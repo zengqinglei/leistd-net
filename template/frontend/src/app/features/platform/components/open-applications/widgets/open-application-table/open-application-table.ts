@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
@@ -28,6 +36,7 @@ import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-tabl
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
+import { TableFit } from '../../../../../../shared/directives/table-fit';
 import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
@@ -64,6 +73,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 @Component({
   selector: 'app-open-application-table',
   imports: [
+    TableFit,
     AppDate,
     NgIcon,
     HlmBadge,
@@ -132,7 +142,10 @@ export class OpenApplicationTable {
   readonly delete = output<string>();
   readonly resetSecret = output<string>();
 
-  private readonly tableViewport = tableViewportSignal();
+  protected readonly tableViewport = tableViewportSignal();
+  private readonly tableFit = viewChild(TableFit);
+  /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
+  private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
 
   protected readonly columns: ColumnDef<AppTableFeatures, OpenApplicationOutputDto>[] = [
     {
@@ -176,10 +189,10 @@ export class OpenApplicationTable {
   ];
 
   private readonly columnVisibility = computed(() =>
-    tableColumnVisibility(this.columns, this.tableViewport()),
+    tableColumnVisibility(this.columns, this.foldLevel()),
   );
 
-  readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
+  readonly hasCollapsedColumns = computed(() => this.foldLevel() !== 'desktop');
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;

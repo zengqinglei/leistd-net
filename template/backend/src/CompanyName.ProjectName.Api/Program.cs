@@ -195,7 +195,7 @@ try
                 .SetTokenEndpointUris("/connect/token")
                 .SetUserInfoEndpointUris("/connect/userinfo")
                 .SetEndSessionEndpointUris("/connect/logout");
-            options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10));
+            options.SetAccessTokenLifetime(oauthOpts.AccessTokenLifetime);
 
             if (!string.IsNullOrWhiteSpace(oauthOpts.Issuer))
             {

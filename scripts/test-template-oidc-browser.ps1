@@ -77,9 +77,6 @@ internal static class BrowserFixtureRegistration
     }
     if ($Name -eq 'idp') {
         $extra = @'
-        services.Configure<OpenIddict.Server.OpenIddictServerOptions>(options => {
-            if (int.TryParse(config["E2E:BrowserAccessTokenSeconds"], out var seconds)) options.AccessTokenLifetime = TimeSpan.FromSeconds(seconds);
-        });
         services.Configure<Microsoft.AspNetCore.Authentication.Google.GoogleOptions>(E2E.Idp.Application.Shared.AuthenticationSchemeNames.ExternalProviderPrefix + "google", options => Configure(options, "google"));
         services.Configure<AspNet.Security.OAuth.GitHub.GitHubAuthenticationOptions>(E2E.Idp.Application.Shared.AuthenticationSchemeNames.ExternalProviderPrefix + "github", options => Configure(options, "github"));
         void Configure(Microsoft.AspNetCore.Authentication.OAuth.OAuthOptions options, string provider)
@@ -136,8 +133,15 @@ public sealed class BrowserTicketController(IConfiguration config, IOptionsMonit
             tokenNames = ticket?.Properties.GetTokens().Select(t => t.Name).ToArray() ?? [],
             expiresAt = ticket?.Properties.GetTokenValue("expires_at"),
             accessHash = access is null ? null : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(access))),
+            // 签发寿命取自访问令牌本身（exp - iat），只回数值，令牌不离开服务端
+            accessLifetime = access is null ? (long?)null : Lifetime(access),
             userId = ticket?.Principal.FindFirst("e2e_user_id")?.Value ?? ticket?.Principal.FindFirst("sub")?.Value
         });
+    }
+    private static long Lifetime(string jwt)
+    {
+        using var payload = System.Text.Json.JsonDocument.Parse(System.Buffers.Text.Base64Url.DecodeFromChars(jwt.Split('.')[1]));
+        return payload.RootElement.GetProperty("exp").GetInt64() - payload.RootElement.GetProperty("iat").GetInt64();
     }
 }
 '@
@@ -361,6 +365,11 @@ function Get-BrowserExpiration($Value) {
     if ($Value -is [DateTime]) { return [DateTimeOffset]::new($Value) }
     return [DateTimeOffset]::Parse([string]$Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
 }
+# S9 等的是真实到期：S1 没证实快速档时直接失败，不进入默认寿命的长等待
+$browserQuickLifetimeVerified = $false
+function Assert-BrowserQuickLifetime {
+    if (-not $browserQuickLifetimeVerified) { throw "S1 未证实访问令牌为 $quickAccessTokenSeconds 秒的快速档，跳过真实到期等待。" }
+}
 function Wait-RealTicketExpiration($Ticket, [string]$Label) {
     $expiration = Get-BrowserExpiration $Ticket.expiresAt
     Write-Host "$Label：真实等待服务端 access_token 边界 $($expiration.ToString('o'))（浏览器不持有令牌）。"
@@ -375,10 +384,10 @@ function Click-BrowserLogout {
     Wait-BrowserUrl ($urls.orders + '/')
 }
 function Invoke-BrowserScenarios {
-    if (-not $BrowserOnly) {
-        # HTTP 场景仍用原来的 600 秒；只在浏览器阶段改为真实 90 秒边界。
+    if (-not $quickAccessTokens) {
+        # HTTP 场景用默认寿命；浏览器阶段要观察真实续期与到期，切到快速档。
         Stop-Api 'idp'
-        $services.idp.Environment.E2E__BrowserAccessTokenSeconds = '90'
+        Use-QuickAccessTokens $services.idp.Environment
         Start-Api 'idp'
     }
     $session = Invoke-Tool 'agent-browser' @('session','id','--scope','worktree','--prefix',"oidc-$runId") 'browser-session'
@@ -393,8 +402,12 @@ function Invoke-BrowserScenarios {
         Start-BrowserResource
         Login-BrowserPassword
         $script:initialBrowserTicket = Assert-BrowserProtected 'S1'
+        # 快速档必须已生效：没生效时 S9 会退回等满默认寿命
+        Assert-Value 'S1-access-token-lifetime' $quickAccessTokenSeconds $initialBrowserTicket.accessLifetime
+        $script:browserQuickLifetimeVerified = $true
     }
     Invoke-Scenario 'S9-renewal' {
+        Assert-BrowserQuickLifetime
         $before = Get-BrowserTicket
         Wait-RealTicketExpiration $before 'S9-success'
         Invoke-Browser @('open', ($urls.orders + '/workspace/dashboard')) | Out-Null
@@ -404,6 +417,7 @@ function Invoke-BrowserScenarios {
         Assert-Value 'S9-expiration-extended' $true ((Get-BrowserExpiration $after.expiresAt) -gt (Get-BrowserExpiration $before.expiresAt))
     }
     Invoke-Scenario 'S9-rejection' {
+        Assert-BrowserQuickLifetime
         $before = Get-BrowserTicket
         $beforeCookies = Invoke-Browser @('cookies','get')
         $copied = @($beforeCookies.cookies | Where-Object { $_.name -eq (Get-SessionCookieName 'Orders') })[0]

@@ -1,7 +1,16 @@
 import { requirePermission } from './authorization';
 import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
-import { SETTING_DEFINITIONS, TENANT_SETTING_VALUES, USER_SETTING_VALUES } from '../data/settings';
+// prettier-ignore
+import {
+  SETTING_DEFINITIONS,
+  SETTING_GROUP_NAMES,
+  //#if (IncludeLocalization)
+  SETTING_TEXTS_ZH_CN,
+  //#endif
+  TENANT_SETTING_VALUES,
+  USER_SETTING_VALUES,
+} from '../data/settings';
 import {
   getCurrentUser,
   getMockSessionSubjectId,
@@ -10,6 +19,16 @@ import {
 
 //#if (IncludeLocalization)
 const SUPPORTED_LANGUAGES = ['en', 'zh-CN'];
+
+/**
+ * 显示名按请求语言给出，与真实后端一致：后端按 Accept-Language 查 `Setting:{name}` /
+ * `SettingGroup:{group}` 词条，切换语言后设置页会重新取一次。请求头不是受支持语言时用英文。
+ */
+function localizedText(req: MockRequest, key: string, english: string): string {
+  return req.headers.get('Accept-Language') === 'zh-CN'
+    ? (SETTING_TEXTS_ZH_CN[key] ?? english)
+    : english;
+}
 
 //#endif
 // 租户取自会话，不看租户提示头：真实后端的租户解析链首位是「已认证主体的租户声明」，
@@ -96,15 +115,28 @@ function write(map: Map<string, string>, key: string, value: string | null): nul
 
 /** 设置中心 Mock API（对应设置组件映射的 /api/v1/settings 端点）。 */
 export const SETTING_API = {
+  //#if (IncludeLocalization)
+  'GET /api/v1/settings': (req: MockRequest) => {
+  //#else
   'GET /api/v1/settings': () => {
+  //#endif
     const subjectId = requireSubjectId();
     const tenantKey = getMockSessionTenantKey();
     return SETTING_DEFINITIONS.map((definition) => ({
       name: definition.name,
+      //#if (IncludeLocalization)
+      displayName: localizedText(req, `Setting:${definition.name}`, definition.displayName),
+      group: definition.group,
+      groupDisplayName: localizedText(
+        req,
+        `SettingGroup:${definition.group}`,
+        SETTING_GROUP_NAMES[definition.group] ?? definition.group,
+      ),
+      //#else
       displayName: definition.displayName,
       group: definition.group,
-      // 真实后端按 `SettingGroup:{group}` 查词条；Mock 不做本地化，回显标识本身
-      groupDisplayName: definition.group,
+      groupDisplayName: SETTING_GROUP_NAMES[definition.group] ?? definition.group,
+      //#endif
       // 机密设置与真实后端一致：一个值都不下发，只报告是否设过
       userValue: definition.isSecret
         ? null

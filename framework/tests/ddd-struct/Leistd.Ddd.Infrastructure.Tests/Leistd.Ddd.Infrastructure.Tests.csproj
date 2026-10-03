@@ -5,6 +5,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <!-- 并发令牌校验需要关系型 provider：InMemory 不实现它 -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>

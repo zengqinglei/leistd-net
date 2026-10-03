@@ -32,7 +32,7 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { combineLatest, EMPTY, of, Subject } from 'rxjs';
+import { combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
@@ -40,7 +40,6 @@ import {
   finalize,
   startWith,
   switchMap,
-  tap,
 } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -274,15 +273,19 @@ export class OpenApplications {
     // URL 变化或显式刷新时重新拉取列表。
     combineLatest([this.route.queryParamMap, this.refreshRequests.pipe(startWith(undefined))])
       .pipe(
-        tap(() => this.loading.set(true)),
+        // 开始状态放进当前请求的订阅里：switchMap 先取消旧请求（其 finalize 置 false）再订阅新请求，
+        // 写在 switchMap 外的话，旧请求的 finalize 会在新请求还没返回时把 loading 关掉。
         switchMap(([params]) =>
-          this.service.getOpenApplications(this.queryFromParams(params)).pipe(
-            catchError((error: unknown) => {
-              this.showRequestError(error);
-              return EMPTY;
-            }),
-            finalize(() => this.loading.set(false)),
-          ),
+          defer(() => {
+            this.loading.set(true);
+            return this.service.getOpenApplications(this.queryFromParams(params)).pipe(
+              catchError((error: unknown) => {
+                this.showRequestError(error);
+                return EMPTY;
+              }),
+              finalize(() => this.loading.set(false)),
+            );
+          }),
         ),
         takeUntilDestroyed(this.destroyRef),
       )

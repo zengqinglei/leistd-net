@@ -1,6 +1,6 @@
-//#if (LocalIdentity)
 import { HttpHeaders } from '@angular/common/http';
 
+//#if (LocalIdentity)
 import { AUTH_API } from '../../../../_mock/api/auth';
 //#endif
 import { SETTING_API } from '../../../../_mock/api/setting';
@@ -17,10 +17,10 @@ import {
 import { TENANT_HEADER } from '../services/tenant-protocol';
 //#endif
 
-type MockHandler = (req: { body: unknown }) => unknown;
+type MockHandler = (req: { body: unknown; headers: HttpHeaders }) => unknown;
 
-function request(body: unknown = null) {
-  return { body };
+function request(body: unknown = null, headers: Record<string, string> = {}) {
+  return { body, headers: new HttpHeaders(headers) };
 }
 
 /** 模拟登录：真实环境下用户与租户在登录那一刻一起定案。 */
@@ -31,6 +31,9 @@ function signIn(userId: string, tenantKey: string | null = null): void {
 
 interface SettingRow {
   name: string;
+  displayName: string;
+  group: string;
+  groupDisplayName: string;
   userValue: string | null;
   tenantValue: string | null;
 }
@@ -234,4 +237,47 @@ describe('settings mock', () => {
       ),
     ).toBe(400);
   });
+
+  // 显示名与真实后端一致：后端按 `Setting:{name}` / `SettingGroup:{group}` 词条返回，不回显分组标识。
+  // Mock 回显标识的话，设置页的面板名在 Mock 模式下与真实环境不同（中文界面显示英文）。
+  function minimumLevel(headers: Record<string, string> = {}): SettingRow {
+    signIn('user_admin');
+    const row = (api[get](request(null, headers)) as SettingRow[]).find(
+      (s) => s.name === 'Logging.MinimumLevel',
+    );
+    if (!row) throw new Error('Logging.MinimumLevel 不在列表里');
+    return row;
+  }
+
+  it('returns English display names from the backend resources', () => {
+    const row = minimumLevel({ 'Accept-Language': 'en' });
+
+    expect(row.displayName).toBe('Minimum log level');
+    expect(row.groupDisplayName).toBe('Operations');
+  });
+  //#if (IncludeLocalization)
+
+  it('follows the request language for setting and group names', () => {
+    const row = minimumLevel({ 'Accept-Language': 'zh-CN' });
+
+    expect(row.displayName).toBe('最小日志级别');
+    expect(row.groupDisplayName).toBe('运维');
+    // 分组标识本身不随语言变：前端按它分面板、进 URL。
+    expect(row.group).toBe('Operations');
+  });
+
+  it('falls back to English when the request language is not supported', () => {
+    expect(minimumLevel({ 'Accept-Language': 'ja' }).groupDisplayName).toBe('Operations');
+    expect(minimumLevel().groupDisplayName).toBe('Operations');
+  });
+  //#else
+
+  it('keeps English names when localization is not included', () => {
+    // 未启用本地化的项目没有中文词条，请求头说什么都返回英文
+    const row = minimumLevel({ 'Accept-Language': 'zh-CN' });
+
+    expect(row.displayName).toBe('Minimum log level');
+    expect(row.groupDisplayName).toBe('Operations');
+  });
+  //#endif
 });

@@ -75,7 +75,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
    所以滚动重启各资源服务副本，并经真实链路（一次 Bearer 请求、一次登录）预热，确认每个副本、两条链路都已取得新 kid。
 3. **切换签发**：新证书过了 `NotBefore` 后滚动重启 Identity。证书的优先顺序在启动时排定，不重启就一直用旧证书签名。
 4. **撤掉旧证书**：授权码、刷新令牌（默认 14 天）与授权、退出请求的 request token 由 Identity 自己签名并加密，
-   兑现时既要验签也要解密，所以旧的签名证书和加密证书都要保留到它们全部过期。旧签名证书还要覆盖访问令牌（10 分钟）
+   兑现时既要验签也要解密，所以旧的签名证书和加密证书都要保留到它们全部过期。旧签名证书还要覆盖访问令牌（`OAuth:AccessTokenLifetime`）
    与依赖方保存的 id_token：后者在退出时作为 `id_token_hint` 回到 Identity，验不了签会让退出失败，所以至少保留到依赖方会话的最长寿命。
    撤掉时从集合中删除该项并滚动重启。
 
@@ -96,7 +96,10 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 - 浏览器整页进入授权端点，发现文档、JWKS、令牌与 UserInfo 由 Resource 后端访问，不要求为这些服务端协议通信开放浏览器 CORS。本机 Angular 开发代理将 `/api/**` 转到 API。
   生产 API 的 `Cors:AllowedOrigins` 默认为空；仅供显式需要的其他 API 集成使用，不负责浏览器认证导航。
 - 下游资源服务的 API 标识以对象登记在 `OAuth:ApiResources` 的 Name，与该服务的 `Authentication:Audience` 相同；Scope 与 OwnerClientId 可独立配置，默认资源名。
-- 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期在 `Program.cs` 里设为 10 分钟。
+- 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期由 `OAuth:AccessTokenLifetime` 决定（默认 10 分钟）。
+  调短它让下面的窗口收敛更快，代价是依赖方续期更频繁；它必须是整秒且长于 1 分钟——资源服务的浏览器会话在令牌剩余 1 分钟时续期，
+  不长于这个窗口时每个请求都要续期，启动时拒绝并指出该键。测试与 CI 要观察真实到期时，用环境变量把它缩短（如 `OAuth__AccessTokenLifetime=00:01:30`），
+  并从实际签发的令牌（`exp - iat`）确认已生效，不要靠等满默认寿命。
   - **停用或删除账号**：同时撤销该用户已签发的令牌，本服务立即拒绝；资源服务要等 Access Token 过期，之后也刷新不到新令牌。
   - **停用或删除租户**：本服务每个请求都查注册表，立即拒绝，刷新令牌也换不到新令牌；资源服务同样要等 Access Token 过期。
   - **撤销会话（含"退出其他设备"、退出登录与空闲到期）**：作废本服务的登录会话，不撤销已签发的访问令牌。之后是否还能刷新取决于开放应用的"会话绑定"：绑定的客户端（授权时记下了会话）刷新随即被拒，下游访问在访问令牌到期时结束；未绑定的客户端不受影响，刷新令牌默认 14 天有效且滑动续期，持续刷新可以一直访问下去，调短 Access Token 有效期也改变不了这一点。

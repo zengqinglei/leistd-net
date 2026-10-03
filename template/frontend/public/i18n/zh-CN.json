@@ -124,6 +124,9 @@
       "clearAll": "清空全部",
       "clearOne": "删除",
       "empty": "暂无通知",
+      "loading": "正在加载通知…",
+      "loadFailed": "通知加载失败。",
+      "historyStale": "更早的通知未能刷新。",
       "clearAllConfirm": "清空全部通知？此操作不可撤销。",
       "unreadAria": "通知（{{count}} 条未读）"
     }

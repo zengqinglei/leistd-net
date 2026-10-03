@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { Users } from './users';
 import { UserTable } from './widgets/user-table/user-table';
@@ -132,5 +132,24 @@ describe('Users page query round trip', () => {
 
     expect(component.pagination()).toEqual(expect.objectContaining({ pageIndex: 1, pageSize: 50 }));
     expect(lastQuery().keyword).toBe('alice');
+  });
+
+  it('keeps loading on while a superseded request is cancelled and the new one is in flight', async () => {
+    const first = new Subject<never>();
+    const second = new Subject<{ items: never[]; totalCount: number }>();
+    service.getUsers.mockReturnValueOnce(first as never).mockReturnValueOnce(second as never);
+
+    table().paginationChange.emit({ pageIndex: 1, pageSize: 20 } as PaginationState);
+    await fixture.whenStable();
+    expect(component.loading()).toBe(true);
+
+    // 上一页还没返回就翻页：旧请求被取消，它的 finalize 不能把新请求的加载状态关掉。
+    table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
+    await fixture.whenStable();
+    expect(component.loading()).toBe(true);
+
+    second.next({ items: [], totalCount: 0 });
+    second.complete();
+    expect(component.loading()).toBe(false);
   });
 });

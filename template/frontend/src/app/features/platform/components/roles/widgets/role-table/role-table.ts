@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
@@ -25,6 +33,7 @@ import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-tabl
 
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
+import { TableFit } from '../../../../../../shared/directives/table-fit';
 import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
@@ -55,6 +64,7 @@ import { RoleOutputDto } from '../../../../models/role.dto';
 @Component({
   selector: 'app-role-table',
   imports: [
+    TableFit,
     AppDate,
     NgIcon,
     HlmBadge,
@@ -117,7 +127,10 @@ export class RoleTable {
   readonly delete = output<RoleOutputDto>();
   readonly managePermissions = output<RoleOutputDto>();
 
-  private readonly tableViewport = tableViewportSignal();
+  protected readonly tableViewport = tableViewportSignal();
+  private readonly tableFit = viewChild(TableFit);
+  /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
+  private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
 
   protected readonly columns: ColumnDef<AppTableFeatures, RoleOutputDto>[] = [
     {
@@ -149,7 +162,7 @@ export class RoleTable {
   ];
 
   private readonly columnVisibility = computed(() =>
-    tableColumnVisibility(this.columns, this.tableViewport()),
+    tableColumnVisibility(this.columns, this.foldLevel()),
   );
 
   protected readonly table = injectAppTable(() => ({
@@ -173,7 +186,7 @@ export class RoleTable {
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
-  readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
+  readonly hasCollapsedColumns = computed(() => this.foldLevel() !== 'desktop');
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;

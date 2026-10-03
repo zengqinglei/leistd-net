@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { Roles } from './roles';
 import { RoleTable } from './widgets/role-table/role-table';
@@ -16,7 +16,7 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
-import { GetRolesInputDto } from '../../models/role.dto';
+import { GetRolesInputDto, RoleOutputDto } from '../../models/role.dto';
 import { RoleService } from '../../services/role-service';
 
 import type { MockedObject } from 'vitest';
@@ -128,5 +128,24 @@ describe('Roles page query round trip', () => {
 
     expect(component.pagination()).toEqual(expect.objectContaining({ pageIndex: 1, pageSize: 50 }));
     expect(lastQuery().keyword).toBe('admin');
+  });
+
+  it('keeps loading on while a superseded request is cancelled and the new one is in flight', async () => {
+    const first = new Subject<{ items: RoleOutputDto[]; totalCount: number }>();
+    const second = new Subject<{ items: RoleOutputDto[]; totalCount: number }>();
+    service.getRoles.mockReturnValueOnce(first as never).mockReturnValueOnce(second as never);
+
+    table().paginationChange.emit({ pageIndex: 1, pageSize: 20 } as PaginationState);
+    await fixture.whenStable();
+    expect(component.loading()).toBe(true);
+
+    // 第一页还没返回就翻到下一页：旧请求被取消，它的 finalize 不能把新请求的加载状态关掉。
+    table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
+    await fixture.whenStable();
+    expect(component.loading()).toBe(true);
+
+    second.next({ items: [], totalCount: 0 });
+    second.complete();
+    expect(component.loading()).toBe(false);
   });
 });

@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { PaginationState } from '@tanstack/angular-table';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { Tenants } from './tenants';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
@@ -238,5 +238,24 @@ describe('Tenants page query and write flow', () => {
     await fixture.whenStable();
 
     expect(service.deleteTenant).not.toHaveBeenCalled();
+  });
+
+  it('keeps loading on while a superseded request is cancelled and the new one is in flight', async () => {
+    const first = new Subject<never>();
+    const second = new Subject<{ items: never[]; totalCount: number }>();
+    service.getTenants.mockReturnValueOnce(first as never).mockReturnValueOnce(second as never);
+
+    table().paginationChange.emit({ pageIndex: 1, pageSize: 20 } as PaginationState);
+    await fixture.whenStable();
+    expect(component.loading()).toBe(true);
+
+    // 上一页还没返回就翻页：旧请求被取消，它的 finalize 不能把新请求的加载状态关掉。
+    table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
+    await fixture.whenStable();
+    expect(component.loading()).toBe(true);
+
+    second.next({ items: [], totalCount: 0 });
+    second.complete();
+    expect(component.loading()).toBe(false);
   });
 });
