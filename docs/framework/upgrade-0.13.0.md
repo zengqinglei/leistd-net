@@ -679,3 +679,10 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
   派生项目沿用这套夹具时，删除测试里依赖内存库语义的写法（如按 `Database:InMemoryName` 切换新库，改为克隆新库）；
   批量 `ExecuteUpdate`/`ExecuteDelete` 后的断言换一个作用域读库。
 - **撤销令牌改用官方批量接口**：`UserAppService` 用 `RevokeBySubjectAsync` 替代逐个 `TryRevokeAsync`；并发撤销失败不再被吞掉，会让整个操作失败。
+
+## 30. 声明式工作单元把方法的取消令牌交给提交
+
+`UnitOfWorkInterceptor` 以方法声明的第一个 `CancellationToken` 参数调用 `CompleteAsync`（此前固定为不可取消；按参数类型取，object 参数里装箱的令牌不算）。
+BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开时，事务型工作单元不再提交（此前照常提交），
+取消按调用方取消记 Debug，不再记成 Error "commit failed"。提交开始之后不响应取消，语义不变。
+依赖"请求已中止仍要落库"的方法，不要把请求令牌传进带 `[UnitOfWork]` 的方法，或在方法内自行开启不可取消的工作单元。
