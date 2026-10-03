@@ -8,6 +8,8 @@ param(
     [string]$Tier,
     # 该档里的一个具名分片（见 template-matrix-scenarios.ps1 的 $MatrixSlices），须与 -Tier 同用。
     [string]$Slice,
+    # 独立预期计划：绑定本候选/档位、选定场景与阶段；默认入口仍完整执行。
+    [string]$ValidationPlanPath,
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [ValidateSet("chromiumHeadless", "chromium")]
@@ -16,6 +18,8 @@ param(
     [string]$LocalFeedPath,
     [switch]$SkipFrontend,
     [switch]$SkipRuntime,
+    # 仅 CI 的同候选 check-all + 必过汇总接替源码预检；独立入口默认仍执行。
+    [switch]$SkipSourcePreflight,
     # 只为选中的场景构建并运行容器入口；Dockerfile/Compose 变化时使用，不随每个普通代码修改运行。
     [string[]]$ContainerSmokeScenarios = @(),
     # 在登记的容器场景（若在本片）上执行容器检查；CI 用它，不在 workflow 重抄场景名。
@@ -105,6 +109,36 @@ function Invoke-External([string]$Command, [string[]]$Arguments, [string]$Workin
     finally {
         Pop-Location
     }
+}
+
+function Invoke-SourcePreflight([switch]$Skip) {
+    if ($Skip) {
+        if ($env:GITHUB_ACTIONS -cne 'true') { throw '-SkipSourcePreflight 仅用于具有同候选静态作业与必过汇总的 GitHub CI。' }
+        # 只核对实际总入口清单，成功责任仍由 CI 汇总对 docs-sync 的结果检查承担。
+        $listing = @(& pwsh -NoProfile -File (Join-Path $repoRoot 'scripts/check-all.ps1') -List)
+        if ($LASTEXITCODE -ne 0) { throw '无法读取源码预检接替入口清单' }
+        foreach ($required in @('check-template-symbols.ps1', 'check-using-guards.py', 'check-async-boundaries.py')) {
+            if (-not ($listing -cmatch ('\s' + [regex]::Escape("scripts/$required") + '$'))) {
+                throw "check-all 缺少源码预检接替入口：$required"
+            }
+        }
+        Write-Host '源码预检由同候选 CI 静态作业承担，质量汇总必须核对其成功。'
+        return
+    }
+
+    # 模板引擎不能可靠诊断悬空符号、指令字面形式与恒真嵌套，先检查源码再准备生成。
+    Invoke-External 'pwsh' @('-File', (Join-Path $repoRoot 'scripts/check-template-symbols.ps1'))
+    $pythonCmd = $null
+    foreach ($candidate in @('python3', 'python')) {
+        $found = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
+    }
+    if (-not $pythonCmd) { throw '未找到 Python 3 解释器（python3/python），无法运行 Python 静态闸门。' }
+
+    # using/import 守卫在全部符号取值上求值，严于登记的生成场景。
+    Invoke-External $pythonCmd @((Join-Path $repoRoot 'scripts/check-using-guards.py'))
+    # 动态连接解析路径不能包含 sync-over-async。
+    Invoke-External $pythonCmd @((Join-Path $repoRoot 'scripts/check-async-boundaries.py'))
 }
 
 # 与 Invoke-External 同型，但显式关闭子进程的 stdin。
@@ -662,6 +696,17 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration, [stri
 }
 
 . (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
+. (Join-Path $PSScriptRoot "quality-validation-plan.ps1")
+$validationMode = 'full'
+$validationPlan = $null
+if ($ValidationPlanPath) {
+    if (-not $Tier -or $Scenarios.Count -gt 0 -or $SkipFrontend -or $SkipRuntime) {
+        throw '-ValidationPlanPath requires -Tier and may not combine with manual skips/scenarios.'
+    }
+    $validationPlan = Read-QualityValidationPlan $ValidationPlanPath $Tier
+    if ($validationPlan.DocsOnly) { throw 'Internal-document plans must not run dynamic scenarios.' }
+    $validationMode = $validationPlan.Mode
+}
 
 if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
 if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
@@ -671,12 +716,14 @@ if ($Tier) {
         throw "Unknown $Tier-tier slice '$Slice'. Valid slices: $($MatrixSlices[$Tier].Keys -join ', ')"
     }
     $Scenarios = Get-TierScenarios $Tier $Slice
+    if ($validationPlan) { $Scenarios = @($Scenarios | Where-Object { $_ -cin $validationPlan.Scenarios }) }
     if ($ContainerSmoke -and $ContainerScenario -in $Scenarios) {
         $ContainerSmokeScenarios += $ContainerScenario
     }
 }
 
 if ($Scenarios.Count -eq 0) {
+    if ($validationPlan) { throw 'No selected scenarios in this planned slice.' }
     $Scenarios = $AllScenarios
 }
 
@@ -689,7 +736,11 @@ foreach ($scenario in $ContainerSmokeScenarios) {
     if ($scenario -notin $Scenarios) {
         throw "Container smoke scenario '$scenario' must also be selected with -Scenarios."
     }
+    if ($validationMode -cne 'full') { throw 'Container validation requires full stages.' }
 }
+
+# 独立入口先预检，避免错误源码仍先 audit/pack；CI 只核对接替清单，不重复扫描。
+Invoke-SourcePreflight -Skip:$SkipSourcePreflight
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 [IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
@@ -763,27 +814,6 @@ elseif (-not (Test-Path -LiteralPath $feedRoot)) {
     throw "-SkipPack requires an existing feed at '$feedRoot'（先 `pwsh framework/build/pack-local-feed.ps1`，或省略 -SkipPack 以重新 pack）."
 }
 
-# 生成前先校验符号一致性：悬空引用、注释里的指令字面形式、恒真嵌套这三类问题，
-# 模板引擎要么抛只有文件名的 NullReferenceException、要么静默少生成整段代码，
-# 到那一步再排查代价极高（本仓库为此付过一整轮）。在这里拦住。
-Invoke-External "pwsh" @("-File", (Join-Path $repoRoot "scripts/check-template-symbols.ps1"))
-
-# Python 闸门的解释器：CI/Unix 常为 python3，Windows 通常只有 python（约定见 docs/framework/development-guide.md §9）
-$pythonCmd = $null
-foreach ($candidate in @("python3", "python")) {
-    $found = Get-Command $candidate -ErrorAction SilentlyContinue
-    if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
-}
-if (-not $pythonCmd) { throw "未找到 Python 3 解释器（python3/python），无法运行 Python 静态闸门。" }
-
-# using 守卫窄于用法 —— 生成后表现为 CS0246，而下面只编译 $Scenarios 里的几个场景，
-# 排不到的符号组合要等真实使用者踩。这一步在全部符号取值上求值，比矩阵严。
-Invoke-External $pythonCmd @((Join-Path $repoRoot "scripts/check-using-guards.py"))
-
-# 连接解析路径上的 sync-over-async。基线验收标准第 6 条此前只是文字声明，
-# 没有任何检查兜着；这条路径每次取 DbContext 都执行，阻塞会在线程池饥饿下自我放大。
-Invoke-External $pythonCmd @((Join-Path $repoRoot "scripts/check-async-boundaries.py"))
-
 Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $templateRoot, "--force")
 
 $results = [System.Collections.Generic.List[object]]::new()
@@ -800,26 +830,31 @@ try {
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
 
-        $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-        # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
-        Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
-        Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
-
+        $backendValidated = $false
         $runtimeValidated = $false
-        if (-not $SkipRuntime) {
-            Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
-            $runtimeValidated = $true
-        }
+        if ($validationMode -cne 'frontend') {
+            $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
+            # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
+            Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
+            Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
-        $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
-        foreach ($testProject in $testProjects) {
-            Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
+            if (-not $SkipRuntime) {
+                Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
+                $runtimeValidated = $true
+            }
+
+            $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
+            if ($testProjects.Count -eq 0) { throw 'No backend test projects found; refusing empty validation.' }
+            foreach ($testProject in $testProjects) {
+                Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
+            }
+            $backendValidated = $true
         }
 
         $frontendValidated = $false
         $lintValidated = $false
         $testValidated = $false
-        if (-not $SkipFrontend -and $definition.Frontend) {
+        if (-not $SkipFrontend -and $definition.Frontend -and $validationMode -cne 'backend') {
             $frontendRoot = Join-Path $projectRoot "frontend"
             $env:HUSKY = "0"
             Invoke-External "npm" @("ci") $frontendRoot
@@ -886,11 +921,11 @@ try {
 
         $results.Add([PSCustomObject]@{
             Scenario = $scenario
-            Backend = "pass"
-            Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
-            Lint = if ($lintValidated) { "pass" } else { "skipped" }
-            Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
-            Test = if ($testValidated) { "pass" } else { "skipped" }
+            Backend = if ($backendValidated) { 'pass' } else { 'not-applicable' }
+            Runtime = if ($runtimeValidated) { 'pass' } elseif ($validationMode -ceq 'frontend') { 'not-applicable' } else { 'skipped' }
+            Lint = if ($lintValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
+            Frontend = if ($frontendValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
+            Test = if ($testValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
             Container = if ($containerValidated) { "pass" } else { "skipped" }
             Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
         })
@@ -905,6 +940,6 @@ Write-Host "Template matrix passed for $($results.Count) scenario(s)." -Foregrou
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
 $resultFile = Join-Path $runRoot "matrix-$(if ($Slice) { $Slice } else { 'local' }).json"
-[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; Results = @($results) } |
+[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; CandidateSha = (git rev-parse HEAD); Mode = $validationMode; Results = @($results) } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
 if ($env:GITHUB_OUTPUT) { "results_path=$resultFile" | Out-File $env:GITHUB_OUTPUT -Append }

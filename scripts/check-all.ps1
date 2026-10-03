@@ -17,8 +17,8 @@
       - scripts/test-template-postgresql-e2e.ps1        真实 PostgreSQL 端到端
       - scripts/test-template-oidc-e2e.ps1              真实 OIDC 跨服务 HTTP 端到端
 
-    模板那三道（symbols / using-guards / async-boundaries）test-template-matrix.ps1 内部也会跑一遍：
-    它必须在生成之前先验模板源码，那里是生成流程的一环，不是重复配置。
+    模板源码的 symbols / using-guards / async-boundaries 由这里完整执行。
+    独立矩阵入口默认也在生成前预检；同候选 CI 显式跳过重复扫描，必过汇总核对本作业成功。
 
 .PARAMETER List
     只打印闸门清单，不执行。

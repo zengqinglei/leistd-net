@@ -50,6 +50,8 @@
          从外部看不出来的性质：计数写在独立工作单元里，不随调用方的事务回滚。
          要钉住这一条只能自己开一个工作单元再释放，端点做不到，所以按生产注册装配后直接测。 -->
     <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
+    <!-- 清理任务的逐库失败汇总是纯编排，不建宿主或数据库也应能验证。 -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.UnitTests" />
   </ItemGroup>
 
   <!-- 业务项目内部引用 -->

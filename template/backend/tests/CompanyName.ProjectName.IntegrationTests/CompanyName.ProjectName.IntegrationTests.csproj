@@ -23,8 +23,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
-<!--#if (LocalIdentity)-->
-    <!-- 两步验证的步长与挑战到期用官方时间替身推进 -->
+<!--#if (LocalIdentity || IncludeNotifications)-->
+    <!-- 两步验证与清理任务的截止边界用官方时间替身 -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->

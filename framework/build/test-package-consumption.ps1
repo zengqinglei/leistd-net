@@ -3,6 +3,8 @@
 param(
     [string]$FeedPath,
     [string[]]$PackageIds = @(),
+    # CI 输入计划只裁剪消费构建；全部包内容、包集完整性及候选依赖仍先核对。
+    [string]$ValidationPlanPath,
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release"
 )
@@ -99,6 +101,8 @@ function Get-PackageMetadata([IO.FileInfo]$PackageFile) {
             Version = $version
             File = $PackageFile.FullName
             AssemblyCount = $assemblies.Count
+            Dependencies = @($metadataNode.SelectNodes(".//*[local-name()='dependency']") |
+                ForEach-Object { $_.GetAttribute('id') } | Where-Object { $_ -clike 'Leistd.*' } | Sort-Object -Unique)
         }
     }
     finally {
@@ -116,6 +120,7 @@ if ($packageFiles.Count -eq 0) {
 }
 
 $packages = @($packageFiles | ForEach-Object { Get-PackageMetadata $_ })
+$allPackageCount = $packages.Count
 
 # feed 里不得存在没有对应源码项目的包。持久化 feed 会保留已被删除的组件——
 # 消费它等于在验证一个仓库里已经不存在的东西，而它带来的告警（例如已删组件的
@@ -153,6 +158,40 @@ if ($PackageIds.Count -gt 0) {
         throw "Requested packages were not found in the feed: $($missingIds -join ', ')"
     }
     $packages = @($packages | Where-Object { $_.Id -in $requestedIds })
+}
+
+if ($ValidationPlanPath) {
+    if ($PackageIds.Count -gt 0) { throw 'Validation plan cannot combine with manual PackageIds.' }
+    . (Join-Path $repoRoot 'scripts/template-matrix-scenarios.ps1')
+    . (Join-Path $repoRoot 'scripts/quality-validation-plan.ps1')
+    $declaredTier = (Get-Content -LiteralPath $ValidationPlanPath -Raw | ConvertFrom-Json).Tier
+    if ($declaredTier -cnotin @('pr', 'full')) { throw 'Invalid consumer plan tier.' }
+    $validationPlan = Read-QualityValidationPlan $ValidationPlanPath $declaredTier
+    if ($validationPlan.DocsOnly) { throw 'Internal-document plan has no package consumer job.' }
+    foreach ($package in $packages) {
+        $missingDependencies = @($package.Dependencies | Where-Object { $_ -cnotin $packages.Id })
+        if ($missingDependencies.Count -gt 0) { throw "Candidate dependency missing: $($missingDependencies -join ', ')" }
+    }
+    if ($null -ne $validationPlan.ConsumerProjects) {
+        $selectedIds = @($validationPlan.ConsumerProjects)
+        if (@($selectedIds | Where-Object { $_ -cnotin $packages.Id }).Count -gt 0) { throw 'Unknown consumer seed package.' }
+        # Actual packed dependencies, across all target framework groups. This
+        # selects restore/build consumers only, never runtime/DI/PG/OIDC tests.
+        do {
+            $previousCount = $selectedIds.Count
+            $selectedIds = @($packages | Where-Object {
+                $_.Id -cin $selectedIds -or @($_.Dependencies | Where-Object { $_ -cin $selectedIds }).Count -gt 0
+            } | ForEach-Object Id)
+        } while ($selectedIds.Count -ne $previousCount)
+        $packages = @($packages | Where-Object { $_.Id -cin $selectedIds })
+    }
+}
+
+Write-Host "Verified contents of $allPackageCount packages; selected $($packages.Count) isolated consumers."
+if ($packages.Count -eq 0) {
+    if (-not $ValidationPlanPath) { throw 'No package consumers selected without a validation plan.' }
+    Write-Host 'Consumer build not applicable: template-only inputs; all candidate package contents verified.'
+    return
 }
 
 Reset-Directory $consumerRoot

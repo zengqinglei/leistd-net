@@ -36,10 +36,10 @@
     <!-- 宿主层里的纯逻辑（协议交互凭据、限频装饰器）按单测验证：不建宿主 -->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Api\CompanyName.ProjectName.Api.csproj" />
   </ItemGroup>
-<!--#if (RemoteTokenAuth)-->
+<!--#if (RemoteTokenAuth || LocalIdentity)-->
 
   <ItemGroup>
-    <!-- 签名公钥刷新限频用官方时间替身 -->
+    <!-- 签名刷新与本地认证任务的时间接缝用官方替身 -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 <!--#endif-->
