@@ -55,6 +55,14 @@ def source_producers(config: dict, path: str, scenarios: dict) -> set[str]:
     Reuse the existing template engine semantics; no feature-directory map.
     An excluded file still gets the default/all-feature sentinels below.
     """
+    # Narrow only the source semantics this proof models. Future engine rules
+    # must be reviewed before they can reduce validation responsibility.
+    for source in config.get('sources', []):
+        if not isinstance(source, dict) or set(source) - {'source', 'target', 'condition', 'exclude', 'modifiers'}:
+            raise ValueError('Unmodelled template source rule')
+        for modifier in source.get('modifiers', []):
+            if not isinstance(modifier, dict) or set(modifier) - {'condition', 'exclude'}:
+                raise ValueError('Unmodelled template modifier rule')
     producers: set[str] = set()
     sources = list(coverage.iter_sources(config, [path]))
     if not sources:
@@ -159,6 +167,8 @@ def main() -> None:
             output.write('validation_plan=' + text + '\n')
             output.write('slices=' + json.dumps(plan['Slices'], ensure_ascii=False, separators=(',', ':')) + '\n')
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+            if plan['DocsOnly']:
+                summary.write('本次仅修改内部文档：此作业只判定范围和生成计划；未打包 Framework，动态验证不适用。\n\n')
             summary.write('验证计划：' + text + '\n')
     print(text)
 

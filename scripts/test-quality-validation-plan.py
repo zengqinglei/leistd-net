@@ -113,6 +113,24 @@ def main():
         assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
         git('reset', '--hard', base)
         print('PASS deletion, cross-boundary rename and multi-commit conservative fallback', flush=True)
+        # Put each unknown rule on BOTH sides of the diff. Otherwise a changed
+        # template.json alone would force full and fail to exercise this guard.
+        config_path = repo / 'template/.template.config/template.json'
+        for label, modifier in [('unknown-source-rule', False), ('unknown-modifier-rule', True)]:
+            git('reset', '--hard', base)
+            config = json.loads(config_path.read_text())
+            target = config['sources'][0]['modifiers'][0] if modifier else config['sources'][0]
+            target['include'] = ['**/*']
+            config_path.write_text(json.dumps(config))
+            git('add', '.'); git('commit', '-qm', label + ' baseline')
+            rule_base = git('rev-parse', 'HEAD')
+            (repo / front).write_text((repo / front).read_text() + '\n// Quality scope fixture\n')
+            git('add', '.'); git('commit', '-qm', label + ' source edit')
+            guarded = planner.create_plan('pr', rule_base, 'pull_request', '')
+            assert guarded['Mode'] == 'full' and guarded['FrameworkTests'] and guarded['ConsumerProjects'] is None
+            assert set(guarded['Scenarios']) == registered and 'proof unavailable' in guarded['Reason']
+            (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2))
+            print('PASS unknown engine rule conservative fallback:', label, flush=True)
     print('Selection and receipt evidence:', out, flush=True)
 
 
