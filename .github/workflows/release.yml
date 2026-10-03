@@ -34,7 +34,7 @@ jobs:
           if ('${{ github.event_name }}' -eq 'push' -and '${{ github.ref }}' -eq 'refs/heads/main') {
             $before = '${{ github.event.before }}'
             if ($before -notmatch '^[0-9a-f]{40}$' -or $before -match '^0+$') { throw '无法确定本次 main 推送的基线' }
-            $changed = git diff --name-only $before HEAD
+            $changed = git diff --no-renames --name-only $before HEAD
             if ($LASTEXITCODE -ne 0) { throw '无法确定 stable 发布的变更范围' }
             $hit = $changed | Where-Object {
               ($_ -eq 'VERSION') -or

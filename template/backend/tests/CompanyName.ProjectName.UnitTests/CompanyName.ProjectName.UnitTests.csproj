@@ -5,8 +5,7 @@
     与 IntegrationTests 的分工见 docs/standards/testing.md §1 的风险分级表——
     纯函数、领域规则、权限判断在这里；数据库、DI 装配、序列化、外部适配在集成测试。
 
-    一个宿主约 0.5–0.8 秒，集成测试的时长几乎全在这上面。能在这一层验证的规则
-    放到集成测试里，会让整套测试的耗时随测试类数量线性增长。
+    纯规则在这一层独立运行；只有实际使用宿主或数据库的用例承担相应准备成本。
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

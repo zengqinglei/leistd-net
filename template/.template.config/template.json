@@ -210,9 +210,8 @@
             "frontend/src/app/core/services/impersonation-service.spec.ts",
             "frontend/src/app/core/services/tenant-context-service.spec.ts",
             "frontend/src/app/core/settings/auth-mock-subject.spec.ts",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/SecureDefaultsTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/UserUniquenessTests.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/VerificationCodeDigestTests.cs"
+            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs"
           ]
         },
         {

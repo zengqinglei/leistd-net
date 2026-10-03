@@ -9,12 +9,14 @@ namespace CompanyName.ProjectName.UnitTests.Domain;
 /// </summary>
 /// <remarks>
 /// 这是单元测试该覆盖的形状——纯函数、没有依赖、分支全部可枚举。
-/// 同样的规则若放进集成测试，每条分支都要付一次宿主构建的钱。
+/// 超级管理员初始化曾只检查口令非空，因此各服务端入口统一使用 PasswordPolicy 校验。
+/// 纯类断言不需要集成测试宿主，实际管理员初始化入口由集成测试 DefaultAdminBootstrapTests 验证。
 /// </remarks>
 public class PasswordPolicyTests
 {
     [Theory]
     [InlineData("aVeryLongPassphrase")]
+    [InlineData("correct horse battery staple and then some")]
     [InlineData("123456789012345")]                 // 只看长度，不要求复杂度
     [InlineData("            x")]                    // 空格计入长度
     public void Long_enough_passwords_are_accepted(string password)
@@ -26,7 +28,8 @@ public class PasswordPolicyTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Missing_password_is_rejected(string? password)
+    [InlineData("elevenchars")]
+    public void Missing_or_short_passwords_are_rejected(string? password)
     {
         Assert.False(PasswordPolicy.IsAcceptable(password));
     }

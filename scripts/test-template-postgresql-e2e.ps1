@@ -119,8 +119,9 @@ try {
         New-Item -ItemType Directory -Path $feedRoot -Force | Out-Null
         Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
     }
-    elseif (-not (Test-Path -LiteralPath $feedRoot)) {
-        throw "-SkipPack requires packages in $feedRoot."
+    elseif (-not (Test-Path -LiteralPath $feedRoot -PathType Container) -or
+            -not (Get-ChildItem -LiteralPath $feedRoot -Filter "Leistd.*.nupkg" -File)) {
+        throw "-SkipPack requires Leistd.*.nupkg packages in $feedRoot."
     }
 
     $escapedFeed = [Security.SecurityElement]::Escape($feedRoot)

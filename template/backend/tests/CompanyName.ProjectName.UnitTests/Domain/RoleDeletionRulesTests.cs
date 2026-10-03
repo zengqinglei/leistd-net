@@ -1,6 +1,6 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.UnitTests.Domain;
 
 public sealed class RoleDeletionRulesTests
 {

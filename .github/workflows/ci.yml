@@ -137,7 +137,7 @@ jobs:
             $hasBase = $LASTEXITCODE -eq 0
           }
           $global:LASTEXITCODE = 0
-          $changed = if ($hasBase) { @(git diff --name-only $base HEAD) } else { @('template/Dockerfile') }
+          $changed = if ($hasBase) { @(git diff --no-renames --name-only $base HEAD) } else { @('template/Dockerfile') }
           if ($LASTEXITCODE -ne 0) { throw '无法确定容器验证的变更范围' }
           $needed = @($changed | Where-Object {
             $_ -match '^template/(Dockerfile|\.dockerignore)$' -or
@@ -283,8 +283,9 @@ jobs:
 
   postgresql-e2e:
     name: 模板 PostgreSQL 端到端
+    needs: framework-pack
     runs-on: ubuntu-latest
-    # 独立真实库契约；与模板分片、包消费和 OIDC 并行，保持自包含。
+    # 复用候选包；各作业的数据库、hive 与解包缓存仍各自隔离。
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -296,13 +297,19 @@ jobs:
           dotnet-version: '10.0.x'
       # 矩阵的集成测试与冒烟各自只用一个库，验不到多库拆分、共享与专属租户库的物理隔离、
       # DbMigrator 命令行与跨进程密钥环这几类"不报错只给错结果"的失效。
-      # 脚本自带 postgres:15-alpine 容器与清理；不加 -SkipPack，作业自包含、不依赖其它作业的 feed
-      - name: 打包 + 生成 + 迁移 + 真实库隔离验证
+      - name: 下载同一候选 Framework 包
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-framework-feed
+          path: .tmp/local-feed
+      # 脚本仍可独立运行并打包；CI 只读同候选包，容器与清理由脚本负责。
+      - name: 生成 + 迁移 + 真实库隔离验证
         shell: pwsh
-        run: pwsh scripts/test-template-postgresql-e2e.ps1
+        run: pwsh scripts/test-template-postgresql-e2e.ps1 -SkipPack
 
   oidc-e2e:
     name: 模板 OIDC 跨服务端到端
+    needs: framework-pack
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -313,11 +320,16 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      # 脚本自包含包源、四个真实 API、PostgreSQL 与 finally 清理。
+      - name: 下载同一候选 Framework 包
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-framework-feed
+          path: .tmp/local-feed
+      # 同候选包只读复用；四个真实 API、PostgreSQL、hive 与 finally 清理仍独立。
       # S7 默认只验即时撤销与到期前窗口，不在 PR 等待十分钟；完整边界用 -IncludeExpiryWait。
-      - name: 打包 + 生成 + OIDC HTTP S2–S8 与 S10
+      - name: 生成 + OIDC HTTP S2–S8 与 S10
         shell: pwsh
-        run: pwsh scripts/test-template-oidc-e2e.ps1
+        run: pwsh scripts/test-template-oidc-e2e.ps1 -SkipPack
       - name: 保留 OIDC 诊断证据
         if: always()
         uses: actions/upload-artifact@v4

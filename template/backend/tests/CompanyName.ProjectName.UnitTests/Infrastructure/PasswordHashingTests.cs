@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.Extensions.Options;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
 /// <summary>
 /// 口令哈希的格式与成本契约

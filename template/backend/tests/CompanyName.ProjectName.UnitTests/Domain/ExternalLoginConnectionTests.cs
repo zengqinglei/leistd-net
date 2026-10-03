@@ -1,7 +1,7 @@
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.UnitTests.Domain;
 
 public sealed class ExternalLoginConnectionTests
 {
