@@ -50,15 +50,53 @@
             </button>
           }
         </div>
+        <!-- 历史加载失败与"没有通知"分开表达：失败时说出来并给重试，已推送到的通知照常列出。 -->
+        @if (notificationService.loadFailed() && notifications().length > 0) {
+          <div
+            class="text-muted-foreground flex items-center justify-between gap-2 border-b border-border px-4 py-2 text-xs"
+            role="status"
+          >
+            <span>{{ t('layout.notifications.historyStale') }}</span>
+            <button
+              type="button"
+              hlmBtn
+              variant="link"
+              size="xs"
+              class="shrink-0"
+              data-testid="notifications-retry"
+              (click)="retryLoad()"
+            >
+              {{ t('common.retry') }}
+            </button>
+          </div>
+        }
         @if (notifications().length === 0) {
           <!-- 图标与文案各自成行、整体居中：原来靠 ng-icon 上的 `block` 让图标独占一行，
              而组件自身的 host 样式把它按行内盒渲染，结果是图标与文字挤在一行、基线还错开。
              改用 flex 列布局，对齐不再取决于哪一条 display 规则赢。 -->
           <div
             class="text-muted-foreground flex flex-col items-center justify-center gap-2 py-10 text-sm"
+            [attr.aria-busy]="notificationService.loading() || null"
           >
-            <ng-icon name="lucideInbox" class="text-2xl opacity-60" />
-            <span>{{ t('layout.notifications.empty') }}</span>
+            @if (notificationService.loading()) {
+              <hlm-spinner />
+              <span>{{ t('layout.notifications.loading') }}</span>
+            } @else if (notificationService.loadFailed()) {
+              <ng-icon name="lucideCircleAlert" class="text-2xl opacity-60" />
+              <span>{{ t('layout.notifications.loadFailed') }}</span>
+              <button
+                hlmBtn
+                variant="outline"
+                size="sm"
+                data-testid="notifications-retry"
+                (click)="retryLoad()"
+              >
+                {{ t('common.retry') }}
+              </button>
+            } @else {
+              <ng-icon name="lucideInbox" class="text-2xl opacity-60" />
+              <span>{{ t('layout.notifications.empty') }}</span>
+            }
           </div>
         } @else {
           <div class="flex max-h-[360px] flex-col overflow-y-auto p-1">

@@ -36,6 +36,12 @@ export class NotificationService {
   /** 加载状态。 */
   readonly loading = signal(false);
 
+  /**
+   * 最近一次加载历史失败。界面据此区分"没有通知"与"没加载出来"，并提供重试；
+   * 已经推送到的通知不受影响，仍然显示。
+   */
+  readonly loadFailed = signal(false);
+
   /** 初始化：加载历史通知 + 连接 SignalR。 */
   async init(): Promise<void> {
     const generation = this.signalR.authGeneration;
@@ -64,6 +70,7 @@ export class NotificationService {
     const generation = this.signalR.authGeneration;
 
     this.loading.set(true);
+    this.loadFailed.set(false);
     try {
       const items = await lastValueFrom(
         this.http.get<NotificationOutputDto[]>('/api/v1/notifications', {
@@ -91,8 +98,15 @@ export class NotificationService {
       this.signalR.notifications.set(merged);
     } catch (err) {
       console.error('[NotificationService] Load failed:', err);
+      // 主体已切换：这次失败属于上一个用户，不能标到下一个人的界面上。
+      if (this.signalR.isCurrentGeneration(generation)) {
+        this.loadFailed.set(true);
+      }
     } finally {
-      this.loading.set(false);
+      // 同理：旧主体的请求结束时，新主体的加载可能正在进行，不能替它关掉加载状态。
+      if (this.signalR.isCurrentGeneration(generation)) {
+        this.loading.set(false);
+      }
     }
   }
 
