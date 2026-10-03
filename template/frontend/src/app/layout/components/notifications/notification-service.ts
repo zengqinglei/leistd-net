@@ -155,3 +155,4 @@ export class NotificationService {
     return TYPE_ICONS[type] ?? 'lucideInfo';
   }
 }
+// Scope validation fixture.
