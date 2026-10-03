@@ -6,11 +6,11 @@ using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Shared.Text;
-using Leistd.Timing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -57,7 +57,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         var username = await CreateUserAsync(host, "tfa_login");
         var secret = await EnableForAsync(host, username, clock);
 
-        clock.Advance();
+        Step(clock);
         var (first, token) = await PasswordStepAsync(host, username);
         Assert.False(first.Headers.Contains("Set-Cookie"));
 
@@ -86,7 +86,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         var username = await CreateUserAsync(host, "tfa_stamp");
         var secret = await EnableForAsync(host, username, clock);
 
-        clock.Advance();
+        Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
 
         using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -115,15 +115,15 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         var username = await CreateUserAsync(host, "tfa_expiry");
         var secret = await EnableForAsync(host, username, clock);
 
-        clock.Advance();
+        Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
 
-        for (var i = 0; i < 8; i++) clock.Advance();   // 4 分钟
+        for (var i = 0; i < 8; i++) Step(clock);   // 4 分钟
         var valid = Code(secret, clock);
         var wrong = valid[..^1] + (valid[^1] == '0' ? '1' : '0');
         Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, Code = wrong }));
 
-        for (var i = 0; i < 4; i++) clock.Advance();   // 再过 2 分钟：签发后第 6 分钟
+        for (var i = 0; i < 4; i++) Step(clock);   // 再过 2 分钟：签发后第 6 分钟
         Assert.Equal("Auth:TwoFactorChallengeExpired",
             await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
     }
@@ -176,7 +176,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
         var secret = await BeginSetupAsync(session.Client);
         await EnableAsync(session.Client, secret, clock);
-        clock.Advance();
+        Step(clock);
 
         using (var wrongPassword = await session.Client.PostAsJsonAsync("/api/v1/auth/me/two-factor/disable",
                    new { Password = Password + "x", Code = Code(secret, clock) }))
@@ -229,7 +229,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             Assert.Equal(HttpStatusCode.OK, (await reissued.GetAsync("/api/v1/auth/me/sessions")).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await restricted.Client.GetAsync("/api/v1/auth/me")).StatusCode);
 
-            clock.Advance();
+            Step(clock);
             using var disable = await reissued.PostAsJsonAsync("/api/v1/auth/me/two-factor/disable",
                 new { Password, Code = Code(secret, clock) });
             Assert.Equal("Auth:TwoFactorRequiredByPolicy", await ErrorCodeAsync(disable));
@@ -294,18 +294,20 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.OK, (await direct.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    private (WebApplicationFactory<Program> Host, TestClock Clock) CreateHost()
+    private (WebApplicationFactory<Program> Host, FakeTimeProvider Clock) CreateHost()
     {
-        var clock = new TestClock();
+        // 从此刻起步：缓存条目按真实时钟回收，假时钟落在过去会让刚写入的挑战被缓存当成已过期。
+        // 替换的是 TimeProvider，应用时钟（IClock）与 Cookie、OpenIddict 一并跟随
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
-            services.RemoveAll<IClock>();
-            services.AddSingleton<IClock>(clock);
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
         }));
         return (host, clock);
     }
 
-    private async Task<string> EnableForAsync(WebApplicationFactory<Program> host, string username, TestClock clock)
+    private async Task<string> EnableForAsync(WebApplicationFactory<Program> host, string username, FakeTimeProvider clock)
     {
         using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
         var secret = await BeginSetupAsync(session.Client);
@@ -323,7 +325,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         return secret;
     }
 
-    private static async Task<List<string>> EnableAsync(HttpClient client, string secret, TestClock clock)
+    private static async Task<List<string>> EnableAsync(HttpClient client, string secret, FakeTimeProvider clock)
     {
         using var response = await client.PostAsJsonAsync("/api/v1/auth/me/two-factor/enable", new { Code = Code(secret, clock) });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -369,8 +371,8 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
     private static string CookieOf(HttpResponseMessage response) =>
         string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]));
 
-    private static string Code(string secret, TestClock clock) =>
-        Totp.ComputeCode(Base32.Decode(secret)!, Totp.TimeStepAt(clock.Now));
+    private static string Code(string secret, FakeTimeProvider clock) =>
+        Totp.ComputeCode(Base32.Decode(secret)!, Totp.TimeStepAt(clock.GetUtcNow().UtcDateTime));
 
     private static async Task<string> CreateUserAsync(WebApplicationFactory<Program> host, string prefix)
     {
@@ -394,15 +396,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    /// <summary>手动推进的时钟：每推一次跨过一个验证码步长。</summary>
-    private sealed class TestClock : IClock
-    {
-        public DateTime Now { get; private set; } = new(2026, 9, 18, 8, 0, 0, DateTimeKind.Utc);
-
-        public void Advance() => Now = Now.AddSeconds(Totp.StepSeconds);
-
-        public DateTime Normalize(DateTime dateTime) =>
-            dateTime.Kind == DateTimeKind.Local ? dateTime.ToUniversalTime() : DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
-    }
+    /// <summary>推进一个验证码步长。</summary>
+    private static void Step(FakeTimeProvider clock) => clock.Advance(TimeSpan.FromSeconds(Totp.StepSeconds));
 }
 #endif

@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Api.Options;
+using CompanyName.ProjectName.Domain.Shared.Security;
 using Leistd.Lock.Abstractions;
 using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
@@ -51,7 +52,7 @@ internal sealed class ResourceSessionRefresher(
             return;
         }
         // 官方 Cookie 处理器已读取票据；远离刷新窗口的请求不再获取锁或重复读取。
-        if (expiration > clock.GetUtcNow().AddMinutes(1)) return;
+        if (expiration > clock.GetUtcNow() + AccessTokenRenewal.Lead) return;
         try
         {
             await using var handle = await locks.LockAsync(key + ":refresh", cancellationToken);
@@ -65,7 +66,7 @@ internal sealed class ResourceSessionRefresher(
                 await RejectAsync();
                 return;
             }
-            if (expiration <= clock.GetUtcNow().AddMinutes(1))
+            if (expiration <= clock.GetUtcNow() + AccessTokenRenewal.Lead)
             {
                 var refresh = properties.GetTokenValue("refresh_token");
                 if (string.IsNullOrEmpty(refresh)) { await RejectAsync(); return; }

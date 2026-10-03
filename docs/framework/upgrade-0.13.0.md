@@ -739,3 +739,14 @@ Hub 不因带 Authorization 头而跳过检查。按文档同源部署不受影�
 BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开时，事务型工作单元不再提交（此前照常提交），
 取消按调用方取消记 Debug，不再记成 Error "commit failed"。提交开始之后不响应取消，语义不变。
 依赖"请求已中止仍要落库"的方法，不要把请求令牌传进带 `[UnitOfWork]` 的方法，或在方法内自行开启不可取消的工作单元。
+
+## 31. 访问令牌寿命可配置（CRM R13）
+
+- Identity 新增 `OAuth:AccessTokenLifetime`（默认 `00:10:00`，与此前写死的值相同），`Program.cs` 改为读取它。不配置的项目行为不变。
+  它决定撤销、停用与会话退出传到依赖方的最长时延，代价是续期频率，取舍见部署文档"生产边界"。
+- 校验（所有环境一致，组合期与启动期复用 `OAuthOptionsValidator`）：必须是整秒且长于 1 分钟。资源服务的浏览器会话在令牌剩余 1 分钟时续期，
+  寿命不长于这个窗口会让每个请求都去续期；令牌的 `exp`/`iat` 以秒计，带小数秒的值会被截掉。两端共用的提前刷新值移到 `Domain/Shared/Security/AccessTokenRenewal.cs`。
+  寿命校验在开发证书分支之前执行，开发配置同样校验。
+- Token Exchange 的 120 秒上限与"不长于源令牌"的约束不变；源令牌寿命短于 120 秒时，交换令牌随源令牌到期。
+- 测试：`TwoFactorTests` 改用 `FakeTimeProvider` 替换容器里的 `TimeProvider`（集成测试项目新增 `Microsoft.Extensions.TimeProvider.Testing` 引用）；
+  测试规范补充时间边界用假时钟验证、端到端不等安全窗口，并列出不随假时钟快进的官方组件。
