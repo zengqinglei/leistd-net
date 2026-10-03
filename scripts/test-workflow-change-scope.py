@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def scope_step(workflow, job, step_id):
-    data = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text())
+    data = yaml.safe_load((ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8'))
     return next(s['run'] for s in data['jobs'][job]['steps'] if s.get('id') == step_id)
 
 
@@ -33,11 +33,11 @@ def evaluate(repo, script, base):
     script = script.replace("${{ github.event_name }}", 'push')
     script = script.replace("${{ github.ref }}", 'refs/heads/main')
     script_path = repo / 'scope.ps1'
-    script_path.write_text(script)
+    script_path.write_text(script, encoding='utf-8')
     result = subprocess.run(['pwsh', '-NoProfile', '-File', str(script_path)], cwd=repo,
                             env=dict(os.environ, GITHUB_OUTPUT=str(output)),
                             capture_output=True, text=True)
-    return result.returncode, output.read_text().strip() if output.exists() else '', result.stderr
+    return result.returncode, output.read_text(encoding='utf-8').strip() if output.exists() else '', result.stderr
 
 
 def main():
@@ -64,7 +64,7 @@ def main():
             git(repo, 'config', 'diff.renames', 'true')
             path = repo / source
             path.parent.mkdir(parents=True)
-            path.write_text('scope fixture\n' * 20)
+            path.write_text('scope fixture\n' * 20, encoding='utf-8')
             git(repo, 'add', source)
             git(repo, 'commit', '-qm', 'fixture base')
             base = git(repo, 'rev-parse', 'HEAD')
@@ -76,7 +76,7 @@ def main():
                 git(repo, 'rm', source)
             git(repo, 'commit', '-qm', 'fixture change')
             # A later docs-only commit must not hide the first commit's impact.
-            (repo / 'note.txt').write_text('later commit\n')
+            (repo / 'note.txt').write_text('later commit\n', encoding='utf-8')
             git(repo, 'add', 'note.txt')
             git(repo, 'commit', '-qm', 'second change')
             for label, script, expected in [('CI', container, ci_needed), ('Release', release, release_needed)]:
@@ -85,6 +85,9 @@ def main():
                 if name in ('container moved out', 'source moved out', 'package docs moved out') and expected:
                     code, output, _ = evaluate(repo, script.replace('--no-renames ', ''), base)
                     assert code == 0 and output == 'needed=false', ('original blind spot not reproduced', name, label)
+            # Dispatch/reusable CI has no PR base and must compare against merge-base.
+            code, output, error = evaluate(repo, container, '')
+            assert code == 0 and output == f'needed={str(ci_needed).lower()}', (name, 'merge-base fallback', code, output, error)
             # Missing commits: CI conservatively checks containers; Release fails closed.
             code, output, error = evaluate(repo, container, '1' * 40)
             assert code == 0 and output == 'needed=true', (name, 'unknown CI base', error)
@@ -92,7 +95,11 @@ def main():
             assert code != 0, (name, 'unknown release base')
             code, _, _ = evaluate(repo, release, '0' * 40)
             assert code != 0, (name, 'zero release base')
-            print(f'PASS {name}: both workflows, multi-commit and missing-base cases')
+            # Equal merge-base/HEAD cannot establish a useful comparison: fail conservatively.
+            git(repo, 'update-ref', 'refs/remotes/origin/main', git(repo, 'rev-parse', 'HEAD'))
+            code, output, error = evaluate(repo, container, '')
+            assert code == 0 and output == 'needed=true', (name, 'merge-base equals HEAD', code, output, error)
+            print(f'PASS {name}: both workflows, multi-commit, merge-base and missing-base cases')
 
 
 if __name__ == '__main__':

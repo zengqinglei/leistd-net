@@ -9,7 +9,8 @@ namespace CompanyName.ProjectName.UnitTests.Domain;
 /// </summary>
 /// <remarks>
 /// 这是单元测试该覆盖的形状——纯函数、没有依赖、分支全部可枚举。
-/// 纯类断言不需要集成测试宿主，实际管理员初始化入口由集成测试验证。
+/// 超级管理员初始化曾只检查口令非空，因此各服务端入口统一使用 PasswordPolicy 校验。
+/// 纯类断言不需要集成测试宿主，实际管理员初始化入口由集成测试 DefaultAdminBootstrapTests 验证。
 /// </remarks>
 public class PasswordPolicyTests
 {
@@ -28,7 +29,7 @@ public class PasswordPolicyTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("elevenchars")]
-    public void Missing_password_is_rejected(string? password)
+    public void Missing_or_short_passwords_are_rejected(string? password)
     {
         Assert.False(PasswordPolicy.IsAcceptable(password));
     }
