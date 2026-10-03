@@ -36,10 +36,10 @@ def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
     script_path = repo / 'scope.ps1'
     script_path.write_text(script, encoding='utf-8')
     result = subprocess.run(['pwsh', '-NoProfile', '-File', str(script_path)], cwd=repo,
-                            env=dict(os.environ, GITHUB_OUTPUT=str(output),
+                            env={**dict(os.environ, GITHUB_OUTPUT=str(output),
                                      GITHUB_STEP_SUMMARY=str(repo / 'summary.txt'),
-                                     PR_BASE_SHA=base, EVENT_NAME=event, CANDIDATE_SHA=candidate,
-                                     **(extra_env or {})),
+                                     PR_BASE_SHA=base, EVENT_NAME=event, CANDIDATE_SHA=candidate),
+                                 **(extra_env or {})},
                             capture_output=True, text=True)
     return result.returncode, output.read_text(encoding='utf-8').strip() if output.exists() else '', result.stderr
 
@@ -107,7 +107,7 @@ def check_existing_scopes():
 
 
 def check_docs_scope():
-    script = scope_step('ci.yml', 'template-slice-plan', 'scope')
+    script = scope_step('ci.yml', 'framework-pack', 'scope')
     cases = [
         ('root readme', 'README.md', 'README.md', True),
         ('internal docs', 'docs/foo.md', 'docs/bar.md', True),
@@ -206,15 +206,21 @@ def check_quality_aggregation():
     workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))
     jobs = workflow['jobs']
     quality = jobs['template-matrix']
-    dynamic = ['framework-pack', 'test', 'template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
-    required = ['template-slice-plan', 'docs-sync', *dynamic]
+    dynamic = ['test', 'template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
+    required = ['framework-pack', 'docs-sync', *dynamic]
     assert set(quality['needs']) == set(required), 'aggregation must wait for every required result'
     assert quality['if'] == 'always()', 'aggregation must run after failure/skip/cancellation'
-    for job in ('framework-pack', 'test', 'template-slices'):
-        assert 'template-slice-plan' in jobs[job]['needs'], ('scope dependency missing', job)
-        assert jobs[job]['if'] == "needs.template-slice-plan.outputs.docs_only == 'false'", ('scope guard missing', job)
-    for job in ('package-consumption', 'postgresql-e2e', 'oidc-e2e'):
-        assert jobs[job]['needs'] == 'framework-pack', ('dynamic skip propagation lost', job)
+    assert 'needs' not in jobs['framework-pack'], 'packing must start without waiting for another runner'
+    assert 'template-slice-plan' not in jobs, 'no redundant planning runner'
+    for job in dynamic:
+        assert jobs[job]['needs'] == 'framework-pack', ('scope dependency missing', job)
+        assert "needs.framework-pack.outputs.docs_only == 'false'" in jobs[job]['if'], ('scope guard missing', job)
+    assert 'FrameworkTests' in jobs['test']['if'], 'template-only must not run unchanged framework tests'
+    pack = jobs['framework-pack']
+    assert pack['steps'][0]['with']['fetch-depth'] == 2, 'PR merge baseline should be locally available'
+    for step in pack['steps']:
+        if step.get('uses', '').startswith(('actions/setup-dotnet@', 'actions/upload-artifact@')) or step.get('name') == '打包当前 Framework':
+            assert step['if'] == "steps.scope.outputs.docs_only == 'false'", 'docs-only must not pack/upload'
     for job in jobs.values():
         for step in job['steps']:
             if step.get('uses', '').startswith('actions/checkout@'):
@@ -228,36 +234,44 @@ def check_quality_aggregation():
     script = scope_step('ci.yml', 'template-matrix', 'quality')
     with tempfile.TemporaryDirectory(prefix='leistd-quality-') as directory:
         repo = Path(directory)
-        for docs_only in ('true', 'false'):
+        candidate = 'a' * 40
+        for docs_only, framework_tests in [('true', False), ('false', True), ('false', False)]:
             normal = {name: {'result': 'success', 'outputs': {}} for name in required}
-            normal['template-slice-plan']['outputs']['docs_only'] = docs_only
+            plan = dict(Version=1, CandidateSha=candidate, Tier='pr', DocsOnly=docs_only == 'true',
+                        Mode='frontend' if docs_only == 'false' and not framework_tests else 'full',
+                        FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'])
+            normal['framework-pack']['outputs'] = dict(docs_only=docs_only, validation_plan=json.dumps(plan))
             for name in dynamic:
-                normal[name]['result'] = 'skipped' if docs_only == 'true' else 'success'
+                normal[name]['result'] = 'skipped' if docs_only == 'true' or (name == 'test' and not framework_tests) else 'success'
 
             def check(state, success, variant=script):
-                code, output, error = evaluate(repo, variant, '', extra_env={'NEEDS_JSON': json.dumps(state)})
-                assert (code == 0) == success, (docs_only, state, code, output, error)
+                code, output, error = evaluate(repo, variant, '', extra_env={
+                    'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'pr'})
+                assert (code == 0) == success, (docs_only, framework_tests, state, code, output, error)
                 if success:
                     assert output == f"dynamic={'false' if docs_only == 'true' else 'true'}", output
 
             check(normal, True)
             for name in required:
-                for bad in ('failure', 'cancelled', '', 'success' if name in dynamic and docs_only == 'true' else 'skipped'):
-                    state = json.loads(json.dumps(normal))
-                    state[name]['result'] = bad
+                expected = normal[name]['result']
+                for bad in ('failure', 'cancelled', '', 'success' if expected == 'skipped' else 'skipped'):
+                    state = json.loads(json.dumps(normal)); state[name]['result'] = bad
                     check(state, False)
-                state = json.loads(json.dumps(normal))
-                del state[name]
+                state = json.loads(json.dumps(normal)); del state[name]
                 check(state, False)
             for value in ('', 'TRUE', None, 'unknown'):
-                state = json.loads(json.dumps(normal))
-                state['template-slice-plan']['outputs']['docs_only'] = value
+                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['docs_only'] = value
                 check(state, False)
-            # Mutation: omitting static result allows the old fake-green scenario.
-            state = json.loads(json.dumps(normal))
-            state['docs-sync']['result'] = 'failure'
-            check(state, True, script.replace("@('template-slice-plan', 'docs-sync')", "@('template-slice-plan')"))
-            print(f'PASS aggregation docs_only={docs_only}: every required failure/cancellation/missing/incorrect skip and static mutation')
+            for field, value in [('CandidateSha', 'b' * 40), ('Tier', 'full'), ('FrameworkTests', 'false'),
+                                 ('Mode', 'unknown'), ('Version', 9), ('DocsOnly', not plan['DocsOnly'])]:
+                invalid = dict(plan); invalid[field] = value
+                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(invalid)
+                check(state, False)
+            state = json.loads(json.dumps(normal)); state['framework-pack']['outputs'].pop('validation_plan')
+            check(state, False)
+            state = json.loads(json.dumps(normal)); state['docs-sync']['result'] = 'failure'
+            check(state, True, script.replace("@('framework-pack', 'docs-sync')", "@('framework-pack')"))
+            print(f'PASS aggregation docs_only={docs_only}, framework_tests={framework_tests}: missing/failed/cancelled/wrong skip, wrong candidate/plan and static mutation')
 
 
 def main():

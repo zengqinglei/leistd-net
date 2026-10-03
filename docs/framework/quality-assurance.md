@@ -10,14 +10,14 @@
 | --- | --- | --- | --- |
 | L0 编辑循环 | 每次小改动 | ≤ 1 分钟 | 受影响项目构建 + `dotnet test <测试项目> --filter "FullyQualifiedName~<类>"`；改了某道闸门就单跑它 |
 | L1 阶段完成 / 提交前 | 交评审前 | 框架 ≤ 5 分钟，模板 ≤ 10 分钟 | `check-all.ps1` + 下表按路径选的入口 |
-| L2 PR CI | 每次推送 PR | 墙钟 ≤ 8.5 分钟 | 完整静态闸门；代码及交付输入变化运行框架全量测试、包消费、PostgreSQL/OIDC 端到端、模板 `pr` 档场景；纯内部文档例外见下文 |
+| L2 PR CI | 每次推送 PR | 墙钟 ≤ 8.5 分钟 | 完整静态闸门；依据同候选验证计划执行必要框架测试、包内容/消费、PostgreSQL/OIDC 与模板场景/阶段；未知及共享输入取完整 PR 档 |
 | L3 全集 | develop 推送、工作日夜间、发布（main 推送仅在框架或 VERSION 变化时） | 不设严格预算 | 同 L2，模板跑 `full` 档全部场景；发布等待同 SHA 的 L3 结果 |
 
 L1 按改动路径选择入口：
 
 | 改动 | 必跑 | 视情况加跑 |
 | --- | --- | --- |
-| 只改内部文档或 Skill（CI 白名单见 `ci.yml` 的 `template-slice-plan/scope`，含根 `skills/`） | `check-all.ps1` | — |
+| 只改内部文档或 Skill（CI 白名单见 `ci.yml` 的 `framework-pack/scope`，含根 `skills/`） | `check-all.ps1` | — |
 | 随包 `framework/docs/`、模板 `template/docs/` 或项目 Skill | `check-all.ps1` + 打包内容或代表性生成检查 | 影响运行契约时加相应隔离消费或生成场景验证 |
 | 框架某组件家族的实现 | 框架全量测试 + `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时按下一行验证 |
 | 模板某个特性（通知、外部登录、本地化）或某种 `ServiceRole` | 含该特性/形态的一个场景 + `identity-all-features` + 关闭侧场景（通常是 `identity`） | 前端交互变化做浏览器验证 |
@@ -25,7 +25,7 @@ L1 按改动路径选择入口：
 | 数据库映射、迁移、租户路由 | 受影响场景 + `test-template-postgresql-e2e.ps1` | — |
 | 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios` |
 | Dockerfile、部署资产 | `-Scenarios standalone -ContainerSmokeScenarios standalone` | — |
-| CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围/聚合变化运行 `python scripts/test-workflow-change-scope.py`；预检接替变化运行 `python scripts/test-template-source-preflight.py`；影响调度时用远端 CI 验收 |
+| CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围/聚合变化运行 `python scripts/test-workflow-change-scope.py`，选测/回执变化运行 `python scripts/test-quality-validation-plan.py`；预检接替变化运行 `python scripts/test-template-source-preflight.py`；影响调度时用远端 CI 验收 |
 
 模板矩阵与生成项目的集成测试需要 Docker：集成测试用 Testcontainers 起 PostgreSQL，运行时冒烟先迁移再启动 API。`full` 档在本地只在需要复现合入后失败时执行。未执行的档位与入口须在交付说明里列出。
 
@@ -35,9 +35,9 @@ L1 按改动路径选择入口：
 
 ## PR 的内部文档例外
 
-直接 PR 的纯内部文档资格只由 [CI 范围步骤](../../.github/workflows/ci.yml) `template-slice-plan/scope` 的路径白名单决定。它读取 base 到实际候选的完整差异，跨边界重命名按两端处理；空差异、未知路径或无法确定基准均取全集。Framework 随包文档、Template 的全部载荷、脚本、workflow 和根构建输入不属于该例外。手动和复用入口不享受 docs-only，按所选档位执行，发布仍为 full。
+直接 PR 的纯内部文档资格只由 [CI 范围步骤](../../.github/workflows/ci.yml) `framework-pack/scope` 的路径白名单决定。它读取 base 到实际候选的完整差异，跨边界重命名按两端处理；空差异、未知路径或无法确定基准均取全集。Framework 随包文档、Template 的全部载荷、脚本、workflow 和根构建输入不属于该例外。手动和复用入口不享受 docs-only，按所选档位执行，发布仍为 full。
 
-docs-only 仍运行完整静态闸门、范围规划和必过质量汇总；动态作业按规则跳过，汇总报告“不适用”。不使用 workflow 级 `paths-ignore`。范围失败、取消、输出缺失或静态失败均阻止汇总通过；不能把缺少矩阵回执称为执行成功。代码 PR 保留完整 L2，普通小修复不会因文件少而自动省略集成或模板场景。
+docs-only 仍运行完整静态闸门、范围/计划与必过质量汇总；动态作业按规则跳过，汇总报告“不适用”。不使用 workflow 级 `paths-ignore`。范围失败、取消、输出缺失或静态失败均阻止汇总通过；不能把缺少矩阵回执称为执行成功。代码 PR 的责任由下述输入计划决定，不能按文件数或需求大小省略测试。
 
 ## 编译器、分析器与静态闸门
 
@@ -59,9 +59,29 @@ docs-only 仍运行完整静态闸门、范围规划和必过质量汇总；动�
 
 先测作业的运行、队列和依赖，按 DAG 关键路径决定优化顺序，不把所有作业节省的秒数相加当作墙钟收益。独立的包消费、框架契约与真实服务闭环可在同一候选 SHA 上并行，但质量结果须包含它们；拆成独立作业不能变成可选检查。
 
-模板场景分 `pr`、`full` 两档。`full` 档完整分配所有已登记场景；`pr` 档是子集，由 `check-template-scenario-coverage.py` 逐行求值，证明每个条件行都由某个 `pr` 档场景生成，且 24 种参数组合可达的行都有登记场景生成。这是行覆盖：同一产物里几处条件分支一起编译、lint 的组合交互不在 `pr` 档保证之内，由 `full` 档兜底。两档的入选场景都执行原有完整阶段；汇总按本次档位核对场景集合与阶段，漏片、错档、取消和失败都不能通过质量聚合。调整场景档位属于调度，以覆盖闸门通过、`full` 档仍在合入后执行为验收，不逐场景注入缺陷；删除或替换检查本身仍按下节执行变异验收。按实测场景耗时均衡负载，不自动为未来规模引入动态调度器；各作业使用独立 feed/hive/缓存/端口和清理边界。是否增加分片同时评估队列、准备重复与 runner 总时间。发布继续等待同 SHA 的完整质量结果，不解除串行发布锁。
+模板场景、档位与分片只维护在 `scripts/template-matrix-scenarios.ps1`。默认人工 PR 档执行六场景完整阶段；full 执行十场景、真实集成及适用容器，发布等待同 SHA 的完整结果。PR 档的条件行覆盖由 `check-template-scenario-coverage.py` 逐行求值；组合交互仍由 full 兜底，不以覆盖率删除测试。
 
-分片按"验证什么"命名并登记说明（`$MatrixSlices`），不用编号；场景定义、档位与分片归属只维护在 `scripts/template-matrix-scenarios.ps1`，`template-slice-plan` 作业从中读出本档分片生成 matrix，不在 workflow 重抄。当前 `pr` 档 3 片、`full` 档 2 片（按服务形态）：`pr` 档有人等待，按墙钟取片数；`full` 档无人等待，按 runner 时间取片数。PR 事件跑 `pr` 档；`release.yml` 复用与手动触发默认跑 `full` 档。`framework-pack` 打包一次并上传当前候选的不可变包 artifact；各分片 `template-slices` 和独立 `package-consumption` 下载到各自私有目录。默认全量消费先核对源码项目与包集完整性，漏包失败；人工 `-PackageIds` 才可缩小消费范围。消费校验与矩阵同时开始，矩阵不等待消费；模板分片、包消费、PostgreSQL 与 OIDC 作业都只读复用同一候选包，不共写包源；后两者的 hive、解包缓存、数据库与清理仍各自隔离，人工独立入口仍可自行打包。全部包的消费者各保留一个独立项目，通过临时 slnx 一次 restore/build 调度；包集合与 DLL/XML/文档检查仍先执行，任何项目失败都使入口失败，不把空消费项目当作实际 API 的依赖完整性证明。原 `template-matrix` 必过检查名作为汇总入口，使用 `always()` 核对必要作业成功与本档每片恰好一份收据的场景集合、阶段和容器责任；缺片、跳过、取消、重复、错档或未登记的片名均失败。结果只在完整执行后写出，文件仅上传验证摘要，不上传生成目录、NuGet 缓存或密钥。
+`framework-pack` 无作业依赖，checkout 候选后执行内部文档判定与 `plan-quality-checks.py`，生成绑定 SHA/档位的计划和选定分片。它同时承担范围结果成功责任；docs-only 不安装 SDK、不打包、不上传产物。其他输入只打包一次，immutable artifact 供各消费者只读下载。所有动态作业显式检查范围，不能依赖打包作业被跳过来间接过滤。移除独立规划 runner，避免 pack 等待另一个 runner 的启动和完成。
+
+### 同候选输入计划
+
+选择规则唯一实现为 `scripts/plan-quality-checks.py`；内部文档白名单仍只在 workflow。完整 base→候选差异非空，且只包含支持的前端源码或后端 C# 时，才允许模板阶段裁剪：
+
+| 输入 | Framework 测试 | 包内容/隔离消费 | 模板阶段 | 独立 PG/OIDC |
+| --- | --- | --- | --- | --- |
+| 仅模板前端 src/public/_mock 的支持文件 | 不适用，输入未变 | 全部包内容；消费构建不适用 | 生成/形态、audit、npm ci、healthcheck、lint、build、spec 发现与真实 Chromium | 保留 |
+| 仅模板 backend/src 或 tests 的 C# | 不适用，输入未变 | 全部包内容；消费构建不适用 | 生成/形态、audit、restore/build、真实运行时、后端单元/集成 | 保留 |
+| Framework 组件/DDD 项目内局部 C# | 全量 | 全部内容；该包与候选 nuspec 反向传递依赖的隔离消费 | 完整 PR 场景/阶段 | 保留 |
+| 跨前后端、共享配置/依赖、随包/生成文档、脚本/workflow、未知输入 | 全量 | 全部内容与全部消费 | 完整 PR 场景/阶段；适用容器 | 保留 |
+| 手动/复用/full 或未知/无效 base | 全量 | 全部内容与全部消费 | 所选档位完整场景/阶段 | 保留 |
+
+局部模板场景依据现有 template.json 的 sources/modifiers/computed 条件求文件生产场景，纳入旧/新树两侧与默认/全特性代表；不另建特性目录映射。模板参数、项目/前端配置和依赖变化取完整档。选测证明是输入闭包，前端 mocks 不认证后端契约，因此 PG/OIDC 不因前端或后端局部变化被省略。
+
+Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/build 消费项目；全包内容、源码包集、DLL/XML/文档、重复包、缺失候选依赖仍先核对。它不裁剪 Framework 用例、DI/反射/配置语义、模板或服务闭环；出现显式跨项目编译输入时回退全量。人工 `-PackageIds` 保持已有局部入口，CI 使用独立计划并仍要求完整候选 feed。
+
+汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确分片、场景、阶段、SHA 与档位。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、错 SHA/档位/阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；默认完整档拒绝局部收据。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
+
+本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`。默认人工入口不自动推测 base，继续完整执行；不能将局部计划与手动跳过或 -Scenarios 混用。
 
 范围裁剪必须基于 PR base/merge-base 到 head 的完整差异及实际依赖，不用单一 `HEAD^` 代替多提交 PR。无法确定范围时全量执行；随包文档、props、lock、脚本与 workflow 都是质量输入。只有接替责任和变异证据完整时才削减组合入口的重复工作。
 
@@ -77,4 +97,4 @@ CI 墙钟从本次尝试的起点到最后一个必要质量作业的 `completed
 
 本地监听或容器访问受限时，经明确裁决可用同规格的完整远端 CI 验收；须核对实际日志、候选 head 与 PR merge 提交、全部必要作业和场景回执。单次历史前后对比只报告观测收益，不冒称同输入三轮复测或稳定 SLA；同时变更的依赖、运行时代码与 runner 镜像版本须披露。浏览器下载、依赖准备与网络耗时有波动，分片收益不能全部归因于代码优化，也不能仅靠本次较快准备阶段再次增加分片。
 
-官方依据：[微软测试分层与执行时机](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/test-asp-net-core-mvc-apps)、[GitHub 矩阵与失败策略](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)、[作业依赖与 always](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds)、[SDK 分析器](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)、[ASP.NET Core 测试层级](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0)、[EF Core 测试选型](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy)、[xUnit 并行配置](https://xunit.net/docs/config-xunit-runner-json)。
+官方依据：[NuGet 实际依赖解析](https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution)、[微软测试分层与执行时机](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/test-asp-net-core-mvc-apps)、[GitHub 矩阵与失败策略](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)、[作业依赖与 always](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds)、[SDK 分析器](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)、[ASP.NET Core 测试层级](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0)、[EF Core 测试选型](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy)、[xUnit 并行配置](https://xunit.net/docs/config-xunit-runner-json)。

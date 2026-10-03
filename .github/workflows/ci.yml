@@ -4,7 +4,7 @@ name: CI
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - package-consumption：NuGet 包内容与隔离消费，独立必过
 #   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
-#   - template-slice-plan / template-slices：按档位读出具名分片（每片验证什么见
+#   - framework-pack / template-slices：按档位读出具名分片（每片验证什么见
 #     scripts/template-matrix-scenarios.ps1 的 $MatrixSlices），每片一个作业，消费同一候选包；
 #     PR 跑 pr 档子集，release 复用与手动触发默认跑 full 全集
 #   - template-matrix：保留必过检查名，核对范围、静态及所有必要动态作业和场景回执
@@ -33,7 +33,7 @@ on:
 # PR 只跑 pr 档：它能否代表全集由 check-template-scenario-coverage.py 逐行判定，
 # 全集在 develop/main 推送、夜间与发布时由 release.yml 复用本工作流执行。
 env:
-  MATRIX_TIER: ${{ github.event_name == 'pull_request' && 'pr' || inputs.tier || 'full' }}
+  MATRIX_TIER: ${{ github.event_name == 'pull_request' && !inputs.candidate_sha && 'pr' || inputs.tier || 'full' }}
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
@@ -59,75 +59,16 @@ jobs:
         shell: pwsh
         run: pwsh scripts/check-all.ps1
 
-  template-slice-plan:
-    name: 判断验证范围与规划模板分片
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      slices: ${{ steps.plan.outputs.slices }}
-      docs_only: ${{ steps.scope.outputs.docs_only }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.candidate_sha || github.sha }}
-          sparse-checkout: scripts
-          # PR merge checkout 的第一层父提交即比较基准，避免另一次网络 fetch；缺失仍保守补取。
-          fetch-depth: 2
-      - name: 判断是否仅修改内部文档
-        id: scope
-        shell: pwsh
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: |
-          # 白名单唯一来源。只有直接 PR 可以省略动态作业；复用入口可能继承 PR 事件名。
-          $docsOnly = $false
-          $base = $env:PR_BASE_SHA
-          if ($env:EVENT_NAME -ceq 'pull_request' -and -not $env:CANDIDATE_SHA -and
-              $base -cmatch '^[0-9a-f]{40}$' -and $base -ne ('0' * 40) -and
-              $base -ne (git rev-parse HEAD)) {
-            git cat-file -e "$base^{commit}" 2>$null
-            if ($LASTEXITCODE -ne 0) {
-              # checkout 默认浅克隆；只取比较基准，不为小作业下载完整历史。
-              git fetch --no-tags --depth=1 origin $base 2>$null
-            }
-            if ($LASTEXITCODE -eq 0) {
-              # 禁止 rename 检测：跨白名单边界移动时，两端都必须计入。
-              $changed = @(git -c core.quotePath=false diff --no-renames --name-only $base HEAD)
-              if ($LASTEXITCODE -eq 0 -and $changed.Count -gt 0) {
-                $outside = @($changed | Where-Object {
-                  $_ -cne 'README.md' -and $_ -cnotmatch '^(docs|\.agents|skills)/'
-                })
-                $docsOnly = $outside.Count -eq 0
-              }
-            }
-          }
-          # 无法确定 base/diff 时取全集；native git 的失败不能污染成功的保守判定。
-          $global:LASTEXITCODE = 0
-          "docs_only=$($docsOnly ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-          Write-Host "docs_only=$($docsOnly ? 'true' : 'false')"
-      # 分片名与说明只维护在场景定义里，这里读出来作为 matrix，不在 workflow 重抄
-      - name: 读出本档分片
-        id: plan
-        if: steps.scope.outputs.docs_only == 'false'
-        shell: pwsh
-        run: |
-          . ./scripts/template-matrix-scenarios.ps1
-          $plannedSlices = @($MatrixSlices[$env:MATRIX_TIER].GetEnumerator() | ForEach-Object { [ordered]@{ key = $_.Key; title = $_.Value } })
-          if ($plannedSlices.Count -eq 0) { throw "档位 $env:MATRIX_TIER 没有登记分片" }
-          "slices=$(ConvertTo-Json -InputObject $plannedSlices -Compress)" | Out-File $env:GITHUB_OUTPUT -Append
-
   template-slices:
     name: 模板场景 · ${{ matrix.slice.title }}
-    needs: [framework-pack, template-slice-plan]
-    if: needs.template-slice-plan.outputs.docs_only == 'false'
+    needs: framework-pack
+    if: needs.framework-pack.outputs.docs_only == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        slice: ${{ fromJSON(needs.template-slice-plan.outputs.slices) }}
+        slice: ${{ fromJSON(needs.framework-pack.outputs.slices) }}
     outputs:
       container_needed: ${{ steps.container_scope.outputs.needed }}
     steps:
@@ -149,6 +90,7 @@ jobs:
             template/.template.config/localization/frontend/package-lock.json
       # 前端单测跑在 Playwright 的 Chromium 里；版本取模板锁文件，与生成项目实际安装的一致
       - name: 安装单测用的 Chromium
+        if: fromJSON(needs.framework-pack.outputs.validation_plan).Mode != 'backend'
         shell: pwsh
         run: |
           # 锁文件根包的键是空字符串，ConvertFrom-Json 须用 -AsHashTable 才能解析
@@ -188,11 +130,14 @@ jobs:
       - name: 生成并验证本片全部场景
         id: matrix
         shell: pwsh
+        env:
+          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
         run: |
+          $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
           # @(...) 包住整个 if：单元素数组经 if 输出会展开成字符串，@ 展开字符串会把它拆成单个字符
           $containerArgs = @(if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { '-ContainerSmoke' })
           # 同候选源码预检由 docs-sync 承担；汇总必须核对其成功，不能用跳过代替通过。
-          pwsh scripts/test-template-matrix.ps1 -SkipPack -SkipSourcePreflight -Tier $env:MATRIX_TIER -Slice '${{ matrix.slice.key }}' @containerArgs
+          pwsh scripts/test-template-matrix.ps1 -SkipPack -SkipSourcePreflight -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER -Slice '${{ matrix.slice.key }}' @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
       - name: 保留完整场景结果
         uses: actions/upload-artifact@v4
@@ -204,21 +149,81 @@ jobs:
 
   framework-pack:
     name: 打包候选 Framework
-    needs: template-slice-plan
-    if: needs.template-slice-plan.outputs.docs_only == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      validation_plan: ${{ steps.plan.outputs.validation_plan }}
+      slices: ${{ steps.plan.outputs.slices }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.candidate_sha || github.sha }}
+          fetch-depth: 2
+      - name: 判断是否仅修改内部文档
+        id: scope
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          # 白名单唯一来源。只有直接 PR 可以省略动态作业；复用入口可能继承 PR 事件名。
+          $docsOnly = $false
+          $base = $env:PR_BASE_SHA
+          if ($env:EVENT_NAME -ceq 'pull_request' -and -not $env:CANDIDATE_SHA -and
+              $base -cmatch '^[0-9a-f]{40}$' -and $base -ne ('0' * 40) -and
+              $base -ne (git rev-parse HEAD)) {
+            git cat-file -e "$base^{commit}" 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              # checkout 默认浅克隆；只取比较基准，不为小作业下载完整历史。
+              git fetch --no-tags --depth=1 origin $base 2>$null
+            }
+            if ($LASTEXITCODE -eq 0) {
+              # 禁止 rename 检测：跨白名单边界移动时，两端都必须计入。
+              $changed = @(git -c core.quotePath=false diff --no-renames --name-only $base HEAD)
+              if ($LASTEXITCODE -eq 0 -and $changed.Count -gt 0) {
+                $outside = @($changed | Where-Object {
+                  $_ -cne 'README.md' -and $_ -cnotmatch '^(docs|\.agents|skills)/'
+                })
+                $docsOnly = $outside.Count -eq 0
+              }
+            }
+          }
+          # 无法确定 base/diff 时取全集；native git 的失败不能污染成功的保守判定。
+          $global:LASTEXITCODE = 0
+          "docs_only=$($docsOnly ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "docs_only=$($docsOnly ? 'true' : 'false')"
+      - name: 生成同候选验证计划
+        id: plan
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          python scripts/plan-quality-checks.py --tier $env:MATRIX_TIER --docs-only '${{ steps.scope.outputs.docs_only }}' --output .tmp/quality-plan.json
+          if ($LASTEXITCODE -ne 0) { throw '无法生成验证计划' }
+          $text = Get-Content .tmp/quality-plan.json -Raw
+          $plan = $text | ConvertFrom-Json
+          . ./scripts/template-matrix-scenarios.ps1
+          $slices = @($MatrixSlices[$env:MATRIX_TIER].GetEnumerator() | Where-Object {
+            $key = $_.Key
+            @($plan.Scenarios | Where-Object { $scenarioMap[$_].Slices[$env:MATRIX_TIER] -ceq $key }).Count -gt 0
+          } | ForEach-Object { [ordered]@{ key = $_.Key; title = $_.Value } })
+          "validation_plan=$text" | Out-File $env:GITHUB_OUTPUT -Append
+          "slices=$(ConvertTo-Json -InputObject $slices -Compress)" | Out-File $env:GITHUB_OUTPUT -Append
+          "验证计划：$text" | Out-File $env:GITHUB_STEP_SUMMARY -Append
       - uses: actions/setup-dotnet@v4
+        if: steps.scope.outputs.docs_only == 'false'
         with:
           dotnet-version: '10.0.x'
       - name: 打包当前 Framework
+        if: steps.scope.outputs.docs_only == 'false'
         shell: pwsh
         run: pwsh framework/build/pack-local-feed.ps1
       - name: 保留同一候选包源
+        if: steps.scope.outputs.docs_only == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: candidate-framework-feed
@@ -229,6 +234,7 @@ jobs:
   package-consumption:
     name: NuGet 包内容与隔离消费
     needs: framework-pack
+    if: needs.framework-pack.outputs.docs_only == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -243,16 +249,19 @@ jobs:
         with:
           name: candidate-framework-feed
           path: .tmp/local-feed
-      - name: 隔离消费全部包
+      - name: 核对全部包并消费影响闭包
         shell: pwsh
+        env:
+          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
         run: |
-          pwsh framework/build/test-package-consumption.ps1
+          $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
+          pwsh framework/build/test-package-consumption.ps1 -ValidationPlanPath .tmp/quality-plan.json
           if ($LASTEXITCODE -ne 0) { throw 'NuGet 包消费失败' }
 
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
-    needs: [template-slice-plan, docs-sync, framework-pack, test, template-slices, package-consumption, postgresql-e2e, oidc-e2e]
+    needs: [docs-sync, framework-pack, test, template-slices, package-consumption, postgresql-e2e, oidc-e2e]
     if: always()
     timeout-minutes: 5
     steps:
@@ -261,21 +270,32 @@ jobs:
         shell: pwsh
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha || github.sha }}
         run: |
           $jobs = ConvertFrom-Json $env:NEEDS_JSON -AsHashtable
-          foreach ($required in @('template-slice-plan', 'docs-sync')) {
+          foreach ($required in @('framework-pack', 'docs-sync')) {
             if ($jobs[$required].result -cne 'success') {
               throw "$required 失败、缺失、跳过或取消"
             }
           }
-          $docsOnly = $jobs['template-slice-plan'].outputs.docs_only
+          $docsOnly = $jobs['framework-pack'].outputs.docs_only
           if ($docsOnly -cnotin @('true', 'false')) { throw '缺少合法验证范围输出' }
           $expected = if ($docsOnly -ceq 'true') { 'skipped' } else { 'success' }
-          foreach ($required in @('framework-pack', 'test', 'template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e')) {
+          foreach ($required in @('template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e')) {
             if ($jobs[$required].result -cne $expected) {
               throw "$required 应为 $expected，实际失败、缺失、取消或范围不一致"
             }
           }
+          $plan = $jobs['framework-pack'].outputs.validation_plan | ConvertFrom-Json
+          if ($plan.Version -ne 1 -or $plan.DocsOnly -isnot [bool] -or
+              $plan.DocsOnly -ne ($docsOnly -ceq 'true') -or $plan.FrameworkTests -isnot [bool] -or
+              $plan.Mode -cnotin @('full', 'frontend', 'backend') -or
+              $plan.CandidateSha -cnotmatch '^[0-9a-f]{40}$' -or
+              $plan.CandidateSha -cne $env:CANDIDATE_SHA -or $plan.Tier -cne $env:MATRIX_TIER -or
+              ($docsOnly -ceq 'true' -and ($plan.FrameworkTests -or @($plan.Scenarios).Count -ne 0)) -or
+              ($docsOnly -ceq 'false' -and @($plan.Scenarios).Count -eq 0)) { throw '缺少合法同候选验证计划' }
+          $frameworkExpected = if ($docsOnly -ceq 'false' -and $plan.FrameworkTests) { 'success' } else { 'skipped' }
+          if ($jobs['test'].result -cne $frameworkExpected) { throw '框架测试失败、缺失、取消或范围不一致' }
           "dynamic=$($docsOnly -ceq 'false' ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
           if ($docsOnly -ceq 'true') {
             '仅修改内部文档：完整静态闸门通过，动态验证不适用。' | Out-File $env:GITHUB_STEP_SUMMARY -Append
@@ -290,21 +310,23 @@ jobs:
           pattern: template-matrix-*
           path: .tmp/matrix-receipts
           merge-multiple: true
-      - name: 核对场景全集和完整阶段
+      - name: 核对预期场景、阶段和候选身份
         if: steps.quality.outputs.dynamic == 'true'
         shell: pwsh
         env:
           CONTAINER_NEEDED: ${{ needs.template-slices.outputs.container_needed }}
+          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
         run: |
+          $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
           if ($env:CONTAINER_NEEDED -notin @('true', 'false')) { throw '缺少容器范围判定结果' }
           $containerArgs = @(if ($env:CONTAINER_NEEDED -eq 'true') { '-ContainerSmoke' })
-          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -Tier $env:MATRIX_TIER @containerArgs
+          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵证明不完整' }
 
   test:
     name: 框架单元测试
-    needs: template-slice-plan
-    if: needs.template-slice-plan.outputs.docs_only == 'false'
+    needs: framework-pack
+    if: needs.framework-pack.outputs.docs_only == 'false' && fromJSON(needs.framework-pack.outputs.validation_plan).FrameworkTests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # 分布式锁的 Redis 契约用例需要真实服务：没有服务时它们会跳过而不是失败
@@ -346,6 +368,7 @@ jobs:
   postgresql-e2e:
     name: 模板 PostgreSQL 端到端
     needs: framework-pack
+    if: needs.framework-pack.outputs.docs_only == 'false'
     runs-on: ubuntu-latest
     # 复用候选包；各作业的数据库、hive 与解包缓存仍各自隔离。
     timeout-minutes: 15
@@ -372,6 +395,7 @@ jobs:
   oidc-e2e:
     name: 模板 OIDC 跨服务端到端
     needs: framework-pack
+    if: needs.framework-pack.outputs.docs_only == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

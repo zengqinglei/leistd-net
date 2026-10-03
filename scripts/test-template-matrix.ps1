@@ -8,6 +8,8 @@ param(
     [string]$Tier,
     # 该档里的一个具名分片（见 template-matrix-scenarios.ps1 的 $MatrixSlices），须与 -Tier 同用。
     [string]$Slice,
+    # 独立预期计划：绑定本候选/档位、选定场景与阶段；默认入口仍完整执行。
+    [string]$ValidationPlanPath,
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [ValidateSet("chromiumHeadless", "chromium")]
@@ -694,6 +696,17 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration, [stri
 }
 
 . (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
+. (Join-Path $PSScriptRoot "quality-validation-plan.ps1")
+$validationMode = 'full'
+$validationPlan = $null
+if ($ValidationPlanPath) {
+    if (-not $Tier -or $Scenarios.Count -gt 0 -or $SkipFrontend -or $SkipRuntime) {
+        throw '-ValidationPlanPath requires -Tier and may not combine with manual skips/scenarios.'
+    }
+    $validationPlan = Read-QualityValidationPlan $ValidationPlanPath $Tier
+    if ($validationPlan.DocsOnly) { throw 'Internal-document plans must not run dynamic scenarios.' }
+    $validationMode = $validationPlan.Mode
+}
 
 if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
 if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
@@ -703,12 +716,14 @@ if ($Tier) {
         throw "Unknown $Tier-tier slice '$Slice'. Valid slices: $($MatrixSlices[$Tier].Keys -join ', ')"
     }
     $Scenarios = Get-TierScenarios $Tier $Slice
+    if ($validationPlan) { $Scenarios = @($Scenarios | Where-Object { $_ -cin $validationPlan.Scenarios }) }
     if ($ContainerSmoke -and $ContainerScenario -in $Scenarios) {
         $ContainerSmokeScenarios += $ContainerScenario
     }
 }
 
 if ($Scenarios.Count -eq 0) {
+    if ($validationPlan) { throw 'No selected scenarios in this planned slice.' }
     $Scenarios = $AllScenarios
 }
 
@@ -721,6 +736,7 @@ foreach ($scenario in $ContainerSmokeScenarios) {
     if ($scenario -notin $Scenarios) {
         throw "Container smoke scenario '$scenario' must also be selected with -Scenarios."
     }
+    if ($validationMode -cne 'full') { throw 'Container validation requires full stages.' }
 }
 
 # 独立入口先预检，避免错误源码仍先 audit/pack；CI 只核对接替清单，不重复扫描。
@@ -814,26 +830,31 @@ try {
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
 
-        $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-        # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
-        Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
-        Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
-
+        $backendValidated = $false
         $runtimeValidated = $false
-        if (-not $SkipRuntime) {
-            Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
-            $runtimeValidated = $true
-        }
+        if ($validationMode -cne 'frontend') {
+            $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
+            # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
+            Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
+            Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
-        $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
-        foreach ($testProject in $testProjects) {
-            Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
+            if (-not $SkipRuntime) {
+                Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
+                $runtimeValidated = $true
+            }
+
+            $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
+            if ($testProjects.Count -eq 0) { throw 'No backend test projects found; refusing empty validation.' }
+            foreach ($testProject in $testProjects) {
+                Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
+            }
+            $backendValidated = $true
         }
 
         $frontendValidated = $false
         $lintValidated = $false
         $testValidated = $false
-        if (-not $SkipFrontend -and $definition.Frontend) {
+        if (-not $SkipFrontend -and $definition.Frontend -and $validationMode -cne 'backend') {
             $frontendRoot = Join-Path $projectRoot "frontend"
             $env:HUSKY = "0"
             Invoke-External "npm" @("ci") $frontendRoot
@@ -900,11 +921,11 @@ try {
 
         $results.Add([PSCustomObject]@{
             Scenario = $scenario
-            Backend = "pass"
-            Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
-            Lint = if ($lintValidated) { "pass" } else { "skipped" }
-            Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
-            Test = if ($testValidated) { "pass" } else { "skipped" }
+            Backend = if ($backendValidated) { 'pass' } else { 'not-applicable' }
+            Runtime = if ($runtimeValidated) { 'pass' } elseif ($validationMode -ceq 'frontend') { 'not-applicable' } else { 'skipped' }
+            Lint = if ($lintValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
+            Frontend = if ($frontendValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
+            Test = if ($testValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
             Container = if ($containerValidated) { "pass" } else { "skipped" }
             Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
         })
@@ -919,6 +940,6 @@ Write-Host "Template matrix passed for $($results.Count) scenario(s)." -Foregrou
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
 $resultFile = Join-Path $runRoot "matrix-$(if ($Slice) { $Slice } else { 'local' }).json"
-[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; Results = @($results) } |
+[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; CandidateSha = (git rev-parse HEAD); Mode = $validationMode; Results = @($results) } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
 if ($env:GITHUB_OUTPUT) { "results_path=$resultFile" | Out-File $env:GITHUB_OUTPUT -Append }

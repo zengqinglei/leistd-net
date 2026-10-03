@@ -12,9 +12,9 @@ UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationT
 
 条件 using 守卫覆盖 24 个符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。
 
-场景定义、`pr`/`full` 档位及具名分片在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致；每片至少一个场景。人工验证用 `scripts/test-template-matrix.ps1` 的 `-Scenarios`、`-Tier pr`（可加 `-Slice <片名>`）或不带参数的全集；CI 每片一个作业，使用 `-Tier <档位> -Slice <片名>`，不能与 `-Scenarios` 混用。`pr` 档只收覆盖必需的场景：`check-template-scenario-coverage.py` 对全部模板文件求值文件级 modifiers、嵌套条件与 computed 符号，任何条件行只由 `full` 档独有场景生成即失败。它是行覆盖，不是组合覆盖：同一文件里几处分支只在某个 `full` 档场景里同时出现时（例如外部登录与非本地化的两段登录页代码），二者的组合交互要到合入后才验证。新增条件分支让闸门变红时，把对应场景加入 `pr` 档或改写条件，不删除闸门；加入后按实测耗时放入合适的分片，必要时新增具名分片并写明它验证什么。默认形态 `identity` 不是覆盖必需，但它是 `dotnet new` 的默认产物，固定留在 `pr` 档。每个入选场景保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试，不用分片或档位替换测试阶段。容器检查由 `-ContainerSmoke` 挂到两档都有的 `standalone-external-login`（镜像与场景特性无关，每档构建一次即可）；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
+场景定义、`pr`/`full` 档位及具名分片在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致；每片至少一个场景。人工验证用 `scripts/test-template-matrix.ps1` 的 `-Scenarios`、`-Tier pr`（可加 `-Slice <片名>`）或不带参数的全集；CI 每片一个作业，使用 `-Tier <档位> -Slice <片名>`，不能与 `-Scenarios` 混用。`pr` 档只收覆盖必需的场景：`check-template-scenario-coverage.py` 对全部模板文件求值文件级 modifiers、嵌套条件与 computed 符号，任何条件行只由 `full` 档独有场景生成即失败。它是行覆盖，不是组合覆盖：同一文件里几处分支只在某个 `full` 档场景里同时出现时（例如外部登录与非本地化的两段登录页代码），二者的组合交互要到合入后才验证。新增条件分支让闸门变红时，把对应场景加入 `pr` 档或改写条件，不删除闸门；加入后按实测耗时放入合适的分片，必要时新增具名分片并写明它验证什么。默认形态 `identity` 不是覆盖必需，但它是 `dotnet new` 的默认产物，固定留在 `pr` 档。默认人工及 full 档每个入选场景保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试。直接 PR 的局部计划按下节选择必要阶段，不能用手动跳过代替计划。容器检查由 `-ContainerSmoke` 挂到两档都有的 `standalone-external-login`（镜像与场景特性无关，每档构建一次即可）；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
 
-矩阵验收读取同一次 run 各分片的 artifact，使用 `scripts/check-template-matrix-results.ps1 -Tier <档位>` 核对收据声明的档位、该档准确的场景归属与 Backend/Runtime/Lint/Frontend/Test 状态；要求容器验证时传入 `-ContainerSmoke`。还须核对日志中后端和真实浏览器测试确有用例执行，不能仅凭作业名称或退出码推定完整覆盖。Standalone 容器检查构建 API 与 Migrator 镜像，并在两种镜像内执行 `dotnet --info`；它认证镜像构建与 .NET 运行时可用，不代表 API 已按部署配置启动或已连接数据库。真实 PostgreSQL 与 OIDC 跨服务责任仍由各自独立作业承担，未执行的可选场景另行注明。
+矩阵验收读取同一次 run 各分片的 artifact，使用 `scripts/check-template-matrix-results.ps1 -Tier <档位>` 核对候选 SHA、收据档位、独立预期计划的准确场景归属与 Backend/Runtime/Lint/Frontend/Test 状态（CI 传 -ValidationPlanPath；默认要求完整档）；要求容器验证时传入 `-ContainerSmoke`。还须核对日志中后端和真实浏览器测试确有用例执行，不能仅凭作业名称或退出码推定完整覆盖。Standalone 容器检查构建 API 与 Migrator 镜像，并在两种镜像内执行 `dotnet --info`；它认证镜像构建与 .NET 运行时可用，不代表 API 已按部署配置启动或已连接数据库。真实 PostgreSQL 与 OIDC 跨服务责任仍由各自独立作业承担，未执行的可选场景另行注明。
 
 分片均衡同时计入实际承担的容器阶段、生成准备和浏览器安装，不只按场景数量划分。关键片可能随实测改变，调整前先核对各场景命令区间和准备阶段；准备阶段变快、未产生 lint 热缓存或另一片提前完成，都不能当作删减测试的依据。
 
@@ -24,7 +24,15 @@ OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrows
 
 独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 源码预检，再 audit、打包和生成。GitHub CI 在同候选静态作业完整执行 `check-all.ps1`，分片显式使用 `-SkipSourcePreflight`，只检查接替入口仍在清单；必过汇总同时等待并核对静态和全部必要动态作业成功。预检和生成可以并行，静态失败不能被分片成功掩盖。源码预检职责不由生成编译替代，人工入口不能用该 CI 开关省略检查。
 
-纯内部文档 PR 的例外由仓库 [CI 范围与聚合规则](../framework/quality-assurance.md) 决定；`template/` 下的文档和 Skill 属于生成载荷，继续运行完整 PR 档。未选择动态场景时汇总明确报告“不适用”，不产生矩阵回执；选择的场景仍保留全部阶段。
+纯内部文档 PR 的例外由仓库 [CI 范围与聚合规则](../framework/quality-assurance.md) 决定；`template/` 下的文档和 Skill 属于生成载荷，继续运行完整 PR 档。未选择动态场景时汇总明确报告“不适用”，不产生矩阵回执；选择的场景按独立计划执行必要阶段，不能由回执自己决定哪些阶段适用。
+
+## 局部 PR 的场景与阶段
+
+唯一规则与跨层责任表见[同候选输入计划](../framework/quality-assurance.md#同候选输入计划)。只含支持的模板前端源码时，生成/形态、audit、安装、healthcheck、lint、构建、spec 发现和真实浏览器测试保持；只含 backend/src/tests C# 时，生成/形态、audit、后端还原/构建、真实 PostgreSQL 冒烟和单元/集成保持。两份锁文件的生产依赖 audit 阈值、每片执行与网络重试保留，不以源码不变推断漏洞库不变。参数、依赖、项目配置、跨层和未知输入保留完整阶段；独立 PG/OIDC 均保留。前后端各自省略的阶段要求实际生成输入保持不变，不能把浏览器 mock 当 API 契约验证。
+
+场景从现有 sources/modifiers/computed 求出修改文件的生产场景，并保留默认与全特性代表；文件删除和跨边界移动用完整差异的两侧，不能只看最后一次提交。首次维护选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`，实际生成六种 PR 产品的前后对照，核对省略阶段/场景的输入，并验证错误回执拒绝。这是维护回归入口，不加入每日静态闸门。
+
+计划绑定实际候选 SHA、档位、场景、模式和 Framework/消费责任。矩阵传 `-ValidationPlanPath`，收据写实际 SHA/模式和阶段的 pass/not-applicable；汇总使用打包作业提供的独立计划，拒绝少场景、错模式、错 SHA、未执行必需阶段及缺失/取消。局部模式不能与 -SkipFrontend/-SkipRuntime/-Scenarios 混用，full 不接受裁剪计划。
 
 ## 前端依赖维护
 
