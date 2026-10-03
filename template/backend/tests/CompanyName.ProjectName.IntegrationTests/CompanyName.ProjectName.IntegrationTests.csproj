@@ -13,6 +13,13 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+<!--#if (RemoteTokenAuth)-->
+  <ItemGroup>
+    <!-- 与资源服务宿主相同的进程级开关：测试运行在 testhost 进程里，宿主项目的 runtimeconfig 不作用于它 -->
+    <RuntimeHostConfigurationOption Include="Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking" Value="true" />
+  </ItemGroup>
+
+<!--#endif-->
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />

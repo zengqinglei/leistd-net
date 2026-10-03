@@ -518,7 +518,7 @@ public sealed class ExternalAuthenticationTests
         var challenge = System.Buffers.Text.Base64Url.EncodeToString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier)));
         using var browser = ProjectWebApplicationFactory.CreateProjectClient(host);
         browser.BaseAddress = new Uri("https://localhost");
-        using var initial = await browser.GetAsync(QueryHelpers.AddQueryString("/connect/authorize", new Dictionary<string, string?>
+        using var initial = await browser.GetCachedAsync(QueryHelpers.AddQueryString("/connect/authorize", new Dictionary<string, string?>
         {
             ["client_id"] = clientId, ["redirect_uri"] = redirectUri, ["response_type"] = "code", ["scope"] = "openid " + scopeName,
             ["state"] = "resource-original-state", ["code_challenge"] = challenge, ["code_challenge_method"] = "S256"

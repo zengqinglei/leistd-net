@@ -84,7 +84,7 @@ $scenarioMap = [ordered]@{
         )
     }
     "identity-notifications" = @{
-        Slices = @{ full = "identity-role"; pr = "features-without-localization" }
+        Slices = @{ full = "identity-role"; pr = "identity-notifications-and-resource-localization" }
         Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
@@ -98,7 +98,7 @@ $scenarioMap = [ordered]@{
         }
     }
     "resource-notifications" = @{
-        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-features" }
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role","Resource","--include-notifications"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Application/Notifications/AppNotificationTypes.cs",
@@ -122,7 +122,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "standalone-external-login" = @{
-        Slices = @{ full = "resource-and-standalone-roles"; pr = "features-without-localization" }
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Standalone", "--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
         Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs")
@@ -161,7 +161,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "resource-localization" = @{
-        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-features" }
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "identity-notifications-and-resource-localization" }
         Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
@@ -198,8 +198,8 @@ $MatrixTiers = @("pr", "full")
 $MatrixSlices = [ordered]@{
     pr = [ordered]@{
         "identity-default-and-all-features" = "Identity 默认产物与可选特性全开"
-        "resource-features"                 = "Resource 形态的通知与本地化"
-        "features-without-localization"     = "特性开启而未本地化的组合（含 Standalone 与容器）"
+        "resource-notifications-and-standalone"               = "Resource 通知与 Standalone 外部登录（含容器）"
+        "identity-notifications-and-resource-localization"    = "Identity 通知与 Resource 本地化"
     }
     full = [ordered]@{
         "identity-role"                 = "Identity 形态全部组合"

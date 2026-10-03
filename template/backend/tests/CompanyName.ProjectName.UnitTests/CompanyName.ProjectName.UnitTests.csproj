@@ -33,6 +33,15 @@
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
     <!-- 迁移作业的服务组合按构建期校验验证（Registration/MigratorRegistrationTests） -->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.DbMigrator\CompanyName.ProjectName.DbMigrator.csproj" />
+    <!-- 宿主层里的纯逻辑（协议交互凭据、限频装饰器）按单测验证：不建宿主 -->
+    <ProjectReference Include="..\..\src\CompanyName.ProjectName.Api\CompanyName.ProjectName.Api.csproj" />
   </ItemGroup>
+<!--#if (RemoteTokenAuth)-->
+
+  <ItemGroup>
+    <!-- 签名公钥刷新限频用官方时间替身 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+<!--#endif-->
 
 </Project>

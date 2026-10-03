@@ -136,8 +136,19 @@ try
 #endif
 #if (LocalIdentity)
 #if (OpenIddictServer)
+    builder.Services.AddSingleton<IValidateOptions<OAuthOptions>, OAuthOptionsValidator>();
     builder.Services.AddOptions<OAuthOptions>()
-        .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName));
+        .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName))
+        .ValidateOnStart();
+    // 退出确认是本源表单 POST，用官方防伪令牌校验；Cookie 规则与会话 Cookie 一致（部署环境 __Host- 前缀、仅 HTTPS）
+    builder.Services.AddAntiforgery(options =>
+    {
+        var isDevelopmentEnvironment = builder.Environment.IsDevelopment();
+        options.Cookie.Name = isDevelopmentEnvironment ? "CompanyName.ProjectName.Antiforgery" : "__Host-CompanyName.ProjectName.Antiforgery";
+        options.Cookie.Path = "/";
+        options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    });
+    builder.Services.AddSingleton<CompanyName.ProjectName.Api.Auth.ConnectInteractionProtector>();
 #endif
     builder.Services.AddOptions<UserRegistrationOptions>()
         .Bind(builder.Configuration.GetSection(UserRegistrationOptions.SectionName))
@@ -150,15 +161,14 @@ try
     // 默认必须显式提供证书：开发证书生成在运行用户的证书存储里、每台机器各一份，多副本互不认，
     // 重建容器后已签发的令牌全部失效，只适合本机开发（由 appsettings.Development.json 打开）。
     var oauthOpts = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
-    if (!oauthOpts.UseDevelopmentCertificates
-        && (string.IsNullOrWhiteSpace(oauthOpts.SigningCertificatePath)
-            || string.IsNullOrWhiteSpace(oauthOpts.EncryptionCertificatePath)))
-    {
-        throw new InvalidOperationException(
-            "OAuth:SigningCertificatePath and OAuth:EncryptionCertificatePath are required " +
-            "(two RSA certificates distinct from the HTTPS certificate: one for signing, one for encryption). " +
-            "OAuth:UseDevelopmentCertificates is intended for local development only.");
-    }
+    // 与启动期校验同一个验证器：这里更早，是因为下面组合 OpenIddict 时就要加载证书
+    if (new OAuthOptionsValidator().Validate(null, oauthOpts) is { Failed: true } oauthValidation)
+        throw new OptionsValidationException(OAuthOptions.SectionName, typeof(OAuthOptions), oauthValidation.Failures);
+    // 证书在组合期逐张加载：路径缺失、文件损坏或口令错误时报出带下标的键名，而不是首个请求时的笼统异常
+    var signingCertificates = oauthOpts.UseDevelopmentCertificates ? []
+        : OAuthCertificateLoader.Load(oauthOpts.SigningCertificates, "OAuth:SigningCertificates");
+    var encryptionCertificates = oauthOpts.UseDevelopmentCertificates ? []
+        : OAuthCertificateLoader.Load(oauthOpts.EncryptionCertificates, "OAuth:EncryptionCertificates");
 
     var oauthScopes = OAuthScopes.All(oauthOpts);
     var conflictingScope = oauthScopes.GroupBy(scope => scope.Name, StringComparer.Ordinal)
@@ -194,6 +204,10 @@ try
 
             options.AllowAuthorizationCodeFlow()
                 .RequireProofKeyForCodeExchange();
+            // 授权与退出请求先存为 request token（控制库）再以 request_uri 重入：依赖方可以跨站 POST 发起，
+            // 重入是顶层 GET，Lax 会话 Cookie 随之送达；id_token_hint 也不再留在浏览器地址里。
+            options.EnableAuthorizationRequestCaching()
+                .EnableEndSessionRequestCaching();
             options.AllowRefreshTokenFlow();
             options.AllowClientCredentialsFlow();
             options.AllowTokenExchangeFlow();
@@ -226,14 +240,9 @@ try
             }
             else
             {
-                options.AddEncryptionCertificate(
-                    X509CertificateLoader.LoadPkcs12FromFile(
-                        oauthOpts.EncryptionCertificatePath!,
-                        oauthOpts.EncryptionCertificatePassword));
-                options.AddSigningCertificate(
-                    X509CertificateLoader.LoadPkcs12FromFile(
-                        oauthOpts.SigningCertificatePath!,
-                        oauthOpts.SigningCertificatePassword));
+                // 全部登记：重叠轮换期间新旧证书同时发布进 JWKS，旧证书签发或加密的令牌仍可验证、解密
+                foreach (var certificate in encryptionCertificates) options.AddEncryptionCertificate(certificate);
+                foreach (var certificate in signingCertificates) options.AddSigningCertificate(certificate);
             }
 
             if (oauthOpts.DisableHttpsRequirement)
@@ -293,11 +302,16 @@ try
         {
             options.SetIssuer(remoteIdentity.IssuerUri!);
             options.AddAudiences(remoteIdentity.Audience!);
-            options.UseSystemNetHttp();
+            // 发现文档与 JWKS 的抓取有界：签名公钥按需刷新时请求会等它（含官方重试）
+            options.UseSystemNetHttp()
+                .ConfigureHttpClient(client => client.Timeout = RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout);
+            options.AddEventHandler(RefreshSigningKeysOnUnknownKeyIdentifier.Descriptor);
             options.UseAspNetCore()
                 .DisableAccessTokenExtractionFromQueryString()
                 .DisableAccessTokenExtractionFromBodyForm();
         });
+    // 在 OpenIddict 建好配置管理器之后给"请求刷新"限频（注册顺序即执行顺序）
+    builder.Services.AddSingleton<IPostConfigureOptions<OpenIddict.Validation.OpenIddictValidationOptions>, ThrottleSigningKeyRefresh>();
 #endif
 
     builder.Services.AddHostedService<ApplicationInitializer>();
@@ -474,7 +488,7 @@ try
     builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
         .Configure<IOptions<SessionCookieOptions>>((cookie, sessionCookie) =>
         {
-            // 默认 Lax；需要顶层跨站 POST 携带会话时评估 None，见 SessionCookieOptions
+            // 默认 Lax；放宽前先看部署文档的 SameSite 说明（协议端点的跨站进入不需要放宽）
             if (sessionCookie.Value.SameSite is { } sameSite)
             {
                 cookie.Cookie.SameSite = sameSite;
@@ -585,6 +599,8 @@ try
         options.SaveTokens = true;
         options.MapInboundClaims = false;
         options.CallbackPath = "/api/v1/auth/signin";
+        // 授权与退出请求都以自动提交的表单 POST 发往 Identity：id_token_hint 不进地址栏、历史记录与 Referer
+        options.AuthenticationMethod = OpenIdConnectRedirectBehavior.FormPost;
         options.SignedOutCallbackPath = "/api/v1/auth/signout";
         options.Scope.Clear();
         foreach (var scope in new[] { "openid", "profile", "email", "roles", "offline_access", remoteIdentity.Scope ?? remoteIdentity.Audience! }) options.Scope.Add(scope);
@@ -602,8 +618,7 @@ try
         };
         options.Events.OnRedirectToIdentityProviderForSignOut = context =>
         {
-            // 默认 id_token_hint 会把 ID token 放进浏览器 URL；客户端标识足以关联已登记退出回调。
-            context.ProtocolMessage.IdTokenHint = null;
+            // 保留 id_token_hint：Identity 据其中的会话标识判断能否免确认退出；client_id 在 hint 缺失时关联退出回调
             context.ProtocolMessage.ClientId = remoteIdentity.ClientId;
             return Task.CompletedTask;
         };
@@ -617,6 +632,21 @@ try
     var app = builder.Build();
     // 宿主级设置配置源要在构建之后挂上：构建期间追加的配置源（如测试宿主的覆盖）不能排在它后面
     app.UseHostSettings();
+
+    // 缺 Redis 不阻止启动：单实例配 DataProtection:KeysPath 是合法部署，副本数又无从推断。
+    // 但分布式缓存随之回落到进程内存，多副本时各副本各一份、彼此看不见，只能靠这条告警在启动日志里发现。
+    // 分布式锁的回落由锁组件自己告警，这里不重复。
+    if (!app.Environment.IsDevelopment() && string.IsNullOrEmpty(app.Configuration.GetConnectionString("Redis")))
+    {
+        app.Logger.LogWarning(
+            "ConnectionStrings:Redis is not configured, so the distributed cache falls back to process memory: {CacheBackedState} " +
+            "are kept per process. This is only valid for a single instance; configure ConnectionStrings:Redis before running more replicas.",
+#if (LocalIdentity)
+            "server-side session tickets, session revocation checks, two-factor challenges, captchas and email verification codes");
+#else
+            "server-side session tickets");
+#endif
+    }
 
     app.UseForwardedHeaders();
 #if (IncludeLocalization)

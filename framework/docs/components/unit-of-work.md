@@ -64,6 +64,7 @@ public class OrderPlacementService(
 ```
 
 方法正常返回时拦截器统一保存并提交；异常时回滚。声明式用法不手动调用 `SaveChanges` 或 `CommitAsync`。
+提交使用方法声明的第一个 `CancellationToken` 参数（没有时不可取消），BeforeCommit 处理器收到的也是它；取消边界见下文。
 
 ```csharp
 [UnitOfWork(IsolationLevel = IsolationLevel.Serializable)]

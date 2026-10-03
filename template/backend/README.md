@@ -44,7 +44,7 @@ dotnet user-secrets list --project src/CompanyName.ProjectName.Api
 
 - Data Protection 密钥必须持久化到共享位置：`ConnectionStrings:Redis`，或 `DataProtection:KeysPath` 指向 API 与 `DbMigrator` 共用的持久目录。存储位置应只允许本服务访问；需要对密钥做静态加密时，在 `AddMyProjectDataProtection` 里按官方 `ProtectKeysWith*` 追加。
 <!--#if (OpenIddictServer)-->
-- 令牌签名与加密证书默认必须显式提供：`OAuth:SigningCertificatePath`、`OAuth:EncryptionCertificatePath`（两张独立的 RSA 证书，口令由部署注入）。`OAuth:UseDevelopmentCertificates` 只用于本机开发，由 `appsettings.Development.json` 打开。
+- 令牌签名与加密证书默认必须显式提供：`OAuth:SigningCertificates` 与 `OAuth:EncryptionCertificates` 各至少一项（每项 `Path`、`Password`，RSA 证书，与 HTTPS 证书分开，口令由部署注入）；轮换时新旧同时登记，步骤见部署文档。`OAuth:UseDevelopmentCertificates` 只用于本机开发，由 `appsettings.Development.json` 打开。
 <!--#endif-->
 
 ## 启动与验证

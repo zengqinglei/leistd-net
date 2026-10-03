@@ -75,6 +75,18 @@
     "description": "Your organization requires two-factor authentication. Set it up to continue.",
     "signOut": "Sign out"
   },
+  "logoutConfirm": {
+    "title": "Sign out?",
+    "description": "{{application}} is asking to sign you out of this account.",
+    "descriptionUnknown": "An application is asking to sign you out of this account.",
+    "confirm": "Sign out",
+    "cancel": "Stay signed in",
+    "invalid": "This sign-out request has expired or belongs to another session. Sign out again from the application.",
+    "backHome": "Back to home",
+    "loading": "Checking the sign-out request...",
+    "failed": "The sign-out request could not be checked.",
+    "retry": "Try again"
+  },
   "externalLogins": {
     "header": "Linked accounts",
     "subtitle": "Sign in with these accounts as well as your password. Keep at least one way to sign in.",

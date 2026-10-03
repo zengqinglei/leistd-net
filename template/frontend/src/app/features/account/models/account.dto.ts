@@ -150,3 +150,16 @@ export interface ExternalLoginLinkOutputDto {
   creationTime: string;
 }
 //#endif
+//#if (OpenIddictServer)
+
+/** 依赖方发起退出、需要用户确认时，确认页所需的信息。 */
+export interface LogoutConfirmationOutputDto {
+  /** 确认凭据仍然有效且属于当前会话；为 false 时其余字段为空，应提示从应用重新发起退出。 */
+  isValid: boolean;
+  /** 发起退出的应用名称；退出请求未标明客户端时为空。 */
+  applicationName?: string | null;
+  /** 确认表单须携带的官方防伪令牌字段名与令牌。 */
+  antiforgeryFieldName?: string | null;
+  antiforgeryToken?: string | null;
+}
+//#endif

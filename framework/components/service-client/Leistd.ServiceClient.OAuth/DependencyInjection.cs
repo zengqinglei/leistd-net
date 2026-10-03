@@ -28,6 +28,8 @@ public static class DependencyInjection
         {
             client.AllowClientCredentialsFlow().AllowTokenExchangeFlow().DisableTokenStorage();
             client.UseSystemNetHttp();
+            // 官方处理器会把远端响应原文（含令牌）写进日志，前置接手解析与状态校验。
+            foreach (var descriptor in ResponsePayloadLoggingGuard.Descriptors) client.AddEventHandler(descriptor);
         });
         services.AddOptions<OpenIddictClientOptions>().Configure<IOptions<ServiceAuthenticationOptions>>((client, identity) =>
         {

@@ -159,6 +159,7 @@
     "SecurityAlert:TwoFactorEnabled:Title": "Two-factor authentication turned on",
     "SecurityAlert:TwoFactorReset:Content": "Set it up again from your security settings.",
     "SecurityAlert:TwoFactorReset:Title": "Two-factor authentication was reset by an administrator",
+    "Session bound": "Session bound",
     "Setting:Audit.RetentionDays": "Operation record retention (days)",
     "Setting:Audit.RetentionEnabled": "Archive expired operation records",
     "Setting:Display.Language": "Language",

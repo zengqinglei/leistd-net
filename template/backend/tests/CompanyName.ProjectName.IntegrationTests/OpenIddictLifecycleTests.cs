@@ -14,6 +14,7 @@ using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using OpenIddict.Core;
@@ -30,6 +31,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var id = $"prompt-{Guid.NewGuid():N}";
         var response = await admin.PostAsJsonAsync("/api/v1/open-applications", new
         {
+            sessionBound = false,
             clientId = id, applicationType = "web", clientType = "public", redirectUris = new[] { Callback },
             permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthOptions().Resource}" },
             requirements = new[] { "ft:pkce" }
@@ -62,7 +64,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var id = await CreatePublicClientAsync(admin.Client);
         using var anonymous = Browser();
-        var response = await anonymous.GetAsync(AuthorizationUrl(id, "&prompt=none&state=probe"));
+        var response = await anonymous.GetCachedAsync(AuthorizationUrl(id, "&prompt=none&state=probe"));
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.StartsWith(Callback, response.Headers.Location!.AbsoluteUri);
         Assert.Contains("error=login_required", response.Headers.Location.Query);
@@ -73,29 +75,30 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     [Theory]
     [InlineData("&prompt=login")]
     [InlineData("&max_age=0")]
-    public async Task Reauthentication_preserves_the_session_until_credentials_succeed_and_does_not_loop(string parameter)
+    public async Task Reauthentication_is_proven_for_the_cached_request_and_completes_without_looping(string parameter)
     {
         using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var id = await CreatePublicClientAsync(session.Client);
-        using var browser = Browser(session.Cookie);
-        var response = await browser.GetAsync(AuthorizationUrl(id, parameter));
-        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        var location = response.Headers.Location!.OriginalString;
-        Assert.StartsWith("/auth/login?returnUrl=", location);
-        Assert.EndsWith("&reauthenticate=true", location);
-        var encodedReturn = location[(location.IndexOf("returnUrl=", StringComparison.Ordinal) + 10)..].Split('&')[0];
-        var returnUrl = Uri.UnescapeDataString(encodedReturn);
-        Assert.DoesNotContain("prompt=login", returnUrl);
-        Assert.DoesNotContain("max_age=0", returnUrl);
-        Assert.False(response.Headers.Contains("Set-Cookie"));
-        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
         // 人为提供旧 auth_time，避免依赖秒级等待；续期不会改变真实认证时间。
         var oldTicket = ReadCookie(session.Cookie);
         var oldIdentity = (ClaimsIdentity)oldTicket.Principal.Identity!;
         foreach (var claim in oldIdentity.FindAll(Claims.AuthenticationTime).ToArray()) oldIdentity.RemoveClaim(claim);
         var oldTime = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds();
         oldIdentity.AddClaim(new Claim(Claims.AuthenticationTime, oldTime.ToString(), ClaimValueTypes.Integer64));
-        using var relogin = Browser(CookieOf(oldTicket));
+        var oldCookie = CookieOf(oldTicket);
+        using var browser = Browser(oldCookie);
+
+        var returnUrl = await ReauthenticationReturnUrlAsync(browser, AuthorizationUrl(id, parameter));
+        // 回跳只指向缓存的请求：协议参数全在 request token 里，URL 上只有引用与证明
+        Assert.Equal(["client_id", "reauthentication", "request_uri"],
+            QueryHelpers.ParseQuery(new Uri(browser.BaseAddress!, returnUrl).Query).Keys.Order());
+        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+        // 证明本身不代替登录：没有新的认证就回跳，仍然要求登录
+        var again = await ReauthenticationReturnUrlAsync(browser, returnUrl, cached: false);
+        Assert.Equal(RequestUriOf(browser, returnUrl), RequestUriOf(browser, again));
+        var otherReturnUrl = await ReauthenticationReturnUrlAsync(browser, AuthorizationUrl(id, parameter));
+
+        using var relogin = Browser(oldCookie);
         using var failed = await relogin.PostAsJsonAsync("/api/v1/auth/session-login", new { usernameOrEmail = "admin", password = "incorrect" });
         Assert.False(failed.IsSuccessStatusCode);
         Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
@@ -103,12 +106,124 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         { usernameOrEmail = "admin", password = ProjectWebApplicationFactory.TestAdminPassword });
         Assert.True(success.IsSuccessStatusCode, await success.Content.ReadAsStringAsync());
         var cookie = success.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(session.Cookie.Split('=')[0] + "=", StringComparison.Ordinal));
-        var renewed = ReadCookie(cookie);
-        Assert.True(long.Parse(renewed.Principal.GetClaim(Claims.AuthenticationTime)!) > oldTime);
+        Assert.True(long.Parse(ReadCookie(cookie).Principal.GetClaim(Claims.AuthenticationTime)!) > oldTime);
         using var authenticated = Browser(cookie.Split(';')[0]);
+
+        // 证明绑定在签发它的请求上：挪给另一个缓存请求不算数
+        Assert.NotEqual(RequestUriOf(browser, returnUrl), RequestUriOf(browser, otherReturnUrl));
+        var transplanted = QueryHelpers.AddQueryString("/connect/authorize", new Dictionary<string, string?>
+        {
+            ["client_id"] = id, ["request_uri"] = RequestUriOf(browser, otherReturnUrl),
+            ["reauthentication"] = QueryHelpers.ParseQuery(new Uri(authenticated.BaseAddress!, returnUrl).Query)["reauthentication"]
+        });
+        using (var moved = await authenticated.GetAsync(transplanted))
+            Assert.StartsWith("/auth/login?returnUrl=", moved.Headers.Location!.OriginalString);
+
+        // 新的认证兑现证明：签发授权码，不再循环回登录
+        using var completed = await authenticated.GetAsync(returnUrl);
+        Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        Assert.StartsWith(Callback, completed.Headers.Location!.AbsoluteUri);
+        Assert.Contains("code=", completed.Headers.Location.Query);
+        // 一次性：授权完成时 request token 已兑现，同一回跳地址不能再换出授权码
+        using var replayed = await authenticated.GetAsync(returnUrl);
+        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
+        Assert.Null(replayed.Headers.Location);
         Assert.Equal(HttpStatusCode.OK, (await authenticated.GetAsync("/api/v1/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
+
+    /// <summary>
+    /// 证明要求发生过新的认证（换了会话），不能只看认证时间
+    /// </summary>
+    /// <remarks>auth_time 只到秒：旧会话与证明同秒、或副本之间时钟有偏差时，单凭"认证时间不早于签发时间"会让旧会话直接兑现。
+    /// 这里把旧会话的认证时间拨到证明签发之后，确定性地复现这一情形（用 prompt=login：认证时间在未来时 max_age 本就判定为未过期；
+    /// 两者兑现证明走同一段校验）。</remarks>
+    [Fact]
+    public async Task A_proof_cannot_be_redeemed_by_the_session_that_existed_when_it_was_issued()
+    {
+        const string parameter = "&prompt=login";
+        using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var id = await CreatePublicClientAsync(session.Client);
+        var ticket = ReadCookie(session.Cookie);
+        var identity = (ClaimsIdentity)ticket.Principal.Identity!;
+        foreach (var claim in identity.FindAll(Claims.AuthenticationTime).ToArray()) identity.RemoveClaim(claim);
+        identity.AddClaim(new Claim(Claims.AuthenticationTime, DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
+        using var browser = Browser(CookieOf(ticket));
+
+        var returnUrl = await ReauthenticationReturnUrlAsync(browser, AuthorizationUrl(id, parameter));
+
+        // 没有重新登录、同一个会话带着证明回跳：仍然要求登录
+        var again = await ReauthenticationReturnUrlAsync(browser, returnUrl, cached: false);
+        Assert.Equal(RequestUriOf(browser, returnUrl), RequestUriOf(browser, again));
+    }
+
+    // 签发前就已存在的另一个会话（同一用户在别处的登录）也兑现不了：秒级 auth_time 被拨到签发之后也不能让它冒充新认证
+    // （这里只改了 Cookie 里的 auth_time；副本之间真实的时钟偏差不在本用例范围内，见部署文档的时钟要求）
+    [Fact]
+    public async Task A_proof_cannot_be_redeemed_by_another_session_that_existed_before_it()
+    {
+        using var first = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var other = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var id = await CreatePublicClientAsync(first.Client);
+        using var browser = Browser(first.Cookie);
+        var returnUrl = await ReauthenticationReturnUrlAsync(browser, AuthorizationUrl(id, "&prompt=login"));
+        var ticket = ReadCookie(other.Cookie);
+        var identity = (ClaimsIdentity)ticket.Principal.Identity!;
+        foreach (var claim in identity.FindAll(Claims.AuthenticationTime).ToArray()) identity.RemoveClaim(claim);
+        identity.AddClaim(new Claim(Claims.AuthenticationTime, DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
+        using var otherBrowser = Browser(CookieOf(ticket));
+
+        var again = await ReauthenticationReturnUrlAsync(otherBrowser, returnUrl, cached: false);
+
+        Assert.Equal(RequestUriOf(browser, returnUrl), RequestUriOf(browser, again));
+    }
+
+    // 正数 max_age 不因证明而放宽：兑现时认证年龄已超过限制，仍要求重新认证
+    [Fact]
+    public async Task A_proof_does_not_relax_a_positive_max_age_that_has_expired_again()
+    {
+        using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var id = await CreatePublicClientAsync(session.Client);
+        var stale = ReadCookie(session.Cookie);
+        var staleIdentity = (ClaimsIdentity)stale.Principal.Identity!;
+        foreach (var claim in staleIdentity.FindAll(Claims.AuthenticationTime).ToArray()) staleIdentity.RemoveClaim(claim);
+        staleIdentity.AddClaim(new Claim(Claims.AuthenticationTime, DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
+        using var browser = Browser(CookieOf(stale));
+        var returnUrl = await ReauthenticationReturnUrlAsync(browser, AuthorizationUrl(id, "&max_age=60"));
+
+        // 新登录兑现证明；随后把这次认证的时间推到 max_age 之前，模拟用户隔了很久才回跳
+        using var relogin = Browser();
+        using var success = await relogin.PostAsJsonAsync("/api/v1/auth/session-login", new
+        { usernameOrEmail = "admin", password = ProjectWebApplicationFactory.TestAdminPassword });
+        var cookie = success.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(session.Cookie.Split('=')[0] + "=", StringComparison.Ordinal));
+        var renewed = ReadCookie(cookie);
+        var renewedIdentity = (ClaimsIdentity)renewed.Principal.Identity!;
+        foreach (var claim in renewedIdentity.FindAll(Claims.AuthenticationTime).ToArray()) renewedIdentity.RemoveClaim(claim);
+        renewedIdentity.AddClaim(new Claim(Claims.AuthenticationTime, DateTimeOffset.UtcNow.AddMinutes(-2).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
+        using var late = Browser(CookieOf(renewed));
+
+        var again = await ReauthenticationReturnUrlAsync(late, returnUrl, cached: false);
+
+        Assert.Equal(RequestUriOf(browser, returnUrl), RequestUriOf(browser, again));
+    }
+
+    // 授权端点要求重新登录时给出的回跳地址；cached 表示 url 是首个请求（需先跟随请求缓存的那一跳）
+    private static async Task<string> ReauthenticationReturnUrlAsync(HttpClient browser, string url, bool cached = true)
+    {
+        using var response = cached ? await browser.GetCachedAsync(url) : await browser.GetAsync(url);
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        var location = response.Headers.Location!.OriginalString;
+        Assert.StartsWith("/auth/login?returnUrl=", location);
+        Assert.EndsWith("&reauthenticate=true", location);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        var returnUrl = QueryHelpers.ParseQuery(new Uri(browser.BaseAddress!, location).Query)["returnUrl"].ToString();
+        Assert.DoesNotContain("prompt=", returnUrl);
+        Assert.DoesNotContain("max_age=", returnUrl);
+        return returnUrl;
+    }
+
+    private static string RequestUriOf(HttpClient browser, string url) =>
+        QueryHelpers.ParseQuery(new Uri(browser.BaseAddress!, url).Query)["request_uri"].ToString();
 
     private AuthenticationTicket ReadCookie(string cookie)
     {
@@ -145,7 +260,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
             identity.AddClaim(new Claim(Claims.AuthenticationTime, DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
         ticket.Properties.IssuedUtc = DateTimeOffset.UtcNow;
         using var browser = Browser(CookieOf(ticket));
-        var response = await browser.GetAsync(AuthorizationUrl(id, "&prompt=none&max_age=30"));
+        var response = await browser.GetCachedAsync(AuthorizationUrl(id, "&prompt=none&max_age=30"));
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Contains("error=login_required", response.Headers.Location!.Query);
         Assert.StartsWith(Callback, response.Headers.Location.AbsoluteUri);
@@ -160,7 +275,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var original = long.Parse(ticket.Principal.GetClaim(Claims.AuthenticationTime)!);
         ticket.Properties.IssuedUtc = DateTimeOffset.UtcNow.AddSeconds(10);
         using var browser = Browser(CookieOf(ticket));
-        var response = await browser.GetAsync(AuthorizationUrl(id, "&max_age=3600"));
+        var response = await browser.GetCachedAsync(AuthorizationUrl(id, "&max_age=3600"));
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         var code = response.Headers.Location!.Query.TrimStart('?').Split('&')
             .Single(part => part.StartsWith("code=", StringComparison.Ordinal))[5..];

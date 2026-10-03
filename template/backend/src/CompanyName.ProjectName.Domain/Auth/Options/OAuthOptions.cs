@@ -10,17 +10,22 @@ public class OAuthOptions
     /// </summary>
     /// <remarks>
     /// 开发证书生成在本机证书存储里，每台机器、每个容器各一份：多副本之间互不认，重建容器后已签发的令牌全部失效。
-    /// 关闭时必须提供 <see cref="SigningCertificatePath"/> 与 <see cref="EncryptionCertificatePath"/>，否则启动失败。
+    /// 关闭时 <see cref="SigningCertificates"/> 与 <see cref="EncryptionCertificates"/> 都至少要有一张，否则启动失败。
     /// </remarks>
     public bool UseDevelopmentCertificates { get; set; }
 
-    public string? SigningCertificatePath { get; set; }
+    /// <summary>
+    /// 令牌签名证书。全部发布进 JWKS；签名时 OpenIddict 优先用已生效且到期最晚的一张，尚未生效的排在后面（启动时排定）。
+    /// </summary>
+    /// <remarks>
+    /// 轮换时同时登记新旧两张（重叠期），顺序见部署文档：先发布新公钥、确认各资源服务已取得，再让新证书生效。
+    /// </remarks>
+    public OAuthCertificate[] SigningCertificates { get; set; } = [];
 
-    public string? SigningCertificatePassword { get; set; }
-
-    public string? EncryptionCertificatePath { get; set; }
-
-    public string? EncryptionCertificatePassword { get; set; }
+    /// <summary>
+    /// 令牌加密证书（授权码、刷新令牌等只给本服务读的令牌）。撤掉旧证书前，用它加密的令牌都要已经过期。
+    /// </summary>
+    public OAuthCertificate[] EncryptionCertificates { get; set; } = [];
 
     /// <summary>
     /// 是否关闭 OpenIddict 的传输安全（HTTPS）要求。只用于本机或测试宿主的纯 HTTP 调试，生产环境不要打开。
@@ -47,6 +52,13 @@ public class OAuthOptions
     /// </summary>
     /// <remarks>下游服务把自己的 <c>Authentication:Audience</c> 设为同一个值。不能为空、不能重复，也不能与内置 scope 同名。</remarks>
     public OAuthApiResource[] ApiResources { get; set; } = [];
+}
+
+/// <summary>一张 PKCS#12 证书文件及其口令（口令由部署注入，不写进配置文件）。</summary>
+public sealed class OAuthCertificate
+{
+    public string Path { get; set; } = string.Empty;
+    public string? Password { get; set; }
 }
 
 /// <summary>一个 API 资源的申请范围和交换发起方归属。</summary>

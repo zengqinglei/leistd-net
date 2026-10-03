@@ -95,10 +95,10 @@ public sealed class ResourceBrowserSessionTests
         using var host = Host(factory, issuer);
         using var browser = Client(host);
         var challenge = await browser.GetAsync("/api/v1/auth/login");
-        var query = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query);
-        issuer.Nonce = query["nonce"].ToString();
+        var query = await FormPostAsync(challenge, Issuer.Address + "authorize");
+        issuer.Nonce = query["nonce"];
         using var callback = await browser.PostAsync("/api/v1/auth/signin", new FormUrlEncodedContent(new Dictionary<string, string>
-        { ["code"] = "test-code", ["state"] = query["state"].ToString() }));
+        { ["code"] = "test-code", ["state"] = query["state"] }));
         Assert.Equal(HttpStatusCode.BadRequest, callback.StatusCode);
         Assert.False(callback.Headers.TryGetValues("Set-Cookie", out var values) && values.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")));
         var cookie = await LoginAsync(host, issuer);
@@ -109,6 +109,28 @@ public sealed class ResourceBrowserSessionTests
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
         Assert.Equal("application/problem+json", forbidden.Content.Headers.ContentType?.MediaType);
         Assert.Equal(403, (await forbidden.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+    }
+
+    [Fact]
+    public async Task Sign_out_posts_the_identity_token_hint_to_the_issuer_instead_of_the_address_bar()
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = Host(factory, issuer);
+        var cookie = await LoginAsync(host, issuer);
+        var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthenticationSchemeNames.SessionCookie);
+        var key = options.TicketDataFormat.Unprotect(cookie.Split('=', 2)[1])!.Principal.Claims.Single().Value;
+        var idToken = (await options.SessionStore!.RetrieveAsync(key))!.Properties.GetTokenValue("id_token");
+        using var browser = Client(host, cookie);
+
+        using var response = await browser.PostAsync("/api/v1/auth/logout", null);
+
+        var form = await FormPostAsync(response, Issuer.Address + "logout");
+        Assert.Equal(idToken, form["id_token_hint"]);
+        Assert.Equal("resource-test", form["client_id"]);
+        Assert.Equal("https://localhost/api/v1/auth/signout", form["post_logout_redirect_uri"]);
+        Assert.False(string.IsNullOrEmpty(form["state"]));
+        Assert.Null(await options.SessionStore.RetrieveAsync(key));
     }
 
     [Theory]
@@ -122,12 +144,12 @@ public sealed class ResourceBrowserSessionTests
         using var host = Host(factory, issuer);
         using var browser = Client(host);
         using var challenge = await browser.GetAsync("/api/v1/auth/login");
-        var query = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query);
-        issuer.Nonce = query["nonce"].ToString();
+        var query = await FormPostAsync(challenge, Issuer.Address + "authorize");
+        issuer.Nonce = query["nonce"];
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/signin")
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            { ["code"] = "test-code", ["state"] = failure == "state" ? "invalid" : query["state"].ToString() })
+            { ["code"] = "test-code", ["state"] = failure == "state" ? "invalid" : query["state"] })
         };
         var cookies = ExternalCookies(challenge);
         request.Headers.Add("Cookie", failure == "correlation" ? cookies.Replace("=N", "=wrong", StringComparison.Ordinal) : cookies);
@@ -239,6 +261,23 @@ public sealed class ResourceBrowserSessionTests
     private static string ExternalCookies(HttpResponseMessage response) =>
         string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0]));
 
+    /// <summary>
+    /// 授权与退出请求以自动提交的表单 POST 发往签发方（官方 FormPost）：参数只在表单里，不在跳转地址上。
+    /// </summary>
+    private static async Task<Dictionary<string, string>> FormPostAsync(HttpResponseMessage response, string action)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        var html = await response.Content.ReadAsStringAsync();
+        var form = System.Text.RegularExpressions.Regex.Match(html, "<form(?=[^>]*method=\"post\")[^>]*action=\"([^\"]+)\"",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        Assert.True(form.Success, html);
+        Assert.Equal(action, WebUtility.HtmlDecode(form.Groups[1].Value));
+        return System.Text.RegularExpressions.Regex.Matches(html, "<input type=\"hidden\" name=\"([^\"]+)\" value=\"([^\"]*)\"")
+            .ToDictionary(match => WebUtility.HtmlDecode(match.Groups[1].Value), match => WebUtility.HtmlDecode(match.Groups[2].Value));
+    }
+
     private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, Issuer issuer) =>
         factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", "resource-api").ConfigureTestServices(services =>
         {
@@ -275,13 +314,12 @@ public sealed class ResourceBrowserSessionTests
     {
         using var browser = Client(host);
         using var challenge = await browser.GetAsync("/api/v1/auth/login?returnUrl=/workspace");
-        Assert.Equal(HttpStatusCode.Found, challenge.StatusCode);
-        var query = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query);
-        Assert.Equal("code", query["response_type"].ToString());
-        Assert.Equal("S256", query["code_challenge_method"].ToString());
-        issuer.Nonce = query["nonce"].ToString();
+        var query = await FormPostAsync(challenge, Issuer.Address + "authorize");
+        Assert.Equal("code", query["response_type"]);
+        Assert.Equal("S256", query["code_challenge_method"]);
+        issuer.Nonce = query["nonce"];
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/signin")
-        { Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["code"] = "test-code", ["state"] = query["state"].ToString() }) };
+        { Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["code"] = "test-code", ["state"] = query["state"] }) };
         request.Headers.Add("Cookie", string.Join("; ", challenge.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0])));
         using var callback = await browser.SendAsync(request);
         Assert.True(callback.StatusCode == HttpStatusCode.Found, await callback.Content.ReadAsStringAsync());

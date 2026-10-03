@@ -46,6 +46,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/api/v1/open-applications",
             new
             {
+                sessionBound = false,
                 clientId = $"client-{Guid.CreateVersion7():N}",
                 displayName = "Probe",
                 applicationType = "web",
@@ -102,6 +103,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             $"/api/v1/open-applications/{application.Id}",
             new
             {
+                sessionBound = false,
                 displayName = "Probe",
                 applicationType = "service",
                 clientType = "confidential",
@@ -118,6 +120,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
     private static object NewApplicationPayload(string clientId, string clientType, string[] permissions) =>
         new
         {
+            sessionBound = false,
             clientId,
             displayName = "Probe",
             applicationType = "service",
@@ -155,6 +158,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/api/v1/open-applications",
             new
             {
+                sessionBound = false,
                 clientId = $"client-{Guid.CreateVersion7():N}",
                 displayName = "Probe",
                 applicationType = "web",
@@ -319,6 +323,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/api/v1/open-applications",
             new
             {
+                sessionBound = false,
                 clientId,
                 displayName = "Secret probe",
                 applicationType = "service",
@@ -352,6 +357,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/api/v1/open-applications",
             new
             {
+                sessionBound = false,
                 clientId,
                 displayName = "Workload",
                 applicationType = "service",
@@ -400,6 +406,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/api/v1/open-applications",
             new
             {
+                sessionBound = false,
                 clientId,
                 displayName = "Bearer probe",
                 applicationType = "web",
@@ -445,7 +452,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
         using var browser = CreateHttpsClient();
         browser.DefaultRequestHeaders.Add("Cookie", session.Cookie);
 
-        var authorize = await browser.GetAsync(
+        var authorize = await browser.GetCachedAsync(
             "/connect/authorize" +
             $"?client_id={Uri.EscapeDataString(clientId)}" +
             $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +

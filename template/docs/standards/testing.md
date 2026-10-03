@@ -41,6 +41,7 @@ backend/tests/
 │   ├── Domain/          领域规则、值对象、策略判定
 │   ├── Application/     应用层契约与纯逻辑，依赖用假实现从构造函数传入
 │   ├── Infrastructure/  基础设施里的纯映射（如数据库错误翻译），不连库
+│   ├── Api/             宿主层里的纯逻辑（协议交互凭据、限频装饰器），不建宿主
 │   └── Registration/    在 IServiceCollection 上断言注册结果
 └── CompanyName.ProjectName.IntegrationTests/   经真实宿主与真实 PostgreSQL 验证端到端行为
     ├── Fixtures/        ProjectWebApplicationFactory、PostgreSqlTestDatabase、共享装配基类
