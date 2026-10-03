@@ -6,7 +6,7 @@
 .DESCRIPTION
     运行 S2–S8、S10；生成项目、隔离包源、日志和临时凭据位于 .tmp/oidc-e2e/<run>。
     依赖 PowerShell 7、.NET 10 SDK 和 Docker，不依赖 Python、OpenSSL 或宿主 psql。
-    默认不等待真实十分钟过期；-IncludeExpiryWait 执行完整撤销到期边界。
+    默认不等待令牌真实到期；-IncludeExpiryWait 以快速档（访问令牌 90 秒）执行撤销到期与交换令牌到期边界，CI 在 full 档传入。
     -IncludeBrowserScenarios 追加有头浏览器 S1/S9/S11 与官方外部登录协议闭环。
     -BrowserOnly 只运行浏览器场景，不重复 HTTP 场景；另需 Node.js、npm 与 agent-browser。
     -IncludeMultiTenantScenarios 在浏览器场景后追加多租户验收 MT0–MT5（隐含浏览器场景）：
@@ -28,6 +28,16 @@ param(
 )
 
 $IncludeBrowserScenarios = $IncludeBrowserScenarios -or $BrowserOnly -or $IncludeMultiTenantScenarios
+# 快速档：真实到期的场景把签发方的访问令牌寿命改为 90 秒，走生成项目的正式配置键。
+# 签发寿命的断言按档位取固定期望值，键名写错或没传到子进程都会变红。
+$quickAccessTokenLifetime = "00:01:30"
+$quickAccessTokenSeconds = 90
+$defaultAccessTokenSeconds = 600
+$quickAccessTokens = $false
+function Use-QuickAccessTokens([hashtable]$Environment) {
+    $Environment.OAuth__AccessTokenLifetime = $quickAccessTokenLifetime
+    $script:quickAccessTokens = $true
+}
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -383,9 +393,7 @@ function Get-CodeToken([Net.Http.HttpClient]$Session, [string]$Scope, [string]$C
     $form.code_verifier = $verifier
     $data = (Assert-Http "code-exchange" 200 ($urls.idp + "/connect/token") -Method POST -Body (ConvertTo-Form $form)).Data
     Assert-Value "spa-no-refresh-token" $false $data.ContainsKey("refresh_token")
-    # 浏览器阶段把签发方的访问令牌缩短为真实可等待的时长，期望值跟随当前配置。
-    $configured = $services.idp.Environment
-    $lifetime = if ($configured.ContainsKey("E2E__BrowserAccessTokenSeconds")) { [int]$configured["E2E__BrowserAccessTokenSeconds"] } else { 600 }
+    $lifetime = if ($quickAccessTokens) { $quickAccessTokenSeconds } else { $defaultAccessTokenSeconds }
     Assert-Value "access-token-lifetime" $true ($data.expires_in -ge ($lifetime - 1) -and $data.expires_in -le $lifetime)
     $claims = Read-TokenClaims $data.access_token
     Assert-Value "jwt-exp-minus-iat" $lifetime ($claims.exp - $claims.iat)
@@ -751,9 +759,9 @@ function Initialize-Environment {
                     $environment["ExternalAuth__${provider}__ClientId"] = "browser-fixture-$provider"
                     $environment["ExternalAuth__${provider}__ClientSecret"] = $browserFixtureSecret
                 }
-                if ($BrowserOnly) { $environment.E2E__BrowserAccessTokenSeconds = "90" }
             }
         }
+        if ($name -eq "idp" -and ($BrowserOnly -or $IncludeExpiryWait)) { Use-QuickAccessTokens $environment }
         if ($role -eq "Identity") {
             $environment.OAuth__Issuer = $issuer
             $environment.OAuth__DisableHttpsRequirement = "true"
@@ -868,7 +876,8 @@ function Test-Exchange([string]$Subject, [hashtable]$SourceClaims) {
     Assert-Value "exchange-audience-only-target" @("billing-api") @($claims.aud)
     Assert-Value "exchange-scope-only-target" "billing-api" $claims.scope
     Assert-Value "exchange-actor" "client:orders-api" $claims.act.sub
-    Assert-Value "exchange-lifetime-120" 120 ($claims.exp - $claims.iat)
+    # 交换令牌取 120 秒上限与源令牌到期时刻中较早的一个；默认档源令牌更长，落在 120 秒上限
+    Assert-Value "exchange-lifetime" ([Math]::Min($claims.iat + 120, $SourceClaims.exp)) $claims.exp
     Assert-Value "exchange-bounded-by-subject" $true ($claims.exp -le $SourceClaims.exp)
     Assert-Value "exchange-no-roles" $false $claims.ContainsKey("role")
     Assert-Value "exchange-no-super-admin" $false $claims.ContainsKey("is_super_admin")
@@ -1078,13 +1087,13 @@ function Test-S7 {
         }
         if ($IncludeExpiryWait) {
             $expiry = [Math]::Max((Read-TokenClaims $token).exp, (Read-TokenClaims $tenantToken).exp) + 2
-            Write-Host "S7 等待真实 600 秒令牌到期（OpenIddict 7.7.0 ClockSkew=0）。"
+            Write-Host "S7 等待快速档访问令牌真实到期（OpenIddict ClockSkew=0）。"
             while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $expiry) { Start-Sleep -Seconds 3 }
             foreach ($name in @("orders", "billing")) {
                 Assert-Http "revoked-user-expired-$name" 401 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
                 Assert-Http "revoked-tenant-expired-$name" 401 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $tenantToken $name) | Out-Null
             }
-        } else { Write-Skipped "S7-expiry-wait" "默认不等待十分钟；使用 -IncludeExpiryWait 验证真实令牌到期边界。" }
+        } else { Write-Skipped "S7-expiry-wait" "默认不等待令牌真实到期；使用 -IncludeExpiryWait 以快速档验证到期边界。" }
     }
     finally {
         Assert-Http "restore-shared-tenant" 200 ($urls.idp + "/api/v1/tenants/" + $sharedTenant.id + "/activation") -Method PUT -Body @{ isActive = $true } -Session $admin | Out-Null
@@ -1170,11 +1179,13 @@ try {
     Invoke-Scenario "S6" { Test-S6 }
     Invoke-Scenario "S8" { Test-S8 }
     Invoke-Scenario "S10" { Test-S10 }
-    Invoke-Scenario "exchange-expiry" {
-        $expires = (Read-TokenClaims $delegatedExpiryToken).exp + 1
-        while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $expires) { Start-Sleep -Milliseconds 500 }
-        Assert-Http "exchanged-jwt-expired" 401 ($urls.billing + "/api/e2e/natural") -Token $delegatedExpiryToken | Out-Null
-    }
+    if ($IncludeExpiryWait) {
+        Invoke-Scenario "exchange-expiry" {
+            $expires = (Read-TokenClaims $delegatedExpiryToken).exp + 1
+            while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $expires) { Start-Sleep -Milliseconds 500 }
+            Assert-Http "exchanged-jwt-expired" 401 ($urls.billing + "/api/e2e/natural") -Token $delegatedExpiryToken | Out-Null
+        }
+    } else { Write-Skipped "exchange-expiry" "默认不等待令牌真实到期；使用 -IncludeExpiryWait 验证交换令牌到期。" }
     Invoke-Scenario "S7" { Test-S7 }
     }
     if ($IncludeBrowserScenarios) { Invoke-BrowserScenarios }
