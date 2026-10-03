@@ -6,12 +6,18 @@
 
 各环境共用同一套配置键，只换值的来源。浏览器页面与所属 API 必须同源，支持同镜像托管，也支持分进程经部署代理统一外部源。认证导航、`/api/**` 协议回调与前端回跳都以该外部源为准；独立跨源 API 地址不属于模板浏览器认证的部署契约。`API_GATEWAY` 构建参数与 `environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。
 
-会话 Cookie 默认 `SameSite=Lax`。外部 OAuth correlation 与 OIDC nonce Cookie 保持官方 `SameSite=None`、`Secure=Always`，协议回调须 HTTPS。第三方站点以顶层 POST 进入授权或退出端点时，若需要附带已有会话，应评估 `SessionCookie__SameSite=None` 与对应请求来源防护；模板未启用 antiforgery。该设置不会补齐跨源浏览器认证导航。
+会话 Cookie 默认 `SameSite=Lax`。外部 OAuth correlation 与 OIDC nonce Cookie 保持官方 `SameSite=None`、`Secure=Always`，协议回调须 HTTPS。放宽会话 Cookie 到 `None` 不会补齐跨源浏览器认证导航。
+<!--#if (OpenIddictServer)-->
+
+第三方站点以顶层 POST 进入授权或退出端点时不需要放宽 SameSite：请求先缓存，再以顶层 GET 重入，Lax 会话 Cookie 即可送达（见 [依赖方的登录与退出](../standards/api.md#依赖方的登录与退出)）。
+<!--#endif-->
 
 口令哈希默认 PBKDF2-HMAC-SHA256 600,000 次迭代（OWASP 现行建议）。硬件基准表明可以承受更高成本时用 `PasswordHash__IterationCount` 调高；新值只作用于此后设置或修改的口令，存量密文按自身记录的迭代数校验，照常可用。
 <!--#if (OpenIddictServer)-->
 
-多系统退出不会自动撤销已经签发的下游令牌。需要即时联动时须实现按已验证令牌 `sid` 查询会话或 OIDC back-channel logout，模板没有这些端点。
+多系统退出不会即时通知其他依赖方：模板没有 OIDC back-channel logout。登记为会话绑定的依赖方在 Identity 会话结束后，于访问令牌到期时续期失败而收敛；未绑定的依赖方持有的刷新令牌不受影响。
+
+授权与退出请求缓存在控制库的令牌表里（request token），重新认证证明、退出确认凭据与 Cookie 由 Data Protection 保护；重新认证证明比较签发时刻与会话开始时间，各副本的时钟须同步。多实例 Identity 之间一次登录或退出可能落在不同副本，因此除共享缓存外，还要共享同一个控制库、同一套令牌证书、同一个 Data Protection 密钥环与应用名，以及分布式锁。修改开放应用登记后滚动重启 Identity：OpenIddict 应用缓存只在本进程失效。
 <!--#endif-->
 
 部署时记录 API 和 DbMigrator 的固定版本或 digest，不用 `latest` 充当发布身份。模板 Compose 中的 `:latest` 是示例值，实际发布需要由项目流水线明确替换。
@@ -23,12 +29,13 @@
 | 测试 / 预发 | `Staging` | 环境变量，需要时加 `appsettings.Staging.json` | CI/CD 的 secret 注入为环境变量 |
 | 生产 | `Production` | 环境变量与 `appsettings.Production.json` | 密钥管理系统，经环境变量或挂载文件注入 |
 
-开发环境以外，只在单机上成立的回落一律缺配即启动失败：
+开发环境以外，下列只在单机上成立的回落缺配即启动失败：
 
-- Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+- Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+- 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，只适合单实例，启动日志各有一条 Warning 说明降级内容；多副本必须配置 Redis。
 - TLS 在网关或 ingress 终结时，所有形态（含 Standalone）都须配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 还原原始协议与主机。浏览器写请求的 Origin 校验同样依赖这些转发头；来源拒绝返回 Problem Details，Warning 日志给出收到的 Origin 与计算出的本源。
 <!--#if (OpenIddictServer)-->
-- 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificatePath`、`OAuth:EncryptionCertificatePath`），与 HTTPS 证书分开；开发证书只用于本机开发。
+- 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificates`、`OAuth:EncryptionCertificates` 各至少一项，每项 `Path`、`Password`），与 HTTPS 证书分开；开发证书只用于本机开发。任何一项缺路径、无法加载或没有 RSA 私钥，启动失败并指出带下标的键名。
 - TLS 在网关或 ingress 终结时，配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 让应用还原原始协议，不要打开 `OAuth:DisableHttpsRequirement`——OpenIddict 明确要求生产环境即使在反向代理后也不关闭传输安全检查。
 <!--#endif-->
 
@@ -51,9 +58,37 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   令牌证书以 compose `secrets` 挂载到 `/run/secrets`，只有口令走环境变量。单机 compose 的文件型 secret 是按宿主机文件权限的绑定挂载，`mode`、`uid` 不生效：证书文件必须对容器用户（UID 1654）可读，例如 `chown 1654 certs/*.pfx && chmod 400 certs/*.pfx`，或 `chmod 640` 并把属组设为 1654。宿主机上 `600` 且属主 root 的证书会让 API 启动失败。
 <!--#endif-->
 - **容器用户**：API 与迁移镜像以镜像自带的非 root 用户（UID 1654）运行。挂进容器的文件要对它可读；Data Protection 密钥改用文件目录（`DataProtection:KeysPath`）而不是 Redis 时，挂载的目录要对它可写。
-- **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件（如身份服务的令牌证书）以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis，Data Protection 密钥与分布式锁都依赖它。
+- **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件（如身份服务的令牌证书）以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis：分布式缓存（会话票据等）与分布式锁依赖它，Data Protection 密钥也默认存在那里。
 - **云平台（容器服务、应用服务）**：配置写应用设置，机密放托管密钥库并以托管身份读取（如 Key Vault 引用）。这类接入与平台绑定，确定平台后再加，不预置在模板里。
 
+<!--#if (OpenIddictServer)-->
+## 令牌证书轮换
+
+签名与加密证书都按集合登记，轮换期间新旧同时在册（重叠轮换），不要直接替换文件硬切。OpenIddict 把全部签名证书发布进 JWKS；
+签名时优先用已生效且到期最晚的一张，尚未生效（`NotBefore` 在未来）的排在后面（顺序在启动时排定）；加密用优先的一张，解密时全部可用。
+集合里至少要有一张当前有效的签名证书与加密证书，否则 OpenIddict 拒绝启动。
+
+1. **发布新公钥**：新签名证书的 `NotBefore` 设在未来（留出第 2 步的时间）、`NotAfter` 晚于旧证书、使用新的 kid，作为新的一项加入
+   `OAuth:SigningCertificates` 后滚动重启 Identity。此时 JWKS 已含新 kid，签名仍用旧证书。
+2. **确认各资源服务已取得新 kid**：资源服务有两条各自缓存的配置链路——OpenIddict 验证（访问令牌：Bearer、登录回调、服务端续期）
+   与 ASP.NET Core OIDC 处理器（id_token）。缓存过期（默认 12 小时）后要等下一个请求才会重新抓取，单靠时间过去不能确认，
+   所以滚动重启各资源服务副本，并经真实链路（一次 Bearer 请求、一次登录）预热，确认每个副本、两条链路都已取得新 kid。
+3. **切换签发**：新证书过了 `NotBefore` 后滚动重启 Identity。证书的优先顺序在启动时排定，不重启就一直用旧证书签名。
+4. **撤掉旧证书**：授权码、刷新令牌（默认 14 天）与授权、退出请求的 request token 由 Identity 自己签名并加密，
+   兑现时既要验签也要解密，所以旧的签名证书和加密证书都要保留到它们全部过期。旧签名证书还要覆盖访问令牌（10 分钟）
+   与依赖方保存的 id_token：后者在退出时作为 `id_token_hint` 回到 Identity，验不了签会让退出失败，所以至少保留到依赖方会话的最长寿命。
+   撤掉时从集合中删除该项并滚动重启。
+
+第 2 步漏做或资源服务在窗口内才启动时，资源服务遇到未知 kid 会先向配置的签发方刷新一次再验证：访问令牌链路合并并发、
+抓取超时 10 秒、请求刷新每分钟至多一次，id_token 链路由 IdentityModel 自身刷新重试一次，因此通常只多一次网络往返；
+但签发方不可达、或刚刷新过（IdentityModel 的 5 分钟间隔、本服务的 1 分钟限频）时，这些请求仍会以 401 失败，
+不能把它当作省略第 2 步的理由。
+
+签发方证书泄露时不走重叠流程：从集合中移除并重启 Identity，用它签发、加密的授权码、刷新令牌与 request token 在 Identity 上随即失效。
+资源服务已经缓存了这张证书的公钥，认得的 kid 不会触发刷新，只重启 Identity 不能让它们拒绝旧签名的访问令牌：
+要接着滚动重启各资源服务副本（或等缓存过期后的首次抓取），并用旧证书签的令牌确认每个副本都已拒绝。
+
+<!--#endif-->
 ## 生产边界
 
 - 密钥和生产凭据由环境变量或密钥管理系统提供，不写入仓库。
@@ -64,7 +99,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 - 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期在 `Program.cs` 里设为 10 分钟。
   - **停用或删除账号**：同时撤销该用户已签发的令牌，本服务立即拒绝；资源服务要等 Access Token 过期，之后也刷新不到新令牌。
   - **停用或删除租户**：本服务每个请求都查注册表，立即拒绝，刷新令牌也换不到新令牌；资源服务同样要等 Access Token 过期。
-  - **撤销会话（含"退出其他设备"）**：只作废本服务的登录会话，不撤销该设备经授权拿到的令牌。客户端持有刷新令牌时，它对下游资源服务的访问不受影响：刷新令牌默认 14 天有效且滑动续期，持续刷新的客户端可以一直访问下去，调短 Access Token 有效期也改变不了这一点。需要一并撤销时，要把令牌与会话关联起来，模板未内置。
+  - **撤销会话（含"退出其他设备"、退出登录与空闲到期）**：作废本服务的登录会话，不撤销已签发的访问令牌。之后是否还能刷新取决于开放应用的"会话绑定"：绑定的客户端（授权时记下了会话）刷新随即被拒，下游访问在访问令牌到期时结束；未绑定的客户端不受影响，刷新令牌默认 14 天有效且滑动续期，持续刷新可以一直访问下去，调短 Access Token 有效期也改变不了这一点。
 
   停用或删除账号、租户之后无法再刷新，所以这两类的窗口可以靠调短 Access Token 有效期来缩短。资源服务改用令牌内省（`UseIntrospection()`）能让**已撤销的令牌**即时失效，所以对停用或删除账号有效；租户停用还要先在停用时撤销该租户的令牌才行。
 <!--#endif-->

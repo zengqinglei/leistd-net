@@ -282,6 +282,29 @@
                   </p>
                 }
               </div>
+
+              <div class="rounded-lg border border-border p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <label class="text-sm font-medium" for="application-session-bound">{{
+                      t('openApp.sessionBound.title')
+                    }}</label>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                      {{ t('openApp.sessionBound.hint') }}
+                    </div>
+                  </div>
+                  <hlm-switch
+                    inputId="application-session-bound"
+                    [checked]="formModel().sessionBound === true"
+                    (checkedChange)="setSessionBound($event)"
+                  />
+                </div>
+                @if (formModel().sessionBound === null) {
+                  <p class="mt-2 text-sm text-warning" data-testid="session-bound-unset">
+                    {{ t('openApp.sessionBound.unset') }}
+                  </p>
+                }
+              </div>
             }
           </div>
 

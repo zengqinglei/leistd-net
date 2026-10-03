@@ -99,6 +99,7 @@ describe('mockInterceptor', () => {
       postLogoutRedirectUris: [],
       permissions: ['ept:token', 'gt:client_credentials'],
       requirements: [],
+      sessionBound: false,
     };
     const http = TestBed.inject(HttpClient);
 
@@ -112,6 +113,24 @@ describe('mockInterceptor', () => {
       http.get<OpenApplicationOutputDto>(`/api/v1/open-applications/${clientId}`),
     );
     expect(stored.clientSecret).toBeUndefined();
+    expect(stored.sessionBound).toBe(false);
+  });
+
+  it('rejects open applications without an explicit session binding choice', async () => {
+    const http = TestBed.inject(HttpClient);
+    const input = {
+      clientId: `spec-unset-${crypto.randomUUID()}`,
+      applicationType: 'web',
+      clientType: 'public',
+      redirectUris: ['https://spa.example.test/callback'],
+      postLogoutRedirectUris: [],
+      permissions: ['ept:authorization', 'ept:token', 'gt:authorization_code', 'rst:code'],
+      requirements: ['ft:pkce'],
+    };
+
+    await expect(
+      firstValueFrom(http.post('/api/v1/open-applications', input)),
+    ).rejects.toMatchObject({ status: 400 });
   });
   //#endif
 });

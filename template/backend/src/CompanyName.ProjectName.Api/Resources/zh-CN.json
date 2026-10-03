@@ -159,6 +159,7 @@
     "SecurityAlert:TwoFactorEnabled:Title": "两步验证已启用",
     "SecurityAlert:TwoFactorReset:Content": "请在账户与安全设置里重新设置。",
     "SecurityAlert:TwoFactorReset:Title": "管理员重置了你的两步验证",
+    "Session bound": "会话绑定",
     "Setting:Audit.RetentionDays": "操作记录保留天数",
     "Setting:Audit.RetentionEnabled": "到期操作记录搬入归档",
     "Setting:Display.Language": "界面语言",

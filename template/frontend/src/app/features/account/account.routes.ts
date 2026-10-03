@@ -20,6 +20,14 @@ export const AUTH_ROUTES: Routes = [
         (m) => m.TwoFactorRequired,
       ),
   },
+  //#if (OpenIddictServer)
+  {
+    // 依赖方发起的退出、且无法确认是当前会话时，由用户确认
+    path: 'logout-confirm',
+    loadComponent: () =>
+      import('./components/logout-confirm/logout-confirm').then((m) => m.LogoutConfirm),
+  },
+  //#endif
   {
     path: 'register',
     loadComponent: () => import('./components/register/register').then((m) => m.Register),

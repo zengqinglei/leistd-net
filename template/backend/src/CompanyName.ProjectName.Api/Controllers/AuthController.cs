@@ -89,6 +89,45 @@ public sealed class AuthController(
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
     }
 
+#if (OpenIddictServer)
+    /// <summary>
+    /// 依赖方发起的退出需要确认时，确认页据此展示发起方并取得防伪令牌
+    /// </summary>
+    /// <remarks>
+    /// 只核对确认凭据与当前会话是否匹配，不结束会话；结束会话在 <c>/connect/logout</c> 的确认 POST 里完成。
+    /// 允许匿名：会话已失效时返回无效，由页面提示重新发起，而不是跳去登录。
+    /// </remarks>
+    [AllowAnonymous]
+    [HttpGet("logout-confirmation")]
+    public async Task<LogoutConfirmationOutputDto> GetLogoutConfirmationAsync(
+        [FromQuery(Name = "request_uri")] string? requestUri,
+        [FromQuery] string? confirmation,
+        [FromServices] ConnectInteractionProtector interactions,
+        [FromServices] Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery,
+        [FromServices] OpenIddict.Abstractions.IOpenIddictApplicationManager applications,
+        CancellationToken cancellationToken)
+    {
+        var session = await HttpContext.AuthenticateAsync(AuthenticationSchemeNames.SessionCookie);
+        if (!session.Succeeded || session.Principal is null ||
+            interactions.BindLogout(requestUri, session.Principal) is not { } current ||
+            interactions.ReadLogoutConfirmation(confirmation, current) is not { } binding)
+        {
+            return new LogoutConfirmationOutputDto { IsValid = false };
+        }
+
+        var application = binding.ClientId is null ? null : await applications.FindByClientIdAsync(binding.ClientId, cancellationToken);
+        var tokens = antiforgery.GetAndStoreTokens(HttpContext);
+        return new LogoutConfirmationOutputDto
+        {
+            IsValid = true,
+            ApplicationName = application is null ? binding.ClientId
+                : await applications.GetLocalizedDisplayNameAsync(application, cancellationToken) ?? binding.ClientId,
+            AntiforgeryFieldName = tokens.FormFieldName,
+            AntiforgeryToken = tokens.RequestToken
+        };
+    }
+
+#endif
     [AllowAnonymous]
     [AllowDuringTwoFactorSetup]
     [HttpGet("security-config")]

@@ -31,7 +31,11 @@ public sealed class ResourceAuthController(ICurrentUser currentUser, ICurrentTen
 
     [AllowAnonymous]
     [HttpPost("logout")]
-    public IActionResult Logout() => SignOut(new AuthenticationProperties { RedirectUri = "/" },
-        AuthenticationSchemeNames.SessionCookie, AuthenticationSchemeNames.OpenIdConnect);
+    public async Task<IActionResult> Logout()
+    {
+        // 本地会话单独退出且不带回跳地址：Cookie 处理器见到回跳地址就写 302，会盖过官方退出表单（FormPost 不改状态码）
+        await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
+        return SignOut(new AuthenticationProperties { RedirectUri = "/" }, AuthenticationSchemeNames.OpenIdConnect);
+    }
 }
 #endif

@@ -679,3 +679,63 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
   派生项目沿用这套夹具时，删除测试里依赖内存库语义的写法（如按 `Database:InMemoryName` 切换新库，改为克隆新库）；
   批量 `ExecuteUpdate`/`ExecuteDelete` 后的断言换一个作用域读库。
 - **撤销令牌改用官方批量接口**：`UserAppService` 用 `RevokeBySubjectAsync` 替代逐个 `TryRevokeAsync`；并发撤销失败不再被吞掉，会让整个操作失败。
+
+## 26. 会话绑定、请求缓存与依赖方退出（CRM R11）
+
+- **OpenIddict 升到 7.7.1**：模板 4 个包与框架 Client 2 个包同步升级；7.7.0 在请求缓存下还原 hint 主体有缺陷。
+  框架 `Leistd.ServiceClient.OAuth` 在官方处理器之前接管发现文档、JWKS、令牌响应的解析与状态校验：
+  调用方取消照常抛出，失败只记状态、类型与长度，不再把响应原文（含 access_token）写进 Error 日志；
+  错误码与官方一致（上游 openiddict/openiddict-core#2558，8.0 提供官方选项后删除）。
+- **开放应用新增必填 `sessionBound`**：创建、更新缺值或为 null 返回 400，调用管理 API 的脚本与集成要补上。
+  已有登记读作未设置（按不绑定处理），升级后须逐个明确选择：Resource 的浏览器登录（BFF）客户端开启，
+  桌面端、原生等离线续期客户端关闭。开启后，开启前签发的刷新令牌换取时返回 `invalid_grant`，客户端重新授权一次；
+  Identity 会话退出、撤销或空闲到期后，绑定客户端的刷新随之失败，依赖方会话在访问令牌到期时收敛。
+  多实例修改登记后滚动重启 Identity（OpenIddict 应用缓存只在本进程失效）。
+- **授权与退出请求缓存**：`/connect/authorize`、`/connect/logout` 的首个请求先存为 request token（控制库令牌表）
+  再以 `request_uri` 重定向回同一端点。控制器只会看到缓存后的请求；派生项目若在控制器里读原始查询串或表单改写协议参数，
+  要改为读 `GetOpenIddictServerRequest()`。重新认证回跳由"删除 `prompt`/`max_age` 参数"改为受保护证明。
+  多实例 Identity 要共享控制库、令牌证书、Data Protection 密钥环与应用名，以及缓存与锁。
+- **Resource 改用官方 FormPost 并保留 `id_token_hint`**：登录挑战与退出都返回自动提交的表单而不是 302；
+  依赖 302 的反向代理规则或测试要改为读取表单。宿主若加内容安全策略，须放行表单的内联提交脚本。
+  `ResourceAuthController.Logout` 先单独退出本地 Cookie（不带回跳地址），再发起 OIDC 退出。
+- **Identity 退出可能要求确认（行为变化）**：hint 的会话标识与当前会话一致时直接退出；没有 hint 或属于其他会话时，
+  转到新增的 `/auth/logout-confirm` 由用户确认（RP-Initiated Logout 1.0 §2）。不带 hint 的第三方依赖方会看到确认页。
+  新增 `GET /api/v1/auth/logout-confirmation` 与官方 antiforgery 注册（Cookie 在部署环境带 `__Host-` 前缀），
+  只用于这张确认表单；`/api` 写请求的跨源防护仍是 Origin 校验。
+- 部署文档原先"第三方顶层 POST 进入授权或退出端点需评估 `SameSite=None`"的说法作废：请求缓存后以顶层 GET 重入，Lax 即可。
+
+## 27. 实时 Hub 的来源检查
+
+`BrowserOriginMiddleware` 的覆盖从 `/api` 写请求扩展到 `/hubs/**` 的全部方法，含 WebSocket 握手：带 Origin 的连接只接受本源与
+`Cors:AllowedOrigins`，没有 Origin 时按 `Sec-Fetch-Site` 判定，两个头都没有的非浏览器客户端照常连接。CORS 不约束 WebSocket，
+此前同站其他子域（或会话 Cookie 放宽到 `SameSite=None` 时的任意站点）能带着 Cookie 握手并读取推送（CSWSH）。
+Hub 不因带 Authorization 头而跳过检查。按文档同源部署不受影响；从其他源连接 Hub 的前端要加进 `Cors:AllowedOrigins`。
+
+## 28. 令牌证书集合与签名公钥轮换
+
+- **Identity 的证书配置改为集合（破坏性）**：`OAuth:SigningCertificatePath/Password`、`OAuth:EncryptionCertificatePath/Password`
+  改为 `OAuth:SigningCertificates` 与 `OAuth:EncryptionCertificates`，每项 `Path`、`Password`，各至少一项。
+  环境变量写成 `OAuth__SigningCertificates__0__Path` 等；Compose 文件已改。旧键不再读取，未迁移时启动失败并指出新键名。
+  任何一项缺路径、无法加载或没有 RSA 私钥，启动失败并给出带下标的键名。
+- **重叠轮换**：新旧证书同时登记，按部署文档"令牌证书轮换"的顺序：发布新公钥 → 确认各资源服务已取得 → 新证书生效后重启切换签发 →
+  旧的签名与加密证书都保留到授权码、刷新令牌与 request token 全部过期（这些令牌既签名又加密），旧签名证书还要覆盖依赖方保存的 id_token 不再用作退出 hint。
+- **Resource 遇到未知 kid 先刷新再验**：新增 `Auth/SigningKeyRefresh.cs`（OpenIddict 验证处理器与配置管理器限频）；
+  验证的 HTTP 抓取超时改为 10 秒（原为 OpenIddict 默认 1 分钟）。Api 与集成测试项目新增
+  `RuntimeHostConfigurationOption`：`Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking=true`，只在资源服务宿主设置。
+  派生项目若另有自己的测试或工具进程承载资源服务宿主，也要设置这一开关，否则刷新只在后台进行、当次请求仍失败。
+
+## 29. 缺 Redis 的启动告警与部署文档更正
+
+- 非 Development 环境未配置 `ConnectionStrings:Redis` 时，启动日志新增一条 Warning，列出回落到进程内存的状态
+  （会话票据，本地身份还有会话撤销检查、两步验证挑战、图形验证码与邮箱验证码），说明只适合单实例；仍不阻止启动。
+  分布式锁的回落仍由锁组件在首次解析时单独告警。
+- 部署文档更正："开发环境以外的单机回落一律启动失败"只对 Data Protection 等列出的项成立；`DataProtection:KeysPath`
+  只替代密钥存储，不替代 Redis，多副本仍须配置 Redis。
+- api.md 的 Resource 小节写明：会话主体来自访问令牌，id_token 声明不进会话；`MaxAge`/`Prompt` 只要求重新验证身份，不是多因素或升级认证。
+
+## 30. 声明式工作单元把方法的取消令牌交给提交
+
+`UnitOfWorkInterceptor` 以方法声明的第一个 `CancellationToken` 参数调用 `CompleteAsync`（此前固定为不可取消；按参数类型取，object 参数里装箱的令牌不算）。
+BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开时，事务型工作单元不再提交（此前照常提交），
+取消按调用方取消记 Debug，不再记成 Error "commit failed"。提交开始之后不响应取消，语义不变。
+依赖"请求已中止仍要落库"的方法，不要把请求令牌传进带 `[UnitOfWork]` 的方法，或在方法内自行开启不可取消的工作单元。

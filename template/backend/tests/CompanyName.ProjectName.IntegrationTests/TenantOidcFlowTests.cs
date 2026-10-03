@@ -155,6 +155,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     {
         using var created = await admin.PostAsJsonAsync("/api/v1/open-applications", new
         {
+            sessionBound = false,
             clientId = id, displayName = id, applicationType = "service", clientType = "confidential",
             permissions = new[] { "ept:token", "gt:urn:ietf:params:oauth:grant-type:token-exchange", "scp:billing.read", "aud:https://api.example.test/billing" },
             requirements = Array.Empty<string>(), redirectUris = Array.Empty<string>(), postLogoutRedirectUris = Array.Empty<string>()
@@ -283,6 +284,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         var clientId = $"client-{Guid.CreateVersion7():N}";
         var created = await hostAdmin.PostAsJsonAsync("/api/v1/open-applications", new
         {
+            sessionBound = false,
             clientId,
             displayName = "Tenant OIDC probe",
             applicationType = "web",
@@ -316,7 +318,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
 
         using var browser = CreateHttpsClient(host);
         browser.DefaultRequestHeaders.Add("Cookie", session.Cookie);
-        var authorize = await browser.GetAsync(
+        var authorize = await browser.GetCachedAsync(
             "/connect/authorize" +
             $"?client_id={Uri.EscapeDataString(clientId)}" +
             $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +
@@ -354,6 +356,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         var clientId = $"client-{Guid.CreateVersion7():N}";
         var created = await hostAdmin.PostAsJsonAsync("/api/v1/open-applications", new
         {
+            sessionBound = false,
             clientId,
             displayName = "Workload",
             applicationType = "service",

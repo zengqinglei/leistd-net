@@ -68,7 +68,8 @@
 | MT4 退出 | 通过（**断言的是现状缺口**） | orders 退出后，orders 需要重新交互登录；billing 会话仍然有效，且访问令牌到期后**仍能续期并轮换** |
 | MT5 租户停用 | 通过 | 停用后新登录被拒；令牌窗口内 billing 仍为 200；到期后刷新被拒、票据被删，回到 idp 登录页，5 秒内无循环 |
 
-MT4 按"现状行为"断言。补齐单点登出后，应把 `mt-slo-billing-refresh-after-idp-logout` 改为期望失败。
+MT4 当时按"现状行为"断言。R11 的会话绑定（开放应用 `sessionBound`）已补齐这一缺口，脚本中的 MT4 改为期望：
+免确认退出、billing 在访问令牌到期前可用、到期续期被拒并回到登录（`mt-slo-billing-ticket-removed`）。
 本轮有 1 次点击重试（`tenant-confirm attempt=1`），说明页面启动期确实存在点击被吞的时序。
 
 ## 四、支撑能力评估

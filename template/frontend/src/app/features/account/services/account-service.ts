@@ -31,6 +31,9 @@ import {
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   TwoFactorStatusOutputDto,
+  //#if (OpenIddictServer)
+  LogoutConfirmationOutputDto,
+  //#endif
 } from '../models/account.dto';
 
 @Injectable({ providedIn: 'root' })
@@ -45,6 +48,18 @@ export class AccountService {
     return this.http.get<SecurityConfigOutputDto>('/api/v1/auth/security-config');
   }
 
+  //#if (OpenIddictServer)
+  /** 依赖方发起的退出需要确认时，核对确认凭据并取得确认表单的防伪令牌。 */
+  getLogoutConfirmation(
+    requestUri: string,
+    confirmation: string,
+  ): Observable<LogoutConfirmationOutputDto> {
+    return this.http.get<LogoutConfirmationOutputDto>('/api/v1/auth/logout-confirmation', {
+      params: { request_uri: requestUri, confirmation },
+    });
+  }
+
+  //#endif
   getCaptcha(): Observable<CaptchaOutputDto> {
     return this.http.get<CaptchaOutputDto>('/api/v1/auth/captcha');
   }
