@@ -124,6 +124,9 @@
       "clearAll": "Clear all",
       "clearOne": "Dismiss",
       "empty": "No notifications",
+      "loading": "Loading notifications…",
+      "loadFailed": "Couldn't load notifications.",
+      "historyStale": "Couldn't refresh earlier notifications.",
       "clearAllConfirm": "Clear all notifications? This cannot be undone.",
       "unreadAria": "Notifications ({{count}} unread)"
     }

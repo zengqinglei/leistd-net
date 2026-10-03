@@ -35,28 +35,6 @@ export const ROLES: MockRole[] = [
   },
 ];
 
-/** 全部权限名，顺序与后端定义树一致。 */
-export const ALL_PERMISSIONS: string[] = [
-  PERMISSIONS.users.default,
-  PERMISSIONS.users.create,
-  PERMISSIONS.users.update,
-  PERMISSIONS.users.delete,
-  PERMISSIONS.users.manageRoles,
-  PERMISSIONS.roles.default,
-  PERMISSIONS.roles.create,
-  PERMISSIONS.roles.update,
-  PERMISSIONS.roles.delete,
-  PERMISSIONS.roles.managePermissions,
-  //#if (OpenIddictServer)
-  PERMISSIONS.openApplications.default,
-  PERMISSIONS.openApplications.create,
-  PERMISSIONS.openApplications.update,
-  PERMISSIONS.openApplications.delete,
-  PERMISSIONS.openApplications.resetSecret,
-  //#endif
-  PERMISSIONS.settings.default,
-];
-
 /**
  * 权限定义树，形状与 `GET /api/v1/permissions/definitions` 一致。
  *
@@ -162,6 +140,18 @@ export const PERMISSION_DEFINITIONS = [
     ],
   },
 ];
+
+/**
+ * 全部权限名，由定义树展开，顺序与定义树一致。
+ *
+ * 不另外手写一份清单：两份各自维护必然漂移，漏掉的权限超管拿不到，对应页面在 Mock 下进不去。
+ */
+export const ALL_PERMISSIONS: string[] = PERMISSION_DEFINITIONS.flatMap((group) =>
+  group.permissions.flatMap((permission) => [
+    permission.name,
+    ...permission.children.map((child) => child.name),
+  ]),
+);
 
 function leaf(name: string, displayName: string, parentName: string) {
   return { name, displayName, parentName, children: [] as never[] };

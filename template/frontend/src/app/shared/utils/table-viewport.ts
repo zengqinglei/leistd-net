@@ -16,8 +16,9 @@ const LARGE_VIEWPORT = '(min-width: 1024px)';
 /**
  * 当前视口档位（mobile / tablet / desktop）。
  *
- * 必须在注入上下文里调用（字段初始化处）。四个平台表格共用同一份判定：
+ * 必须在注入上下文里调用（字段初始化处）。平台表格共用同一份判定：
  * 各写一遍时断点值会各自漂移，表现是同一页里两个表格在不同宽度下折叠。
+ * 带吸附操作列的表格只把它当上限，容器放不下时由 `TableFit` 再降一档。
  */
 export function tableViewportSignal(): Signal<TableViewport> {
   const breakpointObserver = inject(BreakpointObserver);

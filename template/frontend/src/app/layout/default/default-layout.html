@@ -1,13 +1,14 @@
-<!-- 应用主布局容器：hlmSidebarWrapper 包裹侧边栏与主内容区（inset 卡片）。 -->
+<!-- 应用主布局容器：hlmSidebarWrapper 包裹侧边栏与主内容区。 -->
 <div hlmSidebarWrapper data-layout="default" class="h-svh">
-  <!-- 侧边栏（inset 变体：内容区浮为圆角卡片；桌面折叠为图标轨，移动端渲染为 sheet） -->
+  <!-- 侧边栏（默认 sidebar 变体：与内容区平铺相接；桌面折叠为图标轨，移动端渲染为 sheet） -->
   <app-default-sidebar />
 
-  <!-- 主内容区（inset）：Header + 内容；inset 变体自带 m-2 / 圆角 / 阴影。 -->
+  <!-- 主内容区：Header + 内容。hlmSidebarInset 只在侧栏为 inset 变体时才浮为圆角卡片；
+       侧栏包在 app-default-sidebar 里，与本元素不是兄弟，改用 inset 时还要把 peer 与状态属性转到组件宿主上。 -->
   <main hlmSidebarInset class="overflow-hidden">
     <app-default-header />
 
-    <div class="flex-1 overflow-auto scroll-smooth">
+    <div class="flex-1 overflow-auto motion-safe:scroll-smooth">
       <router-outlet></router-outlet>
     </div>
   </main>

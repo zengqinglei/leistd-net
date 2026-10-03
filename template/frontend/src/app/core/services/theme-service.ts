@@ -12,6 +12,7 @@ export interface ThemePreferences {
 }
 
 const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
   mode: 'system',
@@ -35,6 +36,13 @@ export class ThemeService {
   private readonly systemDark = toSignal(
     inject(BreakpointObserver)
       .observe(SYSTEM_DARK_QUERY)
+      .pipe(map((state) => state.matches)),
+    { requireSync: true },
+  );
+  /** 系统"减少动效"偏好：开启时切换主题不播放过渡，直接换色。 */
+  private readonly reducedMotion = toSignal(
+    inject(BreakpointObserver)
+      .observe(REDUCED_MOTION_QUERY)
       .pipe(map((state) => state.matches)),
     { requireSync: true },
   );
@@ -76,7 +84,11 @@ export class ThemeService {
     const modes: ThemeMode[] = ['light', 'system', 'dark'];
     const nextMode = modes[(modes.indexOf(this.mode()) + 1) % modes.length];
 
-    if (isPlatformBrowser(this.platformId) && document.startViewTransition) {
+    if (
+      isPlatformBrowser(this.platformId) &&
+      document.startViewTransition &&
+      !this.reducedMotion()
+    ) {
       document.startViewTransition(() => this.setMode(nextMode));
       return;
     }

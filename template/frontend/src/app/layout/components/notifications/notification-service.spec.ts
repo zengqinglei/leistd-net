@@ -130,5 +130,59 @@ describe('NotificationService', () => {
 
     expect(service.loading()).toBe(false);
     expect(service.notifications().map((item) => item.id)).toEqual(['pushed']);
+    // 失败要能被界面看到，否则空列表与"没有通知"无从区分。
+    expect(service.loadFailed()).toBe(true);
+  });
+
+  it('clears the failure once a retry succeeds', async () => {
+    const failed = service.loadNotifications();
+    httpMock
+      .expectOne((req) => req.url === '/api/v1/notifications')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    await failed;
+    expect(service.loadFailed()).toBe(true);
+
+    const retry = service.loadNotifications();
+    // 重试进行中不再显示失败，界面应回到加载态。
+    expect(service.loadFailed()).toBe(false);
+    httpMock
+      .expectOne((req) => req.url === '/api/v1/notifications')
+      .flush([notification('n-1', '2026-01-01T00:00:00Z')]);
+    await retry;
+
+    expect(service.loadFailed()).toBe(false);
+    expect(service.notifications().map((item) => item.id)).toEqual(['n-1']);
+  });
+
+  it('keeps a stale failure off the new subject on a mid-request switch', async () => {
+    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
+
+    const load = service.loadNotifications();
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
+
+    await signalR.reset();
+    request.flush('boom', { status: 500, statusText: 'Server Error' });
+    await load;
+
+    // 上一个用户的请求失败了，不能在下一个人的铃铛里显示"加载失败"。
+    expect(service.loadFailed()).toBe(false);
+  });
+
+  it("keeps the new subject's loading state when the old subject's request settles late", async () => {
+    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
+
+    const loadA = service.loadNotifications();
+    await signalR.reset();
+    const loadB = service.loadNotifications();
+    const [requestA, requestB] = httpMock.match((req) => req.url === '/api/v1/notifications');
+
+    // A 的请求在 B 加载途中结束：它的 finally 不能替 B 关掉加载状态。
+    requestA.flush([]);
+    await loadA;
+    expect(service.loading()).toBe(true);
+
+    requestB.flush([]);
+    await loadB;
+    expect(service.loading()).toBe(false);
   });
 });

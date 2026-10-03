@@ -7,6 +7,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideBell,
+  lucideCircleAlert,
   lucideInbox,
   lucideInfo,
   //#if (LocalIdentity)
@@ -18,6 +19,7 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { NotificationOutputDto, NotificationService } from './notification-service';
@@ -43,6 +45,7 @@ import { englishText } from '../../../shared/utils/english-text';
     NgIcon,
     HlmButton,
     HlmBadge,
+    HlmSpinner,
     AppDate,
     ...HlmPopoverImports,
     ...HlmTooltipImports,
@@ -54,6 +57,7 @@ import { englishText } from '../../../shared/utils/english-text';
   providers: [
     provideIcons({
       lucideBell,
+      lucideCircleAlert,
       lucideInbox,
       lucideInfo,
       //#if (LocalIdentity)
@@ -153,6 +157,11 @@ export class Notifications implements OnInit {
     //#endif
   }
 
+  /** 重新加载历史通知：只重取列表，不重建实时连接。 */
+  retryLoad(): void {
+    void this.notificationService.loadNotifications();
+  }
+
   notificationIcon(type: string): string {
     return this.notificationService.getIcon(type);
   }
@@ -169,6 +178,10 @@ const ENGLISH: Record<string, string> = {
   'layout.notifications.title': 'Notifications',
   'layout.notifications.markAllRead': 'Mark all as read',
   'layout.notifications.empty': 'No notifications',
+  'layout.notifications.loading': 'Loading notifications…',
+  'layout.notifications.loadFailed': "Couldn't load notifications.",
+  'layout.notifications.historyStale': "Couldn't refresh earlier notifications.",
+  'common.retry': 'Retry',
   'layout.notifications.clearOne': 'Dismiss',
   'layout.notifications.clearAll': 'Clear all',
 };

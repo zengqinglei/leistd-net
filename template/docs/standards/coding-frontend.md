@@ -13,7 +13,7 @@
 - **开发语言**: TypeScript，版本遵循项目依赖及 Angular 编译器的 peer 范围
 - **状态管理**: Angular Signals
 - **表单**: Angular Signal Forms（`@angular/forms/signals`，在 Angular 22 仍为 experimental）；禁止 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态拦截）
-- **数据表格**: TanStack Table（`@tanstack/angular-table` headless 引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页/筛选展示复用 `shared/components/table-paginator`、`faceted-filter`，列按优先级响应式裁剪；被裁剪的列由行展开补偿，展开状态用 TanStack 的行展开特性（`row.getIsExpanded()` / `row.toggleExpanded()`，按 `getRowId` 给出的实体 id 记，翻页、刷新不收起），不另建展开状态
+- **数据表格**: TanStack Table（`@tanstack/angular-table` headless 引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页/筛选展示复用 `shared/components/table-paginator`、`faceted-filter`，列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带右侧吸附操作列的表格在外框挂 `appTableFit`，容器放不下时再降一档，免得吸附列压住被横向滚走的内容（写法 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`；指令按数据引用判断数据是否变了，更新数据要换新数组，不要原地改数组里的字段）；被裁剪的列由行展开补偿，展开状态用 TanStack 的行展开特性（`row.getIsExpanded()` / `row.toggleExpanded()`，按 `getRowId` 给出的实体 id 记，翻页、刷新不收起），不另建展开状态
 - **表格操作列**: 按钮按「常用优先、破坏性置后」排序；操作 ≤3 项桌面端全部平铺（icon 按钮 + tooltip），>3 项显示 2 个高频操作 + `…` 溢出菜单；`<sm` 一律收进 `…` 菜单省列宽，破坏性操作在菜单内用 `variant="destructive"` 且分隔线隔开
 - **列表查询状态**: 分页/排序/筛选以 **URL query params 为唯一来源**（`queryParamMap` 派生 + `router.navigate({queryParams})` 回写），刷新/分享/前进后退可恢复、非法参数回退默认；不用 localStorage 存查询状态
 - **HTTP 错误**: 拦截器只做 401 跳转 + 归一化为类型化 `ApplicationHttpError`（RFC 9457 Problem Details；`errors` 认本框架的数组与官方 `HttpValidationProblemDetails` 的字典两种形状），不发全局 Toast；反馈由发起操作的 feature 决定，全局 Toast 直接用 `@spartan-ng/brain/sonner`
@@ -149,6 +149,8 @@ frontend/
   | `button`                                          | `default` / `lg` 加 `pointer-coarse:h-11`，`icon` / `icon-lg` 加 `pointer-coarse:size-11` | 触屏设备的点按目标不小于 44px；`xs` / `sm` 是刻意选的紧凑尺寸，不改                                                                                                                                                              |
   | `input`、`input-group`                            | 加 `pointer-coarse:h-11`                                                                  | 与按钮同高，表单里并排时对齐                                                                                                                                                                                                     |
   | `select`（trigger）                               | `data-[size=default]` 下加 `pointer-coarse:h-11`                                          | 同上                                                                                                                                                                                                                             |
+  | `dialog`、`alert-dialog`、`sheet`、`popover`、`tooltip`、`select`、`combobox`、`navigation-menu`（内容与遮罩） | 进出场动画加 `motion-safe:` 前缀；`sheet` 内容、`navigation-menu` 内容与触发器箭头的过渡另加 `motion-reduce:transition-none` | 系统开启"减少动效"时不播放缩放、滑入。写法与上游 `dropdown-menu` 一致；Brain 关闭浮层时只等待正在播放的动画，没有动画就立即关闭 |
+  | `sidebar`（`hlm-sidebar`、`-menu-button`、`-group-label`、`-group-action`、`-menu-action`、`-rail`） | 宽度、位置、外边距与位移过渡加 `motion-reduce:transition-none` | 同上：折叠、展开侧栏时不播放滑动；颜色等非位移反馈不受影响 |
   | `dropdown-menu`（`hlm-dropdown-menu-trigger.ts`） | 改 `menuPosition` 后调用 CDK 触发器的 `ngOnChanges`，让已建好的 overlay 更新定位策略      | 上游直接赋值，不经过 `ngOnChanges`，菜单打开过一次后再改 `side` / `align` 不生效；侧栏内容在桌面与手机抽屉间复用同一实例，用户菜单与区域切换器的方向随断点变化，会被摆错。由 `dropdown-side-switch.spec.ts` 钉住，上游修复后删除 |
 
   用 `pointer-coarse` 而不是屏幕宽度判断：平板横屏很宽，但仍是手指操作。

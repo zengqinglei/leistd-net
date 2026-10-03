@@ -11,7 +11,7 @@
 - 图标：`@ng-icons` + Lucide。
 - 字体：正文默认 **Geist**，经 `@fontsource/geist` 自托管（npm 依赖打包字体文件，离线可用、无 CDN），回退 `system-ui, sans-serif`；属模板设计系统的一部分，业务项目可替换为品牌字体或改回系统字体栈。
 - 表单：Angular Signal Forms（`@angular/forms/signals`）；不使用 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态禁止）。
-- 数据表格：`@tanstack/angular-table`（headless 表格引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；展示层复用自有 `TablePaginator`/`FacetedFilter`，列可见性按优先级（primary/secondary/tertiary）响应式裁剪，被裁剪的列由 TanStack 行展开补偿。
+- 数据表格：`@tanstack/angular-table`（headless 表格引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；展示层复用自有 `TablePaginator`/`FacetedFilter`，列可见性按优先级（primary/secondary/tertiary）裁剪——视口档位给上限，带吸附操作列的表格在容器放不下时再降一档（`TableFit`），被裁剪的列由 TanStack 行展开补偿。
 - 列表查询状态：分页/排序/筛选以 **URL query params 为唯一状态源**，刷新、分享链接、浏览器前进后退均可恢复；非法参数回退到默认值。
 - HTTP 错误契约：拦截器只负责 401 认证跳转与把错误归一化为类型化 `ApplicationHttpError`（解析 RFC 9457/7807 Problem Details），**不发全局 toast**；具体反馈（字段错误 / Toast / 空状态 / 静默）由发起操作的 feature 决定；全局 Toast 直接用 Spartan Sonner（`@spartan-ng/brain/sonner`），无自建封装。
 - 支持范围：紧跟 Angular 最近两个大版本（当前 21/22）。
