@@ -10,14 +10,15 @@
 | --- | --- | --- | --- |
 | L0 编辑循环 | 每次小改动 | ≤ 1 分钟 | 受影响项目构建 + `dotnet test <测试项目> --filter "FullyQualifiedName~<类>"`；改了某道闸门就单跑它 |
 | L1 阶段完成 / 提交前 | 交评审前 | 框架 ≤ 5 分钟，模板 ≤ 10 分钟 | `check-all.ps1` + 下表按路径选的入口 |
-| L2 PR CI | 每次推送 PR | 墙钟 ≤ 8.5 分钟 | 框架全量测试、包消费、PostgreSQL/OIDC 端到端、模板 `pr` 档场景 |
+| L2 PR CI | 每次推送 PR | 参考约 8–9 分钟，队列与外部准备波动另计 | 框架全量测试、包消费、PostgreSQL/OIDC 端到端、模板 `pr` 档场景 |
 | L3 全集 | develop 推送、工作日夜间、发布（main 推送仅在框架或 VERSION 变化时） | 不设严格预算 | 同 L2，模板跑 `full` 档全部场景；发布等待同 SHA 的 L3 结果 |
 
 L1 按改动路径选择入口：
 
 | 改动 | 必跑 | 视情况加跑 |
 | --- | --- | --- |
-| 只改文档或 Skill | `check-all.ps1` | — |
+| 只改仓库根 `docs/`、`.agents/` 或 README 文案 | `check-all.ps1` | — |
+| 随包 `framework/docs/`、模板 `template/docs/` 或项目 Skill | `check-all.ps1` + 打包内容或代表性生成检查 | 影响运行契约时加相应隔离消费或生成场景验证 |
 | 框架某组件家族的实现 | 框架全量测试 + `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时按下一行验证 |
 | 模板某个特性（通知、外部登录、本地化）或某种 `ServiceRole` | 含该特性/形态的一个场景 + `identity-all-features` + 关闭侧场景（通常是 `identity`） | 前端交互变化做浏览器验证 |
 | 模板参数、条件块、公共生成逻辑、共享依赖或构建配置 | `test-template-matrix.ps1 -Tier pr` | — |
