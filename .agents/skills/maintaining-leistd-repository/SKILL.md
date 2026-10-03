@@ -50,3 +50,4 @@ description: 在 leistd-net 仓库中处理跨 framework、template、skills、d
 没有同类文档且信息需跨会话复用时，按 `docs/README.md` 创建最小权威文档；归属或关键决策不明确时询问用户。
 
 发布正式包、生产操作、真实数据修改、密钥变更和破坏性 Git 操作前核对现有授权是否覆盖目标与动作；未授权或范围扩大时再询问。
+[Negative scope fixture](references/quality-validation-missing.md)
