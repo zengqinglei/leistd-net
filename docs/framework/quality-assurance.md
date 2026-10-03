@@ -25,7 +25,7 @@ L1 按改动路径选择入口：
 | 数据库映射、迁移、租户路由 | 受影响场景 + `test-template-postgresql-e2e.ps1` | — |
 | 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios` |
 | Dockerfile、部署资产 | `-Scenarios standalone -ContainerSmokeScenarios standalone` | — |
-| CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围判定变化运行 `python scripts/test-workflow-change-scope.py`；影响调度时用远端 CI 验收 |
+| CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围/聚合变化运行 `python scripts/test-workflow-change-scope.py`；预检接替变化运行 `python scripts/test-template-source-preflight.py`；影响调度时用远端 CI 验收 |
 
 模板矩阵与生成项目的集成测试需要 Docker：集成测试用 Testcontainers 起 PostgreSQL，运行时冒烟先迁移再启动 API。`full` 档在本地只在需要复现合入后失败时执行。未执行的档位与入口须在交付说明里列出。
 

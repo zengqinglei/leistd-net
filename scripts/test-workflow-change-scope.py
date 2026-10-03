@@ -185,6 +185,21 @@ def check_docs_scope():
         code, output, error = evaluate(repo, script, parent, 'pull_request', extra_env={'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']})
         assert code == 0 and output == 'docs_only=false', ('failed diff', code, output, error)
         print('PASS empty and failed diff fall back to full')
+        # Model GitHub's actual PR merge checkout: base is the first parent.
+        merge = subprocess.check_output(['git', '-C', str(repo), 'commit-tree', 'HEAD^{tree}', '-p', base, '-p', 'HEAD'],
+                                        input='PR merge fixture\n', text=True).strip()
+        git(repo, 'update-ref', 'refs/heads/pr-merge', merge)
+        git(repo, 'symbolic-ref', 'HEAD', 'refs/heads/pr-merge')
+        for depth in (1, 2):
+            clone = Path(directory) / f'shallow-{depth}'
+            subprocess.run(['git', 'clone', '-q', '--depth', str(depth), repo.as_uri(), str(clone)], check=True)
+            present = subprocess.run(['git', '-C', str(clone), 'cat-file', '-e', f'{base}^{{commit}}'],
+                                     capture_output=True).returncode == 0
+            assert present == (depth == 2), ('unexpected shallow baseline availability', depth)
+            code, output, error = evaluate(clone, script, base, 'pull_request')
+            assert code == 0 and output == 'docs_only=true', ('shallow PR baseline', depth, code, output, error)
+            assert subprocess.run(['git', '-C', str(clone), 'cat-file', '-e', f'{base}^{{commit}}'], capture_output=True).returncode == 0
+            print(f'PASS shallow PR checkout depth={depth}: baseline {"available directly" if present else "fetched conservatively"}')
 
 
 def check_quality_aggregation():

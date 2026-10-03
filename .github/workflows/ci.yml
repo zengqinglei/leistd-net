@@ -71,6 +71,8 @@ jobs:
         with:
           ref: ${{ inputs.candidate_sha || github.sha }}
           sparse-checkout: scripts
+          # PR merge checkout 的第一层父提交即比较基准，避免另一次网络 fetch；缺失仍保守补取。
+          fetch-depth: 2
       - name: 判断是否仅修改内部文档
         id: scope
         shell: pwsh
