@@ -11,13 +11,22 @@ import { ThemeService } from './theme-service';
  */
 describe('ThemeService', () => {
   const query = '(prefers-color-scheme: dark)';
+  const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
   let systemDark: BehaviorSubject<boolean>;
+  let reducedMotion: BehaviorSubject<boolean>;
 
-  // 只有查询的确是系统暗色偏好时才如实回报，查错了查询就恒为不匹配
+  // 只有查询的确是对应的系统偏好时才如实回报，查错了查询就恒为不匹配
   const state = (value: string, matches: boolean): BreakpointState => ({
-    matches: value === query && matches,
-    breakpoints: { [value]: value === query && matches },
+    matches,
+    breakpoints: { [value]: matches },
   });
+  const observe = (value: string) => {
+    if (value === query) return systemDark.pipe(map((matches) => state(value, matches)));
+    if (value === reducedMotionQuery) {
+      return reducedMotion.pipe(map((matches) => state(value, matches)));
+    }
+    return systemDark.pipe(map(() => state(value, false)));
+  };
 
   function create(): ThemeService {
     TestBed.configureTestingModule({
@@ -25,9 +34,7 @@ describe('ThemeService', () => {
         provideZonelessChangeDetection(),
         {
           provide: BreakpointObserver,
-          useValue: {
-            observe: (value: string) => systemDark.pipe(map((matches) => state(value, matches))),
-          },
+          useValue: { observe },
         },
       ],
     });
@@ -37,6 +44,7 @@ describe('ThemeService', () => {
   beforeEach(() => {
     localStorage.removeItem(ThemeService.STORAGE_KEY);
     systemDark = new BehaviorSubject(false);
+    reducedMotion = new BehaviorSubject(false);
   });
 
   afterEach(() => {
@@ -73,5 +81,39 @@ describe('ThemeService', () => {
     TestBed.tick();
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('switches the theme without a view transition when the system asks for reduced motion', () => {
+    reducedMotion.next(true);
+    // 测试浏览器（Chromium）自带这个 API；替身直接执行回调，不真的播放过渡
+    const startViewTransition = vi
+      .spyOn(document, 'startViewTransition')
+      .mockImplementation((update) => {
+        void (update as () => void)();
+        return {} as ViewTransition;
+      });
+    const service = create();
+
+    service.toggleTheme();
+
+    // 三态按 light → system → dark 循环，默认 system 的下一档是 dark
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(service.mode()).toBe('dark');
+  });
+
+  it('keeps the view transition when reduced motion is not requested', () => {
+    // 测试浏览器（Chromium）自带这个 API；替身直接执行回调，不真的播放过渡
+    const startViewTransition = vi
+      .spyOn(document, 'startViewTransition')
+      .mockImplementation((update) => {
+        void (update as () => void)();
+        return {} as ViewTransition;
+      });
+    const service = create();
+
+    service.toggleTheme();
+
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(service.mode()).toBe('dark');
   });
 });
