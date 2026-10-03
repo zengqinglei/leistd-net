@@ -1,6 +1,6 @@
 # 按开发场景选择验证：实现与证据
 
-交付在 [MR #36](https://github.com/zengqinglei/leistd-net/pull/36)。基线 develop 为 `549d106d`；首批 `44f5aa55` 的规划 runner 曾阻塞打包，本轮 `d17c2ad5` / `b8233412` 已解除该依赖，并一次实施剩余的模板阶段/场景选择和 Framework 空消费闭包。Claude 代码审查未发现必须修复项；随后补上未知模板 source/modifier 字段全量回退与文档范围摘要。最终提交的正常 PR、full 复验及评审收敛记录以 MR 的具体 SHA/运行链接为准。本报告的性能样本准确对应下列候选，不将早期数据冒充最终提交。
+交付在 [MR #36](https://github.com/zengqinglei/leistd-net/pull/36)。基线 develop 为 `549d106d`；首批 `44f5aa55` 的规划 runner 曾阻塞打包，本轮 `d17c2ad5` / `b8233412` 已解除该依赖，并一次实施剩余的模板阶段/场景选择和 Framework 空消费闭包。独立代码审查未发现必须修复项；随后补上未知模板 source/modifier 字段全量回退与文档范围摘要，代码候选 `762bdd61` 的正常 PR 与 full 复验均通过。之后仅收敛根内部文档、删除已完成计划，清理提交的普通 PR 结果见 MR；不冒称清理 SHA 已执行 full。下列性能样本注明其实际候选，不将早期数据冒充最后提交。
 
 长期行为以[仓库质量规范](../framework/quality-assurance.md#同候选输入计划)和[模板质量规范](../template/quality-assurance.md)为准。业务项目以生成的 `docs/standards/testing.md` 为准，不执行框架仓库的多形态模板发布矩阵。本轮没有删除测试或断言；减少的是重复预检和输入未变的验证任务。
 
@@ -15,7 +15,7 @@
 | 跨前后端、共享、配置、依赖、生成逻辑或未知输入 | 完整代码 PR 责任 | 完整 PR 档；混合文档不享受局部输入例外 |
 | 非直接 PR、无效基准、默认人工入口、full/复用调用 | 完整验证 | 完整验证；full 仍是 10 场景及适用容器 |
 
-唯一内部文档白名单在 `ci.yml` 的 `framework-pack/scope`：README.md、docs/、.agents/、skills/，大小写敏感；关闭 rename、读取 NUL 分隔的实际 base→候选完整差异。空/未知/失败差异全量。复用输入不能享受 docs-only，即使继承 PR 事件。
+唯一内部文档白名单在 `ci.yml` 的 `framework-pack/scope`：根目录 README.md、docs/、.agents/、skills/，大小写敏感；关闭 rename、读取 NUL 分隔的实际 base→候选完整差异。空/未知/失败差异全量。复用输入不能享受 docs-only，即使继承 PR 事件。
 
 模板生产场景复用唯一场景注册与 template.json 条件求值，按整个文件选择，求旧/新两侧并保留 identity、identity-all-features。支持字段有显式守卫，遇到未建模规则全量；配置变动、脏树和不支持输入全量。前端/后端省略阶段的输入与基准保持一致，由六种实际生成产物的前后哈希对照证伪；只归一化模板引擎随机生成的 UserSecretsId 值。
 
@@ -47,12 +47,14 @@
 | 历史完整 PR，tree 同 develop `549d106d` | [37101560960](https://github.com/zengqinglei/leistd-net/actions/runs/37101560960) | 514 | 1760 | 基线 |
 | 首批 `44f5aa55`，未解除规划依赖 | [37106712274](https://github.com/zengqinglei/leistd-net/actions/runs/37106712274) | 484 | 1718 | 早期候选，非本轮 |
 | 本轮 `b8233412` 普通完整 PR | [37113368834](https://github.com/zengqinglei/leistd-net/actions/runs/37113368834) | 496 | 1737 | −18 墙钟/−23 runner；3.5%/1.3% |
-| 本轮内部文档 | [37113610071](https://github.com/zengqinglei/leistd-net/actions/runs/37113610071) | 93 | 77 | −421/−1683；81.9%/95.6% |
-| 本轮前端通知源码 | [37113612709](https://github.com/zengqinglei/leistd-net/actions/runs/37113612709) | 355 | 976 | −159/−784；30.9%/44.5% |
-| 本轮后端 AuthController | [37113616565](https://github.com/zengqinglei/leistd-net/actions/runs/37113616565) | 355 | 778 | −159/−982；30.9%/55.8% |
+| 本轮内部文档 | [37113610071](https://github.com/zengqinglei/leistd-net/actions/runs/37113610071) | 93（并发排队） | 77 | −421/−1683；81.9%/95.6% |
+| 本轮前端通知源码 | [37113612709](https://github.com/zengqinglei/leistd-net/actions/runs/37113612709) | 355（并发排队） | 976 | −159/−784；30.9%/44.5% |
+| 本轮后端 AuthController | [37113616565](https://github.com/zengqinglei/leistd-net/actions/runs/37113616565) | 355（并发排队） | 778 | −159/−982；30.9%/55.8% |
 | 本轮 Framework SMTP 源码 | [37113620401](https://github.com/zengqinglei/leistd-net/actions/runs/37113620401) | 436 | 1575 | −78/−185；15.2%/10.5%，不能全归于消费裁剪 |
 | 本轮真实 workflow_call，默认 full | [37113603415](https://github.com/zengqinglei/leistd-net/actions/runs/37113603415) | 903 | 1943 | 10 场景/容器，责任不同，不与 PR 算加速率 |
 | 文档缺失引用变异 | [37114173705](https://github.com/zengqinglei/leistd-net/actions/runs/37114173705) | 71 | 75 | 预期失败，计入验证成本，不作性能收益 |
+| 最后代码 `762bdd61` 完整 PR | [37115108539](https://github.com/zengqinglei/leistd-net/actions/runs/37115108539) | 493 | 1708 | −21/−52；4.1%/3.0%，完整责任计数不变 |
+| 最后代码 `762bdd61` full | [37115122529](https://github.com/zengqinglei/leistd-net/actions/runs/37115122529) | 913 | 2027 | 10 场景/容器；不能作为 PR 加速率 |
 
 专用 PR #43–46 的基准已包含 `b8233412`，仅临时增加目标分支的 PR 触发项；实际 job/env/条件/命令与候选相同。完整 MR #36 因 base→HEAD 包含脚本/CI/文档混合输入，始终取完整 PR 档，最后一次仅补文档也不能判为 docs-only。临时分支/PR 在证据收集后关闭清理，不合入产品。
 
@@ -68,7 +70,7 @@
 
 所有已执行后端测试 0 跳过。前端选择 identity、identity-all-features、identity-notifications、resource-notifications；后端选择 identity、identity-all-features、identity-notifications、standalone-external-login。列表是此次具体样本，不是第二份维护清单。
 
-实际 PR 计划/回执绑定 GitHub merge SHA；full 候选绑定 `b8233412`，调用方 SHA 为 `d54f418b`，两者不同。逐项检查模式、档位、场景/片数、每阶段 pass/not-applicable、包消费数、日志用例数及实际汇总检查通过。完整档实跑默认 full 没传 tier，证明复用候选不会因事件继承误取 pr。
+实际 PR 计划/回执绑定 GitHub merge SHA；复用 full 候选绑定 `b8233412`，调用方 SHA 为 `d54f418b`，两者不同。逐项检查模式、档位、场景/片数、每阶段 pass/not-applicable、包消费数、日志用例数及实际汇总检查通过。完整档实跑默认 full 没传 tier，证明复用候选不会因事件继承误取 pr。最后代码的普通 PR 回执为 merge `c1913f19`，full 回执为候选 `762bdd61`；两者分别通过 6/10 场景、68 消费者、相应完整用例及实际 full 容器检查。
 
 ### 每阶段耗时
 
@@ -106,7 +108,7 @@
 
 打包不再等待独立规划 runner。历史 pack 在 3→54 秒、分片 57–58 秒；首批在 15→66、68–69；`b8233412` 在 3→57、60–62。最终样本 scope=0 秒、计划=6 秒，仍有新增计划成本。Framework 测试等待 pack，但 173 秒已结束，早于关键分片 479 秒，不在当前关键路径。
 
-预检去重本地同快照交替三轮：原入口 12.700/10.959/11.028（中位 11.028）；清单接替 1.958/1.739/1.737（中位 1.739），差 9.289 秒/片，三片约 27.867 runner 秒。它是本地入口估算，不是整 CI 墙钟收益；新增计划和 runner 准备会抵消一部分。真实完整 PR 只观测少 18 墙钟/23 runner 秒。
+预检去重本地同快照交替三轮：原入口 12.700/10.959/11.028（中位 11.028）；清单接替 1.958/1.739/1.737（中位 1.739），差 9.289 秒/片，三片约 27.867 runner 秒。它是本地入口估算，不是整 CI 墙钟收益；新增计划和 runner 准备会抵消一部分。真实完整 PR 只观测少 18 墙钟/23 runner 秒。场景前准备区间 61→21 秒还包含 audit/hive 与 runner 执行差异，未独立量化，不能全部归于去重。
 
 本轮首次 `d17c2ad5` 与随后 `b8233412` 的全部观测均披露：
 
@@ -122,7 +124,9 @@
 
 后端后续 pack 在 57 秒完成，OIDC 到 143 秒才启动、执行 198 秒，到 341 秒结束，汇总 344→355；模板分片到 102–155 秒启动。文档静态 61 秒结束，汇总 83 秒才启动，有 22 秒等待。这批与 full 同时提交造成排队，不能把 252→355 的墙钟增长解释为多了测试，也不能把全部 runner 波动都断言为环境噪声。后续完整 PR 相比首次 runner 增加 92 秒，但用例/场景/责任未增，说明单次时长仍不足以给出稳定归因。
 
-两组专用验证成本分别 6986 和 7161 runner 秒，含 full 和预期失败，未取消；这是实施验收的一次性成本，不计入每次开发收益。最终提交的必要复验另在 MR 披露。更早的首批取消运行成本 7+835 runner 秒见 Git/MR 历史，不隐藏为 0。
+两组专用验证成本分别 6986 和 7161 runner 秒，含 full 和预期失败，未取消；最后代码的必要 PR/full 复验另为 1708+2027 runner 秒，根文档清理的自动 PR 在 MR 披露。这是实施验收的一次性成本，不计入每次开发收益。更早的首批取消运行成本 7+835 runner 秒见 Git/MR 历史，不隐藏为 0。
+
+最后代码 full 比 b823 多 10 墙钟/84 runner 秒：Identity 片 575→849（+274），Resource/Standalone 片 824→663（−161），其余作业净 −29。责任/用例数保持完整，关键片由 Resource 转为 Identity；没有证据将此波动全归给某一环境因素，也没有宣称 full 耗时改善。
 
 ### 本地消费者闭包成对样本
 
@@ -145,10 +149,10 @@
 - 未选包 XML 缺失、漏包、缺候选依赖、未知种子、full 裁剪计划均拒绝，恢复内容后通过。
 - 实际文档缺失 Skill 引用令静态和必过汇总同时失败，动态 skipped 不造成假绿；默认 full/候选与 caller SHA 不同的真实复用及容器通过。
 
-Claude 确认没有漏测/假绿路径，首批 M1 已解决。采纳未知规则回退、如实说明 PG/OIDC 保留理由及 docs-only 作业摘要建议；暂不继续裁剪 PG/OIDC，避免扩大尚未完成的入口证明。Framework 消费者收益小这一判断同意，但用户明确要求恢复实施，且正确缩小空构建输入，因而保留；没有宣称它改善了关键路径。跳过分片的 GitHub 动态标题仍显示表达式，是外观限制，不影响必过汇总。
+独立代码审查在核对范围内未发现漏测或假绿路径，首批 M1 已解决。采纳未知规则回退、如实说明 PG/OIDC 保留理由及 docs-only 作业摘要建议；暂不继续裁剪 PG/OIDC，避免扩大尚未完成的入口证明。Framework 消费者收益小这一判断同意，但用户明确要求恢复实施，且正确缩小空构建输入，因而保留；没有宣称它改善了关键路径。跳过分片的 GitHub 动态标题仍显示表达式，是外观限制，不影响必过汇总。
 
 回归脚本仅在范围/责任机制维护时执行，不新增日常闸门。原始命令、日志、receipt、API 时间线、生成哈希、候选/调用 manifest 与评审存于 `.tmp/quality-unified-20261003/`；持久运行链接与收敛状态在 MR。
 
 ## 验收边界
 
-实现与缺陷拒绝责任均已完成上述验证，最后 SHA 的质量结果与 Claude 复审继续在 MR 收敛。**PR 墙钟中位 ≤510 秒尚未稳定验收**：不同候选的一次观测不能当相同候选的独立重复样本，也不能用同时触发专用验证造成的排队估算日常 SLA。首次真实业务局部 PR 仍应核对它的计划与回执；本轮未实测业务功能开发的端到端耗时。发布或合入 SHA 必须执行它自己的完整质量责任。
+实现与缺陷拒绝责任均已完成上述验证，独立代码审查及报告数值核对已收敛，最后文档清理提交的普通 PR 状态以 MR 为准。**PR 墙钟中位 ≤510 秒尚未稳定验收**：不同候选的一次观测不能当相同候选的独立重复样本，也不能用同时触发专用验证造成的排队估算日常 SLA。首次真实业务局部 PR 仍应核对它的计划与回执；本轮未实测业务功能开发的端到端耗时。发布或合入 SHA 必须执行它自己的完整质量责任。
