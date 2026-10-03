@@ -4,12 +4,14 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Api.Notifications;
 using CompanyName.ProjectName.Application.Notifications;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Email.Abstractions;
 using Leistd.Notifications.Channels;
+using Leistd.Notifications.Email.Recipients;
 using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
@@ -54,9 +56,11 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
         var (username, email) = await CreateUserAsync(host, "notify_mail");
         using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
 
-        // 邮箱未验证：不发
+        // 邮箱未验证：不发。渠道在请求内就决定了收件地址（入队前），所以请求返回时判定已经落定，
+        // 不必等后台队列——等也只能证明"观察期内没收到"
         await ChangePasswordAsync(session.Client, Password, Password + "1");
-        await Task.Delay(TimeSpan.FromSeconds(1));
+        Assert.True(mailbox.Resolved.TryGetValue(await GetUserIdAsync(host, username), out var resolved));
+        Assert.Null(resolved);
         Assert.False(mailbox.Received.ContainsKey(email));
 
         await ConfirmEmailAsync(host, username);
@@ -101,6 +105,10 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
         {
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(mailbox);
+            services.RemoveAll<INotificationRecipientResolver>();
+            services.AddScoped<UserEmailRecipientResolver>();
+            services.AddScoped<INotificationRecipientResolver>(provider =>
+                new RecordingRecipientResolver(provider.GetRequiredService<UserEmailRecipientResolver>(), mailbox));
         }));
         return (host, mailbox);
     }
@@ -120,6 +128,13 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
     {
         using var body = JsonDocument.Parse(await client.GetStringAsync("/api/v1/notifications"));
         return body.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
+    }
+
+    private static async Task<string> GetUserIdAsync(WebApplicationFactory<Program> host, string username)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        return (await db.Set<User>().SingleAsync(u => u.Username == username)).Id.ToString();
     }
 
     private static async Task ConfirmEmailAsync(WebApplicationFactory<Program> host, string username)
@@ -147,10 +162,15 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
         return (username, email);
     }
 
-    /// <summary>记下收到的信；邮件经后台队列发送，断言要等。</summary>
+    /// <summary>
+    /// 记下收到的信与邮件渠道为每个用户解析出的收件地址。信经后台队列发送，断言要等；
+    /// 收件地址在请求内入队前解析，请求返回即可断言。
+    /// </summary>
     private sealed class CapturingMailbox : IEmailSender
     {
         public ConcurrentDictionary<string, EmailMessage> Received { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public ConcurrentDictionary<string, string?> Resolved { get; } = new();
 
         public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
         {
@@ -169,6 +189,17 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
             }
 
             return false;
+        }
+    }
+
+    /// <summary>经真实的收件地址解析，并把结果记进邮箱。</summary>
+    private sealed class RecordingRecipientResolver(UserEmailRecipientResolver inner, CapturingMailbox mailbox) : INotificationRecipientResolver
+    {
+        public async Task<string?> ResolveEmailAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            var email = await inner.ResolveEmailAsync(userId, cancellationToken);
+            mailbox.Resolved[userId] = email;
+            return email;
         }
     }
 }

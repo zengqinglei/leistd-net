@@ -1,4 +1,6 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Shared.Security;
+
 namespace CompanyName.ProjectName.Domain.Auth.Options;
 
 public class OAuthOptions
@@ -26,6 +28,15 @@ public class OAuthOptions
     /// 令牌加密证书（授权码、刷新令牌等只给本服务读的令牌）。撤掉旧证书前，用它加密的令牌都要已经过期。
     /// </summary>
     public OAuthCertificate[] EncryptionCertificates { get; set; } = [];
+
+    /// <summary>
+    /// 访问令牌寿命，默认 10 分钟。必须是整秒且长于浏览器会话的提前刷新窗口（<see cref="AccessTokenRenewal.Lead"/>）。
+    /// </summary>
+    /// <remarks>
+    /// 它决定撤销、停用与会话退出传到依赖方的最长时延，代价是续期频率：缩短让收敛更快、刷新更多，反之亦然。
+    /// 测试与 CI 用它缩短真实到期的等待（如 <c>OAuth__AccessTokenLifetime=00:01:30</c>）。
+    /// </remarks>
+    public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// 是否关闭 OpenIddict 的传输安全（HTTPS）要求。只用于本机或测试宿主的纯 HTTP 调试，生产环境不要打开。

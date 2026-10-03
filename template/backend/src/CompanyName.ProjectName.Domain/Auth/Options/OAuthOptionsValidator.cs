@@ -1,10 +1,11 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Shared.Security;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Domain.Auth.Options;
 
 /// <summary>
-/// 令牌证书集合的结构校验：不用开发证书时，签名与加密证书各至少一项、每项给出路径。
+/// 令牌签发配置的校验：访问令牌寿命在支持范围内；不用开发证书时，签名与加密证书各至少一项、每项给出路径。
 /// </summary>
 /// <remarks>
 /// 宿主组合 OpenIddict 时就要读这些证书（早于启动期校验），组合期复用同一个验证器，不另写一套条件。
@@ -14,13 +15,22 @@ public sealed class OAuthOptionsValidator : IValidateOptions<OAuthOptions>
 {
     public ValidateOptionsResult Validate(string? name, OAuthOptions options)
     {
-        if (options.UseDevelopmentCertificates)
-            return ValidateOptionsResult.Success;
-
         var failures = new List<string>();
-        ValidateCertificates(options.SigningCertificates, $"{OAuthOptions.SectionName}:SigningCertificates", failures);
-        ValidateCertificates(options.EncryptionCertificates, $"{OAuthOptions.SectionName}:EncryptionCertificates", failures);
+        ValidateAccessTokenLifetime(options.AccessTokenLifetime, failures);
+        if (!options.UseDevelopmentCertificates)
+        {
+            ValidateCertificates(options.SigningCertificates, $"{OAuthOptions.SectionName}:SigningCertificates", failures);
+            ValidateCertificates(options.EncryptionCertificates, $"{OAuthOptions.SectionName}:EncryptionCertificates", failures);
+        }
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    // 令牌的 exp/iat 以秒计：带小数秒的寿命会被截掉，"长于提前刷新窗口"就可能名存实亡。
+    private static void ValidateAccessTokenLifetime(TimeSpan lifetime, List<string> failures)
+    {
+        if (lifetime.Ticks % TimeSpan.TicksPerSecond != 0 || lifetime <= AccessTokenRenewal.Lead)
+            failures.Add($"{OAuthOptions.SectionName}:AccessTokenLifetime must be whole seconds and longer than " +
+                $"{AccessTokenRenewal.Lead.TotalSeconds:0} seconds (the browser session refresh lead); got {lifetime}.");
     }
 
     private static void ValidateCertificates(OAuthCertificate[] certificates, string key, List<string> failures)

@@ -23,6 +23,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+<!--#if (LocalIdentity)-->
+    <!-- 两步验证的步长与挑战到期用官方时间替身推进 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+<!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
 <!--#endif-->

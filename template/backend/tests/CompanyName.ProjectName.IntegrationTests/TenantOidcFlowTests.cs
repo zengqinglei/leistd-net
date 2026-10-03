@@ -146,9 +146,47 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             Assert.True(accepted.IsSuccessStatusCode, await accepted.Content.ReadAsStringAsync());
             var token = await accepted.Content.ReadFromJsonAsync<TokenResponse>();
             Assert.Equal(["https://api.example.test/billing"], ReadAudiences(token!.AccessToken));
+            // 默认寿命：源令牌 10 分钟，交换令牌取 120 秒上限（源令牌剩余寿命更长）
+            Assert.Equal(600, Lifetime(source.AccessToken));
+            Assert.Equal(120, Lifetime(token.AccessToken));
             using var rejected = await Exchange(unauthorized);
             Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         }
+    }
+
+    /// <summary>
+    /// 配置的访问令牌寿命落到实际签发的令牌上；交换令牌不长于源令牌，源令牌比 120 秒上限先到期时取源令牌的到期时刻。
+    /// </summary>
+    [Fact]
+    public async Task Configured_access_token_lifetime_applies_and_bounds_exchanged_tokens()
+    {
+        using var host = Factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("OAuth:AccessTokenLifetime", "00:01:30");
+            builder.UseSetting("OAuth:ApiResources:0:Name", "lifetime-probe-api");
+            builder.UseSetting("OAuth:ApiResources:0:Scope", "lifetime-probe.read");
+            builder.UseSetting("OAuth:ApiResources:1:Name", "https://api.example.test/billing");
+            builder.UseSetting("OAuth:ApiResources:1:Scope", "billing.read");
+        });
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var presenter = await CreateClientAsync(admin.Client, "lifetime-probe.read");
+        var exchanger = await CreateExchangeClientAsync(admin.Client, "lifetime-probe-api");
+        var source = await AuthorizeAndExchangeAsync(host, admin, presenter.ClientId, presenter.ClientSecret, "lifetime-probe.read");
+        Assert.Equal(90, Lifetime(source.AccessToken));
+
+        using var client = CreateHttpsClient(host);
+        using var exchanged = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
+            ["client_id"] = exchanger.Id, ["client_secret"] = exchanger.Secret,
+            ["subject_token"] = source.AccessToken,
+            ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
+            ["requested_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
+            ["audience"] = "https://api.example.test/billing", ["scope"] = "billing.read"
+        }));
+        Assert.True(exchanged.IsSuccessStatusCode, await exchanged.Content.ReadAsStringAsync());
+        var token = await exchanged.Content.ReadFromJsonAsync<TokenResponse>();
+        Assert.Equal(ReadClaim(source.AccessToken, "exp"), ReadClaim(token!.AccessToken, "exp"));
     }
 
     private static async Task<(string Id, string Secret)> CreateExchangeClientAsync(HttpClient admin, string id)
@@ -180,6 +218,14 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             builder.UseSetting("OAuth:ApiResources:1:OwnerClientId", "second-client");
         });
         Assert.Contains("OAuth:ApiResources", Assert.ThrowsAny<Exception>(() => host.Services).ToString());
+    }
+
+    private static long Lifetime(string accessToken) => ReadClaim(accessToken, "exp") - ReadClaim(accessToken, "iat");
+
+    private static long ReadClaim(string accessToken, string name)
+    {
+        using var json = JsonDocument.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]));
+        return json.RootElement.GetProperty(name).GetInt64();
     }
 
     private static string[] ReadAudiences(string accessToken)
