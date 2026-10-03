@@ -184,6 +184,9 @@ $nugetConfig = @"
 [IO.File]::WriteAllText($nugetConfigPath, $nugetConfig, [Text.UTF8Encoding]::new($false))
 
 $results = [System.Collections.Generic.List[object]]::new()
+$solution = [Xml.XmlDocument]::new()
+$solutionRoot = $solution.CreateElement("Solution")
+$null = $solution.AppendChild($solutionRoot)
 foreach ($package in $packages | Sort-Object Id) {
     $projectRoot = Join-Path $projectsRoot $package.Id.ToLowerInvariant()
     New-Item -ItemType Directory -Path $projectRoot -Force | Out-Null
@@ -203,8 +206,14 @@ foreach ($package in $packages | Sort-Object Id) {
 "@
     [IO.File]::WriteAllText($projectPath, $project, [Text.UTF8Encoding]::new($false))
 
-    Invoke-External "dotnet" @("restore", $projectPath, "--configfile", $nugetConfigPath) $projectRoot
-    Invoke-External "dotnet" @("build", $projectPath, "-c", $Configuration, "--no-restore") $projectRoot
+    # Each package keeps its own restore graph. Distinct solution folders permit
+    # the identical PackageConsumer project names without combining references.
+    $folder = $solution.CreateElement("Folder")
+    $folder.SetAttribute("Name", "/$($package.Id)/")
+    $projectElement = $solution.CreateElement("Project")
+    $projectElement.SetAttribute("Path", "projects/$($package.Id.ToLowerInvariant())/PackageConsumer.csproj")
+    $null = $folder.AppendChild($projectElement)
+    $null = $solutionRoot.AppendChild($folder)
 
     $results.Add([PSCustomObject]@{
         Package = $package.Id
@@ -214,6 +223,12 @@ foreach ($package in $packages | Sort-Object Id) {
         Build = "pass"
     })
 }
+
+$solutionPath = Join-Path $consumerRoot "Consumers.slnx"
+$solution.Save($solutionPath)
+Invoke-External "dotnet" @("restore", $solutionPath, "--configfile", $nugetConfigPath) $consumerRoot
+# Bound parallel compilation on small runners; any project failure fails the batch.
+Invoke-External "dotnet" @("build", $solutionPath, "-c", $Configuration, "--no-restore", "-maxcpucount:4") $consumerRoot
 
 $results | Format-Table -AutoSize
 Write-Host "Package consumption passed for $($results.Count) package(s)." -ForegroundColor Green

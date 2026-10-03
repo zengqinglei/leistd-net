@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
 using Leistd.ExceptionHandling;
 using Microsoft.Extensions.Options;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
 /// <summary>
 /// 验证码摘要：确定性、与口令哈希分开
