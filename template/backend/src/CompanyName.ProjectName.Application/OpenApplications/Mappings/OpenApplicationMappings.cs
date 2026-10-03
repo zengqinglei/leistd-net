@@ -40,6 +40,7 @@ public class OpenApplicationMappings : IRegister
             .Ignore(dest => dest.ClientSecret!)
             .Map(dest => dest.HasClientSecret, src => !string.IsNullOrEmpty(src.ClientSecret))
             .Map(dest => dest.CreationTime, src => ReadCreationTime(src.Properties))
+            .Map(dest => dest.SessionBound, src => OpenApplicationSettings.ReadSessionBound(src.Settings))
             ;
     }
 

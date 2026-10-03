@@ -259,7 +259,7 @@ if (user is null)
 
 ## 浏览器认证
 
-浏览器与所属 API 必须同源；开发期 Angular 代理转发 `/api/**`。页面由前端渲染，认证协议由后端处理。浏览器只持有 HttpOnly 会话引用，OAuth access/refresh/id token 留在服务端 `ITicketStore`，不写 URL、前端存储、JSON 响应或 SignalR 参数。SignalR 浏览器连接使用同源 Cookie；机器令牌仅走 Authorization 头，Hub 仅接受请求头中的 Bearer。
+浏览器与所属 API 必须同源；开发期 Angular 代理转发 `/api/**`。页面由前端渲染，认证协议由后端处理。浏览器只持有 HttpOnly 会话引用，OAuth access/refresh/id token 留在服务端 `ITicketStore`，不写 URL、前端存储、JSON 响应或 SignalR 参数。唯一的例外是退出：依赖方以自动提交的表单把 id_token 作为 `id_token_hint` 发往 Identity，它只出现在那张表单的正文里，不进地址栏、历史记录与 Referer。SignalR 浏览器连接使用同源 Cookie；机器令牌仅走 Authorization 头，Hub 仅接受请求头中的 Bearer。
 
 ### 会话与部署
 
@@ -269,12 +269,30 @@ if (user is null)
 
 `SessionCookie:SameSite` 只控制应用会话 Cookie；默认 Lax。OAuth correlation 与 OIDC nonce Cookie 保持官方 SameSite=None、Secure=Always，HTTPS 回调不可省略。开发回调在 `/api/**` 下，由开发代理转发。
 
-浏览器写 API 请求检查 Origin，接受本源及显式 `Cors:AllowedOrigins`。没有 Origin 时看 `Sec-Fetch-Site`：值为 `cross-site` 或 `same-site` 的拒绝，`same-origin`、`none` 放行；两个头都没有的非浏览器调用保持支持。模板没有启用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
+浏览器写 API 请求与实时 Hub（`/hubs/**`，含 WebSocket 握手）检查 Origin，接受本源及显式 `Cors:AllowedOrigins`。CORS 不约束 WebSocket，Hub 的来源检查不因带 Authorization 头而跳过。没有 Origin 时看 `Sec-Fetch-Site`：值为 `cross-site` 或 `same-site` 的拒绝，`same-origin`、`none` 放行；两个头都没有的非浏览器调用保持支持。API 写请求不使用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护；唯一用到官方 antiforgery 的是 Identity 的退出确认表单（见下文）。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
 
 <!--#if (LocalIdentity)-->
 ### 本地账号
 
 账号密码与第二步验证走 `/api/v1/auth/session-login` 等现有会话接口。`GET /api/v1/auth/me` 读取已验证用户，退出撤销服务端会话。第二步完成前不签发最终会话，第二步凭据由 JSON 与前端导航状态传递。
+<!--#endif-->
+<!--#if (OpenIddictServer)-->
+### 依赖方的登录与退出
+
+授权（`/connect/authorize`）与退出（`/connect/logout`）启用了 OpenIddict 请求缓存：首个请求校验后存为 request token（控制库的令牌表），再重定向回同一端点、只带 `client_id` 与 `request_uri`，此后才进入控制器。依赖方因此可以跨站 POST 发起，重入是顶层 GET，Lax 会话 Cookie 随之送达；附加在重入地址上的参数不能改写缓存的请求。request token 一次性：授权完成或退出完成时即被标记为已兑现，同一 `request_uri` 再次进入返回 400；过期记录由已有的令牌清理任务删除。
+
+请求要求重新认证（`prompt=login`，或 `max_age` 已超过）时，跳转登录页的回跳地址带一份受保护的证明：绑定这一个 `request_uri`，只有证明签发之后才开始的会话（即一次新的登录）能兑现它，签发前就已存在的会话都不行。证明只抵消 `prompt=login` 与 `max_age=0` 的"每次都要认证"；正数 `max_age` 在回跳时仍按当前认证年龄判断。登录、第二步验证与外部登录都回到同一地址；没有新认证就回跳会再次要求登录，证明挪给别的请求无效。
+
+退出时，`id_token_hint` 中的会话标识（`sid`）与当前 Identity 会话一致才直接退出并回到登记的退出回调；没有 hint、hint 属于别的会话时转到确认页 `/auth/logout-confirm`（RP-Initiated Logout 1.0 §2）。确认页的地址只有 `request_uri` 与受保护的确认凭据，后者绑定该退出请求与当前会话的用户、租户、会话标识，有效 10 分钟。页面经 `GET /api/v1/auth/logout-confirmation` 核对凭据并取得官方 antiforgery 令牌，用户确认时整页 POST 回 `/connect/logout`；防伪令牌或凭据不符时再次显示确认页，会话保持。重新登录后，旧确认页不能结束新会话；取消不退出，发起退出的应用已清掉的本地会话不会因此恢复。当前没有会话时直接回到退出回调。
+
+开放应用的"会话绑定"（`sessionBound`，创建与更新都必须显式给值，缺失或 null 返回 400）决定授权是否跟随签发时的 Identity 会话：
+
+- 开启时，授权码、刷新令牌与 id_token 带上会话标识（访问令牌不带）；换取或刷新令牌时会话已退出、被撤销或空闲到期即返回 `invalid_grant`。判定不记活跃，后台续期不会延长 Identity 会话。服务端会话类客户端（BFF，如 Resource 的浏览器登录）应开启：用户在 Identity 退出后，它在访问令牌到期时随之收敛。
+- 关闭时授权与会话无关，适合需要持续离线续期的客户端（桌面端、原生应用）。管理界面新建 Web 应用默认开启，桌面端与服务模板默认关闭。
+- 授权按签发时的事实处理：开启前签发的刷新令牌在开启后被拒，客户端须重新授权；签发时已绑定的授权在关闭后仍受约束。早于该设置的登记读作未设置（按关闭处理），编辑时须明确选择。
+- 修改登记只在当前实例立即生效：OpenIddict 应用缓存只在本进程失效、没有时间过期，多实例修改后滚动重启 Identity。
+
+依赖方须登记 `ept:end_session` 与退出回调；退出确认、重新认证证明与 Cookie 都依赖 Data Protection，多实例除共享缓存外还要共享控制库、令牌证书、Data Protection 密钥环与应用名，以及分布式锁（见部署文档）。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 ### 外部账号
@@ -293,13 +311,15 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 
 后端是 OIDC 机密客户端，使用 code、PKCE、SaveTokens 与服务端票据。配置 `Authentication:Issuer`、`Audience`、`ClientId`、`ClientSecret`，缺键启动失败；`Scope` 可省略，默认与 Audience 同名。密钥只放后端机密配置。
 
-Identity 登记 web/confidential 客户端，允许 authorization code、refresh token、PKCE、openid/profile/email/roles/offline_access 和本 API scope。登录回调登记完整 `/api/v1/auth/signin`，退出回调登记完整 `/api/v1/auth/signout`。
+Identity 登记 web/confidential 客户端，开启会话绑定，允许 authorization code、refresh token、退出端点、PKCE、openid/profile/email/roles/offline_access 和本 API scope。登录回调登记完整 `/api/v1/auth/signin`，退出回调登记完整 `/api/v1/auth/signout`。会话绑定使 Identity 退出后本服务的会话在访问令牌到期时收敛，而不是靠刷新令牌继续存活。
 
-前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。`POST /api/v1/auth/logout` 用整页表单完成官方 OIDC 退出重定向；不发送 id_token_hint，删除本服务端票据后旧 Cookie 立即失效。
+前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。授权与退出请求都以官方 FormPost（`AuthenticationMethod = FormPost`）发往 Identity：响应是一张自动提交的表单，参数不进地址栏。`POST /api/v1/auth/logout` 先删除本服务端票据（旧 Cookie 立即失效），再以表单携带 `id_token_hint` 发起退出，Identity 据其中的会话标识免确认退出。表单依赖一段内联脚本自动提交（禁用脚本时显示提交按钮）；宿主若加内容安全策略，要放行这段脚本或接受手动提交。
 
-有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token；失败注销会话。访问令牌保存在服务器，模板自己的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
+有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明：会话主体在登录回调里换成访问令牌的主体，id_token 的声明（含 `auth_time`）不进会话。需要重新认证时，用官方 `OpenIdConnectChallengeProperties` 的 `MaxAge` 与 `Prompt` 发起挑战；它们只要求 Identity 重新验证身份，不是多因素或升级认证——那需要 Identity 把 `amr`/`acr` 签发进访问令牌，模板没有内置。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token；失败注销会话。访问令牌保存在服务器，模板自己的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
 
 访问令牌按只签名的 JWT 本地验签（issuer、audience、签名、有效期），本服务不持有解密凭据；签发方若改为加密令牌或 introspection，这里要同步配置。
+
+签发方轮换签名证书后，遇到不认识的 kid 时先向配置的签发方刷新一次公钥再验（`Auth/SigningKeyRefresh.cs`，覆盖 Bearer、登录回调与服务端续期；id_token 由 OIDC 处理器自身刷新重试）。只处理可读的 JWS，公钥只来自配置的发现文档，验签规则不放宽。同一时刻的刷新合并成一次抓取，抓取超时 10 秒，请求刷新每分钟至多转交一次（签发方不可用时，伪造 kid 的请求不会逐个触发抓取）；抓取失败时沿用已有公钥；抓取成功则本次只用返回的公钥集，签发方撤掉的公钥不再参与验签。逐请求结果只记 Debug，真实的刷新请求每次记一条 Information。这依赖进程级开关 `Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking`（Api 与集成测试项目以 `RuntimeHostConfigurationOption` 设置）：它也让定期自动刷新改为由到点的请求等待完成。签发方刚刷新过（IdentityModel 的 5 分钟间隔、本服务的 1 分钟限频）或不可达时，新 kid 的请求仍会失败，所以轮换仍按签发方部署文档的顺序先发布、后切换。
 
 退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。账号或租户停用后的本地验签窗口由访问令牌有效期决定，后续刷新失败收敛会话。
 <!--#endif-->

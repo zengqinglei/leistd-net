@@ -118,6 +118,11 @@ function validateApplication(
     }
   }
 
+  // 与后端一致：会话绑定必须显式给值，缺失或 null 都是 400
+  if (typeof input.sessionBound !== 'boolean') {
+    throw new MockException(400, { message: 'Session bound is required' });
+  }
+
   const exchange = 'gt:urn:ietf:params:oauth:grant-type:token-exchange';
   const userGrants = [
     'gt:authorization_code',
@@ -182,6 +187,7 @@ function createOpenApplication(req: MockRequest) {
     settings: {},
     properties: {},
     hasClientSecret: body.clientType === 'confidential',
+    sessionBound: body.sessionBound,
     creationTime: new Date().toISOString(),
     clientSecret:
       body.clientType === 'confidential' ? `mock-secret-${crypto.randomUUID()}` : undefined,
@@ -216,6 +222,7 @@ function updateOpenApplication(req: MockRequest) {
     permissions: body.permissions || [],
     requirements: body.requirements || [],
     hasClientSecret: body.clientType === 'confidential' && applications[index].hasClientSecret,
+    sessionBound: body.sessionBound,
     clientSecret: body.clientType === 'confidential' ? applications[index].clientSecret : undefined,
   };
 

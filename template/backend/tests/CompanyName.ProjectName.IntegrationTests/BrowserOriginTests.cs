@@ -75,6 +75,46 @@ public sealed class BrowserOriginTests(BrowserOriginTests.OriginHost origin) : I
     }
 
 #endif
+#if (IncludeNotifications)
+    // 真实 WebSocket 握手（跳过 negotiate）：CORS 不约束 WebSocket，跨站页面带着 Cookie 也能握手，只能靠来源检查拦住。
+    [Theory]
+    [InlineData("https://localhost", false, false)]
+    [InlineData("https://allowed.test", false, false)]
+    [InlineData(null, false, false)]
+    [InlineData("https://untrusted.test", false, true)]
+    [InlineData("https://untrusted.test", true, true)]
+    public async Task Realtime_hub_handshakes_follow_the_same_origin_rules(string? requestOrigin, bool bearer, bool denied)
+    {
+#if (LocalIdentity)
+        using var session = await ProjectWebApplicationFactory.LoginAsync(origin.Host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+#else
+        using var session = ProjectWebApplicationFactory.CreateResourceSession(origin.Host, Guid.CreateVersion7(), Guid.CreateVersion7());
+#endif
+        origin.Logger.Collector.Clear();
+        var client = origin.Host.Server.CreateWebSocketClient();
+        client.ConfigureRequest = request =>
+        {
+            if (!string.IsNullOrEmpty(session.Cookie)) request.Headers.Cookie = session.Cookie;
+            foreach (var (name, value) in session.AuthenticationHeaders) request.Headers[name] = value;
+            if (requestOrigin is not null) request.Headers.Origin = requestOrigin;
+            // 浏览器页面能附上任意 Authorization 头：Hub 不因它跳过来源检查
+            if (bearer) request.Headers.Authorization = "Bearer forged";
+        };
+        var uri = new Uri("wss://localhost/hubs/realtime");
+
+        if (denied)
+        {
+            var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => client.ConnectAsync(uri, CancellationToken.None));
+            Assert.Contains("403", exception.Message, StringComparison.Ordinal);
+            Assert.Contains(Warnings(), message => message.Contains("/hubs/realtime", StringComparison.Ordinal));
+            return;
+        }
+        using var socket = await client.ConnectAsync(uri, CancellationToken.None);
+        Assert.Equal(System.Net.WebSockets.WebSocketState.Open, socket.State);
+        Assert.Empty(Warnings());
+    }
+
+#endif
     [Fact]
     public async Task Trusted_tls_forwarding_restores_the_browser_origin()
     {

@@ -177,6 +177,7 @@ public class OpenApplicationAppService(
             input.Permissions,
             input.Requirements);
         descriptor.Properties[OpenApplicationMappings.CreationTimePropertyName] = JsonSerializer.SerializeToElement(clock.Now);
+        descriptor.Settings[OpenApplicationSettings.SessionBound] = OpenApplicationSettings.Format(input.SessionBound!.Value);
 
         try
         {
@@ -226,6 +227,8 @@ public class OpenApplicationAppService(
             input.PostLogoutRedirectUris,
             input.Permissions,
             input.Requirements);
+        // 只改模板自有的键，其余 Settings 原样保留
+        descriptor.Settings[OpenApplicationSettings.SessionBound] = OpenApplicationSettings.Format(input.SessionBound!.Value);
 
         await applicationManager.UpdateAsync(application, descriptor, cancellationToken);
         logger.LogInformation("Open application updated (ID: {Id})", id);

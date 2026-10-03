@@ -102,6 +102,18 @@ internal sealed class UserSessionAppService(
     /// 新开工作单元：调用处可能刚在别的租户上下文里写过库，请求作用域里的上下文未必绑着当前租户的库。
     /// 租户上下文沿用环境值——多租户中间件已按会话主体的租户声明设好。
     /// </remarks>
+    public async Task<DateTime?> GetCurrentSessionStartTimeAsync(CancellationToken cancellationToken = default)
+    {
+        if (currentUser.Id is not { } userId || currentUser.GetSessionId() is not { } sessionId)
+            return null;
+
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
+        var session = await sessionRepository.GetByIdAsync(sessionId, cancellationToken);
+        await unitOfWork.CompleteAsync(cancellationToken);
+        return session?.UserId == userId ? session.CreationTime : null;
+    }
+
+    /// <inheritdoc />
     public async Task EndCurrentSessionAsync(CancellationToken cancellationToken = default)
     {
         if (currentUser.Id is not { } userId || currentUser.GetSessionId() is not { } sessionId)

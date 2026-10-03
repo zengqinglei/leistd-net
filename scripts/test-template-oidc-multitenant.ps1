@@ -111,9 +111,13 @@ function Stop-MtBrowserSession {
 function Login-BrowserTenant([string]$Tenant) {
     Wait-BrowserElement '#tenantName'
     $literal = ConvertTo-Json $Tenant -Compress
-    Invoke-BrowserJs "(() => { const e=document.getElementById('tenantName'); e.value=$literal; e.dispatchEvent(new Event('input',{bubbles:true})); return true; })()" | Out-Null
+    # 登录页记住了上次选定的租户（再次登录时）：同一租户已锁定就不再选择
+    $remembered = Invoke-BrowserJs "(() => { const e=document.getElementById('tenantName'); return e.readOnly && e.value === $literal; })()"
+    if (-not $remembered) {
+        Invoke-BrowserJs "(() => { const e=document.getElementById('tenantName'); e.value=$literal; e.dispatchEvent(new Event('input',{bubbles:true})); return true; })()" | Out-Null
+    }
     # 与导航点击同一原因：页面启动期点击可能被吞掉，确认租户已选定才继续，否则重试。
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
+    for ($attempt = 1; -not $remembered -and $attempt -le 3; $attempt++) {
         Wait-BrowserButton 'Confirm'
         Invoke-Browser @('find','role','button','click','--name','Confirm','--exact') | Out-Null
         try { Wait-BrowserElement '#tenantName[readonly]'; break }
@@ -170,24 +174,31 @@ function Test-MtSingleSignOn {
 }
 
 function Test-MtSingleLogout {
-    # orders 发起 RP 退出：结束 orders 与 Identity 会话；没有后通道退出，billing 会话不受影响。
+    # orders 发起 RP 退出：hint 指向当前 Identity 会话，免确认结束 orders 与 Identity 会话。
+    $offsets = Get-LogOffsets "idp"
     Click-BrowserLogout
+    Assert-Value "mt-slo-no-confirmation-page" $false ((Read-ApiLog "idp" $offsets) -match 'GET /auth/logout-confirm')
     Invoke-Browser @('open', ($urls.orders + '/workspace')) | Out-Null
     Wait-BrowserUrl ($urls.idp + '/auth/login*')
+    # 没有后通道退出：billing 的访问令牌到期前，其服务端会话仍然可用。
     Invoke-Browser @('open', ($urls.billing + '/workspace/dashboard')) | Out-Null
     Wait-BrowserUrl ($urls.billing + '/workspace*')
-    Assert-Value "mt-slo-billing-session-survives" 200 (Get-BrowserMe).status
-    # 签发方退出不撤销 billing 持有的 refresh token：访问令牌到期后仍能静默续期。
+    Assert-Value "mt-slo-billing-session-until-renewal" 200 (Get-BrowserMe).status
+    # billing 登记为会话绑定：Identity 会话已结束，到期续期被拒（invalid_grant），会话收敛并回到登录。
     $before = Get-BrowserTicket 'billing'
     Wait-RealTicketExpiration $before 'MT-SLO'
     Invoke-Browser @('open', ($urls.billing + '/workspace/dashboard')) | Out-Null
-    Wait-BrowserUrl ($urls.billing + '/workspace*')
-    Assert-Value "mt-slo-billing-refresh-after-idp-logout" 200 (Get-BrowserMe).status
-    $after = Get-BrowserTicket 'billing'
-    Assert-Value "mt-slo-billing-token-rotated" $true ($after.accessHash -ne $before.accessHash)
+    Wait-BrowserUrl ($urls.idp + '/auth/login*')
+    Assert-Value "mt-slo-billing-ticket-removed" $false (Get-BrowserTicket 'billing' $before.key).exists
+    Save-BrowserEvidence 'MT-single-logout'
 }
 
 function Test-MtTenantDisable {
+    # MT4 已结束 Identity 会话、billing 随之收敛：重新登录 billing，在有效会话上验证停用租户
+    Open-BrowserResource "billing"
+    Wait-BrowserUrl ($urls.idp + '/auth/login*')
+    Login-BrowserTenant $mtTenants.alpha.name
+    Wait-BrowserUrl ($urls.billing + '/workspace*')
     $before = Get-BrowserTicket 'billing'
     Assert-Http "mt-disable-alpha" 200 ($urls.idp + "/api/v1/tenants/" + $mtTenants.alpha.id + "/activation") -Method PUT -Body @{ isActive = $false } -Session $admin | Out-Null
     Assert-Value "mt-disable-window-billing" 200 (Get-BrowserMe).status

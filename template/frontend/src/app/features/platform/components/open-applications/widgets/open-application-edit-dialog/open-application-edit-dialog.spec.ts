@@ -6,6 +6,11 @@ import { OpenApplicationEditDialog } from './open-application-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  CreateOpenApplicationInputDto,
+  OpenApplicationOutputDto,
+  UpdateOpenApplicationInputDto,
+} from '../../../../models/open-application.dto';
 
 /**
  * 下拉触发器与选项文案一致性回归。
@@ -16,10 +21,36 @@ import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.t
  */
 @Component({
   imports: [OpenApplicationEditDialog],
-  template: ` <app-open-application-edit-dialog [(visible)]="visible" /> `,
+  template: `
+    <app-open-application-edit-dialog
+      [(visible)]="visible"
+      [application]="application()"
+      (saved)="saved.push($event)"
+    />
+  `,
 })
 class HostComponent {
   readonly visible = signal(true);
+  readonly application = signal<OpenApplicationOutputDto | null>(null);
+  readonly saved: (CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto)[] = [];
+}
+
+function registered(sessionBound: boolean | null): OpenApplicationOutputDto {
+  return {
+    id: 'bff',
+    clientId: 'bff',
+    applicationType: 'web',
+    clientType: 'confidential',
+    redirectUris: ['https://bff.example.test/signin-oidc'],
+    postLogoutRedirectUris: [],
+    permissions: ['ept:authorization', 'ept:token', 'gt:authorization_code', 'rst:code'],
+    requirements: [],
+    settings: {},
+    properties: {},
+    hasClientSecret: true,
+    sessionBound,
+    creationTime: '2026-05-01T09:00:00Z',
+  };
 }
 
 describe('OpenApplicationEditDialog', () => {
@@ -68,6 +99,74 @@ describe('OpenApplicationEditDialog', () => {
       triggerText: document.getElementById(triggerId)?.textContent?.trim() ?? '',
     };
   }
+
+  function dialog(): OpenApplicationEditDialog {
+    return fixture.debugElement.children[0].componentInstance as OpenApplicationEditDialog;
+  }
+
+  async function edit(application: OpenApplicationOutputDto): Promise<void> {
+    fixture.componentInstance.application.set(application);
+    await fixture.whenStable();
+  }
+
+  async function typeClientId(value: string): Promise<void> {
+    const input = document.getElementById('application-client-id') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+  }
+
+  async function toggleSessionBound(): Promise<void> {
+    document.getElementById('application-session-bound')!.click();
+    await fixture.whenStable();
+  }
+
+  it('binds new browser applications to the sign-in session by default', async () => {
+    await typeClientId('spa');
+    dialog().save();
+
+    expect(fixture.componentInstance.saved).toEqual([
+      expect.objectContaining({ clientId: 'spa', sessionBound: true }),
+    ]);
+  });
+
+  it('keeps the registered choice when editing instead of resetting it', async () => {
+    await edit(registered(false));
+    dialog().save();
+
+    expect(fixture.componentInstance.saved).toEqual([
+      expect.objectContaining({ sessionBound: false }),
+    ]);
+  });
+
+  it('requires an explicit choice for applications registered before session binding', async () => {
+    await edit(registered(null));
+    expect(document.querySelector('[data-testid="session-bound-unset"]')).not.toBeNull();
+
+    dialog().save();
+    expect(fixture.componentInstance.saved).toEqual([]);
+
+    await toggleSessionBound();
+    expect(document.querySelector('[data-testid="session-bound-unset"]')).toBeNull();
+    dialog().save();
+    expect(fixture.componentInstance.saved).toEqual([
+      expect.objectContaining({ sessionBound: true }),
+    ]);
+  });
+
+  it('does not bind desktop or machine clients from their templates', async () => {
+    dialog().applyTemplate('desktop');
+    await fixture.whenStable();
+    dialog().save();
+    dialog().applyTemplate('service');
+    await typeClientId('machine');
+    dialog().save();
+
+    expect(fixture.componentInstance.saved).toEqual([
+      expect.objectContaining({ applicationType: 'native', sessionBound: false }),
+      expect.objectContaining({ applicationType: 'service', sessionBound: false }),
+    ]);
+  });
 
   for (const triggerId of ['application-type', 'application-client-type']) {
     it(`shows the picked option's own label in ${triggerId}`, async () => {

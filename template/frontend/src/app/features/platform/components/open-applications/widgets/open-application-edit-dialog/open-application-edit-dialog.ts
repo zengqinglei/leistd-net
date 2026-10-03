@@ -27,6 +27,7 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmSwitch } from '@spartan-ng/helm/switch';
 
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 //#if (!IncludeLocalization)
@@ -53,6 +54,8 @@ interface OpenApplicationEditFormModel {
   postLogoutRedirectUris: string[];
   permissions: string[];
   requirements: string[];
+  /** `null`：登记早于该设置，保存前须明确选择。 */
+  sessionBound: boolean | null;
 }
 
 const authorizationCodePermissions = [
@@ -79,6 +82,7 @@ const authorizationCodePermissions = [
     HlmInput,
     HlmSpinner,
     HlmSeparator,
+    HlmSwitch,
     ...HlmDialogImports,
     ...HlmFieldImports,
     ...HlmSelectImports,
@@ -137,6 +141,12 @@ export class OpenApplicationEditDialog {
         ? { kind: 'pkceRequired' }
         : null;
     });
+    // 会话绑定没有安全的默认值：存量登记未设置时必须由管理员明确选择（机器客户端不涉及会话，保存时固定为否）。
+    validate(path.sessionBound, (ctx) =>
+      ctx.value() === null && ctx.valueOf(path.applicationType) !== 'service'
+        ? { kind: 'required' }
+        : null,
+    );
   });
 
   //#if (IncludeLocalization)
@@ -369,6 +379,8 @@ export class OpenApplicationEditDialog {
           postLogoutRedirectUris: [...application.postLogoutRedirectUris],
           permissions: [...application.permissions],
           requirements: [...application.requirements],
+          // 编辑不重置：沿用已登记的值，未设置的保持未设置
+          sessionBound: application.sessionBound,
         });
       } else {
         this.formModel.set(this.createEmptyModel());
@@ -386,6 +398,8 @@ export class OpenApplicationEditDialog {
       postLogoutRedirectUris: [],
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
+      // 新建默认是浏览器应用，随登录会话收敛
+      sessionBound: true,
     };
   }
 
@@ -411,6 +425,8 @@ export class OpenApplicationEditDialog {
         postLogoutRedirectUris: ['my-desktop-app://oauth/logout-callback'],
         permissions: [...authorizationCodePermissions],
         requirements: ['ft:pkce'],
+        // 桌面端持有自己的刷新令牌离线续期，不跟随浏览器登录会话
+        sessionBound: false,
       }));
       return;
     }
@@ -424,6 +440,7 @@ export class OpenApplicationEditDialog {
         postLogoutRedirectUris: [],
         permissions: ['ept:token', 'gt:client_credentials'],
         requirements: [],
+        sessionBound: false,
       }));
       return;
     }
@@ -434,7 +451,15 @@ export class OpenApplicationEditDialog {
       clientType: 'public',
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
+      sessionBound: true,
     }));
+  }
+
+  // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；
+  // 直接以 [checked]/(checkedChange) 回写模型信号。
+  setSessionBound(checked: boolean): void {
+    this.formModel.update((model) => ({ ...model, sessionBound: checked }));
+    this.applicationForm.sessionBound().markAsTouched();
   }
 
   onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
@@ -511,6 +536,8 @@ export class OpenApplicationEditDialog {
     }
 
     const model = this.formModel();
+    // 校验已保证非服务类型时有值；机器客户端没有用户会话，固定为否
+    const sessionBound = model.applicationType === 'service' ? false : model.sessionBound === true;
     if (this.isEditMode()) {
       this.saved.emit({
         displayName: model.displayName,
@@ -520,6 +547,7 @@ export class OpenApplicationEditDialog {
         postLogoutRedirectUris: model.postLogoutRedirectUris,
         permissions: model.permissions,
         requirements: model.requirements,
+        sessionBound,
       });
       return;
     }
@@ -533,6 +561,7 @@ export class OpenApplicationEditDialog {
       postLogoutRedirectUris: model.postLogoutRedirectUris,
       permissions: model.permissions,
       requirements: model.requirements,
+      sessionBound,
     });
   }
 
@@ -579,6 +608,11 @@ const ENGLISH: Record<string, string> = {
   'openApp.requirement.forcePkce': 'Force PKCE',
   'openApp.requirements.offlineAccessHint':
     'refresh_token is allowed; consider also granting the offline_access scope.',
+  'openApp.sessionBound.title': 'Bound to the sign-in session',
+  'openApp.sessionBound.hint':
+    'Authorization codes and refresh tokens stop working once the user signs out, the device is revoked, or the session goes idle. Turn on for browser (BFF) clients; turn off for offline clients that must keep refreshing.',
+  'openApp.sessionBound.unset':
+    'This application was registered before session binding existed. Choose explicitly before saving.',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
 };

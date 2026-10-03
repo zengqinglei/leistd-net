@@ -56,5 +56,13 @@ public record CreateOpenApplicationInputDto
     /// 要求
     /// </summary>
     public List<string> Requirements { get; init; } = [];
+
+    /// <summary>
+    /// 会话绑定：授权码与刷新令牌依赖签发时的 Identity 会话（见 <see cref="OpenApplicationSettings.SessionBound"/>）。
+    /// 必须显式给出；浏览器 BFF 类客户端应为 <c>true</c>。
+    /// </summary>
+    [Display(Name = "Session bound")]
+    [Required(ErrorMessage = "{0} is required.")]
+    public required bool? SessionBound { get; init; }
 }
 #endif

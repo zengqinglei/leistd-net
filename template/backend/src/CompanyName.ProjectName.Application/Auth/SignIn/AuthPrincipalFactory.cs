@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.OAuth;
+using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -21,6 +22,8 @@ namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 public class AuthPrincipalFactory(
     IRepository<User, Guid> userRepository,
+    IRepository<UserSession, Guid> sessionRepository,
+    IOptions<UserSessionOptions> sessionOptions,
     UserDomainService userDomainService,
     IClock clock,
     IOptions<OAuthOptions> oauthOptions,
@@ -43,10 +46,19 @@ public class AuthPrincipalFactory(
         using (currentTenant.Change(tenant.Id, tenant.Name))
         using (unitOfWorkManager.Begin(requiresNew: true))
         {
+            // 会话绑定的授权（签发时带了 sid）：会话已退出、撤销或空闲到期就不再续期。
+            // 只判定、不记活跃：后台续期不能替 Identity 会话续命；判定失败一律拒绝（fail closed）。
+            var sessionClaim = tokenPrincipal.GetClaim(CustomClaimTypes.SessionId);
+            if (sessionClaim is not null && !await IsSessionActiveAsync(sessionClaim, userId, cancellationToken))
+                return null;
+
             var principal = await CreateAsync(userId, scopes, cancellationToken);
-            if (principal is not null && tokenPrincipal.GetClaim(Claims.AuthenticationTime) is { } authenticationTime)
-                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, System.Globalization.CultureInfo.InvariantCulture))
-                    .SetDestinations(GetDestinations);
+            if (principal is null) return null;
+            if (tokenPrincipal.GetClaim(Claims.AuthenticationTime) is { } authenticationTime)
+                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, System.Globalization.CultureInfo.InvariantCulture));
+            if (sessionClaim is not null)
+                principal.SetClaim(CustomClaimTypes.SessionId, sessionClaim);
+            principal.SetDestinations(GetDestinations);
             return principal;
         }
     }
@@ -172,6 +184,12 @@ public class AuthPrincipalFactory(
                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
+    private async Task<bool> IsSessionActiveAsync(string sessionClaim, Guid userId, CancellationToken cancellationToken) =>
+        Guid.TryParse(sessionClaim, out var sessionId) &&
+        await sessionRepository.GetByIdAsync(sessionId, cancellationToken) is { } session &&
+        session.UserId == userId &&
+        !session.IsExpired(clock.Now, sessionOptions.Value.IdleTimeout);
+
     private IEnumerable<string> GetDestinations(Claim claim)
     {
         return claim.Type switch
@@ -182,6 +200,8 @@ public class AuthPrincipalFactory(
                 Destinations.IdentityToken
             ],
             Claims.AuthenticationTime => [Destinations.IdentityToken],
+            // 会话标识只给依赖方的 id_token（退出时比对会话），不进访问令牌
+            CustomClaimTypes.SessionId => [Destinations.IdentityToken],
             Claims.Name or Claims.PreferredUsername or Claims.Picture
                 when claim.Subject?.HasScope(Scopes.Profile) == true =>
             [

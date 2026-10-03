@@ -235,6 +235,7 @@
             "frontend/src/app/core/components/resource-login/**",
             "frontend/_mock/api/resource-auth.ts",
             "backend/src/CompanyName.ProjectName.Api/Auth/ResourceSessionAuthentication.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/SigningKeyRefresh.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ResourceAuthController.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceBrowserSessionTests.cs"
           ]
@@ -293,12 +294,17 @@
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/ConnectInteractionProtector.cs",
+            "backend/src/CompanyName.ProjectName.Api/Configuration/OAuthCertificateLoader.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/LogoutConfirmationOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/AuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/SubjectClaims.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptionsValidator.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
+            "frontend/src/app/features/account/components/logout-confirm/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
             "frontend/src/app/features/platform/models/open-application.dto.ts",
             "frontend/_mock/api/open-application.ts",

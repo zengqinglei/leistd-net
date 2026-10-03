@@ -317,6 +317,32 @@ function Read-TokenClaims([string]$Token) {
     return ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($part))) -AsHashtable
 }
 
+# 授权与退出请求启用了 OpenIddict 请求缓存：首个请求存为 request token 后重定向回同一端点（只带 request_uri），
+# 这一跳之后才到控制器。断言这一跳确实发生，再按重入地址取控制器的响应。
+function Assert-CachedHttp(
+    [string]$Label, [int]$Status, [string]$Url, [string]$Method = "GET", $Body = $null,
+    [hashtable]$Headers = @{}, [Net.Http.HttpClient]$Session = $http
+) {
+    $cached = Assert-Http "$Label-cached" 302 $Url -Method $Method -Body $Body -Headers $Headers -Session $Session
+    $reentry = [Uri]::new([Uri]$Url, $cached.Location)
+    Assert-Value "$Label-reentry-endpoint" ([Uri]$Url).AbsolutePath $reentry.AbsolutePath
+    Assert-Value "$Label-reentry-request-uri" $true ((Read-Query $reentry.AbsoluteUri).ContainsKey("request_uri"))
+    return Assert-Http $Label $Status $reentry.AbsoluteUri -Headers $Headers -Session $Session
+}
+
+# 官方 FormPost：Resource 以自动提交的表单把授权、退出请求发往 Identity，参数只在表单里，不在跳转地址上。
+function Read-FormPost($Response, [string]$Action) {
+    Assert-Value "form-post-no-location" $true ([string]::IsNullOrEmpty($Response.Location))
+    $html = [string]$Response.Data
+    $form = [regex]::Match($html, '<form(?=[^>]*method="post")[^>]*action="([^"]+)"', 'IgnoreCase')
+    Assert-Value "form-post-action" $Action ([Net.WebUtility]::HtmlDecode($form.Groups[1].Value))
+    $values = @{}
+    foreach ($input in [regex]::Matches($html, '<input type="hidden" name="([^"]+)" value="([^"]*)"')) {
+        $values[[Net.WebUtility]::HtmlDecode($input.Groups[1].Value)] = [Net.WebUtility]::HtmlDecode($input.Groups[2].Value)
+    }
+    return $values
+}
+
 function Read-Query([string]$Url) {
     $values = @{}
     foreach ($pair in ([Uri]$Url).Query.TrimStart('?').Split('&', [StringSplitOptions]::RemoveEmptyEntries)) {
@@ -345,14 +371,14 @@ function Get-CodeToken([Net.Http.HttpClient]$Session, [string]$Scope, [string]$C
     $parameters = @{ response_type = "code"; client_id = $ClientId; redirect_uri = $redirect; scope = $Scope
         state = $state; code_challenge = $challenge; code_challenge_method = "S256" }
     $authorizeUrl = $urls.idp + "/connect/authorize?" + (ConvertTo-Form $parameters)
-    $response = Assert-Http "authorize-code-pkce" 302 $authorizeUrl -Session $Session
+    $response = Assert-CachedHttp "authorize-code-pkce" 302 $authorizeUrl -Session $Session
     $query = Read-Query $response.Location
     Assert-Value "authorize-state" $state $query.state
     $form = @{ grant_type = "authorization_code"; client_id = $ClientId; redirect_uri = $redirect
         code = $query.code; code_verifier = (New-RandomValue "wrong") }
     Assert-Http "pkce-wrong-verifier" 400 ($urls.idp + "/connect/token") -Method POST -Body (ConvertTo-Form $form) | Out-Null
     # 错误交换可能消费授权码，成功路径重新申请，避免依赖协议实现的消费顺序。
-    $response = Assert-Http "authorize-fresh-code" 302 $authorizeUrl -Session $Session
+    $response = Assert-CachedHttp "authorize-fresh-code" 302 $authorizeUrl -Session $Session
     $form.code = (Read-Query $response.Location).code
     $form.code_verifier = $verifier
     $data = (Assert-Http "code-exchange" 200 ($urls.idp + "/connect/token") -Method POST -Body (ConvertTo-Form $form)).Data
@@ -387,7 +413,9 @@ function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public, 
     if ($BrowserService) { $permissions = @("ept:token", "gt:authorization_code", "gt:refresh_token", "ept:authorization", "ept:end_session", "rst:code") }
     if ($Exchange) { $permissions += @("gt:urn:ietf:params:oauth:grant-type:token-exchange", "aud:billing-api") }
     $permissions += @($Scopes | ForEach-Object { "scp:$_" })
+    # 只有服务端会话（BFF）跟随 Identity 登录会话收敛；SPA 公共客户端与机器客户端不绑定
     $body = @{ clientId = $ClientId; applicationType = $(if ($Public -or $BrowserService) { "web" } else { "service" })
+        sessionBound = [bool]$BrowserService
         clientType = $(if ($Public) { "public" } else { "confidential" })
         redirectUris = @(); postLogoutRedirectUris = @(); permissions = $permissions; requirements = @() }
     if ($Public) { $body.redirectUris = @($redirect); $body.requirements = @("ft:pkce") }
@@ -525,7 +553,7 @@ public sealed class FixtureTokenController(IConfiguration config, IOptions<Claim
     [HttpGet]
     public object Get(string kind, [FromServices] ICurrentUser user, string? tenant = null)
     {
-        using var cert = X509CertificateLoader.LoadPkcs12FromFile(config["OAuth:SigningCertificatePath"]!, "");
+        using var cert = X509CertificateLoader.LoadPkcs12FromFile(config["OAuth:SigningCertificates:0:Path"]!, "");
         using var rsa = cert.GetRSAPrivateKey()!;
         var key = new RsaSecurityKey(rsa) { KeyId = cert.Thumbprint,
             CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false } };
@@ -730,8 +758,8 @@ function Initialize-Environment {
             $environment.OAuth__Issuer = $issuer
             $environment.OAuth__DisableHttpsRequirement = "true"
             $environment.OAuth__UseDevelopmentCertificates = "false"
-            $environment.OAuth__SigningCertificatePath = Join-Path $runRoot "signing.pfx"
-            $environment.OAuth__EncryptionCertificatePath = Join-Path $runRoot "encryption.pfx"
+            $environment.OAuth__SigningCertificates__0__Path = Join-Path $runRoot "signing.pfx"
+            $environment.OAuth__EncryptionCertificates__0__Path = Join-Path $runRoot "encryption.pfx"
             $environment.OAuth__ApiResources__0__Name = "orders-api"
             $environment.OAuth__ApiResources__1__Name = "billing-api"
         }
@@ -876,11 +904,12 @@ function Test-Exchange([string]$Subject, [hashtable]$SourceClaims) {
 }
 
 function Test-BrowserSession {
-    $challenge = Assert-Http "resource-browser-challenge" 302 ($urls.orders + "/api/v1/auth/login?returnUrl=/workspace")
-    $parameters = Read-Query $challenge.Location
+    $challenge = Assert-Http "resource-browser-challenge" 200 ($urls.orders + "/api/v1/auth/login?returnUrl=/workspace")
+    $parameters = Read-FormPost $challenge ($urls.idp + "/connect/authorize")
     Assert-Value "browser-code-flow" "code" $parameters.response_type
     Assert-Value "browser-pkce" "S256" $parameters.code_challenge_method
-    $authorize = Assert-Http "browser-authorize" 200 $challenge.Location -Session $sharedSession
+    $authorize = Assert-CachedHttp "browser-authorize" 200 ($urls.idp + "/connect/authorize") -Method POST `
+        -Body (ConvertTo-Form $parameters) -Session $sharedSession
     $form = @{}
     foreach ($input in [regex]::Matches([string]$authorize.Data, '<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"')) {
         $form[$input.Groups[1].Value] = [Net.WebUtility]::HtmlDecode($input.Groups[2].Value)
@@ -898,9 +927,11 @@ function Test-BrowserSession {
     Assert-Value "browser-session-tenant" $sharedTenant.id $me.tenantId
     Assert-Http "browser-cookie-delegation" 200 ($urls.orders + "/api/e2e/billing") -Headers @{ Cookie = $cookie } | Out-Null
     Assert-Http "browser-no-bearer-fallback" 401 ($urls.orders + "/api/v1/auth/me") -Token "invalid" -Headers @{ Cookie = $cookie } | Out-Null
-    $logout = Assert-Http "resource-browser-logout" 302 ($urls.orders + "/api/v1/auth/logout") -Method POST -Body @{} -Headers @{ Cookie = $cookie }
-    $logoutParameters = Read-Query $logout.Location
-    Assert-Value "logout-has-no-id-token-hint" $false $logoutParameters.ContainsKey("id_token_hint")
+    $logout = Assert-Http "resource-browser-logout" 200 ($urls.orders + "/api/v1/auth/logout") -Method POST -Body @{} -Headers @{ Cookie = $cookie }
+    $logoutParameters = Read-FormPost $logout ($urls.idp + "/connect/logout")
+    # hint 只在表单正文里：Identity 据其中的会话标识免确认退出（浏览器闭环见 S11 与 MT4）
+    Assert-Value "logout-hint-in-form-body" $true (-not [string]::IsNullOrEmpty($logoutParameters["id_token_hint"]))
+    Assert-Value "logout-hint-session" $true ((Read-TokenClaims $logoutParameters["id_token_hint"]).ContainsKey("sid"))
     Assert-Http "browser-logout-invalidates-copied-cookie" 401 ($urls.orders + "/api/v1/auth/me") -Headers @{ Cookie = $cookie } | Out-Null
 }
 
@@ -974,7 +1005,7 @@ function Test-S5 {
         }
     }
     $update = @{}
-    foreach ($key in @("displayName", "applicationType", "clientType", "redirectUris", "postLogoutRedirectUris", "permissions", "requirements")) {
+    foreach ($key in @("displayName", "applicationType", "clientType", "redirectUris", "postLogoutRedirectUris", "permissions", "requirements", "sessionBound")) {
         $update[$key] = $exchangeClient[$key]
     }
     $update.permissions = @($exchangeClient.permissions | Where-Object { $_ -ne "scp:tenant-routing.read" })

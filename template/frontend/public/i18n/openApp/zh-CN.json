@@ -111,6 +111,11 @@
     "placeholder": "选择安全要求",
     "offlineAccessHint": "已允许 refresh_token，建议同时开放 offline_access scope。"
   },
+  "sessionBound": {
+    "title": "绑定登录会话",
+    "hint": "用户退出登录、设备被撤销或会话空闲到期后，授权码与刷新令牌随之失效。浏览器（BFF）客户端应开启；需要持续离线续期的客户端关闭。",
+    "unset": "该应用登记早于会话绑定设置，保存前须明确选择。"
+  },
   "table": {
     "currentPageReport": "共 {{total}} 条",
     "colApp": "应用",

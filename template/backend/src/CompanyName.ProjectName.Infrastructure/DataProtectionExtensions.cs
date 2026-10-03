@@ -23,6 +23,7 @@ public static class DataProtectionExtensions
     /// 需要静态加密时，在这里按官方的 <c>ProtectKeysWith*</c>（如 <c>ProtectKeysWithCertificate</c>）追加。</para>
     /// <para>密钥丢失等于这些数据丢失：开发环境以外必须把密钥持久化到共享且有备份的位置——
     /// 配置 Redis，或用 <c>DataProtection:KeysPath</c> 把各进程指向同一个持久目录；两者都没配时启动失败。
+    /// <c>KeysPath</c> 只解决密钥共享：多副本部署仍须配置 Redis，分布式缓存与锁依赖它。
     /// 只有开发环境回落到内容根下的本地目录：容器里的这个目录随容器重建而消失，多副本之间也互不共享。</para>
     /// </remarks>
     /// <param name="services">服务集合</param>
