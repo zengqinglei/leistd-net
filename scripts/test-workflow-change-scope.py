@@ -33,9 +33,11 @@ def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
     script = script.replace("${{ github.event.before }}", base)
     script = script.replace("${{ github.event_name }}", event)
     script = script.replace("${{ github.ref }}", 'refs/heads/main')
-    script_path = repo / 'scope.ps1'
+    bash = script.startswith(("python - <<", "python3 - <<"))
+    script_path = repo / ('scope.sh' if bash else 'scope.ps1')
     script_path.write_text(script, encoding='utf-8')
-    result = subprocess.run(['pwsh', '-NoProfile', '-File', str(script_path)], cwd=repo,
+    command = ['bash', '-e', '-o', 'pipefail', str(script_path)] if bash else ['pwsh', '-NoProfile', '-File', str(script_path)]
+    result = subprocess.run(command, cwd=repo,
                             env={**dict(os.environ, GITHUB_OUTPUT=str(output),
                                      GITHUB_STEP_SUMMARY=str(repo / 'summary.txt'),
                                      PR_BASE_SHA=base, EVENT_NAME=event, CANDIDATE_SHA=candidate),
@@ -125,6 +127,8 @@ def check_docs_scope():
         ('unknown path', 'unknown.md', 'unknown.md', False),
         ('case sensitive readme', 'readme.md', 'readme.md', False),
         ('case sensitive directory', 'Docs/foo.md', 'Docs/bar.md', False),
+        ('leading whitespace boundary', ' docs/foo.md', ' docs/bar.md', False),
+        ('leading whitespace single file', ' README.md', ' README.md', False),
         ('unicode documentation', 'docs/说明.md', 'docs/规范.md', True),
     ]
     with tempfile.TemporaryDirectory(prefix='leistd-docs-scope-') as directory:
@@ -167,7 +171,7 @@ def check_docs_scope():
             # A called workflow inherits its caller's event; explicit candidate still forces full.
             expect(candidate=git(repo, 'rev-parse', 'HEAD'), wanted=False)
             if name == 'package docs moved out':
-                expect(wanted=True, variant=script.replace('--no-renames ', ''))
+                expect(wanted=True, variant=script.replace("'--no-renames', ", ''))
             print(f'PASS docs scope {name}: complete diff, unknown base, non-PR and reusable caller')
 
         # A different commit with the same tree has no changed paths: remain conservative.

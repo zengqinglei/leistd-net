@@ -162,58 +162,45 @@ jobs:
           fetch-depth: 2
       - name: 判断是否仅修改内部文档
         id: scope
-        shell: pwsh
+        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
         run: |
-          # 白名单唯一来源。只有直接 PR 可以省略动态作业；复用入口可能继承 PR 事件名。
-          $docsOnly = $false
-          $base = $env:PR_BASE_SHA
-          if ($env:EVENT_NAME -ceq 'pull_request' -and -not $env:CANDIDATE_SHA -and
-              $base -cmatch '^[0-9a-f]{40}$' -and $base -ne ('0' * 40) -and
-              $base -ne (git rev-parse HEAD)) {
-            git cat-file -e "$base^{commit}" 2>$null
-            if ($LASTEXITCODE -ne 0) {
-              # checkout 默认浅克隆；只取比较基准，不为小作业下载完整历史。
-              git fetch --no-tags --depth=1 origin $base 2>$null
-            }
-            if ($LASTEXITCODE -eq 0) {
-              # 禁止 rename 检测：跨白名单边界移动时，两端都必须计入。
-              $changed = @(git -c core.quotePath=false diff --no-renames --name-only $base HEAD)
-              if ($LASTEXITCODE -eq 0 -and $changed.Count -gt 0) {
-                $outside = @($changed | Where-Object {
-                  $_ -cne 'README.md' -and $_ -cnotmatch '^(docs|\.agents|skills)/'
-                })
-                $docsOnly = $outside.Count -eq 0
-              }
-            }
-          }
-          # 无法确定 base/diff 时取全集；native git 的失败不能污染成功的保守判定。
-          $global:LASTEXITCODE = 0
-          "docs_only=$($docsOnly ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-          Write-Host "docs_only=$($docsOnly ? 'true' : 'false')"
+          python3 - <<'PY_SCOPE'
+          import os, re, subprocess
+          from pathlib import Path
+          # 白名单唯一来源。只有直接 PR 可以省略动态作业；复用可能继承 PR 事件名。
+          docs_only = False
+          base = os.environ.get('PR_BASE_SHA', '')
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True, encoding='utf-8', stderr=subprocess.PIPE).rstrip('\n')
+          try:
+              if (os.environ.get('EVENT_NAME') == 'pull_request' and not os.environ.get('CANDIDATE_SHA') and
+                  re.fullmatch('[0-9a-f]{40}', base) and base != '0' * 40 and base != git('rev-parse', 'HEAD')):
+                  try:
+                      git('cat-file', '-e', base + '^{commit}')
+                  except subprocess.CalledProcessError:
+                      git('fetch', '--no-tags', '--depth=1', 'origin', base)
+                  # 禁止 rename 检测：跨白名单边界移动时，两端都必须计入。
+                  changed = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, 'HEAD').split('\0')[:-1]
+                  docs_only = bool(changed) and all(path == 'README.md' or re.match(r'^(docs|\.agents|skills)/', path) for path in changed)
+          except (subprocess.CalledProcessError, OSError, UnicodeError):
+              docs_only = False  # 无法确定基准或差异时保守全量，不污染步骤退出码。
+          result = 'docs_only=' + str(docs_only).lower()
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              output.write(result + '\n')
+          print(result)
+          PY_SCOPE
       - name: 生成同候选验证计划
         id: plan
-        shell: pwsh
+        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: |
-          python scripts/plan-quality-checks.py --tier $env:MATRIX_TIER --docs-only '${{ steps.scope.outputs.docs_only }}' --output .tmp/quality-plan.json
-          if ($LASTEXITCODE -ne 0) { throw '无法生成验证计划' }
-          $text = Get-Content .tmp/quality-plan.json -Raw
-          $plan = $text | ConvertFrom-Json
-          . ./scripts/template-matrix-scenarios.ps1
-          $slices = @($MatrixSlices[$env:MATRIX_TIER].GetEnumerator() | Where-Object {
-            $key = $_.Key
-            @($plan.Scenarios | Where-Object { $scenarioMap[$_].Slices[$env:MATRIX_TIER] -ceq $key }).Count -gt 0
-          } | ForEach-Object { [ordered]@{ key = $_.Key; title = $_.Value } })
-          "validation_plan=$text" | Out-File $env:GITHUB_OUTPUT -Append
-          "slices=$(ConvertTo-Json -InputObject $slices -Compress)" | Out-File $env:GITHUB_OUTPUT -Append
-          "验证计划：$text" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+        run: python3 scripts/plan-quality-checks.py --tier "$MATRIX_TIER" --docs-only '${{ steps.scope.outputs.docs_only }}' --output .tmp/quality-plan.json --github-output
       - uses: actions/setup-dotnet@v4
         if: steps.scope.outputs.docs_only == 'false'
         with:

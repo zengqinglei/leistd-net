@@ -24,7 +24,7 @@ spec.loader.exec_module(coverage)
 
 
 def git(*arguments: str) -> str:
-    return subprocess.check_output(['git', '-C', str(ROOT), *arguments], text=True, encoding='utf-8', stderr=subprocess.PIPE).strip()
+    return subprocess.check_output(['git', '-C', str(ROOT), *arguments], text=True, encoding='utf-8', stderr=subprocess.PIPE).rstrip('\n')
 
 
 def frontend_source(path: str) -> bool:
@@ -73,6 +73,12 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
     head = git('rev-parse', 'HEAD')
     scenarios = coverage.load_scenarios()
     registered = [name for name, info in scenarios.items() if tier in info['Slices']]
+    def finish(value):
+        selected = set(value['Scenarios'])
+        titles = next(iter(scenarios.values()))['Titles'][tier]
+        value['Slices'] = [dict(key=key, title=title) for key, title in titles.items()
+                           if any(name in selected and info['Slices'].get(tier) == key for name, info in scenarios.items())]
+        return value
     plan = dict(Version=1, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,
                 Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
                 Reason='Full: non-PR, shared/unknown input or uncertain baseline')
@@ -80,18 +86,18 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
         if event != 'pull_request' or candidate_input or tier != 'pr':
             raise ValueError('Internal-document exemption is only for a direct PR')
         plan.update(DocsOnly=True, Scenarios=[], FrameworkTests=False, ConsumerProjects=[], Reason='Internal documentation only')
-        return plan
+        return finish(plan)
     if tier != 'pr' or event != 'pull_request' or candidate_input or not re.fullmatch(r'[0-9a-f]{40}', base) or base == '0' * 40 or base == head:
-        return plan
+        return finish(plan)
     try:
         # Local plans must describe a committed snapshot, just like CI. A dirty
         # tree cannot be narrowed by a diff that only describes committed HEAD.
         if git('status', '--porcelain', '--untracked-files=normal'):
-            return dict(plan, Reason='Full: working tree differs from candidate HEAD')
+            return finish(dict(plan, Reason='Full: working tree differs from candidate HEAD'))
         git('cat-file', '-e', f'{base}^{{commit}}')
-        paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', base, head).splitlines()
+        paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, head).split('\0')[:-1]
         if not paths:
-            return plan
+            return finish(plan)
         # Strip only inputs already covered by the workflow's internal-doc rule.
         # Mixed documentation deliberately remains full: avoid a second allowlist.
         frontend = all(frontend_source(path) for path in paths)
@@ -102,7 +108,7 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
             old = json.loads(git('show', f'{base}:{config_path}'))
             current = json.loads((ROOT / config_path).read_text(encoding='utf-8'))
             if old != current:
-                return plan
+                return finish(plan)
             affected = set()
             for path in paths:
                 affected |= source_producers(old, path, scenarios) | source_producers(current, path, scenarios)
@@ -111,7 +117,7 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
             affected |= {'identity', 'identity-all-features'}
             selected = [name for name in registered if name in affected]
             if not selected:
-                return plan
+                return finish(plan)
             plan.update(Mode='frontend' if frontend else 'backend', Scenarios=selected,
                         FrameworkTests=False, ConsumerProjects=[], Reason='Only template frontend inputs' if frontend else 'Only template backend C# inputs')
         elif all(owners):
@@ -122,16 +128,16 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
                              if 'obj' not in item.parts and 'bin' not in item.parts] +
                             [ROOT / name for name in ('Directory.Build.props', 'Directory.Build.targets') if (ROOT / name).exists()])
             if any(re.search(r'<Compile\b[^>]*\bInclude\s*=|<AdditionalFiles\b|<EnableDefaultCompileItems>\s*false', item.read_text(encoding='utf-8')) for item in build_inputs):
-                return plan
+                return finish(plan)
             # This narrows only empty NuGet restore/build consumers. Runtime
             # tests and PG/OIDC remain full; nuspec reverse closure is evaluated
             # against the candidate packages by test-package-consumption.ps1.
             plan.update(ConsumerProjects=sorted(set(owners)), Reason='Framework source: consumer dependency closure only')
     except (subprocess.CalledProcessError, ValueError, KeyError, OSError, IndexError):
         # A known-but-unparseable input is never grounds for fewer checks.
-        return dict(plan, Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
-                    Reason='Full: input/dependency proof unavailable')
-    return plan
+        return finish(dict(plan, Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
+                    Reason='Full: input/dependency proof unavailable'))
+    return finish(plan)
 
 
 def main() -> None:
@@ -142,11 +148,18 @@ def main() -> None:
     parser.add_argument('--candidate-input', default=os.environ.get('CANDIDATE_SHA', ''))
     parser.add_argument('--docs-only', choices=['true', 'false'], default='false')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--github-output', action='store_true')
     args = parser.parse_args()
     plan = create_plan(args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(plan, ensure_ascii=False, separators=(',', ':'))
     args.output.write_text(text, encoding='utf-8')
+    if args.github_output:
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+            output.write('validation_plan=' + text + '\n')
+            output.write('slices=' + json.dumps(plan['Slices'], ensure_ascii=False, separators=(',', ':')) + '\n')
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+            summary.write('验证计划：' + text + '\n')
     print(text)
 
 

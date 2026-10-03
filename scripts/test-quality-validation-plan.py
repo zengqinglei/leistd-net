@@ -106,8 +106,11 @@ def main():
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'full'
         git('reset', '--hard', base)
         (repo / front).write_text((repo / front).read_text() + '\n// Uncommitted edit\n')
+        git('add', front); git('commit', '-qm', 'committed frontend input')
+        assert planner.create_plan('pr', base, 'pull_request', '')['Mode'] == 'frontend'
+        (repo / back).write_text((repo / back).read_text() + '\n// Uncommitted backend edit\n')
         dirty = planner.create_plan('pr', base, 'pull_request', '')
-        assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None
+        assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
         git('reset', '--hard', base)
         print('PASS deletion, cross-boundary rename and multi-commit conservative fallback', flush=True)
     print('Selection and receipt evidence:', out, flush=True)
