@@ -44,3 +44,4 @@ public static class DependencyInjection
         return services;
     }
 }
+// Scope validation fixture.
