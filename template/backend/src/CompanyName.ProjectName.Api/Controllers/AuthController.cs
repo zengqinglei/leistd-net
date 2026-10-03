@@ -343,3 +343,4 @@ public sealed class AuthController(
     }
 }
 #endif
+// Scope validation fixture.
