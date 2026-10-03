@@ -50,4 +50,4 @@ OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrows
 
 官方依据：[ESLint 缓存](https://eslint.org/docs/latest/use/command-line-interface#--cache)、[Stylelint 缓存](https://stylelint.io/user-guide/cli/#--cache)、[Prettier 缓存与插件限制](https://prettier.io/docs/cli#--cache)、[Angular 组件测试](https://angular.dev/guide/testing/components-basics)、[Angular test 参数](https://angular.dev/cli/test)、[Playwright CI](https://playwright.dev/docs/ci)。
 
-浏览器认证变更在 L1 跑 `-Tier pr`，十场景全集由合入后的 `full` 档承担。真实官方处理器、Cookie 解保护、服务端票据删除、并发刷新、资源归属与可编译变异的边界见[浏览器认证维护规则](browser-authentication.md)。
+浏览器认证变更在 L1 跑 `-Tier pr`，十场景全集由合入后的 `full` 档承担。修改令牌寿命、刷新或到期判据时，提交前还须运行 `pwsh scripts/test-template-oidc-e2e.ps1 -IncludeExpiryWait`，验证真实到期边界；PR CI 默认省略真实到期等待，full 显式补跑，不能用 PR 成功代替这项变更责任。真实官方处理器、Cookie 解保护、服务端票据删除、并发刷新、资源归属与可编译变异的边界见[浏览器认证维护规则](browser-authentication.md)。

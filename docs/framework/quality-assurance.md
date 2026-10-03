@@ -23,7 +23,7 @@ L1 按改动路径选择入口：
 | 模板某个特性（通知、外部登录、本地化）或某种 `ServiceRole` | 含该特性/形态的一个场景 + `identity-all-features` + 关闭侧场景（通常是 `identity`） | 前端交互变化做浏览器验证 |
 | 模板参数、条件块、公共生成逻辑、共享依赖或构建配置 | `test-template-matrix.ps1 -Tier pr` | — |
 | 数据库映射、迁移、租户路由 | 受影响场景 + `test-template-postgresql-e2e.ps1` | — |
-| 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios` |
+| 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios`；令牌到期变更的 `-IncludeExpiryWait` 责任见[模板质量规范](../template/quality-assurance.md) |
 | Dockerfile、部署资产 | `-Scenarios standalone -ContainerSmokeScenarios standalone` | — |
 | CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围/聚合变化运行 `python scripts/test-workflow-change-scope.py`，选测/回执变化运行 `python scripts/test-quality-validation-plan.py`；预检接替变化运行 `python scripts/test-template-source-preflight.py`；影响调度时用远端 CI 验收 |
 

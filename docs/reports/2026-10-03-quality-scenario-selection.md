@@ -1,6 +1,8 @@
 # 按开发场景选择验证：实现与证据
 
-交付在 [MR #36](https://github.com/zengqinglei/leistd-net/pull/36)。基线 develop 为 `549d106d`；首批 `44f5aa55` 的规划 runner 曾阻塞打包，本轮 `d17c2ad5` / `b8233412` 已解除该依赖，并一次实施剩余的模板阶段/场景选择和 Framework 空消费闭包。独立代码审查未发现必须修复项；随后补上未知模板 source/modifier 字段全量回退与文档范围摘要，代码候选 `762bdd61` 的正常 PR 与 full 复验均通过。之后仅收敛根内部文档、删除已完成计划，清理提交的普通 PR 结果见 MR；不冒称清理 SHA 已执行 full。下列性能样本注明其实际候选，不将早期数据冒充最后提交。
+交付在 [MR #36](https://github.com/zengqinglei/leistd-net/pull/36)。原实施基线 develop 为 `549d106d`；首批 `44f5aa55` 的规划 runner 曾阻塞打包，本轮 `d17c2ad5` / `b8233412` 已解除该依赖，并一次实施剩余的模板阶段/场景选择和 Framework 空消费闭包。独立代码审查未发现必须修复项；随后补上未知模板 source/modifier 字段全量回退与文档范围摘要，合并上游前的代码候选 `762bdd61` 的正常 PR 与 full 复验均通过。随后根文档收敛为 `92764748`，按用户新要求将 develop `422fa3ae` 无冲突合入，merge 为 `ae808f56`。下列历史性能样本注明其实际候选；合并后的 PR/full 状态见 MR，不用合并前 full 证明新增的真实到期责任。
+
+清理候选的 [PR 37116375211](https://github.com/zengqinglei/leistd-net/actions/runs/37116375211) 已通过，439 墙钟/1534 runner 秒。其事件计划 BaseSha 仍为 `549d106d`，实际 merge 父提交已是 `422fa3ae`；运行树与本地 `ae808f56` 相同。实际完整 PR 为 6 场景/3 片、Framework 1670、模板后端 1919、Chromium 2398、后端 0 跳过、68 消费者，不能套用历史 1667/1892/2272，也不能把全部耗时差值归于选测。上游时间优化与 Job 测试职责的审视见[候选评估](../assessments/2026-10-03-background-job-testing.md)。
 
 长期行为以[仓库质量规范](../framework/quality-assurance.md#同候选输入计划)和[模板质量规范](../template/quality-assurance.md)为准。业务项目以生成的 `docs/standards/testing.md` 为准，不执行框架仓库的多形态模板发布矩阵。本轮没有删除测试或断言；减少的是重复预检和输入未变的验证任务。
 
