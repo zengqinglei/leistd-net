@@ -5,12 +5,18 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.BackgroundJobs.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -208,6 +214,47 @@ public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : ICl
 
         Assert.False(await SessionExistsAsync(expiredId));
         Assert.Equal(HttpStatusCode.OK, (await active.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Session_cleanup_matches_the_domain_rule_at_the_exact_idle_cutoff()
+    {
+        // 微秒可表示的 UTC 起点；只建立一个配置变体，共用 fixture 的 PostgreSQL。
+        var ticks = DateTimeOffset.UtcNow.UtcTicks;
+        var clock = new FakeTimeProvider(new DateTimeOffset(ticks - ticks % 10, TimeSpan.Zero));
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+            services.PostConfigure<BackgroundJobOptions>(options => options.Enabled = false);
+        }));
+        Guid[] ids;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var userId = await db.Users.Select(user => user.Id).FirstAsync();
+            var timeout = scope.ServiceProvider.GetRequiredService<IOptions<UserSessionOptions>>().Value.IdleTimeout;
+            var now = clock.GetUtcNow().UtcDateTime;
+            var cutoff = now - timeout;
+            var before = new UserSession(userId, cutoff.AddMilliseconds(-1), "203.0.113.10", "before cutoff");
+            var equal = new UserSession(userId, cutoff, "203.0.113.11", "at cutoff");
+            var after = new UserSession(userId, cutoff.AddMilliseconds(1), "203.0.113.12", "after cutoff");
+            Assert.True(before.IsExpired(now, timeout));
+            Assert.True(equal.IsExpired(now, timeout));
+            Assert.False(after.IsExpired(now, timeout));
+            db.UserSessions.AddRange(before, equal, after);
+            await db.SaveChangesAsync();
+            ids = [before.Id, equal.Id, after.Id];
+
+            await scope.ServiceProvider.GetRequiredService<ExpiredUserSessionCleanupJob>().ExecuteAsync(
+                new RecurringJobContext(ExpiredUserSessionCleanupJob.Name, clock.GetUtcNow()), CancellationToken.None);
+        }
+
+        // 批量删除绕过变更跟踪；新 scope 读取真实 SQL 结果，不能拿旧实体当证据。
+        await using var verify = host.Services.CreateAsyncScope();
+        var remaining = await verify.ServiceProvider.GetRequiredService<MyProjectDbContext>().UserSessions
+            .IgnoreQueryFilters().Where(session => ids.Contains(session.Id)).Select(session => session.Id).ToArrayAsync();
+        Assert.Equal(ids[2], Assert.Single(remaining));
     }
 
     // 最近活动在空闲超时之前的会话：登录流程不会造出这样的行，直接写库

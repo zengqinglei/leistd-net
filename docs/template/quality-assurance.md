@@ -20,6 +20,14 @@ UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationT
 
 OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrowserScenarios` 在 HTTP 场景后追加有头浏览器验证，`-BrowserOnly` 只执行浏览器闭环。另需 Node.js、npm 与已安装 Chromium 的 agent-browser；可用官方 `AGENT_BROWSER_EXECUTABLE_PATH` 选择浏览器程序。脚本按共享矩阵定义生成 Identity 外部登录与 Resource，生产构建前端由所属 API 同源托管；覆盖登录、服务端票据真实到期后的续期/拒绝（浏览器阶段把 Identity 切到快速档 `OAuth__AccessTokenLifetime=00:01:30`，签发寿命按档位断言，不等默认的 10 分钟；分层原则见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)）、官方退出、Google/GitHub 官方处理器及接续原授权请求。第三方通信使用本地 PKCE 协议夹具，不替换生产认证处理器。一次性浏览器会话关闭自动保存，避免额外访问已见过的源。证据保存在隔离 `.tmp/oidc-e2e/<run>/`，包含断言、脱敏 HAR、截图和 SQL 投影；浏览器会话与容器仅清理本轮创建的资源。CI 默认仍执行 HTTP 入口，浏览器开关按需显式启用。
 
+## 业务维护 Job
+
+框架的调度循环测试见[覆盖分工](../framework/quality-assurance.md#定时任务的覆盖分工)。模板只验证业务职责：清理汇总的失败/未解析数据库传播放无宿主单测；SQL 翻译、全局过滤器、共享租户与真实 DI 接线放现有 PostgreSQL 集成测试类。
+
+截止时刻用官方假时钟固定；必要配置变体复用既有工厂的数据库，关闭该变体的自动调度后从 DI 直接执行真实 Job，避免偶发自动清理干扰断言。默认测试工厂仍启动调度器。通知当前契约是读/未读分别按保留期清理，`CreationTime < cutoff`（等于保留），且覆盖宿主和共享租户；会话是 `LastSeenTime <= cutoff`（等于删除），同时核对领域 `IsExpired`。固定 UTC 时刻对齐数据库微秒精度，截止前/后数据用毫秒间隔；批量删除后换作用域查询并按本用例标识断言。
+
+不为每个 Job 新建容器、独立场景或协议 E2E，不以有 HTTP 集成测试为由删除上述边界。代表性生成覆盖 LocalIdentity 与 RemoteTokenAuth 通知、LocalIdentity 无通知侧；全集 CI 继续覆盖所有适用形态。新用例首先解决覆盖缺口，耗时同时披露入口与方法体，不把增加测试宣称为提速。
+
 ## 源码预检与 CI 接替
 
 独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 源码预检，再 audit、打包和生成。GitHub CI 在同候选静态作业完整执行 `check-all.ps1`，分片显式使用 `-SkipSourcePreflight`，只检查接替入口仍在清单；必过汇总同时等待并核对静态和全部必要动态作业成功。预检和生成可以并行，静态失败不能被分片成功掩盖。源码预检职责不由生成编译替代，人工入口不能用该 CI 开关省略检查。

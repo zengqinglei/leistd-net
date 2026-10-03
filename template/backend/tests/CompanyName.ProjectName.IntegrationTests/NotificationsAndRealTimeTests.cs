@@ -3,10 +3,14 @@ using Leistd.Notifications;
 using Leistd.Notifications.Dtos;
 using System.Net;
 using System.Net.Http.Json;
+using Leistd.BackgroundJobs.Options;
+using Leistd.BackgroundJobs.Recurring;
+using Leistd.MultiTenancy.Context;
+using Leistd.Notifications.EntityFrameworkCore.Entities;
+using Leistd.Notifications.EntityFrameworkCore.Options;
 #if (!LocalIdentity)
 using Microsoft.AspNetCore.Http;
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Tenancy;
 #endif
@@ -18,6 +22,9 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Leistd.Notifications.Channels;
 using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
@@ -31,6 +38,68 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
+    [Fact]
+    public async Task Notification_retention_cleans_host_and_shared_tenant_rows_at_the_read_and_unread_cutoffs()
+    {
+        var ticks = DateTimeOffset.UtcNow.UtcTicks;
+        var clock = new FakeTimeProvider(new DateTimeOffset(ticks - ticks % 10, TimeSpan.Zero));
+        // 时钟配置变体共用已有数据库；关闭自动调度，只由本用例触发登记的作业。
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+            services.PostConfigure<BackgroundJobOptions>(options => options.Enabled = false);
+        }));
+        var marker = $"retention-{Guid.NewGuid():N}";
+        var tenantId = Guid.NewGuid();
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+            var options = scope.ServiceProvider.GetRequiredService<IOptionsMonitor<NotificationRetentionOptions>>().CurrentValue;
+            Assert.True(options.Enabled);
+            var now = clock.GetUtcNow().UtcDateTime;
+            var readCutoff = now.AddDays(-options.ReadRetentionDays);
+            var unreadCutoff = now.AddDays(-options.UnreadRetentionDays);
+
+            foreach (var owner in new Guid?[] { null, tenantId })
+            {
+                using (tenant.Change(owner))
+                {
+                    db.Set<NotificationRecord>().AddRange(
+                        Row("read-expired", true, readCutoff.AddMilliseconds(-1)),
+                        Row("read-equal", true, readCutoff),
+                        Row("read-fresh", true, readCutoff.AddMilliseconds(1)),
+                        Row("unread-expired", false, unreadCutoff.AddMilliseconds(-1)),
+                        Row("unread-equal", false, unreadCutoff),
+                        Row("unread-fresh", false, unreadCutoff.AddMilliseconds(1)));
+                    await db.SaveChangesAsync();
+                }
+            }
+
+            var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>()
+                .Single(job => job.Name == "notifications.retention");
+            Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
+            var job = (IRecurringJob)scope.ServiceProvider.GetRequiredService(definition.JobType);
+            await job.ExecuteAsync(new RecurringJobContext(definition.Name, clock.GetUtcNow()), CancellationToken.None);
+        }
+
+        await using var verify = host.Services.CreateAsyncScope();
+        var rows = await verify.ServiceProvider.GetRequiredService<MyProjectDbContext>().Set<NotificationRecord>()
+            .IgnoreQueryFilters().Where(record => record.UserId == marker).ToArrayAsync();
+        Assert.Equal(8, rows.Length);
+        foreach (var owner in new Guid?[] { null, tenantId })
+        {
+            Assert.Equal(["read-equal", "read-fresh", "unread-equal", "unread-fresh"],
+                rows.Where(row => row.TenantId == owner).Select(row => row.Title).Order(StringComparer.Ordinal));
+        }
+
+        NotificationRecord Row(string title, bool read, DateTime created) => new()
+        {
+            UserId = marker, Title = title, IsRead = read, CreationTime = created
+        };
+    }
+
     [Fact]
     public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
