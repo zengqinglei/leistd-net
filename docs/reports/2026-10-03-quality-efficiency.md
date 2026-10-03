@@ -83,3 +83,64 @@
 | L1后端全集（含构建） | 34.757 / 35.232 / 39.114 | 35.232 | 103条单测 + 330条真实PG集成，0跳过 |
 
 这是已有过滤能力落到实际业务后的分层证据，不是用少跑测试冒充等价全量提速。还原与初次生成单列于原始日志，表内用同一已还原项目的 `dotnet test -c Release --no-restore`，不使用旧二进制；无需每轮编辑承担L1全部责任，交付仍执行L1。未变更UI，本示例没有新增浏览器用户流程；仓库矩阵保留完整Chromium验证。
+
+## 保障入口盘点与原始基线
+
+以下为f39bcdcc源码基线（质量入口与df79b494等价）的盘点；不是优化后的计时。本轮静态总入口仍为19个直接脚本、30项执行，自检与生产扫描各有责任，廉价规则不按数量删除。总入口三轮50.128/55.825/46.168秒，中位50.128秒；各子项用脚本自身0.1秒精度的中位，子项中位之和不等于完整入口中位。新增范围夹具不加入此总入口。
+
+| 脚本（相对仓库根） | 保护对象 / 必要性 | 自检中位秒 | 扫描中位秒 |
+| --- | --- | ---: | ---: |
+| `framework/build/check-docs-sync.ps1` | 包家族文档、索引与源码对应；框架交付需要 | — | 1.6 |
+| `framework/build/check-docs-api-drift.ps1` | 文档 API 引用、自检、源码索引；避免发布失真 | 合并 | 2.8 |
+| `scripts/validate-skills.ps1` | Skill 元数据及文档引用 | — | 2.1 |
+| `scripts/check-retired-terms.ps1` | 已退役符号、分发层错误表述 | 0.9 | 9.5 |
+| `scripts/check-i18n-keys.ps1` | 双语键、错误码与词条、scope | 1.1 | 4.4 |
+| `template/scripts/check-operation-action-i18n.py` | 动作码与句子模板集合一致；随业务项目分发 | 0.1 | 0.1 |
+| `scripts/check-template-symbols.ps1` | 未登记/退役条件符号 | — | 2.5 |
+| `scripts/check-template-conditional-blocks.py` | 嵌套条件结构和预处理标记 | 0.1 | 0.2 |
+| `scripts/check-template-scenario-coverage.py` | PR 条件行覆盖、24 参数组合可达性 | 0.1 | 5.9 |
+| `scripts/check-using-guards.py` | 全符号组合的 using/import、IVT、XML、空块 | — | 8.2 |
+| `scripts/check-async-boundaries.py` | 动态连接路径不走同步解析 | — | 0.2 |
+| `scripts/check-clock-access.py` | 时间源可替换及精确豁免 | 0.1 | 0.3 |
+| `scripts/check-dbcontext-access.py` | 业务上下文访问、租户/UoW 边界 | — | 0.1 |
+| `scripts/check-csproj-conventions.py` | Core 依赖、继承属性、项目/包约定 | — | 0.2 |
+| `scripts/check-contact-info-logging.py` | SMTP 等未由运行测试覆盖的联系方式日志调用点 | 0.1 | 0.2 |
+| `scripts/check-test-layout.py` | 家族测试项目、目录、slnx 登记 | 0.2 | 0.1 |
+| `scripts/check-test-names.py` | 中英文测试名规范 | 0.1 | 1.3 |
+| `scripts/check-doc-comment-shape.py` | XML 私有成员/Markdown 形态 | 0.2 | 0.3 |
+| `scripts/check-docs-skeleton.py` | 组件文档骨架及空壳 | 0.1 | 0.1 |
+
+辅助实现 `check-i18n-scopes.py` 与 `vendor/skill-creator/quick_validate.py` 由上述入口调用，不重复计为独立阶段。
+
+| 动态入口（历史本机单轮） | 秒 | 保障对象 |
+| --- | ---: | --- |
+| framework restore | 7.181 | 依赖解析 |
+| framework Release build --no-restore | 23.608 | 编译、分析器、XML |
+| framework Release test --no-build | 30.328 | 28项目/1650条组件契约，Redis可用 |
+| pack-local-feed（构建后热打包） | 19.108 | 68个候选包 |
+| test-package-consumption（旧） | 126.899 | 包内容与逐包隔离消费；正式前后比较见本报告三轮表 |
+| template-matrix -Tier pr -SkipPack | 737.799 | 6场景完整前后端，本机串行，不与CI三分片墙钟混算 |
+| postgresql-e2e -SkipPack | 74.583 | 真实PG多库/迁移/物理隔离/DDL拒绝 |
+| oidc-e2e -SkipPack | 185.887 | 4服务HTTP边界，10场景/306断言 |
+
+其他按影响执行的入口：矩阵 `-ContainerSmoke` 验API/Migrator镜像与运行时；`check-template-matrix-results.ps1` 核对回执；OIDC `-IncludeBrowserScenarios`、`-IncludeMultiTenantScenarios`、`-IncludeExpiryWait` 分别验浏览器、MT0–MT5与真实到期；前端npm lint/build/test由生成场景运行；最终版本包在Release推送前打包/隔离消费。发布后等待包源索引的步骤已在df79b494删除，不恢复。
+
+## 官方依据与本轮取舍
+
+外部框架参考调研保留在本机原始计划与两轮评审证据中；长期仓库报告遵循现有文档分发边界，不引入其API或实现约定。
+
+| 官方资料 | 原则 | 对本仓库的应用 |
+| --- | --- | --- |
+| [Microsoft 单测最佳实践](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-best-practices) | 单条规则测试毫秒级，隔离、可重复、自判定；测试成本与价值匹配 | 纯规则移入 UnitTests，避免为转发/DTO/空实现写测试；慢方法先查初始化与错误分类 |
+| [Microsoft 测试分层](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/test-asp-net-core-mvc-apps)、[ASP.NET Core integration tests](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0) | 能用单测就用单测；不要穷举每个 IO 组合；完整集成可放构建服务器 | 编辑循环跑最小相关集；HTTP 集成保留装配、数据/权限和代表性错误映射 |
+| [EF Core 测试选型](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy) | 本地真实库也可很快；fake Provider 不保证生产查询和约束 | 优先优化容器、迁移、播种/克隆成本，不为了快退回 InMemory |
+| [Angular Testing](https://angular.dev/guide/testing)、[组件测试](https://angular.dev/guide/testing/components-basics)、[CLI test](https://angular.dev/cli/test) | 默认 Vitest/Node DOM 模拟；DOM/浏览器 API 需要对应环境；支持 include/filter/watch | 纯规则与类测试不用创建 TestBed；Node/浏览器分开仅作候选实验，先验证现有 spec 的真实依赖 |
+| [Vitest 性能指南](https://vitest.dev/guide/improving-performance.html) | 先区分环境/导入/初始化/测试成本，再测配置；隔离有成本也有语义 | 测性能时记录完整入口，保留现有隔离；不直接套 `--no-isolate` |
+| [Playwright CI](https://playwright.dev/docs/ci)、[浏览器安装](https://playwright.dev/docs/browsers) | CLI 安装或官方镜像；默认不建议缓存浏览器，Linux 系统依赖不能由浏览器缓存替代 | 统计准备时间分布后移出环境替换任务；保持现有Chromium，外部偶发波动不算持续优化收益 |
+| [GitHub 缓存](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) | 依赖缓存按输入键匹配，命中有范围与恢复成本 | 优先官方 npm/NuGet 工具链缓存，不共享可变生成目录，不缓存“已经测试通过”的笼统布尔值 |
+
+上述资料没有规定 .NET/Angular 的 CI 一律必须 N 分钟，也没有规定固定单测/集成比例。分层预算是本仓库的工程反馈目标，实际验收使用本报告数据，不称“官方规定最佳范围”。
+
+## 最终全集验证
+
+[full运行37087252676](https://github.com/zengqinglei/leistd-net/actions/runs/37087252676) 在候选 `a852ccac` 上全部成功。10场景、2分片的全部阶段与容器回执已下载，本机以 `-Tier full -ContainerSmoke` 复核通过；框架1650条、模板后端跨场景2944条、Chromium跨场景3696条执行通过，后端跳过0条。该候选包含全部代码变更；随后仅补根报告/计划状态，`.github/`、`framework/`、`template/`、`scripts/` 与已验证候选一致。发布源/版本与正式包推送未执行。
