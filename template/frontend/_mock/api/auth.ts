@@ -13,6 +13,9 @@ import {
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   TwoFactorStatusOutputDto,
+  //#if (OpenIddictServer)
+  LogoutConfirmationOutputDto,
+  //#endif
 } from '../../src/app/features/account/models/account.dto';
 //#if (ExternalLogin)
 import { SessionLoginOutputDto, UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
@@ -364,6 +367,20 @@ function logout(): 'ok' {
   return 'ok';
 }
 
+//#if (OpenIddictServer)
+function getLogoutConfirmation(req: MockRequest): LogoutConfirmationOutputDto {
+  // Mock 没有协议端点：只要求确认页的两个引用都在，便于在开发态预览确认页
+  return req.queryParams['request_uri'] && req.queryParams['confirmation']
+    ? {
+        isValid: true,
+        applicationName: 'Mock application',
+        antiforgeryFieldName: '__RequestVerificationToken',
+        antiforgeryToken: 'mock-antiforgery-token',
+      }
+    : { isValid: false };
+}
+
+//#endif
 function getSecurityConfig(): SecurityConfigOutputDto {
   return { enableEmailVerification: EMAIL_VERIFICATION_ENABLED, emailVerificationAvailable: true };
 }
@@ -578,6 +595,9 @@ function unlinkExternalLogin(req: MockRequest): 'ok' {
 export const AUTH_API = {
   'POST /api/v1/auth/register': (req: MockRequest) => register(req),
   'GET /api/v1/auth/security-config': () => getSecurityConfig(),
+  //#if (OpenIddictServer)
+  'GET /api/v1/auth/logout-confirmation': (req: MockRequest) => getLogoutConfirmation(req),
+  //#endif
   'GET /api/v1/auth/captcha': () => getCaptcha(),
   'POST /api/v1/auth/send-email-code': (req: MockRequest) => sendEmailCode(req),
   'POST /api/v1/auth/logout': () => logout(),

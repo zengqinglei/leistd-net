@@ -25,6 +25,8 @@ public interface IAuthPrincipalFactory
     /// </summary>
     /// <remarks>
     /// 令牌端点的请求不带用户身份，解析链只能得出宿主；用户与租户都取自令牌主体，在其租户内加载用户。
+    /// 令牌主体带会话标识（会话绑定客户端签发时写入）时，会话必须仍然有效，否则返回 <see langword="null"/>；
+    /// 判定不记活跃，续期不会延长 Identity 会话。
     /// </remarks>
     /// <param name="tokenPrincipal">授权码或刷新令牌的主体。</param>
     /// <param name="scopes">本次签发的 scope。</param>

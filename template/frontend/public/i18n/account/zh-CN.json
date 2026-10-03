@@ -75,6 +75,18 @@
     "description": "你所在的组织要求启用两步验证，完成设置后才能继续使用。",
     "signOut": "退出登录"
   },
+  "logoutConfirm": {
+    "title": "退出登录？",
+    "description": "{{application}} 请求退出你在此处的登录。",
+    "descriptionUnknown": "有应用请求退出你在此处的登录。",
+    "confirm": "退出登录",
+    "cancel": "保持登录",
+    "invalid": "这个退出请求已过期或属于其他会话，请回到应用重新发起退出。",
+    "backHome": "返回首页",
+    "loading": "正在核对退出请求…",
+    "failed": "未能核对这个退出请求。",
+    "retry": "重试"
+  },
   "externalLogins": {
     "header": "已绑定的外部账号",
     "subtitle": "除了密码，也可以用这些账号登录。请至少保留一种登录方式。",

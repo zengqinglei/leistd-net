@@ -78,5 +78,8 @@ public record OpenApplicationOutputDto
     /// 创建时间
     /// </summary>
     public required DateTimeOffset CreationTime { get; init; }
+
+    /// <summary>会话绑定；<c>null</c> 表示登记早于该设置、尚未选择。</summary>
+    public bool? SessionBound { get; init; }
 }
 #endif

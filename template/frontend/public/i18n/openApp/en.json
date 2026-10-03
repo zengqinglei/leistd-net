@@ -111,6 +111,11 @@
     "placeholder": "Select security requirements",
     "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
   },
+  "sessionBound": {
+    "title": "Bound to the sign-in session",
+    "hint": "Authorization codes and refresh tokens stop working once the user signs out, the device is revoked, or the session goes idle. Turn on for browser (BFF) clients; turn off for offline clients that must keep refreshing.",
+    "unset": "This application was registered before session binding existed. Choose explicitly before saving."
+  },
   "table": {
     "currentPageReport": "{{total}} total",
     "colApp": "Application",

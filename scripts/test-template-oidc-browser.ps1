@@ -431,7 +431,11 @@ function Invoke-BrowserScenarios {
         $before = Assert-BrowserProtected 'S11-before'
         $cookies = Invoke-Browser @('cookies','get')
         $copied = @($cookies.cookies | Where-Object { $_.name -eq (Get-SessionCookieName 'Orders') })[0]
+        $offsets = Get-LogOffsets 'idp'
         Click-BrowserLogout
+        # 退出携带指向当前会话的 hint：不出现确认页。SPA 路由在请求日志里记成 /index.html，
+        # 所以观察确认页一定会调的核对接口；S12 用同一判据做正向对照
+        Assert-Value 'S11-logout-without-confirmation' $false ((Read-ApiLog 'idp' $offsets) -match 'GET /api/v1/auth/logout-confirmation')
         $ticket = Get-BrowserTicket 'orders' $before.key
         Assert-Value 'S11-ticket-deleted' $false $ticket.exists
         Assert-Http 'S11-copied-cookie-rejected' 401 ($urls.orders + '/api/v1/auth/me') -Headers @{ Cookie = $copied.name + '=' + $copied.value } | Out-Null
@@ -456,6 +460,44 @@ function Invoke-BrowserScenarios {
             [IO.File]::WriteAllText((Join-Path $browserEvidence "external-$provider-link.sql.txt"), $sql, $utf8)
             Assert-Value "$provider-external-link-persisted" $true ($sql -match $provider)
         }
+    }
+    Invoke-Scenario 'S12-logout-confirmation' {
+        # 不带 hint 的依赖方退出：Identity 在本源确认页征得同意；取消保持会话，确认后结束会话并回到登记的退出回调
+        $logout = $urls.idp + '/connect/logout?client_id=orders-browser&state=s12&post_logout_redirect_uri=' +
+            [Uri]::EscapeDataString($urls.orders + '/api/v1/auth/signout')
+        # 第一次从另一个 site 发起（localhost 与 127.0.0.1 不同站）：真实浏览器的跨站表单 POST 不带 Lax 会话 Cookie，
+        # 请求缓存后的顶层 GET 重入才带上；能进确认页（不是直接回跳）说明会话 Cookie 在重入时恢复了
+        $offsets = Get-LogOffsets 'idp'
+        $crossSite = ([Uri]$urls.idp).GetLeftPart([UriPartial]::Authority).Replace('127.0.0.1', 'localhost')
+        Invoke-Browser @('open', $crossSite + '/') | Out-Null
+        Wait-BrowserUrl ($crossSite + '/*')
+        $fields = ConvertTo-Json @{ client_id = 'orders-browser'; state = 's12'; post_logout_redirect_uri = $urls.orders + '/api/v1/auth/signout' } -Compress
+        $action = ConvertTo-Json ($urls.idp + '/connect/logout') -Compress
+        Invoke-BrowserJs "(() => { const f=document.createElement('form'); f.method='POST'; f.action=$action; for (const [k,v] of Object.entries($fields)) { const i=document.createElement('input'); i.type='hidden'; i.name=k; i.value=v; f.appendChild(i); } document.body.appendChild(f); f.submit(); return true; })()" | Out-Null
+        Wait-BrowserUrl ($urls.idp + '/auth/logout-confirm*')
+        # 按钮在核对接口返回有效之后才渲染：等到它，核对请求一定已经记进日志
+        Wait-BrowserElement '[data-testid="logout-confirm-cancel"]'
+        $log = Read-ApiLog 'idp' $offsets
+        Assert-Value 'S12-cross-site-post-cached' $true ($log -match 'POST /connect/logout')
+        Assert-Value 'S12-confirmation-check-observed' $true ($log -match 'GET /api/v1/auth/logout-confirmation')
+        Assert-Value 'S12-confirm-url-has-no-hint' $false ((Invoke-Browser @('get','url')).url -match '(?i)id_token')
+        Wait-BrowserElement '[data-testid="logout-confirm-cancel"]'
+        Invoke-Browser @('click','[data-testid="logout-confirm-cancel"]') | Out-Null
+        Wait-BrowserUrl ($urls.idp + '/*')
+        Assert-Value 'S12-cancel-keeps-session' 200 (Invoke-BrowserJs '(async () => (await fetch("/api/v1/auth/me")).status)()')
+        Invoke-Browser @('open', $logout) | Out-Null
+        Wait-BrowserUrl ($urls.idp + '/auth/logout-confirm*')
+        Wait-BrowserElement '[data-testid="logout-confirm-submit"]'
+        Invoke-Browser @('click','[data-testid="logout-confirm-submit"]') | Out-Null
+        Wait-BrowserUrl ($urls.orders + '/*')
+        # 回到 Identity 本源再查会话（不带 returnUrl 的登录页会转回首页，不以页面路由作判据）
+        Invoke-Browser @('open', $urls.idp + '/') | Out-Null
+        Wait-BrowserUrl ($urls.idp + '/*')
+        Assert-Value 'S12-confirm-ends-session' 401 (Invoke-BrowserJs '(async () => (await fetch("/api/v1/auth/me")).status)()')
+        # 停在 Identity 首页，不是登录页或工作区：只截图存证（Save-BrowserEvidence 按这两种页面等待就绪）
+        $picture = Join-Path $browserEvidence 'S12-logout-confirmed.png'
+        Invoke-Browser @('screenshot', $picture) | Out-Null
+        Assert-Value 'S12-screenshot-saved' $true ((Test-Path $picture) -and (Get-Item $picture).Length -gt 0)
     }
     Complete-BrowserNetwork
 }
@@ -493,7 +535,7 @@ function Complete-BrowserNetwork {
         }
         Write-JsonFile (Join-Path $browserEvidence 'network-summary.json') @{ requests = $entries.Count; routes = $routes; continuations = $continuations }
         foreach ($entry in $entries) {
-            Assert-Value 'network-url-no-oauth' $false ($entry.request.url -match '(?i)(access_token|refresh_token|id_token)=')
+            Assert-Value 'network-url-no-oauth' $false ($entry.request.url -match '(?i)(access_token|refresh_token|id_token|id_token_hint)=')
             if ($entry.response.content.ContainsKey('text') -and $entry.response.content.mimeType -match 'json') {
                 Assert-Value 'browser-json-no-oauth' $false ([string]$entry.response.content.text -match '"(?:access_token|refresh_token|id_token)"\s*:')
             }

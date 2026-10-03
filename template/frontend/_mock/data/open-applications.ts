@@ -33,6 +33,7 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     settings: {},
     properties: {},
     hasClientSecret: false,
+    sessionBound: true,
     creationTime: '2026-05-01T09:00:00Z',
   },
   {
@@ -60,6 +61,7 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     settings: {},
     properties: {},
     hasClientSecret: false,
+    sessionBound: false,
     creationTime: '2026-05-02T10:30:00Z',
   },
   {
@@ -75,6 +77,7 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     settings: {},
     properties: {},
     hasClientSecret: true,
+    sessionBound: false,
     creationTime: '2026-05-03T14:15:00Z',
     clientSecret: 'mock-service-secret',
   },
