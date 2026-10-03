@@ -73,3 +73,5 @@
 | 合入/发布 | full 10 场景、实际 PG/OIDC、适用容器 | 保持完整兜底，不因 docs-only 推断未执行测试成功 |
 
 业务项目的唯一规则入口为 `template/docs/standards/testing.md`，没有要求生成项目执行 Leistd 仓库的多形态矩阵。audit 去重、模板阶段裁剪和 Framework 自动消费者选测均未实施。
+
+本行仅用于隔离 PR 验证，不进入交付分支。
