@@ -19,11 +19,6 @@
     <RuntimeHostConfigurationOption Include="Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking" Value="true" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- 签名公钥刷新限频用官方时间替身 -->
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-  </ItemGroup>
-
 <!--#endif-->
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />

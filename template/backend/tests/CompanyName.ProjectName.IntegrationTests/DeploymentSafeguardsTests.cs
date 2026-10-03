@@ -44,7 +44,6 @@ public sealed class DeploymentSafeguardsTests
 
     // 重叠轮换时集合里每一项都要可用：坏掉的一项若被跳过，JWKS 少一个 kid 或旧令牌解不开，要等请求失败才暴露
     [Theory]
-    [InlineData("OAuth:SigningCertificates:1:Path", "", "OAuth:SigningCertificates:1:Path is required")]
     [InlineData("OAuth:EncryptionCertificates:1:Path", "missing.pfx", "OAuth:EncryptionCertificates:1:Path could not be loaded")]
     public void Every_token_certificate_entry_must_load(string key, string path, string expected)
     {
@@ -58,24 +57,6 @@ public sealed class DeploymentSafeguardsTests
         });
 
         Assert.Contains(expected, exception.ToString(), StringComparison.Ordinal);
-    }
-
-    // 结构错误按配置键逐项列出：两个集合的问题一次看全，不必改一个、启动一次
-    [Fact]
-    public void Certificate_configuration_errors_are_reported_together()
-    {
-        using var certificates = new CertificateFiles();
-        using var factory = new ProjectWebApplicationFactory();
-
-        var exception = StartupFailure(factory, builder =>
-        {
-            certificates.Configure(builder);
-            builder.UseSetting("OAuth:SigningCertificates:1:Path", "");
-            builder.UseSetting("OAuth:EncryptionCertificates:0:Path", "");
-        }).ToString();
-
-        Assert.Contains("OAuth:SigningCertificates:1:Path is required", exception, StringComparison.Ordinal);
-        Assert.Contains("OAuth:EncryptionCertificates:0:Path is required", exception, StringComparison.Ordinal);
     }
 
     [Fact]

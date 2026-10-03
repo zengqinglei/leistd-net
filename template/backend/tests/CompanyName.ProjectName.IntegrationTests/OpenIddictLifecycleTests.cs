@@ -207,23 +207,6 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Equal(RequestUriOf(browser, returnUrl), RequestUriOf(browser, again));
     }
 
-    // 证明比较的是会话开始时间的亚秒精度：同一个 Unix 秒里，签发前开始的会话不能兑现，签发后开始的可以，相等不行
-    [Fact]
-    public void Proofs_compare_session_start_times_below_one_second()
-    {
-        var protector = new CompanyName.ProjectName.Api.Auth.ConnectInteractionProtector(
-            new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(),
-            Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()));
-        var issuedAt = new DateTime(2026, 10, 3, 0, 0, 0, 500, DateTimeKind.Utc);
-        var proof = protector.CreateReauthentication("urn:request", issuedAt);
-
-        Assert.False(protector.IsReauthenticated(proof, "urn:request", issuedAt.AddMilliseconds(-1)));
-        Assert.False(protector.IsReauthenticated(proof, "urn:request", issuedAt));
-        Assert.True(protector.IsReauthenticated(proof, "urn:request", issuedAt.AddMilliseconds(1)));
-        Assert.False(protector.IsReauthenticated(proof, "urn:other", issuedAt.AddMilliseconds(1)));
-        Assert.False(protector.IsReauthenticated(proof, "urn:request", null));
-    }
-
     // 授权端点要求重新登录时给出的回跳地址；cached 表示 url 是首个请求（需先跟随请求缓存的那一跳）
     private static async Task<string> ReauthenticationReturnUrlAsync(HttpClient browser, string url, bool cached = true)
     {

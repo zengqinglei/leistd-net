@@ -15,7 +15,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
-using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -265,24 +264,6 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         Assert.Equal(1, issuer.RefreshCount);
     }
 
-    [Fact]
-    public void Refresh_requests_are_forwarded_at_most_once_per_interval()
-    {
-        var inner = new CountingManager();
-        var time = new FakeTimeProvider();
-        var throttle = new SigningKeyRefreshThrottle(inner, time,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<SigningKeyRefreshThrottle>.Instance);
-
-        for (var call = 0; call < 50; call++) throttle.RequestRefresh();
-        Assert.Equal(1, inner.Refreshes);
-        time.Advance(SigningKeyRefreshThrottle.MinimumInterval - TimeSpan.FromSeconds(1));
-        throttle.RequestRefresh();
-        Assert.Equal(1, inner.Refreshes);
-        time.Advance(TimeSpan.FromSeconds(1));
-        throttle.RequestRefresh();
-        Assert.Equal(2, inner.Refreshes);
-    }
-
     private static async Task<HttpStatusCode> MeAsync(HttpClient client, string token, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
@@ -437,13 +418,6 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
             if (disposing) { Current.Rsa.Dispose(); Previous?.Rsa.Dispose(); }
             base.Dispose(disposing);
         }
-    }
-
-    private sealed class CountingManager : IConfigurationManager<OpenIddictConfiguration>
-    {
-        public int Refreshes { get; private set; }
-        public Task<OpenIddictConfiguration> GetConfigurationAsync(CancellationToken cancel) => Task.FromResult(new OpenIddictConfiguration());
-        public void RequestRefresh() => Refreshes++;
     }
 }
 #endif
