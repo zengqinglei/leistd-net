@@ -13,7 +13,7 @@ name: CI
 #   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, quality-validation/final-20261003-base]
   workflow_dispatch:
     inputs:
       tier:
