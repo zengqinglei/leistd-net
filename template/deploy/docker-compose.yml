@@ -59,7 +59,7 @@ services:
       # Database Configuration (PostgreSQL)
       - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=${APP_DB_USER:?APP_DB_USER is required};Password=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required};GSS Encryption Mode=Disable
 #if (RemoteTokenAuth)
-      # Resource 校验远端签发的令牌，并回源 Identity 解析租户路由。
+      # Resource 校验远端签发的令牌。
       # 全部无默认值：漏配时 compose 立刻带变量名失败，不必等到容器启动才由 API 报缺键
       - Authentication__Issuer=${IDENTITY_ISSUER:?IDENTITY_ISSUER is required for a Resource service}
 #if (ResourceBrowserSession)

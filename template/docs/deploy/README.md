@@ -40,8 +40,15 @@
 <!--#if (SpaFrontend)-->
 - Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
 <!--#endif-->
-- 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，只适合单实例，启动日志各有一条 Warning 说明降级内容；多副本必须配置 Redis。
-- TLS 在网关或 ingress 终结时，所有形态（含 Standalone）都须配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 还原原始协议与主机。浏览器写请求的 Origin 校验同样依赖这些转发头；来源拒绝返回 Problem Details，Warning 日志给出收到的 Origin 与计算出的本源。
+<!--#if (SpaFrontend)-->
+- 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，启动日志各有一条 Warning；多副本必须配置 Redis，并共享 Data Protection 密钥。
+<!--#else-->
+- 未配置 `ConnectionStrings:Redis` 不阻止单实例启动，分布式锁回落到进程内并输出 Warning；纯 API 不注册浏览器会话、Data Protection 或其 `KeysPath` 配置。多副本必须配置 Redis。
+<!--#endif-->
+- TLS 在网关或 ingress 终结时，所有形态（含 Standalone）都须配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 还原原始协议与主机。
+<!--#if (SpaFrontend)-->
+  浏览器写请求的 Origin 校验同样依赖这些转发头；来源拒绝返回 Problem Details，Warning 日志给出收到的 Origin 与计算出的本源。
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 - 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificates`、`OAuth:EncryptionCertificates` 各至少一项，每项 `Path`、`Password`），与 HTTPS 证书分开；开发证书只用于本机开发。任何一项缺路径、无法加载或没有 RSA 私钥，启动失败并指出带下标的键名。
 - TLS 在网关或 ingress 终结时，配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 让应用还原原始协议，不要打开 `OAuth:DisableHttpsRequirement`——OpenIddict 明确要求生产环境即使在反向代理后也不关闭传输安全检查。
@@ -49,7 +56,11 @@
 
 ## 本地验证
 
-本机开发时，依赖服务用 `deploy/docker-compose.dev.yml` 起在本机（只绑定 127.0.0.1），应用用 `dotnet run` / `npm start` 跑。完整容器形态用生产 compose 验证：
+本机开发时，依赖服务用 `deploy/docker-compose.dev.yml` 起在本机（只绑定 127.0.0.1），后端用 `dotnet run` 启动。
+<!--#if (SpaFrontend)-->
+前端另用 `npm start` 启动。
+<!--#endif-->
+完整容器形态用生产 compose 验证：
 
 ```bash
 cp deploy/.env.example deploy/.env    # 逐项填写，deploy/.env 已被 Git 忽略
@@ -84,9 +95,8 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 
 1. **发布新公钥**：新签名证书的 `NotBefore` 设在未来（留出第 2 步的时间）、`NotAfter` 晚于旧证书、使用新的 kid，作为新的一项加入
    `OAuth:SigningCertificates` 后滚动重启 Identity。此时 JWKS 已含新 kid，签名仍用旧证书。
-2. **确认各资源服务已取得新 kid**：资源服务有两条各自缓存的配置链路——OpenIddict 验证（访问令牌：Bearer、登录回调、服务端续期）
-   与 ASP.NET Core OIDC 处理器（id_token）。缓存过期（默认 12 小时）后要等下一个请求才会重新抓取，单靠时间过去不能确认，
-   所以滚动重启各资源服务副本，并经真实链路（一次 Bearer 请求、一次登录）预热，确认每个副本、两条链路都已取得新 kid。
+2. **确认各资源服务已取得新 kid**：所有资源服务都有 OpenIddict 访问令牌验证链路；启用浏览器会话时另有 ASP.NET Core OIDC 处理器的 id_token 链路，登录回调与续期也会验证访问令牌。两条链路各自缓存配置。缓存过期（默认 12 小时）后要等下一个请求才会重新抓取，单靠时间过去不能确认，
+   所以滚动重启各资源服务副本，并经真实 Bearer 请求预热；启用浏览器会话的资源服务还须执行一次登录，确认每个副本的适用验签链路都已取得新 kid。
 3. **切换签发**：新证书过了 `NotBefore` 后滚动重启 Identity。证书的优先顺序在启动时排定，不重启就一直用旧证书签名。
 4. **撤掉旧证书**：授权码、刷新令牌（默认 14 天）与授权、退出请求的 request token 由 Identity 自己签名并加密，
    兑现时既要验签也要解密，所以旧的签名证书和加密证书都要保留到它们全部过期。旧签名证书还要覆盖访问令牌（`OAuth:AccessTokenLifetime`）

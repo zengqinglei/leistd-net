@@ -20,7 +20,7 @@ L1 按改动路径选择入口：
 | 只改内部文档或 Skill（CI 白名单见 `ci.yml` 的 `framework-pack/scope`，含根 `skills/`） | `check-all.ps1` | — |
 | 随包 `framework/docs/`、模板 `template/docs/` 或项目 Skill | `check-all.ps1` + 打包内容或代表性生成检查 | 影响运行契约时加相应隔离消费或生成场景验证 |
 | 框架某组件家族的实现 | 框架全量测试 + `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时按下一行验证 |
-| 模板某个特性（通知、外部登录、本地化）或某种 `ServiceRole` | 含该特性/形态的一个场景 + `identity-all-features` + 关闭侧场景（通常是 `identity`） | 前端交互变化做浏览器验证 |
+| 模板某个裁剪能力或某种 `ServiceRole` | 含该特性/形态的一个场景 + `identity-all-features` + 关闭侧场景（通常是 `identity`） | 前端交互变化做浏览器验证 |
 | 模板参数、条件块、公共生成逻辑、共享依赖或构建配置 | `test-template-matrix.ps1 -Tier pr` | — |
 | 数据库映射、迁移、租户路由 | 受影响场景 + `test-template-postgresql-e2e.ps1` | — |
 | 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios`；令牌到期变更的 `-IncludeExpiryWait` 责任见[模板质量规范](../template/quality-assurance.md) |
@@ -69,7 +69,7 @@ Job 的集群锁、水位和失败重试仍由执行器契约测试承担。模�
 
 先测作业的运行、队列和依赖，按 DAG 关键路径决定优化顺序，不把所有作业节省的秒数相加当作墙钟收益。独立的包消费、框架契约与真实服务闭环可在同一候选 SHA 上并行，但质量结果须包含它们；拆成独立作业不能变成可选检查。
 
-模板场景、档位与分片只维护在 `scripts/template-matrix-scenarios.ps1`。默认人工 PR 档执行六场景完整阶段；full 执行十场景、真实集成及适用容器，发布等待同 SHA 的完整结果。PR 档的条件行覆盖由 `check-template-scenario-coverage.py` 逐行求值；组合交互仍由 full 兜底，不以覆盖率删除测试。
+模板场景、档位与分片只维护在 `scripts/template-matrix-scenarios.ps1`。默认人工 PR 档执行登记的 PR 场景完整阶段；full 执行登记全集、真实集成及适用容器，发布等待同 SHA 的完整结果。场景数量不在本文重复维护，以该脚本的档位与分片清单为准。PR 档的条件行覆盖由 `check-template-scenario-coverage.py` 逐行求值；组合交互仍由 full 兜底，不以覆盖率删除测试。
 
 `framework-pack` 无作业依赖，checkout 候选后执行内部文档判定与 `plan-quality-checks.py`，生成绑定 SHA/档位的计划和选定分片。它同时承担范围结果成功责任；docs-only 不安装 SDK、不打包、不上传产物。其他输入只打包一次，immutable artifact 供各消费者只读下载。所有动态作业显式检查范围，不能依赖打包作业被跳过来间接过滤。移除独立规划 runner，避免 pack 等待另一个 runner 的启动和完成。
 
