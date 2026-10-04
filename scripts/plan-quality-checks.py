@@ -149,89 +149,35 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
 
 
 def local_scenarios(base: str) -> dict:
-    """Select complete local products; this is not a CI validation plan.
-
-    Reuse the committed-input proof and file producers. All producing PR
-    products run, with reachable closing states added in registration order.
-    Unknown inputs keep the entire PR set, including for a dirty worktree.
-    """
+    """Select full local products from file producers, independently of CI stages."""
     plan = create_plan('pr', base, 'pull_request', '')
     scenarios = coverage.load_scenarios()
     registered = {name: info for name, info in scenarios.items() if 'pr' in info['Slices']}
-    result = dict(Kind='local-template-scenarios', HeadSha=plan['CandidateSha'], BaseSha=base,
+    head = plan['CandidateSha']
+    result = dict(Kind='local-template-scenarios', HeadSha=head, BaseSha=base,
                   Scope='pr', Scenarios=list(registered), Selection='complete-pr',
-                  Reason=plan['Reason'], ClosingStates=[])
-    if plan['Mode'] not in ('frontend', 'backend'):
+                  Reason=plan['Reason'])
+    if not re.fullmatch(r'[0-9a-f]{40}', base) or base == '0' * 40 or base == head:
         return result
     try:
-        config_path = 'template/.template.config/template.json'
-        config = json.loads(git('show', f"{plan['CandidateSha']}:{config_path}"))
-        values = {name: coverage.symbol_values(config, coverage.parse_cli_arguments(config, info['Arguments']))
-                  for name, info in registered.items()}
-        combinations = coverage.all_combinations(config)
+        if git('status', '--porcelain', '--untracked-files=normal'):
+            return result
         paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z',
-                    base, plan['CandidateSha']).split('\0')[:-1]
-        selected = set(plan['Scenarios'])
-        closing = []
-
-        def require(path, state, predicate):
-            candidates = [name for name, symbols in values.items() if predicate(symbols)]
-            if not candidates:
-                if any(predicate(symbols) for symbols in combinations):
-                    raise ValueError(f'{path}: reachable {state} has no PR representative')
-                return
-            if not selected.intersection(candidates):
-                selected.add(candidates[0])
-                closing.append(dict(Path=path, State=state, Scenario=candidates[0]))
-
-        def active(frames, symbols):
-            return all(coverage.evaluate(current, symbols) and
-                       not any(coverage.evaluate(previous, symbols) for previous in earlier)
-                       for current, earlier in frames)
-
-        # Files inside condition blocks are handled by file producers. Reachable
-        # absent-file and false-branch products are also checked, including when
-        # a branch has no else/body that line coverage alone could discover.
+                    base, head).split('\0')[:-1]
+        if not paths or not all(frontend_source(path) or backend_source(path) for path in paths):
+            return result
+        config_path = 'template/.template.config/template.json'
+        old = json.loads(git('show', f'{base}:{config_path}'))
+        current = json.loads(git('show', f'{head}:{config_path}'))
+        if old != current:
+            return result
+        selected = {'identity', 'identity-all-features'}
         for path in paths:
-            producers = source_producers(config, path, registered)
-            selected.update(producers)
-            for relative, _, condition, modifiers in coverage.iter_sources(config, [path]):
-                excludes = [item['condition'] for item in modifiers
-                            if any(coverage.glob_match(relative, pattern) for pattern in item.get('exclude', []))]
-
-                def generated(symbols):
-                    return (not condition or coverage.evaluate(condition, symbols)) and not any(
-                        coverage.evaluate(expr, symbols) for expr in excludes)
-
-                if condition:
-                    require(path, f'source-closed ({condition})',
-                            lambda symbols: not coverage.evaluate(condition, symbols))
-                for expr in excludes:
-                    require(path, f'excluded ({expr})', lambda symbols:
-                            (not condition or coverage.evaluate(condition, symbols)) and coverage.evaluate(expr, symbols))
-                    require(path, f'included ({expr})', lambda symbols:
-                            (not condition or coverage.evaluate(condition, symbols)) and not coverage.evaluate(expr, symbols))
-                require(path, 'file-present', generated)
-                require(path, 'file-absent', lambda symbols: not generated(symbols))
-                if Path(path).suffix.lower() not in ('.cs', '.ts', '.html', '.css', '.scss', '.json', '.svg'):
-                    continue
-                for revision in (base, plan['CandidateSha']):
-                    # A newly added/deleted file has only one textual side.
-                    try:
-                        git('cat-file', '-e', f'{revision}:{path}')
-                    except subprocess.CalledProcessError:
-                        continue
-                    contexts = {frames for _, frames in coverage.line_contexts(git('show', f'{revision}:{path}'))
-                                if frames}
-                    for frames in sorted(contexts, key=repr):
-                        require(path, 'branch-active', lambda symbols: generated(symbols) and active(frames, symbols))
-                        require(path, 'branch-inactive', lambda symbols: generated(symbols) and
-                                active(frames[:-1], symbols) and not active(frames[-1:], symbols))
-        if git('rev-parse', 'HEAD') != plan['CandidateSha'] or git('status', '--porcelain', '--untracked-files=normal'):
+            selected |= source_producers(old, path, registered) | source_producers(current, path, registered)
+        if git('rev-parse', 'HEAD') != head or git('status', '--porcelain', '--untracked-files=normal'):
             raise ValueError('working tree or HEAD changed during selection')
         result.update(Scenarios=[name for name in registered if name in selected],
-                      Selection='source-products', Reason='All changed source products and reachable closing states',
-                      ClosingStates=closing)
+                      Selection='source-products', Reason='All changed source products and default/all-feature products')
     except (subprocess.CalledProcessError, ValueError, KeyError, OSError, IndexError, UnicodeError) as error:
         result['Reason'] = f'Complete PR: local product proof unavailable ({error})'
     return result

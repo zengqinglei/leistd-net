@@ -39,17 +39,18 @@ L0–L2 不以真实时间流逝等待安全有效期（锁定、挑战、令牌
 
 ### 模板本地场景集合
 
-L1 使用完整任务基线到当前候选的差异计算集合。只支持干净、已提交的局部前端/后端源码；默认产物、全特性产物、全部文件产出场景及可达关闭侧均纳入。规则复用既有 planner、条件引擎和登记清单，不按目录猜特性。
+此入口用于模板维护的局部源码；框架、仓库脚本或文档任务按上表选择入口。L1 使用完整任务基线到当前候选的差异，只支持干净、已提交的局部前端/后端源码，也支持两者混合。默认产物、全特性产物与全部文件产出场景均纳入，复用既有 planner、条件引擎和登记清单。
 
 ```powershell
-python3 scripts/plan-quality-checks.py --local-scenarios --tier pr --base <任务基线完整SHA> --output .tmp/local-template-scenarios.json
+$taskBase = git merge-base origin/develop HEAD
+python3 scripts/plan-quality-checks.py --local-scenarios --tier pr --base $taskBase --output .tmp/local-template-scenarios.json
 $selection = Get-Content .tmp/local-template-scenarios.json -Raw | ConvertFrom-Json
 & ./scripts/test-template-matrix.ps1 -Scenarios @($selection.Scenarios)
 ```
 
-以上在 PowerShell 执行，Windows 使用本机实际 Python 命令。`<任务基线完整SHA>` 替换为真实基线。本地集合只选择产品，每个产品仍运行全部适用阶段，不传 `-ValidationPlanPath` 或跳过开关；该输出不能当作 CI 阶段裁剪计划。
+以上在 PowerShell 执行，Windows 使用本机实际 Python 命令。先更新远端引用；也可使用记录的任务基线完整 SHA，须覆盖全部任务提交。本地集合只选择产品，每个产品仍运行全部适用阶段，不传 `-ValidationPlanPath` 或跳过开关；该输出不能当作 CI 阶段裁剪计划。
 
-元数据/共享/未知输入、无效基线、删除或重命名无法证明、未建模规则、可达状态缺 PR 代表、脏树或选择期间输入变化，均退回登记的完整 PR 集合并说明原因。集合不一定减少；静态覆盖不替代实际生成后的 lint、构建和测试。
+文件内条件的可达分支由全部产出场景覆盖；文件被裁剪的产品输入未变，不额外加入仅用于关闭侧的产品。元数据/共享/未知输入、无效基线、删除或重命名无法证明、未建模规则、脏树或选择期间输入变化，均退回登记的完整 PR 集合并说明原因。集合不一定减少；静态覆盖不替代实际生成后的 lint、构建和测试。
 
 模板维护的 L0 包含生成准备，不能承诺重新生成、还原、构建和测试都在一分钟内。可以在一个已生成的项目中用 `--filter` 或 `--include` 探索行为；最终改动写回模板源，并重新生成受影响场景验证替换、条件和裁剪。生成目录的临时修改不能直接复制回模板。生成后业务项目使用自身测试规范，不执行仓库生成矩阵。
 
