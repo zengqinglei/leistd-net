@@ -4,12 +4,12 @@
 
 ## 分层执行与时间预算
 
-按改动选最小充分集合，不在每次改动后跑全量。完整集成测试与全部模板场景交给 CI 和合入后执行，与微软"单元测试每次推送前跑、完整集成测试放构建服务器"的分层一致。
+按变化行为和依赖选择验证，不在每次编辑后跑全量。本地用目标单测和必要的真实集成定位失败，PR CI 承担完整适用回归；模板全集由合入后与发布验证。生成后的业务项目按自身[测试规范](../../template/docs/standards/testing.md)执行，未配置必过 CI 时不能把完整责任交给 CI。
 
 | 档位 | 时机 | 预算 | 内容 |
 | --- | --- | --- | --- |
 | L0 编辑循环 | 每次小改动 | ≤ 1 分钟 | 受影响项目构建 + `dotnet test <测试项目> --filter "FullyQualifiedName~<类>"`；改了某道闸门就单跑它 |
-| L1 阶段完成 / 提交前 | 交评审前 | 框架 ≤ 5 分钟，模板 ≤ 10 分钟 | `check-all.ps1` + 下表按路径选的入口 |
+| L1 阶段完成 / 推送前 | 完整改动形成后 | 框架 ≤ 5 分钟；模板以实测为准，通常目标 ≤ 10 分钟 | `check-all.ps1` + 下表按路径选的入口；不为预算跳过检查 |
 | L2 PR CI | 每次推送 PR | 墙钟 ≤ 8.5 分钟 | 完整静态闸门；依据同候选验证计划执行必要框架测试、包内容/消费、PostgreSQL/OIDC 与模板场景/阶段；未知及共享输入取完整 PR 档 |
 | L3 全集 | develop 推送、工作日夜间、发布（main 推送仅在框架或 VERSION 变化时） | 不设严格预算 | 同 L2，模板跑 `full` 档全部场景；发布等待同 SHA 的 L3 结果 |
 
@@ -19,9 +19,9 @@ L1 按改动路径选择入口：
 | --- | --- | --- |
 | 只改内部文档或 Skill（CI 白名单见 `ci.yml` 的 `framework-pack/scope`，含根 `skills/`） | `check-all.ps1` | — |
 | 随包 `framework/docs/`、模板 `template/docs/` 或项目 Skill | `check-all.ps1` + 打包内容或代表性生成检查 | 影响运行契约时加相应隔离消费或生成场景验证 |
-| 框架某组件家族的实现 | 框架全量测试 + `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时按下一行验证 |
-| 模板某个裁剪能力或某种 `ServiceRole` | 含该特性/形态的一个场景 + `identity-all-features` + 关闭侧场景（通常是 `identity`） | 前端交互变化做浏览器验证 |
-| 模板参数、条件块、公共生成逻辑、共享依赖或构建配置 | `test-template-matrix.ps1 -Tier pr` | — |
+| 框架某组件家族的实现 | 框架测试全集 + `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时验证实际生成产品 |
+| 模板支持的局部前端/后端源码，含文件内条件块 | 按下节计算场景，执行每个产品的完整适用阶段 | 前端交互变化做浏览器验证；真实依赖变化加目标集成 |
+| 模板参数/符号、computed、modifiers、公共生成逻辑、共享依赖、构建配置或未知输入 | `test-template-matrix.ps1 -Tier pr` | 静态条件覆盖辅助定位，不能替代实际生成、lint、构建和行为验证 |
 | 数据库映射、迁移、租户路由 | 受影响场景 + `test-template-postgresql-e2e.ps1` | — |
 | 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios`；令牌到期变更的 `-IncludeExpiryWait` 责任见[模板质量规范](../template/quality-assurance.md) |
 | Dockerfile、部署资产 | `-Scenarios standalone -ContainerSmokeScenarios standalone` | — |
@@ -31,11 +31,40 @@ L0–L2 不以真实时间流逝等待安全有效期（锁定、挑战、令牌
 
 模板矩阵与生成项目的集成测试需要 Docker：集成测试用 Testcontainers 起 PostgreSQL，运行时冒烟先迁移再启动 API。`full` 档在本地只在需要复现合入后失败时执行。未执行的档位与入口须在交付说明里列出。
 
-框架 L0 可收窄到目标类或家族；L1 跑 `dotnet test framework/Leistd.Framework.slnx -c Release`，覆盖其他家族的反向依赖，且保留必要的还原与构建。只使用 `--no-build` 时必须先构建本次源码，不能拿旧程序集验证新改动。
+### 框架与真实依赖
+
+框架 L0 可收窄到目标类或家族；L1 跑 `dotnet test framework/Leistd.Framework.slnx -c Release`，覆盖其他家族的反向依赖，保留必要的还原与构建。该全集包含关系型 Provider、TestServer 和真实 Redis 契约，不全是纯单测。本地缺 Redis 时按现有规则显式跳过并列为未执行；变化涉及锁实现或 Redis 接线时，必须在可达环境验证相关契约。无关的纯内存规则不因此启动 Redis。
+
+纯领域拒绝或参数判断用单测；数据库事务、HTTP 授权、协议和网络取消等依赖协作契约用目标真实集成。CI 承担完整回归，不意味着已知失败要等到 CI 才第一次复现。`--no-build` 必须先构建本次源码。
+
+### 模板本地场景集合
+
+此入口用于模板维护的局部源码；框架、仓库脚本或文档任务按上表选择入口。L1 使用完整任务基线到当前候选的差异，只支持干净、已提交的局部前端/后端源码，也支持两者混合。默认产物、全特性产物与全部文件产出场景均纳入，复用既有 planner、条件引擎和登记清单。
+
+```powershell
+$taskBase = git merge-base origin/develop HEAD
+python3 scripts/plan-quality-checks.py --local-scenarios --tier pr --base $taskBase --output .tmp/local-template-scenarios.json
+$selection = Get-Content .tmp/local-template-scenarios.json -Raw | ConvertFrom-Json
+& ./scripts/test-template-matrix.ps1 -Scenarios @($selection.Scenarios)
+```
+
+以上在 PowerShell 执行，Windows 使用本机实际 Python 命令。先更新远端引用；也可使用记录的任务基线完整 SHA，须覆盖全部任务提交。本地集合只选择产品，每个产品仍运行全部适用阶段，不传 `-ValidationPlanPath` 或跳过开关；该输出不能当作 CI 阶段裁剪计划。
+
+文件内条件的可达分支由全部产出场景覆盖；文件被裁剪的产品输入未变，不额外加入仅用于关闭侧的产品。元数据/共享/未知输入、无效基线、删除或重命名无法证明、未建模规则、脏树或选择期间输入变化，均退回登记的完整 PR 集合并说明原因。集合不一定减少；静态覆盖不替代实际生成后的 lint、构建和测试。
 
 模板维护的 L0 包含生成准备，不能承诺重新生成、还原、构建和测试都在一分钟内。可以在一个已生成的项目中用 `--filter` 或 `--include` 探索行为；最终改动写回模板源，并重新生成受影响场景验证替换、条件和裁剪。生成目录的临时修改不能直接复制回模板。生成后业务项目使用自身测试规范，不执行仓库生成矩阵。
 
 第三方 SDK 不提供可注入时间时，重复的故障场景可在测试宿主通过官方配置缩短传输等待；默认生产超时由独立组合契约验证，并保留一个真实超时行为用例。共享异步工作使用开始／释放信号与显式取消，保护性超时只拒绝挂起；入口观察不能冒称 SDK 内部等待者观察，仍需取消隔离、共享结果、请求次数和故障反例证据。测试缓存 TTL 时，计算与实际本地缓存到期共用同一官方假时钟，不能只快进一层或主动删除条目。
+
+### 审查与失败后的重跑
+
+完整可审查改动形成后，按用户或团队流程审查代码及文档一致性，可与 PR CI 并行。公共 API、权限、事务或迁移等难返工的决策可提前审查；普通小 bug 不强制增加方案会签。
+
+失败时先复现目标路径，修复后运行目标验证及受影响回归。矩阵失败使用 `-Scenarios <失败场景>` 定位，不靠猜测反复推送。审查者复核有效证据，不因更换评审者重跑无关全套；新增提交均复核增量，相关代码、配置、依赖、fixture 或平台变化使原证据失效。
+
+审查覆盖最终 head 与基线，CI 核对实际执行的 merge 候选及其 head/base 关系；不能机械要求二者 SHA 相同。base 更新后重验融合候选，发布使用最终合入 SHA。本地结果记录命令、范围、环境、实际结果及 SHA/未提交 diff 摘要；跳过不等于通过，Mac 结果不替代 Linux CI。
+
+规则依据：[Anthropic 长任务应用开发](https://www.anthropic.com/engineering/harness-design-long-running-apps)、[Claude Code 最佳实践](https://code.claude.com/docs/en/best-practices)。验证围绕可观察完成条件与真实结果，不固定增加评审代理或逐阶段会签。
 
 ## PR 的内部文档例外
 

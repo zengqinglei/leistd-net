@@ -80,6 +80,20 @@ def main():
             git('add', '.'); git('commit', '-qm', label)
             plan = planner.create_plan('pr', base, 'pull_request', '')
             assert plan['Mode'] == expected_mode, (label, plan)
+            local = planner.local_scenarios(base)
+            assert local['Kind'] == 'local-template-scenarios' and local['HeadSha'] == git('rev-parse', 'HEAD')
+            assert 'Version' not in local and 'Mode' not in local and 'CandidateSha' not in local
+            if expected_mode != 'full':
+                assert local['Selection'] == 'source-products', (label, local)
+                assert local['Scenarios'] == plan['Scenarios']
+            elif label == 'cross-layer':
+                # Independently validated single-side PR plans, excluding full-only products.
+                expected = set(json.loads((out / 'frontend-feature-plan.json').read_text())['Scenarios'])
+                expected |= set(json.loads((out / 'backend-api-plan.json').read_text())['Scenarios'])
+                assert local['Selection'] == 'source-products' and set(local['Scenarios']) == expected, local
+            else:
+                assert local['Selection'] == 'complete-pr' and set(local['Scenarios']) == registered
+            (out / (label + '-local.json')).write_text(json.dumps(local, indent=2))
             if expected_mode != 'full':
                 assert plan['FrameworkTests'] is False and plan['ConsumerProjects'] == []
                 assert {'identity', 'identity-all-features'} <= set(plan['Scenarios']) <= registered
@@ -97,15 +111,18 @@ def main():
                 prove_generation(repo, base, plan, scenarios, out, run, git)
                 prove_receipts(repo, plan, scenarios, out, run)
             elif label == 'cross-layer':
+                prove_generation(repo, base, dict(plan, Mode='local-mixed', Scenarios=local['Scenarios']), scenarios, out, run, git)
                 prove_receipts(repo, plan, scenarios, out, run)
         # Deletion, move across boundaries and later docs commit must keep the
         # original source impact. Evaluate old/new paths, never just HEAD^.
         git('reset', '--hard', base); git('rm', front); git('commit', '-qm', 'delete frontend input')
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'frontend'
+        assert planner.local_scenarios(base)['Selection'] == 'source-products'
         git('reset', '--hard', base); git('mv',front,'docs/moved-source.ts'); git('commit','-qm','cross boundary move')
         (repo / 'docs/later.md').write_text('later documentation')
         git('add','.'); git('commit','-qm','later doc change')
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'full'
+        assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
         (repo / front).write_text((repo / front).read_text() + '\n// Uncommitted edit\n')
         git('add', front); git('commit', '-qm', 'committed frontend input')
@@ -113,6 +130,13 @@ def main():
         (repo / back).write_text((repo / back).read_text() + '\n// Uncommitted backend edit\n')
         dirty = planner.create_plan('pr', base, 'pull_request', '')
         assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
+        assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
+        git('reset', '--hard', base)
+        (repo / 'untracked-input.ts').write_text('untracked')
+        assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
+        (repo / 'untracked-input.ts').unlink()
+        for invalid in ('', '0'*40, git('rev-parse','HEAD')):
+            assert planner.local_scenarios(invalid)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
         print('PASS deletion, cross-boundary rename and multi-commit conservative fallback', flush=True)
         # Put each unknown rule on BOTH sides of the diff. Otherwise a changed
@@ -131,9 +155,81 @@ def main():
             guarded = planner.create_plan('pr', rule_base, 'pull_request', '')
             assert guarded['Mode'] == 'full' and guarded['FrameworkTests'] and guarded['ConsumerProjects'] is None
             assert set(guarded['Scenarios']) == registered and 'proof unavailable' in guarded['Reason']
+            assert planner.local_scenarios(rule_base)['Selection'] == 'complete-pr'
             (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2))
             print('PASS unknown engine rule conservative fallback:', label, flush=True)
+        prove_local_products(repo, base, planner, scenarios, out, run, git)
     print('Selection and receipt evidence:', out, flush=True)
+
+
+def prove_local_products(repo, base, planner, scenarios, out, run, git):
+    """Prove conditional products, unchanged omissions and separate CI schema."""
+    git('reset', '--hard', base)
+    source = 'template/frontend/src/app/app.spec.ts'
+    path = repo / source
+    path.write_text(path.read_text() + '\n//#if (IncludeNotifications)\n// local branch fixture\n//#endif\n')
+    git('add', '.'); git('commit', '-qm', 'local conditional source')
+    selected = planner.local_scenarios(base)
+    assert selected['Selection'] == 'source-products', selected
+    config = json.loads((repo / 'template/.template.config/template.json').read_text())
+    symbols = {name: planner.coverage.symbol_values(config, planner.coverage.parse_cli_arguments(config, info['Arguments']))
+               for name, info in scenarios.items() if name in selected['Scenarios']}
+    assert all(values['SpaFrontend'] for values in symbols.values()), selected
+    assert any(values['SpaFrontend'] and values['IncludeNotifications'] for values in symbols.values())
+    assert any(values['SpaFrontend'] and not values['IncludeNotifications'] for values in symbols.values())
+    plan = planner.create_plan('pr',base,'pull_request','')
+    assert plan['Scenarios'] == selected['Scenarios']
+    prove_generation(repo, base, dict(plan, Mode='local-conditional'), scenarios, out, run, git)
+    local_file = out / 'conditional-local.json'
+    run('local-cli', ['python3','scripts/plan-quality-checks.py','--local-scenarios','--tier','pr',
+                     '--base',base,'--output',str(local_file)], repo)
+    assert json.loads(local_file.read_text()) == selected
+    for flags in (['--tier','full'], ['--tier','pr','--github-output'],
+                  ['--tier','pr','--docs-only','true'], ['--tier','pr','--candidate-input','a'*40]):
+        run('local-invalid-' + str(len(flags)) + '-' + flags[-1],
+            ['python3','scripts/plan-quality-checks.py','--local-scenarios',*flags,
+             '--output',str(out/'invalid-local.json')], repo, success=False)
+    run('local-not-ci-plan', ['pwsh','-NoProfile','-Command',
+        "$ErrorActionPreference='Stop'; . ./scripts/quality-validation-plan.ps1; . ./scripts/template-matrix-scenarios.ps1; "
+        f"Read-QualityValidationPlan -Path '{local_file}' -ExpectedTier pr"], repo, success=False)
+    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text()
+    # A real new commit during selection must invalidate the computed snapshot.
+    original = planner.git
+    fixture_head = git('rev-parse', 'HEAD')
+    head_reads = 0
+    def changing_head(*arguments):
+        nonlocal head_reads
+        if arguments == ('rev-parse', 'HEAD'):
+            head_reads += 1
+            if head_reads == 2:
+                git('commit', '--allow-empty', '-qm', 'selection race')
+        return original(*arguments)
+    try:
+        planner.git = changing_head
+        raced = planner.local_scenarios(base)
+        assert raced['Selection'] == 'complete-pr' and 'HEAD changed' in raced['Reason']
+    finally:
+        planner.git = original
+        git('reset', '--hard', fixture_head)
+    original_producers = planner.source_producers
+    untracked = repo / 'during-selection.cs'
+    producer_calls = 0
+    def changing_tree(*arguments):
+        nonlocal producer_calls
+        producers = original_producers(*arguments)
+        producer_calls += 1
+        # create_plan first evaluates old/new; inject during local selection itself.
+        if producer_calls == 3:
+            untracked.write_text('new input')
+        return producers
+    try:
+        planner.source_producers = changing_tree
+        raced = planner.local_scenarios(base)
+        assert raced['Selection'] == 'complete-pr' and 'working tree' in raced['Reason']
+    finally:
+        planner.source_producers = original_producers
+        untracked.unlink(missing_ok=True)
+    print('PASS local conditional/mixed products, snapshot races and separate CI contract', flush=True)
 
 
 def prove_generation(repo, base, plan, scenarios, out, run, git):
@@ -169,12 +265,12 @@ def prove_generation(repo, base, plan, scenarios, out, run, git):
                     content = re.sub(rb'<UserSecretsId>[^<]+</UserSecretsId>',b'<UserSecretsId>GENERATED</UserSecretsId>',content)
                 files[path.relative_to(target).as_posix()] = hashlib.sha256(content).hexdigest()
             digests[version,name] = files
-    omitted = 'backend/' if label == 'frontend' else 'frontend/'
+    omitted = 'backend/' if label == 'frontend' else ('frontend/' if label == 'backend' else None)
     selected = set(plan['Scenarios'])
     for name in {name for version,name in digests}:
         old_files, new_files = digests['base',name],digests['head',name]
         delta = {path for path in old_files.keys() | new_files.keys() if old_files.get(path) != new_files.get(path)}
-        assert not any(path.startswith(omitted) for path in delta), (label,name,'omitted stage input changed',delta)
+        assert omitted is None or not any(path.startswith(omitted) for path in delta), (label,name,'omitted stage input changed',delta)
         assert name in selected or not delta, (label,name,'omitted scenario output changed',delta)
     (out / (label + '-generation-digests.json')).write_text(json.dumps({f'{version}/{name}': files for (version,name),files in digests.items()},indent=2))
     print('PASS actual generation: omitted inputs and unselected products unchanged:', label, flush=True)

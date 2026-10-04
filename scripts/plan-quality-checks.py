@@ -148,6 +148,41 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
     return finish(plan)
 
 
+def local_scenarios(base: str) -> dict:
+    """Select full local products from file producers, independently of CI stages."""
+    plan = create_plan('pr', base, 'pull_request', '')
+    scenarios = coverage.load_scenarios()
+    registered = {name: info for name, info in scenarios.items() if 'pr' in info['Slices']}
+    head = plan['CandidateSha']
+    result = dict(Kind='local-template-scenarios', HeadSha=head, BaseSha=base,
+                  Scope='pr', Scenarios=list(registered), Selection='complete-pr',
+                  Reason=plan['Reason'])
+    if not re.fullmatch(r'[0-9a-f]{40}', base) or base == '0' * 40 or base == head:
+        return result
+    try:
+        if git('status', '--porcelain', '--untracked-files=normal'):
+            return result
+        paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z',
+                    base, head).split('\0')[:-1]
+        if not paths or not all(frontend_source(path) or backend_source(path) for path in paths):
+            return result
+        config_path = 'template/.template.config/template.json'
+        old = json.loads(git('show', f'{base}:{config_path}'))
+        current = json.loads(git('show', f'{head}:{config_path}'))
+        if old != current:
+            return result
+        selected = {'identity', 'identity-all-features'}
+        for path in paths:
+            selected |= source_producers(old, path, registered) | source_producers(current, path, registered)
+        if git('rev-parse', 'HEAD') != head or git('status', '--porcelain', '--untracked-files=normal'):
+            raise ValueError('working tree or HEAD changed during selection')
+        result.update(Scenarios=[name for name in registered if name in selected],
+                      Selection='source-products', Reason='All changed source products and default/all-feature products')
+    except (subprocess.CalledProcessError, ValueError, KeyError, OSError, IndexError, UnicodeError) as error:
+        result['Reason'] = f'Complete PR: local product proof unavailable ({error})'
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tier', choices=['pr', 'full'], default='full')
@@ -157,8 +192,13 @@ def main() -> None:
     parser.add_argument('--docs-only', choices=['true', 'false'], default='false')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--github-output', action='store_true')
+    parser.add_argument('--local-scenarios', action='store_true',
+                        help='Output local L1 scenario names for -Scenarios; no CI stage reduction')
     args = parser.parse_args()
-    plan = create_plan(args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
+    if args.local_scenarios and (args.tier != 'pr' or args.github_output or args.docs_only != 'false' or args.candidate_input):
+        parser.error('--local-scenarios requires --tier pr and cannot use CI output, docs-only or candidate-input')
+    plan = local_scenarios(args.base) if args.local_scenarios else create_plan(
+        args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(plan, ensure_ascii=False, separators=(',', ':'))
     args.output.write_text(text, encoding='utf-8')
