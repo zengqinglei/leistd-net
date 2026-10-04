@@ -6,6 +6,10 @@ using System.Text.Json;
 using CompanyName.ProjectName.Api.Auth;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+#if (!ResourceBrowserSession)
+using Microsoft.AspNetCore.Http;
+using Leistd.ServiceClient.Abstractions;
+#endif
 #if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication;
@@ -60,6 +64,57 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         Assert.True(document.RootElement.GetProperty("runtimeOptions").GetProperty("configProperties")
             .GetProperty(UpdateConfigAsBlocking).GetBoolean());
     }
+
+#if (!ResourceBrowserSession)
+    // 在真实认证管道内调用宿主注册的读取器，失败 Bearer 不能作为下游用户令牌返回。
+    [Theory]
+    [InlineData("malformed")]
+    [InlineData("invalid-signature")]
+    public async Task Pure_api_user_access_token_requires_successful_bearer_authentication(string kind)
+    {
+        using var issuer = new RotatingIssuer();
+        using var host = Host(baseline.Factory, issuer).WithWebHostBuilder(builder => builder.ConfigureTestServices(
+            services => services.AddSingleton<IStartupFilter, AccessTokenProbe>()));
+        using var client = Client(host);
+        var valid = issuer.AccessToken(issuer.Current);
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(client, valid));
+
+        using var forgedRsa = RSA.Create(2048);
+        var rejected = kind == "malformed" ? "rejected-token" :
+            issuer.AccessToken(new RsaSecurityKey(forgedRsa) { KeyId = issuer.Current.KeyId });
+        using var validRequest = new HttpRequestMessage(HttpMethod.Get, AccessTokenProbe.Path);
+        validRequest.Headers.Authorization = new("Bearer", valid);
+        using var validResponse = await client.SendAsync(validRequest);
+        Assert.Equal(HttpStatusCode.OK, validResponse.StatusCode);
+        Assert.Equal(valid, await validResponse.Content.ReadAsStringAsync());
+
+        using var rejectedRequest = new HttpRequestMessage(HttpMethod.Get, AccessTokenProbe.Path);
+        rejectedRequest.Headers.Authorization = new("Bearer", rejected);
+        using var rejectedResponse = await client.SendAsync(rejectedRequest);
+        Assert.Equal(HttpStatusCode.NoContent, rejectedResponse.StatusCode);
+        Assert.Empty(await rejectedResponse.Content.ReadAsStringAsync());
+    }
+
+    private sealed class AccessTokenProbe : IStartupFilter
+    {
+        public const string Path = "/test/user-access-token";
+
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Map(Path, branch =>
+            {
+                branch.UseAuthentication();
+                branch.Run(async context =>
+                {
+                    var token = await context.RequestServices.GetRequiredService<IUserAccessTokenAccessor>().GetAccessTokenAsync();
+                    if (token is null) context.Response.StatusCode = (int)HttpStatusCode.NoContent;
+                    else await context.Response.WriteAsync(token);
+                });
+            });
+            next(app);
+        };
+    }
+#endif
 
     [Fact]
     public async Task A_bearer_token_signed_by_a_newly_published_key_is_accepted_on_the_first_request()
