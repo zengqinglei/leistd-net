@@ -97,8 +97,9 @@ backend/tests/
 - 时间边界（锁定、挑战与验证码有效期、令牌到期、限频窗口）在单元或集成测试里用 `FakeTimeProvider` 或显式时刻验证，
   不靠真实时间流逝等它过去。集成测试替换容器里的 `TimeProvider`（`ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟），
   应用时钟 `IClock`、Cookie 认证与 OpenIddict 的签发和验证一起跟随；起点取当前时刻，落在过去会让刚写入的缓存条目立即过期。
-  **不跟随**的有：缓存条目的过期（内存缓存与 Redis 各用自己的时钟）、Data Protection 的限时保护器、OIDC 处理器对 id_token 寿命与 nonce 的校验。
-  这些官方机制的过期由它们自己负责，测试不快进它们，也不为了能快进而另写一套判定。
+  缓存条目的过期默认不跟随该时钟：内存缓存与 Redis 各用自己的时钟。测试自身的缓存 TTL 时，可以通过官方
+  `MemoryCacheOptions.Clock` 在测试容器中显式接入同一假时钟，并保留真实 MemoryCache／HybridCache；TTL 计算和本地到期必须一起推进，验证到期前与到期时刻，不能用主动删除冒充到期。
+  Redis、Data Protection 的限时保护器、OIDC 处理器对 id_token 寿命与 nonce 的校验仍使用各自机制，不手写替代判定来快进。
   项目自己的挑战规则（如两步验证登录挑战、邮箱验证码）把到期时刻存在挑战里、用注入的时钟判定，缓存过期只负责回收，所以能快进。
 - 端到端只验接线与生效值（锁定后返回什么、管理员解锁后能登录、配置的寿命已落到签发的令牌上），不等安全窗口过期；
   确需跨进程观察真实到期时，用配置把窗口缩短（见[部署说明](../deploy/README.md)中的 `OAuth:AccessTokenLifetime`），并断言缩短已生效。
@@ -127,6 +128,8 @@ npm run build
 ```
 
 单测由 Vitest 在 Playwright 驱动的真实 Chromium 里运行（无头）。新机器首次运行前安装一次浏览器：`npx playwright install chromium`。
+
+保存状态最短时长与搜索防抖使用 Vitest 假计时器验证边界，不睡真实业务时长。先完成宿主／路由初始化，再伪造 Date、timeout 与 interval（RxJS 防抖使用 interval），保留原生 rAF、performance 和微任务；用 `vi.advanceTimersByTimeAsync` 推进，配合 fixture 稳定与 DOM 断言。边界期望独立于生产常量，teardown 清理业务计时器并恢复真实计时器；HTTP 验证与真实 Chromium 隔离保留。
 
 - 用例名（`describe` / `it`）用英文句子，小写开头，写出行为与期望（如 `keeps the dialog open when saving fails`）；中文只出现在注释与测试数据里。名字装不下的前因后果写进上方注释。
 - service、pipe、复杂状态和共享组件覆盖输入、输出、空态与错误态。

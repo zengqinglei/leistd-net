@@ -15,6 +15,9 @@ using OpenIddict.Client.SystemNetHttp;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Internal;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -285,19 +288,31 @@ public sealed class OfficialClientTests : IAsyncLifetime
     [Fact]
     public async Task Hybrid_cache_never_reads_or_writes_distributed_storage_and_respects_output_expiry()
     {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 4, 0, 0, 0, TimeSpan.Zero));
         var distributed = new RejectDistributedCache();
         var services = new ServiceCollection(); services.AddLogging(); services.AddSingleton<IDistributedCache>(distributed);
+        services.AddSingleton<TimeProvider>(time);
+        services.AddMemoryCache(options => options.Clock = new MemoryClock(time));
         services.AddHybridCache();
         await using var provider = services.BuildServiceProvider();
-        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ILogger<TokenCache>>());
+        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ILogger<TokenCache>>(), time);
         var key = TokenCache.Key("test");
         var count = 0;
-        ValueTask<TokenCache.Token> Fetch(CancellationToken _) => ValueTask.FromResult(new TokenCache.Token($"token-{++count}", DateTimeOffset.UtcNow.AddSeconds(11)));
+        ValueTask<TokenCache.Token> Fetch(CancellationToken _) => ValueTask.FromResult(new TokenCache.Token($"token-{++count}", time.GetUtcNow().AddSeconds(11)));
         Assert.Equal("token-1", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
         Assert.Equal("token-1", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
-        await Task.Delay(1200);
+        time.Advance(TimeSpan.FromMilliseconds(999));
+        Assert.Equal("token-1", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
+        Assert.Equal(1, count);
+        time.Advance(TimeSpan.FromMilliseconds(1));
         Assert.Equal("token-2", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
+        Assert.Equal(2, count);
         Assert.Equal(0, distributed.Reads);
         Assert.Equal(0, distributed.Writes);
+    }
+    // 两级本地缓存与 TokenCache 的 TTL 计算共享官方假时钟。
+    private sealed class MemoryClock(TimeProvider time) : ISystemClock
+    {
+        public DateTimeOffset UtcNow => time.GetUtcNow();
     }
 }

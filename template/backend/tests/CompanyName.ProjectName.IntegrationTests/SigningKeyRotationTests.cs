@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CompanyName.ProjectName.Api.Auth;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 #if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication;
@@ -23,6 +25,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
+using OpenIddict.Validation.SystemNetHttp;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -103,8 +106,9 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
     public async Task An_unavailable_key_set_keeps_the_known_keys_and_is_not_requested_per_request()
     {
         using var issuer = new RotatingIssuer();
-        using var host = Host(baseline.Factory, issuer);
+        using var host = Host(baseline.Factory, issuer, fetchTimeout: TimeSpan.FromMilliseconds(300));
         using var client = Client(host);
+        client.Timeout = TimeSpan.FromSeconds(5);
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
         var attempts = issuer.DiscoveryRequests;
         issuer.KeySetUnavailable = true;
@@ -114,7 +118,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         for (var attempt = 0; attempt < 10; attempt++)
             Assert.Equal(HttpStatusCode.Unauthorized, await MeAsync(client, issuer.AccessToken(forged)));
 
-        // 一次刷新尝试（发现文档 + JWKS，官方重试在抓取超时内），而不是每个请求一次
+        // 一次刷新尝试（发现文档 + JWKS，保留官方重试管道；短超时不验证重试次数），而不是每个请求一次
         Assert.Equal(attempts + 1, issuer.DiscoveryRequests);
         // 旧配置继续可用：合法令牌照常通过
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
@@ -156,6 +160,22 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
             record => record.Level >= LogLevel.Information && record.Category?.Contains("SigningKey", StringComparison.Ordinal) == true);
     }
 
+    [Fact]
+    public async Task The_production_fetch_client_keeps_the_ten_second_timeout()
+    {
+        using var issuer = new RotatingIssuer();
+        var timeouts = new System.Collections.Concurrent.ConcurrentBag<TimeSpan>();
+        using var host = Host(baseline.Factory, issuer, observeClient: client => timeouts.Add(client.Timeout));
+        using var client = Client(host);
+
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
+        var expected = TimeSpan.FromSeconds(10);
+        Assert.Equal(expected, RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout);
+        Assert.NotEmpty(timeouts);
+        // 观察官方 SDK 实际创建的客户端，在生产配置完成后记录有效值，不猜动态客户端名称。
+        Assert.All(timeouts, timeout => Assert.Equal(expected, timeout));
+    }
+
     // JWKS 迟迟不返回：请求等到抓取超时为止，按原有公钥判定，不无限挂起
     [Fact]
     public async Task A_slow_key_set_is_bounded_by_the_fetch_timeout()
@@ -186,16 +206,38 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
         var fetches = issuer.KeySetRequests;
         issuer.Rotate();
-        issuer.KeySetDelay = TimeSpan.FromSeconds(3);
+        var gate = new FetchGate();
+        issuer.Gate = gate;
         var token = issuer.AccessToken(issuer.Current);
-
-        using var abandon = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        using var abandon = new CancellationTokenSource();
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var cancelled = MeAsync(client, token, abandon.Token);
-        var waiting = MeAsync(client, token);
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
-        Assert.Equal(HttpStatusCode.OK, await waiting);
-        Assert.Equal(fetches + 1, issuer.KeySetRequests);
+        Task<HttpStatusCode>? waiting = null;
+        try
+        {
+            await gate.Started.Task.WaitAsync(watchdog.Token);
+            waiting = MeAsync(client, token, watchdog.Token, "waiting");
+            await issuer.WaiterEntered.Task.WaitAsync(watchdog.Token);
+            Assert.False(waiting.IsCompleted, "The second waiter completed before the shared fetch was released.");
+            abandon.Cancel();
+            var cancellation = await Record.ExceptionAsync(() => cancelled.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.False(gate.TransportCancelled);
+            Assert.IsAssignableFrom<OperationCanceledException>(cancellation);
+            Assert.False(waiting.IsCompleted);
+            gate.Release.TrySetResult();
+            Assert.Equal(HttpStatusCode.OK, await waiting.WaitAsync(watchdog.Token));
+            Assert.Equal(fetches + 1, issuer.KeySetRequests);
+            Assert.False(gate.TransportCancelled);
+        }
+        finally
+        {
+            gate.Release.TrySetResult();
+            abandon.Cancel();
+            watchdog.Cancel();
+            try { await cancelled.WaitAsync(TimeSpan.FromSeconds(5)); } catch (OperationCanceledException) { }
+            if (waiting is not null)
+                try { await waiting.WaitAsync(TimeSpan.FromSeconds(5)); } catch (OperationCanceledException) { }
+        }
     }
 
     [Theory]
@@ -289,15 +331,17 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
     }
 #endif
 
-    private static async Task<HttpStatusCode> MeAsync(HttpClient client, string token, CancellationToken cancellationToken = default)
+    private static async Task<HttpStatusCode> MeAsync(HttpClient client, string token, CancellationToken cancellationToken = default, string? marker = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
         request.Headers.Authorization = new("Bearer", token);
+        if (marker is not null) request.Headers.Add("X-Test-Waiter", marker);
         using var response = await client.SendAsync(request, cancellationToken);
         return response.StatusCode;
     }
 
-    private static WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, RotatingIssuer issuer, bool logs = false) =>
+    private static WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, RotatingIssuer issuer, bool logs = false,
+        TimeSpan? fetchTimeout = null, Action<HttpClient>? observeClient = null) =>
         factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", "resource-api").ConfigureTestServices(services =>
         {
             // 两条链路都用真实的配置管理器：不给静态配置，只替换它们的 HTTP
@@ -305,6 +349,13 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
             services.Configure<OpenIdConnectOptions>(AuthenticationSchemeNames.OpenIdConnect, options => options.BackchannelHttpHandler = issuer);
 #endif
             services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new ValidationTransport(issuer));
+            services.AddSingleton<IStartupFilter>(new RequestEntry(issuer.WaiterEntered));
+            if (fetchTimeout is not null || observeClient is not null)
+                services.PostConfigure<OpenIddictValidationSystemNetHttpOptions>(options => options.HttpClientActions.Add(client =>
+                {
+                    if (fetchTimeout is { } timeout) client.Timeout = timeout;
+                    observeClient?.Invoke(client);
+                }));
             if (logs)
             {
                 // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
@@ -339,6 +390,44 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         return ProjectWebApplicationFactory.AssertSessionCookieContract(callback);
     }
 #endif
+
+    // next() 已启动当前宿主的真实请求管道；只观察入口，不声称观察 SDK 内部加入等待者。
+    private sealed class RequestEntry(TaskCompletionSource entered) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (context, nextRequest) =>
+            {
+                var pending = nextRequest();
+                if (context.Request.Headers["X-Test-Waiter"] == "waiting") entered.TrySetResult();
+                await pending;
+            });
+            next(app);
+        };
+    }
+
+    private sealed class FetchGate
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int cancelled;
+        public bool TransportCancelled => Volatile.Read(ref cancelled) != 0;
+
+        public async Task WaitAsync(CancellationToken cancellationToken)
+        {
+            using var registration = cancellationToken.Register(() => Interlocked.Exchange(ref cancelled, 1));
+            try
+            {
+                Started.TrySetResult();
+                await Release.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+            }
+            finally
+            {
+                // WaitAsync 的取消续体可能先释放登记，仍须记录真实传输令牌的最终取消状态。
+                if (cancellationToken.IsCancellationRequested) Interlocked.Exchange(ref cancelled, 1);
+            }
+        }
+    }
 
     // OpenIddict 验证的 HTTP 客户端指向签发方替身
     private sealed class ValidationTransport(RotatingIssuer issuer) : IHttpMessageHandlerBuilderFilter
@@ -376,6 +465,8 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         public bool PublishPrevious { get; set; } = true;
         /// <summary>JWKS 响应前的延迟，用于验证抓取超时。</summary>
         public TimeSpan KeySetDelay { get; set; }
+        public FetchGate? Gate { get; set; }
+        public TaskCompletionSource WaiterEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         private static RsaSecurityKey NewKey(string id) => new(RSA.Create(2048)) { KeyId = id };
 
@@ -416,6 +507,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
                     });
                 case "/jwks":
                     Interlocked.Increment(ref _keySetRequests);
+                    if (Gate is { } gate) await gate.WaitAsync(cancellationToken);
                     if (KeySetDelay > TimeSpan.Zero) await Task.Delay(KeySetDelay, cancellationToken);
                     if (KeySetUnavailable) return new HttpResponseMessage(HttpStatusCode.NotFound);
                     return Json(new { keys = new[] { Current, PublishPrevious ? Previous : null }.OfType<RsaSecurityKey>().Select(Jwk).ToArray() });
