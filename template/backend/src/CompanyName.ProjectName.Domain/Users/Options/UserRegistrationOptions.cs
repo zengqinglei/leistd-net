@@ -8,17 +8,20 @@ namespace CompanyName.ProjectName.Domain.Users.Options;
 public class UserRegistrationOptions
 {
     public const string SectionName = "UserRegistration";
+#if (Email)
 
     /// <summary>
     /// 是否开启邮箱验证（若不开启则只验证图形验证码）
     /// </summary>
     public bool EnableEmailVerification { get; set; } = false;
+#endif
 
     /// <summary>
     /// 图形验证码有效期（分钟）
     /// </summary>
     [Range(1, 60)]
     public int CaptchaExpiryMinutes { get; set; } = 5;
+#if (Email)
 
     /// <summary>
     /// 邮箱验证码有效期（分钟）
@@ -37,4 +40,5 @@ public class UserRegistrationOptions
     /// </summary>
     [Range(1, 20)]
     public int EmailCodeMaxAttempts { get; set; } = 5;
+#endif
 }

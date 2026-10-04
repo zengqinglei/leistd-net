@@ -23,7 +23,9 @@ const IDENTITY = 'layout.sidebar.groupIdentity';
 //#if (OpenIddictServer)
 const DEVELOPER = 'layout.sidebar.groupDeveloper';
 //#endif
+//#if (IncludeOperationRecords)
 const AUDIT = 'layout.sidebar.groupAudit';
+//#endif
 const SYSTEM = 'layout.sidebar.groupSystem';
 //#else
 const WORK = 'Work';
@@ -32,7 +34,9 @@ const IDENTITY = 'Identity & access';
 //#if (OpenIddictServer)
 const DEVELOPER = 'Developer';
 //#endif
+//#if (IncludeOperationRecords)
 const AUDIT = 'Audit';
+//#endif
 const SYSTEM = 'System';
 //#endif
 
@@ -107,8 +111,10 @@ describe('DefaultSidebar menu groups', () => {
       PERMISSIONS.users.default,
       PERMISSIONS.roles.default,
       PERMISSIONS.settings.default,
+      //#if (IncludeOperationRecords)
       PERMISSIONS.operationRecords.default,
-      //#if (LocalIdentity)
+      //#endif
+      //#if (LocalIdentity && IncludeMultiTenancy)
       PERMISSIONS.tenants.default,
       //#endif
       //#if (OpenIddictServer)
@@ -119,7 +125,10 @@ describe('DefaultSidebar menu groups', () => {
     //#if (OpenIddictServer)
     expected.push(DEVELOPER);
     //#endif
-    expected.push(AUDIT, SYSTEM);
+    //#if (IncludeOperationRecords)
+    expected.push(AUDIT);
+    //#endif
+    expected.push(SYSTEM);
 
     const sidebar = build({ platform: true, permissions });
 

@@ -1,14 +1,17 @@
 // 授权结果处理器在所有服务形态下都存在（被拒的写端点要留痕），因此本 using 无条件
 using CompanyName.ProjectName.Api.Auth;
+#if (!IncludeMultiTenancy)
+using CompanyName.ProjectName.Api.Middlewares;
+#endif
 using CompanyName.ProjectName.Application.Shared;
 using Leistd.Security.Claims;
-#if (OpenIddictServer)
+#if (OpenIddictServer && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-#if (OpenIddictServer)
+#if (OpenIddictServer && IncludeMultiTenancy)
 using OpenIddict.Abstractions;
 #endif
 using System.Security.Claims;
@@ -31,8 +34,8 @@ public static class DependencyInjection
     /// 注册 Api 层授权：默认策略、相关 Handler 与内部控制面策略
     /// </summary>
     /// <remarks>
-    /// 两种形态都在这里定案，组合根只有一行调用：本地身份形态的主体来自 Bearer 或会话 Cookie
-    /// 并要求账号可用；资源服务形态来自 Bearer 或服务端 Cookie、账号状态由签发方负责。
+    /// 各形态都在这里定案，组合根只有一行调用：本地身份形态的主体来自 Bearer 或会话 Cookie
+    /// 并要求账号可用；资源服务形态来自 Bearer（带浏览器会话时还有服务端 Cookie）、账号状态由签发方负责。
     /// </remarks>
     public static IServiceCollection AddApiAuthorization(this IServiceCollection services)
     {
@@ -46,7 +49,7 @@ public static class DependencyInjection
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claimTypeOptions) =>
         {
             var claimTypes = claimTypeOptions.Value;
-#if (RemoteTokenAuth)
+#if (ResourceBrowserSession)
             // 资源服务按请求选择 Bearer 或 Cookie，默认策略要求自然人；机器端点另设策略。
             var currentUser = new AuthorizationPolicyBuilder(
                     AuthenticationSchemeNames.Smart)
@@ -55,6 +58,15 @@ public static class DependencyInjection
                 .Build();
             options.DefaultPolicy = currentUser;
             // 组件的自用端点按名字要这条策略，见 ApiPolicies.CurrentUser
+            options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
+#elif (RemoteTokenAuth)
+            // 纯资源 API 只有 Bearer，默认策略要求自然人；机器端点另设策略。
+            var currentUser = new AuthorizationPolicyBuilder(
+                    OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
+                .Build();
+            options.DefaultPolicy = currentUser;
             options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
 #else
             // 自然人主体可以来自两种方案：Bearer（签发形态）与会话 Cookie
@@ -81,7 +93,7 @@ public static class DependencyInjection
             // 组件不套宿主默认策略，要求什么必须写在映射处，见 ApiPolicies.CurrentUser
             options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
 
-#if (OpenIddictServer)
+#if (OpenIddictServer && IncludeMultiTenancy)
             AddMachineScopePolicy(options, claimTypes, TenantConnectionPolicies.RuntimeRead, TenantConnectionScopes.RuntimeRead);
             AddMachineScopePolicy(options, claimTypes, TenantConnectionPolicies.MigrationRead, TenantConnectionScopes.MigrationRead);
 #endif
@@ -93,9 +105,13 @@ public static class DependencyInjection
 
     // 与 ICurrentUser.Id 同一口径：主体标识（按 ClaimTypeOptions.UserIds 读取）是用户 Id 才是自然人
     private static bool IsNaturalPerson(ClaimsPrincipal user, ClaimTypeOptions claimTypes) =>
-        Guid.TryParse(claimTypes.FindUserId(user), out _);
+        Guid.TryParse(claimTypes.FindUserId(user), out _)
+#if (!IncludeMultiTenancy)
+        && HostPrincipalMiddleware.IsHost(user, claimTypes)
+#endif
+        ;
 
-#if (OpenIddictServer)
+#if (OpenIddictServer && IncludeMultiTenancy)
     /// <summary>
     /// 注册一条只对<b>机器主体</b>开放的内部控制面策略
     /// </summary>

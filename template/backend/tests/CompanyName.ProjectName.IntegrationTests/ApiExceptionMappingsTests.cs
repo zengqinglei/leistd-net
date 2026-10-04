@@ -4,7 +4,9 @@ using CompanyName.ProjectName.Application.Shared.Paging.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 #if (LocalIdentity)
+#if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Errors;
+#endif
 using CompanyName.ProjectName.Application.Auth.Errors;
 #endif
 #if (ExternalLogin)
@@ -58,19 +60,23 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
     [InlineData(NotificationErrorCodes.IdentityCannotOperate, StatusCodes.Status403Forbidden)]
 #endif
     [InlineData(PermissionErrorCodes.SubjectNotFound, StatusCodes.Status404NotFound)]
+#if (IncludeMultiTenancy)
     [InlineData(MultiTenancyErrorCodes.NotFound, StatusCodes.Status404NotFound)]
+#endif
 #if (LocalIdentity)
     [InlineData(AuthErrorCodes.CannotRevokeCurrentSession, StatusCodes.Status409Conflict)]
     [InlineData(AuthErrorCodes.EmailAlreadyUsed, StatusCodes.Status409Conflict)]
 #endif
     [InlineData(UserErrorCodes.EmailAlreadyUsed, StatusCodes.Status409Conflict)]
+#if (IncludeMultiTenancy)
     [InlineData(MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant, StatusCodes.Status409Conflict)]
+#endif
+#if (Email)
     [InlineData(AppSettingErrorCodes.EmailVerificationKeyMissing, StatusCodes.Status409Conflict)]
-#if (LocalIdentity)
     [InlineData(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests)]
     [InlineData(AuthErrorCodes.EmailVerificationUnavailable, StatusCodes.Status503ServiceUnavailable)]
-#endif
     [InlineData(AppSettingErrorCodes.TestEmailFailed, StatusCodes.Status503ServiceUnavailable)]
+#endif
     public void Stable_error_codes_keep_their_declared_http_semantics(string code, int expectedStatusCode)
     {
         Assert.Equal(expectedStatusCode, ComposedOptions().CodeStatusMappings[code]);
@@ -86,7 +92,10 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
             typeof(PagingErrorCodes), typeof(RoleErrorCodes), typeof(SecurityErrorCodes),
             typeof(AppSettingErrorCodes), typeof(UserErrorCodes),
 #if (LocalIdentity)
-            typeof(AuthErrorCodes), typeof(TenantErrorCodes),
+            typeof(AuthErrorCodes),
+#if (IncludeMultiTenancy)
+            typeof(TenantErrorCodes),
+#endif
 #endif
 #if (ExternalLogin)
             typeof(ExternalAuthErrorCodes),

@@ -1,7 +1,10 @@
+// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
+  //#if (Email)
   DestroyRef,
+  //#endif
   OnInit,
   effect,
   inject,
@@ -45,7 +48,11 @@ import {
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
+//#if (Email)
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
+//#else
+import { CaptchaOutputDto } from '../../models/account.dto';
+//#endif
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
 
@@ -82,7 +89,9 @@ export class Register implements OnInit {
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  //#if (Email)
   private destroyRef = inject(DestroyRef);
+  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
@@ -100,9 +109,12 @@ export class Register implements OnInit {
 
   protected readonly showConfirmPassword = signal(false);
 
+//#if (Email)
   public securityConfig = signal<SecurityConfigOutputDto | null>(null);
+//#endif
   public captchaData = signal<CaptchaOutputDto | null>(null);
 
+//#if (Email)
   public countdown = signal(0);
   private countdownIntervalId: ReturnType<typeof setInterval> | null = null;
   private readonly emailVerificationChallenge = signal<{
@@ -113,12 +125,15 @@ export class Register implements OnInit {
   private _isSendingEmailCode = signal(false);
   public readonly isSendingEmailCode = this._isSendingEmailCode.asReadonly();
 
+//#endif
   // 注册表单模型（Signal Forms）
   private readonly model = signal({
     email: '',
     username: '',
     captchaCode: '',
+//#if (Email)
     emailVerificationCode: '',
+//#endif
     password: '',
     confirmPassword: '',
   });
@@ -132,9 +147,11 @@ export class Register implements OnInit {
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
     required(path.captchaCode);
     maxLength(path.captchaCode, 10);
+//#if (Email)
     required(path.emailVerificationCode, {
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
+//#endif
     required(path.password);
     minLength(path.password, PASSWORD_MIN_LENGTH);
     maxLength(path.password, PASSWORD_MAX_LENGTH);
@@ -152,20 +169,26 @@ export class Register implements OnInit {
   private lastDerivedUsername = '';
 
   constructor() {
+//#if (Email)
     this.destroyRef.onDestroy(() => this.clearCountdown());
 
+//#endif
     // 监听 email/username 变化：从邮箱前缀自动推导 username，
     // 一旦用户手动改动 username 即停止推导（等价原 valueChanges 逻辑）。
     effect(() => {
       const email = this.model().email;
+//#if (Email)
       const challenge = this.emailVerificationChallenge();
+//#endif
       untracked(() => {
+//#if (Email)
         if (challenge && challenge.email !== this.normalizeEmail(email)) {
           this.emailVerificationChallenge.set(null);
           this.model.update((m) => ({ ...m, emailVerificationCode: '' }));
           this.clearCountdown();
         }
 
+//#endif
         const currentUsername = this.model().username;
 
         // 用户手动改动了 username（当前值既非空也不等于我们上次自动写入的值）
@@ -187,9 +210,12 @@ export class Register implements OnInit {
   }
 
   ngOnInit() {
+//#if (Email)
     this.loadSecurityConfig();
+//#endif
     this.refreshCaptcha();
   }
+  //#if (Email)
 
   async loadSecurityConfig() {
     try {
@@ -199,6 +225,7 @@ export class Register implements OnInit {
       this.showRequestError(err);
     }
   }
+  //#endif
 
   async refreshCaptcha() {
     try {
@@ -209,6 +236,7 @@ export class Register implements OnInit {
       this.showRequestError(err);
     }
   }
+  //#if (Email)
 
   async sendEmailCode() {
     const { email, captchaCode } = this.model();
@@ -265,6 +293,8 @@ export class Register implements OnInit {
       this._isSendingEmailCode.set(false);
     }
   }
+  //#endif
+  //#if (Email)
 
   private startCountdown(seconds: number) {
     this.clearCountdown();
@@ -278,6 +308,8 @@ export class Register implements OnInit {
       }
     }, 1000);
   }
+  //#endif
+  //#if (Email)
 
   private clearCountdown() {
     if (this.countdownIntervalId) {
@@ -286,6 +318,7 @@ export class Register implements OnInit {
     }
     this.countdown.set(0);
   }
+  //#endif
 
   async onSubmit() {
     if (this.registerForm().invalid()) {
@@ -294,6 +327,8 @@ export class Register implements OnInit {
     }
 
     const formValue = this.model();
+    //#if (Email)
+
     const emailVerificationEnabled = this.securityConfig()?.enableEmailVerification === true;
     const challenge = this.emailVerificationChallenge();
     if (
@@ -305,7 +340,7 @@ export class Register implements OnInit {
       this.registerForm.emailVerificationCode().markAsTouched();
       return;
     }
-
+    //#endif
     this._isLoading.set(true);
     try {
       const captchaToken = this.captchaData()?.captchaToken;
@@ -328,12 +363,14 @@ export class Register implements OnInit {
           password: formValue.password,
           captchaCode: formValue.captchaCode,
           captchaToken: captchaToken,
+//#if (Email)
           emailVerification: emailVerificationEnabled
             ? {
                 challengeId: challenge!.challengeId,
                 code: formValue.emailVerificationCode,
               }
             : undefined,
+//#endif
         }),
       );
 
@@ -366,10 +403,12 @@ export class Register implements OnInit {
     toast.error('Request failed', { description: applicationErrorMessage(error) });
     //#endif
   }
+  //#if (Email)
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }
+  //#endif
 }
 //#if (!IncludeLocalization)
 

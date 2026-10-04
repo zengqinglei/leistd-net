@@ -1,8 +1,10 @@
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Settings.Provider;
+#if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore.Options;
+#endif
 using Leistd.Settings.Hosting;
-#if (LocalIdentity)
+#if (Email)
 using Leistd.Email.Smtp.Options;
 #endif
 
@@ -36,7 +38,7 @@ public static class HostSettingBindings
                 fallback: nameof(Serilog.Events.LogEventLevel.Information));
             bindings.BindOption<RequestLoggingOptions>(
                 SettingConstant.Logging.RequestLevel, RequestLoggingOptions.SectionName, nameof(RequestLoggingOptions.Level));
-#if (LocalIdentity)
+#if (Email)
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpHost, SmtpOptions.SectionName, nameof(SmtpOptions.Host));
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpPort, SmtpOptions.SectionName, nameof(SmtpOptions.Port));
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpEnableSsl, SmtpOptions.SectionName, nameof(SmtpOptions.EnableSsl));
@@ -45,9 +47,11 @@ public static class HostSettingBindings
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.DefaultFromAddress, SmtpOptions.SectionName, nameof(SmtpOptions.DefaultFromAddress));
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.DefaultFromName, SmtpOptions.SectionName, nameof(SmtpOptions.DefaultFromName));
 #endif
+#if (IncludeOperationRecords)
             bindings.BindOption<OperationRecordRetentionOptions>(
                 SettingConstant.Audit.RetentionEnabled, OperationRecordRetentionOptions.SectionName, nameof(OperationRecordRetentionOptions.Enabled));
             bindings.BindOption<OperationRecordRetentionOptions>(
                 SettingConstant.Audit.RetentionDays, OperationRecordRetentionOptions.SectionName, nameof(OperationRecordRetentionOptions.RetentionDays));
+#endif
         });
 }

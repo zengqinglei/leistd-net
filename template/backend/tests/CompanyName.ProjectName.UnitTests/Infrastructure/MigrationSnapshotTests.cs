@@ -26,7 +26,7 @@ public sealed class MigrationSnapshotTests
             context.Database.HasPendingModelChanges(),
             "MyProjectDbContext 的模型与迁移快照不一致：请生成迁移（见 backend/README.md 的数据库迁移一节）。");
     }
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 
     [Fact]
     public void Control_plane_model_matches_its_migration_snapshot()

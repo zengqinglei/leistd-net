@@ -22,8 +22,12 @@
                 "input": "public"
               }
             ],
+            //#if (LocalIdentity)
             "styles": ["src/styles.css"],
             "allowedCommonJsDependencies": ["qrcode"]
+            //#else
+            "styles": ["src/styles.css"]
+            //#endif
           },
           "configurations": {
             "production": {

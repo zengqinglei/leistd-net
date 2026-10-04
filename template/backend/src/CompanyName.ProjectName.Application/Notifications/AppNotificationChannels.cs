@@ -20,7 +20,9 @@ public static class AppNotificationChannels
     /// <summary>站内：通知历史与实时推送（框架自带的渠道）。</summary>
     public const string InApp = INotificationChannel.InAppName;
 
+#if (Email)
     /// <summary>邮件：只发到收件人已验证的邮箱。</summary>
     public const string Email = "Email";
+#endif
 }
 #endif

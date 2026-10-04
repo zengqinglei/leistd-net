@@ -6,35 +6,13 @@ using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Domain.Shared.Security;
 using Leistd.Lock.Abstractions;
-using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using OpenIddict.Validation;
-using OpenIddict.Validation.AspNetCore;
 
 namespace CompanyName.ProjectName.Api.Auth;
-
-/// <summary>在请求期从已验证 Bearer 或服务端会话票据读取用户访问令牌。</summary>
-/// <remarks>
-/// 经 Smart 方案认证后取官方保存的令牌：会话由 OIDC 处理器 <c>SaveTokens</c> 存入票据，
-/// Bearer 由 OpenIddict 验证端存入认证结果（<see cref="OpenIddictValidationAspNetCoreConstants.Tokens.AccessToken"/>）。
-/// 两边的名字都是 <c>access_token</c>，所以一个名字取两条路。
-/// <para>必须先判定认证成功，不能直接用 <c>GetTokenAsync</c>：它不看结果是否成功，而 OpenIddict 拒绝 Bearer 时
-/// 仍把原令牌存在失败结果里，直接取会把未通过验证的令牌交给下游。</para>
-/// </remarks>
-internal sealed class ResourceUserAccessTokenAccessor(IHttpContextAccessor contexts) : IUserAccessTokenAccessor
-{
-    public async ValueTask<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (contexts.HttpContext is not { } context) return null;
-        var result = await context.AuthenticateAsync(AuthenticationSchemeNames.Smart);
-        return result.Succeeded ? result.Properties?.GetTokenValue(OpenIdConnectParameterNames.AccessToken) : null;
-    }
-}
 
 /// <summary>机密客户端在服务端续期；同一票据的并发刷新由已有分布式锁串行化。</summary>
 internal sealed class ResourceSessionRefresher(
@@ -47,6 +25,10 @@ internal sealed class ResourceSessionRefresher(
     {
         var principal = await context.RequestServices.GetRequiredService<OpenIddictValidationService>()
             .ValidateAccessTokenAsync(token, cancellationToken);
+#if (!IncludeMultiTenancy)
+        if (!CompanyName.ProjectName.Api.Middlewares.HostPrincipalMiddleware.IsHost(principal, context.RequestServices.GetRequiredService<IOptions<Leistd.Security.Claims.ClaimTypeOptions>>().Value))
+            throw new InvalidOperationException("A single-tenant resource cannot accept a tenant identity.");
+#endif
         return new ClaimsPrincipal(new ClaimsIdentity(principal.Claims, AuthenticationSchemeNames.SessionCookie, "preferred_username", "role"));
     }
 

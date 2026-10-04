@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -80,6 +81,36 @@ public class RealTimeRegistrationTests
         app.MapRealTimeHub();
 
         AssertHubMappedAt(app, "/hubs/realtime");
+    }
+
+    // 授权器按请求判权限，常常依赖作用域服务；映射时只确认已注册，不在根容器里解析它
+    [Fact]
+    public void Mapping_accepts_an_authorizer_with_scoped_dependencies_under_scope_validation()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Logging.ClearProviders();
+        builder.Host.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateScopes = true;
+            options.ValidateOnBuild = true;
+        });
+        builder.Services.AddRealTimeSignalR();
+        builder.Services.AddScoped<ScopedDependency>();
+        builder.Services.AddTransient<IRealTimeSubscriptionAuthorizer, ScopedDependencyAuthorizer>();
+        builder.Services.AddAuthorization();
+        var app = builder.Build();
+
+        app.MapRealTimeHub();
+
+        AssertHubMappedAt(app, "/hubs/realtime");
+    }
+
+    private sealed class ScopedDependency;
+
+    private sealed class ScopedDependencyAuthorizer(ScopedDependency dependency) : IRealTimeSubscriptionAuthorizer
+    {
+        public Task<bool> AuthorizeAsync(RealTimeSubscriptionContext context, CancellationToken cancellationToken = default)
+            => Task.FromResult(dependency is not null);
     }
 
     // 路径由映射处给出，返回官方约定构建器，宿主可以继续链式追加端点约定

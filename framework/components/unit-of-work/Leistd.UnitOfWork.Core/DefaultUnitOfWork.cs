@@ -206,7 +206,14 @@ public class DefaultUnitOfWork : IUnitOfWork
         catch (Exception ex)
         {
             _exception = ex;
-            _logger?.LogError(ex, "Unit of work {UowId} commit failed", Id);
+            if (IsCompleted)
+            {
+                _logger?.LogError(ex, "Unit of work {UowId} committed, but after-commit processing failed", Id);
+            }
+            else
+            {
+                _logger?.LogError(ex, "Unit of work {UowId} commit failed", Id);
+            }
             throw;
         }
     }
@@ -274,6 +281,7 @@ public class DefaultUnitOfWork : IUnitOfWork
     /// <summary>
     /// 发布提交后事件。
     /// </summary>
+    /// <remarks>所有事件分发完毕后再上抛失败；单个异常保留原类型，多个异常聚合。事务已提交，不再回滚。</remarks>
     protected virtual async Task OnCompletedAsync()
     {
         // 队列非空即意味着分发器存在：事件只能经上面那道守卫之后才进 _eventsForLaterPhases
@@ -285,6 +293,7 @@ public class DefaultUnitOfWork : IUnitOfWork
             var ambientUnitOfWork = ServiceProvider.GetService<IAmbientUnitOfWork>();
             var restored = ambientUnitOfWork?.Get();
             ambientUnitOfWork?.Set(null);
+            List<Exception>? failures = null;
 
             try
             {
@@ -292,13 +301,33 @@ public class DefaultUnitOfWork : IUnitOfWork
                 {
                     foreach (var @event in _eventsForLaterPhases)
                     {
-                        await _localEventDispatcher!.DispatchAsync(@event, CancellationToken.None);
+                        try
+                        {
+                            await _localEventDispatcher!.DispatchAsync(@event, CancellationToken.None);
+                        }
+                        catch (Exception exception)
+                        {
+                            // 已提交的事件相互独立，不能因一次副作用失败而跳过后续安全记录。
+                            (failures ??= []).Add(exception);
+                        }
                     }
                 }
             }
             finally
             {
                 ambientUnitOfWork?.Set(restored);
+            }
+
+            if (failures is { Count: 1 })
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            }
+
+            if (failures is { Count: > 1 })
+            {
+                throw new AggregateException(
+                    $"{failures.Count} AfterCommit event dispatch(es) failed in unit of work '{Id}'.",
+                    failures);
             }
         }
     }

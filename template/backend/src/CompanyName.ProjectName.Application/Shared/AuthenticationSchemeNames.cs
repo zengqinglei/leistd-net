@@ -15,17 +15,21 @@ namespace CompanyName.ProjectName.Application.Shared;
 /// </remarks>
 public static class AuthenticationSchemeNames
 {
+#if (SpaFrontend)
     /// <summary>Cookie 会话方案</summary>
     public const string SessionCookie = "MyProjectCookie";
+#endif
+#if (OpenIddictServer || ResourceBrowserSession)
     /// <summary>按请求选择 Bearer 或 Cookie 的策略方案。</summary>
     public const string Smart = "MyProjectSmart";
+#endif
 #if (ExternalLogin)
     /// <summary>显式登记用于外部认证的官方远程处理器的方案名前缀。</summary>
     public const string ExternalProviderPrefix = "MyProjectExternal:";
     /// <summary>外部认证完成前的短时服务端票据方案。</summary>
     public const string ExternalCookie = "MyProjectExternal";
 #endif
-#if (RemoteTokenAuth)
+#if (ResourceBrowserSession)
     /// <summary>Resource 宿主的机密 OIDC 客户端方案。</summary>
     public const string OpenIdConnect = "MyProjectOidc";
 #endif

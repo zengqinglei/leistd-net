@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+// prettier-ignore
+import {
+  ChangeDetectionStrategy, Component, inject, signal,
+  //#if (IncludeMultiTenancy)
+  computed,
+  //#endif
+} from '@angular/core';
 import { form, minLength, maxLength, required, FormField } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
@@ -31,13 +37,19 @@ import {
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
+//#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
+//#endif
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
+//#if (IncludeMultiTenancy)
 import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
+//#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
+//#if (IncludeMultiTenancy)
 import { TenantService } from '../../../platform/services/tenant-service';
+//#endif
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
 import { TwoFactorChallenge } from '../two-factor-challenge/two-factor-challenge';
@@ -91,8 +103,12 @@ export class Login {
   //#else
   protected readonly t = englishText(ENGLISH);
   //#endif
+//#if (IncludeMultiTenancy)
   private readonly tenantService = inject(TenantService);
+//#endif
+//#if (IncludeMultiTenancy)
   protected readonly tenantContext = inject(TenantContextService);
+//#endif
 
   // 加载状态
   private _isLoading = signal(false);
@@ -148,7 +164,9 @@ export class Login {
     }
 
     // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
+//#if (IncludeMultiTenancy)
     void this.resolveTenantFromHost();
+//#endif
     //#if (ExternalLogin)
     this.loadExternalProviders();
     //#endif
@@ -276,6 +294,7 @@ export class Login {
     );
   }
 
+  //#if (IncludeMultiTenancy)
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附租户提示头；不选即宿主登录。
   readonly tenantName = signal('');
   /** 租户区的错误说明，存词条键、由模板按当前语言取：存成文字的话切换语言时它不会跟着变。 */
@@ -410,6 +429,9 @@ export class Login {
     this.tenantContext.clear();
     this.tenantError.set(null);
   }
+  //#else
+  readonly authBlocked = signal(false);
+  //#endif
   //#if (ExternalLogin)
 
   /** 读取已配置的提供商。失败单独提示并可重试，不当作"未配置"；本地登录不受影响。 */

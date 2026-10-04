@@ -14,8 +14,12 @@ using Microsoft.Extensions.Options;
 using System.Security.Claims;
 #endif
 #if (OpenIddictServer)
+#if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections;
+#endif
+#if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
+#endif
 using Leistd.Authorization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
@@ -24,7 +28,9 @@ using Microsoft.AspNetCore.Authorization;
 using OpenIddict.Abstractions;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.EntityFrameworkCore;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -41,6 +47,7 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         Assert.Equal(TimeSpan.FromMinutes(10), options.AccessTokenLifetime);
     }
 
+#if (IncludeMultiTenancy)
     [Fact]
     public async Task Identity_registers_runtime_and_migration_tenant_connection_scopes()
     {
@@ -134,6 +141,8 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         var result = await authorization.AuthorizeAsync(principal, resource: null, policyName);
         return result.Succeeded;
     }
+#endif
+
 }
 #endif
 #if (RemoteTokenAuth)

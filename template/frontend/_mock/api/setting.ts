@@ -174,7 +174,7 @@ export const SETTING_API = {
     assertValidValue(name, value);
     return write(TENANT_SETTING_VALUES, `${getMockSessionTenantKey()}:${name}`, value);
   },
-  //#if (LocalIdentity)
+  //#if (Email)
 
   // mock 下不真的发信，只演示界面
   'POST /api/v1/settings/email/test': () => {

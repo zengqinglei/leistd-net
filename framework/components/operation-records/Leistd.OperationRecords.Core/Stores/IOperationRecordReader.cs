@@ -5,33 +5,15 @@ using Leistd.OperationRecords.Models;
 namespace Leistd.OperationRecords.Stores;
 
 /// <summary>
-/// 操作记录的持久化契约。
+/// 操作记录的历史读取契约。
 /// </summary>
 /// <remarks>
-/// 只负责写入与查询，不做动作码校验与租户判定：租户隔离由实现所在的数据过滤器承担，
-/// 因此本契约不带租户参数。
-/// <para><b>没有更新与删除。</b>审计记录一旦写下就不该再改——留了入口，"清理误记录"
-/// 迟早会变成"清理不想被看到的记录"，而那时这张表已经不能作为证据了。
-/// 保留策略属于运维范畴，用数据库分区或归档作业处理。</para>
+/// <para>只由能回读历史的存储实现（如数据库存储）。只写不读的输出适配（如结构化日志）不实现本接口：
+/// 查询、导出与归档是"内置历史"这项产品能力，没有可回读的存储就不注册它们，而不是给出一个永远返回空页的实现。</para>
+/// <para>租户隔离由实现所在的数据过滤器承担，因此本契约不带租户参数。</para>
 /// </remarks>
-public interface IOperationRecordStore
+public interface IOperationRecordReader
 {
-    /// <summary>写入一条记录。</summary>
-    /// <remarks>
-    /// <para>事务边界由记录的结果决定，这是契约的一部分，实现必须照做：</para>
-    /// <list type="bullet">
-    /// <item><see cref="OperationRecordOutcome.Succeeded"/>：落在调用方所处的事务边界里，
-    /// 有环境工作单元就跟随它提交或回滚，没有就即时生效。记录的
-    /// <see cref="OperationRecordInfo.TenantId"/> 必须与当前租户上下文一致。</item>
-    /// <item><see cref="OperationRecordOutcome.Failed"/>：在 <see cref="OperationRecordInfo.TenantId"/>
-    /// 所指的层里<b>独立写入并提交</b>，不随调用方回滚——失败记录描述的是一次没发生的变更，
-    /// 没有可以同生共死的对象，而业务拒绝之后几乎总是紧跟着回滚。</item>
-    /// </list>
-    /// </remarks>
-    /// <param name="record">要写入的记录。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    Task InsertAsync(OperationRecordInfo record, CancellationToken cancellationToken = default);
-
     /// <summary>按创建时间倒序分页查询当前租户的记录。</summary>
     /// <remarks>
     /// 筛选条件的语义见 <see cref="OperationRecordFilter"/>；分页只作用于取条目，总数按同一组筛选条件计算。

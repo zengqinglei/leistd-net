@@ -22,23 +22,34 @@ describe('Register', () => {
   let fixture: ComponentFixture<Register>;
   let component: Register;
   let router: Router;
+  //#if (Email)
   let accountService: Pick<
     MockedObject<AccountService>,
     'register' | 'getCaptcha' | 'getSecurityConfig' | 'sendEmailCode'
   >;
+  //#else
+  let accountService: Pick<MockedObject<AccountService>, 'register' | 'getCaptcha'>;
+  //#endif
   let queryParams: Record<string, string>;
 
+  //#if (Email)
   async function setUp(enableEmailVerification = false): Promise<void> {
+  //#else
+  async function setUp(): Promise<void> {
+  //#endif
     accountService = {
       register: vi.fn().mockName('AccountService.register'),
       getCaptcha: vi.fn().mockName('AccountService.getCaptcha'),
+      //#if (Email)
       getSecurityConfig: vi.fn().mockName('AccountService.getSecurityConfig'),
       sendEmailCode: vi.fn().mockName('AccountService.sendEmailCode'),
+      //#endif
     };
     accountService.register.mockReturnValue(of(undefined));
     accountService.getCaptcha.mockReturnValue(
       of({ captchaToken: 'token-1', captchaImage: 'data:image/png;base64,' }) as never,
     );
+    //#if (Email)
     accountService.getSecurityConfig.mockReturnValue(of({ enableEmailVerification }) as never);
     accountService.sendEmailCode.mockReturnValue(
       of({
@@ -47,6 +58,7 @@ describe('Register', () => {
         retryAfterSeconds: 37,
       }) as never,
     );
+    //#endif
 
     await TestBed.configureTestingModule({
       imports: [Register],
@@ -154,6 +166,7 @@ describe('Register', () => {
     expect(router.navigate).not.toHaveBeenCalled();
     expect(component.isLoading()).toBe(false);
   });
+  //#if (Email)
 
   it('keeps the challenge and uses the server countdown after sending the email code', async () => {
     await setUp(true);
@@ -195,4 +208,5 @@ describe('Register', () => {
 
     expect(accountService.register).not.toHaveBeenCalled();
   });
+  //#endif
 });

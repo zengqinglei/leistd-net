@@ -6,6 +6,8 @@ using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Events;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Leistd.UnitOfWork.Tests;
@@ -143,9 +145,14 @@ public sealed class UnitOfWorkEventPhaseTests
 
         using var outer = manager.Begin(requiresNew: true);
         var inner = manager.Begin(requiresNew: true);
+        var ambient = provider.GetRequiredService<IAmbientUnitOfWork>();
+        var beforeCompletion = ambient.Get();
+        Assert.Same(inner, beforeCompletion);
         inner.AddPendingEvents([new ProbeEvent()]);
         await inner.CompleteAsync();
+        Assert.Same(beforeCompletion, ambient.Get());
         inner.Dispose();
+        Assert.Same(outer, ambient.Get());
 
         Assert.Equal([false], recorder.AfterCommitSawUnitOfWork);
         // 还原：外层在内层结束后仍是当前工作单元
@@ -183,10 +190,67 @@ public sealed class UnitOfWorkEventPhaseTests
         Assert.Equal([UnitOfWorkPhase.AfterCommit], recorder.AfterCommit);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_after_commit_failure_does_not_skip_later_events_or_lose_its_exception(bool cancelled)
+    {
+        await using var provider = Build();
+        var recorder = provider.GetRequiredService<PhaseRecorder>();
+        var manager = provider.GetRequiredService<IUnitOfWorkManager>();
+        using var outer = manager.Begin(requiresNew: true);
+        using var inner = manager.Begin(requiresNew: true);
+        var ambient = provider.GetRequiredService<IAmbientUnitOfWork>();
+        var beforeCompletion = ambient.Get();
+        Assert.Same(inner, beforeCompletion);
+        Exception failure = cancelled
+            ? new OperationCanceledException("side effect cancelled")
+            : new InvalidOperationException("side effect unavailable");
+        inner.AddPendingEvents([new FailingAfterCommitEvent(failure), new ProbeEvent()]);
+
+        var observed = await Assert.ThrowsAnyAsync<Exception>(() => inner.CompleteAsync());
+
+        Assert.Same(failure, observed);
+        Assert.Same(beforeCompletion, ambient.Get());
+        Assert.True(inner.IsCompleted);
+        Assert.Equal([UnitOfWorkPhase.AfterCommit], recorder.Unannotated);
+        Assert.Equal([UnitOfWorkPhase.AfterCommit], recorder.AfterCommit);
+        Assert.Null(UnitOfWorkContext.CurrentPhase);
+        Assert.Same(outer, manager.Current);
+        var logs = provider.GetFakeLogCollector().GetSnapshot();
+        Assert.Contains(logs, record => record.Level == LogLevel.Error &&
+            record.Message.Contains("committed, but after-commit", StringComparison.Ordinal));
+        Assert.DoesNotContain(logs, record =>
+            record.Message.Contains("commit failed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Multiple_after_commit_failures_are_aggregated_after_all_events_run()
+    {
+        await using var provider = Build();
+        var recorder = provider.GetRequiredService<PhaseRecorder>();
+        using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
+        var first = new InvalidOperationException("first side effect unavailable");
+        var second = new IOException("second side effect unavailable");
+        uow.AddPendingEvents([
+            new FailingAfterCommitEvent(first), new ProbeEvent(),
+            new FailingAfterCommitEvent(second), new ProbeEvent()]);
+
+        var observed = await Assert.ThrowsAsync<AggregateException>(() => uow.CompleteAsync());
+
+        Assert.Equal(2, observed.InnerExceptions.Count);
+        Assert.Same(first, observed.InnerExceptions[0]);
+        Assert.Same(second, observed.InnerExceptions[1]);
+        Assert.True(uow.IsCompleted);
+        Assert.Equal([UnitOfWorkPhase.AfterCommit, UnitOfWorkPhase.AfterCommit], recorder.Unannotated);
+        Assert.Null(UnitOfWorkContext.CurrentPhase);
+    }
+
     private static ServiceProvider Build()
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddFakeLogging();
         services.AddLocalEventBus();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
@@ -196,11 +260,23 @@ public sealed class UnitOfWorkEventPhaseTests
         services.AddTransient<IEventHandler<ProbeEvent>, AfterCommitHandler>();
         services.AddTransient<IEventHandler<NestingEvent>, NestingOuterFirstHandler>();
         services.AddTransient<IEventHandler<NestingEvent>, NestingOuterSecondHandler>();
+        services.AddTransient<IEventHandler<FailingAfterCommitEvent>, FailingAfterCommitHandler>();
         return (ServiceProvider)new DynamicProxyServiceRegistrationCallbackFactory()
             .CreateServiceProvider(services);
     }
 
     public sealed class ProbeEvent : LocalEvent;
+
+    public sealed class FailingAfterCommitEvent(Exception failure) : LocalEvent
+    {
+        public Exception Failure { get; } = failure;
+    }
+
+    public sealed class FailingAfterCommitHandler : IEventHandler<FailingAfterCommitEvent>
+    {
+        public Task HandleAsync(FailingAfterCommitEvent @event, CancellationToken cancellationToken = default)
+            => Task.FromException(@event.Failure);
+    }
 
     public sealed class NestingEvent : LocalEvent;
 

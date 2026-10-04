@@ -75,7 +75,7 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
-      //#if (LocalIdentity)
+      //#if (LocalIdentity && IncludeMultiTenancy)
       {
         name: PERMISSIONS.tenants.default,
         displayName: 'Tenant Management',
@@ -84,7 +84,9 @@ export const PERMISSION_DEFINITIONS = [
           leaf(PERMISSIONS.tenants.create, 'Create', PERMISSIONS.tenants.default),
           leaf(PERMISSIONS.tenants.update, 'Edit', PERMISSIONS.tenants.default),
           leaf(PERMISSIONS.tenants.delete, 'Delete', PERMISSIONS.tenants.default),
+          //#if (Impersonation)
           leaf(PERMISSIONS.tenants.impersonation, 'Sign in as tenant', PERMISSIONS.tenants.default),
+          //#endif
         ],
       },
       //#endif
@@ -113,6 +115,7 @@ export const PERMISSION_DEFINITIONS = [
     ],
   },
   //#endif
+  //#if (IncludeOperationRecords)
   {
     name: 'Audit',
     displayName: 'Audit',
@@ -127,6 +130,7 @@ export const PERMISSION_DEFINITIONS = [
       },
     ],
   },
+  //#endif
   {
     name: 'System',
     displayName: 'System',

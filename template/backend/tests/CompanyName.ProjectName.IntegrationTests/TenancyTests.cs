@@ -28,7 +28,9 @@ using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
+#if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
+#endif
 using Leistd.Settings.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.Management.Provisioning;
 #if (IncludeNotifications)
@@ -295,10 +297,10 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         var target = $"Role/{roleId}";
         var inTenant = await OperationRecordQueries.GetFailuresAsync(
-            tenantClient, OperationRecordActions.PermissionGrantsReplaced, target);
+            _factory, tenantClient, OperationRecordActions.PermissionGrantsReplaced, target, tenantId);
         Assert.Equal(PermissionErrorCodes.ConcurrencyConflict, Assert.Single(inTenant).FailureCode);
         Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
-            hostAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, target));
+            _factory, hostAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, target));
     }
 
     /// <summary>
@@ -647,7 +649,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         using var client = ProjectWebApplicationFactory.CreateProjectClient(domainHost);
 
-        using var forged = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/security-config");
+        using var forged = new HttpRequestMessage(HttpMethod.Get, "/api/v1/tenants/by-host");
         forged.Headers.Host = "subdomain-a.example.com";
         forged.Headers.TryAddWithoutValidation("X-Forwarded-Host", "subdomain-b.example.com");
 
@@ -655,6 +657,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var probe = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("tenant", probe.RootElement.GetProperty("decision").GetString());
+        Assert.Equal("subdomain-a", probe.RootElement.GetProperty("tenant").GetProperty("name").GetString());
     }
 
     /// <summary>
@@ -690,7 +695,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         using var client = ProjectWebApplicationFactory.CreateProjectClient(domainHost);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/security-config");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/tenants/by-host");
         request.Headers.Host = "trusted-a.example.com";
         request.Headers.TryAddWithoutValidation("X-Forwarded-Host", "trusted-b.example.com");
 
@@ -1085,8 +1090,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 #if (IncludeNotifications)
                 nameof(NotificationRecord),
 #endif
-                // 操作记录无条件存在（不像通知那样可裁剪），因此这一项不带守卫
+#if (IncludeOperationRecords)
                 nameof(OperationRecord),
+#endif
                 nameof(PermissionGrantRecord),
                 nameof(Role),
                 nameof(SettingRecord),
@@ -1125,7 +1131,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<UserRole>().ToListAsync());
             // 创建流程里埋了"用户已创建"的操作记录：补偿若漏清它，留下的是一条带租户归属的孤儿审计行——
             // 上面那份类型清单只证明它受过滤器管辖，证明不了补偿真的清干净了。
+#if (IncludeOperationRecords)
             Assert.Empty(await db.Set<OperationRecord>().ToListAsync());
+#endif
             Assert.Empty(await db.Set<UserSession>().ToListAsync());
 #if (ExternalLogin)
             Assert.Empty(await db.Set<ExternalLoginConnection>().ToListAsync());

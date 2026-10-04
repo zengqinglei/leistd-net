@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map, tap } from 'rxjs';
 
 import { AuthService } from '../../../core/services/auth-service';
-//#if (ExternalLogin)
+//#if (ExternalLogin && IncludeMultiTenancy)
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 //#endif
 //#if (ExternalLogin)
@@ -20,11 +20,19 @@ import {
   RegisterInputDto,
   SetAvatarInputDto,
   UpdateCurrentUserInputDto,
+//#if (Email)
   EmailVerificationInputDto,
+//#endif
+//#if (Email)
   SecurityConfigOutputDto,
+//#endif
   CaptchaOutputDto,
+//#if (Email)
   SendEmailCodeInputDto,
+//#endif
+//#if (Email)
   EmailVerificationChallengeOutputDto,
+//#endif
   UserSessionOutputDto,
   DisableTwoFactorInputDto,
   TwoFactorLoginInputDto,
@@ -39,16 +47,18 @@ import {
 @Injectable({ providedIn: 'root' })
 export class AccountService {
   private http = inject(HttpClient);
-  //#if (ExternalLogin)
+  //#if (ExternalLogin && IncludeMultiTenancy)
   private readonly tenantContext = inject(TenantContextService);
   //#endif
   private authService = inject(AuthService);
+  //#if (Email)
 
   getSecurityConfig(): Observable<SecurityConfigOutputDto> {
     return this.http.get<SecurityConfigOutputDto>('/api/v1/auth/security-config');
   }
-
+  //#endif
   //#if (OpenIddictServer)
+
   /** 依赖方发起的退出需要确认时，核对确认凭据并取得确认表单的防伪令牌。 */
   getLogoutConfirmation(
     requestUri: string,
@@ -58,11 +68,11 @@ export class AccountService {
       params: { request_uri: requestUri, confirmation },
     });
   }
-
   //#endif
   getCaptcha(): Observable<CaptchaOutputDto> {
     return this.http.get<CaptchaOutputDto>('/api/v1/auth/captcha');
   }
+  //#if (Email)
 
   sendEmailCode(data: SendEmailCodeInputDto): Observable<EmailVerificationChallengeOutputDto> {
     return this.http.post<EmailVerificationChallengeOutputDto>(
@@ -70,6 +80,7 @@ export class AccountService {
       data,
     );
   }
+  //#endif
 
   register(data: RegisterInputDto): Observable<void> {
     return this.http.post('/api/v1/auth/register', data).pipe(map(() => undefined));
@@ -87,6 +98,7 @@ export class AccountService {
       .put<UserOutputDto>('/api/v1/auth/me/avatar', data)
       .pipe(tap((user) => this.authService.setCurrentUser(user)));
   }
+//#if (Email)
 
   /** 给自己当前的邮箱发验证码。 */
   sendCurrentEmailCode(): Observable<EmailVerificationChallengeOutputDto> {
@@ -95,6 +107,8 @@ export class AccountService {
       {},
     );
   }
+//#endif
+//#if (Email)
 
   /** 用验证码确认自己当前的邮箱。 */
   confirmCurrentEmail(data: EmailVerificationInputDto): Observable<UserOutputDto> {
@@ -102,6 +116,7 @@ export class AccountService {
       .post<UserOutputDto>('/api/v1/auth/me/email-verification/confirm', data)
       .pipe(tap((user) => this.authService.setCurrentUser(user)));
   }
+//#endif
 
   changePassword(data: ChangePasswordInputDto): Observable<void> {
     return this.http.post('/api/v1/auth/change-password', data).pipe(map(() => undefined));
@@ -182,9 +197,13 @@ export class AccountService {
   }
 
   getExternalLoginUrl(provider: 'github' | 'google', returnUrl?: string | null): string {
+//#if (IncludeMultiTenancy)
     const tenant = this.tenantContext.current()?.key;
+//#endif
     const query = new URLSearchParams();
+//#if (IncludeMultiTenancy)
     if (tenant) query.set('tenant', tenant);
+//#endif
     if (returnUrl) query.set('returnUrl', returnUrl);
     return `/api/v1/external-auth/${provider}/challenge${query.size ? `?${query}` : ''}`;
   }

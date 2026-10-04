@@ -30,12 +30,13 @@ using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 using Leistd.Notifications.AspNetCore.SignalR;
-using Leistd.RealTime.Publishing;
-using Leistd.RealTime.Subscriptions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory factory)
+/// <summary>
+/// 通知：持久化、经 Hub 推送、已读与清除，以及保留期清理。
+/// </summary>
+public sealed class NotificationTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
     [Fact]
@@ -111,11 +112,11 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var userId = await GetSuperAdminIdAsync(host);
 #else
         var userId = Guid.CreateVersion7();
-        var tenantId = Guid.CreateVersion7();
+        var tenantId = ProjectWebApplicationFactory.NewTenantId();
         using var admin = ProjectWebApplicationFactory.CreateResourceSession(host, userId, tenantId);
 #endif
-        // 通知与业务事件共用实时 Hub：同一条连接上收到通知，且只收到一次
-        await using var connection = CreateHubConnection(host, "/hubs/realtime", admin);
+        // 有业务实时时与业务事件共用实时 Hub，否则走通知自己的 Hub：同一条连接上收到通知，且只收到一次
+        await using var connection = CreateHubConnection(host, ProjectWebApplicationFactory.HubPath, admin);
         Exception? closedError = null;
         connection.Closed += error =>
         {
@@ -201,53 +202,6 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         await connection.StopAsync();
     }
 
-    [Fact]
-    public async Task Default_realtime_subscription_should_keep_common_resources_available()
-    {
-#if (LocalIdentity)
-        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-#else
-        using var admin = factory.CreateResourceSession(Guid.CreateVersion7(), Guid.CreateVersion7());
-#endif
-        // 订阅授权无条件生效，模板只放行 public: 命名空间（实时组件的前缀授权器）
-        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
-        var received = new TaskCompletionSource<BusinessEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var subscription = connection.On<BusinessEvent>("BusinessEvent", message => received.TrySetResult(message));
-        await connection.StartAsync();
-        await connection.InvokeAsync("Subscribe", "public:announcements");
-
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var publisher = scope.ServiceProvider.GetRequiredService<IBusinessEventPublisher>();
-            await publisher.PublishToResourceAsync("public:announcements", "BusinessEvent", new BusinessEvent("available"));
-        }
-
-        Assert.Equal("available", (await received.Task.WaitAsync(TimeSpan.FromSeconds(10))).Value);
-
-        await connection.StopAsync();
-    }
-
-    // 默认授权器就会拒绝非 public: 的 key：客户端能给任意字符串，组名又不含租户段，
-    // 放行任意 key 等于允许已认证用户订阅别的租户的资源。
-    [Fact]
-    public async Task Default_subscription_authorization_should_allow_public_and_reject_other_resources()
-    {
-#if (LocalIdentity)
-        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-#else
-        using var admin = factory.CreateResourceSession(Guid.CreateVersion7(), Guid.CreateVersion7());
-#endif
-        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
-        await connection.StartAsync();
-
-        await connection.InvokeAsync("Subscribe", "public:announcements");
-        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
-            connection.InvokeAsync("Subscribe", "private:42"));
-        Assert.Contains("Subscription forbidden", exception.ToString(), StringComparison.OrdinalIgnoreCase);
-
-        await connection.StopAsync();
-    }
-
     private static HubConnection CreateHubConnection(
         WebApplicationFactory<Program> application,
         string path,
@@ -273,8 +227,6 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         return await db.Users.Where(user => user.IsSuperAdmin).Select(user => user.Id).SingleAsync();
     }
-
-    private sealed record BusinessEvent(string Value);
 
 }
 #endif

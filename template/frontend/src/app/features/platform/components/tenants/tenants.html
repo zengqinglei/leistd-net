@@ -54,12 +54,16 @@
         [filtered]="hasActiveFilters()"
         [canUpdate]="canUpdate()"
         [canDelete]="canDelete()"
+        <!--#if (Impersonation)-->
         [canImpersonate]="canImpersonate()"
+        <!--#endif-->
         (paginationChange)="onPaginationChange($event)"
         (details)="openDetail($event)"
         (edit)="openEdit($event)"
         (toggleActive)="onToggleActive($event)"
+        <!--#if (Impersonation)-->
         (impersonate)="onImpersonate($event)"
+        <!--#endif-->
         (delete)="onDelete($event)"
       />
     </div>

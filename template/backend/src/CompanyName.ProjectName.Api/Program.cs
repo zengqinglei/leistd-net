@@ -4,8 +4,10 @@ using CompanyName.ProjectName.Api.HealthChecks;
 #endif
 using CompanyName.ProjectName.Api.Auth;
 using CompanyName.ProjectName.Api.Middlewares;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.AspNetCore;
 using Leistd.MultiTenancy.AspNetCore.Options;
+#endif
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Api.Configuration;
@@ -31,6 +33,9 @@ using Leistd.Settings.Options;
 using Leistd.BackgroundJobs.InProcess;
 using Leistd.Settings.Hosting;
 using Leistd.Security.AspNetCore;
+#if (!IncludeOperationRecords)
+using Leistd.OperationRecords.Logging;
+#endif
 using Leistd.Security.Claims;
 using Leistd.Tracing.AspNetCore;
 using Leistd.Authorization.AspNetCore;
@@ -38,6 +43,7 @@ using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.Context;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
+using Leistd.Notifications.Settings;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Api.Notifications;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
@@ -46,18 +52,25 @@ using Leistd.Notifications.Channels;
 using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
-using Leistd.Notifications.Email;
-using Leistd.Notifications.Email.Recipients;
-using Leistd.Notifications.Settings;
 using Leistd.Notifications.Settings.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 #endif
+#if (Email)
+using Leistd.Notifications.Email;
+using Leistd.Notifications.Email.Recipients;
+#endif
+#endif
+#if (IncludeRealTime)
+using CompanyName.ProjectName.Application.RealTime;
 using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
+using Leistd.RealTime.Subscriptions;
 #endif
+#if (SpaFrontend)
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+#endif
 #if (LocalIdentity)
 #if (OpenIddictServer)
 using System.Security.Cryptography.X509Certificates;
@@ -66,10 +79,15 @@ using CompanyName.ProjectName.Application.Auth.OAuth;
 #endif
 #if (RemoteTokenAuth)
 using Leistd.ServiceClient.Abstractions;
+#endif
+#if (ResourceBrowserSession)
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 #endif
 #if (RemoteTokenAuth)
 using OpenIddict.Validation.AspNetCore;
+#endif
+#if (!SpaFrontend && (IncludeNotifications || IncludeRealTime))
+using Leistd.AspNetCore.SignalR;
 #endif
 using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -116,12 +134,16 @@ try
     builder.Services.AddDomainServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
     builder.Services.AddApplicationServices();
+#if (!IncludeOperationRecords)
+    builder.Services.AddOperationRecordsLogging();
+#endif
 
 #if (LocalIdentity)
     // 口令不在启动期校验：只有真的要创建管理员时才需要，由初始化器在那一刻按口令策略校验并报出键名
     builder.Services.AddOptions<DefaultAdminOptions>()
         .Bind(builder.Configuration.GetSection(DefaultAdminOptions.SectionName));
 
+#if (Email)
     // 邮箱验证开启时，HMAC 密钥必须跨实例和重启稳定。
     builder.Services.AddOptions<VerificationCodeOptions>()
         .Bind(builder.Configuration.GetSection(VerificationCodeOptions.SectionName))
@@ -133,6 +155,7 @@ try
             "UserRegistration:EnableEmailVerification is true, and must be at least " +
             $"{VerificationCodeOptions.MinimumKeyBytes} base64-encoded bytes.")
         .ValidateOnStart();
+#endif
 #endif
 #if (LocalIdentity)
 #if (OpenIddictServer)
@@ -406,7 +429,7 @@ try
             policy.AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 
             // 跨域前端需要读取租户失效响应头以触发会话恢复。
             policy.WithExposedHeaders(TenantSessionRecoveryOptions.DefaultTenantInvalidHeader);
@@ -421,6 +444,7 @@ try
 
     builder.Services.AddSecurity();
 
+#if (IncludeMultiTenancy)
 #if (LocalIdentity)
     // Identity 持有租户注册表，因此校验解析结果。
     builder.Services.AddMultiTenancy();
@@ -428,46 +452,67 @@ try
     // Resource 不持有注册表，只信已验证令牌的 tenant_id claim。
     builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
 #endif
+#else
+    builder.Services.AddMultiTenancyCore();
+#endif
 
 #if (RemoteTokenAuth)
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<IUserAccessTokenAccessor, ResourceUserAccessTokenAccessor>();
 #endif
 
-#if (IncludeNotifications)
+#if (IncludeNotifications || IncludeRealTime)
     // 心跳、超时、详细错误是 SignalR 自身的选项，由宿主直接配置。
     builder.Services.AddSignalR(options =>
     {
         options.EnableDetailedErrors = builder.Environment.IsDevelopment();
     });
+#endif
+#if (IncludeRealTime)
+
+    // 业务实时：资源事件推给订阅者。订阅授权必须由宿主明确选择（框架不给默认实现）：
+    // 资源键须属于当前租户或宿主作用域，且订阅者持有查看该资源的权限
+    builder.Services.AddRealTimeSignalR();
+    builder.Services.AddTransient<IRealTimeSubscriptionAuthorizer, AppRealTimeSubscriptionAuthorizer>();
+#endif
+#if (IncludeNotifications)
+#if (IncludeRealTime)
 
     // 通知与业务事件共用实时 Hub：客户端只建一条连接，通知的接收授权即该 Hub 的授权要求
-    builder.Services.AddRealTimeSignalR();
     builder.Services.AddNotificationsSignalR<RealTimeHub>();
-#if (LocalIdentity)
+#else
 
-    // 通知偏好（收件人自己的用户级设置）决定哪类通知经哪个渠道收；安全提醒的站内通知必达，不受偏好影响
+    // 通知经通知自己的 Hub 推送（/hubs/notifications）
+    builder.Services.AddNotificationsSignalR();
+#endif
+
+    // 通知偏好（收件人自己的用户级设置）决定哪类通知经哪个渠道收
+#if (LocalIdentity)
+    // 安全提醒的站内通知必达，不受偏好影响
     builder.Services.AddNotificationPreferences(options =>
         options.MandatoryDeliveries.Add(new NotificationDelivery(AppNotificationTypes.Security, AppNotificationChannels.InApp)));
+#else
+    builder.Services.AddNotificationPreferences();
+#endif
+#if (Email)
     // 邮件渠道只发已验证的邮箱，经后台队列发送
     builder.Services.AddEmailNotifications();
     builder.Services.AddScoped<INotificationRecipientResolver, UserEmailRecipientResolver>();
+#endif
+#if (LocalIdentity)
     // 安全提醒（新设备登录、密码与两步验证变更、账号锁定）经通知组件发给本人
     builder.Services.Replace(ServiceDescriptor.Transient<ISecurityAlertPublisher, NotificationSecurityAlertPublisher>());
 #endif
-
-    // 订阅授权必须由宿主明确选择：Subscribe 无条件走授权器，框架不给默认实现。
-    // 组名不含租户段，Subscribe 收的是客户端给的任意字符串，所以只放行显式公共的 public: 命名空间；
-    // 订阅租户内资源时换成自己的授权器。
-    builder.Services.AddPrefixRealTimeSubscriptions("public:");
 #endif
 
+#if (SpaFrontend)
     builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
     builder.Services.AddSingleton<DistributedTicketStore>();
     builder.Services.AddOptions<SessionCookieOptions>().BindConfiguration(SessionCookieOptions.SectionName);
     builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
         .Configure<DistributedTicketStore>((cookie, store) => cookie.SessionStore = store)
         .PostConfigure(DistributedTicketStore.ConfigureCookie);
+#endif
 #if (ExternalLogin)
     builder.Services.AddExternalAuthentication(builder.Configuration);
 #endif
@@ -539,6 +584,14 @@ try
         // 撤销（退出其他设备、改密码）才能对已发出的 Cookie 生效。结果带短缓存，见 IUserSessionValidator
         options.Events.OnValidatePrincipal = async context =>
         {
+#if (!IncludeMultiTenancy)
+            if (!HostPrincipalMiddleware.IsHost(context.Principal, context.HttpContext.RequestServices.GetRequiredService<IOptions<ClaimTypeOptions>>().Value))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
+                return;
+            }
+#endif
             var validator = context.HttpContext.RequestServices.GetRequiredService<IUserSessionValidator>();
             if (context.Principal is null ||
                 !await validator.ValidateAsync(context.Principal, context.HttpContext.RequestAborted))
@@ -559,7 +612,7 @@ try
         }
     });
 
-#else
+#elif (ResourceBrowserSession)
     foreach (var (key, value) in new[] { ("ClientId", remoteIdentity.ClientId), ("ClientSecret", remoteIdentity.ClientSecret) })
         if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException($"Authentication:{key} is required for the Resource OIDC confidential client.");
     var resourceCookie = builder.Configuration.GetSection(SessionCookieOptions.SectionName).Get<SessionCookieOptions>() ?? new();
@@ -623,6 +676,13 @@ try
             return Task.CompletedTask;
         };
     });
+#else
+    // 纯资源 API：只接受 Bearer。没有浏览器会话，也就没有 Cookie、OIDC 客户端与登录退出端点
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+    });
 #endif
 
     builder.Services.AddApiAuthorization();
@@ -633,28 +693,35 @@ try
     // 宿主级设置配置源要在构建之后挂上：构建期间追加的配置源（如测试宿主的覆盖）不能排在它后面
     app.UseHostSettings();
 
+#if (SpaFrontend)
     // 缺 Redis 不阻止启动：单实例配 DataProtection:KeysPath 是合法部署，副本数又无从推断。
     // 但分布式缓存随之回落到进程内存，多副本时各副本各一份、彼此看不见，只能靠这条告警在启动日志里发现。
     // 分布式锁的回落由锁组件自己告警，这里不重复。
     if (!app.Environment.IsDevelopment() && string.IsNullOrEmpty(app.Configuration.GetConnectionString("Redis")))
     {
+#if (Email)
+        const string cacheBackedState = "server-side session tickets, session revocation checks, two-factor challenges, captchas and email verification codes";
+#elif (LocalIdentity)
+        const string cacheBackedState = "server-side session tickets, session revocation checks, two-factor challenges and captchas";
+#else
+        const string cacheBackedState = "server-side session tickets";
+#endif
         app.Logger.LogWarning(
             "ConnectionStrings:Redis is not configured, so the distributed cache falls back to process memory: {CacheBackedState} " +
             "are kept per process. This is only valid for a single instance; configure ConnectionStrings:Redis before running more replicas.",
-#if (LocalIdentity)
-            "server-side session tickets, session revocation checks, two-factor challenges, captchas and email verification codes");
-#else
-            "server-side session tickets");
-#endif
+            cacheBackedState);
     }
+#endif
 
     app.UseForwardedHeaders();
 #if (IncludeLocalization)
     // 在所有读取当前区域性的中间件之前解析请求区域性。
     app.UseJsonRequestLocalization();
 #endif
+#if (SpaFrontend)
     app.UseDefaultFiles();
     app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
+#endif
 
     var requestLogging = app.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
     app.UseCorrelationId();
@@ -686,16 +753,28 @@ try
         Predicate = registration => registration.Tags.Contains("ready")
     }).AllowAnonymous();
 
+    app.UseRouting();
     app.UseCors();
 
+#if (!SpaFrontend && (IncludeNotifications || IncludeRealTime))
+    // 浏览器连 Hub 只能把 Bearer 放在查询串：只在 Hub 端点上转成 Authorization 头，普通 API 仍只认请求头
+    app.UseHubAccessToken();
+#endif
     app.UseAuthentication();
+#if (SpaFrontend)
+    // 浏览器会话靠 Cookie：跨源写请求与 Hub 握手只接受本源与登记的前端源
     app.UseMiddleware<BrowserOriginMiddleware>();
-#if (LocalIdentity)
+#endif
+#if (LocalIdentity && IncludeMultiTenancy)
     // 租户失效时注销 Cookie，避免会话困在不可用租户中。
     app.UseTenantSessionRecovery(options => options.SignOutScheme = AuthenticationSchemeNames.SessionCookie);
 #endif
     // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
+#if (IncludeMultiTenancy)
     app.UseMultiTenancy();
+#else
+    app.UseMiddleware<HostPrincipalMiddleware>();
+#endif
     // 请求完成日志在租户作用域之外写出：经 Serilog 诊断上下文补上租户，键与 ICurrentTenant.Change 打开的日志作用域一致
     app.Use((context, next) =>
     {
@@ -724,12 +803,16 @@ try
         app.MapOpenApi().AllowAnonymous();
     }
 
-#if (IncludeNotifications)
-    // 通知经实时 Hub 推送，只映射这一个
+#if (IncludeRealTime)
+    // 业务事件与（启用时的）通知都经实时 Hub 推送，只映射这一个
     app.MapRealTimeHub();
+#elif (IncludeNotifications)
+    app.MapNotificationHub();
 #endif
 
+#if (SpaFrontend)
     app.MapMyProjectSpaFallback();
+#endif
 
     // API 只验证 schema；所有 DDL 由 DbMigrator 施加。
     await app.VerifyDatabaseSchemaAsync();

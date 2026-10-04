@@ -50,7 +50,9 @@ internal sealed class AuthAppService(
     UserDomainService userDomainService,
     ICurrentUser currentUser,
     ICaptchaAppService captchaAppService,
+#if (Email)
     IEmailVerificationAppService emailVerificationAppService,
+#endif
     SessionSignInService sessionSignInService,
     UserSessionDomainService userSessionDomainService,
     IUserSessionAppService userSessionAppService,
@@ -59,7 +61,9 @@ internal sealed class AuthAppService(
     IOperationRecorder operationRecorder,
     IDistributedCache distributedCache,
     IObjectMapper objectMapper,
+#if (Email)
     IUserRegistrationPolicyProvider registrationPolicy,
+#endif
     IReauthenticationGuard reauthenticationGuard,
     IAccessFailureCounter accessFailureCounter,
     ISecurityAlertPublisher securityAlerts,
@@ -273,7 +277,7 @@ internal sealed class AuthAppService(
     /// 在这些累计次数上落一条记录；之后每 100 次再落一条。
     /// </summary>
     /// <remarks>
-    /// <b>这是节流，不是"先记后合并"。</b><c>IOperationRecordStore</c> 刻意没有更新能力
+    /// <b>这是节流，不是"先记后合并"。</b><c>IOperationRecordWriter</c> 刻意没有更新能力
     /// （append-only 是它写在契约里的设计），所以做不到逐次记录再归并。
     /// 阈值写入让首次失败立刻可见、升级过程可见，同时把单个标识的写入量从 O(n) 降到 O(log n)。
     /// <para><b>代价</b>：窗口内非阈值的那些失败不各自成行，精确时刻会丢。
@@ -330,6 +334,7 @@ internal sealed class AuthAppService(
         // 同一行给出本地部与域名等于把脱敏拼回去。要查地址用操作记录或按用户查库。
         logger.LogInformation("Registering user {Username}", input.Username);
 
+#if (Email)
         var options = await registrationPolicy.GetAsync(cancellationToken);
 
         if (options.EnableEmailVerification)
@@ -359,6 +364,14 @@ internal sealed class AuthAppService(
                     ;
             }
         }
+#else
+        // 没有发信能力：注册只靠图形验证码证明是人在操作，邮箱照常登记但不验证
+        var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
+        if (!isValidCaptcha)
+        {
+            throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
+        }
+#endif
 
         var user = await userDomainService.CreateUserAsync(
             input.Username, input.Email, input.Password, input.DisplayName,
@@ -499,6 +512,7 @@ internal sealed class AuthAppService(
 
         return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
     }
+#if (Email)
 
     /// <summary>
     /// 给自己当前的邮箱发验证码
@@ -542,6 +556,7 @@ internal sealed class AuthAppService(
 
         return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
     }
+#endif
 
     private async Task<User> GetCurrentUserEntityAsync(CancellationToken cancellationToken)
     {

@@ -2,11 +2,13 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
 
-//#if (IncludeNotifications)
+//#if (IncludeNotifications || IncludeRealTime)
 import { SignalRService } from './signalr-service';
 //#endif
 //#if (RemoteTokenAuth)
+//#if (IncludeMultiTenancy)
 import { TenantContextService } from './tenant-context-service';
+//#endif
 import { isMockedUrl } from '../../../../_mock/core/providers';
 import { environment } from '../../../environments/environment';
 //#endif
@@ -27,9 +29,11 @@ export class AuthService {
   //#endif
   private readonly http = inject(HttpClient);
   //#if (RemoteTokenAuth)
+//#if (IncludeMultiTenancy)
   private readonly tenantContext = inject(TenantContextService);
+//#endif
   //#endif
-  //#if (IncludeNotifications)
+  //#if (IncludeNotifications || IncludeRealTime)
   private readonly signalR = inject(SignalRService);
   //#endif
 
@@ -66,7 +70,9 @@ export class AuthService {
   setCurrentUser(user: UserOutputDto): void {
     this._currentUser.set(new User(user));
     //#if (RemoteTokenAuth)
+//#if (IncludeMultiTenancy)
     this.tenantContext.setAuthenticatedTenant(user.tenantId ?? null);
+//#endif
     //#endif
   }
 
@@ -80,9 +86,11 @@ export class AuthService {
   clearAuthData(): void {
     this._currentUser.set(null);
     //#if (RemoteTokenAuth)
+//#if (IncludeMultiTenancy)
     this.tenantContext.clear();
+//#endif
     //#endif
-    //#if (IncludeNotifications)
+    //#if (IncludeNotifications || IncludeRealTime)
     // 不等待：状态与连接引用在 reset() 内部同步清掉，真正的 stop() 是网络动作，
     // 让它在后台完成即可，不该把登出卡在网络上。
     void this.signalR.reset();

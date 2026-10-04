@@ -1,3 +1,6 @@
+//#if (!IncludeMultiTenancy)
+import { MockException } from '../core/models';
+//#endif
 import { MockUser, USERS } from '../data/user';
 
 // Mock session state — BFF 模式下使用浏览器会话存储模拟 Cookie 会话
@@ -38,6 +41,14 @@ export function getMockSessionSubjectId(): string | null {
  * Mock 若继续每次从请求头取租户，锁定的就是生产环境不存在的行为。
  */
 export function setMockSessionTenantKey(tenantKey: string | null) {
+  //#if (!IncludeMultiTenancy)
+  if (tenantKey && tenantKey !== 'host') {
+    throw new MockException(401, {
+      code: 'Tenant:InvalidScope',
+      message: 'A host session is required',
+    });
+  }
+  //#endif
   if (tenantKey) {
     sessionStorage.setItem(MOCK_SESSION_TENANT_STORAGE_KEY, tenantKey);
   } else {
@@ -47,7 +58,16 @@ export function setMockSessionTenantKey(tenantKey: string | null) {
 
 /** 当前会话的租户键；宿主上下文为 `host`。 */
 export function getMockSessionTenantKey(): string {
-  return sessionStorage.getItem(MOCK_SESSION_TENANT_STORAGE_KEY) ?? 'host';
+  const tenantKey = sessionStorage.getItem(MOCK_SESSION_TENANT_STORAGE_KEY) ?? 'host';
+  //#if (!IncludeMultiTenancy)
+  if (tenantKey !== 'host') {
+    throw new MockException(401, {
+      code: 'Tenant:InvalidScope',
+      message: 'A host session is required',
+    });
+  }
+  //#endif
+  return tenantKey;
 }
 
 function readMockSessionUserId() {
@@ -57,6 +77,7 @@ function readMockSessionUserId() {
 /** 返回当前会话用户；未登录时返回 null（不抛异常，供权限接口自行决定 401/403）。 */
 export function getCurrentUser(): MockUser | null {
   const userId = MOCK_SESSION_USER_ID ?? readMockSessionUserId();
+  if (userId) getMockSessionTenantKey();
   return userId ? (USERS.find((item) => item.id === userId) ?? null) : null;
 }
 /** 为 Mock 会话记录主体与展示 persona，二者可以不同。 */
@@ -65,7 +86,8 @@ export function setMockSessionIdentity(
   personaUserId: string,
   tenantId: string | null,
 ): void {
+  // Validate the scope before publishing the authenticated subject or persona.
+  setMockSessionTenantKey(tenantId);
   setMockSessionUserId(personaUserId);
   sessionStorage.setItem(MOCK_SESSION_SUBJECT_STORAGE_KEY, subjectId);
-  setMockSessionTenantKey(tenantId);
 }

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import * as signalR from '@microsoft/signalr';
 
 import { SignalRService } from './signalr-service';
+import { environment } from '../../../environments/environment';
 
 import type { Mock } from 'vitest';
 
@@ -136,6 +137,7 @@ describe('SignalRService connection lifecycle', () => {
 
   beforeEach(() => {
     built = [];
+    environment.useMock = false;
     failing = new Set<string>();
     deferStart = false;
 
@@ -159,11 +161,18 @@ describe('SignalRService connection lifecycle', () => {
     service = TestBed.inject(SignalRService);
   });
 
-  it('enters the connected state after connecting to the real-time hub', async () => {
+  it('enters the connected state after connecting to the configured hub', async () => {
     await service.connect();
 
     expect(built.length).toBe(1);
     expect(built[0].url).toContain(SignalRService.hubPath);
+    expect(service.isConnected()).toBe(true);
+  });
+
+  it('keeps the real connection when mock configuration is enabled in a deployment build', async () => {
+    environment.useMock = true;
+    await service.connect();
+    expect(built).toHaveLength(1);
     expect(service.isConnected()).toBe(true);
   });
 
@@ -226,6 +235,7 @@ describe('SignalRService connection lifecycle', () => {
     built[0].dropAndRecover();
     expect(service.isConnected()).toBe(true);
   });
+  //#if (IncludeNotifications && IncludeRealTime)
 
   it('notifications and resource events on one connection each trigger only their own handler', async () => {
     service.registerResourceEvent('OrderChanged');
@@ -249,6 +259,8 @@ describe('SignalRService connection lifecycle', () => {
       payload: { id: 'order-1' },
     });
   });
+  //#endif
+  //#if (IncludeRealTime)
 
   it('resubscribes subscribed resources on the same connection after reconnecting', async () => {
     await service.connect();
@@ -260,6 +272,7 @@ describe('SignalRService connection lifecycle', () => {
 
     expect(connection.invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
   });
+  //#endif
 
   it('can connect again after disconnecting', async () => {
     await service.connect();
@@ -274,20 +287,28 @@ describe('SignalRService connection lifecycle', () => {
     expect(built.length).toBe(2);
   });
 
-  it('does not reuse the connection or keep the notifications of the previous principal after a principal switch', async () => {
+  it('does not reuse the connection or state of the previous principal after a switch', async () => {
     await service.connect();
+    //#if (IncludeNotifications)
     service.notifications.set([
       { id: 'n1', title: 'A 的通知', type: 'info', isRead: false, creationTime: '2026-01-01' },
     ]);
+    //#endif
+    //#if (IncludeRealTime)
     await service.subscribeResource('order-1');
+    //#endif
 
     await service.reset();
 
     // SignalR 的 principal 在握手时定死：不断开就换人登录，下一个用户会复用
     // 上一个人的活连接，以对方的身份继续收消息。
     expect(built.every((connection) => connection.stopCount === 1)).toBe(true);
+    //#if (IncludeNotifications)
     expect(service.notifications()).toEqual([]);
+    //#endif
+    //#if (IncludeRealTime)
     expect(service.lastResourceEvent()).toBeNull();
+    //#endif
     expect(service.isConnected()).toBe(false);
 
     await service.connect();
@@ -306,6 +327,7 @@ describe('SignalRService connection lifecycle', () => {
     expect(service.isConnected()).toBe(false);
     expect(built.every((connection) => connection.stopCount >= 1)).toBe(true);
   });
+  //#if (IncludeNotifications)
 
   it('does not write stale hub pushes arriving during reset into the list of the new principal', async () => {
     await service.connect();
@@ -315,9 +337,10 @@ describe('SignalRService connection lifecycle', () => {
 
     // stop() 是异步的，在它完成之前仍可能收到上一个主体的推送。
     push({ id: 'n1', title: 'A 的推送', type: 'info', isRead: false, creationTime: '2026-01-01' });
-
     expect(service.notifications()).toEqual([]);
   });
+  //#endif
+  //#if (IncludeRealTime)
 
   it('does not resubscribe a subscribe call completing after reset on the connection of the next principal', async () => {
     await service.connect();
@@ -335,6 +358,7 @@ describe('SignalRService connection lifecycle', () => {
     // 重连时会被真的重新订阅到下一个用户名下。
     expect(business.invocations).toEqual([]);
   });
+  //#endif
 
   it('connects for a new principal even while the attempt of the old one is unfinished', async () => {
     const stale = service.connect();
@@ -383,9 +407,12 @@ describe('SignalRService connection lifecycle', () => {
       const connection = built[0];
       expect(connection, '连接应当已经建出并写入字段').toBeDefined();
 
+      //#if (IncludeRealTime)
       service.registerResourceEvent('OrderChanged');
+      //#endif
       await service.reset();
 
+      //#if (IncludeNotifications)
       connection.handlers.get(SignalRService.notificationReceived)?.({
         id: 'a-1',
         title: 'A 的推送',
@@ -393,10 +420,17 @@ describe('SignalRService connection lifecycle', () => {
         isRead: false,
         creationTime: '2026-01-01',
       });
+      //#endif
+      //#if (IncludeRealTime)
       connection.handlers.get('OrderChanged')?.({ id: 'order-1' });
+      //#endif
 
+      //#if (IncludeNotifications)
       expect(service.notifications()).toEqual([]);
+      //#endif
+      //#if (IncludeRealTime)
       expect(service.lastResourceEvent()).toBeNull();
+      //#endif
     } finally {
       built.forEach((connection) => connection.completeStart());
     }
@@ -404,6 +438,7 @@ describe('SignalRService connection lifecycle', () => {
     await pending;
     expect(service.isConnected()).toBe(false);
   });
+  //#if (IncludeRealTime)
 
   it('does not subscribe resources of the next principal when switching while reconnect resubscription is stuck', async () => {
     await service.connect();
@@ -437,6 +472,7 @@ describe('SignalRService connection lifecycle', () => {
     // 并在上一个人的连接上把它订阅一遍。
     expect(staleBusiness.invocations.map((call) => call.args[0])).not.toContain('b-order');
   });
+  //#endif
 
   // stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面。
   it('clears the reference even when stop throws', async () => {

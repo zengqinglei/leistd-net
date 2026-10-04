@@ -73,6 +73,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     table.PrimaryKey("PK_RecurringJobStates", x => x.Name);
                 });
 
+#if (IncludeOperationRecords)
             migrationBuilder.CreateTable(
                 name: "OperationRecordArchives",
                 schema: "companyname-projectname",
@@ -102,7 +103,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 {
                     table.PrimaryKey("PK_OperationRecordArchives", x => x.Id);
                 });
+#endif
 
+#if (IncludeOperationRecords)
             migrationBuilder.CreateTable(
                 name: "OperationRecords",
                 schema: "companyname-projectname",
@@ -131,6 +134,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 {
                     table.PrimaryKey("PK_OperationRecords", x => x.Id);
                 });
+#endif
 
             migrationBuilder.CreateTable(
                 name: "PermissionGrantRecords",
@@ -393,32 +397,40 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 columns: new[] { "UserId", "IsRead" });
 #endif
 
+#if (IncludeOperationRecords)
             migrationBuilder.CreateIndex(
                 name: "IX_OperationRecordArchives_TenantId_CreationTime",
                 schema: "companyname-projectname",
                 table: "OperationRecordArchives",
                 columns: new[] { "TenantId", "CreationTime" },
                 descending: new[] { false, true });
+#endif
 
+#if (IncludeOperationRecords)
             migrationBuilder.CreateIndex(
                 name: "IX_OperationRecords_CreationTime",
                 schema: "companyname-projectname",
                 table: "OperationRecords",
                 column: "CreationTime");
+#endif
 
+#if (IncludeOperationRecords)
             migrationBuilder.CreateIndex(
                 name: "IX_OperationRecords_TenantId_CreationTime",
                 schema: "companyname-projectname",
                 table: "OperationRecords",
                 columns: new[] { "TenantId", "CreationTime" },
                 descending: new[] { false, true });
+#endif
 
+#if (IncludeOperationRecords)
             migrationBuilder.CreateIndex(
                 name: "IX_OperationRecords_TenantId_Visibility_CreationTime",
                 schema: "companyname-projectname",
                 table: "OperationRecords",
                 columns: new[] { "TenantId", "Visibility", "CreationTime" },
                 descending: new[] { false, false, true });
+#endif
 
             migrationBuilder.CreateIndex(
                 name: "IX_PermissionGrantRecords_PermissionName_ProviderName_Provider~",
@@ -540,13 +552,17 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 name: "RecurringJobStates",
                 schema: "companyname-projectname");
 
+#if (IncludeOperationRecords)
             migrationBuilder.DropTable(
                 name: "OperationRecordArchives",
                 schema: "companyname-projectname");
+#endif
 
+#if (IncludeOperationRecords)
             migrationBuilder.DropTable(
                 name: "OperationRecords",
                 schema: "companyname-projectname");
+#endif
 
             migrationBuilder.DropTable(
                 name: "PermissionGrantRecords",

@@ -25,39 +25,49 @@
 | 不能，且互斥取值 ≥3 个 | 枚举 |
 | 其余一律 | **布尔 `IncludeXxx`** |
 
-服务形态恰好是三个互斥取值，因此是唯一的枚举 `ServiceRole`：
+服务形态使用互斥枚举 `ServiceRole`：
 
 | 取值 | 含义 |
 | --- | --- |
-| `Identity`（默认） | 自己签发令牌，持有本地身份与租户控制面 |
-| `Standalone` | 有本地身份与租户控制面，但**不带授权服务器**（Cookie 会话形态） |
-| `Resource` | 不持有身份，校验远端签发的令牌 |
+| `Identity`（默认） | 本地口令身份与交互认证，签发 OIDC 令牌 |
+| `Standalone` | 本地口令身份与 Cookie 会话，不带授权服务器 |
+| `Resource` | 验证远端令牌，保留本地用户投影、角色与权限事实 |
 
-其余能力一律布尔，因为它们都能表达成"有/无某能力"：`IncludeNotifications`、`IncludeExternalLogin`、`IncludeLocalization`。
+能力按可独立取舍的产品边界划分；实体审计、软删除、安全失败计数、锁定与撤销属于基础行为，不作为公开参数。
 
-**规则二：能力按"用户会不会单独取舍"划粒度，相关的一次给全。**
+| 布尔参数 | 默认 | 生效范围 |
+| --- | --- | --- |
+| `IncludeFrontend` | true | Resource；本地交互认证始终保留前端 |
+| `IncludeMultiTenancy` | true | 全部角色 |
+| `IncludeRealTime` | false | 全部角色，独立控制业务实时能力 |
+| `IncludeEmail` | true | 本地口令身份 |
+| `IncludeOperationRecords` | true | 全部角色，控制内置历史产品；关闭后保留安全行为日志 |
+| `IncludeNotifications` | false | 全部角色，独立于业务实时能力 |
+| `IncludeExternalLogin` | false | 本地口令身份 |
+| `IncludeLocalization` | false | 全部角色，前端载荷还要求有效前端存在 |
 
-身份能力一次带上用户、角色、权限管理、登录、密码、邮箱验证与租户控制面，不拆 `IncludeRoles`（旧模板拆过，是过度细分）。授权服务器不作为独立布尔，而是 `ServiceRole` 的一个取值——因为"带不带 `/connect/*` 端点"和"是不是身份服务"在部署上从来不是两个独立选择。
+Framework 提供通用契约与适配器，不感知角色或模板参数。Template 在组合根选择能力并裁剪用例、依赖、迁移、界面、Mock、测试、配置及文档。六个后端项目名称保持 Api、Application、Domain、Infrastructure、DbMigrator、Client；服务职责通过项目名前缀表达。
 
-**computed 只做枚举到能力的映射**，让条件代码写能力名而不是写 `ServiceRole == "..."`：
+### 3.2 有效能力集中派生
 
+`template.json` 是参数与有效能力的唯一来源，不使用 `isEnabled`；角色专用参数仅在有效能力表达式中直接消费。
+
+```text
+LocalIdentity = ServiceRole != Resource
+OpenIddictServer = ServiceRole == Identity
+RemoteTokenAuth = ServiceRole == Resource
+ExternalLogin = LocalIdentity && IncludeExternalLogin
+SpaFrontend = LocalIdentity || IncludeFrontend
+ResourceBrowserSession = RemoteTokenAuth && IncludeFrontend
+Email = LocalIdentity && IncludeEmail
+Impersonation = LocalIdentity && IncludeMultiTenancy && IncludeOperationRecords
 ```
-LocalIdentity             = (ServiceRole != "Resource")
-OpenIddictServer          = (ServiceRole == "Identity")
-RemoteTokenAuth           = (ServiceRole == "Resource")
-```
 
-条件代码只引用这四个能力名。这样新增一个 `ServiceRole` 取值时改的是这四行，而不是散在几百个文件里的比较表达式。
+条件按能力含义书写：`LocalIdentity` 表示本地口令身份，不能解释为“存在用户表”；Resource 同样持有用户投影和本地授权。单租户仍保留消费者需要的 MultiTenancy Core 和宿主数据库执行能力，业务 `TenantId=null` 及部分唯一索引保持统一。
 
-按条件的**含义**选能力名，不按当前取值相同就混用：凡指"验证远端令牌、作为 OIDC 客户端"的条件用 `RemoteTokenAuth`；`!LocalIdentity` 只表示"没有本地用户表"。两者现在取值相同，将来新增形态时（例如有本地用户、同时信任外部令牌）就会分开，写错的那一侧会静默生成错的组合。
+通知与实时四种组合分别为无 Hub、通知 Hub、业务实时 Hub、合并实时 Hub；合并形态只建立一条前端连接。邮件关闭同时裁剪完整发送和验证资产，联系信息字段按实际消费者保留。历史关闭同时裁剪数据库与读侧产品，成功安全日志在真实事务提交后输出；日志模式有提交后进程退出导致丢失的窗口，不等同于数据库同事务保证。
 
-### 3.2 前置依赖靠枚举消解，不要用 `isEnabled`
-
-`isEnabled` 不能引用 computed 符号，而本模板的前置条件均为能力名。
-
-将互斥关系编码进枚举取值：`ServiceRole=Resource` 已表示没有本地身份，无需额外布尔开关。`template.json` 不使用 `isEnabled`。
-
-其他布尔参数在前置条件不成立时可以显示，但不得生成无效内容；例如外部登录代码整体受 `LocalIdentity` 保护。
+Resource 的首位管理员通过正式 DbMigrator `--grant-admin <sub> [--tenant <id>]` 引导，默认只读，`--apply` 才写入；不依赖人工 SQL 或首次访问自动授权。重复执行保留显式撤销。生成项目的具体命令说明放在其后端 README。
 
 ### 3.3 模板引擎限制
 
@@ -105,20 +115,11 @@ export const next = 1;
 
 ### 3.5 标准场景矩阵
 
-| 场景 | 参数重点 | 目的 | PR 档 |
-| --- | --- | --- | --- |
-| `identity` | 默认 | OIDC Server、租户控制面、Identity 业务库与完整前端 | ✓ |
-| `resource` | `ServiceRole=Resource` | 远端令牌校验、本服务授权、动态租户连接与完整前端 | |
-| `standalone` | `ServiceRole=Standalone` | Cookie 会话形态：有本地身份与租户控制面，**不带授权服务器** | |
-| `identity-notifications` | `IncludeNotifications=true` | Identity 可选通知切片 | ✓ |
-| `resource-notifications` | Resource + 同上 | Resource 可选通知切片 | ✓ |
-| `identity-external-login` | `IncludeExternalLogin=true` | Identity 外部登录适配 | |
-| `standalone-external-login` | Standalone + 外部登录 | 无授权服务器时的外部登录；登记的容器检查场景 | ✓ |
-| `identity-localization` | `IncludeLocalization=true` | Identity 本地化切片 | |
-| `resource-localization` | Resource + 同上 | Resource 本地化切片 | ✓ |
-| `identity-all-features` | 通知 + 外部登录 + 本地化 | 可选切片的组合交互 | ✓ |
+场景、档位、分片及形态断言唯一维护在 `scripts/template-matrix-scenarios.ps1`。保留原有回归场景，同时覆盖最小本地身份、Resource 纯 API、单租户、日志模式、邮件关闭及通知/实时交互。PR 档覆盖全部可达条件行和有效能力两两取值；高阶交互由关键场景与真实端到端补齐，full 档执行全部登记场景。
 
-PR 档的取舍与覆盖闸门见[模板质量验证](./quality-assurance.md)；全部场景在合入后执行。
+原始输入共 768 组，有效形态共 320 组。`test-template-generation.py` 实际生成全部有效形态，检查资产、JSON、项目结构、迁移与依赖不变量，并以实际生成结果验证角色无效参数的代表性内容等价。随机 UserSecretsId 是唯一排除的非确定性字段。轻量生成不能替代矩阵编译、数据库运行或浏览器验证。
+
+生成检查还验证 TypeScript 相对模块与组件模板/样式资产闭包，防止文件已裁掉但调用方仍引用。词条源码可用模板条件指令包住可选键；源码检查只识别这些指令并校验完整词条集合，不接受普通 JSON 注释或非法内容。全部有效形态的实际词条产物必须是严格 JSON，en/zh 键和占位符逐形态一致；条件结构与符号由独立源码闸门验证。
 
 Standalone 场景专门检验条件独立性：`identity` 与 `resource` 里 `LocalIdentity` 和 `OpenIddictServer` 恰好同真同假，只有 Standalone 形态把两者分开（PR 档由 `standalone-external-login` 承担）。新增能力时不得只验证 `identity` 和 `resource`。
 

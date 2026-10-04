@@ -53,9 +53,11 @@
     <PackageVersion Include="Leistd.OperationRecords.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.OperationRecords.Logging" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Tracing.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.HttpClient" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ServiceClient.Core" Version="$(LeistdFrameworkVersion)" />

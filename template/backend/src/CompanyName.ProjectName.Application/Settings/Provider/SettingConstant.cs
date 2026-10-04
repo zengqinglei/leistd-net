@@ -1,9 +1,7 @@
-#if (LocalIdentity)
 #if (IncludeNotifications)
 using CompanyName.ProjectName.Application.Notifications;
 using Leistd.Notifications.Settings.Options;
 
-#endif
 #endif
 namespace CompanyName.ProjectName.Application.Settings.Provider;
 
@@ -31,7 +29,9 @@ public static class SettingConstant
         public const string Operations = "Operations";
 
         /// <summary>审计：操作记录保留多久，进程级。</summary>
+#if (IncludeOperationRecords)
         public const string Audit = "Audit";
+#endif
 
 #if (LocalIdentity)
         /// <summary>注册与验证：租户各自的注册策略。</summary>
@@ -40,9 +40,11 @@ public static class SettingConstant
         /// <summary>登录安全：租户各自的登录失败锁定等策略。</summary>
         public const string Security = "Security";
 
+#if (Email)
         /// <summary>邮件发送：进程级的 SMTP 参数。</summary>
         public const string Email = "Email";
 
+#endif
 #endif
 #if (IncludeNotifications)
         /// <summary>通知偏好：每个人各自决定哪类通知经哪个渠道收。</summary>
@@ -96,6 +98,7 @@ public static class SettingConstant
             ["Verbose", "Debug", "Information", "Warning", "Error", "Fatal"];
     }
 
+#if (IncludeOperationRecords)
     /// <summary>
     /// 操作记录保留期。
     /// </summary>
@@ -113,6 +116,7 @@ public static class SettingConstant
         public const string RetentionDays = "Audit.RetentionDays";
 
     }
+#endif
 
 #if (LocalIdentity)
     /// <summary>
@@ -125,11 +129,14 @@ public static class SettingConstant
     /// </remarks>
     public static class Registration
     {
+#if (Email)
         /// <summary>是否要求邮箱验证。</summary>
         public const string EnableEmailVerification = "Registration.EnableEmailVerification";
 
+#endif
         /// <summary>图形验证码有效期（分钟）。</summary>
         public const string CaptchaExpiryMinutes = "Registration.CaptchaExpiryMinutes";
+#if (Email)
 
         /// <summary>邮箱验证码有效期（分钟）。</summary>
         public const string EmailCodeExpiryMinutes = "Registration.EmailCodeExpiryMinutes";
@@ -139,6 +146,7 @@ public static class SettingConstant
 
         /// <summary>单个验证挑战允许的最大错误次数。</summary>
         public const string EmailCodeMaxAttempts = "Registration.EmailCodeMaxAttempts";
+#endif
 
     }
 
@@ -165,6 +173,7 @@ public static class SettingConstant
 
     }
 
+#if (Email)
     /// <summary>
     /// 发信参数（SMTP）。
     /// </summary>
@@ -197,7 +206,9 @@ public static class SettingConstant
         /// <summary>默认发件显示名。</summary>
         public const string DefaultFromName = "Email.DefaultFromName";
     }
+#endif
 
+#endif
 #if (IncludeNotifications)
     /// <summary>
     /// 通知偏好（用户级），命名为 <c>Notifications.{通知类别}.{渠道}</c>。
@@ -211,19 +222,19 @@ public static class SettingConstant
     {
         private const string Prefix = NotificationPreferenceOptions.DefaultSettingNamePrefix;
 
+#if (Email)
         /// <summary>安全提醒是否也发邮件（只发到已验证的邮箱）。</summary>
         public const string SecurityEmail = $"{Prefix}.{AppNotificationTypes.Security}.{AppNotificationChannels.Email}";
 
+#endif
         /// <summary>系统通知是否在站内接收。</summary>
         public const string SystemInApp = $"{Prefix}.{AppNotificationTypes.System}.{AppNotificationChannels.InApp}";
+#if (Email)
 
         /// <summary>系统通知是否也发邮件。</summary>
         public const string SystemEmail = $"{Prefix}.{AppNotificationTypes.System}.{AppNotificationChannels.Email}";
-
-        /// <summary>某类通知经某渠道的偏好设置名。</summary>
-        public static string NameOf(string type, string channel) => $"{Prefix}.{type}.{channel}";
+#endif
     }
 
-#endif
 #endif
 }

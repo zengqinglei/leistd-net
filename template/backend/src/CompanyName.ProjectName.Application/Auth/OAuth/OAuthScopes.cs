@@ -1,5 +1,7 @@
 #if (OpenIddictServer)
+#if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
+#endif
 using CompanyName.ProjectName.Domain.Auth.Options;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -32,8 +34,10 @@ public static class OAuthScopes
         new(Scopes.Roles, "Roles", [], MachineOnly: false),
         new(Scopes.OfflineAccess, "Offline access", [], MachineOnly: false),
         new(options.Resource, "API", [options.Resource], MachineOnly: false),
+#if (IncludeMultiTenancy)
         new(TenantConnectionScopes.RuntimeRead, "Read tenant connection routing metadata", [options.Resource], MachineOnly: true),
         new(TenantConnectionScopes.MigrationRead, "Read tenant connection migration metadata", [options.Resource], MachineOnly: true),
+#endif
         .. options.ApiResources.Select(api => new OAuthScope(api.ScopeName, api.ScopeName, [api.Name], MachineOnly: false)),
     ];
 

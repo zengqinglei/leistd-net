@@ -20,8 +20,8 @@
   </ItemGroup>
 
   <!--
-    刻意不引用 unit-of-work：本包只决定记录写进哪一层，事务边界由存储按记录结果执行
-    （契约见 IOperationRecordStore.InsertAsync），独立提交落在持有工作单元依赖的 .EntityFrameworkCore 包里。
+    刻意不引用 unit-of-work：本包只决定记录写进哪一层，与事务的关系由写入实现按记录结果执行
+    （契约见 IOperationRecordWriter.InsertAsync），工作单元依赖落在 .EntityFrameworkCore 与 .Logging 适配包里。
   -->
 
   <ItemGroup>

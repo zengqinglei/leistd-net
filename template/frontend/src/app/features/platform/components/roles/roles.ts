@@ -37,7 +37,13 @@ import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
 import { RoleTable } from './widgets/role-table/role-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
+//#if (IncludeRealTime)
+import { AuthService } from '../../../../core/services/auth-service';
+//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#if (IncludeRealTime)
+import { realtimeResourceKey, SignalRService } from '../../../../core/services/signalr-service';
+//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#if (!IncludeLocalization)
@@ -61,6 +67,11 @@ import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/per
 // 只列实体自身的列：userCount / permissionCount 是聚合出来的派生值，后端无法据其排序。
 const ROLE_SORT_COLUMNS = ['displayName', 'sort', 'creationTime'] as const;
 const DEFAULT_ROLE_SORTING: SortingState = [{ id: 'sort', desc: false }];
+//#if (IncludeRealTime)
+/** 实时资源与事件名：与后端 AppRealTimeResources 一致。 */
+const ROLE_LIST_RESOURCE = 'roles';
+const ROLES_CHANGED_EVENT = 'Roles.Changed';
+//#endif
 
 /**
  * 角色管理页。
@@ -96,6 +107,10 @@ export class Roles {
   private readonly layoutService = inject(LayoutService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  //#if (IncludeRealTime)
+  private readonly authService = inject(AuthService);
+  private readonly signalR = inject(SignalRService);
+  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
@@ -168,6 +183,10 @@ export class Roles {
         this.totalCount.set(result.totalCount);
       });
 
+    //#if (IncludeRealTime)
+    this.followRoleListChanges();
+
+    //#endif
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
     const title = translateSignal('roles.title', {}, { scope: 'roles' });
@@ -180,6 +199,31 @@ export class Roles {
   reload(): void {
     this.refreshRequests.next();
   }
+  //#if (IncludeRealTime)
+
+  /**
+   * 角色列表在别处被改（另一位管理员、另一个标签页）时自动刷新。
+   *
+   * 订阅本作用域的角色列表资源；推送只是"该刷新了"的提示，列表内容仍经受权限保护的查询接口获取。
+   */
+  private followRoleListChanges(): void {
+    const resourceKey = realtimeResourceKey(
+      ROLE_LIST_RESOURCE,
+      this.authService.currentUser()?.tenantId,
+    );
+    this.signalR.registerResourceEvent(ROLES_CHANGED_EVENT);
+    void this.signalR.connect().then(() => this.signalR.subscribeResource(resourceKey));
+    this.destroyRef.onDestroy(() => {
+      void this.signalR.unsubscribeResource(resourceKey).catch(() => undefined);
+    });
+
+    effect(() => {
+      if (this.signalR.lastResourceEvent()?.eventName === ROLES_CHANGED_EVENT) {
+        this.reload();
+      }
+    });
+  }
+  //#endif
 
   onSearchQueryChange(value: string): void {
     this.searchQuery.set(value);

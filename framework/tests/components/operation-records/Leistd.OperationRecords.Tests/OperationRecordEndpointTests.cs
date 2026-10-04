@@ -68,6 +68,24 @@ public sealed class OperationRecordEndpointTests : IAsyncLifetime
         _host.Dispose();
     }
 
+    /// <summary>只写日志的模式没有历史可读：映射端点当场报错，而不是第一次请求才 500。</summary>
+    [Fact]
+    public async Task Mapping_without_a_history_store_fails_at_startup()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddRouting();
+        await using var app = builder.Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => app.MapGroup("/records").MapOperationRecords(o =>
+        {
+            o.ReadPolicy = "records.read";
+            o.ExportPolicy = "records.export";
+            o.ExportAction = "operation-records.exported";
+        }));
+        Assert.Contains("history store", exception.Message);
+    }
+
     private Task<HttpResponseMessage> GetAsync(string url, string? permission)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);

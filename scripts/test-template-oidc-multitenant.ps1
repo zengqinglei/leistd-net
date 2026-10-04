@@ -35,13 +35,14 @@ function Update-MtTokens { foreach ($key in @("alpha", "gamma", "beta")) { $mtTo
 
 function Get-MtDatabase([string]$Key) { if ($Key -eq "beta") { "oidc_mt_beta" } else { "oidc_shared" } }
 
-function Grant-MtPermission([string]$Key, [string]$Service, [string]$Permission) {
-    # Resource 没有授权起点：部署后没有任何人能经接口授予权限，运维只能直接写第一条授予。
+function Grant-MtAdmin([string]$Key, [string]$Service) {
     $tenant = $mtTenants[$Key]
     $subject = (Read-TokenClaims $mtTokens[$Key]).sub
-    $sql = ('INSERT INTO "e2e-{0}"."PermissionGrantRecords" ("Id","TenantId","PermissionName","ProviderName","ProviderKey","CreationTime") ' +
-        'VALUES (gen_random_uuid(), ''{1}'', ''{2}'', ''User'', ''{3}'', now());') -f $Service, $tenant.id, $Permission, $subject
-    Invoke-Sql (Get-MtDatabase $Key) $sql | Out-Null
+    $environment = $services[$Service].Environment.Clone()
+    Invoke-Tool "dotnet" @($services[$Service].Migrator, "--grant-admin", $subject, "--tenant", [string]$tenant.id) `
+        "mt-admin-dry-$Key-$Service" -Variables $environment | Out-Null
+    Invoke-Tool "dotnet" @($services[$Service].Migrator, "--grant-admin", $subject, "--tenant", [string]$tenant.id, "--apply") `
+        "mt-admin-apply-$Key-$Service" -Variables $environment | Out-Null
 }
 
 function Get-MtUserIds([string]$Key, [string]$Service, [hashtable]$Headers = @{}) {
@@ -61,7 +62,7 @@ function Test-MtAuthorizationAndIsolation {
     $ids = @{}
     foreach ($key in @("alpha", "gamma", "beta")) { $ids[$key] = [string](Read-TokenClaims $mtTokens[$key]).sub }
     Assert-Http "mt-no-bootstrap-authority" 403 ($urls.orders + "/api/v1/users") -Token $mtTokens.alpha | Out-Null
-    foreach ($key in @("alpha", "beta")) { Grant-MtPermission $key "orders" "App.Users" }
+    foreach ($key in @("alpha", "beta")) { Grant-MtAdmin $key "orders" }
 
     $alphaUsers = @(Get-MtUserIds "alpha" "orders")
     Assert-Value "mt-alpha-sees-self" $true ($alphaUsers -contains $ids.alpha)

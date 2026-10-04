@@ -1,13 +1,23 @@
+//#if (IncludeMultiTenancy)
 import { TENANT_HEADER } from '../../src/app/core/services/tenant-protocol';
+//#endif
 import {
   ChangePasswordInputDto,
   UpdateCurrentUserInputDto,
   RegisterInputDto,
+  //#if (Email)
   SecurityConfigOutputDto,
+  //#endif
   CaptchaOutputDto,
+  //#if (Email)
   SendEmailCodeInputDto,
+  //#endif
+  //#if (Email)
   EmailVerificationChallengeOutputDto,
+  //#endif
+  //#if (Email)
   EmailVerificationInputDto,
+  //#endif
   SetAvatarInputDto,
   UserSessionOutputDto,
   TwoFactorRecoveryCodesOutputDto,
@@ -24,10 +34,13 @@ import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
 //#endif
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
+//#if (IncludeMultiTenancy)
 import { TENANTS } from '../data/tenant';
+//#endif
 import { MockUser, USERS, toUserOutput } from '../data/user';
 import {
   MOCK_SESSION_USER_ID,
+  getMockSessionTenantKey,
   setMockSessionTenantKey,
   setMockSessionUserId,
 } from '../utils/current-user';
@@ -36,6 +49,7 @@ const CAPTCHA_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const CAPTCHA_DIGITS = '23456789';
 const CAPTCHA_CHARACTERS = CAPTCHA_LETTERS + CAPTCHA_DIGITS;
 const captchaStore = new Map<string, string>();
+//#if (Email)
 const EMAIL_VERIFICATION_ENABLED = false;
 const EMAIL_CODE = '123456';
 const EMAIL_CODE_EXPIRY_SECONDS = 300;
@@ -54,6 +68,7 @@ interface EmailVerificationChallenge {
 const emailChallengeStore = new Map<string, EmailVerificationChallenge>();
 const emailRateLimitStore = new Map<string, number>();
 
+//#endif
 function ensureUsernameAvailable(username: string, currentUserId: string): void {
   const exists = USERS.some((user) => user.username === username && user.id !== currentUserId);
   if (exists) {
@@ -70,6 +85,7 @@ function ensureEmailAvailable(email: string, currentUserId: string): void {
     throw new MockException(409, { code: 'User:EmailTaken', message: 'Email is already in use' });
   }
 }
+//#if (IncludeMultiTenancy)
 
 /** 复刻后端行为：租户提示头指向已停用租户时登录被 403 拒绝。 */
 function ensureTenantActive(req: MockRequest): void {
@@ -82,6 +98,7 @@ function ensureTenantActive(req: MockRequest): void {
     throw new MockException(403, { code: 'Tenant:NotActive', message: 'Tenant is deactivated' });
   }
 }
+//#endif
 
 function sessionLogin(usernameOrEmail: string, password: string, tenantKey: string): 'ok' {
   const user = USERS.find((u) => u.username === usernameOrEmail || u.email === usernameOrEmail);
@@ -113,6 +130,7 @@ function requireCurrentMockUser(): MockUser {
   if (!user) {
     throw new MockException(401, { message: 'Not authenticated' });
   }
+  getMockSessionTenantKey();
   return user;
 }
 
@@ -158,6 +176,7 @@ function setCurrentUserAvatar(req: MockRequest): UserOutputDto {
   user.avatar = body.avatar?.trim() || undefined;
   return toUserOutput(user);
 }
+//#if (Email)
 
 function sendCurrentUserEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const user = requireCurrentMockUser();
@@ -184,6 +203,8 @@ function sendCurrentUserEmailCode(req: MockRequest): EmailVerificationChallengeO
     retryAfterSeconds: EMAIL_CODE_RETRY_SECONDS,
   };
 }
+//#endif
+//#if (Email)
 
 function confirmCurrentUserEmail(req: MockRequest): UserOutputDto {
   const user = requireCurrentMockUser();
@@ -205,6 +226,7 @@ function confirmCurrentUserEmail(req: MockRequest): UserOutputDto {
   user.isEmailVerified = true;
   return toUserOutput(user);
 }
+//#endif
 
 function changePassword(req: MockRequest): 'ok' {
   const user = requireCurrentMockUser();
@@ -366,8 +388,8 @@ function logout(): 'ok' {
   setMockSessionUserId(null);
   return 'ok';
 }
-
 //#if (OpenIddictServer)
+
 function getLogoutConfirmation(req: MockRequest): LogoutConfirmationOutputDto {
   // Mock 没有协议端点：只要求确认页的两个引用都在，便于在开发态预览确认页
   return req.queryParams['request_uri'] && req.queryParams['confirmation']
@@ -379,11 +401,13 @@ function getLogoutConfirmation(req: MockRequest): LogoutConfirmationOutputDto {
       }
     : { isValid: false };
 }
-
 //#endif
+//#if (Email)
+
 function getSecurityConfig(): SecurityConfigOutputDto {
   return { enableEmailVerification: EMAIL_VERIFICATION_ENABLED, emailVerificationAvailable: true };
 }
+//#endif
 
 function getCaptcha(): CaptchaOutputDto {
   const bgColors = ['#f0fdf4', '#f8fafc', '#fffbeb', '#fef2f2', '#f0f9ff'];
@@ -434,6 +458,7 @@ function validateCaptcha(captchaToken: string | undefined, captchaCode: string |
     });
   }
 }
+//#if (Email)
 
 function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const body = req.body as SendEmailCodeInputDto;
@@ -468,6 +493,7 @@ function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
     retryAfterSeconds: EMAIL_CODE_RETRY_SECONDS,
   };
 }
+//#endif
 
 function register(req: MockRequest): 'ok' {
   const body = req.body as RegisterInputDto;
@@ -478,11 +504,15 @@ function register(req: MockRequest): 'ok' {
   ensureUsernameAvailable(username, '');
   ensureEmailAvailable(email, '');
 
+  //#if (Email)
   if (EMAIL_VERIFICATION_ENABLED) {
     validateEmailChallenge(req, email, body);
   } else {
     validateCaptcha(body.captchaToken, body.captchaCode);
   }
+  //#else
+  validateCaptcha(body.captchaToken, body.captchaCode);
+  //#endif
 
   ensureAcceptablePassword(body.password, 'Password');
 
@@ -503,6 +533,7 @@ function register(req: MockRequest): 'ok' {
   // 注册完可按需设置登录态，这里选择不自动登录
   return 'ok';
 }
+//#if (Email)
 
 function validateEmailChallenge(req: MockRequest, email: string, body: RegisterInputDto): void {
   const verification = body.emailVerification;
@@ -533,6 +564,8 @@ function validateEmailChallenge(req: MockRequest, email: string, body: RegisterI
 
   emailChallengeStore.delete(verification.challengeId);
 }
+//#endif
+//#if (Email)
 
 function invalidEmailChallenge(): MockException {
   return new MockException(400, {
@@ -540,9 +573,13 @@ function invalidEmailChallenge(): MockException {
     message: 'The email verification code is incorrect or has expired',
   });
 }
-
-function getRequestScope(req: MockRequest): string {
-  return req.headers.get(TENANT_HEADER) ?? 'host';
+//#endif
+function getRequestScope(_req: MockRequest): string {
+  //#if (IncludeMultiTenancy)
+  return _req.headers.get(TENANT_HEADER) ?? 'host';
+  //#else
+  return 'host';
+  //#endif
 }
 
 function normalizeEmail(email: string): string {
@@ -594,28 +631,34 @@ function unlinkExternalLogin(req: MockRequest): 'ok' {
 
 export const AUTH_API = {
   'POST /api/v1/auth/register': (req: MockRequest) => register(req),
+  //#if (Email)
   'GET /api/v1/auth/security-config': () => getSecurityConfig(),
+  //#endif
   //#if (OpenIddictServer)
   'GET /api/v1/auth/logout-confirmation': (req: MockRequest) => getLogoutConfirmation(req),
   //#endif
   'GET /api/v1/auth/captcha': () => getCaptcha(),
+  //#if (Email)
   'POST /api/v1/auth/send-email-code': (req: MockRequest) => sendEmailCode(req),
+  //#endif
   'POST /api/v1/auth/logout': () => logout(),
   'POST /api/v1/auth/session-login': (req: MockRequest) => {
+    //#if (IncludeMultiTenancy)
     ensureTenantActive(req);
+    //#endif
     // 登录是匿名阶段，此时租户提示头决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
-    return sessionLogin(
-      req.body.usernameOrEmail,
-      req.body.password,
-      req.headers.get(TENANT_HEADER) ?? 'host',
-    );
+    return sessionLogin(req.body.usernameOrEmail, req.body.password, getRequestScope(req));
   },
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
   'PUT /api/v1/auth/me/avatar': (req: MockRequest) => setCurrentUserAvatar(req),
+  //#if (Email)
   'POST /api/v1/auth/me/email-verification': (req: MockRequest) => sendCurrentUserEmailCode(req),
+  //#endif
+  //#if (Email)
   'POST /api/v1/auth/me/email-verification/confirm': (req: MockRequest) =>
     confirmCurrentUserEmail(req),
+  //#endif
   'GET /api/v1/auth/me/two-factor': () => getTwoFactorStatus(),
   'POST /api/v1/auth/me/two-factor/setup': () => beginTwoFactorSetup(),
   'POST /api/v1/auth/me/two-factor/enable': (req: MockRequest) => enableTwoFactor(req),

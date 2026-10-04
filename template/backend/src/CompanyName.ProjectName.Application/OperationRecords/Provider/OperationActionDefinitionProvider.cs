@@ -22,6 +22,10 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
 {
     public void Define(IOperationActionDefinitionContext context)
     {
+#if (RemoteTokenAuth)
+        context.Add(OperationRecordActions.ResourceAdminGranted,
+            OperationRecordCategories.Authorization, OperationVisibility.Tenant, OperationSeverity.Critical);
+#endif
         // 账号：用户与角色自身的增删改。
         context.Add(
             OperationRecordActions.UserCreated,
@@ -172,10 +176,12 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordActions.AuthAvatarChanged,
             OperationRecordCategories.Account,
             OperationVisibility.Actor);
+#if (Email)
         context.Add(
             OperationRecordActions.AuthEmailVerified,
             OperationRecordCategories.Authentication,
             OperationVisibility.Actor);
+#endif
         context.Add(
             OperationRecordActions.AuthSessionRevoked,
             OperationRecordCategories.Authentication,

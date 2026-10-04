@@ -3,8 +3,12 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 using Leistd.Authorization.EntityFrameworkCore;
+#if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore;
+#endif
+#if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
+#endif
 using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
@@ -34,13 +38,15 @@ public class MyProjectDbContext(
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
     public DbSet<PermissionGrantRecord> PermissionGrantRecords { get; set; } = null!;
-    // 声明 DbSet 只为让表名取复数（EF 默认按实体名单数建表），查询一律经 IOperationRecordStore
+#if (IncludeOperationRecords)
+    // 声明 DbSet 只为让表名取复数（EF 默认按实体名单数建表），查询一律经 IOperationRecordReader
     public DbSet<OperationRecord> OperationRecords { get; set; } = null!;
 
     // 到期归档表（操作记录组件的保留期任务写入）。它不实现 IMultiTenant，因此不受租户全局过滤器约束——
     // 归档作业逐库执行，套上过滤器会让它只搬走宿主那部分且不报错。
     public DbSet<OperationRecordArchive> OperationRecordArchives { get; set; } = null!;
 
+#endif
     // 集群周期任务的完成水位：多副本同一时段只跑一次
     public DbSet<RecurringJobState> RecurringJobStates { get; set; } = null!;
 
@@ -68,8 +74,10 @@ public class MyProjectDbContext(
         modelBuilder.ConfigurePermissionAuthorization();
         // 设置值实体配置
         modelBuilder.ConfigureSettings();
+#if (IncludeOperationRecords)
         // 操作记录与归档表
         modelBuilder.ConfigureOperationRecords();
+#endif
         // 周期任务完成水位
         modelBuilder.ConfigureBackgroundJobs();
 #if (IncludeNotifications)

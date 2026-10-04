@@ -181,10 +181,14 @@ internal sealed class SessionSignInService(
     // 模拟登录的会话记下发起人，名称缺席时退回发起人 Id——设备列表里至少要看得出"这不是本人登录的"。
     private static string? ReadImpersonatorName(List<Claim> claims)
     {
+#if (Impersonation)
         if (claims.FirstOrDefault(c => c.Type == ImpersonationClaimTypes.ImpersonatorUserId) is not { } impersonator)
             return null;
 
         return claims.FirstOrDefault(c => c.Type == ImpersonationClaimTypes.ImpersonatorName)?.Value ?? impersonator.Value;
+#else
+        return null;
+#endif
     }
 
     /// <summary>

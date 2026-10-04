@@ -4,6 +4,7 @@ using Leistd.OperationRecords.Dtos;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.OperationRecords.AspNetCore.Endpoints;
 
@@ -32,6 +33,7 @@ public static class OperationRecordEndpoints
     /// 授权策略全部必填，漏配在映射时抛出。</para>
     /// <para>查询参数与控制器形态一致：<c>offset</c>、<c>limit</c>、<c>keyword</c>、<c>startTime</c>、<c>endTime</c>、
     /// 可重复的 <c>categories</c> 与 <c>actions</c>、<c>outcome</c>；入参校验失败返回带字段错误的 400。</para>
+    /// <para>要求已注册历史查询（由可回读的存储适配注册），否则映射时抛出。</para>
     /// <para>不要改写成 <c>[AsParameters]</c> 绑定分页类型：它会把没有默认值的非空属性当成必填参数。</para>
     /// </remarks>
     /// <example>
@@ -57,6 +59,16 @@ public static class OperationRecordEndpoints
         var options = new OperationRecordEndpointOptions();
         configure(options);
         options.Validate();
+
+        // 端点读的是历史，只有可回读的存储（如 AddOperationRecordsEfCore）才注册查询用例；
+        // 只写日志的适配没有历史可读。映射时报出，而不是等第一次请求才 500。
+        var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
+        if (probe is not null && !probe.IsService(typeof(IOperationRecordQueryService)))
+        {
+            throw new InvalidOperationException(
+                "MapOperationRecords requires an operation record history store. Register a readable store "
+                + "(e.g. AddOperationRecordsEfCore<TDbContext>()); the logging writer has no history to query.");
+        }
 
         var group = endpoints.MapGroup(string.Empty);
 

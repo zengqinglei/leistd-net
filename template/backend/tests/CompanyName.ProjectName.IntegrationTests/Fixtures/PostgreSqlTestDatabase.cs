@@ -54,7 +54,7 @@ internal static class PostgreSqlTestDatabase
 
     private static async Task MigrateAsync(string connectionString)
     {
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         var controlOptions = new DbContextOptionsBuilder<IdentityControlDbContext>()
             .UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable(DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name))

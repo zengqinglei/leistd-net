@@ -18,7 +18,9 @@ import {
   lucideCircleCheck,
   lucideEllipsis,
   lucideInfo,
+  //#if (Impersonation)
   lucideLogIn,
+  //#endif
   lucidePencil,
   lucideSearchX,
   lucideTrash2,
@@ -81,7 +83,9 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
       lucideCircleCheck,
       lucideEllipsis,
       lucideInfo,
+      //#if (Impersonation)
       lucideLogIn,
+      //#endif
       lucidePencil,
       lucideSearchX,
       lucideTrash2,
@@ -107,15 +111,19 @@ export class TenantTable {
   /** 行操作按权限裁剪；隐藏只影响体验，服务端仍对每个请求独立校验。 */
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
+  //#if (Impersonation)
 
   /** 模拟登录是宿主侧专属能力（App.Tenants.Impersonation 为 Host 侧别），租户上下文里恒为 false。 */
   readonly canImpersonate = input(true);
+  //#endif
 
   readonly paginationChange = output<PaginationState>();
   readonly details = output<TenantOutputDto>();
   readonly edit = output<TenantOutputDto>();
   readonly toggleActive = output<TenantOutputDto>();
+  //#if (Impersonation)
   readonly impersonate = output<TenantOutputDto>();
+  //#endif
   readonly delete = output<TenantOutputDto>();
 
   protected readonly tableViewport = tableViewportSignal();
@@ -212,8 +220,10 @@ const ENGLISH: Record<string, string> = {
   'common.edit': 'Edit',
   'tenants.deactivate': 'Deactivate',
   'tenants.activate': 'Activate',
+  //#if (Impersonation)
   'tenants.impersonate': 'Sign in as tenant',
   'tenants.impersonateInactiveHint': 'Deactivated tenants cannot be signed in to',
+  //#endif
   'common.delete': 'Delete',
   'tenants.table.emptyFilteredTitle': 'No matching tenants',
   'tenants.table.emptyFilteredHint': 'Adjust the search keyword',

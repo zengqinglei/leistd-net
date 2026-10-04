@@ -6,14 +6,16 @@
 {project-root}/
 ├── .agents/skills/          # 跨工具项目 Skill
 ├── backend/                 # .NET 后端
+<!--#if (SpaFrontend)-->
 ├── frontend/                # Angular 前端
+<!--#endif-->
 ├── deploy/                  # 容器编排配置
 ├── docs/                    # 长期规范与按需沉淀文档
 ├── Dockerfile
 └── README.md
 ```
 
-项目根是同时包含 `backend/`、`frontend/` 和 `docs/` 的目录；monorepo 中所有项目相对路径仍以该层为准。
+项目根包含 `backend/` 和 `docs/`，启用交互前端时同时包含 `frontend/`；monorepo 中所有项目相对路径仍以该层为准。
 
 ## 2. 后端分层
 
@@ -36,6 +38,7 @@ backend/src/
 
 测试项目按实际测试类型放在 `backend/tests/` 或解决方案现有位置，不为目录完整性创建空项目。
 
+<!--#if (SpaFrontend)-->
 ## 3. 前端分层
 
 ```text
@@ -54,6 +57,8 @@ frontend/
 - `features/` 按业务能力组织页面和局部服务。
 - `layout/` 保存应用壳与导航。
 - `shared/` 只保存可跨功能复用的展示组件和工具。
+
+<!--#endif-->
 
 ## 4. 文档与 Skill
 

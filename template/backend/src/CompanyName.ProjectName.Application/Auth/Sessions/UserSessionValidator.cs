@@ -28,7 +28,9 @@ internal sealed class UserSessionValidator(
     IRepository<UserSession, Guid> sessionRepository,
     IRepository<User, Guid> userRepository,
     ICurrentTenant currentTenant,
+#if (IncludeMultiTenancy)
     ITenantStore tenantStore,
+#endif
     IUnitOfWorkManager unitOfWorkManager,
     IDistributedCache distributedCache,
     IRequestClientInfo clientInfo,
@@ -46,17 +48,21 @@ internal sealed class UserSessionValidator(
             ReadGuid(claimTypes.Value.FindUserId(principal)) is not { } userId)
             return false;
 
-        var cacheKey = CacheKey(sessionId);
-        if (await distributedCache.GetStringAsync(cacheKey, cancellationToken) is not null)
-            return true;
-
         // 租户声明非法的会话一律无效：按宿主处理等于让租户会话进到宿主库
         var tenantClaim = claimTypes.Value.ReadTenant(principal);
         if (!tenantClaim.IsValid)
             return false;
 
         var tenantId = tenantClaim.TenantId;
+#if (!IncludeMultiTenancy)
+        if (tenantId is not null) return false;
+#endif
+        var cacheKey = CacheKey(sessionId);
+        if (await distributedCache.GetStringAsync(cacheKey, cancellationToken) is not null)
+            return true;
+
         string? tenantName = null;
+#if (IncludeMultiTenancy)
         if (tenantId is { } id)
         {
             var tenant = await tenantStore.FindAsync(id, cancellationToken);
@@ -67,6 +73,8 @@ internal sealed class UserSessionValidator(
                 return true;
             tenantName = tenant.Name;
         }
+
+#endif
 
         // 认证发生在多租户中间件之前，环境租户还没设：按主体的租户进到它的库里查
         using (currentTenant.Change(tenantId, tenantName))

@@ -14,7 +14,9 @@ internal static class ApiExceptionMappings
     {
 #if (LocalIdentity)
         AuthExceptionMappings.Configure(options);
+#if (IncludeMultiTenancy)
         TenantExceptionMappings.Configure(options);
+#endif
 #endif
 #if (OpenIddictServer)
         OpenApplicationExceptionMappings.Configure(options);

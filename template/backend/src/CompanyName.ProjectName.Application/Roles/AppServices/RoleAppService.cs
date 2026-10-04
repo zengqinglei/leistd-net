@@ -27,6 +27,12 @@ using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
+#if (IncludeRealTime)
+using CompanyName.ProjectName.Application.RealTime;
+using Leistd.EventBus.Abstractions;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Extensions;
+#endif
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
 
@@ -42,6 +48,10 @@ public class RoleAppService(
     IOperationRecorder operationRecorder,
     IObjectMapper objectMapper,
     ILogger<RoleAppService> logger,
+#if (IncludeRealTime)
+    ILocalEventBus localEventBus,
+    ICurrentTenant currentTenant,
+#endif
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IRoleAppService
 {
     public async Task<PagedResult<RoleOutputDto>> GetPagedListAsync(
@@ -139,6 +149,9 @@ public class RoleAppService(
             OperationTarget.For(role.Id, role.DisplayName ?? role.Name),
             PermissionConstant.Roles.Create,
             cancellationToken);
+#if (IncludeRealTime)
+        await PublishRoleListChangedAsync(cancellationToken);
+#endif
 
         return await MapToOutputAsync(role, cancellationToken);
     }
@@ -163,6 +176,9 @@ public class RoleAppService(
 
         await roleRepository.UpdateAsync(role, cancellationToken);
         logger.LogInformation("Role updated: {Name} (ID: {Id})", role.Name, role.Id);
+#if (IncludeRealTime)
+        await PublishRoleListChangedAsync(cancellationToken);
+#endif
 
         return await MapToOutputAsync(role, cancellationToken);
     }
@@ -229,7 +245,18 @@ public class RoleAppService(
             OperationTarget.For(id, role.DisplayName ?? role.Name),
             PermissionConstant.Roles.Delete,
             cancellationToken);
+#if (IncludeRealTime)
+        await PublishRoleListChangedAsync(cancellationToken);
+#endif
     }
+#if (IncludeRealTime)
+
+    // 有工作单元时事件推迟到提交之后分发，回滚的写入不推送
+    private Task PublishRoleListChangedAsync(CancellationToken cancellationToken) =>
+        localEventBus.PublishAsync(
+            new RoleListChangedEvent(currentTenant.ScopeKey(AppRealTimeResources.Roles)),
+            cancellationToken);
+#endif
 
     private async Task<Role> GetRoleOrThrowAsync(Guid id, CancellationToken cancellationToken)
     {

@@ -21,10 +21,17 @@ internal sealed class RemoteIdentityOptions
     /// <summary>本服务在令牌 <c>aud</c> 中的标识</summary>
     public string? Audience { get; set; }
 
+#if (ResourceBrowserSession)
+    /// <summary>浏览器会话使用的机密 OIDC 客户端标识</summary>
     public string? ClientId { get; set; }
+
+    /// <summary>浏览器会话使用的机密 OIDC 客户端口令</summary>
     public string? ClientSecret { get; set; }
-    /// <summary>申请本 API 的 scope，未配置时与 Audience 同名。</summary>
+
+    /// <summary>浏览器会话申请本 API 的 scope，未配置时与 Audience 同名。</summary>
     public string? Scope { get; set; }
+
+#endif
 
     /// <summary>解析后的签发方地址；不是合法绝对 http(s) URI 时为 <see langword="null"/></summary>
     public Uri? IssuerUri =>
