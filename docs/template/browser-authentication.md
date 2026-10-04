@@ -1,14 +1,16 @@
 # 模板浏览器认证维护规则
 
-模板组合根直接组合 ASP.NET Core 官方 Cookie、AddOpenIdConnect、AddGoogle 与 aspnet-contrib 的 AddGitHub；框架不新增 Web/BFF 抽象，不引入反向代理。OpenIddict.Client 继续承担框架的机器认证。前端保留 Angular 页面、开发代理与同源 Cookie 会话认证。
+本页约束生成前端及浏览器会话的形态：Identity、Standalone，以及 `IncludeFrontend=true` 的 Resource。纯 Resource API 不生成前端、浏览器 OIDC 或 Cookie 会话，使用 Bearer 验证；参数边界见[模板开发规范](./development-guide.md#32-有效能力集中派生)。
+
+模板组合根按有效能力直接组合 ASP.NET Core 官方 Cookie、AddOpenIdConnect、AddGoogle 与 aspnet-contrib 的 AddGitHub；外部处理器还要求开启外部登录。框架不新增 Web/BFF 抽象，不引入反向代理。OpenIddict.Client 继续承担框架的机器认证。带前端的形态保留 Angular 页面、开发代理与同源 Cookie 会话认证。
 
 浏览器 OAuth access/refresh/id token 不得出现在 URL、JavaScript 存储、API JSON、SignalR 参数或保护后的 Cookie 载荷中；唯一例外是 Resource 退出时官方 FormPost 表单正文里的 `id_token_hint`。SaveTokens 与 ITicketStore 必须一起配置；保护后的 Cookie 仅含会话引用与引用版本，完整票据留缓存；删除缓存后复制 Cookie 返回 401。显式再登录、MFA 会话升级与冒用切换要保持旧 Cookie 失效；滑动续期不能复活撤销票据，旧请求退出或刷新失败不能删除再次登录的新版本。
 
-会话 Cookie 在非 Development 环境使用 `__Host-Http-` 前缀与 Path=/、无 Domain、Secure Always；Development 不带前缀，以便 HTTP 调试。LocalIdentity 与 Resource 两处注册要同时修改，测试与 e2e 的期望名要各自集中维护，不能从实现读取。
+会话 Cookie 在非 Development 环境使用 `__Host-Http-` 前缀与 Path=/、无 Domain、Secure Always；Development 不带前缀，以便 HTTP 调试。LocalIdentity 与带浏览器会话的 Resource 两处注册要同时修改，测试与 e2e 的期望名要各自集中维护，不能从实现读取。
 
 应用 SameSite 与协议 correlation/nonce Cookie 分开。官方默认协议 Cookie 的 None/Secure Always 保持不变，OIDC code 显式指定，GitHub 的 UsePkce 显式 true。GitHub 处理器的邮箱补取保持关闭（UserEmailsEndpoint 为空）：它不给 verified 且失败即中断登录，verified 由模板查询并在失败时降级。外部 OAuth 的 OpenIddict web providers 不引入：Standalone 的 Api 宿主不含 OpenIddict，只在 Identity 采用会形成两套外部登录实现。回调须在 /api/** 下以覆盖开发代理。Items 提供完整性，业务 complete 的一次消费由服务端外部票据、锁与先删除保证。
 
-Resource 的 Smart policy scheme 以 Authorization 头是否存在确定 Bearer/Cookie，DefaultPolicy 与当前用户策略都使用 Smart；验证失败不尝试其他方案。模板的 IUserAccessTokenAccessor 读经过验证的 Bearer 或 Cookie 服务端票据，不改框架现有 Bearer-only 实现。刷新使用公开 OnValidatePrincipal、官方访问令牌验证服务与已有分布式锁。
+带浏览器会话的 Resource 的 Smart policy scheme 以 Authorization 头是否存在确定 Bearer/Cookie，DefaultPolicy 与当前用户策略都使用 Smart；验证失败不尝试其他方案。模板的 IUserAccessTokenAccessor 读经过验证的 Bearer 或 Cookie 服务端票据，不改框架现有 Bearer-only 实现。刷新使用公开 OnValidatePrincipal、官方访问令牌验证服务与已有分布式锁。
 
 OAuth:ApiResources 是对象目录，资源名、scope、OwnerClientId 单一来源，scope/owner 默认资源名。Scope 与 audience 可不同、同一客户端可拥有多个资源、同一资源只有一个归属；启动期拒绝重复资源/Scope。用户访问令牌的 Token Exchange 只允许单跳，目标为一个资源与 scope，发起方必须拥有来源资源，目标 audience/scope 与登记权限对应。OpenIddict 7.7 ValidateAuthorizedParty 直接看主体 aud，ValidAudiences 不改其逻辑；模板只对 access-token exchange 替换这一处理器，其余分支委托官方实现，不能全局关闭验证。
 

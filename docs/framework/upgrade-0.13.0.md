@@ -440,10 +440,10 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 模板：开发代理改为 Angular `proxyConfig` | 删除后端 `SpaProxy` 选项与实现；前端 `proxy.conf.mjs` 转发 `/api`、`/hubs`（WebSocket）以及身份服务的 `/connect`、`/.well-known`，浏览器访问 `http://localhost:4200`。后端不在默认端口时设置 `API_PROXY_TARGET` |
 | 模板：删除 `/uploads` 静态目录 | 没有写入方；compose 的 `feedback-uploads` 卷一并删除 |
 | 模板：删除 `Cors:AllowAnyLocalhost` | 它只服务于本机跨域联调，已被开发代理取代；前端部署在另一个源时仍用 `Cors:AllowedOrigins` |
-| 模板：通知与业务事件共用实时 Hub | `AddNotificationsSignalR<RealTimeHub>()`，只映射 `MapRealTimeHub()`；前端只建一条 `/hubs/realtime` 连接 |
+| 模板：通知与业务实时独立选择 | `IncludeNotifications` 与 `IncludeRealTime` 分别控制。只开通知使用通知 Hub；只开业务实时使用实时 Hub；都开时 `AddNotificationsSignalR<RealTimeHub>()` + `MapRealTimeHub()`，有前端时共用一条 `/hubs/realtime` 连接；都关闭时不映射 Hub |
 | 模板前端：绝对地址的请求不再带凭据 | URL 格式化拦截器只给本服务的相对地址加网关前缀并带 Cookie；本来就是绝对地址的请求（OIDC 签发方的发现文档、JWKS、令牌端点）原样放行。此前一律 `withCredentials`，签发方在另一个源时带凭据的跨源请求被浏览器拦下，Resource 前端无法发起登录 |
 | 模板前端（身份服务）：登录后回到授权端点用整页跳转 | 未登录的授权请求被送到登录页，`returnUrl` 以 `/connect/` 开头时登录后整页跳转；此前按前端路由处理，落到首页、授权流程中断 |
-| 模板前端（Resource）：OIDC 回调后的导航归回调组件 | `provideAuth` 打开 `triggerAuthorizationResultEvent`；此前库在回调后自行跳到 `postLoginRoute`（默认 `/`），与回到登录前地址的导航竞争。首页的登录入口改为进入工作台由守卫发起登录，不再链到本形态不存在的 `/auth/login`、`/auth/register` |
+| 模板（Resource）：浏览器 OIDC 转到后端官方处理器 | 带前端的形态整页导航至 `/api/v1/auth/login`，回调与票据由后端处理；前端经 `/api/v1/auth/me` 还原用户，不再配置浏览器 OIDC 库。纯 API 形态不生成登录导航或浏览器会话，使用 Bearer |
 | 模板（身份服务）：为下游 API 签发令牌 | 新增 `OAuth:ApiResources`：列出由本服务签发令牌的下游 API，各登记为同名 scope。scope 目录 `OAuthScopes` 成为服务端登记、scope 表、开放应用权限校验与令牌受众的唯一来源；访问令牌的受众由授予的 scope 推出（此前一律是本服务的 `OAuth:Resource`），本服务 API 只接受受众是自己的令牌。**已有客户端要调用本服务 API，须补授 `scp:<OAuth:Resource>` 并在取令牌时申请它**；服务间调用方的 `Leistd:ServiceClients:<服务>:Scope` 同时写目标 API 的 scope 与 `svc.delegate`（空格分隔），委托 scope 改为仅限机器客户端。开放应用新增 `GET /api/v1/open-applications/scopes`，编辑界面的 scope 选项取自它。**启动时按目录对账 scope 表：新建、更新，并删除目录之外的全部 scope**（不只是曾由 `ApiResources` 登记的）；派生项目在库里单独登记过的自定义 scope，升级前须改由目录提供（`OAuth:ApiResources` 或 `OAuthScopes`）。删除登记不撤销已签发的访问令牌，它们照常用到过期 |
 | 模板（Resource）：`Authentication:Audience` 默认改为 `companyname-projectname-api` | 与前端申请的 scope 同名，须在身份服务的 `OAuth:ApiResources` 登记；compose 不再要求 `RESOURCE_AUDIENCE` |
 | 模板：会话时长改为 `SessionCookie:ExpireDays` | 取代 `OAuth:CookieExpireDays`；不带授权服务器的形态此前写死 7 天，现在同样可配。`OAuth` 节只在带授权服务器的形态生成，`Authentication` 节只在 Resource 形态生成 |
@@ -563,7 +563,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 机器调用自动转发 `ICurrentTenant` | 不再转发租户；按租户执行的后台作业若仍只调用 `ICurrentTenant.Change()`，下游可能在宿主上下文执行且不报错。租户必须作为显式参数，例如租户回源使用的路由 tenant ID；下游机器端点自行验证调用权限、租户有效性并建立业务租户上下文 |
 | `Leistd:ServiceAuth:Scope/ExpirationBuffer/TokenEndpoint` 与 `ResolveTokenEndpoint` | 旧全局 scope/buffer 不再读取，scope 改为命名客户端配置，buffer 固定为机器 60 秒／交换 10 秒；手工端点删除，官方客户端按 `Authority` 发现端点并协商认证 |
 | `Leistd:ServiceClients:{Name}:UserContext` 与 `Leistd:ServiceUserContext` | 整个配置节删除；不检测旧配置，也不保留旧协议兼容路径 |
-| Cookie／后台用户上下文 | 不提供 Token Exchange 证明；默认适配器只读验证方案保存的用户访问令牌。普通后台调用选择机器认证，不能仅设置 ambient 用户来委托 |
+| Cookie／后台用户上下文 | 单独的 Cookie 或 ambient 主体不提供 Token Exchange 证明；框架默认适配器只读 Bearer 验证方案保存的访问令牌。模板带浏览器会话的 Resource 使用自己的读取器，从已认证服务端票据取得保存的访问令牌。普通后台调用选择机器认证，不能仅设置 ambient 用户来委托 |
 | 收到下游 401 后自动重放 | 仅清本地令牌缓存，下次独立调用重新取令牌；调用方按业务幂等性决定是否重试，分布式删除失败不能覆盖原 401，取消仍传播 |
 | `ConsentType` DTO、前端选项与错误码 | 删除；服务端固定 implicit。存量应用升级前将其同意类型归一为 implicit |
 
@@ -584,7 +584,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 
 仓库维护入口 `framework/build/check-docs-api-drift.ps1` 在一个进程中执行原 8 个正反例和完整正文扫描，共用本次源码索引；原独立 `-SelfTest` 模式及对应 `check-all.ps1` 清单行删除。原自检能抓的规则失效由合并入口的正反例接替，正文漂移仍由同一完整扫描接替；不删除单元测试。调用方移除旧 `-SelfTest` 参数，直接调用脚本。
 
-CI 原串行“打包 → 包消费 → 九场景”改为一次 `framework-pack` 产出不可变候选包，独立 `package-consumption` 和两片 `template-shards` 下载到各自目录并行验证。默认全量包消费还须与当前源码的完整包集一致，漏包失败；人工 `-PackageIds` 的缩小入口保留。原 `template-matrix` 必过检查名保留为汇总：必要作业全部成功，两份结果恰好覆盖登记全集、完整阶段与容器责任；失败、取消、跳过或缺片不能放行。原包内容/隔离消费由独立必过作业接替；每场景原测试与断言由所属分片原入口接替，没有新旧两套校验或迁移开关。OIDC 作业形态保留，发布继续等待同一候选的全部质量结果。
+CI 原串行“打包 → 包消费 → 模板场景”改为一次 `framework-pack` 产出不可变候选包，独立 `package-consumption` 和登记的 `template-slices` 下载到各自目录并行验证。默认全量包消费还须与当前源码的完整包集一致，漏包失败；人工 `-PackageIds` 的缩小入口保留。原 `template-matrix` 必过检查名保留为汇总：必要作业全部成功，全部分片结果恰好覆盖所选档位登记场景、计划要求的阶段与容器责任；失败、取消、跳过或缺片不能放行。原包内容/隔离消费由独立必过作业接替；每场景原测试与断言由所属分片原入口接替，没有新旧两套校验或迁移开关。OIDC 作业形态保留，发布继续等待同一候选的全部质量结果。
 
 场景与分片归属只维护在 `scripts/template-matrix-scenarios.ps1`；PR 的容器范围从完整 base 到 head 判定，替代会漏掉较早提交的 `HEAD^` 差异，范围不明时执行容器验证。维护口径见[质量检查与验证分工](./quality-assurance.md)与[模板质量验证](../template/quality-assurance.md)。这是 leistd-net 仓库 CI/维护脚本调整，派生项目无需修改运行时 API。
 
@@ -632,7 +632,7 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
 模板自带前端停止充当 OAuth public client，移除 angular-auth-oidc-client、environment.oidc、旧 /auth/callback 组件和令牌拦截/SignalR token 注入及 Hub query 令牌转换；开发代理与同源 Angular 托管保留。第三方 public-client 授权码能力仍可单独登记。
 
 - 外部 HTTP 契约改为 GET challenge → 官方 /api/v1/external-auth/{provider}/signin → POST complete；绑定使用受保护的 GET link/challenge → POST link/complete，不再接收前端 code/state；提供商后台重新登记完整 HTTPS signin 回调。登录与绑定意图受保护，complete 保留一次消费，失败后重新 challenge；第二步凭据只走 JSON/导航状态。
-- Resource 新增 Authentication:ClientId/ClientSecret 必填后端配置（缺失时启动报出键名）；Identity 登记 web/confidential、授权码、PKCE、refresh token、offline_access 和本 API scope。登录/退出回调分别 /api/v1/auth/signin、/api/v1/auth/signout；前端 GET login、GET me、整页 POST logout。
+- 带浏览器会话的 Resource 新增 Authentication:ClientId/ClientSecret 必填后端配置（缺失时启动报出键名）；Identity 登记 web/confidential、授权码、PKCE、refresh token、offline_access 和本 API scope。登录/退出回调分别 /api/v1/auth/signin、/api/v1/auth/signout；前端 GET login、GET me、整页 POST logout。
 - SaveTokens 必须配 ITicketStore。所有会话 Cookie 只携引用及版本，完整票据加密留服务器；部署共享缓存与 Data Protection 密钥。删除票据立即拒绝旧 Cookie，显式再次登录使旧引用版本失效。应用 SessionCookie:SameSite 不覆盖官方 correlation/nonce 的 None/Secure Always。模板未启用 antiforgery；默认写请求校验 Origin；浏览器页面与所属 API 必须同源，分进程须经部署代理统一外部源，详见生成项目浏览器认证文档。
 - OAuth:ApiResources 由字符串数组改为对象，例如 `{ "Name": "https://api.example/orders", "Scope": "orders.read", "OwnerClientId": "orders-worker" }`。Scope/OwnerClientId 默认 Name，重复资源或 scope 启动失败。发起方按所有资源集合验证，允许客户端拥有多个资源；不再要求 client_id、scope、audience 字符串相等，授权码 presenter 与资源所有者可不同。
 - 删除 IOAuthProvider/OAuthTokenInfo、GetExternalLoginUrlAsync 与 code/state DTO；保留规范化 ExternalUserInfo 和业务账号政策。ExternalLoginConnection 删除 AccessToken/RefreshToken/ExpiresAt、UpdateTokens，基线迁移同步删列；派生项目已有数据库须显式删列并覆盖各业务/租户库；若已覆盖模型快照，EF 不会自动推导出删列，需保留旧快照生成迁移或自行编写 DropColumn。
@@ -750,3 +750,22 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 - Token Exchange 的 120 秒上限与"不长于源令牌"的约束不变；源令牌寿命短于 120 秒时，交换令牌随源令牌到期。
 - 测试：`TwoFactorTests` 改用 `FakeTimeProvider` 替换容器里的 `TimeProvider`（集成测试项目新增 `Microsoft.Extensions.TimeProvider.Testing` 引用）；
   测试规范补充时间边界用假时钟验证、端到端不等安全窗口，并列出不随假时钟快进的官方组件。
+
+## 模板能力裁剪与操作记录读写拆分
+
+模板公开参数、默认值及角色生效范围见[根 README 参数表](../../README.md#用模板创建项目)，有效能力表达式见[模板开发规范](../template/development-guide.md#32-有效能力集中派生)。这些参数决定新生成的工程资产，不会自动迁移已经生成的业务项目，也不能通过关闭开关删除已有生产数据。
+
+已消费 0.13.0 预发布版操作记录契约的项目需要同步以下变更（该组件不属于 0.12.0 的既有 API）：
+
+| 原用法 | 最终用法与迁移 |
+| --- | --- |
+| 自定义存储实现并注册 `IOperationRecordStore` | 改为 `IOperationRecordWriter`；可回读历史时同时实现并注册 `IOperationRecordReader`，再显式注册 `AddOperationRecordQueries()`。EF 适配注册两者及查询；Core 注册不再自动附带查询 |
+| 所有宿主都映射操作历史接口 | 仅有读侧存储时映射 `MapOperationRecords()`；日志写入模式不映射历史接口、不注册归档，缺少查询注册时映射立即报错 |
+| 不需要历史产品，但仍必须记录安全操作 | 引用并注册 `Leistd.OperationRecords.Logging` 的 `AddOperationRecordsLogging()`，与 EF 写入适配互斥；保留动作定义、记录器和安全调用链。必要的 UoW、事件总线及日志类别前置见[组件文档](../../framework/docs/components/operation-records.md) |
+| 通知开关同时开启业务实时 | 按业务需要分别设置 `IncludeNotifications`、`IncludeRealTime`；后者默认关闭。需要业务订阅和事件发布的项目必须显式开启 |
+| 关闭内置历史但继续提供模拟登录 | 模拟登录要求本地身份、多租户和可查询历史同时存在；历史关闭时移除模拟登录，普通租户管理仍可保留 |
+| Resource 依赖前端登录或人工 SQL 授予管理员 | 有前端时保留服务端 OIDC/Cookie；纯 API 只验证 Bearer，不包含浏览器客户端配置与回调。首次授权使用正式 DbMigrator `--grant-admin <sub> [--tenant <id>]`，默认 dry-run，`--apply` 才写入；重复运行保留已有撤销 |
+
+数据库模式只有在同一业务事务和存储内记录，才提供原子持久化；提交后处理器中的记录另行持久化。日志模式在真实提交后输出成功，回滚不输出成功，失败立即输出，仍有提交后进程退出的丢失窗口。采集、保留和访问策略由宿主日志平台负责。
+
+工作单元 AfterCommit 队列在某个事件分发失败后继续处理后续事件，全部分发完再上抛：单个异常保留原实例、类型与堆栈，多个异常聚合。事务已经提交，不再回滚；调用方不能将该异常当作事务未提交而盲目重试。诊断区分提交失败与已提交后的处理失败。

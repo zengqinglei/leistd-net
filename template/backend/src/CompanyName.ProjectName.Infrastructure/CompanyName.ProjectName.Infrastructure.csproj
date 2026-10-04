@@ -25,7 +25,10 @@
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
 <!--#endif-->
 <!--#if (SpaFrontend)-->
-    <!-- Data Protection 密钥环：认证 Cookie、机密设置与控制库里租户连接串的加密共用，API 与 DbMigrator 必须一致 -->
+    <!-- Data Protection 密钥环：保护认证 Cookie 与机密设置，多副本必须共享。 -->
+<!--#if (LocalIdentity && IncludeMultiTenancy)-->
+    <!-- 控制库租户连接串加密：API 与 DbMigrator 必须共享密钥环与应用名。 -->
+<!--#endif-->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
 <!--#endif-->
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />

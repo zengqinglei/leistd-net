@@ -16,7 +16,7 @@
 
 | 能力 | Framework | Template | 业务项目需要做什么 |
 | --- | --- | --- | --- |
-| 多租户 | `Leistd.MultiTenancy.*` 三包 | **已接入**（常开，不再是可选开关） | 实体实现 `IMultiTenant` 即可 |
+| 多租户 | `Leistd.MultiTenancy.*` | **可选产品能力**：`IncludeMultiTenancy` 默认开启；关闭后只有宿主作用域，保留基础 Core、`TenantId=null` 模型与宿主执行能力 | 开启时按实体实现 `IMultiTenant`，并配置租户解析及共享/独立数据库路由 |
 | 功能权限 | `Leistd.Authorization.*` | **已接入**（常开：所有 `ServiceRole` 形态都生成角色与权限） | 写 `IPermissionDefinitionProvider` |
 | 数据范围 | `Leistd.Authorization.DataScope.Core` | **未接入** | 必须自行实现 `IDataScopeProvider<T>` 与 `IDataScopeAssignmentProvider` |
 
@@ -32,7 +32,7 @@
 | 需要"宿主管理员管理租户、租户管理员管理自己人"的两级管理面 | 用。侧别（`MultiTenancySides`）就是为此设计 |
 | 同一公司内部的部门/子公司，需要上级看下级 | **不要用**。租户之间没有"上级"，跨租户查看只能靠显式关闭过滤器。这是数据范围的场景 |
 | 只是想给数据打个"归属"标签用于筛选 | 不要用。租户是不可绕过的硬边界，不是筛选维度 |
-| 需要按客户定制表结构 | 本方案不支持（共库共表），需要另做分库分表 |
+| 需要按客户定制表结构 | 当前支持共享库与独立库，但各库采用统一业务模型和迁移；租户自定义表结构需要另行设计 |
 
 ### 测试策略
 
