@@ -55,6 +55,8 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 ## 验证入口
 
+编辑循环运行目标测试；完整改动形成后运行框架测试全集和必要包验证。执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，以下不是每次编辑的固定命令序列。
+
 ```powershell
 dotnet build framework/Leistd.Framework.slnx -c Release
 dotnet test framework/Leistd.Framework.slnx -c Release
@@ -63,4 +65,4 @@ pwsh framework/build/pack-local-feed.ps1
 pwsh framework/build/test-package-consumption.ps1
 ```
 
-本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包；CI 核对全部包内容，消费构建按[质量规范](../../../docs/framework/quality-assurance.md)的候选计划与实际包依赖闭包选择，完整档消费全部包。编辑循环只跑受影响测试项目（`--filter` 收窄到类）；阶段完成按 `docs/framework/quality-assurance.md` 的分层表选入口。只读任务不运行无关测试。未执行项和原因必须如实说明。
+本地可用 `-PackageIds Leistd.Xxx` 检查受影响包；CI 按候选计划与实际包依赖闭包选择，完整档消费全部包。目标测试用 `--filter` 收窄到类；只读任务不运行无关测试。未执行项和原因必须如实说明。

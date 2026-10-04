@@ -148,6 +148,95 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
     return finish(plan)
 
 
+def local_scenarios(base: str) -> dict:
+    """Select complete local products; this is not a CI validation plan.
+
+    Reuse the committed-input proof and file producers. All producing PR
+    products run, with reachable closing states added in registration order.
+    Unknown inputs keep the entire PR set, including for a dirty worktree.
+    """
+    plan = create_plan('pr', base, 'pull_request', '')
+    scenarios = coverage.load_scenarios()
+    registered = {name: info for name, info in scenarios.items() if 'pr' in info['Slices']}
+    result = dict(Kind='local-template-scenarios', HeadSha=plan['CandidateSha'], BaseSha=base,
+                  Scope='pr', Scenarios=list(registered), Selection='complete-pr',
+                  Reason=plan['Reason'], ClosingStates=[])
+    if plan['Mode'] not in ('frontend', 'backend'):
+        return result
+    try:
+        config_path = 'template/.template.config/template.json'
+        config = json.loads(git('show', f"{plan['CandidateSha']}:{config_path}"))
+        values = {name: coverage.symbol_values(config, coverage.parse_cli_arguments(config, info['Arguments']))
+                  for name, info in registered.items()}
+        combinations = coverage.all_combinations(config)
+        paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z',
+                    base, plan['CandidateSha']).split('\0')[:-1]
+        selected = set(plan['Scenarios'])
+        closing = []
+
+        def require(path, state, predicate):
+            candidates = [name for name, symbols in values.items() if predicate(symbols)]
+            if not candidates:
+                if any(predicate(symbols) for symbols in combinations):
+                    raise ValueError(f'{path}: reachable {state} has no PR representative')
+                return
+            if not selected.intersection(candidates):
+                selected.add(candidates[0])
+                closing.append(dict(Path=path, State=state, Scenario=candidates[0]))
+
+        def active(frames, symbols):
+            return all(coverage.evaluate(current, symbols) and
+                       not any(coverage.evaluate(previous, symbols) for previous in earlier)
+                       for current, earlier in frames)
+
+        # Files inside condition blocks are handled by file producers. Reachable
+        # absent-file and false-branch products are also checked, including when
+        # a branch has no else/body that line coverage alone could discover.
+        for path in paths:
+            producers = source_producers(config, path, registered)
+            selected.update(producers)
+            for relative, _, condition, modifiers in coverage.iter_sources(config, [path]):
+                excludes = [item['condition'] for item in modifiers
+                            if any(coverage.glob_match(relative, pattern) for pattern in item.get('exclude', []))]
+
+                def generated(symbols):
+                    return (not condition or coverage.evaluate(condition, symbols)) and not any(
+                        coverage.evaluate(expr, symbols) for expr in excludes)
+
+                if condition:
+                    require(path, f'source-closed ({condition})',
+                            lambda symbols: not coverage.evaluate(condition, symbols))
+                for expr in excludes:
+                    require(path, f'excluded ({expr})', lambda symbols:
+                            (not condition or coverage.evaluate(condition, symbols)) and coverage.evaluate(expr, symbols))
+                    require(path, f'included ({expr})', lambda symbols:
+                            (not condition or coverage.evaluate(condition, symbols)) and not coverage.evaluate(expr, symbols))
+                require(path, 'file-present', generated)
+                require(path, 'file-absent', lambda symbols: not generated(symbols))
+                if Path(path).suffix.lower() not in ('.cs', '.ts', '.html', '.css', '.scss', '.json', '.svg'):
+                    continue
+                for revision in (base, plan['CandidateSha']):
+                    # A newly added/deleted file has only one textual side.
+                    try:
+                        git('cat-file', '-e', f'{revision}:{path}')
+                    except subprocess.CalledProcessError:
+                        continue
+                    contexts = {frames for _, frames in coverage.line_contexts(git('show', f'{revision}:{path}'))
+                                if frames}
+                    for frames in sorted(contexts, key=repr):
+                        require(path, 'branch-active', lambda symbols: generated(symbols) and active(frames, symbols))
+                        require(path, 'branch-inactive', lambda symbols: generated(symbols) and
+                                active(frames[:-1], symbols) and not active(frames[-1:], symbols))
+        if git('rev-parse', 'HEAD') != plan['CandidateSha'] or git('status', '--porcelain', '--untracked-files=normal'):
+            raise ValueError('working tree or HEAD changed during selection')
+        result.update(Scenarios=[name for name in registered if name in selected],
+                      Selection='source-products', Reason='All changed source products and reachable closing states',
+                      ClosingStates=closing)
+    except (subprocess.CalledProcessError, ValueError, KeyError, OSError, IndexError, UnicodeError) as error:
+        result['Reason'] = f'Complete PR: local product proof unavailable ({error})'
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tier', choices=['pr', 'full'], default='full')
@@ -157,8 +246,13 @@ def main() -> None:
     parser.add_argument('--docs-only', choices=['true', 'false'], default='false')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--github-output', action='store_true')
+    parser.add_argument('--local-scenarios', action='store_true',
+                        help='Output local L1 scenario names for -Scenarios; no CI stage reduction')
     args = parser.parse_args()
-    plan = create_plan(args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
+    if args.local_scenarios and (args.tier != 'pr' or args.github_output or args.docs_only != 'false' or args.candidate_input):
+        parser.error('--local-scenarios requires --tier pr and cannot use CI output, docs-only or candidate-input')
+    plan = local_scenarios(args.base) if args.local_scenarios else create_plan(
+        args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(plan, ensure_ascii=False, separators=(',', ':'))
     args.output.write_text(text, encoding='utf-8')

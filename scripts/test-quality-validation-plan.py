@@ -80,6 +80,15 @@ def main():
             git('add', '.'); git('commit', '-qm', label)
             plan = planner.create_plan('pr', base, 'pull_request', '')
             assert plan['Mode'] == expected_mode, (label, plan)
+            local = planner.local_scenarios(base)
+            assert local['Kind'] == 'local-template-scenarios' and local['HeadSha'] == git('rev-parse', 'HEAD')
+            assert 'Version' not in local and 'Mode' not in local and 'CandidateSha' not in local
+            if expected_mode != 'full':
+                assert local['Selection'] == 'source-products', (label, local)
+                assert set(plan['Scenarios']) <= set(local['Scenarios']) <= registered
+            else:
+                assert local['Selection'] == 'complete-pr' and set(local['Scenarios']) == registered
+            (out / (label + '-local.json')).write_text(json.dumps(local, indent=2))
             if expected_mode != 'full':
                 assert plan['FrameworkTests'] is False and plan['ConsumerProjects'] == []
                 assert {'identity', 'identity-all-features'} <= set(plan['Scenarios']) <= registered
@@ -102,10 +111,12 @@ def main():
         # original source impact. Evaluate old/new paths, never just HEAD^.
         git('reset', '--hard', base); git('rm', front); git('commit', '-qm', 'delete frontend input')
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'frontend'
+        assert planner.local_scenarios(base)['Selection'] == 'source-products'
         git('reset', '--hard', base); git('mv',front,'docs/moved-source.ts'); git('commit','-qm','cross boundary move')
         (repo / 'docs/later.md').write_text('later documentation')
         git('add','.'); git('commit','-qm','later doc change')
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'full'
+        assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
         (repo / front).write_text((repo / front).read_text() + '\n// Uncommitted edit\n')
         git('add', front); git('commit', '-qm', 'committed frontend input')
@@ -113,6 +124,13 @@ def main():
         (repo / back).write_text((repo / back).read_text() + '\n// Uncommitted backend edit\n')
         dirty = planner.create_plan('pr', base, 'pull_request', '')
         assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
+        assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
+        git('reset', '--hard', base)
+        (repo / 'untracked-input.ts').write_text('untracked')
+        assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
+        (repo / 'untracked-input.ts').unlink()
+        for invalid in ('', '0'*40, git('rev-parse','HEAD')):
+            assert planner.local_scenarios(invalid)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
         print('PASS deletion, cross-boundary rename and multi-commit conservative fallback', flush=True)
         # Put each unknown rule on BOTH sides of the diff. Otherwise a changed
@@ -131,9 +149,52 @@ def main():
             guarded = planner.create_plan('pr', rule_base, 'pull_request', '')
             assert guarded['Mode'] == 'full' and guarded['FrameworkTests'] and guarded['ConsumerProjects'] is None
             assert set(guarded['Scenarios']) == registered and 'proof unavailable' in guarded['Reason']
+            assert planner.local_scenarios(rule_base)['Selection'] == 'complete-pr'
             (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2))
             print('PASS unknown engine rule conservative fallback:', label, flush=True)
+        prove_local_closing_states(repo, base, planner, scenarios, out, run, git)
     print('Selection and receipt evidence:', out, flush=True)
+
+
+def prove_local_closing_states(repo, base, planner, scenarios, out, run, git):
+    """Prove closing selection from independent guard evaluation, not text labels."""
+    git('reset', '--hard', base)
+    source = 'template/frontend/src/app/app.spec.ts'
+    path = repo / source
+    path.write_text(path.read_text() + '\n//#if (IncludeNotifications)\n// local branch fixture\n//#endif\n')
+    git('add', '.'); git('commit', '-qm', 'local conditional source')
+    selected = planner.local_scenarios(base)
+    assert selected['Selection'] == 'source-products', selected
+    config = json.loads((repo / 'template/.template.config/template.json').read_text())
+    symbols = {name: planner.coverage.symbol_values(config, planner.coverage.parse_cli_arguments(config, info['Arguments']))
+               for name, info in scenarios.items() if name in selected['Scenarios']}
+    assert any(not values['SpaFrontend'] for values in symbols.values()), selected
+    assert any(values['SpaFrontend'] and values['IncludeNotifications'] for values in symbols.values())
+    assert any(values['SpaFrontend'] and not values['IncludeNotifications'] for values in symbols.values())
+    assert set(planner.create_plan('pr',base,'pull_request','')['Scenarios']) <= set(selected['Scenarios'])
+    local_file = out / 'closing-local.json'
+    run('local-cli', ['python3','scripts/plan-quality-checks.py','--local-scenarios','--tier','pr',
+                     '--base',base,'--output',str(local_file)], repo)
+    assert json.loads(local_file.read_text()) == selected
+    for flags in (['--tier','full'], ['--tier','pr','--github-output'],
+                  ['--tier','pr','--docs-only','true'], ['--tier','pr','--candidate-input','a'*40]):
+        run('local-invalid-' + str(len(flags)) + '-' + flags[-1],
+            ['python3','scripts/plan-quality-checks.py','--local-scenarios',*flags,
+             '--output',str(out/'invalid-local.json')], repo, success=False)
+    run('local-not-ci-plan', ['pwsh','-NoProfile','-Command',
+        "$ErrorActionPreference='Stop'; . ./scripts/quality-validation-plan.ps1; . ./scripts/template-matrix-scenarios.ps1; "
+        f"Read-QualityValidationPlan -Path '{local_file}' -ExpectedTier pr"], repo, success=False)
+    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text()
+    # A reachable inactive branch with no registered PR witness cannot narrow.
+    original = planner.coverage.load_scenarios
+    try:
+        planner.coverage.load_scenarios = lambda: {name: info for name, info in scenarios.items() if info['Frontend']}
+        unavailable = planner.local_scenarios(base)
+        assert unavailable['Selection'] == 'complete-pr' and 'no PR representative' in unavailable['Reason']
+    finally:
+        planner.coverage.load_scenarios = original
+    (out / 'closing-local-observations.json').write_text(json.dumps(selected, indent=2))
+    print('PASS local closing states, committed snapshot and separate CI contract', flush=True)
 
 
 def prove_generation(repo, base, plan, scenarios, out, run, git):
