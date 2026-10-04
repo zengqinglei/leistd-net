@@ -1,5 +1,5 @@
-import { Injectable, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Injectable, Signal, computed, inject } from '@angular/core';
+import { Router, isActive } from '@angular/router';
 //#if (IncludeLocalization)
 import { translateObjectSignal, translateSignal } from '@jsverse/transloco';
 //#endif
@@ -319,12 +319,25 @@ export class NavigationService {
     return !item.permissions?.length || this.authorizationService.hasAny(...item.permissions);
   }
 
-  isItemActive(item: MenuItem): boolean {
-    const currentUrl = this.layoutService.currentUrl();
-    if (item.route === '/platform') {
-      return currentUrl === item.route;
-    }
+  /** 每个菜单路由一个"是否当前"信号，按路由缓存，避免每次渲染新建。 */
+  private readonly activeByRoute = new Map<string, Signal<boolean>>();
 
-    return currentUrl === item.route || currentUrl.startsWith(`${item.route}/`);
+  /**
+   * 菜单项是否为当前页：只比较路径，忽略查询参数与锚点。
+   * 列表页的分页、排序、筛选都写在查询参数里，按完整 URL 比较的话一翻页当前项就丢了。
+   */
+  isItemActive(item: MenuItem): boolean {
+    let active = this.activeByRoute.get(item.route);
+    if (!active) {
+      active = isActive(item.route, this.router, {
+        // 平台落地页是其余平台路由的前缀，只能精确匹配；其余入口连同子页面（如设置面板）都算当前
+        paths: item.route === '/platform' ? 'exact' : 'subset',
+        queryParams: 'ignored',
+        fragment: 'ignored',
+        matrixParams: 'ignored',
+      });
+      this.activeByRoute.set(item.route, active);
+    }
+    return active();
   }
 }

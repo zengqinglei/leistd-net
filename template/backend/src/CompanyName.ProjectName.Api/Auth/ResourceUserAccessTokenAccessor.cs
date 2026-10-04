@@ -4,9 +4,7 @@ using CompanyName.ProjectName.Application.Shared;
 #endif
 using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
-#if (!ResourceBrowserSession)
 using OpenIddict.Validation.AspNetCore;
-#endif
 
 namespace CompanyName.ProjectName.Api.Auth;
 
@@ -15,6 +13,11 @@ namespace CompanyName.ProjectName.Api.Auth;
 #else
 /// <summary>在请求期从已验证的 Bearer 读取用户访问令牌。</summary>
 #endif
+/// <remarks>
+/// 认证成功后读取官方保存的访问令牌。OIDC 会话与 OpenIddict Bearer 均使用
+/// <see cref="OpenIddictValidationAspNetCoreConstants.Tokens.AccessToken"/>。
+/// 失败结果也可能保存原令牌，因此必须先检查认证成功，才能将令牌交给下游。
+/// </remarks>
 internal sealed class ResourceUserAccessTokenAccessor(IHttpContextAccessor contexts) : IUserAccessTokenAccessor
 {
     public async ValueTask<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
@@ -26,7 +29,7 @@ internal sealed class ResourceUserAccessTokenAccessor(IHttpContextAccessor conte
 #else
         var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
 #endif
-        return result.Succeeded ? result.Properties?.GetTokenValue("access_token") : null;
+        return result.Succeeded ? result.Properties?.GetTokenValue(OpenIddictValidationAspNetCoreConstants.Tokens.AccessToken) : null;
     }
 }
 #endif

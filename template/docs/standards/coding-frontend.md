@@ -165,13 +165,14 @@ frontend/
 
 | 档位 | 用途                   | 写法                                    |
 | ---- | ---------------------- | --------------------------------------- |
-| 24px | 页面标题，每页一次     | `text-2xl font-semibold tracking-tight` |
+| 24px | 页面标题（有则一个）   | `text-2xl font-semibold tracking-tight` |
 | 16px | 面板标题、卡片标题     | `text-base font-semibold`               |
 | 14px | 分区标题               | `text-sm font-semibold`                 |
 | 14px | 正文、表格、按钮、输入 | `text-sm`                               |
 | 12px | 辅助说明、时间戳、徽章 | `text-xs`                               |
 | 30px | 仅仪表盘大数字         | `text-3xl` + `tabular-nums`             |
 
+- 页面不必都有可见标题：面包屑与浏览器标签页已经说明身在何处的列表页，可以直接从工具栏开始；有页面标题时用 24px 这一档，一页只出现一个。
 - 字重只用 400 / 500 / 600，不用 `font-bold` / `font-extrabold`。
 - 加在图标、`hlm-spinner` 上的 `text-*` 是图标尺寸，不受上表约束。
 - 输入框的 `text-base md:text-sm` 不要改：iOS Safari 遇到小于 16px 的输入框会在聚焦时放大页面。

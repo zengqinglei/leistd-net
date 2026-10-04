@@ -11,7 +11,9 @@ using Microsoft.EntityFrameworkCore;
 #endif
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Api.Auth;
+using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
@@ -108,6 +110,27 @@ public sealed class ResourceBrowserSessionTests
         browser.DefaultRequestHeaders.Authorization = null;
         await options.SessionStore.RemoveAsync(key);
         Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
+    /// 服务间调用只拿到经过认证的访问令牌：会话取服务端票据里的，合法 Bearer 取验证后的；
+    /// Bearer 被拒时，OpenIddict 的失败结果里仍带着原令牌，也不能交出去。
+    /// </summary>
+    [Fact]
+    public async Task User_access_token_comes_only_from_a_successful_authentication()
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = Host(factory, issuer);
+        var cookie = await LoginAsync(host, issuer);
+        var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthenticationSchemeNames.SessionCookie);
+        var key = options.TicketDataFormat.Unprotect(cookie.Split('=', 2)[1])!.Principal.Claims.Single().Value;
+        var stored = (await options.SessionStore!.RetrieveAsync(key))!.Properties.GetTokenValue("access_token");
+        Assert.NotNull(stored);
+
+        Assert.Equal(stored, await AccessTokenAsync(host, "Cookie", cookie));
+        Assert.Equal(stored, await AccessTokenAsync(host, "Authorization", "Bearer " + stored));
+        Assert.Null(await AccessTokenAsync(host, "Authorization", "Bearer rejected-token"));
     }
 
     [Fact]
@@ -334,6 +357,7 @@ public sealed class ResourceBrowserSessionTests
     private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, Issuer issuer) =>
         factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", "resource-api").ConfigureTestServices(services =>
         {
+            services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, AccessTokenProbe>();
             services.AddSingleton<RefreshLockProbe>();
             services.AddSingleton<Leistd.Lock.Abstractions.IDistributedLock>(provider => provider.GetRequiredService<RefreshLockProbe>());
             services.AddSingleton<TicketCacheProbe>();
@@ -354,6 +378,37 @@ public sealed class ResourceBrowserSessionTests
                 options.Configuration.SigningKeys.Add(issuer.Key);
             });
         }));
+
+    // 经测试分支走一次真实请求：OpenIddict 验证要求认证中间件先为请求建好上下文，脱离管道的 HttpContext 认证不了
+    private static async Task<string?> AccessTokenAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host, string header, string value)
+    {
+        using var client = Client(host);
+        using var request = new HttpRequestMessage(HttpMethod.Get, AccessTokenProbe.Path);
+        request.Headers.TryAddWithoutValidation(header, value);
+        using var response = await client.SendAsync(request);
+        return response.StatusCode == HttpStatusCode.NoContent ? null : await response.Content.ReadAsStringAsync();
+    }
+
+    /// <summary>在生产管道前加一个测试分支：分支内先认证，再调用宿主登记的用户访问令牌读取器。</summary>
+    private sealed class AccessTokenProbe : Microsoft.AspNetCore.Hosting.IStartupFilter
+    {
+        public const string Path = "/test/user-access-token";
+
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Map(Path, branch =>
+            {
+                branch.UseAuthentication();
+                branch.Run(async context =>
+                {
+                    var token = await context.RequestServices.GetRequiredService<IUserAccessTokenAccessor>().GetAccessTokenAsync();
+                    if (token is null) context.Response.StatusCode = StatusCodes.Status204NoContent;
+                    else await context.Response.WriteAsync(token);
+                });
+            });
+            next(app);
+        };
+    }
 
     private static HttpClient Client(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host, string? cookie = null)
     {

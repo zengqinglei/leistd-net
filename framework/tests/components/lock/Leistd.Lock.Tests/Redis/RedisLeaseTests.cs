@@ -111,18 +111,17 @@ public sealed class RedisLeaseTests
     {
         Skip.IfNot(RedisServer.IsAvailable, RedisServer.SkipReason);
 
+        // 租约用默认长度，不缩短：句柄每隔租约的三分之一续期一次，租约短到 1 秒时，
+        // 测试机调度抖动可能让续期迟到、键提前过期，下一行"仍被占用"的断言就会偶发失败。
+        // 到期本身用删键模拟，租约长短与这里要验证的事无关。
         var prefix = $"leistd-test:{Guid.NewGuid():N}:";
-        var sut = RedisDistributedLockContractTests.NewLock(o =>
-        {
-            o.KeyPrefix = prefix;
-            o.Expiry = TimeSpan.FromSeconds(1);
-        });
+        var sut = RedisDistributedLockContractTests.NewLock(o => o.KeyPrefix = prefix);
         const string Key = "order-6006";
 
         var abandoned = await sut.LockAsync(Key);          // 刻意不释放：模拟持有者崩溃
         Assert.Null(await sut.TryLockAsync(Key, TimeSpan.Zero));
 
-        // 直接把键删掉等价于"租约到期"，但不必真等 1 秒——
+        // 直接把键删掉等价于"租约到期"，不必真等租约过去——
         // TTL 存在性已由上一条断言，这里要验的是"键消失后能立刻再取"
         await Db.KeyDeleteAsync(prefix + Key);
 
