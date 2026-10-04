@@ -87,11 +87,10 @@ def main():
                 assert local['Selection'] == 'source-products', (label, local)
                 assert local['Scenarios'] == plan['Scenarios']
             elif label == 'cross-layer':
-                config = json.loads((repo / 'template/.template.config/template.json').read_text())
-                expected = {'identity', 'identity-all-features'}
-                for path in changed:
-                    expected |= planner.source_producers(config, path, scenarios)
-                assert local['Selection'] == 'source-products' and set(local['Scenarios']) == expected
+                # Independently validated single-side PR plans, excluding full-only products.
+                expected = set(json.loads((out / 'frontend-feature-plan.json').read_text())['Scenarios'])
+                expected |= set(json.loads((out / 'backend-api-plan.json').read_text())['Scenarios'])
+                assert local['Selection'] == 'source-products' and set(local['Scenarios']) == expected, local
             else:
                 assert local['Selection'] == 'complete-pr' and set(local['Scenarios']) == registered
             (out / (label + '-local.json')).write_text(json.dumps(local, indent=2))
@@ -214,9 +213,14 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
         git('reset', '--hard', fixture_head)
     original_producers = planner.source_producers
     untracked = repo / 'during-selection.cs'
+    producer_calls = 0
     def changing_tree(*arguments):
+        nonlocal producer_calls
         producers = original_producers(*arguments)
-        untracked.write_text('new input')
+        producer_calls += 1
+        # create_plan first evaluates old/new; inject during local selection itself.
+        if producer_calls == 3:
+            untracked.write_text('new input')
         return producers
     try:
         planner.source_producers = changing_tree
