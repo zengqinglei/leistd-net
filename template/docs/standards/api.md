@@ -194,7 +194,15 @@ if (user is null)
 
 ### 5.1 用户认证
 
-- 默认使用 Bearer Token（OpenIddict 校验）或 Cookie Session。
+<!--#if (OpenIddictServer)-->
+支持本地 Cookie Session 与 OpenIddict Bearer 校验。
+<!--#elseif (ResourceBrowserSession)-->
+支持远端 Bearer 校验与服务端 Cookie Session；有 Authorization 头时只选 Bearer，失败不回退 Cookie。
+<!--#elseif (RemoteTokenAuth)-->
+仅使用 OpenIddict 校验远端 Bearer，不提供 Cookie Session。
+<!--#else-->
+使用本地 Cookie Session，不提供 OIDC 授权服务器或 Bearer 验证入口。
+<!--#endif-->
 <!--#if (LocalIdentity)-->
 - Cookie 会话在服务端登记（`UserSessions`，即个人设置里的「登录设备」）：每个请求都确认会话仍然有效，所以撤销——退出某台设备、退出其他所有设备、修改密码、管理员重置密码、退出登录——对已发出的 Cookie 立即生效。确认结果缓存 1 分钟；多实例部署未配 Redis 时，其他实例上的撤销至多滞后这么久。
 <!--#if (OpenIddictServer)-->

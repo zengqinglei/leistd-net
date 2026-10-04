@@ -98,6 +98,36 @@ def validate(output, values, config):
     infra = output / 'backend/src/Generation.Probe.Infrastructure'
     frontend = output / 'frontend'
     assert frontend.exists() == values['SpaFrontend'], 'Frontend applicability'
+    settings = json.loads(re.sub(r'^\s*//.*$', '', (api / 'appsettings.json').read_text(), flags=re.M))
+    assert ('TenantRouting' in settings) == (values['RemoteTokenAuth'] and values['IncludeMultiTenancy']), 'Tenant routing configuration applicability'
+    readme = (output / 'README.md').read_text()
+    testing = (output / 'docs/standards/testing.md').read_text()
+    deployment = (output / 'docs/deploy/README.md').read_text()
+    invocation = (output / 'docs/standards/service-invocation.md').read_text()
+    assert ('前端使用 Angular 22。' in readme) == values['SpaFrontend'], 'Frontend introduction applicability'
+    assert ('npm ' in testing) == values['SpaFrontend'], 'Frontend testing instructions applicability'
+    assert ('npm start' in deployment) == values['SpaFrontend'], 'Frontend deployment instructions applicability'
+    action_check = 'scripts/check-operation-action-i18n.py'
+    assert (action_check in testing) == (action_check in digests), 'Testing instructions reference an excluded action checker'
+    assert ('单实例配 `KeysPath`' in deployment) == values['SpaFrontend'], 'Browser session deployment prerequisite applicability'
+    assert ('/api/v1/auth/signin' in invocation) == (values['OpenIddictServer'] or values['ResourceBrowserSession']), 'Browser relying-party instructions applicability'
+    assert ('tenant-routing.read' in invocation) == values['IncludeMultiTenancy'], 'Tenant machine scope instructions applicability'
+    examples = re.findall(r'```json\s*\n(.*?)\n```', invocation, re.S)
+    assert examples, 'Missing service invocation configuration example'
+    for example in examples:
+        documented = json.loads(example)
+        authentication = documented.get('Authentication')
+        assert (authentication is not None) == values['RemoteTokenAuth'], 'Resource authentication example applicability'
+        if authentication is not None:
+            assert ('ClientId' in authentication) == values['ResourceBrowserSession'], 'Browser client credentials example applicability'
+        assert ('Identity' in documented['Leistd']['ServiceClients']) == (values['RemoteTokenAuth'] and values['IncludeMultiTenancy']), 'Tenant routing client example applicability'
+    backend_readme = (output / 'backend/README.md').read_text()
+    infrastructure_project = (infra / 'Generation.Probe.Infrastructure.csproj').read_text()
+    migrator_protection = values['LocalIdentity'] and values['IncludeMultiTenancy']
+    assert ('API 与 `DbMigrator` 必须共用密钥环' in backend_readme) == migrator_protection, 'Migrator key-sharing instructions applicability'
+    assert ('API 与 DbMigrator 必须共享密钥环' in infrastructure_project) == migrator_protection, 'Migrator key-sharing package comment applicability'
+    development_compose = (output / 'deploy/docker-compose.dev.yml').read_text()
+    assert ('mailpit' in development_compose) == values['Email'], 'Development mail dependency applicability'
     assert (api / 'Controllers/TenantController.cs').exists() == values['Impersonation'], 'Impersonation controller'
     assert (infra / 'Persistence/Migrations/Control').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control migrations'
     assert (infra / 'Persistence/IdentityControlDbContext.cs').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control context'

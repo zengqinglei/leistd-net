@@ -16,7 +16,7 @@
 两个交付面清晰分离：
 
 - **`framework/`** —— 按能力分组的 `Leistd.*` 组件 + DDD 四层基础类型：AOP、DI、核心原语、连接解析、事件总线、异常、本地化、分布式锁、多租户、对象映射、统一响应、安全、服务间调用、链路追踪、工作单元、审计、通知、实时、授权（含资源实例授权与数据范围）。完整清单见[组件总览](framework/docs/components/README.md)。统一版本、中央包管理（CPM）、Source Link 源码调试，以 NuGet 发布，**每个包内置随版本文档**。
-- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 22 前端，DDD 四层），支持 `Identity` / `Standalone` / `Resource` 三种服务形态，可选通知、外部登录与本地化。生成的项目通过 NuGet 引用 framework，并自带项目 Skill 与工程规范。
+- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 22 前端，DDD 四层），支持 `Identity` / `Standalone` / `Resource` 三种服务形态，可独立选择多租户、通知、业务实时、邮件、操作历史、外部登录与本地化；Resource 还可生成无前端的纯 API。生成的项目通过 NuGet 引用 framework，并自带项目 Skill 与工程规范。
 
 ---
 
@@ -107,18 +107,49 @@ dotnet new fullstack-app -n Acme.Shop
 
 生成的后端默认通过 NuGet 引用 `Leistd.*` 框架包，并自带按场景触发的 AI 协作能力。可用参数以 `dotnet new fullstack-app --help` 为准：
 
-| 参数 | 默认值 | 能力 |
+| 参数 | 默认值 | 生效范围与能力 |
 | --- | --- | --- |
-| `--service-role` | `Identity` | 服务形态：`Identity` 身份中心（OIDC 签发 + 本地用户 + 租户控制面）；`Standalone` 一体化应用（Cookie 会话 + 本地用户 + 租户控制面，不带授权服务器）；`Resource` 业务服务（校验远端令牌，持有本服务的角色与权限） |
-| `--include-notifications` | `false` | 通知中心与 SignalR 实时消息 |
-| `--include-external-login` | `false` | GitHub/Google 等外部登录，仅在有本地用户的形态（`Identity`/`Standalone`）下有效 |
-| `--include-localization` | `false` | 多语言（i18n）：前端运行时切换 + 后端按 culture 本地化 |
+| `--service-role` | `Identity` | `Identity`：本地身份与 OIDC 签发；`Standalone`：本地身份与 Cookie，不带授权服务器；`Resource`：验证远端令牌，保留本地用户投影、角色与权限 |
+| `--include-frontend` | `true` | 仅 Resource 可关闭；关闭后只接受 Bearer，移除 Angular、浏览器 OIDC 与 Cookie 会话。Identity/Standalone 始终包含交互登录前端 |
+| `--include-multi-tenancy` | `true` | 全部角色；控制租户解析、连接路由、分库及租户选择；本地身份形态还包含租户管理与控制库。关闭后仅接受宿主身份 |
+| `--include-real-time` | `false` | 全部角色；业务事件发布与资源订阅，独立于通知 |
+| `--include-email` | `true` | 仅 Identity/Standalone；控制 SMTP、邮箱验证、邮件设置及通知邮件渠道。Resource 不发送邮件 |
+| `--include-operation-records` | `true` | 全部角色；控制内置数据库历史、查询、导出、归档及界面。关闭后仍输出结构化安全记录 |
+| `--include-notifications` | `false` | 全部角色；通知发布、历史、未读数、通知中心、推送及个人偏好，独立于业务实时 |
+| `--include-external-login` | `false` | 仅 Identity/Standalone；GitHub/Google 等第三方身份提供商登录 |
+| `--include-localization` | `false` | 全部角色；后端按 culture 本地化，有前端时同时包含语言资源与运行时切换 |
 
-所有服务形态均包含角色与权限、租户解析与数据隔离。例如，生成校验远端令牌的业务服务：
+**常用项目怎么选：** 按场景选一条命令，仅指定需要改变的参数，其余采用表中默认值；多租户默认开启，不需要额外传参。
 
 ```bash
-dotnet new fullstack-app -n Acme.Service --service-role Resource
+# 多租户身份服务：含登录前端、本地用户与 OIDC 签发
+dotnet new fullstack-app -n Acme.Identity
+
+# 单租户身份服务
+dotnet new fullstack-app -n Acme.Identity --include-multi-tenancy false
+
+# 精简独立应用：含前端与本地登录，不带 OIDC 签发、多租户、邮件和数据库操作历史
+dotnet new fullstack-app -n Acme.App --service-role Standalone --include-multi-tenancy false --include-email false --include-operation-records false
+
+# 带前端的多租户业务服务：通过远端 Identity 登录
+dotnet new fullstack-app -n Acme.Orders --service-role Resource
+
+# 多租户资源 API：只接受远端 Bearer，不生成前端
+dotnet new fullstack-app -n Acme.OrdersApi --service-role Resource --include-frontend false
+
+# 精简单租户资源 API：不带数据库操作历史，保留结构化安全记录
+dotnet new fullstack-app -n Acme.InternalApi --service-role Resource --include-frontend false --include-multi-tenancy false --include-operation-records false
 ```
+
+需要通知中心时追加 `--include-notifications true`；需要业务实时订阅时追加 `--include-real-time true`，两者可独立选择。需要多语言时追加 `--include-localization true`。
+
+角色专用参数在其他角色下不生效。通知与业务实时支持四种组合；都开启时共用一个 Hub，有前端时只建立一条连接。模拟登录由“本地身份 + 多租户 + 操作历史”共同决定，关闭历史仍可管理租户，但不提供模拟登录。
+
+裁剪发生在生成时，覆盖用例、依赖、DI、端点、迁移、前端、Mock、测试和部署资产；它不是已部署应用的运行时开关。所有角色保留授权、实体审计、软删除与必要的安全记录；本地身份的失败计数、账户锁定和会话撤销不作为可选裁剪能力。单租户保留基础 `TenantId=null` 模型与宿主执行能力，不保留多租户产品入口。
+
+操作历史关闭后，成功安全记录在工作单元提交后输出，失败记录立即输出；进程在提交后、输出前退出仍可能丢记录。数据库历史模式只有在业务环境事务及同一存储内记录，才提供与业务数据同事务的保证。具体注册和保证见[操作记录组件](framework/docs/components/operation-records.md)。Framework 提供通用契约与适配器，Template 负责角色组合和产品资产裁剪；六个后端项目名称保持不变。
+
+Resource 的首次管理员授予使用生成项目的 DbMigrator `--grant-admin <sub>`，默认 dry-run，显式 `--apply` 才写入；完整命令见[后端说明](template/backend/README.md#资源管理员首次授予)。参数与有效能力的维护规则见[模板开发规范](docs/template/development-guide.md#3-条件生成)。
 
 ### 本地构建框架
 
@@ -166,9 +197,9 @@ pwsh framework/build/pack-local-feed.ps1
 
 | 层 | 技术 |
 | --- | --- |
-| 后端 | .NET 10 · ASP.NET Core · EF Core · OpenIddict |
-| 前端 | Angular 22 · Spartan UI · Tailwind CSS |
-| 数据 | PostgreSQL 15+ / 内存（开发）· Redis 7+（可选） |
+| 后端 | .NET 10 · ASP.NET Core · EF Core；Identity/Resource 使用 OpenIddict |
+| 前端 | Angular 22 · Spartan UI · Tailwind CSS；纯 Resource API 不包含前端 |
+| 数据 | PostgreSQL 15+；Redis 7+ 承载缓存与锁；多副本必需，单实例可回落到进程内缓存与锁（启动告警） |
 | 部署 | Docker · Docker Compose |
 
 ---
