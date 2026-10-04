@@ -131,7 +131,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
         }
     }
 
-    private IOperationRecordStore Store => _services.GetRequiredService<IOperationRecordStore>();
+    private IOperationRecordWriter Store => _services.GetRequiredService<IOperationRecordWriter>();
 
     private static OperationRecordInfo Record(OperationRecordOutcome outcome, Guid? tenantId) => new()
     {

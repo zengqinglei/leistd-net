@@ -49,9 +49,11 @@
   "detailSectionIdentity": "Identity",
   "detailSectionConnections": "Database connections",
   "detailSecretHint": "The connection string is stored encrypted and never returned; saving replaces it in full.",
-  "fieldConnectionVersion": "Version",
+  //#if (Impersonation)
   "impersonate": "Sign in as tenant",
   "impersonateConfirm": "Sign in as the administrator of “{{name}}”? You will leave the host context until you exit.",
   "impersonateFailed": "Could not sign in as this tenant.",
-  "impersonateInactiveHint": "Deactivated tenants cannot be signed in to"
+  "impersonateInactiveHint": "Deactivated tenants cannot be signed in to",
+  //#endif
+  "fieldConnectionVersion": "Version"
 }

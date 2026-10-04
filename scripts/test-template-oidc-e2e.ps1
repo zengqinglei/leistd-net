@@ -736,6 +736,13 @@ function Initialize-Environment {
             default { "resource" }
         }
         $arguments = @("new", "--debug:custom-hive", $hive, "fullstack-app", "-n", "E2E.$title", "-o", $generated, "--force") + $scenarioMap[$scenario].Arguments
+        if ($IncludeBrowserScenarios -and $name -eq 'orders') {
+            # 同一资源服务实际认证通知与业务实时共用 Hub/连接，并验证列表刷新。
+            $arguments += @('--include-real-time', 'true', '--include-notifications', 'true')
+        }
+        if (-not $IncludeBrowserScenarios -and $name -eq 'billing') {
+            $arguments += @('--include-frontend', 'false', '--include-real-time', 'true')
+        }
         Invoke-Tool "dotnet" $arguments "generate-$name" | Out-Null
         $apiDirectory = Join-Path $generated "backend/src/E2E.$title.Api"
         Add-FixtureRegistration $name $role $apiDirectory
@@ -959,6 +966,63 @@ function Test-S2 {
     Assert-Http "pkce-missing-challenge" 400 ($urls.idp + "/connect/authorize?" + (ConvertTo-Form $parameters)) -Session $admin | Out-Null
 }
 
+function Test-PureApiRealtime {
+    Assert-Value 'pure-api-no-frontend' $false (Test-Path (Join-Path $runRoot 'generated/billing/frontend'))
+    Assert-Http 'pure-api-no-spa-fallback' 404 ($urls.billing + '/') | Out-Null
+    $token = Get-CodeToken $admin 'openid profile billing-api' 'billing-web'
+    $subject = (Read-TokenClaims $token).sub
+    Invoke-Tool 'dotnet' @($services.billing.Migrator, '--grant-admin', $subject, '--apply') 'pure-api-realtime-admin' -Variables $services.billing.Environment | Out-Null
+    $probe = Join-Path $runRoot 'realtime-client'
+    New-Item -ItemType Directory -Path $probe -Force | Out-Null
+    $versions = [xml](Get-Content -LiteralPath (Join-Path $runRoot 'generated/billing/backend/Directory.Packages.props') -Raw)
+    $clientVersion = [string]($versions.Project.ItemGroup.PackageVersion | Where-Object { $_.Include -eq 'Microsoft.AspNetCore.SignalR.Client' }).Version
+    if (-not $clientVersion) { throw 'SignalR client version is absent from the generated dependency contract.' }
+    $clientProject = @'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="CLIENT_VERSION" /></ItemGroup>
+</Project>
+'@
+    [IO.File]::WriteAllText((Join-Path $probe 'Realtime.Client.csproj'), $clientProject.Replace('CLIENT_VERSION', $clientVersion), $utf8)
+    [IO.File]::WriteAllText((Join-Path $probe 'Program.cs'), @'
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.SignalR.Client;
+
+var root = Environment.GetEnvironmentVariable("E2E_REALTIME_URL")!;
+var token = Environment.GetEnvironmentVariable("E2E_REALTIME_TOKEN")!;
+await using var connection = new HubConnectionBuilder().WithUrl(root + "/hubs/realtime", options =>
+    options.AccessTokenProvider = () => Task.FromResult<string?>(token)).Build();
+var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+connection.On<object>("Roles.Changed", _ => changed.TrySetResult());
+await connection.StartAsync();
+await connection.InvokeAsync("Subscribe", "host:roles");
+foreach (var forbidden in new[] { Guid.NewGuid().ToString("N") + ":roles", "host:secrets", "roles" })
+{
+    try
+    {
+        await connection.InvokeAsync("Subscribe", forbidden);
+        throw new InvalidOperationException("An unauthorized resource subscription was accepted.");
+    }
+    catch (Microsoft.AspNetCore.SignalR.HubException exception) when (exception.Message.Contains("Subscription forbidden", StringComparison.OrdinalIgnoreCase)) { }
+}
+using var client = new HttpClient();
+client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+var name = "rt_" + Guid.NewGuid().ToString("N")[..12];
+using var created = await client.PostAsJsonAsync(root + "/api/v1/roles", new { name, displayName = name });
+created.EnsureSuccessStatusCode();
+await changed.Task.WaitAsync(TimeSpan.FromSeconds(15));
+await connection.StopAsync();
+Console.WriteLine("PASS: pure API authenticated external client, scope rejection and committed role-list event.");
+'@, $utf8)
+    $project = Join-Path $probe 'Realtime.Client.csproj'
+    Invoke-Tool 'dotnet' @('restore', $project, '--configfile', (Join-Path $runRoot 'NuGet.Config')) 'pure-api-client-restore' | Out-Null
+    Invoke-Tool 'dotnet' @('build', $project, '-c', $Configuration, '--no-restore', '-nodeReuse:false') 'pure-api-client-build' | Out-Null
+    $proof = Invoke-Tool 'dotnet' @((Join-Path $probe "bin/$Configuration/net10.0/Realtime.Client.dll")) 'pure-api-client-runtime' `
+        -Variables @{ E2E_REALTIME_URL = $urls.billing; E2E_REALTIME_TOKEN = $token }
+    Assert-Value 'pure-api-external-client-proof' $true ($proof.Output.Contains('PASS: pure API authenticated external client'))
+}
+
 function Test-S3 {
     $token = Get-MachineToken $plainClient "orders-api"
     $data = (Assert-Http "machine-endpoint-positive" 200 ($urls.orders + "/api/e2e/machine") -Token $token).Data
@@ -1173,6 +1237,7 @@ try {
     if (-not $BrowserOnly) {
     Invoke-Scenario "postgresql-pruning" { Test-PostgresqlPruning }
     Invoke-Scenario "S2" { Test-S2 }
+    if (-not $IncludeBrowserScenarios) { Invoke-Scenario 'pure-api-realtime' { Test-PureApiRealtime } }
     Invoke-Scenario "S3" { Test-S3 }
     Invoke-Scenario "S4" { Test-S4 }
     Invoke-Scenario "S5" { Test-S5 }

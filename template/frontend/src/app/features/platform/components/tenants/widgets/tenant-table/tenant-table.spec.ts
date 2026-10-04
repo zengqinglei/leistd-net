@@ -124,6 +124,7 @@ describe('TenantTable', () => {
     expect(triggers.length).toBe(2);
   });
 
+  //#if (Impersonation)
   // 后端对停用租户直接拒绝模拟登录，留一个点得动的入口就是「能看见但调不通」。
   // 这条钉的是禁用本身：改成隐藏或恢复可点都会红。
   it('keeps the impersonate item for inactive tenants but disables it', async () => {
@@ -163,6 +164,30 @@ describe('TenantTable', () => {
     await closeMenu();
   });
 
+  //#else
+  it('keeps tenant management actions without an impersonation entry', async () => {
+    const [tableBlock] = await fixture.getDeferBlocks();
+    await tableBlock.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLElement>('tbody ng-icon[name="lucideEllipsis"]');
+    trigger!.closest('button')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const menu = document.querySelector('[data-slot="dropdown-menu"]');
+    expect(menu?.querySelector('ng-icon[name="lucideLogIn"]')).toBeNull();
+    const edit = menu?.querySelector('ng-icon[name="lucidePencil"]');
+    expect(edit).not.toBeNull();
+    expect(menu?.querySelector('ng-icon[name="lucideTrash2"]')).not.toBeNull();
+    const updated: TenantOutputDto[] = [];
+    component.edit.subscribe((value) => updated.push(value));
+    edit!.closest('button')!.click();
+    expect(updated).toEqual([tenant('1', 'acme')]);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+  });
+  //#endif
   it('flags collapsed columns on narrow viewports but not on desktop', () => {
     expect(component.hasCollapsedColumns()).toBe(false);
 

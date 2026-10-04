@@ -19,6 +19,7 @@
 9 个场景的矩阵更严，能覆盖矩阵没排到的组合。
 """
 import io, os, re, sys, json, fnmatch, itertools, collections
+from functools import lru_cache
 from xml.etree import ElementTree
 
 ROOT = os.path.join(os.path.dirname(__file__), '..')
@@ -40,21 +41,23 @@ def load_exclusions():
     漏掉这一层会把噪声当成缺陷，而噪声会让整道闸门失去可信度。
     """
     modifiers = json.load(io.open(TEMPLATE_JSON, encoding='utf-8-sig'))['sources'][0]['modifiers']
-    return [(m.get('condition'), m.get('exclude', [])) for m in modifiers if m.get('condition')]
+    return tuple((m['condition'], tuple(m.get('exclude', []))) for m in modifiers if m.get('condition'))
+
+
+@lru_cache(maxsize=None)
+def matching_exclusion_conditions(template_relative, exclusions):
+    # Paths do not depend on symbols. Match each file once instead of repeating all globs
+    # for every usage, namespace declaration and parameter combination.
+    return tuple(condition for condition, globs in exclusions
+                 if any(fnmatch.fnmatch(template_relative, pattern)
+                        or (pattern.endswith('/**') and template_relative.startswith(pattern[:-3] + '/'))
+                        for pattern in globs))
 
 
 def file_exists_in(env, template_relative, exclusions):
     """该文件在这组符号取值下是否会被生成"""
-    for condition, globs in exclusions:
-        if eval_expr(condition, env) is not True:
-            continue
-        for pattern in globs:
-            if fnmatch.fnmatch(template_relative, pattern):
-                return False
-            # `dir/**` 应当匹配 dir 下任意深度
-            if pattern.endswith('/**') and template_relative.startswith(pattern[:-3] + '/'):
-                return False
-    return True
+    return not any(eval_expr(condition, env) is True
+                   for condition in matching_exclusion_conditions(template_relative, exclusions))
 
 
 def load_symbol_space():
@@ -80,15 +83,19 @@ def load_symbol_space():
     return space, sorted(set(names) | set(computed))
 
 
-def eval_expr(expr, env):
-    """求值模板引擎的条件表达式（!、&&、||、==、!=、括号、"字符串"）。"""
-    py = expr
-    py = re.sub(r'(?<![!=<>])==', '==', py)
+@lru_cache(maxsize=None)
+def compile_expr(expr):
+    py = re.sub(r'(?<![!=<>])==', '==', expr)
     py = py.replace('&&', ' and ').replace('||', ' or ')
     py = re.sub(r'!(?=[\w(])', ' not ', py)
     py = re.sub(r'"([^"]*)"', r"'\1'", py)
+    return compile(py.strip(), '<template-condition>', 'eval')
+
+
+def eval_expr(expr, env):
+    """求值模板条件；同一进程复用表达式编译，仍检查全部取值。"""
     try:
-        return bool(eval(py, {'__builtins__': {}}, dict(env)))
+        return bool(eval(compile_expr(expr), {'__builtins__': {}}, dict(env)))
     except Exception:
         return None   # 无法求值：交给 check-template-symbols 的悬空符号检查
 

@@ -95,6 +95,7 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             .WithAllowedValues(SettingConstant.Logging.Levels)
             .IsVisibleToClients = true;
 
+#if (IncludeOperationRecords)
         // 操作记录保留期同样是进程级：归档任务跨租户统一执行。默认值取部署基线，
         // 部署没打开时这里也是关——一个默认就会动审计数据的开关不该由代码替部署决定。
         context.Add(
@@ -113,12 +114,14 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             group: SettingConstant.Groups.Audit)
             .AsInteger(30, 3650)
             .IsVisibleToClients = true;
+#endif
 #if (LocalIdentity)
 
         // 注册策略按租户：同一套部署下，不同租户可以有不同的注册门槛。
         // 默认值取自 appsettings 的 UserRegistration 段，配置仍是部署基线。
         var registration = registrationOptions.Value;
 
+#if (Email)
         context.Add(
             SettingConstant.Registration.EnableEmailVerification,
             defaultValue: registration.EnableEmailVerification ? "true" : "false",
@@ -127,6 +130,8 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             group: SettingConstant.Groups.Registration)
             .AsBoolean()
             .IsVisibleToClients = true;
+
+#endif
 
         context.Add(
             SettingConstant.Registration.CaptchaExpiryMinutes,
@@ -137,6 +142,7 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             .AsInteger(1, 60)
             .IsVisibleToClients = true;
 
+#if (Email)
         context.Add(
             SettingConstant.Registration.EmailCodeExpiryMinutes,
             defaultValue: registration.EmailCodeExpiryMinutes.ToString(CultureInfo.InvariantCulture),
@@ -163,6 +169,7 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             group: SettingConstant.Groups.Registration)
             .AsInteger(1, 20)
             .IsVisibleToClients = true;
+#endif
 
         // 登录失败锁定按租户：对外开放注册的租户与只有内部员工的租户，能接受的门槛不同。
         context.Add(
@@ -194,6 +201,8 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             .AsBoolean()
             .IsVisibleToClients = true;
 
+#if (Email)
+
         // 发信参数是进程级的：整个部署共用一个发信通道。默认值取部署基线，与日志级别同一口径
         AddEmail(context, SettingConstant.Email.SmtpHost, "SMTP host");
         AddEmail(context, SettingConstant.Email.SmtpPort, "SMTP port").AsInteger(1, 65535);
@@ -203,18 +212,22 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
         AddEmail(context, SettingConstant.Email.SmtpPassword, "SMTP password").IsEncrypted = true;
         AddEmail(context, SettingConstant.Email.DefaultFromAddress, "Sender address");
         AddEmail(context, SettingConstant.Email.DefaultFromName, "Sender name");
+#endif
+#endif
 #if (IncludeNotifications)
 
         // 通知偏好是个人的：谁收什么由本人决定，不设租户默认值
+#if (Email)
         AddNotificationPreference(context, SettingConstant.Notifications.SecurityEmail, true, "Security alerts by email");
+#endif
         AddNotificationPreference(context, SettingConstant.Notifications.SystemInApp, true, "System notifications in the app");
+#if (Email)
         AddNotificationPreference(context, SettingConstant.Notifications.SystemEmail, false, "System notifications by email");
 #endif
 #endif
     }
-#if (LocalIdentity)
-
 #if (IncludeNotifications)
+
     private static void AddNotificationPreference(
         ISettingDefinitionContext context,
         string name,
@@ -230,8 +243,9 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             .AsBoolean()
             .IsVisibleToClients = true;
     }
-
 #endif
+#if (Email)
+
     private static ISettingDefinition AddEmail(ISettingDefinitionContext context, string name, string displayName)
     {
         var definition = context.Add(

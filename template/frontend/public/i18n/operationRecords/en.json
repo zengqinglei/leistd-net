@@ -64,7 +64,8 @@
     "tenant.impersonation-ended": "Ended impersonation of tenant {{target}}",
     "auth.token.issued": "Issued an access token",
     "tenant.connection-registered": "Registered a database connection for tenant {{target}}",
-    "tenant.connection-removed": "Removed the database connection of tenant {{target}}"
+    "tenant.connection-removed": "Removed the database connection of tenant {{target}}",
+    "resource.admin-granted": "Granted administrator permissions to {{target}}"
   },
   "actionsNoTarget": {
     "operation-records.exported": "Exported operation records",

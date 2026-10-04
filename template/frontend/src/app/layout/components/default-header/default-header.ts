@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, input } from '@angular/core';
 //#if (IncludeLocalization)
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#else
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 //#endif
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideVenetianMask } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -14,14 +14,14 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBreadcrumbImports } from '@spartan-ng/helm/breadcrumb';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmKbdImports } from '@spartan-ng/helm/kbd';
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 //#endif
 import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ImpersonationService } from '../../../core/services/impersonation-service';
 //#endif
@@ -29,7 +29,7 @@ import { ImpersonationService } from '../../../core/services/impersonation-servi
 import { LanguageSwitcher } from '../../../shared/components/language-switcher/language-switcher';
 //#endif
 import { ThemeModeToggle } from '../../../shared/components/theme-mode-toggle/theme-mode-toggle';
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { PopoverAria } from '../../../shared/directives/popover-aria';
 //#endif
 //#if (!IncludeLocalization)
@@ -56,7 +56,7 @@ import { WorkspaceNav } from '../workspace-nav/workspace-nav';
     ...HlmTooltipImports,
     UserMenu,
     WorkspaceNav,
-    //#if (LocalIdentity)
+    //#if (Impersonation)
     NgIcon,
     ...HlmPopoverImports,
     PopoverAria,
@@ -69,7 +69,7 @@ import { WorkspaceNav } from '../workspace-nav/workspace-nav';
     TranslocoDirective,
     //#endif
   ],
-  //#if (LocalIdentity)
+  //#if (Impersonation)
   providers: [provideIcons({ lucideVenetianMask })],
   //#endif
   templateUrl: './default-header.html',
@@ -86,7 +86,7 @@ export class DefaultHeader {
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
-  //#if (LocalIdentity)
+  //#if (Impersonation)
   readonly impersonation = inject(ImpersonationService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -97,7 +97,7 @@ export class DefaultHeader {
     // 页面标题只在带页头的布局里有意义，离开布局时清掉：登录页、落地页等不设标题，
     // 不清的话浏览器标签页会一直挂着上一个布局页的标题。页头随布局销毁，早于下一页设置标题
     inject(DestroyRef).onDestroy(() => this.layoutService.title.set(''));
-    //#if (LocalIdentity)
+    //#if (Impersonation)
 
     // 退出模拟是整页跳转，提示只能在新页面上补（见 ImpersonationService 的一次性标记）。
     //#if (IncludeLocalization)
@@ -111,7 +111,7 @@ export class DefaultHeader {
     //#endif
     //#endif
   }
-  //#if (LocalIdentity)
+  //#if (Impersonation)
 
   /**
    * 结束模拟。失败时不跳转，让顶栏里的模拟状态留在原处，并说明原因——

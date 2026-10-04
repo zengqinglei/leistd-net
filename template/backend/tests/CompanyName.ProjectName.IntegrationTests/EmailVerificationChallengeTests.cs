@@ -98,6 +98,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         _ = await SendChallengeAsync(host, client, email);
     }
 
+#if (IncludeMultiTenancy)
     [Fact]
     public async Task Challenge_is_scoped_to_its_tenant_and_survives_rejection_elsewhere()
     {
@@ -123,7 +124,10 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
             challengeA);
         Assert.Equal(HttpStatusCode.OK, ownTenant.StatusCode);
     }
+#endif
 
+
+#if (IncludeMultiTenancy)
     [Fact]
     public async Task Send_rate_limit_is_isolated_between_host_and_tenants()
     {
@@ -140,6 +144,8 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientA, email)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientB, email)).StatusCode);
     }
+#endif
+
 
     /// <summary>
     /// 已登录用户验证自己当前的邮箱：改了邮箱就回到未验证，验证码只对账号上此刻的邮箱有效。

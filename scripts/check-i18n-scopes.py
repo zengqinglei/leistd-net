@@ -7,6 +7,13 @@ import re
 import tempfile
 
 
+def source_json(text):
+    # Source catalogs contain all conditional keys; generated catalogs are strict JSON.
+    # Only template directives are removed. Ordinary comments and invalid JSON still fail.
+    text = re.sub(r'(?m)^[ \t]*//[ \t]*#(?:if|elif|else|endif)\b[^\n]*(?:\n|$)', '', text)
+    return json.loads(text)
+
+
 def flatten(node, prefix=''):
     result = {}
     for key, value in node.items():
@@ -216,7 +223,7 @@ def check(frontend):
         for lang in ('en', 'zh-CN'):
             path = directory / f'{lang}.json'
             try:
-                trees[lang] = flatten(json.loads(path.read_text(encoding='utf-8')))
+                trees[lang] = flatten(source_json(path.read_text(encoding='utf-8')))
             except (OSError, ValueError) as error:
                 errors.append(f'{label}/{lang}: invalid or missing JSON: {error}')
         if len(trees) != 2:
@@ -369,6 +376,8 @@ import { required } from '@angular/forms/signals';
         assert check_route_scopes(root, {'users', 'permissions'}) == []
         ts.write_text(selectorless_ts)
         cases = [
+            ('ordinary JSON comment remains invalid', lambda: (root / 'public/i18n/users/en.json').write_text('// not a template directive\n' + json.dumps({'title': 'Users', 'nested': {'label': 'Label {{name}}'}})), 'invalid or missing JSON'),
+            ('conditional malformed JSON remains invalid', lambda: (root / 'public/i18n/users/en.json').write_text('{\n//#if (Impersonation)\n"title": "Users"\n//#endif\n"nested": {"label": "Label {{name}}"}\n}'), 'invalid or missing JSON'),
             ('selector-less route scope registration', lambda: (ts.write_text(selectorless_ts.replace("templateUrl: './page.html'", "template: `<div *transloco=\"let t\">{{ t('permissions.title') }}</div>`")), routes.write_text(original_routes.replace("'users', 'permissions'", "'users'"))), "missing scope registration ['permissions'] for page.ts"),
             ('scope key sets', lambda: write('zh-CN', {}), 'key sets'),
             ('scope reference', lambda: html.write_text(original.replace("t('title')", "t('absent')")), 'missing reference users.absent'),
@@ -391,6 +400,12 @@ import { required } from '@angular/forms/signals';
             ('aliased second host registration', lambda: (routes.write_text(aliased_routes.replace('}];', "}, { path: 'other', providers: [provideTranslocoScope('users')], loadComponent: () => import('./page').then(m => m.Page) }];")), grant.write_text(original_grant.replace('permissions.title', 'grants.title'))), 'missing scope registration'),
         ]
         baseline = {p: p.read_text() for p in root.rglob('*') if p.is_file()}
+        for lang in ('en', 'zh-CN'):
+            path = root / 'public/i18n/users' / f'{lang}.json'
+            path.write_text('{\n//#if (Impersonation)\n"title": "Users",\n//#endif\n"nested": {"label": "Label {{name}}"}\n}')
+        assert check(root) == [], check(root)
+        for p, text in baseline.items():
+            p.write_text(text)
         for name, mutate, expected in cases:
             for p, text in baseline.items():
                 p.write_text(text)

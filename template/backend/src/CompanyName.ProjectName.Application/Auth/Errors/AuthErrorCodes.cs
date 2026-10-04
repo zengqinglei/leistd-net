@@ -6,12 +6,14 @@ public static class AuthErrorCodes
     public const string CannotRevokeCurrentSession = "Auth:CannotRevokeCurrentSession";
     public const string CaptchaInvalid = "Auth:CaptchaInvalid";
     public const string EmailAlreadyUsed = "Auth:EmailAlreadyUsed";
+#if (Email)
     public const string EmailAlreadyVerified = "Auth:EmailAlreadyVerified";
     public const string EmailCodeInvalid = "Auth:EmailCodeInvalid";
     public const string EmailCodeRequired = "Auth:EmailCodeRequired";
     public const string EmailCodeSendTooFrequent = "Auth:EmailCodeSendTooFrequent";
     public const string EmailVerificationDisabled = "Auth:EmailVerificationDisabled";
     public const string EmailVerificationUnavailable = "Auth:EmailVerificationUnavailable";
+#endif
     public const string InvalidCredentials = "Auth:InvalidCredentials";
     public const string TwoFactorAlreadyEnabled = "Auth:TwoFactorAlreadyEnabled";
     public const string TwoFactorChallengeExpired = "Auth:TwoFactorChallengeExpired";

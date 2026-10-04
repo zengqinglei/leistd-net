@@ -5,8 +5,10 @@ using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
+#if (Impersonation)
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
+#endif
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,12 +25,16 @@ namespace CompanyName.ProjectName.Api.Controllers;
 public sealed class AuthController(
     IAuthAppService authService,
     ICaptchaAppService captchaAppService,
+#if (Email)
     IEmailVerificationAppService emailVerificationAppService,
-    ITenantImpersonationAppService impersonationAppService,
-    IUserSessionAppService sessionAppService,
-    ITwoFactorAppService twoFactorAppService,
     IUserRegistrationPolicyProvider registrationPolicy,
-    IOptions<VerificationCodeOptions> verificationCodeOptions) : BaseController
+    IOptions<VerificationCodeOptions> verificationCodeOptions,
+#endif
+#if (Impersonation)
+    ITenantImpersonationAppService impersonationAppService,
+#endif
+    IUserSessionAppService sessionAppService,
+    ITwoFactorAppService twoFactorAppService) : BaseController
 {
     /// <summary>
     /// 账号密码登录。已启用两步验证时不下发会话，返回第二步凭据
@@ -128,6 +134,7 @@ public sealed class AuthController(
     }
 
 #endif
+#if (Email)
     [AllowAnonymous]
     [AllowDuringTwoFactorSetup]
     [HttpGet("security-config")]
@@ -144,12 +151,14 @@ public sealed class AuthController(
         };
     }
 
+#endif
     [AllowAnonymous]
     [HttpGet("captcha")]
     public async Task<CaptchaOutputDto> GetCaptchaAsync(CancellationToken cancellationToken)
     {
         return await captchaAppService.GenerateCaptchaAsync(cancellationToken);
     }
+#if (Email)
 
     [AllowAnonymous]
     [HttpPost("send-email-code")]
@@ -159,6 +168,7 @@ public sealed class AuthController(
     {
         return await emailVerificationAppService.SendEmailCodeAsync(request, cancellationToken);
     }
+#endif
 
     /// <summary>
     /// 用户注册
@@ -170,6 +180,7 @@ public sealed class AuthController(
         return await authService.RegisterAsync(request, cancellationToken);
     }
 
+#if (Impersonation)
     /// <summary>
     /// 结束模拟登录，会话切回发起人
     /// </summary>
@@ -197,6 +208,8 @@ public sealed class AuthController(
     [HttpGet("impersonation")]
     public Task<ImpersonationStatusOutputDto> GetImpersonationStatusAsync(CancellationToken cancellationToken)
         => impersonationAppService.GetStatusAsync(cancellationToken);
+
+#endif
 
     /// <summary>
     /// 获取当前用户信息
@@ -228,6 +241,7 @@ public sealed class AuthController(
     {
         return await authService.SetCurrentUserAvatarAsync(request, cancellationToken);
     }
+#if (Email)
 
     /// <summary>
     /// 给自己当前的邮箱发验证码
@@ -248,6 +262,7 @@ public sealed class AuthController(
     {
         return await authService.ConfirmCurrentUserEmailAsync(request, cancellationToken);
     }
+#endif
 
     /// <summary>
     /// 自己的登录设备（仍然有效的会话），当前设备在前

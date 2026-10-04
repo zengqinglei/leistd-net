@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Events;
 using Leistd.EventBus.EventHandlers;
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.MultiTenancy.Management.Events;
 #endif
 using Leistd.OperationRecords.Definitions;
@@ -54,7 +54,7 @@ internal sealed class PermissionGrantsReplacedAuditHandler(IOperationRecorder re
                 : PermissionConstant.Roles.ManagePermissions,
             cancellationToken);
 }
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 
 /// <summary>
 /// 租户生命周期留痕。事件只在各步都已提交后发布：创建失败并已补偿时不会有"创建成功"的假账。

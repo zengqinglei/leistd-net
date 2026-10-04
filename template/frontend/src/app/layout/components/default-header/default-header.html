@@ -52,7 +52,7 @@
       @if (layout() === 'topbar') {
         <app-workspace-nav placement="end" />
       }
-      <!--#if (LocalIdentity)-->
+      <!--#if (Impersonation)-->
       <!-- 模拟登录状态：常驻在顶栏里，而不是在顶栏上方另起一整行红色横幅。
          横幅会把整页往下推 44px，进出模拟时布局整体跳动，饱和红底也过于刺眼。
          但这个状态必须一直看得见——此刻的每一次操作都记在租户账号上——所以不用会自动消失的

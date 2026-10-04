@@ -19,6 +19,7 @@
       </div>
 
       <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+<!--#if (IncludeMultiTenancy)-->
         <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附租户提示头 -->
         <div hlmField>
           <label hlmFieldLabel for="tenantName">{{ t('account.login.tenant') }}</label>
@@ -105,6 +106,7 @@
           }
         </div>
 
+<!--#endif-->
         <!-- Username/Email -->
         <div hlmField>
           <label hlmFieldLabel for="usernameOrEmail">{{

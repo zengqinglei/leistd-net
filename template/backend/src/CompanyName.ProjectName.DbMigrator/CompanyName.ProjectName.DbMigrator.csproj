@@ -23,6 +23,13 @@
     <PackageReference Include="Leistd.Data" />
   </ItemGroup>
   <ItemGroup>
+<!--#if (RemoteTokenAuth)-->
+    <ProjectReference Include="..\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
+    <PackageReference Include="Leistd.Tracing.Core" />
+<!--#if (!IncludeOperationRecords)-->
+    <PackageReference Include="Leistd.OperationRecords.Logging" />
+<!--#endif-->
+<!--#endif-->
     <ProjectReference Include="..\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
     <ProjectReference Include="..\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />
   </ItemGroup>

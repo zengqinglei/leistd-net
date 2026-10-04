@@ -4,12 +4,14 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CompanyName.ProjectName.Api.Auth;
+#if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+#endif
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
@@ -268,6 +270,28 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         Assert.Equal(fetches, issuer.KeySetRequests);
     }
 
+#if (!SpaFrontend && (IncludeNotifications || IncludeRealTime))
+    // 纯资源 API 的浏览器客户端连 Hub 只能把 Bearer 放进查询串：只在 Hub 端点上采信，普通 API 仍只认请求头
+    [Fact]
+    public async Task A_query_string_bearer_is_accepted_on_the_hub_only()
+    {
+        using var issuer = new RotatingIssuer();
+        using var host = Host(baseline.Factory, issuer);
+        using var client = Client(host);
+        var token = issuer.AccessToken(issuer.Current);
+        var negotiate = ProjectWebApplicationFactory.HubPath + "/negotiate?negotiateVersion=1";
+
+        using (var anonymous = await client.PostAsync(negotiate, null))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        using (var withQueryToken = await client.PostAsync($"{negotiate}&access_token={Uri.EscapeDataString(token)}", null))
+            Assert.Equal(HttpStatusCode.OK, withQueryToken.StatusCode);
+        using (var api = await client.GetAsync($"/api/v1/auth/me?access_token={Uri.EscapeDataString(token)}"))
+            Assert.Equal(HttpStatusCode.Unauthorized, api.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(client, token));
+    }
+
+#endif
+#if (ResourceBrowserSession)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -305,6 +329,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/api/v1/auth/me")).StatusCode);
         Assert.Equal(1, issuer.RefreshCount);
     }
+#endif
 
     private static async Task<HttpStatusCode> MeAsync(HttpClient client, string token, CancellationToken cancellationToken = default, string? marker = null)
     {
@@ -320,7 +345,9 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", "resource-api").ConfigureTestServices(services =>
         {
             // 两条链路都用真实的配置管理器：不给静态配置，只替换它们的 HTTP
+#if (ResourceBrowserSession)
             services.Configure<OpenIdConnectOptions>(AuthenticationSchemeNames.OpenIdConnect, options => options.BackchannelHttpHandler = issuer);
+#endif
             services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new ValidationTransport(issuer));
             services.AddSingleton<IStartupFilter>(new RequestEntry(issuer.WaiterEntered));
             if (fetchTimeout is not null || observeClient is not null)
@@ -344,6 +371,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         if (cookie is not null) client.DefaultRequestHeaders.Add("Cookie", cookie);
         return client;
     }
+#if (ResourceBrowserSession)
 
     private static async Task<string> LoginAsync(WebApplicationFactory<Program> host, RotatingIssuer issuer)
     {
@@ -361,6 +389,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         Assert.True(callback.StatusCode == HttpStatusCode.Found, await callback.Content.ReadAsStringAsync());
         return ProjectWebApplicationFactory.AssertSessionCookieContract(callback);
     }
+#endif
 
     // next() 已启动当前宿主的真实请求管道；只观察入口，不声称观察 SDK 内部加入等待者。
     private sealed class RequestEntry(TaskCompletionSource entered) : IStartupFilter

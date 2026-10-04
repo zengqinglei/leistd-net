@@ -18,12 +18,16 @@
   <ItemGroup>
     <!-- PasswordHasher 使用 PBKDF2-HMAC-SHA256（Microsoft.AspNetCore.Cryptography.KeyDerivation），
          密文自带格式版本与迭代数。显式声明，避免依赖其它包传递的 ASP.NET Core 共享框架。 -->
+<!--#if (LocalIdentity)-->
     <PackageReference Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" />
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
 <!--#endif-->
-    <!-- Data Protection 密钥环：认证 Cookie 与控制库里租户连接串的加密共用，API 与 DbMigrator 必须一致 -->
+<!--#if (SpaFrontend)-->
+    <!-- Data Protection 密钥环：认证 Cookie、机密设置与控制库里租户连接串的加密共用，API 与 DbMigrator 必须一致 -->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
+<!--#endif-->
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <!-- 设计时工厂自建 ConfigurationBuilder：SetBasePath 来自 FileExtensions、AddJsonFile 来自 Json、
          AddEnvironmentVariables 来自 EnvironmentVariables。三个都显式声明，不依赖彼此的传递引用——
@@ -32,7 +36,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
     <PackageReference Include="Microsoft.Extensions.Http" />
-<!--#if (!LocalIdentity)-->
+<!--#if (RemoteTokenAuth && IncludeMultiTenancy)-->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Refit" />
 <!--#endif-->
@@ -56,13 +60,19 @@
     <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
     <PackageReference Include="Leistd.Settings.EntityFrameworkCore" />
+<!--#if (IncludeOperationRecords)-->
     <PackageReference Include="Leistd.OperationRecords.EntityFrameworkCore" />
+<!--#endif-->
     <!-- 集群周期任务的完成水位（多副本同一时段只跑一次） -->
     <PackageReference Include="Leistd.BackgroundJobs.EntityFrameworkCore" />
-<!--#if (LocalIdentity)-->
+<!--#if (LocalIdentity && IncludeMultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
     <!-- 开通失败的数据库错误翻译契约（ITenantDatabaseErrorDescriber）在租户管理用例包 -->
+<!--#if (IncludeMultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.Management" />
+<!--#endif-->
+<!--#endif-->
+<!--#if (Email)-->
     <PackageReference Include="Leistd.Email.Smtp" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
@@ -70,9 +80,11 @@
 <!--#endif-->
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
-<!--#if (!LocalIdentity)-->
+<!--#if (RemoteTokenAuth && IncludeMultiTenancy)-->
     <!-- 向 Identity 回源租户连接：远端存储由框架提供，鉴权用 client credentials -->
+<!--#if (IncludeMultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.ServiceClient" />
+<!--#endif-->
     <PackageReference Include="Leistd.ServiceClient.OAuth" />
 <!--#endif-->
   </ItemGroup>

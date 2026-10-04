@@ -154,6 +154,8 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 `AfterCommit` 阶段的 `IUnitOfWorkManager.Current` 为 `null`。该阶段若写库，会使用独立上下文并自行提交。需要可靠发送的跨系统副作用应使用 Outbox。
 
+一个 `AfterCommit` 事件失败不会跳过后续事件。全部事件分发完后，单个失败保留原异常类型与堆栈，多个分发失败以 `AggregateException` 上抛给 `CompleteAsync()`；事务已提交，异常不触发回滚。该阶段使用不可取消的令牌，处理器自身的取消异常也按分发失败收集。
+
 ### EF Core 连接绑定
 
 `IDbContextProvider<TDbContext>` 在工作单元内按 DbContext 类型复用实例。事务型工作单元中，同一物理关系数据库上的多个 DbContext 共用连接和事务。
@@ -175,7 +177,7 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 进入 Commit 前会最后检查一次取消。Commit 已开始后不再响应取消，避免向调用方返回“无法确定是否已提交”的结果。
 
-日志口径：调用方主动取消（取消异常且令牌已取消）且发生在提交开始之前，事务型记 Debug（什么都没提交），非事务型记 Warning（已保存的部分不会回滚）；提交开始之后（提交本身、AfterCommit 处理器）的任何失败，以及令牌未取消的取消异常（如数据库超时），都按提交失败记 Error。回滚一律记 Debug：它是结果不是原因，原因已由异常处理或提交失败日志记下。
+日志口径：调用方主动取消（取消异常且令牌已取消）且发生在提交开始之前，事务型记 Debug（什么都没提交），非事务型记 Warning（已保存的部分不会回滚）；提交开始之后的任何失败，以及令牌未取消的取消异常（如数据库超时），都记 Error。工作单元尚未完成时记录提交失败；已经完成时明确记录“已提交，但提交后处理失败”，避免误判数据未落库。回滚一律记 Debug：它是结果不是原因，原因已由异常处理或错误日志记下。
 
 非事务工作单元没有该边界：每次保存可能已独立持久化，`BeforeCommit` 异常不承诺回滚已完成的写入。
 

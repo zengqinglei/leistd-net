@@ -7,7 +7,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.Shared.Paging;
-using CompanyName.ProjectName.Application.TenantConnections;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Ddd.Application.AppServices;

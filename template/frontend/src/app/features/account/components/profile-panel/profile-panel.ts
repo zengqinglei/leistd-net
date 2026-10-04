@@ -44,11 +44,13 @@ import { AccountService } from '../../services/account-service';
 const PHONE_PATTERN = /^[0-9+\-()\s]{0,20}$/;
 
 /** 当前这次邮箱验证：发出的验证码对应的挑战，以及还要等多久才能重发。 */
+//#if (Email)
 interface EmailChallenge {
   challengeId: string;
   email: string;
 }
 
+//#endif
 /**
  * 个人设置 ·「个人资料」面板：头像、用户名、邮箱（含验证）、显示名、手机。
  *
@@ -125,6 +127,7 @@ export class ProfilePanel {
    * 部署能不能发邮箱验证码（验证码摘要密钥是否已配置）。取回之前按"能"处理：
    * 多数部署都配了，先藏起按钮再冒出来反而闪一下；真不能时发送端也会给出明确原因。
    */
+//#if (Email)
   readonly emailVerificationAvailable = signal(true);
 
   readonly emailChallenge = signal<EmailChallenge | null>(null);
@@ -135,6 +138,7 @@ export class ProfilePanel {
   readonly resendSeconds = signal(0);
   private resendTimer: ReturnType<typeof setInterval> | undefined;
 
+//#endif
   readonly profileForm = form(this.formModel, (path) => {
     required(path.username);
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
@@ -153,12 +157,14 @@ export class ProfilePanel {
       this.user();
       untracked(() => this.reset());
     });
+//#if (Email)
     this.destroyRef.onDestroy(() => clearInterval(this.resendTimer));
     this.accountService
       .getSecurityConfig()
       .subscribe((config) =>
         this.emailVerificationAvailable.set(config.emailVerificationAvailable),
       );
+//#endif
   }
 
   /** 按当前用户回填表单，丢掉未保存的修改。 */
@@ -170,11 +176,13 @@ export class ProfilePanel {
       displayName: user?.displayName ?? '',
       phoneNumber: user?.phoneNumber ?? '',
     });
+//#if (Email)
     // 已保存的邮箱变了（改邮箱后保存），手里那个挑战是发给旧地址的，作废
     if (this.emailChallenge()?.email !== user?.email) {
       this.emailChallenge.set(null);
       this.emailCode.set('');
     }
+//#endif
   }
 
   /** 选完图片即处理并上传：裁成正方形、缩到 256，失败原因就地说清。 */
@@ -234,6 +242,7 @@ export class ProfilePanel {
       });
   }
 
+//#if (Email)
   /** 给已保存的邮箱发验证码，并开始重发倒计时。 */
   sendEmailCode(): void {
     const email = this.user()?.email;
@@ -301,6 +310,7 @@ export class ProfilePanel {
     }, 1000);
   }
 
+//#endif
   onSubmit(): void {
     if (this.profileForm().invalid()) {
       this.profileForm().markAsTouched();

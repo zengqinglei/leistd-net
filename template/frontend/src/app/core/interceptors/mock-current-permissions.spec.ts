@@ -29,11 +29,13 @@ describe('current permissions mock', () => {
     expect(currentPermissions().sort()).toEqual(defined.sort());
   });
 
-  it('includes the audit and tenant entries that have their own pages', () => {
+  it('includes every enabled platform entry', () => {
     const permissions = currentPermissions();
-
+    expect(permissions).toContain(PERMISSIONS.users.default);
+    //#if (IncludeOperationRecords)
     expect(permissions).toContain(PERMISSIONS.operationRecords.default);
-    //#if (LocalIdentity)
+    //#endif
+    //#if (LocalIdentity && IncludeMultiTenancy)
     expect(permissions).toContain(PERMISSIONS.tenants.default);
     //#endif
   });

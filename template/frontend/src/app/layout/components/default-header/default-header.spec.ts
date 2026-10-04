@@ -6,7 +6,7 @@ import { DefaultHeader } from './default-header';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { ImpersonationService } from '../../../core/services/impersonation-service';
 //#endif
 import { LayoutService } from '../../services/layout-service';
@@ -21,7 +21,7 @@ describe('DefaultHeader page title', () => {
       // prettier-ignore
       providers: [
         provideRouter([]),
-        //#if (LocalIdentity)
+        //#if (Impersonation)
         // 模拟退出提示与本用例无关，真实实例会读会话存储
         {
           provide: ImpersonationService,

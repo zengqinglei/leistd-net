@@ -23,7 +23,9 @@ public class MigratorRegistrationTests
             {
                 // 真实库的注册路径（租户连接解析等）；构建容器不连库
                 ["ConnectionStrings:Default"] = "Host=localhost;Database=migrator-registration;Username=postgres",
+#if (LocalIdentity)
                 ["DataProtection:KeysPath"] = Path.Combine(Path.GetTempPath(), $"migrator-keys-{Guid.NewGuid():N}"),
+#endif
 #if (RemoteTokenAuth)
                 // 迁移目标回源身份服务，构造远端存储时即校验；部署时由 compose 以必填变量提供
                 ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.example",

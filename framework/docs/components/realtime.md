@@ -42,7 +42,7 @@ builder.Services.AddAllowAllRealTimeSubscriptions();
 app.MapRealTimeHub();
 ```
 
-`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，返回官方的 `HubEndpointConventionBuilder`（可继续链式追加授权策略、CORS 等），并在授权器缺失时抛异常。
+`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，返回官方的 `HubEndpointConventionBuilder`（可继续链式追加授权策略、CORS 等），并在授权器缺失时抛异常。映射时只确认授权器已注册、不在根容器里解析它，因此授权器可以按 `Scoped`/`Transient` 注册并依赖作用域服务（如权限检查器）；每次 `Subscribe` 在 Hub 调用的作用域里解析。
 
 心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；解析 `UserIdentifier` 的 claim 顺序是 `ClaimTypeOptions.UserIds`（Security.Core），与框架其他组件读主体标识同一处配置。
 

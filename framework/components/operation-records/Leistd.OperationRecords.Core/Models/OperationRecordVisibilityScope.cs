@@ -6,8 +6,8 @@ namespace Leistd.OperationRecords.Models;
 /// 查询时的可见范围：<b>调用方算好，存储只照做</b>。
 /// </summary>
 /// <remarks>
-/// <para><b>刻意不让存储自己判定"谁是宿主"。</b><see cref="IOperationRecordStore"/> 的契约是
-/// "只负责写入与查询，不做动作码校验与租户判定"，它连当前用户都不注入。若把"读者是不是宿主"
+/// <para><b>刻意不让存储自己判定"谁是宿主"。</b><see cref="IOperationRecordReader"/> 只按给定条件读取，
+/// 不做租户判定，它连当前用户都不注入。若把"读者是不是宿主"
 /// 这类判断挪进组件，等于让存储层长出它不该有的上下文依赖，而宿主对"谁算宿主"的定义
 /// 只有宿主自己知道。因此这里只承载两个已经算好的事实。</para>
 /// <para><b>租户维度不在此列。</b>跨租户隔离由 <c>IMultiTenant</c> 的全局查询过滤器承担

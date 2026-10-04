@@ -93,8 +93,11 @@ jobs:
         if: fromJSON(needs.framework-pack.outputs.validation_plan).Mode != 'backend'
         shell: pwsh
         run: |
-          # 锁文件根包的键是空字符串，ConvertFrom-Json 须用 -AsHashTable 才能解析
-          $version = (Get-Content template/frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages['node_modules/playwright'].version
+          dotnet new install ./template --debug:custom-hive .tmp/browser-tools-hive --force
+          if ($LASTEXITCODE -ne 0) { throw '浏览器工具模板安装失败' }
+          dotnet new fullstack-app -n Ci.Tools -o .tmp/browser-tools --debug:custom-hive .tmp/browser-tools-hive
+          if ($LASTEXITCODE -ne 0) { throw '浏览器工具依赖生成失败' }
+          $version = (Get-Content .tmp/browser-tools/frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages['node_modules/playwright'].version
           if (-not $version) { throw '模板锁文件里没有 playwright' }
           npx --yes "playwright@$version" install --with-deps chromium
       - name: 下载同一候选 Framework 包
@@ -245,10 +248,34 @@ jobs:
           pwsh framework/build/test-package-consumption.ps1 -ValidationPlanPath .tmp/quality-plan.json
           if ($LASTEXITCODE -ne 0) { throw 'NuGet 包消费失败' }
 
+  template-generation:
+    name: 模板全部有效形态生成
+    needs: framework-pack
+    if: needs.framework-pack.outputs.docs_only == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 生成 320 个有效形态并校验 768 组原始输入
+        run: python scripts/test-template-generation.py --output .tmp/generation-proof
+      - uses: actions/upload-artifact@v4
+        with:
+          name: template-generation-proof
+          path: .tmp/generation-proof/generation-results.json
+          if-no-files-found: error
+
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
-    needs: [docs-sync, framework-pack, test, template-slices, package-consumption, postgresql-e2e, oidc-e2e]
+    needs: [docs-sync, framework-pack, test, template-slices, template-generation, package-consumption, postgresql-e2e, oidc-e2e]
     if: always()
     timeout-minutes: 5
     steps:
@@ -268,7 +295,7 @@ jobs:
           $docsOnly = $jobs['framework-pack'].outputs.docs_only
           if ($docsOnly -cnotin @('true', 'false')) { throw '缺少合法验证范围输出' }
           $expected = if ($docsOnly -ceq 'true') { 'skipped' } else { 'success' }
-          foreach ($required in @('template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e')) {
+          foreach ($required in @('template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e')) {
             if ($jobs[$required].result -cne $expected) {
               throw "$required 应为 $expected，实际失败、缺失、取消或范围不一致"
             }

@@ -168,7 +168,7 @@ HTTP/1.1 200 OK
 - **`Code` 一经对外即为契约**，重命名它是破坏性变更。这是"一个标识符同时承担机器身份与词条键"的代价，换来的是不必为每个错误维护两个必须同步的字符串。
 - 全局处理器按 **`Code` 词条 → 安全 `Message`** 解析，本地化失败不改写 `code` 或 HTTP 语义。
 - **未启用多语言时**会直接返回 `Message`，因此必须从抛出点就是安全、可展示的文案；原始技术异常放在 `InnerException` 中。
-- 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等），前缀由一个模块独占，常量成员名与语义后缀一致；码定义在所属模块的 `Errors/`，而非集中到 `Domain/Shared/Errors`。前端**直接显示后端 `detail`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §9.2）。
+- 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等），前缀由一个模块独占，常量成员名与语义后缀一致；码定义在所属模块的 `Errors/`，而非集中到 `Domain/Shared/Errors`。前端**直接显示后端 `detail`**，不重复翻译业务错误。
 - **所有 `BusinessException` 都必须带码**，并由构造函数强制；不需要根据是否启用多语言加条件编译。
 - **DataAnnotations 校验消息**也随 culture 本地化：DTO 的 `ErrorMessage`/`Display` 用英文句子作键（`"{0} is required."`），`zh-CN.json` 按同一句子映射中文；`Program.cs` 已接线 `AddDataAnnotationsLocalization(...DataAnnotationLocalizerProvider...)`。这样参数校验与业务异常在同一请求下**同语言**。
 
@@ -257,6 +257,7 @@ if (user is null)
 - 删除字段、修改字段含义、修改错误码属于破坏性变更。
 - 破坏性变更必须明确迁移方案并获得相关使用者确认。
 
+<!--#if (SpaFrontend)-->
 ## 浏览器认证
 
 浏览器与所属 API 必须同源；开发期 Angular 代理转发 `/api/**`。页面由前端渲染，认证协议由后端处理。浏览器只持有 HttpOnly 会话引用，OAuth access/refresh/id token 留在服务端 `ITicketStore`，不写 URL、前端存储、JSON 响应或 SignalR 参数。唯一的例外是退出：依赖方以自动提交的表单把 id_token 作为 `id_token_hint` 发往 Identity，它只出现在那张表单的正文里，不进地址栏、历史记录与 Referer。SignalR 浏览器连接使用同源 Cookie；机器令牌仅走 Authorization 头，Hub 仅接受请求头中的 Bearer。
@@ -322,4 +323,5 @@ Identity 登记 web/confidential 客户端，开启会话绑定，允许 authori
 签发方轮换签名证书后，遇到不认识的 kid 时先向配置的签发方刷新一次公钥再验（`Auth/SigningKeyRefresh.cs`，覆盖 Bearer、登录回调与服务端续期；id_token 由 OIDC 处理器自身刷新重试）。只处理可读的 JWS，公钥只来自配置的发现文档，验签规则不放宽。同一时刻的刷新合并成一次抓取，抓取超时 10 秒，请求刷新每分钟至多转交一次（签发方不可用时，伪造 kid 的请求不会逐个触发抓取）；抓取失败时沿用已有公钥；抓取成功则本次只用返回的公钥集，签发方撤掉的公钥不再参与验签。逐请求结果只记 Debug，真实的刷新请求每次记一条 Information。这依赖进程级开关 `Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking`（Api 与集成测试项目以 `RuntimeHostConfigurationOption` 设置）：它也让定期自动刷新改为由到点的请求等待完成。签发方刚刷新过（IdentityModel 的 5 分钟间隔、本服务的 1 分钟限频）或不可达时，新 kid 的请求仍会失败，所以轮换仍按签发方部署文档的顺序先发布、后切换。
 
 退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。账号或租户停用后的本地验签窗口由访问令牌有效期（Identity 的 `OAuth:AccessTokenLifetime`，默认 10 分钟）决定，后续刷新失败收敛会话。
+<!--#endif-->
 <!--#endif-->

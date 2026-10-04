@@ -37,7 +37,7 @@ public sealed class FailedOperationRecordingTests
     {
         var store = new RecordingOperationRecordStore();
         var services = new ServiceCollection();
-        services.AddSingleton<IOperationRecordStore>(store);
+        services.AddSingleton<IOperationRecordWriter>(store);
         services.AddScoped<RecordedFailureTracker>();
         services.AddTransient<IOperationRecorder>(
             provider => new PassThroughRecorder(store, provider.GetRequiredService<RecordedFailureTracker>()));
@@ -69,7 +69,7 @@ public sealed class FailedOperationRecordingTests
     // 因此把生产记录器里的登记删掉它们照样绿——那条判据在替身上是恒绿的。
     // 这里用 AddOperationRecords() 解析出真实 OperationRecorder，让"什么时候登记"由生产代码决定。
     private static (IServiceProvider Root, HttpContext Context) CreateWithRealRecorder(
-        IOperationRecordStore store,
+        IOperationRecordWriter store,
         string action,
         string? targetRouteKey = null,
         string? targetRouteValue = null)

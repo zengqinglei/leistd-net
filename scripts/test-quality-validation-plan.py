@@ -96,6 +96,8 @@ def main():
             if label in ('frontend-feature', 'backend-api'):
                 prove_generation(repo, base, plan, scenarios, out, run, git)
                 prove_receipts(repo, plan, scenarios, out, run)
+            elif label == 'cross-layer':
+                prove_receipts(repo, plan, scenarios, out, run)
         # Deletion, move across boundaries and later docs commit must keep the
         # original source impact. Evaluate old/new paths, never just HEAD^.
         git('reset', '--hard', base); git('rm', front); git('commit', '-qm', 'delete frontend input')
@@ -189,7 +191,7 @@ def prove_receipts(repo, plan, scenarios, out, run):
         receipt = receipts.setdefault(slice_name,dict(Tier='pr',Slice=slice_name,CandidateSha=plan['CandidateSha'],Mode=label,Results=[]))
         result = dict(Scenario=name, Container='skipped')
         for stage in ['Backend','Runtime','Lint','Frontend','Test']:
-            omitted = (label == 'frontend' and stage in ['Backend','Runtime']) or (label == 'backend' and stage in ['Lint','Frontend','Test'])
+            omitted = (label == 'frontend' and stage in ['Backend','Runtime']) or ((label == 'backend' or not scenarios[name].get('Frontend', True)) and stage in ['Lint','Frontend','Test'])
             result[stage] = 'not-applicable' if omitted else 'pass'
         receipt['Results'].append(result)
     def write():
@@ -198,7 +200,7 @@ def prove_receipts(repo, plan, scenarios, out, run):
     command=['pwsh','-NoProfile','-File','scripts/check-template-matrix-results.ps1','-ResultsPath',str(receipt_dir),'-Tier','pr','-ValidationPlanPath',str(expected_file)]
     run(label+'-receipts-valid',command,repo)
     first = next(iter(receipts.values()))
-    for field,bad in [('CandidateSha','b'*40),('Mode','full'),('Tier','full')]:
+    for field,bad in [('CandidateSha','b'*40),('Mode','backend' if label == 'full' else 'full'),('Tier','full')]:
         saved=first[field];first[field]=bad;write();run(label+'-reject-'+field,command,repo,False);first[field]=saved
     result=first['Results'][0]
     for stage in ['Backend','Runtime','Lint','Frontend','Test']:
@@ -207,9 +209,16 @@ def prove_receipts(repo, plan, scenarios, out, run):
             result[stage]=bad;write();run(f'{label}-reject-{stage}-{bad or "missing"}',command,repo,False)
         result[stage]=saved
     saved=first['Results'];first['Results']=saved[:-1];write();run(label+'-reject-missing-scenario',command,repo,False);first['Results']=saved
+    if label == 'full':
+        pure_api = next(result for receipt in receipts.values() for result in receipt['Results'] if not scenarios[result['Scenario']].get('Frontend', True))
+        for stage in ['Lint', 'Frontend', 'Test']:
+            assert pure_api[stage] == 'not-applicable'
+            pure_api[stage] = 'pass'; write()
+            run(f'{label}-reject-pure-api-{stage}-claimed-pass', command, repo, False)
+            pure_api[stage] = 'not-applicable'
     write();run(label+'-receipts-restored',command,repo)
     # Old full checker/entry must reject manual/claimed skips too.
-    run(label+'-full-contract-rejects-narrowed',command[:-2],repo,False)
+    run(label+'-full-contract-rejects-narrowed',command[:-2],repo,label == 'full')
 
 
 if __name__ == '__main__': main()

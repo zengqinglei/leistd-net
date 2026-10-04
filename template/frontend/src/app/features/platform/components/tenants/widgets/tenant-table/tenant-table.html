@@ -190,6 +190,7 @@
                                         }}
                                       </button>
                                     }
+                                    <!--#if (Impersonation)-->
                                     <!-- 停用的租户后端拒绝模拟登录，这里禁用并给出原因，
                                        而不是留一个必然 403 的入口（与角色的内置角色同一范式）。 -->
                                     @if (canImpersonate()) {
@@ -211,6 +212,7 @@
                                         }}
                                       </button>
                                     }
+                                    <!--#endif-->
                                   </hlm-dropdown-menu-group>
                                   @if (canDelete()) {
                                     <hlm-dropdown-menu-separator />

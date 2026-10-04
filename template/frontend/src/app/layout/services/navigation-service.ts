@@ -79,7 +79,7 @@ export class NavigationService {
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
         },
-        //#if (LocalIdentity)
+        //#if (LocalIdentity && IncludeMultiTenancy)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'layout.sidebar.tenants',
@@ -103,6 +103,7 @@ export class NavigationService {
       ],
     },
     //#endif
+    //#if (IncludeOperationRecords)
     // 审计：谁在什么时候做了什么。读者是排查问题和对账的人，不是改配置的人。
     {
       label: 'layout.sidebar.groupAudit',
@@ -115,6 +116,7 @@ export class NavigationService {
         },
       ],
     },
+    //#endif
     // 系统设置是本租户（或宿主）的默认值与策略，按 App.Settings 裁剪；
     // 个人设置不在这里，在工作空间的「个人」组——两者作用域不同，混在一处容易把私人偏好当成全租户默认值改。
     {
@@ -172,7 +174,7 @@ export class NavigationService {
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
         },
-        //#if (LocalIdentity)
+        //#if (LocalIdentity && IncludeMultiTenancy)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'Tenant Management',
@@ -196,6 +198,7 @@ export class NavigationService {
       ],
     },
     //#endif
+    //#if (IncludeOperationRecords)
     // 审计：谁在什么时候做了什么。读者是排查问题和对账的人，不是改配置的人。
     {
       label: 'Audit',
@@ -208,6 +211,7 @@ export class NavigationService {
         },
       ],
     },
+    //#endif
     // 系统设置是本租户（或宿主）的默认值与策略；个人设置在工作空间的「个人」组。
     {
       label: 'System',

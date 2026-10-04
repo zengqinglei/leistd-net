@@ -19,7 +19,7 @@ namespace Leistd.OperationRecords.Queries;
 // 查询、筛选项与导出共用同一份读者判定与字段裁剪：两条路径各写一份迟早漂移，
 // 症状是"界面看不到的记录能被导出来"——那是越权，不是显示差异。
 internal sealed class OperationRecordQueryService(
-    IOperationRecordStore store,
+    IOperationRecordReader store,
     IOperationActionDefinitionManager actionDefinitions,
     IOperationRecorder recorder,
     ICurrentTenant currentTenant,

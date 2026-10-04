@@ -118,6 +118,7 @@
               t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
+<!--#if (Email)-->
           <!-- 验证状态针对的是**已保存**的邮箱：表单里改了还没保存时，先提示保存后再验证 -->
           @if (emailEdited()) {
             <p class="text-muted-foreground text-xs" data-testid="email-change-hint">
@@ -189,6 +190,7 @@
               }
             </div>
           }
+<!--#endif-->
         </div>
 
         <!-- DisplayName -->

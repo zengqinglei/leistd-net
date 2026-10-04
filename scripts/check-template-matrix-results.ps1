@@ -55,18 +55,18 @@ foreach ($file in $files) {
     foreach ($result in $receipt.Results) {
         foreach ($stage in @('Backend', 'Runtime', 'Lint', 'Frontend', 'Test')) {
             $notApplicable = ($mode -ceq 'frontend' -and $stage -cin @('Backend', 'Runtime')) -or
-                ($mode -ceq 'backend' -and $stage -cin @('Lint', 'Frontend', 'Test'))
+                (($mode -ceq 'backend' -or -not $scenarioMap[$result.Scenario].Frontend) -and $stage -cin @('Lint', 'Frontend', 'Test'))
             $expectedStage = if ($notApplicable) { 'not-applicable' } else { 'pass' }
             if ($result.$stage -cne $expectedStage) { throw "$($result.Scenario): $stage expected $expectedStage." }
         }
-        if ($ContainerSmoke -and $result.Scenario -eq $ContainerScenario -and $result.Container -cne 'pass') {
+        if ($ContainerSmoke -and $result.Scenario -in $ContainerScenarios -and $result.Container -cne 'pass') {
             throw "$($result.Scenario): required container smoke did not pass."
         }
         $seenScenarios += $result.Scenario
     }
 }
 if (@($selected | Where-Object { $_ -notin $seenScenarios }).Count -gt 0 -or
-    ($ContainerSmoke -and $ContainerScenario -notin $seenScenarios)) {
+    ($ContainerSmoke -and @($ContainerScenarios | Where-Object { $_ -notin $seenScenarios }).Count -gt 0)) {
     throw "Template matrix ($Tier tier) or requested container coverage is incomplete."
 }
 Write-Host "Template matrix receipts passed for $($seenScenarios.Count) $Tier-tier scenarios in $($seenSlices.Count) slices." -ForegroundColor Green

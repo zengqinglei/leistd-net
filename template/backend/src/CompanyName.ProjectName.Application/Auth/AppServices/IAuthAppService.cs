@@ -48,6 +48,7 @@ public interface IAuthAppService : IAppService
     /// 设置或清除自己的头像（只接受图片）
     /// </summary>
     Task<UserOutputDto> SetCurrentUserAvatarAsync(SetAvatarInputDto input, CancellationToken cancellationToken = default);
+#if (Email)
 
     /// <summary>
     /// 给自己当前的邮箱发验证码
@@ -58,6 +59,7 @@ public interface IAuthAppService : IAppService
     /// 用验证码确认自己当前的邮箱
     /// </summary>
     Task<UserOutputDto> ConfirmCurrentUserEmailAsync(EmailVerificationInputDto input, CancellationToken cancellationToken = default);
+#endif
 
     /// <summary>
     /// 修改密码。成功后撤销本人除当前会话以外的全部会话。

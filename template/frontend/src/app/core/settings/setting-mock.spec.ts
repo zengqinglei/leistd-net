@@ -6,7 +6,7 @@ import { AUTH_API } from '../../../../_mock/api/auth';
 import { SETTING_API } from '../../../../_mock/api/setting';
 import { MockException } from '../../../../_mock/core/models';
 import { TENANT_SETTING_VALUES, USER_SETTING_VALUES } from '../../../../_mock/data/settings';
-//#if (ExternalLogin)
+//#if (ExternalLogin && IncludeMultiTenancy)
 import { USERS } from '../../../../_mock/data/user';
 //#endif
 import {
@@ -73,8 +73,8 @@ describe('settings mock', () => {
   });
 
   it('registers the settings endpoints', () => {
-    //#if (LocalIdentity)
-    // 发信参数只存在于本地身份形态，测试邮件端点随之而来
+    //#if (Email)
+    // 测试邮件端点仅随有效邮件能力生成
     expect(Object.keys(SETTING_API).sort()).toEqual([
       get,
       'POST /api/v1/settings/email/test',
@@ -139,6 +139,7 @@ describe('settings mock', () => {
     expect(row?.tenantValue).toBe('America/New_York');
   });
 
+  //#if (IncludeMultiTenancy)
   // 设置行带租户归属，用户级也一样：同一个人在 Acme 设的偏好不该在 Globex 里出现。
   // 真实 Store 的键是 `{tenant}:u:{userId}`，Mock 少了租户这一维就会串值。
   //
@@ -220,6 +221,41 @@ describe('settings mock', () => {
   });
   //#endif
 
+  //#endif
+  //#else
+  it('rejects a non-host mock session before changing settings', () => {
+    signIn('user_admin');
+    expect(statusOf(() => setMockSessionTenantKey('tenant_acme'))).toBe(401);
+    api[putUser](request({ name: 'Display.TimeZone', value: 'UTC' }));
+    expect(USER_SETTING_VALUES.get('host:user_admin:Display.TimeZone')).toBe('UTC');
+    expect(USER_SETTING_VALUES.get('tenant_acme:user_admin:Display.TimeZone')).toBeUndefined();
+  });
+
+  //#if (LocalIdentity)
+  it('ignores anonymous tenant hints when establishing a host session', () => {
+    const auth = AUTH_API as unknown as Record<string, MockHandler>;
+    auth['POST /api/v1/auth/session-login'](
+      request(
+        { usernameOrEmail: 'admin', password: 'Admin@123456' },
+        { [TENANT_HEADER]: 'tenant_acme' },
+      ),
+    );
+    api[putUser](request({ name: 'Display.TimeZone', value: 'UTC' }));
+    expect(USER_SETTING_VALUES.get('host:user_admin:Display.TimeZone')).toBe('UTC');
+    expect(USER_SETTING_VALUES.get('tenant_acme:user_admin:Display.TimeZone')).toBeUndefined();
+  });
+
+  it('rejects a stored tenant session before returning the local user or changing settings', () => {
+    signIn('user_admin');
+    sessionStorage.setItem('mock_session_tenant_key', 'tenant_acme');
+    const auth = AUTH_API as unknown as Record<string, MockHandler>;
+    expect(statusOf(() => auth['GET /api/v1/auth/me'](request()))).toBe(401);
+    expect(statusOf(() => api[putUser](request({ name: 'Display.TimeZone', value: 'UTC' })))).toBe(
+      401,
+    );
+    expect(USER_SETTING_VALUES.size).toBe(0);
+  });
+  //#endif
   //#endif
   it('rejects the values and names the backend rejects', () => {
     signIn('user_admin');

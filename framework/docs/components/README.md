@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、64 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、65 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
@@ -24,7 +24,7 @@
 | 多租户 | 租户环境上下文（AsyncLocal 可切换）、请求级解析与校验中间件、`IMultiTenant` 数据隔离标记与写入落值、租户注册表存储；租户管理用例（创建开通与补偿、连接登记）单独成包并自带端点，资源服务经远端存储回源控制面 | `Leistd.MultiTenancy.Core`、`Leistd.MultiTenancy.Management`、`Leistd.MultiTenancy.AspNetCore`、`Leistd.MultiTenancy.EntityFrameworkCore`、`Leistd.MultiTenancy.ServiceClient` | [`multi-tenancy`](./multi-tenancy.md) |
 | 通知 | 站内通知统一发布入口：先写入用户历史，再通过 SignalR 推送给该用户；自带通知中心端点、保留期清理，以及按用户设置过滤与邮件渠道两个桥接包 | `Leistd.Notifications.Core`、`Leistd.Notifications.EntityFrameworkCore`、`Leistd.Notifications.AspNetCore.SignalR`、`Leistd.Notifications.AspNetCore`、`Leistd.Notifications.Settings`、`Leistd.Notifications.Email` | [`notifications`](./notifications.md) |
 | 对象映射 | 统一的 IObjectMapper 对象映射抽象，实现为 Mapster。 | `Leistd.ObjectMapping.Core`、`Leistd.ObjectMapping.Mapster` | [`object-mapping`](./object-mapping.md) |
-| 操作记录 | 关键操作的审计留痕：什么人在什么时间做了什么、结果如何；业务显式调用，授权阶段的拒绝按注解补记 | `Leistd.OperationRecords.Core`、`Leistd.OperationRecords.EntityFrameworkCore`、`Leistd.OperationRecords.AspNetCore` | [`operation-records`](./operation-records.md) |
+| 操作记录 | 关键操作的审计留痕：什么人在什么时间做了什么、结果如何；业务显式调用，授权阶段的拒绝按注解补记 | `Leistd.OperationRecords.Core`、`Leistd.OperationRecords.EntityFrameworkCore`、`Leistd.OperationRecords.Logging`、`Leistd.OperationRecords.AspNetCore` | [`operation-records`](./operation-records.md) |
 | 实时通信 | 通用业务事件实时推送通道：按 resourceKey 订阅与订阅授权扩展点，基于 SignalR 实现 | `Leistd.RealTime.Core`、`Leistd.RealTime.AspNetCore.SignalR` | [`realtime`](./realtime.md) |
 | 统一 API 响应 | 统一 {code, message, data} 响应模型与 ASP.NET Core 自动包装过滤器 | `Leistd.Response.Core`、`Leistd.Response.AspNetCore` | [`response`](./response.md) |
 | 设置 | 运行期可改的设置：业务声明定义与值域，框架按 用户 → 租户 → 代码默认值 回落解析并持久化；自带设置页端点，宿主级设置可经配置源覆盖部署配置 | `Leistd.Settings.Core`、`Leistd.Settings.EntityFrameworkCore`、`Leistd.Settings.AspNetCore`、`Leistd.Settings.Hosting` | [`settings`](./settings.md) |

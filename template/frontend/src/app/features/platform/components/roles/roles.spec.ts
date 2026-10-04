@@ -13,6 +13,9 @@ import { RoleTable } from './widgets/role-table/role-table';
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#if (IncludeRealTime)
+import { SignalRService } from '../../../../core/services/signalr-service';
+//#endif
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
@@ -30,6 +33,15 @@ describe('Roles page query round trip', () => {
   let component: Roles;
   let router: Router;
   let service: Pick<MockedObject<RoleService>, 'getRoles'>;
+  //#if (IncludeRealTime)
+  const realtime = {
+    lastResourceEvent: signal<{ eventName: string; payload: unknown } | null>(null),
+    registerResourceEvent: vi.fn(),
+    connect: vi.fn(() => Promise.resolve()),
+    subscribeResource: vi.fn(() => Promise.resolve()),
+    unsubscribeResource: vi.fn(() => Promise.resolve()),
+  };
+  //#endif
 
   /** 最近一次列表请求的参数。 */
   function lastQuery(): GetRolesInputDto {
@@ -64,6 +76,9 @@ describe('Roles page query round trip', () => {
         //#endif
         { provide: RoleService, useValue: service },
         { provide: StartupService, useValue: { status: signal('success' as const) } },
+        //#if (IncludeRealTime)
+        { provide: SignalRService, useValue: realtime },
+        //#endif
       ],
     }).compileComponents();
 
@@ -148,4 +163,20 @@ describe('Roles page query round trip', () => {
     second.complete();
     expect(component.loading()).toBe(false);
   });
+  //#if (IncludeRealTime)
+
+  it('subscribes to the role list of its own scope and refetches when it changes', async () => {
+    await fixture.whenStable();
+    // 宿主用户：作用域段为 host，与后端 ICurrentTenant.ScopeKey 一致
+    expect(realtime.registerResourceEvent).toHaveBeenCalledWith('Roles.Changed');
+    expect(realtime.subscribeResource).toHaveBeenCalledWith('host:roles');
+
+    const before = vi.mocked(service.getRoles).mock.calls.length;
+    realtime.lastResourceEvent.set({ eventName: 'Roles.Changed', payload: {} });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(vi.mocked(service.getRoles).mock.calls.length).toBe(before + 1);
+  });
+  //#endif
 });

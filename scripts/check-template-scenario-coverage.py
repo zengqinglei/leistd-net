@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """模板场景覆盖闸门：每一行条件代码都必须由 PR 档的某个场景生成。
 
-为什么需要：PR 只跑场景子集，完整十场景放在合入后、夜间与发布。子集能否代表全集，
+为什么需要：PR 只跑场景子集，完整登记场景放在合入后、夜间与发布。子集能否代表全集，
 取决于"有没有哪行代码只在子集之外的场景里出现"。这个问题不能靠人记——新增一个
 `#if (IncludeNotifications && !IncludeLocalization)` 分支，就可能让某个原本冗余的场景
 变成唯一的覆盖者，而 PR 档照样全绿。
 
-这是行覆盖，不是组合覆盖：同一产物里几处条件分支一起编译、lint 的交互（未使用的 import、
-折行）不在 PR 档保证之内，由合入后的 full 档兜底。
+同时检查有效能力的全部可达两两取值组合。更高阶交互使用登记的关键场景验证，
+全部有效形态的轻量生成由 test-template-generation.py 验证。
 
 判据按模板引擎的语义求值：文件级 modifiers（含第二个来源的 condition）、嵌套的
 #if/#elif/#elseif/#else，以及 template.json 的 computed 符号。对每个条件行算出
 "哪些登记场景会生成它"，要求：
 
   1. 至少一个 PR 档场景生成它（否则 PR 档漏测这行）；
-  2. 只要 24 种参数组合里有一种会生成它，就至少有一个登记场景生成它（否则矩阵本身有洞）。
+  2. 只要 全部原始参数组合里有一种会生成它，就至少有一个登记场景生成它（否则矩阵本身有洞）。
 
 场景与档位的唯一定义在 template-matrix-scenarios.ps1，这里经 pwsh 读取，不重抄清单。
 块结构是否配平由 check-template-conditional-blocks.py 负责；本闸门假定结构合法。
@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 import fnmatch
 import itertools
 import json
@@ -41,8 +42,8 @@ EXPR_TAIL = re.compile(r'\s*(?:-->|\*/)\s*$')
 TOKEN = re.compile(r'\s*(?:(\(|\)|&&|\|\||==|!=|!)|"([^"]*)"|([A-Za-z_]\w*))')
 
 
-def evaluate(expr: str, values: dict[str, object]) -> bool:
-    """按模板引擎的 C 风格表达式求值；未知符号为 false。"""
+@lru_cache(maxsize=None)
+def compile_condition(expr: str):
     parts: list[str] = []
     pos = 0
     expr = EXPR_TAIL.sub("", expr).strip()
@@ -58,9 +59,14 @@ def evaluate(expr: str, values: dict[str, object]) -> bool:
         elif name in ("true", "false"):
             parts.append(name.capitalize())
         else:
-            parts.append(repr(values.get(name, False)))
+            parts.append(f"values.get({name!r}, False)")
         pos = match.end()
-    return bool(eval("".join(parts), {"__builtins__": {}}))  # noqa: S307 —— 只含上面翻译出的字面量与运算符
+    return compile("".join(parts).strip(), '<template-condition>', 'eval')
+
+
+def evaluate(expr: str, values: dict[str, object]) -> bool:
+    """按模板引擎语义求值；仅复用进程内编译，未知符号仍为 false。"""
+    return bool(eval(compile_condition(expr), {"__builtins__": {}}, {"values": values}))
 
 
 def symbol_values(config: dict, arguments: dict[str, object]) -> dict[str, object]:
@@ -94,6 +100,29 @@ def all_combinations(config: dict) -> list[dict[str, object]]:
         symbol_values(config, dict(zip([n for n, _ in choices], combo)))
         for combo in itertools.product(*[v for _, v in choices])
     ]
+
+
+EFFECTIVE_DIMENSIONS = (
+    "ServiceRole", "SpaFrontend", "IncludeMultiTenancy", "IncludeRealTime", "Email",
+    "IncludeOperationRecords", "IncludeNotifications", "ExternalLogin", "IncludeLocalization",
+)
+
+
+def effective_shape(values: dict[str, object]) -> tuple:
+    return tuple(values[name] for name in EFFECTIVE_DIMENSIONS)
+
+
+def pairwise_problems(config: dict, scenarios: dict, dimensions=EFFECTIVE_DIMENSIONS) -> list[str]:
+    combinations = all_combinations(config)
+    selected = [symbol_values(config, parse_cli_arguments(config, info["Arguments"]))
+                for info in scenarios.values() if "pr" in info["Slices"]]
+    problems = []
+    for left, right in itertools.combinations(dimensions, 2):
+        reachable = {(v[left], v[right]) for v in combinations}
+        covered = {(v[left], v[right]) for v in selected}
+        for pair in sorted(reachable - covered, key=str):
+            problems.append(f"PR 档缺少有效能力两两组合：{left}={pair[0]}, {right}={pair[1]}")
+    return problems
 
 
 def parse_cli_arguments(config: dict, args: list[str]) -> dict[str, object]:
@@ -217,7 +246,7 @@ def load_scenarios() -> dict[str, dict]:
     command = (
         f". '{SCENARIOS_SCRIPT}'; "
         "$AllScenarios | ForEach-Object { [ordered]@{ Name = $_; Arguments = @($scenarioMap[$_].Arguments); "
-        "Slices = $scenarioMap[$_].Slices; Titles = $MatrixSlices } } | ConvertTo-Json -Depth 5 -AsArray"
+        "Slices = $scenarioMap[$_].Slices; Frontend = $scenarioMap[$_].Frontend; Titles = $MatrixSlices } } | ConvertTo-Json -Depth 5 -AsArray"
     )
     completed = subprocess.run(
         ["pwsh", "-NoProfile", "-Command", command],
@@ -269,10 +298,21 @@ def self_test() -> int:
         ok = len(problems) == expected
         failures += 0 if ok else 1
         print(f"  {'✅' if ok else '❌'} {name}" + ("" if ok else f"：期望 {expected} 个问题，实际 {problems}"))
+    # 行覆盖全绿仍可漏掉 X=false/Y=true；组合规则须独立发现它。
+    pair_scenarios = dict(scenarios, x_only={"Arguments": ["--x"], "Slices": {"pr": "b"}})
+    missing = pairwise_problems(config, pair_scenarios, ('X', 'Y'))
+    complete = dict(pair_scenarios, y_only={"Arguments": ["--y"], "Slices": {"pr": "b"}})
+    for name, ok in (
+        ("两两组合发现行覆盖未发现的缺口", len(missing) == 1 and 'X=False, Y=True' in missing[0]),
+        ("补齐两两组合后通过", not pairwise_problems(config, complete, ('X', 'Y'))),
+        ("computed 不要求不可达取值", not pairwise_problems(config, complete, ('Role', 'IsA'))),
+    ):
+        failures += int(not ok)
+        print(f"  {'✅' if ok else '❌'} {name}")
     if failures:
         print(f"❌ 场景覆盖规则自检失败：{failures}/{len(cases)} 个用例不符")
         return 1
-    print(f"✅ 场景覆盖规则自检通过（{len(cases)} 个用例）")
+    print(f"✅ 场景覆盖规则自检通过（{len(cases) + 3} 个用例）")
     return 0
 
 
@@ -296,6 +336,11 @@ def main() -> int:
 
     scenarios = load_scenarios()
     problems, checked = coverage_problems(config, files, scenarios)
+    problems.extend(pairwise_problems(config, scenarios))
+    for name, info in scenarios.items():
+        values = symbol_values(config, parse_cli_arguments(config, info["Arguments"]))
+        if info["Frontend"] != values["SpaFrontend"]:
+            problems.append(f"{name} 的 Frontend 阶段适用性与有效 SpaFrontend 不一致")
     if problems:
         print("❌ 模板场景覆盖检查失败：")
         for problem in problems:
@@ -303,7 +348,7 @@ def main() -> int:
         return 1
 
     pr = [name for name, info in scenarios.items() if "pr" in info["Slices"]]
-    print(f"✅ 模板场景覆盖检查通过（{checked} 个条件行；PR 档 {len(pr)} 个场景覆盖全部，登记场景覆盖全部可达组合）。")
+    print(f"✅ 模板场景覆盖检查通过（{checked} 个条件行；PR 档 {len(pr)} 个场景覆盖全部，登记场景覆盖全部可达条件行及有效能力两两组合）。")
     return 0
 
 

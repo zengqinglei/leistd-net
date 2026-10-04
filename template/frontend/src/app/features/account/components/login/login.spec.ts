@@ -11,7 +11,13 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { provideTranslocoScope, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
-import { Observable, of, throwError } from 'rxjs';
+// prettier-ignore
+import {
+  of, throwError,
+  //#if (IncludeMultiTenancy || ExternalLogin)
+  Observable,
+  //#endif
+} from 'rxjs';
 
 import { Login } from './login';
 //#if (ExternalLogin)
@@ -28,14 +34,14 @@ import { LanguageService } from '../../../../core/services/language-service';
 //#endif
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (LocalIdentity)
+//#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
-//#if (LocalIdentity)
+//#if (IncludeMultiTenancy)
 import { TenantByHostOutputDto } from '../../../../shared/dtos/tenant.dto';
 //#endif
 import { PERMISSIONS } from '../../../../shared/models/permission';
-//#if (LocalIdentity)
+//#if (IncludeMultiTenancy)
 import { TenantService } from '../../../platform/services/tenant-service';
 //#endif
 //#if (ExternalLogin)
@@ -66,7 +72,7 @@ describe('Login', () => {
   let authorization: AuthorizationService;
   let queryParams: Record<string, string>;
   let navigationState: { twoFactorToken: string; returnUrl: string } | undefined;
-  //#if (LocalIdentity)
+  //#if (IncludeMultiTenancy)
   // 主机名探测的返回值。默认"域名不表态"，与本机开发一致；租户相关用例逐个覆盖它。
   let byHost: Observable<TenantByHostOutputDto>;
   //#endif
@@ -100,7 +106,7 @@ describe('Login', () => {
         provideTranslocoScope('account'),
         //#endif
         { provide: AuthService, useValue: authService },
-        //#if (LocalIdentity)
+        //#if (IncludeMultiTenancy)
         // 登录页构造时就会按主机名探测一次租户；不打桩的话它会挂在一个永不返回的请求上，
         // 租户区会一直停在 pending，所有与租户有关的断言都测不到真实分支。
         { provide: TenantService, useValue: { getByHost: () => byHost } },
@@ -157,7 +163,7 @@ describe('Login', () => {
   beforeEach(() => {
     queryParams = {};
     navigationState = undefined;
-    //#if (LocalIdentity)
+    //#if (IncludeMultiTenancy)
     byHost = of({ decision: 'undecided' as const });
     localStorage.clear();
     //#endif
@@ -165,7 +171,7 @@ describe('Login', () => {
     externalProviders = of({ providers: ['github', 'google'] });
     //#endif
   });
-  //#if (LocalIdentity)
+  //#if (IncludeMultiTenancy)
   afterEach(() => localStorage.clear());
   //#endif
 
@@ -440,7 +446,7 @@ describe('Login', () => {
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/platform']);
   });
-  //#if (LocalIdentity)
+  //#if (IncludeMultiTenancy)
   /**
    * 主机名定案的三档结果。
    *

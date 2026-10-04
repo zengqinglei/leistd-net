@@ -10,10 +10,12 @@ using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (IncludeMultiTenancy)
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.UnitOfWork;
+#endif
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -295,6 +297,7 @@ public sealed class ExternalAuthenticationTests
         Assert.DoesNotContain(complete.Headers.GetValues("Set-Cookie"), value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal));
     }
 
+#if (IncludeMultiTenancy)
     [Fact]
     public async Task Tenant_external_login_cookie_preserves_the_tenant_without_a_request_header()
     {
@@ -357,6 +360,38 @@ public sealed class ExternalAuthenticationTests
         Assert.Single(users.Items);
         Assert.Equal(tenantEmail, users.Items[0].Email);
     }
+#else
+    [Fact]
+    public async Task Host_external_login_ignores_anonymous_tenant_hints_and_preserves_the_host_session()
+    {
+        const string username = "host_external_user";
+        using var factory = new ProjectWebApplicationFactory();
+        using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
+        {
+            ProviderId = username,
+            ProviderAccountLabel = username,
+            SuggestedUsername = username,
+            Email = "host-external-user@provider.test",
+            EmailVerified = true
+        });
+        using var externalClient = ProjectWebApplicationFactory.CreateProjectClient(host);
+        // 单租户不解析匿名租户线索，外部身份完成后仍只能取得宿主会话。
+        externalClient.DefaultRequestHeaders.Add("X-Tenant", Guid.NewGuid().ToString());
+        var challenge = await ExternalOAuthBackchannel.StartAsync(externalClient);
+        externalClient.DefaultRequestHeaders.Add("Cookie", challenge.Cookie);
+        using var callback = await externalClient.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+        Assert.Equal(HttpStatusCode.OK, callback.StatusCode);
+
+        using var sessionClient = ProjectWebApplicationFactory.CreateProjectClient(host);
+        sessionClient.DefaultRequestHeaders.Add("Cookie", ExternalOAuthBackchannel.Cookies(callback));
+        var me = await sessionClient.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(username, me.GetProperty("username").GetString());
+        await using var scope = host.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        var user = await dbContext.Users.IgnoreQueryFilters().SingleAsync(user => user.Id == me.GetProperty("id").GetGuid());
+        Assert.Null(user.TenantId);
+    }
+#endif
 
     [Theory]
     [InlineData(false)]
@@ -564,8 +599,10 @@ public sealed class ExternalAuthenticationTests
     private static WebApplicationFactory<Program> CreateExternalAuthHost(ProjectWebApplicationFactory factory, ExternalUserInfo user) =>
         new ExternalOAuthBackchannel { User = user }.CreateHost(factory);
 
+#if (IncludeMultiTenancy)
     private sealed record TenantIdResponse(Guid Id);
     private sealed record UserPageResponse(IReadOnlyList<UserResponse> Items);
     private sealed record UserResponse(string Email);
+#endif
 }
 #endif

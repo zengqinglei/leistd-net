@@ -577,7 +577,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.BadRequest, undefined.StatusCode);
 
         var failures = await OperationRecordQueries.GetFailuresAsync(
-            superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}");
+            Factory, superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}");
         Assert.Equal(
             [PermissionErrorCodes.UndefinedPermission, PermissionErrorCodes.ConcurrencyConflict],
             failures.Select(item => item.FailureCode));
@@ -603,7 +603,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
 
         Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
-            superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}"));
+            Factory, superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}"));
     }
 
     [Fact]
@@ -733,9 +733,9 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PostAsJsonAsync(
             $"/api/v1/users/{user.Id}/reset-password", new { Password = "IntegrationTests!Reset1" })).StatusCode);
 
-        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserDisabled, targetId));
-        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserEnabled, targetId));
-        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserPasswordReset, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, OperationRecordActions.UserDisabled, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, OperationRecordActions.UserEnabled, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, OperationRecordActions.UserPasswordReset, targetId));
     }
 
     private static async Task<JsonElement> ReadRoleAsync(HttpClient client, Guid roleId)
@@ -758,7 +758,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
 
         var failures = await OperationRecordQueries.GetFailuresAsync(
-            superAdmin.Client, OperationRecordActions.RoleDeleted, adminRoleId.ToString());
+            Factory, superAdmin.Client, OperationRecordActions.RoleDeleted, adminRoleId.ToString());
         Assert.Contains((RoleErrorCodes.StaticRoleCannotBeDeleted, PermissionConstant.Roles.Delete), failures);
     }
 
@@ -842,7 +842,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-#if (IncludeNotifications)
+#if (IncludeNotifications || IncludeRealTime)
     [Fact]
     public async Task Disabling_a_user_blocks_new_hub_connections()
     {
@@ -853,7 +853,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         // 打 negotiate 而不是引 SignalR.Client：Hub 端点的授权就发生在这一步，
         // 走的是同一条 RequireAuthorization() → 默认策略的路径，不必为一条测试加包依赖。
-        const string Negotiate = "/hubs/realtime/negotiate?negotiateVersion=1";
+        const string Negotiate = ProjectWebApplicationFactory.HubPath + "/negotiate?negotiateVersion=1";
         Assert.Equal(HttpStatusCode.OK, (await session.Client.PostAsync(Negotiate, null)).StatusCode);
 
         Assert.Equal(

@@ -8,7 +8,6 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-import { TenantContextService } from '../../../core/services/tenant-context-service';
 import { LayoutService } from '../../services/layout-service';
 
 //#if (IncludeLocalization)
@@ -60,7 +59,6 @@ describe('UserMenu items', () => {
         },
         // currentUser / current 只被模板用到，这组用例只构造类；给出去是为了满足注入。
         { provide: AuthService, useValue: { currentUser: signal(null), logout: () => undefined } },
-        { provide: TenantContextService, useValue: { current: signal(null) } },
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
         //#endif

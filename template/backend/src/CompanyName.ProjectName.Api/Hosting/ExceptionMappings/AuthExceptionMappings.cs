@@ -23,12 +23,16 @@ internal static class AuthExceptionMappings
             AuthErrorCodes.TwoFactorRequiredByPolicy);
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
             AuthErrorCodes.CannotRevokeCurrentSession,
+#if (Email)
             AuthErrorCodes.EmailAlreadyVerified,
+#endif
             AuthErrorCodes.TwoFactorAlreadyEnabled,
             AuthErrorCodes.TwoFactorNotEnabled,
             AuthErrorCodes.EmailAlreadyUsed);
+#if (Email)
         options.MapCode(AuthErrorCodes.EmailVerificationUnavailable, StatusCodes.Status503ServiceUnavailable);
         options.MapCode(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests);
+#endif
 #if (ExternalLogin)
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
             ExternalAuthErrorCodes.AccountExistsSignInToLink,

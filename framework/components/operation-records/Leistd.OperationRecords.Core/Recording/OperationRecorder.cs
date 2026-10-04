@@ -20,9 +20,9 @@ namespace Leistd.OperationRecords.Recording;
 // 要宿主自己把 AuditSaveChangesInterceptor 挂到目标 DbContext，漏挂是静默的，
 // 得到的会是一张时间全为零的审计表——"什么时间"塌掉，整张表就没用了。
 //
-// 本类只决定记录"写进哪一层"（TenantId），事务边界由存储按结果执行（见 IOperationRecordStore）。
+// 本类只决定记录"写进哪一层"（TenantId），事务边界由存储按结果执行（见 IOperationRecordWriter）。
 internal sealed class OperationRecorder(
-    IOperationRecordStore store,
+    IOperationRecordWriter writer,
     IOperationActionDefinitionManager actionDefinitions,
     ICurrentTenant currentTenant,
     ICurrentUser currentUser,
@@ -49,9 +49,9 @@ internal sealed class OperationRecorder(
                 + "Register it as tenant-visible, or record it after switching to the host context.");
         }
 
-        // 成功路径不吞异常：这条记录与它描述的那次变更同处一个边界，
-        // 审计写不进去就该让业务一起失败——"发生了但没记"和"记了但没发生"一样不可接受。
-        return store.InsertAsync(
+        // 调用阶段的异常照常上抛。数据库写入随业务事务失败；日志适配排队到提交后输出，
+        // 提交后的投递故障由适配报告，不能再把已提交的业务改报成失败。
+        return writer.InsertAsync(
             Create(action, target, authorizationBasis, definition, currentTenant.Id,
                 OperationRecordOutcome.Succeeded, OperationFailure.None),
             cancellationToken);
@@ -74,7 +74,7 @@ internal sealed class OperationRecorder(
         try
         {
             // 不可取消：被审计的一方断开连接，不能让这条审计作废。
-            await store.InsertAsync(
+            await writer.InsertAsync(
                 Create(action, target, authorizationBasis, definition, tenantId,
                     OperationRecordOutcome.Failed, failure),
                 CancellationToken.None);

@@ -1,6 +1,8 @@
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Permissions.Provider;
+#if (Impersonation)
 using CompanyName.ProjectName.Application.Tenants.AppServices;
+#endif
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

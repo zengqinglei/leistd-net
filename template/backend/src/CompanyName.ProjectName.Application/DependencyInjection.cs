@@ -13,7 +13,7 @@ using Leistd.OperationRecords.Stores;
 using CompanyName.ProjectName.Application.OperationRecords.EventHandlers;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Application.Settings.Validators;
-#if (LocalIdentity)
+#if (Email)
 using CompanyName.ProjectName.Application.Settings.AppServices;
 #endif
 #if (LocalIdentity)
@@ -43,9 +43,14 @@ using Leistd.Authorization.Events;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
-#if (LocalIdentity)
+#if (IncludeRealTime)
+using CompanyName.ProjectName.Application.RealTime;
+#endif
+#if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants;
+#if (Impersonation)
 using CompanyName.ProjectName.Application.Tenants.AppServices;
+#endif
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Management.Events;
 using Leistd.MultiTenancy.Management.Provisioning;
@@ -76,7 +81,9 @@ public static class DependencyInjection
 
 #if (LocalIdentity)
         services.AddTransient<ICaptchaAppService, CaptchaAppService>();
+#if (Email)
         services.AddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
+#endif
         services.AddTransient<SessionSignInService>();
         services.AddTransient<IUserSessionValidator, UserSessionValidator>();
         // 会话撤销后作废它的校验缓存（事务提交后由本地事件总线分发）
@@ -122,13 +129,17 @@ public static class DependencyInjection
         services.AddSingleton<IOperationActionDefinitionProvider, OperationActionDefinitionProvider>();
         // 设置值的业务校验：值域（布尔、区间、候选）写在定义上，这里只放定义表达不了的规则
         services.AddTransient<ISettingValueValidator, TimeZoneSettingValidator>();
-#if (LocalIdentity)
+#if (Email)
         services.AddTransient<ISettingValueValidator, EmailSettingValidator>();
         services.AddTransient<IEmailSettingsAppService, EmailSettingsAppService>();
 #endif
         // 组件写入后发布的事件转成本项目的操作记录（提交后分发，回滚的写入不留痕）
         services.AddTransient<IEventHandler<SettingChangedEvent>, SettingChangedAuditHandler>();
         services.AddTransient<IEventHandler<PermissionGrantsReplacedEvent>, PermissionGrantsReplacedAuditHandler>();
+#if (IncludeRealTime)
+        // 业务实时：角色列表变化在提交之后推给订阅者
+        services.AddTransient<IEventHandler<RoleListChangedEvent>, RoleListChangedRealTimeHandler>();
+#endif
         // 服务端产出给人看的时间文本时注入它；DTO 保持 UTC 交给前端渲染，不必经过这里。
         services.AddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();
 #if (LocalIdentity)
@@ -140,7 +151,7 @@ public static class DependencyInjection
         services.AddTransient<IReauthenticationGuard, ReauthenticationGuard>();
 #endif
 
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         // 租户管理的编排与补偿在多租户组件里（存储由 Infrastructure 的 AddMultiTenancyEfCore 提供）；
         // 本项目只负责开通内容与启用前置条件
         services.AddTenantManagement();
@@ -148,7 +159,9 @@ public static class DependencyInjection
         services.AddTransient<ITenantActivationGuard, TenantHasUsersActivationGuard>();
         services.AddTransient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>();
         services.AddTransient<IEventHandler<TenantConnectionChangedEvent>, TenantConnectionChangedAuditHandler>();
+#if (Impersonation)
         services.AddTransient<ITenantImpersonationAppService, TenantImpersonationAppService>();
+#endif
 #endif
 
         return services;

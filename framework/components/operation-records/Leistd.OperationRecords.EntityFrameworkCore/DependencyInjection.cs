@@ -20,9 +20,11 @@ namespace Leistd.OperationRecords.EntityFrameworkCore;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册 EF Core 操作记录存储（基于指定 DbContext）。
+    /// 注册 EF Core 操作记录存储（基于指定 DbContext），同时提供历史读取与查询用例。
     /// </summary>
     /// <remarks>
+    /// <para>登记 <see cref="IOperationRecordWriter"/> 与 <see cref="IOperationRecordReader"/>，并调用
+    /// <c>AddOperationRecordQueries()</c>；HTTP 端点与保留期归档仍由宿主显式映射与注册。</para>
     /// <para>本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文，
     /// 因此宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>。</para>
     /// <para><b>记录器还要四样跨组件前置</b>，缺一个在首次解析 <c>IOperationRecorder</c> 时才暴露：
@@ -55,12 +57,16 @@ public static class DependencyInjection
     {
         // 操作记录只有一个权威存储：两个上下文各注册一次时会静默取一条，
         // 于是一半的审计写进了宿主没预期的库——而审计缺了一半比没有审计更危险。
-        services.EnsureSingleAuthoritative<IOperationRecordStore, EfCoreOperationRecordStore<TDbContext>>(
+        services.EnsureSingleAuthoritative<IOperationRecordWriter, EfCoreOperationRecordStore<TDbContext>>(
             ServiceLifetime.Transient,
-            "Operation records have a single authoritative store; map OperationRecord in one DbContext.");
+            "Operation records have a single authoritative store; map OperationRecord in one DbContext and do not combine it with another writer.");
+        services.EnsureSingleAuthoritative<IOperationRecordReader, EfCoreOperationRecordStore<TDbContext>>(
+            ServiceLifetime.Transient,
+            "Operation record history is read from the same store it is written to.");
 
-        services.AddOperationRecords();
-        services.TryAddTransient<IOperationRecordStore, EfCoreOperationRecordStore<TDbContext>>();
+        services.AddOperationRecordQueries();
+        services.TryAddTransient<IOperationRecordWriter, EfCoreOperationRecordStore<TDbContext>>();
+        services.TryAddTransient<IOperationRecordReader, EfCoreOperationRecordStore<TDbContext>>();
 
         return services;
     }

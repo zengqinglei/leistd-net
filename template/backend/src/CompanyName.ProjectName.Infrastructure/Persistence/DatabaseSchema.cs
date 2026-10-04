@@ -20,7 +20,7 @@ public static class DatabaseSchema
     /// <summary>业务库的迁移历史表</summary>
     public const string BusinessMigrationsHistoryTable = "__EFMigrationsHistory";
 
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
     /// <summary>控制面库的迁移历史表。与业务库分开，两者迁移各自演进</summary>
     public const string ControlMigrationsHistoryTable = "__EFMigrationsHistory_Control";
 #endif

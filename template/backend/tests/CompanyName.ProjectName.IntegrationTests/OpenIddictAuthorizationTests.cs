@@ -69,6 +69,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
     /// <para>创建入口跑完整组合；更新入口只用一个非法组合确认它走的是同一个
     /// <c>ValidateApplication</c>、没有绕过校验——两端复制整套矩阵只会多出一份要同步的清单。</para>
     /// </remarks>
+#if (IncludeMultiTenancy)
     [Theory]
     [InlineData("public", new[] { "ept:token", "gt:client_credentials", "scp:tenant-routing.read" }, false)]
     [InlineData("confidential", new[] { "ept:token", "scp:tenant-routing.read" }, false)]
@@ -116,6 +117,8 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
 
         Assert.Equal(HttpStatusCode.BadRequest, updated.StatusCode);
     }
+#endif
+
 
     private static object NewApplicationPayload(string clientId, string clientType, string[] permissions) =>
         new

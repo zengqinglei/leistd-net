@@ -1,5 +1,5 @@
 using CompanyName.ProjectName.Api.Auth;
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
@@ -14,7 +14,9 @@ using Leistd.Authorization.Constants;
 using Leistd.Notifications.AspNetCore.Endpoints;
 #endif
 using Leistd.OperationRecords.AspNetCore.Attributes;
+#if (IncludeOperationRecords)
 using Leistd.OperationRecords.AspNetCore.Endpoints;
+#endif
 using Leistd.Settings.AspNetCore.Endpoints;
 
 namespace CompanyName.ProjectName.Api.Hosting;
@@ -67,6 +69,7 @@ public static class ComponentEndpoints
                     TargetIdPrefix = PermissionGrantProviderNames.Role + "/"
                 });
 
+#if (IncludeOperationRecords)
         // 导出与查看分开授权：整批带离系统的影响面与在线翻页不是一个量级；导出本身也留痕
         api.MapGroup("operation-records").MapOperationRecords(options =>
         {
@@ -74,11 +77,12 @@ public static class ComponentEndpoints
             options.ExportPolicy = PermissionConstant.OperationRecords.Export;
             options.ExportAction = OperationRecordActions.OperationRecordsExported;
         });
+#endif
 #if (IncludeNotifications)
 
         api.MapGroup("notifications").MapNotifications(options => options.AccessPolicy = ApiPolicies.CurrentUser);
 #endif
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 
         // 租户管理是宿主侧能力：权限声明为 Host 侧别，租户上下文内任何主体都无法通过检查
         api.MapGroup("tenants").MapTenantManagement<CreateTenantWithAdminInputDto>(options =>

@@ -312,12 +312,16 @@ public class CaptchaConsumptionTests
     private sealed class FixedRegistrationPolicy : IUserRegistrationPolicyProvider
     {
         public Task<UserRegistrationPolicy> GetAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new UserRegistrationPolicy(
-                EnableEmailVerification: false,
-                CaptchaExpiryMinutes: 5,
-                EmailCodeExpiryMinutes: 5,
-                EmailCodeSendIntervalSeconds: 60,
-                EmailCodeMaxAttempts: 5));
+            => Task.FromResult(new UserRegistrationPolicy
+            {
+                CaptchaExpiryMinutes = 5,
+#if (Email)
+                EnableEmailVerification = false,
+                EmailCodeExpiryMinutes = 5,
+                EmailCodeSendIntervalSeconds = 60,
+                EmailCodeMaxAttempts = 5,
+#endif
+            });
     }
 }
 #endif

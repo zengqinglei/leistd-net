@@ -5,7 +5,7 @@ import { environment } from '../environments/environment';
 import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
 //#endif
 import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
-//#if (LocalIdentity)
+//#if (LocalIdentity && IncludeMultiTenancy)
 import { tenantInterceptor } from './core/interceptors/tenant-interceptor';
 //#endif
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
@@ -21,7 +21,7 @@ export const appInterceptors: HttpInterceptorFn[] = [
   //#if (IncludeLocalization)
   acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
   //#endif
-  //#if (LocalIdentity)
+  //#if (LocalIdentity && IncludeMultiTenancy)
   tenantInterceptor, // 已选租户时为 /api/ 请求附加租户提示头
   //#endif
   urlFormatInterceptor,

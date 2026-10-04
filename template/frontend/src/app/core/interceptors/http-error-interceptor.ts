@@ -18,12 +18,18 @@ import { ApplicationHttpError } from '../errors/application-http-error';
 import { EntryRouteService } from '../routing/entry-route-service';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
+//#if (IncludeMultiTenancy)
 import { TenantContextService } from '../services/tenant-context-service';
+//#endif
+//#if (IncludeMultiTenancy)
 import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
+//#endif
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
+//#if (IncludeMultiTenancy)
   const tenantContext = inject(TenantContextService);
+//#endif
   const entryRoute = inject(EntryRouteService);
   // TranslocoService 与 SessionContextService 不能在这里直接注入：前者加载词条走 HttpClient，
   // 后者构造时创建 LanguageService、它立即加载初始语言的词条，这些请求都要经过本拦截器，
@@ -48,10 +54,12 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         //
         // 反过来普通 401 不带这个头，租户去向由 AuthService.clearAuthData() 按身份形态
         // 决定——本地身份保留登录入口的选择，OIDC 形态的租户来自令牌声明，跟着主体一起清。
+//#if (IncludeMultiTenancy)
         if (error.headers.get(TENANT_INVALID_HEADER)) {
           tenantContext.clear();
         }
 
+//#endif
         // 会话清理与重新认证是另一件事，它有四个前提：
         //
         // 1) 不在认证路由上。那条流程正在建立主体，插手会把刚建立的主体清掉，而清掉之后

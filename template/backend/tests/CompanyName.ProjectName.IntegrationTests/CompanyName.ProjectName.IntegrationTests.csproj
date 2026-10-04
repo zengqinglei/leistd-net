@@ -27,7 +27,7 @@
     <!-- 两步验证与清理任务的截止边界用官方时间替身 -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
 <!--#endif-->
-<!--#if (IncludeNotifications)-->
+<!--#if (IncludeNotifications || IncludeRealTime)-->
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
 <!--#endif-->
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -42,6 +42,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Api\CompanyName.ProjectName.Api.csproj" />
+<!--#if (RemoteTokenAuth)-->
+    <ProjectReference Include="..\..\src\CompanyName.ProjectName.DbMigrator\CompanyName.ProjectName.DbMigrator.csproj" Aliases="Migrator" />
+<!--#endif-->
 <!--#if (LocalIdentity)-->
     <!-- 服务间调用闭环测试经真实 Client 包发起调用 -->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Client\CompanyName.ProjectName.Client.csproj" />

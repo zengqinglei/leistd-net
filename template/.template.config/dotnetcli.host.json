@@ -12,6 +12,21 @@
     },
     "IncludeLocalization": {
       "longName": "include-localization"
+    },
+    "IncludeFrontend": {
+      "longName": "include-frontend"
+    },
+    "IncludeMultiTenancy": {
+      "longName": "include-multi-tenancy"
+    },
+    "IncludeRealTime": {
+      "longName": "include-real-time"
+    },
+    "IncludeEmail": {
+      "longName": "include-email"
+    },
+    "IncludeOperationRecords": {
+      "longName": "include-operation-records"
     }
   }
 }
