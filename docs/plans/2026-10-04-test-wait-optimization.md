@@ -1,6 +1,6 @@
 # 测试等待时间优化实施计划
 
-状态：四项测试优化及原候选本地验证完成；用户已授权将 TokenCache 生产竞争修复纳入本轮，永久回归、最终包消费、四生成场景、真实到期 E2E 与补测已完成，Claude 最终复审已通过（无必须修复项）；候选 CI 尚未完成。四项主线一次性开发、统一验收、统一交代码审查，不按阶段拆成多批交付。
+状态：a9c94b19 基线实现、24 样本与独立复审完成，已提交 b2a38bb6 并创建 MR #53；develop 随后合入 #52（07ac3cb6），已正常合并为 c16413fe，正在验证最新集成候选。原证据保留并标明基线，不能代替最新候选 CI。
 
 ## 1. 背景、基线与目标
 
@@ -240,3 +240,12 @@ Claude已审查完整候选，四项主线无阻断项；认可隔离生产复�
 T3b 本地验收完成：Framework 1,677／30 静态闸门／68 包消费／四场景后端 1,151 与前端 1,519／真实到期 HTTP E2E 10 项全部通过；最终 24 个配对样本全绿。旧 miss 删除复查反例、V5/V6 与恢复均有编译及目标断言证据。初轮 SIGTERM／数据库退出日志不覆盖，清理本轮资源后同源独立重跑通过。证据 `.tmp/test-wait-token-cache-final-20261004/`；完整数值和预算限制已追加现有报告。
 
 T6 的代码审查子项已完成：独立解析关键 TRX／变异目标／24 样本／矩阵与真实到期回执，确认零阻断项。非阻断建议已吸收：明确工作树候选与最终 SHA 的区别、补 SDK 升级回归注释、避免历史未关闭表述误读；一致性边界登记但不冒称已复现。提交／MR／同 SHA CI 与适用 full／发布仍待交付步骤。
+
+### develop #52 集成后的补充验收
+
+MR 创建时 develop 已推进至 07ac3cb6；本分支正常合并，未覆盖上游修改。框架包变为 69 个；模板新增能力裁剪、认证／操作记录接线与场景。新增 IStartupFilter／IApplicationBuilder 的依赖须在全部 RemoteTokenAuth 形态可用，因此将 Builder／Hosting using 从 ResourceBrowserSession 内移至外层 RemoteTokenAuth 范围，适配有／无浏览器会话两侧。
+
+- 重新构建 Framework 全测、打包到 `.tmp/test-wait-token-cache-develop-20261004/local-feed`，69 包消费验证、全部静态闸门。
+- 完整六场景：原 resource／resource-localization／identity／identity-all-features，补 resource-capabilities-03／04，验证纯 API 关闭浏览器会话及实时组合侧。真实到期 HTTP OIDC 验证最新认证接线。
+- a9 基线的性能数据保留，注明与新基线的责任／包／依赖不同，不宣称代表最新 develop。补测最新基线的证书类／完整 Resource 及两份 FE spec；官方缓存生产代码未被上游修改，确定性反例仍按当前源码核对。
+- 合并后的 using 调整、实际 MR 差异与最新证据再次交同一 Claude 审查，确认实际候选 CI，保留被后续推送取消的前轮 run。
