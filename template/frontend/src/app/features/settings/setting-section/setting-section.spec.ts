@@ -6,7 +6,7 @@ import { provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 
-import { SAVING_MIN_MS, SettingSection } from './setting-section';
+import { SettingSection } from './setting-section';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
@@ -100,9 +100,23 @@ describe('SettingSection', () => {
     http.expectOne('/api/v1/settings').flush([row()]);
     await fixture.whenStable();
     fixture.detectChanges();
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    try {
+      http.verify();
+    } finally {
+      try {
+        fixture.destroy();
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
+    }
+  });
 
   /**
    * 输入并提交。
@@ -124,11 +138,11 @@ describe('SettingSection', () => {
   /**
    * 等到"保存中"的最短可见时长过去。
    *
-   * 成功与失败态都刻意压在这个时长之后才落下（见 SAVING_MIN_MS：本地几十毫秒返回时
-   * 转圈一闪而过，反馈就等于没有）。断言终态前必须把这段真时间等掉。
+   * 用独立的 400 毫秒行为期望推进假时钟，不从生产常量计算边界。
    */
   async function settleSave(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, SAVING_MIN_MS + 50));
+    await vi.advanceTimersByTimeAsync(400);
+    await fixture.whenStable();
     fixture.detectChanges();
   }
 
@@ -149,13 +163,23 @@ describe('SettingSection', () => {
 
     await flushSave();
     http.expectOne('/api/v1/settings').flush([row({ userValue: 'UTC' })]);
-    // 串行队列是裸 Promise 链，Angular 不跟踪它；whenStable 不会等它的续体，
-    // 得让出真实时间
-    await settleSave();
+    await vi.advanceTimersByTimeAsync(399);
+    fixture.detectChanges();
+    expect(host.querySelector('hlm-spinner')).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(1);
+    await fixture.whenStable();
+    fixture.detectChanges();
 
     // 写完转圈消失，换成一次绿色对勾（用图标判定：hlm-spinner 自己也带 role=status）
     expect(host.querySelector('hlm-spinner')).toBeNull();
     expect(host.querySelector('ng-icon[name="lucideCircleCheck"]')).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(1999);
+    fixture.detectChanges();
+    expect(host.querySelector('ng-icon[name="lucideCircleCheck"]')).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(1);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(host.querySelector('ng-icon[name="lucideCircleCheck"]')).toBeNull();
   });
 
   /**
@@ -163,7 +187,7 @@ describe('SettingSection', () => {
    *
    * 拿每行都有的重置按钮来断言：它本身就是一次写入，在途时再点一下只会往队列里塞一条
    * 同样的写入。禁用同时也把"这一下已经收到了"说清楚——没有保存按钮之后，这是唯一的
-   * "点到了"的反馈。用真实时长收尾，顺带钉住禁用态不会一直挂着。
+   * "点到了"的反馈。用虚拟时间收尾，顺带钉住禁用态不会一直挂着。
    */
   it('disables the discrete controls on that row while it saves', async () => {
     const resetButton = () =>
@@ -194,7 +218,7 @@ describe('SettingSection', () => {
 
     await flushSave();
     http.expectOne('/api/v1/settings').flush([row({ userValue: 'UTC' })]);
-    await new Promise((resolve) => setTimeout(resolve));
+    await vi.advanceTimersByTimeAsync(0);
     fixture.detectChanges();
 
     // 新输入必须还在：清草稿只该清掉"本次写入的那个值"
@@ -212,7 +236,7 @@ describe('SettingSection', () => {
     await fixture.whenStable();
 
     http.expectOne('/api/v1/settings').flush([row({ userValue: 'UTC' })]);
-    await new Promise((resolve) => setTimeout(resolve));
+    await vi.advanceTimersByTimeAsync(0);
     fixture.detectChanges();
 
     // 草稿没清掉的话这里会是带空格的原始输入
@@ -241,7 +265,7 @@ describe('SettingSection', () => {
     await typeAndSave('UTC');
     await flushSave();
     http.expectOne('/api/v1/settings').flush('boom', { status: 500, statusText: 'Server Error' });
-    await new Promise((resolve) => setTimeout(resolve));
+    await vi.advanceTimersByTimeAsync(0);
     fixture.detectChanges();
 
     expect(input().value).toBe('UTC');

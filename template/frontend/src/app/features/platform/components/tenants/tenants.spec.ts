@@ -133,6 +133,15 @@ describe('Tenants page query and write flow', () => {
     fixture.detectChanges();
   });
 
+  afterEach(() => {
+    try {
+      fixture.destroy();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('writes paging to the URL and refetches with the new page', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
@@ -158,8 +167,16 @@ describe('Tenants page query and write flow', () => {
     table().paginationChange.emit({ pageIndex: 3, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
+    const queries = vi.mocked(service.getTenants).mock.calls.length;
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
     component.onSearchQueryChange('acme');
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await vi.advanceTimersByTimeAsync(299);
+    expect(vi.mocked(service.getTenants).mock.calls.length).toBe(queries);
+    expect(router.url).not.toContain('keyword=acme');
+    expect(lastQuery().offset).toBe(60);
+    await vi.advanceTimersByTimeAsync(1);
     await fixture.whenStable();
 
     // 停在第 4 页换关键字，看到的是另一批结果的第 4 页，等于结果错乱。

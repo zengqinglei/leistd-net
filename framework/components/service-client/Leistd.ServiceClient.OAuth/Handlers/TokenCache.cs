@@ -20,6 +20,15 @@ internal sealed class TokenCache(HybridCache cache, ILogger<TokenCache> logger, 
     {
         return await cache.GetOrCreateAsync(key, async ct =>
         {
+            // 旧的未命中可能晚于上一轮抓取完成才取得工厂所有权；再次只读检查，避免重复请求。
+            var existing = await cache.GetOrCreateAsync<Token?>(key, static _ => ValueTask.FromResult<Token?>(null),
+                new HybridCacheEntryOptions
+                {
+                    Flags = HybridCacheEntryFlags.DisableDistributedCache | HybridCacheEntryFlags.DisableLocalCacheWrite |
+                        HybridCacheEntryFlags.DisableUnderlyingData
+                }, cancellationToken: ct);
+            if (existing is not null) return existing;
+
             Token token;
             try { token = await fetch(ct); }
             catch (OpenIddictExceptions.ProtocolException exception)
