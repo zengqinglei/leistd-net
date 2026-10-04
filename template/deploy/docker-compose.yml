@@ -13,7 +13,7 @@ services:
     command: ["--apply"]
     environment:
       - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=postgres;Password=${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required};GSS Encryption Mode=Disable
-#if (RemoteTokenAuth)
+#if (RemoteTokenAuth && IncludeMultiTenancy)
       # Resource 的迁移目标清单存在 Identity 的控制库里，必须回源查询。
       # 这些值没有可用默认值：`:?` 让缺配在 compose 阶段就带着变量名失败，
       # 而不是等 DbMigrator 回源时才失败
@@ -24,7 +24,7 @@ services:
       # 迁移身份只授予迁移元数据 scope，不给运行时路由
       - Leistd__ServiceClients__Identity__Scope=tenant-migration.read
 #endif
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
       # 独立库连接串在控制库里加密存储：迁移作业必须与 backend 共用同一个 Data Protection 密钥环（Redis），
       # 否则解不开；开发环境以外没有可用的密钥位置时它会在启动期失败
       - ConnectionStrings__Redis=redis:6379,abortConnect=false
@@ -32,7 +32,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
       redis:
         condition: service_healthy
 #endif
@@ -62,6 +62,11 @@ services:
       # Resource 校验远端签发的令牌，并回源 Identity 解析租户路由。
       # 全部无默认值：漏配时 compose 立刻带变量名失败，不必等到容器启动才由 API 报缺键
       - Authentication__Issuer=${IDENTITY_ISSUER:?IDENTITY_ISSUER is required for a Resource service}
+#if (ResourceBrowserSession)
+      - Authentication__ClientId=${BROWSER_CLIENT_ID:?BROWSER_CLIENT_ID is required for Resource browser sessions}
+      - Authentication__ClientSecret=${BROWSER_CLIENT_SECRET:?BROWSER_CLIENT_SECRET is required for Resource browser sessions}
+#endif
+#if (IncludeMultiTenancy)
       - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
       - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
       - Leistd__ServiceAuth__ClientId=${RESOURCE_CLIENT_ID:?RESOURCE_CLIENT_ID is required for a Resource service}
@@ -70,6 +75,7 @@ services:
       - Leistd__ServiceClients__Identity__Scope=tenant-routing.read
       # 路由缓存 TTL：改租户数据落点前的排空等待取 max(令牌有效期, 本值)
       - TenantRouting__CacheLifetime=${TENANT_ROUTE_CACHE_TTL:-00:10:00}
+#endif
 #endif
 
       # Redis Configuration — matches the bundled redis service below (no password, no TLS).
@@ -81,7 +87,7 @@ services:
       - ConnectionStrings__Redis=redis:6379,abortConnect=false
 
 #if (LocalIdentity)
-      # 首次启动创建的超级管理员。Resource 不持有本地用户，因此这一段只在本地身份形态生成
+      # 首次启动创建本地身份管理员；Resource 用户来自远端身份投影。
       - DefaultAdmin__Username=admin # optional
       # 由部署环境提供（.env 或 CI secret），只在库里还没有超级管理员时用于创建：
       # 首次部署缺失即启动失败并报出键名；已有管理员的部署可以不再提供
@@ -89,7 +95,7 @@ services:
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
       - DefaultAdmin__DisplayName=System Administrator # optional
 #endif
-#if (IncludeNotifications && LocalIdentity)
+#if (IncludeNotifications && Email)
       # 可选：站点对外地址，通知邮件据此把站内链接拼成绝对地址；不配则邮件不附站内链接
       - Leistd__Notifications__Email__PublicBaseUrl=${PUBLIC_BASE_URL:-}
 #endif
@@ -111,6 +117,7 @@ services:
       # CORS Configuration (optional)
       # - Cors__AllowedOrigins__0=https://your-domain.com
 
+#if (ExternalLogin)
       # External OAuth (Optional - uncomment and configure if needed)
       # - ExternalAuth__GitHub__ClientId=your-github-client-id
       # - ExternalAuth__GitHub__ClientSecret=your-github-client-secret
@@ -119,6 +126,8 @@ services:
       # - ExternalAuth__Google__ClientId=your-google-client-id
       # - ExternalAuth__Google__ClientSecret=your-google-client-secret
       # - ExternalAuth__Google__RedirectUri=https://your-domain.com/auth/external-callback/google
+
+#endif
 
       # Logging (optional)
       - Serilog__MinimumLevel__Default=Information

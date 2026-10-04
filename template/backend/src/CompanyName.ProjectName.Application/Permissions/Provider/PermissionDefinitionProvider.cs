@@ -10,8 +10,6 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Tenancy;
-#if (LocalIdentity)
-#endif
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 
@@ -70,7 +68,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         rolesPermission.AddChild(PermissionConstant.Roles.Delete, displayName: DeleteText);
         rolesPermission.AddChild(PermissionConstant.Roles.ManagePermissions, displayName: "Configure permissions");
 
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）
         var tenantsPermission = identityGroup.AddPermission(
             PermissionConstant.Tenants.Default,
@@ -80,7 +78,9 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         tenantsPermission.AddChild(PermissionConstant.Tenants.Create, displayName: CreateText);
         tenantsPermission.AddChild(PermissionConstant.Tenants.Update, displayName: EditText);
         tenantsPermission.AddChild(PermissionConstant.Tenants.Delete, displayName: DeleteText);
+#if (Impersonation)
         tenantsPermission.AddChild(PermissionConstant.Tenants.Impersonation, displayName: "Sign in as tenant");
+#endif
 
 #endif
 #if (OpenIddictServer)
@@ -100,6 +100,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.ResetSecret, displayName: "Reset client secret");
 
 #endif
+#if (IncludeOperationRecords)
         // 审计：记录带 TenantId 并受全局查询过滤器分区，宿主与租户各看各的，因此侧别是 Both
         var auditGroup = context.GetOrAddGroup(PermissionConstant.Groups.Audit, displayName: "Audit");
         var operationRecordsPermission = auditGroup.AddPermission(
@@ -110,6 +111,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         // 导出与查看分开：导出把审计数据整批带离系统，之后不再受可见性分层约束、也不再有访问记录。
         operationRecordsPermission.AddChild(PermissionConstant.OperationRecords.Export, displayName: "Export");
 
+#endif
         // 系统
         var systemGroup = context.GetOrAddGroup(PermissionConstant.Groups.System, displayName: "System");
         systemGroup.AddPermission(

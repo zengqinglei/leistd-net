@@ -20,7 +20,7 @@ public static class ControlPlaneConnectionStrings
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        return Configured(configuration.GetConnectionString(IdentityControlDbContext.ConnectionStringName))
+        return Configured(configuration.GetConnectionString("IdentityControl"))
             ?? Configured(configuration.GetConnectionString(ConnectionStringNames.Default));
     }
 

@@ -74,6 +74,11 @@ public static class OperationRecordActions
     /// <summary>删除了租户的数据库连接登记，该租户退回宿主库。</summary>
     public const string TenantConnectionRemoved = "tenant.connection-removed";
 
+#if (RemoteTokenAuth)
+    /// <summary>部署作业首次授予资源管理员权限。</summary>
+    public const string ResourceAdminGranted = "resource.admin-granted";
+#endif
+
     /// <summary>设置变更。作用域（宿主／租户／用户）随目标标识带出。</summary>
     public const string SettingChanged = "setting.changed";
 
@@ -107,8 +112,10 @@ public static class OperationRecordActions
     /// <summary>用户更换或清除了自己的头像。</summary>
     public const string AuthAvatarChanged = "auth.avatar.changed";
 
+#if (Email)
     /// <summary>用户用验证码确认了自己当前的邮箱。</summary>
     public const string AuthEmailVerified = "auth.email.verified";
+#endif
 
     /// <summary>用户撤销了自己的某个登录会话（目标为该设备的 IP）。</summary>
     public const string AuthSessionRevoked = "auth.session.revoked";
@@ -199,6 +206,10 @@ public static class OperationRecordAuthorizations
     /// 开出用户侧端点时，应先定义相应权限并改用那个权限名。
     /// </remarks>
     public const string DirectUserGrant = "DirectUserGrant";
+#if (RemoteTokenAuth)
+    /// <summary>持有数据库部署权限的命令行作业。</summary>
+    public const string DeploymentBootstrap = "DeploymentBootstrap";
+#endif
 #if (LocalIdentity)
 
     /// <summary>

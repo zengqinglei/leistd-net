@@ -82,6 +82,7 @@
     <Project Path="components/operation-records/Leistd.OperationRecords.Core/Leistd.OperationRecords.Core.csproj" />
     <Project Path="components/operation-records/Leistd.OperationRecords.EntityFrameworkCore/Leistd.OperationRecords.EntityFrameworkCore.csproj" />
     <Project Path="components/operation-records/Leistd.OperationRecords.AspNetCore/Leistd.OperationRecords.AspNetCore.csproj" />
+    <Project Path="components/operation-records/Leistd.OperationRecords.Logging/Leistd.OperationRecords.Logging.csproj" />
   </Folder>
   <Folder Name="/components/realtime/">
     <Project Path="components/realtime/Leistd.RealTime.Core/Leistd.RealTime.Core.csproj" />

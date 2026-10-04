@@ -14,17 +14,25 @@ namespace CompanyName.ProjectName.Application.Auth.Policies;
 /// 字段与 <c>UserRegistrationOptions</c> 一一对应：消费方原来读 <c>IOptions&lt;T&gt;.Value</c>，
 /// 换成读这份快照，除了多一次 <c>await</c> 之外用法不变。
 /// </remarks>
-/// <param name="EnableEmailVerification">是否要求邮箱验证。</param>
-/// <param name="CaptchaExpiryMinutes">图形验证码有效期（分钟）。</param>
-/// <param name="EmailCodeExpiryMinutes">邮箱验证码有效期（分钟）。</param>
-/// <param name="EmailCodeSendIntervalSeconds">发送邮箱验证码的最小间隔（秒）。</param>
-/// <param name="EmailCodeMaxAttempts">单个验证挑战允许的最大错误次数。</param>
-public sealed record UserRegistrationPolicy(
-    bool EnableEmailVerification,
-    int CaptchaExpiryMinutes,
-    int EmailCodeExpiryMinutes,
-    int EmailCodeSendIntervalSeconds,
-    int EmailCodeMaxAttempts);
+public sealed record UserRegistrationPolicy
+{
+    /// <summary>图形验证码有效期（分钟）。</summary>
+    public required int CaptchaExpiryMinutes { get; init; }
+#if (Email)
+
+    /// <summary>是否要求邮箱验证。</summary>
+    public required bool EnableEmailVerification { get; init; }
+
+    /// <summary>邮箱验证码有效期（分钟）。</summary>
+    public required int EmailCodeExpiryMinutes { get; init; }
+
+    /// <summary>发送邮箱验证码的最小间隔（秒）。</summary>
+    public required int EmailCodeSendIntervalSeconds { get; init; }
+
+    /// <summary>单个验证挑战允许的最大错误次数。</summary>
+    public required int EmailCodeMaxAttempts { get; init; }
+#endif
+}
 
 /// <summary>
 /// 解析当前租户生效的注册策略
@@ -50,7 +58,7 @@ public interface IUserRegistrationPolicyProvider
 
 /// <inheritdoc cref="IUserRegistrationPolicyProvider" />
 /// <remarks>
-/// 五项分开读没有额外开销：<c>ISettingProvider</c> 是 Scoped 且在一次请求内记忆化，
+/// 各项分开读没有额外开销：<c>ISettingProvider</c> 是 Scoped 且在一次请求内记忆化，
 /// 一次请求只查库一次。
 /// </remarks>
 /// <param name="settingProvider">按当前上下文解析设置值。</param>
@@ -59,15 +67,19 @@ public sealed class UserRegistrationPolicyProvider(
 {
     /// <inheritdoc />
     public async Task<UserRegistrationPolicy> GetAsync(CancellationToken cancellationToken = default)
-        => new(
-            await settingProvider.GetAsync<bool>(
-                SettingConstant.Registration.EnableEmailVerification, cancellationToken),
-            await settingProvider.GetAsync<int>(
+        => new()
+        {
+            CaptchaExpiryMinutes = await settingProvider.GetAsync<int>(
                 SettingConstant.Registration.CaptchaExpiryMinutes, cancellationToken),
-            await settingProvider.GetAsync<int>(
+#if (Email)
+            EnableEmailVerification = await settingProvider.GetAsync<bool>(
+                SettingConstant.Registration.EnableEmailVerification, cancellationToken),
+            EmailCodeExpiryMinutes = await settingProvider.GetAsync<int>(
                 SettingConstant.Registration.EmailCodeExpiryMinutes, cancellationToken),
-            await settingProvider.GetAsync<int>(
+            EmailCodeSendIntervalSeconds = await settingProvider.GetAsync<int>(
                 SettingConstant.Registration.EmailCodeSendIntervalSeconds, cancellationToken),
-            await settingProvider.GetAsync<int>(
-                SettingConstant.Registration.EmailCodeMaxAttempts, cancellationToken));
+            EmailCodeMaxAttempts = await settingProvider.GetAsync<int>(
+                SettingConstant.Registration.EmailCodeMaxAttempts, cancellationToken),
+#endif
+        };
 }

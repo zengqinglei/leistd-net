@@ -5,14 +5,44 @@ using Microsoft.Extensions.Hosting;
 // 默认只读预演，--apply 才写库。迁移是不可逆的生产数据变更，
 // "跑一下看看"和"改掉生产库"不能是同一个动作。
 var apply = false;
-foreach (var argument in args)
+#if (RemoteTokenAuth)
+Guid? adminSubject = null;
+Guid? adminTenant = null;
+#endif
+for (var index = 0; index < args.Length; index++)
 {
+    var argument = args[index];
     switch (argument)
     {
         case "--apply":
             apply = true;
             break;
 
+#if (RemoteTokenAuth)
+        case "--grant-admin":
+        case "--tenant":
+            if (index + 1 >= args.Length || !Guid.TryParse(args[++index], out var id) || id == Guid.Empty)
+            {
+                Console.Error.WriteLine($"{argument} requires a non-empty GUID.");
+                return 2;
+            }
+            if (argument == "--grant-admin")
+            {
+                if (adminSubject.HasValue) { Console.Error.WriteLine("Duplicate --grant-admin."); return 2; }
+                adminSubject = id;
+            }
+            else
+            {
+#if (IncludeMultiTenancy)
+                if (adminTenant.HasValue) { Console.Error.WriteLine("Duplicate --tenant."); return 2; }
+                adminTenant = id;
+#else
+                Console.Error.WriteLine("--tenant is unavailable in a host-only application.");
+                return 2;
+#endif
+            }
+            break;
+#endif
         case "--help" or "-h":
             WriteUsage();
             return 0;
@@ -25,15 +55,44 @@ foreach (var argument in args)
     }
 }
 
+#if (RemoteTokenAuth)
+if (adminTenant.HasValue && !adminSubject.HasValue)
+{
+    Console.Error.WriteLine("--tenant requires --grant-admin.");
+    return 2;
+}
+#endif
 // 刻意不把 args 交给宿主：命令行配置提供程序会把 `--apply`（无值开关）当配置键解析。
 // 本作业的配置来自环境变量与 appsettings——K8s Job 的标准做法，不需要命令行覆盖。
 var builder = Host.CreateApplicationBuilder();
-builder.Services.AddMigratorServices(builder.Configuration, builder.Environment);
+#if (RemoteTokenAuth)
+if (adminSubject.HasValue)
+{
+    builder.ConfigureContainer(new Leistd.DependencyInjection.DynamicProxy.Registration.DynamicProxyServiceRegistrationCallbackFactory());
+    builder.Services.AddResourceAdminBootstrapServices(builder.Configuration);
+}
+else
+#endif
+{
+    builder.Services.AddMigratorServices(builder.Configuration, builder.Environment);
+}
 
 try
 {
     using var host = builder.Build();
     await using var scope = host.Services.CreateAsyncScope();
+#if (RemoteTokenAuth)
+    if (adminSubject is { } subject)
+    {
+        // 启动期闸门（包括必需日志级别）必须在写入前成立。
+        await host.StartAsync();
+        var result = await scope.ServiceProvider.GetRequiredService<ResourceAdminBootstrapRunner>()
+            .RunAsync(subject, adminTenant, apply);
+        Console.WriteLine(result);
+        await host.StopAsync();
+        return 0;
+    }
+#endif
     var report = await scope.ServiceProvider
         .GetRequiredService<DatabaseMigrationRunner>()
         .RunAsync(apply);
@@ -45,7 +104,7 @@ catch (Exception exception)
 {
     // 只写类型名不足以定位：迁移失败时运维需要知道是哪个目标、哪一条迁移。
     // 连接串不会出现在这里——目标以 SHA256 指纹标识，解密失败的消息也不含明文。
-    Console.Error.WriteLine($"Database migration failed: {exception.GetType().Name}: {exception.Message}");
+    Console.Error.WriteLine($"Database command failed: {exception.GetType().Name}: {exception.Message}");
     for (var inner = exception.InnerException; inner is not null; inner = inner.InnerException)
     {
         Console.Error.WriteLine($"  caused by {inner.GetType().Name}: {inner.Message}");
@@ -60,6 +119,13 @@ static void WriteUsage()
     Console.WriteLine();
     Console.WriteLine("  (no argument)  Dry run: report pending migrations and the SQL, change nothing.");
     Console.WriteLine("  --apply        Apply the pending migrations.");
+#if (RemoteTokenAuth)
+#if (IncludeMultiTenancy)
+    Console.WriteLine("  --grant-admin <sub> [--tenant <id>]  Preview first administrator grants; add --apply to persist.");
+#else
+    Console.WriteLine("  --grant-admin <sub>  Preview first administrator grants; add --apply to persist.");
+#endif
+#endif
 }
 
 static void WriteReport(DatabaseMigrationRunner.MigrationReport report, bool apply)

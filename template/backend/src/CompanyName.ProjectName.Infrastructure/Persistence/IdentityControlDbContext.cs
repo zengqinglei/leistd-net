@@ -1,6 +1,6 @@
 using Leistd.Auditing.EntityFrameworkCore.Extensions;
 using Leistd.Data.Connections;
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure.Persistence.Conventions;
 using Leistd.MultiTenancy;

@@ -22,6 +22,16 @@ public interface IUserAppService : IAppService
     /// 获取用户详情
     /// </summary>
     Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
+#if (RemoteTokenAuth)
+
+    /// <summary>
+    /// 按标识查找用户；本地还没有投影这个主体时返回 <see langword="null"/>
+    /// </summary>
+    /// <remarks>
+    /// 供"当前用户"使用：本服务的超管标记与角色是本地授权事实，与签发方令牌里的同名声明无关。
+    /// </remarks>
+    Task<UserManagementOutputDto?> FindAsync(Guid id, CancellationToken cancellationToken = default);
+#endif
 
 #if (LocalIdentity)
     /// <summary>

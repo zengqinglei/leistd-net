@@ -26,7 +26,7 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
     public async Task A_first_authenticated_request_projects_the_subject_into_a_local_row()
     {
         var subjectId = Guid.CreateVersion7();
-        using var session = factory.CreateResourceSession(subjectId, Guid.CreateVersion7());
+        using var session = factory.CreateResourceSession(subjectId, ProjectWebApplicationFactory.NewTenantId());
 
         var response = await session.Client.GetAsync("/api/health/live");
 
@@ -42,7 +42,7 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
     public async Task Repeated_requests_do_not_create_a_second_row()
     {
         var subjectId = Guid.CreateVersion7();
-        using var session = factory.CreateResourceSession(subjectId, Guid.CreateVersion7());
+        using var session = factory.CreateResourceSession(subjectId, ProjectWebApplicationFactory.NewTenantId());
 
         await session.Client.GetAsync("/api/health/live");
         await session.Client.GetAsync("/api/health/live");
@@ -75,7 +75,7 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
     public async Task Concurrent_first_requests_for_one_subject_all_succeed_and_create_one_row()
     {
         var subjectId = Guid.CreateVersion7();
-        var tenantId = Guid.CreateVersion7();
+        var tenantId = ProjectWebApplicationFactory.NewTenantId();
         var race = new FirstInsertRace(subjectId, participants: 2);
         var warnings = new WarningLogCapture();
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>

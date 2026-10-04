@@ -266,7 +266,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             Assert.Equal("Auth:TwoFactorSetupRequired", await ErrorCodeAsync(blocked));
 
             Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
-                admin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{roleId}"));
+                host, admin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{roleId}"));
         }
         finally
         {

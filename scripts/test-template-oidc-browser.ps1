@@ -93,6 +93,31 @@ internal static class BrowserFixtureRegistration
     $registration = $registration.Replace('__REGISTER__',$extra).Replace('__NAME__',$title)
     [IO.File]::WriteAllText((Join-Path $ApiDirectory 'BrowserFixtureRegistration.cs'), $registration, $utf8)
     [IO.File]::WriteAllText((Join-Path $ApiDirectory 'BrowserTicketController.cs'), $browserTicketSource.Replace('__NAME__',$title), $utf8)
+    if ($Name -in @('orders', 'billing')) {
+        # 正式 CLI 同样会经机器认证访问测试 Identity；只信任本轮证书，不修改生产 TLS 配置。
+        $migratorDirectory = Join-Path (Split-Path $ApiDirectory) "E2E.$title.DbMigrator"
+        $tlsFixture = @'
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
+internal static class BootstrapTlsFixture
+{
+    internal static void Add(IServiceCollection services, IConfiguration config) =>
+        services.PostConfigureAll<HttpClientFactoryOptions>(options => options.HttpMessageHandlerBuilderActions.Add(builder =>
+            builder.PrimaryHandler = new System.Net.Http.HttpClientHandler {
+                ServerCertificateCustomValidationCallback = (request, cert, chain, errors) =>
+                    cert?.Thumbprint == config["E2E:CertificateThumbprint"]
+            }));
+}
+'@
+        [IO.File]::WriteAllText((Join-Path $migratorDirectory 'BootstrapTlsFixture.cs'), $tlsFixture, $utf8)
+        $programPath = Join-Path $migratorDirectory 'Program.cs'
+        $program = [IO.File]::ReadAllText($programPath)
+        $needle = 'builder.Services.AddResourceAdminBootstrapServices(builder.Configuration);'
+        if (-not $program.Contains($needle)) { throw '正式管理员引导入口缺失，不能注入测试证书绑定' }
+        [IO.File]::WriteAllText($programPath, $program.Replace($needle, "$needle`n    BootstrapTlsFixture.Add(builder.Services, builder.Configuration);"), $utf8)
+    }
 }
 
 $browserTicketSource = @'
@@ -279,6 +304,13 @@ function Wait-BrowserElement([string]$Selector) {
         if ($ready) { return }
         Start-Sleep -Milliseconds 200
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
+    $label = 'element-timeout-{0:d4}' -f $browserCommand
+    try {
+        Write-JsonFile (Join-Path $browserEvidence "$label-page.json") (Invoke-BrowserJs '({path:location.pathname,text:document.body.innerText})')
+        Write-JsonFile (Join-Path $browserEvidence "$label-errors.json") (Invoke-Browser @('errors'))
+        Write-JsonFile (Join-Path $browserEvidence "$label-console.json") (Invoke-Browser @('console'))
+        Invoke-Browser @('screenshot', (Join-Path $browserEvidence "$label.png")) | Out-Null
+    } catch { [IO.File]::WriteAllText((Join-Path $browserEvidence "$label-capture-error.txt"), $_.Exception.Message, $utf8) }
     throw "浏览器元素未就绪：$Selector。"
 }
 # 页面刚启动时 Angular 可能仍在替换节点，点击落到被换下的元素上会被静默丢弃（实测偶发）。
@@ -383,6 +415,44 @@ function Click-BrowserLogout {
     Invoke-Browser @('find','role','menuitem','click','--name','Sign out') | Out-Null
     Wait-BrowserUrl ($urls.orders + '/')
 }
+
+function Test-BrowserRoleListRealtime {
+    Start-BrowserResource
+    Login-BrowserPassword
+    $identity = Invoke-BrowserJs '(async () => (await (await fetch("/api/e2e/natural")).json()).userId)()'
+    $environment = $services.orders.Environment.Clone()
+    Invoke-Tool 'dotnet' @($services.orders.Migrator, '--grant-admin', $identity, '--apply') 'realtime-host-admin' -Variables $environment | Out-Null
+    # 完整导航重新读取本地权限；随后只用 SPA 链接进入列表，保留已经建立的通知连接。
+    Invoke-Browser @('open', ($urls.orders + '/workspace')) | Out-Null
+    Wait-BrowserElement 'app-user-menu button'
+    Invoke-Browser @('click', 'app-user-menu button') | Out-Null
+    Wait-BrowserElement '[role="menuitem"]'
+    Invoke-Browser @('find', 'role', 'menuitem', 'click', '--name', 'Admin platform', '--exact') | Out-Null
+    Wait-BrowserUrl ($urls.orders + '/platform*')
+    Wait-BrowserElement 'a[href="/platform/roles"]'
+    Invoke-BrowserNavigationClick 'link' 'Role Management'
+    Wait-BrowserUrl ($urls.orders + '/platform/roles*')
+    Wait-BrowserElement 'app-role-table table'
+    Invoke-Browser @('wait', '--fn', 'window.__e2eHubs?.some(h => h.open && h.sent.some(m => m.target === "Subscribe" && m.resource === "host:roles"))') | Out-Null
+    $name = 'rt_' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $literal = ConvertTo-Json $name -Compress
+    Assert-Value 'realtime-new-role-not-visible-before-mutation' $false (Invoke-BrowserJs "document.querySelector('app-role-table').textContent.includes($literal)")
+    # HTTP 变更不调用 Angular 的保存/刷新方法；DOM 只能由真实 Hub 事件更新。
+    $created = Invoke-BrowserJs "(async () => { const r=await fetch('/api/v1/roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$literal,displayName:$literal})}); return {status:r.status,body:await r.json()}; })()"
+    Assert-Value 'realtime-role-created' 200 $created.status
+    Invoke-Browser @('wait', '--fn', "document.querySelector('app-role-table')?.textContent.includes($literal)") | Out-Null
+    $hubs = @(Invoke-BrowserJs 'window.__e2eHubs')
+    $live = @($hubs | Where-Object { $_.open })
+    Assert-Value 'realtime-notifications-share-one-connection' 1 $live.Count
+    Assert-Value 'realtime-shared-hub-path' '/hubs/realtime' $live[0].path
+    Assert-Value 'realtime-role-event-received' $true (@($live[0].received | Where-Object { $_ -eq 'Roles.Changed' }).Count -gt 0)
+    Write-JsonFile (Join-Path $browserEvidence 'realtime-shared-connection.json') @{ hubs = $hubs; role = $name; visible = $true }
+    $picture = Join-Path $browserEvidence 'realtime-role-list.png'
+    Invoke-Browser @('screenshot', $picture) | Out-Null
+    Assert-Value 'realtime-role-list-screenshot' $true ((Test-Path $picture) -and (Get-Item $picture).Length -gt 0)
+    Click-BrowserLogout
+}
+
 function Invoke-BrowserScenarios {
     if (-not $quickAccessTokens) {
         # HTTP 场景用默认寿命；浏览器阶段要观察真实续期与到期，切到快速档。
@@ -394,7 +464,41 @@ function Invoke-BrowserScenarios {
     $script:browserSession = $session.Output.Trim()
     $script:browserVault = "oidc-$runId-admin"
     $script:browserStarted = $true
-    Invoke-Browser @('open',$urls.orders) | Out-Null
+    $socketObservation = @'
+(() => {
+  window.__e2eHubs = [];
+  const Native = window.WebSocket;
+  function frames(data) {
+    if (typeof data !== 'string') return [];
+    return data.split(String.fromCharCode(30)).filter(Boolean).flatMap(part => {
+      try { return [JSON.parse(part)]; } catch { return []; }
+    });
+  }
+  window.WebSocket = class extends Native {
+    constructor(url, protocols) {
+      super(url, protocols);
+      const path = new URL(url, location.href).pathname;
+      if (!path.startsWith('/hubs/')) return;
+      this.evidence = { path, open: false, sent: [], received: [] };
+      window.__e2eHubs.push(this.evidence);
+      this.addEventListener('open', () => this.evidence.open = true);
+      this.addEventListener('close', () => this.evidence.open = false);
+      this.addEventListener('message', event => frames(event.data).forEach(frame => {
+        if (frame.target) this.evidence.received.push(frame.target);
+      }));
+    }
+    send(data) {
+      if (this.evidence) frames(data).forEach(frame => {
+        if (frame.target) this.evidence.sent.push({ target: frame.target, resource: frame.arguments?.[0] });
+      });
+      return super.send(data);
+    }
+  };
+})();
+'@
+    $observationPath = Join-Path $browserEvidence 'socket-observation.js'
+    [IO.File]::WriteAllText($observationPath, $socketObservation, $utf8)
+    Invoke-Browser @('open', $urls.orders, '--init-script', $observationPath) | Out-Null
     $version = Invoke-Tool 'agent-browser' @('--version') 'browser-version'
     Write-JsonFile (Join-Path $browserEvidence 'runtime.json') @{ session = $browserSession; agentBrowser = $version.Output; userAgent = (Invoke-BrowserJs 'navigator.userAgent'); headed = $true }
     Invoke-Browser @('network','har','start') | Out-Null
@@ -513,6 +617,7 @@ function Invoke-BrowserScenarios {
         Invoke-Browser @('screenshot', $picture) | Out-Null
         Assert-Value 'S12-screenshot-saved' $true ((Test-Path $picture) -and (Get-Item $picture).Length -gt 0)
     }
+    Invoke-Scenario 'realtime-role-list-browser' { Test-BrowserRoleListRealtime }
     Complete-BrowserNetwork
 }
 function Close-BrowserFixtures {

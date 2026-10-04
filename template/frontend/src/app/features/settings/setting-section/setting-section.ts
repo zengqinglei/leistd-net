@@ -26,7 +26,7 @@ import { SettingOutputDto } from '../../../core/settings/setting.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
-//#if (LocalIdentity)
+//#if (Email)
 import { EmailTest } from '../email-test/email-test';
 //#endif
 // prettier-ignore
@@ -96,7 +96,7 @@ export const SAVING_MIN_MS = 400;
     ...HlmSwitchImports,
     ...HlmTooltipImports,
     TranslocoDirective,
-    //#if (LocalIdentity)
+    //#if (Email)
     EmailTest,
     //#endif
   ],
@@ -112,7 +112,7 @@ export const SAVING_MIN_MS = 400;
     ...HlmSelectImports,
     ...HlmSwitchImports,
     ...HlmTooltipImports,
-    //#if (LocalIdentity)
+    //#if (Email)
     EmailTest,
     //#endif
   ],

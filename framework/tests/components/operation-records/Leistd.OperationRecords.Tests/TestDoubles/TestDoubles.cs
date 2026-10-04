@@ -70,7 +70,7 @@ internal sealed class FakeCorrelationIdProvider(string? correlationId) : ICorrel
 }
 
 /// <summary>把写入原样收下的存储，供断言"记了什么"。</summary>
-internal sealed class RecordingOperationRecordStore : IOperationRecordStore
+internal sealed class RecordingOperationRecordStore : IOperationRecordWriter, IOperationRecordReader
 {
     public List<OperationRecordInfo> Written { get; } = [];
 
@@ -95,16 +95,10 @@ internal sealed class RecordingOperationRecordStore : IOperationRecordStore
 }
 
 /// <summary>写入必定失败的存储，用于区分"吞掉"与"上抛"两条策略。</summary>
-internal sealed class ThrowingOperationRecordStore(Exception failure) : IOperationRecordStore
+internal sealed class ThrowingOperationRecordStore(Exception failure) : IOperationRecordWriter
 {
     public Task InsertAsync(OperationRecordInfo record, CancellationToken cancellationToken = default)
         => throw failure;
-
-    public Task<PagedResult<OperationRecordInfo>> GetPagedListAsync(
-        OperationRecordFilter filter,
-        PageRequest page,
-        CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
 }
 
 /// <summary>承载操作记录表的测试上下文。</summary>
@@ -128,7 +122,7 @@ internal sealed class SecondDbContext(DbContextOptions<SecondDbContext> options)
 // 写出之后登记去重标记，与真实 OperationRecorder 同构。
 // 真实记录器自己的登记时机由 FailedOperationRecordingTests 里走真实 DI 的用例钉住，
 // 这个替身只服务于"扩展拿到已登记状态之后怎么做"。
-internal sealed class PassThroughRecorder(IOperationRecordStore store, RecordedFailureTracker recordedFailures)
+internal sealed class PassThroughRecorder(IOperationRecordWriter store, RecordedFailureTracker recordedFailures)
     : IOperationRecorder
 {
     public Task RecordSucceededAsync(string action, OperationTarget target, string basis, CancellationToken ct = default)

@@ -19,6 +19,7 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// </remarks>
 public sealed class DeploymentSafeguardsTests
 {
+#if (SpaFrontend)
     // 本地密钥目录随容器重建而消失、多副本之间不共享：登录 Cookie、租户连接串、机密设置随之无法解密
     [Fact]
     public void Data_protection_keys_must_be_persisted_outside_development()
@@ -29,6 +30,7 @@ public sealed class DeploymentSafeguardsTests
 
         Assert.Contains("DataProtection:KeysPath", exception.ToString(), StringComparison.Ordinal);
     }
+#endif
 #if (OpenIddictServer)
 
     // 开发证书默认关闭：每台机器各一份，多副本互不认、重建容器后令牌全部失效。未打开时必须给证书文件
@@ -106,6 +108,7 @@ public sealed class DeploymentSafeguardsTests
     }
 #endif
 
+#if (SpaFrontend)
     // 缺 Redis 不阻止启动（单实例合法），但非开发环境必须在启动日志里留下降级说明
     [Theory]
     [InlineData("Testing", true)]
@@ -123,6 +126,7 @@ public sealed class DeploymentSafeguardsTests
 
         Assert.Equal(expected, logs.Entries.Any(entry => entry.Message.Contains("ConnectionStrings:Redis is not configured", StringComparison.Ordinal)));
     }
+#endif
 
     private static Exception StartupFailure(ProjectWebApplicationFactory factory, Action<IWebHostBuilder> configure)
     {

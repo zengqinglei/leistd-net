@@ -7,13 +7,12 @@ export interface RegisterInputDto {
   password: string;
   captchaCode?: string;
   captchaToken?: string;
+//#if (Email)
   emailVerification?: EmailVerificationInputDto;
+//#endif
   displayName?: string;
 }
 
-/**
- * 注册安全配置输出 DTO
- */
 /** 登录第二步：验证码与恢复码二选一。 */
 export interface TwoFactorLoginInputDto {
   token: string;
@@ -57,12 +56,15 @@ export interface UserSessionOutputDto {
   impersonatorName?: string | null;
   isCurrent: boolean;
 }
+//#if (Email)
 
+/** 注册安全配置输出 DTO。 */
 export interface SecurityConfigOutputDto {
   enableEmailVerification: boolean;
   /** 部署具备发邮箱验证码的前提；为 false 时"验证我的邮箱"只说明暂不可用，不给发送按钮。 */
   emailVerificationAvailable: boolean;
 }
+//#endif
 
 /**
  * 图形验证码输出 DTO
@@ -71,6 +73,7 @@ export interface CaptchaOutputDto {
   captchaToken: string;
   captchaImageBase64: string;
 }
+//#if (Email)
 
 /**
  * 发送邮件验证码请求 DTO
@@ -80,6 +83,8 @@ export interface SendEmailCodeInputDto {
   captchaToken: string;
   captchaCode: string;
 }
+//#endif
+//#if (Email)
 
 /**
  * 邮箱验证挑战应答 DTO
@@ -88,6 +93,8 @@ export interface EmailVerificationInputDto {
   challengeId: string;
   code: string;
 }
+//#endif
+//#if (Email)
 
 /**
  * 邮箱验证挑战输出 DTO
@@ -97,6 +104,7 @@ export interface EmailVerificationChallengeOutputDto {
   expiresInSeconds: number;
   retryAfterSeconds: number;
 }
+//#endif
 
 /**
  * 当前用户资料更新请求 DTO

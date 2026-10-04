@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+#if (IncludeOperationRecords)
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using Leistd.Authorization.Errors;
+#endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
-using Leistd.Authorization.Errors;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -144,6 +146,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         Assert.Equal("用户名或密码不正确。", businessMessage); // 业务异常中文
     }
 
+#if (IncludeOperationRecords)
     /// <summary>
     /// 被业务规则拒绝的操作记录，失败原因按读取请求的语言由后端渲染
     /// </summary>
@@ -269,10 +272,13 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
             (await LockedReasonAsync("en-US"), await LockedReasonAsync("zh-CN")));
     }
 
+#endif
+
     private static Task<HttpResponseMessage> CreateUserAsync(
         HttpClient client, string username, string email, string password = "LocTests!Passw0rd")
         => client.PostAsJsonAsync("/api/v1/users", new { Username = username, Email = email, Password = password, IsActive = true });
 
+#if (IncludeOperationRecords)
     // 按动作筛失败记录，以指定语言读取，返回唯一匹配的那一条
     private static async Task<JsonElement> ReadFailedRecordAsync(
         HttpClient client, string action, string culture, Predicate<JsonElement> match)
@@ -285,4 +291,5 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return Assert.Single(body.RootElement.GetProperty("items").EnumerateArray(), match).Clone();
     }
+#endif
 }

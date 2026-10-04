@@ -1,3 +1,4 @@
+#if (SpaFrontend)
 # -----------------------------------
 # Stage 1: Build Frontend (Angular)
 # -----------------------------------
@@ -26,8 +27,9 @@ RUN if [ -n "$API_GATEWAY" ]; then \
     fi && \
     npm run build -- --configuration=production
 
+#endif
 # -----------------------------------
-# Stage 2: Build Backend (.NET)
+# Build Backend (.NET)
 # -----------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
 WORKDIR /src
@@ -46,7 +48,7 @@ WORKDIR "/src/backend/src/CompanyName.ProjectName.DbMigrator"
 RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /app/migrator /p:UseAppHost=false
 
 # -----------------------------------
-# Stage 3: Final Runtime Image
+# Migrator Runtime Image
 # -----------------------------------
 # DbMigrator 引用 Microsoft.AspNetCore.App，运行镜像必须包含 ASP.NET Core 共享框架。
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrator
@@ -57,21 +59,27 @@ USER $APP_UID
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.DbMigrator.dll"]
 
 # -----------------------------------
-# Stage 4: API Runtime Image
+# API Runtime Image
 # -----------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS api
 WORKDIR /app
 
 EXPOSE 8080
 
-# 1. 拷贝后端构建结果
+# 拷贝后端构建结果
 COPY --from=backend-build /app/api .
+#if (SpaFrontend)
 
-# 2. 拷贝前端构建结果到后端的 wwwroot 目录，让 ASP.NET Core 直接托管静态 SPA 文件
+# 拷贝前端构建结果到后端的 wwwroot 目录，让 ASP.NET Core 直接托管静态 SPA 文件
 # Angular >= 17 生产构建会输出到 dist/<project>/browser 目录
 COPY --from=frontend-build /app/dist/companyname-projectname-web/browser ./wwwroot
+#endif
 
-# 3. 以镜像自带的非 root 用户（UID 1654）运行：程序与静态文件只读；挂进来的证书要对它可读，
-#    用文件目录保存 Data Protection 密钥时该目录要对它可写（见 docs/deploy/README.md）
+#if (SpaFrontend)
+# 以镜像自带的非 root 用户（UID 1654）运行：程序与静态文件只读；挂进来的证书要对它可读，
+# 用文件目录保存 Data Protection 密钥时该目录要对它可写（见 docs/deploy/README.md）
+#else
+# 以镜像自带的非 root 用户（UID 1654）运行：程序目录只读
+#endif
 USER $APP_UID
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.Api.dll"]

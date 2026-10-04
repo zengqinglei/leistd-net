@@ -1,8 +1,10 @@
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore;
+#if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore;
+#endif
 using Leistd.Settings.EntityFrameworkCore;
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.Management.Provisioning;
 #endif
@@ -20,26 +22,30 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.MultiTenancy;
-#if (!LocalIdentity)
+#if (RemoteTokenAuth && IncludeMultiTenancy)
 using Leistd.MultiTenancy.ServiceClient;
 using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.OAuth.Options;
 #endif
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
 #endif
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 #endif
 
-using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
+#endif
+#if (Email)
 using CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
 using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 #endif
-using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
-
 #if (LocalIdentity)
+using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
+#endif
+
+#if (Email)
 using Leistd.Email.Smtp;
 #endif
 #if (ExternalLogin)
@@ -68,7 +74,7 @@ public static class DependencyInjection
     {
         services.AddPersistenceServices(configuration);
 
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         // 开通失败的数据库错误翻译：SQLSTATE 表是 PostgreSQL 方言，属本项目的技术适配。
         // 组件按 TryAdd 挂"不翻译"的默认实现，这里直接登记，与注册先后无关
         services.AddSingleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>();
@@ -81,10 +87,12 @@ public static class DependencyInjection
 #endif
         services.AddPermissionAuthorizationEfCore<MyProjectDbContext>();
         services.AddSettingsEfCore<MyProjectDbContext>();
+#if (IncludeOperationRecords)
         services.AddOperationRecordsEfCore<MyProjectDbContext>();
         // 到期记录搬入归档表。默认关闭：审计表只增不减是安全的默认值，
         // 要启用就得有人显式打开（配置 Leistd:OperationRecords:Retention 或系统设置的「审计」面板）
         services.AddOperationRecordRetention<MyProjectDbContext>();
+#endif
         // 集群周期任务的完成水位与业务表同库：多副本同一时段只跑一次
         services.AddBackgroundJobsEfCore<MyProjectDbContext>();
         // 连接串使用 StackExchange.Redis 原生格式（host:port,password=...,ssl=true），原样交给官方解析器。
@@ -108,17 +116,16 @@ public static class DependencyInjection
             services.AddMemoryLocalLock();
         }
 
+#if (LocalIdentity)
         services.AddOptions<PasswordHashOptions>()
             .Bind(configuration.GetSection(PasswordHashOptions.SectionName))
             .Validate(options => options.IterationCount > 0, $"{PasswordHashOptions.SectionName}:IterationCount must be greater than 0.")
             .ValidateOnStart();
         services.AddTransient<IPasswordHasher, PasswordHasher>();
-#if (LocalIdentity)
+#endif
+#if (Email)
         // 验证码摘要与口令哈希具有不同的密钥和成本契约。
         services.AddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
-#endif
-
-#if (LocalIdentity)
         services.AddSmtpEmailSender();
 #endif
 
@@ -159,8 +166,10 @@ public static class DependencyInjection
                 : connectionString;
 
         services.AddMemoryCache();
+        services.AddMultiTenancyCore();
 
-#if (!LocalIdentity)
+#if (IncludeMultiTenancy)
+#if (RemoteTokenAuth)
         // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（默认 10 分钟，
         // 它决定租户改路由前的排空等待，可按环境覆盖）；同租户并发回源合并为一次。
         // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
@@ -178,7 +187,9 @@ public static class DependencyInjection
             options => options.ControlPlaneConnectionStringName = IdentityControlDbContext.ConnectionStringName);
 #endif
 
-#if (LocalIdentity)
+#endif
+
+#if (LocalIdentity && IncludeMultiTenancy)
         services.AddDbContext<IdentityControlDbContext>((sp, options) =>
         {
             // 控制面不继承 BaseDbContext，必须显式挂载修改和删除审计拦截器。
@@ -231,7 +242,7 @@ public static class DependencyInjection
                 .Ignore(RelationalEventId.MultipleCollectionIncludeWarning));
         });
 
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         // 租户注册表与连接登记的存储；管理用例只在 API 里注册（AddApplicationServices）
         services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 #endif
@@ -242,7 +253,7 @@ public static class DependencyInjection
         // 构建容器时会直接失败。不传选项即"只登记、不注册仓储"。
         // 业务上下文继承 BaseDbContext，登记时同时挂上审计、领域事件与并发标记三个保存拦截器。
         services.AddDddDbContext<MyProjectDbContext>(options => options.AddDefaultRepositories());
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
         services.AddDddDbContext<IdentityControlDbContext>();
 #endif

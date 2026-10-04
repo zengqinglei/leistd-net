@@ -385,6 +385,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 });
 
 #endif
+#if (IncludeOperationRecords)
             modelBuilder.Entity("Leistd.OperationRecords.EntityFrameworkCore.Entities.OperationRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -473,7 +474,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.ToTable("OperationRecords", "companyname-projectname");
                 });
+#endif
 
+#if (IncludeOperationRecords)
             modelBuilder.Entity("Leistd.OperationRecords.EntityFrameworkCore.Entities.OperationRecordArchive", b =>
                 {
                     b.Property<Guid>("Id")
@@ -560,6 +563,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.ToTable("OperationRecordArchives", "companyname-projectname");
                 });
+#endif
 
             modelBuilder.Entity("Leistd.Settings.EntityFrameworkCore.Entities.SettingRecord", b =>
                 {

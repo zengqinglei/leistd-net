@@ -12,7 +12,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence;
 /// OpenIddict 通过 <c>UseOpenIddict()</c> 注入实体，因此本类不声明 <c>DbSet</c>，
 /// 仅此上下文抑制 <c>PendingModelChangesWarning</c>。它是宿主级存储，不参与租户路由。
 /// </remarks>
-[ConnectionStringName(IdentityControlDbContext.ConnectionStringName)]
+[ConnectionStringName("IdentityControl")]
 public sealed class OpenIddictDbContext(DbContextOptions<OpenIddictDbContext> options)
     : DbContext(options)
 {

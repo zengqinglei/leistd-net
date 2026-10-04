@@ -36,7 +36,9 @@ public static class PermissionConstant
 #endif
 
         /// <summary>审计：操作记录。</summary>
+#if (IncludeOperationRecords)
         public const string Audit = "Audit";
+#endif
 
         /// <summary>系统：系统设置。</summary>
         public const string System = "System";
@@ -91,7 +93,7 @@ public static class PermissionConstant
     }
 
 #endif
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
     /// <summary>
     /// 租户管理权限（宿主侧专属）
     /// </summary>
@@ -113,7 +115,9 @@ public static class PermissionConstant
         /// 与 <see cref="Update"/> 分开授权：改租户的注册信息和"进到租户里面去操作"
         /// 是两种不同量级的能力，后者能看到并改动该租户的全部业务数据。
         /// </remarks>
+#if (Impersonation)
         public const string Impersonation = Default + ".Impersonation";
+#endif
     }
 #endif
     /// <summary>
@@ -129,6 +133,7 @@ public static class PermissionConstant
         public const string Default = Prefix + ".Settings";
     }
 
+#if (IncludeOperationRecords)
     /// <summary>
     /// 操作记录查看权限
     /// </summary>
@@ -152,4 +157,5 @@ public static class PermissionConstant
         /// </remarks>
         public const string Export = Default + ".Export";
     }
+#endif
 }

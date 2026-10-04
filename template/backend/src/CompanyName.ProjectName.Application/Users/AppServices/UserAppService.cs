@@ -181,6 +181,15 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         return await MapToOutputAsync(user, cancellationToken);
     }
+#if (RemoteTokenAuth)
+
+    /// <inheritdoc />
+    public async Task<UserManagementOutputDto?> FindAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var user = await userRepository.GetByIdAsync(id, cancellationToken);
+        return user is null ? null : await MapToOutputAsync(user, cancellationToken);
+    }
+#endif
 
 #if (LocalIdentity)
     /// <summary>

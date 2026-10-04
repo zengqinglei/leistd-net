@@ -3,6 +3,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+#if (!IncludeMultiTenancy)
+using System.Security.Claims;
+using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+#endif
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Api.Auth;
 using Microsoft.AspNetCore.Authentication;
@@ -24,6 +30,51 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// <summary>真实官方 OIDC/Cookie 处理器，只替换签发方的 HTTP 后端。</summary>
 public sealed class ResourceBrowserSessionTests
 {
+#if (!IncludeMultiTenancy)
+    [Theory]
+    [InlineData("tenant")]
+    [InlineData("malformed")]
+    [InlineData("empty")]
+    [InlineData("duplicate")]
+    [InlineData("conflicting")]
+    public async Task A_cached_cookie_with_an_invalid_scope_is_rejected_before_projection(string kind)
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = Host(factory, issuer);
+        var cookie = await LoginAsync(host, issuer);
+        var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthenticationSchemeNames.SessionCookie);
+        var reference = options.TicketDataFormat.Unprotect(cookie.Split('=', 2)[1])!;
+        var key = reference.Principal.Claims.Single().Value;
+        var original = (await options.SessionStore!.RetrieveAsync(key))!;
+        var tenant = Guid.NewGuid().ToString();
+        var tenants = kind switch
+        {
+            "tenant" => new[] { tenant },
+            "malformed" => new[] { "not-a-guid" },
+            "empty" => new[] { "" },
+            "duplicate" => new[] { tenant, tenant },
+            "conflicting" => new[] { tenant, Guid.NewGuid().ToString() },
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+        var claims = original.Principal.Claims.Concat(tenants.Select(value => new Claim(CustomClaimTypes.TenantId, value)));
+        var changed = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, AuthenticationSchemeNames.SessionCookie)),
+            original.Properties, original.AuthenticationScheme);
+        await options.SessionStore.RenewAsync(key, changed);
+        using var browser = Client(host, cookie);
+        using var rejected = await browser.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        var subject = Guid.Parse(issuer.Subject);
+        Assert.False(await db.Users.IgnoreQueryFilters().AnyAsync(user => user.Id == subject));
+        await options.SessionStore.RenewAsync(key, original);
+        using var accepted = await browser.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.True(await db.Users.IgnoreQueryFilters().AnyAsync(user => user.Id == subject));
+    }
+#endif
+
     [Fact]
     public async Task Official_code_flow_keeps_tokens_on_the_server_and_rejects_a_deleted_ticket()
     {
@@ -47,7 +98,9 @@ public sealed class ResourceBrowserSessionTests
         var me = await browser.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
         Assert.Equal(issuer.Subject, me.GetProperty("id").GetString());
         Assert.Equal("oidc-user", me.GetProperty("username").GetString());
-        Assert.Equal("operator", me.GetProperty("roles")[0].GetString());
+        // 签发方的 operator 声明不属于本资源服务的授权事实。
+        Assert.Empty(me.GetProperty("roles").EnumerateArray());
+        Assert.False(me.GetProperty("isSuperAdmin").GetBoolean());
         Assert.False(me.TryGetProperty("isActive", out _));
         Assert.False(me.TryGetProperty("creationTime", out _));
         browser.DefaultRequestHeaders.Authorization = new("Bearer", "invalid-token");

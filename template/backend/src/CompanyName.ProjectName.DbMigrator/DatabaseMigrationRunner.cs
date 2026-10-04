@@ -22,7 +22,9 @@ namespace CompanyName.ProjectName.DbMigrator;
 /// </remarks>
 public sealed class DatabaseMigrationRunner(
     IConfiguration configuration,
+#if (IncludeMultiTenancy)
     ITenantMigrationTargetProvider targetProvider,
+#endif
     ILogger<DatabaseMigrationRunner> logger)
 {
     /// <summary>
@@ -109,7 +111,7 @@ public sealed class DatabaseMigrationRunner(
             throw new InvalidOperationException("ConnectionStrings:Default is required by DbMigrator.");
         }
 
-#if (LocalIdentity)
+#if ((LocalIdentity && IncludeMultiTenancy) || OpenIddictServer)
         // 使用与运行时一致的控制面连接回退链。
         var controlConnection = configuration.GetControlPlaneConnectionString() ?? defaultConnection;
 
@@ -119,9 +121,10 @@ public sealed class DatabaseMigrationRunner(
             : new TenantMigrationTarget(Guid.Empty, controlConnection).Fingerprint;
 #endif
 
-        // 仅控制库的待执行计划可证明本地租户表尚未创建。
+#if (IncludeMultiTenancy)
         MigrationPlan? controlPlan = null;
-#if (LocalIdentity)
+#endif
+#if (LocalIdentity && IncludeMultiTenancy)
         controlPlan = await ProcessControlAsync(controlConnection, controlTarget, apply, cancellationToken);
         plans.Add(controlPlan);
 #endif
@@ -131,6 +134,7 @@ public sealed class DatabaseMigrationRunner(
 #endif
         plans.Add(await ProcessBusinessAsync(defaultConnection, "default", apply, cancellationToken));
 
+#if (IncludeMultiTenancy)
         // 始终真实枚举目标；只有已证实的首次安装可将缺表视为无独立目标。
         // 其他失败必须非零退出，防止不完整预演随后施加额外目标。
         IReadOnlyList<TenantMigrationTarget> targets;
@@ -156,10 +160,11 @@ public sealed class DatabaseMigrationRunner(
             plans.Add(await ProcessBusinessAsync(target.ConnectionString, target.Fingerprint, apply, cancellationToken));
         }
 
+#endif
         return new MigrationReport(plans);
     }
 
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
     private async Task<MigrationPlan> ProcessControlAsync(
         string connectionString,
         string target,

@@ -36,7 +36,7 @@ public sealed class DeniedOperationRecordingTests
             options.AddPolicy("App.Orders.Update", policy => policy.RequireClaim("permission", "App.Orders.Update"));
             options.AddPolicy("Security.RecentMfa", policy => policy.RequireClaim("amr", "mfa"));
         });
-        services.AddSingleton<IOperationRecordStore>(store);
+        services.AddSingleton<IOperationRecordWriter>(store);
         services.AddScoped<RecordedFailureTracker>();
         services.AddTransient<IOperationRecorder>(
             provider => new PassThroughRecorder(store, provider.GetRequiredService<RecordedFailureTracker>()));

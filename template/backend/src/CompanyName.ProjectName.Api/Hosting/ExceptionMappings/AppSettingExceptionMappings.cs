@@ -8,10 +8,14 @@ internal static class AppSettingExceptionMappings
 {
     public static void Configure(GlobalExceptionOptions options)
     {
+#if (Email)
         ApiExceptionMappings.Map(options, StatusCodes.Status403Forbidden,
             AppSettingErrorCodes.ManagePermissionRequired,
             AppSettingErrorCodes.TestEmailHostOnly);
         options.MapCode(AppSettingErrorCodes.TestEmailFailed, StatusCodes.Status503ServiceUnavailable);
         options.MapCode(AppSettingErrorCodes.EmailVerificationKeyMissing, StatusCodes.Status409Conflict);
+#else
+        options.MapCode(AppSettingErrorCodes.ManagePermissionRequired, StatusCodes.Status403Forbidden);
+#endif
     }
 }

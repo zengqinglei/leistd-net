@@ -2,8 +2,6 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
 
-import { isMockedUrl } from '../../../../../_mock/core/providers';
-import { environment } from '../../../../environments/environment';
 import { SignalRService, NotificationOutputDto } from '../../../core/services/signalr-service';
 export type { NotificationOutputDto } from '../../../core/services/signalr-service';
 
@@ -47,11 +45,6 @@ export class NotificationService {
     const generation = this.signalR.authGeneration;
 
     await this.loadNotifications();
-
-    // 实时连接本身由 Mock 应答时不建连：Mock 不模拟 SignalR，连不上的后端只会反复重试
-    if (isMockedUrl(environment.useMock, SignalRService.hubPath)) {
-      return;
-    }
 
     // 加载历史期间发生了主体切换：这一轮 init 属于上一个用户，不能再去建连。
     // 服务端 Cookie 此刻可能仍然有效，建成的连接会把 principal 定在上一个人身上，

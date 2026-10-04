@@ -96,12 +96,18 @@ public sealed class ReauthenticationLockoutTests(ProjectWebApplicationFactory fa
         await ChangePasswordErrorAsync(session.Client, WrongPassword);
 
         using var admin = await ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+#if (IncludeOperationRecords)
         using var body = JsonDocument.Parse(await admin.Client.GetStringAsync(
             "/api/v1/operation-records?offset=0&limit=50&actions=auth.password.changed&outcome=Failed"));
 
         var failureCodes = body.RootElement.GetProperty("items").EnumerateArray()
             .Select(item => item.GetProperty("failureCode").GetString())
             .ToList();
+#else
+        var failureCodes = factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
+            .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), "auth.password.changed"))
+            .Select(entry => OperationRecordLogCapture.Field(entry, "OperationFailureCode") as string);
+#endif
         Assert.Contains("Security:CurrentPasswordIncorrect", failureCodes);
     }
 

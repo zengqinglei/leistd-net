@@ -1,5 +1,6 @@
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
+using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.OperationRecords.EntityFrameworkCore.Stores;
@@ -91,7 +92,9 @@ public sealed class OperationRecordRegistrationTests
 
         services.AddOperationRecords();
 
-        services.AssertNotRegistered<IOperationRecordStore>();
+        services.AssertNotRegistered<IOperationRecordWriter>();
+        services.AssertNotRegistered<IOperationRecordReader>();
+        services.AssertNotRegistered<IOperationRecordQueryService>();
     }
 
     // ---------- Leistd.OperationRecords.EntityFrameworkCore 的 DependencyInjection ----------
@@ -103,8 +106,11 @@ public sealed class OperationRecordRegistrationTests
 
         services.AddOperationRecordsEfCore<TestDbContext>();
 
-        services.AssertSingle<IOperationRecordStore>(ServiceLifetime.Transient);
-        services.AssertImplementedBy<IOperationRecordStore, EfCoreOperationRecordStore<TestDbContext>>();
+        services.AssertSingle<IOperationRecordWriter>(ServiceLifetime.Transient);
+        services.AssertImplementedBy<IOperationRecordWriter, EfCoreOperationRecordStore<TestDbContext>>();
+        services.AssertSingle<IOperationRecordReader>(ServiceLifetime.Transient);
+        services.AssertImplementedBy<IOperationRecordReader, EfCoreOperationRecordStore<TestDbContext>>();
+        services.AssertSingle<IOperationRecordQueryService>(ServiceLifetime.Transient);
     }
 
     /// <summary>EF 入口内部已调用 Core 入口，宿主不必也调一次。</summary>

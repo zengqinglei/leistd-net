@@ -10,11 +10,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Leistd.OperationRecords.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// 使用 EF Core 持久化操作记录。
+/// 使用 EF Core 持久化操作记录，并提供历史读取。
 /// </summary>
 /// <remarks>
-/// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接，参与工作单元。
-/// 租户隔离由 <c>IMultiTenant</c> 的全局查询过滤器承担，本类不带租户条件。
+/// <para>通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接，参与工作单元：
+/// 成功记录与业务数据<b>同一事务</b>提交，提交即持久，这是数据库存储独有的保证。</para>
+/// <para>租户隔离由 <c>IMultiTenant</c> 的全局查询过滤器承担，本类不带租户条件。</para>
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 OperationRecord 配置）。</typeparam>
 /// <param name="dbContextProvider">工作单元内的 DbContext 提供器。</param>
@@ -23,7 +24,7 @@ namespace Leistd.OperationRecords.EntityFrameworkCore.Stores;
 public class EfCoreOperationRecordStore<TDbContext>(
     IDbContextProvider<TDbContext> dbContextProvider,
     IUnitOfWorkManager unitOfWorkManager,
-    ICurrentTenant currentTenant) : IOperationRecordStore
+    ICurrentTenant currentTenant) : IOperationRecordWriter, IOperationRecordReader
     where TDbContext : DbContext
 {
     /// <inheritdoc />

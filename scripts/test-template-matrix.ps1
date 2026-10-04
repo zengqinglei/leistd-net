@@ -229,6 +229,7 @@ function Assert-MarkdownLinks([string]$ProjectRoot) {
 }
 
 function Assert-GeneratedProject([string]$ProjectRoot) {
+    $hasFrontend = Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend")
     $requiredFiles = @(
         ".agents/skills/leistd-project-workflow/SKILL.md",
         ".agents/skills/leistd-project-workflow/references/bootstrap.md",
@@ -250,6 +251,10 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         "backend/README.md",
         "frontend/components.json"
     )
+    if (-not $hasFrontend) {
+        $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(
+            ".agents/skills/spartan/SKILL.md", "docs/standards/coding-frontend.md", "docs/standards/ui-design.md", "frontend/components.json") })
+    }
     foreach ($relativePath in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $relativePath))) {
             throw "Generated project is missing required guidance: $relativePath"
@@ -259,7 +264,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     $skillRoot = Join-Path $ProjectRoot ".agents/skills"
     $skillNames = @(Get-ChildItem -LiteralPath $skillRoot -Directory | ForEach-Object Name)
     # 生成项目携带项目协作和前端 UI 两个独立入口。
-    $allowedSkills = @("leistd-project-workflow", "spartan")
+    $allowedSkills = if ($hasFrontend) { @("leistd-project-workflow", "spartan") } else { @("leistd-project-workflow") }
     if (@($allowedSkills | Where-Object { $skillNames -notcontains $_ }).Count -gt 0) {
         throw "Generated project is missing a required skill in $skillRoot"
     }
@@ -276,6 +281,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     }
 
     $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "service-invocation.md", "tech-stack.md", "testing.md", "ui-design.md")
+    if (-not $hasFrontend) { $expectedStandards = @($expectedStandards | Where-Object { $_ -notin @("coding-frontend.md", "ui-design.md") }) }
     $standardsRoot = Join-Path $ProjectRoot "docs/standards"
     $actualStandards = @(Get-ChildItem -LiteralPath $standardsRoot -File -Filter "*.md" | ForEach-Object Name | Sort-Object)
     $standardDifference = Compare-Object ($expectedStandards | Sort-Object) $actualStandards
@@ -481,21 +487,31 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
-    $mockInterceptorPath = Join-Path $ProjectRoot "frontend/_mock/core/interceptor.ts"
-    $mockInterceptor = Get-Content -LiteralPath $mockInterceptorPath -Raw -Encoding UTF8
-    foreach ($marker in @("MOCK_ROUTE_NOT_FOUND", "Mock Route Not Found", "startsWith('/api/')")) {
-        if (-not $mockInterceptor.Contains($marker)) {
-            throw "Scenario '$($Definition.Name)' Mock interceptor is missing fail-fast marker: $marker"
+    if ($Definition.Frontend) {
+        $mockInterceptorPath = Join-Path $ProjectRoot "frontend/_mock/core/interceptor.ts"
+        $mockInterceptor = Get-Content -LiteralPath $mockInterceptorPath -Raw -Encoding UTF8
+        foreach ($marker in @("MOCK_ROUTE_NOT_FOUND", "Mock Route Not Found", "startsWith('/api/')")) {
+            if (-not $mockInterceptor.Contains($marker)) {
+                throw "Scenario '$($Definition.Name)' Mock interceptor is missing fail-fast marker: $marker"
+            }
         }
     }
 
     $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
-        foreach ($marker in @("environment.useMock", "isMockedUrl(", "await this.signalR.connect()")) {
+        foreach ($marker in @("await this.signalR.connect()")) {
             if (-not $notificationService.Contains($marker)) {
                 throw "Scenario '$($Definition.Name)' notification service is missing Mock isolation marker: $marker"
             }
+        }
+    }
+    # Mock 建连隔离集中在共享连接服务，通知和业务实时均受同一守卫保护。
+    $signalRPath = Join-Path $ProjectRoot 'frontend/src/app/core/services/signalr-service.ts'
+    if (Test-Path -LiteralPath $signalRPath) {
+        $signalR = Get-Content -LiteralPath $signalRPath -Raw -Encoding UTF8
+        foreach ($marker in @('environment.useMock', 'isMockedUrl(')) {
+            if (-not $signalR.Contains($marker)) { throw "Scenario '$($Definition.Name)' shared connection lacks Mock isolation: $marker" }
         }
     }
 }
@@ -548,6 +564,50 @@ function New-RuntimeDatabase([string]$Name) {
     & docker exec $runtimeDatabaseContainer psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE `"$Name`"" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to create runtime smoke database $Name." }
     return "Host=127.0.0.1;Port=$($script:runtimeDatabasePort);Database=$Name;Username=postgres;Password=$runtimeDatabasePassword"
+}
+
+function Invoke-PureApiContainerSmoke([string]$Scenario, [string]$ApiImage, [string]$MigratorImage) {
+    $databaseName = 'container_' + ($Scenario -replace '[^a-z0-9]', '_')
+    [void](New-RuntimeDatabase $databaseName)
+    $network = "leistd-container-$runId"
+    $apiContainer = "leistd-api-$runId"
+    $port = Get-FreeTcpPort
+    $connection = "Host=$runtimeDatabaseContainer;Port=5432;Database=$databaseName;Username=postgres;Password=$runtimeDatabasePassword"
+    try {
+        Invoke-External 'docker' @('network', 'create', $network)
+        Invoke-External 'docker' @('network', 'connect', $network, $runtimeDatabaseContainer)
+        Invoke-External 'docker' @('run', '--rm', '--network', $network,
+            '-e', "ConnectionStrings__MigrationTarget=$connection", $MigratorImage, '--apply')
+        Invoke-External 'docker' @('run', '--rm', '--entrypoint', '/bin/sh', $ApiImage, '-c',
+            'test ! -d /app/wwwroot && ! command -v node')
+        Invoke-External 'docker' @('run', '-d', '--name', $apiContainer, '--network', $network,
+            '-p', "127.0.0.1:${port}:8080", '-e', 'ASPNETCORE_ENVIRONMENT=Development',
+            '-e', "ConnectionStrings__Default=$connection", '-e', 'ConnectionStrings__Redis=',
+            '-e', 'Authentication__Issuer=https://identity.matrix.test/', $ApiImage)
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(90)
+        $healthy = $false
+        while ([DateTimeOffset]::UtcNow -lt $deadline) {
+            try {
+                $response = Invoke-WebRequest "http://127.0.0.1:$port/api/health/live" -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $healthy = $true; break }
+            }
+            catch { Start-Sleep -Milliseconds 500 }
+        }
+        if (-not $healthy) { throw 'Pure API container did not start successfully.' }
+        $root = Invoke-WebRequest "http://127.0.0.1:$port/" -SkipHttpErrorCheck
+        if ($root.StatusCode -ne 404) { throw 'Pure API container unexpectedly serves a frontend.' }
+        Write-Host 'Pure API container: real migration, API startup, liveness and absent SPA passed.'
+    }
+    catch {
+        & docker logs $apiContainer 2>&1 | Out-Host
+        throw
+    }
+    finally {
+        & docker rm -fv $apiContainer 2>$null | Out-Null
+        & docker network disconnect $network $runtimeDatabaseContainer 2>$null | Out-Null
+        & docker network rm $network 2>$null | Out-Null
+        $global:LASTEXITCODE = 0
+    }
 }
 
 function Invoke-WithEnvironment([hashtable]$Variables, [scriptblock]$Action) {
@@ -717,8 +777,8 @@ if ($Tier) {
     }
     $Scenarios = Get-TierScenarios $Tier $Slice
     if ($validationPlan) { $Scenarios = @($Scenarios | Where-Object { $_ -cin $validationPlan.Scenarios }) }
-    if ($ContainerSmoke -and $ContainerScenario -in $Scenarios) {
-        $ContainerSmokeScenarios += $ContainerScenario
+    if ($ContainerSmoke) {
+        $ContainerSmokeScenarios += @($ContainerScenarios | Where-Object { $_ -in $Scenarios })
     }
 }
 
@@ -745,17 +805,14 @@ Invoke-SourcePreflight -Skip:$SkipSourcePreflight
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 [IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
 
-# 安全门禁：生产依赖闭包不得含 high 及以上漏洞。所有场景共用模板的两份 lockfile，
-# 故在循环前各审计一次即可；advisory 端点偶发抖动，用重试消化（完整审计属依赖治理任务）。
-if (-not $SkipFrontend) {
-    $auditTargets = @(
-        (Join-Path $repoRoot "template/frontend"),
-        (Join-Path $repoRoot "template/.template.config/localization/frontend")
-    )
-    foreach ($auditRoot in $auditTargets) {
+# 锁文件包含模板条件，审计生成后实际消费的依赖闭包；相同内容只审计一次。
+$auditedLocks = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+function Assert-FrontendDependencySecurity([string]$FrontendRoot) {
+    $digest = (Get-FileHash -LiteralPath (Join-Path $FrontendRoot 'package-lock.json') -Algorithm SHA256).Hash
+    if (-not $auditedLocks.Contains($digest)) {
         for ($auditAttempt = 1; $auditAttempt -le 3; $auditAttempt++) {
             try {
-                Invoke-External "npm" @("audit", "--omit=dev", "--audit-level=high", "--package-lock-only") $auditRoot
+                Invoke-External "npm" @("audit", "--omit=dev", "--audit-level=high", "--package-lock-only") $FrontendRoot
                 break
             }
             catch {
@@ -763,6 +820,7 @@ if (-not $SkipFrontend) {
                 Start-Sleep -Seconds (5 * $auditAttempt)
             }
         }
+        [void]$auditedLocks.Add($digest)
     }
 }
 
@@ -829,6 +887,9 @@ try {
         Invoke-External "dotnet" $newArguments
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
+        if (-not $SkipFrontend -and $definition.Frontend) {
+            Assert-FrontendDependencySecurity (Join-Path $projectRoot 'frontend')
+        }
 
         $backendValidated = $false
         $runtimeValidated = $false
@@ -911,6 +972,9 @@ try {
                 Invoke-External "docker" @("build", "--target", "migrator", "-t", $migratorImage, $projectRoot)
                 Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $apiImage, "--info")
                 Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $migratorImage, "--info")
+                if (-not $definition.Frontend) {
+                    Invoke-PureApiContainerSmoke $scenario $apiImage $migratorImage
+                }
                 $containerValidated = $true
             }
             finally {
@@ -923,9 +987,9 @@ try {
             Scenario = $scenario
             Backend = if ($backendValidated) { 'pass' } else { 'not-applicable' }
             Runtime = if ($runtimeValidated) { 'pass' } elseif ($validationMode -ceq 'frontend') { 'not-applicable' } else { 'skipped' }
-            Lint = if ($lintValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
-            Frontend = if ($frontendValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
-            Test = if ($testValidated) { 'pass' } elseif ($validationMode -ceq 'backend') { 'not-applicable' } else { 'skipped' }
+            Lint = if ($lintValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
+            Frontend = if ($frontendValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
+            Test = if ($testValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
             Container = if ($containerValidated) { "pass" } else { "skipped" }
             Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
         })
@@ -939,7 +1003,16 @@ $results | Format-Table -AutoSize
 Write-Host "Template matrix passed for $($results.Count) scenario(s)." -ForegroundColor Green
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
-$resultFile = Join-Path $runRoot "matrix-$(if ($Slice) { $Slice } else { 'local' }).json"
-[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; CandidateSha = (git rev-parse HEAD); Mode = $validationMode; Results = @($results) } |
-    ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
-if ($env:GITHUB_OUTPUT) { "results_path=$resultFile" | Out-File $env:GITHUB_OUTPUT -Append }
+$receiptSlices = if ($Tier -and -not $Slice) { @($MatrixSlices[$Tier].Keys) } else { @($Slice) }
+foreach ($receiptSlice in $receiptSlices) {
+    $sliceResults = @($results | Where-Object {
+        -not $Tier -or -not $receiptSlice -or $scenarioMap[$_.Scenario].Slices[$Tier] -ceq $receiptSlice
+    })
+    if ($sliceResults.Count -eq 0) { continue }
+    $resultFile = Join-Path $runRoot "matrix-$(if ($receiptSlice) { $receiptSlice } else { 'local' }).json"
+    [PSCustomObject]@{ Tier = $Tier; Slice = $receiptSlice; CandidateSha = (git rev-parse HEAD); Mode = $validationMode; Results = $sliceResults } |
+        ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
+    Write-Host "Receipt: $resultFile"
+}
+$resultsPath = if ($Tier -and -not $Slice) { $runRoot } else { $resultFile }
+if ($env:GITHUB_OUTPUT) { "results_path=$resultsPath" | Out-File $env:GITHUB_OUTPUT -Append }

@@ -1,5 +1,7 @@
 export class User {
   id!: string;
+  /** 所属租户；宿主用户为空。 */
+  tenantId?: string | null;
   username!: string;
   email!: string;
   displayName?: string;

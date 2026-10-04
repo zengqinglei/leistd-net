@@ -15,7 +15,9 @@ public static class AppNotificationTypes
     /// <summary>系统通知：发布时没指定类型的通知都归这一类（框架的默认类型）。</summary>
     public const string System = NotificationInputDto.DefaultType;
 
+#if (LocalIdentity)
     /// <summary>安全提醒：新设备登录、密码与两步验证变更、账号被锁定。站内通知不可关闭。</summary>
     public const string Security = "Security";
+#endif
 }
 #endif

@@ -23,8 +23,10 @@ import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
+//#if (IncludeMultiTenancy)
 import { TenantContextService } from '../services/tenant-context-service';
 import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
+//#endif
 
 //#if (LocalIdentity)
 import type { Mock, MockedObject } from 'vitest';
@@ -336,6 +338,7 @@ describe('httpErrorInterceptor', () => {
     expectNoReauthentication();
     expect(caught).toBeInstanceOf(ApplicationHttpError);
   });
+  //#if (IncludeMultiTenancy)
 
   // 「租户没了」与「要不要重新认证」是两件正交的事。这条把它们钉开：认证路由上、
   // 静默请求、外加这个头——租户必须清，而会话与认证一动都不能动。
@@ -390,6 +393,7 @@ describe('httpErrorInterceptor', () => {
     expect(sessionContext.clear).not.toHaveBeenCalled();
     expectNoReauthentication();
   });
+  //#endif
 
   // 启动阶段的 /auth/me 与 /permissions/current 都是静默的：这里若打断，
   // 启动流自己的 401 处置就会和拦截器抢方向盘。

@@ -65,6 +65,7 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     allowsHostScope: true,
   },
+  //#if (IncludeOperationRecords)
   {
     name: 'Audit.RetentionEnabled',
     displayName: 'Archive expired operation records',
@@ -75,6 +76,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsHostScope: true,
     isBoolean: true,
   },
+  //#endif
+  //#if (IncludeOperationRecords)
   {
     name: 'Audit.RetentionDays',
     displayName: 'Operation record retention (days)',
@@ -86,7 +89,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     minimum: 30,
     maximum: 3650,
   },
-  //#if (LocalIdentity)
+  //#endif
+  //#if (Email)
   {
     name: 'Registration.EnableEmailVerification',
     displayName: 'Require email verification',
@@ -96,6 +100,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     isBoolean: true,
   },
+  //#endif
+  //#if (LocalIdentity)
   {
     name: 'Registration.CaptchaExpiryMinutes',
     displayName: 'Captcha lifetime (minutes)',
@@ -106,6 +112,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     minimum: 1,
     maximum: 60,
   },
+  //#endif
+  //#if (LocalIdentity)
   {
     name: 'Security.LockoutMaxFailedAttempts',
     displayName: 'Lock the account after this many failed sign-ins (0 = never)',
@@ -116,6 +124,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     minimum: 0,
     maximum: 100,
   },
+  //#endif
+  //#if (LocalIdentity)
   {
     name: 'Security.LockoutDurationMinutes',
     displayName: 'Lockout duration (minutes)',
@@ -126,6 +136,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     minimum: 1,
     maximum: 1440,
   },
+  //#endif
+  //#if (LocalIdentity)
   {
     name: 'Security.RequireTwoFactor',
     displayName: 'Require two-factor authentication for everyone',
@@ -135,6 +147,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     isBoolean: true,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.SmtpHost',
     displayName: 'SMTP host',
@@ -144,6 +158,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     allowsHostScope: true,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.SmtpPort',
     displayName: 'SMTP port',
@@ -155,6 +171,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     minimum: 1,
     maximum: 65535,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.SmtpEnableSsl',
     displayName: 'Use TLS',
@@ -165,6 +183,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsHostScope: true,
     isBoolean: true,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.SmtpUsername',
     displayName: 'SMTP username',
@@ -174,6 +194,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     allowsHostScope: true,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.SmtpPassword',
     displayName: 'SMTP password',
@@ -184,6 +206,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsHostScope: true,
     isSecret: true,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.DefaultFromAddress',
     displayName: 'Sender address',
@@ -193,6 +217,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     allowsHostScope: true,
   },
+  //#endif
+  //#if (Email)
   {
     name: 'Email.DefaultFromName',
     displayName: 'Sender name',
@@ -202,7 +228,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: false,
     allowsHostScope: true,
   },
-  //#if (IncludeNotifications)
+  //#endif
+  //#if (LocalIdentity)
   {
     name: 'Notifications.Security.Email',
     displayName: 'Security alerts by email',
@@ -212,6 +239,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: true,
     isBoolean: true,
   },
+  //#endif
+  //#if (IncludeNotifications)
   {
     name: 'Notifications.System.InApp',
     displayName: 'System notifications in the app',
@@ -221,6 +250,8 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsUserScope: true,
     isBoolean: true,
   },
+  //#endif
+  //#if (IncludeNotifications)
   {
     name: 'Notifications.System.Email',
     displayName: 'System notifications by email',
@@ -231,7 +262,6 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     isBoolean: true,
   },
   //#endif
-  //#endif
 ];
 
 /**
@@ -241,11 +271,21 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
 export const SETTING_GROUP_NAMES: Readonly<Record<string, string>> = {
   Display: 'Display',
   Operations: 'Operations',
+  //#if (IncludeOperationRecords)
   Audit: 'Audit',
+  //#endif
+  //#if (LocalIdentity)
   Registration: 'Registration',
+  //#endif
+  //#if (LocalIdentity)
   Security: 'Sign-in security',
+  //#endif
+  //#if (Email)
   Email: 'Email',
+  //#endif
+  //#if (IncludeNotifications)
   Notifications: 'Notifications',
+  //#endif
 };
 //#if (IncludeLocalization)
 
@@ -259,34 +299,74 @@ export const SETTING_TEXTS_ZH_CN: Readonly<Record<string, string>> = {
   'Setting:Display.TimeZone': '时区',
   'Setting:Logging.MinimumLevel': '最小日志级别',
   'Setting:Logging.RequestLevel': '请求日志级别',
+  //#if (IncludeOperationRecords)
   'Setting:Audit.RetentionEnabled': '到期操作记录搬入归档',
-  'Setting:Audit.RetentionDays': '操作记录保留天数',
-  //#if (LocalIdentity)
-  'Setting:Registration.EnableEmailVerification': '要求邮箱验证',
-  'Setting:Registration.CaptchaExpiryMinutes': '图形验证码有效期（分钟）',
-  'Setting:Security.LockoutMaxFailedAttempts': '连续登录失败多少次后锁定（0 为不锁定）',
-  'Setting:Security.LockoutDurationMinutes': '锁定时长（分钟）',
-  'Setting:Security.RequireTwoFactor': '要求所有人启用两步验证',
-  'Setting:Email.SmtpHost': 'SMTP 主机',
-  'Setting:Email.SmtpPort': 'SMTP 端口',
-  'Setting:Email.SmtpEnableSsl': '启用 TLS 加密',
-  'Setting:Email.SmtpUsername': 'SMTP 用户名',
-  'Setting:Email.SmtpPassword': 'SMTP 口令',
-  'Setting:Email.DefaultFromAddress': '发件地址',
-  'Setting:Email.DefaultFromName': '发件人名称',
-  //#if (IncludeNotifications)
-  'Setting:Notifications.Security.Email': '安全提醒同时发邮件',
-  'Setting:Notifications.System.InApp': '在站内接收系统通知',
-  'Setting:Notifications.System.Email': '系统通知同时发邮件',
   //#endif
+  //#if (IncludeOperationRecords)
+  'Setting:Audit.RetentionDays': '操作记录保留天数',
+  //#endif
+  //#if (Email)
+  'Setting:Registration.EnableEmailVerification': '要求邮箱验证',
+  //#endif
+  //#if (LocalIdentity)
+  'Setting:Registration.CaptchaExpiryMinutes': '图形验证码有效期（分钟）',
+  //#endif
+  //#if (LocalIdentity)
+  'Setting:Security.LockoutMaxFailedAttempts': '连续登录失败多少次后锁定（0 为不锁定）',
+  //#endif
+  //#if (LocalIdentity)
+  'Setting:Security.LockoutDurationMinutes': '锁定时长（分钟）',
+  //#endif
+  //#if (LocalIdentity)
+  'Setting:Security.RequireTwoFactor': '要求所有人启用两步验证',
+  //#endif
+  //#if (Email)
+  'Setting:Email.SmtpHost': 'SMTP 主机',
+  //#endif
+  //#if (Email)
+  'Setting:Email.SmtpPort': 'SMTP 端口',
+  //#endif
+  //#if (Email)
+  'Setting:Email.SmtpEnableSsl': '启用 TLS 加密',
+  //#endif
+  //#if (Email)
+  'Setting:Email.SmtpUsername': 'SMTP 用户名',
+  //#endif
+  //#if (Email)
+  'Setting:Email.SmtpPassword': 'SMTP 口令',
+  //#endif
+  //#if (Email)
+  'Setting:Email.DefaultFromAddress': '发件地址',
+  //#endif
+  //#if (Email)
+  'Setting:Email.DefaultFromName': '发件人名称',
+  //#endif
+  //#if (LocalIdentity)
+  'Setting:Notifications.Security.Email': '安全提醒同时发邮件',
+  //#endif
+  //#if (IncludeNotifications)
+  'Setting:Notifications.System.InApp': '在站内接收系统通知',
+  //#endif
+  //#if (IncludeNotifications)
+  'Setting:Notifications.System.Email': '系统通知同时发邮件',
   //#endif
   'SettingGroup:Display': '显示',
   'SettingGroup:Operations': '运维',
+  //#if (IncludeOperationRecords)
   'SettingGroup:Audit': '审计',
+  //#endif
+  //#if (LocalIdentity)
   'SettingGroup:Registration': '注册验证',
+  //#endif
+  //#if (LocalIdentity)
   'SettingGroup:Security': '登录安全',
+  //#endif
+  //#if (Email)
   'SettingGroup:Email': '邮件发送',
+  //#endif
+  //#if (IncludeNotifications)
   'SettingGroup:Notifications': '通知',
+  //#endif
 };
 //#endif
 

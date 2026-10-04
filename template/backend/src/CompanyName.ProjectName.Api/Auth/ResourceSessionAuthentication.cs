@@ -6,7 +6,6 @@ using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Domain.Shared.Security;
 using Leistd.Lock.Abstractions;
-using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -14,18 +13,6 @@ using Microsoft.Extensions.Options;
 using OpenIddict.Validation;
 
 namespace CompanyName.ProjectName.Api.Auth;
-
-/// <summary>在请求期从已验证 Bearer 或服务端会话票据读取用户访问令牌。</summary>
-internal sealed class ResourceUserAccessTokenAccessor(IHttpContextAccessor contexts) : IUserAccessTokenAccessor
-{
-    public async ValueTask<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (contexts.HttpContext is not { } context) return null;
-        var result = await context.AuthenticateAsync(AuthenticationSchemeNames.Smart);
-        return result.Succeeded ? result.Properties?.GetTokenValue("access_token") : null;
-    }
-}
 
 /// <summary>机密客户端在服务端续期；同一票据的并发刷新由已有分布式锁串行化。</summary>
 internal sealed class ResourceSessionRefresher(
@@ -38,6 +25,10 @@ internal sealed class ResourceSessionRefresher(
     {
         var principal = await context.RequestServices.GetRequiredService<OpenIddictValidationService>()
             .ValidateAccessTokenAsync(token, cancellationToken);
+#if (!IncludeMultiTenancy)
+        if (!CompanyName.ProjectName.Api.Middlewares.HostPrincipalMiddleware.IsHost(principal, context.RequestServices.GetRequiredService<IOptions<Leistd.Security.Claims.ClaimTypeOptions>>().Value))
+            throw new InvalidOperationException("A single-tenant resource cannot accept a tenant identity.");
+#endif
         return new ClaimsPrincipal(new ClaimsIdentity(principal.Claims, AuthenticationSchemeNames.SessionCookie, "preferred_username", "role"));
     }
 

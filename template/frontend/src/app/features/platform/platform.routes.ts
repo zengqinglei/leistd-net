@@ -65,6 +65,7 @@ export const PLATFORM_ROUTES: Routes = [
       },
     ],
   },
+//#if (IncludeOperationRecords)
   {
     // 审计：谁在什么时候做了什么。只读，无写端点。
     path: 'operation-records',
@@ -77,7 +78,8 @@ export const PLATFORM_ROUTES: Routes = [
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.operationRecords.default },
   },
-  //#if (LocalIdentity)
+//#endif
+  //#if (LocalIdentity && IncludeMultiTenancy)
   {
     path: 'tenants',
     //#if (IncludeLocalization)

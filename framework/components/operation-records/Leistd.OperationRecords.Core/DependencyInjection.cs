@@ -17,9 +17,10 @@ public static class DependencyInjection
     /// 注册操作记录的记录器，识别真实操作人的 claim 类型用默认值。
     /// </summary>
     /// <remarks>
-    /// 还需要一个 <see cref="IOperationRecordStore"/> 实现（如
-    /// <c>AddOperationRecordsEfCore&lt;TDbContext&gt;()</c>）：它是记录器的必需依赖，
-    /// 缺失时解析 <see cref="IOperationRecorder"/> 直接失败，而不是静默什么都不记。
+    /// <para>还需要一个 <see cref="IOperationRecordWriter"/> 实现（数据库存储
+    /// <c>AddOperationRecordsEfCore&lt;TDbContext&gt;()</c>，或结构化日志输出 <c>AddOperationRecordsLogging()</c>）：
+    /// 它是记录器的必需依赖，缺失时解析 <see cref="IOperationRecorder"/> 直接失败，而不是静默什么都不记。</para>
+    /// <para>不注册历史查询：查询只在有可回读存储时成立，由存储适配调用 <see cref="AddOperationRecordQueries"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -45,13 +46,27 @@ public static class DependencyInjection
         // 必须是 Scoped——记录器是 Transient，状态放在它身上会随每次解析重置，去重就失效了。
         services.TryAddScoped<RecordedFailureTracker>();
         services.TryAddTransient<IOperationRecorder, OperationRecorder>();
-        services.TryAddTransient<IOperationRecordQueryService, OperationRecordQueryService>();
 
         // 动作定义索引是启动期事实，单例即可；宿主用
         // AddSingleton<IOperationActionDefinitionProvider, XxxProvider>() 登记自己的动作。
         // 写入要求动作码已登记；读取时遇到已不再登记的历史码，界面降级为原样显示裸码，
         // 而不是让整页读不出来：审计记录是既成事实，不能因为定义缺失就取不到。
         services.TryAddSingleton<IOperationActionDefinitionManager, OperationActionDefinitionManager>();
+        return services;
+    }
+
+    /// <summary>
+    /// 注册历史查询与导出用例（<see cref="IOperationRecordQueryService"/>）。
+    /// </summary>
+    /// <remarks>
+    /// 由能回读历史的存储适配调用（如 <c>AddOperationRecordsEfCore&lt;TDbContext&gt;()</c>），宿主通常不直接调用。
+    /// 它要求一个 <see cref="IOperationRecordReader"/>：只写不读的输出适配不提供读取，也就没有查询可注册。
+    /// </remarks>
+    /// <param name="services">服务集合。</param>
+    public static IServiceCollection AddOperationRecordQueries(this IServiceCollection services)
+    {
+        services.AddOperationRecords();
+        services.TryAddTransient<IOperationRecordQueryService, OperationRecordQueryService>();
         return services;
     }
 

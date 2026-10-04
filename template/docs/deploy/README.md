@@ -4,15 +4,21 @@
 
 ## 配置与机密的分层
 
+<!--#if (SpaFrontend)-->
 各环境共用同一套配置键，只换值的来源。浏览器页面与所属 API 必须同源，支持同镜像托管，也支持分进程经部署代理统一外部源。认证导航、`/api/**` 协议回调与前端回跳都以该外部源为准；独立跨源 API 地址不属于模板浏览器认证的部署契约。`API_GATEWAY` 构建参数与 `environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。
 
 会话 Cookie 默认 `SameSite=Lax`。外部 OAuth correlation 与 OIDC nonce Cookie 保持官方 `SameSite=None`、`Secure=Always`，协议回调须 HTTPS。放宽会话 Cookie 到 `None` 不会补齐跨源浏览器认证导航。
+<!--#else-->
+各环境共用同一套配置键，只换值的来源。纯 API 通过 Bearer 认证，不配置浏览器 Cookie、OIDC 回调或前端网关。
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 
 第三方站点以顶层 POST 进入授权或退出端点时不需要放宽 SameSite：请求先缓存，再以顶层 GET 重入，Lax 会话 Cookie 即可送达（见 [依赖方的登录与退出](../standards/api.md#依赖方的登录与退出)）。
 <!--#endif-->
 
+<!--#if (LocalIdentity)-->
 口令哈希默认 PBKDF2-HMAC-SHA256 600,000 次迭代（OWASP 现行建议）。硬件基准表明可以承受更高成本时用 `PasswordHash__IterationCount` 调高；新值只作用于此后设置或修改的口令，存量密文按自身记录的迭代数校验，照常可用。
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 
 多系统退出不会即时通知其他依赖方：模板没有 OIDC back-channel logout。登记为会话绑定的依赖方在 Identity 会话结束后，于访问令牌到期时续期失败而收敛；未绑定的依赖方持有的刷新令牌不受影响。
@@ -31,7 +37,9 @@
 
 开发环境以外，下列只在单机上成立的回落缺配即启动失败：
 
+<!--#if (SpaFrontend)-->
 - Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+<!--#endif-->
 - 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，只适合单实例，启动日志各有一条 Warning 说明降级内容；多副本必须配置 Redis。
 - TLS 在网关或 ingress 终结时，所有形态（含 Standalone）都须配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 还原原始协议与主机。浏览器写请求的 Origin 校验同样依赖这些转发头；来源拒绝返回 Problem Details，Warning 日志给出收到的 Origin 与计算出的本源。
 <!--#if (OpenIddictServer)-->
@@ -57,8 +65,14 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 <!--#if (OpenIddictServer)-->
   令牌证书以 compose `secrets` 挂载到 `/run/secrets`，只有口令走环境变量。单机 compose 的文件型 secret 是按宿主机文件权限的绑定挂载，`mode`、`uid` 不生效：证书文件必须对容器用户（UID 1654）可读，例如 `chown 1654 certs/*.pfx && chmod 400 certs/*.pfx`，或 `chmod 640` 并把属组设为 1654。宿主机上 `600` 且属主 root 的证书会让 API 启动失败。
 <!--#endif-->
-- **容器用户**：API 与迁移镜像以镜像自带的非 root 用户（UID 1654）运行。挂进容器的文件要对它可读；Data Protection 密钥改用文件目录（`DataProtection:KeysPath`）而不是 Redis 时，挂载的目录要对它可写。
-- **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件（如身份服务的令牌证书）以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis：分布式缓存（会话票据等）与分布式锁依赖它，Data Protection 密钥也默认存在那里。
+- **容器用户**：API 与迁移镜像以镜像自带的非 root 用户（UID 1654）运行。挂进容器的文件要对它可读。
+<!--#if (SpaFrontend)-->
+  Data Protection 密钥改用文件目录（`DataProtection:KeysPath`）而不是 Redis 时，挂载的目录要对它可写。
+<!--#endif-->
+- **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis：分布式缓存与分布式锁依赖它。
+<!--#if (SpaFrontend)-->
+  Data Protection 密钥默认保存在 Redis 中；各副本还须使用一致的应用名。
+<!--#endif-->
 - **云平台（容器服务、应用服务）**：配置写应用设置，机密放托管密钥库并以托管身份读取（如 Key Vault 引用）。这类接入与平台绑定，确定平台后再加，不预置在模板里。
 
 <!--#if (OpenIddictServer)-->
@@ -116,12 +130,15 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   采用 [ASP.NET Core 分离 readiness/liveness 的启动任务示例](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0#separate-readiness-and-liveness-probes)的门禁语义，
   不周期探测共享 Identity，避免其短暂故障使所有资源实例同时摘流。
   代价是就绪不保证新密钥获取、新令牌获取或租户回源成功，这些依赖失败在对应请求上暴露。
+<!--#if (ResourceBrowserSession)-->
 - 浏览器使用后端 OIDC 机密客户端与 Cookie 会话，服务端保存并刷新令牌；配置、回调、缓存/密钥与 CSRF 边界见 [浏览器认证](../standards/api.md#浏览器认证)。
+<!--#endif-->
 - 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
 <!--#endif-->
-<!--#if (IncludeNotifications && LocalIdentity)-->
+<!--#if (IncludeNotifications && Email)-->
 - 通知邮件要附可点开的站内链接时配置 `Leistd:Notifications:Email:PublicBaseUrl`（站点对外地址；哈希路由以 `/#` 结尾），不配则不附。
 <!--#endif-->
+<!--#if (IncludeOperationRecords)-->
 - 操作记录默认**只增不减**。需要保留期时打开 `Leistd:OperationRecords:Retention:Enabled`（或由宿主管理员在系统设置的「审计」面板打开），
   到期记录会被搬进 `OperationRecordArchives` 表而不是删除；归档表不参与日常查询，但数据仍在库里，容量规划要把它算进去。
   配置里的开关与保留天数是基线，界面上的设置优先，归档任务每轮读取；执行时刻与批大小只在配置里。
@@ -133,10 +150,18 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 - 「只增不减」由应用契约保证。需要数据库层也保证时，把 Runtime Secret 对 `OperationRecords` 表的权限收敛到 INSERT／SELECT；
   代价是归档要从原表删除，**收敛权限与启用保留期不能同时成立**，二选一并在部署记录里写明。
 - 操作记录表增长到按时间范围查询变慢时，再按时间分区（数据库层 DDL，由 `DbMigrator` 的 DDL 身份执行），不预先做。
+<!--#else-->
+- 安全行为写入 `Leistd.OperationRecords` 结构化日志。成功事件在真实事务提交后输出，失败事件立即输出；必须保留 Information 级别并配置生产日志采集与保留策略。提交后、输出前进程退出仍可能丢失记录，日志模式不提供数据库模式的同事务持久化保证。
+- 多个服务共用 Redis 时，各服务的 `Leistd:Lock:Redis:KeyPrefix` 必须互不相同，避免周期任务相互抢锁。
+<!--#endif-->
 <!--#if (LocalIdentity)-->
 - 原始 IP 保存在三处，各有各的期限，合规评估按这三处分别写明：
   - **会话表**：会话过期后不再使用，由登录时的本人清理或每天的 `auth.sessions.cleanup` 作业删除（逐库执行，含停用租户的库），作业正常运行时最长比有效期多留约一天；
+<!--#if (IncludeOperationRecords)-->
   - **操作记录**（会话撤销等记录的目标名里带 IP）：跟随操作记录的保留期，见上；
+<!--#else-->
+  - **安全行为日志**（会话撤销等记录的目标名里带 IP）：由日志采集系统的保留与脱敏策略管理；
+<!--#endif-->
   - **用户的最近登录 IP**：是当前状态字段而非历史，随用户记录保留、不单设保留期。删除用户是软删除，**不会**清掉它；合规要求删除时须物理删除用户记录或显式清空该字段。
 <!--#endif-->
 - 模板不内置限流。对外提供登录的服务应在网关或 ASP.NET Core 限流中间件上按来源 IP 限流：
@@ -148,7 +173,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   - 全部目标迁移完成后，再发布新代码并完成 Backfill 或读写切换。
   - **确认旧版本实例全部退出后**，才在之后的受控发布里执行 Contract（删除旧列/旧表/兼容代码）。过渡结构只允许存在于这段窗口，不留长期历史兼容层。
   - 模板仓库 CI 用真实 PostgreSQL 验证从当前模板建库、迁移及租户隔离。具体项目发布前，需另用当前生产版本的数据副本验证「当前生产版本 → 新版本」的升级路径与迁移重跑；模板 CI 没有该项目的生产基线，不能替代这项验收。
+<!--#if (IncludeMultiTenancy)-->
 - DedicatedDatabase 首次建库时，先对目标连接以 `ConnectionStrings__MigrationTarget` 运行每个服务的 DbMigrator，再在 Identity 创建租户。该模式只迁移当前服务的业务 schema，不会把 Identity Control schema 写入租户目标。
+<!--#endif-->
 - 数据迁移、备份、回滚、健康检查和核心路径验证必须在执行前明确。
 - 生产部署、回滚、重启、流量切换及真实数据操作前核对用户已有授权是否覆盖目标、环境和动作；未授权或范围变化时再确认。
 

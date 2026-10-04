@@ -2,7 +2,9 @@
 import {
   Injectable,
   signal,
+  //#if (IncludeNotifications)
   computed,
+  //#endif
 } from '@angular/core';
 import {
   HubConnectionBuilder,
@@ -12,6 +14,7 @@ import {
   HttpTransportType,
 } from '@microsoft/signalr';
 
+import { isMockedUrl } from '../../../../_mock/core/providers';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -23,6 +26,17 @@ import { environment } from '../../../environments/environment';
 function isLive(connection: HubConnection | null): boolean {
   return connection != null && connection.state !== HubConnectionState.Disconnected;
 }
+//#if (IncludeRealTime)
+
+/**
+ * 实时资源键：与后端 `ICurrentTenant.ScopeKey` 一致——租户为 `{租户 Id 去连字符}:{资源}`，宿主为 `host:{资源}`。
+ * 订阅只能落在自己的作用域里，后端按同一规则逐字比对。
+ */
+export function realtimeResourceKey(resource: string, tenantId: string | null | undefined): string {
+  return tenantId ? `${tenantId.replace(/-/g, '').toLowerCase()}:${resource}` : `host:${resource}`;
+}
+//#endif
+//#if (IncludeNotifications)
 
 /** 通知 DTO（与后端 Leistd.Notifications.NotificationOutputDto 对应，类型为字符串） */
 export interface NotificationOutputDto {
@@ -37,39 +51,59 @@ export interface NotificationOutputDto {
   relatedEntityId?: string;
   relatedEntityType?: string;
 }
+//#endif
 
 /**
+//#if (IncludeNotifications && IncludeRealTime)
  * SignalR 全局服务：通知与实时业务事件共用一条连接（后端的实时 Hub）。
+//#elseif (IncludeRealTime)
+ * SignalR 全局服务：实时业务事件的连接（后端的实时 Hub）。
+//#else
+ * SignalR 全局服务：通知的连接（后端的通知 Hub）。
+//#endif
  *
  * 地址：Hub 经 resolveHubUrl 拼接 environment.api.gateway，与 HTTP 请求走同一后端（HubConnectionBuilder 不经过 HTTP 拦截器）。
  * 认证：浏览器使用同源 Cookie 会话。
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
-  /** 实时 Hub 的路径：通知与业务事件都经它推送。 */
+  //#if (IncludeRealTime)
+  /** 实时 Hub 的路径：业务事件（与启用时的通知）都经它推送。 */
   static readonly hubPath = '/hubs/realtime';
+  //#else
+  /** 通知 Hub 的路径。 */
+  static readonly hubPath = '/hubs/notifications';
+  //#endif
+  //#if (IncludeNotifications)
 
   /** 通知推送到客户端时调用的方法名（后端 NotificationClientMethods.Received）。 */
   static readonly notificationReceived = 'Notifications.Received';
+  //#endif
 
   private connection: HubConnection | null = null;
+  //#if (IncludeNotifications)
 
   // ── 通知状态 ──
   readonly notifications = signal<NotificationOutputDto[]>([]);
   readonly unreadCount = computed(() => this.notifications().filter((n) => !n.isRead).length);
+  //#endif
+  //#if (IncludeRealTime)
 
   // ── 业务事件（通用）：最近一次收到的资源事件 ──
   readonly lastResourceEvent = signal<{ eventName: string; payload: unknown } | null>(null);
+  //#endif
 
   // ── 连接状态 ──
   private readonly connected = signal(false);
 
   /** 实时连接是否可用。 */
   readonly isConnected = this.connected.asReadonly();
+  //#if (IncludeRealTime)
 
   // ── 已订阅资源（重连后重新订阅） ──
   private readonly subscribedResources = new Set<string>();
   private readonly resourceEventNames = new Set<string>();
+  //#endif
 
   /** 进行中的连接过程，用于让并发的 connect() 复用同一次。 */
   private connecting: Promise<void> | null = null;
@@ -110,6 +144,11 @@ export class SignalRService {
    * 通知组件每次初始化都会走到这里，重挂载就会触发。
    */
   connect(): Promise<void> {
+    // 实时连接本身由 Mock 应答时不建连：Mock 不模拟 SignalR，连不上的后端只会反复重试
+    if (isMockedUrl(environment.useMock, SignalRService.hubPath)) {
+      return Promise.resolve();
+    }
+
     if (this.connecting && this.connectingGeneration === this.generation) {
       return this.connecting;
     }
@@ -177,16 +216,22 @@ export class SignalRService {
    *
    * SignalR 的 principal 在握手时定死，连接不会因为前端清掉用户信号而重新授权。
    * 不断开就换人登录，下一个用户会复用上一个人的活连接，以对方的身份继续收消息，
-   * 内存里的通知列表也照样留在界面上——这不是残留，是跨用户的数据泄漏。
+   * 内存里的状态也照样留在界面上——这不是残留，是跨用户的数据泄漏。
+//#if (IncludeRealTime)
    *
    * resourceEventNames 不清：那是应用关心哪些事件名，与主体无关，
    * 清掉会让重连后所有监听失效。
+//#endif
    */
   async reset(): Promise<void> {
     this.generation++;
+    //#if (IncludeRealTime)
     this.subscribedResources.clear();
-    this.notifications.set([]);
     this.lastResourceEvent.set(null);
+    //#endif
+    //#if (IncludeNotifications)
+    this.notifications.set([]);
+    //#endif
 
     await this.disconnect();
   }
@@ -207,6 +252,7 @@ export class SignalRService {
       console.error('[SignalR] stop failed:', err);
     }
   }
+  //#if (IncludeRealTime)
 
   /** 注册一个业务事件名监听（推送到 lastResourceEvent 信号）。 */
   registerResourceEvent(eventName: string): void {
@@ -252,6 +298,7 @@ export class SignalRService {
       await this.connection.invoke('Unsubscribe', resourceKey);
     }
   }
+  //#endif
 
   // ── 内部 ──
 
@@ -283,6 +330,7 @@ export class SignalRService {
     // 而 disconnect() 已经把字段置空，身份比对天然为假。
     // 身份判据与它保护的对象绑在一起，不会出现"又漏了一处没加检查"。
     const isCurrent = () => this.connection === connection;
+    //#if (IncludeNotifications)
 
     connection.on(SignalRService.notificationReceived, (notification: NotificationOutputDto) => {
       if (!isCurrent()) {
@@ -291,6 +339,8 @@ export class SignalRService {
 
       this.notifications.update((list) => [notification, ...list]);
     });
+    //#endif
+    //#if (IncludeRealTime)
 
     // 重新挂载已注册的业务事件监听
     for (const eventName of this.resourceEventNames) {
@@ -302,15 +352,21 @@ export class SignalRService {
         this.lastResourceEvent.set({ eventName, payload });
       });
     }
+    //#endif
 
     connection.onreconnecting(() => isCurrent() && this.connected.set(false));
     connection.onclose(() => isCurrent() && this.connected.set(false));
+    //#if (IncludeRealTime)
     connection.onreconnected(async () => {
+    //#else
+    connection.onreconnected(() => {
+    //#endif
       if (!isCurrent()) {
         return;
       }
 
       this.connected.set(true);
+      //#if (IncludeRealTime)
 
       // 重连后是一条新的服务端连接，分组订阅要重新建立。
       // 先取快照再迭代：集合会被 reset 清空、被下一个主体重新填充，
@@ -330,6 +386,7 @@ export class SignalRService {
           console.error('[SignalR] re-subscribe failed:', resourceKey, err);
         }
       }
+      //#endif
     });
 
     this.connection = connection;

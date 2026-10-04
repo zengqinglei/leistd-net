@@ -7,7 +7,9 @@
 ```text
 CompanyName.ProjectName/
 |-- backend/                 # .NET 后端
+<!--#if (SpaFrontend)-->
 |-- frontend/                # Angular 前端
+<!--#endif-->
 |-- deploy/                  # Docker Compose 配置
 |-- docs/                    # 项目规范与按需沉淀文档
 |-- .agents/skills/          # 跨工具项目 Skill
@@ -20,7 +22,9 @@ CompanyName.ProjectName/
 <!--#if (LocalIdentity)-->
 - 本地账号、登录、注册和 Cookie 认证。
 - 用户、角色、权限以及超级管理员授权模型。
-- 多租户：租户解析与数据硬隔离、租户管理（宿主侧）、登录页租户选择；每个租户拥有独立的用户、角色与权限授予。
+<!--#if (IncludeMultiTenancy)-->
+- 多租户控制面、租户管理与登录页租户选择。
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 - OpenIddict OAuth 2.0/OIDC Server。
 <!--#endif-->
@@ -29,13 +33,30 @@ CompanyName.ProjectName/
 <!--#endif-->
 <!--#endif-->
 <!--#if (!LocalIdentity)-->
-- 后端 OIDC 机密依赖方与服务端 Cookie 票据、机器 Bearer 验证、本服务 Membership/角色/权限与租户数据隔离。
+- 远端 Bearer 验证、用户投影与本服务角色/权限；首位投影用户不会自动获得管理员权限。
+<!--#if (ResourceBrowserSession)-->
+- 后端 OIDC 机密依赖方与服务端 Cookie 票据。
+<!--#endif-->
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
-- 通知持久化、未读状态，通知与业务实时事件共用的实时 Hub。
+- 通知持久化、未读状态与站内推送。
 <!--#if (LocalIdentity)-->
-- 安全提醒（新设备登录、密码与两步验证变更、账号锁定）：站内通知始终送达，邮件只发已验证邮箱；用户在个人设置「通知」面板按类别与渠道选择接收方式。
+- 安全提醒（新设备登录、密码与两步验证变更、账号锁定）：站内通知始终送达；用户在个人设置「通知」面板按类别与渠道选择接收方式。
 <!--#endif-->
+<!--#endif-->
+
+<!--#if (IncludeRealTime)-->
+- 业务实时事件与受授权保护的资源订阅；角色列表在变更提交后刷新。
+<!--#endif-->
+<!--#if (IncludeMultiTenancy)-->
+- 租户作用域的数据隔离与独立数据库路由。
+<!--#else-->
+- 仅宿主作用域：业务数据保留 nullable TenantId 与审计字段，认证入口拒绝租户身份。
+<!--#endif-->
+<!--#if (IncludeOperationRecords)-->
+- 内置操作记录存储、查询、导出及归档；成功记录随业务事务持久化。
+<!--#else-->
+- 必需的结构化安全记录；成功在工作单元提交后输出，失败立即输出。提交与日志输出之间进程退出可能丢记录。
 <!--#endif-->
 
 ## 本地运行
@@ -58,6 +79,8 @@ dotnet run --project src/CompanyName.ProjectName.Api
 
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
+配置 `Authentication:Issuer` 为真实 Identity 签发方地址，并在 Identity 登记本服务 API 的受众。访问令牌权限以本服务授权事实为准。
+<!--#if (ResourceBrowserSession)-->
 签发令牌的 Identity 服务：开发环境默认指向本机 Identity 的前端开发服务器 `http://localhost:4200/`（`appsettings.Development.json` 的 `Authentication:Issuer`），联调步骤见 [前端说明](frontend/README.md)；
 联调别处的 Identity 时用 user-secrets 覆盖。需先在 Identity 登记机密浏览器依赖方及 `/api/v1/auth/signin`、`/api/v1/auth/signout` 回调（含本服务前端源），再配置 ClientId/ClientSecret；缺失会按键名启动失败：
 
@@ -68,6 +91,8 @@ dotnet user-secrets set "Authentication:ClientId" "<已登记的机密客户端>
 dotnet user-secrets set "Authentication:ClientSecret" "<机密客户端密钥>" --project src/CompanyName.ProjectName.Api
 ```
 
+<!--#endif-->
+<!--#if (IncludeMultiTenancy)-->
 租户路由与迁移作业以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity「开放应用」登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户），登记方式见 [服务调用规范](docs/standards/service-invocation.md)；把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有两个 scope，部署环境按 `deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity：
 
 ```bash
@@ -77,13 +102,14 @@ dotnet user-secrets set "Leistd:ServiceAuth:ClientSecret" "<机器客户端密�
 ```
 
 <!--#endif-->
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 
 默认配置只监听 HTTP（`http://localhost:5240`）。本机的 OIDC 流程（开放应用的授权码流程、资源服务联调）经前端开发服务器 `http://localhost:4200` 访问授权端点，签发方地址即为它；`appsettings.Development.json` 因此关闭了授权端点的 HTTPS 要求，只作用于开发环境。
 <!--#endif-->
 
 存活与就绪检查地址分别为 `http://localhost:5240/api/health/live` 和 `http://localhost:5240/api/health/ready`。
-<!--#if (LocalIdentity)-->
+<!--#if (Email)-->
 
 ### 邮件
 
@@ -93,7 +119,7 @@ dotnet user-secrets set "Leistd:ServiceAuth:ClientSecret" "<机器客户端密�
 <!--#endif-->
 
 Redis 不配置时用进程内缓存与本机锁；多副本部署必须配置 `ConnectionStrings:Redis`，开发 compose 已起一个可供本机验证。
-<!--#if (LocalIdentity)-->
+<!--#if (LocalIdentity && IncludeMultiTenancy)-->
 
 API 与 `DbMigrator` 必须共用 Data Protection 密钥环（租户独立库连接串加密存放在控制库里）。本机两边的内容根不同，需要时把密钥目录指向同一处：`dotnet user-secrets set "DataProtection:KeysPath" "<本机目录>" --project src/CompanyName.ProjectName.Api`。
 <!--#endif-->
@@ -109,6 +135,7 @@ dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --apply  # 确认
 dotnet run --project src/CompanyName.ProjectName.Api
 ```
 
+<!--#if (IncludeMultiTenancy)-->
 **首次安装**时控制库尚未迁移，租户注册表还不存在，预演只列出此刻能确定的目标（控制面、OIDC 存储、默认业务库）——
 此时表里本就不可能有独立库租户，所以这份计划是准确的。`--apply` 会先建好控制表，再枚举独立库租户目标并一并施加。
 
@@ -117,6 +144,8 @@ dotnet run --project src/CompanyName.ProjectName.Api
 
 API 和 `DbMigrator` 使用不同的 Runtime/Migration Secret；API 运行身份只持有 DML 权限。SharedDatabase 中各服务共用数据库实例、使用固定独立 schema 并以 `TenantId` 隔离；DedicatedDatabase 由租户配置覆盖连接，各服务仍共用该租户连接并写入自己的 schema。
 首次建立 DedicatedDatabase 租户前，先以 `ConnectionStrings__MigrationTarget` 运行各服务 DbMigrator 预建该服务 schema，再创建租户；常规发布仍使用全目标枚举模式。
+
+<!--#endif-->
 
 ### 多服务共用一个数据库时的两行配对调整
 
@@ -154,6 +183,7 @@ npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname"
   缺失或不满足密码策略（至少 12 个字符）即启动失败并报出键名；已有管理员的部署不必再提供。
 <!--#endif-->
 
+<!--#if (SpaFrontend)-->
 ### 前端
 
 ```bash
@@ -164,12 +194,16 @@ npm start
 
 浏览器打开 `http://localhost:4200`：开发服务器把 API 与 Hub 请求转发给本机后端，前后端同源。Mock 与后端端口的调整见 [前端说明](frontend/README.md)。
 
+<!--#endif-->
+
 ## 验证
 
 ```bash
 dotnet test backend/CompanyName.ProjectName.sln
+<!--#if (SpaFrontend)-->
 npm --prefix frontend run lint
 npm --prefix frontend run build
+<!--#endif-->
 ```
 
 ## AI 协作

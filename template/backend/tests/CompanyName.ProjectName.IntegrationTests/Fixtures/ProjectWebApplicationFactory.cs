@@ -44,7 +44,19 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     /// 取值要满足密码策略（见 <c>PasswordPolicy</c>），否则测试宿主自己就起不来。
     /// </remarks>
     public const string TestAdminPassword = "IntegrationTests!Adm1n";
+#if (IncludeNotifications || IncludeRealTime)
 
+    /// <summary>
+    /// 客户端连接的 Hub：有业务实时时是实时 Hub（通知也经它推送），否则是通知自己的 Hub。
+    /// </summary>
+#if (IncludeRealTime)
+    public const string HubPath = "/hubs/realtime";
+#else
+    public const string HubPath = "/hubs/notifications";
+#endif
+#endif
+
+#if (SpaFrontend)
     /// <summary>
     /// 测试宿主（非 Development 环境）的会话 Cookie 名。写明期望值而不是读取实现的配置，
     /// 前缀一旦被改掉，所有取会话 Cookie 的用例都会失败。
@@ -66,6 +78,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         Assert.DoesNotContain(attributes, attribute => attribute.StartsWith("domain=", StringComparison.Ordinal));
         return header.Split(';', 2)[0];
     }
+#endif
 
 #if (RemoteTokenAuth)
     // 协议测试保留生产认证与自然人策略，其他业务用例使用专用主体替身。
@@ -73,9 +86,11 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #endif
 
     private string? connectionString;
+#if (SpaFrontend)
 
     // 每个宿主一份密钥目录：开发环境以外 Data Protection 要求显式的持久位置，测试给临时目录
     private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
+#endif
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -90,15 +105,19 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         connectionString ??= PostgreSqlTestDatabase.CreateDatabase();
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("ConnectionStrings:Redis", "");
+#if (SpaFrontend)
         builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
+#endif
 #if (OpenIddictServer)
         builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
 #endif
 #if (RemoteTokenAuth)
         // 组合期即校验的签发方地址：基线配置刻意留空，缺失即启动失败
         builder.UseSetting("Authentication:Issuer", "https://identity.test/");
+#if (ResourceBrowserSession)
         builder.UseSetting("Authentication:ClientId", "resource-test");
         builder.UseSetting("Authentication:ClientSecret", "resource-test-secret");
+#endif
         // 租户连接以机器身份向 Identity 回源：组合与生产一致（含工作负载身份），
         // 测试宿主里没有 Identity，回源存储换成下面的共享库替身，不会真的换令牌
         builder.UseSetting("Leistd:ServiceClients:Identity:BaseAddress", "https://identity.test/");
@@ -117,11 +136,11 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 // 每个宿主都要播种管理员、每次登录都要校验口令；生产工作因子让这两步占去集成测试的大半 CPU。
                 // 哈希格式与默认值的契约由 PasswordHashingTests 按生产默认值验证
                 ["PasswordHash:IterationCount"] = "1000",
-#if (LocalIdentity)
+#if (Email)
                 // 固定值即可：测试要的是确定性，不是保密性
                 ["VerificationCodes:Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
-#endif
                 ["UserRegistration:EnableEmailVerification"] = "false",
+#endif
             });
         });
 
@@ -130,6 +149,10 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         // 作用于工厂 → 覆盖所有测试类（Health / Localization / Notifications 等），而非逐类修补。
         builder.ConfigureServices(services =>
         {
+#if (!IncludeOperationRecords)
+            services.AddSingleton<OperationRecordLogCapture>();
+            services.AddSingleton<Serilog.Core.ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());
+#endif
 #if (RemoteTokenAuth)
             // 测试宿主里没有真实 Identity，启动探针永远探不通。这里直接把门禁置为已开：
             // 其它用例要测的是业务端点，不是"等 Identity 就绪"这件事。
@@ -148,11 +171,13 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             openedGate.MarkReady();
             services.AddSingleton(openedGate);
 
+#if (IncludeMultiTenancy)
             services.RemoveAll<ITenantConnectionConfigurationStore>();
             services.RemoveAll<ITenantDatabaseDirectory>();
             services.AddSingleton<SharedTenantConnectionStore>();
             services.AddSingleton<ITenantConnectionConfigurationStore>(sp => sp.GetRequiredService<SharedTenantConnectionStore>());
             services.AddSingleton<ITenantDatabaseDirectory>(sp => sp.GetRequiredService<SharedTenantConnectionStore>());
+#endif
 #endif
 #if (!LocalIdentity)
             if (!UseProductionAuthentication)
@@ -200,10 +225,12 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             PostgreSqlTestDatabase.DropDatabase(connectionString);
         }
 
+#if (SpaFrontend)
         if (Directory.Exists(dataProtectionKeysPath))
         {
             Directory.Delete(dataProtectionKeysPath, recursive: true);
         }
+#endif
     }
 
     public HttpClient CreateProjectClient() => CreateProjectClient(this);
@@ -250,19 +277,33 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #endif
 
 #if (!LocalIdentity)
-    public AuthenticatedSession CreateResourceSession(Guid subjectId, Guid tenantId) =>
+    /// <summary>
+    /// 新测试主体所属的租户：多租户时是一个新租户，单租户时为 <see langword="null"/>（宿主）。
+    /// </summary>
+    public static Guid? NewTenantId() =>
+#if (IncludeMultiTenancy)
+        Guid.CreateVersion7();
+#else
+        null;
+#endif
+
+    public AuthenticatedSession CreateResourceSession(Guid subjectId, Guid? tenantId) =>
         CreateResourceSession(this, subjectId, tenantId);
 
+    /// <param name="host">测试宿主。</param>
+    /// <param name="subjectId">主体标识。</param>
+    /// <param name="tenantId">主体的租户声明；<see langword="null"/> 表示宿主主体（不带租户声明）。</param>
     public static AuthenticatedSession CreateResourceSession(
         WebApplicationFactory<Program> host,
         Guid subjectId,
-        Guid tenantId)
+        Guid? tenantId)
     {
         var headers = new Dictionary<string, string>
         {
-            [ResourceTestAuthenticationHandler.SubjectHeader] = subjectId.ToString(),
-            [ResourceTestAuthenticationHandler.TenantHeader] = tenantId.ToString()
+            [ResourceTestAuthenticationHandler.SubjectHeader] = subjectId.ToString()
         };
+        if (tenantId is { } tenant)
+            headers[ResourceTestAuthenticationHandler.TenantHeader] = tenant.ToString();
         var client = CreateProjectClient(host);
         foreach (var (name, value) in headers)
             client.DefaultRequestHeaders.Add(name, value);
@@ -317,16 +358,15 @@ internal sealed class ResourceTestAuthenticationHandler(
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var subject = Request.Headers[SubjectHeader].SingleOrDefault();
-        var tenant = Request.Headers[TenantHeader].SingleOrDefault();
-        if (!Guid.TryParse(subject, out var subjectId) || !Guid.TryParse(tenant, out var tenantId))
+        if (!Guid.TryParse(subject, out var subjectId))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var identity = new ClaimsIdentity(
-            [
-                new Claim("sub", subjectId.ToString()),
-                new Claim(CustomClaimTypes.TenantId, tenantId.ToString())
-            ],
-            SchemeName);
+        // 租户头缺省即宿主主体；给了就原样写成租户声明（含非法值），由被测宿主自己判定
+        var claims = new List<Claim> { new("sub", subjectId.ToString()) };
+        foreach (var tenant in Request.Headers[TenantHeader])
+            claims.Add(new Claim(CustomClaimTypes.TenantId, tenant!));
+
+        var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }

@@ -7,6 +7,8 @@ export interface MockOpenApplication extends OpenApplicationOutputDto {
   clientSecret?: string;
 }
 
+const DESKTOP_SCHEME = 'companyname-projectname-desktop';
+
 export const OPEN_APPLICATIONS: MockOpenApplication[] = [
   {
     id: 'companyname-projectname-web',
@@ -42,8 +44,8 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Desktop',
     applicationType: 'native',
     clientType: 'public',
-    redirectUris: ['companyname-projectname-desktop://oauth/callback'],
-    postLogoutRedirectUris: ['companyname-projectname-desktop://oauth/logout-callback'],
+    redirectUris: [`${DESKTOP_SCHEME}://oauth/callback`],
+    postLogoutRedirectUris: [`${DESKTOP_SCHEME}://oauth/logout-callback`],
     permissions: [
       'ept:authorization',
       'ept:end_session',
@@ -96,6 +98,7 @@ export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
     machineOnly: false,
     audience: 'companyname-projectname-api',
   },
+  //#if (IncludeMultiTenancy)
   {
     name: 'tenant-routing.read',
     displayName: 'Read tenant connection routing metadata',
@@ -106,4 +109,5 @@ export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
     displayName: 'Read tenant connection migration metadata',
     machineOnly: true,
   },
+  //#endif
 ];

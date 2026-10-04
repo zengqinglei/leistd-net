@@ -29,7 +29,9 @@ public class AuthPrincipalFactory(
     IOptions<OAuthOptions> oauthOptions,
     IOptions<ClaimTypeOptions> claimTypes,
     ICurrentTenant currentTenant,
+#if (IncludeMultiTenancy)
     ITenantStore tenantStore,
+#endif
     IUnitOfWorkManager unitOfWorkManager) : IAuthPrincipalFactory
 {
     /// <inheritdoc />
@@ -163,18 +165,26 @@ public class AuthPrincipalFactory(
 
     // 令牌主体所属租户：租户声明非法、租户已不存在或已停用时返回 null，不签发、不投影。
     // 请求本身解析出的是宿主，调用方据此切换租户并新开工作单元，读取才落到该租户的库与过滤器上
-    private async Task<TokenTenant?> ResolveTokenTenantAsync(ClaimsPrincipal tokenPrincipal, CancellationToken cancellationToken)
+    private Task<TokenTenant?> ResolveTokenTenantAsync(ClaimsPrincipal tokenPrincipal, CancellationToken cancellationToken)
     {
         var tenantClaim = claimTypes.Value.ReadTenant(tokenPrincipal);
-        if (!tenantClaim.IsValid)
-            return null;
-
+        if (!tenantClaim.IsValid) return Task.FromResult<TokenTenant?>(null);
         if (tenantClaim.TenantId is not { } tenantId)
-            return new TokenTenant(null, null);
+            return Task.FromResult<TokenTenant?>(new TokenTenant(null, null));
+#if (IncludeMultiTenancy)
+        return ResolveRegisteredTenantAsync(tenantId, cancellationToken);
+#else
+        return Task.FromResult<TokenTenant?>(null);
+#endif
+    }
+#if (IncludeMultiTenancy)
 
+    private async Task<TokenTenant?> ResolveRegisteredTenantAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
         var tenant = await tenantStore.FindAsync(tenantId, cancellationToken);
         return tenant is { IsActive: true } ? new TokenTenant(tenantId, tenant.Name) : null;
     }
+#endif
 
     private sealed record TokenTenant(Guid? Id, string? Name);
 

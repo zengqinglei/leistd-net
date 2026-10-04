@@ -42,7 +42,9 @@ dotnet user-secrets list --project src/CompanyName.ProjectName.Api
 
 开发环境以外，下列只在单机上成立的回落不再生效，缺配即启动失败：
 
+<!--#if (SpaFrontend || (LocalIdentity && IncludeMultiTenancy))-->
 - Data Protection 密钥必须持久化到共享位置：`ConnectionStrings:Redis`，或 `DataProtection:KeysPath` 指向 API 与 `DbMigrator` 共用的持久目录。存储位置应只允许本服务访问；需要对密钥做静态加密时，在 `AddMyProjectDataProtection` 里按官方 `ProtectKeysWith*` 追加。
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 - 令牌签名与加密证书默认必须显式提供：`OAuth:SigningCertificates` 与 `OAuth:EncryptionCertificates` 各至少一项（每项 `Path`、`Password`，RSA 证书，与 HTTPS 证书分开，口令由部署注入）；轮换时新旧同时登记，步骤见部署文档。`OAuth:UseDevelopmentCertificates` 只用于本机开发，由 `appsettings.Development.json` 打开。
 <!--#endif-->
@@ -79,6 +81,8 @@ dotnet run --project src/CompanyName.ProjectName.Api
 
 `DbMigrator` 不带 `--apply` 时只读预演（列出待执行迁移与 SQL，不改库）。
 
+默认目标始终执行业务迁移；OIDC 存储由 Identity 的独立 DbContext 管理。
+<!--#if (IncludeMultiTenancy)-->
 `DbMigrator` 先迁移服务默认目标，再从 Identity 获取 DedicatedDatabase 覆盖并按物理连接去重。每个服务使用自己的固定 schema 和迁移历史表。Identity 还会先迁移固定宿主库的 Control DbContext（租户、连接配置、OpenIddict），再迁移可按租户路由的业务 DbContext。
 
 新建 DedicatedDatabase 租户前，运维流程必须先对新目标执行一次业务 schema 迁移，再在 Identity 中建立租户与 Secret Reference：
@@ -89,6 +93,8 @@ ConnectionStrings__MigrationTarget='<migration connection string>' \
 ```
 
 `MigrationTarget` 模式只迁移该服务的业务 schema，不迁移 Identity Control schema，也不枚举已登记租户。它用于打破“先登记租户才能枚举目标、但租户初始化前又必须先有表”的首次建库循环；日常发布仍使用不带该配置的全目标模式。
+
+<!--#endif-->
 
 修改 EF Core 模型后生成并审查迁移文件：
 
@@ -134,11 +140,40 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 
-通知与业务实时事件共用实时 Hub（`AddNotificationsSignalR<RealTimeHub>()`，只映射 `MapRealTimeHub()`），前端只建一条连接。修改通知、订阅或资源鉴权时，应验证通知持久化、未读状态、通用订阅和越权拒绝。
+通知持久化、未读状态及实时送达由通知组件提供；业务实时开启时共享一个 Hub 和一条前端连接。修改订阅时验证实际资源权限与作用域隔离。
 <!--#endif-->
 <!--#endif-->
 
+<!--#if (RemoteTokenAuth)-->
+
+## 资源管理员首次授予
+
+在完成迁移后，以部署授权执行正式引导命令；`sub` 必须为远端自然人的非空 GUID，允许在首次用户投影前授予：
+
+```bash
+dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <sub>
+dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <sub> --apply
+<!--#if (IncludeMultiTenancy)-->
+dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <sub> --tenant <tenant-id> --apply
+<!--#endif-->
+```
+
+默认 dry-run 不改变权限、版本或操作记录；`--apply` 在显式工作单元内初始化角色并首次授予当前作用域全部权限。已有授权版本时不改写，因此重复执行不会恢复之后撤销的权限。记录来源是部署身份，授权依据为 `DeploymentBootstrap`。
+<!--#if (IncludeMultiTenancy)-->
+租户必须已经登记，目标连接经正式路由解析。回源机器身份需要租户路由读取权限。
+<!--#else-->
+此应用只接受宿主目标，`--tenant` 参数会被拒绝。
+<!--#endif-->
+<!--#if (IncludeOperationRecords)-->
+授权与成功操作记录在同一数据库事务内持久化。
+<!--#else-->
+成功安全记录在提交之后输出；提交后、输出前进程退出仍可能丢记录。
+<!--#endif-->
+<!--#endif-->
+
+<!--#if (SpaFrontend)-->
 ## 前后端联调
 
 本机开发时浏览器访问前端开发服务器（`http://localhost:4200`），由它把 API 与 Hub 请求转发到本服务，见[前端说明](../frontend/README.md)。
 本服务不托管开发中的前端；部署时前端构建产物放在 `wwwroot`，由本服务同源托管。
+<!--#endif-->

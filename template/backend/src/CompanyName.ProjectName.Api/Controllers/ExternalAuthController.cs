@@ -77,11 +77,15 @@ public sealed class ExternalAuthController(
                 Read("external.initiator") != claimTypes.Value.FindUserId(User) ||
                 Read("external.tenant") != currentTenant.Id?.ToString())) throw InvalidIntent();
         var tenantId = Guid.TryParse(Read("external.tenant"), out var id) ? id : (Guid?)null;
+#if (IncludeMultiTenancy)
         if (tenantId is { } tenant &&
             await HttpContext.RequestServices.GetRequiredService<Leistd.MultiTenancy.Stores.ITenantStore>()
                 .FindAsync(tenant, cancellationToken) is not { IsActive: true }) throw InvalidIntent();
         var header = HttpContext.RequestServices.GetRequiredService<IOptions<Leistd.MultiTenancy.AspNetCore.Options.MultiTenancyOptions>>().Value.HeaderName;
         if (Request.Headers.ContainsKey(header) && tenantId != currentTenant.Id) throw InvalidIntent();
+#else
+        if (Read("external.tenant") is not null) throw InvalidIntent();
+#endif
         var store = HttpContext.RequestServices.GetRequiredService<DistributedTicketStore>();
         var key = Read("ticket.key") ?? throw InvalidIntent();
         var locks = HttpContext.RequestServices.GetRequiredService<IDistributedLock>();

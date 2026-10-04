@@ -6,7 +6,7 @@ import {
 } from '@angular/core';
 
 import { AuthService } from './auth-service';
-//#if (LocalIdentity)
+//#if (Impersonation)
 import { ImpersonationService } from './impersonation-service';
 //#endif
 import { SessionContextService } from './session-context-service';
@@ -26,7 +26,7 @@ export class StartupService {
   private authService = inject(AuthService);
   private readonly sessionContext = inject(SessionContextService);
   private readonly entryRoute = inject(EntryRouteService);
-  //#if (LocalIdentity)
+  //#if (Impersonation)
   private readonly impersonation = inject(ImpersonationService);
   //#endif
   private _status = signal<StartupStatus>('loading');
@@ -72,7 +72,7 @@ export class StartupService {
       // 权限与设置在同一次启动中就位：Guard 与菜单按权限裁剪、界面按设置渲染由它派生的
       // 状态，未就位前一律按无权限处理，避免受保护入口闪现。
       await this.sessionContext.establish();
-      //#if (LocalIdentity)
+      //#if (Impersonation)
       // 模拟态只有服务端的会话声明知道；顶栏的模拟提示要在外壳首帧就位，否则会闪一下"正常会话"。
       await this.impersonation.load();
       //#endif

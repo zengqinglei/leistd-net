@@ -63,7 +63,12 @@ public static class DependencyInjection
     {
         // 授权器缺失即失败关闭：Subscribe 无条件走授权器，没有它连接会在首次订阅时
         // 因解析不到依赖而失败——那太晚且信息含糊。这里明确指出该注册什么。
-        if (endpoints.ServiceProvider.GetService<IRealTimeSubscriptionAuthorizer>() is null)
+        // 只问"注册了没有"、不在根容器里解析它：授权器通常要按请求判权限（依赖作用域服务），
+        // 从根容器解析会被作用域校验拒绝，或者在不校验时捕获一份不该跨请求共享的实例。
+        var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
+        // 框架的 Microsoft DI 容器提供探针；没有探针时沿用组件的组合检查约定跳过，
+        // 不为未声明支持的容器从根作用域构造授权器。
+        if (probe is not null && !probe.IsService(typeof(IRealTimeSubscriptionAuthorizer)))
         {
             throw new InvalidOperationException(
                 $"No {nameof(IRealTimeSubscriptionAuthorizer)} is registered. Every Subscribe call goes " +

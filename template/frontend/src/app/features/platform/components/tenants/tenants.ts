@@ -39,7 +39,9 @@ import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#if (Impersonation)
 import { ImpersonationService } from '../../../../core/services/impersonation-service';
+//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import {
   CreateTenantInputDto,
@@ -83,7 +85,9 @@ export class Tenants {
   private readonly tenantService = inject(TenantService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
+  //#if (Impersonation)
   private readonly impersonationService = inject(ImpersonationService);
+  //#endif
   private readonly authorizationService = inject(AuthorizationService);
   private readonly layoutService = inject(LayoutService);
   private readonly route = inject(ActivatedRoute);
@@ -122,9 +126,11 @@ export class Tenants {
   readonly canCreate = computed(() => this.authorizationService.has(PERMISSIONS.tenants.create));
   readonly canUpdate = computed(() => this.authorizationService.has(PERMISSIONS.tenants.update));
   readonly canDelete = computed(() => this.authorizationService.has(PERMISSIONS.tenants.delete));
+  //#if (Impersonation)
   readonly canImpersonate = computed(() =>
     this.authorizationService.has(PERMISSIONS.tenants.impersonation),
   );
+  //#endif
 
   constructor() {
     this.searchSubject
@@ -242,6 +248,7 @@ export class Tenants {
       });
   }
 
+  //#if (Impersonation)
   /**
    * 以该租户管理员身份登录。
    *
@@ -285,6 +292,7 @@ export class Tenants {
     //#endif
   }
 
+  //#endif
   async onDelete(tenant: TenantOutputDto): Promise<void> {
     const confirmed = await this.confirmService.open({
       header: this.deleteTitle(),

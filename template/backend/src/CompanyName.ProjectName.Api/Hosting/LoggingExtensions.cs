@@ -19,8 +19,10 @@ public static class LoggingExtensions
         builder.Services.AddSerilog((services, lc) =>
         {
             lc.ReadFrom.Configuration(builder.Configuration)
+              .ReadFrom.Services(services)
               .Enrich.FromLogContext();
-        });
+        }, preserveStaticLogger: true);
+        // 宿主日志实例独立持有：同进程内其他宿主的启动或释放不切换业务日志管道。
         builder.Services.AddOptions<RequestLoggingOptions>()
             .Bind(builder.Configuration.GetSection(RequestLoggingOptions.SectionName));
 

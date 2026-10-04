@@ -47,6 +47,7 @@ public class SystemInitializer(
     UserDomainService userDomainService,
 #endif
     IPermissionGrantSeeder permissionGrantSeeder,
+    ICurrentTenant currentTenant,
 #if (OpenIddictServer)
     IOpenIddictScopeManager scopeManager,
     IOptions<OAuthOptions> oauthOptions,
@@ -95,7 +96,8 @@ public class SystemInitializer(
 #endif
 
 #else
-        _ = await InitializeRolesAsync(cancellationToken);
+        var (adminRole, _) = await InitializeRolesAsync(cancellationToken);
+        await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
 #endif
         logger.LogInformation("System data initialization completed");
     }
@@ -204,7 +206,7 @@ public class SystemInitializer(
         var granted = await permissionGrantSeeder.SeedAllAsync(
             PermissionGrantProviderNames.Role,
             adminRole.Id.ToString(),
-            MultiTenancySides.Host,
+            currentTenant.IsAvailable ? MultiTenancySides.Tenant : MultiTenancySides.Host,
             cancellationToken);
 
         if (granted is { } count)

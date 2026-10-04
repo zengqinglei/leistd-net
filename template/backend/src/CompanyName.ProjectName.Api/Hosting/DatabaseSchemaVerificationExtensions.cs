@@ -19,7 +19,7 @@ public static class DatabaseSchemaVerificationExtensions
         var services = scope.ServiceProvider;
 
         await VerifyAsync(services.GetRequiredService<MyProjectDbContext>(), "business");
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         await VerifyAsync(services.GetRequiredService<IdentityControlDbContext>(), "control");
 #endif
 #if (OpenIddictServer)

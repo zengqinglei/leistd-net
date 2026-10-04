@@ -2,7 +2,7 @@
 # Slices 记各档位里场景所属的分片：full 为全集（合入后、夜间、发布），pr 为 PR 档子集。
 # 分片按"验证什么"命名，含义登记在 $MatrixSlices；CI 每片一个作业，作业名取其说明。
 # check-template-scenario-coverage.py 保证每个条件行都由某个 PR 档场景生成（行覆盖）；
-# 同一产物里几处条件分支的组合交互不在 PR 档保证之内，由 full 档兜底。
+# 同时检查有效能力的可达两两组合；关键高阶交互由登记场景和真实端到端验证。
 $scenarioMap = [ordered]@{
     "identity" = @{
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
@@ -146,7 +146,7 @@ $scenarioMap = [ordered]@{
     # 同时开启时才编译失败（只开外部登录时 WithCode 那行被裁掉，只开本地化时整个文件被裁掉）。
     "identity-all-features" = @{
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
-        Arguments = @("--include-notifications","--include-external-login","--include-localization")
+        Arguments = @("--include-notifications","--include-real-time","--include-external-login","--include-localization")
         Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
@@ -170,6 +170,103 @@ $scenarioMap = [ordered]@{
         # 同 resource：不带本地口令登录契约。
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
+    "identity-capabilities-01" = @{
+        Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
+        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "standalone-capabilities-02" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "resource-capabilities-03" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Frontend = $false; Lint = $true
+        Present = @("backend/src/{name}.DbMigrator/ResourceAdminBootstrapRunner.cs")
+        Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "resource-capabilities-04" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true")
+        Frontend = $false; Lint = $true
+        Present = @("backend/src/{name}.DbMigrator/ResourceAdminBootstrapRunner.cs")
+        Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "identity-capabilities-05" = @{
+        Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
+        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "identity-tenant-management-without-history" = @{
+        Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
+        Arguments = @("--service-role", "Identity", "--include-multi-tenancy", "true", "--include-operation-records", "false", "--include-email", "false", "--include-notifications", "true", "--include-localization", "true")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "frontend/src/app/features/platform/components/tenants/tenants.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "frontend/src/app/core/services/impersonation-service.ts", "frontend/src/app/features/platform/components/operation-records")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation", "canImpersonate", "onImpersonate")
+    }
+    "standalone-capabilities-06" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "true", "--include-localization", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "standalone-capabilities-07" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "true", "--include-localization", "true")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "identity-capabilities-08" = @{
+        Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
+        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "resource-capabilities-09" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Resource", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.DbMigrator/ResourceAdminBootstrapRunner.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "resource-host-api-realtime" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-operation-records", "false")
+        Frontend = $false; Lint = $true
+        Present = @("backend/tests/{name}.IntegrationTests/ResourceHostPrincipalTests.cs", "backend/tests/{name}.IntegrationTests/RealTimeSubscriptionTests.cs")
+        Absent = @("frontend", "backend/src/{name}.Api/Notifications", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
+    "resource-host-browser-notifications" = @{
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
+        Arguments = @("--service-role", "Resource", "--include-multi-tenancy", "false", "--include-notifications", "true", "--include-operation-records", "false", "--include-localization", "true")
+        Frontend = $true; Lint = $true
+        Present = @("backend/tests/{name}.IntegrationTests/ResourceHostPrincipalTests.cs", "backend/tests/{name}.IntegrationTests/ResourceBrowserSessionTests.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
+        Absent = @("backend/src/{name}.Application/RealTime", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+    }
 }
 
 # 全量清单显式排序：定义用哈希表（无序），执行顺序要稳定才便于比对历史日志
@@ -178,7 +275,10 @@ $AllScenarios = @(
     "identity-notifications", "resource-notifications",
     "identity-external-login", "standalone-external-login",
     "identity-localization", "resource-localization",
-    "identity-all-features"
+    "identity-all-features",
+    "identity-capabilities-01", "standalone-capabilities-02", "resource-capabilities-03", "resource-capabilities-04", "identity-capabilities-05", "standalone-capabilities-06", "standalone-capabilities-07", "identity-capabilities-08", "resource-capabilities-09",
+    "resource-host-api-realtime", "resource-host-browser-notifications",
+    "identity-tenant-management-without-history"
 )
 
 # 定义与全量清单必须一一对应。只加定义不加清单，新场景会静默不跑——
@@ -207,8 +307,8 @@ $MatrixSlices = [ordered]@{
     }
 }
 
-# 镜像与场景特性无关，每档构建一次即可：挂在两档都有的这个场景上
-$ContainerScenario = "standalone-external-login"
+# 同时认证含前端镜像与纯资源 API 镜像；后者还实际迁移并启动容器。
+$ContainerScenarios = @("standalone-external-login", "resource-capabilities-03")
 
 # 本文件被各入口 dot-source：变量名不得与调用方参数同名（PowerShell 变量名不分大小写，
 # 循环变量写成 $tier、$slice 会覆盖调用方的 -Tier、-Slice），故统一加 registered 前缀。
@@ -227,8 +327,10 @@ foreach ($registeredTier in $MatrixTiers) {
         $registeredMembers = @($AllScenarios | Where-Object { $scenarioMap[$_].Slices[$registeredTier] -eq $registeredSlice })
         if ($registeredMembers.Count -eq 0) { throw "The $registeredTier-tier slice '$registeredSlice' has no scenarios." }
     }
-    if (-not $scenarioMap[$ContainerScenario].Slices.Contains($registeredTier)) {
-        throw "Container scenario '$ContainerScenario' must belong to the $registeredTier tier."
+    foreach ($registeredContainer in $ContainerScenarios) {
+        if (-not $scenarioMap[$registeredContainer].Slices.Contains($registeredTier)) {
+            throw "Container scenario '$registeredContainer' must belong to the $registeredTier tier."
+        }
     }
 }
 

@@ -21,13 +21,15 @@ export const PERMISSIONS = {
     delete: 'App.Roles.Delete',
     managePermissions: 'App.Roles.ManagePermissions',
   },
-  //#if (LocalIdentity)
+  //#if (LocalIdentity && IncludeMultiTenancy)
   tenants: {
     default: 'App.Tenants',
     create: 'App.Tenants.Create',
     update: 'App.Tenants.Update',
     delete: 'App.Tenants.Delete',
+//#if (Impersonation)
     impersonation: 'App.Tenants.Impersonation',
+//#endif
   },
   //#endif
   //#if (OpenIddictServer)
@@ -42,10 +44,12 @@ export const PERMISSIONS = {
   settings: {
     default: 'App.Settings',
   },
+//#if (IncludeOperationRecords)
   operationRecords: {
     default: 'App.OperationRecords',
     export: 'App.OperationRecords.Export',
   },
+//#endif
 } as const;
 
 /**
@@ -65,7 +69,7 @@ export const PERMISSIONS = {
 export const PLATFORM_ENTRY_PERMISSIONS = [
   PERMISSIONS.users.default,
   PERMISSIONS.roles.default,
-  //#if (LocalIdentity)
+  //#if (LocalIdentity && IncludeMultiTenancy)
   PERMISSIONS.tenants.default,
   //#endif
   //#if (OpenIddictServer)
@@ -73,7 +77,9 @@ export const PLATFORM_ENTRY_PERMISSIONS = [
   //#endif
   // 只持有审计查看权限的岗位（安全、合规）也要进得来：漏了这一项，
   // 那个角色的账号菜单里看不到入口、登录后还会被重定向走。
+//#if (IncludeOperationRecords)
   PERMISSIONS.operationRecords.default,
+//#endif
   PERMISSIONS.settings.default,
 ] as const;
 

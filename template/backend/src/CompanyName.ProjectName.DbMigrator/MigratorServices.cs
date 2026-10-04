@@ -18,7 +18,7 @@ public static class MigratorServices
         // 只注册持久化：迁移目标枚举（ITenantMigrationTargetProvider）随租户连接解析一起注册。
         // 运行期组件依赖只在 API 里注册的当前用户与权限主体，这里用不上
         services.AddPersistenceServices(configuration);
-#if (LocalIdentity)
+#if (LocalIdentity && IncludeMultiTenancy)
         // 独立库连接串在控制库里加密存储：必须与 API 共享同一密钥环，否则解不开、迁移作业整体停下
         services.AddMyProjectDataProtection(configuration, environment);
 #endif

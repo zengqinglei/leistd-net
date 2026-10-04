@@ -10,15 +10,17 @@ UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationT
 
 集成测试与矩阵运行时冒烟都跑在真实 PostgreSQL 上（选型依据见[模板开发规范 §9](./development-guide.md#9-测试与开发只用-postgresql为什么不用-inmemory-或-sqlite)）：集成测试由 Testcontainers 起容器、迁移一次模板库后每个宿主克隆一份；冒烟在本次矩阵运行共用的容器里为每个场景建库，先用该场景构建出的 `DbMigrator --apply` 迁移（Resource 用 `MigrationTarget` 单目标，不回源 Identity），再启动 API。矩阵与集成测试因此都需要本机 Docker 引擎（数据库端口绑定在 127.0.0.1，远端上下文不适用），CI 的 ubuntu runner 自带。设计时快照比对仍保留在单元测试里，它不需要 Docker、几毫秒给出结论。PostgreSQL 端到端承担跨进程与多库拆分；真实库集成测试覆盖了某个路由断言，不代表端到端里的对应断言都能删除，逐项接替仍需变异证据。不能为了测试新建只有测试调用的生产 Provider 选择抽象。
 
-条件 using 守卫覆盖 24 个符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。
+条件 using 守卫覆盖 768 个原始符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。
 
-场景定义、`pr`/`full` 档位及具名分片在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致；每片至少一个场景。人工验证用 `scripts/test-template-matrix.ps1` 的 `-Scenarios`、`-Tier pr`（可加 `-Slice <片名>`）或不带参数的全集；CI 每片一个作业，使用 `-Tier <档位> -Slice <片名>`，不能与 `-Scenarios` 混用。`pr` 档只收覆盖必需的场景：`check-template-scenario-coverage.py` 对全部模板文件求值文件级 modifiers、嵌套条件与 computed 符号，任何条件行只由 `full` 档独有场景生成即失败。它是行覆盖，不是组合覆盖：同一文件里几处分支只在某个 `full` 档场景里同时出现时（例如外部登录与非本地化的两段登录页代码），二者的组合交互要到合入后才验证。新增条件分支让闸门变红时，把对应场景加入 `pr` 档或改写条件，不删除闸门；加入后按实测耗时放入合适的分片，必要时新增具名分片并写明它验证什么。默认形态 `identity` 不是覆盖必需，但它是 `dotnet new` 的默认产物，固定留在 `pr` 档。默认人工及 full 档每个入选场景保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试。直接 PR 的局部计划按下节选择必要阶段，不能用手动跳过代替计划。容器检查由 `-ContainerSmoke` 挂到两档都有的 `standalone-external-login`（镜像与场景特性无关，每档构建一次即可）；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
+场景定义、`pr`/`full` 档位及具名分片在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致；每片至少一个场景。人工验证用 `scripts/test-template-matrix.ps1` 的 `-Scenarios`、`-Tier pr`（可加 `-Slice <片名>`）或不带参数的全集；CI 每片一个作业，使用 `-Tier <档位> -Slice <片名>`，不能与 `-Scenarios` 混用。`pr` 档只收覆盖必需的场景：`check-template-scenario-coverage.py` 对全部模板文件求值文件级 modifiers、嵌套条件与 computed 符号，任何条件行只由 `full` 档独有场景生成即失败。它同时检查行覆盖和有效能力两两组合：同一文件里几处分支只在某个 `full` 档场景里同时出现时（例如外部登录与非本地化的两段登录页代码），二者的组合交互要到合入后才验证。新增条件分支让闸门变红时，把对应场景加入 `pr` 档或改写条件，不删除闸门；加入后按实测耗时放入合适的分片，必要时新增具名分片并写明它验证什么。默认形态 `identity` 不是覆盖必需，但它是 `dotnet new` 的默认产物，固定留在 `pr` 档。独立的全部有效形态生成作业必须在同候选汇总中成功；内部文档变更时按既有范围规则记为不适用。Resource 纯 API 的 Lint/Frontend/Test 阶段明确记为 not-applicable，汇总按场景元数据核对，拒绝伪造 pass。默认人工及 full 档每个入选场景保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试。直接 PR 的局部计划按下节选择必要阶段，不能用手动跳过代替计划。容器检查由 `-ContainerSmoke` 挂到两档共有的含前端 Standalone 与纯 API Resource 场景，清单使用 `$ContainerScenarios`；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
 
-矩阵验收读取同一次 run 各分片的 artifact，使用 `scripts/check-template-matrix-results.ps1 -Tier <档位>` 核对候选 SHA、收据档位、独立预期计划的准确场景归属与 Backend/Runtime/Lint/Frontend/Test 状态（CI 传 -ValidationPlanPath；默认要求完整档）；要求容器验证时传入 `-ContainerSmoke`。还须核对日志中后端和真实浏览器测试确有用例执行，不能仅凭作业名称或退出码推定完整覆盖。Standalone 容器检查构建 API 与 Migrator 镜像，并在两种镜像内执行 `dotnet --info`；它认证镜像构建与 .NET 运行时可用，不代表 API 已按部署配置启动或已连接数据库。真实 PostgreSQL 与 OIDC 跨服务责任仍由各自独立作业承担，未执行的可选场景另行注明。
+矩阵验收读取同一次 run 各分片的 artifact，使用 `scripts/check-template-matrix-results.ps1 -Tier <档位>` 核对候选 SHA、收据档位、独立预期计划的准确场景归属与 Backend/Runtime/Lint/Frontend/Test 状态（CI 传 -ValidationPlanPath；默认要求完整档）；要求容器验证时传入 `-ContainerSmoke`。还须核对日志中后端和真实浏览器测试确有用例执行，不能仅凭作业名称或退出码推定完整覆盖。Standalone 容器检查构建 API 与 Migrator 镜像，并在两种镜像内执行 `dotnet --info`；它认证镜像构建与 .NET 运行时可用，不代表 API 已按部署配置启动或已连接数据库。纯 API Resource 另外在镜像内实际迁移并启动 API，验证 liveness、无 SPA 与无 Node；跨服务认证及完整 PostgreSQL 隔离仍由各自独立作业承担，未执行的可选场景另行注明。
 
 分片均衡同时计入实际承担的容器阶段、生成准备和浏览器安装，不只按场景数量划分。关键片可能随实测改变，调整前先核对各场景命令区间和准备阶段；准备阶段变快、未产生 lint 热缓存或另一片提前完成，都不能当作删减测试的依据。
 
-OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrowserScenarios` 在 HTTP 场景后追加有头浏览器验证，`-BrowserOnly` 只执行浏览器闭环。另需 Node.js、npm 与已安装 Chromium 的 agent-browser；可用官方 `AGENT_BROWSER_EXECUTABLE_PATH` 选择浏览器程序。脚本按共享矩阵定义生成 Identity 外部登录与 Resource，生产构建前端由所属 API 同源托管；覆盖登录、服务端票据真实到期后的续期/拒绝（浏览器阶段把 Identity 切到快速档 `OAuth__AccessTokenLifetime=00:01:30`，签发寿命按档位断言，不等默认的 10 分钟；分层原则见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)）、官方退出、Google/GitHub 官方处理器及接续原授权请求。第三方通信使用本地 PKCE 协议夹具，不替换生产认证处理器。一次性浏览器会话关闭自动保存，避免额外访问已见过的源。证据保存在隔离 `.tmp/oidc-e2e/<run>/`，包含断言、脱敏 HAR、截图和 SQL 投影；浏览器会话与容器仅清理本轮创建的资源。CI 默认仍执行 HTTP 入口，浏览器开关按需显式启用。
+OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrowserScenarios` 在 HTTP 场景后追加有头浏览器验证，`-BrowserOnly` 只执行浏览器闭环。另需 Node.js、npm 与已安装 Chromium 的 agent-browser；可用官方 `AGENT_BROWSER_EXECUTABLE_PATH` 选择浏览器程序。脚本按共享矩阵定义生成 Identity 外部登录与 Resource，生产构建前端由所属 API 同源托管；覆盖登录、服务端票据真实到期后的续期/拒绝（浏览器阶段把 Identity 切到快速档 `OAuth__AccessTokenLifetime=00:01:30`，签发寿命按档位断言，不等默认的 10 分钟；分层原则见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)）、官方退出、Google/GitHub 官方处理器及接续原授权请求。第三方通信使用本地 PKCE 协议夹具，不替换生产认证处理器。一次性浏览器会话关闭自动保存，避免额外访问已见过的源。证据保存在隔离 `.tmp/oidc-e2e/<run>/`，包含断言、脱敏 HAR、截图和 SQL 投影；浏览器会话与容器仅清理本轮创建的资源。浏览器阶段的 Resource 同时启用通知与业务实时，真实创建角色并验证已打开列表自动刷新、共享一条 Hub 连接；多租户阶段通过正式管理员 CLI 引导授权。CI 默认仍执行 HTTP 入口，浏览器开关按需显式启用。
+
+默认 HTTP 端到端还生成启用业务实时的纯 API Resource，以正式管理员命令授予权限，再由独立 .NET SignalR 客户端通过真实 Bearer/WebSocket 订阅宿主角色列表。实际创建角色后验证提交后的事件，并拒绝跨作用域、未知资源及无作用域资源键的订阅；同时验证没有前端目录且根路径不提供 SPA。该用例认证外部客户端消费能力，浏览器列表自动刷新由上述浏览器场景另行验证。
 
 ## 业务维护 Job
 
@@ -30,13 +32,13 @@ OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrows
 
 ## 源码预检与 CI 接替
 
-独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 源码预检，再 audit、打包和生成。GitHub CI 在同候选静态作业完整执行 `check-all.ps1`，分片显式使用 `-SkipSourcePreflight`，只检查接替入口仍在清单；必过汇总同时等待并核对静态和全部必要动态作业成功。预检和生成可以并行，静态失败不能被分片成功掩盖。源码预检职责不由生成编译替代，人工入口不能用该 CI 开关省略检查。
+独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 源码预检，再打包、生成并审计实际生成的锁文件。GitHub CI 在同候选静态作业完整执行 `check-all.ps1`，分片显式使用 `-SkipSourcePreflight`，只检查接替入口仍在清单；必过汇总同时等待并核对静态和全部必要动态作业成功。预检和生成可以并行，静态失败不能被分片成功掩盖。源码预检职责不由生成编译替代，人工入口不能用该 CI 开关省略检查。
 
 纯内部文档 PR 的例外由仓库 [CI 范围与聚合规则](../framework/quality-assurance.md) 决定；`template/` 下的文档和 Skill 属于生成载荷，继续运行完整 PR 档。未选择动态场景时汇总明确报告“不适用”，不产生矩阵回执；选择的场景按独立计划执行必要阶段，不能由回执自己决定哪些阶段适用。
 
 ## 局部 PR 的场景与阶段
 
-唯一规则与跨层责任表见[同候选输入计划](../framework/quality-assurance.md#同候选输入计划)。只含支持的模板前端源码时，生成/形态、audit、安装、healthcheck、lint、构建、spec 发现和真实浏览器测试保持；只含 backend/src/tests C# 时，生成/形态、audit、后端还原/构建、真实 PostgreSQL 冒烟和单元/集成保持。两份锁文件的生产依赖 audit 阈值、每片执行与网络重试保留，不以源码不变推断漏洞库不变。参数、依赖、项目配置、跨层和未知输入保留完整阶段；独立 PG/OIDC 均保留。前后端各自省略的阶段要求实际生成输入保持不变，不能把浏览器 mock 当 API 契约验证。
+唯一规则与跨层责任表见[同候选输入计划](../framework/quality-assurance.md#同候选输入计划)。只含支持的模板前端源码时，生成/形态、audit、安装、healthcheck、lint、构建、spec 发现和真实浏览器测试保持；只含 backend/src/tests C# 时，生成/形态、audit、后端还原/构建、真实 PostgreSQL 冒烟和单元/集成保持。实际生成锁文件的生产依赖 audit 阈值、每片执行与网络重试保留；同片内内容相同的锁文件只审计一次，不以源码不变推断漏洞库不变。参数、依赖、项目配置、跨层和未知输入保留完整阶段；独立 PG/OIDC 均保留。前后端各自省略的阶段要求实际生成输入保持不变，不能把浏览器 mock 当 API 契约验证。
 
 场景从现有 sources/modifiers/computed 求出修改文件的生产场景，并保留默认与全特性代表；文件删除和跨边界移动用完整差异的两侧，不能只看最后一次提交。首次维护选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`，实际生成六种 PR 产品的前后对照，核对省略阶段/场景的输入，并验证错误回执拒绝。这是维护回归入口，不加入每日静态闸门。
 
@@ -58,4 +60,4 @@ OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrows
 
 官方依据：[ESLint 缓存](https://eslint.org/docs/latest/use/command-line-interface#--cache)、[Stylelint 缓存](https://stylelint.io/user-guide/cli/#--cache)、[Prettier 缓存与插件限制](https://prettier.io/docs/cli#--cache)、[Angular 组件测试](https://angular.dev/guide/testing/components-basics)、[Angular test 参数](https://angular.dev/cli/test)、[Playwright CI](https://playwright.dev/docs/ci)。
 
-浏览器认证变更在 L1 跑 `-Tier pr`，十场景全集由合入后的 `full` 档承担。修改令牌寿命、刷新或到期判据时，提交前还须运行 `pwsh scripts/test-template-oidc-e2e.ps1 -IncludeExpiryWait`，验证真实到期边界；PR CI 默认省略真实到期等待，full 显式补跑，不能用 PR 成功代替这项变更责任。真实官方处理器、Cookie 解保护、服务端票据删除、并发刷新、资源归属与可编译变异的边界见[浏览器认证维护规则](browser-authentication.md)。
+浏览器认证变更在 L1 跑 `-Tier pr`，全部登记场景由合入后的 `full` 档承担。修改令牌寿命、刷新或到期判据时，提交前还须运行 `pwsh scripts/test-template-oidc-e2e.ps1 -IncludeExpiryWait`，验证真实到期边界；PR CI 默认省略真实到期等待，full 显式补跑，不能用 PR 成功代替这项变更责任。真实官方处理器、Cookie 解保护、服务端票据删除、并发刷新、资源归属与可编译变异的边界见[浏览器认证维护规则](browser-authentication.md)。
