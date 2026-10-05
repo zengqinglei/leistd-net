@@ -86,7 +86,7 @@ def main():
             assert plan['Version'] == 2 and plan['ContainerSmoke'] == (label == 'cross-layer')
             assigned = [name for group in plan['Slices'] for name in group['Scenarios']]
             assert len(assigned) == len(set(assigned)) and set(assigned) == set(plan['Scenarios'])
-            assert len(plan['Slices']) == min(3, len(plan['Scenarios']))
+            assert len(plan['Slices']) == len({scenarios[name]['Slices']['pr'] for name in plan['Scenarios']})
             assert all(group['Scenarios'] for group in plan['Slices'])
             assert all(any(name in group['title'] for name in group['Scenarios']) for group in plan['Slices'])
             assert plan['Slices'] == planner.execution_slices(scenarios, plan['Scenarios'], 'pr', plan['Mode'], plan['ContainerSmoke'])
@@ -354,12 +354,19 @@ def prove_receipts(repo, plan, scenarios, out, run):
         'missing-container-scope':lambda p:p.pop('ContainerSmoke'),
         'bad-container-type':lambda p:p.update(ContainerSmoke='false'),
         'bad-container-assignment':lambda p:p['Slices'][0]['Containers'].append(p['Slices'][0]['Scenarios'][0]),
+        'reordered-members':lambda p:p['Slices'][0]['Scenarios'].reverse(),
     }
+    def move_plan_member(value):
+        left, right = value['Slices'][0]['Scenarios'], value['Slices'][1]['Scenarios']
+        left[0], right[0] = right[0], left[0]
+    mutations['moved-plan-members'] = move_plan_member
     if plan['ContainerSmoke']:
         mutations['missing-container-assignment'] = lambda p:next(g for g in p['Slices'] if g['Containers']).update(Containers=[])
     for mutation,apply in mutations.items():
         invalid = json.loads(json.dumps(plan));apply(invalid);expected_file.write_text(json.dumps(invalid))
         run(label+'-reject-plan-'+mutation,command,repo,False)
+        if mutation in ('reordered-members', 'moved-plan-members'):
+            assert 'preserve registered group members and order' in (out/(label+'-reject-plan-'+mutation+'.log')).read_text()
     expected_file.write_text(json.dumps(plan))
     if label == 'full':
         pure_api = next(result for receipt in receipts.values() for result in receipt['Results'] if not scenarios[result['Scenario']].get('Frontend', True))
@@ -374,29 +381,31 @@ def prove_receipts(repo, plan, scenarios, out, run):
 
 
 def prove_scheduling(planner, scenarios):
-    # A container's cost must participate in placement; registry order must not.
-    sample = dict(Titles={'pr':{'a':'a','b':'b','c':'c'}},Containers=['heavy'])
-    synthetic = {name:dict(sample,Cost={'full':cost,'frontend':cost,'backend':cost,'container':100})
-                 for name,cost in [('heavy',1),('a',50),('b',49),('c',48)]}
+    # Preserve registered allocation and order, including a partial logical group.
+    sample = dict(Titles={'pr':{'first':'first','second':'second','third':'third'}}, Containers=['heavy'])
+    synthetic = {name:dict(sample, Slices={'pr':group})
+                 for name,group in [('heavy','first'),('b','first'),('a','second'),('c','third')]}
     groups = planner.execution_slices(synthetic,list(synthetic),'pr','full',True)
-    assert groups[0]['Scenarios'] == ['heavy'] and groups[0]['Containers'] == ['heavy']
+    assert [g['Scenarios'] for g in groups] == [['heavy','b'],['a'],['c']]
+    assert [g['Containers'] for g in groups] == [['heavy'],[],[]]
     assert all(any(name in group['title'] for name in group['Scenarios']) for group in groups)
     assert all(('含容器' in group['title']) == bool(group['Containers']) for group in groups)
-    assert groups == planner.execution_slices(dict(reversed(list(synthetic.items()))),list(reversed(synthetic)),'pr','full',True)
-    synthetic['heavy'].pop('Cost')
-    groups = planner.execution_slices(synthetic,list(synthetic),'pr','backend',False)
-    assert sorted(n for g in groups for n in g['Scenarios']) == sorted(synthetic)
-    assert all(not g['Containers'] for g in groups)
-    for missing in (None, 'unknown', {'backend':True}, {'backend':float('inf')}, {'backend':float('nan')}):
-        synthetic['heavy']['Cost'] = missing
-        groups = planner.execution_slices(synthetic,list(synthetic),'pr','backend',False)
-        assert sorted(n for g in groups for n in g['Scenarios']) == sorted(synthetic)
-        assert all(g['Scenarios'] for g in groups)
-    assert len(planner.execution_slices(synthetic,['heavy'],'pr','backend',False)) == 1
+    assert groups == planner.execution_slices(synthetic,list(reversed(synthetic)),'pr','full',True)
+    for mode in ('full','frontend','backend'):
+        partial = planner.execution_slices(synthetic,['heavy','b'],'pr',mode,False)
+        assert len(partial) == 1 and partial[0]['Scenarios'] == ['heavy','b']
+        assert partial[0]['Containers'] == []
+        split = planner.execution_slices(synthetic,['b','c'],'pr',mode,False)
+        assert [g['key'] for g in split] == ['execution-01','execution-02']
+        assert [g['Scenarios'] for g in split] == [['b'],['c']]
     assert planner.execution_slices(synthetic,[],'pr','full',False) == []
-    full = planner.execution_slices(scenarios,list(scenarios),'full','full',True)
-    assert len(full) == 2 and {n for g in full for n in g['Scenarios']} == set(scenarios)
-    print('PASS deterministic scheduling: containers, unknown weights, no empty groups and full coverage',flush=True)
+    for tier in ('pr','full'):
+        selected = [n for n,info in scenarios.items() if tier in info['Slices']]
+        groups = planner.execution_slices(scenarios,selected,tier,'full',True)
+        titles = next(iter(scenarios.values()))['Titles'][tier]
+        assert [g['Scenarios'] for g in groups] == [[n for n in selected if scenarios[n]['Slices'][tier] == logical] for logical in titles]
+        assert {n for g in groups for n in g['Scenarios']} == set(selected)
+    print('PASS registered allocation: candidate containers, partial groups, no empty groups and full coverage',flush=True)
 
 
 if __name__ == '__main__': main()

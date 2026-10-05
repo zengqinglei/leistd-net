@@ -27,7 +27,11 @@ function Read-QualityValidationPlan([string]$Path, [string]$ExpectedTier) {
         throw 'Invalid documentation-only responsibilities.'
     }
     if ($plan.ContainerSmoke -and $plan.Mode -cne 'full') { throw 'Container checks require full stages.' }
-    $count = [Math]::Min($MatrixSlices[$ExpectedTier].Count, $selected.Count)
+    $logicalGroups = @($MatrixSlices[$ExpectedTier].Keys | Where-Object {
+        $logical = $_
+        @(Get-TierScenarios $ExpectedTier $logical | Where-Object { $_ -cin $selected }).Count -gt 0
+    })
+    $count = $logicalGroups.Count
     if ($plan.Slices -isnot [array] -or @($plan.Slices).Count -ne $count) {
         throw 'Invalid quality plan execution group count.'
     }
@@ -39,6 +43,10 @@ function Read-QualityValidationPlan([string]$Path, [string]$ExpectedTier) {
             @($group.Scenarios).Count -eq 0 -or $group.Containers -isnot [array] -or
             @($group.Scenarios | Where-Object { $_ -cnotin $selected }).Count -gt 0) {
             throw 'Invalid quality plan execution group.'
+        }
+        $expectedMembers = @(Get-TierScenarios $ExpectedTier $logicalGroups[$index] | Where-Object { $_ -cin $selected })
+        if (Compare-Object $expectedMembers @($group.Scenarios) -CaseSensitive -SyncWindow 0) {
+            throw 'Quality plan must preserve registered group members and order.'
         }
         $requiredContainers = @($group.Scenarios | Where-Object { $plan.ContainerSmoke -and $_ -cin $ContainerScenarios })
         if (@($group.Containers).Count -ne $requiredContainers.Count -or

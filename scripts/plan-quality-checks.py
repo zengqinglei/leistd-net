@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -79,34 +78,19 @@ def source_producers(config: dict, path: str, scenarios: dict) -> set[str]:
 
 
 def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str, container_smoke: bool) -> list[dict]:
-    """Deterministic LPT; costs affect placement only, never selected responsibility."""
+    """Bind the registered logical allocation to the candidate's selected work."""
     if not selected:
         return []
     sample = next(iter(scenarios.values()))
-    count = min(len(sample['Titles'][tier]), len(selected))
+    selected_names = set(selected)
     containers = set(sample['Containers']) if container_smoke else set()
-    def timing(name, field):
-        metadata = scenarios[name].get('Cost') or {}
-        value = metadata.get(field) if isinstance(metadata, dict) else None
-        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0 else None
-    # Registry serialization emits null for a new scenario without Cost.
-    # Unknown/non-finite timings must still retain and schedule its full work.
-    fallback = {field:max([1] + [value for name in scenarios if (value := timing(name, field)) is not None])
-                for field in (mode, 'container')}
-    def cost(name):
-        def known(field):
-            value = timing(name, field)
-            return fallback[field] if value is None else value
-        return known(mode) + (known('container') if name in containers else 0)
-    bins = [dict(key=f'execution-{i+1:02d}', title='', Scenarios=[], Containers=[])
-            for i in range(count)]
-    loads = [0] * count
-    for name in sorted(selected, key=lambda name: (-cost(name), name)):
-        index = min(range(count), key=lambda i: (loads[i], i))
-        bins[index]['Scenarios'].append(name)
-        if name in containers:
-            bins[index]['Containers'].append(name)
-        loads[index] += cost(name)
+    bins = []
+    for logical in sample['Titles'][tier]:
+        members = [name for name, info in scenarios.items()
+                   if name in selected_names and info['Slices'].get(tier) == logical]
+        if members:
+            bins.append(dict(key=f'execution-{len(bins)+1:02d}', title='', Scenarios=members,
+                             Containers=[name for name in members if name in containers]))
     for group in bins:
         preview = '、'.join(sorted(group['Scenarios'], key=lambda name: (len(name), name))[:2])
         stages = {'full':'完整阶段','frontend':'前端阶段','backend':'后端阶段'}[mode]
