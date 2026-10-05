@@ -69,6 +69,9 @@ def main():
             ('workflow', ['.github/workflows/ci.yml'], 'full'), ('unknown', ['unknown-input.cs'], 'full'),
             ('framework-source', [fw], 'full'),
             ('localized-frontend', ['template/.template.config/localization/frontend/src/app/app.spec.ts'], 'frontend'),
+            ('frontend-roles-15', ['template/frontend/src/app/features/platform/components/roles/roles.ts'], 'frontend'),
+            ('backend-signing-9', ['template/backend/tests/CompanyName.ProjectName.IntegrationTests/SigningKeyRotationTests.cs'], 'backend'),
+            ('backend-roles-18', ['template/backend/src/CompanyName.ProjectName.Application/Roles/AppServices/RoleAppService.cs'], 'backend'),
         ]
         for label, changed, expected_mode in cases:
             git('reset', '--hard', base)
@@ -78,8 +81,17 @@ def main():
                 # generation uses the first two cases and their valid comments.
                 target.write_text((target.read_text() if target.exists() else '') + '\n// Quality scope fixture\n')
             git('add', '.'); git('commit', '-qm', label)
-            plan = planner.create_plan('pr', base, 'pull_request', '')
+            plan = planner.create_plan('pr', base, 'pull_request', '', container_smoke=label == 'cross-layer')
             assert plan['Mode'] == expected_mode, (label, plan)
+            assert plan['Version'] == 2 and plan['ContainerSmoke'] == (label == 'cross-layer')
+            assigned = [name for group in plan['Slices'] for name in group['Scenarios']]
+            assert len(assigned) == len(set(assigned)) and set(assigned) == set(plan['Scenarios'])
+            assert len(plan['Slices']) == min(3, len(plan['Scenarios']))
+            assert all(group['Scenarios'] for group in plan['Slices'])
+            assert plan['Slices'] == planner.execution_slices(scenarios, plan['Scenarios'], 'pr', plan['Mode'], plan['ContainerSmoke'])
+            if label in ('frontend-feature','frontend-roles-15','backend-signing-9','backend-roles-18'):
+                expected_counts = {'frontend-feature':8,'frontend-roles-15':15,'backend-signing-9':9,'backend-roles-18':18}
+                assert len(plan['Scenarios']) == expected_counts[label], (label, plan['Scenarios'])
             local = planner.local_scenarios(base)
             assert local['Kind'] == 'local-template-scenarios' and local['HeadSha'] == git('rev-parse', 'HEAD')
             assert 'Version' not in local and 'Mode' not in local and 'CandidateSha' not in local
@@ -139,6 +151,7 @@ def main():
             assert planner.local_scenarios(invalid)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
         print('PASS deletion, cross-boundary rename and multi-commit conservative fallback', flush=True)
+        prove_scheduling(planner, scenarios)
         # Put each unknown rule on BOTH sides of the diff. Otherwise a changed
         # template.json alone would force full and fail to exercise this guard.
         config_path = repo / 'template/.template.config/template.json'
@@ -282,21 +295,21 @@ def prove_receipts(repo, plan, scenarios, out, run):
     expected_file.write_text(json.dumps(plan))
     receipt_dir = out / (label + '-receipts'); receipt_dir.mkdir(exist_ok=True)
     receipts = {}
-    for name in plan['Scenarios']:
-        slice_name = scenarios[name]['Slices']['pr']
-        receipt = receipts.setdefault(slice_name,dict(Tier='pr',Slice=slice_name,CandidateSha=plan['CandidateSha'],Mode=label,Results=[]))
-        result = dict(Scenario=name, Container='skipped')
-        for stage in ['Backend','Runtime','Lint','Frontend','Test']:
-            omitted = (label == 'frontend' and stage in ['Backend','Runtime']) or ((label == 'backend' or not scenarios[name].get('Frontend', True)) and stage in ['Lint','Frontend','Test'])
-            result[stage] = 'not-applicable' if omitted else 'pass'
-        receipt['Results'].append(result)
+    for group in plan['Slices']:
+        receipt = receipts[group['key']] = dict(Version=2,Tier='pr',Slice=group['key'],CandidateSha=plan['CandidateSha'],Mode=label,Results=[])
+        for name in group['Scenarios']:
+            result = dict(Scenario=name, Container='pass' if name in group['Containers'] else 'skipped')
+            for stage in ['Backend','Runtime','Lint','Frontend','Test']:
+                omitted = (label == 'frontend' and stage in ['Backend','Runtime']) or ((label == 'backend' or not scenarios[name].get('Frontend', True)) and stage in ['Lint','Frontend','Test'])
+                result[stage] = 'not-applicable' if omitted else 'pass'
+            receipt['Results'].append(result)
     def write():
         for key, receipt in receipts.items(): (receipt_dir / f'matrix-{key}.json').write_text(json.dumps(receipt))
     write()
     command=['pwsh','-NoProfile','-File','scripts/check-template-matrix-results.ps1','-ResultsPath',str(receipt_dir),'-Tier','pr','-ValidationPlanPath',str(expected_file)]
     run(label+'-receipts-valid',command,repo)
     first = next(iter(receipts.values()))
-    for field,bad in [('CandidateSha','b'*40),('Mode','backend' if label == 'full' else 'full'),('Tier','full')]:
+    for field,bad in [('Version',1),('CandidateSha','b'*40),('Mode','backend' if label == 'full' else 'full'),('Tier','full'),('Slice','unregistered')]:
         saved=first[field];first[field]=bad;write();run(label+'-reject-'+field,command,repo,False);first[field]=saved
     result=first['Results'][0]
     for stage in ['Backend','Runtime','Lint','Frontend','Test']:
@@ -305,6 +318,41 @@ def prove_receipts(repo, plan, scenarios, out, run):
             result[stage]=bad;write();run(f'{label}-reject-{stage}-{bad or "missing"}',command,repo,False)
         result[stage]=saved
     saved=first['Results'];first['Results']=saved[:-1];write();run(label+'-reject-missing-scenario',command,repo,False);first['Results']=saved
+    # Exact ownership, counts and container responsibility are independent of claimed success.
+    second = list(receipts.values())[1]
+    first['Results'][0],second['Results'][0] = second['Results'][0],first['Results'][0]
+    write();run(label+'-reject-moved-scenario',command,repo,False)
+    first['Results'][0],second['Results'][0] = second['Results'][0],first['Results'][0]
+    first['Results'].append(first['Results'][0]);write();run(label+'-reject-duplicate-scenario',command,repo,False);first['Results'].pop()
+    write()
+    first_file = receipt_dir / f"matrix-{first['Slice']}.json"
+    first_file.unlink();run(label+'-reject-missing-slice',command,repo,False);write()
+    duplicate = receipt_dir / 'matrix-duplicate.json';duplicate.write_text(json.dumps(first))
+    run(label+'-reject-duplicate-slice',command,repo,False);duplicate.unlink()
+    result = first['Results'][0];saved = result['Container']
+    result['Container'] = 'skipped' if saved == 'pass' else 'pass';write();run(label+'-reject-container-claim',command,repo,False);result['Container'] = saved
+    if plan['ContainerSmoke']:
+        result = next(result for receipt in receipts.values() for result in receipt['Results'] if result['Container'] == 'pass')
+        result['Container'] = 'skipped';write();run(label+'-reject-required-container',command,repo,False);result['Container'] = 'pass'
+    write()
+    mutations = {
+        'legacy-version':lambda p:p.update(Version=1),
+        'missing-groups':lambda p:p.pop('Slices'),
+        'missing-group':lambda p:p['Slices'].pop(),
+        'empty-group':lambda p:p['Slices'][0].update(Scenarios=[]),
+        'unknown-member':lambda p:p['Slices'][0]['Scenarios'].append('unknown'),
+        'duplicate-member':lambda p:p['Slices'][0]['Scenarios'].append(p['Slices'][0]['Scenarios'][0]),
+        'duplicate-group':lambda p:p['Slices'][1].update(key=p['Slices'][0]['key']),
+        'missing-container-scope':lambda p:p.pop('ContainerSmoke'),
+        'bad-container-type':lambda p:p.update(ContainerSmoke='false'),
+        'bad-container-assignment':lambda p:p['Slices'][0]['Containers'].append(p['Slices'][0]['Scenarios'][0]),
+    }
+    if plan['ContainerSmoke']:
+        mutations['missing-container-assignment'] = lambda p:next(g for g in p['Slices'] if g['Containers']).update(Containers=[])
+    for mutation,apply in mutations.items():
+        invalid = json.loads(json.dumps(plan));apply(invalid);expected_file.write_text(json.dumps(invalid))
+        run(label+'-reject-plan-'+mutation,command,repo,False)
+    expected_file.write_text(json.dumps(plan))
     if label == 'full':
         pure_api = next(result for receipt in receipts.values() for result in receipt['Results'] if not scenarios[result['Scenario']].get('Frontend', True))
         for stage in ['Lint', 'Frontend', 'Test']:
@@ -314,7 +362,26 @@ def prove_receipts(repo, plan, scenarios, out, run):
             pure_api[stage] = 'not-applicable'
     write();run(label+'-receipts-restored',command,repo)
     # Old full checker/entry must reject manual/claimed skips too.
-    run(label+'-full-contract-rejects-narrowed',command[:-2],repo,label == 'full')
+    run(label+'-manual-contract-rejects-ci-groups',command[:-2],repo,False)
+
+
+def prove_scheduling(planner, scenarios):
+    # A container's cost must participate in placement; registry order must not.
+    sample = dict(Titles={'pr':{'a':'a','b':'b','c':'c'}},Containers=['heavy'])
+    synthetic = {name:dict(sample,Cost={'full':cost,'frontend':cost,'backend':cost,'container':100})
+                 for name,cost in [('heavy',1),('a',50),('b',49),('c',48)]}
+    groups = planner.execution_slices(synthetic,list(synthetic),'pr','full',True)
+    assert groups[0]['Scenarios'] == ['heavy'] and groups[0]['Containers'] == ['heavy']
+    assert groups == planner.execution_slices(dict(reversed(list(synthetic.items()))),list(reversed(synthetic)),'pr','full',True)
+    synthetic['heavy'].pop('Cost')
+    groups = planner.execution_slices(synthetic,list(synthetic),'pr','backend',False)
+    assert sorted(n for g in groups for n in g['Scenarios']) == sorted(synthetic)
+    assert all(not g['Containers'] for g in groups)
+    assert len(planner.execution_slices(synthetic,['heavy'],'pr','backend',False)) == 1
+    assert planner.execution_slices(synthetic,[],'pr','full',False) == []
+    full = planner.execution_slices(scenarios,list(scenarios),'full','full',True)
+    assert len(full) == 2 and {n for g in full for n in g['Scenarios']} == set(scenarios)
+    print('PASS deterministic scheduling: containers, unknown weights, no empty groups and full coverage',flush=True)
 
 
 if __name__ == '__main__': main()

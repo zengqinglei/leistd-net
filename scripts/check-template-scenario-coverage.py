@@ -246,7 +246,7 @@ def load_scenarios() -> dict[str, dict]:
     command = (
         f". '{SCENARIOS_SCRIPT}'; "
         "$AllScenarios | ForEach-Object { [ordered]@{ Name = $_; Arguments = @($scenarioMap[$_].Arguments); "
-        "Slices = $scenarioMap[$_].Slices; Frontend = $scenarioMap[$_].Frontend; Titles = $MatrixSlices } } | ConvertTo-Json -Depth 5 -AsArray"
+        "Slices = $scenarioMap[$_].Slices; Frontend = $scenarioMap[$_].Frontend; Cost = $scenarioMap[$_].Cost; Containers = $ContainerScenarios; Titles = $MatrixSlices } } | ConvertTo-Json -Depth 5 -AsArray"
     )
     completed = subprocess.run(
         ["pwsh", "-NoProfile", "-Command", command],

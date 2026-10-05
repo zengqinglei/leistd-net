@@ -1,10 +1,12 @@
 # 模板场景与 CI 归属的唯一来源；生成入口、汇总入口与场景覆盖闸门共同使用。
 # Slices 记各档位里场景所属的分片：full 为全集（合入后、夜间、发布），pr 为 PR 档子集。
-# 分片按"验证什么"命名，含义登记在 $MatrixSlices；CI 每片一个作业，作业名取其说明。
+# $MatrixSlices 保留人工逻辑分组；CI 实际执行组由候选计划按模式成本计算。
+# Cost 为命令区间的粗粒度秒权重，Run 标明来源；仅影响调度，不决定覆盖或证明性能。
 # check-template-scenario-coverage.py 保证每个条件行都由某个 PR 档场景生成（行覆盖）；
 # 同时检查有效能力的可达两两组合；关键高阶交互由登记场景和真实端到端验证。
 $scenarioMap = [ordered]@{
     "identity" = @{
+        Cost = @{ full = 140; frontend = 72; backend = 71; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @(); Frontend = $true; Lint = $true
         Present = @(
@@ -30,6 +32,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
     }
     "resource" = @{
+        Cost = @{ full = 117; frontend = 64; backend = 56; container = 0; Run = 37310694992 }
         Slices = @{ full = "resource-and-standalone-roles" }
         Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
         Present = @(
@@ -56,6 +59,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "standalone" = @{
+        Cost = @{ full = 99; frontend = 65; backend = 37; container = 0; Run = 37310694992 }
         Slices = @{ full = "resource-and-standalone-roles" }
         # Cookie 会话形态：有本地用户与租户控制面，但不签发 OIDC 令牌。
         # 目的是不让内部系统带着用不到的授权服务器上线——未使用的 /connect/* 端点
@@ -84,6 +88,7 @@ $scenarioMap = [ordered]@{
         )
     }
     "identity-notifications" = @{
+        Cost = @{ full = 180; frontend = 103; backend = 81; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-notifications-and-resource-localization" }
         Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
         Present = @(
@@ -98,6 +103,7 @@ $scenarioMap = [ordered]@{
         }
     }
     "resource-notifications" = @{
+        Cost = @{ full = 162; frontend = 90; backend = 76; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role","Resource","--include-notifications"); Frontend = $true; Lint = $true
         Present = @(
@@ -114,6 +120,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "identity-external-login" = @{
+        Cost = @{ full = 162; frontend = 97; backend = 68; container = 0; Run = 37310694992 }
         Slices = @{ full = "identity-role" }
         Arguments = @("--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
@@ -122,6 +129,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "standalone-external-login" = @{
+        Cost = @{ full = 157; frontend = 96; backend = 65; container = 53; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Standalone", "--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
@@ -134,6 +142,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("OpenIddict", "IOAuthProvider", "OAuthTokenInfo", "angular-auth-oidc-client")
     }
     "identity-localization" = @{
+        Cost = @{ full = 156; frontend = 99; backend = 60; container = 0; Run = 37310694992 }
         Slices = @{ full = "identity-role" }
         Arguments = @("--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
@@ -145,6 +154,7 @@ $scenarioMap = [ordered]@{
     # 曾漏过的实例：ExternalAuthController 的 InvalidState 工厂在「外部登录 + 本地化」
     # 同时开启时才编译失败（只开外部登录时 WithCode 那行被裁掉，只开本地化时整个文件被裁掉）。
     "identity-all-features" = @{
+        Cost = @{ full = 133; frontend = 78; backend = 58; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--include-notifications","--include-real-time","--include-external-login","--include-localization")
         Frontend = $true; Lint = $true
@@ -161,6 +171,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "resource-localization" = @{
+        Cost = @{ full = 140; frontend = 83; backend = 60; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "identity-notifications-and-resource-localization" }
         Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
@@ -171,6 +182,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "identity-capabilities-01" = @{
+        Cost = @{ full = 99; frontend = 67; backend = 35; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $true; Lint = $true
@@ -179,6 +191,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "standalone-capabilities-02" = @{
+        Cost = @{ full = 117; frontend = 83; backend = 37; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $true; Lint = $true
@@ -187,6 +200,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-capabilities-03" = @{
+        Cost = @{ full = 49; frontend = 2; backend = 49; container = 29; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $false; Lint = $true
@@ -195,6 +209,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-capabilities-04" = @{
+        Cost = @{ full = 54; frontend = 2; backend = 54; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true")
         Frontend = $false; Lint = $true
@@ -203,6 +218,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "identity-capabilities-05" = @{
+        Cost = @{ full = 111; frontend = 71; backend = 42; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $true; Lint = $true
@@ -211,6 +227,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "identity-tenant-management-without-history" = @{
+        Cost = @{ full = 116; frontend = 75; backend = 43; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--service-role", "Identity", "--include-multi-tenancy", "true", "--include-operation-records", "false", "--include-email", "false", "--include-notifications", "true", "--include-localization", "true")
         Frontend = $true; Lint = $true
@@ -220,6 +237,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation", "canImpersonate", "onImpersonate")
     }
     "standalone-capabilities-06" = @{
+        Cost = @{ full = 142; frontend = 92; backend = 53; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "true", "--include-localization", "false")
         Frontend = $true; Lint = $true
@@ -228,6 +246,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "standalone-capabilities-07" = @{
+        Cost = @{ full = 132; frontend = 91; backend = 44; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "true", "--include-localization", "true")
         Frontend = $true; Lint = $true
@@ -236,6 +255,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "identity-capabilities-08" = @{
+        Cost = @{ full = 101; frontend = 67; backend = 36; container = 0; Run = 37308080169 }
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $true; Lint = $true
@@ -244,6 +264,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-capabilities-09" = @{
+        Cost = @{ full = 129; frontend = 78; backend = 54; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Resource", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $true; Lint = $true
@@ -252,6 +273,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-host-api-realtime" = @{
+        Cost = @{ full = 50; frontend = 2; backend = 50; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-operation-records", "false")
         Frontend = $false; Lint = $true
@@ -260,6 +282,7 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-host-browser-notifications" = @{
+        Cost = @{ full = 131; frontend = 83; backend = 51; container = 0; Run = 37308080169 }
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Resource", "--include-multi-tenancy", "false", "--include-notifications", "true", "--include-operation-records", "false", "--include-localization", "true")
         Frontend = $true; Lint = $true
@@ -294,7 +317,7 @@ if ($listedOnly.Count -gt 0) {
 
 $MatrixTiers = @("pr", "full")
 
-# 每档的分片及其说明。片内场景按实测耗时大致均衡；分片名描述它验证什么，不用编号。
+# 每档的人工逻辑分组；组数量同时给出 CI 默认分片上限（PR三片、full两片）。
 $MatrixSlices = [ordered]@{
     pr = [ordered]@{
         "identity-default-and-all-features" = "Identity 默认产物与可选特性全开"

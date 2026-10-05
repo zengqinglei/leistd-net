@@ -98,9 +98,11 @@ Job 的集群锁、水位和失败重试仍由执行器契约测试承担。模�
 
 先测作业的运行、队列和依赖，按 DAG 关键路径决定优化顺序，不把所有作业节省的秒数相加当作墙钟收益。独立的包消费、框架契约与真实服务闭环可在同一候选 SHA 上并行，但质量结果须包含它们；拆成独立作业不能变成可选检查。
 
-模板场景、档位与分片只维护在 `scripts/template-matrix-scenarios.ps1`。默认人工 PR 档执行登记的 PR 场景完整阶段；full 执行登记全集、真实集成及适用容器，发布等待同 SHA 的完整结果。场景数量不在本文重复维护，以该脚本的档位与分片清单为准。PR 档的条件行覆盖由 `check-template-scenario-coverage.py` 逐行求值；组合交互仍由 full 兜底，不以覆盖率删除测试。
+模板场景、档位、人工逻辑分组与调度成本只维护在 `scripts/template-matrix-scenarios.ps1`。默认人工 PR 档执行登记的 PR 场景完整阶段；full 执行登记全集、真实集成及适用容器，发布等待同 SHA 的完整结果。场景数量不在本文重复维护，以该脚本的档位清单为准。PR 档的条件行覆盖由 `check-template-scenario-coverage.py` 逐行求值；组合交互仍由 full 兜底，不以覆盖率删除测试。
 
-`framework-pack` 无作业依赖，checkout 候选后执行内部文档判定与 `plan-quality-checks.py`，生成绑定 SHA/档位的计划和选定分片。它同时承担范围结果成功责任；docs-only 不安装 SDK、不打包、不上传产物。其他输入只打包一次，immutable artifact 供各消费者只读下载。所有动态作业显式检查范围，不能依赖打包作业被跳过来间接过滤。移除独立规划 runner，避免 pack 等待另一个 runner 的启动和完成。
+CI 实际执行组与人工逻辑分组分开：planner 按所选模式及适用容器成本，用确定性最长任务优先分配全部必要场景，同成本按名称排序。默认 PR 最多三组、full最多两组，不建立空组。成本是注明来源 run ID 的粗粒度权重，只决定位置，缺少成本使用保守值，不能减少责任。实际最长／最短片相差超过30%时先定位准备、排队和权重变化，确有权重失真才刷新，不逐PR自动测速或增开runner。
+
+`framework-pack` 无作业依赖，checkout 候选后执行内部文档判定、独立容器范围判定与 `plan-quality-checks.py`，生成绑定 SHA／档位／模式的 Version 2 计划，明确每个执行组的场景和容器责任。直接 PR 保留两层提交深度；手动／发布候选读取完整历史以判断 main 差异。它同时承担范围结果成功责任；docs-only 不安装 SDK、不打包、不上传产物。其他输入只打包一次，immutable artifact 供各消费者只读下载。所有动态作业显式检查范围，不能依赖打包作业被跳过来间接过滤；不增加独立规划 runner。
 
 ### 同候选输入计划
 
@@ -118,9 +120,9 @@ Job 的集群锁、水位和失败重试仍由执行器契约测试承担。模�
 
 Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/build 消费项目；全包内容、源码包集、DLL/XML/文档、重复包、缺失候选依赖仍先核对。它不裁剪 Framework 用例、DI/反射/配置语义、模板或服务闭环；出现显式跨项目编译输入时回退全量。人工 `-PackageIds` 保持已有局部入口，CI 使用独立计划并仍要求完整候选 feed。
 
-汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确分片、场景、阶段、SHA 与档位。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、错 SHA/档位/阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；默认完整档拒绝局部收据。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
+汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确执行组、场景、阶段、SHA 与档位。每个必要场景必须唯一分配；回执不能自行缩小范围。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、跨组移动、错版本／SHA／档位／阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；没有计划的人工入口使用原逻辑组，不能拿 CI 执行组回执代替。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
 
-本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`。默认人工入口不自动推测 base，继续完整执行；不能将局部计划与手动跳过或 -Scenarios 混用。
+本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`；单组复现的 `-Slice` 必须取计划中的 key。容器适用时，生成计划增加 `--container-smoke true`，完整模式执行登记的容器责任。默认人工入口不自动推测 base，继续完整执行；不能将计划与手动跳过、`-Scenarios` 或手选容器场景混用。
 
 范围裁剪必须基于 PR base/merge-base 到 head 的完整差异及实际依赖，不用单一 `HEAD^` 代替多提交 PR。无法确定范围时全量执行；随包文档、props、lock、脚本与 workflow 都是质量输入。只有接替责任和变异证据完整时才削减组合入口的重复工作。
 
@@ -131,6 +133,8 @@ Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/b
 验收先区分工作量变化：docs-only 按真实 PR 的路径判定、必要作业和跳过责任验收；同候选去重按被删除的命令、接替缺陷检测及新增命令/依赖的净成本验收。两者仍完整披露实跑墙钟和 runner 合计，新增可归因成本吞掉节省或拖长关键路径时应修正。仅重排相同工作量的调度才使用固定配对的墙钟与 runner 联合门槛，不能将十秒级去重收益套入高噪声重排实验。以下重复测量原则用于声称定量性能改善和稳定预算，单次真实 PR 仅是观测。
 
 使用同输入、同机器或 runner 规格、相同入口与明确的缓存条件，前后各至少三轮，报告全部值和中位数。本机共享负载波动大时，用前后交替的成对测量，并以产物哈希确认两种变体确实不同；调度类改动以至少三次真实 CI 运行的中位验收。含 build 与 `--no-build`、TRX 方法时间和入口墙钟、不同 SHA 的历史 CI、并行阶段不能混算。首轮不清缓存时不称为完全冷启动；跳过用例不称为已经执行。新调度模型与实际执行结果分开记录，实际关键路径变化后重新测量。
+
+先用一次候选校准责任与成本；首轮符合固定比较条件可计入三轮。只有调度改善且 runner 有希望不增加，才补稳定对照。调度改善与510秒预算分别登记：模型已判定不能同时达标时，不为证明预算失败另跑三轮。新增分片须先证明净节省足以抵消新增准备和冷启动，并满足墙钟余量；没有证据就保留默认组数，不放宽测试或成本要求。同候选阶段去重先核对工具实际输入、等价组和净收益；无合格项不建设缓存或来源证明系统。
 
 CI 墙钟从本次尝试的起点到最后一个必要质量作业的 `completed_at` 计算，不用含收尾时间的 `updated_at`：初次执行用 `created_at`，重跑按各自 `run_started_at` 分别计时，不包含两次尝试之间的间隔。每个作业分别记录启动偏移与 `completed_at - started_at` 的运行时间；启动偏移还包含依赖等待，不能全称 runner 排队。沿依赖链记录前序结束到后序开始的间隔，不与启动偏移重复相加。工作流建立耗时与 runner 排队分开记录。模型必须保留原输入与范围，若未计入建立、队列、artifact、汇总或容器成本，比较时须逐项对齐，不事后修改模型迁就实跑。
 
