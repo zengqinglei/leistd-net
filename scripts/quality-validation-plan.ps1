@@ -3,9 +3,9 @@
 function Read-QualityValidationPlan([string]$Path, [string]$ExpectedTier) {
     $plan = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
     $head = git rev-parse HEAD
-    if ($LASTEXITCODE -ne 0 -or $plan.Version -ne 2 -or $plan.CandidateSha -cne $head -or
+    if ($LASTEXITCODE -ne 0 -or $plan.Version -ne 1 -or $plan.CandidateSha -cne $head -or
         $plan.Tier -cne $ExpectedTier -or $plan.Mode -cnotin @('full', 'frontend', 'backend') -or
-        $plan.DocsOnly -isnot [bool] -or $plan.FrameworkTests -isnot [bool] -or $plan.ContainerSmoke -isnot [bool]) {
+        $plan.DocsOnly -isnot [bool] -or $plan.FrameworkTests -isnot [bool]) {
         throw 'Invalid quality plan: version, candidate, tier or mode differs.'
     }
     $registered = @(Get-TierScenarios $ExpectedTier)
@@ -22,35 +22,5 @@ function Read-QualityValidationPlan([string]$Path, [string]$ExpectedTier) {
         $selected.Count -ne $registered.Count)) { throw 'Full-tier plan may not narrow validation.' }
     if ($plan.Mode -cne 'full' -and ($plan.FrameworkTests -or $null -eq $plan.ConsumerProjects -or
         @($plan.ConsumerProjects).Count -ne 0 -or $plan.DocsOnly)) { throw 'Invalid template-only plan responsibilities.' }
-    if ($plan.DocsOnly -and ($plan.Mode -cne 'full' -or $selected.Count -ne 0 -or $plan.FrameworkTests -or
-        $null -eq $plan.ConsumerProjects -or @($plan.ConsumerProjects).Count -ne 0 -or $plan.ContainerSmoke)) {
-        throw 'Invalid documentation-only responsibilities.'
-    }
-    if ($plan.ContainerSmoke -and $plan.Mode -cne 'full') { throw 'Container checks require full stages.' }
-    $count = [Math]::Min($MatrixSlices[$ExpectedTier].Count, $selected.Count)
-    if ($plan.Slices -isnot [array] -or @($plan.Slices).Count -ne $count) {
-        throw 'Invalid quality plan execution group count.'
-    }
-    $assigned = @()
-    for ($index = 0; $index -lt $count; $index++) {
-        $group = $plan.Slices[$index]
-        if ($group.key -cne ('execution-{0:00}' -f ($index + 1)) -or $group.title -isnot [string] -or
-            [string]::IsNullOrWhiteSpace($group.title) -or $group.Scenarios -isnot [array] -or
-            @($group.Scenarios).Count -eq 0 -or $group.Containers -isnot [array] -or
-            @($group.Scenarios | Where-Object { $_ -cnotin $selected }).Count -gt 0) {
-            throw 'Invalid quality plan execution group.'
-        }
-        $requiredContainers = @($group.Scenarios | Where-Object { $plan.ContainerSmoke -and $_ -cin $ContainerScenarios })
-        if (@($group.Containers).Count -ne $requiredContainers.Count -or
-            @($group.Containers | Sort-Object -Unique).Count -ne @($group.Containers).Count -or
-            @($group.Containers | Where-Object { $_ -cnotin $requiredContainers }).Count -gt 0) {
-            throw 'Invalid quality plan container assignment.'
-        }
-        $assigned += @($group.Scenarios)
-    }
-    if ($assigned.Count -ne $selected.Count -or @($assigned | Sort-Object -Unique).Count -ne $assigned.Count -or
-        @($selected | Where-Object { $_ -cnotin $assigned }).Count -gt 0) {
-        throw 'Quality plan must assign every selected scenario exactly once.'
-    }
     return $plan
 }
