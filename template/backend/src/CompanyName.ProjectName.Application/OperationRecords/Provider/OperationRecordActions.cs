@@ -75,7 +75,7 @@ public static class OperationRecordActions
     public const string TenantConnectionRemoved = "tenant.connection-removed";
 
 #if (RemoteTokenAuth)
-    /// <summary>部署作业首次授予资源管理员权限。</summary>
+    /// <summary>部署作业把远端用户首次加入管理员角色。</summary>
     public const string ResourceAdminGranted = "resource.admin-granted";
 #endif
 

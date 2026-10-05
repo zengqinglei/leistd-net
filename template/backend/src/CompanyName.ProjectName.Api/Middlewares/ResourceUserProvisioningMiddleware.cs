@@ -25,15 +25,9 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// 首次访问的并发由重试一次兜底，见下面的注释。</para>
 /// <para><b>做不到的事要如实说：无法按人名预先授权。</b>那需要一条向签发方查人的契约，
 /// 本模板没有——用手填 GUID 假装有，才是前面那个缺陷的由来。</para>
-/// <para><b>如果确实拿到了对方的 <c>sub</c>，两种授权的可行性并不一样，别一概而论：</b></para>
-/// <list type="bullet">
-/// <item><description><b>权限授予可以先落。</b><c>PermissionGrantRecord</c> 只存
-/// <c>ProviderName</c> + <c>ProviderKey</c> 两个字符串，对 <c>Users</c> 没有外键，
-/// 因此写一条 <c>(PermissionGrantProviderNames.User, sub)</c> 的授予不需要用户行先存在；等这个人第一次带令牌来，
-/// 投影建行，授予立刻生效。</description></item>
-/// <item><description><b>角色授予不行。</b><c>UserRole.UserId</c> 对 <c>Users</c> 有外键，
-/// 用户行不存在时插入直接违反外键。要给角色，只能等投影之后。</description></item>
-/// </list>
+/// <para><b>拿到了对方的 <c>sub</c> 时，首位管理员走部署命令。</b>角色关联 <c>UserRole.UserId</c> 对
+/// <c>Users</c> 有外键，需要本地主体行；DbMigrator 的 <c>--grant-admin</c> 在首次访问前建一条只含
+/// <c>sub</c> 的最小行并加入 Admin 角色，这个人第一次带令牌来时由这里补齐资料，角色关联不变。</para>
 /// </remarks>
 public sealed class ResourceUserProvisioningMiddleware(
     RequestDelegate next,

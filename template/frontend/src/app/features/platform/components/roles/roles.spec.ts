@@ -40,6 +40,7 @@ describe('Roles page query round trip', () => {
     connect: vi.fn(() => Promise.resolve()),
     subscribeResource: vi.fn(() => Promise.resolve()),
     unsubscribeResource: vi.fn(() => Promise.resolve()),
+    resourceSubscribed$: new Subject<string>(),
   };
   //#endif
 
@@ -177,6 +178,37 @@ describe('Roles page query round trip', () => {
     await fixture.whenStable();
 
     expect(vi.mocked(service.getRoles).mock.calls.length).toBe(before + 1);
+  });
+
+  it('refetches once its own role list subscription is confirmed, such as after reconnecting', async () => {
+    await fixture.whenStable();
+    const before = vi.mocked(service.getRoles).mock.calls.length;
+
+    // 断线期间的变更不会补推：订阅恢复确认后补查一次
+    realtime.resourceSubscribed$.next('host:roles');
+    await fixture.whenStable();
+    expect(vi.mocked(service.getRoles).mock.calls.length).toBe(before + 1);
+
+    // 别的资源恢复与本页无关
+    realtime.resourceSubscribed$.next('host:users');
+    await fixture.whenStable();
+    expect(vi.mocked(service.getRoles).mock.calls.length).toBe(before + 1);
+  });
+
+  it('does not subscribe once the page has left before the connection completes', async () => {
+    let connected!: () => void;
+    realtime.connect.mockReturnValueOnce(new Promise<void>((resolve) => (connected = resolve)));
+    realtime.subscribeResource.mockClear();
+    realtime.unsubscribeResource.mockClear();
+
+    const leaving = TestBed.createComponent(Roles);
+    leaving.detectChanges();
+    leaving.destroy();
+    expect(realtime.unsubscribeResource).toHaveBeenCalledWith('host:roles');
+
+    connected();
+    await fixture.whenStable();
+    expect(realtime.subscribeResource).not.toHaveBeenCalled();
   });
   //#endif
 });

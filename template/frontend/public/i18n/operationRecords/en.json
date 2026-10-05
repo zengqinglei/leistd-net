@@ -65,7 +65,7 @@
     "auth.token.issued": "Issued an access token",
     "tenant.connection-registered": "Registered a database connection for tenant {{target}}",
     "tenant.connection-removed": "Removed the database connection of tenant {{target}}",
-    "resource.admin-granted": "Granted administrator permissions to {{target}}"
+    "resource.admin-granted": "Added {{target}} to the administrator role"
   },
   "actionsNoTarget": {
     "operation-records.exported": "Exported operation records",

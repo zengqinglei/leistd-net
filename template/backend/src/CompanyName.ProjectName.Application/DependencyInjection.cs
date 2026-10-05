@@ -45,6 +45,8 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 #if (IncludeRealTime)
 using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.Roles.EventHandlers;
+using CompanyName.ProjectName.Application.Roles.Events;
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants;
@@ -137,8 +139,8 @@ public static class DependencyInjection
         services.AddTransient<IEventHandler<SettingChangedEvent>, SettingChangedAuditHandler>();
         services.AddTransient<IEventHandler<PermissionGrantsReplacedEvent>, PermissionGrantsReplacedAuditHandler>();
 #if (IncludeRealTime)
-        // 业务实时：角色列表变化在提交之后推给订阅者
-        services.AddTransient<IEventHandler<RoleListChangedEvent>, RoleListChangedRealTimeHandler>();
+        // 业务实时：角色列表变化后推给订阅者（有工作单元时在提交之后）
+        services.AddTransient<IEventHandler<RoleListChangedEvent>, RoleListChangedEventHandler>();
 #endif
         // 服务端产出给人看的时间文本时注入它；DTO 保持 UTC 交给前端渲染，不必经过这里。
         services.AddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();

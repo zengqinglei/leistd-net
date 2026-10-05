@@ -29,6 +29,7 @@ using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
 #if (IncludeRealTime)
 using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.EventBus.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Extensions;
@@ -251,7 +252,7 @@ public class RoleAppService(
     }
 #if (IncludeRealTime)
 
-    // 有工作单元时事件推迟到提交之后分发，回滚的写入不推送
+    // 有工作单元时事件推迟到提交之后分发，回滚的写入不推送；新建、修改没有工作单元，仓储已保存后立即发布
     private Task PublishRoleListChangedAsync(CancellationToken cancellationToken) =>
         localEventBus.PublishAsync(
             new RoleListChangedEvent(currentTenant.ScopeKey(AppRealTimeResources.Roles)),
