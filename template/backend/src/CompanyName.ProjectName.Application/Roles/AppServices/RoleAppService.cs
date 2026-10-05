@@ -331,3 +331,5 @@ public class RoleAppService(
         return userRoles.Where(ur => users.Any(u => u.Id == ur.UserId));
     }
 }
+
+// Isolated scheduling acceptance input; no business behavior change.
