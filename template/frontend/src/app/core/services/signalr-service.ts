@@ -135,7 +135,8 @@ export class SignalRService {
    * 推送不持久化：断线期间、以及查询完成到加入订阅之间的变更都不会补发。
    * 把推送当作"该重新查询了"的页面，收到这个事件后补查一次，就不会停在旧快照上。
    * 连接恢复（isConnected）不能代替它：那时订阅还没重新建立，立即查询仍会漏掉之后的变更。
-   * 确认回来时已无人持有（含主体切换后），不发出。
+   * 只在实际发起的 Subscribe 成功后发出：确认回来时连接已换（主体切换、断开或重建）、
+   * 或已无人持有，都不发出；再次登记一个已经订阅着的共享键不会另发确认，页面照常自己做首次查询。
    */
   readonly resourceSubscribed$: Observable<string> = this.resourceSubscribedSubject.asObservable();
   //#endif
@@ -397,9 +398,10 @@ export class SignalRService {
     }
 
     subscribed.add(resourceKey);
-    // 确认期间已无人持有（页面离开、reset 清空了登记）就不报告：链上随后的步骤会退订它。
-    // 不必再核对连接是否换过：断线时 SDK 拒绝全部在途调用，旧连接上的确认不会晚于重连回来
-    if ((this.resourceHolders.get(resourceKey)?.size ?? 0) > 0) {
+    // 只报告属于当前连接、且仍有人持有的确认。连接要单独核对：SDK 收到确认后先完成 Promise，
+    // 本方法 await 之后的续行可能晚于 reset、disconnect 或重建连接才执行——那时新主体
+    // 可能已登记同一个键，旧连接的确认不能冒充它的。确认期间已无人持有时，链上随后的步骤会退订它
+    if (this.connection === connection && (this.resourceHolders.get(resourceKey)?.size ?? 0) > 0) {
       this.resourceSubscribedSubject.next(resourceKey);
     }
   }
