@@ -764,7 +764,7 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 | 不需要历史产品，但仍必须记录安全操作 | 引用并注册 `Leistd.OperationRecords.Logging` 的 `AddOperationRecordsLogging()`，与 EF 写入适配互斥；保留动作定义、记录器和安全调用链。必要的 UoW、事件总线及日志类别前置见[组件文档](../../framework/docs/components/operation-records.md) |
 | 通知开关同时开启业务实时 | 按业务需要分别设置 `IncludeNotifications`、`IncludeRealTime`；后者默认关闭。需要业务订阅和事件发布的项目必须显式开启 |
 | 关闭内置历史但继续提供模拟登录 | 模拟登录要求本地身份、多租户和可查询历史同时存在；历史关闭时移除模拟登录，普通租户管理仍可保留 |
-| Resource 依赖前端登录或人工 SQL 授予管理员 | 有前端时保留服务端 OIDC/Cookie；纯 API 只验证 Bearer，不包含浏览器客户端配置与回调。首次授权使用正式 DbMigrator `--grant-admin <sub> [--tenant <id>]`，默认 dry-run，`--apply` 才写入；重复运行保留已有撤销 |
+| Resource 依赖前端登录或人工 SQL 授予管理员 | 有前端时保留服务端 OIDC/Cookie；纯 API 只验证 Bearer，不包含浏览器客户端配置与回调。首次授权使用正式 DbMigrator `--grant-admin <sub> [--tenant <id>]`，默认 dry-run，`--apply` 才写入；授权载体是 Admin 角色成员关系，重复运行不恢复已移出的成员关系。已用 0.13.0 预发布版命令写过用户级全量授予的项目，在明确的数据调整中只收口那次引导写入的全量直接授予、改为 Admin 成员关系；项目另行配置的合法用户级授予保留 |
 
 数据库模式只有在同一业务事务和存储内记录，才提供原子持久化；提交后处理器中的记录另行持久化。日志模式在真实提交后输出成功，回滚不输出成功，失败立即输出，仍有提交后进程退出的丢失窗口。采集、保留和访问策略由宿主日志平台负责。
 

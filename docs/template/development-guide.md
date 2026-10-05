@@ -67,7 +67,7 @@ Impersonation = LocalIdentity && IncludeMultiTenancy && IncludeOperationRecords
 
 通知与实时四种组合分别为无 Hub、通知 Hub、业务实时 Hub、合并实时 Hub；合并形态只建立一条前端连接。邮件关闭同时裁剪完整发送和验证资产，联系信息字段按实际消费者保留。历史关闭同时裁剪数据库与读侧产品，成功安全日志在真实事务提交后输出；日志模式有提交后进程退出导致丢失的窗口，不等同于数据库同事务保证。
 
-Resource 的首位管理员通过正式 DbMigrator `--grant-admin <sub> [--tenant <id>]` 引导，默认只读，`--apply` 才写入；不依赖人工 SQL 或首次访问自动授权。重复执行保留显式撤销。生成项目的具体命令说明放在其后端 README。
+Resource 的首位管理员通过正式 DbMigrator `--grant-admin <sub> [--tenant <id>]` 引导，默认只读，`--apply` 才写入；不依赖人工 SQL 或首次访问自动授权。授权载体是 Admin 角色成员关系（本地无此用户时先建最小主体行），不写用户级直接授予；曾被移出 Admin 的不再加回。初始化锁由命令持有到提交之后。生成项目的具体命令说明放在其后端 README。
 
 ### 3.3 模板引擎限制
 

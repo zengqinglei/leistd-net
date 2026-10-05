@@ -151,7 +151,7 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 
 ## 资源管理员首次授予
 
-在完成迁移后，以部署授权执行正式引导命令；`sub` 必须为远端自然人的非空 GUID，允许在首次用户投影前授予：
+在完成迁移后，以部署授权执行正式引导命令，把远端用户加入 Admin 角色；`sub` 必须为远端自然人的非空 GUID，允许在其首次访问之前执行：
 
 ```bash
 dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <sub>
@@ -161,7 +161,9 @@ dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <su
 <!--#endif-->
 ```
 
-默认 dry-run 不改变权限、版本或操作记录；`--apply` 在显式工作单元内初始化角色并首次授予当前作用域全部权限。已有授权版本时不改写，因此重复执行不会恢复之后撤销的权限。记录来源是部署身份，授权依据为 `DeploymentBootstrap`。
+默认 dry-run 不改变任何数据或操作记录，只说明将要做的事；`--apply` 在持有初始化锁的同一事务内完成：首次初始化角色（Admin 角色首次播种当前作用域全部权限，之后按普通角色管理），本地还没有该用户时建立只含主体标识的最小用户行（首次访问时按令牌补齐资料），再把该用户加入 Admin 角色。已有用户不改资料与启停，已删除的用户不恢复。
+
+权限经角色取得：之后调整 Admin 角色的权限、或把此人移出 Admin，都按普通角色管理生效。此人已在 Admin 中时重复执行无操作；曾被移出时也不再加回，要恢复走角色管理。记录来源是部署身份，授权依据为 `DeploymentBootstrap`。
 <!--#if (IncludeMultiTenancy)-->
 租户必须已经登记，目标连接经正式路由解析。回源机器身份需要租户路由读取权限。
 <!--#else-->

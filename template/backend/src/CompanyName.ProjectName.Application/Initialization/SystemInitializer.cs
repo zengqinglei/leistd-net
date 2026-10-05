@@ -62,7 +62,11 @@ public class SystemInitializer(
     /// 初始化互斥锁的键。
     /// </summary>
     /// <remarks>
+#if (LocalIdentity)
     /// 公开是为了让集成测试能对同一把锁断言互斥，而不是各写一份字面量。
+#else
+    /// 启动初始化与 DbMigrator 的管理员引导共用这把锁：两个入口都会首次创建角色，必须互斥。
+#endif
     /// </remarks>
     public const string InitializationLockKey = "MyProject:system-initialization";
 
@@ -80,8 +84,21 @@ public class SystemInitializer(
             cancellationToken,
             lockHandle.LockLost);
 
-        cancellationToken = lockScope.Token;
+        _ = await InitializeCoreAsync(lockScope.Token);
+    }
+#if (!LocalIdentity)
 
+    /// <remarks>
+    /// 调用方持有 <see cref="InitializationLockKey"/> 并负责提交：写入在调用方的工作单元里，
+    /// 锁须一直持有到提交之后，否则另一入口拿到锁时读不到尚未提交的角色，会重复创建。
+    /// 同一把锁不可重入，这里不再获取。
+    /// </remarks>
+    public Task<Role> InitializeWithinLockAsync(CancellationToken cancellationToken = default)
+        => InitializeCoreAsync(cancellationToken);
+#endif
+
+    private async Task<Role> InitializeCoreAsync(CancellationToken cancellationToken)
+    {
         logger.LogInformation("Initializing system data...");
 
 #if (LocalIdentity)
@@ -100,6 +117,7 @@ public class SystemInitializer(
         await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
 #endif
         logger.LogInformation("System data initialization completed");
+        return adminRole;
     }
 
     private async Task<(Role AdminRole, Role MemberRole)> InitializeRolesAsync(CancellationToken cancellationToken)

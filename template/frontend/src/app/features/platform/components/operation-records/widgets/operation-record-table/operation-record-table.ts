@@ -53,7 +53,7 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'role.created': (t) => `Created role ${t}`,
   'role.deleted': (t) => `Deleted role ${t}`,
   //#if (RemoteTokenAuth)
-  'resource.admin-granted': (t) => `Granted administrator permissions to ${t}`,
+  'resource.admin-granted': (t) => `Added ${t} to the administrator role`,
   //#endif
   'permission-grants.replaced': (t) => `Changed permissions for ${t}`,
   'tenant.created': (t) => `Created tenant ${t}`,

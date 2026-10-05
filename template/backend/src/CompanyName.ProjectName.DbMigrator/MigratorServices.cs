@@ -1,7 +1,21 @@
+#if (RemoteTokenAuth)
+using CompanyName.ProjectName.Application;
+using CompanyName.ProjectName.Domain;
+#endif
 using CompanyName.ProjectName.Infrastructure;
+#if (RemoteTokenAuth)
+using Leistd.Security;
+using Leistd.Tracing;
+#if (!IncludeOperationRecords)
+using Leistd.OperationRecords.Logging;
+#endif
+#endif
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+#if (RemoteTokenAuth && !IncludeOperationRecords)
+using Microsoft.Extensions.Logging;
+#endif
 
 namespace CompanyName.ProjectName.DbMigrator;
 
@@ -25,4 +39,25 @@ public static class MigratorServices
         services.AddScoped<DatabaseMigrationRunner>();
         return services;
     }
+#if (RemoteTokenAuth)
+
+    /// <summary>
+    /// 首位管理员引导命令的组合：比迁移多组合应用能力（初始化、授权、操作记录），因为引导要走正式业务路径。
+    /// </summary>
+    public static IServiceCollection AddResourceAdminBootstrapServices(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddAmbientContext();
+        services.AddCorrelationIdCore();
+        services.AddDomainServices();
+        services.AddInfrastructureServices(configuration);
+        services.AddApplicationServices();
+#if (!IncludeOperationRecords)
+        services.AddOperationRecordsLogging();
+        services.AddLogging(logging => logging.AddFilter("Leistd.OperationRecords", LogLevel.Information));
+#endif
+        services.AddScoped<ResourceAdminBootstrapRunner>();
+        return services;
+    }
+#endif
 }
