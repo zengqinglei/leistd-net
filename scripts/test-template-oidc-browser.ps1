@@ -450,6 +450,23 @@ function Test-BrowserRoleListRealtime {
     $picture = Join-Path $browserEvidence 'realtime-role-list.png'
     Invoke-Browser @('screenshot', $picture) | Out-Null
     Assert-Value 'realtime-role-list-screenshot' $true ((Test-Path $picture) -and (Get-Item $picture).Length -gt 0)
+
+    # 恢复补查：推送不持久化，断线期间的变更只能靠"订阅确认后补查一次"拿到。
+    # 断开传输触发自动重连，扣住重连后的 Subscribe，在新连接尚未加入分组时变更；
+    # 放行后列表必须出现新角色，且新连接从未收到 Roles.Changed——证明来自补查而非推送。
+    Invoke-BrowserJs 'window.__e2eHold = "host:roles"; window.__e2eHubSockets.find(s => s.readyState === 1).close(4000, "e2e drop"); true' | Out-Null
+    Invoke-Browser @('wait', '--fn', 'window.__e2eHeld.length > 0 && window.__e2eHubs.at(-1).open') | Out-Null
+    $missed = 'rt_' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $missedLiteral = ConvertTo-Json $missed -Compress
+    $offline = Invoke-BrowserJs "(async () => (await fetch('/api/v1/roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$missedLiteral,displayName:$missedLiteral})})).status)()"
+    Assert-Value 'realtime-missed-role-created' 200 $offline
+    Assert-Value 'realtime-missed-role-not-visible-before-resubscribe' $false (Invoke-BrowserJs "document.querySelector('app-role-table').textContent.includes($missedLiteral)")
+    Invoke-BrowserJs 'window.__e2eReleaseHeld(); true' | Out-Null
+    Invoke-Browser @('wait', '--fn', "document.querySelector('app-role-table')?.textContent.includes($missedLiteral)") | Out-Null
+    $resumed = @(Invoke-BrowserJs 'window.__e2eHubs') | Select-Object -Last 1
+    Assert-Value 'realtime-resubscribed-on-new-connection' $true (@($resumed.sent | Where-Object { $_.target -eq 'Subscribe' -and $_.resource -eq 'host:roles' }).Count -gt 0)
+    Assert-Value 'realtime-missed-change-came-from-resync' 0 @($resumed.received | Where-Object { $_ -eq 'Roles.Changed' }).Count
+    Write-JsonFile (Join-Path $browserEvidence 'realtime-resync.json') @{ hubs = @(Invoke-BrowserJs 'window.__e2eHubs'); role = $missed; visible = $true }
     Click-BrowserLogout
 }
 
@@ -467,6 +484,16 @@ function Invoke-BrowserScenarios {
     $socketObservation = @'
 (() => {
   window.__e2eHubs = [];
+  // 恢复补查验收用：扣住指定资源的 Subscribe 帧，制造"已重连、订阅尚未恢复"的窗口
+  window.__e2eHubSockets = [];
+  window.__e2eHold = null;
+  window.__e2eHeld = [];
+  window.__e2eReleaseHeld = () => {
+    const held = window.__e2eHeld;
+    window.__e2eHold = null;
+    window.__e2eHeld = [];
+    held.forEach(([socket, data]) => socket.sendNow(data));
+  };
   const Native = window.WebSocket;
   function frames(data) {
     if (typeof data !== 'string') return [];
@@ -481,6 +508,7 @@ function Invoke-BrowserScenarios {
       if (!path.startsWith('/hubs/')) return;
       this.evidence = { path, open: false, sent: [], received: [] };
       window.__e2eHubs.push(this.evidence);
+      window.__e2eHubSockets.push(this);
       this.addEventListener('open', () => this.evidence.open = true);
       this.addEventListener('close', () => this.evidence.open = false);
       this.addEventListener('message', event => frames(event.data).forEach(frame => {
@@ -488,9 +516,18 @@ function Invoke-BrowserScenarios {
       }));
     }
     send(data) {
-      if (this.evidence) frames(data).forEach(frame => {
+      const parsed = frames(data);
+      if (this.evidence) parsed.forEach(frame => {
         if (frame.target) this.evidence.sent.push({ target: frame.target, resource: frame.arguments?.[0] });
       });
+      if (this.evidence && window.__e2eHold
+          && parsed.some(frame => frame.target === 'Subscribe' && frame.arguments?.[0] === window.__e2eHold)) {
+        window.__e2eHeld.push([this, data]);
+        return;
+      }
+      return super.send(data);
+    }
+    sendNow(data) {
       return super.send(data);
     }
   };

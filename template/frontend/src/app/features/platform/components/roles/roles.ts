@@ -24,10 +24,14 @@ import {
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { combineLatest, defer, EMPTY, Subject } from 'rxjs';
+// prettier-ignore
 import {
   catchError,
   debounceTime,
   distinctUntilChanged,
+  //#if (IncludeRealTime)
+  filter,
+  //#endif
   finalize,
   startWith,
   switchMap,
@@ -212,7 +216,18 @@ export class Roles {
       this.authService.currentUser()?.tenantId,
     );
     this.signalR.registerResourceEvent(ROLES_CHANGED_EVENT);
-    void this.signalR.connect().then(() => this.signalR.subscribeResource(resourceKey));
+    // 订阅确认之后补查一次：推送不持久化，首次加入前、断线期间的变更只能靠这次查询拿到
+    this.signalR.resourceSubscribed$
+      .pipe(
+        filter((key) => key === resourceKey),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => this.reload());
+    // 连接完成前页面可能已离开：销毁回调那时已经取消过，不能再订阅回来
+    void this.signalR.connect().then(async () => {
+      if (this.destroyRef.destroyed) return;
+      await this.signalR.subscribeResource(resourceKey);
+    });
     this.destroyRef.onDestroy(() => {
       void this.signalR.unsubscribeResource(resourceKey).catch(() => undefined);
     });

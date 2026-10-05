@@ -107,8 +107,15 @@ describe('SignalRService connection lifecycle', () => {
     gateInvoke = false;
     private invokeGates: (() => void)[] = [];
 
+    /** 服务端拒绝订阅的资源键（例如无权限）。 */
+    readonly rejectedSubscriptions = new Set<string>();
+
     invoke(method: string, ...args: unknown[]): Promise<void> {
       this.invocations.push({ method, args });
+
+      if (method === 'Subscribe' && this.rejectedSubscriptions.has(args[0] as string)) {
+        return Promise.reject(new Error(`subscription rejected: ${String(args[0])}`));
+      }
 
       // 立即完成的 invoke 让重订阅循环在一个微任务里跑完，
       // 制造不出"循环卡在某一轮时主体切换"的竞态。
@@ -272,6 +279,161 @@ describe('SignalRService connection lifecycle', () => {
 
     expect(connection.invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
   });
+
+  describe('confirmed resource subscriptions', () => {
+    let confirmed: string[];
+
+    beforeEach(() => {
+      confirmed = [];
+      service.resourceSubscribed$.subscribe((key) => confirmed.push(key));
+    });
+
+    it('reports a subscription only after the server acknowledges it', async () => {
+      await service.connect();
+      const connection = built[0];
+      connection.gateInvoke = true;
+
+      const subscribing = service.subscribeResource('order-1');
+      try {
+        await Promise.resolve();
+        // 确认前就报告，页面会在加入订阅组之前查询，之间的变更就漏了
+        expect(confirmed).toEqual([]);
+      } finally {
+        connection.gateInvoke = false;
+        connection.releaseInvoke();
+      }
+      await subscribing;
+
+      expect(confirmed).toEqual(['order-1']);
+    });
+
+    it('reports the subscription again after every automatic reconnect', async () => {
+      await service.connect();
+      await service.subscribeResource('order-1');
+      const connection = built[0];
+
+      await connection.triggerReconnected();
+      await connection.triggerReconnected();
+
+      expect(confirmed).toEqual(['order-1', 'order-1', 'order-1']);
+    });
+
+    it('restores and reports subscriptions on a connection rebuilt after reconnecting gave up', async () => {
+      await service.connect();
+      await service.subscribeResource('order-1');
+      built[0].state = signalR.HubConnectionState.Disconnected;
+
+      await service.connect();
+
+      expect(built.length).toBe(2);
+      expect(built[1].invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
+      expect(confirmed).toEqual(['order-1', 'order-1']);
+    });
+
+    it('does not report a resource whose resubscription is rejected', async () => {
+      await service.connect();
+      await service.subscribeResource('order-1');
+      await service.subscribeResource('order-2');
+      const connection = built[0];
+      connection.rejectedSubscriptions.add('order-1');
+      confirmed.length = 0;
+
+      await connection.triggerReconnected();
+
+      expect(confirmed).toEqual(['order-2']);
+    });
+
+    it('does not report a resource unsubscribed while its resubscription was pending', async () => {
+      await service.connect();
+      await service.subscribeResource('order-1');
+      const connection = built[0];
+      confirmed.length = 0;
+      connection.gateInvoke = true;
+
+      const reconnected = connection.triggerReconnected();
+      try {
+        await Promise.resolve();
+        // 页面在重订阅确认前离开
+        void service.unsubscribeResource('order-1');
+      } finally {
+        connection.gateInvoke = false;
+        connection.releaseInvoke();
+      }
+      await reconnected;
+
+      expect(confirmed).toEqual([]);
+    });
+
+    it('does not restore or report a first subscription cancelled before its acknowledgement', async () => {
+      await service.connect();
+      const connection = built[0];
+      connection.gateInvoke = true;
+
+      const subscribing = service.subscribeResource('order-1');
+      try {
+        await Promise.resolve();
+        // 页面在首次订阅确认前离开
+        void service.unsubscribeResource('order-1');
+      } finally {
+        connection.gateInvoke = false;
+        connection.releaseInvoke();
+      }
+      await subscribing;
+      expect(confirmed).toEqual([]);
+
+      // 迟到的确认不能把资源加回恢复集合：重连后不再订阅它
+      connection.invocations.length = 0;
+      await connection.triggerReconnected();
+      expect(connection.invocations).toEqual([]);
+    });
+
+    it('does not resubscribe a resource cancelled while an earlier one was being restored', async () => {
+      await service.connect();
+      await service.subscribeResource('order-1');
+      await service.subscribeResource('order-2');
+      const connection = built[0];
+      connection.invocations.length = 0;
+      confirmed.length = 0;
+      connection.gateInvoke = true;
+
+      const reconnected = connection.triggerReconnected();
+      try {
+        await Promise.resolve();
+        // order-1 等待确认期间，order-2 的页面离开
+        void service.unsubscribeResource('order-2');
+      } finally {
+        connection.gateInvoke = false;
+        connection.releaseInvoke();
+      }
+      await reconnected;
+
+      expect(connection.invocations).toEqual([
+        { method: 'Subscribe', args: ['order-1'] },
+        { method: 'Unsubscribe', args: ['order-2'] },
+      ]);
+      expect(confirmed).toEqual(['order-1']);
+    });
+
+    it('does not report resources of the previous principal resubscribed after a switch', async () => {
+      await service.connect();
+      await service.subscribeResource('a-order');
+      const stale = built[0];
+      confirmed.length = 0;
+      stale.gateInvoke = true;
+
+      const reconnected = stale.triggerReconnected();
+      try {
+        await Promise.resolve();
+        await service.reset();
+      } finally {
+        stale.gateInvoke = false;
+        stale.releaseInvoke();
+      }
+      await reconnected;
+
+      expect(confirmed).toEqual([]);
+    });
+  });
   //#endif
 
   it('can connect again after disconnecting', async () => {
@@ -354,8 +516,8 @@ describe('SignalRService connection lifecycle', () => {
     business.dropAndRecover();
     await Promise.resolve();
 
-    // 断言真实后果而不是内部集合：后端订阅授权默认关闭，回填的 key 一旦留下，
-    // 重连时会被真的重新订阅到下一个用户名下。
+    // 断言真实后果而不是内部集合：回填的 key 一旦留下，重连时会以下一个用户的身份
+    // 重新订阅；同作用域、同权限的 key 照样通过后端订阅授权。
     expect(business.invocations).toEqual([]);
   });
   //#endif
