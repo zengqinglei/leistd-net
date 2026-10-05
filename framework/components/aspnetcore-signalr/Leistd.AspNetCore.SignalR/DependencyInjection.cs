@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Leistd.AspNetCore.SignalR.Middlewares;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Leistd.AspNetCore.SignalR.Filters;
 using Leistd.AspNetCore.SignalR.Options;
 using Leistd.AspNetCore.SignalR.Services;
@@ -78,6 +80,35 @@ public static class DependencyInjection
 
     // 独立标记区分"本方法已注册过"与宿主自行添加的同类过滤器。
     private sealed class HubAmbientContextMarker;
+
+    /// <summary>
+    /// 要求 Hub 握手按 <see cref="HubIdentityOptions.PolicyName"/> 授权（未设置时按宿主的默认策略），
+    /// 与 <see cref="AmbientContextHubFilter"/> 调用期复评取同一策略。
+    /// </summary>
+    /// <remarks>
+    /// 握手跑端点上的授权元数据，方法调用由过滤器复评；两边各配一份时，宿主指定的策略只在其中一个阶段生效。
+    /// 组件的 <c>Map*Hub</c> 已经调用它；宿主自己映射的 Hub 也用它代替 <c>RequireAuthorization</c>。
+    /// 策略名在端点构建时从容器读取，与注册顺序无关。
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.Configure&lt;HubIdentityOptions&gt;(options =&gt; options.PolicyName = "Realtime");
+    ///
+    /// app.MapHub&lt;OrderHub&gt;("/hubs/orders").RequireHubAuthorization();
+    /// </code>
+    /// </example>
+    /// <param name="hub">Hub 端点约定构建器。</param>
+    public static HubEndpointConventionBuilder RequireHubAuthorization(this HubEndpointConventionBuilder hub)
+    {
+        ArgumentNullException.ThrowIfNull(hub);
+
+        hub.Add(endpoint =>
+        {
+            var policyName = endpoint.ApplicationServices.GetRequiredService<IOptions<HubIdentityOptions>>().Value.PolicyName;
+            endpoint.Metadata.Add(policyName is null ? new AuthorizeAttribute() : new AuthorizeAttribute(policyName));
+        });
+        return hub;
+    }
 
     /// <summary>
     /// 在 Hub 端点上把查询串里的 <c>access_token</c> 转成 Bearer 请求头，供 JWT 等基于请求头的认证方案读取。

@@ -42,6 +42,7 @@ using Leistd.Timing;
 using Leistd.Lock.Abstractions;
 using System.Security.Claims;
 using Leistd.ExceptionHandling;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
@@ -307,7 +308,7 @@ internal sealed class AuthAppService(
 
         await distributedCache.SetStringAsync(
             key,
-            attempts.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            attempts.ToString(CultureInfo.InvariantCulture),
             new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(FailedLoginWindowMinutes)

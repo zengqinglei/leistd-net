@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
@@ -106,7 +107,7 @@ public static class DependencyInjection
             options.Configure(configure);
         }
 
-        services.AddExceptionHandler<BusinessExceptionHandler>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExceptionHandler, BusinessExceptionHandler>());
 
         return services;
     }

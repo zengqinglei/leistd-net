@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Leistd.Settings.EntityFrameworkCore.Entities;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -33,7 +34,7 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
             // 库里是密文，不是明文
             await using var scope = factory.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
-            var stored = await db.Set<Leistd.Settings.EntityFrameworkCore.Entities.SettingRecord>()
+            var stored = await db.Set<SettingRecord>()
                 .IgnoreQueryFilters()
                 .Where(r => r.Name == SettingConstant.Email.SmtpPassword)
                 .Select(r => r.Value)

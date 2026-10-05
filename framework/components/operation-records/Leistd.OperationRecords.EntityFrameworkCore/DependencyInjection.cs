@@ -31,7 +31,7 @@ public static class DependencyInjection
     /// <c>IClock</c>（宿主自行 <c>AddSingleton&lt;IClock, UtcClockProvider&gt;()</c>，
     /// <c>Leistd.Core</c> 刻意不提供 DI 扩展）、<c>ICurrentTenant</c>（<c>AddMultiTenancyCore()</c>）、
     /// <c>ICurrentUser</c>（<c>AddAmbientContext()</c>）、<c>ICorrelationIdProvider</c>
-    /// （<c>AddCorrelationIdCore(configuration)</c>）。每条记录都要回答"谁、在哪个租户、哪条链路、什么时间"，
+    /// （<c>AddCorrelationIdCore()</c>）。每条记录都要回答"谁、在哪个租户、哪条链路、什么时间"，
     /// 四样各来自一个独立组件；本组件<b>不</b>替调用方注册——组件由宿主显式组合。</para>
     /// </remarks>
     /// <example>
@@ -39,7 +39,7 @@ public static class DependencyInjection
     /// builder.Services.AddSingleton&lt;IClock, UtcClockProvider&gt;();
     /// builder.Services.AddMultiTenancyCore();
     /// builder.Services.AddAmbientContext();
-    /// builder.Services.AddCorrelationIdCore(builder.Configuration);
+    /// builder.Services.AddCorrelationIdCore();
     /// builder.Services.AddOperationRecordsEfCore&lt;AppDbContext&gt;();
     ///
     /// // DbContext 里映射操作记录表
@@ -75,7 +75,7 @@ public static class DependencyInjection
     /// 启用保留期归档：到期记录按天搬入归档表，作为集群周期任务执行。
     /// </summary>
     /// <remarks>
-    /// <para>选项绑定 <c>Leistd:OperationRecords:Retention</c> 并在启动期校验；默认 <c>Enabled = false</c>，
+    /// <para>选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:OperationRecords:Retention</c>）并在启动期校验，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>；默认 <c>Enabled = false</c>，
     /// 任务照常排期、到点跳过，打开开关下一轮即生效。</para>
     /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁；
     /// 归档按物理库逐个执行，独立库租户的记录在各自的库里归档。</para>
@@ -91,13 +91,25 @@ public static class DependencyInjection
     /// <typeparam name="TDbContext">承载操作记录与归档表的 DbContext。</typeparam>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">在配置节之后应用的选项配置。</param>
+    /// <param name="configSectionPath">选项绑定的配置节，校验消息按它报键名。</param>
     public static IServiceCollection AddOperationRecordRetention<TDbContext>(
         this IServiceCollection services,
-        Action<OperationRecordRetentionOptions>? configure = null)
+        Action<OperationRecordRetentionOptions>? configure = null,
+        string configSectionPath = OperationRecordRetentionOptions.SectionName)
         where TDbContext : DbContext
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // 选项只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<OperationRecordRetentionOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddOperationRecordRetention() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
+
         services.AddOptions<OperationRecordRetentionOptions>()
-            .BindConfiguration(OperationRecordRetentionOptions.SectionName)
+            .BindConfiguration(configSectionPath)
             .ValidateOnStart();
         if (configure is not null)
         {
@@ -105,7 +117,7 @@ public static class DependencyInjection
         }
 
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OperationRecordRetentionOptions>, OperationRecordRetentionOptionsValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<OperationRecordRetentionOptions>>(new OperationRecordRetentionOptionsValidator(configSectionPath)));
         services.TryAddTransient<IOperationRecordArchiveService, OperationRecordArchiveService<TDbContext>>();
         services.AddRecurringJob<OperationRecordArchiveJob>(
             OperationRecordArchiveJob.Name,

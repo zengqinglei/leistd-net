@@ -21,7 +21,7 @@ import { HlmInput } from '@spartan-ng/helm/input';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { CreateRoleInputDto, RoleOutputDto, UpdateRoleInputDto } from '../../../../models/role.dto';
+import { CreateRoleInputDto, RoleOutputDto, UpdateRoleInputDto } from '../../../../dtos/role.dto';
 
 interface RoleEditFormModel {
   name: string;

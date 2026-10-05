@@ -10,7 +10,7 @@ public class JsonStringLocalizerTests
 {
     private static JsonStringLocalizer CreateLocalizer(string defaultCulture = "en")
     {
-        var options = MsOptions.Create(new JsonLocalizationOptions { DefaultCulture = defaultCulture });
+        var options = MsOptions.Create(new JsonLocalizationOptions { SupportedCultures = [defaultCulture] });
         // 使用框架 Core 自带的嵌入资源（en.json / zh-CN.json）
         options.Value.ResourceAssemblies.Add(typeof(JsonLocalizationOptions).Assembly);
         var reader = new JsonLocalizationResourceReader(options);

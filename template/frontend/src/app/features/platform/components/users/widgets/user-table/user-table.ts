@@ -43,18 +43,18 @@ import { SettingContextService } from '../../../../../../core/settings/setting-c
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -62,8 +62,8 @@ import {
   toggleTableSort,
 } from '../../../../../../shared/utils/table-sorting';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
-import { RoleBriefDto } from '../../../../models/role.dto';
-import { UserManagementOutputDto } from '../../../../models/user-management.dto';
+import { RoleBriefDto } from '../../../../dtos/role.dto';
+import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 
 /** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';

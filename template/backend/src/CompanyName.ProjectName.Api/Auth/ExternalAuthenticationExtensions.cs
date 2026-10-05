@@ -3,11 +3,14 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
 using AspNet.Security.OAuth.GitHub;
+using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
@@ -27,8 +30,8 @@ internal static class ExternalAuthenticationExtensions
             cookie.ExpireTimeSpan = TimeSpan.FromMinutes(5);
             cookie.SlidingExpiration = false;
         });
-        services.AddOptions<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(AuthenticationSchemeNames.ExternalCookie)
-            .Configure<DistributedTicketStore, Microsoft.Extensions.Options.IOptions<CompanyName.ProjectName.Api.Options.SessionCookieOptions>>((cookie, store, session) =>
+        services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.ExternalCookie)
+            .Configure<DistributedTicketStore, IOptions<SessionCookieOptions>>((cookie, store, session) =>
             {
                 cookie.SessionStore = store;
                 cookie.Cookie.SameSite = session.Value.SameSite ?? SameSiteMode.Lax;

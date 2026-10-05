@@ -1,0 +1,137 @@
+#if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api.Options;
+using CompanyName.ProjectName.Application.Shared;
+using Leistd.ServiceClient.Abstractions;
+#if (ResourceBrowserSession)
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+#endif
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using OpenIddict.Validation;
+using OpenIddict.Validation.AspNetCore;
+
+namespace CompanyName.ProjectName.Api.Auth;
+
+/// <summary>
+/// 资源服务的认证：远端签发方的 Bearer 校验，以及（带浏览器会话时）服务端 OIDC 会话。
+/// </summary>
+internal static class RemoteTokenAuthenticationExtensions
+{
+    private const string RemoteIdentityConfigurationError =
+        "Resource services require Authentication:Issuer (an absolute http(s) URI) and Authentication:Audience.";
+
+    public static void AddRemoteTokenAuthentication(this WebApplicationBuilder builder)
+    {
+        // Resource 的机器 Bearer 与服务端 OIDC 会话使用同一签发方和资源受众。
+        builder.Services.AddOptions<RemoteIdentityOptions>()
+            .Bind(builder.Configuration.GetSection(RemoteIdentityOptions.SectionName));
+
+        // 校验放在这里而不是 ValidateOnStart：OpenIddict 在**组合期**就要用 issuer，
+        // 比启动期校验早一步。两处都写等于同一条件维护两份，出错时还分不清是哪一处报的。
+        var remoteIdentity = builder.Configuration
+            .GetSection(RemoteIdentityOptions.SectionName)
+            .Get<RemoteIdentityOptions>() ?? new RemoteIdentityOptions();
+        if (!remoteIdentity.IsUsable)
+        {
+            throw new InvalidOperationException(RemoteIdentityConfigurationError);
+        }
+
+        builder.Services.AddOpenIddict()
+            .AddValidation(options =>
+            {
+                options.SetIssuer(remoteIdentity.IssuerUri!);
+                options.AddAudiences(remoteIdentity.Audience!);
+                // 发现文档与 JWKS 的抓取有界：签名公钥按需刷新时请求会等它（含官方重试）
+                options.UseSystemNetHttp()
+                    .ConfigureHttpClient(client => client.Timeout = RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout);
+                options.AddEventHandler(RefreshSigningKeysOnUnknownKeyIdentifier.Descriptor);
+                options.UseAspNetCore()
+                    .DisableAccessTokenExtractionFromQueryString()
+                    .DisableAccessTokenExtractionFromBodyForm();
+            });
+        // 在 OpenIddict 建好配置管理器之后给"请求刷新"限频（注册顺序即执行顺序）
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<OpenIddictValidationOptions>, ThrottleSigningKeyRefresh>());
+
+        // 下游 Token Exchange 取经过验证的请求令牌：会话取服务端票据里的，Bearer 取验证后的
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.TryAddSingleton<IUserAccessTokenAccessor, ResourceUserAccessTokenAccessor>();
+
+#if (ResourceBrowserSession)
+        builder.AddResourceBrowserSession(remoteIdentity);
+#else
+        // 纯资源 API：只接受 Bearer。没有浏览器会话，也就没有 Cookie、OIDC 客户端与登录退出端点
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+        });
+#endif
+    }
+#if (ResourceBrowserSession)
+
+    // 有 Authorization 头只选 Bearer，失败不回退 Cookie；无头时选服务端 Cookie 会话，由机密 OIDC 客户端登录
+    private static void AddResourceBrowserSession(this WebApplicationBuilder builder, RemoteIdentityOptions remoteIdentity)
+    {
+        foreach (var (key, value) in new[] { ("ClientId", remoteIdentity.ClientId), ("ClientSecret", remoteIdentity.ClientSecret) })
+            if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException($"Authentication:{key} is required for the Resource OIDC confidential client.");
+        builder.Services.TryAddSingleton<ResourceSessionRefresher>();
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = AuthenticationSchemeNames.Smart;
+            options.DefaultChallengeScheme = AuthenticationSchemeNames.Smart;
+        })
+        .AddPolicyScheme(AuthenticationSchemeNames.Smart, "Selects the request authentication scheme", options =>
+            options.ForwardDefaultSelector = context => context.Request.Headers.ContainsKey("Authorization")
+                ? OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme : AuthenticationSchemeNames.SessionCookie)
+        .AddCookie(AuthenticationSchemeNames.SessionCookie, options =>
+        {
+            // 前缀取舍同 LocalIdentity 的会话 Cookie；时长与站点策略见 AuthenticationExtensions 的会话 Cookie 选项。
+            options.Cookie.Name = builder.Environment.IsDevelopment() ? "CompanyName.ProjectName.Auth" : "__Host-Http-CompanyName.ProjectName.Auth";
+            options.Cookie.Path = "/";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+            options.Events.OnValidatePrincipal = context => context.HttpContext.RequestServices.GetRequiredService<ResourceSessionRefresher>().ValidateAsync(context);
+            options.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
+            options.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
+        })
+        .AddOpenIdConnect(AuthenticationSchemeNames.OpenIdConnect, options =>
+        {
+            options.Authority = remoteIdentity.Issuer;
+            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+            options.ClientId = remoteIdentity.ClientId;
+            options.ClientSecret = remoteIdentity.ClientSecret;
+            options.SignInScheme = AuthenticationSchemeNames.SessionCookie;
+            options.ResponseType = "code";
+            options.SaveTokens = true;
+            options.MapInboundClaims = false;
+            options.CallbackPath = "/api/v1/auth/signin";
+            // 授权与退出请求都以自动提交的表单 POST 发往 Identity：id_token_hint 不进地址栏、历史记录与 Referer
+            options.AuthenticationMethod = OpenIdConnectRedirectBehavior.FormPost;
+            options.SignedOutCallbackPath = "/api/v1/auth/signout";
+            options.Scope.Clear();
+            foreach (var scope in new[] { "openid", "profile", "email", "roles", "offline_access", remoteIdentity.Scope ?? remoteIdentity.Audience! }) options.Scope.Add(scope);
+            options.Events.OnRemoteFailure = context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return Task.CompletedTask;
+            };
+            options.Events.OnTokenValidated = async context =>
+            {
+                // tenant_id 等资源声明在签发方的访问令牌中，不能假定 ID token 也带这些字段。
+                context.Principal = await ResourceSessionRefresher.ValidateAccessTokenAsync(context.HttpContext,
+                    context.TokenEndpointResponse!.AccessToken, context.HttpContext.RequestAborted);
+            };
+            options.Events.OnRedirectToIdentityProviderForSignOut = context =>
+            {
+                // 保留 id_token_hint：Identity 据其中的会话标识判断能否免确认退出；client_id 在 hint 缺失时关联退出回调
+                context.ProtocolMessage.ClientId = remoteIdentity.ClientId;
+                return Task.CompletedTask;
+            };
+        });
+    }
+#endif
+}
+#endif

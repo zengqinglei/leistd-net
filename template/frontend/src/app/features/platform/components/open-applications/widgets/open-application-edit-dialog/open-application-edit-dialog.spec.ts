@@ -10,7 +10,7 @@ import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
   UpdateOpenApplicationInputDto,
-} from '../../../../models/open-application.dto';
+} from '../../../../dtos/open-application.dto';
 
 /**
  * 下拉触发器与选项文案一致性回归。

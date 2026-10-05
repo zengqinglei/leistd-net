@@ -22,7 +22,6 @@ import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
-import { NotificationOutputDto, NotificationService } from './notification-service';
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
 import { SettingContextService } from '../../../core/settings/setting-context-service';
@@ -31,6 +30,7 @@ import { AppDate } from '../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
+import { NotificationOutputDto, NotificationService } from '../../services/notification-service';
 
 /**
  * 通知中心：铃铛 + 未读角标 + popover 通知列表（标记已读 / 单条或全部清除）。

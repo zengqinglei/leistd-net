@@ -2,10 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import {
-  TenantConnectionDto,
-  UpsertTenantConnectionInputDto,
-} from '../../../shared/dtos/tenant-connection.dto';
+import { TenantConnectionDto, UpsertTenantConnectionInputDto } from '../dtos/tenant-connection.dto';
 
 @Injectable({ providedIn: 'root' })
 export class TenantConnectionService {

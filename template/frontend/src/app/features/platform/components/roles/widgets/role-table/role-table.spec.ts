@@ -13,7 +13,7 @@ import { RoleTable } from './role-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
-import { RoleOutputDto } from '../../../../models/role.dto';
+import { RoleOutputDto } from '../../../../dtos/role.dto';
 
 /**
  * 角色表格与用户表格共用同一套受控分页/排序约定，这里覆盖同样的关键路径。

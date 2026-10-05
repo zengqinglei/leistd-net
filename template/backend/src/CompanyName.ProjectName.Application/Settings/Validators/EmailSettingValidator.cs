@@ -6,6 +6,7 @@ using Leistd.ExceptionHandling;
 using Leistd.Settings.Validation;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
+using System.Net.Mail;
 
 namespace CompanyName.ProjectName.Application.Settings.Validators;
 
@@ -33,7 +34,7 @@ internal sealed class EmailSettingValidator(
 
             // 只收裸地址：带显示名的写法（"Acme <a@b.c>"）在这里放行，发信时才因为解析不出而失败
             case SettingConstant.Email.DefaultFromAddress
-                when !System.Net.Mail.MailAddress.TryCreate(context.Value, out var address) || address.Address != context.Value:
+                when !MailAddress.TryCreate(context.Value, out var address) || address.Address != context.Value:
                 throw new BusinessException(AppSettingErrorCodes.EmailAddressInvalid, $"'{context.Value}' is not a valid email address.")
                     .WithData("Value", context.Value);
         }

@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using System.Text;
 namespace CompanyName.ProjectName.Domain.Shared.Text;
 
 /// <summary>
@@ -11,7 +12,7 @@ public static class Base32
     /// <summary>编码为大写 Base32，不带 <c>=</c> 填充。</summary>
     public static string Encode(ReadOnlySpan<byte> data)
     {
-        var output = new System.Text.StringBuilder((data.Length * 8 + 4) / 5);
+        var output = new StringBuilder((data.Length * 8 + 4) / 5);
         int buffer = 0, bits = 0;
         foreach (var b in data)
         {

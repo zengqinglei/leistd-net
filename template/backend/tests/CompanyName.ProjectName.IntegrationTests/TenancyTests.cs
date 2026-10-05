@@ -47,6 +47,7 @@ using Leistd.Data.Paging;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -233,7 +234,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         using var scope = _factory.Services.CreateScope();
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
         var users = scope.ServiceProvider
-            .GetRequiredService<CompanyName.ProjectName.Domain.Users.DomainServices.UserDomainService>();
+            .GetRequiredService<UserDomainService>();
 
         using (currentTenant.Change(tenantId))
         {

@@ -1,14 +1,39 @@
 using Leistd.Settings.Validation;
+using CompanyName.ProjectName.Api;
+using CompanyName.ProjectName.Api.Auth;
+#if (IncludeNotifications && LocalIdentity)
+using CompanyName.ProjectName.Api.Hosting;
+using CompanyName.ProjectName.Api.Notifications;
+using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
+#endif
 using CompanyName.ProjectName.Application;
+#if (IncludeRealTime)
+using CompanyName.ProjectName.Application.RealTime;
+#endif
 using CompanyName.ProjectName.Domain;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (LocalIdentity && IncludeMultiTenancy)
+using CompanyName.ProjectName.Infrastructure;
+using CompanyName.ProjectName.Infrastructure.TenantConnections;
+using Leistd.MultiTenancy.Management.Provisioning;
+#endif
 using Leistd.ObjectMapping.Abstractions;
+using Leistd.ObjectMapping.Mapster.Options;
+#if (IncludeRealTime)
+using Leistd.RealTime.Subscriptions;
+#endif
+using Microsoft.AspNetCore.Authorization;
+#if (LocalIdentity && IncludeMultiTenancy)
+using Microsoft.Extensions.Configuration;
+#endif
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Registration;
 
 /// <summary>
-/// 注册面：<c>AddDomainServices()</c> 与 <c>AddApplicationServices()</c>。
+/// 注册面：各层入口 <c>AddDomainServices()</c>、<c>AddApplicationServices()</c>、<c>AddApiAuthorization()</c>，
+/// 以及与组件入口的组合顺序。
 /// </summary>
 /// <remarks>
 /// 注册结果是组合根的契约，编译期完全看不出来：生命周期写错、重复注册、
@@ -18,7 +43,7 @@ namespace CompanyName.ProjectName.UnitTests.Registration;
 public class ServiceRegistrationTests
 {
     [Fact]
-    public void Domain_services_are_registered_with_a_scoped_friendly_lifetime()
+    public void Domain_services_are_registered_as_transient()
     {
         var services = new ServiceCollection();
 
@@ -66,8 +91,7 @@ public class ServiceRegistrationTests
         Assert.Contains(services, d => d.ServiceType == typeof(IObjectMapper));
     }
 
-    // 应用层的映射配置经程序集扫描发现。扫描只应发生在这一次显式调用里——
-    // 它一旦渗进更底层的注册面，每建一次容器都要遍历整个程序集的类型。
+    // 映射配置经程序集扫描发现，扫描在构建映射器时执行：不需要宿主也能解析出可用的映射器。
     [Fact]
     public void Application_services_resolve_without_a_host()
     {
@@ -79,4 +103,125 @@ public class ServiceRegistrationTests
 
         Assert.NotNull(provider.GetRequiredService<IObjectMapper>());
     }
+
+    // 重复调用不能让多实现扩展点（事件处理器、设置校验器、定义提供方）多出一份——
+    // 那会让每个事件处理两次、每条定义登记两次；映射扫描也只登记一次。
+    // 组件入口内部的 Options 配置回调可能随调用累加，因此按实际效果比较，而不是比较描述符总数。
+    [Fact]
+    public void Application_registration_is_idempotent()
+    {
+        var once = new ServiceCollection().AddLogging().AddApplicationServices();
+        var twice = new ServiceCollection().AddLogging().AddApplicationServices().AddApplicationServices();
+
+        Assert.Equal(Registrations(once), Registrations(twice));
+        using var onceProvider = once.BuildServiceProvider();
+        using var twiceProvider = twice.BuildServiceProvider();
+        Assert.Equal(
+            onceProvider.GetRequiredService<IOptions<MapsterOptions>>().Value.Configurators.Count,
+            twiceProvider.GetRequiredService<IOptions<MapsterOptions>>().Value.Configurators.Count);
+    }
+#if (IncludeRealTime)
+
+    // 实时 Hub 映射时要求订阅授权器已登记（框架不给默认实现）：它属于应用层的授权规则，随应用层入口登记
+    [Fact]
+    public void Application_registration_chooses_the_realtime_subscription_authorizer()
+    {
+        var services = new ServiceCollection().AddLogging().AddApplicationServices();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IRealTimeSubscriptionAuthorizer));
+        Assert.Equal(typeof(AppRealTimeSubscriptionAuthorizer), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Transient, descriptor.Lifetime);
+    }
+#endif
+#if (LocalIdentity && IncludeMultiTenancy)
+
+    // 组件（AddTenantManagement）按 TryAdd 挂"不翻译"的默认实现，本项目有意覆盖：
+    // 不论哪一层先注册，生效的都是 PostgreSQL 方言的翻译，且只有一条
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_postgres_tenant_error_describer_wins_in_either_registration_order(bool infrastructureFirst)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection().AddLogging();
+
+        if (infrastructureFirst)
+        {
+            services.AddInfrastructureServices(configuration);
+            services.AddApplicationServices();
+        }
+        else
+        {
+            services.AddApplicationServices();
+            services.AddInfrastructureServices(configuration);
+        }
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(ITenantDatabaseErrorDescriber));
+        Assert.Equal(typeof(PostgresTenantDatabaseErrorDescriber), descriptor.ImplementationType);
+    }
+#endif
+#if (IncludeNotifications && LocalIdentity)
+
+    // 应用层默认不发安全提醒（TryAdd），启用通知时宿主有意替换为经通知组件发布：与调用先后无关
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Notification_security_alerts_replace_the_silent_default_in_either_order(bool applicationFirst)
+    {
+        var services = new ServiceCollection().AddLogging();
+
+        if (applicationFirst)
+        {
+            services.AddApplicationServices();
+            services.AddMyProjectNotifications();
+        }
+        else
+        {
+            services.AddMyProjectNotifications();
+            services.AddApplicationServices();
+        }
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(ISecurityAlertPublisher));
+        Assert.Equal(typeof(NotificationSecurityAlertPublisher), descriptor.ImplementationType);
+    }
+#endif
+
+    // ASP.NET Core 只认一个授权结果处理器：本项目的处理器替换官方默认实现，与 AddAuthorization 的先后无关，重复调用也只有一条
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Api_authorization_replaces_the_default_result_handler_in_either_order(bool apiFirst)
+    {
+        var services = new ServiceCollection();
+
+        if (apiFirst)
+        {
+            services.AddApiAuthorization();
+            services.AddAuthorization();
+        }
+        else
+        {
+            services.AddAuthorization();
+            services.AddApiAuthorization();
+        }
+        services.AddApiAuthorization();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthorizationMiddlewareResultHandler));
+        Assert.Equal(typeof(ApiAuthorizationResultHandler), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+    }
+
+    // 服务类型、实现与生命周期的多重集合；Options 配置回调按实际效果另行比较
+    private static List<string> Registrations(IServiceCollection services) =>
+        services
+            .Where(d => !IsOptionsCallback(d.ServiceType))
+            .Select(d => $"{d.ServiceType.FullName}|{d.Lifetime}|" +
+                (d.ImplementationType?.FullName ?? d.ImplementationInstance?.GetType().FullName ?? "factory"))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+    private static bool IsOptionsCallback(Type serviceType) =>
+        serviceType.IsGenericType &&
+        serviceType.GetGenericTypeDefinition() is var definition &&
+        (definition == typeof(IConfigureOptions<>) || definition == typeof(IPostConfigureOptions<>));
 }

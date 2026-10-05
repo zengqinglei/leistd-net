@@ -21,21 +21,21 @@ import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../core/components/language-switcher/language-switcher';
+//#endif
+import { ThemeModeToggle } from '../../../core/components/theme-mode-toggle/theme-mode-toggle';
 //#if (Impersonation)
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ImpersonationService } from '../../../core/services/impersonation-service';
 //#endif
-//#if (IncludeLocalization)
-import { LanguageSwitcher } from '../../../shared/components/language-switcher/language-switcher';
-//#endif
-import { ThemeModeToggle } from '../../../shared/components/theme-mode-toggle/theme-mode-toggle';
+import { LayoutService } from '../../../core/services/layout-service';
 //#if (Impersonation)
 import { PopoverAria } from '../../../shared/directives/popover-aria';
 //#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
-import { LayoutService } from '../../services/layout-service';
 //#if (IncludeNotifications)
 import { Notifications } from '../notifications/notifications';
 //#endif

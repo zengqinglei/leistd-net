@@ -24,9 +24,9 @@ import {
 //#if (IncludeLocalization)
 import { TranslationScopeRecovery } from './core/i18n/translation-scopes';
 //#endif
+import { LayoutService } from './core/services/layout-service';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
-import { LayoutService } from './layout/services/layout-service';
 
 /** 应用名的英文原文，与 `index.html` 启动前的标题一致。 */
 const APP_NAME = 'Template Project';

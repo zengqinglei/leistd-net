@@ -42,12 +42,12 @@ public class CaptchaConsumptionTests
         var (service, cache, captchaLock, token, code) = await CreateChallengeAsync();
 
         // 1) 第一次验证进入临界区后停在缓存读取上
-        var first = Validate(service, token, code, invocation: 1);
-        await WaitOrFail(captchaLock.FirstAcquired, "第一次验证没有拿到锁");
+        var first = ValidateAsync(service, token, code, invocation: 1);
+        await WaitOrFailAsync(captchaLock.FirstAcquired, "第一次验证没有拿到锁");
 
         // 2) 第二次验证必须对同一个键发起加锁（此时被第一次挡住）
-        var second = Validate(service, token, code, invocation: 2);
-        await WaitOrFail(captchaLock.SecondAttemptedSameKey, "第二次验证没有对同一个键加锁");
+        var second = ValidateAsync(service, token, code, invocation: 2);
+        await WaitOrFailAsync(captchaLock.SecondAttemptedSameKey, "第二次验证没有对同一个键加锁");
         // 那一刻锁仍应属于第一次调用——否则"竞争窗口成立"这个前提本身就不成立
         Assert.Equal(1, captchaLock.OwnerWhenSecondAttempted);
 
@@ -69,12 +69,12 @@ public class CaptchaConsumptionTests
         var (service, cache, _, token, code) = await CreateChallengeAsync();
         cache.LetFirstReaderProceed();   // 本用例不需要制造竞争
 
-        Assert.False(await Validate(service, token, "wrong", invocation: 1));
-        Assert.False(await Validate(service, token, code, invocation: 2));
+        Assert.False(await ValidateAsync(service, token, "wrong", invocation: 1));
+        Assert.False(await ValidateAsync(service, token, code, invocation: 2));
     }
 
     /// <summary>在独立的异步流里标记调用标识，再执行验证。</summary>
-    private static Task<bool> Validate(ICaptchaAppService service, string token, string code, int invocation)
+    private static Task<bool> ValidateAsync(ICaptchaAppService service, string token, string code, int invocation)
         => Task.Run(async () =>
         {
             // 在 Task.Run 内部赋值：每个任务因此拿到自己的那份，互不影响
@@ -82,7 +82,7 @@ public class CaptchaConsumptionTests
             return await service.ValidateCaptchaAsync(token, code);
         });
 
-    private static async Task WaitOrFail(Task signal, string message)
+    private static async Task WaitOrFailAsync(Task signal, string message)
     {
         var completed = await Task.WhenAny(signal, Task.Delay(FailSafe));
         Assert.True(completed == signal, message);

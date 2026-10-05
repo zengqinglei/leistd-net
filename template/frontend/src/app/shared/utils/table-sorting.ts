@@ -1,6 +1,6 @@
 import { RowData, Table } from '@tanstack/angular-table';
 
-import type { AppTableFeatures } from '../models/table-features';
+import type { AppTableFeatures } from './table-features';
 
 /** 切换某列排序：升序 → 降序 → 升序。 */
 export function toggleTableSort<TData extends RowData>(

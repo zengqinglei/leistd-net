@@ -25,7 +25,7 @@ import { SignalRService } from '../../../../core/services/signalr-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
-import { GetRolesInputDto, RoleOutputDto } from '../../models/role.dto';
+import { GetRolesInputDto, RoleOutputDto } from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
 
 import type { MockedObject } from 'vitest';

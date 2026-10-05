@@ -20,6 +20,8 @@
   <ItemGroup>
     <!-- 默认 HTTP 状态映射是内部实现（由 AddXxx 自动登记），用例要直接调用它核对登记内容 -->
     <InternalsVisibleTo Include="Leistd.ServiceClient.Tests" />
+    <!-- 各客户端技术共用同一套按服务名登记的规则 -->
+    <InternalsVisibleTo Include="Leistd.ServiceClient.Refit" />
   </ItemGroup>
 
 </Project>

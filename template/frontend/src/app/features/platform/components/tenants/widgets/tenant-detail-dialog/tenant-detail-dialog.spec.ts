@@ -9,8 +9,8 @@ import { ConfirmService } from '../../../../../../core/feedback/confirm-service'
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
-import { TenantConnectionDto } from '../../../../../../shared/dtos/tenant-connection.dto';
-import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
+import { TenantConnectionDto } from '../../../../dtos/tenant-connection.dto';
+import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
 
 import type { Mock, MockedObject } from 'vitest';

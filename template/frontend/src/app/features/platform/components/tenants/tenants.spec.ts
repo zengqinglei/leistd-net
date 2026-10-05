@@ -17,12 +17,8 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import {
-  CreateTenantInputDto,
-  GetTenantsInputDto,
-  TenantOutputDto,
-} from '../../../../shared/dtos/tenant.dto';
 import { PERMISSIONS } from '../../../../shared/models/permission';
+import { CreateTenantInputDto, GetTenantsInputDto, TenantOutputDto } from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
 
 import type { MockedObject } from 'vitest';

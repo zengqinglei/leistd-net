@@ -52,7 +52,9 @@ export const PLATFORM_ROUTES: Routes = [
     resolve: { translations: resolveTranslationScopes },
     //#endif
     loadComponent: () =>
-      import('../settings/system-settings/system-settings').then((m) => m.SystemSettings),
+      import('../settings/components/system-settings/system-settings').then(
+        (m) => m.SystemSettings,
+      ),
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.settings.default },
     children: [
@@ -60,7 +62,9 @@ export const PLATFORM_ROUTES: Routes = [
       {
         path: ':group',
         loadComponent: () =>
-          import('../settings/setting-section/setting-section').then((m) => m.SettingSection),
+          import('../settings/components/setting-section/setting-section').then(
+            (m) => m.SettingSection,
+          ),
         data: { scope: 'system' },
       },
     ],

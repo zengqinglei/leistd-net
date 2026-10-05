@@ -66,12 +66,12 @@ import {
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { RoleBriefDto } from '../../../../models/role.dto';
+import { RoleBriefDto } from '../../../../dtos/role.dto';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
   UserManagementOutputDto,
-} from '../../../../models/user-management.dto';
+} from '../../../../dtos/user-management.dto';
 
 @Component({
   selector: 'app-user-edit-dialog',

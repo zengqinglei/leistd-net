@@ -1,5 +1,5 @@
 import { ROLES } from './authorization';
-import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
+import { UserManagementOutputDto } from '../../src/app/features/platform/dtos/user-management.dto';
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
 
 export interface MockUser {

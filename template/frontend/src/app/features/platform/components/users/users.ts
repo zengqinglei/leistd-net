@@ -47,7 +47,7 @@ import {
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#if (!IncludeLocalization)
@@ -59,7 +59,7 @@ import {
   tableStateToQuery,
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
-import { RoleBriefDto } from '../../models/role.dto';
+import { RoleBriefDto } from '../../dtos/role.dto';
 // 裁掉这几个 DTO 之后剩余项能并成一行，而 prettier 会要求那样写；
 // 条件块不能随形态换折行方式，因此在这里固定住
 // prettier-ignore
@@ -75,7 +75,7 @@ import {
   UpdateUserInputDto,
   //#endif
   UserManagementOutputDto,
-} from '../../models/user-management.dto';
+} from '../../dtos/user-management.dto';
 import { RoleService } from '../../services/role-service';
 import { UserManagementService } from '../../services/user-management-service';
 //#if (LocalIdentity)

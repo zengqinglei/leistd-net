@@ -19,6 +19,7 @@ using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.Abstractions;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
@@ -128,7 +129,7 @@ internal sealed class SessionSignInService(
         identity.AddClaim(new Claim(CustomClaimTypes.SessionId, session.Id.ToString()));
         // 真正认证时记录，Cookie 滑动续期不能更新 OIDC max_age 的基准。
         identity.AddClaim(new Claim("auth_time", new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc))
-            .ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
+            .ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         // ICurrentUser 的约定：Username 取 preferred_username，Name 是显示名、取 name。
         // 只写 ClaimTypes.Name 时两者都读到登录名，操作记录的操作人列就与目标列口径不一——

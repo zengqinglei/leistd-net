@@ -82,9 +82,9 @@ if (!queue.TryQueue((services, ct) => services.GetRequiredService<WelcomeMailer>
 | `AddRecurringJob<TJob>(name, schedule \| scheduleFactory, scope)` | Core 包：登记任务；同名同类型幂等，同名不同类型抛出 |
 | `IRecurringJobStateStore` | 集群任务的完成水位 |
 | `IBackgroundTaskQueue.QueueAsync` / `TryQueue` | 入队；满时等待或返回 `false` |
-| `AddInProcessBackgroundJobs(configure?)` | InProcess 包：注册调度器、队列与进程内水位；幂等 |
+| `AddInProcessBackgroundJobs(configure?, configSectionPath?)` | InProcess 包：注册调度器、队列与进程内水位；绑定 `configSectionPath`（默认 `Leistd:BackgroundJobs`）及其 `InProcess` 子节，校验消息按实际路径报键；幂等，换用另一配置节时抛出 |
 | `RecurringJobSchedulerMarker` | Core 包：调度器实现登记的标记（`TryAddSingleton<RecurringJobSchedulerMarker>()`）；自研调度器不登记时，启动检查会误报"没有调度器" |
-| `AddBackgroundJobsEfCore<TDbContext>()` / `ConfigureBackgroundJobs(modelBuilder)` | EF 包：共享水位存储，与注册顺序无关地替换进程内实现 |
+| `AddBackgroundJobsEfCore<TDbContext>()` / `ConfigureBackgroundJobs(modelBuilder)` | EF 包：共享水位存储，与注册顺序无关地替换进程内实现；同一上下文重复调用幂等，已注册其他水位存储或另一上下文的 EF 存储时抛出 |
 
 ## 配置项（Leistd:BackgroundJobs）
 

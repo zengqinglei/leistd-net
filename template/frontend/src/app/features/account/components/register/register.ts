@@ -49,9 +49,9 @@ import {
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 //#if (Email)
-import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
+import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../dtos/account.dto';
 //#else
-import { CaptchaOutputDto } from '../../models/account.dto';
+import { CaptchaOutputDto } from '../../dtos/account.dto';
 //#endif
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';

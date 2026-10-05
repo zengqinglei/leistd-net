@@ -54,13 +54,14 @@ import {
   switchMap,
 } from 'rxjs/operators';
 
+import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
 import {
   FacetedFilter,
   type FacetedFilterOption,
@@ -82,9 +83,8 @@ import {
   GetOperationRecordsInputDto,
   OperationRecordFilterOptionsDto,
   OperationRecordOutputDto,
-} from '../../models/operation-record.dto';
+} from '../../dtos/operation-record.dto';
 import { OperationRecordService } from '../../services/operation-record-service';
-import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 
 /**
  * 操作记录页。

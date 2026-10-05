@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.AspNetCore.SignalR;
+using Leistd.AspNetCore.SignalR.Options;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
 using Leistd.RealTime.AspNetCore.SignalR.Publishing;
 using Leistd.RealTime.Publishing;
@@ -48,11 +49,17 @@ public static class DependencyInjection
 
     /// <summary>映射实时业务事件 Hub 端点（需登录）。</summary>
     /// <remarks>
-    /// 返回官方的 <see cref="HubEndpointConventionBuilder"/>：宿主可继续链式追加授权策略、CORS 等端点约定。
+    /// <para>握手按 <see cref="HubIdentityOptions.PolicyName"/> 授权，未设置时按宿主的默认策略；Hub 方法调用由 SignalR 基座
+    /// 按同一策略复评。要换 Hub 的授权策略就设置该选项，不要在返回的构建器上追加 <c>RequireAuthorization</c>：
+    /// 追加的策略只在握手时生效，调用期不复评。</para>
+    /// <para>返回官方的 <see cref="HubEndpointConventionBuilder"/>：宿主可继续链式追加 CORS 等端点约定。</para>
     /// </remarks>
     /// <example>
     /// <code>
-    /// app.MapRealTimeHub().RequireAuthorization("Realtime");
+    /// builder.Services.AddRealTimeSignalR();
+    /// builder.Services.Configure&lt;HubIdentityOptions&gt;(options =&gt; options.PolicyName = "Realtime");
+    ///
+    /// app.MapRealTimeHub();
     /// </code>
     /// </example>
     /// <param name="endpoints">端点路由构建器。</param>
@@ -77,8 +84,6 @@ public static class DependencyInjection
                 "authenticated client may subscribe to any resource key.");
         }
 
-        var hub = endpoints.MapHub<RealTimeHub>(pattern);
-        hub.RequireAuthorization();
-        return hub;
+        return endpoints.MapHub<RealTimeHub>(pattern).RequireHubAuthorization();
     }
 }

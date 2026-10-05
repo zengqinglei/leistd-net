@@ -31,6 +31,7 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 #if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.EntityFrameworkCore;
 #endif
+using Leistd.Security.Claims;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -102,7 +103,7 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
             [
                 new Claim(OpenIddictConstants.Claims.Subject, "8f14e45f-ea6a-4c4b-9b2b-7c1f0a2d3e4f"),
-                new Claim(Leistd.Security.Claims.CustomClaimTypes.IsSuperAdmin, "true")
+                new Claim(CustomClaimTypes.IsSuperAdmin, "true")
             ],
             "test"));
 

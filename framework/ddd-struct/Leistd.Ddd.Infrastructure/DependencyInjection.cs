@@ -48,7 +48,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         Action<UnitOfWorkOptions>? configureUnitOfWork = null)
     {
-        services.AddSingleton<IQueryableAsyncExecuter, EfCoreQueryableAsyncExecuter>();
+        services.TryAddSingleton<IQueryableAsyncExecuter, EfCoreQueryableAsyncExecuter>();
 
         // 保留宿主或测试预先注册的时钟实现。
         services.TryAddSingleton<IClock, UtcClockProvider>();
@@ -57,12 +57,13 @@ public static class DependencyInjection
 
         // 领域事件由保存拦截器收集后发布，事件总线是基座的组成部分，不留给宿主记得注册
         services.AddLocalEventBus();
-        services.AddScoped<LocalEventSaveChangesInterceptor>();
+        // 待发布事件按 DbContext 暂存在静态弱表中，拦截器本身无状态。
+        services.TryAddTransient<LocalEventSaveChangesInterceptor>();
 
         services.TryAddSingleton<ConcurrencyStampSaveChangesInterceptor>();
 
-        services.AddSingleton<IDataFilter, DataFilter>();
-        services.AddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>)); // 状态由 AsyncLocal 隔离
+        services.TryAddSingleton<IDataFilter, DataFilter>();
+        services.TryAddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>)); // 状态由 AsyncLocal 隔离
 
         services.AddUnitOfWork(configureUnitOfWork);
 

@@ -17,7 +17,7 @@ import { OperationRecordTable } from './operation-record-table';
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
-import { OperationRecordOutputDto } from '../../../../models/operation-record.dto';
+import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto';
 
 /**
  * 失败原因的取法：后端按请求语言渲染的 `failureMessage` 优先，取不到时回落。

@@ -1,12 +1,13 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using Leistd.Ddd.Application.Contracts.AppServices;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 /// <summary>
 /// 本人的两步验证：设置、启用、停用与恢复码
 /// </summary>
-public interface ITwoFactorAppService
+public interface ITwoFactorAppService : IAppService
 {
     /// <summary>当前状态。</summary>
     Task<TwoFactorStatusOutputDto> GetStatusAsync(CancellationToken cancellationToken = default);

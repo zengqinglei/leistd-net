@@ -16,6 +16,7 @@ using Leistd.Authorization;
 using Leistd.Authorization.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json.Serialization;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -205,7 +206,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
         // 同一个有效令牌：走 Authorization 头能认证，走 query 一律不认。
         // 令牌进 URL 就会进网关访问日志、APM、浏览器历史与 Referer，RFC 6750 §2.3 因此写的是
         // "除非无法用 Authorization 头，否则 SHOULD NOT"。真需要（浏览器 WebSocket/SSE 设不了
-        // 自定义头）时按路径定向搬运，见 Program.cs 中 AddValidation 处的说明——那是 /hubs/* 的
+        // 自定义头）时按路径定向搬运，见 Auth/OpenIddictServerExtensions 中 AddValidation 处的说明——那是 /hubs/* 的
         // 需要，不是全部 API 的。这条断言锁住这个决定：谁把全局提取重新打开，这里会红。
         using var viaHeader = CreateHttpsClient();
         viaHeader.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -507,6 +508,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
     }
 
     private sealed record TokenResponse(
-        [property: System.Text.Json.Serialization.JsonPropertyName("access_token")] string AccessToken);
+        [property: JsonPropertyName("access_token")] string AccessToken);
 }
 #endif

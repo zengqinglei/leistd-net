@@ -2,8 +2,9 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { Provider } from '@angular/core';
 
 import { MOCK_APIS, mockInterceptor } from './interceptor';
-import { shouldProvideMock } from './matching';
+import { isMockedUrl, shouldProvideMock } from './matching';
 import { MockConfig } from './models';
+import { MOCKED_URL } from '../../src/app/core/mock/mocked-url';
 import * as allApis from '../index';
 
 /**
@@ -22,7 +23,10 @@ export function provideMock(config: boolean | MockConfig): Provider[] {
     .filter((value) => typeof value === 'object' && value !== null)
     .reduce((acc, current) => ({ ...acc, ...current }), {});
 
-  return [{ provide: MOCK_APIS, useValue: apis }];
+  return [
+    { provide: MOCK_APIS, useValue: apis },
+    { provide: MOCKED_URL, useValue: (url: string) => isMockedUrl(config, url) },
+  ];
 }
 
 /**
@@ -31,6 +35,3 @@ export function provideMock(config: boolean | MockConfig): Provider[] {
 export function mockInterceptors(config: boolean | MockConfig): HttpInterceptorFn[] {
   return shouldProvideMock(config) ? [mockInterceptor] : [];
 }
-
-/** 这个请求是否由 Mock 应答。只有本机开发构建会把 Mock 编进包里，其他构建里恒为 false。 */
-export { isMockedUrl } from './matching';

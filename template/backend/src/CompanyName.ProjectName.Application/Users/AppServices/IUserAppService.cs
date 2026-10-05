@@ -94,7 +94,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 查询用户当前角色
     /// </summary>
-    Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 取用户上传的头像图片；用户不存在、没有头像或头像是外部地址时为 <see langword="null"/>。
@@ -108,7 +108,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 替换用户角色。需要 App.Users.ManageRoles。
     /// </summary>
-    Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+    Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
         Guid id,
         UpdateUserRolesInputDto input,
         CancellationToken cancellationToken = default);

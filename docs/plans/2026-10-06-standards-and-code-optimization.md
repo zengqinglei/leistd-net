@@ -185,27 +185,80 @@ R10 依赖矩阵（行依赖列，✓ 允许）：
 
 按 Framework、模板后端、模板前端三块对照定稿规范审查，带证据（文件:行）的清单写入 `docs/assessments/2026-10-xx-code-audit.md`，送 Codex 审核后转为本节任务，assessment 随即删除。需要调用方迁移的公共 API 变化写入 `docs/framework/upgrade-0.13.0.md`。
 
-### 6.2 已确认的种子任务
+### 6.2 任务
 
-| # | 范围 | 任务 |
-| --- | --- | --- |
-| T2-K1 | Framework | 按 R3 审查非 `TryAdd` 注册（`Ddd.Infrastructure`、`Authorization.AspNetCore`、`Localization.AspNetCore` 等），区分有意覆盖与缺陷；补相同登记重复调用的测试 |
-| T2-K2 | Framework | Options 入口违例：缺 `configSectionPath`、`IConfiguration` 与委托重载并存、内联校验 |
-| T2-K3 | Framework | 按 R2 审查同类拦截器生命周期差异；按 F1 判定 `Security.Core.AddAmbientContext`、`TenantRouting` 配置节是否值得改 |
-| T2-K4 | Framework | `Notifications.Core/Filters`、`Notifications.Settings/Filters` 中的投递过滤器不属于 MVC/Hub 管道过滤器，按 F2 移到所属功能目录 |
-| T2-B1 | 模板后端 | `IUserSessionAppService`、`ITwoFactorAppService` 继承 `IAppService` |
-| T2-B2 | 模板后端 | 按 R4 拆分多 DTO 文件、修正名不副实的文件与 `RoleBriefDto` |
-| T2-B3 | 模板后端 | `ResourceAuthController.Me` 返回具体 DTO 并补 `Async` |
-| T2-B4 | 模板后端 | 按 R1、R3 调整 `AddApplicationServices` 等注册与 Options 绑定，补注册测试；修正生命周期测试名与断言不符 |
-| T2-B5 | 模板后端 | 判定疑似分层错位：`Domain/Shared/Json/JsonOptions`、`Domain/Auth/Options/OAuthOptions`、`Application/Shared/AuthenticationSchemeNames` |
-| T2-F1 | 模板前端 | 按 R10 消除业务源码对 `_mock` 的依赖、`login` 对 `platform/tenant-service` 的跨特性依赖、`shared` 对 `core` 的依赖；eslint 守护 |
-| T2-F2 | 模板前端 | 删除未使用的 `PlatformUserService`；`models/` 中的 DTO 移入 `dtos/` |
-| T2-F3 | 模板前端 | 补缺失的服务、守卫、拦截器单测（先确认是否已被间接覆盖） |
-| T2-F8 | 模板前端 | `check-i18n-keys` 随模板分发：生成项目路径适配、依赖的检查器、功能裁剪、执行入口与正反例验证；完成后恢复 `coding-frontend.md` 引用（C7） |
+审查清单经 Codex 两轮审核后定稿（证据见各任务所列文件；清单原文已按 `docs/README.md` 删除）。公共 API 变更与其模板消费者、XML、组件文档、升级说明放在同一提交，带 `BREAKING CHANGE:` 脚注。
+
+**规范修订**
+
+| # | 内容 |
+| --- | --- |
+| T2-S1 | 框架 §6.1：只要求含运维可调值的委托选项说明不绑定配置的原因（`HubIdentityOptions.RevalidationInterval`、`ControlPlaneConnectionStringName` 补说明） |
+| T2-S2 | 框架 §1：单个 Hub 映射随注册入口放 `DependencyInjection.cs`，多个端点放 `Endpoints/`；既有通知投递过滤器（`Filters/INotificationDeliveryFilter` 等）为公共契约，按 P1 保留，作为 `Filters/` 规则的登记例外 |
+| T2-S3 | 模板 `coding-backend.md`：§7 区分组合期"选择注册哪种实现"（键须在注册前提供，测试用 `UseSetting`）与"取值判断须延后"；§5 `[Display]` 只要求参与字段校验消息的属性；§2、§8 补列 Application `Shared/`、Api `Localization/`、`Notifications/`，"内层自身消费"含 Application，模块内少量协作类型可放模块根但已有分类的类型按分类归位；§4 注册测试：各层入口必测，有注册或配置决策的宿主扩展测行为，单纯转调由启动集成测试覆盖 |
+| T2-S4 | 模板 `coding-frontend.md`：`*.routes.ts` 跨功能只允许懒加载路由引用（`loadComponent`/`loadChildren`），不放开其他依赖与 `_mock`；`environments/` 属于装配点；§8 单测要求收窄为"含参数映射、分支或状态的服务" |
+
+**Framework**
+
+| # | 内容 |
+| --- | --- |
+| T2-K1 | 单实现 `TryAdd*`、多实现 `TryAddEnumerable`、有意覆盖用 `Replace` 加注释：Ddd.Infrastructure `:51,60,64,65`；Authorization.AspNetCore `:33`（Replace）、`:34`；Localization.AspNetCore `:52,53,56,62`，`:59` 改 Replace，删 `:60`；DataScope `:44`；ExceptionHandling.AspNetCore `:109` 用 `TryAddEnumerable(ServiceDescriptor.Singleton<IExceptionHandler, BusinessExceptionHandler>())`；Tracing.HttpClient 按命名客户端去重 `AddHttpMessageHandler` 并验证执行次数；ServiceClient.OAuth `:24,71` 验证器去重并明确不同配置路径二次调用的契约 |
+| T2-K2 | BackgroundJobs.EntityFrameworkCore：只移除已知内存默认实现，保留对其他实现与另一 DbContext 的冲突检查，最后 `TryAddTransient`；验证 InProcess→EF、EF→InProcess、同一 EF 重复、两个 DbContext 四种组合 |
+| T2-K3 | 补注册测试：每个 `DependencyInjection.cs` 覆盖注册结果与生命周期、相同登记重复调用（观察管道、Options 集合等实际效果）、相邻组件覆盖与共存；逐文件确认已有覆盖 |
+| T2-K4 | **破坏性**：ServiceClient.Core、Refit、MultiTenancy.ServiceClient 入口收敛为 `(serviceName, Action<TOptions>? configure = null, string? configSectionPath = null)`，Refit 保留 `RefitSettings? settings`；默认节 `Leistd:ServiceClients:{serviceName}`；相同登记重复调用不重复登记客户端与处理器；普通命名客户端以 `serviceName` 区分、可多次登记不同名称；单一权威存储（MultiTenancy.ServiceClient 远端连接存储）相同参数幂等、不同 `serviceName` 或配置路径明确拒绝；规则写入 XML 并测试；同步模板 Client 外层入口与 Infrastructure 调用；覆盖配置绑定→委托覆盖、自定义节路径、返回构建器继续配置的测试 |
+| T2-K5 | `configSectionPath` 末尾可选参数：`AddInProcessBackgroundJobs`（根路径推导 `:InProcess` 子节）、`AddNotificationRetention`、`AddOperationRecordRetention`、`AddHostSettings`（保留必填 `bind`）、`AddRemoteTenantConnectionResolution`；验证器报错使用实际配置路径 |
+| T2-K6 | Settings.Hosting `:67`、MultiTenancy.ServiceClient `:58` 的内联校验拆为 `IValidateOptions`，取实际配置路径；不同客户端名与路径的错误消息各自正确 |
+| T2-K7 | **破坏性**：`JsonLocalizationOptions.SupportedCultures` 为唯一事实源，`DefaultCulture` 改为派生只读；空列表、无效文化名在启动阶段失败；验证 `DefaultCulture`、请求默认文化与资源回落均取 `SupportedCultures` 首项；修正 XML 与 `localization.md` 中无法编译的示例；同步模板 `Program.cs` |
+| T2-K8 | `LocalEventSaveChangesInterceptor` 改 Transient，保留多上下文、保存失败、事件只发布一次的验证 |
+| T2-K9 | **破坏性（仅预览版）**：`TenantRouteCacheOptions` 配置节改 `Leistd:MultiTenancy:Routing`，同步默认值、验证器、模板配置、组件文档、测试与升级清单 |
+| T2-K10 | 修正 XML 与文档中调用已删除重载的示例（OperationRecords.EntityFrameworkCore `:34,42`、`operation-records.md:70`、ServiceClient.Refit `:31`、MultiTenancy.ServiceClient `:29`），编译验证 |
+| T2-K11 | Hub 授权：`MapRealTimeHub`、`MapNotificationHub` 收敛到显式策略，并让 `AmbientContextHubFilter` 调用期复评使用同一策略；以"默认策略拒绝、指定策略允许"的主体测握手与调用两阶段，覆盖多个 Hub |
+| T2-K12 | Resource 授权的 `IResourceGrantStore` 与 `IResourceGrantManager` 按 §6.6 统一为 Transient（或写明保持 Scoped 的理由），同步权威存储检查的期望生命周期 |
+
+**模板后端**
+
+| # | 内容 |
+| --- | --- |
+| T2-B1 | `IUserSessionAppService`、`ITwoFactorAppService` 继承 `IAppService` |
+| T2-B2 | DTO 拆分与改名：`RoleDtos.cs`、`TwoFactorDtos.cs`、`EmailVerificationDtos.cs` 逐类型拆分；`ExternalLoginLinkDtos.cs` 改名 `ExternalLoginsOutputDto.cs`；`TenantDtos.cs`、`SettingDtos.cs` 改名；`RoleBriefDto` → `RoleBriefOutputDto`；`OpenApplicationScopeOutputDto` 改 record；`ServiceInfoController` 中的 DTO 拆出（保留 LocalIdentity 条件）；`UserEntityConfiguration.cs` 拆出 `BaseEntityConfiguration`，`ResourceSessionAuthentication.cs` 改名 |
+| T2-B3 | `ResourceAuthController`：新增 `Application/Users/Dtos/CurrentResourceUserOutputDto`（`#if (RemoteTokenAuth)`），`GetCurrentUserAsync` 返回它，保持 JSON 字段、缺省值与本地授权来源；`LogoutAsync` 仍返回协议结果；`"email_verified"` 用 OpenIddict 常量 |
+| T2-B4 | 注册：单实现 `TryAdd*`、多实现 `TryAddEnumerable`，PostgreSQL 错误翻译器等有意覆盖用 `Replace` 加注释；Api 自有类型按关注点抽到 `Api/Auth`、`Api/Hosting` 扩展，`Program.cs` 只组合入口与管道；`AppRealTimeSubscriptionAuthorizer` 移入 `AddApplicationServices`；修正注册测试名，补 Application 重复调用与组件组合顺序测试 |
+| T2-B5 | `Domain/Shared/Json/JsonOptions` 移到 `Api/Hosting/WebApiJson.cs`；`Api/Configuration/OAuthCertificateLoader` 移到 `Api/Auth/` |
+| T2-B6 | 外部登录：`CompleteLinkAsync` 返回 `Task`，`CompleteAsync` 返回具体登录 DTO；抽出 `Api/Auth/SessionCookieIssuer` 构造注入，替代 `RequestServices` 定位与跨 Controller 静态调用；保留锁、租户作用域、一次消费、MFA 未完成不签发最终 Cookie、受保护 returnUrl；同步 `auth.md` |
+| T2-B7 | `ExternalAuthController` 用 `IClock`；DTO 参数统一 `input`；正文全限定名改导入（歧义处保留并注释）；测试辅助方法与局部函数补 `Async` |
+| T2-B8 | SessionCookie 取值判断改为 Options + `ValidateOnStart`，覆盖本地身份与资源浏览器两条分支，Cookie 寿命与服务端 IdleTimeout 从同一 Options 派生 |
+
+**模板前端**
+
+| # | 内容 |
+| --- | --- |
+| T2-F1 | 依赖矩阵：`core/mock/mocked-url.ts` 的 `MOCKED_URL` 令牌（root 默认 false，`provideMock` 提供实现）替代 5 处 `_mock` 引用；language-switcher、theme-mode-toggle 移到 `core/components/`；`TenantService.getByHost` 移为 `AccountService.getTenantByHost`（只移匿名探测契约与类型）；`LayoutService` 移到 `core/services/`；core 中引用装配点的用例移到 app 级 spec；`_mock` 的单测移回 `_mock/` |
+| T2-F2 | 删除 `PlatformUserService`；`models/` 中的 DTO 移入 `dtos/`（`permission.ts` 的常量保留）；`tenant-protocol.ts`、`notification-service.ts`、`table-features.ts`、`table-column-meta.ts` 归位；`features/settings` 整理为 `components/<page>` |
+| T2-F3 | 补单测：`auth-guard`、`two-factor-setup-guard`、`url-format-interceptor`、`global-error-handler`（并修正它把归一化 HTTP 错误判为配置错误的警告与注释）、`operation-record-service`、`user-management-service`、`open-application-service`；先确认间接覆盖 |
+| T2-F4 | eslint `import-x/no-restricted-paths` 按矩阵与 `features/*` 生成 zone；验证静态导入、动态导入、re-export、测试例外、routes 懒加载允许与其他引用拒绝；确保解析失败不会静默放过 |
+| T2-F8 | `template/scripts/check-i18n.py` 随模板分发（`!IncludeLocalization` 排除，项目相对路径、纯 Python），迁移前端 scope、键集合与占位符一致、静态词条引用、后端资源、模板错误码、DataAnnotations 键与显式 `ErrorMessage`、硬编码展示中文检查；仓库 `check-i18n-keys.ps1` 保留框架资源、框架错误码、宿主不复制组件译文与英文表检查并调用前者；迁移自检正反例，生成场景断言可运行，给出执行入口；恢复规范引用 |
+
+所有移动或改名同步 `template.json` 裁剪路径、`scripts/template-matrix-scenarios.ps1` 等脚本中的字面路径。
 
 ### 6.3 验证
 
-按 `docs/framework/quality-assurance.md`：框架测试全集与受影响包消费验证；`scripts/test-template-matrix.ps1 -Tier pr`；数据库、认证、前端交互变化补真实检查。
+- Framework：框架测试全集；`pack-local-feed.ps1` 后对受影响包做隔离消费验证。
+- 模板：`check-all.ps1`；前端 lint、单测、构建；本地包上 `test-template-matrix.ps1 -Tier pr`（产物构建与测试）。
+- 认证可判定行为：Resource `GET /api/v1/auth/me` 的 JSON 字段、缺省值、本地角色与超管来源不变，退出仍为 FormPost；外部账号绑定返回空响应、发起者与租户不匹配被拒、失败后票据不可重用、并发消费只成功一次、MFA 未完成不签发最终 Cookie、returnUrl 受保护。复用 `ExternalAuthenticationTests`、`ResourceBrowserSessionTests` 并补缺口。
+- Hub：握手与调用两阶段的策略一致性（T2-K11）。
+- 端到端：本轮候选包上执行 `scripts/test-template-postgresql-e2e.ps1`（实体配置拆分、租户路由配置）与 `scripts/test-template-oidc-e2e.ps1 -IncludeBrowserScenarios`（Cookie、外部登录链路），与上面的可判定行为测试共同验收。
+
+### 6.4 阶段二结果
+
+| 检查 | 结果 |
+| --- | --- |
+| Framework | 构建 0 警告；28 个测试项目 1888 项通过（Redis 19 项按环境跳过）；69 个包打包，受影响包隔离消费通过 |
+| 静态闸门 | `check-all.ps1` 32 道通过 |
+| 模板矩阵 | `-Tier pr` 全部场景后端单元与集成测试通过；`resource-host-browser-notifications` 首轮 stylelint 进程崩溃，干净重跑 55 个测试文件 348 项与后端全部通过 |
+| 端到端 | PostgreSQL 端到端通过；OIDC 端到端含浏览器场景 17 项通过（真实到期等待按默认跳过） |
+| 审查 | Codex 审查发现的 ServiceClient 判重与 ESLint 跨功能判定缺陷已修复并复核 |
+
+阶段二额外收口了审查中发现的同类问题：`AddAmbientContext` 验证器去重、`AddEmailNotifications` 拒绝换节、`AddNotificationPreferences` 覆盖投递过滤器的幂等与注释；租户 DTO 归入 platform，删除无引用的 `TENANT_CLAIM`。
 
 ## 7. 阶段三：收尾
 

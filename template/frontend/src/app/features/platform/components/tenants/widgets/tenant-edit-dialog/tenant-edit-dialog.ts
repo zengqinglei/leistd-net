@@ -29,20 +29,20 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../../../../../../core/validation/password-rule';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import {
   TENANT_CONNECTION_STRING_MAX_LENGTH,
   TENANT_DEFAULT_CONNECTION_NAME,
-} from '../../../../../../shared/dtos/tenant-connection.dto';
+} from '../../../../dtos/tenant-connection.dto';
 import {
   CreateTenantInputDto,
   TENANT_NAME_MAX_LENGTH,
   TENANT_NAME_PATTERN,
   TenantOutputDto,
   UpdateTenantInputDto,
-} from '../../../../../../shared/dtos/tenant.dto';
-//#if (!IncludeLocalization)
-import { englishText } from '../../../../../../shared/utils/english-text';
-//#endif
+} from '../../../../dtos/tenant.dto';
 
 interface TenantEditFormModel {
   name: string;

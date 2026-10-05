@@ -22,6 +22,7 @@ public sealed class DbContextAccessTests
         [
             typeof(Program).Assembly,
             typeof(MyProjectDbContext).Assembly,
+            // 各层都有名为 DependencyInjection 的类，这里保留全限定名
             typeof(CompanyName.ProjectName.Application.DependencyInjection).Assembly
         ];
 

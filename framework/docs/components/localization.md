@@ -25,20 +25,19 @@ dotnet add package Leistd.Localization.AspNetCore
 在 `Program.cs` 注册本地化并接入请求 culture 中间件：
 
 ```csharp
-builder.Services.AddJsonLocalization(
-    supportedCultures: ["en", "zh-CN"],
-    configure: options =>
-    {
-        options.ResourceAssemblies.Add(typeof(Program).Assembly);
-        options.JsonResourceTypes.Add(typeof(MyResourceMarker));
-    });
+builder.Services.AddJsonLocalization(options =>
+{
+    options.SupportedCultures = ["zh-CN", "en"];
+    options.ResourceAssemblies.Add(typeof(Program).Assembly);
+    options.JsonResourceTypes.Add(typeof(MyResourceMarker));
+});
 
 var app = builder.Build();
 
 app.UseJsonRequestLocalization();
 ```
 
-`supportedCultures` 的首项是默认语言。无参 `IStringLocalizer` 读取 JSON；`IStringLocalizer<T>` 只有在 `T` 已加入 `JsonResourceTypes` 时读取 JSON，否则使用 `ResourceManagerStringLocalizerFactory`。`UseJsonRequestLocalization` 应放在所有读取当前 culture 的中间件之前。
+`SupportedCultures` 是支持语言的唯一来源：首项即默认语言，同时决定请求默认区域性与资源回落语言；列表为空或含无效文化名时启动失败。无参 `IStringLocalizer` 读取 JSON；`IStringLocalizer<T>` 只有在 `T` 已加入 `JsonResourceTypes` 时读取 JSON，否则使用 `ResourceManagerStringLocalizerFactory`。`UseJsonRequestLocalization` 应放在所有读取当前 culture 的中间件之前。
 
 ## 资源文件
 
@@ -101,10 +100,10 @@ public class OrderNotifier(IStringLocalizer localizer)
 | `JsonLocalizationResourceReader` | 读取并缓存嵌入 JSON，按程序集登记顺序合并键 |
 | `JsonLocalizationOptions.ResourceAssemblies` | 承载嵌入 JSON 的程序集集合，后登记者覆盖前者 |
 | `JsonLocalizationOptions.ResourcesPath` | 嵌入资源逻辑目录，默认 `Resources` |
-| `JsonLocalizationOptions.DefaultCulture` | 默认/回落语言，默认 `en` |
-
+| `JsonLocalizationOptions.SupportedCultures` | 支持语言，首项为默认/回落语言，默认 `["en","zh-CN"]` |
+| `JsonLocalizationOptions.DefaultCulture` | 只读，`SupportedCultures` 的首项 |
 | `AddJsonLocalizationResources(assembly)` | Core 包：把组件程序集嵌入的 `Resources/{culture}.json` 登记为资源，恒插在最前，宿主资源总能覆盖；幂等 |
-| `AddJsonLocalization(supportedCultures?, configure?)` | 注册 JSON localizer 栈并配置支持语言（首个为默认/回落语言，默认 `["en","zh-CN"]`） |
+| `AddJsonLocalization(configure?)` | 注册 JSON localizer 栈，按 `SupportedCultures` 配置请求区域性；重复调用不重复登记，各次 `configure` 依次应用 |
 | `UseJsonRequestLocalization()` | 接入请求 culture 解析中间件（查询参数、Cookie、Accept-Language 请求头） |
 
 ## 配置项
@@ -116,7 +115,8 @@ public class OrderNotifier(IStringLocalizer localizer)
 | `ResourceAssemblies` | `IList<Assembly>` | 空（`Add*` 时登记） | **加载**：承载嵌入 JSON 的程序集；后登记者覆盖前者 |
 | `JsonResourceTypes` | `ISet<Type>` | 空 | **路由**：显式登记走 JSON 的 typed 资源标记类型；未登记的 `IStringLocalizer<T>` 走官方 RESX |
 | `ResourcesPath` | `string` | `Resources` | 嵌入资源相对程序集根的逻辑目录 |
-| `DefaultCulture` | `string` | `en` | 默认/回落语言 |
+| `SupportedCultures` | `IList<string>` | `["en","zh-CN"]` | 支持语言，首项为默认/回落语言；为空或含无效文化名时启动失败 |
+| `DefaultCulture` | `string`（只读） | `en` | `SupportedCultures` 的首项 |
 
 ## 注意事项
 

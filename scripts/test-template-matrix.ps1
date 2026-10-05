@@ -114,6 +114,14 @@ function Invoke-External([string]$Command, [string[]]$Arguments, [string]$Workin
     }
 }
 
+function Get-Python3Command([string]$Purpose) {
+    foreach ($candidate in @('python3', 'python')) {
+        $found = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { return $found.Name }
+    }
+    throw "未找到 Python 3 解释器（python3/python），无法$Purpose。"
+}
+
 function Invoke-SourcePreflight([switch]$Skip) {
     if ($Skip) {
         if ($env:GITHUB_ACTIONS -cne 'true') { throw '-SkipSourcePreflight 仅用于具有同候选静态作业与必过汇总的 GitHub CI。' }
@@ -131,12 +139,7 @@ function Invoke-SourcePreflight([switch]$Skip) {
 
     # 模板引擎不能可靠诊断悬空符号、指令字面形式与恒真嵌套，先检查源码再准备生成。
     Invoke-External 'pwsh' @('-File', (Join-Path $repoRoot 'scripts/check-template-symbols.ps1'))
-    $pythonCmd = $null
-    foreach ($candidate in @('python3', 'python')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
-    }
-    if (-not $pythonCmd) { throw '未找到 Python 3 解释器（python3/python），无法运行 Python 静态闸门。' }
+    $pythonCmd = Get-Python3Command '运行 Python 静态闸门'
 
     # using/import 守卫在全部符号取值上求值，严于登记的生成场景。
     Invoke-External $pythonCmd @((Join-Path $repoRoot 'scripts/check-using-guards.py'))
@@ -234,13 +237,20 @@ function Assert-MarkdownLinks([string]$ProjectRoot) {
 # 章节锚点按生成后的标题计算：条件裁剪删掉被链接章节时，只有生成产物上看得见。
 # 规则与自检夹具在 check-markdown-anchors.py，check-all 登记其自检。
 function Assert-MarkdownAnchors([string]$ProjectRoot) {
-    $pythonCmd = $null
-    foreach ($candidate in @('python3', 'python')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
+    Invoke-External (Get-Python3Command '检查 Markdown 章节锚点') @((Join-Path $repoRoot 'scripts/check-markdown-anchors.py'), $ProjectRoot)
+}
+
+# 随模板分发的 i18n 闸门与本地化同进退（template.json 的 !IncludeLocalization 排除项），
+# 并且必须在生成产物上跑通：它按项目相对路径定位，模板源码上通过不代表生成后通过。
+function Assert-I18nGate([string]$ProjectRoot) {
+    $gate = Join-Path $ProjectRoot "scripts/check-i18n.py"
+    $hasLocalization = @(Get-ChildItem -Path (Join-Path $ProjectRoot "backend/src/*.Api/Resources") -Directory -ErrorAction SilentlyContinue).Count -gt 0
+    if ((Test-Path -LiteralPath $gate) -ne $hasLocalization) {
+        throw "scripts/check-i18n.py must ship exactly when localization is enabled (localization: $hasLocalization)"
     }
-    if (-not $pythonCmd) { throw '未找到 Python 3 解释器（python3/python），无法检查 Markdown 章节锚点。' }
-    Invoke-External $pythonCmd @((Join-Path $repoRoot 'scripts/check-markdown-anchors.py'), $ProjectRoot)
+    if ($hasLocalization) {
+        Invoke-External (Get-Python3Command '运行生成项目的 i18n 闸门') @($gate) $ProjectRoot
+    }
 }
 
 # 入口指针：AGENTS.md 只指向协作 Skill 与文档索引，CLAUDE.md 只导入 AGENTS.md。
@@ -380,6 +390,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     Assert-MarkdownLinks $ProjectRoot
     Assert-MarkdownAnchors $ProjectRoot
+    Assert-I18nGate $ProjectRoot
 }
 
 # 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
@@ -530,7 +541,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
-    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
+    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/services/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
         foreach ($marker in @("await this.signalR.connect()")) {
@@ -543,7 +554,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
     $signalRPath = Join-Path $ProjectRoot 'frontend/src/app/core/services/signalr-service.ts'
     if (Test-Path -LiteralPath $signalRPath) {
         $signalR = Get-Content -LiteralPath $signalRPath -Raw -Encoding UTF8
-        foreach ($marker in @('environment.useMock', 'isMockedUrl(')) {
+        foreach ($marker in @('inject(MOCKED_URL)', 'this.isMockedUrl(SignalRService.hubPath)')) {
             if (-not $signalR.Contains($marker)) { throw "Scenario '$($Definition.Name)' shared connection lacks Mock isolation: $marker" }
         }
     }

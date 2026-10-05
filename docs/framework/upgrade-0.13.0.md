@@ -398,7 +398,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 宿主级组件的注册入口统一为 `AddX(configure?, configSectionPath?)` | `AddUnitOfWork`、`AddMultiTenancy`、`AddGlobalExceptionHandler`、`AddSmtpEmailSender`、`AddServiceUserContext`、`AddRedisDistributedLock(connectionString, …)` 的 `IConfiguration` 重载已删除：统一从容器里的 `IConfiguration` 绑定默认配置节，委托在绑定之后应用（代码覆盖配置）。调用处去掉 `builder.Configuration` 实参即可；配置节不在默认路径时传 `configSectionPath`。此前委托重载不绑定配置节，写在 appsettings 里的值静默不生效。多租户与工作单元注册类上的 `ConfigurationSection` 常量已删除，改用 `MultiTenancyOptions.SectionName`、`UnitOfWorkOptions.SectionName`；`AddDddInfrastructure(configure)` 经此同样绑定 `Leistd:UnitOfWork`；无主机的 `ServiceCollection` 需自行注册 `IConfiguration` |
 | `AddDddInterceptors` 已删除，由 `AddDddDbContext<T>()` 挂载保存拦截器 | 删掉 `AddDbContext` 回调里的 `options.AddDddInterceptors(sp)`；派生自 `BaseDbContext` 的上下文登记时自动挂上审计、领域事件与并发标记三个拦截器，与注册先后无关。其他上下文不挂载。此前漏挂时这三项静默失效 |
 | `ConfigureByConvention()` 已删除，改为 EF Core 约定 `DddEntityConvention` | 删掉实体配置里的 `b.ConfigureByConvention()`：`BaseDbContext` 自动注册该约定，对所有实现审计或并发标记契约的实体生效（此前只作用于调用了它的实体），显式 Fluent 配置优先。`BaseDbContext.ConfigureConventions` 已封闭，原覆写改为 `ConfigureModelConventions`（无需调 `base`）。不继承基类的上下文如需同一约定，自行 `configurationBuilder.Conventions.Add(_ => new DddEntityConvention())`。**会改变模型，两处**：① 此前未调用 `ConfigureByConvention` 的审计实体，审计人列（`CreatorId` / `LastModifierId` / `DeleterId`）列长变为 64；② **`ConcurrencyStamp` 变为限长 40、必填、并作为并发令牌**——这一项此前未写，未 opt-in 的实体都需要迁移。升级后按 ddd-struct 文档"迁移快照检查"一节确认并生成迁移；**接入该检查后它会报出这处模型差异**——没接入的项目仍要自己核对。旧库里若有该列为空或超过 40 字符的行（来自绕过保存拦截器的写入——手写 SQL、批量导入，或 EF 自己的 `ExecuteUpdate`/`ExecuteDelete`；走 `SaveChanges` 的拦截器一直写 32 位值），迁移会失败：先把这些行补齐或截断，再执行。表现是会报错的迁移失败，不是数据错误 |
-| `TenantRouting:CacheLifetime` 不再必填 | `TenantRouteCacheOptions.CacheLifetime` 改为非空 `TimeSpan`，默认 10 分钟；仍校验大于 0 且不超过 1 小时 |
+| `Leistd:MultiTenancy:Routing:CacheLifetime` 不再必填（配置节改名见 §36） | `TenantRouteCacheOptions.CacheLifetime` 改为非空 `TimeSpan`，默认 10 分钟；仍校验大于 0 且不超过 1 小时 |
 | 客户端取消的判断移出异常组件 | 官方 `ExceptionHandlerMiddleware`（.NET 8+）在调用处理器之前直接返回 499，行为不变 |
 
 ## 11. 身份口径
@@ -409,7 +409,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | --- | --- |
 | `ICurrentUser` 删除 `GetRoles()`、`IsInRole()`、`FindClaims()`、`GetAllClaims()`、`PhoneNumber` | 角色判断改用官方 `ClaimsPrincipal.IsInRole` 或授权策略 `RequireRole`；其他 claim 用 `FindClaim` 或直接读 `ClaimsPrincipal`。**比较方式不同**：原 `IsInRole` 同时认 `role` 与 `ClaimTypes.Role`、角色名不区分大小写；官方只认身份的 `RoleClaimType`、区分大小写。删除后若调用落到 `ClaimsPrincipal.IsInRole`，编译照样通过而结果可能变化，逐处核对角色名大小写与 claim 类型 |
 | 模板会话 Cookie 的身份按 `role` 设 RoleClaimType | 已派生项目在 `SessionSignInService` 构造身份处改为 `new ClaimsIdentity(scheme, ClaimTypes.Name, "role")`。此前默认 RoleClaimType 是 `ClaimTypes.Role` 而角色写成 `role`，官方 `IsInRole` / `RequireRole` 静默判否；旧 Cookie 在重新登录后生效 |
-| 主体标识与租户的 claim 类型收归 `ClaimTypeOptions`（Security.Core） | 唯一配置处：`UserIds`（默认 `sub` → `NameIdentifier`）与 `TenantId`（默认 `tenant_id`），经 `services.Configure<ClaimTypeOptions>(...)` 设置；读取规则 `FindUserId` / `ReadTenant` 也在这里。**带 `ValidateOnStart`**：选项配错（如某项配成空集合）会在启动时失败，而不是等到第一次读 claim；默认配置总是通过。**删除**：`MultiTenancyOptions.TenantClaimType`、`HubIdentityOptions.UserIdClaimTypes`、`OperationRecordOptions.ActorIdClaimType`（配置节里的对应键一并删掉，改到 `ClaimTypeOptions`）。`ICurrentUser` 新增 `SubjectId`（主体标识原始值）；`CurrentUser` 构造函数新增 `IOptions<ClaimTypeOptions>` 参数。自行签发主体的代码（登录、令牌、服务间还原）写 claim 时用同一选项的类型。模板签发令牌时始终写协议要求的 `sub`，`UserIds` 不含 `sub` 时按 `UserIds[0]` 同值再写一条（`SubjectClaims.Set`），机器令牌同理；改了 `TenantId` 的项目同步改前端 `tenant-protocol.ts` 的 `TENANT_CLAIM`，否则前端读不到租户、把租户用户当成宿主 |
+| 主体标识与租户的 claim 类型收归 `ClaimTypeOptions`（Security.Core） | 唯一配置处：`UserIds`（默认 `sub` → `NameIdentifier`）与 `TenantId`（默认 `tenant_id`），经 `services.Configure<ClaimTypeOptions>(...)` 设置；读取规则 `FindUserId` / `ReadTenant` 也在这里。**带 `ValidateOnStart`**：选项配错（如某项配成空集合）会在启动时失败，而不是等到第一次读 claim；默认配置总是通过。**删除**：`MultiTenancyOptions.TenantClaimType`、`HubIdentityOptions.UserIdClaimTypes`、`OperationRecordOptions.ActorIdClaimType`（配置节里的对应键一并删掉，改到 `ClaimTypeOptions`）。`ICurrentUser` 新增 `SubjectId`（主体标识原始值）；`CurrentUser` 构造函数新增 `IOptions<ClaimTypeOptions>` 参数。自行签发主体的代码（登录、令牌、服务间还原）写 claim 时用同一选项的类型。模板签发令牌时始终写协议要求的 `sub`，`UserIds` 不含 `sub` 时按 `UserIds[0]` 同值再写一条（`SubjectClaims.Set`），机器令牌同理。浏览器不持有令牌，前端从 `/api/v1/auth/me` 的 `tenantId` 取租户（服务端按本选项读 claim），改 `TenantId` 不需要同步前端 |
 | 操作人标识改读 `ICurrentUser.SubjectId` | 此前默认读 `sub`、缺失时回落 `ICurrentUser.Id?.ToString()`；现在一律记按 `ClaimTypeOptions.UserIds` 读到的原始值。差别：只有非 GUID 的 `NameIdentifier` 时此前记 `null`、现在记原值；GUID 若非标准 `D` 格式此前被规范化、现在保持原样；只实现 `Id` 而不提供对应 claim 的自定义 `ICurrentUser` 不再有回落。"本人可见"按操作人标识判定，有历史数据时核对新旧标识格式 |
 | `IPermissionSubjectProvider` 新增 `GetSubjectAsync(ClaimsPrincipal, CancellationToken)` | 自定义实现须补上：只按传入主体的声明解析，与 `GetCurrentSubjectAsync` 同一口径（后者可直接转调前者或共用私有方法）。模板实现见 `PermissionSubjectProvider` |
 | 权限策略按被授权的主体判定 | `PermissionAuthorizationHandler` 改为评估 `AuthorizationHandlerContext.User`，此前总是判当前用户——经 `IAuthorizationService` 为别的主体判权时得到的是当前用户的结果。`IPermissionChecker` 新增带 `ClaimsPrincipal` 的两个重载：非当前主体不走作用域快照，其租户 claim 与当前租户不一致时拒绝；当前主体的租户 claim 非法（`ClaimTypeOptions.ReadTenant`，如两份用户凭据被合并成一个主体）时同样拒绝，但不要求等于当前租户，宿主主体显式切入租户照常判定；未接多租户时两条路径都只校验合法性。自定义 `IPermissionChecker` 实现须补这两个重载 |
@@ -424,7 +424,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 模板：令牌端点与 userinfo 在令牌主体的租户内加载用户 | `IAuthPrincipalFactory` 新增 `CreateFromTokenAsync(tokenPrincipal, scopes)`，`CreateUserInfoAsync` 改为只收令牌主体。此前这两个端点的请求解析出的是宿主，**租户用户走不通授权码换令牌、刷新与 userinfo**；已派生项目按模板同步 |
 | 模板：Resource 形态默认授权策略要求自然人 | 派生项目用纯机器令牌调用默认策略端点时，响应从 200 变为 403；给纯机器端点显式声明机器策略，不放宽默认自然人策略 |
 | 模板：租户相关的缓存与状态键按租户隔离 | 登录失败计数、邮箱验证码限流与挑战、外部登录 state 统一经 `ScopeKey`；外部登录 state 绑定发起时的租户，回调时租户不一致即拒绝 |
-| 模板前端：租户键集中到 `tenant-protocol.ts` | `TENANT_HEADER`（`X-Tenant`）、`TENANT_INVALID_HEADER`、`TENANT_CLAIM` 三个常量取代散落的字面量；Resource 形态接受没有租户 claim 的宿主用户 |
+| 模板前端：租户键集中到 `tenant-protocol.ts` | `TENANT_HEADER`（`X-Tenant`）、`TENANT_INVALID_HEADER` 两个常量取代散落的字面量；Resource 形态接受 `/api/v1/auth/me` 不带 `tenantId` 的宿主用户 |
 
 ## 12. 通知推送与本机开发
 
@@ -818,3 +818,81 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
   跑完后逐个报出并以退出码 1 结束（预演同样如此）。控制库、OIDC 存储、默认业务库与显式 `MigrationTarget` 出错仍立即结束，取消立即传播。
   非零退出可能意味着部分库已经迁移、且不会回滚：发布流水线据退出码停下，修好后重跑；新旧 schema 并存期间的兼容性按部署说明的 Expand 阶段要求保证。
   首次安装的判定（只读预演、控制库仍有待迁移、缺表）不变。
+
+## 35. 服务客户端注册入口收敛（破坏性）
+
+- `AddServiceClient<TClient, TImplementation, TOptions>`、`AddRefitServiceClient<TApi, TOptions>` 与
+  `AddRemoteTenantConnectionStore` 不再接收 `IConfiguration`，统一为 `(serviceName, configure?, configSectionPath?)`，
+  Refit 末尾仍有 `settings?`。先绑定 `configSectionPath`（默认 `Leistd:ServiceClients:{serviceName}`），再应用委托；
+  无主机的 `ServiceCollection`（测试、工具）须自行注册 `IConfiguration`。
+
+  ```csharp
+  // 旧
+  services.AddRefitServiceClient<IOrdersApi, OrdersClientOptions>("Orders", configuration);
+  services.AddRefitServiceClient<IOrdersApi, OrdersClientOptions>("Orders", o => o.BaseAddress = "http://orders");
+  services.AddRemoteTenantConnectionStore("Identity", configuration);
+  // 新
+  services.AddRefitServiceClient<IOrdersApi, OrdersClientOptions>("Orders");
+  services.AddRefitServiceClient<IOrdersApi, OrdersClientOptions>("Orders", o => o.BaseAddress = "http://orders");
+  services.AddRemoteTenantConnectionStore("Identity");
+  ```
+
+- 重复调用的契约写进了 XML：同一服务名的相同登记重复调用不再叠加客户端与处理器，只追加委托并返回同一命名客户端的构建器；
+  同一服务名换用其他客户端接口、实现、选项类型或配置节，或一个选项类型用于两个服务名时，注册即抛 `InvalidOperationException`。
+  远端连接存储是唯一权威来源：相同参数幂等，换用另一服务名或配置节抛出。
+- 认证入口同样幂等：`AddServiceAuthentication` 以相同配置节重复调用不再重复登记验证器与官方客户端处理器（此前每条失败会报两遍），
+  换用另一配置节抛出；`AddClientCredentials` / `AddTokenExchange` 对同一客户端以同一方式、同一配置节重复调用不再抛出，换用另一方式或配置节仍然抛出。
+- 模板：Client 项目的 `AddMyProjectClient(configuration)` 改为 `AddMyProjectClient(configure?, configSectionPath?)`，调用方去掉实参。
+
+## 36. 配置节路径参数与本地化支持语言（破坏性）
+
+- **本地化**：`AddJsonLocalization(supportedCultures, configure)` 改为 `AddJsonLocalization(configure?)`；
+  支持语言只在 `JsonLocalizationOptions.SupportedCultures` 维护（默认 `["en", "zh-CN"]`），`DefaultCulture` 改为只读、取其首项，
+  请求默认区域性与资源回落随之一致。列表为空或含无效文化名时启动失败。
+
+  ```csharp
+  // 旧
+  builder.Services.AddJsonLocalization(supportedCultures: ["zh-CN", "en"], configure: o => o.ResourceAssemblies.Add(asm));
+  // 新
+  builder.Services.AddJsonLocalization(o =>
+  {
+      o.SupportedCultures = ["zh-CN", "en"];
+      o.ResourceAssemblies.Add(asm);
+  });
+  ```
+
+  写过 `options.DefaultCulture = ...` 的宿主改为把该语言放在 `SupportedCultures` 首位。
+- **租户路由缓存配置节**：`TenantRouting` 改为 `Leistd:MultiTenancy:Routing`（`TenantRouteCacheOptions.SectionName`），
+  环境变量 `TenantRouting__CacheLifetime` 改为 `Leistd__MultiTenancy__Routing__CacheLifetime`。旧键不再读取，留着也不报错，
+  只会让改过的 TTL 静默回到默认 10 分钟——升级时请搜索配置文件、部署清单与 compose 文件。
+- **末尾新增 `configSectionPath` 参数**（源码兼容，按位置传参的调用不受影响；已编译的调用方需重新编译）：
+  `AddInProcessBackgroundJobs(configure?, configSectionPath?)`（进程内调优取其下的 `InProcess` 子节）、
+  `AddNotificationRetention<T>(configure?, configSectionPath?)`、`AddOperationRecordRetention<T>(configure?, configSectionPath?)`、
+  `AddHostSettings(bind, configSectionPath?)`、`AddRemoteTenantConnectionResolution(configSectionPath?)`。
+  校验消息按实际路径报键；同一入口重复调用换用另一配置节时抛 `InvalidOperationException`。
+
+## 37. 注册与授权的行为收口
+
+- **Hub 握手与调用期复评同一策略**：`MapRealTimeHub` / `MapNotificationHub` 的握手改按 `HubIdentityOptions.PolicyName` 授权
+  （未设置时仍是默认策略），与 `AmbientContextHubFilter` 的复评一致。此前握手固定要求默认策略，设置了 `PolicyName` 的宿主
+  会在握手时多一道默认策略。在返回的构建器上追加 `RequireAuthorization("X")` 的宿主，改为设置 `PolicyName = "X"`；
+  自己映射的 Hub 改用新增的 `RequireHubAuthorization()`。
+- **本地化注册**：组合工厂以 `Replace` 替换官方 `IStringLocalizerFactory`，不再与 `AddLocalization()` 登记的那条并存；
+  宿主预先注册的无参 `IStringLocalizer` 保留。
+- **权限策略提供器**：`AddPermissionAuthorization()` 以 `Replace` 替换官方策略提供器、授权处理器按实现去重，重复调用不再叠加。
+- **周期任务水位**：`AddBackgroundJobsEfCore<T>()` 只替换进程内默认水位；已注册的其他水位存储或另一上下文的 EF 存储改为注册时报错，
+  此前会被静默移除。
+- **资源 ACL 存储**：`IResourceGrantStore` / `IResourceGrantManager` 由 Scoped 改为 Transient（两者无状态，上下文经工作单元共享）；
+  宿主预先以 Scoped 登记 `EfCoreResourceGrantStore<T>` 时注册即报错。
+- **DDD 基础设施**：`LocalEventSaveChangesInterceptor` 由 Scoped 改为 Transient；`IQueryableAsyncExecuter`、`IDataFilter`、
+  `IDataFilter<>` 改为 `TryAdd`，宿主先登记的实现保留。
+- **其他去重**：同一实体的 `AddDataScopeProvider` 按实现去重；`AddGlobalExceptionHandler` 的业务异常处理器按实现去重；
+  同一命名客户端重复 `AddCorrelationIdForwarding()` 只挂一个处理器。
+- **`AddAmbientContext()`**：`ClaimTypeOptions` 的验证器按实现去重，重复调用时同一配置错误只报一次。
+- **`AddEmailNotifications()`**：重复调用换用另一配置节时抛 `InvalidOperationException`，与其他带 `configSectionPath` 的入口一致。
+
+## 38. 模板：外部账号绑定完成返回空响应（破坏性）
+
+- `POST /api/v1/external-auth/{provider}/link/complete` 成功时由 `{ "linked": true }` 改为 HTTP 200 空响应体；`POST /api/v1/external-auth/{provider}/complete` 改为直接返回登录结果 DTO（JSON 形状不变）。读取 `linked` 字段的客户端改为按状态码判断成功。
+- 两个控制器共用的最终会话签发收进 `Api/Auth/SessionCookieIssuer`（构造注入），不再经 `HttpContext.RequestServices` 定位服务或跨控制器调用静态方法；外部票据一次消费、发起者与租户校验、两步验证未完成不签发最终 Cookie 的行为不变。
+- Resource 的 `GET /api/v1/auth/me` 改为返回 `CurrentResourceUserOutputDto`，字段与缺省值不变。

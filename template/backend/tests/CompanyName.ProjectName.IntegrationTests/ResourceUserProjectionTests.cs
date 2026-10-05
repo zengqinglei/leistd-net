@@ -3,6 +3,8 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Api.Middlewares;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -60,6 +62,44 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         await client.GetAsync("/api/health/live");
 
         Assert.Equal(before, await CountAllUsersAsync());
+    }
+
+    /// <summary>
+    /// 当前主体的响应契约：字段集合与缺省值固定；超管标记与角色只取本服务的授权数据。
+    /// </summary>
+    /// <remarks>令牌里没有用户名与邮箱时为空串，显示名与租户为空时不输出（JSON 忽略 null）。</remarks>
+    [Fact]
+    public async Task Current_user_reports_local_super_admin_and_roles_with_a_stable_shape()
+    {
+        var subjectId = Guid.CreateVersion7();
+        using var session = factory.CreateResourceSession(subjectId, tenantId: null);
+
+        var before = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(
+            ["email", "id", "isEmailVerified", "isSuperAdmin", "roles", "username"],
+            before.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(subjectId, before.GetProperty("id").GetGuid());
+        Assert.Equal("", before.GetProperty("username").GetString());
+        Assert.Equal("", before.GetProperty("email").GetString());
+        Assert.False(before.GetProperty("isEmailVerified").GetBoolean());
+        Assert.False(before.GetProperty("isSuperAdmin").GetBoolean());
+        Assert.Empty(before.GetProperty("roles").EnumerateArray());
+
+        string roleName;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var user = await db.Set<User>().SingleAsync(user => user.Id == subjectId);
+            user.MarkAsSuperAdmin();
+            var role = await db.Set<Role>().OrderBy(role => role.Name).FirstAsync();
+            roleName = role.Name;
+            db.Add(new UserRole(subjectId, role.Id));
+            await db.SaveChangesAsync();
+        }
+
+        var after = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.True(after.GetProperty("isSuperAdmin").GetBoolean());
+        Assert.Equal([roleName], after.GetProperty("roles").EnumerateArray().Select(role => role.GetString()));
     }
 
     /// <summary>同一个 sub 的并发首访：输的一方重试后投影成功，只建一行，两个请求都成功。</summary>

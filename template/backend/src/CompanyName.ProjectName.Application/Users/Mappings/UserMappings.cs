@@ -57,7 +57,7 @@ public class UserMappings : IRegister
             .Map(dest => dest.LockoutEnd, src => ResolveIsLockedOut(src) ? src.LockoutEnd : null)
             .Map(dest => dest.IsTwoFactorEnabled, src => src.TwoFactorEnabled)
 #endif
-            // 角色实体交给 Mapster 按同一份配置映射成 RoleBriefDto（RoleMappings 登记的规则在这里生效）
+            // 角色实体交给 Mapster 按同一份配置映射成 RoleBriefOutputDto（RoleMappings 登记的规则在这里生效）
             .Map(dest => dest.Roles, src => ResolveRoleEntities(src))
             ;
     }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Leistd.AmbientContext;
 using Leistd.Security.Claims;
 using Leistd.Security.Clients;
@@ -31,14 +32,8 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddAmbientContext(this IServiceCollection services)
     {
-        services.AddOptions<ClaimTypeOptions>()
-            .Validate(
-                options => options.UserIds.Count > 0 && options.UserIds.All(type => !string.IsNullOrWhiteSpace(type)),
-                "ClaimTypeOptions.UserIds must list at least one claim type and no blank entries.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.TenantId),
-                "ClaimTypeOptions.TenantId must not be empty.")
-            .ValidateOnStart();
+        services.AddOptions<ClaimTypeOptions>().ValidateOnStart();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<ClaimTypeOptions>, ClaimTypeOptionsValidator>());
         services.TryAddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>();
         services.TryAddTransient<ICurrentUser, CurrentUser>();
         services.TryAddTransient<ICurrentClient, CurrentClient>();

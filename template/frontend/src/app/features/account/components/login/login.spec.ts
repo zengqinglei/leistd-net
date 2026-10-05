@@ -37,15 +37,14 @@ import { StartupService } from '../../../../core/services/startup-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
-//#if (IncludeMultiTenancy)
-import { TenantByHostOutputDto } from '../../../../shared/dtos/tenant.dto';
-//#endif
 import { PERMISSIONS } from '../../../../shared/models/permission';
-//#if (IncludeMultiTenancy)
-import { TenantService } from '../../../platform/services/tenant-service';
-//#endif
 //#if (ExternalLogin)
-import { ExternalLoginProvidersOutputDto } from '../../models/account.dto';
+import { ExternalLoginProvidersOutputDto } from '../../dtos/account.dto';
+//#endif
+//#if (IncludeMultiTenancy)
+import { TenantByHostOutputDto } from '../../dtos/tenant-by-host.dto';
+//#endif
+//#if (ExternalLogin || IncludeMultiTenancy)
 import { AccountService } from '../../services/account-service';
 //#endif
 
@@ -106,11 +105,6 @@ describe('Login', () => {
         provideTranslocoScope('account'),
         //#endif
         { provide: AuthService, useValue: authService },
-        //#if (IncludeMultiTenancy)
-        // 登录页构造时就会按主机名探测一次租户；不打桩的话它会挂在一个永不返回的请求上，
-        // 租户区会一直停在 pending，所有与租户有关的断言都测不到真实分支。
-        { provide: TenantService, useValue: { getByHost: () => byHost } },
-        //#endif
         // 真实 permissionGuard 会先等启动流结束；登录页自身不依赖它，给个已完成的桩即可。
         { provide: StartupService, useValue: { status: signal('success' as const) } },
         {
@@ -125,6 +119,11 @@ describe('Login', () => {
     authorization = TestBed.inject(AuthorizationService);
     vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
     vi.spyOn(TestBed.inject(SessionContextService), 'clear');
+    //#if (IncludeMultiTenancy)
+    // 登录页构造时就会按主机名探测一次租户；不打桩的话它会挂在一个永不返回的请求上，
+    // 租户区会一直停在 pending，所有与租户有关的断言都测不到真实分支。
+    vi.spyOn(TestBed.inject(AccountService), 'getTenantByHost').mockImplementation(() => byHost);
+    //#endif
     //#if (ExternalLogin)
     vi.spyOn(TestBed.inject(AccountService), 'getExternalLoginProviders').mockImplementation(
       () => externalProviders,

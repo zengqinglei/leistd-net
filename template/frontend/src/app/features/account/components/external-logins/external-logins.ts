@@ -17,7 +17,7 @@ import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { ExternalLoginsOutputDto } from '../../models/account.dto';
+import { ExternalLoginsOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 
 const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', google: 'Google' };

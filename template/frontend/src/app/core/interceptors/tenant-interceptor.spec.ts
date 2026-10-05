@@ -6,7 +6,7 @@ import { of } from 'rxjs';
 
 import { tenantInterceptor } from './tenant-interceptor';
 import { TenantContextService } from '../services/tenant-context-service';
-import { TENANT_HEADER } from '../services/tenant-protocol';
+import { TENANT_HEADER } from '../tenancy/tenant-protocol';
 
 /**
  * 直接以 runInInjectionContext 驱动拦截器（与 http-error-interceptor.spec 同形态），

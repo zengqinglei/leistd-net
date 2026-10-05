@@ -42,7 +42,7 @@ builder.Services.AddAllowAllRealTimeSubscriptions();
 app.MapRealTimeHub();
 ```
 
-`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，返回官方的 `HubEndpointConventionBuilder`（可继续链式追加授权策略、CORS 等），并在授权器缺失时抛异常。映射时只确认授权器已注册、不在根容器里解析它，因此授权器可以按 `Scoped`/`Transient` 注册并依赖作用域服务（如权限检查器）；每次 `Subscribe` 在 Hub 调用的作用域里解析。
+`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，并在授权器缺失时抛异常。握手按 `HubIdentityOptions.PolicyName` 授权（未设置时按默认策略），与调用期复评同一策略；要换策略就设置该选项，不要在返回的 `HubEndpointConventionBuilder` 上追加 `RequireAuthorization`——追加的策略只在握手时生效。返回的构建器可继续链式追加 CORS 等约定。映射时只确认授权器已注册、不在根容器里解析它，因此授权器可以按 `Scoped`/`Transient` 注册并依赖作用域服务（如权限检查器）；每次 `Subscribe` 在 Hub 调用的作用域里解析。
 
 心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；解析 `UserIdentifier` 的 claim 顺序是 `ClaimTypeOptions.UserIds`（Security.Core），与框架其他组件读主体标识同一处配置。
 
@@ -124,7 +124,7 @@ app.Use(async (context, next) =>
 - `PublishToResourceAsync` 推送失败只记日志、不抛异常：调用成功返回不代表订阅方一定收到消息（例如客户端未连接/未订阅该资源）。
 - **Hub 方法调用的上下文与有效性由 SignalR 基座保证**。`AddRealTimeSignalR()` 内部走
   `Leistd.AspNetCore.SignalR` 的 `AddSignalRAmbientContext()`：每次 Hub 调用前按连接主体建立
-  `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`，并复评宿主的默认授权策略，
+  `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`，并按握手所用的同一策略（`HubIdentityOptions.PolicyName`，未设置时为默认策略）复评，
   不通过即 `Abort()` 连接。**复评只发生在客户端调用 Hub 方法时**——账号被禁用后，既有连接要到下一次 `Subscribe`/`Unsubscribe` 才会被中止；只被动接收事件的连接不会触发复评。框架不主动关闭既有连接。
   复评频率可用 `HubIdentityOptions.RevalidationInterval` 节流（默认每次调用都评）。
 

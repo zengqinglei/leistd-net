@@ -5,6 +5,7 @@ using Leistd.BackgroundJobs.Recurring;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Leistd.DependencyInjection.Extensions;
 
 namespace Leistd.BackgroundJobs.EntityFrameworkCore;
 
@@ -18,7 +19,8 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 多副本部署必须注册：只有共享的水位能挡住"副本 A 做完、时钟稍慢的副本 B 在同一时段又做一遍"。
-    /// 与调度器注册的先后无关，本方法总是成为唯一的水位存储。宿主须已注册 <c>AddUnitOfWork()</c> 与
+    /// 与调度器注册的先后无关，本方法替换进程内默认实现；同一上下文重复调用幂等，
+    /// 已注册其他水位存储（含另一 DbContext 的 EF 存储）时抛出 <see cref="InvalidOperationException"/>。宿主须已注册 <c>AddUnitOfWork()</c> 与
     /// <c>AddUnitOfWorkEfCore()</c>，并在 <c>OnModelCreating</c> 里调用 <see cref="ConfigureBackgroundJobs"/>。
     /// </remarks>
     /// <example>
@@ -36,8 +38,18 @@ public static class DependencyInjection
     public static IServiceCollection AddBackgroundJobsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        services.RemoveAll<IRecurringJobStateStore>();
-        services.AddTransient<IRecurringJobStateStore, EfCoreRecurringJobStateStore<TDbContext>>();
+        // 进程内水位只是调度器自带的兜底，只移除它；其余实现与另一上下文的存储都算冲突
+        foreach (var fallback in services.Where(descriptor => descriptor.ServiceType == typeof(IRecurringJobStateStore)
+                     && descriptor.ImplementationType is { } type
+                     && typeof(IProcessLocalRecurringJobStateStore).IsAssignableFrom(type)).ToList())
+        {
+            services.Remove(fallback);
+        }
+
+        services.EnsureSingleAuthoritative<IRecurringJobStateStore, EfCoreRecurringJobStateStore<TDbContext>>(
+            ServiceLifetime.Transient,
+            "Recurring job watermarks have a single shared store; map them in one DbContext.");
+        services.TryAddTransient<IRecurringJobStateStore, EfCoreRecurringJobStateStore<TDbContext>>();
         return services;
     }
 

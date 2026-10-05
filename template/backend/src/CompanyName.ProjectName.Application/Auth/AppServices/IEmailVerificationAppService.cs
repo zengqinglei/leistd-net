@@ -17,7 +17,7 @@ public interface IEmailVerificationAppService : IAppService
     /// </summary>
     Task<bool> ValidateEmailChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -32,6 +32,6 @@ public interface IEmailVerificationAppService : IAppService
     /// </summary>
     Task<bool> ValidateAccountEmailChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         CancellationToken cancellationToken = default);
 }

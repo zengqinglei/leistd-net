@@ -109,7 +109,7 @@ public sealed class RemoteTenantConnectionStoreTests
         var services = new ServiceCollection().AddMultiTenancyEfCore<DbContext>();
 
         var error = Assert.Throws<InvalidOperationException>(
-            () => services.AddRemoteTenantConnectionStore("Identity", new ConfigurationBuilder().Build()));
+            () => services.AddRemoteTenantConnectionStore("Identity"));
 
         Assert.Contains("exactly one authoritative source", error.Message);
     }
@@ -123,8 +123,8 @@ public sealed class RemoteTenantConnectionStoreTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Leistd:ServiceClients:Identity:BaseAddress"] = baseAddress })
             .Build();
-        using var provider = new ServiceCollection().AddLogging()
-            .AddRemoteTenantConnectionStore("Identity", configuration).Services
+        using var provider = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration)
+            .AddRemoteTenantConnectionStore("Identity").Services
             .BuildServiceProvider();
 
         var error = Assert.Throws<OptionsValidationException>(
@@ -140,8 +140,8 @@ public sealed class RemoteTenantConnectionStoreTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test" })
             .Build();
-        using var provider = new ServiceCollection().AddLogging()
-            .AddRemoteTenantConnectionStore("Identity", configuration).Services
+        using var provider = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration)
+            .AddRemoteTenantConnectionStore("Identity").Services
             .BuildServiceProvider();
 
         var options = provider.GetRequiredService<IOptions<RemoteTenantConnectionClientOptions>>().Value;
@@ -156,8 +156,8 @@ public sealed class RemoteTenantConnectionStoreTests
         {
             ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test"
         }).Build();
-        using var provider = new ServiceCollection().AddLogging()
-            .AddRemoteTenantConnectionStore("Identity", configuration).Services.BuildServiceProvider();
+        using var provider = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration)
+            .AddRemoteTenantConnectionStore("Identity").Services.BuildServiceProvider();
         Assert.IsAssignableFrom<ITenantConnectionConfigurationStore>(provider.GetRequiredService<ITenantDatabaseDirectory>());
     }
 

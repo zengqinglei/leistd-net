@@ -17,7 +17,7 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
-import { GetUsersInputDto } from '../../models/user-management.dto';
+import { GetUsersInputDto } from '../../dtos/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
 
 import type { MockedObject } from 'vitest';

@@ -214,6 +214,9 @@ dotnet test backend/CompanyName.ProjectName.sln
 npm --prefix frontend run lint
 npm --prefix frontend run build
 <!--#endif-->
+<!--#if (IncludeLocalization)-->
+python3 scripts/check-i18n.py
+<!--#endif-->
 ```
 
 ## AI 协作

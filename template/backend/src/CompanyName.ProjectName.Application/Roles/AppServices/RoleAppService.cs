@@ -104,14 +104,14 @@ public class RoleAppService(
         return ordered.ThenBy(r => r.Id);
     }
 
-    public async Task<IReadOnlyList<RoleBriefDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var query = await roleRepository.GetQueryableAsync(cancellationToken);
         var roles = await asyncExecuter.ToListAsync(
             query.OrderBy(r => r.Sort).ThenBy(r => r.Name),
             cancellationToken);
 
-        return objectMapper.Map<List<Role>, List<RoleBriefDto>>(roles);
+        return objectMapper.Map<List<Role>, List<RoleBriefOutputDto>>(roles);
     }
 
     public async Task<RoleOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)

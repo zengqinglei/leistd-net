@@ -41,7 +41,7 @@ public static class DependencyInjection
         this IServiceCollection services)
         where TProvider : class, IDataScopeProvider<TEntity>
     {
-        services.AddScoped<IDataScopeProvider<TEntity>, TProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDataScopeProvider<TEntity>, TProvider>());
         return services;
     }
 }

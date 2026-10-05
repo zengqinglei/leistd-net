@@ -48,7 +48,7 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         services.AddLogging(); services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new ProtocolTransport(factory.Server));
         services.AddServiceAuthentication();
-        services.AddMyProjectClient(configuration).AddClientCredentials()
+        services.AddMyProjectClient().AddClientCredentials()
             .ConfigurePrimaryHttpMessageHandler(() => factory.Server.CreateHandler());
         await using var caller = services.BuildServiceProvider();
         var client = caller.GetRequiredService<IMyProjectClient>();

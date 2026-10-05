@@ -97,6 +97,39 @@ public sealed class OperationRecordRegistrationTests
         services.AssertNotRegistered<IOperationRecordQueryService>();
     }
 
+    // ---------- AddOperationRecordQueries ----------
+
+    // 查询用例与记录器一起登记：读页面的同时还要给导出本身记一条
+    [Fact]
+    public void AddOperationRecordQueries_registers_the_query_service_as_transient_with_the_recorder()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOperationRecordQueries();
+
+        services.AssertSingle<IOperationRecordQueryService>(ServiceLifetime.Transient);
+        services.AssertImplementedBy<IOperationRecordQueryService, OperationRecordQueryService>();
+        services.AssertSingle<IOperationRecorder>(ServiceLifetime.Transient);
+    }
+
+    // EF 包会调它，宿主也可能再调一次
+    [Fact]
+    public void AddOperationRecordQueries_is_idempotent()
+        => ServiceCollectionAssertions.AssertIdempotent(services => services.AddOperationRecordQueries());
+
+    // 默认用例按 TryAdd 登记：宿主先换成自己的实现时保留宿主那条
+    [Fact]
+    public void AddOperationRecordQueries_keeps_a_query_service_registered_by_the_host()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IOperationRecordQueryService>(_ => throw new NotSupportedException());
+
+        services.AddOperationRecordQueries();
+
+        var descriptor = services.AssertSingle<IOperationRecordQueryService>(ServiceLifetime.Scoped);
+        Assert.NotNull(descriptor.ImplementationFactory);
+    }
+
     // ---------- Leistd.OperationRecords.EntityFrameworkCore 的 DependencyInjection ----------
 
     [Fact]

@@ -36,7 +36,16 @@ public sealed class JsonLocalizationOptions
     public string ResourcesPath { get; set; } = "Resources";
 
     /// <summary>
-    /// 默认/回落语言。当前请求 culture 无对应资源或缺某键时回落到此。默认英语 <c>en</c>。
+    /// 支持的语言，首项为默认/回落语言。默认 <c>["en", "zh-CN"]</c>。
     /// </summary>
-    public string DefaultCulture { get; set; } = "en";
+    /// <remarks>
+    /// 支持语言的唯一事实源：<see cref="DefaultCulture"/>、请求默认区域性与资源回落都取首项，
+    /// 请求可选区域性与启动预热取全部。列表为空或含无效文化名时启动失败。
+    /// </remarks>
+    public IList<string> SupportedCultures { get; set; } = ["en", "zh-CN"];
+
+    /// <summary>
+    /// 默认/回落语言，即 <see cref="SupportedCultures"/> 的首项。当前请求 culture 无对应资源或缺某键时回落到此。
+    /// </summary>
+    public string DefaultCulture => SupportedCultures[0];
 }

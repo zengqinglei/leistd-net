@@ -7,6 +7,7 @@ using Leistd.Settings.Hosting;
 #if (Email)
 using Leistd.Email.Smtp.Options;
 #endif
+using Serilog.Events;
 
 namespace CompanyName.ProjectName.Api.Configuration;
 
@@ -35,7 +36,7 @@ public static class HostSettingBindings
             bindings.Bind(
                 SettingConstant.Logging.MinimumLevel,
                 [SerilogMinimumLevel, $"{SerilogMinimumLevel}:Default"],
-                fallback: nameof(Serilog.Events.LogEventLevel.Information));
+                fallback: nameof(LogEventLevel.Information));
             bindings.BindOption<RequestLoggingOptions>(
                 SettingConstant.Logging.RequestLevel, RequestLoggingOptions.SectionName, nameof(RequestLoggingOptions.Level));
 #if (Email)

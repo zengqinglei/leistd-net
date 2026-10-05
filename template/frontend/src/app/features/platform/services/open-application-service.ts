@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { PagedResultDto } from '../../../shared/models/paged-result.dto';
+import { PagedResultDto } from '../../../shared/dtos/paged-result.dto';
 import {
   CreateOpenApplicationInputDto,
   GetOpenApplicationsInputDto,
@@ -10,7 +10,7 @@ import {
   OpenApplicationScopeOutputDto,
   ResetOpenApplicationSecretOutputDto,
   UpdateOpenApplicationInputDto,
-} from '../models/open-application.dto';
+} from '../dtos/open-application.dto';
 
 @Injectable({
   providedIn: 'root',

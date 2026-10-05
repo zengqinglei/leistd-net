@@ -27,12 +27,22 @@ public static class DependencyInjection
     /// </example>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">编程式配置，在配置节绑定之后应用。</param>
-    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:Notifications:Email</c>。</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:Notifications:Email</c>；重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>。</param>
     public static IServiceCollection AddEmailNotifications(
         this IServiceCollection services,
         Action<EmailNotificationOptions>? configure = null,
         string configSectionPath = EmailNotificationOptions.SectionName)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // 选项只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<EmailNotificationOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddEmailNotifications() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
+
         var options = services.AddOptions<EmailNotificationOptions>().BindConfiguration(configSectionPath);
         if (configure is not null)
         {

@@ -34,7 +34,7 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpGet("options")]
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
-    public async Task<IReadOnlyList<RoleBriefDto>> GetOptionsAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetOptionsAsync(CancellationToken cancellationToken)
     {
         return await roleAppService.GetAllAsync(cancellationToken);
     }

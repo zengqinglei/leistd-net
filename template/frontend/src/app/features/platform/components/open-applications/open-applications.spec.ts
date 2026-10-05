@@ -16,7 +16,7 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
-import { GetOpenApplicationsInputDto } from '../../models/open-application.dto';
+import { GetOpenApplicationsInputDto } from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 
 import type { MockedObject } from 'vitest';

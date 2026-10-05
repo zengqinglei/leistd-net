@@ -22,7 +22,7 @@ import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
 //#endif
 //#if (IncludeMultiTenancy)
-import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
+import { TENANT_INVALID_HEADER } from '../tenancy/tenant-protocol';
 //#endif
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {

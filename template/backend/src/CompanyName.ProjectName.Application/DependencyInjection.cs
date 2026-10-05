@@ -38,6 +38,7 @@ using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.ObjectMapping.Mapster;
+using Mapster;
 using Leistd.Authorization;
 using Leistd.Authorization.Events;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
@@ -47,6 +48,7 @@ using CompanyName.ProjectName.Application.Roles.AppServices;
 using CompanyName.ProjectName.Application.RealTime;
 using CompanyName.ProjectName.Application.Roles.EventHandlers;
 using CompanyName.ProjectName.Application.Roles.Events;
+using Leistd.RealTime.Subscriptions;
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants;
@@ -71,98 +73,106 @@ namespace CompanyName.ProjectName.Application;
 
 public static class DependencyInjection
 {
+    private static readonly Action<TypeAdapterConfig> ScanMappings =
+        config => config.Scan(typeof(DependencyInjection).Assembly);
+
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddMapsterObjectMapper(options =>
         {
-            // 各模块 Mappings/ 下实现 IRegister 的映射配置，登记到组件自己的 TypeAdapterConfig
-            options.Configurators.Add(config => config.Scan(typeof(DependencyInjection).Assembly));
+            // 各模块 Mappings/ 下实现 IRegister 的映射配置，登记到组件自己的 TypeAdapterConfig；
+            // 重复调用本入口时同一扫描只登记一次
+            if (!options.Configurators.Contains(ScanMappings))
+                options.Configurators.Add(ScanMappings);
         });
 
-        services.AddTransient<ISystemInitializer, SystemInitializer>();
+        services.TryAddTransient<ISystemInitializer, SystemInitializer>();
 
 #if (LocalIdentity)
-        services.AddTransient<ICaptchaAppService, CaptchaAppService>();
+        services.TryAddTransient<ICaptchaAppService, CaptchaAppService>();
 #if (Email)
-        services.AddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
+        services.TryAddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
 #endif
-        services.AddTransient<SessionSignInService>();
-        services.AddTransient<IUserSessionValidator, UserSessionValidator>();
+        services.TryAddTransient<SessionSignInService>();
+        services.TryAddTransient<IUserSessionValidator, UserSessionValidator>();
         // 会话撤销后作废它的校验缓存（事务提交后由本地事件总线分发）
-        services.AddTransient<IEventHandler<UserSessionRevokedEvent>, UserSessionRevokedEventHandler>();
-        services.AddTransient<IUserSessionAppService, UserSessionAppService>();
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<UserSessionRevokedEvent>, UserSessionRevokedEventHandler>());
+        services.TryAddTransient<IUserSessionAppService, UserSessionAppService>();
         // 安全提醒默认不发；启用通知时宿主换成经通知组件发布的实现
         services.TryAddTransient<ISecurityAlertPublisher, NullSecurityAlertPublisher>();
-        services.AddTransient<TwoFactorChallengeStore>();
+        services.TryAddTransient<TwoFactorChallengeStore>();
         // 不再登录的用户没有"登录时顺手清理"的时机，过期会话与其中的原始 IP 由这个作业每天清掉
         services.AddRecurringJob<ExpiredUserSessionCleanupJob>(
             ExpiredUserSessionCleanupJob.Name,
             RecurringJobSchedule.DailyAt(new TimeOnly(3, 0)),
             RecurringJobScope.Cluster);
-        services.AddTransient<ITwoFactorAppService, TwoFactorAppService>();
-        services.AddTransient<IAuthAppService, AuthAppService>();
+        services.TryAddTransient<ITwoFactorAppService, TwoFactorAppService>();
+        services.TryAddTransient<IAuthAppService, AuthAppService>();
 
 #if (OpenIddictServer)
         services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
             RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
-        services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
-        services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
+        services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
+        services.TryAddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
 #endif
 #if (ExternalLogin)
-        services.AddTransient<IExternalAuthAppService, ExternalAuthAppService>();
+        services.TryAddTransient<IExternalAuthAppService, ExternalAuthAppService>();
 #endif
 #endif
 
-        services.AddTransient<IUserAppService, UserAppService>();
+        services.TryAddTransient<IUserAppService, UserAppService>();
 
-        services.AddTransient<IRoleAppService, RoleAppService>();
+        services.TryAddTransient<IRoleAppService, RoleAppService>();
 
         services.AddPermissionAuthorizationCore();
         // Scoped：一次请求内的主体解析结果被 PermissionSubjectProvider 与 IPermissionChecker 共享。
-        services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
+        services.TryAddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         // 权限管理用例（端点由 Api 映射）经它确认主体存在、取显示名
-        services.AddTransient<IPermissionSubjectDirectory, PermissionSubjectDirectory>();
-        services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
-        services.AddSingleton<ISettingDefinitionProvider, SettingDefinitionProvider>();
+        services.TryAddTransient<IPermissionSubjectDirectory, PermissionSubjectDirectory>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ISettingDefinitionProvider, SettingDefinitionProvider>());
         // 动作定义与权限、设置同属"启动期一次性登记"的定义族，注册方式与它们一致。
         // 不注册的话管理器拿到空索引：界面按"未登记码"降级为原样显示裸码，
         // 症状是页面照常能用、只是动作列全是机器码——不会报错，所以很容易漏。
-        services.AddSingleton<IOperationActionDefinitionProvider, OperationActionDefinitionProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IOperationActionDefinitionProvider, OperationActionDefinitionProvider>());
         // 设置值的业务校验：值域（布尔、区间、候选）写在定义上，这里只放定义表达不了的规则
-        services.AddTransient<ISettingValueValidator, TimeZoneSettingValidator>();
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISettingValueValidator, TimeZoneSettingValidator>());
 #if (Email)
-        services.AddTransient<ISettingValueValidator, EmailSettingValidator>();
-        services.AddTransient<IEmailSettingsAppService, EmailSettingsAppService>();
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISettingValueValidator, EmailSettingValidator>());
+        services.TryAddTransient<IEmailSettingsAppService, EmailSettingsAppService>();
 #endif
         // 组件写入后发布的事件转成本项目的操作记录（提交后分发，回滚的写入不留痕）
-        services.AddTransient<IEventHandler<SettingChangedEvent>, SettingChangedAuditHandler>();
-        services.AddTransient<IEventHandler<PermissionGrantsReplacedEvent>, PermissionGrantsReplacedAuditHandler>();
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<SettingChangedEvent>, SettingChangedAuditHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<PermissionGrantsReplacedEvent>, PermissionGrantsReplacedAuditHandler>());
 #if (IncludeRealTime)
         // 业务实时：角色列表变化后推给订阅者（有工作单元时在提交之后）
-        services.AddTransient<IEventHandler<RoleListChangedEvent>, RoleListChangedEventHandler>();
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<RoleListChangedEvent>, RoleListChangedEventHandler>());
+        // 订阅授权必须由本项目明确选择（框架不给默认实现）：资源键须属于当前租户或宿主作用域，
+        // 且订阅者持有查看该资源的权限
+        services.TryAddTransient<IRealTimeSubscriptionAuthorizer, AppRealTimeSubscriptionAuthorizer>();
 #endif
         // 服务端产出给人看的时间文本时注入它；DTO 保持 UTC 交给前端渲染，不必经过这里。
-        services.AddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();
+        services.TryAddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();
 #if (LocalIdentity)
         // 注册策略按租户从设置里解析；appsettings 仍是部署基线（设置定义的默认值取自它）。
-        services.AddTransient<IUserRegistrationPolicyProvider, UserRegistrationPolicyProvider>();
-        services.AddTransient<ILoginSecurityPolicyProvider, LoginSecurityPolicyProvider>();
+        services.TryAddTransient<IUserRegistrationPolicyProvider, UserRegistrationPolicyProvider>();
+        services.TryAddTransient<ILoginSecurityPolicyProvider, LoginSecurityPolicyProvider>();
         // 口令登录、两步验证登录、再认证三条路径共用同一份失败计数与锁定
-        services.AddTransient<IAccessFailureCounter, AccessFailureCounter>();
-        services.AddTransient<IReauthenticationGuard, ReauthenticationGuard>();
+        services.TryAddTransient<IAccessFailureCounter, AccessFailureCounter>();
+        services.TryAddTransient<IReauthenticationGuard, ReauthenticationGuard>();
 #endif
 
 #if (LocalIdentity && IncludeMultiTenancy)
         // 租户管理的编排与补偿在多租户组件里（存储由 Infrastructure 的 AddMultiTenancyEfCore 提供）；
         // 本项目只负责开通内容与启用前置条件
         services.AddTenantManagement();
-        services.AddTransient<ITenantProvisioner, TenantSeeder>();
-        services.AddTransient<ITenantActivationGuard, TenantHasUsersActivationGuard>();
-        services.AddTransient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>();
-        services.AddTransient<IEventHandler<TenantConnectionChangedEvent>, TenantConnectionChangedAuditHandler>();
+        services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ITenantActivationGuard, TenantHasUsersActivationGuard>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantConnectionChangedEvent>, TenantConnectionChangedAuditHandler>());
 #if (Impersonation)
-        services.AddTransient<ITenantImpersonationAppService, TenantImpersonationAppService>();
+        services.TryAddTransient<ITenantImpersonationAppService, TenantImpersonationAppService>();
 #endif
 #endif
 

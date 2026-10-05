@@ -142,7 +142,7 @@ public class RegistrationAndOptionsTests
     }
 
     [Fact]
-    public void The_cache_lifetime_binds_from_the_TenantRouting_section()
+    public void The_cache_lifetime_binds_from_the_multi_tenancy_routing_section()
     {
         using var host = new RemoteHost(cacheLifetime: "00:02:30");
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
@@ -54,7 +55,7 @@ public sealed class ConnectInteractionProtector(IDataProtectionProvider provider
                 string.Equals(value.RequestUri, requestUri, StringComparison.Ordinal) &&
                 startedAt > value.IssuedAt;
         }
-        catch (Exception exception) when (exception is System.Security.Cryptography.CryptographicException or JsonException)
+        catch (Exception exception) when (exception is CryptographicException or JsonException)
         {
             return false;
         }
@@ -87,7 +88,7 @@ public sealed class ConnectInteractionProtector(IDataProtectionProvider provider
                     ? confirmed
                     : null;
         }
-        catch (Exception exception) when (exception is System.Security.Cryptography.CryptographicException or JsonException)
+        catch (Exception exception) when (exception is CryptographicException or JsonException)
         {
             return null;
         }

@@ -2,6 +2,7 @@
 using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Net;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -123,8 +124,8 @@ public class ResourceReadinessGateTests
             var match = responses.FirstOrDefault(r => path.EndsWith(r.PathSuffix, StringComparison.Ordinal));
 
             return Task.FromResult(match.Body is null
-                ? new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
-                : new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(match.Body)
                 });

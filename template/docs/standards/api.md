@@ -167,6 +167,7 @@ HTTP/1.1 200 OK
 - **未启用多语言时**会直接返回 `Message`，因此必须从抛出点就是安全、可展示的文案；原始技术异常放在 `InnerException` 中。
 - **所有 `BusinessException` 都必须带码**，并由构造函数强制；不需要根据是否启用多语言加条件编译。
 - DataAnnotations 校验消息同样随 culture 本地化（写法见[后端开发规范 §5](./coding-backend.md#5-命名与-dto)），参数校验与业务异常在同一请求下同语言。
+- `scripts/check-i18n.py` 检查：两种语言资源的 `culture` 与文件名一致、键集合与 `{Name}` 占位符一致；Domain、Application 的 `*ErrorCodes.cs` 常量形如 `<所有者>:<成员名>`（所有者取文件名去掉 `ErrorCodes`）、不重复且在资源里有句子，`BusinessException` 不写字面量码；`Display` 名与 `ErrorMessage` 原文都是资源键，`Dtos/` 下的校验特性都显式写 `ErrorMessage`。
 
 **示例（`Message` 是安全英文回落，`Code` 给出稳定身份）**：
 

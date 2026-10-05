@@ -1,19 +1,41 @@
-import { ApplicationRef, provideZonelessChangeDetection, signal } from '@angular/core';
+//#if (IncludeLocalization)
+import { Location } from '@angular/common';
+//#endif
+// prettier-ignore
+import {
+  ApplicationRef,
+  //#if (IncludeLocalization)
+  Component,
+  ErrorHandler,
+  //#endif
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
-import { of, throwError } from 'rxjs';
+import { provideRouter, Router } from '@angular/router';
+import {
+  provideTranslocoScope,
+  Translation,
+  TranslocoDirective,
+  TranslocoLoader,
+  TranslocoService,
+} from '@jsverse/transloco';
+import { defer, of, Subject, throwError } from 'rxjs';
+//#else
+import { provideRouter } from '@angular/router';
 //#endif
 
 import { App } from './app';
 //#if (IncludeLocalization)
+import { resolveTranslationScopes, TranslationScopeRecovery } from './core/i18n/translation-scopes';
 import { provideTranslocoTesting } from './core/i18n/transloco.testing';
+import { LanguageService } from './core/services/language-service';
 //#endif
+import { LayoutService } from './core/services/layout-service';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
-import { LayoutService } from './layout/services/layout-service';
 
 /**
  * 启动失败页必须显示得出来——包括正是词条没取到的时候。
@@ -173,3 +195,175 @@ describe('App document title', () => {
   });
   //#endif
 });
+//#if (IncludeLocalization)
+
+@Component({
+  selector: 'app-scope-test-page',
+  imports: [TranslocoDirective],
+  template: `<ng-container *transloco="let t; prefix: 'users'">{{ t('title') }}</ng-container>`,
+})
+class ScopedPage {}
+
+/** 作用域词条要等用例显式放行（或判为失败）才到达的加载器；根词条立即返回。 */
+class DelayedScopeLoader implements TranslocoLoader {
+  readonly requests: string[] = [];
+  readonly gates = new Map<string, Subject<Translation>>();
+  private readonly unavailable = new Set<string>();
+
+  getTranslation(path: string) {
+    return defer(() => {
+      this.requests.push(path);
+      if (!path.includes('/')) {
+        return of({ common: { save: path === 'en' ? 'Save' : '保存' } });
+      }
+      if (this.unavailable.has(path)) {
+        return throwError(() => new Error('scope unavailable'));
+      }
+      const gate = new Subject<Translation>();
+      this.gates.set(path, gate);
+      return gate;
+    });
+  }
+
+  fail(path: string): void {
+    this.unavailable.add(path);
+    this.gates.get(path)!.error(new Error('scope unavailable'));
+  }
+
+  restore(path: string): void {
+    this.unavailable.delete(path);
+  }
+
+  resolve(path: string): void {
+    const english = path.endsWith('/en');
+    const gate = this.gates.get(path)!;
+    gate.next({
+      title: english ? 'Users' : '用户管理',
+      choices: { active: english ? 'Active' : '启用' },
+    });
+    gate.complete();
+  }
+}
+
+/**
+ * 首次进入功能区时作用域词条取不到：根组件显示既有的启动失败卡片，重试回到原深链，
+ * 不重跑启动流程。路由解析器的其余行为见 translation-scopes.spec.ts。
+ */
+describe('App translation scope recovery', () => {
+  afterEach(() => localStorage.removeItem(LanguageService.STORAGE_KEY));
+
+  it('shows the existing failure card on first scope failure and retries the original deep link', async () => {
+    localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
+    const loader = new DelayedScopeLoader();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    TestBed.configureTestingModule({
+      providers: [
+        ...provideTranslocoTesting(['en', 'zh-CN'], loader),
+        { provide: ErrorHandler, useValue: { handleError: vi.fn() } },
+        { provide: ThemeService, useValue: {} },
+        {
+          provide: StartupService,
+          useValue: { status: signal('success'), error: signal(null), retry: vi.fn() },
+        },
+        provideRouter([
+          {
+            path: 'users',
+            component: ScopedPage,
+            providers: [provideTranslocoScope('users')],
+            resolve: { translations: resolveTranslationScopes },
+          },
+        ]),
+      ],
+    });
+    await TestBed.inject(LanguageService).initialized;
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const router = TestBed.inject(Router);
+    const url = '/users?sort=name#list';
+    const entered = router.navigateByUrl(url);
+    await vi.waitFor(() => expect(loader.requests).toContain('users/en'));
+    loader.fail('users/en');
+    expect(await entered).toBe(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('h3')!.textContent).toBe('Application Failed to Load');
+    expect(host.querySelector('p')!.textContent).toBe(
+      'An unknown error occurred. Please try again later.',
+    );
+    expect(host.querySelector('button')!.textContent!.trim()).toBe('Retry');
+    expect(TestBed.inject(TranslationScopeRecovery).failedUrl()).toBe(url);
+    expect(TestBed.inject(Location).path(true)).toBe(url);
+    loader.restore('users/en');
+    host.querySelector('button')!.click();
+    await vi.waitFor(() => expect(loader.gates.get('users/en')!.isStopped).toBe(false));
+    loader.resolve('users/en');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(router.url).toBe(url);
+    expect(TestBed.inject(TranslationScopeRecovery).failedUrl()).toBeNull();
+    expect(host.querySelector('h3')).toBeNull();
+    expect(host.textContent).toContain('Users');
+    expect(TestBed.inject(StartupService).retry).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed first navigation to the root until the scope recovers', async () => {
+    localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
+    const loader = new DelayedScopeLoader();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    TestBed.configureTestingModule({
+      providers: [
+        ...provideTranslocoTesting(['en', 'zh-CN'], loader),
+        { provide: ErrorHandler, useValue: { handleError: vi.fn() } },
+        { provide: ThemeService, useValue: {} },
+        {
+          provide: StartupService,
+          useValue: { status: signal('success'), error: signal(null), retry: vi.fn() },
+        },
+        provideRouter([
+          {
+            path: '',
+            component: ScopedPage,
+            providers: [provideTranslocoScope('users')],
+            resolve: { translations: resolveTranslationScopes },
+          },
+        ]),
+      ],
+    });
+    await TestBed.inject(LanguageService).initialized;
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const router = TestBed.inject(Router);
+    const entered = router.navigateByUrl('/');
+    await vi.waitFor(() => expect(loader.requests).toContain('users/en'));
+    loader.fail('users/en');
+    expect(await entered).toBe(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const recovery = TestBed.inject(TranslationScopeRecovery);
+    expect(router.url).toBe('/');
+    expect(recovery.failedUrl()).toBe('/');
+    expect(host.querySelector('h3')!.textContent).toBe('Application Failed to Load');
+    expect(host.querySelector('app-scope-test-page')).toBeNull();
+    const attempts = loader.requests.filter((path) => path === 'users/en').length;
+    host.querySelector('button')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(loader.requests.filter((path) => path === 'users/en').length).toBeGreaterThan(attempts);
+    expect(recovery.failedUrl()).toBe('/');
+    expect(host.querySelector('h3')!.textContent).toBe('Application Failed to Load');
+    loader.restore('users/en');
+    host.querySelector('button')!.click();
+    await vi.waitFor(() => expect(loader.gates.get('users/en')!.isStopped).toBe(false));
+    loader.resolve('users/en');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(router.url).toBe('/');
+    expect(recovery.failedUrl()).toBeNull();
+    expect(host.querySelector('h3')).toBeNull();
+    expect(host.textContent).toContain('Users');
+    expect(TestBed.inject(StartupService).retry).not.toHaveBeenCalled();
+  });
+});
+//#endif

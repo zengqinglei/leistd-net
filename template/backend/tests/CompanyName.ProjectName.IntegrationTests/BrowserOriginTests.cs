@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+using System.Net.WebSockets;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -110,7 +111,7 @@ public sealed class BrowserOriginTests(BrowserOriginTests.OriginHost origin) : I
             return;
         }
         using var socket = await client.ConnectAsync(uri, CancellationToken.None);
-        Assert.Equal(System.Net.WebSockets.WebSocketState.Open, socket.State);
+        Assert.Equal(WebSocketState.Open, socket.State);
         Assert.Empty(Warnings());
     }
 

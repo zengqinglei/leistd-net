@@ -20,7 +20,7 @@ public interface IRoleAppService : IAppService
     /// <summary>
     /// 获取全部角色的简要信息，供用户角色分配等选择场景使用。
     /// </summary>
-    Task<IReadOnlyList<RoleBriefDto>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RoleBriefOutputDto>> GetAllAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 获取角色详情

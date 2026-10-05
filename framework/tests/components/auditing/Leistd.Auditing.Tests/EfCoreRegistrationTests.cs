@@ -1,5 +1,7 @@
+using Leistd.Auditing.Abstractions;
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.TestBase.Assertions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Leistd.Auditing.Tests;
@@ -15,5 +17,27 @@ public class EfCoreRegistrationTests
     public void Repeated_registration_adds_nothing()
     {
         ServiceCollectionAssertions.AssertIdempotent(services => services.AddAuditingEfCore());
+    }
+
+    // 设置器是替换口：宿主先注册的实现（如按自有身份模型填审计人）不被组件默认值盖掉，DDD 基座重复调用也一样
+    [Fact]
+    public void Host_registered_property_setter_is_kept()
+    {
+        var services = new ServiceCollection();
+        services.AddTransient<IAuditPropertySetter, HostSetter>();
+
+        services.AddAuditingEfCore();
+        services.AddAuditingEfCore();
+
+        services.AssertImplementedBy<IAuditPropertySetter, HostSetter>();
+    }
+
+    private sealed class HostSetter : IAuditPropertySetter
+    {
+        public void SetCreationProperties(object entityEntry) { }
+
+        public void SetModificationProperties(object entityEntry) { }
+
+        public void SetDeletionProperties(object entityEntry) { }
     }
 }

@@ -192,33 +192,33 @@ public class EmailVerificationAppService(
 
     public Task<bool> ValidateEmailChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         CancellationToken cancellationToken = default)
-        => ValidateChallengeAsync(email, verification, RegistrationPurpose, cancellationToken);
+        => ValidateChallengeAsync(email, input, RegistrationPurpose, cancellationToken);
 
     /// <inheritdoc />
     public Task<bool> ValidateAccountEmailChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         CancellationToken cancellationToken = default)
-        => ValidateChallengeAsync(email, verification, AccountEmailPurpose, cancellationToken);
+        => ValidateChallengeAsync(email, input, AccountEmailPurpose, cancellationToken);
 
     private async Task<bool> ValidateChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         string purpose,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(email) ||
-            verification.ChallengeId == Guid.Empty ||
-            string.IsNullOrWhiteSpace(verification.Code))
+            input.ChallengeId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(input.Code))
         {
             return false;
         }
 
-        var challengeKey = GetChallengeCacheKey(verification.ChallengeId);
+        var challengeKey = GetChallengeCacheKey(input.ChallengeId);
         await using var challengeLock = await distributedLock.LockAsync(
-            GetChallengeLockKey(verification.ChallengeId),
+            GetChallengeLockKey(input.ChallengeId),
             cancellationToken);
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -267,7 +267,7 @@ public class EmailVerificationAppService(
         bool codeMatches;
         try
         {
-            codeMatches = codeDigest.Matches(challenge.CodeHash, verification.Code.Trim());
+            codeMatches = codeDigest.Matches(challenge.CodeHash, input.Code.Trim());
         }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {

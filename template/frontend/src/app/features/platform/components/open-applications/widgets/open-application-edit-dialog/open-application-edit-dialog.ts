@@ -40,7 +40,7 @@ import {
   OpenApplicationScopeOutputDto,
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
-} from '../../../../models/open-application.dto';
+} from '../../../../dtos/open-application.dto';
 import { UriListEditor } from '../uri-list-editor/uri-list-editor';
 
 type OpenApplicationTemplate = 'web' | 'desktop' | 'service';

@@ -1,6 +1,9 @@
 #if (LocalIdentity)
 using System.Security.Cryptography;
 using CompanyName.ProjectName.Domain.Shared.Text;
+using System.Buffers.Binary;
+using System.Globalization;
+using System.Text;
 
 namespace CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 
@@ -40,7 +43,7 @@ public static class Totp
     public static string ComputeCode(byte[] secret, long timeStep)
     {
         Span<byte> counter = stackalloc byte[8];
-        System.Buffers.Binary.BinaryPrimitives.WriteInt64BigEndian(counter, timeStep);
+        BinaryPrimitives.WriteInt64BigEndian(counter, timeStep);
 
         Span<byte> hash = stackalloc byte[20];
         HMACSHA1.HashData(secret, counter, hash);
@@ -52,7 +55,7 @@ public static class Totp
                      | (hash[offset + 2] << 8)
                      | hash[offset + 3];
 
-        return (binary % 1_000_000).ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+        return (binary % 1_000_000).ToString("D6", CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -75,8 +78,8 @@ public static class Totp
                 continue;
 
             if (CryptographicOperations.FixedTimeEquals(
-                    System.Text.Encoding.ASCII.GetBytes(ComputeCode(secret, step)),
-                    System.Text.Encoding.ASCII.GetBytes(normalized)))
+                    Encoding.ASCII.GetBytes(ComputeCode(secret, step)),
+                    Encoding.ASCII.GetBytes(normalized)))
             {
                 return step;
             }

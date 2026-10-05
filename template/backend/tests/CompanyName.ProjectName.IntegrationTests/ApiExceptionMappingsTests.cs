@@ -35,6 +35,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Hosting;
 using Xunit;
+using System.Reflection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -109,7 +110,7 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 #endif
         };
         var knownCodes = codeTypes
-            .SelectMany(type => type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            .SelectMany(type => type.GetFields(BindingFlags.Public | BindingFlags.Static))
             .Where(field => field.IsLiteral && field.FieldType == typeof(string))
             .Select(field => (string)field.GetRawConstantValue()!)
             .ToHashSet(StringComparer.Ordinal);

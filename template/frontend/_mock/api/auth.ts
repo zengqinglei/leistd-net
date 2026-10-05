@@ -1,5 +1,5 @@
 //#if (IncludeMultiTenancy)
-import { TENANT_HEADER } from '../../src/app/core/services/tenant-protocol';
+import { TENANT_HEADER } from '../../src/app/core/tenancy/tenant-protocol';
 //#endif
 import {
   ChangePasswordInputDto,
@@ -26,7 +26,7 @@ import {
   //#if (OpenIddictServer)
   LogoutConfirmationOutputDto,
   //#endif
-} from '../../src/app/features/account/models/account.dto';
+} from '../../src/app/features/account/dtos/account.dto';
 //#if (ExternalLogin)
 import { SessionLoginOutputDto, UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
 //#else

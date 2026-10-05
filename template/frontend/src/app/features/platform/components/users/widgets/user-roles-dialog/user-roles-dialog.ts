@@ -21,8 +21,8 @@ import { applicationErrorMessage } from '../../../../../../core/errors/applicati
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { RoleBriefDto } from '../../../../models/role.dto';
-import { UserManagementOutputDto } from '../../../../models/user-management.dto';
+import { RoleBriefDto } from '../../../../dtos/role.dto';
+import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 import { UserManagementService } from '../../../../services/user-management-service';
 
 /**

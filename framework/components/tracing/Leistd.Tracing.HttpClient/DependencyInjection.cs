@@ -1,5 +1,6 @@
 using Leistd.Tracing.HttpClient.Handlers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.Tracing.HttpClient;
 
@@ -11,6 +12,7 @@ public static class DependencyInjection
     /// <summary>
     /// 为 HttpClient 添加关联标识转发处理器：把当前关联标识（默认即 TraceId，显式指定时为指定值）写入请求头。
     /// </summary>
+    /// <remarks>按命名客户端登记：同一客户端重复调用只挂一个处理器。</remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddHttpClient("downstream").AddCorrelationIdForwarding();
@@ -18,8 +20,19 @@ public static class DependencyInjection
     /// </example>
     public static IHttpClientBuilder AddCorrelationIdForwarding(this IHttpClientBuilder builder)
     {
-        builder.Services.AddTransient<CorrelationIdDelegatingHandler>();
+        builder.Services.TryAddTransient<CorrelationIdDelegatingHandler>();
+
+        // 处理器管道按客户端名累加，重复挂载会让每个请求多走一遍处理器。
+        if (builder.Services.Any(d => d.ImplementationInstance is ForwardingRegistration registration
+                                      && registration.ClientName == builder.Name))
+        {
+            return builder;
+        }
+
+        builder.Services.AddSingleton(new ForwardingRegistration(builder.Name));
         builder.AddHttpMessageHandler<CorrelationIdDelegatingHandler>();
         return builder;
     }
+
+    private sealed record ForwardingRegistration(string ClientName);
 }

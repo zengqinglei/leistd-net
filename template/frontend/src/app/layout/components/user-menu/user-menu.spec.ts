@@ -8,7 +8,7 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-import { LayoutService } from '../../services/layout-service';
+import { LayoutService } from '../../../core/services/layout-service';
 
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以按**键**断言：改一句中文不该让这组用例变红。

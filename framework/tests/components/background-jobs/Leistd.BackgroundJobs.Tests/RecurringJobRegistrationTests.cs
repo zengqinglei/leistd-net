@@ -1,14 +1,17 @@
 using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.BackgroundJobs.EntityFrameworkCore.Stores;
 using Leistd.BackgroundJobs.InProcess;
+using Leistd.BackgroundJobs.InProcess.Options;
 using Leistd.BackgroundJobs.InProcess.Recurring;
 using Leistd.BackgroundJobs.Queues;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.BackgroundJobs.Tests.TestDoubles;
 using Leistd.TestBase.Assertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.BackgroundJobs.Tests;
@@ -84,5 +87,68 @@ public class RecurringJobRegistrationTests
         }
 
         services.AssertImplementedBy<IRecurringJobStateStore, EfCoreRecurringJobStateStore<DbContext>>();
+        services.AssertSingle<IRecurringJobStateStore>(ServiceLifetime.Transient);
+    }
+
+    [Fact]
+    public void Registering_the_same_ef_state_store_twice_is_idempotent()
+    {
+        ServiceCollectionAssertions.AssertIdempotent(services => services.AddBackgroundJobsEfCore<DbContext>());
+    }
+
+    /// <summary>两个上下文各注册一份水位时，按顺序静默取一条，另一个库里的水位永远不被读到。</summary>
+    [Fact]
+    public void A_second_context_for_the_state_store_is_rejected()
+    {
+        var services = new ServiceCollection().AddBackgroundJobsEfCore<DbContext>();
+
+        var error = Assert.Throws<InvalidOperationException>(() => services.AddBackgroundJobsEfCore<OtherDbContext>());
+
+        Assert.Contains("single shared store", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>只替换进程内兜底：宿主自己的共享存储不是兜底，被静默移除就等于换掉了宿主的选择。</summary>
+    [Fact]
+    public void A_host_state_store_is_not_silently_replaced()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRecurringJobStateStore, HostStateStore>();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddBackgroundJobsEfCore<DbContext>());
+    }
+
+    [Fact]
+    public void Validation_failures_name_the_configured_section()
+    {
+        using var provider = new ServiceCollection()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["Jobs:InProcess:QueueCapacity"] = "0" })
+                .Build())
+            .AddInProcessBackgroundJobs(configSectionPath: "Jobs")
+            .BuildServiceProvider();
+
+        var failure = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<InProcessBackgroundJobOptions>>().Value);
+
+        Assert.StartsWith("Jobs:InProcess:QueueCapacity", Assert.Single(failure.Failures), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Repeated_registration_with_another_section_is_rejected()
+    {
+        var services = new ServiceCollection().AddInProcessBackgroundJobs();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddInProcessBackgroundJobs(configSectionPath: "Jobs"));
+    }
+
+    private sealed class OtherDbContext(DbContextOptions<OtherDbContext> options) : DbContext(options);
+
+    private sealed class HostStateStore : IRecurringJobStateStore
+    {
+        public Task<DateTimeOffset?> GetLastCompletedSlotAsync(string jobName, CancellationToken cancellationToken = default)
+            => Task.FromResult<DateTimeOffset?>(null);
+
+        public Task SetLastCompletedSlotAsync(string jobName, DateTimeOffset slot, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

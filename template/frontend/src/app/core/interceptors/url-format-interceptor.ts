@@ -5,11 +5,12 @@ import {
   HttpInterceptorFn,
   HttpRequest,
 } from '@angular/common/http';
+import { inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { SKIP_GATEWAY } from './http-context-tokens';
-import { isMockedUrl } from '../../../../_mock/core/providers';
 import { environment } from '../../../environments/environment';
+import { MOCKED_URL } from '../mock/mocked-url';
 
 /**
  * 定义一个上下文令牌，用于在请求中标记是是否传递服务在网关中的名字。
@@ -29,7 +30,8 @@ export const urlFormatInterceptor: HttpInterceptorFn = (
 ): Observable<HttpEvent<unknown>> => {
   const url = req.url;
 
-  if (req.context.get(SKIP_GATEWAY) || isAbsoluteUrl(url) || shouldSkipUrlFormat(url)) {
+  // 由 Mock 应答的请求保持原样：Mock 按路径匹配，不加网关与服务前缀
+  if (req.context.get(SKIP_GATEWAY) || isAbsoluteUrl(url) || inject(MOCKED_URL)(url)) {
     return next(req);
   }
 
@@ -54,9 +56,4 @@ export const urlFormatInterceptor: HttpInterceptorFn = (
 
 function isAbsoluteUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
-}
-
-// 由 Mock 应答的请求保持原样：Mock 按路径匹配，不加网关与服务前缀
-function shouldSkipUrlFormat(url: string): boolean {
-  return isMockedUrl(environment.useMock, url);
 }

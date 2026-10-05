@@ -13,7 +13,7 @@ import {
   CreateTenantInputDto,
   TenantOutputDto,
   UpdateTenantInputDto,
-} from '../../../../../../shared/dtos/tenant.dto';
+} from '../../../../dtos/tenant.dto';
 
 /**
  * 新建与编辑共用一个对话框，两种模式的字段集与提交载荷都不一样：

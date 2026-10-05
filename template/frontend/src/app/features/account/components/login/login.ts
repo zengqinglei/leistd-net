@@ -25,8 +25,6 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
-import { isMockedUrl } from '../../../../../../_mock/core/providers';
-import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
   applicationErrorMessage,
@@ -34,6 +32,7 @@ import {
   ApplicationHttpError,
   //#endif
 } from '../../../../core/errors/application-http-error';
+import { MOCKED_URL } from '../../../../core/mock/mocked-url';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
@@ -41,14 +40,11 @@ import { SessionContextService } from '../../../../core/services/session-context
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
-//#if (IncludeMultiTenancy)
-import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
-//#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 //#if (IncludeMultiTenancy)
-import { TenantService } from '../../../platform/services/tenant-service';
+import { HostTenantDecision } from '../../dtos/tenant-by-host.dto';
 //#endif
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -104,9 +100,6 @@ export class Login {
   protected readonly t = englishText(ENGLISH);
   //#endif
 //#if (IncludeMultiTenancy)
-  private readonly tenantService = inject(TenantService);
-//#endif
-//#if (IncludeMultiTenancy)
   protected readonly tenantContext = inject(TenantContextService);
 //#endif
 
@@ -126,7 +119,7 @@ export class Login {
   //#endif
 
   // 登录接口由 Mock 应答时才提示演示账号：只 Mock 了别的模块时，演示账号登不进真实后端
-  public readonly isMockEnabled = signal(isMockedUrl(environment.useMock, AuthService.loginUrl));
+  public readonly isMockEnabled = signal(inject(MOCKED_URL)(AuthService.loginUrl));
 
   // 登录表单模型（Signal Forms）
   private readonly model = signal({
@@ -356,7 +349,7 @@ export class Login {
    */
   private async resolveTenantFromHost(): Promise<void> {
     try {
-      const result = await lastValueFrom(this.tenantService.getByHost());
+      const result = await lastValueFrom(this.accountService.getTenantByHost());
       switch (result.decision) {
         case 'tenant':
           // 租户不存在或已停用时 tenant 为空：清掉记住的那个，并保持锁定，

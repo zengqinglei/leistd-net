@@ -8,7 +8,6 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 
-import { NotificationOutputDto, NotificationService } from './notification-service';
 import { Notifications } from './notifications';
 import { ApplicationHttpError } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
@@ -16,6 +15,7 @@ import { ConfirmService } from '../../../core/feedback/confirm-service';
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
+import { NotificationOutputDto, NotificationService } from '../../services/notification-service';
 
 import type { Mock, MockedObject } from 'vitest';
 //#if (IncludeLocalization)

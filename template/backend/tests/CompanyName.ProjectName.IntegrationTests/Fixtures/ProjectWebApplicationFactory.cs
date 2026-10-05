@@ -22,6 +22,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
 using CompanyName.ProjectName.Domain.Users.Policies;
+using Serilog.Core;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -151,7 +152,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         {
 #if (!IncludeOperationRecords)
             services.AddSingleton<OperationRecordLogCapture>();
-            services.AddSingleton<Serilog.Core.ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());
+            services.AddSingleton<ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());
 #endif
 #if (RemoteTokenAuth)
             // 测试宿主里没有真实 Identity，启动探针永远探不通。这里直接把门禁置为已开：

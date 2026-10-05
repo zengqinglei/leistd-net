@@ -15,18 +15,18 @@ import { textAt } from '../../../../../../core/i18n/translation-text';
 //#endif
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
-import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import { tableColumnVisibility } from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
-import { OperationRecordOutputDto } from '../../../../models/operation-record.dto';
+import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto';
 //#if (!IncludeLocalization)
 
 /**

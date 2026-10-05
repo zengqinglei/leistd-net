@@ -117,7 +117,7 @@ $allow = @(
     # ASP.NET
     'UseForwardedHeaders','ForwardedHeadersOptions','KnownProxies','KnownIPNetworks',
     'OptionsValidationException','IValidateOptions',
-    'IExceptionHandler','AuthorizationPolicyBuilder','DefaultAuthorizationPolicyProvider','ProblemDetails',
+    'IExceptionHandler','AddExceptionHandler','AuthorizationPolicyBuilder','DefaultAuthorizationPolicyProvider','ProblemDetails',
     'IExceptionHandlerFeature',   # 操作记录文档要说明它保留了端点与路由值、却保留不了租户作用域
     'AuthenticateAsync','IClaimsTransformation','PolicyEvaluator',
     'ValidationProblemDetails','IProxyGenerator',   # IProxyGenerator=Castle 类型：文档不该引它，但它不是 Leistd 自有，靠源码存在性判定

@@ -1,6 +1,15 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+#if (SpaFrontend)
+using CompanyName.ProjectName.Application.Shared;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Options;
+#endif
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+#endif
 #if (OpenIddictServer)
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -29,6 +38,34 @@ public sealed class DeploymentSafeguardsTests
         var exception = StartupFailure(factory, builder => builder.UseSetting("DataProtection:KeysPath", ""));
 
         Assert.Contains("DataProtection:KeysPath", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    // 会话时长不足 1 天时 Cookie 一签发即过期、服务端会话一建即判空闲：启动期校验拒绝，并指明键名
+    [Fact]
+    public void Session_lifetime_below_one_day_fails_at_startup()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+
+        var exception = StartupFailure(factory, builder => builder.UseSetting("SessionCookie:ExpireDays", "0"));
+
+        Assert.Contains("SessionCookie:ExpireDays", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    // 会话 Cookie 的滑动过期与服务端会话的空闲时限从同一个设置派生：两者不一致时，
+    // Cookie 还有效会话却已判过期，或设备列表里留着早已失效的会话
+    [Fact]
+    public void Cookie_lifetime_and_server_idle_timeout_follow_one_session_setting()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var host = factory.WithWebHostBuilder(builder => builder.UseSetting("SessionCookie:ExpireDays", "3"));
+
+        var cookie = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(AuthenticationSchemeNames.SessionCookie);
+        Assert.Equal(TimeSpan.FromDays(3), cookie.ExpireTimeSpan);
+        Assert.True(cookie.SlidingExpiration);
+#if (LocalIdentity)
+        Assert.Equal(TimeSpan.FromDays(3), host.Services.GetRequiredService<IOptions<UserSessionOptions>>().Value.IdleTimeout);
+#endif
     }
 #endif
 #if (OpenIddictServer)
@@ -80,6 +117,7 @@ public sealed class DeploymentSafeguardsTests
     // 两张签名证书（当前一张、下一张）与两张加密证书，写成临时 PKCS#12 文件
     private sealed class CertificateFiles : IDisposable
     {
+        // 属性与 System.IO.Directory 同名，类内引用该类型时保留全限定名
         public string Directory { get; } = System.IO.Directory.CreateTempSubdirectory("token-certificates-").FullName;
 
         public CertificateFiles()

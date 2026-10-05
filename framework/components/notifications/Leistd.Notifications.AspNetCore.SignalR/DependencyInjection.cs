@@ -90,14 +90,14 @@ public static class DependencyInjection
     /// <remarks>
     /// 只负责通知自身的 Hub。实时业务事件 Hub 由实时组件的 <c>MapRealTimeHub()</c> 显式映射，
     /// 避免通知组件越权代映射、以及与调用方重复映射 /hubs/realtime。
-    /// 返回官方的 <see cref="HubEndpointConventionBuilder"/>，宿主可继续链式追加授权策略、CORS 等端点约定。
+    /// 握手按 <c>HubIdentityOptions.PolicyName</c> 授权（未设置时按宿主的默认策略），Hub 方法调用由 SignalR 基座按同一策略复评；
+    /// 要换策略就设置该选项，不要在返回的构建器上追加 <c>RequireAuthorization</c>。
+    /// 返回官方的 <see cref="HubEndpointConventionBuilder"/>，宿主可继续链式追加 CORS 等端点约定。
     /// </remarks>
     public static HubEndpointConventionBuilder MapNotificationHub(
         this IEndpointRouteBuilder endpoints,
         string notificationHubPath = DefaultNotificationHubPath)
     {
-        var hub = endpoints.MapHub<NotificationHub>(notificationHubPath);
-        hub.RequireAuthorization();
-        return hub;
+        return endpoints.MapHub<NotificationHub>(notificationHubPath).RequireHubAuthorization();
     }
 }

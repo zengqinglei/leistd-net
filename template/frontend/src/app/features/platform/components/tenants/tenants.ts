@@ -42,18 +42,18 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 //#if (Impersonation)
 import { ImpersonationService } from '../../../../core/services/impersonation-service';
 //#endif
-import { LayoutService } from '../../../../layout/services/layout-service';
-import {
-  CreateTenantInputDto,
-  GetTenantsInputDto,
-  TenantOutputDto,
-  UpdateTenantInputDto,
-} from '../../../../shared/dtos/tenant.dto';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
+import {
+  CreateTenantInputDto,
+  GetTenantsInputDto,
+  TenantOutputDto,
+  UpdateTenantInputDto,
+} from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
 
 /**

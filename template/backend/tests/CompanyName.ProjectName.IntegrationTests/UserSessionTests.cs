@@ -17,6 +17,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using CompanyName.ProjectName.Application.Shared;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -42,10 +45,10 @@ public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : ICl
     public void Development_keeps_the_unprefixed_session_cookie_for_http_debugging()
     {
         using var host = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
-        var options = host.Services.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
-            .Get(CompanyName.ProjectName.Application.Shared.AuthenticationSchemeNames.SessionCookie);
+        var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(AuthenticationSchemeNames.SessionCookie);
         Assert.Equal("CompanyName.ProjectName.Auth", options.Cookie.Name);
-        Assert.Equal(Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest, options.Cookie.SecurePolicy);
+        Assert.Equal(CookieSecurePolicy.SameAsRequest, options.Cookie.SecurePolicy);
     }
 
     private const string Password = "SessionTests!Passw0rd";

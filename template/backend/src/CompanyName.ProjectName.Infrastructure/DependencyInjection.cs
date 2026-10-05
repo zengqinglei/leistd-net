@@ -20,6 +20,7 @@ using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.MultiTenancy;
 #if (RemoteTokenAuth && IncludeMultiTenancy)
@@ -76,8 +77,8 @@ public static class DependencyInjection
 
 #if (LocalIdentity && IncludeMultiTenancy)
         // 开通失败的数据库错误翻译：SQLSTATE 表是 PostgreSQL 方言，属本项目的技术适配。
-        // 组件按 TryAdd 挂"不翻译"的默认实现，这里直接登记，与注册先后无关
-        services.AddSingleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>();
+        // 有意覆盖组件按 TryAdd 挂的"不翻译"默认实现；Replace 与组件入口的调用先后无关
+        services.Replace(ServiceDescriptor.Singleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>());
 #endif
 
 #if (IncludeNotifications)
@@ -100,7 +101,7 @@ public static class DependencyInjection
 
         if (!string.IsNullOrEmpty(redisConnStr))
         {
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
+            services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
 
             services.AddStackExchangeRedisCache(options =>
             {
@@ -121,16 +122,16 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(PasswordHashOptions.SectionName))
             .Validate(options => options.IterationCount > 0, $"{PasswordHashOptions.SectionName}:IterationCount must be greater than 0.")
             .ValidateOnStart();
-        services.AddTransient<IPasswordHasher, PasswordHasher>();
+        services.TryAddTransient<IPasswordHasher, PasswordHasher>();
 #endif
 #if (Email)
         // 验证码摘要与口令哈希具有不同的密钥和成本契约。
-        services.AddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
+        services.TryAddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
         services.AddSmtpEmailSender();
 #endif
 
 #if (ExternalLogin)
-        services.AddSingleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>());
         services.AddOptions<ExternalAuthOptions>()
             .Configure<IConfiguration>((options, config) =>
             {
@@ -170,11 +171,11 @@ public static class DependencyInjection
 
 #if (IncludeMultiTenancy)
 #if (RemoteTokenAuth)
-        // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（默认 10 分钟，
+        // 远端解析：向 Identity 回源租户连接配置，按 Leistd:MultiTenancy:Routing:CacheLifetime 缓存（默认 10 分钟，
         // 它决定租户改路由前的排空等待，可按环境覆盖）；同租户并发回源合并为一次。
         // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
         services.AddRemoteTenantConnectionResolution();
-        var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
+        var identityClient = services.AddRemoteTenantConnectionStore("Identity");
         if (configuration.GetSection(ServiceAuthenticationOptions.SectionName).Exists())
         {
             services.AddServiceAuthentication();

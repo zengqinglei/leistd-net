@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\localization\Leistd.Localization.AspNetCore\Leistd.Localization.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 
 </Project>

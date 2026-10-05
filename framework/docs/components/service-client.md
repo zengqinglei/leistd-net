@@ -30,15 +30,21 @@ dotnet add package Leistd.ServiceClient.AspNetCore
 
 ```csharp
 builder.Services.AddServiceAuthentication();
-builder.Services.AddRefitServiceClient<IIdentityApi, IdentityOptions>("Identity", builder.Configuration)
+builder.Services.AddRefitServiceClient<IIdentityApi, IdentityOptions>("Identity")
     .AddClientCredentials();
-builder.Services.AddRefitServiceClient<IBillingApi, BillingOptions>("Billing", builder.Configuration)
+builder.Services.AddRefitServiceClient<IBillingApi, BillingOptions>("Billing")
     .AddTokenExchange();
 // 资源宿主传入实际的 Bearer 验证方案。Identity/Standalone 的 Cookie 不提供此证明。
 builder.Services.AddUserAccessTokenAccessor("OpenIddict.Validation.AspNetCore");
 ```
 
-新认证入口统一先绑定配置，再应用可选委托，并在启动时验证。`AddServiceAuthentication` 默认绑定 Leistd:ServiceAuth，可通过 configSectionPath 指定其他路径；`AddClientCredentials` 的默认路径由 builder.Name 派生为 Leistd:ServiceClients:{Name}；`AddTokenExchange` 派生为 Leistd:ServiceClients:{Name}:TokenExchange。每个命名客户端只能安装一个认证处理器。
+客户端与认证入口统一先绑定配置，再应用可选委托 `configure`，并可用 `configSectionPath` 指定其他路径：`AddServiceClient` / `AddRefitServiceClient` 默认绑定 Leistd:ServiceClients:{serviceName}；`AddServiceAuthentication` 默认绑定 Leistd:ServiceAuth；`AddClientCredentials` 的默认路径由 builder.Name 派生为 Leistd:ServiceClients:{Name}；`AddTokenExchange` 派生为 Leistd:ServiceClients:{Name}:TokenExchange。认证选项在启动时验证，消息按实际路径报键。
+
+重复调用的契约：
+
+- 客户端按服务名区分，不同服务名可多次登记；同一服务名的相同登记（客户端接口、实现、选项类型与配置节都相同）重复调用不重复登记客户端与处理器，只追加 `configure`，返回同一命名客户端的构建器。同一服务名换用其他登记、或一个选项类型用于两个服务名时抛 `InvalidOperationException`——每个客户端一个具体选项类型。
+- `AddServiceAuthentication` 只有一个工作负载身份：相同配置节重复调用幂等，换用另一配置节时抛出。
+- 每个命名客户端只能安装一个认证处理器：同一方式、同一配置节重复调用幂等；换用另一方式或配置节时抛出。
 
 宿主自行配置 OpenIddict Validation 或等价 JWT Bearer 验证；令牌读取适配器只读取指定方案认证票据中保存的 access_token，不以 Cookie 的已认证状态采信任意 Authorization 头。OpenIddict Validation 自动保存此令牌；使用 JwtBearer 时应启用 SaveToken。适配器在发送请求时读取 HttpContext，池化 handler 不捕获请求作用域。非 Web 宿主可实现 `IUserAccessTokenAccessor`，但返回值必须是真实的已验证用户访问令牌。
 
@@ -111,8 +117,8 @@ var order = await response.ReadContentAsync<OrderDto>();
 | `AddTokenExchange` | 命名客户端用户委托 |
 | `AddUserAccessTokenAccessor` | 当前请求的 Bearer 证明适配 |
 | `IUserAccessTokenAccessor.GetAccessTokenAsync` | 非 Web 宿主的证明来源接缝 |
-| `AddServiceClient` / `AddServiceClientPipeline` | 手写客户端与标准管道 |
-| `AddRefitServiceClient` | Refit 客户端、序列化与统一远端异常 |
+| `AddServiceClient(serviceName, configure?, configSectionPath?)` / `AddServiceClientPipeline` | 手写客户端与标准管道 |
+| `AddRefitServiceClient(serviceName, configure?, configSectionPath?, settings?)` | Refit 客户端、序列化与统一远端异常 |
 | `ReadContentAsync` / `ReadResultAsync` / `EnsureRemoteSuccessAsync` | 裸载荷、信封互操作与错误读取 |
 
 ## 配置项

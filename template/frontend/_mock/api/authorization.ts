@@ -1,4 +1,4 @@
-import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';

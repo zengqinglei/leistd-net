@@ -1,5 +1,5 @@
-import { TenantByHostOutputDto } from '../../src/app/shared/dtos/tenant.dto';
-import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+import { TenantByHostOutputDto } from '../../src/app/features/account/dtos/tenant-by-host.dto';
+import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 import {

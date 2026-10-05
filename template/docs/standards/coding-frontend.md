@@ -2,7 +2,7 @@
 
 本项目 Angular、Spartan UI、Tailwind CSS 前端的编码规范，同时遵循 [项目通用约定](./coding-common.md)。界面、样式与导航见 [前端界面规范](./frontend-ui.md)。
 <!--#if (IncludeLocalization)-->
-多语言见 [前端多语言规范](./frontend-i18n.md)。
+多语言见 [前端多语言规范](./frontend-i18n.md)，词条、引用与 scope 登记由 `scripts/check-i18n.py` 检查。
 <!--#endif-->
 
 ## 1. 技术栈
@@ -37,9 +37,11 @@ frontend/
 | `shared` | | | | | ✓ | |
 | `_mock` | ✓ | | ✓ | ✓ | ✓ | ✓ |
 
-- 应用装配点（`app.config.ts`、`app.interceptors.ts`、`app.routes.ts`）可依赖全部目录，是业务代码之外唯一引入 `_mock` 的位置；测试文件（`*.spec.ts`、`*.testing.ts`）可引用 `_mock`。
+- 应用装配点（`app.config.ts`、`app.interceptors.ts`、`app.routes.ts`、根组件 `app.ts`）与 `src/environments/` 可依赖全部目录，是业务代码之外唯一引入 `_mock` 的位置。各目录可以读取 `environment`，但不反向依赖装配点；需要装配结果的用例写成 `app.*.spec.ts`。测试文件（`*.spec.ts`、`*.testing.ts`）可引用 `_mock`，不放开其他方向。
+- 功能路由文件（`features/<x>/<x>.routes.ts`）可以经 `loadComponent`/`loadChildren` 懒加载其他功能的页面；静态导入、re-export 其他功能以及引用 `_mock` 仍不允许。
 - 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`；依赖 `core` 服务的组件不放 `shared`。功能内复用的组件放该页面的 `widgets/`。
-- 业务代码判断 Mock 模式经应用装配点提供的注入令牌，不直接调用 `_mock` 中的函数。
+- 业务代码判断某个请求是否走 Mock 时注入 `core/mock/mocked-url.ts` 的 `MOCKED_URL`：默认恒为 `false`，只有本机 Mock 构建由 `provideMock` 提供实现；不直接调用 `_mock` 中的函数。
+- 以上方向在 eslint 中检查，按解析器解析出的真实文件判断，不看路径写法，因此导入路径一律写成普通字符串字面量（`import()` 的模板字符串与表达式被 `no-restricted-syntax` 拒绝）：`import-x/no-restricted-paths` 检查各目录之间（静态导入、动态导入与 re-export），功能之间由项目内规则 `local/feature-boundaries` 检查（`features/*` 按目录自动纳入），只放行路由文件里作为 `loadComponent`/`loadChildren` 加载函数的 `import()`；`features/**` 中的导入路径必须是静态字符串，否则无法判断边界、直接报错；`import-x/no-unresolved` 保证解析不到的路径报错，而不是被方向检查静默放过。
 - 基础按钮、卡片、对话框用 `libs/ui`，不在 `shared` 重建组件库。
 
 ## 3. 命名
@@ -101,14 +103,14 @@ frontend/
 ## 7. Mock
 
 - 每个后端新端点同步补 Mock（`_mock/data` + `_mock/api` + `_mock/index.ts` 注册），前端可脱离后端运行。
-- Mock 代码只放 `_mock`，引入规则见第 2 节。
+- Mock 代码只放 `_mock`，引入规则见第 2 节；Mock 自身的单测与被测文件相邻放在 `_mock/`。
 - Mock 与后端保持可观察行为一致：认证、权限、参数校验、过滤语义与失败响应；不复制后端内部实现。
 
 **跨层字段同步**：新增或修改贯穿前后端的字段时逐环改到：后端入参 DTO → 应用层逻辑 → 前端 DTO → 前端服务传参 → Mock 处理器 → Mock 数据。
 
 ## 8. 测试
 
-- `service`、`pipe` 与含复杂业务逻辑的函数必须有单元测试；核心共享组件与业务流程应有组件测试或端到端测试。用例名规则见 [测试规范](./testing.md)。
+- 含参数映射、分支或状态的服务、`pipe` 与含复杂业务逻辑的函数必须有单元测试；只把参数原样转发给 `HttpClient` 的服务由使用它的页面测试覆盖。核心共享组件与业务流程应有组件测试或端到端测试。用例名规则见 [测试规范](./testing.md)。
 - 单测跑在真实 Chromium 里，不得触发真实的下载、打印或页面跳转：对副作用那一步打桩（`saveBlob`，或 `vi.spyOn(HTMLAnchorElement.prototype, 'click').mockReturnValue(undefined)`——`vi.spyOn` 默认仍调用原实现），断言"发起了什么"，见 `shared/utils/download-file.spec.ts`。
 
 ## 9. 日期与时区

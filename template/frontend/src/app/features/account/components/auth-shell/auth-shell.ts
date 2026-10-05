@@ -6,10 +6,10 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
 //#if (IncludeLocalization)
-import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
+import { LanguageSwitcher } from '../../../../core/components/language-switcher/language-switcher';
 //#endif
+import { ThemeModeToggle } from '../../../../core/components/theme-mode-toggle/theme-mode-toggle';
 import { Logo } from '../../../../shared/components/logo/logo';
-import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif

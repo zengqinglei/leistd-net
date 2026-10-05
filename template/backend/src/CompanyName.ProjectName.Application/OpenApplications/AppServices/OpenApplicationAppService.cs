@@ -193,7 +193,7 @@ public class OpenApplicationAppService(
 
             return output;
         }
-        catch (OpenIddict.Abstractions.OpenIddictExceptions.ValidationException ex)
+        catch (OpenIddictExceptions.ValidationException ex)
         {
             logger.LogWarning(ex, "OpenIddict validation failed (ClientId: {ClientId})", clientId);
             throw new BusinessException(OpenAppErrorCodes.CreateFailed, "The open application could not be created.", ex);

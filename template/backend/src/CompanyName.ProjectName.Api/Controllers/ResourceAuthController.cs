@@ -1,5 +1,6 @@
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Users.AppServices;
+using CompanyName.ProjectName.Application.Users.Dtos;
 #if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
 #endif
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Authentication;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -32,24 +34,26 @@ public sealed class ResourceAuthController(
     /// <remarks>签发方令牌里的超管与角色声明属于签发方，不授予本服务任何权限。</remarks>
     [Authorize]
     [HttpGet("me")]
-    public async Task<IActionResult> Me(CancellationToken cancellationToken)
+    public async Task<CurrentResourceUserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken)
     {
         var local = currentUser.Id is { } id ? await userAppService.FindAsync(id, cancellationToken) : null;
-        return Ok(new
+        return new CurrentResourceUserOutputDto
         {
-            id = currentUser.Id, username = currentUser.Username ?? "", email = currentUser.Email ?? "",
-            displayName = currentUser.Name,
-            isEmailVerified = User.FindFirst("email_verified")?.Value == "true",
-            isSuperAdmin = local?.IsSuperAdmin ?? false,
-            roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
-            tenantId = currentTenant.Id
-        });
+            Id = currentUser.Id,
+            Username = currentUser.Username ?? "",
+            Email = currentUser.Email ?? "",
+            DisplayName = currentUser.Name,
+            IsEmailVerified = User.FindFirst(OpenIddictConstants.Claims.EmailVerified)?.Value == "true",
+            IsSuperAdmin = local?.IsSuperAdmin ?? false,
+            Roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
+            TenantId = currentTenant.Id
+        };
     }
 #if (ResourceBrowserSession)
 
     [AllowAnonymous]
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> LogoutAsync()
     {
         // 本地会话单独退出且不带回跳地址：Cookie 处理器见到回跳地址就写 302，会盖过官方退出表单（FormPost 不改状态码）
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);

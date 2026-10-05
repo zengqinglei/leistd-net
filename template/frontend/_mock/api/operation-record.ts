@@ -1,4 +1,4 @@
-import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockRequest } from '../core/models';
 import { OPERATION_RECORDS } from '../data/operation-record';
 

@@ -1,5 +1,5 @@
-import { TenantConnectionDto } from '../../src/app/shared/dtos/tenant-connection.dto';
-import { TenantOutputDto } from '../../src/app/shared/dtos/tenant.dto';
+import { TenantConnectionDto } from '../../src/app/features/platform/dtos/tenant-connection.dto';
+import { TenantOutputDto } from '../../src/app/features/platform/dtos/tenant.dto';
 
 /**
  * 一条连接登记。

@@ -2,7 +2,7 @@ import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { inject, Signal, computed } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 
-import { TableViewport } from '../models/table-column-meta';
+import { TableViewport } from './table-column-meta';
 
 /**
  * 表格列可见性的两个断点。

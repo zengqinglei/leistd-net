@@ -3,7 +3,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { AuthorizationService } from './authorization-service';
-import { routes } from '../../app.routes';
 import { PERMISSIONS, PLATFORM_ENTRY_PERMISSIONS } from '../../shared/models/permission';
 
 /**
@@ -76,24 +75,9 @@ describe('AuthorizationService', () => {
   });
 
   /**
-   * 路由守卫与菜单/重定向必须用同一份权限清单。
-   *
-   * 两处曾各自硬编码，在多租户场景下不等价：路由含 tenants、canAccessPlatform 不含，
-   * 于是只有租户管理权限的账号菜单里没有入口、登录后被重定向走，但直接敲 URL 能进。
-   * 只把两处改成引用同一常量还不够——下一个人仍可能在路由里手写补一项，
-   * 所以这里断言"同源"，让分叉在 CI 里立刻失败。
-   */
-  it('shares the /platform route allowlist with canAccessPlatform', () => {
-    const platformRoute = routes.find((route) => route.path === 'platform');
-
-    expect(platformRoute, '/platform 路由不存在').toBeDefined();
-    expect(platformRoute?.data?.['permissions']).toEqual([...PLATFORM_ENTRY_PERMISSIONS]);
-  });
-
-  /**
    * 平台入口权限集里的**每一项**都要能单独放行。
    *
-   * 上一条锁住两处同源，但同源的清单若漏了某个模块，那个模块的专属角色照样进不去。
+   * 路由与菜单同源由 app.routes.spec.ts 锁住，但同源的清单若漏了某个模块，那个模块的专属角色照样进不去。
    * 这一条逐项验证，新增模块时忘记加入集合就会红。
    */
   it('grants platform access for each platform entry permission on its own', () => {

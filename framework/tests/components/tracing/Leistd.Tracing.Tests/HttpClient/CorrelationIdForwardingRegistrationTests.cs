@@ -1,3 +1,4 @@
+using Leistd.TestBase.Assertions;
 using Leistd.TestBase.Doubles;
 using Leistd.Tracing.Abstractions;
 using Leistd.Tracing.HttpClient;
@@ -43,6 +44,52 @@ public class CorrelationIdForwardingRegistrationTests
         var builder = Base().AddHttpClient("downstream");
 
         Assert.Same(builder, builder.AddCorrelationIdForwarding());
+    }
+
+    // 处理器按客户端名累加：同一客户端挂两遍，每个请求就多走一遍处理器，而描述符层面看不出来
+    [Fact]
+    public void Repeated_forwarding_on_one_client_installs_one_handler()
+    {
+        var services = Base();
+        services.AddHttpClient("downstream").AddCorrelationIdForwarding();
+
+        services.AddHttpClient("downstream").AddCorrelationIdForwarding();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(1, CountForwardingHandlers(provider, "downstream"));
+        Assert.Single(services, d => d.ServiceType == typeof(CorrelationIdDelegatingHandler));
+    }
+
+    // 去重按客户端名，不是全局只装一次：第二个客户端仍要有自己的处理器
+    [Fact]
+    public void Each_named_client_gets_its_own_handler()
+    {
+        var services = Base();
+
+        services.AddHttpClient("first").AddCorrelationIdForwarding();
+        services.AddHttpClient("second").AddCorrelationIdForwarding();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(1, CountForwardingHandlers(provider, "first"));
+        Assert.Equal(1, CountForwardingHandlers(provider, "second"));
+    }
+
+    [Fact]
+    public void Registration_is_idempotent()
+        => ServiceCollectionAssertions.AssertIdempotent(services =>
+            services.AddHttpClient("downstream").AddCorrelationIdForwarding());
+
+    private static int CountForwardingHandlers(IServiceProvider provider, string clientName)
+    {
+        var count = 0;
+        HttpMessageHandler? current = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
+        while (current is DelegatingHandler delegating)
+        {
+            count += delegating is CorrelationIdDelegatingHandler ? 1 : 0;
+            current = delegating.InnerHandler;
+        }
+
+        return count;
     }
 
     // 只有登记过的命名客户端会转发；没登记的客户端必须原样不带头。

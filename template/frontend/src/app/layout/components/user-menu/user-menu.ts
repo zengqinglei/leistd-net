@@ -19,7 +19,7 @@ import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-import { LayoutService } from '../../services/layout-service';
+import { LayoutService } from '../../../core/services/layout-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
 interface UserMenuItem {

@@ -24,6 +24,7 @@ using OpenIddict.Validation;
 using DatabaseMigrationRunner = Migrator::CompanyName.ProjectName.DbMigrator.DatabaseMigrationRunner;
 using MigratorServices = Migrator::CompanyName.ProjectName.DbMigrator.MigratorServices;
 using ResourceAdminBootstrapRunner = Migrator::CompanyName.ProjectName.DbMigrator.ResourceAdminBootstrapRunner;
+using Leistd.DependencyInjection.DynamicProxy.Registration;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -340,7 +341,7 @@ public sealed class ResourceAdminBootstrapTests
             ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.example",
 #endif
         });
-        builder.ConfigureContainer(new Leistd.DependencyInjection.DynamicProxy.Registration.DynamicProxyServiceRegistrationCallbackFactory());
+        builder.ConfigureContainer(new DynamicProxyServiceRegistrationCallbackFactory());
         MigratorServices.AddResourceAdminBootstrapServices(builder.Services, builder.Configuration);
         configure(builder.Services);
         return builder.Build();

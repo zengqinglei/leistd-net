@@ -1,6 +1,7 @@
 // prettier-ignore
 import {
   Injectable,
+  inject,
   signal,
   //#if (IncludeNotifications)
   computed,
@@ -8,7 +9,6 @@ import {
   //#if (IncludeRealTime)
   DestroyRef,
   assertInInjectionContext,
-  inject,
   //#endif
 } from '@angular/core';
 import {
@@ -22,8 +22,8 @@ import {
 import { Observable, Subject } from 'rxjs';
 //#endif
 
-import { isMockedUrl } from '../../../../_mock/core/providers';
 import { environment } from '../../../environments/environment';
+import { MOCKED_URL } from '../mock/mocked-url';
 
 /**
  * 连接是否还在有效生命周期内。
@@ -88,6 +88,7 @@ export class SignalRService {
   static readonly notificationReceived = 'Notifications.Received';
   //#endif
 
+  private readonly isMockedUrl = inject(MOCKED_URL);
   private connection: HubConnection | null = null;
   //#if (IncludeNotifications)
 
@@ -180,7 +181,7 @@ export class SignalRService {
    */
   connect(): Promise<void> {
     // 实时连接本身由 Mock 应答时不建连：Mock 不模拟 SignalR，连不上的后端只会反复重试
-    if (isMockedUrl(environment.useMock, SignalRService.hubPath)) {
+    if (this.isMockedUrl(SignalRService.hubPath)) {
       return Promise.resolve();
     }
 

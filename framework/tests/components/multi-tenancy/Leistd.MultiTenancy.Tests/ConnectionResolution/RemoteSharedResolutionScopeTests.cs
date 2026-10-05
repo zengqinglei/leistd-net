@@ -28,7 +28,7 @@ public sealed class RemoteSharedResolutionScopeTests
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Default"] = "Host=shared",
-            ["TenantRouting:CacheLifetime"] = "00:05:00"
+            ["Leistd:MultiTenancy:Routing:CacheLifetime"] = "00:05:00"
         }).Build());
         services.AddSingleton<ICurrentTenant>(tenant);
         services.AddScoped<ITenantConnectionConfigurationStore>(_ => new ScopeBoundStore(source));

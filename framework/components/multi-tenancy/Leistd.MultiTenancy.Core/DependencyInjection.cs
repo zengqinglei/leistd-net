@@ -57,12 +57,14 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 注册远端连接解析：向持有控制库的服务回源租户连接配置，按 <c>TenantRouting:CacheLifetime</c> 缓存。
+    /// 注册远端连接解析：向持有控制库的服务回源租户连接配置，按 <c>Leistd:MultiTenancy:Routing:CacheLifetime</c> 缓存。
     /// </summary>
     /// <param name="services">服务集合</param>
+    /// <param name="configSectionPath"><see cref="TenantRouteCacheOptions"/> 绑定的配置节，校验消息按它报键名。</param>
     /// <remarks>
-    /// <para><c>TenantRouting:CacheLifetime</c> 默认 10 分钟，可配置（大于 0、不超过 1 小时，越界启动失败）；
-    /// 也可以再用 <c>services.Configure&lt;TenantRouteCacheOptions&gt;</c> 覆盖。</para>
+    /// <para><c>CacheLifetime</c> 默认 10 分钟，可配置（大于 0、不超过 1 小时，越界启动失败）；
+    /// 也可以再用 <c>services.Configure&lt;TenantRouteCacheOptions&gt;</c> 覆盖。重复调用换用另一配置节时抛出
+    /// <see cref="InvalidOperationException"/>。</para>
     /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 包）：控制面经已认证的内部接口下发
     /// 已解密的连接串，本服务不需要控制面的密钥环。
     /// 同时注册多租户核心服务（<see cref="AddMultiTenancyCore"/>）、<see cref="ITenantMigrationTargetProvider"/> 与 <c>HybridCache</c>（只用进程内一级，连接串不进分布式缓存）。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
@@ -71,22 +73,33 @@ public static class DependencyInjection
     /// <example>
     /// <code>
     /// builder.Services.AddRemoteTenantConnectionResolution();
-    /// builder.Services.AddRemoteTenantConnectionStore("identity", builder.Configuration); // Leistd.MultiTenancy.ServiceClient
+    /// builder.Services.AddRemoteTenantConnectionStore("identity"); // Leistd.MultiTenancy.ServiceClient
     /// </code>
     /// </example>
-    public static IServiceCollection AddRemoteTenantConnectionResolution(this IServiceCollection services)
+    public static IServiceCollection AddRemoteTenantConnectionResolution(
+        this IServiceCollection services,
+        string configSectionPath = TenantRouteCacheOptions.SectionName)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // 路由缓存只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<TenantRouteCacheOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddRemoteTenantConnectionResolution() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
 
         // 解析器按当前租户取连接；只做迁移等不经 Web 集成的宿主也要能单独使用本入口
         services.AddMultiTenancyCore();
         // 回源结果的进程内缓存与并发合并；官方实现以 TryAdd 注册，宿主自己的 AddHybridCache 配置照常生效
         services.AddHybridCache();
         services.AddOptions<TenantRouteCacheOptions>()
-            .BindConfiguration(TenantRouteCacheOptions.SectionName)
+            .BindConfiguration(configSectionPath)
             .ValidateOnStart();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<TenantRouteCacheOptions>, TenantRouteCacheOptionsValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TenantRouteCacheOptions>>(
+            new TenantRouteCacheOptionsValidator(configSectionPath)));
 
         // 逐库枚举据此判"有独立库可列"，不从解析器或目录的在场与否推断
         services.TryAddSingleton(TenantConnectionRouting.Instance);

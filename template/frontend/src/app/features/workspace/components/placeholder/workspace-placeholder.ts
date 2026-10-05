@@ -2,11 +2,11 @@
 import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
 import { TranslocoDirective, translateSignal } from '@jsverse/transloco';
 
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 //#else
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 

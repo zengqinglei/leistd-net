@@ -42,7 +42,10 @@ import {
   //#if (OpenIddictServer)
   LogoutConfirmationOutputDto,
   //#endif
-} from '../models/account.dto';
+} from '../dtos/account.dto';
+//#if (IncludeMultiTenancy)
+import { TenantByHostOutputDto } from '../dtos/tenant-by-host.dto';
+//#endif
 
 @Injectable({ providedIn: 'root' })
 export class AccountService {
@@ -69,6 +72,19 @@ export class AccountService {
     });
   }
   //#endif
+  //#if (IncludeMultiTenancy)
+
+  /**
+   * 按当前主机名探测租户（匿名）。
+   *
+   * 子域名部署下由服务端定案，登录页据此把租户显示成只读。回的是**三档定案结果**
+   * （租户 / 宿主 / 域名不表态），不是"有没有租户"——见 {@link TenantByHostOutputDto}。
+   */
+  getTenantByHost(): Observable<TenantByHostOutputDto> {
+    return this.http.get<TenantByHostOutputDto>('/api/v1/tenants/by-host');
+  }
+  //#endif
+
   getCaptcha(): Observable<CaptchaOutputDto> {
     return this.http.get<CaptchaOutputDto>('/api/v1/auth/captcha');
   }

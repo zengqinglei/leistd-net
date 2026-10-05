@@ -37,6 +37,8 @@ public static class DependencyInjection
             services.Configure(configure);
         }
 
+        // 有意覆盖：偏好过滤器取代 Core 的全投默认与此前登记的任何过滤器，成为唯一的投递过滤器——
+        // 并存时按单服务解析会由注册顺序决定谁生效。先清空再登记一条，重复调用结果不变。
         services.RemoveAll<INotificationDeliveryFilter>();
         services.AddScoped<INotificationDeliveryFilter, SettingsNotificationDeliveryFilter>();
         return services;

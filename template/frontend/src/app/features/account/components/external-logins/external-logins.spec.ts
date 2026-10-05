@@ -8,7 +8,7 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import { ExternalLoginsOutputDto } from '../../models/account.dto';
+import { ExternalLoginsOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 
 import type { MockedObject } from 'vitest';

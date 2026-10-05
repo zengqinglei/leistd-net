@@ -27,17 +27,17 @@ import { catchError, EMPTY, finalize, Subscription, tap } from 'rxjs';
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
+import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import {
   TENANT_CONNECTION_NAME_PATTERN,
   TENANT_CONNECTION_STRING_MAX_LENGTH,
   TenantConnectionDto,
   normalizeTenantConnectionName,
-} from '../../../../../../shared/dtos/tenant-connection.dto';
-import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
-import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
-//#if (!IncludeLocalization)
-import { englishText } from '../../../../../../shared/utils/english-text';
-//#endif
+} from '../../../../dtos/tenant-connection.dto';
+import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
 
 /** 连接编辑器的三档：收起 / 添加一条 / 改某条的连接串。 */

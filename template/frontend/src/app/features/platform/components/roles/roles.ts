@@ -45,10 +45,10 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthService } from '../../../../core/services/auth-service';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 //#if (IncludeRealTime)
 import { realtimeResourceKey, SignalRService } from '../../../../core/services/signalr-service';
 //#endif
-import { LayoutService } from '../../../../layout/services/layout-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
@@ -64,7 +64,7 @@ import {
   GetRolesInputDto,
   RoleOutputDto,
   UpdateRoleInputDto,
-} from '../../models/role.dto';
+} from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
 import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/permission-grant-dialog';
 

@@ -9,8 +9,6 @@ import { SignalRService } from './signalr-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from './tenant-context-service';
 //#endif
-import { isMockedUrl } from '../../../../_mock/core/providers';
-import { environment } from '../../../environments/environment';
 //#endif
 //#if (LocalIdentity)
 import { LoginInputDto, SessionLoginOutputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
@@ -19,6 +17,9 @@ import { UserOutputDto } from '../../shared/dtos/auth.dto';
 //#endif
 import { User } from '../../shared/models/user.model';
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
+//#if (RemoteTokenAuth)
+import { MOCKED_URL } from '../mock/mocked-url';
+//#endif
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -35,6 +36,9 @@ export class AuthService {
   //#endif
   //#if (IncludeNotifications || IncludeRealTime)
   private readonly signalR = inject(SignalRService);
+  //#endif
+  //#if (RemoteTokenAuth)
+  private readonly isMockedUrl = inject(MOCKED_URL);
   //#endif
 
   private readonly _currentUser = signal<User | null>(null);
@@ -100,7 +104,7 @@ export class AuthService {
   logout(): void {
     this.clearAuthData();
     //#if (RemoteTokenAuth)
-    if (isMockedUrl(environment.useMock, '/api/v1/auth/logout')) {
+    if (this.isMockedUrl('/api/v1/auth/logout')) {
       this.http
         .post('/api/v1/auth/logout', {})
         .subscribe(() => (window.location.href = '/auth/login'));
@@ -122,7 +126,7 @@ export class AuthService {
   //#if (RemoteTokenAuth)
 
   startLogin(returnUrl = '/workspace'): void {
-    if (isMockedUrl(environment.useMock, '/api/v1/auth/login')) {
+    if (this.isMockedUrl('/api/v1/auth/login')) {
       this.http.post('/api/v1/auth/login', {}).subscribe(() => (window.location.href = returnUrl));
       return;
     }

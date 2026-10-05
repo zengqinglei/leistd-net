@@ -65,7 +65,7 @@ public static class DependencyInjection
     /// 启用通知保留期：到期通知每天按物理库逐个删除，作为集群周期任务执行。
     /// </summary>
     /// <remarks>
-    /// <para>选项绑定 <c>Leistd:Notifications:Retention</c> 并在启动期校验；默认开启，已读保留 90 天、未读保留 365 天，
+    /// <para>选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:Notifications:Retention</c>）并在启动期校验，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>；默认开启，已读保留 90 天、未读保留 365 天，
     /// 均按创建时间计。开关与天数每轮取当前值，执行时刻只在排期时取一次。</para>
     /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁。</para>
     /// <para><b>还需要 <c>AddMultiTenancyCore()</c></b>，单库项目也要：清理按物理库逐个执行，
@@ -82,13 +82,25 @@ public static class DependencyInjection
     /// <typeparam name="TDbContext">承载通知表的 DbContext。</typeparam>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">在配置节之后应用的选项配置。</param>
+    /// <param name="configSectionPath">选项绑定的配置节，校验消息按它报键名。</param>
     public static IServiceCollection AddNotificationRetention<TDbContext>(
         this IServiceCollection services,
-        Action<NotificationRetentionOptions>? configure = null)
+        Action<NotificationRetentionOptions>? configure = null,
+        string configSectionPath = NotificationRetentionOptions.SectionName)
         where TDbContext : DbContext
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // 选项只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<NotificationRetentionOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddNotificationRetention() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
+
         services.AddOptions<NotificationRetentionOptions>()
-            .BindConfiguration(NotificationRetentionOptions.SectionName)
+            .BindConfiguration(configSectionPath)
             .ValidateOnStart();
         if (configure is not null)
         {
@@ -96,7 +108,7 @@ public static class DependencyInjection
         }
 
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<NotificationRetentionOptions>, NotificationRetentionOptionsValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<NotificationRetentionOptions>>(new NotificationRetentionOptionsValidator(configSectionPath)));
         services.AddRecurringJob<NotificationRetentionJob<TDbContext>>(
             NotificationRetentionJob<TDbContext>.Name,
             sp => RecurringJobSchedule.DailyAt(new TimeOnly(

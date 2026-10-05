@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace CompanyName.ProjectName.Api.Auth;
 
 /// <summary>浏览器只带会话引用，票据与 OAuth 令牌经数据保护后留在服务端缓存。</summary>
-internal sealed class DistributedTicketStore(IDistributedCache cache, IDataProtectionProvider protection, TimeProvider clock, IDistributedLock locks) : ITicketStore
+public sealed class DistributedTicketStore(IDistributedCache cache, IDataProtectionProvider protection, TimeProvider clock, IDistributedLock locks) : ITicketStore
 {
     private readonly IDataProtector _protector = protection.CreateProtector("CompanyName.ProjectName.AuthTicket.v1");
 

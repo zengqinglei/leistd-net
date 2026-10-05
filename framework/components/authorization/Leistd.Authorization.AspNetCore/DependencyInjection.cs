@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Authorization.AspNetCore.Permissions;
 using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
@@ -30,8 +31,9 @@ public static class DependencyInjection
     public static IServiceCollection AddPermissionAuthorization(this IServiceCollection services)
     {
         services.AddPermissionAuthorizationCore();
-        services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
-        services.AddTransient<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        // 有意替换官方 DefaultAuthorizationPolicyProvider：权限名策略须动态生成；显式注册的策略仍由内部的官方实现提供。
+        services.Replace(ServiceDescriptor.Singleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IAuthorizationHandler, PermissionAuthorizationHandler>());
         return services;
     }
 }

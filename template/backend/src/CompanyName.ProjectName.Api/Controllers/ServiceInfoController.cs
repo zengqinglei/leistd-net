@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Application.ServiceInfo.Dtos;
 using Leistd.Security.Clients;
 using Leistd.Security.Users;
 using Microsoft.AspNetCore.Authorization;
@@ -41,21 +42,3 @@ public sealed class ServiceInfoController(IClock clock) : BaseController
         new(currentUser.Id, currentUser.Username, currentClient.ClientId);
 #endif
 }
-
-/// <summary>
-/// 服务基础信息。
-/// </summary>
-/// <param name="Service">服务名（程序集名）</param>
-/// <param name="Version">程序集版本</param>
-/// <param name="ServerTime">服务器当前时间（UTC）</param>
-public sealed record ServiceInfoOutputDto(string Service, string Version, DateTimeOffset ServerTime);
-
-#if (LocalIdentity)
-/// <summary>
-/// 当前调用身份。
-/// </summary>
-/// <param name="UserId">当前用户 Id（服务间调用时来自已验证的交换令牌）</param>
-/// <param name="Username">当前用户名</param>
-/// <param name="ClientId">令牌中的调用方客户端 Id</param>
-public sealed record WhoAmIOutputDto(Guid? UserId, string? Username, string? ClientId);
-#endif

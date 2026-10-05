@@ -17,6 +17,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
@@ -57,7 +58,7 @@ public class AuthPrincipalFactory(
             var principal = await CreateAsync(userId, scopes, cancellationToken);
             if (principal is null) return null;
             if (tokenPrincipal.GetClaim(Claims.AuthenticationTime) is { } authenticationTime)
-                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, System.Globalization.CultureInfo.InvariantCulture));
+                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, CultureInfo.InvariantCulture));
             if (sessionClaim is not null)
                 principal.SetClaim(CustomClaimTypes.SessionId, sessionClaim);
             principal.SetDestinations(GetDestinations);

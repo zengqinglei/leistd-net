@@ -20,7 +20,8 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// <para>调度器执行所有经 <c>AddRecurringJob&lt;TJob&gt;</c> 登记的任务；登记与本方法的调用顺序无关。
-    /// 选项绑定 <c>Leistd:BackgroundJobs</c> 与 <c>Leistd:BackgroundJobs:InProcess</c>。</para>
+    /// 选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:BackgroundJobs</c>）与其下的 <c>InProcess</c> 子节，
+    /// 重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>。</para>
     /// <para>集群任务需要 <c>IDistributedLock</c>，缺失时宿主启动失败。水位默认存在进程内，
     /// 多副本部署再注册共享存储的实现（如 <c>AddBackgroundJobsEfCore&lt;TDbContext&gt;()</c>）。</para>
     /// </remarks>
@@ -34,17 +35,30 @@ public static class DependencyInjection
     /// </example>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">在配置节之后应用的选项配置。</param>
+    /// <param name="configSectionPath">通用选项的配置节；进程内调优参数取其下的 <c>InProcess</c> 子节。</param>
     public static IServiceCollection AddInProcessBackgroundJobs(
         this IServiceCollection services,
-        Action<BackgroundJobOptions>? configure = null)
+        Action<BackgroundJobOptions>? configure = null,
+        string configSectionPath = BackgroundJobOptions.SectionName)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
 
-        services.AddOptions<BackgroundJobOptions>().BindConfiguration(BackgroundJobOptions.SectionName);
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<InProcessBackgroundJobOptions>, InProcessBackgroundJobOptionsValidator>());
+        var inProcessSectionPath = $"{configSectionPath}:{InProcessBackgroundJobOptions.SubsectionName}";
+
+        // 选项只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<InProcessBackgroundJobOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != inProcessSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddInProcessBackgroundJobs() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{inProcessSectionPath}'.");
+        }
+
+        services.AddOptions<BackgroundJobOptions>().BindConfiguration(configSectionPath);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<InProcessBackgroundJobOptions>>(
+            new InProcessBackgroundJobOptionsValidator(inProcessSectionPath)));
         services.AddOptions<InProcessBackgroundJobOptions>()
-            .BindConfiguration(InProcessBackgroundJobOptions.SectionName)
+            .BindConfiguration(inProcessSectionPath)
             .ValidateOnStart();
         if (configure is not null)
         {

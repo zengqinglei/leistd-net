@@ -28,9 +28,9 @@ public class EfCoreRegistrationTests
 
         services.AssertImplementedBy<IResourceGrantStore, EfCoreResourceGrantStore<AclDbContext>>();
         services.AssertImplementedBy<IResourceGrantManager, EfCoreResourceGrantManager<AclDbContext>>();
-        // 生命周期一并钉住：这两个是 Scoped，误改成 Transient 会改变它与工作单元的共享关系。
-        services.AssertSingle<IResourceGrantStore>(ServiceLifetime.Scoped);
-        services.AssertSingle<IResourceGrantManager>(ServiceLifetime.Scoped);
+        // 生命周期一并钉住：两者无状态，按 Transient 登记，上下文共享由 IDbContextProvider 按工作单元保证。
+        services.AssertSingle<IResourceGrantStore>(ServiceLifetime.Transient);
+        services.AssertSingle<IResourceGrantManager>(ServiceLifetime.Transient);
     }
 
 
@@ -69,6 +69,7 @@ public class EfCoreRegistrationTests
 
         services.AddResourceAuthorizationEfCore<AclDbContext>();
 
+        // 宿主那条连同它的生命周期原样保留
         var descriptor = services.AssertSingle<IResourceGrantManager>(ServiceLifetime.Scoped);
         Assert.NotNull(descriptor.ImplementationFactory);
     }
@@ -78,12 +79,12 @@ public class EfCoreRegistrationTests
     public void A_host_registration_with_the_wrong_lifetime_is_rejected()
     {
         var services = new ServiceCollection();
-        services.AddTransient<IResourceGrantStore, EfCoreResourceGrantStore<AclDbContext>>();
+        services.AddScoped<IResourceGrantStore, EfCoreResourceGrantStore<AclDbContext>>();
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => services.AddResourceAuthorizationEfCore<AclDbContext>());
 
-        Assert.Contains("Transient", exception.Message);
+        Assert.Contains("Scoped", exception.Message);
     }
 
     [Fact]

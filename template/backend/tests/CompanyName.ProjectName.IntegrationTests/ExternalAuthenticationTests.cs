@@ -24,6 +24,12 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using CompanyName.ProjectName.Application.Shared;
+#if (OpenIddictServer)
+using OpenIddict.Abstractions;
+#endif
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -224,6 +230,31 @@ public sealed class ExternalAuthenticationTests
         copy.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
         using var replay = await copy.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
         Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+    }
+
+    [Fact]
+    public async Task Concurrent_completions_of_one_external_ticket_succeed_only_once()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel();
+        using var host = backchannel.CreateHost(factory);
+        using var starter = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var flow = await ExternalOAuthBackchannel.StartAsync(starter);
+        var clients = Enumerable.Range(0, 4).Select(_ =>
+        {
+            var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+            client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
+            return client;
+        }).ToList();
+
+        var responses = await Task.WhenAll(clients.Select(client =>
+            client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { })));
+
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.All(responses.Where(response => response.StatusCode != HttpStatusCode.OK),
+            response => Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode));
+        foreach (var response in responses) response.Dispose();
+        foreach (var client in clients) client.Dispose();
     }
 
     [Fact]
@@ -430,11 +461,14 @@ public sealed class ExternalAuthenticationTests
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         var challenge = await ExternalOAuthBackchannel.StartAsync(client);
         client.DefaultRequestHeaders.Add("Cookie", challenge.Cookie);
-        var callback = await client.PostAsJsonAsync(
+        using var callback = await client.PostAsJsonAsync(
             "/api/v1/external-auth/github/complete",
             new { });
 
         Assert.Equal(HttpStatusCode.Unauthorized, callback.StatusCode);
+        // 票据在账号政策之前已被消费：被拒之后同一张票据不能再提交
+        using var retry = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, retry.StatusCode);
     }
 
 
@@ -539,18 +573,19 @@ public sealed class ExternalAuthenticationTests
         const string clientId = "external-resource";
         const string clientSecret = "ExternalResource!Secret123";
         const string redirectUri = "https://resource.test/api/v1/auth/signin";
+        // 与 Microsoft.AspNetCore.Authentication.OAuth.OAuthOptions 同名，这里保留全限定名
         var scopeName = new CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions().Resource;
         using (var scope = host.Services.CreateScope())
         {
-            var applications = scope.ServiceProvider.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>();
-            var descriptor = new OpenIddict.Abstractions.OpenIddictApplicationDescriptor
+            var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            var descriptor = new OpenIddictApplicationDescriptor
             { ClientId = clientId, ClientSecret = clientSecret, ClientType = "confidential", ApplicationType = "web" };
             descriptor.RedirectUris.Add(new Uri(redirectUri));
             descriptor.Permissions.UnionWith(["ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", "scp:" + scopeName]);
             await applications.CreateAsync(descriptor);
         }
-        var verifier = System.Buffers.Text.Base64Url.EncodeToString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-        var challenge = System.Buffers.Text.Base64Url.EncodeToString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier)));
+        var verifier = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+        var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         using var browser = ProjectWebApplicationFactory.CreateProjectClient(host);
         browser.BaseAddress = new Uri("https://localhost");
         using var initial = await browser.GetCachedAsync(QueryHelpers.AddQueryString("/connect/authorize", new Dictionary<string, string?>

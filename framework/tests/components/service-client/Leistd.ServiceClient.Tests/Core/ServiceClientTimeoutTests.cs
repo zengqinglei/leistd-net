@@ -23,7 +23,8 @@ public sealed class ServiceClientTimeoutTests
         }).Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        var builder = services.AddServiceClient<ISlowClient, SlowClient, SlowClientOptions>("Slow", configuration)
+        services.AddSingleton<IConfiguration>(configuration);
+        var builder = services.AddServiceClient<ISlowClient, SlowClient, SlowClientOptions>("Slow")
             .ConfigurePrimaryHttpMessageHandler(() => new SlowHandler());
         configure(builder);
         return services.BuildServiceProvider();

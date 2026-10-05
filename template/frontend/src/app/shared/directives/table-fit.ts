@@ -11,7 +11,7 @@ import {
   signal,
 } from '@angular/core';
 
-import { TableViewport } from '../models/table-column-meta';
+import { TableViewport } from '../utils/table-column-meta';
 
 /** 列折叠档位从宽到窄：desktop 显示全部列，tablet 收起 tertiary，mobile 只留 primary。 */
 const LEVELS: readonly TableViewport[] = ['desktop', 'tablet', 'mobile'];

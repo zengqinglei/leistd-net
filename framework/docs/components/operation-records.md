@@ -67,7 +67,7 @@ builder.Services.AddUnitOfWorkEfCore();            // 存储经 IDbContextProvid
 builder.Services.AddSingleton<IClock, UtcClockProvider>();   // Leistd.Core 不提供 DI 扩展；DDD 基础设施包已代为注册
 builder.Services.AddMultiTenancyCore();            // ICurrentTenant：记录写进哪一层
 builder.Services.AddAmbientContext();              // ICurrentUser：谁做的
-builder.Services.AddCorrelationIdCore(builder.Configuration);   // ICorrelationIdProvider：哪条请求链路
+builder.Services.AddCorrelationIdCore();           // ICorrelationIdProvider：哪条请求链路
 ```
 
 保留期归档另外还要逐库遍历（`ITenantDatabaseRunner`），同样由 `AddMultiTenancyCore()` 提供；
@@ -397,7 +397,7 @@ app.UseMiddleware<OperationFailureRecordingMiddleware>();
 | `IOperationRecordReader.GetPagedListAsync(filter, page, ct)` | 只由可回读的存储实现； 按创建时间倒序分页，返回 `PagedResult<OperationRecordInfo>`；`OperationRecordFilter` 的 `Scope` 必填，关键字匹配动作码、目标标识与操作人名，时间两端都是**闭区间**且按 UTC 比较；`PageRequest.Sorting` 不生效 |
 | `IOperationRecordQueryService` | 查询、筛选项与导出用例：无租户上下文即宿主读者；租户读者看不到 `Host` 层、`Actor` 层只看本人（`ActorId` 与 `ActorTenantId` 都与读者相同）；仅宿主字段（`FailureDetail`、`CorrelationId`、`ActorTenantId`）只下发给宿主读者；类别与动作维度间取交集，展开为空返回空页；`FailureMessage` 为按请求语言渲染的失败原因（导出另成 `FailureMessage` 列）。**不做权限判定**，由端点策略把守 |
 | `MapOperationRecords(configure)` | AspNetCore 包：`GET /`、`GET /filter-options`、`GET /export`；`ReadPolicy`、`ExportPolicy`、`ExportAction` 必填；未注册查询用例（日志输出模式）时映射即抛错；返回路由组，端点名前缀见 `OperationRecordEndpoints.NamePrefix` |
-| `AddOperationRecordRetention<TDbContext>(configure?)` | EF 包：绑定 `Leistd:OperationRecords:Retention` 并启动期校验，登记集群周期任务 `operation-records.archive`（每日 `DailyRunHourUtc` 执行） |
+| `AddOperationRecordRetention<TDbContext>(configure?, configSectionPath?)` | EF 包：绑定 `configSectionPath`（默认 `Leistd:OperationRecords:Retention`）并启动期校验，校验消息按实际路径报键，重复调用换用另一配置节时抛出；登记集群周期任务 `operation-records.archive`（每日 `DailyRunHourUtc` 执行） |
 | `IOperationRecordArchiveService` | EF 包：逐库、分批把到期记录搬入 `OperationRecordArchive`，每批一个事务；返回搬运条数与失败库数 |
 | `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**，只能从三个入口取得：`Host` 见全部，`ForTenantReader(actorId, actorTenantId)` 见租户层加本人的 `Actor` 层（标识与所属租户都相同才算本人：主体标识只在签发它的那一层内唯一），`Unrestricted` 不过滤（仅供不代表读者的内部任务）。没有默认值——可见性是安全边界，漏传即越权。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
 | `AddOperationRecords(services)` | 注册记录器与动作定义；不注册写入方与查询 |

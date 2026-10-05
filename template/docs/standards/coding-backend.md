@@ -17,10 +17,10 @@
 | Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、查询聚合 |
 | Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
-目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。
+目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
 
-- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。
-- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层自身消费的配置）、`Abstractions`（端口及其输入输出模型）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
+- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、又不属于任何模块的应用层约定（认证方案名、分页约定）放 `Shared/`，它同样不是兜底目录。
+- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
 - **Infrastructure**：外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
 
 领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 DI 在 `ValidateOnBuild`（Development 环境开启，集成测试覆盖）时检出。
@@ -165,7 +165,7 @@ public class UserAppService(
 
 ## 4. 依赖注入
 
-**注册归属**：每层的 `DependencyInjection.cs`（`AddDomainServices`、`AddApplicationServices`、`AddInfrastructureServices`/`AddPersistenceServices`、`AddApiAuthorization` 等）注册本层类型，可调用实现本层能力所需的组件注册入口。`Program.cs` 组合各层与组件入口并配置管道。部署基线 Options 在声明它的层或组合根绑定，宿主定向配置留在组合根；需要校验的用 `AddOptions<T>()...ValidateOnStart()`。
+**注册归属**：每层的 `DependencyInjection.cs`（`AddDomainServices`、`AddApplicationServices`、`AddInfrastructureServices`/`AddPersistenceServices`、`AddApiAuthorization` 等）注册本层类型，可调用实现本层能力所需的组件注册入口。Api 自有类型按关注点注册在 `Api/Auth`、`Api/Hosting` 的扩展方法里（如 `AddMyProjectAuthentication`、`AddMyProjectWebHost`）；`Program.cs` 只组合各层、组件与这些入口并配置管道。部署基线 Options 在声明它的层或组合根绑定，宿主定向配置留在组合根；需要校验的用 `AddOptions<T>()...ValidateOnStart()`。
 
 **生命周期**：先看状态所有权、并发安全、依赖链与实际消费作用域。
 
@@ -177,7 +177,9 @@ public class UserAppService(
 
 Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transient 必须在正确作用域解析。Development 环境开启 `ValidateScopes` 与 `ValidateOnBuild`。
 
-**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；覆盖组件默认实现用 `Replace`/`Add` 并注释原因。相同登记重复调用不得重复生效，每个 `AddXxx` 由注册测试覆盖注册结果、生命周期与重复调用。
+**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。
+
+**注册测试**：各层入口（`AddDomainServices`、`AddApplicationServices`、`AddApiAuthorization` 等）必测注册结果、生命周期与重复调用，有意覆盖的登记另测与组件入口两种先后顺序的结果；有注册或配置决策的宿主扩展（按形态选择实现、派生 Options）测其行为；只转调组件入口的宿主扩展由启动集成测试覆盖。
 
 没有约定式自动注册：`IAppService` 只是标记，服务需显式注册；`[UnitOfWork]` 依靠代理织入，注册时使用实现类型。
 
@@ -192,7 +194,7 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 - DTO 全部为 record；一个文件一个对外 DTO，仅被它内嵌使用的 item 类型可同文件；业务入参 DTO 放应用层模块，不放 Api。
 - 入参 DTO 写成属性式（`{ get; init; }`），不用位置记录：校验错误的 `errors[].field` 按 JSON 命名策略与请求体字段同名。
-- 校验只在入口 DTO 用 DataAnnotations 完成，内层信任 DTO（多入口共享的实体守卫除外）。每个属性有 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
+- 校验只在入口 DTO 用 DataAnnotations 完成，内层信任 DTO（多入口共享的实体守卫除外）。参与字段校验消息的属性（带校验特性、消息里用到 `{0}`）写 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
 - 变量：DTO 参数 `input`，返回对象 `result`，`IQueryable` 为 `query`/`xxxQuery`；仓储注入 `{entity}Repository`，领域服务注入 `{entity}DomainService`。
 
 ## 6. 数据访问
@@ -216,7 +218,8 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 | 参数与编程契约 | BCL 异常 |
 
 - 部署配置错误在启动期失败：`AddOptions<T>().Validate(...).ValidateOnStart()`。连接串在宿主启动前就要用，缺失时由创建 DbContext 直接抛出并指明键名。
-- 组合期不直接读配置做判断（集成测试的覆盖此时尚未合入）；用 `.Configure<IConfiguration>((o, c) => ...)` 延后求值。
+- 组合期按配置**选择注册哪种实现**（是否接 Redis、加载哪些令牌证书、签发方地址）只能在注册前读取，并在读取处校验、报出键名：键须在宿主构建前由部署配置或环境变量提供，集成测试用 `UseSetting` 覆盖（`ConfigureAppConfiguration` 追加的源此时尚未合入）。
+- 其余**取值与判断**延后：值经 Options 派生（`.Configure<IOptions<T>>(...)`、`.Configure<IConfiguration>(...)`），合法性用 `Validate(...).ValidateOnStart()` 在启动期判定，不在组合期读配置做判断。
 - 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`。不记录密码、令牌、联系方式等敏感信息。
 
 ## 8. Api 目录
@@ -226,8 +229,10 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | 目录 | 内容 |
 | --- | --- |
 | `Controllers/` | 业务 Controller 与 `BaseController` |
-| `Auth/` | 授权策略与处理器、认证方案组装 |
+| `Auth/` | 授权策略与处理器、认证方案组装（`*Extensions`）、会话签发 |
 | `Hosting/` | 宿主组装扩展（`*Extensions`）、组件端点映射、`ExceptionMappings/` |
+| `Localization/` | 本地化资源标记类型（`ApiResource`） |
+| `Notifications/` | 通知组件扩展点的宿主实现（收件人解析、安全提醒发布） |
 | `Configuration/` | 宿主级设置绑定 |
 | `Options/` | 强类型 Options |
 | `Middlewares/` | 中间件 |

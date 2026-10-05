@@ -36,21 +36,21 @@ import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
+import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 
 /**
  * 租户列表表格。

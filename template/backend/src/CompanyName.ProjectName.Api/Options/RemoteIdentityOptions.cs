@@ -6,7 +6,7 @@ namespace CompanyName.ProjectName.Api.Options;
 /// </summary>
 /// <remarks>
 /// <para>"什么样的签发方配置算可用"只在这里定义一次。它有两个消费点：
-/// <c>Program.cs</c> 组合期要拿 issuer 去配 OpenIddict 校验器，
+/// <c>RemoteTokenAuthenticationExtensions</c> 组合期要拿 issuer 去配 OpenIddict 校验器，
 /// <c>RemoteIdentityReadinessInitializer</c> 运行期要拿它探发现文档。
 /// 两处各自读一遍原始配置键、各自判一次空的话，规则就有两个版本。</para>
 /// </remarks>

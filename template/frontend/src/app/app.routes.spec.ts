@@ -3,6 +3,7 @@ import { Route, Routes } from '@angular/router';
 import { routes } from './app.routes';
 import { authGuard } from './core/guards/auth-guard';
 import { PROTECTED_ROUTE_PREFIXES } from './core/services/startup-service';
+import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
 
 describe('top-level routes', () => {
   const isCatchAllPrefix = (r: Route) => r.path === '' && !!r.loadChildren;
@@ -49,5 +50,20 @@ describe('top-level routes', () => {
       [...PROTECTED_ROUTE_PREFIXES].sort() as string[],
       `路由表里使用 authGuard 的是 ${authGuarded.join(', ')}`,
     ).toEqual(authGuarded);
+  });
+
+  /**
+   * 路由守卫与菜单/重定向必须用同一份权限清单。
+   *
+   * 两处曾各自硬编码，在多租户场景下不等价：路由含 tenants、canAccessPlatform 不含，
+   * 于是只有租户管理权限的账号菜单里没有入口、登录后被重定向走，但直接敲 URL 能进。
+   * 只把两处改成引用同一常量还不够——下一个人仍可能在路由里手写补一项，
+   * 所以这里断言"同源"，让分叉在 CI 里立刻失败。
+   */
+  it('shares the /platform route allowlist with canAccessPlatform', () => {
+    const platformRoute = routes.find((route) => route.path === 'platform');
+
+    expect(platformRoute, '/platform 路由不存在').toBeDefined();
+    expect(platformRoute?.data?.['permissions']).toEqual([...PLATFORM_ENTRY_PERMISSIONS]);
   });
 });

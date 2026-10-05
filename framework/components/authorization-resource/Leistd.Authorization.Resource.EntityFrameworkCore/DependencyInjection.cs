@@ -36,12 +36,13 @@ public static class DependencyInjection
         // 同权限授予：资源 ACL 只有一个权威存储，落错库的症状是越权而不是报错。
         // 同样只断言 Store——Manager 允许宿主替换，理由见 AddPermissionAuthorizationEfCore。
         services.EnsureSingleAuthoritative<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>(
-            ServiceLifetime.Scoped,
+            ServiceLifetime.Transient,
             "Resource grants have a single authoritative store; map the resource ACL tables in one DbContext.");
 
         services.AddResourceAuthorizationCore();
-        services.TryAddScoped<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>();
-        services.TryAddScoped<IResourceGrantManager, EfCoreResourceGrantManager<TDbContext>>();
+        // 无状态：上下文经 IDbContextProvider 按工作单元取，与本服务的实例生命周期无关
+        services.TryAddTransient<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>();
+        services.TryAddTransient<IResourceGrantManager, EfCoreResourceGrantManager<TDbContext>>();
         return services;
     }
 

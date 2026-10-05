@@ -58,7 +58,10 @@
 - 扩展类在按层次分的包中放 `Extensions/`；按内容分的包中与被扩展类型同目录。
 
 - `Filters/` 只放 MVC / Hub 管道过滤器（如 `Leistd.Response.AspNetCore.Filters`、`Leistd.AspNetCore.SignalR.Filters`）；
-  名称以 `Filter` 结尾但不在请求管道上的类型（如投递筛选）放所属内容目录。
+  名称以 `Filter` 结尾但不在请求管道上的类型放所属内容目录。登记的例外：通知投递筛选
+  （`Leistd.Notifications.Filters.INotificationDeliveryFilter` 及其实现）已是公共契约，按终局原则保留原命名空间，不为目录规则迁移。
+- 端点映射：组件只映射一个 Hub 时，`Map*Hub` 随注册入口放包根 `DependencyInjection.cs`；映射多个 Minimal API 端点的放 `Endpoints/`
+  （如 `Leistd.Settings.AspNetCore.Endpoints`）。
 - 事件类型（以 `Event` 结尾）放 `Events/`，事件处理器（以 `EventHandler` 结尾）放 `EventHandlers/`，
   与 `Leistd.EventBus.Events`、`Leistd.EventBus.EventHandlers` 同一写法。
 - 周期任务（`*Job`）与常驻消费者（`*Worker`）**不单设 `Jobs/` / `Workers/`**，放在它服务的内容目录里，与同一功能的选项、服务同处
@@ -251,7 +254,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - **由宿主配置的组件，注册入口只有一种形态：** `AddXxx(Action<TOptions>? configure = null, string configSectionPath = TOptions.SectionName)`。内部先 `AddOptions<TOptions>().BindConfiguration(configSectionPath)`，再应用 `configure`，并挂上 `ValidateOnStart()`；校验消息按实际传入的配置节报键名（§6.2）。
   - 不另设 `IConfiguration` 重载：只传委托的宿主也要拿到配置文件里的值，两个入口并存时总有一个会漏绑定。
   - 没有主机的纯 `ServiceCollection`（测试、工具）由调用方注册 `IConfiguration`。
-  - 不适合放进配置文件的选项（如签发方决定的 claim 名）不绑定配置节，只走委托，并在选项类注释里写明。
+  - 不适合放进配置文件的选项（如签发方决定的 claim 名）不绑定配置节，只走委托。其中含运维可能想按环境调整的值时（如 `HubIdentityOptions.RevalidationInterval`、`LocalTenantConnectionOptions.ControlPlaneConnectionStringName`），在该属性注释里写明不绑定配置的原因和需要调整时的做法；纯代码事实不必逐个说明。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
 - **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
   - Core 层错误码和异常只描述语义，XML 注释不写固定 HTTP 状态。组件拥有的非默认 HTTP 语义在组件 Core 包里用 `MapDefaultCode` / `MapDefaultException` 声明，并在组件自己的 `AddXxx` 里经 `services.Configure<GlobalExceptionOptions>(...)` 自动登记——交给宿主逐个调用的话，漏一个不会有编译或启动错误，只会静默回落成 400。登记映射的类型保持 `internal`，默认状态写进组件文档。宿主通过 `MapCode` / `MapException` 覆盖，与调用顺序无关。Core 里的状态码写成 `(int)HttpStatusCode.X`，不为 `StatusCodes` 常量引入 Web 依赖。代价是组件 Core 要依赖 `ExceptionHandling.Core`——多数组件本就为 `BusinessException` 引用它；HTTP 默认状态以 int 表达，Core 仍不依赖 ASP.NET Core 程序集。

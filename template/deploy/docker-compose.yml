@@ -74,7 +74,7 @@ services:
       # 运行时身份只查路由，不给迁移元数据 scope
       - Leistd__ServiceClients__Identity__Scope=tenant-routing.read
       # 路由缓存 TTL：改租户数据落点前的排空等待取 max(令牌有效期, 本值)
-      - TenantRouting__CacheLifetime=${TENANT_ROUTE_CACHE_TTL:-00:10:00}
+      - Leistd__MultiTenancy__Routing__CacheLifetime=${TENANT_ROUTE_CACHE_TTL:-00:10:00}
 #endif
 #endif
 

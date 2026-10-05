@@ -505,7 +505,7 @@ public class UserAppService(
     /// <summary>
     /// 查询用户当前角色。
     /// </summary>
-    public async Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(
         Guid id,
         CancellationToken cancellationToken = default)
     {
@@ -527,7 +527,7 @@ public class UserAppService(
     /// </summary>
     /// <remarks>先删旧角色再插新角色：拆成两次提交时，插入失败会把用户留在零角色状态。</remarks>
     [UnitOfWork]
-    public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
         Guid id,
         UpdateUserRolesInputDto input,
         CancellationToken cancellationToken = default)
@@ -661,14 +661,14 @@ public class UserAppService(
         return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(userRoles, roles));
     }
 
-    /// <remarks>排序是展示口径，映射交给已注册的 <c>Role → RoleBriefDto</c>，不在此手工构造 DTO。</remarks>
-    private List<RoleBriefDto> ToRoleBriefs(List<Role> roles)
+    /// <remarks>排序是展示口径，映射交给已注册的 <c>Role → RoleBriefOutputDto</c>，不在此手工构造 DTO。</remarks>
+    private List<RoleBriefOutputDto> ToRoleBriefs(List<Role> roles)
     {
         var ordered = roles
             .OrderBy(r => r.Sort)
             .ThenBy(r => r.Name, StringComparer.Ordinal)
             .ToList();
-        return objectMapper.Map<List<Role>, List<RoleBriefDto>>(ordered);
+        return objectMapper.Map<List<Role>, List<RoleBriefOutputDto>>(ordered);
     }
 
     private Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)

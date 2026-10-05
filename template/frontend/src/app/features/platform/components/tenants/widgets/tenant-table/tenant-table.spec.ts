@@ -10,7 +10,7 @@ import { TenantTable } from './tenant-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
-import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
+import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 
 /**
  * 租户表格与用户/角色表格共用同一套受控分页与列收纳约定，这里覆盖同样的关键路径。

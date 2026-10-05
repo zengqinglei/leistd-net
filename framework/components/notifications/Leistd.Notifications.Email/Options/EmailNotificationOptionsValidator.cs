@@ -7,6 +7,9 @@ namespace Leistd.Notifications.Email.Options;
 internal sealed class EmailNotificationOptionsValidator(string sectionPath = EmailNotificationOptions.SectionName)
     : IValidateOptions<EmailNotificationOptions>
 {
+    // 选项绑定的配置节；重复注册时据此拒绝另一路径。
+    public string ConfigSectionPath => sectionPath;
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, EmailNotificationOptions options)
     {

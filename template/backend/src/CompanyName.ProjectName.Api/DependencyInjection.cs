@@ -10,6 +10,7 @@ using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 #if (OpenIddictServer && IncludeMultiTenancy)
 using OpenIddict.Abstractions;
@@ -40,9 +41,10 @@ public static class DependencyInjection
     public static IServiceCollection AddApiAuthorization(this IServiceCollection services)
     {
         // ASP.NET Core 只认一个结果处理器，因此"账号失效改判 401"与"被拒写端点留痕"
-        // 收在同一个类里。**无条件注册**：资源服务形态没有本地账号，但一样有带策略的写端点，
+        // 收在同一个类里，有意替换官方默认处理器（Replace 与 AddAuthorization 的先后无关）。
+        // **无条件注册**：资源服务形态没有本地账号，但一样有带策略的写端点，
         // 放进 LocalIdentity 守卫会让那半边静默没有授权阶段的审计。
-        services.AddSingleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationResultHandler>();
+        services.Replace(ServiceDescriptor.Singleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationResultHandler>());
 
         services.AddAuthorization();
         // 默认策略要按宿主配置的主体标识 claim 判定自然人，因此经 Options 管道取 ClaimTypeOptions

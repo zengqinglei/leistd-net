@@ -23,7 +23,7 @@ import {
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { ResetUserPasswordInputDto } from '../../../../models/user-management.dto';
+import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto';
 
 @Component({
   selector: 'app-reset-user-password-dialog',

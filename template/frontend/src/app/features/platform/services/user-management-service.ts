@@ -2,8 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { PagedResultDto } from '../../../shared/models/paged-result.dto';
-import { RoleBriefDto } from '../models/role.dto';
+import { PagedResultDto } from '../../../shared/dtos/paged-result.dto';
+import { RoleBriefDto } from '../dtos/role.dto';
 import {
   CreateUserInputDto,
   GetUsersInputDto,
@@ -13,7 +13,7 @@ import {
   UpdateUserInputDto,
   UpdateUserRolesInputDto,
   UserManagementOutputDto,
-} from '../models/user-management.dto';
+} from '../dtos/user-management.dto';
 
 @Injectable({ providedIn: 'root' })
 export class UserManagementService {

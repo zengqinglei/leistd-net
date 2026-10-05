@@ -99,7 +99,7 @@ def validate(output, values, config):
     frontend = output / 'frontend'
     assert frontend.exists() == values['SpaFrontend'], 'Frontend applicability'
     settings = json.loads(re.sub(r'^\s*//.*$', '', (api / 'appsettings.json').read_text(), flags=re.M))
-    assert ('TenantRouting' in settings) == (values['RemoteTokenAuth'] and values['IncludeMultiTenancy']), 'Tenant routing configuration applicability'
+    assert ('Routing' in settings['Leistd'].get('MultiTenancy', {})) == (values['RemoteTokenAuth'] and values['IncludeMultiTenancy']), 'Tenant routing configuration applicability'
     readme = (output / 'README.md').read_text()
     testing = (output / 'docs/standards/testing.md').read_text()
     deployment = (output / 'docs/deploy/README.md').read_text()
@@ -109,6 +109,9 @@ def validate(output, values, config):
     assert ('npm start' in deployment) == values['SpaFrontend'], 'Frontend deployment instructions applicability'
     action_check = 'scripts/check-operation-action-i18n.py'
     assert (action_check in testing) == (action_check in digests), 'Testing instructions reference an excluded action checker'
+    i18n_check = 'scripts/check-i18n.py'
+    assert (i18n_check in digests) == values['IncludeLocalization'], 'i18n checker applicability'
+    assert (i18n_check in testing) == (i18n_check in readme) == (i18n_check in digests), 'Instructions reference an excluded i18n checker'
     assert ('单实例配 `KeysPath`' in deployment) == values['SpaFrontend'], 'Browser session deployment prerequisite applicability'
     assert ('/api/v1/auth/signin' in invocation) == (values['OpenIddictServer'] or values['ResourceBrowserSession']), 'Browser relying-party instructions applicability'
     assert ('tenant-routing.read' in invocation) == values['IncludeMultiTenancy'], 'Tenant machine scope instructions applicability'

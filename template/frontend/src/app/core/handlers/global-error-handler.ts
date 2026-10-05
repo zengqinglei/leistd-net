@@ -15,16 +15,11 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { ApplicationHttpError } from '../errors/application-http-error';
 
 /**
- * 全局错误处理器
+ * 全局错误处理器：兜底未处理的非 HTTP 错误（运行时异常、Promise rejection 等）。
  *
- * 职责：
- * - 捕获所有未被处理的错误（作为最后的兜底）
- * - 处理非 HTTP 错误（JavaScript 运行时错误、Promise rejection 等）
- * - HTTP 错误已由 httpErrorInterceptor 处理，这里会忽略
- *
- * 注意：
- * - HTTP 错误应该已经被 httpErrorInterceptor 拦截并终止传播
- * - 如果 HTTP 错误到达这里，说明拦截器配置有问题
+ * HTTP 错误的反馈由发起操作的 feature 负责。httpErrorInterceptor 把失败响应归一化为
+ * `ApplicationHttpError` 后继续抛出，没有被 feature 捕获时会到达这里，属于预期情况，静默忽略；
+ * 未经归一化的 `HttpErrorResponse` 说明请求绕过了应用的拦截器链，只记录配置问题，不向用户提示。
  */
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
@@ -33,13 +28,15 @@ export class GlobalErrorHandler implements ErrorHandler {
 
   //#endif
   handleError(error: unknown): void {
+    if (error instanceof ApplicationHttpError) {
+      return;
+    }
+
     console.error('Global error caught:', error);
 
-    // HTTP 错误应该已经被 httpErrorInterceptor 处理
-    // 如果到达这里，记录警告但不重复显示
-    if (error instanceof HttpErrorResponse || error instanceof ApplicationHttpError) {
+    if (error instanceof HttpErrorResponse) {
       console.warn(
-        'HTTP error reached GlobalErrorHandler, this should not happen. Check interceptor configuration.',
+        'An HTTP error bypassed the application interceptor chain. Check how the request was sent.',
       );
       return;
     }

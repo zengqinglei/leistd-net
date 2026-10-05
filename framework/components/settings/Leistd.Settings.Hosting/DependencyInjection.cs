@@ -28,7 +28,8 @@ public static class DependencyInjection
     /// 其余时候由每个副本上的 <c>EveryInstance</c> 周期任务按 <see cref="HostSettingOptions.RefreshInterval"/> 跟上
     /// （需要宿主注册调度器，如 <c>AddInProcessBackgroundJobs()</c>）。</para>
     /// <para>构建之后还要调用 <see cref="UseHostSettings{THost}"/> 把配置源挂上，漏了启动时抛出。
-    /// 可重复调用，绑定累加。</para>
+    /// 可重复调用，绑定累加；刷新周期绑定 <paramref name="configSectionPath"/>，重复调用换用另一配置节时抛出
+    /// <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -42,11 +43,22 @@ public static class DependencyInjection
     /// </example>
     /// <param name="services">服务集合。</param>
     /// <param name="bind">声明绑定。</param>
+    /// <param name="configSectionPath"><see cref="HostSettingOptions"/> 绑定的配置节，校验消息按它报键名。</param>
     public static IServiceCollection AddHostSettings(
         this IServiceCollection services,
-        Action<HostSettingBindingBuilder> bind)
+        Action<HostSettingBindingBuilder> bind,
+        string configSectionPath = HostSettingOptions.SectionName)
     {
         ArgumentNullException.ThrowIfNull(bind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // 刷新周期只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<HostSettingOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddHostSettings() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
 
         services.AddOptions<HostSettingBindingCollection>()
             .Configure(collection => bind(new HostSettingBindingBuilder(collection.Bindings)));
@@ -63,10 +75,9 @@ public static class DependencyInjection
         services.AddHostedService<HostSettingStartupService>();
 
         services.AddOptions<HostSettingOptions>()
-            .BindConfiguration(HostSettingOptions.SectionName)
-            .Validate(options => options.RefreshInterval >= TimeSpan.FromSeconds(1),
-                $"{HostSettingOptions.SectionName}:{nameof(HostSettingOptions.RefreshInterval)} must be at least one second.")
+            .BindConfiguration(configSectionPath)
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<HostSettingOptions>>(new HostSettingOptionsValidator(configSectionPath));
         services.AddRecurringJob<HostSettingRefreshJob>(
             HostSettingRefreshJob.Name,
             provider => RecurringJobSchedule.Every(provider.GetRequiredService<IOptions<HostSettingOptions>>().Value.RefreshInterval),

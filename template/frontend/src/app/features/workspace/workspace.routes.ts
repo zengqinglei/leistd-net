@@ -33,7 +33,9 @@ export const WORKSPACE_ROUTES: Routes = [
     resolve: { translations: resolveTranslationScopes },
     //#endif
     loadComponent: () =>
-      import('../settings/personal-settings/personal-settings').then((m) => m.PersonalSettings),
+      import('../settings/components/personal-settings/personal-settings').then(
+        (m) => m.PersonalSettings,
+      ),
     children: [
       //#if (LocalIdentity)
       { path: '', pathMatch: 'full', redirectTo: 'profile' },
@@ -62,7 +64,9 @@ export const WORKSPACE_ROUTES: Routes = [
         // 通知偏好是"类别 × 渠道"的一组开关，单独一个面板，不混进通用偏好
         path: 'notifications',
         loadComponent: () =>
-          import('../settings/setting-section/setting-section').then((m) => m.SettingSection),
+          import('../settings/components/setting-section/setting-section').then(
+            (m) => m.SettingSection,
+          ),
         data: { scope: 'account', group: 'notifications' },
       },
       //#endif
@@ -73,7 +77,9 @@ export const WORKSPACE_ROUTES: Routes = [
         // 所有允许用户覆盖的设置分组都在这里，新增一项用户级设置会自动出现
         path: 'preferences',
         loadComponent: () =>
-          import('../settings/setting-section/setting-section').then((m) => m.SettingSection),
+          import('../settings/components/setting-section/setting-section').then(
+            (m) => m.SettingSection,
+          ),
         data: { scope: 'account', exclude: ['Notifications'] },
       },
     ],

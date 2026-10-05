@@ -21,8 +21,10 @@ public sealed class HubIdentityOptions
     /// 两次复评之间的最小间隔；为 <see langword="null"/>（默认）时每次调用都复评。
     /// </summary>
     /// <remarks>
-    /// 默认不节流：Hub 调用频率远低于 HTTP 请求，而账号有效性判定通常是一次主键查询。
-    /// 高频 Hub（如光标同步）再按实测放宽。
+    /// <para>默认不节流：Hub 调用频率远低于 HTTP 请求，而账号有效性判定通常是一次主键查询。
+    /// 高频 Hub（如光标同步）再按实测放宽。</para>
+    /// <para>本选项只经 <c>AddSignalRAmbientContext</c> 的委托设置、不绑定配置节：间隔取决于宿主 Hub 的调用频率，
+    /// 与 Hub 代码一起决定；确需按环境调整时，由宿主从自己的配置读值后传进委托。</para>
     /// </remarks>
     public TimeSpan? RevalidationInterval { get; set; }
 }

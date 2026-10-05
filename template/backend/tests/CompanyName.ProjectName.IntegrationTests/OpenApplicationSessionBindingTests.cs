@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using static OpenIddict.Abstractions.OpenIddictConstants;
+using CompanyName.ProjectName.Application.OpenApplications;
+using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -187,7 +189,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         var client = await CreateClientAsync(admin.Client, sessionBound: true);
         await WithApplicationAsync(client, async (manager, application) =>
         {
-            var descriptor = new OpenIddict.Abstractions.OpenIddictApplicationDescriptor();
+            var descriptor = new OpenIddictApplicationDescriptor();
             await manager.PopulateAsync(descriptor, application);
             descriptor.Settings["acme:custom"] = "kept";
             await manager.UpdateAsync(application, descriptor);
@@ -199,25 +201,25 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         {
             var settings = await manager.GetSettingsAsync(application);
             Assert.Equal("kept", settings["acme:custom"]);
-            Assert.Equal("false", settings[CompanyName.ProjectName.Application.OpenApplications.OpenApplicationSettings.SessionBound]);
+            Assert.Equal("false", settings[OpenApplicationSettings.SessionBound]);
         });
     }
 
     // 绕过管理 API 直接改写登记，模拟升级前的存量数据或被手工改坏的值
     private Task RewriteSettingAsync(string clientId, string? value) => WithApplicationAsync(clientId, async (manager, application) =>
     {
-        var descriptor = new OpenIddict.Abstractions.OpenIddictApplicationDescriptor();
+        var descriptor = new OpenIddictApplicationDescriptor();
         await manager.PopulateAsync(descriptor, application);
-        if (value is null) descriptor.Settings.Remove(CompanyName.ProjectName.Application.OpenApplications.OpenApplicationSettings.SessionBound);
-        else descriptor.Settings[CompanyName.ProjectName.Application.OpenApplications.OpenApplicationSettings.SessionBound] = value;
+        if (value is null) descriptor.Settings.Remove(OpenApplicationSettings.SessionBound);
+        else descriptor.Settings[OpenApplicationSettings.SessionBound] = value;
         await manager.UpdateAsync(application, descriptor);
     });
 
     private async Task WithApplicationAsync(string clientId,
-        Func<OpenIddict.Abstractions.IOpenIddictApplicationManager, object, Task> action)
+        Func<IOpenIddictApplicationManager, object, Task> action)
     {
         using var scope = factory.Services.CreateScope();
-        var manager = scope.ServiceProvider.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>();
+        var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
         await action(manager, (await manager.FindByClientIdAsync(clientId))!);
     }
 

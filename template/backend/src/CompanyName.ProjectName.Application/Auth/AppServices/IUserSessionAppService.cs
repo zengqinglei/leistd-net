@@ -1,12 +1,13 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using Leistd.Ddd.Application.Contracts.AppServices;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 /// <summary>
 /// 当前用户的登录设备：查看与撤销
 /// </summary>
-public interface IUserSessionAppService
+public interface IUserSessionAppService : IAppService
 {
     /// <summary>当前用户仍然有效的会话，最近活跃的在前。</summary>
     Task<IReadOnlyList<UserSessionOutputDto>> GetCurrentUserSessionsAsync(CancellationToken cancellationToken = default);

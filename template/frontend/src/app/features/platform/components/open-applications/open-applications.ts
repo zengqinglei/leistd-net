@@ -45,7 +45,7 @@ import {
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#if (!IncludeLocalization)
@@ -64,7 +64,7 @@ import {
   OpenApplicationOutputDto,
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
-} from '../../models/open-application.dto';
+} from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';

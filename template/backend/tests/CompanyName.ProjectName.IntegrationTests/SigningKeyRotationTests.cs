@@ -30,6 +30,10 @@ using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.SystemNetHttp;
+using OpenIddict.Validation;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -146,7 +150,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         var forged = new RsaSecurityKey(forgedRsa) { KeyId = "forged" };
         // 官方处理器验签失败后也会请求刷新：限频装在配置管理器上才约束得到它（限频本身见下面的单元用例）
         Assert.IsType<SigningKeyRefreshThrottle>(host.Services
-            .GetRequiredService<IOptionsMonitor<OpenIddict.Validation.OpenIddictValidationOptions>>().CurrentValue.ConfigurationManager);
+            .GetRequiredService<IOptionsMonitor<OpenIddictValidationOptions>>().CurrentValue.ConfigurationManager);
 
         var concurrent = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => MeAsync(client, issuer.AccessToken(forged))));
         Assert.All(concurrent, status => Assert.Equal(HttpStatusCode.Unauthorized, status));
@@ -219,7 +223,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
     public async Task The_production_fetch_client_keeps_the_ten_second_timeout()
     {
         using var issuer = new RotatingIssuer();
-        var timeouts = new System.Collections.Concurrent.ConcurrentBag<TimeSpan>();
+        var timeouts = new ConcurrentBag<TimeSpan>();
         using var host = Host(baseline.Factory, issuer, observeClient: client => timeouts.Add(client.Timeout));
         using var client = Client(host);
 
@@ -243,7 +247,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         using var forgedRsa = RSA.Create(2048);
         var forged = new RsaSecurityKey(forgedRsa) { KeyId = "forged" };
 
-        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var watch = Stopwatch.StartNew();
         Assert.Equal(HttpStatusCode.Unauthorized, await MeAsync(client, issuer.AccessToken(forged)));
         Assert.True(watch.Elapsed < RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout * 2, $"waited {watch.Elapsed}");
 
@@ -434,7 +438,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         using var challenge = await browser.GetAsync("/api/v1/auth/login?returnUrl=/workspace");
         Assert.Equal(HttpStatusCode.OK, challenge.StatusCode);
         var html = await challenge.Content.ReadAsStringAsync();
-        string Field(string name) => WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html,
+        string Field(string name) => WebUtility.HtmlDecode(Regex.Match(html,
             $"<input type=\"hidden\" name=\"{name}\" value=\"([^\"]*)\"").Groups[1].Value);
         issuer.Nonce = Field("nonce");
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/signin")

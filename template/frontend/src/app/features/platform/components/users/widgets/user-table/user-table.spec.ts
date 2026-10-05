@@ -12,7 +12,7 @@ import { UserTable } from './user-table';
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../../../core/services/auth-service';
-import { UserManagementOutputDto } from '../../../../models/user-management.dto';
+import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 
 /**
  * 用户表格的交互状态。

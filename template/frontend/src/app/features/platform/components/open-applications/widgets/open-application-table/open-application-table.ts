@@ -37,18 +37,18 @@ import { SettingContextService } from '../../../../../../core/settings/setting-c
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -59,7 +59,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
 import {
   OpenApplicationOutputDto,
   OpenApplicationType,
-} from '../../../../models/open-application.dto';
+} from '../../../../dtos/open-application.dto';
 
 const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
   web: 'openApp.appType.web',

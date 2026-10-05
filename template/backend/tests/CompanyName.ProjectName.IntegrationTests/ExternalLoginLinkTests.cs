@@ -11,6 +11,10 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using CompanyName.ProjectName.Domain.Auth.Options;
+#if (OpenIddictServer)
+using OpenIddict.Abstractions;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -35,6 +39,8 @@ public sealed class ExternalLoginLinkTests
         using (var link = await LinkAsync(host, session))
         {
             Assert.True(link.StatusCode == HttpStatusCode.OK, await link.Content.ReadAsStringAsync());
+            // 绑定没有响应体：结果以随后读取的绑定列表为准
+            Assert.Empty(await link.Content.ReadAsByteArrayAsync());
         }
 
         var links = await ReadLinksAsync(session.Client);
@@ -77,6 +83,24 @@ public sealed class ExternalLoginLinkTests
         {
             Assert.Equal(HttpStatusCode.BadRequest, misuse.StatusCode);
         }
+    }
+
+    [Fact]
+    public async Task A_link_started_by_one_user_cannot_be_completed_by_another()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        var provider = new ExternalOAuthBackchannel { User = External("gh-initiator") };
+        using var host = CreateHost(factory, provider);
+        using var initiator = await ProjectWebApplicationFactory.LoginAsync(host, await CreateUserAsync(host, "link_initiator"), Password);
+        using var other = await ProjectWebApplicationFactory.LoginAsync(host, await CreateUserAsync(host, "link_other"), Password);
+
+        var (_, linkCookie) = await StartAsync(initiator.Client, "link");
+        using var misuse = await PostWithCookiesAsync(host, $"{other.Cookie}; {linkCookie}",
+            "/api/v1/external-auth/github/link/complete", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, misuse.StatusCode);
+        var links = await ReadLinksAsync(other.Client);
+        Assert.DoesNotContain(links.GetProperty("providers").EnumerateArray(), p => p.TryGetProperty("link", out var link) && link.ValueKind == JsonValueKind.Object);
     }
 
     [Fact]
@@ -516,11 +540,11 @@ public sealed class ExternalLoginLinkTests
         using var host = CreateHost(factory, provider);
         const string clientId = "link-machine";
         const string secret = "LinkMachine!Secret123";
-        var scopeName = new CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions().Resource;
+        var scopeName = new OAuthOptions().Resource;
         using (var scope = host.Services.CreateScope())
         {
-            var applications = scope.ServiceProvider.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>();
-            var descriptor = new OpenIddict.Abstractions.OpenIddictApplicationDescriptor
+            var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            var descriptor = new OpenIddictApplicationDescriptor
             { ClientId = clientId, ClientSecret = secret, ClientType = "confidential", ApplicationType = "service" };
             descriptor.Permissions.UnionWith(["ept:token", "gt:client_credentials", "scp:" + scopeName]);
             await applications.CreateAsync(descriptor);

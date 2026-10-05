@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -156,7 +157,7 @@ public sealed class RealTimeSubscriptionTests(ProjectWebApplicationFactory facto
             RoleIds = Array.Empty<Guid>()
         });
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
-        var userId = (await create.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        var userId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         await GrantAsync(null, userId, grant);
         return (await factory.LoginAsync($"rt_{suffix}", password), null);
     }

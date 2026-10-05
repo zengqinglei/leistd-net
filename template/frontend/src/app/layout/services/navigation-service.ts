@@ -4,8 +4,8 @@ import { Router, isActive } from '@angular/router';
 import { translateObjectSignal, translateSignal } from '@jsverse/transloco';
 //#endif
 
-import { LayoutService } from './layout-service';
 import { AuthorizationService } from '../../core/services/authorization-service';
+import { LayoutService } from '../../core/services/layout-service';
 import { PERMISSIONS } from '../../shared/models/permission';
 
 //#if (IncludeLocalization)

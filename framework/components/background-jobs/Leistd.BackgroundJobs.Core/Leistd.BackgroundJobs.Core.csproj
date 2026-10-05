@@ -17,4 +17,10 @@
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 进程内水位兜底的类型标记：进程内实现登记它，共享存储据此替换 -->
+    <InternalsVisibleTo Include="Leistd.BackgroundJobs.InProcess" />
+    <InternalsVisibleTo Include="Leistd.BackgroundJobs.EntityFrameworkCore" />
+  </ItemGroup>
+
 </Project>

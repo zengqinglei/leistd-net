@@ -23,7 +23,7 @@ import { AuthService } from '../../../../core/services/auth-service';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { TwoFactorStatusOutputDto } from '../../models/account.dto';
+import { TwoFactorStatusOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 import { RecoveryCodes } from '../recovery-codes/recovery-codes';

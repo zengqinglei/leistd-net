@@ -4,9 +4,7 @@ using Leistd.ServiceClient.Handlers;
 using Leistd.ServiceClient.Options;
 using Leistd.Tracing.Options;
 using Leistd.Tracing.HttpClient.Handlers;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.Tracing.Abstractions;
 
@@ -26,70 +24,112 @@ public static class DependencyInjection
     /// 注册强类型服务客户端并装配标准调用管道。
     /// </summary>
     /// <remarks>
-    /// TraceId 透传是<b>跟随宿主显式组合</b>的可选能力：
+    /// <para>先绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:ServiceClients:{serviceName}</c>），再应用
+    /// <paramref name="configure"/>；无主机的 <c>ServiceCollection</c> 须自行注册 <c>IConfiguration</c>。</para>
+    /// <para>按 <paramref name="serviceName"/> 区分客户端，不同服务名可多次登记。同一服务名以相同的客户端接口、实现、
+    /// 选项类型与配置节重复调用时不重复登记客户端与处理器，只追加 <paramref name="configure"/>，并返回该命名客户端的构建器；
+    /// 同一服务名换用其他客户端接口、实现、选项类型或配置节，或同一选项类型用于另一服务名时抛出 <see cref="InvalidOperationException"/>。</para>
+    /// <para>TraceId 透传是<b>跟随宿主显式组合</b>的可选能力：
     /// 宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传 TraceId；
-    /// 未注册时对应环节自动直通，本方法不代为注册。
+    /// 未注册时对应环节自动直通，本方法不代为注册。</para>
     /// </remarks>
     /// <typeparam name="TClient">客户端接口</typeparam>
     /// <typeparam name="TImplementation">客户端实现</typeparam>
     /// <typeparam name="TOptions">客户端配置类型（每个客户端一个具体类型）</typeparam>
     /// <param name="services">服务集合</param>
-    /// <param name="serviceName">下游服务名：命名 HttpClient、配置节与日志类别</param>
-    /// <param name="configuration">应用配置</param>
+    /// <param name="serviceName">下游服务名：命名 HttpClient、默认配置节与日志类别</param>
+    /// <param name="configure">在配置节之后应用的选项配置</param>
+    /// <param name="configSectionPath">选项绑定的配置节；省略时为 <c>Leistd:ServiceClients:{serviceName}</c></param>
     /// <returns><see cref="IHttpClientBuilder"/>，可继续追加认证（OAuth 包）、弹性等处理器</returns>
     /// <example>
     /// <code>
     /// builder.Services
-    ///     .AddServiceClient&lt;IIdentityApi, IdentityApiClient, IdentityClientOptions&gt;(
-    ///         "identity", builder.Configuration)
+    ///     .AddServiceClient&lt;IIdentityApi, IdentityApiClient, IdentityClientOptions&gt;("identity")
     ///     .AddClientCredentials();
     /// </code>
     /// </example>
     public static IHttpClientBuilder AddServiceClient<TClient, TImplementation, TOptions>(
         this IServiceCollection services,
         string serviceName,
-        IConfiguration configuration)
+        Action<TOptions>? configure = null,
+        string? configSectionPath = null)
         where TClient : class
         where TImplementation : class, TClient
         where TOptions : ServiceClientOptions, new()
-    {
-        services.Configure<TOptions>(configuration.GetSection($"{ConfigurationSectionPrefix}:{serviceName}"));
-        return AddServiceClientCore<TClient, TImplementation, TOptions>(services, serviceName);
-    }
+        => AddServiceClientRegistration(
+            services,
+            serviceName,
+            typeof(TClient),
+            typeof(TImplementation),
+            configure,
+            configSectionPath,
+            () => services.AddHttpClient<TClient, TImplementation>(serviceName));
 
-    /// <summary>
-    /// 注册强类型服务客户端（委托配置版）。行为同
-    /// <see cref="AddServiceClient{TClient,TImplementation,TOptions}(IServiceCollection,string,IConfiguration)"/>。
-    /// </summary>
-    /// <typeparam name="TClient">客户端接口</typeparam>
-    /// <typeparam name="TImplementation">客户端实现</typeparam>
-    /// <typeparam name="TOptions">客户端配置类型（每个客户端一个具体类型）</typeparam>
-    /// <param name="services">服务集合</param>
-    /// <param name="serviceName">下游服务名：命名 HttpClient、配置节与日志类别</param>
-    /// <param name="configureOptions">配置委托</param>
-    public static IHttpClientBuilder AddServiceClient<TClient, TImplementation, TOptions>(
-        this IServiceCollection services,
-        string serviceName,
-        Action<TOptions> configureOptions)
-        where TClient : class
-        where TImplementation : class, TClient
-        where TOptions : ServiceClientOptions, new()
-    {
-        services.Configure(configureOptions);
-        return AddServiceClientCore<TClient, TImplementation, TOptions>(services, serviceName);
-    }
-
-    private static IHttpClientBuilder AddServiceClientCore<TClient, TImplementation, TOptions>(
+    // 按服务名登记一次客户端：绑定选项、创建命名客户端并装配标准管道，供各客户端技术的注册入口共用。
+    // clientType 与 implementationType（Refit 等由框架生成实现时为 null）共同标识客户端，用于判断重复调用是否为相同登记；
+    // createClient 只在首次登记时调用。
+    internal static IHttpClientBuilder AddServiceClientRegistration<TOptions>(
         IServiceCollection services,
-        string serviceName)
-        where TClient : class
-        where TImplementation : class, TClient
+        string serviceName,
+        Type clientType,
+        Type? implementationType,
+        Action<TOptions>? configure,
+        string? configSectionPath,
+        Func<IHttpClientBuilder> createClient)
         where TOptions : ServiceClientOptions, new()
     {
+        ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        if (configSectionPath is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+        }
 
-        return services.AddHttpClient<TClient, TImplementation>(serviceName)
-            .AddServiceClientPipeline<TOptions>(serviceName);
+        var registration = new ServiceClientRegistration(
+            serviceName,
+            clientType,
+            implementationType,
+            typeof(TOptions),
+            configSectionPath ?? $"{ConfigurationSectionPrefix}:{serviceName}");
+        var registered = services.Select(d => d.ImplementationInstance).OfType<ServiceClientRegistration>().ToList();
+        var repeated = registered.Contains(registration);
+
+        if (!repeated)
+        {
+            // 同名的第二种登记会让两套管道叠在同一个命名客户端上；同一选项类型服务两个客户端会让两个配置节互相覆盖。
+            if (registered.FirstOrDefault(r => r.ServiceName == serviceName || r.OptionsType == registration.OptionsType)
+                is { } conflict)
+            {
+                throw new InvalidOperationException(
+                    $"Service client '{serviceName}' ({registration.Describe()}) conflicts with the registered service client " +
+                    $"'{conflict.ServiceName}' ({conflict.Describe()}). " +
+                    "Each service name is registered once, and each service client has its own options type.");
+            }
+
+            services.AddSingleton(registration);
+            services.AddOptions<TOptions>().BindConfiguration(registration.ConfigSectionPath);
+        }
+
+        if (configure is not null)
+        {
+            services.AddOptions<TOptions>().Configure(configure);
+        }
+
+        return repeated
+            ? services.AddHttpClient(serviceName)
+            : createClient().AddServiceClientPipeline<TOptions>(serviceName);
+    }
+
+    private sealed record ServiceClientRegistration(
+        string ServiceName,
+        Type ClientType,
+        Type? ImplementationType,
+        Type OptionsType,
+        string ConfigSectionPath)
+    {
+        public string Describe() =>
+            $"client {ClientType.Name}, implementation {ImplementationType?.Name ?? "<generated>"}, " +
+            $"options {OptionsType.Name}, section '{ConfigSectionPath}'";
     }
 
     /// <summary>

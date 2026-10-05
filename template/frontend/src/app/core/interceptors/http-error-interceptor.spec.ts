@@ -25,7 +25,7 @@ import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from '../services/tenant-context-service';
-import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
+import { TENANT_INVALID_HEADER } from '../tenancy/tenant-protocol';
 //#endif
 
 //#if (LocalIdentity)

@@ -3,7 +3,7 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 
 import { TenantContextService } from '../services/tenant-context-service';
-import { TENANT_HEADER } from '../services/tenant-protocol';
+import { TENANT_HEADER } from '../tenancy/tenant-protocol';
 
 const TENANT_PROBE_PATHS = ['/api/v1/tenants/by-host'] as const;
 

@@ -2,13 +2,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { PagedResultDto } from '../../../shared/models/paged-result.dto';
+import { PagedResultDto } from '../../../shared/dtos/paged-result.dto';
 import {
   ExportOperationRecordsInputDto,
   GetOperationRecordsInputDto,
   OperationRecordFilterOptionsDto,
   OperationRecordOutputDto,
-} from '../models/operation-record.dto';
+} from '../dtos/operation-record.dto';
 
 /**
  * 操作记录查询服务。
