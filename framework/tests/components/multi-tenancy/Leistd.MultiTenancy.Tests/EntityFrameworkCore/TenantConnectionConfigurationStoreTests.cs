@@ -148,24 +148,37 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
         await Manager.SetAsync(exact.Id, "crm", "Host=crm-db", expectedVersion: null);
         await Manager.SetAsync(fallback.Id, "default", "Host=one-db", expectedVersion: null);
 
-        var connections = await Store.GetListAsync("Crm");
+        var list = await Store.GetListAsync("Crm");
+        var connections = list.Connections;
 
         // 没登记的租户不出现——它跟着宿主自己的库迁移
         Assert.Equal(2, connections.Count);
         Assert.Equal("Host=crm-db", connections.Single(x => x.TenantId == exact.Id).ConnectionString);
         Assert.Equal("default", connections.Single(x => x.TenantId == fallback.Id).Name);
+        Assert.Empty(list.FailedTenants);
     }
 
-    // 跳过的库会停在旧结构上，下一次发版才炸——所以是整体停下
+    /// <summary>
+    /// 一个租户解析不出这个名字，单列为失败，其余租户照常返回。
+    /// </summary>
+    /// <remarks>
+    /// 以前整体抛出：一个租户的配置错误挡住所有租户的迁移。也不能静默略过它——
+    /// 那个库会停在旧结构上，下一次发版才炸——所以它必须出现在失败清单里。
+    /// </remarks>
     [Fact]
-    public async Task The_migration_list_stops_when_a_registered_tenant_cannot_be_resolved()
+    public async Task The_migration_list_reports_an_unresolvable_tenant_without_blocking_the_others()
     {
-        var tenant = await Tenants.CreateAsync("partial", null, isActive: false);
-        await Manager.SetAsync(tenant.Id, "foundation", "Host=foundation;Password=secret", expectedVersion: null);
+        var healthy = await Tenants.CreateAsync("healthy", null, isActive: false);
+        var partial = await Tenants.CreateAsync("partial", null, isActive: false);
+        await Manager.SetAsync(healthy.Id, "crm", "Host=crm-db", expectedVersion: null);
+        await Manager.SetAsync(partial.Id, "foundation", "Host=foundation;Password=secret", expectedVersion: null);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Store.GetListAsync("crm"));
+        var list = await Store.GetListAsync("crm");
 
-        Assert.DoesNotContain("secret", error.Message);
+        Assert.Equal(healthy.Id, Assert.Single(list.Connections).TenantId);
+        var failure = Assert.Single(list.FailedTenants);
+        Assert.Equal(partial.Id, failure.TenantId);
+        Assert.DoesNotContain("secret", failure.Reason);
     }
 
     /// <summary>
@@ -188,7 +201,9 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
 
         // 行仍在库里（软删只翻 TenantRecord 的标志），但不再可达
         Assert.Null(await Store.FindAsync(tenant.Id, "default"));
-        Assert.DoesNotContain(await Store.GetListAsync("default"), item => item.TenantId == tenant.Id);
+        var list = await Store.GetListAsync("default");
+        Assert.DoesNotContain(list.Connections, item => item.TenantId == tenant.Id);
+        Assert.DoesNotContain(list.FailedTenants, item => item.TenantId == tenant.Id);
     }
 
     private sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(options)

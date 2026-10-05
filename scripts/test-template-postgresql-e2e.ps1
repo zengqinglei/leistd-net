@@ -184,11 +184,14 @@ try {
     # separation, not just as a code path that ran.
     Invoke-External "docker" @("exec", $containerName, "createdb", "-U", "postgres", "leistd_control")
     Invoke-External "docker" @("exec", $containerName, "createdb", "-U", "postgres", "leistd_split_business")
+    # 部分失败的迁移：排在后面的健康租户库在前一个库失败后照常迁移，作业以失败结束
+    Invoke-External "docker" @("exec", $containerName, "createdb", "-U", "postgres", "leistd_late")
 
     $adminShared = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_shared;Username=postgres;Password=$postgresPassword"
     $adminDedicated = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_dedicated;Username=postgres;Password=$postgresPassword"
     $adminControl = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_control;Username=postgres;Password=$postgresPassword"
     $adminSplitBusiness = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_split_business;Username=postgres;Password=$postgresPassword"
+    $adminLate = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_late;Username=postgres;Password=$postgresPassword"
     $identityMigrator = Join-Path $generatedRoot "identity/backend/src/E2E.Identity.DbMigrator/bin/$Configuration/net10.0/E2E.Identity.DbMigrator.dll"
     $resourceMigrator = Join-Path $generatedRoot "resource/backend/src/E2E.Resource.DbMigrator/bin/$Configuration/net10.0/E2E.Resource.DbMigrator.dll"
 
@@ -461,6 +464,80 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
     }
     Assert-Equal "400" "$badNameStatus" "An invalid connection name was not rejected with 400."
     Assert-Equal "0" (Invoke-Postgres "leistd_shared" 'SELECT count(*) FROM "e2e-identity"."TenantConnectionRecord" WHERE "Name" NOT IN (''default'');') "An invalid connection name was persisted."
+
+    # 迁移目标里一个租户出问题，不能挡住其他租户的库，也不能被静默略过：
+    # 其余库照常预演或迁移，问题逐个报出，作业以非零退出；修好之后重跑即成功。
+    # 三类目标同时在场（租户标识按时间有序，目标按它排序，专属库排在 late 之前）——
+    #   解析不出：共享租户停用后只登记了别的服务（billing）的连接，本服务的名字解析不出；
+    #   迁移出错：专属库的迁移历史少了一行，施加时重复建表失败；
+    #   健康待迁：late 租户的库排在失败库之后，业务 schema 被删掉、有待施加的迁移。
+    Invoke-Migrator $identityMigrator @{ ConnectionStrings__MigrationTarget = $adminLate } -Apply
+    $lateBody = @{
+        name = "late-e2e"; displayName = "Late E2E"; adminEmail = "late@example.test"
+        adminPassword = "E2ETenant!Adm1n"
+        connections = @(@{ name = "default"; connectionString = $adminLate })
+    } | ConvertTo-Json -Depth 5
+    Invoke-WebRequest -Uri "$baseUrl/api/v1/tenants" -Method Post `
+        -ContentType "application/json" -Body $lateBody -WebSession $apiSession | Out-Null
+    Invoke-Postgres "leistd_late" 'DROP SCHEMA "e2e-identity" CASCADE;' | Out-Null
+    $lateHistorySql = 'SELECT count(*) FROM pg_tables WHERE schemaname = ''e2e-identity'' AND tablename = ''__EFMigrationsHistory'';'
+
+    $brokenHistory = [string](Invoke-Postgres "leistd_dedicated" 'SELECT "MigrationId" || ''|'' || "ProductVersion" FROM "e2e-identity"."__EFMigrationsHistory" ORDER BY "MigrationId" LIMIT 1;')
+    $brokenMigrationId, $brokenProductVersion = $brokenHistory.Split('|')
+    Invoke-Postgres "leistd_dedicated" ('DELETE FROM "e2e-identity"."__EFMigrationsHistory" WHERE "MigrationId" = ''{0}'';' -f $brokenMigrationId) | Out-Null
+
+    Invoke-WebRequest -Method Put -WebSession $apiSession `
+        -Uri "$baseUrl/api/v1/tenants/$($sharedTenant.id)/activation" `
+        -ContentType "application/json" -Body (@{ isActive = $false } | ConvertTo-Json) | Out-Null
+    Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)/billing" -Method Put `
+        -ContentType "application/json" -Body $connectionBody -WebSession $apiSession | Out-Null
+
+    $partialDryRun = Invoke-WithEnvironment @{ ConnectionStrings__Default = $adminShared } {
+        & dotnet $identityMigrator 2>&1
+    }
+    $partialDryRunExit = $LASTEXITCODE
+    $partialDryRunText = $partialDryRun -join "`n"
+    Set-Content -LiteralPath (Join-Path $runRoot "migrator-partial-dry-run.txt") -Value $partialDryRunText
+    Assert-Equal "1" "$partialDryRunExit" "A dry run with an unresolvable tenant did not exit with code 1. Output was:`n$partialDryRunText"
+    if ($partialDryRunText -notmatch [regex]::Escape([string]$sharedTenant.id)) {
+        throw "The dry run did not name the tenant whose connection cannot be resolved. Output was:`n$partialDryRunText"
+    }
+    Assert-Equal "0" (Invoke-Postgres "leistd_late" $lateHistorySql) "The dry run changed a healthy target."
+
+    $partialApply = Invoke-WithEnvironment @{ ConnectionStrings__Default = $adminShared } {
+        & dotnet $identityMigrator "--apply" 2>&1
+    }
+    $partialApplyExit = $LASTEXITCODE
+    $partialApplyText = $partialApply -join "`n"
+    Set-Content -LiteralPath (Join-Path $runRoot "migrator-partial-apply.txt") -Value $partialApplyText
+    Assert-Equal "1" "$partialApplyExit" "Applying with an unresolvable tenant and a failing target did not exit with code 1. Output was:`n$partialApplyText"
+    if ($partialApplyText -notmatch [regex]::Escape([string]$sharedTenant.id)) {
+        throw "Apply did not name the tenant whose connection cannot be resolved. Output was:`n$partialApplyText"
+    }
+    if ($partialApplyText -notmatch [regex]::Escape([string]$dedicatedTenant.id)) {
+        throw "Apply did not name the tenant whose database failed to migrate. Output was:`n$partialApplyText"
+    }
+    if ($partialApplyText -match [regex]::Escape($postgresPassword)) {
+        throw "The migrator output exposed a connection string."
+    }
+    # 排在失败库之后的健康库照样迁完。先核对前提——失败库确实先执行——否则"健康库迁好了"
+    # 也可能出自"先迁健康库、遇到失败就停"的实现，这条断言就证明不了"失败之后继续"
+    $dedicatedFingerprint = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($adminDedicated)))
+    $lateFingerprint = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($adminLate)))
+    $failedAt = $partialApplyText.IndexOf("Migrating tenant database $dedicatedFingerprint", [StringComparison]::Ordinal)
+    $lateAppliedAt = $partialApplyText.IndexOf("to target $lateFingerprint", [StringComparison]::Ordinal)
+    if ($failedAt -lt 0 -or $lateAppliedAt -lt 0 -or $failedAt -gt $lateAppliedAt) {
+        throw "The failing target was not migrated before the healthy one (failure at $failedAt, healthy at $lateAppliedAt). Output was:`n$partialApplyText"
+    }
+    Assert-Equal "1" (Invoke-Postgres "leistd_late" $lateHistorySql) "A healthy target after a failing one was not migrated."
+
+    # 修好两处后重跑：撤掉那条别的服务的登记（租户已停用，允许改动），补回缺的迁移历史
+    $sharedVersion = ((Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)" `
+        -WebSession $apiSession).Content | ConvertFrom-Json)[0].version
+    Invoke-WebRequest -Method Delete -WebSession $apiSession `
+        -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)/billing?expectedVersion=$sharedVersion" | Out-Null
+    Invoke-Postgres "leistd_dedicated" ('INSERT INTO "e2e-identity"."__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES (''{0}'', ''{1}'');' -f $brokenMigrationId, $brokenProductVersion) | Out-Null
+    Invoke-Migrator $identityMigrator @{ ConnectionStrings__Default = $adminShared } -Apply
 
     # 删除等同于把路由改回共享库，而该租户已有的数据连同它的管理员都在专属库里——
     # 放行就是让那些数据搁浅。所以与"事后把在用租户改成分库"同一条判据：租户还在服务时必须被拒。

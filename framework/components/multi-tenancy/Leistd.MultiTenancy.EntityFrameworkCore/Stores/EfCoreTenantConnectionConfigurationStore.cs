@@ -75,7 +75,7 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(
+    public async Task<TenantMigrationConnectionListResult> GetListAsync(
         string name,
         CancellationToken cancellationToken = default)
     {
@@ -88,8 +88,8 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
             .Where(x => x.Name == normalized || x.Name == defaultName)
             .ToListAsync(cancellationToken);
 
-        // 登记过连接的租户全集：解析不出这个名字的必须让作业整体停下，而不是被静默跳过——
-        // 跳过的库会停在旧结构上，下一次发版才炸
+        // 登记过连接的租户全集：解析不出这个名字的单列为失败，不被静默跳过——
+        // 调用方据此报错，否则那个库会停在旧结构上，下一次发版才炸
         var tenantIds = await dbContext.ConnectionsOfUndeletedTenants()
             .AsNoTracking()
             .Select(x => x.TenantId)
@@ -98,25 +98,35 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
             .ToListAsync(cancellationToken);
 
         var (resolved, unresolved) = TenantConnectionNameResolution.Resolve(candidates, tenantIds, normalized);
-        if (unresolved.Count > 0)
-        {
-            throw new InvalidOperationException(
-                TenantConnectionNameResolution.DescribeUnresolved(unresolved[0], normalized)
-                + " Fix its connection registrations before running the migrator.");
-        }
+        var failures = unresolved
+            .Select(tenantId => new TenantDatabaseFailure(
+                tenantId, TenantConnectionNameResolution.DescribeUnresolved(tenantId, normalized)))
+            .ToList();
 
         var connections = new List<TenantMigrationConnection>(tenantIds.Count);
         foreach (var tenantId in tenantIds)
         {
-            var record = resolved[tenantId];
+            if (!resolved.TryGetValue(tenantId, out var record))
+            {
+                continue;
+            }
 
-            connections.Add(new TenantMigrationConnection(
-                tenantId,
-                record.Name,
-                _protector.Unprotect(tenantId, record.Name, record.ProtectedConnectionString)));
+            // 解不开密文（密钥环没共享、密文被改）同样只记在这个租户名下：保护器已把它换成只带租户与连接名的安全消息
+            string connectionString;
+            try
+            {
+                connectionString = _protector.Unprotect(tenantId, record.Name, record.ProtectedConnectionString);
+            }
+            catch (InvalidOperationException exception)
+            {
+                failures.Add(new TenantDatabaseFailure(tenantId, exception.Message));
+                continue;
+            }
+
+            connections.Add(new TenantMigrationConnection(tenantId, record.Name, connectionString));
         }
 
-        return connections;
+        return new TenantMigrationConnectionListResult(connections, failures);
     }
 
     private TenantConnectionConfiguration ToConfiguration(TenantConnectionRecord record) => new()

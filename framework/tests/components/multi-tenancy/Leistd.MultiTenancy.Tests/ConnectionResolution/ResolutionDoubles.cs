@@ -45,6 +45,7 @@ public sealed class ScriptedRemoteSource : ITenantConnectionConfigurationStore
         (id, _) => new TenantConnectionLookupResult { TenantId = id, HasAnyConnection = false };
 
     public List<TenantMigrationConnection> Migration { get; } = [];
+    public List<TenantDatabaseFailure> MigrationFailures { get; } = [];
     public TaskCompletionSource? Gate { get; set; }
     public int RuntimeCalls;
 
@@ -70,10 +71,10 @@ public sealed class ScriptedRemoteSource : ITenantConnectionConfigurationStore
         return Lookup(tenantId, name);
     }
 
-    public Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(
+    public Task<TenantMigrationConnectionListResult> GetListAsync(
         string name,
         CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<TenantMigrationConnection>>(Migration);
+        => Task.FromResult(new TenantMigrationConnectionListResult(Migration, MigrationFailures));
 
     /// <summary>构造一条命中的登记。</summary>
     public static TenantConnectionLookupResult Hit(Guid tenantId, string name, string connectionString) => new()

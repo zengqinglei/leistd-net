@@ -87,6 +87,7 @@ dotnet run --project src/CompanyName.ProjectName.Api
 默认目标始终执行业务迁移；OIDC 存储由 Identity 的独立 DbContext 管理。
 <!--#if (IncludeMultiTenancy)-->
 `DbMigrator` 先迁移服务默认目标，再从 Identity 获取 DedicatedDatabase 覆盖并按物理连接去重。每个服务使用自己的固定 schema 和迁移历史表。Identity 还会先迁移固定宿主库的 Control DbContext（租户、连接配置、OpenIddict），再迁移可按租户路由的业务 DbContext。
+单个租户取不出连接或它的库迁移失败时，其余库照常迁移，作业最后逐个报出并以非零退出，详见[模板说明](../README.md)。
 
 新建 DedicatedDatabase 租户前，运维流程必须先对新目标执行一次业务 schema 迁移，再在 Identity 中建立租户与 Secret Reference：
 

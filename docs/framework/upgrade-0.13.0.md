@@ -802,3 +802,19 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
   `resourceSubscribed$`（订阅经服务端确认后发出，页面据此补查）的语义不变：确认改由对账步骤发出，
   首次订阅、自动重连与重建连接后各发一次；确认期间已无人持有（含主体切换）时不发出。
 - 前端规范同步：§5.1 放宽构造函数，允许需要注入上下文的生命周期接线，并写明注入上下文之外各 API 要的作用域参数；§5.8 的订阅写法改为 `watchResource`。
+
+## 34. 迁移目标报出失败租户，单个租户不再挡住其他租户（破坏性，CRM R16）
+
+- **CLR 契约**（`Leistd.MultiTenancy.*`）：
+  - `ITenantConnectionConfigurationStore.GetListAsync` 返回 `TenantMigrationConnectionListResult(Connections, FailedTenants)`；
+  - `ITenantMigrationTargetProvider.GetDedicatedTargetsAsync` 返回 `TenantMigrationTargetSet(Targets, FailedTenants)`；
+  - `ITenantConnectionManagementService.GetMigrationListAsync` 返回 `TenantMigrationConnectionListOutputDto`。
+  失败项沿用运行时的 `TenantDatabaseFailure` / `TenantDatabaseFailureOutputDto`（租户标识 + 原因，不含连接串）。
+  名字解析不出与连接串解不开都归入失败项；控制库查询失败、远端回源失败、取消照常抛出。
+  自行实现这些接口的宿主或测试替身按新签名修改。
+- **HTTP 线协议**：`GET {prefix}/migration?name=` 从裸数组改为 `{ connections, failedTenants }`。不兼容，没有双协议：
+  Identity 与依赖它的 Resource（远端连接存储）、各服务的 DbMigrator 必须一起升级。
+- **模板 DbMigrator**：租户目标中，取不出连接的租户与迁移出错的独立库都记进报告，其余库照常预演或施加；
+  跑完后逐个报出并以退出码 1 结束（预演同样如此）。控制库、OIDC 存储、默认业务库与显式 `MigrationTarget` 出错仍立即结束，取消立即传播。
+  非零退出可能意味着部分库已经迁移、且不会回滚：发布流水线据退出码停下，修好后重跑；新旧 schema 并存期间的兼容性按部署说明的 Expand 阶段要求保证。
+  首次安装的判定（只读预演、控制库仍有待迁移、缺表）不变。

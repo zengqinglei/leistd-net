@@ -98,7 +98,11 @@ try
         .RunAsync(apply);
 
     WriteReport(report, apply);
+#if (IncludeMultiTenancy)
+    return report.Succeeded ? 0 : 1;
+#else
     return 0;
+#endif
 }
 catch (Exception exception)
 {
@@ -134,10 +138,20 @@ static void WriteReport(DatabaseMigrationRunner.MigrationReport report, bool app
     var pendingPlans = plans.Where(x => x.PendingMigrations.Count > 0).ToList();
 
     Console.WriteLine(apply ? "=== Migrations applied ===" : "=== Dry run: pending migrations ===");
+#if (IncludeMultiTenancy)
+    // 失败先报：它们决定退出码，而且不能被后面"已是最新"之类的结论盖住
+    WriteFailures(report);
+#endif
 
     if (pendingPlans.Count == 0)
     {
+#if (IncludeMultiTenancy)
+        Console.WriteLine(report.Succeeded
+            ? $"All {plans.Count} target(s) are up to date. Nothing to do."
+            : $"The {plans.Count} reachable target(s) are up to date; the failures above did not complete.");
+#else
         Console.WriteLine($"All {plans.Count} target(s) are up to date. Nothing to do.");
+#endif
         return;
     }
 
@@ -169,5 +183,37 @@ static void WriteReport(DatabaseMigrationRunner.MigrationReport report, bool app
         Console.WriteLine(group.Script);
     }
 
+#if (IncludeMultiTenancy)
+    Console.WriteLine(report.Succeeded
+        ? "Dry run complete. No change was applied. Re-run with --apply to execute."
+        : "Dry run complete. No change was applied. Fix the failures above before re-running with --apply.");
+#else
     Console.WriteLine("Dry run complete. No change was applied. Re-run with --apply to execute.");
+#endif
 }
+#if (IncludeMultiTenancy)
+
+// 其余库已经迁移（或预演）完；这些没有完成。失败的库可能已提交了前几条迁移（EF 按迁移各自提交），
+// 先看原因与它的迁移历史，修好之后重跑本作业——已施加的迁移不会重复执行
+static void WriteFailures(DatabaseMigrationRunner.MigrationReport report)
+{
+    if (report.Succeeded)
+    {
+        return;
+    }
+
+    foreach (var tenant in report.UnresolvedTenants)
+    {
+        Console.Error.WriteLine($"Tenant {tenant.TenantId} has no migration target: {tenant.Reason}");
+    }
+
+    foreach (var target in report.FailedTargets)
+    {
+        Console.Error.WriteLine($"Target {target.Target} (tenant {target.TenantId}) did not complete: {target.Reason}");
+    }
+
+    Console.Error.WriteLine(
+        $"{report.UnresolvedTenants.Count} tenant(s) without a target were not migrated, and {report.FailedTargets.Count} target(s) " +
+        "did not complete (they may hold some of the pending migrations). Fix them and run the migrator again.");
+}
+#endif

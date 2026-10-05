@@ -77,12 +77,40 @@ public sealed class DatabaseMigrationRunner(
             .ToArray();
     }
 
+#if (IncludeMultiTenancy)
+    /// <summary>取不出连接的租户：它的库没有可迁的目标。</summary>
+    /// <param name="TenantId">租户。</param>
+    /// <param name="Reason">原因；不含连接串。</param>
+    public sealed record UnresolvedTenant(Guid TenantId, string Reason);
+
+    /// <summary>迁移没有完成的租户库；它可能已提交了前几条迁移（EF 按迁移各自提交）。</summary>
+    /// <param name="Target">连接串指纹。</param>
+    /// <param name="TenantId">代表租户：共用这个库的租户都受影响，不只是它。</param>
+    /// <param name="Reason">异常类型与消息；不含连接串。</param>
+    public sealed record FailedTarget(string Target, Guid TenantId, string Reason);
+
+    /// <summary>表示所有物理目标的迁移报告。</summary>
+    /// <param name="Plans">完成预演或施加的目标的计划。</param>
+    /// <param name="UnresolvedTenants">取不出连接、因而没有迁移的租户。</param>
+    /// <param name="FailedTargets">迁移执行失败的租户库。</param>
+    /// <remarks>
+    /// 有任何一项失败即为未成功：其余租户库照常迁移（一个租户的问题不挡住其他租户），
+    /// 但作业必须以失败结束，不能让那些库悄悄停在旧结构上。
+    /// 控制库、OIDC 库与默认库的失败不在这里，它们直接抛出、结束本次运行。
+    /// </remarks>
+    public sealed record MigrationReport(
+        IReadOnlyList<MigrationPlan> Plans,
+        IReadOnlyList<UnresolvedTenant> UnresolvedTenants,
+        IReadOnlyList<FailedTarget> FailedTargets)
+    {
+        /// <summary>全部目标都已预演或施加。</summary>
+        public bool Succeeded => UnresolvedTenants.Count == 0 && FailedTargets.Count == 0;
+    }
+#else
     /// <summary>表示所有物理目标的完整迁移报告。</summary>
     /// <param name="Plans">各物理目标的计划。</param>
-    /// <remarks>
-    /// 目标枚举失败时不会返回不完整报告。
-    /// </remarks>
     public sealed record MigrationReport(IReadOnlyList<MigrationPlan> Plans);
+#endif
 
     /// <summary>
     /// 计算所有物理目标的计划，并按 <paramref name="apply"/> 决定是否施加迁移。
@@ -102,7 +130,7 @@ public sealed class DatabaseMigrationRunner(
         {
             var target = new TenantMigrationTarget(Guid.Empty, explicitTarget);
             plans.Add(await ProcessBusinessAsync(explicitTarget, target.Fingerprint, apply, cancellationToken));
-            return new MigrationReport(plans);
+            return Report(plans);
         }
 
         var defaultConnection = configuration.GetConnectionString(ConnectionStringNames.Default);
@@ -136,12 +164,12 @@ public sealed class DatabaseMigrationRunner(
 
 #if (IncludeMultiTenancy)
         // 始终真实枚举目标；只有已证实的首次安装可将缺表视为无独立目标。
-        // 其他失败必须非零退出，防止不完整预演随后施加额外目标。
-        IReadOnlyList<TenantMigrationTarget> targets;
+        // 读不出清单本身（控制库、回源失败）必须非零退出，防止不完整预演随后施加额外目标。
+        TenantMigrationTargetSet targets;
         try
         {
             // 用本服务业务上下文的连接名问：租户在这个名字下没登记，就回落到它的默认名登记；
-            // 两者都没有的分库租户会让作业整体停下，而不是被静默跳过
+            // 两者都没有、或连接串解不开的租户单列在 FailedTenants 里，报出来而不是被静默跳过
             targets = await targetProvider.GetDedicatedTargetsAsync(
                 BusinessConnectionStringName,
                 cancellationToken);
@@ -151,18 +179,42 @@ public sealed class DatabaseMigrationRunner(
             logger.LogInformation(
                 "The tenant registry does not exist yet and the control database has not been migrated; " +
                 "treating this run as a first install with no dedicated targets.");
-            return new MigrationReport(plans);
+            return Report(plans);
         }
 
-        // 提供器已按物理库去重，与运行时逐库作业同一份清单
-        foreach (var target in targets)
+        // 提供器已按连接指纹去重（运行时逐库作业用的是另一份不带连接串的清单，去重口径相同）。
+        // 一个租户库连不上或迁移出错只记在它名下，其余库照常迁移；取消立即传播，不当成某个库的失败继续执行 DDL
+        var failedTargets = new List<FailedTarget>();
+        foreach (var target in targets.Targets)
         {
-            plans.Add(await ProcessBusinessAsync(target.ConnectionString, target.Fingerprint, apply, cancellationToken));
+            try
+            {
+                plans.Add(await ProcessBusinessAsync(target.ConnectionString, target.Fingerprint, apply, cancellationToken));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(exception,
+                    "Migrating tenant database {Target} (tenant {TenantId}) failed; continuing with the remaining targets.",
+                    target.Fingerprint, target.TenantId);
+                failedTargets.Add(new FailedTarget(
+                    target.Fingerprint, target.TenantId, $"{exception.GetType().Name}: {exception.Message}"));
+            }
         }
 
+        return new MigrationReport(
+            plans,
+            [.. targets.FailedTenants.Select(failure => new UnresolvedTenant(failure.TenantId, failure.Reason))],
+            failedTargets);
+#else
+        return Report(plans);
 #endif
-        return new MigrationReport(plans);
     }
+
+#if (IncludeMultiTenancy)
+    private static MigrationReport Report(List<MigrationPlan> plans) => new(plans, [], []);
+#else
+    private static MigrationReport Report(List<MigrationPlan> plans) => new(plans);
+#endif
 
 #if (LocalIdentity && IncludeMultiTenancy)
     private async Task<MigrationPlan> ProcessControlAsync(

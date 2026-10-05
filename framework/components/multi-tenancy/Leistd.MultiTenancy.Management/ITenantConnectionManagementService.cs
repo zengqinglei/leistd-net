@@ -25,10 +25,10 @@ public interface ITenantConnectionManagementService
     /// <exception cref="Exceptions.TenantNotFoundException">租户不存在或已删除。</exception>
     Task<TenantRuntimeConnectionOutputDto> GetRuntimeAsync(Guid tenantId, string name, CancellationToken cancellationToken = default);
 
-    /// <summary>按连接名枚举全部登记了连接的租户，供迁移作业使用。</summary>
+    /// <summary>按连接名枚举全部登记了连接的租户，供迁移作业使用；取不出连接的租户单列。</summary>
     /// <param name="name">连接名。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    Task<IReadOnlyList<TenantMigrationConnectionOutputDto>> GetMigrationListAsync(string name, CancellationToken cancellationToken = default);
+    Task<TenantMigrationConnectionListOutputDto> GetMigrationListAsync(string name, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 列出某个连接名下的独立库与住在里面的租户，<b>不含连接串</b>。

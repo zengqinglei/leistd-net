@@ -10,6 +10,9 @@ using System.Text.Json.Serialization;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.MultiTenancy.AspNetCore.Options;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Dtos;
+using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -262,6 +265,47 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         Assert.NotEqual(HttpStatusCode.Forbidden, databases.StatusCode);
     }
 
+    /// <summary>
+    /// 迁移清单的线上形状：健康租户的连接与取不出连接的租户一起下发，只有迁移身份读得到。
+    /// </summary>
+    /// <remarks>
+    /// 失败租户若在线上丢了，Resource 的迁移作业会以为一切正常，那个库就停在旧结构上；
+    /// 只持有读路由权限的常驻服务则绝不能拿到这份带全部明文连接串的清单。
+    /// </remarks>
+    [Fact]
+    public async Task The_migration_list_carries_failed_tenants_and_only_the_migration_identity_reads_it()
+    {
+        // 独立宿主：登记的连接会进入同库其他用例的逐库清单
+        using var isolated = new ProjectWebApplicationFactory();
+        Guid healthy, broken;
+        await using (var scope = isolated.Services.CreateAsyncScope())
+        {
+            var tenants = scope.ServiceProvider.GetRequiredService<ITenantManager>();
+            var connections = scope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
+            healthy = (await tenants.CreateAsync("migration-healthy", null, isActive: false)).Id;
+            broken = (await tenants.CreateAsync("migration-broken", null, isActive: false)).Id;
+            await connections.SetAsync(healthy, "default", "Host=healthy-db;Password=healthy-secret", expectedVersion: null);
+            // 只登记了别的服务的连接名：本服务的名字解析不出
+            await connections.SetAsync(broken, "billing", "Host=billing-db;Password=billing-secret", expectedVersion: null);
+        }
+
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
+            isolated, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var migration = await CreateMachineClientAsync(isolated, hostAdmin.Client, "tenant-migration.read");
+        using var response = await migration.GetAsync("/api/v1/tenant-connections/migration?name=Default");
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var list = await response.Content.ReadFromJsonAsync<TenantMigrationConnectionListOutputDto>();
+        Assert.NotNull(list);
+        Assert.Equal(healthy, Assert.Single(list.Connections).TenantId);
+        var failure = Assert.Single(list.FailedTenants);
+        Assert.Equal(broken, failure.TenantId);
+        Assert.DoesNotContain("billing-secret", failure.Reason);
+
+        using var routing = await CreateMachineClientAsync(isolated, hostAdmin.Client);
+        using var denied = await routing.GetAsync("/api/v1/tenant-connections/migration?name=Default");
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+    }
+
     private async Task RunTenantFlowAsync(WebApplicationFactory<Program> host)
     {
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
@@ -397,7 +441,8 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     }
 
     /// <summary>注册一个带 tenant-routing.read 的 client_credentials 应用，返回已带 Bearer 的客户端。</summary>
-    private static async Task<HttpClient> CreateMachineClientAsync(WebApplicationFactory<Program> host, HttpClient hostAdmin)
+    private static async Task<HttpClient> CreateMachineClientAsync(
+        WebApplicationFactory<Program> host, HttpClient hostAdmin, string scope = "tenant-routing.read")
     {
         var clientId = $"client-{Guid.CreateVersion7():N}";
         var created = await hostAdmin.PostAsJsonAsync("/api/v1/open-applications", new
@@ -407,7 +452,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             displayName = "Workload",
             applicationType = "service",
             clientType = "confidential",
-            permissions = new[] { "ept:token", "gt:client_credentials", "scp:tenant-routing.read" },
+            permissions = new[] { "ept:token", "gt:client_credentials", $"scp:{scope}" },
             requirements = Array.Empty<string>(),
             redirectUris = Array.Empty<string>(),
             postLogoutRedirectUris = Array.Empty<string>()
@@ -425,7 +470,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             new KeyValuePair<string, string>("grant_type", "client_credentials"),
             new KeyValuePair<string, string>("client_id", clientId),
             new KeyValuePair<string, string>("client_secret", secret.ClientSecret),
-            new KeyValuePair<string, string>("scope", "tenant-routing.read")
+            new KeyValuePair<string, string>("scope", scope)
         ]));
         Assert.True(token.IsSuccessStatusCode, await token.Content.ReadAsStringAsync());
         var payload = await token.Content.ReadFromJsonAsync<TokenResponse>();

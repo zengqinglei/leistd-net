@@ -230,8 +230,8 @@ public class TenantConnectionChangedEventTests
             Guid tenantId, string name, CancellationToken cancellationToken = default)
             => Task.FromResult<TenantConnectionLookupResult?>(null);
 
-        public Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(
+        public Task<TenantMigrationConnectionListResult> GetListAsync(
             string name, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<TenantMigrationConnection>>([]);
+            => Task.FromResult(new TenantMigrationConnectionListResult([], []));
     }
 }

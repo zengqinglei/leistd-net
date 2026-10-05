@@ -74,17 +74,31 @@ internal sealed class TenantConnectionManagementService(
         };
     }
 
-    public async Task<IReadOnlyList<TenantMigrationConnectionOutputDto>> GetMigrationListAsync(
+    public async Task<TenantMigrationConnectionListOutputDto> GetMigrationListAsync(
         string name,
         CancellationToken cancellationToken = default)
     {
-        var connections = await store.GetListAsync(TenantConnectionNames.NormalizeInput(name), cancellationToken);
-        return [.. connections.Select(connection => new TenantMigrationConnectionOutputDto
+        var list = await store.GetListAsync(TenantConnectionNames.NormalizeInput(name), cancellationToken);
+        return new TenantMigrationConnectionListOutputDto
         {
-            TenantId = connection.TenantId,
-            Name = connection.Name,
-            ConnectionString = connection.ConnectionString
-        })];
+            Connections =
+            [
+                .. list.Connections.Select(connection => new TenantMigrationConnectionOutputDto
+                {
+                    TenantId = connection.TenantId,
+                    Name = connection.Name,
+                    ConnectionString = connection.ConnectionString
+                })
+            ],
+            FailedTenants =
+            [
+                .. list.FailedTenants.Select(failure => new TenantDatabaseFailureOutputDto
+                {
+                    TenantId = failure.TenantId,
+                    Reason = failure.Reason
+                })
+            ]
+        };
     }
 
     public async Task<TenantConnectionOutputDto> SetAsync(

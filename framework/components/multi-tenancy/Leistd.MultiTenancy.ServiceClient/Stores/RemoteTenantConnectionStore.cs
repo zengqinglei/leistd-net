@@ -56,13 +56,16 @@ internal sealed class RemoteTenantConnectionStore(
         };
     }
 
-    public async Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(
+    public async Task<TenantMigrationConnectionListResult> GetListAsync(
         string name,
         CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.GetAsync($"{Prefix}/migration?name={Uri.EscapeDataString(name)}", cancellationToken);
-        var remote = await response.ReadContentAsync<List<TenantMigrationConnectionOutputDto>>(cancellationToken: cancellationToken) ?? [];
-        return [.. remote.Select(x => new TenantMigrationConnection(x.TenantId, x.Name, x.ConnectionString))];
+        // 空响应体由 ReadContentAsync 抛出，不会被当成"没有目标"：迁移作业那样会漏掉本该迁移的库
+        var remote = (await response.ReadContentAsync<TenantMigrationConnectionListOutputDto>(cancellationToken: cancellationToken))!;
+        return new TenantMigrationConnectionListResult(
+            [.. remote.Connections.Select(x => new TenantMigrationConnection(x.TenantId, x.Name, x.ConnectionString))],
+            [.. remote.FailedTenants.Select(x => new TenantDatabaseFailure(x.TenantId, x.Reason))]);
     }
 
     public async Task<TenantDatabaseListResult> GetDatabasesAsync(

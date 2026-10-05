@@ -6,13 +6,12 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// <remarks>
 /// <para>迁移侧的库清单，带明文连接串，<b>与运行时的 <see cref="ITenantDatabaseEnumerator"/> 是两个契约</b>：
 /// 后者只回指纹与租户归属、还要补上宿主库，两者按权限分开，常驻服务不必申请 DDL 身份。
-/// 连接名的解析口径（精确名 → 默认名 → 登记过却都不命中即失败）两边同一份，
-/// 但<b>失败处置相反</b>：迁移整体停下，运行时只隔离该租户。</para>
+/// 连接名的解析口径（精确名 → 默认名 → 登记过却都不命中即失败）与失败的表达两边同一份：
+/// 取不出连接的租户列进 <see cref="TenantMigrationTargetSet.FailedTenants"/>，不挡住其他库。</para>
 /// <para>直接调用仅限迁移作业（DbMigrator 一类的一次性进程）：结果带明文连接串，请求入口与后台作业应改用
 /// <see cref="ITenantDatabaseEnumerator"/>。</para>
-/// <para>目标使用租户在该连接名下的那一条连接串；登记过连接却解析不出该名字时抛
-/// <see cref="InvalidOperationException"/> 终止作业，而不是跳过该租户——跳过的库会停在旧结构上，
-/// 下一次发版才炸。</para>
+/// <para>失败租户<b>不能被当作"没有目标"</b>：迁移作业须迁完其余库后把它们报出来并以失败结束，
+/// 否则那些库会停在旧结构上，下一次发版才炸。</para>
 /// </remarks>
 public interface ITenantMigrationTargetProvider
 {
@@ -28,10 +27,17 @@ public interface ITenantMigrationTargetProvider
     /// 连接名，通常是迁移作业所属服务的业务 DbContext 的 <c>[ConnectionStringName]</c>；大小写不敏感
     /// </param>
     /// <param name="cancellationToken">取消令牌</param>
-    Task<IReadOnlyList<TenantMigrationTarget>> GetDedicatedTargetsAsync(
+    Task<TenantMigrationTargetSet> GetDedicatedTargetsAsync(
         string name,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>迁移目标清单，与运行时的 <see cref="TenantDatabaseSet"/> 同形。</summary>
+/// <param name="Targets">按物理库去重后的目标。</param>
+/// <param name="FailedTenants">取不出连接的租户；它们不在 <paramref name="Targets"/> 里。</param>
+public sealed record TenantMigrationTargetSet(
+    IReadOnlyList<TenantMigrationTarget> Targets,
+    IReadOnlyList<TenantDatabaseFailure> FailedTenants);
 
 /// <summary>
 /// 一个独立物理库目标。
