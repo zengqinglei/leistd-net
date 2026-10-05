@@ -58,7 +58,7 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 
 用户要求提交时只暂存本任务文件，核对生成场景与验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。仓库版本交付由 `maintaining-leistd-repository` 负责；Template 维护完成不等于生成项目已部署。
 
-维护规则归 `docs/template/`，项目协作流程归 `template/.agents/skills/leistd-project-workflow/`，生成项目的长期事实由 `template/docs/README.md` 索引。只沉淀已验证、需复用的信息。
+维护规则归 `docs/template/`，项目协作流程归 `template/.agents/skills/leistd-project-workflow/`，生成项目的长期事实由 `template/docs/README.md` 索引；三者分工见 `docs/architecture/collaboration-scenarios.md` §2。改 `template/docs/` 时同步索引的按任务读取表，并按 `docs/template/development-guide.md` §4 控制核心规范篇幅。只沉淀已验证、需复用的信息。
 
 ## 验证入口
 

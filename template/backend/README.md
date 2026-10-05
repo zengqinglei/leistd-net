@@ -18,7 +18,13 @@ src/
 
 ## Leistd 框架 API
 
-`Directory.Build.props` 统一声明 `LeistdFrameworkVersion`。使用 `Leistd.*` API 前，优先使用 `leistd-net-framework` Skill 按实际还原版本定位包内文档；未安装该 Skill 时，先用 `dotnet nuget locals global-packages --list` 找到 NuGet 缓存，再读取对应包版本的 `docs/*.md` 和 `lib/{tfm}/*.xml`。不要根据模型记忆猜测类型、签名或注册方法。
+`Directory.Build.props` 统一声明 `LeistdFrameworkVersion`。使用 `Leistd.*` API 前，优先使用 `leistd-net-framework` Skill 按实际还原版本定位包内文档。未安装该 Skill 时：
+
+1. 从 `obj/project.assets.json` 或 `dotnet list package --include-transitive` 确认实际还原的包与版本；
+2. 用 `dotnet nuget locals global-packages --list` 找到 NuGet 缓存根目录；
+3. 读取 `{缓存根}/{小写包名}/{版本}/docs/*.md`，精确签名以匹配项目 `TargetFramework` 的 `lib/{tfm}/{包名}.xml` 为准。
+
+不读缓存中其他版本的文档，也不根据模型记忆猜测类型、签名或注册方法。
 
 ## 开发配置
 
@@ -140,7 +146,7 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 `ClientId`、`ClientSecret`：两项全空表示不启用，部分填写在启动期报出缺失键名。
 提供商后台登记后端 HTTPS 回调 `/api/v1/external-auth/{github,google}/signin`，由官方处理器在后端验证 code/state。
 组合根直接使用 AddGoogle、AddGitHub 与短时服务端外部票据；Application 接收规范化 ExternalUserInfo 与可用提供商名称，不读取适配器凭据。
-完整流程、Cookie 与部署规则见 [浏览器认证](../docs/standards/api.md#浏览器认证)。
+完整流程、Cookie 与部署规则见 [浏览器认证](../docs/standards/auth.md#浏览器认证)。
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 

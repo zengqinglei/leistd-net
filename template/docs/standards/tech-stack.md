@@ -2,7 +2,7 @@
 
 ## 1. 用途
 
-本文记录模板项目默认技术栈、版本约束、升级策略和例外处理。新项目可以覆盖本文件，但必须说明原因和影响。
+本文记录项目技术栈、最低版本约束、升级策略和例外处理。精确版本以项目文件与锁文件为准；覆盖默认栈时说明原因和影响。
 
 ## 2. 默认技术栈
 
@@ -15,7 +15,7 @@
 | 字体 | Geist | 5+ | `@fontsource/geist` 自托管（离线可用，回退 `system-ui`），模板设计系统一部分，项目可替换 |
 | 前端语言 | TypeScript | 6.0+ | 类型安全 |
 | 前端状态 | Angular Signals | 当前框架版本 | 组件级/局部状态 |
-| 前端表单 | Angular Signal Forms | 当前框架版本 | `@angular/forms/signals`（Angular 22 仍 experimental，需锁版本） |
+| 前端表单 | Angular Signal Forms | 当前框架版本 | `@angular/forms/signals`（仍为 experimental，需锁定 Angular 版本） |
 <!--#if (IncludeLocalization)-->
 | 前端多语言 | Transloco | ~8.4.0 | 运行时功能 scope；失败处理依赖 8.4 加载失败管道（回落策略抛出 `TranslationLoadError`、清理 `LoadOptions.failedCounter`）。升级次版本前须重新核对 `handleFailure`、inline loader Promise 缓存及缺词回落加载源码，并运行语言服务失败与并发用例 |
 <!--#endif-->
@@ -60,9 +60,4 @@
 
 ## 6. 相关文档
 
-- `docs/standards/coding-backend.md`
-<!--#if (SpaFrontend)-->
-- `docs/standards/coding-frontend.md`
-<!--#endif-->
-- `docs/standards/testing.md`
-- `docs/deploy/README.md`
+规范入口见 [文档索引](../README.md)。

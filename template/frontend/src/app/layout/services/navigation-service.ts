@@ -22,7 +22,7 @@ export interface MenuItem {
 }
 
 export interface MenuGroup {
-  /** 分组标题，必填：没有标题的组就是变相的兜底组（见 docs/standards/coding-frontend.md §8）。 */
+  /** 分组标题，必填：没有标题的组就是变相的兜底组（见 docs/standards/frontend-ui.md「导航与菜单分组」）。 */
   label: string;
   items: MenuItem[];
   /**
@@ -36,7 +36,7 @@ export interface MenuGroup {
  * 下面两套菜单是这个系统的**信息架构**，不是控件清单。
  *
  * 分组判据（工作 / 业务 / 系统 / 开发者 / 运维 各放什么，以及"不设兜底组"等规则）
- * 只写在 docs/standards/coding-frontend.md §8 一处——新增入口先去那张表里找落位，
+ * 只写在 docs/standards/frontend-ui.md「导航与菜单分组」 一处——新增入口先去那张表里找落位，
  * 落不进就在那里新开一类。判据在这里再抄一份，改的时候必然只改一边。
  * 侧栏与工作空间顶栏共用这一份；分组骨架由 default-sidebar.spec.ts 钉住。
  */

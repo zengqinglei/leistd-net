@@ -33,7 +33,7 @@ class SideSwitchHost {
  * 侧栏内容在桌面与手机抽屉之间复用同一实例：用户菜单与区域切换器的方向随断点变化
  * （桌面向右、手机向上 / 向下）。helm 触发器靠直接赋值把位置交给 CDK，不经过 CDK 的
  * ngOnChanges，overlay 建好后新方向就被忽略，菜单仍按旧方向摆、再被推回视口——
- * 不报错，只是摆错。libs/ui 的触发器为此做了定制（见 coding-frontend.md §4.7），这里钉住。
+ * 不报错，只是摆错。libs/ui 的触发器为此做了定制（见 frontend-spartan.md），这里钉住。
  */
 describe('dropdown trigger side change after opening', () => {
   afterEach(() => {

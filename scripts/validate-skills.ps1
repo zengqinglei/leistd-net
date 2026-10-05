@@ -203,10 +203,30 @@ else {
     }
 }
 
+# 生成项目的 AI 入口：AGENTS.md 只放协作 Skill 与文档索引两个指针，CLAUDE.md 只导入 AGENTS.md。
+# 平台适配命令仍由 template/README.md 维护，这里不重复校验其内容。
+$templateAgentsPath = Join-Path $repoRoot "template/AGENTS.md"
+$templateClaudePath = Join-Path $repoRoot "template/CLAUDE.md"
+if (-not (Test-Path -LiteralPath $templateAgentsPath) -or -not (Test-Path -LiteralPath $templateClaudePath)) {
+    Add-ValidationError "Template must provide AGENTS.md and CLAUDE.md entry points"
+}
+else {
+    $templateAgents = Get-Content -LiteralPath $templateAgentsPath -Raw -Encoding UTF8
+    foreach ($pointer in @(".agents/skills/leistd-project-workflow/SKILL.md", "docs/README.md")) {
+        if (-not $templateAgents.Contains("]($pointer)")) {
+            Add-ValidationError "template/AGENTS.md must link $pointer"
+        }
+        elseif (-not (Test-Path -LiteralPath (Join-Path $repoRoot "template/$pointer"))) {
+            Add-ValidationError "template/AGENTS.md points to a missing file: $pointer"
+        }
+    }
+    if ((Get-Content -LiteralPath $templateClaudePath -Raw -Encoding UTF8).Trim() -cne "@AGENTS.md") {
+        Add-ValidationError "template/CLAUDE.md must contain only '@AGENTS.md'"
+    }
+}
+
 $forbiddenPaths = @(
     "template/.claude",
-    "template/CLAUDE.md",
-    "template/AGENTS.md",
     "template/backend/CLAUDE.md",
     "template/backend/AGENTS.md",
     "template/docs/requirements/req-template-plan.md",
@@ -219,6 +239,7 @@ $forbiddenPaths = @(
     "template/docs/standards/api-standard.md",
     "template/docs/standards/code-standard",
     "template/docs/standards/test.md",
+    "template/docs/standards/ui-design.md",
     "template/docs/standards/ui-design-strategy.md",
     "template/docs/standards/document-classification.md",
     "template/docs/standards/document-naming.md"

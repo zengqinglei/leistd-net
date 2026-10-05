@@ -452,6 +452,7 @@
           "condition": "!IncludeLocalization",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Resources/**",
+            "docs/standards/frontend-i18n.md",
             "frontend/public/i18n/**",
             "frontend/src/app/core/i18n/**",
             "frontend/src/app/core/services/language-service.ts",
@@ -512,7 +513,9 @@
           "exclude": [
             "frontend/**",
             "docs/standards/coding-frontend.md",
-            "docs/standards/ui-design.md",
+            "docs/standards/frontend-ui.md",
+            "docs/standards/frontend-spartan.md",
+            "docs/standards/frontend-i18n.md",
             "backend/src/CompanyName.ProjectName.Api/Hosting/SpaExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Middlewares/BrowserOriginMiddleware.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/DistributedTicketStore.cs",

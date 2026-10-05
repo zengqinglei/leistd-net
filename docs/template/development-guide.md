@@ -139,20 +139,15 @@ Identity 形态用 `MapTenantConnections` 映射端点，Resource 形态用 `Lei
 
 ### 3.7 错误码不随本地化裁剪
 
-`BusinessException` 在构造时必填错误码，因此模板不再用 `#if (IncludeLocalization)` 裁掉业务码。多语言形态用它查词条，非多语言形态仍用它做客户端分支和日志聚合；两种形态的机器契约完全一致。
-
-错误码改名按破坏性变更处理，对前端分支和 API 状态映射都要有针对性测试。
-业务错误码按所属模块和最低实际使用层放置：Domain 规则码归对应 Domain 模块，纯用例码归 Application 模块，`Domain/Shared` 只保留真正跨模块的契约。组件错误码始终引用组件常量。API 各模块只登记非默认 HTTP 状态，由组合根汇总；框架组件的默认状态由组件在自己的 `AddXxx` 里登记，组合根不再逐个调用，只在需要时覆盖。宿主覆盖优先且与调用顺序无关，默认 400 不建第二张清单。
-错误码采用 `模块:语义名`，前缀由一个模块独占、后缀与常量成员名一致；`*ErrorCodes` 检查同时验证唯一性、格式和资源键。未命中映射的 `BusinessException` 回落 400；422 仅在客户端需要区分“内容可解析但无法处理”时显式映射。
+`BusinessException` 在构造时必填错误码，模板不用 `#if (IncludeLocalization)` 裁掉业务码：多语言形态用它查词条，非多语言形态仍用它做客户端分支和日志聚合，两种形态的机器契约一致。错误码的命名、放置与 HTTP 映射规则见生成项目 [API 规范](../../template/docs/standards/api.md#4-异常与-http-映射)；`*ErrorCodes` 检查验证唯一性、格式和资源键。
 
 ## 4. Skill 与规范
 
-- `leistd-project-workflow` 覆盖业务开发与环境交付，按最终意图加载对应 reference；不依赖工具专属入口文件触发。
-- `template/docs/README.md` 是生成项目唯一文档索引，`docs/standards/` 只保存工程事实，不重复 Skill 流程。
-- Skill 安装后即使项目没有文档，也必须从源码、配置、测试和 CI 继续低风险任务；只有产生长期可复用信息时才按需创建最小权威文档。
-- 不携带固定需求、规范或报告模板，不预建按需目录。
+- Skill、生成项目规范与入口文件的分工以 [三层交付与 AI 协作](../architecture/collaboration-scenarios.md#2-skill-边界) 为准。
+- `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。
+- `docs/standards/` 只保存工程事实，不重复 Skill 流程；不携带固定需求、规范或报告模板，不预建按需目录。
 - 修改任何 Skill 时使用官方 `skill-creator` 并运行 `scripts/validate-skills.ps1`。
-- 前端 UI 走 Spartan UI：选型依据与主题/能力取舍见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法规范见 [`template/docs/standards/coding-frontend.md`](../../template/docs/standards/coding-frontend.md)；新增、修改或排查 Spartan 组件时，按「`spartan` skill（`.agents/skills/spartan/`，含 `rules/`）→ 本地 `libs/ui` 源码与锁定版本 → 匹配版本的官方文档」确认组件 API，不臆造 Helm/Brain API。`@spartan-ng/mcp` 是仓库维护者的可选工具（根 `.mcp.json`），模板不内置。
+- 前端 UI 走 Spartan UI：选型依据见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法见生成项目 [前端界面规范](../../template/docs/standards/frontend-ui.md)；确认组件 API 按「`spartan` skill → 本地 `libs/ui` 源码与锁定版本 → 匹配版本的官方文档」，不臆造 Helm/Brain API。`@spartan-ng/mcp` 是仓库维护者的可选工具（根 `.mcp.json`），模板不内置。
 
 ## 5. 本地框架联调
 
@@ -181,59 +176,11 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 
 ## 7. 事务边界
 
-工作单元**按需引入**，不是每个写方法的必需装饰。默认不开启，写业务代码可以先不理解它。
-
-- **只有跨多次提交边界的方法才标 `[UnitOfWork]`。** 单次 `SaveChanges` 本身已在数据库隐式事务里；
-  写入由管理器以一次 `SaveChanges` 完成的（权限授予、租户连接配置）也已自证原子；
-  不走本框架仓储的第三方存储（OpenIddict 自带 store）标了也管不到。判据见
-  [工作单元组件文档](../../framework/docs/components/unit-of-work.md#何时不需要)。
-- **写方法一律用仓储返回值构造输出，不回查数据库。** `InsertAsync` / `UpdateAsync` 返回实体，
-  且 `Id`（Guid v7 领域生成）与创建审计、租户值都在实体进入跟踪时就已落定，返回时即完整。
-  回查有两处害处：多一次往返；且在工作单元内那些行还没落库，回查得到空结果——
-  "创建后返回创建结果"会变成 404 或少掉全部关联。
-- 需要把刚写入的关联数据回显时，让写方法**回传**它写了什么（如 `AssignDefaultRolesToUserAsync`
-  返回角色名），而不是让调用方按 id 再查一遍。
-- 已有反向决定的地方不要覆盖：`RoleAppService.DeleteAsync` 刻意不做成一个事务并写明了失败形态选择。
+生成项目的工作单元与写后返回规则见 [后端开发规范 §3.6](../../template/docs/standards/coding-backend.md#36-事务与工作单元)。模板内已有的反向决定不要覆盖：`RoleAppService.DeleteAsync` 刻意不做成一个事务并写明了失败形态选择。
 
 ## 8. 宿主与租户侧别
 
-新增平台能力时先回答一个问题：**这条权限背后的数据带不带 `TenantId`？**
-
-| 数据形态 | 侧别 | 模板中的例子 |
-| --- | --- | --- |
-| 实体实现 `IMultiTenant`，受全局租户过滤器分区 | `Both` | 用户、角色、设置、权限目录 |
-| 宿主全局，无 `TenantId`，过滤器不生效 | `Host` | 租户注册表、OpenIddict 开放应用 |
-| 只在租户内成立 | `Tenant` | 模板当前没有 |
-
-**省略 `side` 等于选择 `Both`**，而 `Both` 的含义是"租户管理员也拿得到"。对宿主全局资源来说这就是跨租户越权：`TenantSeeder` 按 `Side.HasFlag(MultiTenancySides.Tenant)` 播种，`Both` 会命中，于是每个租户的 Admin 角色都被授予该权限；宿主全局的表又不受租户过滤器约束，接口返回的就是全系统的数据。**这条只在真的建了租户之后才暴露**，单租户本地开发和单场景测试永远是绿的。
-
-**侧别为 `Host` 时，权限检查本身就是边界，不要在服务里再拦一次。**
-`DefaultPermissionChecker` 按当前侧别判定，且**与是否授予无关**——即便有人手工往库里写一条授予记录，
-租户上下文下仍然不通过。在应用服务入口重复一遍同一个不变量，只是把它写两处、且没有任何东西保证两处同步。
-
-**只有一种情形需要服务内再校验：权限必须保持 `Both`，而它管辖的内容里有一部分是宿主专属的。**
-`App.Settings` 就是这一种——两侧都要能改自己的设置，所以侧别不能收成 `Host`；
-但 `SettingScopes.Host` 那几项（日志级别这类进程级配置）只有宿主能写，
-这一层租户过滤器和权限侧别都表达不了，由设置组件的设置页用例在读取时隐藏、在写入时拒绝（`Setting:HostOnly`）。
-
-判断口径：**先问侧别能不能表达。能，就只写侧别；不能，才在服务里补。**
-
-### 实体的租户维度
-
-同一条判据对持久化对象同样适用，问法换成：**这个实体会不会被独立查询？**
-
-| 情形 | 要求 |
-| --- | --- |
-| 会被独立查询（有自己的仓储 / `DbSet`，或被 `Where` 直接命中） | **必须 `IMultiTenant`** |
-| 只经聚合根访问，没有任何独立查询入口 | 不需要；但必须**真的**没有入口 |
-
-**没有第三种状态。**"当前所有调用路径恰好都先经过了受过滤的表"不是一种设计——它不被任何机制保证，新增一条直查路径就破防；而 `MultiTenantFilterGuard` 只扫 `IMultiTenant` 实体，对这种实体一个字都不会说。
-
-宿主全局的数据（控制面表、OpenIddict 这类第三方表）走另一条路：**不映射进租户上下文**，能力边界由权限侧别把守。
-
-**侧别是 `AddPermission` 的必填参数**，漏声明连编译都过不去——编译器本身就是那张"已决定"清单，不需要另立一张表来对账。（早先的 `PermissionContractTests.ExpectedSides` 是侧别还可省略时的补偿闸门；根因消除后它已随之删除。）
-
-**收紧侧别不会撤销已经授出去的记录。** `SeedAdminRolePermissionsAsync` 只在授权版本为 0 时播种，既不自动补齐也不自动撤销——因此把某条权限从 `Both` 改成 `Host` 时，必须同时给既有部署一条撤销 SQL，否则已建租户仍持有该权限。
+权限侧别、服务内补校验与实体租户维度的规则见生成项目 [认证与授权](../../template/docs/standards/auth.md#权限侧别与租户维度)。侧别是 `AddPermission` 的必填参数，由编译器保证每条权限都已决定侧别，不另建对账测试。
 
 ## 9. 测试与开发只用 PostgreSQL（为什么不用 InMemory 或 SQLite）
 

@@ -142,7 +142,7 @@ http.get('/api/v1/orders', {
 前端不配置 OAuth 客户端，也不持有 access/refresh/id token。OIDC 的 Issuer、Audience、ClientId、ClientSecret 和 Scope 只在后端配置。
 登录导航至 `/api/v1/auth/login`，回调由后端 `/api/v1/auth/signin` 消费；前端通过 `/api/v1/auth/me` 读取同源 Cookie 会话。
 本形态固定使用普通路径路由，同源后端托管与开发代理仍保留；部署需为 SPA 深链回退到 `index.html`。
-详见 [浏览器认证](../docs/standards/api.md#浏览器认证)。
+详见 [浏览器认证](../docs/standards/auth.md#浏览器认证)。
 <!--#endif-->
 
 使用特定环境：
@@ -193,7 +193,7 @@ docker build -t company-name-project-name .
 
 全局文案位于 `public/i18n/{en,zh-CN}.json`，功能文案位于 `public/i18n/<scope>/{en,zh-CN}.json`。功能路由用 `provideTranslocoScope` 注册完整 scope 信息，并通过 `resolveTranslationScopes` 等待词条后进入；语言切换复用 alias、inline loader，等待全局和已访问 scope 的目标语言词条，失败保留当前语言。已有页面时功能加载失败保留原页面；首次导航（含根地址 `/`）失败显示启动失败卡片，重试重新执行解析器并进入原目标地址；inline loader 拒绝后，重试重新调用加载函数。生产构建的 `postbuild` 递归展平这些文件。
 
-文案归属、模板 prefix、信号与事件文案用法见 [前端规范 §9](../docs/standards/coding-frontend.md#9-多语言i18n)。
+文案归属、模板 prefix、信号与事件文案用法见 [前端多语言规范](../docs/standards/frontend-i18n.md)。
 
 ---
 <!--#endif-->

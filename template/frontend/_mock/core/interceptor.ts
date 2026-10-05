@@ -131,7 +131,7 @@ function findMatchingRule(
   return null;
 }
 
-// 后端失败统一是 RFC 9457 Problem Details（见 docs/standards/api.md §2.4）。Mock 里按 { code, message, errors }
+// 后端失败统一是 RFC 9457 Problem Details（见 docs/standards/api.md「错误响应」）。Mock 里按 { code, message, errors }
 // 书写，这里换成同一形状，前端走与真实后端相同的解析路径：message 进 detail，业务码进 code 扩展。
 const STATUS_TITLES: Record<number, string> = {
   400: 'Bad Request',

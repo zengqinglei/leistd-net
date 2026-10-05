@@ -16,6 +16,19 @@
 - `PackageId` 默认等于项目名（= 程序集名），**无需**在 csproj 显式设置。
 - 包名表达分发边界，命名空间表达概念；`.Core` 等抽象打包后缀不进入命名空间，具体规则见下文。
 
+- 注册入口命名约束新增 API；现有公共 API 不为名称整齐而改名。
+
+  | 情形 | 命名 | 例 |
+  | --- | --- | --- |
+  | 家族主要公共能力 | `Add{Family}`，由提供该能力的包承担（多为 Core）；运行前提由组件契约声明、宿主另行注册 | `AddNotifications`（另需 `INotificationStore` 实现）、`AddRealTime`、`AddUnitOfWork` |
+  | 宿主包补全家族 | 宿主包用 `Add{Family}`，Core 包用 `Add{Family}Core` | `AddMultiTenancy` / `AddMultiTenancyCore`、`AddCorrelationId` / `AddCorrelationIdCore` |
+  | 附加技术包 | `Add{Family}{Tech}` | `AddNotificationsEfCore`、`AddRealTimeSignalR` |
+  | 实现变体 | `Add{Impl}{Capability}` | `AddRedisDistributedLock`、`AddSmtpEmailSender`、`AddMapsterObjectMapper` |
+
+  注册扩展类命名为 `DependencyInjection`，放在包根。
+
+- 配置节以 `Leistd:` 为根，按家族、实现、命名实例分层：`Leistd:UnitOfWork`、`Leistd:Lock:Redis`、`Leistd:ServiceClients:{Name}`。
+
 - `RootNamespace` 规则（由 `scripts/check-csproj-conventions.py` 强制）：
   - **包名以 `.Core` 结尾的一律显式声明为剥掉 `.Core` 的形态**（`Leistd.Security.Core` → `Leistd.Security`，
     根原语包 `Leistd.Core` → `Leistd`）。
@@ -29,7 +42,10 @@
   - ✅ 描述内容的分段：`Leistd.Security.Users`、`Leistd.Timing`、`Leistd.MultiTenancy.ConnectionStrings`、
     `Leistd.Response.AspNetCore.Filters`。
 
-- **包内组织有两种合法形态，按家族有没有并列的子话题来选：**
+- **目录按职责判断，不按类名后缀判断。** 包内通常同时有内容目录（`Checking/`、`Grants/`）与类型目录
+  （`Dtos/`、`Errors/`、`Options/`），这种混合组织合法；新类型放进与现有同类最接近的目录。
+
+- **包内主体有两种合法形态，按家族有没有并列的子话题来选：**
 
   | 家族形态 | 组织方式 | 例 |
   | --- | --- | --- |
@@ -41,15 +57,13 @@
 
 - 扩展类在按层次分的包中放 `Extensions/`；按内容分的包中与被扩展类型同目录。
 
-- 以 `Filter` 结尾的类型（契约与实现）统一放 `Filters/` 内容目录，即使所在包按层次分也不拆进
-  `Abstractions/` / `Services/`（如 `Leistd.Response.AspNetCore.Filters`、`Leistd.Notifications.Filters`）。
+- `Filters/` 只放 MVC / Hub 管道过滤器（如 `Leistd.Response.AspNetCore.Filters`、`Leistd.AspNetCore.SignalR.Filters`）；
+  名称以 `Filter` 结尾但不在请求管道上的类型（如投递筛选）放所属内容目录。
 - 事件类型（以 `Event` 结尾）放 `Events/`，事件处理器（以 `EventHandler` 结尾）放 `EventHandlers/`，
   与 `Leistd.EventBus.Events`、`Leistd.EventBus.EventHandlers` 同一写法。
 - 周期任务（`*Job`）与常驻消费者（`*Worker`）**不单设 `Jobs/` / `Workers/`**，放在它服务的内容目录里，与同一功能的选项、服务同处
   （如 `Leistd.Notifications.EntityFrameworkCore` 的 `Retention/NotificationRetentionJob`、`Leistd.BackgroundJobs.InProcess` 的 `Queues/BackgroundTaskQueueWorker`）；
   同类成熟框架的清理任务也跟随所属功能目录。模板业务项目的归类见模板后端规范。
-
-- `DependencyInjection.cs` 始终留在包根。
 
 - **不要让命名空间与其中的类型同名**（FDG 明确禁止）。家族名与核心类型同名时，
   给实现类加 `Default` 前缀（`Leistd.UnitOfWork.DefaultUnitOfWork`），与
@@ -199,13 +213,13 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 ## 5. 依赖方向（不可违反）
 
 - `Leistd.<...>.Core` / `Leistd.Ddd.Domain` 是底层，**不得**反向依赖上层或具体实现。
-- `components` 可被 `ddd-struct` 依赖；**`components` 不得依赖 `ddd-struct`**（单向）。`ddd-struct` 内部 `Domain ← Application(.Contracts) ← Infrastructure` 单向。
+- `components` 可被 `ddd-struct` 依赖；**`components` 不得依赖 `ddd-struct`**（单向）。在 `ddd-struct` 内部，`Infrastructure` 只直接依赖 `Domain`，`Application` 只直接依赖 `Application.Contracts`，`Application.Contracts` 只依赖 `Leistd.Data`；其余能力各层直接引用对应组件。
 - **`*.Core` 不得依赖"可替换的"具体技术**：Web 宿主（ASP.NET Core）、ORM（EF Core）、消息中间件等只能出现在对应实现层（`*.AspNetCore*`、`*.EntityFrameworkCore`）。判据是**能不能换掉而组件仍成立**——工作单元不接 EF 仍能提供边界与阶段，授权不接 ASP.NET 仍能判权，所以那些必须外移。
   - **例外：某项技术就是该组件主要 API 的实现机制本身时，它属于 Core。** 目前只有动态代理属于这一类，且只涉及一个包：`Leistd.UnitOfWork.Core`（`[UnitOfWork]`、`[UnitOfWorkEventHandler]`）。这些声明式特性的语义**就是**"由拦截器织入"，把代理拆出去会得到一个无法提供其主要能力的 Core——命名会更整齐，但包不再自洽。
   - 例外是**闭集**，不是逃生门：新增组件不得自行扩列。确有需要时先改本条规范并说明为什么该技术不可替换，再落代码。
   - 例外不放宽平台无关：这个包依旧不引 Web 与 ORM。
   - 身份等概念在 `*.Core` 抽象里用中立类型（`string userId` / `ClaimsPrincipal`），不要把富身份模型（如 `ICurrentUser`）焊进核心接口签名；带技术细节的默认值（如 claim 类型）由宿主层注入而非写死在 Core。
-- 一个组件**不得替另一个组件做端点映射 / 基础设施注册**（如通知组件不代映射实时 Hub）；跨组件复用通过显式调用各自的 `Add*/Map*` 完成。
+- 组件只注册完成自身功能必需、且在组件契约中声明的依赖；选哪个实现、映射哪些业务端点、如何编排应用管道由宿主决定（如通知组件不代映射实时 Hub），宿主显式调用各自的 `Add*` / `Map*` / `Use*` 组合。注册方式见 §6.6。
 - 新增跨域依赖前先评估是否会引入环，框架解决方案编译会暴露环依赖。
 
 ### 5.1 文档示例也受依赖方向约束（组件示例自包含原则）
@@ -265,7 +279,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 ### 6.3 变更
 
-- 首个公开版本前直接收敛到最终 API，不保留旧成员、桥接包、双配置键或迁移说明。
+- 直接收敛到最终 API，不保留旧成员、桥接包或双配置键；破坏性变化经提交脚注进入 release notes，需要调用方迁移时补升级说明（[版本规范](./versioning.md#什么时候写升级清单)）。
 - 原子更新源码、测试、模板消费者、XML、组件文档和依赖 API 字面量的校验脚本。
 - 同时检查签名变化、语义变化，以及删除成员后是否会静默绑定到基类同名成员。
 - 公共 API 必须有真实消费者验证；Template 未消费时，使用隔离包消费项目或最小宿主覆盖主路径。
@@ -314,6 +328,30 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 删除仍在使用的能力时，组件文档和升级说明必须给出**具体的替代入口**（类型、方法或配置键），不能只写"改用官方机制"；死代码不必虚构替代。
 
+### 6.6 依赖注入
+
+**生命周期**先按状态所有权、并发安全、依赖链与实际消费作用域判断：
+
+| 判据 | 生命周期 |
+| --- | --- |
+| 持有请求或工作单元状态 | `Scoped` |
+| 跨请求共享且线程安全 | 可 `Singleton` |
+| 其余 | 默认 `Transient` |
+
+`Singleton` 不得直接或间接捕获 `Scoped`；依赖作用域服务的 `Transient` 必须在正确作用域解析（如周期任务每次执行新建作用域）。
+
+**注册方式**按登记意图区分：
+
+| 意图 | 写法 |
+| --- | --- |
+| 可替换的单实现 | `TryAdd*`，宿主先注册或之后 `Replace` 均可覆盖 |
+| 多实现并存 | `TryAddEnumerable` |
+| 按业务键登记 | 入口参数携带键（如 `AddRecurringJob<TJob>` 的任务名、命名客户端名） |
+| 按名称区分的配置 | 命名 Options |
+| 有意覆盖其他包的默认实现 | `Replace` 或 `Add`，行内注释写明原因（如 `AddSecurity` 用 HTTP 主体访问器替换 Core 默认值） |
+
+注册入口须幂等：相同登记重复调用不重复生效；不同参数重复调用按入口契约处理（合并、覆盖或抛 `InvalidOperationException`），并在 XML 注释写明。注册面的测试要求见 §7.3。
+
 ---
 
 ## 7. 测试
@@ -331,13 +369,12 @@ framework/tests/
 └── ddd-struct/                  与 framework/ddd-struct/ 并列，保住依赖方向的一级划分
 ```
 
-- **测试项目名 = `Leistd.<真实包前缀>.Tests`**，前缀必须是该家族下某个包的前缀。
-  不得发明包名段（曾出现过 `Leistd.Authorization.Pipeline.Tests`，而没有任何包叫这个名字）。
+- **测试项目名 = `Leistd.<真实包前缀>.Tests`**，前缀必须是该家族下某个包的前缀，不得发明包名段。
   跨家族的端到端用例放进主家族测试项目的 `EndToEnd/` 子目录。
 - **家族没有独立测试项目时目录不存在**，并在 `check-test-layout.py` 的 `WAIVERS` 里写明理由。
   这道闸门补的是覆盖率阈值的盲区：程序集从未被任何测试加载时根本不出现在覆盖率报告里，
   任何百分比门槛都对它无效。
-- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。`DisplayName` 同样用英文。由 `scripts/check-test-names.py` 机械保证（同时覆盖模板前后端测试名）。
+- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。`DisplayName` 同样用英文。由 `scripts/check-test-names.py` 机械保证。
 - **csproj 只写自己的东西**：`FrameworkReference`、特有 `PackageReference`、`ProjectReference`。
   共享属性和测试包已在 `tests/Directory.Build.props` 注入，重复声明会被闸门拦下。
 
@@ -365,7 +402,7 @@ framework/tests/
   与相邻组件的覆盖/共存关系。用 `Leistd.TestBase.Assertions.ServiceCollectionAssertions`。
   显式组合模型里"注册面正确"就是公共契约，且编译期完全看不出来。
 - **同一契约有多个实现时先写抽象契约套件**（`Contracts/` 下的 `abstract class`），
-  各实现派生。`ILock` 曾在内存与 Redis 上给出不同的零超时语义，靠人记得"两边都改"挡不住。
+  各实现派生：实现间的语义差异（如零超时）靠人记得"两边都改"挡不住。
 - **实体配置、唯一索引、全局查询过滤器必须用关系型 Provider**（SQLite in-memory）。
   EF InMemory 全内存求值，会让被违反的约束和不可翻译的查询静默通过。
   只碰变更跟踪器、不碰 DDL 的测试可以用 InMemory。
@@ -426,19 +463,18 @@ dotnet test framework/Leistd.Framework.slnx -c Release \
 
 ## 8. 提交前自检
 
-以下是各类验证入口，按变更范围选择；文档、XML、行为与包契约变更分别执行相关检查，无需每次全部运行。
+按变更范围选择验证入口；文档、XML、行为与包契约变更分别执行相关检查，无需每次全部运行。
 
 ```bash
-dotnet build framework/Leistd.Framework.slnx -c Release                         # 0 错误
-dotnet test  framework/Leistd.Framework.slnx -c Release                         # 全绿
-pwsh scripts/check-all.ps1                                                      # 全部静态闸门（-List 看清单）
-pwsh framework/build/pack-local-feed.ps1                                        # 本地 NuGet feed（先清空再打包，PDB 内嵌）
-pwsh framework/build/test-package-consumption.ps1                               # 包内容、还原和构建
+dotnet build framework/Leistd.Framework.slnx -c Release          # 0 错误
+dotnet test  framework/Leistd.Framework.slnx -c Release          # 全绿
+pwsh scripts/check-all.ps1                                       # 全部静态闸门
+pwsh framework/build/pack-local-feed.ps1                         # 本地 NuGet feed（先清空再打包，PDB 内嵌）
+pwsh framework/build/test-package-consumption.ps1                # 包内容、还原和构建
 ```
 
-`check-all.ps1` 是**闸门清单的唯一权威来源**（文档/API 漂移、Skill、退役符号、i18n、XML 注释形态、组件文档骨架、模板三道），
-CI 也只调它一处；新增闸门加进那个脚本即可，本文件与 `ci.yml` 都不必跟着改。
-需要构建产物或跑起来才能验的不在它里面——矩阵、PostgreSQL E2E、包消费各有自己的入口。
+静态闸门清单只以 `pwsh scripts/check-all.ps1 -List` 的输出为准，CI 也只调它一处；新增闸门加进该脚本，本文件不跟着列。
+需要构建产物或运行环境的验证（矩阵、PostgreSQL E2E、包消费）不在其中，各有自己的入口。
 
 提交前代码里不留待办标记（`TODO` / `FIXME` / `HACK`），工具生成的也一样：在当期按终局做法改完，推迟的事写进计划（见[设计原则](../architecture/design-principles.md) §4）。
 

@@ -13,7 +13,7 @@
 <!--#endif-->
 <!--#if (OpenIddictServer)-->
 
-第三方站点以顶层 POST 进入授权或退出端点时不需要放宽 SameSite：请求先缓存，再以顶层 GET 重入，Lax 会话 Cookie 即可送达（见 [依赖方的登录与退出](../standards/api.md#依赖方的登录与退出)）。
+第三方站点以顶层 POST 进入授权或退出端点时不需要放宽 SameSite：请求先缓存，再以顶层 GET 重入，Lax 会话 Cookie 即可送达（见 [依赖方的登录与退出](../standards/auth.md#依赖方的登录与退出)）。
 <!--#endif-->
 
 <!--#if (LocalIdentity)-->
@@ -141,7 +141,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   不周期探测共享 Identity，避免其短暂故障使所有资源实例同时摘流。
   代价是就绪不保证新密钥获取、新令牌获取或租户回源成功，这些依赖失败在对应请求上暴露。
 <!--#if (ResourceBrowserSession)-->
-- 浏览器使用后端 OIDC 机密客户端与 Cookie 会话，服务端保存并刷新令牌；配置、回调、缓存/密钥与 CSRF 边界见 [浏览器认证](../standards/api.md#浏览器认证)。
+- 浏览器使用后端 OIDC 机密客户端与 Cookie 会话，服务端保存并刷新令牌；配置、回调、缓存/密钥与 CSRF 边界见 [浏览器认证](../standards/auth.md#浏览器认证)。
 <!--#endif-->
 - 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
 <!--#endif-->

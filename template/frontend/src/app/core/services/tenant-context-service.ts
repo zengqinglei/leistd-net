@@ -47,7 +47,7 @@ export class TenantContextService {
    *
    * 需要按侧别分支时：**按能力判**（服务端下发的权限列表已按侧别过滤，例如宿主专属的
    * `App.Tenants` 不会出现在租户用户的列表里），或由拥有那个页面的业务端点下发结论
-   * （"你能选哪些库"、"这个租户叫什么"）。见 docs/standards/coding-frontend.md §8。
+   * （"你能选哪些库"、"这个租户叫什么"）。见 docs/standards/frontend-ui.md「导航与菜单分组」。
    */
   //#else
   /** 当前租户；null 表示宿主。来源是后端已验证会话中的 tenant_id。 */

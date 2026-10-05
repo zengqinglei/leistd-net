@@ -82,6 +82,10 @@ $gates = @(
     @{ Name = "XML 注释形态";              Cmd = $pythonCmd; Args = @("scripts/check-doc-comment-shape.py") }
     @{ Name = "组件文档骨架规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-docs-skeleton.py", "--self-test") }
     @{ Name = "组件文档骨架";              Cmd = $pythonCmd; Args = @("scripts/check-docs-skeleton.py") }
+    # 矩阵在生成产物上做权威检查（含条件裁剪删掉被链接章节）；源码这道给模板文档改动即时反馈。
+    # 源码含全部条件分支的标题（并集），条件标记不会造成误报，只可能漏掉裁剪类问题。
+    @{ Name = "章节锚点规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-markdown-anchors.py", "--self-test") }
+    @{ Name = "模板文档章节锚点";          Cmd = $pythonCmd; Args = @("scripts/check-markdown-anchors.py", "template") }
 )
 
 if ($List) {

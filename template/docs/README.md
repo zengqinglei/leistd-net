@@ -1,35 +1,35 @@
 # {ProjectName} 文档
 
-本目录只保存需要跨会话、跨成员或长期复用的项目知识。源码、配置、测试、Git 和 CI 已能表达的信息不重复写成文档。
+本目录保存需要长期复用的项目知识；源码、配置、测试、Git 和 CI 已能表达的不重复写成文档。
 
-## 文档入口
+## 按任务读取
 
-| 主题 | 文档 | 核对重点 |
+先参考邻近的同类实现与测试，再读下表对应文档；任务跨多类时取并集，未列出的任务按下方全部规范选读。
+
+| 任务 | 必读 | 按需 |
 | --- | --- | --- |
-| 通用编码 | [`standards/coding-common.md`](standards/coding-common.md) | 邻近实现、依赖方向 |
-| 后端编码 | [`standards/coding-backend.md`](standards/coding-backend.md) | 同类测试、授权与租户边界 |
+| 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口读 [API](standards/api.md)；涉及登录、会话、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md) |
 <!--#if (SpaFrontend)-->
-| 前端编码 | [`standards/coding-frontend.md`](standards/coding-frontend.md) | lint、测试、构建；交互变化看浏览器 |
+<!--#if (IncludeLocalization)-->
+| 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面、表单、导航读 [前端界面](standards/frontend-ui.md)；加组件或升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md)；新增文案读 [前端多语言](standards/frontend-i18n.md) |
+<!--#else-->
+| 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面、表单、导航、文案读 [前端界面](standards/frontend-ui.md)；加组件或升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md) |
 <!--#endif-->
-| API 契约 | [`standards/api.md`](standards/api.md) | 调用方、错误和兼容性 |
-| 服务间调用 | [`standards/service-invocation.md`](standards/service-invocation.md) | 调用链、失败路径与配置 |
-| 测试 | [`standards/testing.md`](standards/testing.md) | 复现、回归与真实依赖语义 |
-| 技术栈与目录 | [`standards/tech-stack.md`](standards/tech-stack.md)、[`standards/project-structure.md`](standards/project-structure.md) | 当前版本与实际目录 |
+| 全栈功能 | 以上两行必读的并集与 [API](standards/api.md) | 同上两行 |
+<!--#endif-->
+| 只审查代码 | 被审查改动涉及的端对应的必读文档 | 改动触及的专题 |
+| 部署、迁移或回滚 | [部署](deploy/README.md) | [技术栈](standards/tech-stack.md) |
+
+## 全部规范
+
+[通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[API](standards/api.md)、[认证与授权](standards/auth.md)、[服务间调用](standards/service-invocation.md)、[测试](standards/testing.md)、[技术栈](standards/tech-stack.md)、[项目目录](standards/project-structure.md)、[部署](deploy/README.md)。
 <!--#if (SpaFrontend)-->
-| UI 设计 | [`standards/ui-design.md`](standards/ui-design.md) | 现有设计系统与交互 |
+前端：[编码](standards/coding-frontend.md)、[界面](standards/frontend-ui.md)、[Spartan 维护](standards/frontend-spartan.md)。
+<!--#if (IncludeLocalization)-->
+前端多语言：[frontend-i18n](standards/frontend-i18n.md)。
 <!--#endif-->
-| 部署 | [`deploy/README.md`](deploy/README.md) 与项目根 `deploy/` | 产物、迁移、健康与回滚 |
-
-业务开发和环境交付由项目 Skill [leistd-project-workflow](../.agents/skills/leistd-project-workflow/SKILL.md) 按任务处理，并读取本索引与必要章节。
-
-## 按需文档
-
-- `requirements/`：长期需求决策和验收边界。
-- `modules/`：稳定模块边界、模型和对外契约。
-- `deploy/`：环境、发布和运维事实，不记录密钥。
-
-先参考已有同类实现，再按任务读取相关规范。只在产生已确认、需复用的信息时创建目录和文档；优先更新最新同类文件，并在本索引登记入口。一个事实只维护一处，其他位置使用链接。
-
-<!--#if (SpaFrontend)-->
-[浏览器认证](standards/api.md#浏览器认证)：官方协议处理器、服务端票据、浏览器会话与部署契约。
 <!--#endif-->
+
+业务开发和环境交付由项目 Skill [leistd-project-workflow](../.agents/skills/leistd-project-workflow/SKILL.md) 处理。
+
+需求决策、模块契约等按需文档只在产生已确认、需复用的信息时创建，并登记到本索引；一个事实只维护一处，其他位置链接。

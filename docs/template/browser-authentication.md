@@ -4,9 +4,9 @@
 
 模板组合根按有效能力直接组合 ASP.NET Core 官方 Cookie、AddOpenIdConnect、AddGoogle 与 aspnet-contrib 的 AddGitHub；外部处理器还要求开启外部登录。框架不新增 Web/BFF 抽象，不引入反向代理。OpenIddict.Client 继续承担框架的机器认证。带前端的形态保留 Angular 页面、开发代理与同源 Cookie 会话认证。
 
-浏览器 OAuth access/refresh/id token 不得出现在 URL、JavaScript 存储、API JSON、SignalR 参数或保护后的 Cookie 载荷中；唯一例外是 Resource 退出时官方 FormPost 表单正文里的 `id_token_hint`。SaveTokens 与 ITicketStore 必须一起配置；保护后的 Cookie 仅含会话引用与引用版本，完整票据留缓存；删除缓存后复制 Cookie 返回 401。显式再登录、MFA 会话升级与冒用切换要保持旧 Cookie 失效；滑动续期不能复活撤销票据，旧请求退出或刷新失败不能删除再次登录的新版本。
+令牌载体、服务端票据与撤销行为的运行契约见生成项目 [认证与授权](../../template/docs/standards/auth.md#浏览器认证)。维护时：SaveTokens 与 ITicketStore 必须一起配置；MFA 会话升级与冒用切换同显式再登录一样更换引用版本。
 
-会话 Cookie 在非 Development 环境使用 `__Host-Http-` 前缀与 Path=/、无 Domain、Secure Always；Development 不带前缀，以便 HTTP 调试。LocalIdentity 与带浏览器会话的 Resource 两处注册要同时修改，测试与 e2e 的期望名要各自集中维护，不能从实现读取。
+会话 Cookie 的命名与属性见同一契约；LocalIdentity 与带浏览器会话的 Resource 两处注册要同时修改，测试与 e2e 的期望名各自集中维护，不能从实现读取。
 
 应用 SameSite 与协议 correlation/nonce Cookie 分开。官方默认协议 Cookie 的 None/Secure Always 保持不变，OIDC code 显式指定，GitHub 的 UsePkce 显式 true。GitHub 处理器的邮箱补取保持关闭（UserEmailsEndpoint 为空）：它不给 verified 且失败即中断登录，verified 由模板查询并在失败时降级。外部 OAuth 的 OpenIddict web providers 不引入：Standalone 的 Api 宿主不含 OpenIddict，只在 Identity 采用会形成两套外部登录实现。回调须在 /api/** 下以覆盖开发代理。Items 提供完整性，业务 complete 的一次消费由服务端外部票据、锁与先删除保证。
 
@@ -16,10 +16,10 @@ OAuth:ApiResources 是对象目录，资源名、scope、OwnerClientId 单一来
 
 协议测试仅替换通信依赖，运行生产注册的官方处理器与失败事件；业务测试可直接输入规范化 ExternalUserInfo。提供商以 `AuthenticationSchemeNames.ExternalProviderPrefix` 登记官方远程 scheme，目录过滤此专用前缀与远程处理器类型；绑定入口执行自然人策略与受限会话规则。站内回跳地址由 challenge 校验后随受保护票据保存，并贯穿外部登录和第二步验证。
 
-浏览器认证仅支持页面与所属 API 同源，服务可分进程、由部署代理统一外部源。TLS 终结后的来源检查依赖受信任转发头；来源拒绝输出诊断日志并由 API 状态码管道补写问题详情。无 Origin 的写请求按 Sec-Fetch-Site 判定：cross-site、same-site 拒绝，Fetch Metadata 不能推翻已失败的 Origin 检查。升级到内置跨源防护的 .NET 版本后，要先核对它对 JSON 端点的判定范围，并注入原缺陷做变异验证，之后才能删除自写判定。访问令牌只签名、不加密，这是宿主显式选择，契约写在生成项目 api.md 的认证小节。有效票据远离刷新窗口时不获取刷新锁；临近过期才加锁、重读并复查。
+浏览器认证仅支持页面与所属 API 同源，服务可分进程、由部署代理统一外部源。TLS 终结后的来源检查依赖受信任转发头；来源拒绝输出诊断日志并由 API 状态码管道补写问题详情。无 Origin 的写请求按 Sec-Fetch-Site 判定：cross-site、same-site 拒绝，Fetch Metadata 不能推翻已失败的 Origin 检查。升级到内置跨源防护的 .NET 版本后，要先核对它对 JSON 端点的判定范围，并注入原缺陷做变异验证，之后才能删除自写判定。访问令牌只签名、不加密，这是宿主显式选择，契约写在生成项目 auth.md 的认证小节。有效票据远离刷新窗口时不获取刷新锁；临近过期才加锁、重读并复查。
 
 Identity 的授权与退出端点启用 OpenIddict 请求缓存并保留 passthrough；不另建 ASP.NET Core 层的平行参数缓存。缓存后协议参数只在 request token 里，控制器不能再靠改写 URL 兑现 `prompt=login`/`max_age`：重新认证用绑定 `request_uri` 的受保护证明：兑现要求当前会话在证明签发之后才开始（每次登录都新建会话，会话开始时间是完整精度；auth_time 只到秒，同一秒里已有的会话靠它分辨不出）。证明只抵消 `prompt=login` 与 `max_age=0`，正数 `max_age` 始终按当前认证年龄判断。一次性由 request token 的兑现保证。Resource 使用官方 `AuthenticationMethod = FormPost` 并保留 hint，本地 Cookie 单独先退出且不带回跳地址（Cookie 处理器会写 302 盖过表单）。退出时 hint 的 `sid` 与当前会话一致才免确认；确认页只拿 `request_uri` 与受保护凭据，凭据绑定请求与 sub/tenant/sid 并限时，确认是本源整页 POST，显式调用官方 `IAntiforgery` 校验（端点本身对初始跨源协议请求保持 `IgnoreAntiforgeryToken`）；不得用 `confirm=true` 一类查询参数代替确认。
 
 开放应用的会话绑定是模板自有的 Settings 键 `leistd:session_bound`，读写只经 `OpenApplicationSettings`；不要把它等同于 `backchannel_logout_session_required`。API 区分缺值/null（400）与显式 false；签发时把经验证的 Cookie `sid` 写入 code/RT/id_token，换取与刷新只判定 Identity 会话（不 Touch、不走 `UserSessionValidator` 的缓存），失败一律 `invalid_grant`。是否受约束按签发时 grant 里有无 `sid` 判定，当前登记只用于拒绝缺 `sid` 的旧 grant；token exchange 与 client_credentials 不进入会话检查。后通道退出与 OpenIddict 8 的会话能力到位前不另建事件通道。
 
-生成项目的运行契约见 template/docs/standards/api.md#浏览器认证；仓库验收日志和过程放 .tmp，不分发进 template。
+仓库验收日志和过程放 .tmp，不分发进 template。

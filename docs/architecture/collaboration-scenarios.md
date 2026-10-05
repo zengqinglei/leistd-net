@@ -24,6 +24,17 @@
 
 维护 Skill 时同时使用官方 `skill-creator`。每个 Skill 必须在自己的分发环境中自洽，不能依赖不会一同交付的文件。
 
+生成项目内的分工：
+
+| 载体 | 内容 | 维护者 |
+| --- | --- | --- |
+| `.agents/skills/leistd-project-workflow` | 与语言、技术栈无关的开发流程、通用原则和规范演进机制 | 模板维护者；生成后项目通常不改 |
+| `docs/standards/` | 项目技术栈与个性化规范，生成时是模板的 .NET/Angular 基线 | 生成后归项目所有，由 Skill 驱动积累与精简 |
+| `docs/README.md` | 唯一文档索引与按任务读取表 | 项目 |
+| `AGENTS.md`、`CLAUDE.md` | 只指向 Skill 与 `docs/README.md` | 基本不变 |
+
+`dotnet new` 是一次性脚手架，模板升级不会覆盖已生成项目的文档或 Skill。项目新增的规则写入项目 `docs/`，不回流到通用 Skill。
+
 ## 3. 事实入口
 
 | 场景 | 稳定入口 | 按需事实 |
@@ -31,7 +42,7 @@
 | 框架设计与维护 | `docs/architecture/design-principles.md`、`docs/framework/development-guide.md` | 目标源码、测试、`.csproj`、`framework/docs/` |
 | 框架组件使用 | `leistd-net-framework` | 已安装 NuGet 包的 `docs/*.md`、XML、项目配置 |
 | 模板维护 | `docs/template/development-guide.md` | `template.json`、模板源码、生成场景 |
-| 业务项目协作 | `leistd-project-workflow`、项目 `docs/README.md` | 项目源码、配置、测试、CI 和最新同类文档 |
+| 业务项目协作 | `AGENTS.md` → `leistd-project-workflow`、项目 `docs/README.md` | 项目源码、配置、测试、CI 和最新同类文档 |
 
 历史 assessment、plan 和 Git 记录用于追溯，不作为当前规则入口。
 
@@ -106,5 +117,9 @@
 | “调整模板条件开关” | `developing-leistd-template` | 生成开关两侧，核对裁剪与链接 |
 | “修改 Dockerfile 和部署变量” | `developing-leistd-template` | 生成项目镜像可构建、.NET 运行时层可用；实际启动另验 |
 | “已授权部署到预发，继续完成” | `leistd-project-workflow` 的 delivery reference | 连续执行授权步骤，等待具体状态，不重复询问或固定休眠 |
+| 在没有 `docs/README.md` 的其他技术栈项目中“修复这个 bug” | `leistd-project-workflow` | 从源码、配置和测试恢复约定继续，不因缺少索引停止 |
+| 同一条审查意见第二次出现 | `leistd-project-workflow` 的 documentation reference | 沉淀为项目规范或闸门，并登记索引；不写入 Skill |
+| 发现规范与实现冲突或重复 | `leistd-project-workflow` 的 documentation reference | 修正或删除过时条目，不新增平行规则 |
+| “只审查这个 PR”时发现可沉淀的规则 | `leistd-project-workflow` | 只在结果中报告候选，不修改文件 |
 
 对每个场景检查触发 Skill、实际读取的资料、交付结果、额外工作和等待次数；描述发生变化时也用相邻的非触发请求检验误匹配。验收结果保留在当前评审、PR 或 CI；只有团队或合规明确要求时才另建长期记录。

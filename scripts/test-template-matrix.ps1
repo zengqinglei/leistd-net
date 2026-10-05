@@ -23,7 +23,10 @@ param(
     # 只为选中的场景构建并运行容器入口；Dockerfile/Compose 变化时使用，不随每个普通代码修改运行。
     [string[]]$ContainerSmokeScenarios = @(),
     # 在登记的容器场景（若在本片）上执行容器检查；CI 用它，不在 workflow 重抄场景名。
-    [switch]$ContainerSmoke
+    [switch]$ContainerSmoke,
+    # 只生成并执行形态断言与文档检查（文件集合、入口指针、条件裁剪、文件与章节锚点链接）；
+    # 不打包、不 restore/构建/测试、不跑前端与运行时，也不产出回执。用于改模板文档或 Skill 时的快速验证。
+    [switch]$GenerateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -228,9 +231,40 @@ function Assert-MarkdownLinks([string]$ProjectRoot) {
     }
 }
 
+# 章节锚点按生成后的标题计算：条件裁剪删掉被链接章节时，只有生成产物上看得见。
+# 规则与自检夹具在 check-markdown-anchors.py，check-all 登记其自检。
+function Assert-MarkdownAnchors([string]$ProjectRoot) {
+    $pythonCmd = $null
+    foreach ($candidate in @('python3', 'python')) {
+        $found = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
+    }
+    if (-not $pythonCmd) { throw '未找到 Python 3 解释器（python3/python），无法检查 Markdown 章节锚点。' }
+    Invoke-External $pythonCmd @((Join-Path $repoRoot 'scripts/check-markdown-anchors.py'), $ProjectRoot)
+}
+
+# 入口指针：AGENTS.md 只指向协作 Skill 与文档索引，CLAUDE.md 只导入 AGENTS.md。
+function Assert-AgentEntryPoints([string]$ProjectRoot) {
+    $agents = Get-Content -LiteralPath (Join-Path $ProjectRoot "AGENTS.md") -Raw -Encoding UTF8
+    foreach ($pointer in @(".agents/skills/leistd-project-workflow/SKILL.md", "docs/README.md")) {
+        if (-not $agents.Contains("]($pointer)")) {
+            throw "Generated AGENTS.md must link $pointer"
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $pointer))) {
+            throw "Generated AGENTS.md points to a missing file: $pointer"
+        }
+    }
+    $claude = (Get-Content -LiteralPath (Join-Path $ProjectRoot "CLAUDE.md") -Raw -Encoding UTF8).Trim()
+    if ($claude -cne "@AGENTS.md") {
+        throw "Generated CLAUDE.md must contain only '@AGENTS.md', found: $claude"
+    }
+}
+
 function Assert-GeneratedProject([string]$ProjectRoot) {
     $hasFrontend = Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend")
     $requiredFiles = @(
+        "AGENTS.md",
+        "CLAUDE.md",
         ".agents/skills/leistd-project-workflow/SKILL.md",
         ".agents/skills/leistd-project-workflow/references/bootstrap.md",
         ".agents/skills/leistd-project-workflow/references/delivery.md",
@@ -239,21 +273,20 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         ".agents/skills/leistd-project-workflow/references/documentation.md",
         ".agents/skills/spartan/SKILL.md",
         "docs/README.md",
-        "docs/standards/api.md",
-        "docs/standards/coding-common.md",
-        "docs/standards/coding-backend.md",
-        "docs/standards/coding-frontend.md",
-        "docs/standards/project-structure.md",
-        "docs/standards/tech-stack.md",
-        "docs/standards/testing.md",
-        "docs/standards/ui-design.md",
         "docs/deploy/README.md",
         "backend/README.md",
         "frontend/components.json"
     )
+    # 规范文件集合的唯一登记处：前端专属规范随 SpaFrontend 裁剪（template.json 的 !SpaFrontend 排除项），
+    # frontend-i18n.md 另随 IncludeLocalization 裁剪（!IncludeLocalization 排除项），前端词条目录与它同进退。
+    $hasFrontendI18n = Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend/public/i18n")
+    $expectedStandards = @("api.md", "auth.md", "coding-backend.md", "coding-common.md", "project-structure.md",
+        "service-invocation.md", "tech-stack.md", "testing.md")
+    if ($hasFrontend) { $expectedStandards += @("coding-frontend.md", "frontend-ui.md", "frontend-spartan.md") }
+    if ($hasFrontendI18n) { $expectedStandards += "frontend-i18n.md" }
+    $requiredFiles += @($expectedStandards | ForEach-Object { "docs/standards/$_" })
     if (-not $hasFrontend) {
-        $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(
-            ".agents/skills/spartan/SKILL.md", "docs/standards/coding-frontend.md", "docs/standards/ui-design.md", "frontend/components.json") })
+        $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(".agents/skills/spartan/SKILL.md", "frontend/components.json") })
     }
     foreach ($relativePath in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $relativePath))) {
@@ -280,8 +313,6 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         }
     }
 
-    $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "service-invocation.md", "tech-stack.md", "testing.md", "ui-design.md")
-    if (-not $hasFrontend) { $expectedStandards = @($expectedStandards | Where-Object { $_ -notin @("coding-frontend.md", "ui-design.md") }) }
     $standardsRoot = Join-Path $ProjectRoot "docs/standards"
     $actualStandards = @(Get-ChildItem -LiteralPath $standardsRoot -File -Filter "*.md" | ForEach-Object Name | Sort-Object)
     $standardDifference = Compare-Object ($expectedStandards | Sort-Object) $actualStandards
@@ -289,10 +320,10 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated project standards must be flat and contain only the expected files: $($expectedStandards -join ', ')"
     }
 
+    Assert-AgentEntryPoints $ProjectRoot
+
     $forbiddenPaths = @(
         ".claude",
-        "CLAUDE.md",
-        "AGENTS.md",
         "backend/CLAUDE.md",
         "backend/AGENTS.md",
         "docs/guides",
@@ -301,6 +332,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         "docs/standards/api-standard.md",
         "docs/standards/code-standard",
         "docs/standards/test.md",
+        "docs/standards/ui-design.md",
         "docs/standards/ui-design-strategy.md"
     )
     foreach ($relativePath in $forbiddenPaths) {
@@ -320,7 +352,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated project contains template residue:`n$($sample -join "`n")"
     }
 
-    $removedGuidanceReferences = $textFiles | Select-String -Pattern 'template/\.claude', 'agent-workflow\.md', 'api-standard\.md', 'code-standard/(common|backend|frontend)-develop\.md', 'ui-design-strategy\.md'
+    $removedGuidanceReferences = $textFiles | Select-String -Pattern 'template/\.claude', 'agent-workflow\.md', 'api-standard\.md', 'code-standard/(common|backend|frontend)-develop\.md', 'ui-design-strategy\.md', '(?<![\w-])ui-design\.md'
     if ($removedGuidanceReferences) {
         $sample = $removedGuidanceReferences | Select-Object -First 20 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
         throw "Generated project references removed guidance:`n$($sample -join "`n")"
@@ -347,6 +379,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     }
 
     Assert-MarkdownLinks $ProjectRoot
+    Assert-MarkdownAnchors $ProjectRoot
 }
 
 # 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
@@ -768,6 +801,10 @@ if ($ValidationPlanPath) {
     $validationMode = $validationPlan.Mode
 }
 
+if ($GenerateOnly -and ($ValidationPlanPath -or $ContainerSmoke -or $ContainerSmokeScenarios.Count -gt 0 -or $SkipPack -or $LocalFeedPath)) {
+    # 这些开关都作用于打包、构建或容器阶段；与只生成同用时没有可执行的含义，直接拒绝而不是静默忽略。
+    throw '-GenerateOnly cannot be combined with -ValidationPlanPath, -ContainerSmoke, -ContainerSmokeScenarios, -SkipPack or -LocalFeedPath.'
+}
 if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
 if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
 if ($Tier) {
@@ -864,7 +901,10 @@ $nugetConfig = @"
 "@
 [IO.File]::WriteAllText($nugetConfigPath, $nugetConfig, [Text.UTF8Encoding]::new($false))
 
-if (-not $SkipPack) {
+if ($GenerateOnly) {
+    # 只生成：模板从源码目录安装，不消费 Leistd 包，无需本地包源
+}
+elseif (-not $SkipPack) {
     Reset-Directory $feedRoot
     Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
 }
@@ -887,6 +927,14 @@ try {
         Invoke-External "dotnet" $newArguments
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
+        if ($GenerateOnly) {
+            $results.Add([PSCustomObject]@{
+                Scenario = $scenario
+                Generate = 'pass'
+                Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
+            })
+            continue
+        }
         if (-not $SkipFrontend -and $definition.Frontend) {
             Assert-FrontendDependencySecurity (Join-Path $projectRoot 'frontend')
         }
@@ -1000,6 +1048,11 @@ finally {
 }
 
 $results | Format-Table -AutoSize
+if ($GenerateOnly) {
+    # 只生成模式不产出回执：回执代表完整阶段通过，汇总作业不能把形态检查当成构建与测试证据
+    Write-Host "Template generation and document checks passed for $($results.Count) scenario(s); pack, build, test and runtime were not run." -ForegroundColor Green
+    exit 0
+}
 Write-Host "Template matrix passed for $($results.Count) scenario(s)." -ForegroundColor Green
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
