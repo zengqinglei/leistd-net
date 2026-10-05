@@ -94,7 +94,7 @@ def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str,
             return max([1] + [item.get('Cost', {}).get(field, 0) for item in scenarios.values()
                               if isinstance(item.get('Cost', {}).get(field), (int, float))])
         return known(mode) + (known('container') if name in containers else 0)
-    bins = [dict(key=f'execution-{i+1:02d}', title=f'{tier} · {mode} · {i+1}', Scenarios=[], Containers=[])
+    bins = [dict(key=f'execution-{i+1:02d}', title='', Scenarios=[], Containers=[])
             for i in range(count)]
     loads = [0] * count
     for name in sorted(selected, key=lambda name: (-cost(name), name)):
@@ -103,6 +103,11 @@ def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str,
         if name in containers:
             bins[index]['Containers'].append(name)
         loads[index] += cost(name)
+    for group in bins:
+        preview = '、'.join(sorted(group['Scenarios'], key=lambda name: (len(name), name))[:2])
+        stages = {'full':'完整阶段','frontend':'前端阶段','backend':'后端阶段'}[mode]
+        container = '；含容器' if group['Containers'] else ''
+        group['title'] = f"{stages} · {preview}（共{len(group['Scenarios'])}场景{container}）"
     return bins
 
 
@@ -112,7 +117,9 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_onl
     scenarios = coverage.load_scenarios()
     registered = [name for name, info in scenarios.items() if tier in info['Slices']]
     def finish(value):
-        value['ContainerSmoke'] = bool(container_smoke and not value['DocsOnly'] and value['Mode'] == 'full')
+        if container_smoke and (value['DocsOnly'] or value['Mode'] != 'full'):
+            raise ValueError('Container scope requires a dynamic full-mode plan')
+        value['ContainerSmoke'] = container_smoke
         value['Slices'] = execution_slices(scenarios, value['Scenarios'], tier, value['Mode'], value['ContainerSmoke'])
         return value
     plan = dict(Version=2, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,

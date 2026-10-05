@@ -88,7 +88,15 @@ def main():
             assert len(assigned) == len(set(assigned)) and set(assigned) == set(plan['Scenarios'])
             assert len(plan['Slices']) == min(3, len(plan['Scenarios']))
             assert all(group['Scenarios'] for group in plan['Slices'])
+            assert all(any(name in group['title'] for name in group['Scenarios']) for group in plan['Slices'])
             assert plan['Slices'] == planner.execution_slices(scenarios, plan['Scenarios'], 'pr', plan['Mode'], plan['ContainerSmoke'])
+            if expected_mode != 'full':
+                try:
+                    planner.create_plan('pr', base, 'pull_request', '', container_smoke=True)
+                except ValueError as error:
+                    assert 'Container scope requires' in str(error)
+                else:
+                    raise AssertionError('Conflicting container responsibility must fail explicitly')
             if label in ('frontend-feature','frontend-roles-15','backend-signing-9','backend-roles-18'):
                 expected_counts = {'frontend-feature':8,'frontend-roles-15':15,'backend-signing-9':9,'backend-roles-18':18}
                 assert len(plan['Scenarios']) == expected_counts[label], (label, plan['Scenarios'])
@@ -372,6 +380,8 @@ def prove_scheduling(planner, scenarios):
                  for name,cost in [('heavy',1),('a',50),('b',49),('c',48)]}
     groups = planner.execution_slices(synthetic,list(synthetic),'pr','full',True)
     assert groups[0]['Scenarios'] == ['heavy'] and groups[0]['Containers'] == ['heavy']
+    assert all(any(name in group['title'] for name in group['Scenarios']) for group in groups)
+    assert all(('含容器' in group['title']) == bool(group['Containers']) for group in groups)
     assert groups == planner.execution_slices(dict(reversed(list(synthetic.items()))),list(reversed(synthetic)),'pr','full',True)
     synthetic['heavy'].pop('Cost')
     groups = planner.execution_slices(synthetic,list(synthetic),'pr','backend',False)

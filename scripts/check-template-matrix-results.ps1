@@ -38,7 +38,8 @@ $seenSlices = @()
 $seenScenarios = @()
 foreach ($file in $files) {
     $receipt = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
-    if ($receipt.Version -ne 2 -or $receipt.Tier -cne $Tier) {
+    if ($receipt.Version -ne 2) { throw "Unsupported matrix receipt version '$($receipt.Version)'; expected 2." }
+    if ($receipt.Tier -cne $Tier) {
         throw "Slice receipt declares tier '$($receipt.Tier)', expected '$Tier'."
     }
     if ($receipt.CandidateSha -cne (git rev-parse HEAD) -or $receipt.Mode -cne $mode) {
