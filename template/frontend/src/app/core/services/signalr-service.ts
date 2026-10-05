@@ -5,6 +5,11 @@ import {
   //#if (IncludeNotifications)
   computed,
   //#endif
+  //#if (IncludeRealTime)
+  DestroyRef,
+  assertInInjectionContext,
+  inject,
+  //#endif
 } from '@angular/core';
 import {
   HubConnectionBuilder,
@@ -103,8 +108,24 @@ export class SignalRService {
   readonly isConnected = this.connected.asReadonly();
   //#if (IncludeRealTime)
 
-  // ── 已订阅资源（重连后重新订阅） ──
-  private readonly subscribedResources = new Set<string>();
+  // ── 资源订阅 ──
+  // 需求与现状分开记：需求是"谁还持有哪个 key"，现状是"当前服务端连接上订阅了哪些 key"。
+  // 两者之差由每个 key 一条的对账链补齐，所以登记、销毁、建连、重连谁先谁后都不影响最终结果。
+
+  /** 资源键 → 持有它的登记。集合为空即不再需要该订阅。 */
+  private readonly resourceHolders = new Map<string, Set<object>>();
+
+  /**
+   * 当前服务端连接上已成功订阅的资源键。
+   *
+   * 每建立一次服务端连接（首次连接、自动重连）就换一个新集合：新连接上没有任何组。
+   * 对账步骤记下开始时的集合，调用返回后只写回那一个——连接换过时写进的是已作废的集合。
+   */
+  private subscribedResources = new Set<string>();
+
+  /** 每个资源键的对账链：同一个键的 Subscribe/Unsubscribe 依次执行。 */
+  private readonly reconcileQueues = new Map<string, Promise<void>>();
+
   private readonly resourceEventNames = new Set<string>();
   private readonly resourceSubscribedSubject = new Subject<string>();
 
@@ -114,6 +135,7 @@ export class SignalRService {
    * 推送不持久化：断线期间、以及查询完成到加入订阅之间的变更都不会补发。
    * 把推送当作"该重新查询了"的页面，收到这个事件后补查一次，就不会停在旧快照上。
    * 连接恢复（isConnected）不能代替它：那时订阅还没重新建立，立即查询仍会漏掉之后的变更。
+   * 确认回来时已无人持有（含主体切换后），不发出。
    */
   readonly resourceSubscribed$: Observable<string> = this.resourceSubscribedSubject.asObservable();
   //#endif
@@ -239,7 +261,9 @@ export class SignalRService {
   async reset(): Promise<void> {
     this.generation++;
     //#if (IncludeRealTime)
-    this.subscribedResources.clear();
+    this.resourceHolders.clear();
+    this.subscribedResources = new Set();
+    this.reconcileQueues.clear();
     this.lastResourceEvent.set(null);
     //#endif
     //#if (IncludeNotifications)
@@ -284,49 +308,110 @@ export class SignalRService {
   }
 
   /**
-   * 订阅资源变更。
+   * 在 `destroyRef` 所属的组件（或注入器）存活期间订阅资源变更。
    *
-   * 先登记订阅意图、再等服务端确认：确认期间页面取消订阅会把意图删掉，
-   * 迟到的确认据此既不把资源加回恢复集合，也不再发出 {@link resourceSubscribed$}。
-   * 连接尚未就绪（重连中）时只登记，重连成功后由恢复流程订阅并通知。
-   * 订阅失败也保留意图：断线导致的失败要靠重连恢复，服务端拒绝的订阅重连时会再被拒绝一次。
+   * 调用即登记需求，销毁时自动撤销；真正的 Subscribe/Unsubscribe 由服务在连接可用时补齐，
+   * 所以与 `connect()` 的先后无关——不要把它放进 `connect().then(...)`，那会让"销毁先于连上"的页面在连上后照样订阅。
+   * 多个持有者共用同一个键时，最后一个撤销后才真正退订。
+   *
+   * 省略 `destroyRef` 时取当前注入上下文的（与 `takeUntilDestroyed` 同一惯例），须在构造期或字段初始化时调用；
+   * 已销毁的 `destroyRef` 不登记。认证主体切换（`reset()`）会清空全部登记。
    */
-  async subscribeResource(resourceKey: string): Promise<void> {
-    const conn = this.connection;
-    if (!conn) return;
-
-    this.subscribedResources.add(resourceKey);
-    if (conn.state !== 'Connected') return;
-
-    const generation = this.generation;
-    try {
-      await conn.invoke('Subscribe', resourceKey);
-    } catch (err) {
-      console.error('[SignalR] subscribeResource failed:', err);
+  watchResource(resourceKey: string, destroyRef?: DestroyRef): void {
+    if (!destroyRef) {
+      assertInInjectionContext(this.watchResource);
+      destroyRef = inject(DestroyRef);
+    }
+    if (destroyRef.destroyed) {
       return;
     }
 
-    // 确认回来时主体可能已切换（集合属于下一个人，同名 key 不代表同一份意图）、
-    // 连接可能已重建，或页面已经取消：三者任一成立都不报告
-    if (
-      this.isCurrentGeneration(generation) &&
-      this.connection === conn &&
-      this.subscribedResources.has(resourceKey)
-    ) {
-      this.resourceSubscribedSubject.next(resourceKey);
-    }
-  }
+    const holder = {};
+    const holders = this.resourceHolders.get(resourceKey) ?? new Set<object>();
+    holders.add(holder);
+    this.resourceHolders.set(resourceKey, holders);
 
-  /** 取消订阅资源变更。 */
-  async unsubscribeResource(resourceKey: string): Promise<void> {
-    this.subscribedResources.delete(resourceKey);
-    if (this.connection?.state === 'Connected') {
-      await this.connection.invoke('Unsubscribe', resourceKey);
-    }
+    // 撤销只删自己这一次登记：reset() 后新主体同名键的持有是另一组登记，旧页面晚到的销毁碰不到它
+    destroyRef.onDestroy(() => {
+      const current = this.resourceHolders.get(resourceKey);
+      current?.delete(holder);
+      if (current?.size === 0) {
+        this.resourceHolders.delete(resourceKey);
+      }
+      this.reconcile(resourceKey);
+    });
+
+    this.reconcile(resourceKey);
   }
   //#endif
 
   // ── 内部 ──
+  //#if (IncludeRealTime)
+
+  /** 为该键排一次对账，排在同一个键已有的步骤之后。 */
+  private reconcile(resourceKey: string): void {
+    const generation = this.generation;
+    const step = (this.reconcileQueues.get(resourceKey) ?? Promise.resolve()).then(() =>
+      this.reconcileStep(resourceKey, generation),
+    );
+    this.reconcileQueues.set(resourceKey, step);
+    void step.finally(() => {
+      // 只清自己这一项：之后排进来的步骤，或 reset() 之后新主体的链，都不能被它删掉
+      if (this.reconcileQueues.get(resourceKey) === step) {
+        this.reconcileQueues.delete(resourceKey);
+      }
+    });
+  }
+
+  /**
+   * 比较"是否仍有持有者"与"当前连接上是否已订阅"，按差值调一次 Hub。
+   *
+   * 不会拒绝：失败只记诊断，链上后面的步骤照常执行；连接重建时会再对账一次。
+   * 没连上（含 Mock 不建连）时什么都不做，需求留着，连上后统一补齐。
+   */
+  private async reconcileStep(resourceKey: string, generation: number): Promise<void> {
+    const connection = this.connection;
+    if (
+      !this.isCurrentGeneration(generation) ||
+      connection?.state !== HubConnectionState.Connected
+    ) {
+      return;
+    }
+
+    const subscribed = this.subscribedResources;
+    const wanted = (this.resourceHolders.get(resourceKey)?.size ?? 0) > 0;
+    if (wanted === subscribed.has(resourceKey)) {
+      return;
+    }
+
+    try {
+      await connection.invoke(wanted ? 'Subscribe' : 'Unsubscribe', resourceKey);
+    } catch (err) {
+      console.error('[SignalR] resource subscription failed:', resourceKey, err);
+      return;
+    }
+
+    if (!wanted) {
+      subscribed.delete(resourceKey);
+      return;
+    }
+
+    subscribed.add(resourceKey);
+    // 确认期间已无人持有（页面离开、reset 清空了登记）就不报告：链上随后的步骤会退订它。
+    // 不必再核对连接是否换过：断线时 SDK 拒绝全部在途调用，旧连接上的确认不会晚于重连回来
+    if ((this.resourceHolders.get(resourceKey)?.size ?? 0) > 0) {
+      this.resourceSubscribedSubject.next(resourceKey);
+    }
+  }
+
+  /** 新的服务端连接上没有任何组：把仍有持有者的键全部重新对账。 */
+  private resubscribeResources(): void {
+    this.subscribedResources = new Set();
+    for (const resourceKey of this.resourceHolders.keys()) {
+      this.reconcile(resourceKey);
+    }
+  }
+  //#endif
 
   /**
    * 解析 Hub 绝对地址。
@@ -382,11 +467,7 @@ export class SignalRService {
 
     connection.onreconnecting(() => isCurrent() && this.connected.set(false));
     connection.onclose(() => isCurrent() && this.connected.set(false));
-    //#if (IncludeRealTime)
-    connection.onreconnected(async () => {
-    //#else
     connection.onreconnected(() => {
-    //#endif
       if (!isCurrent()) {
         return;
       }
@@ -395,7 +476,9 @@ export class SignalRService {
       //#if (IncludeRealTime)
 
       // 重连后是一条新的服务端连接，分组订阅要重新建立。
-      await this.restoreSubscriptions(connection, isCurrent);
+      // SDK 不等待本回调返回的 Promise，恢复因此排进各键的对账链，不在这里直接调用：
+      // 恢复途中被释放或重新持有的键，由链上后续步骤按当时的持有关系处理。
+      this.resubscribeResources();
       //#endif
     });
 
@@ -405,49 +488,9 @@ export class SignalRService {
     if (isCurrent()) {
       this.connected.set(true);
       //#if (IncludeRealTime)
-
-      // 自动重连耗尽后重建的连接：同一主体之前订阅的资源同样要恢复。首次连接时集合为空，什么都不做。
-      await this.restoreSubscriptions(connection, isCurrent);
+      // 连上之前登记的需求（页面先于连接创建）在这里补齐
+      this.resubscribeResources();
       //#endif
     }
   }
-  //#if (IncludeRealTime)
-
-  /**
-   * 在指定连接上重新订阅已登记的资源；每个资源确认后发出 {@link resourceSubscribed$}。
-   */
-  private async restoreSubscriptions(
-    connection: HubConnection,
-    isCurrent: () => boolean,
-  ): Promise<void> {
-    // 先取快照再迭代：集合会被 reset 清空、被下一个主体重新填充，
-    // 跨 await 直接迭代活集合，旧回调会读到新主体的 key。
-    for (const resourceKey of [...this.subscribedResources]) {
-      // 每轮复核身份：主体可能在上一次 invoke 期间切换，
-      // 继续下去就是拿上一个人的连接去订阅剩下的资源。
-      if (!isCurrent()) {
-        return;
-      }
-
-      // 快照里的资源可能在前一项等待确认时被取消：不能再把它订阅回服务端分组
-      if (!this.subscribedResources.has(resourceKey)) {
-        continue;
-      }
-
-      // 重订阅打在自己这条连接上，不走字段——旧连接的晚到回调若读字段，
-      // 会拿当前主体的连接去订阅上一个人的资源。
-      try {
-        await connection.invoke('Subscribe', resourceKey);
-      } catch (err) {
-        console.error('[SignalR] re-subscribe failed:', resourceKey, err);
-        continue;
-      }
-
-      // 确认期间页面可能已经取消订阅，或主体已经切换：这时不报告恢复
-      if (isCurrent() && this.subscribedResources.has(resourceKey)) {
-        this.resourceSubscribedSubject.next(resourceKey);
-      }
-    }
-  }
-  //#endif
 }

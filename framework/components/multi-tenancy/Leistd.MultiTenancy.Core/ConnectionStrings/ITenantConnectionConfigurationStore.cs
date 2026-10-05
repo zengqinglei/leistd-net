@@ -42,16 +42,26 @@ public interface ITenantConnectionConfigurationStore
     /// 枚举所有登记了连接的未删除租户在该名字下解析出的连接，供 DbMigrator 计算迁移目标。
     /// </summary>
     /// <remarks>
-    /// 一条连接都没有的租户不出现——它们跟着宿主自己的库迁移。
-    /// 登记过连接却解析不出这个名字的租户必须让调用方失败，而不是被跳过：
-    /// 跳过的库会停在旧结构上，下一次发版才炸。
+    /// <para>一条连接都没有的租户不出现——它们跟着宿主自己的库迁移。</para>
+    /// <para>登记过连接却取不出这个名字下连接串的租户（名字解析不出、密文解不开）列进
+    /// <see cref="TenantMigrationConnectionListResult.FailedTenants"/>，其余租户照常返回：
+    /// 一个租户的配置错误不该挡住其他租户的迁移。它们不能被当作"没有目标"静默略过——
+    /// 调用方须把它们报出来并以失败结束，否则那些库会停在旧结构上，下一次发版才炸。</para>
+    /// <para>控制库读不出、远端回源失败、取消等不属于某个租户的错误照常抛出。</para>
     /// </remarks>
     /// <param name="name">连接名；大小写不敏感</param>
     /// <param name="cancellationToken">取消令牌</param>
-    Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(
+    Task<TenantMigrationConnectionListResult> GetListAsync(
         string name,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>迁移作业的连接清单，与运行时的 <see cref="TenantDatabaseListResult"/> 同一种失败表达。</summary>
+/// <param name="Connections">解析出的连接，每个租户一条。</param>
+/// <param name="FailedTenants">取不出连接的租户；它们不在 <paramref name="Connections"/> 里。</param>
+public sealed record TenantMigrationConnectionListResult(
+    IReadOnlyList<TenantMigrationConnection> Connections,
+    IReadOnlyList<TenantDatabaseFailure> FailedTenants);
 
 /// <summary>
 /// 某个租户在某个连接名下解析出的连接。

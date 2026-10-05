@@ -145,6 +145,13 @@ dotnet run --project src/CompanyName.ProjectName.Api
 控制库**已迁移**之后若仍读不到租户注册表（表被误删、schema 配错、迁移与模型不一致），
 那是损坏而不是首装：预演与 `--apply` 都以非零退出码结束，不会静默当作"没有独立目标"。
 
+**单个租户出问题不挡住其他租户**：某个租户取不出本服务的连接（只登记了别的服务的连接名、连接串解不开），
+或它的独立库迁移出错（连不上、迁移失败），只记在它名下，其余独立库照常预演或施加；
+跑完后逐个报出这些租户与库（租户标识、库的指纹与原因，不含连接串），并以非零退出码结束。
+控制库、OIDC 存储与默认业务库出错仍立即结束本次运行。
+因此非零退出可能意味着**部分库已经迁移**：迁移不会回滚，发布流水线据退出码拦住新版本 API，
+新旧 schema 并存的兼容性按[部署说明](docs/deploy/README.md)里 Expand 阶段的要求保证；修好问题后重跑 `--apply`，已迁移的库不会重复执行。
+
 API 和 `DbMigrator` 使用不同的 Runtime/Migration Secret；API 运行身份只持有 DML 权限。SharedDatabase 中各服务共用数据库实例、使用固定独立 schema 并以 `TenantId` 隔离；DedicatedDatabase 由租户配置覆盖连接，各服务仍共用该租户连接并写入自己的 schema。
 首次建立 DedicatedDatabase 租户前，先以 `ConnectionStrings__MigrationTarget` 运行各服务 DbMigrator 预建该服务 schema，再创建租户；常规发布仍使用全目标枚举模式。
 

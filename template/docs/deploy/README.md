@@ -185,6 +185,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   - 模板仓库 CI 用真实 PostgreSQL 验证从当前模板建库、迁移及租户隔离。具体项目发布前，需另用当前生产版本的数据副本验证「当前生产版本 → 新版本」的升级路径与迁移重跑；模板 CI 没有该项目的生产基线，不能替代这项验收。
 <!--#if (IncludeMultiTenancy)-->
 - DedicatedDatabase 首次建库时，先对目标连接以 `ConnectionStrings__MigrationTarget` 运行每个服务的 DbMigrator，再在 Identity 创建租户。该模式只迁移当前服务的业务 schema，不会把 Identity Control schema 写入租户目标。
+- DbMigrator 非零退出时先看它报出的租户与库：单个租户的问题不挡住其他租户，健康的独立库在这一次已经迁移完，不会回滚。发布在此停下，新版本 API 不上线；修好之后重跑，成功后再继续发布。部分库已迁移、旧版本 API 仍在运行的这段时间，靠的正是上面 Expand 阶段"同时兼容新旧版本"的要求。
 <!--#endif-->
 - 数据迁移、备份、回滚、健康检查和核心路径验证必须在执行前明确。
 - 生产部署、回滚、重启、流量切换及真实数据操作前核对用户已有授权是否覆盖目标、环境和动作；未授权或范围变化时再确认。

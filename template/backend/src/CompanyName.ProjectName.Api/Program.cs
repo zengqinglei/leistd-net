@@ -727,6 +727,9 @@ try
     app.UseCorrelationId();
     app.UseSerilogRequestLogging(options =>
     {
+        // 宿主 logger 独立持有（preserveStaticLogger）：不指定时中间件写进启动期的静态 logger，
+        // 请求完成事件就丢掉配置里的输出格式、sink 与 enrich
+        options.Logger = app.Services.GetRequiredService<Serilog.ILogger>();
         options.GetLevel = (httpContext, elapsed, ex) =>
         {
             if (ex != null || httpContext.Response.StatusCode >= 500)

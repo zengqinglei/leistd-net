@@ -339,8 +339,8 @@ internal sealed class SharedTenantConnectionStore : ITenantConnectionConfigurati
     public Task<TenantConnectionLookupResult?> FindAsync(Guid tenantId, string name, CancellationToken cancellationToken = default) =>
         Task.FromResult<TenantConnectionLookupResult?>(new TenantConnectionLookupResult { TenantId = tenantId, HasAnyConnection = false });
 
-    public Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(string name, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<TenantMigrationConnection>>([]);
+    public Task<TenantMigrationConnectionListResult> GetListAsync(string name, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new TenantMigrationConnectionListResult([], []));
 
     public Task<TenantDatabaseListResult> GetDatabasesAsync(string name, bool activeOnly, CancellationToken cancellationToken = default) =>
         Task.FromResult(TenantDatabaseListResult.Empty);

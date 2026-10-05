@@ -111,7 +111,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
         var tenantId = await RegisterTenantAsync();
 
         Assert.Equal(ConnectionString, (await Store.FindAsync(tenantId, Name))!.Connection!.ConnectionString);
-        Assert.Equal(ConnectionString, Assert.Single(await Store.GetListAsync(Name)).ConnectionString);
+        Assert.Equal(ConnectionString, Assert.Single((await Store.GetListAsync(Name)).Connections).ConnectionString);
     }
 
     [Fact]
@@ -171,6 +171,26 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
         db.ChangeTracker.Clear();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => Store.FindAsync(tenantId, Name));
+    }
+
+    // 迁移清单里解不开的密文只算这个租户失败：不挡住其他租户，失败原因里也没有明文
+    [Fact]
+    public async Task A_tampered_ciphertext_fails_only_its_own_tenant_in_the_migration_list()
+    {
+        var healthy = await RegisterTenantAsync();
+        var tampered = await RegisterTenantAsync();
+        var db = _provider.GetRequiredService<TestDbContext>();
+        var record = await db.Set<TenantConnectionRecord>().SingleAsync(x => x.TenantId == tampered);
+        record.ProtectedConnectionString = "not-a-valid-payload";
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var list = await Store.GetListAsync(Name);
+
+        Assert.Equal(healthy, Assert.Single(list.Connections).TenantId);
+        var failure = Assert.Single(list.FailedTenants);
+        Assert.Equal(tampered, failure.TenantId);
+        Assert.DoesNotContain(Secret, failure.Reason);
     }
 
     // 开着 EF 敏感数据日志，写入与读取的日志里也只能出现密文

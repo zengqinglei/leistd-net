@@ -1,3 +1,6 @@
+//#if (IncludeRealTime)
+import { DestroyRef, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
+//#endif
 import { TestBed } from '@angular/core/testing';
 import * as signalR from '@microsoft/signalr';
 
@@ -96,7 +99,7 @@ describe('SignalRService connection lifecycle', () => {
       this.state = signalR.HubConnectionState.Disconnected;
     }
 
-    // 订阅走 invoke：缺了它，subscribeResource 会直接抛错进 catch，
+    // 订阅走 invoke：缺了它，对账步骤会直接抛错进 catch，
     // 相关用例在改坏实现时也照样绿——那种"通过"什么都证明不了。
     readonly invocations: {
       method: string;
@@ -105,7 +108,7 @@ describe('SignalRService connection lifecycle', () => {
 
     /** 置为 true 时 invoke() 挂起，直到 releaseInvoke() 被调用。 */
     gateInvoke = false;
-    private invokeGates: (() => void)[] = [];
+    private invokeGates: { resolve: () => void; reject: (error: Error) => void }[] = [];
 
     /** 服务端拒绝订阅的资源键（例如无权限）。 */
     readonly rejectedSubscriptions = new Set<string>();
@@ -123,13 +126,20 @@ describe('SignalRService connection lifecycle', () => {
         return Promise.resolve();
       }
 
-      return new Promise<void>((resolve) => this.invokeGates.push(resolve));
+      return new Promise<void>((resolve, reject) => this.invokeGates.push({ resolve, reject }));
     }
 
     releaseInvoke(): void {
       const gates = this.invokeGates;
       this.invokeGates = [];
-      gates.forEach((resolve) => resolve());
+      gates.forEach((gate) => gate.resolve());
+    }
+
+    /** 让挂起中的 invoke() 全部失败（模拟断线时 SDK 拒绝在途调用）。 */
+    failInvoke(): void {
+      const gates = this.invokeGates;
+      this.invokeGates = [];
+      gates.forEach((gate) => gate.reject(new Error('invocation canceled')));
     }
   }
 
@@ -167,6 +177,26 @@ describe('SignalRService connection lifecycle', () => {
 
     service = TestBed.inject(SignalRService);
   });
+  //#if (IncludeRealTime)
+
+  /** 一个可控的持有者：销毁它，等于持有订阅的页面被销毁。 */
+  function holder(): { ref: DestroyRef; destroy: () => void } {
+    const injector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+    return { ref: injector.get(DestroyRef), destroy: () => injector.destroy() };
+  }
+
+  /** 让对账链上已就绪的步骤全部跑完（链由微任务串起，一个宏任务足以排空）。 */
+  function settle(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  /** 某个连接上针对某个键的 Hub 调用序列。 */
+  function calls(connection: FakeConnection, resourceKey: string): string[] {
+    return connection.invocations
+      .filter((call) => call.args[0] === resourceKey)
+      .map((call) => call.method);
+  }
+  //#endif
 
   it('enters the connected state after connecting to the configured hub', async () => {
     await service.connect();
@@ -269,170 +299,17 @@ describe('SignalRService connection lifecycle', () => {
   //#endif
   //#if (IncludeRealTime)
 
-  it('resubscribes subscribed resources on the same connection after reconnecting', async () => {
+  it('resubscribes held resources on the same connection after reconnecting', async () => {
+    service.watchResource('order-1', holder().ref);
     await service.connect();
-    await service.subscribeResource('order-1');
+    await settle();
     const connection = built[0];
     connection.invocations.length = 0;
 
     await connection.triggerReconnected();
+    await settle();
 
     expect(connection.invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
-  });
-
-  describe('confirmed resource subscriptions', () => {
-    let confirmed: string[];
-
-    beforeEach(() => {
-      confirmed = [];
-      service.resourceSubscribed$.subscribe((key) => confirmed.push(key));
-    });
-
-    it('reports a subscription only after the server acknowledges it', async () => {
-      await service.connect();
-      const connection = built[0];
-      connection.gateInvoke = true;
-
-      const subscribing = service.subscribeResource('order-1');
-      try {
-        await Promise.resolve();
-        // 确认前就报告，页面会在加入订阅组之前查询，之间的变更就漏了
-        expect(confirmed).toEqual([]);
-      } finally {
-        connection.gateInvoke = false;
-        connection.releaseInvoke();
-      }
-      await subscribing;
-
-      expect(confirmed).toEqual(['order-1']);
-    });
-
-    it('reports the subscription again after every automatic reconnect', async () => {
-      await service.connect();
-      await service.subscribeResource('order-1');
-      const connection = built[0];
-
-      await connection.triggerReconnected();
-      await connection.triggerReconnected();
-
-      expect(confirmed).toEqual(['order-1', 'order-1', 'order-1']);
-    });
-
-    it('restores and reports subscriptions on a connection rebuilt after reconnecting gave up', async () => {
-      await service.connect();
-      await service.subscribeResource('order-1');
-      built[0].state = signalR.HubConnectionState.Disconnected;
-
-      await service.connect();
-
-      expect(built.length).toBe(2);
-      expect(built[1].invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
-      expect(confirmed).toEqual(['order-1', 'order-1']);
-    });
-
-    it('does not report a resource whose resubscription is rejected', async () => {
-      await service.connect();
-      await service.subscribeResource('order-1');
-      await service.subscribeResource('order-2');
-      const connection = built[0];
-      connection.rejectedSubscriptions.add('order-1');
-      confirmed.length = 0;
-
-      await connection.triggerReconnected();
-
-      expect(confirmed).toEqual(['order-2']);
-    });
-
-    it('does not report a resource unsubscribed while its resubscription was pending', async () => {
-      await service.connect();
-      await service.subscribeResource('order-1');
-      const connection = built[0];
-      confirmed.length = 0;
-      connection.gateInvoke = true;
-
-      const reconnected = connection.triggerReconnected();
-      try {
-        await Promise.resolve();
-        // 页面在重订阅确认前离开
-        void service.unsubscribeResource('order-1');
-      } finally {
-        connection.gateInvoke = false;
-        connection.releaseInvoke();
-      }
-      await reconnected;
-
-      expect(confirmed).toEqual([]);
-    });
-
-    it('does not restore or report a first subscription cancelled before its acknowledgement', async () => {
-      await service.connect();
-      const connection = built[0];
-      connection.gateInvoke = true;
-
-      const subscribing = service.subscribeResource('order-1');
-      try {
-        await Promise.resolve();
-        // 页面在首次订阅确认前离开
-        void service.unsubscribeResource('order-1');
-      } finally {
-        connection.gateInvoke = false;
-        connection.releaseInvoke();
-      }
-      await subscribing;
-      expect(confirmed).toEqual([]);
-
-      // 迟到的确认不能把资源加回恢复集合：重连后不再订阅它
-      connection.invocations.length = 0;
-      await connection.triggerReconnected();
-      expect(connection.invocations).toEqual([]);
-    });
-
-    it('does not resubscribe a resource cancelled while an earlier one was being restored', async () => {
-      await service.connect();
-      await service.subscribeResource('order-1');
-      await service.subscribeResource('order-2');
-      const connection = built[0];
-      connection.invocations.length = 0;
-      confirmed.length = 0;
-      connection.gateInvoke = true;
-
-      const reconnected = connection.triggerReconnected();
-      try {
-        await Promise.resolve();
-        // order-1 等待确认期间，order-2 的页面离开
-        void service.unsubscribeResource('order-2');
-      } finally {
-        connection.gateInvoke = false;
-        connection.releaseInvoke();
-      }
-      await reconnected;
-
-      expect(connection.invocations).toEqual([
-        { method: 'Subscribe', args: ['order-1'] },
-        { method: 'Unsubscribe', args: ['order-2'] },
-      ]);
-      expect(confirmed).toEqual(['order-1']);
-    });
-
-    it('does not report resources of the previous principal resubscribed after a switch', async () => {
-      await service.connect();
-      await service.subscribeResource('a-order');
-      const stale = built[0];
-      confirmed.length = 0;
-      stale.gateInvoke = true;
-
-      const reconnected = stale.triggerReconnected();
-      try {
-        await Promise.resolve();
-        await service.reset();
-      } finally {
-        stale.gateInvoke = false;
-        stale.releaseInvoke();
-      }
-      await reconnected;
-
-      expect(confirmed).toEqual([]);
-    });
   });
   //#endif
 
@@ -457,7 +334,8 @@ describe('SignalRService connection lifecycle', () => {
     ]);
     //#endif
     //#if (IncludeRealTime)
-    await service.subscribeResource('order-1');
+    service.watchResource('order-1', holder().ref);
+    await settle();
     //#endif
 
     await service.reset();
@@ -506,15 +384,19 @@ describe('SignalRService connection lifecycle', () => {
 
   it('does not resubscribe a subscribe call completing after reset on the connection of the next principal', async () => {
     await service.connect();
+    const stale = built[0];
+    stale.gateInvoke = true;
+    service.watchResource('order-1', holder().ref);
+    await settle();
 
-    const pending = service.subscribeResource('order-1');
     await service.reset();
-    await pending;
+    stale.gateInvoke = false;
+    stale.releaseInvoke();
 
     await service.connect();
     const business = built[1];
     business.dropAndRecover();
-    await Promise.resolve();
+    await settle();
 
     // 断言真实后果而不是内部集合：回填的 key 一旦留下，重连时会以下一个用户的身份
     // 重新订阅；同作用域、同权限的 key 照样通过后端订阅授权。
@@ -603,8 +485,9 @@ describe('SignalRService connection lifecycle', () => {
   //#if (IncludeRealTime)
 
   it('does not subscribe resources of the next principal when switching while reconnect resubscription is stuck', async () => {
+    service.watchResource('a-order', holder().ref);
     await service.connect();
-    await service.subscribeResource('a-order');
+    await settle();
 
     const staleBusiness = built[0];
     staleBusiness.invocations.length = 0;
@@ -613,13 +496,14 @@ describe('SignalRService connection lifecycle', () => {
     // 重连回调进入循环并卡在 A 的第一次 Subscribe 上。
     const reconnected = staleBusiness.triggerReconnected();
     try {
-      await Promise.resolve();
-      expect(staleBusiness.invocations.length, '重连回调应当已经发出第一次 Subscribe').toBe(1);
+      await settle();
+      expect(staleBusiness.invocations.length, '重连恢复应当已经发出第一次 Subscribe').toBe(1);
 
       // 就在这一轮未完成时切换主体，并让新主体订阅自己的资源。
       await service.reset();
       await service.connect();
-      await service.subscribeResource('b-order');
+      service.watchResource('b-order', holder().ref);
+      await settle();
     } finally {
       // 先关掉拦截再释放：缺陷被重新引入时，循环会对 b-order 再发一次 invoke，
       // 只释放已排队的那次会让它继续挂住，用例最终以 5 秒超时收场——
@@ -629,6 +513,7 @@ describe('SignalRService connection lifecycle', () => {
     }
 
     await reconnected;
+    await settle();
 
     // 跨 await 迭代活集合时，旧回调的迭代器会读到新主体刚加入的 key，
     // 并在上一个人的连接上把它订阅一遍。
@@ -650,4 +535,421 @@ describe('SignalRService connection lifecycle', () => {
     expect(built.length).toBe(2);
     expect(service.isConnected()).toBe(true);
   });
+  //#if (IncludeRealTime)
+
+  /**
+   * 资源订阅的持有与对账：需求（谁还持有）与现状（服务端连接上订阅了什么）分开记，
+   * 每个键一条链按差值补齐。下列用例各对应一种曾在下游项目里复现过的交错。
+   */
+  describe('resource subscription lifecycle', () => {
+    it('does not subscribe for a page destroyed before the connection is up', async () => {
+      const page = holder();
+      service.watchResource('roles', page.ref);
+      page.destroy();
+
+      await service.connect();
+      await settle();
+      await built[0].triggerReconnected();
+      await settle();
+
+      expect(calls(built[0], 'roles')).toEqual([]);
+    });
+
+    it('unsubscribes once an in-flight subscribe completes after the page is destroyed', async () => {
+      await service.connect();
+      const connection = built[0];
+      connection.gateInvoke = true;
+      const page = holder();
+      service.watchResource('roles', page.ref);
+      await settle();
+
+      page.destroy();
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe', 'Unsubscribe']);
+
+      connection.invocations.length = 0;
+      await connection.triggerReconnected();
+      await settle();
+      expect(calls(connection, 'roles'), '无人持有的键不能在重连时复活').toEqual([]);
+    });
+
+    it('stays subscribed when a page is left and immediately re-entered', async () => {
+      await service.connect();
+      const connection = built[0];
+      const first = holder();
+      service.watchResource('roles', first.ref);
+      await settle();
+
+      first.destroy();
+      service.watchResource('roles', holder().ref);
+      await settle();
+      expect(calls(connection, 'roles').at(-1)).toBe('Subscribe');
+
+      connection.invocations.length = 0;
+      await connection.triggerReconnected();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe']);
+    });
+
+    it('resubscribes when a page re-enters while its unsubscribe is in flight', async () => {
+      await service.connect();
+      const connection = built[0];
+      const first = holder();
+      service.watchResource('roles', first.ref);
+      await settle();
+
+      connection.gateInvoke = true;
+      first.destroy();
+      await settle();
+      service.watchResource('roles', holder().ref);
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe', 'Unsubscribe', 'Subscribe']);
+
+      connection.invocations.length = 0;
+      await connection.triggerReconnected();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe']);
+    });
+
+    it('keeps a stale page of the previous principal from touching the same key after reset', async () => {
+      await service.connect();
+      const stale = built[0];
+      stale.gateInvoke = true;
+      const oldPage = holder();
+      service.watchResource('roles', oldPage.ref);
+      await settle();
+
+      await service.reset();
+      service.watchResource('roles', holder().ref);
+      await service.connect();
+      const current = built[1];
+      stale.gateInvoke = false;
+      stale.releaseInvoke();
+      oldPage.destroy();
+      await settle();
+
+      // 旧页面晚到的销毁既不能撤掉新主体的持有，也不能把 Unsubscribe 打到新连接上
+      expect(calls(current, 'roles')).toEqual(['Subscribe']);
+      current.invocations.length = 0;
+      await current.triggerReconnected();
+      await settle();
+      expect(calls(current, 'roles')).toEqual(['Subscribe']);
+    });
+
+    it('keeps a shared key subscribed until its last holder is destroyed', async () => {
+      await service.connect();
+      const connection = built[0];
+      const first = holder();
+      const second = holder();
+      service.watchResource('roles', first.ref);
+      service.watchResource('roles', second.ref);
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe']);
+
+      first.destroy();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe']);
+
+      second.destroy();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe', 'Unsubscribe']);
+    });
+
+    it('does not restore a key released while reconnect recovery is in flight', async () => {
+      const keep = holder();
+      const release = holder();
+      service.watchResource('a', keep.ref);
+      service.watchResource('b', release.ref);
+      await service.connect();
+      await settle();
+      const connection = built[0];
+      connection.invocations.length = 0;
+
+      connection.gateInvoke = true;
+      void connection.triggerReconnected();
+      await settle();
+      release.destroy();
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+
+      expect(calls(connection, 'a')).toEqual(['Subscribe']);
+      expect(calls(connection, 'b').at(-1), '恢复途中释放的键最终必须退订').toBe('Unsubscribe');
+
+      connection.invocations.length = 0;
+      await connection.triggerReconnected();
+      await settle();
+      expect(calls(connection, 'b')).toEqual([]);
+    });
+
+    it('keeps a key held again while reconnect recovery is in flight', async () => {
+      const first = holder();
+      service.watchResource('b', first.ref);
+      await service.connect();
+      await settle();
+      const connection = built[0];
+      connection.invocations.length = 0;
+
+      connection.gateInvoke = true;
+      void connection.triggerReconnected();
+      await settle();
+      first.destroy();
+      service.watchResource('b', holder().ref);
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+
+      expect(calls(connection, 'b').at(-1)).toBe('Subscribe');
+    });
+
+    it('recovers a rejected subscribe on the next reconnect', async () => {
+      await service.connect();
+      const connection = built[0];
+      connection.rejectedSubscriptions.add('roles');
+      service.watchResource('roles', holder().ref);
+      await settle();
+      expect(console.error).toHaveBeenCalled();
+
+      connection.rejectedSubscriptions.delete('roles');
+      connection.invocations.length = 0;
+      await connection.triggerReconnected();
+      await settle();
+      expect(calls(connection, 'roles')).toEqual(['Subscribe']);
+    });
+
+    it('keeps reconciling a key after its in-flight unsubscribe fails', async () => {
+      await service.connect();
+      const connection = built[0];
+      const first = holder();
+      service.watchResource('roles', first.ref);
+      await settle();
+
+      // 退订在途时，同一个键又排进了新的持有与释放；随后那次退订失败
+      connection.gateInvoke = true;
+      first.destroy();
+      await settle();
+      const second = holder();
+      service.watchResource('roles', second.ref);
+      second.destroy();
+      connection.gateInvoke = false;
+      connection.failInvoke();
+      await settle();
+
+      // 链没有被那次失败卡死：排在后面的步骤照常执行，按"仍订阅着"再退订一次
+      expect(calls(connection, 'roles')).toEqual(['Subscribe', 'Unsubscribe', 'Unsubscribe']);
+    });
+
+    it('does not let a stale queue cleanup drop the queue of the next principal for the same key', async () => {
+      await service.connect();
+      const stale = built[0];
+      stale.gateInvoke = true;
+      service.watchResource('roles', holder().ref);
+      await settle();
+
+      await service.reset();
+      await service.connect();
+      const current = built[1];
+      current.gateInvoke = true;
+      const page = holder();
+      service.watchResource('roles', page.ref);
+      await settle();
+
+      // 旧链在新链入队之后才收尾；它若按键删除队列，新链上随后的释放会与在途的 Subscribe 并行，
+      // 读到"尚未订阅"而不发 Unsubscribe，订阅就此残留
+      stale.gateInvoke = false;
+      stale.releaseInvoke();
+      await settle();
+      page.destroy();
+      current.gateInvoke = false;
+      current.releaseInvoke();
+      await settle();
+
+      expect(calls(current, 'roles')).toEqual(['Subscribe', 'Unsubscribe']);
+    });
+
+    it('records demand without touching the hub while there is no connection', async () => {
+      const page = holder();
+      service.watchResource('roles', page.ref);
+      page.destroy();
+      await settle();
+
+      expect(built).toEqual([]);
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it('ignores a destroy ref that is already destroyed', async () => {
+      const page = holder();
+      page.destroy();
+      service.watchResource('roles', page.ref);
+
+      await service.connect();
+      await settle();
+      expect(calls(built[0], 'roles')).toEqual([]);
+    });
+
+    it('takes the destroy ref of the injection context when none is given', async () => {
+      const injector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+      injector.runInContext(() => service.watchResource('roles'));
+      await service.connect();
+      await settle();
+      expect(calls(built[0], 'roles')).toEqual(['Subscribe']);
+
+      injector.destroy();
+      await settle();
+      expect(calls(built[0], 'roles')).toEqual(['Subscribe', 'Unsubscribe']);
+      expect(
+        () => service.watchResource('roles'),
+        '注入上下文之外又没传 DestroyRef 必须报错',
+      ).toThrow();
+    });
+  });
+
+  describe('confirmed resource subscriptions', () => {
+    let confirmed: string[];
+
+    beforeEach(() => {
+      confirmed = [];
+      service.resourceSubscribed$.subscribe((key) => confirmed.push(key));
+    });
+
+    it('reports a subscription only after the server acknowledges it', async () => {
+      await service.connect();
+      const connection = built[0];
+      connection.gateInvoke = true;
+      service.watchResource('order-1', holder().ref);
+      await settle();
+      // 确认前就报告，页面会在加入订阅组之前查询，之间的变更就漏了
+      expect(confirmed).toEqual([]);
+
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+      expect(confirmed).toEqual(['order-1']);
+    });
+
+    it('reports the subscription again after every automatic reconnect', async () => {
+      service.watchResource('order-1', holder().ref);
+      await service.connect();
+      await settle();
+      const connection = built[0];
+
+      await connection.triggerReconnected();
+      await settle();
+      await connection.triggerReconnected();
+      await settle();
+
+      expect(confirmed).toEqual(['order-1', 'order-1', 'order-1']);
+    });
+
+    it('restores and reports subscriptions on a connection rebuilt after reconnecting gave up', async () => {
+      service.watchResource('order-1', holder().ref);
+      await service.connect();
+      await settle();
+      built[0].state = signalR.HubConnectionState.Disconnected;
+
+      await service.connect();
+      await settle();
+
+      expect(built.length).toBe(2);
+      expect(built[1].invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
+      expect(confirmed).toEqual(['order-1', 'order-1']);
+    });
+
+    it('does not report a resource whose resubscription is rejected', async () => {
+      service.watchResource('order-1', holder().ref);
+      service.watchResource('order-2', holder().ref);
+      await service.connect();
+      await settle();
+      const connection = built[0];
+      connection.rejectedSubscriptions.add('order-1');
+      confirmed.length = 0;
+
+      await connection.triggerReconnected();
+      await settle();
+
+      expect(confirmed).toEqual(['order-2']);
+    });
+
+    it('does not report a resource released while its resubscription was pending', async () => {
+      const page = holder();
+      service.watchResource('order-1', page.ref);
+      await service.connect();
+      await settle();
+      const connection = built[0];
+      confirmed.length = 0;
+      connection.gateInvoke = true;
+
+      void connection.triggerReconnected();
+      await settle();
+      // 页面在重订阅确认前离开
+      page.destroy();
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+
+      expect(confirmed).toEqual([]);
+    });
+
+    it('does not report a first subscription cancelled before its acknowledgement', async () => {
+      await service.connect();
+      const connection = built[0];
+      connection.gateInvoke = true;
+      const page = holder();
+      service.watchResource('order-1', page.ref);
+      await settle();
+
+      // 页面在首次订阅确认前离开
+      page.destroy();
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+      expect(confirmed).toEqual([]);
+    });
+
+    it('reports only the key still held when another is released during recovery', async () => {
+      const kept = holder();
+      const released = holder();
+      service.watchResource('order-1', kept.ref);
+      service.watchResource('order-2', released.ref);
+      await service.connect();
+      await settle();
+      const connection = built[0];
+      confirmed.length = 0;
+      connection.gateInvoke = true;
+
+      void connection.triggerReconnected();
+      await settle();
+      // order-2 的页面在恢复确认前离开
+      released.destroy();
+      connection.gateInvoke = false;
+      connection.releaseInvoke();
+      await settle();
+
+      expect(confirmed).toEqual(['order-1']);
+      expect(calls(connection, 'order-2').at(-1)).toBe('Unsubscribe');
+    });
+
+    it('does not report resources of the previous principal resubscribed after a switch', async () => {
+      service.watchResource('a-order', holder().ref);
+      await service.connect();
+      await settle();
+      const stale = built[0];
+      confirmed.length = 0;
+      stale.gateInvoke = true;
+
+      void stale.triggerReconnected();
+      await settle();
+      await service.reset();
+      stale.gateInvoke = false;
+      stale.releaseInvoke();
+      await settle();
+
+      expect(confirmed).toEqual([]);
+    });
+  });
+  //#endif
 });
