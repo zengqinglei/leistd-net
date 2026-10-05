@@ -20,14 +20,16 @@ if ($ValidationPlanPath) {
     if ($plan.DocsOnly) { throw 'Documentation-only has no dynamic receipts.' }
     $selected = @($plan.Scenarios)
     $mode = $plan.Mode
+    if ($ContainerSmoke -and -not $plan.ContainerSmoke) { throw 'Manual container scope differs from the plan.' }
+    $ContainerSmoke = $plan.ContainerSmoke
 }
 if ($ContainerSmoke -and $mode -cne 'full') { throw 'Container checks require full stages.' }
 
 # 每个分片恰好一份收据：缺片、重复、错档或不认识的分片都失败
-$expectedSlices = @($MatrixSlices[$Tier].Keys | Where-Object {
+$expectedSlices = if ($ValidationPlanPath) { @($plan.Slices.key) } else { @($MatrixSlices[$Tier].Keys | Where-Object {
     $registeredSlice = $_
     @($selected | Where-Object { $scenarioMap[$_].Slices[$Tier] -ceq $registeredSlice }).Count -gt 0
-})
+}) }
 $files = @(Get-ChildItem -LiteralPath $ResultsPath -Filter 'matrix-*.json' -File -Recurse)
 if ($files.Count -ne $expectedSlices.Count) {
     throw "Expected $($expectedSlices.Count) $Tier-tier slice receipts, found $($files.Count)."
@@ -36,20 +38,23 @@ $seenSlices = @()
 $seenScenarios = @()
 foreach ($file in $files) {
     $receipt = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+    if ($receipt.Version -ne 2) { throw "Unsupported matrix receipt version '$($receipt.Version)'; expected 2." }
     if ($receipt.Tier -cne $Tier) {
         throw "Slice receipt declares tier '$($receipt.Tier)', expected '$Tier'."
     }
     if ($receipt.CandidateSha -cne (git rev-parse HEAD) -or $receipt.Mode -cne $mode) {
         throw 'Receipt candidate SHA or validation mode differs from the expected plan.'
     }
-    if ($receipt.Slice -notin $expectedSlices -or $receipt.Slice -in $seenSlices) {
+    if ($receipt.Slice -cnotin $expectedSlices -or $receipt.Slice -cin $seenSlices) {
         throw "Unknown or duplicate $Tier-tier slice receipt: '$($receipt.Slice)'."
     }
     $seenSlices += $receipt.Slice
-    $expected = @(Get-TierScenarios $Tier $receipt.Slice | Where-Object { $_ -cin $selected })
+    $expected = if ($ValidationPlanPath) { @(($plan.Slices | Where-Object { $_.key -ceq $receipt.Slice }).Scenarios) } else {
+        @(Get-TierScenarios $Tier $receipt.Slice | Where-Object { $_ -cin $selected })
+    }
     $actual = @($receipt.Results | ForEach-Object { $_.Scenario })
-    if ($actual.Count -ne $expected.Count -or @($actual | Sort-Object -Unique).Count -ne $actual.Count -or
-        @($expected | Where-Object { $_ -notin $actual }).Count -gt 0) {
+    if ($receipt.Results -isnot [array] -or $actual.Count -ne $expected.Count -or @($actual | Sort-Object -Unique).Count -ne $actual.Count -or
+        @($expected | Where-Object { $_ -cnotin $actual }).Count -gt 0) {
         throw "Slice '$($receipt.Slice)' scenario coverage differs from its registered set."
     }
     foreach ($result in $receipt.Results) {
@@ -59,8 +64,9 @@ foreach ($file in $files) {
             $expectedStage = if ($notApplicable) { 'not-applicable' } else { 'pass' }
             if ($result.$stage -cne $expectedStage) { throw "$($result.Scenario): $stage expected $expectedStage." }
         }
-        if ($ContainerSmoke -and $result.Scenario -in $ContainerScenarios -and $result.Container -cne 'pass') {
-            throw "$($result.Scenario): required container smoke did not pass."
+        $containerExpected = if ($ContainerSmoke -and $result.Scenario -cin $ContainerScenarios) { 'pass' } else { 'skipped' }
+        if ($result.Container -cne $containerExpected) {
+            throw "$($result.Scenario): Container expected $containerExpected."
         }
         $seenScenarios += $result.Scenario
     }
