@@ -77,17 +77,40 @@ def source_producers(config: dict, path: str, scenarios: dict) -> set[str]:
     return producers
 
 
-def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_only: bool = False) -> dict:
+def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str, container_smoke: bool) -> list[dict]:
+    """Bind the registered logical allocation to the candidate's selected work."""
+    if not selected:
+        return []
+    sample = next(iter(scenarios.values()))
+    selected_names = set(selected)
+    containers = set(sample['Containers']) if container_smoke else set()
+    bins = []
+    for logical in sample['Titles'][tier]:
+        members = [name for name, info in scenarios.items()
+                   if name in selected_names and info['Slices'].get(tier) == logical]
+        if members:
+            bins.append(dict(key=f'execution-{len(bins)+1:02d}', title='', Scenarios=members,
+                             Containers=[name for name in members if name in containers]))
+    for group in bins:
+        preview = '、'.join(sorted(group['Scenarios'], key=lambda name: (len(name), name))[:2])
+        stages = {'full':'完整阶段','frontend':'前端阶段','backend':'后端阶段'}[mode]
+        container = '；含容器' if group['Containers'] else ''
+        group['title'] = f"{stages} · {preview}（共{len(group['Scenarios'])}场景{container}）"
+    return bins
+
+
+def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_only: bool = False,
+                container_smoke: bool = False) -> dict:
     head = git('rev-parse', 'HEAD')
     scenarios = coverage.load_scenarios()
     registered = [name for name, info in scenarios.items() if tier in info['Slices']]
     def finish(value):
-        selected = set(value['Scenarios'])
-        titles = next(iter(scenarios.values()))['Titles'][tier]
-        value['Slices'] = [dict(key=key, title=title) for key, title in titles.items()
-                           if any(name in selected and info['Slices'].get(tier) == key for name, info in scenarios.items())]
+        if container_smoke and (value['DocsOnly'] or value['Mode'] != 'full'):
+            raise ValueError('Container scope requires a dynamic full-mode plan')
+        value['ContainerSmoke'] = container_smoke
+        value['Slices'] = execution_slices(scenarios, value['Scenarios'], tier, value['Mode'], value['ContainerSmoke'])
         return value
-    plan = dict(Version=1, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,
+    plan = dict(Version=2, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,
                 Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
                 Reason='Full: non-PR, shared/unknown input or uncertain baseline')
     if docs_only:
@@ -190,15 +213,17 @@ def main() -> None:
     parser.add_argument('--event', default=os.environ.get('EVENT_NAME', ''))
     parser.add_argument('--candidate-input', default=os.environ.get('CANDIDATE_SHA', ''))
     parser.add_argument('--docs-only', choices=['true', 'false'], default='false')
+    parser.add_argument('--container-smoke', choices=['true', 'false'], default='false',
+                        help='Bind the independent container-scope decision into this candidate plan')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--github-output', action='store_true')
     parser.add_argument('--local-scenarios', action='store_true',
                         help='Output local L1 scenario names for -Scenarios; no CI stage reduction')
     args = parser.parse_args()
-    if args.local_scenarios and (args.tier != 'pr' or args.github_output or args.docs_only != 'false' or args.candidate_input):
+    if args.local_scenarios and (args.tier != 'pr' or args.github_output or args.docs_only != 'false' or args.candidate_input or args.container_smoke != 'false'):
         parser.error('--local-scenarios requires --tier pr and cannot use CI output, docs-only or candidate-input')
     plan = local_scenarios(args.base) if args.local_scenarios else create_plan(
-        args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
+        args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true', args.container_smoke == 'true')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(plan, ensure_ascii=False, separators=(',', ':'))
     args.output.write_text(text, encoding='utf-8')

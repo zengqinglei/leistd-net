@@ -1,6 +1,6 @@
 # 模板场景与 CI 归属的唯一来源；生成入口、汇总入口与场景覆盖闸门共同使用。
 # Slices 记各档位里场景所属的分片：full 为全集（合入后、夜间、发布），pr 为 PR 档子集。
-# 分片按"验证什么"命名，含义登记在 $MatrixSlices；CI 每片一个作业，作业名取其说明。
+# $MatrixSlices 维护逻辑分组；候选计划明确绑定各组实际所选成员。
 # check-template-scenario-coverage.py 保证每个条件行都由某个 PR 档场景生成（行覆盖）；
 # 同时检查有效能力的可达两两组合；关键高阶交互由登记场景和真实端到端验证。
 $scenarioMap = [ordered]@{
@@ -294,7 +294,7 @@ if ($listedOnly.Count -gt 0) {
 
 $MatrixTiers = @("pr", "full")
 
-# 每档的分片及其说明。片内场景按实测耗时大致均衡；分片名描述它验证什么，不用编号。
+# 每档的人工逻辑分组；组数量同时给出 CI 默认分片上限（PR三片、full两片）。
 $MatrixSlices = [ordered]@{
     pr = [ordered]@{
         "identity-default-and-all-features" = "Identity 默认产物与可选特性全开"

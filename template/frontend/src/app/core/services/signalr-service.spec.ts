@@ -933,6 +933,28 @@ describe('SignalRService connection lifecycle', () => {
       expect(calls(connection, 'order-2').at(-1)).toBe('Unsubscribe');
     });
 
+    // SDK 收到确认后先完成 Promise，await 之后的续行在微任务里才跑：这段间隙里切换主体、
+    // 新主体又登记了同一个键，旧连接的确认不能冒充新主体的
+    it('does not report a completed acknowledgement of the previous connection for the same key', async () => {
+      await service.connect();
+      const stale = built[0];
+      stale.gateInvoke = true;
+      service.watchResource('host:roles', holder().ref);
+      await settle();
+
+      stale.gateInvoke = false;
+      stale.releaseInvoke();
+      void service.reset();
+      service.watchResource('host:roles', holder().ref);
+      await settle();
+      expect(confirmed).toEqual([]);
+
+      await service.connect();
+      await settle();
+      expect(calls(built[1], 'host:roles')).toEqual(['Subscribe']);
+      expect(confirmed).toEqual(['host:roles']);
+    });
+
     it('does not report resources of the previous principal resubscribed after a switch', async () => {
       service.watchResource('a-order', holder().ref);
       await service.connect();

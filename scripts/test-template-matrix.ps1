@@ -6,7 +6,7 @@ param(
     # 都不给时等同 full。
     [ValidateSet("pr", "full")]
     [string]$Tier,
-    # 该档里的一个具名分片（见 template-matrix-scenarios.ps1 的 $MatrixSlices），须与 -Tier 同用。
+    # 人工入口使用逻辑组；传入计划时必须使用该计划的实际执行组ID。
     [string]$Slice,
     # 独立预期计划：绑定本候选/档位、选定场景与阶段；默认入口仍完整执行。
     [string]$ValidationPlanPath,
@@ -804,12 +804,14 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration, [stri
 $validationMode = 'full'
 $validationPlan = $null
 if ($ValidationPlanPath) {
-    if (-not $Tier -or $Scenarios.Count -gt 0 -or $SkipFrontend -or $SkipRuntime) {
+    if (-not $Tier -or $Scenarios.Count -gt 0 -or $SkipFrontend -or $SkipRuntime -or $ContainerSmokeScenarios.Count -gt 0) {
         throw '-ValidationPlanPath requires -Tier and may not combine with manual skips/scenarios.'
     }
     $validationPlan = Read-QualityValidationPlan $ValidationPlanPath $Tier
     if ($validationPlan.DocsOnly) { throw 'Internal-document plans must not run dynamic scenarios.' }
     $validationMode = $validationPlan.Mode
+    if ($ContainerSmoke -and -not $validationPlan.ContainerSmoke) { throw 'Manual container scope differs from the plan.' }
+    $ContainerSmoke = $validationPlan.ContainerSmoke
 }
 
 if ($GenerateOnly -and ($ValidationPlanPath -or $ContainerSmoke -or $ContainerSmokeScenarios.Count -gt 0 -or $SkipPack -or $LocalFeedPath)) {
@@ -820,11 +822,17 @@ if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
 if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
 if ($Tier) {
     if ($Scenarios.Count -gt 0) { throw "-Tier and -Scenarios cannot be combined." }
-    if ($Slice -and -not $MatrixSlices[$Tier].Contains($Slice)) {
-        throw "Unknown $Tier-tier slice '$Slice'. Valid slices: $($MatrixSlices[$Tier].Keys -join ', ')"
+    if ($validationPlan) {
+        if ($Slice -and $Slice -cnotin @($validationPlan.Slices.key)) { throw "Unknown planned execution group '$Slice'." }
+        $Scenarios = if ($Slice) { @(($validationPlan.Slices | Where-Object { $_.key -ceq $Slice }).Scenarios) } else {
+            @($validationPlan.Slices | ForEach-Object { $_.Scenarios })
+        }
+    } else {
+        if ($Slice -and -not $MatrixSlices[$Tier].Contains($Slice)) {
+            throw "Unknown $Tier-tier slice '$Slice'. Valid slices: $($MatrixSlices[$Tier].Keys -join ', ')"
+        }
+        $Scenarios = Get-TierScenarios $Tier $Slice
     }
-    $Scenarios = Get-TierScenarios $Tier $Slice
-    if ($validationPlan) { $Scenarios = @($Scenarios | Where-Object { $_ -cin $validationPlan.Scenarios }) }
     if ($ContainerSmoke) {
         $ContainerSmokeScenarios += @($ContainerScenarios | Where-Object { $_ -in $Scenarios })
     }
@@ -1067,14 +1075,19 @@ if ($GenerateOnly) {
 Write-Host "Template matrix passed for $($results.Count) scenario(s)." -ForegroundColor Green
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
-$receiptSlices = if ($Tier -and -not $Slice) { @($MatrixSlices[$Tier].Keys) } else { @($Slice) }
+$receiptSlices = if ($validationPlan -and -not $Slice) { @($validationPlan.Slices.key) } elseif ($Tier -and -not $Slice) {
+    @($MatrixSlices[$Tier].Keys)
+} else { @($Slice) }
 foreach ($receiptSlice in $receiptSlices) {
+    $plannedMembers = if ($validationPlan) { @(($validationPlan.Slices | Where-Object { $_.key -ceq $receiptSlice }).Scenarios) } else { @() }
     $sliceResults = @($results | Where-Object {
-        -not $Tier -or -not $receiptSlice -or $scenarioMap[$_.Scenario].Slices[$Tier] -ceq $receiptSlice
+        if ($validationPlan) { $_.Scenario -cin $plannedMembers } else {
+            -not $Tier -or -not $receiptSlice -or $scenarioMap[$_.Scenario].Slices[$Tier] -ceq $receiptSlice
+        }
     })
     if ($sliceResults.Count -eq 0) { continue }
     $resultFile = Join-Path $runRoot "matrix-$(if ($receiptSlice) { $receiptSlice } else { 'local' }).json"
-    [PSCustomObject]@{ Tier = $Tier; Slice = $receiptSlice; CandidateSha = (git rev-parse HEAD); Mode = $validationMode; Results = $sliceResults } |
+    [PSCustomObject]@{ Version = 2; Tier = $Tier; Slice = $receiptSlice; CandidateSha = (git rev-parse HEAD); Mode = $validationMode; Results = $sliceResults } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
     Write-Host "Receipt: $resultFile"
 }

@@ -47,7 +47,7 @@ def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
 
 
 def check_existing_scopes():
-    container = scope_step('ci.yml', 'template-slices', 'container_scope')
+    container = scope_step('ci.yml', 'framework-pack', 'container_scope')
     release = scope_step('release.yml', 'candidate', 'scope')
     cases = [
         ('container moved out', 'template/Dockerfile', 'deploy/Dockerfile', True, False),
@@ -210,7 +210,7 @@ def check_quality_aggregation():
     workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))
     jobs = workflow['jobs']
     quality = jobs['template-matrix']
-    dynamic = ['test', 'template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
+    dynamic = ['test', 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
     required = ['framework-pack', 'docs-sync', *dynamic]
     assert set(quality['needs']) == set(required), 'aggregation must wait for every required result'
     assert quality['if'] == 'always()', 'aggregation must run after failure/skip/cancellation'
@@ -221,7 +221,7 @@ def check_quality_aggregation():
         assert "needs.framework-pack.outputs.docs_only == 'false'" in jobs[job]['if'], ('scope guard missing', job)
     assert 'FrameworkTests' in jobs['test']['if'], 'template-only must not run unchanged framework tests'
     pack = jobs['framework-pack']
-    assert pack['steps'][0]['with']['fetch-depth'] == 2, 'PR merge baseline should be locally available'
+    assert pack['steps'][0]['with']['fetch-depth'] == "${{ github.event_name == 'pull_request' && !inputs.candidate_sha && 2 || 0 }}", 'PR keeps two parents; dispatch needs complete main comparison'
     for step in pack['steps']:
         if step.get('uses', '').startswith(('actions/setup-dotnet@', 'actions/upload-artifact@')) or step.get('name') == '打包当前 Framework':
             assert step['if'] == "steps.scope.outputs.docs_only == 'false'", 'docs-only must not pack/upload'
@@ -241,7 +241,7 @@ def check_quality_aggregation():
         candidate = 'a' * 40
         for docs_only, framework_tests in [('true', False), ('false', True), ('false', False)]:
             normal = {name: {'result': 'success', 'outputs': {}} for name in required}
-            plan = dict(Version=1, CandidateSha=candidate, Tier='pr', DocsOnly=docs_only == 'true',
+            plan = dict(Version=2,ContainerSmoke=False, CandidateSha=candidate, Tier='pr', DocsOnly=docs_only == 'true',
                         Mode='frontend' if docs_only == 'false' and not framework_tests else 'full',
                         FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'])
             normal['framework-pack']['outputs'] = dict(docs_only=docs_only, validation_plan=json.dumps(plan))
