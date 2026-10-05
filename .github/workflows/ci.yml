@@ -445,3 +445,5 @@ jobs:
             .tmp/oidc-e2e/**/results.json
             .tmp/oidc-e2e/**/topology.json
             .tmp/oidc-e2e/**/cleanup.json
+
+# Isolated full-input scheduling acceptance.
