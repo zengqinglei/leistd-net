@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Grants;
 using Leistd.EventBus.Abstractions;

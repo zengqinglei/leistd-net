@@ -549,6 +549,8 @@
           "condition": "!IncludeRealTime",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/RealTime/**",
+            "backend/src/CompanyName.ProjectName.Application/Roles/Events/RoleListChangedEvent.cs",
+            "backend/src/CompanyName.ProjectName.Application/Roles/EventHandlers/RoleListChangedEventHandler.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/RealTimeSubscriptionTests.cs"
           ]
         },
