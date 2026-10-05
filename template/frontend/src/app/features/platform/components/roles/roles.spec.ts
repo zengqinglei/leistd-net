@@ -1,6 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+// prettier-ignore
+import {
+  signal,
+  //#if (IncludeRealTime)
+  type DestroyRef,
+  //#endif
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
@@ -38,8 +44,7 @@ describe('Roles page query round trip', () => {
     lastResourceEvent: signal<{ eventName: string; payload: unknown } | null>(null),
     registerResourceEvent: vi.fn(),
     connect: vi.fn(() => Promise.resolve()),
-    subscribeResource: vi.fn(() => Promise.resolve()),
-    unsubscribeResource: vi.fn(() => Promise.resolve()),
+    watchResource: vi.fn<(resourceKey: string, destroyRef?: DestroyRef) => void>(),
     resourceSubscribed$: new Subject<string>(),
   };
   //#endif
@@ -170,7 +175,8 @@ describe('Roles page query round trip', () => {
     await fixture.whenStable();
     // 宿主用户：作用域段为 host，与后端 ICurrentTenant.ScopeKey 一致
     expect(realtime.registerResourceEvent).toHaveBeenCalledWith('Roles.Changed');
-    expect(realtime.subscribeResource).toHaveBeenCalledWith('host:roles');
+    expect(realtime.watchResource).toHaveBeenCalledWith('host:roles', expect.anything());
+    expect(realtime.connect).toHaveBeenCalled();
 
     const before = vi.mocked(service.getRoles).mock.calls.length;
     realtime.lastResourceEvent.set({ eventName: 'Roles.Changed', payload: {} });
@@ -195,20 +201,15 @@ describe('Roles page query round trip', () => {
     expect(vi.mocked(service.getRoles).mock.calls.length).toBe(before + 1);
   });
 
-  it('does not subscribe once the page has left before the connection completes', async () => {
-    let connected!: () => void;
-    realtime.connect.mockReturnValueOnce(new Promise<void>((resolve) => (connected = resolve)));
-    realtime.subscribeResource.mockClear();
-    realtime.unsubscribeResource.mockClear();
-
-    const leaving = TestBed.createComponent(Roles);
-    leaving.detectChanges();
-    leaving.destroy();
-    expect(realtime.unsubscribeResource).toHaveBeenCalledWith('host:roles');
-
-    connected();
+  it('holds the subscription for exactly the lifetime of the page', async () => {
     await fixture.whenStable();
-    expect(realtime.subscribeResource).not.toHaveBeenCalled();
+    // 交给服务的是本页的 DestroyRef：页面销毁即撤销，连接前离开也由服务保证不再订阅
+    const destroyRef = realtime.watchResource.mock.calls.at(-1)?.[1];
+    expect(destroyRef?.destroyed).toBe(false);
+
+    fixture.destroy();
+
+    expect(destroyRef?.destroyed).toBe(true);
   });
   //#endif
 });

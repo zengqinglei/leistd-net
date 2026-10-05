@@ -223,14 +223,9 @@ export class Roles {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => this.reload());
-    // 连接完成前页面可能已离开：销毁回调那时已经取消过，不能再订阅回来
-    void this.signalR.connect().then(async () => {
-      if (this.destroyRef.destroyed) return;
-      await this.signalR.subscribeResource(resourceKey);
-    });
-    this.destroyRef.onDestroy(() => {
-      void this.signalR.unsubscribeResource(resourceKey).catch(() => undefined);
-    });
+    // 订阅随本页销毁撤销，与连接何时建立无关：页面在连上之前离开，连上后也不会订阅
+    this.signalR.watchResource(resourceKey, this.destroyRef);
+    void this.signalR.connect();
 
     effect(() => {
       if (this.signalR.lastResourceEvent()?.eventName === ROLES_CHANGED_EVENT) {

@@ -200,7 +200,7 @@ frontend/
 ### 5.1 依赖注入
 
 - **必须** 使用 `inject()` 函数进行依赖注入
-- 构造函数 (`constructor`) **仅用于** 执行简单的属性赋值
+- 构造函数 (`constructor`) 只做属性赋值，以及需要注入上下文的生命周期接线：`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅，连同这些接线自带的首次读取与建连（例如列表页订阅查询条件后立即取第一页）。与生命周期无关的业务流程不写进构造函数。这类接线也可以写成字段初始化，两处都在注入上下文里；放到注入上下文之外（如 `ngOnInit`）时显式交出各 API 要的作用域：`takeUntilDestroyed(destroyRef)`、`watchResource(key, destroyRef)` 传 `DestroyRef`，`effect(fn, { injector })` 传 `Injector`
 
 ### 5.2 状态管理
 
@@ -270,7 +270,7 @@ frontend/
 
 业务推送不持久化，断线期间、以及首次查询完成到加入订阅之间的变更都不会补发。把推送当作刷新提示的页面按同一写法接入（角色列表是示例）：
 
-- 先监听 `SignalRService.resourceSubscribed$`，按自己的资源键过滤，订阅被确认（首次、自动重连后、重建连接后）时重新查询一次；再 `subscribeResource`。页面销毁时 `unsubscribeResource`。
+- 先监听 `SignalRService.resourceSubscribed$`，按自己的资源键过滤，订阅被确认（首次、自动重连后、重建连接后）时重新查询一次；再用 `watchResource(key, destroyRef?)` 登记订阅，并调用一次 `connect()`。订阅随页面销毁自动撤销，与连接何时建立无关；不要写成 `connect().then(() => 订阅)`，页面在连上之前离开时连上后照样会订阅。多个页面持有同一个键时，最后一个离开才真正退订。
 - 收到业务事件时同样走既有的查询入口，不从推送内容里取数据：列表数据仍经受权限保护的查询取得，资源订阅本身也经过作用域和权限校验。
 - 不用 `isConnected` 代替订阅确认：连接恢复时订阅还没重新建立，那时查询仍会漏掉之后的变更。
 

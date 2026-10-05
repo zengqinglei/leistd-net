@@ -776,3 +776,29 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
   宿主 logger 用 `preserveStaticLogger: true` 独立持有，不设置时 Serilog.AspNetCore 的请求日志中间件回落到静态 `Log`，
   也就是启动期那个只输出纯文本的 logger：请求完成事件丢掉配置里的格式、sink 与 enrich（含关联标识）。
 - 派生项目照此加一行即可；新增集成测试 `RequestLoggingTests` 断言请求完成事件进入宿主管道并带关联标识。
+
+## 33. 实时资源订阅改为按持有者生命周期登记（破坏性，CRM R16）
+
+- `SignalRService.subscribeResource(key)` / `unsubscribeResource(key)` 删除，改为 `watchResource(key, destroyRef?)`：
+  调用即登记需求，`DestroyRef` 销毁时自动撤销；省略 `destroyRef` 时取当前注入上下文的（须在构造期或字段初始化时调用）。
+  服务按"是否仍有持有者"与"当前连接上是否已订阅"的差值，为每个键串行补齐 Subscribe/Unsubscribe；
+  首次连接与自动重连后统一重新对账，`reset()` 清空全部登记。
+- 修掉的交错：连上之前页面已销毁仍会订阅；订阅在途时退订、晚到的订阅把键加回重连集合；旧页面的清理撤掉新页面同一个键的订阅；
+  `reset()` 之后旧页面的操作打到新主体的连接上；重连恢复途中释放的键仍被恢复。后端的租户与权限校验不受影响。
+- 迁移：
+
+  ```ts
+  // 旧
+  void this.signalR.connect().then(() => this.signalR.subscribeResource(key));
+  this.destroyRef.onDestroy(() => void this.signalR.unsubscribeResource(key));
+  // 新（构造期或字段初始化时）
+  this.signalR.watchResource(key);
+  void this.signalR.connect();
+  // 新（注入上下文之外，例如 ngOnInit 里）
+  this.signalR.watchResource(key, this.destroyRef);
+  ```
+
+  组件里为此加的 owner、存活标记一并删除，不要再把订阅放进 `connect().then(...)`。
+  `resourceSubscribed$`（订阅经服务端确认后发出，页面据此补查）的语义不变：确认改由对账步骤发出，
+  首次订阅、自动重连与重建连接后各发一次；确认期间已无人持有（含主体切换）时不发出。
+- 前端规范同步：§5.1 放宽构造函数，允许需要注入上下文的生命周期接线，并写明注入上下文之外各 API 要的作用域参数；§5.8 的订阅写法改为 `watchResource`。
