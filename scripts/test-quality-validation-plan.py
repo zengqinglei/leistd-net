@@ -387,6 +387,11 @@ def prove_scheduling(planner, scenarios):
     groups = planner.execution_slices(synthetic,list(synthetic),'pr','backend',False)
     assert sorted(n for g in groups for n in g['Scenarios']) == sorted(synthetic)
     assert all(not g['Containers'] for g in groups)
+    for missing in (None, 'unknown', {'backend':True}, {'backend':float('inf')}, {'backend':float('nan')}):
+        synthetic['heavy']['Cost'] = missing
+        groups = planner.execution_slices(synthetic,list(synthetic),'pr','backend',False)
+        assert sorted(n for g in groups for n in g['Scenarios']) == sorted(synthetic)
+        assert all(g['Scenarios'] for g in groups)
     assert len(planner.execution_slices(synthetic,['heavy'],'pr','backend',False)) == 1
     assert planner.execution_slices(synthetic,[],'pr','full',False) == []
     full = planner.execution_slices(scenarios,list(scenarios),'full','full',True)

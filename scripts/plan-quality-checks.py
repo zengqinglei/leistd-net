@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -84,15 +85,18 @@ def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str,
     sample = next(iter(scenarios.values()))
     count = min(len(sample['Titles'][tier]), len(selected))
     containers = set(sample['Containers']) if container_smoke else set()
-    def cost(name):
+    def timing(name, field):
         metadata = scenarios[name].get('Cost') or {}
-        # Unknown timings cannot remove work. Use the largest observed weight.
+        value = metadata.get(field) if isinstance(metadata, dict) else None
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0 else None
+    # Registry serialization emits null for a new scenario without Cost.
+    # Unknown/non-finite timings must still retain and schedule its full work.
+    fallback = {field:max([1] + [value for name in scenarios if (value := timing(name, field)) is not None])
+                for field in (mode, 'container')}
+    def cost(name):
         def known(field):
-            value = metadata.get(field)
-            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
-                return value
-            return max([1] + [item.get('Cost', {}).get(field, 0) for item in scenarios.values()
-                              if isinstance(item.get('Cost', {}).get(field), (int, float))])
+            value = timing(name, field)
+            return fallback[field] if value is None else value
         return known(mode) + (known('container') if name in containers else 0)
     bins = [dict(key=f'execution-{i+1:02d}', title='', Scenarios=[], Containers=[])
             for i in range(count)]
