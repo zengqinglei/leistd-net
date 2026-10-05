@@ -71,16 +71,36 @@ public sealed class RemoteTenantConnectionStoreTests
     }
 
     [Fact]
-    public async Task Migration_targets_are_listed_by_name()
+    public async Task Migration_targets_and_failed_tenants_are_listed_by_name()
     {
+        var failed = Guid.NewGuid();
         _handler.Responder = _ => Json(HttpStatusCode.OK, $$"""
-            [{"tenantId":"{{TenantId}}","name":"default","connectionString":"Host=a"}]
+            {"connections":[{"tenantId":"{{TenantId}}","name":"default","connectionString":"Host=a"}],
+             "failedTenants":[{"tenantId":"{{failed}}","reason":"no connection named 'crm'"}]}
             """);
 
-        var targets = await Store().GetListAsync("crm");
+        var list = await Store().GetListAsync("crm");
 
         Assert.Equal("/api/v1/tenant-connections/migration", _handler.Requests[0].RequestUri!.AbsolutePath);
-        Assert.Equal(new TenantMigrationConnection(TenantId, "default", "Host=a"), Assert.Single(targets));
+        Assert.Equal(new TenantMigrationConnection(TenantId, "default", "Host=a"), Assert.Single(list.Connections));
+        Assert.Equal(new TenantDatabaseFailure(failed, "no connection named 'crm'"), Assert.Single(list.FailedTenants));
+    }
+
+    // 空响应不能当成"没有目标"：迁移作业会以为一切正常，漏掉本该迁移的库
+    [Fact]
+    public async Task An_empty_migration_response_is_an_error_not_an_empty_list()
+    {
+        _handler.Responder = _ => Json(HttpStatusCode.OK, "null");
+
+        await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetListAsync("crm"));
+    }
+
+    [Fact]
+    public async Task Migration_listing_server_errors_are_thrown()
+    {
+        _handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+
+        await Assert.ThrowsAsync<RemoteServiceException>(() => Store().GetListAsync("crm"));
     }
 
     [Fact]

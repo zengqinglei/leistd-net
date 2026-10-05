@@ -128,7 +128,7 @@ public sealed class TenantManagementRegistrationTests
         public Task<TenantConnectionLookupResult?> FindAsync(Guid tenantId, string name, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(string name, CancellationToken cancellationToken = default)
+        public Task<TenantMigrationConnectionListResult> GetListAsync(string name, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 

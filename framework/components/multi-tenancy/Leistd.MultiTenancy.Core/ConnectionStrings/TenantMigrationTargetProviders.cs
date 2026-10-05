@@ -5,21 +5,22 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 internal sealed class TenantMigrationTargetProvider(ITenantConnectionConfigurationStore connectionStore)
     : ITenantMigrationTargetProvider
 {
-    public async Task<IReadOnlyList<TenantMigrationTarget>> GetDedicatedTargetsAsync(
+    public async Task<TenantMigrationTargetSet> GetDedicatedTargetsAsync(
         string name,
         CancellationToken cancellationToken = default)
     {
-        var connections = await connectionStore.GetListAsync(name, cancellationToken);
+        var list = await connectionStore.GetListAsync(name, cancellationToken);
 
-        // 存储已经按名字解析并排除了"一条连接都没有"的租户；这里按物理库合并。
+        // 存储已经按名字解析、排除了"一条连接都没有"的租户，并把取不出连接的租户单列；这里按物理库合并。
         // 运行时逐库作业不走这条路——它经 ITenantDatabaseDirectory 取指纹与租户归属，
         // 因为这里的每一条都带明文连接串，常驻服务不该拿到
-        return
-        [
-            .. connections
-                .Select(x => new TenantMigrationTarget(x.TenantId, x.ConnectionString))
-                .GroupBy(x => x.Fingerprint, StringComparer.Ordinal)
-                .Select(group => group.MinBy(x => x.TenantId)!)
-        ];
+        return new TenantMigrationTargetSet(
+            [
+                .. list.Connections
+                    .Select(x => new TenantMigrationTarget(x.TenantId, x.ConnectionString))
+                    .GroupBy(x => x.Fingerprint, StringComparer.Ordinal)
+                    .Select(group => group.MinBy(x => x.TenantId)!)
+            ],
+            list.FailedTenants);
     }
 }

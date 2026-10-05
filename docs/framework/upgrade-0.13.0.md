@@ -769,3 +769,52 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 数据库模式只有在同一业务事务和存储内记录，才提供原子持久化；提交后处理器中的记录另行持久化。日志模式在真实提交后输出成功，回滚不输出成功，失败立即输出，仍有提交后进程退出的丢失窗口。采集、保留和访问策略由宿主日志平台负责。
 
 工作单元 AfterCommit 队列在某个事件分发失败后继续处理后续事件，全部分发完再上抛：单个异常保留原实例、类型与堆栈，多个异常聚合。事务已经提交，不再回滚；调用方不能将该异常当作事务未提交而盲目重试。诊断区分提交失败与已提交后的处理失败。
+
+## 32. 请求完成日志走宿主日志管道（CRM R16）
+
+- 模板 `Program.cs` 的 `UseSerilogRequestLogging` 显式设置 `options.Logger` 为容器里的 `Serilog.ILogger`。
+  宿主 logger 用 `preserveStaticLogger: true` 独立持有，不设置时 Serilog.AspNetCore 的请求日志中间件回落到静态 `Log`，
+  也就是启动期那个只输出纯文本的 logger：请求完成事件丢掉配置里的格式、sink 与 enrich（含关联标识）。
+- 派生项目照此加一行即可；新增集成测试 `RequestLoggingTests` 断言请求完成事件进入宿主管道并带关联标识。
+
+## 33. 实时资源订阅改为按持有者生命周期登记（破坏性，CRM R16）
+
+- `SignalRService.subscribeResource(key)` / `unsubscribeResource(key)` 删除，改为 `watchResource(key, destroyRef?)`：
+  调用即登记需求，`DestroyRef` 销毁时自动撤销；省略 `destroyRef` 时取当前注入上下文的（须在构造期或字段初始化时调用）。
+  服务按"是否仍有持有者"与"当前连接上是否已订阅"的差值，为每个键串行补齐 Subscribe/Unsubscribe；
+  首次连接与自动重连后统一重新对账，`reset()` 清空全部登记。
+- 修掉的交错：连上之前页面已销毁仍会订阅；订阅在途时退订、晚到的订阅把键加回重连集合；旧页面的清理撤掉新页面同一个键的订阅；
+  `reset()` 之后旧页面的操作打到新主体的连接上；重连恢复途中释放的键仍被恢复。后端的租户与权限校验不受影响。
+- 迁移：
+
+  ```ts
+  // 旧
+  void this.signalR.connect().then(() => this.signalR.subscribeResource(key));
+  this.destroyRef.onDestroy(() => void this.signalR.unsubscribeResource(key));
+  // 新（构造期或字段初始化时）
+  this.signalR.watchResource(key);
+  void this.signalR.connect();
+  // 新（注入上下文之外，例如 ngOnInit 里）
+  this.signalR.watchResource(key, this.destroyRef);
+  ```
+
+  组件里为此加的 owner、存活标记一并删除，不要再把订阅放进 `connect().then(...)`。
+  `resourceSubscribed$`（订阅经服务端确认后发出，页面据此补查）的语义不变：确认改由对账步骤发出，
+  首次订阅、自动重连与重建连接后各发一次；确认期间已无人持有（含主体切换）时不发出。
+- 前端规范同步：§5.1 放宽构造函数，允许需要注入上下文的生命周期接线，并写明注入上下文之外各 API 要的作用域参数；§5.8 的订阅写法改为 `watchResource`。
+
+## 34. 迁移目标报出失败租户，单个租户不再挡住其他租户（破坏性，CRM R16）
+
+- **CLR 契约**（`Leistd.MultiTenancy.*`）：
+  - `ITenantConnectionConfigurationStore.GetListAsync` 返回 `TenantMigrationConnectionListResult(Connections, FailedTenants)`；
+  - `ITenantMigrationTargetProvider.GetDedicatedTargetsAsync` 返回 `TenantMigrationTargetSet(Targets, FailedTenants)`；
+  - `ITenantConnectionManagementService.GetMigrationListAsync` 返回 `TenantMigrationConnectionListOutputDto`。
+  失败项沿用运行时的 `TenantDatabaseFailure` / `TenantDatabaseFailureOutputDto`（租户标识 + 原因，不含连接串）。
+  名字解析不出与连接串解不开都归入失败项；控制库查询失败、远端回源失败、取消照常抛出。
+  自行实现这些接口的宿主或测试替身按新签名修改。
+- **HTTP 线协议**：`GET {prefix}/migration?name=` 从裸数组改为 `{ connections, failedTenants }`。不兼容，没有双协议：
+  Identity 与依赖它的 Resource（远端连接存储）、各服务的 DbMigrator 必须一起升级。
+- **模板 DbMigrator**：租户目标中，取不出连接的租户与迁移出错的独立库都记进报告，其余库照常预演或施加；
+  跑完后逐个报出并以退出码 1 结束（预演同样如此）。控制库、OIDC 存储、默认业务库与显式 `MigrationTarget` 出错仍立即结束，取消立即传播。
+  非零退出可能意味着部分库已经迁移、且不会回滚：发布流水线据退出码停下，修好后重跑；新旧 schema 并存期间的兼容性按部署说明的 Expand 阶段要求保证。
+  首次安装的判定（只读预演、控制库仍有待迁移、缺表）不变。

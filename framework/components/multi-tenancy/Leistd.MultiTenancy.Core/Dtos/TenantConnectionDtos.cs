@@ -59,6 +59,19 @@ public sealed record TenantMigrationConnectionOutputDto
         $"{nameof(TenantMigrationConnectionOutputDto)} {{ TenantId = {TenantId}, Name = {Name} }}";
 }
 
+/// <summary>迁移作业的连接清单，与 <see cref="TenantDatabaseListOutputDto"/> 同一种失败表达。</summary>
+/// <remarks>
+/// 取不出连接的租户与清单一起下发：迁移作业迁完其余库后把它们报出来并以失败结束，不能当作"没有目标"。
+/// </remarks>
+public sealed record TenantMigrationConnectionListOutputDto
+{
+    /// <summary>解析出的连接，每个租户一条。</summary>
+    public required IReadOnlyList<TenantMigrationConnectionOutputDto> Connections { get; init; }
+
+    /// <summary>取不出连接的租户。</summary>
+    public required IReadOnlyList<TenantDatabaseFailureOutputDto> FailedTenants { get; init; }
+}
+
 /// <summary>
 /// 一个独立库，以及住在里面的租户。
 /// </summary>
@@ -78,7 +91,7 @@ public sealed record TenantDatabaseOutputDto
 /// <summary>
 /// 一个解析不出连接的租户。
 /// </summary>
-/// <remarks>坏掉一个租户不该让整轮逐库作业不执行，因此它们与清单一起下发，由调用方记日志。</remarks>
+/// <remarks>坏掉一个租户不该让整轮逐库作业或迁移不执行，因此它们与清单一起下发，由调用方报出。</remarks>
 public sealed record TenantDatabaseFailureOutputDto
 {
     /// <summary>租户标识。</summary>

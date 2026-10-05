@@ -299,7 +299,7 @@ app.MapGroup("/api/v1/tenant-connections").MapTenantConnections(options =>
 });
 ```
 
-**机器端点的部署边界**：`GET /migration?name=` 下发**全部租户的明文连接串**，只给一次性迁移作业的身份（`MigrationReadPolicy`），**永远不要**把这个 scope 给常驻 API——那等于让长期运行的进程随时能拉取所有租户的库凭据。常驻服务的逐库作业用 `GET /databases?name=`（`RuntimeReadPolicy`）：它只回指纹与租户归属，连接由各租户的正常解析链取得。
+**机器端点的部署边界**：`GET /migration?name=` 下发**全部租户的明文连接串**（`TenantMigrationConnectionListOutputDto`：`connections` 与 `failedTenants`，后者形状同 `/databases` 的失败项），只给一次性迁移作业的身份（`MigrationReadPolicy`），**永远不要**把这个 scope 给常驻 API——那等于让长期运行的进程随时能拉取所有租户的库凭据。常驻服务的逐库作业用 `GET /databases?name=`（`RuntimeReadPolicy`）：它只回指纹与租户归属，连接由各租户的正常解析链取得。
 
 管理面（`GET /{tenantId}`、`PUT /{tenantId}/{name}`、`DELETE /{tenantId}/{name}?expectedVersion=`）只回名字与版本，列表经 `ITenantConnectionDirectory` 读控制库、不取密文。机器端点 `GET /runtime/{tenantId}?name=` 与 `GET /migration?name=` 按名字下发解密后的连接串，只能对机器主体开放。
 
@@ -349,7 +349,7 @@ builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuratio
 
 - **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `TenantNotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`。
 - **远端解析**：结果按 `TenantRouting:CacheLifetime` 缓存；同租户并发请求合并为一次回源；响应的 `TenantId` 与请求不一致时抛 `InvalidOperationException`，校验在使用连接串和写缓存之前。
-- **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。结果按物理库去重（同一连接串只出现一次，代表租户取标识最小者）。**它与运行时逐库作业不是同一份清单，也不是同一档权限**：迁移目标带明文连接串、要 DDL 身份（`MigrationReadPolicy`），运行时清单只回指纹与租户归属（`RuntimeReadPolicy`），见下一条；一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却解析不出这个名字的租户会让作业整体停下（`InvalidOperationException`），不跳过——跳过的库会停在旧结构上，下一次发版才炸。本地迁移作业同样要解密，必须与 API 共享密钥环。
+- **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。结果按物理库去重（同一连接串只出现一次，代表租户取标识最小者）。**它与运行时逐库作业不是同一份清单，也不是同一档权限**：迁移目标带明文连接串、要 DDL 身份（`MigrationReadPolicy`），运行时清单只回指纹与租户归属（`RuntimeReadPolicy`），见下一条；一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却取不出这个名字下连接串的租户（名字解析不出、密文解不开）列进 `TenantMigrationTargetSet.FailedTenants`，与运行时清单同一种失败表达，健康租户照常成为目标——一个租户的配置错误不挡住其他租户的迁移。迁移作业**不能**把失败租户当作"没有目标"：迁完其余库后把它们报出来并以失败结束，否则那些库会停在旧结构上，下一次发版才炸。读不出清单本身（控制库查询失败、远端回源失败、取消）照常抛出。本地迁移作业同样要解密，必须与 API 共享密钥环。
 - **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是独立库，结果里没有连接串。**停用租户的库算不算由调用方用 `activeOnly` 显式决定**，框架不替它选：保留期作业要连停用租户一起处理（合规义务不随停用消失），刷新进程内状态一类作业则不该去连可能已下线的库。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `Begin(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余——`ITenantDatabaseRunner.ForEachDatabaseAsync` 封装了切租户与逐库隔离，回调里按需开工作单元。登记成与宿主完全相同的连接串时，该项会并进宿主库，不会让同一个物理库出现两次。但指纹判的是**连接配置相同**而非物理库相同：同一个库用不同凭据连、或键值对顺序不同，仍会被当成两个库，因此逐库逻辑仍须能重复执行。
 
 ```json
@@ -393,10 +393,10 @@ public sealed class IdentityControlDbContext : DbContext;
 | `AddTenantManagement()` | Management 包：注册 `ITenantManagementService`、`ITenantConnectionManagementService` 与开通错误翻译的默认实现（不翻译），并调用 `AddMultiTenancyCore()`；存储契约与工作单元由调用方先就位 |
 | `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标，并调用 `AddMultiTenancyCore()`；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
 | `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、`HybridCache`（只用进程内一级，并发回源合并为一次，连接串不进分布式缓存）与远端迁移目标，并调用 `AddMultiTenancyCore()`；绑定 `TenantRouting` 配置节 |
-| `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现，ServiceClient 包提供远端实现，**按名字问、按名字答，一次只出一条** |
+| `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举，返回 `TenantMigrationConnectionListResult(Connections, FailedTenants)`。EF 包提供控制库实现，ServiceClient 包提供远端实现，**按名字问、按名字答，一次只出一条** |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
 | `TenantRouteCacheOptions` | `CacheLifetime`（默认 10 分钟，不超过 `MaximumCacheLifetime` 1 小时） |
-| `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 按连接名枚举独立物理库 `TenantMigrationTarget(TenantId, ConnectionString)`，每个库一条，`Fingerprint` 为连接串的 SHA-256 |
+| `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 返回 `TenantMigrationTargetSet(Targets, FailedTenants)`：按连接名枚举的独立物理库 `TenantMigrationTarget(TenantId, ConnectionString)`，每个库一条，`Fingerprint` 为连接串的 SHA-256；取不出连接的租户为 `TenantDatabaseFailure(TenantId, Reason)`，`Reason` 不含连接串 |
 | `ITenantDatabaseDirectory` | 控制库侧的库目录：按连接名回 `TenantDatabaseListResult(Databases, FailedTenants)`，不含连接串。EF 实现随 `AddMultiTenancyEfCore` 注册（它读的就是控制库），ServiceClient 的远端存储同时实现它；自定义存储的宿主要自己注册，`AddTenantManagement` 少了它解析不出连接管理用例 |
 | `ITenantDatabaseEnumerator` | `GetDatabasesAsync(name, activeOnly, ct)` 列出运行时要逐库处理的物理库 `TenantDatabase(TenantId, Fingerprint, TenantIds)`；`TenantId` 为 `null` 即宿主库，宿主项的 `TenantIds` 为空（那份清单等于共享库的租户数，且要跨 HTTP 边界；进宿主库用宿主配置，不需要某个租户）。宿主库与独立库用同一套指纹算法，与宿主同配置的登记会被合并掉，不会让同一个物理库出现两次 |
 | `ITenantDatabaseRunner` | `ForEachDatabaseAsync(name, activeOnly, action, ct)` 在每个物理库的代表租户上下文里执行回调，逐库隔离失败，返回 `TenantDatabaseRunResult(Databases, FailedDatabases, UnresolvedTenants)`（最后一项是本轮解析不出连接、被跳过的租户）；不替回调开工作单元。**两份清单都要看**：解析不出连接的租户有自己的库、这一轮一条数据都没处理，只看 `FailedDatabases` 会把这一轮报成成功 |

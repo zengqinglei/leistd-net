@@ -79,7 +79,7 @@ public sealed class RemoteSharedResolutionScopeTests
             return inner.FindAsync(tenantId, name, cancellationToken);
         }
 
-        public Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(string name, CancellationToken cancellationToken = default)
+        public Task<TenantMigrationConnectionListResult> GetListAsync(string name, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             return inner.GetListAsync(name, cancellationToken);
