@@ -77,52 +77,17 @@ def source_producers(config: dict, path: str, scenarios: dict) -> set[str]:
     return producers
 
 
-def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str, container_smoke: bool) -> list[dict]:
-    """Deterministic LPT; costs affect placement only, never selected responsibility."""
-    if not selected:
-        return []
-    sample = next(iter(scenarios.values()))
-    count = min(len(sample['Titles'][tier]), len(selected))
-    containers = set(sample['Containers']) if container_smoke else set()
-    def cost(name):
-        metadata = scenarios[name].get('Cost') or {}
-        # Unknown timings cannot remove work. Use the largest observed weight.
-        def known(field):
-            value = metadata.get(field)
-            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
-                return value
-            return max([1] + [item.get('Cost', {}).get(field, 0) for item in scenarios.values()
-                              if isinstance(item.get('Cost', {}).get(field), (int, float))])
-        return known(mode) + (known('container') if name in containers else 0)
-    bins = [dict(key=f'execution-{i+1:02d}', title='', Scenarios=[], Containers=[])
-            for i in range(count)]
-    loads = [0] * count
-    for name in sorted(selected, key=lambda name: (-cost(name), name)):
-        index = min(range(count), key=lambda i: (loads[i], i))
-        bins[index]['Scenarios'].append(name)
-        if name in containers:
-            bins[index]['Containers'].append(name)
-        loads[index] += cost(name)
-    for group in bins:
-        preview = '、'.join(sorted(group['Scenarios'], key=lambda name: (len(name), name))[:2])
-        stages = {'full':'完整阶段','frontend':'前端阶段','backend':'后端阶段'}[mode]
-        container = '；含容器' if group['Containers'] else ''
-        group['title'] = f"{stages} · {preview}（共{len(group['Scenarios'])}场景{container}）"
-    return bins
-
-
-def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_only: bool = False,
-                container_smoke: bool = False) -> dict:
+def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_only: bool = False) -> dict:
     head = git('rev-parse', 'HEAD')
     scenarios = coverage.load_scenarios()
     registered = [name for name, info in scenarios.items() if tier in info['Slices']]
     def finish(value):
-        if container_smoke and (value['DocsOnly'] or value['Mode'] != 'full'):
-            raise ValueError('Container scope requires a dynamic full-mode plan')
-        value['ContainerSmoke'] = container_smoke
-        value['Slices'] = execution_slices(scenarios, value['Scenarios'], tier, value['Mode'], value['ContainerSmoke'])
+        selected = set(value['Scenarios'])
+        titles = next(iter(scenarios.values()))['Titles'][tier]
+        value['Slices'] = [dict(key=key, title=title) for key, title in titles.items()
+                           if any(name in selected and info['Slices'].get(tier) == key for name, info in scenarios.items())]
         return value
-    plan = dict(Version=2, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,
+    plan = dict(Version=1, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,
                 Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
                 Reason='Full: non-PR, shared/unknown input or uncertain baseline')
     if docs_only:
@@ -225,17 +190,15 @@ def main() -> None:
     parser.add_argument('--event', default=os.environ.get('EVENT_NAME', ''))
     parser.add_argument('--candidate-input', default=os.environ.get('CANDIDATE_SHA', ''))
     parser.add_argument('--docs-only', choices=['true', 'false'], default='false')
-    parser.add_argument('--container-smoke', choices=['true', 'false'], default='false',
-                        help='Bind the independent container-scope decision into this candidate plan')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--github-output', action='store_true')
     parser.add_argument('--local-scenarios', action='store_true',
                         help='Output local L1 scenario names for -Scenarios; no CI stage reduction')
     args = parser.parse_args()
-    if args.local_scenarios and (args.tier != 'pr' or args.github_output or args.docs_only != 'false' or args.candidate_input or args.container_smoke != 'false'):
+    if args.local_scenarios and (args.tier != 'pr' or args.github_output or args.docs_only != 'false' or args.candidate_input):
         parser.error('--local-scenarios requires --tier pr and cannot use CI output, docs-only or candidate-input')
     plan = local_scenarios(args.base) if args.local_scenarios else create_plan(
-        args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true', args.container_smoke == 'true')
+        args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(plan, ensure_ascii=False, separators=(',', ':'))
     args.output.write_text(text, encoding='utf-8')

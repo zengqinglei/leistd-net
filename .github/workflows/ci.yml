@@ -4,8 +4,8 @@ name: CI
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - package-consumption：NuGet 包内容与隔离消费，独立必过
 #   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
-#   - framework-pack / template-slices：场景责任与成本登记在 template-matrix-scenarios.ps1，
-#     候选计划按模式输出均衡执行组，每组一个作业，消费同一候选包；
+#   - framework-pack / template-slices：按档位读出具名分片（每片验证什么见
+#     scripts/template-matrix-scenarios.ps1 的 $MatrixSlices），每片一个作业，消费同一候选包；
 #     PR 跑 pr 档子集，release 复用与手动触发默认跑 full 全集
 #   - template-matrix：保留必过检查名，核对范围、静态及所有必要动态作业和场景回执
 #   - test：框架单元测试（含真实 Redis 的分布式锁契约）
@@ -13,7 +13,7 @@ name: CI
 #   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'ci-cost-acceptance-*']
   workflow_dispatch:
     inputs:
       tier:
@@ -69,6 +69,8 @@ jobs:
       fail-fast: false
       matrix:
         slice: ${{ fromJSON(needs.framework-pack.outputs.slices) }}
+    outputs:
+      container_needed: ${{ steps.container_scope.outputs.needed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,6 +105,31 @@ jobs:
         with:
           name: candidate-framework-feed
           path: .tmp/local-feed
+      - name: 判断是否需要容器验证
+        id: container_scope
+        shell: pwsh
+        run: |
+          # PR 用完整 base→head 差异；发布候选用完整 main 差异，无法确定时保守验证。
+          $base = '${{ github.event.pull_request.base.sha }}'
+          if ($base -notmatch '^[0-9a-f]{40}$') {
+            $base = git merge-base origin/main HEAD 2>$null
+          }
+          $hasBase = $base -match '^[0-9a-f]{40}$'
+          if ($hasBase -and $base -eq (git rev-parse HEAD)) { $hasBase = $false }
+          if ($hasBase) {
+            git cat-file -e "$base^{commit}" 2>$null
+            $hasBase = $LASTEXITCODE -eq 0
+          }
+          $global:LASTEXITCODE = 0
+          $changed = if ($hasBase) { @(git diff --no-renames --name-only $base HEAD) } else { @('template/Dockerfile') }
+          if ($LASTEXITCODE -ne 0) { throw '无法确定容器验证的变更范围' }
+          $needed = @($changed | Where-Object {
+            $_ -match '^template/(Dockerfile|\.dockerignore)$' -or
+            $_ -match '^template/deploy/' -or
+            $_ -eq 'template/.template.config/template.json' -or
+            $_ -match '^template/(frontend|\.template\.config/localization/frontend)/(package(-lock)?\.json|angular\.json)$'
+          }).Count -gt 0
+          "needed=$($needed ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
       - name: 生成并验证本片全部场景
         id: matrix
         shell: pwsh
@@ -110,8 +137,10 @@ jobs:
           VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
         run: |
           $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
+          # @(...) 包住整个 if：单元素数组经 if 输出会展开成字符串，@ 展开字符串会把它拆成单个字符
+          $containerArgs = @(if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { '-ContainerSmoke' })
           # 同候选源码预检由 docs-sync 承担；汇总必须核对其成功，不能用跳过代替通过。
-          pwsh scripts/test-template-matrix.ps1 -SkipPack -SkipSourcePreflight -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER -Slice '${{ matrix.slice.key }}'
+          pwsh scripts/test-template-matrix.ps1 -SkipPack -SkipSourcePreflight -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER -Slice '${{ matrix.slice.key }}' @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
       - name: 保留完整场景结果
         uses: actions/upload-artifact@v4
@@ -133,7 +162,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.candidate_sha || github.sha }}
-          fetch-depth: ${{ github.event_name == 'pull_request' && !inputs.candidate_sha && 2 || 0 }}
+          fetch-depth: 2
       - name: 判断是否仅修改内部文档
         id: scope
         shell: bash
@@ -167,32 +196,6 @@ jobs:
               output.write(result + '\n')
           print(result)
           PY_SCOPE
-      - name: 判断是否需要容器验证
-        id: container_scope
-        if: steps.scope.outputs.docs_only == 'false'
-        shell: pwsh
-        run: |
-          # PR 用完整 base→head 差异；发布候选用完整 main 差异，无法确定时保守验证。
-          $base = '${{ github.event.pull_request.base.sha }}'
-          if ($base -notmatch '^[0-9a-f]{40}$') {
-            $base = git merge-base origin/main HEAD 2>$null
-          }
-          $hasBase = $base -match '^[0-9a-f]{40}$'
-          if ($hasBase -and $base -eq (git rev-parse HEAD)) { $hasBase = $false }
-          if ($hasBase) {
-            git cat-file -e "$base^{commit}" 2>$null
-            $hasBase = $LASTEXITCODE -eq 0
-          }
-          $global:LASTEXITCODE = 0
-          $changed = if ($hasBase) { @(git diff --no-renames --name-only $base HEAD) } else { @('template/Dockerfile') }
-          if ($LASTEXITCODE -ne 0) { throw '无法确定容器验证的变更范围' }
-          $needed = @($changed | Where-Object {
-            $_ -match '^template/(Dockerfile|\.dockerignore)$' -or
-            $_ -match '^template/deploy/' -or
-            $_ -eq 'template/.template.config/template.json' -or
-            $_ -match '^template/(frontend|\.template\.config/localization/frontend)/(package(-lock)?\.json|angular\.json)$'
-          }).Count -gt 0
-          "needed=$($needed ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
       - name: 生成同候选验证计划
         id: plan
         shell: bash
@@ -200,7 +203,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: python3 scripts/plan-quality-checks.py --tier "$MATRIX_TIER" --docs-only '${{ steps.scope.outputs.docs_only }}' --container-smoke '${{ steps.container_scope.outputs.needed || 'false' }}' --output .tmp/quality-plan.json --github-output
+        run: python3 scripts/plan-quality-checks.py --tier "$MATRIX_TIER" --docs-only '${{ steps.scope.outputs.docs_only }}' --output .tmp/quality-plan.json --github-output
       - uses: actions/setup-dotnet@v4
         if: steps.scope.outputs.docs_only == 'false'
         with:
@@ -298,9 +301,9 @@ jobs:
             }
           }
           $plan = $jobs['framework-pack'].outputs.validation_plan | ConvertFrom-Json
-          if ($plan.Version -ne 2 -or $plan.DocsOnly -isnot [bool] -or
+          if ($plan.Version -ne 1 -or $plan.DocsOnly -isnot [bool] -or
               $plan.DocsOnly -ne ($docsOnly -ceq 'true') -or $plan.FrameworkTests -isnot [bool] -or
-              $plan.Mode -cnotin @('full', 'frontend', 'backend') -or $plan.ContainerSmoke -isnot [bool] -or
+              $plan.Mode -cnotin @('full', 'frontend', 'backend') -or
               $plan.CandidateSha -cnotmatch '^[0-9a-f]{40}$' -or
               $plan.CandidateSha -cne $env:CANDIDATE_SHA -or $plan.Tier -cne $env:MATRIX_TIER -or
               ($docsOnly -ceq 'true' -and ($plan.FrameworkTests -or @($plan.Scenarios).Count -ne 0)) -or
@@ -325,10 +328,13 @@ jobs:
         if: steps.quality.outputs.dynamic == 'true'
         shell: pwsh
         env:
+          CONTAINER_NEEDED: ${{ needs.template-slices.outputs.container_needed }}
           VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
         run: |
           $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
-          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER
+          if ($env:CONTAINER_NEEDED -notin @('true', 'false')) { throw '缺少容器范围判定结果' }
+          $containerArgs = @(if ($env:CONTAINER_NEEDED -eq 'true') { '-ContainerSmoke' })
+          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵证明不完整' }
 
   test:
