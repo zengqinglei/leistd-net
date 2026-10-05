@@ -14,7 +14,7 @@ builder.Services.AddBillingServiceClient(builder.Configuration).AddTokenExchange
 
 机器调用只代表客户端，范围绑定在 Leistd:ServiceClients:{Name}:Scope。用户调用从 Resource 请求读取已验证的 Bearer；带浏览器会话时也可读取服务端保存的访问令牌并交换，不能通过设置 ICurrentUser、ICurrentTenant 或请求头制造用户凭据。Identity/Standalone 的 Cookie 和后台用户上下文不提供交换证明；用户委托需要已验证的用户访问令牌。
 
-远端失败以 RemoteServiceException 携带业务码、远端 traceId 和错误字段；协议取令牌失败为 ServiceClientException，默认 API 返回安全的 502。可预期业务失败由本服务明确翻译。
+远端失败以 RemoteServiceException 携带业务码、远端 traceId 和错误字段；协议取令牌失败为 ServiceClientException。ServiceClientException 按本地观测的失败来源映射：本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502，连接失败 503、等待超时 504；不从远端状态推断本地状态，原始 URL 与响应片段只留服务端诊断，已知上游契约可由宿主覆盖。可预期业务失败由本服务明确翻译。
 
 ## 被其他服务调用
 

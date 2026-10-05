@@ -144,7 +144,7 @@ Identity 形态用 `MapTenantConnections` 映射端点，Resource 形态用 `Lei
 ## 4. Skill 与规范
 
 - Skill、生成项目规范与入口文件的分工以 [三层交付与 AI 协作](../architecture/collaboration-scenarios.md#2-skill-边界) 为准。
-- `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。
+- `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。调整规范结构或篇幅时，按读取表统计后端 CRUD、全栈 CRUD、UI 调整、新增文案、只审查五类任务去重后的读取字符数（含项目 Skill 的 `SKILL.md` 与所需 reference），与改动前对比，不让典型任务的读取量回升。
 - `docs/standards/` 只保存工程事实，不重复 Skill 流程；不携带固定需求、规范或报告模板，不预建按需目录。
 - 修改任何 Skill 时使用官方 `skill-creator` 并运行 `scripts/validate-skills.ps1`。
 - 前端 UI 走 Spartan UI：选型依据见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法见生成项目 [前端界面规范](../../template/docs/standards/frontend-ui.md)；确认组件 API 按「`spartan` skill → 本地 `libs/ui` 源码与锁定版本 → 匹配版本的官方文档」，不臆造 Helm/Brain API。`@spartan-ng/mcp` 是仓库维护者的可选工具（根 `.mcp.json`），模板不内置。

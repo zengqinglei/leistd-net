@@ -136,6 +136,10 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
   **也不要与标识符同行记**：用户名常常就是邮箱本地部，同一行给出本地部与域名等于把脱敏拼回去。
   账号名本身可以记——它不是联系方式，且是这些日志可读性的来源。
   由 `scripts/check-contact-info-logging.py` 守住（判据是实参表达式，不是占位符名）。
+- **官方日志脱敏（`Microsoft.Extensions.Compliance.Redaction`）只在"必须输出个人数据且要集中管控策略"时采用**，
+  实测（extensions 10.9）有三处反直觉：普通模板日志不会被脱敏，须改写为带数据分类的 `[LoggerMessage]`；
+  `services.AddSerilog(configure)` 与 `EnableRedaction()` 同用会让日志全部消失，须改用 `builder.Logging.AddSerilog(logger)`；
+  宿主漏调 `EnableRedaction()` 时被分类的参数输出为空，不泄露原文。HMAC 脱敏器仍是实验性 API。
 - `cref` 必须可解析（避免 CS1574）。
 - 组件用法文档位于 `framework/docs/components/` 与 `framework/docs/ddd-struct/`，骨架见 §4.3。
 

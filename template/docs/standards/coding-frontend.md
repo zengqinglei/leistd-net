@@ -37,12 +37,11 @@ frontend/
 | `shared` | | | | | ✓ | |
 | `_mock` | ✓ | | ✓ | ✓ | ✓ | ✓ |
 
-- 应用装配点（`app.config.ts`、`app.interceptors.ts`、`app.routes.ts`、根组件 `app.ts`）与 `src/environments/` 可依赖全部目录，是业务代码之外唯一引入 `_mock` 的位置。各目录可以读取 `environment`，但不反向依赖装配点；需要装配结果的用例写成 `app.*.spec.ts`。测试文件（`*.spec.ts`、`*.testing.ts`）可引用 `_mock`，不放开其他方向。
-- 功能路由文件（`features/<x>/<x>.routes.ts`）可以经 `loadComponent`/`loadChildren` 懒加载其他功能的页面；静态导入、re-export 其他功能以及引用 `_mock` 仍不允许。
+- 应用装配点（`app.config.ts`、`app.interceptors.ts`、`app.routes.ts`、根组件 `app.ts`）与 `src/environments/` 可依赖全部目录，是业务代码之外唯一引入 `_mock` 的位置。各目录可读取 `environment`，不反向依赖应用装配点，需要装配结果的用例写成 `app.*.spec.ts`。测试文件可引用 `_mock`，不放开其他方向。
+- 功能路由文件（`features/<x>/<x>.routes.ts`）可以经 `loadComponent`/`loadChildren` 懒加载其他功能的页面，其他引用仍不允许。
 - 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`；依赖 `core` 服务的组件不放 `shared`。功能内复用的组件放该页面的 `widgets/`。
-- 业务代码判断某个请求是否走 Mock 时注入 `core/mock/mocked-url.ts` 的 `MOCKED_URL`：默认恒为 `false`，只有本机 Mock 构建由 `provideMock` 提供实现；不直接调用 `_mock` 中的函数。
-- 以上方向在 eslint 中检查，按解析器解析出的真实文件判断，不看路径写法，因此导入路径一律写成普通字符串字面量（`import()` 的模板字符串与表达式被 `no-restricted-syntax` 拒绝）：`import-x/no-restricted-paths` 检查各目录之间（静态导入、动态导入与 re-export），功能之间由项目内规则 `local/feature-boundaries` 检查（`features/*` 按目录自动纳入），只放行路由文件里作为 `loadComponent`/`loadChildren` 加载函数的 `import()`；`features/**` 中的导入路径必须是静态字符串，否则无法判断边界、直接报错；`import-x/no-unresolved` 保证解析不到的路径报错，而不是被方向检查静默放过。
-- 基础按钮、卡片、对话框用 `libs/ui`，不在 `shared` 重建组件库。
+- 业务代码判断请求是否走 Mock 时注入 `core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
+- 以上方向由 `eslint.config.mjs` 按解析出的真实文件检查（`import-x/no-restricted-paths`、项目内规则 `local/feature-boundaries`、`import-x/no-unresolved`），因此导入路径一律写成普通字符串字面量。
 
 ## 3. 命名
 
@@ -72,7 +71,7 @@ frontend/
 - **页面状态**优先放组件 signal；状态复杂且有复用或生命周期收益时，抽成组件级 `@Injectable()` 状态类并在组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
-- 依赖注入一律用 `inject()`。构造函数只做属性赋值，以及需要注入上下文的生命周期接线：`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅及其首次读取；与生命周期无关的业务流程不写进构造函数。放到注入上下文之外（如 `ngOnInit`）时显式传入作用域：`takeUntilDestroyed(destroyRef)`、`watchResource(key, destroyRef)`、`effect(fn, { injector })`。
+- 依赖注入一律用 `inject()`。构造函数只做属性赋值与需要注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅及其首次读取），不写业务流程；在注入上下文之外（如 `ngOnInit`）调用这些 API 时显式传入 `destroyRef` 或 `{ injector }`。
 
 ## 5. 状态
 
@@ -89,7 +88,7 @@ frontend/
 | 未做成 setting definition | 允许纯 `localStorage`，但不得同时出现在偏好页 | 主题 |
 | 本服务不拥有该偏好（跨服务只读） | 切换器只作用于本会话；设置页只放去签发方的外链 | 资源服务里的账户偏好 |
 
-给某个偏好补 setting definition 时，同一个提交里必须改掉切换器，否则两处各存一份且不报错。
+给偏好补 setting definition 时同一提交改掉切换器。
 
 ## 6. 错误处理
 
@@ -98,7 +97,7 @@ frontend/
 - 5xx 不展示技术细节，使用通用文案，响应含 `traceId` 时附上本地化的追踪 ID 标签。
 - `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误；HTTP 错误的反馈由发起操作的 feature 负责。
 - 可以用 `catchError` 处理特定错误，但不吞掉错误；需要特定交互时按稳定 `code` 分支，不按单个状态码。
-- 前端不兼容框架可选的响应信封（`AddResponseWrapper()`）：开启它要同时改拦截器的成功解包与失败字段读取。
+- 前端不兼容框架可选的响应信封（`AddResponseWrapper()`），开启须同时改拦截器。
 
 ## 7. Mock
 
@@ -110,7 +109,7 @@ frontend/
 
 ## 8. 测试
 
-- 含参数映射、分支或状态的服务、`pipe` 与含复杂业务逻辑的函数必须有单元测试；只把参数原样转发给 `HttpClient` 的服务由使用它的页面测试覆盖。核心共享组件与业务流程应有组件测试或端到端测试。用例名规则见 [测试规范](./testing.md)。
+- 含参数映射、分支或状态的服务、`pipe` 与含复杂业务逻辑的函数必须有单元测试；只把参数原样转发给 `HttpClient` 的服务由使用它的页面测试覆盖。用例名规则见 [测试规范](./testing.md)。
 - 单测跑在真实 Chromium 里，不得触发真实的下载、打印或页面跳转：对副作用那一步打桩（`saveBlob`，或 `vi.spyOn(HTMLAnchorElement.prototype, 'click').mockReturnValue(undefined)`——`vi.spyOn` 默认仍调用原实现），断言"发起了什么"，见 `shared/utils/download-file.spec.ts`。
 
 ## 9. 日期与时区
@@ -123,8 +122,7 @@ frontend/
   {{ row.creationTime | appDate: 'full' : displayTimeZone() : displayLocale() }}
   ```
 
-- 槽位（`full`、`short`、`date`、`time`、`monthDayTime`）由调用点按用途定；时区决定"哪一刻"；locale 决定"怎么写"，取当前正在使用的界面语言，不从持久化设置再推一份，也不由时区推导。
-- 不把精度、自定义格式串做成设置项；某语种需要改写法时在管道的 `WRITING_OVERRIDES` 加一条并写明依据；12/24 小时制用 `Intl` 的 `hourCycle`。
+- 槽位（`full`、`short`、`date`、`time`、`monthDayTime`）由调用点按用途定；locale 取当前界面语言，不由时区推导。精度与格式串不做成设置项，语种写法差异加在管道的 `WRITING_OVERRIDES`。
 - 时区候选项按"能否真的渲染"判定，不用 `Intl.supportedValuesOf('timeZone')` 过滤（它只列规范名，`UTC`、`Asia/Kolkata` 等可用值不在其中）。时区值只收 IANA 名，写入端已校验。
 <!--#if (IncludeRealTime)-->
 

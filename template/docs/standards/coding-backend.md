@@ -177,9 +177,7 @@ public class UserAppService(
 
 Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transient 必须在正确作用域解析。Development 环境开启 `ValidateScopes` 与 `ValidateOnBuild`。
 
-**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。
-
-**注册测试**：各层入口（`AddDomainServices`、`AddApplicationServices`、`AddApiAuthorization` 等）必测注册结果、生命周期与重复调用，有意覆盖的登记另测与组件入口两种先后顺序的结果；有注册或配置决策的宿主扩展（按形态选择实现、派生 Options）测其行为；只转调组件入口的宿主扩展由启动集成测试覆盖。
+**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。 注册测试范围见[测试规范](./testing.md)。
 
 没有约定式自动注册：`IAppService` 只是标记，服务需显式注册；`[UnitOfWork]` 依靠代理织入，注册时使用实现类型。
 
@@ -218,8 +216,7 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 | 参数与编程契约 | BCL 异常 |
 
 - 部署配置错误在启动期失败：`AddOptions<T>().Validate(...).ValidateOnStart()`。连接串在宿主启动前就要用，缺失时由创建 DbContext 直接抛出并指明键名。
-- 组合期按配置**选择注册哪种实现**（是否接 Redis、加载哪些令牌证书、签发方地址）只能在注册前读取，并在读取处校验、报出键名：键须在宿主构建前由部署配置或环境变量提供，集成测试用 `UseSetting` 覆盖（`ConfigureAppConfiguration` 追加的源此时尚未合入）。
-- 其余**取值与判断**延后：值经 Options 派生（`.Configure<IOptions<T>>(...)`、`.Configure<IConfiguration>(...)`），合法性用 `Validate(...).ValidateOnStart()` 在启动期判定，不在组合期读配置做判断。
+- 组合期只为**选择注册哪种实现**（是否接 Redis、加载哪些证书）读配置，在读取处校验并报出键名；集成测试用 `UseSetting` 覆盖这类键。其余取值经 Options 派生，合法性用 `ValidateOnStart()` 判定。
 - 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`。不记录密码、令牌、联系方式等敏感信息。
 
 ## 8. Api 目录
@@ -240,6 +237,5 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | `HostedServices/Initializer/` | 一次性启动引导 `*Initializer` |
 | `Filters/` | MVC/Hub 管道过滤器（按需创建）；名字以 `Filter` 结尾的业务策略按所属功能域放 |
 
-- 不用笼统的 `Extensions` 命名空间。只有一个关注点的目录保持顶层，不强行套壳。
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
-- 请求体上限沿用 Kestrel 默认，需要更大上传的端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽。
+- 请求体上限沿用 Kestrel 默认，大上传端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽；不用笼统的 `Extensions` 命名空间。

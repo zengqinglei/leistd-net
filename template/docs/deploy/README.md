@@ -84,6 +84,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 <!--#if (SpaFrontend)-->
   Data Protection 密钥默认保存在 Redis 中；各副本还须使用一致的应用名。
 <!--#endif-->
+<!--#if (IncludeRealTime || IncludeNotifications)-->
+  实时推送多副本须配置 SignalR 背板（模板未内置），否则只有连在发布方节点的客户端收到推送。
+<!--#endif-->
 - **云平台（容器服务、应用服务）**：配置写应用设置，机密放托管密钥库并以托管身份读取（如 Key Vault 引用）。这类接入与平台绑定，确定平台后再加，不预置在模板里。
 
 <!--#if (OpenIddictServer)-->
@@ -134,7 +137,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 - 跨服务客户端、Issuer、Audience 与机器身份配置见 [服务间调用](../standards/service-invocation.md#identity-与资源服务对接)。
 - readiness 是启动门禁：首次成功解析发现文档、精确比对 issuer 并取得非空 JWKS 后锁存成功。
   冷实例在 Identity 不可达时 `/api/health/ready` 返回 503，`/api/health/live` 仍为 200；
-  日志指出发现文档或签名密钥依赖，Identity 恢复后自动重试并进入就绪。
+  日志指出发现文档或签名密钥依赖（探针请求时健康检查与请求日志各记一条），Identity 恢复后自动重试并进入就绪。
   热实例保持就绪；只有 OpenIddict 验证器已缓存所需密钥时，才能在 Identity 停机期间继续本地验签。
   该探针不表示 Identity 持续可达，也不检查租户路由。
   采用 [ASP.NET Core 分离 readiness/liveness 的启动任务示例](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0#separate-readiness-and-liveness-probes)的门禁语义，

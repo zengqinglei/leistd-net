@@ -76,7 +76,7 @@ HTTP/1.1 200 OK
 | detail | string | 业务错误面向用户的说明，按错误码本地化或回落为安全文案；协议层失败不带 |
 | instance | string | 出错的请求路径 |
 | code | string | **稳定错误码**：只出现在业务错误上，`BusinessException` 在构造时必填，形如 `User:UsernameTaken`；也是本地化词条键 |
-| traceId | string | ASP.NET Core 写出的链路标识（当前 `Activity.Id`），W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，第二段是 TraceId，用它检索日志与链路；没有 Activity 时为请求标识。业务关联标识另在响应头 `X-Correlation-Id` |
+| traceId | string | 链路标识（W3C 格式，第二段是 TraceId，用于检索日志；无 Activity 时为请求标识）；业务关联标识在响应头 `X-Correlation-Id` |
 
 > `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；开启后仅额外输出 `stackTrace`，只用于本地调试，生产环境不开启。
 
@@ -136,7 +136,7 @@ HTTP/1.1 200 OK
 | DataAnnotations 自动校验 / `ValidationException` | 400 | 请求字段或结构不合法，返回 `errors` |
 | 未捕获的 BCL/技术异常 | 500 | 只返回通用安全文案，细节记日志 |
 | 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致。前端按状态码处理这类失败 |
-| `ServiceClientException` | 按本地观测的失败来源返回 500/502/503/504（注册客户端时自动登记） | 本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502；不从远端状态推断本地状态。原始 URL、响应片段只留服务端诊断，已知上游契约可由宿主覆盖 |
+| `ServiceClientException` | 500/502/503/504（注册客户端时自动登记） | 按本地观测的失败来源映射，不透传远端状态；细节见[服务间调用](./service-invocation.md) |
 
 框架不根据 BCL 异常类型猜测为 400/503；认证和授权拒绝交给 ASP.NET Core 管道，不用业务异常模拟。
 
@@ -167,7 +167,7 @@ HTTP/1.1 200 OK
 - **未启用多语言时**会直接返回 `Message`，因此必须从抛出点就是安全、可展示的文案；原始技术异常放在 `InnerException` 中。
 - **所有 `BusinessException` 都必须带码**，并由构造函数强制；不需要根据是否启用多语言加条件编译。
 - DataAnnotations 校验消息同样随 culture 本地化（写法见[后端开发规范 §5](./coding-backend.md#5-命名与-dto)），参数校验与业务异常在同一请求下同语言。
-- `scripts/check-i18n.py` 检查：两种语言资源的 `culture` 与文件名一致、键集合与 `{Name}` 占位符一致；Domain、Application 的 `*ErrorCodes.cs` 常量形如 `<所有者>:<成员名>`（所有者取文件名去掉 `ErrorCodes`）、不重复且在资源里有句子，`BusinessException` 不写字面量码；`Display` 名与 `ErrorMessage` 原文都是资源键，`Dtos/` 下的校验特性都显式写 `ErrorMessage`。
+- 资源键集合、占位符与错误码格式由 `scripts/check-i18n.py` 检查（见[测试规范](./testing.md)）。
 
 **示例（`Message` 是安全英文回落，`Code` 给出稳定身份）**：
 
