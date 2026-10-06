@@ -19,9 +19,9 @@
 
 目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
 
-- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。多个用例复用的只读投影写成所属模块根目录的 `{概念}Reader`，方法按返回内容命名（`GetRoleNamesAsync`），不新增未登记的类型后缀。
-- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
-- **Infrastructure**：外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
+- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
+- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
+- **Infrastructure**：自定义仓储实现放 `Persistence/Repositories`；外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
 
 领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 `ValidateOnBuild` 检出（见 §4）。
 
@@ -52,18 +52,14 @@
 public class User : FullAuditedEntity<Guid>
 {
     public string Username { get; private set; }
-    public string Email { get; private set; }
-    public string PasswordHash { get; private set; }
     public bool IsActive { get; private set; } = true;
 
-    private User() { Username = null!; Email = null!; PasswordHash = null!; }
+    private User() { Username = null!; }
 
-    public User(string username, string email, string passwordHash)
+    public User(string username)
     {
         Id = Guid.CreateVersion7();
         Username = username;
-        Email = email;
-        PasswordHash = passwordHash;
     }
 
     public void Disable() => IsActive = false;
@@ -79,17 +75,15 @@ public class User : FullAuditedEntity<Guid>
 缓存、通知等副作用经本地事件在提交后由应用层 `IEventHandler<TEvent>` 执行：纯实体变更的由实体 `AddLocalEvent(...)` 发出；随用例而异的（如本人改密与管理员重置的提醒）由应用服务发布。
 
 ```csharp
-public class UserDomainService(IRepository<User, Guid> userRepository, IPasswordHasher passwordHasher)
+public class UserDomainService(IRepository<User, Guid> userRepository)
 {
-    public async Task<User> CreateUserAsync(
-        string username, string email, string password, CancellationToken cancellationToken = default)
+    public async Task<User> CreateUserAsync(string username, CancellationToken cancellationToken = default)
     {
         if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
             throw new BusinessException(UserErrorCodes.UsernameTaken, $"Username '{username}' already exists.")
                 .WithData("Username", username);
 
-        var user = new User(username, email, passwordHasher.HashPassword(password));
-        return await userRepository.InsertAsync(user, cancellationToken);
+        return await userRepository.InsertAsync(new User(username), cancellationToken);
     }
 }
 ```
@@ -201,7 +195,8 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 ## 6. 数据访问
 
-- 仓储方法以 `IRepository` 为准（`GetByIdAsync`、`GetQueryableAsync`、`Insert/Update/DeleteAsync` 及 `*ManyAsync` 等）；实现 `ISoftDelete` 的删除为逻辑删除。
+- **聚合**：子实体只经聚合根的方法修改；聚合间按 Id 引用，跨聚合协调在应用服务；有独立仓储的实体（如 `UserRole`）按聚合根对待。
+- **仓储**只为聚合根提供：通用 `IRepository<T, TKey>` 覆盖增删改与单个用例的查询组合（`ISoftDelete` 实体为逻辑删除）。聚合特有、被多个用例复用的查询（连接、投影）加到该聚合的自定义仓储：Domain `<模块>/Repositories/I{聚合}Repository`，Infrastructure `EfCore{聚合}Repository`，经 `AddRepository<{聚合}, EfCore{聚合}Repository>()` 登记，方法按返回内容命名（`IUserRepository.GetRoleNamesAsync`）。不在领域服务里拼查询，不新增 `*Reader`、`*Query` 等查询类型。
 - Application 不使用 EF Core 扩展：`IQueryable` 经 `IQueryableAsyncExecuter`（`ToListAsync`、`CountAsync`、`FirstOrDefaultAsync`、`AnyAsync` 等）执行；关联数据用查询组合（子查询、`Join`）或分别查询，不用 `Include`。
 - 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 获取，不直接构造注入：直接注入的实例按宿主库创建，分库租户下会落到宿主库（框架拒绝，表现为 500）。控制库上下文固定宿主连接，可以直接注入。
 - 对象映射：实体、存储模型或框架模型到 DTO 的投影走模块 `Mappings/` 下实现 `IRegister` 的类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；不调用无参 `Adapt<T>()`（它用全局配置，本项目的规则静默失效）；调用方才知道的值经 MapContext 传入；由多个来源拼装、带计算或本地化的 DTO 直接构造；不在 DTO 上写 `FromXxx` 静态方法。
