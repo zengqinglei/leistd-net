@@ -9,8 +9,4 @@ export const environment: Environment = {
     delay: 0,
     log: false,
   },
-  api: {
-    ...environmentBase.api,
-    gateway: '',
-  },
 };
