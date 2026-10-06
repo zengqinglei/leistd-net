@@ -18,10 +18,10 @@ namespace Leistd.Ddd.Infrastructure.Tests;
 /// 创建审计的落值时机：必须在实体进入跟踪时，不是保存时。
 /// </summary>
 /// <remarks>
-/// <para>锁死的缺陷：创建审计原先在 <c>AuditSaveChangesInterceptor.SavingChanges</c> 里落值。
-/// 仓储在工作单元内不立即保存，新增与保存之间可以跨越
+/// <para>保护的缺陷形状：若在 <c>AuditSaveChangesInterceptor.SavingChanges</c> 里落值，
+/// 由于仓储在工作单元内不立即保存，新增与保存之间可以跨越
 /// <c>ICurrentPrincipalAccessor.Change</c> 的边界——于是 <c>CreatorId</c> 落成外层主体，
-/// 不报错。这与本轮修掉的 <c>TenantId</c> 是同一个缺陷形状，只是字段不同。</para>
+/// 不报错。<c>TenantId</c> 的落值时机是同一个缺陷形状，只是字段不同。</para>
 /// <para>另一半同等重要：提早落值不能碰查询出来的实体。三层护栏
 /// （<c>FromQuery</c>、<c>State == Added</c>、值已有则不动）各有一条用例。</para>
 /// </remarks>

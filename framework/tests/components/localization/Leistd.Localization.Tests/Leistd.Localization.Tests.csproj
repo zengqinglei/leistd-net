@@ -23,6 +23,8 @@
   <ItemGroup>
     <!-- 预热是"失败即静默降级"的路径，唯一可断言的对象是日志；用官方 FakeLogger -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <!-- 请求区域性中间件要经真实管道验证 -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
   </ItemGroup>
 
   <ItemGroup>

@@ -8,8 +8,8 @@ namespace Leistd.DependencyInjection.Tests;
 /// 「同一服务只能有一个权威实现」断言的支持边界。
 /// </summary>
 /// <remarks>
-/// 这是对外 NuGet 公共 API，四个存储包都靠它。此前它的测试散在各消费组件里，
-/// 于是「工厂/实例/keyed 各算不算冲突」这几条边界谁都没有明确钉过。
+/// 这是对外 NuGet 公共 API，四个存储包都靠它。「工厂/实例/keyed 各算不算冲突」
+/// 这几条边界在这里集中钉住，不依赖各消费组件的用例。
 /// </remarks>
 public class SingleAuthoritativeServiceTests
 {

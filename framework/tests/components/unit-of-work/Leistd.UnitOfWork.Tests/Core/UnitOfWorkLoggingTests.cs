@@ -13,8 +13,8 @@ namespace Leistd.UnitOfWork.Tests.Core;
 /// 日志级别区分"真正的提交失败"与"调用方取消、正常回滚"
 /// </summary>
 /// <remarks>
-/// 浏览器主动中断请求、每一次业务拒绝引起的回滚，此前分别记成 Error 与 Warning，
-/// 真正需要被看见的提交失败淹没在里面。
+/// 浏览器主动中断请求、每一次业务拒绝引起的回滚若分别记成 Error 与 Warning，
+/// 真正需要被看见的提交失败就淹没在里面。
 /// </remarks>
 public sealed class UnitOfWorkLoggingTests
 {
@@ -55,7 +55,7 @@ public sealed class UnitOfWorkLoggingTests
     /// <summary>
     /// 提交开始之后的取消异常是真故障，即使调用方令牌恰好已取消
     /// </summary>
-    /// <remarks>回归点：曾按"令牌已取消"一律降为 Debug 并写成"提交前取消"，把提交中或提交后处理器的失败藏了起来。</remarks>
+    /// <remarks>按"令牌已取消"一律降为 Debug 并写成"提交前取消"，会把提交中或提交后处理器的失败藏起来。</remarks>
     [Fact]
     public async Task A_cancellation_after_the_commit_started_is_still_an_error()
     {

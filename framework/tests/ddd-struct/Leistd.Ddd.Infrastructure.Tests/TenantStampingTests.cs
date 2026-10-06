@@ -118,8 +118,8 @@ public class TenantStampingTests : IAsyncLifetime
     /// 宿主上下文新增、却在租户作用域内提交：必须保持宿主行。
     /// </summary>
     /// <remarks>
-    /// 这是删除 <c>MultiTenantSaveChangesInterceptor</c> 的回归锁。落值在 ② 之后，
-    /// 那个在 ③ 落值的拦截器在正常路径上已是死代码，但在本场景里方向相反地有害——
+    /// 落值只能发生在 ②：若在 ③（保存时）再按当前租户落一次值，正常路径上无害，
+    /// 但在本场景里方向相反地有害——
     /// 它会把合法的宿主数据（<c>TenantId</c> 本就该是 null）盖成租户数据。
     /// 同一条边界漂移，只是方向反过来。
     /// </remarks>

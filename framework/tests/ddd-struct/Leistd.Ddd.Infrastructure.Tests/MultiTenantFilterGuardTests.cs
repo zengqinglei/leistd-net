@@ -81,7 +81,7 @@ public class MultiTenantFilterGuardTests
     /// 非多租户宿主零影响：没注册 ICurrentTenant 就不该有任何判定。
     /// </summary>
     /// <remarks>
-    /// 这条同时防住"闸门变成新的启动失败来源"——它是我最担心的回归方向：
+    /// 这条同时防住"闸门变成新的启动失败来源"：
     /// 一个根本不分租户的服务不该因为实体恰好实现了标记接口就起不来。
     /// </remarks>
     [Fact]

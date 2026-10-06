@@ -17,8 +17,8 @@ namespace Leistd.UnitOfWork.Tests.Core;
 /// <remarks>
 /// <para>这一组钉的是<b>拦截器路径</b>。显式 <c>using (await Begin())</c> 的调用点由
 /// <c>using</c> 保证释放，而 <c>[UnitOfWork]</c> 特性的调用点完全依赖拦截器——
-/// 此前它的成功路径只调 <c>CompleteAsync()</c>、从不 <c>Dispose()</c>，
-/// 于是管理器为每个工作单元创建的 DI 作用域在正常路径上永不释放。</para>
+/// 成功路径若只调 <c>CompleteAsync()</c>、不 <c>Dispose()</c>，
+/// 管理器为每个工作单元创建的 DI 作用域在正常路径上永不释放。</para>
 /// <para>作用域是否释放通过一个注册为 Scoped 的探针观察：<c>IDisposable.Dispose</c> 被调用
 /// 即说明它所在的作用域被释放了。这比断言内部字段可靠——它测的是可观察后果。</para>
 /// </remarks>
@@ -106,10 +106,10 @@ public sealed class UnitOfWorkLifecycleTests
 
     /// <summary>返回 <c>Task&lt;T&gt;</c> 的成功调用同样释放作用域</summary>
     /// <remarks>
-    /// 拦截器的泛型与非泛型重载是两段独立代码。上一轮只修了非泛型那一支，而<b>应用服务的常态形态
-    /// 恰恰是泛型</b>（任何返回 DTO 的方法都走这里），于是"成功路径泄漏作用域"这个缺陷在真实调用
-    /// 里几乎原封不动地留着，测试却全绿——因为当时的用例只声明了 <c>Task</c> 方法。
-    /// 这两条用例存在的意义就是让两个重载不能再分头演化。
+    /// 拦截器的泛型与非泛型重载是两段独立代码，而<b>应用服务的常态形态恰恰是泛型</b>
+    /// （任何返回 DTO 的方法都走这里）。只用 <c>Task</c> 方法的用例覆盖不到泛型那一支，
+    /// "成功路径泄漏作用域"在真实调用里留着，测试却全绿。
+    /// 这两条用例让两个重载不能分头演化。
     /// </remarks>
     [Fact]
     public async Task Successful_generic_interception_releases_the_unit_of_work_scope()

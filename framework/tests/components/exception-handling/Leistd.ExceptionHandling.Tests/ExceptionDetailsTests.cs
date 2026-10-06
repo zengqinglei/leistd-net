@@ -17,15 +17,15 @@ public sealed class ExceptionDetailsTests
     [InlineData(true)]
     public async Task Stack_trace_follows_the_diagnostic_option(bool includeDetails)
     {
-        using var server = await StartAsync(includeDetails);
+        using var host = await StartAsync(includeDetails);
 
-        var response = await server.CreateClient().GetAsync("/");
+        var response = await host.GetTestClient().GetAsync("/");
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(includeDetails, problem.TryGetProperty("stackTrace", out _));
     }
 
-    private static async Task<TestServer> StartAsync(bool includeDetails)
+    private static async Task<IHost> StartAsync(bool includeDetails)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
@@ -37,6 +37,6 @@ public sealed class ExceptionDetailsTests
                     app.Run(_ => throw new InvalidOperationException("diagnostic only"));
                 }))
             .StartAsync();
-        return host.GetTestServer();
+        return host;
     }
 }

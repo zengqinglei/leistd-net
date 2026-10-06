@@ -93,29 +93,35 @@ public class DataFilterTests
     }
 
     // 状态挂在 AsyncLocal 上：并行分支各自独立，不能互相污染。
+    // 两个信号把交错顺序钉死：分支 B 一定在分支 A 的禁用作用域打开期间读取，
+    // 状态一旦改为跨分支共享（静态字段或普通字段），B 就会读到 A 的禁用而变红。
     [Fact]
     public async Task Scopes_do_not_leak_across_async_branches()
     {
         var filter = NewFilter();
-        var observed = new bool[2];
+        var disabledInBranchA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedInBranchB = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        await Task.WhenAll(
-            Task.Run(() =>
+        var branchA = Task.Run(async () =>
+        {
+            using (filter.Disable<ISoftDeleteMarker>())
             {
-                using (filter.Disable<ISoftDeleteMarker>())
-                {
-                    Thread.Sleep(20);
-                    observed[0] = filter.IsEnabled<ISoftDeleteMarker>();
-                }
-            }),
-            Task.Run(() =>
-            {
-                Thread.Sleep(10);
-                observed[1] = filter.IsEnabled<ISoftDeleteMarker>();
-            }));
+                disabledInBranchA.SetResult();
+                await observedInBranchB.Task;
+                return filter.IsEnabled<ISoftDeleteMarker>();
+            }
+        });
+        var branchB = Task.Run(async () =>
+        {
+            await disabledInBranchA.Task;
+            var enabled = filter.IsEnabled<ISoftDeleteMarker>();
+            observedInBranchB.SetResult();
+            return enabled;
+        });
 
-        Assert.False(observed[0]);
-        Assert.True(observed[1]);
+        Assert.False(await branchA);
+        Assert.True(await branchB);
+        Assert.True(filter.IsEnabled<ISoftDeleteMarker>());
     }
 
     // 重复释放同一个作用域会多弹一次栈，把外层的状态也还原掉。

@@ -189,9 +189,9 @@ public class TenantStoreManagerTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// 存储返回值里带 IsActive，中间件据此放行或 403——它是访问控制状态。
-    /// 曾经这里挂着分布式缓存，停用的生效依赖尽力而为的失效：缓存不可用时
+    /// 若这里挂分布式缓存，停用的生效就依赖尽力而为的失效：缓存不可用时
     /// 陈旧条目继续放行已停用租户，删除之后连重试失效都做不到（租户已软删、按 Id 找不到）。
-    /// 现在存储直接读库，撤销时序由构造保证。
+    /// 存储直接读库，撤销时序由构造保证。
     /// </remarks>
     [Fact]
     public async Task Deactivation_takes_effect_immediately_on_commit()
@@ -374,7 +374,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// 用 SaveChanges 拦截器精确插入竞争写入——这是唯一能越过管理器预检的时点。
-    /// 若竞争者提前提交，预检就会直接拒绝，唯一索引那条路径一次都走不到（曾经的测试就是这样空转的）。
+    /// 若竞争者提前提交，预检就会直接拒绝，唯一索引那条路径一次都走不到，用例空转。
     /// </remarks>
     [Fact]
     public async Task Losing_a_race_after_the_precheck_surfaces_as_duplicate_name()
@@ -426,7 +426,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     /// <para>早期实现在冲突分支里 <c>ChangeTracker.Clear()</c>，会静默清空整个跟踪器——
     /// 调用方先改了业务实体、再调用租户管理器并捕获 409 继续执行时，那些修改凭空消失。</para>
     /// <para>必须走**竞争**路径而不是预检路径：预检拒绝时 SaveChanges 根本没被调用，
-    /// 跟踪器也就没人动过，用例即使在有 <c>Clear()</c> 的实现下也是绿的（曾经就是这样空转的）。
+    /// 跟踪器也就没人动过，用例即使在有 <c>Clear()</c> 的实现下也是绿的，用例空转。
     /// 只有预检通过、保存被唯一索引拒绝时，才会执行到丢弃逻辑。</para>
     /// </remarks>
     [Fact]
@@ -482,7 +482,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// 删除在提交那一刻即不可达——这条路径曾经**无法**靠重试补救。
+    /// 删除在提交那一刻即不可达——这条路径**无法**靠重试补救，访问控制不能依赖事后失效。
     /// </summary>
     /// <remarks>
     /// 缓存时代：删除先提交、再失效缓存，失效失败时陈旧条目继续放行；而重试删除会被

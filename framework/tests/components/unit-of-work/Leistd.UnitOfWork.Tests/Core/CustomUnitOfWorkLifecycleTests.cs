@@ -14,9 +14,9 @@ namespace Leistd.UnitOfWork.Tests.Core;
 /// <remarks>
 /// <para><c>AddUnitOfWork()</c> 用 <c>TryAdd</c> 注册默认实现，宿主先注册自己的即可替换。
 /// 管理器为每个显式边界建一个独立 DI 作用域，靠工作单元的释放通知回收它——
-/// 这个订阅曾写成 <c>if (unitOfWork is DefaultUnitOfWork)</c>，于是换了实现之后
+/// 这个订阅若按具体类型判断（如 <c>if (unitOfWork is DefaultUnitOfWork)</c>），换了实现之后
 /// <b>整段回收静默失效</b>：作用域一直挂着，环境工作单元也停在已释放的那个实例上。</para>
-/// <para>因此 <c>Disposed</c> 现在是 <see cref="IUnitOfWork"/> 的正式契约。本组用一个
+/// <para>因此 <c>Disposed</c> 是 <see cref="IUnitOfWork"/> 的正式契约。本组用一个
 /// 最小自定义实现钉住它：只要按契约发出释放通知，作用域回收与环境恢复就都成立。</para>
 /// </remarks>
 public sealed class CustomUnitOfWorkLifecycleTests
@@ -67,8 +67,8 @@ public sealed class CustomUnitOfWorkLifecycleTests
     }
 
     // 初始化抛错时调用方还没拿到可释放的句柄：作用域必须当场回收，外层 ambient 一次都不能被覆盖。
-    // 曾经 Initialize() 在 CreateNewUnitOfWork() 返回之后才调用，于是抛错后作用域没人释放，
-    // 而"当前工作单元"停在一个初始化失败的实例上。
+    // 若 Initialize() 在 CreateNewUnitOfWork() 返回之后才调用，抛错后作用域没人释放，
+    // "当前工作单元"也会停在一个初始化失败的实例上。
     [Fact]
     public async Task A_failed_initialization_releases_the_scope_and_leaves_the_ambient_untouched()
     {

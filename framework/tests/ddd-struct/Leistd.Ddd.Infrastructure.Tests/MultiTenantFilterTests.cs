@@ -161,7 +161,7 @@ public class MultiTenantFilterTests : IAsyncLifetime
 
         using (_currentTenant.Change(TenantB))
         {
-            // 跨租户按 Id 取数：不可见即 null——修复前 FindAsync 会绕过过滤器直接命中
+            // 跨租户按 Id 取数：不可见即 null；按主键走 FindAsync 会绕过过滤器直接命中
             Assert.Null(await repository.GetByIdAsync(_tenantAOrderId));
             Assert.Null(await repository.GetByIdAsync(_hostOrderId));
         }
@@ -181,7 +181,7 @@ public class MultiTenantFilterTests : IAsyncLifetime
 
         using (_currentTenant.Change(TenantA))
         {
-            // 软删除回归：FindAsync 时代按 Id 能取出已删行
+            // 软删除同样生效：按主键走 FindAsync 能取出已删行
             Assert.Null(await repository.GetByIdAsync(_tenantASoftDeletedId));
         }
     }

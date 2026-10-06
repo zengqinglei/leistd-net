@@ -380,7 +380,7 @@ public sealed class FailedOperationRecordingTests
     }
 
     /// <summary>任一身份已认证即不算匿名，与官方 <c>DenyAnonymousAuthorizationRequirement</c> 一致。</summary>
-    /// <remarks>回归点：曾只看 <c>User.Identity</c>（第一个身份），首身份未认证时整条记录被当成匿名丢掉。</remarks>
+    /// <remarks>若只看 <c>User.Identity</c>（第一个身份），首身份未认证时整条记录会被当成匿名丢掉。</remarks>
     [Fact]
     public async Task A_principal_authenticated_only_by_a_later_identity_is_recorded()
     {

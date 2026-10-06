@@ -42,8 +42,8 @@ public class UnitOfWorkOptionsLifecycleTests
     [Fact]
     public async Task Begin_without_options_works_in_both_requiresNew_modes()
     {
-        // 回归点：Initialize 改为拒绝 null 之后，Begin(requiresNew: false) 不带选项
-        // 且无环境工作单元时会把 null 递进去。选项必须在 Begin 里定案。
+        // Initialize 拒绝 null，而 Begin(requiresNew: false) 不带选项且无环境工作单元时
+        // 手里只有 null。选项必须在 Begin 里定案。
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 

@@ -16,7 +16,7 @@ namespace Leistd.UnitOfWork.Tests.Core;
 /// 声明式工作单元把方法收到的取消令牌交给提交：客户端断开时提交前的取消按调用方取消处理，不记成提交失败。
 /// </summary>
 /// <remarks>
-/// 回归点：拦截器曾以默认令牌调用 <c>CompleteAsync</c>。BeforeCommit 处理器用请求令牌做 I/O、请求恰在此时中止时，
+/// 拦截器若以默认令牌调用 <c>CompleteAsync</c>，BeforeCommit 处理器用请求令牌做 I/O、请求恰在此时中止时，
 /// 取消异常对不上"调用方令牌已取消"的判定，被记成 Error "commit failed"——每次客户端断开都多一条假故障。
 /// </remarks>
 public sealed class UnitOfWorkInterceptorCancellationTests

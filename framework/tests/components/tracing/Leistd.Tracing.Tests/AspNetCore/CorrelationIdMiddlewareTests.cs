@@ -16,47 +16,12 @@ namespace Leistd.Tracing.Tests.AspNetCore;
 /// <summary>
 /// 中间件的取值顺序（合法入站头 → Activity → 新建）、入站校验与日志作用域。
 /// </summary>
-public class CorrelationIdMiddlewareTests : IAsyncLifetime
+public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixture fixture)
+    : IClassFixture<CorrelationIdMiddlewareTests.HostFixture>
 {
-    private readonly CapturedScopes _scopes = new();
+    private readonly CapturedScopes _scopes = fixture.Scopes;
 
-    private IHost _host = default!;
-    private System.Net.Http.HttpClient _client = default!;
-
-    public async Task InitializeAsync()
-    {
-        _host = await new HostBuilder()
-            .ConfigureWebHost(web => web
-                .UseTestServer()
-                .ConfigureServices(services =>
-                {
-                    services.AddCorrelationId();
-                    services.AddSingleton(_scopes);
-                    services.AddSingleton<ILoggerProvider>(new ScopeCapturingLoggerProvider(_scopes));
-                })
-                .Configure(app =>
-                {
-                    app.UseCorrelationId();
-                    app.Run(async context =>
-                    {
-                        var provider = context.RequestServices.GetRequiredService<ICorrelationIdProvider>();
-                        // 同时回显三处，用于断言它们一致
-                        var activityTraceId = Activity.Current?.TraceId.ToHexString() ?? "";
-                        await context.Response.WriteAsync(
-                            $"{provider.Get()}|{context.TraceIdentifier}|{activityTraceId}");
-                    });
-                }))
-            .StartAsync();
-
-        _client = _host.GetTestClient();
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _host.StopAsync();
-        _host.Dispose();
-    }
+    private readonly System.Net.Http.HttpClient _client = fixture.Client;
 
     private async Task<(string Correlation, string TraceIdentifier, string ActivityTraceId)> CallAsync(
         string? headerValue, string? traceParent = null)
@@ -196,7 +161,7 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
         Assert.Equal(correlation, _scopes.Find(CorrelationIdConstants.LogKey));
     }
 
-    private sealed class CapturedScopes
+    internal sealed class CapturedScopes
     {
         private readonly List<IReadOnlyDictionary<string, object>> _states = [];
 
@@ -252,6 +217,53 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
 
                 public void Dispose() { }
             }
+        }
+    }
+
+    /// <summary>
+    /// 本类用例共享的宿主：配置固定。捕获的日志作用域跨用例累积，读取它的用例先清空再断言。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public IHost Host { get; private set; } = default!;
+
+        public System.Net.Http.HttpClient Client { get; private set; } = default!;
+
+        internal CapturedScopes Scopes { get; } = new();
+
+        public async Task InitializeAsync()
+        {
+            Host = await new HostBuilder()
+                .ConfigureWebHost(web => web
+                    .UseTestServer()
+                    .ConfigureServices(services =>
+                    {
+                        services.AddCorrelationId();
+                        services.AddSingleton(Scopes);
+                        services.AddSingleton<ILoggerProvider>(new ScopeCapturingLoggerProvider(Scopes));
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseCorrelationId();
+                        app.Run(async context =>
+                        {
+                            var provider = context.RequestServices.GetRequiredService<ICorrelationIdProvider>();
+                            // 同时回显三处，用于断言它们一致
+                            var activityTraceId = Activity.Current?.TraceId.ToHexString() ?? "";
+                            await context.Response.WriteAsync(
+                                $"{provider.Get()}|{context.TraceIdentifier}|{activityTraceId}");
+                        });
+                    }))
+                .StartAsync();
+
+            Client = Host.GetTestClient();
+        }
+
+        public async Task DisposeAsync()
+        {
+            Client.Dispose();
+            await Host.StopAsync();
+            Host.Dispose();
         }
     }
 }

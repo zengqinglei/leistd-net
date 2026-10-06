@@ -16,7 +16,7 @@ public sealed class CorrelationIdExceptionPipelineTests
 {
     /// <summary>
     /// 关联标识与链路标识分开：响应头回显调用方的关联标识，问题详情的 <c>traceId</c> 是官方写出的
-    /// 当前 Activity 标识，与异常日志里记下的同值。此前 <c>traceId</c> 被改写成关联标识，
+    /// 当前 Activity 标识，与异常日志里记下的同值。<c>traceId</c> 若被改写成关联标识，
     /// 按它去链路追踪系统里查不到。
     /// </summary>
     [Fact]

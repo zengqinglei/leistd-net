@@ -13,8 +13,8 @@ namespace Leistd.Lock.Tests.Redis;
 /// </summary>
 /// <remarks>
 /// <para>这一批是 <c>Leistd.Lock.Redis</c> 唯一会真正执行 <c>LockTake</c> / <c>LockRelease</c> /
-/// <c>LockExtend</c> 的地方。此前这三条路径在整个仓库里从未被执行过：
-/// 既有的 Redis 用例只驱动 <c>TryAcquireWithRetryAsync</c> 的重试循环，喂的是假的 attempt 委托。</para>
+/// <c>LockExtend</c> 的地方。只驱动 <c>TryAcquireWithRetryAsync</c> 重试循环、喂假 attempt 委托的用例
+/// 执行不到这三条路径。</para>
 /// <para>租约、令牌归属这些 Redis 自己的话题在 <see cref="RedisLeaseTests"/>，
 /// 本类只跑跨实现共享的契约。</para>
 /// </remarks>

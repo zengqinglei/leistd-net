@@ -75,7 +75,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// 业务在工作单元内记完失败紧接着抛出、整体回滚，是被拒路径最常见的形态。
-    /// 回归点：早先写入落在调用方的工作单元里，随回滚一起消失——"谁在反复做他不被允许的事"就这样丢了。
+    /// 写入若落在调用方的工作单元里，就会随回滚一起消失——"谁在反复做他不被允许的事"就这样丢了。
     /// </remarks>
     [Fact]
     public async Task A_failed_record_survives_the_callers_rollback()

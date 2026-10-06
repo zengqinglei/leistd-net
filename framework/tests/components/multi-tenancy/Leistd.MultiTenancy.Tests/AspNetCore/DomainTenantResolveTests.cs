@@ -18,13 +18,13 @@ namespace Leistd.MultiTenancy.Tests.AspNetCore;
 /// <summary>
 /// 子域名解析：格式匹配规则，以及它在解析链中的位置。
 /// </summary>
-public class DomainTenantResolveTests : IAsyncLifetime
+public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixture)
+    : IClassFixture<DomainTenantResolveTests.HostFixture>
 {
     private static readonly Guid AcmeId = Guid.NewGuid();
     private static readonly Guid GlobexId = Guid.NewGuid();
 
-    private IHost _host = default!;
-    private HttpClient _client = default!;
+    private readonly HttpClient _client = fixture.Client;
 
     /// <summary>
     /// 主机名到租户的映射规则，全部走真实请求——格式匹配是这个贡献者的对外契约，
@@ -328,68 +328,6 @@ public class DomainTenantResolveTests : IAsyncLifetime
         await host.StopAsync();
     }
 
-    public async Task InitializeAsync()
-    {
-        _host = await new HostBuilder()
-            .ConfigureWebHost(builder => builder
-                .UseTestServer()
-                .ConfigureServices(services =>
-                {
-                    services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.com");
-                    services.AddInMemoryTenantStore(options =>
-                    {
-                        options.Tenants.Add(new TenantConfiguration
-                        {
-                            Id = AcmeId,
-                            Name = "acme",
-                            NormalizedName = "ACME"
-                        });
-                        options.Tenants.Add(new TenantConfiguration
-                        {
-                            Id = GlobexId,
-                            Name = "globex",
-                            NormalizedName = "GLOBEX"
-                        });
-                    });
-                })
-                .Configure(app =>
-                {
-                    app.Use(async (context, next) =>
-                    {
-                        if (context.Request.Headers.TryGetValue("X-Test-Auth", out var user))
-                        {
-                            var claims = new List<Claim> { new("sub", user.ToString()) };
-                            if (context.Request.Headers.TryGetValue("X-Test-Tenant-Claim", out var tenantClaim))
-                            {
-                                claims.Add(new Claim(CustomClaimTypes.TenantId, tenantClaim.ToString()));
-                            }
-
-                            context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
-                        }
-
-                        await next(context);
-                    });
-
-                    app.UseMultiTenancy();
-
-                    app.Run(async context =>
-                    {
-                        var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
-                        await context.Response.WriteAsync(currentTenant.Id?.ToString() ?? "host");
-                    });
-                }))
-            .StartAsync();
-
-        _client = _host.GetTestClient();
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _host.StopAsync();
-        _host.Dispose();
-    }
-
     private async Task<string> GetAsync(string url, params (string Name, string Value)[] headers)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -400,5 +338,77 @@ public class DomainTenantResolveTests : IAsyncLifetime
 
         var response = await _client.SendAsync(request);
         return await response.Content.ReadAsStringAsync();
+    }
+
+    /// <summary>
+    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public IHost Host { get; private set; } = default!;
+
+        public HttpClient Client { get; private set; } = default!;
+
+        public async Task InitializeAsync()
+        {
+            Host = await new HostBuilder()
+                .ConfigureWebHost(builder => builder
+                    .UseTestServer()
+                    .ConfigureServices(services =>
+                    {
+                        services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.com");
+                        services.AddInMemoryTenantStore(options =>
+                        {
+                            options.Tenants.Add(new TenantConfiguration
+                            {
+                                Id = AcmeId,
+                                Name = "acme",
+                                NormalizedName = "ACME"
+                            });
+                            options.Tenants.Add(new TenantConfiguration
+                            {
+                                Id = GlobexId,
+                                Name = "globex",
+                                NormalizedName = "GLOBEX"
+                            });
+                        });
+                    })
+                    .Configure(app =>
+                    {
+                        app.Use(async (context, next) =>
+                        {
+                            if (context.Request.Headers.TryGetValue("X-Test-Auth", out var user))
+                            {
+                                var claims = new List<Claim> { new("sub", user.ToString()) };
+                                if (context.Request.Headers.TryGetValue("X-Test-Tenant-Claim", out var tenantClaim))
+                                {
+                                    claims.Add(new Claim(CustomClaimTypes.TenantId, tenantClaim.ToString()));
+                                }
+
+                                context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+                            }
+
+                            await next(context);
+                        });
+
+                        app.UseMultiTenancy();
+
+                        app.Run(async context =>
+                        {
+                            var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
+                            await context.Response.WriteAsync(currentTenant.Id?.ToString() ?? "host");
+                        });
+                    }))
+                .StartAsync();
+
+            Client = Host.GetTestClient();
+        }
+
+        public async Task DisposeAsync()
+        {
+            Client.Dispose();
+            await Host.StopAsync();
+            Host.Dispose();
+        }
     }
 }

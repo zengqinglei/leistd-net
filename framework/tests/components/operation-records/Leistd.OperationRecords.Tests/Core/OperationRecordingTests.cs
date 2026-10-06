@@ -177,8 +177,8 @@ public sealed class OperationRecordingTests
     /// 只有后续身份已认证的主体，按真实的当前用户补齐出完整的操作人
     /// </summary>
     /// <remarks>
-    /// 回归点：HttpContext 扩展按"任一身份已认证"放行，而当前用户曾只看第一个身份，
-    /// 于是记录写下了、操作人标识与名字却为空，所属租户退回请求租户。
+    /// HttpContext 扩展按"任一身份已认证"放行；当前用户若只看第一个身份，
+    /// 记录会写下、操作人标识与名字却为空，所属租户退回请求租户。
     /// </remarks>
     [Fact]
     public async Task A_principal_authenticated_only_by_a_later_identity_yields_the_full_actor()
@@ -394,7 +394,7 @@ public sealed class OperationRecordingTests
     /// </summary>
     /// <remarks>
     /// 可见性取自动作定义，未登记的码没有可见性可盖：默认给租户看是泄露，
-    /// 默认只给宿主看又会让租户上下文里写下的记录谁都看不见（回归点：早先盖 Host 且不报错）。
+    /// 默认只给宿主看又会让租户上下文里写下的记录谁都看不见；静默盖成 Host 同样不可接受。
     /// 被拒路径上也不被 catch 吞掉——这是确定性的编码错误，不是写库故障。
     /// </remarks>
     [Fact]
@@ -461,7 +461,7 @@ public sealed class OperationRecordingTests
     /// </summary>
     /// <remarks>
     /// 典型场景是租户用户调用宿主接口被拒——宿主最该看到的安全事件。
-    /// 回归点：早先留在租户层，租户读者看不到、宿主也查不到，谁都看不见。
+    /// 若留在租户层，租户读者看不到、宿主也查不到，谁都看不见。
     /// </remarks>
     [Fact]
     public async Task A_rejected_host_action_inside_a_tenant_is_written_to_the_host_layer()

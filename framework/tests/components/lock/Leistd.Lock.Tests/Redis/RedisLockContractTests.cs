@@ -19,7 +19,7 @@ public class RedisLockContractTests
     /// 零超时必须"尝试一次"，与内存实现一致。
     /// </summary>
     /// <remarks>
-    /// 回归点：此前 <c>TryLockAsync</c> 是 <c>while (now &lt; deadline)</c>，
+    /// 若 <c>TryLockAsync</c> 写成 <c>while (now &lt; deadline)</c>，
     /// <c>TimeSpan.Zero</c> 使循环一次都不进——同一个 <see cref="ILock"/> 契约在两个实现上
     /// 给出不同行为，而调用方按接口编程时看不出来。
     /// 本仓库的内存锁测试（MemoryLocalLockCleanupTests 等）多条断言正建立在"零超时会尝试一次"之上。
@@ -85,13 +85,13 @@ public class RedisLockContractTests
     }
 
     [Theory]
-    [InlineData(-1)]        // Timeout.InfiniteTimeSpan 的毫秒值：曾被内存实现当作"无限等待"
+    [InlineData(-1)]        // Timeout.InfiniteTimeSpan 的毫秒值：交给 SemaphoreSlim 会变成"无限等待"
     [InlineData(-5000)]
     public async Task A_negative_timeout_is_rejected_by_both_implementations(int milliseconds)
     {
-        // 统一契约：负值是编程错误。此前内存实现把它交给 SemaphoreSlim
-        //（-1ms 无限等待、更小的负数抛异常），Redis 实现则一律"试一次后返回 null"——
-        // 同一个 ILock 接口三种行为，调用方无从依赖
+        // 统一契约：负值是编程错误。若内存实现把它交给 SemaphoreSlim
+        //（-1ms 无限等待、更小的负数抛异常）、Redis 实现一律"试一次后返回 null"，
+        // 同一个 ILock 接口就有三种行为，调用方无从依赖
         var timeout = TimeSpan.FromMilliseconds(milliseconds);
 
         using var memory = new MemoryLocalLock(NullLogger<MemoryLocalLock>.Instance);

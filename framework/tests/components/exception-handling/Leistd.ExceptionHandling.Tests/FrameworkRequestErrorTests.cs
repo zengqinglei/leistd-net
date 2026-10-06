@@ -23,7 +23,7 @@ namespace Leistd.ExceptionHandling.Tests;
 /// </remarks>
 public class FrameworkRequestErrorTests
 {
-    private static async Task<TestServer> StartAsync(bool throwOnBadRequest, bool useStatusCodePages = true)
+    private static async Task<IHost> StartAsync(bool throwOnBadRequest, bool useStatusCodePages = true)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(web => web
@@ -53,11 +53,11 @@ public class FrameworkRequestErrorTests
                     });
                 }))
             .StartAsync();
-        return host.GetTestServer();
+        return host;
     }
 
-    private static Task<HttpResponseMessage> PostAsync(TestServer server, string body, string contentType = "application/json")
-        => server.CreateClient().PostAsync("/api/items", new StringContent(body, Encoding.UTF8, contentType));
+    private static Task<HttpResponseMessage> PostAsync(IHost host, string body, string contentType = "application/json")
+        => host.GetTestClient().PostAsync("/api/items", new StringContent(body, Encoding.UTF8, contentType));
 
     private static async Task<JsonElement> ReadProblemAsync(HttpResponseMessage response)
     {
@@ -73,9 +73,9 @@ public class FrameworkRequestErrorTests
     [InlineData(false, """{"name":123}""")]
     public async Task Unreadable_json_body_is_a_bad_request_in_both_modes(bool throwOnBadRequest, string body)
     {
-        using var server = await StartAsync(throwOnBadRequest);
+        using var host = await StartAsync(throwOnBadRequest);
 
-        using var response = await PostAsync(server, body);
+        using var response = await PostAsync(host, body);
         var raw = await response.Content.ReadAsStringAsync();
         var problem = await ReadProblemAsync(response);
 
@@ -92,9 +92,9 @@ public class FrameworkRequestErrorTests
     [Fact]
     public async Task Bad_request_exception_keeps_its_status_without_status_code_pages()
     {
-        using var server = await StartAsync(throwOnBadRequest: true, useStatusCodePages: false);
+        using var host = await StartAsync(throwOnBadRequest: true, useStatusCodePages: false);
 
-        using var response = await PostAsync(server, """{"name":""");
+        using var response = await PostAsync(host, """{"name":""");
         var problem = await ReadProblemAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -106,9 +106,9 @@ public class FrameworkRequestErrorTests
     [InlineData(false)]
     public async Task Wrong_content_type_is_unsupported_media_type(bool throwOnBadRequest)
     {
-        using var server = await StartAsync(throwOnBadRequest);
+        using var host = await StartAsync(throwOnBadRequest);
 
-        using var response = await PostAsync(server, "x", "text/plain");
+        using var response = await PostAsync(host, "x", "text/plain");
         var problem = await ReadProblemAsync(response);
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
@@ -118,9 +118,9 @@ public class FrameworkRequestErrorTests
     [Fact]
     public async Task Unmatched_api_route_gets_a_not_found_problem()
     {
-        using var server = await StartAsync(throwOnBadRequest: false);
+        using var host = await StartAsync(throwOnBadRequest: false);
 
-        using var response = await server.CreateClient().GetAsync("/api/does-not-exist");
+        using var response = await host.GetTestClient().GetAsync("/api/does-not-exist");
         var problem = await ReadProblemAsync(response);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -130,9 +130,9 @@ public class FrameworkRequestErrorTests
     [Fact]
     public async Task Response_with_a_body_is_left_untouched()
     {
-        using var server = await StartAsync(throwOnBadRequest: false);
+        using var host = await StartAsync(throwOnBadRequest: false);
 
-        using var response = await server.CreateClient().GetAsync("/api/conflict");
+        using var response = await host.GetTestClient().GetAsync("/api/conflict");
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("custom body", await response.Content.ReadAsStringAsync());
@@ -141,9 +141,9 @@ public class FrameworkRequestErrorTests
     [Fact]
     public async Task Paths_outside_the_chosen_branch_keep_the_framework_default()
     {
-        using var server = await StartAsync(throwOnBadRequest: false);
+        using var host = await StartAsync(throwOnBadRequest: false);
 
-        using var response = await server.CreateClient().GetAsync("/page/missing");
+        using var response = await host.GetTestClient().GetAsync("/page/missing");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());

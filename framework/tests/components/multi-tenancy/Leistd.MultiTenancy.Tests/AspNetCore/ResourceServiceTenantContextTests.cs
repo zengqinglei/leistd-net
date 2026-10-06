@@ -28,60 +28,10 @@ namespace Leistd.MultiTenancy.Tests.AspNetCore;
 /// <para>边界改由权限定义的 <c>MultiTenancySides</c> 承担：宿主上下文只能看到宿主行
 /// （过滤器仍然生效，只是按 <c>TenantId IS NULL</c>），跨租户操作需要 Host 侧权限。</para>
 /// </remarks>
-public class ResourceServiceTenantContextTests : IAsyncLifetime
+public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests.HostFixture fixture)
+    : IClassFixture<ResourceServiceTenantContextTests.HostFixture>
 {
-    private IHost _host = default!;
-    private HttpClient _client = default!;
-
-    public async Task InitializeAsync()
-    {
-        _host = await new HostBuilder()
-            .ConfigureWebHost(builder => builder
-                .UseTestServer()
-                // 刻意不注册任何 ITenantStore：资源服务没有注册表，
-                // 若中间件在本形态下仍去查存储，这里会直接抛出来
-                .ConfigureServices(services => services.AddMultiTenancy(options =>
-                {
-                    options.ValidateResolvedTenant = false;
-                    // 即便配了子域名格式也不该生效——链已被收窄
-                    options.DomainFormat = "{0}.example.com";
-                }))
-                .Configure(app =>
-                {
-                    app.Use(async (context, next) =>
-                    {
-                        if (context.Request.Headers.TryGetValue("X-Test-Auth", out var subject))
-                        {
-                            var claims = new List<Claim> { new("sub", subject.ToString()) };
-                            foreach (var value in context.Request.Headers["X-Test-Tenant-Claim"])
-                            {
-                                claims.Add(new Claim(CustomClaimTypes.TenantId, value!));
-                            }
-
-                            context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
-                        }
-
-                        await next(context);
-                    });
-
-                    app.UseMultiTenancy();
-                    app.Run(async context =>
-                    {
-                        var tenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
-                        await context.Response.WriteAsync(tenant.Id?.ToString() ?? "host");
-                    });
-                }))
-            .StartAsync();
-
-        _client = _host.GetTestClient();
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _host.StopAsync();
-        _host.Dispose();
-    }
+    private readonly HttpClient _client = fixture.Client;
 
     [Fact]
     public async Task Verified_claim_establishes_the_tenant_without_a_store()
@@ -97,8 +47,8 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
     /// 已认证但无租户 claim：宿主上下文，不是错误。
     /// </summary>
     /// <remarks>
-    /// 这一档是删掉平行中间件换来的。机器主体（客户端凭据）、宿主用户、平台运维端点
-    /// 都落在这里；此前它们一律 401，控制面接口只能标成公开或搬去 Identity 服务。
+    /// 机器主体（客户端凭据）、宿主用户、平台运维端点都落在这里；若一律 401，
+    /// 控制面接口只能标成公开或搬去 Identity 服务。
     /// </remarks>
     [Fact]
     public async Task Authenticated_principal_without_a_tenant_claim_runs_as_host()
@@ -192,7 +142,7 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
     /// 多条租户 claim 一律失败关闭，即使两个值完全相同
     /// </summary>
     /// <remarks>
-    /// <para>此前用的是 <c>FindFirst()</c>：两条 claim 静默取第一条。那是在安全边界上做静默选择——
+    /// <para>若用 <c>FindFirst()</c>，两条 claim 会静默取第一条。那是在安全边界上做静默选择——
     /// 攻击者只要能让令牌多出一条，就能决定后续所有租户过滤器、权限检查和写入落值的归属。</para>
     /// <para>值相同的那一档也必须拒绝。"反正结果一样所以无害"是拿当前实现的巧合当保证：
     /// 一旦哪天取的不是第一条，行为就变了；而且它会掩盖签发侧真实存在的缺陷——
@@ -236,5 +186,65 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
 
         var response = await _client.SendAsync(request);
         return await response.Content.ReadAsStringAsync();
+    }
+
+    /// <summary>
+    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public IHost Host { get; private set; } = default!;
+
+        public HttpClient Client { get; private set; } = default!;
+
+        public async Task InitializeAsync()
+        {
+            Host = await new HostBuilder()
+                .ConfigureWebHost(builder => builder
+                    .UseTestServer()
+                    // 刻意不注册任何 ITenantStore：资源服务没有注册表，
+                    // 若中间件在本形态下仍去查存储，这里会直接抛出来
+                    .ConfigureServices(services => services.AddMultiTenancy(options =>
+                    {
+                        options.ValidateResolvedTenant = false;
+                        // 即便配了子域名格式也不该生效——链已被收窄
+                        options.DomainFormat = "{0}.example.com";
+                    }))
+                    .Configure(app =>
+                    {
+                        app.Use(async (context, next) =>
+                        {
+                            if (context.Request.Headers.TryGetValue("X-Test-Auth", out var subject))
+                            {
+                                var claims = new List<Claim> { new("sub", subject.ToString()) };
+                                foreach (var value in context.Request.Headers["X-Test-Tenant-Claim"])
+                                {
+                                    claims.Add(new Claim(CustomClaimTypes.TenantId, value!));
+                                }
+
+                                context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+                            }
+
+                            await next(context);
+                        });
+
+                        app.UseMultiTenancy();
+                        app.Run(async context =>
+                        {
+                            var tenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
+                            await context.Response.WriteAsync(tenant.Id?.ToString() ?? "host");
+                        });
+                    }))
+                .StartAsync();
+
+            Client = Host.GetTestClient();
+        }
+
+        public async Task DisposeAsync()
+        {
+            Client.Dispose();
+            await Host.StopAsync();
+            Host.Dispose();
+        }
     }
 }

@@ -7,8 +7,7 @@ namespace Leistd.MultiTenancy.Tests.TestDoubles;
 /// 测试用的配置型 <see cref="ITenantStore"/>：让"宿主形态"的用例有一个注册表可查。
 /// </summary>
 /// <remarks>
-/// <para>本类曾是 <c>Leistd.MultiTenancy.Core</c> 的公开 API，2026-09-16 移来测试项目。
-/// 移动理由：它承诺的场景在本框架里不存在——持有注册表的宿主用 EF 实现，
+/// <para>本类只作测试替身，不作为公开 API：它对应的场景在本框架里不存在——持有注册表的宿主用 EF 实现，
 /// 资源服务把 <c>ValidateResolvedTenant</c> 置为 <see langword="false"/> 后根本不查 Store。
 /// 而 <c>IsActive</c> 是访问控制状态，配置型清单改一次要重启进程，
 /// 陈旧窗口比框架明令禁止的缓存还长（见 <c>EfCoreTenantStore</c> 的"刻意不缓存"）。</para>

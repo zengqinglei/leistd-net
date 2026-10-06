@@ -24,58 +24,11 @@ namespace Leistd.Response.Tests;
 /// 组件经 <c>Map*</c> 提供的端点不走 MVC 过滤器；宿主若用信封形状，靠的就是这一层。
 /// 包错（把错误或文件流包进信封）与漏包（信封形状在组件端点上缺席）都只在响应体里显形。
 /// </remarks>
-public sealed class EndpointResultWrappingTests : IAsyncLifetime
+public sealed class EndpointResultWrappingTests(EndpointResultWrappingTests.HostFixture fixture)
+    : IClassFixture<EndpointResultWrappingTests.HostFixture>
 {
-    private IHost _host = default!;
-    private HttpClient _client = default!;
-
-    public async Task InitializeAsync()
-    {
-        _host = await new HostBuilder()
-            .ConfigureWebHost(web => web
-                .UseTestServer()
-                .ConfigureServices(services => services.AddRouting())
-                .Configure(app =>
-                {
-                    app.UseRouting();
-                    app.UseEndpoints(endpoints =>
-                    {
-                        var group = endpoints.MapGroup("/api").WithResultWrapper();
-                        group.MapGet("/plain", () => new { Name = "order" });
-                        group.MapGet("/ok", () => TypedResults.Ok(new { Name = "order" }));
-                        group.MapPost("/created", () => TypedResults.Created("/api/plain", new { Name = "order" }));
-                        group.MapPost("/created-envelope", ()
-                            => TypedResults.Created("/api/plain", Result<object>.Ok(new { Name = "order" })));
-                        group.MapGet("/file", () => TypedResults.File("x"u8.ToArray(), "text/plain", "x.txt"));
-                        // 宿主自建的 JSON 结果：运行时原样放行（不是 Ok<T>），元数据也不该被改
-                        group.MapGet("/json", () => TypedResults.Json(new Payload("order"))).Produces<Payload>();
-                        // 多分支返回：只有 Ok<T> 那一支会被包装，NotFound 一支照旧
-                        group.MapGet("/either/{found:bool}", Results<Ok<Payload>, NotFound> (bool found)
-                            => found ? TypedResults.Ok(new Payload("order")) : TypedResults.NotFound());
-                        // 声明成 object 的处理器返回裸值：运行时会被包装，元数据也要跟着改
-                        group.MapGet("/object", object () => new Payload("order")).Produces<Payload>();
-                        // 两个 200 分支：两条元数据都要改
-                        group.MapGet("/two-ok/{first:bool}", Results<Ok<Payload>, Ok<string>> (bool first)
-                            => first ? TypedResults.Ok(new Payload("order")) : TypedResults.Ok("plain"));
-                        // 文件端点显式声明 200：同理
-                        group.MapGet("/declared-file", () => TypedResults.File("x"u8.ToArray(), "text/plain"))
-                            .Produces<byte[]>(contentType: "text/plain");
-                        group.MapDelete("/empty", () => TypedResults.NoContent());
-                        group.MapGet("/missing", () => TypedResults.NotFound(new { Name = "order" }));
-                        group.MapGet("/already", () => Result<string>.Ok("x"));
-                        group.MapGet("/raw", () => new { Name = "order" }).WithMetadata(new NoWrapAttribute());
-                    });
-                }))
-            .StartAsync();
-        _client = _host.GetTestClient();
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _host.StopAsync();
-        _host.Dispose();
-    }
+    private readonly IHost _host = fixture.Host;
+    private readonly HttpClient _client = fixture.Client;
 
     [Fact]
     public async Task A_plain_value_is_wrapped()
@@ -293,5 +246,63 @@ public sealed class EndpointResultWrappingTests : IAsyncLifetime
         var body = await _client.GetFromJsonAsync<JsonElement>("/api/raw");
 
         Assert.Equal("order", body.GetProperty("name").GetString());
+    }
+
+    /// <summary>
+    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public IHost Host { get; private set; } = default!;
+
+        public HttpClient Client { get; private set; } = default!;
+
+        public async Task InitializeAsync()
+        {
+            Host = await new HostBuilder()
+                .ConfigureWebHost(web => web
+                    .UseTestServer()
+                    .ConfigureServices(services => services.AddRouting())
+                    .Configure(app =>
+                    {
+                        app.UseRouting();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            var group = endpoints.MapGroup("/api").WithResultWrapper();
+                            group.MapGet("/plain", () => new { Name = "order" });
+                            group.MapGet("/ok", () => TypedResults.Ok(new { Name = "order" }));
+                            group.MapPost("/created", () => TypedResults.Created("/api/plain", new { Name = "order" }));
+                            group.MapPost("/created-envelope", ()
+                                => TypedResults.Created("/api/plain", Result<object>.Ok(new { Name = "order" })));
+                            group.MapGet("/file", () => TypedResults.File("x"u8.ToArray(), "text/plain", "x.txt"));
+                            // 宿主自建的 JSON 结果：运行时原样放行（不是 Ok<T>），元数据也不该被改
+                            group.MapGet("/json", () => TypedResults.Json(new Payload("order"))).Produces<Payload>();
+                            // 多分支返回：只有 Ok<T> 那一支会被包装，NotFound 一支照旧
+                            group.MapGet("/either/{found:bool}", Results<Ok<Payload>, NotFound> (bool found)
+                                => found ? TypedResults.Ok(new Payload("order")) : TypedResults.NotFound());
+                            // 声明成 object 的处理器返回裸值：运行时会被包装，元数据也要跟着改
+                            group.MapGet("/object", object () => new Payload("order")).Produces<Payload>();
+                            // 两个 200 分支：两条元数据都要改
+                            group.MapGet("/two-ok/{first:bool}", Results<Ok<Payload>, Ok<string>> (bool first)
+                                => first ? TypedResults.Ok(new Payload("order")) : TypedResults.Ok("plain"));
+                            // 文件端点显式声明 200：同理
+                            group.MapGet("/declared-file", () => TypedResults.File("x"u8.ToArray(), "text/plain"))
+                                .Produces<byte[]>(contentType: "text/plain");
+                            group.MapDelete("/empty", () => TypedResults.NoContent());
+                            group.MapGet("/missing", () => TypedResults.NotFound(new { Name = "order" }));
+                            group.MapGet("/already", () => Result<string>.Ok("x"));
+                            group.MapGet("/raw", () => new { Name = "order" }).WithMetadata(new NoWrapAttribute());
+                        });
+                    }))
+                .StartAsync();
+            Client = Host.GetTestClient();
+        }
+
+        public async Task DisposeAsync()
+        {
+            Client.Dispose();
+            await Host.StopAsync();
+            Host.Dispose();
+        }
     }
 }

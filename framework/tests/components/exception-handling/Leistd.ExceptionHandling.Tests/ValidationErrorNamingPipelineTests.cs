@@ -19,15 +19,16 @@ using Leistd.ExceptionHandling.AspNetCore.Constants;
 namespace Leistd.ExceptionHandling.Tests;
 
 /// <summary>
-/// 真实 ASP.NET 管道回归：自动 400（[ApiController] 模型校验 → <see cref="DependencyInjection.ConfigureApiValidation"/>
+/// 真实 ASP.NET 管道：自动 400（[ApiController] 模型校验 → <see cref="DependencyInjection.ConfigureApiValidation"/>
 /// 的 InvalidModelStateResponseFactory，经 MVC AddJsonOptions 序列化）与显式验证异常（<see cref="BusinessExceptionHandler"/>
 /// → IProblemDetailsService，经 ConfigureHttpJsonOptions 序列化）走的是**两套独立 JSON 配置**。本用例给两者施加**同一条
 /// 会改名所有属性的自定义命名策略（全大写）**，断言两条响应中 errors 数组内 <see cref="ErrorItem"/> 的属性名一致地变为
-/// FIELD/DETAIL——守卫「两套配置必须统一」这一关键修复不被后续无意拆开，并证明 ErrorItem 未固定 [JsonPropertyName]。
+/// FIELD/DETAIL——两套配置一旦被拆开就会变红，并证明 ErrorItem 未固定 [JsonPropertyName]。
 /// （命名策略只作用于扩展项的值对象；顶层 type/title/status/detail/instance 由内置 ProblemDetailsJsonConverter 固定小写
 /// 写出，扩展键 errors 按字典键原样写出——两者本就不随策略变化，故不作为断言目标。）
 /// </summary>
-public class ValidationErrorNamingPipelineTests
+public class ValidationErrorNamingPipelineTests(ValidationErrorNamingPipelineTests.HostFixture fixture)
+    : IClassFixture<ValidationErrorNamingPipelineTests.HostFixture>
 {
     // 会改变所有属性名的自定义命名策略：全大写。若任一路径固定了属性名/未跟随宿主策略，断言即失败。
     private sealed class UpperCaseNamingPolicy : JsonNamingPolicy
@@ -95,8 +96,7 @@ public class ValidationErrorNamingPipelineTests
     [Fact]
     public async Task Automatic_and_explicit_validation_use_same_host_naming_policy_and_validation_type()
     {
-        using var host = await StartHostAsync();
-        using var client = host.GetTestClient();
+        var client = fixture.Client;
 
         // 自动 400：缺 Name → 校验失败。
         var r400 = await client.PostAsJsonAsync("/probe/auto", new { });
@@ -131,14 +131,13 @@ public class ValidationErrorNamingPipelineTests
     }
 
     // 字段名要与请求体的 JSON 契约同名，前端才能把错误落回对应的输入框。
-    // 自动 400 原本写出 C# 属性名（Name），而显式验证的约定与 JSON 契约都是 camelCase（name）——
+    // 自动 400 默认写出 C# 属性名（Name），而显式验证的约定与 JSON 契约都是 camelCase（name）——
     // 同一个字段在两条路径上叫法不同，调用方只能靠大小写不敏感去猜。
     // 用全大写策略断言：跟随的是宿主策略，而不是写死了某一种命名。
     [Fact]
     public async Task Auto400_field_names_follow_the_host_json_naming_policy()
     {
-        using var host = await StartHostAsync();
-        using var client = host.GetTestClient();
+        var client = fixture.Client;
 
         Assert.Equal(["DISPLAYNAME"], await ReadFieldsAsync(client, "/probe/auto-properties"));
     }
@@ -147,8 +146,7 @@ public class ValidationErrorNamingPipelineTests
     [Fact]
     public async Task Auto400_for_malformed_json_does_not_echo_parser_details()
     {
-        using var host = await StartHostAsync();
-        using var client = host.GetTestClient();
+        var client = fixture.Client;
 
         var response = await client.PostAsync(
             "/probe/auto",
@@ -164,7 +162,7 @@ public class ValidationErrorNamingPipelineTests
         Assert.DoesNotContain("LineNumber", raw, StringComparison.Ordinal);
     }
 
-    // 两条校验路径的标题同一取法：显式验证按 Title:{状态码} 本地化，自动 400 原本写死英文。
+    // 两条校验路径的标题同一取法：显式验证按 Title:{状态码} 本地化，自动 400 默认写死英文。
     [Fact]
     public async Task Auto400_title_is_localized_the_same_way_as_business_errors()
     {
@@ -181,8 +179,7 @@ public class ValidationErrorNamingPipelineTests
     [Fact]
     public async Task Auto400_title_keeps_the_english_sentence_without_localization()
     {
-        using var host = await StartHostAsync();
-        using var client = host.GetTestClient();
+        var client = fixture.Client;
 
         var response = await client.PostAsJsonAsync("/probe/auto", new { });
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -217,11 +214,13 @@ public class ValidationErrorNamingPipelineTests
     [Fact]
     public async Task Auto400_uses_the_official_activity_id()
     {
-        using var host = await StartHostAsync();
-        using var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Test-Activity", "true");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/probe/auto")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        request.Headers.Add("X-Test-Activity", "true");
 
-        var response = await client.PostAsJsonAsync("/probe/auto", new { });
+        var response = await fixture.Client.SendAsync(request);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var traceId = document.RootElement.GetProperty("traceId").GetString();
 
@@ -233,6 +232,29 @@ public class ValidationErrorNamingPipelineTests
     {
         using var doc = JsonDocument.Parse(body);
         return doc.RootElement.TryGetProperty("type", out var t) ? t.GetString() : null;
+    }
+
+    /// <summary>
+    /// 默认配置的共享宿主；需要替换本地化器的用例另建宿主。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public IHost Host { get; private set; } = default!;
+
+        public HttpClient Client { get; private set; } = default!;
+
+        public async Task InitializeAsync()
+        {
+            Host = await StartHostAsync();
+            Client = Host.GetTestClient();
+        }
+
+        public async Task DisposeAsync()
+        {
+            Client.Dispose();
+            await Host.StopAsync();
+            Host.Dispose();
+        }
     }
 }
 

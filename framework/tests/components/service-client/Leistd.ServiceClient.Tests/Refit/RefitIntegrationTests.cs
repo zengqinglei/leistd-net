@@ -22,9 +22,10 @@ namespace Leistd.ServiceClient.Tests.Refit;
 /// Refit 路径的数据格式矩阵与契约一致性：JSON/route/query、表单、multipart 文件上传、
 /// 二进制下载、错误还原为 <see cref="RemoteServiceException"/>、标准管道（TraceId/用户头）透传。
 /// </summary>
-public sealed class RefitIntegrationTests : IAsyncLifetime
+public sealed class RefitIntegrationTests(RefitIntegrationTests.HostFixture fixture)
+    : IClassFixture<RefitIntegrationTests.HostFixture>
 {
-    private WebApplication _host = null!;
+    private readonly WebApplication _host = fixture.Host;
 
     public sealed class FormatApiOptions : ServiceClientOptions;
 
@@ -65,67 +66,6 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     private static readonly byte[] DownloadPayload = Encoding.UTF8.GetBytes("binary-payload-0123456789");
-
-    public async Task InitializeAsync()
-    {
-        var builder = WebApplication.CreateSlimBuilder();
-        builder.Logging.ClearProviders();
-        builder.WebHost.UseTestServer();
-        var app = builder.Build();
-
-        app.MapGet("/api/items/{id:guid}", (Guid id, string q) =>
-            Results.Json(new { id, name = "item", q }));
-
-        app.MapGet("/api/headers-echo", (HttpContext context) => Results.Json(new
-        {
-            userId = context.Request.Headers["X-User-Id"].FirstOrDefault(),
-            traceId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault(),
-        }));
-
-        app.MapPost("/api/form", async (HttpRequest request) =>
-        {
-            if (!request.HasFormContentType)
-            {
-                return Results.BadRequest();
-            }
-
-            var form = await request.ReadFormAsync();
-            return Results.Json(form.ToDictionary(f => f.Key, f => f.Value.ToString()));
-        });
-
-        app.MapPost("/api/upload", async (HttpRequest request) =>
-        {
-            var form = await request.ReadFormAsync();
-            var file = form.Files["file"];
-            if (file is null)
-            {
-                return Results.BadRequest();
-            }
-
-            return Results.Json(new
-            {
-                fileName = file.FileName,
-                contentType = file.ContentType,
-                size = file.Length,
-                note = form["note"].ToString(),
-            });
-        });
-
-        app.MapGet("/api/download", () => Results.Bytes(DownloadPayload, "application/octet-stream"));
-
-        app.MapGet("/api/download-error", () => Results.Json(
-            new { status = 500, code = "Storage:Unavailable", message = "存储不可用", traceId = "rt-download" },
-            statusCode: 500));
-
-        app.MapGet("/api/error", () => Results.Json(
-            new { status = 404, code = "Item:NotFound", message = "条目不存在", traceId = "rt-error" },
-            statusCode: 404));
-
-        await app.StartAsync();
-        _host = app;
-    }
-
-    public async Task DisposeAsync() => await _host.DisposeAsync();
 
     private ServiceProvider CreateCaller(ICurrentUser? currentUser = null)
     {
@@ -257,5 +197,74 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
         Assert.Equal("rt-error", exception.RemoteTraceId);
         Assert.Contains("条目不存在", exception.Message);
         Assert.IsNotAssignableFrom<ApiException>(exception); // 错误契约与手写路径统一
+    }
+
+    /// <summary>
+    /// 本类用例共享的远端服务：端点固定、只回显请求，用例之间没有逐测可变的宿主状态。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public WebApplication Host { get; private set; } = null!;
+
+        public async Task InitializeAsync()
+        {
+            var builder = WebApplication.CreateSlimBuilder();
+            builder.Logging.ClearProviders();
+            builder.WebHost.UseTestServer();
+            var app = builder.Build();
+
+            app.MapGet("/api/items/{id:guid}", (Guid id, string q) =>
+                Results.Json(new { id, name = "item", q }));
+
+            app.MapGet("/api/headers-echo", (HttpContext context) => Results.Json(new
+            {
+                userId = context.Request.Headers["X-User-Id"].FirstOrDefault(),
+                traceId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault(),
+            }));
+
+            app.MapPost("/api/form", async (HttpRequest request) =>
+            {
+                if (!request.HasFormContentType)
+                {
+                    return Results.BadRequest();
+                }
+
+                var form = await request.ReadFormAsync();
+                return Results.Json(form.ToDictionary(f => f.Key, f => f.Value.ToString()));
+            });
+
+            app.MapPost("/api/upload", async (HttpRequest request) =>
+            {
+                var form = await request.ReadFormAsync();
+                var file = form.Files["file"];
+                if (file is null)
+                {
+                    return Results.BadRequest();
+                }
+
+                return Results.Json(new
+                {
+                    fileName = file.FileName,
+                    contentType = file.ContentType,
+                    size = file.Length,
+                    note = form["note"].ToString(),
+                });
+            });
+
+            app.MapGet("/api/download", () => Results.Bytes(DownloadPayload, "application/octet-stream"));
+
+            app.MapGet("/api/download-error", () => Results.Json(
+                new { status = 500, code = "Storage:Unavailable", message = "存储不可用", traceId = "rt-download" },
+                statusCode: 500));
+
+            app.MapGet("/api/error", () => Results.Json(
+                new { status = 404, code = "Item:NotFound", message = "条目不存在", traceId = "rt-error" },
+                statusCode: 404));
+
+            await app.StartAsync();
+            Host = app;
+        }
+
+        public async Task DisposeAsync() => await Host.DisposeAsync();
     }
 }

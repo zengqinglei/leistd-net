@@ -22,7 +22,7 @@ namespace Leistd.Authorization.Tests.EntityFrameworkCore;
 /// 授权存储必须写进<b>工作单元绑定的那个</b>数据库，并进同一个事务。
 /// </summary>
 /// <remarks>
-/// <para>这是 P0-1 的失败边界回归，刻意走完整链路：真实 <c>IUnitOfWorkManager</c> +
+/// <para>守的是租户路由的失败边界，刻意走完整链路：真实 <c>IUnitOfWorkManager</c> +
 /// 真实 <c>IConnectionStringResolver</c> + 宿主形态的 <c>AddDbContext</c> 回调
 /// （读 <c>DbContextCreationContext.Current</c>，回落默认连接）。用
 /// <c>FixedDbContextProvider</c> 的单元测试<b>覆盖不到这个缺陷</b>——它直接把上下文递进去，
@@ -116,7 +116,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
             await unitOfWork.CompleteAsync();
         }
 
-        // 修复前：落到宿主库（回调走回落分支），租户库里什么都没有
+        // 若从容器直接解析上下文：落到宿主库（回调走回落分支），租户库里什么都没有
         Assert.Equal(0, await CountGrantsAsync(_hostConnectionString));
         Assert.True(await CountGrantsAsync(_tenantConnectionString) > 0,
             "grant must land in the tenant database");
@@ -170,7 +170,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
     public async Task A_di_resolving_provider_would_send_the_grant_to_the_wrong_database()
     {
         // 本条钉住上面那些断言的**鉴别力**：同一条代码路径，只把 IDbContextProvider 换成
-        // "从 DI 直接解析 TDbContext"（即修复前存储的行为），落库目标就从租户库翻到宿主库。
+        // "从 DI 直接解析 TDbContext"，落库目标就从租户库翻到宿主库。
         //
         // 换句话说，如果哪天有人把存储改回直接注入 TDbContext，
         // A_grant_written_under_a_tenant_lands_in_the_tenant_database 一定会红——它不是一条空测试。
@@ -228,7 +228,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         }
     }
 
-    /// <summary>不读 <c>DbContextCreationContext</c>，直接问容器要上下文——修复前存储的等价行为。</summary>
+    /// <summary>不读 <c>DbContextCreationContext</c>，直接问容器要上下文——用来证明用例能区分两种路由。</summary>
     private sealed class DiResolvingDbContextProvider<TDbContext>(IServiceProvider serviceProvider)
         : IDbContextProvider<TDbContext>
         where TDbContext : DbContext

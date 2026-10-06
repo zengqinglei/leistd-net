@@ -162,7 +162,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     /// 一个租户解析不出这个名字，单列为失败，其余租户照常返回。
     /// </summary>
     /// <remarks>
-    /// 以前整体抛出：一个租户的配置错误挡住所有租户的迁移。也不能静默略过它——
+    /// 不能整体抛出：那样一个租户的配置错误会挡住所有租户的迁移。也不能静默略过它——
     /// 那个库会停在旧结构上，下一次发版才炸——所以它必须出现在失败清单里。
     /// </remarks>
     [Fact]

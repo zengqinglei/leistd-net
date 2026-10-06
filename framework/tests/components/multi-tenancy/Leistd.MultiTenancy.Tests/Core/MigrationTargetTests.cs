@@ -78,7 +78,7 @@ public class MigrationTargetTests
     /// </summary>
     /// <remarks>
     /// 去重在提供器里做，迁移作业与运行时逐库作业共用这一份清单；
-    /// 由调用方各自去重时，两边的规则迟早会分叉（回归点：DbMigrator 与运行时曾各写一份）。
+    /// 由调用方各自去重时，两边的规则迟早会分叉。
     /// </remarks>
     [Fact]
     public async Task Tenants_sharing_a_database_yield_one_target()

@@ -335,12 +335,10 @@ public sealed class OperationRecordStoreTests : IDisposable
 
     /// <summary>宿主读者看得到全部三层，含不属于自己、乃至没有操作人的 <c>Actor</c> 层记录。</summary>
     /// <remarks>
-    /// <para><b>这条用例补的是一处真实漏网。</b>此前三条用例分别覆盖"不传即不过滤"、租户读者、
-    /// 未知读者，<b>唯独没有一条用 <c>Host</c> 作用域查询过</b>。于是
-    /// <c>OperationRecordVisibilityScope.Host</c> 的注释写着"所有层级都可见"、架构文档写着
-    /// "<c>Actor</c> = 本人 + 上面两层"，而实现里 <c>Host</c> 的 <c>ActorId</c> 恒为
-    /// <see langword="null"/>、<c>actorId != null</c> 恒假，把 <c>Actor</c> 层整层滤掉。</para>
-    /// <para>真实后果是宿主管理员<b>看不到自己的登录记录</b>——界面只显示"暂无操作记录"，
+    /// <para>其余用例覆盖"不传即不过滤"、租户读者与未知读者；这一条专门用 <c>Host</c> 作用域查询。
+    /// <c>Host</c> 的 <c>ActorId</c> 为 <see langword="null"/>，按 <c>actorId != null</c> 过滤
+    /// <c>Actor</c> 层就会整层滤掉，与"所有层级都可见"的契约相反。</para>
+    /// <para>那样的后果是宿主管理员<b>看不到自己的登录记录</b>——界面只显示"暂无操作记录"，
     /// 不报错、不提示。<c>actor.anonymous</c> 那条正是这个形态：<c>auth.login.succeeded</c>
     /// 写在登录成功的同一次请求里，此刻主体仍是匿名，操作人字段为空是<b>刻意</b>的
     /// （"谁登录了"由目标承载），因此它既不属于任何人、又必须对宿主可见。</para>

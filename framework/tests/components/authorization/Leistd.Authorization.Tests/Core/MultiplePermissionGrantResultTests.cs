@@ -8,7 +8,7 @@ namespace Leistd.Authorization.Tests.Core;
 /// 多权限结果在空集合上必须失败关闭。
 /// </summary>
 /// <remarks>
-/// 回归点：<c>Enumerable.All</c> 对空序列返回 <c>true</c>（全称量化在空集上恒真）。
+/// <c>Enumerable.All</c> 对空序列返回 <c>true</c>（全称量化在空集上恒真）。
 /// 直接沿用会让 <c>AllGranted</c> 成为失败开放的授权判据——
 /// <c>IsGrantedAsync(string[])</c> 对 null、空数组与全空白入参都返回空结果字典，
 /// 于是 <c>names</c> 意外为空时（拼错常量、配置漏读、上游返回空列表）当场放行。

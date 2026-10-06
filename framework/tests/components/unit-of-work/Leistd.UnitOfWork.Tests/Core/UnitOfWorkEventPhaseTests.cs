@@ -18,7 +18,7 @@ namespace Leistd.UnitOfWork.Tests.Core;
 /// <remarks>
 /// <para>这一组钉的是"缺省阶段"。<c>CompleteAsync</c> 对每个事件发布两趟
 /// （BeforeCommit 一趟、AfterCommit 一趟），靠拦截器挡掉不属于当前阶段的那趟。
-/// 此前只有带 <c>[UnitOfWorkEventHandler]</c> 的处理器才被织入，于是不带特性的处理器
+/// 若只有带 <c>[UnitOfWorkEventHandler]</c> 的处理器才被织入，不带特性的处理器
 /// 完全不被代理，两趟都执行——同一个副作用做两遍，且第二遍还落在"已完成的工作单元"
 /// 之外，走仓储会另开连接自动提交，稳定产生重复数据。</para>
 /// <para>断言的是<b>执行次数与所处阶段</b>，不是内部字段：次数与阶段才是调用方能观察到的后果。</para>

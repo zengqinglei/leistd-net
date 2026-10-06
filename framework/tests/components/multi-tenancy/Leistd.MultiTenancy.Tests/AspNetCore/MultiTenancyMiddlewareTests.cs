@@ -18,83 +18,14 @@ namespace Leistd.MultiTenancy.Tests.AspNetCore;
 /// <summary>
 /// 多租户中间件端到端：解析链优先级、Store 校验失败语义、Change 覆盖下游管道。
 /// </summary>
-public class MultiTenancyMiddlewareTests : IAsyncLifetime
+public class MultiTenancyMiddlewareTests(MultiTenancyMiddlewareTests.HostFixture fixture)
+    : IClassFixture<MultiTenancyMiddlewareTests.HostFixture>
 {
     private static readonly Guid ActiveTenantId = Guid.NewGuid();
     private static readonly Guid InactiveTenantId = Guid.NewGuid();
     private static readonly Guid ClaimTenantId = ActiveTenantId;
 
-    private IHost _host = default!;
-    private HttpClient _client = default!;
-
-    public async Task InitializeAsync()
-    {
-        _host = await new HostBuilder()
-            .ConfigureWebHost(builder => builder
-                .UseTestServer()
-                .ConfigureServices(services =>
-                {
-                    services.AddMultiTenancy();
-                    services.AddInMemoryTenantStore(options =>
-                    {
-                        options.Tenants.Add(new TenantConfiguration
-                        {
-                            Id = ActiveTenantId,
-                            Name = "acme",
-                            NormalizedName = "ACME"
-                        });
-                        options.Tenants.Add(new TenantConfiguration
-                        {
-                            Id = InactiveTenantId,
-                            Name = "frozen",
-                            NormalizedName = "FROZEN",
-                            IsActive = false
-                        });
-                    });
-                })
-                .Configure(app =>
-                {
-                    // 模拟认证：请求头 X-Test-Auth 存在时构造已认证主体，
-                    // X-Test-Tenant-Claim 存在时附 tenant_id claim
-                    app.Use(async (context, next) =>
-                    {
-                        if (context.Request.Headers.TryGetValue("X-Test-Auth", out var user))
-                        {
-                            var claims = new List<Claim> { new("sub", user.ToString()) };
-                            if (context.Request.Headers.TryGetValue("X-Test-Tenant-Claim", out var tenantClaim))
-                            {
-                                claims.Add(new Claim(CustomClaimTypes.TenantId, tenantClaim.ToString()));
-                            }
-
-                            var authenticated = new ClaimsIdentity(claims, "Test");
-                            // X-Test-Anonymous-First：已认证身份前面还有一个未认证的空身份
-                            context.User = context.Request.Headers.ContainsKey("X-Test-Anonymous-First")
-                                ? new ClaimsPrincipal([new ClaimsIdentity(), authenticated])
-                                : new ClaimsPrincipal(authenticated);
-                        }
-
-                        await next(context);
-                    });
-
-                    app.UseMultiTenancy();
-
-                    app.Run(async context =>
-                    {
-                        var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
-                        await context.Response.WriteAsync(currentTenant.Id?.ToString() ?? "host");
-                    });
-                }))
-            .StartAsync();
-
-        _client = _host.GetTestClient();
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _host.StopAsync();
-        _host.Dispose();
-    }
+    private readonly HttpClient _client = fixture.Client;
 
     private async Task<string> GetAsync(string path, params (string Name, string Value)[] headers)
     {
@@ -202,7 +133,7 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
     /// 只有后续身份已认证的主体同样由 claim 定案租户，请求头改写不了
     /// </summary>
     /// <remarks>
-    /// 回归点：租户解析曾只看第一个身份，这样的主体被当成匿名，解析继续交给请求头——
+    /// 租户解析若只看第一个身份，这样的主体会被当成匿名，解析继续交给请求头——
     /// 而授权管线与当前用户都认为它已认证，于是它在一个由请求头选中的租户里被判权、被留痕。
     /// </remarks>
     [Fact]
@@ -225,5 +156,84 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
             ("X-Test-Auth", "u1"),
             ("X-Test-Anonymous-First", "1"),
             ("X-Test-Tenant-Claim", InactiveTenantId.ToString())));
+    }
+
+    /// <summary>
+    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
+    /// </summary>
+    public sealed class HostFixture : IAsyncLifetime
+    {
+        public IHost Host { get; private set; } = default!;
+
+        public HttpClient Client { get; private set; } = default!;
+
+        public async Task InitializeAsync()
+        {
+            Host = await new HostBuilder()
+                .ConfigureWebHost(builder => builder
+                    .UseTestServer()
+                    .ConfigureServices(services =>
+                    {
+                        services.AddMultiTenancy();
+                        services.AddInMemoryTenantStore(options =>
+                        {
+                            options.Tenants.Add(new TenantConfiguration
+                            {
+                                Id = ActiveTenantId,
+                                Name = "acme",
+                                NormalizedName = "ACME"
+                            });
+                            options.Tenants.Add(new TenantConfiguration
+                            {
+                                Id = InactiveTenantId,
+                                Name = "frozen",
+                                NormalizedName = "FROZEN",
+                                IsActive = false
+                            });
+                        });
+                    })
+                    .Configure(app =>
+                    {
+                        // 模拟认证：请求头 X-Test-Auth 存在时构造已认证主体，
+                        // X-Test-Tenant-Claim 存在时附 tenant_id claim
+                        app.Use(async (context, next) =>
+                        {
+                            if (context.Request.Headers.TryGetValue("X-Test-Auth", out var user))
+                            {
+                                var claims = new List<Claim> { new("sub", user.ToString()) };
+                                if (context.Request.Headers.TryGetValue("X-Test-Tenant-Claim", out var tenantClaim))
+                                {
+                                    claims.Add(new Claim(CustomClaimTypes.TenantId, tenantClaim.ToString()));
+                                }
+
+                                var authenticated = new ClaimsIdentity(claims, "Test");
+                                // X-Test-Anonymous-First：已认证身份前面还有一个未认证的空身份
+                                context.User = context.Request.Headers.ContainsKey("X-Test-Anonymous-First")
+                                    ? new ClaimsPrincipal([new ClaimsIdentity(), authenticated])
+                                    : new ClaimsPrincipal(authenticated);
+                            }
+
+                            await next(context);
+                        });
+
+                        app.UseMultiTenancy();
+
+                        app.Run(async context =>
+                        {
+                            var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
+                            await context.Response.WriteAsync(currentTenant.Id?.ToString() ?? "host");
+                        });
+                    }))
+                .StartAsync();
+
+            Client = Host.GetTestClient();
+        }
+
+        public async Task DisposeAsync()
+        {
+            Client.Dispose();
+            await Host.StopAsync();
+            Host.Dispose();
+        }
     }
 }

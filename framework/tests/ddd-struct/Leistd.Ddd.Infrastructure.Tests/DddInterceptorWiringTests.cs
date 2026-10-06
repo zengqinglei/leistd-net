@@ -17,10 +17,9 @@ namespace Leistd.Ddd.Infrastructure.Tests;
 /// <remarks>
 /// <para>本测试刻意<b>不手工 new 拦截器</b>，而是走
 /// <c>AddDddInfrastructure()</c> → <c>AddDbContext&lt;T&gt;(...)</c> → <c>AddDddDbContext&lt;T&gt;()</c>
-/// 这条宿主真实路径。上一轮的并发标记测试手工构造拦截器，因此
-/// <b>证明不了模板那样的宿主接线是否真的挂上了它</b>——而事实是当时没挂：
-/// 框架把类型注册为可解析服务，模板却只挂了审计与领域事件两个，
-/// 生成项目里 <c>IHasConcurrencyStamp</c> 静默不生效。</para>
+/// 这条宿主真实路径。手工构造拦截器的用例
+/// <b>证明不了宿主接线是否真的挂上了它</b>：拦截器只注册为可解析服务、
+/// 却没挂到 DbContext 上时，<c>IHasConcurrencyStamp</c> 静默不生效。</para>
 /// <para>三项能力在同一次保存里一起断言：任何一个从接线里掉出去都会红。</para>
 /// </remarks>
 public sealed class DddInterceptorWiringTests : IAsyncLifetime
@@ -37,7 +36,7 @@ public sealed class DddInterceptorWiringTests : IAsyncLifetime
         services.AddLogging();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         // 最小组合：不单独注册事件总线。领域事件总线随 AddDddInfrastructure 注册，
-        // 此前缺它时解析 DbContext 即抛，宿主必须记得另调 AddLocalEventBus
+        // 缺它时解析 DbContext 即抛，宿主不必另调 AddLocalEventBus
         services.AddDddInfrastructure();
         // 一个实现只注册一次，接口做别名转发。分两条 AddSingleton 会得到两个实例，
         // 处理器加的计数与断言读的计数就不是同一个对象——与 Redis 锁那处重复注册同一类错误

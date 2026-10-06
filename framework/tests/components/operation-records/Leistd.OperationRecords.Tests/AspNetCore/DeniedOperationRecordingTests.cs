@@ -121,8 +121,8 @@ public sealed class DeniedOperationRecordingTests
 
     /// <summary>只给了 Detail 同样算给过原因，不能被换成通用 Forbidden。</summary>
     /// <remarks>
-    /// 回归点：判据曾写成 <c>failure.Code is null</c>，而 <c>FromDetail</c> 给出的原因本来就没有码，
-    /// 于是调用方显式传入的 Detail 被静默丢弃。
+    /// 判据若写成 <c>failure.Code is null</c>，由于 <c>FromDetail</c> 给出的原因本来就没有码，
+    /// 调用方显式传入的 Detail 会被静默丢弃。
     /// </remarks>
     [Fact]
     public async Task A_caller_supplied_detail_without_a_code_is_kept()
@@ -155,7 +155,7 @@ public sealed class DeniedOperationRecordingTests
     /// 注解在哪就记哪，不按 HTTP 方法二次否决
     /// </summary>
     /// <remarks>
-    /// 回归点：早先额外过滤了只记 POST/PUT/PATCH/DELETE。开发者把注解打在敏感的 <c>GET</c>
+    /// 不按 HTTP 方法再筛一道（如只记 POST/PUT/PATCH/DELETE）。开发者把注解打在敏感的 <c>GET</c>
     /// 导出端点上，已经明确表达了"这个动作值得留痕"，框架再筛一道会让它静默失效——
     /// 而失效的表现是"审计里什么都没有"，没有任何报错提示。
     /// </remarks>
@@ -196,7 +196,7 @@ public sealed class DeniedOperationRecordingTests
     }
 
     /// <summary>任一身份已认证即不算匿名，与官方 <c>DenyAnonymousAuthorizationRequirement</c> 一致。</summary>
-    /// <remarks>回归点：曾只看 <c>User.Identity</c>（第一个身份），首身份未认证时整条记录被当成匿名丢掉。</remarks>
+    /// <remarks>若只看 <c>User.Identity</c>（第一个身份），首身份未认证时整条记录会被当成匿名丢掉。</remarks>
     [Fact]
     public async Task A_principal_authenticated_only_by_a_later_identity_is_recorded()
     {
@@ -264,8 +264,8 @@ public sealed class DeniedOperationRecordingTests
     /// 叠了多个策略时，授权依据取实际没通过的那个，而不是书写顺序上的最后一个
     /// </summary>
     /// <remarks>
-    /// 回归点：早先取最后一个具名策略。权限策略之后再叠一个近期 MFA 策略，
-    /// 被权限拒绝时记下的却是 MFA，业务只能靠调整特性顺序规避，而那只是换了一种情况记错。
+    /// 若取最后一个具名策略，权限策略之后再叠一个近期 MFA 策略时，
+    /// 被权限拒绝记下的却是 MFA，业务只能靠调整特性顺序规避，而那只是换了一种情况记错。
     /// </remarks>
     [Theory]
     [InlineData("amr", "mfa", "App.Orders.Update")]

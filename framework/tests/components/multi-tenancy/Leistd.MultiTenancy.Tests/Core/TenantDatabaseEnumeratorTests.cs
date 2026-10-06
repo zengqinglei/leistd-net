@@ -59,8 +59,8 @@ public class TenantDatabaseEnumeratorTests
 
     /// <summary>租户显式登记的连接与宿主相同时，并入宿主库，不另列一项。</summary>
     /// <remarks>
-    /// 回归点：宿主库曾被写死成指纹 <c>"host"</c>，永远不等于任何真实指纹，
-    /// 于是这种租户被列成第二个库——归档、清理会在同一个物理库上执行两遍。
+    /// 宿主库若用固定指纹（如 <c>"host"</c>），永远不等于任何真实指纹，
+    /// 这种租户就会被列成第二个库——归档、清理会在同一个物理库上执行两遍。
     /// </remarks>
     [Fact]
     public async Task A_tenant_connection_equal_to_the_host_is_merged_into_the_host_database()
@@ -209,7 +209,7 @@ public class TenantDatabaseEnumeratorTests
     /// 没有注册任何租户连接解析时，核心注册给出的清单只有宿主库
     /// </summary>
     /// <remarks>
-    /// 单库部署与内存库测试都是这种形态。回归点：早先枚举器只随连接解析注册，
+    /// 单库部署与内存库测试都是这种形态。枚举器若只随连接解析注册，
     /// 宿主在单库模式下解析不到它，只好自己写一个"只有宿主库"的实现并按模式分支注册。
     /// </remarks>
     [Fact]

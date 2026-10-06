@@ -19,7 +19,7 @@ namespace Leistd.MultiTenancy.Tests.ServiceClient;
 /// 远端连接存储：按控制面端点的路由回源，只把"租户不存在"翻成 null，其余错误一律上抛。
 /// </summary>
 /// <remarks>
-/// 手写客户端曾只捕获 Refit 的 <c>ApiException</c>，而服务调用管道把非成功响应统一转成 <c>RemoteServiceException</c>，
+/// 服务调用管道把非成功响应统一转成 <c>RemoteServiceException</c>：客户端若只捕获 Refit 的 <c>ApiException</c>，
 /// "租户不存在返回 null"的分支永远不触发。这里用真实的错误形态断言。
 /// </remarks>
 public sealed class RemoteTenantConnectionStoreTests
