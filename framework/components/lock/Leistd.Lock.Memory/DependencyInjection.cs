@@ -22,6 +22,7 @@ public static class DependencyInjection
     /// 宿主已自行注册 <see cref="IDistributedLock"/> 时不兜底、不覆盖。
     /// <b>兜底是一条静默降级路径</b>：扩到多副本后互斥当场失效而没有任何报错，
     /// 因此兜底的 <see cref="IDistributedLock"/> 首次被解析时打一条 Warning，启动日志里有据可查。
+    /// 可重复调用：服务、兜底与清理服务都只注册一次。
     /// </remarks>
     /// <example>
     /// <code>

@@ -18,6 +18,7 @@ public static class DependencyInjection
     /// 挂在 <see cref="IMvcBuilder"/> 上而不是 <c>IServiceCollection</c>：MVC 由宿主组装，
     /// 组件替宿主调 <c>AddControllers()</c> 会形成第二个 MVC 入口，与宿主自己的
     /// <c>AddJsonOptions(...)</c> 等配置顺序不清。
+    /// 可重复调用：响应包装过滤器与问题详情写入器都只挂一份。
     /// </remarks>
     /// <example>
     /// <code>

@@ -23,6 +23,7 @@ public static class DependencyInjection
     /// 本家族的存储与管理器经 <c>IDbContextProvider&lt;TDbContext&gt;</c> 取上下文
     /// （只有它会设置 <c>DbContextCreationContext.Current</c>，从而拿到本工作单元已解析的连接）。
     /// 与 <c>AddMultiTenancyEfCore</c> 同一约定：组件不替其它组件注册基础设施。
+    /// 同一 DbContext 重复调用幂等；已用另一 DbContext 或其他实现注册过授予存储时抛出 <see cref="InvalidOperationException"/>。
     /// </remarks>
     /// <example>
     /// <code>

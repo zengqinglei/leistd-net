@@ -17,7 +17,8 @@ public static class DependencyInjection
     /// <remarks>
     /// <para>偏好设置由宿主定义：为需要可关闭的组合定义用户级布尔设置，名为 <c>{前缀}.{通知类型}.{渠道名}</c>；
     /// 没有定义的组合一律投递。必达组合经 <see cref="NotificationPreferenceOptions.MandatoryDeliveries"/> 给出。</para>
-    /// <para>与通知组件的注册顺序无关，总是成为唯一的投递过滤器。</para>
+    /// <para>与通知组件的注册顺序无关，总是成为唯一的投递过滤器。可重复调用：过滤器始终只有一条，
+    /// <paramref name="configure"/> 每次都叠加。</para>
     /// </remarks>
     /// <example>
     /// <code>

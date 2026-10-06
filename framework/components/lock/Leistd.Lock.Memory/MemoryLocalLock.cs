@@ -100,7 +100,7 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
             if (entry.TryAcquireLease())
                 return entry;
 
-            // A retired entry may still be visible briefly between retirement and dictionary removal.
+            // 条目已退役但尚未从字典移除时仍可能短暂可见，移除后重取。
             TryRemove(key, entry);
         }
     }

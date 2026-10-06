@@ -14,7 +14,8 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <remarks>
-    /// 用于明确不需要实际投递的环境，不作为发送失败时的兜底。
+    /// 用于明确不需要实际投递的环境，不作为发送失败时的兜底。可重复调用；
+    /// 已注册其他 <see cref="IEmailSender"/> 时不覆盖。
     /// </remarks>
     /// <example>
     /// <code>

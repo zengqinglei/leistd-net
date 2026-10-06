@@ -24,7 +24,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 内部调用 <c>AddSignalR()</c>。通知组件（Leistd.Notifications.AspNetCore.SignalR）
-    /// 可在此基础上叠加自己的 Hub 与发布器。
+    /// 可在此基础上叠加自己的 Hub 与发布器。可重复调用：服务只注册一次。
     /// </remarks>
     /// <example>
     /// <code>

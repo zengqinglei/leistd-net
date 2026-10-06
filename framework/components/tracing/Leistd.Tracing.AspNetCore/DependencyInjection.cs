@@ -11,6 +11,7 @@ namespace Leistd.Tracing.AspNetCore;
 public static class DependencyInjection
 {
     /// <summary>注册关联标识（含核心能力）。</summary>
+    /// <remarks>重复调用的规则同 <c>AddCorrelationIdCore</c>。</remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">在配置节绑定之后应用的覆盖。</param>
     /// <param name="configSectionPath">选项绑定的配置节路径。</param>

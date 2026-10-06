@@ -88,7 +88,7 @@ public static class DependencyInjection
                 request.ApplyCurrentCultureToResponseHeaders = true;
             });
 
-        // 启动预热：把资源解析/坏文件告警提前到启动阶段，而非生产首个请求（P4）
+        // 启动预热：把资源解析/坏文件告警提前到启动阶段，而非生产首个请求
         services.AddHostedService<LocalizationPreloadHostedService>();
 
         return services;

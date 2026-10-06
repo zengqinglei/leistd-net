@@ -23,7 +23,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 不注册 <see cref="ITenantStore"/>；宿主必须选择 EF Core 或内存实现。
-    /// ASP.NET Core 宿主应使用 Web 集成包的 <c>AddMultiTenancy()</c>。
+    /// ASP.NET Core 宿主应使用 Web 集成包的 <c>AddMultiTenancy()</c>。可重复调用，结果与调用一次相同。
     /// </remarks>
     /// <example>
     /// <code>

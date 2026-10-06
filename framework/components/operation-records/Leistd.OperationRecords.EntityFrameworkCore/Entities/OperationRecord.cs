@@ -120,10 +120,10 @@ public class OperationRecord : IMultiTenant
 
     /// <summary>操作人标识列长度上限：容得下 GUID 字符串与机器主体的 client_id。</summary>
     /// <remarks>
-    /// <b>指向 <see cref="OperationRecordInfo.MaxActorIdLength"/>，不再独立取值。</b>
-    /// 此前两处各写一份 128，而用法已经分叉：<see cref="FromInfo"/> 截断按 Core 那份、
-    /// EF 列长度配置按这一份。值相同时相安无事，改任一处就会让截断长度与列长度静默错开——
-    /// 超出的部分要么被数据库拒绝、要么被二次截断。长度是同一个事实，只能有一个源。
+    /// <b>指向 <see cref="OperationRecordInfo.MaxActorIdLength"/>，不独立取值。</b>
+    /// <see cref="FromInfo"/> 的截断按 Core 那份、EF 列长度配置按这一份；两处各自取值时，
+    /// 改任一处就会让截断长度与列长度静默错开——超出的部分要么被数据库拒绝、要么被二次截断。
+    /// 长度是同一个事实，只能有一个源。
     /// </remarks>
     public const int MaxActorIdLength = OperationRecordInfo.MaxActorIdLength;
 

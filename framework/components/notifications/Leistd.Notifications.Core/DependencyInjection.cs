@@ -20,6 +20,7 @@ public static class DependencyInjection
     /// <remarks>
     /// 还需要一个 <c>INotificationStore</c> 实现（如 <c>AddNotificationsEfCore&lt;TDbContext&gt;()</c>）：
     /// 它是发布器的必需依赖，缺失时解析 <c>INotificationPublisher</c> 直接失败，而不是静默只推不落。
+    /// 可重复调用，结果与调用一次相同。
     /// </remarks>
     /// <example>
     /// <code>

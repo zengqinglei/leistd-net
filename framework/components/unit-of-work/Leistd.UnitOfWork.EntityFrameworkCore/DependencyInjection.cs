@@ -12,6 +12,7 @@ public static class DependencyInjection
     /// <summary>
     /// 注册工作单元的 EF Core 支持。
     /// </summary>
+    /// <remarks>可重复调用：服务只注册一次。</remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddUnitOfWork();

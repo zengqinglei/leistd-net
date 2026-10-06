@@ -20,6 +20,7 @@ public static class DependencyInjection
     /// <remarks>
     /// 宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>；
     /// 本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文。
+    /// 同一 DbContext 重复调用幂等；已用另一 DbContext 或其他实现注册过设置存储时抛出 <see cref="InvalidOperationException"/>。
     /// </remarks>
     /// <example>
     /// <code>

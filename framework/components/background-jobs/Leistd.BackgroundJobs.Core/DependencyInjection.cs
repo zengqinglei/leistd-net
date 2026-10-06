@@ -16,7 +16,7 @@ public static class DependencyInjection
     /// <remarks>
     /// <para>只登记描述，不启动调度：宿主还需注册一个调度器实现（如 <c>AddInProcessBackgroundJobs()</c>）。
     /// 组件在自己的 <c>Add*</c> 里登记维护任务，调度器由宿主选；宿主启动时没有调度器会记一条 Warning。</para>
-    /// <para>任务名全局唯一：同名同类型重复登记是幂等的，同名不同类型在登记时抛出——
+    /// <para>任务名全局唯一：同名同类型重复登记是幂等的（保留首次登记的排期与执行范围），同名不同类型在登记时抛出——
     /// 名字同时是集群锁与水位的键，两个任务共用一个名字会互相跳过。</para>
     /// </remarks>
     /// <example>
@@ -46,7 +46,7 @@ public static class DependencyInjection
     /// <summary>
     /// 登记一个周期任务，排期在调度器启动时从容器取（如来自选项）。
     /// </summary>
-    /// <remarks>规则同另一个重载。排期只在调度器启动时取一次，改选项后要重启才影响排期。</remarks>
+    /// <remarks>规则同另一个重载（含重复登记的处理）。排期只在调度器启动时取一次，改选项后要重启才影响排期。</remarks>
     /// <typeparam name="TJob">任务类型。</typeparam>
     /// <param name="services">服务集合。</param>
     /// <param name="name">任务名，全局唯一。</param>

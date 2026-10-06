@@ -19,6 +19,7 @@ public static class DependencyInjection
     /// 调用方仍需把 <see cref="AuditSaveChangesInterceptor"/> 经 <c>DbContextOptionsBuilder.AddInterceptors(...)</c> 挂到目标 DbContext。
     /// 依赖 <see cref="IClock"/> 已注册；<see cref="Leistd.Security.Users.ICurrentUser"/> <b>可选</b>——
     /// 未注册时按匿名处理，时间审计照常落值、用户字段留空。
+    /// 可重复调用：服务只注册一次。
     /// </remarks>
     /// <example>
     /// <code>

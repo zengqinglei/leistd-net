@@ -16,7 +16,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 判定入口与 ACL 处理器在 <c>Leistd.Authorization.Resource.AspNetCore</c> 的 <c>AddResourceAuthorization()</c>，
-    /// 资源 ACL 存储在 EF 包；两者都会调用本方法。
+    /// 资源 ACL 存储在 EF 包；两者都会调用本方法。可重复调用，结果与调用一次相同。
     /// </remarks>
     public static IServiceCollection AddResourceAuthorizationCore(this IServiceCollection services)
     {

@@ -19,6 +19,7 @@ public static class DependencyInjection
     /// <remarks>
     /// 主体来源须显式建立；<see cref="IAmbientContext.Begin"/> 同时建立已注册贡献者的维度。
     /// 仅注册本方法时只有主体维度。Web 宿主用 <c>AddSecurity()</c> 接入 HTTP 主体来源，调用顺序无关。
+    /// 可重复调用：服务只注册一次，各组件替宿主调用不会重复登记。
     /// </remarks>
     /// <example>
     /// <code>

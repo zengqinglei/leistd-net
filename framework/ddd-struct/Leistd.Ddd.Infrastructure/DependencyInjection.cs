@@ -30,6 +30,9 @@ public static class DependencyInjection
     /// <summary>
     /// 注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。
     /// </summary>
+    /// <remarks>
+    /// 可重复调用：服务只注册一次，<paramref name="configureUnitOfWork"/> 每次都叠加；工作单元配置节的规则同 <c>AddUnitOfWork</c>。
+    /// </remarks>
     /// <example>
     /// <code>
     /// // 必要步骤：拦截器织入与漏登记校验都由这个工厂驱动，不装则两者都不生效。
@@ -92,6 +95,8 @@ public static class DependencyInjection
     /// <para>每个已注册 DbContext 都须登记，包括不需要仓储的上下文。
     /// 宿主必须使用 Leistd 服务提供器工厂，才能在构建容器时检测漏登记。
     /// 省略选项时仅登记上下文，不注册仓储。</para>
+    /// <para>同一上下文重复调用只登记一次、保存拦截器只挂一份；但仓储不合并：再次为已有仓储的实体注册仓储
+    /// （包括相同实现）抛出 <see cref="InvalidOperationException"/>，仓储选项须在一处给出。</para>
     /// </remarks>
     /// <example>
     /// <code>

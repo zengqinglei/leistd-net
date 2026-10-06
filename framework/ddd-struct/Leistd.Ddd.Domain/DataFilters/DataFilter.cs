@@ -47,9 +47,7 @@ public class DataFilter<TFilter> : IDataFilter<TFilter>
 {
     private readonly AsyncLocal<FilterState> _filterState = new();
 
-    /// <summary>
-    /// 获取过滤器当前是否启用。
-    /// </summary>
+    /// <inheritdoc />
     public bool IsEnabled
     {
         get
@@ -61,17 +59,13 @@ public class DataFilter<TFilter> : IDataFilter<TFilter>
         }
     }
 
-    /// <summary>
-    /// 在返回的作用域内禁用过滤器。
-    /// </summary>
+    /// <inheritdoc />
     public IDisposable Disable()
     {
         return SetIsEnabled(false);
     }
 
-    /// <summary>
-    /// 在返回的作用域内启用过滤器。
-    /// </summary>
+    /// <inheritdoc />
     public IDisposable Enable()
     {
         return SetIsEnabled(true);

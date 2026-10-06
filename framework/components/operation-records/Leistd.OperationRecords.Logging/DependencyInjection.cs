@@ -27,7 +27,7 @@ public static class DependencyInjection
     /// <para>前置：<c>AddUnitOfWork()</c> 与 <c>AddLocalEventBus()</c>（成功记录借工作单元的提交后阶段写出，
     /// 宿主须启用拦截器织入），以及记录器需要的 <c>IClock</c>、<c>ICurrentTenant</c>、<c>ICurrentUser</c>、
     /// <c>ICorrelationIdProvider</c>。日志类别在启动期须对 Information 开启，否则宿主启动失败。</para>
-    /// <para>与数据库存储互斥：一个宿主只有一个记录写入方。</para>
+    /// <para>与数据库存储互斥：一个宿主只有一个记录写入方。重复调用幂等；已注册数据库存储时抛出 <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>

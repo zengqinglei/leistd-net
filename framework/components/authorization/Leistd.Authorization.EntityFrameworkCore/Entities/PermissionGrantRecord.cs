@@ -17,7 +17,7 @@ public class PermissionGrantRecord : ICreationAuditedObject, IMultiTenant
     /// <summary>权限授予 ID（有序 Guid v7）。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
-    /// <summary>所属租户 Id，null 为宿主授予。</summary>
+    /// <inheritdoc />
     public Guid? TenantId { get; set; }
 
     /// <summary>权限名称。</summary>
@@ -28,7 +28,6 @@ public class PermissionGrantRecord : ICreationAuditedObject, IMultiTenant
 
     /// <summary>授予对象 Key，如 UserId、RoleId。</summary>
     public string ProviderKey { get; set; } = default!;
-
 
     /// <inheritdoc />
     public DateTime CreationTime { get; set; }

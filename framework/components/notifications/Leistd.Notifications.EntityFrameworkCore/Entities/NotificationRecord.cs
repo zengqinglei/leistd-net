@@ -16,7 +16,7 @@ namespace Leistd.Notifications.EntityFrameworkCore.Entities;
 /// </remarks>
 public class NotificationRecord : ICreationAuditedObject, IMultiTenant
 {
-    /// <summary>所属租户 ID；<see langword="null"/> 表示宿主。</summary>
+    /// <inheritdoc />
     public Guid? TenantId { get; set; }
 
     /// <summary>通知 ID（有序 Guid v7）。</summary>

@@ -340,7 +340,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         Disposed?.Invoke(this, new UnitOfWorkEventArgs(this));
     }
 
-    /// <summary>Notifies failure observers without allowing them to interrupt disposal.</summary>
+    /// <summary>通知失败观察者；观察者抛出的异常不会中断释放。</summary>
     protected virtual void OnFailed()
     {
         var args = new UnitOfWorkFailedEventArgs(this, _exception, _isRolledback);

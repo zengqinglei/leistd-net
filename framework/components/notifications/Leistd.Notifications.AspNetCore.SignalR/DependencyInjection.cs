@@ -25,6 +25,7 @@ public static class DependencyInjection
     /// 等价于 <c>AddNotificationsSignalR&lt;NotificationHub&gt;()</c>，配合 <see cref="MapNotificationHub"/> 使用。
     /// 内部只注册通知传输所需的 SignalR 能力，不注册实时业务 Hub、在线状态或业务事件发布器。
     /// 通知持久化请另行调用通知 EF Core 包提供的 AddNotificationsEfCore 泛型方法。
+    /// 重复调用的规则同泛型重载：重复调用幂等，已为通知选定其他 Hub 时抛出 <see cref="InvalidOperationException"/>。
     /// </remarks>
     /// <example>
     /// <code>

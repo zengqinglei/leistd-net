@@ -135,7 +135,12 @@ public static class DependencyInjection
     /// <summary>
     /// 在现有客户端构建器上装配服务客户端标准管道。
     /// </summary>
-    /// <remarks>依次应用传输异常与链路标识处理器。</remarks>
+    /// <remarks>
+    /// <para>依次应用传输异常与链路标识处理器。</para>
+    /// <para>按命名客户端登记：同一客户端以相同 <typeparamref name="TOptions"/> 重复调用（包括已由
+    /// <c>AddServiceClient</c> 装配过的客户端）不重复挂处理器；同一客户端换用另一选项类型时抛出
+    /// <see cref="InvalidOperationException"/>。</para>
+    /// </remarks>
     /// <typeparam name="TOptions">客户端配置类型（须已绑定，如经 <c>services.Configure</c>）</typeparam>
     /// <param name="builder">HttpClient 构建器</param>
     /// <param name="serviceName">下游服务名（日志类别后缀）</param>
@@ -144,7 +149,26 @@ public static class DependencyInjection
         string serviceName)
         where TOptions : ServiceClientOptions, new()
     {
+        ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+
+        // 处理器管道按客户端名累加，重复挂载会让每个请求走两遍传输异常翻译与链路透传；
+        // 两种选项类型各配一次基址时，后配置的静默覆盖前者。
+        var pipeline = new PipelineRegistration(builder.Name, typeof(TOptions));
+        if (builder.Services.Select(d => d.ImplementationInstance).OfType<PipelineRegistration>()
+                .FirstOrDefault(r => r.ClientName == builder.Name) is { } registered)
+        {
+            if (registered == pipeline)
+            {
+                return builder;
+            }
+
+            throw new InvalidOperationException(
+                $"Service client '{builder.Name}' already has the standard pipeline with options {registered.OptionsType.Name}; " +
+                $"it cannot also use options {typeof(TOptions).Name}.");
+        }
+
+        builder.Services.AddSingleton(pipeline);
 
         // 上游故障的状态语义属于本组件的默认值，在这里登记而不是交给宿主逐个 Configure：
         // 漏一个不会有编译或启动错误，只会让 502/503/504 静默变成 500。
@@ -180,4 +204,6 @@ public static class DependencyInjection
 
         return builder;
     }
+
+    private sealed record PipelineRegistration(string ClientName, Type OptionsType);
 }

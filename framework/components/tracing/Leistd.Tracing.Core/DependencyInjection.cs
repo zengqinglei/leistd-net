@@ -15,6 +15,10 @@ namespace Leistd.Tracing;
 public static class DependencyInjection
 {
     /// <summary>注册关联标识核心能力（不含 ASP.NET Core 中间件）。</summary>
+    /// <remarks>
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
+    /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键），校验消息仍按首次调用的配置节给出键名。
+    /// </remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">在配置节绑定之后应用的覆盖。</param>
     /// <param name="configSectionPath">选项绑定的配置节路径。</param>

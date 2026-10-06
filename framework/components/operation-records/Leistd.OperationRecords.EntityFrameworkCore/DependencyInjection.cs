@@ -33,6 +33,7 @@ public static class DependencyInjection
     /// <c>ICurrentUser</c>（<c>AddAmbientContext()</c>）、<c>ICorrelationIdProvider</c>
     /// （<c>AddCorrelationIdCore()</c>）。每条记录都要回答"谁、在哪个租户、哪条链路、什么时间"，
     /// 四样各来自一个独立组件；本组件<b>不</b>替调用方注册——组件由宿主显式组合。</para>
+    /// <para>同一 DbContext 重复调用幂等；已用另一 DbContext 或日志写出注册过记录写入方时抛出 <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>

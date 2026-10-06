@@ -19,6 +19,10 @@ public static class DependencyInjection
     /// <summary>
     /// 注册多租户 Web 集成：绑定配置节，再应用代码里的配置（代码覆盖配置文件）。
     /// </summary>
+    /// <remarks>
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
+    /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键），校验消息仍按首次调用的配置节给出键名。
+    /// </remarks>
     /// <example>
     /// <code>
     /// // 宿主服务：持有租户注册表，解析后校验；选项全部来自 Leistd:MultiTenancy

@@ -898,6 +898,8 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 
 - **工作单元选项校验**：默认选项在启动期校验，`Begin(options)` 的单次选项按同一规则在创建工作单元前校验。`Timeout` 只能为空或在 1 秒到 `int.MaxValue` 秒之间，`IsolationLevel` 只能为空或已定义值；配置错误抛 `OptionsValidationException`（按实际配置节报键），方法参数错误抛 `ArgumentOutOfRangeException`。此前不足 1 秒的 `Timeout` 被截成 0（等于不限时），现在被拒绝；非整秒值改为向上取整。`AddUnitOfWork` 重复调用换用另一配置节时抛出。
 
+- **服务客户端管道只装配一次**：`AddServiceClientPipeline<TOptions>` 按命名客户端只装配一次，同一客户端重复调用不再叠加处理器；同一客户端换另一选项类型时抛 `InvalidOperationException`（此前静默叠两层管道）。
+
 ## 38. 模板：外部账号绑定完成返回空响应（破坏性）
 
 - `POST /api/v1/external-auth/{provider}/link/complete` 成功时由 `{ "linked": true }` 改为 HTTP 200 空响应体；`POST /api/v1/external-auth/{provider}/complete` 改为直接返回登录结果 DTO（JSON 形状不变）。读取 `linked` 字段的客户端改为按状态码判断成功。

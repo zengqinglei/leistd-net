@@ -87,6 +87,8 @@ public static class DependencyInjection
     /// 逐库作业的库目录 <c>ITenantDatabaseDirectory</c> <b>不在这里</b>：它是控制库的存储，由
     /// <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
     /// 连接配置在另一个服务时改用 Core 包的 <c>AddRemoteTenantConnectionResolution</c>，两者二选一。</para>
+    /// <para>可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加。换用另一控制库上下文再调用时，
+    /// 解析器仍是首次登记的那个（按 <c>TryAdd</c> 保留），不报错。</para>
     /// </remarks>
     /// <example>
     /// <code>

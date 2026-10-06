@@ -18,6 +18,7 @@ public static class DependencyInjection
     /// <remarks>
     /// 依赖调用方已注册 <see cref="IPermissionChecker"/> 与
     /// <see cref="IPermissionDefinitionManager"/>，并已调用 <c>AddAuthorization()</c>。
+    /// 可重复调用：策略提供器与授权处理器只登记一次。
     /// </remarks>
     /// <example>
     /// <code>

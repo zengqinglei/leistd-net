@@ -21,6 +21,7 @@ public static class DependencyInjection
     /// 否则任一 <c>Succeed()</c> 即允许（规则、ACL 授予、超级管理员），全部无结论时拒绝。</para>
     /// <para>依赖宿主注册 <c>IPermissionSubjectProvider</c>；Web 宿主另需 <c>AddSecurity()</c> 让当前主体来自 HTTP 请求。资源 ACL 存储
     /// （EF 包的 <c>AddResourceAuthorizationEfCore</c>）可选，未注册时只有规则处理器与超级管理员参与判定。</para>
+    /// <para>可重复调用：服务与资源 ACL 处理器只注册一次。</para>
     /// </remarks>
     /// <example>
     /// <code>

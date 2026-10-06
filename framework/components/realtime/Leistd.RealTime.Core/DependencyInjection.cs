@@ -23,7 +23,7 @@ public static class DependencyInjection
     /// <b>不注册默认订阅授权器。</b>框架不知道资源语义，给不出正确默认值，而"允许任何人
     /// 订阅任意资源"是一个必须由宿主明确做出的决定。公共资源场景显式注册
     /// <see cref="AllowAllRealTimeSubscriptionAuthorizer"/>；未注册时 <c>MapRealTimeHub()</c>
-    /// 让宿主起不来，而不是静默放行。
+    /// 让宿主起不来，而不是静默放行。可重复调用，结果与调用一次相同。
     /// </remarks>
     public static IServiceCollection AddRealTime(this IServiceCollection services)
     {
@@ -33,6 +33,7 @@ public static class DependencyInjection
     /// <summary>
     /// 注册"允许订阅任意资源"的授权器——公共资源场景的显式选择。
     /// </summary>
+    /// <remarks>可重复调用；已注册其他订阅授权器时不覆盖，先注册者生效。</remarks>
     public static IServiceCollection AddAllowAllRealTimeSubscriptions(this IServiceCollection services)
     {
         services.TryAddSingleton<IRealTimeSubscriptionAuthorizer, AllowAllRealTimeSubscriptionAuthorizer>();
@@ -44,7 +45,8 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 前缀按序数比较；需要按用户或租户判定的资源不要用它，实现自己的 <see cref="IRealTimeSubscriptionAuthorizer"/>。
-    /// 与 <see cref="AddAllowAllRealTimeSubscriptions"/> 二选一，先注册者生效。
+    /// 与 <see cref="AddAllowAllRealTimeSubscriptions"/> 二选一，先注册者生效；重复调用同样以首次的前缀为准，
+    /// 不同前缀不合并，需要多个前缀时在一次调用中全部给出。
     /// </remarks>
     /// <example>
     /// <code>

@@ -79,6 +79,10 @@ public static class DependencyInjection
     }
 
     /// <summary>注册全局异常处理器：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。</summary>
+    /// <remarks>
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
+    /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键）。
+    /// </remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">编程式配置（如错误码映射），在配置节绑定之后应用。</param>
     /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:GlobalException</c>。</param>
