@@ -284,7 +284,7 @@ public sealed class PermissionManagementTests
             => Task.FromResult<IReadOnlyList<PermissionGrantSet>>([.. providerKeys.Select(key => GetGrantsAsync(providerName, key).Result)]);
 
         public async Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(string userId, IReadOnlyCollection<string> roleIds, CancellationToken cancellationToken = default)
-            => new(await GetGrantsAsync(PermissionGrantProviderNames.User, userId), await GetGrantsAsync(PermissionGrantProviderNames.Role, roleIds));
+            => new(await GetGrantsAsync(PermissionGrantProviderNames.User, userId, cancellationToken), await GetGrantsAsync(PermissionGrantProviderNames.Role, roleIds, cancellationToken));
 
         public Task<long> ReplaceGrantsAsync(string providerName, string providerKey, IReadOnlyCollection<string> permissionNames, long? expectedVersion = null, CancellationToken cancellationToken = default)
         {

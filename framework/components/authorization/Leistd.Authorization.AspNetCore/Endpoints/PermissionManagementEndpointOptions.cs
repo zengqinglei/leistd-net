@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Leistd.Authorization.Constants;
 
 namespace Leistd.Authorization.AspNetCore.Endpoints;
@@ -28,6 +29,7 @@ public sealed class PermissionManagementEndpointOptions
     public IDictionary<string, string> GrantPolicies { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
     // 策略名为空或主体类型不受支持都抛 ArgumentException；支持范围由端点侧传入，选项不反向依赖路由表
+    [SuppressMessage("Usage", "CA2208", Justification = "paramName 指向宿主在委托里填写的选项属性，与同方法中 ThrowIfNullOrWhiteSpace(CurrentPolicy) 的口径一致")]
     internal void Validate(IReadOnlyCollection<string> supportedProviders)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(CurrentPolicy);

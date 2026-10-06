@@ -49,7 +49,7 @@ public class GlobalExceptionPipelineTests
                         if (path == "/api/custom")
                             throw new CustomApiException("custom failure");
                         if (path == "/api/programmer-error")
-                            throw new ArgumentNullException("input", "developer-only detail");
+                            throw new ArgumentNullException(nameof(context), "developer-only detail");
 
                         context.Response.ContentType = "application/json";
                         await context.Response.WriteAsync("""{"ok":true}""");
