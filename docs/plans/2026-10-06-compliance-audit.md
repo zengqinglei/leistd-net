@@ -142,6 +142,7 @@
 | A14 | P7-1 | `quality.md` 措辞：规范类 finding 引用具体条目；其他 finding 给出预期行为、影响与源码或测试证据 |
 | A15 | 全部包（用户审查发现） | 每个包报告列出新建的类型与文件及其依据的规范条款；主会话提交前核对命名后缀、目录与模块归属是否已在规范登记，未登记的类别先补规范或改用已登记形式（如 `UserRoleNamesQuery` → `Users/UserRoleReader`）；Z 收口时对 `1b0cad7c..HEAD` 全部新增类型再核一遍 |
 | A16 | P1-7（用户裁定方案 A） | 用户角色名查询不设 `*Reader`/`*Query` 类型：Domain 新增 `Users/Repositories/IUserRepository : IRepository<User, Guid>`（`GetRoleNamesAsync`），Infrastructure `Persistence/Repositories/EfCoreUserRepository` 一次连接查询实现，经 `AddRepository<User, EfCoreUserRepository>()` 登记；框架 `AddRepository` 同时注册实现的自定义仓储接口（并入 F6a，追加能力，非破坏）；规范补聚合与自定义仓储规则（已提交）。模板改动为新包 **TB-R**：依赖 TB2a、F6a 与重新打包，先于 TB2b；删除 `Application/Users/UserRoleReader.cs`，三处调用方改注入 `IUserRepository`，补仓储集成测试（含租户过滤与软删除） |
+| A17 | 实施中的更正 | P4-23 前提不成立：空响应体原本已是 502，F2 只删除不可达分支并补用例，无行为变化、不写升级说明；G-12 不启用 CA1812（测试 114 处均为经 DI/反射实例化的误报），死替身由评审与 §7.3 把关；TB2b 的令牌撤销不进业务事务，放在提交前最后一步（失败整体回滚）；F7 新增：修复 `DataFilter<T>` 并行分支状态泄漏；FE4 新增：移除与同源契约矛盾的 `API_GATEWAY` 构建参数与环境中的固定网关域名 |
 
 ### 5.1 执行约束
 
