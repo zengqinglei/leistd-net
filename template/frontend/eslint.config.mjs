@@ -138,6 +138,143 @@ const featureBoundaries = {
   },
 };
 
+const httpStatusOperators = new Set(['===', '!==', '==', '!=']);
+
+/**
+ * 页面按稳定 `code` 分支，不按单个 HTTP 状态码（coding-frontend.md 第 6 节）。拦截 `.status` 与
+ * 100–599 的数字或 `HttpStatusCode.*` 的相等比较、`switch (x.status)` 的同类 `case` 与
+ * `[409, …].includes(x.status)`；`status === 0`（网络不可达）与区间判断不算单个状态码。
+ */
+const noStatusCodeBranch = {
+  meta: {
+    type: 'problem',
+    messages: {
+      statusBranch:
+        'Branch on the stable error code (ApplicationHttpError.code with API_ERROR_CODES), not on a single HTTP status code.',
+    },
+    schema: [],
+  },
+  create(/** @type {any} */ context) {
+    const unwrap = (/** @type {any} */ node) =>
+      node?.type === 'ChainExpression' ? node.expression : node;
+    const isStatus = (/** @type {any} */ node) => {
+      const target = unwrap(node);
+      return (
+        target?.type === 'MemberExpression' && !target.computed && target.property.name === 'status'
+      );
+    };
+    const isStatusCode = (/** @type {any} */ node) => {
+      const target = unwrap(node);
+      if (target?.type === 'Literal') {
+        return typeof target.value === 'number' && target.value >= 100 && target.value <= 599;
+      }
+      return (
+        target?.type === 'MemberExpression' &&
+        target.object.type === 'Identifier' &&
+        target.object.name === 'HttpStatusCode'
+      );
+    };
+    const report = (/** @type {any} */ node) => context.report({ node, messageId: 'statusBranch' });
+    return {
+      BinaryExpression(/** @type {any} */ node) {
+        if (!httpStatusOperators.has(node.operator)) return;
+        if (
+          (isStatus(node.left) && isStatusCode(node.right)) ||
+          (isStatus(node.right) && isStatusCode(node.left))
+        ) {
+          report(node);
+        }
+      },
+      SwitchCase(/** @type {any} */ node) {
+        if (node.test && isStatusCode(node.test) && isStatus(node.parent.discriminant)) {
+          report(node);
+        }
+      },
+      CallExpression(/** @type {any} */ node) {
+        const callee = unwrap(node.callee);
+        if (
+          callee?.type === 'MemberExpression' &&
+          callee.property.name === 'includes' &&
+          callee.object.type === 'ArrayExpression' &&
+          callee.object.elements.some(isStatusCode) &&
+          isStatus(node.arguments[0])
+        ) {
+          report(node);
+        }
+      },
+    };
+  },
+};
+
+// 导入路径一律写成普通字符串字面量：模板字符串与表达式不经 import-x 解析，方向与存在性都检查不到
+const importPathSyntax = {
+  selector: "ImportExpression[source.type!='Literal']",
+  message: 'Write import() paths as plain string literals so they can be resolved and checked.',
+};
+
+// API 契约类型只放 `{name}.dto.ts`（coding-frontend.md 第 3、4 节）；`*.dto.ts` 自身由后面的配置块放开
+const dtoOutsideDtoFileSyntax = {
+  selector:
+    ':matches(TSInterfaceDeclaration, TSTypeAliasDeclaration, ClassDeclaration, TSEnumDeclaration)[id.name=/Dto$/]',
+  message: 'Declare API contract types (*Dto) in a {name}.dto.ts file under dtos/.',
+};
+
+const formsRestriction = {
+  name: '@angular/forms',
+  importNames: ['FormsModule', 'ReactiveFormsModule', 'NgModel', 'NgForm', 'NgControl'],
+  message:
+    'Use Angular Signal Forms (@angular/forms/signals); FormsModule/ReactiveFormsModule/ngModel are not allowed.',
+};
+
+// 浏览器标签页标题由根组件统一合成（frontend-ui.md 第 3 节），页面只设 LayoutService.title
+const titleRestriction = {
+  name: '@angular/platform-browser',
+  importNames: ['Title'],
+  message:
+    'Set LayoutService.title instead; only the root component (app.ts) composes the browser title through Title.',
+};
+
+/*
+ * 模板类名档位（frontend-ui.md 第 2.2、2.8 节）。只检查静态 `class="…"` 与 `[class.xxx]` 的类名；
+ * 已知边界：`[class]`/`[ngClass]` 绑定的表达式、带插值的 `class="a {{b}}"` 与 TS 字符串（host、cva）
+ * 不在覆盖内，留给评审。具体色板只拦带色阶的色名与十六进制任意值，`black`/`white` 不带色阶，
+ * 图像遮罩与二维码底色两类例外因此天然放过；`ng-icon`、`hlm-spinner` 上的 `text-*` 是图标尺寸。
+ */
+const classToken = String.raw`(^|\s)([^\s]*:)?`;
+const paletteUtilities =
+  'bg|text|border(-[xytrblse])?|ring|ring-offset|outline|fill|stroke|from|via|to|decoration|divide|shadow|accent|caret|placeholder';
+const paletteHues =
+  'slate|gray|zinc|neutral|stone|mauve|olive|mist|taupe|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
+/** 静态 class 属性或 `[class.xxx]` 绑定的类名命中 `pattern`（esquery 正则，不得含 `/`）。 */
+const classMatching = (/** @type {string} */ pattern) =>
+  `:matches(TextAttribute[name='class'][value=/${pattern}/], BoundAttribute[name=/${pattern}/])`;
+const templateClassSyntax = [
+  {
+    selector: classMatching(String.raw`${classToken}-?space-[xy]-`),
+    message: 'Separate siblings with flex/grid + gap-* instead of space-x-*/space-y-*.',
+  },
+  {
+    selector: classMatching(String.raw`${classToken}font-(bold|extrabold|black)(\s|$)`),
+    message: 'Use font weights 400/500/600 only (font-normal/font-medium/font-semibold).',
+  },
+  {
+    selector: classMatching(
+      String.raw`${classToken}(${paletteUtilities})-(${paletteHues})-(50|[1-9]00|950)(?![0-9])`,
+    ),
+    message:
+      'Use semantic theme tokens (primary, muted, destructive, …) instead of palette colors.',
+  },
+  {
+    selector: classMatching(String.raw`-\[#[0-9a-fA-F]{3,8}\]`),
+    message: 'Use semantic theme tokens instead of hex color values.',
+  },
+  {
+    selector: `:not(Element[name=/^(ng-icon|hlm-spinner)$/]) > ${classMatching(String.raw`${classToken}text-\[[0-9.]`)}`,
+    message:
+      'Use the font-size tiers (text-xs/sm/base/2xl/3xl); arbitrary text-[…] sizes are only for ng-icon and hlm-spinner.',
+  },
+];
+
 const tests = ['**/*.spec.ts', '**/*.testing.ts'];
 
 export default defineConfig(
@@ -146,7 +283,12 @@ export default defineConfig(
     files: ['**/*.ts'],
     plugins: {
       'import-x': importX,
-      local: { rules: { 'feature-boundaries': featureBoundaries } },
+      local: {
+        rules: {
+          'feature-boundaries': featureBoundaries,
+          'no-status-code-branch': noStatusCodeBranch,
+        },
+      },
       'unused-imports': unusedImports,
     },
     settings: {
@@ -173,6 +315,13 @@ export default defineConfig(
         { type: 'attribute', prefix: 'app', style: 'camelCase' },
       ],
       '@angular-eslint/no-pipe-impure': 'error',
+      // 推荐集已含以下两条；显式登记，推荐集调整时闸门不随之静默消失。Angular 22 起 OnPush 是默认策略，
+      // 规则拦的是显式退回 Eager/Default，不要求逐个组件写出 OnPush
+      '@angular-eslint/prefer-inject': 'error',
+      '@angular-eslint/prefer-on-push-component-change-detection': [
+        'error',
+        { allowExplicitOnPush: true },
+      ],
       '@angular-eslint/prefer-output-readonly': 'error',
       '@typescript-eslint/no-unused-vars': 'off',
       'import-x/no-duplicates': 'error',
@@ -191,34 +340,35 @@ export default defineConfig(
         },
       ],
       'local/feature-boundaries': 'error',
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            {
-              name: '@angular/forms',
-              importNames: ['FormsModule', 'ReactiveFormsModule', 'NgModel', 'NgForm', 'NgControl'],
-              message:
-                'Use Angular Signal Forms (@angular/forms/signals); FormsModule/ReactiveFormsModule/ngModel are not allowed.',
-            },
-          ],
-        },
-      ],
+      'local/no-status-code-branch': 'error',
+      'no-restricted-imports': ['error', { paths: [formsRestriction, titleRestriction] }],
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
         'error',
         { vars: 'all', varsIgnorePattern: '^_', args: 'after-used', argsIgnorePattern: '^_' },
       ],
       'prefer-template': 'error',
-      // 导入路径一律写成普通字符串字面量：模板字符串与表达式不经 import-x 解析，方向与存在性都检查不到
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "ImportExpression[source.type!='Literal']",
-          message:
-            'Write import() paths as plain string literals so they can be resolved and checked.',
-        },
-      ],
+      'no-restricted-syntax': ['error', importPathSyntax, dtoOutsideDtoFileSyntax],
+    },
+  },
+  {
+    files: ['**/*.dto.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', importPathSyntax],
+    },
+  },
+  {
+    // 根组件负责合成浏览器标题，它的 spec 要注入 Title 断言结果
+    files: ['src/app/app.ts', 'src/app/app.spec.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: [formsRestriction] }],
+    },
+  },
+  {
+    // 认证处置（401 跳转、受限会话的 403）与启动时的未登录判定属于协议层，按状态码分支
+    files: ['src/app/core/interceptors/**/*.ts', 'src/app/core/services/startup-service.ts'],
+    rules: {
+      'local/no-status-code-branch': 'off',
     },
   },
   {
@@ -239,5 +389,8 @@ export default defineConfig(
   {
     files: ['**/*.html'],
     extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
+    rules: {
+      'no-restricted-syntax': ['error', ...templateClassSyntax],
+    },
   },
 );
