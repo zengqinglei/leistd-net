@@ -40,7 +40,8 @@ def main():
 
         # Extract the actual functions with PowerShell's parser, not a test implementation.
         runner = repo / 'preflight-functions.ps1'
-        runner.write_text('''param([switch]$Skip)
+        runner.write_text('''#!/usr/bin/env pwsh
+param([switch]$Skip)
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $tokens = $null; $errors = $null

@@ -211,7 +211,7 @@ def check_quality_aggregation():
     jobs = workflow['jobs']
     quality = jobs['template-matrix']
     dynamic = ['test', 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
-    required = ['framework-pack', 'docs-sync', *dynamic]
+    required = ['framework-pack', 'docs-sync', 'docs-sync-windows', 'frontend-gates', *dynamic]
     assert set(quality['needs']) == set(required), 'aggregation must wait for every required result'
     assert quality['if'] == 'always()', 'aggregation must run after failure/skip/cancellation'
     assert 'needs' not in jobs['framework-pack'], 'packing must start without waiting for another runner'
@@ -273,8 +273,11 @@ def check_quality_aggregation():
                 check(state, False)
             state = json.loads(json.dumps(normal)); state['framework-pack']['outputs'].pop('validation_plan')
             check(state, False)
+            # 变异：把 docs-sync 从必需清单里拿掉，失败的 docs-sync 就不再阻断——证明判据真的读这份清单
+            mutated = script.replace("'framework-pack', 'docs-sync', ", "'framework-pack', ")
+            assert mutated != script, 'mutation did not apply: required-job list literal changed'
             state = json.loads(json.dumps(normal)); state['docs-sync']['result'] = 'failure'
-            check(state, True, script.replace("@('framework-pack', 'docs-sync')", "@('framework-pack')"))
+            check(state, True, mutated)
             print(f'PASS aggregation docs_only={docs_only}, framework_tests={framework_tests}: missing/failed/cancelled/wrong skip, wrong candidate/plan and static mutation')
 
 
