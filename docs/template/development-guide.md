@@ -144,10 +144,11 @@ Identity 形态用 `MapTenantConnections` 映射端点，Resource 形态用 `Lei
 ## 4. Skill 与规范
 
 - Skill、生成项目规范与入口文件的分工以 [三层交付与 AI 协作](../architecture/collaboration-scenarios.md#2-skill-边界) 为准。
-- `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。调整规范结构或篇幅时，按读取表统计后端 CRUD、全栈 CRUD、UI 调整、新增文案、只审查五类任务去重后的读取字符数（含项目 Skill 的 `SKILL.md` 与所需 reference），与改动前对比，不让典型任务的读取量回升。
+- `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。调整规范结构或篇幅时运行 `python3 scripts/measure-template-read-cost.py --check`：它按读取表统计五类典型任务去重后的读取字符数（含项目 Skill 的 `SKILL.md` 与所需 reference），超过登记的上限即失败；有意放宽时连同理由修改上限。
 - `docs/standards/` 只保存工程事实，不重复 Skill 流程；不携带固定需求、规范或报告模板，不预建按需目录。
 - 修改任何 Skill 时使用官方 `skill-creator` 并运行 `scripts/validate-skills.ps1`。
 - 前端 UI 走 Spartan UI：选型依据见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法见生成项目 [前端界面规范](../../template/docs/standards/frontend-ui.md)；确认组件 API 按「`spartan` skill → 本地 `libs/ui` 源码与锁定版本 → 匹配版本的官方文档」，不臆造 Helm/Brain API。`@spartan-ng/mcp` 是仓库维护者的可选工具（根 `.mcp.json`），模板不内置。
+- 生成项目 [Spartan 维护约定](../../template/docs/standards/frontend-spartan.md) 的定制登记表由 `scripts/check-spartan-customizations.mjs` 核对，边界是组件集合：用锁定版本的 Spartan CLI 还原上游后，与上游有差异的组件集合必须等于登记表列出的组件集合；它不核对行内改动描述，改 helm 组件或升级时人工逐项核对描述与源码一致。
 
 ## 5. 本地框架联调
 
@@ -176,7 +177,7 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 
 ## 7. 事务边界
 
-生成项目的工作单元与写后返回规则见 [后端开发规范 §3.6](../../template/docs/standards/coding-backend.md#36-事务与工作单元)。模板内已有的反向决定不要覆盖：`RoleAppService.DeleteAsync` 刻意不做成一个事务并写明了失败形态选择。
+生成项目的工作单元与写后返回规则见 [后端开发规范 §3.6](../../template/docs/standards/coding-backend.md#36-事务与工作单元)。模板内写明了取舍的事务边界不要按通用规则改写，例如 `RoleAppService.DeleteAsync` 在一个工作单元里提交删角色、清关联、清授权与成功记录，原因与失败形态见其 `<remarks>`。
 
 ## 8. 宿主与租户侧别
 

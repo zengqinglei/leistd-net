@@ -7,7 +7,7 @@
 
 ## 1. 技术栈
 
-Angular（Signals、zoneless、Angular CLI）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元 + 项目持有的 helm 样式层）、Tailwind CSS 4、Angular Signal Forms（`@angular/forms/signals`）、TanStack Table。项目采用的精确版本以 `package.json` 与锁文件为准；Signal Forms 在当前 Angular 版本仍为 experimental，升级 Angular 后须回归所有表单。禁止 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 拦截）。
+Angular（Signals、zoneless、Angular CLI）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元 + 项目持有的 helm 样式层）、Tailwind CSS 4、Angular Signal Forms（`@angular/forms/signals`）、TanStack Table。项目采用的精确版本以 `package.json` 与锁文件为准。禁止 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 拦截）。
 
 ## 2. 目录与依赖方向
 
@@ -71,7 +71,7 @@ frontend/
 - **页面状态**优先放组件 signal；状态复杂且有复用或生命周期收益时，抽成组件级 `@Injectable()` 状态类并在组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
-- 依赖注入一律用 `inject()`。构造函数只做属性赋值与需要注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅及其首次读取），不写业务流程；在注入上下文之外（如 `ngOnInit`）调用这些 API 时显式传入 `destroyRef` 或 `{ injector }`。
+- 依赖注入一律用 `inject()`。构造函数只做属性赋值、需要注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅）与进入页面的首次只读查询；写请求、多步流程和清理会话放 `ngOnInit`（判据：构造不改变服务端或会话状态）；在注入上下文之外（如 `ngOnInit`）调用这些 API 时显式传入 `destroyRef` 或 `{ injector }`。
 
 ## 5. 状态
 
@@ -95,7 +95,7 @@ frontend/
 - `http-error-interceptor` 负责认证处置（401 跳转）并把 RFC 9457 Problem Details 归一化为 `ApplicationHttpError`（`errors` 兼容框架的数组与官方字典两种形状）；页面不自己猜测响应形状。
 - 发起操作的 feature 决定反馈：字段错误优先回填到表单，其余可展示的 4xx 按 `detail`、`title` 顺序取安全文案 toast（`@spartan-ng/brain/sonner`），或显示空状态、静默；同一错误不重复提示。
 - 5xx 不展示技术细节，使用通用文案，响应含 `traceId` 时附上本地化的追踪 ID 标签。
-- `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误；HTTP 错误的反馈由发起操作的 feature 负责。
+- `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误。
 - 可以用 `catchError` 处理特定错误，但不吞掉错误；需要特定交互时按稳定 `code` 分支，不按单个状态码。
 - 前端不兼容框架可选的响应信封（`AddResponseWrapper()`），开启须同时改拦截器。
 
