@@ -2,7 +2,6 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.Definitions;
 
-// 操作动作定义
 internal sealed class OperationActionDefinition(
     string code,
     string category,
@@ -45,7 +44,6 @@ internal sealed class OperationActionDefinitionRegistry
     public IReadOnlyList<OperationActionDefinition> GetAll() => _ordered;
 }
 
-// 操作动作定义上下文
 internal sealed class OperationActionDefinitionContext : IOperationActionDefinitionContext
 {
     private readonly OperationActionDefinitionRegistry _registry = new();

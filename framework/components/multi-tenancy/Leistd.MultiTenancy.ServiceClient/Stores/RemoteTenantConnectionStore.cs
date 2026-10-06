@@ -37,8 +37,8 @@ internal sealed class RemoteTenantConnectionStore(
             throw error;
         }
 
-        var remote = await response.ReadContentAsync<TenantRuntimeConnectionOutputDto>(cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException("The control plane returned an empty tenant connection lookup.");
+        // 空响应体由 ReadContentAsync 抛无效响应（对外 502），不会落到这里
+        var remote = (await response.ReadContentAsync<TenantRuntimeConnectionOutputDto>(cancellationToken: cancellationToken))!;
 
         return new TenantConnectionLookupResult
         {
@@ -77,12 +77,8 @@ internal sealed class RemoteTenantConnectionStore(
         using var response = await httpClient.GetAsync(
             $"{Prefix}/databases?name={Uri.EscapeDataString(name)}&activeOnly={(activeOnly ? "true" : "false")}",
             cancellationToken);
-        var remote = await response.ReadContentAsync<TenantDatabaseListOutputDto>(cancellationToken: cancellationToken);
-        if (remote is null)
-        {
-            return TenantDatabaseListResult.Empty;
-        }
-
+        // 空响应体同样上抛：当成"没有库"会让逐库作业静默跳过全部租户库
+        var remote = (await response.ReadContentAsync<TenantDatabaseListOutputDto>(cancellationToken: cancellationToken))!;
         return new TenantDatabaseListResult(
             [.. remote.Databases.Select(x => new TenantDatabaseEntry(x.Fingerprint, x.TenantIds))],
             [.. remote.FailedTenants.Select(x => new TenantDatabaseFailure(x.TenantId, x.Reason))]);

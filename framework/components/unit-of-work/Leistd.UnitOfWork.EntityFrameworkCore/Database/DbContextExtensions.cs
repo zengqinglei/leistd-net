@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
-// DbContext 扩展方法
 internal static class DbContextExtensions
 {
     /// <summary>

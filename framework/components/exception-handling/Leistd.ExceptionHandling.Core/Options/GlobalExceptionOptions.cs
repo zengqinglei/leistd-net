@@ -61,7 +61,7 @@ public class GlobalExceptionOptions
 
     private static void ValidateStatusCode(int statusCode)
     {
-        if (statusCode is < 400 or > 599)
-            throw new ArgumentOutOfRangeException(nameof(statusCode), statusCode, "Exception status codes must be between 400 and 599.");
+        ArgumentOutOfRangeException.ThrowIfLessThan(statusCode, 400);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(statusCode, 599);
     }
 }

@@ -4,7 +4,6 @@ using Leistd.Security.Claims;
 
 namespace Leistd.Security.AmbientContext;
 
-// IAmbientContext 的默认实现。
 internal sealed class AmbientContext(
     ICurrentPrincipalAccessor principalAccessor,
     IEnumerable<IAmbientContextContributor> contributors) : IAmbientContext

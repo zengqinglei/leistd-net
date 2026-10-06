@@ -70,6 +70,19 @@ public sealed class RemoteTenantConnectionStoreTests
         await Assert.ThrowsAsync<RemoteServiceException>(() => Store().FindAsync(TenantId, "crm"));
     }
 
+    // 控制面答了 200 却没有内容是对端故障：归为无效响应，经全局异常处理成 502，不能当成本服务内部错误
+    [Theory]
+    [InlineData("")]
+    [InlineData("null")]
+    public async Task An_empty_runtime_lookup_is_an_invalid_response(string body)
+    {
+        _handler.Responder = _ => Json(HttpStatusCode.OK, body);
+
+        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().FindAsync(TenantId, "crm"));
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, error.FailureKind);
+    }
+
     [Fact]
     public async Task Migration_targets_and_failed_tenants_are_listed_by_name()
     {
@@ -92,7 +105,20 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => Json(HttpStatusCode.OK, "null");
 
-        await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetListAsync("crm"));
+        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetListAsync("crm"));
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, error.FailureKind);
+    }
+
+    // 同理，空的库目录不能当成"没有库"：逐库作业会静默跳过全部租户库
+    [Fact]
+    public async Task An_empty_database_listing_is_an_error_not_an_empty_directory()
+    {
+        _handler.Responder = _ => Json(HttpStatusCode.OK, "null");
+
+        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetDatabasesAsync("crm", activeOnly: true));
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, error.FailureKind);
     }
 
     [Fact]

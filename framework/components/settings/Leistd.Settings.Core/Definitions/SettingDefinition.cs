@@ -1,6 +1,5 @@
 namespace Leistd.Settings.Definitions;
 
-// 设置定义
 internal sealed class SettingDefinition : ISettingDefinition
 {
     public SettingDefinition(

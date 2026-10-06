@@ -36,13 +36,8 @@ public sealed class SmtpEmailSender(
 
         if (!string.IsNullOrWhiteSpace(current.Username))
         {
-            // 即使绕过启动校验，也不能把缺少口令误当作匿名投递。
-            var password = current.Password
-                ?? throw new InvalidOperationException(
-                    $"{SmtpOptions.SectionName}: Username is set but Password is missing. " +
-                    "Both must be provided together; startup validation should have rejected this.");
-
-            await client.AuthenticateAsync(current.Username, password, cancellationToken);
+            // CurrentValue 经 SmtpOptionsValidator 校验，只有用户名、没有口令的配置到不了这里。
+            await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
         }
 
         await client.SendAsync(mime, cancellationToken);

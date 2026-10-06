@@ -27,42 +27,36 @@ public class EfCoreTransactionApi(IDbContextTransaction dbContextTransaction, Db
     /// <inheritdoc />
     public async Task CommitAsync()
     {
-        // 先处理所有 AttendedDbContexts
         foreach (var dbContext in AttendedDbContexts)
         {
-            // 关系型数据库且共享同一连接时，跳过（会随主事务一起提交）
+            // 共享同一连接的关系型上下文已加入主事务，随主事务一起提交
             if (dbContext.HasRelationalTransactionManager() &&
                 dbContext.Database.GetDbConnection() == DbContextTransaction.GetDbTransaction().Connection)
             {
                 continue;
             }
 
-            // 非关系型数据库或使用不同连接的数据库，需要单独提交
             await dbContext.Database.CommitTransactionAsync();
         }
 
-        // 最后提交主事务
         await DbContextTransaction.CommitAsync();
     }
 
     /// <inheritdoc />
     public async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
-        // 先处理所有 AttendedDbContexts
         foreach (var dbContext in AttendedDbContexts)
         {
-            // 关系型数据库且共享同一连接时，跳过（会随主事务一起回滚）
+            // 共享同一连接的关系型上下文随主事务回滚
             if (dbContext.HasRelationalTransactionManager() &&
                 dbContext.Database.GetDbConnection() == DbContextTransaction.GetDbTransaction().Connection)
             {
                 continue;
             }
 
-            // 非关系型数据库或使用不同连接的数据库，需要单独回滚
             await dbContext.Database.RollbackTransactionAsync(cancellationToken);
         }
 
-        // 最后回滚主事务
         await DbContextTransaction.RollbackAsync(cancellationToken);
     }
 

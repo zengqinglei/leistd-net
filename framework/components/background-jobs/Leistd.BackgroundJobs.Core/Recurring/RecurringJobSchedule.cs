@@ -17,10 +17,7 @@ public abstract class RecurringJobSchedule
     /// <param name="interval">间隔，不小于 1 秒。</param>
     public static RecurringJobSchedule Every(TimeSpan interval)
     {
-        if (interval < TimeSpan.FromSeconds(1))
-        {
-            throw new ArgumentOutOfRangeException(nameof(interval), interval, "The interval must be at least one second.");
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(interval, TimeSpan.FromSeconds(1));
 
         return new IntervalSchedule(interval);
     }
