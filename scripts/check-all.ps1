@@ -57,7 +57,8 @@ if (-not $pythonCmd) {
 # 直接运行的 Python 闸门带参数；PowerShell 闸门内部再起的 Python 子进程（如 check-i18n-keys.ps1）
 # 拿不到这些参数，靠同义的环境变量继承——"Python 编码警告设置生效"闸门证明两条路径都真的生效。
 $pythonFlags = @("-X", "warn_default_encoding", "-W", "error::EncodingWarning")
-$pythonEncodingEnv = @{ PYTHONWARNDEFAULTENCODING = "1"; PYTHONWARNINGS = "error::EncodingWarning" }
+# PYTHONIOENCODING：Windows 上管道输出默认按 cp1252 编码，✅ 与中文会让闸门在打印结果时崩溃
+$pythonEncodingEnv = @{ PYTHONWARNDEFAULTENCODING = "1"; PYTHONWARNINGS = "error::EncodingWarning"; PYTHONIOENCODING = "utf-8" }
 
 # 入口 ps1 的文件头（development-guide §9）：首行 shebang；有注释帮助块时与 shebang 之间空一行，
 # 帮助块紧贴 shebang 时 Get-Help 认不出它。只被点源加载的库脚本不能直接执行，不要求 shebang。

@@ -288,6 +288,9 @@ def self_test():
 
 
 def main():
+    # Windows 上管道输出默认按本地代码页编码，打印 ✅ 与中文会崩溃
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding='utf-8')
     if '--self-test' in sys.argv:
         return self_test()
 
