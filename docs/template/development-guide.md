@@ -220,7 +220,7 @@ pwsh scripts/test-template-postgresql-e2e.ps1
 pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScenarios standalone
 ```
 
-按改动选哪一档、哪些场景见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)。第三条在真实 PostgreSQL 上验证本地 Framework NuGet 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路；它要求本机已安装 Docker、`psql` 和 PowerShell。
+按改动选哪一档、哪些场景见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)。第三条在真实 PostgreSQL 上验证本地 Framework NuGet 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路；它要求本机已安装 Docker 和 PowerShell（psql 用容器自带的）。
 第四条验证生成项目的 API 与 Migrator 镜像可构建、.NET 运行时层可用。它不启动应用；部署配置或迁移行为变化时另做对应环境启动和健康检查。
 
 每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`、`local-feed/`、`template-hive/`、`nuget-cache/` 与一次性 NuGet 配置——生成物、包源和 `globalPackagesFolder` 都不跨 run 写入，因此**多个 AI/终端可并行执行**。不得共享解包目录后再“定点清理 Leistd.*”：本地包会在版本号不变时重新 pack，清理会在另一个并发 build 期间抽走 DLL。NuGet 自身的 HTTP 缓存仍会避免重复下载。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。

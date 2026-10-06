@@ -79,26 +79,20 @@ function Invoke-Postgres(
     [string]$Username = "postgres",
     [string]$Password = $postgresPassword,
     [switch]$ExpectFailure) {
-    $previousPassword = $env:PGPASSWORD
-    $env:PGPASSWORD = $Password
-    try {
-        $output = & psql -h 127.0.0.1 -p $script:postgresPort -U $Username -d $Database `
-            -v ON_ERROR_STOP=1 -At -c $Sql 2>&1
-        $exitCode = $LASTEXITCODE
-        if ($ExpectFailure) {
-            if ($exitCode -eq 0) { throw "PostgreSQL command unexpectedly succeeded." }
-            # 把错误文本还给调用方：只断言"失败了"会让打错的表名、写错的列名一样通过，
-            # 调用方需要能核对失败原因正是它预期的那一个
-            return ($output -join [Environment]::NewLine).Trim()
-        }
-        if ($exitCode -ne 0) {
-            throw "PostgreSQL command failed: $($output -join [Environment]::NewLine)"
-        }
+    # 用容器自带的 psql，宿主机不必安装 PostgreSQL 客户端；经 TCP 连接，按指定账号走口令认证
+    $output = & docker exec -e "PGPASSWORD=$Password" $containerName psql -h 127.0.0.1 -U $Username -d $Database `
+        -v ON_ERROR_STOP=1 -At -c $Sql 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($ExpectFailure) {
+        if ($exitCode -eq 0) { throw "PostgreSQL command unexpectedly succeeded." }
+        # 把错误文本还给调用方：只断言"失败了"会让打错的表名、写错的列名一样通过，
+        # 调用方需要能核对失败原因正是它预期的那一个
         return ($output -join [Environment]::NewLine).Trim()
     }
-    finally {
-        $env:PGPASSWORD = $previousPassword
+    if ($exitCode -ne 0) {
+        throw "PostgreSQL command failed: $($output -join [Environment]::NewLine)"
     }
+    return ($output -join [Environment]::NewLine).Trim()
 }
 
 function Assert-Equal([string]$Expected, [string]$Actual, [string]$Message) {
