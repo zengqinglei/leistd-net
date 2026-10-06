@@ -654,6 +654,7 @@
             "frontend/src/app/features/platform/services/operation-record-service.ts",
             "frontend/src/app/features/platform/services/operation-record-service.spec.ts",
             "frontend/_mock/api/operation-record.ts",
+            "frontend/_mock/api/operation-record.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/OperationRecordArchiveTests.cs",
             "frontend/src/app/features/platform/dtos/operation-record.dto.ts",
             "frontend/_mock/data/operation-record.ts",
