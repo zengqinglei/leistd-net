@@ -94,10 +94,17 @@ internal sealed class AccessFailureCounter(
         ArgumentNullException.ThrowIfNull(user);
         var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
 
-        await securityAlerts.PublishAsync(
-            user.Id,
-            new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.LockoutEnd),
-            cancellationToken);
+        // 再认证路径（改口令、停用两步验证）处在随后要回滚的工作单元里：提醒的写入放进独立工作单元，
+        // 否则会随那次拒绝一起回滚，本人收不到"账号已锁定"
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
+        {
+            await securityAlerts.PublishAsync(
+                user.Id,
+                new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.LockoutEnd),
+                cancellationToken);
+            await unitOfWork.CompleteAsync(cancellationToken);
+        }
+
         await operationRecorder.RecordFailedAsync(
             OperationRecordActions.AuthLockedOut,
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),

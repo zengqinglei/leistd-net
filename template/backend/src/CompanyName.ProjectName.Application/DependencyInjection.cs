@@ -25,6 +25,7 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.EventHandlers;
+using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
@@ -100,6 +101,9 @@ public static class DependencyInjection
         services.TryAddTransient<IUserSessionAppService, UserSessionAppService>();
         // 安全提醒默认不发；启用通知时宿主换成经通知组件发布的实现
         services.TryAddTransient<ISecurityAlertPublisher, NullSecurityAlertPublisher>();
+        // 改密、重置与两步验证变更的提醒，以及设置密钥的清理，都在提交之后执行
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<SecurityAlertRequestedEvent>, SecurityAlertRequestedEventHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TwoFactorSetupCompletedEvent>, TwoFactorSetupCompletedEventHandler>());
         services.TryAddTransient<TwoFactorChallengeStore>();
         // 不再登录的用户没有"登录时顺手清理"的时机，过期会话与其中的原始 IP 由这个作业每天清掉
         services.AddRecurringJob<ExpiredUserSessionCleanupJob>(

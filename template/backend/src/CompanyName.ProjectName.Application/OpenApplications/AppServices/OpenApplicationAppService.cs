@@ -231,7 +231,8 @@ public class OpenApplicationAppService(
 
         await applicationManager.UpdateAsync(application, descriptor, cancellationToken);
         logger.LogInformation("Open application updated (ID: {Id})", id);
-        return await GetAsync(id, cancellationToken);
+        // 管理器已把描述符写回手里的实例，用它构造输出，不再按 Id 回查
+        return await MapToOutputAsync(application, cancellationToken);
     }
 
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)

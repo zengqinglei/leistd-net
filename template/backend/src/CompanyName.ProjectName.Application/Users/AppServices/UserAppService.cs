@@ -7,10 +7,12 @@ using Leistd.MultiTenancy.Context;
 using Leistd.UnitOfWork;
 #endif
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Users.Mappings;
+using Leistd.EventBus.Abstractions;
 using Leistd.Timing;
 #endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
@@ -71,7 +73,7 @@ public class UserAppService(
 #endif
 #if (LocalIdentity)
     UserSessionDomainService userSessionDomainService,
-    ISecurityAlertPublisher securityAlerts,
+    ILocalEventBus localEventBus,
 #endif
 #if (OpenIddictServer)
     IOpenIddictTokenManager tokenManager,
@@ -375,6 +377,10 @@ public class UserAppService(
     /// <summary>
     /// 禁用用户
     /// </summary>
+#if (LocalIdentity)
+    /// <remarks>停用与撤销同生共死；撤销的时序见 <see cref="RevokeAllAccessAsync"/>。</remarks>
+    [UnitOfWork]
+#endif
     public async Task DisableAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
@@ -392,13 +398,8 @@ public class UserAppService(
         var wasActive = user.IsActive;
         user.Disable();
         await userRepository.UpdateAsync(user, cancellationToken);
-#if (LocalIdentity)
 
-        // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
-        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
-#endif
-
-        // 撤销照做（兜住此前遗留的会话），记录只在状态真正变化时写
+        // 记录只在状态真正变化时写；下面的撤销照做，兜住此前遗留的会话与令牌
         if (wasActive)
         {
             await operationRecorder.RecordSucceededAsync(
@@ -407,12 +408,19 @@ public class UserAppService(
                 PermissionConstant.Users.Update,
                 cancellationToken);
         }
+#if (LocalIdentity)
+
+        // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
+        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
+#endif
     }
 
 #if (LocalIdentity)
     /// <summary>
     /// 重置用户密码，并撤销该用户的全部会话
     /// </summary>
+    /// <remarks>口令与撤销同生共死；提醒在提交之后发出。</remarks>
+    [UnitOfWork]
     public async Task ResetPasswordAsync(Guid id, ResetUserPasswordInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
@@ -425,17 +433,20 @@ public class UserAppService(
         userDomainService.ResetPassword(user, input.Password);
         await userRepository.UpdateAsync(user, cancellationToken);
 
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), clock.Now),
+            cancellationToken);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserPasswordReset,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
+
         // 密码被管理员重置，意味着账号可能已不在本人掌控之下：此前的会话全部作废。
         // 重置的是自己时保留当前这台，免得操作完把自己踢出去
         await RevokeAllAccessAsync(
             user.Id,
             user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
-            cancellationToken);
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), cancellationToken);
-        await operationRecorder.RecordSucceededAsync(
-            OperationRecordActions.UserPasswordReset,
-            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
-            PermissionConstant.Users.Update,
             cancellationToken);
     }
 
@@ -469,7 +480,9 @@ public class UserAppService(
     /// <remarks>
     /// 给丢了手机又没了恢复码的人用。会话一并作废：能走到这一步，说明账号的第二道门已经不在本人手里。
     /// 所在租户要求两步验证时，本人下次登录会被带去重新设置。
+    /// 停用与撤销同生共死；提醒在提交之后发出。
     /// </remarks>
+    [UnitOfWork]
     public async Task ResetTwoFactorAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
@@ -486,16 +499,19 @@ public class UserAppService(
 
         user.DisableTwoFactor();
         await userRepository.UpdateAsync(user, cancellationToken);
-        await RevokeAllAccessAsync(
-            user.Id,
-            user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
-            cancellationToken);
 
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorReset), cancellationToken);
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorReset), clock.Now),
+            cancellationToken);
         await operationRecorder.RecordSucceededAsync(
             OperationRecordActions.UserTwoFactorReset,
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             PermissionConstant.Users.Update,
+            cancellationToken);
+
+        await RevokeAllAccessAsync(
+            user.Id,
+            user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
             cancellationToken);
     }
 #endif
@@ -510,7 +526,9 @@ public class UserAppService(
     /// 主体被永久删除时才调用 <c>IPermissionGrantManager.RemoveProviderAsync</c> 清理，
     /// 例如角色删除（<c>RoleAppService.DeleteAsync</c>）。
     /// <para>站内通知一并删掉：它们只对本人有意义，留下来就是没人能读、也没人能删的孤儿行。</para>
+    /// <para>删除、清理与撤销同生共死；撤销的时序见 <see cref="RevokeAllAccessAsync"/>。</para>
     /// </remarks>
+    [UnitOfWork]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Deleting user {Id}", id);
@@ -522,7 +540,6 @@ public class UserAppService(
                 ;
         }
 
-        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
         await userRepository.DeleteAsync(user, cancellationToken);
 #if (IncludeNotifications)
         await notificationStore.DeleteAllAsync(id.ToString(), cancellationToken);
@@ -536,6 +553,8 @@ public class UserAppService(
             OperationTarget.For(id, user.DisplayName ?? user.Username),
             PermissionConstant.Users.Delete,
             cancellationToken);
+
+        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
     }
 
 #endif
@@ -707,11 +726,18 @@ public class UserAppService(
 
 #if (LocalIdentity)
     /// <summary>
-    /// 作废该用户已建立的会话与已签发的令牌。
+    /// 作废该用户已建立的会话与已签发的令牌。调用方在工作单元内、把它放在最后一步。
     /// </summary>
     /// <remarks>
-    /// 撤权要对已签发的凭据生效：会话 Cookie 由会话校验按登记的会话拒绝，Bearer 令牌由令牌记录校验按撤销状态拒绝，
-    /// 两者都在认证阶段就失效。与写入同在一个工作单元里，撤不掉就整体失败，不留"账号停了、令牌还能用"的状态。
+    /// <para>撤权要对已签发的凭据生效：会话 Cookie 由会话校验按登记的会话拒绝，Bearer 令牌由令牌记录校验按撤销状态拒绝，
+    /// 两者都在认证阶段就失效。</para>
+    /// <para>会话删除与调用方的写入同在一个事务里提交。</para>
+#if (OpenIddictServer)
+    /// <para>令牌撤销不在这个事务里：OpenIddict 存储用自己的上下文与连接（多租户时用户还在另一个库），
+    /// 撤销语句当场生效。所以它放在最后、提交之前：撤不掉就抛出，整个用例回滚，不留"账号停了、令牌还能用"的状态；
+    /// 撤销之后只剩提交本身可能失败，那时令牌已作废而用例回滚，结果是本人需要重新登录，错在安全一侧。
+    /// 不放到提交后处理器：那里失败时变更已提交、令牌仍然有效，而重置两步验证与删除的重试会在前置检查处返回，不再撤销。</para>
+#endif
     /// </remarks>
     /// <param name="userId">用户 Id。</param>
     /// <param name="keepSessionId">保留的会话（管理员操作的是自己时保留当前这台），没有则为 null。</param>

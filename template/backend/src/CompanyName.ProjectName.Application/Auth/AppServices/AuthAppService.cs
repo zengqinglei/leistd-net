@@ -19,12 +19,14 @@ using System.Text;
 using Microsoft.Extensions.Caching.Distributed;
 using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
+using Leistd.EventBus.Abstractions;
 using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
@@ -68,7 +70,7 @@ internal sealed class AuthAppService(
 #endif
     IReauthenticationGuard reauthenticationGuard,
     IAccessFailureCounter accessFailureCounter,
-    ISecurityAlertPublisher securityAlerts,
+    ILocalEventBus localEventBus,
     ICurrentTenant currentTenant,
     IClock clock,
     IDistributedLock distributedLock,
@@ -400,8 +402,7 @@ internal sealed class AuthAppService(
     /// </summary>
     public async Task<UserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
-        var userId = currentUser.Id!.Value;
-        var output = await GetCurrentUserOutputAsync(userId, cancellationToken);
+        var output = await ToOutputAsync(await GetCurrentUserEntityAsync(cancellationToken), cancellationToken);
         // 受限会话由会话声明而不是账号字段决定：同一个账号换个没开强制的租户登录就不受限
         return output with { TwoFactorSetupRequired = currentUser.FindClaim(TwoFactorClaimTypes.SetupRequired) is not null };
     }
@@ -432,12 +433,17 @@ internal sealed class AuthAppService(
         await userRepository.UpdateAsync(user, cancellationToken);
         logger.LogInformation("Current user profile updated (ID: {UserId})", user.Id);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return await ToOutputAsync(user, cancellationToken);
     }
 
     /// <summary>
     /// 修改密码，并撤销除当前以外的全部会话
     /// </summary>
+    /// <remarks>
+    /// 口令与会话撤销同生共死：撤不掉就整体失败，不留"口令换了、旧会话还在"的状态。
+    /// 再认证失败的计数与审计各自独立提交，不随本方法的回滚丢失；提醒在提交之后发出。
+    /// </remarks>
+    [UnitOfWork]
     public async Task ChangePasswordAsync(ChangePasswordInputDto input, CancellationToken cancellationToken = default)
     {
         var userId = currentUser.Id!.Value;
@@ -476,7 +482,9 @@ internal sealed class AuthAppService(
 
         // 凭据换了，以旧密码建立的其他会话随之失效；发起修改的这台保留，免得改完密码自己也被踢出去
         await userSessionDomainService.RevokeAllAsync(user.Id, currentUser.GetSessionId(), cancellationToken);
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordChanged), cancellationToken);
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.PasswordChanged), clock.Now),
+            cancellationToken);
 
         logger.LogInformation("Current user password changed (ID: {UserId})", user.Id);
 
@@ -515,7 +523,7 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return await ToOutputAsync(user, cancellationToken);
     }
 #if (Email)
 
@@ -555,7 +563,7 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return await ToOutputAsync(user, cancellationToken);
     }
 #endif
 
@@ -567,17 +575,12 @@ internal sealed class AuthAppService(
                 .WithData("Id", userId);
     }
 
-    private async Task<UserOutputDto> GetCurrentUserOutputAsync(Guid userId, CancellationToken cancellationToken)
+    /// <remarks>
+    /// 写路径直接用手里刚改过的实体，不回查用户行；角色不随这些写入变化，按已落库的关联读取。
+    /// </remarks>
+    private async Task<UserOutputDto> ToOutputAsync(User user, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-        if (user == null)
-        {
-            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
-                .WithData("Id", userId);
-        }
-
-        var roleNames = await userRepository.GetRoleNamesAsync(userId, cancellationToken);
-
+        var roleNames = await userRepository.GetRoleNamesAsync(user.Id, cancellationToken);
         return ToOutput(user, roleNames);
     }
 

@@ -3,6 +3,7 @@ using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.Sessions;
@@ -14,6 +15,7 @@ using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Shared.Text;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
+using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
@@ -26,6 +28,7 @@ using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.Security.Users;
 using Leistd.Timing;
+using Leistd.UnitOfWork.Attributes;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
@@ -34,6 +37,8 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// <remarks>
 /// 待启用的密钥放在缓存里而不是用户行上：没确认的设置不该改变账号状态，
 /// 半途放弃也不留痕。缓存里存的同样是加密后的密钥。
+/// <para>启用与停用各有多次写入（用户行、会话撤销），标 <c>[UnitOfWork]</c> 同生共死；
+/// 提醒与设置密钥的清理经本地事件在提交之后执行，回滚的变更不发提醒、也不丢掉还能再确认的设置。</para>
 /// </remarks>
 internal sealed class TwoFactorAppService(
     IRepository<User, Guid> userRepository,
@@ -45,7 +50,7 @@ internal sealed class TwoFactorAppService(
     ILoginSecurityPolicyProvider loginSecurityPolicy,
     IReauthenticationGuard reauthenticationGuard,
     IOperationRecorder operationRecorder,
-    ISecurityAlertPublisher securityAlerts,
+    ILocalEventBus localEventBus,
     IDistributedCache cache,
     IClock clock) : BaseAppService, ITwoFactorAppService
 {
@@ -93,6 +98,7 @@ internal sealed class TwoFactorAppService(
     }
 
     /// <inheritdoc />
+    [UnitOfWork]
     public async Task<TwoFactorRecoveryCodesOutputDto> EnableAsync(
         TwoFactorCodeInputDto input,
         CancellationToken cancellationToken = default)
@@ -113,7 +119,6 @@ internal sealed class TwoFactorAppService(
         var codes = RecoveryCodes.Generate();
         user.EnableTwoFactor(protectedSecret, codes.Select(RecoveryCodes.Hash), step);
         await userRepository.UpdateAsync(user, cancellationToken);
-        await cache.RemoveAsync(SetupKey(user.Id), cancellationToken);
 
         // 登录方式变了，此前的其他会话都是在没有第二道门时建立的
         await userSessionDomainService.RevokeAllAsync(user.Id, currentUser.GetSessionId(), cancellationToken);
@@ -123,12 +128,17 @@ internal sealed class TwoFactorAppService(
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorEnabled), cancellationToken);
+        await localEventBus.PublishAsync(new TwoFactorSetupCompletedEvent(user.Id, clock.Now), cancellationToken);
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorEnabled), clock.Now),
+            cancellationToken);
 
         return new TwoFactorRecoveryCodesOutputDto { RecoveryCodes = codes };
     }
 
     /// <inheritdoc />
+    /// <remarks>再认证失败的计数与审计各自独立提交，不随本方法的回滚丢失。</remarks>
+    [UnitOfWork]
     public async Task DisableAsync(DisableTwoFactorInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
@@ -174,7 +184,9 @@ internal sealed class TwoFactorAppService(
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorDisabled), cancellationToken);
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorDisabled), clock.Now),
+            cancellationToken);
     }
 
     /// <inheritdoc />
@@ -217,7 +229,8 @@ internal sealed class TwoFactorAppService(
     private static BusinessException CodeInvalid() =>
         new(AuthErrorCodes.TwoFactorCodeInvalid, CodeInvalidMessage);
 
-    private static string SetupKey(Guid userId) => SetupKeyPrefix + userId.ToString("N");
+    /// <summary>待确认设置密钥的缓存键。</summary>
+    internal static string SetupKey(Guid userId) => SetupKeyPrefix + userId.ToString("N");
 
     private async Task<User> GetCurrentUserEntityAsync(CancellationToken cancellationToken)
     {
