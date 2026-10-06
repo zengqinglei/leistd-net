@@ -49,7 +49,7 @@ import { LayoutService } from '../../../../core/services/layout-service';
 //#if (IncludeRealTime)
 import { realtimeResourceKey, SignalRService } from '../../../../core/services/signalr-service';
 //#endif
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif

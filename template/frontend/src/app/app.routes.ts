@@ -14,7 +14,7 @@ import { DefaultLayout } from './layout/default/default-layout';
 import { EmptyLayout } from './layout/empty/empty-layout';
 //#endif
 import { WorkspaceLayout } from './layout/workspace/workspace-layout';
-import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
+import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 export const routes: Routes = [
   //#if (LocalIdentity)

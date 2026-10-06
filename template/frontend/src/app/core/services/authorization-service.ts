@@ -2,10 +2,8 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
 
-import {
-  CurrentPermissionsOutputDto,
-  PLATFORM_ENTRY_PERMISSIONS,
-} from '../../shared/models/permission';
+import { PLATFORM_ENTRY_PERMISSIONS } from '../../shared/constants/permission.constants';
+import { CurrentPermissionsOutputDto } from '../../shared/dtos/permission.dto';
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 
 /**

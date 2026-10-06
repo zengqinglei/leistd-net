@@ -1,6 +1,6 @@
 // prettier-ignore
 import {
-  ChangeDetectionStrategy, Component, inject, signal,
+  ChangeDetectionStrategy, Component, inject, OnInit, signal,
   //#if (IncludeMultiTenancy)
   computed,
   //#endif
@@ -87,7 +87,7 @@ const githubIcon =
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class Login {
+export class Login implements OnInit {
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
   private readonly authorizationService = inject(AuthorizationService);
@@ -150,19 +150,24 @@ export class Login {
       ?.twoFactorToken ?? null,
   );
 
+//#if (IncludeMultiTenancy || ExternalLogin)
   constructor() {
-    // 普通登录清理旧主体；重新认证保留当前上下文并始终显示表单，凭据成功后再替换。
-    if (this.route.snapshot.queryParamMap.get('reauthenticate') !== 'true') {
-      this.sessionContext.clear();
-    }
-
-    // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
 //#if (IncludeMultiTenancy)
+    // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
     void this.resolveTenantFromHost();
 //#endif
     //#if (ExternalLogin)
     this.loadExternalProviders();
     //#endif
+  }
+
+//#endif
+  ngOnInit(): void {
+    // 普通登录清理旧主体；重新认证保留当前上下文并始终显示表单，凭据成功后再替换。
+    // 清理会话属于改变会话状态的流程，不放构造函数。
+    if (this.route.snapshot.queryParamMap.get('reauthenticate') !== 'true') {
+      this.sessionContext.clear();
+    }
   }
 
   /**

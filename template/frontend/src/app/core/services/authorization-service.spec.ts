@@ -3,7 +3,10 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { AuthorizationService } from './authorization-service';
-import { PERMISSIONS, PLATFORM_ENTRY_PERMISSIONS } from '../../shared/models/permission';
+import {
+  PERMISSIONS,
+  PLATFORM_ENTRY_PERMISSIONS,
+} from '../../shared/constants/permission.constants';
 
 /**
  * 前端可见性的唯一判据。

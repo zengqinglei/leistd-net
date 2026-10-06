@@ -24,7 +24,7 @@ import { SignalRService } from '../../../../core/services/signalr-service';
 //#endif
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { GetRolesInputDto, RoleOutputDto } from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
 

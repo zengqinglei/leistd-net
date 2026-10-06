@@ -16,7 +16,7 @@ import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { GetUsersInputDto } from '../../dtos/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
 

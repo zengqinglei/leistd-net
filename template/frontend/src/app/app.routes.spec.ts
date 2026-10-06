@@ -3,7 +3,7 @@ import { Route, Routes } from '@angular/router';
 import { routes } from './app.routes';
 import { authGuard } from './core/guards/auth-guard';
 import { PROTECTED_ROUTE_PREFIXES } from './core/services/startup-service';
-import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
+import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 describe('top-level routes', () => {
   const isCatchAllPrefix = (r: Route) => r.path === '' && !!r.loadChildren;

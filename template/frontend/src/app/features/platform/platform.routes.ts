@@ -7,7 +7,7 @@ import { permissionGuard } from '../../core/guards/permission-guard';
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from '../../core/i18n/translation-scopes';
 //#endif
-import { PERMISSIONS } from '../../shared/models/permission';
+import { PERMISSIONS } from '../../shared/constants/permission.constants';
 
 /**
  * 平台管理模块路由配置

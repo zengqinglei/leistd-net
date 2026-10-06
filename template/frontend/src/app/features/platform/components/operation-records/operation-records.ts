@@ -66,7 +66,7 @@ import {
   FacetedFilter,
   type FacetedFilterOption,
 } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { formatAppDate, parseAppCalendarDate } from '../../../../shared/pipes/app-date-pipe';
 import { saveBlob } from '../../../../shared/utils/download-file';
 //#if (!IncludeLocalization)

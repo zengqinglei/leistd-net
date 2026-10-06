@@ -1,11 +1,15 @@
 /**
  * 前端需要按值分支的后端错误码。
  *
- * 必须与后端的 `AuthErrorCodes` / `SecurityErrorCodes` 逐字一致。
+ * 必须与后端的错误码常量（`AuthErrorCodes`、`SecurityErrorCodes`、框架的 `PermissionErrorCodes`）逐字一致。
  * 这里只收**前端真的要据此改变行为**的那几个；只用于展示的码不进来——
  * 展示走服务端下发的 `detail`，多列一个就多一处要同步的地方。
  */
 export const API_ERROR_CODES = {
+  /** 保存权限授予时版本已过期（他人抢先保存）：重新加载，不静默覆盖。 */
+  permissionConcurrencyConflict: 'Permission:ConcurrencyConflict',
+  //#if (LocalIdentity)
+
   /**
    * 连续认证失败触发的临时锁定。
    *
@@ -19,4 +23,5 @@ export const API_ERROR_CODES = {
 
   /** 两步验证码不正确：停在当前页重试，不退出挑战流程。 */
   twoFactorCodeInvalid: 'Auth:TwoFactorCodeInvalid',
+  //#endif
 } as const;

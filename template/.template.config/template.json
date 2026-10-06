@@ -321,7 +321,6 @@
             "frontend/src/app/features/account/**",
             "frontend/src/app/features/platform/components/users/widgets/reset-user-password-dialog/**",
             "frontend/src/app/features/platform/components/users/widgets/user-edit-dialog/**",
-            "frontend/src/app/core/errors/api-error-codes.ts",
             "frontend/_mock/api/auth.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
             "backend/src/CompanyName.ProjectName.Application/Tenants/**",
@@ -398,6 +397,7 @@
             "frontend/src/app/layout/components/notifications/**",
             "frontend/src/app/layout/services/notification-service.ts",
             "frontend/src/app/layout/services/notification-service.spec.ts",
+            "frontend/src/app/shared/dtos/notification.dto.ts",
             "frontend/_mock/api/notification.ts",
             "frontend/_mock/data/notifications.ts"
           ]
@@ -443,7 +443,6 @@
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/ExternalAuthOptionsValidatorTests.cs",
             "frontend/src/app/features/account/components/external-auth-callback/**",
             "frontend/src/app/features/account/components/external-logins/**",
-            "frontend/src/app/features/account/services/account-service.spec.ts",
             "backend/tests/CompanyName.ProjectName.UnitTests/Domain/ExternalLoginConnectionTests.cs"
           ]
         },

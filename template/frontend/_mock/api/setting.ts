@@ -1,5 +1,5 @@
 import { requirePermission } from './authorization';
-import { PERMISSIONS } from '../../src/app/shared/models/permission';
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { MockException, MockRequest } from '../core/models';
 // prettier-ignore
 import {

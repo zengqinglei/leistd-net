@@ -6,7 +6,7 @@ import { translateObjectSignal, translateSignal } from '@jsverse/transloco';
 
 import { AuthorizationService } from '../../core/services/authorization-service';
 import { LayoutService } from '../../core/services/layout-service';
-import { PERMISSIONS } from '../../shared/models/permission';
+import { PERMISSIONS } from '../../shared/constants/permission.constants';
 
 //#if (IncludeLocalization)
 /** 本地化形态下菜单项的 label 是这个前缀下的词条键。 */

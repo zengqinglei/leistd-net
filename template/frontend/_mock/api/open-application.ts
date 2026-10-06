@@ -4,8 +4,8 @@ import {
   OpenApplicationOutputDto,
   UpdateOpenApplicationInputDto,
 } from '../../src/app/features/platform/dtos/open-application.dto';
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
-import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';
 import {

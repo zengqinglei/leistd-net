@@ -21,7 +21,7 @@ frontend/
 │   ├── core/              # 应用级服务、认证、拦截器、启动、错误处理、应用级组件
 │   ├── features/<x>/      # 业务功能：components/<page>/widgets、services、dtos、models、guards、<x>.routes.ts
 │   ├── layout/            # 布局、导航与布局内组件
-│   ├── shared/            # 无状态的展示组件、指令、管道、工具与跨功能契约（dtos、models、components、directives、pipes、utils）
+│   ├── shared/            # 无状态的展示组件、指令、管道、工具与跨功能契约（dtos、models、constants、components、directives、pipes、utils）
 │   ├── app.config.ts、app.interceptors.ts、app.routes.ts、app.ts
 ├── src/environments/      # 公共配置与各部署环境的覆盖
 └── public/                # 构建后映射到站点根的静态资源
@@ -49,7 +49,7 @@ frontend/
 
 | 类型 | 文件 | 类名或导出 |
 | --- | --- | --- |
-| 组件 | `{name}.ts`（模板 `.html`） | 不带后缀，如 `UserProfile` |
+| 组件 | `{name}.ts`（模板 `.html`） | 不带后缀 |
 | 服务 | `{name}-service.ts` | 带 `Service`，如 `UserService` |
 | 指令 | `{name}.ts` | 不带后缀；selector 为 `app` + camelCase 属性 |
 | 管道 | `{name}-pipe.ts` | 如 `AppDate`；名称见 `@Pipe` |
@@ -59,6 +59,7 @@ frontend/
 | 布局 | `{name}-layout.ts` | 如 `DefaultLayout` |
 | API 契约 | `{name}.dto.ts` | `*Dto` 接口 |
 | 前端模型 | `{name}.model.ts` | 需要行为或派生字段的类型 |
+| 常量 | `{name}.constants.ts` | 跨功能放 `shared/constants` |
 | 路由 | `{name}.routes.ts` | |
 | 测试装配 | `{name}.testing.ts` | |
 

@@ -4,6 +4,7 @@ import {
   computed,
   inject,
   input,
+  OnInit,
   output,
   signal,
 } from '@angular/core';
@@ -14,6 +15,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideCopy } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { toDataURL } from 'qrcode';
 import { finalize } from 'rxjs/operators';
@@ -38,6 +40,7 @@ import { OtpCodeInput } from '../otp-code-input/otp-code-input';
   imports: [
     NgIcon,
     HlmButton,
+    ...HlmFieldImports,
     HlmSpinner,
     OtpCodeInput,
     //#if (IncludeLocalization)
@@ -48,7 +51,7 @@ import { OtpCodeInput } from '../otp-code-input/otp-code-input';
   templateUrl: './two-factor-setup.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TwoFactorSetup {
+export class TwoFactorSetup implements OnInit {
   private readonly accountService = inject(AccountService);
   private readonly clipboard = injectCopyToClipboard();
   //#if (IncludeLocalization)
@@ -82,7 +85,8 @@ export class TwoFactorSetup {
     () => /^\d{6}$/.test(this.code().replace(/\s/g, '')) && !this.submitting(),
   );
 
-  constructor() {
+  // 生成待启用密钥是写请求，不放构造函数：组件实例化（含测试装配）不应改变服务端状态。
+  ngOnInit(): void {
     this.start();
   }
 

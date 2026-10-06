@@ -37,7 +37,7 @@ import { StartupService } from '../../../../core/services/startup-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (ExternalLogin)
 import { ExternalLoginProvidersOutputDto } from '../../dtos/account.dto';
 //#endif
@@ -80,7 +80,8 @@ describe('Login', () => {
   let externalProviders: Observable<ExternalLoginProvidersOutputDto>;
   //#endif
 
-  async function setUp(): Promise<void> {
+  /** @param initialize 为 false 时只构造组件、不触发 `ngOnInit`，用于核对构造期没有副作用。 */
+  async function setUp(initialize = true): Promise<void> {
     currentUser = signal<{
       twoFactorSetupRequired?: boolean;
     } | null>(null);
@@ -141,17 +142,20 @@ describe('Login', () => {
       } as never);
     }
     fixture = TestBed.createComponent(Login);
-    //#if (IncludeLocalization)
-    // 登录页构造时清理旧主体，等待这次退回设备语言后再测试用户切换。
-    await TestBed.inject(LanguageService).resetToDeviceLang();
-    //#endif
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
 
     vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
+    if (!initialize) {
+      return;
+    }
     fixture.detectChanges();
+    //#if (IncludeLocalization)
+    // 登录页初始化时清理旧主体，等待这次退回设备语言后再测试用户切换。
+    await TestBed.inject(LanguageService).resetToDeviceLang();
+    //#endif
   }
 
   function fillValidCredentials(): void {
@@ -173,6 +177,18 @@ describe('Login', () => {
   //#if (IncludeMultiTenancy)
   afterEach(() => localStorage.clear());
   //#endif
+
+  it('clears the previous subject on init rather than on construction, exactly once', async () => {
+    await setUp(false);
+    expect(TestBed.inject(SessionContextService).clear).not.toHaveBeenCalled();
+    expect(authService.clearAuthData).not.toHaveBeenCalled();
+
+    fixture.detectChanges();
+    fixture.detectChanges();
+
+    expect(TestBed.inject(SessionContextService).clear).toHaveBeenCalledOnce();
+    expect(authService.clearAuthData).toHaveBeenCalledOnce();
+  });
 
   it('keeps the existing context and displays credentials when reauthentication is required', async () => {
     queryParams = { reauthenticate: 'true' };

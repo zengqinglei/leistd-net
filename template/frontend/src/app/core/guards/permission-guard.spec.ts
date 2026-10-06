@@ -10,7 +10,7 @@ import {
 import { firstValueFrom, isObservable, of } from 'rxjs';
 
 import { permissionGuard } from './permission-guard';
-import { PERMISSIONS } from '../../shared/models/permission';
+import { PERMISSIONS } from '../../shared/constants/permission.constants';
 import { AuthorizationService } from '../services/authorization-service';
 import { StartupService } from '../services/startup-service';
 

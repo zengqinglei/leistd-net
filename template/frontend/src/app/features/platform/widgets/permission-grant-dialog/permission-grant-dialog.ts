@@ -29,12 +29,16 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
 import { catchError, filter, finalize, startWith, switchMap, tap } from 'rxjs/operators';
 
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import { API_ERROR_CODES } from '../../../../core/errors/api-error-codes';
+import {
+  applicationErrorMessage,
+  ApplicationHttpError,
+} from '../../../../core/errors/application-http-error';
 import {
   PermissionDefinitionGroupOutputDto,
   PermissionDefinitionOutputDto,
   PermissionGrantsOutputDto,
-} from '../../../../shared/models/permission';
+} from '../../../../shared/dtos/permission.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -287,10 +291,12 @@ export class PermissionGrantDialog {
           //#endif
           this.saved.emit();
         },
-        error: (error) => {
+        error: (error: unknown) => {
           this.saving.set(false);
-          // 409 说明另一位管理员抢先保存：重新加载，不静默覆盖。
-          if (error?.status === 409) {
+          // 版本冲突说明另一位管理员抢先保存：重新加载，不静默覆盖。按错误码而不是 409 分支，
+          // 其他同样映射为 409 的错误不该触发重新加载。
+          const code = error instanceof ApplicationHttpError ? error.code : undefined;
+          if (code === API_ERROR_CODES.permissionConcurrencyConflict) {
             //#if (IncludeLocalization)
             toast.error(this.transloco.translate('permissions.conflict'));
             //#else

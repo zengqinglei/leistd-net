@@ -1,5 +1,5 @@
 import { AUTHORIZATION_API, getRoleOptions } from './authorization';
-import { PERMISSIONS } from '../../src/app/shared/models/permission';
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PERMISSION_DEFINITIONS, ROLES } from '../data/authorization';
 import { setMockSessionUserId } from '../utils/current-user';
 

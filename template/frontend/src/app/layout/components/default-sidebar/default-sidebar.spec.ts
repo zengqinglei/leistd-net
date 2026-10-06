@@ -12,7 +12,10 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
 import { LayoutService } from '../../../core/services/layout-service';
-import { PERMISSIONS, PLATFORM_ENTRY_PERMISSIONS } from '../../../shared/models/permission';
+import {
+  PERMISSIONS,
+  PLATFORM_ENTRY_PERMISSIONS,
+} from '../../../shared/constants/permission.constants';
 
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以这里按**键**断言：分组骨架与文案无关，

@@ -1,9 +1,17 @@
-import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpErrorResponse,
+  HttpInterceptorFn,
+  provideHttpClient,
+  withInterceptors,
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { toast } from '@spartan-ng/brain/sonner';
+import { catchError, throwError } from 'rxjs';
 
 import { PermissionGrantDialog } from './permission-grant-dialog';
+import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -25,6 +33,16 @@ class HostComponent {
 }
 
 const DEFINITIONS_URL = '/api/v1/permissions/definitions';
+
+/** 与应用的错误拦截器一样把失败归一化为 `ApplicationHttpError`，弹窗按其中的错误码分支。 */
+const normalizeErrors: HttpInterceptorFn = (req, next) =>
+  next(req).pipe(
+    catchError((error: unknown) =>
+      throwError(() =>
+        error instanceof HttpErrorResponse ? ApplicationHttpError.from(error) : error,
+      ),
+    ),
+  );
 
 function definitions() {
   return [
@@ -64,7 +82,7 @@ describe('PermissionGrantDialog', () => {
       // prettier-ignore
       providers: [
                 provideZonelessChangeDetection(),
-                provideHttpClient(),
+                provideHttpClient(withInterceptors([normalizeErrors])),
                 provideHttpClientTesting(),
                 //#if (IncludeLocalization)
                 ...provideTranslocoTesting(),
@@ -147,6 +165,7 @@ describe('PermissionGrantDialog', () => {
   });
 
   it('reloads the subject after a concurrency conflict', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
     await fixture.whenStable();
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
@@ -155,8 +174,15 @@ describe('PermissionGrantDialog', () => {
     dialog().onSave();
     httpTesting
       .expectOne({ method: 'PUT', url: '/api/v1/permissions/grants/roles/role-a' })
-      .flush({ detail: 'conflict' }, { status: 409, statusText: 'Conflict' });
+      .flush(
+        { code: 'Permission:ConcurrencyConflict', detail: 'conflict' },
+        { status: 409, statusText: 'Conflict' },
+      );
     await fixture.whenStable();
+
+    expect(errorToast).toHaveBeenCalledOnce();
+    expect(errorToast).not.toHaveBeenCalledWith('conflict');
+    expect(dialog().saving()).toBe(false);
 
     // 409 后必须真的重新拉取，否则用户只能拿着旧版本反复重试、反复 409。
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
@@ -166,6 +192,30 @@ describe('PermissionGrantDialog', () => {
     await fixture.whenStable();
 
     expect(dialog().isGranted('App.Users')).toBe(false);
+  });
+
+  it('only reports a 409 whose code is not a concurrency conflict, without reloading', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await fixture.whenStable();
+
+    dialog().onSave();
+    httpTesting
+      .expectOne({ method: 'PUT', url: '/api/v1/permissions/grants/roles/role-a' })
+      .flush(
+        { code: 'Permission:SomethingElse', detail: 'Other conflict' },
+        { status: 409, statusText: 'Conflict' },
+      );
+    await fixture.whenStable();
+
+    // 只按服务端文案提示一次；不重新加载，界面上的勾选与版本原样保留，可以改后再存。
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith('Other conflict');
+    httpTesting.expectNone(DEFINITIONS_URL);
+    expect(dialog().isGranted('App.Users')).toBe(true);
+    expect(dialog().version()).toBe(7);
+    expect(dialog().saving()).toBe(false);
   });
 
   it('keeps the spinner up until the next subject has loaded', async () => {

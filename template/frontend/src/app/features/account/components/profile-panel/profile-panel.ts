@@ -231,7 +231,8 @@ export class ProfilePanel {
         }),
       )
       .subscribe({
-        next: () => {
+        next: (user) => {
+          this.authService.setCurrentUser(user);
           //#if (IncludeLocalization)
           toast.success(this.transloco.translate(successKey));
           //#else
@@ -281,7 +282,8 @@ export class ProfilePanel {
       .confirmCurrentEmail({ challengeId: challenge.challengeId, code })
       .pipe(finalize(() => this.confirmingCode.set(false)))
       .subscribe({
-        next: () => {
+        next: (user) => {
+          this.authService.setCurrentUser(user);
           this.emailChallenge.set(null);
           this.emailCode.set('');
           //#if (IncludeLocalization)
@@ -329,7 +331,8 @@ export class ProfilePanel {
       })
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
-        next: () => {
+        next: (user) => {
+          this.authService.setCurrentUser(user);
           //#if (IncludeLocalization)
           toast.success(this.transloco.translate('common.success'), {
             description: this.transloco.translate('account.profile.updateSuccess'),

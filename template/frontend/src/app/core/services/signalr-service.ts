@@ -23,6 +23,9 @@ import { Observable, Subject } from 'rxjs';
 //#endif
 
 import { environment } from '../../../environments/environment';
+//#if (IncludeNotifications)
+import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
+//#endif
 import { MOCKED_URL } from '../mock/mocked-url';
 
 /**
@@ -42,22 +45,6 @@ function isLive(connection: HubConnection | null): boolean {
  */
 export function realtimeResourceKey(resource: string, tenantId: string | null | undefined): string {
   return tenantId ? `${tenantId.replace(/-/g, '').toLowerCase()}:${resource}` : `host:${resource}`;
-}
-//#endif
-//#if (IncludeNotifications)
-
-/** 通知 DTO（与后端 Leistd.Notifications.NotificationOutputDto 对应，类型为字符串） */
-export interface NotificationOutputDto {
-  id: string;
-  title: string;
-  content?: string;
-  type: string;
-  link?: string;
-  icon?: string;
-  isRead: boolean;
-  creationTime: string;
-  relatedEntityId?: string;
-  relatedEntityType?: string;
 }
 //#endif
 

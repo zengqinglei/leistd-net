@@ -6,7 +6,7 @@ import {
   PermissionDefinitionGroupOutputDto,
   PermissionGrantsOutputDto,
   ReplacePermissionGrantsInputDto,
-} from '../../../shared/models/permission';
+} from '../../../shared/dtos/permission.dto';
 
 /**
  * 权限定义与授予的管理端接口。

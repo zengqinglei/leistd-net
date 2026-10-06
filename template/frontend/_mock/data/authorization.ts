@@ -1,4 +1,4 @@
-import { PERMISSIONS } from '../../src/app/shared/models/permission';
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 
 export interface MockRole {
   id: string;

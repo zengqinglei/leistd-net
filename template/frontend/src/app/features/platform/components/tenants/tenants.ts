@@ -43,7 +43,7 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 import { ImpersonationService } from '../../../../core/services/impersonation-service';
 //#endif
 import { LayoutService } from '../../../../core/services/layout-service';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif

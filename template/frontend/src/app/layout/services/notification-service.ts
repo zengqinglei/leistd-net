@@ -2,8 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
 
-import { SignalRService, NotificationOutputDto } from '../../core/services/signalr-service';
-export type { NotificationOutputDto } from '../../core/services/signalr-service';
+import { SignalRService } from '../../core/services/signalr-service';
+import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
 
 /**
  * 各通知类型的图标。类型由后端业务定义（见 `AppNotificationTypes`），新增类型时在这里补一行；
