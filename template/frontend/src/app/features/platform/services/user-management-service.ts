@@ -5,12 +5,14 @@ import { Observable } from 'rxjs';
 import { PagedResultDto } from '../../../shared/dtos/paged-result.dto';
 import { RoleBriefDto } from '../dtos/role.dto';
 import {
+  //#if (LocalIdentity)
   CreateUserInputDto,
+  //#endif
   GetUsersInputDto,
   //#if (LocalIdentity)
   ResetUserPasswordInputDto,
-  //#endif
   UpdateUserInputDto,
+  //#endif
   UpdateUserRolesInputDto,
   UserManagementOutputDto,
 } from '../dtos/user-management.dto';
@@ -43,6 +45,7 @@ export class UserManagementService {
     return this.http.get<UserManagementOutputDto>(`${this.baseUrl}/${id}`);
   }
 
+  //#if (LocalIdentity)
   createUser(data: CreateUserInputDto): Observable<UserManagementOutputDto> {
     return this.http.post<UserManagementOutputDto>(this.baseUrl, data);
   }
@@ -51,6 +54,7 @@ export class UserManagementService {
     return this.http.put<UserManagementOutputDto>(`${this.baseUrl}/${id}`, data);
   }
 
+  //#endif
   enableUser(id: string): Observable<void> {
     return this.http.patch<void>(`${this.baseUrl}/${id}/enable`, {});
   }
@@ -72,11 +76,11 @@ export class UserManagementService {
   resetTwoFactor(id: string): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${id}/reset-two-factor`, {});
   }
-  //#endif
 
   deleteUser(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
+  //#endif
 
   getUserRoles(id: string): Observable<RoleBriefDto[]> {
     return this.http.get<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`);

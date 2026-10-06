@@ -1,8 +1,8 @@
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';
-import { ROLES } from '../data/authorization';
 //#if (LocalIdentity)
+import { ROLES } from '../data/authorization';
 import { ensureAcceptablePassword } from '../data/password-policy';
 //#endif
 import { USERS, toUserManagementOutput } from '../data/user';
@@ -86,6 +86,7 @@ export function getUserById(id: string) {
   return toUserManagementOutput(user);
 }
 
+//#if (LocalIdentity)
 export function addUser(value: any) {
   const username = String(value.username ?? '').trim();
   const email = String(value.email ?? '').trim();
@@ -101,24 +102,11 @@ export function addUser(value: any) {
       message: `Email '${email}' is already in use.`,
     });
   }
-  //#if (LocalIdentity)
   // 复刻后端口令策略：创建用户必须显式给出合规口令，没有默认值。
   ensureAcceptablePassword(value.password, 'Password');
 
-  //#else
-  // 复刻后端 CreateUserInputDto：SubjectId 必填，且就是本服务 Membership 的主键。
-  const subjectId = String(value.subjectId ?? '').trim();
-  if (!subjectId) {
-    throw new MockException(400, { message: 'SubjectId is required.' });
-  }
-
-  //#endif
   const newUser = {
-    //#if (LocalIdentity)
     id: crypto.randomUUID(),
-    //#else
-    id: subjectId,
-    //#endif
     username,
     email,
     displayName: value.displayName,
@@ -138,12 +126,7 @@ export function addUser(value: any) {
       : ROLES.filter((role: { isDefault: boolean }) => role.isDefault).map(
           (role: { name: string }) => role.name,
         )) as string[],
-    //#if (LocalIdentity)
     password: value.password,
-    //#else
-    // Resource 形态没有本地口令，空串仅满足 MockUser 结构。
-    password: '',
-    //#endif
   };
   USERS.push(newUser);
   return toUserManagementOutput(newUser);
@@ -177,6 +160,7 @@ export function updateUser(id: string, value: any) {
   return toUserManagementOutput(user);
 }
 
+//#endif
 export function enableUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
@@ -252,7 +236,6 @@ export function resetTwoFactor(id: string) {
   user.recoveryCodes = [];
 }
 
-//#endif
 /** 与后端一致：删除幂等，不存在（含已删除）即成功；内置超级管理员不可删（403）。 */
 export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
@@ -268,11 +251,14 @@ export function deleteUser(id: string) {
   USERS.splice(index, 1);
 }
 
+//#endif
 export const USER_API = {
   'GET /api/v1/users': (req: MockRequest) => getUsers(req.queryParams),
   'GET /api/v1/users/:id': (req: MockRequest) => getUserById(req.params.id),
+  //#if (LocalIdentity)
   'POST /api/v1/users': (req: MockRequest) => addUser(req.body),
   'PUT /api/v1/users/:id': (req: MockRequest) => updateUser(req.params.id, req.body),
+  //#endif
   'PATCH /api/v1/users/:id/enable': (req: MockRequest) => enableUser(req.params.id),
   'PATCH /api/v1/users/:id/disable': (req: MockRequest) => disableUser(req.params.id),
   //#if (LocalIdentity)
@@ -280,6 +266,6 @@ export const USER_API = {
     resetPassword(req.params.id, req.body),
   'POST /api/v1/users/:id/unlock': (req: MockRequest) => unlockUser(req.params.id),
   'POST /api/v1/users/:id/reset-two-factor': (req: MockRequest) => resetTwoFactor(req.params.id),
-  //#endif
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
+  //#endif
 };

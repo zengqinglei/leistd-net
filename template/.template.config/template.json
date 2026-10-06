@@ -339,6 +339,7 @@
             "frontend/src/app/core/services/impersonation-service.spec.ts",
             "frontend/src/app/core/services/tenant-context-service.spec.ts",
             "frontend/_mock/api/auth.spec.ts",
+            "frontend/_mock/api/user.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/UserUniquenessTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs",
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/DefaultAdminOptions.cs",
