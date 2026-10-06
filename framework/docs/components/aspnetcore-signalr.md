@@ -48,15 +48,28 @@ builder.Services.AddSignalR(options =>
 });
 ```
 
+用 JWT 等请求头认证时，浏览器的 WebSocket 与 SSE 连接设不了自定义请求头，SignalR 客户端只能把令牌放进查询串 `access_token`。在路由之后、认证之前接入 `UseHubAccessToken()`，它对宿主映射的全部 Hub 生效；用 Cookie 会话时不需要：
+
+```csharp
+using Leistd.AspNetCore.SignalR;
+
+app.UseRouting();
+app.UseHubAccessToken();
+app.UseAuthentication();
+```
+
 ## 使用
 
 Hub 方法内可直接读环境态，与 HTTP 路径写法一致：
 
 ```csharp
-public class OrderHub(ICurrentUser currentUser, ICurrentTenant currentTenant) : Hub
+using Leistd.Security.Users;
+using Microsoft.AspNetCore.SignalR;
+
+public class OrderHub(ICurrentUser currentUser) : Hub
 {
     public Task<string> WhoAmI() =>
-        Task.FromResult($"{currentUser.Id} @ {currentTenant.Id?.ToString() ?? "host"}");
+        Task.FromResult($"{currentUser.Id} @ {currentUser.TenantId?.ToString() ?? "host"}");
 }
 ```
 

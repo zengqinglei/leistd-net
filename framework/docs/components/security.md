@@ -148,11 +148,14 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 
 | 成员 | 值 | 说明 |
 | --- | --- | --- |
+| `Subject` | `sub` | 主体标识（OIDC 标准）：自然人是 GUID 用户 Id，机器主体带 `client:` 前缀（见下文 `ClientSubject`）；审计等需要任何主体都留下标识的场景读它的原始值 |
 | `ClientId` | `client_id` | OAuth2/OIDC 客户端标识符 |
 | `SessionId` | `sid` | 会话标识符（OIDC 标准） |
 | `IdentityProvider` | `idp` | 身份提供者（如 github / google / microsoft） |
 | `IsSuperAdmin` | `is_super_admin` | 是否超级管理员（权限授权的超管判定约定来源） |
 | `TenantId` | `tenant_id` | `ClaimTypeOptions.TenantId` 的默认值。读写租户 claim 一律经 `ClaimTypeOptions`，不直接用这个常量 |
+| `ImpersonatorUserId` | `impersonator_id` | 模拟登录时真实操作人的用户 Id；非模拟场景没有此 claim |
+| `ImpersonatorUserName` | `impersonator_name` | 模拟登录时真实操作人的显示名快照；非模拟场景没有此 claim |
 
 标准字段直接使用 `System.Security.Claims.ClaimTypes`。
 

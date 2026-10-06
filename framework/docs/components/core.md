@@ -56,7 +56,7 @@ public class DailyReportService(IClock clock)
 
 ## 接口参考
 
-`Leistd.Timing` 命名空间：
+时钟成员位于 `Leistd.Timing` 命名空间，`TextRedactor` 位于 `Leistd.Redaction` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |

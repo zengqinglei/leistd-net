@@ -73,7 +73,7 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 
 ## 接口参考
 
-`Leistd.DynamicProxy` 命名空间：
+`Leistd.DynamicProxy.Interceptors` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |

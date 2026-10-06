@@ -63,19 +63,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 
 `AddMultiTenancyEfCore<TDbContext>()` 只注册租户与连接配置的 Store/Manager，均可通过 `TryAdd` 替换；只读控制库的宿主（租户连接解析、迁移作业）到此为止。租户管理与连接管理用例在 `Leistd.MultiTenancy.Management` 包，由提供管理界面的宿主另行 `AddTenantManagement()`（需要工作单元）。它不注册业务实体的租户落值拦截器；该行为属于 DDD 基座的 `BaseDbContext`。
 
-普通 `DbContext` 若需为 `TenantConnectionRecord` 记录创建审计，应显式启用创建审计：
-
-```csharp
-public IdentityControlDbContext(
-    DbContextOptions<IdentityControlDbContext> options,
-    IServiceProvider? serviceProvider)
-    : base(options)
-{
-    ChangeTracker.EnableCreationAuditing(serviceProvider);
-}
-```
-
-该调用只落创建审计，不落租户归属；修改审计仍由 `AuditSaveChangesInterceptor` 处理。
+普通 `DbContext` 若需为 `TenantConnectionRecord` 记录创建审计，应在构造函数中显式启用创建审计，做法见[审计](./auditing.md#注册)。它只落创建审计，不落租户归属；修改审计仍由 `AuditSaveChangesInterceptor` 处理。
 
 ## 使用
 
@@ -389,7 +377,7 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
 | `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
 | `TenantConfiguration.NamePattern` / `MaxNameLength` | 租户名规则（单个 DNS 标签，≤63）；前端表单可直接复用这个模式 |
-| 默认 HTTP 状态 | 组件默认状态：租户停用 → 403，不存在 → 404，版本与命名冲突 → 409。其余（如 `Tenant:NameInvalid`、`TenantConnection:NameInvalid`）按业务异常默认 400。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
+| 默认 HTTP 状态 | 组件默认状态：租户停用（`Tenant:NotActive`）→ 403，不存在（`Tenant:NotFound`）→ 404；租户版本冲突（`Tenant:ConcurrencyConflict`）、重名（`Tenant:DuplicateName`）、连接版本冲突（`TenantConnection:VersionConflict`）与租户未停用时修改连接（`TenantConnection:ChangeRequiresInactiveTenant`）→ 409。其余（如 `Tenant:NameInvalid`、`TenantConnection:NameInvalid`）按业务异常默认 400。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名，它跑宿主配置的解析链，与真实请求给出同一个答案 |
 | `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；按 `ClaimTypeOptions.ReadTenant` 判定租户会话（主体属于某个租户；声明非法时保留原始错误）；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
 | `AddRemoteTenantConnectionStore(serviceName, configure?, configSectionPath?)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一，相同参数重复调用幂等，换用另一服务名或配置节时抛出；默认绑定 `Leistd:ServiceClients:{serviceName}`，`BaseAddress` 缺失或不是绝对地址时启动失败并报出实际键名；该客户端不转发用户与租户上下文（控制面查询，租户 Id 在路径里） |

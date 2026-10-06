@@ -106,7 +106,7 @@ builder.Services.AddNotificationRetention<MyProjectDbContext>();
 builder.Services.AddNotificationPreferences(options =>
     options.MandatoryDeliveries.Add(new NotificationDelivery("Security", INotificationChannel.InAppName)));
 builder.Services.AddEmailNotifications();
-builder.Services.AddScoped<INotificationRecipientResolver, UserEmailRecipientResolver>();
+builder.Services.TryAddTransient<INotificationRecipientResolver, UserEmailRecipientResolver>();
 ```
 
 邮件里附的链接：绝对 http(s) 地址原样附上；以 `/` 开头的站内链接在配置了 `Leistd:Notifications:Email:PublicBaseUrl`（`EmailNotificationOptions.PublicBaseUrl`）时拼成绝对地址附上，未配置时不附。站点地址直接拼在链接前，带路径前缀的站点写 `https://example.com/portal`，前端用哈希路由时写 `https://example.com/#`；不从请求推导，通知可能在后台产生，请求头也可被伪造。
@@ -227,7 +227,7 @@ public class MessageCenter(INotificationStore notificationStore)
 - **发布方负责建立租户上下文。** `NotificationRecord` 实现 `IMultiTenant`，`TenantId` 由基座在 `SaveChanges` 时按**当前租户上下文**落值——`NotificationPublisher` 与 `EfCoreNotificationStore` 自身都不带租户，也无从推断：收件人只有 `userId`，由它反查租户需要用户表，而 Resource 形态根本没有。因此后台作业、消息消费者这类不经 HTTP 的入口必须先 `ICurrentTenant.Change(tenantId)`（或 `IAmbientContext.Begin`）再发布，否则通知落成宿主行（`TenantId` 为 `null`），租户侧被全局查询过滤器滤掉。**症状具有迷惑性**：实时推送按 `userId` 直达、不受过滤器约束，于是「推送收到了、未读数却是 0」——失败只出现在查询这一侧。
 - **多副本部署必须配置 SignalR 背板**，否则推送只到达连在本节点的客户端。通知已落库，用户刷新后仍能看到，因此降级较软——但实时性会静默失效。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
 - **令牌过期本身不会自动断开连接**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不因令牌到期关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。
-- **用 Bearer 认证时，浏览器客户端的令牌到不了 Hub**。浏览器的 WebSocket 与 SSE 接口设不了自定义请求头，令牌只能拼进 query；若宿主只接受 `Authorization: Bearer`，握手会失败。处理方式（按 Hub 路径定向搬运，含完整示例）见[实时通信组件文档](./realtime.md#bearer-认证下的-hub-令牌传递)——两个 Hub 面对的是同一个问题，配方不在此重复；照抄时把路径换成本组件实际映射的 `MapNotificationHub` 路径（默认 `/hubs/notifications`）。用 Cookie 会话时不涉及本条。
+- **用 Bearer 认证时，浏览器客户端的令牌到不了 Hub**：浏览器的 WebSocket 与 SSE 设不了自定义请求头，令牌只能放进查询串，宿主须在认证之前接入 SignalR 基座的 `UseHubAccessToken()`，见 [SignalR 基座](./aspnetcore-signalr.md#注册)。用 Cookie 会话时不涉及本条。
 
 ## 相关
 

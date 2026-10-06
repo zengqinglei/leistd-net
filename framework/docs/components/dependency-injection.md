@@ -29,7 +29,7 @@ dotnet add package Leistd.DependencyInjection.DynamicProxy
 只需要执行回调、不需要 AOP：
 
 ```csharp
-using Leistd.DependencyInjection.Extensions;
+using Leistd.DependencyInjection.Registration;
 
 builder.Host.UseServiceProviderFactory(new ServiceRegistrationCallbackFactory());
 ```
@@ -37,7 +37,7 @@ builder.Host.UseServiceProviderFactory(new ServiceRegistrationCallbackFactory())
 需要根据回调结果织入 DynamicProxy 拦截器：
 
 ```csharp
-using Leistd.DependencyInjection.DynamicProxy.Extensions;
+using Leistd.DependencyInjection.DynamicProxy.Registration;
 
 builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
 ```
@@ -45,6 +45,8 @@ builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallba
 需要与 ASP.NET Core 开发环境默认校验对齐时，显式传入 `ServiceProviderOptions`：
 
 ```csharp
+using Leistd.DependencyInjection.DynamicProxy.Registration;
+
 builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory(
     new ServiceProviderOptions
     {
@@ -88,6 +90,7 @@ builder.Services.AddRegistrationValidator(services =>
 ```csharp
 using Leistd.DependencyInjection.Extensions;
 using Leistd.DependencyInjection.DynamicProxy.Extensions;
+using Leistd.DependencyInjection.DynamicProxy.Registration;
 using Microsoft.Extensions.DependencyInjection;
 
 builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());

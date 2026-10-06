@@ -90,35 +90,10 @@ public class ProductProfileService(IBusinessEventPublisher eventPublisher)
 
 SignalR 传输层的配置不在本组件：心跳、超时、详细错误是 SignalR 的 `HubOptions`，用户标识解析在 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions`。
 
-## Bearer 认证下的 Hub 令牌传递
-
-用 Cookie 会话时不涉及本节。
-
-浏览器的 WebSocket 与 SSE 无法设置自定义请求头，SignalR 因此通过 `?access_token=` 传递 Bearer 令牌。
-
-若宿主只接受 `Authorization: Bearer`（例如显式关闭了 query 形式的令牌提取），需要在认证中间件之前，把 Hub 路径上的 query 令牌搬进请求头：
-
-```csharp
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/hubs/realtime") &&
-        context.Request.Headers.Authorization.Count == 0 &&
-        context.Request.Query.TryGetValue("access_token", out var token) &&
-        token.Count == 1 &&
-        !string.IsNullOrWhiteSpace(token[0]))
-    {
-        context.Request.Headers.Authorization = $"Bearer {token[0]}";
-    }
-
-    await next();
-});
-```
-
-该中间件必须放在 `UseAuthentication()` 之前，路径必须与 `MapRealTimeHub` 映射的路径一致。只接受单个非空令牌，且仅在缺少 `Authorization` 头时采信 query；不要将范围放宽到全部 API 或所有 Hub。
-
 ## 注意事项
 
 - **多副本部署必须配置 SignalR 背板**，否则发布方所在节点之外的订阅者收不到事件，且静默无信号。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
+- **用 Bearer 认证时**，浏览器客户端只能把令牌放进查询串，宿主须在认证之前接入 SignalR 基座的 `UseHubAccessToken()`，见 [SignalR 基座](./aspnetcore-signalr.md#注册)。用 Cookie 会话时不涉及本条。
 - 本组件不提供在线状态查询；多实例在线状态需要宿主维护共享连接注册表。
 - 订阅授权**没有开关**：授权器无条件参与每一次 `Subscribe`。未注册授权器时宿主启动失败；`AddAllowAllRealTimeSubscriptions()` 是「公共资源随便订阅」的显式选择。
 - `PublishToResourceAsync` 推送失败只记日志、不抛异常：调用成功返回不代表订阅方一定收到消息（例如客户端未连接/未订阅该资源）。
