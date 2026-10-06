@@ -25,7 +25,8 @@ internal sealed class OperationRecordArchiveJob(
             return;
         }
 
-        var cutoff = clock.Now.AddDays(-current.RetentionDays);
+        // 启用时天数必填已由选项校验保证：缺失的话 CurrentValue 在上面就抛出了
+        var cutoff = clock.Now.AddDays(-current.RetentionDays!.Value);
         var result = await archiveService.ArchiveOlderThanAsync(cutoff, current.BatchSize, cancellationToken);
 
         // 解析不出连接的租户与失败的库一样要让本轮失败：它们的记录一条都没搬走，

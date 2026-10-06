@@ -872,6 +872,10 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
   `AddHostSettings(bind, configSectionPath?)`、`AddRemoteTenantConnectionResolution(configSectionPath?)`。
   校验消息按实际路径报键；同一入口重复调用换用另一配置节时抛 `InvalidOperationException`。
 
+- **操作记录注册入口合并**：`AddOperationRecords(services)` 与 `AddOperationRecords(services, configureOptions)` 合并为 `AddOperationRecords(configure?)`。以命名参数 `configureOptions:` 调用的改为 `configure:`；已编译的调用方需重新编译。
+- **操作记录保留天数改为启用时必填**：`OperationRecordRetentionOptions.RetentionDays` 由 `int`（默认 365）改为 `int?`，不再有默认值；`Enabled=true` 而未配置天数时启动失败，报 `{节}:RetentionDays is required when Enabled is true.`。按需显式配置天数（模板 `appsettings.json` 已写 365）。
+- **操作记录拒绝码随包译文**：`Error:Forbidden` 的中英译文由 `Leistd.OperationRecords.Core` 随包提供，宿主资源中的同名词条应删除（模板已删除）。
+
 ## 37. 注册与授权的行为收口
 
 - **Hub 握手与调用期复评同一策略**：`MapRealTimeHub` / `MapNotificationHub` 的握手改按 `HubIdentityOptions.PolicyName` 授权
@@ -891,6 +895,8 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
   同一命名客户端重复 `AddCorrelationIdForwarding()` 只挂一个处理器。
 - **`AddAmbientContext()`**：`ClaimTypeOptions` 的验证器按实现去重，重复调用时同一配置错误只报一次。
 - **`AddEmailNotifications()`**：重复调用换用另一配置节时抛 `InvalidOperationException`，与其他带 `configSectionPath` 的入口一致。
+
+- **工作单元选项校验**：默认选项在启动期校验，`Begin(options)` 的单次选项按同一规则在创建工作单元前校验。`Timeout` 只能为空或在 1 秒到 `int.MaxValue` 秒之间，`IsolationLevel` 只能为空或已定义值；配置错误抛 `OptionsValidationException`（按实际配置节报键），方法参数错误抛 `ArgumentOutOfRangeException`。此前不足 1 秒的 `Timeout` 被截成 0（等于不限时），现在被拒绝；非整秒值改为向上取整。`AddUnitOfWork` 重复调用换用另一配置节时抛出。
 
 ## 38. 模板：外部账号绑定完成返回空响应（破坏性）
 

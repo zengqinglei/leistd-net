@@ -11,6 +11,7 @@ using Leistd.UnitOfWork.Registration;
 using Leistd.DependencyInjection.Extensions;
 using Leistd.DependencyInjection.DynamicProxy.Extensions;
 using Leistd.DependencyInjection.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.UnitOfWork;
 
@@ -25,6 +26,11 @@ public static class DependencyInjection
     /// <param name="services">服务集合。</param>
     /// <param name="configure">编程式配置，在配置节绑定之后应用。</param>
     /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:UnitOfWork</c>。</param>
+    /// <remarks>
+    /// 默认选项在宿主启动时校验，校验消息以实际配置节的键开头：<c>Timeout</c> 只能为空或 1 秒至 <see cref="int.MaxValue"/> 秒，
+    /// <c>IsolationLevel</c> 只能为空或已定义的枚举值。单次传给 <see cref="IUnitOfWorkManager.Begin"/> 的选项按同一判据校验。
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>。
+    /// </remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddUnitOfWork(options =&gt;
@@ -43,11 +49,25 @@ public static class DependencyInjection
         Action<UnitOfWorkOptions>? configure = null,
         string configSectionPath = UnitOfWorkOptions.SectionName)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // 默认选项只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<UnitOfWorkOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddUnitOfWork() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
+
         var options = services.AddOptions<UnitOfWorkOptions>().BindConfiguration(configSectionPath);
         if (configure is not null)
         {
             options.Configure(configure);
         }
+
+        options.ValidateOnStart();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<UnitOfWorkOptions>>(
+            new UnitOfWorkOptionsValidator(configSectionPath)));
 
         return services.AddUnitOfWorkCore();
     }

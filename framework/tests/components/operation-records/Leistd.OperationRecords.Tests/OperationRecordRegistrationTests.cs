@@ -1,3 +1,5 @@
+using Leistd.Localization.Options;
+using Leistd.OperationRecords.Errors;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Queries;
@@ -53,6 +55,25 @@ public sealed class OperationRecordRegistrationTests
         ServiceCollectionAssertions.AssertIdempotent(services => services.AddOperationRecords());
     }
 
+    [Fact]
+    public void AddOperationRecords_with_a_delegate_is_idempotent()
+        => ServiceCollectionAssertions.AssertIdempotent(
+            services => services.AddOperationRecords(options => options.ImpersonatorIdClaimType = "act_sub"));
+
+    /// <summary>自产失败码的默认译文随注册登记一次，重复调用不重复登记。</summary>
+    [Fact]
+    public void AddOperationRecords_registers_the_component_resources_once()
+    {
+        using var provider = new ServiceCollection()
+            .AddOperationRecords()
+            .AddOperationRecords(options => options.ImpersonatorIdClaimType = "act_sub")
+            .BuildServiceProvider();
+
+        var assemblies = provider.GetRequiredService<IOptions<JsonLocalizationOptions>>().Value.ResourceAssemblies;
+
+        Assert.Single(assemblies, assembly => assembly == typeof(OperationFailureCodes).Assembly);
+    }
+
     /// <summary>宿主不配置时选项也解析得出，值为默认 claim 名。</summary>
     /// <remarks>
     /// 漏了这一步的症状很隐蔽：记录器在解析 <c>IOptions&lt;T&gt;</c> 时才失败，
@@ -69,9 +90,9 @@ public sealed class OperationRecordRegistrationTests
         Assert.Equal("impersonator_name", options.ImpersonatorNameClaimType);
     }
 
-    /// <summary>宿主签发的 claim 换了名字时从选项改，组件不写死。</summary>
+    /// <summary>宿主签发的 claim 换了名字时从选项改，组件不写死；多次传入的委托依次叠加。</summary>
     [Fact]
-    public void The_configure_overload_overrides_the_claim_types()
+    public void The_configure_delegate_overrides_the_claim_types()
     {
         using var provider = new ServiceCollection()
             .AddOperationRecords(options => options.ImpersonatorIdClaimType = "act_sub")
@@ -82,6 +103,20 @@ public sealed class OperationRecordRegistrationTests
         Assert.Equal("act_sub", options.ImpersonatorIdClaimType);
         // 只改了一项，另一项必须保持默认，而不是被整体覆盖成空
         Assert.Equal("impersonator_name", options.ImpersonatorNameClaimType);
+    }
+
+    [Fact]
+    public void Delegates_from_repeated_calls_are_applied_in_order()
+    {
+        using var provider = new ServiceCollection()
+            .AddOperationRecords(options => options.ImpersonatorIdClaimType = "first")
+            .AddOperationRecords(options => options.ImpersonatorNameClaimType = "act_name")
+            .AddOperationRecords(options => options.ImpersonatorIdClaimType = "act_sub")
+            .BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<OperationRecordOptions>>().Value;
+
+        Assert.Equal(("act_sub", "act_name"), (options.ImpersonatorIdClaimType, options.ImpersonatorNameClaimType));
     }
 
     /// <summary>Core 不替宿主注册持久化：缺存储时解析记录器直接失败，而不是静默什么都不记。</summary>

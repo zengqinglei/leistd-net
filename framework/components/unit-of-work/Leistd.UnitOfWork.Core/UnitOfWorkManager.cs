@@ -18,6 +18,15 @@ public class UnitOfWorkManager(
     /// <inheritdoc />
     public IUnitOfWork Begin(UnitOfWorkOptions? options = null, bool requiresNew = false)
     {
+        if (options is not null)
+        {
+            var failures = UnitOfWorkOptionsValidator.GetFailures(options, nameof(UnitOfWorkOptions) + ".");
+            if (failures.Count > 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(options), string.Join(" ", failures));
+            }
+        }
+
         // 新建工作单元前定案本次选项，避免修改共享的默认实例。
         var effectiveOptions = options?.Clone() ?? defaultUowOptions.Value.Clone();
         var currentUow = GetCurrentUnitOfWork();

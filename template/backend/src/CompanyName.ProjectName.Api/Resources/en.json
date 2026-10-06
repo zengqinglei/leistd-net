@@ -50,7 +50,6 @@
     "Email verification code": "Email verification code",
     "Email verification status": "Email verification status",
     "End time": "End time",
-    "Error:Forbidden": "Not allowed to perform this action.",
     "Expected version": "Expected version",
     "ExternalAuth:AccessTokenEmpty": "Access token is empty.",
     "ExternalAuth:AccessTokenExchangeFailed": "Failed to obtain access token: {StatusCode}",

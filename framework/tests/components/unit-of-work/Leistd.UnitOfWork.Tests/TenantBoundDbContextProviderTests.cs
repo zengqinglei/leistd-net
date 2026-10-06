@@ -177,6 +177,25 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// 工作单元超时按整秒向上取整成命令超时：不足整秒的部分不能被截掉，更不能截成表示不限时的 0。
+    /// </summary>
+    [Theory]
+    [InlineData(1000, 1)]
+    [InlineData(1500, 2)]
+    [InlineData(30000, 30)]
+    public async Task The_unit_of_work_timeout_becomes_the_command_timeout_rounded_up(int timeoutMilliseconds, int expectedSeconds)
+    {
+        var manager = _services.GetRequiredService<IUnitOfWorkManager>();
+        var provider = _services.GetRequiredService<IDbContextProvider<FirstDbContext>>();
+
+        using var unitOfWork = manager.Begin(
+            new UnitOfWorkOptions { Timeout = TimeSpan.FromMilliseconds(timeoutMilliseconds) }, requiresNew: true);
+        var dbContext = await provider.GetDbContextAsync();
+
+        Assert.Equal(expectedSeconds, dbContext.Database.GetCommandTimeout());
+    }
+
     [Fact]
     public async Task Dbcontext_declared_connection_string_name_is_passed_to_the_resolver()
     {

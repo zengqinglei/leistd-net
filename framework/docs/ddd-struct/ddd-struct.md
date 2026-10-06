@@ -123,7 +123,18 @@ public class OrderManager(IRepository<Order, Guid> repository)
 
 延迟提交有一个后果值得单列：**唯一索引等约束冲突在冲刷时才抛出，不在 `InsertAsync` 抛出**。
 所以工作单元内的 `try { InsertAsync } catch` 是永不触发的死代码，要就地处理并发首次写入
-必须先 `IUnitOfWork.SaveChangesAsync`（见[工作单元](../components/unit-of-work.md#在事务内提前冲刷)）。
+必须先 `IUnitOfWork.SaveChangesAsync`（见[工作单元](../components/unit-of-work.md#在事务内提前冲刷)）：
+
+```csharp
+// 错：catch 永不触发
+try { await repository.InsertAsync(entity, ct); }
+catch (DbUpdateException) { /* 死代码 */ }
+
+// 对：先冲刷，冲刷才是抛出点
+await repository.InsertAsync(entity, ct);
+try { await unitOfWorkManager.Current!.SaveChangesAsync(ct); }
+catch (DbUpdateException) { /* 这里才捕获得到 */ }
+```
 
 ### 分页映射
 

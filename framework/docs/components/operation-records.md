@@ -90,6 +90,18 @@ app.MapGroup("/api/v1/operation-records").MapOperationRecords(options =>
 builder.Services.AddOperationRecordRetention<AppDbContext>();
 ```
 
+默认关闭；启用时必须同时给出保留天数，组件不提供默认天数：
+
+```json
+{
+  "Leistd": {
+    "OperationRecords": {
+      "Retention": { "Enabled": true, "RetentionDays": 365 }
+    }
+  }
+}
+```
+
 ### 结构化日志输出
 
 数据库模式的同事务保证要求在业务的环境事务工作单元内调用记录器，并使用该事务内的数据库存储。若宿主在 `AfterCommit` 事件处理器或无工作单元路径中记录，业务已经提交，记录只能另外持久化；更换适配不能让它重新加入已结束的事务。需要业务与记录原子持久化的用例应在原事务内调用记录器。
@@ -194,7 +206,7 @@ public class UserService(IOperationRecorder recorder, ...)
                 OperationTarget.For(id, user.DisplayName ?? user.Username),
                 "App.Users.Update",
                 OperationFailure.FromCode("User:LastAdministrator"));
-            throw new InvalidOperationException("最后一个管理员不能停用。");
+            throw new BusinessException("User:LastAdministrator", "The last administrator cannot be disabled.");
         }
         ...
     }
@@ -319,8 +331,9 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 ```
 
 不传原因时补上 `OperationFailureCodes.Forbidden`（`Error:Forbidden`）——没有原因码的失败记录
-事后无法按原因聚合。**这是本组件唯一自产的失败码，没有随包译文，宿主资源要为它备一条词条**
-（键 `Error:Forbidden`）；漏了只会显示裸码，不报错。
+事后无法按原因聚合。这是本组件唯一自产的失败码，是写进记录的**失败原因码**，不属于协议层错误响应：
+错误响应按协议只给状态码与标题，不带它。中英默认译文随包分发，由 `AddOperationRecords()` 登记，
+宿主不必再备词条；要改文案时在宿主资源里写同名键覆盖。
 
 授权通过之后的业务拒绝：组件映射的端点（如权限管理的整体替换）在并发冲突、目标不存在时抛出业务异常，
 宿主在那里没有代码可写。在宿主**紧接 `UseAuthorization()`** 的中间件里捕获、补记、原样重抛，
@@ -385,7 +398,7 @@ app.UseMiddleware<OperationFailureRecordingMiddleware>();
 | `IOperationRecorder.RecordFailedAsync(action, target, authorizationBasis, failure)` | 记录一次被拒或失败；独立提交、不可取消，写失败只记日志不抛。成功路径**没有** `failure` 参数——成功不存在"为什么没成"；失败路径**没有**取消令牌——被审计的一方断开连接不能让审计作废 |
 | `OperationTarget` | 目标的标识与名字快照捆绑传递；`For(id, name)` / `None`。名字是快照，理由同 `ActorName` |
 | `OperationFailure` | 失败原因；`FromCode(code, data)` 走本地化码（`data` 是标量字典，本组件负责写 JSON），`FromDetail(detail)` 走技术说明。**刻意不提供接受 `Exception` 的工厂**，`BusinessException` 也不例外 |
-| `OperationFailureCodes` | 本组件自己会产生的失败码，目前只有 `Error:Forbidden`（授权被拒的默认原因）。这些码没有随包译文，宿主资源必须自备词条，否则 `FailureMessage` 为空、界面显示裸码 |
+| `OperationFailureCodes` | 本组件自己会写进记录的失败原因码，目前只有 `Error:Forbidden`（授权被拒的默认原因），不出现在错误响应里。中英默认译文随包分发，宿主资源的同名键覆盖它 |
 | `OperationRecordInfo` | 一条记录的传输形态；各列长度上限以 `Max*Length` 常量给出。除操作人与目标标识外还带 `TargetName`（目标名快照）、`Visibility`（必填）、`ActorTenantId`（操作人自己所属的租户，取自主体的租户 claim；宿主管理员进入租户操作时它仍是宿主；匿名请求没有主体，取请求所在的租户上下文。与 `TenantId` 不同的行即跨层写入的记录），以及失败三件套 `FailureCode`（本地化码）／`FailureData`（占位参数 JSON，**刻意不设长度上限**）／`FailureDetail`（技术说明，含内部拓扑，宿主应在下发前裁剪） |
 | `OperationRecordOutcome` | `Succeeded`、`Failed`；只有两档 |
 | `OperationVisibility` | `Tenant` / `Host` / `Actor`；写入时由动作定义盖章。`Host` 表示记录属于宿主层，见「可见性与记录所在的层」 |
@@ -400,7 +413,7 @@ app.UseMiddleware<OperationFailureRecordingMiddleware>();
 | `AddOperationRecordRetention<TDbContext>(configure?, configSectionPath?)` | EF 包：绑定 `configSectionPath`（默认 `Leistd:OperationRecords:Retention`）并启动期校验，校验消息按实际路径报键，重复调用换用另一配置节时抛出；登记集群周期任务 `operation-records.archive`（每日 `DailyRunHourUtc` 执行） |
 | `IOperationRecordArchiveService` | EF 包：逐库、分批把到期记录搬入 `OperationRecordArchive`，每批一个事务；返回搬运条数与失败库数 |
 | `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**，只能从三个入口取得：`Host` 见全部，`ForTenantReader(actorId, actorTenantId)` 见租户层加本人的 `Actor` 层（标识与所属租户都相同才算本人：主体标识只在签发它的那一层内唯一），`Unrestricted` 不过滤（仅供不代表读者的内部任务）。没有默认值——可见性是安全边界，漏传即越权。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
-| `AddOperationRecords(services)` | 注册记录器与动作定义；不注册写入方与查询 |
+| `AddOperationRecords(services, configure?)` | 注册记录器与动作定义，登记自产失败码的默认译文；`configure` 修改 `OperationRecordOptions`（不绑定配置节），重复调用时依次叠加；不注册写入方与查询 |
 | `AddOperationRecordQueries(services)` | 注册 `IOperationRecordQueryService`；要求 `IOperationRecordReader`，由可回读的存储适配调用 |
 | `AddOperationRecordsEfCore<TDbContext>(services)` | 注册 EF Core 存储（写入与读取）；内部调用 `AddOperationRecords()` 与 `AddOperationRecordQueries()` |
 | `AddOperationRecordsLogging(services)` | Logging 包：注册结构化日志写入方，不注册读取与查询；启动期校验日志类别与工作单元前置 |
@@ -435,7 +448,7 @@ app.UseMiddleware<OperationFailureRecordingMiddleware>();
 - **框架只定义它自己会读的字符串，且连这些也让宿主能改。** 动作码与授权依据框架都只存不读，一律由业务定义——框架穷举不了业务词汇，硬定一套只会逼着业务去凑。模拟登录的 claim 名框架要读，但它属于"宿主签发主体时的技术细节"，因此经 `OperationRecordOptions` 注入、默认值指向 `CustomClaimTypes`，而不是写死在组件里。
 - **动作码一旦发布就不要改。** 它是历史记录的含义本身，改了等于篡改过去。
 - **存储没有更新与删除。** 留了入口，"清理误记录"迟早变成"清理不想被看到的记录"，那时这张表已经不能作为证据了。保留期由 `AddOperationRecordRetention` 把到期记录**搬入**归档表，数据仍在库里；归档表不实现 `IMultiTenant`，将来为它开查询时须自行按租户过滤。
-- **保留期默认关闭。** 保留天数受法律与合同约束，组件无从知道；启用时 `RetentionDays` 取 30–3650。
+- **保留期默认关闭，启用时天数必填。** 保留天数受法律与合同约束，组件无从知道，所以 `RetentionDays` 没有默认值：`Enabled` 为 `true` 而未填时启动失败（`{配置节}:RetentionDays is required when Enabled is true.`）；填了就取 30–3650，关闭时也校验。
 - **Minimal API 端点的查询参数不要改成 `[AsParameters]` 绑定。** 它把没有默认值的非空属性当必填，省略 `offset` 的请求会直接 400。
 - **不要加请求维度字段**（IP、UA、URL）。那属于请求日志；混进来就回到了"用路由代替业务语义"。
 - **不要加变更明细。** 那是实体变更追踪的量级（另一张明细表 + 追踪拦截器），加进来会得到半个审计日志却没有它的能力。

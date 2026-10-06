@@ -50,7 +50,6 @@
     "Email verification code": "邮箱验证码",
     "Email verification status": "邮箱是否已验证",
     "End time": "结束时间",
-    "Error:Forbidden": "没有执行该操作的权限。",
     "Expected version": "预期版本",
     "ExternalAuth:AccessTokenEmpty": "Access Token 为空。",
     "ExternalAuth:AccessTokenExchangeFailed": "获取 Access Token 失败：{StatusCode}",

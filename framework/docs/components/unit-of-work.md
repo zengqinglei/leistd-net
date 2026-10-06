@@ -116,19 +116,24 @@ dbContext.OrderLines.AddRange(CreateLines(order.Id));
 `SaveChangesAsync()` 只冲刷挂起变更，不提交事务；后续回滚仍会撤销这些写入。
 
 **要就地捕获数据库约束冲突，也必须先冲刷。** 唯一索引、外键与检查约束的冲突由数据库在收到语句时才报出，
-而工作单元内的仓储写入在冲刷前根本没发到数据库——把 `try { InsertAsync } catch` 写在工作单元内，
-那个 `catch` 永不触发，异常最终在 `CompleteAsync` 抛出，已经离开了你想处理它的位置：
+而工作单元内的写入在冲刷前根本没发到数据库——工作单元托管的 DbContext 不会自行保存，
+`CompleteAsync` 才统一冲刷。所以 `catch` 必须包住冲刷本身，包住添加实体的那一行永不触发，
+异常最终在 `CompleteAsync` 抛出，已经离开了你想处理它的位置：
 
 ```csharp
-// 错：catch 永不触发，写法却"看起来在处理并发首次写入"
-try { await repository.InsertAsync(entity, ct); }
+var dbContext = await dbContextProvider.GetDbContextAsync(ct);
+
+// 错：Add 只登记到变更跟踪，catch 永不触发，写法却"看起来在处理并发首次写入"
+try { dbContext.Orders.Add(order); }
 catch (DbUpdateException) { /* 死代码 */ }
 
 // 对：先冲刷，冲刷才是抛出点
-repository.InsertAsync(entity, ct);
+dbContext.Orders.Add(order);
 try { await unitOfWorkManager.Current!.SaveChangesAsync(ct); }
 catch (DbUpdateException) { /* 这里才捕获得到 */ }
 ```
+
+经 DDD 基座仓储写入时同理，写法见 [DDD 四层基座](../ddd-struct/ddd-struct.md#通过仓储读写)。
 
 这条与上面四种"要回填值"的理由不同：漏了那四种会立刻拿到空的 Id、报错醒目；漏了这一条**完全无声**，
 代码编译通过、读起来也对，只在真的并发时才暴露。不确定要不要捕获时，优先让异常传播到工作单元边界。
@@ -148,7 +153,8 @@ catch (DbUpdateException) { /* 这里才捕获得到 */ }
 [UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)]
 public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 {
-    public Task HandleAsync(OrderCreatedEvent @event) => ValidateAsync(@event);
+    public Task HandleAsync(OrderCreatedEvent @event, CancellationToken cancellationToken = default)
+        => ValidateAsync(@event, cancellationToken);
 }
 ```
 
@@ -219,8 +225,10 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
 | `IsTransactional` | `true` | 是否开启数据库事务 |
-| `IsolationLevel` | `null` | 事务隔离级别；默认使用数据库设置 |
-| `Timeout` | `null` | EF Core 关系数据库命令超时 |
+| `IsolationLevel` | `null` | 事务隔离级别，须为已定义的枚举值；默认使用数据库设置 |
+| `Timeout` | `null` | EF Core 关系数据库命令超时，取 1 秒至 `int.MaxValue` 秒，按整秒向上取整；默认使用数据库设置 |
+
+默认选项在宿主启动时校验，越界时启动失败（`OptionsValidationException`），消息以实际配置节的键开头，如 `Leistd:UnitOfWork:Timeout must be ...`。命令超时以整秒计且 0 表示不限时，所以不足 1 秒的值被拒绝，而不是被截成"不限时"。传给 `Begin(options)` 的单次选项按同一判据在创建工作单元前校验，不合法时抛 `ArgumentOutOfRangeException`（`ParamName` 为 `options`）。重复调用 `AddUnitOfWork` 换用另一配置节时抛 `InvalidOperationException`。
 
 ## 注意事项
 

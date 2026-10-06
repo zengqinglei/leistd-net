@@ -4,8 +4,8 @@ namespace Leistd.OperationRecords.EntityFrameworkCore.Options;
 /// 操作记录保留期。配置节 <c>Leistd:OperationRecords:Retention</c>。
 /// </summary>
 /// <remarks>
-/// <para><b>默认关闭。</b>审计表只增不减是安全的默认值；保留期受法律与合同约束，组件无从知道，
-/// 要启用就得有人显式打开并为保留期负责。</para>
+/// <para><b>默认关闭，启用时保留天数必填。</b>审计表只增不减是安全的默认值；保留期受法律与合同约束，组件无从知道，
+/// 要启用就得有人显式打开并给出保留天数，组件不提供默认天数。</para>
 /// <para><b>到期记录搬去归档表，不是删除。</b>存储契约没有删除入口；搬走的数据仍在库里，只是不再参与日常查询。</para>
 /// <para>归档任务每轮取 <c>IOptionsMonitor</c> 的当前值，<see cref="Enabled"/> 与 <see cref="RetentionDays"/> 改完下一轮生效；
 /// 执行时刻只在任务排期时取一次。</para>
@@ -24,8 +24,9 @@ public sealed class OperationRecordRetentionOptions
     /// <summary>是否启用到期归档，默认关闭。</summary>
     public bool Enabled { get; set; }
 
-    /// <summary>保留天数：早于"当前时刻减去该天数"的记录搬入归档表，取值见上下限常量，默认 365。</summary>
-    public int RetentionDays { get; set; } = 365;
+    /// <summary>保留天数：早于"当前时刻减去该天数"的记录搬入归档表，取值见上下限常量。</summary>
+    /// <remarks><see cref="Enabled"/> 为 <see langword="true"/> 时必填，未填时启动校验失败；关闭时可以不填，填了也照样校验区间。</remarks>
+    public int? RetentionDays { get; set; }
 
     /// <summary>每天执行的 UTC 小时（0–23），默认 18；按 UTC 而非服务器时区，需要对齐当地凌晨时由部署侧换算。</summary>
     public int DailyRunHourUtc { get; set; } = 18;

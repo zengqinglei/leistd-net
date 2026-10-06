@@ -3,8 +3,10 @@ using Leistd.TestBase.Assertions;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Leistd.UnitOfWork.Interceptors;
+using Leistd.UnitOfWork.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.UnitOfWork.Tests;
@@ -36,6 +38,19 @@ public sealed class UnitOfWorkRegistrationTests
     [Fact]
     public void Core_registration_is_idempotent()
         => ServiceCollectionAssertions.AssertIdempotent(services => services.AddUnitOfWork());
+
+    // 默认选项只有一份，校验消息只能按一个配置节报键名
+    [Fact]
+    public void A_second_registration_with_another_section_is_rejected()
+    {
+        var services = new ServiceCollection();
+        services.AddUnitOfWork();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.AddUnitOfWork(configSectionPath: "Ops:Transactions"));
+
+        Assert.Contains("'Ops:Transactions'", exception.Message, StringComparison.Ordinal);
+        services.AssertSingle<IValidateOptions<UnitOfWorkOptions>>(ServiceLifetime.Singleton);
+    }
 
     // 管理器是替换口：宿主先注册的实现不被组件默认值盖掉
     [Fact]

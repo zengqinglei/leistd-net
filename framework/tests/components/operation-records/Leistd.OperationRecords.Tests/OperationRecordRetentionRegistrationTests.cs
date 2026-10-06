@@ -50,6 +50,38 @@ public sealed class OperationRecordRetentionRegistrationTests
         Assert.All(failure.Failures, message => Assert.StartsWith($"{path}:", message, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 保留天数没有默认值：启用时必填，关闭时可以不填，填了照样校验区间。
+    /// </summary>
+    /// <remarks>保留期受法律与合同约束，组件给不出一个替部署方负责的天数。</remarks>
+    [Theory]
+    [InlineData("true", null, "RetentionDays is required when Enabled is true.")]
+    [InlineData("true", "29", "RetentionDays must be between 30 and 3650.")]
+    [InlineData("false", "3651", "RetentionDays must be between 30 and 3650.")]
+    [InlineData("true", "30", null)]
+    [InlineData("true", "3650", null)]
+    [InlineData("false", null, null)]
+    public void Retention_days_are_required_only_when_enabled(string enabled, string? retentionDays, string? expectedFailure)
+    {
+        const string path = "Ops:AuditRetention";
+        using var provider = Build(
+            new() { [$"{path}:Enabled"] = enabled, [$"{path}:RetentionDays"] = retentionDays },
+            services => services.AddOperationRecordRetention<TestDbContext>(configSectionPath: path));
+        var validator = provider.GetRequiredService<IStartupValidator>();
+
+        if (expectedFailure is null)
+        {
+            validator.Validate();
+            Assert.Equal(
+                retentionDays is null ? null : int.Parse(retentionDays, System.Globalization.CultureInfo.InvariantCulture),
+                provider.GetRequiredService<IOptions<OperationRecordRetentionOptions>>().Value.RetentionDays);
+            return;
+        }
+
+        var failure = Assert.Throws<OptionsValidationException>(validator.Validate);
+        Assert.Equal($"{path}:{expectedFailure}", Assert.Single(failure.Failures));
+    }
+
     [Fact]
     public void Registration_is_idempotent()
         => ServiceCollectionAssertions.AssertIdempotent(services => services.AddOperationRecordRetention<TestDbContext>());

@@ -263,7 +263,8 @@ public class DbContextProvider<TDbContext>(
             dbContext.Database.IsRelational() &&
             !dbContext.Database.GetCommandTimeout().HasValue)
         {
-            dbContext.Database.SetCommandTimeout((int)unitOfWork.Options.Timeout.Value.TotalSeconds);
+            // 命令超时以整秒计；向上取整，不把 1.5 秒缩短成 1 秒。取值范围已由选项校验限定在 int 整秒内。
+            dbContext.Database.SetCommandTimeout((int)Math.Ceiling(unitOfWork.Options.Timeout.Value.TotalSeconds));
         }
     }
 

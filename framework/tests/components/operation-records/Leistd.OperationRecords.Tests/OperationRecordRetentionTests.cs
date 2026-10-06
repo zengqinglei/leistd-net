@@ -151,7 +151,7 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
     /// 有库失败、或有租户解析不出库时抛出，让调度器不记水位。
     /// </summary>
     /// <remarks>
-    /// 解析不出连接的租户同样一条都没搬走。之前这一档被漏掉，本轮就报成功——积压虽然会被
+    /// 解析不出连接的租户同样一条都没搬走。这一档报成功的话，积压虽然会被
     /// 下一轮按截止时间扫到，但"有一批库进不去"这件事没有任何人知道，直到它一直进不去。
     /// </remarks>
     [Theory]
@@ -161,8 +161,23 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
     {
         var archive = new CountingArchive(new OperationRecordArchiveResult(3, 2, failedDatabases, unresolvedTenants));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Job(enabled: true, archive).ExecuteAsync(new RecurringJobContext("operation-records.archive", DateTimeOffset.UtcNow), CancellationToken.None));
+
+        Assert.Contains($"{failedDatabases} of 2 database(s) failed", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, archive.Calls);
+    }
+
+    /// <summary>启用时按配置的保留天数算截止时间，批大小原样交给归档服务。</summary>
+    [Fact]
+    public async Task An_enabled_retention_archives_records_older_than_the_configured_days()
+    {
+        var archive = new CountingArchive(new OperationRecordArchiveResult(3, 2, 0));
+
+        await Job(enabled: true, archive, retentionDays: 90)
+            .ExecuteAsync(new RecurringJobContext("operation-records.archive", DateTimeOffset.UtcNow), CancellationToken.None);
+
+        Assert.Equal((1, Now.AddDays(-90), 500), (archive.Calls, archive.LastCutoff, archive.LastBatchSize));
     }
 
     /// <summary>按文档注册后能解析出周期任务本身。</summary>
@@ -196,8 +211,9 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOperationRecordArchiveService>());
     }
 
-    private static OperationRecordArchiveJob Job(bool enabled, IOperationRecordArchiveService archive) => new(
-        new MutableOptionsMonitor<OperationRecordRetentionOptions>(new OperationRecordRetentionOptions { Enabled = enabled }),
+    private static OperationRecordArchiveJob Job(bool enabled, IOperationRecordArchiveService archive, int? retentionDays = 365) => new(
+        new MutableOptionsMonitor<OperationRecordRetentionOptions>(
+            new OperationRecordRetentionOptions { Enabled = enabled, RetentionDays = retentionDays }),
         archive,
         new UtcClockProvider(new FakeTimeProvider(new DateTimeOffset(Now))),
         new FakeLogger<OperationRecordArchiveJob>());
@@ -231,9 +247,15 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
     {
         public int Calls { get; private set; }
 
+        public DateTime? LastCutoff { get; private set; }
+
+        public int? LastBatchSize { get; private set; }
+
         public Task<OperationRecordArchiveResult> ArchiveOlderThanAsync(DateTime cutoffUtc, int batchSize, CancellationToken cancellationToken = default)
         {
             Calls++;
+            LastCutoff = cutoffUtc;
+            LastBatchSize = batchSize;
             return Task.FromResult(result);
         }
     }

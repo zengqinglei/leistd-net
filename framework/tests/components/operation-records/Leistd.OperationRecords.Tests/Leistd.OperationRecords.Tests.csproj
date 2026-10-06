@@ -25,6 +25,8 @@
     <ProjectReference Include="..\..\..\..\components\operation-records\Leistd.OperationRecords.AspNetCore\Leistd.OperationRecords.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\operation-records\Leistd.OperationRecords.Logging\Leistd.OperationRecords.Logging.csproj" />
     <ProjectReference Include="..\..\..\..\components\event-bus\Leistd.EventBus.Local\Leistd.EventBus.Local.csproj" />
+    <!-- 自产失败码的随包译文经真实 JSON 本地化读出，不用替身 -->
+    <ProjectReference Include="..\..\..\..\components\localization\Leistd.Localization.AspNetCore\Leistd.Localization.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 

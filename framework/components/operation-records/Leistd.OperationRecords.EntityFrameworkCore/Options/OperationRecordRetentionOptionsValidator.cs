@@ -11,7 +11,11 @@ internal sealed class OperationRecordRetentionOptionsValidator(string configSect
     public ValidateOptionsResult Validate(string? name, OperationRecordRetentionOptions options)
     {
         var failures = new List<string>();
-        if (options.RetentionDays is < OperationRecordRetentionOptions.MinimumRetentionDays or > OperationRecordRetentionOptions.MaximumRetentionDays)
+        if (options.Enabled && options.RetentionDays is null)
+        {
+            failures.Add($"{ConfigSectionPath}:RetentionDays is required when Enabled is true.");
+        }
+        else if (options.RetentionDays is < OperationRecordRetentionOptions.MinimumRetentionDays or > OperationRecordRetentionOptions.MaximumRetentionDays)
         {
             failures.Add($"{ConfigSectionPath}:RetentionDays must be between {OperationRecordRetentionOptions.MinimumRetentionDays} and {OperationRecordRetentionOptions.MaximumRetentionDays}.");
         }

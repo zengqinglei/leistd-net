@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text;
+using Leistd.Localization.AspNetCore;
 using Leistd.OperationRecords.Definitions;
+using Leistd.OperationRecords.Errors;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
@@ -11,6 +13,7 @@ using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.Security.Claims;
 using Leistd.TestBase.Doubles;
 using Leistd.Timing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
@@ -385,6 +388,24 @@ public sealed class OperationRecordQueryTests
             failureData: """{"Email":"a@b.com"}"""));
 
         Assert.Equal("邮箱 'a@b.com' 已被使用。", await InCulture("zh-CN", () => ReadFailureMessageAsync(service)));
+    }
+
+    /// <summary>
+    /// 组件自产的失败码由组件自带译文：宿主只注册本地化与本组件、资源里没有这条词条时，原因照样渲染成句子。
+    /// </summary>
+    [Theory]
+    [InlineData("en", "Not allowed to perform this action.")]
+    [InlineData("zh-CN", "没有执行该操作的权限。")]
+    public async Task The_component_failure_code_renders_from_the_bundled_resources(string culture, string expected)
+    {
+        using var provider = new ServiceCollection()
+            .AddJsonLocalization()
+            .AddOperationRecords()
+            .BuildServiceProvider();
+        var (service, store) = Create(hostReader: true, localizer: provider.GetRequiredService<IStringLocalizer>());
+        store.Written.Add(Record(outcome: OperationRecordOutcome.Failed, failureCode: OperationFailureCodes.Forbidden));
+
+        Assert.Equal(expected, await InCulture(culture, () => ReadFailureMessageAsync(service)));
     }
 
     private static async Task<string?> ReadFailureMessageAsync(OperationRecordQueryService service)
