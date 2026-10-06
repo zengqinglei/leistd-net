@@ -301,10 +301,11 @@ public class ExternalAuthDomainService(
             }
         }
 
+        // 不复用 UserErrorCodes.UsernameTaken：那条的词条是"用户名已存在"并回显用户名，
+        // 而这里的用户名是本服务生成的，用户既没填过它，也改不了它，只能重试。
         throw new BusinessException(
-                UserErrorCodes.UsernameTaken,
-                "Could not allocate a username for this account. Try again.")
-            .WithData("Username", baseName);
+            ExternalAuthErrorCodes.UsernameAllocationFailed,
+            "Could not allocate a username for this account. Try again.");
     }
 
     private Task<bool> IsUsernameTakenAsync(string username, CancellationToken cancellationToken) =>

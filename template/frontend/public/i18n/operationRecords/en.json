@@ -42,6 +42,7 @@
     "tenant.deleted": "Deleted tenant {{target}}",
     "tenant.connection-changed": "Changed the database connection of tenant {{target}}",
     "setting.changed": "Changed setting {{target}}",
+    "setting.test-email-sent": "Sent a test email",
     "operation-records.exported": "Exported operation records",
     "auth.login.succeeded": "Signed in",
     "auth.login.failed": "Failed to sign in ({{target}})",
@@ -69,6 +70,7 @@
   },
   "actionsNoTarget": {
     "operation-records.exported": "Exported operation records",
+    "setting.test-email-sent": "Sent a test email",
     "user.created": "Created a user",
     "role.created": "Created a role"
   },

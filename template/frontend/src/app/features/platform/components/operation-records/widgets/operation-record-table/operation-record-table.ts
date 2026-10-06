@@ -64,6 +64,7 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'tenant.connection-changed': (t) => `Changed the database connection of tenant ${t}`,
   'tenant.connection-removed': (t) => `Removed the database connection of tenant ${t}`,
   'setting.changed': (t) => `Changed setting ${t}`,
+  'setting.test-email-sent': () => 'Sent a test email',
   'operation-records.exported': () => 'Exported operation records',
   'auth.login.succeeded': () => 'Signed in',
   'auth.login.failed': (t) => `Failed to sign in (${t})`,
@@ -89,10 +90,11 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'auth.token.issued': () => 'Issued an access token',
 };
 
-/** 无目标时的变体：只有创建类端点在授权阶段被拒时会走到这里（目标记为 `-`）。 */
+/** 无目标时的变体（目标记为 `-`）：创建类端点在授权阶段被拒，以及本来就不带目标的动作。 */
 const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
   'user.created': 'Created a user',
   'role.created': 'Created a role',
+  'setting.test-email-sent': 'Sent a test email',
 };
 
 /**

@@ -117,6 +117,13 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordActions.SettingChanged,
             OperationRecordCategories.Configuration,
             OperationVisibility.Tenant);
+#if (LocalIdentity && Email)
+        // 只有宿主能发测试邮件；租户里的尝试被拒后记在租户层，租户管理员看得见自己人试过。
+        context.Add(
+            OperationRecordActions.SettingTestEmailSent,
+            OperationRecordCategories.Configuration,
+            OperationVisibility.Tenant);
+#endif
 
         // 导出审计日志本身是安全事件：谁把历史带走了必须留痕。
         // 可见性取租户级——导出的是该租户自己的记录，租户管理员有权知道谁导走了。

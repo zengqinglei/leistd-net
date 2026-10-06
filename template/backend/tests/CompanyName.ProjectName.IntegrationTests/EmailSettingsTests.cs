@@ -2,9 +2,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Permissions.Provider;
+using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Email.Smtp.Options;
+#if (IncludeMultiTenancy)
+using Leistd.MultiTenancy.AspNetCore.Options;
+#endif
+using Leistd.OperationRecords.Errors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -102,7 +109,14 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
 
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.Equal("AppSetting:TestEmailFailed", body.RootElement.GetProperty("code").GetString());
+            Assert.Equal(AppSettingErrorCodes.TestEmailFailed, body.RootElement.GetProperty("code").GetString());
+
+            // 授权已通过的业务失败同样留痕，依据是端点上的权限策略
+            var failures = await OperationRecordQueries.GetFailuresAsync(
+                factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget);
+            Assert.Contains((AppSettingErrorCodes.TestEmailFailed, PermissionConstant.Settings.Default), failures);
+            Assert.Equal(0, await OperationRecordQueries.CountSucceededAsync(
+                factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget));
         }
         finally
         {
@@ -110,6 +124,80 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
             await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, null);
         }
     }
+
+    /// <summary>
+    /// 没有设置管理权限时由授权管道拒绝：标准 403、不带业务码，请求到不了应用服务；
+    /// 被拒的尝试由授权结果处理器补记，且只记一条。
+    /// </summary>
+    [Fact]
+    public async Task Test_email_without_the_settings_permission_is_rejected_by_the_pipeline_and_recorded_once()
+    {
+        using var admin = await LoginAdminAsync();
+        var username = $"mailer_{Guid.NewGuid():N}"[..24];
+        using (var create = await admin.Client.PostAsJsonAsync("/api/v1/users", new
+        {
+            Username = username,
+            Email = $"{username}@example.test",
+            Password = MemberPassword,
+            IsActive = true
+        }))
+        {
+            Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        }
+
+        bool IsDenial((string? FailureCode, string? AuthorizationBasis) failure) =>
+            failure == (OperationFailureCodes.Forbidden, PermissionConstant.Settings.Default);
+        var deniedBefore = (await OperationRecordQueries.GetFailuresAsync(
+            factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget)).Count(IsDenial);
+
+        using var member = await ProjectWebApplicationFactory.LoginAsync(factory, username, MemberPassword);
+        using var response = await member.Client.PostAsJsonAsync("/api/v1/settings/email/test", new { To = "someone@example.test" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.DoesNotContain("\"code\"", await response.Content.ReadAsStringAsync());
+        var deniedAfter = (await OperationRecordQueries.GetFailuresAsync(
+            factory, admin.Client, OperationRecordActions.SettingTestEmailSent, NoTarget)).Count(IsDenial);
+        Assert.Equal(deniedBefore + 1, deniedAfter);
+    }
+#if (IncludeMultiTenancy)
+
+    /// <summary>租户管理员持有设置权限、通过了授权，仍因发信参数只属于宿主而被业务规则拒绝。</summary>
+    [Fact]
+    public async Task Test_email_from_a_tenant_is_rejected_as_host_only()
+    {
+        using var admin = await LoginAdminAsync();
+        var name = $"mail-{Guid.NewGuid():N}"[..16];
+        Guid tenantId;
+        using (var create = await admin.Client.PostAsJsonAsync("/api/v1/tenants", new
+        {
+            Name = name,
+            DisplayName = name,
+            AdminEmail = $"admin@{name}.example.test",
+            AdminPassword = TenantAdminPassword
+        }))
+        {
+            Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+            tenantId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        using var tenantAdmin = ProjectWebApplicationFactory.CreateProjectClient(factory);
+        tenantAdmin.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
+        using (var login = await tenantAdmin.PostAsJsonAsync(
+                   "/api/v1/auth/session-login",
+                   new { UsernameOrEmail = "admin", Password = TenantAdminPassword }))
+        {
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            tenantAdmin.DefaultRequestHeaders.Add("Cookie", string.Join("; ", login.Headers.GetValues("Set-Cookie")
+                .Select(value => value.Split(';', 2)[0])));
+        }
+
+        using var response = await tenantAdmin.PostAsJsonAsync("/api/v1/settings/email/test", new { To = "someone@example.test" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(AppSettingErrorCodes.TestEmailHostOnly, body.RootElement.GetProperty("code").GetString());
+    }
+#endif
 
     [Fact]
     public async Task Sender_address_must_be_a_bare_mailbox()
@@ -122,6 +210,14 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
 
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
     }
+
+    private const string MemberPassword = "EmailSettingsTests!Pw1";
+#if (IncludeMultiTenancy)
+    private const string TenantAdminPassword = "Tenant@123456";
+#endif
+
+    // 测试邮件不带目标：收件人是任意填写的地址，不进审计表
+    private const string NoTarget = "-";
 
     private Task<AuthenticatedSession> LoginAdminAsync() =>
         ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);

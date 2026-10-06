@@ -1,4 +1,4 @@
-namespace CompanyName.ProjectName.Domain.Shared.Security.Errors;
+namespace CompanyName.ProjectName.Domain.Auth.Errors;
 
 /// <summary>Security 业务错误码。</summary>
 public static class SecurityErrorCodes

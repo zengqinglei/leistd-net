@@ -5,7 +5,6 @@ public static class UserErrorCodes
 {
     public const string AvatarInvalid = "User:AvatarInvalid";
     public const string AvatarTooLarge = "User:AvatarTooLarge";
-    public const string EmailAlreadyUsed = "User:EmailAlreadyUsed";
     public const string EmailTaken = "User:EmailTaken";
     public const string ManageRolesRequired = "User:ManageRolesRequired";
     public const string NotFound = "User:NotFound";

@@ -42,6 +42,7 @@
     "tenant.deleted": "删除了租户 {{target}}",
     "tenant.connection-changed": "改动了租户 {{target}} 的数据库连接",
     "setting.changed": "修改了设置 {{target}}",
+    "setting.test-email-sent": "发送了测试邮件",
     "operation-records.exported": "导出了操作记录",
     "auth.login.succeeded": "登录了系统",
     "auth.login.failed": "登录失败（{{target}}）",
@@ -69,6 +70,7 @@
   },
   "actionsNoTarget": {
     "operation-records.exported": "导出了操作记录",
+    "setting.test-email-sent": "发送了测试邮件",
     "user.created": "创建用户",
     "role.created": "创建角色"
   },

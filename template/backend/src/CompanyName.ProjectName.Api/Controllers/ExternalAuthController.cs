@@ -157,6 +157,6 @@ public sealed class ExternalAuthController(
     public Task UnlinkAsync(Guid id, CancellationToken cancellationToken) =>
         externalAuthAppService.UnlinkCurrentUserAsync(id, cancellationToken);
 
-    private static BusinessException InvalidIntent() => new("ExternalAuth:InvalidState", "Invalid or expired external authentication intent.");
+    private static BusinessException InvalidIntent() => new(ExternalAuthErrorCodes.InvalidState, "Invalid or expired external authentication intent.");
 }
 #endif

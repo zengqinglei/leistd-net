@@ -1,6 +1,5 @@
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Shared.Paging.Errors;
-using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 #if (LocalIdentity)
 #if (IncludeMultiTenancy)
@@ -62,13 +61,16 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 #endif
 #if (LocalIdentity)
     [InlineData(AuthErrorCodes.CannotRevokeCurrentSession, StatusCodes.Status409Conflict)]
-    [InlineData(AuthErrorCodes.EmailAlreadyUsed, StatusCodes.Status409Conflict)]
 #endif
-    [InlineData(UserErrorCodes.EmailAlreadyUsed, StatusCodes.Status409Conflict)]
+    [InlineData(UserErrorCodes.EmailTaken, StatusCodes.Status409Conflict)]
+#if (ExternalLogin)
+    [InlineData(ExternalAuthErrorCodes.UsernameAllocationFailed, StatusCodes.Status409Conflict)]
+#endif
 #if (IncludeMultiTenancy)
     [InlineData(MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant, StatusCodes.Status409Conflict)]
 #endif
 #if (Email)
+    [InlineData(AppSettingErrorCodes.TestEmailHostOnly, StatusCodes.Status403Forbidden)]
     [InlineData(AppSettingErrorCodes.EmailVerificationKeyMissing, StatusCodes.Status409Conflict)]
     [InlineData(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests)]
     [InlineData(AuthErrorCodes.EmailVerificationUnavailable, StatusCodes.Status503ServiceUnavailable)]
@@ -86,10 +88,10 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 
         var codeTypes = new[]
         {
-            typeof(PagingErrorCodes), typeof(RoleErrorCodes), typeof(SecurityErrorCodes),
+            typeof(PagingErrorCodes), typeof(RoleErrorCodes),
             typeof(AppSettingErrorCodes), typeof(UserErrorCodes),
 #if (LocalIdentity)
-            typeof(AuthErrorCodes),
+            typeof(AuthErrorCodes), typeof(SecurityErrorCodes),
 #if (IncludeMultiTenancy)
             typeof(TenantErrorCodes),
 #endif

@@ -905,3 +905,11 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 - `POST /api/v1/external-auth/{provider}/link/complete` 成功时由 `{ "linked": true }` 改为 HTTP 200 空响应体；`POST /api/v1/external-auth/{provider}/complete` 改为直接返回登录结果 DTO（JSON 形状不变）。读取 `linked` 字段的客户端改为按状态码判断成功。
 - 两个控制器共用的最终会话签发收进 `Api/Auth/SessionCookieIssuer`（构造注入），不再经 `HttpContext.RequestServices` 定位服务或跨控制器调用静态方法；外部票据一次消费、发起者与租户校验、两步验证未完成不签发最终 Cookie 的行为不变。
 - Resource 的 `GET /api/v1/auth/me` 改为返回 `CurrentResourceUserOutputDto`，字段与缺省值不变。
+
+## 39. 模板：错误码收敛、入参校验与授权拒绝交给管道、删除幂等（破坏性）
+
+- 邮箱占用统一为 `User:EmailTaken`（409，`WithData("Email")`）：`PUT /api/v1/users/{id}` 原 `User:EmailAlreadyUsed`、`POST /api/v1/auth/send-email-code` 原 `Auth:EmailAlreadyUsed` 均改为该码。发码前的判定与建号一致：被删除用户仍占用的地址现在在发码时即被拒（原先放行、注册时才失败）；只差大小写的地址按唯一索引视为不同地址，不再被拒。客户端按旧码分支的改判 `User:EmailTaken`，自定义词条改键。
+- `POST /api/v1/settings/email/test` 改由策略 `App.Settings` 授权：无权限返回授权管道的标准 403，响应不带 `code`（原 `AppSetting:ManagePermissionRequired`，常量、映射与词条已删除）；租户内调用仍为 403 `AppSetting:TestEmailHostOnly`。新增操作记录动作 `setting.test-email-sent`（不带目标；成功、授权拒绝、业务失败均记录），前端补 `operationRecords.actions` 与 `actionsNoTarget` 词条。
+- 首次外部登录无法分配用户名时，`POST /api/v1/external-auth/{provider}/complete` 由 `User:UsernameTaken`（带 `Username`）改为 409 `ExternalAuth:UsernameAllocationFailed`（不带数据）。
+- 删除不可达或零引用的码及词条：`Auth:UnsupportedGrantType`（OpenIddict 已按协议回 `unsupported_grant_type`，未登记处理分支改为 `InvalidOperationException`）、`Tenant:ImpersonationRequiresAuthentication`（原 401 映射；未认证请求在授权阶段已被拒）、`ExternalAuth:ProviderNotSupported`。生成项目中引用这些常量或词条的代码一并删除。
+- `SecurityErrorCodes` 命名空间由 `…Domain.Shared.Security.Errors` 改为 `…Domain.Auth.Errors`（码值不变）；`ExternalAuth:InvalidState` 改用常量 `ExternalAuthErrorCodes.InvalidState`（码值不变）。

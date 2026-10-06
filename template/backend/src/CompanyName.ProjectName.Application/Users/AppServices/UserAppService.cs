@@ -312,7 +312,7 @@ public class UserAppService(
         var email = input.Email.Trim();
         if (!await userDomainService.IsEmailAvailableAsync(id, email, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.EmailAlreadyUsed, $"Email '{email}' is already in use.")
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
                 .WithData("Email", email);
         }
 

@@ -157,7 +157,7 @@ export function updateUser(id: string, value: any) {
   // 与后端一致：邮箱被其他用户占用时 409，不静默覆盖
   if (value.email && USERS.some((w) => w.id !== id && w.email === value.email)) {
     throw new MockException(409, {
-      code: 'User:EmailAlreadyUsed',
+      code: 'User:EmailTaken',
       message: `Email '${value.email}' is already in use.`,
     });
   }

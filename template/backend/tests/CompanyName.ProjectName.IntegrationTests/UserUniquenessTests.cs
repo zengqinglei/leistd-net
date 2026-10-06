@@ -92,6 +92,43 @@ public sealed class UserUniquenessTests(ProjectWebApplicationFactory factory)
         }
     }
 
+    /// <summary>
+    /// 管理员改邮箱与建号、改本人资料同一判定、同一个码：看得见软删除行，按唯一索引的原样比较。
+    /// </summary>
+    [Fact]
+    public async Task Admin_email_change_reports_the_same_conflict_as_the_other_entries()
+    {
+        var taken = $"uniq_{Guid.NewGuid():N}"[..24];
+        var takenEmail = $"{taken}@example.test";
+        var other = $"uniq_{Guid.NewGuid():N}"[..24];
+
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+
+        var deletedId = await CreateAsync(admin, taken, takenEmail);
+        using (var delete = await admin.Client.DeleteAsync($"/api/v1/users/{deletedId}"))
+        {
+            Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+        }
+
+        var otherId = await CreateAsync(admin, other, $"{other}@example.test");
+
+        using (var sameEmail = await PutUserEmailAsync(admin, otherId, takenEmail))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, sameEmail.StatusCode);
+            Assert.Equal("User:EmailTaken", await ErrorCodeAsync(sameEmail));
+        }
+
+        // 被拒的那次没有改动目标用户
+        Assert.Equal($"{other}@example.test", await GetUserEmailAsync(admin, otherId));
+
+        // 唯一索引区分大小写，只差大小写的地址是另一个地址：各入口都放行
+        using (var caseVariant = await PutUserEmailAsync(admin, otherId, takenEmail.ToUpperInvariant()))
+        {
+            Assert.Equal(HttpStatusCode.OK, caseVariant.StatusCode);
+        }
+    }
+
     /// <summary>删掉的角色仍占着角色名：重建同名角色必须是业务冲突，而不是撞唯一索引的 500。</summary>
     [Fact]
     public async Task Recreating_a_role_with_a_deleted_roles_name_is_reported_as_taken()
@@ -192,6 +229,15 @@ public sealed class UserUniquenessTests(ProjectWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
         var created = await create.Content.ReadFromJsonAsync<JsonElement>();
         return created.GetProperty("id").GetGuid();
+    }
+
+    private static Task<HttpResponseMessage> PutUserEmailAsync(AuthenticatedSession admin, Guid id, string email) =>
+        admin.Client.PutAsJsonAsync($"/api/v1/users/{id}", new { Email = email });
+
+    private static async Task<string?> GetUserEmailAsync(AuthenticatedSession admin, Guid id)
+    {
+        var user = await admin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/users/{id}");
+        return user.GetProperty("email").GetString();
     }
 
     private static Task<HttpResponseMessage> PostAsync(AuthenticatedSession admin, string username, string email) =>

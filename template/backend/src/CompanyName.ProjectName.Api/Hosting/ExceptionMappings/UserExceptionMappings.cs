@@ -18,7 +18,6 @@ internal static class UserExceptionMappings
             UserErrorCodes.SuperAdminUpdateForbidden);
         options.MapCode(UserErrorCodes.NotFound, StatusCodes.Status404NotFound);
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
-            UserErrorCodes.EmailAlreadyUsed,
             UserErrorCodes.EmailTaken,
             UserErrorCodes.UsernameTaken);
     }

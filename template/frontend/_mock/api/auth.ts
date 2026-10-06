@@ -464,8 +464,9 @@ function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const body = req.body as SendEmailCodeInputDto;
   validateCaptcha(body.captchaToken, body.captchaCode);
 
+  // 占用判定与后端同一口径：按唯一索引原样比较，只差大小写的是另一个地址
+  ensureEmailAvailable(body.email.trim(), '');
   const email = normalizeEmail(body.email);
-  ensureEmailAvailable(email, '');
   const scope = getRequestScope(req);
   const rateKey = `${scope}:${email}`;
   const now = Date.now();

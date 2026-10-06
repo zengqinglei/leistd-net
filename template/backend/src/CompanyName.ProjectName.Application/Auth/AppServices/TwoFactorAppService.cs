@@ -1,6 +1,5 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Errors;
-using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Events;

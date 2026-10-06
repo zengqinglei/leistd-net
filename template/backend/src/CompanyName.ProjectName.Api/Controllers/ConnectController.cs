@@ -1,7 +1,5 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
-using Leistd.ExceptionHandling;
 using System.Security.Claims;
 using Leistd.Timing;
 using System.Text.Json.Nodes;
@@ -259,8 +257,10 @@ public sealed class ConnectController(
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        throw new BusinessException(AuthErrorCodes.UnsupportedGrantType, $"Unsupported grant type: {request.GrantType}")
-            .WithData("GrantType", request.GrantType);
+        // OpenIddict 只放行上面登记的四种授权类型，其余在进入本端点前已按协议回 unsupported_grant_type。
+        // 走到这里说明登记了新的授权类型却没写处理分支，是编程错误而不是客户端的业务错误。
+        throw new InvalidOperationException(
+            $"Grant type '{request.GrantType}' is enabled on the OpenIddict server but has no handler in {nameof(ExchangeAsync)}.");
     }
 
     private ForbidResult ProtocolError(string error) => Forbid(new AuthenticationProperties(new Dictionary<string, string?>

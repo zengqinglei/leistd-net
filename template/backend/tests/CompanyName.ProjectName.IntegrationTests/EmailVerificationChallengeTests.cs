@@ -236,6 +236,46 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         Assert.False(await ReadEmailVerifiedAsync(user.Client));
     }
 
+    /// <summary>
+    /// 注册发码前的占用判定与建号同一口径：被删用户仍占着地址，只差大小写的是另一个地址。
+    /// 先放行再在建号时撞上，用户就白收了一封验证码。
+    /// </summary>
+    [Fact]
+    public async Task Registration_code_is_refused_for_an_email_held_by_a_deleted_user()
+    {
+        using var host = CreateEmailVerificationHost();
+        using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var username = $"held_{Guid.NewGuid():N}"[..24];
+        var email = $"{username}@example.test";
+        using (var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword))
+        {
+            using var create = await admin.Client.PostAsJsonAsync("/api/v1/users", new
+            {
+                Username = username,
+                Email = email,
+                Password = "VerificationTests!Pw1",
+                IsActive = true
+            });
+            Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+            var id = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+            using var delete = await admin.Client.DeleteAsync($"/api/v1/users/{id}");
+            Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+        }
+
+        using (var refused = await SendChallengeResponseAsync(anonymous, email))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            using var body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync());
+            Assert.Equal("User:EmailTaken", body.RootElement.GetProperty("code").GetString());
+        }
+
+        // 被拒时没有发出验证码，也没有占用发送间隔
+        Assert.Throws<InvalidOperationException>(() => host.Services.GetRequiredService<CapturingEmailSender>().GetCode(email));
+
+        var variant = email.ToUpperInvariant();
+        await SendChallengeAsync(host, anonymous, variant);
+    }
+
     private static async Task<bool> ReadEmailVerifiedAsync(HttpClient client)
     {
         using var me = JsonDocument.Parse(await client.GetStringAsync("/api/v1/auth/me"));

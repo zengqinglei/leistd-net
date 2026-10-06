@@ -9,7 +9,6 @@ internal static class TenantExceptionMappings
 {
     public static void Configure(GlobalExceptionOptions options)
     {
-        options.MapCode(TenantErrorCodes.ImpersonationRequiresAuthentication, StatusCodes.Status401Unauthorized);
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
             TenantErrorCodes.ActivateWithoutUsers,
             TenantErrorCodes.AdministratorNotFound,

@@ -62,8 +62,10 @@ internal sealed class TenantImpersonationAppService(
             throw new BusinessException(TenantErrorCodes.AlreadyImpersonating, "Already impersonating; end the current impersonation first.");
         }
 
+        // 端点要求 App.Tenants.Impersonation 权限，未认证的请求在授权阶段已被挡下；
+        // 这里取不到用户说明调用方绕过了端点授权，是编程错误。
         var impersonatorId = currentUser.Id
-            ?? throw new BusinessException(TenantErrorCodes.ImpersonationRequiresAuthentication, "Only an authenticated user can start impersonation.");
+            ?? throw new InvalidOperationException("Impersonation requires an authenticated caller; the endpoint authorization was bypassed.");
 
         var tenant = await tenantStore.FindAsync(tenantId, cancellationToken)
                      ?? throw new BusinessException(MultiTenancyErrorCodes.NotFound, $"Tenant '{tenantId}' not found.");

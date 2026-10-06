@@ -12,9 +12,9 @@ using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Email.Abstractions;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
-using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -39,7 +39,7 @@ public class EmailVerificationAppService(
     IEmailSender emailSender,
     ILogger<EmailVerificationAppService> logger,
     IClock clock,
-    IRepository<User, Guid> userRepository
+    UserDomainService userDomainService
     , ICurrentTenant currentTenant
     , IOptions<VerificationCodeOptions> verificationCodeOptions
     ) : BaseAppService, IEmailVerificationAppService
@@ -87,12 +87,13 @@ public class EmailVerificationAppService(
             throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
         }
 
-        var existingUser = await userRepository.GetFirstAsync(
-            u => u.Email.ToLower() == normalizedEmail,
-            cancellationToken: cancellationToken);
-        if (existingUser != null)
+        // 与建号、改邮箱同一判定：看得见软删除行、按唯一索引的原样比较。
+        // 这里先放行、建号时再撞上，用户就白收了一封验证码。
+        var email = input.Email.Trim();
+        if (!await userDomainService.IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BusinessException(AuthErrorCodes.EmailAlreadyUsed, "This email address is already in use.");
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         return await IssueChallengeAsync(normalizedEmail, RegistrationPurpose, policy, cancellationToken);

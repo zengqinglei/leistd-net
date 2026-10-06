@@ -5,7 +5,6 @@ public static class AuthErrorCodes
 {
     public const string CannotRevokeCurrentSession = "Auth:CannotRevokeCurrentSession";
     public const string CaptchaInvalid = "Auth:CaptchaInvalid";
-    public const string EmailAlreadyUsed = "Auth:EmailAlreadyUsed";
 #if (Email)
     public const string EmailAlreadyVerified = "Auth:EmailAlreadyVerified";
     public const string EmailCodeInvalid = "Auth:EmailCodeInvalid";
@@ -23,7 +22,6 @@ public static class AuthErrorCodes
     public const string TwoFactorRequiredByPolicy = "Auth:TwoFactorRequiredByPolicy";
     public const string TwoFactorSetupExpired = "Auth:TwoFactorSetupExpired";
     public const string TwoFactorSetupRequired = "Auth:TwoFactorSetupRequired";
-    public const string UnsupportedGrantType = "Auth:UnsupportedGrantType";
     public const string UserDisabled = "Auth:UserDisabled";
     public const string UserLockedOut = "Auth:UserLockedOut";
     public const string UserTemporarilyLockedOut = "Auth:UserTemporarilyLockedOut";
