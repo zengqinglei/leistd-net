@@ -58,7 +58,8 @@
          但这个状态必须一直看得见——此刻的每一次操作都记在租户账号上——所以不用会自动消失的
          toast，也不用只在悬停时出现的 tooltip（按无障碍规范，tooltip 里不能放可点击的退出按钮）。
          配色用语义色 warning，与操作记录表里"由 X 模拟操作"的提示同一口径。
-         outline 变体自带 dark: 与 aria-expanded: 的底色和边框，前缀不同不会被合并掉，须逐一覆盖。
+         用 secondary 变体：它的底色只有亮暗共用的一组，警示色按同一前缀即可覆盖，不必再写 dark:；
+         outline 自带 dark: 底色与边框，前缀不同不会被合并掉，须逐一抵消。
          窄屏只留图标；完整说明与退出按钮在浮层里。 -->
       @if (impersonation.status(); as impersonationStatus) {
         @if (impersonationStatus.isImpersonating) {
@@ -68,8 +69,8 @@
               hlmBtn
               hlmPopoverTrigger
               size="sm"
-              variant="outline"
-              class="border-warning/60 bg-warning/15 hover:bg-warning/25 aria-expanded:bg-warning/25 dark:border-warning/50 dark:bg-warning/15 dark:hover:bg-warning/25 max-w-48 gap-1.5 rounded-full"
+              variant="secondary"
+              class="border-warning/60 bg-warning/15 hover:bg-warning/25 aria-expanded:bg-warning/25 max-w-48 gap-1.5 rounded-full"
               data-testid="impersonation-indicator"
               [attr.aria-label]="
                 t('impersonation.banner', {

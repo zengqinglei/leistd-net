@@ -4,6 +4,8 @@ import { ActivatedRoute } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
 
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
@@ -13,7 +15,9 @@ import { AuthService } from '../../services/auth-service';
 @Component({
   selector: 'app-resource-login',
   //#if (IncludeLocalization)
-  imports: [TranslocoDirective],
+  imports: [TranslocoDirective, HlmButton, HlmCardImports],
+  //#else
+  imports: [HlmButton, HlmCardImports],
   //#endif
   templateUrl: './resource-login.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

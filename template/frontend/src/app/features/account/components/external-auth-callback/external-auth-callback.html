@@ -6,7 +6,7 @@
   <main class="flex min-h-screen items-center justify-center bg-background px-4">
     <section class="text-center">
       @if (error(); as error) {
-        <h1 class="mb-3 text-2xl font-semibold text-destructive">
+        <h1 class="text-destructive mb-3 text-2xl font-semibold tracking-tight">
           {{ t('account.login.loginFailed') }}
         </h1>
         <p class="text-muted-foreground">{{ 'key' in error ? t(error.key) : error.text }}</p>
@@ -18,7 +18,7 @@
           class="text-4xl"
           [attr.aria-label]="t('account.externalCallback.processingAria')"
         />
-        <h1 class="mt-4 text-2xl font-semibold text-foreground">
+        <h1 class="text-foreground mt-4 text-2xl font-semibold tracking-tight">
           {{ t('account.externalCallback.processing') }}
         </h1>
       }

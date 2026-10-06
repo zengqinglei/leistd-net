@@ -13,10 +13,10 @@
     </div>
 
     <div class="flex max-w-2xl flex-col gap-8 text-center">
-      <h1 class="text-3xl font-semibold tracking-tight text-balance">
+      <h1 class="text-2xl font-semibold tracking-tight text-balance">
         {{ t('hero.title') }}
       </h1>
-      <p class="text-base text-muted-foreground">{{ t('hero.subtitle') }}</p>
+      <p class="text-muted-foreground text-sm">{{ t('hero.subtitle') }}</p>
 
       <div class="flex items-center justify-center gap-4">
         <!--#if (LocalIdentity)-->
@@ -31,21 +31,21 @@
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
         <div class="p-6 rounded-xl bg-card border border-border">
           <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('feature.authTitle') }}</h3>
+          <h3 class="text-base font-medium">{{ t('feature.authTitle') }}</h3>
           <p class="text-sm text-muted-foreground mt-2">
             {{ t('feature.authDesc') }}
           </p>
         </div>
         <div class="p-6 rounded-xl bg-card border border-border">
           <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('feature.usersTitle') }}</h3>
+          <h3 class="text-base font-medium">{{ t('feature.usersTitle') }}</h3>
           <p class="text-sm text-muted-foreground mt-2">
             {{ t('feature.usersDesc') }}
           </p>
         </div>
         <div class="p-6 rounded-xl bg-card border border-border">
           <ng-icon name="lucideSunMoon" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('feature.themeTitle') }}</h3>
+          <h3 class="text-base font-medium">{{ t('feature.themeTitle') }}</h3>
           <p class="text-sm text-muted-foreground mt-2">
             {{ t('feature.themeDesc') }}
           </p>

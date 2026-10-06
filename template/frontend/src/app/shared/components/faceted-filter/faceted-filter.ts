@@ -69,7 +69,7 @@ let nextFacetedFilterId = 0;
             <!-- 最多展示 2 枚 Badge，其余折叠为 +N，防止选中项多时撑宽工具栏。 -->
             <div class="flex gap-1">
               @for (opt of selectedOptions().slice(0, 2); track opt.value) {
-                <span hlmBadge>{{ opt.label }}</span>
+                <span hlmBadge variant="secondary">{{ opt.label }}</span>
               }
               @if (selectedOptions().length > 2) {
                 <span hlmBadge variant="secondary">+{{ selectedOptions().length - 2 }}</span>
@@ -78,7 +78,7 @@ let nextFacetedFilterId = 0;
           }
         } @else if (selectedOption(); as sel) {
           <hlm-separator class="mx-2" orientation="vertical" />
-          <span hlmBadge>{{ sel.label }}</span>
+          <span hlmBadge variant="secondary">{{ sel.label }}</span>
         }
       </button>
 

@@ -203,6 +203,24 @@ describe('FacetedFilter', () => {
     }
   });
 
+  // 已选项是分类标签：用中性变体，主色留给主操作
+  it('shows the selection on the trigger as neutral badges in both modes', () => {
+    const badges = (fixture: ComponentFixture<FacetedFilter>) =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[data-slot="badge"]'),
+      ).map((b) => [b.textContent?.trim(), b.getAttribute('data-variant')]);
+
+    const multi = createFilter({ multiple: true, values: ['admin', 'member', 'guest'] });
+    expect(badges(multi)).toEqual([
+      ['Administrator', 'secondary'],
+      ['Member', 'secondary'],
+      ['+1', 'secondary'],
+    ]);
+
+    const single = createFilter({ value: 'guest' });
+    expect(badges(single)).toEqual([['Guest', 'secondary']]);
+  });
+
   it('uses a distinct checked background in dark mode', () => {
     document.documentElement.classList.add('dark');
     try {

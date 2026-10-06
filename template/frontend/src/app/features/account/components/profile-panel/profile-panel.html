@@ -50,11 +50,11 @@
 
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
-            <h3 class="m-0 truncate text-base font-semibold">
+            <h3 class="m-0 truncate text-base font-medium">
               {{ displayName() || t('account.profile.guestUser') }}
             </h3>
             @if (user()?.isSuperAdmin) {
-              <span hlmBadge variant="default">{{ t('account.profile.superAdminTag') }}</span>
+              <span hlmBadge variant="outline">{{ t('account.profile.superAdminTag') }}</span>
             } @else if (roleLabels().length > 0) {
               @for (role of roleLabels(); track role) {
                 <span hlmBadge variant="secondary">{{ role }}</span>

@@ -68,7 +68,7 @@ const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
 };
 
 /** Badge 变体。 */
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+type BadgeVariant = 'secondary' | 'outline';
 
 @Component({
   selector: 'app-open-application-table',
@@ -249,7 +249,7 @@ export class OpenApplicationTable {
   }
 
   getClientTypeVariant(value: string): BadgeVariant {
-    return value === 'public' ? 'secondary' : 'default';
+    return value === 'public' ? 'secondary' : 'outline';
   }
 
   /** 已授予的授权方式摘要；一个都没有时为空串，由模板给出"未配置"。 */

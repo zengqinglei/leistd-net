@@ -225,7 +225,7 @@
                             <div class="flex items-center gap-1.5 whitespace-nowrap">
                               <span
                                 hlmBadge
-                                [variant]="hasPkce(row.original) ? 'default' : 'destructive'"
+                                [variant]="hasPkce(row.original) ? 'success' : 'destructive'"
                                 >{{
                                   hasPkce(row.original) ? 'PKCE' : t('openApp.table.noPkce')
                                 }}</span
@@ -419,7 +419,7 @@
                             <dd class="flex flex-wrap gap-1.5">
                               <span
                                 hlmBadge
-                                [variant]="hasPkce(row.original) ? 'default' : 'destructive'"
+                                [variant]="hasPkce(row.original) ? 'success' : 'destructive'"
                                 >{{
                                   hasPkce(row.original) ? 'PKCE' : t('openApp.table.noPkce')
                                 }}</span

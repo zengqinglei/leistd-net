@@ -19,7 +19,7 @@
         <ng-icon name="lucideMenu" />
       </button>
       <hlm-sheet-content *hlmSheetPortal="let ctx">
-        <h2 hlmSheetTitle class="px-4 pt-4 text-base font-semibold">
+        <h2 hlmSheetTitle class="px-4 pt-4">
           {{ t('layout.sidebar.appTitle') }}
         </h2>
         <!-- 抽屉必须有描述：组件会无条件指一个 aria-describedby，缺了它就是悬空引用 -->
@@ -85,16 +85,17 @@
       </ul>
     </nav>
   } @else if (items().length) {
-    <!-- 右侧与主题、通知、语言同一排：用同款图标按钮，名称放进提示与可访问名。
+    <!-- 右侧与主题、通知、语言同一排：用同尺寸的图标按钮，名称放进提示与可访问名。
+       用 ghost 而不是 outline：当前项与侧栏同一写法，outline 自带的暗色底不需要再逐个覆盖。
        没有 placement:'end' 的分组时整个 nav 不渲染——空的导航地标对读屏用户是噪音。
        分组机制保留：宿主给自己的菜单标 placement:'end' 就会出现在这里。 -->
     <nav class="hidden items-center gap-2 md:flex" [attr.aria-label]="endNavLabel()">
       @for (item of items(); track item.route) {
         <a
           hlmBtn
-          variant="outline"
+          variant="ghost"
           size="icon"
-          class="aria-[current=page]:border-primary/30 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary dark:aria-[current=page]:bg-primary/15"
+          class="aria-[current=page]:bg-primary/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
           [routerLink]="item.route"
           [attr.aria-current]="isItemActive(item) ? 'page' : null"
           [attr.aria-label]="item.label"
