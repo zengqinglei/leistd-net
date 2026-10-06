@@ -62,13 +62,16 @@ public sealed class SmtpEmailSenderTests
             () => Sender(o => o.Host = string.Empty).SendAsync(Message(), cts.Token));
     }
 
-    // 示例主机名不是哨兵值：配置像默认示例也不能假装发出去，它只是一个连不通的主机名
+    // 示例主机名不是哨兵值：配置像默认示例也不能假装发出去。
+    // 令牌预先取消，发送只要走到连接这一步就抛取消异常，无需解析主机名；
+    // 按示例主机名提前静默返回的实现不会抛，用例因此变红。
     [Fact]
     public async Task An_example_host_is_not_treated_as_a_skip_signal()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
 
-        await Assert.ThrowsAnyAsync<Exception>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => Sender(o => o.Host = "smtp.example.com").SendAsync(Message(), cts.Token));
     }
 
