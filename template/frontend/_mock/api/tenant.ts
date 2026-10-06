@@ -1,4 +1,10 @@
+//#if (Impersonation)
+import { requirePermission } from './authorization';
+//#endif
 import { TenantByHostOutputDto } from '../../src/app/features/account/dtos/tenant-by-host.dto';
+//#if (Impersonation)
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
+//#endif
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
@@ -9,6 +15,20 @@ import {
   toTenantConnection,
   toTenantOutput,
 } from '../data/tenant';
+//#if (Impersonation)
+import { USERS } from '../data/user';
+import {
+  getCurrentUser,
+  getMockImpersonator,
+  getMockSessionTenantKey,
+  setMockImpersonator,
+  setMockSessionTenantKey,
+  setMockSessionUserId,
+} from '../utils/current-user';
+
+/** 与后端 `AdminConstant.TenantAdminUsername` 一致：模拟登录进入的是租户里叫这个名字的用户。 */
+const TENANT_ADMIN_USERNAME = 'admin';
+//#endif
 
 /** 连接名的合法形态，与后端 `TenantConnectionConfiguration.NamePattern` 同源。 */
 const CONNECTION_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
@@ -255,6 +275,51 @@ export function deleteTenant(id: string) {
   TENANTS.splice(index, 1);
 }
 
+//#if (Impersonation)
+/**
+ * 以租户管理员身份进入该租户：会话整体换成租户管理员，并记下发起人供顶栏提示与结束模拟。
+ *
+ * 复刻后端的拒绝条件：无权限 403、已在模拟中 409、租户不存在 404、已停用 403、
+ * 租户里没有管理员 409。Mock 用户不按租户分区，租户管理员就是用户名为 admin 的那个。
+ */
+export function impersonateTenant(id: string): 'ok' {
+  requirePermission(PERMISSIONS.tenants.impersonation);
+  if (getMockImpersonator()) {
+    throw new MockException(409, {
+      code: 'Tenant:AlreadyImpersonating',
+      message: 'Already impersonating; end the current impersonation first.',
+    });
+  }
+
+  const tenant = findTenantOrThrow(id);
+  if (!tenant.isActive) {
+    throw new MockException(403, {
+      code: 'Tenant:NotActive',
+      message: `Tenant '${tenant.name}' is deactivated.`,
+    });
+  }
+
+  const admin = USERS.find((user) => user.username === TENANT_ADMIN_USERNAME);
+  if (!admin) {
+    throw new MockException(409, {
+      code: 'Tenant:AdministratorNotFound',
+      message: `Tenant '${tenant.name}' has no '${TENANT_ADMIN_USERNAME}' user to impersonate.`,
+    });
+  }
+
+  // requirePermission 已确认有会话用户
+  const impersonator = getCurrentUser()!;
+  setMockImpersonator({
+    userId: impersonator.id,
+    name: impersonator.displayName ?? impersonator.username,
+    tenantKey: getMockSessionTenantKey(),
+  });
+  setMockSessionUserId(admin.id);
+  setMockSessionTenantKey(tenant.id);
+  return 'ok';
+}
+
+//#endif
 export const TENANT_API = {
   'GET /api/v1/tenants': (req: MockRequest) => getTenants(req.queryParams),
   // by-host 必须排在 :id 之前，否则会被当成一个 id 走到按 id 查询那条上。
@@ -266,6 +331,9 @@ export const TENANT_API = {
     setTenantActivation(req.params.id, req.body),
   'PUT /api/v1/tenants/:id': (req: MockRequest) => updateTenant(req.params.id, req.body),
   'DELETE /api/v1/tenants/:id': (req: MockRequest) => deleteTenant(req.params.id),
+  //#if (Impersonation)
+  'POST /api/v1/tenants/:id/impersonate': (req: MockRequest) => impersonateTenant(req.params.id),
+  //#endif
   'GET /api/v1/tenant-connections/:tenantId': (req: MockRequest) =>
     getTenantConnections(req.params.tenantId),
   'PUT /api/v1/tenant-connections/:tenantId/:name': (req: MockRequest) =>

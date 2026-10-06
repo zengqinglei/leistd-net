@@ -164,6 +164,8 @@ export class UserEditDialog {
     // 编辑模式禁用用户名（不可改）。
     disabled(path.username, { when: () => this.isEditMode() });
     required(path.email);
+    // 首尾空白按格式错误拒绝，因此提交时邮箱原样发出、不再 trim：type="email" 的输入框本就去掉首尾空白，
+    // 校验器再兜住程序化写入的值；后端对同一字段也会先 trim，带空白的地址不会落库
     emailValidator(path.email);
     maxLength(path.email, 256);
     maxLength(path.displayName, 128);
@@ -286,7 +288,7 @@ export class UserEditDialog {
     const model = this.formModel();
     if (this.isEditMode()) {
       this.saved.emit({
-        email: model.email.trim(),
+        email: model.email,
         displayName: model.displayName.trim() || undefined,
         avatar: model.avatar.trim() || undefined,
         //#if (LocalIdentity)
@@ -298,7 +300,7 @@ export class UserEditDialog {
 
     this.saved.emit({
       username: model.username.trim(),
-      email: model.email.trim(),
+      email: model.email,
       displayName: model.displayName.trim() || undefined,
       avatar: model.avatar.trim() || undefined,
       //#if (LocalIdentity)

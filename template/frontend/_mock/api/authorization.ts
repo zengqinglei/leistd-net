@@ -231,9 +231,10 @@ export function updateRole(id: string, body: Record<string, unknown>) {
 export function deleteRole(id: string) {
   requirePermission('App.Roles.Delete');
 
+  // 与后端一致：删除幂等，不存在（含已删除）即成功
   const index = ROLES.findIndex((candidate) => candidate.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 'Role:NotFound', message: 'Role does not exist' });
+    return;
   }
 
   const role = ROLES[index];

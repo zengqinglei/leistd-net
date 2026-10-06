@@ -96,31 +96,52 @@ function getOpenApplication(req: MockRequest) {
   return toOutput(application);
 }
 
+const CALLBACK_URI_INVALID =
+  'Each callback URI must be an absolute URI without whitespace or a fragment.';
+
+/** 与后端回调地址校验同一判据：绝对 URI、不含空白与片段。 */
+function isValidCallbackUri(value: string): boolean {
+  if (!value?.trim() || /\s/.test(value)) {
+    return false;
+  }
+  try {
+    return new URL(value).hash === '';
+  } catch {
+    return false;
+  }
+}
+
 function validateApplication(
   input: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto,
   id?: string,
 ) {
-  if ('clientId' in input) {
-    const clientId = input.clientId.trim();
-    if (!clientId) {
-      // 与后端一致：入参校验失败是 400 字段错误，不带业务码
-      throw new MockException(400, {
-        errors: [{ field: 'clientId', detail: 'Client ID is required.' }],
-      });
-    }
-    if (
-      applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)
-    ) {
-      throw new MockException(409, {
-        code: 'OpenApp:ClientIdTaken',
-        message: `Client ID already exists: ${clientId}`,
-      });
+  // 与后端一致：入参校验（必填等）先于业务规则，失败是 400 字段错误、不带业务码，一次报全
+  const errors: { field: string; detail: string }[] = [];
+  const clientId = 'clientId' in input ? input.clientId.trim() : undefined;
+  if (clientId === '') {
+    errors.push({ field: 'clientId', detail: 'Client ID is required.' });
+  }
+  // 会话绑定必须显式给值，缺失或 null 都不行
+  if (typeof input.sessionBound !== 'boolean') {
+    errors.push({ field: 'sessionBound', detail: 'Session bound is required.' });
+  }
+  for (const field of ['redirectUris', 'postLogoutRedirectUris'] as const) {
+    if (!(input[field] ?? []).every(isValidCallbackUri)) {
+      errors.push({ field, detail: CALLBACK_URI_INVALID });
     }
   }
+  if (errors.length > 0) {
+    throw new MockException(400, { errors });
+  }
 
-  // 与后端一致：会话绑定必须显式给值，缺失或 null 都是 400
-  if (typeof input.sessionBound !== 'boolean') {
-    throw new MockException(400, { message: 'Session bound is required' });
+  if (
+    clientId &&
+    applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)
+  ) {
+    throw new MockException(409, {
+      code: 'OpenApp:ClientIdTaken',
+      message: `Client ID already exists: ${clientId}`,
+    });
   }
 
   const exchange = 'gt:urn:ietf:params:oauth:grant-type:token-exchange';

@@ -7,6 +7,9 @@ import { MockUser, USERS } from '../data/user';
 const MOCK_SESSION_STORAGE_KEY = 'mock_session_user_id';
 const MOCK_SESSION_TENANT_STORAGE_KEY = 'mock_session_tenant_key';
 const MOCK_SESSION_SUBJECT_STORAGE_KEY = 'mock_session_subject_id';
+//#if (Impersonation)
+const MOCK_SESSION_IMPERSONATOR_STORAGE_KEY = 'mock_session_impersonator';
+//#endif
 
 export let MOCK_SESSION_USER_ID: string | null = readMockSessionUserId();
 
@@ -18,8 +21,34 @@ export function setMockSessionUserId(id: string | null) {
     sessionStorage.removeItem(MOCK_SESSION_STORAGE_KEY);
     sessionStorage.removeItem(MOCK_SESSION_TENANT_STORAGE_KEY);
     sessionStorage.removeItem(MOCK_SESSION_SUBJECT_STORAGE_KEY);
+    //#if (Impersonation)
+    sessionStorage.removeItem(MOCK_SESSION_IMPERSONATOR_STORAGE_KEY);
+    //#endif
   }
 }
+//#if (Impersonation)
+
+/** 模拟登录的发起人，对应真实会话里的发起人声明；随会话一起保存、退出登录时一起清掉。 */
+export interface MockImpersonator {
+  userId: string;
+  name: string;
+  /** 发起人所在的租户键，结束模拟时回到这里。 */
+  tenantKey: string;
+}
+
+export function getMockImpersonator(): MockImpersonator | null {
+  const value = sessionStorage.getItem(MOCK_SESSION_IMPERSONATOR_STORAGE_KEY);
+  return value ? (JSON.parse(value) as MockImpersonator) : null;
+}
+
+export function setMockImpersonator(impersonator: MockImpersonator | null): void {
+  if (impersonator) {
+    sessionStorage.setItem(MOCK_SESSION_IMPERSONATOR_STORAGE_KEY, JSON.stringify(impersonator));
+  } else {
+    sessionStorage.removeItem(MOCK_SESSION_IMPERSONATOR_STORAGE_KEY);
+  }
+}
+//#endif
 
 /**
  * 主体标识：按用户隔离数据时用它，而不是用 Mock persona 的 id。

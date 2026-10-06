@@ -6,6 +6,9 @@ import { ROLES } from '../data/authorization';
 import { ensureAcceptablePassword } from '../data/password-policy';
 //#endif
 import { USERS, toUserManagementOutput } from '../data/user';
+//#if (LocalIdentity)
+import { getCurrentUser } from '../utils/current-user';
+//#endif
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
@@ -154,16 +157,17 @@ export function updateUser(id: string, value: any) {
       message: 'User does not exist or has been deleted',
     });
   }
-  // 与后端一致：邮箱被其他用户占用时 409，不静默覆盖
-  if (value.email && USERS.some((w) => w.id !== id && w.email === value.email)) {
+  // 与后端一致：邮箱先去掉首尾空白再判占用与保存；被其他用户占用时 409，不静默覆盖
+  const email = String(value.email ?? '').trim();
+  if (email && USERS.some((w) => w.id !== id && w.email === email)) {
     throw new MockException(409, {
       code: 'User:EmailTaken',
-      message: `Email '${value.email}' is already in use.`,
+      message: `Email '${email}' is already in use.`,
     });
   }
 
   Object.assign(user, {
-    email: value.email,
+    email,
     displayName: value.displayName,
     avatar: value.avatar,
     isActive: value.isActive,
@@ -226,14 +230,34 @@ export function unlockUser(id: string) {
   delete user.lockoutEnd;
 }
 
+/**
+ * 管理员重置两步验证。超级管理员只能由本人重置（403）；未启用时什么也不做，与后端一致。
+ * 真实后端还会撤销该用户的全部会话，Mock 的会话列表只有当前用户自己的，这里不复刻。
+ */
+export function resetTwoFactor(id: string) {
+  const user = USERS.find((w) => w.id === id);
+  if (!user) {
+    throw new MockException(404, {
+      code: 'User:NotFound',
+      message: `User ${id} not found.`,
+    });
+  }
+  if (user.isSuperAdmin && user.id !== getCurrentUser()?.id) {
+    throw new MockException(403, {
+      code: 'User:SuperAdminOperationForbidden',
+      message: 'The built-in super administrator cannot be operated on by other administrators.',
+    });
+  }
+  user.twoFactorEnabled = false;
+  user.recoveryCodes = [];
+}
+
 //#endif
+/** 与后端一致：删除幂等，不存在（含已删除）即成功；内置超级管理员不可删（403）。 */
 export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
   if (index < 0) {
-    throw new MockException(404, {
-      code: 'User:NotFound',
-      message: 'User does not exist or has been deleted',
-    });
+    return;
   }
   if (USERS[index].isSuperAdmin) {
     throw new MockException(403, {
@@ -255,6 +279,7 @@ export const USER_API = {
   'POST /api/v1/users/:id/reset-password': (req: MockRequest) =>
     resetPassword(req.params.id, req.body),
   'POST /api/v1/users/:id/unlock': (req: MockRequest) => unlockUser(req.params.id),
+  'POST /api/v1/users/:id/reset-two-factor': (req: MockRequest) => resetTwoFactor(req.params.id),
   //#endif
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
 };

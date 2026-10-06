@@ -99,3 +99,29 @@ describe('getRoleOptions', () => {
     expect(ROLES.map((role) => role.id)).toEqual([...originalOrder, ...temporaryIds]);
   });
 });
+
+// 与后端一致：删除幂等，角色不存在（含已删除）即成功，重试不报错
+describe('deleteRole', () => {
+  const remove = AUTHORIZATION_API['DELETE /api/v1/roles/:id'] as (req: {
+    params: { id: string };
+  }) => unknown;
+
+  afterEach(() => setMockSessionUserId(null));
+
+  it('succeeds for a missing role without touching the others', () => {
+    setMockSessionUserId('user_admin');
+    const before = ROLES.map((role) => role.id);
+
+    expect(() => remove({ params: { id: 'role_missing' } })).not.toThrow();
+
+    expect(ROLES.map((role) => role.id)).toEqual(before);
+  });
+
+  it('still requires the delete permission for a missing role', () => {
+    setMockSessionUserId('user_demo');
+
+    expect(() => remove({ params: { id: 'role_missing' } })).toThrow(
+      expect.objectContaining({ status: 403 }),
+    );
+  });
+});

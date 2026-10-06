@@ -121,6 +121,22 @@ describe('OpenApplicationEditDialog', () => {
     await fixture.whenStable();
   }
 
+  // 开关的标签经 for 关联到开关本身（点标签即切换、读屏读出名称），说明与它同属一个字段
+  it('labels and describes the session binding switch', () => {
+    const label = document.querySelector('label[for="application-session-bound"]');
+    expect(label).not.toBeNull();
+    const field = label!.closest('[hlmField]')!;
+    expect(field.contains(document.getElementById('application-session-bound'))).toBe(true);
+
+    const description = field.querySelector('[hlmFieldDescription]')?.textContent?.trim();
+    //#if (IncludeLocalization)
+    // 测试不装词条，缺失的键原样渲染：正好能看出读的是哪一条
+    expect(description).toBe('openApp.sessionBound.hint');
+    //#else
+    expect(description).toMatch(/^Authorization codes and refresh tokens stop working/);
+    //#endif
+  });
+
   it('binds new browser applications to the sign-in session by default', async () => {
     await typeClientId('spa');
     dialog().save();

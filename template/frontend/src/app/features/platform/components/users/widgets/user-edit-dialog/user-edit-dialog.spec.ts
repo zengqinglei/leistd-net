@@ -47,6 +47,15 @@ class HostComponent {
   readonly saved: (CreateUserInputDto | UpdateUserInputDto)[] = [];
 }
 
+//#if (!IncludeLocalization)
+/** 与组件内英文文案一致。 */
+const ENGLISH_HINTS: Record<string, string> = {
+  'users.editDialog.activeHint':
+    'When disabled, the user cannot sign in or call protected endpoints',
+  'users.editDialog.emailVerifiedHint': 'Used to manage the email verification status',
+};
+
+//#endif
 describe('UserEditDialog', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -145,6 +154,26 @@ describe('UserEditDialog', () => {
     }
   });
 
+  // 开关的说明与标签同属一个字段：说明随开关一起出现，读的是该开关自己的提示
+  it('describes each switch inside its own field', () => {
+    for (const [id, hint] of [
+      ['user-is-active', 'users.editDialog.activeHint'],
+      //#if (LocalIdentity)
+      ['user-email-verified', 'users.editDialog.emailVerifiedHint'],
+      //#endif
+    ]) {
+      const field = document.querySelector(`label[for="${id}"]`)!.closest('[hlmField]')!;
+      const description = field.querySelector('[hlmFieldDescription]')?.textContent?.trim();
+      //#if (IncludeLocalization)
+      // 测试不装词条，缺失的键原样渲染：正好能看出读的是哪一条
+      expect(description).toBe(hint);
+      //#else
+      expect(description).toBe(ENGLISH_HINTS[hint]);
+      //#endif
+      expect(field.contains(document.getElementById(id))).toBe(true);
+    }
+  });
+
   it('does not submit an empty create form and reveals the errors on submit', async () => {
     expect(shownErrorCount()).toBe(0);
 
@@ -170,6 +199,16 @@ describe('UserEditDialog', () => {
       expect(host.saved).toEqual([]);
     },
   );
+
+  // 与后端口径一致：首尾空白不是邮箱的一部分。这里拒绝而不是替用户 trim，提交的值即用户看到的值
+  it('rejects an email with surrounding whitespace instead of trimming it', async () => {
+    await fillValidCreate();
+    await fill({ email: ' bob@example.test ' });
+
+    expect(errorKinds('email')).toEqual(['email']);
+    submitButton().click();
+    expect(host.saved).toEqual([]);
+  });
 
   it('rejects an invalid email and a short initial password', async () => {
     await fillValidCreate();

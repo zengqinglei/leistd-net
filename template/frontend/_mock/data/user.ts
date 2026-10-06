@@ -17,6 +17,12 @@ export interface MockUser {
   lastLoginTime?: string;
   /** 登录锁定：有值即锁定中；null 表示无期限（管理员锁定）。 */
   lockoutEnd?: string | null;
+  //#if (LocalIdentity)
+  /** 已启用两步验证；登录第二步、管理员重置都读写这一项。 */
+  twoFactorEnabled?: boolean;
+  /** 尚未用过的恢复码，个数即"剩余恢复码"。 */
+  recoveryCodes?: string[];
+  //#endif
   roles: string[];
 }
 
@@ -96,6 +102,7 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
       user.lockoutEnd === null ||
       (user.lockoutEnd !== undefined && new Date(user.lockoutEnd).getTime() > Date.now()),
     lockoutEnd: user.lockoutEnd ?? null,
+    isTwoFactorEnabled: user.twoFactorEnabled === true,
     //#endif
   };
 }
