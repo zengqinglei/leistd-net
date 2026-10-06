@@ -4,7 +4,7 @@ using CompanyName.ProjectName.Api.HostedServices.Initializer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Net;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.UnitTests.Api;
 
 /// <summary>
 /// 资源服务启动门禁的语义：确认前拒绝流量，确认后锁存

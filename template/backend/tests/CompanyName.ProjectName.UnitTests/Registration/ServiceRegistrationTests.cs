@@ -1,38 +1,52 @@
 using Leistd.Settings.Validation;
 using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth;
-#if (IncludeNotifications && LocalIdentity)
 using CompanyName.ProjectName.Api.Hosting;
+#if (IncludeNotifications && LocalIdentity)
 using CompanyName.ProjectName.Api.Notifications;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 #endif
+#if (IncludeNotifications && Email)
+using CompanyName.ProjectName.Application.Notifications.Provider;
+using Leistd.Notifications.Email.Recipients;
+#endif
 using CompanyName.ProjectName.Application;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Abstractions;
+#endif
 #if (IncludeRealTime)
 using CompanyName.ProjectName.Application.RealTime;
 #endif
 using CompanyName.ProjectName.Domain;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-#if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Infrastructure;
+using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
 using Leistd.MultiTenancy.Management.Provisioning;
 #endif
+using Leistd.Lock.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
 using Leistd.ObjectMapping.Mapster.Options;
 #if (IncludeRealTime)
 using Leistd.RealTime.Subscriptions;
 #endif
 using Microsoft.AspNetCore.Authorization;
-#if (LocalIdentity && IncludeMultiTenancy)
-using Microsoft.Extensions.Configuration;
+#if (LocalIdentity)
+using Microsoft.AspNetCore.Builder;
 #endif
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace CompanyName.ProjectName.UnitTests.Registration;
 
 /// <summary>
-/// 注册面：各层入口 <c>AddDomainServices()</c>、<c>AddApplicationServices()</c>、<c>AddApiAuthorization()</c>，
+/// 注册面：各层入口 <c>AddDomainServices()</c>、<c>AddApplicationServices()</c>、
+/// <c>AddInfrastructureServices()</c>/<c>AddPersistenceServices()</c>、<c>AddApiAuthorization()</c> 与宿主扩展，
 /// 以及与组件入口的组合顺序。
 /// </summary>
 /// <remarks>
@@ -51,6 +65,8 @@ public class ServiceRegistrationTests
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(UserDomainService));
         Assert.Equal(ServiceLifetime.Transient, descriptor.Lifetime);
+        var roles = Assert.Single(services, d => d.ServiceType == typeof(RoleDomainService));
+        Assert.Equal(ServiceLifetime.Transient, roles.Lifetime);
     }
 
     // 组合根拆分后重复调用是常态。不幂等会让同一实现出现多条，
@@ -142,7 +158,7 @@ public class ServiceRegistrationTests
     [InlineData(false)]
     public void The_postgres_tenant_error_describer_wins_in_either_registration_order(bool infrastructureFirst)
     {
-        var configuration = new ConfigurationBuilder().Build();
+        var configuration = Configuration(redis: false);
         var services = new ServiceCollection().AddLogging();
 
         if (infrastructureFirst)
@@ -186,6 +202,87 @@ public class ServiceRegistrationTests
     }
 #endif
 
+    // 基础设施入口按 ConnectionStrings:Redis 选择分布式缓存与锁的实现（未配置时退回进程内实现）；
+    // 两种配置下重复调用都不多出登记，业务上下文按作用域登记
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Infrastructure_registration_selects_cache_and_lock_by_configuration_and_is_idempotent(bool redis)
+    {
+        var configuration = Configuration(redis);
+        var once = new ServiceCollection().AddLogging().AddInfrastructureServices(configuration);
+        var twice = new ServiceCollection().AddLogging()
+            .AddInfrastructureServices(configuration).AddInfrastructureServices(configuration);
+
+        Assert.Equal(Registrations(once), Registrations(twice));
+        var cache = Assert.Single(once, d => d.ServiceType == typeof(IDistributedCache));
+        Assert.Equal(ServiceLifetime.Singleton, cache.Lifetime);
+        Assert.Equal(redis, cache.ImplementationType != typeof(MemoryDistributedCache));
+        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(once, d => d.ServiceType == typeof(IDistributedLock)).Lifetime);
+        Assert.Equal(redis, once.Any(d => d.ServiceType == typeof(IConnectionMultiplexer)));
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(once, d => d.ServiceType == typeof(MyProjectDbContext)).Lifetime);
+    }
+
+    // 迁移作业只调用持久化入口：业务上下文按作用域登记一次，重复调用不多出登记，也不带入缓存与锁
+    [Fact]
+    public void Persistence_registration_registers_the_business_context_once_without_runtime_components()
+    {
+        var configuration = Configuration(redis: true);
+        var once = new ServiceCollection().AddLogging().AddPersistenceServices(configuration);
+        var twice = new ServiceCollection().AddLogging()
+            .AddPersistenceServices(configuration).AddPersistenceServices(configuration);
+
+        Assert.Equal(Registrations(once), Registrations(twice));
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(once, d => d.ServiceType == typeof(MyProjectDbContext)).Lifetime);
+        Assert.DoesNotContain(once, d => d.ServiceType == typeof(IDistributedCache));
+        Assert.DoesNotContain(once, d => d.ServiceType == typeof(IConnectionMultiplexer));
+    }
+
+    // 健康检查按名称登记，同名再登记一次会让 HealthCheckService 解析失败；宿主入口重复调用必须仍能解析
+    [Fact]
+    public void Web_host_registration_can_be_called_twice_and_still_resolves_health_checks()
+    {
+        var once = new ServiceCollection().AddLogging().AddMyProjectWebHost();
+        var twice = new ServiceCollection().AddLogging().AddMyProjectWebHost().AddMyProjectWebHost();
+
+        Assert.Equal(Registrations(once), Registrations(twice));
+        using var provider = twice.BuildServiceProvider();
+        Assert.NotNull(provider.GetRequiredService<HealthCheckService>());
+        var names = provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Select(registration => registration.Name)
+            .ToList();
+        Assert.Equal(names.Distinct().Count(), names.Count);
+        Assert.Contains("self", names);
+    }
+#if (LocalIdentity)
+
+    // 请求来源信息只读当前 HttpContext、不持有状态：按无状态服务登记为 Transient
+    [Fact]
+    public void Request_client_info_is_registered_as_transient()
+    {
+        var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions());
+
+        builder.AddLocalSessionAuthentication();
+
+        var descriptor = Assert.Single(builder.Services, d => d.ServiceType == typeof(IRequestClientInfo));
+        Assert.Equal(typeof(HttpRequestClientInfo), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Transient, descriptor.Lifetime);
+    }
+#endif
+#if (IncludeNotifications && Email)
+
+    // 邮件收件人解析无状态（每次按仓储查询）：按无状态服务登记为 Transient
+    [Fact]
+    public void Notification_recipient_resolver_is_registered_as_transient()
+    {
+        var services = new ServiceCollection().AddLogging().AddMyProjectNotifications();
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(INotificationRecipientResolver));
+        Assert.Equal(typeof(UserEmailRecipientResolver), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Transient, descriptor.Lifetime);
+    }
+#endif
+
     // ASP.NET Core 只认一个授权结果处理器：本项目的处理器替换官方默认实现，与 AddAuthorization 的先后无关，重复调用也只有一条
     [Theory]
     [InlineData(true)]
@@ -210,6 +307,13 @@ public class ServiceRegistrationTests
         Assert.Equal(typeof(ApiAuthorizationResultHandler), descriptor.ImplementationType);
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
+
+    private static IConfiguration Configuration(bool redis) =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(redis
+                ? new Dictionary<string, string?> { ["ConnectionStrings:Redis"] = "localhost:6379" }
+                : new Dictionary<string, string?>())
+            .Build();
 
     // 服务类型、实现与生命周期的多重集合；Options 配置回调按实际效果另行比较
     private static List<string> Registrations(IServiceCollection services) =>

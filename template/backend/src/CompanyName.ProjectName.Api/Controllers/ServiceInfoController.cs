@@ -28,7 +28,6 @@ public sealed class ServiceInfoController(IClock clock) : BaseController
             clock.Now);
     }
 
-#if (LocalIdentity)
     /// <summary>
     /// 返回「本次调用以谁的身份进入」：已认证用户与调用方客户端。
     /// 默认授权策略要求可用的自然人用户，资源服务间调用通过 Token Exchange 令牌证明用户；
@@ -40,5 +39,4 @@ public sealed class ServiceInfoController(IClock clock) : BaseController
         [FromServices] ICurrentUser currentUser,
         [FromServices] ICurrentClient currentClient) =>
         new(currentUser.Id, currentUser.Username, currentClient.ClientId);
-#endif
 }

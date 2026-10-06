@@ -23,24 +23,19 @@ internal static class RemoteTokenAuthenticationExtensions
     public static void AddRemoteTokenAuthentication(this WebApplicationBuilder builder)
     {
         // Resource 的机器 Bearer 与服务端 OIDC 会话使用同一签发方和资源受众。
+        // 组合期不读这些值：缺失或格式错误由启动期校验报出键名，OpenIddict 与 OIDC 处理器在解析选项时才取值
         builder.Services.AddOptions<RemoteIdentityOptions>()
-            .Bind(builder.Configuration.GetSection(RemoteIdentityOptions.SectionName));
-
-        // 校验放在这里而不是 ValidateOnStart：OpenIddict 在**组合期**就要用 issuer，
-        // 比启动期校验早一步。两处都写等于同一条件维护两份，出错时还分不清是哪一处报的。
-        var remoteIdentity = builder.Configuration
-            .GetSection(RemoteIdentityOptions.SectionName)
-            .Get<RemoteIdentityOptions>() ?? new RemoteIdentityOptions();
-        if (!remoteIdentity.IsUsable)
-        {
-            throw new InvalidOperationException(RemoteIdentityConfigurationError);
-        }
+            .Bind(builder.Configuration.GetSection(RemoteIdentityOptions.SectionName))
+            .Validate(options => options.IsUsable, RemoteIdentityConfigurationError)
+#if (ResourceBrowserSession)
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ClientId), ConfidentialClientConfigurationError("ClientId"))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ClientSecret), ConfidentialClientConfigurationError("ClientSecret"))
+#endif
+            .ValidateOnStart();
 
         builder.Services.AddOpenIddict()
             .AddValidation(options =>
             {
-                options.SetIssuer(remoteIdentity.IssuerUri!);
-                options.AddAudiences(remoteIdentity.Audience!);
                 // 发现文档与 JWKS 的抓取有界：签名公钥按需刷新时请求会等它（含官方重试）
                 options.UseSystemNetHttp()
                     .ConfigureHttpClient(client => client.Timeout = RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout);
@@ -48,6 +43,20 @@ internal static class RemoteTokenAuthenticationExtensions
                 options.UseAspNetCore()
                     .DisableAccessTokenExtractionFromQueryString()
                     .DisableAccessTokenExtractionFromBodyForm();
+            });
+        // 签发方与受众在 OpenIddict 按 issuer 建配置管理器（PostConfigure）之前写入
+        builder.Services.AddOptions<OpenIddictValidationOptions>()
+            .Configure<IOptions<RemoteIdentityOptions>>((options, remoteIdentityOptions) =>
+            {
+                var remoteIdentity = remoteIdentityOptions.Value;
+                if (!remoteIdentity.IsUsable)
+                {
+                    // 启动期校验会拒绝这份配置并报出键名
+                    return;
+                }
+
+                options.Issuer = remoteIdentity.IssuerUri;
+                options.Audiences.Add(remoteIdentity.Audience!);
             });
         // 在 OpenIddict 建好配置管理器之后给"请求刷新"限频（注册顺序即执行顺序）
         builder.Services.TryAddEnumerable(
@@ -58,7 +67,7 @@ internal static class RemoteTokenAuthenticationExtensions
         builder.Services.TryAddSingleton<IUserAccessTokenAccessor, ResourceUserAccessTokenAccessor>();
 
 #if (ResourceBrowserSession)
-        builder.AddResourceBrowserSession(remoteIdentity);
+        builder.AddResourceBrowserSession();
 #else
         // 纯资源 API：只接受 Bearer。没有浏览器会话，也就没有 Cookie、OIDC 客户端与登录退出端点
         builder.Services.AddAuthentication(options =>
@@ -70,11 +79,12 @@ internal static class RemoteTokenAuthenticationExtensions
     }
 #if (ResourceBrowserSession)
 
+    private static string ConfidentialClientConfigurationError(string key) =>
+        $"Authentication:{key} is required for the Resource OIDC confidential client.";
+
     // 有 Authorization 头只选 Bearer，失败不回退 Cookie；无头时选服务端 Cookie 会话，由机密 OIDC 客户端登录
-    private static void AddResourceBrowserSession(this WebApplicationBuilder builder, RemoteIdentityOptions remoteIdentity)
+    private static void AddResourceBrowserSession(this WebApplicationBuilder builder)
     {
-        foreach (var (key, value) in new[] { ("ClientId", remoteIdentity.ClientId), ("ClientSecret", remoteIdentity.ClientSecret) })
-            if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException($"Authentication:{key} is required for the Resource OIDC confidential client.");
         builder.Services.TryAddSingleton<ResourceSessionRefresher>();
         builder.Services.AddAuthentication(options =>
         {
@@ -98,10 +108,8 @@ internal static class RemoteTokenAuthenticationExtensions
         })
         .AddOpenIdConnect(AuthenticationSchemeNames.OpenIdConnect, options =>
         {
-            options.Authority = remoteIdentity.Issuer;
+            // 签发方、客户端与 scope 见下方按 RemoteIdentityOptions 的延后配置
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-            options.ClientId = remoteIdentity.ClientId;
-            options.ClientSecret = remoteIdentity.ClientSecret;
             options.SignInScheme = AuthenticationSchemeNames.SessionCookie;
             options.ResponseType = "code";
             options.SaveTokens = true;
@@ -110,8 +118,6 @@ internal static class RemoteTokenAuthenticationExtensions
             // 授权与退出请求都以自动提交的表单 POST 发往 Identity：id_token_hint 不进地址栏、历史记录与 Referer
             options.AuthenticationMethod = OpenIdConnectRedirectBehavior.FormPost;
             options.SignedOutCallbackPath = "/api/v1/auth/signout";
-            options.Scope.Clear();
-            foreach (var scope in new[] { "openid", "profile", "email", "roles", "offline_access", remoteIdentity.Scope ?? remoteIdentity.Audience! }) options.Scope.Add(scope);
             options.Events.OnRemoteFailure = context =>
             {
                 context.HandleResponse();
@@ -127,10 +133,21 @@ internal static class RemoteTokenAuthenticationExtensions
             options.Events.OnRedirectToIdentityProviderForSignOut = context =>
             {
                 // 保留 id_token_hint：Identity 据其中的会话标识判断能否免确认退出；client_id 在 hint 缺失时关联退出回调
-                context.ProtocolMessage.ClientId = remoteIdentity.ClientId;
+                context.ProtocolMessage.ClientId = context.Options.ClientId;
                 return Task.CompletedTask;
             };
         });
+        builder.Services.AddOptions<OpenIdConnectOptions>(AuthenticationSchemeNames.OpenIdConnect)
+            .Configure<IOptions<RemoteIdentityOptions>>((options, remoteIdentityOptions) =>
+            {
+                var remoteIdentity = remoteIdentityOptions.Value;
+                options.Authority = remoteIdentity.Issuer;
+                options.ClientId = remoteIdentity.ClientId;
+                options.ClientSecret = remoteIdentity.ClientSecret;
+                options.Scope.Clear();
+                foreach (var scope in new[] { "openid", "profile", "email", "roles", "offline_access", remoteIdentity.Scope ?? remoteIdentity.Audience })
+                    if (!string.IsNullOrWhiteSpace(scope)) options.Scope.Add(scope);
+            });
     }
 #endif
 }

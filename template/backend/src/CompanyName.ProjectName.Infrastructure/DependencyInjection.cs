@@ -77,6 +77,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // 相同登记重复调用不重复生效：EF 的上下文选项、Redis 缓存与选项校验器都按调用追加，
+        // 重复调用会让拦截器挂两次、校验跑两遍。用本入口自己的标记判定
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(InfrastructureRegistrationMarker)))
+        {
+            return services;
+        }
+
+        services.AddSingleton<InfrastructureRegistrationMarker>();
         services.AddPersistenceServices(configuration);
 
 #if (LocalIdentity && IncludeMultiTenancy)
@@ -161,6 +169,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // 迁移作业与 API 都经这里登记上下文；重复调用不重复追加上下文选项（理由同 AddInfrastructureServices）
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceRegistrationMarker)))
+        {
+            return services;
+        }
+
+        services.AddSingleton<PersistenceRegistrationMarker>();
+
         // 缺连接串在首次创建上下文时失败并指明键名。API 在接流量之前校验迁移（会创建全部上下文），
         // 因此这个错误发生在启动期，不会变成每个请求一次的 500。
         string RequireConnection(string? connectionString) =>
@@ -283,4 +299,9 @@ public static class DependencyInjection
         options.ClientSecret = configuration[nameof(options.ClientSecret)];
     }
 #endif
+
+    // 独立标记区分"本入口已注册过"与宿主自行添加的同类服务
+    private sealed class InfrastructureRegistrationMarker;
+
+    private sealed class PersistenceRegistrationMarker;
 }

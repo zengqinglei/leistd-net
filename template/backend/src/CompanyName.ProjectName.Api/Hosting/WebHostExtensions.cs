@@ -9,6 +9,9 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 #endif
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
+#if (RemoteTokenAuth)
+using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace CompanyName.ProjectName.Api.Hosting;
@@ -23,6 +26,14 @@ public static class WebHostExtensions
     /// </summary>
     public static IServiceCollection AddMyProjectWebHost(this IServiceCollection services)
     {
+        // 相同登记重复调用不重复生效：健康检查按名称登记，再追加一次同名检查会让 HealthCheckService 解析失败；
+        // 转发头的受信代理也会重复追加。用本入口自己的标记判定，不以某个官方服务是否已注册来推断
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(WebHostRegistrationMarker)))
+        {
+            return services;
+        }
+
+        services.AddSingleton<WebHostRegistrationMarker>();
         services.AddHostedService<ApplicationInitializer>();
 
         // liveness 只表示本进程存活，不依赖外部服务。
@@ -30,7 +41,7 @@ public static class WebHostExtensions
             .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
 #if (RemoteTokenAuth)
         // readiness 在启动时确认 Identity 元数据可达，并锁存结果。
-        services.AddSingleton<RemoteIdentityReadinessHealthCheck>();
+        services.TryAddSingleton<RemoteIdentityReadinessHealthCheck>();
         services.AddHttpClient(nameof(RemoteIdentityReadinessInitializer));
         services.AddHostedService<RemoteIdentityReadinessInitializer>();
         healthChecks.AddCheck<RemoteIdentityReadinessHealthCheck>("remote-identity", tags: ["ready"]);
@@ -81,6 +92,9 @@ public static class WebHostExtensions
 
         return services;
     }
+
+    // 独立标记区分"本入口已注册过"与宿主自行添加的同类服务
+    private sealed class WebHostRegistrationMarker;
 
     private static void ConfigureForwardedHeaders(ForwardedHeadersOptions options, IConfiguration configuration)
     {

@@ -1,4 +1,3 @@
-#if (LocalIdentity)
 namespace CompanyName.ProjectName.Client.Dtos;
 
 /// <summary>
@@ -8,4 +7,3 @@ namespace CompanyName.ProjectName.Client.Dtos;
 /// <param name="Username">当前用户名</param>
 /// <param name="ClientId">调用方客户端 Id</param>
 public sealed record WhoAmIDto(Guid? UserId, string? Username, string? ClientId);
-#endif

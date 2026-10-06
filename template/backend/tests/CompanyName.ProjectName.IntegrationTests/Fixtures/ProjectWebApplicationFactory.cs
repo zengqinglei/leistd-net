@@ -113,7 +113,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
 #endif
 #if (RemoteTokenAuth)
-        // 组合期即校验的签发方地址：基线配置刻意留空，缺失即启动失败
+        // 启动期校验的签发方地址：基线配置刻意留空，缺失即启动失败
         builder.UseSetting("Authentication:Issuer", "https://identity.test/");
 #if (ResourceBrowserSession)
         builder.UseSetting("Authentication:ClientId", "resource-test");

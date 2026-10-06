@@ -1,18 +1,30 @@
-#if (OpenIddictServer)
+#if (OpenIddictServer || RemoteTokenAuth)
 using CompanyName.ProjectName.Client;
-using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.ServiceClient.Exceptions;
-using Leistd.ServiceClient.OAuth;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenIddict.Abstractions;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Domain.Auth.Options;
+using Leistd.ServiceClient.OAuth;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
-using OpenIddict.Abstractions;
 using OpenIddict.Client.SystemNetHttp;
+#else
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using CompanyName.ProjectName.Client.Dtos;
+using Leistd.Security.Claims;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+using OpenIddict.Validation;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
+#if (OpenIddictServer)
 public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {
     [Fact]
@@ -71,4 +83,102 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         };
     }
 }
+#else
+/// <summary>
+/// 资源服务作为 Token Exchange 的接收方，同样提供调用诊断端点：经生成的 Client 与真实 Bearer 验签，
+/// 交换令牌代表的自然人与调用方客户端原样呈现，机器令牌不满足自然人策略。
+/// </summary>
+public sealed class ServiceInvocationTests
+{
+    private const string Issuer = "https://identity.test/";
+    private const string Audience = "resource-api";
+
+    [Fact]
+    public async Task Generated_client_whoami_presents_the_exchanged_user_and_the_calling_client()
+    {
+        using var rsa = RSA.Create(2048);
+        var key = new RsaSecurityKey(rsa) { KeyId = "service-invocation-test" };
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var host = SignedBy(factory, key);
+        var subject = Guid.NewGuid();
+        await using var caller = Caller(host, Token(key, subject.ToString(), "orders-worker", "dave"));
+
+        var identity = await caller.GetRequiredService<IMyProjectClient>().WhoAmIAsync();
+
+        Assert.Equal(new WhoAmIDto(subject, "dave", "orders-worker"), identity);
+    }
+
+    [Fact]
+    public async Task Generated_client_whoami_rejects_a_machine_token_by_the_natural_user_policy()
+    {
+        using var rsa = RSA.Create(2048);
+        var key = new RsaSecurityKey(rsa) { KeyId = "service-invocation-test" };
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var host = SignedBy(factory, key);
+
+        await using (var anonymous = Caller(host, token: null))
+        {
+            var unauthenticated = await Assert.ThrowsAsync<RemoteServiceException>(
+                () => anonymous.GetRequiredService<IMyProjectClient>().WhoAmIAsync());
+            Assert.Equal(401, unauthenticated.RemoteStatusCode);
+        }
+
+        // 403 而不是 401：机器令牌已通过验签，只是不代表自然人
+        await using var machine = Caller(host, Token(key, ClientSubject.Format("orders-worker"), "orders-worker", null));
+        var rejection = await Assert.ThrowsAsync<RemoteServiceException>(
+            () => machine.GetRequiredService<IMyProjectClient>().WhoAmIAsync());
+        Assert.Equal(403, rejection.RemoteStatusCode);
+    }
+
+    // 调用方进程：只注册生成的 Client，经测试宿主的处理器发出请求，按需附上 Bearer
+    private static ServiceProvider Caller(WebApplicationFactory<Program> host, string? token)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Leistd:ServiceClients:MyProject:BaseAddress"] = "https://localhost/"
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(configuration);
+        var client = services.AddMyProjectClient()
+            .ConfigurePrimaryHttpMessageHandler(() => host.Server.CreateHandler());
+        if (token is not null) client.AddHttpMessageHandler(() => new BearerHandler(token));
+        return services.BuildServiceProvider();
+    }
+
+    private sealed class BearerHandler(string token) : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
+
+    private static WebApplicationFactory<Program> SignedBy(ProjectWebApplicationFactory factory, SecurityKey key) =>
+        factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", Audience)
+            .ConfigureTestServices(services => services.Configure<OpenIddictValidationOptions>(options =>
+            {
+                options.Configuration = new OpenIddictConfiguration { Issuer = new Uri(Issuer) };
+                options.Configuration.SigningKeys.Add(key);
+            })));
+
+    private static string Token(SecurityKey key, string subject, string clientId, string? username)
+    {
+        var claims = new Dictionary<string, object>
+        {
+            [CustomClaimTypes.Subject] = subject,
+            [CustomClaimTypes.ClientId] = clientId,
+            ["jti"] = Guid.NewGuid().ToString()
+        };
+        if (username is not null) claims["preferred_username"] = username;
+        return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = Issuer, Audience = Audience, Claims = claims, TokenType = "at+jwt",
+            IssuedAt = DateTime.UtcNow, NotBefore = DateTime.UtcNow.AddSeconds(-5), Expires = DateTime.UtcNow.AddMinutes(5),
+            SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256)
+        });
+    }
+}
+#endif
 #endif

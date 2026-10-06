@@ -1,7 +1,7 @@
 using System.Reflection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
 /// <summary>
 /// 业务 DbContext 只能经 <c>IDbContextProvider</c> 取得，不得直接注入。
@@ -20,7 +20,8 @@ public sealed class DbContextAccessTests
     {
         Assembly[] assemblies =
         [
-            typeof(Program).Assembly,
+            // 单元测试同时引用 Api 与 DbMigrator，两者都有顶级 Program，这里用 Api 自己的类型定位程序集
+            typeof(CompanyName.ProjectName.Api.Controllers.BaseController).Assembly,
             typeof(MyProjectDbContext).Assembly,
             // 各层都有名为 DependencyInjection 的类，这里保留全限定名
             typeof(CompanyName.ProjectName.Application.DependencyInjection).Assembly

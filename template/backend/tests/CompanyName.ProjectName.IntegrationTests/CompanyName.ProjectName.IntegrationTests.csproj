@@ -23,8 +23,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
-<!--#if (LocalIdentity || IncludeNotifications)-->
-    <!-- 两步验证与清理任务的截止边界用官方时间替身 -->
+<!--#if (LocalIdentity || IncludeNotifications || IncludeRealTime)-->
+    <!-- 两步验证、清理任务与实时订阅的截止边界用官方时间替身 -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
 <!--#endif-->
 <!--#if (IncludeNotifications || IncludeRealTime)-->
@@ -45,10 +45,8 @@
 <!--#if (RemoteTokenAuth)-->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.DbMigrator\CompanyName.ProjectName.DbMigrator.csproj" Aliases="Migrator" />
 <!--#endif-->
-<!--#if (LocalIdentity)-->
-    <!-- 服务间调用闭环测试经真实 Client 包发起调用 -->
+    <!-- 服务间调用闭环测试经真实 Client 包发起调用（签发与资源两种形态） -->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Client\CompanyName.ProjectName.Client.csproj" />
-<!--#endif-->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />

@@ -1,4 +1,3 @@
-#if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.ServiceInfo.Dtos;
 
 /// <summary>
@@ -8,4 +7,3 @@ namespace CompanyName.ProjectName.Application.ServiceInfo.Dtos;
 /// <param name="Username">当前用户名</param>
 /// <param name="ClientId">令牌中的调用方客户端 Id</param>
 public sealed record WhoAmIOutputDto(Guid? UserId, string? Username, string? ClientId);
-#endif

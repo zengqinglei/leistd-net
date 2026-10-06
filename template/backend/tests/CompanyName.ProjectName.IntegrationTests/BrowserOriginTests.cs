@@ -62,6 +62,31 @@ public sealed class BrowserOriginTests(BrowserOriginTests.OriginHost origin) : I
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // 带 Authorization 头的 API 写请求不靠浏览器自动附带的 Cookie 取得身份，跨站页面无法借用受害者的凭据，
+    // 因此跳过来源检查，交给认证判定；同一来源去掉该头仍被拒，证明放行来自这个头
+    [Fact]
+    public async Task An_API_write_carrying_an_authorization_header_skips_the_origin_check()
+    {
+        static void CrossSite(HttpRequestMessage request)
+        {
+            request.Headers.Add("Origin", "https://untrusted.test");
+            request.Headers.Add("Sec-Fetch-Site", "cross-site");
+        }
+
+        using (var withoutHeader = await SendWriteAsync(CrossSite))
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, withoutHeader.StatusCode);
+        }
+
+        using var response = await SendWriteAsync(request =>
+        {
+            CrossSite(request);
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer forged");
+        });
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(Warnings());
+    }
+
 #if (LocalIdentity)
     [Fact]
     public async Task A_rejected_cross_site_write_has_no_side_effect()

@@ -8,6 +8,11 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.DependencyInjection;
+#endif
+#if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api.Options;
+#endif
+#if (SpaFrontend || RemoteTokenAuth)
 using Microsoft.Extensions.Options;
 #endif
 #if (OpenIddictServer)
@@ -28,6 +33,29 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// </remarks>
 public sealed class DeploymentSafeguardsTests
 {
+#if (RemoteTokenAuth)
+    // 签发方、受众（与浏览器会话的机密客户端）经 Options 启动期校验：组合期不读这些值，
+    // 缺失或格式错误在启动时以选项校验失败报出键名，而不是等到第一个请求才在令牌校验器里失败
+    [Theory]
+    [InlineData("Authentication:Issuer", "", "Authentication:Issuer")]
+    [InlineData("Authentication:Issuer", "identity.test/", "Authentication:Issuer")]
+    [InlineData("Authentication:Audience", " ", "Authentication:Audience")]
+#if (ResourceBrowserSession)
+    [InlineData("Authentication:ClientId", "", "Authentication:ClientId")]
+    [InlineData("Authentication:ClientSecret", "", "Authentication:ClientSecret")]
+#endif
+    public void Remote_identity_configuration_is_validated_at_startup(string key, string value, string expected)
+    {
+        using var factory = new ProjectWebApplicationFactory();
+
+        var exception = StartupFailure(factory, builder => builder.UseSetting(key, value));
+
+        var failure = Assert.IsType<OptionsValidationException>(exception);
+        Assert.Equal(typeof(RemoteIdentityOptions), failure.OptionsType);
+        Assert.Contains(expected, failure.Message, StringComparison.Ordinal);
+    }
+
+#endif
 #if (SpaFrontend)
     // 本地密钥目录随容器重建而消失、多副本之间不共享：登录 Cookie、租户连接串、机密设置随之无法解密
     [Fact]

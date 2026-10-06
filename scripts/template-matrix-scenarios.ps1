@@ -17,7 +17,8 @@ $scenarioMap = [ordered]@{
         Absent = @(
             "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
-            "backend/src/{name}.Api/Notifications"
+            "backend/src/{name}.Api/Notifications",
+            "backend/tests/{name}.UnitTests/Api/ResourceReadinessGateTests.cs"
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
@@ -34,7 +35,9 @@ $scenarioMap = [ordered]@{
         Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
-            "backend/src/{name}.DbMigrator"
+            "backend/src/{name}.DbMigrator",
+            "backend/tests/{name}.UnitTests/Api/ResourceReadinessGateTests.cs",
+            "backend/src/{name}.Client/Dtos/WhoAmIDto.cs"
         )
         Absent = @(
             "backend/src/{name}.Api/Controllers/AuthController.cs",
@@ -46,10 +49,12 @@ $scenarioMap = [ordered]@{
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
-        # 租户连接由框架的远端存储包回源 Identity，模板不再手写客户端
+        # 租户连接由框架的远端存储包回源 Identity，模板不再手写客户端。
+        # 资源服务是 Token Exchange 的接收方，调用诊断端点与 Client 方法同样生成
         RequiredTokens = @{
             "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.MultiTenancy.ServiceClient")
             "backend/src/{name}.Infrastructure/DependencyInjection.cs" = @("AddRemoteTenantConnectionStore(")
+            "backend/src/{name}.Api/Controllers/ServiceInfoController.cs" = @("WhoAmI(")
         }
         # Resource 固定使用普通路径路由，后端完成认证后返回站内路径。
         # 产物不携带哈希路由配置或本地口令登录契约。

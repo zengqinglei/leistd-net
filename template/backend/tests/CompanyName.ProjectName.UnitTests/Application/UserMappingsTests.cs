@@ -7,7 +7,7 @@ using Leistd.ObjectMapping.Mapster;
 using Mapster;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CompanyName.ProjectName.UnitTests.Mappings;
+namespace CompanyName.ProjectName.UnitTests.Application;
 
 /// <summary>
 /// 映射配置里的嵌套映射必须沿用本项目登记的那份配置。
