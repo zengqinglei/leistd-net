@@ -1,3 +1,4 @@
+using Leistd.TestBase.Doubles;
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using Leistd.Authorization.Definitions;
@@ -302,39 +303,5 @@ public sealed class PermissionManagementTests
         public Task GrantAsync(string permissionName, string providerName, string providerKey, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task RevokeAsync(string permissionName, string providerName, string providerKey, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
-
-    private sealed class RecordingEventBus : ILocalEventBus
-    {
-        public List<IEvent> Published { get; } = [];
-
-        public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
-        }
-
-        public Task PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class DictionaryLocalizerFactory(Dictionary<string, string> texts) : IStringLocalizerFactory
-    {
-        public IStringLocalizer Create(Type resourceSource) => new DictionaryLocalizer(texts);
-
-        public IStringLocalizer Create(string baseName, string location) => new DictionaryLocalizer(texts);
-    }
-
-    private sealed class DictionaryLocalizer(Dictionary<string, string> texts) : IStringLocalizer
-    {
-        public LocalizedString this[string name]
-            => texts.TryGetValue(name, out var value) ? new(name, value) : new(name, name, resourceNotFound: true);
-
-        public LocalizedString this[string name, params object[] arguments] => this[name];
-
-        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) => [];
     }
 }

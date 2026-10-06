@@ -1,3 +1,4 @@
+using Leistd.TestBase.Doubles;
 using System.Security.Claims;
 using Xunit;
 using Leistd.Authorization.Definitions;
@@ -34,14 +35,6 @@ public class PermissionSideTests
             app.AddPermission(BothSides, MultiTenancySides.Both, "订单管理");
             app.AddPermission(TenantOnly, MultiTenancySides.Tenant, "租户工作台");
         }
-    }
-
-    private sealed class FakeCurrentTenant(Guid? id) : ICurrentTenant
-    {
-        public bool IsAvailable => Id.HasValue;
-        public Guid? Id { get; } = id;
-        public string? Name => null;
-        public IDisposable Change(Guid? id, string? name = null) => throw new NotSupportedException();
     }
 
     private sealed class FixedSubjectProvider(PermissionSubject? subject) : IPermissionSubjectProvider

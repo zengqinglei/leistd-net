@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Hosting;
 

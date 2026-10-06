@@ -37,14 +37,6 @@ public sealed class EfCoreSettingStoreTests : IDisposable
         new FixedDbContextProvider<SettingDbContext>(_db),
         new FakeCurrentTenant(tenantId));
 
-    private sealed class FakeCurrentTenant(Guid? id) : ICurrentTenant
-    {
-        public bool IsAvailable => Id.HasValue;
-        public Guid? Id { get; } = id;
-        public string? Name => null;
-        public IDisposable Change(Guid? id, string? name = null) => throw new NotSupportedException();
-    }
-
     public sealed class SettingDbContext(DbContextOptions<SettingDbContext> options) : DbContext(options)
     {
         public DbSet<SettingRecord> Settings => Set<SettingRecord>();

@@ -8,6 +8,7 @@ using Leistd.RealTime.AspNetCore.SignalR.Hubs;
 using Leistd.RealTime.Subscriptions;
 using Leistd.RealTime.Publishing;
 using Leistd.TestBase.Doubles;
+using Leistd.RealTime.Tests.TestDoubles;
 
 namespace Leistd.RealTime.Tests;
 

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Leistd.AspNetCore.SignalR.Tests.TestDoubles;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 

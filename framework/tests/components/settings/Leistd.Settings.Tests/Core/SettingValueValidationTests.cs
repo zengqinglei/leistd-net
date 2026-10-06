@@ -9,6 +9,7 @@ using Leistd.Settings.Events;
 using Leistd.Settings.Validation;
 using Leistd.TestBase.Doubles;
 using Xunit;
+using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 
@@ -146,24 +147,6 @@ public class SettingValueValidationTests
                 throw new BusinessException("AppSetting:TimeZoneInvalid", $"'{value}' is not valid.");
             }
 
-            return Task.CompletedTask;
-        }
-    }
-
-    internal sealed class RecordingEventBus : ILocalEventBus
-    {
-        public List<IEvent> Published { get; } = [];
-
-        public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
-            where TEvent : IEvent
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
-        }
-
-        public Task PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        {
-            Published.Add(@event);
             return Task.CompletedTask;
         }
     }

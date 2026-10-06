@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Xunit;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 

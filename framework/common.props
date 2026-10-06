@@ -33,9 +33,8 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>leistd ddd aspnetcore framework dotnet</PackageTags>
     <PackageReadmeFile>NuGet.md</PackageReadmeFile>
+    <!-- 不抑制 CS1591：公共 API 缺 XML 注释即构建失败，保证随包 XML 完整。 -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- 容忍 CS0436 类型冲突；保留 CS1591 检查，确保公共 API 的随包 XML 完整。 -->
-    <NoWarn>$(NoWarn);CS0436</NoWarn>
     <!-- 默认所有框架项目可打包，纯内部项目可在自身 csproj 覆盖为 false -->
     <IsPackable>true</IsPackable>
   </PropertyGroup>

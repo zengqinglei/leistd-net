@@ -26,6 +26,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\components\core\Leistd.Core\Leistd.Core.csproj" />
     <ProjectReference Include="..\..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <!-- RecordingEventBus、FakeCurrentTenant：只依赖两个家族的 Core 抽象 -->
+    <ProjectReference Include="..\..\..\components\event-bus\Leistd.EventBus.Core\Leistd.EventBus.Core.csproj" />
+    <ProjectReference Include="..\..\..\components\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
     <!-- FixedDbContextProvider：组件的 EF 存储统一经 IDbContextProvider 取上下文 -->
     <ProjectReference Include="..\..\..\components\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
   </ItemGroup>

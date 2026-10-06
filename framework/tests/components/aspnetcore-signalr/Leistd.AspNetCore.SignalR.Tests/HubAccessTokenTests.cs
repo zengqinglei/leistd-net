@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
+using Leistd.AspNetCore.SignalR.Tests.TestDoubles;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 

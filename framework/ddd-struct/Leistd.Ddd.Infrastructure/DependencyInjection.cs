@@ -95,8 +95,10 @@ public static class DependencyInjection
     /// <para>每个已注册 DbContext 都须登记，包括不需要仓储的上下文。
     /// 宿主必须使用 Leistd 服务提供器工厂，才能在构建容器时检测漏登记。
     /// 省略选项时仅登记上下文，不注册仓储。</para>
-    /// <para>同一上下文重复调用只登记一次、保存拦截器只挂一份；但仓储不合并：再次为已有仓储的实体注册仓储
-    /// （包括相同实现）抛出 <see cref="InvalidOperationException"/>，仓储选项须在一处给出。</para>
+    /// <para>同一上下文重复调用只登记一次、保存拦截器只挂一份；为已有仓储的实体再次登记相同实现时不重复注册，
+    /// 登记不同实现（含另一个上下文的默认仓储）抛出 <see cref="InvalidOperationException"/>。</para>
+    /// <para>仓储实现另外实现的、派生自 <c>IRepository&lt;TEntity&gt;</c> 的自定义接口一并按 Scoped 注册，
+    /// 重复与冲突规则同上。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -213,11 +215,26 @@ public static class DependencyInjection
 
                 AddRepositoryDescriptor(services, keyedInterface, implementationType, entityType);
             }
+
+            // 自定义仓储接口（如 IUserRepository : IRepository<User, Guid>）与默认接口同属一个实现，
+            // 按同样的生命周期与唯一性规则注册，业务代码才能直接注入它。
+            var entityRepository = typeof(IRepository<>).MakeGenericType(entityType);
+            foreach (var customInterface in implementationType.GetInterfaces())
+            {
+                if (customInterface != entityRepository &&
+                    !(customInterface.IsGenericType &&
+                      customInterface.GetGenericTypeDefinition() == typeof(IRepository<,>)) &&
+                    entityRepository.IsAssignableFrom(customInterface))
+                {
+                    AddRepositoryDescriptor(services, customInterface, implementationType, entityType);
+                }
+            }
         }
     }
 
     // 同一实体被两个上下文各注册一次时，Microsoft DI 让后注册的静默胜出——
     // 调用方拿到的是哪个库的仓储由注册顺序决定，且没有任何信号。此处直接拒绝。
+    // 相同实现的重复登记（组合根重复调用）不改变解析结果，按幂等跳过。
     private static void AddRepositoryDescriptor(
         IServiceCollection services,
         Type repositoryInterface,
@@ -226,6 +243,11 @@ public static class DependencyInjection
     {
         if (services.FirstOrDefault(d => d.ServiceType == repositoryInterface) is { } existing)
         {
+            if (existing.ImplementationType == implementationType && existing.Lifetime == ServiceLifetime.Scoped)
+            {
+                return;
+            }
+
             throw new InvalidOperationException(
                 $"A repository for '{entityType.FullName}' is already registered as " +
                 $"'{existing.ImplementationType?.FullName ?? "<factory>"}'. Registering " +

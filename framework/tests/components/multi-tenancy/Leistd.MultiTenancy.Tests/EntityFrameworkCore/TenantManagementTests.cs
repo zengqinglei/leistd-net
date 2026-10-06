@@ -1,3 +1,4 @@
+using Leistd.TestBase.Doubles;
 using System.ComponentModel.DataAnnotations;
 using System.Data.Common;
 using Leistd.EventBus.Abstractions;
@@ -404,23 +405,6 @@ public sealed class TenantManagementTests : IAsyncLifetime
             }
 
             return null;
-        }
-    }
-
-    private sealed class RecordingEventBus : ILocalEventBus
-    {
-        public List<IEvent> Published { get; } = [];
-
-        public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
-        }
-
-        public Task PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
         }
     }
 

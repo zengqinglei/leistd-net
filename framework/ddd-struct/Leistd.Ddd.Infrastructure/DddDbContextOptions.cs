@@ -36,6 +36,10 @@ public sealed class DddDbContextOptions
     /// <summary>
     /// 为 <typeparamref name="TEntity"/> 注册自定义仓储实现，优先于默认注册。
     /// </summary>
+    /// <remarks>
+    /// 除默认仓储接口外，<typeparamref name="TImplementation"/> 实现的、派生自 <see cref="IRepository{TEntity}"/>
+    /// 的自定义接口（如 <c>IUserRepository : IRepository&lt;User, Guid&gt;</c>）也注册为同一实现。
+    /// </remarks>
     public DddDbContextOptions AddRepository<TEntity, TImplementation>()
         where TEntity : class, IEntity
         where TImplementation : class, IRepository<TEntity>

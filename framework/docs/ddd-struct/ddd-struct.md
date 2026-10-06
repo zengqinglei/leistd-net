@@ -38,7 +38,7 @@ DbContext"的唯一拦截点。装了 `DynamicProxyServiceRegistrationCallbackFa
 `AddDefaultRepository<TEntity>()` 点名，或用 `AddRepository<TEntity, TImpl>()` 指定自定义实现。
 
 同一实体被两个上下文各注册一次会**直接抛异常**：Microsoft DI 让后注册的静默胜出，调用方
-无从知道读的是哪个库。
+无从知道读的是哪个库。同一上下文以相同选项重复登记不会抛，也不会多出注册。
 
 ### 应用服务基类
 
@@ -135,6 +135,36 @@ await repository.InsertAsync(entity, ct);
 try { await unitOfWorkManager.Current!.SaveChangesAsync(ct); }
 catch (DbUpdateException) { /* 这里才捕获得到 */ }
 ```
+
+### 自定义仓储接口
+
+同一聚合的专属查询被多个用例复用时，在 Domain 声明派生自 `IRepository<TEntity, TKey>` 的接口，在 Infrastructure 继承 `EfCoreRepository<TDbContext, TEntity, TKey>` 实现，再用 `AddRepository<TEntity, TImpl>()` 登记。只被一个用例使用的查询直接经 `GetQueryableAsync` 写在用例里，不必为它新增接口。
+
+```csharp
+// Domain
+public interface IOrderRepository : IRepository<Order, Guid>
+{
+    Task<List<Order>> GetByCustomerAsync(string customerName, CancellationToken ct = default);
+}
+
+// Infrastructure
+public class OrderRepository(IDbContextProvider<AppDbContext> dbContextProvider, IUnitOfWorkManager uow)
+    : EfCoreRepository<AppDbContext, Order, Guid>(dbContextProvider, uow), IOrderRepository
+{
+    public async Task<List<Order>> GetByCustomerAsync(string customerName, CancellationToken ct = default)
+    {
+        var orders = await GetDbSetAsync(ct);
+        return await orders.Where(x => x.CustomerName == customerName).ToListAsync(ct);
+    }
+}
+
+// 注册：IOrderRepository、IRepository<Order>、IRepository<Order, Guid> 都解析到 OrderRepository
+builder.Services.AddDddDbContext<AppDbContext>(o => o
+    .AddDefaultRepositories()
+    .AddRepository<Order, OrderRepository>());
+```
+
+实现类上派生自 `IRepository<TEntity>` 的自定义接口与默认接口一起按 Scoped 注册。相同登记重复调用不重复生效；同一接口登记另一个实现时抛 `InvalidOperationException`，先登记的实现保持不变。
 
 ### 分页映射
 
