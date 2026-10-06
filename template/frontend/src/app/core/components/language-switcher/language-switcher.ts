@@ -35,8 +35,6 @@ interface LangOption {
       *transloco="let t"
       hlmBtn
       variant="outline"
-      size="icon"
-      class="w-auto gap-1.5 px-2.5"
       [attr.aria-label]="t('language.label')"
       [hlmDropdownMenuTrigger]="langMenu"
       align="end"
