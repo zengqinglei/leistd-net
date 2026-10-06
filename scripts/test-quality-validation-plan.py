@@ -265,11 +265,14 @@ def prove_generation(repo, base, plan, scenarios, out, run, git):
     old = out / (label + '-base-template')
     old.mkdir(exist_ok=True)
     data = subprocess.check_output(['git','archive',base,'template'],cwd=repo)
+    # 解压过滤器（PEP 706）在 3.12 起提供，并回移到 3.10.12+、3.11.4+；
+    # 缺少时明确报错，不回落到不带过滤器的旧行为。
+    if not hasattr(tarfile, 'data_filter'):
+        raise SystemExit('Python with tarfile extraction filters is required (3.12+, or 3.10.12+/3.11.4+)')
     with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-        # Locally produced git archive, supporting the repository's Python 3.9
-        # machines as well as CI 3.12. Reject any unexpected archive path.
+        # 本地 git archive 的产物：先拒绝意外路径，再以 'data' 过滤器解压。
         assert all(member.name.startswith('template/') or member.name == 'template' for member in archive.getmembers())
-        archive.extractall(old)
+        archive.extractall(old, filter='data')
     digests = {}
     for version, template in [('base', old / 'template'), ('head', repo / 'template')]:
         hive = out / f'{label}-{version}-hive'

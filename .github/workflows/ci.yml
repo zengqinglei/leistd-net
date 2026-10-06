@@ -2,6 +2,8 @@ name: CI
 
 # PR 的质量闸门；release.yml 对发布候选提交复用同一组作业：
 #   - docs-sync：组件文档、Skill 与引用一致性
+#   - docs-sync-windows：同一组静态闸门在 Windows 上再跑一遍，证伪路径分隔符、默认编码与解释器名的可移植性
+#   - frontend-gates：依赖前端 node_modules 的仓库闸门（Spartan 定制登记、模板 ESLint 规则自检）
 #   - package-consumption：NuGet 包内容与隔离消费，独立必过
 #   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
 #   - framework-pack / template-slices：场景责任与成本登记在 template-matrix-scenarios.ps1，
@@ -58,6 +60,63 @@ jobs:
       - name: 全部静态闸门
         shell: pwsh
         run: pwsh scripts/check-all.ps1
+
+  docs-sync-windows:
+    name: 文档与 Skill 同步闸门（Windows）
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 安装 Skill 校验依赖
+        run: python -m pip install PyYAML==6.0.2
+      # 与 docs-sync 同一入口；Windows 上通常只有 python，check-all.ps1 自行探测解释器
+      - name: 全部静态闸门
+        shell: pwsh
+        run: pwsh scripts/check-all.ps1
+
+  frontend-gates:
+    name: 前端依赖闸门
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            template/frontend/package-lock.json
+            template/.template.config/localization/frontend/package-lock.json
+      # 这些闸门借生成项目的 node_modules（模板源码的 package.json 带条件行，不能直接安装）。
+      # 每次现生成、现安装，不依赖任何残留；缺依赖或版本不一致时脚本直接失败，不跳过。
+      - name: 生成项目并安装前端依赖
+        shell: pwsh
+        run: |
+          dotnet new install ./template --debug:custom-hive .tmp/browser-tools-hive --force
+          if ($LASTEXITCODE -ne 0) { throw '模板安装失败' }
+          dotnet new fullstack-app -n Ci.Tools -o .tmp/browser-tools --debug:custom-hive .tmp/browser-tools-hive
+          if ($LASTEXITCODE -ne 0) { throw '生成项目失败' }
+          npm ci --prefix .tmp/browser-tools/frontend
+          if ($LASTEXITCODE -ne 0) { throw '前端依赖安装失败' }
+      - name: Spartan 定制登记规则自检
+        run: node scripts/check-spartan-customizations.mjs --self-test .tmp/browser-tools/frontend
+      - name: Spartan 定制与登记表一致
+        run: node scripts/check-spartan-customizations.mjs .tmp/browser-tools/frontend
+      - name: 模板 ESLint 规则自检
+        run: node scripts/test-template-eslint-rules.mjs .tmp/browser-tools/frontend
 
   template-slices:
     name: 模板场景 · ${{ matrix.slice.title }}
@@ -272,7 +331,7 @@ jobs:
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
-    needs: [docs-sync, framework-pack, test, template-slices, template-generation, package-consumption, postgresql-e2e, oidc-e2e]
+    needs: [docs-sync, docs-sync-windows, frontend-gates, framework-pack, test, template-slices, template-generation, package-consumption, postgresql-e2e, oidc-e2e]
     if: always()
     timeout-minutes: 5
     steps:
@@ -284,7 +343,7 @@ jobs:
           CANDIDATE_SHA: ${{ inputs.candidate_sha || github.sha }}
         run: |
           $jobs = ConvertFrom-Json $env:NEEDS_JSON -AsHashtable
-          foreach ($required in @('framework-pack', 'docs-sync')) {
+          foreach ($required in @('framework-pack', 'docs-sync', 'docs-sync-windows', 'frontend-gates')) {
             if ($jobs[$required].result -cne 'success') {
               throw "$required 失败、缺失、跳过或取消"
             }

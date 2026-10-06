@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""测试名只用英文。
+"""测试名只用英文；前端用例标题小写开头。
 
 前后端规范规定：前端 `describe` / `it` / `test` 的标题、后端 `[Fact]` / `[Theory]` 的方法名与
 `DisplayName` 都用英文句子；中文只出现在注释与测试数据里。测试名会出现在测试报告、
@@ -12,6 +12,11 @@ CI 日志和 IDE 的测试树里，混着两种语言时既难检索，也难与
 - 用例体里的中文断言文本、中文测试数据不受影响；
 - `it.each([...])('标题')`、`it.skipIf(cond)('标题')` 这类链式写法也能找到标题；
 - 模板字符串标题只看字面部分，`${...}` 插值里的内容是数据。
+
+前端 `it` / `test` 的标题另须**小写开头**（testing.md §3：标题是一句接在主语后面的行为描述，
+如 `keeps the dialog open when saving fails`）。首词是专有名词（`PROPER_NOUNS`）或全大写缩写
+（`URL`、`OIDC`）时放行；标题不以字母开头（`%s`、`/api/...`、数字）不受约束。`describe` 的标题按惯例
+写被测单元名（`AuthService`、`RoleTable`），不在此列。
 
 判定的字符范围：中日韩统一表意文字（含扩展 A 与兼容区）、假名、谚文，以及
 中日韩标点（U+3000–U+303F）和全角形式（U+FF00–U+FFEF）——全角括号、逗号单独出现也算。
@@ -46,6 +51,15 @@ TS_CALL = re.compile(
     r'(?<![\w.$])(describe|it|test)'
     r'((?:\s*\.\s*(?:each|for|skip|only|todo|concurrent|sequential|fails|runIf|skipIf|shuffle))*)\s*\(')
 TS_CHAIN_WITH_ARGS = re.compile(r'\.\s*(?:each|for|runIf|skipIf)\b')
+
+# 用例标题首词可以大写的专有名词：产品、协议与库名按原样书写。缩写（全大写）另由 ACRONYM 放行。
+PROPER_NOUNS = {
+    'Angular', 'Chromium', 'GitHub', 'JavaScript', 'Mapster', 'OAuth', 'OpenID', 'OpenIddict',
+    'Playwright', 'PostgreSQL', 'Redis', 'SignalR', 'Spartan', 'Transloco', 'TypeScript', 'Vitest',
+}
+ACRONYM = re.compile(r'[A-Z][A-Z0-9]+s?')
+TS_CASE_CHECKED = {'it', 'test'}
+FIRST_WORD = re.compile(r'[A-Za-z][A-Za-z0-9]*')
 
 CS_TEST_ATTR = re.compile(r'\[\s*(?:Xunit\s*\.\s*)?(?:Fact|Theory)\b')
 CS_DISPLAY_NAME = re.compile(r'\bDisplayName\s*=\s*')
@@ -270,7 +284,8 @@ def _line_of(src: str, pos: int) -> int:
     return src.count('\n', 0, pos) + 1
 
 
-def scan_ts(src: str) -> list[tuple[int, str]]:
+def _ts_titles(src: str) -> list[tuple[str, int, str]]:
+    """前端用例调用点：(describe/it/test, 行号, 标题)。标题只取字符串字面量的文本。"""
     masked, literals = mask_ts(src)
     found = []
     for m in TS_CALL.finditer(masked):
@@ -281,9 +296,28 @@ def scan_ts(src: str) -> list[tuple[int, str]]:
                 continue
         start = _skip_ws(masked, pos + 1)
         title = literals.get(start)
-        if title is not None and CJK.search(title):
-            found.append((_line_of(src, start), title))
+        if title is not None:
+            found.append((m.group(1), _line_of(src, start), title))
     return found
+
+
+def scan_ts(src: str) -> list[tuple[int, str]]:
+    return [(line, title) for _, line, title in _ts_titles(src) if CJK.search(title)]
+
+
+def title_starts_uppercase(title: str) -> bool:
+    """标题以大写字母开头，且首词既不是专有名词也不是缩写。"""
+    if not title[:1].isupper() or not title[:1].isascii():
+        return False
+    word = FIRST_WORD.match(title)
+    if word is None:
+        return False
+    return word.group(0) not in PROPER_NOUNS and not ACRONYM.fullmatch(word.group(0))
+
+
+def scan_ts_case(src: str) -> list[tuple[int, str]]:
+    return [(line, title) for kind, line, title in _ts_titles(src)
+            if kind in TS_CASE_CHECKED and title_starts_uppercase(title)]
 
 
 def scan_cs(src: str) -> list[tuple[int, str]]:
@@ -331,16 +365,19 @@ def run(zones, root):
                 src = open(path, encoding='utf-8', errors='replace').read()
                 scanned += 1
                 scan = scan_ts if suffix == '.spec.ts' else scan_cs
-                findings.extend((rel, line, title) for line, title in scan(src))
+                findings.extend((rel, line, f'测试名含中日韩字符：{title}') for line, title in scan(src))
+                if suffix == '.spec.ts':
+                    findings.extend((rel, line, f'用例标题要小写开头：{title}') for line, title in scan_ts_case(src))
         if scanned == 0:
             return 1, [f'⚠️  {zone} 下没有扫到任何 *{suffix} 文件，判据可能已失效']
         scanned_total += scanned
 
     if findings:
         for rel, line, title in findings:
-            messages.append(f'❌ {rel}:{line} 测试名含中日韩字符：{title}')
+            messages.append(f'❌ {rel}:{line} {title}')
         messages.append(
-            f'\n共 {len(findings)} 处。测试名改为英文句子；"为什么"写进上方注释，中文数据留在用例体里。')
+            f'\n共 {len(findings)} 处。测试名改为小写开头的英文句子；"为什么"写进上方注释，中文数据留在用例体里；'
+            f'首词确是专有名词时加进 PROPER_NOUNS。')
         return 1, messages
     return 0, [f'✅ 测试名检查通过（{scanned_total} 个文件，{len(zones)} 个扫描路径）。']
 
@@ -394,8 +431,27 @@ SELF_TEST_CASES = [
 ]
 
 
+# (说明, 内容, 期望命中数)：只看 it / test 标题的大小写
+CASE_SELF_TEST_CASES = [
+    ('大写开头的 it 标题', "it('Returns 401', () => {});\n", 1),
+    ('大写开头的 test 标题', "test('Shows the dialog', () => {});\n", 1),
+    ('链式 it.each 的标题', "it.each([1])('Renders %s', () => {});\n", 1),
+    ('小写开头放行', "it('returns 401', () => {});\n", 0),
+    ('专有名词开头放行', "it('SignalR reconnects after a drop', () => {});\n", 0),
+    ('缩写开头放行', "it('URL keeps the query', () => {});\nit('OIDC callbacks finish', () => {});\n", 0),
+    ('非字母开头放行', "it('%s is rejected', () => {});\nit('/api/v1 prefix', () => {});\n", 0),
+    ('describe 写被测单元名放行', "describe('AuthService', () => {});\n", 0),
+    ('注释与字符串里的大写标题不算', "// it('Returns')\nconst s = \"it('Returns')\";\n", 0),
+]
+
+
 def self_test():
     failures = 0
+    for name, content, expected in CASE_SELF_TEST_CASES:
+        got = len(scan_ts_case(content))
+        ok = got == expected
+        print(f"  {'✅' if ok else '❌'} 小写开头：{name}（期望 {expected} 处，实际 {got} 处）")
+        failures += 0 if ok else 1
     for name, fname, content, expected in SELF_TEST_CASES:
         scan = scan_ts if fname.endswith('.spec.ts') else scan_cs
         got = len(scan(content))
@@ -413,7 +469,7 @@ def self_test():
             print(f"  {'✅' if ok else '❌'} {label}（期望退出 1，实际 {code}）")
             failures += 0 if ok else 1
 
-    total = len(SELF_TEST_CASES) + 2
+    total = len(SELF_TEST_CASES) + len(CASE_SELF_TEST_CASES) + 2
     if failures:
         print(f'\n❌ 自测失败 {failures} 例。')
         return 1

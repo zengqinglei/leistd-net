@@ -5,7 +5,7 @@
 这是覆盖率报告发现不了的那一类缺口：程序集从未被任何测试加载时，它根本不出现在
 报告里，任何百分比门槛都对它无效。
 
-四条规则：
+六条规则：
 
 1. **路径形状精确。** 测试项目只能是下面三种之一，多一层少一层都不行：
    `tests/components/<家族>/<项目>/<项目>.csproj`、`tests/ddd-struct/<项目>/<项目>.csproj`、
@@ -18,6 +18,15 @@
    只做单向检查时，一个拼错的家族目录会静默长成第二棵没人镜像的树。
 4. **每个测试项目都必须在 `Leistd.Framework.slnx` 里。** 不在解决方案里的测试项目
    不会被 `dotnet test` 跑到——它存在、能编译、看起来一切正常，但从未运行过。
+
+5. **项目内子目录名有限。** 测试项目（`tests/components/**`、`tests/ddd-struct/**`）里的目录只能是
+   包后缀（`Leistd.Lock.Tests/Redis/` 对应 `Leistd.Lock.Redis`；多段后缀逐段嵌套，
+   `Leistd.Notifications.Tests/AspNetCore/SignalR/` 对应 `Leistd.Notifications.AspNetCore.SignalR`），
+   或 `Contracts`、`TestDoubles`、`TestResources`、`EndToEnd` 之一（可以在包后缀目录之下，其内部不再约束）。
+   目录按包切分时，读者能从路径直接找到被测包；随手起的 `Helpers/`、`Misc/` 让这层对应失效。
+6. **替身放在 `TestDoubles/`。** 文件名以 `Fake` 开头或含 `Doubles` 的文件必须在某个 `TestDoubles/` 之下。
+
+另外，项目根目录直接放的文件超过 10 个时**只报告、不失败**：提示考虑按包后缀分目录，是否拆由评审决定。
 
 **本闸门只保证到"家族"这一级**：家族有测试项目、项目名对得上、已登记进解决方案。
 它**不能**证明家族内每个发布包都被引用或加载——那需要读覆盖率或解析引用图，
@@ -43,6 +52,11 @@ WAIVERS = {
 }
 
 BRANCHES = ("components", "ddd-struct", "shared")
+
+# 不按包后缀、而按用途划分的子目录：契约用例、替身、测试资源、端到端
+PURPOSE_DIRS = {"Contracts", "TestDoubles", "TestResources", "EndToEnd"}
+DOUBLE_FILE = re.compile(r"^(Fake\w*|\w*Doubles\w*)\.cs$")
+ROOT_FILE_REPORT_THRESHOLD = 10
 
 
 def has_executable_code(family_dir: Path) -> bool:
@@ -93,6 +107,66 @@ def family_prefixes(family_dir: Path) -> set[str]:
     return allowed
 
 
+def package_suffix_paths(project_stem: str, package_names: list[str]) -> set[tuple[str, ...]]:
+    """包后缀对应的目录路径及其各级前缀：`Leistd.Notifications` + `.AspNetCore.SignalR` → (AspNetCore,)、(AspNetCore, SignalR)。"""
+    paths: set[tuple[str, ...]] = set()
+    for name in package_names:
+        if not name.startswith(project_stem + "."):
+            continue
+        segments = tuple(name[len(project_stem) + 1:].split("."))
+        paths.update(segments[:i] for i in range(1, len(segments) + 1))
+    return paths
+
+
+def subdirectory_problems(csproj: Path, package_names: list[str], framework: Path) -> list[str]:
+    """规则 5、6：项目内子目录名与替身位置。"""
+    project_dir = csproj.parent
+    stem = csproj.stem.removesuffix(".Tests")
+    allowed = package_suffix_paths(stem, package_names)
+    problems: list[str] = []
+    for path in sorted(project_dir.rglob("*")):
+        rel = path.relative_to(project_dir).parts
+        if {"bin", "obj"} & set(rel):
+            continue
+        shown = path.relative_to(framework.parent).as_posix()
+        if path.is_dir():
+            purpose = next((i for i, part in enumerate(rel) if part in PURPOSE_DIRS), None)
+            if purpose is not None:
+                ok = purpose == 0 or rel[:purpose] in allowed
+            else:
+                ok = rel in allowed
+            # 只报最外层的违规目录，它下面的子目录不重复报
+            parent_ok = len(rel) == 1 or _dir_allowed(rel[:-1], allowed)
+            if not ok and parent_ok:
+                choices = sorted("/".join(p) for p in allowed if len(p) == len(rel) and p[:-1] == rel[:-1])
+                problems.append(
+                    f"{shown}/: 子目录名不符——只能是包后缀（可选：{', '.join(choices) or '无'}）"
+                    f"或 {', '.join(sorted(PURPOSE_DIRS))} 之一"
+                )
+        elif DOUBLE_FILE.match(path.name) and "TestDoubles" not in rel[:-1]:
+            problems.append(f"{shown}: 替身文件必须放在 TestDoubles/ 下")
+    return problems
+
+
+def _dir_allowed(rel: tuple[str, ...], allowed: set[tuple[str, ...]]) -> bool:
+    purpose = next((i for i, part in enumerate(rel) if part in PURPOSE_DIRS), None)
+    if purpose is not None:
+        return purpose == 0 or rel[:purpose] in allowed
+    return rel in allowed
+
+
+def root_file_reports(framework: Path) -> list[str]:
+    """项目根目录文件数超过阈值的测试项目：只报告，不失败。"""
+    reports = []
+    for csproj in sorted((framework / "tests").rglob("*.Tests.csproj")):
+        if any(part in {"obj", "bin"} for part in csproj.parts):
+            continue
+        count = sum(1 for f in csproj.parent.iterdir() if f.is_file())
+        if count > ROOT_FILE_REPORT_THRESHOLD:
+            reports.append(f"{csproj.parent.relative_to(framework.parent).as_posix()}/ 根目录有 {count} 个文件")
+    return reports
+
+
 def check(framework: Path) -> list[str]:
     """对一棵 framework/ 目录树执行全部规则，返回违规列表。"""
     components = framework / "components"
@@ -136,6 +210,18 @@ def check(framework: Path) -> list[str]:
 
         if branch == "components":
             components_projects.append((parts[1], csproj))
+
+    # 规则 5、6：子目录名与替身位置（按家族或 ddd-struct 的包名求后缀）
+    for family, csproj in components_projects:
+        family_dir = components / family
+        if family_dir.is_dir():
+            names = [c.stem for c in family_dir.glob("*/*.csproj")]
+            problems.extend(subdirectory_problems(csproj, names, framework))
+    ddd_tests = tests / "ddd-struct"
+    if ddd_tests.is_dir():
+        ddd_names = [c.stem for c in (framework / "ddd-struct").glob("*/*.csproj")]
+        for csproj in sorted(ddd_tests.glob("*/*.Tests.csproj")):
+            problems.extend(subdirectory_problems(csproj, ddd_names, framework))
 
     # 规则 3 正向：家族名与项目名对上
     for family, csproj in components_projects:
@@ -207,7 +293,7 @@ def check(framework: Path) -> list[str]:
 # 家族"没有合法的 .Tests 项目"），只看 problems 非空时，把目标规则整条删掉自检照样绿。
 #
 # (说明, 组件包相对路径, 测试 csproj 相对 tests/ 的路径, 是否登记 slnx, 期望命中的诊断片段/None 表示应通过)
-CASES: list[tuple[str, list[str], str, bool, str | None]] = [
+CASES: list[tuple] = [
     ("正例：家族名与项目名一致",
      ["lock/Leistd.Lock.Core", "lock/Leistd.Lock.Redis"],
      "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, None),
@@ -247,13 +333,50 @@ CASES: list[tuple[str, list[str], str, bool, str | None]] = [
     ("反例：已建测试目录却仍留着豁免",
      ["aop/Leistd.DynamicProxy"],
      "components/aop/Leistd.DynamicProxy.Tests/Leistd.DynamicProxy.Tests.csproj", True, "仍在 WAIVERS 里"),
+    # 规则 5、6：第 6 项是测试项目内的附加文件（相对项目目录）
+    ("正例：包后缀目录、用途目录与包后缀下的替身目录",
+     ["lock/Leistd.Lock.Core", "lock/Leistd.Lock.Memory", "lock/Leistd.Lock.Redis"],
+     "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, None,
+     ["Memory/A.cs", "Redis/B.cs", "Contracts/C.cs", "TestDoubles/FakeLock.cs", "Redis/TestDoubles/FakeRedis.cs",
+      "TestResources/Good/en.json", "EndToEnd/D.cs"]),
+    ("正例：多段包后缀逐段嵌套",
+     ["notifications/Leistd.Notifications.Core", "notifications/Leistd.Notifications.AspNetCore",
+      "notifications/Leistd.Notifications.AspNetCore.SignalR"],
+     "components/notifications/Leistd.Notifications.Tests/Leistd.Notifications.Tests.csproj", True, None,
+     ["AspNetCore/A.cs", "AspNetCore/SignalR/B.cs"]),
+    ("例外：根目录文件多只报告不失败",
+     ["lock/Leistd.Lock.Core"],
+     "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, None,
+     [f"Case{i}Tests.cs" for i in range(12)]),
+    ("反例：不是包后缀也不是用途目录",
+     ["lock/Leistd.Lock.Core", "lock/Leistd.Lock.Redis"],
+     "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, "子目录名不符", ["Helpers/A.cs"]),
+    ("反例：包后缀目录下嵌套非后缀目录",
+     ["lock/Leistd.Lock.Core", "lock/Leistd.Lock.Redis"],
+     "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, "子目录名不符", ["Redis/Deep/A.cs"]),
+    ("反例：单包家族没有包后缀可用",
+     ["aspnetcore-signalr/Leistd.AspNetCore.SignalR"],
+     "components/aspnetcore-signalr/Leistd.AspNetCore.SignalR.Tests/Leistd.AspNetCore.SignalR.Tests.csproj",
+     True, "子目录名不符", ["SignalR/A.cs"]),
+    ("反例：Fake 替身散在根目录",
+     ["lock/Leistd.Lock.Core"],
+     "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, "替身文件必须放在 TestDoubles/", ["FakeClock.cs"]),
+    ("反例：*Doubles* 文件放在包后缀目录",
+     ["lock/Leistd.Lock.Core", "lock/Leistd.Lock.Memory"],
+     "components/lock/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj", True, "替身文件必须放在 TestDoubles/",
+     ["Memory/LockDoubles.cs"]),
+    ("反例：ddd-struct 测试项目同样受约束",
+     ["lock/Leistd.Lock.Core"],
+     "ddd-struct/Leistd.Ddd.Domain.Tests/Leistd.Ddd.Domain.Tests.csproj", True, "子目录名不符", ["Entities/A.cs"]),
 ]
 
 
 def self_test() -> int:
     failures: list[str] = []
 
-    for label, packages, test_rel, registered, expect in CASES:
+    reported = False
+    for label, packages, test_rel, registered, expect, *rest in CASES:
+        extras = rest[0] if rest else []
         with tempfile.TemporaryDirectory() as tmp:
             fw = Path(tmp) / "framework"
             for pkg in packages:
@@ -267,7 +390,15 @@ def self_test() -> int:
             target = fw / "tests" / test_rel
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("<Project />", encoding="utf-8")
+            for extra in extras:
+                file = target.parent / extra
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("", encoding="utf-8")
             (fw / "tests" / "ddd-struct").mkdir(parents=True, exist_ok=True)
+            (fw / "ddd-struct" / "Leistd.Ddd.Domain").mkdir(parents=True, exist_ok=True)
+            (fw / "ddd-struct" / "Leistd.Ddd.Domain" / "Leistd.Ddd.Domain.csproj").write_text("<Project />", encoding="utf-8")
+            if label.startswith("例外：根目录文件多"):
+                reported = bool(root_file_reports(fw))
 
             entry = f'    <Project Path="tests/{test_rel}" />\n' if registered else ""
             (fw / "Leistd.Framework.slnx").write_text(
@@ -280,6 +411,9 @@ def self_test() -> int:
             elif not any(expect in p for p in problems):
                 got = "；".join(problems) if problems else "无任何诊断"
                 failures.append(f"{label}：期望命中「{expect}」，实际得到 {got}")
+
+    if not reported:
+        failures.append("例外：根目录文件超过阈值时应出现在报告里，实际没有")
 
     if failures:
         print("测试布局闸门自检失败：")
@@ -302,6 +436,9 @@ def main() -> int:
         for problem in problems:
             print(f"  {problem}")
         return 1
+
+    for report in root_file_reports(framework):
+        print(f"ℹ️  {report}（超过 {ROOT_FILE_REPORT_THRESHOLD} 个，仅报告：考虑按包后缀分目录）")
 
     components = framework / "components"
     tests = framework / "tests"

@@ -129,6 +129,29 @@ $todoScopes = @("framework/", "template/")
 $todoExemptPaths = @("template/frontend/libs/ui/")
 $todoMarker = '(?-i:(?:(?<!:)//|/\*|<!--|@\*|^\s*\*|^\s*#|^\s*(?:[-*]\s+)?(?=(?:TODO|FIXME|HACK)\b))[^''"`]*?\b(?<marker>TODO|FIXME|HACK)\b)'
 
+# 维护事实不进模板。template/ 是生成项目的载荷，生成项目里没有本仓库的 workflow、仓库根目录与仓库名；
+# 注释写"由 .github/workflows/release.yml 替换""仓库根 VERSION"，读者在生成项目里找不到对应物。
+# .template.config/ 是模板引擎的配置，不进生成项目，不受约束。
+# `leistd-net-framework` 是随框架包分发的 Skill 名，生成项目里确实存在，属于例外（负向断言排除）。
+$maintenanceFactScope = "template/"
+$maintenanceFactExemptPaths = @("template/.template.config/")
+$maintenanceFactPatterns = @(
+    "\.github/workflows",
+    "仓库根",
+    "(?<![\w-])leistd-net(?![\w-])"
+)
+
+# 修复轮次不进源码与测试。"N9 的回归守卫""上一轮""（P4）"只对当时的评审有意义，
+# 读者既查不到编号指的是什么，也无从判断它是否仍然成立——注释写行为与理由，不写来历。
+# 编号区分大小写：小写的 p1)、n2) 是普通参数名。
+$roundRecordScopes = @("framework/", "template/backend/")
+# "上一轮"本身是普通词（"上一轮抓取""上一轮失败锁定"），只拦它指评审或修复的用法。
+$roundRecordPatterns = @(
+    "(?-i:\b[NP]\d{1,2}\s*(的|）|\)))",
+    "上一轮(评审|审查|审核|修复|修改|改动)",
+    "本轮修"
+)
+
 # 短语 → 豁免路径片段。资源实例授权那一层保留了 ResourceGrantEffect，
 # "显式拒绝优先"在那里是当前正确的描述，不是漂移。
 $retiredPhrases = @{
@@ -199,6 +222,20 @@ if ($SelfTest) {
         @{ Rule = "todo"; Text = '{ "status": "TODO" }';                                        ShouldMatch = $false }
         @{ Rule = "todo"; Text = "const next = Status.TODO;";                                   ShouldMatch = $false }
         @{ Rule = "todo"; Text = 'var url = "http://host/TODO";';                              ShouldMatch = $false }
+        @{ Rule = "maintenance"; Text = "由 .github/workflows/release.yml 替换版本号";               ShouldMatch = $true }
+        @{ Rule = "maintenance"; Text = "版本号来自仓库根 VERSION";                                 ShouldMatch = $true }
+        @{ Rule = "maintenance"; Text = "源码位于 leistd-net 仓库";                                  ShouldMatch = $true }
+        @{ Rule = "maintenance"; Text = "使用 leistd-net-framework Skill 定位包内文档";              ShouldMatch = $false }
+        @{ Rule = "maintenance"; Text = "部署后按镜像 revision 标签确认版本";                         ShouldMatch = $false }
+        @{ Rule = "round"; Text = "// N9 的回归守卫";                                               ShouldMatch = $true }
+        @{ Rule = "round"; Text = "// 补上（P4）发现的缺口";                                         ShouldMatch = $true }
+        @{ Rule = "round"; Text = "// 修复 P12) 之后";                                               ShouldMatch = $true }
+        @{ Rule = "round"; Text = "// 上一轮评审遗漏的分支";                                         ShouldMatch = $true }
+        @{ Rule = "round"; Text = "// 晚于上一轮抓取完成才取得工厂所有权";                           ShouldMatch = $false }
+        @{ Rule = "round"; Text = "// 本轮修正了排序";                                               ShouldMatch = $true }
+        @{ Rule = "round"; Text = "Assert.Equal(expected, Compute(p1));";                           ShouldMatch = $false }
+        @{ Rule = "round"; Text = "var n2 = Next(n1);";                                             ShouldMatch = $false }
+        @{ Rule = "round"; Text = "// HTTP2) 与 P4-27 这类带连字符的编号不是轮次短语";              ShouldMatch = $false }
     )
 
     $failures = New-Object System.Collections.Generic.List[string]
@@ -220,6 +257,16 @@ if ($SelfTest) {
             # 诊断信息要能说出命中的是哪个标记
             if ($matched -and $case.Marker -and $Matches['marker'] -ne $case.Marker) {
                 $failures.Add("[todo] ""$($case.Text)"" 命中的标记是 '$($Matches['marker'])'，应为 '$($case.Marker)'")
+            }
+        }
+        elseif ($case.Rule -eq "maintenance") {
+            foreach ($pattern in $maintenanceFactPatterns) {
+                if ($case.Text -match $pattern) { $matched = $true; break }
+            }
+        }
+        elseif ($case.Rule -eq "round") {
+            foreach ($pattern in $roundRecordPatterns) {
+                if ($case.Text -match $pattern) { $matched = $true; break }
             }
         }
         elseif ($case.Rule -eq "roadmap") {
@@ -253,8 +300,13 @@ if ($SelfTest) {
 # .agents 这类隐藏目录也不会漏掉。也扫 .html 与 .json：页面文案和 i18n 词条同样会讲解旧模型。
 $listed = @(git -C $RepoRoot -c core.quotepath=off ls-files --cached --others --exclude-standard -- framework template docs)
 if ($LASTEXITCODE -ne 0) { throw "git ls-files 失败，无法确定扫描范围。" }
+# 既有规则只扫源码、文档与词条；维护事实与修复轮次另扫构建文件（props、csproj），
+# 维护事实再加部署与脚本文件（yml、ps1、py、Dockerfile 等）——这两类表述最常出现在那里的注释里。
+$sourceExtensions = '\.(cs|ts|md|html|json)$'
+$buildExtensions = '\.(props|targets|csproj)$'
 $files = $listed | Where-Object {
-    $_ -match '\.(cs|ts|md|html|json)$' -and
+    ($_ -match $sourceExtensions -or $_ -match $buildExtensions -or
+     $_ -match '\.(mjs|ya?ml|ps1|py|sh|example)$' -or $_ -match '(^|/)Dockerfile$') -and
     $_ -notmatch '(^|/)(bin|obj|node_modules|dist|\.angular)/' -and
     $_ -notlike '*package-lock.json' -and
     (Test-Path -LiteralPath (Join-Path $RepoRoot $_) -PathType Leaf)
@@ -265,19 +317,21 @@ foreach ($relative in $files) {
     if (Test-Historical $relative) { continue }
 
     $scanned++
+    $isSource = $relative -match $sourceExtensions
+    $isBuild = $relative -match $buildExtensions
     # 强制成数组：单行文件下 Get-Content 返回字符串，按下标取到的是字符而不是整行。
     $lines = @(Get-Content -LiteralPath (Join-Path $RepoRoot $relative) -Encoding UTF8)
 
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]
 
-        foreach ($symbol in $retiredSymbols) {
+        foreach ($symbol in $(if ($isSource) { $retiredSymbols } else { @() })) {
             if ($line -match $symbol) {
                 $problems.Add("$relative`:$($index + 1) 引用了已删除的符号 '$symbol'")
             }
         }
 
-        foreach ($symbol in $foreignFrameworkSymbols) {
+        foreach ($symbol in $(if ($isSource) { $foreignFrameworkSymbols } else { @() })) {
             if ($line -match $symbol) {
                 $problems.Add("$relative`:$($index + 1) 引用了外部参考框架 '$symbol'")
             }
@@ -289,7 +343,7 @@ foreach ($relative in $files) {
             if ($normalizedPath.StartsWith($scope)) { $inDistribution = $true; break }
         }
 
-        if ($inDistribution) {
+        if ($inDistribution -and $isSource) {
             foreach ($phrase in $roadmapPhrases) {
                 if ($line.Contains($phrase)) {
                     $problems.Add("$relative`:$($index + 1) 分发面出现路线图/升级动作表述 '$phrase'；归 docs/framework/versioning.md")
@@ -304,11 +358,28 @@ foreach ($relative in $files) {
         foreach ($exemptPath in $todoExemptPaths) {
             if ($normalizedPath.StartsWith($exemptPath)) { $inTodoScope = $false; break }
         }
-        if ($inTodoScope -and $line -match $todoMarker) {
+        if ($normalizedPath.StartsWith($maintenanceFactScope) -and
+            -not ($maintenanceFactExemptPaths | Where-Object { $normalizedPath.StartsWith($_) })) {
+            foreach ($pattern in $maintenanceFactPatterns) {
+                if ($line -match $pattern) {
+                    $problems.Add("$relative`:$($index + 1) 模板载荷写了本仓库的维护事实 '$($Matches[0])'；生成项目里没有它，改写为生成项目视角")
+                }
+            }
+        }
+
+        if (($isSource -or $isBuild) -and ($roundRecordScopes | Where-Object { $normalizedPath.StartsWith($_) })) {
+            foreach ($pattern in $roundRecordPatterns) {
+                if ($line -match $pattern) {
+                    $problems.Add("$relative`:$($index + 1) 记录了修复轮次 '$($Matches[0])'；注释写行为与理由，不写来历")
+                }
+            }
+        }
+
+        if ($isSource -and $inTodoScope -and $line -match $todoMarker) {
             $problems.Add("$relative`:$($index + 1) 留下了待办标记 '$($Matches['marker'])'；在当期按终局做法完成，不留待办")
         }
 
-        foreach ($phrase in $retiredPhrases.Keys) {
+        foreach ($phrase in $(if ($isSource) { $retiredPhrases.Keys } else { @() })) {
             if (-not $line.Contains($phrase)) { continue }
 
             $exempt = $false

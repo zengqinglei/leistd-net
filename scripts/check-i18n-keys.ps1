@@ -22,10 +22,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$python = (Get-Command python3 -ErrorAction SilentlyContinue).Source
-if (-not $python) { $python = (Get-Command python -ErrorAction SilentlyContinue).Source }
-if (-not $python -or (& $python --version 2>&1) -notmatch '^Python 3\.') {
-    throw "未找到 Python 3 解释器（python3/python）。"
+# 与 check-all.ps1 同一口径：3.10+。check-all 经环境变量把 EncodingWarning 设为错误传给这里起的子进程，
+# 低于 3.10 的解释器会静默忽略该设置。
+$python = $null
+foreach ($candidate in @("python3", "python", "python3.14", "python3.13", "python3.12", "python3.11", "python3.10")) {
+    $found = Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $found) { continue }
+    $version = "$(& $found.Source -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null)".Trim()
+    if ($LASTEXITCODE -eq 0 -and $version -and [version]$version -ge [version]"3.10") { $python = $found.Source; break }
+}
+if (-not $python) {
+    throw "需要 Python 3.10 或更高版本（python3/python/python3.1x）。"
 }
 
 $checks = @(
