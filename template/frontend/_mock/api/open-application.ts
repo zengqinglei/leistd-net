@@ -111,15 +111,25 @@ function isValidCallbackUri(value: string): boolean {
   }
 }
 
-function validateApplication(
-  input: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto,
-  id?: string,
-) {
-  // 与后端一致：入参校验（必填等）先于业务规则，失败是 400 字段错误、不带业务码，一次报全
+// 与后端一致：入参校验先于查找与业务规则（更新不存在的应用时，非法入参仍是 400），失败是 400 字段错误、不带业务码，一次报全
+function validateInput(input: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) {
   const errors: { field: string; detail: string }[] = [];
   const clientId = 'clientId' in input ? input.clientId.trim() : undefined;
   if (clientId === '') {
     errors.push({ field: 'clientId', detail: 'Client ID is required.' });
+  }
+  // 与后端 DTO 的必填与允许值同一口径
+  const allowedValues = [
+    ['applicationType', 'Application type', ['web', 'native', 'service']],
+    ['clientType', 'Client type', ['public', 'confidential']],
+  ] as const;
+  for (const [field, name, allowed] of allowedValues) {
+    const value: unknown = input[field];
+    if (typeof value !== 'string' || value === '') {
+      errors.push({ field, detail: `${name} is required.` });
+    } else if (!(allowed as readonly string[]).includes(value)) {
+      errors.push({ field, detail: `${name} is not an allowed value.` });
+    }
   }
   // 会话绑定必须显式给值，缺失或 null 都不行
   if (typeof input.sessionBound !== 'boolean') {
@@ -133,7 +143,13 @@ function validateApplication(
   if (errors.length > 0) {
     throw new MockException(400, { errors });
   }
+}
 
+function validateBusinessRules(
+  input: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto,
+  id?: string,
+) {
+  const clientId = 'clientId' in input ? input.clientId.trim() : undefined;
   if (
     clientId &&
     applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)
@@ -193,7 +209,8 @@ function validateApplication(
 function createOpenApplication(req: MockRequest) {
   requirePermission(PERMISSIONS.openApplications.create);
   const body = req.body as CreateOpenApplicationInputDto;
-  validateApplication(body);
+  validateInput(body);
+  validateBusinessRules(body);
 
   const newApplication: MockOpenApplication = {
     id: body.clientId,
@@ -223,6 +240,7 @@ function updateOpenApplication(req: MockRequest) {
   requirePermission(PERMISSIONS.openApplications.update);
   const id = req.params['id'];
   const body = req.body as UpdateOpenApplicationInputDto;
+  validateInput(body);
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
   if (index === -1) {
     throw new MockException(404, {
@@ -231,7 +249,7 @@ function updateOpenApplication(req: MockRequest) {
     });
   }
 
-  validateApplication(body, id);
+  validateBusinessRules(body, id);
 
   applications[index] = {
     ...applications[index],

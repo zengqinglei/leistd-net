@@ -37,7 +37,7 @@ import { ensureAcceptablePassword } from '../data/password-policy';
 //#if (IncludeMultiTenancy)
 import { TENANTS } from '../data/tenant';
 //#endif
-import { MockUser, USERS, toUserOutput } from '../data/user';
+import { MockUser, USERS, isEmailTaken, isUsernameTaken, toUserOutput } from '../data/user';
 import {
   MOCK_SESSION_USER_ID,
   //#if (Impersonation)
@@ -75,9 +75,8 @@ const emailChallengeStore = new Map<string, EmailVerificationChallenge>();
 const emailRateLimitStore = new Map<string, number>();
 
 //#endif
-function ensureUsernameAvailable(username: string, currentUserId: string): void {
-  const exists = USERS.some((user) => user.username === username && user.id !== currentUserId);
-  if (exists) {
+function ensureUsernameAvailable(username: string, currentUserId?: string): void {
+  if (isUsernameTaken(username, currentUserId)) {
     throw new MockException(409, {
       code: 'User:UsernameTaken',
       message: 'Username already exists',
@@ -85,9 +84,8 @@ function ensureUsernameAvailable(username: string, currentUserId: string): void 
   }
 }
 
-function ensureEmailAvailable(email: string, currentUserId: string): void {
-  const exists = USERS.some((user) => user.email === email && user.id !== currentUserId);
-  if (exists) {
+function ensureEmailAvailable(email: string, currentUserId?: string): void {
+  if (isEmailTaken(email, currentUserId)) {
     throw new MockException(409, { code: 'User:EmailTaken', message: 'Email is already in use' });
   }
 }
@@ -184,10 +182,19 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
   return toUserOutput(user);
 }
 
+/** 与后端 `SetAvatarInputDto` 同一判据：本人入口只收图片 data URL，空值表示清除。 */
+const AVATAR_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]*$/;
+
 function setCurrentUserAvatar(req: MockRequest): UserOutputDto {
   const user = requireCurrentMockUser();
   const body = req.body as SetAvatarInputDto;
-  user.avatar = body.avatar?.trim() || undefined;
+  // 入参校验：外部地址等非图片 data URL 是 400 字段错误、不带业务码
+  if (body.avatar && !AVATAR_DATA_URL.test(body.avatar)) {
+    throw new MockException(400, {
+      errors: [{ field: 'avatar', detail: 'Avatar must be a PNG, JPEG or WebP image.' }],
+    });
+  }
+  user.avatar = body.avatar || undefined;
   return toUserOutput(user);
 }
 //#if (Email)
@@ -599,7 +606,7 @@ function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   validateCaptcha(body.captchaToken, body.captchaCode);
 
   // 占用判定与后端同一口径：按唯一索引原样比较，只差大小写的是另一个地址
-  ensureEmailAvailable(body.email.trim(), '');
+  ensureEmailAvailable(body.email.trim());
   const email = normalizeEmail(body.email);
   const scope = getRequestScope(req);
   const rateKey = `${scope}:${email}`;
@@ -634,14 +641,16 @@ function register(req: MockRequest): 'ok' {
   const body = req.body as RegisterInputDto;
 
   const username = body.username.trim();
-  const email = normalizeEmail(body.email);
+  // 与后端一致：占用判定与保存都用原样地址（只差大小写的是另一个地址）；
+  // 只有验证码按规范化地址归档
+  const email = body.email.trim();
 
-  ensureUsernameAvailable(username, '');
-  ensureEmailAvailable(email, '');
+  ensureUsernameAvailable(username);
+  ensureEmailAvailable(email);
 
   //#if (Email)
   if (EMAIL_VERIFICATION_ENABLED) {
-    validateEmailChallenge(req, email, body);
+    validateEmailChallenge(req, normalizeEmail(email), body);
   } else {
     validateCaptcha(body.captchaToken, body.captchaCode);
   }

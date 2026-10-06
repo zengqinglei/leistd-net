@@ -3,7 +3,7 @@ import { HttpHeaders } from '@angular/common/http';
 
 import { AUTH_API } from './auth';
 import { MockException } from '../core/models';
-import { USERS } from '../data/user';
+import { DELETED_USERS, MockUser, USERS } from '../data/user';
 import {
   MOCK_SESSION_USER_ID,
   //#if (Impersonation)
@@ -86,6 +86,104 @@ function rejectionOf(run: () => unknown): MockException {
   }
   throw new Error('expected the handler to reject');
 }
+
+/**
+ * 注册的占用判定与后端同一口径：按唯一索引原样比较（只差大小写的是另一个地址，原样保存），
+ * 已删除用户仍占着用户名和邮箱。
+ */
+describe('mock registration occupancy', () => {
+  const register = AUTH_API['POST /api/v1/auth/register'] as Handler;
+  const captcha = AUTH_API['GET /api/v1/auth/captcha'] as () => {
+    captchaToken: string;
+    captchaImageBase64: string;
+  };
+  let users: MockUser[];
+
+  beforeEach(() => {
+    users = [...USERS];
+  });
+
+  afterEach(() => {
+    USERS.length = 0;
+    USERS.push(...users);
+    DELETED_USERS.length = 0;
+  });
+
+  /** 从验证码图片里读出文字，模拟用户照图输入。 */
+  function solvedCaptcha(): { captchaToken: string; captchaCode: string } {
+    const { captchaToken, captchaImageBase64 } = captcha();
+    const svg = atob(captchaImageBase64.split(',')[1]);
+    return { captchaToken, captchaCode: /<text[^>]*>([^<]+)<\/text>/.exec(svg)![1] };
+  }
+
+  function registration(username: string, email: string) {
+    return { username, email, password: 'Spec@1234567890', ...solvedCaptcha() };
+  }
+
+  it('registers an address that differs from a taken one only by case and keeps its case', () => {
+    register({ body: registration('spec-case', 'DEMO@Example.com') });
+
+    expect(USERS.find((u) => u.username === 'spec-case')?.email).toBe('DEMO@Example.com');
+  });
+
+  it('rejects the username and email of a deleted user with 409', () => {
+    DELETED_USERS.push({
+      ...USERS.find((u) => u.username === 'demo')!,
+      id: 'user_deleted',
+      username: 'gone',
+      email: 'gone@example.com',
+    });
+
+    const username = rejectionOf(() =>
+      register({ body: registration('gone', 'fresh@example.com') }),
+    );
+    expect(username.status).toBe(409);
+    expect(username.error.code).toBe('User:UsernameTaken');
+
+    const email = rejectionOf(() => register({ body: registration('fresh', 'gone@example.com') }));
+    expect(email.status).toBe(409);
+    expect(email.error.code).toBe('User:EmailTaken');
+    expect(USERS).toEqual(users);
+  });
+});
+
+/** 本人头像只收图片 data URL：外部地址等是 400 字段错误、不带业务码，头像不变。 */
+describe('mock self avatar', () => {
+  const setAvatar = AUTH_API['PUT /api/v1/auth/me/avatar'] as Handler;
+  const admin = USERS.find((u) => u.username === 'admin')!;
+  let original: string | undefined;
+
+  beforeEach(() => {
+    original = admin.avatar;
+    setMockSessionUserId(admin.id);
+  });
+
+  afterEach(() => {
+    admin.avatar = original;
+    setMockSessionUserId(null);
+  });
+
+  it.each([
+    ['an external URL', 'https://example.com/avatar.png'],
+    ['a non-image data URL', 'data:text/plain;base64,aGVsbG8='],
+    ['an unsupported image type', 'data:image/svg+xml;base64,PHN2Zy8+'],
+  ])('rejects %s as a field error without a code', (_, avatar) => {
+    const error = rejectionOf(() => setAvatar({ body: { avatar } }));
+
+    expect(error.status).toBe(400);
+    expect(error.error.code).toBeUndefined();
+    expect(error.error.errors.map((item: { field: string }) => item.field)).toEqual(['avatar']);
+    expect(admin.avatar).toBe(original);
+  });
+
+  it('accepts an image data URL and clears with an empty value', () => {
+    setAvatar({ body: { avatar: 'data:image/png;base64,iVBORw0KGgo=' } });
+    expect(admin.avatar).toBe('data:image/png;base64,iVBORw0KGgo=');
+
+    setAvatar({ body: { avatar: '' } });
+    expect(admin.avatar).toBeUndefined();
+  });
+});
 
 /**
  * 登录第二步：启用了两步验证的账号，第一步只拿到凭据、不下发会话；第二步的拒绝形态与后端一致——

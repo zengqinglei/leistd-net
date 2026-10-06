@@ -5,7 +5,18 @@ import { parseMockSorting } from '../core/sorting';
 import { ROLES } from '../data/authorization';
 import { ensureAcceptablePassword } from '../data/password-policy';
 //#endif
-import { USERS, toUserManagementOutput } from '../data/user';
+// prettier-ignore
+import {
+  //#if (LocalIdentity)
+  DELETED_USERS,
+  //#endif
+  USERS,
+  //#if (LocalIdentity)
+  isEmailTaken,
+  isUsernameTaken,
+  //#endif
+  toUserManagementOutput,
+} from '../data/user';
 //#if (LocalIdentity)
 import { getCurrentUser } from '../utils/current-user';
 //#endif
@@ -90,13 +101,14 @@ export function getUserById(id: string) {
 export function addUser(value: any) {
   const username = String(value.username ?? '').trim();
   const email = String(value.email ?? '').trim();
-  if (USERS.some((w) => w.username === username)) {
+  // 与后端一致：已删除用户仍占着用户名与邮箱
+  if (isUsernameTaken(username)) {
     throw new MockException(409, {
       code: 'User:UsernameTaken',
       message: `Username '${username}' already exists.`,
     });
   }
-  if (USERS.some((w) => w.email === email)) {
+  if (isEmailTaken(email)) {
     throw new MockException(409, {
       code: 'User:EmailTaken',
       message: `Email '${email}' is already in use.`,
@@ -142,7 +154,7 @@ export function updateUser(id: string, value: any) {
   }
   // 与后端一致：邮箱先去掉首尾空白再判占用与保存；被其他用户占用时 409，不静默覆盖
   const email = String(value.email ?? '').trim();
-  if (email && USERS.some((w) => w.id !== id && w.email === email)) {
+  if (email && isEmailTaken(email, id)) {
     throw new MockException(409, {
       code: 'User:EmailTaken',
       message: `Email '${email}' is already in use.`,
@@ -236,7 +248,10 @@ export function resetTwoFactor(id: string) {
   user.recoveryCodes = [];
 }
 
-/** 与后端一致：删除幂等，不存在（含已删除）即成功；内置超级管理员不可删（403）。 */
+/**
+ * 与后端一致：删除幂等，不存在（含已删除）即成功；内置超级管理员不可删（403）。
+ * 删除是软删除：移出列表但仍占着用户名与邮箱。
+ */
 export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
   if (index < 0) {
@@ -248,7 +263,7 @@ export function deleteUser(id: string) {
       message: 'The built-in super administrator cannot be deleted',
     });
   }
-  USERS.splice(index, 1);
+  DELETED_USERS.push(...USERS.splice(index, 1));
 }
 
 //#endif

@@ -56,6 +56,29 @@ export const USERS: MockUser[] = [
     roles: ['Member'],
   },
 ];
+//#if (LocalIdentity)
+
+/**
+ * 已删除的用户：不出现在任何列表与查询里，但仍占着用户名和邮箱。
+ * 与后端一致：唯一索引不排除软删除行，查重关掉了软删除过滤。
+ */
+export const DELETED_USERS: MockUser[] = [];
+
+/** 用户名是否已被占用（含已删除用户），按唯一索引原样比较。 */
+export function isUsernameTaken(username: string, excludeUserId?: string): boolean {
+  return [...USERS, ...DELETED_USERS].some(
+    (user) => user.username === username && user.id !== excludeUserId,
+  );
+}
+
+/** 邮箱是否已被占用（含已删除用户），按唯一索引原样比较，只差大小写的是另一个地址。 */
+export function isEmailTaken(email: string, excludeUserId?: string): boolean {
+  return [...USERS, ...DELETED_USERS].some(
+    (user) => user.email === email && user.id !== excludeUserId,
+  );
+}
+//#endif
+
 export function toUserOutput(user: MockUser): UserOutputDto {
   return {
     id: user.id,

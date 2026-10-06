@@ -22,6 +22,7 @@ function rejectionOf(run: () => unknown): MockException {
  */
 describe('open application mock', () => {
   const create = OPEN_APPLICATION_API['POST /api/v1/open-applications'] as Handler;
+  const update = OPEN_APPLICATION_API['PUT /api/v1/open-applications/:id'] as Handler;
   const remove = OPEN_APPLICATION_API['DELETE /api/v1/open-applications/:id'] as Handler;
   let snapshot: typeof OPEN_APPLICATIONS;
 
@@ -63,6 +64,24 @@ describe('open application mock', () => {
     expect(OPEN_APPLICATIONS).toEqual(snapshot);
   });
 
+  it('rejects application and client types outside the allowed values as field errors', () => {
+    const body = { ...valid, applicationType: 'spa', clientType: 'secret' };
+
+    const created = rejectionOf(() => create({ body }));
+    expect(created.status).toBe(400);
+    expect(created.error.code).toBeUndefined();
+    expect(fieldsOf(created)).toEqual(['applicationType', 'clientType']);
+    expect(OPEN_APPLICATIONS).toEqual(snapshot);
+
+    const target = snapshot[0];
+    const before = { ...target };
+    const updated = rejectionOf(() => update({ params: { id: target.id }, body }));
+    expect(updated.status).toBe(400);
+    expect(updated.error.code).toBeUndefined();
+    expect(fieldsOf(updated)).toEqual(['applicationType', 'clientType']);
+    expect(target).toEqual(before);
+  });
+
   it.each([
     ['a relative URI', 'callback'],
     ['whitespace', 'https://app.example.test/call back'],
@@ -87,6 +106,18 @@ describe('open application mock', () => {
     const duplicate = rejectionOf(() => create({ body: { ...valid, clientId: taken } }));
     expect(duplicate.status).toBe(409);
     expect(duplicate.error.code).toBe('OpenApp:ClientIdTaken');
+  });
+
+  it('checks the field errors before looking up the application on update', () => {
+    const body = { ...valid, applicationType: 'spa' };
+
+    const invalid = rejectionOf(() => update({ params: { id: 'app_missing' }, body }));
+    expect(invalid.status).toBe(400);
+    expect(fieldsOf(invalid)).toEqual(['applicationType']);
+
+    const missing = rejectionOf(() => update({ params: { id: 'app_missing' }, body: valid }));
+    expect(missing.status).toBe(404);
+    expect(missing.error.code).toBe('OpenApp:NotFound');
   });
 
   it('deletes idempotently: a missing application succeeds and changes nothing', () => {
