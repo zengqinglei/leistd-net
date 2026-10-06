@@ -19,13 +19,16 @@
         <ng-icon name="lucideMenu" />
       </button>
       <hlm-sheet-content *hlmSheetPortal="let ctx">
-        <h2 hlmSheetTitle class="px-4 pt-4">
-          {{ t('layout.sidebar.appTitle') }}
-        </h2>
-        <!-- 抽屉必须有描述：组件会无条件指一个 aria-describedby，缺了它就是悬空引用 -->
-        <p hlmSheetDescription class="sr-only">
-          {{ t('layout.topbar.navigationDescription') }}
-        </p>
+        <!-- 页头右侧为关闭按钮让位；底边距由下面导航的 p-4 承担 -->
+        <div hlmSheetHeader class="pb-0">
+          <h2 hlmSheetTitle>
+            {{ t('layout.sidebar.appTitle') }}
+          </h2>
+          <!-- 抽屉必须有描述：组件会无条件指一个 aria-describedby，缺了它就是悬空引用 -->
+          <p hlmSheetDescription class="sr-only">
+            {{ t('layout.topbar.navigationDescription') }}
+          </p>
+        </div>
         <nav class="flex flex-col gap-4 p-4" [attr.aria-label]="t('layout.sidebar.navigation')">
           @for (group of groups(); track group.label) {
             <div class="flex flex-col gap-1">

@@ -16,25 +16,11 @@
       }
     </ol>
     <div class="flex flex-wrap gap-2">
-      <button
-        hlmBtn
-        variant="outline"
-        size="sm"
-        class="pointer-coarse:h-11"
-        type="button"
-        (click)="copy()"
-      >
+      <button hlmBtn variant="outline" size="sm" type="button" (click)="copy()">
         <ng-icon [name]="copied() ? 'lucideCheck' : 'lucideCopy'" data-icon="inline-start" />
         {{ copied() ? t('account.twoFactor.copied') : t('account.twoFactor.copyCodes') }}
       </button>
-      <button
-        hlmBtn
-        variant="outline"
-        size="sm"
-        class="pointer-coarse:h-11"
-        type="button"
-        (click)="download()"
-      >
+      <button hlmBtn variant="outline" size="sm" type="button" (click)="download()">
         <ng-icon name="lucideDownload" data-icon="inline-start" />
         {{ t('account.twoFactor.downloadCodes') }}
       </button>
@@ -42,7 +28,7 @@
         hlmBtn
         size="sm"
         type="button"
-        class="sm:ml-auto pointer-coarse:h-11"
+        class="sm:ml-auto"
         data-testid="recovery-codes-done"
         (click)="done.emit()"
       >
