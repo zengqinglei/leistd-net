@@ -35,7 +35,25 @@ app.UseCorrelationId();
 app.UseGlobalExceptionHandler();
 ```
 
-`UseGlobalExceptionHandler` 应尽量靠近管道前端，并放在关联 ID 中间件之后。`ConfigureApiValidation` 让 MVC 自动模型校验经同一管道写出，字段名跟随宿主的 JSON 命名策略；请求体读不成 JSON 时只报对应字段，不回显解析器的异常消息（关闭了 `AllowInputFormatterExceptionMessages`）。未匹配的 `BusinessException` 默认为 400；资源不存在、并发冲突、显式的 422 语义等由宿主在 API 组合根按稳定错误码映射。
+`UseGlobalExceptionHandler` 应尽量靠近管道前端，并放在关联 ID 中间件之后。`ConfigureApiValidation` 让 MVC 自动模型校验经同一管道写出，`errors[].field` 跟随宿主的 JSON 命名策略，请求体、查询参数与嵌套对象（`shippingAddress.postalCode`）一致；请求体读不成 JSON 时只报对应字段，不回显解析器的异常消息（关闭了 `AllowInputFormatterExceptionMessages`）。未匹配的 `BusinessException` 默认为 400；资源不存在、并发冲突、显式的 422 语义等由宿主在 API 组合根按稳定错误码映射。
+
+`IValidatableObject.Validate` 产出的错误与特性错误同一口径：`MemberNames` 写 C# 属性名（`nameof(Roles)`），字段名同样换成 JSON 名；对不上任何属性的成员名原样使用，不给成员名的错误落在模型自身的键上。宿主启用了 DataAnnotations 本地化（`AddDataAnnotationsLocalization`）时，`ErrorMessage` 与特性的 `ErrorMessage` 一样作资源键，经宿主的 `DataAnnotationLocalizerProvider`（以该 DTO 类型为参数）取本地化器翻译，所以写不含运行时值的固定英文句；未启用时原文返回。`Validate` 里不必自己取本地化器或换算字段名。
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+
+public sealed record TwoFactorLoginInput : IValidatableObject
+{
+    public string? Code { get; init; }
+    public string? RecoveryCode { get; init; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(Code) && string.IsNullOrWhiteSpace(RecoveryCode))
+            yield return new ValidationResult("Enter the verification code or a recovery code.", [nameof(Code)]);
+    }
+}
+```
 
 宿主只映射自己的错误码。**框架组件的非默认状态由组件在自己的 `AddXxx` 里登记**（经
 `services.Configure<GlobalExceptionOptions>`），宿主不必逐个调用，也不必复制组件映射表——

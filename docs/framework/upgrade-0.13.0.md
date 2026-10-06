@@ -920,3 +920,9 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 ## 40. 模板：前端只按同源访问 API（破坏性）
 
 - 移除 Dockerfile 的 `API_GATEWAY` 构建参数、`environment.prod.ts` 的 `__API_GATEWAY__` 占位符，以及 `dev`/`test`/`uat` 构建配置与对应环境文件：浏览器认证只支持页面与 API 同源，`environment.api.gateway` 保持空值。仍传 `--build-arg API_GATEWAY` 或 `-c dev|test|uat` 的部署脚本改用默认的 production 构建，需要统一外部源时由部署代理承担。
+
+## 41. 自动 400 的字段名与 `IValidatableObject` 文案（破坏性）
+
+- `ConfigureApiValidation` 的 `errors[].field` 在查询参数等逐属性绑定的来源上也跟随 JSON 命名策略：此前沿用绑定时的 C# 属性名（`?roles=` 校验失败报 `Roles`），现报 `roles`；带参数名前缀绑定的报 `input.roles`。
+- `IValidatableObject.Validate` 的错误与特性错误同一口径：`MemberNames` 写 `nameof(...)`，字段名换成 JSON 名（含嵌套前缀）；宿主启用 `AddDataAnnotationsLocalization` 时，`ErrorMessage` 作资源键，经 `DataAnnotationLocalizerProvider`（以该 DTO 类型为参数）翻译。
+- 改法：按大小写敏感比对旧字段名（`Roles`、`RedirectUris`）的客户端改用 JSON 名；`Validate` 里手写 camelCase 成员名、从 `ValidationContext` 取 `IStringLocalizer` 的写法删除，改回 `nameof(...)` 与固定英文句，并在资源中备该句词条。未设命名策略的宿主不受影响。模板四个输入 DTO 已按此简化。

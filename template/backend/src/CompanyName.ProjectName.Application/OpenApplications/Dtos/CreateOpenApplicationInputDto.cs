@@ -1,8 +1,5 @@
 #if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
-#if (IncludeLocalization)
-using Microsoft.Extensions.Localization;
-#endif
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
@@ -72,6 +69,6 @@ public record CreateOpenApplicationInputDto : IValidatableObject
 
     /// <inheritdoc />
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
-        UpdateOpenApplicationInputDto.ValidateUris(RedirectUris, PostLogoutRedirectUris, validationContext);
+        UpdateOpenApplicationInputDto.ValidateUris(RedirectUris, PostLogoutRedirectUris);
 }
 #endif

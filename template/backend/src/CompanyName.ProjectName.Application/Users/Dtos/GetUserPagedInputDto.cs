@@ -1,9 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Data.Paging;
-#if (IncludeLocalization)
-using Microsoft.Extensions.Localization;
-#endif
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
@@ -14,8 +11,6 @@ public record GetUserPagedInputDto : PageRequest, IValidatableObject
 {
     /// <summary>单个角色名的长度上限，与角色名的持久化约束一致。</summary>
     private const int RoleNameMaxLength = 64;
-
-    private const string RoleNameTooLongMessage = "Each role name cannot exceed 64 characters.";
 
     /// <summary>
     /// 搜索关键字（用户名、邮箱、显示名称）
@@ -46,17 +41,10 @@ public record GetUserPagedInputDto : PageRequest, IValidatableObject
     public List<string>? Roles { get; init; }
 
     /// <inheritdoc />
-    /// <remarks>逐项长度没有对应的内置特性；自定义校验不经特性适配器，文案在这里按请求语言取。</remarks>
+    /// <remarks>逐项长度没有对应的内置特性；文案与特性文案一样是本地化键。</remarks>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (Roles?.Exists(role => role?.Trim().Length > RoleNameMaxLength) != true)
-            yield break;
-
-#if (IncludeLocalization)
-        var localizer = validationContext.GetService(typeof(IStringLocalizer)) as IStringLocalizer;
-        yield return new ValidationResult(localizer?[RoleNameTooLongMessage].Value ?? RoleNameTooLongMessage, [nameof(Roles)]);
-#else
-        yield return new ValidationResult(RoleNameTooLongMessage, [nameof(Roles)]);
-#endif
+        if (Roles?.Exists(role => role?.Trim().Length > RoleNameMaxLength) == true)
+            yield return new ValidationResult("Each role name cannot exceed 64 characters.", [nameof(Roles)]);
     }
 }
