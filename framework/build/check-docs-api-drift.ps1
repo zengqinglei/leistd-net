@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# 文档-源码 API 漂移校验（方案 P1）
+# 文档-源码 API 漂移校验
 # 目的：抓住组件/ddd 文档正文里“臆造的 Leistd API”——文档写了反引号包裹的类型/成员名，
 #       但该名字在框架源码里根本不存在（如曾出现的 tracing `IProxyGenerator`、event-bus `LogError`）。
 # 策略（保守，宁可漏报不误报）：

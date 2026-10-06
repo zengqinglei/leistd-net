@@ -331,7 +331,7 @@ foreach ($relative in $files) {
             }
         }
 
-        foreach ($symbol in $(if ($isSource) { $foreignFrameworkSymbols } else { @() })) {
+        foreach ($symbol in $(if ($isSource -or $isBuild) { $foreignFrameworkSymbols } else { @() })) {
             if ($line -match $symbol) {
                 $problems.Add("$relative`:$($index + 1) 引用了外部参考框架 '$symbol'")
             }

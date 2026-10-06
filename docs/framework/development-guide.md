@@ -505,7 +505,7 @@ pwsh framework/build/test-package-consumption.ps1                # 包内容、�
   - 可直接执行的入口脚本首行 `#!/usr/bin/env pwsh`（注释帮助块 `<# … #>` 与 `param(` 放在它之后，帮助块与 shebang 之间空一行，否则 `Get-Help` 认不出帮助块）；只被其他脚本点源加载的库脚本不要求（如 `scripts/template-matrix-scenarios.ps1`、`scripts/quality-validation-plan.ps1`）；
   - 路径分隔符用 `[\\/]` 正则或 `Join-Path`/`[System.IO.Path]`，不硬编码 `\`；
   - 不用 Windows 专属 cmdlet（`Get-WmiObject` 等）或调用 `cmd`/`*.exe`。
-- **纯文本分析的静态闸门**（`scripts/check-*.py`）可用 Python 3（同样跨平台），本地与 CI 均以 Python 3 为前置。
-  调用入口负责探测解释器（`python3` 优先，回落 `python` 并校验主版本为 3，找不到则报明确错误），
-  不硬编码 `python3` 可执行名——Windows 上通常只有 `python`。
+- **纯文本分析的静态闸门**（`scripts/check-*.py`）可用 Python 3.10 及以上（同样跨平台），本地与 CI 均以它为前置。
+  调用入口负责探测解释器（`python3` 优先，回落 `python` 并校验版本不低于 3.10，找不到则报明确错误），
+  不硬编码 `python3` 可执行名——Windows 上通常只有 `python`。闸门以默认编码警告即错误运行，因此要求 3.10。
 - **文档命令示例**优先给三平台通用形态；引用的脚本必须真实存在（不要写引用尚未创建的脚本的命令）。

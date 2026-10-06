@@ -99,7 +99,7 @@ def core_dependency_problems(relative: str, assembly_name: str, text: str) -> li
 
 
 # `.Core` 是打包边界，不是类型归属：命名空间一律剥掉它。
-# 这条对根原语包同样成立（Leistd.Core → Leistd），与 Volo.Abp.Core → Volo.Abp 一致。
+# 这条对根原语包同样成立（Leistd.Core → Leistd）。
 CORE_SUFFIX = re.compile(r"^(Leistd(?:\..+)?)\.Core$")
 
 

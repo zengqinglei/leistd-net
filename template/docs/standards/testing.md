@@ -135,7 +135,7 @@ npm run build
 
 保存状态最短时长与搜索防抖使用 Vitest 假计时器验证边界，不睡真实业务时长。先完成宿主／路由初始化，再伪造 Date、timeout 与 interval（RxJS 防抖使用 interval），保留原生 rAF、performance 和微任务；用 `vi.advanceTimersByTimeAsync` 推进，配合 fixture 稳定与 DOM 断言。边界期望独立于生产常量，teardown 清理业务计时器并恢复真实计时器；HTTP 验证与真实 Chromium 隔离保留。
 
-- 用例名（`describe` / `it`）用英文句子，小写开头，写出行为与期望（如 `keeps the dialog open when saving fails`）；中文只出现在注释与测试数据里。名字装不下的前因后果写进上方注释。
+- `describe` 写被测对象；`it` 用英文句子，小写开头，写出行为与期望（如 `keeps the dialog open when saving fails`）；中文只出现在注释与测试数据里。名字装不下的前因后果写进上方注释。
 - service、pipe、复杂状态和共享组件覆盖输入、输出、空态与错误态。
 - HTTP 调用使用 mock，除非当前任务明确执行前后端集成验证。
 - 表单覆盖校验、提交、防重复操作和失败反馈。
@@ -175,24 +175,12 @@ python3 scripts/check-operation-action-i18n.py --self-test  # 判据本身还成
 <!--#endif-->
 ```
 
-`check-error-codes.py` 检查错误码形如 `模块:语义`、前缀只由一个模块声明、源码引用常量而不写字面量，
-以及每个码都有抛出处——只被异常映射引用的码是死码。判据见脚本文件头。
-
-<!--#if (IncludeLocalization)-->
-`check-i18n.py` 检查词条键集合与占位符、静态引用、后端资源与错误码词条、DataAnnotations 键与写死的中文，判据见脚本文件头。
-
-<!--#endif-->
+判据见各脚本文件头。
 <!--#if (SpaFrontend && IncludeOperationRecords)-->
-**动作码 ↔ 词条必须集合相等。** 界面把动作码渲染成一句话（「删除了角色 管理员」），
-靠的是 `operationRecords.actions.<码>` 这条词条。漏配**不会报错**：没有词条的码按降级规则
-原样显示裸码，页面照常能用，只是那一行是 `role.deleted` 这种机器码——没有红灯，
-只有"有些行看不懂"。新增动作码时同一个提交里补上中英两种句子。
-
+动作码与 `operationRecords.actions.<码>` 词条须集合相等：漏配不报错，界面只把那一行显示成裸码（`role.deleted`）。新增动作码时同一提交补中英句子。
 <!--#endif-->
-后端的日志模板、文件范围命名空间、命名空间跟随目录、未使用的 using 与实现参数名由 `backend/.editorconfig` 在构建期检查，
-构建以 0 警告为准；确需违反时用 `[SuppressMessage]` 并写明 Justification。
-控制器授权、路由前缀与实体租户归属的约定由 `ControllerAuthorizationConventionTests`、`RouteConventionTests`、
-`EntityModelConventionTests` 随测试检查，豁免各写在测试的白名单里并注明理由。
+
+后端代码风格（日志模板、命名空间、未使用的 using 等）由 `backend/.editorconfig` 在构建期检查，以 0 警告为准，确需违反用 `[SuppressMessage]` 写明理由；控制器授权、路由前缀与实体租户归属由三个 `*ConventionTests` 检查，豁免写在测试白名单里并注明理由。
 
 新增这类闸门时一并写 `--self-test`：判据自己失效之后，它给出的每一次"通过"都是假的。
 

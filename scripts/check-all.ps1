@@ -211,6 +211,7 @@ $gates = @(
     # 源码含全部条件分支的标题（并集），条件标记不会造成误报，只可能漏掉裁剪类问题。
     @{ Name = "章节锚点规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-markdown-anchors.py", "--self-test") }
     @{ Name = "模板文档章节锚点";          Cmd = $pythonCmd; Args = @("scripts/check-markdown-anchors.py", "template") }
+    @{ Name = "模板规范读取成本上限";      Cmd = $pythonCmd; Args = @("scripts/measure-template-read-cost.py", "--check") }
 )
 
 if ($List) {
