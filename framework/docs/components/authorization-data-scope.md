@@ -39,6 +39,8 @@ builder.Services.AddDataScopeProvider<Order, OwnOrderScopeProvider>();
 实现范围 Provider，返回谓词以便多个范围取并集：
 
 ```csharp
+using System.Linq.Expressions;
+
 public class OwnOrderScopeProvider : IDataScopeProvider<Order>
 {
     public const string Scope = "Own";
@@ -60,6 +62,8 @@ public class OwnOrderScopeProvider : IDataScopeProvider<Order>
 分配来源按操作返回范围；"能看"不等于"能改"：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
     : IDataScopeAssignmentProvider
 {
@@ -87,6 +91,8 @@ public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
 列表、总数和导出必须复用施加范围后的同一查询：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Read, ct);
 
 if (!string.IsNullOrWhiteSpace(keyword))
@@ -101,6 +107,8 @@ var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).T
 批量操作应先在范围内定位目标并核对数量，不能静默跳过越权项：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Update, ct);
 
 var targets = await scoped.Where(x => ids.Contains(x.Id)).ToListAsync(ct);

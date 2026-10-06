@@ -53,6 +53,8 @@ app.MapGroup("/api/v1")
 注册过滤器后，控制器可以直接返回业务对象，框架自动包装：
 
 ```csharp
+using Microsoft.AspNetCore.Mvc;
+
 [ApiController]
 [Route("api/users")]
 public class UserController(IUserService userService) : ControllerBase
@@ -63,7 +65,7 @@ public class UserController(IUserService userService) : ControllerBase
 
     [HttpGet("export")]
     [NoWrap]
-    public IActionResult Export() => File(bytes, "text/csv", "users.csv");
+    public IActionResult Export() => File(userService.ExportCsv(), "text/csv", "users.csv");
 }
 ```
 
@@ -71,6 +73,8 @@ public class UserController(IUserService userService) : ControllerBase
 启用包装时同样得到带 `traceId` 与 `errorCode` 的信封：
 
 ```csharp
+using Microsoft.AspNetCore.Mvc;
+
 public class OrderController(IOrderService service) : ControllerBase
 {
     [HttpPost]

@@ -95,6 +95,8 @@ public class Order : IMultiTenant
 ### 切换租户上下文
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 using (currentTenant.Change(tenantId))
 {
     var orders = await db.Orders.ToListAsync();
@@ -302,13 +304,11 @@ app.MapGroup("/api/v1/tenant-connections").MapTenantConnections(options =>
 | 自己持有控制库（租户注册表与连接配置就在本服务） | `AddLocalTenantConnectionResolution<TControlDbContext>(o => o.ControlPlaneConnectionStringName = "IdentityControl")`（EF 包） | 持久化的 Data Protection 密钥环 |
 | 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包）+ `AddRemoteTenantConnectionStore(serviceName)`（ServiceClient 包） | 控制面地址 `Leistd:ServiceClients:{serviceName}:BaseAddress`、机器身份（如 client credentials）；`Leistd:MultiTenancy:Routing:CacheLifetime` 可选（默认 10 分钟） |
 
-远端存储回源控制面经 `MapTenantConnections` 映射的机器端点，与端点共用 Core 里的线上 DTO；路由前缀默认 `/api/v1/tenant-connections`，经 `Leistd:ServiceClients:{serviceName}:RoutePrefix` 改。控制面下发**解密后**的连接串，远端服务不持有控制面的密钥环。鉴权与弹性策略加在返回的构建器上：
+远端存储回源控制面经 `MapTenantConnections` 映射的机器端点，与端点共用 Core 里的线上 DTO；路由前缀默认 `/api/v1/tenant-connections`，经 `Leistd:ServiceClients:{serviceName}:RoutePrefix` 改。控制面下发**解密后**的连接串，远端服务不持有控制面的密钥环。鉴权（如[服务客户端](./service-client.md)的 `AddClientCredentials()`）与官方的标准弹性处理器加在返回的 `IHttpClientBuilder` 上：
 
 ```csharp
 builder.Services.AddRemoteTenantConnectionResolution();
-builder.Services.AddRemoteTenantConnectionStore("Identity")
-    .AddClientCredentials()
-    .AddStandardResilienceHandler();
+IHttpClientBuilder controlPlane = builder.Services.AddRemoteTenantConnectionStore("Identity");
 ```
 
 只有 404 且错误码为 `Tenant:NotFound` 的响应翻成"租户不存在"（`null`，由解析器失败关闭）；路由配错之类的其它 404 与一切其它错误原样抛出——吞成 `null` 会让"控制面不可达"表现成"这个租户不存在"。
@@ -355,6 +355,8 @@ builder.Services.AddRemoteTenantConnectionStore("Identity")
 固定在控制库的 DbContext 声明专属连接名，与 `ControlPlaneConnectionStringName` 一致：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 [ConnectionStringName("IdentityControl")]
 public sealed class IdentityControlDbContext : DbContext;
 ```

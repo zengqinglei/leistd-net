@@ -30,6 +30,8 @@ dotnet add package Leistd.UnitOfWork.EntityFrameworkCore
 ## 注册
 
 ```csharp
+using System.Data;
+
 builder.Services.AddUnitOfWork(options =>
 {
     options.IsTransactional = true;
@@ -49,6 +51,7 @@ builder.Services.AddUnitOfWorkEfCore();
 
 ```csharp
 using Leistd.UnitOfWork.Attributes;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
 [UnitOfWork]
 public class OrderPlacementService(
@@ -66,6 +69,7 @@ public class OrderPlacementService(
 方法正常返回时拦截器统一保存并提交；异常时回滚。声明式用法不手动调用 `SaveChanges` 或 `CommitAsync`。
 提交使用方法声明的第一个 `CancellationToken` 参数（没有时不可取消），BeforeCommit 处理器收到的也是它；取消边界见下文。
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 [UnitOfWork(IsolationLevel = IsolationLevel.Serializable)]
 public Task TransferAsync(...) => ...;
@@ -121,6 +125,8 @@ dbContext.OrderLines.AddRange(CreateLines(order.Id));
 异常最终在 `CompleteAsync` 抛出，已经离开了你想处理它的位置：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 var dbContext = await dbContextProvider.GetDbContextAsync(ct);
 
 // 错：Add 只登记到变更跟踪，catch 永不触发，写法却"看起来在处理并发首次写入"
@@ -151,10 +157,10 @@ catch (DbUpdateException) { /* 这里才捕获得到 */ }
 
 ```csharp
 [UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)]
-public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
+public class ValidateOrderHandler(OrderValidator validator) : IEventHandler<OrderCreatedEvent>
 {
     public Task HandleAsync(OrderCreatedEvent @event, CancellationToken cancellationToken = default)
-        => ValidateAsync(@event, cancellationToken);
+        => validator.ValidateAsync(@event, cancellationToken);
 }
 ```
 

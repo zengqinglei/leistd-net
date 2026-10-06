@@ -35,6 +35,8 @@ builder.Services.AddMapsterObjectMapper(options =>
 映射配置用 Mapster 官方的 `IRegister` 书写，`config.Scan(...)` 把程序集里的注册类登记到组件自己的 `TypeAdapterConfig`：
 
 ```csharp
+using Mapster;
+
 public class OrderMappings : IRegister
 {
     public void Register(TypeAdapterConfig config) =>

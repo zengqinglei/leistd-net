@@ -52,14 +52,14 @@ builder.Services.AddHttpClient<MyApiClient>()
 ### 读取和切换
 
 ```csharp
-public class OrderService(ICorrelationIdProvider correlationId)
+public class OrderService(ICorrelationIdProvider correlationId, OrderSubmitter submitter)
 {
     public async Task RetryAsync(Order order, CancellationToken ct)
     {
         // 重试沿用下单时的关联标识：两次执行是两条链路，但在日志里按同一个标识串起来
         using (correlationId.Change(order.CorrelationId))
         {
-            await SubmitAsync(order, ct);
+            await submitter.SubmitAsync(order, ct);
         }
     }
 }

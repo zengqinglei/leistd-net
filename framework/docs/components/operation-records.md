@@ -179,6 +179,7 @@ builder.Services.AddSingleton<IOperationActionDefinitionProvider, AppOperationAc
 
 用例里显式记录：
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 public class UserService(IOperationRecorder recorder, ...)
 {
@@ -220,6 +221,7 @@ public class UserService(IOperationRecorder recorder, ...)
 参数走 `FromCode` 的第二个入参（键即资源文案里的占位名），与本地化词条一一对应。
 `BusinessException.LocalizationData` 正是这个类型，所以异常与记录可以用同一份参数：
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 // 应用服务：业务规则拒绝，不是授权拒绝——授权那一档由端点上的
 // [OperationRecordAction] 自动补记，这里是走到了业务逻辑之后才判定的
@@ -299,6 +301,7 @@ await recorder.RecordSucceededAsync(
 
 授权阶段的拒绝：端点声明动作码，宿主在自己的授权结果处理器里补记。
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 [HttpPut("{id:guid}")]
 [Authorize(Policy = "App.Roles.Update")]
@@ -313,6 +316,9 @@ public Task<Role> UpdateAsync(Guid id, ...) => ...;
 被拒路径上逐个重新评估，取最具体（最后声明）的未通过者，与特性的书写顺序无关。
 
 ```csharp
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
+
 public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultHandler
 {
     private readonly AuthorizationMiddlewareResultHandler defaultHandler = new();

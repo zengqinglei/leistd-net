@@ -70,7 +70,7 @@ app.MapGroup("/api/v1/settings").MapSettings(options =>
 ```csharp
 builder.Services.AddHostSettings(bindings => bindings
     .Bind("Logging.MinimumLevel", ["Serilog:MinimumLevel", "Serilog:MinimumLevel:Default"], fallback: "Information")
-    .BindOption<SmtpOptions>("Email.SmtpHost", SmtpOptions.SectionName, nameof(SmtpOptions.Host)));
+    .BindOption<ExportOptions>("Export.Endpoint", ExportOptions.SectionName, nameof(ExportOptions.Endpoint)));
 
 var app = builder.Build();
 app.UseHostSettings();   // 构建之后挂配置源，漏了启动失败
@@ -133,6 +133,7 @@ builder.Services.AddTransient<ISettingValueValidator, TimeZoneSettingValidator>(
 
 读取当前生效值：
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 public class ReportService(ISettingProvider settings)
 {

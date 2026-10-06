@@ -8,6 +8,9 @@
 #   - 只在该标识符“看起来是 Leistd 自有 API”时校验：即它不在 .NET BCL / EF / 第三方 白名单里；
 #   - 判定“存在”：该标识符作为一个词出现在 framework 任一 .cs 源码（排除 bin/obj）中；
 #   - 不存在 → 记为疑似臆造，CI 失败。
+# 闭包（docs/framework/development-guide.md §5.1）：组件文档代码块里的 Leistd 公共类型、Add*/Use*/Map* 入口
+#   及其他扩展方法，至少有一个定义包属于本篇家族 csproj 的 ProjectReference 传递闭包；`## 注册` 段里调用兄弟组件
+#   Add*/Use*/Map* 的宿主组合行整行豁免。代码块自己声明的类型、注释与字符串不参与判定。
 # 用法：pwsh framework/build/check-docs-api-drift.ps1  （从仓库根运行）
 
 $ErrorActionPreference = 'Stop'
@@ -29,6 +32,20 @@ Get-ChildItem -Recurse -File -Include *.csproj framework/components, framework/d
     Where-Object { $_.FullName -notmatch '[\\/](bin|obj|tests)[\\/]' } |
     ForEach-Object { [void]$packageIds.Add($_.BaseName) }
 
+# 包目录 → 包名、包 → 直接引用的 Leistd 包：闭包判定用。
+$packageDirs = @{}
+$packageRefs = @{}
+Get-ChildItem -Recurse -File -Include *.csproj framework/components, framework/ddd-struct |
+    Where-Object { $_.FullName -notmatch '[\\/](bin|obj|tests)[\\/]' } |
+    ForEach-Object {
+        $packageDirs[$_.DirectoryName + [IO.Path]::DirectorySeparatorChar] = $_.BaseName
+        $packageRefs[$_.BaseName] = @([regex]::Matches((Get-Content $_.FullName -Raw), '<ProjectReference\s+Include="([^"]+)"') |
+            ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_.Groups[1].Value.Replace('\', '/')) })
+    }
+$typeOwners = @{}
+$entryOwners = @{}
+$extensionOwners = @{}
+
 $namespaces = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $qualifiedTypes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $typeSources = @{}
@@ -42,8 +59,21 @@ foreach ($srcFile in $srcFiles) {
     $namespace = $namespaceMatch.Groups[1].Value
     [void]$namespaces.Add($namespace)
     $typePattern = '(?m)^\s*public\s+(?:(?:abstract|sealed|static|partial|readonly|ref)\s+)*(?:class|record(?:\s+(?:class|struct))?|struct|interface|enum)\s+([A-Za-z_]\w*)'
+    $ownerDir = @($packageDirs.Keys | Where-Object { $srcFile.FullName.StartsWith($_, [StringComparison]::Ordinal) } |
+        Sort-Object Length -Descending | Select-Object -First 1)
+    $owner = if ($ownerDir) { $packageDirs[$ownerDir[0]] } else { $null }
+    if ($owner) {
+        # 扩展方法都按定义包计闭包；其中 Add*/Use*/Map* 是宿主组合行豁免所认的注册入口。
+        $extensionPattern = 'public\s+static\s+[^=;{(]*?\b([A-Z]\w*)\s*(?:<[^>]*>)?\s*\(\s*this\b'
+        foreach ($extensionMatch in [regex]::Matches($text, $extensionPattern)) {
+            $name = $extensionMatch.Groups[1].Value
+            $extensionOwners[$name] = @($extensionOwners[$name]) + $owner | Where-Object { $_ } | Sort-Object -Unique
+            if ($name -cmatch '^(Add|Use|Map)') { $entryOwners[$name] = $extensionOwners[$name] }
+        }
+    }
     foreach ($typeMatch in [regex]::Matches($text, $typePattern)) {
         $typeName = $typeMatch.Groups[1].Value
+        if ($owner) { $typeOwners[$typeName] = @($typeOwners[$typeName]) + $owner | Where-Object { $_ } | Sort-Object -Unique }
         $qualifiedType = "$namespace.$typeName"
         [void]$qualifiedTypes.Add($qualifiedType)
         $typeSources[$typeName] = @($typeSources[$typeName]) + $text
@@ -76,6 +106,96 @@ function Test-QualifiedReference([string]$Reference) {
     }
     return $false
 }
+
+function Get-PackageClosure([string[]]$Packages) {
+    $closure = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $pending = [System.Collections.Generic.Stack[string]]::new()
+    foreach ($package in $Packages) { $pending.Push($package) }
+    while ($pending.Count -gt 0) {
+        $package = $pending.Pop()
+        if (-not $closure.Add($package)) { continue }
+        foreach ($reference in @($packageRefs[$package])) { if ($reference) { $pending.Push($reference) } }
+    }
+    return , $closure
+}
+
+function Get-FamilyClosure([string]$Family) {
+    $projects = @(Get-ChildItem -File -Path "framework/components/$Family/*/Leistd.*.csproj" -ErrorAction SilentlyContinue | ForEach-Object BaseName)
+    return , (Get-PackageClosure $projects)
+}
+
+# 返回违规列表（"行号: 标识符 → 定义包"）。正文与自检共用同一实现。
+function Test-DocClosure([string]$Text, [System.Collections.Generic.HashSet[string]]$Closure) {
+    $violations = @()
+    $lines = $Text -split "`r?`n"
+    $blocks = @()
+    $section = $null
+    $current = $null
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
+        if ($null -ne $current) {
+            if ($line.Trim().StartsWith('```')) { $blocks += $current; $current = $null }
+            else { $current.Lines += [PSCustomObject]@{ Number = $index + 1; Text = $line } }
+            continue
+        }
+        if ($line -match '^\s*```\s*(csharp|cs|c#)\s*$') { $current = [PSCustomObject]@{ Section = $section; Lines = @() }; continue }
+        if ($line -match '^\s*```') { $current = [PSCustomObject]@{ Section = '__other'; Lines = @() }; continue }
+        if ($line -match '^##\s+(.+?)\s*$') { $section = $Matches[1] }
+    }
+    $blocks = @($blocks | Where-Object Section -ne '__other')
+    # 去掉注释与字符串，只看代码里的标识符。
+    $code = { param($t) [regex]::Replace(($t -replace '//.*$', ''), '\$?@?"(?:\\.|[^"\\])*"', '""') }
+    $declared = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($block in $blocks) {
+        foreach ($entry in $block.Lines) {
+            foreach ($m in [regex]::Matches((& $code $entry.Text), '\b(?:class|record|struct|interface|enum)\s+([A-Za-z_]\w*)')) { [void]$declared.Add($m.Groups[1].Value) }
+        }
+    }
+    foreach ($block in $blocks) {
+        foreach ($entry in $block.Lines) {
+            $text = & $code $entry.Text
+            if ($text -match '^\s*using\s') { continue }
+            $tokens = @([regex]::Matches($text, '\b[A-Z]\w*\b') | ForEach-Object Value | Sort-Object -Unique)
+            # 宿主组合行：`## 注册` 段里调用兄弟组件的 Add*/Use*/Map*，整行豁免（§5.1）。
+            $callsSibling = $block.Section -eq '注册' -and @($tokens | Where-Object {
+                $entryOwners.ContainsKey($_) -and -not @($entryOwners[$_] | Where-Object { $Closure.Contains($_) }).Count
+            }).Count -gt 0
+            if ($callsSibling) { continue }
+            foreach ($token in $tokens) {
+                if ($declared.Contains($token)) { continue }
+                $owners = if ($typeOwners.ContainsKey($token)) { $typeOwners[$token] } elseif ($extensionOwners.ContainsKey($token)) { $extensionOwners[$token] } else { $null }
+                if (-not $owners) { continue }
+                if (@($owners | Where-Object { $Closure.Contains($_) }).Count -eq 0) {
+                    $violations += "{0}: ``{1}`` → {2}" -f $entry.Number, $token, ($owners -join '/')
+                }
+            }
+        }
+    }
+    return $violations
+}
+
+# 闭包规则自检：用本次索引里真实的兄弟入口与类型构造正反例。
+$selfFamily = Get-FamilyClosure 'email'
+foreach ($name in 'AddRealTimeSignalR', 'RealTimeHub', 'IEmailSender', 'EnableCreationAuditing') {
+    if (-not ($extensionOwners.ContainsKey($name) -or $typeOwners.ContainsKey($name))) { throw "文档闭包规则自检缺少索引项: $name" }
+}
+if (@($typeOwners['RealTimeHub'] + $entryOwners['AddRealTimeSignalR'] + $extensionOwners['EnableCreationAuditing'] | Where-Object { $selfFamily.Contains($_) }).Count) {
+    throw '文档闭包规则自检前提失效：realtime 已进入 email 家族闭包，请换一个兄弟组件。'
+}
+$fence = '```'
+$closureCases = @(
+    @{ Name = '注册段调用兄弟入口豁免'; Expected = 0; Text = "## 注册`n$fence" + "csharp`nbuilder.Services.AddRealTimeSignalR();`n$fence" },
+    @{ Name = '使用段调用兄弟入口'; Expected = 1; Text = "## 使用`n$fence" + "csharp`nbuilder.Services.AddRealTimeSignalR();`n$fence" },
+    @{ Name = '注册段调用兄弟的非注册扩展'; Expected = 1; Text = "## 注册`n$fence" + "csharp`nChangeTracker.EnableCreationAuditing(serviceProvider);`n$fence" },
+    @{ Name = '注册段使用兄弟类型'; Expected = 1; Text = "## 注册`n$fence" + "csharp`nbuilder.Services.AddSingleton<RealTimeHub>();`n$fence" },
+    @{ Name = '本家族类型'; Expected = 0; Text = "## 使用`n$fence" + "csharp`npublic class X(IEmailSender sender);`n$fence" },
+    @{ Name = '注释与字符串不计'; Expected = 0; Text = "## 使用`n$fence" + "csharp`nvar name = `"RealTimeHub`"; // RealTimeHub`n$fence" },
+    @{ Name = '代码块自声明类型'; Expected = 0; Text = "## 使用`n$fence" + "csharp`npublic class RealTimeHub;`nvar hub = new RealTimeHub();`n$fence" },
+    @{ Name = '非 C# 代码块不计'; Expected = 0; Text = "## 使用`n$fence" + "bash`nAddRealTimeSignalR RealTimeHub`n$fence" }
+)
+$failedClosure = @($closureCases | Where-Object { @(Test-DocClosure $_.Text $selfFamily).Count -ne $_.Expected } | ForEach-Object Name)
+if ($failedClosure.Count -gt 0) { throw "文档闭包规则自检失败: $($failedClosure -join ', ')" }
+Write-Host "✅ 文档闭包规则自检通过（$($closureCases.Count) 例）。" -ForegroundColor Green
 
 # 自检与正文扫描使用同一份本次源码索引；规则失效时不继续给出正文通过。
 $cases = @(
@@ -194,6 +314,15 @@ foreach ($glob in $docGlobs) {
                 $fail += "{0}: 反引号 API `{1}` 在框架源码中不存在（疑似臆造或已改名）" -f $doc.Name, $id
             }
         }
+    }
+}
+
+# 组件示例只用本组件闭包里的类型（§5.1）。ddd-struct 文档就是分层示范，不在此列。
+foreach ($doc in Get-ChildItem 'framework/docs/components/*.md' -File | Where-Object Name -ne 'README.md') {
+    $closureSet = Get-FamilyClosure $doc.BaseName
+    if ($closureSet.Count -eq 0) { continue }
+    foreach ($violation in Test-DocClosure (Get-Content $doc.FullName -Raw) $closureSet) {
+        $fail += "{0}:{1}（不在本家族 csproj 的传递闭包内）" -f $doc.Name, $violation
     }
 }
 

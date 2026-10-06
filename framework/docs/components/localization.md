@@ -83,6 +83,8 @@ services.AddJsonLocalizationResources(typeof(OrderService).Assembly);
 注入 `IStringLocalizer` 按键取文案：
 
 ```csharp
+using Microsoft.Extensions.Localization;
+
 public class OrderNotifier(IStringLocalizer localizer)
 {
     public string StockWarning() => localizer["Order:StockInsufficient", "A1"];

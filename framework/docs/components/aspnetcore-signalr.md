@@ -76,6 +76,8 @@ public class OrderHub(ICurrentUser currentUser) : Hub
 宿主为 HTTP 路径写的授权 handler 无需改动即可在 Hub 上复评生效：
 
 ```csharp
+using Microsoft.AspNetCore.Authorization;
+
 options.DefaultPolicy = new AuthorizationPolicyBuilder()
     .RequireAuthenticatedUser()
     .AddRequirements(new AccountStillActiveRequirement())   // 宿主自定义；已建连接在下一次方法调用时复评

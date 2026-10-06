@@ -25,6 +25,8 @@ dotnet add package Leistd.Authorization.Resource.EntityFrameworkCore
 ## 注册
 
 ```csharp
+using Microsoft.AspNetCore.Authorization;
+
 builder.Services.AddSecurity();                                        // Web 宿主：当前主体来自 HTTP 请求
 builder.Services.AddResourceAuthorizationEfCore<AppDbContext>();
 builder.Services.AddResourceAuthorization();
@@ -52,6 +54,9 @@ ACL Store/Manager 依赖 `IDbContextProvider<TDbContext>`，因此需先注册 `
 ### 定义资源与规则
 
 ```csharp
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
+
 public class Order : IAuthorizableResource
 {
     public string OwnerId { get; set; } = string.Empty;

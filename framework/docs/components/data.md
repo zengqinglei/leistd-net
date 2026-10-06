@@ -24,6 +24,8 @@ dotnet add package Leistd.Data
 实现契约并注册；连接名由 DbContext 上的特性决定。
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 [ConnectionStringName("Control")]
 public class ControlDbContext(DbContextOptions<ControlDbContext> options) : DbContext(options);
 
@@ -44,6 +46,8 @@ builder.Services.AddScoped<IConnectionStringResolver, ConfigurationConnectionStr
 分页查询直接接收请求类型，排序字段按白名单解析：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 public async Task<PagedResult<Order>> GetPagedListAsync(PageRequest page, CancellationToken ct)
 {
     var query = dbContext.Orders.AsNoTracking();

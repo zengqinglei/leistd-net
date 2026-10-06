@@ -56,6 +56,8 @@ builder.Services.AddRecurringJob<LeadRecycleJob>(
 排期来自选项时用工厂重载，调度器启动时取一次：
 
 ```csharp
+using Microsoft.Extensions.Options;
+
 builder.Services.AddRecurringJob<LeadRecycleJob>(
     "crm.lead-recycle",
     sp => RecurringJobSchedule.DailyAt(sp.GetRequiredService<IOptions<LeadOptions>>().Value.RecycleAt),

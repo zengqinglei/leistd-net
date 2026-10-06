@@ -96,6 +96,8 @@ public class ReportService(ICurrentClient currentClient)
 后台任务或测试用 `IAmbientContext` 同时建立已注册的主体、租户与链路维度：
 
 ```csharp
+using System.Security.Claims;
+
 public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 {
     public void Run(ClaimsPrincipal systemPrincipal)
