@@ -1,4 +1,3 @@
-using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Shared.Paging.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
@@ -7,9 +6,6 @@ using CompanyName.ProjectName.Domain.Users.Errors;
 #if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Errors;
 #endif
-using CompanyName.ProjectName.Application.Auth.Errors;
-#endif
-#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 #if (OpenIddictServer)

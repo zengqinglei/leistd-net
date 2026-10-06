@@ -1,5 +1,5 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
@@ -8,7 +8,6 @@ using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
@@ -41,7 +40,7 @@ internal sealed class TwoFactorAppService(
     ICurrentUser currentUser,
     ICurrentTenant currentTenant,
     TwoFactorDomainService twoFactorDomainService,
-    IPasswordHasher passwordHasher,
+    UserDomainService userDomainService,
     UserSessionDomainService userSessionDomainService,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
     IReauthenticationGuard reauthenticationGuard,
@@ -72,7 +71,7 @@ internal sealed class TwoFactorAppService(
     public async Task<TwoFactorSetupOutputDto> BeginSetupAsync(CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        EnsureDisabled(user);
+        user.EnsureTwoFactorDisabled();
 
         var secret = Totp.GenerateSecret();
         await cache.SetStringAsync(
@@ -99,7 +98,8 @@ internal sealed class TwoFactorAppService(
         CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        EnsureDisabled(user);
+        // 先于取缓存与校验验证码拒绝：已启用的账号不该看到"设置已过期"或"验证码不对"
+        user.EnsureTwoFactorDisabled();
 
         var protectedSecret = await cache.GetStringAsync(SetupKey(user.Id), cancellationToken)
             ?? throw new BusinessException(AuthErrorCodes.TwoFactorSetupExpired, "The setup has expired. Start again.")
@@ -145,7 +145,7 @@ internal sealed class TwoFactorAppService(
         // 少了这一道，持有被盗会话的人能在这个接口上无限次猜——猜到了就把这个账号的第二道防线拆了。
         await reauthenticationGuard.EnsureAllowedAsync(user, cancellationToken);
 
-        if (user.PasswordHash is null || !passwordHasher.VerifyPassword(user.PasswordHash, input.Password))
+        if (!userDomainService.VerifyCurrentPassword(user, input.Password))
         {
             throw await reauthenticationGuard.RejectAsync(
                 user,
@@ -183,11 +183,8 @@ internal sealed class TwoFactorAppService(
         CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        if (!user.TwoFactorEnabled)
-        {
-            throw new BusinessException(AuthErrorCodes.TwoFactorNotEnabled, "Two-factor authentication is not turned on.")
-                ;
-        }
+        // 先于再认证拒绝：未启用的账号没有可校验的验证码，不该计入失败次数
+        user.EnsureTwoFactorEnabled();
 
         // 重发恢复码同样是再认证：拿到恢复码等于拿到一组可绕过两步验证的凭据
         await reauthenticationGuard.EnsureAllowedAsync(user, cancellationToken);
@@ -213,15 +210,6 @@ internal sealed class TwoFactorAppService(
             cancellationToken);
 
         return new TwoFactorRecoveryCodesOutputDto { RecoveryCodes = codes };
-    }
-
-    private static void EnsureDisabled(User user)
-    {
-        if (user.TwoFactorEnabled)
-        {
-            throw new BusinessException(AuthErrorCodes.TwoFactorAlreadyEnabled, "Two-factor authentication is already turned on.")
-                ;
-        }
     }
 
     private const string CodeInvalidMessage = "The verification code is incorrect.";

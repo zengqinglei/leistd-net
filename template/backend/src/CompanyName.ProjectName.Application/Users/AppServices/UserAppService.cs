@@ -1,5 +1,4 @@
 using Leistd.UnitOfWork.Attributes;
-using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 #if (LocalIdentity)

@@ -1,7 +1,7 @@
 using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Domain.Auth.Options;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 using System.Globalization;

@@ -36,6 +36,7 @@ using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 #endif
 #endif
 using CompanyName.ProjectName.Application.Initialization;
+using CompanyName.ProjectName.Application.Users;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.ObjectMapping.Mapster;
 using Mapster;
@@ -122,6 +123,7 @@ public static class DependencyInjection
 #endif
 
         services.TryAddTransient<IUserAppService, UserAppService>();
+        services.TryAddTransient<UserRoleReader>();
 
         services.TryAddTransient<IRoleAppService, RoleAppService>();
 

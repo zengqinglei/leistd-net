@@ -175,6 +175,8 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         // 已验证时不再发码
         using var alreadyVerified = await user.Client.PostAsync("/api/v1/auth/me/email-verification", null);
         Assert.Equal(HttpStatusCode.Conflict, alreadyVerified.StatusCode);
+        Assert.Equal("Auth:EmailAlreadyVerified",
+            (await alreadyVerified.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
 
         var newEmail = $"new-{username}@example.test";
         using var change = await user.Client.PutAsJsonAsync("/api/v1/auth/me", new { Username = username, Email = newEmail });

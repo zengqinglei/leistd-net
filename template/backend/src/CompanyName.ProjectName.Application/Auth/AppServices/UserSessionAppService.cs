@@ -1,5 +1,5 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Mappings;
 using CompanyName.ProjectName.Application.Auth.Sessions;
@@ -26,6 +26,7 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// <inheritdoc cref="IUserSessionAppService" />
 internal sealed class UserSessionAppService(
     IRepository<UserSession, Guid> sessionRepository,
+    IQueryableAsyncExecuter asyncExecuter,
     UserSessionDomainService userSessionDomainService,
     ICurrentUser currentUser,
     IUnitOfWorkManager unitOfWorkManager,
@@ -39,9 +40,10 @@ internal sealed class UserSessionAppService(
     {
         var userId = currentUser.Id!.Value;
         var currentSessionId = currentUser.GetSessionId();
-        var cutoff = clock.Now - sessionOptions.Value.IdleTimeout;
-        var sessions = await sessionRepository.GetListAsync(
-            s => s.UserId == userId && s.LastSeenTime > cutoff,
+        var sessions = await asyncExecuter.ToListAsync(
+            (await sessionRepository.GetQueryableAsync(cancellationToken))
+                .Where(s => s.UserId == userId)
+                .Where(UserSession.ActiveAt(clock.Now, sessionOptions.Value.IdleTimeout)),
             cancellationToken);
 
         var context = new Dictionary<string, object>();

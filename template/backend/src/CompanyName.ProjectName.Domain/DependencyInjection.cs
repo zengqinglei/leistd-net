@@ -21,6 +21,7 @@ public static class DependencyInjection
         // 用户管理领域服务。TryAdd：组合根拆分后重复调用是常态，
         // 重复注册会让同一实现出现多条，按 IEnumerable 解析时重复执行
         services.TryAddTransient<UserDomainService>();
+        services.TryAddTransient<RoleDomainService>();
 #if (LocalIdentity)
         services.TryAddTransient<TwoFactorDomainService>();
         services.TryAddTransient<UserSessionDomainService>();

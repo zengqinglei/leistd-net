@@ -1,6 +1,6 @@
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Application.Users;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
@@ -25,9 +25,10 @@ namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 internal sealed class SessionSignInService(
     IRepository<User, Guid> userRepository,
-    UserDomainService userDomainService,
+    UserRoleReader userRoleReader,
     UserSessionDomainService userSessionDomainService,
     IRepository<UserSession, Guid> sessionRepository,
+    IQueryableAsyncExecuter asyncExecuter,
     IOptions<UserSessionOptions> sessionOptions,
     TwoFactorChallengeStore twoFactorChallengeStore,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
@@ -148,7 +149,7 @@ internal sealed class SessionSignInService(
         }
 
         foreach (var roleName in roleNames
-            ?? await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
+            ?? await userRoleReader.GetRoleNamesAsync(user.Id, cancellationToken))
         {
             identity.AddClaim(new Claim(RoleClaimType, roleName));
         }
@@ -173,9 +174,10 @@ internal sealed class SessionSignInService(
         if (impersonatorName is not null || previousIp is null || previousIp == clientInfo.IpAddress)
             return false;
 
-        var cutoff = clock.Now - sessionOptions.Value.IdleTimeout;
-        return !await sessionRepository.AnyAsync(
-            s => s.UserId == userId && s.LastSeenTime > cutoff && s.UserAgent == clientInfo.UserAgent,
+        return !await asyncExecuter.AnyAsync(
+            (await sessionRepository.GetQueryableAsync(cancellationToken))
+                .Where(s => s.UserId == userId && s.UserAgent == clientInfo.UserAgent)
+                .Where(UserSession.ActiveAt(clock.Now, sessionOptions.Value.IdleTimeout)),
             cancellationToken);
     }
 

@@ -37,15 +37,14 @@ internal sealed class ExpiredUserSessionCleanupJob(
 
     public async Task ExecuteAsync(RecurringJobContext context, CancellationToken cancellationToken)
     {
-        var cutoff = clock.Now - options.Value.IdleTimeout;
+        var now = clock.Now;
 
         var result = await databaseRunner.ForEachDatabaseAsync(ConnectionStringNames.Default, activeOnly: false, async (_, ct) =>
         {
             using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             using (dataFilter.Disable<IMultiTenant>())
             {
-                // 过期判据须与 UserSession.IsExpired 一致（这里写成可翻译成 SQL 的形式）
-                await sessionRepository.DeleteManyAsync(s => s.LastSeenTime <= cutoff, ct);
+                await sessionRepository.DeleteManyAsync(UserSession.ExpiredAt(now, options.Value.IdleTimeout), ct);
             }
 
             await unitOfWork.CompleteAsync(ct);

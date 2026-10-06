@@ -1,3 +1,7 @@
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Errors;
+using Leistd.ExceptionHandling;
+#endif
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
@@ -221,7 +225,9 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         Avatar = string.IsNullOrEmpty(avatar) ? null : avatar;
     }
 
-    public void MarkAsSuperAdmin()
+    /// <summary>标记为宿主超级管理员。</summary>
+    /// <remarks>只由 <see cref="UserDomainService"/> 调用：它在标记之前挡住租户上下文，超管必须只在宿主。</remarks>
+    internal void MarkAsSuperAdmin()
     {
         IsSuperAdmin = true;
     }
@@ -271,6 +277,17 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     {
         EmailConfirmed = true;
     }
+#if (Email)
+
+    /// <summary>邮箱尚未验证；已验证时以 <see cref="AuthErrorCodes.EmailAlreadyVerified"/> 拒绝再发验证码。</summary>
+    public void EnsureEmailUnconfirmed()
+    {
+        if (EmailConfirmed)
+        {
+            throw new BusinessException(AuthErrorCodes.EmailAlreadyVerified, "This email address has already been verified.");
+        }
+    }
+#endif
 
     public void ConfirmPhoneNumber()
     {
@@ -355,8 +372,10 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     /// <param name="protectedSecret">已加密的密钥。</param>
     /// <param name="recoveryCodeHashes">恢复码摘要。</param>
     /// <param name="usedStep">启用时校验通过的那一步，随即记为已用：同一个码不能紧接着再拿去登录。</param>
+    /// <exception cref="BusinessException">两步验证已启用（<see cref="AuthErrorCodes.TwoFactorAlreadyEnabled"/>）：重新启用会静默换掉正在使用的密钥。</exception>
     public void EnableTwoFactor(string protectedSecret, IEnumerable<string> recoveryCodeHashes, long usedStep)
     {
+        EnsureTwoFactorDisabled();
         TwoFactorEnabled = true;
         TwoFactorSecret = protectedSecret;
         TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
@@ -375,9 +394,29 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     }
 
     /// <summary>换一组恢复码，旧的全部作废。</summary>
+    /// <exception cref="BusinessException">两步验证未启用（<see cref="AuthErrorCodes.TwoFactorNotEnabled"/>）。</exception>
     public void ReplaceRecoveryCodes(IEnumerable<string> recoveryCodeHashes)
     {
+        EnsureTwoFactorEnabled();
         TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
+    }
+
+    /// <summary>两步验证尚未启用；已启用时以 <see cref="AuthErrorCodes.TwoFactorAlreadyEnabled"/> 拒绝。</summary>
+    public void EnsureTwoFactorDisabled()
+    {
+        if (TwoFactorEnabled)
+        {
+            throw new BusinessException(AuthErrorCodes.TwoFactorAlreadyEnabled, "Two-factor authentication is already turned on.");
+        }
+    }
+
+    /// <summary>两步验证已启用；未启用时以 <see cref="AuthErrorCodes.TwoFactorNotEnabled"/> 拒绝。</summary>
+    public void EnsureTwoFactorEnabled()
+    {
+        if (!TwoFactorEnabled)
+        {
+            throw new BusinessException(AuthErrorCodes.TwoFactorNotEnabled, "Two-factor authentication is not turned on.");
+        }
     }
 
     /// <summary>记下校验通过的步序号。</summary>

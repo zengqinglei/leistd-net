@@ -17,6 +17,7 @@ namespace CompanyName.ProjectName.Domain.Auth.DomainServices;
 /// </remarks>
 public class UserSessionDomainService(
     IRepository<UserSession, Guid> sessionRepository,
+    IQueryableAsyncExecuter asyncExecuter,
     IOptions<UserSessionOptions> options,
     IClock clock)
 {
@@ -32,8 +33,12 @@ public class UserSessionDomainService(
         CancellationToken cancellationToken = default)
     {
         var now = clock.Now;
-        var cutoff = now - options.Value.IdleTimeout;
-        await sessionRepository.DeleteManyAsync(s => s.UserId == userId && s.LastSeenTime <= cutoff, cancellationToken);
+        var expired = await asyncExecuter.ToListAsync(
+            (await sessionRepository.GetQueryableAsync(cancellationToken))
+                .Where(s => s.UserId == userId)
+                .Where(UserSession.ExpiredAt(now, options.Value.IdleTimeout)),
+            cancellationToken);
+        await sessionRepository.DeleteManyAsync(expired, cancellationToken);
 
         return await sessionRepository.InsertAsync(
             new UserSession(userId, now, ipAddress, userAgent, impersonatorName),

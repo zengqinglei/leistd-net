@@ -1,7 +1,7 @@
 using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
@@ -20,6 +20,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Application.Users;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -49,6 +50,7 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 internal sealed class AuthAppService(
     IRepository<User, Guid> userRepository,
     UserDomainService userDomainService,
+    UserRoleReader userRoleReader,
     ICurrentUser currentUser,
     ICaptchaAppService captchaAppService,
 #if (Email)
@@ -521,11 +523,7 @@ internal sealed class AuthAppService(
     public async Task<EmailVerificationChallengeOutputDto> SendCurrentUserEmailCodeAsync(CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        if (user.EmailConfirmed)
-        {
-            throw new BusinessException(AuthErrorCodes.EmailAlreadyVerified, "This email address has already been verified.")
-                ;
-        }
+        user.EnsureEmailUnconfirmed();
 
         return await emailVerificationAppService.SendAccountEmailCodeAsync(user.Email, cancellationToken);
     }
@@ -576,7 +574,7 @@ internal sealed class AuthAppService(
                 .WithData("Id", userId);
         }
 
-        var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
+        var roleNames = await userRoleReader.GetRoleNamesAsync(userId, cancellationToken);
 
         return ToOutput(user, roleNames);
     }

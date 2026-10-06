@@ -1,4 +1,10 @@
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Errors;
+#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
+#if (LocalIdentity)
+using Leistd.ExceptionHandling;
+#endif
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
@@ -35,6 +41,63 @@ public sealed class UserManagementRulesTests
         Assert.False(user.CanBeDeleted());
     }
 
+#if (LocalIdentity)
+    [Fact]
+    public void Enabling_two_factor_twice_is_rejected_and_keeps_the_secret_in_use()
+    {
+        var user = CreateUser();
+        user.EnableTwoFactor("secret-in-use", ["code-hash"], usedStep: 1);
+        var stamp = user.SecurityStamp;
+
+        var error = Assert.Throws<BusinessException>(() => user.EnableTwoFactor("other-secret", ["other-hash"], usedStep: 2));
+
+        Assert.Equal(AuthErrorCodes.TwoFactorAlreadyEnabled, error.Code);
+        Assert.Equal("secret-in-use", user.TwoFactorSecret);
+        Assert.Equal(1, user.RecoveryCodesLeft);
+        Assert.Equal(1, user.TwoFactorLastUsedStep);
+        Assert.Equal(stamp, user.SecurityStamp);
+    }
+
+    [Fact]
+    public void Replacing_recovery_codes_without_two_factor_is_rejected_and_writes_nothing()
+    {
+        var user = CreateUser();
+
+        var error = Assert.Throws<BusinessException>(() => user.ReplaceRecoveryCodes(["code-hash"]));
+
+        Assert.Equal(AuthErrorCodes.TwoFactorNotEnabled, error.Code);
+        Assert.Null(user.TwoFactorRecoveryCodes);
+        Assert.Equal(0, user.RecoveryCodesLeft);
+    }
+
+    [Fact]
+    public void Recovery_codes_are_replaced_while_two_factor_is_enabled()
+    {
+        var user = CreateUser();
+        user.EnableTwoFactor("secret", ["old-a", "old-b"], usedStep: 1);
+
+        user.ReplaceRecoveryCodes(["new-a"]);
+
+        Assert.Equal(1, user.RecoveryCodesLeft);
+        Assert.False(user.TryConsumeRecoveryCode("old-a"));
+        Assert.True(user.TryConsumeRecoveryCode("new-a"));
+    }
+#if (Email)
+
+    [Fact]
+    public void A_verified_email_rejects_another_verification_code()
+    {
+        var user = CreateUser();
+        user.EnsureEmailUnconfirmed();
+
+        user.ConfirmEmail();
+        var error = Assert.Throws<BusinessException>(() => user.EnsureEmailUnconfirmed());
+
+        Assert.Equal(AuthErrorCodes.EmailAlreadyVerified, error.Code);
+    }
+#endif
+
+#endif
     private static User CreateUser() =>
 #if (LocalIdentity)
         new("management-user", "management@example.com", "password-hash");

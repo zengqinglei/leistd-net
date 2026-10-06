@@ -1,4 +1,4 @@
-namespace CompanyName.ProjectName.Application.Auth.Errors;
+namespace CompanyName.ProjectName.Domain.Auth.Errors;
 
 /// <summary>Auth 业务错误码。</summary>
 public static class AuthErrorCodes

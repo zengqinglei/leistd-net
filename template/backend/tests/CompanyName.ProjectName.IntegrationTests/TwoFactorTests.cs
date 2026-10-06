@@ -192,6 +192,51 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.OK, (await direct.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
+    /// <summary>
+    /// 前置状态由用户实体守卫：未启用时不能重发恢复码，已启用时不能再设置或再启用；
+    /// 拒绝码与状态码不变，被拒的请求不改两步验证状态。
+    /// </summary>
+    [Fact]
+    public async Task Two_factor_state_preconditions_are_rejected_with_conflict()
+    {
+        var (host, clock) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_state");
+        using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+
+        using (var regenerate = await session.Client.PostAsJsonAsync(
+                   "/api/v1/auth/me/two-factor/recovery-codes", new { Code = "000000" }))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, regenerate.StatusCode);
+            Assert.Equal("Auth:TwoFactorNotEnabled", await ErrorCodeAsync(regenerate));
+        }
+
+        var secret = await BeginSetupAsync(session.Client);
+        await EnableAsync(session.Client, secret, clock);
+        Step(clock);
+
+        using (var setupAgain = await session.Client.PostAsync("/api/v1/auth/me/two-factor/setup", null))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, setupAgain.StatusCode);
+            Assert.Equal("Auth:TwoFactorAlreadyEnabled", await ErrorCodeAsync(setupAgain));
+        }
+
+        using (var enableAgain = await session.Client.PostAsJsonAsync(
+                   "/api/v1/auth/me/two-factor/enable", new { Code = Code(secret, clock) }))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, enableAgain.StatusCode);
+            Assert.Equal("Auth:TwoFactorAlreadyEnabled", await ErrorCodeAsync(enableAgain));
+        }
+
+        // 原密钥仍在用：恢复码数没变，下一步的验证码照样能重发恢复码
+        var status = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me/two-factor");
+        Assert.True(status.GetProperty("enabled").GetBoolean());
+        Assert.Equal(RecoveryCodes.Count, status.GetProperty("recoveryCodesLeft").GetInt32());
+        using var regenerated = await session.Client.PostAsJsonAsync(
+            "/api/v1/auth/me/two-factor/recovery-codes", new { Code = Code(secret, clock) });
+        Assert.Equal(HttpStatusCode.OK, regenerated.StatusCode);
+    }
+
     [Fact]
     public async Task Tenant_requirement_grants_a_restricted_session_until_enabled()
     {

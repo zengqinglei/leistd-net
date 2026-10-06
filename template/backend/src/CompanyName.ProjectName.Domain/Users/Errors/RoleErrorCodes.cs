@@ -1,4 +1,4 @@
-namespace CompanyName.ProjectName.Application.Roles.Errors;
+namespace CompanyName.ProjectName.Domain.Users.Errors;
 
 /// <summary>Role 业务错误码。</summary>
 public static class RoleErrorCodes

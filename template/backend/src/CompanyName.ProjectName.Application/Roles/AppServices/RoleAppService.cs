@@ -1,9 +1,10 @@
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using CompanyName.ProjectName.Application.Roles.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
 using CompanyName.ProjectName.Application.Shared.Paging;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
 using Leistd.Ddd.Application.AppServices;
@@ -42,6 +43,7 @@ namespace CompanyName.ProjectName.Application.Roles.AppServices;
 /// </summary>
 public class RoleAppService(
     IRepository<Role, Guid> roleRepository,
+    RoleDomainService roleDomainService,
     IRepository<UserRole, Guid> userRoleRepository,
     IRepository<User, Guid> userRepository,
     IPermissionGrantStore permissionGrantStore,
@@ -124,24 +126,13 @@ public class RoleAppService(
         CreateRoleInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var name = input.Name.Trim();
-
-        if (await roleRepository.AnyAsync(r => r.Name == name, cancellationToken))
-        {
-            throw new BusinessException(RoleErrorCodes.NameAlreadyUsed, $"Role '{name}' already exists.")
-                .WithData("Name", name);
-        }
-
-        var role = new Role(
-            name,
+        var role = await roleDomainService.CreateAsync(
+            input.Name.Trim(),
             input.DisplayName.Trim(),
             input.Description?.Trim(),
-            isStatic: false,
-            isDefault: input.IsDefault,
-            sort: input.Sort);
-
-        await roleRepository.InsertAsync(role, cancellationToken);
-        logger.LogInformation("Role created: {Name} (ID: {Id})", role.Name, role.Id);
+            input.IsDefault,
+            input.Sort,
+            cancellationToken);
 
         // 目标名取显示名、退到名称：同类记录必须用同一套取值规则，
         // 一半存显示名一半存名称会让同一张表里的同类行长得不一样。

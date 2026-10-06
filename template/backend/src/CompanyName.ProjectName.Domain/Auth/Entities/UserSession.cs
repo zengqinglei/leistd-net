@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using System.Linq.Expressions;
 using CompanyName.ProjectName.Domain.Auth.Events;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy.ConnectionStrings;
@@ -76,8 +77,25 @@ public class UserSession : CreationAuditedEntity<Guid>, IMultiTenant
     public void Revoke(DateTime now) => AddLocalEvent(new UserSessionRevokedEvent(Id, now));
 
     /// <summary>空闲超过 <paramref name="idleTimeout"/> 即视为已结束（与会话 Cookie 的滑动过期同一口径）。</summary>
-    // 改判据时同步改 ExpiredUserSessionCleanupJob 与 UserSessionDomainService.StartAsync 里的查询形式
-    public bool IsExpired(DateTime now, TimeSpan idleTimeout) => LastSeenTime + idleTimeout <= now;
+    /// <remarks>与 <see cref="ActiveAt"/>、<see cref="ExpiredAt"/> 共用同一个截止时刻，内存判定与查询不会分叉。</remarks>
+    public bool IsExpired(DateTime now, TimeSpan idleTimeout) => LastSeenTime <= ActiveCutoff(now, idleTimeout);
+
+    /// <summary>在 <paramref name="now"/> 时刻仍有效的会话（<see cref="IsExpired"/> 的反面），可翻译成 SQL。</summary>
+    public static Expression<Func<UserSession, bool>> ActiveAt(DateTime now, TimeSpan idleTimeout)
+    {
+        var cutoff = ActiveCutoff(now, idleTimeout);
+        return session => session.LastSeenTime > cutoff;
+    }
+
+    /// <summary>在 <paramref name="now"/> 时刻已结束的会话（与 <see cref="IsExpired"/> 同一判据），可翻译成 SQL。</summary>
+    public static Expression<Func<UserSession, bool>> ExpiredAt(DateTime now, TimeSpan idleTimeout)
+    {
+        var cutoff = ActiveCutoff(now, idleTimeout);
+        return session => session.LastSeenTime <= cutoff;
+    }
+
+    // 最近活跃晚于这一刻的会话才算有效：恰好落在这一刻（空闲刚好满时长）即已结束
+    private static DateTime ActiveCutoff(DateTime now, TimeSpan idleTimeout) => now - idleTimeout;
 
     /// <summary>
     /// 记一次活跃。距上次记录不足 <see cref="TouchInterval"/> 时不改动，返回 false，调用方据此省掉写库。

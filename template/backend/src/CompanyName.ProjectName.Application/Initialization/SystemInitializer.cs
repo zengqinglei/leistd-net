@@ -187,7 +187,7 @@ public class SystemInitializer(
             }
             else
             {
-                adminUser.MarkAsSuperAdmin();
+                userDomainService.PromoteToSuperAdmin(adminUser);
                 await userRepository.UpdateAsync(adminUser, cancellationToken);
                 logger.LogInformation("Default admin user marked as super admin: {Username}", adminUser.Username);
             }

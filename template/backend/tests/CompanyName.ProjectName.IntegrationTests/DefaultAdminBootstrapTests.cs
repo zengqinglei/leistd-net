@@ -1,9 +1,15 @@
 #if (LocalIdentity)
 using System.Net;
+#if (IncludeMultiTenancy)
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using Leistd.Ddd.Domain.Repositories;
+#if (IncludeMultiTenancy)
+using Leistd.MultiTenancy.Context;
+#endif
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -80,6 +86,28 @@ public sealed class DefaultAdminBootstrapTests(ProjectWebApplicationFactory fact
         Assert.True(boss.IsSuperAdmin);
     }
 
+#if (IncludeMultiTenancy)
+    // 提升已有用户与新建超管共用同一道宿主守卫：租户上下文里提升直接拒绝，用户不被标记
+    [Fact]
+    public async Task Promoting_a_user_to_super_admin_inside_a_tenant_is_rejected()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var userDomainService = scope.ServiceProvider.GetRequiredService<UserDomainService>();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var user = new User("promote-target", "promote-target@example.test");
+
+        using (currentTenant.Change(Guid.CreateVersion7()))
+        {
+            Assert.Throws<InvalidOperationException>(() => userDomainService.PromoteToSuperAdmin(user));
+        }
+
+        Assert.False(user.IsSuperAdmin);
+
+        userDomainService.PromoteToSuperAdmin(user);
+        Assert.True(user.IsSuperAdmin);
+    }
+
+#endif
     private WebApplicationFactory<Program> CreateHost(
         bool freshDatabase,
         string? password,
