@@ -37,21 +37,30 @@ WORKDIR /src
 # 复制后端代码（.dockerignore 已排除 bin/obj）
 # 注意：Leistd.* 框架以 NuGet 包形式引用（见 backend/Directory.Packages.props），
 # publish 期间从 NuGet 源还原，无需将 framework 源码拷入镜像。
-# 如使用私有 NuGet 源，请在构建环境或项目根目录 NuGet.Config 中配置。
+# 使用私有 NuGet 源时把 NuGet.Config 放在 backend/ 下：构建上下文只拷入 backend/，
+# 项目根目录的 NuGet.Config 不会进入镜像。
 COPY backend/ ./backend/
+
+# 发布身份由流水线传入：APP_VERSION 写进程序集版本（GET /api/v1/service-info 返回的 version），
+# APP_REVISION 是源码提交，写进镜像标签 org.opencontainers.image.revision。不传时版本为 1.0.0、提交为空
+ARG APP_VERSION=1.0.0
+ARG APP_REVISION=
 
 # Build（还原会自动拉取 Leistd.* 框架包）
 WORKDIR "/src/backend/src/CompanyName.ProjectName.Api"
-RUN dotnet publish "CompanyName.ProjectName.Api.csproj" -c Release -o /app/api /p:UseAppHost=false
+RUN dotnet publish "CompanyName.ProjectName.Api.csproj" -c Release -o /app/api /p:UseAppHost=false /p:Version=$APP_VERSION
 
 WORKDIR "/src/backend/src/CompanyName.ProjectName.DbMigrator"
-RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /app/migrator /p:UseAppHost=false
+RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /app/migrator /p:UseAppHost=false /p:Version=$APP_VERSION
 
 # -----------------------------------
 # Migrator Runtime Image
 # -----------------------------------
 # DbMigrator 引用 Microsoft.AspNetCore.App，运行镜像必须包含 ASP.NET Core 共享框架。
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrator
+ARG APP_VERSION=1.0.0
+ARG APP_REVISION=
+LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$APP_REVISION
 WORKDIR /app
 COPY --from=backend-build /app/migrator .
 # 以镜像自带的非 root 用户（UID 1654）运行；程序目录只读即可
@@ -62,6 +71,9 @@ ENTRYPOINT ["dotnet", "CompanyName.ProjectName.DbMigrator.dll"]
 # API Runtime Image
 # -----------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS api
+ARG APP_VERSION=1.0.0
+ARG APP_REVISION=
+LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$APP_REVISION
 WORKDIR /app
 
 EXPOSE 8080

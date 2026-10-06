@@ -53,6 +53,13 @@
 - 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificates`、`OAuth:EncryptionCertificates` 各至少一项，每项 `Path`、`Password`），与 HTTPS 证书分开；开发证书只用于本机开发。任何一项缺路径、无法加载或没有 RSA 私钥，启动失败并指出带下标的键名。
 - TLS 在网关或 ingress 终结时，配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 让应用还原原始协议，不要打开 `OAuth:DisableHttpsRequirement`——OpenIddict 明确要求生产环境即使在反向代理后也不关闭传输安全检查。
 <!--#endif-->
+<!--#if (Email)-->
+- 发信基线指向本机邮件捕获器（`localhost:1025`）。部署时覆盖 `Leistd:Email:Smtp` 的 `Host`、`Port`、`EnableSsl`、`DefaultFromAddress`，`Username` 与 `Password` 成对提供或都不提供；compose 以 `SMTP_HOST`、`SMTP_PORT`、`SMTP_FROM_ADDRESS` 为必填，账号口令只填一项时启动失败。
+- 开启注册邮箱验证（`UserRegistration:EnableEmailVerification`，compose 的 `ENABLE_EMAIL_VERIFICATION`）时必须提供 `VerificationCodes:Key`（compose 的 `VERIFICATION_CODES_KEY`）：Base64、至少 32 字节，所有实例相同且跨重启不变，可用 `openssl rand -base64 32` 生成。缺失或无效即启动失败并报出键名；关闭时可以不提供，但之后在系统设置里也无法开启。
+<!--#endif-->
+<!--#if (ExternalLogin)-->
+- 外部登录提供商（`ExternalAuth:Github`、`ExternalAuth:Google`）的 `ClientId` 与 `ClientSecret` 成对提供，只给一项启动失败；都不给则不启用该提供商。提供商后台登记的回调地址是 `https://<站点对外地址>/api/v1/external-auth/{github,google}/signin`。
+<!--#endif-->
 
 ## 本地验证
 
@@ -68,7 +75,36 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml down
 ```
 
+compose 里的 `db-migrator` 固定带 `--apply`。施加前先预演：用 `--entrypoint` 重新指定入口时 compose 不再附加服务的 `command`，迁移作业不带参数运行，只列出待执行的迁移与 SQL，不改库。不加 `--entrypoint` 直接 `run db-migrator` 会照常施加。
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml \
+  run --rm --build --entrypoint "dotnet CompanyName.ProjectName.DbMigrator.dll" db-migrator
+```
+
+生产配置只在 HTTPS 下签发会话 Cookie（`Secure`、`__Host-` 前缀），compose 本身只提供 HTTP（`http://localhost`）。
+<!--#if (SpaFrontend)-->
+Chrome 等浏览器把 `http://localhost` 视为安全来源，本机经它登录可用；经局域网地址或其他主机名以 HTTP 访问时浏览器丢弃会话 Cookie，登录请求成功但随后的请求仍是未登录。
+<!--#endif-->
+<!--#if (OpenIddictServer)-->
+OIDC 端点（授权码流程、令牌）在生产配置下拒绝 HTTP 请求，验证开放应用或资源服务联调须在前面加一层终结 TLS 的反向代理，并按上文配置转发头。
+<!--#endif-->
+只验证镜像能启动、迁移与健康端点时不需要 HTTPS。
+
 命令和文件存在性应以当前项目为准。
+
+## 确认已部署版本
+
+构建镜像时由流水线传入发布身份：
+
+```bash
+docker build --build-arg APP_VERSION=1.4.0 --build-arg APP_REVISION="$(git rev-parse HEAD)" --target api -t <仓库>/companyname-projectname:1.4.0 .
+```
+
+部署后按两处核对，不按镜像标签推断：
+
+- 运行中的 API 返回自己的版本：`GET /api/v1/service-info` 的 `version`（程序集版本，`APP_VERSION` 补齐为四段）。
+- 镜像记录源码提交：`docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' <容器或镜像>`。为空说明镜像不是由流水线按上面的方式构建的。
 
 ## 部署形态
 

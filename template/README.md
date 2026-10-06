@@ -15,6 +15,9 @@ CompanyName.ProjectName/
 <!--#endif-->
 |-- deploy/                  # Docker Compose 配置
 |-- docs/                    # 项目规范与按需沉淀文档
+<!--#if (IncludeLocalization || (SpaFrontend && IncludeOperationRecords))-->
+|-- scripts/                 # 静态检查脚本（Python 3）
+<!--#endif-->
 |-- .agents/skills/          # 跨工具项目 Skill
 `-- Dockerfile
 ```
@@ -208,14 +211,22 @@ npm start
 
 ## 验证
 
+<!--#if (IncludeLocalization || (SpaFrontend && IncludeOperationRecords))-->
+下面的 `python` 指 Python 3 解释器：Windows 上通常就叫 `python`，macOS 与多数 Linux 发行版上叫 `python3`。
+
+<!--#endif-->
 ```bash
 dotnet test backend/CompanyName.ProjectName.sln
 <!--#if (SpaFrontend)-->
+npm --prefix frontend test -- --watch=false
 npm --prefix frontend run lint
 npm --prefix frontend run build
 <!--#endif-->
 <!--#if (IncludeLocalization)-->
-python3 scripts/check-i18n.py
+python scripts/check-i18n.py
+<!--#endif-->
+<!--#if (SpaFrontend && IncludeOperationRecords)-->
+python scripts/check-operation-action-i18n.py
 <!--#endif-->
 ```
 
@@ -239,4 +250,4 @@ Windows 需开启开发者模式并设置 `git config --global core.symlinks tru
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up --build
 ```
 
-生产部署前应确认数据库迁移、密钥、管理员密码、HTTPS、健康检查和回滚方案。
+生产部署前应确认数据库迁移、密钥、管理员密码、HTTPS、健康检查和回滚方案；变量清单、迁移预演与已部署版本的确认方式见[部署说明](docs/deploy/README.md)。
