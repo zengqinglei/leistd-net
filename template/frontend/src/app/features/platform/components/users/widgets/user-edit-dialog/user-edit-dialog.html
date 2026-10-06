@@ -58,16 +58,16 @@
                 </span>
               </label>
 
-              <div class="min-w-0 flex-1">
+              <div class="flex min-w-0 flex-1 flex-col gap-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="m-0 truncate text-base font-medium">
+                  <h3 class="truncate text-base font-medium">
                     {{ displayName() || t('users.editDialog.unnamedUser') }}
                   </h3>
                 </div>
-                <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+                <p class="truncate text-sm text-muted-foreground">
                   {{ formModel().email || t('users.editDialog.noEmail') }}
                 </p>
-                <p class="mt-2 mb-0 text-xs text-muted-foreground">
+                <p class="text-xs text-muted-foreground">
                   {{ t('users.editDialog.avatarHint') }}
                 </p>
               </div>
@@ -210,40 +210,34 @@
               <!-- Enable user：仅新建时设置初始状态。已存在账号的启用/禁用只有列表页那两个命令一个入口，
                  保护规则（超级管理员不得禁用自己）也只写在那里；这里再放一个开关就是第二个入口。 -->
               @if (!isEditMode()) {
-                <div class="rounded-lg border border-border p-3">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <div class="text-sm font-medium">
-                        {{ t('users.editDialog.activeTitle') }}
-                      </div>
-                      <div class="mt-1 text-xs text-muted-foreground">
-                        {{ t('users.editDialog.activeHint') }}
-                      </div>
-                    </div>
-                    <hlm-switch
-                      [checked]="formModel().isActive"
-                      (checkedChange)="setActive($event)"
-                    />
+                <div hlmField orientation="horizontal">
+                  <div hlmFieldContent>
+                    <label hlmFieldLabel for="user-is-active">{{
+                      t('users.editDialog.activeTitle')
+                    }}</label>
+                    <p hlmFieldDescription>{{ t('users.editDialog.activeHint') }}</p>
                   </div>
+                  <hlm-switch
+                    inputId="user-is-active"
+                    [checked]="formModel().isActive"
+                    (checkedChange)="setActive($event)"
+                  />
                 </div>
               }
               <!--#if (LocalIdentity)-->
               <!-- Email verified -->
-              <div class="rounded-lg border border-border p-3">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium">
-                      {{ t('users.editDialog.emailVerifiedTitle') }}
-                    </div>
-                    <div class="mt-1 text-xs text-muted-foreground">
-                      {{ t('users.editDialog.emailVerifiedHint') }}
-                    </div>
-                  </div>
-                  <hlm-switch
-                    [checked]="formModel().isEmailVerified"
-                    (checkedChange)="setEmailVerified($event)"
-                  />
+              <div hlmField orientation="horizontal">
+                <div hlmFieldContent>
+                  <label hlmFieldLabel for="user-email-verified">{{
+                    t('users.editDialog.emailVerifiedTitle')
+                  }}</label>
+                  <p hlmFieldDescription>{{ t('users.editDialog.emailVerifiedHint') }}</p>
                 </div>
+                <hlm-switch
+                  inputId="user-email-verified"
+                  [checked]="formModel().isEmailVerified"
+                  (checkedChange)="setEmailVerified($event)"
+                />
               </div>
               <!--#endif-->
             </section>

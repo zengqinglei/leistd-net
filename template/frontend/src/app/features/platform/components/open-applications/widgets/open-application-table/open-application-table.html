@@ -154,7 +154,7 @@
                                 class="min-w-72 max-w-xl"
                                 [appPopoverAria]="t('openApp.section.authorization')"
                               >
-                                <div class="mb-3 text-sm font-semibold">
+                                <div class="text-sm font-semibold">
                                   {{ t('openApp.section.authorization') }}
                                 </div>
                                 <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -198,7 +198,7 @@
                                       class="min-w-72 max-w-xl"
                                       [appPopoverAria]="t('openApp.table.colRedirectUris')"
                                     >
-                                      <div class="mb-3 text-sm font-semibold">
+                                      <div class="text-sm font-semibold">
                                         {{ t('openApp.table.colRedirectUris') }}
                                       </div>
                                       <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -381,7 +381,7 @@
                                   class="min-w-72 max-w-xl"
                                   [appPopoverAria]="t('openApp.section.authorization')"
                                 >
-                                  <div class="mb-3 text-sm font-semibold">
+                                  <div class="text-sm font-semibold">
                                     {{ t('openApp.section.authorization') }}
                                   </div>
                                   <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -458,24 +458,24 @@
                       class="!p-0 !border-0"
                     >
                       <div
-                        class="flex flex-col items-center justify-center h-64 text-muted-foreground"
+                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
                       >
                         <ng-icon
                           [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'"
-                          class="text-5xl opacity-30 mb-3"
+                          class="text-5xl opacity-30"
                         />
                         @if (filtered()) {
-                          <p class="text-base font-medium m-0">
+                          <p class="text-base font-medium">
                             {{ t('openApp.table.emptyFilteredTitle') }}
                           </p>
-                          <p class="text-sm mt-1 opacity-70">
+                          <p class="text-sm opacity-70">
                             {{ t('openApp.table.emptyFilteredHint') }}
                           </p>
                         } @else {
-                          <p class="text-base font-medium m-0">
+                          <p class="text-base font-medium">
                             {{ t('openApp.table.emptyTitle') }}
                           </p>
-                          <p class="text-sm mt-1 opacity-70">
+                          <p class="text-sm opacity-70">
                             {{ t('openApp.table.emptyHint') }}
                           </p>
                         }

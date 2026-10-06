@@ -200,9 +200,9 @@
           }
         } @else if (hasRenderableExternalProvider()) {
           <!-- Divider -->
-          <div class="relative flex py-2 items-center my-2" data-testid="external-divider">
+          <div class="relative flex items-center gap-6 py-4" data-testid="external-divider">
             <div class="flex-grow border-t border-border"></div>
-            <span class="flex-shrink mx-4 text-muted-foreground text-sm px-2">{{
+            <span class="flex-shrink text-muted-foreground text-sm">{{
               t('account.login.or')
             }}</span>
             <div class="flex-grow border-t border-border"></div>
@@ -271,9 +271,9 @@
         </h4>
         <div class="bg-muted flex flex-col gap-1 rounded-lg px-3 py-2">
           <span class="text-muted-foreground text-xs">{{ t('account.login.adminRole') }}</span>
-          <span>
+          <span class="flex items-center gap-1">
             <span class="font-mono">admin</span>
-            <span class="text-muted-foreground mx-1">/</span>
+            <span class="text-muted-foreground">/</span>
             <span class="font-mono">Admin&#64;123456</span>
           </span>
         </div>

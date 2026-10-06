@@ -96,14 +96,17 @@
                           [checked]="isGranted(row.name)"
                           (checkedChange)="onCheckedChange(row.name, $event)"
                         />
-                        <label class="min-w-0 flex-1 cursor-pointer text-sm" [attr.for]="row.name">
+                        <label
+                          class="flex min-w-0 flex-1 cursor-pointer flex-wrap items-baseline gap-x-1 text-sm"
+                          [attr.for]="row.name"
+                        >
                           {{ row.displayName }}
                           <!--
                           顶层那条勾上等于"能看到这份列表"，光看"用户管理"四个字读不出来，
                           会被当成分类标题。这里直接把它是什么写在旁边。
                         -->
                           @if (row.depth === 0 && row.hasChildren) {
-                            <span class="ml-1 text-xs font-normal text-muted-foreground">
+                            <span class="text-xs font-normal text-muted-foreground">
                               {{ t('permissions.viewAccessHint') }}
                             </span>
                           }

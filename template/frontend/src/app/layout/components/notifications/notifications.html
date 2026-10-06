@@ -99,7 +99,7 @@
             }
           </div>
         } @else {
-          <div class="flex max-h-[360px] flex-col overflow-y-auto p-1">
+          <div class="flex max-h-[360px] flex-col gap-1 overflow-y-auto p-1">
             @for (n of notifications(); track n.id; let last = $last) {
               <!-- 主操作用原生 button（自带 Enter/Space 语义），删除按钮是兄弟节点，避免交互元素嵌套。 -->
               <div
@@ -152,7 +152,7 @@
                 </button>
               </div>
               @if (!last) {
-                <div class="border-t border-dashed border-border my-1"></div>
+                <div class="border-t border-dashed border-border"></div>
               }
             }
           </div>

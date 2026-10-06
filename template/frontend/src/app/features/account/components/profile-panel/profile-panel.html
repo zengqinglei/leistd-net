@@ -48,9 +48,9 @@
           }
         </label>
 
-        <div class="min-w-0 flex-1">
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
           <div class="flex flex-wrap items-center gap-2">
-            <h3 class="m-0 truncate text-base font-medium">
+            <h3 class="truncate text-base font-medium">
               {{ displayName() || t('account.profile.guestUser') }}
             </h3>
             @if (user()?.isSuperAdmin) {
@@ -61,11 +61,11 @@
               }
             }
           </div>
-          <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+          <p class="truncate text-sm text-muted-foreground">
             {{ formModel().email || user()?.email }}
           </p>
-          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p class="m-0 text-xs text-muted-foreground">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p class="text-xs text-muted-foreground">
               {{ t('account.profile.avatarHint') }}
             </p>
             @if (hasAvatarImage() && !avatarBusy()) {
