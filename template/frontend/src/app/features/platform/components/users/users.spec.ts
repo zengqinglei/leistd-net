@@ -1,11 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
+import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { Users } from './users';
 import { UserTable } from './widgets/user-table/user-table';
@@ -151,5 +152,87 @@ describe('Users page query round trip', () => {
     second.next({ items: [], totalCount: 0 });
     second.complete();
     expect(component.loading()).toBe(false);
+  });
+
+  /** 加载成功时的一行：表格会真的渲染它，字段要齐。 */
+  const loadedRow = {
+    id: 'row-1',
+    username: 'alice',
+    email: 'alice@example.test',
+    displayName: 'Alice',
+    isActive: true,
+    isSuperAdmin: false,
+    roles: [],
+    creationTime: '2026-01-01T00:00:00Z',
+  };
+
+  /** 以首次请求失败重建页面：此时没有任何旧行可保留。 */
+  async function openWithFailedFirstLoad(): Promise<void> {
+    fixture.destroy();
+    service.getUsers.mockReturnValue(throwError(() => new Error('boom')) as never);
+    fixture = TestBed.createComponent(Users);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('shows the load failure with retry instead of the empty state when the first load fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await openWithFailedFirstLoad();
+
+    // 没有旧行时不能落到"暂无数据"：表格拿到失败原因，显示错误态与重试
+    expect(component.loadError()).toBe('boom');
+    expect(table().loadError()).toBe('boom');
+    expect(component.users()).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
+
+    const requests = service.getUsers.mock.calls.length;
+    service.getUsers.mockReturnValue(of({ items: [loadedRow], totalCount: 1 }) as never);
+    table().retry.emit();
+    await fixture.whenStable();
+
+    expect(service.getUsers).toHaveBeenCalledTimes(requests + 1);
+    expect(component.loadError()).toBeNull();
+    expect(component.users()).toHaveLength(1);
+  });
+
+  it('keeps the loaded rows and only notifies when a refresh fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    service.getUsers.mockReturnValue(of({ items: [loadedRow], totalCount: 1 }) as never);
+    component.reloadList();
+    await fixture.whenStable();
+
+    service.getUsers.mockReturnValue(throwError(() => new Error('boom')) as never);
+    component.reloadList();
+    await fixture.whenStable();
+
+    expect(component.users()).toHaveLength(1);
+    expect(component.loadError()).toBeNull();
+    expect(notify).toHaveBeenCalledOnce();
+  });
+
+  it('renders the failure reason and a retry button that refetches, not the empty state', async () => {
+    await openWithFailedFirstLoad();
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [deferred] = await fixture.getDeferBlocks();
+    await deferred.render(DeferBlockState.Complete);
+
+    const host = fixture.nativeElement as HTMLElement;
+    const retry = host.querySelector<HTMLButtonElement>('[data-testid="table-retry"]');
+    expect(retry).not.toBeNull();
+    expect(host.textContent).toContain('boom');
+    expect(host.textContent).not.toMatch(/No users yet|users\.table\.emptyTitle/);
+
+    const requests = service.getUsers.mock.calls.length;
+    service.getUsers.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
+    retry?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 重试成功且确实为空：这时才显示"暂无数据"
+    expect(service.getUsers).toHaveBeenCalledTimes(requests + 1);
+    expect(host.querySelector('[data-testid="table-retry"]')).toBeNull();
+    expect(host.textContent).toMatch(/No users yet|users\.table\.emptyTitle/);
   });
 });

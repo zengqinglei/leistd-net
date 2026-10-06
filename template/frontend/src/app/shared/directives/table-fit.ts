@@ -34,8 +34,15 @@ interface FitBasis {
  * 每次渲染后检查一次：溢出就降一档。决定各列宽度的事实——容器宽度、视口上限、表格数据、
  * 界面语言——任何一项变了，先回到上限再逐档降到放得下。被收起的列不在页面上，量不到，
  * 只能凭这些事实判断它们可能变了；降档在同一轮渲染里完成，界面不会闪。
+ *
+ * 实际档位写在容器的 `data-table-fit` 上。最窄一档已无列可收，主列（`TITLE_COLUMN_META`）
+ * 据此改为占满剩余宽度并截断，其余列与吸附的操作列保持完整。
  */
-@Directive({ selector: '[appTableFit]', exportAs: 'appTableFit' })
+@Directive({
+  selector: '[appTableFit]',
+  exportAs: 'appTableFit',
+  host: { '[attr.data-table-fit]': 'level()' },
+})
 export class TableFit {
   /**
    * 视口档位，作为折叠的上限。不设为必填：宿主表格在自身的 computed 里读 `level`，

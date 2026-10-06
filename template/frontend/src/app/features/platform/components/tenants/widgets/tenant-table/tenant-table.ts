@@ -15,6 +15,7 @@ import {
   lucideBan,
   lucideBuilding2,
   lucideChevronRight,
+  lucideCircleAlert,
   lucideCircleCheck,
   lucideEllipsis,
   lucideInfo,
@@ -43,6 +44,8 @@ import { englishText } from '../../../../../../shared/utils/english-text';
 import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
+  TITLE_COLUMN_META,
+  TITLE_CONTENT_CLASS,
 } from '../../../../../../shared/utils/table-column-meta';
 import {
   injectAppTable,
@@ -80,6 +83,7 @@ import { TenantOutputDto } from '../../../../dtos/tenant.dto';
       lucideBan,
       lucideBuilding2,
       lucideChevronRight,
+      lucideCircleAlert,
       lucideCircleCheck,
       lucideEllipsis,
       lucideInfo,
@@ -107,6 +111,10 @@ export class TenantTable {
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  /** 错误态里的重试。 */
+  readonly retry = output<void>();
 
   /** 行操作按权限裁剪；隐藏只影响体验，服务端仍对每个请求独立校验。 */
   readonly canUpdate = input(true);
@@ -127,6 +135,8 @@ export class TenantTable {
   readonly delete = output<TenantOutputDto>();
 
   protected readonly tableViewport = tableViewportSignal();
+  /** 主列内容外层：最窄一档下长名称截断，不撑宽表格（见 TITLE_COLUMN_META）。 */
+  protected readonly titleContentClass = TITLE_CONTENT_CLASS;
   private readonly tableFit = viewChild(TableFit);
   /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
   private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
@@ -138,7 +148,7 @@ export class TenantTable {
       id: 'name',
       enableSorting: false,
       enableHiding: false,
-      meta: { priority: 'primary', locked: true },
+      meta: TITLE_COLUMN_META,
     },
     {
       accessorKey: 'displayName',
@@ -208,6 +218,8 @@ export class TenantTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'tenants.colName': 'Name',
   'tenants.colDisplayName': 'Display name',
   'tenants.colDescription': 'Description',

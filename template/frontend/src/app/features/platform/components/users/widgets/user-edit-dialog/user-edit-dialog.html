@@ -82,6 +82,7 @@
                 <input
                   hlmInput
                   id="user-username"
+                  autocomplete="off"
                   class="w-full"
                   [formField]="userForm.username"
                   [placeholder]="t('users.editDialog.usernamePlaceholder')"
@@ -99,6 +100,7 @@
                 <input
                   hlmInput
                   id="user-email"
+                  autocomplete="off"
                   type="email"
                   class="w-full"
                   [formField]="userForm.email"
@@ -140,6 +142,7 @@
                     <input
                       hlmInputGroupInput
                       id="user-password"
+                      autocomplete="new-password"
                       [type]="showPassword() ? 'text' : 'password'"
                       [formField]="userForm.password"
                       [placeholder]="t('users.editDialog.passwordPlaceholder')"
@@ -215,10 +218,13 @@
                     <label hlmFieldLabel for="user-is-active">{{
                       t('users.editDialog.activeTitle')
                     }}</label>
-                    <p hlmFieldDescription>{{ t('users.editDialog.activeHint') }}</p>
+                    <p hlmFieldDescription id="user-is-active-hint">
+                      {{ t('users.editDialog.activeHint') }}
+                    </p>
                   </div>
                   <hlm-switch
                     inputId="user-is-active"
+                    aria-describedby="user-is-active-hint"
                     [checked]="formModel().isActive"
                     (checkedChange)="setActive($event)"
                   />
@@ -231,10 +237,13 @@
                   <label hlmFieldLabel for="user-email-verified">{{
                     t('users.editDialog.emailVerifiedTitle')
                   }}</label>
-                  <p hlmFieldDescription>{{ t('users.editDialog.emailVerifiedHint') }}</p>
+                  <p hlmFieldDescription id="user-email-verified-hint">
+                    {{ t('users.editDialog.emailVerifiedHint') }}
+                  </p>
                 </div>
                 <hlm-switch
                   inputId="user-email-verified"
+                  aria-describedby="user-email-verified-hint"
                   [checked]="formModel().isEmailVerified"
                   (checkedChange)="setEmailVerified($event)"
                 />

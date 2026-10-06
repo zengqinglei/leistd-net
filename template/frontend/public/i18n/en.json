@@ -11,6 +11,7 @@
     "traceId": "Trace ID",
     "authFailedReLogin": "Authentication failed. Please sign in again.",
     "retry": "Retry",
+    "loadFailed": "Couldn't load the list",
     "cancel": "Cancel",
     "save": "Save",
     "success": "Success",

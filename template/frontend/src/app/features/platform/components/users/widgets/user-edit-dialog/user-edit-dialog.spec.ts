@@ -171,6 +171,10 @@ describe('UserEditDialog', () => {
       expect(description).toBe(ENGLISH_HINTS[hint]);
       //#endif
       expect(field.contains(document.getElementById(id))).toBe(true);
+      // 读屏软件聚焦开关时要连同说明一起读：开关按钮的 aria-describedby 指向这条说明
+      const describedBy = field.querySelector('[role="switch"]')?.getAttribute('aria-describedby');
+      expect(describedBy).toBeTruthy();
+      expect(document.getElementById(describedBy!)?.textContent?.trim()).toBe(description);
     }
   });
 

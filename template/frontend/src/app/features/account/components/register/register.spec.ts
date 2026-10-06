@@ -107,6 +107,18 @@ describe('Register', () => {
     expect(component.isLoading()).toBe(false);
   });
 
+  // 新口令标成 new-password：浏览器据此生成强口令并在注册后保存，而不是填入别处的旧口令
+  it('marks the account fields for password managers', async () => {
+    await setUp();
+    const autocomplete = (id: string) =>
+      (fixture.nativeElement as HTMLElement).querySelector(`#${id}`)?.getAttribute('autocomplete');
+
+    expect(autocomplete('email')).toBe('email');
+    expect(autocomplete('username')).toBe('username');
+    expect(autocomplete('password')).toBe('new-password');
+    expect(autocomplete('confirmPassword')).toBe('new-password');
+  });
+
   it('treats the form as invalid when the two passwords differ', async () => {
     await setUp();
     fillValidForm();

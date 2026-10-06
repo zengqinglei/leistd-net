@@ -3,7 +3,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { TranslocoDirective, translateObjectSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideChevronRight, lucideDatabase, lucideSearchX, lucideUserPen } from '@ng-icons/lucide';
+import {
+  lucideChevronRight,
+  lucideCircleAlert,
+  lucideDatabase,
+  lucideSearchX,
+  lucideUserPen,
+} from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
@@ -155,6 +161,7 @@ interface ActionSentence {
   providers: [
     provideIcons({
       lucideChevronRight,
+      lucideCircleAlert,
       lucideDatabase,
       lucideSearchX,
       lucideUserPen,
@@ -189,6 +196,10 @@ export class OperationRecordTable {
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  /** 错误态里的重试。 */
+  readonly retry = output<void>();
 
   readonly paginationChange = output<PaginationState>();
 
@@ -402,6 +413,8 @@ export class OperationRecordTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'operationRecords.table.colAction': 'Action',
   'operationRecords.table.colOutcome': 'Outcome',
   'operationRecords.table.colActor': 'Operator',

@@ -88,6 +88,12 @@ describe('OperationRecords', () => {
     return query;
   }
 
+  /** 真实的子表实例：错误态与重试经它的 input/output 往返。 */
+  function recordTable(): OperationRecordTable {
+    return fixture.debugElement.query(By.directive(OperationRecordTable))
+      .componentInstance as OperationRecordTable;
+  }
+
   /** 三个筛选器按模板顺序：类别、动作、结果。 */
   function filters(): FacetedFilter[] {
     return fixture.debugElement
@@ -371,14 +377,46 @@ describe('OperationRecords', () => {
     expect(service.getOperationRecords).toHaveBeenCalledOnce();
   });
 
-  it('reports a failed list request and leaves the loading state', async () => {
+  it('shows a failed first load as a retryable error state, not as an empty list', async () => {
     service.getOperationRecords.mockReturnValue(failure());
 
     await open();
 
-    expect(toast.error).toHaveBeenCalledOnce();
+    // 没有旧行可保留：表格拿到失败原因显示错误态，不弹提示也不显示"暂无记录"
     expect(component.loading()).toBe(false);
     expect(component.records()).toEqual([]);
+    expect(component.loadError()).not.toBeNull();
+    expect(recordTable().loadError()).toBe(component.loadError());
+    expect(toast.error).not.toHaveBeenCalled();
+
+    const requests = service.getOperationRecords.mock.calls.length;
+    service.getOperationRecords.mockImplementation(() => emptyPage());
+    recordTable().retry.emit();
+    await fixture.whenStable();
+
+    expect(service.getOperationRecords).toHaveBeenCalledTimes(requests + 1);
+    expect(component.loadError()).toBeNull();
+  });
+
+  it('keeps the loaded records and reports a failed refresh', async () => {
+    const record = {
+      id: 'r-1',
+      action: 'alpha.created',
+      targetId: 't-1',
+      authorizationBasis: 'alpha',
+      outcome: 'Succeeded',
+      creationTime: '2026-09-20T10:00:00Z',
+    };
+    service.getOperationRecords.mockReturnValue(of({ items: [record], totalCount: 1 }));
+    await open();
+
+    service.getOperationRecords.mockReturnValue(failure());
+    component.reloadList();
+    await fixture.whenStable();
+
+    expect(component.records()).toHaveLength(1);
+    expect(component.loadError()).toBeNull();
+    expect(toast.error).toHaveBeenCalledOnce();
   });
 
   it('refetches the current query on refresh', async () => {

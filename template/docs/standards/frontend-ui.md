@@ -7,12 +7,12 @@
 - 以用户任务为中心，而不是以数据表单为中心；主要动作、关键状态、辅助信息分层呈现。
 - 错误态、空状态、加载态必须可解释并可恢复。异步内容区分加载中、加载失败、确实为空：失败要说出来并给出重试；已有内容时刷新失败，保留原内容并提示。请求被后续请求取代时（快速翻页、改筛选），"加载中"跟随当前请求。
 - 表单字段有标签、帮助文本、校验提示和提交状态；列表考虑空态、筛选、分页、加载和错误重试。
-- 可访问性：交互元素可键盘访问；颜色不是唯一信息表达；表单错误与字段关联；遵守系统"减少动效"，开启时不播放位移、缩放类动画，颜色与焦点反馈保留（Spartan 组件做法见 [Spartan 维护约定](./frontend-spartan.md)）。
+- 可访问性：交互元素可键盘访问；触屏点按目标 ≥ 44px（`icon-sm` 补 `pointer-coarse:size-11`）；颜色不是唯一信息表达；表单错误与字段关联；遵守系统"减少动效"，开启时不播放位移、缩放类动画，颜色与焦点反馈保留（Spartan 组件做法见 [Spartan 维护约定](./frontend-spartan.md)）。
 
 ### 1.1 数据表格与列表
 
 - 表格用 TanStack Table（`@tanstack/angular-table`，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页与筛选复用 `shared/components/table-paginator`、`faceted-filter`。
-- 列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带吸附操作列的表格外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降一档（更新数据须换新数组）。被裁的列由 TanStack 行展开补偿（按 `getRowId` 的实体 id 记），不另建展开状态。
+- 列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带吸附操作列的表格外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降一档（更新数据须换新数组）。被裁的列由 TanStack 行展开补偿（按 `getRowId` 的实体 id 记），不另建展开状态。主列用 `TITLE_COLUMN_META` 与 `TITLE_CONTENT_CLASS`：最窄档截断长名称。
 - 操作列按"常用优先、破坏性置后"排序：≤3 项桌面端平铺（icon 按钮 + tooltip），>3 项显示 2 个高频操作 + `…` 溢出菜单；`<sm` 一律收进 `…`，破坏性操作用 `variant="destructive"` 并以分隔线隔开。
 
 ## 2. 组件与样式
@@ -86,7 +86,7 @@
 | 12px | 辅助说明、时间戳、徽章 | `text-xs`                               |
 | 30px | 仅仪表盘大数字         | `text-3xl` + `tabular-nums`             |
 
-- 页面不必都有可见标题：面包屑与浏览器标签页已经说明身在何处的列表页，可以直接从工具栏开始；有页面标题时用 24px 这一档，一页只出现一个。
+- 页面不必都有可见标题：列表页可直接从工具栏开始（面包屑与标签页已说明位置）；有页面标题时用 24px 一档，一页一个。
 - 字重只用 400 / 500 / 600，不用 `font-bold` / `font-extrabold`。
 - 16px 一档即 card、dialog、sheet、alert-dialog 标题组件的默认样式，不再手加 `font-semibold`。
 - 加在图标、`hlm-spinner` 上的 `text-*` 是图标尺寸，不受上表约束。
@@ -100,13 +100,13 @@
 | `rounded-lg`   | 控件（按钮、输入框，组件已是）；嵌在卡片或对话框里的块、代码框、行项、图标块 |
 | `rounded-full` | 徽章、头像                                                                   |
 
-嵌套的块用 `lg` 而不是 `xl`：内外同一个圆角，层次就分不出来。组件内部的小元素（菜单项、清除按钮）跟随所在组件的写法。
+嵌套的块用 `lg` 不用 `xl`：内外同圆角就分不出层次。组件内部的小元素（菜单项、清除按钮）跟随所在组件的写法。
 
-- **当前项**：侧栏、顶栏、设置面板导航统一用 `bg-primary/10 text-primary font-semibold`（按组件的状态属性挂，如 `data-active:`、`aria-[current=page]:`）。
+- **当前项**：侧栏、顶栏、设置面板导航统一用 `bg-primary/10 text-primary font-semibold`（挂在状态属性上，如 `data-active:`、`aria-[current=page]:`）。
 - **间距**：兄弟元素之间用 `flex` / `grid` + `gap-*`，不用 `space-y-*` 与逐个元素的外边距。页面外框统一 `p-4 sm:p-6`。
 - **暗色**：表面分五层逐级提亮（`sidebar` < `background` < `card` < `popover` < `muted`），不用纯黑；层级都在 `styles.css` 里定好，页面不写 `dark:` 颜色覆盖。
-- **图标 + 文案的空态一律用 flex 列**（`flex flex-col items-center justify-center gap-2`），**不要**靠在 `ng-icon` 上加 `block` 让图标独占一行：`ng-icon` 组件自身的 host 样式把它按行内盒渲染，`block` 压不住，结果是图标与文字挤在一行、基线还错开。用 flex 列之后对齐不再取决于哪一条 `display` 规则赢。同款写法见通知面板的空态。
-- **字段说明不要做成独立方框。** 口令规则、格式提示这类说明贴在字段下方的描述位（`hlm-field-description`），与输入框同宽同起止。做成带边框底色的独立块会在视觉上像另一个输入控件，而它的宽度由容器决定、与下方真正的输入框对不齐。
+- **图标 + 文案的空态一律用 flex 列**（`flex flex-col items-center justify-center gap-2`），不靠给 `ng-icon` 加 `block`：它的 host 样式按行内盒渲染，`block` 压不住，图标与文字会挤在一行、基线错开。同款写法见通知面板的空态。
+- **字段说明不要做成独立方框。** 口令规则、格式提示这类说明贴在字段下方的描述位（`hlm-field-description`），与输入框同宽同起止；带边框底色的独立块看着像另一个输入控件，宽度也与输入框对不齐。
 
 ## 3. 导航与菜单分组
 

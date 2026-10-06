@@ -115,6 +115,7 @@
           <input
             hlmInput
             id="usernameOrEmail"
+            autocomplete="username"
             class="w-full"
             [formField]="loginForm.usernameOrEmail"
             [placeholder]="t('account.login.usernameOrEmailPlaceholder')"
@@ -133,6 +134,7 @@
             <input
               hlmInputGroupInput
               id="password"
+              autocomplete="current-password"
               [type]="showPassword() ? 'text' : 'password'"
               [formField]="loginForm.password"
               [placeholder]="t('account.login.passwordPlaceholder')"

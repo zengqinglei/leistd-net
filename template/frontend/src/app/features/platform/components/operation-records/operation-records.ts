@@ -147,6 +147,8 @@ export class OperationRecords {
   records = signal<OperationRecordOutputDto[]>([]);
   totalRecords = signal(0);
   loading = signal(false);
+  /** 列表加载失败且没有旧行可保留时的原因：有值时表格显示错误态与重试，不显示"暂无数据"。 */
+  loadError = signal<string | null>(null);
 
   /** 导出进行中：按钮置灰，避免连点发起多次下载。 */
   readonly exporting = signal(false);
@@ -349,7 +351,12 @@ export class OperationRecords {
             this.loading.set(true);
             return this.service.getOperationRecords(this.queryFromParams(params)).pipe(
               catchError((error: unknown) => {
-                this.showRequestError(error);
+                // 已有行时刷新失败：保留旧行，只做提示
+                if (this.records().length > 0) {
+                  this.showRequestError(error);
+                } else {
+                  this.loadError.set(applicationErrorMessage(error));
+                }
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -359,6 +366,7 @@ export class OperationRecords {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((data) => {
+        this.loadError.set(null);
         this.records.set(data.items);
         this.totalRecords.set(data.totalCount);
       });

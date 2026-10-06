@@ -73,6 +73,8 @@
         [sorting]="sorting()"
         [loading]="loading()"
         [filtered]="hasActiveFilters()"
+        [loadError]="loadError()"
+        (retry)="reloadList()"
         [canUpdate]="canUpdate()"
         [canDelete]="canDelete()"
         [canResetSecret]="canResetSecret()"

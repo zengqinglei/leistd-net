@@ -92,6 +92,7 @@
           <input
             hlmInput
             id="profile-username"
+            autocomplete="username"
             class="w-full"
             [formField]="profileForm.username"
             [placeholder]="t('account.profile.usernamePlaceholder')"
@@ -109,6 +110,7 @@
           <input
             hlmInput
             id="profile-email"
+            autocomplete="email"
             class="w-full"
             [formField]="profileForm.email"
             [placeholder]="t('account.profile.emailPlaceholder')"
@@ -220,6 +222,7 @@
           <input
             hlmInput
             id="profile-phone-number"
+            autocomplete="tel"
             class="w-full"
             [formField]="profileForm.phoneNumber"
             [placeholder]="t('account.profile.phoneNumberPlaceholder')"

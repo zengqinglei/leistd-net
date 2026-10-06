@@ -18,7 +18,7 @@
                   @for (header of headerGroup.headers; track header.id) {
                     <th
                       hlmTh
-                      [class]="header.column.columnDef.meta?.headClass ?? 'px-6'"
+                      [class]="header.column.columnDef.meta?.headClass ?? 'px-4 sm:px-6'"
                       [attr.aria-sort]="sortAria(header.column.id)"
                     >
                       @switch (header.column.id) {
@@ -96,16 +96,22 @@
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
                     @for (cell of row.getVisibleCells(); track cell.id) {
-                      <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'px-6 py-2'">
+                      <td
+                        hlmTd
+                        [class]="cell.column.columnDef.meta?.cellClass ?? 'px-4 py-2 sm:px-6'"
+                      >
                         @switch (cell.column.id) {
                           @case ('username') {
-                            <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
+                            <div
+                              class="flex min-w-0 items-center gap-3 whitespace-nowrap"
+                              [class]="titleContentClass"
+                            >
                               @if (hasCollapsedColumns()) {
                                 <button
                                   hlmBtn
                                   variant="ghost"
                                   size="icon-sm"
-                                  class="-ml-2 shrink-0"
+                                  class="-ml-2 shrink-0 pointer-coarse:size-11"
                                   [attr.aria-label]="t('common.details')"
                                   [attr.aria-expanded]="row.getIsExpanded()"
                                   (click)="row.toggleExpanded()"
@@ -409,7 +415,7 @@
                       <td
                         hlmTd
                         [attr.colspan]="table.getVisibleLeafColumns().length"
-                        class="px-6 pb-3 pt-2"
+                        class="px-4 pb-3 pt-2 sm:px-6"
                       >
                         <dl
                           class="grid grid-cols-[minmax(5rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
@@ -470,24 +476,41 @@
                       <div
                         class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
                       >
-                        <ng-icon
-                          [name]="filtered() ? 'lucideSearchX' : 'lucideUsers'"
-                          class="text-5xl opacity-30"
-                        />
-                        @if (filtered()) {
-                          <p class="text-base font-medium">
-                            {{ t('users.table.emptyFilteredTitle') }}
+                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                        @if (loadError(); as error) {
+                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
+                          <p class="text-base font-medium" role="alert">
+                            {{ t('common.loadFailed') }}
                           </p>
-                          <p class="text-sm opacity-70">
-                            {{ t('users.table.emptyFilteredHint') }}
-                          </p>
+                          <p class="text-sm opacity-70">{{ error }}</p>
+                          <button
+                            hlmBtn
+                            variant="outline"
+                            data-testid="table-retry"
+                            (click)="retry.emit()"
+                          >
+                            {{ t('common.retry') }}
+                          </button>
                         } @else {
-                          <p class="text-base font-medium">
-                            {{ t('users.table.emptyTitle') }}
-                          </p>
-                          <p class="text-sm opacity-70">
-                            {{ t('users.table.emptyHint') }}
-                          </p>
+                          <ng-icon
+                            [name]="filtered() ? 'lucideSearchX' : 'lucideUsers'"
+                            class="text-5xl opacity-30"
+                          />
+                          @if (filtered()) {
+                            <p class="text-base font-medium">
+                              {{ t('users.table.emptyFilteredTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('users.table.emptyFilteredHint') }}
+                            </p>
+                          } @else {
+                            <p class="text-base font-medium">
+                              {{ t('users.table.emptyTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('users.table.emptyHint') }}
+                            </p>
+                          }
                         }
                       </div>
                     </td>

@@ -135,6 +135,10 @@ describe('OpenApplicationEditDialog', () => {
     //#else
     expect(description).toMatch(/^Authorization codes and refresh tokens stop working/);
     //#endif
+    // 读屏软件聚焦开关时连同说明一起读
+    const describedBy = field.querySelector('[role="switch"]')?.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent?.trim()).toBe(description);
   });
 
   it('binds new browser applications to the sign-in session by default', async () => {

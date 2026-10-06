@@ -296,6 +296,15 @@ describe('Login', () => {
     expect(component.isLoading()).toBe(false);
   });
 
+  // 密码管理器按 autocomplete 取用与保存凭据：缺了它，已保存的账号口令填不进来
+  it('marks the credential fields for password managers', async () => {
+    await setUp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('#usernameOrEmail')?.getAttribute('autocomplete')).toBe('username');
+    expect(host.querySelector('#password')?.getAttribute('autocomplete')).toBe('current-password');
+  });
+
   it('navigates to a safe local returnUrl after a successful login', async () => {
     queryParams = { returnUrl: '/platform/users' };
     await setUp();

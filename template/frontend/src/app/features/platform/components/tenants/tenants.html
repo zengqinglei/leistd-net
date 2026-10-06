@@ -52,6 +52,8 @@
         [pagination]="pagination()"
         [loading]="loading()"
         [filtered]="hasActiveFilters()"
+        [loadError]="loadError()"
+        (retry)="reload()"
         [canUpdate]="canUpdate()"
         [canDelete]="canDelete()"
         <!--#if (Impersonation)-->

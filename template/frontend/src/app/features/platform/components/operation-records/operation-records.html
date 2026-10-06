@@ -153,6 +153,8 @@
         [pagination]="pagination()"
         [loading]="loading()"
         [filtered]="hasActiveFilters()"
+        [loadError]="loadError()"
+        (retry)="reloadList()"
         (paginationChange)="onPaginationChange($event)"
       />
     </div>

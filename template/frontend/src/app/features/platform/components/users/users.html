@@ -87,6 +87,8 @@
         [sorting]="sorting()"
         [loading]="loading()"
         [filtered]="hasActiveFilters()"
+        [loadError]="loadError()"
+        (retry)="reloadList()"
         <!--#if (LocalIdentity)-->
         [canUpdate]="canUpdateUser()"
         [canDelete]="canDeleteUser()"

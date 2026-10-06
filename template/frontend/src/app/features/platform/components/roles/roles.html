@@ -53,6 +53,8 @@
         [sorting]="sorting()"
         [loading]="loading()"
         [filtered]="hasActiveFilters()"
+        [loadError]="loadError()"
+        (retry)="reload()"
         [canUpdate]="canUpdate()"
         [canDelete]="canDelete()"
         [canManagePermissions]="canManagePermissions()"

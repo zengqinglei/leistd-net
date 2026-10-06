@@ -33,6 +33,7 @@
               <input
                 hlmInputGroupInput
                 id="current-password"
+                autocomplete="current-password"
                 [type]="showCurrentPassword() ? 'text' : 'password'"
                 [formField]="changeForm.currentPassword"
               />
@@ -65,6 +66,7 @@
               <input
                 hlmInputGroupInput
                 id="new-password"
+                autocomplete="new-password"
                 [type]="showNewPassword() ? 'text' : 'password'"
                 [formField]="changeForm.newPassword"
               />
@@ -98,6 +100,7 @@
               <input
                 hlmInputGroupInput
                 id="confirm-password"
+                autocomplete="new-password"
                 [type]="showConfirmPassword() ? 'text' : 'password'"
                 [formField]="changeForm.confirmPassword"
               />

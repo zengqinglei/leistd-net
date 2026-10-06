@@ -14,6 +14,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowUpDown,
   lucideChevronRight,
+  lucideCircleAlert,
   lucideEllipsis,
   lucideInbox,
   lucidePencil,
@@ -44,6 +45,8 @@ import { englishText } from '../../../../../../shared/utils/english-text';
 import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
+  TITLE_COLUMN_META,
+  TITLE_CONTENT_CLASS,
 } from '../../../../../../shared/utils/table-column-meta';
 import {
   injectAppTable,
@@ -93,6 +96,7 @@ type BadgeVariant = 'secondary' | 'outline';
     provideIcons({
       lucideArrowUpDown,
       lucideChevronRight,
+      lucideCircleAlert,
       lucideEllipsis,
       lucideInbox,
       lucidePencil,
@@ -122,6 +126,10 @@ export class OpenApplicationTable {
   readonly sorting = input<SortingState>([]);
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  /** 错误态里的重试。 */
+  readonly retry = output<void>();
 
   /**
    * 行操作按权限裁剪。默认全开，未启用权限模块的生成物行为不变；
@@ -143,6 +151,8 @@ export class OpenApplicationTable {
   readonly resetSecret = output<string>();
 
   protected readonly tableViewport = tableViewportSignal();
+  /** 主列内容外层：最窄一档下长名称截断，不撑宽表格（见 TITLE_COLUMN_META）。 */
+  protected readonly titleContentClass = TITLE_CONTENT_CLASS;
   private readonly tableFit = viewChild(TableFit);
   /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
   private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
@@ -152,7 +162,7 @@ export class OpenApplicationTable {
       accessorKey: 'clientId',
       id: 'clientId',
       enableHiding: false,
-      meta: { priority: 'primary', locked: true },
+      meta: TITLE_COLUMN_META,
     },
     {
       accessorKey: 'applicationType',
@@ -268,6 +278,8 @@ export class OpenApplicationTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'openApp.table.colApp': 'Application',
   'openApp.table.colType': 'Type',
   'openApp.table.colPermissions': 'Capabilities',

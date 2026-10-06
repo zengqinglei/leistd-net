@@ -130,6 +130,8 @@ export class Roles {
   readonly roles = signal<RoleOutputDto[]>([]);
   readonly totalCount = signal(0);
   readonly loading = signal(false);
+  /** 列表加载失败且没有旧行可保留时的原因：有值时表格显示错误态与重试，不显示"暂无数据"。 */
+  readonly loadError = signal<string | null>(null);
 
   // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
   readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
@@ -173,7 +175,12 @@ export class Roles {
             this.loading.set(true);
             return this.roleService.getRoles(this.queryFromParams(params)).pipe(
               catchError((error: unknown) => {
-                toast.error(applicationErrorMessage(error));
+                // 已有行时刷新失败：保留旧行，只做提示
+                if (this.roles().length > 0) {
+                  toast.error(applicationErrorMessage(error));
+                } else {
+                  this.loadError.set(applicationErrorMessage(error));
+                }
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -183,6 +190,7 @@ export class Roles {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((result) => {
+        this.loadError.set(null);
         this.roles.set([...result.items]);
         this.totalCount.set(result.totalCount);
       });

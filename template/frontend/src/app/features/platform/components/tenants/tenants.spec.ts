@@ -4,6 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
+import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState } from '@tanstack/angular-table';
 import { of, Subject, throwError } from 'rxjs';
 
@@ -270,5 +271,51 @@ describe('Tenants page query and write flow', () => {
     second.next({ items: [], totalCount: 0 });
     second.complete();
     expect(component.loading()).toBe(false);
+  });
+
+  /** 以首次请求失败重建页面：此时没有任何旧行可保留。 */
+  async function openWithFailedFirstLoad(): Promise<void> {
+    fixture.destroy();
+    service.getTenants.mockReturnValue(throwError(() => new Error('boom')) as never);
+    fixture = TestBed.createComponent(Tenants);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('shows the load failure with retry instead of the empty state when the first load fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await openWithFailedFirstLoad();
+
+    // 没有旧行时不能落到"暂无数据"：表格拿到失败原因，显示错误态与重试
+    expect(component.loadError()).toBe('boom');
+    expect(table().loadError()).toBe('boom');
+    expect(component.tenants()).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
+
+    const requests = service.getTenants.mock.calls.length;
+    service.getTenants.mockReturnValue(of({ items: [tenant], totalCount: 1 }) as never);
+    table().retry.emit();
+    await fixture.whenStable();
+
+    expect(service.getTenants).toHaveBeenCalledTimes(requests + 1);
+    expect(component.loadError()).toBeNull();
+    expect(component.tenants()).toHaveLength(1);
+  });
+
+  it('keeps the loaded rows and only notifies when a refresh fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    service.getTenants.mockReturnValue(of({ items: [tenant], totalCount: 1 }) as never);
+    component.reload();
+    await fixture.whenStable();
+
+    service.getTenants.mockReturnValue(throwError(() => new Error('boom')) as never);
+    component.reload();
+    await fixture.whenStable();
+
+    expect(component.tenants()).toHaveLength(1);
+    expect(component.loadError()).toBeNull();
+    expect(notify).toHaveBeenCalledOnce();
   });
 });

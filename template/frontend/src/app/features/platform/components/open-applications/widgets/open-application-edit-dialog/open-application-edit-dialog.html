@@ -289,10 +289,13 @@
                     <label hlmFieldLabel for="application-session-bound">{{
                       t('openApp.sessionBound.title')
                     }}</label>
-                    <p hlmFieldDescription>{{ t('openApp.sessionBound.hint') }}</p>
+                    <p hlmFieldDescription id="application-session-bound-hint">
+                      {{ t('openApp.sessionBound.hint') }}
+                    </p>
                   </div>
                   <hlm-switch
                     inputId="application-session-bound"
+                    aria-describedby="application-session-bound-hint"
                     [checked]="formModel().sessionBound === true"
                     (checkedChange)="setSessionBound($event)"
                   />
