@@ -21,12 +21,8 @@ internal sealed class UnitOfWorkOptionsValidator(string configSectionPath) : IVa
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    /// <summary>
-    /// 按共享判据校验选项。
-    /// </summary>
-    /// <param name="options">待校验的选项。</param>
-    /// <param name="keyPrefix">消息前缀：配置节路径加冒号，或方法参数时的类型名加点。</param>
-    /// <returns>每条失败一项；为空表示通过。</returns>
+    // 启动期与 Begin(options) 共用的判据；keyPrefix 为配置节路径加冒号，或方法参数时的类型名加点。
+    // 返回每条失败一项，为空表示通过。
     internal static List<string> GetFailures(IUnitOfWorkOptions options, string keyPrefix)
     {
         var failures = new List<string>();
