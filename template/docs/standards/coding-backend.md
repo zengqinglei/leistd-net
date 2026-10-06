@@ -19,7 +19,7 @@
 
 目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
 
-- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、又不属于任何模块的应用层约定（认证方案名、分页约定）放 `Shared/`，它同样不是兜底目录。
+- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。多个用例复用的只读投影写成所属模块根目录的 `{概念}Reader`，方法按返回内容命名（`GetRoleNamesAsync`），不新增未登记的类型后缀。
 - **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
 - **Infrastructure**：外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
 
