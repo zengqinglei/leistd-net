@@ -110,6 +110,8 @@
   重复声明会让改共享值只对没重复的项目生效，差异静默存在。
 - **`PackageReference` 一律不写 `Version`**——版本在 `framework/Directory.Packages.props` 用 `<PackageVersion>` 声明。新引入的第三方包必须先在该文件登记版本，否则还原报错（CPM 已启用）。
 - ASP.NET Core 能力用 `<FrameworkReference Include="Microsoft.AspNetCore.App" />`，不要直接引 Microsoft.AspNetCore.* 包。
+  只需要契约的 `*.Abstractions` 纯抽象包除外：它不含 Web 运行时，直接 `PackageReference`
+  才能让非 Web 的包也用上（如 §6.1 的 `Microsoft.AspNetCore.DataProtection.Abstractions`）。
 - 纯内部、不应发布的项目，在其 csproj 设 `<IsPackable>false</IsPackable>`（默认全部可打包）。
 
 ---
@@ -239,7 +241,9 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 需要指引消费者“在 DDD 项目里的正确做法”时，用**一句叙述性 cross-link** 指向 `ddd-struct.md`（例：“在采用 DDD 四层基座的项目里，实体通常继承 `FullAuditedEntity<TKey>`、经仓储读写”），**只作文字说明、不在示例代码里引入该类型**。
 - “经仓储 + AppService/DTO 分层”的完整示范，归位到 **`framework/docs/ddd-struct/ddd-struct.md`**（它才引用这些类型）——那里是分层最佳实践的唯一权威出处，组件文档不重复、不承担这一职责。
 
-> 一句话判据：**看这个组件的 csproj 引用了什么，示例就只能用什么**（外加原生 .NET）。示例引入了 csproj 里没有的组件类型 = 违规。
+- **例外只有宿主组合行**：`## 注册` 段里为满足本组件运行前提而写的组合代码，可以调用兄弟组件的注册入口（`Add*` / `Use*` / `Map*`），如"另需宿主注册 `AddUnitOfWork()`"。组合行只表达"宿主还要注册什么"，不使用兄弟组件的其他类型；`## 使用` 等其他段的示例不在例外内，需要兄弟组件的能力时改用本组件闭包里的类型，或改成指向兄弟文档的文字链接。
+
+> 一句话判据：**看这个组件的 csproj 引用了什么，示例就只能用什么**（外加原生 .NET）。示例引入了 csproj 里没有的组件类型 = 违规；`## 注册` 段的宿主组合行除外。
 
 ---
 
@@ -258,6 +262,8 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - **由宿主配置的组件，注册入口只有一种形态：** `AddXxx(Action<TOptions>? configure = null, string configSectionPath = TOptions.SectionName)`。内部先 `AddOptions<TOptions>().BindConfiguration(configSectionPath)`，再应用 `configure`，并挂上 `ValidateOnStart()`；校验消息按实际传入的配置节报键名（§6.2）。
   - 不另设 `IConfiguration` 重载：只传委托的宿主也要拿到配置文件里的值，两个入口并存时总有一个会漏绑定。
   - 没有主机的纯 `ServiceCollection`（测试、工具）由调用方注册 `IConfiguration`。
+  - 按名称区分实例的入口（如 `AddServiceClient`、`AddClientCredentials`），默认配置节随实例名变化，无法写成常量：`configSectionPath` 声明为可空、默认 `null`，省略时取 `Leistd:ServiceClients:{Name}`（附加能力再加子节，如 `:TokenExchange`），并在 XML 注释里写明默认路径；显式传入的值仍按非空白校验。
+  - 两个已登记的例外不带 `configure`：`AddRemoteTenantConnectionResolution` 只收配置节，`AddHostSettings` 唯一的委托用于声明设置绑定。它们的选项各只有一个调优值（`TenantRouteCacheOptions.CacheLifetime`、`HostSettingOptions.RefreshInterval`），宿主经配置节或 `services.Configure<T>` 调整。不为补齐形态在已有参数中间插入 `configure`：按位置传参的调用会静默错位（可选参数只能追加在末尾）。新增入口不得自行扩列这类例外。
   - 不适合放进配置文件的选项（如签发方决定的 claim 名）不绑定配置节，只走委托。其中含运维可能想按环境调整的值时（如 `HubIdentityOptions.RevalidationInterval`、`LocalTenantConnectionOptions.ControlPlaneConnectionStringName`），在该属性注释里写明不绑定配置的原因和需要调整时的做法；纯代码事实不必逐个说明。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
 - **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
@@ -387,7 +393,7 @@ framework/tests/
 
 ### 7.2 项目内部组织
 
-项目根只放用例文件，文件名表达**被测行为**而不是被测类名。出现下面任一情形才分子目录：
+项目根只放用例文件。新文件优先按**被测行为**命名；只测单一类型的单元用例可以按该类型命名（`XxxTests`）。已有文件不为统一命名批量改名。出现下面任一情形才分子目录：
 
 | 情形 | 子目录 |
 | --- | --- |
@@ -467,6 +473,7 @@ dotnet test framework/Leistd.Framework.slnx -c Release \
 - 组件与 DDD 基座里新增程序集扫描（`GetTypes()`、`DefinedTypes`、`Assembly.Load`）必须有明确理由，
   且不得进入 `AddXxx()` 的公共路径——只能在调用方显式要求扫描时发生。
 - 需要真实宿主的用例（`TestHost` / `WebApplicationFactory`）用 `IClassFixture` 或 collection fixture 共享。
+  用例之间有逐测可变的宿主状态时（每条用例的服务注册、选项或中间件组合不同，或用例会改写宿主内的单例状态），可以每条新建宿主，并在用完后释放；只是为了省事而每条新建不在此列。
 
 ## 8. 提交前自检
 
@@ -493,7 +500,7 @@ pwsh framework/build/test-package-consumption.ps1                # 包内容、�
 
 - **能用 `dotnet` CLI 直接表达的，不要包一层脚本**。`dotnet build/pack/nuget push` 三平台命令完全一致、零额外依赖——文档与 CI 直接写 `dotnet …`，不写 `pwsh xxx.ps1` 去包装它。
 - **确需脚本的复合逻辑**（如文档校验 `framework/build/check-docs-*.ps1`）用 PowerShell 7（`pwsh`，本身跨平台），并遵守：
-  - 首行 `#!/usr/bin/env pwsh`；
+  - 可直接执行的入口脚本首行 `#!/usr/bin/env pwsh`（注释帮助块 `<# … #>` 与 `param(` 放在它之后）；只被其他脚本点源加载的库脚本不要求（如 `scripts/template-matrix-scenarios.ps1`、`scripts/quality-validation-plan.ps1`）；
   - 路径分隔符用 `[\\/]` 正则或 `Join-Path`/`[System.IO.Path]`，不硬编码 `\`；
   - 不用 Windows 专属 cmdlet（`Get-WmiObject` 等）或调用 `cmd`/`*.exe`。
 - **纯文本分析的静态闸门**（`scripts/check-*.py`）可用 Python 3（同样跨平台），本地与 CI 均以 Python 3 为前置。
