@@ -11,7 +11,9 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Claims;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Stores;
+#endif
 using Leistd.MultiTenancy.Context;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;

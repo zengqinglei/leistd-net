@@ -12,7 +12,9 @@ using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.ExceptionHandling;
+#if (LocalIdentity)
 using Leistd.MultiTenancy.Context;
+#endif
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 
@@ -253,7 +255,7 @@ public class UserDomainService(
     /// 创建用户
     /// </summary>
     /// <remarks>
-    /// 资源服务形态没有这个方法：那一侧的用户行由 <see cref="EnsureProjectedAsync"/> 按令牌投影，
+    /// 资源服务形态没有这个方法：那一侧的用户行由 <c>EnsureProjectedAsync</c> 按令牌投影，
     /// 不存在"由本服务决定一个新主体的标识"这回事。
     /// </remarks>
     /// <param name="passwordSubject">

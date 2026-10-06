@@ -1,5 +1,7 @@
+#if (LocalIdentity)
 using System.Net;
 using System.Net.Http.Json;
+#endif
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
@@ -17,13 +19,17 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+#if (IncludeMultiTenancy)
 using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
+#if (!IncludeOperationRecords)
 using Serilog.Core;
+#endif
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>
 /// 集成测试宿主：每个实例一份从已迁移模板库克隆出的 PostgreSQL 库（见 <see cref="PostgreSqlTestDatabase"/>）。

@@ -56,7 +56,9 @@ using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Options;
 #endif
 using StackExchange.Redis;
+#if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
+#endif
 using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure;

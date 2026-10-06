@@ -5,7 +5,9 @@ using Leistd.ExceptionHandling;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
+#endif
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;

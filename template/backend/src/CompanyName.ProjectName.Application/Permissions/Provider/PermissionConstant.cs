@@ -107,6 +107,7 @@ public static class PermissionConstant
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
+#if (Impersonation)
 
         /// <summary>
         /// 以租户管理员身份登录该租户（模拟登录）。
@@ -115,7 +116,6 @@ public static class PermissionConstant
         /// 与 <see cref="Update"/> 分开授权：改租户的注册信息和"进到租户里面去操作"
         /// 是两种不同量级的能力，后者能看到并改动该租户的全部业务数据。
         /// </remarks>
-#if (Impersonation)
         public const string Impersonation = Default + ".Impersonation";
 #endif
     }

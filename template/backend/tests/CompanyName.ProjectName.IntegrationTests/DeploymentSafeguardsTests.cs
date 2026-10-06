@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.TestHost;
 #if (SpaFrontend)
+using Microsoft.AspNetCore.TestHost;
 using CompanyName.ProjectName.Application.Shared;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -190,7 +190,9 @@ public sealed class DeploymentSafeguardsTests
             {
                 // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
                 services.RemoveAll<ILoggerFactory>();
-                services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning));
+                services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
+                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
+                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
             }));
 
         using var client = host.CreateClient();

@@ -11,7 +11,9 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+#if (OpenIddictServer)
 using CompanyName.ProjectName.Domain.Auth.Options;
+#endif
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif

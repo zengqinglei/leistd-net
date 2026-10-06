@@ -45,6 +45,7 @@ public sealed class ConnectController(
     IAntiforgery antiforgery,
     IClock clock) : Controller
 {
+    [AllowAnonymous]
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
     [IgnoreAntiforgeryToken]
@@ -119,6 +120,7 @@ public sealed class ConnectController(
     /// 没有 hint 或 hint 属于别的会话时须征得用户同意，转到 SPA 的确认页。初始协议请求可以跨源（依赖方的表单 POST），
     /// 由 OpenIddict 校验并缓存；用户确认则是本源表单 POST，显式校验官方防伪令牌与确认凭据的绑定。
     /// </remarks>
+    [AllowAnonymous]
     [HttpGet("~/connect/logout")]
     [HttpPost("~/connect/logout")]
     [IgnoreAntiforgeryToken]
@@ -170,6 +172,7 @@ public sealed class ConnectController(
         return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
+    [AllowAnonymous]
     [HttpPost("~/connect/token")]
     [IgnoreAntiforgeryToken]
     [Produces("application/json")]

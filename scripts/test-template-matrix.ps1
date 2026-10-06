@@ -254,6 +254,16 @@ function Assert-I18nGate([string]$ProjectRoot) {
     }
 }
 
+# 错误码闸门不随任何参数裁剪，每个生成项目都必须带上并在产物上跑通：
+# 关闭本地化或邮件时，被裁掉的抛出处会让对应映射或常量变成死码，只有生成产物上看得见。
+function Assert-ErrorCodeGate([string]$ProjectRoot) {
+    $gate = Join-Path $ProjectRoot "scripts/check-error-codes.py"
+    if (-not (Test-Path -LiteralPath $gate)) {
+        throw "scripts/check-error-codes.py must ship with every generated project"
+    }
+    Invoke-External (Get-Python3Command '运行生成项目的错误码闸门') @($gate) $ProjectRoot
+}
+
 # 入口指针：AGENTS.md 只指向协作 Skill 与文档索引，CLAUDE.md 只导入 AGENTS.md。
 function Assert-AgentEntryPoints([string]$ProjectRoot) {
     $agents = Get-Content -LiteralPath (Join-Path $ProjectRoot "AGENTS.md") -Raw -Encoding UTF8
@@ -392,6 +402,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     Assert-MarkdownLinks $ProjectRoot
     Assert-MarkdownAnchors $ProjectRoot
     Assert-I18nGate $ProjectRoot
+    Assert-ErrorCodeGate $ProjectRoot
 }
 
 # 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
@@ -965,7 +976,8 @@ try {
             $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
             # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
             Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
-            Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
+            # 警告即错误：backend/.editorconfig 的风格规则以 warning 交付，生成项目的构建线是 0 警告
+            Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore", "-p:TreatWarningsAsErrors=true")
 
             if (-not $SkipRuntime) {
                 Invoke-RuntimeSmoke $projectRoot $Configuration $scenario

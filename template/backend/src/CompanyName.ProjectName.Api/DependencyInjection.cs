@@ -3,7 +3,9 @@ using CompanyName.ProjectName.Api.Auth;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
 #endif
+#if (LocalIdentity || ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
+#endif
 using Leistd.Security.Claims;
 #if (OpenIddictServer && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
@@ -15,7 +17,7 @@ using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 #endif
 using System.Security.Claims;
-#if (OpenIddictServer || RemoteTokenAuth)
+#if ((OpenIddictServer && IncludeMultiTenancy) || (RemoteTokenAuth && !ResourceBrowserSession))
 using OpenIddict.Validation.AspNetCore;
 #endif
 

@@ -10,7 +10,9 @@ using Leistd.Authorization.Grants;
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.EventHandlers;
 using Leistd.MultiTenancy.Context;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Extensions;
+#endif
 using Leistd.Timing;
 using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Http.Connections;
@@ -19,7 +21,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+#if (LocalIdentity)
 using System.Text.Json;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

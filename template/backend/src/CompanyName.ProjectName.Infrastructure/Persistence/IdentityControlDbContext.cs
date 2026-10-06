@@ -16,7 +16,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence;
 /// 租户注册表若被租户过滤器作用，解析租户就要先知道租户，形成循环。</para>
 /// <para>代价是拿不到基座在"进入跟踪"时落创建审计的钩子，而
 /// <c>TenantConnectionRecord</c> 恰恰是全系统最敏感的一行、必须能回答"谁改的"。
-/// 因此这里显式接上同一个原语（<see cref="EntityEnteringAddedHook"/>），
+/// 因此这里显式接上同一个原语（<c>ChangeTracker.EnableCreationAuditing</c>），
 /// 只落创建审计、不落租户归属——修改审计由宿主的
 /// <c>AuditSaveChangesInterceptor</c> 在保存时处理。</para>
 /// </remarks>

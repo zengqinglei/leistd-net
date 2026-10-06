@@ -3,10 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 #if (IncludeOperationRecords)
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using Leistd.Authorization.Errors;
-#endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
+using Leistd.Authorization.Errors;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

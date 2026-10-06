@@ -12,7 +12,9 @@ using CompanyName.ProjectName.Domain.Users.Options;
 #endif
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
+#if (LocalIdentity)
 using Microsoft.Extensions.Options;
+#endif
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Grants;
 using Leistd.Lock.Abstractions;

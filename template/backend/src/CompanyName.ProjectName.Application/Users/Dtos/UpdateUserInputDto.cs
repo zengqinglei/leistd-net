@@ -30,7 +30,5 @@ public record UpdateUserInputDto
     [StringLength(1500000, ErrorMessage = "{0} is too large. Compress it and try again.")]
     public string? Avatar { get; init; }
 
-#if (LocalIdentity)
     public bool IsEmailVerified { get; init; }
-#endif
 }

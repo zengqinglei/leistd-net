@@ -11,7 +11,7 @@
 <!--#endif-->
 ├── deploy/                  # 容器编排配置
 ├── docs/                    # 长期规范与按需沉淀文档
-├── scripts/                 # 静态检查脚本（按启用的功能生成）
+├── scripts/                 # 静态检查脚本（错误码闸门总在，其余按启用的功能生成）
 ├── AGENTS.md                # AI 协作入口指针（CLAUDE.md 引用它）
 ├── CLAUDE.md
 ├── Dockerfile

@@ -211,10 +211,8 @@ npm start
 
 ## 验证
 
-<!--#if (IncludeLocalization || (SpaFrontend && IncludeOperationRecords))-->
 下面的 `python` 指 Python 3 解释器：Windows 上通常就叫 `python`，macOS 与多数 Linux 发行版上叫 `python3`。
 
-<!--#endif-->
 ```bash
 dotnet test backend/CompanyName.ProjectName.sln
 <!--#if (SpaFrontend)-->
@@ -222,6 +220,7 @@ npm --prefix frontend test -- --watch=false
 npm --prefix frontend run lint
 npm --prefix frontend run build
 <!--#endif-->
+python scripts/check-error-codes.py
 <!--#if (IncludeLocalization)-->
 python scripts/check-i18n.py
 <!--#endif-->

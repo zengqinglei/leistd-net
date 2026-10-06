@@ -30,7 +30,9 @@ using OpenIddict.Validation.SystemNetHttp;
 using OpenIddict.Validation;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+#if (ResourceBrowserSession)
 using System.Text.RegularExpressions;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

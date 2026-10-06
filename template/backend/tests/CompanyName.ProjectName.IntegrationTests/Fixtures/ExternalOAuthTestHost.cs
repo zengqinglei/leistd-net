@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>协议用例只替换 Backchannel，保持真实 OAuth 处理器和关联 Cookie。</summary>
 internal sealed class ExternalOAuthBackchannel : HttpMessageHandler

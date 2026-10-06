@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""实际生成全部有效形态，验证原始输入映射、裁剪不变量及角色无效参数等价。"""
+"""实际生成全部有效形态，验证原始输入映射、裁剪不变量及角色无效参数等价。
+
+部署资产在每个形态的生成产物上核对（判据自检：`--self-test`）：
+- compose 引用的 `${VAR}` 与 `deploy/.env.example` 登记的变量双向一致；
+- compose 里的 `Section__Key` 能对上 appsettings 的键或 Options 类型的属性链；
+- Serilog 的 Override 类别是本项目命名空间、所引用包或 Microsoft/System 的前缀；
+- 生成项目根目录与 `docs/standards/project-structure.md` §1 的清单一致。
+"""
 from __future__ import annotations
 
 import argparse
@@ -13,6 +20,7 @@ import posixpath
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from xml.etree import ElementTree
@@ -64,6 +72,269 @@ def translation_keys(node, prefix=''):
         else:
             keys[name] = value
     return keys
+
+
+COMPOSE_VARIABLE = re.compile(r'\$\{([A-Za-z_][A-Za-z0-9_]*)')
+ENV_EXAMPLE_ENTRY = re.compile(r'^#?\s*([A-Z][A-Z0-9_]*)=', re.M)
+COMPOSE_LIST_ENV = re.compile(r'^\s*-\s*([A-Za-z_][\w.]*)=')
+COMPOSE_MAP_ENV = re.compile(r'^\s+([A-Za-z_][\w.]*__[\w.]*):')
+CLASS_DECL = re.compile(r'\b(?:class|record)\s+(\w+)(?:<[^>{]*>)?(?:\s*\([^)]*\))?\s*(?::\s*([^{\n]+))?')
+PROPERTY_DECL = re.compile(r'\bpublic\s+(?:(?:required|virtual|override|new|static)\s+)*([\w<>\[\]?,.\s]+?)\s+(\w+)\s*\{\s*(?:get|set|init)\b')
+SECTION_CONST = re.compile(r'\bconst\s+string\s+(\w+)\s*=\s*(\$?)"([^"]+)"')
+NAMESPACE_DECL = re.compile(r'^\s*namespace\s+([\w.]+)', re.M)
+# 由宿主自身解析、不经 Options 绑定的根节
+FREE_CONFIGURATION_ROOTS = {'connectionstrings', 'serilog'}
+LOGGING_CATEGORY_ROOTS = ('Microsoft', 'System')
+
+
+def compose_lines(text):
+    """compose 的有效行：去掉整行注释与行尾注释。"""
+    return [re.sub(r'\s+#.*$', '', line) for line in text.split('\n') if not line.lstrip().startswith('#')]
+
+
+def check_compose_variables(compose, env_example):
+    used = set(COMPOSE_VARIABLE.findall('\n'.join(compose_lines(compose))))
+    listed = set(ENV_EXAMPLE_ENTRY.findall(env_example))
+    return ([f'compose variable missing from .env.example: {name}' for name in sorted(used - listed)]
+            + [f'.env.example variable not used by compose: {name}' for name in sorted(listed - used)])
+
+
+def options_catalog(sources):
+    """从 C# 源码收集 Options 形态：类 -> (属性 -> 类型名, 基类)，配置节 -> (类名, 是否按名字分节)。"""
+    classes, sections, constants = {}, {}, {}
+    for text in sources:
+        text = re.sub(r'/\*[\s\S]*?\*/', lambda m: ' ' * len(m[0]), text)
+        text = re.sub(r'//[^\n]*', lambda m: ' ' * len(m[0]), text)
+        # 字符串内容换成等长占位，花括号与关键字只在代码里计数；取值时回到原文
+        masked = re.sub(r'"[^"\n]*"', lambda m: '"' + ' ' * (len(m[0]) - 2) + '"', text)
+        spans = []
+        for declared in CLASS_DECL.finditer(masked):
+            body = re.compile(r'[{;]').search(masked, declared.end())
+            if body is None or body[0] != '{':
+                continue
+            depth, index = 0, body.start()
+            while index < len(masked):
+                depth += {'{': 1, '}': -1}.get(masked[index], 0)
+                if depth == 0:
+                    break
+                index += 1
+            spans.append((body.start(), index, declared[1]))
+            bases = [b.strip().split('<')[0] for b in (declared[2] or '').split(',') if b.strip()]
+            classes.setdefault(declared[1], ({}, bases))
+
+        def owner_at(position):
+            inside = [span for span in spans if span[0] < position < span[1]]
+            return max(inside, key=lambda span: span[0])[2] if inside else None
+
+        for match in PROPERTY_DECL.finditer(masked):
+            if owner := owner_at(match.start()):
+                classes[owner][0][match[2].lower()] = match[1].strip()
+        for match in SECTION_CONST.finditer(text):
+            if owner := owner_at(match.start()):
+                constants[(owner, match[1])] = (match[3], match[2] == '$')
+    def resolve(owner, name, seen=()):
+        value, interpolated = constants[(owner, name)]
+        if not interpolated:
+            return value
+        def part(match):
+            reference = match[1].split('.')
+            key = (reference[0], reference[1]) if len(reference) == 2 else (owner, reference[0])
+            return resolve(*key, seen + (key,)) if key in constants and key not in seen else match[0]
+        return re.sub(r'\{([\w.]+)\}', part, value)
+    for (owner, name), _ in constants.items():
+        if name == 'SectionName' or name.endswith('SectionPrefix'):
+            sections[resolve(owner, name).lower()] = (owner, name.endswith('SectionPrefix'))
+    return classes, sections
+
+
+def element_type(type_name):
+    """属性类型 -> (元素类名, 下一段是否为字典键)。"""
+    type_name = type_name.replace('?', '').strip()
+    dictionary = re.match(r'(?:I?Dictionary|IReadOnlyDictionary)<\s*\w+\s*,\s*(.+)>$', type_name)
+    if dictionary:
+        return element_type(dictionary[1])[0], True
+    generic = re.match(r'[\w.]+<\s*(.+)>$', type_name)
+    if generic:
+        return element_type(generic[1])
+    return type_name.removesuffix('[]').split('.')[-1], False
+
+
+def check_configuration_key(key, catalog, settings_keys):
+    """`A__B__C` 是否对得上 appsettings 的键或 Options 属性链；对不上返回问题描述。"""
+    classes, sections = catalog
+    path = key.split('__')
+    normalized = ':'.join('#' if part.isdigit() else part.lower() for part in path)
+    if normalized in settings_keys or path[0].lower() in FREE_CONFIGURATION_ROOTS:
+        return None
+    segments = [part for part in path if not part.isdigit()]
+    lowered = [part.lower() for part in segments]
+    matched = max((s for s in sections if lowered[:len(s.split(':'))] == s.split(':')), key=lambda s: len(s.split(':')), default=None)
+    if matched is None:
+        return f'{key}: no Options section or appsettings key for {segments[0]}'
+    owner, by_name = sections[matched]
+    remaining = segments[len(matched.split(':')):]
+    current, free = (None, True) if by_name else (owner, False)
+    all_properties = {prop for props, _ in classes.values() for prop in props}
+    for segment in remaining:
+        if free:
+            free = False
+            continue
+        if current is None:
+            if segment.lower() not in all_properties:
+                return f'{key}: {segment} is not an Options property'
+            continue
+        properties, seen, queue = {}, set(), [current]
+        while queue:
+            name = queue.pop()
+            if name in classes and name not in seen:
+                seen.add(name)
+                properties = {**classes[name][0], **properties}
+                queue += classes[name][1]
+        if segment.lower() not in properties:
+            return f'{key}: {segment} is not a property of {current}'
+        current, free = element_type(properties[segment.lower()])
+        current = current if current in classes else None
+    return None
+
+
+def check_logging_categories(keys, namespaces, packages):
+    errors = []
+    roots = set(namespaces) | set(packages)
+    for key in keys:
+        if not key.lower().startswith('serilog__minimumlevel__override__'):
+            continue
+        category = key.split('__', 3)[3]
+        legal = (category.split('.')[0] in LOGGING_CATEGORY_ROOTS
+                 or any(root == category or root.startswith(category + '.') or category.startswith(root + '.') for root in roots))
+        if not legal:
+            errors.append(f'{key}: Serilog override category {category} matches no project namespace or referenced package')
+    return errors
+
+
+def check_root_entries(entries, project_structure):
+    section = re.search(r'^## 1\..*?```text\n(.*?)```', project_structure, re.S | re.M)
+    if section is None:
+        return ['project-structure.md: missing §1 project root listing']
+    documented = {m[1].rstrip('/') for m in re.finditer(r'^[├└]── (\S+)', section[1], re.M)}
+    actual = {entry for entry in entries if not entry.startswith('.') or entry == '.agents'}
+    documented = {entry.split('/')[0] for entry in documented}
+    return ([f'root entry not listed in project-structure.md §1: {entry}' for entry in sorted(actual - documented)]
+            + [f'project-structure.md §1 lists a missing root entry: {entry}' for entry in sorted(documented - actual)])
+
+
+def flatten_settings(node, prefix=''):
+    keys = set()
+    if isinstance(node, dict):
+        for key, value in node.items():
+            keys |= flatten_settings(value, f'{prefix}:{key.lower()}' if prefix else key.lower())
+    elif isinstance(node, list):
+        for value in node:
+            keys |= flatten_settings(value, f'{prefix}:#')
+    else:
+        keys.add(prefix)
+    return keys
+
+
+FRAMEWORK_SOURCES = None
+
+
+def check_deployment(output):
+    """生成产物上的部署资产核对，返回问题列表。"""
+    global FRAMEWORK_SOURCES
+    if FRAMEWORK_SOURCES is None:
+        FRAMEWORK_SOURCES = [p.read_text(encoding='utf-8') for p in sorted((ROOT / 'framework').rglob('*.cs'))
+                             if not {'bin', 'obj', 'tests'} & set(p.relative_to(ROOT / 'framework').parts)]
+    project_sources = [p.read_text(encoding='utf-8') for p in sorted((output / 'backend/src').rglob('*.cs'))
+                       if not {'bin', 'obj'} & set(p.parts)]
+    catalog = options_catalog(FRAMEWORK_SOURCES + project_sources)
+    settings_keys = set()
+    for path in sorted((output / 'backend/src').glob('*/appsettings*.json')):
+        settings_keys |= flatten_settings(json.loads(re.sub(r'^\s*//.*$', '', path.read_text(encoding='utf-8'), flags=re.M)))
+    compose = (output / 'deploy/docker-compose.yml').read_text(encoding='utf-8')
+    keys = [m[1] for line in compose_lines(compose) for m in [COMPOSE_LIST_ENV.match(line) or COMPOSE_MAP_ENV.match(line)] if m]
+    namespaces = {m for text in project_sources for m in NAMESPACE_DECL.findall(text)}
+    packages = re.findall(r'<PackageVersion\s+Include="([^"]+)"', (output / 'backend/Directory.Packages.props').read_text(encoding='utf-8'))
+    return (check_compose_variables(compose, (output / 'deploy/.env.example').read_text(encoding='utf-8'))
+            + [problem for key in keys if '__' in key and not key.lower().startswith('serilog__')
+               for problem in [check_configuration_key(key, catalog, settings_keys)] if problem]
+            + check_logging_categories(keys, namespaces, packages)
+            + check_root_entries([p.name for p in output.iterdir()],
+                                 (output / 'docs/standards/project-structure.md').read_text(encoding='utf-8')))
+
+
+def self_test():
+    """部署资产判据的夹具：合法、违规与例外各至少一例。"""
+    options = ["""
+public sealed class ExternalAuthOptions
+{
+    public const string SectionName = "ExternalAuth";
+    public ProviderOptions Github { get; } = new();
+    public sealed class ProviderOptions
+    {
+        public string? ClientId { get; set; }
+        public bool IsAvailable => ClientId is not null;
+    }
+}
+public class ServiceClientOptions { public string? BaseAddress { get; set; } }
+public static class ServiceClientRegistration { public const string ConfigurationSectionPrefix = "Leistd:ServiceClients"; }
+public sealed class BackgroundJobOptions { public const string SectionName = "Leistd:BackgroundJobs"; }
+public sealed class RetentionOptions
+{
+    public const string SubsectionName = "Retention";
+    public const string SectionName = $"{BackgroundJobOptions.SectionName}:{SubsectionName}";
+    public int Days { get; set; }
+    public List<EndpointOptions> Endpoints { get; set; } = [];
+}
+public sealed class EndpointOptions { public string? Path { get; init; } }
+"""]
+    catalog = options_catalog(options)
+    settings = flatten_settings({'Authentication': {'Issuer': ''}, 'Cors': {'AllowedOrigins': ['x']}})
+    cases = [
+        ('declared provider property', check_configuration_key('ExternalAuth__Github__ClientId', catalog, settings), None),
+        ('extra key under a declared section', check_configuration_key('ExternalAuth__Github__RedirectUri', catalog, settings), 'RedirectUri is not a property of ProviderOptions'),
+        ('computed property is not bindable', check_configuration_key('ExternalAuth__Github__IsAvailable', catalog, settings), 'IsAvailable'),
+        ('unknown section', check_configuration_key('MyProject__Feature__Enabled', catalog, settings), 'no Options section'),
+        ('named client section', check_configuration_key('Leistd__ServiceClients__Identity__BaseAddress', catalog, settings), None),
+        ('named client unknown property', check_configuration_key('Leistd__ServiceClients__Identity__Endpoint', catalog, settings), 'Endpoint is not an Options property'),
+        ('interpolated section and list element', check_configuration_key('Leistd__BackgroundJobs__Retention__Endpoints__0__Path', catalog, settings), None),
+        ('appsettings key with index', check_configuration_key('Cors__AllowedOrigins__0', catalog, settings), None),
+        ('connection strings are free', check_configuration_key('ConnectionStrings__Default', catalog, settings), None),
+    ]
+    failures = [f'{name}: expected {expected!r}, got {actual!r}' for name, actual, expected in cases
+                if (expected is None) != (actual is None) or (expected and expected not in actual)]
+    compose = 'services:\n  api:\n    image: ${IMAGE:-api}\n    environment:\n      - A__B=${SMTP_HOST:?required}\n      # - C__D=${COMMENTED}\n'
+    variable_cases = [
+        ('variables match', check_compose_variables(compose, 'SMTP_HOST=\n# IMAGE=api\n'), []),
+        ('missing variable', check_compose_variables(compose, '# IMAGE=api\n'), ['compose variable missing from .env.example: SMTP_HOST']),
+        ('extra variable', check_compose_variables(compose, 'SMTP_HOST=\n# IMAGE=api\nUNUSED=\n'), ['.env.example variable not used by compose: UNUSED']),
+    ]
+    logging_cases = [
+        ('framework category', ['Serilog__MinimumLevel__Override__Microsoft.AspNetCore'], []),
+        ('project namespace prefix', ['Serilog__MinimumLevel__Override__Generation.Probe'], []),
+        ('package category', ['Serilog__MinimumLevel__Override__Leistd.OperationRecords'], []),
+        ('invalid category', ['Serilog__MinimumLevel__Override__MyProject'], ['MyProject']),
+    ]
+    structure = '# 项目目录\n\n## 1. 项目根\n\n```text\n{project-root}/\n├── .agents/skills/  # x\n├── backend/\n└── README.md\n```\n'
+    root_cases = [
+        ('documented root', check_root_entries(['.agents', '.gitignore', 'backend', 'README.md'], structure), []),
+        ('extra root file', check_root_entries(['.agents', 'backend', 'README.md', 'VERSION'], structure), ['VERSION']),
+        ('missing root entry', check_root_entries(['.agents', 'README.md'], structure), ['backend']),
+    ]
+    for name, actual, expected in variable_cases:
+        if actual != expected:
+            failures.append(f'{name}: expected {expected}, got {actual}')
+    for name, keys, expected in logging_cases + [(n, None, e) for n, _, e in root_cases]:
+        actual = check_logging_categories(keys, {'Generation.Probe.Api'}, ['Leistd.OperationRecords.Core']) if keys else next(a for n2, a, _ in root_cases if n2 == name)
+        if len(actual) != len(expected) or not all(word in problem for word, problem in zip(expected, actual)):
+            failures.append(f'{name}: expected {expected}, got {actual}')
+    if failures:
+        print('FAIL: deployment asset self-test')
+        for failure in failures:
+            print(f'  - {failure}')
+        return 1
+    total = len(cases) + len(variable_cases) + len(logging_cases) + len(root_cases)
+    print(f'PASS: deployment asset self-test ({total} cases)')
+    return 0
 
 
 def validate(output, values, config):
@@ -136,6 +407,11 @@ def validate(output, values, config):
     assert (infra / 'Persistence/IdentityControlDbContext.cs').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control context'
     assert (api / 'Controllers/SettingController.cs').exists() == values['Email'], 'Email test controller'
     assert (output / 'backend/src/Generation.Probe.DbMigrator/ResourceAdminBootstrapRunner.cs').exists() == values['RemoteTokenAuth'], 'Resource bootstrap'
+    deployment_problems = check_deployment(output)
+    assert not deployment_problems, 'Deployment assets: ' + '; '.join(deployment_problems)
+    error_codes = subprocess.run([sys.executable, str(output / 'scripts/check-error-codes.py')], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    assert error_codes.returncode == 0, f'Error code checker: {error_codes.stdout}{error_codes.stderr}'
+    assert not (api / 'Localization').exists() or values['IncludeLocalization'], 'Localization marker type without localization'
     migrations = '\n'.join(p.read_text(encoding='utf-8') for p in (infra / 'Persistence/Migrations').rglob('*.cs'))
     assert ('name: "OperationRecords"' in migrations) == values['IncludeOperationRecords'], 'Operation record tables'
     assert 'CreationTime' in migrations and 'TenantId' in migrations, 'Baseline entity audit/scope columns'
@@ -164,7 +440,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--self-test', action='store_true', help='只运行部署资产判据的夹具自检')
     args = parser.parse_args()
+    if args.self_test:
+        raise SystemExit(self_test())
     assert 1 <= args.workers <= 8
     def source_digests():
         return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()

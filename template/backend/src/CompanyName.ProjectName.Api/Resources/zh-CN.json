@@ -200,12 +200,18 @@
     "Super administrator": "超级管理员",
     "Tenant name": "租户名称",
     "Tenant:ActivateWithoutUsers": "该租户还没有任何用户，启用后谁也进不去。请先完成初始化。",
+//#if (Impersonation)
     "Tenant:AdministratorNotFound": "该租户没有可用于模拟登录的已启用管理员。",
+//#endif
+//#if (Impersonation)
     "Tenant:AlreadyImpersonating": "请先结束当前模拟登录，再开始新的模拟登录。",
+//#endif
     "Tenant:DedicatedDatabaseMissing": "连接串里指定的数据库不存在。请先建库，再用 ConnectionStrings:MigrationTarget 迁移它，然后再创建租户。",
     "Tenant:DedicatedDatabaseNotMigrated": "该库存在但尚未迁移，业务表还没建起来。请先用 ConnectionStrings:MigrationTarget 对它运行 DbMigrator --apply。",
     "Tenant:DedicatedDatabaseUnreachable": "连不上租户的专属库。请确认主机与端口可达、数据库服务在运行。为避免泄露口令，此处不回显连接串。",
+//#if (Impersonation)
     "Tenant:NotImpersonating": "当前会话未在模拟登录租户。",
+//#endif
     "The captcha has expired. Refresh it and try again.": "图形验证码已失效，请刷新重试",
     "The email verification code must contain exactly 6 digits.": "邮箱验证码必须是 6 位数字",
     "The verification code must contain exactly 6 digits.": "验证码必须是 6 位数字",
@@ -217,11 +223,15 @@
     "User:NotFound": "用户 {Id} 不存在。",
     "User:RoleRequired": "请至少选择一个角色。",
     "User:RolesNotFound": "角色不存在：{Roles}",
+//#if (LocalIdentity)
     "User:SuperAdminDeleteForbidden": "系统内置超级管理员不允许删除。",
+//#endif
     "User:SuperAdminDisableForbidden": "系统内置超级管理员不允许被其他管理员禁用。",
     "User:SuperAdminDisableSelfForbidden": "系统内置超级管理员不允许禁用自己。",
     "User:SuperAdminOperationForbidden": "系统内置超级管理员不允许被其他管理员操作。",
+//#if (LocalIdentity)
     "User:SuperAdminResetPasswordForbidden": "系统内置超级管理员的密码不允许被其他管理员重置。",
+//#endif
     "User:SuperAdminUpdateForbidden": "系统内置超级管理员不允许被其他管理员更新。",
     "User:UsernameTaken": "用户名 '{Username}' 已存在。",
     "Username": "用户名",

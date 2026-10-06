@@ -44,9 +44,9 @@ public sealed class DistributedTicketStore(IDistributedCache cache, IDataProtect
         }
     }
 
-    public async Task<string> StoreAsync(AuthenticationTicket ticket, HttpContext context, CancellationToken cancellationToken)
+    public async Task<string> StoreAsync(AuthenticationTicket ticket, HttpContext httpContext, CancellationToken cancellationToken)
     {
-        context.Items[ReferenceVersion + ":" + ticket.AuthenticationScheme] = ticket.Properties.Items[ReferenceVersion];
+        httpContext.Items[ReferenceVersion + ":" + ticket.AuthenticationScheme] = ticket.Properties.Items[ReferenceVersion];
         return await StoreAsync(ticket);
     }
 
@@ -57,20 +57,20 @@ public sealed class DistributedTicketStore(IDistributedCache cache, IDataProtect
         return value is null ? null : options.TicketDataFormat.Unprotect(value);
     }
 
-    public async Task<AuthenticationTicket?> RetrieveAsync(string key, HttpContext context, CancellationToken cancellationToken)
+    public async Task<AuthenticationTicket?> RetrieveAsync(string key, HttpContext httpContext, CancellationToken cancellationToken)
     {
         var ticket = await RetrieveAsync(key);
         if (ticket is null) return null;
-        var reference = ReadReference(context, ticket.AuthenticationScheme);
+        var reference = ReadReference(httpContext, ticket.AuthenticationScheme);
         return reference is not null &&
             reference.Properties.Items.TryGetValue(ReferenceVersion, out var version) &&
             ticket.Properties.Items.TryGetValue(ReferenceVersion, out var expected) && version == expected ? ticket : null;
     }
 
-    public async Task RenewAsync(string key, AuthenticationTicket ticket, HttpContext context, CancellationToken cancellationToken)
+    public async Task RenewAsync(string key, AuthenticationTicket ticket, HttpContext httpContext, CancellationToken cancellationToken)
     {
-        var reference = ReadReference(context, ticket.AuthenticationScheme);
-        context.Items[ReferenceVersion + ":" + ticket.AuthenticationScheme] = ticket.Properties.Items[ReferenceVersion];
+        var reference = ReadReference(httpContext, ticket.AuthenticationScheme);
+        httpContext.Items[ReferenceVersion + ":" + ticket.AuthenticationScheme] = ticket.Properties.Items[ReferenceVersion];
         var previous = reference is not null && reference.Properties.Items.TryGetValue(ReferenceVersion, out var prior) ? prior : null;
         ticket.Properties.Items.TryGetValue(ReferenceVersion, out var version);
         if (version is not null && version != previous)
@@ -122,12 +122,12 @@ public sealed class DistributedTicketStore(IDistributedCache cache, IDataProtect
         await cache.RemoveAsync(key, handle.LockLost);
     }
 
-    public async Task RemoveAsync(string key, HttpContext context, CancellationToken cancellationToken)
+    public async Task RemoveAsync(string key, HttpContext httpContext, CancellationToken cancellationToken)
     {
         await using var handle = await locks.LockAsync(key + ":ticket", cancellationToken);
         var current = await RetrieveAsync(key);
         if (current is null) return;
-        var reference = ReadReference(context, current.AuthenticationScheme);
+        var reference = ReadReference(httpContext, current.AuthenticationScheme);
         if (reference is not null &&
             reference.Properties.Items.TryGetValue(ReferenceVersion, out var version) &&
             current.Properties.Items.TryGetValue(ReferenceVersion, out var expected) && version == expected)

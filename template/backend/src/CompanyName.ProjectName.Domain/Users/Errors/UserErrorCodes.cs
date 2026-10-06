@@ -9,11 +9,15 @@ public static class UserErrorCodes
     public const string ManageRolesRequired = "User:ManageRolesRequired";
     public const string NotFound = "User:NotFound";
     public const string RolesNotFound = "User:RolesNotFound";
+#if (LocalIdentity)
     public const string SuperAdminDeleteForbidden = "User:SuperAdminDeleteForbidden";
+#endif
     public const string SuperAdminDisableForbidden = "User:SuperAdminDisableForbidden";
     public const string SuperAdminDisableSelfForbidden = "User:SuperAdminDisableSelfForbidden";
     public const string SuperAdminOperationForbidden = "User:SuperAdminOperationForbidden";
+#if (LocalIdentity)
     public const string SuperAdminResetPasswordForbidden = "User:SuperAdminResetPasswordForbidden";
+#endif
     public const string SuperAdminUpdateForbidden = "User:SuperAdminUpdateForbidden";
     public const string UsernameTaken = "User:UsernameTaken";
 }

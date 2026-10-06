@@ -37,9 +37,11 @@ using OpenIddict.Abstractions;
 // 与 Microsoft.AspNetCore.Authentication.OAuth.OAuthOptions 同名，用别名指定项目自己的选项
 using ProjectOAuthOptions = CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions;
 #endif
+#if (OpenIddictServer)
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

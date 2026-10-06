@@ -200,12 +200,18 @@
     "Super administrator": "Super administrator",
     "Tenant name": "Tenant name",
     "Tenant:ActivateWithoutUsers": "This tenant has no users yet; activating it would let nobody in. Finish provisioning first.",
+//#if (Impersonation)
     "Tenant:AdministratorNotFound": "This tenant has no active administrator available for impersonation.",
+//#endif
+//#if (Impersonation)
     "Tenant:AlreadyImpersonating": "End the current impersonation before starting another one.",
+//#endif
     "Tenant:DedicatedDatabaseMissing": "The database named in the connection string does not exist. Create it, migrate it via ConnectionStrings:MigrationTarget, then create the tenant.",
     "Tenant:DedicatedDatabaseNotMigrated": "The database exists but has not been migrated; its business tables are missing. Run the DbMigrator against it with ConnectionStrings:MigrationTarget first.",
     "Tenant:DedicatedDatabaseUnreachable": "The tenant's dedicated database is unreachable. Check that the host and port are reachable and the database server is running. The connection string is not echoed back because it carries credentials.",
+//#if (Impersonation)
     "Tenant:NotImpersonating": "The current session is not impersonating a tenant.",
+//#endif
     "The captcha has expired. Refresh it and try again.": "The captcha has expired. Refresh it and try again.",
     "The email verification code must contain exactly 6 digits.": "The email verification code must contain exactly 6 digits.",
     "The verification code must contain exactly 6 digits.": "The verification code must contain exactly 6 digits.",
@@ -217,11 +223,15 @@
     "User:NotFound": "User {Id} not found.",
     "User:RoleRequired": "Please select at least one role.",
     "User:RolesNotFound": "Roles not found: {Roles}",
+//#if (LocalIdentity)
     "User:SuperAdminDeleteForbidden": "The built-in super administrator cannot be deleted.",
+//#endif
     "User:SuperAdminDisableForbidden": "The built-in super administrator cannot be disabled by other administrators.",
     "User:SuperAdminDisableSelfForbidden": "The built-in super administrator cannot disable itself.",
     "User:SuperAdminOperationForbidden": "The built-in super administrator cannot be operated on by other administrators.",
+//#if (LocalIdentity)
     "User:SuperAdminResetPasswordForbidden": "The built-in super administrator's password cannot be reset by other administrators.",
+//#endif
     "User:SuperAdminUpdateForbidden": "The built-in super administrator cannot be updated by other administrators.",
     "User:UsernameTaken": "Username '{Username}' already exists.",
     "Username": "Username",

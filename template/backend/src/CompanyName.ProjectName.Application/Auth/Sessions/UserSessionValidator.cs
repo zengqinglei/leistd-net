@@ -5,7 +5,9 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy.Context;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Stores;
+#endif
 using Leistd.Security.Claims;
 using Leistd.Timing;
 using Leistd.UnitOfWork;

@@ -15,8 +15,8 @@
 后端：
   4. `backend/src/*.Api/Resources` 的 en、zh-CN 是合法 JSON，`culture` 与文件名一致，
      `texts` 键集合一致，同一键的 `{Name}` 占位符集合一致。
-  5. Domain、Application 的 `*ErrorCodes.cs` 常量值形如 `<所有者>:<成员名>`（所有者取文件名去掉 ErrorCodes）、
-     全局唯一、在资源里有句子；`new BusinessException("…")` 不写字面量码。
+  5. Domain、Application 的 `*ErrorCodes.cs` 常量在资源里有句子；码的形态、归属与引用
+     由不随本地化裁剪的 `scripts/check-error-codes.py` 检查。
   6. `[Display(Name = "…")]` 与 `ErrorMessage = "…"` 的原文都是资源键；`Dtos/` 下的校验特性必须显式写 ErrorMessage
      （不写时落成 .NET 内置英文，本地化查不到）。
 两端：
@@ -271,7 +271,7 @@ def load_frontend_catalog(frontend):
     en = {}
     dirs = [resources, *sorted(p for p in resources.rglob('*') if p.is_dir())]
     for directory in dirs:
-        label = str(directory.relative_to(resources))
+        label = directory.relative_to(resources).as_posix()
         trees = {}
         for lang in LOCALES:
             path = directory / f'{lang}.json'
@@ -344,7 +344,6 @@ def check_frontend(frontend):
 # ---------------------------------------------------------------- 后端
 
 CONSTANT = re.compile(r'public\s+const\s+string\s+([A-Za-z]\w*)\s*=\s*"([^"]+)"')
-LITERAL_BUSINESS_CODE = re.compile(r'new\s+BusinessException\(\s*"[^"]+"')
 ANNOTATION_KEYS = (re.compile(r'Display\(Name\s*=\s*"([^"]+)"'), re.compile(r'ErrorMessage\s*=\s*"([^"]+)"'))
 VALIDATION_ATTRIBUTE = re.compile(
     r'\[(Required|StringLength|MaxLength|MinLength|Range|RegularExpression|EmailAddress|Phone|Url|Compare|Length)\b(\([^\]]*\))?\]')
@@ -414,25 +413,15 @@ def check_backend(root):
     if texts is None:
         return errors
 
-    codes = {}
     for layer in ('*.Domain', '*.Application'):
         for project in sorted(src.glob(layer)):
             for path, member, code in error_code_constants(project):
-                name = relative(path, root)
-                owner = path.name[:-len('ErrorCodes.cs')]
-                if code != f'{owner}:{member}':
-                    errors.append(f'{name}: error code {member} = {code} should be {owner}:{member}')
-                if code in codes:
-                    errors.append(f'{name}: duplicate error code {code} (also {codes[code]})')
-                codes.setdefault(code, name)
                 if code not in texts:
-                    errors.append(f'{name}: error code {code} has no resource entry')
+                    errors.append(f'{relative(path, root)}: error code {code} has no resource entry')
 
     for path in source_files(src, {'.cs'}):
         name = relative(path, root)
         text = path.read_text(encoding='utf-8')
-        if LITERAL_BUSINESS_CODE.search(text):
-            errors.append(f'{name}: BusinessException must use the owning module error code constant')
         code = without_doc_comments(text)
         for pattern in ANNOTATION_KEYS:
             for m in pattern.finditer(code):
@@ -494,6 +483,11 @@ def write_fixture(root):
         # 条件指令行在模板源码里出现，生成后消失；两种形态都要能解析。
         'frontend/public/i18n/users/en.json': f'{{\n{IF} (Impersonation)\n"title": "Users",\n{ENDIF}\n"nested": {{"label": "Label {{{{name}}}}"}}\n}}',
         'frontend/public/i18n/users/zh-CN.json': json.dumps({'title': '用户', 'nested': {'label': '标签 {{name}}'}}),
+        # 两级 scope：标签与键前缀都按 `/` 拼，Windows 上也一样
+        'frontend/public/i18n/admin/en.json': json.dumps({'title': 'Admin'}),
+        'frontend/public/i18n/admin/zh-CN.json': json.dumps({'title': '管理'}),
+        'frontend/public/i18n/admin/audit/en.json': json.dumps({'title': 'Audit'}),
+        'frontend/public/i18n/admin/audit/zh-CN.json': json.dumps({'title': '审计'}),
         'frontend/public/i18n/permissions/en.json': json.dumps({'title': 'Grant'}),
         'frontend/public/i18n/permissions/zh-CN.json': json.dumps({'title': '授权'}),
         'frontend/src/page.html': """<ng-container *transloco="let t; prefix: 'users'">{{ t('title') }}<ng-container *transloco="let t">{{ t('common.save') }}</ng-container></ng-container><example-grant />""",
@@ -588,6 +582,8 @@ def self_test():
         ('conditional malformed JSON remains invalid', write(users_en, f'{{\n{IF} (Impersonation)\n"title": "Users"\n{ENDIF}\n"nested": {{"label": "Label {{{{name}}}}"}}\n}}'), 'invalid or missing JSON'),
         ('missing language file', lambda root: (root / users_zh).unlink(), 'invalid or missing JSON'),
         ('scope key sets', write(users_zh, '{}'), 'key sets differ'),
+        ('two-level scope label', write('frontend/public/i18n/admin/audit/zh-CN.json', '{}'), 'admin/audit: scope key sets differ'),
+        ('two-level scope key prefix', write('frontend/public/i18n/en.json', json.dumps({'validation': {'required': 'Required'}, 'common': {'save': 'Save'}, 'admin': {'audit': {'title': 'Audit'}}})), 'admin.audit.title: duplicate global/scope key'),
         ('empty value', write(users_zh, json.dumps({'title': '', 'nested': {'label': '标签 {{name}}'}})), 'empty or non-string translation'),
         ('non-string value', write(users_zh, json.dumps({'title': 1, 'nested': {'label': '标签 {{name}}'}})), 'empty or non-string translation'),
         ('single-brace interpolation', write(users_zh, json.dumps({'title': '用户', 'nested': {'label': '标签 {name}'}})), 'zh-CN:nested.label: invalid Transloco interpolation'),
@@ -612,11 +608,8 @@ def self_test():
         ('backend culture', edit(backend_zh, '"culture": "zh-CN"', '"culture": "en"'), "does not match file name zh-CN"),
         ('backend key sets', edit(backend_zh, '"Name": "\\u540d\\u79f0", ', ''), 'key sets differ'),
         ('backend placeholders', edit(backend_zh, '{Id}', '{UserId}'), 'placeholders differ for User:NotFound'),
-        # 错误码
-        ('error code owner', edit(codes, '"User:NotFound"', '"Account:NotFound"'), 'should be User:NotFound'),
-        ('duplicate error code', write('backend/src/Demo.Application/Users/Errors/UserErrorCodes.cs', 'public static class UserErrorCodes { public const string NotFound = "User:NotFound"; }'), 'duplicate error code User:NotFound'),
+        # 错误码（形态与引用见 check-error-codes.py）
         ('error code without resource', edit(codes, 'public const string NotFound = "User:NotFound";', 'public const string NotFound = "User:NotFound";\n    public const string Locked = "User:Locked";'), 'error code User:Locked has no resource entry'),
-        ('literal business code', write('backend/src/Demo.Application/Users/Literal.cs', 'throw new BusinessException("User:NotFound", "x");'), 'BusinessException must use the owning module error code constant'),
         # DataAnnotations
         ('display key', edit(dto, 'Display(Name = "Name")', 'Display(Name = "Full name")'), 'DataAnnotations key has no resource entry: Full name'),
         ('error message key', edit(dto, 'ErrorMessage = "{0} is required."', 'ErrorMessage = "{0} is mandatory."'), 'DataAnnotations key has no resource entry: {0} is mandatory.'),

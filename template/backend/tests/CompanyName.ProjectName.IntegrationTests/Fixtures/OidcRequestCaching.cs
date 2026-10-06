@@ -1,7 +1,7 @@
 #if (OpenIddictServer)
 using System.Net;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>
 /// 授权与退出请求启用了 OpenIddict 请求缓存：首个请求被存为 request token，

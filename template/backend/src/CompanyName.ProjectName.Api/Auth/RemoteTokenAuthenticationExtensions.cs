@@ -1,6 +1,8 @@
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.Options;
+#if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
+#endif
 using Leistd.ServiceClient.Abstractions;
 #if (ResourceBrowserSession)
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;

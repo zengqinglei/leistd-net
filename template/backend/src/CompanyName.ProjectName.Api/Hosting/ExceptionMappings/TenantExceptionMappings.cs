@@ -9,10 +9,12 @@ internal static class TenantExceptionMappings
     public static void Configure(GlobalExceptionOptions options)
     {
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
-            TenantErrorCodes.ActivateWithoutUsers,
+#if (Impersonation)
             TenantErrorCodes.AdministratorNotFound,
             TenantErrorCodes.AlreadyImpersonating,
-            TenantErrorCodes.NotImpersonating);
+            TenantErrorCodes.NotImpersonating,
+#endif
+            TenantErrorCodes.ActivateWithoutUsers);
     }
 }
 #endif

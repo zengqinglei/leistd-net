@@ -353,6 +353,8 @@
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/AuthExceptionMappings.cs",
             "backend/src/CompanyName.ProjectName.Api/Middlewares/TwoFactorSetupEnforcementMiddleware.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/ResetUserPasswordInputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/CreateUserInputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserInputDto.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/OneTimeCodes/RecoveryCodes.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/OneTimeCodes/Totp.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Text/Base32.cs",
@@ -363,6 +365,7 @@
             "backend/src/CompanyName.ProjectName.Domain/Users/ValueObjects/CredentialValidationResult.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/ControlPlaneConnectionStrings.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AccessFailureCounterTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/CredentialChangeTransactionTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AvatarTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/DefaultAdminBootstrapTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Fixtures/AuthorizationTestBase.cs",
@@ -459,6 +462,7 @@
           "condition": "!IncludeLocalization",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Resources/**",
+            "backend/src/CompanyName.ProjectName.Api/Localization/**",
             "docs/standards/frontend-i18n.md",
             "frontend/public/i18n/**",
             "frontend/src/app/core/i18n/**",
@@ -682,7 +686,8 @@
           "condition": "!(OpenIddictServer || RemoteTokenAuth)",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/AccessTokenRenewal.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs"
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthenticationModeTests.cs"
           ]
         },
         {

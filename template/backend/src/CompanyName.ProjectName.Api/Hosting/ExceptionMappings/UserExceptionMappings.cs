@@ -9,11 +9,15 @@ internal static class UserExceptionMappings
     {
         ApiExceptionMappings.Map(options, StatusCodes.Status403Forbidden,
             UserErrorCodes.ManageRolesRequired,
+#if (LocalIdentity)
             UserErrorCodes.SuperAdminDeleteForbidden,
+#endif
             UserErrorCodes.SuperAdminDisableForbidden,
             UserErrorCodes.SuperAdminDisableSelfForbidden,
             UserErrorCodes.SuperAdminOperationForbidden,
+#if (LocalIdentity)
             UserErrorCodes.SuperAdminResetPasswordForbidden,
+#endif
             UserErrorCodes.SuperAdminUpdateForbidden);
         options.MapCode(UserErrorCodes.NotFound, StatusCodes.Status404NotFound);
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,

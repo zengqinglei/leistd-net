@@ -23,7 +23,9 @@ using Leistd.Notifications.Dtos;
 #if (!LocalIdentity)
 using Leistd.MultiTenancy.Context;
 #endif
+#if (LocalIdentity)
 using Microsoft.AspNetCore.Mvc.Testing;
+#endif
 #if (Email)
 using Microsoft.AspNetCore.TestHost;
 #endif

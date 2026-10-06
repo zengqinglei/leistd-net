@@ -99,7 +99,9 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
         {
             // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
             services.RemoveAll<ILoggerFactory>();
-            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning));
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
+                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
+                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
         }));
 #if (LocalIdentity)
         using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);

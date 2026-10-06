@@ -158,12 +158,13 @@ npm run build
 - 实时订阅、资源鉴权和通用订阅不受影响的路径。
 <!--#endif-->
 
-<!--#if (IncludeLocalization || (SpaFrontend && IncludeOperationRecords))-->
 ## 5. 静态闸门
 
-有些错漏不让任何断言变红，只让界面显示得不对；这类判据做成脚本，跟测试一起跑（Windows 上把 `python3` 换成 `py`）：
+有些错漏不让任何断言变红，只让契约或界面悄悄不对；这类判据做成脚本，跟测试一起跑（Windows 上把 `python3` 换成 `py`）：
 
 ```bash
+python3 scripts/check-error-codes.py                      # 错误码形态、归属与引用
+python3 scripts/check-error-codes.py --self-test          # 判据本身还成立吗
 <!--#if (IncludeLocalization)-->
 python3 scripts/check-i18n.py                             # 词条、引用与写死文案
 python3 scripts/check-i18n.py --self-test                 # 判据本身还成立吗
@@ -174,8 +175,11 @@ python3 scripts/check-operation-action-i18n.py --self-test  # 判据本身还成
 <!--#endif-->
 ```
 
+`check-error-codes.py` 检查错误码形如 `模块:语义`、前缀只由一个模块声明、源码引用常量而不写字面量，
+以及每个码都有抛出处——只被异常映射引用的码是死码。判据见脚本文件头。
+
 <!--#if (IncludeLocalization)-->
-`check-i18n.py` 检查词条键集合与占位符、静态引用、后端资源与错误码、DataAnnotations 键与写死的中文，判据见脚本文件头。
+`check-i18n.py` 检查词条键集合与占位符、静态引用、后端资源与错误码词条、DataAnnotations 键与写死的中文，判据见脚本文件头。
 
 <!--#endif-->
 <!--#if (SpaFrontend && IncludeOperationRecords)-->
@@ -185,9 +189,12 @@ python3 scripts/check-operation-action-i18n.py --self-test  # 判据本身还成
 只有"有些行看不懂"。新增动作码时同一个提交里补上中英两种句子。
 
 <!--#endif-->
-新增这类闸门时一并写 `--self-test`：判据自己失效之后，它给出的每一次"通过"都是假的。
+后端的日志模板、文件范围命名空间、命名空间跟随目录、未使用的 using 与实现参数名由 `backend/.editorconfig` 在构建期检查，
+构建以 0 警告为准；确需违反时用 `[SuppressMessage]` 并写明 Justification。
+控制器授权、路由前缀与实体租户归属的约定由 `ControllerAuthorizationConventionTests`、`RouteConventionTests`、
+`EntityModelConventionTests` 随测试检查，豁免各写在测试的白名单里并注明理由。
 
-<!--#endif-->
+新增这类闸门时一并写 `--self-test`：判据自己失效之后，它给出的每一次"通过"都是假的。
 
 ## 6. 数据与结果
 

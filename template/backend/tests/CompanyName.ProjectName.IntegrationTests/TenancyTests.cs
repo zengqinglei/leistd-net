@@ -39,7 +39,9 @@ using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.Data.Paging;
+#if (ExternalLogin)
 using Leistd.Timing;
+#endif
 using Leistd.UnitOfWork;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.DomainServices;

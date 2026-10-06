@@ -17,7 +17,9 @@ using Leistd.Timing;
 #endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.Users.Avatars;
+#endif
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Shared.Paging;
@@ -37,7 +39,7 @@ using Leistd.Data.Paging;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
-#if (IncludeNotifications)
+#if (LocalIdentity && IncludeNotifications)
 using Leistd.Notifications.Stores;
 #endif
 
@@ -65,7 +67,7 @@ public class UserAppService(
     IOpenIddictTokenManager tokenManager,
 #endif
     ICurrentUser currentUser,
-#if (IncludeNotifications)
+#if (LocalIdentity && IncludeNotifications)
     INotificationStore notificationStore,
 #endif
     ILogger<UserAppService> logger,

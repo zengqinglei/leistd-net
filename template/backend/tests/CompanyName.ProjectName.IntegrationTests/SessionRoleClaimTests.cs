@@ -8,9 +8,9 @@ using CompanyName.ProjectName.Application.Shared;
 #if (ExternalLogin)
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
+#endif
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;

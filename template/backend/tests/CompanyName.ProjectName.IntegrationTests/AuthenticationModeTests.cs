@@ -1,6 +1,6 @@
-using Leistd.Authorization.Definitions;
 using Microsoft.Extensions.DependencyInjection;
 #if (RemoteTokenAuth)
+using Leistd.Authorization.Definitions;
 using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth;
 using Leistd.Security.AspNetCore;
@@ -14,10 +14,12 @@ using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
+#if (IncludeMultiTenancy)
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using OpenIddict.Abstractions;
 using Leistd.Security.Claims;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
