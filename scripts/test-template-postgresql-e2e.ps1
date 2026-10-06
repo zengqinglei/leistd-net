@@ -586,6 +586,6 @@ finally {
         $apiProcess.WaitForExit()
         $apiProcess.Dispose()
     }
-    & docker rm --force $containerName *> $null
+    & docker rm --force --volumes $containerName *> $null
     [Environment]::SetEnvironmentVariable("DataProtection__KeysPath", $previousDataProtectionKeysPath)
 }
