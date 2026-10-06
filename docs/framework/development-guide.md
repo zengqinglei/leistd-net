@@ -243,6 +243,8 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 - **例外只有宿主组合行**：`## 注册` 段里为满足本组件运行前提而写的组合代码，可以调用兄弟组件的注册入口（`Add*` / `Use*` / `Map*`），如"另需宿主注册 `AddUnitOfWork()`"。组合行只表达"宿主还要注册什么"，不使用兄弟组件的其他类型；`## 使用` 等其他段的示例不在例外内，需要兄弟组件的能力时改用本组件闭包里的类型，或改成指向兄弟文档的文字链接。
 
+- **示例的 `using`**：代码块要么不写任何 Leistd 命名空间（默认引入本家族的命名空间），要么完整写出所需的全部 Leistd 命名空间；写了任一 Leistd `using` 的代码块不再默认引入。含 `...` 等占位、无法独立编译的代码块在前一行标注 `<!-- no-compile: 理由 -->`（理由必填）。`framework/build/test-package-consumption.ps1` 按此编译 `## 注册` 与 `## 使用` 段的代码块。
+
 > 一句话判据：**看这个组件的 csproj 引用了什么，示例就只能用什么**（外加原生 .NET）。示例引入了 csproj 里没有的组件类型 = 违规；`## 注册` 段的宿主组合行除外。
 
 ---
@@ -484,7 +486,7 @@ dotnet build framework/Leistd.Framework.slnx -c Release          # 0 错误
 dotnet test  framework/Leistd.Framework.slnx -c Release          # 全绿
 pwsh scripts/check-all.ps1                                       # 全部静态闸门
 pwsh framework/build/pack-local-feed.ps1                         # 本地 NuGet feed（先清空再打包，PDB 内嵌）
-pwsh framework/build/test-package-consumption.ps1                # 包内容、还原和构建
+pwsh framework/build/test-package-consumption.ps1                # 包内容、还原、构建与组件文档示例编译
 ```
 
 静态闸门清单只以 `pwsh scripts/check-all.ps1 -List` 的输出为准，CI 也只调它一处；新增闸门加进该脚本，本文件不跟着列。
@@ -500,7 +502,7 @@ pwsh framework/build/test-package-consumption.ps1                # 包内容、�
 
 - **能用 `dotnet` CLI 直接表达的，不要包一层脚本**。`dotnet build/pack/nuget push` 三平台命令完全一致、零额外依赖——文档与 CI 直接写 `dotnet …`，不写 `pwsh xxx.ps1` 去包装它。
 - **确需脚本的复合逻辑**（如文档校验 `framework/build/check-docs-*.ps1`）用 PowerShell 7（`pwsh`，本身跨平台），并遵守：
-  - 可直接执行的入口脚本首行 `#!/usr/bin/env pwsh`（注释帮助块 `<# … #>` 与 `param(` 放在它之后）；只被其他脚本点源加载的库脚本不要求（如 `scripts/template-matrix-scenarios.ps1`、`scripts/quality-validation-plan.ps1`）；
+  - 可直接执行的入口脚本首行 `#!/usr/bin/env pwsh`（注释帮助块 `<# … #>` 与 `param(` 放在它之后，帮助块与 shebang 之间空一行，否则 `Get-Help` 认不出帮助块）；只被其他脚本点源加载的库脚本不要求（如 `scripts/template-matrix-scenarios.ps1`、`scripts/quality-validation-plan.ps1`）；
   - 路径分隔符用 `[\\/]` 正则或 `Join-Path`/`[System.IO.Path]`，不硬编码 `\`；
   - 不用 Windows 专属 cmdlet（`Get-WmiObject` 等）或调用 `cmd`/`*.exe`。
 - **纯文本分析的静态闸门**（`scripts/check-*.py`）可用 Python 3（同样跨平台），本地与 CI 均以 Python 3 为前置。
