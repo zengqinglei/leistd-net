@@ -6,6 +6,7 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Shared;
 #if (ExternalLogin)
+using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -117,7 +119,7 @@ public sealed class SessionRoleClaimTests(ProjectWebApplicationFactory factory)
         {
             var result = await scope.ServiceProvider.GetRequiredService<IExternalAuthAppService>()
                 .AuthenticateExternalUserAsync("github", external);
-            var principal = Assert.IsType<System.Security.Claims.ClaimsPrincipal>(result.Principal);
+            var principal = Assert.IsType<ClaimsPrincipal>(result.Principal);
             Assert.True(principal.IsInRole(defaultRole));
             Assert.False(principal.IsInRole(otherRole));
         }
@@ -148,7 +150,7 @@ public sealed class SessionRoleClaimTests(ProjectWebApplicationFactory factory)
     }
 
     private static async Task AssertSessionRolesAsync(
-        Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host,
+        WebApplicationFactory<Program> host,
         string username,
         string expectedRole,
         string absentRole)

@@ -1,10 +1,6 @@
 #if (LocalIdentity)
-using Leistd.MultiTenancy;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;

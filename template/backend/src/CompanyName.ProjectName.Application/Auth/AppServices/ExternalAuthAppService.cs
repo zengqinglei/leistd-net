@@ -14,11 +14,8 @@ using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Security.Users;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
@@ -32,7 +29,7 @@ internal sealed class ExternalAuthAppService(
     IRoleRepository roleRepository,
     SessionSignInService sessionSignInService,
     IRepository<User, Guid> userRepository,
-    IRepository<ExternalLoginConnection, Guid> externalLoginRepository,
+    IRepository<ExternalLoginConnection, Guid> externalLoginConnectionRepository,
     ICurrentUser currentUser,
     IOperationRecorder operationRecorder,
     IObjectMapper objectMapper) : BaseAppService(), IExternalAuthAppService
@@ -74,7 +71,7 @@ internal sealed class ExternalAuthAppService(
     public async Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(IEnumerable<string> availableProviders, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        var links = (await externalLoginRepository.GetListAsync(c => c.UserId == user.Id, cancellationToken)).ToList();
+        var links = (await externalLoginConnectionRepository.GetListAsync(c => c.UserId == user.Id, cancellationToken)).ToList();
 
         return new ExternalLoginsOutputDto
         {

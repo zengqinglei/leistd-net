@@ -1,6 +1,5 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -11,22 +10,13 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Options;
 #endif
-using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.Authorization.Constants;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
-using Leistd.Lock;
 using Leistd.Lock.Abstractions;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Tenancy;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;

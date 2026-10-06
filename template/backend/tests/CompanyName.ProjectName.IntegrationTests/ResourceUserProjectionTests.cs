@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -117,12 +119,12 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         var subjectId = Guid.CreateVersion7();
         var tenantId = ProjectWebApplicationFactory.NewTenantId();
         var race = new FirstInsertRace(subjectId, participants: 2);
-        var warnings = new WarningLogCapture();
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(race));
-            // 不换回标准日志工厂，"没有记下警告"就恒成立、证伪不了
-            warnings.Install(services);
+            // 宿主用 Serilog 接管了日志工厂，不换回标准工厂，"没有记下警告"就恒成立、证伪不了
+            services.RemoveAll<ILoggerFactory>();
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning));
         }));
         using var first = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
         using var second = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
@@ -136,9 +138,9 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.True(race.Released, "两个请求没有同时走到提交，竞争没有发生，用例证明不了任何事");
         // 输的一方第一次提交撞键时 EF 与工作单元会各记一条错误，那是竞争本身；要看的是投影最终有没有失败
         Assert.DoesNotContain(
-            warnings.Entries,
-            entry => entry.Category.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal)
-                && entry.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
+            host.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Category?.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal) == true
+                && record.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
         Assert.Equal(1, await CountUsersAsync(subjectId, host.Services));
     }
 
@@ -149,11 +151,11 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
     {
         var subjectId = Guid.CreateVersion7();
         var failing = new FailingUserInsert(subjectId);
-        var warnings = new WarningLogCapture();
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(failing));
-            warnings.Install(services);
+            services.RemoveAll<ILoggerFactory>();
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning));
         }));
         using var session = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, ProjectWebApplicationFactory.NewTenantId());
 
@@ -163,9 +165,9 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         // 两次：首次加一次重试；不重试是 1，重试循环会大于 2
         Assert.Equal(2, failing.Attempts);
         Assert.Contains(
-            warnings.Entries,
-            entry => entry.Category.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal)
-                && entry.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
+            host.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Category?.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal) == true
+                && record.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
         Assert.Equal(0, await CountUsersAsync(subjectId, host.Services));
     }
 

@@ -1,6 +1,5 @@
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
-using Leistd.ExceptionHandling;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;

@@ -20,7 +20,7 @@ namespace CompanyName.ProjectName.Domain.Auth.DomainServices;
 /// </summary>
 public class ExternalAuthDomainService(
     IRepository<User, Guid> userRepository,
-    IRepository<ExternalLoginConnection, Guid> externalLoginRepository,
+    IRepository<ExternalLoginConnection, Guid> externalLoginConnectionRepository,
     IDataFilter dataFilter,
     IClock clock,
     ILogger<ExternalAuthDomainService> logger)
@@ -52,7 +52,7 @@ public class ExternalAuthDomainService(
         CancellationToken cancellationToken = default)
     {
         // 先按外部连接查找，再用邮箱关联已有用户（两边都已验证才关联）。
-        var connection = await externalLoginRepository.GetFirstAsync(
+        var connection = await externalLoginConnectionRepository.GetFirstAsync(
             c => c.Provider == provider && c.ProviderUserId == externalUserInfo.ProviderId,
             q => q.OrderBy(c => c.Id),
             cancellationToken);
@@ -152,7 +152,7 @@ public class ExternalAuthDomainService(
             providerEmail: externalUserInfo.Email,
             providerAvatarUrl: externalUserInfo.AvatarUrl
         );
-        await externalLoginRepository.InsertAsync(newConnection, cancellationToken);
+        await externalLoginConnectionRepository.InsertAsync(newConnection, cancellationToken);
 
         logger.LogInformation("Linked user {Username} to a {Provider} login connection", user.Username, provider);
 
@@ -173,7 +173,7 @@ public class ExternalAuthDomainService(
         ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default)
     {
-        var existing = await externalLoginRepository.GetFirstAsync(
+        var existing = await externalLoginConnectionRepository.GetFirstAsync(
             c => c.Provider == provider && c.ProviderUserId == externalUserInfo.ProviderId,
             q => q.OrderBy(c => c.Id),
             cancellationToken);
@@ -186,11 +186,11 @@ public class ExternalAuthDomainService(
         if (existing is not null)
         {
             existing.Update(clock.Now, externalUserInfo.ProviderAccountLabel, externalUserInfo.Email, externalUserInfo.AvatarUrl);
-            await externalLoginRepository.UpdateAsync(existing, cancellationToken);
+            await externalLoginConnectionRepository.UpdateAsync(existing, cancellationToken);
             return existing;
         }
 
-        if (await externalLoginRepository.AnyAsync(c => c.UserId == user.Id && c.Provider == provider, cancellationToken))
+        if (await externalLoginConnectionRepository.AnyAsync(c => c.UserId == user.Id && c.Provider == provider, cancellationToken))
         {
             throw new BusinessException(ExternalAuthErrorCodes.ProviderAlreadyLinked, $"A {ProviderName(provider, externalUserInfo)} account is already linked. Unlink it first.")
                 .WithData("Provider", ProviderName(provider, externalUserInfo));
@@ -204,7 +204,7 @@ public class ExternalAuthDomainService(
             providerAccountLabel: externalUserInfo.ProviderAccountLabel,
             providerEmail: externalUserInfo.Email,
             providerAvatarUrl: externalUserInfo.AvatarUrl);
-        await externalLoginRepository.InsertAsync(connection, cancellationToken);
+        await externalLoginConnectionRepository.InsertAsync(connection, cancellationToken);
 
         logger.LogInformation("User {Username} linked a {Provider} login connection", user.Username, provider);
         return connection;
@@ -222,20 +222,19 @@ public class ExternalAuthDomainService(
         Guid connectionId,
         CancellationToken cancellationToken = default)
     {
-        var connection = await externalLoginRepository.GetByIdAsync(connectionId, cancellationToken);
+        var connection = await externalLoginConnectionRepository.GetByIdAsync(connectionId, cancellationToken);
         if (connection is null || connection.UserId != user.Id)
             return null;
 
-        var otherLinks = await externalLoginRepository.CountAsync(
+        var otherLinks = await externalLoginConnectionRepository.CountAsync(
             c => c.UserId == user.Id && c.Id != connectionId,
             cancellationToken);
         if (user.PasswordHash is null && otherLinks == 0)
         {
-            throw new BusinessException(ExternalAuthErrorCodes.LastSignInMethod, "This is your only way to sign in. Set a password or link another account first.")
-                ;
+            throw new BusinessException(ExternalAuthErrorCodes.LastSignInMethod, "This is your only way to sign in. Set a password or link another account first.");
         }
 
-        await externalLoginRepository.DeleteAsync(connection, cancellationToken);
+        await externalLoginConnectionRepository.DeleteAsync(connection, cancellationToken);
         // 凭据变了：此前用这个外部账号完成第一步、尚待第二步的登录挑战随之作废
         user.RotateSecurityStamp();
         logger.LogInformation("User {Username} unlinked a {Provider} login connection", user.Username, connection.Provider);

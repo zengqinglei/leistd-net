@@ -11,11 +11,8 @@ using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Security.Users;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
@@ -25,7 +22,7 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 /// <inheritdoc cref="IUserSessionAppService" />
 internal sealed class UserSessionAppService(
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IQueryableAsyncExecuter asyncExecuter,
     UserSessionDomainService userSessionDomainService,
     ICurrentUser currentUser,
@@ -41,7 +38,7 @@ internal sealed class UserSessionAppService(
         var userId = currentUser.Id!.Value;
         var currentSessionId = currentUser.GetSessionId();
         var sessions = await asyncExecuter.ToListAsync(
-            (await sessionRepository.GetQueryableAsync(cancellationToken))
+            (await userSessionRepository.GetQueryableAsync(cancellationToken))
                 .Where(s => s.UserId == userId)
                 .Where(UserSession.ActiveAt(clock.Now, sessionOptions.Value.IdleTimeout)),
             cancellationToken);
@@ -63,8 +60,7 @@ internal sealed class UserSessionAppService(
     {
         if (sessionId == currentUser.GetSessionId())
         {
-            throw new BusinessException(AuthErrorCodes.CannotRevokeCurrentSession, "Use sign-out to end the current session.")
-                ;
+            throw new BusinessException(AuthErrorCodes.CannotRevokeCurrentSession, "Use sign-out to end the current session.");
         }
 
         var revoked = await userSessionDomainService.RevokeAsync(currentUser.Id!.Value, sessionId, cancellationToken);
@@ -110,7 +106,7 @@ internal sealed class UserSessionAppService(
             return null;
 
         using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
-        var session = await sessionRepository.GetByIdAsync(sessionId, cancellationToken);
+        var session = await userSessionRepository.GetByIdAsync(sessionId, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
         return session?.UserId == userId ? session.CreationTime : null;
     }

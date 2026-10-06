@@ -11,22 +11,16 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Email.Abstractions;
-using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.MultiTenancy;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling;
 using Leistd.Timing;
-using Leistd.Lock;
 using Leistd.Lock.Abstractions;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 

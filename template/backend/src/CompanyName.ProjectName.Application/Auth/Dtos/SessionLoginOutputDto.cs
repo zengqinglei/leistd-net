@@ -1,7 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-using CompanyName.ProjectName.Domain.Shared.Text;
-using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
-
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
 /// <summary>

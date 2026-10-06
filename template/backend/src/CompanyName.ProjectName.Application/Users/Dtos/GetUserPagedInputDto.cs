@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;

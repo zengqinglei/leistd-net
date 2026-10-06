@@ -1,18 +1,12 @@
 using Microsoft.Extensions.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
-using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
 using System.Security.Claims;
 using Leistd.Security.Claims;
 using Leistd.Security.Users;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
 using Leistd.Timing;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Management;
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 

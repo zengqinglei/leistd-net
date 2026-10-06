@@ -6,27 +6,16 @@ using CompanyName.ProjectName.Application.Roles.Mappings;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Authorization;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
 using Leistd.ExceptionHandling;
-using Leistd.ObjectMapping;
 using Leistd.UnitOfWork.Attributes;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
 #if (IncludeRealTime)
 using CompanyName.ProjectName.Application.RealTime;
@@ -324,8 +313,8 @@ public class RoleAppService(
     /// <summary>未删除用户的角色关联：已删除用户的关联行保留着，但不算"已分配"。</summary>
     private async Task<IQueryable<UserRole>> AssignmentsOfExistingUsersAsync(CancellationToken cancellationToken)
     {
-        var users = await userRepository.GetQueryableAsync(cancellationToken);
-        var userRoles = await userRoleRepository.GetQueryableAsync(cancellationToken);
-        return userRoles.Where(ur => users.Any(u => u.Id == ur.UserId));
+        var userQuery = await userRepository.GetQueryableAsync(cancellationToken);
+        var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
+        return userRoleQuery.Where(ur => userQuery.Any(u => u.Id == ur.UserId));
     }
 }

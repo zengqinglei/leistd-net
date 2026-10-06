@@ -5,7 +5,6 @@ using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Repositories;
-using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
@@ -24,7 +23,7 @@ namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 public class AuthPrincipalFactory(
     IUserRepository userRepository,
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IOptions<UserSessionOptions> sessionOptions,
     IClock clock,
     IOptions<OAuthOptions> oauthOptions,
@@ -191,7 +190,7 @@ public class AuthPrincipalFactory(
 
     private async Task<bool> IsSessionActiveAsync(string sessionClaim, Guid userId, CancellationToken cancellationToken) =>
         Guid.TryParse(sessionClaim, out var sessionId) &&
-        await sessionRepository.GetByIdAsync(sessionId, cancellationToken) is { } session &&
+        await userSessionRepository.GetByIdAsync(sessionId, cancellationToken) is { } session &&
         session.UserId == userId &&
         !session.IsExpired(clock.Now, sessionOptions.Value.IdleTimeout);
 

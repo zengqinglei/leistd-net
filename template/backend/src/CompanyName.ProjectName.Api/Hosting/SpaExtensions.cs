@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Net.Http.Headers;
 
 namespace CompanyName.ProjectName.Api.Hosting;

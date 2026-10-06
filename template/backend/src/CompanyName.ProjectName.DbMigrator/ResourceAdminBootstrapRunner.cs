@@ -15,7 +15,6 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.Data.Connections;
 using Leistd.MultiTenancy.ConnectionStrings;
 #endif
-using Leistd.Lock;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Tenancy;

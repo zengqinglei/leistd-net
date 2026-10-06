@@ -1,7 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Errors;
 using Leistd.ExceptionHandling.Options;
-using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.Api.Hosting.ExceptionMappings;
 

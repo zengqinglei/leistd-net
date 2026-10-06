@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 #if (SpaFrontend)
 using CompanyName.ProjectName.Application.Shared;
@@ -8,6 +7,8 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 #endif
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.Options;
@@ -16,10 +17,11 @@ using CompanyName.ProjectName.Api.Options;
 using Microsoft.Extensions.Options;
 #endif
 #if (OpenIddictServer)
-using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+// 证书目录夹具的属性名就是 Directory，类内引用该类型用别名
+using FileSystemDirectory = System.IO.Directory;
 #endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -145,8 +147,7 @@ public sealed class DeploymentSafeguardsTests
     // 两张签名证书（当前一张、下一张）与两张加密证书，写成临时 PKCS#12 文件
     private sealed class CertificateFiles : IDisposable
     {
-        // 属性与 System.IO.Directory 同名，类内引用该类型时保留全限定名
-        public string Directory { get; } = System.IO.Directory.CreateTempSubdirectory("token-certificates-").FullName;
+        public string Directory { get; } = FileSystemDirectory.CreateTempSubdirectory("token-certificates-").FullName;
 
         public CertificateFiles()
         {
@@ -170,7 +171,7 @@ public sealed class DeploymentSafeguardsTests
                 }
         }
 
-        public void Dispose() => System.IO.Directory.Delete(Directory, recursive: true);
+        public void Dispose() => FileSystemDirectory.Delete(Directory, recursive: true);
     }
 #endif
 
@@ -181,16 +182,21 @@ public sealed class DeploymentSafeguardsTests
     [InlineData("Development", false)]
     public void A_missing_redis_connection_is_reported_at_startup_outside_development(string environment, bool expected)
     {
-        var logs = new WarningLogCapture();
         using var factory = new ProjectWebApplicationFactory();
         using var host = factory.WithWebHostBuilder(builder => builder
             .UseEnvironment(environment)
             .UseSetting("ConnectionStrings:Redis", "")
-            .ConfigureTestServices(logs.Install));
+            .ConfigureTestServices(services =>
+            {
+                // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
+                services.RemoveAll<ILoggerFactory>();
+                services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning));
+            }));
 
         using var client = host.CreateClient();
 
-        Assert.Equal(expected, logs.Entries.Any(entry => entry.Message.Contains("ConnectionStrings:Redis is not configured", StringComparison.Ordinal)));
+        Assert.Equal(expected, host.Services.GetFakeLogCollector().GetSnapshot()
+            .Any(record => record.Message.Contains("ConnectionStrings:Redis is not configured", StringComparison.Ordinal)));
     }
 #endif
 

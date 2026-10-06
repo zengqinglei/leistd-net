@@ -1,4 +1,3 @@
-using CompanyName.ProjectName.Domain.Users.Policies;
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
 /// <summary>

@@ -2,6 +2,9 @@ using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth;
 using CompanyName.ProjectName.Api.Configuration;
 using CompanyName.ProjectName.Api.Hosting;
+#if (IncludeLocalization)
+using CompanyName.ProjectName.Api.Localization;
+#endif
 using CompanyName.ProjectName.Api.Middlewares;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application;

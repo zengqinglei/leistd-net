@@ -26,7 +26,7 @@ namespace CompanyName.ProjectName.Application.Auth.SignIn;
 internal sealed class SessionSignInService(
     IUserRepository userRepository,
     UserSessionDomainService userSessionDomainService,
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IQueryableAsyncExecuter asyncExecuter,
     IOptions<UserSessionOptions> sessionOptions,
     TwoFactorChallengeStore twoFactorChallengeStore,
@@ -174,7 +174,7 @@ internal sealed class SessionSignInService(
             return false;
 
         return !await asyncExecuter.AnyAsync(
-            (await sessionRepository.GetQueryableAsync(cancellationToken))
+            (await userSessionRepository.GetQueryableAsync(cancellationToken))
                 .Where(s => s.UserId == userId && s.UserAgent == clientInfo.UserAgent)
                 .Where(UserSession.ActiveAt(clock.Now, sessionOptions.Value.IdleTimeout)),
             cancellationToken);
@@ -209,8 +209,7 @@ internal sealed class SessionSignInService(
                 .WithData("Minutes", minutes);
         }
 
-        return new BusinessException(AuthErrorCodes.UserLockedOut, "This account is locked. Contact your administrator.")
-            ;
+        return new BusinessException(AuthErrorCodes.UserLockedOut, "This account is locked. Contact your administrator.");
     }
 
     internal static void EnsureAllowed(User user, DateTime now)

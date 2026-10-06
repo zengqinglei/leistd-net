@@ -9,7 +9,6 @@ using Leistd.Security.Claims;
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 #if (OpenIddictServer && IncludeMultiTenancy)

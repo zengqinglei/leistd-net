@@ -1,6 +1,5 @@
 #if (LocalIdentity)
 using System.Security.Cryptography;
-using CompanyName.ProjectName.Domain.Shared.Text;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;

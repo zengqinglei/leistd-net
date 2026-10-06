@@ -27,7 +27,7 @@ namespace CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 internal sealed class ExpiredUserSessionCleanupJob(
     ITenantDatabaseRunner databaseRunner,
     IUnitOfWorkManager unitOfWorkManager,
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IDataFilter dataFilter,
     IOptions<UserSessionOptions> options,
     IClock clock,
@@ -44,7 +44,7 @@ internal sealed class ExpiredUserSessionCleanupJob(
             using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             using (dataFilter.Disable<IMultiTenant>())
             {
-                await sessionRepository.DeleteManyAsync(UserSession.ExpiredAt(now, options.Value.IdleTimeout), ct);
+                await userSessionRepository.DeleteManyAsync(UserSession.ExpiredAt(now, options.Value.IdleTimeout), ct);
             }
 
             await unitOfWork.CompleteAsync(ct);

@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Shared;
-using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Domain.Shared.Security;
 using Leistd.Lock.Abstractions;
 using Microsoft.AspNetCore.Authentication;

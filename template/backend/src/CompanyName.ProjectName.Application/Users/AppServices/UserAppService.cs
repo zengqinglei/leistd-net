@@ -23,35 +23,21 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
-using Leistd.Authorization;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
 using Leistd.Security.Users;
 using Leistd.ExceptionHandling;
-using Leistd.ObjectMapping;
 using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
 #if (IncludeNotifications)
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 #endif
 
@@ -296,8 +282,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
         }
 
         var email = input.Email.Trim();
@@ -345,8 +330,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.");
         }
 
         // 已启用时静默成功、不留记录（同解锁）：重复点击不该留下一串没发生过的事
@@ -377,13 +361,11 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminDisableForbidden, "The built-in super administrator cannot be disabled by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableForbidden, "The built-in super administrator cannot be disabled by other administrators.");
         }
         if (!user.CanBeDisabled())
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminDisableSelfForbidden, "The built-in super administrator cannot disable itself.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableSelfForbidden, "The built-in super administrator cannot disable itself.");
         }
 
         var wasActive = user.IsActive;
@@ -417,8 +399,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminResetPasswordForbidden, "The built-in super administrator's password cannot be reset by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminResetPasswordForbidden, "The built-in super administrator's password cannot be reset by other administrators.");
         }
 
         userDomainService.ResetPassword(user, input.Password);
@@ -479,8 +460,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.");
         }
 
         if (!user.TwoFactorEnabled)
@@ -530,8 +510,7 @@ public class UserAppService(
         logger.LogInformation("Deleting user {Id}", id);
         if (!user.CanBeDeleted())
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.");
         }
 
         await userRepository.DeleteAsync(user, cancellationToken);
@@ -606,8 +585,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
         }
 
         var roles = await GetRolesByIdsAsync(input.RoleIds, cancellationToken);
@@ -635,8 +613,7 @@ public class UserAppService(
     {
         if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Users.ManageRoles, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.ManageRolesRequired, "Assigning roles requires the user role management permission.")
-                ;
+            throw new BusinessException(UserErrorCodes.ManageRolesRequired, "Assigning roles requires the user role management permission.");
         }
 
         return await GetRolesByIdsAsync(roleIds, cancellationToken);

@@ -9,13 +9,6 @@ using System.Text;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using CompanyName.ProjectName.Application.Users.Dtos;
-using CompanyName.ProjectName.Domain.Users.Entities;
-using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.Authorization;
-using Leistd.Authorization.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json.Serialization;
 
 namespace CompanyName.ProjectName.IntegrationTests;

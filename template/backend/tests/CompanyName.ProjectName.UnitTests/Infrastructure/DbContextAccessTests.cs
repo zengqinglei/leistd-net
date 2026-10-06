@@ -1,5 +1,8 @@
 using System.Reflection;
+using CompanyName.ProjectName.Api.Controllers;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+// 各层都有名为 DependencyInjection 的类，用别名指明取 Application 层的
+using ApplicationDependencyInjection = CompanyName.ProjectName.Application.DependencyInjection;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
@@ -21,10 +24,9 @@ public sealed class DbContextAccessTests
         Assembly[] assemblies =
         [
             // 单元测试同时引用 Api 与 DbMigrator，两者都有顶级 Program，这里用 Api 自己的类型定位程序集
-            typeof(CompanyName.ProjectName.Api.Controllers.BaseController).Assembly,
+            typeof(BaseController).Assembly,
             typeof(MyProjectDbContext).Assembly,
-            // 各层都有名为 DependencyInjection 的类，这里保留全限定名
-            typeof(CompanyName.ProjectName.Application.DependencyInjection).Assembly
+            typeof(ApplicationDependencyInjection).Assembly
         ];
 
         var offenders = assemblies

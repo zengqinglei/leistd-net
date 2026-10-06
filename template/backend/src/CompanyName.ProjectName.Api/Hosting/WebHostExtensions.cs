@@ -3,6 +3,9 @@ using System.Net;
 using CompanyName.ProjectName.Api.HealthChecks;
 #endif
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
+#if (IncludeLocalization)
+using CompanyName.ProjectName.Api.Localization;
+#endif
 using Leistd.ExceptionHandling.AspNetCore;
 #if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.MultiTenancy.AspNetCore.Options;
@@ -13,6 +16,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 #endif
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+// 与已过时的 Microsoft.AspNetCore.HttpOverrides.IPNetwork 同名，用别名指定 System.Net 的实现
+using IPNetwork = System.Net.IPNetwork;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
@@ -118,8 +123,7 @@ public static class WebHostExtensions
 
         foreach (var network in forwardedConfig.GetSection("KnownNetworks").Get<string[]>() ?? [])
         {
-            // 与已过时的 Microsoft.AspNetCore.HttpOverrides.IPNetwork 同名，这里保留全限定名
-            if (!System.Net.IPNetwork.TryParse(network, out var parsed))
+            if (!IPNetwork.TryParse(network, out var parsed))
             {
                 throw new InvalidOperationException(
                     $"ForwardedHeaders:KnownNetworks contains an invalid CIDR range: '{network}'.");

@@ -7,7 +7,6 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using Leistd.Lock;
 using Leistd.Lock.Abstractions;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;

@@ -1,6 +1,5 @@
 using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.ExceptionHandling.Options;
-using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.Api.Hosting.ExceptionMappings;
 

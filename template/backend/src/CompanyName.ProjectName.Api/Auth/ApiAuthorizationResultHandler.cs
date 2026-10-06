@@ -1,7 +1,6 @@
 using Leistd.OperationRecords.AspNetCore.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
-using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.Api.Auth;
 

@@ -10,15 +10,9 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Auditing.Abstractions;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
-#if (LocalIdentity)
-using Leistd.MultiTenancy;
-#endif
 using Microsoft.Extensions.Logging;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 

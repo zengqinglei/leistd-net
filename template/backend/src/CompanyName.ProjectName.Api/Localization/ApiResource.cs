@@ -1,4 +1,4 @@
-namespace CompanyName.ProjectName.Api;
+namespace CompanyName.ProjectName.Api.Localization;
 
 /// <summary>
 /// DataAnnotations 校验消息本地化的标记类型：作为 <c>DataAnnotationLocalizerProvider</c> 的 resource 类型传入。

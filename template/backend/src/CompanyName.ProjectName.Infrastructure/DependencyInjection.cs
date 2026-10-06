@@ -1,4 +1,3 @@
-using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore;
 #if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -10,7 +9,6 @@ using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
-using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Lock.Redis;
 using Leistd.Lock.Memory;
 using Microsoft.EntityFrameworkCore;
@@ -54,13 +52,11 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 using Leistd.Email.Smtp;
 #endif
 #if (ExternalLogin)
-using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Options;
 #endif
 using StackExchange.Redis;
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
-using Leistd.Data;
 using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure;

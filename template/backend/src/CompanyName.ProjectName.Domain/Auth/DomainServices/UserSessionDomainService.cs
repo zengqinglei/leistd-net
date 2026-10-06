@@ -16,7 +16,7 @@ namespace CompanyName.ProjectName.Domain.Auth.DomainServices;
 /// <para>会话落在用户所在租户的库里，登记与撤销跟随调用方当时的租户上下文。</para>
 /// </remarks>
 public class UserSessionDomainService(
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IQueryableAsyncExecuter asyncExecuter,
     IOptions<UserSessionOptions> options,
     IClock clock)
@@ -34,13 +34,13 @@ public class UserSessionDomainService(
     {
         var now = clock.Now;
         var expired = await asyncExecuter.ToListAsync(
-            (await sessionRepository.GetQueryableAsync(cancellationToken))
+            (await userSessionRepository.GetQueryableAsync(cancellationToken))
                 .Where(s => s.UserId == userId)
                 .Where(UserSession.ExpiredAt(now, options.Value.IdleTimeout)),
             cancellationToken);
-        await sessionRepository.DeleteManyAsync(expired, cancellationToken);
+        await userSessionRepository.DeleteManyAsync(expired, cancellationToken);
 
-        return await sessionRepository.InsertAsync(
+        return await userSessionRepository.InsertAsync(
             new UserSession(userId, now, ipAddress, userAgent, impersonatorName),
             cancellationToken);
     }
@@ -48,12 +48,12 @@ public class UserSessionDomainService(
     /// <summary>撤销某用户的一个会话；不存在（或不属于该用户）时返回 null。</summary>
     public async Task<UserSession?> RevokeAsync(Guid userId, Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var session = await sessionRepository.GetByIdAsync(sessionId, cancellationToken);
+        var session = await userSessionRepository.GetByIdAsync(sessionId, cancellationToken);
         if (session is null || session.UserId != userId)
             return null;
 
         session.Revoke(clock.Now);
-        await sessionRepository.DeleteAsync(session, cancellationToken);
+        await userSessionRepository.DeleteAsync(session, cancellationToken);
         return session;
     }
 
@@ -65,7 +65,7 @@ public class UserSessionDomainService(
     /// </remarks>
     public async Task<int> RevokeAllAsync(Guid userId, Guid? exceptSessionId, CancellationToken cancellationToken = default)
     {
-        var sessions = (await sessionRepository.GetListAsync(
+        var sessions = (await userSessionRepository.GetListAsync(
             s => s.UserId == userId && s.Id != exceptSessionId,
             cancellationToken)).ToList();
         if (sessions.Count == 0)
@@ -78,7 +78,7 @@ public class UserSessionDomainService(
             session.Revoke(now);
         }
 
-        await sessionRepository.DeleteManyAsync(sessions, cancellationToken);
+        await userSessionRepository.DeleteManyAsync(sessions, cancellationToken);
         return active;
     }
 }

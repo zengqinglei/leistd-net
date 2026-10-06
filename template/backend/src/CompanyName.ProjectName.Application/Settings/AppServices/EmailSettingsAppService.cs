@@ -6,10 +6,7 @@ using CompanyName.ProjectName.Application.Settings.Errors;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Email.Abstractions;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Microsoft.Extensions.Logging;
@@ -29,8 +26,7 @@ public class EmailSettingsAppService(
     {
         // 发信参数是进程级的，只有宿主能改，也只有宿主来试
         if (currentTenant.Id is not null)
-            throw new BusinessException(AppSettingErrorCodes.TestEmailHostOnly, "The email settings can only be tested on the host.")
-                ;
+            throw new BusinessException(AppSettingErrorCodes.TestEmailHostOnly, "The email settings can only be tested on the host.");
 
         try
         {

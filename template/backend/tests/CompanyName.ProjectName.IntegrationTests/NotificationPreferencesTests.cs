@@ -18,10 +18,7 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Email.Abstractions;
 using Leistd.Notifications.Email.Recipients;
 #endif
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
-using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
 #if (!LocalIdentity)
 using Leistd.MultiTenancy.Context;

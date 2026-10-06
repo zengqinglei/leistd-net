@@ -39,7 +39,6 @@ public static class DependencyInjection
     public static IServiceCollection AddSettingsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-
         // 设置只有一个权威存储：两个上下文各注册一次时会静默取一条，值写进宿主没预期的库。
         services.EnsureSingleAuthoritative<ISettingStore, EfCoreSettingStore<TDbContext>>(
             ServiceLifetime.Transient,

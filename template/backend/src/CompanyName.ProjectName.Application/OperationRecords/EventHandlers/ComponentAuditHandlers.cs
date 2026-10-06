@@ -6,11 +6,8 @@ using Leistd.EventBus.EventHandlers;
 #if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.MultiTenancy.Management.Events;
 #endif
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Events;
 

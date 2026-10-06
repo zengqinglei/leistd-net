@@ -1,9 +1,4 @@
-using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Microsoft.Extensions.DependencyInjection;
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api;
@@ -15,22 +10,13 @@ using System.Security.Claims;
 #endif
 #if (OpenIddictServer)
 #if (IncludeMultiTenancy)
-using CompanyName.ProjectName.Application.TenantConnections;
-#endif
-#if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
-using Leistd.Authorization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using OpenIddict.Abstractions;
-using CompanyName.ProjectName.Domain.Users.Entities;
-using CompanyName.ProjectName.Infrastructure.Persistence;
-#if (IncludeMultiTenancy)
-using Leistd.MultiTenancy.EntityFrameworkCore;
-#endif
 using Leistd.Security.Claims;
 
 namespace CompanyName.ProjectName.IntegrationTests;

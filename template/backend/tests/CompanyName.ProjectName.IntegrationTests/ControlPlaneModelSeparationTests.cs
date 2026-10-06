@@ -2,8 +2,6 @@
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.MultiTenancy.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;

@@ -1,14 +1,4 @@
-using Leistd.Authorization;
-using Leistd.MultiTenancy;
-using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
@@ -86,7 +76,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
 #if (OpenIddictServer)
         // 开放应用是宿主全局资源：OpenIddict 的四张表都没有 TenantId，也就不是 IMultiTenant，
         // 全局租户过滤器对它们不生效；OpenIddictDbContext 还固定连宿主控制库、不跟随租户路由。
-        // 因此侧别必须是 Host——省略它会落到默认的 Both，租户管理员将拿到这组权限，
+        // 因此侧别必须是 Host——设为 Both 会让租户管理员拿到这组权限，
         // 进而读写全系统的 OAuth 客户端（重置密钥即可让该客户端对所有租户失效）。
         var developerGroup = context.GetOrAddGroup(PermissionConstant.Groups.Developer, displayName: "Developer");
         var openApplicationsPermission = developerGroup.AddPermission(

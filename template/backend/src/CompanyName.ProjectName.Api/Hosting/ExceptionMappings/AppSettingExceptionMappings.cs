@@ -1,6 +1,5 @@
 #if (Email)
 using CompanyName.ProjectName.Application.Settings.Errors;
-using Microsoft.AspNetCore.Http;
 #endif
 using Leistd.ExceptionHandling.Options;
 

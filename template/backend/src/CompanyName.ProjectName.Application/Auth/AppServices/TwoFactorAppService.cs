@@ -16,15 +16,9 @@ using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Security.Users;
 using Leistd.Timing;
 using Leistd.UnitOfWork.Attributes;
@@ -107,8 +101,7 @@ internal sealed class TwoFactorAppService(
         user.EnsureTwoFactorDisabled();
 
         var protectedSecret = await cache.GetStringAsync(SetupKey(user.Id), cancellationToken)
-            ?? throw new BusinessException(AuthErrorCodes.TwoFactorSetupExpired, "The setup has expired. Start again.")
-                ;
+            ?? throw new BusinessException(AuthErrorCodes.TwoFactorSetupExpired, "The setup has expired. Start again.");
 
         if (twoFactorDomainService.VerifySetupCode(protectedSecret, input.Code, clock.Now) is not { } step)
         {
@@ -146,8 +139,7 @@ internal sealed class TwoFactorAppService(
 
         if ((await loginSecurityPolicy.GetAsync(cancellationToken)).RequireTwoFactor)
         {
-            throw new BusinessException(AuthErrorCodes.TwoFactorRequiredByPolicy, "Two-factor authentication is required here and cannot be turned off.")
-                ;
+            throw new BusinessException(AuthErrorCodes.TwoFactorRequiredByPolicy, "Two-factor authentication is required here and cannot be turned off.");
         }
 
         // 停用两步验证要口令与验证码各过一关，两关都是再认证：锁定期内不给试，失败按登录的同一套计数。

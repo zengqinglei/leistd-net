@@ -9,11 +9,8 @@ using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Users.Mappings;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Caching.Distributed;
@@ -29,16 +26,12 @@ using Leistd.EventBus.Abstractions;
 using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
-using CompanyName.ProjectName.Domain.Users.Options;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.Timing;
 using Leistd.Lock.Abstractions;
 using System.Security.Claims;
@@ -266,8 +259,7 @@ internal sealed class AuthAppService(
             user, OperationRecordAuthorizations.CredentialsPresented, cancellationToken);
 
     private static BusinessException TwoFactorChallengeExpired() =>
-        new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.")
-        ;
+        new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.");
 
     /// <summary>失败登录的计数窗口（分钟）。</summary>
     private const int FailedLoginWindowMinutes = 5;
@@ -340,8 +332,7 @@ internal sealed class AuthAppService(
         {
             if (input.EmailVerification is null || input.EmailVerification.ChallengeId == Guid.Empty)
             {
-                throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.")
-                    ;
+                throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.");
             }
 
             var isValidEmailCode = await emailVerificationAppService.ValidateEmailChallengeAsync(
@@ -350,8 +341,7 @@ internal sealed class AuthAppService(
                 cancellationToken);
             if (!isValidEmailCode)
             {
-                throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
-                    ;
+                throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.");
             }
         }
         else
@@ -359,8 +349,7 @@ internal sealed class AuthAppService(
             var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
             if (!isValidCaptcha)
             {
-                throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.")
-                    ;
+                throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
             }
         }
 #else
@@ -539,8 +528,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (!await emailVerificationAppService.ValidateAccountEmailChallengeAsync(user.Email, input, cancellationToken))
         {
-            throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
-                ;
+            throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.");
         }
 
         user.ConfirmEmail();

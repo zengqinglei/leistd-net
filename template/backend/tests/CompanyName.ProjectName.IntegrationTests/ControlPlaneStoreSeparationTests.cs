@@ -1,6 +1,5 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

@@ -1,7 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Dtos;
 #endif
-using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Avatars;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -45,8 +44,7 @@ public class UserMappings : IRegister
             .Map(dest => dest.Avatar, src => AvatarUrls.For(src.Id, src.Avatar))
             .Map(dest => dest.IsEmailVerified, src => src.EmailConfirmed)
             .Map(dest => dest.IsTwoFactorEnabled, src => src.TwoFactorEnabled)
-            .Ignore(dest => dest.TwoFactorSetupRequired)
-            ;
+            .Ignore(dest => dest.TwoFactorSetupRequired);
 #endif
 
         config.NewConfig<User, UserManagementOutputDto>()
@@ -58,8 +56,7 @@ public class UserMappings : IRegister
             .Map(dest => dest.IsTwoFactorEnabled, src => src.TwoFactorEnabled)
 #endif
             // 角色实体交给 Mapster 按同一份配置映射成 RoleBriefOutputDto（RoleMappings 登记的规则在这里生效）
-            .Map(dest => dest.Roles, src => ResolveRoleEntities(src))
-            ;
+            .Map(dest => dest.Roles, src => ResolveRoleEntities(src));
     }
 
 #if (LocalIdentity)

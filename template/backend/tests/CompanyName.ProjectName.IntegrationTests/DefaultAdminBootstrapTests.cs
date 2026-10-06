@@ -10,7 +10,6 @@ using Leistd.Ddd.Domain.Repositories;
 #if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Context;
 #endif
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;

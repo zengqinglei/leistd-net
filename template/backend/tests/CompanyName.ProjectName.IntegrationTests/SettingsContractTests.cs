@@ -5,16 +5,11 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Api.Options;
 using Leistd.Settings.Definitions;
-using Leistd.Settings.Errors;
-using Leistd.Settings.Management;
-using Leistd.Settings.Resolution;
-using Leistd.Settings.Stores;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Serilog.Events;
-using Xunit;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

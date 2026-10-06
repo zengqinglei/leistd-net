@@ -12,7 +12,6 @@ using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CompanyName.ProjectName.Application.OpenApplications.Mappings;
@@ -256,8 +255,7 @@ public class OpenApplicationAppService(
         var clientType = await applicationManager.GetClientTypeAsync(application, cancellationToken);
         if (clientType != OpenIddictConstants.ClientTypes.Confidential)
         {
-            throw new BusinessException(OpenAppErrorCodes.SecretResetConfidentialOnly, "Only confidential clients can reset their secret.")
-                ;
+            throw new BusinessException(OpenAppErrorCodes.SecretResetConfidentialOnly, "Only confidential clients can reset their secret.");
         }
 
         var clientSecret = GenerateClientSecret();
@@ -325,8 +323,7 @@ public class OpenApplicationAppService(
         if ((applicationType == OpenIddictConstants.ApplicationTypes.Native || clientType == OpenIddictConstants.ClientTypes.Public) &&
             !requirements.Contains(PkceRequirement))
         {
-            throw new BusinessException(OpenAppErrorCodes.PkceRequired, "PKCE must be enabled for native/public clients.")
-                ;
+            throw new BusinessException(OpenAppErrorCodes.PkceRequired, "PKCE must be enabled for native/public clients.");
         }
 
         foreach (var permission in permissions.Where(x =>

@@ -1,6 +1,5 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
-using Leistd.ExceptionHandling;
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 

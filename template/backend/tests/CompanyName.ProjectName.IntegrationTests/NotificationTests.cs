@@ -1,5 +1,4 @@
 #if (IncludeNotifications)
-using Leistd.Notifications;
 using Leistd.Notifications.Dtos;
 using System.Net;
 using System.Net.Http.Json;
@@ -8,13 +7,6 @@ using Leistd.BackgroundJobs.Recurring;
 using Leistd.MultiTenancy.Context;
 using Leistd.Notifications.EntityFrameworkCore.Entities;
 using Leistd.Notifications.EntityFrameworkCore.Options;
-#if (!LocalIdentity)
-using Microsoft.AspNetCore.Http;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
-#endif
-using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -23,12 +15,10 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
-using Leistd.Notifications.Stores;
 using Leistd.Notifications.AspNetCore.SignalR;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -105,8 +95,12 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
     public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
         // 发布器隔离渠道故障、只记日志，推送没到时失败信息里要带上服务端日志，否则无从判断是没发还是没收到
-        var logs = new WarningLogCapture();
-        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(logs.Install));
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
+            services.RemoveAll<ILoggerFactory>();
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning));
+        }));
 #if (LocalIdentity)
         using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var userId = await GetSuperAdminIdAsync(host);
@@ -165,7 +159,7 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
             var unread = await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count");
             throw new TimeoutException(
                 $"No notification push within 10s. Connection={connection.State}, Closed={closedError?.Message ?? "none"}, " +
-                $"Deliveries={Volatile.Read(ref deliveries)}, Unread={unread}.{Environment.NewLine}Server log:{Environment.NewLine}{logs}",
+                $"Deliveries={Volatile.Read(ref deliveries)}, Unread={unread}.{Environment.NewLine}Server log:{Environment.NewLine}{ServerWarnings(host)}",
                 exception);
         }
         Assert.Equal(1, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
@@ -220,6 +214,16 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
             .Build();
     }
 
+    // 带上异常全文：被隔离吞掉的渠道故障只剩这一处线索
+    private static string ServerWarnings(WebApplicationFactory<Program> host)
+    {
+        var records = host.Services.GetFakeLogCollector().GetSnapshot();
+        return records.Count == 0
+            ? "(no warnings or errors logged)"
+            : string.Join(Environment.NewLine, records.Select(record =>
+                $"[{record.Category}] {record.Message}{(record.Exception is null ? string.Empty : Environment.NewLine + record.Exception)}"));
+    }
+#if (LocalIdentity)
 
     private static async Task<Guid> GetSuperAdminIdAsync(WebApplicationFactory<Program> application)
     {
@@ -227,6 +231,6 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         return await db.Users.Where(user => user.IsSuperAdmin).Select(user => user.Id).SingleAsync();
     }
-
+#endif
 }
 #endif

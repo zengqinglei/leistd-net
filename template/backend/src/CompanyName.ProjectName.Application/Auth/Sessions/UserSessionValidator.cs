@@ -4,10 +4,7 @@ using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
 using Leistd.Timing;
@@ -25,7 +22,7 @@ namespace CompanyName.ProjectName.Application.Auth.Sessions;
 /// <see cref="EventHandlers.UserSessionRevokedEventHandler"/> 作废对应缓存。
 /// </remarks>
 internal sealed class UserSessionValidator(
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IRepository<User, Guid> userRepository,
     ICurrentTenant currentTenant,
 #if (IncludeMultiTenancy)
@@ -81,7 +78,7 @@ internal sealed class UserSessionValidator(
         using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             var now = clock.Now;
-            var session = await sessionRepository.GetByIdAsync(sessionId, cancellationToken);
+            var session = await userSessionRepository.GetByIdAsync(sessionId, cancellationToken);
             if (session is null || session.UserId != userId || session.IsExpired(now, options.Value.IdleTimeout))
                 return false;
 
@@ -92,7 +89,7 @@ internal sealed class UserSessionValidator(
 
             if (session.Touch(now, clientInfo.IpAddress))
             {
-                await sessionRepository.UpdateAsync(session, cancellationToken);
+                await userSessionRepository.UpdateAsync(session, cancellationToken);
             }
 
             await unitOfWork.CompleteAsync(cancellationToken);

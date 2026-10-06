@@ -29,7 +29,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Hosting;
-using Xunit;
 using System.Reflection;
 
 namespace CompanyName.ProjectName.IntegrationTests;

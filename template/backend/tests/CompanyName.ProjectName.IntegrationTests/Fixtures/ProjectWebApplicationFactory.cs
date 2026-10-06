@@ -21,7 +21,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
-using CompanyName.ProjectName.Domain.Users.Policies;
 using Serilog.Core;
 
 namespace CompanyName.ProjectName.IntegrationTests;
