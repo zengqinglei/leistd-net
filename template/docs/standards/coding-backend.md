@@ -1,10 +1,10 @@
 # 后端开发规范
 
-本项目 .NET 10、EF Core、DDD 后端的编码规范，同时遵循 [项目通用约定](./coding-common.md)。接口契约见 [API 规范](./api.md)，认证与权限侧别见 [认证与授权](./auth.md)。`Leistd.*` 的 API 以实际还原版本的包内文档与 XML 为准，定位方法见 [后端说明](../../backend/README.md#leistd-框架-api)。
+本项目后端编码规范，同时遵循 [项目通用约定](./coding-common.md)。接口契约见 [API 规范](./api.md)，认证与权限侧别见 [认证与授权](./auth.md)。`Leistd.*` 的 API 以实际还原版本的包内文档与 XML 为准，定位方法见 [后端说明](../../backend/README.md#leistd-框架-api)。
 
 ## 1. 技术栈
 
-.NET 10、EF Core 10、PostgreSQL、Redis（多实例部署）、Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）、Microsoft.Extensions.DependencyInjection、Serilog。精确版本以项目文件为准。
+.NET 10、EF Core 10、PostgreSQL、Redis（多实例部署）、Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）、Serilog。精确版本以项目文件为准。
 
 ## 2. 分层与目录
 
@@ -23,7 +23,7 @@
 - **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
 - **Infrastructure**：外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
 
-领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 DI 在 `ValidateOnBuild`（Development 环境开启，集成测试覆盖）时检出。
+领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 `ValidateOnBuild` 检出（见 §4）。
 
 ## 3. 编码
 
@@ -72,7 +72,11 @@ public class User : FullAuditedEntity<Guid>
 
 ### 3.4 领域服务
 
-命名 `*DomainService`，不定义接口。负责单聚合规则与实体增删改的核心逻辑；不做 DTO 转换、事务管理、查询聚合。缓存、通知等副作用由实体 `AddLocalEvent(...)` 发出本地事件，事务提交后由应用层 `IEventHandler<TEvent>` 处理。
+命名 `*DomainService`，不定义接口。负责单聚合规则与实体增删改的核心逻辑；不做 DTO 转换、事务管理、查询聚合。
+
+规则判定在实体或领域服务；应用服务据其结果（如 `user.CanBeManagedBy(...)`）按用例选码抛出，自行组合实体字段做判定属于违规。
+
+缓存、通知等副作用经本地事件在提交后由应用层 `IEventHandler<TEvent>` 执行：纯实体变更的由实体 `AddLocalEvent(...)` 发出；随用例而异的（如本人改密与管理员重置的提醒）由应用服务发布。
 
 ```csharp
 public class UserDomainService(IRepository<User, Guid> userRepository, IPasswordHasher passwordHasher)
@@ -116,7 +120,7 @@ public class UserAppService(
 }
 ```
 
-排序字段取自各接口的白名单，末尾追加 `Id` 保证分页稳定。
+排序字段取自各接口的白名单，末尾追加唯一键（如 `Id`）保证分页稳定。
 
 ### 3.6 事务与工作单元
 
@@ -129,7 +133,7 @@ public class UserAppService(
 框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 用组件的 `Map*` 给前缀与授权策略。组件不认识的业务动作才写 Controller，路由不与组件端点重叠。
 
 - Controller 命名 `*Controller`，继承 `BaseController`（视图渲染、透传代理、机器端点等例外就近注释）；只做路由、鉴权与调用应用服务。
-- 有响应体直接返回 `Task<TOutputDto>`，无响应体返回 `Task`（HTTP 200 空响应）；只有同一方法需要 `Redirect`、`Forbid`、`SignIn` 等多种结果或返回文件时用 `IActionResult`。
+- 有响应体返回 `Task<TOutputDto>`（无 I/O 可同步返回 DTO），无响应体返回 `Task`（HTTP 200 空响应）；返回协议结果（`Challenge`、`SignIn`、`Redirect` 等，含 `/connect/*`）或文件时用 `IActionResult`。
 - 方法名与路由以 [API 规范 §6](./api.md#6-http-方法与路由规范) 为准。
 
 操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由 `ApiAuthorizationResultHandler`、`OperationFailureRecordingMiddleware` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
@@ -177,7 +181,7 @@ public class UserAppService(
 
 Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transient 必须在正确作用域解析。Development 环境开启 `ValidateScopes` 与 `ValidateOnBuild`。
 
-**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。 注册测试范围见[测试规范](./testing.md)。
+**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。注册测试范围见[测试规范](./testing.md)。
 
 没有约定式自动注册：`IAppService` 只是标记，服务需显式注册；`[UnitOfWork]` 依靠代理织入，注册时使用实现类型。
 
@@ -197,12 +201,12 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 ## 6. 数据访问
 
-- 仓储常用方法：`GetByIdAsync`、`GetOneAsync`、`GetFirstAsync`、`GetListAsync`、`GetQueryableAsync`、`CountAsync`、`AnyAsync`、`InsertAsync`/`InsertManyAsync`、`UpdateAsync`/`UpdateManyAsync`、`DeleteAsync`/`DeleteManyAsync`（实现 `ISoftDelete` 时为逻辑删除）。
+- 仓储方法以 `IRepository` 为准（`GetByIdAsync`、`GetQueryableAsync`、`Insert/Update/DeleteAsync` 及 `*ManyAsync` 等）；实现 `ISoftDelete` 的删除为逻辑删除。
 - Application 不使用 EF Core 扩展：`IQueryable` 经 `IQueryableAsyncExecuter`（`ToListAsync`、`CountAsync`、`FirstOrDefaultAsync`、`AnyAsync` 等）执行；关联数据用查询组合（子查询、`Join`）或分别查询，不用 `Include`。
 - 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 获取，不直接构造注入：直接注入的实例按宿主库创建，分库租户下会落到宿主库（框架拒绝，表现为 500）。控制库上下文固定宿主连接，可以直接注入。
 - 对象映射：实体、存储模型或框架模型到 DTO 的投影走模块 `Mappings/` 下实现 `IRegister` 的类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；不调用无参 `Adapt<T>()`（它用全局配置，本项目的规则静默失效）；调用方才知道的值经 MapContext 传入；由多个来源拼装、带计算或本地化的 DTO 直接构造；不在 DTO 上写 `FromXxx` 静态方法。
-- 请求外的异步工作交给 `IBackgroundTaskQueue`，并发互斥用 `IDistributedLock`，定期维护登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）；不另起线程或自造锁。
-- 可还原的加密用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串带版本，解密只捕获 `CryptographicException`。
+- 请求外的异步工作交给 `IBackgroundTaskQueue`，跨实例互斥用 `IDistributedLock`，定期维护登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）；不另起线程或自造跨实例锁（只护进程内状态的 `lock` 除外）。
+- 可还原的加密用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串带版本，解密只捕获 `CryptographicException`，可并列同一载荷的 Base64/JSON 解析异常。
 
 ## 7. 异常与日志
 
@@ -229,7 +233,7 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | `Auth/` | 授权策略与处理器、认证方案组装（`*Extensions`）、会话签发 |
 | `Hosting/` | 宿主组装扩展（`*Extensions`）、组件端点映射、`ExceptionMappings/` |
 | `Localization/` | 本地化资源标记类型（`ApiResource`） |
-| `Notifications/` | 通知组件扩展点的宿主实现（收件人解析、安全提醒发布） |
+| `Notifications/` | 只放依赖宿主资源的通知扩展点实现 |
 | `Configuration/` | 宿主级设置绑定 |
 | `Options/` | 强类型 Options |
 | `Middlewares/` | 中间件 |

@@ -11,6 +11,7 @@
 <!--#endif-->
 ├── deploy/                  # 容器编排配置
 ├── docs/                    # 长期规范与按需沉淀文档
+├── scripts/                 # 静态检查脚本（按启用的功能生成）
 ├── AGENTS.md                # AI 协作入口指针（CLAUDE.md 引用它）
 ├── CLAUDE.md
 ├── Dockerfile
@@ -23,12 +24,12 @@
 
 ```text
 backend/src/
-├── {ProjectName}.Domain/
-├── {ProjectName}.Application/
-├── {ProjectName}.Infrastructure/
-├── {ProjectName}.Client/
-├── {ProjectName}.DbMigrator/
-└── {ProjectName}.Api/
+├── CompanyName.ProjectName.Domain/
+├── CompanyName.ProjectName.Application/
+├── CompanyName.ProjectName.Infrastructure/
+├── CompanyName.ProjectName.Client/
+├── CompanyName.ProjectName.DbMigrator/
+└── CompanyName.ProjectName.Api/
 ```
 
 - Domain 保存领域模型和内层抽象。
@@ -48,6 +49,7 @@ backend/src/
 ```text
 frontend/
 ├── _mock/
+├── libs/ui/                 # Spartan helm 组件（CLI 复制进来的自有代码）
 ├── public/
 ├── src/app/
 │   ├── core/
@@ -72,4 +74,4 @@ frontend/
 
 业务开发与环境交付由 `.agents/skills/leistd-project-workflow/` 按场景加载对应 reference，不携带固定文档模板。根目录 `AGENTS.md`（`CLAUDE.md` 引用它）只指向该 Skill 与 `docs/README.md`，不承载规则。
 
-目录和普通 Markdown 文件使用小写 kebab-case；目录入口统一命名为 `README.md`。代码命名遵循对应语言规范。调整现有目录时同步检查项目引用、导入、构建、部署、测试和文档链接。
+目录和普通 Markdown 文件使用小写 kebab-case（前端多语言 scope 目录名跟随 scope 名）；目录入口统一命名为 `README.md`。代码命名遵循对应语言规范。调整现有目录时同步检查项目引用、导入、构建、部署、测试和文档链接。

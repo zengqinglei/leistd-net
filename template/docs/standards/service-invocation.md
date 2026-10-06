@@ -8,8 +8,8 @@
 
 ```csharp
 builder.Services.AddServiceAuthentication();
-builder.Services.AddOrderServiceClient(builder.Configuration).AddClientCredentials();
-builder.Services.AddBillingServiceClient(builder.Configuration).AddTokenExchange();
+builder.Services.AddOrderClient().AddClientCredentials();   // 目标服务 Client 包的注册入口
+builder.Services.AddBillingClient().AddTokenExchange();
 ```
 
 机器调用只代表客户端，范围绑定在 Leistd:ServiceClients:{Name}:Scope。用户调用从 Resource 请求读取已验证的 Bearer；带浏览器会话时也可读取服务端保存的访问令牌并交换，不能通过设置 ICurrentUser、ICurrentTenant 或请求头制造用户凭据。Identity/Standalone 的 Cookie 和后台用户上下文不提供交换证明；用户委托需要已验证的用户访问令牌。
@@ -77,6 +77,6 @@ OIDC authority 在 Resource 后端配置并与 Identity issuer 一致；回调�
 
 ## 发布本服务的 Client 包
 
-src/{ProjectName}.Client 只依赖 Refit 与服务客户端框架，不引用服务内部程序集；DTO 独立演进。新增接口经 Refit 特性声明，并由 AddRefitServiceClient 注册，以统一还原远端异常。Client 注册返回 IHttpClientBuilder，由消费宿主选择机器认证或用户交换，不自行猜测身份模式。以 NuGet 发布并按服务版本升级。
+src/CompanyName.ProjectName.Client 只依赖 Refit 与服务客户端框架，不引用服务内部程序集；DTO 独立演进。新增接口经 Refit 特性声明，并由 AddRefitServiceClient 注册，以统一还原远端异常。Client 注册返回 IHttpClientBuilder，由消费宿主选择机器认证或用户交换，不自行猜测身份模式。以 NuGet 发布并按服务版本升级。
 
 认证变更需运行本项目已配置的认证与服务调用集成测试，并在部署环境验证跨服务 Token Exchange 正反例、租户成员关系与用户资料一致性。

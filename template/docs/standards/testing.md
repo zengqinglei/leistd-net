@@ -109,8 +109,7 @@ backend/tests/
   "已写入后再开独立事务写入"这种生产上合法的写法会在测试里锁死。
 - 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言删除或更新结果时换一个作用域读，
   否则读到的是同一 DbContext 里仍被跟踪的旧实体。
-- 外部服务使用 fake、mock 或明确的测试环境。
-  时间用 `FakeTimeProvider`、日志用 `FakeLogger`，不手写替身。
+- 外部服务使用 fake、mock 或明确的测试环境；日志用 `FakeLogger`，不手写替身。
 - 时间边界（锁定、挑战与验证码有效期、令牌到期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟，`IClock`、Cookie 认证与 OpenIddict 随之跟随；起点取当前时刻。缓存过期不跟随该时钟：测试自身的缓存 TTL 时保留真实 MemoryCache/HybridCache，经 `MemoryCacheOptions.Clock` 接入同一假时钟，让 TTL 计算与本地到期一起推进，验证到期前与到期时刻，不用主动删除冒充到期；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制，不手写替代判定来快进。项目自己的挑战规则把到期时刻存在挑战里、用注入的时钟判定，因此能快进。
 - 端到端只验接线与生效值，不等安全窗口过期；确需观察真实到期时用配置缩短窗口（如[部署说明](../deploy/README.md)中的 `OAuth:AccessTokenLifetime`）并断言已生效。网络、取消、超时等有上限、等可观察结果的等待不在此列。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。
@@ -162,8 +161,7 @@ npm run build
 <!--#if (IncludeLocalization || (SpaFrontend && IncludeOperationRecords))-->
 ## 5. 静态闸门
 
-有些错漏不是测试能发现的——它们不让任何断言变红，只让界面显示得不对。这类判据做成脚本，
-跟测试一起跑：
+有些错漏不让任何断言变红，只让界面显示得不对；这类判据做成脚本，跟测试一起跑（Windows 上把 `python3` 换成 `py`）：
 
 ```bash
 <!--#if (IncludeLocalization)-->
