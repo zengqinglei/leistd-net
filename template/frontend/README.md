@@ -100,10 +100,9 @@ API_PROXY_TARGET=http://localhost:5250 npm start -- --port 4201
 项目使用 Angular 的环境配置系统。配置文件位于 `src/environments/`：
 
 - `environment.ts` - 本机开发（`npm start` 使用，Mock 只在这个配置下可用）
-- `environment.dev.ts` - 开发环境
-- `environment.test.ts` - 测试环境
-- `environment.uat.ts` - UAT 环境
-- `environment.prod.ts` - 生产环境
+- `environment.prod.ts` - 部署构建（`npm run build` 默认使用）
+
+前端产物不区分部署环境：页面与所属 API 同源，各环境的差异由后端配置承担，同一份构建产物可部署到任意环境。
 
 ### 主要配置选项
 
@@ -116,18 +115,18 @@ export const environment: Environment = {
   useMock: false, // true 开启全部 Mock；也可按模块传对象
   api: {
     ...environmentBase.api,
-    gateway: '', // 网关地址；留空时请求保持相对路径，由同源部署或开发代理转发
+    gateway: '', // 保持空值：请求以相对路径访问同源 API，由同源部署或开发代理转发
   },
 };
 ```
 
-经网关访问、且网关按服务名分流时，给请求带上服务名（`GATEWAY_SERVICE_NAME` 由 `src/app/core/interceptors/url-format-interceptor.ts` 导出），拦截器会把它插在网关地址与路径之间：
+访问同源下按路由前缀分流的其他微服务时，给请求带上服务名（`GATEWAY_SERVICE_NAME` 由 `src/app/core/interceptors/url-format-interceptor.ts` 导出），拦截器会把它作为路径前缀：
 
 ```typescript
 http.get('/api/v1/orders', {
   context: new HttpContext().set(GATEWAY_SERVICE_NAME, 'order-service'),
 });
-// → {gateway}/order-service/api/v1/orders
+// → /order-service/api/v1/orders（同源，由部署代理转发到对应服务）
 ```
 <!--#if (LocalIdentity)-->
 
@@ -145,24 +144,14 @@ http.get('/api/v1/orders', {
 详见 [浏览器认证](../docs/standards/auth.md#浏览器认证)。
 <!--#endif-->
 
-使用特定环境：
-
-```bash
-ng serve -c <环境名称>
-npm run build -- -c <环境名称>
-```
-
 ---
 
 ## 构建项目
 
-您可以根据目标环境构建项目。构建产物将存放在 `dist/` 目录下。
+构建产物存放在 `dist/` 目录下，各部署环境共用同一份产物。
 
 ```bash
-npm run build -- -c dev         # 开发环境
-npm run build -- -c test        # 测试环境
-npm run build -- -c uat         # UAT 环境
-npm run build                   # 生产环境（默认配置，已优化性能）
+npm run build                   # 默认 production 配置，已优化性能
 ```
 <!--#if (IncludeLocalization)-->
 
@@ -184,7 +173,7 @@ docker build -t company-name-project-name .
 
 #### 2. 分进程同源部署
 
-前端与后端可分进程部署，由网关或反向代理统一外部源，并将 `/api/**` 与服务端授权端点路由到后端。浏览器认证导航和回调均使用此同源地址。`API_GATEWAY` 构建参数保持空值；其他服务通过同源微服务路由前缀访问。独立跨源 API 地址不属于当前浏览器认证契约。完整 Cookie 与 TLS 转发规则见 [部署说明](../docs/deploy/README.md)。
+前端与后端可分进程部署，由网关或反向代理统一外部源，并将 `/api/**` 与服务端授权端点路由到后端。浏览器认证导航和回调均使用此同源地址；前端以相对路径访问 API，其他服务通过同源微服务路由前缀访问。独立跨源 API 地址不属于当前浏览器认证契约。完整 Cookie 与 TLS 转发规则见 [部署说明](../docs/deploy/README.md)。
 
 ---
 <!--#if (IncludeLocalization)-->

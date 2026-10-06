@@ -20,7 +20,7 @@ export interface Environment {
    */
   useMock: boolean | MockConfig;
   api: {
-    /** 网关地址；为空时请求保持相对路径（同源部署或开发代理）。 */
+    /** 网关地址；保持空值，请求以相对路径访问同源 API（同镜像托管、部署代理或开发代理）。 */
     gateway: string;
   };
 }
@@ -33,6 +33,6 @@ export const environmentBase: Environment = {
   //#endif
   useMock: false, // 默认关闭
   api: {
-    gateway: 'https://example.com',
+    gateway: '',
   },
 };

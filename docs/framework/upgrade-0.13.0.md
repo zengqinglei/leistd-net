@@ -913,3 +913,7 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 - 首次外部登录无法分配用户名时，`POST /api/v1/external-auth/{provider}/complete` 由 `User:UsernameTaken`（带 `Username`）改为 409 `ExternalAuth:UsernameAllocationFailed`（不带数据）。
 - 删除不可达或零引用的码及词条：`Auth:UnsupportedGrantType`（OpenIddict 已按协议回 `unsupported_grant_type`，未登记处理分支改为 `InvalidOperationException`）、`Tenant:ImpersonationRequiresAuthentication`（原 401 映射；未认证请求在授权阶段已被拒）、`ExternalAuth:ProviderNotSupported`。生成项目中引用这些常量或词条的代码一并删除。
 - `SecurityErrorCodes` 命名空间由 `…Domain.Shared.Security.Errors` 改为 `…Domain.Auth.Errors`（码值不变）；`ExternalAuth:InvalidState` 改用常量 `ExternalAuthErrorCodes.InvalidState`（码值不变）。
+
+## 40. 模板：前端只按同源访问 API（破坏性）
+
+- 移除 Dockerfile 的 `API_GATEWAY` 构建参数、`environment.prod.ts` 的 `__API_GATEWAY__` 占位符，以及 `dev`/`test`/`uat` 构建配置与对应环境文件：浏览器认证只支持页面与 API 同源，`environment.api.gateway` 保持空值。仍传 `--build-arg API_GATEWAY` 或 `-c dev|test|uat` 的部署脚本改用默认的 production 构建，需要统一外部源时由部署代理承担。
