@@ -103,9 +103,9 @@ function validateApplication(
   if ('clientId' in input) {
     const clientId = input.clientId.trim();
     if (!clientId) {
+      // 与后端一致：入参校验失败是 400 字段错误，不带业务码
       throw new MockException(400, {
-        code: 'OpenApp:ClientIdRequired',
-        message: 'Client ID is required',
+        errors: [{ field: 'clientId', detail: 'Client ID is required.' }],
       });
     }
     if (

@@ -913,6 +913,9 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 - 首次外部登录无法分配用户名时，`POST /api/v1/external-auth/{provider}/complete` 由 `User:UsernameTaken`（带 `Username`）改为 409 `ExternalAuth:UsernameAllocationFailed`（不带数据）。
 - 删除不可达或零引用的码及词条：`Auth:UnsupportedGrantType`（OpenIddict 已按协议回 `unsupported_grant_type`，未登记处理分支改为 `InvalidOperationException`）、`Tenant:ImpersonationRequiresAuthentication`（原 401 映射；未认证请求在授权阶段已被拒）、`ExternalAuth:ProviderNotSupported`。生成项目中引用这些常量或词条的代码一并删除。
 - `SecurityErrorCodes` 命名空间由 `…Domain.Shared.Security.Errors` 改为 `…Domain.Auth.Errors`（码值不变）；`ExternalAuth:InvalidState` 改用常量 `ExternalAuthErrorCodes.InvalidState`（码值不变）。
+- 删除不存在的资源一律成功：`DELETE /api/v1/users/{id}` 与 `DELETE /api/v1/open-applications/{id}` 在对象不存在（含已删除）时由 404 改为 200，不写操作记录；依赖 404 判断"已删除"的客户端改按 200 处理。
+- 入参校验由业务码改为 400 字段错误（`urn:leistd:problem:validation-error`，不带 `code`）：`OpenApp:ClientIdRequired`、`OpenApp:ApplicationTypeUnsupported`、`OpenApp:ClientTypeUnsupported`、`OpenApp:InvalidUri`（字段 `redirectUris`/`postLogoutRedirectUris`）、`Role:NameTooLong`（用户列表 `roles` 查询参数）、`Auth:TwoFactorCodeRequired`（字段 `code`）的常量与词条已删除；`PUT /api/v1/auth/me/avatar` 提交非图片 data URL（如外部地址）由 `User:AvatarInvalid` 改为 400 字段 `avatar`。按旧码分支的客户端改读 `errors[].field`。
+- 新增操作记录动作 `role.updated`、`open-application.created`、`open-application.updated`、`open-application.deleted`、`open-application.secret-reset`（后四个仅 Identity 形态、宿主可见），前端补 `operationRecords.actions` 与 `actionsNoTarget` 词条。
 
 ## 40. 模板：前端只按同源访问 API（破坏性）
 

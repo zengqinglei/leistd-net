@@ -51,7 +51,14 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'user.two-factor-reset': (t) => `Reset two-factor authentication for user ${t}`,
   'user.roles-replaced': (t) => `Changed roles for user ${t}`,
   'role.created': (t) => `Created role ${t}`,
+  'role.updated': (t) => `Updated role ${t}`,
   'role.deleted': (t) => `Deleted role ${t}`,
+  //#if (OpenIddictServer)
+  'open-application.created': (t) => `Created open application ${t}`,
+  'open-application.updated': (t) => `Updated open application ${t}`,
+  'open-application.deleted': (t) => `Deleted open application ${t}`,
+  'open-application.secret-reset': (t) => `Reset the secret of open application ${t}`,
+  //#endif
   //#if (RemoteTokenAuth)
   'resource.admin-granted': (t) => `Added ${t} to the administrator role`,
   //#endif
@@ -94,6 +101,9 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
 const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
   'user.created': 'Created a user',
   'role.created': 'Created a role',
+  //#if (OpenIddictServer)
+  'open-application.created': 'Created an open application',
+  //#endif
   'setting.test-email-sent': 'Sent a test email',
 };
 

@@ -34,7 +34,12 @@
     "user.two-factor-reset": "重置了用户 {{target}} 的两步验证",
     "user.roles-replaced": "调整了用户 {{target}} 的角色",
     "role.created": "创建了角色 {{target}}",
+    "role.updated": "修改了角色 {{target}}",
     "role.deleted": "删除了角色 {{target}}",
+    "open-application.created": "创建了开放应用 {{target}}",
+    "open-application.updated": "修改了开放应用 {{target}}",
+    "open-application.deleted": "删除了开放应用 {{target}}",
+    "open-application.secret-reset": "重置了开放应用 {{target}} 的密钥",
     "permission-grants.replaced": "调整了 {{target}} 的权限",
     "tenant.created": "创建了租户 {{target}}",
     "tenant.updated": "更新了租户 {{target}}",
@@ -72,7 +77,8 @@
     "operation-records.exported": "导出了操作记录",
     "setting.test-email-sent": "发送了测试邮件",
     "user.created": "创建用户",
-    "role.created": "创建角色"
+    "role.created": "创建角色",
+    "open-application.created": "创建开放应用"
   },
   "table": {
     "currentPageReport": "共 {{total}} 条",

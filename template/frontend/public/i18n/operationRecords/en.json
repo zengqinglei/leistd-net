@@ -34,7 +34,12 @@
     "user.two-factor-reset": "Reset two-factor authentication for user {{target}}",
     "user.roles-replaced": "Changed roles for user {{target}}",
     "role.created": "Created role {{target}}",
+    "role.updated": "Updated role {{target}}",
     "role.deleted": "Deleted role {{target}}",
+    "open-application.created": "Created open application {{target}}",
+    "open-application.updated": "Updated open application {{target}}",
+    "open-application.deleted": "Deleted open application {{target}}",
+    "open-application.secret-reset": "Reset the secret of open application {{target}}",
     "permission-grants.replaced": "Changed permissions for {{target}}",
     "tenant.created": "Created tenant {{target}}",
     "tenant.updated": "Updated tenant {{target}}",
@@ -72,7 +77,8 @@
     "operation-records.exported": "Exported operation records",
     "setting.test-email-sent": "Sent a test email",
     "user.created": "Created a user",
-    "role.created": "Created a role"
+    "role.created": "Created a role",
+    "open-application.created": "Created an open application"
   },
   "table": {
     "currentPageReport": "{{total}} in total",

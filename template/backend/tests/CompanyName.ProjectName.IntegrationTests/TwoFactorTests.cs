@@ -101,6 +101,34 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
     }
 
     /// <summary>
+    /// 验证码与恢复码都没给是入参校验失败：400 字段错误、不带业务码，也不消耗这次挑战
+    /// </summary>
+    [Fact]
+    public async Task Submitting_neither_code_is_a_field_error_and_keeps_the_challenge()
+    {
+        var (host, clock) = CreateHost();
+        using var ownedHost = host;
+        var username = await CreateUserAsync(host, "tfa_empty");
+        var secret = await EnableForAsync(host, username, clock);
+
+        Step(clock);
+        var (_, token) = await PasswordStepAsync(host, username);
+
+        using (var client = ProjectWebApplicationFactory.CreateProjectClient(host))
+        using (var empty = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, RecoveryCode = "  " }))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+            using var body = JsonDocument.Parse(await empty.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.TryGetProperty("code", out _));
+            Assert.Contains(body.RootElement.GetProperty("errors").EnumerateArray(),
+                error => error.GetProperty("field").GetString() == "code");
+        }
+
+        using var signedIn = await SecondStepAsync(host, token, new { Token = token, Code = Code(secret, clock) });
+        Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
     /// 输错不延长挑战的有效期
     /// </summary>
     /// <remarks>

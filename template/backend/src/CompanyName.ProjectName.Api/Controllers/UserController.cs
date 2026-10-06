@@ -134,7 +134,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
 
 #if (LocalIdentity)
     /// <summary>
-    /// 删除用户（需要用户删除权限）
+    /// 删除用户（需要用户删除权限；幂等：不存在时同样成功）
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Delete)]

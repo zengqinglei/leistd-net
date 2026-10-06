@@ -1,6 +1,7 @@
 #if (LocalIdentity)
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CompanyName.ProjectName.Domain.Users.Constants;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -75,7 +76,13 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
         var response = await admin.Client.GetAsync(
             $"/api/v1/users?offset=0&limit=10&roles={overlong}");
 
+        // 入参校验失败：字段错误落在 roles 上，不带业务码。
+        // 查询参数名不区分大小写，模型状态沿用绑定时的键（属性名），所以按不区分大小写比对
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(body.RootElement.TryGetProperty("code", out _));
+        Assert.Contains(body.RootElement.GetProperty("errors").EnumerateArray(),
+            error => string.Equals(error.GetProperty("field").GetString(), "roles", StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed record PagedUsers(int TotalCount, List<PagedUserItem> Items);

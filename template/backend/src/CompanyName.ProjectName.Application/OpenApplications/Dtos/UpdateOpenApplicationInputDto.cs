@@ -1,12 +1,16 @@
 #if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+#if (IncludeLocalization)
+using Microsoft.Extensions.Localization;
+#endif
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
 /// <summary>
 /// 更新开放应用输入 DTO
 /// </summary>
-public record UpdateOpenApplicationInputDto
+public record UpdateOpenApplicationInputDto : IValidatableObject
 {
     /// <summary>
     /// 显示名称
@@ -20,6 +24,7 @@ public record UpdateOpenApplicationInputDto
     /// </summary>
     [Display(Name = "Application type")]
     [Required(ErrorMessage = "{0} is required.")]
+    [RegularExpression("^(web|native|service)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ApplicationType { get; init; }
 
     /// <summary>
@@ -27,6 +32,7 @@ public record UpdateOpenApplicationInputDto
     /// </summary>
     [Display(Name = "Client type")]
     [Required(ErrorMessage = "{0} is required.")]
+    [RegularExpression("^(public|confidential)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ClientType { get; init; }
 
     /// <summary>
@@ -56,5 +62,35 @@ public record UpdateOpenApplicationInputDto
     [Display(Name = "Session bound")]
     [Required(ErrorMessage = "{0} is required.")]
     public required bool? SessionBound { get; init; }
+
+    /// <inheritdoc />
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
+        ValidateUris(RedirectUris, PostLogoutRedirectUris, validationContext);
+
+    /// <summary>
+    /// 回调地址逐项校验：绝对 URI、不含空白与片段。创建与更新共用这一份。
+    /// </summary>
+    /// <remarks>逐项校验没有对应的内置特性；自定义校验不经特性适配器，文案在这里按请求语言取；成员名也不经 JSON 命名策略转换，直接给请求体字段名。</remarks>
+    internal static IEnumerable<ValidationResult> ValidateUris(
+        IEnumerable<string> redirectUris,
+        IEnumerable<string> postLogoutRedirectUris,
+        ValidationContext validationContext)
+    {
+        const string message = "Each callback URI must be an absolute URI without whitespace or a fragment.";
+#if (IncludeLocalization)
+        var localizer = validationContext.GetService(typeof(IStringLocalizer)) as IStringLocalizer;
+        var text = localizer?[message].Value ?? message;
+#else
+        var text = message;
+#endif
+        if (!redirectUris.All(IsValidUri))
+            yield return new ValidationResult(text, [JsonNamingPolicy.CamelCase.ConvertName(nameof(RedirectUris))]);
+        if (!postLogoutRedirectUris.All(IsValidUri))
+            yield return new ValidationResult(text, [JsonNamingPolicy.CamelCase.ConvertName(nameof(PostLogoutRedirectUris))]);
+    }
+
+    private static bool IsValidUri(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && !value.Any(char.IsWhiteSpace) &&
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && string.IsNullOrEmpty(uri.Fragment);
 }
 #endif

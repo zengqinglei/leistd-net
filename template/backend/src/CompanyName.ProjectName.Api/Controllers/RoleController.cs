@@ -68,6 +68,7 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Policy = PermissionConstant.Roles.Update)]
+    [OperationRecordAction(OperationRecordActions.RoleUpdated, "id")]
     public async Task<RoleOutputDto> UpdateAsync(
         Guid id,
         [FromBody] UpdateRoleInputDto input,

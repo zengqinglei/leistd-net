@@ -6,6 +6,8 @@ using Leistd.ExceptionHandling;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -15,6 +17,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CompanyName.ProjectName.Application.OpenApplications.Mappings;
 using Leistd.ObjectMapping.Abstractions;
+using Leistd.OperationRecords.Models;
+using Leistd.OperationRecords.Recording;
 using OpenIddict.Abstractions;
 using Leistd.Timing;
 using Leistd.Data.Paging;
@@ -25,23 +29,11 @@ public class OpenApplicationAppService(
     IOpenIddictApplicationManager applicationManager,
     IOptions<OAuthOptions> oauthOptions,
     IObjectMapper objectMapper,
+    IOperationRecorder operationRecorder,
     IClock clock,
     ILogger<OpenApplicationAppService> logger) : BaseAppService, IOpenApplicationAppService
 {
     private const string PkceRequirement = "ft:pkce";
-
-    private static readonly HashSet<string> ApplicationTypes = new(StringComparer.Ordinal)
-    {
-        OpenIddictConstants.ApplicationTypes.Web,
-        OpenIddictConstants.ApplicationTypes.Native,
-        "service"
-    };
-
-    private static readonly HashSet<string> ClientTypes = new(StringComparer.Ordinal)
-    {
-        OpenIddictConstants.ClientTypes.Public,
-        OpenIddictConstants.ClientTypes.Confidential
-    };
 
     /// <summary>
     /// 本服务能签发的 scope 与其中仅限机器的那些，都取自 scope 目录（见 <see cref="OAuthScopes"/>）。
@@ -138,19 +130,13 @@ public class OpenApplicationAppService(
         CancellationToken cancellationToken = default)
     {
         var clientId = input.ClientId.Trim();
-        if (string.IsNullOrWhiteSpace(clientId))
-        {
-            throw new BusinessException(OpenAppErrorCodes.ClientIdRequired, "Client ID is required.")
-                ;
-        }
-
         if (await applicationManager.FindByClientIdAsync(clientId, cancellationToken) != null)
         {
             throw new BusinessException(OpenAppErrorCodes.ClientIdTaken, $"Client ID already exists: {clientId}")
                 .WithData("ClientId", clientId);
         }
 
-        ValidateApplication(input.ApplicationType, input.ClientType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements, input.Permissions);
+        ValidateApplication(input.ApplicationType, input.ClientType, input.Requirements, input.Permissions);
 
         // Confidential 客户端：自动生成 Secret
         string? generatedSecret = null;
@@ -184,6 +170,11 @@ public class OpenApplicationAppService(
             logger.LogInformation("Open application created (ClientId: {ClientId})", clientId);
 
             var output = await MapToOutputAsync(application, cancellationToken);
+            await operationRecorder.RecordSucceededAsync(
+                OperationRecordActions.OpenApplicationCreated,
+                OperationTarget.For(output.Id, output.DisplayName ?? output.ClientId),
+                PermissionConstant.OpenApplications.Create,
+                cancellationToken);
 
             // 创建时返回生成的 Secret（仅此一次）
             if (generatedSecret != null)
@@ -205,7 +196,7 @@ public class OpenApplicationAppService(
         UpdateOpenApplicationInputDto input,
         CancellationToken cancellationToken = default)
     {
-        ValidateApplication(input.ApplicationType, input.ClientType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements, input.Permissions);
+        ValidateApplication(input.ApplicationType, input.ClientType, input.Requirements, input.Permissions);
 
         var application = await FindRequiredAsync(id, cancellationToken);
         var descriptor = new OpenIddictApplicationDescriptor();
@@ -232,14 +223,31 @@ public class OpenApplicationAppService(
         await applicationManager.UpdateAsync(application, descriptor, cancellationToken);
         logger.LogInformation("Open application updated (ID: {Id})", id);
         // 管理器已把描述符写回手里的实例，用它构造输出，不再按 Id 回查
-        return await MapToOutputAsync(application, cancellationToken);
+        var output = await MapToOutputAsync(application, cancellationToken);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.OpenApplicationUpdated,
+            OperationTarget.For(id, output.DisplayName ?? output.ClientId),
+            PermissionConstant.OpenApplications.Update,
+            cancellationToken);
+        return output;
     }
 
+    /// <remarks>删除幂等：不存在时直接成功，不写操作记录——什么也没删。</remarks>
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        var application = await FindRequiredAsync(id, cancellationToken);
+        var application = await applicationManager.FindByIdAsync(id, cancellationToken);
+        if (application == null)
+            return;
+
+        // 名字在删除前取：删完再查什么都查不到，而审计要回答的正是"当时删掉的是哪一个"
+        var name = await GetTargetNameAsync(application, cancellationToken);
         await applicationManager.DeleteAsync(application, cancellationToken);
         logger.LogInformation("Open application deleted (ID: {Id})", id);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.OpenApplicationDeleted,
+            OperationTarget.For(id, name),
+            PermissionConstant.OpenApplications.Delete,
+            cancellationToken);
     }
 
     public async Task<ResetOpenApplicationSecretOutputDto> ResetSecretAsync(string id, CancellationToken cancellationToken = default)
@@ -255,6 +263,11 @@ public class OpenApplicationAppService(
         var clientSecret = GenerateClientSecret();
         await applicationManager.UpdateAsync(application, clientSecret, cancellationToken);
         logger.LogInformation("Open application secret reset (ID: {Id})", id);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.OpenApplicationSecretReset,
+            OperationTarget.For(id, await GetTargetNameAsync(application, cancellationToken)),
+            PermissionConstant.OpenApplications.ResetSecret,
+            cancellationToken);
         return new ResetOpenApplicationSecretOutputDto { ClientSecret = clientSecret };
     }
 
@@ -269,6 +282,11 @@ public class OpenApplicationAppService(
 
         return application;
     }
+
+    /// <summary>操作记录的目标名：显示名，退到 Client ID；四个写操作同一套取值规则。</summary>
+    private async Task<string?> GetTargetNameAsync(object application, CancellationToken cancellationToken) =>
+        await applicationManager.GetDisplayNameAsync(application, cancellationToken)
+        ?? await applicationManager.GetClientIdAsync(application, cancellationToken);
 
     /// <remarks><c>PopulateAsync</c> 一次填满除 <c>Id</c> 以外的全部字段，<c>Id</c> 经映射上下文传入。</remarks>
     private async Task<OpenApplicationOutputDto> MapToOutputAsync(object application, CancellationToken cancellationToken)
@@ -294,29 +312,16 @@ public class OpenApplicationAppService(
             })
             .ToList();
 
+    /// <remarks>
+    /// 取值范围与回调地址格式由入参 DTO 校验；这里只判跨字段组合与依赖 scope 目录的规则。
+    /// Secret 由后端自动生成，不从前端传入，无需校验。
+    /// </remarks>
     private void ValidateApplication(
         string applicationType,
         string clientType,
-        IReadOnlyCollection<string> redirectUris,
-        IReadOnlyCollection<string> postLogoutRedirectUris,
         IReadOnlyCollection<string> requirements,
         IReadOnlyCollection<string> permissions)
     {
-        if (!ApplicationTypes.Contains(applicationType))
-        {
-            throw new BusinessException(OpenAppErrorCodes.ApplicationTypeUnsupported, $"Unsupported application type: {applicationType}")
-                .WithData("ApplicationType", applicationType);
-        }
-
-        if (!ClientTypes.Contains(clientType))
-        {
-            throw new BusinessException(OpenAppErrorCodes.ClientTypeUnsupported, $"Unsupported client type: {clientType}")
-                .WithData("ClientType", clientType);
-        }
-
-
-        // Secret 由后端自动生成，不从前端传入，无需校验
-
         if ((applicationType == OpenIddictConstants.ApplicationTypes.Native || clientType == OpenIddictConstants.ClientTypes.Public) &&
             !requirements.Contains(PkceRequirement))
         {
@@ -347,11 +352,6 @@ public class OpenApplicationAppService(
             var audience = permission[OpenIddictConstants.Permissions.Prefixes.Audience.Length..];
             if (!ScopeCatalog.SelectMany(scope => scope.Resources).Contains(audience))
                 throw new BusinessException(OpenAppErrorCodes.AudienceUnsupported, $"Unsupported audience: {audience}").WithData("Audience", audience);
-        }
-
-        foreach (var uri in redirectUris.Concat(postLogoutRedirectUris))
-        {
-            ValidateUri(uri);
         }
     }
 
@@ -433,16 +433,6 @@ public class OpenApplicationAppService(
                 $"types ({string.Join(", ", humanGrants)}).")
                 .WithData("Scopes", scopeList)
                 .WithData("Grants", string.Join(", ", humanGrants));
-        }
-    }
-
-    private static void ValidateUri(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsWhiteSpace) ||
-            !Uri.TryCreate(value, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Fragment))
-        {
-            throw new BusinessException(OpenAppErrorCodes.InvalidUri, $"Invalid URI: {value}")
-                .WithData("Uri", value);
         }
     }
 

@@ -89,14 +89,11 @@ public class UserAppService(
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
-    /// <summary>角色名称最大长度，与 Role 实体的持久化约束保持一致。</summary>
-    private const int RoleNameMaxLength = 64;
 #if (RemoteTokenAuth)
-
     /// <summary>OIDC 标准声明：签发方是否已验证该邮箱。</summary>
     private const string EmailVerifiedClaimType = "email_verified";
-#endif
 
+#endif
     /// <summary>
     /// 获取用户列表（分页）
     /// </summary>
@@ -126,18 +123,12 @@ public class UserAppService(
 
         if (input.Roles is { Count: > 0 })
         {
-            // 规范化：去 null/空白（模型绑定会把空白项转为 null）、去重；单项超长直接拒绝。
+            // 规范化：去 null/空白（模型绑定会把空白项转为 null）、去重；单项长度已由入参 DTO 校验。
             var roleNames = input.Roles
                 .Where(r => !string.IsNullOrWhiteSpace(r))
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
-            if (roleNames.Exists(r => r.Length > RoleNameMaxLength))
-            {
-                throw new BusinessException(RoleErrorCodes.NameTooLong,
-                    $"Role name cannot exceed {RoleNameMaxLength} characters.")
-                    .WithData("MaximumLength", RoleNameMaxLength);
-            }
             if (roleNames.Count > 0)
             {
                 var matchedRoles = await roleRepository.GetListAsync(r => roleNames.Contains(r.Name), cancellationToken);
@@ -527,13 +518,16 @@ public class UserAppService(
     /// 例如角色删除（<c>RoleAppService.DeleteAsync</c>）。
     /// <para>站内通知一并删掉：它们只对本人有意义，留下来就是没人能读、也没人能删的孤儿行。</para>
     /// <para>删除、清理与撤销同生共死；撤销的时序见 <see cref="RevokeAllAccessAsync"/>。</para>
+    /// <para>删除幂等：用户不存在（含已删除）时直接成功，不写操作记录——什么也没删。</para>
     /// </remarks>
     [UnitOfWork]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Deleting user {Id}", id);
+        var user = await userRepository.GetByIdAsync(id, cancellationToken);
+        if (user is null)
+            return;
 
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        logger.LogInformation("Deleting user {Id}", id);
         if (!user.CanBeDeleted())
         {
             throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.")

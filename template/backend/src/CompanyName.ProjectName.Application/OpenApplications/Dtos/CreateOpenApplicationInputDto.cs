@@ -1,12 +1,15 @@
 #if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
+#if (IncludeLocalization)
+using Microsoft.Extensions.Localization;
+#endif
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
 /// <summary>
 /// 创建开放应用输入 DTO
 /// </summary>
-public record CreateOpenApplicationInputDto
+public record CreateOpenApplicationInputDto : IValidatableObject
 {
     /// <summary>
     /// Client ID
@@ -28,6 +31,7 @@ public record CreateOpenApplicationInputDto
     /// </summary>
     [Display(Name = "Application type")]
     [Required(ErrorMessage = "{0} is required.")]
+    [RegularExpression("^(web|native|service)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ApplicationType { get; init; }
 
     /// <summary>
@@ -35,6 +39,7 @@ public record CreateOpenApplicationInputDto
     /// </summary>
     [Display(Name = "Client type")]
     [Required(ErrorMessage = "{0} is required.")]
+    [RegularExpression("^(public|confidential)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ClientType { get; init; }
 
     /// <summary>
@@ -64,5 +69,9 @@ public record CreateOpenApplicationInputDto
     [Display(Name = "Session bound")]
     [Required(ErrorMessage = "{0} is required.")]
     public required bool? SessionBound { get; init; }
+
+    /// <inheritdoc />
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
+        UpdateOpenApplicationInputDto.ValidateUris(RedirectUris, PostLogoutRedirectUris, validationContext);
 }
 #endif

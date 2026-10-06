@@ -193,18 +193,14 @@ internal sealed class AuthAppService(
 
         bool verified;
         var usedRecoveryCode = false;
+        // 入参 DTO 已保证两者至少有一个；都给了时以恢复码为准
         if (!string.IsNullOrWhiteSpace(input.RecoveryCode))
         {
             verified = usedRecoveryCode = twoFactorDomainService.UseRecoveryCode(user, input.RecoveryCode);
         }
-        else if (!string.IsNullOrWhiteSpace(input.Code))
-        {
-            verified = twoFactorDomainService.VerifyCode(user, input.Code, now);
-        }
         else
         {
-            throw new BusinessException(AuthErrorCodes.TwoFactorCodeRequired, "Enter the verification code or a recovery code.")
-                ;
+            verified = twoFactorDomainService.VerifyCode(user, input.Code!, now);
         }
 
         if (!verified)
@@ -499,19 +495,13 @@ internal sealed class AuthAppService(
     /// 设置或清除自己的头像
     /// </summary>
     /// <remarks>
-    /// 本人只能上传图片（外部地址来自外部登录提供方，不由本人随手填）；
+    /// 本人只能上传图片，入参 DTO 已挡掉外部地址（它来自外部登录提供方，不由本人随手填）；
     /// 浏览器端已裁剪缩放，这里按 <see cref="AvatarPolicy"/> 校验体积与真实类型。
     /// </remarks>
     public async Task<UserOutputDto> SetCurrentUserAvatarAsync(SetAvatarInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        if (!string.IsNullOrEmpty(input.Avatar) && !AvatarPolicy.TryReadImage(input.Avatar, out _))
-        {
-            AvatarPolicy.EnsureValid(input.Avatar);
-            // 外部地址本身合法，但不是本人上传的入口能写的东西
-            throw new BusinessException(UserErrorCodes.AvatarInvalid, "The avatar must be a PNG, JPEG or WebP image.")
-                ;
-        }
+        AvatarPolicy.EnsureValid(input.Avatar);
 
         user.SetAvatar(input.Avatar);
         await userRepository.UpdateAsync(user, cancellationToken);

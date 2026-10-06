@@ -170,6 +170,11 @@ public class RoleAppService(
 
         await roleRepository.UpdateAsync(role, cancellationToken);
         logger.LogInformation("Role updated: {Name} (ID: {Id})", role.Name, role.Id);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.RoleUpdated,
+            OperationTarget.For(role.Id, role.DisplayName ?? role.Name),
+            PermissionConstant.Roles.Update,
+            cancellationToken);
 #if (IncludeRealTime)
         await PublishRoleListChangedAsync(cancellationToken);
 #endif
