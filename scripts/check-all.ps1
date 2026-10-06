@@ -241,7 +241,8 @@ try {
         else {
             $gateArgs = @($g.Args | ForEach-Object { if ($_ -like '-*') { $_ } else { Join-Path $repoRoot $_ } })
             if ($g.Cmd -eq $pythonCmd) { $gateArgs = @($pythonFlags) + $gateArgs }
-            & $g.Cmd @gateArgs
+            # 输出照常直通终端，同时留一份给 CI 注解
+            & $g.Cmd @gateArgs 2>&1 | Tee-Object -Variable gateOutput | Out-Host
             $ok = $LASTEXITCODE -eq 0
         }
         $results += [PSCustomObject]@{
@@ -249,6 +250,13 @@ try {
             Passed  = $ok
             Seconds = [math]::Round(((Get-Date) - $started).TotalSeconds, 1)
         }
+        # GitHub Actions 的作业日志要登录才能看，注解公开可见：失败的闸门写成错误注解，带上输出末尾
+        if (-not $ok -and $env:GITHUB_ACTIONS -eq 'true') {
+            $tail = if (-not $g.Run -and $gateOutput) { @($gateOutput | ForEach-Object { "$_" } | Select-Object -Last 30) -join "`n" } else { "见作业日志" }
+            $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Host "::error title=check-all：$($g.Name)::$escaped"
+        }
+        $gateOutput = $null
         if (-not $ok -and $StopOnFirstFailure) { break }
     }
 }
