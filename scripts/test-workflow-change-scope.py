@@ -23,7 +23,7 @@ def scope_step(workflow, job, step_id):
 
 
 def git(repo, *args):
-    return subprocess.check_output(['git', '-C', str(repo), *args], text=True).strip()
+    return subprocess.check_output(['git', '-C', str(repo), *args], text=True, encoding='utf-8', errors='replace').strip()
 
 
 def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
@@ -42,7 +42,7 @@ def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
                                      GITHUB_STEP_SUMMARY=str(repo / 'summary.txt'),
                                      PR_BASE_SHA=base, EVENT_NAME=event, CANDIDATE_SHA=candidate),
                                  **(extra_env or {})},
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding='utf-8', errors='replace')
     return result.returncode, output.read_text(encoding='utf-8').strip() if output.exists() else '', result.stderr
 
 
@@ -146,7 +146,7 @@ def check_docs_scope():
             git(repo, 'commit', '-qm', 'base')
             base = git(repo, 'rev-parse', 'HEAD')
             if target == source:
-                path.write_text(path.read_text() + 'change\n', encoding='utf-8')
+                path.write_text(path.read_text(encoding='utf-8') + 'change\n', encoding='utf-8')
                 git(repo, 'add', source)
             elif target:
                 (repo / target).parent.mkdir(parents=True, exist_ok=True)
@@ -182,16 +182,16 @@ def check_docs_scope():
         # Force git diff to fail after a valid base lookup, rather than merely use an unknown SHA.
         fake_bin = repo / 'fake-bin'
         fake_bin.mkdir()
-        actual_git = subprocess.check_output(['which', 'git'], text=True).strip()
+        actual_git = subprocess.check_output(['which', 'git'], text=True, encoding='utf-8', errors='replace').strip()
         shim = fake_bin / 'git'
-        shim.write_text('#!/bin/sh\ncase " $* " in *" diff "*) exit 23;; esac\nexec "' + actual_git + '" "$@"\n')
+        shim.write_text('#!/bin/sh\ncase " $* " in *" diff "*) exit 23;; esac\nexec "' + actual_git + '" "$@"\n', encoding='utf-8')
         shim.chmod(0o755)
         code, output, error = evaluate(repo, script, parent, 'pull_request', extra_env={'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']})
         assert code == 0 and output == 'docs_only=false', ('failed diff', code, output, error)
         print('PASS empty and failed diff fall back to full')
         # Model GitHub's actual PR merge checkout: base is the first parent.
         merge = subprocess.check_output(['git', '-C', str(repo), 'commit-tree', 'HEAD^{tree}', '-p', base, '-p', 'HEAD'],
-                                        input='PR merge fixture\n', text=True).strip()
+                                        input='PR merge fixture\n', text=True, encoding='utf-8', errors='replace').strip()
         git(repo, 'update-ref', 'refs/heads/pr-merge', merge)
         git(repo, 'symbolic-ref', 'HEAD', 'refs/heads/pr-merge')
         for depth in (1, 2):

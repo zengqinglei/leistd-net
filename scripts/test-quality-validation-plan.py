@@ -31,10 +31,10 @@ def main():
 
     def run(label, command, cwd, success=True):
         started = time.monotonic()
-        result = subprocess.run(command, cwd=cwd, text=True, capture_output=True)
+        result = subprocess.run(command, cwd=cwd, text=True, encoding='utf-8', errors='replace', capture_output=True)
         (out / (label + '.log')).write_text(result.stdout + result.stderr, encoding='utf-8')
         records.append(dict(label=label, seconds=round(time.monotonic() - started, 3), exit_code=result.returncode))
-        (out / 'results.json').write_text(json.dumps(records, indent=2))
+        (out / 'results.json').write_text(json.dumps(records, indent=2), encoding='utf-8')
         assert (result.returncode == 0) == success, (label, result.stdout[-1000:], result.stderr[-1500:])
         return result.stdout
 
@@ -49,7 +49,7 @@ def main():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
         def git(*args):
-            return subprocess.check_output(['git', *args], cwd=repo, text=True, stderr=subprocess.PIPE).strip()
+            return subprocess.check_output(['git', *args], cwd=repo, text=True, encoding='utf-8', errors='replace', stderr=subprocess.PIPE).strip()
         git('init', '-q'); git('config', 'user.name', 'Quality fixture'); git('config', 'user.email', 'fixture@example.invalid')
         git('add', '.'); git('commit', '-qm', 'fixture baseline')
         base = git('rev-parse', 'HEAD')
@@ -79,7 +79,7 @@ def main():
                 target = repo / path; target.parent.mkdir(parents=True, exist_ok=True)
                 # No need for valid source in a classifier-only fixture; actual
                 # generation uses the first two cases and their valid comments.
-                target.write_text((target.read_text() if target.exists() else '') + '\n// Quality scope fixture\n')
+                target.write_text((target.read_text(encoding='utf-8') if target.exists() else '') + '\n// Quality scope fixture\n', encoding='utf-8')
             git('add', '.'); git('commit', '-qm', label)
             plan = planner.create_plan('pr', base, 'pull_request', '', container_smoke=label == 'cross-layer')
             assert plan['Mode'] == expected_mode, (label, plan)
@@ -108,12 +108,12 @@ def main():
                 assert local['Scenarios'] == plan['Scenarios']
             elif label == 'cross-layer':
                 # Independently validated single-side PR plans, excluding full-only products.
-                expected = set(json.loads((out / 'frontend-feature-plan.json').read_text())['Scenarios'])
-                expected |= set(json.loads((out / 'backend-api-plan.json').read_text())['Scenarios'])
+                expected = set(json.loads((out / 'frontend-feature-plan.json').read_text(encoding='utf-8'))['Scenarios'])
+                expected |= set(json.loads((out / 'backend-api-plan.json').read_text(encoding='utf-8'))['Scenarios'])
                 assert local['Selection'] == 'source-products' and set(local['Scenarios']) == expected, local
             else:
                 assert local['Selection'] == 'complete-pr' and set(local['Scenarios']) == registered
-            (out / (label + '-local.json')).write_text(json.dumps(local, indent=2))
+            (out / (label + '-local.json')).write_text(json.dumps(local, indent=2), encoding='utf-8')
             if expected_mode != 'full':
                 assert plan['FrameworkTests'] is False and plan['ConsumerProjects'] == []
                 assert {'identity', 'identity-all-features'} <= set(plan['Scenarios']) <= registered
@@ -125,7 +125,7 @@ def main():
                 ('pr','pull_request','0'*40,''), ('pr','pull_request',base,'b'*40), ('pr','pull_request',git('rev-parse','HEAD'),'')]:
                 conservative = planner.create_plan(tier, baseline, event, candidate)
                 assert conservative['Mode'] == 'full' and conservative['FrameworkTests'] and conservative['ConsumerProjects'] is None
-            (out / (label + '-plan.json')).write_text(json.dumps(plan, indent=2))
+            (out / (label + '-plan.json')).write_text(json.dumps(plan, indent=2), encoding='utf-8')
             print('PASS complete-input plan:', label, flush=True)
             if label in ('frontend-feature', 'backend-api'):
                 prove_generation(repo, base, plan, scenarios, out, run, git)
@@ -139,20 +139,20 @@ def main():
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'frontend'
         assert planner.local_scenarios(base)['Selection'] == 'source-products'
         git('reset', '--hard', base); git('mv',front,'docs/moved-source.ts'); git('commit','-qm','cross boundary move')
-        (repo / 'docs/later.md').write_text('later documentation')
+        (repo / 'docs/later.md').write_text('later documentation', encoding='utf-8')
         git('add','.'); git('commit','-qm','later doc change')
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'full'
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
-        (repo / front).write_text((repo / front).read_text() + '\n// Uncommitted edit\n')
+        (repo / front).write_text((repo / front).read_text(encoding='utf-8') + '\n// Uncommitted edit\n', encoding='utf-8')
         git('add', front); git('commit', '-qm', 'committed frontend input')
         assert planner.create_plan('pr', base, 'pull_request', '')['Mode'] == 'frontend'
-        (repo / back).write_text((repo / back).read_text() + '\n// Uncommitted backend edit\n')
+        (repo / back).write_text((repo / back).read_text(encoding='utf-8') + '\n// Uncommitted backend edit\n', encoding='utf-8')
         dirty = planner.create_plan('pr', base, 'pull_request', '')
         assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
-        (repo / 'untracked-input.ts').write_text('untracked')
+        (repo / 'untracked-input.ts').write_text('untracked', encoding='utf-8')
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         (repo / 'untracked-input.ts').unlink()
         for invalid in ('', '0'*40, git('rev-parse','HEAD')):
@@ -165,19 +165,19 @@ def main():
         config_path = repo / 'template/.template.config/template.json'
         for label, modifier in [('unknown-source-rule', False), ('unknown-modifier-rule', True)]:
             git('reset', '--hard', base)
-            config = json.loads(config_path.read_text())
+            config = json.loads(config_path.read_text(encoding='utf-8'))
             target = config['sources'][0]['modifiers'][0] if modifier else config['sources'][0]
             target['include'] = ['**/*']
-            config_path.write_text(json.dumps(config))
+            config_path.write_text(json.dumps(config), encoding='utf-8')
             git('add', '.'); git('commit', '-qm', label + ' baseline')
             rule_base = git('rev-parse', 'HEAD')
-            (repo / front).write_text((repo / front).read_text() + '\n// Quality scope fixture\n')
+            (repo / front).write_text((repo / front).read_text(encoding='utf-8') + '\n// Quality scope fixture\n', encoding='utf-8')
             git('add', '.'); git('commit', '-qm', label + ' source edit')
             guarded = planner.create_plan('pr', rule_base, 'pull_request', '')
             assert guarded['Mode'] == 'full' and guarded['FrameworkTests'] and guarded['ConsumerProjects'] is None
             assert set(guarded['Scenarios']) == registered and 'proof unavailable' in guarded['Reason']
             assert planner.local_scenarios(rule_base)['Selection'] == 'complete-pr'
-            (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2))
+            (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2), encoding='utf-8')
             print('PASS unknown engine rule conservative fallback:', label, flush=True)
         prove_local_products(repo, base, planner, scenarios, out, run, git)
     print('Selection and receipt evidence:', out, flush=True)
@@ -188,11 +188,11 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
     git('reset', '--hard', base)
     source = 'template/frontend/src/app/app.spec.ts'
     path = repo / source
-    path.write_text(path.read_text() + '\n//#if (IncludeNotifications)\n// local branch fixture\n//#endif\n')
+    path.write_text(path.read_text(encoding='utf-8') + '\n//#if (IncludeNotifications)\n// local branch fixture\n//#endif\n', encoding='utf-8')
     git('add', '.'); git('commit', '-qm', 'local conditional source')
     selected = planner.local_scenarios(base)
     assert selected['Selection'] == 'source-products', selected
-    config = json.loads((repo / 'template/.template.config/template.json').read_text())
+    config = json.loads((repo / 'template/.template.config/template.json').read_text(encoding='utf-8'))
     symbols = {name: planner.coverage.symbol_values(config, planner.coverage.parse_cli_arguments(config, info['Arguments']))
                for name, info in scenarios.items() if name in selected['Scenarios']}
     assert all(values['SpaFrontend'] for values in symbols.values()), selected
@@ -202,18 +202,18 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
     assert plan['Scenarios'] == selected['Scenarios']
     prove_generation(repo, base, dict(plan, Mode='local-conditional'), scenarios, out, run, git)
     local_file = out / 'conditional-local.json'
-    run('local-cli', ['python3','scripts/plan-quality-checks.py','--local-scenarios','--tier','pr',
+    run('local-cli', [sys.executable,'scripts/plan-quality-checks.py','--local-scenarios','--tier','pr',
                      '--base',base,'--output',str(local_file)], repo)
-    assert json.loads(local_file.read_text()) == selected
+    assert json.loads(local_file.read_text(encoding='utf-8')) == selected
     for flags in (['--tier','full'], ['--tier','pr','--github-output'],
                   ['--tier','pr','--docs-only','true'], ['--tier','pr','--candidate-input','a'*40]):
         run('local-invalid-' + str(len(flags)) + '-' + flags[-1],
-            ['python3','scripts/plan-quality-checks.py','--local-scenarios',*flags,
+            [sys.executable,'scripts/plan-quality-checks.py','--local-scenarios',*flags,
              '--output',str(out/'invalid-local.json')], repo, success=False)
     run('local-not-ci-plan', ['pwsh','-NoProfile','-Command',
         "$ErrorActionPreference='Stop'; . ./scripts/quality-validation-plan.ps1; . ./scripts/template-matrix-scenarios.ps1; "
         f"Read-QualityValidationPlan -Path '{local_file}' -ExpectedTier pr"], repo, success=False)
-    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text()
+    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text(encoding='utf-8')
     # A real new commit during selection must invalidate the computed snapshot.
     original = planner.git
     fixture_head = git('rev-parse', 'HEAD')
@@ -241,7 +241,7 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
         producer_calls += 1
         # create_plan first evaluates old/new; inject during local selection itself.
         if producer_calls == 3:
-            untracked.write_text('new input')
+            untracked.write_text('new input', encoding='utf-8')
         return producers
     try:
         planner.source_producers = changing_tree
@@ -293,14 +293,14 @@ def prove_generation(repo, base, plan, scenarios, out, run, git):
         delta = {path for path in old_files.keys() | new_files.keys() if old_files.get(path) != new_files.get(path)}
         assert omitted is None or not any(path.startswith(omitted) for path in delta), (label,name,'omitted stage input changed',delta)
         assert name in selected or not delta, (label,name,'omitted scenario output changed',delta)
-    (out / (label + '-generation-digests.json')).write_text(json.dumps({f'{version}/{name}': files for (version,name),files in digests.items()},indent=2))
+    (out / (label + '-generation-digests.json')).write_text(json.dumps({f'{version}/{name}': files for (version,name),files in digests.items()},indent=2), encoding='utf-8')
     print('PASS actual generation: omitted inputs and unselected products unchanged:', label, flush=True)
 
 
 def prove_receipts(repo, plan, scenarios, out, run):
     label = plan['Mode']
     expected_file = out / (label + '-expected.json')
-    expected_file.write_text(json.dumps(plan))
+    expected_file.write_text(json.dumps(plan), encoding='utf-8')
     receipt_dir = out / (label + '-receipts'); receipt_dir.mkdir(exist_ok=True)
     receipts = {}
     for group in plan['Slices']:
@@ -312,7 +312,7 @@ def prove_receipts(repo, plan, scenarios, out, run):
                 result[stage] = 'not-applicable' if omitted else 'pass'
             receipt['Results'].append(result)
     def write():
-        for key, receipt in receipts.items(): (receipt_dir / f'matrix-{key}.json').write_text(json.dumps(receipt))
+        for key, receipt in receipts.items(): (receipt_dir / f'matrix-{key}.json').write_text(json.dumps(receipt), encoding='utf-8')
     write()
     command=['pwsh','-NoProfile','-File','scripts/check-template-matrix-results.ps1','-ResultsPath',str(receipt_dir),'-Tier','pr','-ValidationPlanPath',str(expected_file)]
     run(label+'-receipts-valid',command,repo)
@@ -335,7 +335,7 @@ def prove_receipts(repo, plan, scenarios, out, run):
     write()
     first_file = receipt_dir / f"matrix-{first['Slice']}.json"
     first_file.unlink();run(label+'-reject-missing-slice',command,repo,False);write()
-    duplicate = receipt_dir / 'matrix-duplicate.json';duplicate.write_text(json.dumps(first))
+    duplicate = receipt_dir / 'matrix-duplicate.json';duplicate.write_text(json.dumps(first), encoding='utf-8')
     run(label+'-reject-duplicate-slice',command,repo,False);duplicate.unlink()
     result = first['Results'][0];saved = result['Container']
     result['Container'] = 'skipped' if saved == 'pass' else 'pass';write();run(label+'-reject-container-claim',command,repo,False);result['Container'] = saved
@@ -363,11 +363,11 @@ def prove_receipts(repo, plan, scenarios, out, run):
     if plan['ContainerSmoke']:
         mutations['missing-container-assignment'] = lambda p:next(g for g in p['Slices'] if g['Containers']).update(Containers=[])
     for mutation,apply in mutations.items():
-        invalid = json.loads(json.dumps(plan));apply(invalid);expected_file.write_text(json.dumps(invalid))
+        invalid = json.loads(json.dumps(plan));apply(invalid);expected_file.write_text(json.dumps(invalid), encoding='utf-8')
         run(label+'-reject-plan-'+mutation,command,repo,False)
         if mutation in ('reordered-members', 'moved-plan-members'):
-            assert 'preserve registered group members and order' in (out/(label+'-reject-plan-'+mutation+'.log')).read_text()
-    expected_file.write_text(json.dumps(plan))
+            assert 'preserve registered group members and order' in (out/(label+'-reject-plan-'+mutation+'.log')).read_text(encoding='utf-8')
+    expected_file.write_text(json.dumps(plan), encoding='utf-8')
     if label == 'full':
         pure_api = next(result for receipt in receipts.values() for result in receipt['Results'] if not scenarios[result['Scenario']].get('Frontend', True))
         for stage in ['Lint', 'Frontend', 'Test']:

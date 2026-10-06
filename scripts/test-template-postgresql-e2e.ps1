@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",

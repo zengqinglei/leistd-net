@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 param(
     [string]$RepositoryRoot = (Join-Path $PSScriptRoot ".."),
     [string]$SkillCreatorValidator = $env:SKILL_CREATOR_VALIDATOR,

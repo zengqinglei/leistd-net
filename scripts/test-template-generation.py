@@ -43,7 +43,7 @@ def validate_relative_modules(output, files):
     for relative in files:
         if not relative.endswith('.ts'):
             continue
-        source = (output / relative).read_text()
+        source = (output / relative).read_text(encoding='utf-8')
         for module in re.findall(r"(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)['\"](\.[^'\"]+)['\"]", source):
             stem = posixpath.normpath(posixpath.join(posixpath.dirname(relative), module))
             candidates = [stem, stem + '.ts', stem + '.json', stem + '/index.ts']
@@ -89,8 +89,8 @@ def validate(output, values, config):
         if relative.startswith('frontend/public/i18n/') and relative.endswith('/en.json'):
             chinese = posixpath.join(posixpath.dirname(relative), 'zh-CN.json')
             assert chinese in digests, f'Missing translation pair: {relative}'
-            english_keys = translation_keys(json.loads((output / relative).read_text()))
-            chinese_keys = translation_keys(json.loads((output / chinese).read_text()))
+            english_keys = translation_keys(json.loads((output / relative).read_text(encoding='utf-8')))
+            chinese_keys = translation_keys(json.loads((output / chinese).read_text(encoding='utf-8')))
             assert english_keys.keys() == chinese_keys.keys(), f'Generated translation keys differ: {relative}'
             for key in english_keys:
                 assert set(re.findall(r'\{\{(\w+)\}\}', english_keys[key])) == set(re.findall(r'\{\{(\w+)\}\}', chinese_keys[key])), f'Generated translation placeholders differ: {relative}/{key}'
@@ -98,12 +98,12 @@ def validate(output, values, config):
     infra = output / 'backend/src/Generation.Probe.Infrastructure'
     frontend = output / 'frontend'
     assert frontend.exists() == values['SpaFrontend'], 'Frontend applicability'
-    settings = json.loads(re.sub(r'^\s*//.*$', '', (api / 'appsettings.json').read_text(), flags=re.M))
+    settings = json.loads(re.sub(r'^\s*//.*$', '', (api / 'appsettings.json').read_text(encoding='utf-8'), flags=re.M))
     assert ('Routing' in settings['Leistd'].get('MultiTenancy', {})) == (values['RemoteTokenAuth'] and values['IncludeMultiTenancy']), 'Tenant routing configuration applicability'
-    readme = (output / 'README.md').read_text()
-    testing = (output / 'docs/standards/testing.md').read_text()
-    deployment = (output / 'docs/deploy/README.md').read_text()
-    invocation = (output / 'docs/standards/service-invocation.md').read_text()
+    readme = (output / 'README.md').read_text(encoding='utf-8')
+    testing = (output / 'docs/standards/testing.md').read_text(encoding='utf-8')
+    deployment = (output / 'docs/deploy/README.md').read_text(encoding='utf-8')
+    invocation = (output / 'docs/standards/service-invocation.md').read_text(encoding='utf-8')
     assert ('前端使用 Angular 22。' in readme) == values['SpaFrontend'], 'Frontend introduction applicability'
     assert ('npm ' in testing) == values['SpaFrontend'], 'Frontend testing instructions applicability'
     assert ('npm start' in deployment) == values['SpaFrontend'], 'Frontend deployment instructions applicability'
@@ -124,39 +124,39 @@ def validate(output, values, config):
         if authentication is not None:
             assert ('ClientId' in authentication) == values['ResourceBrowserSession'], 'Browser client credentials example applicability'
         assert ('Identity' in documented['Leistd']['ServiceClients']) == (values['RemoteTokenAuth'] and values['IncludeMultiTenancy']), 'Tenant routing client example applicability'
-    backend_readme = (output / 'backend/README.md').read_text()
-    infrastructure_project = (infra / 'Generation.Probe.Infrastructure.csproj').read_text()
+    backend_readme = (output / 'backend/README.md').read_text(encoding='utf-8')
+    infrastructure_project = (infra / 'Generation.Probe.Infrastructure.csproj').read_text(encoding='utf-8')
     migrator_protection = values['LocalIdentity'] and values['IncludeMultiTenancy']
     assert ('API 与 `DbMigrator` 必须共用密钥环' in backend_readme) == migrator_protection, 'Migrator key-sharing instructions applicability'
     assert ('API 与 DbMigrator 必须共享密钥环' in infrastructure_project) == migrator_protection, 'Migrator key-sharing package comment applicability'
-    development_compose = (output / 'deploy/docker-compose.dev.yml').read_text()
+    development_compose = (output / 'deploy/docker-compose.dev.yml').read_text(encoding='utf-8')
     assert ('mailpit' in development_compose) == values['Email'], 'Development mail dependency applicability'
     assert (api / 'Controllers/TenantController.cs').exists() == values['Impersonation'], 'Impersonation controller'
     assert (infra / 'Persistence/Migrations/Control').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control migrations'
     assert (infra / 'Persistence/IdentityControlDbContext.cs').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control context'
     assert (api / 'Controllers/SettingController.cs').exists() == values['Email'], 'Email test controller'
     assert (output / 'backend/src/Generation.Probe.DbMigrator/ResourceAdminBootstrapRunner.cs').exists() == values['RemoteTokenAuth'], 'Resource bootstrap'
-    migrations = '\n'.join(p.read_text() for p in (infra / 'Persistence/Migrations').rglob('*.cs'))
+    migrations = '\n'.join(p.read_text(encoding='utf-8') for p in (infra / 'Persistence/Migrations').rglob('*.cs'))
     assert ('name: "OperationRecords"' in migrations) == values['IncludeOperationRecords'], 'Operation record tables'
     assert 'CreationTime' in migrations and 'TenantId' in migrations, 'Baseline entity audit/scope columns'
     if values['SpaFrontend']:
-        package = json.loads((frontend / 'package.json').read_text())
-        lock = json.loads((frontend / 'package-lock.json').read_text())
+        package = json.loads((frontend / 'package.json').read_text(encoding='utf-8'))
+        lock = json.loads((frontend / 'package-lock.json').read_text(encoding='utf-8'))
         assert ('@microsoft/signalr' in package['dependencies']) == (values['IncludeNotifications'] or values['IncludeRealTime']), 'SignalR dependency'
         assert ('qrcode' in package['dependencies']) == values['LocalIdentity'], 'QR dependency'
         assert package['dependencies'] == lock['packages']['']['dependencies'], 'Lock runtime roots'
         assert package['devDependencies'] == lock['packages']['']['devDependencies'], 'Lock build roots'
         assert (frontend / 'src/app/features/platform/components/operation-records').exists() == values['IncludeOperationRecords'], 'History UI'
         assert (frontend / 'src/app/core/services/tenant-context-service.ts').exists() == values['IncludeMultiTenancy'], 'Tenant frontend'
-        assert ('POST /api/v1/settings/email/test' in (frontend / '_mock/api/setting.ts').read_text()) == values['Email'], 'Email mock endpoint'
+        assert ('POST /api/v1/settings/email/test' in (frontend / '_mock/api/setting.ts').read_text(encoding='utf-8')) == values['Email'], 'Email mock endpoint'
         if values['OpenIddictServer']:
-            scopes = (frontend / '_mock/data/open-applications.ts').read_text()
+            scopes = (frontend / '_mock/data/open-applications.ts').read_text(encoding='utf-8')
             for scope in ('tenant-routing.read', 'tenant-migration.read'):
                 assert (scope in scopes) == values['IncludeMultiTenancy'], f'Mock machine scope: {scope}'
         tenants = frontend / 'src/app/features/platform/components/tenants'
         if tenants.exists():
-            assert ('onImpersonate' in (tenants / 'tenants.ts').read_text()) == values['Impersonation'], 'Impersonation page action'
-            assert ('canImpersonate' in (tenants / 'widgets/tenant-table/tenant-table.ts').read_text()) == values['Impersonation'], 'Impersonation table action'
+            assert ('onImpersonate' in (tenants / 'tenants.ts').read_text(encoding='utf-8')) == values['Impersonation'], 'Impersonation page action'
+            assert ('canImpersonate' in (tenants / 'widgets/tenant-table/tenant-table.ts').read_text(encoding='utf-8')) == values['Impersonation'], 'Impersonation table action'
     return digests
 
 
@@ -171,7 +171,7 @@ def main():
                 for p in sorted((ROOT / 'template').rglob('*')) if p.is_file()
                 and not any(part in ('node_modules', 'bin', 'obj', '.cache') for part in p.relative_to(ROOT / 'template').parts)}
     candidate_sources = source_digests()
-    config = json.loads(model.CONFIG_PATH.read_text())
+    config = json.loads(model.CONFIG_PATH.read_text(encoding='utf-8'))
     combinations = model.all_combinations(config)
     groups = {}
     for values in combinations:
@@ -198,7 +198,7 @@ def main():
         output = root / 'generated' / str(index)
         if output.exists():
             shutil.rmtree(output)
-        result = subprocess.run(['dotnet', 'new', 'fullstack-app', '-n', 'Generation.Probe', '-o', str(output), *cli_arguments(config, values), '--debug:custom-hive', str(getattr(worker_state, 'hive', hive))], capture_output=True, text=True)
+        result = subprocess.run(['dotnet', 'new', 'fullstack-app', '-n', 'Generation.Probe', '-o', str(output), *cli_arguments(config, values), '--debug:custom-hive', str(getattr(worker_state, 'hive', hive))], capture_output=True, text=True, encoding='utf-8', errors='replace')
         assert result.returncode == 0, f'{index}: {result.stdout}\n{result.stderr}'
         try:
             digest = validate(output, values, config)
@@ -221,12 +221,12 @@ def main():
                 assert digest == digests[index], f'Ignored role parameter changed actual bytes: {role}/{variant_id}'
                 comparisons.append({'variant': variant_id, 'representative': index})
     assert candidate_sources == source_digests(), 'Template source changed during generation; evidence does not describe one candidate.'
-    report = {'candidateSha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+    report = {'candidateSha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, encoding='utf-8', errors='replace').strip(),
               'templateSourceDigests': candidate_sources,
               'rawInputs': len(combinations), 'effectiveShapes': len(groups), 'equivalenceComparisons': comparisons,
               'inputMapping': [{'input': cli_arguments(config, v), 'effective': list(model.effective_shape(v))} for v in combinations],
               'digests': digests}
-    (root / 'generation-results.json').write_text(json.dumps(report, indent=2))
+    (root / 'generation-results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(f'PASS: {len(groups)} generated shapes, {len(combinations)} input mappings, {len(comparisons)} actual equivalence comparisons: {root}')
 
 

@@ -17,7 +17,7 @@ timeProvider ?? TimeProvider.System;` 是 .NET 官方的可测时钟形态：接
 
 自测：`python3 scripts/check-clock-access.py --self-test`
 """
-import io, os, re, sys, tempfile
+import io, ntpath, os, re, sys, tempfile
 
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 
@@ -46,6 +46,15 @@ WAIVERS = {
 }
 
 SKIP_DIR = ('obj', 'bin', 'node_modules')
+
+
+def rel_key(path, root, pathmod=os.path):
+    """相对路径统一成 `/` 分隔，与 WAIVERS 的键同形。
+
+    Windows 上 relpath 给出 `\\` 分隔，不统一的话豁免永远对不上键：登记的那处被报成违规，
+    同时豁免被判为"文件不存在"。`pathmod` 只供自测注入 `ntpath`，在任何平台上复现这一点。
+    """
+    return pathmod.relpath(path, root).replace(pathmod.sep, '/')
 
 
 def scan_file(path, rel, waiver):
@@ -95,7 +104,7 @@ def run(zones, waivers, root):
                 if not name.endswith('.cs'):
                     continue
                 path = os.path.join(dp, name)
-                rel = os.path.relpath(path, root)
+                rel = rel_key(path, root)
                 scanned += 1
                 seen_files.add(rel)
                 found, hits = scan_file(path, rel, waivers.get(rel))
@@ -154,14 +163,26 @@ def self_test():
         ('豁免表达式与另一种违规同在一行：另一种必须仍被报出',
          {'a.cs': 'var d = TimeProvider.System.GetUtcNow().UtcDateTime - DateTime.UtcNow;\n'},
          {'zone/a.cs': ('TimeProvider.System.GetUtcNow().UtcDateTime', 1, 'r')}, 1),
+        ('多级目录下的豁免：键按 `/` 分隔匹配',
+         {'sub/a.cs': 'var x = TimeProvider.System.GetUtcNow().UtcDateTime;\n'},
+         {'zone/sub/a.cs': ('TimeProvider.System.GetUtcNow().UtcDateTime', 1, 'r')}, 0),
     ]
     failures = 0
+    # Windows 分隔符：用 ntpath 模拟，不依赖当前平台
+    win_rel = rel_key('C:\\repo\\zone\\sub\\a.cs', 'C:\\repo', ntpath)
+    ok = win_rel == 'zone/sub/a.cs'
+    print(f"  {'✅' if ok else '❌'} 反斜杠路径统一成 `/`（期望 zone/sub/a.cs，实际 {win_rel}）")
+    if not ok:
+        failures += 1
     for name, files, waivers, expected in cases:
         with tempfile.TemporaryDirectory() as tmp:
             zone = os.path.join(tmp, 'zone')
             os.makedirs(zone)
             for fname, content in files.items():
-                io.open(os.path.join(zone, fname), 'w', encoding='utf-8').write(content)
+                target = os.path.join(zone, *fname.split('/'))
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with io.open(target, 'w', encoding='utf-8') as f:
+                    f.write(content)
             code, msgs = run(['zone'], waivers, tmp)
             ok = code == expected
             print(f"  {'✅' if ok else '❌'} {name}（期望退出 {expected}，实际 {code}）")
@@ -171,7 +192,7 @@ def self_test():
     if failures:
         print(f'\n❌ 自测失败 {failures} 例。')
         return 1
-    print(f'\n✅ 自测通过（{len(cases)} 例）。')
+    print(f'\n✅ 自测通过（{len(cases) + 1} 例）。')
     return 0
 
 
