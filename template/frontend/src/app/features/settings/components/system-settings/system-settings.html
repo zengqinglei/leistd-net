@@ -9,5 +9,17 @@
     [panels]="panels()"
     [navLabel]="t('settings.navigation')"
     [openNavLabel]="t('settings.openNavigation')"
-  />
+  >
+    <!-- 面板清单来自设置快照：首次加载失败时没有面板可进，错误态与重试只能由这里给出。
+         已进入某个面板时由面板自己显示，不重复。 -->
+    @if (loadError(); as error) {
+      <div class="flex flex-col items-start gap-2" data-testid="settings-load-error">
+        <p class="text-sm font-medium" role="alert">{{ t('settings.loadFailed') }}</p>
+        <p class="text-muted-foreground text-sm">{{ error }}</p>
+        <button hlmBtn variant="outline" [disabled]="loading()" (click)="reload()">
+          {{ t('common.retry') }}
+        </button>
+      </div>
+    }
+  </app-settings-shell>
 </ng-container>

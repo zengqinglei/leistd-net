@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { toast } from '@spartan-ng/brain/sonner';
 import { Subject } from 'rxjs';
 
 import { SettingsPageState } from './settings-page-state';
@@ -45,5 +46,63 @@ describe('SettingsPageState', () => {
     responses[0].next([setting('en')]);
 
     expect(state.settings()[0].userValue).toBe('zh-CN');
+  });
+
+  /** 每次读取都返回一个由用例应答的响应。 */
+  function stateWithManualResponses(): {
+    state: SettingsPageState;
+    responses: Subject<SettingOutputDto[]>[];
+  } {
+    const responses: Subject<SettingOutputDto[]>[] = [];
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsPageState,
+        {
+          provide: SettingService,
+          useValue: {
+            getSettings: () => {
+              const response = new Subject<SettingOutputDto[]>();
+              responses.push(response);
+              return response;
+            },
+          },
+        },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(['en']),
+        //#endif
+      ],
+    });
+    return { state: TestBed.inject(SettingsPageState), responses };
+  }
+
+  it('reports a first-load failure as page state without a toast, and a retry clears it', () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const { state, responses } = stateWithManualResponses();
+
+    responses[0].error(new Error('boom'));
+
+    // 还没有快照可保留：页面据此显示错误态与重试，而不是"没有可配置项"
+    expect(state.loadError()).toBe('boom');
+    expect(state.loaded()).toBe(false);
+    expect(notify).not.toHaveBeenCalled();
+
+    state.load();
+    responses[1].next([setting('en')]);
+
+    expect(state.loadError()).toBeNull();
+    expect(state.loaded()).toBe(true);
+  });
+
+  it('keeps the snapshot and only notifies when a later refresh fails', () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const { state, responses } = stateWithManualResponses();
+    responses[0].next([setting('en')]);
+
+    state.load();
+    responses[1].error(new Error('boom'));
+
+    expect(state.settings()[0].userValue).toBe('en');
+    expect(state.loadError()).toBeNull();
+    expect(notify).toHaveBeenCalledOnce();
   });
 });

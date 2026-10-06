@@ -151,6 +151,34 @@ describe('PermissionGrantDialog', () => {
     expect(dialog().canSave()).toBe(false);
   });
 
+  it('shows the load failure with retry instead of an empty list, and retry reloads', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting
+      .expectOne('/api/v1/permissions/grants/roles/role-a')
+      .flush({ detail: 'boom' }, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+
+    // 失败要说出来并给重试：不能停在一张看似"没有任何权限"的空列表上
+    expect(dialog().loadError()).not.toBeNull();
+    expect(errorToast).not.toHaveBeenCalled();
+    expect(document.querySelector('hlm-accordion-trigger')).toBeNull();
+    const retry = document.querySelector<HTMLButtonElement>('[data-testid="permissions-retry"]');
+    expect(retry, 'retry button should be rendered').not.toBeNull();
+
+    retry!.click();
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await fixture.whenStable();
+
+    expect(dialog().loadError()).toBeNull();
+    expect(dialog().isGranted('App.Users')).toBe(true);
+    expect(dialog().canSave()).toBe(true);
+    expect(document.querySelector('[data-testid="permissions-retry"]')).toBeNull();
+  });
+
   it('blocks saving until the current subject has loaded successfully', async () => {
     await fixture.whenStable();
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());

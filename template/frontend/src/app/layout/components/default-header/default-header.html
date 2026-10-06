@@ -60,7 +60,7 @@
          配色用语义色 warning，与操作记录表里"由 X 模拟操作"的提示同一口径。
          用 secondary 变体：它的底色只有亮暗共用的一组，警示色按同一前缀即可覆盖，不必再写 dark:；
          outline 自带 dark: 底色与边框，前缀不同不会被合并掉，须逐一抵消。
-         窄屏只留图标；完整说明与退出按钮在浮层里。 -->
+         窄屏只留图标；完整说明与退出按钮在浮层里。徽章字号压回 text-xs（sm 自带的 0.8rem 是档外值）。 -->
       @if (impersonation.status(); as impersonationStatus) {
         @if (impersonationStatus.isImpersonating) {
           <hlm-popover align="end" sideOffset="10">
@@ -70,7 +70,7 @@
               hlmPopoverTrigger
               size="sm"
               variant="secondary"
-              class="border-warning/60 bg-warning/15 hover:bg-warning/25 aria-expanded:bg-warning/25 max-w-48 gap-1.5 rounded-full"
+              class="border-warning/60 bg-warning/15 hover:bg-warning/25 aria-expanded:bg-warning/25 max-w-48 gap-1.5 rounded-full text-xs pointer-coarse:h-11"
               data-testid="impersonation-indicator"
               [attr.aria-label]="
                 t('impersonation.banner', {
@@ -100,7 +100,12 @@
                   }}
                 </p>
                 <p class="text-muted-foreground text-xs">{{ t('impersonation.note') }}</p>
-                <button hlmBtn size="sm" class="self-end" (click)="endImpersonation()">
+                <button
+                  hlmBtn
+                  size="sm"
+                  class="self-end pointer-coarse:h-11"
+                  (click)="endImpersonation()"
+                >
                   {{ t('impersonation.exit') }}
                 </button>
               </div>

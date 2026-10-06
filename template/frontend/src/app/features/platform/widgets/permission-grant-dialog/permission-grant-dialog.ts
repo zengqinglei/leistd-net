@@ -13,7 +13,12 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideChevronDown, lucideChevronRight, lucideSearch } from '@ng-icons/lucide';
+import {
+  lucideChevronDown,
+  lucideChevronRight,
+  lucideCircleAlert,
+  lucideSearch,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAccordionImports } from '@spartan-ng/helm/accordion';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -91,7 +96,9 @@ interface PermissionGroupRender extends PermissionGroupView {
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideSearch, lucideChevronDown, lucideChevronRight })],
+  providers: [
+    provideIcons({ lucideSearch, lucideChevronDown, lucideChevronRight, lucideCircleAlert }),
+  ],
   templateUrl: './permission-grant-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -110,6 +117,8 @@ export class PermissionGrantDialog {
   //#endif
 
   readonly loading = signal(false);
+  /** 加载失败的原因：打开时编辑状态已清空、没有内容可保留，因此显示错误态与重试而不是空列表。 */
+  readonly loadError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly groups = signal<PermissionGroupView[]>([]);
   readonly version = signal(0);
@@ -235,9 +244,15 @@ export class PermissionGrantDialog {
   /** 清空编辑状态并解除归属，使保存在重新加载成功前不可用。 */
   private resetState(): void {
     this.loadedRoleId.set(null);
+    this.loadError.set(null);
     this.granted.set(new Set<string>());
     this.expandedGroups.set(new Set<string>());
     this.version.set(0);
+  }
+
+  /** 错误态里的重试：与 409 后的重新加载共用同一条请求流。 */
+  retry(): void {
+    this.reloadRequests.next();
   }
 
   isGranted(name: string): boolean {
@@ -326,7 +341,7 @@ export class PermissionGrantDialog {
       filter((grants) => grants.providerKey === roleId),
       tap((grants) => this.applyGrants(grants)),
       catchError((error: unknown) => {
-        toast.error(applicationErrorMessage(error));
+        this.loadError.set(applicationErrorMessage(error));
         return EMPTY;
       }),
       finalize(() => this.loading.set(false)),
@@ -408,5 +423,7 @@ const ENGLISH: Record<string, string> = {
   'permissions.viewAccessHint': 'view list',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
+  'permissions.loadFailed': "Couldn't load permissions",
+  'common.retry': 'Retry',
 };
 //#endif

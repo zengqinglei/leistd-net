@@ -13,6 +13,7 @@ import {
   lucideShieldCheck,
   lucideUserPlus,
 } from '@ng-icons/lucide';
+import { HlmButton } from '@spartan-ng/helm/button';
 import { filter, map } from 'rxjs';
 
 import { LayoutService } from '../../../../core/services/layout-service';
@@ -62,6 +63,7 @@ const GROUP_ICONS: Readonly<Record<string, string>> = {
   ],
   // prettier-ignore
   imports: [
+    HlmButton,
     SettingsShell,
     //#if (IncludeLocalization)
     TranslocoDirective,
@@ -95,6 +97,24 @@ export class SystemSettings {
     { initialValue: this.router.url },
   );
 
+  protected readonly loading = this.pageState.loading;
+
+  /**
+   * 首次加载失败的原因，仅在还没进入任何面板时由本页显示：
+   * 带着面板地址进来时，面板自己会显示同一个错误态。
+   */
+  protected readonly loadError = computed(() => {
+    this.url(); // 子路由随导航变化，地址变了要重算
+    return this.route.firstChild?.snapshot.paramMap.has('group')
+      ? null
+      : this.pageState.loadError();
+  });
+
+  /** 错误态里的重试：取回后面板导航出现，再按惯例落到第一个面板。 */
+  protected reload(): void {
+    this.pageState.load();
+  }
+
   constructor() {
     //#if (IncludeLocalization)
     const title = translateSignal('settings.system.title', {}, { scope: 'settings' });
@@ -127,5 +147,7 @@ const ENGLISH: Record<string, string> = {
     'Defaults and policies for everyone here; each user may override their own preferences',
   'settings.navigation': 'Settings navigation',
   'settings.openNavigation': 'Open settings navigation',
+  'settings.loadFailed': "Couldn't load settings",
+  'common.retry': 'Retry',
 };
 //#endif

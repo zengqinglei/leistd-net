@@ -6,7 +6,7 @@
   @if (loadFailed()) {
     <div class="flex items-center gap-3 text-sm">
       <span class="text-muted-foreground">{{ t('account.twoFactor.setupLoadFailed') }}</span>
-      <button hlmBtn variant="link" size="sm" class="px-0" (click)="start()">
+      <button hlmBtn variant="link" size="sm" class="px-0 pointer-coarse:h-11" (click)="start()">
         {{ t('common.retry') }}
       </button>
     </div>
@@ -44,7 +44,7 @@
               hlmBtn
               variant="outline"
               size="sm"
-              class="self-start"
+              class="self-start pointer-coarse:h-11"
               type="button"
               (click)="copySecret()"
             >

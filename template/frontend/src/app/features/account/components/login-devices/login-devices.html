@@ -17,7 +17,7 @@
           hlmBtn
           variant="outline"
           size="sm"
-          class="shrink-0 self-start"
+          class="shrink-0 self-start pointer-coarse:h-11"
           data-testid="revoke-other-sessions"
           [disabled]="busy() !== null"
           (click)="revokeOthers()"
@@ -35,7 +35,7 @@
     @if (loadFailed()) {
       <div class="flex items-center gap-3 text-sm">
         <span class="text-muted-foreground">{{ t('account.sessions.loadFailed') }}</span>
-        <button hlmBtn variant="link" size="sm" class="px-0" (click)="reload()">
+        <button hlmBtn variant="link" size="sm" class="px-0 pointer-coarse:h-11" (click)="reload()">
           {{ t('common.retry') }}
         </button>
       </div>
@@ -78,6 +78,7 @@
                   hlmBtn
                   variant="ghost"
                   size="sm"
+                  class="pointer-coarse:h-11"
                   data-testid="revoke-session"
                   [disabled]="busy() !== null"
                   (click)="revoke(row.id)"

@@ -147,6 +147,12 @@ export class SettingSection {
   readonly exclude = input<readonly string[]>([]);
 
   protected readonly loading = this.pageState.loading;
+  protected readonly loadError = this.pageState.loadError;
+
+  /** 错误态里的重试：重取整页共用的快照，外壳的面板导航随之恢复。 */
+  protected reload(): void {
+    this.pageState.load();
+  }
 
   /**
    * 每一项自己的写入状态。
@@ -533,6 +539,8 @@ const ENGLISH: Record<string, string> = {
   'settings.saving': 'Saving…',
   'settings.saved': 'Saved',
   'settings.empty': 'No configurable items in this section',
+  'settings.loadFailed': "Couldn't load settings",
+  'common.retry': 'Retry',
   'settings.logLevelHints.Verbose':
     'Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.',
   'settings.logLevelHints.Debug':

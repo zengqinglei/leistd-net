@@ -1,6 +1,7 @@
 {
   "reset": "恢复默认",
   "empty": "此分组下没有可配置项",
+  "loadFailed": "设置加载失败",
   "timeZoneSearch": "搜索城市或 UTC 偏移",
   "timeZoneEmpty": "没有匹配的时区",
   "timeZoneToggle": "展开时区列表",

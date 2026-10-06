@@ -82,6 +82,8 @@ export class SettingsPageState {
   readonly loading = signal(false);
   /** 至少成功取到过一次。外壳据此决定何时把空地址导向第一个面板。 */
   readonly loaded = signal(false);
+  /** 还没有快照可保留时的加载失败原因：有值时页面显示错误态与重试，不显示"暂无可配置项"。 */
+  readonly loadError = signal<string | null>(null);
 
   constructor() {
     this.load();
@@ -114,13 +116,19 @@ export class SettingsPageState {
       .getSettings()
       .pipe(
         catchError((error: unknown) => {
-          toast.error(applicationErrorMessage(error));
+          // 已有快照时刷新失败（切换语言、写入后重取）：保留原内容，只做提示
+          if (this.loaded()) {
+            toast.error(applicationErrorMessage(error));
+          } else {
+            this.loadError.set(applicationErrorMessage(error));
+          }
           return EMPTY;
         }),
         finalize(() => this.loading.set(false)),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((settings) => {
+        this.loadError.set(null);
         this.settings.set(settings);
         this.loaded.set(true);
       });

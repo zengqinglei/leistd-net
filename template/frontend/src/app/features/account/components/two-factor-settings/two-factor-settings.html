@@ -30,7 +30,7 @@
           <button
             hlmBtn
             size="sm"
-            class="shrink-0 self-start"
+            class="shrink-0 self-start pointer-coarse:h-11"
             data-testid="two-factor-turn-on"
             (click)="setMode('setup')"
           >
@@ -44,7 +44,7 @@
     @if (loadFailed()) {
       <div class="flex items-center gap-3 text-sm">
         <span class="text-muted-foreground">{{ t('account.twoFactor.loadFailed') }}</span>
-        <button hlmBtn variant="link" size="sm" class="px-0" (click)="reload()">
+        <button hlmBtn variant="link" size="sm" class="px-0 pointer-coarse:h-11" (click)="reload()">
           {{ t('common.retry') }}
         </button>
       </div>
@@ -133,7 +133,13 @@
                 t('account.twoFactor.recoveryCodesLeft', { count: s.recoveryCodesLeft })
               }}</span>
               <div class="flex flex-wrap gap-2">
-                <button hlmBtn variant="outline" size="sm" (click)="setMode('regenerate')">
+                <button
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  class="pointer-coarse:h-11"
+                  (click)="setMode('regenerate')"
+                >
                   {{ t('account.twoFactor.regenerate') }}
                 </button>
                 @if (!s.requiredByPolicy) {
@@ -141,6 +147,7 @@
                     hlmBtn
                     variant="outline"
                     size="sm"
+                    class="pointer-coarse:h-11"
                     data-testid="two-factor-turn-off"
                     (click)="setMode('disable')"
                   >

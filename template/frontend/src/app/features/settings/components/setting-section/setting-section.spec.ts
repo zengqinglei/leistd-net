@@ -318,6 +318,38 @@ describe('SettingSection input kinds', () => {
   });
 });
 
+/** 首次加载失败与"没有可配置项"分开表达：说出原因、给重试，重试成功后渲染设置。 */
+describe('SettingSection load failure', () => {
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('shows the load failure with retry instead of the empty state, then renders after retry', async () => {
+    TestBed.configureTestingModule({
+      imports: [SettingSection],
+      providers: [...pageProviders()],
+    });
+    const fixture = TestBed.createComponent(SettingSection);
+    const http = TestBed.inject(HttpTestingController);
+    const host = fixture.nativeElement as HTMLElement;
+    fixture.detectChanges();
+    http
+      .expectOne('/api/v1/settings')
+      .flush({ detail: 'boom' }, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="settings-load-error"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="settings-empty"]')).toBeNull();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="settings-load-error"] button')!.click();
+    http.expectOne('/api/v1/settings').flush([row()]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="settings-load-error"]')).toBeNull();
+    expect(hasRow(host, 'Display.FreeTextProbe')).toBe(true);
+  });
+});
+
 /**
  * 作用域由路由数据经组件输入给出，不是页内状态。
  *
