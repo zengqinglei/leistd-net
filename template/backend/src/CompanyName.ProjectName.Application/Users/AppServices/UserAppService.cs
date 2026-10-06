@@ -20,6 +20,7 @@ using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Authorization;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Application.Contracts.Dtos;
@@ -59,14 +60,11 @@ namespace CompanyName.ProjectName.Application.Users.AppServices;
 /// </summary>
 public class UserAppService(
     IRepository<User, Guid> userRepository,
-    IRepository<Role, Guid> roleRepository,
+    IRoleRepository roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
     IPermissionChecker permissionChecker,
     IOperationRecorder operationRecorder,
     UserDomainService userDomainService,
-#if (LocalIdentity)
-    UserRoleReader userRoleReader,
-#endif
 #if (RemoteTokenAuth)
     ICurrentTenant currentTenant,
     IUnitOfWorkManager unitOfWorkManager,
@@ -271,7 +269,7 @@ public class UserAppService(
         // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
         var roles = input.RoleIds.Count > 0
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
-            : await userRoleReader.GetDefaultRolesAsync(cancellationToken);
+            : await roleRepository.GetDefaultRolesAsync(cancellationToken);
         AvatarPolicy.EnsureValid(input.Avatar?.Trim());
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);

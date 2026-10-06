@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Application.Users;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
@@ -24,8 +24,7 @@ using System.Globalization;
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 internal sealed class SessionSignInService(
-    IRepository<User, Guid> userRepository,
-    UserRoleReader userRoleReader,
+    IUserRepository userRepository,
     UserSessionDomainService userSessionDomainService,
     IRepository<UserSession, Guid> sessionRepository,
     IQueryableAsyncExecuter asyncExecuter,
@@ -149,7 +148,7 @@ internal sealed class SessionSignInService(
         }
 
         foreach (var roleName in roleNames
-            ?? await userRoleReader.GetRoleNamesAsync(user.Id, cancellationToken))
+            ?? await userRepository.GetRoleNamesAsync(user.Id, cancellationToken))
         {
             identity.AddClaim(new Claim(RoleClaimType, roleName));
         }

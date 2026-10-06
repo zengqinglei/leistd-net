@@ -4,7 +4,7 @@ using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
-using CompanyName.ProjectName.Application.Users;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
@@ -23,10 +23,9 @@ using System.Globalization;
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 public class AuthPrincipalFactory(
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
     IRepository<UserSession, Guid> sessionRepository,
     IOptions<UserSessionOptions> sessionOptions,
-    UserRoleReader userRoleReader,
     IClock clock,
     IOptions<OAuthOptions> oauthOptions,
     IOptions<ClaimTypeOptions> claimTypes,
@@ -81,7 +80,7 @@ public class AuthPrincipalFactory(
             return null;
         }
 
-        var roleNames = await userRoleReader.GetRoleNamesAsync(user.Id, cancellationToken);
+        var roleNames = await userRepository.GetRoleNamesAsync(user.Id, cancellationToken);
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
         SubjectClaims.Set(identity, claimTypes.Value, user.Id.ToString());

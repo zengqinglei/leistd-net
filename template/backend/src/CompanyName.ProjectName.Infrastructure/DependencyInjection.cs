@@ -22,6 +22,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using CompanyName.ProjectName.Infrastructure.Persistence.Repositories;
+using CompanyName.ProjectName.Domain.Users.Entities;
+// StackExchange.Redis 也有 Role 类型
+using Role = CompanyName.ProjectName.Domain.Users.Entities.Role;
 using Leistd.MultiTenancy;
 #if (RemoteTokenAuth && IncludeMultiTenancy)
 using Leistd.MultiTenancy.ServiceClient;
@@ -253,7 +257,11 @@ public static class DependencyInjection
         // 每个注册过的 DbContext 都必须显式接入：漏掉的上下文会逃出租户过滤器闸门，
         // 构建容器时会直接失败。不传选项即"只登记、不注册仓储"。
         // 业务上下文继承 BaseDbContext，登记时同时挂上审计、领域事件与并发标记三个保存拦截器。
-        services.AddDddDbContext<MyProjectDbContext>(options => options.AddDefaultRepositories());
+        // 自定义仓储一并注册为其聚合的自定义接口与默认仓储接口
+        services.AddDddDbContext<MyProjectDbContext>(options => options
+            .AddDefaultRepositories()
+            .AddRepository<User, EfCoreUserRepository>()
+            .AddRepository<Role, EfCoreRoleRepository>());
 #if (LocalIdentity && IncludeMultiTenancy)
         // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
         services.AddDddDbContext<IdentityControlDbContext>();

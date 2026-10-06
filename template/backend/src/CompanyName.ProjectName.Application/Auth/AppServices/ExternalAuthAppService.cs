@@ -7,7 +7,7 @@ using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-using CompanyName.ProjectName.Application.Users;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Domain.Auth.Entities;
@@ -29,7 +29,7 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 internal sealed class ExternalAuthAppService(
     ExternalAuthDomainService externalAuthDomainService,
     UserDomainService userDomainService,
-    UserRoleReader userRoleReader,
+    IRoleRepository roleRepository,
     SessionSignInService sessionSignInService,
     IRepository<User, Guid> userRepository,
     IRepository<ExternalLoginConnection, Guid> externalLoginRepository,
@@ -60,7 +60,7 @@ internal sealed class ExternalAuthAppService(
         List<string>? roleNames = null;
         if (created)
         {
-            var defaultRoles = await userRoleReader.GetDefaultRolesAsync(cancellationToken);
+            var defaultRoles = await roleRepository.GetDefaultRolesAsync(cancellationToken);
             await userDomainService.AssignRolesAsync(user.Id, defaultRoles, cancellationToken);
             roleNames = [.. defaultRoles.Select(role => role.Name)];
         }

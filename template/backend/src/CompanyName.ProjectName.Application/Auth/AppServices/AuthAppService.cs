@@ -20,12 +20,11 @@ using Microsoft.Extensions.Caching.Distributed;
 using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
-using CompanyName.ProjectName.Application.Users;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
@@ -48,9 +47,9 @@ using System.Globalization;
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 internal sealed class AuthAppService(
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
     UserDomainService userDomainService,
-    UserRoleReader userRoleReader,
+    IRoleRepository roleRepository,
     ICurrentUser currentUser,
     ICaptchaAppService captchaAppService,
 #if (Email)
@@ -379,7 +378,7 @@ internal sealed class AuthAppService(
         var user = await userDomainService.CreateUserAsync(
             input.Username, input.Email, input.Password, input.DisplayName,
             cancellationToken: cancellationToken);
-        var defaultRoles = await userRoleReader.GetDefaultRolesAsync(cancellationToken);
+        var defaultRoles = await roleRepository.GetDefaultRolesAsync(cancellationToken);
         await userDomainService.AssignRolesAsync(user.Id, defaultRoles, cancellationToken);
         // 用刚分配的角色名，不回查：关联行在本工作单元内尚未落库
         var roleNames = defaultRoles.Select(role => role.Name).ToList();
@@ -577,7 +576,7 @@ internal sealed class AuthAppService(
                 .WithData("Id", userId);
         }
 
-        var roleNames = await userRoleReader.GetRoleNamesAsync(userId, cancellationToken);
+        var roleNames = await userRepository.GetRoleNamesAsync(userId, cancellationToken);
 
         return ToOutput(user, roleNames);
     }
