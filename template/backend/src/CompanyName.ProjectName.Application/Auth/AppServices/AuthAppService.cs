@@ -379,7 +379,10 @@ internal sealed class AuthAppService(
         var user = await userDomainService.CreateUserAsync(
             input.Username, input.Email, input.Password, input.DisplayName,
             cancellationToken: cancellationToken);
-        var roleNames = await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
+        var defaultRoles = await userRoleReader.GetDefaultRolesAsync(cancellationToken);
+        await userDomainService.AssignRolesAsync(user.Id, defaultRoles, cancellationToken);
+        // 用刚分配的角色名，不回查：关联行在本工作单元内尚未落库
+        var roleNames = defaultRoles.Select(role => role.Name).ToList();
 
         logger.LogInformation("User registered (ID: {Id})", user.Id);
 

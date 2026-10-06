@@ -2,17 +2,24 @@ using System.Net;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.Roles.AppServices;
+using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Grants;
 using Leistd.EventBus.Abstractions;
+using Leistd.EventBus.EventHandlers;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Extensions;
+using Leistd.Timing;
 using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using System.Text.Json;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -58,11 +65,12 @@ public sealed class RealTimeSubscriptionTests(ProjectWebApplicationFactory facto
         {
             var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
             var events = scope.ServiceProvider.GetRequiredService<ILocalEventBus>();
+            var clock = scope.ServiceProvider.GetRequiredService<IClock>();
             var key = ScopeKey(tenantId);
 
             using (var rolledBack = manager.Begin())
             {
-                await events.PublishAsync(new RoleListChangedEvent(key));
+                await events.PublishAsync(new RoleListChangedEvent(key, clock.Now));
                 await rolledBack.RollbackAsync();
             }
 
@@ -70,7 +78,7 @@ public sealed class RealTimeSubscriptionTests(ProjectWebApplicationFactory facto
 
             using (var committed = manager.Begin())
             {
-                await events.PublishAsync(new RoleListChangedEvent(key));
+                await events.PublishAsync(new RoleListChangedEvent(key, clock.Now));
                 Assert.False(changed.Task.IsCompleted);
                 await committed.CompleteAsync();
             }
@@ -78,6 +86,30 @@ public sealed class RealTimeSubscriptionTests(ProjectWebApplicationFactory facto
 
         await changed.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await connection.StopAsync();
+    }
+
+    [Fact]
+    public async Task The_role_list_change_carries_the_application_clock_time()
+    {
+        // 假时钟落在过去：事件时间若取系统时钟，就与它相差数天，断言必然失败
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow.AddDays(-3));
+        var captured = new List<RoleListChangedEvent>();
+        await using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(time);
+            services.AddSingleton<IEventHandler<RoleListChangedEvent>>(new CapturingRoleListHandler(captured));
+        }));
+
+        await using var scope = host.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IRoleAppService>().CreateAsync(new CreateRoleInputDto
+        {
+            Name = $"clk_{Guid.NewGuid():N}"[..20],
+            DisplayName = "Clock role"
+        });
+
+        var published = Assert.Single(captured);
+        Assert.Equal(time.GetUtcNow().UtcDateTime, published.OccurredOn);
     }
 
     [Fact]
@@ -129,7 +161,9 @@ public sealed class RealTimeSubscriptionTests(ProjectWebApplicationFactory facto
         {
             var current = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
             await scope.ServiceProvider.GetRequiredService<ILocalEventBus>()
-                .PublishAsync(new RoleListChangedEvent(current.ScopeKey(AppRealTimeResources.Roles)));
+                .PublishAsync(new RoleListChangedEvent(
+                    current.ScopeKey(AppRealTimeResources.Roles),
+                    scope.ServiceProvider.GetRequiredService<IClock>().Now));
         }
 
         await Assert.ThrowsAsync<TimeoutException>(() => changed.Task.WaitAsync(Silence));
@@ -214,5 +248,18 @@ public sealed class RealTimeSubscriptionTests(ProjectWebApplicationFactory facto
             .Build();
         await connection.StartAsync();
         return connection;
+    }
+
+    private sealed class CapturingRoleListHandler(List<RoleListChangedEvent> captured) : IEventHandler<RoleListChangedEvent>
+    {
+        public Task HandleAsync(RoleListChangedEvent @event, CancellationToken cancellationToken = default)
+        {
+            lock (captured)
+            {
+                captured.Add(@event);
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }

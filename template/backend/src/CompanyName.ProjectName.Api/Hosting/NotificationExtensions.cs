@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Notifications;
 #endif
 #if (Email)
+using CompanyName.ProjectName.Application.Notifications.Provider;
 using Leistd.Notifications.Email;
 using Leistd.Notifications.Email.Recipients;
 #endif
@@ -51,7 +52,7 @@ public static class NotificationExtensions
 #if (Email)
         // 邮件渠道只发已验证的邮箱，经后台队列发送
         services.AddEmailNotifications();
-        services.TryAddScoped<INotificationRecipientResolver, UserEmailRecipientResolver>();
+        services.TryAddTransient<INotificationRecipientResolver, UserEmailRecipientResolver>();
 #endif
 #if (LocalIdentity)
         // 安全提醒（新设备登录、密码与两步验证变更、账号锁定）经通知组件发给本人：

@@ -51,6 +51,19 @@ public class EmailVerificationAppService(
     private const string AccountEmailPurpose = "account-email";
     private const string CacheKeyPrefix = "MyProject:email-verification";
 
+    public async Task<SecurityConfigOutputDto> GetSecurityConfigAsync(CancellationToken cancellationToken = default)
+    {
+        // 按租户解析：同一套部署下，不同租户的注册门槛可以不同，
+        // 而登录页拿到的必须是它所在那个租户的那一份
+        var policy = await registrationPolicy.GetAsync(cancellationToken);
+
+        return new SecurityConfigOutputDto
+        {
+            EnableEmailVerification = policy.EnableEmailVerification,
+            EmailVerificationAvailable = verificationCodeOptions.Value.IsKeyUsable
+        };
+    }
+
     public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
         SendEmailCodeInputDto input,
         CancellationToken cancellationToken = default)

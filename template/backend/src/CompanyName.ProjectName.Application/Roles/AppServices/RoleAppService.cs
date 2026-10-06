@@ -34,6 +34,7 @@ using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.EventBus.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Extensions;
+using Leistd.Timing;
 #endif
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
@@ -54,6 +55,7 @@ public class RoleAppService(
 #if (IncludeRealTime)
     ILocalEventBus localEventBus,
     ICurrentTenant currentTenant,
+    IClock clock,
 #endif
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IRoleAppService
 {
@@ -246,7 +248,7 @@ public class RoleAppService(
     // 有工作单元时事件推迟到提交之后分发，回滚的写入不推送；新建、修改没有工作单元，仓储已保存后立即发布
     private Task PublishRoleListChangedAsync(CancellationToken cancellationToken) =>
         localEventBus.PublishAsync(
-            new RoleListChangedEvent(currentTenant.ScopeKey(AppRealTimeResources.Roles)),
+            new RoleListChangedEvent(currentTenant.ScopeKey(AppRealTimeResources.Roles), clock.Now),
             cancellationToken);
 #endif
 

@@ -572,7 +572,7 @@
         {
           "condition": "!(IncludeNotifications && Email)",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Api/Notifications/UserEmailRecipientResolver.cs"
+            "backend/src/CompanyName.ProjectName.Application/Notifications/Provider/UserEmailRecipientResolver.cs"
           ]
         },
         {

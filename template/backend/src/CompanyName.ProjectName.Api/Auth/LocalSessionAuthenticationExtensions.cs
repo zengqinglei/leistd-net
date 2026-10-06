@@ -34,7 +34,7 @@ internal static class LocalSessionAuthenticationExtensions
         builder.Services.AddOptions<UserSessionOptions>()
             .Configure<IOptions<SessionCookieOptions>>((options, sessionCookie) => options.IdleTimeout = sessionCookie.Value.Lifetime);
         builder.Services.AddHttpContextAccessor();
-        builder.Services.TryAddScoped<IRequestClientInfo, HttpRequestClientInfo>();
+        builder.Services.TryAddTransient<IRequestClientInfo, HttpRequestClientInfo>();
         builder.Services.TryAddTransient<SessionCookieIssuer>();
 
         builder.Services.AddAuthentication(options =>

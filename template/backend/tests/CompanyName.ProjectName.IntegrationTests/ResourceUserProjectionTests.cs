@@ -142,6 +142,57 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.Equal(1, await CountUsersAsync(subjectId, host.Services));
     }
 
+    /// <summary>投影持续失败：只重试一次，记下警告后放行请求，不留下用户行。</summary>
+    /// <remarks>投影不是安全闸门：拦下请求只会让一个可预见的写入故障把该用户的每个请求都变成 500。</remarks>
+    [Fact]
+    public async Task A_projection_that_keeps_failing_is_retried_once_then_logged_and_the_request_proceeds()
+    {
+        var subjectId = Guid.CreateVersion7();
+        var failing = new FailingUserInsert(subjectId);
+        var warnings = new WarningLogCapture();
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(failing));
+            warnings.Install(services);
+        }));
+        using var session = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, ProjectWebApplicationFactory.NewTenantId());
+
+        using var response = await session.Client.GetAsync("/api/health/live");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // 两次：首次加一次重试；不重试是 1，重试循环会大于 2
+        Assert.Equal(2, failing.Attempts);
+        Assert.Contains(
+            warnings.Entries,
+            entry => entry.Category.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal)
+                && entry.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
+        Assert.Equal(0, await CountUsersAsync(subjectId, host.Services));
+    }
+
+    // 只拦插入这个主体的提交，其余写入照常
+    private sealed class FailingUserInsert(Guid subjectId) : SaveChangesInterceptor
+    {
+        private int attempts;
+
+        public int Attempts => Volatile.Read(ref attempts);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var inserting = eventData.Context?.ChangeTracker.Entries<User>()
+                .Any(entry => entry.State == EntityState.Added && entry.Entity.Id == subjectId) == true;
+            if (inserting)
+            {
+                Interlocked.Increment(ref attempts);
+                throw new InvalidOperationException("Simulated projection failure.");
+            }
+
+            return ValueTask.FromResult(result);
+        }
+    }
+
     // 两个上下文都要提交同一个新用户行时才一起放行：两边都已读到"不存在"，提交时必有一方撞键
     private sealed class FirstInsertRace(Guid subjectId, int participants) : SaveChangesInterceptor
     {

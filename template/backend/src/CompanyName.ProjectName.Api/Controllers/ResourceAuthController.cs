@@ -4,22 +4,16 @@ using CompanyName.ProjectName.Application.Users.Dtos;
 #if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
 #endif
-using Leistd.Security.Users;
-using Leistd.MultiTenancy.Context;
 #if (ResourceBrowserSession)
 using Microsoft.AspNetCore.Authentication;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
 [Route("api/v1/auth")]
-public sealed class ResourceAuthController(
-    ICurrentUser currentUser,
-    ICurrentTenant currentTenant,
-    IUserAppService userAppService) : BaseController
+public sealed class ResourceAuthController(IUserAppService userAppService) : BaseController
 {
 #if (ResourceBrowserSession)
     [AllowAnonymous]
@@ -34,21 +28,8 @@ public sealed class ResourceAuthController(
     /// <remarks>签发方令牌里的超管与角色声明属于签发方，不授予本服务任何权限。</remarks>
     [Authorize]
     [HttpGet("me")]
-    public async Task<CurrentResourceUserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken)
-    {
-        var local = currentUser.Id is { } id ? await userAppService.FindAsync(id, cancellationToken) : null;
-        return new CurrentResourceUserOutputDto
-        {
-            Id = currentUser.Id,
-            Username = currentUser.Username ?? "",
-            Email = currentUser.Email ?? "",
-            DisplayName = currentUser.Name,
-            IsEmailVerified = User.FindFirst(OpenIddictConstants.Claims.EmailVerified)?.Value == "true",
-            IsSuperAdmin = local?.IsSuperAdmin ?? false,
-            Roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
-            TenantId = currentTenant.Id
-        };
-    }
+    public Task<CurrentResourceUserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken)
+        => userAppService.GetCurrentResourceUserAsync(cancellationToken);
 #if (ResourceBrowserSession)
 
     [AllowAnonymous]

@@ -3,7 +3,6 @@ using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Application.Auth.Policies;
 #if (Impersonation)
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
@@ -14,8 +13,6 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
-using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Api.Auth;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
@@ -32,8 +29,6 @@ public sealed class AuthController(
     ICaptchaAppService captchaAppService,
 #if (Email)
     IEmailVerificationAppService emailVerificationAppService,
-    IUserRegistrationPolicyProvider registrationPolicy,
-    IOptions<VerificationCodeOptions> verificationCodeOptions,
 #endif
 #if (Impersonation)
     ITenantImpersonationAppService impersonationAppService,
@@ -124,18 +119,8 @@ public sealed class AuthController(
     [AllowAnonymous]
     [AllowDuringTwoFactorSetup]
     [HttpGet("security-config")]
-    public async Task<SecurityConfigOutputDto> GetSecurityConfigAsync(CancellationToken cancellationToken)
-    {
-        // 按租户解析：同一套部署下，不同租户的注册门槛可以不同，
-        // 而登录页拿到的必须是**它所在那个租户**的那一份。
-        var policy = await registrationPolicy.GetAsync(cancellationToken);
-
-        return new SecurityConfigOutputDto
-        {
-            EnableEmailVerification = policy.EnableEmailVerification,
-            EmailVerificationAvailable = verificationCodeOptions.Value.IsKeyUsable
-        };
-    }
+    public Task<SecurityConfigOutputDto> GetSecurityConfigAsync(CancellationToken cancellationToken)
+        => emailVerificationAppService.GetSecurityConfigAsync(cancellationToken);
 
 #endif
     [AllowAnonymous]

@@ -1,10 +1,14 @@
 using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (RemoteTokenAuth)
+using Leistd.MultiTenancy.Context;
+using Leistd.UnitOfWork;
+#endif
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using Leistd.Timing;
@@ -59,10 +63,15 @@ public class UserAppService(
     IRepository<UserRole, Guid> userRoleRepository,
     IPermissionChecker permissionChecker,
     IOperationRecorder operationRecorder,
-#if (LocalIdentity)
-    // 资源服务形态下用户由令牌投影而来：没有新建、改邮箱、重置口令这些入口，
-    // 这个依赖的三处用法全在本形态内，那边留着只会是一个未读参数
     UserDomainService userDomainService,
+#if (LocalIdentity)
+    UserRoleReader userRoleReader,
+#endif
+#if (RemoteTokenAuth)
+    ICurrentTenant currentTenant,
+    IUnitOfWorkManager unitOfWorkManager,
+#endif
+#if (LocalIdentity)
     UserSessionDomainService userSessionDomainService,
     ISecurityAlertPublisher securityAlerts,
 #endif
@@ -82,6 +91,11 @@ public class UserAppService(
 {
     /// <summary>角色名称最大长度，与 Role 实体的持久化约束保持一致。</summary>
     private const int RoleNameMaxLength = 64;
+#if (RemoteTokenAuth)
+
+    /// <summary>OIDC 标准声明：签发方是否已验证该邮箱。</summary>
+    private const string EmailVerifiedClaimType = "email_verified";
+#endif
 
     /// <summary>
     /// 获取用户列表（分页）
@@ -183,10 +197,57 @@ public class UserAppService(
 #if (RemoteTokenAuth)
 
     /// <inheritdoc />
-    public async Task<UserManagementOutputDto?> FindAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<CurrentResourceUserOutputDto> GetCurrentResourceUserAsync(CancellationToken cancellationToken = default)
     {
-        var user = await userRepository.GetByIdAsync(id, cancellationToken);
-        return user is null ? null : await MapToOutputAsync(user, cancellationToken);
+        var user = currentUser.Id is { } id ? await userRepository.GetByIdAsync(id, cancellationToken) : null;
+        var local = user is null ? null : await MapToOutputAsync(user, cancellationToken);
+        return new CurrentResourceUserOutputDto
+        {
+            Id = currentUser.Id,
+            Username = currentUser.Username ?? "",
+            Email = currentUser.Email ?? "",
+            DisplayName = currentUser.Name,
+            IsEmailVerified = currentUser.FindClaim(EmailVerifiedClaimType)?.Value == "true",
+            IsSuperAdmin = local?.IsSuperAdmin ?? false,
+            Roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
+            TenantId = currentTenant.Id
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!currentUser.IsAuthenticated || currentUser.Id is not { } subjectId)
+        {
+            return;
+        }
+
+        try
+        {
+            await ProjectCurrentUserAsync(subjectId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // 首次访问的并发：同一个 sub 的两个请求同时插入，输的那个在提交时撞主键。
+            // 前端登录后往往并行发好几个请求，第一次访问正好都在投影；重来一次就会读到赢家写下的行。
+            // 只重试一次，不做退避循环：第二次还失败就不是竞争，是真有问题，交给调用方
+            logger.LogDebug(exception, "Projecting issuer subject {SubjectId} failed once; retrying", subjectId);
+            await ProjectCurrentUserAsync(subjectId, cancellationToken);
+        }
+    }
+
+    // 独立工作单元：投影是请求的前置动作，不该被后续业务失败连带回滚——
+    // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关
+    private async Task ProjectCurrentUserAsync(Guid subjectId, CancellationToken cancellationToken)
+    {
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
+        await userDomainService.EnsureProjectedAsync(
+            subjectId,
+            currentUser.Username,
+            currentUser.Email,
+            currentUser.Name,
+            cancellationToken);
+        await unitOfWork.CompleteAsync(cancellationToken);
     }
 #endif
 
@@ -210,13 +271,13 @@ public class UserAppService(
         // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
         var roles = input.RoleIds.Count > 0
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
-            : await GetDefaultRolesAsync(cancellationToken);
+            : await userRoleReader.GetDefaultRolesAsync(cancellationToken);
         AvatarPolicy.EnsureValid(input.Avatar?.Trim());
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
         await userRepository.UpdateAsync(user, cancellationToken);
-        var userRoles = await AssignRolesAsync(user.Id, roles, cancellationToken);
+        var userRoles = await userDomainService.AssignRolesAsync(user.Id, roles, cancellationToken);
 
         logger.LogInformation("User created (ID: {Id})", user.Id);
 
@@ -539,7 +600,7 @@ public class UserAppService(
         }
 
         var roles = await GetRolesByIdsAsync(input.RoleIds, cancellationToken);
-        await ReplaceUserRolesAsync(id, roles, cancellationToken);
+        await userDomainService.ReplaceRolesAsync(id, roles, cancellationToken);
 
         logger.LogInformation("User roles replaced (ID: {Id}, role count: {Count})", id, roles.Count);
 
@@ -590,42 +651,6 @@ public class UserAppService(
         }
 
         return roles;
-    }
-
-    /// <summary>
-    /// 没有显式指定角色时使用默认角色，保证新用户不会处于"零角色"状态。
-    /// </summary>
-    private async Task<List<Role>> GetDefaultRolesAsync(CancellationToken cancellationToken)
-        => [.. await roleRepository.GetListAsync(r => r.IsDefault, cancellationToken)];
-
-    /// <returns>本次写入的用户角色关联行。</returns>
-    /// <remarks>
-    /// 回传而不是让调用方回查：在工作单元内这些行还没落库，回查查不到。
-    /// 调用方要的本来就是"我刚写进去的那些"，回查多一次往返还多一层不确定。
-    /// </remarks>
-    private async Task<List<UserRole>> AssignRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
-    {
-        if (roles.Count == 0)
-        {
-            return [];
-        }
-
-        var userRoles = roles.Select(role => new UserRole(userId, role.Id)).ToList();
-        await userRoleRepository.InsertManyAsync(userRoles, cancellationToken);
-        return userRoles;
-    }
-
-    /// <returns>替换后的用户角色关联行。</returns>
-    /// <remarks><inheritdoc cref="AssignRolesAsync" path="/remarks"/></remarks>
-    private async Task<List<UserRole>> ReplaceUserRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
-    {
-        var currentRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken)).ToList();
-        if (currentRoles.Count != 0)
-        {
-            await userRoleRepository.DeleteManyAsync(currentRoles, cancellationToken);
-        }
-
-        return await AssignRolesAsync(userId, roles, cancellationToken);
     }
 
     private async Task<List<UserManagementOutputDto>> MapToOutputsAsync(List<User> users, CancellationToken cancellationToken)

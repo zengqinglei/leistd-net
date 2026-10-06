@@ -43,6 +43,10 @@
     <PackageReference Include="Leistd.Notifications.Core" />
     <!-- 偏好设置名的前缀与通知偏好组件同源 -->
     <PackageReference Include="Leistd.Notifications.Settings" />
+<!--#if (Email)-->
+    <!-- 邮件渠道的收件人解析扩展点（只发已验证邮箱）由应用层实现 -->
+    <PackageReference Include="Leistd.Notifications.Email" />
+<!--#endif-->
 <!--#endif-->
     <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />
