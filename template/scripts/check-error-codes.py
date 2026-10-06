@@ -7,7 +7,7 @@
 判据（扫描 `backend/src`，测试不在内）：
   1. `*ErrorCodes.cs` 里的常量值形如 `<所有者>:<成员名>`：所有者取文件名去掉 ErrorCodes，成员名即常量名。
   2. 码值全局唯一；同一所有者前缀只由一个 `*ErrorCodes.cs` 声明（不同目录的同名文件也算两个）。
-  3. 源码不写字面量码：`new BusinessException("…")` 的第一个参数不是字面量，
+  3. 源码不写字面量码：`new BusinessException("…")` 的第一个参数不是字面量（类型名与括号之间、参数之间的空白和换行不影响判定），
      任何字符串字面量都不等于一个已声明的码（应引用常量）。
   4. 每个常量至少有一处业务引用：零引用是死码；只被异常映射（`ExceptionMappings/`、`*ExceptionMappings.cs`）
      引用、没有任何抛出处的，同样是死码——映射了一个永远不会出现的码。
@@ -30,7 +30,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 CONSTANT = re.compile(r'public\s+const\s+string\s+([A-Za-z]\w*)\s*=\s*("(?:[^"\\]|\\.)*"|[^;]+);')
 CODE_SHAPE = re.compile(r'^[A-Z][A-Za-z0-9]*:[A-Z][A-Za-z0-9]*$')
-LITERAL_BUSINESS_CODE = re.compile(r'new\s+BusinessException\(\s*\$?@?"')
+# 类型名与括号之间、参数之间允许空白和换行；也认限定名与具名参数 `code:`。
+LITERAL_BUSINESS_CODE = re.compile(
+    r'\bnew\s+(?:[\w.]+\.)?BusinessException\s*\(\s*(?:code\s*:\s*)?(?:\$@|@\$|\$|@)?"')
 STRING_LITERAL = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 
 
@@ -91,9 +93,15 @@ def check_project(root):
     for path in files:
         if path.name.endswith('ErrorCodes.cs'):
             continue
-        for number, line in enumerate(texts[path].split('\n'), 1):
-            if LITERAL_BUSINESS_CODE.search(line):
-                errors.append(f'{name(path)}:{number}: BusinessException must use the owning module error code constant')
+        text = texts[path]
+        # 按整个文件匹配：构造调用可能跨行，按行扫描会漏掉换行后的字面量。
+        raised = set()
+        for match in LITERAL_BUSINESS_CODE.finditer(text):
+            number = text.count('\n', 0, match.start()) + 1
+            raised.add(text.count('\n', 0, match.end()) + 1)
+            errors.append(f'{name(path)}:{number}: BusinessException must use the owning module error code constant')
+        for number, line in enumerate(text.split('\n'), 1):
+            if number in raised:
                 continue
             for literal in STRING_LITERAL.findall(line):
                 if literal in codes:
@@ -182,6 +190,15 @@ def self_test():
     cases = [
         ('literal in BusinessException', write('backend/src/Demo.Application/Users/Literal.cs',
                                                'throw new BusinessException("User:Gone", "x");'),
+         'Literal.cs:1: BusinessException must use the owning module error code constant'),
+        ('literal with space before parenthesis', write('backend/src/Demo.Application/Users/Literal.cs',
+                                                        'throw new BusinessException ("User:Undeclared", "Failure.");'),
+         'Literal.cs:1: BusinessException must use the owning module error code constant'),
+        ('literal on the next line', write('backend/src/Demo.Application/Users/Literal.cs',
+                                           'void M()\n{\n    throw new BusinessException\n    (\n        "User:Undeclared",\n        "Failure.");\n}'),
+         'Literal.cs:3: BusinessException must use the owning module error code constant'),
+        ('qualified type with named literal code', write('backend/src/Demo.Application/Users/Literal.cs',
+                                                         'throw new Leistd.Exceptions.BusinessException(code: $"User:{x}", "Failure.");'),
          'Literal.cs:1: BusinessException must use the owning module error code constant'),
         ('literal code elsewhere', write('backend/src/Demo.Api/Controllers/Literal.cs',
                                          'if (error.Code == "User:Locked") return;'),

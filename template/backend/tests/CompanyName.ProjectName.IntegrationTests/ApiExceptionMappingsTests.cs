@@ -2,6 +2,7 @@ using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Shared.Paging.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 #if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Errors;
 #endif

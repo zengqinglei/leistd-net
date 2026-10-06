@@ -11,7 +11,8 @@ Mock 还留着旧键，Mock 模式下一切正常、联调时才 404。两端各
 - **后端路由**：`backend/src` 下控制器的 `[Route]` 与 `[Http*]`，加上 `ComponentEndpoints.cs` 里
   `api.MapGroup("x").MapXxx(...)` 映射的组件端点——组件端点的子路由从 `framework/components` 中
   对应 `MapXxx` 方法体里的 `MapGet/MapPost/...` 读出。
-- **前端调用**：`frontend/src` 非测试 TS 里经 `HttpClient` 发出的请求（方法 + 路径），以及其余以
+- **前端调用**：`frontend/src` 非测试 TS 里经 `HttpClient` 发出的请求（方法 + 路径；`get/post/put/delete/patch`
+  取方法名，`request('方法', 地址)` 取字面量方法，其余成员或非字面量方法一律按输入不完整失败），以及其余以
   `/api/` 开头的地址字面量（整页跳转、`<img>` 按 GET，赋给表单 `action` 的按 POST）。常量的初值
   （如 `baseUrl`）不单独算引用，在用到它的调用处核对。
 - **Mock 键**：`frontend/_mock/api/*.ts` 里 `'方法 路径'` 形式的键。
@@ -41,7 +42,8 @@ Mock 里有键但前端没有调用的端点不算违规：只要后端存在，
   python3 scripts/check-template-mock-coverage.py --root <生成项目>  # 生成项目（框架源码仍取本仓库）
   python3 scripts/check-template-mock-coverage.py --self-test     # 闸门自检
 
-退出码非 0 表示存在违规或输入不完整（缺目录、缺清单、解析不出调用地址），供 CI 阻断。
+退出码非 0 表示存在违规或输入不完整（缺目录、缺清单、解析不出调用的方法或地址、后端路由/前端调用/Mock 键
+任一为空、某个 Mock 文件或 api/ 控制器或组件端点方法读不出条目），供 CI 阻断。
 """
 from __future__ import annotations
 
@@ -334,6 +336,12 @@ def _skip_generic(masked: str, i: int) -> int:
     return i
 
 
+def _skip_space(masked: str, i: int) -> int:
+    while i < len(masked) and masked[i] in " \t\r\n":
+        i += 1
+    return i
+
+
 @dataclass
 class FrontendUsage:
     calls: list[Endpoint] = field(default_factory=list)
@@ -369,17 +377,31 @@ def collect_frontend(src_dir: Path, root: Path) -> FrontendUsage:
         clients = set(HTTP_CLIENT_NAME.findall(masked))
         if clients:
             names = "|".join(re.escape(name) for name in sorted(clients))
-            call = re.compile(rf"\b(?:this\s*\.\s*)?(?:{names})\s*\.\s*(get|post|put|delete|patch)\s*")
+            call = re.compile(rf"\b(?:this\s*\.\s*)?(?:{names})\s*\.\s*([A-Za-z_$][\w$]*)\s*")
             for match in call.finditer(masked):
                 i = _skip_generic(masked, match.end())
-                while i < len(masked) and masked[i] in " \t\r\n":
-                    i += 1
+                i = _skip_space(masked, i)
                 if i >= len(masked) or masked[i] != "(":
                     continue
-                i += 1
-                while i < len(masked) and masked[i] in " \t\r\n":
-                    i += 1
+                i = _skip_space(masked, i + 1)
                 line = masked.count("\n", 0, i) + 1
+                member = match.group(1)
+                if member == "request":
+                    # request(方法, 地址, …)：方法必须是静态字面量，否则无法判定读写，也就核对不了 Mock 键
+                    token = by_start.get(i)
+                    verb = render(token, None).upper() if token and all(kind == "text" for kind, _ in token.parts) else None
+                    if verb not in HTTP_VERBS:
+                        raise InputError(f"{rel}:{line}: 解析不出 HttpClient.request 的 HTTP 方法，请改用字面量方法与地址")
+                    consumed.add(token.start)
+                    i = _skip_space(masked, token.end)
+                    if i >= len(masked) or masked[i] != ",":
+                        raise InputError(f"{rel}:{line}: 解析不出 HttpClient.request 调用的地址，请改用字面量或常量")
+                    i = _skip_space(masked, i + 1)
+                    line = masked.count("\n", 0, i) + 1
+                elif member.upper() in HTTP_VERBS:
+                    verb = member.upper()
+                else:
+                    raise InputError(f"{rel}:{line}: 不支持的 HttpClient 调用 {member}()，闸门无法核对它的方法与地址")
                 token = by_start.get(i)
                 if token is not None:
                     consumed.add(token.start)
@@ -390,7 +412,7 @@ def collect_frontend(src_dir: Path, root: Path) -> FrontendUsage:
                     if url is None:
                         raise InputError(f"{rel}:{line}: 解析不出 HttpClient 调用的地址，请改用字面量或常量")
                 if url.startswith("/api/"):
-                    usage.calls.append(Endpoint(match.group(1).upper(), normalize_path(url), f"{rel}:{line}"))
+                    usage.calls.append(Endpoint(verb, normalize_path(url), f"{rel}:{line}"))
 
         mocked_checks = {
             match.end() for match in re.finditer(r"\bisMockedUrl\s*\(\s*", masked)
@@ -429,7 +451,11 @@ def collect_mock_keys(mock_api_dir: Path, root: Path) -> list[Endpoint]:
             continue
         masked, _ = lex_typescript(path.read_text(encoding="utf-8"))
         rel = path.relative_to(root).as_posix()
-        for match in MOCK_KEY.finditer(masked):
+        found = list(MOCK_KEY.finditer(masked))
+        # 每个 Mock 文件都应读出键：读出零个说明键的写法变了，静默跳过会让整个文件的端点都不参与核对
+        if not found:
+            raise InputError(f"{rel}: 读不出任何 '方法 路径' 形式的 Mock 键")
+        for match in found:
             line = masked.count("\n", 0, match.start()) + 1
             keys.append(Endpoint(match.group(1), normalize_path(match.group(2)), f"{rel}:{line}"))
     return keys
@@ -545,7 +571,11 @@ def collect_backend(backend_src: Path, framework_dir: Path, root: Path) -> list[
             following = next((start for start in classes if start > match.start()), None)
             if following is not None:
                 class_routes.setdefault(following, match.group(1))
-        for match in ACTION_ROUTE.finditer(src):
+        actions = list(ACTION_ROUTE.finditer(src))
+        # 类级路由指向 api/ 的控制器至少应读出一个 action：读出零个说明特性写法变了
+        if not actions and any(route.lstrip("/~").lower().startswith("api/") for route in class_routes.values()):
+            raise InputError(f"{rel}: 控制器声明了 api/ 路由，却读不出任何 [HttpGet]/[HttpPost]/... action")
+        for match in actions:
             owner = max((start for start in classes if start < match.start()), default=None)
             template = match.group(2) or ""
             prefix = "" if template.startswith(("/", "~/")) else class_routes.get(owner, "")
@@ -562,6 +592,8 @@ def collect_backend(backend_src: Path, framework_dir: Path, root: Path) -> list[
             name = match.group(3)
             if name not in component_methods:
                 raise InputError(f"{rel}: 在 {framework_dir} 中找不到组件端点方法 {name}")
+            if not component_methods[name]:
+                raise InputError(f"{rel}: 组件端点方法 {name} 里读不出任何 MapGet/MapPost/... 路由")
             prefix = join_route(groups.get(match.group(1), ""), match.group(2))
             line = src.count("\n", 0, match.start()) + 1
             for method, relative in component_methods[name]:
@@ -589,6 +621,10 @@ def check(root: Path, framework_dir: Path) -> tuple[list[str], dict[str, int]]:
     usage = collect_frontend(frontend / "src", root)
     mocks = collect_mock_keys(frontend / "_mock" / "api", root)
     unmocked, mock_only = collect_declarations(frontend / "_mock" / "index.ts", root)
+    # 三个集合任一为空都说明解析失效（或指错了根目录），这时"零违规"不是结论
+    for label, items in (("后端路由", backend), ("前端 HttpClient 调用", usage.calls), ("Mock 键", mocks)):
+        if not items:
+            raise InputError(f"{label}为空：解析失效或 --root 指错了目录（{root}）")
 
     violations: list[str] = []
     for call in usage.calls:
@@ -860,6 +896,66 @@ def self_test() -> int:
                 "    return this.http.get(buildUrl());",
             ),
             "解析不出 HttpClient 调用的地址",
+        ),
+        (
+            "写请求经 request() 发出：按字面量方法核对，不误记为 GET 地址引用",
+            _edit(
+                "frontend/src/app/services/record-service.ts",
+                "    return this.http.get('/api/v1/records');",
+                "    this.http.get('/api/v1/records');\n    return this.http.request('DELETE', '/api/v1/users');",
+            ),
+            "缺 Mock：DELETE /api/v1/users",
+        ),
+        (
+            "request() 的方法不是字面量时失败而不是放过",
+            _edit(
+                "frontend/src/app/services/record-service.ts",
+                "    return this.http.get('/api/v1/records');",
+                "    this.http.get('/api/v1/records');\n    return this.http.request(method, '/api/v1/users');",
+            ),
+            "解析不出 HttpClient.request 的 HTTP 方法",
+        ),
+        (
+            "不认识的 HttpClient 调用时失败而不是放过",
+            _edit(
+                "frontend/src/app/services/record-service.ts",
+                "    return this.http.get('/api/v1/records');",
+                "    this.http.get('/api/v1/records');\n    return this.http.head('/api/v1/users');",
+            ),
+            "不支持的 HttpClient 调用 head()",
+        ),
+        (
+            "后端路由为空时失败",
+            {
+                "backend/src/Demo.Api/Controllers/UserController.cs": None,
+                "backend/src/Demo.Api/Controllers/AuthController.cs": None,
+                "backend/src/Demo.Api/Hosting/ComponentEndpoints.cs": None,
+                "backend/src/Demo.Api/Placeholder.cs": "public sealed class Placeholder { }",
+            },
+            "后端路由为空",
+        ),
+        (
+            "前端调用为空时失败",
+            {
+                "frontend/src/app/services/user-service.ts": None,
+                "frontend/src/app/services/record-service.ts": None,
+                "frontend/src/app/services/auth-service.ts": None,
+            },
+            "前端 HttpClient 调用为空",
+        ),
+        (
+            "Mock 文件读不出键时失败",
+            {"frontend/_mock/api/record.ts": "export const RECORD_API = { [`GET ${base}`]: () => [] };\n"},
+            "读不出任何 '方法 路径' 形式的 Mock 键",
+        ),
+        (
+            "控制器读不出 action 时失败",
+            {
+                "backend/src/Demo.Api/Controllers/AuthController.cs": FIXTURE["backend/src/Demo.Api/Controllers/AuthController.cs"]
+                .replace('[HttpGet("login")]', '[HttpGet(template: "login")]')
+                .replace('[HttpPost("logout")]', '[HttpPost(template: "logout")]'),
+            },
+            "读不出任何 [HttpGet]/[HttpPost]/... action",
         ),
         (
             "缺少清单文件时失败",

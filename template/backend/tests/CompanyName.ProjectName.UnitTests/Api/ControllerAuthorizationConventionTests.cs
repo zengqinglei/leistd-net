@@ -100,6 +100,18 @@ public class ControllerAuthorizationConventionTests
             [new(ExemptionKind.AnonymousProtocol, "POST fixtures/me/anonymous", "夹具：协议端点")]));
     }
 
+    /// <summary>
+    /// 只有 [Route]、没有 HTTP 方法特性的公开方法仍是 action，接受任意方法，被拒；[NonAction] 与 ControllerBase 自带的辅助方法不算
+    /// </summary>
+    [Fact]
+    public void A_route_only_action_without_http_method_is_reported()
+    {
+        var violation = Assert.Single(FindViolations([typeof(RouteOnlyController)], FixtureExemptions));
+
+        Assert.Contains("fixtures/route-only (RouteOnlyController.Delete)", violation);
+        Assert.Contains("no HTTP method attribute", violation);
+    }
+
     private static readonly AuthorizationExemption[] FixtureExemptions =
     [
         new(ExemptionKind.SelfService, "* fixtures/me/**", "夹具：本人自助端点"),
@@ -117,11 +129,13 @@ public class ControllerAuthorizationConventionTests
             var classAuthorize = controller.GetCustomAttributes(inherit: true).OfType<IAuthorizeData>().ToArray();
             var classAnonymous = controller.GetCustomAttributes(inherit: true).OfType<IAllowAnonymous>().Any();
 
-            foreach (var action in controller.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+            foreach (var action in controller.GetMethods(BindingFlags.Instance | BindingFlags.Public).Where(IsAction))
             {
                 var routes = action.GetCustomAttributes(inherit: true).OfType<HttpMethodAttribute>().ToArray();
                 if (routes.Length == 0)
                 {
+                    // 没有 HTTP 方法特性的 action 仍是端点（[Route] 或类级路由），且接受任意方法，无法按读写判定授权
+                    violations.Add($"{CombineRoute(prefix, action.GetCustomAttributes<RouteAttribute>(inherit: true).FirstOrDefault()?.Template)} ({controller.Name}.{action.Name}): action has no HTTP method attribute and accepts every method");
                     continue;
                 }
 
@@ -161,6 +175,16 @@ public class ControllerAuthorizationConventionTests
 
         return violations;
     }
+
+    /// <summary>
+    /// 与 MVC 发现 action 的规则一致：公开、非静态、非抽象、非泛型、非属性访问器、未标 [NonAction]，
+    /// 且不是 <see cref="object"/> 或 <see cref="IDisposable"/> 上的方法。
+    /// </summary>
+    private static bool IsAction(MethodInfo method) =>
+        method is { IsPublic: true, IsStatic: false, IsAbstract: false, IsSpecialName: false, IsGenericMethod: false }
+        && method.GetBaseDefinition().DeclaringType != typeof(object)
+        && !(method.Name == nameof(IDisposable.Dispose) && method.GetParameters().Length == 0 && typeof(IDisposable).IsAssignableFrom(method.DeclaringType))
+        && !method.IsDefined(typeof(NonActionAttribute), inherit: true);
 
     private static string CombineRoute(string? prefix, string? template) => template switch
     {
@@ -238,6 +262,17 @@ public class ControllerAuthorizationConventionTests
     {
         [HttpGet("undeclared")]
         public void Read() { }
+    }
+
+    [Authorize]
+    [Route("fixtures")]
+    public sealed class RouteOnlyController : ControllerBase
+    {
+        [Route("route-only")]
+        public void Delete() { }
+
+        [NonAction]
+        public void Helper() { }
     }
 
     [Route("fixtures")]
