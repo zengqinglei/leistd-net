@@ -62,7 +62,7 @@ public sealed class RepeatedDbContextRegistrationTests
         services.AssertImplementedBy<IRepository<Order, Guid>, OrderRepository>();
     }
 
-    private sealed class Order : Entity<Guid>;
+    private sealed class Order : Entity<Guid>, IAggregateRoot<Guid>;
 
     private sealed class OrderDbContext(DbContextOptions<OrderDbContext> options)
         : BaseDbContext(options, serviceProvider: null)

@@ -69,7 +69,7 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
     }
 
     /// <summary>
-    /// 合规实体通过；缺租户归属、枚举按整数存的各报一条；白名单内的实体只免租户归属
+    /// 合规实体通过；缺租户归属、枚举按整数存（含值对象里的）各报一条；白名单内的实体只免租户归属
     /// </summary>
     [Fact]
     public void Synthetic_model_reports_missing_tenant_scope_and_integer_enums()
@@ -79,12 +79,14 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
 
         var violations = FindViolations(model, fixtures, []);
 
-        Assert.Equal(2, violations.Count);
+        Assert.Equal(3, violations.Count);
         Assert.Contains(violations, v => v.Contains(nameof(HostOnlyOrder)) && v.Contains(nameof(IMultiTenant)));
         Assert.Contains(violations, v => v.Contains($"{nameof(HostOnlyOrder)}.{nameof(HostOnlyOrder.Status)}") && v.Contains("string"));
+        Assert.Contains(violations, v => v.Contains($"{nameof(HostOnlyOrder)}.{nameof(HostOnlyOrder.Shipping)}.{nameof(Shipping.Stage)}"));
 
         var exempted = FindViolations(model, fixtures, [new(typeof(HostOnlyOrder), "夹具：宿主数据")]);
-        Assert.Contains($"{nameof(HostOnlyOrder)}.{nameof(HostOnlyOrder.Status)}", Assert.Single(exempted));
+        Assert.Equal(2, exempted.Count);
+        Assert.DoesNotContain(exempted, v => v.Contains(nameof(IMultiTenant)));
     }
 
     private static List<string> FindViolations(IModel model, Assembly projectAssembly, IReadOnlyList<EntityExemption> exemptions)
@@ -97,18 +99,35 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
                 violations.Add($"{entity.ClrType.Name}: entity must implement {nameof(IMultiTenant)} or be exempted");
             }
 
-            foreach (var property in entity.GetProperties())
+            foreach (var (path, property) in ScalarProperties(entity, entity.ClrType.Name))
             {
                 var type = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
                 var provider = property.GetProviderClrType() ?? property.GetValueConverter()?.ProviderClrType;
                 if (type.IsEnum && provider != typeof(string))
                 {
-                    violations.Add($"{entity.ClrType.Name}.{property.Name}: enum must be stored as string");
+                    violations.Add($"{path}: enum must be stored as string");
                 }
             }
         }
 
         return violations;
+    }
+
+    // 值对象（复杂属性）里的列同样受约束，逐层展开
+    private static IEnumerable<(string Path, IProperty Property)> ScalarProperties(ITypeBase type, string path)
+    {
+        foreach (var property in type.GetProperties())
+        {
+            yield return ($"{path}.{property.Name}", property);
+        }
+
+        foreach (var complex in type.GetComplexProperties())
+        {
+            foreach (var nested in ScalarProperties(complex.ComplexType, $"{path}.{complex.Name}"))
+            {
+                yield return nested;
+            }
+        }
     }
 
     private static IModel SyntheticModel()
@@ -124,6 +143,7 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
         {
             entity.HasKey(order => order.Id);
             entity.Property(order => order.Status);
+            entity.ComplexProperty(order => order.Shipping, shipping => shipping.Property(s => s.Stage));
         });
         return builder.FinalizeModel();
     }
@@ -150,5 +170,12 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
         public Guid Id { get; set; }
 
         public OrderStatus Status { get; set; }
+
+        public Shipping Shipping { get; set; } = new();
+    }
+
+    private sealed record Shipping
+    {
+        public OrderStatus Stage { get; set; }
     }
 }

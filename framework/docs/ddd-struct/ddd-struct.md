@@ -23,8 +23,9 @@ DDD 基座为 Domain、Application.Contracts、Application 和 Infrastructure �
 漏掉的上下文不受租户过滤器闸门检查。装了 `DynamicProxyServiceRegistrationCallbackFactory` 时，漏写在构建容器时失败；
 不装则框架查不出漏登记。不需要仓储的上下文调用无参重载即可。框架不扫描容器自动发现上下文。
 
-默认仓储的实体来源是公开的 `DbSet<T>` 声明（`T` 实现 `IEntity`）；只经 `modelBuilder` 映射的实体用
-`AddDefaultRepository<TEntity>()` 点名，或用 `AddRepository<TEntity, TImpl>()` 指定自定义实现。
+默认仓储只给聚合根：实体来源是公开的 `DbSet<T>` 声明中实现 `IAggregateRoot` 的类型。子实体可以声明 `DbSet`
+让表名走命名约定，不会得到仓储，只能经根修改。只经 `modelBuilder` 映射的聚合根用 `AddDefaultRepository<TEntity>()`
+点名，或用 `AddRepository<TEntity, TImpl>()` 指定自定义实现。
 
 同一实体被两个上下文各注册一次时抛异常；同一上下文以相同选项重复登记不会抛，也不会多出注册。
 
@@ -218,7 +219,7 @@ protected override void ConfigureConventions(ModelConfigurationBuilder configura
 
 ## 实现行为
 
-- `AddDddDbContext<TDbContext>(o => o.AddDefaultRepositories())` 扫描该上下文的 public `DbSet<>` 属性，为对应实体注册 Scoped 仓储；不传选项即只登记上下文、不注册仓储。未声明 `DbSet<>` 的实体用 `AddDefaultRepository<TEntity>()` 点名。
+- `AddDddDbContext<TDbContext>(o => o.AddDefaultRepositories())` 扫描该上下文的 public `DbSet<>` 属性，为其中的聚合根注册 Scoped 仓储；不传选项即只登记上下文、不注册仓储。未声明 `DbSet<>` 的聚合根用 `AddDefaultRepository<TEntity>()` 点名。
 - `LocalEventSaveChangesInterceptor` 在保存前收集并清空实体事件，保存成功后加入当前工作单元；无工作单元时直接发布。保存失败会丢弃本次收集。
 - 使用同步 `SaveChanges()` 时，本地事件发布需要 sync-over-async 并记录 Warning；应优先使用 `SaveChangesAsync()`。
 - 全局过滤器只应用于 EF Core 模型中的根实体类型，派生实体不重复添加。

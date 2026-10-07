@@ -11,8 +11,6 @@ public class ResourceAuthorizationVersionRecordConfiguration
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<ResourceAuthorizationVersionRecord> builder)
     {
-        builder.ToTable("ResourceAuthorizationVersions");
-
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.ResourceName)

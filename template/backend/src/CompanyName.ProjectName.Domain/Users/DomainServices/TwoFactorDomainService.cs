@@ -28,11 +28,10 @@ public sealed class TwoFactorDomainService(IDataProtectionProvider dataProtectio
     /// </summary>
     public bool VerifyCode(User user, string code, DateTime now)
     {
-        if (!user.TwoFactorEnabled || user.TwoFactorSecret is null ||
-            UnprotectSecret(user.TwoFactorSecret) is not { } secret)
+        if (user.TwoFactor is not { } credential || UnprotectSecret(credential.Secret) is not { } secret)
             return false;
 
-        if (Totp.Verify(secret, code, now, user.TwoFactorLastUsedStep) is not { } step)
+        if (Totp.Verify(secret, code, now, credential.LastUsedStep) is not { } step)
             return false;
 
         user.RecordTwoFactorStep(step);
@@ -41,7 +40,7 @@ public sealed class TwoFactorDomainService(IDataProtectionProvider dataProtectio
 
     /// <summary>用掉一个恢复码。</summary>
     public bool UseRecoveryCode(User user, string recoveryCode) =>
-        user.TwoFactorEnabled && user.TryConsumeRecoveryCode(RecoveryCodes.Hash(recoveryCode));
+        user.TryConsumeRecoveryCode(RecoveryCodes.Hash(recoveryCode));
 
     /// <summary>
     /// 校验一个待启用的密钥：启用前必须证明应用里已经添加成功，否则启用后本人就登不进来了。

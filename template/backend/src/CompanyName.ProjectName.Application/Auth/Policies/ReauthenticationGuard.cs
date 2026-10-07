@@ -65,7 +65,7 @@ internal sealed class ReauthenticationGuard(
         var now = clock.Now;
         if (user.GetAccessStatus(now) == UserAccessStatus.LockedOut)
         {
-            throw SessionSignInService.LockedOut(user, now);
+            throw SessionIssuer.LockedOut(user, now);
         }
 
         await Task.CompletedTask;
@@ -104,7 +104,7 @@ internal sealed class ReauthenticationGuard(
             counted, OperationRecordAuthorizations.AuthenticatedSelf, cancellationToken);
 
         // 取刚提交的那一行，不是调用方手里的陈旧实例
-        return SessionSignInService.LockedOut(counted, clock.Now);
+        return SessionIssuer.LockedOut(counted, clock.Now);
     }
 }
 #endif

@@ -2,7 +2,8 @@ namespace Leistd.Ddd.Domain.Entities;
 
 /// <summary>标记作为一致性边界入口的聚合根。</summary>
 /// <remarks>
-/// 框架不强制本标记（<c>IRepository&lt;TEntity&gt;</c> 约束的是 <c>IEntity</c>），用于审查与架构测试判断聚合边界。
+/// 默认仓储只登记实现本标记的实体（见 <c>DddDbContextOptions.AddDefaultRepositories</c>）；
+/// <c>IRepository&lt;TEntity&gt;</c> 本身约束的是 <c>IEntity</c>，点名登记与自定义仓储不受本标记限制。
 /// </remarks>
 public interface IAggregateRoot : IEntity
 {

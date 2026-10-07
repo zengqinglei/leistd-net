@@ -307,11 +307,13 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             DbDataReader result,
             CancellationToken cancellationToken = default)
         {
-            if (!command.CommandText.Contains("ResourceAuthorizationVersions", StringComparison.Ordinal))
+            // 表名取模型里的实际值：它由命名约定决定，不在组件里写死
+            var table = eventData.Context!.Model.FindEntityType(typeof(ResourceAuthorizationVersionRecord))!.GetTableName()!;
+            if (!command.CommandText.Contains(table, StringComparison.Ordinal))
                 return result;
 
             await using var bump = connection.CreateCommand();
-            bump.CommandText = "UPDATE \"ResourceAuthorizationVersions\" SET \"Version\" = \"Version\" + 1";
+            bump.CommandText = $"UPDATE \"{table}\" SET \"Version\" = \"Version\" + 1";
             await bump.ExecuteNonQueryAsync(cancellationToken);
 
             return result;

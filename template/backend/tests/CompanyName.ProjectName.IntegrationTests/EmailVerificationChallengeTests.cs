@@ -5,8 +5,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using CompanyName.ProjectName.Application.Auth.AppServices;
-using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Application.Auth.Captcha;
 using Leistd.Email.Abstractions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -293,8 +292,8 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
                 }));
             builder.ConfigureServices(services =>
             {
-                services.RemoveAll<ICaptchaAppService>();
-                services.AddSingleton<ICaptchaAppService, AcceptingCaptchaAppService>();
+                services.RemoveAll<ICaptchaVerifier>();
+                services.AddSingleton<ICaptchaVerifier, AcceptingCaptcha>();
                 services.RemoveAll<IEmailSender>();
                 services.AddSingleton<CapturingEmailSender>();
                 services.AddSingleton<IEmailSender>(provider =>
@@ -370,19 +369,9 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
 
     private sealed record ChallengeCredentials(Guid ChallengeId, string Code);
 
-    private sealed class AcceptingCaptchaAppService : ICaptchaAppService
+    private sealed class AcceptingCaptcha : ICaptchaVerifier
     {
-        public Task<CaptchaOutputDto> GenerateCaptchaAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new CaptchaOutputDto
-            {
-                CaptchaToken = "accepted",
-                CaptchaImageBase64 = "data:image/svg+xml;base64,"
-            });
-
-        public Task<bool> ValidateCaptchaAsync(
-            string token,
-            string code,
-            CancellationToken cancellationToken = default)
+        public Task<bool> VerifyAsync(string token, string code, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
     }
 

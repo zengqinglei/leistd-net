@@ -9,9 +9,4 @@ public interface ICaptchaAppService : IAppService
     /// 生成图形验证码
     /// </summary>
     Task<CaptchaOutputDto> GenerateCaptchaAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 验证图形验证码
-    /// </summary>
-    Task<bool> ValidateCaptchaAsync(string token, string code, CancellationToken cancellationToken = default);
 }

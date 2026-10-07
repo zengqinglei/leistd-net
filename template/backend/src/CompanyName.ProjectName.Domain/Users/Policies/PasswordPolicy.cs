@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.ExceptionHandling;
 
 namespace CompanyName.ProjectName.Domain.Users.Policies;
@@ -70,13 +71,13 @@ public static class PasswordPolicy
     {
         if (string.IsNullOrWhiteSpace(password))
         {
-            return new Problem("Security:PasswordRequired", "is required.", []);
+            return new Problem(SecurityErrorCodes.PasswordRequired, "is required.", []);
         }
 
         if (password.Length < MinimumLength)
         {
             return new Problem(
-                "Security:PasswordTooShort",
+                SecurityErrorCodes.PasswordTooShort,
                 $"must be at least {MinimumLength} characters long.",
                 [("MinimumLength", MinimumLength)]);
         }
@@ -84,7 +85,7 @@ public static class PasswordPolicy
         if (password.Length > MaximumLength)
         {
             return new Problem(
-                "Security:PasswordTooLong",
+                SecurityErrorCodes.PasswordTooLong,
                 $"must be at most {MaximumLength} characters long.",
                 [("MaximumLength", MaximumLength)]);
         }

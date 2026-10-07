@@ -25,7 +25,7 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 internal sealed class ExternalAuthAppService(
     ExternalAuthDomainService externalAuthDomainService,
     IRoleRepository roleRepository,
-    SessionSignInService sessionSignInService,
+    SessionIssuer sessionIssuer,
     IRepository<User, Guid> userRepository,
     IRepository<ExternalLoginConnection, Guid> externalLoginConnectionRepository,
     ICurrentUser currentUser,
@@ -51,7 +51,7 @@ internal sealed class ExternalAuthAppService(
             cancellationToken);
 
         // 新建用户带出刚分配的角色名（成员关系在本工作单元内尚未落库，回查不到）；
-        // 既有用户传 null，由 SessionSignInService 按已落库的角色回查
+        // 既有用户传 null，由 SessionIssuer 按已落库的角色回查
         List<string>? roleNames = null;
         if (created)
         {
@@ -61,7 +61,7 @@ internal sealed class ExternalAuthAppService(
             roleNames = [.. defaultRoles.Select(role => role.Name)];
         }
 
-        return await sessionSignInService.StartAsync(user, roleNames, cancellationToken);
+        return await sessionIssuer.StartAsync(user, roleNames, cancellationToken);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ internal sealed class ExternalAuthAppService(
 
         return new ExternalLoginsOutputDto
         {
-            HasPassword = user.PasswordHash is not null,
+            HasPassword = user.HasLocalPassword,
             Providers = availableProviders
                 .OrderBy(p => p, StringComparer.Ordinal)
                 .Select(p => new ExternalLoginProviderOutputDto
@@ -125,9 +125,13 @@ internal sealed class ExternalAuthAppService(
         if (removed is null)
             return;
 
+        // 凭据变了：此前用这个外部账号完成第一步、尚待第二步的登录挑战随之作废
+        user.RotateSecurityStamp();
+        await userRepository.UpdateAsync(user, cancellationToken);
+
         await operationRecorder.RecordSucceededAsync(
             OperationRecordActions.AuthExternalLoginUnlinked,
-            OperationTarget.For(removed.Id, $"{removed.Provider}: {removed.ProviderAccountLabel}"),
+            OperationTarget.For(removed.Id, $"{removed.Provider}: {removed.Profile.AccountLabel}"),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
     }

@@ -100,7 +100,7 @@ internal sealed class AccessFailureCounter(
         {
             await securityAlerts.PublishAsync(
                 user.Id,
-                new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.LockoutEnd),
+                new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.Lockout.End),
                 cancellationToken);
             await unitOfWork.CompleteAsync(cancellationToken);
         }

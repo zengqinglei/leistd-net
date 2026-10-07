@@ -1,8 +1,11 @@
 using Leistd.MultiTenancy.Extensions;
+using CompanyName.ProjectName.Application.Auth.Captcha;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
 using CompanyName.ProjectName.Domain.Auth.Errors;
+#endif
+#if (Email)
+using CompanyName.ProjectName.Application.Auth.EmailVerification;
 #endif
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
@@ -46,13 +49,13 @@ internal sealed class AuthAppService(
     UserDomainService userDomainService,
     IRoleRepository roleRepository,
     ICurrentUser currentUser,
-    ICaptchaAppService captchaAppService,
+    ICaptchaVerifier captchaVerifier,
 #if (Email)
-    IEmailVerificationAppService emailVerificationAppService,
+    EmailChallengeStore emailChallengeStore,
 #endif
-    SessionSignInService sessionSignInService,
+    SessionIssuer sessionIssuer,
     UserSessionDomainService userSessionDomainService,
-    IUserSessionAppService userSessionAppService,
+    CurrentSessionTerminator currentSessionTerminator,
     TwoFactorChallengeStore twoFactorChallengeStore,
     TwoFactorDomainService twoFactorDomainService,
     IOperationRecorder operationRecorder,
@@ -83,7 +86,7 @@ internal sealed class AuthAppService(
         if (result.Status == CredentialValidationStatus.LockedOut)
         {
             // 已在锁定中：不计数也不再记一条，否则锁定期内的每次尝试都是一个匿名刷表的面
-            throw SessionSignInService.LockedOut(result.User!, now);
+            throw SessionIssuer.LockedOut(result.User!, now);
         }
 
         if (result.Countable)
@@ -93,7 +96,7 @@ internal sealed class AuthAppService(
             if (counted is { LockoutTriggered: true, User: { } lockedUser })
             {
                 await RecordLockedOutAsync(lockedUser, cancellationToken);
-                throw SessionSignInService.LockedOut(lockedUser, now);
+                throw SessionIssuer.LockedOut(lockedUser, now);
             }
         }
 
@@ -124,7 +127,7 @@ internal sealed class AuthAppService(
         }
 
         var user = result.User!;
-        var outcome = await sessionSignInService.StartAsync(user, cancellationToken: cancellationToken);
+        var outcome = await sessionIssuer.StartAsync(user, cancellationToken: cancellationToken);
 
         // 还要第二步时先不记成功：密码对了不等于登录成功，第二步通过时再记（见 CompleteTwoFactorLoginAsync）
         if (outcome.Principal is not null)
@@ -168,7 +171,7 @@ internal sealed class AuthAppService(
 
         // 第一步之后凭据变了（改口令、管理员重置、启用或停用两步验证、解绑外部登录）：
         // 这个挑战凭的是旧凭据，作废。撤销会话挡不住它——挑战不是会话
-        if (!string.Equals(user.SecurityStamp, challenge.SecurityStamp, StringComparison.Ordinal))
+        if (!user.HasSecurityStamp(challenge.SecurityStamp))
         {
             await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
             throw TwoFactorChallengeExpired();
@@ -177,7 +180,7 @@ internal sealed class AuthAppService(
         var now = clock.Now;
         try
         {
-            SessionSignInService.EnsureAllowed(user, now);
+            SessionIssuer.EnsureAllowed(user, now);
         }
         catch
         {
@@ -205,7 +208,7 @@ internal sealed class AuthAppService(
             {
                 await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
                 await RecordLockedOutAsync(lockedUser, cancellationToken);
-                throw SessionSignInService.LockedOut(lockedUser, now);
+                throw SessionIssuer.LockedOut(lockedUser, now);
             }
 
             if (!await twoFactorChallengeStore.RecordFailureAsync(input.Token, challenge, cancellationToken))
@@ -230,7 +233,7 @@ internal sealed class AuthAppService(
         }
 
         await RecordLoginSucceededAsync(user, cancellationToken);
-        return await sessionSignInService.SignInAsync(user, cancellationToken: cancellationToken);
+        return await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -240,8 +243,8 @@ internal sealed class AuthAppService(
     public async Task<ClaimsPrincipal> ReissueSessionAsync(CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        await userSessionAppService.EndCurrentSessionAsync(cancellationToken);
-        return await sessionSignInService.SignInAsync(user, cancellationToken: cancellationToken);
+        await currentSessionTerminator.EndAsync(cancellationToken);
+        return await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken);
     }
 
     // 登录成功的"什么人"由目标承载：SignInAsync 只往响应里种 Cookie，
@@ -336,7 +339,7 @@ internal sealed class AuthAppService(
                 throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.");
             }
 
-            var isValidEmailCode = await emailVerificationAppService.ValidateEmailChallengeAsync(
+            var isValidEmailCode = await emailChallengeStore.ValidateRegistrationAsync(
                 input.Email,
                 input.EmailVerification,
                 cancellationToken);
@@ -347,7 +350,7 @@ internal sealed class AuthAppService(
         }
         else
         {
-            var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
+            var isValidCaptcha = await captchaVerifier.VerifyAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
             if (!isValidCaptcha)
             {
                 throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
@@ -355,7 +358,7 @@ internal sealed class AuthAppService(
         }
 #else
         // 没有发信能力：注册只靠图形验证码证明是人在操作，邮箱照常登记但不验证
-        var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
+        var isValidCaptcha = await captchaVerifier.VerifyAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
         if (!isValidCaptcha)
         {
             throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
@@ -487,13 +490,11 @@ internal sealed class AuthAppService(
     /// </summary>
     /// <remarks>
     /// 本人只能上传图片，入参 DTO 已挡掉外部地址（它来自外部登录提供方，不由本人随手填）；
-    /// 浏览器端已裁剪缩放，这里按 <see cref="AvatarPolicy"/> 校验体积与真实类型。
+    /// 浏览器端已裁剪缩放，实体按 <see cref="AvatarPolicy"/> 校验体积与真实类型。
     /// </remarks>
     public async Task<UserOutputDto> SetCurrentUserAvatarAsync(SetAvatarInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        AvatarPolicy.EnsureValid(input.Avatar);
-
         user.SetAvatar(input.Avatar);
         await userRepository.UpdateAsync(user, cancellationToken);
 
@@ -515,7 +516,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         user.EnsureEmailUnconfirmed();
 
-        return await emailVerificationAppService.SendAccountEmailCodeAsync(user.Email, cancellationToken);
+        return await emailChallengeStore.IssueAccountEmailAsync(user.Email, cancellationToken);
     }
 
     /// <summary>
@@ -528,7 +529,7 @@ internal sealed class AuthAppService(
     public async Task<UserOutputDto> ConfirmCurrentUserEmailAsync(EmailVerificationInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        if (!await emailVerificationAppService.ValidateAccountEmailChallengeAsync(user.Email, input, cancellationToken))
+        if (!await emailChallengeStore.ValidateAccountEmailAsync(user.Email, input, cancellationToken))
         {
             throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.");
         }

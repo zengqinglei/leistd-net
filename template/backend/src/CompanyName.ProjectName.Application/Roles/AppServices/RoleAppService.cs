@@ -192,26 +192,7 @@ public class RoleAppService(
             return;
         }
 
-        if (!role.CanBeDeleted())
-        {
-            throw new BusinessException(RoleErrorCodes.StaticRoleCannotBeDeleted, $"Built-in role '{role.Name}' cannot be deleted.")
-                .WithData("Name", role.Name);
-        }
-
-        // 只数还在的用户：删除用户是软删除，关联行随用户保留（恢复时一并回来），
-        // 数进去的话角色就被一个界面上看不到、也无法改派的人永久卡住
-        var userCount = await asyncExecuter.CountAsync(
-            (await AssignmentsOfExistingUsersAsync(cancellationToken)).Where(ur => ur.RoleId == id),
-            cancellationToken);
-        if (userCount > 0)
-        {
-            throw new BusinessException(RoleErrorCodes.RoleStillAssigned,
-                    $"Role '{role.Name}' still has {userCount} assigned user(s). Reassign them before deleting.")
-                .WithData("Name", role.Name)
-                .WithData("UserCount", userCount);
-        }
-
-        await roleRepository.DeleteAsync(role, cancellationToken);
+        await roleDomainService.DeleteAsync(role, cancellationToken);
         await RevokeFromDeletedUsersAsync(id, cancellationToken);
 
         // 角色被永久删除，授予与授权版本一并清理。

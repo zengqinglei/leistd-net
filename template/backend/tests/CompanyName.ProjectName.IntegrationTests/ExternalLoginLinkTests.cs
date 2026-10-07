@@ -332,6 +332,26 @@ public sealed class ExternalLoginLinkTests
         Assert.Matches("^alice_[0-9]{6}$", secondName);
     }
 
+    /// <summary>被删用户仍占着用户名：同一基底的新外部用户得到带后缀的名字，而不是落库撞唯一索引。</summary>
+    /// <remarks>用户名唯一索引不排除已删除行，查重只看未删除的行会判定"可用"并返回 500。</remarks>
+    [Fact]
+    public async Task A_username_held_by_a_deleted_user_gets_a_numeric_suffix()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        var provider = new ExternalOAuthBackchannel();
+        using var host = CreateHost(factory, provider);
+
+        provider.User = External("gh-del-1") with { SuggestedUsername = "carol", Email = "carol@x.test", EmailVerified = true };
+        using var first = await SignInExternallyAsync(host);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        await SoftDeleteUserAsync(host, "carol@x.test");
+
+        provider.User = External("gh-del-2") with { SuggestedUsername = "carol", Email = "carol@y.test", EmailVerified = true };
+        using var second = await SignInExternallyAsync(host);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Matches("^carol_[0-9]{6}$", await UsernameOfAsync(host, "carol@y.test"));
+    }
+
     /// <summary>生成出来的用户名必须是用户自己在账号设置里也能填的形态。</summary>
     /// <remarks>
     /// 提供商给的值可能含 <c>.</c> <c>+</c> 这类字符（<c>alice.smith+tag</c>），

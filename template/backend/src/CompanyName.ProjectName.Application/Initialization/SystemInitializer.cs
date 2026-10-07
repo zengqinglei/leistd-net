@@ -1,17 +1,16 @@
-#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (LocalIdentity)
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 #endif
-using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Options;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 #endif
-using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 #if (LocalIdentity)
 using Microsoft.Extensions.Options;
@@ -34,7 +33,7 @@ public class SystemInitializer(
 #if (LocalIdentity)
     IUserRepository userRepository,
 #endif
-    IRepository<Role, Guid> roleRepository,
+    RoleDomainService roleDomainService,
 #if (LocalIdentity)
     UserDomainService userDomainService,
 #endif
@@ -61,8 +60,6 @@ public class SystemInitializer(
 #endif
     /// </remarks>
     public const string InitializationLockKey = "MyProject:system-initialization";
-
-    private const string MemberRoleName = "Member";
 
     /// <remarks>
     /// 初始化在 <see cref="IDistributedLock"/> 内串行执行，避免多实例并发创建角色、用户、
@@ -112,40 +109,8 @@ public class SystemInitializer(
         return adminRole;
     }
 
-    private async Task<(Role AdminRole, Role MemberRole)> InitializeRolesAsync(CancellationToken cancellationToken)
-    {
-        var adminRole = await roleRepository.GetFirstAsync(r => r.Name == AdminConstant.RoleName, cancellationToken: cancellationToken);
-        if (adminRole == null)
-        {
-            adminRole = new Role(
-                name: AdminConstant.RoleName,
-                displayName: "Administrator",
-                description: "System administrator with all permissions",
-                isStatic: true,
-                isDefault: false,
-                sort: 1
-            );
-            await roleRepository.InsertAsync(adminRole, cancellationToken);
-            logger.LogInformation("System role created: {RoleName}", AdminConstant.RoleName);
-        }
-
-        var memberRole = await roleRepository.GetFirstAsync(r => r.Name == MemberRoleName, cancellationToken: cancellationToken);
-        if (memberRole == null)
-        {
-            memberRole = new Role(
-                name: MemberRoleName,
-                displayName: "Member",
-                description: "Default role automatically assigned to new users",
-                isStatic: true,
-                isDefault: true,
-                sort: 100
-            );
-            await roleRepository.InsertAsync(memberRole, cancellationToken);
-            logger.LogInformation("System role created: {RoleName}", MemberRoleName);
-        }
-
-        return (adminRole, memberRole);
-    }
+    private Task<(Role Admin, Role Member)> InitializeRolesAsync(CancellationToken cancellationToken) =>
+        roleDomainService.EnsureBuiltInRolesAsync("System administrator with all permissions", cancellationToken);
 
 #if (LocalIdentity)
     private async Task<User> InitializeDefaultAdminAsync(CancellationToken cancellationToken)

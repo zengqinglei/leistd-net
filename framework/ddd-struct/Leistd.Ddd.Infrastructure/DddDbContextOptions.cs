@@ -16,10 +16,11 @@ public sealed class DddDbContextOptions
 
     internal List<Type> ExplicitEntities { get; } = [];
 
-    /// <summary>为本上下文按公开 <c>DbSet&lt;T&gt;</c> 声明派生的实体注册默认仓储。</summary>
+    /// <summary>为本上下文按公开 <c>DbSet&lt;T&gt;</c> 声明的聚合根注册默认仓储。</summary>
     /// <remarks>
-    /// 实体来源是公开 <c>DbSet&lt;T&gt;</c> 属性中实现 <see cref="IEntity"/> 的类型。
-    /// 仅经模型配置映射的实体需用 <see cref="AddDefaultRepository{TEntity}"/> 显式登记。
+    /// 实体来源是公开 <c>DbSet&lt;T&gt;</c> 属性中实现 <see cref="IAggregateRoot"/> 的类型：仓储只为聚合根提供，
+    /// 子实体可以声明 <c>DbSet</c>（让表名走命名约定）而不得到仓储，只能经根修改。
+    /// 仅经模型配置映射的聚合根用 <see cref="AddDefaultRepository{TEntity}"/> 显式登记。
     /// </remarks>
     public DddDbContextOptions AddDefaultRepositories()
     {
@@ -40,7 +41,7 @@ public sealed class DddDbContextOptions
         return this;
     }
 
-    /// <summary>点名为 <typeparamref name="TEntity"/> 注册默认仓储，用于未暴露 <c>DbSet&lt;T&gt;</c> 的实体。</summary>
+    /// <summary>点名为 <typeparamref name="TEntity"/> 注册默认仓储，用于未暴露 <c>DbSet&lt;T&gt;</c> 的聚合根。</summary>
     public DddDbContextOptions AddDefaultRepository<TEntity>()
         where TEntity : class, IEntity
     {

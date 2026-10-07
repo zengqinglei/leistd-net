@@ -86,7 +86,7 @@ public sealed class AccessFailureCounterTests(ProjectWebApplicationFactory facto
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         return (await db.Set<User>().IgnoreQueryFilters()
-            .SingleAsync(user => user.Id == userId)).AccessFailedCount;
+            .SingleAsync(user => user.Id == userId)).Lockout.AccessFailedCount;
     }
 }
 #endif

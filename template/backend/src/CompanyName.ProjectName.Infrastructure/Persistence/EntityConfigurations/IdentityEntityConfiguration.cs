@@ -11,7 +11,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.ConfigureUserIdentity();
         builder.ConfigureRoles();
-        builder.ConfigureUserRoles();
         builder.ConfigureUserSessions();
 #if (ExternalLogin)
         builder.ConfigureExternalLoginConnections();
@@ -24,10 +23,14 @@ internal static class IdentityEntityConfiguration
         {
             b.Property(e => e.PasswordHash).HasMaxLength(256);
             b.Property(e => e.PhoneNumber).HasMaxLength(32);
-            b.Property(e => e.LastLoginIp).HasMaxLength(45);
-            b.Property(e => e.TwoFactorSecret).HasMaxLength(512);
-            // 十个 SHA-256 十六进制摘要加分隔符
-            b.Property(e => e.TwoFactorRecoveryCodes).HasMaxLength(1024);
+            b.ComplexProperty(e => e.Lockout);
+            b.ComplexProperty(e => e.LastLogin, login => login.Property(l => l.Ip).HasMaxLength(45));
+            b.ComplexProperty(e => e.TwoFactor, twoFactor =>
+            {
+                twoFactor.Property(t => t.Secret).HasMaxLength(512);
+                // 十个 SHA-256 十六进制摘要加分隔符
+                twoFactor.Property(t => t.RecoveryCodes).HasMaxLength(1024);
+            });
             // Guid 的 32 位十六进制
             b.Property(e => e.SecurityStamp).IsRequired().HasMaxLength(32);
         });
@@ -75,9 +78,12 @@ internal static class IdentityEntityConfiguration
         {
             b.Property(e => e.Provider).IsRequired().HasMaxLength(50);
             b.Property(e => e.ProviderUserId).IsRequired().HasMaxLength(256);
-            b.Property(e => e.ProviderAccountLabel).HasMaxLength(256);
-            b.Property(e => e.ProviderEmail).HasMaxLength(256);
-            b.Property(e => e.ProviderAvatarUrl).HasMaxLength(1024);
+            b.ComplexProperty(e => e.Profile, profile =>
+            {
+                profile.Property(p => p.AccountLabel).HasMaxLength(256);
+                profile.Property(p => p.Email).HasMaxLength(256);
+                profile.Property(p => p.AvatarUrl).HasMaxLength(1024);
+            });
 
             // 租户内唯一：同一外部身份可在不同租户各自绑定。
             // 宿主行（TenantId 为 NULL）在 PostgreSQL/SQLite 中 NULL 互不相等，
@@ -96,20 +102,5 @@ internal static class IdentityEntityConfiguration
         });
     }
 #endif
-
-    // 关系本身在 BaseEntityConfiguration 映射；本地身份形态另加唯一索引并改为限制删除
-    private static void ConfigureUserRoles(this ModelBuilder builder)
-    {
-        builder.Entity<User>().HasMany(user => user.Roles).WithOne().HasForeignKey(userRole => userRole.UserId)
-            .OnDelete(DeleteBehavior.Restrict).IsRequired(false);
-        builder.Entity<UserRole>(b =>
-        {
-            b.HasIndex(e => new { e.UserId, e.RoleId, e.DeletionTime }).IsUnique();
-            b.HasIndex(e => e.RoleId);
-
-            b.HasOne<Role>().WithMany().HasForeignKey(e => e.RoleId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
-        });
-    }
-
 }
 #endif

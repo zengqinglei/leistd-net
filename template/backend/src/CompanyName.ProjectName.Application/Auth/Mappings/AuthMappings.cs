@@ -19,7 +19,9 @@ public class AuthMappings : IRegister
             .Map(dest => dest.IsCurrent, src => IsCurrentSession(src.Id));
 #if (ExternalLogin)
 
-        config.NewConfig<ExternalLoginConnection, ExternalLoginLinkOutputDto>();
+        config.NewConfig<ExternalLoginConnection, ExternalLoginLinkOutputDto>()
+            .Map(dest => dest.ProviderAccountLabel, src => src.Profile.AccountLabel)
+            .Map(dest => dest.ProviderEmail, src => src.Profile.Email);
 #endif
     }
 

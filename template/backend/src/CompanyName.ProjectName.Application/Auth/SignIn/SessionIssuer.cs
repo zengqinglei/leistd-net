@@ -23,7 +23,8 @@ using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
-internal sealed class SessionSignInService(
+/// <summary>签发登录会话：判定账号可登录、记录登录、建立会话并组装主体；需要第二步时只发两步验证挑战。</summary>
+internal sealed class SessionIssuer(
     IUserRepository userRepository,
     UserSessionDomainService userSessionDomainService,
     IRepository<UserSession, Guid> userSessionRepository,
@@ -107,7 +108,7 @@ internal sealed class SessionSignInService(
         var now = clock.Now;
         EnsureAllowed(user, now);
 
-        var previousIp = user.LastLoginIp;
+        var previousIp = user.LastLogin?.Ip;
         user.RecordLoginSuccess(now, clientInfo.IpAddress);
         await userRepository.UpdateAsync(user, cancellationToken);
 
@@ -203,7 +204,7 @@ internal sealed class SessionSignInService(
     {
         if (user.IsTemporarilyLockedOut(now))
         {
-            var minutes = (int)Math.Ceiling((user.LockoutEnd!.Value - now).TotalMinutes);
+            var minutes = (int)Math.Ceiling((user.Lockout.End!.Value - now).TotalMinutes);
             return new BusinessException(AuthErrorCodes.UserTemporarilyLockedOut,
                     $"Too many failed sign-in attempts. Try again in {minutes} minute(s).")
                 .WithData("Minutes", minutes);

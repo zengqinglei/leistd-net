@@ -168,7 +168,7 @@ public class MultiTenantFilterGuardTests
     }
 
     /// <summary>真实体（实现 IEntity&lt;TKey&gt;），会进入仓储派生</summary>
-    private sealed class SharedEntity : Leistd.Ddd.Domain.Entities.Entity<Guid>;
+    private sealed class SharedEntity : Leistd.Ddd.Domain.Entities.Entity<Guid>, IAggregateRoot<Guid>;
 
     /// <summary>只实现无主键契约的自定义仓储：能通过 AddRepository 的泛型约束</summary>
     private sealed class KeylessOnlyRepository(
@@ -264,12 +264,18 @@ public class MultiTenantFilterGuardTests
         Assert.DoesNotContain(declaredOnly, d => d.ServiceType == typeof(Leistd.Ddd.Domain.Repositories.IRepository<SharedEntity>));
     }
 
+    /// <summary>默认仓储只给声明了 <c>DbSet</c> 的聚合根；子实体声明 <c>DbSet</c>（为表名走约定）也拿不到仓储。</summary>
+    [Fact]
+    public void A_child_entity_with_a_dbset_gets_no_default_repository()
+    {
+        var services = new ServiceCollection();
+        services.AddDddDbContext<AggregateDbContext>(o => o.AddDefaultRepositories());
+
+        Assert.Contains(services, d => d.ServiceType == typeof(Leistd.Ddd.Domain.Repositories.IRepository<SharedEntity>));
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(Leistd.Ddd.Domain.Repositories.IRepository<MappedOnlyEntity>));
+    }
+
     /// <summary>只映射、不暴露 <c>DbSet</c> 的实体可以点名注册仓储。</summary>
-    /// <remarks>
-    /// 默认注册的实体来源是上下文上公开的 <c>DbSet&lt;T&gt;</c>——那是"我要直接查它"的选择信号。
-    /// 只经 <c>modelBuilder</c> 映射的实体（明细行、关联表）默认拿不到仓储，
-    /// 业务确实需要时用单数形式点名，这是它存在的全部理由。
-    /// </remarks>
     [Fact]
     public void An_entity_without_a_dbset_gets_a_repository_only_when_named_explicitly()
     {
@@ -287,6 +293,14 @@ public class MultiTenantFilterGuardTests
     private sealed class MappedOnlyEntity : Entity<Guid>
     {
         public string Name { get; set; } = "";
+    }
+
+    private sealed class AggregateDbContext(DbContextOptions<AggregateDbContext> options)
+        : BaseDbContext(options, serviceProvider: null)
+    {
+        public DbSet<SharedEntity> Items => Set<SharedEntity>();
+
+        public DbSet<MappedOnlyEntity> Lines => Set<MappedOnlyEntity>();
     }
 
     /// <summary>只在 <c>OnModelCreating</c> 里映射实体，不暴露 <c>DbSet</c>。</summary>

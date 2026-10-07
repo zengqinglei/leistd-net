@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.AppServices;
+using CompanyName.ProjectName.Application.Auth.Captcha;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Shared;
 #if (ExternalLogin)
@@ -78,8 +79,8 @@ public sealed class SessionRoleClaimTests(ProjectWebApplicationFactory factory)
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IStartupFilter>(new RoleProbe());
-                services.RemoveAll<ICaptchaAppService>();
-                services.AddTransient<ICaptchaAppService, AcceptingCaptcha>();
+                services.RemoveAll<ICaptchaVerifier>();
+                services.AddTransient<ICaptchaVerifier, AcceptingCaptcha>();
             });
         });
 
@@ -175,12 +176,9 @@ public sealed class SessionRoleClaimTests(ProjectWebApplicationFactory factory)
         return body.RootElement.GetProperty("id").GetGuid();
     }
 
-    private sealed class AcceptingCaptcha : ICaptchaAppService
+    private sealed class AcceptingCaptcha : ICaptchaVerifier
     {
-        public Task<CaptchaOutputDto> GenerateCaptchaAsync(CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<bool> ValidateCaptchaAsync(string token, string code, CancellationToken cancellationToken = default)
+        public Task<bool> VerifyAsync(string token, string code, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
     }
 
