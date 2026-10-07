@@ -55,9 +55,9 @@ public sealed class UserAccessStatusTests
 
         user.RecordLoginSuccess(Now, "127.0.0.1");
 
-        Assert.Equal(Now, user.LastLoginTime);
-        Assert.Equal("127.0.0.1", user.LastLoginIp);
-        Assert.Equal(0, user.AccessFailedCount);
+        Assert.Equal(Now, user.LastLogin!.Time);
+        Assert.Equal("127.0.0.1", user.LastLogin.Ip);
+        Assert.Equal(0, user.Lockout.AccessFailedCount);
     }
 
     [Fact]
@@ -72,8 +72,8 @@ public sealed class UserAccessStatusTests
         Assert.True(user.RecordAccessFailed(Now, Lockout));
         Assert.Equal(UserAccessStatus.LockedOut, user.GetAccessStatus(Now));
         Assert.True(user.IsTemporarilyLockedOut(Now));
-        Assert.Equal(Now + Lockout.Duration, user.LockoutEnd);
-        Assert.Equal(0, user.AccessFailedCount);
+        Assert.Equal(Now + Lockout.Duration, user.Lockout.End);
+        Assert.Equal(0, user.Lockout.AccessFailedCount);
     }
 
     // 过期锁定留在库里的 IsLocked 要在下一次失败时清掉，否则会一直被当成"已锁定"
@@ -84,8 +84,8 @@ public sealed class UserAccessStatusTests
         user.Lock(Now);
 
         Assert.False(user.RecordAccessFailed(Now.AddMinutes(1), Lockout));
-        Assert.False(user.IsLocked);
-        Assert.Equal(1, user.AccessFailedCount);
+        Assert.False(user.Lockout.IsLocked);
+        Assert.Equal(1, user.Lockout.AccessFailedCount);
     }
 
     [Fact]

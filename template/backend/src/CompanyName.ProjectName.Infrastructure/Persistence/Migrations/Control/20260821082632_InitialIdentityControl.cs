@@ -1,6 +1,5 @@
 using System;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 
 #nullable disable
 

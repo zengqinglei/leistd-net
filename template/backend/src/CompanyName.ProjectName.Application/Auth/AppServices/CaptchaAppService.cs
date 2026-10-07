@@ -1,16 +1,15 @@
 using System.Security.Cryptography;
 using System.Text;
+using CompanyName.ProjectName.Application.Auth.Captcha;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Lock.Abstractions;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public class CaptchaAppService(
     IDistributedCache distributedCache,
-    IDistributedLock distributedLock,
     IUserRegistrationPolicyProvider registrationPolicy) : BaseAppService, ICaptchaAppService
 {
     private const string CaptchaLetters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -37,7 +36,7 @@ public class CaptchaAppService(
         var imageBase64 = $"data:image/svg+xml;base64,{base64}";
 
         // 3. 保存到缓存
-        var cacheKey = GetCacheKey(token);
+        var cacheKey = CaptchaKeys.Cache(token);
         var cacheOptions = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(policy.CaptchaExpiryMinutes)
@@ -49,37 +48,6 @@ public class CaptchaAppService(
             CaptchaToken = token,
             CaptchaImageBase64 = imageBase64
         };
-    }
-
-    /// <remarks>
-    /// 读取、消费与比较必须在同一个临界区里。<c>IDistributedCache</c> 没有原子的
-    /// get-and-delete，"读出来再删掉"之间存在窗口：同一个 token 并发提交时两个请求
-    /// 都会读到验证码、都判定通过，于是"一次性挑战"只是名义上的一次——
-    /// 解一次验证码就能并发提交任意多次注册，正是验证码要挡的那件事。
-    /// 临界区用模板已装的分布式锁，不为此另建验证码专用存储或 Redis 脚本。
-    /// </remarks>
-    public async Task<bool> ValidateCaptchaAsync(string token, string code, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(code))
-            return false;
-
-        var cacheKey = GetCacheKey(token);
-        await using var captchaLock = await distributedLock.LockAsync(GetLockKey(token), cancellationToken);
-        using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            captchaLock.LockLost);
-        var operationToken = lockScope.Token;
-
-        var cachedCode = await distributedCache.GetStringAsync(cacheKey, operationToken);
-
-        if (string.IsNullOrEmpty(cachedCode))
-            return false;
-
-        // 验证码只能使用一次：无论比对结果如何，token 存在就消费掉——
-        // 猜错一次即失效，否则同一个 token 可以被反复试。
-        await distributedCache.RemoveAsync(cacheKey, operationToken);
-
-        return cachedCode.Equals(code, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GenerateCode(int length)
@@ -102,7 +70,4 @@ public class CaptchaAppService(
         return new string(chars);
     }
 
-    private static string GetCacheKey(string token) => $"MyProject:Captcha:{token}";
-
-    private static string GetLockKey(string token) => $"MyProject:Captcha:lock:{token}";
 }

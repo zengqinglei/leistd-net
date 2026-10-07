@@ -6,9 +6,7 @@ using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
-#endif
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
@@ -45,11 +43,6 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// 手机号
     /// </summary>
     public string? PhoneNumber { get; private set; }
-
-    /// <summary>
-    /// 手机号是否已验证
-    /// </summary>
-    public bool PhoneNumberConfirmed { get; private set; }
 #endif
 
     /// <summary>
@@ -74,50 +67,29 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 
 #if (LocalIdentity)
     /// <summary>
-    /// 是否锁定
+    /// 锁定状态
     /// </summary>
-    public bool IsLocked { get; private set; }
+    public LockoutState Lockout { get; private set; } = LockoutState.None;
 
     /// <summary>
-    /// 锁定截止时间
+    /// 最近一次成功登录；从未登录为 null
     /// </summary>
-    public DateTime? LockoutEnd { get; private set; }
+    public LoginTrace? LastLogin { get; private set; }
 
     /// <summary>
-    /// 访问失败次数
+    /// 两步验证凭据；未启用为 null
     /// </summary>
-    public int AccessFailedCount { get; private set; }
-
-    /// <summary>
-    /// 最后登录时间
-    /// </summary>
-    public DateTime? LastLoginTime { get; private set; }
-
-    /// <summary>
-    /// 最后登录 IP
-    /// </summary>
-    public string? LastLoginIp { get; private set; }
+    public TwoFactorCredential? TwoFactor { get; private set; }
 
     /// <summary>
     /// 是否已启用两步验证
     /// </summary>
-    public bool TwoFactorEnabled { get; private set; }
+    public bool TwoFactorEnabled => TwoFactor is not null;
 
     /// <summary>
-    /// 两步验证密钥（经 <c>TwoFactorDomainService</c> 用 Data Protection 加密）
+    /// 设有本地口令（外部登录建的账号可以没有）
     /// </summary>
-    public string? TwoFactorSecret { get; private set; }
-
-    /// <summary>
-    /// 尚未使用的恢复码摘要，以 <c>;</c> 分隔
-    /// </summary>
-    /// <remarks>一个用户至多十个、用过即删，不值得为它单开一张表。</remarks>
-    public string? TwoFactorRecoveryCodes { get; private set; }
-
-    /// <summary>
-    /// 最近一次校验通过的验证码所在步序号；不大于它的步一律拒绝，防止同一个码被重放
-    /// </summary>
-    public long? TwoFactorLastUsedStep { get; private set; }
+    public bool HasLocalPassword => PasswordHash is not null;
 
     /// <summary>
     /// 账号安全版本：凭据（口令、两步验证、外部登录绑定）每变一次就换一个新值
@@ -164,6 +136,8 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         if (subjectId == Guid.Empty) throw new ArgumentException("Subject Id cannot be empty.", nameof(subjectId));
         Id = subjectId;
 #endif
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentNullException.ThrowIfNull(email);
         Username = username;
         Email = email;
 #if (LocalIdentity)
@@ -171,15 +145,6 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         SecurityStamp = NewSecurityStamp();
 #endif
         DisplayName = displayName ?? username;
-    }
-
-    public void Update(string? displayName, string? phoneNumber, string? avatar)
-    {
-        DisplayName = displayName;
-#if (LocalIdentity)
-        PhoneNumber = phoneNumber;
-#endif
-        Avatar = avatar;
     }
 
 #if (!LocalIdentity)
@@ -197,16 +162,19 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     }
 
 #endif
-    public void UpdateManagement(string email, string? displayName, string? avatar, bool isActive, bool emailConfirmed)
+#if (LocalIdentity)
+    /// <summary>管理员修改资料；启用状态只经 <see cref="Enable"/>/<see cref="Disable"/>，那里才有超管保护。</summary>
+    /// <remarks>邮箱唯一由 <c>UserDomainService.UpdateManagementAsync</c> 判定，因此不对领域层之外开放。</remarks>
+    internal void UpdateManagement(string email, string? displayName, string? avatar, bool emailConfirmed)
     {
+        AvatarPolicy.EnsureValid(avatar);
         Email = email;
         DisplayName = displayName;
-        Avatar = avatar;
-        IsActive = isActive;
-#if (LocalIdentity)
+        Avatar = string.IsNullOrEmpty(avatar) ? null : avatar;
         EmailConfirmed = emailConfirmed;
-#endif
     }
+
+#endif
 
     /// <summary>
     /// 本人修改资料。头像另有入口（<see cref="SetAvatar"/>），不随资料表单一起提交。
@@ -229,9 +197,11 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 #endif
     }
 
-    /// <summary>设置或清除头像；取值须先经 <c>AvatarPolicy.EnsureValid</c> 校验。</summary>
+    /// <summary>设置或清除头像。</summary>
+    /// <exception cref="Leistd.ExceptionHandling.BusinessException">取值不合规（见 <see cref="AvatarPolicy.EnsureValid"/>）。</exception>
     public void SetAvatar(string? avatar)
     {
+        AvatarPolicy.EnsureValid(avatar);
         Avatar = string.IsNullOrEmpty(avatar) ? null : avatar;
     }
 
@@ -331,6 +301,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         SecurityStamp = NewSecurityStamp();
     }
 
+    /// <summary>安全版本仍是 <paramref name="stamp"/>：签发后凭据没有变过。</summary>
+    public bool HasSecurityStamp(string stamp) => string.Equals(SecurityStamp, stamp, StringComparison.Ordinal);
+
     private static string NewSecurityStamp() => Guid.NewGuid().ToString("N");
 
     public void ConfirmEmail()
@@ -349,48 +322,26 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     }
 #endif
 
-    public void ConfirmPhoneNumber()
-    {
-        PhoneNumberConfirmed = true;
-    }
-
+    /// <summary>锁定；不传截止时间即管理员锁定。</summary>
     public void Lock(DateTime? lockoutEnd = null)
     {
-        IsLocked = true;
-        LockoutEnd = lockoutEnd;
+        Lockout = Lockout.LockUntil(lockoutEnd);
     }
 
+    /// <summary>解除锁定并清零失败次数。</summary>
     public void Unlock()
     {
-        IsLocked = false;
-        LockoutEnd = null;
-        AccessFailedCount = 0;
+        Lockout = LockoutState.None;
     }
 
     /// <summary>
     /// 记一次密码错误；累计达到 <paramref name="policy"/> 的阈值时锁定一段时间，返回 true。
     /// </summary>
-    /// <remarks>
-    /// 锁定时计数清零：锁定到期后重新给满一轮尝试次数。上一轮失败锁定已到期的，先解除再计数，
-    /// 否则过期锁定留下的 <c>IsLocked</c> 会让界面一直显示"已锁定"。
-    /// 管理员锁定（无截止时间）不经这里解除。
-    /// </remarks>
+    /// <remarks>规则见 <see cref="LockoutState.RecordFailure"/>。</remarks>
     public bool RecordAccessFailed(DateTime now, LoginLockoutPolicy policy)
     {
-        if (IsLocked && LockoutEnd is { } end && end <= now)
-        {
-            Unlock();
-        }
-
-        AccessFailedCount++;
-        if (!policy.IsEnabled || AccessFailedCount < policy.MaxFailedAttempts)
-        {
-            return false;
-        }
-
-        Lock(now + policy.Duration);
-        AccessFailedCount = 0;
-        return true;
+        Lockout = Lockout.RecordFailure(now, policy, out var lockedOut);
+        return lockedOut;
     }
 
     /// <summary>
@@ -400,7 +351,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// 与管理员锁定（无截止时间）分开判：临时锁定可以由别人反复输错触发，
     /// 它只挡新的登录，不能拿来把已经登录的本人踢下线。
     /// </remarks>
-    public bool IsTemporarilyLockedOut(DateTime now) => IsLocked && LockoutEnd is { } end && end > now;
+    public bool IsTemporarilyLockedOut(DateTime now) => Lockout.IsTemporaryAt(now);
 
     /// <summary>
     /// 已建立的会话与已签发的令牌还能否继续使用：账号被禁用、或被锁定且没有截止时间时不能。
@@ -418,13 +369,12 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 
     public void RecordLoginSuccess(DateTime now, string? ip = null)
     {
-        LastLoginTime = now;
-        LastLoginIp = ip;
-        AccessFailedCount = 0;
+        LastLogin = new LoginTrace(now, ip);
+        Lockout = Lockout.ResetFailures();
     }
 
-    /// <summary>剩余可用的恢复码个数。</summary>
-    public int RecoveryCodesLeft => SplitRecoveryCodes().Count;
+    /// <summary>剩余可用的恢复码个数；未启用两步验证为 0。</summary>
+    public int RecoveryCodesLeft => TwoFactor?.RecoveryCodesLeft ?? 0;
 
     /// <summary>
     /// 启用两步验证。
@@ -436,20 +386,14 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     public void EnableTwoFactor(string protectedSecret, IEnumerable<string> recoveryCodeHashes, long usedStep)
     {
         EnsureTwoFactorDisabled();
-        TwoFactorEnabled = true;
-        TwoFactorSecret = protectedSecret;
-        TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
-        TwoFactorLastUsedStep = usedStep;
+        TwoFactor = TwoFactorCredential.Create(protectedSecret, recoveryCodeHashes, usedStep);
         RotateSecurityStamp();
     }
 
     /// <summary>停用两步验证，并清掉密钥与恢复码。</summary>
     public void DisableTwoFactor()
     {
-        TwoFactorEnabled = false;
-        TwoFactorSecret = null;
-        TwoFactorRecoveryCodes = null;
-        TwoFactorLastUsedStep = null;
+        TwoFactor = null;
         RotateSecurityStamp();
     }
 
@@ -458,7 +402,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     public void ReplaceRecoveryCodes(IEnumerable<string> recoveryCodeHashes)
     {
         EnsureTwoFactorEnabled();
-        TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
+        TwoFactor = TwoFactor!.WithRecoveryCodes(recoveryCodeHashes);
     }
 
     /// <summary>两步验证尚未启用；已启用时以 <see cref="AuthErrorCodes.TwoFactorAlreadyEnabled"/> 拒绝。</summary>
@@ -480,24 +424,22 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     }
 
     /// <summary>记下校验通过的步序号。</summary>
+    /// <exception cref="BusinessException">两步验证未启用（<see cref="AuthErrorCodes.TwoFactorNotEnabled"/>）。</exception>
     public void RecordTwoFactorStep(long step)
     {
-        TwoFactorLastUsedStep = step;
+        EnsureTwoFactorEnabled();
+        TwoFactor = TwoFactor!.WithLastUsedStep(step);
     }
 
-    /// <summary>用掉一个恢复码；摘要不在剩余列表里时返回 false。</summary>
+    /// <summary>用掉一个恢复码；未启用两步验证或摘要不在剩余列表里时返回 false。</summary>
     public bool TryConsumeRecoveryCode(string hash)
     {
-        var codes = SplitRecoveryCodes();
-        if (!codes.Remove(hash))
+        if (TwoFactor?.ConsumeRecoveryCode(hash) is not { } next)
             return false;
 
-        TwoFactorRecoveryCodes = codes.Count == 0 ? null : string.Join(';', codes);
+        TwoFactor = next;
         return true;
     }
-
-    private List<string> SplitRecoveryCodes() =>
-        [.. (TwoFactorRecoveryCodes ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries)];
 
 #endif
 
@@ -509,7 +451,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         }
 
 #if (LocalIdentity)
-        if (IsLocked && (!LockoutEnd.HasValue || LockoutEnd.Value > now))
+        if (Lockout.IsActiveAt(now))
         {
             return UserAccessStatus.LockedOut;
         }

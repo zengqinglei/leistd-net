@@ -154,7 +154,7 @@ public class UserAppService(
             "username" => SortingRequest.By(query, u => u.Username, descending),
             "email" => SortingRequest.By(query, u => u.Email, descending),
 #if (LocalIdentity)
-            "lastLoginTime" => SortingRequest.By(query, u => u.LastLoginTime, descending),
+            "lastLoginTime" => SortingRequest.By(query, u => u.LastLogin!.Time, descending),
 #endif
             "creationTime" => SortingRequest.By(query, u => u.CreationTime, descending),
             _ => throw SortingRequest.UnknownField(field)
@@ -249,10 +249,19 @@ public class UserAppService(
         var roles = input.RoleIds.Count > 0
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
             : await roleRepository.GetDefaultRolesAsync(cancellationToken);
-        AvatarPolicy.EnsureValid(input.Avatar?.Trim());
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
-        user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
+        user.SetAvatar(input.Avatar?.Trim());
+        if (input.IsEmailVerified)
+        {
+            user.ConfirmEmail();
+        }
+
+        if (!input.IsActive)
+        {
+            user.Disable();
+        }
+
         user.AssignRoles(roles.Select(role => role.Id));
         await userRepository.UpdateAsync(user, cancellationToken);
 
@@ -285,24 +294,14 @@ public class UserAppService(
             throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
         }
 
-        var email = input.Email.Trim();
-        if (!await userDomainService.IsEmailAvailableAsync(id, email, cancellationToken))
-        {
-            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
-                .WithData("Email", email);
-        }
-
         // 编辑表单会把读到的头像地址原样送回，那表示"没改"，换回存储的原值再校验。
-        var avatar = AvatarUrls.ResolveSubmitted(user, input.Avatar);
-        AvatarPolicy.EnsureValid(avatar);
-
-        // 启用状态原样带过：它只由 Enable/Disable 两个命令写入，那里才有"超管不得禁用自己"的保护。
-        user.UpdateManagement(
-            email,
+        await userDomainService.UpdateManagementAsync(
+            user,
+            input.Email.Trim(),
             input.DisplayName?.Trim(),
-            avatar,
-            user.IsActive,
-            input.IsEmailVerified);
+            AvatarUrls.ResolveSubmitted(user, input.Avatar),
+            input.IsEmailVerified,
+            cancellationToken);
         // 角色不在此处变更：普通资料更新与角色分配是两个命令、两个权限。
         await userRepository.UpdateAsync(user, cancellationToken);
 
@@ -431,7 +430,7 @@ public class UserAppService(
     public async Task UnlockAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
-        if (!user.IsLocked && user.AccessFailedCount == 0)
+        if (!user.Lockout.HasAnythingToClear)
         {
             return;
         }

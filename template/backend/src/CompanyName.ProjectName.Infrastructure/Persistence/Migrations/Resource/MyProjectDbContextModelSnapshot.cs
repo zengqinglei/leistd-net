@@ -18,7 +18,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("companyname-projectname")
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -203,7 +203,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.HasIndex("RoleId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "RoleId")
+                        .IsUnique()
+                        .HasFilter("NOT \"IsDeleted\"");
 
                     b.ToTable("UserRoles", "companyname-projectname");
                 });
@@ -382,8 +384,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.ToTable("NotificationRecord", "companyname-projectname");
                 });
-
 #endif
+
 #if (IncludeOperationRecords)
             modelBuilder.Entity("Leistd.OperationRecords.EntityFrameworkCore.Entities.OperationRecord", b =>
                 {
@@ -605,14 +607,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.Role", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", null)
                         .WithMany("Roles")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.User", b =>

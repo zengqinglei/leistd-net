@@ -30,7 +30,8 @@ internal sealed class UserSessionAppService(
     IOperationRecorder operationRecorder,
     IOptions<UserSessionOptions> sessionOptions,
     IClock clock,
-    IObjectMapper objectMapper) : BaseAppService, IUserSessionAppService
+    IObjectMapper objectMapper,
+    CurrentSessionTerminator currentSessionTerminator) : BaseAppService, IUserSessionAppService
 {
     /// <inheritdoc />
     public async Task<IReadOnlyList<UserSessionOutputDto>> GetCurrentUserSessionsAsync(CancellationToken cancellationToken = default)
@@ -112,14 +113,7 @@ internal sealed class UserSessionAppService(
     }
 
     /// <inheritdoc />
-    public async Task EndCurrentSessionAsync(CancellationToken cancellationToken = default)
-    {
-        if (currentUser.Id is not { } userId || currentUser.GetSessionId() is not { } sessionId)
-            return;
-
-        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
-        await userSessionDomainService.RevokeAsync(userId, sessionId, cancellationToken);
-        await unitOfWork.CompleteAsync(cancellationToken);
-    }
+    public Task EndCurrentSessionAsync(CancellationToken cancellationToken = default) =>
+        currentSessionTerminator.EndAsync(cancellationToken);
 }
 #endif

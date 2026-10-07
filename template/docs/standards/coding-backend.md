@@ -17,7 +17,7 @@
 | Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、供展示的查询 |
 | Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
-目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
+目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
 
 - **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
 - **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
@@ -65,6 +65,8 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>
 }
 ```
 
+成组变化、带自身规则的属性收成值对象（`ValueObjects/`）：有构造不变量的继承 `ValueObject`，否则用 `record`；只读属性加 `private` 无参构造，变更返回新实例；用 `ComplexProperty` 映射，可空值对象须含必需属性，带索引的列（EF Core 11 前）保持平铺。
+
 ### 3.4 领域服务
 
 命名 `*DomainService`，不定义接口。承载需经仓储判定的规则（如用户名唯一）与实体的创建、变更，方法按业务行为命名；读取只为判定规则或执行变更，可读外聚合、不改外聚合；不提供供展示的查询方法，不做 DTO 转换、事务管理。
@@ -89,7 +91,7 @@ public class UserDomainService(IRepository<User, Guid> userRepository)
 
 ### 3.5 应用服务
 
-接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经 `IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。
+接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经 `IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。同模块应用服务不互相调用，共用逻辑提为协作类（如 `ICaptchaVerifier`）或下沉领域层。
 
 ```csharp
 public class UserAppService(
@@ -193,8 +195,9 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 ## 6. 数据访问
 
-- **聚合**：聚合根实现 `IAggregateRoot<Guid>`，只有它声明 DbSet、拥有仓储（`EntityModelConventionTests` 核对）；子实体（如 `UserRole`）不声明 DbSet，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。
+- **聚合**：聚合根实现 `IAggregateRoot<Guid>`，框架只给它登记默认仓储（`EntityModelConventionTests` 核对）；子实体（如 `UserRole`）声明 DbSet 只为表名走约定，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。
 - **仓储**只为聚合根提供：通用 `IRepository<T, TKey>` 覆盖增删改与单个用例的查询组合（`ISoftDelete` 实体为逻辑删除）。聚合特有、被多个用例复用的查询（连接、投影）加到该聚合的自定义仓储：Domain `<模块>/Repositories/I{聚合}Repository`，Infrastructure `EfCore{聚合}Repository`，经 `AddRepository<{聚合}, EfCore{聚合}Repository>()` 登记，方法按返回内容命名（`IUserRepository.GetRoleNamesAsync`）。领域服务的读取范围见 §3.4，不新增 `*Reader`、`*Query` 等查询类型。
+- **映射用默认约定**：表名、列名与第三方组件的表名保持 EF 与组件默认，不写 `ToTable(名)`、`HasColumnName`、`HasColumnType`。`HasFilter`、`HasCheckConstraint` 只写查询过滤器管不到的数据库约束（软删除或租户范围内唯一），列名用 `nameof` 拼并加双引号；换数据库时随新迁移集一并复核。
 - Application 不使用 EF Core 扩展：`IQueryable` 经 `IQueryableAsyncExecuter`（`ToListAsync`、`CountAsync`、`FirstOrDefaultAsync`、`AnyAsync` 等）执行；关联数据用查询组合（子查询、`Join`）或分别查询，不用 `Include`。
 - 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 获取，不直接构造注入：直接注入的实例按宿主库创建，分库租户下会落到宿主库（框架拒绝，表现为 500）。控制库上下文固定宿主连接，可以直接注入。
 - 对象映射：实体、存储模型或框架模型到 DTO 的投影走模块 `Mappings/` 下实现 `IRegister` 的类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；不调用无参 `Adapt<T>()`（它用全局配置，本项目的规则静默失效）；调用方才知道的值经 MapContext 传入；由多个来源拼装、带计算或本地化的 DTO 直接构造；不在 DTO 上写 `FromXxx` 静态方法。

@@ -1,5 +1,6 @@
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.ValueObjects;
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
@@ -12,7 +13,7 @@ public sealed class ExternalLoginConnectionTests
     {
         var connection = CreateConnection(InitialSync);
 
-        Assert.Equal(InitialSync, connection.LastSyncTime);
+        Assert.Equal(InitialSync, connection.Profile.SyncedAt);
     }
 
     [Fact]
@@ -21,10 +22,10 @@ public sealed class ExternalLoginConnectionTests
         var connection = CreateConnection(InitialSync);
         var updatedAt = InitialSync.AddMinutes(1);
 
-        connection.Update(updatedAt, "updated-user", "updated@example.com", "https://example.com/avatar.png");
+        connection.Sync(new ExternalProfile(updatedAt, "updated-user", "updated@example.com", "https://example.com/avatar.png"));
 
-        Assert.Equal(updatedAt, connection.LastSyncTime);
-        Assert.Equal("updated-user", connection.ProviderAccountLabel);
+        Assert.Equal(updatedAt, connection.Profile.SyncedAt);
+        Assert.Equal("updated-user", connection.Profile.AccountLabel);
     }
 
     private static ExternalLoginConnection CreateConnection(DateTime syncedAt) =>
@@ -32,8 +33,6 @@ public sealed class ExternalLoginConnectionTests
             Guid.Parse("01991a40-8a00-7000-8000-000000000001"),
             "github",
             "provider-user-id",
-            syncedAt,
-            "provider-user",
-            "provider@example.com");
+            new ExternalProfile(syncedAt, "provider-user", "provider@example.com", null));
 }
 #endif

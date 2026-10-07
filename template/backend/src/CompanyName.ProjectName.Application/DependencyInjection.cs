@@ -15,6 +15,10 @@ using CompanyName.ProjectName.Application.Settings.Timing;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
+using CompanyName.ProjectName.Application.Auth.Captcha;
+#if (Email)
+using CompanyName.ProjectName.Application.Auth.EmailVerification;
+#endif
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.EventHandlers;
 using CompanyName.ProjectName.Application.Auth.Events;
@@ -78,14 +82,17 @@ public static class DependencyInjection
         services.TryAddTransient<ISystemInitializer, SystemInitializer>();
 
 #if (LocalIdentity)
+        services.TryAddTransient<ICaptchaVerifier, CaptchaVerifier>();
         services.TryAddTransient<ICaptchaAppService, CaptchaAppService>();
 #if (Email)
+        services.TryAddTransient<EmailChallengeStore>();
         services.TryAddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
 #endif
-        services.TryAddTransient<SessionSignInService>();
+        services.TryAddTransient<SessionIssuer>();
         services.TryAddTransient<IUserSessionValidator, UserSessionValidator>();
         // 会话撤销后作废它的校验缓存（事务提交后由本地事件总线分发）
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<UserSessionRevokedEvent>, UserSessionRevokedEventHandler>());
+        services.TryAddTransient<CurrentSessionTerminator>();
         services.TryAddTransient<IUserSessionAppService, UserSessionAppService>();
         // 安全提醒默认不发；启用通知时宿主换成经通知组件发布的实现
         services.TryAddTransient<ISecurityAlertPublisher, NullSecurityAlertPublisher>();

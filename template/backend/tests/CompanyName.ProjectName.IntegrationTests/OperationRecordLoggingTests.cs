@@ -69,7 +69,11 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
             var user = await repository.GetOneAsync(u => u.Id == subject);
             Assert.NotNull(user);
             before = user.DisplayName;
-            user.Update(changed, null, user.Avatar);
+#if (LocalIdentity)
+            user.UpdateProfile(user.Username, user.Email, changed, user.PhoneNumber);
+#else
+            user.ProjectFromIssuer(user.Username, user.Email, changed);
+#endif
             await repository.UpdateAsync(user);
             await scope.ServiceProvider.GetRequiredService<IOperationRecorder>().RecordSucceededAsync(
                 OperationRecordActions.UserUpdated, OperationTarget.For(subject, changed), PermissionConstant.Users.Update);

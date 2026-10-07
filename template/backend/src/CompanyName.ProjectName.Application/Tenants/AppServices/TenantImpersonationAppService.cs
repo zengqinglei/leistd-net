@@ -27,14 +27,14 @@ namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 
 /// <inheritdoc cref="ITenantImpersonationAppService" />
 /// <remarks>
-/// <c>internal sealed</c> 而非 <c>public</c>：它依赖 <c>SessionSignInService</c>（internal），
+/// <c>internal sealed</c> 而非 <c>public</c>：它依赖 <c>SessionIssuer</c>（internal），
 /// 公开类的构造参数可访问性不能更低（CS0051）。与 <c>AuthAppService</c> 同型——
 /// 对外契约是接口，实现不必公开。
 /// </remarks>
 internal sealed class TenantImpersonationAppService(
     ITenantStore tenantStore,
     IRepository<User, Guid> userRepository,
-    SessionSignInService sessionSignInService,
+    SessionIssuer sessionIssuer,
     IUserSessionAppService userSessionAppService,
     ICurrentUser currentUser,
     ICurrentPrincipalAccessor currentPrincipalAccessor,
@@ -106,7 +106,7 @@ internal sealed class TenantImpersonationAppService(
                 claims.Add(new Claim(ImpersonationClaimTypes.ImpersonatorTenantId, impersonatorTenantId.ToString()));
             }
 
-            principal = await sessionSignInService.SignInAsync(
+            principal = await sessionIssuer.SignInAsync(
                 admin, roleNames: null, additionalClaims: claims, cancellationToken: cancellationToken);
 
             logger.LogWarning(
@@ -191,7 +191,7 @@ internal sealed class TenantImpersonationAppService(
                 cancellationToken)
                 ?? throw new BusinessException(UserErrorCodes.NotFound, "The impersonating user no longer exists.");
 
-            principal = await sessionSignInService.SignInAsync(
+            principal = await sessionIssuer.SignInAsync(
                 impersonator, cancellationToken: cancellationToken);
 
             logger.LogWarning(

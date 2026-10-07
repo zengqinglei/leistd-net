@@ -21,7 +21,8 @@ internal static class BaseEntityConfiguration
         {
             b.Property(e => e.Username).IsRequired().HasMaxLength(UsernameRules.MaxLength);
             b.Property(e => e.Email).IsRequired().HasMaxLength(256);
-            b.Property(e => e.Avatar).HasColumnType("text");
+            // 头像可以是站内上传的 data URL，不设长度即各数据库的大文本类型
+            b.Property(e => e.Avatar);
             b.Property(e => e.DisplayName).HasMaxLength(128);
             b.Property(e => e.IsSuperAdmin);
 
@@ -55,17 +56,22 @@ internal static class BaseEntityConfiguration
     }
 
     // 角色成员关系是 User 聚合的子实体：经 User.Roles 一对多映射，按 RoleId 引用角色，不设导航。
-    // 不声明 DbSet（声明即自动登记独立仓储），表名在这里固定。
+    // 两端都是软删除且带全局查询过滤器：关系声明为可选、删除为限制，主体被过滤或误删时不会连带吞掉成员关系
     private static void ConfigureUserRoles(this ModelBuilder builder)
     {
-        builder.Entity<User>().HasMany(user => user.Roles).WithOne().HasForeignKey(userRole => userRole.UserId);
+        builder.Entity<User>().HasMany(user => user.Roles).WithOne().HasForeignKey(userRole => userRole.UserId)
+            .OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         builder.Entity<UserRole>(b =>
         {
-            b.ToTable("UserRoles");
             // 主键由构造函数生成。按约定标为"添加时生成"的话，经 User.Roles 发现的新成员关系带着非默认主键，
             // EF 会当成已有行去 UPDATE（影响 0 行即并发异常）；标为不生成才按新增插入
             b.Property(userRole => userRole.Id).ValueGeneratedNever();
-            b.HasOne<Role>().WithMany().HasForeignKey(userRole => userRole.RoleId);
+            // 同一用户对同一角色只有一条有效成员关系；撤销是软删除，历史行不参与
+            b.HasIndex(e => new { e.UserId, e.RoleId })
+                .IsUnique()
+                .HasFilter($"NOT \"{nameof(UserRole.IsDeleted)}\"");
+            b.HasOne<Role>().WithMany().HasForeignKey(userRole => userRole.RoleId)
+                .OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         });
     }
 }

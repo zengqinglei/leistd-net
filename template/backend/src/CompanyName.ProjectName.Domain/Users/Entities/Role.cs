@@ -58,6 +58,8 @@ public class Role : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         bool isDefault = false,
         int sort = 0)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
         Id = Guid.CreateVersion7();
         Name = name;
         DisplayName = displayName;

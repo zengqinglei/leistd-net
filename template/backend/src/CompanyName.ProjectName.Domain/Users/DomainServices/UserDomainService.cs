@@ -1,3 +1,8 @@
+#if (ExternalLogin)
+using System.Text;
+using CompanyName.ProjectName.Domain.Auth.Errors;
+using CompanyName.ProjectName.Domain.Users.Constants;
+#endif
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
@@ -31,6 +36,13 @@ public class UserDomainService(
 #endif
     ILogger<UserDomainService> logger)
 {
+#if (ExternalLogin)
+    // 外部登录生成用户名的基底长度上限是可读性取舍：名字再长对识别没有帮助，加上后缀仍远低于 UsernameRules.MaxLength。
+    private const int UsernameBaseMaxLength = 24;
+    private const int UsernameSuffixAttempts = 5;
+    private const string FallbackUsernameBase = "user";
+
+#endif
 #if (!LocalIdentity)
     /// <summary>
     /// 把签发方的主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段。
@@ -292,7 +304,151 @@ public class UserDomainService(
     }
 
 #endif
+#if (ExternalLogin)
+    /// <summary>
+    /// 为首次外部登录建立本地用户：用户名按 <paramref name="usernameBase"/> 生成，没有本地口令。
+    /// </summary>
+    /// <param name="usernameBase">
+    /// 期望的用户名基底，取提供商的公开句柄或显示名；为空或清洗后不可用时回落到 <c>user</c>。
+    /// <b>不要传邮箱或邮箱本地部</b>：用户名是公开标识符，那样等于把半个联系方式公开。
+    /// </param>
+    /// <param name="email">已验证的邮箱或占位地址；由调用方确认未被占用。</param>
+    /// <param name="emailConfirmed">提供商已确认该邮箱。</param>
+    /// <param name="displayName">显示名；为空时取用户名。</param>
+    /// <param name="avatarUrl">提供商的头像地址。</param>
+    /// <param name="cancellationToken">取消标记。</param>
+    public async Task<User> CreateExternalAsync(
+        string? usernameBase,
+        string email,
+        bool emailConfirmed,
+        string? displayName,
+        string? avatarUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var username = await GenerateAvailableUsernameAsync(usernameBase, cancellationToken);
+        var user = new User(username, email, passwordHash: null, displayName: displayName ?? username);
+        if (emailConfirmed)
+        {
+            user.ConfirmEmail();
+        }
 
+        if (!string.IsNullOrEmpty(avatarUrl))
+        {
+            user.SetAvatar(avatarUrl);
+        }
+
+        await userRepository.InsertAsync(user, cancellationToken);
+        logger.LogInformation("User created via external login: {Username} (ID: {UserId})", user.Username, user.Id);
+        return user;
+    }
+
+    /// <summary>
+    /// 按候选基底生成一个可用的本地用户名（<c>alice</c>，已被占用时 <c>alice_418203</c>）
+    /// </summary>
+    /// <returns>当前未被占用、且符合 <see cref="UsernameRules"/> 的用户名。</returns>
+    /// <exception cref="BusinessException">连续若干次随机后缀都被占用。</exception>
+    /// <remarks>
+    /// 不直接用提供商给的值：不同域的同名用户（<c>alice@x.com</c> 与 <c>alice@y.com</c>）会撞上 <c>Username</c> 的唯一索引，
+    /// 第二个人首次登录直接失败；提供商给的值还可能含 <c>.</c> <c>+</c> 这类字符，不符合 <see cref="UsernameRules"/>，
+    /// 会造出用户自己在账号设置里都改不回去的名字。
+    /// <para>
+    /// 裸名优先是为了可读：句柄或显示名本身就是用户认得的名字。
+    /// 回落基底不发裸名：显示名清洗后不可用（纯中文、纯符号）的用户全都归到同一个 <c>user</c>，
+    /// 裸名既没有任何识别价值，又会成为所有这类用户的确定性争抢点。六位随机后缀把它们分散到九十万个坑位上，
+    /// 空间仍然有限——分配失败的出口一直留着。
+    /// </para>
+    /// <para>
+    /// 随机候选也可能已被占用，所以最多尝试五次：同一基底已占用 N 个后缀时单次碰撞率约 N/900000，
+    /// 一个租户积累上万个 <c>user_*</c> 后就不再是可以忽略的量。
+    /// </para>
+    /// <para>
+    /// 并发边界：可用性是先查后插，而仓储在工作单元内不立即保存，真正落库在提交时。
+    /// 两个请求同时判定同一个裸基底可用时，仍会有一个在提交时撞唯一索引。
+    /// 这里不为它加提交期重试：撞上要求两人同时<b>首次</b>登录且基底相同，基底一旦被占用后续都走随机后缀。
+    /// </para>
+    /// </remarks>
+    private async Task<string> GenerateAvailableUsernameAsync(string? preferredBase, CancellationToken cancellationToken)
+    {
+        var preferred = NormalizeUsernameBase(preferredBase);
+        var baseName = preferred ?? FallbackUsernameBase;
+
+        if (preferred is not null && await IsUsernameAvailableAsync(preferred, cancellationToken))
+        {
+            return preferred;
+        }
+
+        for (var attempt = 0; attempt < UsernameSuffixAttempts; attempt++)
+        {
+            var candidate = $"{baseName}_{Random.Shared.Next(100_000, 1_000_000)}";
+            if (await IsUsernameAvailableAsync(candidate, cancellationToken))
+            {
+                return candidate;
+            }
+        }
+
+        // 不复用 UserErrorCodes.UsernameTaken：那条的词条是"用户名已存在"并回显用户名，
+        // 而这里的用户名是本服务生成的，用户既没填过它，也改不了它，只能重试。
+        throw new BusinessException(
+            ExternalAuthErrorCodes.UsernameAllocationFailed,
+            "Could not allocate a username for this account. Try again.");
+    }
+
+    // 清洗成 UsernameRules 允许的字符集：只留字母数字与下划线，其余折成单个下划线并去掉首尾与连续的下划线。
+    // 清洗后短于下限的返回 null，由调用方回落——补位凑长度只会造出 "zh__" 这种既不可读也没意义的名字。
+    private static string? NormalizeUsernameBase(string? preferred)
+    {
+        if (string.IsNullOrWhiteSpace(preferred))
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder(preferred.Length);
+        foreach (var ch in preferred)
+        {
+            if (char.IsAsciiLetterOrDigit(ch))
+            {
+                builder.Append(char.ToLowerInvariant(ch));
+            }
+            else if (builder.Length > 0 && builder[^1] != '_')
+            {
+                builder.Append('_');
+            }
+        }
+
+        var cleaned = builder.ToString().Trim('_');
+        if (cleaned.Length > UsernameBaseMaxLength)
+        {
+            cleaned = cleaned[..UsernameBaseMaxLength].TrimEnd('_');
+        }
+
+        return cleaned.Length >= UsernameRules.MinLength ? cleaned : null;
+    }
+
+#endif
+#if (LocalIdentity)
+    /// <summary>
+    /// 管理员修改用户资料；邮箱在租户内唯一。
+    /// </summary>
+    /// <exception cref="BusinessException">邮箱已被占用（<see cref="UserErrorCodes.EmailTaken"/>），或头像不合规。</exception>
+    public async Task UpdateManagementAsync(
+        User user,
+        string email,
+        string? displayName,
+        string? avatar,
+        bool emailConfirmed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        if (!await IsEmailAvailableAsync(user.Id, email, cancellationToken))
+        {
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
+        }
+
+        user.UpdateManagement(email, displayName, avatar, emailConfirmed);
+    }
+
+#endif
     /// <summary>
     /// 更新个人信息
     /// </summary>

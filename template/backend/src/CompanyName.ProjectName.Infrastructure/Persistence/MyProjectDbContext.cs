@@ -30,7 +30,8 @@ public class MyProjectDbContext(
     public DbSet<User> Users { get; set; } = null!;
     // Identity 角色模型
     public DbSet<Role> Roles { get; set; } = null!;
-    // 角色成员关系是 User 聚合的子实体，不声明 DbSet：声明即自动登记 IRepository<UserRole>
+    // 角色成员关系是 User 聚合的子实体：声明 DbSet 只为表名走命名约定，它不是聚合根，不会得到仓储
+    public DbSet<UserRole> UserRoles { get; set; } = null!;
 #if (LocalIdentity)
     public DbSet<UserSession> UserSessions { get; set; } = null!;
 #endif
@@ -39,7 +40,7 @@ public class MyProjectDbContext(
 #endif
     public DbSet<PermissionGrantRecord> PermissionGrantRecords { get; set; } = null!;
 #if (IncludeOperationRecords)
-    // 声明 DbSet 只为让表名取复数（EF 默认按实体名单数建表），查询一律经 IOperationRecordReader
+    // 声明 DbSet 只为表名走命名约定（未声明时 EF 取实体类名），查询一律经 IOperationRecordReader
     public DbSet<OperationRecord> OperationRecords { get; set; } = null!;
 
     // 到期归档表（操作记录组件的保留期任务写入）。它不实现 IMultiTenant，因此不受租户全局过滤器约束——

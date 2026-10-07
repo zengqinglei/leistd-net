@@ -41,6 +41,7 @@ using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.Data.Paging;
 #if (ExternalLogin)
+using CompanyName.ProjectName.Domain.Auth.ValueObjects;
 using Leistd.Timing;
 #endif
 using Leistd.UnitOfWork;
@@ -1546,7 +1547,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.NotNull(admin);
 
             // TenantId 由多租户落值拦截器按当前上下文填充，业务代码不手写
-            var connection = new ExternalLoginConnection(admin.Id, provider, providerUserId, clock.Now);
+            var connection = new ExternalLoginConnection(admin.Id, provider, providerUserId, new ExternalProfile(clock.Now, null, null, null));
             await connections.InsertAsync(connection);
             return connection.Id;
         }

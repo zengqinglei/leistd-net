@@ -2,6 +2,8 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
+using Leistd.Auditing.Abstractions;
+using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
@@ -31,14 +33,14 @@ public class TenantSeeder(
     IRepository<Role, Guid> roleRepository,
     IQueryableAsyncExecuter asyncExecuter,
     UserDomainService userDomainService,
+    RoleDomainService roleDomainService,
+    IDataFilter dataFilter,
     IPermissionGrantSeeder permissionGrantSeeder,
     IPermissionGrantManager permissionGrantManager,
     IDistributedLock distributedLock,
     ISettingStore settingStore,
     ILogger<TenantSeeder> logger) : ITenantProvisioner
 {
-    private const string MemberRoleName = "Member";
-
     /// <inheritdoc />
     public async Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
     {
@@ -106,13 +108,20 @@ public class TenantSeeder(
 
         if (users.Count > 0)
         {
+            // 用户已在本工作单元内软删除：关掉过滤才能把它们连同成员关系一并加载，不依赖删除是否已冲刷
             var userIds = users.Select(u => u.Id).ToList();
-            var holders = await asyncExecuter.ToListAsync(
-                (await userRepository.GetQueryableWithRolesAsync(cancellationToken)).Where(u => userIds.Contains(u.Id)),
-                cancellationToken);
+            List<User> holders;
+            using (dataFilter.Disable<ISoftDelete>())
+            {
+                holders = await asyncExecuter.ToListAsync(
+                    (await userRepository.GetQueryableWithRolesAsync(cancellationToken)).Where(u => userIds.Contains(u.Id)),
+                    cancellationToken);
+            }
+
             foreach (var holder in holders)
             {
                 holder.RemoveAllRoles();
+                await userRepository.UpdateAsync(holder, cancellationToken);
             }
         }
 
@@ -124,36 +133,8 @@ public class TenantSeeder(
             tenantId, users.Count, roles.Count);
     }
 
-    private async Task<Role> EnsureRolesAsync(CancellationToken cancellationToken)
-    {
-        var adminRole = await roleRepository.GetFirstAsync(r => r.Name == AdminConstant.RoleName, cancellationToken: cancellationToken);
-        if (adminRole == null)
-        {
-            adminRole = new Role(
-                name: AdminConstant.RoleName,
-                displayName: "Administrator",
-                description: "Tenant administrator with all tenant permissions",
-                isStatic: true,
-                isDefault: false,
-                sort: 1
-            );
-            await roleRepository.InsertAsync(adminRole, cancellationToken);
-        }
-
-        if (!await roleRepository.AnyAsync(r => r.Name == MemberRoleName, cancellationToken))
-        {
-            await roleRepository.InsertAsync(new Role(
-                name: MemberRoleName,
-                displayName: "Member",
-                description: "Default role automatically assigned to new users",
-                isStatic: true,
-                isDefault: true,
-                sort: 100
-            ), cancellationToken);
-        }
-
-        return adminRole;
-    }
+    private async Task<Role> EnsureRolesAsync(CancellationToken cancellationToken) =>
+        (await roleDomainService.EnsureBuiltInRolesAsync("Tenant administrator with all tenant permissions", cancellationToken)).Admin;
 
     // 只授予租户侧可用的权限；从未写过授予才写，之后按普通角色管理
     private async Task SeedAdminRolePermissionsAsync(Role adminRole, CancellationToken cancellationToken)

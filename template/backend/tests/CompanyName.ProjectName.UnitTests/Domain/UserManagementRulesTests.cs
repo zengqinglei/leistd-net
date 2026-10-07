@@ -2,9 +2,8 @@
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
-#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.ExceptionHandling;
-#endif
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
@@ -18,6 +17,19 @@ public sealed class UserManagementRulesTests
         Assert.True(user.CanBeManagedBy(Guid.NewGuid()));
         Assert.True(user.CanBeDisabled());
         Assert.True(user.CanBeDeleted());
+    }
+
+    /// <summary>头像规则在实体里守：任何入口（本人上传、管理员编辑、外部登录同步）写进来的值都经同一道校验。</summary>
+    [Fact]
+    public void An_invalid_avatar_is_rejected_and_leaves_the_current_one()
+    {
+        var user = CreateUser();
+        user.SetAvatar("https://example.com/avatar.png");
+
+        var error = Assert.Throws<BusinessException>(() => user.SetAvatar("javascript:alert(1)"));
+
+        Assert.Equal(UserErrorCodes.AvatarInvalid, error.Code);
+        Assert.Equal("https://example.com/avatar.png", user.Avatar);
     }
 
     [Fact]
@@ -52,9 +64,9 @@ public sealed class UserManagementRulesTests
         var error = Assert.Throws<BusinessException>(() => user.EnableTwoFactor("other-secret", ["other-hash"], usedStep: 2));
 
         Assert.Equal(AuthErrorCodes.TwoFactorAlreadyEnabled, error.Code);
-        Assert.Equal("secret-in-use", user.TwoFactorSecret);
+        Assert.Equal("secret-in-use", user.TwoFactor!.Secret);
         Assert.Equal(1, user.RecoveryCodesLeft);
-        Assert.Equal(1, user.TwoFactorLastUsedStep);
+        Assert.Equal(1, user.TwoFactor.LastUsedStep);
         Assert.Equal(stamp, user.SecurityStamp);
     }
 
@@ -66,7 +78,7 @@ public sealed class UserManagementRulesTests
         var error = Assert.Throws<BusinessException>(() => user.ReplaceRecoveryCodes(["code-hash"]));
 
         Assert.Equal(AuthErrorCodes.TwoFactorNotEnabled, error.Code);
-        Assert.Null(user.TwoFactorRecoveryCodes);
+        Assert.Null(user.TwoFactor);
         Assert.Equal(0, user.RecoveryCodesLeft);
     }
 

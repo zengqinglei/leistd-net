@@ -6,21 +6,20 @@ using Microsoft.AspNetCore.TestHost;
 using CompanyName.ProjectName.Api.Auth;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
+using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Timing;
 using Microsoft.Extensions.Logging;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
-#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Context;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.UnitOfWork;
 #endif
@@ -655,12 +654,12 @@ public sealed class ExternalAuthenticationTests
             User = new ExternalUserInfo { ProviderId = "crowded-id", ProviderAccountLabel = handle, SuggestedUsername = handle }
         };
         using var host = backchannel.CreateHost(factory).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-            services.AddTransient(provider => new ExternalAuthDomainService(
+            services.AddTransient(provider => new UserDomainService(
                 EveryUsernameTaken.Create(provider.GetRequiredService<IRepository<User, Guid>>()),
-                provider.GetRequiredService<IRepository<ExternalLoginConnection, Guid>>(),
                 provider.GetRequiredService<IDataFilter>(),
-                provider.GetRequiredService<IClock>(),
-                provider.GetRequiredService<ILogger<ExternalAuthDomainService>>()))));
+                provider.GetRequiredService<ICurrentTenant>(),
+                provider.GetRequiredService<IPasswordHasher>(),
+                provider.GetRequiredService<ILogger<UserDomainService>>()))));
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         var flow = await ExternalOAuthBackchannel.StartAsync(client);
         client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);

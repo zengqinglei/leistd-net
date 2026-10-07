@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.ValueObjects;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy.Tenancy;
@@ -36,65 +37,34 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IAggregateRo
     public string ProviderUserId { get; private set; }
 
     /// <summary>
-    /// 外部账号在提供商侧的展示标签（GitHub 的句柄、Google 的邮箱）
+    /// 提供商侧的账号资料快照
     /// </summary>
     /// <remarks>
     /// 只用于在"已绑定哪些登录方式"里显示是哪个账号，不是本地用户名，也不是身份标识：
-    /// 身份按 <c>Provider</c> + <see cref="ProviderUserId"/> 认，本地用户名由外部登录领域服务生成。
+    /// 身份按 <see cref="Provider"/> + <see cref="ProviderUserId"/> 认，本地用户名由用户领域服务生成。
     /// </remarks>
-    public string? ProviderAccountLabel { get; private set; }
-
-    /// <summary>
-    /// 外部身份提供商的邮箱
-    /// </summary>
-    public string? ProviderEmail { get; private set; }
-
-    /// <summary>
-    /// 外部身份提供商的头像 URL
-    /// </summary>
-    public string? ProviderAvatarUrl { get; private set; }
-
-    /// <summary>
-    /// 最后同步时间
-    /// </summary>
-    public DateTime? LastSyncTime { get; private set; }
+    public ExternalProfile Profile { get; private set; }
 
     private ExternalLoginConnection()
     {
         Provider = null!;
         ProviderUserId = null!;
+        Profile = null!;
     }
 
-    public ExternalLoginConnection(
-        Guid userId,
-        string provider,
-        string providerUserId,
-        DateTime syncedAt,
-        string? providerAccountLabel = null,
-        string? providerEmail = null,
-        string? providerAvatarUrl = null)
+    public ExternalLoginConnection(Guid userId, string provider, string providerUserId, ExternalProfile profile)
     {
         Id = Guid.CreateVersion7();
         UserId = userId;
         Provider = provider ?? throw new ArgumentNullException(nameof(provider));
         ProviderUserId = providerUserId ?? throw new ArgumentNullException(nameof(providerUserId));
-        ProviderAccountLabel = providerAccountLabel;
-        ProviderEmail = providerEmail;
-        ProviderAvatarUrl = providerAvatarUrl;
-        LastSyncTime = syncedAt;
+        Profile = profile ?? throw new ArgumentNullException(nameof(profile));
     }
 
-    public void Update(
-        DateTime syncedAt,
-        string? providerAccountLabel = null,
-        string? providerEmail = null,
-        string? providerAvatarUrl = null)
+    /// <summary>用提供商最新的资料替换快照。</summary>
+    public void Sync(ExternalProfile profile)
     {
-        ProviderAccountLabel = providerAccountLabel;
-        ProviderEmail = providerEmail;
-        ProviderAvatarUrl = providerAvatarUrl;
-        LastSyncTime = syncedAt;
+        Profile = profile ?? throw new ArgumentNullException(nameof(profile));
     }
-
 }
 #endif

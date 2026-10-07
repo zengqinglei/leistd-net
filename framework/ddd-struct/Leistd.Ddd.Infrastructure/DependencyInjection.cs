@@ -145,7 +145,7 @@ public static class DependencyInjection
         return tracked;
     }
 
-    // 本上下文按 DbSet<T> 声明派生的实体。注册阶段拿不到 EF Core 模型
+    // 本上下文按 DbSet<T> 声明派生的聚合根。注册阶段拿不到 EF Core 模型
     // （取 Model 要实例化 DbContext，而那需要已构建的容器），只能反射类型。
     private static IEnumerable<Type> DiscoverEntityTypes(Type dbContextType) =>
         dbContextType
@@ -153,7 +153,7 @@ public static class DependencyInjection
             .Where(p => p.PropertyType.IsGenericType &&
                         p.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>))
             .Select(p => p.PropertyType.GetGenericArguments()[0])
-            .Where(t => typeof(IEntity).IsAssignableFrom(t));
+            .Where(t => typeof(IAggregateRoot).IsAssignableFrom(t));
 
     // 先把「实体 → 实现」定案再落注册：同一上下文内 AddDefaultRepositories 与
     // AddDefaultRepository 重叠时自然去重，且自定义实现恒优先。

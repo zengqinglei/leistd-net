@@ -2,7 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
@@ -196,7 +196,7 @@ public sealed class ReauthenticationLockoutTests(ProjectWebApplicationFactory fa
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         return (await db.Set<User>().IgnoreQueryFilters()
-            .SingleAsync(user => user.Id == userId)).AccessFailedCount;
+            .SingleAsync(user => user.Id == userId)).Lockout.AccessFailedCount;
     }
 
     private static async Task<string?> ChangePasswordErrorAsync(HttpClient client, string currentPassword)
