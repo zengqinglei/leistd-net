@@ -28,7 +28,7 @@ using Leistd.Authorization.DataScope.Abstractions;
 namespace Leistd.Authorization.Tests.EndToEnd;
 
 /// <summary>
-/// 真实 ASP.NET Core 宿主：验证三层授权**串起来之后**的行为。
+/// 真实 ASP.NET Core 宿主：验证三层授权串起来之后的行为。
 /// </summary>
 /// <remarks>
 /// 单元测试只能覆盖每一层自己的语义，覆盖不到集成缝：动态 Policy 是否真的接上了检查器、

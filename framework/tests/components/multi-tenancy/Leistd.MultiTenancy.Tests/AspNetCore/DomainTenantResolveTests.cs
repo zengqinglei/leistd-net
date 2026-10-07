@@ -68,7 +68,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
     }
 
     /// <summary>
-    /// 受管域内没解析出租户时必须**就此定案为宿主**，不能把决定权交还给请求头。
+    /// 受管域内没解析出租户时必须就此定案为宿主，不能把决定权交还给请求头。
     /// </summary>
     /// <remarks>
     /// 只在成功提取到租户名时才写 <c>TenantIdOrName</c>、从不设 <c>Handled</c> 的话，
@@ -183,7 +183,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
     }
 
     /// <summary>
-    /// 受管域**之外**的请求仍走请求头：服务间调用打的是集群内部主机名，
+    /// 受管域之外的请求仍走请求头：服务间调用打的是集群内部主机名，
     /// 租户靠提示头传递，一刀切会把它打断。
     /// </summary>
     [Fact]

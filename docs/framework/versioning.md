@@ -6,18 +6,9 @@
 
 ### `VERSION` 是"上一次已发布的正式版"，不是"下一版"
 
-这一条必须明确，因为两种读法都讲得通，而选错会拿到不存在的包：
-
-- `VERSION` 的内容 **等于最近一次 stable 已上传的版本号**，由 `release.yml` 在包上传后推送回写；包源索引和 Release 验收可能稍后完成；
-- **下一版由流水线按提交算出**（见下一节），`VERSION` 里不会提前出现；
-- 因此在 `main` 上读到 `0.12.0`，含义是"nuget.org 上最新的正式版是 0.12.0"，
-  而不是"正在做 0.12.0"。
-- 在 `develop` 上读到的仍是 `0.12.0`，但该分支产出的包是 `0.13.0-beta.<N>`
-  ——`VERSION` 不随 beta 递增。要知道当前 beta 版本号，看 nuget.org 的预发布列表或流水线日志，
-  不要从 `VERSION` 推。
-
-下游仓库据此定版：跟 stable 用 `VERSION` 的值；跟 beta 必须写实际的 `-beta.<N>` 全称，
-不能写 `VERSION` 的值加猜测的后缀。
+- `VERSION` 等于最近一次 stable 已上传的版本，由 `release.yml` 上传后回写；包源索引与 Release 验收可能稍后完成。
+- 下一版由流水线按提交推算，不提前写入 `VERSION`；`develop` 也保留这个稳定版本基准，不随 beta 递增。
+- 下游跟 stable 使用 `VERSION`；跟 beta 从包源或流水线确认实际 `-beta.<N>` 全称，不猜测后缀。
 
 ### ⚠️ nuget.org 上存在版本号虚高的历史预发布包
 
@@ -28,16 +19,7 @@
 **在这批包被 unlist 之前，预发布依赖必须写死全称**，例如
 `<PackageReference Include="Leistd.Core" Version="0.13.0-beta.170" />`，不要用浮动或 `--prerelease`。
 
-成因（两条，都已确认）：
-
-1. `1.0.0-beta.22` 早于「0.x 期间破坏性变更按 Minor 递增」这条规则（2026-09-06 引入）。
-2. `1.0.0-preview.*` 是**规则引入之后**仍在产出的：GitHub 的 `schedule` 事件
-   **始终执行默认分支的 workflow 文件**，而该规则目前只在 `develop` 的 `release.yml` 里，
-   `main` 还没有。nightly 因此检出 develop 的源码，却跑着 main 的版本推算逻辑。
-   push 到 `develop` 触发的 beta 通道跑的是 develop 自己的文件，所以 beta 一直是正确的 `0.13.0-beta.*`。
-
-修复需要两步，都不能顺带做：`release.yml` 的当前版本合入 `main`（合入 main 本身即触发正式发版），
-以及在 nuget.org 上 unlist 那 10 个包（NuGet 包不可删，只能 unlist，且是对公共源的操作）。
+定时任务执行默认分支的 workflow；当前默认分支与 develop 的版本规则不同，nightly 因而仍可能产出虚高版本。修正需将 `release.yml` 合入 `main` 并在 nuget.org unlist 旧包；合入 main 会触发正式发布，unlist 是公共源操作，均须单独授权。
 
 - `framework/common.props` 在构建时自动读取 `VERSION` 作为 `VersionPrefix`，所有 `Leistd.*` 包同步该版本（无外部工具依赖）。
 - 模板 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 是字面值副本（生成项目需自包含），由发布流水线 `release.yml` 在发版时回写。
@@ -56,11 +38,7 @@
 
 ### 标了 `!` 就必须有 `BREAKING CHANGE:` 脚注
 
-`!` 只让流水线知道"这是破坏性的"，它不告诉适配方**破坏了什么**。而适配方是**按脚注检索**的：
-`git log --grep='BREAKING CHANGE'` 是他们确认"这一版要改哪些地方"的入口，
-标题里的 `!` 不在这个结果里。少一条脚注，对应的那次改动就会在适配时被整体漏掉。
-
-因此带 `!` 的提交必须带脚注，且脚注与升级指南一致：
+带 `!` 的提交必须有非空 `BREAKING CHANGE:` 或 `BREAKING-CHANGE:` 脚注，与升级指南一致，供下游按脚注检索。
 
 ```
 refactor!: 异常响应统一走 Problem Details 管道
@@ -69,43 +47,18 @@ BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/error
 组件异常映射由各组件的 AddXxx 自行登记。详见 docs/framework/upgrades/0.13.0.md#异常处理。
 ```
 
-脚注不必复述全部细节——**指向升级指南 `docs/framework/upgrades/<版本>.md` 的具体小节**即可，但那一句指路不能省。
-此前的脚注写的是迁移前那份升级说明的节号，已推送的历史不改写；从升级指南迁到 `upgrades/` 起，脚注一律指向新文件的小节。
+脚注写变化概要，并须指向升级指南 `docs/framework/upgrades/<版本>.md` 的具体小节。旧提交中的节号指向迁移前说明，已推历史不改写；新脚注指向 `upgrades/`。
 
-**发布时会拦。** `release.yml` 推算版本那一步逐条解析本次范围内的提交：标了 `!` 却没有脚注就中止发布，
-并列出是哪几条。升版判定与这道检查**共用同一个解析**——`!` 看标题前缀，脚注看行首
-`BREAKING CHANGE:` / `BREAKING-CHANGE:`（Conventional Commits 的真脚注，两种写法等价）。
+`release.yml` 在推算版本时拦截带 `!` 却无非空脚注的提交并列出原因。脚注检查、升版推算与发布说明提取使用同一解析口径：`!` 看标题前缀，脚注须在行首，接受 `BREAKING CHANGE:` 与 `BREAKING-CHANGE:`。
 
-**脚注不能是空的**：`BREAKING CHANGE:` 后面什么都不写不算数——适配方检索到了也读不出改了什么。
-识别口径在三处出现（脚注闸门、升版推算、发布说明提取），三处必须一致：
-只在一处接受连字符写法，会出现"过了闸门却不进发布说明"。
-
-> 此前升版判定用的是无锚点的 `BREAKING CHANGE`，正文里任何位置出现这串字样都会被判成 major——
-> 一条只在正文解释"这次不算 BREAKING CHANGE"的 `docs:` 提交足以触发一次错误升版。现已修正。
-
-**这道检查有一个写死的起点。** 闸门落地时，上一个稳定 tag（`v0.12.0`）到 `HEAD` 之间已经有
-**20 条**带 `!` 缺脚注的提交（最早一条是 `46a5555c`）。不设起点的话第一次发布就会被自己拦下，
-而已推的历史不原地改写，所以 `release.yml` 里的 `$footnoteAnchor` 固定为
-`802b4dca`——**只检查它之后的提交**。这一批旧提交的破坏性内容统一由
-`docs/framework/upgrades/0.13.0.md` 承载；按脚注检索不到时以那份升级指南为准。
-
-起点是一次性的切换点，不是可开可关的开关：它不随时间推移扩大豁免范围，`802b4dca` 之后的每一条提交
-都要守这条规则。只有分支历史被重构（起点不再是 `HEAD` 的祖先）时才更新它，那时发布会直接报错提示，
-不会静默跳过检查。升版推算仍然用完整范围，只有脚注检查用这个起点。
+脚注检查只覆盖固定锚点 `802b4dca` 之后的提交，避免检查引入前的已推历史；此前缺脚注的破坏性内容见 [0.13.0 升级指南](upgrades/0.13.0.md)。锚点不扩大豁免范围，仅在历史重构后不再是 HEAD 祖先时更新；找不到祖先会报错，不静默跳过。升版推算仍使用完整提交范围。
 
 ### 0.x 期间的破坏性变更按 Minor 递增
 
 依据 [SemVer 第 4 条](https://semver.org/lang/zh-CN/#spec-item-4)：`0.y.z` 是初始开发期，
 公共 API 不承诺稳定。因此当前主版本为 `0` 时，`!` / `BREAKING CHANGE` 递增 **Minor** 而不是 Major。
 
-这条规则解决的是：破坏性变更在 0.x 阶段是常态，若照搬"带 `!` 就进 Major"，
-**第一条不兼容改动就会把版本推到 `1.0.0`** —— 而 1.0 意味着 API 稳定承诺，
-那是一次产品决定，不该由某条提交顺带触发。
-
-破坏性变更**不会被隐藏**：release notes 仍按 `!` / `BREAKING CHANGE` 归入「破坏性变更」小节，
-升级 0.x 小版本时必须照常阅读。
-
-进入 `1.0.0` 需要显式抬 `VERSION`，见下方「本地手动操作」。
+`1.0.0` 代表 API 稳定承诺，须显式抬 `VERSION`，不能由一条破坏性提交自动触发。0.x 的破坏性变化仍列入 release notes，升级小版本须阅读。
 
 ## 分支 → 包类型
 
@@ -141,8 +94,7 @@ BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/error
 
 ## 破坏性变更怎么让下游知道
 
-**发版日志与升级指南是唯一的对外交付物**，和生态里的通行做法一致（ABP 同样是
-release notes + migration guides，没有提交式的 API 基线）：
+破坏性变化通过 release notes 与按需升级指南交付，采用 ABP 同类的发布说明与迁移指南形式：
 
 - release notes 由 `release.yml` 按 Conventional Commits 自动归类，`!` 与
   `BREAKING CHANGE` 脚注进「破坏性变更」小节；
@@ -194,20 +146,11 @@ release notes + migration guides，没有提交式的 API 基线）：
 （基类与接口、泛型约束、参数默认值、static↔实例、访问器可见性、常量值都在内），
 有意的破坏性变更落进 `CompatibilitySuppressions.xml` 供评审。
 
-**现在不接，也不作为任何版本的发布前置条件。** 理由是当前的治理方式够用：
-0.x 期间破坏性变更是常态，消费方是已知的几个内部仓库，Conventional Commits +
-release notes + 按需升级指南能把变化送到；再叠一套机械闸门属于为不存在的风险付维护成本。
+当前不启用，也不作为发布前置条件：0.x 破坏性变化频繁、消费方为已知内部仓库，现有提交脚注、release notes 与升级指南足够，暂不增加兼容性闸门。
 
-满足下面任一条时再评估引入：
+以下任一情况出现时重新评估：进入 `1.0.0` 承诺 API 稳定；外部消费方不可控；升级指南反复漏记。
 
-- 框架进入 `1.0.0`——那意味着对外承诺 API 稳定，"我以为没破坏"不再是可接受的答案；
-- 消费方变得不可控（公开发布、外部团队接入），脚注漏写的代价不再由自己承担；
-- **升级说明重复漏记**——这是最实在的触发条件，一次是意外，反复发生说明靠人不行了。
-
-真要接入时：基线取**一个已发布的版本**（不能取当前开发版），在 `framework/common.props`
-打开 `EnablePackageValidation` 并设 `PackageValidationBaselineVersion`，首次 `dotnet pack`
-带 `/p:GenerateCompatibilitySuppressionFile=true` 生成抑制文件，逐条评审后提交。
-注意改过名或新增的包没有基线，需逐包例外。
+接入时以已发布版本为基线，在 `framework/common.props` 设置 `EnablePackageValidation` 与 `PackageValidationBaselineVersion`；首次 pack 用 `/p:GenerateCompatibilitySuppressionFile=true` 生成抑制文件，逐条评审后提交。改名或新增包无基线，须逐包处理。
 
 升级指南都在 [`upgrades/`](upgrades/) 目录，按版本号命名：
 
@@ -243,4 +186,4 @@ pwsh framework/build/pack-local-feed.ps1
 
 - CPM 下第三方包版本集中在 `framework/Directory.Packages.props`；升级第三方依赖按提交规范评估影响。
 - monorepo 统一版本：所有可发布框架包共享同一版本。推包途中失败可能留下部分已发布的包；同版本不可覆盖，恢复前须核对实际包集合和 tag，不用 `--skip-duplicate` 掩盖不同候选产物。
-- 整个机制零外部版本工具（纯 git + PowerShell + MSBuild 读文件），与团队其它项目（如 ai-relay）的 VERSION 文件范式一致。
+- 版本机制仅使用 git、PowerShell 与 MSBuild，不依赖外部版本工具。

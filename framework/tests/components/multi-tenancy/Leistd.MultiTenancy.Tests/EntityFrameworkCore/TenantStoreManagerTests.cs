@@ -400,8 +400,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Other_constraint_failures_are_not_reported_as_duplicate_name()
     {
-        // 名称未变、因别的约束失败：不能被当成名称重复。
-        // 早期实现只查"同名是否存在"，更新时必然命中自己，任何写入错误都会被误报成 409
+        // 名称未变时，同名查询会命中自己；其他约束失败不能据此误报成名称冲突。
         var record = await _manager.CreateAsync("Acme", null, isActive: true);
 
         var tooLongDisplayName = new string('x', TestTenantDbContext.DisplayNameCheckLimit + 1);
@@ -423,11 +422,8 @@ public class TenantStoreManagerTests : IAsyncLifetime
     /// 管理器的 DbContext 可能就是宿主的工作单元：名称冲突不能连带丢掉调用方尚未提交的业务变更。
     /// </summary>
     /// <remarks>
-    /// <para>早期实现在冲突分支里 <c>ChangeTracker.Clear()</c>，会静默清空整个跟踪器——
-    /// 调用方先改了业务实体、再调用租户管理器并捕获 409 继续执行时，那些修改凭空消失。</para>
-    /// <para>必须走**竞争**路径而不是预检路径：预检拒绝时 SaveChanges 根本没被调用，
-    /// 跟踪器也就没人动过，用例即使在有 <c>Clear()</c> 的实现下也是绿的，用例空转。
-    /// 只有预检通过、保存被唯一索引拒绝时，才会执行到丢弃逻辑。</para>
+    /// 名称冲突只丢弃本次租户变更，不能 <c>ChangeTracker.Clear()</c> 清掉其他待提交实体。
+    /// 必须模拟预检通过后被唯一索引拒绝的竞争；预检拒绝不会调用 SaveChanges，测不到保存失败的丢弃逻辑。
     /// </remarks>
     [Fact]
     public async Task Name_conflict_does_not_discard_unrelated_pending_changes()
@@ -482,14 +478,9 @@ public class TenantStoreManagerTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// 删除在提交那一刻即不可达——这条路径**无法**靠重试补救，访问控制不能依赖事后失效。
+    /// 删除在提交那一刻即不可达——这条路径无法靠重试补救，访问控制不能依赖事后失效。
     /// </summary>
-    /// <remarks>
-    /// 缓存时代：删除先提交、再失效缓存，失效失败时陈旧条目继续放行；而重试删除会被
-    /// 管理器的 <c>!IsDeleted</c> 前置查询挡住（租户已软删、按 Id 找不到），
-    /// 直接抛 TenantNotFoundException，连再试一次失效的机会都没有。
-    /// 直接读库让"删除即不可达"成为构造性质，不依赖任何补救动作。
-    /// </remarks>
+    /// <remarks>直接读库保证提交即不可达；软删后重试删除会被 <c>!IsDeleted</c> 查询拒绝，不能依赖事后缓存失效补救。</remarks>
     [Fact]
     public async Task Deletion_takes_effect_immediately_and_needs_no_compensating_action()
     {
@@ -502,8 +493,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Null(await _store.FindAsync(record.Id));
         Assert.Null(await _store.FindByNameAsync("ACME"));
 
-        // 重试删除确实抛 NotFound——这正是缓存时代补救不了的原因，
-        // 现在无所谓了：第一次提交就已经生效
+        // 重试删除抛 NotFound；第一次提交已生效，不依赖再次删除补救。
         await Assert.ThrowsAsync<TenantNotFoundException>(() => _manager.DeleteAsync(record.Id));
     }
 

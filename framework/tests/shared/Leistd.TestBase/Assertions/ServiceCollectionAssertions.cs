@@ -4,16 +4,8 @@ using Xunit;
 
 namespace Leistd.TestBase.Assertions;
 
-/// <summary>
-/// 针对 <see cref="IServiceCollection"/> 的断言词汇：把"注册面正确"写成一行。
-/// </summary>
-/// <remarks>
-/// <para>Leistd 靠宿主显式调用 <c>AddXxx()</c> 组合，没有模块图也没有约定注册——
-/// 注册结果就是公共契约的一部分，且是显式组合模型的主要风险面：
-/// 生命周期写错、重复注册、组件之间意外互相覆盖，编译期一个都发现不了。</para>
-/// <para>规范：每个 <c>DependencyInjection.cs</c> 至少三条用例——注册结果与生命周期、
-/// 重复调用幂等、与相邻组件的覆盖/共存关系。</para>
-/// </remarks>
+/// <summary>服务注册数量、生命周期、实现与幂等性的断言。</summary>
+/// <remarks>注册测试覆盖生命周期、重复调用，以及与相邻组件的覆盖或共存关系。</remarks>
 public static class ServiceCollectionAssertions
 {
     /// <summary>断言 <typeparamref name="TService"/> 恰好注册一次，且生命周期符合预期。</summary>
@@ -46,10 +38,7 @@ public static class ServiceCollectionAssertions
     }
 
     /// <summary>断言 <typeparamref name="TService"/> 未被注册。</summary>
-    /// <remarks>
-    /// 用于钉住"本组件不替其他组件注册基础设施"——那是设计原则里的硬边界，
-    /// 破坏它的症状（宿主拿到一个它没要过的实现）在集成阶段才会显形。
-    /// </remarks>
+    /// <remarks>检查组件没有替宿主注册其他组件的基础设施。</remarks>
     public static void AssertNotRegistered<TService>(this IServiceCollection services) =>
         Assert.DoesNotContain(services, d => d.ServiceType == typeof(TService));
 
@@ -60,12 +49,7 @@ public static class ServiceCollectionAssertions
     /// </code>
     /// </example>
     /// <remarks>
-    /// <para>宿主重复调用 <c>AddXxx()</c> 是常态（组合根拆分、组件互相"确保已注册"）。
-    /// 不幂等的表现是同一接口被解析成 <c>IEnumerable</c> 时出现重复项，或单例被建两份。</para>
-    /// <para><b>选项配置器不计入</b>：<c>IConfigureOptions&lt;&gt;</c> 一族按 Microsoft.Extensions.Options
-    /// 的契约就是累加的，同一个配置委托跑两遍对结果没有影响。把它们算进来会让任何经
-    /// <c>AddOptions&lt;&gt;()</c> 或 <c>AddSignalR()</c> 的注册面永远无法通过本断言，
-    /// 于是这条规则会被整体放弃——那才是真正的损失。</para>
+    /// 按服务类型与实现统计注册次数；Options 配置器按累加契约排除，本断言不验证配置委托的执行结果。
     /// </remarks>
     public static void AssertIdempotent(Action<IServiceCollection> register)
     {

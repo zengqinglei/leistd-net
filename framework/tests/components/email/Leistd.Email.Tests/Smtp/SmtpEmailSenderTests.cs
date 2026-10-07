@@ -13,11 +13,7 @@ namespace Leistd.Email.Tests.Smtp;
 /// <summary>
 /// 发送失败必须上抛。
 /// </summary>
-/// <remarks>
-/// 这是本组件存在的直接动因：上一版实现在 <c>Host</c> 为空或等于默认示例值时静默返回，
-/// 调用方以为信已发出。而 <c>EmailVerificationAppService</c> 正是靠这次异常
-/// 回滚已占用的限流槽位与挑战缓存——静默成功会把一个永远收不到码的挑战交给用户。
-/// </remarks>
+/// <remarks>调用方依赖发送异常回滚限流槽位与挑战缓存；空 Host 或示例主机名也不能被当成成功跳过。</remarks>
 public sealed class SmtpEmailSenderTests
 {
     // 保留给 IANA 的丢弃端口，本机上不会有服务监听

@@ -10,18 +10,10 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// <c>ValidateResolvedTenant = false</c> 时解析链必须被强制收口为只有主体贡献者，
-/// 无论宿主怎么改链。
-/// </summary>
+/// <summary><c>ValidateResolvedTenant = false</c> 时强制只保留主体贡献者。</summary>
 /// <remarks>
-/// <para>这是一道安全边界。仅在"装配默认链"时少加贡献者是不够的——宿主有两种写法能绕过：
-/// 在 <c>AddMultiTenancy</c> 之前注册贡献者（链非空，默认装配直接跳过），
-/// 或在之后追加。此形态下注册表校验已关闭，未经验证的来源会被直接采信，
-/// 匿名请求改一个请求头就能拿到任意租户上下文。因此收窄必须发生在
-/// 所有 <c>Configure</c> 之后（<c>IPostConfigureOptions</c>）。</para>
-/// <para>三类反例分别对应：默认装配、宿主前置、宿主后置。缺任何一类，
-/// 对应的绕过路径就没有回归锁。</para>
+/// 注册表校验关闭后，请求头、查询串和子域名均为未经验证的来源；须在所有 Configure 之后收窄解析链。
+/// 分别覆盖默认装配、宿主前置注册和后置追加，避免注册顺序绕过安全边界。
 /// </remarks>
 public class PrincipalOnlyEnforcementTests
 {
@@ -56,10 +48,7 @@ public class PrincipalOnlyEnforcementTests
         Assert.IsType<CurrentPrincipalTenantResolveContributor>(contributors[0]);
     }
 
-    /// <summary>
-    /// 宿主在 <c>AddMultiTenancy</c> 之后追加贡献者：这是最自然的扩展写法，
-    /// 也最容易在评审时被当成"宿主的自由"而放过。
-    /// </summary>
+    // 后置 Configure 也必须被 PostConfigure 收窄，不能重新引入未经验证的来源。
     [Fact]
     public void Host_appended_contributors_after_setup_are_removed()
     {

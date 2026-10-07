@@ -49,8 +49,7 @@ public sealed class RemoteResolutionTests : IDisposable
         Assert.Equal("Data Source=acme", await _host.ResolveAsync("Crm"));
     }
 
-    // 这是本设计唯一的失败关闭点：租户明明是分库租户，却缺了这个服务的连接、也没有默认名可回落。
-    // 静默连到本服务的公共库就是事故——那个库里没有它的数据，它的写入会落进别人的库。
+    // 分库租户缺少当前连接名且无 default 时须失败关闭，回落本服务配置会把写入落到错误的物理库。
     [Fact]
     public async Task A_registered_tenant_missing_this_name_is_refused()
     {

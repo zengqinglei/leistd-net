@@ -14,19 +14,10 @@ using Leistd.MultiTenancy.Context;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// 资源服务形态（<c>ValidateResolvedTenant = false</c>）：不持有租户注册表，
-/// 租户上下文只来自已验证令牌的 claim。
-/// </summary>
+/// <summary>资源服务不查注册表，租户上下文只来自已验证主体的声明。</summary>
 /// <remarks>
-/// <para>本形态与持有注册表的宿主<b>共用同一个中间件</b>，只靠一个选项区分。
-/// 为资源服务另建平行中间件（要求每个非匿名请求必须带恰好一个 <c>tenant_id</c>、否则 401）
-/// 会比主流多租户框架更严，代价是平台运维端点没有落点——只能标成公开、搬去 Identity，
-/// 或再引入一个端点豁免特性。而"有 claim 即租户、无 claim 即宿主"这套语义
-/// 由 <see cref="CurrentPrincipalTenantResolveContributor"/> 加中间件的 null 分支承担，
-/// 也是主流多租户框架的默认语义。</para>
-/// <para>边界改由权限定义的 <c>MultiTenancySides</c> 承担：宿主上下文只能看到宿主行
-/// （过滤器仍然生效，只是按 <c>TenantId IS NULL</c>），跨租户操作需要 Host 侧权限。</para>
+/// <c>ValidateResolvedTenant = false</c> 复用同一中间件：有租户声明进入租户上下文，无声明进入宿主上下文。
+/// 边界仍由 <c>MultiTenancySides</c> 与全局过滤器约束；宿主上下文只见 <c>TenantId IS NULL</c>，跨租户操作须有 Host 侧权限。
 /// </remarks>
 public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests.HostFixture fixture)
     : IClassFixture<ResourceServiceTenantContextTests.HostFixture>
@@ -64,18 +55,8 @@ public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests
         Assert.Equal("host", await SendAsync("/health", subject: null, tenantClaims: []));
     }
 
-    /// <summary>
-    /// <b>匿名</b>请求携带的租户线索不得被采信：链已收窄到只有主体贡献者。
-    /// </summary>
-    /// <remarks>
-    /// <para>这是"跳过注册表校验"与"收窄解析链"必须成对的原因。两者脱钩时，
-    /// 一个未认证的调用方只要带上 <c>X-Tenant</c>（或 <c>?tenant=</c>、或访问租户子域名），
-    /// 就能拿到该租户的上下文，而资源服务不查注册表、没有任何一道会拦下它。
-    /// 匿名端点（登录、找回密码、邮箱验证）就此在攻击者指定的租户上下文里执行。</para>
-    /// <para><b>必须用匿名请求测</b>：已认证请求会在
-    /// <see cref="CurrentPrincipalTenantResolveContributor"/> 处 <c>Handled</c> 终止链，
-    /// 后面的贡献者根本到不了，测不到收窄。</para>
-    /// </remarks>
+    // 必须用匿名请求验证请求头、查询串和子域名被忽略；已认证请求会在主体贡献者处 Handled，测不到后续链收窄。
+    // 跳过注册表校验须同时收窄解析链，避免匿名端点使用调用方指定的租户。
     [Theory]
     [InlineData("http://localhost/orders?tenant=11111111-1111-1111-1111-111111111111", null)]
     [InlineData("http://localhost/orders", "X-Tenant")]

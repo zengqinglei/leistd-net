@@ -8,16 +8,9 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 宿主换掉 <see cref="IUnitOfWork"/> 实现之后的生命周期。
-/// </summary>
+/// <summary>自定义工作单元的作用域回收与环境恢复。</summary>
 /// <remarks>
-/// <para><c>AddUnitOfWork()</c> 用 <c>TryAdd</c> 注册默认实现，宿主先注册自己的即可替换。
-/// 管理器为每个显式边界建一个独立 DI 作用域，靠工作单元的释放通知回收它——
-/// 这个订阅若按具体类型判断（如 <c>if (unitOfWork is DefaultUnitOfWork)</c>），换了实现之后
-/// <b>整段回收静默失效</b>：作用域一直挂着，环境工作单元也停在已释放的那个实例上。</para>
-/// <para>因此 <c>Disposed</c> 是 <see cref="IUnitOfWork"/> 的正式契约。本组用一个
-/// 最小自定义实现钉住它：只要按契约发出释放通知，作用域回收与环境恢复就都成立。</para>
+/// 宿主可先注册实现覆盖 <c>TryAdd</c> 默认项；管理器须依赖 <c>IUnitOfWork.Disposed</c> 契约回收独立作用域，不能按具体实现类型订阅。
 /// </remarks>
 public sealed class CustomUnitOfWorkLifecycleTests
 {

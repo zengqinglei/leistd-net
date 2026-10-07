@@ -277,13 +277,8 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
     /// 工作单元之外，改道后的连接不能静默复用作用域里已创建的 DbContext
     /// </summary>
     /// <remarks>
-    /// <para>生产事故的最小复现。<c>AddDbContext</c> 默认 Scoped：同一作用域里第一次取到的实例
-    /// 此后一直被复用，宿主回调不会再执行。请求里先在宿主上下文取过一次（授权阶段读权限就会），
-    /// 再 <c>ICurrentTenant.Change</c> 到分库租户去取，拿到的仍是宿主库上的那个实例——
-    /// 查询在宿主库执行，得出"该租户没有用户"这类<b>完全不报错的错答案</b>。</para>
-    /// <para>用改写解析结果来模拟"切到分库租户"，与
-    /// <c>Physical_target_switch_inside_one_unit_of_work_is_rejected</c> 同一手法；
-    /// 区别在于那条走工作单元路径，这条走工作单元之外。</para>
+    /// <c>AddDbContext</c> 默认 Scoped，首次解析后不再执行配置回调；切换物理库时不能复用先前的上下文。
+    /// 改写连接解析结果模拟切到分库租户，覆盖工作单元之外的路径；工作单元内由另一用例覆盖。
     /// </remarks>
     [Fact]
     public async Task Outside_a_unit_of_work_a_rerouted_connection_is_rejected_instead_of_reusing_the_scoped_dbcontext()

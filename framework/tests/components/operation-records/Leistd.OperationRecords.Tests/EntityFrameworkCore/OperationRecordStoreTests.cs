@@ -335,13 +335,8 @@ public sealed class OperationRecordStoreTests : IDisposable
 
     /// <summary>宿主读者看得到全部三层，含不属于自己、乃至没有操作人的 <c>Actor</c> 层记录。</summary>
     /// <remarks>
-    /// <para>其余用例覆盖"不传即不过滤"、租户读者与未知读者；这一条专门用 <c>Host</c> 作用域查询。
-    /// <c>Host</c> 的 <c>ActorId</c> 为 <see langword="null"/>，按 <c>actorId != null</c> 过滤
-    /// <c>Actor</c> 层就会整层滤掉，与"所有层级都可见"的契约相反。</para>
-    /// <para>那样的后果是宿主管理员<b>看不到自己的登录记录</b>——界面只显示"暂无操作记录"，
-    /// 不报错、不提示。<c>actor.anonymous</c> 那条正是这个形态：<c>auth.login.succeeded</c>
-    /// 写在登录成功的同一次请求里，此刻主体仍是匿名，操作人字段为空是<b>刻意</b>的
-    /// （"谁登录了"由目标承载），因此它既不属于任何人、又必须对宿主可见。</para>
+    /// <c>Host</c> 范围不按 ActorId 过滤，即使其值为 null 也须看见 Actor 层。
+    /// <c>actor.anonymous</c> 刻意构造无操作人的 Actor 记录，验证宿主读取不会被本人匹配规则排除。
     /// </remarks>
     [Fact]
     public async Task A_host_reader_sees_every_layer_including_actor_records_that_are_not_theirs()

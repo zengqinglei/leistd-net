@@ -292,7 +292,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.NotNull((await _store.FindAsync(tenant.Id, Name))!.Connection);
     }
 
-    /// <summary>停用之后可以改——这就是标准切换流程的第 4 步</summary>
+    /// <summary>停用租户后允许切换连接。</summary>
     [Fact]
     public async Task Changing_a_registration_is_allowed_once_the_tenant_is_deactivated()
     {
@@ -310,12 +310,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     /// <summary>
     /// 把"不分库"的在用租户改成分库，必须先停用
     /// </summary>
-    /// <remarks>
-    /// 这一条登记落下之前，该租户的种子、管理员与既有业务数据都活在服务自己配置的库里。
-    /// 登记一落，解析立刻改指新库，而那些数据不会跟着走：新库里没有管理员，租户当场登不上；
-    /// 旧库里留着一份带口令散列的孤儿账号。它与"改已有的那一行"是同一类事故——判据都是数据落点变了，
-    /// 而不是"这一行是不是首次写"。
-    /// </remarks>
+    /// <remarks>首次登记同样改变数据落点，既有种子、管理员和业务数据不会迁移，故不能按“首次写入”豁免停用要求。</remarks>
     [Fact]
     public async Task The_first_connection_of_an_active_tenant_is_rejected()
     {
@@ -330,14 +325,8 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Empty(await _dbContext.Set<TenantConnectionRecord>().AsNoTracking().ToListAsync());
     }
 
-    /// <summary>
-    /// 已是分库租户时，补一个此前没有的名字在启用态下照常放行
-    /// </summary>
-    /// <remarks>
-    /// 这一档不是数据落点变更：该租户已经登记过连接，缺这个名字的服务此前按"登记过却缺这个名字"
-    /// 失败关闭（见 <c>TenantConnectionTargets.Select</c>），回落库里根本没有它的数据，
-    /// 补登不会搁浅任何东西。而这恰恰是修复动作——为它要求停机，等于罚正在救火的人。
-    /// </remarks>
+    /// <summary>分库租户启用时允许补登缺失的连接名。</summary>
+    /// <remarks>缺名时 <c>TenantConnectionTargets.Select</c> 失败关闭，没有向默认配置库写入数据；补登不改变既有数据落点，无需停用。</remarks>
     [Fact]
     public async Task Adding_a_missing_name_to_a_sharded_tenant_is_allowed_while_it_is_active()
     {
