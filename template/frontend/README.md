@@ -115,13 +115,11 @@ npm run build                   # 默认 production 配置
 ### 部署
 
 页面与所属 API 必须同源：默认由后端同镜像托管构建产物，也可分进程部署、由网关统一外部源。同源要求见 [浏览器认证](../docs/standards/auth.md#浏览器认证)，镜像构建与转发规则见 [部署说明](../docs/deploy/README.md)。
-
 <!--#if (IncludeLocalization)-->
 
 ## 多语言
 
 词条位于 `public/i18n/`，文案归属、scope 登记与接线见 [前端多语言规范](../docs/standards/frontend-i18n.md)。
-
 <!--#endif-->
 <!--#if (IncludeNotifications || IncludeRealTime)-->
 
@@ -140,7 +138,6 @@ npm run build                   # 默认 production 配置
 <!--#endif-->
 
 客户端日志默认使用 `Warning`。排障时可以临时提高等级；生产日志与代理访问日志仍须遵循项目的凭据脱敏规范。
-
 <!--#endif-->
 
 ## 代码质量
