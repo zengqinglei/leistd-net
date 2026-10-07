@@ -11,7 +11,6 @@ using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Application.Users.Mappings;
 using Leistd.EventBus.Abstractions;
 using Leistd.Timing;
 #endif
@@ -21,6 +20,7 @@ using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Avatars;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
+using CompanyName.ProjectName.Application.Users.Mappings;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -49,9 +49,8 @@ namespace CompanyName.ProjectName.Application.Users.AppServices;
 /// 用户应用服务
 /// </summary>
 public class UserAppService(
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
     IRoleRepository roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
     IPermissionChecker permissionChecker,
     IOperationRecorder operationRecorder,
     UserDomainService userDomainService,
@@ -89,7 +88,7 @@ public class UserAppService(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var userQuery = await userRepository.GetQueryableAsync(cancellationToken);
+        var userQuery = await userRepository.GetQueryableWithRolesAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(input.Keyword))
         {
@@ -126,8 +125,7 @@ public class UserAppService(
                     return new PagedResult<UserManagementOutputDto>(0, []);
                 }
 
-                var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
-                userQuery = userQuery.Where(u => userRoleQuery.Any(ur => roleIds.Contains(ur.RoleId) && ur.UserId == u.Id));
+                userQuery = userQuery.Where(u => u.Roles.Any(ur => roleIds.Contains(ur.RoleId)));
             }
         }
 
@@ -170,7 +168,7 @@ public class UserAppService(
     /// </summary>
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
         return await MapToOutputAsync(user, cancellationToken);
     }
 #if (RemoteTokenAuth)
@@ -178,7 +176,7 @@ public class UserAppService(
     /// <inheritdoc />
     public async Task<CurrentResourceUserOutputDto> GetCurrentResourceUserAsync(CancellationToken cancellationToken = default)
     {
-        var user = currentUser.Id is { } id ? await userRepository.GetByIdAsync(id, cancellationToken) : null;
+        var user = currentUser.Id is { } id ? await userRepository.GetWithRolesAsync(id, cancellationToken) : null;
         var local = user is null ? null : await MapToOutputAsync(user, cancellationToken);
         return new CurrentResourceUserOutputDto
         {
@@ -255,8 +253,8 @@ public class UserAppService(
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
+        user.AssignRoles(roles.Select(role => role.Id));
         await userRepository.UpdateAsync(user, cancellationToken);
-        var userRoles = await userDomainService.AssignRolesAsync(user.Id, roles, cancellationToken);
 
         logger.LogInformation("User created (ID: {Id})", user.Id);
 
@@ -267,7 +265,7 @@ public class UserAppService(
             PermissionConstant.Users.Create,
             cancellationToken);
 
-        return MapToOutput(user, userRoles, roles);
+        return MapToOutput(user, roles);
     }
 
     /// <summary>
@@ -281,7 +279,7 @@ public class UserAppService(
     {
         logger.LogInformation("Updating user {Id}", id);
 
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
             throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
@@ -534,16 +532,13 @@ public class UserAppService(
 
 #endif
     private async Task<User> GetUserOrThrowAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var user = await userRepository.GetByIdAsync(id, cancellationToken);
-        if (user is null)
-        {
-            throw new BusinessException(UserErrorCodes.NotFound, $"User {id} not found.")
-                .WithData("Id", id);
-        }
+        => await userRepository.GetByIdAsync(id, cancellationToken) ?? throw UserNotFound(id);
 
-        return user;
-    }
+    private async Task<User> GetUserWithRolesOrThrowAsync(Guid id, CancellationToken cancellationToken)
+        => await userRepository.GetWithRolesAsync(id, cancellationToken) ?? throw UserNotFound(id);
+
+    private static BusinessException UserNotFound(Guid id)
+        => new BusinessException(UserErrorCodes.NotFound, $"User {id} not found.").WithData("Id", id);
 
     /// <inheritdoc />
     public async Task<UserAvatarOutputDto?> GetAvatarAsync(Guid id, CancellationToken cancellationToken = default)
@@ -561,10 +556,7 @@ public class UserAppService(
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        await GetUserOrThrowAsync(id, cancellationToken);
-
-        var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == id, cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
+        var roleIds = (await GetUserWithRolesOrThrowAsync(id, cancellationToken)).GetRoleIds();
         if (roleIds.Count == 0)
         {
             return [];
@@ -577,21 +569,22 @@ public class UserAppService(
     /// <summary>
     /// 替换用户角色。调用方必须持有 App.Users.ManageRoles，由 Controller 上的策略保证。
     /// </summary>
-    /// <remarks>先删旧角色再插新角色：拆成两次提交时，插入失败会把用户留在零角色状态。</remarks>
+    /// <remarks>撤销与新增在同一工作单元提交：拆成两次提交时，后一步失败会把用户留在零角色状态。</remarks>
     [UnitOfWork]
     public async Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
         Guid id,
         UpdateUserRolesInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
             throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
         }
 
         var roles = await GetRolesByIdsAsync(input.RoleIds, cancellationToken);
-        await userDomainService.ReplaceRolesAsync(id, roles, cancellationToken);
+        user.ReplaceRoles(roles.Select(role => role.Id));
+        await userRepository.UpdateAsync(user, cancellationToken);
 
         logger.LogInformation("User roles replaced (ID: {Id}, role count: {Count})", id, roles.Count);
 
@@ -650,29 +643,30 @@ public class UserAppService(
             return [];
         }
 
-        var userIds = users.Select(u => u.Id).ToList();
-        var userRoles = (await userRoleRepository.GetListAsync(ur => userIds.Contains(ur.UserId), cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
-        var roles = roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
-
-        return objectMapper.Map<List<User>, List<UserManagementOutputDto>>(users, CreateMappingContext(userRoles, roles));
+        var roles = await GetRolesOfAsync(users, cancellationToken);
+        return objectMapper.Map<List<User>, List<UserManagementOutputDto>>(users, CreateMappingContext(roles));
     }
 
+    /// <remarks>用户须已带角色读取。</remarks>
     private async Task<UserManagementOutputDto> MapToOutputAsync(User user, CancellationToken cancellationToken)
     {
-        var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == user.Id, cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
-        var roles = roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
-        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(userRoles, roles));
+        var roles = await GetRolesOfAsync([user], cancellationToken);
+        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(roles));
+    }
+
+    private async Task<List<Role>> GetRolesOfAsync(List<User> users, CancellationToken cancellationToken)
+    {
+        var roleIds = users.SelectMany(u => u.GetRoleIds()).Distinct().ToList();
+        return roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
     }
 
     /// <remarks>
-    /// 供刚写入的路径使用：角色数据由调用方给出，不回查数据库。
-    /// 写方法本来就知道自己产出了什么，回查既多一次往返，又要求那些行已经落库。
+    /// 供刚写入的路径使用：角色实体由调用方给出，不回查数据库。
+    /// 写方法本来就知道自己分配了哪些角色，回查既多一次往返，又要求成员关系已经落库。
     /// </remarks>
-    private UserManagementOutputDto MapToOutput(User user, List<UserRole> userRoles, List<Role> roles)
+    private UserManagementOutputDto MapToOutput(User user, List<Role> roles)
     {
-        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(userRoles, roles));
+        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(roles));
     }
 
     /// <remarks>排序是展示口径，映射交给已注册的 <c>Role → RoleBriefOutputDto</c>，不在此手工构造 DTO。</remarks>
@@ -685,12 +679,11 @@ public class UserAppService(
         return objectMapper.Map<List<Role>, List<RoleBriefOutputDto>>(ordered);
     }
 
-    private Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)
+    private Dictionary<string, object> CreateMappingContext(List<Role> roles)
     {
         return new Dictionary<string, object>
         {
-            ["UserRoles"] = userRoles,
-            ["Roles"] = roles,
+            [UserMappings.RolesKey] = roles,
 #if (LocalIdentity)
             [UserMappings.NowKey] = clock.Now,
 #endif

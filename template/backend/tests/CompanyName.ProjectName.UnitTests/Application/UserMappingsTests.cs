@@ -42,13 +42,14 @@ public class UserMappingsTests
 #else
         var user = new User(Guid.NewGuid(), "alice", "alice@example.test");
 #endif
+        user.AssignRoles([role.Id]);
 
         var dto = provider.GetRequiredService<IObjectMapper>().Map<User, UserManagementOutputDto>(
             user,
             new Dictionary<string, object>
             {
-                [UserMappings.UserRolesKey] = new List<UserRole> { new(user.Id, role.Id) },
-                [UserMappings.RolesKey] = new List<Role> { role }
+                // 多给一个用户未持有的角色：映射只取用户自己的成员关系
+                [UserMappings.RolesKey] = new List<Role> { role, new("other", "Other") }
             });
 
         Assert.Equal("marked:Member", Assert.Single(dto.Roles).DisplayName);

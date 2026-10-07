@@ -1,6 +1,7 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
@@ -26,9 +27,9 @@ namespace CompanyName.ProjectName.Application.Tenants;
 /// </remarks>
 public class TenantSeeder(
     ICurrentTenant currentTenant,
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
     IRepository<Role, Guid> roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
+    IQueryableAsyncExecuter asyncExecuter,
     UserDomainService userDomainService,
     IPermissionGrantSeeder permissionGrantSeeder,
     IPermissionGrantManager permissionGrantManager,
@@ -91,8 +92,8 @@ public class TenantSeeder(
                 PermissionGrantProviderNames.User, user.Id.ToString(), cancellationToken);
         }
 
-        // 主体和关联均软删除；必须先删主体再加载关联。
-        // 关联先进入 Modified 状态会使 EF 在删除必需关系主体时立即报错。
+        // 主体和成员关系均软删除；必须先删主体再加载成员关系：
+        // 成员关系在删除用户、角色之前就被跟踪时，限制删除的外键会让 EF 当场报错。
         if (users.Count > 0)
         {
             await userRepository.DeleteManyAsync(users, cancellationToken);
@@ -106,7 +107,13 @@ public class TenantSeeder(
         if (users.Count > 0)
         {
             var userIds = users.Select(u => u.Id).ToList();
-            await userRoleRepository.DeleteManyAsync(ur => userIds.Contains(ur.UserId), cancellationToken);
+            var holders = await asyncExecuter.ToListAsync(
+                (await userRepository.GetQueryableWithRolesAsync(cancellationToken)).Where(u => userIds.Contains(u.Id)),
+                cancellationToken);
+            foreach (var holder in holders)
+            {
+                holder.RemoveAllRoles();
+            }
         }
 
         // 设置行带租户归属：租户永久废弃后它们既读不到也删不掉，必须一并清理。
@@ -194,9 +201,12 @@ public class TenantSeeder(
 
     private async Task AssignAdminRoleAsync(User adminUser, Role adminRole, CancellationToken cancellationToken)
     {
-        if (!await userRoleRepository.AnyAsync(ur => ur.UserId == adminUser.Id && ur.RoleId == adminRole.Id, cancellationToken))
+        // 刚建的管理员在工作单元内还没落库、按 Id 读不到，它也还没有任何角色，直接用它
+        var user = await userRepository.GetWithRolesAsync(adminUser.Id, cancellationToken) ?? adminUser;
+        if (!user.IsInRole(adminRole.Id))
         {
-            await userRoleRepository.InsertAsync(new UserRole(adminUser.Id, adminRole.Id), cancellationToken);
+            user.AssignRoles([adminRole.Id]);
+            await userRepository.UpdateAsync(user, cancellationToken);
         }
     }
 }

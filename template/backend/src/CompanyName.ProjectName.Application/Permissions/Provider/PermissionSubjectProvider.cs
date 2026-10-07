@@ -16,9 +16,9 @@ namespace CompanyName.ProjectName.Application.Permissions.Provider;
 public class PermissionSubjectProvider(
     ICurrentUser currentUser,
     IRepository<User, Guid> userRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
     IOptions<ClaimTypeOptions> claimTypes,
-    IClock clock) : IPermissionSubjectProvider
+    IClock clock,
+    IQueryableAsyncExecuter asyncExecuter) : IPermissionSubjectProvider
 {
     public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
         => GetSubjectAsync(currentUser.Id, cancellationToken);
@@ -54,8 +54,12 @@ public class PermissionSubjectProvider(
                 IsSuperAdmin: true);
         }
 
-        var roleIds = (await userRoleRepository.GetListAsync(ur => ur.UserId == userIdValue, cancellationToken))
-            .Select(ur => ur.RoleId.ToString())
+        // 只投影角色 Id、不加载成员关系：每个请求都走这里，跟踪下来的成员关系会挡住同一请求里删除该用户
+        var userQuery = await userRepository.GetQueryableAsync(cancellationToken);
+        var roleIds = (await asyncExecuter.ToListAsync(
+                userQuery.Where(u => u.Id == userIdValue).SelectMany(u => u.Roles).Select(ur => ur.RoleId),
+                cancellationToken))
+            .Select(roleId => roleId.ToString())
             .ToArray();
 
         return new PermissionSubject(

@@ -654,7 +654,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
         await using var scope = Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
-        Assert.False(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+        Assert.False(await db.Set<UserRole>().AnyAsync(userRole => userRole.RoleId == role.Id));
     }
 
     /// <summary>
@@ -688,7 +688,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         Assert.True(await db.Roles.AnyAsync(existing => existing.Id == role.Id));
-        Assert.True(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+        Assert.True(await db.Set<UserRole>().AnyAsync(userRole => userRole.RoleId == role.Id));
         var providerKey = role.Id.ToString();
         Assert.True(await db.Set<PermissionGrantRecord>()
             .AnyAsync(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey));

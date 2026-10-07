@@ -19,9 +19,8 @@ public class UserMappings : IRegister
 #if (LocalIdentity)
     /// <summary>MapContext 参数名：调用方已解析好的角色名称。</summary>
     /// <remarks>
-    /// 写路径（注册、首次外部登录）在同一事务边界内刚分配完角色，关联行尚未落库，
-    /// 靠 <see cref="UserRolesKey"/> 与 <see cref="RolesKey"/> 的实体连接查不到。
-    /// 传本键即可绕开回查——调用方本来就知道它刚分配了哪些角色。
+    /// 写路径（注册、首次外部登录）在同一事务边界内刚分配完角色，成员关系尚未落库，
+    /// 按名称回查查不到。传本键即可绕开回查——调用方本来就知道它刚分配了哪些角色。
     /// </remarks>
     public const string RoleNamesKey = "RoleNames";
 
@@ -30,10 +29,7 @@ public class UserMappings : IRegister
     public const string NowKey = "Now";
 #endif
 
-    /// <summary>MapContext 参数名：用户角色关联行。</summary>
-    public const string UserRolesKey = "UserRoles";
-
-    /// <summary>MapContext 参数名：角色实体。</summary>
+    /// <summary>MapContext 参数名：角色实体，按用户当前持有的角色 Id（<see cref="User.GetRoleIds"/>）取用。</summary>
     public const string RolesKey = "Roles";
 
     public void Register(TypeAdapterConfig config)
@@ -60,7 +56,7 @@ public class UserMappings : IRegister
     }
 
 #if (LocalIdentity)
-    // 优先用调用方直接给出的角色名；没有时退回实体连接
+    // 优先用调用方直接给出的角色名；没有时按角色实体取
     private static string[] ResolveRoles(User source)
     {
         if (MapContext.Current?.Parameters.TryGetValue(RoleNamesKey, out var roleNamesObj) == true &&
@@ -86,14 +82,10 @@ public class UserMappings : IRegister
 
     private static List<Role> ResolveRoleEntities(User source)
     {
-        if (MapContext.Current?.Parameters.TryGetValue(UserRolesKey, out var userRolesObj) == true &&
-            userRolesObj is List<UserRole> userRoles &&
-            MapContext.Current?.Parameters.TryGetValue(RolesKey, out var rolesObj) == true &&
+        if (MapContext.Current?.Parameters.TryGetValue(RolesKey, out var rolesObj) == true &&
             rolesObj is List<Role> roles)
         {
-            return [.. userRoles
-                .Where(ur => ur.UserId == source.Id)
-                .Join(roles, ur => ur.RoleId, r => r.Id, (ur, r) => r)];
+            return [.. source.GetRoleIds().Join(roles, roleId => roleId, role => role.Id, (_, role) => role)];
         }
 
         return [];

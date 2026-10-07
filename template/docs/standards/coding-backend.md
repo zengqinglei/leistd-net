@@ -193,7 +193,7 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 ## 6. 数据访问
 
-- **聚合**：子实体只经聚合根的方法修改；聚合间按 Id 引用，跨聚合协调在应用服务；有独立仓储的实体（如 `UserRole`）按聚合根对待。
+- **聚合**：有独立仓储即聚合根；子实体（如 `UserRole`）不声明 DbSet，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。
 - **仓储**只为聚合根提供：通用 `IRepository<T, TKey>` 覆盖增删改与单个用例的查询组合（`ISoftDelete` 实体为逻辑删除）。聚合特有、被多个用例复用的查询（连接、投影）加到该聚合的自定义仓储：Domain `<模块>/Repositories/I{聚合}Repository`，Infrastructure `EfCore{聚合}Repository`，经 `AddRepository<{聚合}, EfCore{聚合}Repository>()` 登记，方法按返回内容命名（`IUserRepository.GetRoleNamesAsync`）。不在领域服务里拼查询，不新增 `*Reader`、`*Query` 等查询类型。
 - Application 不使用 EF Core 扩展：`IQueryable` 经 `IQueryableAsyncExecuter`（`ToListAsync`、`CountAsync`、`FirstOrDefaultAsync`、`AnyAsync` 等）执行；关联数据用查询组合（子查询、`Join`）或分别查询，不用 `Include`。
 - 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 获取，不直接构造注入：直接注入的实例按宿主库创建，分库租户下会落到宿主库（框架拒绝，表现为 500）。控制库上下文固定宿主连接，可以直接注入。

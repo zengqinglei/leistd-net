@@ -6,7 +6,6 @@ using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
@@ -25,7 +24,6 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// </summary>
 internal sealed class ExternalAuthAppService(
     ExternalAuthDomainService externalAuthDomainService,
-    UserDomainService userDomainService,
     IRoleRepository roleRepository,
     SessionSignInService sessionSignInService,
     IRepository<User, Guid> userRepository,
@@ -52,13 +50,14 @@ internal sealed class ExternalAuthAppService(
             externalUserInfo,
             cancellationToken);
 
-        // 新建用户带出刚分配的角色名（关联行在本工作单元内尚未落库，回查不到）；
+        // 新建用户带出刚分配的角色名（成员关系在本工作单元内尚未落库，回查不到）；
         // 既有用户传 null，由 SessionSignInService 按已落库的角色回查
         List<string>? roleNames = null;
         if (created)
         {
             var defaultRoles = await roleRepository.GetDefaultRolesAsync(cancellationToken);
-            await userDomainService.AssignRolesAsync(user.Id, defaultRoles, cancellationToken);
+            user.AssignRoles(defaultRoles.Select(role => role.Id));
+            await userRepository.UpdateAsync(user, cancellationToken);
             roleNames = [.. defaultRoles.Select(role => role.Name)];
         }
 

@@ -4,15 +4,12 @@ using Leistd.MultiTenancy.Tenancy;
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
 /// <summary>
-/// 用户角色关联实体
+/// 用户的角色成员关系：<see cref="User"/> 聚合的子实体，按 <see cref="RoleId"/> 引用角色聚合。
 /// </summary>
 /// <remarks>
-/// 实现 <see cref="IMultiTenant"/>：本实体<b>被独立查询</b>（有自己的仓储，按 <c>UserId</c> /
-/// <c>RoleId</c> 直接命中），因此必须自带租户维度，由全局过滤器与启动期检查接管。
-/// <para><b>这是过渡形态，不是终局。</b>按 DDD，用户角色关联属于 User 聚合，本不该有独立仓储；
-/// 终局是把它收进聚合、取消独立查询入口，那时租户维度由聚合根承担、本接口可以去掉。
-/// 在那之前，"独立可查 ⇒ 自带租户维度"这条判据必须满足，否则隔离只是碰巧成立。
-/// 判据见 docs/template/development-guide.md §8。</para>
+/// 只经 <see cref="User"/> 的方法分配与撤销，没有独立仓储。撤销是软删除：已撤销的行留作历史，
+/// 资源管理员引导据此不再把撤销过的 Admin 成员关系加回来。
+/// 自带租户维度：仓储里的角色名查询直接读这张表，全局租户过滤器要能单独作用于它。
 /// </remarks>
 public class UserRole : DeletionAuditedEntity<Guid>, IMultiTenant
 {
@@ -31,22 +28,18 @@ public class UserRole : DeletionAuditedEntity<Guid>, IMultiTenant
     /// </summary>
     public Guid RoleId { get; private set; }
 
-    /// <summary>
-    /// 导航属性 - 用户
-    /// </summary>
-    public User? User { get; private set; }
-
-    /// <summary>
-    /// 导航属性 - 角色
-    /// </summary>
-    public Role? Role { get; private set; }
-
     private UserRole() { }
 
-    public UserRole(Guid userId, Guid roleId)
+    internal UserRole(Guid userId, Guid roleId)
     {
         Id = Guid.CreateVersion7();
         UserId = userId;
         RoleId = roleId;
+    }
+
+    /// <summary>撤销这条成员关系：标记软删除，删除时间与删除者在保存时由审计拦截器补齐。</summary>
+    internal void Revoke()
+    {
+        IsDeleted = true;
     }
 }

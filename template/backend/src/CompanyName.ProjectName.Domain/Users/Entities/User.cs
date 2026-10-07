@@ -128,6 +128,17 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     public string SecurityStamp { get; private set; }
 #endif
 
+    private readonly List<UserRole> _roles = [];
+
+    /// <summary>
+    /// 角色成员关系（子实体）
+    /// </summary>
+    /// <remarks>
+    /// 只在经 <c>IUserRepository</c> 带角色读取时加载，<c>GetByIdAsync</c> 读出的用户这里为空：修改角色前必须带角色读取。
+    /// 本工作单元内撤销的行仍在集合里（<c>IsDeleted</c> 为真），判断成员关系用 <see cref="IsInRole"/> 或 <see cref="GetRoleIds"/>。
+    /// </remarks>
+    public IReadOnlyCollection<UserRole> Roles => _roles;
+
     private User()
     {
         Username = null!;
@@ -244,6 +255,56 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     {
         return !IsSuperAdmin;
     }
+
+    /// <summary>当前持有该角色（未撤销）。</summary>
+    public bool IsInRole(Guid roleId) => _roles.Any(role => role.RoleId == roleId && !role.IsDeleted);
+
+    /// <summary>当前持有的角色 Id（不含已撤销的）。</summary>
+    public IReadOnlyList<Guid> GetRoleIds() => [.. _roles.Where(role => !role.IsDeleted).Select(role => role.RoleId)];
+
+    /// <summary>
+    /// 分配角色；已持有的跳过。
+    /// </summary>
+    /// <remarks>角色是否存在由调用方经角色仓储确认：这里只按 Id 引用，不读角色聚合。</remarks>
+    public void AssignRoles(IEnumerable<Guid> roleIds)
+    {
+        ArgumentNullException.ThrowIfNull(roleIds);
+        foreach (var roleId in roleIds.Distinct())
+        {
+            if (!IsInRole(roleId))
+            {
+                _roles.Add(new UserRole(Id, roleId));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 用给定角色整体替换现有角色：不在其中的撤销，缺的补上，保留的不动；为空即清空。
+    /// </summary>
+    /// <remarks>撤销与补上随同一次保存落库，不会出现中途失败后零角色的状态。</remarks>
+    public void ReplaceRoles(IEnumerable<Guid> roleIds)
+    {
+        ArgumentNullException.ThrowIfNull(roleIds);
+        var target = roleIds.ToHashSet();
+        foreach (var membership in _roles.Where(role => !role.IsDeleted && !target.Contains(role.RoleId)))
+        {
+            membership.Revoke();
+        }
+
+        AssignRoles(target);
+    }
+
+    /// <summary>撤销该角色的成员关系；未持有时什么也不做。</summary>
+    public void RemoveRole(Guid roleId)
+    {
+        foreach (var membership in _roles.Where(role => role.RoleId == roleId && !role.IsDeleted))
+        {
+            membership.Revoke();
+        }
+    }
+
+    /// <summary>撤销全部角色成员关系。</summary>
+    public void RemoveAllRoles() => ReplaceRoles([]);
 
     public void Enable()
     {

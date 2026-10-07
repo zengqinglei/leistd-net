@@ -97,15 +97,17 @@ internal static class IdentityEntityConfiguration
     }
 #endif
 
+    // 关系本身在 BaseEntityConfiguration 映射；本地身份形态另加唯一索引并改为限制删除
     private static void ConfigureUserRoles(this ModelBuilder builder)
     {
+        builder.Entity<User>().HasMany(user => user.Roles).WithOne().HasForeignKey(userRole => userRole.UserId)
+            .OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         builder.Entity<UserRole>(b =>
         {
             b.HasIndex(e => new { e.UserId, e.RoleId, e.DeletionTime }).IsUnique();
             b.HasIndex(e => e.RoleId);
 
-            b.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
-            b.HasOne(e => e.Role).WithMany().HasForeignKey(e => e.RoleId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+            b.HasOne<Role>().WithMany().HasForeignKey(e => e.RoleId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         });
     }
 

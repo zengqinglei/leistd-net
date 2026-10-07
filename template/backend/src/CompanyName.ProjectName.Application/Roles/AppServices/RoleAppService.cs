@@ -6,7 +6,10 @@ using CompanyName.ProjectName.Application.Roles.Mappings;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
+using Leistd.Auditing.Abstractions;
 using Leistd.Ddd.Application.AppServices;
+using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
@@ -34,8 +37,8 @@ namespace CompanyName.ProjectName.Application.Roles.AppServices;
 public class RoleAppService(
     IRepository<Role, Guid> roleRepository,
     RoleDomainService roleDomainService,
-    IRepository<UserRole, Guid> userRoleRepository,
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
+    IDataFilter dataFilter,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
     IOperationRecorder operationRecorder,
@@ -209,10 +212,7 @@ public class RoleAppService(
         }
 
         await roleRepository.DeleteAsync(role, cancellationToken);
-        // 剩下的关联都属于已删除的用户，随角色一并删除，不留指向已删角色的孤儿行
-        await userRoleRepository.DeleteManyAsync(
-            await userRoleRepository.GetListAsync(ur => ur.RoleId == id, cancellationToken),
-            cancellationToken);
+        await RevokeFromDeletedUsersAsync(id, cancellationToken);
 
         // 角色被永久删除，授予与授权版本一并清理。
         // 不能用"替换为空集合"：那是撤销语义，会保留并递增版本（给"还有人在编辑"用），
@@ -310,11 +310,31 @@ public class RoleAppService(
         };
     }
 
-    /// <summary>未删除用户的角色关联：已删除用户的关联行保留着，但不算"已分配"。</summary>
+    /// <summary>未删除用户的角色成员关系：已删除用户的成员关系保留着，但不算"已分配"。</summary>
     private async Task<IQueryable<UserRole>> AssignmentsOfExistingUsersAsync(CancellationToken cancellationToken)
+        => (await userRepository.GetQueryableAsync(cancellationToken)).SelectMany(u => u.Roles);
+
+    /// <summary>
+    /// 剩下的成员关系都属于已删除的用户，随角色一并撤销，不留指向已删角色的成员关系。
+    /// </summary>
+    /// <remarks>
+    /// 必须在删除角色之后加载：成员关系在角色删除前就被跟踪时，限制删除的外键会让 EF 当场报错。
+    /// </remarks>
+    private async Task RevokeFromDeletedUsersAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        var userQuery = await userRepository.GetQueryableAsync(cancellationToken);
-        var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
-        return userRoleQuery.Where(ur => userQuery.Any(u => u.Id == ur.UserId));
+        List<User> holders;
+        using (dataFilter.Disable<ISoftDelete>())
+        {
+            var query = await userRepository.GetQueryableWithRolesAsync(cancellationToken);
+            holders = await asyncExecuter.ToListAsync(
+                query.Where(u => u.IsDeleted && u.Roles.Any(ur => ur.RoleId == roleId && !ur.IsDeleted)),
+                cancellationToken);
+        }
+
+        foreach (var holder in holders)
+        {
+            holder.RemoveRole(roleId);
+            await userRepository.UpdateAsync(holder, cancellationToken);
+        }
     }
 }

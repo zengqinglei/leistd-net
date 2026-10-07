@@ -41,6 +41,92 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
     }
 
     [Fact]
+    public async Task Role_memberships_are_part_of_the_user_aggregate_and_have_no_repository()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+
+        Assert.Null(scope.ServiceProvider.GetService<IRepository<UserRole>>());
+        Assert.Null(scope.ServiceProvider.GetService<IRepository<UserRole, Guid>>());
+    }
+
+    [Fact]
+    public async Task Roles_load_only_through_the_explicit_read_and_include_revoked_ones_when_soft_delete_is_off()
+    {
+        var (userId, _) = await SeedUserWithRolesAsync(tenantId: null, NewSuffix());
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var userRepository = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+        Assert.Empty((await userRepository.GetByIdAsync(userId))!.Roles);
+
+        await using var withRoles = factory.Services.CreateAsyncScope();
+        var repository = withRoles.ServiceProvider.GetRequiredService<IUserRepository>();
+        // 已删除角色的成员关系本身未撤销，仍算持有；撤销过的那条被软删除过滤器挡在外面
+        Assert.Equal(3, (await repository.GetWithRolesAsync(userId))!.Roles.Count);
+
+        await using var history = factory.Services.CreateAsyncScope();
+        using (history.ServiceProvider.GetRequiredService<IDataFilter>().Disable<ISoftDelete>())
+        {
+            var user = (await history.ServiceProvider.GetRequiredService<IUserRepository>().GetWithRolesAsync(userId))!;
+            Assert.Equal(4, user.Roles.Count);
+            Assert.Single(user.Roles, membership => membership.IsDeleted);
+        }
+    }
+
+    [Fact]
+    public async Task Replacing_roles_commits_revocations_and_additions_together_or_not_at_all()
+    {
+        var suffix = NewSuffix();
+        var (userId, names) = await SeedUserWithRolesAsync(tenantId: null, suffix);
+        Guid addedRoleId;
+        await using (var setup = factory.Services.CreateAsyncScope())
+        {
+            using var unitOfWork = setup.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var added = new Role($"a_{suffix}", "Added");
+            await setup.ServiceProvider.GetRequiredService<IRoleRepository>().InsertAsync(added);
+            await unitOfWork.CompleteAsync();
+            addedRoleId = added.Id;
+        }
+
+        async Task ReplaceAsync(bool complete)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var services = scope.ServiceProvider;
+            using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var repository = services.GetRequiredService<IUserRepository>();
+            var user = (await repository.GetWithRolesAsync(userId))!;
+            var keep = (await services.GetRequiredService<IRoleRepository>().GetFirstAsync(role => role.Name == names.First))!;
+            user.ReplaceRoles([keep.Id, addedRoleId]);
+            await repository.UpdateAsync(user);
+            if (complete)
+            {
+                await unitOfWork.CompleteAsync();
+            }
+        }
+
+        async Task<List<string>> RoleNamesAsync()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<IUserRepository>().GetRoleNamesAsync(userId);
+        }
+
+        await ReplaceAsync(complete: false);
+        Assert.Equal([names.First, names.Second], await RoleNamesAsync());
+
+        await ReplaceAsync(complete: true);
+        Assert.Equal([$"a_{suffix}", names.First], await RoleNamesAsync());
+
+        // 撤销留下删除审计，保留的那条不重建
+        await using var history = factory.Services.CreateAsyncScope();
+        using (history.ServiceProvider.GetRequiredService<IDataFilter>().Disable<ISoftDelete>())
+        {
+            var user = (await history.ServiceProvider.GetRequiredService<IUserRepository>().GetWithRolesAsync(userId))!;
+            Assert.Equal(5, user.Roles.Count);
+            Assert.Equal(3, user.Roles.Count(membership => membership.IsDeleted));
+            Assert.All(user.Roles.Where(membership => membership.IsDeleted), membership => Assert.NotNull(membership.DeletionTime));
+        }
+    }
+
+    [Fact]
     public async Task Role_names_are_sorted_and_exclude_deleted_roles_and_deleted_assignments()
     {
         var suffix = NewSuffix();
@@ -190,7 +276,7 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
 #endif
 
     /// <summary>
-    /// 写入一个用户与四个角色关联：两个正常、一个角色已删除、一个关联已删除。
+    /// 写入一个用户与四个角色成员关系：两个正常、一个角色已删除、一个成员关系已撤销。
     /// 名称前缀故意与插入顺序相反，排序断言才有意义。
     /// </summary>
     private async Task<(Guid UserId, SeededNames Names)> SeedUserWithRolesAsync(Guid? tenantId, string suffix)
@@ -200,15 +286,14 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
         using var _ = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);
         var userRepository = scope.ServiceProvider.GetRequiredService<IUserRepository>();
         var roleRepository = scope.ServiceProvider.GetRequiredService<IRoleRepository>();
-        var userRoleRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserRole, Guid>>();
         var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
         User user;
         Role deletedRole;
-        UserRole deletedAssignment;
+        Role deletedAssignment;
         using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
-            user = await userRepository.InsertAsync(NewUser(suffix));
+            user = NewUser(suffix);
             Role[] roles =
             [
                 new(names.DeletedAssignment, "Deleted assignment"),
@@ -217,16 +302,23 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
                 new(names.First, "First"),
             ];
             await roleRepository.InsertManyAsync(roles);
-            var assignments = roles.Select(role => new UserRole(user.Id, role.Id)).ToList();
-            await userRoleRepository.InsertManyAsync(assignments);
+            user.AssignRoles(roles.Select(role => role.Id));
+            await userRepository.InsertAsync(user);
             await unitOfWork.CompleteAsync();
-            deletedAssignment = assignments[0];
+            deletedAssignment = roles[0];
             deletedRole = roles[1];
         }
 
         using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
-            await userRoleRepository.DeleteAsync(deletedAssignment);
+            var loaded = (await userRepository.GetWithRolesAsync(user.Id))!;
+            loaded.RemoveRole(deletedAssignment.Id);
+            await userRepository.UpdateAsync(loaded);
+            await unitOfWork.CompleteAsync();
+        }
+
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
+        {
             await roleRepository.DeleteAsync(deletedRole);
             await unitOfWork.CompleteAsync();
         }

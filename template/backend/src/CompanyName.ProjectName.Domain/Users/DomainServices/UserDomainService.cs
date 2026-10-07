@@ -23,7 +23,6 @@ namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 /// </summary>
 public class UserDomainService(
     IRepository<User, Guid> userRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
     IDataFilter dataFilter,
 #if (LocalIdentity)
     // CreateSuperAdminAsync 与 PromoteToSuperAdmin 用它挡"租户上下文里造超管"，两者只在本地身份形态存在
@@ -320,49 +319,6 @@ public class UserDomainService(
         }
 
         user.UpdateProfile(username, email, displayName, phoneNumber);
-    }
-
-    /// <summary>
-    /// 把给定角色分配给用户，新增对应的用户角色关联。
-    /// </summary>
-    /// <remarks>
-    /// 分配哪些角色由调用方决定（管理员指定的，或应用层读出的默认角色）：领域服务不读角色聚合。
-    /// 回传关联行而不是让调用方回查：在工作单元内这些行还没落库，回查查不到。
-    /// </remarks>
-    /// <returns>本次写入的用户角色关联行；角色为空时为空列表。</returns>
-    public async Task<List<UserRole>> AssignRolesAsync(
-        Guid userId,
-        IReadOnlyCollection<Role> roles,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(roles);
-        if (roles.Count == 0)
-        {
-            return [];
-        }
-
-        var userRoles = roles.Select(role => new UserRole(userId, role.Id)).ToList();
-        await userRoleRepository.InsertManyAsync(userRoles, cancellationToken);
-        return userRoles;
-    }
-
-    /// <summary>
-    /// 用给定角色整体替换用户现有的角色关联；角色为空即清空。
-    /// </summary>
-    /// <remarks>先删后插须在同一工作单元内：拆成两次提交时，插入失败会把用户留在零角色状态。</remarks>
-    /// <returns>替换后的用户角色关联行。</returns>
-    public async Task<List<UserRole>> ReplaceRolesAsync(
-        Guid userId,
-        IReadOnlyCollection<Role> roles,
-        CancellationToken cancellationToken = default)
-    {
-        var currentRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken)).ToList();
-        if (currentRoles.Count != 0)
-        {
-            await userRoleRepository.DeleteManyAsync(currentRoles, cancellationToken);
-        }
-
-        return await AssignRolesAsync(userId, roles, cancellationToken);
     }
 
 #if (LocalIdentity)

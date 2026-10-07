@@ -9,6 +9,7 @@ using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 #endif
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
@@ -31,10 +32,9 @@ namespace CompanyName.ProjectName.Application.Initialization;
 /// </summary>
 public class SystemInitializer(
 #if (LocalIdentity)
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
 #endif
     IRepository<Role, Guid> roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
 #if (LocalIdentity)
     UserDomainService userDomainService,
 #endif
@@ -192,16 +192,19 @@ public class SystemInitializer(
         return adminUser;
     }
 
-#endif
     private async Task AssignAdminRoleAsync(User adminUser, Role adminRole, CancellationToken cancellationToken)
     {
-        if (!await userRoleRepository.AnyAsync(ur => ur.UserId == adminUser.Id && ur.RoleId == adminRole.Id, cancellationToken))
+        // 刚建的超管在工作单元内还没落库、按 Id 读不到，它也还没有任何角色，直接用它
+        var user = await userRepository.GetWithRolesAsync(adminUser.Id, cancellationToken) ?? adminUser;
+        if (!user.IsInRole(adminRole.Id))
         {
-            var userRole = new UserRole(adminUser.Id, adminRole.Id);
-            await userRoleRepository.InsertAsync(userRole, cancellationToken);
+            user.AssignRoles([adminRole.Id]);
+            await userRepository.UpdateAsync(user, cancellationToken);
             logger.LogInformation("Assigned role {RoleName} to the admin user", AdminConstant.RoleName);
         }
     }
+
+#endif
 
     /// <summary>
     /// 在 Admin 角色尚未有过任何授予写入时，把宿主侧可用的全部权限授予它。

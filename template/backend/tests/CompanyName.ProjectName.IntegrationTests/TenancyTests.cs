@@ -11,6 +11,7 @@ using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 using Npgsql;
@@ -197,8 +198,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.True(tenantAdmin.CanBeDisabled());
             Assert.True(tenantAdmin.CanBeDeleted());
 
-            var userRoles = scope.ServiceProvider.GetRequiredService<IRepository<UserRole, Guid>>();
-            Assert.True(await userRoles.AnyAsync(ur => ur.UserId == tenantAdmin.Id));
+            var withRoles = await scope.ServiceProvider.GetRequiredService<IUserRepository>().GetWithRolesAsync(tenantAdmin.Id);
+            Assert.NotEmpty(withRoles!.GetRoleIds());
         }
     }
 

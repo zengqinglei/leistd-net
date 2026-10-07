@@ -9,6 +9,7 @@ using CompanyName.ProjectName.Application.Shared;
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Domain.Repositories;
 #endif
 using Microsoft.AspNetCore.Authentication;
@@ -142,8 +143,8 @@ public sealed class SessionRoleClaimTests(ProjectWebApplicationFactory factory)
         {
             var defaults = await scope.ServiceProvider.GetRequiredService<IRepository<Role, Guid>>()
                 .CountAsync(role => role.IsDefault);
-            var assigned = await scope.ServiceProvider.GetRequiredService<IRepository<UserRole, Guid>>()
-                .CountAsync(userRole => userRole.UserId == externalUserId);
+            var assigned = (await scope.ServiceProvider.GetRequiredService<IUserRepository>()
+                .GetWithRolesAsync(externalUserId))!.Roles.Count;
             Assert.Equal(defaults, assigned);
         }
 #endif

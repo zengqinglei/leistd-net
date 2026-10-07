@@ -271,7 +271,8 @@ public static class DependencyInjection
         // 每个注册过的 DbContext 都必须显式接入：漏掉的上下文会逃出租户过滤器闸门，
         // 构建容器时会直接失败。不传选项即"只登记、不注册仓储"。
         // 业务上下文继承 BaseDbContext，登记时同时挂上审计、领域事件与并发标记三个保存拦截器。
-        // 自定义仓储一并注册为其聚合的自定义接口与默认仓储接口
+        // 自定义仓储一并注册为其聚合的自定义接口与默认仓储接口。
+        // 默认仓储按 DbSet 声明登记，聚合子实体（UserRole）不声明 DbSet，因而没有独立仓储
         services.AddDddDbContext<MyProjectDbContext>(options => options
             .AddDefaultRepositories()
             .AddRepository<User, EfCoreUserRepository>()

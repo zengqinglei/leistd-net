@@ -98,6 +98,66 @@ public sealed class UserManagementRulesTests
 #endif
 
 #endif
+    [Fact]
+    public void Assigning_roles_skips_roles_already_held_and_duplicates()
+    {
+        var user = CreateUser();
+        var (first, second) = (Guid.NewGuid(), Guid.NewGuid());
+
+        user.AssignRoles([first, first]);
+        user.AssignRoles([first, second]);
+
+        Assert.Equal([first, second], user.GetRoleIds());
+        Assert.Equal(2, user.Roles.Count);
+        Assert.All(user.Roles, membership => Assert.Equal(user.Id, membership.UserId));
+    }
+
+    [Fact]
+    public void Replacing_roles_revokes_dropped_memberships_keeps_retained_rows_and_adds_missing_ones()
+    {
+        var user = CreateUser();
+        var (dropped, kept, added) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        user.AssignRoles([dropped, kept]);
+        var keptRow = user.Roles.Single(membership => membership.RoleId == kept);
+
+        user.ReplaceRoles([kept, added]);
+
+        Assert.Equal([kept, added], user.GetRoleIds());
+        Assert.False(user.IsInRole(dropped));
+        // 撤销是软删除：行留在集合里作历史，保存时由审计拦截器补删除时间
+        Assert.True(user.Roles.Single(membership => membership.RoleId == dropped).IsDeleted);
+        Assert.Same(keptRow, user.Roles.Single(membership => membership.RoleId == kept));
+        Assert.False(keptRow.IsDeleted);
+    }
+
+    [Fact]
+    public void A_revoked_role_can_be_assigned_again_as_a_new_membership()
+    {
+        var user = CreateUser();
+        var roleId = Guid.NewGuid();
+        user.AssignRoles([roleId]);
+
+        user.RemoveRole(roleId);
+        Assert.False(user.IsInRole(roleId));
+        user.AssignRoles([roleId]);
+
+        Assert.True(user.IsInRole(roleId));
+        Assert.Equal(2, user.Roles.Count(membership => membership.RoleId == roleId));
+        Assert.Single(user.Roles, membership => membership.RoleId == roleId && membership.IsDeleted);
+    }
+
+    [Fact]
+    public void Removing_all_roles_revokes_every_membership()
+    {
+        var user = CreateUser();
+        user.AssignRoles([Guid.NewGuid(), Guid.NewGuid()]);
+
+        user.RemoveAllRoles();
+
+        Assert.Empty(user.GetRoleIds());
+        Assert.All(user.Roles, membership => Assert.True(membership.IsDeleted));
+    }
+
     private static User CreateUser() =>
 #if (LocalIdentity)
         new("management-user", "management@example.com", "password-hash");

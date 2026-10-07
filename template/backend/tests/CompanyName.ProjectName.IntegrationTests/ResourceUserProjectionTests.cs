@@ -95,7 +95,7 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
             user.MarkAsSuperAdmin();
             var role = await db.Set<Role>().OrderBy(role => role.Name).FirstAsync();
             roleName = role.Name;
-            db.Add(new UserRole(subjectId, role.Id));
+            user.AssignRoles([role.Id]);
             await db.SaveChangesAsync();
         }
 

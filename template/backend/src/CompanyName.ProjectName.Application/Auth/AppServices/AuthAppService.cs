@@ -366,8 +366,9 @@ internal sealed class AuthAppService(
             input.Username, input.Email, input.Password, input.DisplayName,
             cancellationToken: cancellationToken);
         var defaultRoles = await roleRepository.GetDefaultRolesAsync(cancellationToken);
-        await userDomainService.AssignRolesAsync(user.Id, defaultRoles, cancellationToken);
-        // 用刚分配的角色名，不回查：关联行在本工作单元内尚未落库
+        user.AssignRoles(defaultRoles.Select(role => role.Id));
+        await userRepository.UpdateAsync(user, cancellationToken);
+        // 用刚分配的角色名，不回查：成员关系在本工作单元内尚未落库
         var roleNames = defaultRoles.Select(role => role.Name).ToList();
 
         logger.LogInformation("User registered (ID: {Id})", user.Id);

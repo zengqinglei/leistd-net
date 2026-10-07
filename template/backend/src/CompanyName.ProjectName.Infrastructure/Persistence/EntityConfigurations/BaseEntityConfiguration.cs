@@ -5,13 +5,14 @@ using Microsoft.EntityFrameworkCore;
 namespace CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 
 /// <summary>
-/// User 实体基础配置（始终包含）
+/// User 聚合基础配置（始终包含）
 /// </summary>
 internal static class BaseEntityConfiguration
 {
     internal static void ConfigureBaseEntities(this ModelBuilder builder)
     {
         builder.ConfigureUser();
+        builder.ConfigureUserRoles();
     }
 
     private static void ConfigureUser(this ModelBuilder builder)
@@ -50,6 +51,21 @@ internal static class BaseEntityConfiguration
             b.HasIndex(e => new { e.TenantId, e.Email })
                 .IsUnique()
                 .HasFilter($"\"{nameof(User.TenantId)}\" IS NOT NULL AND \"{nameof(User.Email)}\" <> ''");
+        });
+    }
+
+    // 角色成员关系是 User 聚合的子实体：经 User.Roles 一对多映射，按 RoleId 引用角色，不设导航。
+    // 不声明 DbSet（声明即自动登记独立仓储），表名在这里固定。
+    private static void ConfigureUserRoles(this ModelBuilder builder)
+    {
+        builder.Entity<User>().HasMany(user => user.Roles).WithOne().HasForeignKey(userRole => userRole.UserId);
+        builder.Entity<UserRole>(b =>
+        {
+            b.ToTable("UserRoles");
+            // 主键由构造函数生成。按约定标为"添加时生成"的话，经 User.Roles 发现的新成员关系带着非默认主键，
+            // EF 会当成已有行去 UPDATE（影响 0 行即并发异常）；标为不生成才按新增插入
+            b.Property(userRole => userRole.Id).ValueGeneratedNever();
+            b.HasOne<Role>().WithMany().HasForeignKey(userRole => userRole.RoleId);
         });
     }
 }
