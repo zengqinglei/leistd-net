@@ -1,18 +1,7 @@
 name: CI
 
-# PR 的质量闸门；release.yml 对发布候选提交复用同一组作业：
-#   - docs-sync：组件文档、Skill 与引用一致性
-#   - docs-sync-windows：同一组静态闸门在 Windows 上再跑一遍，证伪路径分隔符、默认编码与解释器名的可移植性
-#   - frontend-gates：依赖前端 node_modules 的仓库闸门（Spartan 定制登记、模板 ESLint 规则自检）
-#   - package-consumption：NuGet 包内容与隔离消费，独立必过
-#   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
-#   - framework-pack / template-slices：场景责任与成本登记在 template-matrix-scenarios.ps1，
-#     候选计划按模式输出均衡执行组，每组一个作业，消费同一候选包；
-#     PR 跑 pr 档子集，release 复用与手动触发默认跑 full 全集
-#   - template-matrix：保留必过检查名，核对范围、静态及所有必要动态作业和场景回执
-#   - test：按计划清单运行框架测试项目（含真实 Redis 的分布式锁契约），每个通过的项目留一份回执
-#   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
-#   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
+# PR 与发布共用候选计划；静态检查始终执行，其他作业按输入责任选择。
+# template-matrix 保留必过检查名，严格核对作业状态、候选与回执。
 on:
   pull_request:
     branches: [main, develop]
@@ -31,6 +20,28 @@ on:
       tier:
         type: string
         default: full
+      quality_base_sha:
+        type: string
+        default: ''
+      release_channel:
+        type: string
+        default: ''
+      release_base_tag:
+        type: string
+        default: ''
+      release_base_sha:
+        type: string
+        default: ''
+      expected_plan:
+        type: string
+        default: ''
+    outputs:
+      validation_plan:
+        value: ${{ jobs.template-matrix.outputs.validation_plan }}
+
+permissions:
+  contents: read
+  actions: read
 
 # PR 只跑 pr 档：它能否代表全集由 check-template-scenario-coverage.py 逐行判定，
 # 全集在 develop/main 推送、夜间与发布时由 release.yml 复用本工作流执行。
@@ -82,6 +93,8 @@ jobs:
 
   frontend-gates:
     name: 前端依赖闸门
+    needs: quality-plan
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['frontend-gates']
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -120,14 +133,14 @@ jobs:
 
   template-slices:
     name: 模板场景 · ${{ matrix.slice.title }}
-    needs: framework-pack
-    if: needs.framework-pack.outputs.docs_only == 'false'
+    needs: [quality-plan, framework-pack]
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['template-slices']
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        slice: ${{ fromJSON(needs.framework-pack.outputs.slices) }}
+        slice: ${{ fromJSON(needs.quality-plan.outputs.slices) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -147,7 +160,7 @@ jobs:
             template/.template.config/localization/frontend/package-lock.json
       # 前端单测跑在 Playwright 的 Chromium 里；版本取模板锁文件，与生成项目实际安装的一致
       - name: 安装单测用的 Chromium
-        if: fromJSON(needs.framework-pack.outputs.validation_plan).Mode != 'backend'
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).Mode != 'backend'
         shell: pwsh
         run: |
           dotnet new install ./template --debug:custom-hive .tmp/browser-tools-hive --force
@@ -166,7 +179,7 @@ jobs:
         id: matrix
         shell: pwsh
         env:
-          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+          VALIDATION_PLAN: ${{ needs.quality-plan.outputs.validation_plan }}
         run: |
           $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
           # 同候选源码预检由 docs-sync 承担；汇总必须核对其成功，不能用跳过代替通过。
@@ -180,96 +193,69 @@ jobs:
           path: ${{ steps.matrix.outputs.results_path }}
           if-no-files-found: error
 
-  framework-pack:
-    name: 打包候选 Framework
+  quality-plan:
+    name: 计算候选验证责任
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     outputs:
-      docs_only: ${{ steps.scope.outputs.docs_only }}
       validation_plan: ${{ steps.plan.outputs.validation_plan }}
       slices: ${{ steps.plan.outputs.slices }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.candidate_sha || github.sha }}
-          fetch-depth: ${{ github.event_name == 'pull_request' && !inputs.candidate_sha && 2 || 0 }}
-      - name: 判断是否仅修改内部文档
-        id: scope
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: |
-          python3 - <<'PY_SCOPE'
-          import os, re, subprocess
-          from pathlib import Path
-          # 白名单唯一来源。只有直接 PR 可以省略动态作业；复用可能继承 PR 事件名。
-          docs_only = False
-          base = os.environ.get('PR_BASE_SHA', '')
-          def git(*args):
-              return subprocess.check_output(['git', *args], text=True, encoding='utf-8', stderr=subprocess.PIPE).rstrip('\n')
-          try:
-              if (os.environ.get('EVENT_NAME') == 'pull_request' and not os.environ.get('CANDIDATE_SHA') and
-                  re.fullmatch('[0-9a-f]{40}', base) and base != '0' * 40 and base != git('rev-parse', 'HEAD')):
-                  try:
-                      git('cat-file', '-e', base + '^{commit}')
-                  except subprocess.CalledProcessError:
-                      git('fetch', '--no-tags', '--depth=1', 'origin', base)
-                  # 禁止 rename 检测：跨白名单边界移动时，两端都必须计入。
-                  changed = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, 'HEAD').split('\0')[:-1]
-                  docs_only = bool(changed) and all(path == 'README.md' or re.match(r'^(docs|\.agents|skills)/', path) for path in changed)
-          except (subprocess.CalledProcessError, OSError, UnicodeError):
-              docs_only = False  # 无法确定基准或差异时保守全量，不污染步骤退出码。
-          result = 'docs_only=' + str(docs_only).lower()
-          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(result + '\n')
-          print(result)
-          PY_SCOPE
-      - name: 判断是否需要容器验证
-        id: container_scope
-        if: steps.scope.outputs.docs_only == 'false'
-        shell: pwsh
-        run: |
-          # PR 用完整 base→head 差异；发布候选用完整 main 差异，无法确定时保守验证。
-          $base = '${{ github.event.pull_request.base.sha }}'
-          if ($base -notmatch '^[0-9a-f]{40}$') {
-            $base = git merge-base origin/main HEAD 2>$null
-          }
-          $hasBase = $base -match '^[0-9a-f]{40}$'
-          if ($hasBase -and $base -eq (git rev-parse HEAD)) { $hasBase = $false }
-          if ($hasBase) {
-            git cat-file -e "$base^{commit}" 2>$null
-            $hasBase = $LASTEXITCODE -eq 0
-          }
-          $global:LASTEXITCODE = 0
-          $changed = if ($hasBase) { @(git diff --no-renames --name-only $base HEAD) } else { @('template/Dockerfile') }
-          if ($LASTEXITCODE -ne 0) { throw '无法确定容器验证的变更范围' }
-          $needed = @($changed | Where-Object {
-            $_ -match '^template/(Dockerfile|\.dockerignore)$' -or
-            $_ -match '^template/deploy/' -or
-            $_ -eq 'template/.template.config/template.json' -or
-            $_ -match '^template/(frontend|\.template\.config/localization/frontend)/(package(-lock)?\.json|angular\.json)$'
-          }).Count -gt 0
-          "needed=$($needed ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-      - name: 生成同候选验证计划
+          fetch-depth: 0
+      - name: 独立计算并核对候选计划
         id: plan
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: python3 scripts/plan-quality-checks.py --tier "$MATRIX_TIER" --docs-only '${{ steps.scope.outputs.docs_only }}' --container-smoke '${{ steps.container_scope.outputs.needed || 'false' }}' --output .tmp/quality-plan.json --github-output
+          CALLER_BASE_SHA: ${{ inputs.quality_base_sha }}
+          RELEASE_CHANNEL: ${{ inputs.release_channel }}
+          RELEASE_BASE_TAG: ${{ inputs.release_base_tag }}
+          RELEASE_BASE_SHA: ${{ inputs.release_base_sha }}
+          EXPECTED_PLAN: ${{ inputs.expected_plan }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          if os.environ['CANDIDATE_SHA'] and os.environ['CALLER_BASE_SHA'] != os.environ['PR_BASE_SHA']:
+              raise ValueError('Caller quality baseline differs from triggering event')
+          arguments = ['python3', 'scripts/plan-quality-checks.py', '--tier', os.environ['MATRIX_TIER'],
+                       '--output', '.tmp/quality-plan.json', '--github-output']
+          if os.environ['RELEASE_CHANNEL']:
+              arguments += ['--release-channel', os.environ['RELEASE_CHANNEL'],
+                            '--release-base-tag', os.environ['RELEASE_BASE_TAG'],
+                            '--release-base-sha', os.environ['RELEASE_BASE_SHA']]
+          if os.environ['EXPECTED_PLAN']:
+              expected = Path('.tmp/expected-plan.json')
+              expected.parent.mkdir(parents=True, exist_ok=True)
+              expected.write_text(os.environ['EXPECTED_PLAN'], encoding='utf-8')
+              arguments += ['--expected-plan', str(expected)]
+          elif os.environ['CANDIDATE_SHA']:
+              raise ValueError('Reusable candidate requires an expected plan')
+          subprocess.run(arguments, check=True)
+          PY
+
+  framework-pack:
+    name: 打包候选 Framework
+    needs: quality-plan
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['framework-pack']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
       - uses: actions/setup-dotnet@v4
-        if: steps.scope.outputs.docs_only == 'false'
         with:
           dotnet-version: '10.0.x'
       - name: 打包当前 Framework
-        if: steps.scope.outputs.docs_only == 'false'
         shell: pwsh
         run: pwsh framework/build/pack-local-feed.ps1
       - name: 保留同一候选包源
-        if: steps.scope.outputs.docs_only == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: candidate-framework-feed
@@ -279,8 +265,8 @@ jobs:
 
   package-consumption:
     name: NuGet 包内容与隔离消费
-    needs: framework-pack
-    if: needs.framework-pack.outputs.docs_only == 'false'
+    needs: [quality-plan, framework-pack]
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['package-consumption']
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -298,16 +284,21 @@ jobs:
       - name: 核对全部包并消费影响闭包
         shell: pwsh
         env:
-          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+          VALIDATION_PLAN: ${{ needs.quality-plan.outputs.validation_plan }}
         run: |
           $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
           pwsh framework/build/test-package-consumption.ps1 -ValidationPlanPath .tmp/quality-plan.json
           if ($LASTEXITCODE -ne 0) { throw 'NuGet 包消费失败' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-content-proof
+          path: .tmp/package-consumer/package-results.json
+          if-no-files-found: error
 
   template-generation:
     name: 模板全部有效形态生成
-    needs: framework-pack
-    if: needs.framework-pack.outputs.docs_only == 'false'
+    needs: quality-plan
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['template-generation']
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -324,6 +315,19 @@ jobs:
         run: python -m pip install PyYAML==6.0.2
       - name: 生成 320 个有效形态并校验 768 组原始输入
         run: python scripts/test-template-generation.py --output .tmp/generation-proof
+      - uses: actions/setup-node@v4
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).GeneratedDocumentation
+        with:
+          node-version: '22'
+      - name: 核对全部生成文档与 Skill
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).GeneratedDocumentation
+        run: python scripts/check-generated-documentation.py --generation-root .tmp/generation-proof
+      - uses: actions/upload-artifact@v4
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).GeneratedDocumentation
+        with:
+          name: generated-documentation-proof
+          path: .tmp/generation-proof/documentation-results.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: template-generation-proof
@@ -333,10 +337,15 @@ jobs:
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
-    needs: [docs-sync, docs-sync-windows, frontend-gates, framework-pack, test, template-slices, template-generation, package-consumption, postgresql-e2e, oidc-e2e]
+    needs: [quality-plan, docs-sync, docs-sync-windows, frontend-gates, framework-pack, test, template-slices, template-generation, package-consumption, postgresql-e2e, oidc-e2e]
     if: always()
     timeout-minutes: 5
+    outputs:
+      validation_plan: ${{ steps.complete.outputs.validation_plan }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
       - name: 检查必要作业全部成功
         id: quality
         shell: pwsh
@@ -345,47 +354,21 @@ jobs:
           CANDIDATE_SHA: ${{ inputs.candidate_sha || github.sha }}
         run: |
           $jobs = ConvertFrom-Json $env:NEEDS_JSON -AsHashtable
-          foreach ($required in @('framework-pack', 'docs-sync', 'docs-sync-windows', 'frontend-gates')) {
-            if ($jobs[$required].result -cne 'success') {
-              throw "$required 失败、缺失、跳过或取消"
-            }
+          foreach ($required in @('quality-plan', 'docs-sync', 'docs-sync-windows')) {
+            if ($jobs[$required].result -cne 'success') { throw "$required 失败、缺失、跳过或取消" }
           }
-          $docsOnly = $jobs['framework-pack'].outputs.docs_only
-          if ($docsOnly -cnotin @('true', 'false')) { throw '缺少合法验证范围输出' }
-          $expected = if ($docsOnly -ceq 'true') { 'skipped' } else { 'success' }
-          foreach ($required in @('template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e')) {
-            if ($jobs[$required].result -cne $expected) {
-              throw "$required 应为 $expected，实际失败、缺失、取消或范围不一致"
-            }
+          New-Item -ItemType Directory -Force .tmp | Out-Null
+          $jobs['quality-plan'].outputs.validation_plan | Set-Content .tmp/quality-plan.json -Encoding utf8
+          . scripts/template-matrix-scenarios.ps1
+          . scripts/quality-validation-plan.ps1
+          $plan = Read-QualityValidationPlan .tmp/quality-plan.json $env:MATRIX_TIER
+          if ($plan.CandidateSha -cne $env:CANDIDATE_SHA) { throw '汇总候选身份不一致' }
+          foreach ($responsibility in $plan.Jobs.PSObject.Properties) {
+            $expected = if ($responsibility.Value) { 'success' } else { 'skipped' }
+            if ($jobs[$responsibility.Name].result -cne $expected) { throw "$($responsibility.Name) 应为 $expected" }
           }
-          $plan = $jobs['framework-pack'].outputs.validation_plan | ConvertFrom-Json
-          if ($plan.Version -ne 2 -or $plan.DocsOnly -isnot [bool] -or
-              $plan.DocsOnly -ne ($docsOnly -ceq 'true') -or $plan.FrameworkTests -isnot [bool] -or
-              $plan.Mode -cnotin @('full', 'frontend', 'backend') -or $plan.ContainerSmoke -isnot [bool] -or
-              $plan.CandidateSha -cnotmatch '^[0-9a-f]{40}$' -or
-              $plan.CandidateSha -cne $env:CANDIDATE_SHA -or $plan.Tier -cne $env:MATRIX_TIER -or
-              ($docsOnly -ceq 'true' -and ($plan.FrameworkTests -or @($plan.Scenarios).Count -ne 0)) -or
-              ($docsOnly -ceq 'false' -and @($plan.Scenarios).Count -eq 0)) { throw '缺少合法同候选验证计划' }
-          $frameworkExpected = if ($docsOnly -ceq 'false' -and $plan.FrameworkTests) { 'success' } else { 'skipped' }
-          if ($jobs['test'].result -cne $frameworkExpected) { throw '框架测试失败、缺失、取消或范围不一致' }
-          # 框架测试清单与同一计划的 BaseSha/CandidateSha 绑定；none 只对应没有框架测试责任。
-          $testProjects = @($plan.FrameworkTestProjects)
-          $selection = $plan.FrameworkTestSelection
-          if ($plan.FrameworkTestProjects -isnot [array] -or $selection -cnotin @('none', 'affected', 'all') -or
-              ($selection -ceq 'none') -ne (-not $plan.FrameworkTests) -or
-              ($frameworkExpected -ceq 'success') -ne ($testProjects.Count -gt 0) -or
-              ($env:MATRIX_TIER -ceq 'full' -and $selection -cne 'all') -or
-              @($testProjects | Where-Object { $_ -isnot [string] -or $_ -cnotmatch '^framework/tests/[^\s]+\.Tests\.csproj$' }).Count -gt 0 -or
-              @($testProjects | Sort-Object -Unique -CaseSensitive).Count -ne $testProjects.Count) { throw '缺少合法框架测试清单' }
-          "dynamic=$($docsOnly -ceq 'false' ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-          "framework_tests=$($frameworkExpected -ceq 'success' ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-          if ($docsOnly -ceq 'true') {
-            '仅修改内部文档：完整静态闸门通过，动态验证不适用。' | Out-File $env:GITHUB_STEP_SUMMARY -Append
-          }
-      - uses: actions/checkout@v4
-        if: steps.quality.outputs.dynamic == 'true'
-        with:
-          ref: ${{ inputs.candidate_sha || github.sha }}
+          "dynamic=$($plan.Jobs.'template-slices' ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+          "framework_tests=$($plan.FrameworkTests ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
       - uses: actions/download-artifact@v4
         if: steps.quality.outputs.dynamic == 'true'
         with:
@@ -396,7 +379,7 @@ jobs:
         if: steps.quality.outputs.dynamic == 'true'
         shell: pwsh
         env:
-          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+          VALIDATION_PLAN: ${{ needs.quality-plan.outputs.validation_plan }}
         run: |
           $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
           pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER
@@ -413,7 +396,7 @@ jobs:
         if: steps.quality.outputs.framework_tests == 'true'
         shell: pwsh
         env:
-          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+          VALIDATION_PLAN: ${{ needs.quality-plan.outputs.validation_plan }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha || github.sha }}
         run: |
           $plan = $env:VALIDATION_PLAN | ConvertFrom-Json
@@ -437,11 +420,35 @@ jobs:
           $missing = @($expected | Where-Object { -not $seen.ContainsKey($_) })
           if ($missing) { throw "选中的框架测试项目缺少回执：$($missing -join '、')" }
           "框架测试回执：$($expected.Count) 个项目全部通过。" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - uses: actions/download-artifact@v4
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['package-consumption']
+        with:
+          name: package-content-proof
+          path: .tmp/package-content-proof
+      - name: 核对包与文档编译证明
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['package-consumption']
+        shell: pwsh
+        run: pwsh scripts/check-quality-proof.ps1 -ValidationPlanPath .tmp/quality-plan.json -Kind package -ResultsPath .tmp/package-content-proof
+      - uses: actions/download-artifact@v4
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).GeneratedDocumentation
+        with:
+          name: generated-documentation-proof
+          path: .tmp/generated-documentation-proof
+      - name: 核对生成文档证明
+        if: fromJSON(needs.quality-plan.outputs.validation_plan).GeneratedDocumentation
+        shell: pwsh
+        run: pwsh scripts/check-quality-proof.ps1 -ValidationPlanPath .tmp/quality-plan.json -Kind documentation -ResultsPath .tmp/generated-documentation-proof
+      - name: 输出已验证候选计划
+        id: complete
+        shell: pwsh
+        env:
+          VALIDATION_PLAN: ${{ needs.quality-plan.outputs.validation_plan }}
+        run: '"validation_plan=$env:VALIDATION_PLAN" | Out-File $env:GITHUB_OUTPUT -Append'
 
   test:
     name: 框架单元测试
-    needs: framework-pack
-    if: needs.framework-pack.outputs.docs_only == 'false' && fromJSON(needs.framework-pack.outputs.validation_plan).FrameworkTests
+    needs: quality-plan
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs.test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # 分布式锁的 Redis 契约用例需要真实服务：没有服务时它们会跳过而不是失败
@@ -481,7 +488,7 @@ jobs:
         id: framework_tests
         shell: pwsh
         env:
-          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+          VALIDATION_PLAN: ${{ needs.quality-plan.outputs.validation_plan }}
         run: |
           $plan = $env:VALIDATION_PLAN | ConvertFrom-Json
           $projects = @($plan.FrameworkTestProjects)
@@ -507,8 +514,8 @@ jobs:
 
   postgresql-e2e:
     name: 模板 PostgreSQL 端到端
-    needs: framework-pack
-    if: needs.framework-pack.outputs.docs_only == 'false'
+    needs: [quality-plan, framework-pack]
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['postgresql-e2e']
     runs-on: ubuntu-latest
     # 复用候选包；各作业的数据库、hive 与解包缓存仍各自隔离。
     timeout-minutes: 15
@@ -534,8 +541,8 @@ jobs:
 
   oidc-e2e:
     name: 模板 OIDC 跨服务端到端
-    needs: framework-pack
-    if: needs.framework-pack.outputs.docs_only == 'false'
+    needs: [quality-plan, framework-pack]
+    if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['oidc-e2e']
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

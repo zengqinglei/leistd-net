@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Plan PR validation from complete input changes; unknown inputs retain all checks.
 
-The internal-document allowlist stays in ci.yml. Scenario/source definitions stay
-in their existing files. This entry also works locally; omit valid PR inputs for full.
+Input classes and job responsibilities live here. Scenario/source definitions
+stay in their existing files. Unproven inputs retain full validation.
 """
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ import posixpath
 import re
 import subprocess
 import sys
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
 sys.dont_write_bytecode = True
@@ -85,6 +87,185 @@ def read_blobs(sha: str, paths: list[str]) -> dict[str, str]:
         blobs[path] = data[header_end + 1:header_end + 1 + size].decode('utf-8')
         offset = header_end + 2 + size
     return blobs
+
+
+JOB_NAMES = ('frontend-gates', 'framework-pack', 'package-consumption', 'template-generation',
+             'template-slices', 'test', 'postgresql-e2e', 'oidc-e2e')
+INTERNAL_DOCUMENT = re.compile(r'(?:README\.md|(?:docs|\.agents|skills)/.+\.md|framework/README\.md)')
+CONTAINER_INPUT = re.compile(r'template/(?:Dockerfile|\.dockerignore|deploy/.+|\.template\.config/template\.json|'
+                             r'(?:frontend|\.template\.config/localization/frontend)/(?:package(?:-lock)?\.json|angular\.json))')
+
+
+def changed_paths(base: str, head: str) -> list[str]:
+    if not re.fullmatch(r'[0-9a-f]{40}', base) or base == '0' * 40 or base == head:
+        raise ValueError('uncertain or empty baseline')
+    git('cat-file', '-e', f'{base}^{{commit}}')
+    git('merge-base', '--is-ancestor', base, head)
+    paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, head).split('\0')[:-1]
+    if not paths:
+        raise ValueError('empty input difference')
+    return paths
+
+
+def verified_quality_base(base: str, head: str) -> dict:
+    """A push may narrow only after its preceding candidate passed this workflow."""
+    unavailable = dict(Verified=False, RunId=0, Attempt=0)
+    try:
+        git('merge-base', '--is-ancestor', base, head)
+        repository = os.environ.get('GITHUB_REPOSITORY', '')
+        branch = os.environ.get('GITHUB_REF_NAME', '')
+        token = os.environ.get('GH_TOKEN', '')
+        if not re.fullmatch(r'[\w.-]+/[\w.-]+', repository) or branch not in ('main', 'develop') or not token:
+            return unavailable
+        api = os.environ.get('GITHUB_API_URL', 'https://api.github.com').rstrip('/')
+        def get(endpoint):
+            request = Request(api + '/repos/' + repository + '/actions/' + endpoint,
+                              headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
+                                       'X-GitHub-Api-Version': '2022-11-28'})
+            with urlopen(request, timeout=15) as response:
+                return json.load(response)
+        query = urlencode(dict(head_sha=base, branch=branch, event='push', per_page=100))
+        payload = get('workflows/release.yml/runs?' + query)
+        runs = payload['workflow_runs']
+        if payload['total_count'] != len(runs) or not runs:
+            return unavailable
+        run = max(runs, key=lambda entry: entry['id'])
+        if (run['head_sha'] != base or run['head_branch'] != branch or run['event'] != 'push' or
+                run['path'] != '.github/workflows/release.yml' or run['status'] != 'completed' or run['conclusion'] != 'success'):
+            return unavailable
+        jobs = get(f"runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=100")
+        if jobs['total_count'] != len(jobs['jobs']):
+            return unavailable
+        aggregates = [job for job in jobs['jobs'] if job['name'] == 'quality / 模板全场景矩阵']
+        if len(aggregates) != 1 or aggregates[0]['status'] != 'completed' or aggregates[0]['conclusion'] != 'success':
+            return unavailable
+        return dict(Verified=True, RunId=run['id'], Attempt=run['run_attempt'])
+    except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError):
+        return unavailable
+
+
+def packaged_documents(sha: str) -> set[str]:
+    """Model the current Pack declarations; unknown declarations disable narrowing."""
+    graph = framework_graph(sha)
+    files = tree_files(sha)
+    build_files = sorted(FRAMEWORK_BUILD_FILES & set(files))
+    blobs = read_blobs(sha, list(graph) + build_files)
+    expected = {
+        '$(MSBuildThisFileDirectory)NuGet.md': {'Pack': 'true', 'PackagePath': '\\', 'Visible': 'false'},
+        '$(_LeistdComponentDocPath)': {'Pack': 'true', 'PackagePath': 'docs\\', 'Visible': 'false',
+                                    'Condition': "Exists('$(_LeistdComponentDocPath)')"},
+        '$(_LeistdDddDocPath)': {'Pack': 'true', 'PackagePath': 'docs\\', 'Visible': 'false',
+                              'Condition': "'$(_LeistdParentDir)' == 'ddd-struct' And Exists('$(_LeistdDddDocPath)')"},
+    }
+    properties = {
+        'PackageReadmeFile': 'NuGet.md',
+        '_LeistdParentDir': '$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName($(MSBuildProjectDirectory)))))',
+        '_LeistdComponentDocPath': '$(MSBuildThisFileDirectory)docs\\components\\$(_LeistdParentDir).md',
+        '_LeistdDddDocPath': '$(MSBuildThisFileDirectory)docs\\ddd-struct\\ddd-struct.md',
+    }
+    seen, values = set(), {}
+    for path, text in blobs.items():
+        for item in ElementTree.fromstring(text).iter():
+            if path == 'framework/common.props':
+                if item.tag == 'Import':
+                    raise FrameworkProofUnavailable('unknown package import')
+                if item.tag in properties:
+                    if item.attrib or item.tag in values:
+                        raise FrameworkProofUnavailable('unknown package property')
+                    values[item.tag] = (item.text or '').strip()
+                if 'Pack' in item.attrib or item.tag == 'Pack':
+                    include = item.attrib.get('Include')
+                    attrs = {key: value for key, value in item.attrib.items() if key != 'Include'}
+                    if item.tag != 'None' or include not in expected or attrs != expected[include] or include in seen:
+                        raise FrameworkProofUnavailable('unknown Pack declaration')
+                    seen.add(include)
+            elif (path == 'framework/tests/Directory.Build.props' and item.tag == '_LeistdIsTestProject' and
+                  (item.text or '').strip() == 'true' and item.attrib == {'Condition': "$(MSBuildProjectName.EndsWith('.Tests'))"}):
+                continue
+            elif ('Pack' in item.attrib or item.tag == 'Pack' or item.tag.startswith('_Leistd') or
+                  item.tag == 'PackageReadmeFile' and not (path == 'framework/tests/Directory.Build.props' and not item.text)):
+                raise FrameworkProofUnavailable(f'unknown package input in {path}')
+    if seen != set(expected) or values != properties:
+        raise FrameworkProofUnavailable('package document mapping changed')
+    tests = ElementTree.fromstring(blobs['framework/tests/Directory.Build.props'])
+    excluded = [item for group in tests.findall('PropertyGroup') if not group.attrib
+                for item in group.findall('IsPackable') if not item.attrib and (item.text or '').strip() == 'false']
+    if len(excluded) != 1:
+        raise FrameworkProofUnavailable('test package exclusion changed')
+    result = {'framework/NuGet.md'}
+    for project in graph:
+        root = ElementTree.fromstring(blobs[project])
+        packable = [item for item in root.iter('IsPackable')]
+        if any(item.attrib or (item.text or '').strip().lower() not in ('true', 'false') for item in packable):
+            raise FrameworkProofUnavailable(f'unknown IsPackable in {project}')
+        if project.startswith('framework/tests/'):
+            if any((item.text or '').strip().lower() == 'true' for item in packable):
+                raise FrameworkProofUnavailable('test package override')
+            continue
+        if packable and packable[-1].text.strip().lower() == 'false':
+            continue
+        parent = posixpath.basename(posixpath.dirname(posixpath.dirname(project)))
+        document = f'framework/docs/components/{parent}.md'
+        if document in files:
+            result.add(document)
+        if parent == 'ddd-struct':
+            result.add('framework/docs/ddd-struct/ddd-struct.md')
+    return result
+
+
+def classify_inputs(base: str, head: str, paths: list[str]) -> dict[str, list[str]]:
+    packaged = packaged_documents(base) | packaged_documents(head)
+    result = {name: [] for name in ('internal', 'generated-doc', 'package-doc', 'frontend', 'backend', 'framework', 'unknown')}
+    for path in paths:
+        if path in packaged:
+            kind = 'package-doc'
+        elif (INTERNAL_DOCUMENT.fullmatch(path) or path.startswith('framework/docs/') and path.endswith('.md')):
+            kind = 'internal'
+        elif path.startswith('template/') and path.endswith('.md'):
+            kind = 'generated-doc'
+        elif frontend_source(path):
+            kind = 'frontend'
+        elif backend_source(path):
+            kind = 'backend'
+        elif path.startswith('framework/') and path.endswith('.cs'):
+            kind = 'framework'
+        else:
+            kind = 'unknown'
+        result[kind].append(path)
+    return result
+
+
+def release_tag(channel: str, head: str, selected: str = '') -> tuple[str, str]:
+    pattern = r'v\d+\.\d+\.\d+' + (r'(?:-beta\.\d+)?' if channel == 'beta' else '')
+    names = [name for name in git('tag', '--merged', head).splitlines() if re.fullmatch(pattern, name)]
+    if not names:
+        if selected:
+            raise ValueError('release baseline is not a published channel ancestor')
+        return '', ''
+    nearest = min(names, key=lambda name: (int(git('rev-list', '--count', f'{name}..{head}')),
+                                          '-beta.' in name, name))
+    if selected and selected != nearest:
+        raise ValueError('release baseline differs from nearest published channel ancestor')
+    return nearest, git('rev-parse', f'{nearest}^{{commit}}')
+
+
+def needs_release(base: str, head: str) -> tuple[bool, str]:
+    if not base:
+        return True, 'No published channel baseline'
+    if base == head:
+        return False, 'Candidate already has a published channel tag'
+    try:
+        paths = changed_paths(base, head)
+        classes = classify_inputs(base, head, paths)
+        # Test projects do not produce Framework packages. Unknown production
+        # and build inputs remain publication responsibilities.
+        hits = classes['package-doc'] + [path for path in paths if path.startswith('framework/')
+                and not path.startswith('framework/tests/') and not path.endswith('.md')]
+        harmless = set(sum((classes[name] for name in ('internal', 'generated-doc', 'frontend', 'backend')), []))
+        unknown = [path for path in paths if path not in harmless and not path.startswith(('template/', 'framework/tests/'))]
+        return bool(hits or unknown), 'Changed package or unmodelled inputs: ' + ', '.join(sorted(set(hits + unknown))) if hits or unknown else 'Only non-package inputs'
+    except (ValueError, OSError, subprocess.CalledProcessError, ElementTree.ParseError) as error:
+        return True, f'Publication input proof unavailable: {error}'
 
 
 def framework_test_project(path: str) -> bool:
@@ -233,91 +414,133 @@ def execution_slices(scenarios: dict, selected: list[str], tier: str, mode: str,
     return bins
 
 
-def create_plan(tier: str, base: str, event: str, candidate_input: str, docs_only: bool = False,
-                container_smoke: bool = False) -> dict:
+def create_plan(tier: str, base: str, event: str, candidate_input: str,
+                container_smoke: bool = False, release_channel: str = '', release_base_tag: str = '',
+                release_base_sha: str = '') -> dict:
     head = git('rev-parse', 'HEAD')
+    if candidate_input and candidate_input != head:
+        raise ValueError('candidate input differs from checkout')
     scenarios = coverage.load_scenarios()
     registered = [name for name, info in scenarios.items() if tier in info['Slices']]
     all_tests = all_framework_tests(head)
+    tag, published, publish, release_reason = '', '', False, 'Not a publication candidate'
+    if release_channel:
+        if release_channel not in ('stable', 'beta', 'nightly') or not candidate_input:
+            raise ValueError('invalid publication context')
+        if release_channel != 'nightly':
+            tag, published = release_tag(release_channel, head, release_base_tag)
+        if release_base_sha and release_base_sha != published:
+            raise ValueError('release baseline differs from channel tag')
+        if event == 'push':
+            publish, release_reason = needs_release(published, head)
+        else:
+            publish, release_reason = True, 'Explicit or scheduled publication'
+    plan = dict(Version=3, CandidateSha=head, BaseSha=base, Tier=tier, Event=event,
+                ReleaseRequired=publish, ReleaseChannel=release_channel, ReleaseBaseTag=tag,
+                ReleaseBaseSha=published, ReleaseReason=release_reason,
+                QualityBaseline=dict(Verified=False, RunId=0, Attempt=0),
+                DocsOnly=False, Mode='full', Scenarios=registered, FrameworkTests=True,
+                ConsumerProjects=None, GeneratedDocumentation=True, PackageDocumentation=True,
+                Jobs={name: True for name in JOB_NAMES}, Inputs={}, ChangedPaths=[],
+                Reason='Full: shared/unknown inputs, publication, explicit run or uncertain baseline',
+                FrameworkTestProjects=all_tests, FrameworkTestSelection='all', FrameworkTestReason='')
+
     def finish(value):
-        if container_smoke and (value['DocsOnly'] or value['Mode'] != 'full'):
+        value['Jobs']['test'] = value['FrameworkTests']
+        value['Jobs']['template-slices'] = bool(value['Scenarios'])
+        value['DocsOnly'] = not any(value['Jobs'].values())
+        # Container responsibility is meaningful only alongside full runtime stages.
+        value['ContainerSmoke'] = bool(container_smoke and value['Mode'] == 'full')
+        if container_smoke and value['Mode'] not in ('full', 'documentation'):
             raise ValueError('Container scope requires a dynamic full-mode plan')
-        # The list is bound to BaseSha/CandidateSha of this same plan; no list means no job.
         if not value['FrameworkTests']:
-            value.update(FrameworkTestProjects=[], FrameworkTestSelection='none', FrameworkTestReason='No framework test responsibility')
-        elif value.get('FrameworkTestSelection') != 'affected':
+            value.update(FrameworkTestProjects=[], FrameworkTestSelection='none', FrameworkTestReason='No framework test inputs')
+        elif value['FrameworkTestSelection'] != 'affected':
             value.update(FrameworkTestProjects=all_tests, FrameworkTestSelection='all',
-                         FrameworkTestReason=value.get('FrameworkTestReason') or value['Reason'])
-        value['ContainerSmoke'] = container_smoke
+                         FrameworkTestReason=value['FrameworkTestReason'] or value['Reason'])
         value['Slices'] = execution_slices(scenarios, value['Scenarios'], tier, value['Mode'], value['ContainerSmoke'])
         return value
-    plan = dict(Version=2, CandidateSha=head, BaseSha=base, Tier=tier, DocsOnly=False,
-                Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
-                Reason='Full: non-PR, shared/unknown input or uncertain baseline',
-                FrameworkTestProjects=all_tests, FrameworkTestSelection='all', FrameworkTestReason='')
-    if docs_only:
-        if event != 'pull_request' or candidate_input or tier != 'pr':
-            raise ValueError('Internal-document exemption is only for a direct PR')
-        plan.update(DocsOnly=True, Scenarios=[], FrameworkTests=False, ConsumerProjects=[], Reason='Internal documentation only')
-        return finish(plan)
-    if tier != 'pr' or event != 'pull_request' or candidate_input or not re.fullmatch(r'[0-9a-f]{40}', base) or base == '0' * 40 or base == head:
-        return finish(plan)
+
     try:
-        # Local plans must describe a committed snapshot, just like CI. A dirty
-        # tree cannot be narrowed by a diff that only describes committed HEAD.
+        paths = changed_paths(base, head)
+        plan['ChangedPaths'] = paths
+        classes = classify_inputs(base, head, paths)
+        plan['Inputs'] = classes
+        if classes['unknown'] or any(CONTAINER_INPUT.fullmatch(path) for path in paths):
+            container_smoke = True
         if git('status', '--porcelain', '--untracked-files=normal'):
             return finish(dict(plan, Reason='Full: working tree differs from candidate HEAD'))
-        git('cat-file', '-e', f'{base}^{{commit}}')
-        paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, head).split('\0')[:-1]
-        if not paths:
+        if publish:
+            if published and published != head:
+                release_paths = changed_paths(published, head)
+                container_smoke = container_smoke or bool(classify_inputs(published, head, release_paths)['unknown']) or any(CONTAINER_INPUT.fullmatch(path) for path in release_paths)
+            return finish(dict(plan, Reason='Full: publication requires all quality responsibilities'))
+        direct_pr = tier == 'pr' and event == 'pull_request' and not candidate_input
+        if event == 'push' and release_channel and not publish:
+            plan['QualityBaseline'] = verified_quality_base(base, head)
+            if not plan['QualityBaseline']['Verified']:
+                container_smoke = True
+        documentation_push = event == 'push' and release_channel and plan['QualityBaseline']['Verified']
+        if not direct_pr and not documentation_push:
             return finish(plan)
-        # Strip only inputs already covered by the workflow's internal-doc rule.
-        # Mixed documentation deliberately remains full: avoid a second allowlist.
-        frontend = all(frontend_source(path) for path in paths)
-        backend = all(backend_source(path) for path in paths)
-        owners = [project_owner(path) for path in paths]
-        if frontend or backend:
+        if classes['unknown']:
+            container_smoke = True
+            return finish(dict(plan, Reason='Full: shared or unknown inputs: ' + ', '.join(classes['unknown'])))
+        code = classes['frontend'] + classes['backend'] + classes['framework']
+        generated_docs, package_docs = bool(classes['generated-doc']), bool(classes['package-doc'])
+        gate_document = 'template/docs/standards/frontend-spartan.md' in paths
+        if generated_docs:
             config_path = 'template/.template.config/template.json'
             old = json.loads(git('show', f'{base}:{config_path}'))
-            current = json.loads((ROOT / config_path).read_text(encoding='utf-8'))
+            current = json.loads(git('show', f'{head}:{config_path}'))
             if old != current:
                 return finish(plan)
-            affected = set()
-            for path in paths:
+            for path in classes['generated-doc']:
+                source_producers(old, path, scenarios)
+                source_producers(current, path, scenarios)
+        if not code:
+            jobs = {name: False for name in JOB_NAMES}
+            jobs.update({'frontend-gates': gate_document, 'framework-pack': package_docs, 'package-consumption': package_docs,
+                         'template-generation': generated_docs})
+            return finish(dict(plan, Mode='documentation', Scenarios=[], FrameworkTests=False,
+                               ConsumerProjects=[], Jobs=jobs, GeneratedDocumentation=generated_docs,
+                               PackageDocumentation=package_docs, Reason='Documentation responsibilities only'))
+        if not direct_pr:
+            return finish(plan)
+        front = bool(classes['frontend']) and not classes['backend'] and not classes['framework']
+        back = bool(classes['backend']) and not classes['frontend'] and not classes['framework']
+        if front or back:
+            config_path = 'template/.template.config/template.json'
+            old = json.loads(git('show', f'{base}:{config_path}'))
+            current = json.loads(git('show', f'{head}:{config_path}'))
+            if old != current:
+                return finish(plan)
+            affected = {'identity', 'identity-all-features'}
+            for path in code:
                 affected |= source_producers(old, path, scenarios) | source_producers(current, path, scenarios)
-            # Always retain opening/closing representatives, without assuming a
-            # feature can never leak into a product that excludes its files.
-            affected |= {'identity', 'identity-all-features'}
             selected = [name for name in registered if name in affected]
             if not selected:
                 return finish(plan)
-            plan.update(Mode='frontend' if frontend else 'backend', Scenarios=selected,
-                        FrameworkTests=False, ConsumerProjects=[], Reason='Only template frontend inputs' if frontend else 'Only template backend C# inputs')
+            jobs = dict(plan['Jobs'])
+            jobs.update({'frontend-gates': front or gate_document, 'test': False})
+            # PG/OIDC and generation still retain their independent responsibilities.
+            plan.update(Mode='frontend' if front else 'backend', Scenarios=selected, FrameworkTests=False,
+                        ConsumerProjects=[], Jobs=jobs, GeneratedDocumentation=generated_docs,
+                        PackageDocumentation=package_docs, Reason='Template stages plus independent documentation responsibilities')
         else:
-            # Independent of template scope: a mixed change keeps every scenario
-            # but may still need only the affected framework test projects.
             try:
-                selected_tests, reason = select_framework_tests(base, head, paths)
+                selected_tests, reason = select_framework_tests(base, head, code)
                 plan.update(FrameworkTestProjects=selected_tests, FrameworkTestSelection='affected', FrameworkTestReason=reason)
             except FrameworkProofUnavailable as error:
                 plan.update(FrameworkTestReason=f'All: {error}')
-        if not (frontend or backend) and all(owners):
-            # Linked/generated cross-project compilation inputs are outside this
-            # proof. A future explicit Compile/AdditionalFiles rule disables it.
-            build_inputs = (list((ROOT / 'framework').rglob('*.csproj')) +
-                            [item for suffix in ('*.props', '*.targets') for item in (ROOT / 'framework').rglob(suffix)
-                             if 'obj' not in item.parts and 'bin' not in item.parts] +
-                            [ROOT / name for name in ('Directory.Build.props', 'Directory.Build.targets') if (ROOT / name).exists()])
-            if any(re.search(r'<Compile\b[^>]*\bInclude\s*=|<AdditionalFiles\b|<EnableDefaultCompileItems>\s*false', item.read_text(encoding='utf-8')) for item in build_inputs):
-                return finish(dict(plan, FrameworkTestSelection='all', FrameworkTestReason='All: explicit compile input'))
-            # This narrows only empty NuGet restore/build consumers. Runtime
-            # tests and PG/OIDC remain full; nuspec reverse closure is evaluated
-            # against the candidate packages by test-package-consumption.ps1.
-            plan.update(ConsumerProjects=sorted(set(owners)), Reason='Framework source: consumer dependency closure only')
-    except (subprocess.CalledProcessError, ValueError, KeyError, OSError, IndexError):
-        # A known-but-unparseable input is never grounds for fewer checks.
-        return finish(dict(plan, Mode='full', Scenarios=registered, FrameworkTests=True, ConsumerProjects=None,
-                    Reason='Full: input/dependency proof unavailable', FrameworkTestSelection='all', FrameworkTestReason=''))
+            if classes['framework'] and not classes['frontend'] and not classes['backend']:
+                owners = [project_owner(path) for path in code]
+                if all(owners):
+                    plan.update(ConsumerProjects=sorted(set(owners)), PackageDocumentation=True,
+                                GeneratedDocumentation=generated_docs, Reason='Framework dependency closure plus documentation responsibilities')
+    except (subprocess.CalledProcessError, ValueError, KeyError, OSError, IndexError, ElementTree.ParseError) as error:
+        container_smoke = True
+        return finish(dict(plan, Reason=f'Full: input/dependency proof unavailable ({error})'))
     return finish(plan)
 
 
@@ -374,7 +597,10 @@ def main() -> None:
     parser.add_argument('--base', default=os.environ.get('PR_BASE_SHA', ''))
     parser.add_argument('--event', default=os.environ.get('EVENT_NAME', ''))
     parser.add_argument('--candidate-input', default=os.environ.get('CANDIDATE_SHA', ''))
-    parser.add_argument('--docs-only', choices=['true', 'false'], default='false')
+    parser.add_argument('--release-channel', choices=['stable', 'beta', 'nightly'], default='')
+    parser.add_argument('--release-base-tag', default='')
+    parser.add_argument('--release-base-sha', default='')
+    parser.add_argument('--expected-plan', type=Path)
     parser.add_argument('--container-smoke', choices=['true', 'false'], default='false',
                         help='Bind the independent container-scope decision into this candidate plan')
     parser.add_argument('--output', type=Path, required=True)
@@ -386,14 +612,17 @@ def main() -> None:
     args = parser.parse_args()
     local = args.local_scenarios or args.local_framework_tests
     if local and (args.local_scenarios and args.local_framework_tests or args.tier != 'pr' or args.github_output or
-                  args.docs_only != 'false' or args.candidate_input or args.container_smoke != 'false'):
+                  args.release_channel or args.release_base_tag or args.release_base_sha or args.expected_plan or args.candidate_input or args.container_smoke != 'false'):
         parser.error('--local-scenarios/--local-framework-tests: choose one, with --tier pr and without CI output, docs-only or candidate-input')
     if args.local_scenarios:
         plan = local_scenarios(args.base)
     elif args.local_framework_tests:
         plan = local_framework_tests(args.base)
     else:
-        plan = create_plan(args.tier, args.base, args.event, args.candidate_input, args.docs_only == 'true', args.container_smoke == 'true')
+        plan = create_plan(args.tier, args.base, args.event, args.candidate_input, args.container_smoke == 'true',
+                           args.release_channel, args.release_base_tag, args.release_base_sha)
+        if args.expected_plan and json.loads(args.expected_plan.read_text(encoding='utf-8-sig')) != plan:
+            raise ValueError('caller plan differs from independently computed candidate responsibilities')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(plan, ensure_ascii=False, separators=(',', ':'))
     args.output.write_text(text, encoding='utf-8')
@@ -401,6 +630,9 @@ def main() -> None:
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
             output.write('validation_plan=' + text + '\n')
             output.write('slices=' + json.dumps(plan['Slices'], ensure_ascii=False, separators=(',', ':')) + '\n')
+            output.write('release_required=' + str(plan['ReleaseRequired']).lower() + '\n')
+            output.write('release_base_tag=' + plan['ReleaseBaseTag'] + '\n')
+            output.write('release_base_sha=' + plan['ReleaseBaseSha'] + '\n')
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
             if plan['DocsOnly']:
                 summary.write('本次仅修改内部文档：此作业只判定范围和生成计划；未打包 Framework，动态验证不适用。\n\n')

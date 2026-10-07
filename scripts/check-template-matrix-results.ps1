@@ -17,7 +17,7 @@ $selected = @(Get-TierScenarios $Tier)
 $mode = 'full'
 if ($ValidationPlanPath) {
     $plan = Read-QualityValidationPlan $ValidationPlanPath $Tier
-    if ($plan.DocsOnly) { throw 'Documentation-only has no dynamic receipts.' }
+    if (-not $plan.Jobs.'template-slices') { throw 'Documentation-only has no dynamic receipts.' }
     $selected = @($plan.Scenarios)
     $mode = $plan.Mode
     if ($ContainerSmoke -and -not $plan.ContainerSmoke) { throw 'Manual container scope differs from the plan.' }

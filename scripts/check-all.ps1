@@ -63,6 +63,7 @@ $pythonEncodingEnv = @{ PYTHONWARNDEFAULTENCODING = "1"; PYTHONWARNINGS = "error
 # 入口 ps1 的文件头（development-guide §9）：首行 shebang；有注释帮助块时与 shebang 之间空一行，
 # 帮助块紧贴 shebang 时 Get-Help 认不出它。只被点源加载的库脚本不能直接执行，不要求 shebang。
 $dotSourcedLibraries = @(
+    'scripts/generated-project-checks.ps1',
     "scripts/quality-validation-plan.ps1",
     "scripts/template-matrix-scenarios.ps1",
     "scripts/test-template-oidc-browser.ps1",

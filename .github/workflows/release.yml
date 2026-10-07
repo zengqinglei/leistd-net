@@ -12,13 +12,21 @@ on:
     - cron: '0 18 * * 1-5'   # UTC 18:00（北京次日 02:00），工作日 -> nightly
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   candidate:
     if: github.event_name != 'push' || (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]'))
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.commit.outputs.sha }}
-      needed: ${{ steps.scope.outputs.needed }}
+      needed: ${{ steps.plan.outputs.release_required }}
+      plan: ${{ steps.plan.outputs.validation_plan }}
+      release_base_tag: ${{ steps.plan.outputs.release_base_tag }}
+      release_base_sha: ${{ steps.plan.outputs.release_base_sha }}
+      channel: ${{ steps.commit.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,36 +34,37 @@ jobs:
           fetch-depth: 0
       - id: commit
         shell: bash
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - id: scope
-        shell: pwsh
         run: |
-          $needed = 'true'
-          if ('${{ github.event_name }}' -eq 'push' -and '${{ github.ref }}' -eq 'refs/heads/main') {
-            $before = '${{ github.event.before }}'
-            if ($before -notmatch '^[0-9a-f]{40}$' -or $before -match '^0+$') { throw '无法确定本次 main 推送的基线' }
-            $changed = git diff --no-renames --name-only $before HEAD
-            if ($LASTEXITCODE -ne 0) { throw '无法确定 stable 发布的变更范围' }
-            $hit = $changed | Where-Object {
-              ($_ -eq 'VERSION') -or
-              ($_ -match '^framework/docs/') -or
-              ($_ -match '^framework/' -and $_ -notmatch '\.md$')
-            }
-            $needed = if ($hit) { 'true' } else { 'false' }
-          }
-          "needed=$needed" | Out-File $env:GITHUB_OUTPUT -Append
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then channel=nightly
+          elif [ "$GITHUB_REF" = refs/heads/main ]; then channel=stable
+          else channel=beta; fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+      - id: plan
+        name: 判断质量与发布责任
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.before || '' }}
+          CANDIDATE_SHA: ${{ steps.commit.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/plan-quality-checks.py --tier full --release-channel '${{ steps.commit.outputs.channel }}' --output .tmp/quality-plan.json --github-output
 
   quality:
     needs: candidate
-    if: needs.candidate.outputs.needed == 'true'
+    if: needs.candidate.result == 'success'
     uses: ./.github/workflows/ci.yml
     with:
       candidate_sha: ${{ needs.candidate.outputs.sha }}
+      quality_base_sha: ${{ github.event.before || '' }}
+      release_channel: ${{ needs.candidate.outputs.channel }}
+      release_base_tag: ${{ needs.candidate.outputs.release_base_tag }}
+      release_base_sha: ${{ needs.candidate.outputs.release_base_sha }}
+      expected_plan: ${{ needs.candidate.outputs.plan }}
 
   release:
     needs: [candidate, quality]
     # 跳过机器人自身回写提交与 [skip ci]，避免死循环；schedule/dispatch 没有 head_commit。
-    if: needs.candidate.outputs.needed == 'true' && needs.quality.result == 'success'
+    if: needs.candidate.outputs.needed == 'true' && needs.quality.result == 'success' && fromJSON(needs.quality.outputs.validation_plan).ReleaseRequired && fromJSON(needs.quality.outputs.validation_plan).Mode == 'full' && fromJSON(needs.quality.outputs.validation_plan).CandidateSha == needs.candidate.outputs.sha
     runs-on: ubuntu-latest
     # 同一分支的发布必须排队：版本推算是对 tag 命名空间的「读—改—写」，
     # stable 还要把版本回写 main。两个 run 并行时各自读到同一状态、算出同一个 tag，

@@ -300,7 +300,7 @@ def check_no_empty_conditional_blocks():
     for dp, dn, fn in os.walk(os.path.join(ROOT, 'template')):
         dn[:] = [d for d in dn if d not in ('node_modules', 'obj', 'bin', 'dist')]
         for name in fn:
-            if not name.endswith(('.ts', '.cs', '.html', '.json', '.csproj')):
+            if not name.endswith(('.ts', '.cs', '.html', '.json', '.csproj', '.md')):
                 continue
             path = os.path.join(dp, name)
             lines = io.open(path, encoding='utf-8', errors='replace').read().split('\n')
