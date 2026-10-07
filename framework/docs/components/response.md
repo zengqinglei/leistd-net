@@ -36,9 +36,9 @@ builder.Services.AddControllers()
     .AddResponseWrapper();
 ```
 
-`AddResponseWrapper` 把 `ResultWrapperFilter`（一个 `IAsyncResultFilter`）加入 MVC 过滤器管线，并注册一个排在最前的 `IProblemDetailsWriter`：异常、自动模型校验、状态码页等所有经 `IProblemDetailsService` 写出的失败都被写成信封，不会有哪一类漏成 Problem Details。它会幂等地启用 `ConfigureApiValidation()`，因此两者调用顺序不影响自动 400 校验的格式或 JSON 字段名。
+`AddResponseWrapper` 把 `ResultWrapperFilter`（一个 `IAsyncResultFilter`）加入 MVC 过滤器管线，并注册一个排在最前的 `IProblemDetailsWriter`：经 `IProblemDetailsService` 写出的失败（异常、自动模型校验、状态码页等）都写成信封。
+它会幂等地启用 `ConfigureApiValidation()`，两者调用顺序无关。
 
-> 它是 `IMvcBuilder` 扩展而不是 `IServiceCollection` 扩展：MVC 由宿主组装，组件不替宿主调 `AddControllers()`。
 
 Minimal API 端点不经过 MVC 过滤器，在路由组上挂端点过滤器：
 
@@ -118,29 +118,28 @@ public class OrderController(IOrderService service) : ControllerBase
 
 ### Leistd.Response.AspNetCore（自动包装过滤器）
 
-- `ResultWrapperFilter` 仅包装满足以下全部条件的结果：结果为 `ObjectResult`、其 `Value` **不是** `Result`（避免重复包装）、且 HTTP 状态码为 `null` 或落在 **200–299** 区间（即只包装成功响应）。
+- `ResultWrapperFilter` 仅包装满足以下全部条件的结果：结果为 `ObjectResult`、其 `Value` 不是 `Result`、HTTP 状态码为 `null` 或落在 200–299 区间。
 - 命中包装时，原值被包成 `Result<object?>.Ok(value)`，状态码保留原值（无则取 200）；包装时输出一条 `Debug` 级日志。
 - 标注了 `[NoWrap]`（通过 `EndpointMetadata` 检测）的接口直接放行，不做包装。
 - 全局异常与 DataAnnotations 自动校验失败输出 `Result`。`code` 保持数字契约（默认为 HTTP 状态码），`errorCode` 保留可供客户端分支的稳定业务码。
 
 ### Leistd.Response.AspNetCore（端点包装过滤器）
 
-- `ResultWrapperEndpointFilter` 只包装两种形态：处理器直接返回的对象，以及 `TypedResults.Ok(value)`。这两种都只表达"200 加这个值"，换成信封不丢 HTTP 语义。
-- 其余 `IResult` 一律原样放行：`Created`、`Accepted`、文件与流、重定向、`NoContent` 与非 2xx。它们各自带着响应头（`Location`）、内容类型或序列化选项，重建成 JSON 会丢掉这些，而状态码看上去还是对的。
-- 要让这类端点也走信封，由端点自己把信封放进结果：`TypedResults.Created(location, Result<T>.Ok(dto))`——`Location` 与信封都在。
+- `ResultWrapperEndpointFilter` 只包装处理器直接返回的对象与 `TypedResults.Ok(value)`。
+- 其余 `IResult` 原样放行（`Created`、`Accepted`、文件与流、重定向、`NoContent` 与非 2xx），以保留响应头与内容类型；
+  需要信封时由端点自己放进结果，如 `TypedResults.Created(location, Result<T>.Ok(dto))`。
 - 已是 `Result` 的值、带 `NoWrapAttribute` 元数据的端点同样原样放行。
-- `WithResultWrapper()` 同时改写 **200** 响应的类型元数据（在 `Finally` 约定里改，那时 Minimal API 推断出的元数据已经挂上），因此生成的 OpenAPI 与实际响应一致；组件经 `Map*` 提供的端点宿主拿不到处理器，只能由这里改。改写判据与运行时同源，**按处理器的返回类型**决定：
+- `WithResultWrapper()` 同时改写 200 响应的类型元数据，使 OpenAPI 与实际响应一致。按处理器的返回类型决定：
   - 裸值（含 `Task<T>`、`ValueTask<T>`，以及声明成 `object` 的）→ 该端点的每条 200 元数据都改写；
   - `Ok<T>` 与 `Results<Ok<A>, Ok<B>, …>` → 只改写落在这些 `Ok<T>` 上的 200 元数据，同为 200 的 `Json<T>` 分支不动；
   - `JsonHttpResult<T>`、文件、流、重定向、裸 `IResult`，以及拿不到处理器 `MethodInfo` 的自定义端点源 → 一律不改。
-- **不要用 `object` 藏异构的 `IResult`**：返回类型是 `object` 时，框架按"裸值"处理并改写该端点的每条 200 元数据——包括手工加的 `.Produces<T>()`，所以手工声明救不回来；而运行期那些非 `Ok<T>` 的 `IResult` 又原样放行，两边必然对不上。写成具体类型、`Results<...>` 或 `IResult`：前两者框架能按分支精确改写，`IResult` 则一律不改。整个端点不该被包装时标 `[NoWrap]`。
+- 不要用 `object` 返回异构的 `IResult`：框架按裸值改写该端点的每条 200 元数据（含手工 `.Produces<T>()`），而运行期非 `Ok<T>` 的结果原样放行。
+  写成具体类型、`Results<...>` 或 `IResult`；整个端点不该被包装时标 `[NoWrap]`。
 - 标了 `[NoWrap]` 的端点既不包装响应也不改元数据。
 
 ## 注意事项
 
-- MVC 过滤器只自动包装成功（2xx）的 `ObjectResult`；抛出的异常由异常处理组件解析后写成 `Result`。业务代码仍应抛 `BusinessException`，不要为了信封在每个 Controller 手写 `try/catch`。
-- 信封只是可选的传输格式，用于需要固定 `{ code, message, data }` 的 Java/旧系统对接；异常分类、错误码、HTTP 状态和本地化仍由异常处理组件的同一份 `ExceptionDescriptor` 决定，不形成第二套失败协议。
-- 异常与自动模型校验信封包含 `traceId` 和稳定 `errorCode`。直接在 Core 构造 `Result.Fail` 不存在 HTTP 上下文，`traceId` 需由调用方补充。
-- 异常管道写出的失败信封中，`code` 是 HTTP 状态码，稳定业务码在 `errorCode`；二者都来自异常处理组件的 `ExceptionDescriptor`。
-- `Result.Code = 0` 约定表示成功。直接在 Core 构造 `Result.Fail(code, message)` 时 `code` 由调用方给出，仅用于不经异常管道的场景（如非 HTTP 的消息体）。
-- 返回值本身已是 `Result`（如自行调用 `OkResult`）时不会被二次包装，可放心混用自动包装与显式构造。
+- MVC 过滤器只自动包装成功（2xx）的 `ObjectResult`；失败抛 `BusinessException`，由异常处理组件写成 `Result`，不在 Controller 手写 `try/catch`。
+- 异常分类、错误码、HTTP 状态和本地化仍由异常处理组件的 `ExceptionDescriptor` 决定，信封只是传输格式。
+- 异常管道写出的失败信封中，`code` 是 HTTP 状态码，稳定业务码在 `errorCode`，并带 `traceId`。直接在 Core 构造 `Result.Fail(code, message)` 时没有 HTTP 上下文，`code` 与 `traceId` 由调用方给出，仅用于不经异常管道的场景。
+- 返回值本身已是 `Result`（如自行调用 `OkResult`）时不会被二次包装。

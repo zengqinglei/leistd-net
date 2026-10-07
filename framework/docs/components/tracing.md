@@ -107,9 +107,9 @@ using (ambientContext.Begin(principal, correlationId: message.CorrelationId))
 
 ## 与 W3C Trace Context 的关系
 
-- **两者分工。** 链路追踪用 W3C `traceparent` 与 `Activity`，由 .NET 自动传播；关联标识用 `X-Correlation-Id`，是可以跨多条链路的业务标识。默认情况下两者相等。
-- **入站取值顺序。** 合法的入站 `X-Correlation-Id` → 当前 `Activity.TraceId` → 新建。入站值优先，上游显式指定的标识经出站转发才能一路传到底。非法值被丢弃（记 Debug 日志），请求不失败。
-- **错误响应的 `traceId` 是官方链路标识，不是关联标识。** 中间件不改写 `HttpContext.TraceIdentifier`；问题详情里的 `traceId` 由 ASP.NET Core 写成当前 `Activity.Id`，W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，取第二段检索链路；没有 Activity 时回落为请求标识。关联标识在响应头 `X-Correlation-Id` 与日志作用域里。
+- 链路追踪用 W3C `traceparent` 与 `Activity`，由 .NET 自动传播；关联标识用 `X-Correlation-Id`，可以跨多条链路。默认情况下两者相等。
+- 入站取值顺序：合法的入站 `X-Correlation-Id` → 当前 `Activity.TraceId` → 新建。非法值被丢弃（记 Debug 日志），请求不失败。
+- 错误响应的 `traceId` 是官方链路标识（当前 `Activity.Id`，取第二段检索），不是关联标识；中间件不改写 `HttpContext.TraceIdentifier`。
 
 ## 注意事项
 

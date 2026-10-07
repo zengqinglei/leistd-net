@@ -123,23 +123,22 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | `DynamicProxyWeavingMarker` | 表示宿主已接入代理工厂；依赖织入的组件在启动时解析它，缺失即失败 |
 | `DynamicProxyRegistrationExtensions.AddInterceptor(context, type)` | 为当前服务追加拦截器类型；通常写作 `context.AddInterceptor(type)` |
 | `DynamicProxyRegistrationExtensions.GetInterceptorTypes(context)` | 获取当前服务收集到的拦截器类型；通常写作 `context.GetInterceptorTypes()` |
-| `IServiceCollection.EnsureSingleAuthoritative<TService, TImplementation>(expectedLifetime, reason)` | 注册期断言：`TService` 上不得已有别的实现、也不得是同一实现的不同生命周期，违反则抛 `InvalidOperationException`（`reason` 是给宿主看的一句话）。只用于「多个实现说不通」的**存储**类服务；业务编排型服务用 `TryAdd*` 表达「默认实现可被宿主替换」即可。边界见下节 |
+| `IServiceCollection.EnsureSingleAuthoritative<TService, TImplementation>(expectedLifetime, reason)` | 注册期断言：`TService` 上不得已有别的实现、也不得是同一实现的不同生命周期，违反则抛 `InvalidOperationException`（`reason` 写进消息）。只用于只能有一个权威实现的存储类服务；可替换的服务用 `TryAdd*`。边界见下节 |
 
 ### `EnsureSingleAuthoritative` 的支持边界
 
-刻意收窄，不覆盖全部 `ServiceDescriptor` 形态：
+不覆盖全部 `ServiceDescriptor` 形态：
 
 | 已有的注册形态 | 判定 |
 | --- | --- |
-| 同一封闭类型、同一生命周期 | 通过——重复登记是幂等的 |
-| 同一封闭类型、不同生命周期 | **冲突**——放行会让紧随其后的 `TryAdd*` 保留宿主那条错的 |
+| 同一封闭类型、同一生命周期 | 通过，重复登记幂等 |
+| 同一封闭类型、不同生命周期 | 冲突 |
 | 别的实现类型 | 冲突 |
 | 实例注册（`AddSingleton<TService>(instance)`） | 按实例真实类型判定；其生命周期恒为单例，故只有期望生命周期也是单例时才通过 |
-| 工厂注册（`ImplementationFactory`） | **冲突**——问不出实现身份，而「不确定」不能当成「没问题」 |
-| keyed 注册 | 忽略——按键解析，不参与单服务解析 |
-| 开放泛型（`typeof(IFoo<>)`） | 不在范围内——`TService` 是封闭类型，匹配不到那种描述符 |
+| 工厂注册（`ImplementationFactory`） | 冲突（无法确定实现身份） |
+| keyed 注册 | 忽略 |
+| 开放泛型（`typeof(IFoo<>)`） | 不在范围内 |
 
-它检查全部描述符，避免后注册的冲突实现被遗漏。
 
 ## 实现行为
 
@@ -152,15 +151,10 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 - 使用 `[UnitOfWork]` 等基于 AOP 的能力时，宿主必须使用 `DynamicProxyServiceRegistrationCallbackFactory`。
 - 拦截器类型必须能被容器解析，否则代理创建时会抛异常。
-- **`ValidateOnBuild` 覆盖被织入的服务**：描述符改写成工厂型后 Microsoft DI 看不到它的
-  构造函数图，因此工厂在改写前用未改写的副本额外校验一次，把这块覆盖面补回来。
-- **注册回调必须是纯函数**：只允许往 `context` 记拦截器，<b>不得往 `IServiceCollection`
-  追加服务</b>。上面那次预校验看到的依赖图必须是完整的；回调里追加服务会让预校验把尚未
-  注册的依赖误报成缺失。需要按类型批量注册时用显式的扩展方法
-  （如 `AddDddDbContext<TDbContext>()`），不要写进回调。
-- **键控注册可以参与织入**：`IOnServiceRegisteredContext.ServiceKey` 给出服务键，织入后
-  仍是键控描述符，`GetKeyedService` 照常可取。仅按 `ServiceType` 判定的约定会同时命中
-  同类型的键控与非键控注册。
+- `ValidateOnBuild` 覆盖被织入的服务：工厂在改写描述符前用未改写的副本额外校验一次依赖图。
+- 注册回调只允许往 `context` 记拦截器，不得往 `IServiceCollection` 追加服务，否则预校验会把尚未注册的依赖误报成缺失。
+  需要按类型批量注册时用显式的扩展方法（如 `AddDddDbContext<TDbContext>()`）。
+- 键控注册可以参与织入：`IOnServiceRegisteredContext.ServiceKey` 给出服务键，织入后仍是键控描述符。仅按 `ServiceType` 判定的约定会同时命中同类型的键控与非键控注册。
 - `Leistd.DependencyInjection` 不依赖 Castle；Castle 依赖只存在于 `Leistd.DependencyInjection.DynamicProxy` 与 `Leistd.DynamicProxy`。
 
 ## 相关

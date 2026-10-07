@@ -48,8 +48,7 @@ services.AddAmbientContext();
 `Begin(...)` 建立哪些维度取决于已注册的贡献者：租户维度随 `Leistd.MultiTenancy.AspNetCore`
 分发，链路标识随 `Leistd.Tracing.Core`。没装的维度就是没有，不会给猜测值。
 
-主体标识与租户的 claim 类型只在 `ClaimTypeOptions` 一处配置，框架里读写这两类 claim 的每一处都从这里取
-（当前用户、租户解析、权限判定、SignalR 寻址、操作记录、服务间还原）。签发主体的宿主改了 claim 名时：
+主体标识与租户的 claim 类型只在 `ClaimTypeOptions` 一处配置，框架各处都从这里读取。签发主体的宿主改了 claim 名时：
 
 ```csharp
 builder.Services.Configure<ClaimTypeOptions>(options =>
@@ -128,7 +127,7 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 | `Email` | 邮箱，依次取 `email` / `Email` claim |
 | `FindClaim(claimType)` | 指定类型的第一个 `Claim`，跨全部身份查找（官方 `ClaimsPrincipal.FindFirst`），不存在返回 `null` |
 | `FindClaims(claimType)` | 指定类型的全部 `Claim`（多值的角色、scope、amr），与 `FindClaim` 同一范围；没有主体时为空 |
-| `IsInRole(role)` | 当前用户是否属于该角色：**只看主体身份**，按其 `RoleClaimType` 精确匹配；其他认证身份上的角色不算。没有带用户标识的身份时按整个主体判断 |
+| `IsInRole(role)` | 当前用户是否属于该角色：只看主体身份，按其 `RoleClaimType` 精确匹配；没有带用户标识的身份时按整个主体判断 |
 
 `Username`、`Name`、`Email` 只在主体身份（`ClaimTypeOptions.FindSubjectIdentity`）上读取，与 `SubjectId`、`TenantId` 同源：主体身份没带 `name` 时，不会取到其他认证身份上的名字。主体上没有带用户标识的身份时按整个主体读取。
 
@@ -183,7 +182,7 @@ if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受
 
 | 成员 | 说明 |
 | --- | --- |
-| `HasAuthenticatedIdentity()` | 主体的任一身份已认证即为 `true`，`null` 为 `false`；与官方授权管线判定"已认证用户"一致。框架里判断"这个请求是否匿名"的每一处（当前用户、租户解析、会话恢复、环境上下文、Hub 复评、操作记录）都用它。不要用 `ClaimsPrincipal.Identity.IsAuthenticated`：它只是第一个身份。服务间调用判定"调用方是否受信的机器身份"是例外，那里有意只看第一个身份 |
+| `HasAuthenticatedIdentity()` | 主体的任一身份已认证即为 `true`，`null` 为 `false`；与官方授权管线一致，框架各处判断匿名都用它。不要用只看第一个身份的 `ClaimsPrincipal.Identity.IsAuthenticated` |
 
 ### `Leistd.Security.Claims.ClaimTypeOptions`（claim 类型与读取规则）
 
@@ -191,12 +190,11 @@ if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受
 | --- | --- |
 | `UserIds` | 主体标识的读取顺序，默认 `sub`，其次 `ClaimTypes.NameIdentifier` |
 | `TenantId` | 租户 claim 类型，默认 `tenant_id`；值必须是租户 GUID，没有即宿主 |
-| `FindSubjectIdentity(principal)` | 主体身份：按顺序第一个带用户标识（按 `UserIds`）的身份；没有时为 `null`。标识、租户与名字、邮箱这类描述"这个人"的 claim 都取自它 |
+| `FindSubjectIdentity(principal)` | 主体身份：按顺序第一个带用户标识（按 `UserIds`）的身份；没有时为 `null`。标识、租户、名字、邮箱都取自它 |
 | `FindUserId(principal)` | 在主体身份上按 `UserIds` 取第一个非空白的原始值 |
-| `ReadTenant(principal)` | 返回 `TenantClaim`：用户标识与租户取自同一个身份——按顺序第一个带用户标识的身份（主体身份）；同一身份内多条（即使值相同）或非 GUID 为非法；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）为非法，这样同一请求携带的两份用户凭据拼不出"甲的标识 + 乙的租户"；不带用户标识的补充身份只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份（如其他认证方案的身份）不参与判定。同一主体被多个认证方案认证、各身份带同一租户是合法的 |
+| `ReadTenant(principal)` | 返回 `TenantClaim`，租户取自主体身份。非法：同一身份内多条（即使值相同）或非 GUID；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）。不带用户标识的补充身份只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份不参与判定；各身份带同一租户合法 |
 
-只共享读取规则，不合并语义：`ICurrentUser.Id` 在原始值之上只接受 GUID；审计、SignalR 寻址等场景读原始值。
-同一主体被多个认证方案认证时（策略评估会合并各方案的身份），各身份各带一条相同的租户 claim 是合法的。
+`ICurrentUser.Id` 在原始值之上只接受 GUID；审计、SignalR 寻址等场景读原始值。
 
 ```csharp
 bool isNaturalPerson = Guid.TryParse(claimTypes.Value.FindUserId(principal), out _);

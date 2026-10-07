@@ -148,13 +148,40 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 | 看似可删但必须保留的实现约束 | 行内 `//` | 独占一行，通常 1–3 行 |
 | 实施过程和历史 | Git、PR、CI | 不写入源码和分发文档 |
 
+统一规则：名称与类型先表达职责，注释只补正确使用所需的契约；文档只描述当前产品。
+
+| 对象 | 保留 | 精简 |
+| --- | --- | --- |
+| 公共类型与成员 | `<summary>` 或显式 `<inheritdoc/>`；单位、默认值、空值与 `false` 的含义、失败形态、取消、顺序、作用域、租约、幂等、事务、租户、部署前提 | 名称翻译式套话、构造参数逐字复述、与组件文档重复的实现说明 |
+| 内部成员与行注释 | 算法原因、并发与安全不变量、外部约束 | 步骤编号、代码复述、装饰分隔线、修复经过与设计演进 |
+| 组件文档 | 安装与注册入口、最小示例、关键 API、配置、运行限制 | 过程记录、实现教学、夸张警示、与其他文档重复的事实 |
+
+- 精简以语义为单位，不按行数截断或批量删 `<remarks>`；删除前对照源码确认该句不是上表的契约。
+- `<summary>` 一句话，短的写成单行；属性不机械加“获取或设置”；`<param>`、`<returns>` 只写签名之外的信息，没有就不写。
 - `<remarks>` 保留影响正确用法的契约；组件文档说明必要的使用取舍，过程记录交给 Git。
 - `<example>` 用于主要注册入口和容易误用的主路径；可从签名直接推出的调用不补示例。
-- 接口或基类定义公共契约；实现没有新增语义时使用 `<inheritdoc/>`，不复制同一段说明。
+- 接口或基类定义公共契约；实现确有继承且语义一致时使用 `<inheritdoc/>`，不复制同一段说明；实现收窄或改变语义时写自己的摘要。
 - XML 不使用 Markdown `**…**`；行内代码用 `<c>`，引用 API 用 `<see cref="..."/>`。
 - `<para>` 仅用于两个以上段落。
-- 行内注释解释“为什么必须这样”，不复述代码正在做什么。
+- 行内注释解释“为什么必须这样”，不复述代码正在做什么。工具指令（`#pragma`、`#if`、`SuppressMessage` 的 `Justification`）与版权声明不在精简范围。
 - 示例中的 API、依赖和变量必须可用；XML 内的代码不会自动参与 C# 编译，关键路径需单独验证。
+
+示例（前者每句都可从签名读出，后者只留调用方需要的契约）：
+
+```csharp
+// 精简前
+/// <summary>
+/// 获取或设置锁的过期时间。
+/// </summary>
+/// <param name="key">锁的键。</param>
+/// <param name="cancellationToken">取消令牌。</param>
+/// <returns>返回锁句柄。</returns>
+// 1. 构造键  2. 调用存储
+
+// 精简后
+/// <summary>尝试获取锁；已被占用时返回 <c>null</c>，不等待。</summary>
+/// <remarks>租约到期自动释放，持有者需在到期前完成或续租。</remarks>
+```
 
 Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓库也不为这些数字设硬闸门；统计只用于发现趋势，审查仍回到必要性、准确性与唯一性。
 
@@ -466,11 +493,13 @@ dotnet test framework/Leistd.Framework.slnx -c Release \
 
 ```bash
 dotnet build framework/Leistd.Framework.slnx -c Release          # 0 错误
-dotnet test  framework/Leistd.Framework.slnx -c Release          # 全绿
+# 测试：L1 运行 plan-quality-checks.py --local-framework-tests 选出的受影响测试项目，全集留给 L3（见 quality-assurance.md）
 pwsh scripts/check-all.ps1                                       # 全部静态闸门
 pwsh framework/build/pack-local-feed.ps1                         # 本地 NuGet feed（先清空再打包，PDB 内嵌）
 pwsh framework/build/test-package-consumption.ps1                # 包内容、还原、构建与组件文档示例编译
 ```
+
+测试项目的选择与执行命令见[质量规范 §框架与真实依赖](./quality-assurance.md#框架与真实依赖)，本文件不复述选择规则。
 
 静态闸门清单只以 `pwsh scripts/check-all.ps1 -List` 的输出为准，CI 也只调它一处；新增闸门加进该脚本，本文件不跟着列。
 需要构建产物或运行环境的验证（矩阵、PostgreSQL E2E、包消费）不在其中，各有自己的入口。

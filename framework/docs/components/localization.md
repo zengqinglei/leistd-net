@@ -91,7 +91,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 }
 ```
 
-按当前 `CultureInfo.CurrentUICulture` 逐级回落（`zh-Hans-CN` → `zh-Hans` → `zh`），再回落到默认语言；**仍未命中则返回键本身**（.NET "键即默认值" 语义）。
+按当前 `CultureInfo.CurrentUICulture` 逐级回落（`zh-Hans-CN` → `zh-Hans` → `zh`），再回落到默认语言；仍未命中则返回键本身，`ResourceNotFound` 为 `true`。
 
 ## 接口参考
 

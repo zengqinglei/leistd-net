@@ -23,7 +23,7 @@ dotnet add package Leistd.Email.Smtp
 
 ## 注册
 
-在 `Program.cs` 注册**其中一种**实现：
+在 `Program.cs` 注册其中一种实现：
 
 ```csharp
 if (builder.Environment.IsDevelopment())
@@ -36,7 +36,7 @@ else
 }
 ```
 
-两者都绑定 `IEmailSender`。`AddSmtpEmailSender` 绑定 `Leistd:Email:Smtp` 配置节，可选的委托在绑定之后应用（代码覆盖配置），另可传入自定义配置节路径；它还把配置校验挂到 `ValidateOnStart`——配置非法时宿主起不来，而不是等到第一次发信。实现类型只注册一次，接口是别名转发，重复调用不会产生两个实例。
+两者都绑定 `IEmailSender`。`AddSmtpEmailSender` 绑定 `Leistd:Email:Smtp` 配置节（可传入自定义路径），可选的委托在绑定之后应用；配置在启动期校验（`ValidateOnStart`）。重复调用不会产生两个实例。
 
 ## 使用
 
@@ -113,7 +113,7 @@ await emailSender.SendAsync(new EmailMessage
 }
 ```
 
-`Host`、`Port`、`DefaultFromAddress` 与「`Username`/`Password` 成对」四项在启动期校验，任一不过阻止宿主启动。地址是否合法交给 MimeKit 判定，与发送路径同一套解析——不会出现"配置过了却在发送时解析不出来"。
+`Host`、`Port`、`DefaultFromAddress` 与「`Username`/`Password` 成对」四项在启动期校验，任一不过阻止宿主启动；地址按发送路径同一套 MimeKit 规则解析。
 
 ## 实现行为
 
@@ -122,33 +122,26 @@ SMTP 连接、认证或投递失败均原样抛出；重试和补偿由调用方
 ### Leistd.Email.Core（`NullEmailSender`）
 
 - 不连接任何服务器，不投递，返回成功。
-- 按 **Warning** 级别记录收件人与主题，**不记录正文**。级别是"本环境不会真的发信"的唯一信号，因此不用 Debug——降级后，误把它注册进生产的部署会完全静默地丢掉每一封信。
-- 不记正文是有意的：验证码、重置链接进应用日志等于把凭据留在日志里。要看内容请用 SMTP 指向本机邮件捕获器。
+- 按 Warning 级别记录脱敏后的收件人与主题，不记录正文；要看内容请用 SMTP 指向本机邮件捕获器。
 - 必须由宿主主动注册。
 
 ### Leistd.Email.Smtp（`SmtpEmailSender`）
 
 - 每次发送新建一个 `SmtpClient`，发完 `QUIT` 断开，不复用连接。
-- `EnableSsl` 为 `true` 时按端口选握手方式：465 用隐式 TLS，其余用 STARTTLS。两者不可互换——对 465 用 STARTTLS 会卡在等待明文问候，对 587 用隐式 TLS 会握手失败。
-- 仅在 `Username` 非空时认证。用户名与口令由启动期校验保证成对，取到一半时当场抛，而不是跳过认证继续发送。
-- 参数每封信取 `IOptionsMonitor<SmtpOptions>.CurrentValue`：配置源重载后（文件改动，或宿主注册的可重载配置源）下一封信即用新值，不必重启。重算出的值同样过启动期那套校验，不合规时发信抛 `OptionsValidationException`；`IOptionsMonitor` 在重载回调里就重算，因此触发重载的一方也会收到包着它的 `AggregateException`。
+- `EnableSsl` 为 `true` 时按端口选握手方式：465 用隐式 TLS，其余用 STARTTLS。
+- 仅在 `Username` 非空时认证；用户名与口令由校验保证成对。
+- 每封信取 `IOptionsMonitor<SmtpOptions>.CurrentValue`，配置源重载后下一封信即用新值。新值同样经校验，不合规时发信抛 `OptionsValidationException`，
+  触发重载的一方也会收到包着它的 `AggregateException`。
 
 ## 注意事项
 
-- **发件地址与显示名成对取用。** 给出 `FromAddress` 而不给 `FromName` 时，显示名为空，不会贴上 `DefaultFromName`；否则会发出"自定义地址 + 系统署名"这种没人想要的组合，而且不报错。
+- 给出 `FromAddress` 而不给 `FromName` 时显示名为空，不使用 `DefaultFromName`。
 - `IsBodyHtml` 取错不会报错，只会让收件人看到转义后的 HTML 源码或没有排版的信。
-- 组件不排队、不重试、不退避。一次 `SendAsync` 就是一次同步投递尝试，耗时受 SMTP 往返影响；放在请求路径上时需要考虑它对响应时间的贡献。
-- `Password` 属于凭据。它不该出现在随代码分发的配置文件里，也不该经由任何面向界面的设置接口读写。
-- **投递日志记脱敏后的收件人，不记完整地址。** 字段名仍是 `{To}`，值经
-  `TextRedactor.RedactEmail` 处理：`zhangsan@example.com` 记成 `zha***@example.com`
-  （本地部保开头几位 + 完整域名，规则见[核心原语](core.md)）。邮箱是个人数据，而日志通常被集中采集、
-  保留更久、可见范围更大；保住域名是为了能按域名聚合，看出"某个租户或某个邮件服务商整体收不到"。
-  地址取不出域名（配错了）时记成 `not***` 这样的形态，**不回落成原文**。
-  要按收件人逐一追查时用操作记录或业务侧的标识，不要把地址加回日志。
-- **主题原样记录，不脱敏。** 脱敏了就失去"这封是什么信"的排障价值，而那正是这条日志的用途。
-  本组件与模板产出的主题都是固定或本地化文案，不含个人数据；**宿主若把人名之类放进主题，
-  它会原样进日志**——那是宿主的显式选择，自行改用标识符或不要放进主题。
-  通知类邮件的主题来自 `NotificationInputDto.Title`，同样受这条约束。
+- 组件不排队、不重试、不退避；一次 `SendAsync` 就是一次同步投递尝试，放在请求路径上时计入响应时间。
+- `Password` 属于凭据，不要写进随代码分发的配置文件，也不要经面向界面的设置接口读写。
+- 投递日志的 `{To}` 记脱敏后的收件人（`TextRedactor.RedactEmail`：`zhangsan@example.com` → `zha***@example.com`，规则见[核心原语](core.md)），
+  取不出域名时也不回落成原文。按收件人追查时用操作记录或业务侧标识。
+- 主题原样记录：不要把人名等个人数据放进主题（通知邮件的主题来自 `NotificationInputDto.Title`）。
 
 ## 相关
 

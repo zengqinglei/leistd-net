@@ -20,7 +20,8 @@ dotnet add package Leistd.Authorization.Resource.AspNetCore      # 判定实现�
 dotnet add package Leistd.Authorization.Resource.EntityFrameworkCore
 ```
 
-仅使用领域规则时可不安装 EF Core 包。判定包按框架约定以 `FrameworkReference Microsoft.AspNetCore.App` 引用官方授权组件：不依赖 `HttpContext`，后台宿主同样可用，代价是需要 ASP.NET Core 共享框架（Worker 等非 Web 宿主也要带上它）。实例判定必须在资源加载后执行，无法由加载前的 `[Authorize]` 策略取代。
+仅使用领域规则时可不安装 EF Core 包。判定包以 `FrameworkReference Microsoft.AspNetCore.App` 引用官方授权组件，不依赖 `HttpContext`；Worker 等非 Web 宿主也需要 ASP.NET Core 共享框架。
+实例判定必须在资源加载后执行，无法由加载前的 `[Authorize]` 策略取代。
 
 ## 注册
 
@@ -106,7 +107,8 @@ public class ArchivedOrderHandler : AuthorizationHandler<OperationAuthorizationR
 3. 否则任一处理器 `Succeed()` 即允许：规则允许、ACL 授予（`Granted`）、超级管理员。
 4. 全部无结论时拒绝。没有 ACL 记录时 ACL 处理器不给结论，交给规则处理器。
 
-主体的租户规则与功能权限一致，且先于超级管理员判定：主体的租户声明非法（如两份用户凭据被拼成一个主体）时 ACL 处理器 `Fail()`；经 `IAuthorizationService` 显式判定别的主体时，它还须属于当前租户，否则同样 `Fail()`——ACL 按当前租户读取，别的租户里同一标识的用户不能拿到这里比对。当前主体只校验声明合法，宿主主体显式切入租户照常判定。
+主体的租户规则与功能权限一致，且先于超级管理员判定：租户声明非法时 ACL 处理器 `Fail()`；经 `IAuthorizationService` 显式判定别的主体时，它还须属于当前租户，否则同样 `Fail()`。
+当前主体只校验声明合法。
 
 超级管理员不会跳过领域规则的拒绝。未注册 ACL 存储时，只有规则处理器与超级管理员参与判定。ACL 按被授权的主体（`context.User`）查询，经 `IAuthorizationService` 为别的主体判权时同样成立。
 

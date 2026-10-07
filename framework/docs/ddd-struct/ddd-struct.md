@@ -13,32 +13,20 @@ DDD 基座为 Domain、Application.Contracts、Application 和 Infrastructure �
 
 业务项目通常每层建立一个工程并只引用对应包，层间依赖为 Application → Application.Contracts → Domain。
 
-框架包本身的引用更窄：`Leistd.Ddd.Application` 只引用 `Application.Contracts` 与
-`Leistd.ObjectMapping.Core`（分页映射需要 `IObjectMapper`，而 `Application.Contracts`
-作为客户端也要引用的契约包，不应背上映射依赖）；`Leistd.Ddd.Infrastructure` 依赖 `Domain`。
+框架包本身：`Leistd.Ddd.Application` 只引用 `Application.Contracts` 与 `Leistd.ObjectMapping.Core`（分页映射需要 `IObjectMapper`）；
+`Application.Contracts` 不依赖映射组件；`Leistd.Ddd.Infrastructure` 依赖 `Domain`。
 
 ### DbContext 显式接入
 
 每个注册过的 DbContext 都要调用一次 `AddDddDbContext<TDbContext>()`，完整写法见[注册](#注册)。
 
-**漏掉的上下文会逃出租户过滤器闸门**——那道闸门是"多租户实体被映射进没有租户过滤器的
-DbContext"的唯一拦截点。装了 `DynamicProxyServiceRegistrationCallbackFactory` 时，漏写在构建容器时直接
-失败；**不装则框架查不出漏登记**——校验器不执行，闸门也只看已登记的上下文，漏掉的那个
-自始至终不可见。这就是它属于必要步骤而非可选优化的原因。
-不需要仓储的上下文调用无参重载即可，那也算显式声明。
+漏掉的上下文不受租户过滤器闸门检查。装了 `DynamicProxyServiceRegistrationCallbackFactory` 时，漏写在构建容器时失败；
+不装则框架查不出漏登记。不需要仓储的上下文调用无参重载即可。框架不扫描容器自动发现上下文。
 
-刻意不扫描容器自动发现：扫描得到的覆盖面取决于宿主怎么注册 DbContext（工厂委托注册
-看不到实现类型；不装 provider factory 则注册回调根本不执行），于是一道安全闸门的
-有效性会挂在无关的注册形态上。
-
-**仓储的实体来源是 `DbSet<T>` 声明**，且 `T` 实现 `IEntity`。这是有意的选择信号——声明
-`DbSet<T>` 等于宣布"这是我要直接查询的实体"。只经 `modelBuilder` 映射、不暴露 `DbSet<T>`
-的实体不在其中（注册阶段拿不到 EF Core 模型，取 `Model` 要实例化 DbContext 而那需要已构建
-的容器）。确实需要时用
+默认仓储的实体来源是公开的 `DbSet<T>` 声明（`T` 实现 `IEntity`）；只经 `modelBuilder` 映射的实体用
 `AddDefaultRepository<TEntity>()` 点名，或用 `AddRepository<TEntity, TImpl>()` 指定自定义实现。
 
-同一实体被两个上下文各注册一次会**直接抛异常**：Microsoft DI 让后注册的静默胜出，调用方
-无从知道读的是哪个库。同一上下文以相同选项重复登记不会抛，也不会多出注册。
+同一实体被两个上下文各注册一次时抛异常；同一上下文以相同选项重复登记不会抛，也不会多出注册。
 
 ### 应用服务基类
 
@@ -121,9 +109,8 @@ public class OrderManager(IRepository<Order, Guid> repository)
 
 仓储写入在工作单元内延迟到统一提交，在工作单元外立即调用 `SaveChangesAsync`。`GetByIdAsync` 使用过滤查询而非 `FindAsync`，不会绕过软删除或租户隔离。
 
-延迟提交有一个后果值得单列：**唯一索引等约束冲突在冲刷时才抛出，不在 `InsertAsync` 抛出**。
-所以工作单元内的 `try { InsertAsync } catch` 是永不触发的死代码，要就地处理并发首次写入
-必须先 `IUnitOfWork.SaveChangesAsync`（见[工作单元](../components/unit-of-work.md#在事务内提前冲刷)）：
+唯一索引等约束冲突在冲刷时才抛出，不在 `InsertAsync` 抛出；工作单元内要就地处理并发首次写入，先
+`IUnitOfWork.SaveChangesAsync`（见[工作单元](../components/unit-of-work.md#在事务内提前冲刷)）：
 
 ```csharp
 // 错：catch 永不触发
@@ -203,7 +190,7 @@ public class AppDbContext(
 }
 ```
 
-`BaseDbContext.OnModelCreating` 与 `ConfigureConventions` 已封闭；派生类覆盖 `ConfigureModel` 配置实体、覆盖 `ConfigureModelConventions` 追加模型约定（如枚举统一存为字符串）。基类在派生配置完成后为所有已进入模型的实体添加命名过滤器，防止未声明 `DbSet` 的组件实体逃逸软删除或租户隔离。
+`BaseDbContext.OnModelCreating` 与 `ConfigureConventions` 已封闭；派生类覆盖 `ConfigureModel` 配置实体、覆盖 `ConfigureModelConventions` 追加模型约定（如枚举统一存为字符串）。基类在派生配置完成后为所有已进入模型的实体（含未声明 `DbSet` 的组件实体）添加命名过滤器。
 
 基类注册 EF Core 约定 `DddEntityConvention`：审计人字段（`CreatorId`、`LastModifierId`、`DeleterId`）最长 64，`ConcurrencyStamp` 见[乐观并发标记](#乐观并发标记)。约定以约定来源写入，实体上的显式 Fluent 配置优先。不继承基类的上下文可在 `ConfigureConventions` 中注册同一约定：
 
@@ -285,7 +272,7 @@ public class Document : Entity<Guid>, IHasConcurrencyStamp
 
 ## 迁移快照检查
 
-模型约定和组件实体配置随框架版本演进。升级会改变模型的框架版本（升级说明会注明）后，必须确认迁移快照与当前模型一致，否则真实库上执行迁移时会因模型存在未迁移的变更而失败，而 InMemory 测试察觉不到。
+模型约定和组件实体配置随框架版本变化。更新框架后核对迁移快照与当前模型一致；不一致时真实库上执行迁移会失败，InMemory 测试察觉不到。
 
 在测试中经设计时工厂检查，不连库、不装 `dotnet-ef`：
 

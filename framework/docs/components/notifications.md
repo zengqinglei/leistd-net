@@ -51,8 +51,7 @@ services.AddNotificationsEfCore<MyProjectDbContext>();
 builder.Services.AddNotificationsSignalR();
 ```
 
-保留期清理另外还要逐库遍历（`ITenantDatabaseRunner`），由 `AddMultiTenancyCore()` 提供；
-不分库时它给出的清单只有宿主库，行为与单库一致。组件不替你注册——跨组件的前置由宿主显式组合。
+保留期清理的逐库遍历（`ITenantDatabaseRunner`）由 `AddMultiTenancyCore()` 提供，不分库时只有宿主库；组件不代为注册。
 
 在 `OnModelCreating` 中应用通知实体的 EF Core 配置：
 
@@ -110,15 +109,12 @@ builder.Services.AddEmailNotifications();
 builder.Services.TryAddTransient<INotificationRecipientResolver, UserEmailRecipientResolver>();
 ```
 
-邮件里附的链接：绝对 http(s) 地址原样附上；以 `/` 开头的站内链接在配置了 `Leistd:Notifications:Email:PublicBaseUrl`（`EmailNotificationOptions.PublicBaseUrl`）时拼成绝对地址附上，未配置时不附。站点地址直接拼在链接前，带路径前缀的站点写 `https://example.com/portal`，前端用哈希路由时写 `https://example.com/#`；不从请求推导，通知可能在后台产生，请求头也可被伪造。
+邮件里附的链接：绝对 http(s) 地址原样附上；以 `/` 开头的站内链接在配置了 `Leistd:Notifications:Email:PublicBaseUrl` 时拼成绝对地址附上，未配置时不附。
+站点地址直接拼在链接前：带路径前缀的站点写 `https://example.com/portal`，前端用哈希路由时写 `https://example.com/#`；不从请求推导。
 
 偏好是宿主定义的用户级布尔设置，名为 `{前缀}.{通知类型}.{渠道名}`（前缀默认 `Notifications`，邮件渠道名为 `EmailNotificationChannel.ChannelName`）；没有定义的组合一律投递。
 
-> **前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`。本家族的 EF 存储与管理器经
-> `IDbContextProvider<TDbContext>` 取上下文——只有它会设置 `DbContextCreationContext.Current`，
-> 宿主的 `AddDbContext` 回调据此拿到本工作单元已解析的连接。直接注入 `TDbContext` 会让独立库租户的数据
-> 落到宿主配置的默认连接上、并脱离工作单元事务，两者都是静默的。与 `AddMultiTenancyEfCore` 同一约定：
-> 组件不替其它组件注册基础设施。
+前置：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`，EF 存储经 `IDbContextProvider<TDbContext>` 取得本工作单元已解析连接的上下文。
 
 ## 使用
 
@@ -162,14 +158,14 @@ public class MessageCenter(INotificationStore notificationStore)
 | --- | --- |
 | `INotificationPublisher` | 通知发布器，业务层唯一入口，不感知底层传输 |
 | `INotificationPublisher.PublishToUserAsync(userId, notification, ct)` | 推送给指定用户；`userId` 为 `string`，`notification` 为 `NotificationInputDto` |
-| `INotificationChannel` | 通知外发渠道，只负责把已定案的通知送出去，由具体介质实现（如 SignalR）。**不是业务入口**——业务代码用 `INotificationPublisher` |
+| `INotificationChannel` | 通知外发渠道，只负责把已定案的通知送出去，由具体介质实现（如 SignalR）；业务代码用 `INotificationPublisher` |
 | `INotificationChannel.Name` | 渠道名，投递过滤按它区分；站内实时推送用 `INotificationChannel.InAppName` |
 | `INotificationChannel.DeliverAsync(userId, notification, ct)` | 投递给指定用户；`notification` 已由发布器补齐 `Id`/`CreationTime` |
 | `INotificationDeliveryFilter.ShouldDeliverAsync(userId, notification, channel, ct)` | 这条通知是否经该渠道投给该用户；默认一律投递，宿主按用户偏好替换 |
-| `INotificationChannel.InAppName` | 站内渠道名（`"InApp"`）：通知历史与实时推送共用这一个开关；这是框架自己的渠道，业务渠道名由业务项目在各自的渠道实现上定义 |
-| `INotificationStore` | 通知持久化接口；**必需且只能有一个**实现 |
+| `INotificationChannel.InAppName` | 站内渠道名（`"InApp"`）：通知历史与实时推送共用这一个开关 |
+| `INotificationStore` | 通知持久化接口；必需且只能有一个实现 |
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
-| `INotificationStore.GetByUserAsync(userId, page, unreadOnly, ct)` | 按创建时间**倒序**分页获取用户通知，`unreadOnly` 只取未读；返回 `PagedResult<NotificationOutputDto>` |
+| `INotificationStore.GetByUserAsync(userId, page, unreadOnly, ct)` | 按创建时间倒序分页获取用户通知，`unreadOnly` 只取未读；返回 `PagedResult<NotificationOutputDto>` |
 | `INotificationStore.DeleteAsync(notificationId, userId, ct)` / `DeleteAllAsync(userId, ct)` | 删除用户自己的一条 / 全部通知；删除账号时调用后者清理孤儿行 |
 | `MapNotifications(configure)` | AspNetCore 包：`AccessPolicy` 必填；`GET /`（`maxCount` 收敛到 1–`NotificationEndpoints.MaximumListCount`，可加 `unreadOnly`）、`GET /unread-count`、`PUT /{id}/read`、`PUT /read-all`、`DELETE /`、`DELETE /{id}` |
 | 默认 HTTP 状态 | 组件默认状态：`NotificationErrorCodes.IdentityCannotOperate` → 403。由 `AddNotifications()` 自动登记；宿主 `MapCode` 可覆盖 |
@@ -180,55 +176,57 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationStore.MarkAsReadAsync(notificationId, userId, ct)` | 标记单条通知为已读 |
 | `INotificationStore.MarkAllAsReadAsync(userId, ct)` | 标记用户所有通知为已读 |
 | `INotificationStore.GetUnreadCountAsync(userId, ct)` | 获取用户未读通知数量 |
-| `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（业务自定义字符串，默认 `NotificationInputDto.DefaultType`，即 `"System"`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`。**不含身份**——`Id`/`CreationTime`/`IsRead` 由发布器按收件人定案 |
-| `NotificationOutputDto` | 读取与实时传输输出：在 `NotificationInputDto` 的字段上加 `Id`、`IsRead`、`CreationTime`。`Id` 恒为**该用户的那条记录**，标记已读用的就是它 |
+| `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（业务自定义字符串，默认 `"System"`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`；`Id`、`CreationTime`、`IsRead` 由发布器按收件人定案 |
+| `NotificationOutputDto` | 读取与实时传输输出：在 `NotificationInputDto` 的字段上加 `Id`、`IsRead`、`CreationTime`；`Id` 是该用户那条记录的标识，标记已读时使用 |
 
 ## 实现行为
 
 ### Leistd.Notifications.Core（`NotificationPublisher` 默认发布器）
 
-- `PublishToUserAsync` 先写入 Store，再依次调用所有渠道（`INotificationChannel`）。Store 是必需依赖；先落库再推送——推送失败只是这一次没送到，历史还在，反过来则是历史丢了。
-- 投不投由 `INotificationDeliveryFilter` 决定：先问站内（`INotificationChannel.InAppName`），不投则既不写 Store、也不调用站内渠道；其余渠道逐个按 `Name` 问。默认过滤器一律投递；要按用户偏好过滤时，在 `AddNotifications` 之前注册自己的实现（或之后用 `Replace`）。过滤器抛出的异常会让本次发布失败，而不是替收件人猜一个投或不投。
+- `PublishToUserAsync` 先写入 Store，再依次调用所有渠道（`INotificationChannel`）；Store 写入失败终止发布。
+- 投不投由 `INotificationDeliveryFilter` 决定：先问站内（`INotificationChannel.InAppName`），不投则既不写 Store、也不调用站内渠道；其余渠道逐个按 `Name` 问。
+  默认过滤器一律投递；要按用户偏好过滤时，在 `AddNotifications` 之前注册自己的实现（或之后用 `Replace`）。过滤器抛出的异常会让本次发布失败。
 - 创建时刻只来自 `IClock.Now`，发布输入不能指定。
 - 通知按用户寻址并保留历史；realtime 按客户端订阅的资源寻址。两个组件默认使用各自的 Hub、可独立安装，也可经 `AddNotificationsSignalR<THub>()` 共用一个 Hub。
 - 业务代码只注入 `INotificationPublisher`；直接调用 `INotificationChannel` 会绕过历史写入。
-- 多个 `INotificationChannel` 按注入顺序 `foreach` **串行 `await`**，非并行、非后台任务。`INotificationStore` 只允许一个：多个持久化去处只会带来「写了一半」的不一致。
+- 多个 `INotificationChannel` 按注入顺序串行 `await`，非并行、非后台任务。
 
 ### Leistd.Notifications.AspNetCore.SignalR（实时推送）
 
 - `NotificationHub` 没有可供客户端调用的方法，也不做分组；它只是接收端点。
-- 渠道用 SignalR 自带的 `Clients.User(userId)` 寻址，经注册时选定的 Hub 推送；客户端方法名为 `NotificationClientMethods.Received`（`Notifications.Received`，前端 `connection.on("Notifications.Received", ...)` 订阅）。带命名空间是为了与同一连接上的业务事件名区分，业务事件不要使用 `Notifications.` 前缀。
-- `DeliverAsync` **不吞异常**，送达失败（如底层 SignalR 传输异常）原样抛出；跨渠道的隔离与日志由 `NotificationPublisher` 统一负责——它逐个渠道捕获、记 `LogError`、继续下一个，因此一个渠道送不到不会让 `PublishToUserAsync` 失败，也不会让后面的渠道收不到。唯一例外是调用方取消（`OperationCanceledException` 且 `ct` 已取消）：如实向上传播。
-- `AddNotificationsSignalR` 内部会先调用 `AddNotifications()`（若未单独调用也会补齐 `INotificationPublisher` 注册），因此只需要引用 SignalR 包并调用它，无需再显式调用 `AddNotifications()`。
-- `AddNotificationsSignalR` 的 SignalR 部分只调用基座的 `AddSignalRAmbientContext()`：SignalR 注册、Hub 调用的环境上下文与 `UserIdentifier` 解析都由基座提供，本组件不重复注册，也不碰 `HubOptions`。
-- `MapNotificationHub` 只映射通知自身的 Hub，**不会**代为映射 `Leistd.RealTime` 的业务实时 Hub；如项目同时需要业务实时事件，需另行调用 `AddRealTimeSignalR` 与 `MapRealTimeHub`，或用 `AddNotificationsSignalR<RealTimeHub>()` 让两者共用那一个 Hub。
+- 渠道用 `Clients.User(userId)` 寻址，经注册时选定的 Hub 推送；客户端方法名为 `NotificationClientMethods.Received`（`Notifications.Received`）。
+  业务事件不要使用 `Notifications.` 前缀。
+- `DeliverAsync` 不吞异常；`NotificationPublisher` 逐个渠道捕获、记 `LogError`、继续下一个，一个渠道送不到不会让 `PublishToUserAsync` 失败。
+  调用方取消（`OperationCanceledException` 且 `ct` 已取消）如实向上传播。
+- `AddNotificationsSignalR` 内部调用 `AddNotifications()` 与基座的 `AddSignalRAmbientContext()`，不碰 `HubOptions`。
+- `MapNotificationHub` 只映射通知自身的 Hub；同时需要业务实时事件时另行调用 `AddRealTimeSignalR` 与 `MapRealTimeHub`，或用 `AddNotificationsSignalR<RealTimeHub>()` 共用一个 Hub。
 
 ### Leistd.Notifications.EntityFrameworkCore（持久化）
 
-- `EfCoreNotificationStore<TDbContext>` 为**泛型**实现，绑定到调用方指定的 `TDbContext`（`where TDbContext : DbContext`），通过 `dbContext.Set<NotificationRecord>()` 操作，宿主 DbContext 需自行包含该实体（由 `ConfigureNotifications()` 提供配置）。
-- `NotificationRecord` 实现 `ICreationAuditedObject`。`CreationTime` 由发布器定好、`FromDto` 带入：留空转而依赖审计拦截器，等于把落库时间挂在「宿主是否给这个 DbContext 挂了审计拦截器」上——没挂就是 `default(DateTime)`，而通知列表按它排序。`CreatorId` 仍由审计拦截器填充。
-- `GetByUserAsync` 按 `CreationTime` **倒序**、同刻按 `Id` 倒序排序；`PageRequest.Sorting` 不生效。
+- `EfCoreNotificationStore<TDbContext>` 经 `dbContext.Set<NotificationRecord>()` 操作，宿主 DbContext 需在 `OnModelCreating` 调用 `ConfigureNotifications()`。
+- `CreationTime` 由发布器定好、经 `FromDto` 带入，不依赖审计拦截器；`CreatorId` 仍由审计拦截器填充。
+- `GetByUserAsync` 按 `CreationTime` 倒序、同刻按 `Id` 倒序排序；`PageRequest.Sorting` 不生效。
 - 保留期清理按物理库逐个执行，每批一个事务；已读与未读都按创建时间计，未读的保留天数不得短于已读。
 - 邮件渠道按纯文本发送正文，链接另起一段附上：绝对 http(s) 地址原样附上，以 `/` 开头的站内链接在配置了 `PublicBaseUrl` 时拼成绝对地址，其余不附；需要定制邮件版式时实现自己的 `INotificationChannel`。队列满时丢弃这一封并记警告，站内通知不受影响。
-- `MarkAsReadAsync` **幂等**：`notificationId` 无法解析为 `Guid` 时直接返回；查不到记录，或记录已是 `IsRead: true` 时也直接返回、不产生额外的 `SaveChanges`；仅在确实从未读变为已读时才更新 `IsRead` 与 `ReadAt` 并保存。
-- `MarkAllAsReadAsync` 只查询 `IsRead == false` 的记录批量标记；无未读记录时直接返回，不调用 `SaveChangesAsync`。
-- 索引三条：`(UserId, CreationTime)` 支撑"拉取用户通知列表"，`(UserId, IsRead)` 支撑"未读数"查询，单列 `CreationTime` 支撑**保留期清理**——清理整库按时间扫、不带 `UserId`（`IgnoreQueryFilters()` 覆盖同库的全部租户），前两条都以 `UserId` 打头，那条路径一条都用不上。表名沿用 EF Core 默认约定（`NotificationRecord`），不额外加框架前缀。
+- `MarkAsReadAsync` 幂等：`notificationId` 不是 `Guid`、查不到记录或已读时直接返回；仅在从未读变为已读时更新 `IsRead` 与 `ReadAt` 并保存。
+- `MarkAllAsReadAsync` 只批量标记未读记录；没有未读时不保存。
+- 索引：`(UserId, CreationTime)`（通知列表）、`(UserId, IsRead)`（未读数）、单列 `CreationTime`（保留期清理整库按时间扫）。表名沿用 EF Core 默认约定。
 
 ## 注意事项
 
-- **本组件只面向人**：每条通知都有归属用户、写入历史、计入未读数。需要推给「此刻在线的连接」（无归属、无历史）时用 [实时通信](./realtime.md) 的 `IBusinessEventPublisher`——那是瞬态推送的职责，不是没有历史的通知。
-
-- 本家族无独立 Options。心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；`UserIdentifier` 的 claim 解析顺序在 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions`。本组件不依赖实时通信组件。
-- 全员公告要进历史时是扇出：受众由业务决定，逐个调用 `PublishToUserAsync`。框架不提供「发给一个组」的入口——那会让受众解析与历史归属两件事混在一处。
-- **身份在收件人边界产生**：`PublishToUserAsync` 为每次发布生成 `Id`（`Guid.CreateVersion7().ToString("N")`）与 `CreationTime`（`IClock.Now`），并把同一个对象先交给 Store、再交给所有渠道——因此库里的 ID 与实时推送里的 ID 必然一致，客户端拿推送里的 ID 标记已读一定命中自己那条。同一份 `NotificationInputDto` 扇出给多个用户得到多条独立记录。`NotificationRecord.FromDto` 不再替上游发明 ID：`Id` 解析不出 Guid 直接抛 `ArgumentException`。
-- **传给 `PublishToUserAsync` 的 `userId` 必须等于该客户端的 SignalR `UserIdentifier`**，否则推送静默落空。`UserIdentifier` 由 [SignalR 基座](./aspnetcore-signalr.md)按 `ClaimTypeOptions.UserIds` 从 claim 解析（默认 `sub`，其次 `ClaimTypes.NameIdentifier`），只有这一处可配置。
-- SignalR 投递失败只记日志、不抛异常：调用 `PublishToUserAsync` 成功返回不代表用户端一定收到实时推送（例如客户端未连接、连接已断开），需要"送达确认"的场景仍应依赖持久化历史 + 客户端主动拉取未读数兜底。
-- `NotificationHub` 端点默认要求登录（`RequireHubAuthorization`），未登录客户端无法建立 SignalR 连接、也就收不到任何推送。
-- **Hub 调用的上下文与有效性由 SignalR 基座保证**。`AddNotificationsSignalR()` 内部走 `Leistd.AspNetCore.SignalR` 的 `AddSignalRAmbientContext()`：每次 Hub 调用前按连接主体建立 `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`。**但 `NotificationHub` 没有可供客户端调用的方法**，因此连接建立后不会再触发复评——授权只在握手时执行一次，账号之后被禁用不会主动关闭既有连接。需要立即断连的项目自建终止通道。
-- **发布方负责建立租户上下文。** `NotificationRecord` 实现 `IMultiTenant`，`TenantId` 由基座在 `SaveChanges` 时按**当前租户上下文**落值——`NotificationPublisher` 与 `EfCoreNotificationStore` 自身都不带租户，也无从推断：收件人只有 `userId`，由它反查租户需要用户表，而 Resource 形态根本没有。因此后台作业、消息消费者这类不经 HTTP 的入口必须先 `ICurrentTenant.Change(tenantId)`（或 `IAmbientContext.Begin`）再发布，否则通知落成宿主行（`TenantId` 为 `null`），租户侧被全局查询过滤器滤掉。**症状具有迷惑性**：实时推送按 `userId` 直达、不受过滤器约束，于是「推送收到了、未读数却是 0」——失败只出现在查询这一侧。
-- **多副本部署必须配置 SignalR 背板**，否则推送只到达连在本节点的客户端。通知已落库，用户刷新后仍能看到，因此降级较软——但实时性会静默失效。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
-- **令牌过期本身不会自动断开连接**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不因令牌到期关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。
-- **用 Bearer 认证时，浏览器客户端的令牌到不了 Hub**：浏览器的 WebSocket 与 SSE 设不了自定义请求头，令牌只能放进查询串，宿主须在认证之前接入 SignalR 基座的 `UseHubAccessToken()`，见 [SignalR 基座](./aspnetcore-signalr.md#注册)。用 Cookie 会话时不涉及本条。
+- 本组件只面向人：每条通知都有归属用户、写入历史、计入未读数。推给订阅了某资源的连接（无历史）用[实时通信](./realtime.md)的 `IBusinessEventPublisher`。
+- 本家族无独立 Options；心跳、超时用 `AddSignalR(o => ...)` 配，`UserIdentifier` 的 claim 解析顺序见 [SignalR 基座](./aspnetcore-signalr.md)。
+- 全员公告要进历史时由业务决定受众，逐个调用 `PublishToUserAsync`；框架不提供发给一个组的入口。
+- `PublishToUserAsync` 为每次发布生成 `Id`（`Guid.CreateVersion7().ToString("N")`）与 `CreationTime`（`IClock.Now`），并把同一个对象先交给 Store、再交给所有渠道，
+  库里与推送里的 ID 一致。`NotificationRecord.FromDto` 遇到不是 Guid 的 `Id` 抛 `ArgumentException`。
+- 传给 `PublishToUserAsync` 的 `userId` 必须等于该客户端的 SignalR `UserIdentifier`（按 `ClaimTypeOptions.UserIds` 解析），否则推送静默落空。
+- `PublishToUserAsync` 成功返回不代表实时推送送达（客户端可能未连接）；需要送达保证时依赖持久化历史与客户端拉取未读数。
+- `NotificationHub` 要求登录；它没有客户端可调用的方法，授权只在握手时执行，账号之后被禁用不会主动关闭既有连接。
+- 发布方负责建立租户上下文：`NotificationRecord` 实现 `IMultiTenant`，`TenantId` 按实体进入跟踪时的当前租户落值。后台作业、消息消费者须先
+  `ICurrentTenant.Change(tenantId)`（或 `IAmbientContext.Begin`）再发布，否则通知落成宿主行，表现为“推送收到了、未读数却是 0”。
+- 多副本部署须配置 SignalR 背板，否则推送只到达连在本节点的客户端，见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
+- 令牌到期不会自动断开连接（未配置 `CloseOnAuthenticationExpiration`）；确需到期即断时显式开启，并用真实 SignalR Client 验证。
+- 用 Bearer 认证时，浏览器客户端的令牌只能放进查询串，宿主须在认证之前接入 SignalR 基座的 `UseHubAccessToken()`，见 [SignalR 基座](./aspnetcore-signalr.md#注册)。
 
 ## 相关
 

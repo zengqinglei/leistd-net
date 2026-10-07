@@ -55,17 +55,12 @@ public sealed record TwoFactorLoginInput : IValidatableObject
 }
 ```
 
-宿主只映射自己的错误码。**框架组件的非默认状态由组件在自己的 `AddXxx` 里登记**（经
-`services.Configure<GlobalExceptionOptions>`），宿主不必逐个调用，也不必复制组件映射表——
-交给宿主手写的话，漏掉一行不会有编译或启动错误，只会静默回落成 400（例如租户停用从 403 变成 400，
-上游超时从 504 变成 500）。登记映射的类型是组件的内部实现，各组件的默认状态列在各自文档里。
+宿主只映射自己的错误码。框架组件的非默认状态由组件在自己的 `AddXxx` 里登记（经 `services.Configure<GlobalExceptionOptions>`），
+各组件的默认状态列在各自文档里。组件用 `MapDefaultCode` / `MapDefaultException` 登记，宿主用 `MapCode` 与对同一类型的 `MapException` 覆盖，
+与调用顺序无关。
 
-组件用 `MapDefaultCode` / `MapDefaultException` 登记，宿主用 `MapCode` 与对同一类型的 `MapException`
-覆盖，**调用顺序不影响优先级**：默认值按 `TryAdd` 写入，宿主的写入按键覆盖，先后都是宿主赢。
-
-`GlobalExceptionOptions` 与 `ExceptionDescriptor` 在 `Leistd.ExceptionHandling.Core`：两者只有状态码、
-错误码、文案与日志级别，与响应序列化形式无关，放在 Core 才能让组件在自己的 Core 包里声明默认值，
-而不必为此依赖 ASP.NET Core。默认 400 不需要映射。HTTP 状态属于 API 契约，只在代码里声明，不从配置文件读取。
+`GlobalExceptionOptions` 与 `ExceptionDescriptor` 在 `Leistd.ExceptionHandling.Core`，不依赖 ASP.NET Core。默认 400 不需要映射。
+HTTP 状态属于 API 契约，只在代码里声明，不从配置文件读取。
 
 ## 使用
 
@@ -87,7 +82,9 @@ if (order.Status == OrderStatus.Shipped)
 }
 ```
 
-`Code` 在构造时必填且不可变，同时是机器契约和本地化资源键。`Message` 必须是安全、可在未启用本地化时直接返回的默认文案；技术细节放入 `InnerException` 和日志。能帮用户修正操作的非敏感输入可以回显；密码、令牌、连接串以及登录等匿名场景中会帮助枚举账号的标识不得回显。`WithData` 只为资源文案的具名占位符传值，写入 `LocalizationData`；这些值会展示出去——随错误响应返回，也会被操作记录的业务拒绝留痕原样记下、进审计与导出——所以只放可公开展示的值。
+`Code` 在构造时必填且不可变，同时是机器契约和本地化资源键。`Message` 必须是安全、可在未启用本地化时直接返回的默认文案；技术细节放入 `InnerException` 和日志。
+能帮用户修正操作的非敏感输入可以回显；密码、令牌、连接串以及匿名场景中会帮助枚举账号的标识不得回显。
+`WithData` 写入 `LocalizationData`，供资源文案的具名占位符使用；这些值会随错误响应返回，也可能进入操作记录与导出，只放可公开展示的值。
 
 ## 默认映射与安全边界
 
@@ -99,19 +96,24 @@ if (order.Status == OrderStatus.Shipped)
 | 请求被客户端取消 | 官方 `ExceptionHandlerMiddleware` 在调用处理器之前直接返回 499，不经本组件 |
 | 其它异常 | 500，只有本地化标题与 `traceId`，不回显异常消息；原异常记 Error 日志 |
 
-`BadHttpRequestException` 由 ASP.NET Core 自己判定并携带状态码；`UseGlobalExceptionHandler` 通过 `ExceptionHandlerOptions.StatusCodeSelector` 让异常中间件沿用它，而不是 .NET 10 默认的 500。处理器不猜测 `HttpRequestException` 就是 503、`ArgumentException` 就是 400。这些异常往往代表本地缺陷或基础设施失败，未经宿主显式决策时应安全地返回 500。
+`UseGlobalExceptionHandler` 通过 `ExceptionHandlerOptions.StatusCodeSelector` 让异常中间件沿用 `BadHttpRequestException` 自带的状态码。
+处理器不把 `HttpRequestException`、`ArgumentException` 等推断为 4xx/503，未经宿主映射时返回 500。
 
 业务错误码（`code`）与公开文案（`detail`）只出现在 `BusinessException` 上。输入校验、未预期异常、上游故障这类协议层失败的契约就是 HTTP 状态码本身（RFC 9457 §4），响应只有本地化标题、`traceId` 与可选的 `errors`，不合成与状态码一一对应的错误码。
 
 400 是客户端请求错误的广义默认；422 只在宿主明确要表达“请求内容语法成立，但无法按其指令处理”且客户端确实需要区分时，才通过 `MapCode` 显式使用。
 
-日志以 `TraceId` 关联请求。响应字段 `traceId` 是官方口径的链路标识（当前 `Activity.Id`，W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，取第二段检索；没有 Activity 时回落为 `HttpContext.TraceIdentifier`），不被关联标识覆盖；异常日志里记下同一个值，按响应里的 `traceId` 就能搜到。业务层面的关联标识见[关联标识](./tracing.md)，它在响应头 `X-Correlation-Id` 与日志作用域里，与 `traceId` 分开。预期的 4xx 记 Warning，记录已经确认安全的公开消息，不记录未经审查的原始异常对象；5xx 记 Error 并保留异常链与堆栈。客户端可将 5xx 响应中的 `traceId` 告知支持人员快速定位。
+响应字段 `traceId` 是当前 `Activity.Id`（W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，取第二段检索；没有 Activity 时为 `HttpContext.TraceIdentifier`），不被关联标识覆盖；
+异常日志记下同一个值。业务层面的关联标识见[关联标识](./tracing.md)，它在响应头 `X-Correlation-Id` 与日志作用域里。
+预期的 4xx 记 Warning（只记公开消息），5xx 记 Error 并保留异常链与堆栈。
 
 ## 无响应体的错误状态码
 
-所有失败响应只走一条管道：ASP.NET Core 的 `IProblemDetailsService`。异常处理器、自动模型校验、状态码页、`Results.Problem()` 与框架各中间件都经它写出；本组件在它唯一的自定义钩子（`ProblemDetailsOptions.CustomizeProblemDetails`）上统一补 `traceId`（与官方默认写入器同一取值，MVC 自动校验等不经默认写入器的路径也一致）、按 `Title:{状态码}` 本地化框架给的默认标题，不另造写出路径。
+所有失败响应都经 ASP.NET Core 的 `IProblemDetailsService` 写出（异常处理器、自动模型校验、状态码页、`Results.Problem()` 与框架各中间件）；
+本组件在 `ProblemDetailsOptions.CustomizeProblemDetails` 上统一补 `traceId`，并按 `Title:{状态码}` 本地化框架给的默认标题。
 
-有些失败框架只写状态码、不写响应体：生产环境的 Minimal API 请求体解析失败（400）、内容类型不符（415）、未匹配路由（404）、认证质询（401）、限流（429）等。其中请求体解析失败还与环境有关——`RouteHandlerOptions.ThrowOnBadRequest` 默认只在开发环境开启，开发环境抛 `BadHttpRequestException`，由异常中间件按其自带状态码写出；生产环境直接写 400。为这类响应补上响应体用 ASP.NET Core 标准的状态码页，只作用于 API 路径（页面与静态资源的 404 不该变成 JSON）：
+生产环境的 Minimal API 请求体解析失败（400）、内容类型不符（415）、未匹配路由（404）、认证质询（401）、限流（429）等只写状态码、不写响应体
+（`RouteHandlerOptions.ThrowOnBadRequest` 默认只在开发环境开启）。为这类响应补上响应体用 ASP.NET Core 标准的状态码页，只作用于 API 路径：
 
 ```csharp
 app.UseGlobalExceptionHandler();
@@ -137,7 +139,8 @@ app.UseWhen(
 }
 ```
 
-容器里有**非泛型** `IStringLocalizer` 时（本地化组件的 `AddJsonLocalization` 会注册；只注册泛型 `IStringLocalizer<T>` 不算），处理器按 `Code` 查资源并用 `LocalizationData` 替换 `{Name}` 占位符；未命中或未启用本地化时回落到安全 `Message`。不增加 WithCode 扩展：BCL 异常不应被临时贴上业务身份。
+容器里有非泛型 `IStringLocalizer` 时（本地化组件的 `AddJsonLocalization` 会注册），处理器按 `Code` 查资源并用 `LocalizationData` 替换 `{Name}` 占位符；
+未命中或未启用本地化时回落到安全 `Message`。
 
 `IncludeExceptionDetails` 仅用于调试时输出 `stackTrace`，生产环境保持 `false`。
 
@@ -163,7 +166,7 @@ app.UseWhen(
 
 ## 注意事项
 
-Core 包不依赖 ASP.NET Core。不提供 UserFriendlyException，也不提供 BadRequestException / NotFoundException 等 HTTP 命名异常，避免开发者在业务层同时选“异常类型”和“错误码”两套分类。
+- Core 包不依赖 ASP.NET Core。不提供 UserFriendlyException 或 BadRequestException / NotFoundException 等 HTTP 命名异常，业务失败只用错误码分类。
 
 ## 相关
 
