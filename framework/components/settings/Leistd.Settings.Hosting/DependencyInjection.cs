@@ -28,8 +28,9 @@ public static class DependencyInjection
     /// 其余时候由每个副本上的 <c>EveryInstance</c> 周期任务按 <see cref="HostSettingOptions.RefreshInterval"/> 跟上
     /// （需要宿主注册调度器，如 <c>AddInProcessBackgroundJobs()</c>）。</para>
     /// <para>构建之后还要调用 <see cref="UseHostSettings{THost}"/> 把配置源挂上，漏了启动时抛出。
-    /// 可重复调用，绑定累加；刷新周期绑定 <paramref name="configSectionPath"/>，重复调用换用另一配置节时抛出
-    /// <see cref="InvalidOperationException"/>。</para>
+    /// 可重复调用：不同设置的绑定累加，完全相同的绑定不重复生效；同一设置名的绑定不同时在本次调用就抛出
+    /// <see cref="InvalidOperationException"/>（判定见 <see cref="HostSettingBindingBuilder"/>），<paramref name="bind"/> 在调用时即执行。
+    /// 刷新周期绑定 <paramref name="configSectionPath"/>，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -60,8 +61,19 @@ public static class DependencyInjection
                 $"AddHostSettings() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
         }
 
-        services.AddOptions<HostSettingBindingCollection>()
-            .Configure(collection => bind(new HostSettingBindingBuilder(collection.Bindings)));
+        // 在登记时执行绑定声明：冲突此时就抛出，且失败时已登记的绑定保持不变
+        var collection = services.Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<IOptions<HostSettingBindingCollection>>().FirstOrDefault()?.Value;
+        List<HostSettingBinding> pending = [.. collection?.Bindings ?? []];
+        bind(new HostSettingBindingBuilder(pending));
+        if (collection is null)
+        {
+            collection = new HostSettingBindingCollection();
+            services.AddSingleton<IOptions<HostSettingBindingCollection>>(new OptionsWrapper<HostSettingBindingCollection>(collection));
+        }
+
+        collection.Bindings.Clear();
+        collection.Bindings.AddRange(pending);
 
         if (services.Any(descriptor => descriptor.ServiceType == typeof(HostSettingsConfigurationProvider)))
         {

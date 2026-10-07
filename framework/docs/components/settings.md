@@ -76,6 +76,8 @@ var app = builder.Build();
 app.UseHostSettings();   // 构建之后挂配置源，漏了启动失败
 ```
 
+组合根拆分时可多次调用 `AddHostSettings`：同一设置的绑定以设置名、按顺序的配置键、兜底值与选项类型判定是否相同，相同即不重复生效，不同则在调用 `AddHostSettings` 时抛出 `InvalidOperationException` 并列出两处登记。
+
 ## 使用
 
 声明设置：
@@ -211,7 +213,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 | `AddSettingsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddSettingsCore()` |
 | `ConfigureSettings(modelBuilder)` | 映射 `SettingRecord` 实体 |
 | `MapSettings(configure)` | AspNetCore 包：`GET /`、`PUT /current-user`、`PUT /current-tenant`；`AccessPolicy` 与 `TenantWritePolicy` 均必填（组件不套宿主默认策略），端点名前缀 `SettingEndpoints.NamePrefix` |
-| `AddHostSettings(bind, configSectionPath?)` / `UseHostSettings()` | Hosting 包：声明绑定并注册应用与刷新，刷新周期绑定 `configSectionPath`（默认 `Leistd:Settings:Hosting`），重复调用绑定累加、换用另一配置节时抛出；构建后挂配置源 |
+| `AddHostSettings(bind, configSectionPath?)` / `UseHostSettings()` | Hosting 包：声明绑定并注册应用与刷新，刷新周期绑定 `configSectionPath`（默认 `Leistd:Settings:Hosting`），重复调用时不同设置的绑定累加、完全相同的绑定不重复生效，同一设置名绑定不同（含只换兜底值或键的顺序）或换用另一配置节时在该次调用抛出；构建后挂配置源 |
 | `HostSettingBindingBuilder.Bind(name, keys, fallback?)` / `BindOption<TOptions>(name, section, property)` | 设置 → 配置键；后者兜底值取选项类型上的属性默认值，并参与整组校验 |
 
 ## 配置项（Leistd:Settings:Hosting）
