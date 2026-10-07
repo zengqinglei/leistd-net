@@ -219,7 +219,7 @@
 
 | 包 | 文件 | 依赖 |
 | --- | --- | --- |
-| U1 | `docs/framework/upgrades/**`（新建并迁移 0.13.0）、删除 `docs/framework/upgrade-0.13.0*.md`、`docs/framework/versioning.md`、`framework/common.props` 的 `PackageReleaseNotes`、`release.yml` 的 Release 正文链接、`check-retired-terms.ps1`、`scripts/check-doc-references.py` 白名单、仓库内对旧文件的引用 | 无 |
+| U1 | `docs/framework/upgrades/**`（新建并迁移 0.13.0）、删除 `docs/framework/upgrade-0.13.0*.md`、`docs/framework/versioning.md`、`release.yml` 的打包参数（`PackageReleaseNotes`）与 Release 正文链接、现有发布验证入口、`check-retired-terms.ps1`、`scripts/check-doc-references.py` 白名单、仓库内对旧文件的引用 | 无 |
 | U2 | `skills/leistd-net-framework/**`、`.agents/skills/developing-leistd-framework/SKILL.md` 的升级说明规则、`docs/framework/development-guide.md` 的升级说明规则 | U1 |
 | V1 | `template/scripts/verify.ps1`、CI 薄壳、`template.json` 参数与排除、`template/docs/standards/testing.md`、`template/README.md`、`template/docs/README.md`、矩阵与生成测试接线 | 无 |
 | S1 | `scripts/plan-quality-checks.py`、`.github/workflows/ci.yml` 的 test 作业与聚合、`test-quality-validation-plan.py`、`test-workflow-change-scope.py`、`docs/framework/quality-assurance.md` 的框架部分、框架 Skill 的验证入口段 | U2（与它共用框架 Skill，在其后改） |
