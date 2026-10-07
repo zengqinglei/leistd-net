@@ -33,10 +33,7 @@ import { englishText } from '../../../shared/utils/english-text';
 //#endif
 import { NotificationService } from '../../services/notification-service';
 
-/**
- * 通知中心：铃铛 + 未读角标 + popover 通知列表（标记已读 / 单条或全部清除）。
- * 独立共享组件，供 header 直接引用；仅在启用通知功能时编译（见 template.json 排除规则）。
- */
+/** 通知中心：铃铛 + 未读角标 + popover 通知列表；仅在启用通知功能时生成（见 template.json 排除规则）。 */
 @Component({
   selector: 'app-notifications',
   standalone: true,
@@ -72,8 +69,7 @@ import { NotificationService } from '../../services/notification-service';
 })
 export class Notifications implements OnInit {
   private readonly router = inject(Router);
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   private readonly confirmService = inject(ConfirmService);

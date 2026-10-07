@@ -16,18 +16,8 @@ import { TenantConnectionService } from '../../../../services/tenant-connection-
 import type { Mock, MockedObject } from 'vitest';
 
 /**
- * 详情弹窗的连接段是一张可增删改的表，几处只在"操作顺序不寻常"时才暴露的问题由这组用例钉住：
- *
- * 1. 连接查询没有随弹窗关闭/换租户取消时，慢响应会把另一个租户的连接列表
- *    贴到当前租户的身份信息旁边——两个租户的信息拼在一屏，而且看不出来是错的。
- * 2. 列表为空必须有一句话。去掉标志位之后，"故意不分库"与"漏登记"在数据上完全一样，
- *    空白的一段谁也读不出当前是哪一种。
- * 3. 提交时的 `expectedVersion` 选错档（首次登记该传 null、改已有的该传读到的版本），
- *    后端会拒或让人悄悄盖掉别人的改动，而前端看不出任何异常。
- * 4. 连接串只写：任何时候都不该被预填。
- *
- * 断言一律落在**渲染结果**或**发出的请求参数**上，而不是内部 signal：
- * 内部字段可以改名，"用户看到了谁的连接"和"发出去的是哪个版本"不会。
+ * 连接段的用例钉住：换租户或关闭时取消慢查询、空列表显式说明不分库、`expectedVersion`
+ * 首次登记传 null 而修改传读到的版本、连接串从不预填。断言落在渲染结果与请求参数上。
  */
 describe('TenantDetailDialog', () => {
   let fixture: ComponentFixture<TenantDetailDialog>;
@@ -150,9 +140,7 @@ describe('TenantDetailDialog', () => {
 
     expect(requested).toEqual(['t-a', 't-b']);
 
-    // globex 先回来，acme 的响应姗姗来迟。
-    // 发完要 complete：真实 HttpClient 就是发一个值随即完成，只 next 不 complete
-    // 会让界面一直停在加载态，断言测到的就不是"数据渲染成什么"了。
+    // globex 先回来，acme 迟到。发完要 complete，否则界面一直停在加载态。
     await resolve('t-b', [connectionOf('t-b', 'globex-crm')]);
     await resolve('t-a', [connectionOf('t-a', 'acme-legacy')]);
 

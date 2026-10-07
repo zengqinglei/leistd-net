@@ -68,7 +68,6 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
 import { RoleBriefDto } from '../../../../dtos/role.dto';
 import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 
-/** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
 @Component({
@@ -116,8 +115,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 })
 export class UserTable {
   private readonly authService = inject(AuthService);
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -132,7 +130,6 @@ export class UserTable {
   readonly filtered = input(false);
   /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
   readonly loadError = input<string | null>(null);
-  /** 错误态里的重试。 */
   readonly retry = output<void>();
 
   /**
@@ -229,7 +226,6 @@ export class UserTable {
     },
   }));
 
-  // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
@@ -266,12 +262,7 @@ export class UserTable {
     return user.isSuperAdmin && user.id !== this.authService.currentUser()?.id;
   }
 
-  /**
-   * 角色徽章样式。
-   *
-   * 角色由管理员自由创建，前端无法也不应预知有哪些角色，因此统一使用中性样式，
-   * 只用「是否默认角色」这类结构信息做弱区分；红色（destructive）专留给危险/删除操作。
-   */
+  /** 角色徽章样式：角色由管理员自由创建，统一用中性样式，只按是否默认角色弱区分。 */
   getRoleVariant(): BadgeVariant {
     return 'outline';
   }

@@ -18,13 +18,7 @@ import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.t
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 
-/**
- * 用户表格的交互状态。
- *
- * 分页与排序都是 manual 模式：表格自己不切数据，只把意图回传给父级去取下一页。
- * 因此这里验的是"回传了什么"，而不是"表格里剩几行"——把这两件事搞混，
- * 就会出现界面翻了页、请求却没换参数。
- */
+/** 用户表格的交互状态：分页与排序是 manual 模式，验证回传给父级的意图，而不是表格里剩几行。 */
 describe('UserTable', () => {
   let fixture: ComponentFixture<UserTable>;
   let component: UserTable;
@@ -206,8 +200,7 @@ describe('UserTable', () => {
     expect(expandedStates()).toEqual(['false', 'false']);
   });
 
-  // 最窄一档已无列可收：只剩不换行的长名称撑宽表格时，吸附的操作列会压住被横向滚走的状态列。
-  // 主列改为截断，表格不横向滚动，状态列与操作列完整可见。
+  // 最窄一档无列可收时主列截断，表格不横向滚动，状态列与操作列完整可见。
   it('truncates a long name instead of scrolling the table at the narrowest level', async () => {
     // 手机视口：`sm:` 断点（单元格内边距、行内操作按钮）也要按手机生效，只模拟档位不够
     await page.viewport(390, 844);

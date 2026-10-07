@@ -1,11 +1,7 @@
 /**
- * 不含本地化时组件取文案的函数：按键查组件自带的英文表，`{{name}}` 占位按参数替换。
- *
- * 与含本地化时结构指令 `*transloco="let t"` 给出的 `t` 同名同签名，模板正文因此两种形态共用一份。
- * 英文表的键与值须与 `en.json` 一致（i18n 静态闸门校验）；表里没有的键原样返回，与 Transloco 缺词条时的表现相同。
- *
- * 校验提示（`validation.*`）由这里统一并入每张表：模板按错误类型拼键 `t('validation.' + error.kind, error)`，
- * 各组件英文表列不全也查得到。参数可以直接传校验错误对象，占位符按它的字段名取值（如 `minLength`）。
+ * 不含本地化时组件取文案的函数：按键查组件自带的英文表，`{{name}}` 按参数替换。与 `*transloco="let t"`
+ * 的 `t` 同名同签名，模板正文两种形态共用。英文表须与 `en.json` 一致（i18n 闸门校验），缺键原样返回。
+ * 校验提示（`validation.*`）统一并入每张表，参数可以直接传校验错误对象。
  */
 export function englishText(table: Readonly<Record<string, string>>) {
   const texts: Readonly<Record<string, string>> = { ...ENGLISH_VALIDATION, ...table };
@@ -16,9 +12,8 @@ export function englishText(table: Readonly<Record<string, string>>) {
 }
 
 /**
- * 校验提示的英文表，键是 `validation.<错误类型>`，与 `en.json` 的 `validation` 段逐条一致。
- *
- * 新增自定义错误类型时两边同时补：模板里的键是拼出来的，漏了只会在界面上显示裸键（i18n 闸门校验两边键集一致）。
+ * 校验提示的英文表，与 `en.json` 的 `validation` 段逐条一致；模板按错误类型拼键，新增错误类型时
+ * 两边同时补。
  */
 const ENGLISH_VALIDATION: Record<string, string> = {
   'validation.required': 'This field is required.',

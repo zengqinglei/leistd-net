@@ -21,12 +21,8 @@ import { englishText } from '../../../../shared/utils/english-text';
 import { AccountService } from '../../services/account-service';
 
 /**
- * 外部登录回调组件
- *
- * 处理 GitHub/Google 等第三方登录重定向回来后的流程:
- * 1. 从路由参数取 provider（回调地址 /auth/external-callback/{provider}），读取非敏感的完成意图
- * 2. 由后端消费短时外部票据并完成登录
- * 3. 加载用户信息并根据角色跳转
+ * 外部登录回调：从路由取 provider（`/auth/external-callback/{provider}`）并读取完成意图，
+ * 由后端消费短时外部票据完成登录或绑定，再按权限跳转。
  */
 @Component({
   selector: 'app-external-auth-callback',

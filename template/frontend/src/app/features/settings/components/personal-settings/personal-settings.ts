@@ -32,11 +32,8 @@ import { SettingsPageState } from '../../settings-page-state';
 import { SettingsPanelLink, SettingsShell } from '../../widgets/settings-shell/settings-shell';
 
 /**
- * 个人设置：关于"我自己"的一切，所有登录用户同一处。
- *
- * 管理人员也是用户，从头像菜单进这里，管理平台不另放一份——两个入口就是两份状态。
- * 面板清单是固定的：个人资料与账户安全是专门的表单，「通知」是通知偏好分组，「偏好」收纳其余所有允许用户覆盖的设置分组
- * （新增一项用户级设置会自动出现在那里，不需要在这里登记）。
+ * 个人设置：所有登录用户（含管理人员）同一处，管理平台不另放。面板固定：个人资料与账户安全是专门表单，
+ * 「通知」是通知偏好分组，「偏好」收纳其余允许用户覆盖的设置分组（新增用户级设置自动出现）。
  */
 @Component({
   selector: 'app-personal-settings',

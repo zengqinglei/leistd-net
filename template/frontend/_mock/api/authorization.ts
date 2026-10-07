@@ -168,9 +168,7 @@ function sortRoles(rows: MockRoleRow[], sorting: string): void {
 
 export function getRoleOptions() {
   requirePermission('App.Users.ManageRoles');
-  // 与后端 GetAllAsync 同为 Sort → Name（角色名唯一，因此不需要再补稳定键）。
-  // 排副本而不是 ROLES 本身：ROLES.sort() 会原地重排这份全局 Mock 数据，
-  // 把"取一次选项"变成对其他接口可见的副作用
+  // 与后端 GetAllAsync 同为 Sort → Name；排副本，原地排序会改动全局 Mock 数据。
   return [...ROLES]
     .sort((left, right) => left.sort - right.sort || left.name.localeCompare(right.name))
     .map((role) => ({

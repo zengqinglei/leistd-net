@@ -13,20 +13,15 @@ export interface ImpersonationStatus {
 }
 
 /**
- * 租户模拟登录。
- *
- * **进入与退出都做整页跳转**，不做前端状态切换：会话 Cookie 被整体换掉之后，
- * 权限集合、菜单、租户上下文、已加载的列表数据全部作废——留在原页面上逐个刷新，
- * 任何一处漏刷都会让界面显示上一个身份的数据。整页重建是这里唯一不会漏的做法，
- * 与 `AuthService.logout()` 同一处置。
- */
-/**
- * 退出成功后的一次性提示标记。整页跳转会清掉内存里的一切，包括刚弹出的 toast，
- * 所以跳转前记在 sessionStorage，新页面挂好顶栏后读一次、删掉、再提示——即服务端渲染里的 flash 消息。
- * 用 sessionStorage 而不是 localStorage：只该在这个标签页的下一次加载里出现一次。
+ * 退出模拟后的一次性提示标记：整页跳转会清掉 toast，因此跳转前记在 sessionStorage，
+ * 新页面读一次即删，只在本标签页的下一次加载出现一次。
  */
 const EXITED_NOTICE_KEY = 'impersonation.exitedNotice';
 
+/**
+ * 租户模拟登录。进入与退出都整页跳转：会话被整体替换后权限、菜单与已加载数据全部作废，
+ * 与 `AuthService.logout()` 同一处置。
+ */
 @Injectable({ providedIn: 'root' })
 export class ImpersonationService {
   private readonly http = inject(HttpClient);

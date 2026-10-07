@@ -5,13 +5,9 @@ import { HlmInputOtpImports } from '@spartan-ng/helm/input-otp';
 const CODE_LENGTH = 6;
 
 /**
- * 6 位验证码输入：官方 Input OTP 的固定组合（3 + 3 格）。
- *
- * 内部输入框自带 `autocomplete="one-time-code"` 与数字键盘，短信与密码管理器的自动填充照常可用。
- * 粘贴与键入都只保留数字，"123 456""123-456"这类带分隔的写法也能落成 6 位。
- *
- * 标签必须以 `for` 关联到内部输入框（`inputId`）：挂在宿主元素上的 aria-label 读屏器读不到。
- * 页面上已有可见 `<label for>` 时不传 `label`，否则这里补一个仅供读屏器的标签。
+ * 6 位验证码输入：官方 Input OTP 的 3 + 3 格组合。内部输入框带 `autocomplete="one-time-code"`，
+ * 粘贴与键入只保留数字。标签须以 `for` 关联内部输入框（`inputId`），宿主上的 aria-label 读不到；
+ * 页面已有可见 `<label for>` 时不传 `label`。
  */
 @Component({
   selector: 'app-otp-code-input',

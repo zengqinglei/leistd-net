@@ -19,12 +19,7 @@ import {
 
 type MockHandler = (req: { body: unknown }) => unknown;
 
-/**
- * Mock 的受保护写端点必须与真后端同口径：无会话即 401。
- *
- * 这两个 handler 曾在匿名时回落到 `USERS[0]` 并"成功"改掉默认用户——真后端在这两个端点上
- * 都是 401。Mock 一旦证明了生产不存在的行为，脱离后端开发出来的前端就会在接真后端时才炸。
- */
+/** Mock 的受保护写端点与真后端同口径：无会话即 401，不回落到默认用户。 */
 describe('mock auth subject', () => {
   const profile = AUTH_API['PUT /api/v1/auth/me'] as MockHandler;
   const changePassword = AUTH_API['POST /api/v1/auth/change-password'] as MockHandler;

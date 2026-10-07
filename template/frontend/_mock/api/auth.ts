@@ -130,12 +130,8 @@ function sessionLogin(
 }
 
 /**
- * 当前认证主体——受保护端点的唯一入口。
- *
- * 没有会话、或会话里的 ID 匹配不到 Mock 用户，一律 401。**不能回落到 USERS[0]**：
- * 那会让匿名的资料修改与改密码"成功"，改掉的还是默认用户，于是 Mock 证明了一个
- * 生产环境不存在的行为——真后端在这两个端点上都是 401。
- * 展示用的 persona 回落只属于 Resource 形态的权限演示路径，不能进数据修改路径。
+ * 当前认证主体，受保护端点的唯一入口。没有会话或匹配不到 Mock 用户一律 401，不回落到 USERS[0]：
+ * 否则匿名的资料修改与改密码会"成功"，与真后端不一致。persona 回落只用于 Resource 形态的权限演示。
  */
 function requireCurrentMockUser(): MockUser {
   const user = MOCK_SESSION_USER_ID ? USERS.find((u) => u.id === MOCK_SESSION_USER_ID) : undefined;
@@ -660,7 +656,6 @@ function register(req: MockRequest): 'ok' {
 
   ensureAcceptablePassword(body.password, 'Password');
 
-  // 模拟写入用户
   const newUser = {
     id: `user_${Date.now()}`,
     username: username,

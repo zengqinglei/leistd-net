@@ -154,7 +154,7 @@
                           }
                           @case ('actions') {
                             <!-- 操作列（3 项 ≤ 3）：桌面端全部平铺；<sm 收进 … 菜单省列宽。
-                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
+                               规则见 docs/standards/frontend-ui.md §1.1。 -->
                             <div class="flex items-center justify-end gap-1">
                               @if (canManagePermissions()) {
                                 <button
@@ -361,7 +361,7 @@
       }
     </div>
 
-    <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
+    <!-- 分页栏独立于表格卡片，置于其下方。 -->
     @if (totalCount() > 0) {
       <app-table-paginator
         [labels]="{

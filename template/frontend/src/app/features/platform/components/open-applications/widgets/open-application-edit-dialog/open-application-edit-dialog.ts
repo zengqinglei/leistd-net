@@ -129,7 +129,6 @@ export class OpenApplicationEditDialog {
 
   readonly applicationForm = form(this.formModel, (path) => {
     required(path.clientId, { when: () => !this.isEditMode() });
-    // 编辑模式禁用 Client ID（不可改）。
     disabled(path.clientId, { when: () => this.isEditMode() });
     // 跨字段：Native / Public 客户端必须启用 PKCE。
     validate(path.requirements, (ctx) => {
@@ -347,11 +346,8 @@ export class OpenApplicationEditDialog {
   //#endif
 
   /**
-   * Select 触发器上显示的文本。
-   *
-   * 触发器渲染的是 `itemToString(value)`，不传就退化成把值本身字符串化——
-   * 下拉里是"桌面/原生"，选完输入框里却是 `native`，同一个东西两个说法。
-   * 这些是箭头函数属性而非方法：传给 input 的引用必须稳定，否则每轮变更检测都换一个新函数。
+   * Select 触发器上的文本：不传 `itemToString` 会显示原始值（如 `native`）。写成箭头函数属性，
+   * 传给 input 的引用须稳定。
    */
   readonly applicationTypeToLabel = (value: string): string =>
     this.applicationTypeLabels()[value] ?? value;

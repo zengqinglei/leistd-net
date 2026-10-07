@@ -4,11 +4,8 @@ import { RouterOutlet } from '@angular/router';
 import { DefaultHeader } from '../components/default-header/default-header';
 
 /**
- * 工作空间布局：顶栏导航，没有侧栏。
- *
- * 菜单与管理平台的侧栏读同一份（见 NavigationService）。工作空间的入口多到顶栏放不下、
- * 或需要分组标题与按权限整组裁剪时，把路由换回 DefaultLayout 即可，判据见
- * docs/standards/frontend-ui.md「导航与菜单分组」。
+ * 工作空间布局：顶栏导航，没有侧栏；菜单与管理平台侧栏读同一份（见 NavigationService）。需要分组标题
+ * 或按权限整组裁剪时换回 DefaultLayout，判据见 docs/standards/frontend-ui.md「导航与菜单分组」。
  */
 @Component({
   selector: 'app-workspace-layout',

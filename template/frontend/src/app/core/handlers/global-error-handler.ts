@@ -15,11 +15,8 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { ApplicationHttpError } from '../errors/application-http-error';
 
 /**
- * 全局错误处理器：兜底未处理的非 HTTP 错误（运行时异常、Promise rejection 等）。
- *
- * HTTP 错误的反馈由发起操作的 feature 负责。httpErrorInterceptor 把失败响应归一化为
- * `ApplicationHttpError` 后继续抛出，没有被 feature 捕获时会到达这里，属于预期情况，静默忽略；
- * 未经归一化的 `HttpErrorResponse` 说明请求绕过了应用的拦截器链，只记录配置问题，不向用户提示。
+ * 全局错误处理器：兜底未处理的非 HTTP 错误。已归一化的 `ApplicationHttpError` 静默忽略（反馈由
+ * feature 负责）；未归一化的 `HttpErrorResponse` 说明请求绕过了拦截器链，只记录配置问题。
  */
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
@@ -41,7 +38,6 @@ export class GlobalErrorHandler implements ErrorHandler {
       return;
     }
 
-    // 处理 JavaScript 运行时错误
     if (error instanceof Error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('common.appError'), { description: error.message });
@@ -51,7 +47,6 @@ export class GlobalErrorHandler implements ErrorHandler {
       return;
     }
 
-    // 处理未知类型的错误
     //#if (IncludeLocalization)
     toast.error(this.transloco.translate('common.unknownError'), {
       description: this.transloco.translate('common.unexpectedError'),

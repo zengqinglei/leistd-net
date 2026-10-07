@@ -1,11 +1,7 @@
 import { TenantConnectionDto } from '../../src/app/features/platform/dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../src/app/features/platform/dtos/tenant.dto';
 
-/**
- * 一条连接登记。
- *
- * 连接串在真实后端加密存储、接口从不返回，Mock 索性不保存它——存了就迟早会有人把它读出来回显。
- */
+/** 一条连接登记；Mock 不保存连接串（真实后端加密存储、从不返回）。 */
 export interface MockTenantConnection {
   name: string;
   version: number;
@@ -18,12 +14,7 @@ export interface MockTenant {
   description?: string;
   isActive: boolean;
   creationTime: string;
-  /**
-   * 该租户已登记的连接，按名字唯一。
-   *
-   * 空数组即"不单独分库，各服务使用自己配置的数据库"。没有标志位这一档，
-   * 详情弹窗只能从这个数组是不是空的看出当前状态。
-   */
+  /** 该租户已登记的连接，按名字唯一；空数组即不单独分库。 */
   connections: MockTenantConnection[];
 }
 

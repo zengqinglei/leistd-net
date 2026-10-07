@@ -137,7 +137,6 @@ export class UserEditDialog {
 
   readonly avatarPreview = signal('');
 
-  // 表单模型（Signal Forms）
   protected readonly formModel = signal({
     username: '',
     email: '',
@@ -161,11 +160,9 @@ export class UserEditDialog {
     required(path.username);
     // 长度与字符集共用一句提示，合成一条规则：分开校验会把同一句话报出几遍
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
-    // 编辑模式禁用用户名（不可改）。
     disabled(path.username, { when: () => this.isEditMode() });
     required(path.email);
-    // 首尾空白按格式错误拒绝，因此提交时邮箱原样发出、不再 trim：type="email" 的输入框本就去掉首尾空白，
-    // 校验器再兜住程序化写入的值；后端对同一字段也会先 trim，带空白的地址不会落库
+    // 首尾空白按格式错误拒绝，因此提交时邮箱原样发出、不再 trim（后端同样先 trim）。
     emailValidator(path.email);
     maxLength(path.email, 256);
     maxLength(path.displayName, 128);

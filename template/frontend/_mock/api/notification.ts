@@ -1,7 +1,7 @@
 import { MockRequest } from '../core/models';
 import { NOTIFICATIONS } from '../data/notifications';
 
-/** 通知中心 Mock API（对应 NotificationsController）。 */
+/** 通知中心 Mock API（对应框架的 NotificationEndpoints）。 */
 export const NOTIFICATION_API = {
   'GET /api/v1/notifications': () => {
     return [...NOTIFICATIONS].sort(

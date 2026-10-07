@@ -1,9 +1,4 @@
-/**
- * 把内容存成本地文件（触发浏览器下载）。
- *
- * **`revokeObjectURL` 不能省**：`createObjectURL` 建的引用会一直持有整个 blob，
- * 不释放的话每下载一次就泄漏一份，直到页面关闭。
- */
+/** 把内容存成本地文件（触发浏览器下载）；用完即 `revokeObjectURL`，否则每次下载都泄漏一份 blob。 */
 export function saveBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');

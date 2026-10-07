@@ -30,10 +30,8 @@ import { OperationRecordService } from '../../services/operation-record-service'
 import type { Mock } from 'vitest';
 
 /**
- * 操作记录页：URL 查询参数 → 列表请求与导出请求，以及时间区间按展示时区换算。
- *
- * 这些映射写错都不报错：筛选不生效、导出的不是屏幕上那一批、选一天却查到另一天。
- * 用例经子组件的 output 与真实路由驱动，覆盖模板绑定与 URL 往返，而不是只调方法。
+ * 操作记录页：URL 查询参数到列表与导出请求的映射，以及时间区间按展示时区换算。
+ * 经子组件 output 与真实路由驱动，覆盖模板绑定与 URL 往返。
  */
 describe('OperationRecords', () => {
   const page = '/platform/operation-records';
@@ -78,7 +76,6 @@ describe('OperationRecords', () => {
     );
   }
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetOperationRecordsInputDto {
     const query = service.getOperationRecords.mock.calls.at(-1)?.[0];
     if (!query) {

@@ -1,13 +1,9 @@
 /**
- * 认证契约 DTO。
- *
- * 放在 `shared/` 而不是 `features/account/`：`core/services/auth-service.ts` 是应用级单例，
- * 它要用这些类型；DTO 留在特性目录会让 `core` 反向依赖 `features`，改动或移除 account
- * 特性就会连带打断 core。它们同时被 core、account 特性与 Mock 消费。
+ * 认证契约 DTO，放在 `shared/`：`core` 的 AuthService、account 特性与 Mock 都消费它们，
+ * 留在特性目录会让 `core` 反向依赖 `features`。
  */
 //#if (LocalIdentity)
 
-/** 登录请求。 */
 export interface LoginInputDto {
   usernameOrEmail: string;
   password: string;

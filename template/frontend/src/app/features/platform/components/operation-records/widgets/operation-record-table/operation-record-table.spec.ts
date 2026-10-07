@@ -134,12 +134,7 @@ describe('OperationRecordTable failure reasons', () => {
 });
 //#if (IncludeLocalization)
 
-/**
- * 操作句子取哪条词条，随词条到达更新。
- *
- * 判断「动作码登记了没有」要看词条；首次渲染时词条可能还在路上（组件先于词条创建）。
- * 这一判断若靠「读活动语言 + 同步查词条」，那一刻得出的"未登记"会被缓存，词条到了也一直显示裸码。
- */
+/** 操作句子取哪条词条随词条到达更新：首次渲染时词条可能未到，同步判断会把"未登记"缓存下来。 */
 describe('OperationRecordTable action sentences', () => {
   it('switches from the raw code to the registered sentence once translations arrive', () => {
     vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en']);

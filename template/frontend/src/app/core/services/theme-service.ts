@@ -18,12 +18,7 @@ const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
   mode: 'system',
 };
 
-/**
- * 主题服务：管理亮/暗/跟随系统三态，切换 `<html>` 的 `.dark` class 并持久化。
- *
- * Spartan/Tailwind 主题走 CSS 变量（styles.css 的 :root / :root.dark），
- * 不需要运行时换色 API。品牌定制由项目改 CSS 变量完成。
- */
+/** 主题服务：管理亮/暗/跟随系统三态，切换 `<html>` 的 `.dark` class 并持久化；配色走 styles.css 的 CSS 变量。 */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   static readonly STORAGE_KEY = 'theme_config';

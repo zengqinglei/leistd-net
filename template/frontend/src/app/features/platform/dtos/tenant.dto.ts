@@ -1,9 +1,8 @@
 import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
 
 /**
- * 租户名的合法形态：单个 DNS 标签，与后端 `TenantConfiguration.NamePattern` 同源。
- *
- * 按子域名解析租户时名字就是主机名里的一段，不合规的名字建得出来却经子域名访问不到。
+ * 租户名的合法形态：单个 DNS 标签（按子域名解析时即主机名的一段），与后端
+ * `TenantConfiguration.NamePattern` 同源。
  */
 export const TENANT_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
 
@@ -34,14 +33,8 @@ export interface CreateTenantInputDto {
   adminEmail: string;
   adminPassword: string;
   /**
-   * 该租户的专属库连接，按名字登记；留空数组即不分库，各服务使用自己配置的数据库。
-   *
-   * **分库只能在建租户时定案。**登记先于播种，种子（含租户管理员）因此直接落进这些库。
-   * 建好之后再想分库，后端会以 409 拒绝——那时数据已经在回落库里，登记连接不会把它们搬过去。
-   * 库须事先建好并迁移过；这里只登记，不建库也不迁移。
-   *
-   * 多服务部署可以一次给多条（如 `default`、`crm`）：租户与全部连接在同一个事务里落库，
-   * 不会出现"租户已建、某条连接还没登记"的中间状态。
+   * 该租户的专属库连接，按名字登记；留空数组即不分库。分库只能在建租户时定案：登记先于播种，
+   * 建好后再分库会被 409 拒绝。库须事先建好并迁移；租户与全部连接在同一事务里落库。
    */
   connections?: CreateTenantConnectionInputDto[];
 }
@@ -56,13 +49,7 @@ export interface CreateTenantConnectionInputDto {
 export interface UpdateTenantInputDto {
   name: string;
   displayName?: string;
-  /**
-   * 描述；`null` 表示清空。
-   *
-   * **这是整体覆盖，没有"不传即保留原值"这一档**：省略字段与显式传 `null` 效果相同，
-   * 都会把库里的描述清掉（后端 DTO 上它是可空字段，缺省即 `null`，管理器按传入值覆盖）。
-   * 所以表单每次提交都必须带上当前值，要保留就把原值一起传回来。
-   */
+  /** 描述；整体覆盖，省略与 `null` 都会清空，要保留须把原值一起传回。 */
   description?: string | null;
 }
 

@@ -30,14 +30,12 @@ export interface FacetedFilterOption {
 let nextFacetedFilterId = 0;
 
 /**
- * 分面筛选器（对齐参考站）：虚线描边按钮 + 可搜索选项面板 + 清除。
- * - 单选（默认）：命中项打勾、选中即关闭；用 `value` / `valueChange`。
- * - 多选（`multiple`）：勾选框 + 选中项 Badge、连续勾选不关闭；用 `values` / `valuesChange`。
- * 所有文案由父级以已翻译字符串传入，组件本身与 i18n 无关。
+ * 分面筛选器：虚线描边按钮 + 可搜索选项面板 + 清除。单选（默认）用 `value` / `valueChange`，
+ * 选中即关闭；多选（`multiple`）用 `values` / `valuesChange`，连续勾选不关闭。文案由父级以已翻译
+ * 字符串传入。
  *
- * 无障碍：采用 WAI-ARIA「combobox + listbox 弹出层」模式并自持键盘导航——
- * `aria-selected` 只表示业务选中，键盘高亮项由输入框的 `aria-activedescendant` 表达。
- * 不复用 Command 原语，因其把 `aria-selected` 绑定为键盘 active，会与业务选中语义冲突。
+ * 无障碍采用 WAI-ARIA「combobox + listbox」模式并自持键盘导航：`aria-selected` 只表示业务选中，
+ * 键盘高亮由 `aria-activedescendant` 表达。不复用 Command 原语，它把 `aria-selected` 绑定为键盘 active。
  */
 @Component({
   selector: 'app-faceted-filter',
@@ -197,7 +195,6 @@ let nextFacetedFilterId = 0;
 export class FacetedFilter {
   readonly label = input.required<string>();
   readonly options = input.required<FacetedFilterOption[]>();
-  // 单选值。
   readonly value = input<string | boolean | null>(null);
   // 多选开关及其取值（仅字符串值场景，如角色）。
   readonly multiple = input(false, { transform: booleanAttribute });

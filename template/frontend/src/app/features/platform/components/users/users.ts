@@ -241,10 +241,7 @@ export class Users {
   ]);
   //#endif
   //#endif
-  /**
-   * 角色筛选项来自角色 API：新建的角色立即出现在筛选器里。
-   * 不要改回硬编码列表——那样筛选项会与后端实际角色脱节。
-   */
+  /** 角色筛选项来自角色 API，新建的角色立即出现在筛选器里。 */
   readonly availableRoles = signal<RoleBriefDto[]>([]);
   readonly roleOptions = computed(() =>
     this.availableRoles().map((role) => ({

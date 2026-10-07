@@ -29,10 +29,8 @@ import { AccountService } from '../../services/account-service';
 import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 
 /**
- * 设置两步验证：把密钥添加到身份验证器应用，再输入应用上的验证码确认启用。
- *
- * 个人设置与"组织要求启用"的强制设置页共用。确认成功后发出恢复码，展示与保存由使用方负责。
- * 二维码在浏览器里生成：密钥不经过任何第三方二维码服务。
+ * 设置两步验证：添加密钥到身份验证器后输入验证码确认启用。个人设置与"组织要求启用"的强制页共用；
+ * 确认后发出恢复码，二维码在浏览器里生成，密钥不经过第三方服务。
  */
 @Component({
   selector: 'app-two-factor-setup',
@@ -64,7 +62,6 @@ export class TwoFactorSetup implements OnInit {
   readonly enabled = output<string[]>();
   /** 是否提供"取消"：组织要求启用时没有退路，不给这个按钮。 */
   readonly cancellable = input(true);
-  /** 放弃设置。 */
   readonly cancelled = output<void>();
 
   protected readonly secret = signal<string | null>(null);

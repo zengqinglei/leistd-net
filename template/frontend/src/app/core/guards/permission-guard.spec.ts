@@ -15,12 +15,8 @@ import { AuthorizationService } from '../services/authorization-service';
 import { StartupService } from '../services/startup-service';
 
 /**
- * 路由准入。
- *
- * 这里最要紧的一条是"只读路由自身的 data"：守卫刻意不用
- * `ActivatedRouteSnapshot.data`，因为它会把父路由的 data 合并进来，
- * 于是 /platform 上"拥有任一平台权限即可"的宽松声明会顺着继承链盖住子路由更严格的要求。
- * 那处改动看起来只是"换成标准写法"，却会让本该拦下的页面全部放行，且不会有任何东西报错。
+ * 路由准入。守卫只读路由自身的 data（`routeConfig.data`）：合并后的 `snapshot.data` 会让父路由的
+ * 宽松声明盖住子路由更严格的要求。
  */
 describe('permissionGuard', () => {
   const status = signal<'loading' | 'success' | 'failed'>('success');
@@ -86,13 +82,8 @@ describe('permissionGuard', () => {
   });
 
   it('does not inherit the looser declaration of the parent route', async () => {
-    // 复刻真实路由的形状：父路由用 permissions 数组（"拥有任一平台权限即可进平台区"），
-    // 子路由用单个 permission。两个键不同名，合并后会同时保留——这才是能触发
-    // any-of 错误放行的组合。若两边用同一个键，子会覆盖父，无论守卫读
-    // routeConfig.data 还是合并后的 data 结果都一样，用例就锁不住任何东西。
-    //
-    // 当前用户只有 users 权限：读自身 data 时要求 roles → 拦下；
-    // 误读合并后的 data 时会因为父路由的 users 而放行。
+    // 复刻真实路由：父路由用 permissions 数组、子路由用单个 permission，合并后两键同时保留才能触发
+    // 错误放行。当前用户只有 users 权限：读自身 data 时要求 roles 被拦下，误读合并后的 data 会放行。
     const result = await runGuard(
       { permission: PERMISSIONS.roles.default },
       { permissions: [PERMISSIONS.users.default] },

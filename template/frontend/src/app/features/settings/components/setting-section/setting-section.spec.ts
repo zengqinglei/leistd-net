@@ -15,11 +15,8 @@ import { SettingOutputDto } from '../../../../core/settings/setting.dto';
 import { SettingsPageState } from '../../settings-page-state';
 
 /**
- * 这些用例验的是**取值开放**的设置那条链路（文本框 + 保存按钮）。
- *
- * 刻意用一个不在 `SETTING_CHOICES` 里的设置名：登记了候选项的设置渲染成下拉，
- * 没有输入框也没有独立保存键。拿 `Display.TimeZone` 之类的枚举型设置来验这条路，
- * 会在它某天登记候选项时整批变红——而那不是这条链路出了问题。
+ * 验取值开放的设置链路（文本框）：刻意用不在 `SETTING_CHOICES` 里的设置名，
+ * 免得它日后登记候选项（渲染成下拉）时整批变红。
  */
 function row(overrides: Partial<SettingOutputDto> = {}): SettingOutputDto {
   return {
@@ -39,19 +36,7 @@ function row(overrides: Partial<SettingOutputDto> = {}): SettingOutputDto {
   };
 }
 
-/**
- * 保存链路的异步状态。
- *
- * 这一段是上一轮真的出过问题的地方：写入在途时输入没禁用、草稿在 PUT 一完成就删除，
- * 于是「保存后继续输入会被吞掉」和「PUT 成功但刷新失败时界面显示旧值」两个坑同时存在，
- * 而它们都不会让任何既有用例变红。这里按行为断言，而不是断言实现细节。
- */
-/**
- * 用例的公共提供者。
- *
- * 设置快照来自外壳提供的 {@link SettingsPageState}，这里直接提供它：它一构造就取一次设置，
- * 所以每个用例开头都要先应答那次 GET。
- */
+/** 用例的公共提供者。{@link SettingsPageState} 一构造就取一次设置，每个用例开头先应答那次 GET。 */
 function pageProviders(): unknown[] {
   return [
     provideHttpClient(),
@@ -67,13 +52,7 @@ function pageProviders(): unknown[] {
   ];
 }
 
-/**
- * 某一项设置在当前面板上渲染出来了。
- *
- * 按每行常驻的重置按钮判定，而不是找页面文本里的设置名——设置名是给开发看的标识，
- * 界面上刻意不显示（显示它会像是在解释这一项的含义）。按文本断言的用例会随文案改动
- * 一起红，而那时并不是"这一项没渲染"。
- */
+/** 该设置在当前面板上渲染出来了：按每行常驻的重置按钮判定，设置名在界面上刻意不显示。 */
 function hasRow(host: HTMLElement, name: string): boolean {
   return host.querySelector(`[data-testid="setting-reset-${name}"]`) !== null;
 }
@@ -118,12 +97,7 @@ describe('SettingSection', () => {
     }
   });
 
-  /**
-   * 输入并提交。
-   *
-   * 没有保存按钮了：输入类控件在原生 `change`（失焦 / 回车）时提交。
-   * 用 `input` 事件先更新草稿，再用 `change` 提交，和真人操作的顺序一致。
-   */
+  /** 输入并提交：先 `input` 更新草稿，再 `change` 提交，与真人操作顺序一致。 */
   async function typeAndSave(value: string): Promise<void> {
     const field = input();
     field.value = value;
@@ -135,11 +109,7 @@ describe('SettingSection', () => {
     fixture.detectChanges();
   }
 
-  /**
-   * 等到"保存中"的最短可见时长过去。
-   *
-   * 用独立的 400 毫秒行为期望推进假时钟，不从生产常量计算边界。
-   */
+  /** 推进假时钟越过"保存中"的最短可见时长；用独立的 400 毫秒期望，不从生产常量计算。 */
   async function settleSave(): Promise<void> {
     await vi.advanceTimersByTimeAsync(400);
     await fixture.whenStable();
@@ -183,11 +153,8 @@ describe('SettingSection', () => {
   });
 
   /**
-   * 离散控件在本行写入期间禁用，写完恢复。
-   *
-   * 拿每行都有的重置按钮来断言：它本身就是一次写入，在途时再点一下只会往队列里塞一条
-   * 同样的写入。禁用同时也把"这一下已经收到了"说清楚——没有保存按钮之后，这是唯一的
-   * "点到了"的反馈。用虚拟时间收尾，顺带钉住禁用态不会一直挂着。
+   * 离散控件在本行写入期间禁用、写完恢复；以每行都有的重置按钮断言，用虚拟时间收尾，
+   * 确认禁用态不会一直挂着。
    */
   it('disables the discrete controls on that row while it saves', async () => {
     const resetButton = () =>
@@ -205,8 +172,7 @@ describe('SettingSection', () => {
     expect(resetButton().disabled).toBe(false);
   });
 
-  // 原来靠禁用控件挡住的那件事：按回车提交后光标还在输入框里，用户接着改，
-  // 而先前那次写入完成时会清草稿——无条件清掉就把新输入抹掉了。
+  // 回车提交后光标还在输入框里，用户可以接着改；先前那次写入完成时清草稿不能抹掉新输入。
   it('keeps newer input when an earlier save completes', async () => {
     await typeAndSave('UTC');
 
@@ -274,12 +240,7 @@ describe('SettingSection', () => {
   });
 });
 
-/**
- * 控件按真实响应的形态判定。
- *
- * 服务端的 JSON 选项省掉值为 null 的属性：非数值型设置根本不带 `minimum` / `maximum`。只拿显式 null 的
- * 夹具测，会把"缺字段"误判成数值型、渲染成 number 框——主机名、账号这类文本一个字也输不进去。
- */
+/** 控件按真实响应形态判定：服务端省掉值为 null 的属性，非数值型设置不带 `minimum` / `maximum`。 */
 describe('SettingSection input kinds', () => {
   async function render(settings: SettingOutputDto[]): Promise<HTMLElement> {
     TestBed.configureTestingModule({
@@ -350,12 +311,7 @@ describe('SettingSection load failure', () => {
   });
 });
 
-/**
- * 作用域由路由数据经组件输入给出，不是页内状态。
- *
- * 个人偏好与系统默认值写的是不同层级：作用域取错，保存下去就是把私人偏好写成了所有人的默认值——
- * 所以这里按渲染出的作用域断言。
- */
+/** 作用域由路由数据经组件输入给出；取错会把私人偏好写成所有人的默认值，因此按渲染出的作用域断言。 */
 describe('SettingSection scope', () => {
   async function render(
     settings: SettingOutputDto[],
@@ -428,12 +384,7 @@ describe('SettingSection scope', () => {
   });
 });
 
-/**
- * 分组。
- *
- * 分组完全由后端下发的分组标识驱动，前端不另列一份清单——列一份的后果是新增设置忘了登记
- * 就从界面上消失，既不报错也查不出来。
- */
+/** 分组由后端下发的分组标识驱动，前端不另列清单。 */
 describe('SettingSection groups', () => {
   const grouped = [
     row({ name: 'Display.TimeZone', group: 'Display', groupDisplayName: '显示' }),
@@ -492,12 +443,7 @@ describe('SettingSection groups', () => {
   });
 });
 
-/**
- * 开关。
- *
- * 开关没有占位符，本层未覆盖时必须显示继承来的生效值：默认开启的项显示成关着，
- * 用户会以为自己没开。
- */
+/** 开关没有占位符，本层未覆盖时显示继承来的生效值。 */
 describe('SettingSection switches', () => {
   const switches = [
     row({ name: 'Probe.DefaultOn', isBoolean: true, defaultValue: 'true' }),

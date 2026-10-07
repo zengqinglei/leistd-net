@@ -36,13 +36,8 @@ export const ROLES: MockRole[] = [
 ];
 
 /**
- * 权限定义树，形状与 `GET /api/v1/permissions/definitions` 一致。
- *
- * Mock 只复刻端点形状，不复刻后端的决策引擎（多来源并集、写时祖先归一化）——
- * 在前端重写一遍那套规则必然与后端漂移，漂移的 Mock 比没有 Mock 更危险。
- *
- * 分组标识符写字面量而不引用 PERMISSIONS：分组不是权限，不参与路由 Guard 与按钮裁剪，
- * 放进那份契约常量会让人误以为可以拿它做鉴权判断。
+ * 权限定义树，形状与 `GET /api/v1/permissions/definitions` 一致。Mock 只复刻端点形状，不复刻后端的
+ * 决策引擎。分组标识写字面量而不引用 PERMISSIONS：分组不是权限，不参与鉴权。
  */
 export const PERMISSION_DEFINITIONS = [
   {
@@ -145,11 +140,7 @@ export const PERMISSION_DEFINITIONS = [
   },
 ];
 
-/**
- * 全部权限名，由定义树展开，顺序与定义树一致。
- *
- * 不另外手写一份清单：两份各自维护必然漂移，漏掉的权限超管拿不到，对应页面在 Mock 下进不去。
- */
+/** 全部权限名，由定义树展开，不另手写清单。 */
 export const ALL_PERMISSIONS: string[] = PERMISSION_DEFINITIONS.flatMap((group) =>
   group.permissions.flatMap((permission) => [
     permission.name,

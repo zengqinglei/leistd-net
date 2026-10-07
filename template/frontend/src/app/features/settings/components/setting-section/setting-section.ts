@@ -49,37 +49,29 @@ import {
 } from '../../settings-page-state';
 
 /**
- * 单项设置的写入状态。
- *
- * `saved` 是暂时的（{@link SAVED_HINT_MS} 后自动回到常态），`error` 不自动消失——
- * 一次失败的保存必须一直看得见，直到下一次尝试把它替换掉。
+ * 单项设置的写入状态。`saved` 在 {@link SAVED_HINT_MS} 后回到常态；
+ * `error` 保留到下一次尝试，失败必须一直可见。
  */
 interface RowState {
   status: 'saving' | 'saved' | 'error';
   message?: string;
 }
 
-/** "已保存"提示的停留时长。够看见，又不至于长到和下一次改动的状态混在一起。 */
+/** "已保存"提示的停留时长：看得见，又不与下一次改动的状态混淆。 */
 const SAVED_HINT_MS = 2000;
 
 /**
- * "保存中"的最短可见时长。
- *
- * 同机部署下一次写入常常几十毫秒就回来了，转圈一闪而过，用户看到的只是描述行末尾
- * 忽然多了个"已保存"——分不清那是这次点击的结果，还是上一次操作的残留。撑到看得清，
- * 这个反馈才成立；也顺带保证禁用态不会短到像抖了一下。
+ * "保存中"的最短可见时长：同机部署下写入几十毫秒就返回，转圈一闪而过，
+ * 用户分不清"已保存"是这次点击的结果还是上次的残留。
  */
 export const SAVING_MIN_MS = 400;
 
 /**
- * 设置区块：按作用域与分组渲染一组设置项，逐行即改即存。
+ * 设置区块：按作用域与分组渲染设置项，逐行即改即存。
  *
- * 个人设置的「偏好」面板与系统设置的每个面板都用它。账户作用域写当前用户偏好（任何登录用户可改），
- * 系统作用域写当前上下文的默认值（需要 App.Settings）。设置快照来自外壳提供的
- * {@link SettingsPageState}，本组件不自己取数。
- *
- * 值为空即表示"未覆盖"，界面以占位符展示继承来的值，避免把继承值渲染成
- * 用户自己设过的值——那会让"恢复默认"看起来没有效果。
+ * 账户作用域写当前用户偏好，系统作用域写当前上下文的默认值（需要 App.Settings）。
+ * 快照由外壳的 {@link SettingsPageState} 提供，本组件不取数。值为空表示未覆盖，
+ * 继承值只作占位符展示，否则"恢复默认"看起来没有效果。
  */
 @Component({
   selector: 'app-setting-section',
@@ -132,11 +124,8 @@ export class SettingSection {
   //#endif
 
   /**
-   * 作用域由**路由数据**给出（经组件输入绑定），不是页内状态。
-   *
-   * 个人偏好在 `/workspace/settings`、系统默认值在 `/platform/settings`：两者的读者、权限与影响范围
-   * 都不同，混在一处会让人把私人偏好当成租户默认值来改（反之亦然）。没声明时按账户处理：
-   * 宁可让人看到自己的偏好，也不要默认打开写全租户的那一页。
+   * 作用域由路由数据经输入绑定给出：个人偏好在 `/workspace/settings`，系统默认值在
+   * `/platform/settings`。未声明时按账户处理，不默认打开写全租户的页面。
    */
   readonly scope = input<SettingScope>('account');
 
@@ -154,12 +143,7 @@ export class SettingSection {
     this.pageState.load();
   }
 
-  /**
-   * 每一项自己的写入状态。
-   *
-   * 刻意是**按行**的，不是整页一个：没有保存按钮之后，用户会连着点好几个控件，
-   * 整页一个状态只记得住最后一项，而反馈也就落不到用户刚碰的那一行上。
-   */
+  /** 按行记录写入状态：用户会连续操作多个控件，整页一个状态无法把反馈落到对应行。 */
   private readonly rowState = signal<Record<string, RowState>>({});
 
   /** 写入链的队尾。见 {@link write} 里为什么必须串行。 */
@@ -168,17 +152,12 @@ export class SettingSection {
   protected readonly drafts = signal<Record<string, string>>({});
   private readonly labelFns = new Map<string, (value: unknown) => string>();
 
-  /**
-   * 本区块要渲染的分组。
-   *
-   * 分组完全由后端下发的分组标识驱动，前端不另列一份清单——列一份的后果是新增设置忘了登记
-   * 就从界面上消失，既不报错也查不出来。
-   */
-  /** 发信参数的面板底部给"发送测试邮件"：改完参数最想确认的就是"现在收不收得到"。 */
+  /** 发信参数的面板底部给"发送测试邮件"：改完参数最想确认的就是能否收到。 */
   protected readonly showEmailTest = computed(
     () => this.scope() === 'system' && this.groups().some((group) => group.key === 'Email'),
   );
 
+  /** 分组由后端下发的分组标识驱动，前端不另列清单，否则漏登记的新设置会从界面上静默消失。 */
   protected readonly groups = computed<SettingGroup[]>(() => {
     const groups = groupSettings(settingsInScope(this.settings(), this.scope()));
     const only = this.group();
@@ -190,11 +169,7 @@ export class SettingSection {
     return groups.filter((group) => !excluded.has(group.key));
   });
 
-  /**
-   * 输入框显示的是**本层的覆盖值**，不是回落后的生效值。
-   *
-   * 两者混用会让租户页显示出当前用户的个人偏好，保存即把私人偏好写成了租户默认值。
-   */
+  /** 输入框显示本层覆盖值而非生效值，否则租户页会显示个人偏好，保存即写成租户默认值。 */
   protected draftOf(setting: SettingOutputDto, scope: SettingScope): string {
     const draft = this.drafts()[this.draftKey(setting, scope)];
     if (draft !== undefined) {
@@ -206,11 +181,8 @@ export class SettingSection {
   }
 
   /**
-   * 时区候选在组件实例内**构造一次**。
-   *
-   * 它要为四百多个时区各构造几个 `Intl` formatter，而结果只取决于运行时环境
-   * （可用时区、当前偏移），不随任何页内状态变化，所以放在字段上初始化一次即可。
-   * 不要改成模板里直接调用的函数——那会每轮变更检测重跑一次。
+   * 时区候选在字段上构造一次：要为四百多个时区构造 `Intl` formatter，结果只取决于运行时环境。
+   * 不要改成模板里调用的函数，那会每轮变更检测重跑。
    */
   protected readonly timeZones = timeZoneGroups();
 
@@ -218,11 +190,7 @@ export class SettingSection {
     this.timeZones.flatMap((group) => group.zones.map((zone) => [zone.value, zone] as const)),
   );
 
-  /**
-   * 时区用可搜索的分组下拉，不用普通下拉。
-   *
-   * 四百多项没有搜索只能靠滚，比手敲还难用；而手挑一份短清单必然漏掉某些部署地。
-   */
+  /** 时区用可搜索的分组下拉：四百多项无搜索难以选择，手挑短清单又会漏掉部署地。 */
   protected isTimeZone(setting: SettingOutputDto): boolean {
     return setting.name === SETTINGS.display.timeZone;
   }
@@ -246,11 +214,8 @@ export class SettingSection {
   }
 
   /**
-   * 这一项正在写入。
-   *
-   * 只用来禁用**离散**控件（开关、下拉、重置）：它们点一下就结束，写入在飞的时候再点
-   * 不表达任何新意图，禁用同时也把"这一下已经收到了"说清楚。文本与数字框不跟着禁用，
-   * 原因见模板里那处注释。
+   * 是否正在写入。只用于禁用开关、下拉、重置等离散控件：写入在途时再点不表达新意图；
+   * 文本与数字框不禁用，原因见模板注释。
    */
   protected isRowSaving(setting: SettingOutputDto, scope: SettingScope): boolean {
     return this.stateOf(setting, scope)?.status === 'saving';
@@ -261,17 +226,12 @@ export class SettingSection {
     return SETTING_CHOICES[setting.name];
   }
 
-  /**
-   * 真值只有两种的设置用开关，而不是两项下拉：一次点击 vs 两次。
-   * 由服务端标注：前端不另列清单，漏登记的布尔设置就不会渲染成要手打 true 的文本框。
-   */
+  /** 布尔设置由服务端标注并渲染为开关；前端不另列清单，免得漏登记的项渲染成文本框。 */
   protected isBoolean(setting: SettingOutputDto): boolean {
     return setting.isBoolean === true;
   }
 
-  /**
-   * 输入框类型。机密设置（加密落库）用口令框：服务端从不下发它的值，框里只会是这次新输入的内容。
-   */
+  /** 机密设置（加密落库）用口令框：服务端从不下发其值，框里只有本次输入。 */
   protected inputTypeOf(setting: SettingOutputDto): string {
     if (setting.isSecret) {
       return 'password';
@@ -285,21 +245,14 @@ export class SettingSection {
     return typeof setting.minimum === 'number' && typeof setting.maximum === 'number';
   }
 
-  /**
-   * 开关显示的是**生效值**：本层没覆盖时取继承来的值。
-   *
-   * 开关没有占位符可以表达"跟随上层"，只看本层的值会把默认开启的项显示成关着——
-   * 用户会以为自己没开，而它其实正在生效。
-   */
+  /** 开关显示生效值（本层未覆盖时取继承值）：开关无法用占位符表达"跟随上层"。 */
   protected isChecked(setting: SettingOutputDto, scope: SettingScope): boolean {
     return (this.draftOf(setting, scope) || this.inheritedOf(setting, scope)) === 'true';
   }
 
   /**
-   * 「跟随系统」时实际生效的值。
-   *
-   * 语言与时区没有租户默认值也没有代码默认值——留空即跟随系统。占位符必须把探测到的那个值
-   * 显示出来：不然一个空输入框看着像"没配"，而它其实正在生效。
+   * 「跟随系统」时实际生效的值。语言与时区没有租户或代码默认值，占位符须显示探测到的值，
+   * 否则空框看着像没配置。
    */
   protected systemDefaultOf(setting: SettingOutputDto): string {
     if (setting.name === SETTINGS.display.timeZone) {
@@ -320,12 +273,7 @@ export class SettingSection {
     return this.choicesOf(setting)?.find((c) => c.value === value)?.label ?? value;
   }
 
-  /**
-   * 下拉展示用的取名函数，按设置名缓存。
-   *
-   * 每次变更检测新建闭包会让 `itemToString` 这个 signal input 每轮都变，
-   * 触发下拉反复重算。
-   */
+  /** 下拉的取名函数按设置名缓存：每轮新建闭包会让 `itemToString` 输入变化，触发反复重算。 */
   protected labelFnOf(setting: SettingOutputDto): (value: unknown) => string {
     let fn = this.labelFns.get(setting.name);
     if (!fn) {
@@ -358,12 +306,9 @@ export class SettingSection {
   }
 
   /**
-   * 继承值的展示文案：有候选项时换成候选项的标签。
+   * 继承值的展示文案：有候选项时换成标签，避免同一控件上出现「中文」与 `zh-CN` 两种写法。
    *
-   * 占位符直接显示原始值会让下拉里挑「中文」、没选中时却显示 <c>zh-CN</c>，
-   * 同一个值在同一个控件上两种写法。
-   *
-   * @param followSystemLabel 「跟随系统」的文案，由模板按当前语言取好传入。
+   * @param followSystemLabel 「跟随系统」的文案，由模板按当前语言传入。
    */
   protected inheritedLabelOf(
     setting: SettingOutputDto,
@@ -385,18 +330,11 @@ export class SettingSection {
     this.drafts.update((drafts) => ({ ...drafts, [this.draftKey(setting, scope)]: value }));
   }
 
-  /**
-   * 输入类控件的**提交**：原生 `change` 在失焦或按下回车时触发，正好是"这次输入结束了"。
-   *
-   * 刻意不在每次按键时写：输入 60 会途经 6，而 6 也是合法值——按键即写等于把一串
-   * 中间状态依次存进去并生效。
-   */
+  /** 输入类控件在原生 `change`（失焦或回车）时提交，不按键即写：输入 60 会途经同样合法的 6。 */
   protected onCommit(setting: SettingOutputDto, scope: SettingScope, event: Event): void {
     const value = (event.target as HTMLInputElement).value.trim();
 
-    // 草稿同步成裁剪后的值，两件事都靠它：界面立刻显示"真正存进去的那个值"，
-    // 而写入完成后的清草稿是按值比对的（见 write），草稿留着未裁剪的原文就永远对不上、
-    // 于是永远清不掉。
+    // 草稿同步成裁剪后的值：界面显示实际存入的值，写入完成后按值比对清草稿（见 write）才对得上。
     this.drafts.update((drafts) => ({ ...drafts, [this.draftKey(setting, scope)]: value }));
     void this.write(setting, value.length === 0 ? null : value, scope);
   }
@@ -435,20 +373,13 @@ export class SettingSection {
     void this.write(setting, null, scope);
   }
 
-  /**
-   * 一次写一项，整条 PUT → GET → 发布快照 结束前不接受新的写入。
-   *
-   * 页面上的设置项个数是个位数，不值得为并发写入引入队列；而放任并发会踩三个坑：
-   * 保存中状态只记得住最后一项、任一请求返回就把状态清掉、多个刷新响应乱序时旧快照
-   * 盖掉新快照。用一个 single-flight 状态把这三件事一次挡掉。
-   */
+  /** 写入一项：经 {@link enqueue} 串行执行 PUT → 重取快照 → 全局发布。 */
   private write(setting: SettingOutputDto, value: string | null, scope: SettingScope): void {
     const key = this.draftKey(setting, scope);
     this.setRowState(key, { status: 'saving' });
 
-    // 排到队尾而不是直接发：写入不是单个 PUT，而是 PUT → 重取快照 → 全局发布一整条链。
-    // 两条链并发时两个 GET 的响应可能乱序，旧快照会盖掉新快照——那是正确性问题。
-    // 串行保证顺序，并且只有本行的离散控件被禁用，别的设置项照样能改。
+    // 串行：两条链并发时 GET 响应可能乱序，旧快照会覆盖新快照。只禁用本行的离散控件，
+    // 其他设置项照样能改。
     const startedAt = Date.now();
     this.enqueue(async () => {
       try {
@@ -459,17 +390,12 @@ export class SettingSection {
 
         await firstValueFrom(request);
 
-        // 走会话上下文而不是直接 load()：语言是从设置派生的，只刷新数据不重新应用，
-        // 改完语言界面会停在旧语言。同时那份快照直接用来刷新本页列表——
-        // 各自请求一次不仅浪费，还会在其中一次失败时让本页和全局的显示对不上。
+        // 走会话上下文而非 load()：语言由设置派生，只刷新数据不会重新应用；
+        // 同一份快照也用于刷新本页，避免两次请求结果不一致。
         this.pageState.settings.set([...(await this.sessionContext.refreshSettings())]);
 
-        // 草稿留到快照到手之后再丢：先丢的话，PUT 成功而这次 GET 失败时，
-        // 界面会退回上一份快照显示旧值，而库里其实已经改了。
-        //
-        // 只在草稿仍是本次写入的那个值时才丢：用户按回车提交后光标还在输入框里，
-        // 完全可以接着改。无条件清掉会把这期间的新输入抹掉——原来靠禁用控件挡这件事，
-        // 而禁用会让整页看着卡住，用条件清除更精确。
+        // 快照到手后才丢草稿，否则 PUT 成功而 GET 失败时界面会退回旧值。
+        // 只丢仍等于本次写入值的草稿：回车提交后用户可以接着改，新输入不能被抹掉。
         this.drafts.update((drafts) => {
           if (drafts[key] !== (value ?? '')) {
             return drafts;
@@ -483,9 +409,7 @@ export class SettingSection {
         await this.holdSavingState(startedAt);
         this.markSaved(key);
       } catch (error: unknown) {
-        // 失败就地报在那一行上，并且**不自动消失**：改一项失败必须被看见，
-        // 而 toast 会把反馈从用户刚碰的那一行挪到屏幕角落，还容易被下一条顶掉。
-        // 界面保持原样（上一份快照仍然有效），不清空成一张白页。
+        // 失败就地报在该行且不自动消失（toast 会离开该行且易被顶掉）；上一份快照仍有效。
         await this.holdSavingState(startedAt);
         this.setRowState(key, { status: 'error', message: applicationErrorMessage(error) });
       }

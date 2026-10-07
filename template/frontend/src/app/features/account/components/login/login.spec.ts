@@ -51,11 +51,8 @@ import { AccountService } from '../../services/account-service';
 import type { Mock, MockedObject } from 'vitest';
 
 /**
- * 登录提交路径。
- *
- * 其中 returnUrl 的处理是安全相关的：它来自查询串，攻击者可以构造一个指向外站的
- * 登录链接，用户登录成功后被直接送走。因此只接受本地绝对路径，`//host` 与
- * 含 `://` 的一律丢弃——这条判断没有测试的话，放宽它不会有任何提示。
+ * 登录提交路径。returnUrl 来自查询串，只接受本地绝对路径（`//host` 与含 `://` 的一律丢弃），
+ * 防止登录后被送往外站。
  */
 describe('Login', () => {
   let fixture: ComponentFixture<Login>;
@@ -226,10 +223,7 @@ describe('Login', () => {
   }
 
   //#if (IncludeLocalization)
-  /**
-   * 校验提示按错误类型取词条（`validation.<kind>`），参数来自校验器给出的错误对象。
-   * 提示若在建表单时一次性翻译，切到另一种语言后标签都换了，错误提示还停在旧语言（全功能端到端测试发现）。
-   */
+  /** 校验提示按错误类型取词条（`validation.<kind>`），参数来自校验器的错误对象，切换语言后随之更新。 */
   it('shows validation errors by kind, with their parameters, in the active language', async () => {
     vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en']);
     await setUp();
@@ -415,10 +409,8 @@ describe('Login', () => {
     await setUp();
     fillValidCredentials();
 
-    // 用真实 Router + 真实 permissionGuard 跑完整条路：
-    // spy 掉 Router 只能验到"调用了 navigateByUrl"，验不到导航之后 guard 怎么判。
-    // 凭据通过后会话上下文先被清空；若在建立它之前就跳转，
-    // guard 会在空权限下判定并把人踢到 403——从深链登录本该落到那个页面。
+    // 用真实 Router 与 permissionGuard 跑完整条路：会话上下文须在跳转前建立，
+    // 否则 guard 在空权限下把深链登录踢到 403。
     vi.mocked(router.navigateByUrl).mockRestore();
     (TestBed.inject(SessionContextService).establish as Mock).mockImplementation(async () => {
       authorization.setPermissions({
@@ -447,9 +439,8 @@ describe('Login', () => {
     await setUp();
     fillValidCredentials();
 
-    // 平台入口可见性由权限集合决定：这里通过真实的 setPermissions 造状态，
-    // 而不是打桩 canAccessPlatform——打桩就绕过了"判据是权限而非角色"这件事本身。
-    // 权限在建立会话上下文时加载（凭据通过后旧主体先被清空），所以在 establish 里设置
+    // 用真实的 setPermissions 造状态而不打桩 canAccessPlatform，才能验证判据是权限而非角色；
+    // 权限在 establish 时加载（凭据通过后旧主体先被清空）。
     const establish = TestBed.inject(SessionContextService).establish as Mock;
     establish.mockImplementation(async () => {
       authorization.setPermissions({ permissions: [], isSuperAdmin: true, versionToken: 'r1' });
@@ -471,23 +462,12 @@ describe('Login', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/platform']);
   });
   //#if (IncludeMultiTenancy)
-  /**
-   * 主机名定案的三档结果。
-   *
-   * 关键在于**"宿主定案"与"域名不表态"必须分开**：两者都当成"没有租户"时，
-   * 宿主域上会残留上次记住的租户，而服务端已按宿主处理请求——
-   * 界面显示的和实际生效的不是同一个租户上下文，登录会落在用户没选的那一侧。
-   */
+  /** 主机名定案的三档结果；宿主定案与域名不表态必须分开，否则宿主域上残留上次记住的租户。 */
   describe('tenant resolution by host name', () => {
     // 匿名 by-host 只回租户名：回 id / 展示名 / 启用状态都会泄露"这个租户存在"
     const domainTenant = { name: 'acme' };
 
-    /**
-     * 造出"上次记住的租户"。
-     *
-     * 直接写存储而不是调 `TenantContextService.set`：探测在组件构造时就跑，
-     * 得让上下文在服务初始化那一刻就已经有值，否则测不到"探测把它清掉"这件事。
-     */
+    /** 造出"上次记住的租户"：直接写存储，因为探测在组件构造时就跑。 */
     function rememberTenant(): void {
       localStorage.setItem('app.tenant', JSON.stringify({ key: 'remembered' }));
     }
@@ -531,13 +511,7 @@ describe('Login', () => {
       expect(component.tenantError()).toBeTruthy();
     });
 
-    /**
-     * 探测失败不等于"域名不表态"。
-     *
-     * 未配置子域名格式的部署本来就正常返回 undecided，走不到这条分支；能走到的是
-     * "域名指向的租户解析不了"（租户解析中间件直接 404）或后端不可达。把它折进 undecided，
-     * 就是在不知道域名会怎么解析的情况下让人手选一个注定被覆盖的租户，然后带着它去登录。
-     */
+    /** 探测失败不等于域名不表态：租户解析不了（404）或后端不可达时，不开放手选也不放行登录。 */
     it('probe failure is not treated as undecided: blocks manual selection and login and explains why', async () => {
       byHost = throwError(() => new Error('offline'));
       await setUp();
@@ -573,12 +547,7 @@ describe('Login', () => {
       expect(component.tenantSelectionBlocked()).toBe(false);
     });
 
-    /**
-     * 探测未回来时不发认证请求。
-     *
-     * 服务端按主机名解析租户且不接受请求头改写：此时提交，界面上显示着上次记住的租户，
-     * 请求却落到域名对应的那个上下文里，而探测响应随后又会把前端状态改掉。
-     */
+    /** 探测未回来时不发认证请求：请求会落到域名对应的上下文，与界面显示的租户不一致。 */
     it('does not send an authentication request while the probe is pending', async () => {
       byHost = new Observable<TenantByHostOutputDto>(() => undefined);
       await setUp();

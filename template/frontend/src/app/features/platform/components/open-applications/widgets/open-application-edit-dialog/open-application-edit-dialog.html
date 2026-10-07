@@ -190,7 +190,6 @@
             </div>
 
             @if (isServiceType()) {
-              <!-- service 类型：简化显示 -->
               <div class="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-4">
                 <div class="flex items-center gap-2">
                   <ng-icon name="lucideCircleCheck" class="text-success" />
@@ -206,7 +205,6 @@
                 </p>
               </div>
             } @else {
-              <!-- web/desktop 类型：完整编辑 -->
               <div hlmField>
                 <label hlmFieldLabel for="application-permissions">{{
                   t('openApp.field.permissions')

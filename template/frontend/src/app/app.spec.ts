@@ -37,12 +37,7 @@ import { LayoutService } from './core/services/layout-service';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
 
-/**
- * 启动失败页必须显示得出来——包括正是词条没取到的时候。
- *
- * 根组件不在结构指令里：文案若等词条到位，这一层就是空白；若在词条加载失败时读取即抛错，
- * 它整个渲染不出来。而这时用户手里只剩这一页。
- */
+/** 启动失败页必须显示得出来，包括词条没取到的时候：根组件不在结构指令里。 */
 describe('App startup failure page', () => {
   //#if (IncludeLocalization)
   async function render(loader: TranslocoLoader): Promise<HTMLElement> {

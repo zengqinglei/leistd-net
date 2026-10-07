@@ -35,13 +35,7 @@ interface SettingRow {
   tenantValue: string | null;
 }
 
-/**
- * Mock 契约。
- *
- * Mock 是 `useMock` 开发模式下的唯一后端，它与真实 API 的每一处差异都会在联调时才暴露。
- * 因此这里断言的不只是路由存在，还有身份、权限、错误状态与主体隔离——这些恰恰是
- * 「直接调 handler 看它抛不抛」测不出来的东西。
- */
+/** Mock 契约：除路由外还断言身份、权限、错误状态与主体隔离，与真实 API 的差异会在联调时才暴露。 */
 describe('settings mock', () => {
   const api = SETTING_API as unknown as Record<string, MockHandler>;
   const get = 'GET /api/v1/settings';
@@ -137,11 +131,7 @@ describe('settings mock', () => {
   });
 
   //#if (IncludeMultiTenancy)
-  // 设置行带租户归属，用户级也一样：同一个人在 Acme 设的偏好不该在 Globex 里出现。
-  // 真实 Store 的键是 `{tenant}:u:{userId}`，Mock 少了租户这一维就会串值。
-  //
-  // 租户随登录一起切换——这也是真实环境唯一能换租户的方式：已认证主体的租户声明定案后，
-  // 请求头就改不动它了。
+  // 用户级覆盖按 `{tenant}:u:{userId}` 隔离；租户随登录一起定案，之后请求头改不动它。
   it('keeps overrides separate per tenant', () => {
     const acme = 'tenant_acme';
     const globex = 'tenant_globex';
@@ -172,9 +162,7 @@ describe('settings mock', () => {
   });
 
   //#if (LocalIdentity)
-  // 前面几条都是直接摆好会话再测设置，证明的是「会话建立之后」的行为。
-  // 这一条从登录入口进：租户在登录那一刻由请求头定案、写进会话，之后设置读写按会话走。
-  // 认证到会话这段接线断了的话，上面那些用例照样全绿。
+  // 从登录入口进：租户由请求头定案写进会话，设置读写按会话走；上面直接摆会话的用例测不到这段接线。
   it('picks up the tenant pinned by the login endpoint', () => {
     const auth = AUTH_API as unknown as Record<
       string,
@@ -271,8 +259,7 @@ describe('settings mock', () => {
     ).toBe(400);
   });
 
-  // 显示名与真实后端一致：后端按 `Setting:{name}` / `SettingGroup:{group}` 词条返回，不回显分组标识。
-  // Mock 回显标识的话，设置页的面板名在 Mock 模式下与真实环境不同（中文界面显示英文）。
+  // 显示名按后端 `Setting:{name}` / `SettingGroup:{group}` 词条返回，不回显分组标识。
   function minimumLevel(headers: Record<string, string> = {}): SettingRow {
     signIn('user_admin');
     const row = (api[get](request(null, headers)) as SettingRow[]).find(

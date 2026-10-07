@@ -91,7 +91,7 @@ const APP_NAME = 'Template Project';
 })
 export class App {
   protected readonly startupService = inject(StartupService);
-  // 注入 ThemeService 确保主题在应用启动时生效 (通过构造函数中的 effect)
+  // 注入即让主题在启动时生效（ThemeService 构造时注册 effect）。
   protected readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -224,7 +224,6 @@ function startupErrorText(error: unknown): StartupText {
     };
   }
 
-  // 处理非 ApplicationHttpError 的其他未知错误
   if (error instanceof Error) {
     return {
       key: 'app.startup.unknownErrorDetail',

@@ -7,18 +7,12 @@ import { MockConfig } from './models';
 import { MOCKED_URL } from '../../src/app/core/mock/mocked-url';
 import * as allApis from '../index';
 
-/**
- * 提供 Mock 服务的核心函数。
- *
- * @param config Mock 配置对象，通常来自环境文件。
- * @returns 返回一个 Provider 数组，可直接在 app.config.ts 的 providers 中使用。
- */
+/** 提供 Mock 服务，返回可直接放进 app.config.ts providers 的 Provider 数组。 */
 export function provideMock(config: boolean | MockConfig): Provider[] {
   if (!shouldProvideMock(config)) {
     return [];
   }
 
-  // 动态地将所有导入的 *_API 对象合并到一个 APIS 对象中
   const apis = Object.values(allApis)
     .filter((value) => typeof value === 'object' && value !== null)
     .reduce((acc, current) => ({ ...acc, ...current }), {});

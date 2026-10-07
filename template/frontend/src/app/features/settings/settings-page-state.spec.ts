@@ -9,12 +9,7 @@ import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 import { SettingService } from '../../core/settings/setting-service';
 import { SettingOutputDto } from '../../core/settings/setting.dto';
 
-/**
- * 设置页快照：最后一次读取为准。
- *
- * 切换语言与写入都会触发重取；较早发出的那次若晚到，会用旧值覆盖新快照，
- * 表现为偏好页显示的语言与实际不一致（全功能端到端发现）。
- */
+/** 设置页快照以最后一次读取为准：切换语言与写入都会触发重取，晚到的旧响应不能覆盖新快照。 */
 describe('SettingsPageState', () => {
   const setting = (userValue: string): SettingOutputDto =>
     ({ name: 'Display.Language', userValue }) as SettingOutputDto;

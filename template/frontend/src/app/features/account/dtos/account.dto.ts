@@ -1,6 +1,3 @@
-/**
- * 用户注册请求 DTO
- */
 export interface RegisterInputDto {
   username: string;
   email: string;
@@ -58,7 +55,6 @@ export interface UserSessionOutputDto {
 }
 //#if (Email)
 
-/** 注册安全配置输出 DTO。 */
 export interface SecurityConfigOutputDto {
   enableEmailVerification: boolean;
   /** 部署具备发邮箱验证码的前提；为 false 时"验证我的邮箱"只说明暂不可用，不给发送按钮。 */
@@ -66,18 +62,12 @@ export interface SecurityConfigOutputDto {
 }
 //#endif
 
-/**
- * 图形验证码输出 DTO
- */
 export interface CaptchaOutputDto {
   captchaToken: string;
   captchaImageBase64: string;
 }
 //#if (Email)
 
-/**
- * 发送邮件验证码请求 DTO
- */
 export interface SendEmailCodeInputDto {
   email: string;
   captchaToken: string;
@@ -86,9 +76,6 @@ export interface SendEmailCodeInputDto {
 //#endif
 //#if (Email)
 
-/**
- * 邮箱验证挑战应答 DTO
- */
 export interface EmailVerificationInputDto {
   challengeId: string;
   code: string;
@@ -96,9 +83,6 @@ export interface EmailVerificationInputDto {
 //#endif
 //#if (Email)
 
-/**
- * 邮箱验证挑战输出 DTO
- */
 export interface EmailVerificationChallengeOutputDto {
   challengeId: string;
   expiresInSeconds: number;
@@ -106,9 +90,6 @@ export interface EmailVerificationChallengeOutputDto {
 }
 //#endif
 
-/**
- * 当前用户资料更新请求 DTO
- */
 export interface UpdateCurrentUserInputDto {
   username: string;
   email: string;
@@ -121,9 +102,6 @@ export interface SetAvatarInputDto {
   avatar: string | null;
 }
 
-/**
- * 修改密码请求 DTO
- */
 export interface ChangePasswordInputDto {
   currentPassword: string;
   newPassword: string;

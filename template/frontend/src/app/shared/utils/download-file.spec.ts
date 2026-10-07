@@ -2,13 +2,7 @@ import { saveBlob } from './download-file';
 
 import type { Mock } from 'vitest';
 
-/**
- * 下载是有副作用的：它会在跑测试的那台机器上真的存下文件。
- *
- * 曾经有人给导出写单测时调了真实下载路径，单测跑在真实的浏览器里，
- * 每跑一次就往开发者的下载目录落一个文件，一度攒到上百个——用例是绿的，机器被污染了。
- * 所以这组用例对 `click()` 打桩，断言的是"发起了什么下载"，不是"文件存下来了"。
- */
+/** 下载有副作用：单测跑在真实浏览器里会真的存下文件，因此对 `click()` 打桩，断言发起了什么下载。 */
 describe('saveBlob', () => {
   let click: Mock;
   let createObjectURL: Mock;

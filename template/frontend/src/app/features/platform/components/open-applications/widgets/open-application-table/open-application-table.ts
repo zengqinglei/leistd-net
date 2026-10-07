@@ -70,7 +70,6 @@ const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
   service: 'openApp.appType.service',
 };
 
-/** Badge 变体。 */
 type BadgeVariant = 'secondary' | 'outline';
 
 @Component({
@@ -112,8 +111,7 @@ type BadgeVariant = 'secondary' | 'outline';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationTable {
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -128,7 +126,6 @@ export class OpenApplicationTable {
   readonly filtered = input(false);
   /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
   readonly loadError = input<string | null>(null);
-  /** 错误态里的重试。 */
   readonly retry = output<void>();
 
   /**
@@ -226,7 +223,6 @@ export class OpenApplicationTable {
     },
   }));
 
-  // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 

@@ -29,7 +29,6 @@ describe('OpenApplications page query round trip', () => {
   let router: Router;
   let service: Pick<MockedObject<OpenApplicationService>, 'getOpenApplications' | 'getScopes'>;
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetOpenApplicationsInputDto {
     const calls = vi.mocked(service.getOpenApplications).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -77,8 +76,7 @@ describe('OpenApplications page query round trip', () => {
       versionToken: 'r1',
     });
 
-    // 应用启动时会话设置（连带语言服务）早已建好；留到首帧渲染途中才惰性创建的话，
-    // 语言服务构造时激活语言，会让模板结构指令在创建视图的半途重入
+    // 先建好设置上下文（连带语言服务），否则首帧渲染途中创建它会让结构指令重入。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(OpenApplications);
     component = fixture.componentInstance;

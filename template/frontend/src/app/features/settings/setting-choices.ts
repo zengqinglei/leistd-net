@@ -10,20 +10,8 @@ export interface SettingChoice {
 }
 
 /**
- * 取值封闭、且选项不多的设置的候选项。
- *
- * 候选项留在设置页面而不是后端，与 spartan 官方设置页同一取舍：后端设置定义只管
- * 「名称 / 默认值 / 可写层级」，不承载控件元数据——把控件类型塞进设置定义，
- * 等于让每加一种控件就要改一次后端契约。
- *
- * 时区不在这里：它有四百多项，要的是可搜索的分组下拉，见 {@link timeZoneGroups}。
- * 未列在此、也不是时区的设置渲染成文本框。
- */
-/**
- * 日志级别候选项。
- *
- * 与后端 `SettingConstant.Logging.Levels`（即 Serilog 的 `LogEventLevel`）逐字一致。
- * 文案不本地化：这些是日志级别的标准名字，翻译过来反而对不上日志里实际出现的词。
+ * 日志级别候选项，与后端 `SettingConstant.Logging.Levels`（Serilog `LogEventLevel`）逐字一致。
+ * 不本地化：翻译后对不上日志里实际出现的词。
  */
 const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
   { value: 'Verbose', label: 'Verbose' },
@@ -35,13 +23,8 @@ const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
 ];
 
 /**
- * 日志级别的说明文案。
- *
- * 选完在下面显示对应说明：级别名本身（Verbose / Debug / …）说不出"选了它会多打多少日志"，
- * 而那恰恰是做这个选择时唯一想知道的事。级别名不翻译（见上），说明要翻译——它是给人读的句子。
+ * 日志级别说明的词条键，选中后显示：级别名说不出会多打多少日志。级别名不翻译，说明要翻译。
  */
-// 值是词条键（settings.logLevelHints.*），由设置页的模板按当前语言取文案。
-// 先前直接写中文，英文界面下照样显示中文。
 export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   Verbose: 'settings.logLevelHints.Verbose',
   Debug: 'settings.logLevelHints.Debug',
@@ -51,6 +34,10 @@ export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   Fatal: 'settings.logLevelHints.Fatal',
 };
 
+/**
+ * 取值封闭且选项不多的设置的候选项。候选项留在前端：后端设置定义不承载控件元数据，否则每加一种
+ * 控件都要改后端契约。时区见 {@link timeZoneGroups}；其余设置渲染成文本框。
+ */
 export const SETTING_CHOICES: Readonly<Record<string, readonly SettingChoice[]>> = {
   //#if (IncludeLocalization)
   // 直接取语言服务的清单：候选值就是应用真正支持的语言，另抄一份必然漂移。
@@ -71,7 +58,6 @@ export interface TimeZoneOption {
   offsetLabel: string;
   /** 同一偏移的 `GMT+8` 写法，只用于搜索匹配。 */
   offsetAlias: string;
-  /** 是否为当前浏览器所在时区。 */
   isBrowser: boolean;
   /** 搜索时额外匹配的名字（见 {@link SEARCH_ALIASES}）。 */
   aliases: readonly string[];
@@ -83,12 +69,7 @@ export interface TimeZoneGroup {
   zones: readonly TimeZoneOption[];
 }
 
-/**
- * 已被时区数据库改名的时区的**搜索别名**。
- *
- * `Intl.supportedValuesOf('timeZone')` 只返回规范名，印度在多数运行时是 `Asia/Calcutta`，
- * 而人会去搜 Kolkata。这里只影响搜索匹配，不额外造出选项——同一个时区列成两行更糟。
- */
+/** 已改名时区的搜索别名（如规范名 `Asia/Calcutta` 可搜 Kolkata）；只影响匹配，不另造选项。 */
 const SEARCH_ALIASES: Record<string, readonly string[]> = {
   'Asia/Calcutta': ['Kolkata'],
   'Asia/Kolkata': ['Calcutta'],
@@ -102,12 +83,8 @@ const SEARCH_ALIASES: Record<string, readonly string[]> = {
 };
 
 /**
- * 该时区在当前运行时能否用于渲染，能则返回它的规范名。
- *
- * **判定方式刻意是"真的构造一次 formatter"，而不是查 `Intl.supportedValuesOf('timeZone')`。**
- * 后者只列规范名：`UTC`、`Asia/Kolkata`、`America/Argentina/Buenos_Aires` 都不在其中，
- * 却都能正常渲染。拿它当合法性清单去过滤，会把这些有效时区静默删掉——
- * 其中 `UTC` 还是最常见的运维选择。
+ * 该时区在当前运行时能否渲染，能则返回规范名。刻意构造一次 formatter 判定，不查
+ * `Intl.supportedValuesOf('timeZone')`：它不含 `UTC`、`Asia/Kolkata` 等可用值。
  */
 function canonicalTimeZone(timeZone: string): string | undefined {
   try {
@@ -117,12 +94,7 @@ function canonicalTimeZone(timeZone: string): string | undefined {
   }
 }
 
-/**
- * 该时区此刻的偏移文案；取不到返回空串。
- *
- * `shortOffset` 给的是 `GMT+8`，这里改写成 `UTC+8`：偏移的通用说法是 UTC，
- * GMT 严格来说是个时区名。两种写法都参与搜索匹配（见 {@link timeZoneMatches}）。
- */
+/** 该时区此刻的偏移文案（`GMT+8` 改写为 `UTC+8`，两种写法都参与搜索）；取不到返回空串。 */
 function offsetLabel(timeZone: string): { label: string; alias: string } {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -149,12 +121,7 @@ function offsetMinutes(timeZone: string): number {
   }
 }
 
-/**
- * 浏览器所在时区（IANA 名）。
- *
- * `Intl.DateTimeFormat().resolvedOptions().timeZone` 直接给出运行时的默认时区，
- * 是 ECMA-402 的标准行为、各端普遍可用，因此不需要任何平台判断。
- */
+/** 浏览器所在时区（IANA 名）。 */
 export function browserTimeZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
@@ -164,11 +131,8 @@ export function browserTimeZone(): string | undefined {
 }
 
 /**
- * 全量时区，按地区分组。
- *
- * 给的是**全量**而不是精选清单：控件可搜索之后，四百多项不再是负担，而精选清单
- * 必然漏掉某些部署地。清单里额外补上 `UTC` 与浏览器时区，并按规范名去重——
- * 同一时区的规范名与旧名只保留一行，避免出现"选哪个都一样"的重复项。
+ * 全量时区，按地区分组：可搜索后全量不再是负担，精选清单必然漏掉部署地。额外补上 `UTC` 与
+ * 浏览器时区，并按规范名去重。
  */
 export function timeZoneGroups(): readonly TimeZoneGroup[] {
   const browser = browserTimeZone();
@@ -195,8 +159,7 @@ export function timeZoneGroups(): readonly TimeZoneGroup[] {
   }
 
   const browserCanonical = browser ? canonicalTimeZone(browser) : undefined;
-  // 偏移**先算好再排序**：比较器会被调用 O(n log n) 次，而 offsetMinutes 每次都要
-  // 构造两个 formatter；放进比较器等于把这份开销乘上比较次数。
+  // 偏移先算好再排序：offsetMinutes 每次构造两个 formatter，放进比较器会乘上比较次数。
   const groups = new Map<string, { option: TimeZoneOption; offset: number }[]>();
 
   for (const [canonical, id] of chosen) {
@@ -232,11 +195,7 @@ export function timeZoneGroups(): readonly TimeZoneGroup[] {
     .sort((a, b) => a.region.localeCompare(b.region));
 }
 
-/**
- * 搜索匹配：地名、完整 IANA 名、偏移（`UTC+8` 与 `GMT+8` 两种写法）与别名都算命中。
- *
- * 偏移参与匹配，因为"我在 UTC+8"是人找时区最常用的说法之一。
- */
+/** 搜索匹配：地名、完整 IANA 名、偏移（`UTC+8` 与 `GMT+8`）与别名都算命中。 */
 export function timeZoneMatches(option: TimeZoneOption, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (needle.length === 0) {

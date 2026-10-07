@@ -1,10 +1,4 @@
-/**
- * 设置的 Mock 数据。
- *
- * 覆盖值按主体键控，键的形状对齐真实 Store 的 `ScopeKey`——**用户级也带租户**，
- * 因为设置行本身带租户归属。共用一份全局值会让切换 Mock 用户或租户后看到上一个主体的
- * 偏好，把「层级隔离」这条最该被验证的语义演成假的。
- */
+/** 设置的 Mock 数据。覆盖值按主体键控，键形状对齐真实 Store 的 `ScopeKey`，用户级也带租户。 */
 export interface MockSettingDefinition {
   name: string;
   /** 显示名，取后端 `Setting:{name}` 的英文词条；其他语言见下方对照表。 */
@@ -19,7 +13,7 @@ export interface MockSettingDefinition {
   /** 数值型设置的取值区间；界面据此渲染带上下界的数字输入框。 */
   minimum?: number;
   maximum?: number;
-  /** 布尔型设置，渲染成开关（与后端 SettingConstant.BooleanSettings 对应）。 */
+  /** 布尔型设置，渲染成开关（与后端设置定义的 `AsBoolean()` 对应）。 */
   isBoolean?: boolean;
   /** 机密设置：值不下发，只报告是否设过。 */
   isSecret?: boolean;
@@ -371,10 +365,8 @@ export const SETTING_TEXTS_ZH_CN: Readonly<Record<string, string>> = {
 //#endif
 
 /**
- * 用户级覆盖：`${tenantKey}:${subjectId}:${settingName}` → 值；宿主用 `host`。
- *
- * 键里的是**主体标识**（有本地身份时即会话用户 id，Resource 形态下是令牌的原始 `sub`），
- * 不是界面借用的那个 Mock persona——用 persona 做键会让同租户下的两个真实用户串数据。
+ * 用户级覆盖：`${tenantKey}:${subjectId}:${settingName}` → 值，宿主用 `host`。键用主体标识
+ * （Resource 形态下是令牌的 `sub`），不是 Mock persona，否则同租户的两个真实用户会串数据。
  */
 export const USER_SETTING_VALUES = new Map<string, string>();
 

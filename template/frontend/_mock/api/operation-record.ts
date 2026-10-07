@@ -95,8 +95,7 @@ function filterRecords(params: any): MockOperationRecord[] {
     );
   }
 
-  // 与后端同为**闭区间**。两端都是 UTC ISO 串，而 `creationTime` 也是同格式的 UTC ISO，
-  // 因此可以直接按字典序比较——ISO 8601 的字典序与时间序一致，这是它被选作传输格式的原因之一。
+  // 与后端同为闭区间；两端与 `creationTime` 都是 UTC ISO 串，字典序即时间序。
   const startTime = getQueryValue(params.startTime);
   const endTime = getQueryValue(params.endTime);
   if (startTime) {
@@ -120,7 +119,7 @@ function filterRecords(params: any): MockOperationRecord[] {
   });
 }
 
-/** **没有排序参数**：后端契约里就没有，前端也不该造一个。 */
+/** 后端契约没有排序参数。 */
 export function getOperationRecords(params: any): PagedResultDto<any> {
   validateFilters(params);
   const offset = +(getQueryValue(params.offset) ?? 0);

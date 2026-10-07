@@ -54,16 +54,10 @@ interface TenantEditFormModel {
 }
 
 /**
- * 租户新建 / 编辑对话框。
+ * 租户新建 / 编辑对话框。新建时提供初始管理员的邮箱与密码，编辑只改名称、显示名与描述。
  *
- * 新建时同时提供租户初始管理员的邮箱与密码（由后端在该租户内创建管理员账号）；
- * 编辑只涉及名称与显示名，管理员账号变更走租户内的用户管理。
- *
- * **分库只在新建时定案**，所以连接串是新建表单上的一个可选字段：填了就登记到默认名下，
- * 后端在播种之前完成登记，种子（含租户管理员）因此直接落进那个库；留空即不分库。
- * 建好之后再想分库，后端会以 409 拒绝——那时数据已经在回落库里，登记连接不会把它们搬过去，
- * 只能走停用 → 迁移数据 → 登记 → 重新启用。详情里的连接列表管的是另一件事：
- * 给**已经分库**的租户按服务补登一条或换连接串。
+ * 分库只在新建时定案：填了连接串就登记到默认名下，后端在播种前完成登记；建好后再分库会被
+ * 409 拒绝。详情里的连接列表用于给已分库的租户补登或换连接串。
  */
 @Component({
   selector: 'app-tenant-edit-dialog',
@@ -110,8 +104,7 @@ export class TenantEditDialog {
 
   readonly tenantForm = form(this.formModel, (path) => {
     required(path.name);
-    // 编辑时名称原样未改（按原始字符串比，不先 trim）就不按新规则校验、提交时也原样送回：
-    // 存量租户的名称可能早于这条规则（含首尾空白、64 个字符），只改显示名或描述不该被它挡住（与后端一致）
+    // 编辑时名称原样未改（不 trim 比较）就不按新规则校验、原样送回：存量名称可能早于这条规则（与后端一致）。
     maxLength(path.name, TENANT_NAME_MAX_LENGTH, {
       when: (ctx) => !this.isUnchangedName(ctx.value()),
     });
@@ -166,9 +159,7 @@ export class TenantEditDialog {
 
     const model = this.formModel();
     const displayName = model.displayName.trim() || undefined;
-    // 清空描述要能传达到后端：编辑时传 null 而不是 undefined——
-    // undefined 会被 JSON 序列化丢掉，后端读到的是"未提供"，旧值就留在库里；
-    // 传 null 后端会把字段置空（而不是存成空字符串）。
+    // 编辑时清空描述传 null：undefined 会被 JSON 序列化丢掉，后端视为未提供而保留旧值。
     const description = model.description.trim();
 
     if (this.isEdit()) {

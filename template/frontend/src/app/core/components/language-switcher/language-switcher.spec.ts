@@ -15,13 +15,7 @@ import { SettingService } from '../../settings/setting-service';
 
 import type { MockedObject } from 'vitest';
 
-/**
- * 语言选择的归属：切换器是唯一决定「这次选择算谁的」的地方。
- *
- * 已登录的选择属于账户，只能写回设置；未登录的选择属于这台设备，才落本地存储。
- * 两边搞混就回到那个共享机器上的老问题：A 退出后，B 在登录页看到 A 的语言。
- * LanguageService 自己拦不住这种误用——它只是照吩咐做，所以这条边界得在调用点上钉。
- */
+/** 语言选择的归属由切换器决定：已登录的选择写回账户设置，未登录的才落本地存储。 */
 describe('LanguageSwitcher', () => {
   let component: LanguageSwitcher;
   let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
@@ -69,12 +63,7 @@ describe('LanguageSwitcher', () => {
     expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
   });
 
-  /**
-   * 切语言之后，文案与日期必须同时换。
-   *
-   * 日期的书写方式取自**活动语言**（见 SettingContextService.displayLocale），
-   * 与切换器改的是同一个东西；若哪天又改回从设置快照推导，这条就会红。
-   */
+  /** 切语言后文案与日期同时换：日期写法取自活动语言（见 SettingContextService.displayLocale）。 */
   it('switches text and dates together once the account write succeeds', async () => {
     setUp(true);
     const settingContext = TestBed.inject(SettingContextService);
@@ -86,10 +75,7 @@ describe('LanguageSwitcher', () => {
     expect(settingContext.displayLocale()).toBe('zh-CN');
   });
 
-  /**
-   * 先写回、成功后再切换。先切换的话，切换触发的设置页重取早于写入完成，
-   * 偏好页显示旧值（全功能端到端发现）。
-   */
+  /** 先写回、成功后再切换：先切换会让设置页的重取早于写入完成，偏好页显示旧值。 */
   it('does not switch before the account write completes', () => {
     setUp(true);
     const pending = new Subject<void>();

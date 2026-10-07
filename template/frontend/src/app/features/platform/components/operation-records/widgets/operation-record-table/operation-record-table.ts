@@ -36,15 +36,8 @@ import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto'
 //#if (!IncludeLocalization)
 
 /**
- * 不启用多语言时的英文句子表。
- *
- * **与 `public/i18n/en.json` 的 `operationRecords.actions` 是两个事实源，必须同步改。**
- * 这是模板条件裁剪的固有代价：启用多语言的场景走词条，不启用的场景没有词条文件
- * （`template.json` 在 `!IncludeLocalization` 时整个排除 `public/i18n/**`），
- * 句子只能内联。
- *
- * 不内联的话，三分之一的场景（identity／resource／standalone）会退回显示裸动作码——
- * 而句子化正是这张表改造的全部价值。
+ * 不启用多语言时的英文句子表，与 `public/i18n/en.json` 的 `operationRecords.actions` 必须同步改：
+ * 该场景不生成词条文件，不内联就只能显示裸动作码。
  */
 const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'user.created': (t) => `Created user ${t}`,
@@ -114,11 +107,9 @@ const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
 };
 
 /**
- * 失败原因的英文文案，键是失败码。
- *
- * 不启用多语言时后端没有本地化器，`failureMessage` 恒为空，常见的失败码只能在这里备英文句子；
- * 与后端 `Api/Resources/en.json` 同步：有 `{码}:Record` 的取它，否则取码本身。
- * 占位符 `{name}` 与后端同一写法，用记录的 `failureData` 填，键名区分大小写。
+ * 失败原因的英文文案，键是失败码。不启用多语言时后端 `failureMessage` 恒为空，须与后端
+ * `Api/Resources/en.json` 同步：有 `{码}:Record` 的取它，否则取码本身。`{name}` 占位符用
+ * `failureData` 填，键名区分大小写。
  */
 const FAILURE_REASONS: Record<string, string> = {
   'Auth:InvalidCredentials':
@@ -142,9 +133,8 @@ interface ActionSentence {
 
 @Component({
   selector: 'app-operation-record-table',
-  // 不启用多语言时 TranslocoDirective 被守卫剥掉，剩下的 7 项刚好缩到 98 字符（< printWidth 100），
-  // prettier 就要求折成一行；带上它又超行、要求展开。同一份源码满足不了两种生成物，
-  // 所以固定书写形态——与 default-sidebar 的同类数组一致。
+  // 不启用多语言时剩下的 7 项刚好不超 printWidth，prettier 会要求折成一行，与另一生成物冲突；
+  // 固定书写形态，与 default-sidebar 的同类数组一致。
   // prettier-ignore
   imports: [
     AppDate,
@@ -171,8 +161,7 @@ interface ActionSentence {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OperationRecordTable {
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (IncludeLocalization)
@@ -198,7 +187,6 @@ export class OperationRecordTable {
   readonly filtered = input(false);
   /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
   readonly loadError = input<string | null>(null);
-  /** 错误态里的重试。 */
   readonly retry = output<void>();
 
   readonly paginationChange = output<PaginationState>();
@@ -206,18 +194,8 @@ export class OperationRecordTable {
   private readonly tableViewport = tableViewportSignal();
 
   /**
-   * 四列：时间 ｜ 操作人 ｜ 操作内容 ｜ 结果。
-   *
-   * **操作内容是一句话，且句子里不含操作人**——操作人独立成列。二者若都带人名，
-   * 同一个名字会在一行里印两遍。Django admin 的 object_history 正是这个形态
-   * （Date/time、User、Action，而 Action 列写的是 "Changed name and email."）。
-   *
-   * **保留"结果"列而不是把成败写进句子**：NIST AU-3 与 OWASP 都把 success/fail
-   * 列为审计记录的必需内容，写进句子就没法独立筛选与告警。
-   *
-   * 目标标识、授权依据、链路标识不占列——它们只在追查时有人看，进行展开区。
-   *
-   * **没有操作列**：本页只读，一个行操作也没有。
+   * 四列：时间、操作人、操作内容、结果。句子不含操作人，避免同一名字在一行出现两遍；成败独立成列
+   * 才能单独筛选与告警（NIST AU-3）。目标标识、授权依据、链路标识放展开区；本页只读，没有操作列。
    */
   protected readonly columns: ColumnDef<AppTableFeatures, OperationRecordOutputDto>[] = [
     {
@@ -279,24 +257,15 @@ export class OperationRecordTable {
   }
 
   /**
-   * 操作人；都缺失时为 undefined，模板显示"匿名"。名字可能缺失：宿主没下发 name claim 时只留得下标识。
-   *
-   * `actorIsTarget` 为真时回落到目标名——登录这类自证动作发生在认证之前，
-   * 请求主体当时确实是匿名的（见 `AuthAppService` 的说明），"什么人"由目标承载。
-   * **这个判定来自服务端**：此处不按动作码前缀猜，否则前端就复制了一份服务端的动作登记；
-   * 更要紧的是 `auth.login.failed` 的目标是调用方提交的用户名，未经验证。
+   * 操作人；都缺失时为 undefined，模板显示"匿名"。宿主未下发 name claim 时只有标识。
+   * `actorIsTarget`（服务端判定）为真时回落到目标名，前端不按动作码前缀猜。
    */
   actorOf(record: OperationRecordOutputDto): string | undefined {
     const fromTarget = record.actorIsTarget ? record.targetName : undefined;
     return record.actorName ?? record.actorId ?? fromTarget;
   }
 
-  /**
-   * 每条记录的操作句子与失败原因，按记录 Id 取。
-   *
-   * 句子要在词条缺失时降级为裸码，模板里的 t 表达不了"缺词条"，所以在这里判定取哪条词条；
-   * 本地化形态下句子本身由模板经 t 取，词条到达与语言切换时随之更新。
-   */
+  /** 每条记录的操作句子与失败原因，按记录 Id 取；模板里的 t 表达不了"缺词条"，因此在这里选词条。 */
   protected readonly recordTexts = computed(
     () =>
       new Map(
@@ -308,13 +277,9 @@ export class OperationRecordTable {
   );
 
   /**
-   * 把一条记录渲染成「操作内容」那一句话：给出词条键与参数，或（未登记时）原样的文字。
-   *
-   * **整句进语言包，绝不在代码里拼片段。** Discourse 的中文译文把占位符顺序整个翻转
-   * （en 是"动词+宾语+时间"，zh 是"时间+动词+宾语"），任何 join 片段的写法在那里必然出错。
-   *
-   * 目标三级降级：有名字用名字 → 只有标识用截断标识 → 无目标（`-`）走 `actionsNoTarget` 变体。
-   * 动作码未登记时原样显示裸码：造一个假句子比显示机器码更糟——读者会以为自己看懂了。
+   * 「操作内容」那句话：给出词条键与参数，未登记时给原样文字。整句进语言包，不拼片段（各语言
+   * 语序不同）。目标降级：名称 → 截断的标识 → 无目标（`-`）走 `actionsNoTarget`；未登记的动作码
+   * 显示裸码，不造假句子。
    */
   private actionSentence(record: OperationRecordOutputDto): ActionSentence {
     //#if (IncludeLocalization)
@@ -325,7 +290,6 @@ export class OperationRecordTable {
       return { key: `operationRecords.actionsNoTarget.${record.action}`, params: {}, text: '' };
     }
 
-    // 未登记的动作码（下游业务自定义、尚未补词条）原样显示裸码
     return textAt(this.actionTexts(), record.action) === undefined
       ? { key: null, params: {}, text: record.action }
       : {
@@ -347,13 +311,7 @@ export class OperationRecordTable {
     //#endif
   }
 
-  /**
-   * 目标的显示形态。
-   *
-   * 授权阶段被拒的记录没有名字，这是**正确**的：那条路径上调用方正因无权访问该目标而被拒，
-   * 回填名字等于把他无权查看的内容写进他能读到的记录。此时退到标识，并截断——
-   * 一个 36 位 GUID 塞进句子会把整行撑开。
-   */
+  /** 目标的显示形态：无名称（如授权阶段被拒）时退到截断的标识，避免 36 位 GUID 撑开整行。 */
   targetDisplay(record: OperationRecordOutputDto): string {
     if (record.targetName) {
       return record.targetName;
@@ -361,11 +319,7 @@ export class OperationRecordTable {
     return record.targetId.length > 12 ? `${record.targetId.slice(0, 8)}…` : record.targetId;
   }
 
-  /**
-   * 失败原因：显示后端按当前语言渲染的 `failureMessage`，取不到时回落到原始码。
-   *
-   * 审计专用的措辞与参数（登录失败次数、锁定时长）也由后端的 `{码}:Record` 词条给出，前端不再备词条。
-   */
+  /** 失败原因：显示后端按当前语言渲染的 `failureMessage`，取不到时回落到原始码。 */
   private failureReason(record: OperationRecordOutputDto): string | null {
     if (!record.failureCode) {
       return null;

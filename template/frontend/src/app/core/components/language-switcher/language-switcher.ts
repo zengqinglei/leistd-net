@@ -18,12 +18,7 @@ interface LangOption {
   active: boolean;
 }
 
-/**
- * 语言切换器：圆形图标按钮，点击弹出下拉菜单（Spartan dropdown-menu，模板驱动），
- * 当前语言项高亮并显示勾选。
- *
- * 复用于各布局右上角操作区（default-header、landing、login、register）。
- */
+/** 语言切换器：图标按钮弹出下拉菜单，当前语言打勾；用于各布局右上角操作区。 */
 @Component({
   selector: 'app-language-switcher',
   standalone: true,
@@ -79,10 +74,8 @@ export class LanguageSwitcher {
   });
 
   select(lang: Lang): void {
-    // 已登录的选择属于账户：先写回设置，成功后再切换，与偏好页的顺序一致。
-    // 先切换再写回的话，切换会触发设置页重新取快照，那次读取早于写入完成，
-    // 偏好页就显示旧值；写入失败时界面与账户偏好也会从此分叉。
-    // 会话建立时以账户设置为准（见 SessionContextService），所以不写回的话这里切过的语言下次登录就被覆盖。
+    // 已登录的选择属于账户：先写回设置、成功后再切换，否则设置页的重取会早于写入完成；
+    // 会话建立时以账户设置为准，不写回的话下次登录就被覆盖。
     if (this.authService.isAuthenticated()) {
       this.settingService
         .setForCurrentUser({ name: SETTINGS.display.language, value: lang })

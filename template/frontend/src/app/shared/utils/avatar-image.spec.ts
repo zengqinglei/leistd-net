@@ -7,10 +7,8 @@ import {
 } from './avatar-image';
 
 /**
- * 画一张指定尺寸的 PNG 当作用户选的原图。
- *
- * 用同步的 toDataURL 而不是 toBlob：Chromium 在主线程上按空闲时间渐进编码 PNG，
- * 用例连续执行时主线程少有空闲，最坏约 6.7s 才回调，超过 Vitest 默认的 5s 超时。
+ * 画一张指定尺寸的 PNG 当作原图。用同步的 toDataURL：toBlob 在主线程繁忙时可能超过 Vitest
+ * 默认 5s 超时。
  */
 function pngFile(
   width: number,

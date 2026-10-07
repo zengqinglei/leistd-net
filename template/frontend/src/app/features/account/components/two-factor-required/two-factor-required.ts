@@ -21,10 +21,8 @@ import { RecoveryCodes } from '../recovery-codes/recovery-codes';
 import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
 
 /**
- * 组织要求两步验证而本人尚未启用时的设置页（受限会话只能到这里）。
- *
- * 单独成页而不是带去个人设置：受限会话调不了设置之外的接口，放进主布局的话，
- * 布局自带的通知、菜单等请求会一路报错。启用成功后服务端换发正常会话，这里重建会话上下文再进入应用。
+ * 组织要求两步验证而本人尚未启用时的设置页：受限会话调不了设置之外的接口，因此不进主布局；
+ * 启用后重建会话上下文再进入应用。
  */
 @Component({
   selector: 'app-two-factor-required',

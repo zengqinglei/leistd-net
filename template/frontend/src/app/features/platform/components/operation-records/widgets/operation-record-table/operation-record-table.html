@@ -83,8 +83,7 @@
                                   [class.rotate-90]="row.getIsExpanded()"
                                 />
                               </button>
-                              <!-- 操作内容是一句话：句子整条来自语言包，**不含操作人**（它独立成列，
-                                 否则同一个名字一行印两遍）。未登记的动作码降级为裸码，见 actionSentence。 -->
+                              <!-- 句子整条来自语言包，不含操作人（独立成列）；未登记的动作码降级为裸码，见 actionSentence。 -->
                               @if (recordTexts().get(row.original.id)?.sentence; as sentence) {
                                 <span class="text-sm text-foreground wrap-anywhere sm:truncate">{{
                                   sentence.key ? t(sentence.key, sentence.params) : sentence.text
@@ -99,8 +98,7 @@
                                   t('operationRecords.outcome.succeeded')
                                 }}</span>
                               } @else {
-                                <!-- 被拒绝的操作是这张表最该被一眼看到的行：destructive 变体让它在整列里跳出来。
-                                   与用户/租户列表的状态徽章一样只用文字与配色，不嵌图标。 -->
+                                <!-- 被拒绝的操作用 destructive 变体突出；与其他列表的状态徽章一样只用文字与配色。 -->
                                 <span hlmBadge variant="destructive">{{
                                   t('operationRecords.outcome.failed')
                                 }}</span>
@@ -112,8 +110,7 @@
                               <span class="text-sm text-foreground truncate">{{
                                 actorOf(row.original) ?? t('operationRecords.table.unknownActor')
                               }}</span>
-                              <!-- 模拟登录提示与操作人名同格显示：actorName 是被模拟的租户用户，
-                                 真正按下按钮的是这里的人。只显示前者会把责任指向一个什么都没做的人。 -->
+                              <!-- 模拟登录时与操作人名同格显示真实操作人，否则责任会指向被模拟的用户。 -->
                               @if (row.original.impersonatorName; as name) {
                                 <span
                                   class="flex items-center gap-1 text-xs text-warning truncate"
@@ -166,8 +163,7 @@
                               }
                             </dd>
                           }
-                          <!-- 目标标识常驻展开区：它不再占列（名字已并进句子），
-                             但"对谁做的"这一问的精确答案只在标识里。 -->
+                          <!-- 目标标识常驻展开区："对谁做的"的精确答案。 -->
                           <dt class="text-muted-foreground">
                             {{ t('operationRecords.table.colTarget') }}
                           </dt>
@@ -200,8 +196,7 @@
                               }}
                             </dd>
                           }
-                          <!-- 授权依据常驻展开区：它回答"凭什么"，是审计四问之外的第五问，
-                             但只在追查时才有人看，不值得占一列。 -->
+                          <!-- 授权依据常驻展开区：回答"凭什么"，只在追查时看，不占列。 -->
                           <dt class="text-muted-foreground">
                             {{ t('operationRecords.table.colBasis') }}
                           </dt>

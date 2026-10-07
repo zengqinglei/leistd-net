@@ -266,7 +266,7 @@
                           }
                           @case ('actions') {
                             <!-- 操作列（7 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。
-                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
+                               规则见 docs/standards/frontend-ui.md §1.1。 -->
                             <div class="flex items-center justify-end gap-1">
                               @if (canUpdate()) {
                                 <button
@@ -523,7 +523,7 @@
       }
     </div>
 
-    <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
+    <!-- 分页栏独立于表格卡片，置于其下方。 -->
     @if (totalCount() > 0) {
       <app-table-paginator
         [labels]="{

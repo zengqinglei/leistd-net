@@ -17,11 +17,7 @@ import { SettingService } from '../../../../../../core/settings/setting-service'
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
 
-/**
- * 「邮件发送」面板底部：用当前生效的参数发一封测试邮件。
- *
- * 失败时把服务端给出的原因原样显示（连不上、认证失败、发件地址被拒），管理员据此改参数。
- */
+/** 「邮件发送」面板底部：用当前生效的参数发一封测试邮件，失败时原样显示服务端给出的原因。 */
 @Component({
   selector: 'app-email-test',
   // prettier-ignore

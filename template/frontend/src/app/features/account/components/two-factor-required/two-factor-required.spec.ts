@@ -18,12 +18,7 @@ import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
 
 import type { Mock } from 'vitest';
 
-/**
- * 组织强制两步验证时的受限会话页：设置完成 → 展示恢复码 → 用换发的正常会话进入应用。
- *
- * 顺序错了的后果：恢复码没给人看就跳走，人再也拿不到；会话上下文没重建就进主布局，
- * 布局的请求还带着受限会话、一路报错。
- */
+/** 组织强制两步验证时的受限会话页：设置完成 → 展示恢复码 → 用换发的正常会话进入应用。 */
 describe('TwoFactorRequired', () => {
   let fixture: ComponentFixture<TwoFactorRequired>;
   let auth: { loadUser: Mock; logout: Mock };

@@ -1,15 +1,8 @@
 import { AppDate, formatAppDate, parseAppCalendarDate } from './app-date-pipe';
 
 /**
- * 时区换算与书写方式。
- *
- * 时区那部分是**Angular 自带 `date` 管道做不到的事**：它的时区参数只接受固定偏移，
- * 传 IANA 名会静默回落到浏览器时区——界面照常渲染，设置却没生效。这里的断言就是
- * 那条静默失败的哨兵：真值换成 `date` 管道会立刻变红。
- *
- * 书写方式由 **locale** 决定，不由时区决定；精度由**槽位**决定，不由用户偏好决定。
- * 因此断言按"哪个维度该管什么"分组，而不是逐个 locale 抄一遍 ICU 输出——
- * 抄输出的用例会在 CLDR 数据更新时集体变红，却查不出任何真问题。
+ * 时区换算与书写方式。时区断言是 Angular `date` 管道静默回落到浏览器时区的哨兵；书写方式按
+ * locale、精度按槽位分组断言，不逐个 locale 抄 ICU 输出（CLDR 更新会让它们集体变红）。
  */
 describe('AppDate', () => {
   const pipe = new AppDate();

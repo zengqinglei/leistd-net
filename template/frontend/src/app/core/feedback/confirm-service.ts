@@ -8,7 +8,6 @@ import { firstValueFrom } from 'rxjs';
 import { ConfirmContext, ConfirmDialog } from './confirm-dialog';
 
 export interface ConfirmOptions {
-  /** 主体提示文本。 */
   message: string;
   /** 标题（默认「请确认」）。 */
   header?: string;
@@ -21,11 +20,7 @@ export interface ConfirmOptions {
 }
 
 /**
- * 确认对话框服务。
- *
- * Spartan 无服务式 confirm（alert-dialog 是声明式）。这里基于 `HlmDialogService`
- * 动态打开通用 confirm 组件，返回 `Promise<boolean>`（确认 = true）。
- *
+ * 确认对话框服务：基于 `HlmDialogService` 动态打开通用 confirm 组件，确认时返回 `true`。
  * 用法：`if (await confirm.open({ message, variant: 'destructive' })) { ... }`。
  */
 @Injectable({ providedIn: 'root' })

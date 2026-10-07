@@ -11,12 +11,8 @@ import { provideTranslocoTesting } from './core/i18n/transloco.testing';
 import { LanguageService, provideLanguageInitializer } from './core/services/language-service';
 
 /**
- * 真实启动链：语言初始化器经应用的整条拦截器链（{@link appInterceptors}）与 HTTP 加载器取首帧词条。
- *
- * 初始化器创建 LanguageService，它立即加载初始语言；请求要过拦截器，拦截器若在构造期注入
- * 依赖 LanguageService 的服务（如 SessionContextService），就形成循环依赖（NG0200）——
- * 词条请求发不出去，整个应用停在启动页（全功能端到端发现）。LanguageService 的其余用例都用可控加载器、
- * 不走 HTTP，覆盖不到。
+ * 真实启动链：语言初始化器经整条拦截器链（{@link appInterceptors}）与 HTTP 加载器取首帧词条。拦截器若在
+ * 构造期注入依赖 LanguageService 的服务就会循环依赖（NG0200），应用停在启动页。
  */
 describe('app interceptors', () => {
   afterEach(() => localStorage.removeItem(LanguageService.STORAGE_KEY));

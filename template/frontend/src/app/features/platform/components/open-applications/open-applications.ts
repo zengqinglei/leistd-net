@@ -163,13 +163,7 @@ export class OpenApplications {
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);
 
-  /**
-   * 弹窗可见性变化的唯一入口。
-   *
-   * 关闭时连带清空 secret 与标题：留着的话，下一次误打开弹窗会显示上一次的 secret。
-   * 这是状态正确性，不是"擦除内存明文"——JavaScript 字符串无法可靠擦除，
-   * 服务端的保证是"一次生成、一次返回、以后不可读取"。
-   */
+  /** 弹窗可见性变化的唯一入口：关闭时清空 secret 与标题，免得下次打开显示上一次的 secret。 */
   onSecretDialogVisibleChange(visible: boolean): void {
     if (!visible) {
       this.secretValue.set('');

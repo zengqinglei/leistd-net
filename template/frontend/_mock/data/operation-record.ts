@@ -1,10 +1,6 @@
 /**
- * 操作记录样本数据。
- *
- * 刻意混入三类真实世界里最容易出问题的行，让前端在联调前就撞上它们：
- *   - 被拒绝的操作（`Failed`）——这张表的价值有一半在这里；
- *   - 模拟登录产生的行（`impersonatorName` 有值）——操作人与真正按下按钮的人不是同一个；
- *   - 非自然人主体（`client:` / `job:` 前缀的 actorId）——它们没有 GUID，也没有头像。
+ * 操作记录样本数据，刻意包含被拒绝的操作、模拟登录产生的行与非自然人主体
+ * （`client:` / `job:` 前缀的 actorId）。
  */
 export interface MockOperationRecord {
   id: string;
@@ -26,11 +22,7 @@ export interface MockOperationActionDefinition {
   severity: 'Info' | 'Notice' | 'Critical';
 }
 
-/**
- * 样本记录用到的动作定义，取自后端登记表的同名条目。
- *
- * 筛选项由它下发、按类别筛选由它展开成动作码——记录本身不带类别，与后端一样靠动作码查定义。
- */
+/** 样本用到的动作定义，取自后端登记表的同名条目；筛选项与按类别筛选都靠它，记录本身不带类别。 */
 export const OPERATION_ACTION_DEFINITIONS: MockOperationActionDefinition[] = [
   { code: 'user.created', category: 'account', severity: 'Info' },
   { code: 'user.updated', category: 'account', severity: 'Info' },

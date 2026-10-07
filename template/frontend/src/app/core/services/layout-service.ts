@@ -3,11 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map, startWith } from 'rxjs/operators';
 
-/**
- * 布局服务：页面标题 + 当前区段（平台/工作区）派生状态。
- *
- * 本服务只维护页面标题与当前区段；侧边栏状态由 Spartan 的 `HlmSidebarService` 统一管理。
- */
+/** 布局服务：页面标题与当前区段（平台/工作区）派生状态；侧栏状态由 Spartan 的 `HlmSidebarService` 管理。 */
 @Injectable({
   providedIn: 'root',
 })
@@ -15,12 +11,8 @@ export class LayoutService {
   private readonly router = inject(Router);
 
   /**
-   * 页面标题：面包屑末级与浏览器标签页标题（见根组件）的唯一来源。各页进入时设置本页标题：
-   * 多语言下在构造函数里用 `effect()` 跟随当前语言，单语言下直接写入；它只改前端展示状态，
-   * 不涉及服务端或会话，放构造函数或 `ngOnInit` 都符合规范。
-   *
-   * 离开带页头（DefaultHeader）的布局时由页头销毁清空，认证页因此只显示应用名；
-   * 新增不含 DefaultHeader 的布局时，须自己在离开时清空，否则上一页的标题会残留在标签页上。
+   * 页面标题：面包屑末级与浏览器标签页标题的唯一来源，各页进入时设置。离开带 DefaultHeader 的布局时
+   * 由页头销毁清空；新增不含它的布局须自己在离开时清空。
    */
   // 初值为空，不给字面量：占位文案在任何语言下都不正确，多语言变体下会先闪一下英文。
   // 空标题时 default-header 整个末级（含分隔符）不渲染，因此不会留下断裂的面包屑。

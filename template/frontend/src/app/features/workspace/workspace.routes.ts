@@ -23,10 +23,7 @@ export const WORKSPACE_ROUTES: Routes = [
       import('./components/dashboard/workspace-dashboard').then((m) => m.WorkspaceDashboard),
   },
   {
-    // 个人设置（当前用户自己）挂在 workspace：platform 的父路由要求管理类权限
-    // （见 PLATFORM_ENTRY_PERMISSIONS），普通登录用户进不去，而个人设置是每个人的
-    // 个人数据，只要求认证即可。系统默认值与策略是另一件事，在 /platform/settings。
-    // 面板是子路由：面板名进 URL，刷新、分享与头像菜单直达都落在同一面板。
+    // 个人设置挂在 workspace，只要求认证（platform 父路由要求管理类权限）；面板是子路由，面板名进 URL。
     path: 'settings',
     //#if (IncludeLocalization)
     providers: [provideTranslocoScope('settings')],

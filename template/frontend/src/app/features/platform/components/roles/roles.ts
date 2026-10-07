@@ -77,12 +77,7 @@ const ROLE_LIST_RESOURCE = 'roles';
 const ROLES_CHANGED_EVENT = 'Roles.Changed';
 //#endif
 
-/**
- * 角色管理页。
- *
- * 角色数据以 API 为唯一数据源，新建的角色立即可用于用户分配。
- * 列表状态（分页、排序、关键字）落在 URL 查询参数上，刷新与前进后退均可复原。
- */
+/** 角色管理页。列表状态（分页、排序、关键字）落在 URL 查询参数上。 */
 @Component({
   selector: 'app-roles',
   imports: [
@@ -213,11 +208,7 @@ export class Roles {
   }
   //#if (IncludeRealTime)
 
-  /**
-   * 角色列表在别处被改（另一位管理员、另一个标签页）时自动刷新。
-   *
-   * 订阅本作用域的角色列表资源；推送只是"该刷新了"的提示，列表内容仍经受权限保护的查询接口获取。
-   */
+  /** 角色列表在别处被改时自动刷新：推送只是刷新提示，内容仍经受权限保护的查询接口获取。 */
   private followRoleListChanges(): void {
     const resourceKey = realtimeResourceKey(
       ROLE_LIST_RESOURCE,

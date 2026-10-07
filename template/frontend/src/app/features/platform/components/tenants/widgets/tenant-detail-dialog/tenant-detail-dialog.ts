@@ -49,21 +49,11 @@ interface ConnectionEditorModel {
 }
 
 /**
- * 租户详情。
+ * 租户详情。标识来自列表已有的租户对象；数据库连接另行请求，失败只让连接段降级。
  *
- * 分两段：**标识**来自列表已有的租户对象，打开即可显示；**数据库连接**要额外请求连接列表。
- * 两段的失败面因此分开——连接请求失败只让连接段降级，标识段照常呈现：
- * 一个副请求失败就把整个详情打空，会让人以为租户本身出了问题。
- *
- * 连接是**一张表**而不是一个标志位：一个租户在多个服务各可以登记一条，名字就是使用方
- * DbContext 的连接名。**一条都没有即该租户不单独分库**——这一档只能靠列表为空看出来，
- * 所以空列表必须显式写一句话，否则"故意不分库"与"漏登记"在界面上长得一模一样。
- *
- * 连接串只写：从不预填、也不从任何响应里读回来（见 DTO 说明）。
- *
- * 连接接口要求 `App.Tenants.Update`，所以 {@link canManage} 为假时**不发这些请求**、
- * 也不渲染连接段与编辑按钮：发一个必然 403 的请求只会在控制台留下红字，
- * 再配一个点不动的按钮，比直接不显示更糟。
+ * 连接是一张表：每个服务可登记一条，名字是使用方 DbContext 的连接名；一条都没有即不单独分库，
+ * 空列表须显式说明，否则与漏登记无法区分。连接串只写，从不预填或读回。{@link canManage} 为假时
+ * 不发连接请求（需要 `App.Tenants.Update`），也不渲染连接段与编辑按钮。
  */
 @Component({
   selector: 'app-tenant-detail-dialog',
@@ -92,11 +82,8 @@ export class TenantDetailDialog {
   readonly canManage = input(false);
 
   /**
-   * 请求编辑当前租户。
-   *
-   * 是 `output` 而不是 `model`：这里表达的是**动作**，不是需要双向同步的状态。
-   * 用 model 时连续两次编辑同一个租户，第二次 `set` 拿到的是同一个对象引用，
-   * signal 判等后不再发出变化——详情关掉了，编辑框却不会打开。
+   * 请求编辑当前租户。用 `output` 而非 `model`：连续两次编辑同一租户时，`set` 同一引用
+   * 不会触发变化，编辑框不会打开。
    */
   readonly edit = output<TenantOutputDto>();
 
@@ -115,15 +102,8 @@ export class TenantDetailDialog {
   protected readonly connections = signal<TenantConnectionDto[] | null>(null);
 
   /**
-   * 能不能现在登记连接。
-   *
-   * 分两档，判据是**该租户此前有没有任意一条登记**：
-   * 一条都没有时，这一条会把它从"不分库"改成"分库"——数据落点变了，而它现有的数据
-   * （含租户管理员）都在各服务自己配置的库里，登记连接不会把它们搬过去，后端因此对
-   * **在用**租户以 409 拒绝。已经分库的租户补一个此前没有的名字不在此列：那个服务本来
-   * 就是失败关闭的，回落库里没有它的数据，补登是修复动作。
-   *
-   * 这里把后端的判据照搬到界面上，是为了把"点了才报错"变成"看得见为什么点不了"。
+   * 能否现在登记连接，照搬后端判据：此前没有任何登记时，新登记会把租户从"不分库"改成"分库"，
+   * 现有数据不会搬过去，后端对在用租户以 409 拒绝；已分库的租户补登新名字不受限。
    */
   protected readonly canAddConnection = computed(() => {
     const list = this.connections();
@@ -171,9 +151,7 @@ export class TenantDetailDialog {
 
       const subscription = this.loadConnections(tenant.id);
 
-      // 关闭弹窗或换到另一个租户时，取消上一次的连接查询。
-      // 不取消的话：打开 A、关掉、打开 B，A 的慢响应会在 B 之后到达，
-      // 界面就会把 B 的身份信息配上 A 的连接列表——两个租户的信息拼在一屏。
+      // 关闭或换租户时取消上一次查询，否则 A 的慢响应会配到 B 的标识上。
       onCleanup(() => subscription.unsubscribe());
     });
 
@@ -237,12 +215,7 @@ export class TenantDetailDialog {
     this.editorModel.set({ name: '', connectionString: '' });
   }
 
-  /**
-   * 提交登记或改连接串。
-   *
-   * 连接串留空时这里不做"沿用当前值"：`PUT` 是整串覆盖，后端没有"不传即保留"这一档，
-   * 静默跳过提交会让人以为已经保存。所以留空按必填报错、保存按钮禁用，让人看得见没提交。
-   */
+  /** 提交登记或改连接串。`PUT` 整串覆盖，没有"不传即保留"，因此连接串留空按必填报错。 */
   submitEditor(): void {
     const tenant = this.tenant();
     if (!tenant || this.editorMode() === 'idle' || this.connectionForm().invalid()) {

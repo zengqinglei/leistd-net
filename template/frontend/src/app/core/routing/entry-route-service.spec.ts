@@ -11,12 +11,8 @@ import { Router, provideRouter } from '@angular/router';
 import { EntryRouteService } from './entry-route-service';
 
 /**
- * 「当前在哪条路由上」的读法。
- *
- * 这个服务存在的全部理由就是 `Router.url` 不总是准：启动流跑在初始导航之前，那时它一律是 `/`。
- * 所以这里断言的重点是地址栏（TestBed 的地址栏由 `MOCK_PLATFORM_LOCATION_CONFIG` 给出）——
- * 路径与哈希两种路由策略都要覆盖，并且要在应用初始化器里读一次，
- * 否则换回 `Router.url` 或只认其中一种策略都不会有人发现。
+ * 「当前在哪条路由上」的读法：断言地址栏（由 `MOCK_PLATFORM_LOCATION_CONFIG` 给出），覆盖路径与
+ * 哈希两种策略，并在应用初始化器里读一次（那时 `Router.url` 一律是 `/`）。
  */
 describe('EntryRouteService', () => {
   function configure(

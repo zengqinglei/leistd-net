@@ -3,12 +3,7 @@ import type { ColumnDef, ColumnVisibilityState, RowData } from '@tanstack/table-
 
 export type TableViewport = 'mobile' | 'tablet' | 'desktop';
 
-/**
- * 行操作列的列元数据：右侧吸附、不参与排序与隐藏。
- *
- * 四个平台表格共用同一份。class 串各写一遍时会各自漂移，
- * 表现是吸附列的背景/边框在不同页面对不上——那种不一致没人会当成缺陷去修。
- */
+/** 行操作列的列元数据：右侧吸附、不参与排序与隐藏；四个平台表格共用，避免样式各自漂移。 */
 export const ACTIONS_COLUMN_META: AppColumnMeta = {
   priority: 'primary',
   locked: true,
@@ -19,12 +14,9 @@ export const ACTIONS_COLUMN_META: AppColumnMeta = {
 };
 
 /**
- * 行的主列（名称、标识）的列元数据：始终显示，不参与隐藏。
- *
- * 列按优先级逐档收起，到最窄一档（`TableFit` 在容器上写 `data-table-fit="mobile"`）仍放不下时，
- * 只剩不换行的长名称撑宽表格，吸附的操作列就会压住被横向滚走的状态列。此时主列占满剩余宽度，
- * 单元格内容包一层 `TITLE_CONTENT_CLASS`，让长名称截断而不是撑宽。更宽的档位不截断：
- * 那里放不下应当先收列，主列可压缩会让 `TableFit` 永远量不到溢出。
+ * 行的主列（名称、标识）的列元数据：始终显示，不参与隐藏。到最窄一档（`data-table-fit="mobile"`）
+ * 主列占满剩余宽度，内容包一层 `TITLE_CONTENT_CLASS` 截断长名称，免得吸附的操作列压住其他列；
+ * 更宽的档位不截断，否则 `TableFit` 量不到溢出。
  */
 export const TITLE_COLUMN_META: AppColumnMeta = {
   priority: 'primary',

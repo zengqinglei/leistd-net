@@ -30,10 +30,8 @@ import { AccountService } from '../../services/account-service';
 import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 
 /**
- * 登录第二步：输入身份验证器应用上的验证码，或手机不在身边时输入恢复码。
- *
- * 通过后服务端下发会话，由登录页接着建立会话上下文与跳转；
- * 凭据过期或错误次数用完时回到密码那一步。
+ * 登录第二步：输入身份验证器验证码或恢复码；通过后由登录页建立会话上下文，凭据过期或次数用完时
+ * 回到密码那一步。
  */
 @Component({
   selector: 'app-two-factor-challenge',

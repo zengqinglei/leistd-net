@@ -8,12 +8,7 @@ import {
   ReplacePermissionGrantsInputDto,
 } from '../../../shared/dtos/permission.dto';
 
-/**
- * 权限定义与授予的管理端接口。
- *
- * 权限树完全由后端定义生成，前端不硬编码任何权限列表；保存以主体为单位一次性替换，
- * 并携带版本号做乐观并发。
- */
+/** 权限定义与授予的管理端接口：权限树由后端生成，保存以主体为单位一次性替换并携带版本号。 */
 @Injectable({ providedIn: 'root' })
 export class PermissionManagementService {
   private readonly http = inject(HttpClient);

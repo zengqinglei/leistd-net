@@ -16,10 +16,7 @@ const TYPE_ICONS: Readonly<Record<string, string>> = {
   //#endif
 };
 
-/**
- * 通知管理服务：通知列表/已读（HTTP）+ SignalR 实时推送桥接。
- * 铃铛面板使用此服务获取数据。
- */
+/** 通知管理：通知列表与已读（HTTP）+ SignalR 实时推送桥接。 */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly http = inject(HttpClient);
@@ -28,10 +25,8 @@ export class NotificationService {
   /** 通知列表（与 SignalR 推送共享同一信号）。 */
   readonly notifications = this.signalR.notifications;
 
-  /** 未读数量。 */
   readonly unreadCount = this.signalR.unreadCount;
 
-  /** 加载状态。 */
   readonly loading = signal(false);
 
   /**
@@ -46,9 +41,7 @@ export class NotificationService {
 
     await this.loadNotifications();
 
-    // 加载历史期间发生了主体切换：这一轮 init 属于上一个用户，不能再去建连。
-    // 服务端 Cookie 此刻可能仍然有效，建成的连接会把 principal 定在上一个人身上，
-    // 下一个用户的 connect() 见到活连接就直接复用了它。
+    // 加载期间主体已切换：这一轮属于上一个用户，不再建连，否则连接会以上一个人的身份被复用。
     if (!this.signalR.isCurrentGeneration(generation)) {
       return;
     }
@@ -56,7 +49,6 @@ export class NotificationService {
     await this.signalR.connect();
   }
 
-  /** 加载通知列表。 */
   async loadNotifications(maxCount = 50): Promise<void> {
     // 记下发起请求时的认证代际：请求在途时登出/换人登录，响应回来仍会写同一个
     // 共享 signal——那就是把上一个用户的历史通知落到下一个人的界面上。
@@ -103,7 +95,6 @@ export class NotificationService {
     }
   }
 
-  /** 标记单条已读。 */
   async markAsRead(notificationId: string): Promise<void> {
     const generation = this.signalR.authGeneration;
     await lastValueFrom(this.http.put(`/api/v1/notifications/${notificationId}/read`, {}));

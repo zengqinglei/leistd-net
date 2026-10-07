@@ -9,7 +9,6 @@
     (submit)="$event.preventDefault(); onSubmit()"
   >
     <div class="flex flex-col gap-6">
-      <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
       <div class="flex items-center gap-4 border-b border-border pb-5">
         <!-- 头像上传：无图时常驻居中图标；有图时 hover / 键盘 focus-visible 显示、触屏（pointer-coarse）常驻。 -->
         <!-- 选完即上传：头像有自己的接口，不随下面的表单保存，也不被「撤销修改」撤回 -->
@@ -21,7 +20,7 @@
           @if (hasAvatarImage()) {
             <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
           } @else {
-            <!-- 无图占位：常驻居中上传图标即完整语义，不再叠加首字母。 -->
+            <!-- 无图占位：常驻居中上传图标即完整语义。 -->
             <span class="block h-full w-full bg-primary/10"></span>
           }
 
@@ -86,7 +85,6 @@
       </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <!-- Username -->
         <div hlmField>
           <label hlmFieldLabel for="profile-username">{{ t('account.profile.username') }}</label>
           <input
@@ -104,7 +102,6 @@
           }
         </div>
 
-        <!-- Email -->
         <div hlmField>
           <label hlmFieldLabel for="profile-email">{{ t('account.profile.email') }}</label>
           <input
@@ -195,7 +192,6 @@
 <!--#endif-->
         </div>
 
-        <!-- DisplayName -->
         <div hlmField>
           <label hlmFieldLabel for="profile-display-name">{{
             t('account.profile.displayName')
@@ -214,7 +210,6 @@
           }
         </div>
 
-        <!-- Phone Number -->
         <div hlmField>
           <label hlmFieldLabel for="profile-phone-number">{{
             t('account.profile.phoneNumber')

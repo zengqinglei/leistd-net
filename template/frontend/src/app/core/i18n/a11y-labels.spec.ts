@@ -11,11 +11,8 @@ import { provideAppA11yLabels } from './a11y-labels';
 import { provideTranslocoTesting } from './transloco.testing';
 
 /**
- * `libs/ui` 组件内部的读屏文案必须跟着语言走。
- *
- * 回归点：接线（`provideAppA11yLabels`）与消费（组件模板读令牌）是两处，
- * 一次 spartan 升级只改掉了后者——两个组件把读屏名改回写死英文，接线还在、却没人读它。
- * 界面上看不出来（`sr-only` 不可见），所以判据只能是"渲染出的读屏名不是英文默认值"。
+ * `libs/ui` 组件内部的读屏文案必须跟着语言走。接线（`provideAppA11yLabels`）与消费（组件模板读令牌）
+ * 是两处，读屏名不可见，判据是渲染出的读屏名不是英文默认值。
  */
 const translations: Record<string, Record<string, string>> = {
   en: { 'common.close': 'Close', 'layout.sidebar.toggle': 'Toggle Sidebar' },

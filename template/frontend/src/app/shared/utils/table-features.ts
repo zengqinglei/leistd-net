@@ -10,9 +10,7 @@ import {
 
 export type TableColumnPriority = 'primary' | 'secondary' | 'tertiary';
 
-/**
- * 应用表格的列元数据，通过 feature 类型槽限定可用属性。
- */
+/** 应用表格的列元数据，通过 feature 类型槽限定可用属性。 */
 export interface AppColumnMeta {
   locked?: boolean;
   priority: TableColumnPriority;
@@ -34,12 +32,8 @@ const features = tableFeatures({
 });
 
 /**
- * 预绑定应用 feature 集合的表格 hook。
- *
- * 行展开的两项默认值：
- * - 每一行都可展开：展开内容是本行被隐藏的列，不是子行（默认只有带子行的行才能展开）；
- * - 数据换了不收起：翻页、排序、刷新都会换一批数据，默认会清空展开状态。展开按行 id 记，
- *   刷新后同一行仍保持展开；因此各表格须用 `getRowId` 给出实体 id，默认的行下标会让展开跟着位置走。
+ * 预绑定应用 feature 集合的表格 hook。行展开改两项默认值：每行都可展开（内容是被隐藏的列），
+ * 换数据不收起（按行 id 记）；各表格须用 `getRowId` 给出实体 id。
  */
 export const { injectAppTable } = createTableHook({
   features,

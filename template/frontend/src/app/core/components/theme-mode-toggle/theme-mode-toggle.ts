@@ -11,13 +11,7 @@ import { englishText } from '../../../shared/utils/english-text';
 //#endif
 import { ThemeService } from '../../services/theme-service';
 
-/**
- * 主题模式切换按钮：单击在 亮 → 跟随系统 → 暗 三态间循环，图标反映当前模式。
- *
- * 按 Spartan 主题体系（CSS 变量），不提供运行时换主色/表面色；
- * 品牌定制由项目改 styles.css 的 CSS 变量完成。
- * aria-label 经结构指令的 t 取文案，与相邻的 language-switcher 一致。
- */
+/** 主题模式切换按钮：单击在 亮 → 跟随系统 → 暗 三态间循环，图标反映当前模式。 */
 @Component({
   selector: 'app-theme-mode-toggle',
   standalone: true,

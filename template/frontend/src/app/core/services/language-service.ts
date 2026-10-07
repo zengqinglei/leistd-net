@@ -23,7 +23,6 @@ import { take } from 'rxjs';
 export const SUPPORTED_LANGS = ['en', 'zh-CN'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
 
-/** 默认语言：英语。 */
 export const DEFAULT_LANG: Lang = 'en';
 
 interface LangMeta {
@@ -43,21 +42,15 @@ export const LANG_OPTIONS: LangMeta[] = [
 /**
  * 语言服务：管理活动语言并驱动 Transloco 文案。
  *
- * **活动语言有两个来源，本地存储只认其中一个。** 存进 localStorage 的是「这台设备的偏好」
- * ——未登录访客的显式选择，也是主体离开后的回落值。账户设置里的语言只在内存生效：
- * 它属于某个账户，写进设备存储就分不清「这台机器习惯用哪种语言」和「上一个登录的人用哪种」，
- * 于是共享机器上 A 退出后，B 会在登录页看到 A 的语言。
+ * localStorage 只存本设备偏好（未登录访客的显式选择，也是主体离开后的回落值）；账户语言只在内存
+ * 生效，否则共享机器上 A 退出后 B 会在登录页看到 A 的语言。外壳在启动流成功后才渲染，启动流会等
+ * 账户语言的词条激活（见 {@link applyAccountLang}），因此不会先闪一下默认语言。
  *
- * 账户语言不落盘也不会有「先英文闪一下再变中文」：外壳只在启动流成功后渲染，
- * 而启动流会等账户语言的词条到达并激活（见 {@link applyAccountLang} 的返回值）。
+ * 切换先加载全局与已访问功能的词条、成功后才激活：一次性文案用同步 `translate()`，先激活会让途中
+ * 返回的请求取到裸键。加载期间停在原语言，失败时保持原语言并上报；连续切换只让最后一次生效。
  *
- * **切换先加载全局与已访问功能的词条、成功后才激活。** 结构指令与翻译信号不依赖这一点，但一次性文案（请求回调里的提示、
- * 确认框）用同步 `translate()`，它要求活动语言的词条已加载：若先激活，切换途中返回的请求会取到裸键，
- * 且不会再更新。加载期间界面停在原语言，失败时保持原语言并上报；连续切换只让最后一次生效。
- *
- * **Transloco 的活动语言只由本服务决定。** 它自带两处会自行激活语言的逻辑，都绕过上面的约束：
- * 加载失败时自动回落，以及失败后的下一次成功自行激活，都由 {@link provideLanguageFallbackStrategy} 阻止。
- * 否则本服务、Transloco、`<html lang>` 会各执一词，同步 `translate()` 取到裸键。
+ * Transloco 的活动语言只由本服务决定：它在加载失败时自动回落、失败后下一次成功自行激活，都由
+ * {@link provideLanguageFallbackStrategy} 阻止，否则本服务、Transloco 与 `<html lang>` 会不一致。
  */
 @Injectable({ providedIn: 'root' })
 export class LanguageService {
@@ -98,12 +91,7 @@ export class LanguageService {
     this.initialized = this.switchTo(initial);
   }
 
-  /**
-   * 切到指定语言，并记为本设备偏好。
-   *
-   * 只有「未登录时的显式选择」走这里：已登录的选择属于账户，走
-   * {@link applyAccountLang} 并由切换器写回设置。
-   */
+  /** 切到指定语言并记为本设备偏好；只用于未登录时的显式选择，已登录走 {@link applyAccountLang}。 */
   setDeviceLang(lang: Lang): Promise<void> {
     if (isPlatformBrowser(this.platformId)) {
       localStorage.setItem(LanguageService.STORAGE_KEY, lang);
@@ -122,11 +110,8 @@ export class LanguageService {
   }
 
   /**
-   * 加载目标语言的词条，成功后激活（理由见类注释）；返回的 Promise 在词条落定时完成，从不 reject。
-   *
-   * 相同目标正在加载时复用那次的 Promise，不提前完成。目标就是已激活的语言时也走一遍加载，
-   * 不按"已激活"短路：它可能是加载失败后仍停在的初始语言，短路就再也不会重新请求；
-   * 已加载的取 Transloco 缓存，同时取代在途的切换（用户切走又切回）。
+   * 加载目标语言的词条，成功后激活；返回的 Promise 在词条落定时完成，从不 reject。相同目标在途时
+   * 复用；已激活的语言也走一遍加载（可能是加载失败后停留的初始语言），同时取代在途的切换。
    */
   private setActive(lang: Lang): Promise<void> {
     if (this.pending?.lang === lang) {
@@ -136,10 +121,8 @@ export class LanguageService {
   }
 
   /**
-   * 加载 `lang`，成功则激活；已被后发起的切换取代时什么都不做。
-   *
-   * 失败时停在原语言。原语言就是这次没加载上的语言时（初始语言，或在它加载途中切走又切回）
-   * 没有词条可停留，退回默认语言；这一步同样受取代约束。
+   * 加载 `lang`，成功则激活；被后发起的切换取代时不做任何事。失败时停在原语言；原语言就是这次
+   * 没加载上的语言时没有词条可停留，退回默认语言（同样受取代约束）。
    */
   private switchTo(lang: Lang): Promise<void> {
     const generation = ++this.generation;
@@ -293,11 +276,8 @@ export class LanguageService {
   }
 
   /**
-   * 本设备的语言：显式选过的 → 跟随系统 → 回落默认。
-   *
-   * 中间那一档是关键：没显式选过时按**浏览器语言**走，而不是直接落到 `DEFAULT_LANG`。
-   * 直接落默认的话，浏览器是中文的人第一次进来也会看到英文，得自己改一次——
-   * 而这份偏好操作系统早就告诉浏览器了。
+   * 本设备的语言：显式选过的 → 浏览器语言 → 默认语言。跳过浏览器语言会让中文浏览器首次进入
+   * 也看到英文。
    */
   private loadDeviceLang(): Lang {
     if (!isPlatformBrowser(this.platformId)) {
@@ -320,11 +300,8 @@ export class LanguageService {
 }
 
 /**
- * 首帧前等初始语言的词条落定。
- *
- * 结构指令与翻译信号不靠它也不会留下裸键，这里等的是另外两类读者：根组件的启动页不在结构指令里，
- * 词条未到时只能显示空白；渲染后立即发出的一次性提示（如退出模拟后的提示）用同步 `translate()`，
- * 词条未到就取到裸键。取不到时已退回默认语言，这里不 reject——不然应用整个起不来，连启动失败页都没有。
+ * 首帧前等初始语言的词条落定：根组件的启动页不在结构指令里，渲染后立即发出的一次性提示用同步
+ * `translate()`。取不到时已退回默认语言，这里不 reject，否则应用连启动失败页都没有。
  */
 export function provideLanguageInitializer(): EnvironmentProviders {
   return provideAppInitializer(() => inject(LanguageService).initialized);
@@ -339,25 +316,18 @@ class NoAutomaticFallback implements TranslocoFallbackStrategy {
 }
 
 /**
- * 词条加载失败时 Transloco 不自行回落：默认策略会转去加载回落语言并激活它，不管这次加载是否已被取代。
- * 失败改由 {@link LanguageService} 处理（停在原语言；初始语言失败时显式退回默认语言）。
- *
- * 只管加载失败：缺词条时取回落语言文案（`missingHandler.useFallbackTranslation`）读的是配置里的 `fallbackLang`，
- * 不经过这里。应用与单测装配都要登记，否则测不到应用里的失败路径。
+ * 词条加载失败时 Transloco 不自行回落（默认策略会加载并激活回落语言，不管这次加载是否已被取代），
+ * 改由 {@link LanguageService} 处理。缺词条时的回落文案读配置的 `fallbackLang`，不经过这里。
+ * 应用与单测装配都要登记，否则测不到应用里的失败路径。
  */
 export function provideLanguageFallbackStrategy(): EnvironmentProviders {
   return provideTranslocoFallbackStrategy(NoAutomaticFallback);
 }
 
 /**
- * 浏览器偏好的语言里第一个本端支持的。
- *
- * 按 `navigator.languages` 的偏好顺序逐个匹配：先精确匹配（`zh-CN` → `zh-CN`），
- * 再按主语言子标签匹配（`en-GB` → `en`、`zh-Hans-CN` → `zh-CN`）。只比字符串相等
- * 会让 `en-GB`、`en-US` 这些最常见的取值全部落空。
- *
- * `navigator.languages` 在 Safari（始终）与 Chrome 隐身模式下会被截成一项以降低指纹面，
- * 因此取不到时退回 `navigator.language`（前者的首项，两者同源）。
+ * 浏览器偏好的语言里第一个本端支持的：按 `navigator.languages` 顺序先精确匹配，再按主语言子标签
+ * 匹配（`en-GB` → `en`、`zh-Hans-CN` → `zh-CN`）。Safari 与 Chrome 隐身模式会把它截成一项，
+ * 取不到时退回 `navigator.language`。
  */
 function systemLang(): Lang | undefined {
   let preferred: readonly string[];

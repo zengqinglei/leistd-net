@@ -53,18 +53,9 @@ export const PERMISSIONS = {
 } as const;
 
 /**
- * 进入 `/platform` 所需的权限集：**任一**命中即可放行。
- *
- * 这是唯一来源，`/platform` 父路由的 `data.permissions` 与
- * `AuthorizationService.canAccessPlatform` 都必须引用它，不得各自硬编码。
- *
- * 两处曾是两份清单，在多租户场景下并不等价——路由含 `tenants.default`、
- * `canAccessPlatform` 不含，于是只有租户管理权限的平台运营账号：菜单里看不到入口、
- * 登录后被重定向到别处，但直接敲 `/platform/tenants` 却能进。
- * 表现为"后端通、前端不通"，最容易被误判成权限没生效。
- *
- * 新增平台模块时只改这里；`authorization-service.spec.ts` 里有一条断言锁住两处同源，
- * 后端契约测试另外核对它恰好覆盖平台菜单的全部菜单项权限。
+ * 进入 `/platform` 所需的权限集，任一命中即放行。`/platform` 父路由的 `data.permissions` 与
+ * `AuthorizationService.canAccessPlatform` 都引用这里，不得各自硬编码；新增平台模块时只改这里
+ * （`authorization-service.spec.ts` 与后端契约测试核对同源与覆盖）。
  */
 export const PLATFORM_ENTRY_PERMISSIONS = [
   PERMISSIONS.users.default,

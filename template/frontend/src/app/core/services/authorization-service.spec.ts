@@ -8,13 +8,7 @@ import {
   PLATFORM_ENTRY_PERMISSIONS,
 } from '../../shared/constants/permission.constants';
 
-/**
- * 前端可见性的唯一判据。
- *
- * 这里锁住的是"不存在第二套放行规则"：超级管理员标记只是展示信息，
- * 不参与 has/hasAny/canAccessPlatform 的判定。前端多一套语义，界面就会与后端分叉——
- * 菜单里看得见、点进去 403。
- */
+/** 前端可见性的唯一判据：超级管理员标记只是展示信息，不参与 has/hasAny/canAccessPlatform 的判定。 */
 describe('AuthorizationService', () => {
   let service: AuthorizationService;
   let httpMock: HttpTestingController;
@@ -77,12 +71,7 @@ describe('AuthorizationService', () => {
     expect(service.canAccessPlatform()).toBe(true);
   });
 
-  /**
-   * 平台入口权限集里的**每一项**都要能单独放行。
-   *
-   * 路由与菜单同源由 app.routes.spec.ts 锁住，但同源的清单若漏了某个模块，那个模块的专属角色照样进不去。
-   * 这一条逐项验证，新增模块时忘记加入集合就会红。
-   */
+  /** 平台入口权限集里的每一项都要能单独放行，新增模块忘记加入集合就会红。 */
   it('grants platform access for each platform entry permission on its own', () => {
     for (const permission of PLATFORM_ENTRY_PERMISSIONS) {
       service.setPermissions({

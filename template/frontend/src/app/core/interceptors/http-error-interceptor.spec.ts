@@ -242,12 +242,8 @@ describe('httpErrorInterceptor', () => {
     //#endif
   }
 
-  // 断言的是统一清理入口，而不是 AuthService.clearAuthData()：只断言后者的话，
-  // 把生产代码退回"只清认证数据"会继续通过，而权限和设置会留给下一个登录的人。
-  //
-  // 两种形态都要走这一条。OIDC 形态没有静默续期也没有刷新令牌，isAuthenticated()
-  // 只看内存主体，不会自己变假——少了这里的清理与重新认证，令牌到期后 Guard 继续放行、
-  // 旧权限旧设置继续显示、请求全部 401，而这是那种部署形态的常规生命周期。
+  // 断言统一清理入口而非 AuthService.clearAuthData()，否则退回"只清认证数据"也能通过。
+  // OIDC 形态没有静默续期，isAuthenticated() 只看内存主体，两种形态都必须在这里清理并重新认证。
   it('clears the whole session and re-initiates authentication on a non-silent 401', () => {
     const caught = runInterceptor(httpError(401));
 
@@ -258,10 +254,8 @@ describe('httpErrorInterceptor', () => {
   });
 
   //#if (LocalIdentity)
-  // 401 有两种含义，恰好共用一个状态码。再认证（改口令、停用两步验证、重发恢复码）连续失败
-  // 触发的临时锁定是"这次操作被拒"，服务端并不踢会话——把人清掉再送去登录页，
-  // 而登录页在锁定期内恰恰进不去，用户就卡死了。服务端那半由 ReauthenticationLockoutTests 守，
-  // 这一条守的是前端不要把仍然有效的会话扔掉。
+  // 再认证连续失败的临时锁定只表示"这次操作被拒"：会话仍有效，且锁定期内登录页进不去。
+  // 服务端一半由 ReauthenticationLockoutTests 守。
   it('keeps the session on a 401 that only means this attempt was refused', () => {
     const caught = runInterceptor(
       httpError(401, { code: 'Auth:UserTemporarilyLockedOut', detail: 'Too many attempts.' }),
@@ -294,17 +288,13 @@ describe('httpErrorInterceptor', () => {
     expectSingleReauthentication('/platform/users?page=2');
   });
 
-  // 认证路由上不能再发起一次认证：OIDC 形态下那是死循环——回调页上再授权一次，
-  // IdP 侧已有会话，立刻带着新 code 跳回来，而 401 的原因一点没变。
-  // 只把落地地址丢掉是不够的，authorize() 本身就不能再发生。
+  // 认证路由上不能再发起认证：OIDC 形态下回调页再授权会立刻带新 code 跳回，形成死循环。
   it('leaves the 401 entirely to the running auth flow while on an auth route', () => {
     openAt('/auth/callback?code=abc');
 
     const caught = runInterceptor(httpError(401));
 
-    // 会话清理都不能做：回调这一刻主体刚建立，清掉之后启动流照常判成功、
-    // 回调页照常跳进受保护路由，Guard 发现没有主体又发起一次授权——
-    // callback → 清主体 → workspace → authorize → callback，循环只是多绕一跳。
+    // 也不能清会话：主体刚建立，清掉后会多绕一轮授权。
     expect(sessionContext.clear).not.toHaveBeenCalled();
     expectNoReauthentication();
     // 归一化照做：调用方（这里是启动流）要靠它判断状态码。
@@ -321,9 +311,8 @@ describe('httpErrorInterceptor', () => {
     runInterceptor(httpError(401));
     runInterceptor(httpError(401));
 
-    // 恢复跑两遍不是"多导航一次"这么轻：OIDC 客户端的 authorize() 是异步的，
-    // 每条流程都会重新生成并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
-    // 收敛靠的是第一条已经同步清掉主体，后面的到闸门处就没有主体可清了。
+    // 恢复跑两遍会让两条 authorize() 交叉覆盖 PKCE codeVerifier，回调换 token 失败；
+    // 收敛靠第一条已同步清掉主体。
     expectSingleReauthentication('/platform/users');
     expect(sessionContext.clear).toHaveBeenCalledTimes(1);
   });
@@ -340,10 +329,7 @@ describe('httpErrorInterceptor', () => {
   });
   //#if (IncludeMultiTenancy)
 
-  // 「租户没了」与「要不要重新认证」是两件正交的事。这条把它们钉开：认证路由上、
-  // 静默请求、外加这个头——租户必须清，而会话与认证一动都不能动。
-  // 登录页的启动探测正是最容易撞上它的地方（旧 Cookie 带着已停用租户的 tenant_id），
-  // 不清的话后续登录请求继续携带失效的租户提示头，用户一直登不进来。
+  // 「租户没了」与「是否重新认证」正交：认证路由上的静默请求带这个头时，租户必须清，会话与认证不动。
   it('clears an invalid tenant even on an auth route, without touching the session', () => {
     openAt('/auth/login');
     const tenantContext = TestBed.inject(TenantContextService);
@@ -373,10 +359,8 @@ describe('httpErrorInterceptor', () => {
 
     runInterceptor(httpError(401));
 
-    // 拦截器只按 X-Tenant-Invalid 处置租户。普通 401 的租户去向不在这里，而在
-    // AuthService.clearAuthData()（经 sessionContext.clear() 到达，此处是替身）：
-    // 本地身份保留登录入口的选择，免得每次超时都要重选；OIDC 形态的租户来自令牌声明，
-    // 跟着主体一起清。所以这条断言说的是「拦截器没越过那层去清」，不是「租户一定还在」。
+    // 普通 401 的租户去向由 AuthService.clearAuthData() 决定（经 sessionContext.clear()，此处是替身），
+    // 这里只断言拦截器没有越过那层去清。
     expect(clearTenantSpy).not.toHaveBeenCalled();
   });
 

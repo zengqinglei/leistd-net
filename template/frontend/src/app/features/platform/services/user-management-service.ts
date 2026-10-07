@@ -67,7 +67,6 @@ export class UserManagementService {
     return this.http.post<void>(`${this.baseUrl}/${id}/reset-password`, data);
   }
 
-  /** 解除用户的登录锁定。 */
   unlockUser(id: string): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${id}/unlock`, {});
   }

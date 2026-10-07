@@ -29,10 +29,8 @@ import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
 import { MOCKED_URL } from '../mock/mocked-url';
 
 /**
- * 连接是否还在有效生命周期内。
- *
- * `Disconnected` 表示自动重连也已放弃，此时必须重建；其余状态（连接中、已连接、重连中）
- * 都会自行恢复，重建只会白白丢掉已订阅的资源并留下一对孤儿连接。
+ * 连接是否还在有效生命周期内：只有 `Disconnected`（自动重连已放弃）需要重建，其余状态会自行恢复，
+ * 重建只会丢掉已订阅的资源并留下孤儿连接。
  */
 function isLive(connection: HubConnection | null): boolean {
   return connection != null && connection.state !== HubConnectionState.Disconnected;
@@ -57,8 +55,7 @@ export function realtimeResourceKey(resource: string, tenantId: string | null | 
  * SignalR 全局服务：通知的连接（后端的通知 Hub）。
 //#endif
  *
- * 地址：Hub 经 resolveHubUrl 拼接 environment.api.gateway，与 HTTP 请求走同一后端（HubConnectionBuilder 不经过 HTTP 拦截器）。
- * 认证：浏览器使用同源 Cookie 会话。
+ * 地址经 resolveHubUrl 拼接；认证使用同源 Cookie 会话。
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
@@ -66,7 +63,6 @@ export class SignalRService {
   /** 实时 Hub 的路径：业务事件（与启用时的通知）都经它推送。 */
   static readonly hubPath = '/hubs/realtime';
   //#else
-  /** 通知 Hub 的路径。 */
   static readonly hubPath = '/hubs/notifications';
   //#endif
   //#if (IncludeNotifications)
@@ -79,35 +75,28 @@ export class SignalRService {
   private connection: HubConnection | null = null;
   //#if (IncludeNotifications)
 
-  // ── 通知状态 ──
   readonly notifications = signal<NotificationOutputDto[]>([]);
   readonly unreadCount = computed(() => this.notifications().filter((n) => !n.isRead).length);
   //#endif
   //#if (IncludeRealTime)
 
-  // ── 业务事件（通用）：最近一次收到的资源事件 ──
   readonly lastResourceEvent = signal<{ eventName: string; payload: unknown } | null>(null);
   //#endif
 
-  // ── 连接状态 ──
   private readonly connected = signal(false);
 
-  /** 实时连接是否可用。 */
   readonly isConnected = this.connected.asReadonly();
   //#if (IncludeRealTime)
 
-  // ── 资源订阅 ──
-  // 需求与现状分开记：需求是"谁还持有哪个 key"，现状是"当前服务端连接上订阅了哪些 key"。
-  // 两者之差由每个 key 一条的对账链补齐，所以登记、销毁、建连、重连谁先谁后都不影响最终结果。
+  // 需求（谁还持有哪个键）与现状（当前服务端连接上订阅了哪些键）分开记，两者之差由每个键一条
+  // 对账链补齐，因此登记、销毁、建连、重连的先后不影响最终结果。
 
   /** 资源键 → 持有它的登记。集合为空即不再需要该订阅。 */
   private readonly resourceHolders = new Map<string, Set<object>>();
 
   /**
-   * 当前服务端连接上已成功订阅的资源键。
-   *
-   * 每建立一次服务端连接（首次连接、自动重连）就换一个新集合：新连接上没有任何组。
-   * 对账步骤记下开始时的集合，调用返回后只写回那一个——连接换过时写进的是已作废的集合。
+   * 当前服务端连接上已订阅的资源键。每次建连（含自动重连）换新集合；对账步骤只写回开始时的
+   * 那个集合，连接换过时写进的是已作废的集合。
    */
   private subscribedResources = new Set<string>();
 
@@ -118,13 +107,9 @@ export class SignalRService {
   private readonly resourceSubscribedSubject = new Subject<string>();
 
   /**
-   * 某个资源的订阅已被服务端确认（首次订阅、自动重连后、重建连接后都会发出），值为资源键。
-   *
-   * 推送不持久化：断线期间、以及查询完成到加入订阅之间的变更都不会补发。
-   * 把推送当作"该重新查询了"的页面，收到这个事件后补查一次，就不会停在旧快照上。
-   * 连接恢复（isConnected）不能代替它：那时订阅还没重新建立，立即查询仍会漏掉之后的变更。
-   * 只在实际发起的 Subscribe 成功后发出：确认回来时连接已换（主体切换、断开或重建）、
-   * 或已无人持有，都不发出；再次登记一个已经订阅着的共享键不会另发确认，页面照常自己做首次查询。
+   * 资源订阅已被服务端确认（首次、自动重连后、重建连接后），值为资源键。推送不持久化，
+   * 把推送当作刷新提示的页面收到后补查一次；isConnected 不能代替它（那时订阅还没重建）。
+   * 只在实际发起的 Subscribe 成功、连接未换且仍有持有者时发出；重复登记已订阅的共享键不另发。
    */
   readonly resourceSubscribed$: Observable<string> = this.resourceSubscribedSubject.asObservable();
   //#endif
@@ -136,19 +121,14 @@ export class SignalRService {
   private connectingGeneration = -1;
 
   /**
-   * 认证主体代际。每次 reset() 递增。
-   *
-   * 连接过程中途发生登出时，await 回来的那条连接属于上一个主体，必须就地关掉——
-   * 否则它会被写进字段，成为一条没人再管、却仍在以旧身份接收推送的孤儿。
+   * 认证主体代际，每次 reset() 递增。连接过程中途登出时，await 回来的连接属于上一个主体，
+   * 须就地关掉，否则会以旧身份继续接收推送。
    */
   private generation = 0;
 
   /**
-   * 当前认证主体的代际。
-   *
-   * 凡是"await 之后要写用户态"的地方都必须先核对它：reset() 只清得掉调用那一刻的
-   * 状态，清不掉 A 已经发出、稍后才回来的异步操作。历史通知响应、Hub 回调、
-   * 订阅回填都会写同一批共享 signal，不核对就会把 A 的数据落到 B 的界面上。
+   * 当前认证主体的代际。await 之后要写用户态的地方都先核对它：reset() 清不掉上一个主体已发出、
+   * 稍后才回来的异步操作，不核对会把 A 的数据落到 B 的界面上。
    */
   get authGeneration(): number {
     return this.generation;
@@ -160,12 +140,8 @@ export class SignalRService {
   }
 
   /**
-   * 建立 SignalR 连接（在用户登录后调用）。
-   *
-   * 幂等：并发调用复用同一次连接过程；已经连上时直接返回，不重建。
-   * 连接成功后再次调用也不能新建连接，否则被覆盖字段引用无法触达的连接及其处理器
-   * 会继续向同一个 signal 推送，造成连接泄漏和重复通知。
-   * 通知组件每次初始化都会走到这里，重挂载就会触发。
+   * 建立 SignalR 连接（登录后调用）。幂等：并发调用复用同一次连接过程，已连上时直接返回；
+   * 重建会让被覆盖的旧连接继续推送，造成泄漏和重复通知。通知组件每次初始化都会调用。
    */
   connect(): Promise<void> {
     // 实时连接本身由 Mock 应答时不建连：Mock 不模拟 SignalR，连不上的后端只会反复重试
@@ -177,9 +153,8 @@ export class SignalRService {
       return this.connecting;
     }
 
-    // 上一个主体的连接过程还没收尾：它发现代际变化后会把自己建的连接断掉，
-    // 直接复用它的 Promise 会让本主体拿到一个"正常返回但什么都没连上"的结果，
-    // 在组件重挂载前一直没有实时连接。等它结束，再为本主体重新建立。
+    // 上一个主体的连接过程还没收尾：它会断开自己建的连接，直接复用会得到"成功但没连上"的结果。
+    // 等它结束再为本主体重建。
     const previous = this.connecting;
     const generation = this.generation;
 
@@ -197,11 +172,8 @@ export class SignalRService {
   }
 
   /**
-   * @param generation 发起本次连接请求时的认证代际。
-   *
-   * 由调用方传入而不是在这里读：本方法要等上一个主体的连接过程收尾才开始执行，
-   * 那时读到的已经是 reset() 递增过的值，代际校验永远相等、防护形同虚设。
-   * 代际属于"这次 connect 请求"，不属于"这段代码碰巧执行的时刻"。
+   * @param generation 发起本次连接请求时的认证代际。由调用方传入：本方法要等上一个连接过程收尾
+   * 才执行，那时读到的已是 reset() 递增后的值，校验将形同虚设。
    */
   private async connectAsync(generation: number): Promise<void> {
     if (isLive(this.connection)) {
@@ -212,12 +184,8 @@ export class SignalRService {
     // 少了这一步，早退会把应用永久留在断线状态，不早退又会泄漏。
     await this.disconnect();
 
-    // await 之后先核对一次：连接尚未建立就已经不是当前主体，直接不建。
-    // 连接一旦写进字段，下面那些 isCurrent() 的身份比对就一律为真——
-    // 身份判据能排除"已退休的旧连接"，排除不了"旧请求在 reset 之后新建的连接"。
-    //
-    // 约束：本行到建连方法里的字段赋值之间**不得插入 await**。
-    // 一旦插入，reset 可以在核对之后、赋值之前发生，这道防护就静默失效了。
+    // await 之后先核对代际：连接一旦写进字段，isCurrent() 的身份比对就一律为真，排除不了旧请求
+    // 在 reset 之后新建的连接。本行到建连方法里的字段赋值之间不得插入 await。
     if (generation !== this.generation) {
       return;
     }
@@ -236,15 +204,11 @@ export class SignalRService {
   }
 
   /**
-   * 认证主体切换时清空一切与该主体绑定的状态。
-   *
-   * SignalR 的 principal 在握手时定死，连接不会因为前端清掉用户信号而重新授权。
-   * 不断开就换人登录，下一个用户会复用上一个人的活连接，以对方的身份继续收消息，
-   * 内存里的状态也照样留在界面上——这不是残留，是跨用户的数据泄漏。
+   * 认证主体切换时清空与该主体绑定的状态。SignalR 的 principal 在握手时定死，不断开就换人登录，
+   * 下一个用户会以上一个人的身份继续收消息。
 //#if (IncludeRealTime)
    *
-   * resourceEventNames 不清：那是应用关心哪些事件名，与主体无关，
-   * 清掉会让重连后所有监听失效。
+   * resourceEventNames 不清：它与主体无关，清掉会让重连后所有监听失效。
 //#endif
    */
   async reset(): Promise<void> {
@@ -297,14 +261,12 @@ export class SignalRService {
   }
 
   /**
-   * 在 `destroyRef` 所属的组件（或注入器）存活期间订阅资源变更。
+   * 在 `destroyRef` 所属的组件（或注入器）存活期间订阅资源变更。登记即生效，销毁时自动撤销；
+   * 实际的 Subscribe/Unsubscribe 在连接可用时补齐，与 `connect()` 先后无关，不要放进
+   * `connect().then(...)`。同一个键在最后一个持有者撤销后才退订。
    *
-   * 调用即登记需求，销毁时自动撤销；真正的 Subscribe/Unsubscribe 由服务在连接可用时补齐，
-   * 所以与 `connect()` 的先后无关——不要把它放进 `connect().then(...)`，那会让"销毁先于连上"的页面在连上后照样订阅。
-   * 多个持有者共用同一个键时，最后一个撤销后才真正退订。
-   *
-   * 省略 `destroyRef` 时取当前注入上下文的（与 `takeUntilDestroyed` 同一惯例），须在构造期或字段初始化时调用；
-   * 已销毁的 `destroyRef` 不登记。认证主体切换（`reset()`）会清空全部登记。
+   * 省略 `destroyRef` 时取当前注入上下文的，须在构造期或字段初始化时调用；已销毁的不登记。
+   * `reset()` 清空全部登记。
    */
   watchResource(resourceKey: string, destroyRef?: DestroyRef): void {
     if (!destroyRef) {
@@ -333,8 +295,6 @@ export class SignalRService {
     this.reconcile(resourceKey);
   }
   //#endif
-
-  // ── 内部 ──
   //#if (IncludeRealTime)
 
   /** 为该键排一次对账，排在同一个键已有的步骤之后。 */
@@ -404,11 +364,8 @@ export class SignalRService {
   //#endif
 
   /**
-   * 解析 Hub 绝对地址。
-   *
-   * SignalR 的 HubConnectionBuilder 不经过 Angular HTTP 拦截器，
-   * 因此需在此手动拼接 `environment.api.gateway` 前缀（与 urlFormatInterceptor 一致）。
-   * 网关为空时返回相对路径，由浏览器按当前源解析（同源托管与本机开发代理）。
+   * 解析 Hub 绝对地址：HubConnectionBuilder 不经过 HTTP 拦截器，需手动拼接
+   * `environment.api.gateway`；网关为空时返回相对路径，由浏览器按当前源解析。
    */
   private resolveHubUrl(path: string): string {
     const gateway = environment.api.gateway || '';
@@ -426,10 +383,8 @@ export class SignalRService {
       .configureLogging(LogLevel.Warning)
       .build();
 
-    // 每个回调都先确认自己仍是当前那条连接。判据用身份而不是代际：
-    // stop() 是异步的，旧连接的推送与状态回调可能晚于主体切换才到达，
-    // 而 disconnect() 已经把字段置空，身份比对天然为假。
-    // 身份判据与它保护的对象绑在一起，不会出现"又漏了一处没加检查"。
+    // 每个回调先确认仍是当前连接。判据用身份而非代际：stop() 是异步的，旧连接的回调可能晚于
+    // 主体切换才到达，而 disconnect() 已把字段置空。
     const isCurrent = () => this.connection === connection;
     //#if (IncludeNotifications)
 
@@ -443,7 +398,6 @@ export class SignalRService {
     //#endif
     //#if (IncludeRealTime)
 
-    // 重新挂载已注册的业务事件监听
     for (const eventName of this.resourceEventNames) {
       connection.on(eventName, (payload: unknown) => {
         if (!isCurrent()) {

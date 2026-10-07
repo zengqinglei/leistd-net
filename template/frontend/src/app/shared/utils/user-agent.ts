@@ -33,10 +33,8 @@ const OPERATING_SYSTEMS: readonly (readonly [string, RegExp])[] = [
 ];
 
 /**
- * 把 User-Agent 归纳成"浏览器 · 系统"，只用于让用户认出是哪台设备。
- *
- * 在界面上归纳而不是存库时归纳：规则会随浏览器演进要改，原文留在库里，改了规则旧记录也跟着变对。
- * 这里只认主流浏览器与系统，不追求完整——认不出时显示"未知"，比猜错更好。
+ * 把 User-Agent 归纳成"浏览器 · 系统"，供用户认出设备。在界面上归纳而不是存库时归纳，
+ * 规则改了旧记录也跟着变对；只认主流浏览器与系统，认不出时显示"未知"。
  */
 export function describeUserAgent(userAgent: string | null | undefined): DeviceDescription {
   const ua = userAgent ?? '';

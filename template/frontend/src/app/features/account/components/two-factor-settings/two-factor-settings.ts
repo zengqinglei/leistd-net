@@ -32,9 +32,8 @@ import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
 type Mode = 'idle' | 'setup' | 'codes' | 'disable' | 'regenerate';
 
 /**
- * 「账户与安全」面板的一节：两步验证的启用、停用与恢复码。
- *
- * 启用与停用都会让本人的其他设备退出登录（服务端完成），面板据 {@link sessionsChanged} 刷新设备列表。
+ * 「账户与安全」面板的一节：两步验证的启用、停用与恢复码。启用与停用都会让本人其他设备退出，
+ * 面板据 {@link sessionsChanged} 刷新设备列表。
  */
 @Component({
   selector: 'app-two-factor-settings',

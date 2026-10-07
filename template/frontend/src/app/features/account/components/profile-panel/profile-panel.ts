@@ -92,7 +92,7 @@ export class ProfilePanel {
   readonly saving = signal(false);
   readonly user = computed(() => this.authService.currentUser());
 
-  /** 角色徽章直接展示后端返回的角色名，不再依赖前端硬编码的角色枚举与标签映射。 */
+  /** 角色徽章直接展示后端返回的角色名。 */
   readonly roleLabels = computed(() => this.authService.currentUser()?.roles ?? []);
 
   /** 正在上传的头像（处理好的 data URL）；上传期间先显示它，完成后换成服务端给的地址。 */
@@ -101,7 +101,6 @@ export class ProfilePanel {
   readonly avatarPreview = computed(() => this.pendingAvatar() ?? this.user()?.avatar ?? '');
   readonly hasAvatarImage = computed(() => isAvatarImageUrl(this.avatarPreview()));
 
-  // 表单模型（Signal Forms）
   protected readonly formModel = signal({
     username: '',
     email: '',

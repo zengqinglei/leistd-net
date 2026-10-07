@@ -23,19 +23,13 @@ import { UserManagementService } from '../../services/user-management-service';
 
 import type { MockedObject } from 'vitest';
 
-/**
- * 用户页面的查询闭环：子表事件 → URL query → 列表请求参数。
- *
- * 子表用例只证明组件内部计算正确，证明不了父页面这一层——模板绑定接错、
- * query 键写错、DTO 映射漏字段，子表照样全绿，而界面上翻页翻不动、筛选不生效。
- */
+/** 用户页面的查询闭环：子表事件 → URL query → 列表请求参数，覆盖子表用例测不到的模板绑定与映射。 */
 describe('Users page query round trip', () => {
   let fixture: ComponentFixture<Users>;
   let component: Users;
   let router: Router;
   let service: Pick<MockedObject<UserManagementService>, 'getUsers'>;
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetUsersInputDto {
     const calls = vi.mocked(service.getUsers).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -81,9 +75,8 @@ describe('Users page query round trip', () => {
       versionToken: 'r1',
     });
 
-    // 应用里设置上下文（连带语言服务）在启动流中就已创建，首帧之前语言已经激活。
-    // 这里同样先建好：否则它要到页面首次渲染途中才被子表格注入，构造时激活语言会让
-    // 页面外层的 *transloco 在视图还没建完时再建一次。
+    // 先建好设置上下文（连带语言服务），与应用启动一致；否则子表格首次渲染时才注入它，
+    // 激活语言会让外层 *transloco 在视图未建完时重建。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Users);
     component = fixture.componentInstance;

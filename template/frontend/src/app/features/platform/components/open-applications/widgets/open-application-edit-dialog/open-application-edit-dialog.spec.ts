@@ -13,11 +13,8 @@ import {
 } from '../../../../dtos/open-application.dto';
 
 /**
- * 下拉触发器与选项文案一致性回归。
- *
- * Select 的触发器渲染的是 `itemToString(value)`，不传就退化成把值本身字符串化——
- * 下拉里写着"桌面/原生"，选完输入框里却是 `native`，同一个东西两个说法。
- * 这类不一致编译期与 lint 都发现不了，只有把选项点开、选中、再读触发器才暴露得出来。
+ * 下拉触发器与选项文案一致：不传 `itemToString` 时触发器显示原始值，只有点开、选中再读触发器
+ * 才暴露得出来。
  */
 @Component({
   imports: [OpenApplicationEditDialog],

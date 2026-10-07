@@ -36,9 +36,7 @@
                       [attr.data-testid]="'setting-combobox-' + setting.name"
                       (valueChange)="onSelect(setting, scope(), $event)"
                     >
-                      <!-- justify-between + font-normal 是官方用法：触发器本身是个
-                         hlmBtn，按钮默认把内容居中并加粗，不给这两个类的话选中的时区
-                         会居中显示、字重也和旁边的下拉不一样。 -->
+                      <!-- justify-between + font-normal 是官方用法：触发器是 hlmBtn，默认居中且加粗。 -->
                       <hlm-combobox-trigger
                         [buttonId]="setting.name"
                         class="w-full justify-between font-normal"
@@ -102,10 +100,8 @@
                       </hlm-select-content>
                     </hlm-select>
                   } @else if (isBoolean(setting)) {
-                    <!-- 真值只有两种：开关一次点击就完成，两项下拉要点两次。
-                       布局类必须放在**包裹层**上：hlm-switch 的 class 会被透传并 twMerge 到
-                       内部 brn-switch 上，给它 flex-1 会盖掉自身的固定宽度，开关就被拉成一整行
-                       （官方用法也是把 hlm-switch 原样放进 label，不给布局类）。 -->
+                    <!-- 布局类放在包裹层：hlm-switch 的 class 会透传 twMerge 到内部 brn-switch，
+                       flex-1 会把开关拉成整行。 -->
                     <div class="flex flex-1 items-center">
                       <hlm-switch
                         [inputId]="setting.name"
@@ -116,13 +112,8 @@
                       />
                     </div>
                   } @else {
-                    <!-- 数值型把上下界交给浏览器（区间由服务端下发，值域仍以服务端为准）。
-                       用 change 而不是 input 提交：原生 change 在失焦或回车时触发，
-                       正好是"这次输入结束了"；按键即写会把 60 途经的 6 也存进去并生效。
-
-                       这里刻意**不**跟着写入禁用：提交发生在失焦或回车时，光标往往还在框里，
-                       禁用会当场把焦点弹走、接着输入的字也丢了。离散控件（开关、下拉）没有
-                       这个问题——它们点一下就结束，所以那几个才禁用。 -->
+                    <!-- 数值型把上下界交给浏览器（值域以服务端为准）。用 change 提交；刻意不随写入禁用：
+                       提交时光标常在框里，禁用会弹走焦点。 -->
                     <input
                       hlmInput
                       class="flex-1"
@@ -162,10 +153,7 @@
                 @if (levelHintKeyOf(setting, scope()); as levelHint) {
                   <p class="text-muted-foreground text-xs">{{ t(levelHint) }}</p>
                 }
-                <!-- 这一行常驻并预留一行高度：写入状态在这里进出就不会把下面的内容顶来顶去。
-                   刻意**不**显示设置名与继承值——设置名是给开发看的标识，摆在标签下面像是
-                   在解释这一项的含义；继承值控件的占位符已经显示了，重复一遍反而让人以为
-                   那才是当前生效的值。 -->
+                <!-- 常驻并预留一行高度，状态进出不顶动下方内容；不显示设置名（开发标识）与继承值（占位符已显示）。 -->
                 <hlm-field-description class="flex min-h-4 flex-wrap items-center gap-x-2">
                   @if (setting.allowsHostScope) {
                     <!-- 进程级设置的生效范围与延迟不写出来的话，改完在别的实例上没变会被当成 bug -->
@@ -173,8 +161,7 @@
                       {{ t('settings.hostScopeHint') }}
                     </span>
                   }
-                  <!-- 写入状态接在**常驻的**描述行末尾：不新开一行，状态进出就不会把下面的
-                     内容顶来顶去；同时反馈落在用户刚碰的那个控件正下方，视线不用移动。 -->
+                  <!-- 写入状态接在常驻描述行末尾，落在刚操作的控件正下方。 -->
                   @if (stateOf(setting, scope()); as state) {
                     @switch (state.status) {
                       @case ('saving') {
@@ -184,16 +171,14 @@
                         </span>
                       }
                       @case ('saved') {
-                        <!-- 成功用语义色 success，不用主题主色：主色在别处表示"可点"，
-                           拿它表示"成功"会和链接、选中态混成一片。 -->
+                        <!-- 成功用语义色 success：主色在别处表示可点。 -->
                         <span class="text-success inline-flex items-center gap-1" role="status">
                           <ng-icon name="lucideCircleCheck" size="12" />
                           {{ t('settings.saved') }}
                         </span>
                       }
                       @case ('error') {
-                        <!-- 失败必须带原因：只给一个红叉，用户既不知道是值不合法还是没权限，
-                           也就无从修正。 -->
+                        <!-- 失败必须带原因，否则无从修正。 -->
                         <span class="text-destructive inline-flex items-center gap-1" role="alert">
                           <ng-icon name="lucideCircleX" size="12" class="shrink-0" />
                           {{ state.message }}

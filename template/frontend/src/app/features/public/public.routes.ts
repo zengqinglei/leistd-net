@@ -7,10 +7,7 @@ import { provideTranslocoScope } from '@jsverse/transloco';
 import { resolveTranslationScopes } from '../../core/i18n/translation-scopes';
 //#endif
 
-/**
- * 公共页面路由配置
- * Landing Layout 的子路由
- */
+/** 公共页面路由，作为 Landing Layout 的子路由。 */
 export const PUBLIC_ROUTES: Routes = [
   {
     path: '',

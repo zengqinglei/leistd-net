@@ -13,10 +13,8 @@ import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.t
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 
 /**
- * 租户表格与用户/角色表格共用同一套受控分页与列收纳约定，这里覆盖同样的关键路径。
- * 三张表各自实现这一层，其中一张语义漂移不会有任何东西报错，只能靠各自的用例钉住。
- *
- * 租户列表的后端契约只有 offset/limit/keyword，没有排序，因此这里不存在排序用例。
+ * 租户表格与用户、角色表格共用受控分页与列收纳约定，但各自实现，因此各自用例钉住。
+ * 租户列表不支持排序。
  */
 describe('TenantTable', () => {
   let fixture: ComponentFixture<TenantTable>;
@@ -101,9 +99,7 @@ describe('TenantTable', () => {
     expect(emitted).toEqual([{ pageIndex: 0, pageSize: 50 }]);
   });
 
-  // 租户表的溢出菜单里有一项只读的"详情"，因此它不随修改权限消失——
-  // 能看到这张列表就能看详情。按 canUpdate||canDelete 藏起来时，只有查看权限的人
-  // 反而完全没有详情入口，那才是真正的功能缺口。
+  // "详情"是只读项，菜单入口不随修改权限消失，否则只有查看权限的人没有详情入口。
   it('still shows the row action menu trigger with view-only permission', async () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);

@@ -24,10 +24,7 @@ import { TenantService } from '../../services/tenant-service';
 
 import type { MockedObject } from 'vitest';
 
-/**
- * 租户页面的查询与写操作闭环。与用户/角色页各写一份：三个页面各自实现这一层，
- * 其中一个接线写错，另外两个的用例不会有任何反应。
- */
+/** 租户页面的查询与写操作闭环；与用户、角色页各自实现，因此各写一份。 */
 describe('Tenants page query and write flow', () => {
   let fixture: ComponentFixture<Tenants>;
   let component: Tenants;
@@ -46,7 +43,6 @@ describe('Tenants page query and write flow', () => {
     creationTime: '2026-08-14T00:00:00Z',
   };
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetTenantsInputDto {
     const calls = vi.mocked(service.getTenants).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -122,8 +118,7 @@ describe('Tenants page query and write flow', () => {
       versionToken: 'r1',
     });
 
-    // 应用启动时会话设置（连带语言服务）早已建好；留到首帧渲染途中才惰性创建的话，
-    // 语言服务构造时激活语言，会让模板结构指令在创建视图的半途重入
+    // 先建好设置上下文（连带语言服务），否则首帧渲染途中创建它会让结构指令重入。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Tenants);
     component = fixture.componentInstance;

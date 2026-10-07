@@ -4,21 +4,13 @@ import { toSignal } from '@angular/core/rxjs-interop';
 
 import { TableViewport } from './table-column-meta';
 
-/**
- * 表格列可见性的两个断点。
- *
- * 与 Tailwind 的 `md` / `lg` 对齐（768px / 1024px）——列在什么宽度下折叠，
- * 必须和页面其它响应式行为同一个刻度，否则表格会在别处还没换布局时先折叠。
- */
+/** 表格列可见性的两个断点，与 Tailwind 的 `md` / `lg` 对齐。 */
 const MEDIUM_VIEWPORT = '(min-width: 768px)';
 const LARGE_VIEWPORT = '(min-width: 1024px)';
 
 /**
- * 当前视口档位（mobile / tablet / desktop）。
- *
- * 必须在注入上下文里调用（字段初始化处）。平台表格共用同一份判定：
- * 各写一遍时断点值会各自漂移，表现是同一页里两个表格在不同宽度下折叠。
- * 带吸附操作列的表格只把它当上限，容器放不下时由 `TableFit` 再降一档。
+ * 当前视口档位（mobile / tablet / desktop），须在注入上下文里调用；带吸附操作列的表格只把它当上限，
+ * 容器放不下时由 `TableFit` 再降一档。
  */
 export function tableViewportSignal(): Signal<TableViewport> {
   const breakpointObserver = inject(BreakpointObserver);

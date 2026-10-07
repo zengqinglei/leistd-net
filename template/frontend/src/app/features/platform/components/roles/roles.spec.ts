@@ -31,10 +31,7 @@ import { RoleService } from '../../services/role-service';
 
 import type { MockedObject } from 'vitest';
 
-/**
- * 角色页面的查询闭环。与用户页各写一份：两个页面各自实现这一层，
- * 其中一个接线写错，另一个的用例不会有任何反应。
- */
+/** 角色页面的查询闭环；与用户页各自实现，因此各写一份。 */
 describe('Roles page query round trip', () => {
   let fixture: ComponentFixture<Roles>;
   let component: Roles;
@@ -50,7 +47,6 @@ describe('Roles page query round trip', () => {
   };
   //#endif
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetRolesInputDto {
     const calls = vi.mocked(service.getRoles).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -98,9 +94,8 @@ describe('Roles page query round trip', () => {
       versionToken: 'r1',
     });
 
-    // 应用里设置上下文（连带语言服务）在启动流中就已创建，首帧之前语言已经激活。
-    // 这里同样先建好：否则它要到页面首次渲染途中才被子表格注入，构造时激活语言会让
-    // 页面外层的 *transloco 在视图还没建完时再建一次。
+    // 先建好设置上下文（连带语言服务），与应用启动一致；否则子表格首次渲染时才注入它，
+    // 激活语言会让外层 *transloco 在视图未建完时重建。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Roles);
     component = fixture.componentInstance;

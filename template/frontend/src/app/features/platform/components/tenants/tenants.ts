@@ -56,11 +56,7 @@ import {
 } from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
 
-/**
- * 租户管理页（仅宿主侧可见：租户用户的 current 权限里不会出现 App.Tenants）。
- *
- * 列表状态（分页、关键字）落在 URL 查询参数上，刷新与前进后退均可复原。
- */
+/** 租户管理页（仅宿主侧可见），列表状态（分页、关键字）落在 URL 查询参数上。 */
 @Component({
   selector: 'app-tenants',
   imports: [
@@ -258,10 +254,8 @@ export class Tenants {
 
   //#if (Impersonation)
   /**
-   * 以该租户管理员身份登录。
-   *
-   * 成功后整页跳转（由 ImpersonationService 负责）：会话 Cookie 被整体换掉，
-   * 权限、菜单、已加载的列表数据全部作废，留在本页逐个刷新必然漏掉某处。
+   * 以该租户管理员身份登录。成功后由 ImpersonationService 整页跳转：会话被整体替换，
+   * 本页状态全部作废。
    */
   async onImpersonate(tenant: TenantOutputDto): Promise<void> {
     const confirmed = await this.confirmService.open({

@@ -1,35 +1,11 @@
-/**
- * 分页查询请求基类
- *
- * 对应后端: Leistd.Ddd.Application.Contracts.Dtos.PagedRequestDto
- *
- * 使用示例:
- * ```typescript
- * export interface GetUsersInputDto extends PagedRequestDto {
- *   keyword?: string;
- * }
- * ```
- */
+/** 分页查询请求基类，对应后端 `Leistd.Data.Paging.PageRequest`。 */
 export interface PagedRequestDto {
-  /**
-   * 偏移量（跳过的记录数）
-   *
-   * @default 0
-   */
+  /** 跳过的记录数，默认 0。 */
   offset?: number;
 
-  /**
-   * 每页记录数
-   *
-   * @default 10
-   */
+  /** 每页记录数，默认 10。 */
   limit?: number;
 
-  /**
-   * 排序字段（可选）
-   *
-   * 格式: "fieldName asc" 或 "fieldName desc"
-   * 示例: "creationTime desc"
-   */
+  /** 排序表达式，形如 `"creationTime desc"`；省略时用该查询的默认排序。 */
   sorting?: string;
 }

@@ -54,7 +54,7 @@ API_PROXY_TARGET=http://localhost:5250 npm start -- --port 4201
 
 ## 环境配置
 
-项目使用 Angular 的环境配置系统。配置文件位于 `src/environments/`：
+配置文件位于 `src/environments/`：
 
 - `environment.ts` - 本机开发（`npm start` 使用，Mock 只在这个配置下可用）
 - `environment.prod.ts` - 部署构建（`npm run build` 默认使用）
@@ -108,7 +108,7 @@ http.get('/api/v1/orders', {
 构建产物输出到 dist 目录，各部署环境共用同一份产物。
 
 ```bash
-npm run build                   # 默认 production 配置，已优化性能
+npm run build                   # 默认 production 配置
 ```
 <!--#if (IncludeLocalization)-->
 
@@ -154,8 +154,6 @@ npm run build                   # 默认 production 配置，已优化性能
 
 ### 代码检查
 
-运行代码检查：
-
 ```bash
 npm run lint           # 运行所有检查
 npm run lint:ts        # TypeScript/HTML 检查
@@ -163,7 +161,7 @@ npm run lint:style     # CSS 检查
 npm run format         # 检查代码格式
 ```
 
-自动修复问题：
+自动修复：
 
 ```bash
 npm run lint:fix       # 修复所有可自动修复的问题

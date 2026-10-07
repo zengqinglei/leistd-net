@@ -24,7 +24,6 @@ import { MOCKED_URL } from '../mock/mocked-url';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   //#if (LocalIdentity)
-  /** 账号密码登录接口。 */
   static readonly loginUrl = '/api/v1/auth/session-login';
 
   //#endif
@@ -81,11 +80,8 @@ export class AuthService {
   }
 
   /**
-   * 清空当前认证主体的一切本地状态。
-   *
-   * 只清认证数据。权限与设置也跟着主体走，但它们的清理在 <c>SessionContextService.clear()</c>：
-   * 非静默 401 与启动流进登录页都走那个入口，一处清三样，避免各自记得调而漏掉一条。
-   * <c>logout()</c> 之后是整页跳转，内存状态随页面重建，不必再走一遍。
+   * 清空认证数据。权限与设置的清理在 `SessionContextService.clear()`，非静默 401 与启动流都走那里；
+   * `logout()` 之后整页跳转，不必再走一遍。
    */
   clearAuthData(): void {
     this._currentUser.set(null);

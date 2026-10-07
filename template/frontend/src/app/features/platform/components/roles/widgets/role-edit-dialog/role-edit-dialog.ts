@@ -34,11 +34,7 @@ interface RoleEditFormModel {
 /** 与服务端 CreateRoleInputDto.Name 一致：长度 2~64 与 [RegularExpression] 的字符集。 */
 const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]{2,64}$/;
 
-/**
- * 角色新建 / 编辑对话框。
- *
- * 角色名称是稳定的业务标识，创建后不可修改——用户赋权按 Id 提交，名称只用于展示与筛选。
- */
+/** 角色新建 / 编辑对话框。角色名称是稳定的业务标识，创建后不可修改。 */
 @Component({
   selector: 'app-role-edit-dialog',
   // prettier-ignore
@@ -75,10 +71,8 @@ export class RoleEditDialog {
   });
 
   readonly roleForm = form(this.formModel, (path) => {
-    // 角色名是稳定业务标识，创建后不可修改。
     disabled(path.name, () => this.isEdit());
     // 与 CreateRoleInputDto 的规则逐条对应（长度 2~64、字母数字下划线；显示名 128；描述 512）。
-    // 只校验"必填"时，格式不对要等提交后由服务端拒绝，用户才第一次知道规则。
     required(path.name);
     // 长度与字符集共用一句提示，合成一条规则：分开校验会把同一句话报出几遍
     pattern(path.name, ROLE_NAME_PATTERN, { error: { kind: 'roleNamePattern' } });

@@ -1,6 +1,6 @@
 # 前端开发规范
 
-本项目 Angular、Spartan UI、Tailwind CSS 前端的编码规范，同时遵循 [项目通用约定](./coding-common.md)。界面、样式与导航见 [前端界面规范](./frontend-ui.md)。
+同时遵循 [项目通用约定](./coding-common.md)。界面、样式与导航见 [前端界面规范](./frontend-ui.md)。
 <!--#if (IncludeLocalization)-->
 多语言见 [前端多语言规范](./frontend-i18n.md)，词条、引用与 scope 登记由 `scripts/check-i18n.py` 检查。
 <!--#endif-->
@@ -52,7 +52,7 @@ frontend/
 | 路由 | `{name}.routes.ts` | |
 | 测试装配 | `{name}.testing.ts` | |
 
-组件 selector 为 `app-` + kebab-case（eslint 检查）。API 的请求与响应必须有类型定义；命名表达意图，JSDoc 只补充不明显的契约。
+组件 selector 为 `app-` + kebab-case（eslint 检查）。API 的请求与响应必须有类型定义。JSDoc 只写服务边界、状态归属、协议、订阅清理与竞态原因，不逐成员注释，不用 `@param`/`@returns` 重复类型；模板与样式不加一眼可见的区块标签。
 
 ## 4. 分层与依赖注入
 
@@ -87,7 +87,7 @@ frontend/
 - 5xx 不展示技术细节，使用通用文案，响应含 `traceId` 时附上本地化的追踪 ID 标签。
 - `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误。
 - 状态码与 `code` 的分工：认证与协议层处置（401 跳转、受限会话的 403、启动时的未登录判定）由 `http-error-interceptor` 与 `startup-service` 按状态码处理，eslint 只对它们放行 `local/no-status-code-branch`；feature 使用归一化后的错误反馈，需要特定业务交互时按稳定 `code` 分支。业务错误缺少 `code` 不构成 feature 按状态码分支的理由，应在后端补码。
-- 可以用 `catchError` 处理特定错误，但不吞掉错误。
+- `catchError` 只处理特定错误，不吞掉错误。
 - 前端不兼容框架可选的响应信封（`AddResponseWrapper()`），开启须同时改拦截器。
 
 ## 7. Mock
@@ -105,7 +105,7 @@ frontend/
 
 ## 9. 日期与时区
 
-时间以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone`（IANA 名），书写方式取自界面语言，两者由 `SettingContextService` 提供。
+时间以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone`（IANA 名，写入端已校验），书写方式取自界面语言，两者由 `SettingContextService` 提供。
 
 - 业务日期用 `appDate` 管道，不用 Angular 的 `date`：后者传 IANA 名会静默回落到浏览器时区，也表达不了夏令时。
 
@@ -114,7 +114,7 @@ frontend/
   ```
 
 - 槽位（`full`、`short`、`date`、`time`、`monthDayTime`）由调用点按用途定；locale 取当前界面语言，不由时区推导。精度与格式串不做成设置项，语种写法差异加在管道的 `WRITING_OVERRIDES`。
-- 时区候选项按"能否真的渲染"判定，不用 `Intl.supportedValuesOf('timeZone')` 过滤（它只列规范名，`UTC`、`Asia/Kolkata` 等可用值不在其中）。时区值只收 IANA 名，写入端已校验。
+- 时区候选项按"能否真的渲染"判定，不用 `Intl.supportedValuesOf('timeZone')` 过滤（它只列规范名，`UTC`、`Asia/Kolkata` 等可用值不在其中）。
 <!--#if (IncludeRealTime)-->
 
 ## 10. 资源订阅：推送只表示"该重新查询了"

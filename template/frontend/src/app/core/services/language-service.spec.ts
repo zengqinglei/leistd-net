@@ -434,7 +434,7 @@ describe('LanguageService', () => {
     expectActive(service, transloco, 'en', 'Hello');
   });
 
-  // 失败后仍停在初始语言上：再次请求同一语言不能按"已是活动语言"短路，否则永远不重新加载（Codex 发现）
+  // 失败后仍停在初始语言上：再次请求同一语言不能按"已是活动语言"短路，否则永远不重新加载
   it('requests the initial language again when it failed and is still the active one', async () => {
     localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
     configure([provideLanguageInitializer()]);

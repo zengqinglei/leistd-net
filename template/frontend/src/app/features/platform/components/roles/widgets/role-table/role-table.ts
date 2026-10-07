@@ -58,12 +58,7 @@ import {
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 import { RoleOutputDto } from '../../../../dtos/role.dto';
 
-/**
- * 角色列表表格。
- *
- * 与用户列表同一形态：列优先级驱动响应式收纳、被隐藏的列由行展开补偿、
- * 分页与排序状态由父组件（URL 查询参数）单向下发。
- */
+/** 角色列表表格：列优先级驱动响应式收纳，隐藏列由行展开补偿，分页与排序状态由父组件单向下发。 */
 @Component({
   selector: 'app-role-table',
   imports: [
@@ -100,8 +95,7 @@ import { RoleOutputDto } from '../../../../dtos/role.dto';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RoleTable {
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -116,7 +110,6 @@ export class RoleTable {
   readonly filtered = input(false);
   /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
   readonly loadError = input<string | null>(null);
-  /** 错误态里的重试。 */
   readonly retry = output<void>();
 
   /** 行操作按权限裁剪；隐藏只影响体验，服务端仍对每个请求独立校验。 */

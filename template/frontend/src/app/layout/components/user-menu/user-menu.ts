@@ -30,23 +30,18 @@ interface UserMenuItem {
 }
 
 /**
- * 用户菜单，两种形态共用同一份下拉内容：
- * - `sidebar`：侧栏底部，Spartan sidebar 区块的 nav-user 写法（头像 + 姓名/邮箱两行，折叠时收成头像方块）。
- *   菜单桌面向右、手机向上弹出：侧栏收成图标栏时向上弹会被挤到屏幕边缘、盖住图标。
- *   `closeMobileSidebarOnClick` 单独关掉：app.config.ts 全局开了点菜单按钮即关抽屉（为导航项），
- *   对这个按钮则会连锚点一起关掉，菜单没处弹；
- * - `topbar`：顶栏右侧，Spartan Avatar 文档的头像下拉写法（`ghost` 圆形图标按钮包 `hlm-avatar`）。
- * 下拉条目：区域切换、个人设置、退出，按 Dropdown Menu 官方写法分组渲染。
- * 具体项见 `userMenuItems`，构成由 user-menu.spec.ts 钉住。
- * 退出登录不用 `destructive`：本项目红色只留给危险、删除与错误（见 styles.css 语义色约定）。
+ * 用户菜单，两种形态共用同一份下拉内容（区域切换、个人设置、退出；构成由 user-menu.spec.ts 钉住）：
+ * - `sidebar`：侧栏底部的 nav-user 写法。桌面向右、手机向上弹出，图标栏下向上弹会盖住图标；
+ *   单独关掉 `closeMobileSidebarOnClick`，否则全局的点击即关抽屉会连锚点一起关掉；
+ * - `topbar`：顶栏右侧的头像下拉。
+ * 退出不用 `destructive`：红色只留给危险、删除与错误。
  */
 @Component({
   selector: 'app-user-menu',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  // 顶栏里宿主必须是 flex：块级宿主里的头像按钮只有图片没有文字，会落在行内基线上，
-  // 基线下留出的字母下伸空间把宿主撑高约 6px，头像就比同排按钮高出一截。
-  // 侧栏形态里宿主要承载占满整行的列表，保持块级。
+  // 顶栏里宿主须是 flex：块级宿主里只有图片的按钮落在基线上，下伸空间会把头像撑高约 6px。
+  // 侧栏形态保持块级。
   host: { '[class.inline-flex]': "variant() === 'topbar'" },
   imports: [
     NgIcon,
@@ -221,9 +216,7 @@ export class UserMenu {
     }
 
     items.push(
-      // 个人资料、账户安全、偏好都是个人设置的面板，这里只留一个入口直达；
-      // 管理人员从管理平台点它会回到工作空间——个人设置只有一处，管理平台不另放一份。
-      // 不带 LocalIdentity 守卫：没有本地身份时个人设置里仍有偏好面板。
+      // 个人设置只有一处（工作空间），管理平台不另放；不带 LocalIdentity 守卫：没有本地身份时仍有偏好面板。
       {
         //#if (IncludeLocalization)
         label: this.texts.personalSettings(),
@@ -234,9 +227,7 @@ export class UserMenu {
         action: () => this.router.navigate(['/workspace/settings']),
       },
       { separator: true },
-      // 这里刻意没有「切换租户」：已登录会话的租户由 cookie claim 定案，换租户只能重新登录，
-      // 所以那一项做的事其实就是退出登录，再单列一个入口只是让人以为存在会话内切换。
-      // 换租户走登录页：退出 → 登录页按域名定案，或（域名不表态时）在那里清掉 / 换一个租户。
+      // 刻意没有「切换租户」：会话租户由 cookie claim 定案，换租户只能退出后在登录页重新选择。
       {
         //#if (IncludeLocalization)
         label: this.texts.logout(),
@@ -267,19 +258,8 @@ export class UserMenu {
       .filter((group) => group.length > 0),
   );
 
-  // 这里**刻意没有**"当前租户"一行。
-  //
-  // 产品上它不解决任何问题：租户数据本就隔离，用户只可能看到自己租户的数据；
-  // 会话内也换不了租户（见下面菜单项的注释），所以这个值既不会变、也不用来做决定。
-  // 用子域名区分租户的部署里，地址栏已经是答案。
-  //
-  // 实现上更不能照着 TenantContextService 显示：那份上下文是**登录入口的路由提示**
-  // （用户在登录页填的名字，存在 localStorage），不是会话事实。实测过：保持宿主超管登录态不变，
-  // 只往 localStorage 写一个名字，这一行就会显示那个并不存在的租户——它报的是本地字符串，
-  // 不是"这个会话属于谁"。
-  //
-  // 将来真要显示，唯一可接受的来源是**会话自己**（给 WhoAmI 加租户字段，用展示名而不是路由 key），
-  // 并且只在确实处于租户时渲染。别再从 TenantContextService 取。
+  // 刻意不显示"当前租户"：会话内租户不变，子域名部署下地址栏已是答案。也不能取 TenantContextService：
+  // 那是登录入口的路由提示（localStorage），不是会话事实；确需显示时应由会话（WhoAmI）提供展示名。
 
   handleLogout(): void {
     this.authService.logout();

@@ -44,19 +44,11 @@ const SYSTEM = 'System';
 //#endif
 
 /**
- * 侧栏菜单的信息架构。
- *
- * 分组改错了既不报错、也不影响任何功能，只是让人找不到入口——没有断言就等于没有约束。
- * 这里钉住两个区各自的分组骨架，以及判据里能自动验的部分：不留兜底组、
- * 个人设置只在工作空间（管理平台不另放一份）、权限不足的组整组消失。
+ * 侧栏菜单的信息架构：钉住两个区的分组骨架、不留兜底组、个人设置只在工作空间、
+ * 权限不足的组整组消失。
  */
 describe('DefaultSidebar menu groups', () => {
-  /**
-   * 只构造类，不渲染模板。
-   *
-   * 分组是这个类上的 computed，而模板依赖 Spartan 的 sidebar 上下文；为了验分组去搭那套
-   * 上下文，等于让这组用例依赖一堆与 IA 无关的东西。
-   */
+  /** 只构造类，不渲染模板：分组是类上的 computed，模板依赖与信息架构无关的 sidebar 上下文。 */
   function build(options: { platform: boolean; permissions?: readonly string[] }): DefaultSidebar {
     const granted = new Set(options.permissions ?? []);
     TestBed.configureTestingModule({
@@ -98,9 +90,7 @@ describe('DefaultSidebar menu groups', () => {
     expect(routesOf(sidebar)).toEqual(['/workspace/dashboard', '/workspace/placeholder']);
   });
 
-  // 个人设置只有一个入口：头像菜单。菜单树里再放一份，顶栏会多出一个齿轮、侧栏会多出一组，
-  // 而它们和头像菜单里的那一项去的是同一个地址。
-  // 工作空间侧由上一条的精确 toEqual 覆盖；这里只查权限开满的平台侧。
+  // 个人设置只有头像菜单一个入口；工作空间侧由上一条的精确 toEqual 覆盖，这里只查平台侧。
   it('leaves the personal settings entry out of the menu tree', () => {
     const everything = Object.values(PERMISSIONS).map((group) => group.default);
 
@@ -169,10 +159,8 @@ describe('DefaultSidebar menu groups', () => {
 //#if (IncludeLocalization)
 
 /**
- * 菜单文案随词条到达更新。
- *
- * 语言切换不再等词条加载完才激活，首次读菜单时词条可能还在路上。文案若靠「读活动语言 + 同步 translate()」，
- * 那一刻会把键名缓存下来，之后语言不再变化，键名就一直留在菜单上。
+ * 菜单文案随词条到达更新：首次读菜单时词条可能还在路上，靠同步 translate() 会把键名
+ * 留在菜单上。
  */
 describe('DefaultSidebar menu labels', () => {
   it('shows the translated labels once translations arrive after the first read', () => {

@@ -13,12 +13,7 @@ import { AccountService } from '../../services/account-service';
 
 import type { Mock } from 'vitest';
 
-/**
- * 个人资料面板：资料类写请求成功后由本页把服务端返回的资料写回当前用户。
- *
- * API 服务只封装 HTTP，不再顺手改写认证状态；写回漏掉时头像、显示名和邮箱验证状态
- * 只在下次刷新后才更新，失败时则绝不能写回。
- */
+/** 个人资料面板：资料类写请求成功后由本页把服务端返回的资料写回当前用户，失败时不写回。 */
 describe('ProfilePanel', () => {
   const initialUser = {
     id: 'user-1',

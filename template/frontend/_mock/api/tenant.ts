@@ -70,13 +70,7 @@ export function getTenantById(id: string) {
   return toTenantOutput(tenant);
 }
 
-/**
- * 按主机名探测租户（匿名）。
- *
- * Mock 里没有 `DomainFormat` 这类部署配置，`localhost` 也不是任何受管域，
- * 因此**恒定回"域名不表态"**——这正是真实后端在同一条件下的回答，
- * 登录页据此保留记住的租户并允许手选。
- */
+/** 按主机名探测租户（匿名）。Mock 没有子域名配置，恒回"域名不表态"，与真实后端在 localhost 下一致。 */
 export function getTenantByHost(): TenantByHostOutputDto {
   return { decision: 'undecided' };
 }
@@ -104,12 +98,7 @@ export function getTenantConnections(tenantId: string) {
   return tenant.connections.map((connection) => toTenantConnection(tenant, connection));
 }
 
-/**
- * 登记或更新一条连接。
- *
- * `expectedVersion` 必须显式给出（首次登记传 `null`）：后端把"缺这个字段"当 400 处理，
- * 而不是按后写者胜出。这条不复刻的话，Mock 下"忘了带版本"会一路成功，换到真实后端才炸。
- */
+/** 登记或更新一条连接。`expectedVersion` 必须显式给出（首次传 `null`），后端对缺字段返回 400。 */
 export function setTenantConnection(tenantId: string, rawName: string, value: any) {
   const tenant = findTenantOrThrow(tenantId);
   const name = normalizeConnectionName(rawName);
@@ -323,7 +312,6 @@ export function impersonateTenant(id: string): 'ok' {
 export const TENANT_API = {
   'GET /api/v1/tenants': (req: MockRequest) => getTenants(req.queryParams),
   // by-host 必须排在 :id 之前，否则会被当成一个 id 走到按 id 查询那条上。
-  // 按名字查租户的匿名端点已被移除：它是一个租户存在性 oracle
   'GET /api/v1/tenants/by-host': () => getTenantByHost(),
   'GET /api/v1/tenants/:id': (req: MockRequest) => getTenantById(req.params.id),
   'POST /api/v1/tenants': (req: MockRequest) => createTenant(req.body),

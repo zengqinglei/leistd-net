@@ -4,12 +4,7 @@ export const AVATAR_SIZE = 256;
 /** 接受的原图类型，与后端 AvatarPolicy 按文件头核实的类型一致。 */
 export const ACCEPTED_AVATAR_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
 
-/**
- * 原图体积上限。
- *
- * 只是防止读入一张巨图把页面卡住：真正提交的是缩放后的结果（通常几十 KB），
- * 服务端对它另有上限。所以这里可以比服务端宽得多，用户不必自己先压一遍图。
- */
+/** 原图体积上限，只防读入巨图卡住页面；提交的是缩放后的结果，服务端另有上限。 */
 export const MAX_SOURCE_AVATAR_BYTES = 10 * 1024 * 1024;
 
 export type AvatarImageRejection = 'type' | 'size' | 'decode';
@@ -23,11 +18,8 @@ export class AvatarImageRejected extends Error {
 }
 
 /**
- * 把用户选的图片处理成可提交的头像：居中裁成正方形、缩放到 {@link AVATAR_SIZE}，编码成 data URL。
- *
- * 在浏览器里做而不是交给服务端：服务端做图像处理要引入图像库（常见的几个都有许可证约束），
- * 而浏览器自带解码与缩放。优先编码成 WebP；浏览器不支持 WebP 编码时（`toDataURL` 会悄悄退回 PNG）
- * 改用 JPEG，并先铺白底——JPEG 没有透明通道，透明处会变黑。
+ * 把用户选的图片居中裁成正方形、缩放到 {@link AVATAR_SIZE} 并编码成 data URL。在浏览器里处理，
+ * 服务端不必引入图像库；优先 WebP，不支持 WebP 编码时改用 JPEG 并先铺白底（JPEG 无透明通道）。
  */
 export async function prepareAvatarImage(file: File): Promise<string> {
   if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {

@@ -8,7 +8,6 @@ import { permissionGuard } from './core/guards/permission-guard';
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from './core/i18n/translation-scopes';
 //#endif
-// 布局组件导入
 import { DefaultLayout } from './layout/default/default-layout';
 //#if (LocalIdentity)
 import { EmptyLayout } from './layout/empty/empty-layout';
@@ -18,7 +17,6 @@ import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.consta
 
 export const routes: Routes = [
   //#if (LocalIdentity)
-  // Empty Layout - 认证相关页面（登录、注册等）
   {
     path: 'auth',
     //#if (IncludeLocalization)
@@ -55,7 +53,6 @@ export const routes: Routes = [
       import('./features/public/components/forbidden/forbidden').then((m) => m.Forbidden),
   },
 
-  // Default Layout - 平台管理
   {
     path: 'platform',
     component: DefaultLayout,
@@ -75,6 +72,5 @@ export const routes: Routes = [
     loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
   },
 
-  // 兜底路由
   { path: '**', redirectTo: '' },
 ];

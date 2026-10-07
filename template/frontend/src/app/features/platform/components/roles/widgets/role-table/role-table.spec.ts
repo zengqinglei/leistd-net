@@ -15,10 +15,7 @@ import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.t
 //#endif
 import { RoleOutputDto } from '../../../../dtos/role.dto';
 
-/**
- * 角色表格与用户表格共用同一套受控分页/排序约定，这里覆盖同样的关键路径。
- * 两张表各自实现，语义漂移不会有任何东西报错，只能靠各自的用例钉住。
- */
+/** 角色表格与用户表格共用受控分页与排序约定，但各自实现，因此各自用例钉住。 */
 describe('RoleTable', () => {
   let fixture: ComponentFixture<RoleTable>;
   let component: RoleTable;
