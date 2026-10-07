@@ -46,8 +46,8 @@ BASELINE = {'backend-crud': 53365, 'fullstack-crud': 89680, 'ui-change': 51672,
             'new-text': 33266, 'review-only': 78841}
 
 # 当前上限：调整后不得回升；有意放宽时连同理由一并修改
-LIMITS = {'backend-crud': 33747, 'fullstack-crud': 58291, 'ui-change': 39271,
-          'new-text': 19055, 'review-only': 39404}
+LIMITS = {'backend-crud': 33400, 'fullstack-crud': 58230, 'ui-change': 39230,
+          'new-text': 17500, 'review-only': 38960}
 
 
 def measure(task: str) -> tuple[int, list[tuple[str, int]]]:
