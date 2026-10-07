@@ -52,6 +52,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from urllib.parse import unquote
@@ -108,6 +109,8 @@ WHITELIST = [
      'reason': '命名占位：Xxx 代表具体包名'},
     {'source': 'docs/framework/development-guide.md', 'ref': 'framework/artifacts', 'mode': 'source',
      'reason': 'CI 构建输出目录，不入库'},
+    {'source': 'docs/framework/development-guide.md', 'ref': '.tmp/package-consumer/', 'mode': 'source',
+     'reason': '包消费检查运行时创建的工作目录，不入库'},
     {'source': 'docs/framework/versioning.md', 'ref': 'framework/artifacts', 'mode': 'source',
      'reason': 'CI 构建输出目录，不入库'},
     {'source': 'docs/template/development-guide.md', 'ref': 'framework/artifacts', 'mode': 'source',
@@ -161,12 +164,23 @@ class Problem:
 
 
 class Delivery:
-    """一棵交付树：解析根与精确大小写的存在性缓存。"""
+    """一棵交付树：解析根与精确大小写的存在性缓存。
 
-    def __init__(self, root, known_roots):
+    tracked 给出时（源码模式），存在性只认版本库文件清单：被忽略的本地产物（如 .tmp/）在干净检出与 CI 中不存在，
+    不能让它们掩盖失效引用。生成模式的产物是全新生成的目录，按文件系统判断。
+    """
+
+    def __init__(self, root, known_roots, tracked=None):
         self.root = os.path.abspath(root)
         self.known_roots = known_roots
         self._listing = {}
+        self._tracked = None
+        if tracked is not None:
+            self._tracked = set(tracked)
+            for path in tracked:
+                parts = path.split('/')
+                for index in range(1, len(parts)):
+                    self._tracked.add('/'.join(parts[:index]))
 
     def _entries(self, directory):
         if directory not in self._listing:
@@ -190,6 +204,8 @@ class Delivery:
         relative = self.relative(absolute)
         if relative is None:
             return False
+        if self._tracked is not None:
+            return relative == '' or relative.replace(os.sep, '/') in self._tracked
         current = self.root
         for part in relative.split(os.sep) if relative else []:
             entries = self._entries(current)
@@ -360,6 +376,15 @@ class Config:
         return None
 
 
+def repository_files(repo_root):
+    """版本库文件清单：已跟踪与未跟踪但未被忽略的文件（新建未提交的文件照样算），不含被忽略的本地产物。"""
+    result = subprocess.run(['git', '-C', repo_root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+                            capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(f'无法列出版本库文件（git ls-files 退出码 {result.returncode}）：源码模式须在 git 工作树中运行')
+    return [path for path in result.stdout.decode('utf-8').split('\0') if path]
+
+
 def collect(repo_root, generated_root, context_roots, whitelist):
     """返回 (问题列表, 文档数, 引用数, 命中的白名单下标集合, 扫描到的文档键集合)。"""
     mode = 'generated' if generated_root else 'source'
@@ -369,8 +394,10 @@ def collect(repo_root, generated_root, context_roots, whitelist):
                 for path in iter_markdown(project.root, ['.'])]
         config = Config(project)
     else:
-        repository = Delivery(repo_root, KNOWN_ROOTS['repository'])
-        template = Delivery(os.path.join(repo_root, 'template'), KNOWN_ROOTS['template'])
+        tracked = repository_files(repo_root)
+        repository = Delivery(repo_root, KNOWN_ROOTS['repository'], tracked)
+        template = Delivery(os.path.join(repo_root, 'template'), KNOWN_ROOTS['template'],
+                            [path[len(TEMPLATE_PREFIX):] for path in tracked if path.startswith(TEMPLATE_PREFIX)])
         docs = []
         for path in iter_markdown(repository.root, SOURCE_SCAN, SOURCE_EXCLUDED_DIRS):
             key = os.path.relpath(path, repository.root).replace(os.sep, '/')
@@ -673,6 +700,7 @@ def self_test():
     try:
         source_root = os.path.join(workspace, 'repo')
         write_tree(source_root, SOURCE_FIXTURE)
+        subprocess.run(['git', 'init', '-q', source_root], check=True)
         problems, docs, references, used, _ = collect(source_root, None, SELF_TEST_CONTEXT_ROOTS,
                                                       SELF_TEST_WHITELIST)
         actual = problem_keys(problems)
@@ -687,6 +715,14 @@ def self_test():
                                                'reason': '自检：陈旧项'}])
         if not any('白名单陈旧项' in line and 'deploy/.env2' in line for line in stale):
             failures.append('源码模式未报告未命中的白名单项')
+        # 被忽略的本地产物在磁盘上存在，也不能让引用通过：干净检出与 CI 里没有它
+        ignored_root = os.path.join(workspace, 'ignored')
+        write_tree(ignored_root, {'README.md': '构建输出在 `docs/out/report.txt`。', '.gitignore': 'docs/out/',
+                                  'docs/out/report.txt': 'x', 'docs/guide.md': '# 指南'})
+        subprocess.run(['git', 'init', '-q', ignored_root], check=True)
+        ignored_problems, _, _, _, _ = collect(ignored_root, None, {}, [])
+        if not any('docs/out/report.txt' in str(problem) for problem in ignored_problems):
+            failures.append('源码模式让被 .gitignore 忽略、仅在本地存在的产物通过了存在性检查')
         invalid = validate_whitelist([{'source': 'docs/a.md', 'ref': 'x', 'mode': 'both', 'reason': ''},
                                       {'source': 'a', 'ref': 'b', 'mode': 'prefix', 'reason': 'r'}])
         if len(invalid) != 4:
@@ -727,6 +763,7 @@ def self_test():
             failures.append(f'引用为零未失败：{lines}')
         empty_repo = os.path.join(workspace, 'empty-repo')
         os.makedirs(empty_repo)
+        subprocess.run(['git', 'init', '-q', empty_repo], check=True)
         lines, _ = run(empty_repo, None, {}, [])
         if not any('文档数量为零' in line for line in lines):
             failures.append(f'源码模式扫描为空未失败：{lines}')
