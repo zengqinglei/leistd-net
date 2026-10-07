@@ -819,3 +819,17 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
   跑完后逐个报出并以退出码 1 结束（预演同样如此）。控制库、OIDC 存储、默认业务库与显式 `MigrationTarget` 出错仍立即结束，取消立即传播。
   非零退出可能意味着部分库已经迁移、且不会回滚：发布流水线据退出码停下，修好后重跑；新旧 schema 并存期间的兼容性按部署说明的 Expand 阶段要求保证。
   首次安装的判定（只读预演、控制库仍有待迁移、缺表）不变。
+
+## 35. Resource 会话主体不再被默认 ClaimActions 删声明（CRM R13）
+
+- **现象**：Resource 浏览器会话登录时，访问令牌里的 `acr`、`aud`、`azp`、`iss`、`iat`、`nbf`、`exp`、`nonce` 等声明被删掉；首次续期后这些声明又出现。
+  按这类声明做判断的派生项目（如以 `acr` 判定近期多因素认证），结果随会话是否续期过而变。
+- **原因**：会话主体由 `ResourceSessionRefresher.ValidateAccessTokenAsync` 按访问令牌构建，登录（`OnTokenValidated`）与续期同源；
+  但官方 `OpenIdConnectHandler` 在 `OnTokenValidated` 之后，还会用空载荷对换上的主体执行 `OpenIdConnectOptions.ClaimActions`，
+  其默认的 `DeleteClaim` 不看载荷，按类型直接删除。续期由模板自行实现，不经过这一步。
+  官方 Blazor OIDC 示例使用 id_token 主体，它的续期器同样不执行 ClaimActions；示例没有基于这些声明做本项目这类判定。
+- **修正**：模板在 Resource 的 `AddOpenIdConnect` 中 `options.ClaimActions.Clear()`，表明这个处理器不做声明映射，会话主体只由上述构建函数决定。
+  不影响签名、issuer、受众、nonce、PKCE 等协议校验。新增集成测试断言登录后保留访问令牌的 `acr`、`aud`，且首次续期前后声明类型一致、不混入 id_token 的声明。
+- **派生项目**：照此加一行；已自行 `ClaimActions.Clear()` 的保持即可。已存入服务端的会话票据不会立即补回声明，
+  下次续期或重新登录后才按新规则构建；无需清空票据库或强制退出。会话里多出的这些声明若参与派生项目的声明判定，请据此复核。
+- §29 中"会话主体来自访问令牌，id_token 声明不进会话"的说明由本节补全。

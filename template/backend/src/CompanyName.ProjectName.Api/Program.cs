@@ -651,6 +651,10 @@ try
         options.ResponseType = "code";
         options.SaveTokens = true;
         options.MapInboundClaims = false;
+        // 会话主体只由 ValidateAccessTokenAsync 构建（登录在下方 OnTokenValidated，续期在 ResourceSessionRefresher），
+        // 两条路同源。处理器的默认 ClaimActions 是给 id_token/userinfo 做映射的，却会在 OnTokenValidated 之后
+        // 对换上的访问令牌主体再跑一遍，删掉 acr、aud、iss、exp 等——只删登录这一条路，首次续期后它们又回来
+        options.ClaimActions.Clear();
         options.CallbackPath = "/api/v1/auth/signin";
         // 授权与退出请求都以自动提交的表单 POST 发往 Identity：id_token_hint 不进地址栏、历史记录与 Referer
         options.AuthenticationMethod = OpenIdConnectRedirectBehavior.FormPost;

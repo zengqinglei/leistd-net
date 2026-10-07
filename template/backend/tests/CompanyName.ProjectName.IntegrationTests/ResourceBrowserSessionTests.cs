@@ -1,10 +1,10 @@
 #if (RemoteTokenAuth)
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
 #if (!IncludeMultiTenancy)
-using System.Security.Claims;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Security.Claims;
 using Microsoft.EntityFrameworkCore;
@@ -110,6 +110,48 @@ public sealed class ResourceBrowserSessionTests
         browser.DefaultRequestHeaders.Authorization = null;
         await options.SessionStore.RemoveAsync(key);
         Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
+    /// 会话主体只由访问令牌构建，登录与续期同源：访问令牌里的 acr、aud 等登录时就在，首次续期前后声明一致，不混入 id_token。
+    /// </summary>
+    /// <remarks>
+    /// 官方处理器在 OnTokenValidated 之后还会对换上的主体执行默认 ClaimActions，删掉 acr、aud、iss、exp 等；
+    /// 续期不经过它，这些声明首次续期后才出现。派生项目按访问令牌声明做判断（如近期认证）时，结果随会话是否续期过而变。
+    /// </remarks>
+    [Fact]
+    public async Task The_session_principal_keeps_access_token_claims_from_login_through_refresh()
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = Host(factory, issuer);
+        var cookie = await LoginAsync(host, issuer);
+        var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthenticationSchemeNames.SessionCookie);
+        var key = options.TicketDataFormat.Unprotect(cookie.Split('=', 2)[1])!.Principal.Claims.Single().Value;
+
+        var login = (await options.SessionStore!.RetrieveAsync(key))!.Principal;
+        AssertBuiltFromAccessToken(login);
+        var loginTypes = login.Claims.Select(claim => claim.Type).Distinct().Order().ToArray();
+
+        var ticket = (await options.SessionStore.RetrieveAsync(key))!;
+        ticket.Properties.UpdateTokenValue("expires_at", TimeProvider.System.GetUtcNow().AddSeconds(-1).ToString("o"));
+        await options.SessionStore.RenewAsync(key, ticket);
+        using var browser = Client(host, cookie);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(1, issuer.RefreshCount);
+
+        var refreshed = (await options.SessionStore.RetrieveAsync(key))!.Principal;
+        AssertBuiltFromAccessToken(refreshed);
+        // 签发方夹具每次签同样结构的令牌：声明类型应一致（jti、时间等取值可以变）
+        Assert.Equal(loginTypes, refreshed.Claims.Select(claim => claim.Type).Distinct().Order().ToArray());
+
+        static void AssertBuiltFromAccessToken(ClaimsPrincipal principal)
+        {
+            Assert.True(principal.Identity?.IsAuthenticated);
+            Assert.Equal(Issuer.AccessTokenAcr, Assert.Single(principal.FindAll("acr")).Value);
+            Assert.Contains(principal.FindAll("aud"), claim => claim.Value == "resource-api");
+            Assert.Null(principal.FindFirst("id_token_only"));
+        }
     }
 
     /// <summary>
@@ -479,6 +521,7 @@ public sealed class ResourceBrowserSessionTests
     private sealed class Issuer : HttpMessageHandler
     {
         public const string Address = "https://identity.test/";
+        public const string AccessTokenAcr = "access-token-acr";
         public RsaSecurityKey Key { get; } = new(RSA.Create(2048)) { KeyId = "oidc-test" };
         public string Subject { get; } = Guid.NewGuid().ToString();
         public string Nonce { get; set; } = "";
@@ -517,8 +560,9 @@ public sealed class ResourceBrowserSessionTests
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new
             {
                 access_token = Token("resource-api", "at+jwt", new()
-                { ["sub"] = Subject, ["preferred_username"] = "oidc-user", ["email"] = "user@example.test", ["role"] = "operator", ["jti"] = Guid.NewGuid().ToString() }),
-                id_token = Token("resource-test", "JWT", new() { ["sub"] = Subject, ["nonce"] = Nonce }),
+                { ["sub"] = Subject, ["preferred_username"] = "oidc-user", ["email"] = "user@example.test", ["role"] = "operator", ["acr"] = AccessTokenAcr, ["jti"] = Guid.NewGuid().ToString() }),
+                // id_token 带一个与访问令牌不同的 acr 和一个专属声明：会话里出现它们，就说明主体混入了 id_token
+                id_token = Token("resource-test", "JWT", new() { ["sub"] = Subject, ["nonce"] = Nonce, ["acr"] = "id-token-acr", ["id_token_only"] = "x" }),
                 refresh_token = refresh ? "refresh-2" : "refresh-1", token_type = "Bearer", expires_in = 600
             }) };
         }
