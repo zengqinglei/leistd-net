@@ -92,7 +92,7 @@ $selection = Get-Content .tmp/local-template-scenarios.json -Raw | ConvertFrom-J
 
 不使用 workflow 级 paths-ignore。汇总严格核对每项 success/skipped、候选、计划与适用证明；检查数为零、失败、取消、意外跳过或缺失回执均失败。格式直接读取生成 frontend 文件，使用锁定 Prettier 与实际配置/忽略范围，避免 .tmp 被 Git 忽略后假绿；不扩展到根 docs。
 
-非发布 push 只有在 before 是候选祖先，且同一分支 release workflow 的最新 before 推送运行和尝试成功、质量汇总成功时才允许轻量文档责任。candidate 与 CI 分别查询 Actions API；失败、取消、进行中、缺失或 API/权限错误均完整验证。机器人或 [skip ci] 的 before 没有成功质量汇总，也按完整验证处理。发布基线另见[版本规范](./versioning.md#正式版发布全自动)。
+非发布 push 只有在 before 是候选祖先，且同一分支 release workflow 的最新 before 推送运行和尝试成功、质量汇总成功时才允许轻量文档责任。candidate 与 CI 分别查询 Actions API；失败、取消、进行中、缺失或 API/权限错误均完整验证。机器人或 [skip ci] 的 before 没有成功质量汇总，也按完整验证处理。发布基线另见[版本规范](./versioning.md#正式版发布全自动)。状态查询使用 GitHub 的[工作流运行接口](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow)和[指定运行尝试的作业接口](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)。
 
 ## 编译器、分析器与静态闸门
 
