@@ -15,7 +15,7 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 | 参数、条件、文件裁剪 | `template.json`、相邻条件块、`docs/template/development-guide.md` | 按质量规范区分局部源条件与全局生成输入，验证实际产物 |
 | 架构边界、权限、租户、数据库 | 调用链、Migrator、`docs/architecture/design-principles.md` 及相关后端规范 | 真实 PostgreSQL 与受影响生成场景 |
 | Dockerfile、Compose、部署入口 | 实际容器配置、`template/docs/deploy/README.md` | 镜像可构建、.NET 运行时层可用；实际启动另验 |
-| 缺陷修复 | 复现所需的生成场景、相关测试 | 在生成项目中先写修复前失败的回归测试，修复写回模板源后重新生成受影响场景验证 |
+| 缺陷修复 | 复现所需的生成场景、相关测试 | 在生成项目中先写修复前失败的回归测试，回归测试与修复一起写回模板源后重新生成受影响场景验证 |
 | 项目 Skill 或规范 | 生成项目入口、官方 `skill-creator`、`template/docs/README.md` | Skill 校验和代表性生成结果 |
 
 模板通过 `PackageReference` 消费框架；`Api` 是组合根，Application 不依赖 Infrastructure。模板源可编辑不等于交付完成，必须验证实际生成结果。
