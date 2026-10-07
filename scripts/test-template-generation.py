@@ -267,6 +267,41 @@ def check_deployment(output):
                                  (output / 'docs/standards/project-structure.md').read_text(encoding='utf-8')))
 
 
+def self_test_gitlab_ci():
+    """GitLab 薄壳判据：合法配置通过，语法错误与缺 DinD 变量都失败。
+
+    在完整生成运行开头执行（该运行本就需要 PyYAML 解析产物），不放进 --self-test：
+    check-all 的静态闸门不依赖 PyYAML。
+    """
+    valid = """stages:
+  - verify
+verify:
+  stage: verify
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  services:
+    - name: docker:dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apt-get update
+  script:
+    - pwsh -NoProfile -File scripts/verify.ps1
+"""
+    failures = []
+    check_gitlab_ci(valid)
+    for label, text in [('语法错误', valid.replace('  stage: verify', '  stage: [verify')),
+                        ('缺 DOCKER_HOST', valid.replace('    DOCKER_HOST: "tcp://docker:2375"\n', ''))]:
+        try:
+            check_gitlab_ci(text)
+            failures.append(f'GitLab 薄壳判据未拒绝：{label}')
+        except Exception:
+            pass
+    return failures
+
+
 def self_test():
     """部署资产判据的夹具：合法、违规与例外各至少一例。"""
     options = ["""
@@ -354,6 +389,26 @@ def expected_verify_steps(values):
     steps += ['backend-restore', 'backend-build', 'backend-test:Generation.Probe.UnitTests', 'backend-test:Generation.Probe.IntegrationTests']
     steps += ['frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build'] if values['SpaFrontend'] else []
     return steps
+
+
+def check_gitlab_ci(text):
+    """按 YAML 实际解析 GitLab 薄壳：语法错误直接失败，再核对单一 verify 作业、DinD 与 Testcontainers 连接变量。"""
+    try:
+        import yaml
+    except ImportError as error:
+        raise SystemExit('需要 PyYAML 解析生成的 .gitlab-ci.yml（python -m pip install PyYAML==6.0.2）') from error
+    document = yaml.safe_load(text)
+    assert isinstance(document, dict) and list(document) == ['stages', 'verify'], f'GitLab CI top-level keys: {document and list(document)}'
+    assert document['stages'] == ['verify'], f'GitLab CI stages: {document["stages"]}'
+    job = document['verify']
+    assert job['stage'] == 'verify', 'GitLab CI job stage'
+    assert str(job['image']).startswith('mcr.microsoft.com/dotnet/sdk:'), f'GitLab CI image: {job["image"]}'
+    services = [s for s in job['services'] if isinstance(s, dict) and s.get('name') == 'docker:dind']
+    assert services and services[0].get('command') == ['--tls=false'], 'GitLab CI DinD service with --tls=false'
+    variables = job['variables']
+    assert variables.get('DOCKER_HOST') == 'tcp://docker:2375' and variables.get('DOCKER_TLS_CERTDIR') == '', 'Testcontainers DinD variables'
+    assert isinstance(job.get('before_script'), list) and job['before_script'], 'GitLab CI before_script'
+    assert job['script'] == ['pwsh -NoProfile -File scripts/verify.ps1'], f'GitLab CI script: {job["script"]}'
 
 
 def check_verify_script(output, values):
@@ -452,14 +507,7 @@ def validate(output, values, config):
             assert 'scripts/verify.ps1' in wrapper, f'CI wrapper must call verify: {ci_file}'
             assert ('playwright' in wrapper) == values['SpaFrontend'], f'CI wrapper browser setup applicability: {ci_file}'
     if values['Ci'] == 'gitlab':
-        # 结构与必需键（不依赖 YAML 库）：单一 verify 作业、DinD 服务与 Testcontainers 官方连接变量
-        gitlab = (output / ci_files['gitlab']).read_text(encoding='utf-8')
-        top_level = re.findall(r'^([A-Za-z_][\w-]*):', gitlab, re.M)
-        assert top_level == ['stages', 'verify'], f'GitLab CI top-level keys: {top_level}'
-        for required in (r'^  stage: verify$', r'^  image: mcr\.microsoft\.com/dotnet/sdk:', r'^    - name: docker:dind$',
-                         r'^      command: \["--tls=false"\]$', r'^    DOCKER_HOST: "tcp://docker:2375"$', r'^    DOCKER_TLS_CERTDIR: ""$',
-                         r'^  before_script:$', r'^  script:\n    - pwsh -NoProfile -File scripts/verify\.ps1$'):
-            assert re.search(required, gitlab, re.M), f'GitLab CI is missing {required}'
+        check_gitlab_ci((output / ci_files['gitlab']).read_text(encoding='utf-8'))
     assert not any(p.startswith('.github/') and p != ci_files['github'] for p in digests), 'Unexpected files under .github'
     check_verify_script(output, values)
     assert ('单实例配 `KeysPath`' in deployment) == values['SpaFrontend'], 'Browser session deployment prerequisite applicability'
@@ -524,6 +572,8 @@ def main():
     if args.self_test:
         raise SystemExit(self_test())
     assert 1 <= args.workers <= 8
+    gitlab_failures = self_test_gitlab_ci()
+    assert not gitlab_failures, f'GitLab 薄壳判据自检失败：{gitlab_failures}'
     def source_digests():
         return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted((ROOT / 'template').rglob('*')) if p.is_file()

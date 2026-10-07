@@ -320,6 +320,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: 安装 YAML 解析依赖
+        run: python -m pip install PyYAML==6.0.2
       - name: 生成 320 个有效形态并校验 768 组原始输入
         run: python scripts/test-template-generation.py --output .tmp/generation-proof
       - uses: actions/upload-artifact@v4

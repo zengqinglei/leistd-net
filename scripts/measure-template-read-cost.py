@@ -35,6 +35,11 @@ REQUIRED_COMPANIONS: dict[str, list[str]] = {
     SPARTAN: spartan_rules('styling.md', 'composition.md'),
 }
 
+# 任务 → 按任务内容必读、不随某个文件自动带出的规则：样例请求涉及表单，就要读 forms.md
+TASK_REQUIRED: dict[str, list[str]] = {
+    'ui-change': spartan_rules('forms.md'),
+}
+
 
 # 任务 → (样例请求, 应读文件)
 TASKS: dict[str, tuple[str, list[str]]] = {
@@ -72,6 +77,10 @@ def missing_companions(tasks: dict[str, tuple[str, list[str]]]) -> list[str]:
         for path, companions in REQUIRED_COMPANIONS.items():
             if path in files:
                 errors += [f'{task}：含 {path} 但缺伴随文件 {c}' for c in companions if c not in files]
+    for required_task, required in TASK_REQUIRED.items():
+        if required_task in tasks:
+            files = tasks[required_task][1]
+            errors += [f'{required_task}：缺按任务必读的 {r}' for r in required if r not in files]
     return errors
 
 
@@ -80,8 +89,15 @@ def self_test() -> list[str]:
     task, (sample, files) = next((t, v) for t, v in TASKS.items() if SPARTAN in v[1])
     removed = REQUIRED_COMPANIONS[SPARTAN][0]
     broken = {task: (sample, [f for f in files if f != removed])}
-    errors = missing_companions(broken)
-    return [] if any(removed in e for e in errors) else [f'自检反例未报出：{task} 删掉 {removed}']
+    failures = [] if any(removed in e for e in missing_companions(broken)) else [f'自检反例未报出：{task} 删掉 {removed}']
+    # 反例：从任务里删掉按任务必读的规则，自检必须报出
+    for required_task, required in TASK_REQUIRED.items():
+        sample, files = TASKS[required_task]
+        for path in required:
+            broken = {required_task: (sample, [f for f in files if f != path])}
+            if not any(path in e for e in missing_companions(broken)):
+                failures.append(f'自检反例未报出：{required_task} 删掉 {path}')
+    return failures
 
 
 def measure(task: str) -> tuple[int, list[tuple[str, int]]]:
