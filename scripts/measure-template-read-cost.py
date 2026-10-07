@@ -61,9 +61,9 @@ BASELINE = {'backend-crud': 53365, 'fullstack-crud': 97875, 'ui-change': 63719,
             'new-text': 33266, 'review-only': 78841}
 
 # 当前上限：调整后不得回升；有意放宽时连同理由一并修改。
-# 暂取计入 Spartan rules 后的读数加约 1%，阶段六文档改动全部完成后再定终值
-LIMITS = {'backend-crud': 33460, 'fullstack-crud': 66610, 'ui-change': 51500,
-          'new-text': 17610, 'review-only': 39040}
+# 阶段六完成时的读数加约 1%（计入 Spartan 必读 rules 的口径）
+LIMITS = {'backend-crud': 33790, 'fullstack-crud': 66940, 'ui-change': 51810,
+          'new-text': 17640, 'review-only': 39380}
 
 
 def missing_companions(tasks: dict[str, tuple[str, list[str]]]) -> list[str]:
