@@ -96,20 +96,32 @@ Spartan Skill 的 Nx 分支属于上游维护内容，不在本阶段删改。
 
 ## 4. 闸门（G5）
 
-1. **文档引用存在性**：新增 `scripts/check-doc-references.py`。
-   - **两种运行方式**：
-     - 源码模式：根为仓库，扫描 `template/**/*.md`（不含 node_modules、libs/ui）、`docs/**/*.md`、`framework/docs/**/*.md`、`.agents/skills/**/*.md`、`skills/**/*.md`。路径按“文档所在交付面”的根解析：模板文档以 `template/` 为根，其余以仓库根为根。
-     - 生成模式（`--root <生成项目>`）：根为生成项目，扫描其全部 `.md`，路径以生成项目根解析。
-   - **检查对象**：
-     - 反引号包裹、看起来像相对路径的引用（含 `/` 且带已知扩展名或以已知目录开头）。
-     - `npm run <脚本>`：所属项目定为离文档最近的 `package.json`，模板为 `frontend/`。
-     - `ng <执行目标>`（build、serve、test、lint、e2e 等）对照 `angular.json` 的 architect 目标；`ng generate` 视为 generator，不检查。
-     - `python3|py scripts/*.py`、`pwsh *.ps1`。
-   - **失败条件**：目标缺失、`package.json` 或 `angular.json` 解析失败、所属项目无法确定、扫描到的文档或引用数量为零。
-   - **白名单**：放在脚本内，每条写明来源文件、引用原文、适用模式（源码或生成）和理由，精确匹配，不做前缀或模糊匹配。“生成后才出现”只豁免源码模式，生成模式仍须存在。
-   - **自检反例**：缺文件、缺 npm 脚本、缺 Angular 目标、配置解析失败、白名单近似拼写不匹配、源码存在但生成后缺失、扫描为空。
-   - **Markdown 文件链接**：生成项目内的链接已由 `test-template-matrix.ps1` 检查；仓库文档（含 D2 改动）的文件链接由本脚本源码模式检查。锚点仍由 `check-markdown-anchors.py` 负责。
-   - **接线**：源码模式接入 check-all；生成模式接入矩阵的文档检查步骤。
+1. **文档引用存在性**：新增 `scripts/check-doc-references.py`，两种模式。
+   - **源码模式**（接入 check-all）：
+     - 扫描范围：仓库根 `README.md`、`docs/**/*.md`、`framework/docs/**/*.md`、`.agents/skills/**/*.md`、`skills/**/*.md`、`template/**/*.md`，排除 node_modules、libs/ui、bin、obj、dist、.angular。
+     - 只检查路径与链接，不检查命令。模板里的 `package.json`、`angular.json` 带条件指令，无法直接解析；命令统一交给生成模式校验，不在源码模式里跳过不报。
+   - **生成模式**（`--root <生成项目>`，接入矩阵文档检查步骤）：扫描生成项目全部 `.md`，排除口径同上；检查路径、链接与命令。条件裁剪后的配置是完整 JSON，命令只存在于未启用分支时，在对应场景中失败。
+   - **路径解析**：
+     - Markdown 链接：相对链接按文档所在目录解析；以 `/` 开头的按交付根解析（模板为生成项目根，其余为仓库根）。
+     - 反引号路径：一律按交付根解析。少数文档的上下文根不同（如 `frontend/README.md` 以 `frontend/` 为根、`frontend-i18n.md` 以 `frontend/src/app/` 为根），由脚本内的映射表精确登记“文档 → 解析根”；其余文档写交付根相对路径，D1a/D1b 改写时照此统一。
+     - 不做“尝试多个目录，找到就通过”。
+   - **命令解析**（仅生成模式）：
+     - `npm run <脚本>` 对应生成项目的 `frontend/package.json`，这是唯一的 npm 项目，映射写死。
+     - `ng <执行目标>`（build、serve、test、lint、e2e、extract-i18n 等）对照 `frontend/angular.json` 的 architect 目标；`ng generate`、`ng new` 是 generator，不检查。
+     - `python3|py scripts/*.py`、`pwsh *.ps1` 按交付根解析。
+     - 仓库文档里的 npm/ng 命令不在检查范围内；出现时须在映射表里登记所属项目，否则失败。
+   - **失败条件**：目标缺失、配置解析失败、所属项目无法确定、扫描到的文档或引用数量为零。
+   - **白名单**：放在脚本内，每条写明来源文件、引用原文、适用模式和理由，精确匹配，不做前缀或模糊匹配。“生成后才出现”只豁免源码模式，生成模式仍须存在。
+   - **自检反例**：
+     - 缺文件、缺 npm 脚本、缺 Angular 目标；
+     - 配置解析失败；
+     - 白名单近似拼写不匹配；
+     - 源码存在、生成后缺失；
+     - 命令只存在于未启用的条件分支；
+     - 合法条件模板在源码模式下不因配置而误报；
+     - 映射表外的上下文相对路径；
+     - 扫描为空。
+   - **Markdown 文件链接**：生成项目内的链接已由 `test-template-matrix.ps1` 检查，本脚本的生成模式复用同一判据，并取代那一处检查（只留一个实现）；仓库文档的链接由源码模式检查。锚点仍由 `check-markdown-anchors.py` 负责。
 2. **读取成本**：规则若迁入另一份必读文档，同步更新 `measure-template-read-cost.py` 的文件集合，并在提交说明里写明口径变化；上限按本阶段结束时的读数下调，留约 1% 余量；不接入 check-all（沿用 P9 的裁定）。
 
 ## 5. 工作包与顺序
@@ -131,5 +143,5 @@ Spartan Skill 的 Nx 分支属于上游维护内容，不在本阶段删改。
 验证：
 
 - `check-all`、锚点检查、`validate-skills`、`measure-template-read-cost --check`；
-- 生成 identity-all-features、resource、identity-capabilities-08（关闭本地化）、resource-host-api-realtime（无前端）四个场景，检查移动过的条件块；
+- 生成 identity-all-features、resource、standalone-external-login（独立认证）、identity-capabilities-08（关闭本地化）、resource-host-api-realtime（无前端）五个场景，检查移动过的条件块，并在每个场景上运行 G5 生成模式；
 - `test-template-generation.py`。
