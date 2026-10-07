@@ -28,7 +28,7 @@
 - 0.13.0 现有内容：
   - `docs/framework/upgrade-0.13.0.md` 迁到 `docs/framework/upgrades/0.13.0.md`，按上述结构重排；
   - `upgrade-0.13.0-api-diff.md` 作为同目录附录 `0.13.0-api-diff.md`，由正文链接；
-  - 逐项核对旧 43 节（含合入 develop 新增的 §44）的去向，迁移动作原样保留，去向清单在评审时给出；
+  - 逐项核对旧 44 节（含合入 develop 新增的 §44）与附录全部 212 条成员的去向，迁移动作原样保留，去向清单在评审时给出；
   - 仓库内对旧文件的引用全部更新（历史提交脚注不改写）。
 - 包内家族文档（`framework/docs/components/*.md`）描述当前版本契约，不变。
 
@@ -38,13 +38,17 @@
 
 ### 2.3 链接与规则
 
-- **包元数据**：`framework/common.props` 的 `PackageReleaseNotes` 设为该版本 GitHub Release 的 URL（按发版 tag 生成，不用分支链接）。消费方离线也能从已安装包的 `.nuspec` 读到它。
+- **版本映射**：预发布版本按去掉预发布后缀的基础版本对应指南，`0.13.0-beta.N`、`0.13.0-preview.<日期>.<序号>` 都对应 `upgrades/0.13.0.md`。
+- **包元数据**：`PackageReleaseNotes` 由 `release.yml` 在打包时按渠道设置，消费方离线也能从已安装包的 `.nuspec` 读到：
+  - 基础版本有升级指南时，所有渠道（stable、beta、nightly）一律指向该指南在本次发版 tag 下的固定 URL；
+  - 没有指南时：stable 与 beta 指向本次 GitHub Release，nightly 只推送 tag、不建 Release，指向该 tag 的提交页。
+  - 不用分支链接。
 - **Release 正文**：`release.yml` 生成的 Release Notes 追加一行“升级指南”链接，指向 `docs/framework/upgrades/<版本>.md` 在该 tag 下的地址；该版本没有升级指南时不加。
 - **`docs/framework/versioning.md`**：改写“破坏性变更怎么让下游知道”与升级清单一节，写明位置、格式与链接方式；脚注从本次切换起指向 `upgrades/<版本>.md` 的小节；文末列表链接 `upgrades/` 目录。
 - **闸门**：
   - `check-retired-terms.ps1` 的前缀豁免改到新目录；
   - G5 白名单中指向 `upgrade-0.13.0.md` 的条目迁到新文件；
-  - `release.yml` 的链接拼接逻辑若可抽成脚本，加自检，验证有、无升级指南两种情形。
+  - 链接政策必须有验证，不取决于是否抽成脚本：复用现有发布验证入口，覆盖 stable、beta、nightly 三个渠道，各验证有指南、无指南两种分支；并检查实际打出的 `.nuspec` 中的 URL 固定到本次 tag。
 - **分发边界不变**：`docs/README.md` 仍禁止分发载荷写迁移步骤，升级指南留在仓库。
 
 ### 2.4 消费方 Skill（`skills/leistd-net-framework`）
@@ -52,7 +56,10 @@
 新增“升级版本”工作流：
 
 1. 确认当前版本与目标版本。
-2. 取得目标版本的升级指南，二选一：读目标版本包 `.nuspec` 的 `PackageReleaseNotes` 链接；或执行 `gh release view v<版本>`。按版本顺序读取当前版本之后各版的指南，框架部分只读项目引用的家族。
+2. 取得目标版本的升级指南，二选一：
+   - 读目标版本包 `.nuspec` 的 `PackageReleaseNotes`；
+   - 执行 `gh release view "v<版本>" --repo zengqinglei/leistd-net --json body,url`，必须带 `--repo`，否则会查到下游仓库。
+   链接指向 Release 时，继续读取正文中的升级指南链接。预发布版本按基础版本对应指南。按版本顺序读取当前版本之后各版的指南，框架部分只读项目引用的家族。
 3. 先处理包级前置动作：包改名、移除、新增必需包。
 4. 再按项目的 CPM 或统一版本属性修改版本与包引用，然后还原。
 5. 逐条迁移源码与配置；有数据库模型变化时按项目规范生成并检查迁移。
