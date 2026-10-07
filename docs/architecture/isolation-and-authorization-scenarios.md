@@ -152,7 +152,7 @@ RBAC 的坑集中在三处：定义树与授予的归一化、超管旁路的边
 4. 批量操作传入含越权项的 Id 集合，断言**整体拒绝**并且一条都没改。
 5. 负向：不给任何分配 → 空集；给一个没注册 Provider 的范围名 → 仍是空集而不是全表。
 
-> 可执行事实来源：`framework/tests/Leistd.Authorization.Pipeline.Tests` 是一个真实 ASP.NET Core 宿主（TestServer + Sqlite + 真实 DI），把功能权限 → 数据范围 → 资源 ACL 三层串起来跑通，覆盖上述全部负向场景。改动这三层的公共行为时连同它一起更新。
+> 可执行事实来源：`framework/tests/components/authorization/Leistd.Authorization.Tests/EndToEnd/AuthorizationPipelineTests.cs` 是一个真实 ASP.NET Core 宿主（TestServer + Sqlite + 真实 DI），把功能权限 → 数据范围 → 资源 ACL 三层串起来跑通，覆盖上述全部负向场景。改动这三层的公共行为时连同它一起更新。
 
 ---
 

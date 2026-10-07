@@ -436,7 +436,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | `SignalRNotificationChannel` 改为 internal | 宿主经 `INotificationChannel` 使用；需要定制推送时实现自己的渠道 |
 | `AddEmailNotifications(configure?, configSectionPath?)` 绑定 `Leistd:Notifications:Email` | 新增可选 `PublicBaseUrl`：配置后，以 `/` 开头的站内链接拼成绝对地址附进邮件（此前相对链接一律不附）；配置值不是绝对 http(s) 地址时启动失败。无主机的 `ServiceCollection` 需自行注册 `IConfiguration` |
 | 模板：默认管理员口令只在首次创建时校验 | 删除 `DefaultAdmin:Password` 的启动期校验与 `DefaultAdminOptions.IsPasswordUsable`；库里没有超级管理员、需要创建时才校验并报出键名。`appsettings.Development.json` 带公开的本机演示口令；compose 不再以 `:?` 强制 `DEFAULT_ADMIN_PASSWORD` |
-| 模板前端：本机开发配置 | `npm start` 即 `ng serve`（构建配置 `debug` 改名 `development`）；`environment.ts` 即本机配置，不再需要复制 `environment.debug.ts`。Mock 提供器默认空实现，只有 `development` 构建替换为 `providers.mock.ts`，其他构建不含 Mock；Mock 判定统一为 `_mock/core/matching.ts` |
+| 模板前端：本机开发配置 | `npm start` 即 `ng serve`（构建配置 `debug` 改名 `development`）；`environment.ts` 即本机配置，不再需要复制 `environment.debug.ts`。Mock 提供器默认空实现，只有 `development` 构建替换为 `providers.mock.ts`，其他构建不含 Mock；Mock 判定统一为 `template/frontend/_mock/core/matching.ts` |
 | 模板：开发代理改为 Angular `proxyConfig` | 删除后端 `SpaProxy` 选项与实现；前端 `proxy.conf.mjs` 转发 `/api`、`/hubs`（WebSocket）以及身份服务的 `/connect`、`/.well-known`，浏览器访问 `http://localhost:4200`。后端不在默认端口时设置 `API_PROXY_TARGET` |
 | 模板：删除 `/uploads` 静态目录 | 没有写入方；compose 的 `feedback-uploads` 卷一并删除 |
 | 模板：删除 `Cors:AllowAnyLocalhost` | 它只服务于本机跨域联调，已被开发代理取代；前端部署在另一个源时仍用 `Cors:AllowedOrigins` |
@@ -483,7 +483,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | --- | --- |
 | `ng test` 改由 `@angular/build:unit-test` 驱动 Vitest，在 Playwright 的无头 Chromium 里运行 | Karma、Jasmine 及其配置删除（`karma.conf.js`、`@types/jasmine`、`istanbul-lib-instrument` 等）。新机器首次运行前执行 `npx playwright install chromium`；CI 同样需要安装（`--with-deps`）。有头运行：`npm test -- --browsers=chromium` |
 | spec 写法改为 Vitest | `jasmine.createSpyObj` → 由 `vi.fn()` 组成的对象，类型用 `Pick<MockedObject<T>, …>`；`spyOn` → `vi.spyOn`（**默认调用原实现**，要桩掉副作用须显式 `mockReturnValue` / `mockResolvedValue`）；`.and.returnValue` → `.mockReturnValue`；`toBeTrue()` → `toBe(true)`；`done` 回调改为 `async` + `firstValueFrom`。已有项目可先跑官方 `ng g @schematics/angular:refactor-jasmine-vitest`，再按上述差异核对 |
-| 单测专用构建配置 `unit-test` | 不做开发构建的 Mock 提供器替换，`_mock/core/providers.ts` 保持部署形态。自定义了 `development` 配置的项目，单测不再跟着它变 |
+| 单测专用构建配置 `unit-test` | 不做开发构建的 Mock 提供器替换，`template/frontend/_mock/core/providers.ts` 保持部署形态。自定义了 `development` 配置的项目，单测不再跟着它变 |
 | `vitest-base.config.ts` 开启 `restoreMocks`、`unstubGlobals`；`isolate: true` | 每条用例开始前自动还原 `vi.spyOn` 替身与 `vi.stubGlobal` 的全局值（其他直接修改与假计时器仍需自己还原）；每个 spec 文件在独立页面运行，并发执行的文件之间不共享全局对象上的桩 |
 | 测试名统一英文 | 前端 `describe` / `it` 标题与后端测试方法名、`DisplayName` 用英文句子；中文只在注释与测试数据里 |
 | **`_mock` 目录下的 spec 此前从未执行** | `angular.json` 的 `unit-test.include` 原为 `_mock/**/*.spec.ts`，而 include 的 glob 以 `sourceRoot`（`src`）为工作目录，它被解析成不存在的 `src/_mock/**`，于是该目录下的用例一条也没跑过、测试照样全绿。**这不是 Vitest 迁移引入的**，Karma 时期同样如此。改法：写成 `../_mock/**/*.spec.ts`。自建了 `src` 之外测试目录的项目一并核对——用 `ng test --list-tests` 列出实际被发现的文件，与磁盘上的 spec 集合比对，不要只看用例总数 |
@@ -517,7 +517,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | --- | --- |
 | 模板：外部登录按邮箱关联已有账号，改为两边都已验证才关联 | 此前外部账号的邮箱与本地账号相同就直接关联，任何人在提供商那里填上别人的邮箱即可接管对方账号。现要求提供商确认邮箱已验证（`ExternalUserInfo.EmailVerified`：Google 取 `verified_email`，GitHub 取 `/user/emails` 的主邮箱）**且**本地账号邮箱已确认；不满足而邮箱已被占用时返回 409 `ExternalAuth:AccountExistsSignInToLink`，回调页显示服务端原因，用户先登录原账号再在账号设置里绑定。外部登录新建账号时只采用已验证的邮箱，并记为已确认；未验证的邮箱改用占位地址，只留在外部连接上，防止抢占别人的地址。自定义 `IOAuthProvider` 须按提供商的 API 填 `EmailVerified`，不填即按未验证处理。**已部署的派生项目**：升级前按旧规则自动关联产生的绑定仍然有效，系统分不清哪些是被利用过的。用户表只记邮箱是否已确认、不记确认时间，仅凭用户与绑定两张表还原不了当时的验证状态；保留了足够的邮箱确认与绑定操作记录时，可以用它们辅助排查 |
 | 文档：资源服务的撤销传播窗口 | 停用或删除账号、停用或删除租户：在身份服务立即生效，在只验签的资源服务要等已签发的 Access Token 过期（模板为 10 分钟），之后也刷新不到新令牌。撤销会话不撤销 OAuth 令牌：刷新令牌默认滑动续期，持续刷新的客户端对资源服务的访问会一直延续，调短 Access Token 有效期也无济于事。内省只能让已撤销的令牌即时失效。见多租户组件文档"注意事项"与模板部署文档 |
-| 模板：外部登录回调改为路径形式 `/auth/external-callback/{provider}` | 此前回调页从查询串 `?provider=` 取提供商，回调地址须写成 `/auth/external-callback?provider=github`，而 GitHub 连查询串一起比对登记值，极易配错；`deploy/docker-compose.yml` 的示例还误指向 API 的 POST 端点。现 `ExternalAuth:{Provider}:RedirectUri` 与提供商后台登记的回调都改为 `https://<站点>/auth/external-callback/github`（Google 同理），两处逐字一致 |
+| 模板：外部登录回调改为路径形式 `/auth/external-callback/{provider}` | 此前回调页从查询串 `?provider=` 取提供商，回调地址须写成 `/auth/external-callback?provider=github`，而 GitHub 连查询串一起比对登记值，极易配错；`template/deploy/docker-compose.yml` 的示例还误指向 API 的 POST 端点。现 `ExternalAuth:{Provider}:RedirectUri` 与提供商后台登记的回调都改为 `https://<站点>/auth/external-callback/github`（Google 同理），两处逐字一致 |
 | 模板：只分配给已删除用户的角色可以删除 | 删除用户是软删除、角色关联行保留，此前角色的"已分配用户数"与删除校验把它们也算上，角色永远删不掉，界面上又找不到可改派的人。现只数未删除的用户；删除角色时连带删除剩余的关联行。删除角色改为单一工作单元：角色、关联、授权与成功记录一起提交，任一步失败整体回滚（此前角色与授权分两次提交，失败后会留下"接口报错但角色已删"的状态） |
 | 模板：管理员启用、停用用户与重置密码留操作记录 | 新增动作 `user.enabled`、`user.disabled`、`user.password-reset`（账号类，Notice）；状态没变的重复启停不留记录。控制器同时挂上 `[OperationRecordAction]`，被拒的操作也留痕。派生项目若自定义了操作记录的动作展示，补这三个码的文案 |
 | 操作记录的失败原因由后端本地化：`OperationRecordOutputDto` 新增 `FailureMessage`，导出新增 `FailureMessage` 列；新增 `LocalizationPlaceholders.Fill`（`Leistd.ExceptionHandling.Core`），`Leistd.OperationRecords.Core` 因此直接依赖该包 | 查询服务用容器里的非泛型 `IStringLocalizer` 按 `FailureCode` 取文案、用 `FailureData` 填 `{Name}` 占位符，与错误响应同一条词条、同一套填充规则；审计要与接口报错措辞不同时（如记录多带了次数、时长），备一条 `{码}:Record`，它优先于码本身（两步各走本地化器的文化回落，审计键在整条回落链上都没有才查码本身，因此只在默认语言备了审计键时其他语言也显示它）；没有本地化器或缺词条时为空。自定义 DTO 或前端直接显示 `failureMessage`，缺失时回落到码；前端原先按 `operationRecords.failures.<码>` 自备的词条可以删掉，改在后端资源里为码备文案（本组件自产的 `Error:Forbidden` 也要备，键不再把冒号换成下划线）。导出 CSV 的仅宿主列因此后移一列，按列序解析导出文件的脚本要调整。模板：删除前端 `Error_Forbidden` 等三条失败词条、后端资源补 `Error:Forbidden`；登录失败与锁定两条记录带着错误响应没有的参数，后端资源新增 `Auth:InvalidCredentials:Record`、`Auth:UserTemporarilyLockedOut:Record`，前端 `operationRecords.failures` 整节删除（不含本地化的形态仍内置英文句子，按同样的 `{name}` 占位符填参数）；操作记录页切换语言时重新拉取列表 |
@@ -545,7 +545,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 操作记录的参数口径**不变** | 审计按设计会显示邮箱、用户名等可公开展示的值（见组件文档里 `LocalizationData` 的约定），这是审计的用途所在，不受本条影响。不要误以为审计也脱敏了 |
 | `Leistd.Email.Smtp` 新增对 `Leistd.Core` 的包依赖 | 为取 `TextRedactor`。`Leistd.Core` 只含原语、只依赖抽象，通常已在依赖闭包里；在架构门禁里限制应用层/领域层可引用包名的项目按 `nuspec` 对比结果更新白名单（方法见第 1 节） |
 | 新增公共入口 `Leistd.Redaction.TextRedactor`（`Leistd.Core`，纯静态方法、无新依赖） | `RedactEmail(address)` → `al***@example.com`（保本地部开头几位 + 完整域名：从第一个字母或数字起最多 3 位且不超过一半——`zhangsan@`→`zha***@`、`alice@`→`al***@`、`bob@`→`b***@`）；`RedactPartially(value, keepStart, keepEnd)` → `158***90`（位数由业务定：手机号常用 `(3,2)`，卡号按 PCI DSS 最多 `(6,4)`，证件号 `(0,4)`）。写日志与对外展示共用。**只提供形态，不维护数据类型目录**——不要期待框架为每种业务数据加方法 |
-| **没有引入脱敏组件** | 评估过 `Microsoft.Extensions.Compliance.Redaction`（数据分类 + `IRedactorProvider` + 日志脱敏），本次未采用：缺陷是"组件默认把个人数据写进日志"，终局修法是默认不写，而不是建一套"把个人数据安全写出去"的机制。实测结论留档在仓库的 `docs/assessments/`，其中两条对派生项目有用：**普通模板日志（`logger.LogInformation("{To}", to)`）永远不会被脱敏**，脱敏只作用于带 `[LoggerMessage]` 与数据分类标注的源生成方法；以及 **`builder.Services.AddSerilog(configure)` 与 `EnableRedaction()` 冲突，两者同时存在时日志会全部消失**（不是丢字段）。自行接入脱敏的项目注意这两点 |
+| **没有引入脱敏组件** | 评估过 `Microsoft.Extensions.Compliance.Redaction`（数据分类 + `IRedactorProvider` + 日志脱敏），本次未采用：缺陷是"组件默认把个人数据写进日志"，终局修法是默认不写，而不是建一套"把个人数据安全写出去"的机制。实测结论见仓库[框架开发规范 §4](./development-guide.md#4-文档注释)，其中两条对派生项目有用：**普通模板日志（`logger.LogInformation("{To}", to)`）永远不会被脱敏**，脱敏只作用于带 `[LoggerMessage]` 与数据分类标注的源生成方法；以及 **`builder.Services.AddSerilog(configure)` 与 `EnableRedaction()` 冲突，两者同时存在时日志会全部消失**（不是丢字段）。自行接入脱敏的项目注意这两点 |
 
 ## 21. 官方 Token Exchange 与服务客户端认证替换
 
@@ -580,13 +580,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 
 交换令牌最多 120 秒，最终 `exp` 不超过来源；角色与超管信息留给下游本地授权，用户名、邮箱、显示名由 Identity 回查权威资料。Bearer 缓存只在进程内，按官方客户端返回的到期时间提前失效，机器 60 秒、用户交换 10 秒。组件不设置宿主日志过滤；官方客户端脱敏协议中的令牌与密钥字段。`AddServiceAuthentication` 的 `DisableTokenStorage` 是官方客户端全局选项，同宿主的 OpenIddict.Client 交互式登录也受影响。需要 state 存储的宿主在所有组件注册之后调用 `services.Configure<OpenIddict.Client.OpenIddictClientOptions>(options => options.DisableTokenStorage = false)`，并按官方方案接入 Core、令牌存储、证书与交互式宿主集成；覆写须晚于 `AddServiceAuthentication`，其后再次调用组件注册会关闭存储，无需强制分开部署或增加框架开关。
 
-## 22. 质量入口合并与模板 CI 分片
-
-仓库维护入口 `framework/build/check-docs-api-drift.ps1` 在一个进程中执行原 8 个正反例和完整正文扫描，共用本次源码索引；原独立 `-SelfTest` 模式及对应 `check-all.ps1` 清单行删除。原自检能抓的规则失效由合并入口的正反例接替，正文漂移仍由同一完整扫描接替；不删除单元测试。调用方移除旧 `-SelfTest` 参数，直接调用脚本。
-
-CI 原串行“打包 → 包消费 → 模板场景”改为一次 `framework-pack` 产出不可变候选包，独立 `package-consumption` 和登记的 `template-slices` 下载到各自目录并行验证。默认全量包消费还须与当前源码的完整包集一致，漏包失败；人工 `-PackageIds` 的缩小入口保留。原 `template-matrix` 必过检查名保留为汇总：必要作业全部成功，全部分片结果恰好覆盖所选档位登记场景、计划要求的阶段与容器责任；失败、取消、跳过或缺片不能放行。原包内容/隔离消费由独立必过作业接替；每场景原测试与断言由所属分片原入口接替，没有新旧两套校验或迁移开关。OIDC 作业形态保留，发布继续等待同一候选的全部质量结果。
-
-场景与分片归属只维护在 `scripts/template-matrix-scenarios.ps1`；PR 的容器范围从完整 base 到 head 判定，替代会漏掉较早提交的 `HEAD^` 差异，范围不明时执行容器验证。维护口径见[质量检查与验证分工](./quality-assurance.md)与[模板质量验证](../template/quality-assurance.md)。这是 leistd-net 仓库 CI/维护脚本调整，派生项目无需修改运行时 API。
+## 22. 模板前端 Angular 依赖更新到 22.2.0
 
 模板默认与本地化前端的 Angular 运行时、CDK、编译器和 CLI/build 统一更新到 22.2.0，两套 lock 同步；替换 22.1 系列依赖以通过既有 high 审计阈值，不修改 lint 缓存、测试隔离或发现范围。派生项目按两套依赖文件更新并重新安装。安全依据见 [Angular Router 官方公告](https://github.com/advisories/GHSA-ff3f-86qr-9cv3)（公告利用路径为 Node SSR）。
 
@@ -627,20 +621,6 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
 派生项目若希望被删用户交还用户名与邮箱，要自行在唯一索引上加 `IsDeleted = false` 过滤并新增迁移，
 那会改变"删掉再建同一个人"的语义，本次不做。
 
-## 浏览器认证与官方外部处理器
-
-模板自带前端停止充当 OAuth public client，移除 angular-auth-oidc-client、environment.oidc、旧 /auth/callback 组件和令牌拦截/SignalR token 注入及 Hub query 令牌转换；开发代理与同源 Angular 托管保留。第三方 public-client 授权码能力仍可单独登记。
-
-- 外部 HTTP 契约改为 GET challenge → 官方 /api/v1/external-auth/{provider}/signin → POST complete；绑定使用受保护的 GET link/challenge → POST link/complete，不再接收前端 code/state；提供商后台重新登记完整 HTTPS signin 回调。登录与绑定意图受保护，complete 保留一次消费，失败后重新 challenge；第二步凭据只走 JSON/导航状态。
-- 带浏览器会话的 Resource 新增 Authentication:ClientId/ClientSecret 必填后端配置（缺失时启动报出键名）；Identity 登记 web/confidential、授权码、PKCE、refresh token、offline_access 和本 API scope。登录/退出回调分别 /api/v1/auth/signin、/api/v1/auth/signout；前端 GET login、GET me、整页 POST logout。
-- SaveTokens 必须配 ITicketStore。所有会话 Cookie 只携引用及版本，完整票据加密留服务器；部署共享缓存与 Data Protection 密钥。删除票据立即拒绝旧 Cookie，显式再次登录使旧引用版本失效。应用 SessionCookie:SameSite 不覆盖官方 correlation/nonce 的 None/Secure Always。模板未启用 antiforgery；默认写请求校验 Origin；浏览器页面与所属 API 必须同源，分进程须经部署代理统一外部源，详见生成项目浏览器认证文档。
-- OAuth:ApiResources 由字符串数组改为对象，例如 `{ "Name": "https://api.example/orders", "Scope": "orders.read", "OwnerClientId": "orders-worker" }`。Scope/OwnerClientId 默认 Name，重复资源或 scope 启动失败。发起方按所有资源集合验证，允许客户端拥有多个资源；不再要求 client_id、scope、audience 字符串相等，授权码 presenter 与资源所有者可不同。
-- 删除 IOAuthProvider/OAuthTokenInfo、GetExternalLoginUrlAsync 与 code/state DTO；保留规范化 ExternalUserInfo 和业务账号政策。ExternalLoginConnection 删除 AccessToken/RefreshToken/ExpiresAt、UpdateTokens，基线迁移同步删列；派生项目已有数据库须显式删列并覆盖各业务/租户库；若已覆盖模型快照，EF 不会自动推导出删列，需保留旧快照生成迁移或自行编写 DropColumn。
-- `AuthenticationSchemeNames` 移至 `Application.Shared` 命名空间，使用方更新 using。提供商 scheme 使用 `AuthenticationSchemeNames.ExternalProviderPrefix + provider` 登记官方远程处理器，目录不接受普通 Cookie/Bearer/策略 scheme。外部登录站内 returnUrl 贯穿受保护票据与第二步验证；Resource 的 me 删除 isActive/creationTime。旧在飞请求的退出或刷新失败仅删除同一引用版本。
-- Google UserInfo 改用官方 v3 的 sub/email_verified；旧 id→sub 真实账号连续性尚未验证，已有外部账号连接迁移须先实测。绑定列表字段 providerAccountLabel 的既有改名同前节。
-
-完整当前契约见 [模板浏览器认证维护规则](../template/browser-authentication.md)。
-
 ## 24. 会话 Cookie 前缀、GitHub 处理器与跨源写请求
 
 - **会话 Cookie 改名（三种形态都受影响）**：非 Development 环境的会话 Cookie 名改为 `__Host-Http-<项目名>.Auth`，
@@ -670,7 +650,7 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
   缺失时 API 在接流量前（迁移校验创建上下文时）启动失败并指明键名。删除只服务于"连接串与内存库二选一"的
   `TenantConnectionResolutionOptions`。
 - **本机开发改为起依赖再迁移**：Api 与 DbMigrator 各有一份 `appsettings.Development.json`，指向
-  `deploy/docker-compose.dev.yml` 的本机库（公开的本机开发值）；流程是 `docker compose … up -d` →
+  `template/deploy/docker-compose.dev.yml` 的本机库（公开的本机开发值）；流程是 `docker compose … up -d` →
   `dotnet run --project …DbMigrator -- --apply` → 启动 API。DbMigrator 新增 `RunWorkingDirectory`，从 `backend/` 运行也读得到自己的开发配置。
 - **Resource 本机开发需要机器身份**：开发配置补上 `Leistd:ServiceAuth:Authority` 与回源地址，DbMigrator 用 `tenant-migration.read`；
   在 Identity 登记 client credentials 客户端，把 `Leistd:ServiceAuth:ClientId/ClientSecret` 写进 user-secrets，缺失时启动失败并指明键名。
@@ -719,7 +699,7 @@ Hub 不因带 Authorization 头而跳过检查。按文档同源部署不受影�
   任何一项缺路径、无法加载或没有 RSA 私钥，启动失败并给出带下标的键名。
 - **重叠轮换**：新旧证书同时登记，按部署文档"令牌证书轮换"的顺序：发布新公钥 → 确认各资源服务已取得 → 新证书生效后重启切换签发 →
   旧的签名与加密证书都保留到授权码、刷新令牌与 request token 全部过期（这些令牌既签名又加密），旧签名证书还要覆盖依赖方保存的 id_token 不再用作退出 hint。
-- **Resource 遇到未知 kid 先刷新再验**：新增 `Auth/SigningKeyRefresh.cs`（OpenIddict 验证处理器与配置管理器限频）；
+- **Resource 遇到未知 kid 先刷新再验**：新增 `template/backend/src/CompanyName.ProjectName.Api/Auth/SigningKeyRefresh.cs`（OpenIddict 验证处理器与配置管理器限频）；
   验证的 HTTP 抓取超时改为 10 秒（原为 OpenIddict 默认 1 分钟）。Api 与集成测试项目新增
   `RuntimeHostConfigurationOption`：`Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking=true`，只在资源服务宿主设置。
   派生项目若另有自己的测试或工具进程承载资源服务宿主，也要设置这一开关，否则刷新只在后台进行、当次请求仍失败。
@@ -745,30 +725,11 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 - Identity 新增 `OAuth:AccessTokenLifetime`（默认 `00:10:00`，与此前写死的值相同），`Program.cs` 改为读取它。不配置的项目行为不变。
   它决定撤销、停用与会话退出传到依赖方的最长时延，代价是续期频率，取舍见部署文档"生产边界"。
 - 校验（所有环境一致，组合期与启动期复用 `OAuthOptionsValidator`）：必须是整秒且长于 1 分钟。资源服务的浏览器会话在令牌剩余 1 分钟时续期，
-  寿命不长于这个窗口会让每个请求都去续期；令牌的 `exp`/`iat` 以秒计，带小数秒的值会被截掉。两端共用的提前刷新值移到 `Domain/Shared/Security/AccessTokenRenewal.cs`。
+  寿命不长于这个窗口会让每个请求都去续期；令牌的 `exp`/`iat` 以秒计，带小数秒的值会被截掉。两端共用的提前刷新值移到 `template/backend/src/CompanyName.ProjectName.Domain/Shared/Security/AccessTokenRenewal.cs`。
   寿命校验在开发证书分支之前执行，开发配置同样校验。
 - Token Exchange 的 120 秒上限与"不长于源令牌"的约束不变；源令牌寿命短于 120 秒时，交换令牌随源令牌到期。
 - 测试：`TwoFactorTests` 改用 `FakeTimeProvider` 替换容器里的 `TimeProvider`（集成测试项目新增 `Microsoft.Extensions.TimeProvider.Testing` 引用）；
   测试规范补充时间边界用假时钟验证、端到端不等安全窗口，并列出不随假时钟快进的官方组件。
-
-## 模板能力裁剪与操作记录读写拆分
-
-模板公开参数、默认值及角色生效范围见[根 README 参数表](../../README.md#用模板创建项目)，有效能力表达式见[模板开发规范](../template/development-guide.md#32-有效能力集中派生)。这些参数决定新生成的工程资产，不会自动迁移已经生成的业务项目，也不能通过关闭开关删除已有生产数据。
-
-已消费 0.13.0 预发布版操作记录契约的项目需要同步以下变更（该组件不属于 0.12.0 的既有 API）：
-
-| 原用法 | 最终用法与迁移 |
-| --- | --- |
-| 自定义存储实现并注册 `IOperationRecordStore` | 改为 `IOperationRecordWriter`；可回读历史时同时实现并注册 `IOperationRecordReader`，再显式注册 `AddOperationRecordQueries()`。EF 适配注册两者及查询；Core 注册不再自动附带查询 |
-| 所有宿主都映射操作历史接口 | 仅有读侧存储时映射 `MapOperationRecords()`；日志写入模式不映射历史接口、不注册归档，缺少查询注册时映射立即报错 |
-| 不需要历史产品，但仍必须记录安全操作 | 引用并注册 `Leistd.OperationRecords.Logging` 的 `AddOperationRecordsLogging()`，与 EF 写入适配互斥；保留动作定义、记录器和安全调用链。必要的 UoW、事件总线及日志类别前置见[组件文档](../../framework/docs/components/operation-records.md) |
-| 通知开关同时开启业务实时 | 按业务需要分别设置 `IncludeNotifications`、`IncludeRealTime`；后者默认关闭。需要业务订阅和事件发布的项目必须显式开启 |
-| 关闭内置历史但继续提供模拟登录 | 模拟登录要求本地身份、多租户和可查询历史同时存在；历史关闭时移除模拟登录，普通租户管理仍可保留 |
-| Resource 依赖前端登录或人工 SQL 授予管理员 | 有前端时保留服务端 OIDC/Cookie；纯 API 只验证 Bearer，不包含浏览器客户端配置与回调。首次授权使用正式 DbMigrator `--grant-admin <sub> [--tenant <id>]`，默认 dry-run，`--apply` 才写入；授权载体是 Admin 角色成员关系，重复运行不恢复已移出的成员关系。已用 0.13.0 预发布版命令写过用户级全量授予的项目，在明确的数据调整中只收口那次引导写入的全量直接授予、改为 Admin 成员关系；项目另行配置的合法用户级授予保留 |
-
-数据库模式只有在同一业务事务和存储内记录，才提供原子持久化；提交后处理器中的记录另行持久化。日志模式在真实提交后输出成功，回滚不输出成功，失败立即输出，仍有提交后进程退出的丢失窗口。采集、保留和访问策略由宿主日志平台负责。
-
-工作单元 AfterCommit 队列在某个事件分发失败后继续处理后续事件，全部分发完再上抛：单个异常保留原实例、类型与堆栈，多个异常聚合。事务已经提交，不再回滚；调用方不能将该异常当作事务未提交而盲目重试。诊断区分提交失败与已提交后的处理失败。
 
 ## 32. 请求完成日志走宿主日志管道（CRM R16）
 
@@ -926,3 +887,36 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 - `ConfigureApiValidation` 的 `errors[].field` 在查询参数等逐属性绑定的来源上也跟随 JSON 命名策略：此前沿用绑定时的 C# 属性名（`?roles=` 校验失败报 `Roles`），现报 `roles`；带参数名前缀绑定的报 `input.roles`。
 - `IValidatableObject.Validate` 的错误与特性错误同一口径：`MemberNames` 写 `nameof(...)`，字段名换成 JSON 名（含嵌套前缀）；宿主启用 `AddDataAnnotationsLocalization` 时，`ErrorMessage` 作资源键，经 `DataAnnotationLocalizerProvider`（以该 DTO 类型为参数）翻译。
 - 改法：按大小写敏感比对旧字段名（`Roles`、`RedirectUris`）的客户端改用 JSON 名；`Validate` 里手写 camelCase 成员名、从 `ValidationContext` 取 `IStringLocalizer` 的写法删除，改回 `nameof(...)` 与固定英文句，并在资源中备该句词条。未设命名策略的宿主不受影响。模板四个输入 DTO 已按此简化。
+
+## 42. 浏览器认证与官方外部处理器
+
+模板自带前端停止充当 OAuth public client，移除 angular-auth-oidc-client、environment.oidc、旧 /auth/callback 组件和令牌拦截/SignalR token 注入及 Hub query 令牌转换；开发代理与同源 Angular 托管保留。第三方 public-client 授权码能力仍可单独登记。
+
+- 外部 HTTP 契约改为 GET challenge → 官方 /api/v1/external-auth/{provider}/signin → POST complete；绑定使用受保护的 GET link/challenge → POST link/complete，不再接收前端 code/state；提供商后台重新登记完整 HTTPS signin 回调。登录与绑定意图受保护，complete 保留一次消费，失败后重新 challenge；第二步凭据只走 JSON/导航状态。
+- 带浏览器会话的 Resource 新增 Authentication:ClientId/ClientSecret 必填后端配置（缺失时启动报出键名）；Identity 登记 web/confidential、授权码、PKCE、refresh token、offline_access 和本 API scope。登录/退出回调分别 /api/v1/auth/signin、/api/v1/auth/signout；前端 GET login、GET me、整页 POST logout。
+- SaveTokens 必须配 ITicketStore。所有会话 Cookie 只携引用及版本，完整票据加密留服务器；部署共享缓存与 Data Protection 密钥。删除票据立即拒绝旧 Cookie，显式再次登录使旧引用版本失效。应用 SessionCookie:SameSite 不覆盖官方 correlation/nonce 的 None/Secure Always。模板未启用 antiforgery；默认写请求校验 Origin；浏览器页面与所属 API 必须同源，分进程须经部署代理统一外部源，详见生成项目浏览器认证文档。
+- OAuth:ApiResources 由字符串数组改为对象，例如 `{ "Name": "https://api.example/orders", "Scope": "orders.read", "OwnerClientId": "orders-worker" }`。Scope/OwnerClientId 默认 Name，重复资源或 scope 启动失败。发起方按所有资源集合验证，允许客户端拥有多个资源；不再要求 client_id、scope、audience 字符串相等，授权码 presenter 与资源所有者可不同。
+- 删除 IOAuthProvider/OAuthTokenInfo、GetExternalLoginUrlAsync 与 code/state DTO；保留规范化 ExternalUserInfo 和业务账号政策。ExternalLoginConnection 删除 AccessToken/RefreshToken/ExpiresAt、UpdateTokens，基线迁移同步删列；派生项目已有数据库须显式删列并覆盖各业务/租户库；若已覆盖模型快照，EF 不会自动推导出删列，需保留旧快照生成迁移或自行编写 DropColumn。
+- `AuthenticationSchemeNames` 移至 `Application.Shared` 命名空间，使用方更新 using。提供商 scheme 使用 `AuthenticationSchemeNames.ExternalProviderPrefix + provider` 登记官方远程处理器，目录不接受普通 Cookie/Bearer/策略 scheme。外部登录站内 returnUrl 贯穿受保护票据与第二步验证；Resource 的 me 删除 isActive/creationTime。旧在飞请求的退出或刷新失败仅删除同一引用版本。
+- Google UserInfo 改用官方 v3 的 sub/email_verified；旧 id→sub 真实账号连续性尚未验证，已有外部账号连接迁移须先实测。绑定列表字段 providerAccountLabel 的改名见第 23 节。
+
+完整当前契约见 [模板浏览器认证维护规则](../template/browser-authentication.md)。
+
+## 43. 模板能力裁剪与操作记录读写拆分
+
+模板公开参数、默认值及角色生效范围见[根 README 参数表](../../README.md#用模板创建项目)，有效能力表达式见[模板开发规范](../template/development-guide.md#32-有效能力集中派生)。这些参数决定新生成的工程资产，不会自动迁移已经生成的业务项目，也不能通过关闭开关删除已有生产数据。
+
+已消费 0.13.0 预发布版操作记录契约的项目需要同步以下变更（该组件不属于 0.12.0 的既有 API）：
+
+| 原用法 | 最终用法与迁移 |
+| --- | --- |
+| 自定义存储实现并注册 `IOperationRecordStore` | 改为 `IOperationRecordWriter`；可回读历史时同时实现并注册 `IOperationRecordReader`，再显式注册 `AddOperationRecordQueries()`。EF 适配注册两者及查询；Core 注册不再自动附带查询 |
+| 所有宿主都映射操作历史接口 | 仅有读侧存储时映射 `MapOperationRecords()`；日志写入模式不映射历史接口、不注册归档，缺少查询注册时映射立即报错 |
+| 不需要历史产品，但仍必须记录安全操作 | 引用并注册 `Leistd.OperationRecords.Logging` 的 `AddOperationRecordsLogging()`，与 EF 写入适配互斥；保留动作定义、记录器和安全调用链。必要的 UoW、事件总线及日志类别前置见[组件文档](../../framework/docs/components/operation-records.md) |
+| 通知开关同时开启业务实时 | 按业务需要分别设置 `IncludeNotifications`、`IncludeRealTime`；后者默认关闭。需要业务订阅和事件发布的项目必须显式开启 |
+| 关闭内置历史但继续提供模拟登录 | 模拟登录要求本地身份、多租户和可查询历史同时存在；历史关闭时移除模拟登录，普通租户管理仍可保留 |
+| Resource 依赖前端登录或人工 SQL 授予管理员 | 有前端时保留服务端 OIDC/Cookie；纯 API 只验证 Bearer，不包含浏览器客户端配置与回调。首次授权使用正式 DbMigrator `--grant-admin <sub> [--tenant <id>]`，默认 dry-run，`--apply` 才写入；授权载体是 Admin 角色成员关系，重复运行不恢复已移出的成员关系。已用 0.13.0 预发布版命令写过用户级全量授予的项目，在明确的数据调整中只收口那次引导写入的全量直接授予、改为 Admin 成员关系；项目另行配置的合法用户级授予保留 |
+
+数据库模式只有在同一业务事务和存储内记录，才提供原子持久化；提交后处理器中的记录另行持久化。日志模式在真实提交后输出成功，回滚不输出成功，失败立即输出，仍有提交后进程退出的丢失窗口。采集、保留和访问策略由宿主日志平台负责。
+
+工作单元 AfterCommit 队列在某个事件分发失败后继续处理后续事件，全部分发完再上抛：单个异常保留原实例、类型与堆栈，多个异常聚合。事务已经提交，不再回滚；调用方不能将该异常当作事务未提交而盲目重试。诊断区分提交失败与已提交后的处理失败。

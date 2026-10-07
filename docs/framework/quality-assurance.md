@@ -80,6 +80,8 @@ docs-only 仍运行完整静态闸门、范围/计划与必过质量汇总；动
 
 闸门清单唯一入口是 `scripts/check-all.ps1`，数量不在其他文档或 workflow 另行维护。检查器的正反例自检与生产输入检查保护不同对象，不能互相替代。优化可合并同一输入的重复遍历或索引构建，但仍须执行原自检与完整扫描；不建立没有实测收益的跨 run 索引缓存。 API 漂移入口在同一进程中先执行全部正反例，再以本次源码索引扫描正文；规则失效立即失败，不提供只自检后提前退出的模式。
 
+文档引用由 `scripts/check-doc-references.py` 单一实现：check-all 跑源码模式（路径与链接），矩阵文档检查以 `--root` 在生成产物上跑生成模式（另查 npm/ng/脚本命令）；豁免只登记在脚本内的精确白名单。
+
 ## 定时任务的覆盖分工
 
 通用调度行为由 BackgroundJobs 组件集中验证：真实 `RecurringJobScheduler` 配合官方 `FakeTimeProvider`、内存依赖与计时器登记/完成信号，覆盖每日排期的未到点、到点、下一轮、全局/单任务禁用、非法排期隔离、等待/执行中的停止。先观察后台初始化完成再推进时钟；停止后同时核对执行任务正常完成与没有新增运行。真实周期等待不加入编辑或提交入口，保护性超时只用于拒绝卡死。
@@ -116,28 +118,26 @@ CI 执行组取登记逻辑组与所选场景的交集，保留登记成员及�
 | 跨前后端、共享配置/依赖、随包/生成文档、脚本/workflow、未知输入 | 全量 | 全部内容与全部消费 | 完整 PR 场景/阶段；适用容器 | 保留 |
 | 手动/复用/full 或未知/无效 base | 全量 | 全部内容与全部消费 | 所选档位完整场景/阶段 | 保留 |
 
-局部模板场景依据现有 template.json 的 sources/modifiers/computed 条件求文件生产场景，纳入旧/新树两侧与默认/全特性代表；不另建特性目录映射。模板参数、项目/前端配置、依赖变化及未建模的 source/modifier 字段取完整档。选测证明是输入闭包。后端变化仍需真实 PG/OIDC 检查契约，前端 mocks 不能替代该职责；纯前端模式也暂保留 PG/OIDC，因为本轮未逐项完成其所有入口的独立输入闭包证明，不能据此宣称它们不可裁剪。
+局部模板场景依据现有 template.json 的 sources/modifiers/computed 条件求文件生产场景，纳入旧/新树两侧与默认/全特性代表；不另建特性目录映射。模板参数、项目/前端配置、依赖变化及未建模的 source/modifier 字段取完整档。选测证明是输入闭包。后端变化仍需真实 PG/OIDC 检查契约，前端 mocks 不能替代该职责；纯前端模式同样保留 PG/OIDC，直到逐项证明其全部入口的输入闭包不含该前端源码。前后端各自省略的阶段要求实际生成输入保持不变。实际生成锁文件的生产依赖 audit 阈值、每片执行与网络重试保留；同片内内容相同的锁文件只审计一次，不以源码不变推断漏洞库不变。
 
 Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/build 消费项目；全包内容、源码包集、DLL/XML/文档、重复包、缺失候选依赖仍先核对。它不裁剪 Framework 用例、DI/反射/配置语义、模板或服务闭环；出现显式跨项目编译输入时回退全量。人工 `-PackageIds` 保持已有局部入口，CI 使用独立计划并仍要求完整候选 feed。
 
 汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确执行组、场景、阶段、SHA 与档位。每个必要场景必须唯一分配；回执不能自行缩小范围。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、跨组移动、错版本／SHA／档位／阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；没有计划的人工入口使用原逻辑组，不能拿 CI 执行组回执代替。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
 
-本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`；单组复现的 `-Slice` 必须取计划中的 key。容器适用时，生成计划增加 `--container-smoke true`，完整模式执行登记的容器责任。默认人工入口不自动推测 base，继续完整执行；不能将计划与手动跳过、`-Scenarios` 或手选容器场景混用。
+本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`；单组复现的 `-Slice` 必须取计划中的 key。容器适用时，生成计划增加 `--container-smoke true`，完整模式执行登记的容器责任。默认人工入口不自动推测 base，继续完整执行；不能将计划与手动跳过、`-Scenarios` 或手选容器场景混用，full 不接受裁剪计划。修改选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`：它实际生成 PR 档产品做前后对照，核对省略阶段/场景的输入并验证错误回执被拒绝；这是维护回归入口，不加入每日静态闸门。
 
 范围裁剪必须基于 PR base/merge-base 到 head 的完整差异及实际依赖，不用单一 `HEAD^` 代替多提交 PR。无法确定范围时全量执行；随包文档、props、lock、脚本与 workflow 都是质量输入。只有接替责任和变异证据完整时才削减组合入口的重复工作。
 
-同一 CI 候选的模板源码预检由 `docs-sync` 完整运行 `check-all.ps1` 承担，矩阵传入 `-SkipSourcePreflight` 省略重复扫描，并核对总入口仍登记了三个实际预检入口。所有作业显式 checkout 相同候选 SHA；生成可与静态检查并行，必过汇总必须等待并核对范围、静态、打包、Framework 测试、包消费、PostgreSQL、OIDC 和各模板分片全部成功，再核对本档完整回执。独立人工矩阵默认在生成前预检，不使用该 CI 开关。清单存在不能代替缺陷注入和失败传播验证。
+独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 三项源码预检，再打包、生成并审计实际生成的锁文件；预检职责不由生成编译替代。同一 CI 候选的源码预检由 `docs-sync` 完整运行 `check-all.ps1` 承担，矩阵传入 `-SkipSourcePreflight` 省略重复扫描，并核对总入口仍登记了这三个预检入口。所有作业显式 checkout 相同候选 SHA；生成可与静态检查并行，必过汇总必须等待并核对范围、静态、打包、Framework 测试、包消费、PostgreSQL、OIDC 和各模板分片全部成功，再核对本档完整回执。独立人工矩阵默认在生成前预检，不使用该 CI 开关。清单存在不能代替缺陷注入和失败传播验证。
 
 ## 效率证据
 
-验收先区分工作量变化：docs-only 按真实 PR 的路径判定、必要作业和跳过责任验收；同候选去重按被删除的命令、接替缺陷检测及新增命令/依赖的净成本验收。两者仍完整披露实跑墙钟和 runner 合计，新增可归因成本吞掉节省或拖长关键路径时应修正。仅重排相同工作量的调度才使用固定配对的墙钟与 runner 联合门槛，不能将十秒级去重收益套入高噪声重排实验。以下重复测量原则用于声称定量性能改善和稳定预算，单次真实 PR 仅是观测。
+验收先区分工作量变化：docs-only 按真实 PR 的路径判定、必要作业和跳过责任验收；同候选去重按被删除的命令、接替缺陷检测及新增命令/依赖的净成本验收。两者都完整披露实跑墙钟和 runner 合计，新增可归因成本吞掉节省或拖长关键路径时应修正。只有重排相同工作量的调度才使用固定配对的墙钟与 runner 联合门槛，不能把小幅去重收益套入高噪声重排实验。
 
-使用同输入、同机器或 runner 规格、相同入口与明确的缓存条件，前后各至少三轮，报告全部值和中位数。本机共享负载波动大时，用前后交替的成对测量，并以产物哈希确认两种变体确实不同；调度类改动以至少三次真实 CI 运行的中位验收。含 build 与 `--no-build`、TRX 方法时间和入口墙钟、不同 SHA 的历史 CI、并行阶段不能混算。首轮不清缓存时不称为完全冷启动；跳过用例不称为已经执行。新调度模型与实际执行结果分开记录，实际关键路径变化后重新测量。
-
-先用一次候选校准责任与成本；首轮符合固定比较条件可计入三轮。只有调度改善且 runner 有希望不增加，才补稳定对照。调度改善与510秒预算分别登记：模型已判定不能同时达标时，不为证明预算失败另跑三轮。新增分片须先证明净节省足以抵消新增准备和冷启动，并满足墙钟余量；没有证据就保留默认组数，不放宽测试或成本要求。同候选阶段去重先核对工具实际输入、等价组和净收益；无合格项不建设缓存或来源证明系统。
+声称定量性能改善或稳定预算时，使用同输入、同机器或 runner 规格、相同入口与明确的缓存条件，前后各至少三轮（符合同一比较条件的首轮可计入），报告全部值和中位数。本机共享负载波动大时，用前后交替的成对测量，并以产物哈希确认两种变体确实不同；调度类改动以至少三次真实 CI 运行的中位验收。含 build 与 `--no-build`、TRX 方法时间和入口墙钟、不同 SHA 的历史 CI、并行阶段不能混算。首轮不清缓存时不称为完全冷启动；跳过用例不称为已经执行。新调度模型与实际执行结果分开记录，实际关键路径变化后重新测量。调度改善与 L2 墙钟预算分别判定。新增分片须先证明净节省足以抵消新增准备和冷启动，并满足墙钟余量；没有证据就保留默认组数，不放宽测试或成本要求。同候选阶段去重先核对工具实际输入、等价组和净收益；无合格项不建设缓存或来源证明系统。
 
 CI 墙钟从本次尝试的起点到最后一个必要质量作业的 `completed_at` 计算，不用含收尾时间的 `updated_at`：初次执行用 `created_at`，重跑按各自 `run_started_at` 分别计时，不包含两次尝试之间的间隔。每个作业分别记录启动偏移与 `completed_at - started_at` 的运行时间；启动偏移还包含依赖等待，不能全称 runner 排队。沿依赖链记录前序结束到后序开始的间隔，不与启动偏移重复相加。工作流建立耗时与 runner 排队分开记录。模型必须保留原输入与范围，若未计入建立、队列、artifact、汇总或容器成本，比较时须逐项对齐，不事后修改模型迁就实跑。
 
-本地监听或容器访问受限时，经明确裁决可用同规格的完整远端 CI 验收；须核对实际日志、候选 head 与 PR merge 提交、全部必要作业和场景回执。单次历史前后对比只报告观测收益，不冒称同输入三轮复测或稳定 SLA；同时变更的依赖、运行时代码与 runner 镜像版本须披露。浏览器下载、依赖准备与网络耗时有波动，分片收益不能全部归因于代码优化，也不能仅靠本次较快准备阶段再次增加分片。
+本地监听或容器访问受限时，经明确裁决可用同规格的完整远端 CI 验收；须核对实际日志、候选 head 与 PR merge 提交、全部必要作业和场景回执。单次历史前后对比只报告观测收益，不冒称三轮复测或稳定 SLA；同时变更的依赖、运行时代码与 runner 镜像版本须披露。浏览器下载、依赖准备与网络耗时有波动，分片收益不能全部归因于代码优化，也不能仅靠一次较快的准备阶段再增加分片。
 
 官方依据：[NuGet 实际依赖解析](https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution)、[微软测试分层与执行时机](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/test-asp-net-core-mvc-apps)、[GitHub 矩阵与失败策略](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)、[作业依赖与 always](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds)、[SDK 分析器](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)、[ASP.NET Core 测试层级](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0)、[EF Core 测试选型](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy)、[xUnit 并行配置](https://xunit.net/docs/config-xunit-runner-json)。

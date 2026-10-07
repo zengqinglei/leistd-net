@@ -65,7 +65,7 @@ leistd-net/
 │   ├── components/     #   共享组件（按能力分组，清单见 framework/docs/components/README.md）
 │   ├── ddd-struct/     #   DDD 四层基础类型
 │   ├── docs/           #   面向使用者的组件文档（随包分发）
-│   └── build/          #   pack / push / 文档-源码漂移校验 脚本
+│   └── build/          #   本地打包、包消费验证与文档-源码漂移校验脚本
 ├── template/           # dotnet new 项目模板
 │   ├── backend/        #   .NET 10 + DDD 后端
 │   ├── frontend/       #   Angular 22 前端
@@ -84,16 +84,7 @@ leistd-net/
 
 ### 给 AI 装上框架知识（框架级 Skill）
 
-让你的编码 Agent（Claude Code / Cursor / Codex 等）学会按 `Leistd.*` 真实 API 编码、不臆造——安装框架级 Skill `leistd-net-framework`：
-
-```bash
-# 跨代理安装（GitHub 即注册表，基于 Agent Skills 开放标准）
-npx skills add https://github.com/zengqinglei/leistd-net/tree/main/skills/leistd-net-framework --global
-```
-
-安装后对 AI 说「用 leistd-net-framework skill」即可。它是**索引 Skill**：指向随每个 NuGet 包分发的版本正确文档，AI 用的始终是你安装的那个版本的真实 API。
-
-> 模板生成项目已包含 `leistd-project-workflow`，无需重复安装。其他项目可从 `template/.agents/skills/leistd-project-workflow` 目录进行项目级安装；详见 [`skills/README.md`](skills/README.md)。
+让你的编码 Agent（Claude Code / Cursor / Codex 等）学会按 `Leistd.*` 真实 API 编码、不臆造：安装框架级 Skill `leistd-net-framework`。它是**索引 Skill**，指向随每个 NuGet 包分发的版本正确文档，AI 用的始终是你安装的那个版本的真实 API。安装命令与项目级 Skill 的安装方式见 [`skills/README.md`](skills/README.md#安装)；模板生成项目已包含 `leistd-project-workflow`，无需重复安装。
 
 ### 用模板创建项目
 
@@ -181,15 +172,7 @@ pwsh framework/build/pack-local-feed.ps1
 
 ## 版本与发布
 
-版本基准存于仓库根 [`VERSION`](VERSION) 文件；发布流水线（[`release.yml`](.github/workflows/release.yml)）按 **Conventional Commits** 推算递增——`fix:`→patch、`feat:`→minor、`BREAKING CHANGE`→major（默认 patch）。零外部版本工具，纯 git + PowerShell，逻辑内联于 workflow。
-
-| 分支 / 触发 | 版本形态 | 发布目标 |
-| --- | --- | --- |
-| push `main` | `x.y.z`（正式，自动递增） | nuget.org |
-| push `develop` | `x.y.z-beta.N` | nuget.org（预发布） |
-| 每工作日定时 | `x.y.z-preview.<date>` | GitHub Packages（内部） |
-
-提交请遵循 [Conventional Commits](https://www.conventionalcommits.org/)（它直接决定版本递增）。完整发布流程见 [版本与发布](docs/framework/versioning.md)。
+版本基准存于仓库根 [`VERSION`](VERSION)，由 [`release.yml`](.github/workflows/release.yml) 按 [Conventional Commits](https://www.conventionalcommits.org/) 推算递增并分通道发布；提交格式直接决定版本号。递增规则、版本形态、发布通道与恢复流程见 [版本与发布](docs/framework/versioning.md)。
 
 ---
 

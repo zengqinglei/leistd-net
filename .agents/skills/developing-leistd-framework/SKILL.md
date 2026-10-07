@@ -24,14 +24,7 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 ## 方案与实施计划
 
-涉及通用组件、DDD 基座、公共 API 或包边界的方案设计时，先读取 `docs/README.md` 并搜索同主题最新文档：
-
-- 仍在比较候选或诊断现状时，跨会话材料写入 `docs/assessments/YYYY-MM-DD-<topic>.md`；
-- 方案已经选定且需要任务分解、实施顺序和验收时，写入 `docs/plans/YYYY-MM-DD-<topic>.md`；
-- 长期维护规则才写入 `docs/framework/`；
-- 已实现且使用者必须知道的公共契约才写入 `framework/docs/`。
-
-临时分析默认留在当前答复。不得把未实施方案、迁移步骤、任务状态、分支记录或仓库验证过程写入随 NuGet 分发的 `framework/docs/`。同时影响 Template、Skill、CI 或发布流程时，改用 `maintaining-leistd-repository` 维护一份跨交付面计划。
+涉及通用组件、DDD 基座、公共 API 或包边界的方案设计时，先搜索同主题最新文档；评估、计划与稳定规范的归属和生命周期见 [`docs/README.md`](../../../docs/README.md)。`framework/docs/` 随 NuGet 分发，只写已实现且使用者必须知道的公共契约，分发边界同见该文。同时影响 Template、Skill、CI 或发布流程时，改用 `maintaining-leistd-repository` 维护一份跨交付面计划。
 
 ## 工作流
 
@@ -40,7 +33,7 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 3. 实施最小变更，并为行为风险补充对应测试和 XML 注释。
 4. 公共 API、包依赖、注册、默认值或运行时语义变化时同步所有当前消费者和目标家族文档，不保留未发布兼容层。
 5. 按变化选择验证：Markdown 检查引用与骨架；XML 变更构建受影响项目，关键示例单独编译；行为变化运行相关测试。
-6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时验证隔离消费。
+6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时用 `framework/build/test-package-consumption.ps1` 验证隔离消费。
 7. 影响 Template 消费方式时使用 `developing-leistd-template` 验证相关生成场景；其他运行时语义由组件测试或最小宿主验证。
 
 用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
@@ -49,14 +42,4 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 ## 验证入口
 
-编辑循环运行目标测试；完整改动形成后运行框架测试全集和必要包验证。执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，以下不是每次编辑的固定命令序列。
-
-```powershell
-dotnet build framework/Leistd.Framework.slnx -c Release
-dotnet test framework/Leistd.Framework.slnx -c Release
-pwsh scripts/check-all.ps1            # 全部静态闸门（唯一清单来源，-List 只看清单）
-pwsh framework/build/pack-local-feed.ps1
-pwsh framework/build/test-package-consumption.ps1
-```
-
-本地可用 `-PackageIds Leistd.Xxx` 检查受影响包；CI 按候选计划与实际包依赖闭包选择，完整档消费全部包。目标测试用 `--filter` 收窄到类；只读任务不运行无关测试。未执行项和原因必须如实说明。
+编辑循环运行目标测试；完整改动形成后运行框架测试全集和必要包验证。命令见[开发规范 §8 提交前自检](../../../docs/framework/development-guide.md#8-提交前自检)，执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，不是每次编辑的固定命令序列。只读任务不运行无关测试；未执行项和原因必须如实说明。

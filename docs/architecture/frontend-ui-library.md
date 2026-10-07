@@ -6,15 +6,15 @@
 
 模板前端（`template/frontend`）采用 **Spartan UI（spartan.ng）** 作为 UI 组件库。
 
-- 组件消费模式：headless 逻辑层 `@spartan-ng/brain`（npm 依赖）+ 样式层 helm（经 CLI 复制进本仓库 `libs/ui/`，**属自有代码**）。
+- 组件消费模式：headless 逻辑层 `@spartan-ng/brain`（npm 依赖）+ 样式层 helm（经 CLI 复制进 `template/frontend/libs/ui/`，**属自有代码**）。
 - 样式基座：Tailwind CSS v4，组件主题走 CSS 变量（oklch token）。
 - 图标：`@ng-icons` + Lucide。
-- 字体：正文默认 **Geist**，经 `@fontsource/geist` 自托管（npm 依赖打包字体文件，离线可用、无 CDN），回退 `system-ui, sans-serif`；属模板设计系统的一部分，业务项目可替换为品牌字体或改回系统字体栈。
-- 表单：Angular Signal Forms（`@angular/forms/signals`）；不使用 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态禁止）。
-- 数据表格：`@tanstack/angular-table`（headless 表格引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；展示层复用自有 `TablePaginator`/`FacetedFilter`，列可见性按优先级（primary/secondary/tertiary）裁剪——视口档位给上限，带吸附操作列的表格在容器放不下时再降一档（`TableFit`），被裁剪的列由 TanStack 行展开补偿。
-- 列表查询状态：分页/排序/筛选以 **URL query params 为唯一状态源**，刷新、分享链接、浏览器前进后退均可恢复；非法参数回退到默认值。
-- HTTP 错误契约：拦截器只负责 401 认证跳转与把错误归一化为类型化 `ApplicationHttpError`（解析 RFC 9457/7807 Problem Details），**不发全局 toast**；具体反馈（字段错误 / Toast / 空状态 / 静默）由发起操作的 feature 决定；全局 Toast 直接用 Spartan Sonner（`@spartan-ng/brain/sonner`），无自建封装。
-- 支持范围：紧跟 Angular 最近两个大版本（当前 21/22）。
+- 字体：正文默认 **Geist**，经 `@fontsource/geist` 自托管（离线可用、无 CDN），业务项目可替换。
+- 表单：Angular Signal Forms（`@angular/forms/signals`），不使用 Reactive Forms 与 `ngModel`。
+- 数据表格：`@tanstack/angular-table` headless 引擎，展示层为自有组件。
+- 支持范围：紧跟 Angular 最近两个大版本；具体允许的 Angular 版本以锁定依赖中 Spartan Brain 的 `peerDependencies` 为准。
+
+表格裁剪、列表状态、HTTP 错误反馈与表单写法等执行规则见生成项目的[前端界面规范](../../template/docs/standards/frontend-ui.md)与[前端编码规范](../../template/docs/standards/coding-frontend.md)。
 
 ## 依据
 
@@ -26,7 +26,7 @@
 
 - 主题保留亮、暗、系统三态和一套品牌 token；业务项目通过 CSS 变量调整品牌。
 - Angular 与 Spartan 版本必须位于双方支持范围内。
-- helm 组件升级走官方 `ng g @spartan-ng/cli:healthcheck`；**改动过的组件禁用 `migrate-helm-libraries`（会覆盖自定义）**，需对照上游手动合入。
+- helm 组件升级与定制登记见生成项目的 [Spartan 维护约定](../../template/docs/standards/frontend-spartan.md)。
 - 修改组件约定时同步 `template/docs/standards/` 与生成项目 Skill。
 - 仓库根与模板各带一份 Spartan Skill；当前本地调整为先核对锁定版本和已复制 Helm 代码、按需运行 CLI info、避免交互式生成。同步上游 Skill 时核对这些差异并保持两份一致。
 

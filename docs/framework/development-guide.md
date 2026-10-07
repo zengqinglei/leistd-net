@@ -29,18 +29,7 @@
 
 - 配置节以 `Leistd:` 为根，按家族、实现、命名实例分层：`Leistd:UnitOfWork`、`Leistd:Lock:Redis`、`Leistd:ServiceClients:{Name}`。
 
-- `RootNamespace` 规则（由 `scripts/check-csproj-conventions.py` 强制）：
-  - **包名以 `.Core` 结尾的一律显式声明为剥掉 `.Core` 的形态**（`Leistd.Security.Core` → `Leistd.Security`，
-    根原语包 `Leistd.Core` → `Leistd`）。
-  - 其余项目**一律不声明**——默认已等于程序集名，写出来只是噪声。
-  - 类型的命名空间 = `RootNamespace` + 从项目根到该文件的目录路径，由 `framework/.editorconfig`
-    的 IDE0130（severity=error）机械保证。
-
-- **子命名空间的两条硬规则**（由同一道闸门强制，检查目录名）：
-  - ❌ 与包名重复：`Leistd.Exception.Exceptions`、`Leistd.Lock.Memory.Locks`、`Leistd.EventBus.Local.EventBus`。
-  - ❌ 缩写：`Uow`。FDG 明确要求避免缩写，且这类往往同时是自重复。
-  - ✅ 描述内容的分段：`Leistd.Security.Users`、`Leistd.Timing`、`Leistd.MultiTenancy.ConnectionStrings`、
-    `Leistd.Response.AspNetCore.Filters`。
+- 命名空间 = `RootNamespace` + 目录路径（IDE0130）。包名以 `.Core` 结尾的显式声明剥掉 `.Core` 的 `RootNamespace`（`Leistd.Core` → `Leistd`），其余项目不声明；目录名不得与包名重复（`Leistd.Lock.Memory.Locks`）或使用缩写（`Uow`）。由 `scripts/check-csproj-conventions.py` 强制。
 
 - **目录按职责判断，不按类名后缀判断。** 包内通常同时有内容目录（`Checking/`、`Grants/`）与类型目录
   （`Dtos/`、`Errors/`、`Options/`），这种混合组织合法；新类型放进与现有同类最接近的目录。
@@ -227,6 +216,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
   - **例外：某项技术就是该组件主要 API 的实现机制本身时，它属于 Core。** 目前只有动态代理属于这一类，且只涉及一个包：`Leistd.UnitOfWork.Core`（`[UnitOfWork]`、`[UnitOfWorkEventHandler]`）。这些声明式特性的语义**就是**"由拦截器织入"，把代理拆出去会得到一个无法提供其主要能力的 Core——命名会更整齐，但包不再自洽。
   - 例外是**闭集**，不是逃生门：新增组件不得自行扩列。确有需要时先改本条规范并说明为什么该技术不可替换，再落代码。
   - 例外不放宽平台无关：这个包依旧不引 Web 与 ORM。
+  - **Core 包只依赖抽象**：`PackageReference` 限于 `Microsoft.Extensions.*` 与 `*.Abstractions`，不得引用 `.AspNetCore` / `.EntityFrameworkCore` 等宿主与基础设施包。业务项目在架构门禁里限制应用层、领域层能引用什么，而 Core 的依赖会顺着传递引用进它们的闭包。跨家族的 Core → Core 引用不禁止（否则会禁掉"错误码译文随包分发"这类能力），被引用方受同一条约束，传递进去的仍然只有抽象。由 `scripts/check-csproj-conventions.py` 强制。
   - 身份等概念在 `*.Core` 抽象里用中立类型（`string userId` / `ClaimsPrincipal`），不要把富身份模型（如 `ICurrentUser`）焊进核心接口签名；带技术细节的默认值（如 claim 类型）由宿主层注入而非写死在 Core。
 - 组件只注册完成自身功能必需、且在组件契约中声明的依赖；选哪个实现、映射哪些业务端点、如何编排应用管道由宿主决定（如通知组件不代映射实时 Hub），宿主显式调用各自的 `Add*` / `Map*` / `Use*` 组合。注册方式见 §6.6。
 - 新增跨域依赖前先评估是否会引入环，框架解决方案编译会暴露环依赖。
@@ -268,7 +258,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
   - 两个已登记的例外不带 `configure`：`AddRemoteTenantConnectionResolution` 只收配置节，`AddHostSettings` 唯一的委托用于声明设置绑定。它们的选项各只有一个调优值（`TenantRouteCacheOptions.CacheLifetime`、`HostSettingOptions.RefreshInterval`），宿主经配置节或 `services.Configure<T>` 调整。不为补齐形态在已有参数中间插入 `configure`：按位置传参的调用会静默错位（可选参数只能追加在末尾）。新增入口不得自行扩列这类例外。
   - 不适合放进配置文件的选项（如签发方决定的 claim 名）不绑定配置节，只走委托。其中含运维可能想按环境调整的值时（如 `HubIdentityOptions.RevalidationInterval`、`LocalTenantConnectionOptions.ControlPlaneConnectionStringName`），在该属性注释里写明不绑定配置的原因和需要调整时的做法；纯代码事实不必逐个说明。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
-- **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
+- **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包的 Resources 目录（en.json、zh-CN.json，例：`framework/components/authorization/Leistd.Authorization.Core/Resources/`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
   - Core 层错误码和异常只描述语义，XML 注释不写固定 HTTP 状态。组件拥有的非默认 HTTP 语义在组件 Core 包里用 `MapDefaultCode` / `MapDefaultException` 声明，并在组件自己的 `AddXxx` 里经 `services.Configure<GlobalExceptionOptions>(...)` 自动登记——交给宿主逐个调用的话，漏一个不会有编译或启动错误，只会静默回落成 400。登记映射的类型保持 `internal`，默认状态写进组件文档。宿主通过 `MapCode` / `MapException` 覆盖，与调用顺序无关。Core 里的状态码写成 `(int)HttpStatusCode.X`，不为 `StatusCodes` 常量引入 Web 依赖。代价是组件 Core 要依赖 `ExceptionHandling.Core`——多数组件本就为 `BusinessException` 引用它；HTTP 默认状态以 int 表达，Core 仍不依赖 ASP.NET Core 程序集。
   - 新增错误码时只为非默认 HTTP 语义在组件 Core 里登记默认映射（或在宿主映射）并补针对性测试；未映射的 `BusinessException` 故意回落 400，不登记冗余的 400 映射。422 只在协议确有区分价值时显式使用。
   - **协议层失败不发错误码**：输入校验、未预期异常、上游故障等只有状态码语义的失败只返回状态码、本地化标题（`Title:{status}`，译文在 `Leistd.Localization.Core`）与 `traceId`，不合成 `Error:*` 这类与状态码一一对应的码（RFC 9457 §4）。错误码只用于调用方需要据以分支的业务语义。
@@ -384,14 +374,7 @@ framework/tests/
 └── ddd-struct/                  与 framework/ddd-struct/ 并列，保住依赖方向的一级划分
 ```
 
-- **测试项目名 = `Leistd.<真实包前缀>.Tests`**，前缀必须是该家族下某个包的前缀，不得发明包名段。
-  跨家族的端到端用例放进主家族测试项目的 `EndToEnd/` 子目录。
-- **家族没有独立测试项目时目录不存在**，并在 `check-test-layout.py` 的 `WAIVERS` 里写明理由。
-  这道闸门补的是覆盖率阈值的盲区：程序集从未被任何测试加载时根本不出现在覆盖率报告里，
-  任何百分比门槛都对它无效。
-- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。`DisplayName` 同样用英文。由 `scripts/check-test-names.py` 机械保证。
-- **csproj 只写自己的东西**：`FrameworkReference`、特有 `PackageReference`、`ProjectReference`。
-  共享属性和测试包已在 `tests/Directory.Build.props` 注入，重复声明会被闸门拦下。
+- 测试项目名为 `Leistd.<真实包前缀>.Tests`；跨家族端到端用例放主家族项目的 `EndToEnd/`；没有独立测试项目的家族在 `check-test-layout.py` 的 `WAIVERS` 写明理由。测试方法名与 `DisplayName` 用下划线分隔的英文句子（`Endpoint_error_throws_ServiceClientException`），背景写进 XML 注释（`check-test-names.py`）。csproj 只写 `FrameworkReference`、特有 `PackageReference` 与 `ProjectReference`，共享属性由 `framework/tests/Directory.Build.props` 注入（`check-csproj-conventions.py`）。
 
 ### 7.2 项目内部组织
 
@@ -492,7 +475,7 @@ pwsh framework/build/test-package-consumption.ps1                # 包内容、�
 静态闸门清单只以 `pwsh scripts/check-all.ps1 -List` 的输出为准，CI 也只调它一处；新增闸门加进该脚本，本文件不跟着列。
 需要构建产物或运行环境的验证（矩阵、PostgreSQL E2E、包消费）不在其中，各有自己的入口。
 
-提交前代码里不留待办标记（`TODO` / `FIXME` / `HACK`），工具生成的也一样：在当期按终局做法改完，推迟的事写进计划（见[设计原则](../architecture/design-principles.md) §4）。
+交付不留待办标记，规则见[设计原则 §4](../architecture/design-principles.md#4-验证原则)。
 
 本地 NuGet 包统一输出到仓库根 `.tmp/local-feed`，不要临时发明其它产物目录；CI 发布产物仍使用 `framework/artifacts`。包消费检查会验证 DLL、XML、随包文档和依赖闭包，并在 `.tmp/package-consumer/` 使用隔离 NuGet 配置构建最小消费项目；本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包。新增第三方包时确认已在 `framework/Directory.Packages.props` 登记；新增包发布前确认 `PackageId` 唯一。
 

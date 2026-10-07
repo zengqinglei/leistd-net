@@ -24,14 +24,14 @@
 
 维护 Skill 时同时使用官方 `skill-creator`。每个 Skill 必须在自己的分发环境中自洽，不能依赖不会一同交付的文件。
 
-生成项目内的分工：
+生成项目内的分工（路径为模板源，生成后去掉 `template/` 前缀）：
 
 | 载体 | 内容 | 维护者 |
 | --- | --- | --- |
-| `.agents/skills/leistd-project-workflow` | 与语言、技术栈无关的开发流程、通用原则和规范演进机制 | 模板维护者；生成后项目通常不改 |
-| `docs/standards/` | 项目技术栈与个性化规范，生成时是模板的 .NET/Angular 基线 | 生成后归项目所有，由 Skill 驱动积累与精简 |
-| `docs/README.md` | 唯一文档索引与按任务读取表 | 项目 |
-| `AGENTS.md`、`CLAUDE.md` | 只指向 Skill 与 `docs/README.md` | 基本不变 |
+| `template/.agents/skills/leistd-project-workflow` | 与语言、技术栈无关的开发流程、通用原则和规范演进机制 | 模板维护者；生成后项目通常不改 |
+| `template/docs/standards/` | 项目技术栈与个性化规范，生成时是模板的 .NET/Angular 基线 | 生成后归项目所有，由 Skill 驱动积累与精简 |
+| `template/docs/README.md` | 唯一文档索引与按任务读取表 | 项目 |
+| `template/AGENTS.md`、`template/CLAUDE.md` | 只指向 Skill 与项目文档索引 | 基本不变 |
 
 `dotnet new` 是一次性脚手架，模板升级不会覆盖已生成项目的文档或 Skill。项目新增的规则写入项目 `docs/`，不回流到通用 Skill。
 
@@ -40,9 +40,10 @@
 | 场景 | 稳定入口 | 按需事实 |
 | --- | --- | --- |
 | 框架设计与维护 | `docs/architecture/design-principles.md`、`docs/framework/development-guide.md` | 目标源码、测试、`.csproj`、`framework/docs/` |
-| 框架组件使用 | `leistd-net-framework` | 已安装 NuGet 包的 `docs/*.md`、XML、项目配置 |
+| 版本与发布 | `docs/framework/versioning.md` | `release.yml`、`VERSION`、包源与 tag 状态 |
+| 框架组件使用 | `leistd-net-framework`；仓库内入口 `framework/docs/README.md` | 已安装 NuGet 包的 `docs/*.md`、XML、项目配置 |
 | 模板维护 | `docs/template/development-guide.md` | `template.json`、模板源码、生成场景 |
-| 业务项目协作 | `AGENTS.md` → `leistd-project-workflow`、项目 `docs/README.md` | 项目源码、配置、测试、CI 和最新同类文档 |
+| 业务项目协作 | `AGENTS.md` → `leistd-project-workflow`、项目 `docs/README.md`（模板源：`template/.agents/skills/leistd-project-workflow/`、`template/docs/README.md`） | 项目源码、配置、测试、CI 和最新同类文档 |
 
 历史 assessment、plan 和 Git 记录用于追溯，不作为当前规则入口。
 

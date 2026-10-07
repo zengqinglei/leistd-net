@@ -1,6 +1,6 @@
 # 模板质量验证
 
-本文用于维护模板，不进入生成项目。闸门、检查接替与变异验收、CI 分片原则统一见[质量检查与验证分工](../framework/quality-assurance.md)；生成与条件裁剪入口见[模板开发规范](./development-guide.md)。
+本文只记录模板维护相对[质量检查与验证分工](../framework/quality-assurance.md)的差异，不进入生成项目。闸门、检查接替与变异验收、CI 计划、回执、源码预检与 docs-only 规则以该文为准；生成项目自身的测试规则见模板 [`testing.md`](../../template/docs/standards/testing.md)；生成与条件裁剪入口见[模板开发规范](./development-guide.md)。
 
 ## 本地与 CI 的执行位置
 
@@ -17,13 +17,13 @@
 
 UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationTests 用 `WebApplicationFactory` 组合真实 HTTP 管道。后者是进程内宿主，替换外部依赖后不能认证真实网络、OIDC 跨服务链路或 PostgreSQL 语义。浏览器模式组件测试验证类、注入和 DOM，HTTP mocks 与 TestBed 仍是测试替身，不等于完整应用 E2E。纯函数不启动 TestBed；需要 DOM/注入上下文时才创建 fixture，不以固定数量比例削减测试。
 
-测试宿主把 `PasswordHash:IterationCount` 调到 1000：每个宿主都要播种管理员、每次登录都要校验口令，生产工作因子曾占集成测试一半以上的 CPU。默认值与密文格式由 `PasswordHashingTests` 按生产默认值钉住；PostgreSQL 与 OIDC 端到端使用生产默认值。宿主数量不靠合并测试类来压：多个类的用例依赖空库（精确用户名、全库计数、租户设置），共享宿主须改写断言，收益不抵风险。
+测试宿主的口令工作因子与宿主复用口径见生成项目 `testing.md` §2.1；PostgreSQL 与 OIDC 端到端使用生产默认工作因子。
 
-集成测试与矩阵运行时冒烟都跑在真实 PostgreSQL 上（选型依据见[模板开发规范 §9](./development-guide.md#9-测试与开发只用-postgresql为什么不用-inmemory-或-sqlite)）：集成测试由 Testcontainers 起容器、迁移一次模板库后每个宿主克隆一份；冒烟在本次矩阵运行共用的容器里为每个场景建库，先用该场景构建出的 `DbMigrator --apply` 迁移（Resource 用 `MigrationTarget` 单目标，不回源 Identity），再启动 API。矩阵与集成测试因此都需要本机 Docker 引擎（数据库端口绑定在 127.0.0.1，远端上下文不适用），CI 的 ubuntu runner 自带。设计时快照比对仍保留在单元测试里，它不需要 Docker、几毫秒给出结论。PostgreSQL 端到端承担跨进程与多库拆分；真实库集成测试覆盖了某个路由断言，不代表端到端里的对应断言都能删除，逐项接替仍需变异证据。不能为了测试新建只有测试调用的生产 Provider 选择抽象。
+集成测试与矩阵运行时冒烟都跑在真实 PostgreSQL 上（选型依据见[模板开发规范 §9](./development-guide.md#9-测试与开发只用-postgresql为什么不用-inmemory-或-sqlite)，集成测试的建库方式见 `testing.md` §2.1）；冒烟在本次矩阵运行共用的容器里为每个场景建库，先用该场景构建出的 `DbMigrator --apply` 迁移（Resource 用 `MigrationTarget` 单目标，不回源 Identity），再启动 API。矩阵与集成测试因此都需要本机 Docker 引擎（数据库端口绑定在 127.0.0.1，远端上下文不适用），CI 的 ubuntu runner 自带。设计时快照比对仍保留在单元测试里，它不需要 Docker、几毫秒给出结论。PostgreSQL 端到端承担跨进程与多库拆分；真实库集成测试覆盖了某个路由断言，不代表端到端里的对应断言都能删除，逐项接替仍需变异证据。不能为了测试新建只有测试调用的生产 Provider 选择抽象。
 
 条件 using 守卫覆盖 768 个原始符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。
 
-场景定义、`pr`/`full` 档位及具名分片在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致；每片至少一个场景。人工验证用 `scripts/test-template-matrix.ps1` 的 `-Scenarios`、`-Tier pr`（可加 `-Slice <片名>`）或不带参数的全集；CI 每片一个作业，使用 `-Tier <档位> -Slice <片名>`，不能与 `-Scenarios` 混用。`pr` 档只收覆盖必需的场景：`check-template-scenario-coverage.py` 对全部模板文件求值文件级 modifiers、嵌套条件与 computed 符号，任何条件行只由 `full` 档独有场景生成即失败。它同时检查行覆盖和有效能力两两组合：同一文件里几处分支只在某个 `full` 档场景里同时出现时（例如外部登录与非本地化的两段登录页代码），二者的组合交互要到合入后才验证。新增条件分支让闸门变红时，把对应场景加入 `pr` 档或改写条件，不删除闸门；加入后按实测耗时放入合适的分片，必要时新增具名分片并写明它验证什么。默认形态 `identity` 不是覆盖必需，但它是 `dotnet new` 的默认产物，固定留在 `pr` 档。独立的全部有效形态生成作业必须在同候选汇总中成功；内部文档变更时按既有范围规则记为不适用。Resource 纯 API 的 Lint/Frontend/Test 阶段明确记为 not-applicable，汇总按场景元数据核对，拒绝伪造 pass。默认人工及 full 档每个入选场景保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试。直接 PR 的局部计划按下节选择必要阶段，不能用手动跳过代替计划。容器检查由 `-ContainerSmoke` 挂到两档共有的含前端 Standalone 与纯 API Resource 场景，清单使用 `$ContainerScenarios`；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
+场景定义、`pr`/`full` 档位及具名分片在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致；每片至少一个场景。人工验证用 `scripts/test-template-matrix.ps1` 的 `-Scenarios`、`-Tier pr`（可加 `-Slice <片名>`）或不带参数的全集；CI 每片一个作业，使用 `-Tier <档位> -Slice <片名>`，不能与 `-Scenarios` 混用。`pr` 档只收覆盖必需的场景：`check-template-scenario-coverage.py` 对全部模板文件求值文件级 modifiers、嵌套条件与 computed 符号，任何条件行只由 `full` 档独有场景生成即失败。它同时检查行覆盖和有效能力两两组合：同一文件里几处分支只在某个 `full` 档场景里同时出现时（例如外部登录与非本地化的两段登录页代码），二者的组合交互要到合入后才验证。新增条件分支让闸门变红时，把对应场景加入 `pr` 档或改写条件，不删除闸门；加入后按实测耗时放入合适的分片，必要时新增具名分片并写明它验证什么。默认形态 `identity` 不是覆盖必需，但它是 `dotnet new` 的默认产物，固定留在 `pr` 档。独立的全部有效形态生成作业必须在同候选汇总中成功；内部文档变更时按既有范围规则记为不适用。Resource 纯 API 的 Lint/Frontend/Test 阶段明确记为 not-applicable，汇总按场景元数据核对，拒绝伪造 pass。默认人工及 full 档每个入选场景保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试。直接 PR 的局部计划按[同候选输入计划](../framework/quality-assurance.md#同候选输入计划)选择必要阶段，不能用手动跳过代替计划。容器检查由 `-ContainerSmoke` 挂到两档共有的含前端 Standalone 与纯 API Resource 场景，清单使用 `$ContainerScenarios`；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
 
 矩阵验收读取同一次 run 各分片的 artifact，使用 `scripts/check-template-matrix-results.ps1 -Tier <档位>` 核对候选 SHA、收据档位、独立预期计划的准确场景归属与 Backend/Runtime/Lint/Frontend/Test 状态（CI 传 -ValidationPlanPath；默认要求完整档）；要求容器验证时传入 `-ContainerSmoke`。还须核对日志中后端和真实浏览器测试确有用例执行，不能仅凭作业名称或退出码推定完整覆盖。Standalone 容器检查构建 API 与 Migrator 镜像，并在两种镜像内执行 `dotnet --info`；它认证镜像构建与 .NET 运行时可用，不代表 API 已按部署配置启动或已连接数据库。纯 API Resource 另外在镜像内实际迁移并启动 API，验证 liveness、无 SPA 与无 Node；跨服务认证及完整 PostgreSQL 隔离仍由各自独立作业承担，未执行的可选场景另行注明。
 
@@ -37,23 +37,13 @@ OIDC 浏览器闭环复用 `scripts/test-template-oidc-e2e.ps1`：`-IncludeBrows
 
 框架的调度循环测试见[覆盖分工](../framework/quality-assurance.md#定时任务的覆盖分工)。模板只验证业务职责：清理汇总的失败/未解析数据库传播放无宿主单测；SQL 翻译、全局过滤器、共享租户与真实 DI 接线放现有 PostgreSQL 集成测试类。
 
-截止时刻用官方假时钟固定；必要配置变体复用既有工厂的数据库，关闭该变体的自动调度后从 DI 直接执行真实 Job，避免偶发自动清理干扰断言。默认测试工厂仍启动调度器。通知当前契约是读/未读分别按保留期清理，`CreationTime < cutoff`（等于保留），且覆盖宿主和共享租户；会话是 `LastSeenTime <= cutoff`（等于删除），同时核对领域 `IsExpired`。固定 UTC 时刻对齐数据库微秒精度，截止前/后数据用毫秒间隔；批量删除后换作用域查询并按本用例标识断言。
+测试写法见生成项目 `testing.md` §2.3；默认测试工厂仍启动调度器。模板当前的截止契约：通知读/未读分别按保留期清理，`CreationTime < cutoff`（等于保留），且覆盖宿主和共享租户；会话是 `LastSeenTime <= cutoff`（等于删除），同时核对领域 `IsExpired`。断言按本用例标识筛选。
 
 不为每个 Job 新建容器、独立场景或协议 E2E，不以有 HTTP 集成测试为由删除上述边界。代表性生成覆盖 LocalIdentity 与 RemoteTokenAuth 通知、LocalIdentity 无通知侧；全集 CI 继续覆盖所有适用形态。新用例首先解决覆盖缺口，耗时同时披露入口与方法体，不把增加测试宣称为提速。
 
-## 源码预检与 CI 接替
+## 源码预检、CI 计划与局部 PR
 
-独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 源码预检，再打包、生成并审计实际生成的锁文件。GitHub CI 在同候选静态作业完整执行 `check-all.ps1`，分片显式使用 `-SkipSourcePreflight`，只检查接替入口仍在清单；必过汇总同时等待并核对静态和全部必要动态作业成功。预检和生成可以并行，静态失败不能被分片成功掩盖。源码预检职责不由生成编译替代，人工入口不能用该 CI 开关省略检查。
-
-纯内部文档 PR 的例外由仓库 [CI 范围与聚合规则](../framework/quality-assurance.md) 决定；`template/` 下的文档和 Skill 属于生成载荷，继续运行完整 PR 档。未选择动态场景时汇总明确报告“不适用”，不产生矩阵回执；选择的场景按独立计划执行必要阶段，不能由回执自己决定哪些阶段适用。
-
-## 局部 PR 的场景与阶段
-
-唯一规则与跨层责任表见[同候选输入计划](../framework/quality-assurance.md#同候选输入计划)。只含支持的模板前端源码时，生成/形态、audit、安装、healthcheck、lint、构建、spec 发现和真实浏览器测试保持；只含 backend/src/tests C# 时，生成/形态、audit、后端还原/构建、真实 PostgreSQL 冒烟和单元/集成保持。实际生成锁文件的生产依赖 audit 阈值、每片执行与网络重试保留；同片内内容相同的锁文件只审计一次，不以源码不变推断漏洞库不变。参数、依赖、项目配置、跨层和未知输入保留完整阶段；独立 PG/OIDC 均保留。前后端各自省略的阶段要求实际生成输入保持不变，不能把浏览器 mock 当 API 契约验证。
-
-场景从现有 sources/modifiers/computed 求出修改文件的生产场景，并保留默认与全特性代表；文件删除和跨边界移动用完整差异的两侧，不能只看最后一次提交。首次维护选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`，实际生成六种 PR 产品的前后对照，核对省略阶段/场景的输入，并验证错误回执拒绝。这是维护回归入口，不加入每日静态闸门。
-
-计划绑定实际候选 SHA、档位、场景、模式和 Framework/消费责任。矩阵传 `-ValidationPlanPath`，收据写实际 SHA/模式和阶段的 pass/not-applicable；汇总使用打包作业提供的独立计划，拒绝少场景、错模式、错 SHA、未执行必需阶段及缺失/取消。局部模式不能与 -SkipFrontend/-SkipRuntime/-Scenarios 混用，full 不接受裁剪计划。
+源码预检、CI 接替、docs-only 例外、同候选输入计划与回执的唯一规则见[质量检查与验证分工](../framework/quality-assurance.md#同候选输入计划)。模板侧的差异只有：`template/` 下的文档和 Skill 属于生成载荷，不享受 docs-only 例外，继续运行完整 PR 档。
 
 ## 前端依赖维护
 
