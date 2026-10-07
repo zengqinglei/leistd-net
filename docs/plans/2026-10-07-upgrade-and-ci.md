@@ -23,7 +23,7 @@
 
 - **框架侧**：`framework/docs/upgrades/<版本>/<家族>.md`。家族划分与 `framework/docs/components/<家族>.md` 一致，DDD 基座为 `ddd-struct`。
 - **打包**：`framework/common.props` 把本家族所有版本的升级说明打进包内 `docs/upgrades/<版本>.md`，与现有家族文档的打包规则同处维护。消费方只要读已安装或目标版本的包，就能拿到该家族全部历史版本的说明。
-- **跨家族条目**（如命名空间搬迁、Core 契约）：完整写入受影响的每个家族文件，不做包间相对链接，因为消费方本地只有自己安装的包。条目短时复制；条目长时写入 Core 家族文件，其他家族写一句“另见 `Leistd.Core` 包内 `docs/upgrades/<版本>.md`”。所有消费方都安装 Core，这个定位在包内总能找到。
+- **跨家族条目**（如命名空间搬迁、Core 契约）：完整写入受影响的每个家族文件，不做包间相对链接，因为消费方本地只有自己安装的包。条目短时复制；条目长时写入 Core 家族文件，其他家族写一句“另见 `Leistd.Core` 包内 `docs/upgrades/<版本>.md`；项目未安装 Core 时，单独下载目标版本的 Core 包读取，不为取得说明新增运行时依赖”。并非所有家族都依赖 Core（如 `Leistd.Lock.Core`、`Leistd.Data`），验收包含“只消费一个不依赖 Core 的家族”的情形。
 - **包内链接**：同一包内的升级说明之间只用相对链接；指向仓库的内容（模板侧说明、API 差异附录）一律用固定到版本 tag 的绝对 URL，不用分支链接。
 - **模板侧**：模板 HTTP 契约、生成项目文件等变更移到 `docs/template/upgrade-<版本>.md`，仓库内维护，不进 NuGet。
 - **0.13.0 现有内容**：
@@ -211,9 +211,9 @@
 
 | 包 | 文件 | 依赖 |
 | --- | --- | --- |
-| U1 | `framework/docs/upgrades/**`、`docs/template/upgrade-0.13.0.md`、删除 `docs/framework/upgrade-0.13.0*.md`、`docs/framework/versioning.md`、`framework/common.props`、`release.yml` 的 Release 正文与包元数据、`check-retired-terms.ps1`、包内容检查 | 无 |
+| U1 | `framework/docs/upgrades/**`、仓库 `docs/README.md` 的分发边界、`scripts/check-doc-references.py` 的白名单迁移、`docs/template/upgrade-0.13.0.md`、删除 `docs/framework/upgrade-0.13.0*.md`、`docs/framework/versioning.md`、`framework/common.props`、`release.yml` 的 Release 正文与包元数据、`check-retired-terms.ps1`、包内容检查 | 无 |
 | U2 | `skills/leistd-net-framework/**`、`.agents/skills/developing-leistd-framework/SKILL.md` 的升级说明规则、`docs/framework/development-guide.md` 的升级说明规则 | U1 |
-| V1 | `template/scripts/verify.ps1`、CI 薄壳、`template.json` 参数与排除、`testing.md`、根 README、`docs/README.md`、矩阵与生成测试接线 | 无 |
+| V1 | `template/scripts/verify.ps1`、CI 薄壳、`template.json` 参数与排除、`template/docs/standards/testing.md`、`template/README.md`、`template/docs/README.md`、矩阵与生成测试接线 | 无 |
 | S1 | `scripts/plan-quality-checks.py`、`.github/workflows/ci.yml` 的 test 作业与聚合、`test-quality-validation-plan.py`、`test-workflow-change-scope.py`、`docs/framework/quality-assurance.md` 的框架部分、框架 Skill 的验证入口段 | U2（与它共用框架 Skill，在其后改） |
 | D1 | `framework/components/settings/Leistd.Settings.Hosting/**`、`framework/tests/components/settings/Leistd.Settings.Tests/Hosting/**`、`framework/docs/components/settings.md` | 无 |
 | E1 | 第 6 节列出的 7 个消费点及 `User`、`UserRole` 实体、EF 映射与 `DependencyInjection`、两套模型快照、相关测试；`coding-backend.md`、`coding-common.md` 的聚合条目 | 无 |
