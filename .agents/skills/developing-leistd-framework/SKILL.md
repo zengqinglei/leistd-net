@@ -37,7 +37,7 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时用 `framework/build/test-package-consumption.ps1` 验证隔离消费。
 7. 影响 Template 消费方式时使用 `developing-leistd-template` 验证相关生成场景；其他运行时语义由组件测试或最小宿主验证。
 
-用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
+用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。破坏性提交须在同一提交中新增或更新 `docs/framework/upgrades/<基础版本>.md` 的对应条目，并与 `BREAKING CHANGE:` 脚注一致，判定见[什么时候写升级指南](../../../docs/framework/versioning.md#什么时候写升级指南)。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
 
 组件契约归 `framework/docs/components/{family}.md`，DDD 组合归 `framework/docs/ddd-struct/`，维护规则归 `docs/framework/`。缺少必要文档时创建最小权威说明并更新索引，不复制精确签名或维护过程。
 
