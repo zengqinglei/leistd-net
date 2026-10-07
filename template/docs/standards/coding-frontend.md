@@ -27,7 +27,7 @@ frontend/
 └── public/                # 构建后映射到站点根的静态资源
 ```
 
-依赖方向由 `frontend/eslint.config.mjs` 按解析出的真实文件检查，报错消息即规则：`shared` 只依赖自身，`core` 只依赖 `core` 与 `shared`，`layout` 与各功能另可依赖自身，功能之间只有路由文件可经 `loadComponent`/`loadChildren` 懒加载；应用装配点（`app.*.ts`）不被反向依赖，业务代码中只有它们引入 `_mock`。导入路径写普通字符串字面量。
+依赖方向由 `frontend/eslint.config.mjs` 按解析出的真实文件检查，报错消息即规则：`shared` 只依赖自身，`core` 只依赖 `core` 与 `shared`，`layout` 与各功能另可依赖自身，功能之间只有路由文件可经 `loadComponent`/`loadChildren` 懒加载；应用装配点（`app.*.ts`）不被反向依赖，业务代码中只有它们引入 `_mock`；各目录可读取 `environment`，测试文件可引用 `_mock`，不放开其他方向。导入路径写普通字符串字面量。
 
 - 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`；依赖 `core` 服务的组件不放 `shared`。功能内复用的组件放该页面的 `widgets/`。
 - 业务代码判断请求是否走 Mock 时注入 `frontend/src/app/core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
