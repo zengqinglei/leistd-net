@@ -2,8 +2,9 @@
 """统计生成项目典型任务读取的规范与 Skill 篇幅，检查不超过登记的上限。
 
 口径：模板源码（含条件标记、全部功能开启）；每类任务按 docs/README.md 的按任务读取表与
-项目 Skill 的意图路由列出应读文件，去重后累加字符数（Python len）。篇幅调整需要人工判断，
-本脚本不纳入 check-all，调整模板文档结构或篇幅时手动运行。
+项目 Skill 的意图路由列出应读文件，连同这些文件要求先读的伴随文件（如 Spartan Skill 的
+rules），去重后累加字符数（Python len）。篇幅调整需要人工判断，本脚本不纳入 check-all，
+调整模板文档结构或篇幅时手动运行。
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SKILL = 'template/.agents/skills/leistd-project-workflow/'
 STANDARDS = 'template/docs/standards/'
 SPARTAN = 'template/.agents/skills/spartan/SKILL.md'
+SPARTAN_RULES = 'template/.agents/skills/spartan/rules/'
 COMMON = [SKILL + 'SKILL.md', 'template/docs/README.md']
 IMPLEMENT = COMMON + [SKILL + 'references/development.md', SKILL + 'references/quality.md']
 
@@ -23,16 +25,28 @@ def standards(*names: str) -> list[str]:
     return [STANDARDS + name for name in names]
 
 
+def spartan_rules(*names: str) -> list[str]:
+    return [SPARTAN_RULES + name for name in names]
+
+
+# 文件 → 读它时必须同读的伴随文件。Spartan Skill“Critical rules”要求做相关工作前先读对应
+# rule：任何界面工作都涉及样式与组件组合；表单规则（forms.md）只在改表单时必读，按任务登记。
+REQUIRED_COMPANIONS: dict[str, list[str]] = {
+    SPARTAN: spartan_rules('styling.md', 'composition.md'),
+}
+
+
 # 任务 → (样例请求, 应读文件)
 TASKS: dict[str, tuple[str, list[str]]] = {
     'backend-crud': ('新增一个带分页查询的资源（后端）',
                      IMPLEMENT + standards('coding-common.md', 'coding-backend.md', 'api.md', 'testing.md')),
     'fullstack-crud': ('新增上述资源并加列表页',
                        IMPLEMENT + standards('coding-common.md', 'coding-backend.md', 'api.md', 'testing.md',
-                                             'coding-frontend.md', 'frontend-ui.md') + [SPARTAN]),
+                                             'coding-frontend.md', 'frontend-ui.md')
+                       + [SPARTAN] + spartan_rules('styling.md', 'composition.md')),
     'ui-change': ('调整现有页面布局与表单',
                   IMPLEMENT + standards('coding-common.md', 'coding-frontend.md', 'frontend-ui.md', 'testing.md')
-                  + [SPARTAN]),
+                  + [SPARTAN] + spartan_rules('styling.md', 'composition.md', 'forms.md')),
     'new-text': ('新增界面文案',
                  COMMON + [SKILL + 'references/development.md']
                  + standards('coding-common.md', 'coding-frontend.md', 'frontend-i18n.md')),
@@ -41,13 +55,33 @@ TASKS: dict[str, tuple[str, list[str]]] = {
                     + standards('coding-common.md', 'coding-backend.md', 'coding-frontend.md', 'api.md', 'testing.md')),
 }
 
-# 基线提交 e984db19（规范分层之前）的读数，仅供对比
-BASELINE = {'backend-crud': 53365, 'fullstack-crud': 89680, 'ui-change': 51672,
+# 基线提交 e984db19（规范分层之前）的读数，仅供对比。按当时的读取集合计：当时没有
+# frontend-ui.md 与 frontend-i18n.md，界面规范是 ui-design.md；Spartan rules 与当前集合相同。
+BASELINE = {'backend-crud': 53365, 'fullstack-crud': 97875, 'ui-change': 63719,
             'new-text': 33266, 'review-only': 78841}
 
-# 当前上限：调整后不得回升；有意放宽时连同理由一并修改
-LIMITS = {'backend-crud': 33400, 'fullstack-crud': 58230, 'ui-change': 39230,
-          'new-text': 17500, 'review-only': 38960}
+# 当前上限：调整后不得回升；有意放宽时连同理由一并修改。
+# 暂取计入 Spartan rules 后的读数加约 1%，阶段六文档改动全部完成后再定终值
+LIMITS = {'backend-crud': 33460, 'fullstack-crud': 66610, 'ui-change': 51500,
+          'new-text': 17610, 'review-only': 39040}
+
+
+def missing_companions(tasks: dict[str, tuple[str, list[str]]]) -> list[str]:
+    errors = []
+    for task, (_, files) in tasks.items():
+        for path, companions in REQUIRED_COMPANIONS.items():
+            if path in files:
+                errors += [f'{task}：含 {path} 但缺伴随文件 {c}' for c in companions if c not in files]
+    return errors
+
+
+def self_test() -> list[str]:
+    # 反例：从含 Spartan Skill 的任务里删掉一个必读伴随文件，自检必须报出
+    task, (sample, files) = next((t, v) for t, v in TASKS.items() if SPARTAN in v[1])
+    removed = REQUIRED_COMPANIONS[SPARTAN][0]
+    broken = {task: (sample, [f for f in files if f != removed])}
+    errors = missing_companions(broken)
+    return [] if any(removed in e for e in errors) else [f'自检反例未报出：{task} 删掉 {removed}']
 
 
 def measure(task: str) -> tuple[int, list[tuple[str, int]]]:
@@ -61,6 +95,11 @@ def main() -> int:
     parser.add_argument('--check', action='store_true', help='任一任务超过上限时以非 0 退出')
     parser.add_argument('--files', action='store_true', help='列出每类任务的去重文件与字符数')
     args = parser.parse_args()
+
+    errors = missing_companions(TASKS) + self_test()
+    if errors:
+        print('\n'.join(errors), file=sys.stderr)
+        return 1
 
     over = []
     for task, (sample, _) in TASKS.items():
