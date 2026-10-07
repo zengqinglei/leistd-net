@@ -27,9 +27,7 @@ internal sealed class FakeOperationActionDefinition(
     public bool TargetIsActor { get; } = targetIsActor;
 }
 
-/// <summary>
-/// 按给定的"动作码 → 可见性"表作答；表里没有的码按 <paramref name="otherCodes"/> 作答。
-/// </summary>
+/// <summary>按给定的"动作码 → 可见性"表作答；表里没有的码按 <paramref name="otherCodes"/> 作答。</summary>
 /// <remarks>
 /// 默认把任何码都当作已登记的 <see cref="OperationVisibility.Tenant"/>，不关心可见性的用例因此不必逐个登记；
 /// 验证"未登记"的用例显式传 <c>otherCodes: null</c>。

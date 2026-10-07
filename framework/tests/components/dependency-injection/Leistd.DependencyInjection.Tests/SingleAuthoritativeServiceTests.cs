@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.DependencyInjection.Tests;
 
-/// <summary>
-/// 「同一服务只能有一个权威实现」断言的支持边界。
-/// </summary>
+/// <summary>「同一服务只能有一个权威实现」断言的支持边界。</summary>
 /// <remarks>
 /// 这是对外 NuGet 公共 API，四个存储包都靠它。「工厂/实例/keyed 各算不算冲突」
 /// 这几条边界在这里集中钉住，不依赖各消费组件的用例。

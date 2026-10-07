@@ -63,14 +63,10 @@ using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure;
 
-/// <summary>
-/// 提供基础设施层服务注册。
-/// </summary>
+/// <summary>提供基础设施层服务注册。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册基础设施层服务：持久化（见 <see cref="AddPersistenceServices"/>）加上运行期组件、缓存与锁、外部适配器。
-    /// </summary>
+    /// <summary>注册基础设施层服务：持久化（见 <see cref="AddPersistenceServices"/>）加上运行期组件、缓存与锁、外部适配器。</summary>
     public static IServiceCollection AddInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -156,9 +152,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 注册持久化：数据库上下文、租户连接解析与多租户控制库。
-    /// </summary>
+    /// <summary>注册持久化：数据库上下文、租户连接解析与多租户控制库。</summary>
     /// <remarks>
     /// 迁移作业（DbMigrator）只用这一部分：运行期组件（设置、权限、操作记录等）依赖只在 API 里注册的当前用户与权限主体，
     /// 迁移进程注册它们既用不上、也会让开发环境的容器构建期校验失败。

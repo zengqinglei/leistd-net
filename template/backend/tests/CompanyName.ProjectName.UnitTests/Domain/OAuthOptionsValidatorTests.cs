@@ -4,9 +4,7 @@ using System.Globalization;
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
-/// <summary>
-/// 令牌签发配置的校验：一条失败一项、以配置键开头，访问令牌寿命与两个证书集合的问题一次报全。
-/// </summary>
+/// <summary>令牌签发配置的校验：一条失败一项、以配置键开头，访问令牌寿命与两个证书集合的问题一次报全。</summary>
 public sealed class OAuthOptionsValidatorTests
 {
     private readonly OAuthOptionsValidator _validator = new();

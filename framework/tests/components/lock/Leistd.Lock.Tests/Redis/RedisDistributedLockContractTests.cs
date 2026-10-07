@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// Redis 实现对 <see cref="ILock"/> 契约的兑现——跑在真实 Redis 上。
-/// </summary>
+/// <summary>Redis 实现对 <see cref="ILock"/> 契约的兑现——跑在真实 Redis 上。</summary>
 /// <remarks>
 /// <para>这一批是 <c>Leistd.Lock.Redis</c> 唯一会真正执行 <c>LockTake</c> / <c>LockRelease</c> /
 /// <c>LockExtend</c> 的地方。只驱动 <c>TryAcquireWithRetryAsync</c> 重试循环、喂假 attempt 委托的用例
@@ -27,9 +25,7 @@ public sealed class RedisDistributedLockContractTests : LockContractTests
         return NewLock();
     }
 
-    /// <summary>
-    /// 每个用例用独立键前缀，使同一个 Redis 实例上的并行用例互不干扰。
-    /// </summary>
+    /// <summary>每个用例用独立键前缀，使同一个 Redis 实例上的并行用例互不干扰。</summary>
     /// <remarks>
     /// 契约套件里的键本身已经是随机的；前缀再隔离一层，是为了让本地开发者
     /// 直接连自己长期运行的 Redis 也不会撞上业务数据。

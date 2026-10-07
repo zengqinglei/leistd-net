@@ -1,9 +1,7 @@
 
 namespace Leistd.MultiTenancy.AspNetCore.Options;
 
-/// <summary>
-/// 配置 Web 宿主的多租户解析与校验。
-/// </summary>
+/// <summary>配置 Web 宿主的多租户解析与校验。</summary>
 public class MultiTenancyOptions
 {
     /// <summary>获取配置节名称 <c>Leistd:MultiTenancy</c>。</summary>

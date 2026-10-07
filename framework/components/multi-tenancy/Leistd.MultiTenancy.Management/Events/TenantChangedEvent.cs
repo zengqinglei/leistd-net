@@ -2,9 +2,7 @@ using Leistd.EventBus.Events;
 
 namespace Leistd.MultiTenancy.Management.Events;
 
-/// <summary>
-/// 租户经管理用例被创建、更新、启停或删除。
-/// </summary>
+/// <summary>租户经管理用例被创建、更新、启停或删除。</summary>
 /// <remarks>
 /// 在各步写入都已提交后发布；创建失败并已补偿时不发布。
 /// </remarks>

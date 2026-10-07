@@ -9,9 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.OperationRecords.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// 使用 EF Core 持久化操作记录，并提供历史读取。
-/// </summary>
+/// <summary>使用 EF Core 持久化操作记录，并提供历史读取。</summary>
 /// <remarks>
 /// <para>通过 <see cref="IDbContextProvider{TDbContext}"/> 参与工作单元：成功记录与业务数据同一事务提交。</para>
 /// <para>租户隔离由 <c>IMultiTenant</c> 的全局查询过滤器承担，本类不带租户条件。</para>

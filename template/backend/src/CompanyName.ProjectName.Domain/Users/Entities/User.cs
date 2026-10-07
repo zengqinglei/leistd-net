@@ -13,87 +13,55 @@ namespace CompanyName.ProjectName.Domain.Users.Entities;
 
 public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 {
-    /// <summary>
-    /// 所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充
-    /// </summary>
+    /// <summary>所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充。</summary>
     public Guid? TenantId { get; private set; }
 
-    /// <summary>
-    /// 用户名（租户内唯一）
-    /// </summary>
+    /// <summary>用户名（租户内唯一）。</summary>
     public string Username { get; private set; }
 
-    /// <summary>
-    /// 邮箱（租户内唯一）
-    /// </summary>
+    /// <summary>邮箱（租户内唯一）。</summary>
     public string Email { get; private set; }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 邮箱是否已验证
-    /// </summary>
+    /// <summary>邮箱是否已验证。</summary>
     public bool EmailConfirmed { get; private set; }
 
-    /// <summary>
-    /// 密码哈希（可为空，OAuth 用户无密码）
-    /// </summary>
+    /// <summary>密码哈希（可为空，OAuth 用户无密码）。</summary>
     public string? PasswordHash { get; private set; }
 
-    /// <summary>
-    /// 手机号
-    /// </summary>
+    /// <summary>手机号。</summary>
     public string? PhoneNumber { get; private set; }
 #endif
 
-    /// <summary>
-    /// 头像
-    /// </summary>
+    /// <summary>头像。</summary>
     public string? Avatar { get; private set; }
 
-    /// <summary>
-    /// 显示名称
-    /// </summary>
+    /// <summary>显示名称。</summary>
     public string? DisplayName { get; private set; }
 
-    /// <summary>
-    /// 是否启用
-    /// </summary>
+    /// <summary>是否启用。</summary>
     public bool IsActive { get; private set; } = true;
 
-    /// <summary>
-    /// 是否系统内置超级管理员
-    /// </summary>
+    /// <summary>是否系统内置超级管理员。</summary>
     public bool IsSuperAdmin { get; private set; }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 锁定状态
-    /// </summary>
+    /// <summary>锁定状态。</summary>
     public LockoutState Lockout { get; private set; } = LockoutState.None;
 
-    /// <summary>
-    /// 最近一次成功登录；从未登录为 null
-    /// </summary>
+    /// <summary>最近一次成功登录；从未登录为 null。</summary>
     public LoginTrace? LastLogin { get; private set; }
 
-    /// <summary>
-    /// 两步验证凭据；未启用为 null
-    /// </summary>
+    /// <summary>两步验证凭据；未启用为 null。</summary>
     public TwoFactorCredential? TwoFactor { get; private set; }
 
-    /// <summary>
-    /// 是否已启用两步验证
-    /// </summary>
+    /// <summary>是否已启用两步验证。</summary>
     public bool TwoFactorEnabled => TwoFactor is not null;
 
-    /// <summary>
-    /// 设有本地口令（外部登录建的账号可以没有）
-    /// </summary>
+    /// <summary>设有本地口令（外部登录建的账号可以没有）。</summary>
     public bool HasLocalPassword => PasswordHash is not null;
 
-    /// <summary>
-    /// 账号安全版本：凭据（口令、两步验证、外部登录绑定）每变一次就换一个新值
-    /// </summary>
+    /// <summary>账号安全版本：凭据（口令、两步验证、外部登录绑定）每变一次就换一个新值。</summary>
     /// <remarks>
     /// 登录第二步的挑战记下签发时的值，完成前比对：第一步通过之后改了口令、重置或解绑了凭据，
     /// 旧挑战随之作废。挑战不是会话，撤销会话挡不住它。
@@ -103,9 +71,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 
     private readonly List<UserRole> _roles = [];
 
-    /// <summary>
-    /// 角色成员关系（子实体）
-    /// </summary>
+    /// <summary>角色成员关系（子实体）。</summary>
     /// <remarks>
     /// 只在经 <c>IUserRepository</c> 带角色读取时加载，<c>GetByIdAsync</c> 读出的用户这里为空：修改角色前必须带角色读取。
     /// 本工作单元内撤销的行仍在集合里（<c>IsDeleted</c> 为真），判断成员关系用 <see cref="IsInRole"/> 或 <see cref="GetRoleIds"/>。
@@ -176,9 +142,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 
 #endif
 
-    /// <summary>
-    /// 本人修改资料。头像另有入口（<see cref="SetAvatar"/>），不随资料表单一起提交。
-    /// </summary>
+    /// <summary>本人修改资料。头像另有入口（<see cref="SetAvatar"/>），不随资料表单一起提交。</summary>
     /// <remarks>换了邮箱即回到"未验证"：验证过的是旧地址，新地址是否属于本人还不知道。</remarks>
     public void UpdateProfile(string username, string email, string? displayName, string? phoneNumber)
     {
@@ -233,9 +197,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <summary>当前持有的角色 Id（不含已撤销的）。</summary>
     public IReadOnlyList<Guid> GetRoleIds() => [.. _roles.Where(role => !role.IsDeleted).Select(role => role.RoleId)];
 
-    /// <summary>
-    /// 分配角色；已持有的跳过。
-    /// </summary>
+    /// <summary>分配角色；已持有的跳过。</summary>
     /// <remarks>角色是否存在由调用方经角色仓储确认：这里只按 Id 引用，不读角色聚合。</remarks>
     public void AssignRoles(IEnumerable<Guid> roleIds)
     {
@@ -249,9 +211,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         }
     }
 
-    /// <summary>
-    /// 用给定角色整体替换现有角色：不在其中的撤销，缺的补上，保留的不动；为空即清空。
-    /// </summary>
+    /// <summary>用给定角色整体替换现有角色：不在其中的撤销，缺的补上，保留的不动；为空即清空。</summary>
     /// <remarks>撤销与补上随同一次保存落库，不会出现中途失败后零角色的状态。</remarks>
     public void ReplaceRoles(IEnumerable<Guid> roleIds)
     {
@@ -334,9 +294,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         Lockout = LockoutState.None;
     }
 
-    /// <summary>
-    /// 记一次密码错误；累计达到 <paramref name="policy"/> 的阈值时锁定一段时间，返回 true。
-    /// </summary>
+    /// <summary>记一次密码错误；累计达到 <paramref name="policy"/> 的阈值时锁定一段时间，返回 true。</summary>
     /// <remarks>规则见 <see cref="LockoutState.RecordFailure"/>。</remarks>
     public bool RecordAccessFailed(DateTime now, LoginLockoutPolicy policy)
     {
@@ -344,18 +302,14 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         return lockedOut;
     }
 
-    /// <summary>
-    /// 处于因登录失败而起的临时锁定中（有截止时间且未到）。
-    /// </summary>
+    /// <summary>处于因登录失败而起的临时锁定中（有截止时间且未到）。</summary>
     /// <remarks>
     /// 与管理员锁定（无截止时间）分开判：临时锁定可以由别人反复输错触发，
     /// 它只挡新的登录，不能拿来把已经登录的本人踢下线。
     /// </remarks>
     public bool IsTemporarilyLockedOut(DateTime now) => Lockout.IsTemporaryAt(now);
 
-    /// <summary>
-    /// 已建立的会话与已签发的令牌还能否继续使用：账号被禁用、或被锁定且没有截止时间时不能。
-    /// </summary>
+    /// <summary>已建立的会话与已签发的令牌还能否继续使用：账号被禁用、或被锁定且没有截止时间时不能。</summary>
     /// <remarks>
     /// 登录失败触发的临时锁定只挡新的登录：它可以由别人反复输错触发，若也作用于已在线的会话，
     /// 知道用户名就能把本人踢下线。
@@ -376,9 +330,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <summary>剩余可用的恢复码个数；未启用两步验证为 0。</summary>
     public int RecoveryCodesLeft => TwoFactor?.RecoveryCodesLeft ?? 0;
 
-    /// <summary>
-    /// 启用两步验证。
-    /// </summary>
+    /// <summary>启用两步验证。</summary>
     /// <param name="protectedSecret">已加密的密钥。</param>
     /// <param name="recoveryCodeHashes">恢复码摘要。</param>
     /// <param name="usedStep">启用时校验通过的那一步，随即记为已用：同一个码不能紧接着再拿去登录。</param>

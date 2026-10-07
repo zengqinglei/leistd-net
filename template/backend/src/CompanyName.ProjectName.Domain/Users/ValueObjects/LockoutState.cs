@@ -4,9 +4,7 @@ using Leistd.Ddd.Domain.Values;
 
 namespace CompanyName.ProjectName.Domain.Users.ValueObjects;
 
-/// <summary>
-/// 账号锁定状态：是否锁定、截止时间与连续失败次数，三者一起变化。
-/// </summary>
+/// <summary>账号锁定状态：是否锁定、截止时间与连续失败次数，三者一起变化。</summary>
 /// <remarks>
 /// 锁定分两种：登录失败累计触发的临时锁定有截止时间，它只挡新的登录；管理员锁定没有截止时间，已在线的会话也一并失效。
 /// 临时锁定到期后库里仍是"已锁定"，直到下一次登录失败或解锁才清掉，判定一律带当前时刻。
@@ -38,9 +36,7 @@ public sealed class LockoutState : ValueObject
     /// <summary>锁定；不传截止时间即管理员锁定。失败次数保留。</summary>
     public LockoutState LockUntil(DateTime? end) => new(true, end, AccessFailedCount);
 
-    /// <summary>
-    /// 记一次登录失败；累计达到 <paramref name="policy"/> 的阈值时锁定到 <paramref name="now"/> 加锁定时长。
-    /// </summary>
+    /// <summary>记一次登录失败；累计达到 <paramref name="policy"/> 的阈值时锁定到 <paramref name="now"/> 加锁定时长。</summary>
     /// <remarks>
     /// 锁定时计数清零：锁定到期后重新给满一轮尝试次数。上一轮失败锁定已到期的，先解除再计数，
     /// 否则过期锁定会让界面一直显示"已锁定"。管理员锁定不经这里解除。

@@ -11,9 +11,7 @@ public interface IUnitOfWork : IDatabaseApiContainer, ITransactionApiContainer, 
     /// <summary>未完成即释放工作单元时同步触发。</summary>
     event EventHandler<UnitOfWorkFailedEventArgs>? Failed;
 
-    /// <summary>
-    /// 工作单元释放时同步触发，无论是否已完成。
-    /// </summary>
+    /// <summary>工作单元释放时同步触发，无论是否已完成。</summary>
     /// <remarks>
     /// 自定义实现必须在释放时发出一次本事件，供管理器回收 DI 作用域并恢复外层工作单元。
     /// <see cref="IDisposable.Dispose"/> 必须幂等。

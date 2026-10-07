@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.Recording;
 
-/// <summary>
-/// 记录当前作用域内哪些动作与目标已经留过失败记录，供端点兜底据此跳过重复补记。
-/// </summary>
+/// <summary>记录当前作用域内哪些动作与目标已经留过失败记录，供端点兜底据此跳过重复补记。</summary>
 /// <remarks>
 /// <para><see cref="IOperationRecorder.RecordFailedAsync"/> 自身不判重，直接调用两次仍会写两条。
 /// 判据是动作码加目标；推不出目标时按动作码判。端点注解的目标须与应用服务记录的目标逐字一致。</para>

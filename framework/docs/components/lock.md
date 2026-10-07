@@ -125,6 +125,6 @@ public class OrderService(IDistributedLock distributedLock)
 
 - `TryLockAsync` 返回 `null` 表示未抢到锁，不抛异常，调用方必须判空并处理降级。
 - 内存实现也绑定了 `IDistributedLock`，但互斥范围仅限单进程，多实例部署中不同节点会同时进入临界区。
-- Redis 实现的过期时长、轮询间隔与 key 前缀由 `RedisLockOptions`（配置节 `Leistd:Lock:Redis`）给出，见下节。句柄会按租约的三分之一周期自动续期（续期时校验 token，不会误续别人的锁），因此临界区超过租约时长不再等于自动失去锁。
+- Redis 实现的过期时长、轮询间隔与 key 前缀由 `RedisLockOptions`（配置节 `Leistd:Lock:Redis`）给出。句柄会按租约的三分之一周期自动续期（续期时校验 token，不会误续别人的锁），因此临界区超过租约时长不再等于自动失去锁。
 - 续期失败即失去持锁资格：`ILockHandle.LockLost` 被取消，释放时不再删除 key。长事务、数据迁移、批量初始化等临界区应把该令牌与自己的 `CancellationToken` 关联。
   进程内实现没有租约，该令牌永不取消。

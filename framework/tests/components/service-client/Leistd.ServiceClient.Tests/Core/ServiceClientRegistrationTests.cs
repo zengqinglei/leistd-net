@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.ServiceClient.Tests.Core;
 
-/// <summary>
-/// <c>AddServiceClient</c> 的注册面：先绑定配置节再应用委托、按服务名登记一次、冲突的登记在注册时报错。
-/// </summary>
+/// <summary><c>AddServiceClient</c> 的注册面：先绑定配置节再应用委托、按服务名登记一次、冲突的登记在注册时报错。</summary>
 /// <remarks>
 /// 同一个命名客户端被登记两遍时，处理器管道会叠两层：每个请求走两遍传输异常翻译与链路透传，
 /// 而服务集合里的描述符看起来一切正常——只有构建出的处理器链能看出来。

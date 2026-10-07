@@ -2,9 +2,7 @@ using Leistd.EventBus.Events;
 
 namespace Leistd.Authorization.Events;
 
-/// <summary>
-/// 某个主体的授予经管理用例整体替换。
-/// </summary>
+/// <summary>某个主体的授予经管理用例整体替换。</summary>
 /// <remarks>
 /// 由管理用例在替换成功后发布，宿主据此记审计；种子与单项授予不发布。
 /// </remarks>

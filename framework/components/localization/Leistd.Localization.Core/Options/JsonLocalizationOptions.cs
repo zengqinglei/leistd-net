@@ -18,9 +18,7 @@ public sealed class JsonLocalizationOptions
     /// <remarks>未登记的强类型本地化器仍使用宿主的默认工厂；集合为空时不接管任何类型。</remarks>
     public ISet<Type> JsonResourceTypes { get; } = new HashSet<Type>();
 
-    /// <summary>
-    /// 嵌入资源相对程序集根的逻辑目录，默认 <c>Resources</c>（程序集 <c>Foo</c> 下 <c>Resources/en.json</c> 的清单名为 <c>Foo.Resources.en.json</c>）。
-    /// </summary>
+    /// <summary>嵌入资源相对程序集根的逻辑目录，默认 <c>Resources</c>（程序集 <c>Foo</c> 下 <c>Resources/en.json</c> 的清单名为 <c>Foo.Resources.en.json</c>）。</summary>
     public string ResourcesPath { get; set; } = "Resources";
 
     /// <summary>支持的语言，首项为默认与回落语言；默认 <c>["en", "zh-CN"]</c>。</summary>

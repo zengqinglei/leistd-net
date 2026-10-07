@@ -7,18 +7,14 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Application.Auth.OAuth;
 
-/// <summary>
-/// 本授权服务器能签发的一个 scope。
-/// </summary>
+/// <summary>本授权服务器能签发的一个 scope。</summary>
 /// <param name="Name">scope 名。</param>
 /// <param name="DisplayName">展示名。</param>
 /// <param name="Resources">授予该 scope 时访问令牌的受众（API 资源标识）。</param>
 /// <param name="MachineOnly">只能发给 client_credentials 的机器客户端。</param>
 public sealed record OAuthScope(string Name, string DisplayName, IReadOnlyList<string> Resources, bool MachineOnly);
 
-/// <summary>
-/// 本授权服务器的 scope 目录：服务端登记、scope 表、开放应用的权限校验与令牌受众都从这里取，不各自维护清单。
-/// </summary>
+/// <summary>本授权服务器的 scope 目录：服务端登记、scope 表、开放应用的权限校验与令牌受众都从这里取，不各自维护清单。</summary>
 /// <remarks>
 /// 本服务自己的 API 以 <see cref="OAuthOptions.Resource"/> 同名登记为 scope；下游 API 由 <see cref="OAuthOptions.ApiResources"/> 列出，
 /// 各自登记为配置的 scope（默认同名）。访问令牌的受众由授予的 scope 推出：申请哪个 API 的 scope，令牌就只能调用那个 API。

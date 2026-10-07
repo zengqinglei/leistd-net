@@ -23,9 +23,7 @@ public static class OperationRecordEndpoints
     /// <summary>导出端点名。</summary>
     public const string ExportName = NamePrefix + "Export";
 
-    /// <summary>
-    /// 映射操作记录的查询、筛选项与导出端点：<c>GET /</c>、<c>GET /filter-options</c>、<c>GET /export</c>。
-    /// </summary>
+    /// <summary>映射操作记录的查询、筛选项与导出端点：<c>GET /</c>、<c>GET /filter-options</c>、<c>GET /export</c>。</summary>
     /// <remarks>
     /// <para>前缀由宿主的路由组决定；返回的路由组可继续追加约定（限流、OpenAPI 标签、响应包装）。
     /// 授权策略全部必填，漏配在映射时抛出。</para>

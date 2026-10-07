@@ -3,9 +3,7 @@ using Leistd.OperationRecords.Models;
 
 namespace CompanyName.ProjectName.Application.OperationRecords.Provider;
 
-/// <summary>
-/// 登记本项目的操作动作定义。
-/// </summary>
+/// <summary>登记本项目的操作动作定义。</summary>
 /// <remarks>
 /// <para><b>与 <see cref="OperationRecordActions"/> 是两层，不是替代关系。</b>
 /// 常量类仍然保留并被逐字引用——控制器上的 <c>[OperationRecordAction(...)]</c> 是特性参数，

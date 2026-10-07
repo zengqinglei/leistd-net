@@ -3,60 +3,42 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
-/// <summary>
-/// 创建开放应用输入 DTO
-/// </summary>
+/// <summary>创建开放应用输入 DTO。</summary>
 public record CreateOpenApplicationInputDto : IValidatableObject
 {
-    /// <summary>
-    /// Client ID
-    /// </summary>
+    /// <summary>Client ID</summary>
     [Display(Name = "Client ID")]
     [Required(ErrorMessage = "{0} is required.")]
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public required string ClientId { get; init; }
 
-    /// <summary>
-    /// 显示名称
-    /// </summary>
+    /// <summary>显示名称。</summary>
     [Display(Name = "Display name")]
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 
-    /// <summary>
-    /// 应用类型
-    /// </summary>
+    /// <summary>应用类型。</summary>
     [Display(Name = "Application type")]
     [Required(ErrorMessage = "{0} is required.")]
     [RegularExpression("^(web|native|service)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ApplicationType { get; init; }
 
-    /// <summary>
-    /// 客户端类型
-    /// </summary>
+    /// <summary>客户端类型。</summary>
     [Display(Name = "Client type")]
     [Required(ErrorMessage = "{0} is required.")]
     [RegularExpression("^(public|confidential)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ClientType { get; init; }
 
-    /// <summary>
-    /// Redirect URIs
-    /// </summary>
+    /// <summary>Redirect URIs</summary>
     public List<string> RedirectUris { get; init; } = [];
 
-    /// <summary>
-    /// Post Logout Redirect URIs
-    /// </summary>
+    /// <summary>Post Logout Redirect URIs</summary>
     public List<string> PostLogoutRedirectUris { get; init; } = [];
 
-    /// <summary>
-    /// 授权能力
-    /// </summary>
+    /// <summary>授权能力。</summary>
     public List<string> Permissions { get; init; } = [];
 
-    /// <summary>
-    /// 要求
-    /// </summary>
+    /// <summary>要求。</summary>
     public List<string> Requirements { get; init; } = [];
 
     /// <summary>

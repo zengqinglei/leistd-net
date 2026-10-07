@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
-/// <summary>
-/// 控制器基类：只提供 <see cref="ApiControllerAttribute"/>
-/// </summary>
+/// <summary>控制器基类：只提供 <see cref="ApiControllerAttribute"/>。</summary>
 /// <remarks>
 /// <b>刻意不在这里声明 <c>[Route]</c>。</b>本项目的路由约定是显式版本化路径
 /// （<c>api/v1/&lt;kebab-复数&gt;</c>，如 <c>api/v1/tenant-connections</c>），

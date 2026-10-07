@@ -2,9 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.Authorization.Definitions;
 
-/// <summary>
-/// 权限定义管理器：加载全部 <see cref="IPermissionDefinitionProvider"/> 并提供定义查询。
-/// </summary>
+/// <summary>权限定义管理器：加载全部 <see cref="IPermissionDefinitionProvider"/> 并提供定义查询。</summary>
 /// <remarks>
 /// 定义在构造时一次性加载并预计算，运行期不再遍历定义树；
 /// 新增或修改权限定义需重启进程。

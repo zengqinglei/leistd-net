@@ -15,9 +15,7 @@ public class SettingDefinitionTests
         Assert.Equal(["Display.Language", "Export.MaxRowsPerFile"], manager.GetAll().Select(d => d.Name).Order());
     }
 
-    /// <summary>
-    /// 分组标识随定义原样保留，未指定则为 <see langword="null"/>。
-    /// </summary>
+    /// <summary>分组标识随定义原样保留，未指定则为 <see langword="null"/>。</summary>
     /// <remarks>
     /// 框架只搬运这个标识、不翻译也不给回落值：分组的展示文案要请求 culture，
     /// 而定义是一次性加载并缓存的。未分组返回 null，由宿主决定摆到哪里
@@ -36,9 +34,7 @@ public class SettingDefinitionTests
         Assert.Null(definitions["Export.MaxRowsPerFile"].Group);
     }
 
-    /// <summary>
-    /// 进程级与可分层覆盖互斥：组合层级在定义阶段就被拒绝。
-    /// </summary>
+    /// <summary>进程级与可分层覆盖互斥：组合层级在定义阶段就被拒绝。</summary>
     /// <remarks>
     /// <c>Host | User</c> 没有一致的读取解释——要么按宿主那一行、要么按用户覆盖。
     /// 允许注册的话，写入端按"允许用户级"放行，而解析端按进程级读宿主行，

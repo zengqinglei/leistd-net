@@ -193,6 +193,10 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 - 字段校验（必填、长度、范围）只在入口 DTO 用 DataAnnotations 完成，应用层与领域层信任 DTO 已保证的前置条件、不重复校验；例外是实体构造另有不经该 DTO 的调用路径时，其守卫是多入口共享的不变量保护，保留。参与字段校验消息的属性（带校验特性、消息里用到 `{0}`）写 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
 - 变量：DTO 参数 `input`，返回对象 `result`，`IQueryable` 为 `query`/`xxxQuery`；仓储注入 `{entity}Repository`，领域服务注入 `{entity}DomainService`。
 
+### 文档注释
+
+XML 按需补契约。短摘要写 `/// <summary>说明。</summary>`；正文需换行时，起止标签各占一行，补充信息用 `<remarks>`。[微软规范](https://learn.microsoft.com/dotnet/csharp/language-reference/language-specification/documentation-comments#d316-summary)允许两种格式，本项目优先单行。`<param>` 须完整覆盖参数，或将必要约束并入摘要后删整组，避免 CS1573。
+
 ## 6. 数据访问
 
 - **聚合**：聚合根实现 `IAggregateRoot<Guid>`，框架只给它登记默认仓储（`EntityModelConventionTests` 核对）；子实体（如 `UserRole`）声明 DbSet 只为表名走约定，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。

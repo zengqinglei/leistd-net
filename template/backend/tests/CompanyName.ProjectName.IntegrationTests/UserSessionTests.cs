@@ -23,9 +23,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 登录设备：每次登录登记一个会话，撤销对已发出的 Cookie 立即生效。
-/// </summary>
+/// <summary>登录设备：每次登录登记一个会话，撤销对已发出的 Cookie 立即生效。</summary>
 /// <remarks>
 /// 断言都落在"那份 Cookie 还能不能用"上：会话表里少一行不算数，Cookie 仍被放行才是要防的事。
 /// </remarks>
@@ -178,10 +176,7 @@ public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : ICl
         Assert.Equal(HttpStatusCode.Unauthorized, (await copy.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>
-    /// "退出其他设备"只把仍然有效的设备算进返回值，已过期的会话一并清掉但不计数
-    /// </summary>
-    /// <remarks>回归点：计数曾包含早已过期的会话，提示"退出了几台设备"与操作记录都会虚高。</remarks>
+    /// <summary>"退出其他设备"只把仍然有效的设备算进返回值，已过期的会话一并清掉但不计数。</summary>
     [Fact]
     public async Task Signing_out_other_devices_counts_only_active_devices()
     {
@@ -198,10 +193,7 @@ public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : ICl
         Assert.False(await SessionExistsAsync(expiredId));
     }
 
-    /// <summary>
-    /// 不再登录的用户，过期会话（连同原始 IP）由每日清理作业删掉，有效会话不受影响
-    /// </summary>
-    /// <remarks>登录时只清本人的过期会话；此前不再登录的人的会话行会无限期留在表里。</remarks>
+    /// <summary>不再登录的用户，过期会话（连同原始 IP）由每日清理作业删掉，有效会话不受影响。</summary>
     [Fact]
     public async Task The_cleanup_job_deletes_expired_sessions_of_users_who_never_sign_in_again()
     {

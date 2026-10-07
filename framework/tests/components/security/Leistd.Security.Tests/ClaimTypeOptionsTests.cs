@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Security.Tests;
 
-/// <summary>
-/// 主体标识与租户 claim 的唯一读取规则：当前用户、租户解析、判权、SignalR 寻址、操作记录都按它读。
-/// </summary>
+/// <summary>主体标识与租户 claim 的唯一读取规则：当前用户、租户解析、判权、SignalR 寻址、操作记录都按它读。</summary>
 /// <remarks>
 /// 各处读法一旦不一，同一个主体就会在这里是 A、在那里是 B；宿主改了 claim 名也只该改一处。
 /// </remarks>

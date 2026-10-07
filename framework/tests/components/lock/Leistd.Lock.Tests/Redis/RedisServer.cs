@@ -2,9 +2,7 @@ using StackExchange.Redis;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// 真实 Redis 的可达性判定与共享连接。
-/// </summary>
+/// <summary>真实 Redis 的可达性判定与共享连接。</summary>
 /// <remarks>
 /// <para>默认连 <c>127.0.0.1:6379</c>，可用 <c>LEISTD_TEST_REDIS</c> 覆盖。
 /// 连得上就跑，连不上就整类跳过——仓库的提交前自检

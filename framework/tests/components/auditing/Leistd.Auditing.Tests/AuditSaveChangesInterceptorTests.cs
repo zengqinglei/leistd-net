@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.Auditing.Tests;
 
-/// <summary>
-/// 保存时的审计与软删除转写。
-/// </summary>
+/// <summary>保存时的审计与软删除转写。</summary>
 public class AuditSaveChangesInterceptorTests
 {
     private static readonly DateTime Now = new(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);

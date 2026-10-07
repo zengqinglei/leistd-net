@@ -113,9 +113,7 @@ public class SettingResolutionTests
         Assert.Contains("Display.Language", visible.Keys);
     }
 
-    /// <summary>
-    /// 宿主上下文下，进程级设置从宿主那一行读出来；清掉那一行才回落到代码默认值。
-    /// </summary>
+    /// <summary>宿主上下文下，进程级设置从宿主那一行读出来；清掉那一行才回落到代码默认值。</summary>
     /// <remarks>
     /// 这条钉的是公共读取契约：把 Host 加进定义与写入端，却漏了解析端，症状是"写进去了、
     /// 读出来还是默认值"，而写入与界面都看不出异常——最难从现象反推的一类问题。
@@ -143,9 +141,7 @@ public class SettingResolutionTests
         Assert.Equal("Information", await Build(store).GetOrNullAsync("Logging.MinimumLevel"));
     }
 
-    /// <summary>
-    /// 租户上下文下进程级设置不可读：单项读取抛错，批量读取不包含它。
-    /// </summary>
+    /// <summary>租户上下文下进程级设置不可读：单项读取抛错，批量读取不包含它。</summary>
     /// <remarks>
     /// 这里刻意不返回代码默认值。那个值看着有效，调用方分不出"这就是当前生效的级别"
     /// 和"这一层在当前上下文根本读不到"，而前者会被直接展示或用于判断。

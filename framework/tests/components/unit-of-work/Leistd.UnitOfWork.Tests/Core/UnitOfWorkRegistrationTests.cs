@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// <c>AddUnitOfWork</c> 的注册面：生命周期、幂等与宿主替换。
-/// </summary>
+/// <summary><c>AddUnitOfWork</c> 的注册面：生命周期、幂等与宿主替换。</summary>
 /// <remarks>
 /// 环境工作单元与管理器是单例（状态在 AsyncLocal 里）；工作单元本身是 Transient，每次开始都是新的。
 /// 管理器被改成 Scoped 时，后台作业在根作用域里拿不到它；工作单元被改成单例时，两个请求会共用一个事务。

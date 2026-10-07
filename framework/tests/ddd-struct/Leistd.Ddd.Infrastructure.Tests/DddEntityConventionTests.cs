@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// <see cref="DddEntityConvention"/> 的模型约定，以及 <c>AddDddDbContext</c> 只给基座上下文挂拦截器。
-/// </summary>
+/// <summary><see cref="DddEntityConvention"/> 的模型约定，以及 <c>AddDddDbContext</c> 只给基座上下文挂拦截器。</summary>
 public sealed class DddEntityConventionTests
 {
     [Fact]

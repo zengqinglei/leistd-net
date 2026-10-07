@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// Domain 层拿到 <see cref="IQueryable{T}"/> 之后的异步执行入口。
-/// </summary>
+/// <summary>Domain 层拿到 <see cref="IQueryable{T}"/> 之后的异步执行入口。</summary>
 /// <remarks>
 /// <para>Domain 不引用 EF Core，所以 <c>GetQueryableAsync()</c> 返回的查询在领域服务里
 /// 调不到 <c>ToListAsync</c>，必须经本接口。业务项目的每个列表查询、每个计数、

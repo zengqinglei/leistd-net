@@ -34,7 +34,6 @@ public class UnitOfWorkAttribute : Attribute
 
     /// <summary>以默认选项为底，套用本特性显式设置的项，得到本次工作单元的选项。</summary>
     /// <param name="defaultUnitOfWorkOptions">宿主注册的默认选项。</param>
-    /// <returns>本次工作单元使用的选项。</returns>
     public UnitOfWorkOptions CreateOptionsFromDefault(UnitOfWorkOptions defaultUnitOfWorkOptions)
     {
         return new UnitOfWorkOptions

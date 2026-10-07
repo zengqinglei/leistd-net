@@ -5,9 +5,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 宿主漏接代理工厂时，工作单元在启动时失败，而不是照常运行、静默失去织入。
-/// </summary>
+/// <summary>宿主漏接代理工厂时，工作单元在启动时失败，而不是照常运行、静默失去织入。</summary>
 /// <remarks>
 /// 用真实的 <c>HostApplicationBuilder</c>：检查依赖两件官方行为——<c>ConfigureContainer</c> 会调用工厂的
 /// <c>CreateBuilder</c>（标记在那里登记），以及所有 <c>StartingAsync</c> 先于任何 <c>StartAsync</c>。

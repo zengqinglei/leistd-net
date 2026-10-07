@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Email.Tests.Smtp;
 
-/// <summary>
-/// SMTP 发送器的注册面。
-/// </summary>
+/// <summary>SMTP 发送器的注册面。</summary>
 public sealed class SmtpDependencyInjectionTests
 {
     [Fact]

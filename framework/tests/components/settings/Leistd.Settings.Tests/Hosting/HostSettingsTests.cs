@@ -17,9 +17,7 @@ using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Hosting;
 
-/// <summary>
-/// 宿主级设置经配置源覆盖部署配置：消费方读 <c>IOptionsMonitor</c>，默认值是部署基线，整组不合规时沿用上一组。
-/// </summary>
+/// <summary>宿主级设置经配置源覆盖部署配置：消费方读 <c>IOptionsMonitor</c>，默认值是部署基线，整组不合规时沿用上一组。</summary>
 public sealed class HostSettingsTests : IDisposable
 {
     private readonly FakeSettingStore _store = new();

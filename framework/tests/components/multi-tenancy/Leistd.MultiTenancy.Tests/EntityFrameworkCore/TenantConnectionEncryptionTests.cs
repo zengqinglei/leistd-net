@@ -18,9 +18,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 连接串加密存储：库里只有密文、读取时正确解密、换了密钥环就拒绝，日志与异常里不出现明文。
-/// </summary>
+/// <summary>连接串加密存储：库里只有密文、读取时正确解密、换了密钥环就拒绝，日志与异常里不出现明文。</summary>
 /// <remarks>
 /// 上下文刻意开启 EF 敏感数据日志：即使运维为排障打开它，参数里也只能看到密文。
 /// </remarks>

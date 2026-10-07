@@ -17,9 +17,7 @@ public interface IPermissionDefinitionManager
     /// <summary>判断权限是否已定义且自身与全部祖先都启用；定义不存在时返回 <see langword="false"/>。</summary>
     bool IsEffectivelyEnabled(string name);
 
-    /// <summary>
-    /// 判断权限在给定侧别上是否可用：已定义、实际启用，且定义的侧别包含 <paramref name="side"/>。
-    /// </summary>
+    /// <summary>判断权限在给定侧别上是否可用：已定义、实际启用，且定义的侧别包含 <paramref name="side"/>。</summary>
     /// <remarks>权限检查器与管理用例共用此判据。</remarks>
     /// <param name="name">权限名。</param>
     /// <param name="side">当前侧别。</param>

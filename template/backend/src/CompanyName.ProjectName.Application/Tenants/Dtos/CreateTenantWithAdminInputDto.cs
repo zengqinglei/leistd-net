@@ -4,9 +4,7 @@ using Leistd.MultiTenancy.Management.Dtos;
 
 namespace CompanyName.ProjectName.Application.Tenants.Dtos;
 
-/// <summary>
-/// 创建租户入参：在组件的创建入参之上带租户管理员的初始凭据，开通时在新租户里建好管理员。
-/// </summary>
+/// <summary>创建租户入参：在组件的创建入参之上带租户管理员的初始凭据，开通时在新租户里建好管理员。</summary>
 /// <remarks>
 /// 租户管理的端点与编排由多租户组件提供（<c>MapTenantManagement&lt;CreateTenantWithAdminInputDto&gt;</c>），
 /// 这两个字段是本项目的开通需要，由 <see cref="TenantSeeder"/> 从开通上下文里取回。

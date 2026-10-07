@@ -5,9 +5,7 @@ using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.DesignTime;
 
-/// <summary>
-/// 设计时 DbContext 工厂。
-/// </summary>
+/// <summary>设计时 DbContext 工厂。</summary>
 /// <remarks>
 /// 仅供 EF Core 工具（<c>dotnet ef migrations add</c> / <c>dotnet ef dbcontext</c>）在设计时构建模型使用，
 /// 不参与运行时（运行时由 DI 注册的 <c>AddDbContext</c> 创建）。

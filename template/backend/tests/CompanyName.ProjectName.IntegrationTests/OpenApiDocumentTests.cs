@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 官方 OpenAPI 文档：Development 下收录控制器与组件端点，其他环境不暴露接口清单。
-/// </summary>
+/// <summary>官方 OpenAPI 文档：Development 下收录控制器与组件端点，其他环境不暴露接口清单。</summary>
 public sealed class OpenApiDocumentTests
 {
     [Fact]

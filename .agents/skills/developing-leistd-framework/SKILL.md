@@ -23,6 +23,8 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 源码和项目引用定义实际 API 与行为；文档冲突时修正权威文档，不为兼容旧说明保留错误实现。
 
+修改注释或文档前读取[文档注释规范](../../../docs/framework/development-guide.md#4-文档注释)，以必要契约决定保留内容，不沿用邻近文件的冗余写法。
+
 ## 方案与实施计划
 
 涉及通用组件、DDD 基座、公共 API 或包边界的方案设计时，先搜索同主题最新文档；评估、计划与稳定规范的归属和生命周期见 [`docs/README.md`](../../../docs/README.md)。`framework/docs/` 随 NuGet 分发，只写已实现且使用者必须知道的公共契约，分发边界同见该文。同时影响 Template、Skill、CI 或发布流程时，改用 `maintaining-leistd-repository` 维护一份跨交付面计划。
@@ -37,7 +39,7 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时用 `framework/build/test-package-consumption.ps1` 验证隔离消费。
 7. 影响 Template 消费方式时使用 `developing-leistd-template` 验证相关生成场景；其他运行时语义由组件测试或最小宿主验证。
 
-用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。破坏性提交须在同一提交中新增或更新 `docs/framework/upgrades/<基础版本>.md` 的对应条目，并与 `BREAKING CHANGE:` 脚注一致，判定见[什么时候写升级指南](../../../docs/framework/versioning.md#什么时候写升级指南)。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
+用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 执行。破坏性提交在 `BREAKING CHANGE:` 脚注说明变化与必要动作，不强制维护旧版对照。实际发布由 `maintaining-leistd-repository` 负责；开发完成本身不触发发版。
 
 组件契约归 `framework/docs/components/{family}.md`，DDD 组合归 `framework/docs/ddd-struct/`，维护规则归 `docs/framework/`。缺少必要文档时创建最小权威说明并更新索引，不复制精确签名或维护过程。
 

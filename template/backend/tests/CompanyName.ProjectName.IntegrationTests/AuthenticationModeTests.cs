@@ -47,9 +47,7 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         Assert.NotNull(await scopeManager.FindByNameAsync("tenant-migration.read"));
     }
 
-    /// <summary>
-    /// 内部控制面策略的完整判定矩阵
-    /// </summary>
+    /// <summary>内部控制面策略的完整判定矩阵。</summary>
     /// <remarks>
     /// <para>这两条策略保护的端点直接返回租户连接配置（数据落在哪个库、解密后的连接串），
     /// 且接受<b>任意</b> <c>tenantId</c>——控制库是普通 <c>DbContext</c>、没有租户过滤器。

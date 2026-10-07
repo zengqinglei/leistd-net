@@ -13,7 +13,7 @@ export interface MockResponse {
   status?: number;
   headers?: HttpHeaders;
   body?: any;
-  /** 模拟延迟，单位：毫秒 */
+  /** 模拟延迟，单位：毫秒。 */
   delay?: number;
 }
 
@@ -30,7 +30,7 @@ export interface MockConfig {
   enable: boolean;
   include?: string | string[];
   exclude?: string | string[];
-  /** 模拟延迟，单位：毫秒 */
+  /** 模拟延迟，单位：毫秒。 */
   delay?: number;
   log?: boolean;
 }

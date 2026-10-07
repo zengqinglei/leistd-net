@@ -3,9 +3,7 @@ using Leistd.Settings.Resolution;
 
 namespace CompanyName.ProjectName.Application.Settings.Timing;
 
-/// <summary>
-/// 按 <c>Display.TimeZone</c> 设置解析当前用户的展示时区
-/// </summary>
+/// <summary>按 <c>Display.TimeZone</c> 设置解析当前用户的展示时区。</summary>
 /// <remarks>
 /// 时区值只接受 IANA 名。.NET 会连 Windows 时区 ID（<c>China Standard Time</c> 之类）一起认下来，
 /// 但浏览器的 <c>Intl.DateTimeFormat</c> 对它抛 <c>RangeError</c>——只按「能不能解析」放行，

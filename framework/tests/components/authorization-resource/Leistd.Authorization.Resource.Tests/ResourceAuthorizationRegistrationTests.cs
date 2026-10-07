@@ -14,9 +14,7 @@ using Xunit;
 
 namespace Leistd.Authorization.Resource.Tests;
 
-/// <summary>
-/// <c>AddResourceAuthorization</c> 与 <c>AddResourceAuthorizationCore</c> 的注册面。
-/// </summary>
+/// <summary><c>AddResourceAuthorization</c> 与 <c>AddResourceAuthorizationCore</c> 的注册面。</summary>
 /// <remarks>
 /// ACL 处理器重复登记时同一资源被判两遍；处理器按 TryAdd 去重又会把宿主的领域规则处理器挤掉——
 /// 两种错都只在运行期以"越权"或"多一倍查询"显形。

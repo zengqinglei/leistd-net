@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Leistd.Authorization.Dtos;
 
-/// <summary>
-/// 当前用户在当前侧别上的有效权限。
-/// </summary>
+/// <summary>当前用户在当前侧别上的有效权限。</summary>
 /// <remarks>前端据此裁剪路由、菜单和按钮；裁剪只影响体验，服务端仍对每个请求独立校验。</remarks>
 public record CurrentPermissionsOutputDto
 {

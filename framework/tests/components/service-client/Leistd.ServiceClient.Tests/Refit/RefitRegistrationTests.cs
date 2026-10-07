@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.ServiceClient.Tests.Refit;
 
-/// <summary>
-/// <c>AddRefitServiceClient</c> 的注册面：与手写客户端同一套按服务名登记的规则。
-/// </summary>
+/// <summary><c>AddRefitServiceClient</c> 的注册面：与手写客户端同一套按服务名登记的规则。</summary>
 public sealed class RefitRegistrationTests
 {
     private static ServiceCollection Services(Dictionary<string, string?>? settings = null)

@@ -13,9 +13,7 @@ using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 
-/// <summary>
-/// 写入端按定义上的值元数据与业务校验器把关，写入成功后发布变更事件。
-/// </summary>
+/// <summary>写入端按定义上的值元数据与业务校验器把关，写入成功后发布变更事件。</summary>
 /// <remarks>值域只靠界面约束不住脚本、旧版客户端与迁移数据；非法值一旦落库，之后每个消费方都得自己防御。</remarks>
 public class SettingValueValidationTests
 {

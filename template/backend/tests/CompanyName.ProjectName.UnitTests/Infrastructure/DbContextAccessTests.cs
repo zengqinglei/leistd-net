@@ -6,9 +6,7 @@ using ApplicationDependencyInjection = CompanyName.ProjectName.Application.Depen
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
-/// <summary>
-/// 业务 DbContext 只能经 <c>IDbContextProvider</c> 取得，不得直接注入。
-/// </summary>
+/// <summary>业务 DbContext 只能经 <c>IDbContextProvider</c> 取得，不得直接注入。</summary>
 /// <remarks>
 /// <para>直接注入的 <see cref="MyProjectDbContext"/> 在作用域创建时就绑定了连接，
 /// 不跟随租户路由也不参与工作单元：独立库租户的请求或切过租户的后台作业拿到它，

@@ -76,9 +76,7 @@ public sealed class CredentialChangeTransactionTests(CredentialChangeTransaction
         Assert.Equal(1, await CountSucceededAsync(OperationRecordActions.AuthPasswordChanged, userId));
     }
 
-    /// <summary>
-    /// 启用回滚时设置密钥还在，同一个验证器不必重新扫码；提交后密钥才删除。
-    /// </summary>
+    /// <summary>启用回滚时设置密钥还在，同一个验证器不必重新扫码；提交后密钥才删除。</summary>
     [Fact]
     public async Task Rolled_back_two_factor_enable_keeps_the_setup_secret_and_commit_clears_it()
     {
@@ -151,9 +149,7 @@ public sealed class CredentialChangeTransactionTests(CredentialChangeTransaction
         Assert.Equal(1, await CountSucceededAsync(OperationRecordActions.AuthTwoFactorDisabled, userId));
     }
 
-    /// <summary>
-    /// 管理员的停用、重置口令、重置两步验证与删除：最后一步失败时整体回滚，成功时撤销会话（与已签发令牌）并只发一次提醒。
-    /// </summary>
+    /// <summary>管理员的停用、重置口令、重置两步验证与删除：最后一步失败时整体回滚，成功时撤销会话（与已签发令牌）并只发一次提醒。</summary>
     [Theory]
     [InlineData("disable")]
     [InlineData("reset-password")]
@@ -226,9 +222,7 @@ public sealed class CredentialChangeTransactionTests(CredentialChangeTransaction
 #endif
     }
 
-    /// <summary>
-    /// 再认证失败触发锁定时，改口令的工作单元随拒绝回滚，锁定提醒仍要送达本人。
-    /// </summary>
+    /// <summary>再认证失败触发锁定时，改口令的工作单元随拒绝回滚，锁定提醒仍要送达本人。</summary>
     [Fact]
     public async Task Lockout_during_password_change_still_alerts_the_user()
     {
@@ -366,9 +360,7 @@ public sealed class CredentialChangeTransactionTests(CredentialChangeTransaction
         return (username, body.GetProperty("id").GetGuid());
     }
 
-    /// <summary>
-    /// 本类共用的派生宿主：可开关的失败注入、记下发出的安全提醒、手动推进的时钟。
-    /// </summary>
+    /// <summary>本类共用的派生宿主：可开关的失败注入、记下发出的安全提醒、手动推进的时钟。</summary>
     public sealed class Host : IDisposable
     {
         private readonly ProjectWebApplicationFactory factory = new();

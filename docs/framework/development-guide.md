@@ -157,29 +157,28 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 | 组件文档 | 安装与注册入口、最小示例、关键 API、配置、运行限制 | 过程记录、实现教学、夸张警示、与其他文档重复的事实 |
 
 - 精简以语义为单位，不按行数截断或批量删 `<remarks>`；删除前对照源码确认该句不是上表的契约。
-- `<summary>` 一句话，短的写成单行；属性不机械加“获取或设置”；`<param>`、`<returns>` 只写签名之外的信息，没有就不写。
+- `<summary>` 保持一句话：短摘要的起止标签与正文同一行；正文确需换行时，起止标签各占一行。补充契约放 `<remarks>`；属性不机械加“获取或设置”；参数、返回值只补签名之外的信息。
+- 同一成员使用 `<param>` 时覆盖全部参数，避免 CS1573；整组都无额外信息时删除。必要约束也可合并进摘要或 `<remarks>` 后删整组，不抑制文档警告。
 - `<remarks>` 保留影响正确用法的契约；组件文档说明必要的使用取舍，过程记录交给 Git。
 - `<example>` 用于主要注册入口和容易误用的主路径；可从签名直接推出的调用不补示例。
 - 接口或基类定义公共契约；实现确有继承且语义一致时使用 `<inheritdoc/>`，不复制同一段说明；实现收窄或改变语义时写自己的摘要。
+- 随包 XML 不会自动展开 `<inheritdoc/>`；目标须可追溯到本包、依赖包的 XML 或 BCL，AI 读取时继续解析目标契约。
 - XML 不使用 Markdown `**…**`；行内代码用 `<c>`，引用 API 用 `<see cref="..."/>`。
 - `<para>` 仅用于两个以上段落。
 - 行内注释解释“为什么必须这样”，不复述代码正在做什么。工具指令（`#pragma`、`#if`、`SuppressMessage` 的 `Justification`）与版权声明不在精简范围。
+- 中文注释使用中文标点；XML、JSDoc 摘要以句号结束，其他注释的完整句以句号结束。代码标识、路径和命令保留原样；仅调整新增或修改的注释。
 - 示例中的 API、依赖和变量必须可用；XML 内的代码不会自动参与 C# 编译，关键路径需单独验证。
 
-示例：`HubIdentityOptions.RevalidationInterval` 的摘要只补默认值与 `null` 的含义；其 remarks 中的配置方式等契约仍须保留，以下只展示摘要对照。
+示例：`HubIdentityOptions.RevalidationInterval` 的摘要补充默认值与 `null` 的含义；配置方式等补充契约放在 `<remarks>` 中。
 
 ```csharp
-// 精简前
-/// <summary>获取或设置两次 Hub 授权复评之间的最小间隔。</summary>
-/// <value>两次 Hub 授权复评之间的最小间隔。</value>
-public TimeSpan? RevalidationInterval { get; set; }
-
-// 精简后
 /// <summary>两次复评之间的最小间隔；为 <see langword="null"/>（默认）时每次调用都复评。</summary>
 public TimeSpan? RevalidationInterval { get; set; }
 ```
 
 Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓库也不为这些数字设硬闸门；统计只用于发现趋势，审查仍回到必要性、准确性与唯一性。
+
+`summary` 的单行与多行都是合法格式，微软[语言规范 D.3.16](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/documentation-comments#d316-summary)同时示例两种写法；以上换行规则是本仓库的简约风格约定。
 
 ### 4.2 由闸门保证的部分
 
@@ -307,7 +306,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 ### 6.3 变更
 
-- 直接收敛到最终 API，不保留旧成员、桥接包或双配置键；破坏性变化经提交脚注进入 release notes；同一提交须新增或更新 `docs/framework/upgrades/<基础版本>.md` 的对应条目，与脚注一致（判定见[什么时候写升级指南](./versioning.md#什么时候写升级指南)）。
+- 直接收敛到最终 API，不保留旧成员、桥接包或双配置键；破坏性变化由提交脚注说明变化与必要动作，进入 release notes。开发期不强制维护旧版对照，见[版本规范](./versioning.md#发布说明)。
 - 原子更新源码、测试、模板消费者、XML、组件文档和依赖 API 字面量的校验脚本。
 - 同时检查签名变化、语义变化，以及删除成员后是否会静默绑定到基类同名成员。
 - 公共 API 必须有真实消费者验证；Template 未消费时，使用隔离包消费项目或最小宿主覆盖主路径。

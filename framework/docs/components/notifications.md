@@ -75,7 +75,8 @@ app.MapNotificationHub();
 ```csharp
 builder.Services.AddRealTimeSignalR();
 
-app.MapRealTimeHub();   // 不再调用 MapNotificationHub
+// 共用连接时只映射此 Hub。
+app.MapRealTimeHub();
 ```
 
 此时通知的接收授权就是该 Hub 的授权要求。通知只经一个 Hub 推送：同一个 Hub 重复注册是幂等的，已选定一个 Hub 后再指定另一个（包括先调用无泛型版本）在注册时抛 `InvalidOperationException`。

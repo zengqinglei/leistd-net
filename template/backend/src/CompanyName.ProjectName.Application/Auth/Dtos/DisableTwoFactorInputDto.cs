@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 停用两步验证：密码与验证码都要
-/// </summary>
+/// <summary>停用两步验证：密码与验证码都要。</summary>
 public sealed record DisableTwoFactorInputDto
 {
     /// <summary>当前密码。</summary>

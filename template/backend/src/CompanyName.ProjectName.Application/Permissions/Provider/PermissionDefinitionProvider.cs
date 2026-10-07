@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 
-/// <summary>
-/// 权限定义提供器
-/// </summary>
+/// <summary>权限定义提供器。</summary>
 /// <remarks>
 /// 权限管理界面与授予存储均由这里的定义驱动。组仅用于模块展示与批量操作；
 /// 资源权限同时表示读取该资源，子权限表示可执行的动作。

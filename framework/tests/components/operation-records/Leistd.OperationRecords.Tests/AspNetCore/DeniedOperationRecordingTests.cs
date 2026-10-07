@@ -12,9 +12,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.AspNetCore;
 
-/// <summary>
-/// 授权阶段的拒绝：注解决定记不记，框架不再二次筛选。
-/// </summary>
+/// <summary>授权阶段的拒绝：注解决定记不记，框架不再二次筛选。</summary>
 /// <remarks>
 /// <c>[Authorize(Policy = ...)]</c> 的拒绝发生在授权阶段，请求到不了应用服务，
 /// 那里的记录调用看不见它——于是"谁在反复尝试他没有的权限"这类问题没有任何痕迹可查。
@@ -151,9 +149,7 @@ public sealed class DeniedOperationRecordingTests
         Assert.Empty(store.Written);
     }
 
-    /// <summary>
-    /// 注解在哪就记哪，不按 HTTP 方法二次否决
-    /// </summary>
+    /// <summary>注解在哪就记哪，不按 HTTP 方法二次否决。</summary>
     /// <remarks>
     /// 不按 HTTP 方法再筛一道（如只记 POST/PUT/PATCH/DELETE）。开发者把注解打在敏感的 <c>GET</c>
     /// 导出端点上，已经明确表达了"这个动作值得留痕"，框架再筛一道会让它静默失效——
@@ -175,9 +171,7 @@ public sealed class DeniedOperationRecordingTests
         Assert.Single(store.Written);
     }
 
-    /// <summary>
-    /// 匿名请求一律不记
-    /// </summary>
+    /// <summary>匿名请求一律不记。</summary>
     /// <remarks>
     /// 这不是偏好而是安全属性：匿名请求没有操作人，记下来等于把审计表变成一个
     /// 不需要凭据的写入面，任何人都能往里灌数据。
@@ -260,9 +254,7 @@ public sealed class DeniedOperationRecordingTests
         Assert.Equal("App.Roles.Update", Assert.Single(store.Written).AuthorizationBasis);
     }
 
-    /// <summary>
-    /// 叠了多个策略时，授权依据取实际没通过的那个，而不是书写顺序上的最后一个
-    /// </summary>
+    /// <summary>叠了多个策略时，授权依据取实际没通过的那个，而不是书写顺序上的最后一个。</summary>
     /// <remarks>
     /// 若取最后一个具名策略，权限策略之后再叠一个近期 MFA 策略时，
     /// 被权限拒绝记下的却是 MFA，业务只能靠调整特性顺序规避，而那只是换了一种情况记错。

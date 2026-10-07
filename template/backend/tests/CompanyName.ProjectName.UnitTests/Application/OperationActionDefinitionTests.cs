@@ -7,9 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.UnitTests.Application;
 
-/// <summary>
-/// 自证类动作（登录成功、改密码、注册）的目标就是本人：登记为 targetIsActor，界面据此把目标显示成操作人。
-/// </summary>
+/// <summary>自证类动作（登录成功、改密码、注册）的目标就是本人：登记为 targetIsActor，界面据此把目标显示成操作人。</summary>
 /// <remarks>
 /// 登录失败刻意不标：它的目标是调用方提交的用户名，未经验证，标了就成了无需凭据即可写入任意文本的"操作人"。
 /// </remarks>

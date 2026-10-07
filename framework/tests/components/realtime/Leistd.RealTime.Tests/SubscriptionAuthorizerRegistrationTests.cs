@@ -5,9 +5,7 @@ using Xunit;
 
 namespace Leistd.RealTime.Tests;
 
-/// <summary>
-/// 订阅授权器的注册面：两个内置选择都是单例、按 TryAdd 登记，宿主或先做出的选择不被后来者盖掉。
-/// </summary>
+/// <summary>订阅授权器的注册面：两个内置选择都是单例、按 TryAdd 登记，宿主或先做出的选择不被后来者盖掉。</summary>
 /// <remarks>
 /// 授权器决定谁能订阅什么。被后一行静默换掉时，表现是越权订阅或全部被拒，而不是启动报错。
 /// </remarks>

@@ -2,9 +2,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 
 namespace Leistd.MultiTenancy.Dtos;
 
-/// <summary>
-/// 下发给资源服务的运行时查询结果，形态与 <see cref="TenantConnectionLookupResult"/> 一致。
-/// </summary>
+/// <summary>下发给资源服务的运行时查询结果，形态与 <see cref="TenantConnectionLookupResult"/> 一致。</summary>
 /// <remarks>控制面端点与远端连接存储共用这一份线上契约。</remarks>
 public sealed record TenantRuntimeConnectionOutputDto
 {
@@ -70,9 +68,7 @@ public sealed record TenantMigrationConnectionListOutputDto
     public required IReadOnlyList<TenantDatabaseFailureOutputDto> FailedTenants { get; init; }
 }
 
-/// <summary>
-/// 一个独立库，以及住在里面的租户。
-/// </summary>
+/// <summary>一个独立库，以及住在里面的租户。</summary>
 /// <remarks>不含连接串：连接由各租户的正常解析链取得，因此只需读路由权限。</remarks>
 public sealed record TenantDatabaseOutputDto
 {
@@ -83,9 +79,7 @@ public sealed record TenantDatabaseOutputDto
     public required IReadOnlyList<Guid> TenantIds { get; init; }
 }
 
-/// <summary>
-/// 一个解析不出连接的租户。
-/// </summary>
+/// <summary>一个解析不出连接的租户。</summary>
 /// <remarks>与清单一起下发，不阻止其余库的作业或迁移，由调用方报出。</remarks>
 public sealed record TenantDatabaseFailureOutputDto
 {

@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
-/// <summary>
-/// 当前模型与已提交的迁移快照一致：改了实体或框架配置却没有生成迁移时在这里失败。
-/// </summary>
+/// <summary>当前模型与已提交的迁移快照一致：改了实体或框架配置却没有生成迁移时在这里失败。</summary>
 /// <remarks>
 /// <para>这类漂移在真实库执行 <c>Migrate</c> 时才抛 <c>PendingModelChangesWarning</c>
 /// （集成测试准备模板库时也会撞上，但要先起数据库容器）。这里用设计时工厂按关系型

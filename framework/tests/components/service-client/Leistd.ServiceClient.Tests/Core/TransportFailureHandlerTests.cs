@@ -5,9 +5,7 @@ using Leistd.TestBase.Doubles;
 
 namespace Leistd.ServiceClient.Tests.Core;
 
-/// <summary>
-/// 传输异常统一为带故障类别的 <see cref="ServiceClientException"/>；调用方取消原样传出。
-/// </summary>
+/// <summary>传输异常统一为带故障类别的 <see cref="ServiceClientException"/>；调用方取消原样传出。</summary>
 public class TransportFailureHandlerTests
 {
     private static HttpMessageInvoker Create(HttpMessageHandler inner) =>

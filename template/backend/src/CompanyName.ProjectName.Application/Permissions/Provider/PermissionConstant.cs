@@ -1,22 +1,16 @@
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 
-/// <summary>
-/// 权限定义
-/// </summary>
+/// <summary>权限定义。</summary>
 /// <remarks>
 /// 全部权限统一使用 <c>App.</c> 前缀。这些常量既是权限定义的名称，也是
 /// <c>[Authorize(Policy = ...)]</c> 的策略名和前端裁剪使用的契约，三处必须是同一组值。
 /// </remarks>
 public static class PermissionConstant
 {
-    /// <summary>
-    /// 权限名前缀
-    /// </summary>
+    /// <summary>权限名前缀。</summary>
     public const string Prefix = "App";
 
-    /// <summary>
-    /// 权限分组的标识符。
-    /// </summary>
+    /// <summary>权限分组的标识符。</summary>
     /// <remarks>
     /// <b>分组与前端菜单分组按约定对应</b>：根权限对应菜单项，子权限对应页面上的操作按钮——
     /// 管理员在权限配置里看到的结构，就是用户在界面上看到的结构。
@@ -44,9 +38,7 @@ public static class PermissionConstant
         public const string System = "System";
     }
 
-    /// <summary>
-    /// 用户管理权限
-    /// </summary>
+    /// <summary>用户管理权限。</summary>
     public static class Users
     {
         public const string Default = Prefix + ".Users";
@@ -58,9 +50,7 @@ public static class PermissionConstant
         public const string ManageRoles = Default + ".ManageRoles";
     }
 
-    /// <summary>
-    /// 角色管理权限
-    /// </summary>
+    /// <summary>角色管理权限。</summary>
     public static class Roles
     {
         public const string Default = Prefix + ".Roles";
@@ -71,9 +61,7 @@ public static class PermissionConstant
     }
 
 #if (OpenIddictServer)
-    /// <summary>
-    /// 开放应用（OAuth2 客户端）管理权限（宿主侧专属）
-    /// </summary>
+    /// <summary>开放应用（OAuth2 客户端）管理权限（宿主侧专属）。</summary>
     /// <remarks>
     /// 开放应用持有 ClientId/ClientSecret，能代表本系统对外颁发令牌，
     /// 因此与用户、角色同级独立成权限族，而不是复用用户管理权限。
@@ -94,9 +82,7 @@ public static class PermissionConstant
 
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
-    /// <summary>
-    /// 租户管理权限（宿主侧专属）
-    /// </summary>
+    /// <summary>租户管理权限（宿主侧专属）。</summary>
     /// <remarks>
     /// 定义时声明 Host 侧别：租户上下文内对任何主体（含租户管理员）不可见、不可授予、检查一律拒绝，
     /// 租户管理员不会在权限树里看到"管理租户"这类平台能力。
@@ -109,9 +95,7 @@ public static class PermissionConstant
         public const string Delete = Default + ".Delete";
 #if (Impersonation)
 
-        /// <summary>
-        /// 以租户管理员身份登录该租户（模拟登录）。
-        /// </summary>
+        /// <summary>以租户管理员身份登录该租户（模拟登录）。</summary>
         /// <remarks>
         /// 与 <see cref="Update"/> 分开授权：改租户的注册信息和"进到租户里面去操作"
         /// 是两种不同量级的能力，后者能看到并改动该租户的全部业务数据。
@@ -120,9 +104,7 @@ public static class PermissionConstant
 #endif
     }
 #endif
-    /// <summary>
-    /// 设置管理权限
-    /// </summary>
+    /// <summary>设置管理权限。</summary>
     /// <remarks>
     /// 只约束"改租户默认值"，因此是一个扁平权限而非"资源 + 动作"：查看设置不需要权限
     /// （个人偏好是个人数据），没有可作为资源层的读权限，硬造一个就没人检查。
@@ -134,9 +116,7 @@ public static class PermissionConstant
     }
 
 #if (IncludeOperationRecords)
-    /// <summary>
-    /// 操作记录查看权限
-    /// </summary>
+    /// <summary>操作记录查看权限。</summary>
     /// <remarks>
     /// 只约束"看"，因此是一个扁平权限而非"资源 + 动作"：记录写下就不再修改或删除，
     /// 没有别的动作可授。侧别为 <c>Both</c>——记录带 <c>TenantId</c> 且受全局查询过滤器分区，
@@ -147,9 +127,7 @@ public static class PermissionConstant
         /// <summary>查看操作记录。</summary>
         public const string Default = Prefix + ".OperationRecords";
 
-        /// <summary>
-        /// 导出操作记录。
-        /// </summary>
+        /// <summary>导出操作记录。</summary>
         /// <remarks>
         /// <b>与查看分开授权</b>：导出把审计数据整批带离系统，之后既不受本系统的可见性分层约束，
         /// 也不再有访问记录——影响面与在线翻页查看不是一个量级。GitHub、Salesforce 等

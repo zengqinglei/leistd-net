@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Security.Tests;
 
-/// <summary>
-/// 主体到强类型身份的解析：缺失、格式错误、多值与优先级。
-/// </summary>
+/// <summary>主体到强类型身份的解析：缺失、格式错误、多值与优先级。</summary>
 /// <remarks>
 /// 这些分支不是理论风险——多租户家族专门有 <c>InvalidTenantClaimException</c>，
 /// 说明"同一个 claim type 出现多个值"在生产里确实发生过。

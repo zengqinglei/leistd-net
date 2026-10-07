@@ -6,9 +6,7 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 
 namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
-/// <summary>
-/// 从查询参数解析匿名请求的租户。
-/// </summary>
+/// <summary>从查询参数解析匿名请求的租户。</summary>
 public class QueryStringTenantResolveContributor : ITenantResolveContributor
 {
     /// <inheritdoc />

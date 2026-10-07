@@ -13,9 +13,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// 租户过滤器就位闸门。
-/// </summary>
+/// <summary>租户过滤器就位闸门。</summary>
 /// <remarks>
 /// 各组件的 <c>Add*EfCore&lt;TDbContext&gt;()</c> 只能约束到 <c>where TDbContext : DbContext</c>
 /// （components 不得依赖 ddd-struct），因此把普通 DbContext 传进去能编译通过，
@@ -77,9 +75,7 @@ public class MultiTenantFilterGuardTests
         await StartHostedServicesAsync(provider);
     }
 
-    /// <summary>
-    /// 非多租户宿主零影响：没注册 ICurrentTenant 就不该有任何判定。
-    /// </summary>
+    /// <summary>非多租户宿主零影响：没注册 ICurrentTenant 就不该有任何判定。</summary>
     /// <remarks>
     /// 这条同时防住"闸门变成新的启动失败来源"：
     /// 一个根本不分租户的服务不该因为实体恰好实现了标记接口就起不来。
@@ -92,9 +88,7 @@ public class MultiTenantFilterGuardTests
         await StartHostedServicesAsync(provider);
     }
 
-    /// <summary>
-    /// 上下文构造不出来时只跳过、不失败：闸门只回答"过滤器在不在"。
-    /// </summary>
+    /// <summary>上下文构造不出来时只跳过、不失败：闸门只回答"过滤器在不在"。</summary>
     [Fact]
     public async Task Uncreatable_dbcontext_is_skipped_instead_of_failing_startup()
     {

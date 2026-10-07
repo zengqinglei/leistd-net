@@ -23,9 +23,7 @@ using Leistd.MultiTenancy.Context;
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 
-/// <summary>
-/// 用户领域服务
-/// </summary>
+/// <summary>用户领域服务。</summary>
 public class UserDomainService(
     IRepository<User, Guid> userRepository,
     IDataFilter dataFilter,
@@ -44,9 +42,7 @@ public class UserDomainService(
 
 #endif
 #if (!LocalIdentity)
-    /// <summary>
-    /// 把签发方的主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段。
-    /// </summary>
+    /// <summary>把签发方的主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段。</summary>
     /// <remarks>
     /// <para>本形态下用户行的主键<b>就是</b>签发方的 <c>sub</c>（见 <see cref="User"/> 的构造函数），
     /// 所以这条投影不可能"对错人"——而让人手填主体标识就可能，且抄错时不报错。</para>
@@ -96,9 +92,7 @@ public class UserDomainService(
         return user;
     }
 
-    /// <summary>
-    /// 取得主体对应的本地用户行；还没有时建立只含主体标识的最小行，供部署引导在首次访问之前分配角色。
-    /// </summary>
+    /// <summary>取得主体对应的本地用户行；还没有时建立只含主体标识的最小行，供部署引导在首次访问之前分配角色。</summary>
     /// <remarks>
     /// <para>最小行按投影的回落规则命名（用户名取主体标识、邮箱留空），不编造资料；
     /// 首次真实访问时由 <see cref="EnsureProjectedAsync"/> 按令牌补齐。</para>
@@ -139,9 +133,7 @@ public class UserDomainService(
         => (string.IsNullOrWhiteSpace(username) ? subjectId.ToString() : username.Trim(), email?.Trim() ?? string.Empty);
 
 #endif
-    /// <summary>
-    /// 检查用户名是否可用
-    /// </summary>
+    /// <summary>检查用户名是否可用。</summary>
     /// <remarks>
     /// 查重要看见被软删除的行：用户名与邮箱的唯一索引都没有排除 <c>IsDeleted</c>，
     /// 软删除的用户仍然占着它们，而仓储默认把这些行过滤掉。不关掉过滤，这里会答"可用"，
@@ -156,9 +148,7 @@ public class UserDomainService(
         return !await userRepository.AnyAsync(u => u.Username == username, cancellationToken);
     }
 
-    /// <summary>
-    /// 检查用户名是否可用（排除指定用户）
-    /// </summary>
+    /// <summary>检查用户名是否可用（排除指定用户）。</summary>
     /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsUsernameAvailableAsync(Guid excludeUserId, string username, CancellationToken cancellationToken = default)
     {
@@ -166,9 +156,7 @@ public class UserDomainService(
         return !await userRepository.AnyAsync(u => u.Id != excludeUserId && u.Username == username, cancellationToken);
     }
 
-    /// <summary>
-    /// 检查邮箱是否可用
-    /// </summary>
+    /// <summary>检查邮箱是否可用。</summary>
     /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsEmailAvailableAsync(string email, CancellationToken cancellationToken = default)
     {
@@ -176,9 +164,7 @@ public class UserDomainService(
         return !await userRepository.AnyAsync(u => u.Email == email, cancellationToken);
     }
 
-    /// <summary>
-    /// 检查邮箱是否可用（排除指定用户）
-    /// </summary>
+    /// <summary>检查邮箱是否可用（排除指定用户）。</summary>
     /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsEmailAvailableAsync(Guid excludeUserId, string email, CancellationToken cancellationToken = default)
     {
@@ -187,9 +173,7 @@ public class UserDomainService(
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 校验口令是否满足服务端策略，通过后返回哈希
-    /// </summary>
+    /// <summary>校验口令是否满足服务端策略，通过后返回哈希。</summary>
     /// <param name="password">明文口令</param>
     /// <param name="subject">错误消息里的主体描述</param>
     /// <remarks>
@@ -204,9 +188,7 @@ public class UserDomainService(
         return passwordHasher.HashPassword(password!);
     }
 
-    /// <summary>
-    /// 创建<b>宿主</b>引导管理员（<c>IsSuperAdmin</c>）
-    /// </summary>
+    /// <summary>创建<b>宿主</b>引导管理员（<c>IsSuperAdmin</c>）。</summary>
     /// <remarks>
     /// <c>IsSuperAdmin</c> 是宿主专用的权限管理防锁死主体，会旁路功能权限、资源授权和
     /// 数据范围，且不可停用或删除。租户管理员通过普通 Admin 角色管理权限，不得获得此标记。
@@ -231,9 +213,7 @@ public class UserDomainService(
         return user;
     }
 
-    /// <summary>
-    /// 把已有的<b>宿主</b>用户提升为超级管理员，守卫与 <see cref="CreateSuperAdminAsync"/> 相同。
-    /// </summary>
+    /// <summary>把已有的<b>宿主</b>用户提升为超级管理员，守卫与 <see cref="CreateSuperAdminAsync"/> 相同。</summary>
     /// <remarks>只改实体，调用方负责保存。</remarks>
     /// <exception cref="InvalidOperationException">当前存在租户上下文。</exception>
     public void PromoteToSuperAdmin(User user)
@@ -254,17 +234,13 @@ public class UserDomainService(
         }
     }
 
-    /// <summary>
-    /// 管理员重置他人口令（不校验原口令，由应用层完成越权判断）
-    /// </summary>
+    /// <summary>管理员重置他人口令（不校验原口令，由应用层完成越权判断）。</summary>
     public void ResetPassword(User user, string? newPassword) =>
         user.UpdatePasswordHash(HashWithPolicy(newPassword));
 #endif
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 创建用户
-    /// </summary>
+    /// <summary>创建用户。</summary>
     /// <remarks>
     /// 资源服务形态没有这个方法：那一侧的用户行由 <c>EnsureProjectedAsync</c> 按令牌投影，
     /// 不存在"由本服务决定一个新主体的标识"这回事。
@@ -305,9 +281,7 @@ public class UserDomainService(
 
 #endif
 #if (ExternalLogin)
-    /// <summary>
-    /// 为首次外部登录建立本地用户：用户名按 <paramref name="usernameBase"/> 生成，没有本地口令。
-    /// </summary>
+    /// <summary>为首次外部登录建立本地用户：用户名按 <paramref name="usernameBase"/> 生成，没有本地口令。</summary>
     /// <param name="usernameBase">
     /// 期望的用户名基底，取提供商的公开句柄或显示名；为空或清洗后不可用时回落到 <c>user</c>。
     /// <b>不要传邮箱或邮箱本地部</b>：用户名是公开标识符，那样等于把半个联系方式公开。
@@ -342,9 +316,7 @@ public class UserDomainService(
         return user;
     }
 
-    /// <summary>
-    /// 按候选基底生成一个可用的本地用户名（<c>alice</c>，已被占用时 <c>alice_418203</c>）
-    /// </summary>
+    /// <summary>按候选基底生成一个可用的本地用户名（<c>alice</c>，已被占用时 <c>alice_418203</c>）。</summary>
     /// <returns>当前未被占用、且符合 <see cref="UsernameRules"/> 的用户名。</returns>
     /// <exception cref="BusinessException">连续若干次随机后缀都被占用。</exception>
     /// <remarks>
@@ -426,9 +398,7 @@ public class UserDomainService(
 
 #endif
 #if (LocalIdentity)
-    /// <summary>
-    /// 管理员修改用户资料；邮箱在租户内唯一。
-    /// </summary>
+    /// <summary>管理员修改用户资料；邮箱在租户内唯一。</summary>
     /// <exception cref="BusinessException">邮箱已被占用（<see cref="UserErrorCodes.EmailTaken"/>），或头像不合规。</exception>
     public async Task UpdateManagementAsync(
         User user,
@@ -449,9 +419,7 @@ public class UserDomainService(
     }
 
 #endif
-    /// <summary>
-    /// 更新个人信息
-    /// </summary>
+    /// <summary>更新个人信息。</summary>
     public async Task UpdateProfileAsync(
         User user,
         string username,
@@ -478,9 +446,7 @@ public class UserDomainService(
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 本人修改口令：校验当前口令，通过则写入新口令的哈希。
-    /// </summary>
+    /// <summary>本人修改口令：校验当前口令，通过则写入新口令的哈希。</summary>
     /// <remarks>
     /// <b>失败返回状态而不是抛异常</b>，与 <see cref="ValidateCredentialsAsync"/> 同型：
     /// 当前口令不对是一次<b>再认证失败</b>，应用层要先计入失败次数、留下审计，然后才抛。
@@ -507,9 +473,7 @@ public class UserDomainService(
         return ChangePasswordStatus.Succeeded;
     }
 
-    /// <summary>
-    /// 再认证时核对本人的当前口令，只给判定；没有本地口令（只经外部登录）的账号一律不通过。
-    /// </summary>
+    /// <summary>再认证时核对本人的当前口令，只给判定；没有本地口令（只经外部登录）的账号一律不通过。</summary>
     /// <remarks>失败计数与锁定由应用层的再认证守卫负责，这里不改用户。</remarks>
     public bool VerifyCurrentPassword(User user, string password)
     {
@@ -517,9 +481,7 @@ public class UserDomainService(
         return user.PasswordHash is not null && passwordHasher.VerifyPassword(user.PasswordHash, password);
     }
 
-    /// <summary>
-    /// 校验用户名密码，只给判定。
-    /// </summary>
+    /// <summary>校验用户名密码，只给判定。</summary>
     /// <remarks>
     /// <para><b>失败返回状态而不是抛异常，也不在这里累计失败</b>：累计要落在独立的工作单元里，
     /// 那是事务编排、属于应用层（见 <c>IAccessFailureCounter</c>）。领域只回答"口令对不对"。</para>

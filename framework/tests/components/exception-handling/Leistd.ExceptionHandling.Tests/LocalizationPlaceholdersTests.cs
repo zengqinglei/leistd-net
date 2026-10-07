@@ -2,9 +2,7 @@ using Xunit;
 
 namespace Leistd.ExceptionHandling.Tests;
 
-/// <summary>
-/// 具名占位符填充：错误响应与操作记录的失败原因共用，口径变了两处一起变
-/// </summary>
+/// <summary>具名占位符填充：错误响应与操作记录的失败原因共用，口径变了两处一起变。</summary>
 public class LocalizationPlaceholdersTests
 {
     [Fact]

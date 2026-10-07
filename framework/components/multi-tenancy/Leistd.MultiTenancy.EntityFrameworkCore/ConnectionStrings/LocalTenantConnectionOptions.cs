@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 
-/// <summary>
-/// 本地解析（宿主直连控制库）的配置。
-/// </summary>
+/// <summary>本地解析（宿主直连控制库）的配置。</summary>
 public sealed class LocalTenantConnectionOptions
 {
     /// <summary>控制库上下文的连接名（其 <c>[ConnectionStringName]</c> 的值），如 <c>IdentityControl</c>。</summary>

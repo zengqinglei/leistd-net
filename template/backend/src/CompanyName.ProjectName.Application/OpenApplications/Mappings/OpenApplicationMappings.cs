@@ -6,9 +6,7 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Mappings;
 
-/// <summary>
-/// 开放应用映射配置
-/// </summary>
+/// <summary>开放应用映射配置。</summary>
 /// <remarks>
 /// 源用 <see cref="OpenIddictApplicationDescriptor"/> 而不是 OpenIddict 的应用实体：实体是
 /// <c>object</c>，字段只能逐个 <c>await</c> 取。<c>Id</c> 不在 descriptor 上，经

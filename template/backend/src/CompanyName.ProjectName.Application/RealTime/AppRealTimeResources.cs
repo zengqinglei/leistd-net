@@ -2,9 +2,7 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 
 namespace CompanyName.ProjectName.Application.RealTime;
 
-/// <summary>
-/// 客户端可订阅的实时资源与事件名。
-/// </summary>
+/// <summary>客户端可订阅的实时资源与事件名。</summary>
 /// <remarks>
 /// <para>资源键一律经 <c>ICurrentTenant.ScopeKey(资源名)</c> 生成：租户为 <c>{租户 Id:N}:{资源名}</c>，宿主为
 /// <c>host:{资源名}</c>。发布与订阅两侧用同一个函数，不同租户、租户与宿主的键天然不同，组名里就带着作用域——

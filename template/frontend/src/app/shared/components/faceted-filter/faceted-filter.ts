@@ -20,7 +20,7 @@ import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 
 import { PopoverAria } from '../../directives/popover-aria';
 
-/** faceted filter 选项。`icon` 为可选的 ng-icon 名称（须由使用方 provideIcons 注册）。 */
+/** `icon` 为可选的 ng-icon 名称，由使用方通过 provideIcons 注册。 */
 export interface FacetedFilterOption {
   value: string | boolean | null;
   label: string;

@@ -3,9 +3,7 @@ using Leistd.Security.Claims;
 
 namespace CompanyName.ProjectName.Application.Auth.Constants;
 
-/// <summary>
-/// 模拟登录期间写入会话主体的声明类型。
-/// </summary>
+/// <summary>模拟登录期间写入会话主体的声明类型。</summary>
 /// <remarks>
 /// <para>放在应用层而不是框架：模拟登录是本模板的产品能力，不是 Leistd 的通用原语。
 /// 与 <see cref="Shared.AuthenticationSchemeNames"/> 同型——应用层构造主体时需要它，而应用层不能引用 Api。</para>

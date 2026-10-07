@@ -8,9 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.UnitTests.Application;
 
-/// <summary>
-/// 图形验证码的「一次性」必须是并发意义上的一次。
-/// </summary>
+/// <summary>图形验证码的「一次性」必须是并发意义上的一次。</summary>
 /// <remarks>
 /// <para><c>IDistributedCache</c> 没有原子的 get-and-delete，"读出来再删掉"之间存在窗口：
 /// 同一个 token 并发提交时两个请求都会读到验证码、都判定通过——解一次验证码就能并发提交
@@ -27,9 +25,7 @@ public class CaptchaConsumptionTests
     /// <summary>只用于防止用例在实现有问题时永久挂住。走到超时即判失败。</summary>
     private static readonly TimeSpan FailSafe = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    /// 当前调用的标识，随异步链流动。
-    /// </summary>
+    /// <summary>当前调用的标识，随异步链流动。</summary>
     /// <remarks>
     /// 探针必须能判断「<b>本次</b>调用是否持锁」，而不只是「此刻有人持锁」。只看全局持锁计数
     /// 会漏掉最像真实维护失误的那种形态：锁只包住读取，删除落在锁外——那时第二个调用往往
@@ -122,9 +118,7 @@ public class CaptchaConsumptionTests
         return (provider.GetRequiredService<ICaptchaVerifier>(), cache, captchaLock, challenge.CaptchaToken, code!);
     }
 
-    /// <summary>
-    /// 按键互斥的进程内锁：记录尝试的键与<b>当前持有者</b>，并暴露两个编排信号。
-    /// </summary>
+    /// <summary>按键互斥的进程内锁：记录尝试的键与<b>当前持有者</b>，并暴露两个编排信号。</summary>
     /// <remarks>
     /// 记 owner 而不只是"持锁计数"：探针要判断的是「本次调用是否持锁」。只看计数时，
     /// 第一个调用提前释放、第二个抢到锁之后，第一个在锁外做的删除会被误判为合规。
@@ -203,9 +197,7 @@ public class CaptchaConsumptionTests
         }
     }
 
-    /// <summary>
-    /// 让第一个读取者停在读窗口里直到测试放行；同时记录读窗口并发数与"未持锁就操作"的次数。
-    /// </summary>
+    /// <summary>让第一个读取者停在读窗口里直到测试放行；同时记录读窗口并发数与"未持锁就操作"的次数。</summary>
     private sealed class ProbeCache(GatedLock captchaLock) : IDistributedCache
     {
         private readonly Dictionary<string, byte[]> _entries = new(StringComparer.Ordinal);
@@ -282,9 +274,7 @@ public class CaptchaConsumptionTests
             return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// 观察期内的每次读/删都必须发生在<b>本次调用自己</b>持锁期间。
-        /// </summary>
+        /// <summary>观察期内的每次读/删都必须发生在<b>本次调用自己</b>持锁期间。</summary>
         /// <remarks>
         /// 比对 owner 而不是"有没有人持锁"：锁只包住读取、删除落在锁外时，第二个调用往往
         /// 已经抢到锁，只看持锁计数会把这种失误判为合规。

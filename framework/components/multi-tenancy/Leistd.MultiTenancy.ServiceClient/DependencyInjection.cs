@@ -11,9 +11,7 @@ namespace Leistd.MultiTenancy.ServiceClient;
 /// <summary>远端租户连接存储的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现：回源控制面经 <c>MapTenantConnections</c> 暴露的机器端点。
-    /// </summary>
+    /// <summary>注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现：回源控制面经 <c>MapTenantConnections</c> 暴露的机器端点。</summary>
     /// <remarks>
     /// <para>与控制库的 EF 实现二选一：连接配置只能有一个权威来源，已注册其它实现时抛出。
     /// 以相同参数重复调用不重复登记，返回同一命名客户端的构建器；换用另一 <paramref name="serviceName"/>
@@ -36,7 +34,6 @@ public static class DependencyInjection
     /// <param name="serviceName">控制面服务名：命名 HttpClient 与默认配置节 <c>Leistd:ServiceClients:{serviceName}</c>。</param>
     /// <param name="configure">在配置节之后应用的选项配置。</param>
     /// <param name="configSectionPath">选项绑定的配置节；省略时为 <c>Leistd:ServiceClients:{serviceName}</c>。</param>
-    /// <returns>HttpClient 构建器。</returns>
     public static IHttpClientBuilder AddRemoteTenantConnectionStore(
         this IServiceCollection services,
         string serviceName,

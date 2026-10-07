@@ -3,9 +3,7 @@ using Leistd.OperationRecords.Definitions;
 
 namespace Leistd.OperationRecords.Models;
 
-/// <summary>
-/// 一条操作记录：什么人、在什么时间、凭什么、做了什么、结果如何。
-/// </summary>
+/// <summary>一条操作记录：什么人、在什么时间、凭什么、做了什么、结果如何。</summary>
 /// <remarks>
 /// 请求维度的信息（IP、UA、URL）与变更明细不在这里，按 <see cref="CorrelationId"/> 回查请求日志。
 /// </remarks>

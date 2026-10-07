@@ -18,9 +18,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 操作记录到期归档：搬走该搬的、留下不该搬的，且<b>不漏掉任何租户</b>。
-/// </summary>
+/// <summary>操作记录到期归档：搬走该搬的、留下不该搬的，且<b>不漏掉任何租户</b>。</summary>
 /// <remarks>
 /// <para>这套用例存在的理由是一个<b>错了不会报错</b>的陷阱：<c>OperationRecord</c> 实现
 /// <c>IMultiTenant</c>，带着租户全局过滤器；而归档作业跑在<b>无租户上下文</b>里，此时过滤器的语义是
@@ -141,9 +139,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
         Assert.Equal((false, (int?)365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
     }
 
-    /// <summary>
-    /// 归档表覆盖原表的每一列
-    /// </summary>
+    /// <summary>归档表覆盖原表的每一列。</summary>
     /// <remarks>
     /// 搬运是逐字段复制，原表加了列而归档表没跟上，搬完照样报成功，缺的那列到查归档时才会发现。
     /// </remarks>

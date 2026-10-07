@@ -29,9 +29,7 @@ public abstract class RecurringJobSchedule
     /// <param name="now">当前时刻。</param>
     public abstract DateTimeOffset GetNextRun(DateTimeOffset now);
 
-    /// <summary>
-    /// 进程启动后首次执行前的最大随机延迟：按间隔排期的任务在此范围内先跑一次；按每日时刻排期的为零，只在排定时刻执行。
-    /// </summary>
+    /// <summary>进程启动后首次执行前的最大随机延迟：按间隔排期的任务在此范围内先跑一次；按每日时刻排期的为零，只在排定时刻执行。</summary>
     public abstract TimeSpan MaxStartupJitter { get; }
 
     private sealed class IntervalSchedule(TimeSpan interval) : RecurringJobSchedule

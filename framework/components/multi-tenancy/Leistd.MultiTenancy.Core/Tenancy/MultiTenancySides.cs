@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.Tenancy;
 
-/// <summary>
-/// 指定能力适用的多租户侧别。
-/// </summary>
+/// <summary>指定能力适用的多租户侧别。</summary>
 [Flags]
 public enum MultiTenancySides
 {

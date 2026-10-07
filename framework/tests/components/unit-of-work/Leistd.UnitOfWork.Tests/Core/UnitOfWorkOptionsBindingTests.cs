@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// <c>AddUnitOfWork</c> 绑定 <c>Leistd:UnitOfWork</c>，委托在其后应用；默认选项启动期校验，单次选项在 <c>Begin</c> 时按同一判据校验。
-/// </summary>
+/// <summary><c>AddUnitOfWork</c> 绑定 <c>Leistd:UnitOfWork</c>，委托在其后应用；默认选项启动期校验，单次选项在 <c>Begin</c> 时按同一判据校验。</summary>
 /// <remarks>
 /// 命令超时以整秒计且 0 表示不限时：不拒绝亚秒值的话，配置的 0.5 秒会变成"永不超时"，没有任何报错。
 /// </remarks>
@@ -111,9 +109,7 @@ public class UnitOfWorkOptionsBindingTests
         { null, (IsolationLevel)12345 },
     };
 
-    /// <summary>
-    /// 单次选项是方法参数，按参数错误报出；拒绝发生在创建工作单元之前，环境里不留下任何工作单元。
-    /// </summary>
+    /// <summary>单次选项是方法参数，按参数错误报出；拒绝发生在创建工作单元之前，环境里不留下任何工作单元。</summary>
     [Theory]
     [MemberData(nameof(InvalidPerCallOptions))]
     public void Invalid_per_call_options_are_rejected_before_a_unit_of_work_is_created(TimeSpan? timeout, IsolationLevel? isolationLevel)

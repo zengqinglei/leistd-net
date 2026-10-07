@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.Email.Tests.Smtp;
 
-/// <summary>
-/// 发送失败必须上抛。
-/// </summary>
+/// <summary>发送失败必须上抛。</summary>
 /// <remarks>调用方依赖发送异常回滚限流槽位与挑战缓存；空 Host 或示例主机名也不能被当成成功跳过。</remarks>
 public sealed class SmtpEmailSenderTests
 {

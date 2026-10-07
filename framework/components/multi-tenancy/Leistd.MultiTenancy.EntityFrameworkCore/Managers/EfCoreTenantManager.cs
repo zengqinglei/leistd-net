@@ -11,9 +11,7 @@ using Leistd.MultiTenancy.Exceptions;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 
-/// <summary>
-/// 使用 EF Core 持久化租户生命周期和并发版本。
-/// </summary>
+/// <summary>使用 EF Core 持久化租户生命周期和并发版本。</summary>
 /// <remarks>
 /// 管理器自行 SaveChanges；在外层工作单元事务内调用时仅表现为提前刷写，不破坏事务边界。
 /// 软删除与创建时间由管理器自己落定，控制面上下文无需继承 <c>BaseDbContext</c>；<c>CreatorId</c> / <c>DeleterId</c> 仍归审计层填充。

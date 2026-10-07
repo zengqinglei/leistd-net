@@ -9,9 +9,7 @@ using Leistd.AspNetCore.SignalR.Tests.TestDoubles;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 
-/// <summary>
-/// <c>RequireHubAuthorization()</c>：握手的授权元数据取 <see cref="HubIdentityOptions.PolicyName"/>，与调用期复评同源。
-/// </summary>
+/// <summary><c>RequireHubAuthorization()</c>：握手的授权元数据取 <see cref="HubIdentityOptions.PolicyName"/>，与调用期复评同源。</summary>
 /// <remarks>两阶段的端到端验证见 <c>EndToEnd/HubAuthorizationTests</c>；这里钉住元数据本身。</remarks>
 public sealed class RequireHubAuthorizationTests
 {

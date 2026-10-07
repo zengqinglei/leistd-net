@@ -2,9 +2,7 @@ using Microsoft.Net.Http.Headers;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
-/// <summary>
-/// SPA 的静态文件缓存与静态回退。
-/// </summary>
+/// <summary>SPA 的静态文件缓存与静态回退。</summary>
 /// <remarks>
 /// 只服务部署形态（前端构建产物放在 wwwroot，由本服务同源托管）。本机开发时浏览器访问前端开发服务器，
 /// 由它按 proxy.conf.mjs 把 API 与 Hub 请求转发过来，本服务不托管前端。
@@ -14,9 +12,7 @@ public static class SpaExtensions
     private const string FingerprintedCacheControl = "public, max-age=31536000, immutable";
     private const string RevalidateCacheControl = "no-cache";
 
-    /// <summary>
-    /// 前端静态文件的托管选项：按文件是否带内容哈希设置 Cache-Control。
-    /// </summary>
+    /// <summary>前端静态文件的托管选项：按文件是否带内容哈希设置 Cache-Control。</summary>
     /// <remarks>
     /// <para>不设 Cache-Control 时，浏览器按 Last-Modified 自行推算新鲜期，发版后会继续用旧的
     /// index.html 与词条文件，直到推算的期限过去。</para>

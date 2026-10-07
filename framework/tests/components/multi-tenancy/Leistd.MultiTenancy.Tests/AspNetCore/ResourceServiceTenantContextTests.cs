@@ -34,9 +34,7 @@ public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests
         Assert.Equal(tenantId.ToString(), response);
     }
 
-    /// <summary>
-    /// 已认证但无租户 claim：宿主上下文，不是错误。
-    /// </summary>
+    /// <summary>已认证但无租户 claim：宿主上下文，不是错误。</summary>
     /// <remarks>
     /// 机器主体（客户端凭据）、宿主用户、平台运维端点都落在这里；若一律 401，
     /// 控制面接口只能标成公开或搬去 Identity 服务。
@@ -76,9 +74,7 @@ public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests
         Assert.Equal("host", await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>
-    /// 已认证请求的租户由 claim 定案，请求头无法改写。
-    /// </summary>
+    /// <summary>已认证请求的租户由 claim 定案，请求头无法改写。</summary>
     /// <remarks>
     /// 这条与上一条防的是不同的东西：本条靠贡献者顺序（主体在链首且终止链），
     /// 上一条靠链收窄。两道都要有——前者管已认证请求，后者管匿名请求。
@@ -97,9 +93,7 @@ public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests
         Assert.Equal(claimTenant.ToString(), await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>
-    /// claim 格式非法时拒绝，而不是静默退回宿主。
-    /// </summary>
+    /// <summary>claim 格式非法时拒绝，而不是静默退回宿主。</summary>
     /// <remarks>
     /// 令牌里带着一个解析不出的 <c>tenant_id</c> 是签发方或令牌被篡改的信号。
     /// 退回宿主意味着一个本应受租户约束的请求悄悄获得了宿主视角——按失败关闭处理。
@@ -119,9 +113,7 @@ public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests
             () => SendAsync("/orders", subject: "alice", tenantClaims: ["00000000-0000-0000-0000-000000000000"]));
     }
 
-    /// <summary>
-    /// 多条租户 claim 一律失败关闭，即使两个值完全相同
-    /// </summary>
+    /// <summary>多条租户 claim 一律失败关闭，即使两个值完全相同。</summary>
     /// <remarks>
     /// <para>若用 <c>FindFirst()</c>，两条 claim 会静默取第一条。那是在安全边界上做静默选择——
     /// 攻击者只要能让令牌多出一条，就能决定后续所有租户过滤器、权限检查和写入落值的归属。</para>
@@ -169,9 +161,7 @@ public class ResourceServiceTenantContextTests(ResourceServiceTenantContextTests
         return await response.Content.ReadAsStringAsync();
     }
 
-    /// <summary>
-    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
-    /// </summary>
+    /// <summary>本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

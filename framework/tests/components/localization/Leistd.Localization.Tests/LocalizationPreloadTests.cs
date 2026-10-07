@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Localization.Tests;
 
-/// <summary>
-/// 启动期资源预热：把首个请求才会触发的解析提前到启动阶段。
-/// </summary>
+/// <summary>启动期资源预热：把首个请求才会触发的解析提前到启动阶段。</summary>
 /// <remarks>
 /// <para>这条路径的失败方式是<b>静默降级</b>——资源坏了照样启动，只在日志里留一行。
 /// 因此断言的对象只能是日志本身，用官方 <see cref="FakeLogger"/> 而不是手写替身。</para>

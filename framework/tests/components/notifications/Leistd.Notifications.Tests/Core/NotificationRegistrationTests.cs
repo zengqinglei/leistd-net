@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.Core;
 
-/// <summary>
-/// <c>AddNotifications()</c> 的注册面：发布器与默认投递过滤器，宿主先登记的过滤器保留。
-/// </summary>
+/// <summary><c>AddNotifications()</c> 的注册面：发布器与默认投递过滤器，宿主先登记的过滤器保留。</summary>
 public sealed class NotificationRegistrationTests
 {
     [Fact]

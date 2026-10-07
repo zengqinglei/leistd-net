@@ -57,9 +57,7 @@ export class SessionContextService {
     return settings;
   }
 
-  /**
-   * 主体离开：认证数据、权限、设置一起清掉。`logout()` 例外：之后整页跳转，内存状态随页面重建。
-   */
+  /** 主体离开：认证数据、权限、设置一起清掉。`logout()` 例外：之后整页跳转，内存状态随页面重建。 */
   clear(): void {
     this.authService.clearAuthData();
     this.authorizationService.clear();

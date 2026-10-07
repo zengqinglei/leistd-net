@@ -14,9 +14,7 @@ using OpenIddict.Validation.AspNetCore;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 资源服务的认证：远端签发方的 Bearer 校验，以及（带浏览器会话时）服务端 OIDC 会话。
-/// </summary>
+/// <summary>资源服务的认证：远端签发方的 Bearer 校验，以及（带浏览器会话时）服务端 OIDC 会话。</summary>
 internal static class RemoteTokenAuthenticationExtensions
 {
     private const string RemoteIdentityConfigurationError =

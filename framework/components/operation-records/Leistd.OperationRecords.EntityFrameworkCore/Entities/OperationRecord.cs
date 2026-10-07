@@ -3,9 +3,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 操作记录的持久化形态。
-/// </summary>
+/// <summary>操作记录的持久化形态。</summary>
 /// <remarks>
 /// <para>不实现 <c>ICreationAuditedObject</c>：操作人与时间由记录器填充，不依赖宿主的审计拦截器。</para>
 /// <para>写入后不再修改：没有修改与删除审计列，也没有对应的存储方法。</para>

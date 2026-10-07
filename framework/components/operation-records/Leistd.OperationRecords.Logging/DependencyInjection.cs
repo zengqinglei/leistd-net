@@ -16,9 +16,7 @@ namespace Leistd.OperationRecords.Logging;
 /// <summary>操作记录结构化日志输出的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 把操作记录写成结构化日志（<see cref="OperationRecordLogging.CategoryName"/> 类别），不保存可回读的历史。
-    /// </summary>
+    /// <summary>把操作记录写成结构化日志（<see cref="OperationRecordLogging.CategoryName"/> 类别），不保存可回读的历史。</summary>
     /// <remarks>
     /// <para>记录器与动作定义与数据库存储相同，只换写出的去处。不注册历史读取与查询：
     /// <c>MapOperationRecords</c> 在本模式下映射即报错，也没有保留期归档。</para>
@@ -34,7 +32,6 @@ public static class DependencyInjection
     /// builder.Services.AddOperationRecordsLogging();
     /// </code>
     /// </example>
-    /// <param name="services">服务集合。</param>
     public static IServiceCollection AddOperationRecordsLogging(this IServiceCollection services)
     {
         services.EnsureSingleAuthoritative<IOperationRecordWriter, LoggingOperationRecordWriter>(

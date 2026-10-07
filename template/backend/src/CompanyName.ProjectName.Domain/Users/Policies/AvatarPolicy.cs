@@ -3,9 +3,7 @@ using CompanyName.ProjectName.Domain.Users.Errors;
 
 namespace CompanyName.ProjectName.Domain.Users.Policies;
 
-/// <summary>
-/// 头像取值的唯一规则：外部地址（http/https，来自外部登录提供方等），或站内上传的图片（data URL）。
-/// </summary>
+/// <summary>头像取值的唯一规则：外部地址（http/https，来自外部登录提供方等），或站内上传的图片（data URL）。</summary>
 /// <remarks>
 /// <para>上传的图片存在 <c>User.Avatar</c> 里，不另建文件存储：头像是每人一张的小图，
 /// 为它引入对象存储得不偿失。代价由两条约束兜住——体积上限（浏览器端先裁剪缩放，
@@ -68,9 +66,7 @@ public static class AvatarPolicy
         return true;
     }
 
-    /// <summary>
-    /// 校验一个待写入的头像值：空（清除）、外部地址或合法的上传图片。
-    /// </summary>
+    /// <summary>校验一个待写入的头像值：空（清除）、外部地址或合法的上传图片。</summary>
     /// <exception cref="BusinessException">不合规时抛出，并说明是格式不对还是体积超限。</exception>
     public static void EnsureValid(string? value)
     {

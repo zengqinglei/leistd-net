@@ -14,9 +14,7 @@ using Xunit;
 
 namespace Leistd.RealTime.Tests;
 
-/// <summary>
-/// 实时组件的注册面与端点映射。
-/// </summary>
+/// <summary>实时组件的注册面与端点映射。</summary>
 public class RealTimeRegistrationTests
 {
     private static IServiceCollection Base() => new ServiceCollection().AddLogging();

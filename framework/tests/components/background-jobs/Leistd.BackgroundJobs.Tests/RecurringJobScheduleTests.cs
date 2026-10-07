@@ -3,9 +3,7 @@ using Xunit;
 
 namespace Leistd.BackgroundJobs.Tests;
 
-/// <summary>
-/// 排期把时间切成按 UTC 对齐的时段：不同副本、重启前后算出的是同一个时段。
-/// </summary>
+/// <summary>排期把时间切成按 UTC 对齐的时段：不同副本、重启前后算出的是同一个时段。</summary>
 /// <remarks>
 /// 时段若相对进程启动时间计算，两个副本的"同一时段"就对不上，集群水位比对失效，任务会在每个副本各跑一遍。
 /// </remarks>

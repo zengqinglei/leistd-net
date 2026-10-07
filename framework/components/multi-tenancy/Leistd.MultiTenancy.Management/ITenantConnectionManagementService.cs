@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.Management;
 
-/// <summary>
-/// 租户连接的管理面与内部下发。
-/// </summary>
+/// <summary>租户连接的管理面与内部下发。</summary>
 /// <remarks>
 /// <para>管理面只回名字与版本；明文连接串只经已认证的机器端点，按名字下发给需要连库的服务。</para>
 /// <para>连接名可来自外部输入；不合法时抛出带 <c>TenantConnection:NameInvalid</c> 错误码的业务异常。</para>
@@ -30,9 +28,7 @@ public interface ITenantConnectionManagementService
     /// <param name="cancellationToken">取消令牌。</param>
     Task<TenantMigrationConnectionListOutputDto> GetMigrationListAsync(string name, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 列出某个连接名下的独立库与住在里面的租户，不含连接串，供资源服务的逐库作业使用。
-    /// </summary>
+    /// <summary>列出某个连接名下的独立库与住在里面的租户，不含连接串，供资源服务的逐库作业使用。</summary>
     /// <param name="name">连接名。</param>
     /// <param name="activeOnly">只列启用租户的库。</param>
     /// <param name="cancellationToken">取消令牌。</param>

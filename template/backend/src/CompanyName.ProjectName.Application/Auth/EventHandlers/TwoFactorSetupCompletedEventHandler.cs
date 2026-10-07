@@ -6,9 +6,7 @@ using Microsoft.Extensions.Caching.Distributed;
 
 namespace CompanyName.ProjectName.Application.Auth.EventHandlers;
 
-/// <summary>
-/// 两步验证启用提交之后删除待确认的设置密钥，同一份密钥不能再被确认第二次。
-/// </summary>
+/// <summary>两步验证启用提交之后删除待确认的设置密钥，同一份密钥不能再被确认第二次。</summary>
 /// <remarks>删除失败时密钥仍按设置有效期自然过期；账号已启用，再次确认会先被"已启用"拒绝。</remarks>
 internal sealed class TwoFactorSetupCompletedEventHandler(IDistributedCache cache)
     : IEventHandler<TwoFactorSetupCompletedEvent>

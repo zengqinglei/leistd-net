@@ -9,9 +9,7 @@ using Leistd.AspNetCore.SignalR.Tests.TestDoubles;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 
-/// <summary>
-/// 查询串令牌只在 Hub 端点上转成 Bearer 头，其它端点照旧拒绝。
-/// </summary>
+/// <summary>查询串令牌只在 Hub 端点上转成 Bearer 头，其它端点照旧拒绝。</summary>
 /// <remarks>
 /// 浏览器的 WebSocket 与 SSE 不能带自定义头，令牌只能走查询串；但在普通端点上接受查询串令牌，
 /// 会让令牌出现在访问日志与 Referer 里。识别按端点元数据，与 Hub 挂在哪个路径无关。
@@ -40,9 +38,7 @@ public sealed class HubAccessTokenTests(HubAccessTokenTests.HostFixture fixture)
         Assert.Equal("|?access_token=abc", await ProbeAsync("/api/orders?access_token=abc"));
     }
 
-    /// <summary>
-    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
-    /// </summary>
+    /// <summary>本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

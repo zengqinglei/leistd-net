@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.Email;
 
-/// <summary>
-/// 邮件渠道的注册面：渠道是累加扩展点，按实现去重，与其他渠道共存。
-/// </summary>
+/// <summary>邮件渠道的注册面：渠道是累加扩展点，按实现去重，与其他渠道共存。</summary>
 public sealed class EmailNotificationRegistrationTests
 {
     [Fact]

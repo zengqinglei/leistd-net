@@ -13,9 +13,7 @@ using System.Text.Json.Serialization;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 依赖 OIDC 令牌流程的授权用例：客户端凭据、授权码、Bearer 挑战、开放应用端点。
-/// </summary>
+/// <summary>依赖 OIDC 令牌流程的授权用例：客户端凭据、授权码、Bearer 挑战、开放应用端点。</summary>
 /// <remarks>
 /// <para>与 <c>AuthorizationAndAuditingTests</c> 分开是因为剪裁归属不同：那一批覆盖权限、
 /// 审计、撤权等横切主题，只要有本地身份就成立；本批需要一个能签发令牌的授权服务器。
@@ -302,9 +300,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
     }
 
 
-    /// <summary>
-    /// 客户端密钥只在创建与重置时各返回一次明文，查询路径一律不回。
-    /// </summary>
+    /// <summary>客户端密钥只在创建与重置时各返回一次明文，查询路径一律不回。</summary>
     /// <remarks>
     /// 这条钉的是输出映射：应用实体上存的是<b>散列后</b>的密钥，而输出 DTO 有同名
     /// <c>ClientSecret</c> 字段——按同名约定自动映射就会把存储值写进查询响应。
@@ -485,9 +481,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
     }
 
 
-    /// <summary>
-    /// 基地址为 https 的客户端。
-    /// </summary>
+    /// <summary>基地址为 https 的客户端。</summary>
     /// <remarks>
     /// OpenIddict 的授权与令牌端点只收 HTTPS。TestServer 不做真实 TLS，改基地址即可让
     /// <c>Request.IsHttps</c> 成立，不必为测试在服务端放宽这条要求——那等于把生产配置改松来迁就测试。

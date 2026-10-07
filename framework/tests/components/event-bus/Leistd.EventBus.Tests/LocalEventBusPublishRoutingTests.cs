@@ -7,9 +7,7 @@ using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Tests;
 
-/// <summary>
-/// 本地事件按<b>运行时类型</b>路由到具体 handler。
-/// </summary>
+/// <summary>本地事件按<b>运行时类型</b>路由到具体 handler。</summary>
 /// <remarks>
 /// 重载陷阱：以基接口（ILocalEvent）的静态类型发布时，容易误选泛型重载；
 /// 泛型发布重载若按基接口类型解析处理器，会找不到具体 handler 并静默丢事件。

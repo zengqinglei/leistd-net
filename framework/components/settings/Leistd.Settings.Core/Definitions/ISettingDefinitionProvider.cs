@@ -26,9 +26,7 @@ public interface ISettingDefinitionProvider
     /// <param name="context">设置定义上下文。</param>
     void Define(ISettingDefinitionContext context);
 
-    /// <summary>
-    /// 在全部提供者的 <see cref="Define"/> 之后调用，用于补充或调整别处声明的定义。
-    /// </summary>
+    /// <summary>在全部提供者的 <see cref="Define"/> 之后调用，用于补充或调整别处声明的定义。</summary>
     /// <remarks>提供者之间没有执行顺序约定，修改别处声明的定义须放在这里。</remarks>
     /// <param name="context">设置定义上下文。</param>
     void PostDefine(ISettingDefinitionContext context)
@@ -46,7 +44,6 @@ public interface ISettingDefinitionContext
     /// <param name="scopes">允许覆盖该设置的层级；默认只允许租户级。</param>
     /// <param name="displayName">显示名称。</param>
     /// <param name="group">所属分组的稳定标识。</param>
-    /// <returns>新建的设置定义。</returns>
     ISettingDefinition Add(
         string name,
         string? defaultValue = null,

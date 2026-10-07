@@ -1,8 +1,6 @@
 namespace Leistd.DependencyInjection.Abstractions;
 
-/// <summary>
-/// 向服务注册回调公开当前描述符的类型信息。
-/// </summary>
+/// <summary>向服务注册回调公开当前描述符的类型信息。</summary>
 public interface IOnServiceRegisteredContext
 {
     /// <summary>注册的服务类型。</summary>

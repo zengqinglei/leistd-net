@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.ExceptionHandling.Tests;
 
-/// <summary>
-/// <c>AddGlobalExceptionHandler</c> 与 <c>ConfigureApiValidation</c> 的注册面。
-/// </summary>
+/// <summary><c>AddGlobalExceptionHandler</c> 与 <c>ConfigureApiValidation</c> 的注册面。</summary>
 /// <remarks>
 /// <see cref="IExceptionHandler"/> 是多实现链：业务异常处理器登记两份时，官方中间件会按顺序问两遍，
 /// 宿主自己的处理器也必须与它并存而不是被替换。

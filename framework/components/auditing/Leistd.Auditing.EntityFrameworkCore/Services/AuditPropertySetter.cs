@@ -55,9 +55,7 @@ public class AuditPropertySetter(
             nameof(entityEntry));
     }
 
-    /// <summary>
-    /// 设置尚未赋值的创建时间。
-    /// </summary>
+    /// <summary>设置尚未赋值的创建时间。</summary>
     protected virtual void SetCreationTime(EntityEntry entry)
     {
         if (entry.Entity is not IHasCreationTime objectWithCreationTime)
@@ -69,9 +67,7 @@ public class AuditPropertySetter(
         entry.Property(nameof(IHasCreationTime.CreationTime)).CurrentValue = clock.Normalize(clock.Now);
     }
 
-    /// <summary>
-    /// 设置尚未赋值的创建者标识。
-    /// </summary>
+    /// <summary>设置尚未赋值的创建者标识。</summary>
     protected virtual void SetCreatorId(EntityEntry entry)
     {
         if (currentUser?.Id is null)
@@ -86,9 +82,7 @@ public class AuditPropertySetter(
         entry.Property(nameof(ICreationAuditedObject.CreatorId)).CurrentValue = currentUser!.Id!.Value.ToString();
     }
 
-    /// <summary>
-    /// 设置最后修改时间。
-    /// </summary>
+    /// <summary>设置最后修改时间。</summary>
     protected virtual void SetLastModificationTime(EntityEntry entry)
     {
         if (entry.Entity is not IHasModificationTime)
@@ -97,9 +91,7 @@ public class AuditPropertySetter(
         entry.Property(nameof(IHasModificationTime.LastModificationTime)).CurrentValue = clock.Normalize(clock.Now);
     }
 
-    /// <summary>
-    /// 设置最后修改者标识；没有当前用户时置空，与同时刷新的修改时间保持同一次修改。
-    /// </summary>
+    /// <summary>设置最后修改者标识；没有当前用户时置空，与同时刷新的修改时间保持同一次修改。</summary>
     protected virtual void SetLastModifierId(EntityEntry entry)
     {
         if (entry.Entity is not IModificationAuditedObject)
@@ -108,9 +100,7 @@ public class AuditPropertySetter(
         entry.Property(nameof(IModificationAuditedObject.LastModifierId)).CurrentValue = currentUser?.Id?.ToString();
     }
 
-    /// <summary>
-    /// 设置软删除标记。
-    /// </summary>
+    /// <summary>设置软删除标记。</summary>
     protected virtual void SetIsDeleted(EntityEntry entry)
     {
         if (entry.Entity is not ISoftDelete softDelete)
@@ -122,9 +112,7 @@ public class AuditPropertySetter(
         entry.Property(nameof(ISoftDelete.IsDeleted)).CurrentValue = true;
     }
 
-    /// <summary>
-    /// 设置尚未赋值的删除时间。
-    /// </summary>
+    /// <summary>设置尚未赋值的删除时间。</summary>
     protected virtual void SetDeletionTime(EntityEntry entry)
     {
         if (entry.Entity is not IHasDeletionTime objectWithDeletionTime)
@@ -136,9 +124,7 @@ public class AuditPropertySetter(
         entry.Property(nameof(IHasDeletionTime.DeletionTime)).CurrentValue = clock.Normalize(clock.Now);
     }
 
-    /// <summary>
-    /// 设置尚未赋值的删除者标识。
-    /// </summary>
+    /// <summary>设置尚未赋值的删除者标识。</summary>
     protected virtual void SetDeleterId(EntityEntry entry)
     {
         if (currentUser?.Id is null)

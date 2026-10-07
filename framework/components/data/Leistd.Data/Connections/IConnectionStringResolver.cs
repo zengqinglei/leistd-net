@@ -1,8 +1,6 @@
 namespace Leistd.Data.Connections;
 
-/// <summary>
-/// 按连接名称解析最终连接字符串。
-/// </summary>
+/// <summary>按连接名称解析最终连接字符串。</summary>
 /// <remarks>
 /// 不依赖多租户：租户感知的实现由多租户组件提供；未注册任何实现时，DbContext 使用宿主配置的单连接。
 /// </remarks>

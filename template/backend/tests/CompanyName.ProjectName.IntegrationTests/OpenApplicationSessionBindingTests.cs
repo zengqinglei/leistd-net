@@ -18,9 +18,7 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 会话绑定的开放应用：授权码与刷新令牌跟随签发时的 Identity 会话，会话结束后不能再续期。
-/// </summary>
+/// <summary>会话绑定的开放应用：授权码与刷新令牌跟随签发时的 Identity 会话，会话结束后不能再续期。</summary>
 /// <remarks>
 /// 断言都落在"那份刷新令牌还能不能换出令牌"上：BFF 的服务端会话靠它续命，
 /// 用户在 Identity 退出或被撤销设备后它仍能换出令牌，就是要防的事。

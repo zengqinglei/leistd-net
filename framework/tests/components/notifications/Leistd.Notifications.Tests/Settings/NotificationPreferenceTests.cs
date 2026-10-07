@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.Settings;
 
-/// <summary>
-/// 通知偏好：按收件人自己的生效值（本人覆盖 → 租户默认 → 代码默认）决定投递，没有定义的组合与必达组合一律投递。
-/// </summary>
+/// <summary>通知偏好：按收件人自己的生效值（本人覆盖 → 租户默认 → 代码默认）决定投递，没有定义的组合与必达组合一律投递。</summary>
 /// <remarks>读的是收件人的设置而不是请求者的：发布方往往是别人或后台任务，读错人就是按别人的偏好给你发通知。</remarks>
 public sealed class NotificationPreferenceTests
 {

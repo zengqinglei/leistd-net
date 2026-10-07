@@ -18,9 +18,7 @@ namespace Leistd.Settings.Hosting;
 /// <summary>宿主级设置 → 配置源 → <c>IOptionsMonitor</c> 的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 让宿主级设置覆盖部署配置：消费方照常注入 <c>IOptionsMonitor&lt;T&gt;</c>，不必知道值来自设置表。
-    /// </summary>
+    /// <summary>让宿主级设置覆盖部署配置：消费方照常注入 <c>IOptionsMonitor&lt;T&gt;</c>，不必知道值来自设置表。</summary>
     /// <remarks>
     /// <para>值在三处推进配置：宿主开始接收请求之前一次；写入宿主级设置的事务提交后本进程立即一次；
     /// 其余时候由每个副本上的 <c>EveryInstance</c> 周期任务按 <see cref="HostSettingOptions.RefreshInterval"/> 跟上
@@ -96,9 +94,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 把宿主级设置作为优先级最高的配置源挂到宿主配置上。
-    /// </summary>
+    /// <summary>把宿主级设置作为优先级最高的配置源挂到宿主配置上。</summary>
     /// <remarks>
     /// 须在构建之后调用：构建期间追加的配置源（如测试宿主的覆盖配置）否则会排在后面、压过设置。
     /// </remarks>

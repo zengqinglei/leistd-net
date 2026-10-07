@@ -2,9 +2,7 @@ using System.Collections.ObjectModel;
 
 namespace Leistd.Data.Paging;
 
-/// <summary>
-/// 一页查询结果。
-/// </summary>
+/// <summary>一页查询结果。</summary>
 /// <typeparam name="T">条目类型。</typeparam>
 /// <param name="TotalCount">符合条件的总条数，与当前页条数无关。</param>
 /// <param name="Items">当前页条目。</param>

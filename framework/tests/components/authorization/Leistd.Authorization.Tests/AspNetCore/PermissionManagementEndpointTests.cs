@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.Authorization.Tests.AspNetCore;
 
-/// <summary>
-/// 权限管理端点：策略名必填，只为开放的主体类型映射授予端点，端点名带组件前缀。
-/// </summary>
+/// <summary>权限管理端点：策略名必填，只为开放的主体类型映射授予端点，端点名带组件前缀。</summary>
 public sealed class PermissionManagementEndpointTests
 {
     [Theory]
@@ -66,9 +64,7 @@ public sealed class PermissionManagementEndpointTests
         ], routes);
     }
 
-    /// <summary>
-    /// 每个端点只带自己那条具名策略。
-    /// </summary>
+    /// <summary>每个端点只带自己那条具名策略。</summary>
     /// <remarks>
     /// 组上一句无参 <c>RequireAuthorization()</c> 会把宿主的默认策略额外叠到每个端点上：
     /// 具名策略通过了，端点仍可能因为宿主对"默认主体"的要求被拒，而映射处看不出来。

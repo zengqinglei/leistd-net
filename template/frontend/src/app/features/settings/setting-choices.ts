@@ -22,9 +22,7 @@ const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
   { value: 'Fatal', label: 'Fatal' },
 ];
 
-/**
- * 日志级别说明的词条键，选中后显示：级别名说不出会多打多少日志。级别名不翻译，说明要翻译。
- */
+/** 日志级别说明的词条键，选中后显示：级别名说不出会多打多少日志。级别名不翻译，说明要翻译。 */
 export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   Verbose: 'settings.logLevelHints.Verbose',
   Debug: 'settings.logLevelHints.Debug',

@@ -8,9 +8,7 @@ using Leistd.Data.Paging;
 
 namespace Leistd.Ddd.Application.Tests;
 
-/// <summary>
-/// 应用服务基类与分页映射扩展。
-/// </summary>
+/// <summary>应用服务基类与分页映射扩展。</summary>
 public class BaseAppServiceTests
 {
     private sealed class OrderAppService : BaseAppService;

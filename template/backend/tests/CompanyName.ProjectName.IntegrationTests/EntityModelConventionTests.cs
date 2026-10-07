@@ -23,14 +23,10 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class EntityModelConventionTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
-    /// <summary>
-    /// 不实现 <see cref="IMultiTenant"/> 的本项目实体，每项写明理由。当前没有。
-    /// </summary>
+    /// <summary>不实现 <see cref="IMultiTenant"/> 的本项目实体，每项写明理由。当前没有。</summary>
     private static readonly EntityExemption[] Exemptions = [];
 
-    /// <summary>
-    /// 业务上下文里的本项目实体全部满足约定
-    /// </summary>
+    /// <summary>业务上下文里的本项目实体全部满足约定。</summary>
     [Fact]
     public void Project_entities_are_tenant_scoped_and_store_enums_as_strings()
     {
@@ -43,9 +39,7 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
         Assert.Empty(FindViolations(model, domain, Exemptions));
     }
 
-    /// <summary>
-    /// 实现 <see cref="IAggregateRoot"/> 的实体有仓储，其余实体没有
-    /// </summary>
+    /// <summary>实现 <see cref="IAggregateRoot"/> 的实体有仓储，其余实体没有。</summary>
     [Fact]
     public void Only_aggregate_roots_have_repositories()
     {
@@ -68,9 +62,7 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
         Assert.Empty(mismatched);
     }
 
-    /// <summary>
-    /// 合规实体通过；缺租户归属、枚举按整数存（含值对象里的）各报一条；白名单内的实体只免租户归属
-    /// </summary>
+    /// <summary>合规实体通过；缺租户归属、枚举按整数存（含值对象里的）各报一条；白名单内的实体只免租户归属。</summary>
     [Fact]
     public void Synthetic_model_reports_missing_tenant_scope_and_integer_enums()
     {

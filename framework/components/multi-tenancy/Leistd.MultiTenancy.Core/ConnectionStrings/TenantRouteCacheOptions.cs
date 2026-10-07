@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 远端解析结果的路由缓存（默认配置节 <c>Leistd:MultiTenancy:Routing</c>）。
-/// </summary>
+/// <summary>远端解析结果的路由缓存（默认配置节 <c>Leistd:MultiTenancy:Routing</c>）。</summary>
 /// <remarks>
 /// <para><see cref="CacheLifetime"/> 默认 <see cref="DefaultCacheLifetime"/>，可在配置中覆盖。改租户数据落点的流程是：
 /// 停用租户 → 等待排空 → 迁移数据 → 改路由 → 重新启用，排空要等 <c>max(Access Token 有效期, 本 TTL)</c>。</para>

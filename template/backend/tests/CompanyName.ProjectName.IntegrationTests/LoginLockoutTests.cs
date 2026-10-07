@@ -6,9 +6,7 @@ using CompanyName.ProjectName.Application.Settings.Provider;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 登录失败锁定：按租户设置的阈值锁定、锁定期间不校验密码、已登录会话不受影响、管理员可提前解除。
-/// </summary>
+/// <summary>登录失败锁定：按租户设置的阈值锁定、锁定期间不校验密码、已登录会话不受影响、管理员可提前解除。</summary>
 /// <remarks>用例在同一个夹具里顺序执行；改设置的用例在结束时清掉覆盖值，回到默认的 5 次 / 15 分钟。</remarks>
 public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {

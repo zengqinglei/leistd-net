@@ -145,9 +145,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
 #endif
 
 
-    /// <summary>
-    /// 已登录用户验证自己当前的邮箱：改了邮箱就回到未验证，验证码只对账号上此刻的邮箱有效。
-    /// </summary>
+    /// <summary>已登录用户验证自己当前的邮箱：改了邮箱就回到未验证，验证码只对账号上此刻的邮箱有效。</summary>
     [Fact]
     public async Task Signed_in_user_verifies_email_and_must_reverify_after_changing_it()
     {
@@ -197,9 +195,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         Assert.True(await ReadEmailVerifiedAsync(user.Client));
     }
 
-    /// <summary>
-    /// 注册时发出的验证码不能拿来验证已有账号的邮箱：挑战绑定用途。
-    /// </summary>
+    /// <summary>注册时发出的验证码不能拿来验证已有账号的邮箱：挑战绑定用途。</summary>
     [Fact]
     public async Task Registration_code_cannot_verify_an_existing_account_email()
     {

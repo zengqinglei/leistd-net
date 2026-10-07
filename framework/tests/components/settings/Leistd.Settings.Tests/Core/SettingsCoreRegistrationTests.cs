@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Settings.Tests.Core;
 
-/// <summary>
-/// <c>AddSettingsCore</c> 的注册面：生命周期、重复调用只叠加展示约定、宿主实现保留。
-/// </summary>
+/// <summary><c>AddSettingsCore</c> 的注册面：生命周期、重复调用只叠加展示约定、宿主实现保留。</summary>
 public sealed class SettingsCoreRegistrationTests
 {
     // 定义管理器跨请求缓存定义；读取器按请求缓存当前主体的值；写入与用例无状态

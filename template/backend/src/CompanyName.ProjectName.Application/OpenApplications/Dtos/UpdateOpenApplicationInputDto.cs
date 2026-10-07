@@ -3,52 +3,36 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
-/// <summary>
-/// 更新开放应用输入 DTO
-/// </summary>
+/// <summary>更新开放应用输入 DTO。</summary>
 public record UpdateOpenApplicationInputDto : IValidatableObject
 {
-    /// <summary>
-    /// 显示名称
-    /// </summary>
+    /// <summary>显示名称。</summary>
     [Display(Name = "Display name")]
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 
-    /// <summary>
-    /// 应用类型
-    /// </summary>
+    /// <summary>应用类型。</summary>
     [Display(Name = "Application type")]
     [Required(ErrorMessage = "{0} is required.")]
     [RegularExpression("^(web|native|service)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ApplicationType { get; init; }
 
-    /// <summary>
-    /// 客户端类型
-    /// </summary>
+    /// <summary>客户端类型。</summary>
     [Display(Name = "Client type")]
     [Required(ErrorMessage = "{0} is required.")]
     [RegularExpression("^(public|confidential)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ClientType { get; init; }
 
-    /// <summary>
-    /// Redirect URIs
-    /// </summary>
+    /// <summary>Redirect URIs</summary>
     public List<string> RedirectUris { get; init; } = [];
 
-    /// <summary>
-    /// Post Logout Redirect URIs
-    /// </summary>
+    /// <summary>Post Logout Redirect URIs</summary>
     public List<string> PostLogoutRedirectUris { get; init; } = [];
 
-    /// <summary>
-    /// 授权能力
-    /// </summary>
+    /// <summary>授权能力。</summary>
     public List<string> Permissions { get; init; } = [];
 
-    /// <summary>
-    /// 要求
-    /// </summary>
+    /// <summary>要求。</summary>
     public List<string> Requirements { get; init; } = [];
 
     /// <summary>
@@ -63,9 +47,7 @@ public record UpdateOpenApplicationInputDto : IValidatableObject
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
         ValidateUris(RedirectUris, PostLogoutRedirectUris);
 
-    /// <summary>
-    /// 回调地址逐项校验：绝对 URI、不含空白与片段。创建与更新共用这一份。
-    /// </summary>
+    /// <summary>回调地址逐项校验：绝对 URI、不含空白与片段。创建与更新共用这一份。</summary>
     /// <remarks>逐项校验没有对应的内置特性；文案与特性文案一样是本地化键。</remarks>
     internal static IEnumerable<ValidationResult> ValidateUris(
         IEnumerable<string> redirectUris,

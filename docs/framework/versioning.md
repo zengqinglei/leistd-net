@@ -10,7 +10,7 @@
 - 下一版由流水线按提交推算，不提前写入 `VERSION`；`develop` 也保留这个稳定版本基准，不随 beta 递增。
 - 下游跟 stable 使用 `VERSION`；跟 beta 从包源或流水线确认实际 `-beta.<N>` 全称，不猜测后缀。
 
-### ⚠️ nuget.org 上存在版本号虚高的历史预发布包
+### 预发布版本选择
 
 `1.0.0-beta.22`（2026-07-20）与 `1.0.0-preview.20260908`–`20260918` 共 10 个包，
 按 SemVer 排序**高于**当前在用的 `0.13.0-beta.*`。后果是
@@ -38,20 +38,20 @@
 
 ### 标了 `!` 就必须有 `BREAKING CHANGE:` 脚注
 
-带 `!` 的提交必须有非空 `BREAKING CHANGE:` 或 `BREAKING-CHANGE:` 脚注，与升级指南一致，供下游按脚注检索。
+带 `!` 的提交必须有非空 `BREAKING CHANGE:` 或 `BREAKING-CHANGE:` 脚注，自身说明变化与必要动作。
 
 ```
 refactor!: 异常响应统一走 Problem Details 管道
 
 BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/errors，
-组件异常映射由各组件的 AddXxx 自行登记。详见 docs/framework/upgrades/0.13.0.md#异常处理。
+调用方改用 detail/errors，各组件的 AddXxx 登记自己的异常映射。
 ```
 
-脚注写变化概要，并须指向升级指南 `docs/framework/upgrades/<版本>.md` 的具体小节。旧提交中的节号指向迁移前说明，已推历史不改写；新脚注指向 `upgrades/`。
+脚注直接写清变化与调用方必要动作，不强制链接旧版对照文档。
 
 `release.yml` 在推算版本时拦截带 `!` 却无非空脚注的提交并列出原因。脚注检查、升版推算与发布说明提取使用同一解析口径：`!` 看标题前缀，脚注须在行首，接受 `BREAKING CHANGE:` 与 `BREAKING-CHANGE:`。
 
-脚注检查只覆盖固定锚点 `802b4dca` 之后的提交，避免检查引入前的已推历史；此前缺脚注的破坏性内容见 [0.13.0 升级指南](upgrades/0.13.0.md)。锚点不扩大豁免范围，仅在历史重构后不再是 HEAD 祖先时更新；找不到祖先会报错，不静默跳过。升版推算仍使用完整提交范围。
+脚注检查从固定锚点 `802b4dca` 开始；升版推算使用完整提交范围。锚点不得随时间扩大豁免范围，仅在历史重构后不再是 HEAD 祖先时更新；找不到祖先即失败。
 
 ### 0.x 期间的破坏性变更按 Minor 递增
 
@@ -92,69 +92,25 @@ BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/error
 
 失败时先核对目标包源中已发布和缺失的包、tag 指向、`VERSION` 回写提交及 GitHub Release。tag 记录已发布版本，不能因发布后发现的问题而删除后复用版本号。只从原候选产物补齐缺失包；候选或产物改变时使用新版本并说明旧版本状态。恢复后手工确认目标包源能还原全部精确版本，并补齐缺失的 Release。不要用 `--skip-duplicate` 掩盖不同产物。
 
-## 破坏性变更怎么让下游知道
+## 发布说明
 
-破坏性变化通过 release notes 与按需升级指南交付，采用 ABP 同类的发布说明与迁移指南形式：
+`release.yml` 按 Conventional Commits 生成 release notes，`!` 与 `BREAKING CHANGE` 脚注进入“破坏性变更”。公共 API、配置、路由、授权、数据库模型与译文变化同步源码、消费者和当前文档；不保留过渡 API 或旧版对照。
 
-- release notes 由 `release.yml` 按 Conventional Commits 自动归类，`!` 与
-  `BREAKING CHANGE` 脚注进「破坏性变更」小节；
-- 需要写明"原来怎么写、现在怎么写"的，另出一份升级指南，见下文。
+开发期不强制独立升级指南。用户明确要求迁移说明时按需提供，发布工具仍支持 `docs/framework/upgrades/<基础版本>.md` 这一可选文件；没有指南不能推断无需改代码，最终用法以目标包文档、XML 和程序集为准。
 
-因此**提交信息必须如实**：脚注漏写就等于下游拿不到那一条。
+### 包与 Release 链接
 
-不维护提交式的公共表面快照：XML 文档 ID 看不见 static↔实例、常量值与基类变化，不能充当兼容性真值，
-且与发版日志职责重叠。随包译文键与占位符的比对由 `scripts/check-i18n-keys.ps1` 负责。
+`PackageReleaseNotes` 固定到本次 tag，不使用可变分支链接：
 
-### 什么时候写升级指南
+| 条件 | 包发布说明 |
+| --- | --- |
+| 有可选指南 | 指向指南在本次 tag 下的地址，Release 正文追加同一链接 |
+| 无指南，stable / beta | 指向本次 GitHub Release |
+| 无指南，nightly | 指向该 tag 的提交页，nightly 不创建 Release |
 
-不是每版都写。**只有调用方必须动手改代码时才写**——否则 release notes 已经够了。
+`python scripts/test-workflow-change-scope.py` 执行实际 workflow 步骤，验证三个渠道的有／无指南链接及夹具包 `.nuspec`。本地打包不设置 `PackageReleaseNotes`。
 
-纳入发版评审的变化面（这些即使不改公共 API 也会让下游动手）：数据库迁移、配置键、
-路由、授权策略、随包译文键、模板消费方式。Framework、随包文档与 Template 同步交付，
-不允许某一面先行。
-
-### 升级指南的位置与格式
-
-- **位置**：每个版本一份，`docs/framework/upgrades/<版本>.md`，版本取正式版号（`0.13.0`）。
-  它留在仓库里，**不进 NuGet 包**：包内只有 README 与指向它的 `PackageReleaseNotes` 链接，
-  包体积不随历史版本增长。随包的 `framework/docs/` 只描述当前版本契约，不写迁移步骤（分发边界见 `docs/README.md`）。
-- **结构**：分"框架"与"模板（生成项目）"两部分。框架部分按组件家族分小节，消费方只读自己引用的家族；
-  跨家族的变化（包改名、命名空间、注册入口约定）放在框架部分开头，所有人都读。
-  逐条成员对比等大清单作为同目录附录（如 `0.13.0-api-diff.md`），由正文链接。
-- **每条写四项**：受影响的是什么、原来怎么写、现在怎么写、必须执行的迁移动作；
-  并标注不兼容类型——**二进制**（已编译的调用方须重新编译）、**源码**（须改代码才能编译）、
-  **行为**（照常编译，运行结果变化）。
-
-### 版本映射与发布链接
-
-- **版本映射**：预发布版本按去掉预发布后缀的基础版本对应指南：`0.13.0-beta.N`、
-  `0.13.0-preview.<日期>.<序号>` 都对应 `docs/framework/upgrades/0.13.0.md`。
-- **包元数据**：`release.yml` 打包时按渠道设置 `PackageReleaseNotes`，消费方离线也能从已安装包的 `.nuspec` 读到：
-  - 基础版本有升级指南时，stable、beta、nightly 一律指向该指南**在本次发版 tag 下**的固定地址
-    （`https://github.com/<仓库>/blob/<tag>/docs/framework/upgrades/<版本>.md`）；
-  - 没有指南时，stable 与 beta 指向本次 GitHub Release（`…/releases/tag/<tag>`）；
-    nightly 只推送 tag、不建 Release，指向该 tag 的提交页（`…/commit/<tag>`）。
-  - 不用分支链接：分支上的文件会随后续提交变化，已发布的包要对应发版时的说明。
-- **Release 正文**：有升级指南时，生成的 Release Notes 追加「升级指南」一节，链接同样固定到本次 tag；没有指南时不加。
-- **验证**：链接规则由 `python scripts/test-workflow-change-scope.py` 执行 `release.yml` 的实际步骤验证——
-  三个渠道各覆盖有、无指南两种情况，并打出夹具包，检查 `.nuspec` 的 `releaseNotes` 固定到本次 tag。
-  改动这几步时运行它。本地 `framework/build/pack-local-feed.ps1` 不设置该属性。
-
-### Package Validation：当前不是既定任务
-
-.NET SDK 内置的 **Package Validation** 能对上一个已发布的包做二进制兼容性比对
-（基类与接口、泛型约束、参数默认值、static↔实例、访问器可见性、常量值都在内），
-有意的破坏性变更落进 `CompatibilitySuppressions.xml` 供评审。
-
-当前不启用，也不作为发布前置条件：0.x 破坏性变化频繁、消费方为已知内部仓库，现有提交脚注、release notes 与升级指南足够，暂不增加兼容性闸门。
-
-以下任一情况出现时重新评估：进入 `1.0.0` 承诺 API 稳定；外部消费方不可控；升级指南反复漏记。
-
-接入时以已发布版本为基线，在 `framework/common.props` 设置 `EnablePackageValidation` 与 `PackageValidationBaselineVersion`；首次 pack 用 `/p:GenerateCompatibilitySuppressionFile=true` 生成抑制文件，逐条评审后提交。改名或新增包无基线，须逐包处理。
-
-升级指南都在 [`upgrades/`](upgrades/) 目录，按版本号命名：
-
-- [从 0.12.0 升级到 0.13.0](upgrades/0.13.0.md)
+当前不启用 Package Validation：开发期以最终 API 和真实消费验证为准；建立 API 稳定承诺时再评估兼容性基线。
 
 ## 鉴权
 

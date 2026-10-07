@@ -138,9 +138,7 @@ internal sealed class AuthAppService(
         return outcome;
     }
 
-    /// <summary>
-    /// 登录第二步：校验验证码或恢复码，通过后签发会话。
-    /// </summary>
+    /// <summary>登录第二步：校验验证码或恢复码，通过后签发会话。</summary>
     /// <remarks>
     /// <para>锁定中的账号不校验验证码，与第一步同理：否则锁定期间照样能一个个试。</para>
     /// <para>输错计入账号的登录失败次数：第二步的 10⁶ 空间只靠单个挑战的尝试上限挡不住——
@@ -236,9 +234,7 @@ internal sealed class AuthAppService(
         return await sessionIssuer.SignInAsync(user, cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// 换发当前会话：结束现在这个，按账号最新状态签发一个新的。
-    /// </summary>
+    /// <summary>换发当前会话：结束现在这个，按账号最新状态签发一个新的。</summary>
     /// <remarks>受限会话的用户完成两步验证设置后调用，换掉带限制声明的那一个。</remarks>
     public async Task<ClaimsPrincipal> ReissueSessionAsync(CancellationToken cancellationToken = default)
     {
@@ -268,9 +264,7 @@ internal sealed class AuthAppService(
     /// <summary>失败登录的计数窗口（分钟）。</summary>
     private const int FailedLoginWindowMinutes = 5;
 
-    /// <summary>
-    /// 在这些累计次数上落一条记录；之后每 100 次再落一条。
-    /// </summary>
+    /// <summary>在这些累计次数上落一条记录；之后每 100 次再落一条。</summary>
     /// <remarks>
     /// <b>这是节流，不是"先记后合并"。</b><c>IOperationRecordWriter</c> 刻意没有更新能力
     /// （append-only 是它写在契约里的设计），所以做不到逐次记录再归并。
@@ -285,9 +279,7 @@ internal sealed class AuthAppService(
         => Array.IndexOf(FailedLoginRecordThresholds, attempts) >= 0
            || (attempts > 100 && attempts % 100 == 0);
 
-    /// <summary>
-    /// 累计同一标识在窗口内的失败次数，返回本次之后的累计值。
-    /// </summary>
+    /// <summary>累计同一标识在窗口内的失败次数，返回本次之后的累计值。</summary>
     /// <remarks>
     /// <b>刻意不加分布式锁。</b><c>CaptchaAppService</c> 为"读取-消费-比较"的原子性用了锁，
     /// 那里丢一次就是一次可被重放的验证码；这里丢一次递增只会让某个阈值记录晚一点出现，
@@ -386,9 +378,7 @@ internal sealed class AuthAppService(
         return ToOutput(user, roleNames);
     }
 
-    /// <summary>
-    /// 获取当前用户信息
-    /// </summary>
+    /// <summary>获取当前用户信息。</summary>
     public async Task<UserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         var output = await ToOutputAsync(await GetCurrentUserEntityAsync(cancellationToken), cancellationToken);
@@ -396,9 +386,7 @@ internal sealed class AuthAppService(
         return output with { TwoFactorSetupRequired = currentUser.FindClaim(TwoFactorClaimTypes.SetupRequired) is not null };
     }
 
-    /// <summary>
-    /// 更新个人信息
-    /// </summary>
+    /// <summary>更新个人信息。</summary>
     public async Task<UserOutputDto> UpdateCurrentUserAsync(UpdateCurrentUserInputDto input, CancellationToken cancellationToken = default)
     {
         var userId = currentUser.Id!.Value;
@@ -425,9 +413,7 @@ internal sealed class AuthAppService(
         return await ToOutputAsync(user, cancellationToken);
     }
 
-    /// <summary>
-    /// 修改密码，并撤销除当前以外的全部会话
-    /// </summary>
+    /// <summary>修改密码，并撤销除当前以外的全部会话。</summary>
     /// <remarks>
     /// 口令与会话撤销同生共死：撤不掉就整体失败，不留"口令换了、旧会话还在"的状态。
     /// 再认证失败的计数与审计各自独立提交，不随本方法的回滚丢失；提醒在提交之后发出。
@@ -485,9 +471,7 @@ internal sealed class AuthAppService(
             cancellationToken);
     }
 
-    /// <summary>
-    /// 设置或清除自己的头像
-    /// </summary>
+    /// <summary>设置或清除自己的头像。</summary>
     /// <remarks>
     /// 本人只能上传图片，入参 DTO 已挡掉外部地址（它来自外部登录提供方，不由本人随手填）；
     /// 浏览器端已裁剪缩放，实体按 <see cref="AvatarPolicy"/> 校验体积与真实类型。
@@ -508,9 +492,7 @@ internal sealed class AuthAppService(
     }
 #if (Email)
 
-    /// <summary>
-    /// 给自己当前的邮箱发验证码
-    /// </summary>
+    /// <summary>给自己当前的邮箱发验证码。</summary>
     public async Task<EmailVerificationChallengeOutputDto> SendCurrentUserEmailCodeAsync(CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
@@ -519,9 +501,7 @@ internal sealed class AuthAppService(
         return await emailChallengeStore.IssueAccountEmailAsync(user.Email, cancellationToken);
     }
 
-    /// <summary>
-    /// 用验证码确认自己当前的邮箱
-    /// </summary>
+    /// <summary>用验证码确认自己当前的邮箱。</summary>
     /// <remarks>
     /// 校验针对的是<b>此刻</b>账号上的邮箱：发码之后改过邮箱的话，旧验证码对新地址无效，
     /// 不能用它把一个没验证过的新地址标成已验证。

@@ -31,9 +31,7 @@ using Serilog.Core;
 
 namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
-/// <summary>
-/// 集成测试宿主：每个实例一份从已迁移模板库克隆出的 PostgreSQL 库（见 <see cref="PostgreSqlTestDatabase"/>）。
-/// </summary>
+/// <summary>集成测试宿主：每个实例一份从已迁移模板库克隆出的 PostgreSQL 库（见 <see cref="PostgreSqlTestDatabase"/>）。</summary>
 /// <remarks>
 /// <para>走生产的 Npgsql 注册路径：唯一约束、查询翻译、事务与独立事务都与生产一致。
 /// <see cref="WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/> 派生的宿主共用父实例的库。</para>
@@ -42,9 +40,7 @@ namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 /// </remarks>
 public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program>
 {
-    /// <summary>
-    /// 测试宿主的超级管理员密码。唯一定义处
-    /// </summary>
+    /// <summary>测试宿主的超级管理员密码。唯一定义处。</summary>
     /// <remarks>
     /// 以字面量散在各调用点时，改动测试凭据要逐处追平；集中之后是改一行。
     /// 取值要满足密码策略（见 <c>PasswordPolicy</c>），否则测试宿主自己就起不来。
@@ -52,9 +48,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     public const string TestAdminPassword = "IntegrationTests!Adm1n";
 #if (IncludeNotifications || IncludeRealTime)
 
-    /// <summary>
-    /// 客户端连接的 Hub：有业务实时时是实时 Hub（通知也经它推送），否则是通知自己的 Hub。
-    /// </summary>
+    /// <summary>客户端连接的 Hub：有业务实时时是实时 Hub（通知也经它推送），否则是通知自己的 Hub。</summary>
 #if (IncludeRealTime)
     public const string HubPath = "/hubs/realtime";
 #else
@@ -283,9 +277,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #endif
 
 #if (!LocalIdentity)
-    /// <summary>
-    /// 新测试主体所属的租户：多租户时是一个新租户，单租户时为 <see langword="null"/>（宿主）。
-    /// </summary>
+    /// <summary>新测试主体所属的租户：多租户时是一个新租户，单租户时为 <see langword="null"/>（宿主）。</summary>
     public static Guid? NewTenantId() =>
 #if (IncludeMultiTenancy)
         Guid.CreateVersion7();
@@ -333,9 +325,7 @@ public sealed class AuthenticatedSession(
 }
 
 #if (!LocalIdentity)
-/// <summary>
-/// 远端租户连接存储的替身：所有租户都没有登记独立连接，落在宿主的共享库上。
-/// </summary>
+/// <summary>远端租户连接存储的替身：所有租户都没有登记独立连接，落在宿主的共享库上。</summary>
 /// <remarks>
 /// 回源协议本身（缓存分区、取消不牵连搭车者）按生产注册方式单独装配后测试；
 /// 这里只让业务用例在没有 Identity 的测试宿主里拿到确定的路由。

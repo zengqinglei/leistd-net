@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.Models;
 
-/// <summary>
-/// 一次操作的结果。
-/// </summary>
+/// <summary>一次操作的结果。</summary>
 /// <remarks>只有两档；“部分成功”“重试中”这类中间态由业务自己的实体表达。</remarks>
 public enum OperationRecordOutcome
 {

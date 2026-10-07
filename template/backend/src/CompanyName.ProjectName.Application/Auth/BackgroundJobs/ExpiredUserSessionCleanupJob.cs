@@ -14,9 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 
-/// <summary>
-/// 每天删除已过期的会话（最近活动早于空闲超时）。
-/// </summary>
+/// <summary>每天删除已过期的会话（最近活动早于空闲超时）。</summary>
 /// <remarks>
 /// <para>登录时会顺手删掉此人自己的过期会话，但不再登录的用户没有这个时机：他们的会话行连同原始 IP
 /// 会无限期留在表里。过期会话既不能再用于登录，设备列表也不显示，保留它没有任何读取方，所以不设保留期。</para>

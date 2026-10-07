@@ -7,9 +7,7 @@ using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
 
-/// <summary>
-/// 控制器授权约定：每个 action 显式声明授权；写操作要么带策略，要么列入有理由的豁免。
-/// </summary>
+/// <summary>控制器授权约定：每个 action 显式声明授权；写操作要么带策略，要么列入有理由的豁免。</summary>
 /// <remarks>
 /// 只有类级 <c>[Authorize]</c> 的写端点等于"登录即可写"，权限判定只能退回应用服务里手写，
 /// 被拒时也拿不到管道的 403。这类回退在评审里不显眼，由本约定在构建后的程序集上拦住。
@@ -17,9 +15,7 @@ namespace CompanyName.ProjectName.UnitTests.Api;
 /// </remarks>
 public class ControllerAuthorizationConventionTests
 {
-    /// <summary>
-    /// 不带策略的写端点豁免清单：匿名协议端点与本人自助端点，每项写明理由。
-    /// </summary>
+    /// <summary>不带策略的写端点豁免清单：匿名协议端点与本人自助端点，每项写明理由。</summary>
     private static readonly AuthorizationExemption[] Exemptions =
     [
         new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/session-login", "登录本身，调用时还没有主体"),
@@ -39,9 +35,7 @@ public class ControllerAuthorizationConventionTests
         new(ExemptionKind.SelfService, "DELETE api/v1/external-auth/links/{id:guid}", "解绑本人的外部账号"),
     ];
 
-    /// <summary>
-    /// Api 程序集里的控制器全部满足约定
-    /// </summary>
+    /// <summary>Api 程序集里的控制器全部满足约定。</summary>
     [Fact]
     public void Api_controllers_declare_authorization_and_guard_writes_with_policies()
     {
@@ -52,18 +46,14 @@ public class ControllerAuthorizationConventionTests
         Assert.Empty(FindViolations(controllers, Exemptions));
     }
 
-    /// <summary>
-    /// 带策略的写端点、只读端点与豁免内的自助端点都合规
-    /// </summary>
+    /// <summary>带策略的写端点、只读端点与豁免内的自助端点都合规。</summary>
     [Fact]
     public void Policy_guarded_writes_reads_and_exempted_self_service_endpoints_pass()
     {
         Assert.Empty(FindViolations([typeof(CompliantController)], FixtureExemptions));
     }
 
-    /// <summary>
-    /// 只有类级 [Authorize] 的写端点被拒：这正是"登录即可写"的回退
-    /// </summary>
+    /// <summary>只有类级 [Authorize] 的写端点被拒：这正是"登录即可写"的回退。</summary>
     [Fact]
     public void A_write_endpoint_with_only_class_level_authorize_is_reported()
     {
@@ -73,9 +63,7 @@ public class ControllerAuthorizationConventionTests
         Assert.Contains("policy", violation);
     }
 
-    /// <summary>
-    /// 既没有 [Authorize] 也没有 [AllowAnonymous] 的 action 被拒
-    /// </summary>
+    /// <summary>既没有 [Authorize] 也没有 [AllowAnonymous] 的 action 被拒。</summary>
     [Fact]
     public void An_action_without_explicit_authorization_is_reported()
     {
@@ -85,9 +73,7 @@ public class ControllerAuthorizationConventionTests
         Assert.Contains("no explicit", violation);
     }
 
-    /// <summary>
-    /// 匿名写端点必须列在匿名协议豁免里；列在自助豁免下不算数
-    /// </summary>
+    /// <summary>匿名写端点必须列在匿名协议豁免里；列在自助豁免下不算数。</summary>
     [Fact]
     public void An_anonymous_write_needs_an_anonymous_protocol_exemption()
     {
@@ -100,9 +86,7 @@ public class ControllerAuthorizationConventionTests
             [new(ExemptionKind.AnonymousProtocol, "POST fixtures/me/anonymous", "夹具：协议端点")]));
     }
 
-    /// <summary>
-    /// 只有 [Route]、没有 HTTP 方法特性的公开方法仍是 action，接受任意方法，被拒；[NonAction] 与 ControllerBase 自带的辅助方法不算
-    /// </summary>
+    /// <summary>只有 [Route]、没有 HTTP 方法特性的公开方法仍是 action，接受任意方法，被拒；[NonAction] 与 ControllerBase 自带的辅助方法不算。</summary>
     [Fact]
     public void A_route_only_action_without_http_method_is_reported()
     {
@@ -205,9 +189,7 @@ public class ControllerAuthorizationConventionTests
         SelfService,
     }
 
-    /// <summary>
-    /// 豁免项：<c>{HTTP 方法或 *} {路由}</c>，路由以 <c>/**</c> 结尾时匹配该路由本身及其下全部路由。
-    /// </summary>
+    /// <summary>豁免项：<c>{HTTP 方法或 *} {路由}</c>，路由以 <c>/**</c> 结尾时匹配该路由本身及其下全部路由。</summary>
     private sealed record AuthorizationExemption(ExemptionKind Kind, string Endpoint, string Reason)
     {
         public bool Matches(string method, string path)

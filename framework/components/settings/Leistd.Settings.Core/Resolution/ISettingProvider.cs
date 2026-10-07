@@ -1,8 +1,6 @@
 namespace Leistd.Settings.Resolution;
 
-/// <summary>
-/// 按层级解析设置的当前生效值。
-/// </summary>
+/// <summary>按层级解析设置的当前生效值。</summary>
 /// <remarks>
 /// <para>回落顺序：用户级 → 租户级 → 代码默认值。宿主视角走租户级那一层（<c>TenantId</c> 为 <see langword="null"/> 的行）。</para>
 /// <para>实现为 Scoped，一次请求内只查一次库；其他请求写入的变更在下一请求可见。</para>
@@ -20,9 +18,7 @@ public interface ISettingProvider
     /// </exception>
     Task<string?> GetOrNullAsync(string name, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 读取指定用户在当前租户下的生效值：该用户的覆盖 → 租户级 → 代码默认值。
-    /// </summary>
+    /// <summary>读取指定用户在当前租户下的生效值：该用户的覆盖 → 租户级 → 代码默认值。</summary>
     /// <remarks>用于按他人偏好判断（如按收件人偏好决定是否投递）。进程级设置与 <see cref="GetOrNullAsync"/> 相同。</remarks>
     /// <param name="name">设置名称。</param>
     /// <param name="userId">目标用户标识。</param>

@@ -21,9 +21,7 @@ using OpenIddict.Validation.AspNetCore;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 本地身份的账号配置与认证：服务端登记的会话 Cookie（签发形态另有 Bearer）。
-/// </summary>
+/// <summary>本地身份的账号配置与认证：服务端登记的会话 Cookie（签发形态另有 Bearer）。</summary>
 internal static class LocalSessionAuthenticationExtensions
 {
     public static void AddLocalSessionAuthentication(this WebApplicationBuilder builder)

@@ -8,9 +8,7 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// 共享的远端解析任务不能用发起者的作用域：发起者的请求结束、作用域释放后，搭车者照样拿到结果。
-/// </summary>
+/// <summary>共享的远端解析任务不能用发起者的作用域：发起者的请求结束、作用域释放后，搭车者照样拿到结果。</summary>
 /// <remarks>
 /// 共享任务被刻意设计成比发起者活得更久（发起者取消不取消它），它就不能持有发起者作用域里的实例——
 /// 表现是负载一上来偶发 <see cref="ObjectDisposedException"/>，几乎无法定位。

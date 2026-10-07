@@ -6,9 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 上下文之间的模型边界：租户注册表不进业务上下文，用户不进控制面上下文。
-/// </summary>
+/// <summary>上下文之间的模型边界：租户注册表不进业务上下文，用户不进控制面上下文。</summary>
 /// <remarks>
 /// <para>与是否签发 OIDC 令牌无关，所以独立于 <c>AuthenticationModeTests</c>——
 /// 后者整体只在签发令牌的形态下存在。</para>
@@ -33,9 +31,7 @@ public sealed class ControlPlaneModelSeparationTests(ProjectWebApplicationFactor
     }
 
 #if (OpenIddictServer)
-    /// <summary>
-    /// OIDC 存储自成一个上下文，不与租户控制面共享模型。
-    /// </summary>
+    /// <summary>OIDC 存储自成一个上下文，不与租户控制面共享模型。</summary>
     /// <remarks>
     /// 两者合并在一个上下文里的代价是：剪掉 OIDC 时要么留 4 张空表、
     /// 要么给迁移与模型快照做条件剪裁。

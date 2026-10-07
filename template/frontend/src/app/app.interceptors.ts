@@ -14,12 +14,13 @@ import { mockInterceptors } from '../../_mock/core/providers';
 /** 应用的 HTTP 拦截器链，按顺序执行；单独导出供启动用例走同一条链。 */
 export const appInterceptors: HttpInterceptorFn[] = [
   //#if (IncludeLocalization)
-  acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
+  // 请求语言须在 URL 改写前确定。
+  acceptLanguageInterceptor,
   //#endif
   //#if (LocalIdentity && IncludeMultiTenancy)
-  tenantInterceptor, // 已选租户时为 /api/ 请求附加租户提示头
+  tenantInterceptor,
   //#endif
   urlFormatInterceptor,
-  httpErrorInterceptor, // 认证处置，并把错误归一化为 ApplicationHttpError
+  httpErrorInterceptor,
   ...mockInterceptors(environment.useMock),
 ];

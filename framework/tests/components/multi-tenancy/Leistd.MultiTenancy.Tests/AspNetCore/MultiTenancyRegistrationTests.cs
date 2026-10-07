@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// <c>AddMultiTenancy()</c> 的注册面：补齐 Web 宿主所需服务，重复调用不叠加验证器、贡献者与解析链。
-/// </summary>
+/// <summary><c>AddMultiTenancy()</c> 的注册面：补齐 Web 宿主所需服务，重复调用不叠加验证器、贡献者与解析链。</summary>
 public sealed class MultiTenancyRegistrationTests
 {
     private static IServiceCollection Base() =>

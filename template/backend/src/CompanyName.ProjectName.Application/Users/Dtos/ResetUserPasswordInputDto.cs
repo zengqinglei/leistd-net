@@ -4,9 +4,7 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
-/// <summary>
-/// 重置用户密码输入 DTO
-/// </summary>
+/// <summary>重置用户密码输入 DTO。</summary>
 public record ResetUserPasswordInputDto
 {
     [Display(Name = "Password")]

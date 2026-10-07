@@ -23,9 +23,7 @@ export function provideMock(config: boolean | MockConfig): Provider[] {
   ];
 }
 
-/**
- * 按配置返回 Mock 拦截器，供 app.config.ts 的 withInterceptors 展开。
- */
+/** 按配置返回 Mock 拦截器，供 app.config.ts 的 withInterceptors 展开。 */
 export function mockInterceptors(config: boolean | MockConfig): HttpInterceptorFn[] {
   return shouldProvideMock(config) ? [mockInterceptor] : [];
 }

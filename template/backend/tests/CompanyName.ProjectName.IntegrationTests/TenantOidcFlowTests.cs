@@ -21,9 +21,7 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 租户用户走完整个 OIDC 流程：授权、授权码换令牌、userinfo、刷新令牌。
-/// </summary>
+/// <summary>租户用户走完整个 OIDC 流程：授权、授权码换令牌、userinfo、刷新令牌。</summary>
 /// <remarks>
 /// 令牌端点与 userinfo 的请求不带用户会话，请求本身只能解析出宿主；用户与租户必须取自令牌主体，
 /// 在其租户内加载用户。取错上下文时租户用户在宿主分区里查不到，只在租户用户身上失败——宿主用户的用例照样绿。
@@ -157,9 +155,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         }
     }
 
-    /// <summary>
-    /// 配置的访问令牌寿命落到实际签发的令牌上；交换令牌不长于源令牌，源令牌比 120 秒上限先到期时取源令牌的到期时刻。
-    /// </summary>
+    /// <summary>配置的访问令牌寿命落到实际签发的令牌上；交换令牌不长于源令牌，源令牌比 120 秒上限先到期时取源令牌的到期时刻。</summary>
     [Fact]
     public async Task Configured_access_token_lifetime_applies_and_bounds_exchanged_tokens()
     {
@@ -245,9 +241,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     [Fact]
     public Task A_tenant_user_can_exchange_a_code_read_userinfo_and_refresh() => RunTenantFlowAsync(Factory);
 
-    /// <summary>
-    /// 宿主把主体标识换成别的 claim 名：签发、换码、userinfo、资源服务判定自然人与机器主体都按它走。
-    /// </summary>
+    /// <summary>宿主把主体标识换成别的 claim 名：签发、换码、userinfo、资源服务判定自然人与机器主体都按它走。</summary>
     /// <remarks>令牌只签 sub 的话，换码按配置读不到用户、资源服务判不出自然人，链路在签发方自己这里就断了。</remarks>
     [Fact]
     public async Task A_configured_user_id_claim_carries_through_the_whole_flow()
@@ -265,9 +259,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         Assert.NotEqual(HttpStatusCode.Forbidden, databases.StatusCode);
     }
 
-    /// <summary>
-    /// 迁移清单的线上形状：健康租户的连接与取不出连接的租户一起下发，只有迁移身份读得到。
-    /// </summary>
+    /// <summary>迁移清单的线上形状：健康租户的连接与取不出连接的租户一起下发，只有迁移身份读得到。</summary>
     /// <remarks>
     /// 失败租户若在线上丢了，Resource 的迁移作业会以为一切正常，那个库就停在旧结构上；
     /// 只持有读路由权限的常驻服务则绝不能拿到这份带全部明文连接串的清单。

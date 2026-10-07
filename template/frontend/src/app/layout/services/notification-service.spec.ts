@@ -8,9 +8,7 @@ import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
 
 import type { Mock } from 'vitest';
 
-/**
- * 通知的连接闭环：init() 是 SignalR 连接的实际调用方，铃铛组件每次初始化都会走到这里。
- */
+/** 通知的连接闭环：init() 是 SignalR 连接的实际调用方，铃铛组件每次初始化都会走到这里。 */
 describe('NotificationService', () => {
   let service: NotificationService;
   let signalR: SignalRService;

@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 登录第一步（密码或外部登录）的结果
-/// </summary>
+/// <summary>登录第一步（密码或外部登录）的结果。</summary>
 public sealed record SessionLoginOutputDto
 {
     /// <summary>还需要第二步：凭 <see cref="TwoFactorToken"/> 提交验证码或恢复码后才会下发会话。</summary>

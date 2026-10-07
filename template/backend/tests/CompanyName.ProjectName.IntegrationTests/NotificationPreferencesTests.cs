@@ -40,13 +40,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace CompanyName.ProjectName.IntegrationTests;
 
 #if (LocalIdentity)
-/// <summary>
-/// 通知偏好与安全提醒：本人按"类别 × 渠道"决定收什么；安全提醒的站内通知关不掉；邮件只发已验证的邮箱。
-/// </summary>
+/// <summary>通知偏好与安全提醒：本人按"类别 × 渠道"决定收什么；安全提醒的站内通知关不掉；邮件只发已验证的邮箱。</summary>
 #else
-/// <summary>
-/// 通知偏好：本人决定是否在站内接收系统通知。资源服务不发邮件，没有邮件渠道与对应偏好。
-/// </summary>
+/// <summary>通知偏好：本人决定是否在站内接收系统通知。资源服务不发邮件，没有邮件渠道与对应偏好。</summary>
 #endif
 public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {

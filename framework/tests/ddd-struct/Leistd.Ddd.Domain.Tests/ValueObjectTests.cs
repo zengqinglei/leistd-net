@@ -3,9 +3,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Domain.Tests;
 
-/// <summary>
-/// 值对象的相等性契约。基座里少一条断言，下游是 N 个项目各踩一次。
-/// </summary>
+/// <summary>值对象的相等性契约。基座里少一条断言，下游是 N 个项目各踩一次。</summary>
 public class ValueObjectTests
 {
     private sealed class Money(decimal amount, string currency) : ValueObject

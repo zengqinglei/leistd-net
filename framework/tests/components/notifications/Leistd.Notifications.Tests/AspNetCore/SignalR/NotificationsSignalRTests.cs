@@ -14,9 +14,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.AspNetCore.SignalR;
 
-/// <summary>
-/// 通知的 SignalR 传输：注册面与投递寻址。
-/// </summary>
+/// <summary>通知的 SignalR 传输：注册面与投递寻址。</summary>
 public class NotificationsSignalRTests
 {
     private static NotificationOutputDto Notification() => new()

@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.Management.Provisioning;
 
-/// <summary>
-/// 租户开通：创建租户时在新租户里写入初始数据（角色、权限、管理员），失败时清掉写过的东西。由宿主实现。
-/// </summary>
+/// <summary>租户开通：创建租户时在新租户里写入初始数据（角色、权限、管理员），失败时清掉写过的东西。由宿主实现。</summary>
 /// <remarks>
 /// <para>两个方法都在目标租户上下文与各自新开的工作单元里调用，写入归属该租户，分库租户的写入落进它的专属库。</para>
 /// <para><see cref="ProvisionAsync"/> 抛出即触发补偿：先 <see cref="PurgeAsync"/>，再删连接登记，最后删注册表记录。

@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
-/// <summary>
-/// 表示租户不存在。
-/// </summary>
+/// <summary>表示租户不存在。</summary>
 public class TenantNotFoundException : BusinessException
 {
     /// <summary>构造异常。</summary>

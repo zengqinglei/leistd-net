@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// <c>AddDddInfrastructure</c> 的工作单元选项：绑定 <c>Leistd:UnitOfWork</c>，委托在其后应用。
-/// </summary>
+/// <summary><c>AddDddInfrastructure</c> 的工作单元选项：绑定 <c>Leistd:UnitOfWork</c>，委托在其后应用。</summary>
 public class UnitOfWorkOptionsBindingTests
 {
     // 走委托重载注册时配置节同样要绑定，否则 appsettings 里写的超时静默不生效

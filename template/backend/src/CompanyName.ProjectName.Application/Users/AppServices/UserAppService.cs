@@ -45,9 +45,7 @@ using Leistd.Notifications.Stores;
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;
 
-/// <summary>
-/// 用户应用服务
-/// </summary>
+/// <summary>用户应用服务。</summary>
 public class UserAppService(
     IUserRepository userRepository,
     IRoleRepository roleRepository,
@@ -81,9 +79,7 @@ public class UserAppService(
     private const string EmailVerifiedClaimType = "email_verified";
 
 #endif
-    /// <summary>
-    /// 获取用户列表（分页）
-    /// </summary>
+    /// <summary>获取用户列表（分页）。</summary>
     public async Task<PagedResult<UserManagementOutputDto>> GetPagedListAsync(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
@@ -138,9 +134,7 @@ public class UserAppService(
         return new PagedResult<UserManagementOutputDto>(totalCount, userDtos);
     }
 
-    /// <summary>
-    /// 用户列表的可排序字段
-    /// </summary>
+    /// <summary>用户列表的可排序字段。</summary>
     /// <remarks>
     /// 白名单为什么在这一层见 <see cref="SortingRequest"/>。末尾固定追加 <c>Id</c> 是分页
     /// 正确性要求：排序键有重复值时，缺少稳定的次序会让同一行在翻页时重复出现或整行漏掉。
@@ -163,9 +157,7 @@ public class UserAppService(
         return ordered.ThenBy(u => u.Id);
     }
 
-    /// <summary>
-    /// 获取用户详情
-    /// </summary>
+    /// <summary>获取用户详情。</summary>
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
@@ -229,9 +221,7 @@ public class UserAppService(
 #endif
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 创建用户
-    /// </summary>
+    /// <summary>创建用户。</summary>
     /// <remarks>建用户、补管理字段、分配角色三次写入必须同生共死：中途失败会留下没有任何角色的用户。</remarks>
     [UnitOfWork]
     public async Task<UserManagementOutputDto> CreateAsync(CreateUserInputDto input, CancellationToken cancellationToken = default)
@@ -277,9 +267,7 @@ public class UserAppService(
         return MapToOutput(user, roles);
     }
 
-    /// <summary>
-    /// 更新用户
-    /// </summary>
+    /// <summary>更新用户。</summary>
     /// <remarks>
     /// 资源服务形态下没有这个入口：用户名、邮箱、显示名归签发方所有，本地改了没有回写通道，
     /// 只会与签发方漂移。那一侧的资料由 <c>ResourceUserProvisioningMiddleware</c> 每次访问按令牌刷新。
@@ -320,9 +308,7 @@ public class UserAppService(
     }
 
 #endif
-    /// <summary>
-    /// 启用用户
-    /// </summary>
+    /// <summary>启用用户。</summary>
     /// <remarks>两种形态都保留：即使身份由签发方发放，本服务仍要能就地停掉一个人的访问。</remarks>
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -348,9 +334,7 @@ public class UserAppService(
             cancellationToken);
     }
 
-    /// <summary>
-    /// 禁用用户
-    /// </summary>
+    /// <summary>禁用用户。</summary>
 #if (LocalIdentity)
     /// <remarks>停用与撤销同生共死；撤销的时序见 <see cref="RevokeAllAccessAsync"/>。</remarks>
     [UnitOfWork]
@@ -388,9 +372,7 @@ public class UserAppService(
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 重置用户密码，并撤销该用户的全部会话
-    /// </summary>
+    /// <summary>重置用户密码，并撤销该用户的全部会话。</summary>
     /// <remarks>口令与撤销同生共死；提醒在提交之后发出。</remarks>
     [UnitOfWork]
     public async Task ResetPasswordAsync(Guid id, ResetUserPasswordInputDto input, CancellationToken cancellationToken = default)
@@ -421,9 +403,7 @@ public class UserAppService(
             cancellationToken);
     }
 
-    /// <summary>
-    /// 解除用户的登录锁定
-    /// </summary>
+    /// <summary>解除用户的登录锁定。</summary>
     /// <remarks>
     /// 未锁定时静默成功、不留记录：解锁是幂等的，重复点击不该在操作记录里留下一串没发生过的事。
     /// </remarks>
@@ -445,9 +425,7 @@ public class UserAppService(
             cancellationToken);
     }
 
-    /// <summary>
-    /// 重置用户的两步验证：停用并清掉密钥与恢复码，该用户的会话全部失效
-    /// </summary>
+    /// <summary>重置用户的两步验证：停用并清掉密钥与恢复码，该用户的会话全部失效。</summary>
     /// <remarks>
     /// 给丢了手机又没了恢复码的人用。会话一并作废：能走到这一步，说明账号的第二道门已经不在本人手里。
     /// 所在租户要求两步验证时，本人下次登录会被带去重新设置。
@@ -487,9 +465,7 @@ public class UserAppService(
 #endif
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 删除用户（软删除）
-    /// </summary>
+    /// <summary>删除用户（软删除）。</summary>
     /// <remarks>
     /// 软删除保留该用户的直授权限与授权版本：软删除是可恢复的，恢复后权限跟着一起回来才合理；
     /// 删了权限再恢复，得到的是一个"存在但什么都不能做"的账号，没人会预期这个结果。
@@ -548,9 +524,7 @@ public class UserAppService(
             : null;
     }
 
-    /// <summary>
-    /// 查询用户当前角色。
-    /// </summary>
+    /// <summary>查询用户当前角色。</summary>
     public async Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -565,9 +539,7 @@ public class UserAppService(
         return ToRoleBriefs(roles);
     }
 
-    /// <summary>
-    /// 替换用户角色。调用方必须持有 App.Users.ManageRoles，由 Controller 上的策略保证。
-    /// </summary>
+    /// <summary>替换用户角色。调用方必须持有 App.Users.ManageRoles，由 Controller 上的策略保证。</summary>
     /// <remarks>撤销与新增在同一工作单元提交：拆成两次提交时，后一步失败会把用户留在零角色状态。</remarks>
     [UnitOfWork]
     public async Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
@@ -598,9 +570,7 @@ public class UserAppService(
         return ToRoleBriefs(roles);
     }
 
-    /// <summary>
-    /// 解析角色前先确认调用方持有角色分配权限。
-    /// </summary>
+    /// <summary>解析角色前先确认调用方持有角色分配权限。</summary>
     private async Task<List<Role>> GetRolesWithManageRolesCheckAsync(
         List<Guid> roleIds,
         CancellationToken cancellationToken)
@@ -613,9 +583,7 @@ public class UserAppService(
         return await GetRolesByIdsAsync(roleIds, cancellationToken);
     }
 
-    /// <summary>
-    /// 按 Id 解析角色。角色名只用于展示与筛选，写入路径一律按 Id，避免大小写与重名歧义。
-    /// </summary>
+    /// <summary>按 Id 解析角色。角色名只用于展示与筛选，写入路径一律按 Id，避免大小写与重名歧义。</summary>
     private async Task<List<Role>> GetRolesByIdsAsync(List<Guid> roleIds, CancellationToken cancellationToken)
     {
         var normalized = roleIds.Where(id => id != Guid.Empty).Distinct().ToList();
@@ -690,9 +658,7 @@ public class UserAppService(
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 作废该用户已建立的会话与已签发的令牌。调用方在工作单元内、把它放在最后一步。
-    /// </summary>
+    /// <summary>作废该用户已建立的会话与已签发的令牌。调用方在工作单元内、把它放在最后一步。</summary>
     /// <remarks>
     /// <para>撤权要对已签发的凭据生效：会话 Cookie 由会话校验按登记的会话拒绝，Bearer 令牌由令牌记录校验按撤销状态拒绝，
     /// 两者都在认证阶段就失效。</para>

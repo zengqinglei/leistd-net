@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 一个登录中的会话（登录设备）
-/// </summary>
+/// <summary>一个登录中的会话（登录设备）。</summary>
 public record UserSessionOutputDto
 {
     /// <summary>会话 Id</summary>

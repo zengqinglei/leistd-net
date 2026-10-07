@@ -5,9 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
-/// <summary>
-/// 口令哈希的格式与成本契约
-/// </summary>
+/// <summary>口令哈希的格式与成本契约。</summary>
 /// <remarks>
 /// <para>裸 <c>[salt][hash]</c> 里没有算法、格式版本和成本参数，于是既答不出"这条是怎么算的"，
 /// 也无法在不作废存量口令的前提下调高成本。</para>
@@ -39,9 +37,7 @@ public class PasswordHashingTests
         Assert.False(_hasher.VerifyPassword(hash, "PasswordHashingTests!Px"));
     }
 
-    /// <summary>
-    /// 密文自带格式版本与成本参数
-    /// </summary>
+    /// <summary>密文自带格式版本与成本参数。</summary>
     /// <remarks>
     /// 这是"能不能在不作废存量口令的前提下提高成本"的前提：
     /// 没有它就只能全部作废或永远停在旧参数上。
@@ -58,9 +54,7 @@ public class PasswordHashingTests
         Assert.Equal(600_000, iterations);
     }
 
-    /// <summary>
-    /// 调整工作因子后，旧参数算出的密文照常校验
-    /// </summary>
+    /// <summary>调整工作因子后，旧参数算出的密文照常校验。</summary>
     [Fact]
     public void A_hash_from_another_cost_still_verifies_after_the_cost_changes()
     {
@@ -71,9 +65,7 @@ public class PasswordHashingTests
         Assert.False(_hasher.VerifyPassword(hash, "PasswordHashingTests!Px"));
     }
 
-    /// <summary>
-    /// 损坏或旧格式的密文按"不匹配"处理，不抛
-    /// </summary>
+    /// <summary>损坏或旧格式的密文按"不匹配"处理，不抛。</summary>
     /// <remarks>
     /// 这条路径直接面向登录请求：抛异常会把"这条哈希坏了"变成 500，
     /// 还能被用来区分账号是否存在。

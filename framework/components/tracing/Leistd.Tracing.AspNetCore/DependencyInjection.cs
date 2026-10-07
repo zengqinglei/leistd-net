@@ -29,7 +29,6 @@ public static class DependencyInjection
     }
 
     /// <summary>把入站关联标识中间件接入请求管道。应尽量靠近管道前端。</summary>
-    /// <param name="app">应用构建器。</param>
     public static IApplicationBuilder UseCorrelationId(this IApplicationBuilder app)
     {
         return app.UseMiddleware<CorrelationIdMiddleware>();

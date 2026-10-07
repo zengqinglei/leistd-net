@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// 同一上下文重复调用 <c>AddDddDbContext</c> 时仓储注册的幂等边界。
-/// </summary>
+/// <summary>同一上下文重复调用 <c>AddDddDbContext</c> 时仓储注册的幂等边界。</summary>
 /// <remarks>
 /// 组合根拆分时同一行登记可能被调用两次：相同实现不改变解析结果，必须按幂等跳过；
 /// 换成另一个实现则会让"谁先注册谁生效"决定仓储，必须拒绝且不改动已有注册。

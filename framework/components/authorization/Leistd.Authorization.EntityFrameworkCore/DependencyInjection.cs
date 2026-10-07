@@ -13,9 +13,7 @@ namespace Leistd.Authorization.EntityFrameworkCore;
 /// <summary>权限 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 EF Core 权限授予存储（基于指定 DbContext）。
-    /// </summary>
+    /// <summary>注册 EF Core 权限授予存储（基于指定 DbContext）。</summary>
     /// <remarks>
     /// 宿主须已注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>：存储与管理器经
     /// <c>IDbContextProvider&lt;TDbContext&gt;</c> 取得本工作单元已解析连接的上下文。
@@ -43,9 +41,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 映射 <see cref="PermissionGrantRecord"/> 与 <see cref="AuthorizationVersionRecord"/>，在 OnModelCreating 中调用。
-    /// </summary>
+    /// <summary>映射 <see cref="PermissionGrantRecord"/> 与 <see cref="AuthorizationVersionRecord"/>，在 OnModelCreating 中调用。</summary>
     public static ModelBuilder ConfigurePermissionAuthorization(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PermissionGrantRecordConfiguration());

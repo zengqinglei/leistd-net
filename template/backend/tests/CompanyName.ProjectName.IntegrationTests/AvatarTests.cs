@@ -5,9 +5,7 @@ using System.Text.Json;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 头像：上传只收图片、对外给带版本号的地址、图片经专门端点输出，以及编辑表单的原样回写。
-/// </summary>
+/// <summary>头像：上传只收图片、对外给带版本号的地址、图片经专门端点输出，以及编辑表单的原样回写。</summary>
 /// <remarks>
 /// 服务端不解码图片，只核对文件头与声明的类型一致——这里的"图片"只需要正确的文件头。
 /// </remarks>

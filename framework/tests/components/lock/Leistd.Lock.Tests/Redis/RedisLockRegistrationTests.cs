@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// <c>AddRedisDistributedLock</c> 的注册面：单例、幂等，校验器只有一份。
-/// </summary>
+/// <summary><c>AddRedisDistributedLock</c> 的注册面：单例、幂等，校验器只有一份。</summary>
 /// <remarks>
 /// 多路复用器是昂贵的长连接，必须单例；重复调用若多建一份，进程会对 Redis 开两组连接。
 /// 校验器不计入 <see cref="ServiceCollectionAssertions.AssertIdempotent"/>，多一份时每条配置错误报两遍。

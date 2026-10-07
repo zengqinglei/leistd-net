@@ -16,9 +16,7 @@ namespace Leistd.Authorization;
 /// <summary>权限定义与检查的核心注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册权限定义管理器、默认权限检查器、管理用例与首次授予。
-    /// </summary>
+    /// <summary>注册权限定义管理器、默认权限检查器、管理用例与首次授予。</summary>
     /// <remarks>
     /// <para><see cref="IPermissionDefinitionManager"/> 为 Singleton，<see cref="IPermissionChecker"/> 为 Scoped——
     /// 一次请求内的多次权限检查共享同一份主体与授予快照。</para>

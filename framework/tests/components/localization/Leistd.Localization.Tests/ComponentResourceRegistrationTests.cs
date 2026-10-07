@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.Localization.Tests;
 
-/// <summary>
-/// 组件自带的默认译文：登记在最前，宿主资源总能覆盖，与调用顺序无关。
-/// </summary>
+/// <summary>组件自带的默认译文：登记在最前，宿主资源总能覆盖，与调用顺序无关。</summary>
 /// <remarks>
 /// 同一键出现在多个程序集时后登记者生效。组件的 <c>Add*</c> 常在宿主本地化注册之后调用，
 /// 若按调用顺序追加，组件默认文案会静默盖掉宿主的定制——界面上看到的是"改了词条不生效"。
@@ -22,9 +20,7 @@ public class ComponentResourceRegistrationTests
     private static readonly Assembly Component = typeof(object).Assembly;
     private static readonly Assembly Host = typeof(ComponentResourceRegistrationTests).Assembly;
 
-    /// <summary>
-    /// 同名键最终取到的是宿主那一份，不只是程序集顺序对。
-    /// </summary>
+    /// <summary>同名键最终取到的是宿主那一份，不只是程序集顺序对。</summary>
     /// <remarks>
     /// 只断言 <c>ResourceAssemblies</c> 的下标不够：合并是在读取器里做的，真正要钉住的是"读出来的那句话"。
     /// 组件默认译文盖掉宿主定制时，表现是"改了词条不生效"，而登记顺序看上去完全正常。

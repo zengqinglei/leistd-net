@@ -9,9 +9,7 @@ using static OpenIddict.Validation.OpenIddictValidationHandlers;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// Identity 轮换签名证书后，资源服务在同一个请求里取回新公钥，而不是先拒绝、下一次才认得。
-/// </summary>
+/// <summary>Identity 轮换签名证书后，资源服务在同一个请求里取回新公钥，而不是先拒绝、下一次才认得。</summary>
 /// <remarks>
 /// <para>访问令牌（Bearer、登录回调、服务端续期）由 OpenIddict 验证：遇到不认识的 kid，官方处理器只请求刷新配置就拒绝，
 /// 刷新要到之后的请求才用得上。这里排在官方验签之前：kid 不在本次的验签密钥里时，向<b>配置的签发方</b>刷新一次，
@@ -89,9 +87,7 @@ public sealed class RefreshSigningKeysOnUnknownKeyIdentifier(ILogger<RefreshSign
     }
 }
 
-/// <summary>
-/// 给 OpenIddict 验证的配置管理器限频：请求刷新在 <see cref="MinimumInterval"/> 内只转交一次。
-/// </summary>
+/// <summary>给 OpenIddict 验证的配置管理器限频：请求刷新在 <see cref="MinimumInterval"/> 内只转交一次。</summary>
 /// <remarks>
 /// IdentityModel 的阻塞模式在抓取失败时保留旧配置，但距上次<b>成功</b>刷新超过 RefreshInterval 后，每次请求刷新都会把
 /// 下次同步时间拨回现在——签发方不可用时，带伪造 kid 的请求（官方处理器验签失败也会请求刷新）就能让每个请求都去抓一次。

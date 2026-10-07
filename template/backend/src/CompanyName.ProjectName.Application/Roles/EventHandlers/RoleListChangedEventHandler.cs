@@ -5,9 +5,7 @@ using Leistd.RealTime.Publishing;
 
 namespace CompanyName.ProjectName.Application.Roles.EventHandlers;
 
-/// <summary>
-/// 角色列表变化后，推送给订阅了同一作用域角色列表的客户端。
-/// </summary>
+/// <summary>角色列表变化后，推送给订阅了同一作用域角色列表的客户端。</summary>
 /// <remarks>
 /// 有工作单元时事件在提交之后分发，回滚的写入不推送；没有工作单元的单次写入在仓储保存之后发布。
 /// 两种情况下客户端收到提示时，变更都已持久化。

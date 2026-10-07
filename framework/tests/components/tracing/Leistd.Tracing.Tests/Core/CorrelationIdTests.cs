@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.Tracing.Tests.Core;
 
-/// <summary>
-/// 关联标识优先使用显式作用域；否则取当前 <see cref="Activity"/> 的 TraceId。
-/// </summary>
+/// <summary>关联标识优先使用显式作用域；否则取当前 <see cref="Activity"/> 的 TraceId。</summary>
 /// <remarks>
 /// 默认情况下关联标识就是官方的 TraceId，不另造第二个；显式值用于跨链路的业务关联。
 /// </remarks>

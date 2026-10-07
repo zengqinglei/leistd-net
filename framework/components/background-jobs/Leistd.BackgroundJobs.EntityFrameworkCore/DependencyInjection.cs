@@ -29,7 +29,6 @@ public static class DependencyInjection
     /// </code>
     /// </example>
     /// <typeparam name="TDbContext">承载水位表的 DbContext。</typeparam>
-    /// <param name="services">服务集合。</param>
     public static IServiceCollection AddBackgroundJobsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
@@ -49,7 +48,6 @@ public static class DependencyInjection
     }
 
     /// <summary>映射 <see cref="RecurringJobState"/>，在 OnModelCreating 中调用。</summary>
-    /// <param name="modelBuilder">模型构建器。</param>
     public static ModelBuilder ConfigureBackgroundJobs(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new RecurringJobStateConfiguration());

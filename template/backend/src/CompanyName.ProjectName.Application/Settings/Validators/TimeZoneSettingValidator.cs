@@ -6,9 +6,7 @@ using Leistd.Settings.Validation;
 
 namespace CompanyName.ProjectName.Application.Settings.Validators;
 
-/// <summary>
-/// 展示时区只接受 IANA 标识，与读取端共用同一套判定，不会出现"写得进去却解析不出来"。
-/// </summary>
+/// <summary>展示时区只接受 IANA 标识，与读取端共用同一套判定，不会出现"写得进去却解析不出来"。</summary>
 internal sealed class TimeZoneSettingValidator(IUserTimeZoneProvider userTimeZoneProvider) : ISettingValueValidator
 {
     public Task ValidateAsync(SettingValueValidationContext context, CancellationToken cancellationToken = default)

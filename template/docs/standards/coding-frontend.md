@@ -52,7 +52,13 @@ frontend/
 | 路由 | `{name}.routes.ts` | |
 | 测试装配 | `{name}.testing.ts` | |
 
-组件 selector 为 `app-` + kebab-case（eslint 检查）。API 的请求与响应必须有类型定义。JSDoc 只写服务边界、状态归属、协议、订阅清理与竞态原因，不逐成员注释，不用 `@param`/`@returns` 重复类型；模板与样式不加一眼可见的区块标签。
+组件 selector 为 `app-` + kebab-case（eslint 检查）。API 的请求与响应必须有类型定义。
+
+- JSDoc 按需补服务边界、状态归属和协议契约，不逐成员翻译名称；`@param`、`@returns` 只补单位、空值、失败等非显然信息，不重复 TypeScript 类型。
+- 实现原因用独占行 `//`，保留订阅清理、竞态、安全与可访问性约束；模板与样式不加显然的区块标签。
+- 上游 Skill 与 helm 原样内容遵循上游风格，不为注释精简制造定制差异；本地改动见[Spartan 维护约定](./frontend-spartan.md)。
+
+注释原则参考 [Angular 框架规范](https://github.com/angular/angular/blob/main/contributing-docs/coding-standards.md#write-useful-comments)与 [TypeScript JSDoc](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html)。
 
 ## 4. 分层与依赖注入
 

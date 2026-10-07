@@ -5,9 +5,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
-/// <summary>
-/// 开通失败的数据库错误翻译：只翻译调用方能改的四种，其余不翻译。
-/// </summary>
+/// <summary>开通失败的数据库错误翻译：只翻译调用方能改的四种，其余不翻译。</summary>
 /// <remarks>
 /// 把库重启、连接数耗尽、序列化失败也翻成 400，会让责任归属出错——客户端既不会重试也不会告警，
 /// 而运维在 4xx 面板上根本看不到这台库出了事。

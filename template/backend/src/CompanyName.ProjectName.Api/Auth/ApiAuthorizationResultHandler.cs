@@ -4,9 +4,7 @@ using Microsoft.AspNetCore.Authorization.Policy;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 授权结果里本应用专有的处置：<b>被拒的写操作补一条失败的操作记录</b>。其余一切按默认处理。
-/// </summary>
+/// <summary>授权结果里本应用专有的处置：<b>被拒的写操作补一条失败的操作记录</b>。其余一切按默认处理。</summary>
 /// <remarks>
 /// <para><b>ASP.NET Core 只认一个 <see cref="IAuthorizationMiddlewareResultHandler"/>。</b>框架侧刻意不接管这个扩展点
 /// （占住它，宿主唯一的授权处置入口就没了），只提供

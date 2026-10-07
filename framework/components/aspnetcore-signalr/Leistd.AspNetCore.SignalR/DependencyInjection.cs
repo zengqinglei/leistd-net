@@ -111,7 +111,6 @@ public static class DependencyInjection
     /// app.UseAuthentication();
     /// </code>
     /// </example>
-    /// <param name="app">应用管道。</param>
     public static IApplicationBuilder UseHubAccessToken(this IApplicationBuilder app)
         => app.UseMiddleware<HubAccessTokenMiddleware>();
 }

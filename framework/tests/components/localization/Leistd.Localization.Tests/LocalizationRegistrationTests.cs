@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.Localization.Tests;
 
-/// <summary>
-/// <c>AddJsonLocalization</c> 的注册面：组合工厂是唯一的全局工厂，重复调用不重复登记，宿主预先注册的无参本地化器保留。
-/// </summary>
+/// <summary><c>AddJsonLocalization</c> 的注册面：组合工厂是唯一的全局工厂，重复调用不重复登记，宿主预先注册的无参本地化器保留。</summary>
 public sealed class LocalizationRegistrationTests
 {
     [Fact]

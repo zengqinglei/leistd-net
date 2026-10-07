@@ -17,9 +17,7 @@ using Xunit;
 
 namespace Leistd.ExceptionHandling.Tests;
 
-/// <summary>
-/// 全局异常处理接入真实管道后的行为：注册面、映射优先级与诊断抑制。
-/// </summary>
+/// <summary>全局异常处理接入真实管道后的行为：注册面、映射优先级与诊断抑制。</summary>
 /// <remarks>
 /// <c>AddGlobalExceptionHandler</c> / <c>UseGlobalExceptionHandler</c> 是这个家族唯一的接入方式，
 /// 只测 handler 本身证明不了"它有没有被挂上去"，这里经真实管道验证两者。

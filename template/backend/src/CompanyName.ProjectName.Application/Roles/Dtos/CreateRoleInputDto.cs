@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Roles.Dtos;
 
-/// <summary>
-/// 创建角色输入 DTO
-/// </summary>
+/// <summary>创建角色输入 DTO。</summary>
 public record CreateRoleInputDto
 {
     [Display(Name = "Role name")]

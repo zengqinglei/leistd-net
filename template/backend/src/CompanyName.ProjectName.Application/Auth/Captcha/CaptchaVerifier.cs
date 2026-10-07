@@ -3,9 +3,7 @@ using Microsoft.Extensions.Caching.Distributed;
 
 namespace CompanyName.ProjectName.Application.Auth.Captcha;
 
-/// <summary>
-/// 校验并消费图形验证码，供注册与发送注册验证码共用。
-/// </summary>
+/// <summary>校验并消费图形验证码，供注册与发送注册验证码共用。</summary>
 public class CaptchaVerifier(IDistributedCache distributedCache, IDistributedLock distributedLock) : ICaptchaVerifier
 {
     /// <remarks>

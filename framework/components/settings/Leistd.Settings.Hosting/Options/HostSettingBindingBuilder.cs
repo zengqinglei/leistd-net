@@ -2,9 +2,7 @@ using System.Globalization;
 
 namespace Leistd.Settings.Hosting.Options;
 
-/// <summary>
-/// 声明哪些宿主级设置覆盖哪些配置键。
-/// </summary>
+/// <summary>声明哪些宿主级设置覆盖哪些配置键。</summary>
 /// <remarks>
 /// <para>设置有值时，它绑定的每个配置键都写成这个值；没有值的设置不出现在配置源里，自然回落到部署配置。
 /// 被绑定的设置必须已定义且是进程级（<c>SettingScopes.Host</c>），否则首次访问定义时抛出。</para>
@@ -50,9 +48,7 @@ public sealed class HostSettingBindingBuilder
         return this;
     }
 
-    /// <summary>
-    /// 把设置绑定到某个选项类的属性：配置键为 <c>{节名}:{属性名}</c>，兜底值取该类型上的属性默认值。
-    /// </summary>
+    /// <summary>把设置绑定到某个选项类的属性：配置键为 <c>{节名}:{属性名}</c>，兜底值取该类型上的属性默认值。</summary>
     /// <remarks>
     /// 应用新值后会按该选项类型（默认名称）的校验规则整组检验，不合规就整组不生效、沿用上一组；
     /// 只用 <see cref="Bind"/> 绑定的键不参与这项检验。

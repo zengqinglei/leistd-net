@@ -18,9 +18,7 @@ namespace Leistd.UnitOfWork;
 /// <summary>工作单元核心服务注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册工作单元核心服务：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
-    /// </summary>
+    /// <summary>注册工作单元核心服务：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。</summary>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">编程式配置，在配置节绑定之后应用。</param>
     /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:UnitOfWork</c>。</param>

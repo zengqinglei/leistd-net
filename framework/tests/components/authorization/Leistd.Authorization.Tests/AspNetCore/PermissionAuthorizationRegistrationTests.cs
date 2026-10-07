@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Authorization.Tests.AspNetCore;
 
-/// <summary>
-/// <c>AddPermissionAuthorization</c> 的注册面：策略提供器有意替换官方实现，授权处理器按实现去重。
-/// </summary>
+/// <summary><c>AddPermissionAuthorization</c> 的注册面：策略提供器有意替换官方实现，授权处理器按实现去重。</summary>
 /// <remarks>
 /// 策略提供器只能有一条：两条并存时谁生效取决于注册顺序，权限名策略可能整体失效（官方实现不认识它们）。
 /// 处理器重复时同一需求被判两次，单次检查的成本翻倍且日志成双。

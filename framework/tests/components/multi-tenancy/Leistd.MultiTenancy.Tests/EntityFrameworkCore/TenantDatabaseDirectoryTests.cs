@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 本地库目录：按指纹合并、按启用过滤、逐租户隔离，且<b>不下发连接串</b>。
-/// </summary>
+/// <summary>本地库目录：按指纹合并、按启用过滤、逐租户隔离，且<b>不下发连接串</b>。</summary>
 /// <remarks>
 /// 逐库作业只需要"有哪些库、用哪个租户进得去"。把连接串一起下发会逼着常驻服务申请迁移权限，
 /// 那等于让它能拉取全部租户的明文连接串——这条路必须与迁移分开。
@@ -55,9 +53,7 @@ public class TenantDatabaseDirectoryTests : IAsyncLifetime
         _provider.GetRequiredService<ITenantConnectionConfigurationManager>();
     private ITenantDatabaseDirectory Directory => _provider.GetRequiredService<ITenantDatabaseDirectory>();
 
-    /// <summary>
-    /// 只调 <c>AddMultiTenancyEfCore</c> 就能解析出库目录，不必再调本地连接解析。
-    /// </summary>
+    /// <summary>只调 <c>AddMultiTenancyEfCore</c> 就能解析出库目录，不必再调本地连接解析。</summary>
     /// <remarks>
     /// 目录读的是控制库，注册跟控制库的其余存储走，不挂在连接解析入口上：只承担控制面、
     /// 自己不分库的服务不会调那个入口，而它同样要对外提供库清单。
@@ -84,9 +80,7 @@ public class TenantDatabaseDirectoryTests : IAsyncLifetime
         Assert.DoesNotContain("s3cret", string.Join('|', listed.Databases.Select(entry => entry.Fingerprint)));
     }
 
-    /// <summary>
-    /// 停用租户的库算不算由调用方决定。
-    /// </summary>
+    /// <summary>停用租户的库算不算由调用方决定。</summary>
     /// <remarks>
     /// 保留期作业要连停用租户的数据一起处理（合规义务不随停用消失），
     /// 而刷新进程内状态一类作业不该去连可能已下线的库——框架不替调用方选。

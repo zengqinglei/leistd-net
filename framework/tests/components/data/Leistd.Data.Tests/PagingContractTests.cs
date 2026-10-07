@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.Data.Tests;
 
-/// <summary>
-/// 分页请求与结果的对外契约：组件的存储、用例、端点与业务项目的列表接口都直接用它。
-/// </summary>
+/// <summary>分页请求与结果的对外契约：组件的存储、用例、端点与业务项目的列表接口都直接用它。</summary>
 public class PagingContractTests
 {
     private static IReadOnlyList<ValidationResult> Validate(PageRequest request)

@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.Settings;
 
-/// <summary>
-/// 通知偏好的注册面：与通知组件的注册顺序无关，总是成为唯一的投递过滤器。
-/// </summary>
+/// <summary>通知偏好的注册面：与通知组件的注册顺序无关，总是成为唯一的投递过滤器。</summary>
 /// <remarks>
 /// 过滤器并存时发布器只取最后一条：偏好要么静默不生效，要么取决于宿主把哪行写在后面。
 /// </remarks>

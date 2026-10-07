@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.Email;
 
-/// <summary>
-/// 邮件渠道：只发到已验证地址、正文按纯文本发送并附上链接、经后台队列异步发送。
-/// </summary>
+/// <summary>邮件渠道：只发到已验证地址、正文按纯文本发送并附上链接、经后台队列异步发送。</summary>
 public sealed class EmailNotificationChannelTests
 {
     private static (ServiceProvider Provider, CapturingSender Sender) Build(string? verifiedEmail, string? publicBaseUrl = null)

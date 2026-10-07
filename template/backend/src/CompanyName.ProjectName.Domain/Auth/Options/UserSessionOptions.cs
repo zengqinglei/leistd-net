@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Domain.Auth.Options;
 
-/// <summary>
-/// 登录会话的时效（由宿主按会话 Cookie 的过期时间配置，两者必须一致）
-/// </summary>
+/// <summary>登录会话的时效（由宿主按会话 Cookie 的过期时间配置，两者必须一致）。</summary>
 public sealed class UserSessionOptions
 {
     /// <summary>

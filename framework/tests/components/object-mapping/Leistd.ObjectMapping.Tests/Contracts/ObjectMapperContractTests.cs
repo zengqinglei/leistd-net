@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.ObjectMapping.Tests.Contracts;
 
-/// <summary>
-/// 任何 <see cref="IObjectMapper"/> 实现都必须兑现的行为。
-/// </summary>
+/// <summary>任何 <see cref="IObjectMapper"/> 实现都必须兑现的行为。</summary>
 /// <remarks>
 /// <para><b>新增实现时必须派生本类</b>，否则换 mapper 就是一次没有安全网的替换：
 /// 三个 <c>Map</c> 重载的语义（新建实例 / 写入既有实例 / 带上下文）只写在接口注释里，

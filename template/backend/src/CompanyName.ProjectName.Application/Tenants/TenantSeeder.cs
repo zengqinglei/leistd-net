@@ -17,9 +17,7 @@ using Leistd.MultiTenancy.Management.Provisioning;
 
 namespace CompanyName.ProjectName.Application.Tenants;
 
-/// <summary>
-/// 租户开通：在新租户里建初始角色、权限授予与租户管理员；创建失败时清掉写过的东西。
-/// </summary>
+/// <summary>租户开通：在新租户里建初始角色、权限授予与租户管理员；创建失败时清掉写过的东西。</summary>
 /// <remarks>
 /// <para>多租户组件的租户管理用例在目标租户上下文与新工作单元里调用它（见 <see cref="ITenantProvisioner"/>），
 /// 所有仓储与授予读写都自动分区到该租户；分库租户的写入直接落进它的专属库。</para>
@@ -151,9 +149,7 @@ public class TenantSeeder(
         }
     }
 
-    /// <summary>
-    /// 建立租户管理员：<b>普通用户</b> + 本租户 Admin 角色
-    /// </summary>
+    /// <summary>建立租户管理员：<b>普通用户</b> + 本租户 Admin 角色。</summary>
     /// <remarks>
     /// <para><b>刻意不打 <c>IsSuperAdmin</c>。</b>那是宿主的防锁死逃生舱，代价与适用范围见
     /// <c>UserDomainService.CreateSuperAdminAsync</c>。租户侧不需要它：本租户 Admin 角色已在

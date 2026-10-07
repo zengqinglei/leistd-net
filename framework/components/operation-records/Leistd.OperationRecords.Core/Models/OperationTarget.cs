@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.Models;
 
-/// <summary>
-/// 操作的目标：标识与名字快照捆绑传递，避免与授权依据等字符串参数互换。
-/// </summary>
+/// <summary>操作的目标：标识与名字快照捆绑传递，避免与授权依据等字符串参数互换。</summary>
 /// <remarks>名字是快照，不是外键：改名或销号后仍保留当时的名字。</remarks>
 public readonly record struct OperationTarget
 {

@@ -600,9 +600,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
 
     private readonly List<ServiceProvider> _providers = [];
 
-    /// <summary>
-    /// 按宿主的真实组合建服务：<c>AddResourceAuthorization()</c> 加官方方式注册的规则处理器。
-    /// </summary>
+    /// <summary>按宿主的真实组合建服务：<c>AddResourceAuthorization()</c> 加官方方式注册的规则处理器。</summary>
     private IResourceAuthorizationService CreateService(
         PermissionSubject? subject,
         bool withOwnerHandler = false,
@@ -735,9 +733,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
         return provider;
     }
 
-    /// <summary>
-    /// 两份用户凭据拼成的主体（租户声明非法）失败关闭：即使业务规则给了允许，也不能按它去当前租户的 ACL 判定。
-    /// </summary>
+    /// <summary>两份用户凭据拼成的主体（租户声明非法）失败关闭：即使业务规则给了允许，也不能按它去当前租户的 ACL 判定。</summary>
     [Fact]
     public async Task A_principal_with_an_illegal_tenant_claim_is_denied_even_when_a_rule_allows()
     {
@@ -755,9 +751,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// 显式传入的其他主体须属于当前租户：别的租户里同一标识的用户，不能拿到当前租户的 ACL 里判定。
-    /// </summary>
+    /// <summary>显式传入的其他主体须属于当前租户：别的租户里同一标识的用户，不能拿到当前租户的 ACL 里判定。</summary>
     [Fact]
     public async Task An_explicit_principal_from_another_tenant_is_denied()
     {

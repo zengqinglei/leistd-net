@@ -1,8 +1,6 @@
 namespace Leistd.Settings.AspNetCore.Endpoints;
 
-/// <summary>
-/// 设置端点的授权口径。
-/// </summary>
+/// <summary>设置端点的授权口径。</summary>
 /// <remarks>
 /// 两个策略名都必填，组件不内置默认策略，也不在路由组上叠加宿主默认策略；漏配任一项时 <c>MapSettings</c> 映射即抛出。
 /// </remarks>

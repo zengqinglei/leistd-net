@@ -92,9 +92,7 @@ public sealed class ExternalAuthController(
             return true;
         }, cancellationToken);
 
-    /// <summary>
-    /// 核对外部票据的提供商、意图、绑定发起者与租户，先一次消费票据，再在票据记录的租户作用域内执行账号政策。
-    /// </summary>
+    /// <summary>核对外部票据的提供商、意图、绑定发起者与租户，先一次消费票据，再在票据记录的租户作用域内执行账号政策。</summary>
     private async Task<TResult> ConsumeTicketAsync<TResult>(
         string provider,
         string intent,

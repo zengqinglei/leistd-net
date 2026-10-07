@@ -21,9 +21,7 @@ public static class SettingEndpoints
     /// <summary>写当前租户设置的端点名。</summary>
     public const string SetForCurrentTenantName = NamePrefix + "SetForCurrentTenant";
 
-    /// <summary>
-    /// 映射设置页端点：<c>GET /</c>、<c>PUT /current-user</c>、<c>PUT /current-tenant</c>。
-    /// </summary>
+    /// <summary>映射设置页端点：<c>GET /</c>、<c>PUT /current-user</c>、<c>PUT /current-tenant</c>。</summary>
     /// <remarks>
     /// <para>两个写入端点授权不同：改自己的偏好走 <see cref="SettingEndpointOptions.AccessPolicy"/>，
     /// 改租户值走 <see cref="SettingEndpointOptions.TenantWritePolicy"/>。</para>

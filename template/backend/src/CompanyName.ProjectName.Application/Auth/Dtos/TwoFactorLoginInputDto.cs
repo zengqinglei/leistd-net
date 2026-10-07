@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 登录第二步：提交验证码或恢复码（二选一）
-/// </summary>
+/// <summary>登录第二步：提交验证码或恢复码（二选一）。</summary>
 public sealed record TwoFactorLoginInputDto : IValidatableObject
 {
     /// <summary>第一步返回的凭据。</summary>

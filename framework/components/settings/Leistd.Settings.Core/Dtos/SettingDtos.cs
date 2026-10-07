@@ -1,8 +1,6 @@
 namespace Leistd.Settings.Dtos;
 
-/// <summary>
-/// 一项设置在各层级上的覆盖值、可写层级与值元数据。
-/// </summary>
+/// <summary>一项设置在各层级上的覆盖值、可写层级与值元数据。</summary>
 /// <remarks>
 /// 给的是各层级的原始覆盖值而不是回落后的生效值，供设置页分层编辑；<see langword="null"/> 表示该层未覆盖。
 /// 层级用布尔量表达，不受宿主枚举序列化方式影响。
@@ -41,9 +39,7 @@ public record SettingOutputDto(
     bool HasSecretValue = false,
     IReadOnlyList<string>? AllowedValues = null);
 
-/// <summary>
-/// 写入一项设置。
-/// </summary>
+/// <summary>写入一项设置。</summary>
 /// <param name="Name">设置名称。</param>
 /// <param name="Value">设置值；<see langword="null"/> 表示清除该层级的值，回落到下一层。</param>
 public record SetSettingInputDto(string Name, string? Value);

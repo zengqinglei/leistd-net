@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
-/// <summary>
-/// 表示租户生命周期发生并发写入冲突。
-/// </summary>
+/// <summary>表示租户生命周期发生并发写入冲突。</summary>
 /// <remarks>
 /// 启用、停用、改名与连接配置共用租户版本，防止并发改路由导致同一租户同时写入不同数据库。
 /// </remarks>

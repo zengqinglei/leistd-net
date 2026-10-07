@@ -15,9 +15,7 @@ namespace Leistd.Settings;
 /// <summary>设置定义与解析的核心注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册设置定义管理器、解析器、写入入口与设置页用例。
-    /// </summary>
+    /// <summary>注册设置定义管理器、解析器、写入入口与设置页用例。</summary>
     /// <remarks>
     /// <para><see cref="ISettingDefinitionManager"/> 为 Singleton——定义在进程生命周期内不变；
     /// <see cref="ISettingProvider"/> 为 Scoped，一次请求内只查一次库并复用结果。</para>

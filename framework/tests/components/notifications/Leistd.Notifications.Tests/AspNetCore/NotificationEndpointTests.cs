@@ -24,9 +24,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.AspNetCore;
 
-/// <summary>
-/// 通知中心端点：走宿主给的具名策略、只作用于当前用户、列表条数有上限。
-/// </summary>
+/// <summary>通知中心端点：走宿主给的具名策略、只作用于当前用户、列表条数有上限。</summary>
 /// <remarks>收件人若可由参数指定，任何登录用户都能读、删别人的通知；条数没有上限时一次请求能把整张表拉回来。</remarks>
 public sealed class NotificationEndpointTests : IAsyncLifetime
 {

@@ -2,9 +2,7 @@ using System.Security.Claims;
 
 namespace Leistd.Security.Claims;
 
-/// <summary>
-/// 主体标识与租户的 claim 类型，以及读取它们的唯一规则。
-/// </summary>
+/// <summary>主体标识与租户的 claim 类型，以及读取它们的唯一规则。</summary>
 /// <remarks>
 /// <para>框架读这两类 claim 的每一处（当前用户、租户解析、权限判定、SignalR 寻址、操作记录、服务间还原）都按这里解析。</para>
 /// <para>只在代码里经 <c>services.Configure&lt;ClaimTypeOptions&gt;(...)</c> 设置，不绑定配置节。</para>

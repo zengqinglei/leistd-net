@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
-/// <summary>
-/// 表示租户名称已被占用。
-/// </summary>
+/// <summary>表示租户名称已被占用。</summary>
 public class DuplicateTenantNameException : BusinessException
 {
     /// <summary>构造异常。</summary>

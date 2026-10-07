@@ -2,9 +2,7 @@ using System.Data;
 
 namespace Leistd.UnitOfWork.Options;
 
-/// <summary>
-/// <see cref="IUnitOfWorkOptions"/> 的可变实现，用于装配默认选项与单次工作单元的选项。
-/// </summary>
+/// <summary><see cref="IUnitOfWorkOptions"/> 的可变实现，用于装配默认选项与单次工作单元的选项。</summary>
 public class UnitOfWorkOptions : IUnitOfWorkOptions
 {
     /// <summary>默认配置节路径。</summary>
@@ -25,7 +23,6 @@ public class UnitOfWorkOptions : IUnitOfWorkOptions
     }
 
     /// <summary>复制一份选项；默认选项是共享实例，按次修改前必须先复制。</summary>
-    /// <returns>与当前实例各项相同的新实例。</returns>
     public UnitOfWorkOptions Clone()
     {
         return new UnitOfWorkOptions

@@ -10,9 +10,7 @@ using System.Net.Mail;
 
 namespace CompanyName.ProjectName.Application.Settings.Validators;
 
-/// <summary>
-/// 邮件相关设置的业务取值：开启邮箱验证的运行前提、发件地址的写法。
-/// </summary>
+/// <summary>邮件相关设置的业务取值：开启邮箱验证的运行前提、发件地址的写法。</summary>
 internal sealed class EmailSettingValidator(
     IOptions<VerificationCodeOptions> verificationCodeOptions,
     ILogger<EmailSettingValidator> logger) : ISettingValueValidator

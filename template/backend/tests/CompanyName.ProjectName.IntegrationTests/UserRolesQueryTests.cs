@@ -6,9 +6,7 @@ using CompanyName.ProjectName.Domain.Users.Constants;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 用户分页接口多角色查询的输入约束：规范化（去空白/去重）、数量上限、单项长度上限。
-/// </summary>
+/// <summary>用户分页接口多角色查询的输入约束：规范化（去空白/去重）、数量上限、单项长度上限。</summary>
 public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {

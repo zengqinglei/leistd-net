@@ -3,9 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Settings.Dtos;
 
-/// <summary>
-/// 发一封测试邮件。
-/// </summary>
+/// <summary>发一封测试邮件。</summary>
 /// <remarks>设置页的读写端点由设置组件提供（<c>MapSettings</c>），这里只剩发信测试这一项业务能力。</remarks>
 public record SendTestEmailInputDto
 {

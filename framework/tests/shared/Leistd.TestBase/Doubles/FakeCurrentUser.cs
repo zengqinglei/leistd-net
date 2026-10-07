@@ -4,9 +4,7 @@ using Leistd.Security.Users;
 
 namespace Leistd.TestBase.Doubles;
 
-/// <summary>
-/// 可控当前用户：测试中设定 Id / Claims，替代真实 <c>ICurrentUser</c> 实现。
-/// </summary>
+/// <summary>可控当前用户：测试中设定 Id / Claims，替代真实 <c>ICurrentUser</c> 实现。</summary>
 public sealed class FakeCurrentUser : ICurrentUser
 {
     private readonly Claim[] _claims;

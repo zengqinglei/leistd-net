@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.EntityFrameworkCore.Options;
 
-/// <summary>
-/// 操作记录保留期。配置节 <c>Leistd:OperationRecords:Retention</c>。
-/// </summary>
+/// <summary>操作记录保留期。配置节 <c>Leistd:OperationRecords:Retention</c>。</summary>
 /// <remarks>
 /// <para>默认关闭；启用时保留天数必填，组件不提供默认天数。</para>
 /// <para>到期记录搬去归档表，不是删除。</para>

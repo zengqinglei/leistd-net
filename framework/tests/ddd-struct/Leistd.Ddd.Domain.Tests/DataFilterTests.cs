@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Domain.Tests;
 
-/// <summary>
-/// 数据过滤器的嵌套开关：软删除与租户隔离都建立在它之上，还原错一次就是越权读。
-/// </summary>
+/// <summary>数据过滤器的嵌套开关：软删除与租户隔离都建立在它之上，还原错一次就是越权读。</summary>
 public class DataFilterTests
 {
     private interface ISoftDeleteMarker;

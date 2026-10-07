@@ -4,9 +4,7 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 注册请求 DTO
-/// </summary>
+/// <summary>注册请求 DTO。</summary>
 public record RegisterInputDto
 {
     [Display(Name = "Username")]

@@ -7,9 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// <see cref="IUserRepository"/> 的 EF Core 实现。
-/// </summary>
+/// <summary><see cref="IUserRepository"/> 的 EF Core 实现。</summary>
 public class EfCoreUserRepository(
     IDbContextProvider<MyProjectDbContext> dbContextProvider,
     IUnitOfWorkManager uow)

@@ -19,9 +19,7 @@ using Leistd.Security.Users;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
-/// <summary>
-/// 外部身份验证服务
-/// </summary>
+/// <summary>外部身份验证服务。</summary>
 internal sealed class ExternalAuthAppService(
     ExternalAuthDomainService externalAuthDomainService,
     IRoleRepository roleRepository,
@@ -32,9 +30,7 @@ internal sealed class ExternalAuthAppService(
     IOperationRecorder operationRecorder,
     IObjectMapper objectMapper) : BaseAppService(), IExternalAuthAppService
 {
-    /// <summary>
-    /// 处理外部登录回调
-    /// </summary>
+    /// <summary>处理外部登录回调。</summary>
     /// <remarks>
     /// 建用户、分配默认角色、建外部登录连接三次写入必须同生共死：缺了连接行，
     /// 同一外部账号下次登录会再建一个用户。
@@ -64,9 +60,7 @@ internal sealed class ExternalAuthAppService(
         return await sessionIssuer.StartAsync(user, roleNames, cancellationToken);
     }
 
-    /// <summary>
-    /// 本人的外部账号绑定：部署已配置的每个提供商，附带本人在其下的绑定
-    /// </summary>
+    /// <summary>本人的外部账号绑定：部署已配置的每个提供商，附带本人在其下的绑定。</summary>
     public async Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(IEnumerable<string> availableProviders, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
@@ -89,9 +83,7 @@ internal sealed class ExternalAuthAppService(
         };
     }
 
-    /// <summary>
-    /// 把外部身份绑定到当前用户（外部授权回来后调用）
-    /// </summary>
+    /// <summary>把外部身份绑定到当前用户（外部授权回来后调用）。</summary>
     [UnitOfWork]
     public async Task LinkCurrentUserAsync(
         string provider,
@@ -112,9 +104,7 @@ internal sealed class ExternalAuthAppService(
             cancellationToken);
     }
 
-    /// <summary>
-    /// 解绑当前用户的一个外部账号
-    /// </summary>
+    /// <summary>解绑当前用户的一个外部账号。</summary>
     /// <remarks>不存在或不属于本人时静默成功：解绑是幂等的，也不借此透露别人的绑定 Id 是否存在。</remarks>
     // 删除绑定、轮换安全版本与成功记录同生共死：只删了绑定而版本没轮换，此前的登录挑战仍能完成
     [UnitOfWork]

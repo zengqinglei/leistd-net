@@ -641,9 +641,7 @@ public sealed class ExternalAuthenticationTests
     }
 #endif
 
-    /// <summary>
-    /// 候选用户名全被占用时以专用码拒绝首次外部登录：不说"用户名已存在"、不回显本服务生成的用户名，也不留下半个账号。
-    /// </summary>
+    /// <summary>候选用户名全被占用时以专用码拒绝首次外部登录：不说"用户名已存在"、不回显本服务生成的用户名，也不留下半个账号。</summary>
     [Fact]
     public async Task First_external_sign_in_is_refused_with_a_dedicated_code_when_no_username_can_be_allocated()
     {

@@ -3,9 +3,7 @@ using Xunit;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// Redis 租约本身的语义：令牌归属、过期、键前缀。
-/// </summary>
+/// <summary>Redis 租约本身的语义：令牌归属、过期、键前缀。</summary>
 /// <remarks>
 /// 这些是基于租约的实现独有的失效方式，进程内锁不存在，因此不属于共享契约。
 /// 它们全都属于"出问题不报错、只让互斥静默失效"那一类：

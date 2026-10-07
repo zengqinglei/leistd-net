@@ -13,9 +13,7 @@ using Leistd.Tracing.Abstractions;
 
 namespace Leistd.Tracing.Tests.AspNetCore;
 
-/// <summary>
-/// 中间件的取值顺序（合法入站头 → Activity → 新建）、入站校验与日志作用域。
-/// </summary>
+/// <summary>中间件的取值顺序（合法入站头 → Activity → 新建）、入站校验与日志作用域。</summary>
 public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixture fixture)
     : IClassFixture<CorrelationIdMiddlewareTests.HostFixture>
 {
@@ -220,9 +218,7 @@ public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixtu
         }
     }
 
-    /// <summary>
-    /// 本类用例共享的宿主：配置固定。捕获的日志作用域跨用例累积，读取它的用例先清空再断言。
-    /// </summary>
+    /// <summary>本类用例共享的宿主：配置固定。捕获的日志作用域跨用例累积，读取它的用例先清空再断言。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

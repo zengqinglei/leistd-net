@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.Tenants.Dtos;
 
-/// <summary>
-/// 当前会话的模拟登录状态。
-/// </summary>
+/// <summary>当前会话的模拟登录状态。</summary>
 /// <remarks>
 /// 独立于 <c>UserOutputDto</c>：后者同时是注册接口的输出，把模拟态塞进去会让一个
 /// 与注册无关的字段出现在注册响应里。代价是前端启动时多一次请求。

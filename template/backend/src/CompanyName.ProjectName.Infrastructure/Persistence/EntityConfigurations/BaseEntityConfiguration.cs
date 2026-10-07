@@ -4,9 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 
-/// <summary>
-/// User 聚合基础配置（始终包含）
-/// </summary>
+/// <summary>User 聚合基础配置（始终包含）。</summary>
 internal static class BaseEntityConfiguration
 {
     internal static void ConfigureBaseEntities(this ModelBuilder builder)

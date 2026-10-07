@@ -43,9 +43,7 @@ public class TenantStampingTests : IAsyncLifetime
         await _provider.DisposeAsync();
     }
 
-    /// <summary>
-    /// 在租户作用域内新增、退出作用域后才提交，仍须归属该租户。
-    /// </summary>
+    /// <summary>在租户作用域内新增、退出作用域后才提交，仍须归属该租户。</summary>
     /// <remarks>
     /// 仓储在工作单元内不立即保存（由 UoW 统一提交），因此新增与保存之间可能跨越
     /// <c>Change</c> 的边界。若在保存时刻取当前租户，这条数据会静默落成宿主行——
@@ -114,9 +112,7 @@ public class TenantStampingTests : IAsyncLifetime
         Assert.Null(order.TenantId);
     }
 
-    /// <summary>
-    /// 宿主上下文新增、却在租户作用域内提交：必须保持宿主行。
-    /// </summary>
+    /// <summary>宿主上下文新增、却在租户作用域内提交：必须保持宿主行。</summary>
     /// <remarks>
     /// 落值只能发生在 ②：若在 ③（保存时）再按当前租户落一次值，正常路径上无害，
     /// 但在本场景里方向相反地有害——

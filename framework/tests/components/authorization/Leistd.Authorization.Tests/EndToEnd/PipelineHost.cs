@@ -27,9 +27,7 @@ using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Tests.EndToEnd;
 
-/// <summary>
-/// 真实 ASP.NET Core 宿主：验证三层授权串起来之后的行为。
-/// </summary>
+/// <summary>真实 ASP.NET Core 宿主：验证三层授权串起来之后的行为。</summary>
 /// <remarks>
 /// 单元测试只能覆盖每一层自己的语义，覆盖不到集成缝：动态 Policy 是否真的接上了检查器、
 /// 数据范围能否作用在仓储返回的 IQueryable 上、资源判定是否发生在实体加载之后、
@@ -224,9 +222,7 @@ public sealed class TestPermissionSubjectProvider(IHttpContextAccessor accessor)
     }
 }
 
-/// <summary>
-/// 范围分配：读取整个组织，修改只允许本人。
-/// </summary>
+/// <summary>范围分配：读取整个组织，修改只允许本人。</summary>
 /// <remarks>刻意让读写范围不同，用来验证"能看不等于能改"。</remarks>
 public sealed class TestDataScopeAssignmentProvider : IDataScopeAssignmentProvider
 {

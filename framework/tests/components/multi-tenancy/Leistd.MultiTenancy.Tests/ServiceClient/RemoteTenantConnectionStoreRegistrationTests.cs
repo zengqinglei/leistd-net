@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.ServiceClient;
 
-/// <summary>
-/// 远端连接存储的注册契约：它是连接配置的唯一权威来源，相同参数幂等，换服务名或配置节即拒绝。
-/// </summary>
+/// <summary>远端连接存储的注册契约：它是连接配置的唯一权威来源，相同参数幂等，换服务名或配置节即拒绝。</summary>
 /// <remarks>
 /// 两套参数同时生效时，路由取哪个控制面由注册顺序决定——那决定的是租户数据落在哪个库，必须在注册时就报错。
 /// </remarks>

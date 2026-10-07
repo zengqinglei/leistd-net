@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
-/// <summary>
-/// 表示租户连接配置版本不匹配。
-/// </summary>
+/// <summary>表示租户连接配置版本不匹配。</summary>
 /// <remarks>
 /// 写入必须携带预期版本；冲突时由调用方重新读取并决定如何合并。
 /// </remarks>

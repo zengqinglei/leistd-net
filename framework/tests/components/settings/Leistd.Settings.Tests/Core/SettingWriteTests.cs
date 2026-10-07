@@ -35,9 +35,7 @@ public class SettingWriteTests
         Assert.Empty(store.Writes);
     }
 
-    /// <summary>
-    /// 进程级设置只能写宿主那一层，租户级与用户级都要被拒。
-    /// </summary>
+    /// <summary>进程级设置只能写宿主那一层，租户级与用户级都要被拒。</summary>
     /// <remarks>
     /// 不拒的话，租户各写一份自己的日志级别，界面上显示得好好的、实际一个都不生效——
     /// 这类"看着改了其实没改"最难被发现。

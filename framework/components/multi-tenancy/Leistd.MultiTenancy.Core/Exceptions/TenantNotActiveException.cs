@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
-/// <summary>
-/// 表示租户已停用。
-/// </summary>
+/// <summary>表示租户已停用。</summary>
 public class TenantNotActiveException : BusinessException
 {
     /// <summary>构造异常。</summary>

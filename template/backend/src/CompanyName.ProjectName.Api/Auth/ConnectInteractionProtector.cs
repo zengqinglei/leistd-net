@@ -7,9 +7,7 @@ using System.Security.Cryptography;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 协议端点与 SPA 交互页之间往返的受保护凭据：重新认证已完成的证明、退出确认的绑定上下文。
-/// </summary>
+/// <summary>协议端点与 SPA 交互页之间往返的受保护凭据：重新认证已完成的证明、退出确认的绑定上下文。</summary>
 /// <remarks>
 /// 授权与退出请求启用了 OpenIddict 请求缓存：协议参数只存在于 request token（<c>request_uri</c>）里，
 /// 附加在 URL 上的普通参数既不能改写它，也不能代表它。两种凭据都绑定到 <c>request_uri</c>，
@@ -33,15 +31,11 @@ public sealed class ConnectInteractionProtector(IDataProtectionProvider provider
     private readonly ITimeLimitedDataProtector _logoutConfirmation =
         provider.CreateProtector("CompanyName.ProjectName.Connect.LogoutConfirmation.v1").ToTimeLimitedDataProtector();
 
-    /// <summary>
-    /// 为要求重新认证的授权请求签发证明，记下签发时刻（完整精度）。
-    /// </summary>
+    /// <summary>为要求重新认证的授权请求签发证明，记下签发时刻（完整精度）。</summary>
     public string CreateReauthentication(string requestUri, DateTime issuedAt) =>
         _reauthentication.Protect(JsonSerializer.Serialize(new ReauthenticationProof(requestUri, issuedAt)));
 
-    /// <summary>
-    /// 证明属于本授权请求，且当前会话是在证明签发之后才开始的（即此后发生过一次新的登录）。
-    /// </summary>
+    /// <summary>证明属于本授权请求，且当前会话是在证明签发之后才开始的（即此后发生过一次新的登录）。</summary>
     /// <remarks>
     /// 每次登录都新建会话，会话开始时间是完整精度；auth_time 只到秒，同一秒里已经存在的会话凭它分辨不出来。
     /// 证明签发前就存在的任何会话（包括签发时的那个）都兑现不了。前提是各副本的时钟一致（见部署文档）。
@@ -65,9 +59,7 @@ public sealed class ConnectInteractionProtector(IDataProtectionProvider provider
     public string CreateLogoutConfirmation(LogoutConfirmation confirmation) =>
         _logoutConfirmation.Protect(JsonSerializer.Serialize(confirmation), LogoutConfirmationLifetime);
 
-    /// <summary>
-    /// 退出确认要比对的上下文：本次退出请求与当前会话。会话缺少用户或会话标识时无法绑定，返回 <see langword="null"/>。
-    /// </summary>
+    /// <summary>退出确认要比对的上下文：本次退出请求与当前会话。会话缺少用户或会话标识时无法绑定，返回 <see langword="null"/>。</summary>
     public LogoutConfirmation? BindLogout(string? requestUri, ClaimsPrincipal session) =>
         string.IsNullOrEmpty(requestUri) || claimTypes.Value.FindUserId(session) is not { } subject ||
         session.FindFirst(CustomClaimTypes.SessionId)?.Value is not { Length: > 0 } sessionId
@@ -75,9 +67,7 @@ public sealed class ConnectInteractionProtector(IDataProtectionProvider provider
             : new LogoutConfirmation(requestUri, ClientId: null, subject,
                 claimTypes.Value.ReadTenant(session).TenantId?.ToString(), sessionId);
 
-    /// <summary>
-    /// 解开确认凭据并与 <paramref name="binding"/> 逐项比对（发起客户端除外）；伪造、篡改、过期或不匹配返回 <see langword="null"/>。
-    /// </summary>
+    /// <summary>解开确认凭据并与 <paramref name="binding"/> 逐项比对（发起客户端除外）；伪造、篡改、过期或不匹配返回 <see langword="null"/>。</summary>
     public LogoutConfirmation? ReadLogoutConfirmation(string? value, LogoutConfirmation binding)
     {
         if (string.IsNullOrEmpty(value)) return null;

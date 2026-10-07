@@ -17,9 +17,7 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// <summary>多租户 EF Core 存储注册与模型配置。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 使用指定 DbContext 注册租户注册表与租户连接的读写口。
-    /// </summary>
+    /// <summary>使用指定 DbContext 注册租户注册表与租户连接的读写口。</summary>
     /// <remarks>
     /// <para>不注册租户落值组件；DDD 基座在实体进入跟踪时写入 <c>TenantId</c>。</para>
     /// <para>只注册存储：只读控制库的宿主（租户连接解析、迁移作业）到此为止。要租户管理与连接管理用例的宿主
@@ -62,9 +60,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 注册本地连接解析：宿主直连控制库，按 DbContext 的连接名查租户登记的连接。
-    /// </summary>
+    /// <summary>注册本地连接解析：宿主直连控制库，按 DbContext 的连接名查租户登记的连接。</summary>
     /// <typeparam name="TControlDbContext">映射了租户注册表（<see cref="ConfigureMultiTenancy"/>）的控制库上下文。</typeparam>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">配置控制库连接名，启动期校验。</param>
@@ -113,9 +109,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 将租户注册表实体映射应用到模型。
-    /// </summary>
+    /// <summary>将租户注册表实体映射应用到模型。</summary>
     /// <remarks>
     /// 不添加查询过滤器；读取注册表必须使用 <c>TenantQueryableExtensions</c> 的未删除入口。
     /// </remarks>

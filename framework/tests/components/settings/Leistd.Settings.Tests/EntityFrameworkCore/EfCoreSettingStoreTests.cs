@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.Settings.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 设置存储与表结构。
-/// </summary>
+/// <summary>设置存储与表结构。</summary>
 /// <remarks>
 /// 用 SQLite 而不是 InMemory：唯一索引与长度约束只有真正建库时才产生 DDL，
 /// InMemory 全内存求值会让整个 <c>SettingRecordConfiguration</c> 静默通过。
@@ -235,9 +233,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
             () => _store.GetAllAsync(scope, null));
     }
 
-    /// <summary>
-    /// 进程级设置在租户上下文下读写会就地失败，而不是静默落到租户行上。
-    /// </summary>
+    /// <summary>进程级设置在租户上下文下读写会就地失败，而不是静默落到租户行上。</summary>
     /// <remarks>
     /// 租户上下文下宿主行会被查询过滤器滤掉（专属库形态连的还是租户自己的库），
     /// 读到空、写成租户行——两者都不报错。这条不变式必须在存储边界拦住：

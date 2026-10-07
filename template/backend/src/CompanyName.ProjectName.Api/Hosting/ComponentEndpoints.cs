@@ -21,12 +21,9 @@ using Leistd.Settings.AspNetCore.Endpoints;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
-/// <summary>
-/// 组件自带的 HTTP 端点：本项目只给前缀、授权策略与个别端点的附加元数据。
-/// </summary>
+/// <summary>组件自带的 HTTP 端点：本项目只给前缀、授权策略与个别端点的附加元数据。</summary>
 /// <remarks>
-/// <para>路由与响应形状与原先的控制器一致，前端不用改。业务动作（发信测试、模拟登录）仍在各自控制器里，
-/// 与组件端点共用前缀但路由不重叠。</para>
+/// <para>业务动作（发信测试、模拟登录）由控制器提供，与组件端点共用前缀，路由不重叠。</para>
 /// <para>个别端点要追加元数据时按组件公开的端点名定位（<see cref="WithMetadataOn{TBuilder}"/>），
 /// 不改组件、不复制端点。</para>
 /// </remarks>

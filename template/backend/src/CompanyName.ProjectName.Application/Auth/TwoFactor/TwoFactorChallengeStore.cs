@@ -8,9 +8,7 @@ using System.Text;
 
 namespace CompanyName.ProjectName.Application.Auth.TwoFactor;
 
-/// <summary>
-/// 登录第二步的挑战：密码（或外部登录）已通过、尚待验证码的那一段。
-/// </summary>
+/// <summary>登录第二步的挑战：密码（或外部登录）已通过、尚待验证码的那一段。</summary>
 /// <remarks>
 /// <para>凭据放在缓存里、只把随机令牌交给浏览器：这一段还不是会话，不能发 Cookie——
 /// 发了就等于第一步即登录成功，第二步形同虚设。</para>

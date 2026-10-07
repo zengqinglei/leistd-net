@@ -12,9 +12,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// <c>AddRepository</c> 登记的实现所带的自定义仓储接口（如 <c>IUserRepository</c>）可直接注入。
-/// </summary>
+/// <summary><c>AddRepository</c> 登记的实现所带的自定义仓储接口（如 <c>IUserRepository</c>）可直接注入。</summary>
 /// <remarks>
 /// 自定义接口与默认接口指向同一实现、同一生命周期；同一自定义接口出现两个实现时，
 /// 后注册静默胜出会让调用方拿到哪个由顺序决定，因此与默认接口一样在注册期拒绝，且保留先登记的实现。

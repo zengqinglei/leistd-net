@@ -5,9 +5,7 @@ using Mapster;
 
 namespace CompanyName.ProjectName.Application.Auth.Mappings;
 
-/// <summary>
-/// 认证模块映射配置
-/// </summary>
+/// <summary>认证模块映射配置。</summary>
 public class AuthMappings : IRegister
 {
     /// <summary>MapContext 参数名：发起请求的这台设备的会话 Id，用来标出"当前设备"。</summary>

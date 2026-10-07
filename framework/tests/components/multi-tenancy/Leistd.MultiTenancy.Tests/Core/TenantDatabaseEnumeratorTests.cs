@@ -7,9 +7,7 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// 运行时的物理库清单：宿主库在前，每个物理库只出现一次，连接串不出现在结果里。
-/// </summary>
+/// <summary>运行时的物理库清单：宿主库在前，每个物理库只出现一次，连接串不出现在结果里。</summary>
 /// <remarks>
 /// 清单来自库目录而不是迁移目标：迁移目标带明文连接串、要 DDL 身份，
 /// 而逐库作业只需要"有哪些库、用哪个租户进得去"，两者权限不是一回事。
@@ -205,9 +203,7 @@ public class TenantDatabaseEnumeratorTests
         Assert.Equal(activeOnly, directory.LastActiveOnly);
     }
 
-    /// <summary>
-    /// 没有注册任何租户连接解析时，核心注册给出的清单只有宿主库
-    /// </summary>
+    /// <summary>没有注册任何租户连接解析时，核心注册给出的清单只有宿主库。</summary>
     /// <remarks>
     /// 单库部署与内存库测试都是这种形态。枚举器若只随连接解析注册，
     /// 宿主在单库模式下解析不到它，只好自己写一个"只有宿主库"的实现并按模式分支注册。

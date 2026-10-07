@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.ServiceClient.Tests.Core;
 
-/// <summary>
-/// <c>AddServiceClientPipeline</c> 的重复调用契约：同一客户端相同选项类型只挂一套处理器，换用另一选项类型在注册时报错。
-/// </summary>
+/// <summary><c>AddServiceClientPipeline</c> 的重复调用契约：同一客户端相同选项类型只挂一套处理器，换用另一选项类型在注册时报错。</summary>
 /// <remarks>
 /// 处理器经 <c>IConfigureOptions&lt;HttpClientFactoryOptions&gt;</c> 按客户端名累加，重复挂载不会报错，
 /// 只会让每个请求多走一遍传输异常翻译与链路透传，所以从构建出的处理器链计数。

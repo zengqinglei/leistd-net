@@ -6,9 +6,7 @@ using Leistd.MultiTenancy.Management.Provisioning;
 
 namespace CompanyName.ProjectName.Infrastructure.TenantConnections;
 
-/// <summary>
-/// 按 PostgreSQL 的 SQLSTATE 把开通失败翻译成调用方能照着改的 400
-/// </summary>
+/// <summary>按 PostgreSQL 的 SQLSTATE 把开通失败翻译成调用方能照着改的 400。</summary>
 /// <remarks>
 /// <para>错误码表是各数据库自己的方言，框架只定义错误码与译文，映射由本项目给出——本项目已经选定 PostgreSQL。
 /// 换数据库时改这一个类。</para>

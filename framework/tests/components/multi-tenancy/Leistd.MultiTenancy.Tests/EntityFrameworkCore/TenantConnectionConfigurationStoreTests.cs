@@ -158,9 +158,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
         Assert.Empty(list.FailedTenants);
     }
 
-    /// <summary>
-    /// 一个租户解析不出这个名字，单列为失败，其余租户照常返回。
-    /// </summary>
+    /// <summary>一个租户解析不出这个名字，单列为失败，其余租户照常返回。</summary>
     /// <remarks>
     /// 不能整体抛出：那样一个租户的配置错误会挡住所有租户的迁移。也不能静默略过它——
     /// 那个库会停在旧结构上，下一次发版才炸——所以它必须出现在失败清单里。
@@ -181,9 +179,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
         Assert.DoesNotContain("secret", failure.Reason);
     }
 
-    /// <summary>
-    /// 已删除租户的连接不可达。
-    /// </summary>
+    /// <summary>已删除租户的连接不可达。</summary>
     /// <remarks>
     /// 这条锁住的缺陷是<b>非对称的删除边界</b>：本地解析器自己 join 了「租户未删」，
     /// 而 Resource 宿主拿路由走的是本存储经 HTTP 暴露的读路径。本存储少这道 join 时，

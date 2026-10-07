@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.Email.Tests.Smtp;
 
-/// <summary>
-/// 启动期配置校验。
-/// </summary>
+/// <summary>启动期配置校验。</summary>
 /// <remarks>
 /// 这几条留到运行期才发现，代价是"用户已经点了发送"：
 /// 注册验证码流程会把一个永远收不到码的挑战交给用户，而日志里只有一次发送失败。

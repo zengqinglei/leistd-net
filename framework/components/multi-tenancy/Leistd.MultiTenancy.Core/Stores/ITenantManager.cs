@@ -3,18 +3,14 @@ using Leistd.MultiTenancy.Exceptions;
 
 namespace Leistd.MultiTenancy.Stores;
 
-/// <summary>
-/// 管理租户注册表并规范化租户名称。
-/// </summary>
+/// <summary>管理租户注册表并规范化租户名称。</summary>
 /// <remarks>
 /// 契约与出参都在 Core：应用层依赖它即可完成租户管理，不必引用任何持久化实现包。
 /// EF 实现见 <c>Leistd.MultiTenancy.EntityFrameworkCore</c> 的 <c>AddMultiTenancyEfCore&lt;TDbContext&gt;()</c>。
 /// </remarks>
 public interface ITenantManager
 {
-    /// <summary>
-    /// 创建租户，名称在未删除租户中大小写不敏感且唯一。
-    /// </summary>
+    /// <summary>创建租户，名称在未删除租户中大小写不敏感且唯一。</summary>
     /// <param name="name">租户名称，须匹配 <see cref="TenantConfiguration.NamePattern"/>；原值落库。</param>
     /// <param name="displayName">显示名。</param>
     /// <param name="isActive">初始是否启用。还要初始化角色、管理员等数据时传 <see langword="false"/>，完成后用 <see cref="SetActiveAsync"/> 启用。</param>
@@ -31,9 +27,7 @@ public interface ITenantManager
         string? description = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 更新租户名称、显示名称与描述。
-    /// </summary>
+    /// <summary>更新租户名称、显示名称与描述。</summary>
     /// <remarks>
     /// 三个字段都按传入值覆盖：<paramref name="displayName"/> 或 <paramref name="description"/> 传 <see langword="null"/> 即清空。
     /// </remarks>
@@ -49,9 +43,7 @@ public interface ITenantManager
         string? description = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 更改租户启用状态。
-    /// </summary>
+    /// <summary>更改租户启用状态。</summary>
     /// <remarks>使用直读库的 <c>EfCoreTenantStore</c> 时，停用在提交时对所有节点生效。</remarks>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除。</exception>
     Task<TenantConfiguration> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default);
@@ -63,9 +55,7 @@ public interface ITenantManager
     /// <summary>按标识查找未删除租户；不存在时返回 <see langword="null"/>。</summary>
     Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 按名称关键字分页查询租户，并按创建时间倒序返回。
-    /// </summary>
+    /// <summary>按名称关键字分页查询租户，并按创建时间倒序返回。</summary>
     /// <param name="keyword">名称或显示名关键字；为空不过滤。</param>
     /// <param name="page">分页；排序固定为创建时间倒序。</param>
     /// <param name="cancellationToken">取消令牌。</param>

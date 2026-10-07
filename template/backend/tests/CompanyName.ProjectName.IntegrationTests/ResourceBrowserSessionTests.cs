@@ -118,9 +118,7 @@ public sealed class ResourceBrowserSessionTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>
-    /// 会话主体只由访问令牌构建，登录与续期同源：访问令牌里的 acr、aud 等登录时就在，首次续期前后声明一致，不混入 id_token。
-    /// </summary>
+    /// <summary>会话主体只由访问令牌构建，登录与续期同源：访问令牌里的 acr、aud 等登录时就在，首次续期前后声明一致，不混入 id_token。</summary>
     /// <remarks>
     /// 官方处理器在 OnTokenValidated 之后还会对换上的主体执行默认 ClaimActions，删掉 acr、aud、iss、exp 等；
     /// 续期不经过它，这些声明首次续期后才出现。派生项目按访问令牌声明做判断（如近期认证）时，结果随会话是否续期过而变。
@@ -385,9 +383,7 @@ public sealed class ResourceBrowserSessionTests
     private static string ExternalCookies(HttpResponseMessage response) =>
         string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0]));
 
-    /// <summary>
-    /// 授权与退出请求以自动提交的表单 POST 发往签发方（官方 FormPost）：参数只在表单里，不在跳转地址上。
-    /// </summary>
+    /// <summary>授权与退出请求以自动提交的表单 POST 发往签发方（官方 FormPost）：参数只在表单里，不在跳转地址上。</summary>
     private static async Task<Dictionary<string, string>> FormPostAsync(HttpResponseMessage response, string action)
     {
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

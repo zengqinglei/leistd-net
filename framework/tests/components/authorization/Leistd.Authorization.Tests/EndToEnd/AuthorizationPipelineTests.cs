@@ -10,9 +10,7 @@ using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Tests.EndToEnd;
 
-/// <summary>
-/// 三层授权串起来之后的行为：功能权限 → 数据范围 → 资源实例授权。
-/// </summary>
+/// <summary>三层授权串起来之后的行为：功能权限 → 数据范围 → 资源实例授权。</summary>
 public class AuthorizationPipelineTests : IAsyncLifetime
 {
     private PipelineHost _host = default!;

@@ -4,9 +4,7 @@ using CompanyName.ProjectName.Domain.Users.ValueObjects;
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 
-/// <summary>
-/// <see cref="UserDomainService.ValidateCredentialsAsync"/> 的结果。
-/// </summary>
+/// <summary><see cref="UserDomainService.ValidateCredentialsAsync"/> 的结果。</summary>
 /// <param name="Status">结果。</param>
 /// <param name="User">匹配到的用户；用户不存在时为 null。</param>
 /// <param name="Countable">

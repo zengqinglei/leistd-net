@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.Logging.Constants;
 
-/// <summary>
-/// 结构化日志输出的公开约定：日志类别与事件标识。
-/// </summary>
+/// <summary>结构化日志输出的公开约定：日志类别与事件标识。</summary>
 /// <remarks>
 /// 部署按这里的类别配置日志级别与采集；记录以 <see cref="Microsoft.Extensions.Logging.LogLevel.Information"/>（成功）
 /// 与 <see cref="Microsoft.Extensions.Logging.LogLevel.Warning"/>（失败）写出，因此该类别至少要开到 Information。

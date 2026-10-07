@@ -2,9 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 转发头信任配置的启动契约：写错的地址/网段必须让宿主起不来，且错误里带着键名与值。
-/// </summary>
+/// <summary>转发头信任配置的启动契约：写错的地址/网段必须让宿主起不来，且错误里带着键名与值。</summary>
 /// <remarks>
 /// <para>这段配置无条件存在（与多租户是否启用无关），因此测试也放在无条件生成的类里。</para>
 /// <para>只验"合法值被采信"是不够的：<c>Configure&lt;ForwardedHeadersOptions&gt;</c> 是延迟回调，

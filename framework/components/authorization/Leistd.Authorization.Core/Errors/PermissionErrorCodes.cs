@@ -1,8 +1,6 @@
 namespace Leistd.Authorization.Errors;
 
-/// <summary>
-/// 权限组件抛出的错误码，默认译文随包分发，宿主资源里的同名词条优先。
-/// </summary>
+/// <summary>权限组件抛出的错误码，默认译文随包分发，宿主资源里的同名词条优先。</summary>
 public static class PermissionErrorCodes
 {
     /// <summary>授予主体不存在。占位：<c>Provider</c>、<c>Key</c>。</summary>

@@ -4,9 +4,7 @@ using Leistd.Authorization.Definitions;
 
 namespace Leistd.Authorization.Tests.TestDoubles;
 
-/// <summary>
-/// 测试用权限定义：一个启用组和一个被禁用的父权限，覆盖父子、禁用与未定义三类边界。
-/// </summary>
+/// <summary>测试用权限定义：一个启用组和一个被禁用的父权限，覆盖父子、禁用与未定义三类边界。</summary>
 /// <remarks>
 /// <code>
 /// App（组）

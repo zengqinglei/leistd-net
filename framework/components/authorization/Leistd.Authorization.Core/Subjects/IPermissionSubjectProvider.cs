@@ -2,9 +2,7 @@ using System.Security.Claims;
 
 namespace Leistd.Authorization.Subjects;
 
-/// <summary>
-/// 权限检查主体提供器：把认证主体映射为权限检查所需的用户、角色与超管标记。
-/// </summary>
+/// <summary>权限检查主体提供器：把认证主体映射为权限检查所需的用户、角色与超管标记。</summary>
 /// <remarks>
 /// 两个方法必须同一口径：<see cref="GetCurrentSubjectAsync"/> 等价于对当前主体调用 <see cref="GetSubjectAsync"/>。
 /// 读主体标识用 <c>ClaimTypeOptions.FindUserId</c> 的共享规则。

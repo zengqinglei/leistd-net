@@ -3,9 +3,7 @@ using Leistd.Ddd.Domain.Values;
 
 namespace CompanyName.ProjectName.Domain.Users.ValueObjects;
 
-/// <summary>
-/// 已启用的两步验证凭据：加密后的密钥、剩余恢复码摘要与最近一次通过的验证码步序号。
-/// </summary>
+/// <summary>已启用的两步验证凭据：加密后的密钥、剩余恢复码摘要与最近一次通过的验证码步序号。</summary>
 /// <remarks>用户上它为 null 即未启用；启用、停用都是整体替换，不会留下"已启用但没有密钥"的中间状态。</remarks>
 public sealed class TwoFactorCredential : ValueObject
 {

@@ -21,14 +21,10 @@ using IPNetwork = System.Net.IPNetwork;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
-/// <summary>
-/// Web 宿主的注册入口：启动引导、健康检查、控制器与 JSON、OpenAPI、转发头与跨域。
-/// </summary>
+/// <summary>Web 宿主的注册入口：启动引导、健康检查、控制器与 JSON、OpenAPI、转发头与跨域。</summary>
 public static class WebHostExtensions
 {
-    /// <summary>
-    /// 注册 Web 宿主自身的服务。
-    /// </summary>
+    /// <summary>注册 Web 宿主自身的服务。</summary>
     public static IServiceCollection AddMyProjectWebHost(this IServiceCollection services)
     {
         // 相同登记重复调用不重复生效：健康检查按名称登记，再追加一次同名检查会让 HealthCheckService 解析失败；

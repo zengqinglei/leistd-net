@@ -5,9 +5,7 @@ using Leistd.Ddd.Application.Contracts.AppServices;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 
-/// <summary>
-/// 租户模拟登录：宿主管理员以目标租户管理员的身份获得一个会话主体。
-/// </summary>
+/// <summary>租户模拟登录：宿主管理员以目标租户管理员的身份获得一个会话主体。</summary>
 /// <remarks>
 /// <para><b>为什么是模拟登录而不是"宿主跨租户管理"。</b>全局查询过滤器按
 /// <c>TenantId == CurrentTenantId</c> 分区，宿主只看得见宿主自己的行——这是默认安全。

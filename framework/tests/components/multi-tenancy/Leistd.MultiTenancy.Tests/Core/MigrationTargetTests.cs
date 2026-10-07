@@ -4,9 +4,7 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// 迁移目标：按连接名解析，登记过连接的租户全都要出现；取不出连接的租户单列为失败，既不挡住其他库，也不被静默略过。
-/// </summary>
+/// <summary>迁移目标：按连接名解析，登记过连接的租户全都要出现；取不出连接的租户单列为失败，既不挡住其他库，也不被静默略过。</summary>
 /// <remarks>
 /// 本地与远端共用同一个提供器，差别只在注入的是哪种 <see cref="ITenantConnectionConfigurationStore"/>
 /// 实现（EF 读控制库 / 宿主的 HTTP 实现）。这里用桩存储覆盖提供器自身的形态转换与指纹。
@@ -73,9 +71,7 @@ public class MigrationTargetTests
         Assert.Equal([first, second], targets.Select(x => x.TenantId));
     }
 
-    /// <summary>
-    /// 共用同一个库的租户只出一条目标，代表租户取标识最小者
-    /// </summary>
+    /// <summary>共用同一个库的租户只出一条目标，代表租户取标识最小者。</summary>
     /// <remarks>
     /// 去重在提供器里做，迁移作业与运行时逐库作业共用这一份清单；
     /// 由调用方各自去重时，两边的规则迟早会分叉。
@@ -94,9 +90,7 @@ public class MigrationTargetTests
         Assert.DoesNotContain("acme-secret", target.Fingerprint, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// 取不出连接的租户原样随清单交出，健康租户照常成为目标。
-    /// </summary>
+    /// <summary>取不出连接的租户原样随清单交出，健康租户照常成为目标。</summary>
     /// <remarks>提供器若吞掉失败，迁移作业会以为一切正常，那些库就停在旧结构上。</remarks>
     [Fact]
     public async Task Failed_tenants_travel_with_the_targets_of_healthy_tenants()

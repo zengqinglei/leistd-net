@@ -4,16 +4,12 @@ using Leistd.Settings.Resolution;
 
 namespace CompanyName.ProjectName.Application.Auth.Policies;
 
-/// <summary>
-/// 当前上下文（租户）生效的登录安全策略
-/// </summary>
+/// <summary>当前上下文（租户）生效的登录安全策略。</summary>
 /// <param name="Lockout">登录失败锁定策略。</param>
 /// <param name="RequireTwoFactor">是否要求所有人启用两步验证。</param>
 public sealed record LoginSecurityPolicy(LoginLockoutPolicy Lockout, bool RequireTwoFactor);
 
-/// <summary>
-/// 解析当前租户生效的登录安全策略
-/// </summary>
+/// <summary>解析当前租户生效的登录安全策略。</summary>
 /// <remarks>与 <see cref="IUserRegistrationPolicyProvider"/> 同型：租户级策略从设置读，而不是 <c>IOptions</c>。</remarks>
 public interface ILoginSecurityPolicyProvider
 {

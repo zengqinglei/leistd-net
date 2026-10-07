@@ -14,9 +14,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.Core;
 
-/// <summary>
-/// 记录器把「什么人、什么时间、做了什么、结果如何」从当前上下文补齐成一条记录。
-/// </summary>
+/// <summary>记录器把「什么人、什么时间、做了什么、结果如何」从当前上下文补齐成一条记录。</summary>
 public sealed class OperationRecordingTests
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 3, 4, 5, 6, 7, TimeSpan.Zero);
@@ -75,9 +73,7 @@ public sealed class OperationRecordingTests
         Assert.Equal("0af7651916cd43dd8448eb211c80319c", written.CorrelationId);
     }
 
-    /// <summary>
-    /// 租户归属由记录器显式盖章，不依赖宿主 DbContext 是否为 <c>BaseDbContext</c>。
-    /// </summary>
+    /// <summary>租户归属由记录器显式盖章，不依赖宿主 DbContext 是否为 <c>BaseDbContext</c>。</summary>
     /// <remarks>漏配落值拦截器是静默的，得到的会是一批归属为空、谁也查不到的记录。</remarks>
     [Fact]
     public async Task The_tenant_is_stamped_by_the_recorder()
@@ -104,9 +100,7 @@ public sealed class OperationRecordingTests
         Assert.Equal(expected, Assert.Single(store.Written).ActorName);
     }
 
-    /// <summary>
-    /// 模拟登录留两个人：主体上的是被模拟者，真实操作人另存。
-    /// </summary>
+    /// <summary>模拟登录留两个人：主体上的是被模拟者，真实操作人另存。</summary>
     /// <remarks>只记前者等于把真正按下按钮的人从审计里抹掉，事后追责会指向一个什么都没做的租户管理员。</remarks>
     [Fact]
     public async Task An_impersonated_operation_records_the_real_actor_as_well()
@@ -139,9 +133,7 @@ public sealed class OperationRecordingTests
         Assert.Equal("host-admin-1", Assert.Single(store.Written).ImpersonatorId);
     }
 
-    /// <summary>
-    /// 非自然人主体也要留得下标识
-    /// </summary>
+    /// <summary>非自然人主体也要留得下标识。</summary>
     /// <remarks>
     /// <c>ICurrentUser.Id</c> 只在 <c>sub</c> 能解析成 GUID 时有值，而机器主体是
     /// <c>client:&lt;client_id&gt;</c>、后台作业由宿主自定前缀。只认 Id 会让这两类操作
@@ -173,9 +165,7 @@ public sealed class OperationRecordingTests
         Assert.Equal("Nightly cleanup", written.ActorName);
     }
 
-    /// <summary>
-    /// 只有后续身份已认证的主体，按真实的当前用户补齐出完整的操作人
-    /// </summary>
+    /// <summary>只有后续身份已认证的主体，按真实的当前用户补齐出完整的操作人。</summary>
     /// <remarks>
     /// HttpContext 扩展按"任一身份已认证"放行；当前用户若只看第一个身份，
     /// 记录会写下、操作人标识与名字却为空，所属租户退回请求租户。
@@ -239,9 +229,7 @@ public sealed class OperationRecordingTests
         Assert.Equal(OperationRecordOutcome.Failed, Assert.Single(store.Written).Outcome);
     }
 
-    /// <summary>
-    /// 被拒路径写不进去只记 <c>Error</c>，不抛
-    /// </summary>
+    /// <summary>被拒路径写不进去只记 <c>Error</c>，不抛。</summary>
     /// <remarks>
     /// 被拒的请求本来就要以 403/400 结束。让审计的写入故障冒上去会把它变成 500，
     /// 于是真正的拒绝原因被一个基础设施错误盖掉——调用方看到的是"服务器炸了"而不是"你没有权限"。
@@ -268,9 +256,7 @@ public sealed class OperationRecordingTests
         Assert.Equal(LogLevel.Error, record.Level);
     }
 
-    /// <summary>
-    /// 成功路径的写入故障照常上抛
-    /// </summary>
+    /// <summary>成功路径的写入故障照常上抛。</summary>
     /// <remarks>
     /// 这条记录与它描述的那次变更同处一个事务边界：审计写不进去就该让业务一起失败。
     /// 吞掉会留下"发生了但没记"的账，而那正是审计存在的理由被掏空的样子。
@@ -294,9 +280,7 @@ public sealed class OperationRecordingTests
             () => recorder.RecordSucceededAsync("a", OperationTarget.For("t"), "b"));
     }
 
-    /// <summary>
-    /// 两个由业务给值的字符串必填，空白即拒
-    /// </summary>
+    /// <summary>两个由业务给值的字符串必填，空白即拒。</summary>
     /// <remarks>
     /// 从三个减为两个：目标已由 <see cref="OperationTarget"/> 承载，
     /// 空白在值对象里被吸收成 <see cref="OperationTarget.None"/>，构造不出空白标识。
@@ -321,9 +305,7 @@ public sealed class OperationRecordingTests
         Assert.Empty(store.Written);
     }
 
-    /// <summary>
-    /// 空白目标标识不再抛错，而是退化为"无目标"
-    /// </summary>
+    /// <summary>空白目标标识不再抛错，而是退化为"无目标"。</summary>
     /// <remarks>
     /// 这是 <see cref="OperationTarget"/> 引入后的<b>行为变化</b>，不是放宽校验：
     /// 空白在值对象里被吸收成 <see cref="OperationTarget.None"/>，
@@ -345,9 +327,7 @@ public sealed class OperationRecordingTests
         Assert.Null(written.TargetName);
     }
 
-    /// <summary>
-    /// 失败原因按码与技术说明两路落库
-    /// </summary>
+    /// <summary>失败原因按码与技术说明两路落库。</summary>
     /// <remarks>
     /// 码走本地化资源在展示期渲染；技术说明不本地化且仅宿主可见。
     /// 存渲染好的句子会把语言永久锁死，写入时是哪国语言此后就是哪国语言。
@@ -373,9 +353,7 @@ public sealed class OperationRecordingTests
         Assert.Equal("A001", written.TargetName);
     }
 
-    /// <summary>
-    /// 被拒路径同样当场拒绝空白参数，不被那个 catch 吞掉
-    /// </summary>
+    /// <summary>被拒路径同样当场拒绝空白参数，不被那个 catch 吞掉。</summary>
     /// <remarks>
     /// 该 catch 吞的是"写库没成功"这类运行期故障；参数漏传是确定性的编码错误，
     /// 吞掉它会让一个永远记不上的调用点一直静默存在。
@@ -389,9 +367,7 @@ public sealed class OperationRecordingTests
             () => recorder.RecordFailedAsync("a", OperationTarget.For("t"), "  "));
     }
 
-    /// <summary>
-    /// 未登记的动作码在两条路径上都当场拒绝，什么都不写
-    /// </summary>
+    /// <summary>未登记的动作码在两条路径上都当场拒绝，什么都不写。</summary>
     /// <remarks>
     /// 可见性取自动作定义，未登记的码没有可见性可盖：默认给租户看是泄露，
     /// 默认只给宿主看又会让租户上下文里写下的记录谁都看不见；静默盖成 Host 同样不可接受。
@@ -439,9 +415,7 @@ public sealed class OperationRecordingTests
         Assert.Null(written.ActorTenantId);
     }
 
-    /// <summary>
-    /// 宿主可见的动作不能在租户上下文里记成功
-    /// </summary>
+    /// <summary>宿主可见的动作不能在租户上下文里记成功。</summary>
     /// <remarks>
     /// 记在租户层谁都看不见（租户读者按可见性滤掉、宿主按租户维度查不到），
     /// 挪到宿主层又脱离了租户库里的业务事务。两头都不对，只能让调用方改登记或改记录位置。
@@ -456,9 +430,7 @@ public sealed class OperationRecordingTests
         Assert.Empty(store.Written);
     }
 
-    /// <summary>
-    /// 租户上下文里被拒的宿主动作写进宿主层，来源租户另存
-    /// </summary>
+    /// <summary>租户上下文里被拒的宿主动作写进宿主层，来源租户另存。</summary>
     /// <remarks>
     /// 典型场景是租户用户调用宿主接口被拒——宿主最该看到的安全事件。
     /// 若留在租户层，租户读者看不到、宿主也查不到，谁都看不见。
@@ -476,9 +448,7 @@ public sealed class OperationRecordingTests
         Assert.Equal(TenantId, written.ActorTenantId);
     }
 
-    /// <summary>
-    /// 宿主操作人进入租户上下文（模拟登录、代管租户）：记录落在该租户层，操作人租户仍是宿主
-    /// </summary>
+    /// <summary>宿主操作人进入租户上下文（模拟登录、代管租户）：记录落在该租户层，操作人租户仍是宿主。</summary>
     /// <remarks>操作人标识只在它所属的租户里有意义，记成上下文租户就把宿主管理员错认成了租户里的某个人。</remarks>
     [Fact]
     public async Task A_host_actor_inside_a_tenant_keeps_the_host_as_actor_tenant()
@@ -492,9 +462,7 @@ public sealed class OperationRecordingTests
         Assert.Null(written.ActorTenantId);
     }
 
-    /// <summary>
-    /// 自证类动作（登录、注册）在匿名请求里完成：操作人取目标，所属租户取请求的租户上下文
-    /// </summary>
+    /// <summary>自证类动作（登录、注册）在匿名请求里完成：操作人取目标，所属租户取请求的租户上下文。</summary>
     /// <remarks>
     /// 没有操作人的话，这条 Actor 层记录对"本人"永远不可见——租户用户看不到自己的登录记录，
     /// 而宿主读者整层可见，只在租户用户身上暴露。

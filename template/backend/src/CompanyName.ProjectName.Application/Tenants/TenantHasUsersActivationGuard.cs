@@ -11,9 +11,7 @@ using Leistd.UnitOfWork;
 
 namespace CompanyName.ProjectName.Application.Tenants;
 
-/// <summary>
-/// 启用前要求租户里至少有一个用户。
-/// </summary>
+/// <summary>启用前要求租户里至少有一个用户。</summary>
 /// <remarks>
 /// <para>启用一个没有管理员的租户毫无用途，只会成为匿名入口（注册、找回密码）的靶子；它同时挡住控制面竞争：
 /// 另一个宿主管理员在开通阶段抢先手动启用，会把一个还没有管理员的半成品租户暴露出去。</para>

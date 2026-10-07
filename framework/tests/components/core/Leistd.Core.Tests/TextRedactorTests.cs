@@ -3,9 +3,7 @@ using Xunit;
 
 namespace Leistd.Core.Tests;
 
-/// <summary>
-/// 敏感值的脱敏形态（写日志与对外展示共用）。
-/// </summary>
+/// <summary>敏感值的脱敏形态（写日志与对外展示共用）。</summary>
 public sealed class TextRedactorTests
 {
     /// <summary>邮箱保本地部开头几位 + 完整域名。</summary>

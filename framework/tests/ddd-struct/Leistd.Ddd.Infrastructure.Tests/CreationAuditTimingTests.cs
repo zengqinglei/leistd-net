@@ -14,9 +14,7 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// 创建审计的落值时机：必须在实体进入跟踪时，不是保存时。
-/// </summary>
+/// <summary>创建审计的落值时机：必须在实体进入跟踪时，不是保存时。</summary>
 /// <remarks>
 /// <para>保护的缺陷形状：若在 <c>AuditSaveChangesInterceptor.SavingChanges</c> 里落值，
 /// 由于仓储在工作单元内不立即保存，新增与保存之间可以跨越
@@ -141,9 +139,7 @@ public class CreationAuditTimingTests
         Assert.Equal(ScopeUser.ToString(), entity.CreatorId);
     }
 
-    /// <summary>
-    /// 普通 <see cref="DbContext"/> 用同一个原语接创建审计，时机与基座一致
-    /// </summary>
+    /// <summary>普通 <see cref="DbContext"/> 用同一个原语接创建审计，时机与基座一致。</summary>
     /// <remarks>
     /// <para>控制面上下文（如租户注册表）刻意不继承 <c>BaseDbContext</c>——控制面数据是宿主侧的，
     /// 不能被租户过滤器作用，否则解析租户就要先知道租户。代价是拿不到基座的钩子。</para>
@@ -205,9 +201,7 @@ public class CreationAuditTimingTests
         Assert.Null(entity.CreatorId);
     }
 
-    /// <summary>
-    /// 直接把 <c>IsDeleted</c> 翻成 true 也必须落删除审计
-    /// </summary>
+    /// <summary>直接把 <c>IsDeleted</c> 翻成 true 也必须落删除审计。</summary>
     /// <remarks>
     /// <para>软删除有两条到达路径：<c>Remove()</c>（状态变 <c>Deleted</c>，拦截器转换）与
     /// 直接翻标志（状态就是 <c>Modified</c>）。拦截器若对 <c>IsDeleted:true</c> 的
@@ -259,9 +253,7 @@ public class CreationAuditTimingTests
         Assert.Equal(ScopeUser.ToString(), entity.DeleterId);
     }
 
-    /// <summary>
-    /// 无主体删除留下的空 <c>DeleterId</c>，不得被后来的修改者顶替
-    /// </summary>
+    /// <summary>无主体删除留下的空 <c>DeleterId</c>，不得被后来的修改者顶替。</summary>
     /// <remarks>
     /// <para>各字段落值本身幂等（已有值就跳过），所以"已删除实体又被改"在大多数字段上本来就安全。
     /// 真正会失真的是这一种：删除发生在没有主体的上下文（后台作业、迁移脚本），
@@ -298,9 +290,7 @@ public class CreationAuditTimingTests
         Assert.Null(entity.DeleterId);
     }
 
-    /// <summary>
-    /// 未注册 <c>ICurrentUser</c> 的宿主仍能解析审计设施并完成匿名审计
-    /// </summary>
+    /// <summary>未注册 <c>ICurrentUser</c> 的宿主仍能解析审计设施并完成匿名审计。</summary>
     /// <remarks>
     /// <para>迁移作业、后台任务、设计时工具都没有请求主体。把 <c>ICurrentUser</c> 设成必需依赖时，
     /// 这些宿主在配置 DbContext 的那一刻就失败——错误信息指向审计设施，

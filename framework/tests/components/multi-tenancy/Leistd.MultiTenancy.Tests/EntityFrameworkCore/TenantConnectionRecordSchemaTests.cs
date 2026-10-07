@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 租户连接登记的表级形态：主键是 <c>(TenantId, Name)</c>，密文非空，同一租户可登记多条。
-/// </summary>
+/// <summary>租户连接登记的表级形态：主键是 <c>(TenantId, Name)</c>，密文非空，同一租户可登记多条。</summary>
 /// <remarks>以行是否存在判断登记状态；复合主键防止同名重复，密文非空防止出现既不能回落也无连接可用的空行。</remarks>
 public class TenantConnectionRecordSchemaTests : IAsyncLifetime
 {

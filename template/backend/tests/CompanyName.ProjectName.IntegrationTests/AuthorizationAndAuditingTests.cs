@@ -377,9 +377,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(1, grants.Version);
     }
 
-    /// <summary>
-    /// 记录初始化锁使用情况的替身：本身提供真实互斥，同时把"取过几次""同时几人持有"暴露出来。
-    /// </summary>
+    /// <summary>记录初始化锁使用情况的替身：本身提供真实互斥，同时把"取过几次""同时几人持有"暴露出来。</summary>
     private sealed class LockUsageProbe : IDistributedLock
     {
         private readonly SemaphoreSlim gate = new(1, 1);
@@ -544,9 +542,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.False(current.Grants.Single(x => x.Name == PermissionConstant.Roles.Default).Granted);
     }
 
-    /// <summary>
-    /// 组件端点在授权之后被业务规则拒绝，也留下一条失败记录
-    /// </summary>
+    /// <summary>组件端点在授权之后被业务规则拒绝，也留下一条失败记录。</summary>
     /// <remarks>
     /// 权限管理端点由组件映射，拒绝发生在组件内部，由紧接授权之后、租户作用域之内的中间件补记。
     /// 目标标识与授权依据要与成功路径写下的逐字一致，按目标、按依据检索才查得全。
@@ -637,9 +633,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.Conflict, assignedDelete.StatusCode);
     }
 
-    /// <summary>
-    /// 删除用户是软删除、关联行保留；只分配给已删除用户的角色不能因此永久删不掉，删除时连带清掉这些关联。
-    /// </summary>
+    /// <summary>删除用户是软删除、关联行保留；只分配给已删除用户的角色不能因此永久删不掉，删除时连带清掉这些关联。</summary>
     [Fact]
     public async Task A_role_assigned_only_to_deleted_users_counts_no_users_and_can_be_deleted()
     {
@@ -657,9 +651,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.False(await db.Set<UserRole>().AnyAsync(userRole => userRole.RoleId == role.Id));
     }
 
-    /// <summary>
-    /// 删角色、清关联、清授权与成功记录同在一个工作单元：最后一步失败时整体回滚，不留"接口报错但角色已删"的半成品。
-    /// </summary>
+    /// <summary>删角色、清关联、清授权与成功记录同在一个工作单元：最后一步失败时整体回滚，不留"接口报错但角色已删"的半成品。</summary>
     [Fact]
     public async Task A_failed_role_deletion_rolls_back_the_role_and_its_assignments()
     {
@@ -732,9 +724,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, OperationRecordActions.UserPasswordReset, targetId));
     }
 
-    /// <summary>
-    /// 删除不存在的用户即成功：重复删除与删除从未存在的 Id 都返回 200，且不新增删除记录
-    /// </summary>
+    /// <summary>删除不存在的用户即成功：重复删除与删除从未存在的 Id 都返回 200，且不新增删除记录。</summary>
     [Fact]
     public async Task Deleting_a_missing_user_succeeds_without_a_record()
     {
@@ -753,9 +743,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             Factory, superAdmin.Client, OperationRecordActions.UserDeleted, neverExisted.ToString()));
     }
 
-    /// <summary>
-    /// 角色资料更新留成功记录；无更新权限被拒时由端点注解补一条失败记录，角色不变
-    /// </summary>
+    /// <summary>角色资料更新留成功记录；无更新权限被拒时由端点注解补一条失败记录，角色不变。</summary>
     [Fact]
     public async Task Updating_a_role_leaves_an_operation_record()
     {
@@ -782,9 +770,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     }
 
 #if (OpenIddictServer)
-    /// <summary>
-    /// 开放应用的四个写操作各留一条成功记录；删除幂等，重复删除返回 200 且不新增记录
-    /// </summary>
+    /// <summary>开放应用的四个写操作各留一条成功记录；删除幂等，重复删除返回 200 且不新增记录。</summary>
     [Fact]
     public async Task Open_application_writes_leave_records_and_deletion_is_idempotent()
     {
@@ -823,9 +809,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         }
     }
 
-    /// <summary>
-    /// 取值范围与回调地址格式是入参校验：400 且字段错误落在对应字段，不带业务码，也不会建出客户端
-    /// </summary>
+    /// <summary>取值范围与回调地址格式是入参校验：400 且字段错误落在对应字段，不带业务码，也不会建出客户端。</summary>
     [Theory]
     [InlineData("clientId", "   ", "web", "confidential", "https://localhost/cb")]
     [InlineData("applicationType", "bad-type-client", "desktop", "confidential", "https://localhost/cb")]
@@ -864,9 +848,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         return body.RootElement.Clone();
     }
 
-    /// <summary>
-    /// 控制器端点的业务拒绝走同一个中间件，与组件的 Minimal API 端点一致
-    /// </summary>
+    /// <summary>控制器端点的业务拒绝走同一个中间件，与组件的 Minimal API 端点一致。</summary>
     /// <remarks>删除内置角色被规则拒绝：目标取路由上的 id，依据取控制器动作上的删除策略。</remarks>
     [Fact]
     public async Task A_rejected_role_deletion_leaves_a_failure_record()
@@ -1004,9 +986,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>
-    /// 绕过应用直接改库锁定（无截止时间）的账号，已有会话在下一次会话校验时被拒。
-    /// </summary>
+    /// <summary>绕过应用直接改库锁定（无截止时间）的账号，已有会话在下一次会话校验时被拒。</summary>
     /// <remarks>
     /// 经应用停用、删除账号会当场撤销会话；直接改库不经过那条路，靠会话校验在缓存未命中时确认账号仍可用。
     /// 登录后先改库、再发第一个带 Cookie 的请求，校验必然落在缓存之外。

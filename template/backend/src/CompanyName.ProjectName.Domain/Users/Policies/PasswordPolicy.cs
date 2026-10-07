@@ -4,9 +4,7 @@ using Leistd.ExceptionHandling;
 
 namespace CompanyName.ProjectName.Domain.Users.Policies;
 
-/// <summary>
-/// 服务端权威密码策略
-/// </summary>
+/// <summary>服务端权威密码策略。</summary>
 /// <remarks>
 /// <para><b>唯一权威。</b>DTO 的 DataAnnotations 与前端表单只负责快速反馈，不承担安全不变量——
 /// 直接调 API 能绕开它们，内部调用（种子、租户初始化、bootstrap）连 DTO 都不经过。
@@ -31,9 +29,7 @@ public static class PasswordPolicy
     /// <summary>密码是否满足策略</summary>
     public static bool IsAcceptable(string? password) => Describe(password) is null;
 
-    /// <summary>
-    /// 校验密码，不通过则抛 <see cref="BusinessException"/>
-    /// </summary>
+    /// <summary>校验密码，不通过则抛 <see cref="BusinessException"/>。</summary>
     /// <remarks>
     /// 每种不通过的原因带自己的错误码与占位参数，界面上看到的才是"密码长度至少 12 个字符"
     /// 这样的具体原因。不带码时没有词条可查，中文界面上只会出现构造时那句英文诊断串。

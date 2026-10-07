@@ -156,10 +156,7 @@ jobs:
           # 带 ! 的提交必须有脚注：适配方是靠 git log --grep='BREAKING CHANGE' 检索改动的，
           # 只有 ! 的提交不在那个结果里，对应的改动会被整体漏掉（versioning.md 第 57 节起）。
           #
-          # 只查这个提交之后的历史。闸门落地时，上一个稳定 tag 到 HEAD 之间已经有 20 条带 ! 缺脚注的旧提交，
-          # 不加起点的话第一次发布就会被自己拦下；而历史不能改写，那批的破坏性内容由 docs/framework/upgrades/0.13.0.md 承载。
-          # 这是写死的一次性切换点，不是可开可关的开关，也不会随时间扩大豁免范围——之后的每一条提交都要守这条规则。
-          # 升版推算仍然用完整范围（$commits），只有脚注检查用这个起点。
+          # 脚注检查从固定锚点开始，不扩大历史豁免；升版推算仍使用完整提交范围。
           $footnoteAnchor = '802b4dca012bda2e6d64f4a7939860bf950cd302'
           git merge-base --is-ancestor $footnoteAnchor HEAD 2>$null
           if ($LASTEXITCODE -ne 0) {
@@ -241,9 +238,7 @@ jobs:
           }
           $global:LASTEXITCODE = 0
 
-      # 包内 PackageReleaseNotes 与 Release 正文的链接都固定到本次 tag，不用分支链接：
-      # 已安装的包要对应发版时的说明。预发布版本按基础版本找指南（0.13.0-beta.N → upgrades/0.13.0.md）。
-      # 没有指南时 stable/beta 指向本次 Release；nightly 不建 Release，指向 tag 的提交页。
+      # 发布说明固定到本次 tag；有可选指南时链接指南，否则链接对应 Release 或 nightly 提交页。
       - name: 确定升级指南与包发布说明链接
         id: links
         shell: pwsh

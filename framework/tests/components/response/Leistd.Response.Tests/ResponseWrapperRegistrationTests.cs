@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.Response.Tests;
 
-/// <summary>
-/// 统一响应包装的注册面。
-/// </summary>
+/// <summary>统一响应包装的注册面。</summary>
 /// <remarks>
 /// 挂在 <see cref="IMvcBuilder"/> 而不是 <see cref="IServiceCollection"/> 是刻意的设计约束
 /// （组件不替宿主调 <c>AddControllers()</c>）。这条约束只写在注释里就会在某次

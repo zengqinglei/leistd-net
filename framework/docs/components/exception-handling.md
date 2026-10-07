@@ -122,7 +122,7 @@ app.UseWhen(
     api => api.UseStatusCodePages());
 ```
 
-这类协议层失败的契约就是 HTTP 状态码本身：响应只有 `status`、本地化的 `title` 与 `traceId`，不合成业务错误码。业务错误码（`code`）只出现在 `BusinessException` 上。
+状态码页响应包含 `status`、本地化的 `title` 与 `traceId`，遵循上述协议错误契约。
 
 ## 响应与本地化
 

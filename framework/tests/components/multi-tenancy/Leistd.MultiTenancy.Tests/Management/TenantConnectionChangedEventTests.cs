@@ -9,9 +9,7 @@ using Leistd.MultiTenancy.Management.Events;
 
 namespace Leistd.MultiTenancy.Tests.Management;
 
-/// <summary>
-/// 连接登记变化发出的事件：宿主据此留痕，所以"发不发、发哪一种"是契约。
-/// </summary>
+/// <summary>连接登记变化发出的事件：宿主据此留痕，所以"发不发、发哪一种"是契约。</summary>
 /// <remarks>
 /// 组件不依赖操作记录组件，只发中性事件；记成什么词汇由宿主定。因此这里钉住的是事件本身，
 /// 不是审计表的内容。事件里<b>没有连接串</b>——它是凭据。

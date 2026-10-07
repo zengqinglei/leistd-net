@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.ObjectMapping.Tests.Mapster;
 
-/// <summary>
-/// 映射配置用 Mapster 官方 <see cref="IRegister"/>，扫描进组件自己的 <see cref="TypeAdapterConfig"/>。
-/// </summary>
+/// <summary>映射配置用 Mapster 官方 <see cref="IRegister"/>，扫描进组件自己的 <see cref="TypeAdapterConfig"/>。</summary>
 public class MapsterRegistrationTests
 {
     private sealed record Order(string Code, decimal Total);

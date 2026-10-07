@@ -148,9 +148,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Equal(2, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.TenantId == tenant.Id));
     }
 
-    /// <summary>
-    /// 创建时间与修改时间由管理器填充，不依赖宿主是否接入审计层。
-    /// </summary>
+    /// <summary>创建时间与修改时间由管理器填充，不依赖宿主是否接入审计层。</summary>
     /// <remarks>
     /// 这一行决定该租户在这个服务的数据落在哪个库，所以"配置在何时被改过"必须无条件可查。
     /// 用户字段（<c>CreatorId</c> / <c>LastModifierId</c>）由宿主审计层补充：控制面上下文
@@ -206,9 +204,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.DoesNotContain("highly-sensitive", configuration.ToString(), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 预期版本与实际状态的四种组合，只有两种放行
-    /// </summary>
+    /// <summary>预期版本与实际状态的四种组合，只有两种放行。</summary>
     /// <remarks>
     /// 丢更新在这一行是静默的：两个管理员同时改同一个名字的连接，后提交的那次覆盖前一次且不报错，
     /// 而"该租户在这个服务的数据落在哪个库"已经变了。因此四种组合都要钉住，不能只测匹配那一种。
@@ -254,9 +250,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Equal(1, stored.Version);
     }
 
-    /// <summary>
-    /// 在用租户不允许改连接
-    /// </summary>
+    /// <summary>在用租户不允许改连接。</summary>
     /// <remarks>
     /// 路由改了不等于数据跟着走：资源服务按租户与连接名缓存解析结果，已缓存的实例继续写旧库、
     /// 冷启动的实例开始写新库，同一租户在两个物理位置同时产生新数据，且双方都不报错。
@@ -307,9 +301,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Equal(2, moved.Version);
     }
 
-    /// <summary>
-    /// 把"不分库"的在用租户改成分库，必须先停用
-    /// </summary>
+    /// <summary>把"不分库"的在用租户改成分库，必须先停用。</summary>
     /// <remarks>首次登记同样改变数据落点，既有种子、管理员和业务数据不会迁移，故不能按“首次写入”豁免停用要求。</remarks>
     [Fact]
     public async Task The_first_connection_of_an_active_tenant_is_rejected()
@@ -372,9 +364,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.NotNull((await _store.FindAsync(tenant.Id, Name))!.Connection);
     }
 
-    /// <summary>
-    /// 真正的同时提交也必须是 409，不能是 500
-    /// </summary>
+    /// <summary>真正的同时提交也必须是 409，不能是 500。</summary>
     /// <remarks>
     /// <para><c>expectedVersion</c> 预检只挡得住"读到的版本已过期"这种串行陈旧。真正的竞态是
     /// 两个事务都先读到 v1：双方预检都过，先提交的把版本推到 v2，后提交的并发令牌命中 0 行。
@@ -419,9 +409,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// 路由事务读到"已停用"之后、写入之前，激活提交 —— 必须由数据库拦下
-    /// </summary>
+    /// <summary>路由事务读到"已停用"之后、写入之前，激活提交 —— 必须由数据库拦下。</summary>
     /// <remarks>
     /// 只读一次 <c>IsActive</c> 在 READ COMMITTED 下挡不住它：读不持锁，激活可以在读之后提交。
     /// 若不拦，最终租户是启用状态、热实例用旧路由、冷实例用新路由，同一租户同时往两个库写新数据。
@@ -457,9 +445,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Equal("Host=one", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
     }
 
-    /// <summary>
-    /// 并发首次登记：败者是 409，不是主键冲突导致的 500
-    /// </summary>
+    /// <summary>并发首次登记：败者是 409，不是主键冲突导致的 500。</summary>
     /// <remarks>
     /// 两个请求都以 <c>expectedVersion: null</c> 登记同一个名字，都读到"这一行不存在"，
     /// 都要推进同一个租户版本 —— 败者在插入之前就冲突。靠租户版本而不是识别主键冲突：
@@ -498,9 +484,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Single(await _dbContext.Set<TenantConnectionRecord>().AsNoTracking().ToListAsync());
     }
 
-    /// <summary>
-    /// 并发冲突只丢弃本操作涉及的行，不碰同一工作单元里的其它实体
-    /// </summary>
+    /// <summary>并发冲突只丢弃本操作涉及的行，不碰同一工作单元里的其它实体。</summary>
     /// <remarks>
     /// <c>DbContext</c> 是宿主的工作单元。用 <c>ChangeTracker.Clear()</c> 收拾现场会把
     /// 调用方尚未提交的其它实体一并抹掉——调用方捕获 409 后继续处理时，
@@ -540,9 +524,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Equal("edited-by-caller", reread.DisplayName);
     }
 
-    /// <summary>
-    /// 陈旧改名必须是 409 并发，而不是泄漏成 500
-    /// </summary>
+    /// <summary>陈旧改名必须是 409 并发，而不是泄漏成 500。</summary>
     /// <remarks>
     /// 改名同时参与两个竞争：名称唯一，和租户生命周期版本。<c>DbUpdateConcurrencyException</c>
     /// 继承 <c>DbUpdateException</c>，所以若把名称冲突那一档写在前面，陈旧改名会先走进名称判定；

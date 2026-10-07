@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Authorization.Tests.Core;
 
-/// <summary>
-/// 权限组的归属判定与授予集合的空值构造。
-/// </summary>
+/// <summary>权限组的归属判定与授予集合的空值构造。</summary>
 /// <remarks>
 /// <c>IPermissionGroupDefinition.GetPermissionOrNull</c> 是权限树 UI 的按组查询入口，
 /// 归属判定错了会把别的组的权限显示进来——那是一条越权配置路径。

@@ -9,14 +9,10 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 认证方案的注册入口：按服务形态组装会话 Cookie、Bearer 与外部登录。
-/// </summary>
+/// <summary>认证方案的注册入口：按服务形态组装会话 Cookie、Bearer 与外部登录。</summary>
 public static class AuthenticationExtensions
 {
-    /// <summary>
-    /// 注册本服务形态的认证方案、浏览器会话的服务端票据与会话 Cookie 选项。
-    /// </summary>
+    /// <summary>注册本服务形态的认证方案、浏览器会话的服务端票据与会话 Cookie 选项。</summary>
     public static WebApplicationBuilder AddMyProjectAuthentication(this WebApplicationBuilder builder)
     {
 #if (SpaFrontend)

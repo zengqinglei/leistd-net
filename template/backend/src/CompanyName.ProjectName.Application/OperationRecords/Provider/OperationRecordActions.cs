@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.OperationRecords.Provider;
 
-/// <summary>
-/// 稳定的业务操作码，回答"发生了什么动作"。
-/// </summary>
+/// <summary>稳定的业务操作码，回答"发生了什么动作"。</summary>
 /// <remarks>
 /// <para>框架只把它原样存下去、从不解释，因此由业务定义——它穷举不了业务词汇。
 /// 界面按这个码本地化，<b>一旦发布就不要改</b>：它是历史记录的含义本身，改了等于篡改过去。</para>
@@ -86,9 +84,7 @@ public static class OperationRecordActions
     public const string SettingChanged = "setting.changed";
 
 #if (LocalIdentity && Email)
-    /// <summary>
-    /// 用当前发信参数发送了一封测试邮件。
-    /// </summary>
+    /// <summary>用当前发信参数发送了一封测试邮件。</summary>
     /// <remarks>
     /// 它不改任何状态，记它是为了被拒的那一半：没有权限却反复尝试、或在租户里尝试，
     /// 都要留下"谁在试"的痕迹。不带目标——收件人是任意填写的地址。
@@ -118,9 +114,7 @@ public static class OperationRecordActions
     /// <summary>登录成功。</summary>
     public const string AuthLoginSucceeded = "auth.login.succeeded";
 
-    /// <summary>
-    /// 登录失败。
-    /// </summary>
+    /// <summary>登录失败。</summary>
     /// <remarks>
     /// <b>必须记</b>：OWASP 明列认证事件，"谁在反复尝试"正是审计最该回答的问题之一。
     /// 但它是<b>匿名写入面</b>——记录由未认证请求触发，因此必须与失败登录的折叠计数
@@ -128,9 +122,7 @@ public static class OperationRecordActions
     /// </remarks>
     public const string AuthLoginFailed = "auth.login.failed";
 
-    /// <summary>
-    /// 账号因连续登录失败被临时锁定（目标为被锁定的账号）。
-    /// </summary>
+    /// <summary>账号因连续登录失败被临时锁定（目标为被锁定的账号）。</summary>
     /// <remarks>与登录失败同为匿名写入面，但一个锁定期内至多触发一次，写入量有界。</remarks>
     public const string AuthLockedOut = "auth.locked-out";
 
@@ -160,9 +152,7 @@ public static class OperationRecordActions
     /// <summary>用户重新生成了恢复码（旧的全部作废）。</summary>
     public const string AuthTwoFactorRecoveryCodesRegenerated = "auth.two-factor.recovery-codes-regenerated";
 
-    /// <summary>
-    /// 用恢复码完成了登录第二步。
-    /// </summary>
+    /// <summary>用恢复码完成了登录第二步。</summary>
     /// <remarks>值得单独留痕：恢复码是手机不在身边时的后门，被别人用掉时本人和管理员都该看得到。</remarks>
     public const string AuthTwoFactorRecoveryCodeUsed = "auth.two-factor.recovery-code-used";
 
@@ -177,9 +167,7 @@ public static class OperationRecordActions
     /// <summary>自助注册。</summary>
     public const string AuthRegistered = "auth.registered";
 
-    /// <summary>
-    /// 宿主管理员开始以租户身份操作。
-    /// </summary>
+    /// <summary>宿主管理员开始以租户身份操作。</summary>
     /// <remarks>
     /// 可见性是 <b>租户级</b>而非宿主级：租户必须看得见"有人以我的名义进来了"，
     /// 否则审计表对被操作的一方是瞎的——租户管理员会看到自己的用户做了他没做过的事。
@@ -211,9 +199,7 @@ public static class OperationRecordActions
 #endif
 }
 
-/// <summary>
-/// 不由权限把守的操作，凭什么放行。
-/// </summary>
+/// <summary>不由权限把守的操作，凭什么放行。</summary>
 /// <remarks>
 /// 授权依据绝大多数情况下就是权限名。但有些操作不由权限体系管辖，此时仍要留下依据——
 /// 空值分不出"不需要权限"和"忘了记"。框架同样不替业务枚举这些标记。
@@ -223,9 +209,7 @@ public static class OperationRecordAuthorizations
     /// <summary>用户改自己的数据（改密码、绑定 MFA），凭的是"已认证且是本人"。</summary>
     public const string AuthenticatedSelf = "AuthenticatedSelf";
 
-    /// <summary>
-    /// 给用户直接授予权限。
-    /// </summary>
+    /// <summary>给用户直接授予权限。</summary>
     /// <remarks>
     /// <b>刻意不复用某个权限名。</b>授予管理器支持 <c>User</c> 与 <c>Role</c> 两种主体
     /// （见 <c>PermissionGrantProviderNames</c>），但本项目只为角色侧开了端点，
@@ -240,9 +224,7 @@ public static class OperationRecordAuthorizations
 #endif
 #if (LocalIdentity)
 
-    /// <summary>
-    /// 出示了凭据（登录尝试），凭的既不是权限也不是"已认证"——此刻还没有主体。
-    /// </summary>
+    /// <summary>出示了凭据（登录尝试），凭的既不是权限也不是"已认证"——此刻还没有主体。</summary>
     /// <remarks>
     /// 登录记录的"什么人"由<b>目标</b>承载而非操作人：登录请求发生时主体尚未建立
     /// （<c>SignInAsync</c> 只往响应里种 Cookie，本次请求的 <c>HttpContext.User</c> 仍是匿名），

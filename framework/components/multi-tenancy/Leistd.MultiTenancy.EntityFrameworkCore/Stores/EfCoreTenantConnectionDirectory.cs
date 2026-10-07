@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// 直接读控制库列出租户的连接登记。
-/// </summary>
+/// <summary>直接读控制库列出租户的连接登记。</summary>
 /// <remarks>只列未删除租户的登记，只投影名字与版本，不读取密文列。</remarks>
 /// <typeparam name="TDbContext">映射了租户注册表的控制库上下文。</typeparam>
 /// <param name="dbContextProvider">控制库上下文。</param>

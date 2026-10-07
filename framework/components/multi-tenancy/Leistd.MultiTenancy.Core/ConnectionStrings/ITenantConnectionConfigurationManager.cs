@@ -2,17 +2,13 @@ using Leistd.MultiTenancy.Exceptions;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 租户连接的唯一写入口，负责名字归一化、连接串加密与逐行的版本不变量。
-/// </summary>
+/// <summary>租户连接的唯一写入口，负责名字归一化、连接串加密与逐行的版本不变量。</summary>
 /// <remarks>
 /// 连接串在写入时加密存储，库、备份与只读账号里都只有密文；实现不得在日志或异常消息里带出连接串。
 /// </remarks>
 public interface ITenantConnectionConfigurationManager
 {
-    /// <summary>
-    /// 登记或更新租户在某个连接名下的连接。
-    /// </summary>
+    /// <summary>登记或更新租户在某个连接名下的连接。</summary>
     /// <param name="tenantId">目标租户。</param>
     /// <param name="name">连接名，通常是使用方 DbContext 的 <c>[ConnectionStringName]</c>；归一化为小写后须匹配 <see cref="TenantConnectionConfiguration.NamePattern"/>。</param>
     /// <param name="connectionString">明文连接串，运行时与迁移共用，最长 <see cref="TenantConnectionConfiguration.MaxConnectionStringLength"/> 个字符。</param>
@@ -35,9 +31,7 @@ public interface ITenantConnectionConfigurationManager
         long? expectedVersion,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 删除租户在某个连接名下的连接。
-    /// </summary>
+    /// <summary>删除租户在某个连接名下的连接。</summary>
     /// <remarks>删除后该名字回落到服务自己的配置。与修改相同，删除前必须先停用租户。</remarks>
     /// <param name="tenantId">目标租户。</param>
     /// <param name="name">连接名，大小写不敏感。</param>

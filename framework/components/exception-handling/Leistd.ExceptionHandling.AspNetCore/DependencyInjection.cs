@@ -21,9 +21,7 @@ namespace Leistd.ExceptionHandling.AspNetCore;
 /// <summary>全局异常处理的注册与管道接入入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 将自动模型校验响应接入统一失败管道：经 <see cref="IProblemDetailsService"/> 写出，默认为 Problem Details。
-    /// </summary>
+    /// <summary>将自动模型校验响应接入统一失败管道：经 <see cref="IProblemDetailsService"/> 写出，默认为 Problem Details。</summary>
     /// <remarks>
     /// <para>在 <c>AddControllers()</c> 后调用，使 400 与业务校验的 <c>errors</c> 结构一致。</para>
     /// <para><c>errors[].field</c> 跟随宿主的 JSON 命名策略（请求体里叫 <c>name</c>，这里就是 <c>name</c>），
@@ -134,7 +132,6 @@ public static class DependencyInjection
     }
 
     /// <summary>把全局异常处理接入请求管道。应尽量靠近管道前端，以覆盖后续中间件抛出的异常。</summary>
-    /// <param name="app">应用构建器。</param>
     public static IApplicationBuilder UseGlobalExceptionHandler(this IApplicationBuilder app)
     {
         return app.UseExceptionHandler(new ExceptionHandlerOptions

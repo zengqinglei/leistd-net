@@ -20,9 +20,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 通知保留期：已读与未读分开计时，按物理库逐个清理，同库的其余租户一并覆盖。
-/// </summary>
+/// <summary>通知保留期：已读与未读分开计时，按物理库逐个清理，同库的其余租户一并覆盖。</summary>
 public sealed class NotificationRetentionTests : IAsyncLifetime
 {
     private static readonly Guid DedicatedTenant = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -71,9 +69,7 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
         await _tenantAnchor.DisposeAsync();
     }
 
-    /// <summary>
-    /// 已读超 90 天删、未读超 365 天删，未读的在两者之间保留；独立库与共享库里的其他租户都被覆盖
-    /// </summary>
+    /// <summary>已读超 90 天删、未读超 365 天删，未读的在两者之间保留；独立库与共享库里的其他租户都被覆盖。</summary>
     [Fact]
     public async Task Expired_notifications_are_deleted_per_database_by_read_state()
     {
@@ -99,9 +95,7 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
         Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
     }
 
-    /// <summary>
-    /// 有租户解析不出库时本轮失败，不记水位。
-    /// </summary>
+    /// <summary>有租户解析不出库时本轮失败，不记水位。</summary>
     /// <remarks>
     /// 解析失败被逐库执行器隔离掉了（一个坏租户不该让整轮不执行），但"隔离"不等于"没事"：
     /// 那个租户的通知一条都没清。任务若只看失败的库，就会把这一轮报成成功，

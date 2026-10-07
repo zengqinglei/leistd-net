@@ -21,9 +21,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// <c>AddOperationRecordsEfCore</c> 的注册面与存储映射。
-/// </summary>
+/// <summary><c>AddOperationRecordsEfCore</c> 的注册面与存储映射。</summary>
 /// <remarks>
 /// Leistd 靠宿主显式调用 <c>AddXxx()</c> 组合，注册结果就是公共契约的一部分：
 /// 生命周期写错、重复注册、组件之间意外互相覆盖，编译期一个都发现不了。
@@ -91,9 +89,7 @@ public sealed class OperationRecordEfCoreRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOperationRecorder>());
     }
 
-    /// <summary>
-    /// 第二个 DbContext 在注册期就被拒
-    /// </summary>
+    /// <summary>第二个 DbContext 在注册期就被拒。</summary>
     /// <remarks>
     /// 静默取最后一条会让一半的审计写进宿主没预期的库——审计缺了一半比没有审计更危险，
     /// 因为查不到记录时人会以为"这件事没发生过"。
@@ -110,9 +106,7 @@ public sealed class OperationRecordEfCoreRegistrationTests
         Assert.Contains("single authoritative store", exception.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 可见性列有库默认值，但 EF 每次都显式写它。
-    /// </summary>
+    /// <summary>可见性列有库默认值，但 EF 每次都显式写它。</summary>
     /// <remarks>
     /// 库默认值是给"宿主给存量表加这一列"的回填用的：没有它，历史行落空串、读取时枚举转换失败。
     /// 但 HasDefaultValue 会让 EF 在属性等于 CLR 默认值时省略该列，而 OperationVisibility.Tenant 正好是 0——

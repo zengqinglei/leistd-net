@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
-/// <summary>
-/// 启动期<b>只校验不施加</b>迁移：有待执行迁移就失败并打印清单。
-/// </summary>
+/// <summary>启动期<b>只校验不施加</b>迁移：有待执行迁移就失败并打印清单。</summary>
 /// <remarks>
 /// API 使用只具备 DML 权限的 Runtime 身份，DDL 由持有 Migration 身份的 DbMigrator
 /// 独占执行。启动校验在接收流量前检查所有上下文；存在待执行迁移时立即失败并列出清单。

@@ -19,9 +19,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.DbMigrator;
 
-/// <summary>
-/// 迁移作业的服务组合。宿主与注册面测试共用这一份，测试校验的就是作业实际解析的组合。
-/// </summary>
+/// <summary>迁移作业的服务组合。宿主与注册面测试共用这一份，测试校验的就是作业实际解析的组合。</summary>
 public static class MigratorServices
 {
     public static IServiceCollection AddMigratorServices(
@@ -41,9 +39,7 @@ public static class MigratorServices
     }
 #if (RemoteTokenAuth)
 
-    /// <summary>
-    /// 首位管理员引导命令的组合：比迁移多组合应用能力（初始化、授权、操作记录），因为引导要走正式业务路径。
-    /// </summary>
+    /// <summary>首位管理员引导命令的组合：比迁移多组合应用能力（初始化、授权、操作记录），因为引导要走正式业务路径。</summary>
     public static IServiceCollection AddResourceAdminBootstrapServices(
         this IServiceCollection services, IConfiguration configuration)
     {

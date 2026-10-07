@@ -2,9 +2,7 @@ using Leistd.EventBus.Events;
 
 namespace Leistd.MultiTenancy.Management.Events;
 
-/// <summary>
-/// 某个租户的一条命名连接被登记、改写或删除。
-/// </summary>
+/// <summary>某个租户的一条命名连接被登记、改写或删除。</summary>
 /// <remarks>
 /// <para>不含连接串：事件会进入日志、审计与订阅者的存储。</para>
 /// <para>多租户组件不依赖操作记录组件，宿主订阅本事件后自行留痕。</para>

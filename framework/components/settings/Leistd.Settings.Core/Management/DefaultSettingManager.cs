@@ -15,9 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Management;
 
-/// <summary>
-/// 写入前对照定义校验设置名、层级与取值，写入后发布 <see cref="SettingChangedEvent"/>。
-/// </summary>
+/// <summary>写入前对照定义校验设置名、层级与取值，写入后发布 <see cref="SettingChangedEvent"/>。</summary>
 /// <remarks>
 /// <para>取值校验依次是：空串拒绝、<see cref="ISettingDefinition.ValueType"/> 与区间、
 /// <see cref="ISettingDefinition.AllowedValues"/>、宿主注册的 <see cref="ISettingValueValidator"/>。

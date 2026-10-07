@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// <c>AddMultiTenancyCore()</c> 的注册面：各服务的生命周期、重复调用不叠加、宿主替换口保留。
-/// </summary>
+/// <summary><c>AddMultiTenancyCore()</c> 的注册面：各服务的生命周期、重复调用不叠加、宿主替换口保留。</summary>
 public sealed class MultiTenancyCoreRegistrationTests
 {
     // 访问器是进程级的 AsyncLocal 单例；解析器按请求缓存结果；其余无状态

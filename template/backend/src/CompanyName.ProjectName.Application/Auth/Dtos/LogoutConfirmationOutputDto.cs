@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 依赖方发起退出、需要用户确认时，确认页所需的信息。
-/// </summary>
+/// <summary>依赖方发起退出、需要用户确认时，确认页所需的信息。</summary>
 public record LogoutConfirmationOutputDto
 {
     /// <summary>

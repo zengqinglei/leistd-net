@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 
-/// <summary>
-/// <c>AddSignalRAmbientContext()</c> 的注册面：过滤器只挂一次，上层组件各调一遍也不叠加。
-/// </summary>
+/// <summary><c>AddSignalRAmbientContext()</c> 的注册面：过滤器只挂一次，上层组件各调一遍也不叠加。</summary>
 /// <remarks>
 /// 通知与实时都会调基座。过滤器挂两遍时每次 Hub 调用建立两层环境上下文、复评两遍。
 /// </remarks>

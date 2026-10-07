@@ -11,14 +11,10 @@ using Leistd.MultiTenancy.Resolution;
 
 namespace Leistd.MultiTenancy.AspNetCore;
 
-/// <summary>
-/// 提供 ASP.NET Core 多租户注册和管道扩展。
-/// </summary>
+/// <summary>提供 ASP.NET Core 多租户注册和管道扩展。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册多租户 Web 集成：绑定配置节，再应用代码里的配置（代码覆盖配置文件）。
-    /// </summary>
+    /// <summary>注册多租户 Web 集成：绑定配置节，再应用代码里的配置（代码覆盖配置文件）。</summary>
     /// <remarks>
     /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
     /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键），校验消息仍按首次调用的配置节给出键名。
@@ -97,9 +93,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 在认证和受信上下文恢复之后、授权之前挂载多租户中间件。
-    /// </summary>
+    /// <summary>在认证和受信上下文恢复之后、授权之前挂载多租户中间件。</summary>
     /// <remarks>
     /// <c>ValidateResolvedTenant</c> 为 <see langword="true"/> 时校验注册表；为
     /// <see langword="false"/> 时只信已认证主体的租户声明。

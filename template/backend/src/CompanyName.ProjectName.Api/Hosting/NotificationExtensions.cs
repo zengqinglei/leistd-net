@@ -23,14 +23,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
-/// <summary>
-/// 通知的注册入口：推送通道、收件偏好、邮件渠道与安全提醒。
-/// </summary>
+/// <summary>通知的注册入口：推送通道、收件偏好、邮件渠道与安全提醒。</summary>
 public static class NotificationExtensions
 {
-    /// <summary>
-    /// 注册通知的投递与本项目的收件人、安全提醒实现。
-    /// </summary>
+    /// <summary>注册通知的投递与本项目的收件人、安全提醒实现。</summary>
     public static IServiceCollection AddMyProjectNotifications(this IServiceCollection services)
     {
 #if (IncludeRealTime)

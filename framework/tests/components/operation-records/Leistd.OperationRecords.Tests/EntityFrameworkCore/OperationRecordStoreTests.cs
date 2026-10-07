@@ -14,9 +14,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 存储与表结构。
-/// </summary>
+/// <summary>存储与表结构。</summary>
 /// <remarks>
 /// 用 SQLite 而不是 InMemory：列长度、枚举字符串转换与倒序索引只有真正建库时才产生 DDL，
 /// InMemory 全内存求值会让整个 <c>OperationRecordConfiguration</c> 静默通过。
@@ -136,9 +134,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Equal(OperationRecordOutcome.Succeeded, read.Outcome);
     }
 
-    /// <summary>
-    /// 同一时刻的多条记录有稳定顺序，翻页不会重复或遗漏
-    /// </summary>
+    /// <summary>同一时刻的多条记录有稳定顺序，翻页不会重复或遗漏。</summary>
     /// <remarks>
     /// <para>只按时间排序时，同一毫秒内写入的多条记录在两次查询之间可能换序，
     /// 于是翻页会重复或漏掉记录——而漏掉的那条没有任何迹象。次级键 <c>Id</c> 消除这种不确定。</para>
@@ -269,9 +265,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Equal(1, page.TotalCount);
     }
 
-    /// <summary>
-    /// <c>Unrestricted</c> 不按可见性过滤，三层记录都返回
-    /// </summary>
+    /// <summary><c>Unrestricted</c> 不按可见性过滤，三层记录都返回。</summary>
     /// <remarks>
     /// 它供不代表某个读者的内部任务使用；与 <c>Host</c> 的差别在于不走可见性谓词，
     /// 此处钉住"显式不过滤"确实不过滤。
@@ -289,9 +283,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Equal(3, page.TotalCount);
     }
 
-    /// <summary>
-    /// 租户读者看不到 <c>Host</c> 层；<c>Actor</c> 层仅限本人
-    /// </summary>
+    /// <summary>租户读者看不到 <c>Host</c> 层；<c>Actor</c> 层仅限本人。</summary>
     /// <remarks>
     /// 跨租户隔离不在这里——那由 <c>IMultiTenant</c> 的全局查询过滤器承担。
     /// 本段只在同一层内部再分一次"这条给不给看"。
@@ -387,9 +379,7 @@ public sealed class OperationRecordStoreTests : IDisposable
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: null!));
     }
 
-    /// <summary>
-    /// 不传 <c>actions</c> 与 <c>outcome</c> 时不按它们过滤
-    /// </summary>
+    /// <summary>不传 <c>actions</c> 与 <c>outcome</c> 时不按它们过滤。</summary>
     /// <remarks>
     /// 这两个是筛选条件，缺省即"不限"；与可见范围不同，它们不是安全边界，不需要调用方显式表态。
     /// </remarks>

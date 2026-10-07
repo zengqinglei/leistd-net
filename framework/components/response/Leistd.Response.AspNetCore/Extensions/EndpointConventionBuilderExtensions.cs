@@ -12,9 +12,7 @@ namespace Leistd.Response.AspNetCore.Extensions;
 /// <summary>为 Minimal API 端点挂载统一响应包装。</summary>
 public static class EndpointConventionBuilderExtensions
 {
-    /// <summary>
-    /// 为端点或路由组挂载 <see cref="ResultWrapperEndpointFilter"/>，成功响应包装为 <c>Result&lt;object?&gt;</c>。
-    /// </summary>
+    /// <summary>为端点或路由组挂载 <see cref="ResultWrapperEndpointFilter"/>，成功响应包装为 <c>Result&lt;object?&gt;</c>。</summary>
     /// <remarks>
     /// <para>MVC 侧的 <c>AddResponseWrapper()</c> 只作用于控制器；组件经 <c>Map*</c> 提供的端点在宿主的路由组上调本方法。
     /// 不要在同一端点链上重复调用：不会重复包装，但每次都多挂一层过滤器。</para>

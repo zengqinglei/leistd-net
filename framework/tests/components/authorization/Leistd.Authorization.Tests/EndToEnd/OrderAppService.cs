@@ -13,9 +13,7 @@ public sealed record OrderDto(string ResourceKey, string Code, string Organizati
 
 public sealed record PagedOrders(long TotalCount, IReadOnlyList<OrderDto> Items);
 
-/// <summary>
-/// 订单应用服务：按设计文档 §6.5 的标准执行链落地。
-/// </summary>
+/// <summary>订单应用服务：按设计文档 §6.5 的标准执行链落地。</summary>
 /// <remarks>
 /// 功能权限由端点上的 <c>[Authorize(Policy = ...)]</c> 前置把关，本服务负责其余两层：
 /// 集合先经数据范围翻译成 SQL 谓词，单实例先加载再做资源判定。
@@ -27,9 +25,7 @@ public sealed class OrderAppService(
     IPermissionSubjectProvider subjectProvider,
     IResourceGrantStore resourceGrantStore)
 {
-    /// <summary>
-    /// 列表：先施加可见范围，再叠加分页。总数与当前页共用同一个范围入口。
-    /// </summary>
+    /// <summary>列表：先施加可见范围，再叠加分页。总数与当前页共用同一个范围入口。</summary>
     public async Task<PagedOrders> GetPagedListAsync(int offset, int limit, CancellationToken ct)
     {
         var scoped = await VisibleQueryAsync(DataOperations.Read, ct);
@@ -45,9 +41,7 @@ public sealed class OrderAppService(
         return new PagedOrders(totalCount, items);
     }
 
-    /// <summary>
-    /// 导出：必须与列表共用同一个范围入口，否则导出会多出用户看不到的数据。
-    /// </summary>
+    /// <summary>导出：必须与列表共用同一个范围入口，否则导出会多出用户看不到的数据。</summary>
     public async Task<IReadOnlyList<OrderDto>> ExportAsync(CancellationToken ct)
     {
         var scoped = await VisibleQueryAsync(DataOperations.Export, ct);
@@ -57,9 +51,7 @@ public sealed class OrderAppService(
             .ToListAsync(ct);
     }
 
-    /// <summary>
-    /// 详情：在可见范围内定位，范围外当作不存在。
-    /// </summary>
+    /// <summary>详情：在可见范围内定位，范围外当作不存在。</summary>
     /// <remarks>
     /// <para>只经 <see cref="VisibleQueryAsync"/> 判可见性，与列表返回同样的 DTO。
     /// 不再叠加实例 Read 判定：Handler 或 ACL Granted 的口径不同于集合的（数据范围 OR ACL 允许）AND NOT ACL 拒绝。</para>
@@ -75,9 +67,7 @@ public sealed class OrderAppService(
             : new OrderDto(order.ResourceKey, order.Code, order.OrganizationId, order.OwnerId);
     }
 
-    /// <summary>
-    /// 更新：范围用 Update 而非 Read——能看不等于能改。
-    /// </summary>
+    /// <summary>更新：范围用 Update 而非 Read——能看不等于能改。</summary>
     public async Task<bool> UpdateAsync(string resourceKey, string code, CancellationToken ct)
     {
         var scoped = await VisibleQueryAsync(DataOperations.Update, ct);
@@ -97,9 +87,7 @@ public sealed class OrderAppService(
         return true;
     }
 
-    /// <summary>
-    /// 批量：先在范围内定位目标，再核对数量，禁止静默跳过越权项。
-    /// </summary>
+    /// <summary>批量：先在范围内定位目标，再核对数量，禁止静默跳过越权项。</summary>
     public async Task<bool> ArchiveManyAsync(IReadOnlyCollection<string> resourceKeys, CancellationToken ct)
     {
         var scoped = await VisibleQueryAsync(DataOperations.Update, ct);
@@ -129,9 +117,7 @@ public sealed class OrderAppService(
         return true;
     }
 
-    /// <summary>
-    /// 分享给我的：ACL 作为集合入口合并进查询，而不是逐行判定。
-    /// </summary>
+    /// <summary>分享给我的：ACL 作为集合入口合并进查询，而不是逐行判定。</summary>
     public async Task<IReadOnlyList<OrderDto>> GetSharedWithMeAsync(CancellationToken ct)
     {
         var subject = await subjectProvider.GetCurrentSubjectAsync(ct);
@@ -154,9 +140,7 @@ public sealed class OrderAppService(
             .ToListAsync(ct);
     }
 
-    /// <summary>
-    /// 可见集合 = （数据范围 OR ACL 允许）AND NOT ACL 拒绝。
-    /// </summary>
+    /// <summary>可见集合 = （数据范围 OR ACL 允许）AND NOT ACL 拒绝。</summary>
     /// <remarks>
     /// 只用数据范围会漏掉"别人分享给我"的资源；只用 ACL 允许集合又减不掉数据范围放行、
     /// 却被 ACL 显式拒绝的那一份——而"分享给部门、排除这一个人"正是显式拒绝的唯一用途。

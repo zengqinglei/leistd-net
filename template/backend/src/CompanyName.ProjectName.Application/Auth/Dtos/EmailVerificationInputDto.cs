@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 注册时提交的邮箱验证挑战应答。
-/// </summary>
+/// <summary>注册时提交的邮箱验证挑战应答。</summary>
 public sealed record EmailVerificationInputDto
 {
     public required Guid ChallengeId { get; init; }

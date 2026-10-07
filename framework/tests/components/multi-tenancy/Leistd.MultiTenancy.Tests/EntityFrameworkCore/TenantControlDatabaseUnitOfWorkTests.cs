@@ -65,9 +65,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
         Assert.Empty(await dbContext.Set<TenantConnectionRecord>().ToListAsync());
     }
 
-    /// <summary>
-    /// 建租户 + 登记连接在同一个原子边界内，且租户注册表与连接行始终同库同事务。
-    /// </summary>
+    /// <summary>建租户 + 登记连接在同一个原子边界内，且租户注册表与连接行始终同库同事务。</summary>
     /// <remarks>
     /// 租户注册表与连接行都在控制库；分库只影响后续业务数据，不能让创建流程跨物理库。
     /// 不分库租户没有连接行，由 <c>A_tenant_without_registrations_commits_with_no_connection_rows</c> 覆盖。

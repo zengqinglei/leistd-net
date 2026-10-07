@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Domain.Auth.Options;
 
-/// <summary>
-/// 验证码摘要密钥（配置节 <c>VerificationCodes</c>）
-/// </summary>
+/// <summary>验证码摘要密钥（配置节 <c>VerificationCodes</c>）。</summary>
 /// <remarks>
 /// <para><b>为什么必须是显式配置的稳定密钥。</b>摘要要做的事是：数据库泄漏后，
 /// 攻击者不能离线枚举 10⁶ 空间反查出在途验证码。这需要一个他不知道的密钥。</para>

@@ -15,9 +15,7 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// 子域名解析：格式匹配规则，以及它在解析链中的位置。
-/// </summary>
+/// <summary>子域名解析：格式匹配规则，以及它在解析链中的位置。</summary>
 public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixture)
     : IClassFixture<DomainTenantResolveTests.HostFixture>
 {
@@ -54,9 +52,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Equal(GlobexId.ToString(), await GetAsync("http://globex.example.com/"));
     }
 
-    /// <summary>
-    /// 子域名排在请求头之前：子域名部署下域名是权威，匿名请求不能用头把自己挪到别的租户。
-    /// </summary>
+    /// <summary>子域名排在请求头之前：子域名部署下域名是权威，匿名请求不能用头把自己挪到别的租户。</summary>
     [Fact]
     public async Task Header_cannot_move_an_anonymous_request_off_the_subdomain()
     {
@@ -67,9 +63,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Equal(AcmeId.ToString(), body);
     }
 
-    /// <summary>
-    /// 受管域内没解析出租户时必须就此定案为宿主，不能把决定权交还给请求头。
-    /// </summary>
+    /// <summary>受管域内没解析出租户时必须就此定案为宿主，不能把决定权交还给请求头。</summary>
     /// <remarks>
     /// 只在成功提取到租户名时才写 <c>TenantIdOrName</c>、从不设 <c>Handled</c> 的话，
     /// 基础域与多级子域都会继续走到 Header 贡献者——匿名请求在 example.com 上带个
@@ -90,9 +84,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Equal("host", await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>
-    /// 前缀形态下，受管域内但不匹配前缀的主机同样定案为宿主，不回退请求头。
-    /// </summary>
+    /// <summary>前缀形态下，受管域内但不匹配前缀的主机同样定案为宿主，不回退请求头。</summary>
     /// <remarks>
     /// <c>tenant-{0}.example.com</c> 部署里的 <c>other.example.com</c> 属于同一个域、
     /// 但不是租户入口；它若能被请求头改写，前缀形态就白设了。
@@ -133,9 +125,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         await host.StopAsync();
     }
 
-    /// <summary>
-    /// 受管域按 DNS label 边界算，不是占位符之后的原始字符串。
-    /// </summary>
+    /// <summary>受管域按 DNS label 边界算，不是占位符之后的原始字符串。</summary>
     /// <remarks>
     /// <c>{0}-tenant.example.com</c> 的受管域应是 <c>example.com</c>。若按原始字符串取后缀，
     /// 后缀会变成 <c>-tenant.example.com</c>，于是基础域被判为"域外"而回退请求头——
@@ -198,9 +188,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Equal(GlobexId.ToString(), await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>
-    /// 末尾根点是 DNS 中的等价写法，不能成为绕过子域名权威的后门。
-    /// </summary>
+    /// <summary>末尾根点是 DNS 中的等价写法，不能成为绕过子域名权威的后门。</summary>
     /// <remarks>
     /// <c>acme.example.com.</c> 与 <c>acme.example.com</c> 在 DNS 中是同一个名字，
     /// 而 <c>HostString.Host</c> 会原样保留那个点。字面比较匹配不上就会退回请求头，
@@ -228,9 +216,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Equal(AcmeId.ToString(), body);
     }
 
-    /// <summary>
-    /// claim 仍然优先于子域名：已认证主体的租户由 claim 定案，这条顺序是防跨租户越权的关键。
-    /// </summary>
+    /// <summary>claim 仍然优先于子域名：已认证主体的租户由 claim 定案，这条顺序是防跨租户越权的关键。</summary>
     [Fact]
     public async Task Authenticated_principal_claim_still_wins_over_the_subdomain()
     {
@@ -242,9 +228,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Equal(GlobexId.ToString(), body);
     }
 
-    /// <summary>
-    /// 非法 DomainFormat 必须在启动期失败，而不是运行期静默退回请求头解析。
-    /// </summary>
+    /// <summary>非法 DomainFormat 必须在启动期失败，而不是运行期静默退回请求头解析。</summary>
     /// <remarks>
     /// 这是 fail-open 的典型形态：配置写错了，系统照常启动、看起来在跑，
     /// 而"子域名是权威来源"这条边界已经没了——请求头重新说了算。
@@ -288,9 +272,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         Assert.Contains("DomainFormat", error.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 占位符不必占满整个 label：<c>tenant-{0}.example.com</c> 是合法形态。
-    /// </summary>
+    /// <summary>占位符不必占满整个 label：<c>tenant-{0}.example.com</c> 是合法形态。</summary>
     /// <remarks>
     /// 替换后仍是合法主机名即可；租户段本身不含点号由运行期解析保证。
     /// </remarks>
@@ -340,9 +322,7 @@ public class DomainTenantResolveTests(DomainTenantResolveTests.HostFixture fixtu
         return await response.Content.ReadAsStringAsync();
     }
 
-    /// <summary>
-    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
-    /// </summary>
+    /// <summary>本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

@@ -14,13 +14,9 @@ using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 资源服务形态：本地用户行由令牌投影而来，不由人手工创建。
-/// </summary>
+/// <summary>资源服务形态：本地用户行由令牌投影而来，不由人手工创建。</summary>
 /// <remarks>
-/// 这一侧的用户行主键<b>就是</b>签发方的 <c>sub</c>，而角色授予按这个主键落。
-/// 曾经这里放的是一个要人手填主体标识的表单：抄错一位得到的是一条永远匹配不上任何令牌、
-/// 又不报错的授权。这组用例钉住替代它的机制。
+/// 用户主键取签发方的 <c>sub</c>，角色授予使用同一主键，避免主体不匹配的无效授权。
 /// </remarks>
 public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
@@ -66,9 +62,7 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.Equal(before, await CountAllUsersAsync());
     }
 
-    /// <summary>
-    /// 当前主体的响应契约：字段集合与缺省值固定；超管标记与角色只取本服务的授权数据。
-    /// </summary>
+    /// <summary>当前主体的响应契约：字段集合与缺省值固定；超管标记与角色只取本服务的授权数据。</summary>
     /// <remarks>令牌里没有用户名与邮箱时为空串，显示名与租户为空时不输出（JSON 忽略 null）。</remarks>
     [Fact]
     public async Task Current_user_reports_local_super_admin_and_roles_with_a_stable_shape()
@@ -106,12 +100,9 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
 
     /// <summary>同一个 sub 的并发首访：输的一方重试后投影成功，只建一行，两个请求都成功。</summary>
     /// <remarks>
-    /// <para>回归点有两处。其一，<c>EnsureProjectedAsync</c> 里曾包着 <c>InsertAsync</c> 的 catch
-    /// <b>永不触发</b>：工作单元内 <c>InsertAsync</c> 只登记实体，撞键要到提交时才抛，
-    /// 那时已在 try 之外——结果是 500。其二，投影失败曾会拦住请求。</para>
-    /// <para>竞争靠屏障确定性地制造：两个请求都读到"不存在"、都要提交新行时才一起放行，
-    /// 必有一方真实撞键。只看响应码与行数证伪不了重试——投影失败也放行、胜者总会写下那一行；
-    /// 判据是"没有记下投影失败"：去掉重试，输的一方会记这条警告。</para>
+    /// <para>工作单元在提交时才报告撞键，重试须覆盖提交边界。</para>
+    /// <para>屏障让两个请求同时提交新行；响应码和行数无法单独证明重试，
+    /// 还须断言没有投影失败警告，因为投影失败也会放行请求。</para>
     /// </remarks>
     [Fact]
     public async Task Concurrent_first_requests_for_one_subject_all_succeed_and_create_one_row()

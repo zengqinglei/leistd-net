@@ -4,9 +4,7 @@ using Leistd.Authorization.Checking;
 
 namespace Leistd.Authorization.Tests.Core;
 
-/// <summary>
-/// 多权限结果在空集合上必须失败关闭。
-/// </summary>
+/// <summary>多权限结果在空集合上必须失败关闭。</summary>
 /// <remarks>
 /// <c>Enumerable.All</c> 对空序列返回 <c>true</c>（全称量化在空集上恒真）。
 /// 直接沿用会让 <c>AllGranted</c> 成为失败开放的授权判据——

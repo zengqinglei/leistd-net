@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// 租户会话自恢复：会话所属租户不可用时注销并放行恢复，而不是把用户卡死在连登录页都打不开的状态。
-/// </summary>
+/// <summary>租户会话自恢复：会话所属租户不可用时注销并放行恢复，而不是把用户卡死在连登录页都打不开的状态。</summary>
 public sealed class TenantSessionRecoveryTests
 {
     [Fact]

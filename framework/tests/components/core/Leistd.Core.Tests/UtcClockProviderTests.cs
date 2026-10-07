@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.Core.Tests;
 
-/// <summary>
-/// 框架的时间基准实现：<see cref="IClock.Now"/> 恒为 UTC，<see cref="IClock.Normalize"/> 是唯一入口。
-/// </summary>
+/// <summary>框架的时间基准实现：<see cref="IClock.Now"/> 恒为 UTC，<see cref="IClock.Normalize"/> 是唯一入口。</summary>
 public class UtcClockProviderTests
 {
     [Fact]

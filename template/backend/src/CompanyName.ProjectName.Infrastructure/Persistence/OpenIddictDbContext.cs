@@ -4,9 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence;
 
-/// <summary>
-/// OpenIddict 存储（应用、授权、作用域、令牌）。与租户控制面同库，但独立上下文。
-/// </summary>
+/// <summary>OpenIddict 存储（应用、授权、作用域、令牌）。与租户控制面同库，但独立上下文。</summary>
 /// <remarks>
 /// 该上下文随令牌签发能力独立裁剪，与本地身份控制面共享物理库但使用独立迁移历史。
 /// OpenIddict 通过 <c>UseOpenIddict()</c> 注入实体，因此本类不声明 <c>DbSet</c>，
