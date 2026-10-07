@@ -7,9 +7,7 @@ namespace Leistd.UnitOfWork.Options;
 /// </summary>
 public class UnitOfWorkOptions : IUnitOfWorkOptions
 {
-    /// <summary>
-    /// 默认配置节路径。
-    /// </summary>
+    /// <summary>默认配置节路径。</summary>
     public const string SectionName = "Leistd:UnitOfWork";
 
     /// <inheritdoc />
@@ -21,16 +19,12 @@ public class UnitOfWorkOptions : IUnitOfWorkOptions
     /// <inheritdoc />
     public TimeSpan? Timeout { get; set; }
 
-    /// <summary>
-    /// 创建一份各项均未设置的选项。
-    /// </summary>
+    /// <summary>创建选项：开启事务，其余未设置。</summary>
     public UnitOfWorkOptions()
     {
     }
 
-    /// <summary>
-    /// 复制一份选项。默认选项是共享实例，按次修改前必须先复制。
-    /// </summary>
+    /// <summary>复制一份选项；默认选项是共享实例，按次修改前必须先复制。</summary>
     /// <returns>与当前实例各项相同的新实例。</returns>
     public UnitOfWorkOptions Clone()
     {

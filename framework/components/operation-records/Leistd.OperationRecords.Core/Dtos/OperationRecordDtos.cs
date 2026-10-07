@@ -9,7 +9,7 @@ namespace Leistd.OperationRecords.Dtos;
 /// </summary>
 /// <remarks>
 /// <see cref="FailureDetail"/>、<see cref="CorrelationId"/> 与 <see cref="ActorTenantId"/> 只下发给宿主读者，
-/// 租户读者拿到的恒为空——字段级裁剪在服务端完成，交给界面"不显示"只是把数据下发了却假装看不见。
+/// 租户读者拿到的恒为空（服务端裁剪）。
 /// </remarks>
 public sealed record OperationRecordOutputDto
 {

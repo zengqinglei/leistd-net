@@ -6,11 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.Tracing.AmbientContext;
 
-// 非 HTTP 入口（Hub 调用、后台作业）的关联标识维度。
-//
-// 指定值优先；没有指定值而当前有 Activity 时不切换，Get() 自然取其 TraceId；
-// 两者都没有时新建一个，保证作用域内总有可用于关联日志的标识。
-// 与 HTTP 中间件一样同时打开日志作用域，作用域内的日志（含失败日志）才带得上关联标识。
+// 非 HTTP 入口（Hub 调用、后台作业）的关联标识维度：指定值优先；有 Activity 时不切换（Get() 取其 TraceId）；
+// 都没有时新建。与 HTTP 中间件一样同时打开日志作用域。
 internal sealed class CorrelationIdAmbientContextContributor(
     ICorrelationIdProvider correlationIdProvider,
     ILoggerFactory? loggerFactory = null) : IAmbientContextContributor

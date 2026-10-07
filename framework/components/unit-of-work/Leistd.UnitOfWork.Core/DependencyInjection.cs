@@ -15,9 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.UnitOfWork;
 
-/// <summary>
-/// 提供工作单元核心服务注册入口。
-/// </summary>
+/// <summary>工作单元核心服务注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>

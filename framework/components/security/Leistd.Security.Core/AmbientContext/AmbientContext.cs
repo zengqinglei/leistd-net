@@ -28,8 +28,7 @@ internal sealed class AmbientContext(
         }
         catch
         {
-            // 部分建立即回滚：留一半上下文比完全不建立更危险——
-            // 调用方会以为整个作用域可信，而实际只有主体生效、租户没有。
+            // 部分建立即回滚：调用方会以为整个作用域可信，而实际只有部分维度生效
             DisposeAll(entered);
             throw;
         }

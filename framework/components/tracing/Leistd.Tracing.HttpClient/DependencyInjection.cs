@@ -4,14 +4,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.Tracing.HttpClient;
 
-/// <summary>
-/// 关联标识出站透传的注册入口：为 <c>HttpClient</c> 挂上转发处理器。
-/// </summary>
+/// <summary>关联标识出站透传的注册入口：为 <c>HttpClient</c> 挂上转发处理器。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 为 HttpClient 添加关联标识转发处理器：把当前关联标识（默认即 TraceId，显式指定时为指定值）写入请求头。
-    /// </summary>
+    /// <summary>为 HttpClient 添加关联标识转发处理器：把当前关联标识写入请求头。</summary>
     /// <remarks>按命名客户端登记：同一客户端重复调用只挂一个处理器。</remarks>
     /// <example>
     /// <code>

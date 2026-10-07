@@ -13,8 +13,7 @@ namespace Leistd.OperationRecords.EntityFrameworkCore.Stores;
 /// 使用 EF Core 持久化操作记录，并提供历史读取。
 /// </summary>
 /// <remarks>
-/// <para>通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接，参与工作单元：
-/// 成功记录与业务数据<b>同一事务</b>提交，提交即持久，这是数据库存储独有的保证。</para>
+/// <para>通过 <see cref="IDbContextProvider{TDbContext}"/> 参与工作单元：成功记录与业务数据同一事务提交。</para>
 /// <para>租户隔离由 <c>IMultiTenant</c> 的全局查询过滤器承担，本类不带租户条件。</para>
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 OperationRecord 配置）。</typeparam>
@@ -29,11 +28,9 @@ public class EfCoreOperationRecordStore<TDbContext>(
 {
     /// <inheritdoc />
     /// <remarks>
-    /// <para>成功记录与 <c>EfCoreSettingStore</c>、<c>EfCoreNotificationStore</c> 同型：就地保存。
-    /// 这不等于"立即提交"——有环境工作单元时写入落进它的事务，由它决定提交还是回滚；
-    /// 没有工作单元时 <see cref="IDbContextProvider{TDbContext}"/> 给的是当前作用域新建的上下文，保存即生效。</para>
-    /// <para>失败记录先切到记录所在的租户层，再在新开的工作单元里写入并提交。切租户必须在开工作单元之前：
-    /// 工作单元按开启时的租户绑定连接，开了再切会被连接归属校验拒绝。</para>
+    /// <para>成功记录就地保存：有环境工作单元时落进它的事务，由它决定提交还是回滚；没有时保存即生效。</para>
+    /// <para>失败记录先切到记录所在的租户层，再在新开的工作单元里写入并提交；切租户须在开工作单元之前，
+    /// 工作单元按开启时的租户绑定连接。</para>
     /// </remarks>
     public async Task InsertAsync(OperationRecordInfo record, CancellationToken cancellationToken = default)
     {
@@ -41,7 +38,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
 
         if (record.Outcome == OperationRecordOutcome.Succeeded)
         {
-            // 成功记录跟随调用方的事务，连的是当前租户的库；归属对不上就会写进别人的库。
+            // 成功记录跟随调用方的事务，连的是当前租户的库，归属必须一致
             if (record.TenantId != currentTenant.Id)
             {
                 throw new InvalidOperationException(
@@ -84,8 +81,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var query = dbContext.Set<OperationRecord>().AsNoTracking();
 
-        // 动作码集合先物化成数组：EF 把它翻成 IN (...)，而传 IReadOnlyCollection 进表达式树
-        // 在部分 Provider 上会退化成客户端求值——那会把整表拉进内存，且总数算错。
+        // 先物化成数组，EF 才翻译为 IN (...)；IReadOnlyCollection 在部分 Provider 上会退化为客户端求值
         if (filter.Actions is { Count: > 0 } actions)
         {
             var actionCodes = actions.ToArray();
@@ -97,26 +93,15 @@ public class EfCoreOperationRecordStore<TDbContext>(
             query = query.Where(x => x.Outcome == requiredOutcome);
         }
 
-        // 可见性过滤在数据库里做，不是查出来再筛：内存筛会让总数与当页双双算错，分页直接失效。
-        // 租户维度不在这里——那由 IMultiTenant 的全局查询过滤器承担（谓词 TenantId == CurrentTenantId，
-        // 宿主视角下即 TenantId == null）。本段只在同一层内部再分一次"这条给不给看"。
+        // 可见性过滤在数据库里做，总数与分页才正确；租户维度由 IMultiTenant 的全局查询过滤器承担
         if (scope.IsRestricted)
         {
             var actorId = scope.ActorId;
             var actorTenantId = scope.ActorTenantId;
             var includesHostRecords = scope.IncludesHostRecords;
-            // 两个值都先落成局部变量再进表达式树：直接写 scope.XXX 会把整个对象
-            // 捕获进查询，EF 需要把成员访问翻译成 SQL，翻不动时报的是很难对上号的运行期错。
-            // Actor 层对宿主整层放行，对其余读者只放行"本人"：标识与所属租户都相同——
-            // 主体标识只在签发它的那一层内唯一，宿主主体进入租户留下的记录不能被租户里同标识的主体认领。
-            //
-            // **能看 Host 层的读者就是宿主**，这里复用 includesHostRecords 表达这件事，
-            // 而不是再加一个恒等于它的布尔——那种冗余状态迟早会与它漂移。
-            //
-            // 少了 includesHostRecords 这一支会怎样：宿主的 ActorId 恒为 null，
-            // `actorId != null` 恒假，于是 Actor 层被整层滤掉。症状是宿主管理员
-            // **看不到自己的登录记录**，而界面只会显示"暂无操作记录"——
-            // 既不报错也不提示，最难联想到是可见性判定的问题。
+            // 先落成局部变量再进表达式树，避免把 scope 对象捕获进查询。
+            // Actor 层对宿主（即能看 Host 层的读者）整层放行，否则宿主的 ActorId 为 null 会滤掉整层；
+            // 对其余读者只放行标识与所属租户都相同的“本人”。
             query = query.Where(x =>
                 x.Visibility == OperationVisibility.Tenant
                 || (x.Visibility == OperationVisibility.Host && includesHostRecords)
@@ -133,8 +118,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
                 || (x.ActorName != null && x.ActorName.Contains(trimmed)));
         }
 
-        // 两端都是闭区间：调用方给的是"从这一刻到那一刻"，而不是半开区间。
-        // 界面上选到某一天时，调用方应把上界取到那天的 23:59:59.999，否则当天的记录会整天看不见。
+        // 两端闭区间：按天选择时调用方把上界取到当天 23:59:59.999
         if (filter.StartTime is { } startTime)
         {
             query = query.Where(x => x.CreationTime >= startTime);
@@ -147,10 +131,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
 
         var totalCount = await query.LongCountAsync(cancellationToken);
 
-        // 同一毫秒内的多条记录时间相同，只按时间排序会让分页出现重复或遗漏。次级键消除这种不确定。
-        // 它保证的是"顺序确定"，不是"同一时刻内更新的在前"：后者取决于 Provider 怎么比较 Guid
-        // （PostgreSQL 的 uuid 按网络字节序，v7 时间序成立；SQLite 存 BLOB 按 .NET 字节布局比较，
-        // 前三段小端，时间序不成立）。分页要的是前者。
+        // 次级键让同一时刻的记录顺序确定，分页不重复不遗漏；不保证同一时刻内的先后（取决于 Provider 的 Guid 比较）
         var items = await query
             .OrderByDescending(x => x.CreationTime)
             .ThenByDescending(x => x.Id)

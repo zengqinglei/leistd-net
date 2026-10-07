@@ -5,16 +5,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.Security.AspNetCore;
 
-/// <summary>
-/// 提供当前主体安全上下文的服务注册。
-/// </summary>
+/// <summary>当前主体安全上下文的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册当前主体、用户和客户端访问器。
-    /// </summary>
-    /// <param name="services">服务集合。</param>
-    /// <returns>原服务集合。</returns>
+    /// <summary>注册当前主体、用户和客户端访问器，主体来源为 <c>HttpContext.User</c>。</summary>
     /// <example>
     /// <code>
     /// builder.Services.AddSecurity();

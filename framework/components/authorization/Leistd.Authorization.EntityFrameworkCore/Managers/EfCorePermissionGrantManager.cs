@@ -8,9 +8,7 @@ using Leistd.Authorization.Grants;
 
 namespace Leistd.Authorization.EntityFrameworkCore.Managers;
 
-/// <summary>
-/// EF Core 权限授予管理器。
-/// </summary>
+/// <summary>EF Core 权限授予管理器。</summary>
 /// <remarks>
 /// 所有写入经同一条归一化流水线：先校验权限已定义且启用（未定义抛 <see cref="UndefinedPermissionException"/>），
 /// 再向上补齐全部祖先，因此单条授予、批量替换与种子数据结果一致。

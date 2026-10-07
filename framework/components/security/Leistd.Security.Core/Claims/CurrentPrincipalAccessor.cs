@@ -3,9 +3,7 @@ using Leistd.Disposables;
 
 namespace Leistd.Security.Claims;
 
-/// <summary>
-/// 支持异步流覆盖的认证主体访问器。
-/// </summary>
+/// <summary>支持异步流覆盖的认证主体访问器。</summary>
 /// <remarks>
 /// 直接使用即"只认显式建立的主体"：适用于没有认证中间件的入口（后台作业、消息消费者、
 /// Hub 调用），未经 <see cref="Change"/> 或 <c>IAmbientContext.Begin</c> 建立时
@@ -29,15 +27,7 @@ public class CurrentPrincipalAccessor : ICurrentPrincipalAccessor
         }
     }
 
-    /// <summary>
-    /// 获取底层认证源中的主体；默认没有底层来源。
-    /// </summary>
-    /// <returns>认证主体，没有则返回 <see langword="null"/>。</returns>
-    /// <remarks>
-    /// 默认返回 <see langword="null"/> 而不是强制派生：绝大多数入口没有独立于
-    /// <see cref="Change"/> 的主体来源，null 也是这里唯一安全的回落——猜一个主体
-    /// 会让调用方读到不属于当前作用域的身份。
-    /// </remarks>
+    /// <summary>获取底层认证源中的主体；默认没有底层来源，返回 <see langword="null"/>。</summary>
     protected virtual ClaimsPrincipal? GetClaimsPrincipal() => null;
 
     /// <inheritdoc />

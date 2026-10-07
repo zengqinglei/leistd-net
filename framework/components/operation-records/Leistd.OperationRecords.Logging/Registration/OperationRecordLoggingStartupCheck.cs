@@ -7,8 +7,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Leistd.OperationRecords.Logging.Registration;
 
-// 日志模式下记录只有这一个去处：类别被过滤掉，安全记录就静默消失，而一切看起来照常。
-// 启动期按已登记的事实报出——日志级别与提交后输出所需的两个组件。
+// 日志模式下类别被过滤会让记录静默消失：启动期校验日志级别与提交后输出所需的两个组件
 internal sealed class OperationRecordLoggingStartupCheck(
     IServiceProvider serviceProvider,
     OperationRecordLogEmitter emitter) : IHostedLifecycleService

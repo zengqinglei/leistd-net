@@ -7,9 +7,7 @@ using Leistd.Response.Wrappers;
 
 namespace Leistd.Response.AspNetCore.Filters;
 
-/// <summary>
-/// 将成功响应包装为统一结果；MVC 的错误结果（问题详情）同样换成信封。
-/// </summary>
+/// <summary>将成功响应包装为统一结果；MVC 的错误结果（问题详情）同样换成信封。</summary>
 /// <remarks>
 /// <c>NotFound()</c>、<c>Problem()</c> 等错误结果由 MVC 的 <c>ProblemDetailsFactory</c> 生成、经输出格式化器写出，
 /// 不经过 <c>IProblemDetailsService</c>，信封写入器接不到它们，只能在结果阶段转换。

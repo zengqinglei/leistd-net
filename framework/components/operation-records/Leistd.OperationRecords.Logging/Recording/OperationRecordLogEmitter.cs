@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.OperationRecords.Logging.Recording;
 
-// 把一条已冻结的记录写成一条结构化日志。字段与数据库存储逐一对应：
-// 日志模式只换去处，不换"记什么"——采集端按字段筛选取证，与审计表的独立筛选同一要求。
+// 把一条已冻结的记录写成一条结构化日志，字段与数据库存储逐一对应
 internal sealed class OperationRecordLogEmitter(ILoggerFactory loggerFactory)
 {
     private const string MessageTemplate =
@@ -47,8 +46,7 @@ internal sealed class OperationRecordLogEmitter(ILoggerFactory loggerFactory)
             record.Id);
     }
 
-    // 业务已提交之后的写出：失败不能再改变业务结果（回滚已不可能），也不能让调用方把它当成业务失败再补记一条失败记录。
-    // 只报告记录标识与动作码，不重放其余字段——输出端本身就是坏的，换个类别尽力报一次。
+    // 业务已提交后的写出：失败不改变业务结果，只在另一类别尽力报告记录标识与动作码
     public void EmitCommitted(OperationRecordInfo record)
     {
         try

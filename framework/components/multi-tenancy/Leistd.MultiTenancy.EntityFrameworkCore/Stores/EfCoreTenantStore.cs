@@ -10,10 +10,8 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 /// 使用 EF Core 直接查询租户配置。
 /// </summary>
 /// <remarks>
-/// <b>刻意不缓存，每次解析都读库</b>：<see cref="TenantConfiguration.IsActive"/> 是访问控制状态，
-/// 缓存不可用时已停用或已删除的租户会被陈旧条目放行。直读让停用与删除在提交那一刻对所有节点生效。
-/// 成本是每请求一次索引查找，且复用当前请求已有的 <typeparamref name="TDbContext"/>。
-/// 确需缓存的服务自行包装 <see cref="ITenantStore"/> 装饰器，取舍见 multi-tenancy 组件文档。
+/// 不缓存，每次解析都读库：<see cref="TenantConfiguration.IsActive"/> 是访问控制状态，直读让停用与删除在提交时对所有节点生效。
+/// 成本是每请求一次索引查找，复用当前请求的 <typeparamref name="TDbContext"/>。确需缓存时自行包装 <see cref="ITenantStore"/> 装饰器。
 /// </remarks>
 public class EfCoreTenantStore<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider) : ITenantStore
     where TDbContext : DbContext

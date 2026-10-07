@@ -15,9 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Hosting;
 
-/// <summary>
-/// 宿主级设置 → 配置源 → <c>IOptionsMonitor</c> 的注册入口。
-/// </summary>
+/// <summary>宿主级设置 → 配置源 → <c>IOptionsMonitor</c> 的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -102,8 +100,7 @@ public static class DependencyInjection
     /// 把宿主级设置作为优先级最高的配置源挂到宿主配置上。
     /// </summary>
     /// <remarks>
-    /// 要在构建<b>之后</b>调用：构建期间还会追加配置源（例如测试宿主的覆盖配置），
-    /// 在那之前挂上的话它们会排在后面、压过设置。配置在构建之后仍可追加，追加即触发一次重载。
+    /// 须在构建之后调用：构建期间追加的配置源（如测试宿主的覆盖配置）否则会排在后面、压过设置。
     /// </remarks>
     /// <typeparam name="THost">宿主类型。</typeparam>
     /// <param name="host">已构建的宿主。</param>

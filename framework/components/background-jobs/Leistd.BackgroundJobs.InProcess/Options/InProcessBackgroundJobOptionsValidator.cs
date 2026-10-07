@@ -2,8 +2,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.BackgroundJobs.InProcess.Options;
 
-// 容量越界在启动期拒绝，不在建队列时静默改写：被改写后队列只剩 1 格，
-// 表现是入队方一直在等，而配置看上去是 256。
+// 容量越界在启动期拒绝，不在建队列时静默改写
 internal sealed class InProcessBackgroundJobOptionsValidator(string configSectionPath) : IValidateOptions<InProcessBackgroundJobOptions>
 {
     // 选项绑定的配置节；重复注册时据此拒绝另一路径。

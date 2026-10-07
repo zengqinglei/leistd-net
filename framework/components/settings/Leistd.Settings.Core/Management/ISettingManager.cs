@@ -6,10 +6,7 @@ namespace Leistd.Settings.Management;
 /// <summary>
 /// 设置值的写入入口，写前对照定义校验。
 /// </summary>
-/// <remarks>
-/// 写入不直接走 <see cref="ISettingStore"/>：未定义的名称会长成永远读不到的孤儿行，
-/// 写进定义不允许的层级则会让回落顺序失去意义——两者都要在写入时拒绝，而不是留到读取时才发现。
-/// </remarks>
+/// <remarks>业务写入经本接口而不是直接调用 <see cref="ISettingStore"/>：未定义的名称与定义不允许的层级在写入时拒绝。</remarks>
 public interface ISettingManager
 {
     /// <summary>写入设置值；<paramref name="value"/> 为 <see langword="null"/> 时清除该层级的值。</summary>

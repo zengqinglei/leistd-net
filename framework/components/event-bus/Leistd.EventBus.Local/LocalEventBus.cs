@@ -7,9 +7,7 @@ using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Local;
 
-/// <summary>
-/// 在当前进程中按事件运行时类型分发事件。
-/// </summary>
+/// <summary>在当前进程中按事件运行时类型分发事件。</summary>
 public class LocalEventBus(
     IServiceScopeFactory serviceScopeFactory,
     ILocalEventDeferrer? deferrer = null) : ILocalEventBus, ILocalEventDispatcher

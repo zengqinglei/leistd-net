@@ -3,7 +3,7 @@ using Leistd.Notifications.Email.Channels;
 
 namespace Leistd.Notifications.Email.Options;
 
-// 报错里的键名按实际绑定的配置节给出，宿主改了节路径时照提示去改才对得上
+// 报错里的键名按实际绑定的配置节给出
 internal sealed class EmailNotificationOptionsValidator(string sectionPath = EmailNotificationOptions.SectionName)
     : IValidateOptions<EmailNotificationOptions>
 {

@@ -9,15 +9,13 @@ namespace Leistd.MultiTenancy.Exceptions;
 public class TenantNotFoundException : BusinessException
 {
     /// <summary>构造异常。</summary>
-    /// <param name="tenantIdOrName">解析出的租户线索（Id 或名称）</param>
+    /// <param name="tenantIdOrName">解析出的租户 Id 或名称。</param>
     public TenantNotFoundException(string tenantIdOrName)
         : base(MultiTenancyErrorCodes.NotFound, $"Tenant not found: {tenantIdOrName}")
     {
         TenantIdOrName = tenantIdOrName;
     }
 
-    /// <summary>
-    /// 获取解析出的租户标识或名称。
-    /// </summary>
+    /// <summary>解析出的租户 Id 或名称。</summary>
     public string TenantIdOrName { get; }
 }

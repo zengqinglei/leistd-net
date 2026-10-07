@@ -11,17 +11,13 @@ using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime.AspNetCore.SignalR;
 
-/// <summary>
-/// Leistd 实时（SignalR）依赖注入与端点映射配置。
-/// </summary>
+/// <summary>实时组件 SignalR 传输的注册与端点映射。</summary>
 public static class DependencyInjection
 {
     /// <summary>业务事件 Hub 的默认路径。</summary>
     public const string DefaultRealTimeHubPath = "/hubs/realtime";
 
-    /// <summary>
-    /// 注册 SignalR 实时基础设施：业务事件推送器。
-    /// </summary>
+    /// <summary>注册 SignalR 实时基础设施：业务事件推送器。</summary>
     /// <remarks>
     /// 内部调用 <c>AddSignalR()</c>。通知组件（Leistd.Notifications.AspNetCore.SignalR）
     /// 可在此基础上叠加自己的 Hub 与发布器。可重复调用：服务只注册一次。
@@ -36,12 +32,10 @@ public static class DependencyInjection
     public static IServiceCollection AddRealTimeSignalR(this IServiceCollection services)
     {
         services.AddRealTime();
-        // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，
-        // 主体/租户/链路标识与 UserIdentifier 解析全靠基座。
+        // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，主体、租户、链路标识与 UserIdentifier 由基座建立
         services.AddSignalRAmbientContext();
 
-        // 幂等：宿主同时装通知与实时时两个入口都会走到这里，重复注册会让
-        // IBusinessEventPublisher 出现两条，按 IEnumerable 解析时同一事件推两遍。
+        // 幂等：重复注册会让同一事件推两遍
         services.TryAddSingleton<IBusinessEventPublisher, SignalRBusinessEventPublisher>();
 
         return services;
@@ -68,10 +62,8 @@ public static class DependencyInjection
         this IEndpointRouteBuilder endpoints,
         string pattern = DefaultRealTimeHubPath)
     {
-        // 授权器缺失即失败关闭：Subscribe 无条件走授权器，没有它连接会在首次订阅时
-        // 因解析不到依赖而失败——那太晚且信息含糊。这里明确指出该注册什么。
-        // 只问"注册了没有"、不在根容器里解析它：授权器通常要按请求判权限（依赖作用域服务），
-        // 从根容器解析会被作用域校验拒绝，或者在不校验时捕获一份不该跨请求共享的实例。
+        // 授权器缺失时映射即失败并指明该注册什么，而不是首次订阅才失败。
+        // 只问是否注册、不从根容器解析：授权器通常依赖作用域服务。
         var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
         // 框架的 Microsoft DI 容器提供探针；没有探针时沿用组件的组合检查约定跳过，
         // 不为未声明支持的容器从根作用域构造授权器。

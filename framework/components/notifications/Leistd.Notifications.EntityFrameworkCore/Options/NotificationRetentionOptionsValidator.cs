@@ -20,7 +20,7 @@ internal sealed class NotificationRetentionOptionsValidator(string configSection
             failures.Add($"{ConfigSectionPath}:UnreadRetentionDays must be between 1 and 3650.");
         }
 
-        // 未读比已读先删就本末倒置：用户还没看到的通知反而先消失
+        // 未读不得比已读先删
         if (options.UnreadRetentionDays < options.ReadRetentionDays)
         {
             failures.Add($"{ConfigSectionPath}:UnreadRetentionDays must not be shorter than ReadRetentionDays.");

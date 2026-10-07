@@ -7,17 +7,14 @@ namespace Leistd.MultiTenancy.Exceptions;
 /// 表示尝试在启用中的租户上做一次会改变数据落点的连接变更。
 /// </summary>
 /// <remarks>
-/// <para>两类写入落在这一档：<b>改或删已有的那一行</b>（路由从一个库指向另一个库），
-/// 以及<b>给一条登记都没有的租户登记第一条</b>（把它从"不分库"变成"分库"）。
-/// 前者让热实例与冷实例同时写入不同物理库；后者把它已有的数据连同租户管理员一起留在旧库里，
-/// 新库是空的，租户当场登不上。</para>
-/// <para><b>已是分库租户、补一个此前没有的名字不在此列</b>：那个服务此前就是失败关闭的，
-/// 没有数据可搁浅，补登是修复动作，启用态下照常放行。</para>
+/// <para>两类写入要求先停用：改或删已有的一行（路由换库，否则新旧实例同时写入不同物理库），
+/// 以及给无登记的租户登记第一条（变为分库，既有数据与租户管理员不会随之迁移）。</para>
+/// <para>已是分库租户补登此前缺失的名字不在此列：该服务此前失败关闭，没有数据搁浅，启用态下照常放行。</para>
 /// </remarks>
 public class TenantConnectionChangeRequiresInactiveTenantException : BusinessException
 {
     /// <summary>构造异常。</summary>
-    /// <param name="tenantId">目标租户</param>
+    /// <param name="tenantId">目标租户。</param>
     public TenantConnectionChangeRequiresInactiveTenantException(Guid tenantId)
         : base(MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant,
             $"Deactivate tenant '{tenantId}' before changing its database connection.")
@@ -25,6 +22,6 @@ public class TenantConnectionChangeRequiresInactiveTenantException : BusinessExc
         TenantId = tenantId;
     }
 
-    /// <summary>获取目标租户标识。</summary>
+    /// <summary>目标租户标识。</summary>
     public Guid TenantId { get; }
 }

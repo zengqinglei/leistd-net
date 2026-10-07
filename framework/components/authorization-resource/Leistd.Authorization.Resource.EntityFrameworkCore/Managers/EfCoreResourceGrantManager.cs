@@ -8,14 +8,8 @@ using Leistd.Authorization.Resource.Exceptions;
 
 namespace Leistd.Authorization.Resource.EntityFrameworkCore.Managers;
 
-/// <summary>
-/// EF Core 资源 ACL 管理器。
-/// </summary>
-/// <remarks>
-/// DbContext 一律经 <see cref="IDbContextProvider{TDbContext}"/> 获取，不直接注入
-/// <typeparamref name="TDbContext"/>：只有它会设置 <c>DbContextCreationContext.Current</c>，
-/// 直接注入会让独立库租户的 ACL 写入落到宿主配置的默认连接上，并脱离工作单元事务。
-/// </remarks>
+/// <summary>EF Core 资源 ACL 管理器。</summary>
+/// <remarks>DbContext 经 <see cref="IDbContextProvider{TDbContext}"/> 获取，写入随工作单元事务并落在当前租户的库。</remarks>
 public class EfCoreResourceGrantManager<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider)
     : IResourceGrantManager
     where TDbContext : DbContext

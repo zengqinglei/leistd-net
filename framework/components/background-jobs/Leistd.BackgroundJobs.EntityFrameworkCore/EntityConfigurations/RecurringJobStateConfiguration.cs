@@ -4,9 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Leistd.BackgroundJobs.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// <see cref="RecurringJobState"/> 的实体配置。
-/// </summary>
+/// <summary><see cref="RecurringJobState"/> 的实体配置。</summary>
 public class RecurringJobStateConfiguration : IEntityTypeConfiguration<RecurringJobState>
 {
     /// <inheritdoc />

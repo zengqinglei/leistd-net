@@ -8,9 +8,7 @@ using Leistd.DependencyInjection.Abstractions;
 
 namespace Leistd.DependencyInjection.DynamicProxy.Registration;
 
-/// <summary>
-/// 支持 DynamicProxy 拦截器织入的服务注册回调工厂。
-/// </summary>
+/// <summary>支持 DynamicProxy 拦截器织入的服务注册回调工厂。</summary>
 public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistrationCallbackFactory
 {
     /// <summary>创建使用 Microsoft DI 默认校验选项的工厂。</summary>
@@ -24,9 +22,7 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
     {
     }
 
-    /// <summary>
-    /// 登记 <see cref="DynamicProxyWeavingMarker"/>，供依赖织入的组件在启动时确认本工厂已接入。
-    /// </summary>
+    /// <summary>登记 <see cref="DynamicProxyWeavingMarker"/>，供依赖织入的组件在启动时确认本工厂已接入。</summary>
     public override IServiceCollection CreateBuilder(IServiceCollection services)
     {
         services.TryAddSingleton<DynamicProxyWeavingMarker>();
@@ -47,8 +43,7 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
         ApplyInterceptors(services, descriptor, interceptorTypes);
     }
 
-    // 键控注册必须原样改写回键控描述符：改成非键控会让 GetKeyedService 直接取不到，
-    // 而容器照常构建成功——正是本组件要消除的静默失效。
+    // 键控注册必须改写回键控描述符，否则 GetKeyedService 取不到而容器照常构建成功
     private static void ApplyInterceptors(
         IServiceCollection services,
         ServiceDescriptor descriptor,
@@ -108,8 +103,7 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
             $"Interceptor '{interceptor.GetType().FullName}' must implement Castle IInterceptor or IAsyncInterceptor.")
     };
 
-    // 键控与非键控的实现信息分挂在两组属性上，读错那一组只会得到 null，
-    // 最终以"Cannot create instance"的形式在解析时才暴露。
+    // 键控与非键控的实现信息分挂在两组属性上，读错一组只得到 null
     private static object CreateOriginalInstance(
         ServiceDescriptor descriptor,
         IServiceProvider sp,

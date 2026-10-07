@@ -1,12 +1,7 @@
 namespace Leistd.Authorization.Exceptions;
 
-/// <summary>
-/// 表示无法读取稳定的权限授予快照。
-/// </summary>
-/// <remarks>
-/// 这是可重试的瞬时读取失败，而非保存冲突。
-/// 存储层用"读版本 → 读数据 → 再读版本"确认期间无人写入，连续若干次不稳定时抛出。
-/// </remarks>
+/// <summary>无法读取稳定的权限授予快照。</summary>
+/// <remarks>可重试的瞬时读取失败，不是保存冲突：存储层连续若干次读到并发写入时抛出。</remarks>
 public sealed class UnstableGrantSnapshotException(string subject, int attempts)
     : InvalidOperationException(
         $"Could not read a consistent grant snapshot for '{subject}' after {attempts} attempts.")

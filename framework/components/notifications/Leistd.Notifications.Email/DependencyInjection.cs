@@ -7,9 +7,7 @@ using Leistd.Notifications.Email.Options;
 
 namespace Leistd.Notifications.Email;
 
-/// <summary>
-/// 通知邮件渠道的注册入口。
-/// </summary>
+/// <summary>通知邮件渠道的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>

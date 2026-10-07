@@ -4,9 +4,7 @@ using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Memory;
 
-/// <summary>
-/// 使用按键隔离的进程内信号量提供互斥。
-/// </summary>
+/// <summary>使用按键隔离的进程内信号量提供互斥。</summary>
 public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
 {
     private readonly ILogger<MemoryLocalLock> _logger;

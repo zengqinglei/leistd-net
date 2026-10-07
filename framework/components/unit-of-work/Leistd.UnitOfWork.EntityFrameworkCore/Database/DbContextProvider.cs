@@ -170,18 +170,9 @@ public class DbContextProvider<TDbContext>(
         return configured is null ? null : CreateTargetKey(configured);
     }
 
-    // 工作单元之外取到的 DbContext 由当前 DI 作用域持有（AddDbContext 默认 Scoped）：同一作用域里第一次创建之后，
-    // 再取拿到的都是那个实例，宿主回调不会再执行。于是这里解析出的连接串只是"应当用的"，不等于"实际在用的"。
-    //
-    // 典型事故：请求里先在宿主上下文取过一次（授权阶段读权限授予就会），随后 ICurrentTenant.Change 到分库租户再取，
-    // 拿到的仍是宿主库上的实例——计数、查找都在宿主库里执行，得出"该租户没有用户"这类完全不报错的错答案。
-    //
-    // 另一种做法是工作单元之外一律拒绝取 DbContext。本组件刻意不这么做：宿主侧大量读取本就不需要事务，
-    // 一刀切会逼着这些路径都包一层工作单元。这里只拒绝"解析出的连接与实例实际连接不一致"这一种情形，
-    // 它正是唯一会静默连错库的情形。判据与工作单元路径同一把尺（CreateTargetKey），不另立等价规则。
-    //
-    // 修正方式：在目标租户上下文内新开工作单元（Begin(requiresNew: true)）。工作单元自带独立作用域，
-    // DbContext 会按解析出的连接重新创建。
+    // 工作单元之外的 DbContext 由当前 DI 作用域持有，首次创建后宿主回调不再执行：作用域内切换租户后再取，
+    // 拿到的仍是先前连接上的实例。这里只拒绝“解析出的连接与实例实际连接不一致”这一会静默连错库的情形，
+    // 判据与工作单元路径相同（CreateTargetKey）。调用方应在目标租户上下文内 Begin(requiresNew: true)。
     private static void EnsureResolvedTargetIsUsed(TDbContext dbContext, string? resolvedConnectionString)
     {
         // 无解析器（宿主自己配置连接）或非关系型：没有"应当用哪个库"可比。

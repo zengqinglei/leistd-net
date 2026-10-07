@@ -5,13 +5,9 @@ namespace Leistd.MultiTenancy.Resolution;
 /// </summary>
 public interface ITenantResolveContributor
 {
-    /// <summary>
-    /// 获取用于诊断的贡献者名称。
-    /// </summary>
+    /// <summary>贡献者名称，用于诊断日志。</summary>
     string Name { get; }
 
-    /// <summary>
-    /// 尝试解析租户并更新解析上下文。
-    /// </summary>
+    /// <summary>尝试解析租户；给出结论时设置 <see cref="TenantResolveContext.TenantIdOrName"/> 或 <see cref="TenantResolveContext.Handled"/>。</summary>
     Task ResolveAsync(TenantResolveContext context);
 }

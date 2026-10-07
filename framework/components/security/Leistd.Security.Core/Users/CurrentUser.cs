@@ -4,11 +4,9 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Security.Users;
 
-/// <summary>
-/// 从当前 <see cref="ClaimsPrincipal"/> 提供强类型用户信息。
-/// </summary>
-/// <param name="principalAccessor">认证主体访问器</param>
-/// <param name="claimTypes">主体标识与租户的 claim 类型</param>
+/// <summary>从当前 <see cref="ClaimsPrincipal"/> 提供强类型用户信息。</summary>
+/// <param name="principalAccessor">认证主体访问器。</param>
+/// <param name="claimTypes">主体标识与租户的 claim 类型。</param>
 public class CurrentUser(ICurrentPrincipalAccessor principalAccessor, IOptions<ClaimTypeOptions> claimTypes) : ICurrentUser
 {
     private const string NameClaimType = "name";

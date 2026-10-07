@@ -4,15 +4,13 @@ using Leistd.Notifications.EntityFrameworkCore.Entities;
 
 namespace Leistd.Notifications.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// NotificationRecord EF Core 实体配置。
-/// </summary>
+/// <summary><see cref="NotificationRecord"/> 的实体配置。</summary>
 public class NotificationRecordConfiguration : IEntityTypeConfiguration<NotificationRecord>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<NotificationRecord> builder)
     {
-        // 表名沿用 EF Core 默认约定（实体名 NotificationRecord），不显式指定，避免框架前缀污染宿主库。
+        // 表名沿用 EF Core 默认约定，不加框架前缀
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.UserId)
@@ -45,16 +43,13 @@ public class NotificationRecordConfiguration : IEntityTypeConfiguration<Notifica
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);
 
-        // 按用户 + 创建时间查询（最频繁：拉取用户通知列表）。索引名沿用 EF Core 默认约定。
+        // 用户通知列表
         builder.HasIndex(x => new { x.UserId, x.CreationTime });
 
-        // 按用户 + 已读状态查询（未读数）。
+        // 未读数
         builder.HasIndex(x => new { x.UserId, x.IsRead });
 
-        // 保留期清理的访问路径：整库按时间扫、最旧的先删（IgnoreQueryFilters，不带 UserId）。
-        // 上面两条都以 UserId 打头，用不上。清理的谓词是
-        // "CreationTime < 未读截止 OR (已读 AND CreationTime < 已读截止)"，两个分支都被
-        // 较宽的那个上界包住，所以单列时间索引就够，不为它再拆一条按已读状态的组合索引。
+        // 保留期清理整库按时间扫（IgnoreQueryFilters，不带 UserId）；清理谓词的两个分支都受较宽的时间上界约束，单列索引即可
         builder.HasIndex(x => x.CreationTime);
     }
 }

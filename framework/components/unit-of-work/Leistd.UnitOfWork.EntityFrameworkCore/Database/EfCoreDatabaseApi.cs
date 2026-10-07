@@ -3,13 +3,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
-/// <summary>
-/// 把一个受工作单元管理的 <see cref="DbContext"/> 挂到工作单元上。
-/// </summary>
-/// <remarks>
-/// 上下文由工作单元的 DI 作用域创建、也由该作用域在释放时回收，因此本类<b>不</b>实现
-/// <see cref="IDisposable"/>——工作单元也不释放数据库 API。口径见 <see cref="IDatabaseApi"/>。
-/// </remarks>
+/// <summary>把一个受工作单元管理的 <see cref="DbContext"/> 挂到工作单元上。</summary>
+/// <remarks>上下文由工作单元的 DI 作用域创建与回收，本类不实现 <see cref="IDisposable"/>（见 <see cref="IDatabaseApi"/>）。</remarks>
 public class EfCoreDatabaseApi<TDbContext>(TDbContext dbContext) : IDatabaseApi, ISupportsSavingChanges, ISupportsRollback
     where TDbContext : DbContext
 {

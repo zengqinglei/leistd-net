@@ -8,9 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.OperationRecords.AspNetCore.Endpoints;
 
-/// <summary>
-/// 操作记录的 HTTP 端点。
-/// </summary>
+/// <summary>操作记录的 HTTP 端点。</summary>
 public static class OperationRecordEndpoints
 {
     /// <summary>端点名前缀，宿主按名字给个别端点追加约定时使用。</summary>
@@ -60,8 +58,7 @@ public static class OperationRecordEndpoints
         configure(options);
         options.Validate();
 
-        // 端点读的是历史，只有可回读的存储（如 AddOperationRecordsEfCore）才注册查询用例；
-        // 只写日志的适配没有历史可读。映射时报出，而不是等第一次请求才 500。
+        // 只有可回读的存储才注册查询用例；映射时报出，而不是等第一次请求才 500。
         var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
         if (probe is not null && !probe.IsService(typeof(IOperationRecordQueryService)))
         {

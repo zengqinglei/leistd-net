@@ -1,13 +1,10 @@
 namespace Leistd.BackgroundJobs.Recurring;
 
-/// <summary>
-/// 按固定排期重复执行的后台任务。
-/// </summary>
+/// <summary>按固定排期重复执行的后台任务。</summary>
 /// <remarks>
 /// <para>用 <c>AddRecurringJob&lt;TJob&gt;(name, schedule, scope)</c> 登记；每次执行在新的依赖注入作用域里解析实例，
 /// 可以注入 Scoped 服务。执行时没有请求主体与租户上下文：要逐个租户库处理时，在任务内部自行进入。</para>
-/// <para>任务应当<b>幂等</b>：<see cref="RecurringJobScope.Cluster"/> 保证同一时段只成功执行一次，
-/// 但一次执行中途失败（进程退出、锁丢失）后，下一个时段会从头再来。</para>
+/// <para>任务应当幂等：<see cref="RecurringJobScope.Cluster"/> 保证同一时段只成功执行一次，但中途失败后下一个时段会从头再来。</para>
 /// </remarks>
 public interface IRecurringJob
 {

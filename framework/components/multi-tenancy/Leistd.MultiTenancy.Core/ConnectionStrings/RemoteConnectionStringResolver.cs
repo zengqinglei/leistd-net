@@ -8,12 +8,10 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-// 远端解析：向持有控制库的服务按连接名回源，结果按 TTL 缓存在本进程，同租户同名字的并发回源由 HybridCache 合并为一次。
-//
-// 只用进程内一级缓存（DisableDistributedCache）：结果是含口令的连接串，不能因为宿主注册了 Redis 就被写进去。
-// 远端依赖（ITenantConnectionConfigurationStore 的 HTTP 实现）刻意不从构造注入：回源工厂由第一个调用方触发，
-// 却要为所有等待者服务，不能持有发起者请求作用域里的实例，因此在工厂里自开作用域。
-// 取消语义沿用 HybridCache：单个等待者取消只影响自己，全部等待者都取消时回源才取消；失败不缓存。
+// 远端解析：按连接名回源控制面，结果按 TTL 缓存在本进程，同租户同名字的并发回源由 HybridCache 合并。
+// 只用进程内一级缓存（DisableDistributedCache）：含口令的连接串不进分布式缓存。
+// 远端存储不从构造注入而在工厂里自开作用域：工厂为所有等待者服务，不能持有发起者请求作用域里的实例。
+// 取消沿用 HybridCache：全部等待者都取消时回源才取消；失败不缓存。
 internal sealed class RemoteConnectionStringResolver(
     ICurrentTenant currentTenant,
     IConfiguration configuration,
@@ -31,7 +29,7 @@ internal sealed class RemoteConnectionStringResolver(
         }
 
         var tenantId = currentTenant.Id!.Value;
-        // 归一化后再做缓存键：Crm 与 crm 是同一条路由，不能占两份缓存、也不能出现一份命中一份回源
+        // 归一化后做缓存键：Crm 与 crm 是同一条路由
         var name = TenantConnectionNames.Normalize(connectionStringName);
         // 期限同时定义租户改路由前的排空等待时间；启动期已校验
         var lifetime = routeCacheOptions.Value.CacheLifetime;

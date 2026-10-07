@@ -13,9 +13,7 @@ using Leistd.Notifications.Stores;
 
 namespace Leistd.Notifications.EntityFrameworkCore;
 
-/// <summary>
-/// 通知 EF Core 持久化依赖注入与模型配置。
-/// </summary>
+/// <summary>通知 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -24,11 +22,8 @@ public static class DependencyInjection
     /// <remarks>
     /// <para>本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文，
     /// 因此宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>。</para>
-    /// <para>同时接上 Core 的 <c>AddNotifications()</c>（幂等）：<b>"只要通知历史、不要实时推送"
-    /// 是受支持的组合</b>，装完本包就该能解析 <c>INotificationPublisher</c>。</para>
-    /// <para><b>还需要 <c>IClock</c></b>：发布器给每条通知盖创建时刻。宿主自行
-    /// <c>AddSingleton&lt;IClock, UtcClockProvider&gt;()</c>——<c>Leistd.Core</c> 刻意不提供 DI 扩展
-    /// （DDD 基础设施包已代为注册）。跨组件的前置由宿主显式组合，本包不隐式挂载别的组件。</para>
+    /// <para>同时调用 Core 的 <c>AddNotifications()</c>（幂等），只要通知历史、不要实时推送时也能解析 <c>INotificationPublisher</c>。</para>
+    /// <para>还需要 <c>IClock</c>：宿主自行 <c>AddSingleton&lt;IClock, UtcClockProvider&gt;()</c>（DDD 基础设施包已代为注册）。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -47,15 +42,12 @@ public static class DependencyInjection
         where TDbContext : DbContext
     {
 
-        // 发布器只消费一个权威存储：两个上下文各注册一次时会静默取一条，通知落进宿主没预期的库。
+        // 发布器只消费一个权威存储：两个上下文各注册一次时会静默取其一
         services.EnsureSingleAuthoritative<INotificationStore, EfCoreNotificationStore<TDbContext>>(
             ServiceLifetime.Transient,
             "Notifications have a single authoritative store; map NotificationRecord in one DbContext.");
 
-        // 同家族内的组合：持久化包要能独立成立。"只要通知历史、不要实时推送"是文档支持的组合，
-        // 而发布器在 Core 里——不在这里接上，那种宿主装完 EF 包仍解析不出 INotificationPublisher。
-        // AddNotifications() 幂等，与实时包同时装也只有一条。与操作记录 EF 包调 AddOperationRecords() 同型。
-        // 这不是替别的组件注册：跨组件（多租户、安全、链路）的前置仍由宿主显式组合。
+        // 同家族内组合：只装持久化包也能解析发布器；跨组件前置仍由宿主显式组合
         services.AddNotifications();
         services.TryAddTransient<INotificationStore, EfCoreNotificationStore<TDbContext>>();
         return services;
@@ -68,9 +60,7 @@ public static class DependencyInjection
     /// <para>选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:Notifications:Retention</c>）并在启动期校验，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>；默认开启，已读保留 90 天、未读保留 365 天，
     /// 均按创建时间计。开关与天数每轮取当前值，执行时刻只在排期时取一次。</para>
     /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁。</para>
-    /// <para><b>还需要 <c>AddMultiTenancyCore()</c></b>，单库项目也要：清理按物理库逐个执行，
-    /// 那条遍历（<c>ITenantDatabaseRunner</c>）由多租户 Core 提供。不分库时它给出的清单只有宿主库，
-    /// 行为与单库一致。本组件<b>不</b>替调用方注册它——组件由宿主显式组合，不隐式挂载别的组件。</para>
+    /// <para>还需要 <c>AddMultiTenancyCore()</c>，单库项目也要：逐库遍历（<c>ITenantDatabaseRunner</c>）由它提供，不分库时只有宿主库。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -117,9 +107,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 将 NotificationRecord 实体配置应用到 DbContext。在 OnModelCreating 中调用。
-    /// </summary>
+    /// <summary>映射 <c>NotificationRecord</c>，在 OnModelCreating 中调用。</summary>
     public static ModelBuilder ConfigureNotifications(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new NotificationRecordConfiguration());

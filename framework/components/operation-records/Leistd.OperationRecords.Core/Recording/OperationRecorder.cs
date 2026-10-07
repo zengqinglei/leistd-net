@@ -12,15 +12,8 @@ using Microsoft.Extensions.Options;
 namespace Leistd.OperationRecords.Recording;
 
 // IOperationRecorder 的默认实现：从当前上下文补齐操作人、时间与链路标识。
-//
-// internal：宿主经 IOperationRecorder 使用或装饰它。公开具体类而只按接口注册，
-// 注入具体类能编译通过、运行时才解析失败。
-//
-// 时间由本类填充，与 EfCoreTenantConnectionConfigurationManager 同型：审计属性的自动填充
-// 要宿主自己把 AuditSaveChangesInterceptor 挂到目标 DbContext，漏挂是静默的，
-// 得到的会是一张时间全为零的审计表——"什么时间"塌掉，整张表就没用了。
-//
-// 本类只决定记录"写进哪一层"（TenantId），事务边界由存储按结果执行（见 IOperationRecordWriter）。
+// 时间由本类填充，不依赖宿主给 DbContext 挂审计拦截器。
+// 本类只决定记录写进哪一层（TenantId），事务边界由存储按结果执行（见 IOperationRecordWriter）。
 internal sealed class OperationRecorder(
     IOperationRecordWriter writer,
     IOperationActionDefinitionManager actionDefinitions,
@@ -40,8 +33,7 @@ internal sealed class OperationRecorder(
     {
         var definition = GetDefinition(action, authorizationBasis);
 
-        // 宿主可见的成功记录只能写在宿主上下文里：租户上下文的事务连的是租户的库，
-        // 记在租户层谁都看不见，挪到宿主层又脱离了业务事务，两头都不对，只能让调用方改。
+        // 宿主可见的成功记录只能写在宿主上下文里：租户上下文的事务连的是租户的库
         if (definition.Visibility == OperationVisibility.Host && currentTenant.Id is { } tenantId)
         {
             throw new InvalidOperationException(
@@ -63,24 +55,21 @@ internal sealed class OperationRecorder(
         string authorizationBasis,
         OperationFailure failure = default)
     {
-        // 校验放在 try 之外：下面那个 catch 吞的是"写库没成功"这类运行期故障，
-        // 而参数漏传、动作码未登记是调用方的编码错误，确定性地每次都发生，必须当场响而不是被吞掉。
+        // 校验放在 try 之外：catch 只吞写入故障，参数与动作码错误是编码错误，必须抛出
         var definition = GetDefinition(action, authorizationBasis);
 
-        // 宿主可见的失败记录写进宿主层：留在租户层的话租户读者按可见性看不到、宿主按租户维度查不到。
-        // 失败记录本就独立提交，换一层写不牵动任何业务事务。
+        // 宿主可见的失败记录写进宿主层；失败记录独立提交，不牵动业务事务
         var tenantId = definition.Visibility == OperationVisibility.Host ? null : currentTenant.Id;
 
         try
         {
-            // 不可取消：被审计的一方断开连接，不能让这条审计作废。
+            // 不可取消：请求中断不影响这条记录
             await writer.InsertAsync(
                 Create(action, target, authorizationBasis, definition, tenantId,
                     OperationRecordOutcome.Failed, failure),
                 CancellationToken.None);
 
-            // 登记在写出之后：写库失败时下面只记日志、不抛，这条失败并没有留痕，
-            // 端点兜底应当照常补记。
+            // 写出之后才登记：写库失败时端点兜底仍应补记
             recordedFailures.MarkRecorded(action, target.Id);
         }
         catch (Exception exception)
@@ -93,15 +82,8 @@ internal sealed class OperationRecorder(
         }
     }
 
-    // 两个字符串由业务给值，框架只存不读，所以"忘了传"只能在这里响。
-    // 空串落库之后分不出"这次操作不需要授权依据"和"调用方漏传了"，
-    // 而审计表里一个分不清含义的列等于没有这一列。
-    //
-    // 目标不在这里校验：OperationTarget 把空白吸收成 None（标识为 "-"），
-    // 空白标识在类型层面就构造不出来，校验点前移到了值对象里。
-    //
-    // 动作码必须已登记：记录的可见性取自定义，未登记的码没有可见性可盖——默认给租户看是泄露，
-    // 默认只给宿主看又会让租户上下文里写下的记录谁都看不见。与权限未定义同一处理。
+    // 动作码与授权依据不得为空白（空白目标已由 OperationTarget 收敛为 None）；
+    // 动作码必须已登记，记录的可见性取自定义。
     private IOperationActionDefinition GetDefinition(string action, string authorizationBasis)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
@@ -113,8 +95,7 @@ internal sealed class OperationRecorder(
                 + "Register it through an IOperationActionDefinitionProvider.");
     }
 
-    // 从当前上下文补齐四问的答案。超长字段在存储侧被截断（列有长度上限），这里提前预警：
-    // 截断是静默的，而一条被截断的目标标识既检索不到成功路径写下的那条，又看起来像个真实存在的目标。
+    // 从当前上下文补齐记录。超长字段会在存储侧被静默截断，这里先记 Warning
     private OperationRecordInfo Create(
         string action,
         OperationTarget target,
@@ -127,12 +108,8 @@ internal sealed class OperationRecorder(
         var correlationId = correlationIdProvider.Get();
         var claimTypes = options.Value;
 
-        // 读 claim 原始值而不是 ICurrentUser.Id：后者只在 sub 能解析成 GUID 时有值，
-        // 而机器主体（client:<client_id>）与后台作业主体都不是 GUID——只认 Id 会把这两类
-        // 操作全部记成无主的，而"什么人"正是这张表的第一问。
-        //
-        // 自证类动作（登录、注册）在匿名请求里完成：主体在动作完成那一刻才被证实，定义声明目标即本人，
-        // 操作人取目标、所属租户取当前上下文——否则这条记录没有操作人，Actor 层的本人永远看不到它。
+        // 读 claim 原始值而不是 ICurrentUser.Id：后者只在 sub 是 GUID 时有值，机器与后台作业主体不是。
+        // 自证类动作在匿名请求里完成：操作人取目标、所属租户取当前上下文，Actor 层的本人才能看到它。
         var authenticated = currentUser.IsAuthenticated;
         var actorId = authenticated
             ? currentUser.SubjectId

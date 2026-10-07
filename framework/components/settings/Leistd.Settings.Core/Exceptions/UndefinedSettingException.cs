@@ -3,13 +3,8 @@ using Leistd.Settings.Errors;
 
 namespace Leistd.Settings.Exceptions;
 
-/// <summary>
-/// 表示读写了未定义的设置。
-/// </summary>
-/// <remarks>
-/// 与"值为空"刻意分开：未定义意味着名字拼错或漏注册 <c>ISettingDefinitionProvider</c>，
-/// 静默回落到默认值会让这两种情况看起来一样。错误码为 <see cref="SettingErrorCodes.Undefined"/>。
-/// </remarks>
+/// <summary>读写了未定义的设置（名字拼错或漏注册 <c>ISettingDefinitionProvider</c>）。</summary>
+/// <remarks>错误码为 <see cref="SettingErrorCodes.Undefined"/>。</remarks>
 public class UndefinedSettingException : BusinessException
 {
     /// <summary>以未定义的设置名构造。</summary>

@@ -7,10 +7,8 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 /// 表示宿主控制库中租户的一条连接登记。
 /// </summary>
 /// <remarks>
-/// <b>改这一行就改了该租户在这个服务的数据落在哪个库</b>，因此除并发令牌之外还带审计字段——
-/// 必须能回答"谁在何时改的"。主键是 <see cref="TenantId"/> + <see cref="Name"/>：
-/// 一个租户可以在 identity、foundation、crm 各登记一条。<b>行的存在本身就是判据</b>，没有模式标志位；
-/// 一条都没有即该租户不单独分库。
+/// 这一行决定该租户在这个服务的数据落在哪个库，因此除并发令牌外还带审计字段。
+/// 主键是 <see cref="TenantId"/> + <see cref="Name"/>；一条都没有即该租户不单独分库。
 /// 不实现 <see cref="ISoftDelete"/>：随 <see cref="TenantRecord"/> 级联删除。
 /// 写入统一通过 <see cref="ITenantConnectionConfigurationManager"/>，它负责名字归一化、加密、版本递增与时间填充。
 /// </remarks>

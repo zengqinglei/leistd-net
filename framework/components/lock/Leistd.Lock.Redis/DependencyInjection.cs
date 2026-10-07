@@ -8,9 +8,7 @@ using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Redis;
 
-/// <summary>
-/// 提供 Redis 分布式锁注册入口。
-/// </summary>
+/// <summary>Redis 分布式锁注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -20,10 +18,10 @@ public static class DependencyInjection
     /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加。连接串以首次调用为准，之后传入的不同连接串被忽略；
     /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键），校验消息仍按首次调用的配置节给出键名。
     /// </remarks>
-    /// <param name="services">服务集合</param>
-    /// <param name="connectionString">Redis 连接串</param>
-    /// <param name="configure">编程式配置，在配置节绑定之后应用</param>
-    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:Lock:Redis</c></param>
+    /// <param name="services">服务集合。</param>
+    /// <param name="connectionString">Redis 连接串。</param>
+    /// <param name="configure">编程式配置，在配置节绑定之后应用。</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:Lock:Redis</c>。</param>
     /// <example>
     /// <code>
     /// builder.Services.AddRedisDistributedLock(
@@ -39,7 +37,7 @@ public static class DependencyInjection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-        // 租约与重试间隔配错都是静默的生产事故（忙轮询 / 互斥当场不成立），必须在接流量之前失败
+        // 租约与重试间隔配错会导致忙轮询或互斥失效，启动期即失败
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<RedisLockOptions>>(new RedisLockOptionsValidator(configSectionPath)));
         var options = services.AddOptions<RedisLockOptions>().BindConfiguration(configSectionPath).ValidateOnStart();

@@ -8,10 +8,7 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 /// <summary>
 /// 直接读控制库列出租户的连接登记。
 /// </summary>
-/// <remarks>
-/// 从未删除租户的入口起查：控制面上下文没有软删除过滤器兜底，少这道 join 就会把已删租户的登记也列出来。
-/// 只投影名字与版本，密文列根本不进 SELECT。
-/// </remarks>
+/// <remarks>只列未删除租户的登记，只投影名字与版本，不读取密文列。</remarks>
 /// <typeparam name="TDbContext">映射了租户注册表的控制库上下文。</typeparam>
 /// <param name="dbContextProvider">控制库上下文。</param>
 public class EfCoreTenantConnectionDirectory<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider)

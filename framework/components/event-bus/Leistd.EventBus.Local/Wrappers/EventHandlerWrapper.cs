@@ -15,13 +15,10 @@ internal abstract class EventHandlerWrapper
 internal class EventHandlerWrapperImpl<TEvent> : EventHandlerWrapper
     where TEvent : IEvent
 {
-    /// <summary>
-    /// 依次调用全部处理器，并在全部完成后抛出收集的异常。
-    /// </summary>
+    /// <summary>依次调用全部处理器，并在全部完成后抛出收集的异常。</summary>
     /// <remarks>
-    /// <b>一个处理器失败不阻断其余处理器</b>。全部跑完后：单个异常原样上抛（保留类型），
-    /// 多个包成 <see cref="AggregateException"/>——发布方因此仍会失败。
-    /// 取消异常不参与聚合：它表示调用方主动放弃，不是处理器缺陷。
+    /// 一个处理器失败不阻断其余处理器；全部跑完后单个异常原样上抛，多个包成 <see cref="AggregateException"/>。
+    /// 取消异常不参与聚合。
     /// </remarks>
     public override async Task HandleAsync(
         IEvent @event,

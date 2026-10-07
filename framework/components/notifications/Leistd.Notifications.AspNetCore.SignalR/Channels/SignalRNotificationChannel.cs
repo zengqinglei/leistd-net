@@ -4,9 +4,8 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Leistd.Notifications.AspNetCore.SignalR.Channels;
 
-// 基于 SignalR 的通知外发渠道。推送经哪个 Hub 由注册时选定（见 NotificationHubClients）。
-//
-// 不注入日志：送达失败的记录由发布器统一做（见 INotificationChannel），这里再记一遍只会得到两条描述同一件事的日志。
+// 基于 SignalR 的通知外发渠道，经注册时选定的 Hub 推送（见 NotificationHubClients）。
+// 不记日志、不吞异常：失败隔离与记录由发布器统一负责（见 INotificationChannel）。
 internal sealed class SignalRNotificationChannel(NotificationHubClients hub) : INotificationChannel
 {
     /// <inheritdoc />
@@ -16,10 +15,7 @@ internal sealed class SignalRNotificationChannel(NotificationHubClients hub) : I
     /// <inheritdoc />
     public async Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
     {
-        // 按 UserIdentifier 寻址，其生成规则由 SignalR 基座的 UserIdProvider 统一提供。
-        //
-        // 这里不吞异常：跨渠道隔离与日志由发布器统一负责（见 INotificationChannel），
-        // 各实现各吞一遍会让"取消"也被伪装成"送达失败"，而且这条保证会取决于每个实现者。
+        // 按 UserIdentifier 寻址，其生成规则由 SignalR 基座的 UserIdProvider 提供
         await hub.Clients.User(userId).SendAsync(NotificationClientMethods.Received, notification, ct);
     }
 }

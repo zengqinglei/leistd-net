@@ -15,8 +15,7 @@ public class TenantRecordConfiguration : IEntityTypeConfiguration<TenantRecord>
     {
         builder.HasKey(x => x.Id);
 
-        // 并发令牌：租户生命周期的所有写路径（启停、改名、连接配置创建与修改）
-        // 都要竞争它，把"改路由前必须已停用"从一句注释变成数据库层面的不变量
+        // 并发令牌：启停、改名与连接配置写入都竞争它，使“改路由前必须已停用”成为数据库层面的不变量
         builder.Property(x => x.Version)
             .IsRequired()
             .IsConcurrencyToken();

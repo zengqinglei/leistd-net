@@ -7,10 +7,7 @@ namespace Leistd.OperationRecords.EntityFrameworkCore.Entities;
 /// 操作记录的持久化形态。
 /// </summary>
 /// <remarks>
-/// <para><b>刻意不实现 <c>ICreationAuditedObject</c>。</b>那套审计属性由宿主挂的
-/// <c>AuditSaveChangesInterceptor</c> 填充：<c>CreatorId</c> 取当前用户标识，而本表要的是
-/// <see cref="ActorName"/> 这种<b>快照</b>——用户改名或销号之后仍要留住当时的名字。
-/// 两套并存就有两个"什么人"的事实源，且其中一个会随宿主有没有挂拦截器而时有时无。</para>
+/// <para>不实现 <c>ICreationAuditedObject</c>：操作人与时间由记录器填充，不依赖宿主的审计拦截器。</para>
 /// <para>写入后不再修改：没有修改与删除审计列，也没有对应的存储方法。</para>
 /// </remarks>
 public class OperationRecord : IMultiTenant
@@ -21,7 +18,7 @@ public class OperationRecord : IMultiTenant
     /// <inheritdoc />
     public Guid? TenantId { get; set; }
 
-    /// <summary>操作发生时的租户上下文；<see langword="null"/> 表示宿主。</summary>
+    /// <summary>操作人所属的租户；<see langword="null"/> 表示宿主主体。</summary>
     public Guid? ActorTenantId { get; set; }
 
     /// <summary>业务动作码。</summary>
@@ -39,7 +36,7 @@ public class OperationRecord : IMultiTenant
     /// <summary>发生时间（UTC）。</summary>
     public DateTime CreationTime { get; set; }
 
-    /// <summary>操作人标识；机器主体为 <see langword="null"/>。</summary>
+    /// <summary>操作人标识；匿名请求为 <see langword="null"/>。</summary>
     public string? ActorId { get; set; }
 
     /// <summary>操作人显示名的快照。</summary>
@@ -89,8 +86,7 @@ public class OperationRecord : IMultiTenant
         TargetName = Truncate(info.TargetName, OperationRecordInfo.MaxTargetNameLength),
         Visibility = info.Visibility,
         FailureCode = Truncate(info.FailureCode, OperationRecordInfo.MaxFailureCodeLength),
-        // FailureData 不截断：它是 JSON，截断会得到一个无法解析的串——
-        // 那比不存更糟，因为读取方拿到的是"看起来有值但解析必然失败"的数据。
+        // FailureData 不截断：截断的 JSON 无法解析
         FailureData = info.FailureData,
         FailureDetail = Truncate(info.FailureDetail, OperationRecordInfo.MaxFailureDetailLength)
     };
@@ -119,16 +115,10 @@ public class OperationRecord : IMultiTenant
     };
 
     /// <summary>操作人标识列长度上限：容得下 GUID 字符串与机器主体的 client_id。</summary>
-    /// <remarks>
-    /// <b>指向 <see cref="OperationRecordInfo.MaxActorIdLength"/>，不独立取值。</b>
-    /// <see cref="FromInfo"/> 的截断按 Core 那份、EF 列长度配置按这一份；两处各自取值时，
-    /// 改任一处就会让截断长度与列长度静默错开——超出的部分要么被数据库拒绝、要么被二次截断。
-    /// 长度是同一个事实，只能有一个源。
-    /// </remarks>
+    /// <remarks>引用 <see cref="OperationRecordInfo.MaxActorIdLength"/>，截断长度与列长度同源。</remarks>
     public const int MaxActorIdLength = OperationRecordInfo.MaxActorIdLength;
 
-    // 就地截断而不是抛异常：审计写入不能因为一个字段超长，把一次已经成功的业务操作变成 500。
-    // Recorder 在写入前已对超长值记 Warning，排查时按那条日志走。
+    // 就地截断而不是抛异常，不让超长字段把成功的业务变成 500；记录器写入前已记 Warning
     private static string? Truncate(string? value, int maxLength)
     {
         if (value is null)

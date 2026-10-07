@@ -5,9 +5,7 @@ using Leistd.Authorization.Definitions;
 
 namespace Leistd.Authorization.AspNetCore.Permissions;
 
-/// <summary>
-/// 权限策略提供器：把"权限名"作为授权策略名。
-/// </summary>
+/// <summary>权限策略提供器：把权限名作为授权策略名。</summary>
 /// <remarks>
 /// policy 名命中已定义权限时动态构建携带 <see cref="PermissionRequirement"/> 的策略，否则回退到默认策略提供器。
 /// 策略名可用 <c>|</c> 连接多个权限名表示"任一满足"；
@@ -30,8 +28,7 @@ public class PermissionPolicyProvider : IAuthorizationPolicyProvider
     /// <inheritdoc />
     public async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
-        // 显式注册的同名策略优先：宿主可能注册了一个更严格的同名策略（例如在权限之外再要求
-        // MFA 或特定 Claim），动态生成的权限策略不得把它盖掉。
+        // 显式注册的同名策略优先（宿主可能在权限之外再要求 MFA 或特定 Claim）
         var registered = await _fallbackPolicyProvider.GetPolicyAsync(policyName);
         if (registered != null)
             return registered;

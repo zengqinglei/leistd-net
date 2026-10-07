@@ -15,6 +15,5 @@ public sealed class SettingManagementOptions
     public Type? LocalizationResource { get; set; }
 
     /// <summary>未写分组的设置归入的分组标识，默认 <c>Other</c>。</summary>
-    /// <remarks>归到一个固定分组而不是落在界面之外：新增设置忘了写分组时，摆在这里一眼就能看到。</remarks>
     public string DefaultGroup { get; set; } = "Other";
 }

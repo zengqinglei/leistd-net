@@ -54,9 +54,7 @@ public class DefaultUnitOfWork : IUnitOfWork
     private bool _isRolledback;
     private bool _isInitialized;
 
-    /// <summary>
-    /// 使用容器服务和默认选项创建工作单元。
-    /// </summary>
+    /// <summary>使用容器服务和默认选项创建工作单元。</summary>
     public DefaultUnitOfWork(IServiceProvider serviceProvider, IOptions<UnitOfWorkOptions> options)
     {
         ServiceProvider = serviceProvider;
@@ -187,8 +185,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested && !commitStarted)
         {
-            // 调用方主动取消（典型是客户端断开），且发生在提交开始之前。与框架其余处一致：调用方取消不记为失败。
-            // 事务型：此前的保存都在事务里，什么都没提交。非事务型：每次保存都已各自落库，不会回滚——这要让人看见
+            // 提交开始之前的调用方取消（如客户端断开）不记为失败。事务型什么都没提交；非事务型此前的保存已各自落库，不会回滚。
             _exception = ex;
             if (Options.IsTransactional)
             {
@@ -230,7 +227,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         }
 
         _isRolledback = true;
-        // Debug：回滚是结果不是原因。每一次业务拒绝都会走到这里，原因已由异常处理（或上面的提交失败日志）记下
+        // Debug 级：每次业务拒绝都会回滚，原因已由异常处理或提交失败日志记录
         _logger?.LogDebug("Unit of work {UowId} rolling back", Id);
 
         await RollbackAllAsync(cancellationToken);
@@ -278,9 +275,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         _pendingEvents.AddRange(events);
     }
 
-    /// <summary>
-    /// 发布提交后事件。
-    /// </summary>
+    /// <summary>发布提交后事件。</summary>
     /// <remarks>所有事件分发完毕后再上抛失败；单个异常保留原类型，多个异常聚合。事务已提交，不再回滚。</remarks>
     protected virtual async Task OnCompletedAsync()
     {
@@ -332,9 +327,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         }
     }
 
-    /// <summary>
-    /// 触发释放事件。
-    /// </summary>
+    /// <summary>触发释放事件。</summary>
     protected virtual void OnDisposed()
     {
         Disposed?.Invoke(this, new UnitOfWorkEventArgs(this));
@@ -410,9 +403,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         }
     }
 
-    /// <summary>
-    /// 回滚所有数据库和事务操作。
-    /// </summary>
+    /// <summary>回滚所有数据库和事务操作。</summary>
     protected virtual async Task RollbackAllAsync(CancellationToken cancellationToken)
     {
         // 各 API 独立回滚并记录失败，避免一个异常跳过其余 API 或覆盖原始异常。
@@ -447,9 +438,7 @@ public class DefaultUnitOfWork : IUnitOfWork
         }
     }
 
-    /// <summary>
-    /// 依次提交本工作单元登记的事务。
-    /// </summary>
+    /// <summary>依次提交本工作单元登记的事务。</summary>
     /// <remarks>
     /// 不提供跨事务原子性；后续提交失败时抛出包含已提交项的 <see cref="InvalidOperationException"/>。
     /// </remarks>

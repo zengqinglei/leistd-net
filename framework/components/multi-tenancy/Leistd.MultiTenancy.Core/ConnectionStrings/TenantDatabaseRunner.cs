@@ -19,7 +19,7 @@ internal sealed class TenantDatabaseRunner(
         var set = await databaseEnumerator.GetDatabasesAsync(connectionStringName, activeOnly, cancellationToken);
         var failed = new List<TenantDatabase>();
 
-        // 解析不出连接的租户只记不抛：坏掉一个租户不该让整轮作业不执行
+        // 解析不出连接的租户只记不抛，不阻止其余库
         foreach (var unresolved in set.FailedTenants)
         {
             logger.LogError(

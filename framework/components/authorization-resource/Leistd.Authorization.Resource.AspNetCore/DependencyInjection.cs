@@ -7,9 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.Authorization.Resource.AspNetCore;
 
-/// <summary>
-/// 资源实例授权的注册入口：判定接入官方授权管线。
-/// </summary>
+/// <summary>资源实例授权的注册入口：判定接入官方授权管线。</summary>
 public static class DependencyInjection
 {
     /// <summary>

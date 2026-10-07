@@ -3,7 +3,7 @@ namespace Leistd.MultiTenancy.AspNetCore.Endpoints;
 /// <summary>
 /// 租户管理端点的授权口径，全部必填。
 /// </summary>
-/// <remarks>组件不内置默认策略：租户管理是宿主侧最敏感的能力，默认放行就是事故。漏配任何一项，映射时就抛出。</remarks>
+/// <remarks>组件不内置默认策略，漏配任何一项时映射即抛出。</remarks>
 public sealed class TenantManagementEndpointOptions
 {
     /// <summary>查询租户列表与详情所需的策略名。</summary>
@@ -32,8 +32,7 @@ public sealed class TenantManagementEndpointOptions
 /// 租户连接端点的授权口径。
 /// </summary>
 /// <remarks>
-/// <see cref="ManagePolicy"/> 必填。两个机器端点各自的策略为空时不映射它：不签发机器令牌的部署里，
-/// 一个永远无人可用的内部端点只是攻击面。
+/// <see cref="ManagePolicy"/> 必填。两个机器端点各自的策略为空时不映射该端点，不留无人可用的内部端点。
 /// </remarks>
 public sealed class TenantConnectionEndpointOptions
 {

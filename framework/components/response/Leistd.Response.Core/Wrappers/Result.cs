@@ -2,9 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Leistd.Response.Wrappers;
 
-/// <summary>
-/// 统一响应结果：成功与业务失败共用的信封，<c>code</c> 为 0 表示成功。
-/// </summary>
+/// <summary>统一响应结果：成功与业务失败共用的信封，<c>code</c> 为 0 表示成功。</summary>
 /// <remarks>
 /// HTTP 状态码由调用方另行决定（见 <c>ControllerExtensions</c>）；本类型只承载业务语义。
 /// 未包装的返回值由 <c>ResultWrapperFilter</c> 自动套上本信封。

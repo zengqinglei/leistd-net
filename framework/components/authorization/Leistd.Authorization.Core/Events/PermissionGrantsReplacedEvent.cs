@@ -6,8 +6,7 @@ namespace Leistd.Authorization.Events;
 /// 某个主体的授予经管理用例整体替换。
 /// </summary>
 /// <remarks>
-/// 替换由授予管理器自己提交，事件在写入成功后发布；宿主据此记审计。
-/// 授予管理器的其它写入（种子、单项授予）不发布它：那些不是"管理员改了谁能做什么"。
+/// 由管理用例在替换成功后发布，宿主据此记审计；种子与单项授予不发布。
 /// </remarks>
 /// <param name="providerName">授予对象类型。</param>
 /// <param name="providerKey">授予对象 Key。</param>

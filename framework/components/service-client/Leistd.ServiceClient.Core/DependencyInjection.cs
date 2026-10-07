@@ -10,37 +10,29 @@ using Leistd.Tracing.Abstractions;
 
 namespace Leistd.ServiceClient;
 
-/// <summary>
-/// 服务客户端注册入口。
-/// </summary>
+/// <summary>服务客户端注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 服务客户端配置节前缀：每个下游服务绑定 <c>Leistd:ServiceClients:&lt;服务名&gt;</c>。
-    /// </summary>
+    /// <summary>服务客户端配置节前缀：每个下游服务绑定 <c>Leistd:ServiceClients:&lt;服务名&gt;</c>。</summary>
     public const string ConfigurationSectionPrefix = "Leistd:ServiceClients";
 
-    /// <summary>
-    /// 注册强类型服务客户端并装配标准调用管道。
-    /// </summary>
+    /// <summary>注册强类型服务客户端并装配标准调用管道。</summary>
     /// <remarks>
     /// <para>先绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:ServiceClients:{serviceName}</c>），再应用
     /// <paramref name="configure"/>；无主机的 <c>ServiceCollection</c> 须自行注册 <c>IConfiguration</c>。</para>
     /// <para>按 <paramref name="serviceName"/> 区分客户端，不同服务名可多次登记。同一服务名以相同的客户端接口、实现、
     /// 选项类型与配置节重复调用时不重复登记客户端与处理器，只追加 <paramref name="configure"/>，并返回该命名客户端的构建器；
     /// 同一服务名换用其他客户端接口、实现、选项类型或配置节，或同一选项类型用于另一服务名时抛出 <see cref="InvalidOperationException"/>。</para>
-    /// <para>TraceId 透传是<b>跟随宿主显式组合</b>的可选能力：
-    /// 宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传 TraceId；
-    /// 未注册时对应环节自动直通，本方法不代为注册。</para>
+    /// <para>宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传 TraceId，本方法不代为注册。</para>
     /// </remarks>
-    /// <typeparam name="TClient">客户端接口</typeparam>
-    /// <typeparam name="TImplementation">客户端实现</typeparam>
-    /// <typeparam name="TOptions">客户端配置类型（每个客户端一个具体类型）</typeparam>
-    /// <param name="services">服务集合</param>
-    /// <param name="serviceName">下游服务名：命名 HttpClient、默认配置节与日志类别</param>
-    /// <param name="configure">在配置节之后应用的选项配置</param>
-    /// <param name="configSectionPath">选项绑定的配置节；省略时为 <c>Leistd:ServiceClients:{serviceName}</c></param>
-    /// <returns><see cref="IHttpClientBuilder"/>，可继续追加认证（OAuth 包）、弹性等处理器</returns>
+    /// <typeparam name="TClient">客户端接口。</typeparam>
+    /// <typeparam name="TImplementation">客户端实现。</typeparam>
+    /// <typeparam name="TOptions">客户端配置类型，每个客户端一个具体类型。</typeparam>
+    /// <param name="services">服务集合。</param>
+    /// <param name="serviceName">下游服务名：命名 HttpClient、默认配置节与日志类别。</param>
+    /// <param name="configure">在配置节之后应用的选项配置。</param>
+    /// <param name="configSectionPath">选项绑定的配置节；省略时为 <c>Leistd:ServiceClients:{serviceName}</c>。</param>
+    /// <returns>可继续追加认证（OAuth 包）、弹性等处理器的构建器。</returns>
     /// <example>
     /// <code>
     /// builder.Services
@@ -132,18 +124,16 @@ public static class DependencyInjection
             $"options {OptionsType.Name}, section '{ConfigSectionPath}'";
     }
 
-    /// <summary>
-    /// 在现有客户端构建器上装配服务客户端标准管道。
-    /// </summary>
+    /// <summary>在现有客户端构建器上装配服务客户端标准管道。</summary>
     /// <remarks>
     /// <para>依次应用传输异常与链路标识处理器。</para>
     /// <para>按命名客户端登记：同一客户端以相同 <typeparamref name="TOptions"/> 重复调用（包括已由
     /// <c>AddServiceClient</c> 装配过的客户端）不重复挂处理器；同一客户端换用另一选项类型时抛出
     /// <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
-    /// <typeparam name="TOptions">客户端配置类型（须已绑定，如经 <c>services.Configure</c>）</typeparam>
-    /// <param name="builder">HttpClient 构建器</param>
-    /// <param name="serviceName">下游服务名（日志类别后缀）</param>
+    /// <typeparam name="TOptions">客户端配置类型，须已绑定（如经 <c>services.Configure</c>）。</typeparam>
+    /// <param name="builder">HttpClient 构建器。</param>
+    /// <param name="serviceName">下游服务名，用作日志类别后缀。</param>
     public static IHttpClientBuilder AddServiceClientPipeline<TOptions>(
         this IHttpClientBuilder builder,
         string serviceName)
@@ -170,10 +160,8 @@ public static class DependencyInjection
 
         builder.Services.AddSingleton(pipeline);
 
-        // 上游故障的状态语义属于本组件的默认值，在这里登记而不是交给宿主逐个 Configure：
-        // 漏一个不会有编译或启动错误，只会让 502/503/504 静默变成 500。
-        // 幂等：MapDefaultException 按类型 TryAdd，多个客户端各调一次也只登记一次；
-        // 宿主的 MapException<ServiceClientException> 覆盖它，与调用顺序无关。
+        // 上游故障的状态语义属于本组件默认值，在此登记，避免 502/503/504 静默变成 500。
+        // MapDefaultException 按类型 TryAdd，幂等；宿主的 MapException<ServiceClientException> 覆盖它，与调用顺序无关。
         builder.Services.Configure<GlobalExceptionOptions>(ServiceClientExceptionMappings.Configure);
 
         builder.ConfigureHttpClient((provider, client) =>

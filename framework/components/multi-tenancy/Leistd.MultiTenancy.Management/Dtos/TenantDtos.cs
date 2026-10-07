@@ -38,8 +38,8 @@ public record TenantOutputDto
 /// 域名对租户的定案结果。
 /// </summary>
 /// <remarks>
-/// 三档必须分开：<see cref="Host"/> 是域名已经定了案（宿主），<see cref="Undecided"/> 是域名不表态、后续解析来源仍可决定。
-/// 把两者都讲成"没有租户"，登录页会在宿主域上继续显示上次记住的租户，而服务端已按宿主处理请求。
+/// <see cref="Host"/> 是域名已定案为宿主，<see cref="Undecided"/> 是域名不表态、后续解析来源仍可决定；
+/// 客户端须区分两者，否则会在宿主域上沿用上次记住的租户。
 /// </remarks>
 public enum HostTenantDecision
 {
@@ -67,10 +67,8 @@ public record TenantByHostOutputDto
 /// 匿名响应里的租户：只有名字。
 /// </summary>
 /// <remarks>
-/// <b>刻意不含标识与启用状态。</b>未认证者不该从响应里读出租户主键，也不该分辨出某个租户是否启用。
-/// <b>存在性仍可被匿名判定</b>（租户存在时请求走到业务逻辑，不存在时被中间件挡成 404），
-/// 那是权衡后有意接受的残留，理由与边界见组件文档与 <c>MultiTenancyMiddleware</c>，别当缺陷"修"掉。
-/// 客户端把名字随后续请求发出即可——租户头按名字同样能解析（<c>MultiTenancyMiddleware</c>）。
+/// 不含标识与启用状态；存在性仍可被匿名判定，是有意接受的边界（见组件文档）。
+/// 客户端把名字随后续请求发出即可，租户头按名字同样能解析。
 /// </remarks>
 public sealed record AnonymousTenantOutputDto
 {
@@ -100,11 +98,10 @@ public record CreateTenantInputDto
     /// 该租户的专属库连接，按名字登记；留空即不分库，各服务用自己配置的库。
     /// </summary>
     /// <remarks>
-    /// <para>分库只能在创建时定案：开通紧随登记之后，解析到的已经是这些库。库要先建好并迁移过，这里只登记。</para>
-    /// <para>多服务部署可以一次登记多条（如 <c>default</c>、<c>crm</c>）：租户与全部连接在同一个控制面工作单元里落库，
-    /// 不会出现"租户已建、某条连接还没登记"的中间状态，开通钩子第一次执行时看到的就是完整的连接集合。</para>
+    /// <para>库要先建好并迁移过，这里只登记；开通紧随登记之后，解析到的已经是这些库。</para>
+    /// <para>多服务部署可一次登记多条（如 <c>default</c>、<c>crm</c>），租户与全部连接在同一个控制面工作单元里落库。
+    /// 请求体显式传 <see langword="null"/> 时按空列表处理。</para>
     /// </remarks>
-    /// <remarks>请求体显式传 <c>null</c> 时按"没给"处理：默认值挡不住显式 null，而下游按非空用它。</remarks>
     public IReadOnlyList<CreateTenantConnectionInputDto> Connections
     {
         get => _connections;
@@ -142,9 +139,8 @@ public record CreateTenantConnectionInputDto
 public record UpdateTenantInputDto
 {
     /// <summary>
-    /// 租户名称。与原名不同时须匹配 <see cref="TenantConfiguration.NamePattern"/>（上限 63）；
-    /// 原名不变时原样接受，长度按存储容量 <see cref="TenantConfiguration.MaxStoredNameLength"/>，
-    /// 规则之前建出的租户才能照常编辑其他字段。
+    /// 租户名称。与原名不同时须匹配 <see cref="TenantConfiguration.NamePattern"/>；
+    /// 原名不变时原样接受，长度上限为 <see cref="TenantConfiguration.MaxStoredNameLength"/>。
     /// </summary>
     [Required]
     [MaxLength(TenantConfiguration.MaxStoredNameLength)]

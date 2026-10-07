@@ -1,23 +1,16 @@
 namespace Leistd.Timing;
 
-/// <summary>
-/// 提供业务自然日到 UTC 时刻的转换扩展。
-/// </summary>
-/// <remarks>
-/// 时区由调用方按租户、用户或报表需求显式传入，不默认使用宿主时区。
-/// </remarks>
+/// <summary>业务自然日到 UTC 时刻的转换扩展；时区由调用方显式传入，不默认使用宿主时区。</summary>
 public static class ClockExtensions
 {
-    /// <summary>
-    /// 获取指定时区今日零点对应的 UTC 时刻。
-    /// </summary>
+    /// <summary>获取指定时区今日零点对应的 UTC 时刻。</summary>
     /// <remarks>
     /// 例：时区为 <c>Asia/Shanghai</c>、当前 UTC 为 <c>2026-05-27T20:00:00Z</c> 时，
     /// 该时区的当日是 05-28，返回 <c>2026-05-27T16:00:00Z</c>。
     /// </remarks>
-    /// <param name="clock">时钟实例</param>
-    /// <param name="timeZone">用于判定"今日"的时区</param>
-    /// <returns>该时区今日零点对应的 UTC 时间（<see cref="DateTimeKind.Utc"/>）</returns>
+    /// <param name="clock">时钟。</param>
+    /// <param name="timeZone">用于判定“今日”的时区。</param>
+    /// <returns><see cref="DateTimeKind.Utc"/> 的时刻。</returns>
     public static DateTime GetMidnightInUtc(this IClock clock, TimeZoneInfo timeZone)
     {
         ArgumentNullException.ThrowIfNull(clock);
@@ -32,11 +25,9 @@ public static class ClockExtensions
             timeZone);
     }
 
-    /// <summary>
-    /// 取指定时区当前相对 UTC 的偏移小时数（已计入夏令时）
-    /// </summary>
-    /// <param name="clock">时钟实例</param>
-    /// <param name="timeZone">目标时区</param>
+    /// <summary>取指定时区当前相对 UTC 的偏移小时数（已计入夏令时）。</summary>
+    /// <param name="clock">时钟。</param>
+    /// <param name="timeZone">目标时区。</param>
     public static double GetUtcOffsetHours(this IClock clock, TimeZoneInfo timeZone)
     {
         ArgumentNullException.ThrowIfNull(clock);

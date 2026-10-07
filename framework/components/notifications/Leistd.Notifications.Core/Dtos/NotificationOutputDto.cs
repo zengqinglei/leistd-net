@@ -1,18 +1,10 @@
 namespace Leistd.Notifications.Dtos;
 
-/// <summary>
-/// 通知传输对象（DTO）—— 不含持久化细节。
-/// </summary>
+/// <summary>归属到某个收件人的一条通知。</summary>
 public record NotificationOutputDto
 {
-    /// <summary>
-    /// 该用户这条通知记录的 ID；标记已读用的就是它。
-    /// </summary>
-    /// <remarks>
-    /// 必填、无默认值：身份只在两处产生——发布器按收件人定案，或持久化读取时映射回来。
-    /// 留一个"自己生成 Guid"的默认值等于开了第二个身份入口，而那正是同一份内容扇出给
-    /// 多个用户时两条记录带同一主键的来源。
-    /// </remarks>
+    /// <summary>该用户这条通知记录的 ID，标记已读时使用。</summary>
+    /// <remarks>必填：只由发布器按收件人定案，或持久化读取时映射回来。</remarks>
     public required string Id { get; init; }
 
     /// <summary>通知标题。</summary>
@@ -21,7 +13,7 @@ public record NotificationOutputDto
     /// <summary>通知内容（可选）。</summary>
     public string? Content { get; init; }
 
-    /// <summary>通知类型（业务自定义的字符串；未指定时为 <see cref="NotificationInputDto.DefaultType"/>）。</summary>
+    /// <summary>通知类型；默认 <see cref="NotificationInputDto.DefaultType"/>。</summary>
     public string Type { get; init; } = NotificationInputDto.DefaultType;
 
     /// <summary>点击跳转路由（可选）。</summary>

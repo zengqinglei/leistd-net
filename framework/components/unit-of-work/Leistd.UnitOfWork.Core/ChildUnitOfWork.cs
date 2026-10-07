@@ -5,7 +5,7 @@ using Leistd.EventBus.Events;
 
 namespace Leistd.UnitOfWork;
 
-// 子工作单元（委托给父工作单元处理，用于嵌套场景）
+// 嵌套边界并入外层时返回的子工作单元，全部委托给父级
 internal class ChildUnitOfWork : IUnitOfWork
 {
     private readonly IUnitOfWork _parent;

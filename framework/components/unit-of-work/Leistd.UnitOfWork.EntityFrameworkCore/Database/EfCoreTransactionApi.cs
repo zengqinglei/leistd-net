@@ -4,14 +4,8 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
-/// <summary>
-/// 把一个 EF Core 事务挂到工作单元上，并在提交/回滚时带上加入该事务的其它上下文。
-/// </summary>
-/// <remarks>
-/// 事务由提供方为本工作单元开启，所有权因此在工作单元这边——本类实现
-/// <see cref="IDisposable"/>，工作单元释放时一并释放事务。与
-/// <see cref="EfCoreDatabaseApi{TDbContext}"/> 的差别见 <see cref="IDatabaseApi"/>。
-/// </remarks>
+/// <summary>把一个 EF Core 事务挂到工作单元上，并在提交与回滚时带上加入该事务的其它上下文。</summary>
+/// <remarks>事务归工作单元所有，工作单元释放时一并释放（见 <see cref="IDatabaseApi"/>）。</remarks>
 public class EfCoreTransactionApi(IDbContextTransaction dbContextTransaction, DbContext starterDbContext)
     : ITransactionApi, ISupportsRollback
 {

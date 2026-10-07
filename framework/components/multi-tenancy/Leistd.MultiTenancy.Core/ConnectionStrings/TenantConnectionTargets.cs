@@ -6,8 +6,7 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 // 本地与远端两种解析共用的判定：宿主连接的取法，以及"查到什么就用什么"的三级落点。
 internal static class TenantConnectionTargets
 {
-    // 宿主自己的连接：先按名字找，再回落默认名。
-    // 回落是有意的：业务项目把上下文改名为 Crm 之后，部署里仍然只配 ConnectionStrings__Default，不用改部署。
+    // 宿主自己的连接：先按名字找，再回落默认名，部署只配 ConnectionStrings__Default 即可。
     public static string HostConnection(string connectionStringName, IConfiguration configuration)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringName);
@@ -38,8 +37,7 @@ internal static class TenantConnectionTargets
             return connection.ConnectionString;
         }
 
-        // 租户登记过连接（说明它是分库租户），却偏偏缺了这个服务的、也没有默认名可回落。
-        // 这时静默连到公共库是事故：那个库里没有它的数据，而它的写入会落进别人的库。
+        // 分库租户缺这个服务的连接、也没有默认名可回落：失败关闭，不连到宿主库（那里没有它的数据）。
         throw new InvalidOperationException(
             $"Tenant '{tenantId}' has tenant-specific connections registered but none for " +
             $"'{connectionStringName}', and no default-named connection to fall back to. " +

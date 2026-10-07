@@ -6,10 +6,8 @@ namespace Leistd.OperationRecords.Definitions;
 /// 向定义上下文登记本模块的操作动作。
 /// </summary>
 /// <remarks>
-/// <para><b>为什么动作码要注册，而不是散落的字符串常量。</b>只原样存下、不加解释的动作码有四件事做不到：
-/// 界面无法按类别筛选（只能硬编码码表）、无法在构建期断言"每个动作都有中英文案"、
-/// 无法区分一方码与第三方码、也无法按严重度接告警。登记之后这四件事都由定义本身回答。</para>
-/// <para>动作码<b>一经发布就不要改</b>：它是历史记录的含义本身，改了等于篡改过去。</para>
+/// <para>登记后的定义提供类别筛选、可见性与严重度；记录器拒绝未登记的动作码。</para>
+/// <para>动作码一经发布不要修改：它是历史记录的含义本身。</para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -34,7 +32,7 @@ public interface IOperationActionDefinitionProvider
 /// <summary>
 /// 操作动作的登记与查询上下文。
 /// </summary>
-/// <remarks>动作码在全局唯一，重复登记在启动期抛出异常——与权限定义同一约定。</remarks>
+/// <remarks>动作码全局唯一，重复登记在启动期抛出。</remarks>
 public interface IOperationActionDefinitionContext
 {
     /// <summary>
@@ -45,15 +43,12 @@ public interface IOperationActionDefinitionContext
     /// 类别，驱动界面分类筛选；取值由业务定义（如 <c>"account"</c>），框架不预置清单。
     /// </param>
     /// <param name="visibility">
-    /// 可见性，<b>必填</b>。没有默认值是刻意的：省略时静默落到"租户可见"，
-    /// 而宿主侧动作落成租户可见就是跨租户信息泄露，且只在真的建了租户之后才暴露。
-    /// 判据是这条记录描述的操作属于谁的边界。
+    /// 可见性，必填：按这条记录描述的操作属于谁的边界选择，判错即越权。
     /// </param>
     /// <param name="severity">严重度，默认 <see cref="OperationSeverity.Info"/>。</param>
     /// <param name="targetIsActor">
-    /// 目标即操作人：主体在动作完成那一刻才被证实的自证类动作（登录成功、注册、改密），
-    /// 记录里没有操作人，由目标承载"什么人"。只标经过凭据验证的动作——调用方提交、未经验证的标识
-    /// （如失败登录的用户名）不能标，否则操作人列成了一个无需凭据即可写入任意文本的面。
+    /// 目标即操作人：用于主体在动作完成时才被证实的自证类动作（登录成功、注册、改密）。
+    /// 只标经过凭据验证的动作；失败登录的用户名这类未经验证的标识不能标。
     /// </param>
     /// <returns>登记后的定义。</returns>
     IOperationActionDefinition Add(
@@ -95,9 +90,7 @@ public interface IOperationActionDefinitionManager
 {
     /// <summary>按动作码查找；不存在时返回 <see langword="null"/>。</summary>
     /// <remarks>
-    /// 返回 <see langword="null"/> 表示这是一个<b>未登记</b>的码。写入时它是编码错误，记录器直接抛出；
-    /// 读取历史记录时遇到它（码后来被移除了），调用方应据此降级（界面原样显示裸码），而不是抛错：
-    /// 审计记录是既成事实，不能因为定义缺失就让整页读不出来。
+    /// 返回 <see langword="null"/> 表示未登记的码：写入时记录器直接抛出；读取历史时调用方应降级（如显示裸码），不抛错。
     /// </remarks>
     IOperationActionDefinition? GetOrNull(string code);
 

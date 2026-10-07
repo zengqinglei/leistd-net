@@ -9,9 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Tracing;
 
-/// <summary>
-/// 关联标识核心能力的注册入口：<c>ICorrelationIdProvider</c> 与非 HTTP 入口的环境上下文维度。
-/// </summary>
+/// <summary>关联标识核心能力的注册入口：<c>ICorrelationIdProvider</c> 与非 HTTP 入口的环境上下文维度。</summary>
 public static class DependencyInjection
 {
     /// <summary>注册关联标识核心能力（不含 ASP.NET Core 中间件）。</summary>

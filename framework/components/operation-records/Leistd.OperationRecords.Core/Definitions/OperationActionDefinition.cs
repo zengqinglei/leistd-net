@@ -16,8 +16,7 @@ internal sealed class OperationActionDefinition(
     public bool TargetIsActor { get; } = targetIsActor;
 }
 
-// 动作码到定义的全局注册表，保证动作码唯一并提供 O(1) 查找。
-// 与 PermissionDefinitionRegistry 同型：重复即抛，让冲突死在启动期而不是运行期。
+// 动作码到定义的全局注册表：重复即抛（启动期），提供 O(1) 查找。
 internal sealed class OperationActionDefinitionRegistry
 {
     private readonly Dictionary<string, OperationActionDefinition> _actions = new(StringComparer.Ordinal);
@@ -40,7 +39,7 @@ internal sealed class OperationActionDefinitionRegistry
     public OperationActionDefinition? GetOrNull(string code)
         => _actions.TryGetValue(code, out var action) ? action : null;
 
-    // 保持登记顺序：界面按它渲染筛选项，字典序会让"创建/删除/更新"这种排法读起来很别扭。
+    // 保持登记顺序：界面按它渲染筛选项
     public IReadOnlyList<OperationActionDefinition> GetAll() => _ordered;
 }
 

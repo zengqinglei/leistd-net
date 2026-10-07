@@ -5,14 +5,10 @@ using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope.Services;
 
-/// <summary>
-/// 默认数据范围应用器。
-/// </summary>
+/// <summary>默认数据范围应用器。</summary>
 /// <remarks>
-/// 被分配的多个范围之间取并集（OR）。"全部可见"由 Provider 返回 <c>_ =&gt; true</c>，
-/// "本范围不贡献可见性"返回 <c>_ =&gt; false</c>；没有"未返回谓词即不限制"这一态。
-/// 没有任何分配时按默认拒绝处理，返回空结果集。
-/// 租户隔离与软删除等硬边界由 EF Core 全局查询过滤器始终生效，永远与业务范围做 AND。
+/// 被分配的多个范围之间取并集；没有任何分配或分配的范围没有对应 Provider 时按拒绝处理。
+/// 租户隔离与软删除等全局查询过滤器始终与业务范围取交集。
 /// </remarks>
 public class DefaultDataScopeApplier(
     IPermissionSubjectProvider subjectProvider,
@@ -39,8 +35,7 @@ public class DefaultDataScopeApplier(
             operation,
             cancellationToken);
 
-        // 再按当前资源与操作过滤一遍：分配来源由业务项目实现，查询漏写条件时会返回别的资源
-        // 或别的操作的分配，直接采信就等于让"能看订单"顺带放开"能改客户"。
+        // 再按当前资源与操作过滤一遍，不采信分配来源漏写条件返回的其他资源或操作的分配
         assignments = [.. assignments.Where(x =>
             string.Equals(x.ResourceName, resourceName, StringComparison.Ordinal) &&
             string.Equals(x.Operation, operation, StringComparison.Ordinal))];
@@ -65,8 +60,7 @@ public class DefaultDataScopeApplier(
                 continue;
             }
 
-            // 不贡献可见性的范围由 Provider 返回 _ => false 表达，并入并集后自然是空贡献；
-            // "全部可见"必须显式返回 _ => true。签名不可空，就没有第三种解释的余地。
+            // 谓词非空：_ => false 并入并集即无贡献，“全部可见”须显式返回 _ => true
             var predicate = await provider.BuildPredicateAsync(context, cancellationToken);
 
             combined = combined == null ? predicate : Or(combined, predicate);

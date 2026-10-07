@@ -9,8 +9,6 @@ namespace Leistd.MultiTenancy.Context;
 /// </remarks>
 public interface ICurrentTenantAccessor
 {
-    /// <summary>
-    /// 获取或设置当前租户快照。
-    /// </summary>
+    /// <summary>当前租户快照。</summary>
     BasicTenantInfo? Current { get; set; }
 }

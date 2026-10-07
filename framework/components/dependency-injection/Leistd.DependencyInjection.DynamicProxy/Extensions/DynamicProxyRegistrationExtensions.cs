@@ -2,17 +2,12 @@ using Leistd.DependencyInjection.Abstractions;
 
 namespace Leistd.DependencyInjection.DynamicProxy.Extensions;
 
-/// <summary>
-/// 提供服务注册回调的动态代理配置扩展。
-/// </summary>
+/// <summary>服务注册回调的动态代理配置扩展。</summary>
 public static class DynamicProxyRegistrationExtensions
 {
     private const string InterceptorsKey = "Leistd.DependencyInjection.DynamicProxy.Interceptors";
 
-    /// <summary>
-    /// 为当前服务注册追加拦截器类型；同一类型只追加一次。
-    /// </summary>
-    /// <remarks>组件的 <c>AddXxx</c> 被重复调用时会重复登记回调，去重避免同一拦截器被织入两层。</remarks>
+    /// <summary>为当前服务注册追加拦截器类型；同一类型只追加一次，重复登记的回调不会织入两层。</summary>
     public static IOnServiceRegisteredContext AddInterceptor(
         this IOnServiceRegisteredContext context,
         Type interceptorType)
@@ -29,9 +24,7 @@ public static class DynamicProxyRegistrationExtensions
         return context;
     }
 
-    /// <summary>
-    /// 获取当前服务注册上收集到的拦截器类型。
-    /// </summary>
+    /// <summary>获取当前服务注册上收集到的拦截器类型。</summary>
     public static List<Type> GetInterceptorTypes(this IOnServiceRegisteredContext context)
     {
         ArgumentNullException.ThrowIfNull(context);

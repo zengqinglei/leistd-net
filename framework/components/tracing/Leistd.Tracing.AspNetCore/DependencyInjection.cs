@@ -5,9 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Tracing.AspNetCore;
 
-/// <summary>
-/// 关联标识的 ASP.NET Core 接入入口：入站中间件与配置绑定。
-/// </summary>
+/// <summary>关联标识的 ASP.NET Core 接入入口：入站中间件与配置绑定。</summary>
 public static class DependencyInjection
 {
     /// <summary>注册关联标识（含核心能力）。</summary>

@@ -18,9 +18,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.ExceptionHandling.AspNetCore;
 
-/// <summary>
-/// 全局异常处理的注册与管道接入入口。
-/// </summary>
+/// <summary>全局异常处理的注册与管道接入入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -48,9 +46,8 @@ public static class DependencyInjection
         builder.Services.AddProblemDetails();
         RegisterProblemDetailsConventions(builder.Services);
 
-        // 模型校验的键默认是 C# 属性名，而请求体与显式验证的字段名都按 JSON 命名策略写——
-        // 同一个字段两种叫法，调用方只能大小写不敏感地去猜。宿主没设命名策略时属性名即 JSON 名，无需处理。
-        // 校验键改用 JSON 名后，绑定时已按属性名建好的条目与 IValidatableObject 的成员名由写出时的换算补齐。
+        // 模型校验键默认是 C# 属性名，改用 JSON 命名策略，与请求体和显式验证的字段名一致；宿主没设命名策略时无需处理。
+        // 绑定时已按属性名建好的条目与 IValidatableObject 的成员名由写出时的换算补齐。
         builder.Services.AddOptions<MvcOptions>()
             .Configure<IOptions<JsonOptions>>((mvcOptions, jsonOptions) =>
             {
@@ -69,8 +66,7 @@ public static class DependencyInjection
                     new ValidatableObjectModelValidatorProvider(
                         localizationOptions, serviceProvider.GetService<IStringLocalizerFactory>())));
 
-        // 请求体读不成 JSON 时，System.Text.Json 的异常消息（行号、字节位置、内部路径）默认会写进字段错误，
-        // 原样回给调用方。这是协议层失败，调用方只需知道哪个字段读不成；与 Minimal API 路径不带解析细节一致。
+        // 请求体读不成 JSON 时不回显 System.Text.Json 的解析细节，与 Minimal API 路径一致
         builder.Services.Configure<JsonOptions>(options => options.AllowInputFormatterExceptionMessages = false);
 
         builder.Services.PostConfigure<ApiBehaviorOptions>(options =>

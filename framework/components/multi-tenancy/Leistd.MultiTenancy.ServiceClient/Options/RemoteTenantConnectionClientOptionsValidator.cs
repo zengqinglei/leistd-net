@@ -2,8 +2,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.ServiceClient.Options;
 
-// 回源全用相对地址：缺 BaseAddress 时组合照常成功，要到首个租户请求才以不带键名的 URI 错误暴露。
-// 只约束本存储自己的客户端，ServiceClient 通用选项仍允许留空（只用绝对地址的客户端存在）。
+// 回源全用相对地址，缺 BaseAddress 时启动即失败并报键名；只约束本存储的客户端，通用 ServiceClient 选项仍可留空。
 internal sealed class RemoteTenantConnectionClientOptionsValidator(string configSectionPath)
     : IValidateOptions<RemoteTenantConnectionClientOptions>
 {

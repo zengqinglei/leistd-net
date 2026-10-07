@@ -36,15 +36,8 @@ internal sealed class PermissionManagementService(
     {
         var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
 
-        // 问"我有哪些权限"而当前身份不在本权限主体空间里时，正确答案是"一个都没有"，不是"你没登录"。
-        //
-        // 端点挂着 RequireAuthorization，能走到这里的调用方**必然已认证**，回 401 是在说假话；
-        // 客户端据此去重新登录，登录成功后再问一次、再拿到 401，就是死循环。双 realm 部署
-        // （员工走 RBAC、客户走另一套身份）会稳定踩中：客户令牌按设计就不落在员工的主体空间里。
-        //
-        // 这不是放松校验：空集合意味着任何权限判定都不通过，与抛异常的拒绝效果一致。
-        // 需要区分"没有主体"与"有主体但没授权"的调用方看 IsSuperAdmin 之外的业务标识，
-        // 不要把状态码当作那个信号。
+        // 当前身份不在本权限主体空间里（如双 realm 部署中的另一套身份）时返回空集合：
+        // 调用方已认证，回 401 会让客户端反复重新登录；空集合下任何权限判定都不通过。
         if (subject is null)
         {
             return new CurrentPermissionsOutputDto
@@ -93,7 +86,7 @@ internal sealed class PermissionManagementService(
                     .Where(permission => definitionManager.IsAvailableOn(permission.Name, side))
                     .Select(permission => ToTree(permission, side, localizer))]
             })
-            // 整组都不可用时不下发空壳：一个只有标题、点开什么都没有的分组只会让人怀疑数据没加载出来
+            // 整组都不可用时不下发空分组
             .Where(group => group.Permissions.Count > 0)];
 
         return Task.FromResult(groups);
@@ -170,8 +163,7 @@ internal sealed class PermissionManagementService(
         };
     }
 
-    // 子节点同样过滤：可用的父级下挂着停用的子权限时，界面会把它渲染成可勾选项，
-    // 保存时却被授予管理器拒绝——能不能勾必须与能不能存同一判据
+    // 子节点同样过滤，能勾选的与能保存的同一判据
     private PermissionDefinitionOutputDto ToTree(IPermissionDefinition definition, MultiTenancySides side, IStringLocalizer? localizer)
         => new()
         {
@@ -186,13 +178,11 @@ internal sealed class PermissionManagementService(
     private IStringLocalizer? Localizer()
         => options.Value.LocalizationResource is { } resource ? localizerFactory?.Create(resource) : null;
 
-    // 词条键按约定由名称拼出，与设置组件的 Setting:{名称} / SettingGroup:{分组} 同一模式：
-    // 定义里的 DisplayName 是默认文案（未启用本地化或缺词条时直接显示），不再兼作词条键——
-    // 否则不含本地化的宿主只能看到 App.Users.Create 这类技术名。
+    // 词条键由名称拼出（与设置组件同一模式）；定义里的 DisplayName 是缺词条时的默认文案
     internal const string PermissionKeyPrefix = "Permission:";
     internal const string GroupKeyPrefix = "PermissionGroup:";
 
-    // 定义是 Singleton、启动时加载，翻译必须发生在响应阶段，否则先到的那个请求的语言会被固化给所有人
+    // 定义是单例，翻译须在响应阶段进行，否则先到请求的语言会固化给所有人
     private static string DisplayName(IStringLocalizer? localizer, string key, string? defaultText, string name)
     {
         if (localizer is not null)

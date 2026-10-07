@@ -10,8 +10,8 @@ namespace Leistd.MultiTenancy.Context;
 /// 切换租户的同时打开日志作用域（<see cref="TenantLogKeys.TenantId"/>）：所有切换入口的日志都带上租户，
 /// 切回宿主时写入 <see langword="null"/>，覆盖外层租户。
 /// </remarks>
-/// <param name="accessor">租户上下文存取器</param>
-/// <param name="logger">用于打开日志作用域；未注册日志时不写</param>
+/// <param name="accessor">租户上下文存取器。</param>
+/// <param name="logger">用于打开日志作用域；为 <see langword="null"/> 时不写。</param>
 public class CurrentTenant(ICurrentTenantAccessor accessor, ILogger<CurrentTenant>? logger = null) : ICurrentTenant
 {
     /// <inheritdoc />

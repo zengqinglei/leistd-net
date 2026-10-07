@@ -3,10 +3,7 @@ namespace Leistd.OperationRecords.Models;
 /// <summary>
 /// 一次操作的结果。
 /// </summary>
-/// <remarks>
-/// 刻意只有两档。"部分成功""重试中"这类中间态属于业务流程状态，该由业务自己的实体表达；
-/// 塞进审计表会让"这次操作到底成没成"失去唯一答案，而那正是这张表存在的理由。
-/// </remarks>
+/// <remarks>只有两档；“部分成功”“重试中”这类中间态由业务自己的实体表达。</remarks>
 public enum OperationRecordOutcome
 {
     /// <summary>操作完成。</summary>

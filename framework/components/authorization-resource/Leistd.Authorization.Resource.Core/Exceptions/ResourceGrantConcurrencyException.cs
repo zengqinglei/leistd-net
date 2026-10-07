@@ -3,9 +3,7 @@ using Leistd.Authorization.Resource.Errors;
 
 namespace Leistd.Authorization.Resource.Exceptions;
 
-/// <summary>
-/// 资源 ACL 版本冲突。调用方应重新加载后再保存。
-/// </summary>
+/// <summary>资源 ACL 版本冲突；调用方应重新加载后再保存。</summary>
 public sealed class ResourceGrantConcurrencyException(
     string resourceName,
     string resourceKey,

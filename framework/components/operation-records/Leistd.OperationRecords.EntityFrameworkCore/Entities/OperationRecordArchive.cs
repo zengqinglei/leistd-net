@@ -6,11 +6,9 @@ namespace Leistd.OperationRecords.EntityFrameworkCore.Entities;
 /// 操作记录的归档形态：列与 <see cref="OperationRecord"/> 逐一对齐，外加一列归档时刻。
 /// </summary>
 /// <remarks>
-/// <para><b>刻意不实现 <c>IMultiTenant</c>。</b>归档作业跑在无租户过滤的查询里，实现它会让读归档时再中一次
-/// "宿主视角只放行宿主自己的行"的埋伏。<see cref="TenantId"/> 因此是普通列；
-/// 将来为归档表开放查询时，必须在那一层自己按租户过滤，这里没有过滤器兜底。</para>
-/// <para>列定义与原表必须一致：搬运是逐字段复制，少一列就是静默丢数据——搬完照样报成功，
-/// 缺的那列到查归档时才会发现。</para>
+/// <para>不实现 <c>IMultiTenant</c>：归档作业跑在无租户过滤的查询里。<see cref="TenantId"/> 是普通列，
+/// 查询归档表时须自行按租户过滤。</para>
+/// <para>列定义须与原表一致：搬运逐字段复制，缺列会静默丢数据。</para>
 /// </remarks>
 public class OperationRecordArchive
 {
@@ -20,7 +18,7 @@ public class OperationRecordArchive
     /// <summary>原记录所在的层；不是多租户过滤维度，见类型说明。</summary>
     public Guid? TenantId { get; set; }
 
-    /// <summary>操作发生时的租户上下文。</summary>
+    /// <summary>操作人所属的租户。</summary>
     public Guid? ActorTenantId { get; set; }
 
     /// <summary>业务动作码。</summary>
@@ -38,7 +36,7 @@ public class OperationRecordArchive
     /// <summary>原记录的发生时间（UTC）。</summary>
     public DateTime CreationTime { get; set; }
 
-    /// <summary>搬入归档表的时刻（UTC）；与 <see cref="CreationTime"/> 分开：前者是何时被搬走，后者是事情何时发生。</summary>
+    /// <summary>搬入归档表的时刻（UTC）。</summary>
     public DateTime ArchivedTime { get; set; }
 
     /// <summary>操作人标识。</summary>

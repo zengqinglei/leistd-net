@@ -6,14 +6,10 @@ using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope;
 
-/// <summary>
-/// 数据范围依赖注入扩展。
-/// </summary>
+/// <summary>数据范围注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册数据范围应用器。
-    /// </summary>
+    /// <summary>注册数据范围应用器。</summary>
     /// <remarks>
     /// 依赖调用方已注册 <see cref="IPermissionSubjectProvider"/> 与
     /// <see cref="IDataScopeAssignmentProvider"/>；后者由业务项目提供，
@@ -35,9 +31,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 注册某个实体的一种数据范围 Provider。同一实体可以注册多个不同范围。
-    /// </summary>
+    /// <summary>注册某个实体的一种数据范围 Provider；同一实体可以注册多个不同范围。</summary>
     /// <remarks>按 Provider 类型登记：同一 Provider 重复调用只登记一次，不同 Provider 并存。</remarks>
     public static IServiceCollection AddDataScopeProvider<TEntity, TProvider>(
         this IServiceCollection services)

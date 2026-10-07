@@ -3,9 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.Lock.Memory.HostedServices;
 
-/// <summary>
-/// 定期回收长时间空闲的内存锁条目。
-/// </summary>
+/// <summary>定期回收长时间空闲的内存锁条目。</summary>
 public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
 {
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(1);

@@ -9,15 +9,12 @@ using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
 namespace Leistd.Settings.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// 使用 EF Core 持久化设置值。
-/// </summary>
+/// <summary>使用 EF Core 持久化设置值。</summary>
 /// <remarks>
 /// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接。
 /// <see cref="SettingRecord.ScopeKey"/> 保证各层级唯一性；租户隔离仍由查询过滤器承担。
 /// <para>
-/// <see cref="SettingScopes.Host"/> 与宿主的租户级共用同一行（<c>host:t</c>）：宿主视角本就走租户层，
-/// 而设置名全局唯一，两者不会撞在一起。它的意义在于<b>禁止</b>租户各存一份。
+/// <see cref="SettingScopes.Host"/> 与宿主的租户级共用同一行（<c>host:t</c>），区别在于禁止租户各存一份。
 /// </para>
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 SettingRecord 配置）。</typeparam>
@@ -98,8 +95,7 @@ public class EfCoreSettingStore<TDbContext>(
     public async Task RemoveAllAsync(CancellationToken cancellationToken = default)
     {
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
-        // 按当前租户删：查询过滤器已把范围限定在当前租户，不需要也不应该带 ScopeKey 条件——
-        // 要清的是该租户下所有层级，含各用户在该租户内的偏好。
+        // 查询过滤器已限定当前租户，不带 ScopeKey 条件，清掉所有层级（含用户偏好）。
         // 加载后 RemoveRange 而非批量删除：兼容所有 EF 提供程序（含内存库），在工作单元里与其它清理一起提交。
         var records = await dbContext.Set<SettingRecord>().ToListAsync(cancellationToken);
         if (records.Count == 0)
@@ -111,13 +107,9 @@ public class EfCoreSettingStore<TDbContext>(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    // 用独立层级段区分租户与用户设置，避免用户标识与租户级保留值冲突。租户段与框架其他按租户隔离的键
-    // 同一写法（CurrentTenantKeyExtensions.ScopeKey）：
-    //
+    // 租户段与 CurrentTenantKeyExtensions.ScopeKey 同一写法，层级段区分租户与用户：
     //   {tenant}:t            租户级（宿主为 host:t）
-    //   {tenant}:u:{userId}   用户级
-    // userId 跟随 ISettingStore 的签名保持可空——租户级本就传 null。它只在 scope 为 User
-    // 时必需，这种「取值取决于另一个参数」的约束类型系统表达不了，只能在下面就地校验。
+    //   {tenant}:u:{userId}   用户级（userId 必填，下面就地校验）
     private string BuildScopeKey(SettingScopes scope, string? userId)
     {
         switch (scope)
@@ -131,10 +123,7 @@ public class EfCoreSettingStore<TDbContext>(
                 return currentTenant.ScopeKey($"u:{userId}");
 
             case SettingScopes.Host:
-                // 进程级设置只有宿主那一行，因此必须在宿主上下文读写：租户上下文下
-                // 查询过滤器会把宿主行滤掉（专属库形态下连的还是租户自己的库），
-                // 读到的是空、写进去的是租户行——两者都不报错，只是静默不生效。
-                // 这条不变式在存储边界上就地拦住，不靠调用方自觉。
+                // 进程级设置必须在宿主上下文读写：租户上下文下会静默读空、写成租户行
                 if (currentTenant.Id is not null)
                 {
                     throw new HostScopeUnavailableException(tenantId: currentTenant.Id?.ToString());
@@ -143,8 +132,7 @@ public class EfCoreSettingStore<TDbContext>(
                 return currentTenant.ScopeKey("t");
 
             default:
-                // None 与 All 不对应任何一行：前者不是层级，后者是「两层都允许」的定义侧标记。
-                // 走到这里说明调用方绕过了 ISettingManager 的校验，静默按某一层处理会写错地方。
+                // None 与 All 不对应任何一行；走到这里说明调用方绕过了 ISettingManager 的校验
                 throw new ArgumentOutOfRangeException(
                     nameof(scope), scope, "Only Tenant, User and Host scopes address a stored row.");
         }

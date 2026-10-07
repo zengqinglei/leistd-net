@@ -1,8 +1,6 @@
 namespace Leistd.EventBus.Abstractions;
 
-/// <summary>
-/// 将事件发布给当前进程内的处理器。
-/// </summary>
+/// <summary>将事件发布给当前进程内的处理器；有活动完成边界（如工作单元）时推迟到边界完成。</summary>
 /// <example>
 /// <code>
 /// public sealed class OrderPlaced : BaseEvent { public Guid OrderId { get; init; } }

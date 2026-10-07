@@ -3,10 +3,7 @@ namespace Leistd.Notifications.EntityFrameworkCore.Options;
 /// <summary>
 /// 通知保留期。配置节 <c>Leistd:Notifications:Retention</c>。
 /// </summary>
-/// <remarks>
-/// 默认开启：通知是运营数据，不承担审计举证责任，不清理只会让表无限增长、铃铛列表越来越慢。
-/// 已读与未读分开计时：已读的留得短，未读的留得长，给长期离开的用户回来时仍能看到的余地。
-/// </remarks>
+/// <remarks>默认开启；已读与未读分开计时，未读保留更久。</remarks>
 public sealed class NotificationRetentionOptions
 {
     /// <summary>配置节路径。</summary>

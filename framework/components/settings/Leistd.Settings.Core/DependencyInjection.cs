@@ -12,9 +12,7 @@ using Leistd.Settings.Options;
 
 namespace Leistd.Settings;
 
-/// <summary>
-/// 设置定义与解析的核心依赖注入扩展。
-/// </summary>
+/// <summary>设置定义与解析的核心注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -23,8 +21,8 @@ public static class DependencyInjection
     /// <remarks>
     /// <para><see cref="ISettingDefinitionManager"/> 为 Singleton——定义在进程生命周期内不变；
     /// <see cref="ISettingProvider"/> 为 Scoped，一次请求内只查一次库并复用结果。</para>
-    /// <para>还需要一个 <see cref="ISettingStore"/> 实现（如 <c>AddSettingsEfCore&lt;TDbContext&gt;()</c>）：
-    /// 缺失时解析 <see cref="ISettingProvider"/> 直接失败，而不是静默只返回默认值。</para>
+    /// <para>还需要一个 <see cref="ISettingStore"/> 实现（如 <c>AddSettingsEfCore&lt;TDbContext&gt;()</c>），
+    /// 缺失时解析 <see cref="ISettingProvider"/> 失败。</para>
     /// <para>机密设置（<see cref="ISettingDefinition.IsEncrypted"/>）用宿主的 Data Protection 加解密：
     /// 宿主须 <c>AddDataProtection()</c> 并配置持久化、可共享的密钥环；没注册时只有读写机密设置会失败，
     /// 不定义机密设置的宿主不受影响。</para>
@@ -53,8 +51,7 @@ public static class DependencyInjection
         }
 
         services.AddJsonLocalizationResources(typeof(SettingErrorCodes).Assembly);
-        // 错误码的状态语义与默认译文同属本组件的默认值，一并在这里登记：
-        // 交给宿主逐个 Configure 的话，漏一个不会有编译或启动错误，只会静默回落成 400。
+        // 错误码的状态语义与默认译文属于本组件默认值，在此登记，避免宿主漏配时静默回落成 400。
         // 宿主的 MapCode / MapException 覆盖同一码或同一类型，与调用顺序无关。
         services.Configure<GlobalExceptionOptions>(SettingsExceptionMappings.Configure);
         return services;

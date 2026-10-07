@@ -1,8 +1,6 @@
 namespace Leistd.BackgroundJobs.Recurring;
 
-/// <summary>
-/// 一个登记过的周期任务，供调度器实现读取。
-/// </summary>
+/// <summary>一个登记过的周期任务，供调度器实现读取。</summary>
 /// <remarks>由 <c>AddRecurringJob&lt;TJob&gt;</c> 生成；业务代码不直接构造。</remarks>
 public sealed class RecurringJobDefinition
 {

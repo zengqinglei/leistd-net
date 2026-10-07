@@ -3,12 +3,9 @@ using Leistd.ExceptionHandling;
 
 namespace Leistd.Authorization.Exceptions;
 
-/// <summary>
-/// 表示尝试授予未定义或已禁用的权限。
-/// </summary>
+/// <summary>尝试授予未定义或已禁用的权限。</summary>
 /// <remarks>
-/// 由写入方抛出，是"未定义权限不落库"的唯一执行点——
-/// 应用服务、种子数据与后台任务都不必重复这条判断。错误码为 <see cref="PermissionErrorCodes.UndefinedPermission"/>。
+/// 由授予管理器在所有写入路径上抛出，调用方不必重复判断。错误码为 <see cref="PermissionErrorCodes.UndefinedPermission"/>。
 /// </remarks>
 public class UndefinedPermissionException : BusinessException
 {

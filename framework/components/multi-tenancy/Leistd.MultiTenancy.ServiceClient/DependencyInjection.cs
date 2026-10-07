@@ -8,9 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.ServiceClient;
 
-/// <summary>
-/// 远端租户连接存储的注册入口。
-/// </summary>
+/// <summary>远端租户连接存储的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>

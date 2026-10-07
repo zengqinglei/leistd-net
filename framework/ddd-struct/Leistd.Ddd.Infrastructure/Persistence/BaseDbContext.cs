@@ -11,9 +11,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Ddd.Infrastructure.Persistence;
 
-/// <summary>
-/// 提供审计、租户隔离、软删除和领域事件集成的 DbContext 基类。
-/// </summary>
+/// <summary>提供审计、租户隔离、软删除和领域事件集成的 DbContext 基类。</summary>
 /// <remarks>
 /// 提供三件事：新增实体的环境值（<c>TenantId</c> / 创建审计）在进入跟踪时落定、
 /// 软删除与租户隔离的全局查询过滤器、领域事件的收集。
@@ -23,10 +21,10 @@ namespace Leistd.Ddd.Infrastructure.Persistence;
 /// </remarks>
 public abstract class BaseDbContext : DbContext
 {
-    /// <summary>表示软删除查询过滤器。</summary>
+    /// <summary>软删除查询过滤器名。</summary>
     public const string SoftDeleteFilterName = "SoftDelete";
 
-    /// <summary>表示租户隔离查询过滤器。</summary>
+    /// <summary>租户隔离查询过滤器名。</summary>
     public const string MultiTenantFilterName = "MultiTenant";
 
     private readonly IServiceProvider? _serviceProvider;
@@ -40,9 +38,7 @@ public abstract class BaseDbContext : DbContext
     private ICurrentTenant? _currentTenant;
     private bool _currentTenantResolved;
 
-    /// <summary>
-    /// 获取创建审计设置器；未注册审计组件时为 <see langword="null"/>。
-    /// </summary>
+    /// <summary>创建审计设置器；未注册审计组件时为 <see langword="null"/>。</summary>
     protected virtual IAuditPropertySetter? AuditPropertySetter
     {
         get
@@ -87,28 +83,19 @@ public abstract class BaseDbContext : DbContext
         }
     }
 
-    // 这两个开关刻意**不可覆写**：它们只是 IDataFilter 运行期状态的投影，语义是
-    // "本次作用域内要不要过滤"，而写入侧的 TenantId 落值不受它们影响（见 SetTenantId）。
-    //
-    // 若开成 protected virtual，派生上下文覆写成 false 会得到"读不过滤、写照样落租户"的
-    // 半吊子状态——不报错、无告警，数据带着租户归属写进去而查询看得见全部。
-    // 想让整个上下文不参与多租户，正确做法是**不把 IMultiTenant 实体映射进来**
-    // （MultiTenantFilterGuard 的启动期断言也是这么说的），而不是从这里开一道门。
+    // 不可覆写：这两个开关只投影 IDataFilter 的运行期状态，写入侧的 TenantId 落值不受其影响；
+    // 覆写为 false 会得到“读不过滤、写照样落租户”。整个上下文不参与多租户时，不映射 IMultiTenant 实体。
     private bool IsSoftDeleteFilterEnabled => DataFilter?.IsEnabled<ISoftDelete>() ?? true;
 
     private bool IsMultiTenantFilterEnabled => DataFilter?.IsEnabled<IMultiTenant>() ?? true;
 
-    /// <summary>
-    /// 获取当前租户标识；<see langword="null"/> 表示宿主视角。
-    /// </summary>
+    /// <summary>当前租户标识；<see langword="null"/> 表示宿主视角。</summary>
     /// <remarks>
     /// 设计时或未注册 <c>ICurrentTenant</c> 时为 <see langword="null"/>，租户过滤器表现为宿主视角。
     /// </remarks>
     protected virtual Guid? CurrentTenantId => CurrentTenant?.Id;
 
-    /// <summary>
-    /// 创建上下文并接入容器，使 <c>IDataFilter</c> 的运行时开关、当前租户与审计原语可用。
-    /// </summary>
+    /// <summary>创建上下文并接入容器，使 <c>IDataFilter</c> 的运行时开关、当前租户与审计原语可用。</summary>
     /// <param name="options">EF Core 上下文选项。</param>
     /// <param name="serviceProvider">
     /// 作用域容器。仅设计时工具与迁移传 <see langword="null"/>：此时没有当前租户与用户，
@@ -147,9 +134,7 @@ public abstract class BaseDbContext : DbContext
         }
     }
 
-    /// <summary>
-    /// 构建模型并在派生配置后应用全局过滤器。
-    /// </summary>
+    /// <summary>构建模型并在派生配置后应用全局过滤器。</summary>
     protected sealed override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -165,9 +150,7 @@ public abstract class BaseDbContext : DbContext
             EF.Property<Guid?>(e, nameof(IMultiTenant.TenantId)) == CurrentTenantId);
     }
 
-    /// <summary>
-    /// 注册 <see cref="DddEntityConvention"/>，再交由 <see cref="ConfigureModelConventions"/> 追加宿主约定。
-    /// </summary>
+    /// <summary>注册 <see cref="DddEntityConvention"/>，再交由 <see cref="ConfigureModelConventions"/> 追加宿主约定。</summary>
     protected sealed override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         base.ConfigureConventions(configurationBuilder);
@@ -175,16 +158,12 @@ public abstract class BaseDbContext : DbContext
         ConfigureModelConventions(configurationBuilder);
     }
 
-    /// <summary>
-    /// 配置模型约定（如枚举统一存为字符串）；基类的实体约定已先行注册。
-    /// </summary>
+    /// <summary>配置模型约定（如枚举统一存为字符串）；基类的实体约定已先行注册。</summary>
     protected virtual void ConfigureModelConventions(ModelConfigurationBuilder configurationBuilder)
     {
     }
 
-    /// <summary>
-    /// 配置实体映射；基类会在此后应用全局过滤器。
-    /// </summary>
+    /// <summary>配置实体映射；基类会在此后应用全局过滤器。</summary>
     protected virtual void ConfigureModel(ModelBuilder modelBuilder)
     {
     }

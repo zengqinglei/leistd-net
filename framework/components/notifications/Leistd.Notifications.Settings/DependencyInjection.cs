@@ -6,9 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.Notifications.Settings;
 
-/// <summary>
-/// 通知偏好的注册入口。
-/// </summary>
+/// <summary>通知偏好的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -38,8 +36,7 @@ public static class DependencyInjection
             services.Configure(configure);
         }
 
-        // 有意覆盖：偏好过滤器取代 Core 的全投默认与此前登记的任何过滤器，成为唯一的投递过滤器——
-        // 并存时按单服务解析会由注册顺序决定谁生效。先清空再登记一条，重复调用结果不变。
+        // 取代 Core 的默认与此前登记的任何过滤器，成为唯一的投递过滤器；先清空再登记，重复调用结果不变
         services.RemoveAll<INotificationDeliveryFilter>();
         services.AddScoped<INotificationDeliveryFilter, SettingsNotificationDeliveryFilter>();
         return services;

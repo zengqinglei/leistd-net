@@ -2,18 +2,11 @@ using Leistd.Authorization.Constants;
 
 namespace Leistd.Authorization.Grants;
 
-/// <summary>
-/// 权限授予存储（只读）。
-/// </summary>
-/// <remarks>
-/// 只读，写入职责属于 <see cref="IPermissionGrantManager"/>。
-/// 读取形状是"按主体一次取回全部授予"，多权限判断在内存完成，不存在 N+1。
-/// </remarks>
+/// <summary>权限授予的只读存储；写入经 <see cref="IPermissionGrantManager"/>。</summary>
+/// <remarks>按主体一次取回全部授予，多权限判断在内存完成。</remarks>
 public interface IPermissionGrantStore
 {
-    /// <summary>
-    /// 获取单个授予主体（用户或角色）的全部授予及其并发版本。
-    /// </summary>
+    /// <summary>获取单个授予主体的全部授予及其并发版本。</summary>
     /// <param name="providerName">授予对象类型，见 <see cref="PermissionGrantProviderNames"/>。</param>
     /// <param name="providerKey">授予对象 Key。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -23,12 +16,7 @@ public interface IPermissionGrantStore
         string providerKey,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 一次取回同类型多个主体的授予及其并发版本，用于管理界面的列表页。
-    /// </summary>
-    /// <remarks>
-    /// 往返次数与主体数量无关；逐行调用单主体重载会退化成按行的 N+1。
-    /// </remarks>
+    /// <summary>一次取回同类型多个主体的授予及其并发版本；往返次数与主体数量无关。</summary>
     /// <param name="providerName">授予对象类型，见 <see cref="PermissionGrantProviderNames"/>。</param>
     /// <param name="providerKeys">授予对象 Key 集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -38,9 +26,7 @@ public interface IPermissionGrantStore
         IReadOnlyCollection<string> providerKeys,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 一次取回权限检查主体的全部授予：用户直授加其所属角色的授予。
-    /// </summary>
+    /// <summary>一次取回权限检查主体的全部授予：用户直授加其所属角色的授予。</summary>
     /// <param name="userId">用户 ID。</param>
     /// <param name="roleIds">用户所属角色 ID 集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>

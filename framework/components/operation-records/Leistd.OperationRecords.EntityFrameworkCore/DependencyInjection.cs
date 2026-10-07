@@ -14,9 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.OperationRecords.EntityFrameworkCore;
 
-/// <summary>
-/// 操作记录 EF Core 持久化依赖注入与模型配置。
-/// </summary>
+/// <summary>操作记录 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -27,12 +25,9 @@ public static class DependencyInjection
     /// <c>AddOperationRecordQueries()</c>；HTTP 端点与保留期归档仍由宿主显式映射与注册。</para>
     /// <para>本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文，
     /// 因此宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>。</para>
-    /// <para><b>记录器还要四样跨组件前置</b>，缺一个在首次解析 <c>IOperationRecorder</c> 时才暴露：
-    /// <c>IClock</c>（宿主自行 <c>AddSingleton&lt;IClock, UtcClockProvider&gt;()</c>，
-    /// <c>Leistd.Core</c> 刻意不提供 DI 扩展）、<c>ICurrentTenant</c>（<c>AddMultiTenancyCore()</c>）、
-    /// <c>ICurrentUser</c>（<c>AddAmbientContext()</c>）、<c>ICorrelationIdProvider</c>
-    /// （<c>AddCorrelationIdCore()</c>）。每条记录都要回答"谁、在哪个租户、哪条链路、什么时间"，
-    /// 四样各来自一个独立组件；本组件<b>不</b>替调用方注册——组件由宿主显式组合。</para>
+    /// <para>记录器另需四样由宿主注册的前置，缺一个在首次解析 <c>IOperationRecorder</c> 时才暴露：
+    /// <c>IClock</c>（<c>AddSingleton&lt;IClock, UtcClockProvider&gt;()</c>）、<c>ICurrentTenant</c>（<c>AddMultiTenancyCore()</c>）、
+    /// <c>ICurrentUser</c>（<c>AddAmbientContext()</c>）、<c>ICorrelationIdProvider</c>（<c>AddCorrelationIdCore()</c>）。</para>
     /// <para>同一 DbContext 重复调用幂等；已用另一 DbContext 或日志写出注册过记录写入方时抛出 <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <example>
@@ -56,8 +51,7 @@ public static class DependencyInjection
     public static IServiceCollection AddOperationRecordsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        // 操作记录只有一个权威存储：两个上下文各注册一次时会静默取一条，
-        // 于是一半的审计写进了宿主没预期的库——而审计缺了一半比没有审计更危险。
+        // 操作记录只有一个权威存储：两个上下文各注册一次时会静默取其一
         services.EnsureSingleAuthoritative<IOperationRecordWriter, EfCoreOperationRecordStore<TDbContext>>(
             ServiceLifetime.Transient,
             "Operation records have a single authoritative store; map OperationRecord in one DbContext and do not combine it with another writer.");
@@ -80,8 +74,7 @@ public static class DependencyInjection
     /// 任务照常排期、到点跳过，打开开关下一轮即生效。</para>
     /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁；
     /// 归档按物理库逐个执行，独立库租户的记录在各自的库里归档。</para>
-    /// <para>逐库遍历（<c>ITenantDatabaseRunner</c>）由 <c>AddMultiTenancyCore()</c> 提供——
-    /// 基础注册本来就要它。不分库时它给出的清单只有宿主库，行为与单库一致。</para>
+    /// <para>逐库遍历（<c>ITenantDatabaseRunner</c>）由 <c>AddMultiTenancyCore()</c> 提供；不分库时只有宿主库。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -131,7 +124,7 @@ public static class DependencyInjection
     /// <summary>
     /// 将 <see cref="OperationRecord"/> 与 <see cref="OperationRecordArchive"/> 的实体配置应用到 DbContext。在 OnModelCreating 中调用。
     /// </summary>
-    /// <remarks>归档表随原表一起映射：启用保留期不需要改模型，也不会出现"开了归档却没有归档表"。</remarks>
+    /// <remarks>归档表随原表一起映射，启用保留期不需要改模型。</remarks>
     /// <param name="modelBuilder">模型构建器。</param>
     public static ModelBuilder ConfigureOperationRecords(this ModelBuilder modelBuilder)
     {

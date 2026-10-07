@@ -7,13 +7,10 @@ using Leistd.Authorization.Exceptions;
 
 namespace Leistd.Authorization.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// EF Core 权限授予存储。
-/// </summary>
+/// <summary>EF Core 权限授予存储。</summary>
 /// <remarks>
-/// 每个读取方法的数据库往返次数是常数，与权限数量、角色数量和批量主体数量都无关，不存在 N+1。
-/// DbContext 一律经 <see cref="IDbContextProvider{TDbContext}"/> 获取而不直接注入 <typeparamref name="TDbContext"/>——
-/// 只有它会设置 <c>DbContextCreationContext.Current</c>，直接注入会让独立库租户的读取静默落到默认连接上。
+/// 每个读取方法的数据库往返次数是常数。DbContext 经 <see cref="IDbContextProvider{TDbContext}"/> 获取：
+/// 直接注入会让独立库租户的读取落到默认连接上。
 /// </remarks>
 public class EfCorePermissionGrantStore<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider)
     : IPermissionGrantStore

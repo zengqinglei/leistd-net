@@ -7,9 +7,7 @@ using Leistd.Authorization.Definitions;
 
 namespace Leistd.Authorization.AspNetCore;
 
-/// <summary>
-/// 权限授权（微软 Policy 管道）依赖注入扩展。
-/// </summary>
+/// <summary>权限授权接入 ASP.NET Core 策略管道的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>

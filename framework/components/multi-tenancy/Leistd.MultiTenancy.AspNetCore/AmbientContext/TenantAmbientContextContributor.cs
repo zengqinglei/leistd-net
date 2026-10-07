@@ -6,12 +6,9 @@ using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.AmbientContext;
 
-// 非 HTTP 入口的租户维度：从主体的租户声明建立 ICurrentTenant。
-//
-// 非 HTTP 入口只从已验证主体的 claim 建立租户，不读取请求参数。
-//
-// 不做租户存在性与启用状态校验：那是请求入口的职责（MultiTenancyMiddleware），
-// 连接建立之后的失效判定统一走宿主授权策略。
+// 非 HTTP 入口的租户维度：只从已验证主体的租户声明建立 ICurrentTenant，不读取请求参数。
+// 不校验租户存在性与启用状态：那是请求入口（MultiTenancyMiddleware）的职责，
+// 连接建立之后的失效判定走宿主授权策略。
 internal sealed class TenantAmbientContextContributor(
     ICurrentTenant currentTenant,
     IOptions<ClaimTypeOptions> claimTypes) : IAmbientContextContributor

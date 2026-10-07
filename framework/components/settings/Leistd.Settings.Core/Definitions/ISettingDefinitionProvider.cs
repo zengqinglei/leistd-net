@@ -1,8 +1,6 @@
 namespace Leistd.Settings.Definitions;
 
-/// <summary>
-/// 将设置定义添加到定义上下文。
-/// </summary>
+/// <summary>向定义上下文登记设置定义。</summary>
 /// <example>
 /// <code>
 /// public class DisplaySettingDefinitionProvider : ISettingDefinitionProvider
@@ -31,19 +29,14 @@ public interface ISettingDefinitionProvider
     /// <summary>
     /// 在全部提供者的 <see cref="Define"/> 之后调用，用于补充或调整别处声明的定义。
     /// </summary>
-    /// <remarks>
-    /// 提供者之间没有注册顺序约定，要改动别人声明的定义（例如按部署配置补默认值）就放在这里，
-    /// 而不是在 <see cref="Define"/> 里赌对方已经执行过。
-    /// </remarks>
+    /// <remarks>提供者之间没有执行顺序约定，修改别处声明的定义须放在这里。</remarks>
     /// <param name="context">设置定义上下文。</param>
     void PostDefine(ISettingDefinitionContext context)
     {
     }
 }
 
-/// <summary>
-/// 提供设置定义的注册与查询上下文。
-/// </summary>
+/// <summary>设置定义的登记与查询上下文。</summary>
 /// <remarks>设置名全局唯一，重复注册在首次访问定义时抛出异常。</remarks>
 public interface ISettingDefinitionContext
 {
@@ -52,7 +45,7 @@ public interface ISettingDefinitionContext
     /// <param name="defaultValue">代码默认值。</param>
     /// <param name="scopes">允许覆盖该设置的层级；默认只允许租户级。</param>
     /// <param name="displayName">显示名称。</param>
-    /// <param name="group">所属分组的稳定标识；界面按它把设置分类摆放。</param>
+    /// <param name="group">所属分组的稳定标识。</param>
     /// <returns>新建的设置定义。</returns>
     ISettingDefinition Add(
         string name,

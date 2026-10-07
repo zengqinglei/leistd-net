@@ -4,14 +4,10 @@ namespace Leistd.Settings.Resolution;
 /// 按层级解析设置的当前生效值。
 /// </summary>
 /// <remarks>
-/// <para>回落顺序：<b>用户级 → 租户级 → 代码默认值</b>。宿主视角走租户级那一层
-/// （<c>TenantId</c> 为 <see langword="null"/> 的行），不额外引入"全局"层。</para>
-/// <para>实现为 Scoped 并在一次请求内记忆化：同一请求里多次读取只查一次库，
-/// 也就不存在跨节点缓存失效的问题。设置在请求之间的变更下一请求即可见。</para>
-/// <para><b>进程级设置（<c>SettingScopes.Host</c>）不走这条回落链</b>：它只有宿主那一行，
-/// 没有"上一层"。宿主上下文下直接读那一行，没有值才用代码默认值；租户上下文下它不可达
-/// （查询过滤器会滤掉它，专属库形态下连的还是租户自己的库），此时<b>不返回代码默认值</b>——
-/// 那个值看着有效，调用方分不出"这就是当前生效值"和"这一层根本读不到"。</para>
+/// <para>回落顺序：用户级 → 租户级 → 代码默认值。宿主视角走租户级那一层（<c>TenantId</c> 为 <see langword="null"/> 的行）。</para>
+/// <para>实现为 Scoped，一次请求内只查一次库；其他请求写入的变更在下一请求可见。</para>
+/// <para>进程级设置（<c>SettingScopes.Host</c>）不走回落链：宿主上下文下读宿主那一行，没有值才用代码默认值；
+/// 租户上下文下不可达，单项读取抛 <see cref="Exceptions.HostScopeUnavailableException"/>，不返回代码默认值。</para>
 /// </remarks>
 public interface ISettingProvider
 {
@@ -25,12 +21,9 @@ public interface ISettingProvider
     Task<string?> GetOrNullAsync(string name, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 读取<b>指定用户</b>在当前租户下的生效值：该用户的覆盖 → 租户级 → 代码默认值。
+    /// 读取指定用户在当前租户下的生效值：该用户的覆盖 → 租户级 → 代码默认值。
     /// </summary>
-    /// <remarks>
-    /// 给"替别人判断"的场景用，例如按收件人的偏好决定是否投递：发布方往往是另一个用户或后台任务，
-    /// 当前用户的回落结果与收件人无关。进程级设置与 <see cref="GetOrNullAsync"/> 相同。
-    /// </remarks>
+    /// <remarks>用于按他人偏好判断（如按收件人偏好决定是否投递）。进程级设置与 <see cref="GetOrNullAsync"/> 相同。</remarks>
     /// <param name="name">设置名称。</param>
     /// <param name="userId">目标用户标识。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -48,13 +41,8 @@ public interface ISettingProvider
     /// </exception>
     Task<T?> GetAsync<T>(string name, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 读取<b>当前上下文可访问的</b>全部设置的当前生效值。
-    /// </summary>
-    /// <remarks>
-    /// 租户上下文下不包含进程级设置：它们不属于这个租户，也读不到。不抛异常——
-    /// 批量读取不该因为其中一项在当前上下文不可达而整体失败。
-    /// </remarks>
+    /// <summary>读取当前上下文可访问的全部设置的当前生效值。</summary>
+    /// <remarks>租户上下文下不包含进程级设置，也不因此抛出。</remarks>
     /// <param name="visibleToClientsOnly">只返回标记为可下发客户端的设置。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     Task<IReadOnlyDictionary<string, string?>> GetAllAsync(

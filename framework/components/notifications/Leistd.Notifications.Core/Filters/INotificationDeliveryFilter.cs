@@ -3,16 +3,13 @@ using Leistd.Notifications.Dtos;
 
 namespace Leistd.Notifications.Filters;
 
-/// <summary>
-/// 决定一条通知是否经某个渠道投给某个收件人（收件人的通知偏好在这里生效）。
-/// </summary>
+/// <summary>决定一条通知是否经某个渠道投给某个收件人（收件人的通知偏好在这里生效）。</summary>
 /// <remarks>
 /// <para>默认实现一律投递。宿主要按用户偏好过滤时注册自己的实现：在 <c>AddNotifications</c> 之前注册即可保留，
 /// 之后注册则用 <c>Replace</c> 覆盖。</para>
 /// <para>站内渠道（<see cref="INotificationChannel.InAppName"/>）同时决定是否写入通知历史：
 /// 发布器先问它，不投则既不落库也不实时推送。其余渠道逐个问。</para>
-/// <para>过滤失败（例如读偏好时出错）会让本次发布失败，而不是按"投递"或"不投递"猜一个：
-/// 两种猜法都可能违背收件人的选择。</para>
+/// <para>过滤失败（例如读偏好时出错）会让本次发布失败，不按“投递”或“不投递”猜测。</para>
 /// </remarks>
 public interface INotificationDeliveryFilter
 {

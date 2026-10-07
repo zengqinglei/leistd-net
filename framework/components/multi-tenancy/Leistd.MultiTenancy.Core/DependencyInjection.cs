@@ -13,9 +13,7 @@ using Leistd.Localization;
 
 namespace Leistd.MultiTenancy;
 
-/// <summary>
-/// 提供平台无关的多租户服务注册。
-/// </summary>
+/// <summary>平台无关的多租户服务注册。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -35,10 +33,8 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddMultiTenancyCore(this IServiceCollection services)
     {
-        // 用 TryAdd 是<b>有意</b>留的替换口：宿主先注册自己的 ICurrentTenantAccessor 即可换掉
-        // 上下文的存储机制（HttpContext.Items、ThreadLocal、公司自有的 ambient 原语……），
-        // 而 Change() 的嵌套与还原语义仍由框架的 CurrentTenant 保证——那是最容易写错的一段，
-        // 忘了还原父上下文就是跨租户泄漏。不要因为"仓库里暂时没人替换"就把这层拿掉。
+        // TryAdd 是替换口：宿主先注册自己的 ICurrentTenantAccessor 即可换掉上下文存储机制，
+        // 而 Change() 的嵌套与还原（漏还原即跨租户泄漏）仍由框架的 CurrentTenant 保证。
         services.TryAddSingleton<ICurrentTenantAccessor>(AsyncLocalCurrentTenantAccessor.Instance);
         services.TryAddTransient<ICurrentTenant, CurrentTenant>();
         services.TryAddTransient<ITenantNormalizer, UpperInvariantTenantNormalizer>();
@@ -49,8 +45,7 @@ public static class DependencyInjection
         services.TryAddTransient<ITenantDatabaseEnumerator, TenantDatabaseEnumerator>();
         services.TryAddTransient<ITenantDatabaseRunner, TenantDatabaseRunner>();
         services.AddJsonLocalizationResources(typeof(MultiTenancyErrorCodes).Assembly);
-        // 错误码的状态语义与默认译文同属本组件的默认值，一并在这里登记：
-        // 交给宿主逐个 Configure 的话，漏一个不会有编译或启动错误，只会静默回落成 400。
+        // 错误码的状态语义与默认译文属于本组件默认值，在此登记，避免宿主漏配时静默回落成 400。
         // 宿主的 MapCode / MapException 覆盖同一码或同一类型，与调用顺序无关。
         services.Configure<GlobalExceptionOptions>(MultiTenancyExceptionMappings.Configure);
         return services;
@@ -59,7 +54,7 @@ public static class DependencyInjection
     /// <summary>
     /// 注册远端连接解析：向持有控制库的服务回源租户连接配置，按 <c>Leistd:MultiTenancy:Routing:CacheLifetime</c> 缓存。
     /// </summary>
-    /// <param name="services">服务集合</param>
+    /// <param name="services">服务集合。</param>
     /// <param name="configSectionPath"><see cref="TenantRouteCacheOptions"/> 绑定的配置节，校验消息按它报键名。</param>
     /// <remarks>
     /// <para><c>CacheLifetime</c> 默认 10 分钟，可配置（大于 0、不超过 1 小时，越界启动失败）；

@@ -4,13 +4,9 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Authorization.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 表示持久化的权限授予记录。
-/// </summary>
+/// <summary>持久化的权限授予记录；一行即一次授予，同一主体对同一权限只有一行。</summary>
 /// <remarks>
-/// 一行即代表一次授予，没有"拒绝"这一维，同一主体对同一权限不会出现两行。
-/// 实现 <see cref="IMultiTenant"/>：授予按租户分区，<c>TenantId</c> 由 <c>BaseDbContext</c> 在实体<b>进入变更跟踪时</b>落定。
-/// 写入统一通过 <see cref="IPermissionGrantManager"/>；直接构造本实体写库会绕过归一化。
+/// 授予按租户分区。写入须经 <see cref="IPermissionGrantManager"/>，直接写库会绕过归一化。
 /// </remarks>
 public class PermissionGrantRecord : ICreationAuditedObject, IMultiTenant
 {

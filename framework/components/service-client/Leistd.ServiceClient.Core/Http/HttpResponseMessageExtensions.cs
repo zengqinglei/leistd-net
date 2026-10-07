@@ -5,9 +5,7 @@ using Leistd.ServiceClient.Exceptions;
 
 namespace Leistd.ServiceClient.Http;
 
-/// <summary>
-/// 服务调用响应读取扩展：裸载荷读取、信封解包与远端错误还原。
-/// </summary>
+/// <summary>服务调用响应读取扩展：裸载荷读取、信封解包与远端错误还原。</summary>
 /// <remarks>
 /// <see cref="ReadContentAsync{T}"/> 读取裸载荷；<see cref="ReadResultAsync{T}"/> 用于远端信封。
 /// 两者均通过 <see cref="CreateRemoteErrorAsync"/> 还原远端错误。
@@ -25,10 +23,10 @@ public static class HttpResponseMessageExtensions
     /// 响应体为空或不是有效 JSON 抛 <see cref="ServiceClientException"/>。
     /// </summary>
     /// <remarks>被调方直出裸载荷时用 <see cref="ReadContentAsync{T}"/>。</remarks>
-    /// <typeparam name="T">信封 <c>data</c> 的类型</typeparam>
-    /// <param name="response">HTTP 响应</param>
-    /// <param name="jsonOptions">自定义序列化选项，默认 camelCase 且大小写不敏感（<see cref="JsonSerializerDefaults.Web"/>）</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <typeparam name="T">信封 <c>data</c> 的类型。</typeparam>
+    /// <param name="response">HTTP 响应。</param>
+    /// <param name="jsonOptions">序列化选项；默认 <see cref="JsonSerializerDefaults.Web"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     public static async Task<T?> ReadResultAsync<T>(
         this HttpResponseMessage response,
         JsonSerializerOptions? jsonOptions = null,
@@ -41,12 +39,10 @@ public static class HttpResponseMessageExtensions
         return envelope.Data;
     }
 
-    /// <summary>
-    /// 读取无数据负载的信封。非 2xx 或 <c>code != 0</c> 抛 <see cref="RemoteServiceException"/>。
-    /// </summary>
-    /// <param name="response">HTTP 响应</param>
-    /// <param name="jsonOptions">自定义序列化选项</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <summary>读取无数据负载的信封；非 2xx 或 <c>code != 0</c> 抛 <see cref="RemoteServiceException"/>。</summary>
+    /// <param name="response">HTTP 响应。</param>
+    /// <param name="jsonOptions">序列化选项；默认 <see cref="JsonSerializerDefaults.Web"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     public static async Task ReadResultAsync(
         this HttpResponseMessage response,
         JsonSerializerOptions? jsonOptions = null,
@@ -59,14 +55,14 @@ public static class HttpResponseMessageExtensions
     }
 
     /// <summary>
-    /// 直接把响应体反序列化为 <typeparamref name="T"/>，<b>调用本框架服务的常规路径</b>。
+    /// 直接把响应体反序列化为 <typeparamref name="T"/>，调用本框架服务的常规路径。
     /// 非 2xx 抛 <see cref="RemoteServiceException"/>。文件流场景请直接使用
     /// <see cref="HttpResponseMessage.Content"/>，先调用 <see cref="EnsureRemoteSuccessAsync"/> 检查错误。
     /// </summary>
-    /// <typeparam name="T">响应内容类型</typeparam>
-    /// <param name="response">HTTP 响应</param>
-    /// <param name="jsonOptions">自定义序列化选项</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <typeparam name="T">响应内容类型。</typeparam>
+    /// <param name="response">HTTP 响应。</param>
+    /// <param name="jsonOptions">序列化选项；默认 <see cref="JsonSerializerDefaults.Web"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     public static async Task<T?> ReadContentAsync<T>(
         this HttpResponseMessage response,
         JsonSerializerOptions? jsonOptions = null,
@@ -76,11 +72,7 @@ public static class HttpResponseMessageExtensions
         return await DeserializeAsync<T>(response, jsonOptions, cancellationToken);
     }
 
-    /// <summary>
-    /// 确保远端响应成功，否则抛出 <see cref="RemoteServiceException"/>。
-    /// </summary>
-    /// <param name="response">HTTP 响应</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <summary>确保远端响应成功，否则抛出 <see cref="RemoteServiceException"/>。</summary>
     public static async Task EnsureRemoteSuccessAsync(
         this HttpResponseMessage response,
         CancellationToken cancellationToken = default)
@@ -93,12 +85,7 @@ public static class HttpResponseMessageExtensions
         throw await CreateRemoteErrorAsync(response, cancellationToken);
     }
 
-    /// <summary>
-    /// 从失败响应创建 <see cref="RemoteServiceException"/>。
-    /// </summary>
-    /// <remarks>解析 Problem Details 字段；无法解析时保留截断后的原始响应体。</remarks>
-    /// <param name="response">非 2xx 的 HTTP 响应</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <summary>从非 2xx 响应创建 <see cref="RemoteServiceException"/>；无法解析时保留截断后的原始响应体。</summary>
     public static async Task<RemoteServiceException> CreateRemoteErrorAsync(
         this HttpResponseMessage response,
         CancellationToken cancellationToken = default)

@@ -10,14 +10,10 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.BackgroundJobs.InProcess;
 
-/// <summary>
-/// 进程内后台作业实现的注册入口。
-/// </summary>
+/// <summary>进程内后台作业实现的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册进程内调度器与后台任务队列。
-    /// </summary>
+    /// <summary>注册进程内调度器与后台任务队列。</summary>
     /// <remarks>
     /// <para>调度器执行所有经 <c>AddRecurringJob&lt;TJob&gt;</c> 登记的任务；登记与本方法的调用顺序无关。
     /// 选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:BackgroundJobs</c>）与其下的 <c>InProcess</c> 子节，

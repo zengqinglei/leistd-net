@@ -3,13 +3,8 @@ using Leistd.Authorization.Subjects;
 
 namespace Leistd.Authorization.DataScope.Abstractions;
 
-/// <summary>
-/// 内置数据操作名称。业务可以自行扩展，本类只是常用值的约定。
-/// </summary>
-/// <remarks>
-/// 读、改、删、导出可以使用不同的范围策略：不能假设"能看就能改"。
-/// 但列表、总数、导出和批量操作必须使用同一个范围入口，否则分页总数与实际可见数据会不一致。
-/// </remarks>
+/// <summary>常用数据操作名称；业务可使用任意字符串操作。</summary>
+/// <remarks>不同操作可分配不同范围；同一操作的列表、总数、导出与批量操作须经同一范围入口。</remarks>
 public static class DataOperations
 {
     /// <summary>读取（列表、详情、统计）。</summary>
@@ -25,12 +20,7 @@ public static class DataOperations
     public const string Export = "Export";
 }
 
-/// <summary>
-/// 数据范围分配：某个主体在某类资源的某个操作上被授予的一种范围。
-/// </summary>
-/// <remarks>
-/// 范围按操作分别分配："能看"不等于"能改"。
-/// </remarks>
+/// <summary>数据范围分配：某个主体在某类资源的某个操作上被授予的一种范围。</summary>
 /// <example>
 /// 同一资源的读与改可以拿到不同的范围集合：
 /// <code>
@@ -41,19 +31,14 @@ public static class DataOperations
 /// <param name="ResourceName">资源类型名称。</param>
 /// <param name="Operation">该分配适用的操作。</param>
 /// <param name="ScopeName">范围名称。</param>
-/// <param name="ScopeValue">
-/// 范围参数，语义由 Provider 解释，例如组织 ID。通用存储只保存这个字符串，
-/// 组织树展开、项目成员等业务关系仍由业务表负责，不复制到通用授权表。
-/// </param>
+/// <param name="ScopeValue">范围参数，语义由 Provider 解释（如组织 ID）；组织树展开等业务关系由业务表负责。</param>
 public sealed record DataScopeAssignment(
     string ResourceName,
     string Operation,
     string ScopeName,
     string? ScopeValue = null);
 
-/// <summary>
-/// 数据范围解析上下文。
-/// </summary>
+/// <summary>数据范围解析上下文。</summary>
 /// <param name="Subject">当前主体。</param>
 /// <param name="ResourceName">资源类型名称。</param>
 /// <param name="Operation">本次查询的操作，见 <see cref="DataOperations"/>。</param>
@@ -64,14 +49,11 @@ public sealed record DataScopeContext(
     string Operation,
     IReadOnlyList<DataScopeAssignment> Assignments);
 
-/// <summary>
-/// 数据范围提供器：把一种范围翻译成可由数据库执行的查询谓词。
-/// </summary>
+/// <summary>数据范围提供器：把一种范围翻译成可由数据库执行的查询谓词。</summary>
 /// <typeparam name="TEntity">被过滤的实体类型。</typeparam>
 /// <remarks>
-/// 实现必须返回可被数据库 Provider 翻译的表达式，不得调用只能客户端求值的方法，
-/// 也不得先把候选数据加载到内存再过滤——否则分页总数、排序、导出和性能都会错误。
-/// 多个被分配的范围之间取并集，取舍见 authorization-data-scope 组件文档。
+/// 实现必须返回可被数据库 Provider 翻译的表达式，不得依赖客户端求值或先加载候选数据。
+/// 多个被分配的范围之间取并集。
 /// </remarks>
 public interface IDataScopeProvider<TEntity>
 {
@@ -81,34 +63,17 @@ public interface IDataScopeProvider<TEntity>
     /// <summary>本 Provider 负责的范围名称。</summary>
     string ScopeName { get; }
 
-    /// <summary>
-    /// 构造该范围对应的查询谓词。
-    /// </summary>
-    /// <returns>
-    /// 谓词。"全部可见"必须显式返回 <c>_ =&gt; true</c>，"本范围不贡献任何可见性"返回 <c>_ =&gt; false</c>。
-    /// </returns>
-    /// <remarks>
-    /// 返回非空谓词；多个范围按并集合并，允许与拒绝均须显式表达。
-    /// </remarks>
+    /// <summary>构造该范围对应的查询谓词。</summary>
+    /// <returns>非空谓词：“全部可见”显式返回 <c>_ =&gt; true</c>，不贡献可见性返回 <c>_ =&gt; false</c>。</returns>
     ValueTask<Expression<Func<TEntity, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// 数据范围分配的来源，由业务项目实现。
-/// </summary>
-/// <remarks>
-/// Framework 不规定分配存放在哪里：可以来自角色配置表、组织架构或外部策略服务。
-/// </remarks>
+/// <summary>数据范围分配的来源，由业务项目实现（角色配置表、组织架构或外部策略服务等）。</summary>
 public interface IDataScopeAssignmentProvider
 {
-    /// <summary>
-    /// 获取指定主体在某类资源的某个操作上的全部范围分配。
-    /// </summary>
-    /// <remarks>
-    /// 返回空集合表示该主体在此操作上没有任何可见范围，应用器将据此返回空结果集（默认拒绝）。
-    /// </remarks>
+    /// <summary>获取指定主体在某类资源的某个操作上的全部范围分配；空集合表示没有可见范围（应用器返回空结果集）。</summary>
     ValueTask<IReadOnlyList<DataScopeAssignment>> GetAssignmentsAsync(
         PermissionSubject subject,
         string resourceName,
@@ -116,17 +81,11 @@ public interface IDataScopeAssignmentProvider
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// 数据范围应用入口：把当前主体的可见范围合并进业务查询。
-/// </summary>
-/// <remarks>
-/// 列表、总数、导出和批量操作必须全部经由本接口取得候选集合，才能保证四者一致。
-/// </remarks>
+/// <summary>数据范围应用入口：把当前主体的可见范围合并进业务查询。</summary>
+/// <remarks>列表、总数、导出和批量操作须全部经由本接口取得候选集合，四者才一致。</remarks>
 public interface IDataScopeApplier
 {
-    /// <summary>
-    /// 对查询施加当前主体在该资源上的可见范围。
-    /// </summary>
+    /// <summary>对查询施加当前主体在该资源上的可见范围。</summary>
     /// <returns>
     /// 施加范围后的查询。主体不可识别时返回空结果集（默认拒绝）；
     /// 主体是超级管理员或被分配的范围中存在"无限制"时，原样返回。

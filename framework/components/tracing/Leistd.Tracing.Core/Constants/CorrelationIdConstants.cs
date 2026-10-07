@@ -1,25 +1,15 @@
 namespace Leistd.Tracing.Constants;
 
-/// <summary>
-/// 关联标识的默认请求头、日志键与取值约束。
-/// </summary>
+/// <summary>关联标识的默认请求头、日志键与取值约束。</summary>
 public static class CorrelationIdConstants
 {
     /// <summary>默认请求头名。</summary>
     public const string DefaultHeaderName = "X-Correlation-Id";
 
-    /// <summary>
-    /// 日志上下文中的关联标识键名。
-    /// </summary>
-    /// <remarks>
-    /// 各服务无论用什么技术栈都写同一个键，运维才能一次查询命中整条业务链路。
-    /// 链路追踪的 TraceId 由日志框架按 Activity 另行记录，与本键分开。
-    /// </remarks>
+    /// <summary>日志上下文中的关联标识键名；链路追踪的 TraceId 由日志框架另行记录。</summary>
     public const string LogKey = "leistd.correlationId";
 
-    /// <summary>
-    /// 采信入站关联标识的最大长度，与操作记录的落库列宽一致，保证记下的值能完整关联回日志。
-    /// </summary>
+    /// <summary>采信入站关联标识的最大长度，与操作记录的列宽一致。</summary>
     public const int MaxLength = 64;
 
     /// <summary>

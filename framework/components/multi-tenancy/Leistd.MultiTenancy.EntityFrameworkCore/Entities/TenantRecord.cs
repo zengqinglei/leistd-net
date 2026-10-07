@@ -12,22 +12,22 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 /// </remarks>
 public class TenantRecord : IFullAuditedObject
 {
-    /// <summary>获取或设置租户标识。</summary>
+    /// <summary>租户标识。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
-    /// <summary>获取或设置大小写不敏感的唯一租户名称。</summary>
+    /// <summary>大小写不敏感的唯一租户名称。</summary>
     public string Name { get; set; } = default!;
 
-    /// <summary>获取或设置归一化查询键。</summary>
+    /// <summary>归一化查询键。</summary>
     public string NormalizedName { get; set; } = default!;
 
-    /// <summary>获取或设置显示名称。</summary>
+    /// <summary>显示名称。</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>获取或设置简短描述，供管理界面说明该租户的用途。</summary>
+    /// <summary>简短描述。</summary>
     public string? Description { get; set; }
 
-    /// <summary>获取或设置租户是否启用。</summary>
+    /// <summary>租户是否启用。</summary>
     public bool IsActive { get; set; } = true;
 
     /// <summary>
@@ -35,9 +35,7 @@ public class TenantRecord : IFullAuditedObject
     /// </summary>
     /// <remarks>
     /// 启用、停用、改名与连接配置的创建/修改全部竞争这一个版本，因此同一租户的这些管理操作互斥，
-    /// 并发时落败方抛 <c>TenantConcurrencyConflictException</c>（409）。
-    /// 这道串行化让「改路由前必须已停用」成为数据库层面的不变量。
-    /// 取舍论证见 multi-tenancy 组件文档「租户管理」。
+    /// 并发时落败方抛 <c>TenantConcurrencyConflictException</c>（409），使“改路由前必须已停用”成为数据库层面的不变量。
     /// </remarks>
     public long Version { get; set; } = 1;
 

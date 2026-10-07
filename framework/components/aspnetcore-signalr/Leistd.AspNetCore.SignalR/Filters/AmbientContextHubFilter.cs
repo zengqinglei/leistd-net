@@ -10,9 +10,7 @@ using Leistd.Security.Claims;
 
 namespace Leistd.AspNetCore.SignalR.Filters;
 
-/// <summary>
-/// 为每次 Hub 调用建立环境上下文，并复评宿主授权策略。
-/// </summary>
+/// <summary>为每次 Hub 调用建立环境上下文，并复评宿主授权策略。</summary>
 /// <remarks>
 /// Hub 方法调用不经过 HTTP 中间件。本过滤器基于握手主体建立调用上下文，
 /// 并按 <see cref="HubIdentityOptions.PolicyName"/> 和复评间隔检查身份有效性；对全部 Hub 生效。
@@ -56,10 +54,7 @@ public sealed class AmbientContextHubFilter(
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// 连接建立也要包在上下文里：<c>OnConnectedAsync</c> 里常做加组这类动作，
-    /// 那些同样需要租户与主体。
-    /// </remarks>
+    /// <remarks>连接建立同样在环境上下文内执行（<c>OnConnectedAsync</c> 里的加组等动作需要租户与主体）。</remarks>
     public async Task OnConnectedAsync(
         HubLifetimeContext context,
         Func<HubLifetimeContext, Task> next)
@@ -97,8 +92,7 @@ public sealed class AmbientContextHubFilter(
         System.Security.Claims.ClaimsPrincipal principal)
         => serviceProvider.GetRequiredService<IAmbientContext>().Begin(principal);
 
-    // 账号有效性复评。不通过即中止连接：让客户端重连并重新认证，
-    // 而不是让它继续持有一个已经失效的身份反复调用。
+    // 账号有效性复评：不通过即中止连接，让客户端重连并重新认证
     private async Task RevalidateOrAbortAsync(
         IServiceProvider serviceProvider,
         HubCallerContext callerContext,

@@ -10,14 +10,12 @@ using Leistd.Notifications.Email.Options;
 
 namespace Leistd.Notifications.Email.Channels;
 
-/// <summary>
-/// 通知的邮件渠道：收件人有已验证地址时，经后台队列异步发送。
-/// </summary>
+/// <summary>通知的邮件渠道：收件人有已验证地址时，经后台队列异步发送。</summary>
 /// <remarks>
-/// <para>正文按纯文本发送（内容，链接另起一段附上）：通知内容可能夹带用户可控文本，按 HTML 发出等于让邮件承载注入。
+/// <para>正文按纯文本发送（内容，链接另起一段附上），避免用户可控文本注入 HTML。
 /// 需要定制邮件版式时实现自己的 <see cref="INotificationChannel"/>。</para>
 /// <para>链接：绝对 http(s) 地址原样附上；以 <c>/</c> 开头的站内链接在配置了 <see cref="EmailNotificationOptions.PublicBaseUrl"/> 时转成绝对地址附上，未配置时不附。</para>
-/// <para>队列满时丢弃本封并记警告，不阻塞发布方——邮件是尽力而为的附加渠道，站内通知已经落库。</para>
+/// <para>队列满时丢弃本封并记警告，不阻塞发布方。</para>
 /// </remarks>
 /// <param name="recipients">收件人地址解析。</param>
 /// <param name="queue">后台任务队列。</param>

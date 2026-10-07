@@ -13,9 +13,8 @@ namespace Leistd.Authorization.Resource.AspNetCore.Operations;
 // - 没有授予记录时什么都不做，交给业务处理器；全部无结论时官方默认拒绝。
 // 主体取 context.User（被授权的主体），不回落到环境里的当前用户。
 //
-// ACL 按当前租户读取，因此主体的租户规则与功能权限检查器一致，且先于超管旁路：
-// 租户声明非法（如两份用户凭据被拼成一个主体）一律失败关闭；显式传入的其他主体还须属于当前租户，
-// 否则它的标识会被拿到别的租户的 ACL 里去比对。当前主体只校验合法性——宿主主体显式切入租户是正当用法。
+// ACL 按当前租户读取，主体的租户规则与功能权限检查器一致且先于超管旁路：租户声明非法一律失败关闭；
+// 显式传入的其他主体还须属于当前租户；当前主体只校验合法性（宿主主体可显式切入租户）。
 internal sealed class ResourceGrantAuthorizationHandler(
     IPermissionSubjectProvider subjectProvider,
     ICurrentPrincipalAccessor principalAccessor,

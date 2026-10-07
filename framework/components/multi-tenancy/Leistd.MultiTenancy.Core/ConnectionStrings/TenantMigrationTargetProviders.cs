@@ -1,7 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-// 迁移目标一律从连接存储按名字读：本地宿主拿到的是 EF 实现（读控制库），
-// 资源服务拿到的是宿主的 HTTP 实现（回源控制面）。两种形态的差异由注册决定，不需要两个提供器。
+// 迁移目标一律从连接存储按名字读；本地（EF）与远端（HTTP）形态的差异由存储的注册决定。
 internal sealed class TenantMigrationTargetProvider(ITenantConnectionConfigurationStore connectionStore)
     : ITenantMigrationTargetProvider
 {
@@ -11,9 +10,7 @@ internal sealed class TenantMigrationTargetProvider(ITenantConnectionConfigurati
     {
         var list = await connectionStore.GetListAsync(name, cancellationToken);
 
-        // 存储已经按名字解析、排除了"一条连接都没有"的租户，并把取不出连接的租户单列；这里按物理库合并。
-        // 运行时逐库作业不走这条路——它经 ITenantDatabaseDirectory 取指纹与租户归属，
-        // 因为这里的每一条都带明文连接串，常驻服务不该拿到
+        // 存储已按名字解析、排除无登记租户并单列失败租户；这里按物理库合并。
         return new TenantMigrationTargetSet(
             [
                 .. list.Connections

@@ -3,9 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Response.AspNetCore.Writers;
 
-// 统一响应信封作为 IProblemDetailsWriter 接入 ASP.NET Core 的问题详情管道：异常、自动模型校验、
-// 状态码页、Results.Problem() 与框架各中间件的失败都经 IProblemDetailsService 写出，
-// 在这一处换成信封，就不会有哪一类失败漏成另一种形状。注册时排在所有写入器之前（先到先写）。
+// 统一响应信封作为 IProblemDetailsWriter 接入问题详情管道：经 IProblemDetailsService 写出的失败都在此换成信封。
+// 注册时排在所有写入器之前（先到先写）。
 internal sealed class ResultProblemDetailsWriter(IOptions<ProblemDetailsOptions> options) : IProblemDetailsWriter
 {
     public bool CanWrite(ProblemDetailsContext context) => true;

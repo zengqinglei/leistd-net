@@ -16,11 +16,7 @@ internal sealed class RedisLockHandle : ILockHandle
     private readonly Task renewalLoop;
     private int disposed;
 
-    /// <remarks>
-    /// 续期与释放以委托传入，而不是持有 <see cref="RedisDistributedLock"/>：
-    /// 这两个动作是本类唯一需要的外部能力，收成委托后测试可以直接构造句柄验证续期与失锁行为，
-    /// 不必为此把生产类型解封或公开扩展点——公共 API 不该为测试留口子。
-    /// </remarks>
+    /// <remarks>续期与释放以委托传入，测试可直接构造句柄验证续期与失锁行为。</remarks>
     public RedisLockHandle(
         string key,
         TimeSpan expiry,

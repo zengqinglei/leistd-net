@@ -13,10 +13,8 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 
 /// <summary><see cref="ITenantConnectionConfigurationManager"/> 的 EF Core 实现。</summary>
 /// <remarks>
-/// 与 <see cref="EfCoreTenantManager{TDbContext}"/> 同型：<b>时间由本类填充</b>，
-/// 这样即使宿主没有把控制面 DbContext 接入审计层，也仍能得到"配置在何时被改过"。
-/// <c>CreatorId</c> / <c>LastModifierId</c> 由宿主审计层补充——控制面 DbContext 需要
-/// 同时接上创建审计钩子与 <c>AuditSaveChangesInterceptor</c>，两者缺一就少一半用户字段。
+/// 时间由本类填充，不依赖控制面 DbContext 接入审计层；<c>CreatorId</c> / <c>LastModifierId</c> 由宿主审计层补充，
+/// 需要控制面 DbContext 同时接上创建审计钩子与 <c>AuditSaveChangesInterceptor</c>。
 /// 连接串经宿主的 Data Protection 密钥环加密后落库。
 /// </remarks>
 public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantConnectionConfigurationManager
@@ -27,9 +25,9 @@ public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantCon
     private readonly TenantConnectionStringProtector _protector;
 
     /// <summary>创建管理器。</summary>
-    /// <param name="dbContextProvider">工作单元内的 DbContext 提供器</param>
-    /// <param name="clock">时钟</param>
-    /// <param name="dataProtectionProvider">宿主的 Data Protection 提供器，用于加密连接串</param>
+    /// <param name="dbContextProvider">工作单元内的 DbContext 提供器。</param>
+    /// <param name="clock">时钟。</param>
+    /// <param name="dataProtectionProvider">宿主的 Data Protection 提供器，用于加密连接串。</param>
     public EfCoreTenantConnectionConfigurationManager(
         IDbContextProvider<TDbContext> dbContextProvider,
         IClock clock,
@@ -61,8 +59,7 @@ public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantCon
             throw new TenantConnectionVersionConflictException(tenantId, expectedVersion, record?.Version);
         }
 
-        // 判据是"本次写入会不会改变已有数据的物理落点"，不是"这一行是不是首次写"。
-        // tenant.IsActive 写在前面短路：停用态的租户不必为此多查一次连接表。
+        // 判据是本次写入是否改变已有数据的物理落点；IsActive 在前短路，停用态不必再查连接表。
         if (tenant.IsActive
             && await ChangesDataResidencyAsync(dbContext, tenantId, record, cancellationToken))
         {
@@ -148,15 +145,9 @@ public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantCon
         return tenant ?? throw new TenantNotFoundException(tenantId.ToString());
     }
 
-    // 本次写入是否改变"已有数据"的物理落点——只有这一类写入要求租户先停用。
-    // 判据是该租户此前有没有任意一条登记，而不是"这一行是不是首次写"。三档：
-    //   1. 改已有的那一行：路由从一个库指向另一个库，而旧库里有这个租户的数据。要停用。
-    //   2. 该租户一条登记都没有：此前它不分库，种子、租户管理员与既有业务数据都活在服务自己
-    //      配置的库里；这一条登记把它变成分库租户，而那些数据不会跟着走——新库里没有管理员，
-    //      租户当场登不上，旧库里则留着一份带口令散列的孤儿账号。要停用，并自行迁移数据。
-    //   3. 已是分库租户、补一个此前没有的名字：那个服务此前按"登记过却缺这个名字"失败关闭
-    //      （见 TenantConnectionTargets.Select），回落库里根本没有它的数据，补登不搁浅任何东西。
-    //      放行——给漏登记的在用租户补一条是修复动作，不该要求先停机。
+    // 本次写入是否改变已有数据的物理落点（只有这类写入要求先停用），按该租户此前有无任意登记判断：
+    // 改已有的行会换库；无任何登记时首条登记把它变为分库租户，既有数据与管理员留在原库——两者都要停用。
+    // 已是分库租户补一个缺失的名字不搁浅数据（该服务此前失败关闭，见 TenantConnectionTargets.Select），放行。
     private static async Task<bool> ChangesDataResidencyAsync(
         TDbContext dbContext,
         Guid tenantId,

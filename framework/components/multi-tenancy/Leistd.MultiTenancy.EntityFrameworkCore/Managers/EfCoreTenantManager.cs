@@ -15,7 +15,6 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 /// 使用 EF Core 持久化租户生命周期和并发版本。
 /// </summary>
 /// <remarks>
-/// 契约与出参都在 Core，应用层无需引用本持久化实现包。
 /// 管理器自行 SaveChanges；在外层工作单元事务内调用时仅表现为提前刷写，不破坏事务边界。
 /// 软删除与创建时间由管理器自己落定，控制面上下文无需继承 <c>BaseDbContext</c>；<c>CreatorId</c> / <c>DeleterId</c> 仍归审计层填充。
 /// 无缓存失效步骤：存储直读库，启停与删除提交即生效。
@@ -67,8 +66,7 @@ public class EfCoreTenantManager<TDbContext>(
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var record = await GetAsync(dbContext, id, cancellationToken);
-        // 名称变了才按规则校验（只改大小写也算改名）：存量租户的名称可能早于这条规则，
-        // 只改显示名或描述不该被它挡住
+        // 名称变了才校验（只改大小写也算改名），存量名称可能不符合当前规则
         if (!string.Equals(record.Name, name, StringComparison.Ordinal))
         {
             TenantNames.EnsureValid(name);

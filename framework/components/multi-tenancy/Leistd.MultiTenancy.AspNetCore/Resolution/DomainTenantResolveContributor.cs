@@ -10,9 +10,8 @@ namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 /// 从主机名解析租户，格式形如 <c>{0}.example.com</c>（<c>acme.example.com</c> → <c>acme</c>）
 /// </summary>
 /// <remarks>
-/// 排在 Claim 贡献者<b>之后</b>、头与查询串<b>之前</b>：已认证主体的租户仍由 claim 定案，
-/// 对匿名请求，子域名部署下域名即权威，不允许被请求头改写。
-/// <b>只把真正用于租户的通配子域指向本应用</b>：把整个顶级域通配过来时，<c>www.example.com</c> 会被解析成名为 <c>www</c> 的租户。
+/// 排在 Claim 贡献者之后、请求头与查询串之前：已认证主体的租户仍由 claim 定案；匿名请求的域名结论不被请求头改写。
+/// 只把用于租户的通配子域指向本应用，否则 <c>www.example.com</c> 会被解析成名为 <c>www</c> 的租户。
 /// </remarks>
 public class DomainTenantResolveContributor : ITenantResolveContributor
 {

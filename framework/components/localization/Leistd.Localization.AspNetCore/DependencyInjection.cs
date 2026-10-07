@@ -10,13 +10,11 @@ using Leistd.Localization.AspNetCore.HostedServices;
 
 namespace Leistd.Localization.AspNetCore;
 
-/// <summary>
-/// Leistd JSON 本地化的注册与中间件装配入口。
-/// </summary>
+/// <summary>Leistd JSON 本地化的注册与中间件装配入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册基于嵌入 JSON 的本地化：<see cref="CompositeStringLocalizerFactory"/> 按<b>资源标记类型</b>路由
+    /// 注册基于嵌入 JSON 的本地化：<see cref="CompositeStringLocalizerFactory"/> 按资源标记类型路由
     /// （仅 <see cref="JsonLocalizationOptions.JsonResourceTypes"/> 中的类型走 JSON，其余委派官方 RESX），
     /// 及 <see cref="IStringLocalizer"/> / <see cref="IStringLocalizer{T}"/> 解析，并按
     /// <see cref="JsonLocalizationOptions.SupportedCultures"/> 配置请求区域性。
@@ -48,15 +46,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         Action<JsonLocalizationOptions>? configure = null)
     {
-        // JSON localizer 栈 + 官方 RESX 工厂，二者由组合工厂按资源来源路由（不全局接管宿主本地化）。
+        // JSON 本地化器与官方 RESX 工厂，由组合工厂按资源类型路由
         services.TryAddSingleton<JsonLocalizationResourceReader>();
         services.TryAddSingleton<JsonStringLocalizerFactory>();
         // 官方 ResourceManagerStringLocalizerFactory 依赖 IOptions<LocalizationOptions> / ILoggerFactory：由 AddLocalization 提供；
         // 它同时登记 IStringLocalizer<> → StringLocalizer<>，typed 本地化器经下面的组合工厂路由。
         services.AddLocalization();
         services.TryAddSingleton<ResourceManagerStringLocalizerFactory>();
-        // 有意替换 AddLocalization 登记的全局 IStringLocalizerFactory：typed IStringLocalizer<T> 按**类型**路由
-        //（TResourceSource 登记在 JsonResourceTypes 才走 JSON，其余委派官方 RESX），从而不接管宿主既有本地化。
+        // 替换 AddLocalization 登记的 IStringLocalizerFactory：IStringLocalizer<T> 按类型路由，未登记的类型仍走官方 RESX
         services.Replace(ServiceDescriptor.Singleton<IStringLocalizerFactory, CompositeStringLocalizerFactory>());
         // 无参 IStringLocalizer 直接使用全局 JSON 词条；按 object 路由会误入 RESX 分支。
         services.TryAddTransient<IStringLocalizer>(sp =>
@@ -88,15 +85,13 @@ public static class DependencyInjection
                 request.ApplyCurrentCultureToResponseHeaders = true;
             });
 
-        // 启动预热：把资源解析/坏文件告警提前到启动阶段，而非生产首个请求
+        // 启动预热：资源解析与坏文件告警在启动阶段而非首个请求发生
         services.AddHostedService<LocalizationPreloadHostedService>();
 
         return services;
     }
 
-    /// <summary>
-    /// 启用请求区域性解析中间件。
-    /// </summary>
+    /// <summary>启用请求区域性解析中间件。</summary>
     /// <remarks>必须在任何读取当前区域性的中间件之前调用。</remarks>
     public static IApplicationBuilder UseJsonRequestLocalization(this IApplicationBuilder app)
         => app.UseRequestLocalization();

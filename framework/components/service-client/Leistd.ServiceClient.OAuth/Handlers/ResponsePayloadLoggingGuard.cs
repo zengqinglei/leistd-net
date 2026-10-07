@@ -10,11 +10,9 @@ using static OpenIddict.Client.SystemNetHttp.OpenIddictClientSystemNetHttpHandle
 
 namespace Leistd.ServiceClient.OAuth.Handlers;
 
-// OpenIddict 7.x 在三处把远端响应原文写进 Error 日志：解析 JSON 时的宽泛 catch（事件 6183，取消也会落进去）、
-// 非成功状态码且没有 OAuth error 时（事件 6184）、成功状态码却没有任何处理器取出响应时（事件 6185，
-// 如 200 配 text/plain 或缺 Content-Type）。令牌端点的响应含 access_token，原文落盘就是凭据泄露。
-// 这里各在官方处理器之前接手同一职责：语义与错误码保持官方，只是取消照常抛出、日志只记状态、类型与长度。
-// 上游已接受改进（openiddict/openiddict-core#2558，8.0），升级到含官方选项的版本后删除本文件。
+// OpenIddict 7.x 在事件 6183/6184/6185 处把远端响应原文（令牌响应含 access_token）写进 Error 日志。
+// 这里在官方处理器之前接手同一职责：语义与错误码保持官方，取消照常抛出，日志只记状态、类型与长度。
+// 上游 openiddict/openiddict-core#2558（8.0）提供官方选项后可移除。
 internal static class ResponsePayloadLoggingGuard
 {
     // 框架注册的 Client 实际经过的响应：发现文档、JWKS、令牌请求（机器令牌与 Token Exchange）。

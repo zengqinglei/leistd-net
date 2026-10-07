@@ -3,12 +3,7 @@ using Leistd.Authorization.Resource.Errors;
 
 namespace Leistd.Authorization.Resource.Exceptions;
 
-/// <summary>
-/// 表示资源授权主体或效果无效。
-/// </summary>
-/// <remarks>
-/// <see cref="Reason"/> 区分主体与效果校验失败，由调用方修正输入。
-/// </remarks>
+/// <summary>资源授权主体或效果无效，由调用方修正输入。</summary>
 /// <param name="resourceName">资源类型名。</param>
 /// <param name="resourceKey">资源实例 Key。</param>
 /// <param name="reason">具体原因，进入异常消息。</param>

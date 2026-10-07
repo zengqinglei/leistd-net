@@ -2,9 +2,7 @@ using Leistd.ExceptionHandling.Descriptors;
 
 namespace Leistd.ExceptionHandling.Options;
 
-/// <summary>
-/// 配置全局异常响应。
-/// </summary>
+/// <summary>全局异常响应配置。</summary>
 public class GlobalExceptionOptions
 {
     /// <summary>配置节名 <c>Leistd:GlobalException</c>。</summary>

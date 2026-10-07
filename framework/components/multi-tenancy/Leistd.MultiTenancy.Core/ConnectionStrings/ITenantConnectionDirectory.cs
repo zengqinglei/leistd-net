@@ -4,10 +4,8 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// 列出某个租户已登记的连接名与版本（管理面用）。
 /// </summary>
 /// <remarks>
-/// <para>与 <see cref="ITenantConnectionConfigurationStore"/> 分开：那个契约刻意"按名字问、按名字答，一次只出一条"——
-/// 远端形态下把整租户的连接都发给某一个资源服务，等于把别的服务的库口令也发过去了。
-/// 管理面要的恰好是"这个租户有哪些连接"，因此单独开一个窄口，而不是拓宽那个契约。</para>
-/// <para>只回名字与版本，密文不取出来，明文更不会。</para>
+/// 只回名字与版本，不读取密文。与只按名字返回单条连接的 <see cref="ITenantConnectionConfigurationStore"/> 分开，
+/// 后者不暴露租户的完整连接列表。
 /// </remarks>
 public interface ITenantConnectionDirectory
 {

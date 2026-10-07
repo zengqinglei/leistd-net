@@ -4,11 +4,10 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// 租户在某个连接名下登记的连接配置快照。
 /// </summary>
 /// <remarks>
-/// <para>一个租户可以登记多条：连接名对应使用方 DbContext 的 <c>[ConnectionStringName]</c>，
-/// 因此同一个租户能在 identity、foundation、crm 各有一个库。<b>一行存在就代表登记了一条连接</b>，
-/// 没有"模式"标志位；一条都没有即该租户不单独分库，各服务使用自己配置的数据库。</para>
-/// <para><see cref="ConnectionString"/> 是<b>已解密的明文</b>，只在进程内流转：
-/// <see cref="ToString"/> 不输出它，调用方也不得把它写进日志、异常消息或面向人的响应。</para>
+/// <para>连接名对应使用方 DbContext 的 <c>[ConnectionStringName]</c>，一个租户可按服务各登记一条；
+/// 一条都没有即该租户不单独分库，各服务使用自己配置的数据库。</para>
+/// <para><see cref="ConnectionString"/> 是已解密的明文，只在进程内流转：<see cref="ToString"/> 不输出它，
+/// 调用方不得把它写进日志、异常消息或响应。</para>
 /// </remarks>
 public sealed class TenantConnectionConfiguration
 {
@@ -18,13 +17,7 @@ public sealed class TenantConnectionConfiguration
     /// <summary>连接名的最大长度。</summary>
     public const int MaxNameLength = 64;
 
-    /// <summary>
-    /// 连接名的合法形态：小写字母、数字与连字符。
-    /// </summary>
-    /// <remarks>
-    /// 名字统一归一化为小写后存储与查询，管理员填 <c>Crm</c> 还是 <c>crm</c> 命中同一行，
-    /// 不会因大小写差异走到拒绝分支。
-    /// </remarks>
+    /// <summary>连接名的合法形态：小写字母、数字与连字符。输入先归一化为小写，<c>Crm</c> 与 <c>crm</c> 命中同一行。</summary>
     public const string NamePattern = "^[a-z0-9-]{1,64}$";
 
     /// <summary>租户 Id。</summary>

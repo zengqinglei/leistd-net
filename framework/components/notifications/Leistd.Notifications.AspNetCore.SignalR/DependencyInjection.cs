@@ -10,9 +10,7 @@ using Leistd.Notifications.Channels;
 
 namespace Leistd.Notifications.AspNetCore.SignalR;
 
-/// <summary>
-/// 通知（SignalR 传输）依赖注入与端点映射配置。
-/// </summary>
+/// <summary>通知 SignalR 传输的注册与端点映射。</summary>
 public static class DependencyInjection
 {
     /// <summary>通知 Hub 路径。</summary>
@@ -45,7 +43,7 @@ public static class DependencyInjection
     /// 客户端方法名为 <see cref="NotificationClientMethods.Received"/>。该 Hub 由宿主自行映射，
     /// 此时不再调用 <see cref="MapNotificationHub"/>；通知的接收授权随之就是该 Hub 的授权要求。</para>
     /// <para>同一个 Hub 重复调用是幂等的；已选定一个 Hub 后再指定另一个（包括先调用无泛型版本）会抛
-    /// <see cref="InvalidOperationException"/>：一条通知只经一个 Hub 推送，冲突的选择在注册时报错，而不是静默取其一。</para>
+    /// <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <typeparam name="THub">推送通知所经的 Hub。</typeparam>
     /// <exception cref="InvalidOperationException">已为通知选定了另一个 Hub。</exception>
@@ -75,8 +73,8 @@ public static class DependencyInjection
         }
 
         services.AddNotifications();
-        // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，主体/租户/链路标识与
-        // UserIdentifier 解析全靠基座。基座注册是幂等的，与 realtime 组件同时装也只有一份过滤器。
+        // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，主体、租户、链路标识与 UserIdentifier 由基座建立。
+        // 基座注册幂等，与 realtime 组件同时装也只有一份过滤器。
         services.AddSignalRAmbientContext();
         services.AddSingleton<NotificationHubClients, NotificationHubClients<THub>>();
         // 渠道是累加扩展点，按实现类型去重，保留宿主注册的其他渠道。
@@ -85,12 +83,9 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 映射通知 Hub 端点（需登录）。
-    /// </summary>
+    /// <summary>映射通知 Hub 端点（需登录）。</summary>
     /// <remarks>
-    /// 只负责通知自身的 Hub。实时业务事件 Hub 由实时组件的 <c>MapRealTimeHub()</c> 显式映射，
-    /// 避免通知组件越权代映射、以及与调用方重复映射 /hubs/realtime。
+    /// 只映射通知自身的 Hub，实时业务事件 Hub 由实时组件的 <c>MapRealTimeHub()</c> 映射。
     /// 握手按 <c>HubIdentityOptions.PolicyName</c> 授权（未设置时按宿主的默认策略），Hub 方法调用由 SignalR 基座按同一策略复评；
     /// 要换策略就设置该选项，不要在返回的构建器上追加 <c>RequireAuthorization</c>。
     /// 返回官方的 <see cref="HubEndpointConventionBuilder"/>，宿主可继续链式追加 CORS 等端点约定。

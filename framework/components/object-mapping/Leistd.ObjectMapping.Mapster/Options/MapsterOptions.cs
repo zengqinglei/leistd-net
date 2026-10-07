@@ -7,13 +7,9 @@ namespace Leistd.ObjectMapping.Mapster.Options;
 /// </summary>
 public class MapsterOptions
 {
-    /// <summary>
-    /// 获取映射配置操作列表。
-    /// </summary>
+    /// <summary>映射配置操作，按添加顺序作用于组件自己的 <see cref="TypeAdapterConfig"/>。</summary>
     public List<Action<TypeAdapterConfig>> Configurators { get; } = [];
 
-    /// <summary>
-    /// 获取或设置是否验证映射配置。
-    /// </summary>
+    /// <summary>为 <see langword="true"/> 时在首次解析映射器时编译全部配置，配置错误立即抛出；默认 <see langword="false"/>。</summary>
     public bool ValidateMappings { get; set; }
 }

@@ -22,14 +22,10 @@ using Leistd.DependencyInjection.Extensions;
 
 namespace Leistd.Ddd.Infrastructure;
 
-/// <summary>
-/// 提供 DDD 基础设施服务注册。
-/// </summary>
+/// <summary>DDD 基础设施服务注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。
-    /// </summary>
+    /// <summary>注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。</summary>
     /// <remarks>
     /// 可重复调用：服务只注册一次，<paramref name="configureUnitOfWork"/> 每次都叠加；工作单元配置节的规则同 <c>AddUnitOfWork</c>。
     /// </remarks>
@@ -58,7 +54,7 @@ public static class DependencyInjection
 
         services.AddAuditingEfCore();
 
-        // 领域事件由保存拦截器收集后发布，事件总线是基座的组成部分，不留给宿主记得注册
+        // 领域事件由保存拦截器收集后发布，事件总线由基座注册
         services.AddLocalEventBus();
         // 待发布事件按 DbContext 暂存在静态弱表中，拦截器本身无状态。
         services.TryAddTransient<LocalEventSaveChangesInterceptor>();
@@ -83,9 +79,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，挂载保存拦截器，并按选项注册仓储。
-    /// </summary>
+    /// <summary>把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，挂载保存拦截器，并按选项注册仓储。</summary>
     /// <remarks>
     /// <para>派生自 <see cref="BaseDbContext"/> 的上下文经 <c>ConfigureDbContext&lt;TDbContext&gt;</c> 挂载三个保存拦截器：
     /// 修改/删除审计（含软删除转换）、领域事件收集与发布、并发标记换发；与 <c>AddDbContext</c> 的先后无关。
@@ -232,9 +226,7 @@ public static class DependencyInjection
         }
     }
 
-    // 同一实体被两个上下文各注册一次时，Microsoft DI 让后注册的静默胜出——
-    // 调用方拿到的是哪个库的仓储由注册顺序决定，且没有任何信号。此处直接拒绝。
-    // 相同实现的重复登记（组合根重复调用）不改变解析结果，按幂等跳过。
+    // 同一实体被两个上下文各注册一次时 Microsoft DI 会让后注册者静默胜出，此处直接拒绝；相同实现的重复登记幂等跳过。
     private static void AddRepositoryDescriptor(
         IServiceCollection services,
         Type repositoryInterface,
@@ -259,8 +251,8 @@ public static class DependencyInjection
         services.AddScoped(repositoryInterface, implementationType);
     }
 
-    // 注册了 DbContext 却没有显式接入的，直接让宿主起不来：那个上下文会逃出
-    // 租户过滤器闸门。不要仓储的上下文调用无参重载即可（只登记，不注册仓储）。
+    // 注册了 DbContext 却没有显式接入的，宿主启动即失败：那个上下文会绕过租户过滤器闸门。
+    // 不要仓储的上下文调用无参重载即可。
     private static void EnsureEveryDbContextIsDeclared(IServiceCollection services)
     {
         if (services.FirstOrDefault(d => d.ServiceType == typeof(TrackedDbContextTypes))

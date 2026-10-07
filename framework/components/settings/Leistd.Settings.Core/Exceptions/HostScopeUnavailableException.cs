@@ -1,16 +1,9 @@
 namespace Leistd.Settings.Exceptions;
 
-/// <summary>
-/// 表示在宿主上下文之外读写进程级设置。
-/// </summary>
+/// <summary>在宿主上下文之外读写进程级设置。</summary>
 /// <remarks>
-/// 进程级设置（<c>SettingScopes.Host</c>）只有宿主那一行。租户上下文下这一行不可达：
-/// 查询过滤器会把它滤掉，专属库形态下连的还是租户自己的库。此时静默回落到代码默认值，
-/// 读到的会是一个<b>看着有效的错误值</b>——所以这里明确抛出。
-/// <para>
-/// 需要在租户请求里读进程级配置的消费者，应当读进程内那份运行期状态（由宿主侧的应用器
-/// 维护），而不是每个请求去问设置存储。
-/// </para>
+/// 进程级设置只有宿主那一行，租户上下文下不可达，因此抛出而不是回落到代码默认值。
+/// 租户请求里需要进程级配置时，读进程内的运行期状态（如经 <c>AddHostSettings</c> 绑定的 Options）。
 /// </remarks>
 /// <param name="settingName">被访问的设置名；存储层抛出时为 <see langword="null"/>（那里只知道层级）。</param>
 /// <param name="tenantId">当前租户标识；取不到时为 <see langword="null"/>。</param>

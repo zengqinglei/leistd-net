@@ -19,9 +19,7 @@ public class PermissionDefinitionManager : IPermissionDefinitionManager
     private readonly Dictionary<string, string[]> _descendants = new(StringComparer.Ordinal);
     private readonly HashSet<string> _effectivelyEnabled = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// 构造时一次性加载全部提供方的定义并预计算关系缓存；任一提供方抛异常即启动失败。
-    /// </summary>
+    /// <summary>一次性加载全部提供方的定义并预计算关系；任一提供方抛异常即构造失败。</summary>
     public PermissionDefinitionManager(
         IEnumerable<IPermissionDefinitionProvider> providers,
         ILogger<PermissionDefinitionManager> logger)
