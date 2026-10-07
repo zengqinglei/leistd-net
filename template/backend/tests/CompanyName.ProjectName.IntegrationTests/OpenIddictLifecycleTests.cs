@@ -132,9 +132,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>
-    /// 证明要求发生过新的认证（换了会话），不能只看认证时间
-    /// </summary>
+    /// <summary>证明要求发生过新的认证（换了会话），不能只看认证时间。</summary>
     /// <remarks>auth_time 只到秒：旧会话与证明同秒、或副本之间时钟有偏差时，单凭"认证时间不早于签发时间"会让旧会话直接兑现。
     /// 这里把旧会话的认证时间拨到证明签发之后，确定性地复现这一情形（用 prompt=login：认证时间在未来时 max_age 本就判定为未过期；
     /// 两者兑现证明走同一段校验）。</remarks>

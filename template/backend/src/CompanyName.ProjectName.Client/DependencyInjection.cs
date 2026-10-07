@@ -3,9 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.Client;
 
-/// <summary>
-/// 客户端注册入口（在调用方服务的 Program.cs 使用）。
-/// </summary>
+/// <summary>客户端注册入口（在调用方服务的 Program.cs 使用）。</summary>
 public static class DependencyInjection
 {
     /// <summary>

@@ -2,9 +2,7 @@ using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.Management.Provisioning;
 
-/// <summary>
-/// 启用租户的前置条件，例如"租户里至少有一个用户"。由宿主实现，可注册多个。
-/// </summary>
+/// <summary>启用租户的前置条件，例如"租户里至少有一个用户"。由宿主实现，可注册多个。</summary>
 /// <remarks>
 /// <para>只在经管理用例手动启用时依次调用，创建流程末尾的自动启用不经过它。不满足时抛带码的业务异常，启用中止。</para>
 /// <para>调用时处于宿主上下文；查租户自己的数据时须切到租户上下文并新开工作单元，

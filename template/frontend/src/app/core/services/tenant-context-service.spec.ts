@@ -5,7 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { TenantContextService } from './tenant-context-service';
 
 describe('TenantContextService', () => {
-  // 上下文只存 key：匿名接口不再回显租户的 id / 展示名（那会泄露租户是否存在）
+  // 只存租户键，匿名接口不返回可泄露租户存在性的标识与展示名。
   const tenantName = 'acme';
 
   function create(): TenantContextService {
@@ -37,8 +37,7 @@ describe('TenantContextService', () => {
     expect(create().current()).toEqual({ key: tenantName });
   });
 
-  // 旧版本存的是 {id,name,displayName}，没有 key。这种存档必须判为无效并清掉，
-  // 否则拦截器会把 undefined 塞进租户提示头
+  // 缺少 key 的存档无效，避免向租户提示头写入 undefined。
   it('treats a stored record in the legacy shape as invalid', () => {
     localStorage.setItem(
       'app.tenant',
@@ -51,7 +50,6 @@ describe('TenantContextService', () => {
   it('restores the context from localStorage in a new instance', () => {
     create().set(tenantName);
 
-    // 模拟刷新页面：新实例读回持久化的租户
     expect(create().current()?.key).toBe(tenantName);
   });
 

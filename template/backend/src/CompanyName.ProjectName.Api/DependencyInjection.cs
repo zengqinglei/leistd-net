@@ -23,18 +23,14 @@ using OpenIddict.Validation.AspNetCore;
 
 namespace CompanyName.ProjectName.Api;
 
-/// <summary>
-/// Api 层依赖注入配置
-/// </summary>
+/// <summary>Api 层依赖注入配置。</summary>
 /// <remarks>
 /// 授权策略属于 Api 层职责（HTTP 认证方案与 Requirement），因此收在本文件而不是 <c>Program.cs</c>：
 /// 与其余三层各自的 <c>DependencyInjection.cs</c> 同构，组合根只负责调用。
 /// </remarks>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 Api 层授权：默认策略、相关 Handler 与内部控制面策略
-    /// </summary>
+    /// <summary>注册 Api 层授权：默认策略、相关 Handler 与内部控制面策略。</summary>
     /// <remarks>
     /// 各形态都在这里定案，组合根只有一行调用：本地身份形态的主体来自 Bearer 或会话 Cookie
     /// 并要求账号可用；资源服务形态来自 Bearer（带浏览器会话时还有服务端 Cookie）、账号状态由签发方负责。
@@ -115,9 +111,7 @@ public static class DependencyInjection
         ;
 
 #if (OpenIddictServer && IncludeMultiTenancy)
-    /// <summary>
-    /// 注册一条只对<b>机器主体</b>开放的内部控制面策略
-    /// </summary>
+    /// <summary>注册一条只对<b>机器主体</b>开放的内部控制面策略。</summary>
     /// <remarks>
     /// 策略只接受 Bearer 认证的 <c>client:&lt;client_id&gt;</c> 机器主体，并要求对应 scope；
     /// Runtime 与 Migration scope 彼此独立。超管 claim 和会话 Cookie 均不能旁路该边界，

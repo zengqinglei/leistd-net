@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 嵌套工作单元：子级把一切都委托给父级，唯独提交与释放是空操作。
-/// </summary>
+/// <summary>嵌套工作单元：子级把一切都委托给父级，唯独提交与释放是空操作。</summary>
 /// <remarks>
 /// <para>这是工作单元里最容易出错、后果最重的一段：子级若真的提交，内层方法一返回
 /// 事务就落地了，外层再回滚也追不回来；子级若真的释放，父级的连接会在外层还在用时被关掉。</para>

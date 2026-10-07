@@ -7,9 +7,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;
 
-/// <summary>
-/// 一次登录建立的会话（"登录设备"里的一行）。
-/// </summary>
+/// <summary>一次登录建立的会话（"登录设备"里的一行）。</summary>
 /// <remarks>
 /// <para>会话 Cookie 本身是自包含的：服务端不登记就无从得知谁在哪儿登录着，更撤不回一个已发出的 Cookie。
 /// 登记后 Cookie 只携带会话 Id（<c>sid</c> 声明），每次校验都要这一行还在——
@@ -27,9 +25,7 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
     /// <summary>模拟发起人名称的列宽。</summary>
     public const int ImpersonatorNameMaxLength = 128;
 
-    /// <summary>
-    /// 最近活跃时间的更新间隔：同一会话在这个间隔内的请求不再写库。
-    /// </summary>
+    /// <summary>最近活跃时间的更新间隔：同一会话在这个间隔内的请求不再写库。</summary>
     /// <remarks>每个请求都写一次的话，读多写少的接口全都变成了写请求。</remarks>
     public static readonly TimeSpan TouchInterval = TimeSpan.FromMinutes(1);
 
@@ -48,9 +44,7 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
     /// <summary>登录时的 User-Agent。</summary>
     public string? UserAgent { get; private set; }
 
-    /// <summary>
-    /// 模拟登录建立的会话：发起人的名称；普通登录为 null。
-    /// </summary>
+    /// <summary>模拟登录建立的会话：发起人的名称；普通登录为 null。</summary>
     /// <remarks>被模拟的账号在自己的设备列表里能看到"谁以我的身份进来过"，与操作记录的信任属性一致。</remarks>
     public string? ImpersonatorName { get; private set; }
 
@@ -68,9 +62,7 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
         ImpersonatorName = Truncate(impersonatorName, ImpersonatorNameMaxLength);
     }
 
-    /// <summary>
-    /// 撤销：调用方随后删除这一行。发出 <see cref="UserSessionRevokedEvent"/>，事务提交后订阅方据此作废会话校验缓存。
-    /// </summary>
+    /// <summary>撤销：调用方随后删除这一行。发出 <see cref="UserSessionRevokedEvent"/>，事务提交后订阅方据此作废会话校验缓存。</summary>
     /// <param name="now">撤销时刻。</param>
     public void Revoke(DateTime now) => AddLocalEvent(new UserSessionRevokedEvent(Id, now));
 
@@ -95,9 +87,7 @@ public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IM
     // 最近活跃晚于这一刻的会话才算有效：恰好落在这一刻（空闲刚好满时长）即已结束
     private static DateTime ActiveCutoff(DateTime now, TimeSpan idleTimeout) => now - idleTimeout;
 
-    /// <summary>
-    /// 记一次活跃。距上次记录不足 <see cref="TouchInterval"/> 时不改动，返回 false，调用方据此省掉写库。
-    /// </summary>
+    /// <summary>记一次活跃。距上次记录不足 <see cref="TouchInterval"/> 时不改动，返回 false，调用方据此省掉写库。</summary>
     public bool Touch(DateTime now, string? ipAddress)
     {
         if (now - LastSeenTime < TouchInterval)

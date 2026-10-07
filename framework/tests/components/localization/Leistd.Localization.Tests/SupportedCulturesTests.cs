@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Localization.Tests;
 
-/// <summary>
-/// 支持语言只有 <see cref="JsonLocalizationOptions.SupportedCultures"/> 一份：默认语言、请求默认区域性与资源回落都取它的首项。
-/// </summary>
+/// <summary>支持语言只有 <see cref="JsonLocalizationOptions.SupportedCultures"/> 一份：默认语言、请求默认区域性与资源回落都取它的首项。</summary>
 /// <remarks>
 /// 三处各存一份时，宿主只改其中一处就会出现"请求按中文协商、词条却回落英文"这类不报错的分裂。
 /// </remarks>

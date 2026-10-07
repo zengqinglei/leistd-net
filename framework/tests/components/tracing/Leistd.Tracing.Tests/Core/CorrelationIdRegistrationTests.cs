@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.Tracing.Tests.Core;
 
-/// <summary>
-/// <c>AddCorrelationIdCore</c> / <c>AddCorrelationId</c> 的注册面。
-/// </summary>
+/// <summary><c>AddCorrelationIdCore</c> / <c>AddCorrelationId</c> 的注册面。</summary>
 /// <remarks>
 /// 两个入口常被不同组件各调一次（服务客户端、Hub 基座、宿主自身）：重复登记会让环境上下文贡献者出现两次、
 /// 校验失败报两遍；宿主先换掉的提供器也不能被组件换回来。

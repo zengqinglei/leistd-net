@@ -85,9 +85,7 @@ public class PrincipalOnlyEnforcementTests
         Assert.IsType<CurrentPrincipalTenantResolveContributor>(contributors[0]);
     }
 
-    /// <summary>
-    /// 开着注册表校验却没注册 <c>ITenantStore</c>：必须在读取选项时就失败，不能留到运行期
-    /// </summary>
+    /// <summary>开着注册表校验却没注册 <c>ITenantStore</c>：必须在读取选项时就失败，不能留到运行期。</summary>
     /// <remarks>
     /// 若这个前提只在中间件里发现，每个带租户的请求都会失败一次、而进程"健康"地跑着。
     /// </remarks>

@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 
-/// <summary>
-/// 短期验证码的摘要能力
-/// </summary>
+/// <summary>短期验证码的摘要能力。</summary>
 /// <remarks>
 /// <para><b>刻意与口令哈希分开。</b>两者安全语义不同：口令是长期机密、搜索空间大，
 /// 需要高成本的自适应哈希抬高离线破解代价；六位验证码只有 10⁶ 空间、寿命几分钟，

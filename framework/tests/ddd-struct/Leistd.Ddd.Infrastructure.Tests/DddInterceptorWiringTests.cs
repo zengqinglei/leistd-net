@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// <c>AddDddDbContext</c> 一次挂齐保存时刻的三项能力，且经宿主真实接线生效。
-/// </summary>
+/// <summary><c>AddDddDbContext</c> 一次挂齐保存时刻的三项能力，且经宿主真实接线生效。</summary>
 /// <remarks>
 /// <para>本测试刻意<b>不手工 new 拦截器</b>，而是走
 /// <c>AddDddInfrastructure()</c> → <c>AddDbContext&lt;T&gt;(...)</c> → <c>AddDddDbContext&lt;T&gt;()</c>

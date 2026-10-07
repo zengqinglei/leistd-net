@@ -10,14 +10,10 @@ using Leistd.ObjectMapping.Abstractions;
 
 namespace Leistd.ObjectMapping.Mapster;
 
-/// <summary>
-/// Mapster 对象映射的注册入口：注册 <c>IObjectMapper</c> 与组件自己的 <see cref="TypeAdapterConfig"/>。
-/// </summary>
+/// <summary>Mapster 对象映射的注册入口：注册 <c>IObjectMapper</c> 与组件自己的 <see cref="TypeAdapterConfig"/>。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 Mapster 对象映射器。
-    /// </summary>
+    /// <summary>注册 Mapster 对象映射器。</summary>
     /// <remarks>
     /// 映射配置用 Mapster 官方的 <see cref="IRegister"/> 书写，经 <c>Configurators</c> 扫描登记到组件的
     /// <see cref="TypeAdapterConfig"/>（不是 <c>TypeAdapterConfig.GlobalSettings</c>）。业务代码只注入

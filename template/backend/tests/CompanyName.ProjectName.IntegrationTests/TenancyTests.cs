@@ -50,9 +50,7 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 多租户端到端闭环：建租户即种子、租户登录、数据硬隔离、宿主侧权限边界、停用即拒。
-/// </summary>
+/// <summary>多租户端到端闭环：建租户即种子、租户登录、数据硬隔离、宿主侧权限边界、停用即拒。</summary>
 public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, IDisposable
 {
     private readonly ProjectWebApplicationFactory _factory;
@@ -134,9 +132,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         return client;
     }
 
-    /// <summary>
-    /// 以匿名身份带租户头调用注册端点，返回状态码。
-    /// </summary>
+    /// <summary>以匿名身份带租户头调用注册端点，返回状态码。</summary>
     /// <remarks>
     /// 注册是匿名端点，正是"半成品租户"最现实的入侵面：租户一旦启用，
     /// 任何人带上它的租户提示头 就能在还没有管理员的租户里注册出第一个用户。
@@ -167,9 +163,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             .ToList();
     }
 
-    /// <summary>
-    /// 租户管理员是<b>普通用户 + Admin 角色</b>，不是超管
-    /// </summary>
+    /// <summary>租户管理员是<b>普通用户 + Admin 角色</b>，不是超管。</summary>
     /// <remarks>
     /// <para><c>IsSuperAdmin</c> 是宿主的防锁死逃生舱：旁路功能权限、资源实例授权与数据范围过滤，
     /// 且不可停用、不可删除、没有撤销入口。给租户用户打上它会带来三个真实后果——</para>
@@ -271,12 +265,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(UserCheckConstraints.SuperAdminIsHostOnly, error.ConstraintName);
     }
 
-    /// <summary>
-    /// 租户内被业务规则拒绝的写操作，失败记录留在该租户
-    /// </summary>
+    /// <summary>租户内被业务规则拒绝的写操作，失败记录留在该租户。</summary>
     /// <remarks>
-    /// 回归点：留痕若放在全局异常处理器里，租户中间件的作用域已随异常退出，记录会写进宿主层——
-    /// 租户读者看不到自己租户里发生的失败，宿主反倒多出一条归属错误的记录。
+    /// 失败记录须在租户作用域退出前冻结归属，避免写入宿主层。
     /// </remarks>
     [Fact]
     public async Task A_rejected_permission_save_inside_a_tenant_is_recorded_in_that_tenant()
@@ -303,9 +294,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             _factory, hostAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, target));
     }
 
-    /// <summary>
-    /// 过期会话清理作业也删掉共享库里租户用户的过期会话
-    /// </summary>
+    /// <summary>过期会话清理作业也删掉共享库里租户用户的过期会话。</summary>
     /// <remarks>
     /// 作业按物理库逐个执行，同一个库里有多个租户；删除时不关租户过滤，宿主上下文里只看得到宿主的会话，
     /// 共享库租户的过期会话会永远留下。
@@ -490,9 +479,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, loginResponse.StatusCode);
     }
 
-    /// <summary>
-    /// 启用一个不存在的租户回 404，不能被"租户内没有用户"的守卫抢先讲成 400。
-    /// </summary>
+    /// <summary>启用一个不存在的租户回 404，不能被"租户内没有用户"的守卫抢先讲成 400。</summary>
     [Fact]
     public async Task Activating_a_missing_tenant_returns_404()
     {
@@ -560,9 +547,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal("Legacy Inc.", detail.GetProperty("displayName").GetString());
     }
 
-    /// <summary>
-    /// 跨域响应必须把 <c>X-Tenant-Invalid</c> 列入 Access-Control-Expose-Headers。
-    /// </summary>
+    /// <summary>跨域响应必须把 <c>X-Tenant-Invalid</c> 列入 Access-Control-Expose-Headers。</summary>
     /// <remarks>
     /// CORS 分离部署（前端 dev server 直连后端）是模板明确支持的模式之一。
     /// 自定义响应头不在 CORS 安全清单里，不显式暴露则浏览器不交给 JS——
@@ -608,9 +593,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Contains("X-Tenant-Invalid", exposed, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// 子域名部署下，来自不受信任地址的 X-Forwarded-Host 不能改写租户。
-    /// </summary>
+    /// <summary>子域名部署下，来自不受信任地址的 X-Forwarded-Host 不能改写租户。</summary>
     /// <remarks>
     /// <para><c>UseForwardedHeaders</c> 会用 <c>X-Forwarded-Host</c> 覆盖 <c>Request.Host</c>，
     /// 而 Host 正是子域名解析的权威来源，且转发头中间件排在多租户中间件之前。
@@ -662,9 +645,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal("subdomain-a", probe.RootElement.GetProperty("tenant").GetProperty("name").GetString());
     }
 
-    /// <summary>
-    /// 正向：配置为可信代理的来源，其转发头应当被采信。
-    /// </summary>
+    /// <summary>正向：配置为可信代理的来源，其转发头应当被采信。</summary>
     /// <remarks>
     /// 只有"不可信来源被拒"这一条时，把信任逻辑改成永不生效也能让它保持绿——
     /// 那样网关后的 X-Forwarded-* 全部失效却无人察觉。两个方向都要钉住。
@@ -705,9 +686,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    /// <summary>
-    /// 按主机名探测：<b>三档结果必须分开</b>。
-    /// </summary>
+    /// <summary>按主机名探测：<b>三档结果必须分开</b>。</summary>
     /// <remarks>
     /// "受管域但不指向租户（宿主）"与"根本不是受管域"在后续解析上语义不同：前者已经定案，
     /// 请求头不再能改写；后者允许记住的租户继续生效。两者都回成"没有租户"时，登录页会在
@@ -757,9 +736,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal("undecided", outsideProbe.RootElement.GetProperty("decision").GetString());
     }
 
-    /// <summary>
-    /// 子域名指向一个不存在的租户时，请求在**租户解析阶段**就被拒，探测端点根本到不了。
-    /// </summary>
+    /// <summary>子域名指向一个不存在的租户时，请求在**租户解析阶段**就被拒，探测端点根本到不了。</summary>
     /// <remarks>
     /// 这条钉住的是"探测救不了配错的子域名"这件事：中间件按主机名解析出一个不存在的租户名，
     /// 整个请求（含匿名的探测端点）一律 404。登录页因此走探测失败那条分支，退回手填——
@@ -786,9 +763,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    /// <summary>
-    /// 匿名请求下，"租户不存在"与"租户已停用"必须给出同一种失败。
-    /// </summary>
+    /// <summary>匿名请求下，"租户不存在"与"租户已停用"必须给出同一种失败。</summary>
     /// <remarks>
     /// 两者不同就等于把"某个租户被停用了"这条业务情报告诉任何人。按名字查租户的匿名端点也因此被移除。
     /// </remarks>
@@ -816,9 +791,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(await ErrorCodeAsync(unknown), await ErrorCodeAsync(inactive));
     }
 
-    /// <summary>
-    /// 匿名请求**能**区分"租户存在"与"租户不存在"——这是有意接受的残留，不是缺陷。
-    /// </summary>
+    /// <summary>匿名请求**能**区分"租户存在"与"租户不存在"——这是有意接受的残留，不是缺陷。</summary>
     /// <remarks>
     /// <para>存在且启用的租户会走到业务逻辑（错误凭据 401），不存在的在中间件就被挡成 404。
     /// 一次请求即可判定，不需要爆破。</para>
@@ -849,9 +822,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 
-    /// <summary>
-    /// 种子进行中的租户必须还没启用：否则它已经能被中间件接受，而此刻还没有管理员和权限授予。
-    /// </summary>
+    /// <summary>种子进行中的租户必须还没启用：否则它已经能被中间件接受，而此刻还没有管理员和权限授予。</summary>
     [Fact]
     public async Task Tenant_being_seeded_is_inactive_and_rejects_registration()
     {
@@ -915,9 +886,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(3, observations.Select(item => item.UnitOfWorkId).Distinct().Count());
     }
 
-    /// <summary>
-    /// 播种成功但激活失败：整个创建回滚，不留下"数据完整却永远停用"的租户。
-    /// </summary>
+    /// <summary>播种成功但激活失败：整个创建回滚，不留下"数据完整却永远停用"的租户。</summary>
     /// <remarks>
     /// 激活失败**必须**走补偿，不能因为"种子数据已完整"就放过：激活失败的现实成因之一
     /// 是另一个宿主管理员在播种期间删掉了这个租户，那时数据不是完整的而是孤儿的
@@ -957,9 +926,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         await AssertTenantAbsentAsync(brokenActivationHost, "halfway");
     }
 
-    /// <summary>
-    /// 清种子失败不能拖累删注册表：两步各用一个作用域。
-    /// </summary>
+    /// <summary>清种子失败不能拖累删注册表：两步各用一个作用域。</summary>
     /// <remarks>
     /// 删注册表是"租户从此不可达"的最后一道保障。共用作用域时，清种子那一步的
     /// SaveChanges 失败会在跟踪器里留下实体，删注册表的 SaveChanges 会把它们一起写出去，
@@ -1060,9 +1027,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.NotEqual(Guid.Empty, retried);
     }
 
-    /// <summary>
-    /// 断言指定租户上下文内看不到任何租户化数据。
-    /// </summary>
+    /// <summary>断言指定租户上下文内看不到任何租户化数据。</summary>
     /// <remarks>
     /// 第一步的类型清单是完整性锁：新增租户化实体（或种子开始写入新实体）时，
     /// 清单断言先失败，提醒同步补偿逻辑与此处断言——避免补偿悄悄漏掉新数据。
@@ -1144,9 +1109,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         }
     }
 
-    /// <summary>
-    /// 播种期间的控制面竞争：另一个合法宿主管理员在种子还没跑完时动这个租户。
-    /// </summary>
+    /// <summary>播种期间的控制面竞争：另一个合法宿主管理员在种子还没跑完时动这个租户。</summary>
     /// <remarks>
     /// 用可阻塞种子把"播种中"这个瞬间拉长到可观测：种子先发出"我到了"信号，
     /// 然后挂住等测试放行。测试在这段时间里以第二个宿主会话发起竞争操作。
@@ -1192,9 +1155,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         await AssertNoVisibleTenantDataAsync(blockingHost, tenantId);
     }
 
-    /// <summary>
-    /// 播种期间并发手动启用：租户里还没有用户，启用必须被拒绝。
-    /// </summary>
+    /// <summary>播种期间并发手动启用：租户里还没有用户，启用必须被拒绝。</summary>
     [Fact]
     public async Task Concurrent_activation_during_seeding_is_rejected()
     {
@@ -1236,9 +1197,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(["admin"], await GetUsernamesAsync(tenantClient));
     }
 
-    /// <summary>
-    /// 真实种子跑到一半挂住，等测试放行；用来把"播种中"拉长成可观测的窗口。
-    /// </summary>
+    /// <summary>真实种子跑到一半挂住，等测试放行；用来把"播种中"拉长成可观测的窗口。</summary>
     private sealed class BlockingTenantSeeder(
         ICurrentTenant currentTenant,
         TenantSeeder inner) : ITenantProvisioner
@@ -1272,9 +1231,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             => inner.PurgeAsync(context, cancellationToken);
     }
 
-    /// <summary>
-    /// 把远端地址改成公网测试地址（TEST-NET-3），使请求不落在任何受信任代理网段内。
-    /// </summary>
+    /// <summary>把远端地址改成公网测试地址（TEST-NET-3），使请求不落在任何受信任代理网段内。</summary>
     private sealed class UntrustedRemoteAddressFilter : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) =>
@@ -1290,9 +1247,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             };
     }
 
-    /// <summary>
-    /// 走完真实种子的角色与权限写入后抛错，制造"部分落库"的失败现场。
-    /// </summary>
+    /// <summary>走完真实种子的角色与权限写入后抛错，制造"部分落库"的失败现场。</summary>
     private sealed class FailAfterRolesTenantSeeder(
         ICurrentTenant currentTenant,
         MyProjectDbContext dbContext,
@@ -1324,9 +1279,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             => inner.PurgeAsync(context, cancellationToken);
     }
 
-    /// <summary>
-    /// 在真实种子开始之前探测租户此刻是否已对外可用，然后照常完成种子。
-    /// </summary>
+    /// <summary>在真实种子开始之前探测租户此刻是否已对外可用，然后照常完成种子。</summary>
     private sealed class ProbingTenantSeeder(
         ICurrentTenant currentTenant,
         TenantSeeder inner) : ITenantProvisioner
@@ -1439,9 +1392,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             => inner.GetPagedAsync(keyword, page, cancellationToken);
     }
 
-    /// <summary>
-    /// 种子失败、且清种子也失败并在自己的作用域里留下脏跟踪器。
-    /// </summary>
+    /// <summary>种子失败、且清种子也失败并在自己的作用域里留下脏跟踪器。</summary>
     private sealed class FailingPurgeTenantSeeder(MyProjectDbContext dbContext) : ITenantProvisioner
     {
         /// <summary>清种子失败瞬间留在跟踪器里、绝不应被删注册表那一步写入的实体名。</summary>
@@ -1465,9 +1416,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         }
     }
 
-    /// <summary>
-    /// 种子正常完成，但最后一步激活失败。
-    /// </summary>
+    /// <summary>种子正常完成，但最后一步激活失败。</summary>
     private sealed class FailActivationTenantManager(EfCoreTenantManager<IdentityControlDbContext> inner) : ITenantManager
     {
         internal static Guid? LastCreatedId { get; private set; }

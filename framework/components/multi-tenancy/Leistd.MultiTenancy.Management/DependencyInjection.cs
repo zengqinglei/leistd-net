@@ -6,13 +6,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.MultiTenancy.Management;
 
-/// <summary>
-/// 租户管理用例的注册入口。
-/// </summary>
+/// <summary>租户管理用例的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>注册租户管理与连接管理两个用例。</summary>
-    /// <param name="services">服务集合。</param>
     /// <remarks>
     /// <para>用例只依赖契约（<see cref="ITenantManager"/>、<see cref="ITenantStore"/>、
     /// <see cref="ITenantConnectionConfigurationManager"/>、<see cref="ITenantConnectionDirectory"/>、

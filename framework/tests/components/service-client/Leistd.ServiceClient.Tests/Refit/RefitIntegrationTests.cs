@@ -199,9 +199,7 @@ public sealed class RefitIntegrationTests(RefitIntegrationTests.HostFixture fixt
         Assert.IsNotAssignableFrom<ApiException>(exception); // 错误契约与手写路径统一
     }
 
-    /// <summary>
-    /// 本类用例共享的远端服务：端点固定、只回显请求，用例之间没有逐测可变的宿主状态。
-    /// </summary>
+    /// <summary>本类用例共享的远端服务：端点固定、只回显请求，用例之间没有逐测可变的宿主状态。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public WebApplication Host { get; private set; } = null!;

@@ -3,9 +3,7 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 
 namespace CompanyName.ProjectName.UnitTests.Application;
 
-/// <summary>
-/// 权限名的形状契约。
-/// </summary>
+/// <summary>权限名的形状契约。</summary>
 /// <remarks>
 /// 这些常量同时是权限定义名、<c>[Authorize(Policy = ...)]</c> 的策略名和前端裁剪的契约，
 /// 三处必须是同一组值。改错一个字符的表现是"端点永远 403"或"前端菜单永远不显示"，

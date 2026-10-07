@@ -6,9 +6,7 @@ using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 
-/// <summary>
-/// 两步验证密钥的保护，以及按用户已启用的两步验证校验验证码或恢复码。
-/// </summary>
+/// <summary>两步验证密钥的保护，以及按用户已启用的两步验证校验验证码或恢复码。</summary>
 /// <remarks>
 /// <para>TOTP 密钥必须能还原（每次校验都要用它算码），所以只能加密、不能哈希：用宿主的 Data Protection
 /// 加密后落库，数据库单独泄漏时拿不到可用的密钥。加密与解密都在这里，用途字符串只有一处。</para>
@@ -23,9 +21,7 @@ public sealed class TwoFactorDomainService(IDataProtectionProvider dataProtectio
     /// <summary>加密一个新生成的密钥，返回可存库（或暂存缓存）的文本。</summary>
     public string ProtectSecret(byte[] secret) => Convert.ToBase64String(_protector.Protect(secret));
 
-    /// <summary>
-    /// 校验身份验证器应用上的验证码。同一个码（同一步）只认一次。
-    /// </summary>
+    /// <summary>校验身份验证器应用上的验证码。同一个码（同一步）只认一次。</summary>
     public bool VerifyCode(User user, string code, DateTime now)
     {
         if (user.TwoFactor is not { } credential || UnprotectSecret(credential.Secret) is not { } secret)
@@ -42,9 +38,7 @@ public sealed class TwoFactorDomainService(IDataProtectionProvider dataProtectio
     public bool UseRecoveryCode(User user, string recoveryCode) =>
         user.TryConsumeRecoveryCode(RecoveryCodes.Hash(recoveryCode));
 
-    /// <summary>
-    /// 校验一个待启用的密钥：启用前必须证明应用里已经添加成功，否则启用后本人就登不进来了。
-    /// </summary>
+    /// <summary>校验一个待启用的密钥：启用前必须证明应用里已经添加成功，否则启用后本人就登不进来了。</summary>
     /// <returns>校验通过的步序号；不通过为 null。</returns>
     public long? VerifySetupCode(string protectedSecret, string code, DateTime now) =>
         UnprotectSecret(protectedSecret) is { } secret ? Totp.Verify(secret, code, now, null) : null;

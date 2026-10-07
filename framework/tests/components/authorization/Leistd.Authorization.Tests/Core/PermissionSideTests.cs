@@ -12,9 +12,7 @@ using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.Core;
 
-/// <summary>
-/// 权限多租户侧别：侧别是先于授予与超管旁路的硬边界。
-/// </summary>
+/// <summary>权限多租户侧别：侧别是先于授予与超管旁路的硬边界。</summary>
 public class PermissionSideTests
 {
     private const string HostOnly = "App.Tenants";

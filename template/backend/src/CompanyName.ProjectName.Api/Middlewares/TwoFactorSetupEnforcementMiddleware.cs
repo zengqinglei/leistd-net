@@ -7,9 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace CompanyName.ProjectName.Api.Middlewares;
 
-/// <summary>
-/// 受限会话只能调用完成两步验证设置所需的接口。
-/// </summary>
+/// <summary>受限会话只能调用完成两步验证设置所需的接口。</summary>
 /// <remarks>
 #if (OpenIddictServer)
 /// <para>放在中间件而不是默认授权策略里：<c>/connect/authorize</c>

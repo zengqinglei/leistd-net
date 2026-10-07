@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.ServiceClient.Tests.OAuth;
 
-/// <summary>
-/// 服务认证入口的注册面：工作负载身份只有一个，每个命名客户端只有一种认证方式，相同登记重复调用不叠加。
-/// </summary>
+/// <summary>服务认证入口的注册面：工作负载身份只有一个，每个命名客户端只有一种认证方式，相同登记重复调用不叠加。</summary>
 /// <remarks>
 /// 验证器与处理器都不在 <c>AssertIdempotent</c> 的计数范围内：验证器登记两份时每条失败报两遍，
 /// 处理器挂两层时每个请求取两次令牌。这里直接数验证器、失败条数和构建出的处理器链。

@@ -9,9 +9,7 @@ using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.AspNetCore.Endpoints;
 
-/// <summary>
-/// 租户管理与租户连接的 HTTP 端点。
-/// </summary>
+/// <summary>租户管理与租户连接的 HTTP 端点。</summary>
 public static class TenantManagementEndpoints
 {
     /// <summary>端点名前缀，宿主按名字给个别端点追加约定时使用。</summary>

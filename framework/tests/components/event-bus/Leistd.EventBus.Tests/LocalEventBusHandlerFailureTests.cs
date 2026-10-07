@@ -8,9 +8,7 @@ using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Tests;
 
-/// <summary>
-/// 一个处理器失败不阻断其余处理器；失败被聚合后上抛。
-/// </summary>
+/// <summary>一个处理器失败不阻断其余处理器；失败被聚合后上抛。</summary>
 /// <remarks>
 /// 若用裸 <c>foreach + await</c>，第一个抛异常的处理器会让后面的处理器
 /// <b>根本不执行</b>。而处理器之间彼此无依赖——"发通知"失败不该让"失效缓存"也不跑，

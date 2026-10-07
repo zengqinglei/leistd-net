@@ -4,9 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence;
 
-/// <summary>
-/// 控制面连接串的回落链：<c>IdentityControl</c> → <c>Default</c>
-/// </summary>
+/// <summary>控制面连接串的回落链：<c>IdentityControl</c> → <c>Default</c>。</summary>
 /// <remarks>
 /// 运行时、DbMigrator 与设计时工厂共用此回落链，保证迁移目标与运行时控制面一致。
 /// 空白值按未配置处理；两级均未配置时返回 <see langword="null"/>，由宿主启动校验

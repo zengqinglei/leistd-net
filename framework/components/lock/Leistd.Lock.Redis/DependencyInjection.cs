@@ -11,9 +11,7 @@ namespace Leistd.Lock.Redis;
 /// <summary>Redis 分布式锁注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 Redis 分布式锁：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
-    /// </summary>
+    /// <summary>注册 Redis 分布式锁：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。</summary>
     /// <remarks>
     /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加。连接串以首次调用为准，之后传入的不同连接串被忽略；
     /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键），校验消息仍按首次调用的配置节给出键名。

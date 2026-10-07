@@ -44,9 +44,7 @@ internal sealed class SessionIssuer(
     // 否则官方 IsInRole / RequireRole 按默认的 ClaimTypes.Role 去找，静默判为不在角色中。
     private const string RoleClaimType = "role";
 
-    /// <summary>
-    /// 登录第一步（密码或外部登录）通过之后决定去向。
-    /// </summary>
+    /// <summary>登录第一步（密码或外部登录）通过之后决定去向。</summary>
     /// <remarks>
     /// <list type="bullet">
     /// <item>已启用两步验证：不签发会话，只发第二步凭据。</item>
@@ -194,9 +192,7 @@ internal sealed class SessionIssuer(
 #endif
     }
 
-    /// <summary>
-    /// 账号锁定时的登录错误。临时锁定（登录失败触发）告诉用户还要等多久；管理员锁定只说联系管理员。
-    /// </summary>
+    /// <summary>账号锁定时的登录错误。临时锁定（登录失败触发）告诉用户还要等多久；管理员锁定只说联系管理员。</summary>
     /// <remarks>
     /// 不带锁定截止的时刻本身：服务端的时刻要按用户时区换算才有意义，"还有几分钟"则不需要。
     /// </remarks>

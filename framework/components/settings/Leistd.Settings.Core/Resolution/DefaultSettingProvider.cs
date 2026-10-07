@@ -10,9 +10,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Leistd.Settings.Resolution;
 
-/// <summary>
-/// 按 用户级 → 租户级 → 代码默认值 的顺序解析设置。
-/// </summary>
+/// <summary>按 用户级 → 租户级 → 代码默认值 的顺序解析设置。</summary>
 /// <remarks>
 /// 按作用域缓存已读取的设置，同一作用域内保持一致；跨作用域重新读取，不使用分布式缓存。
 /// 经 <see cref="ISettingManager"/> 写入后，同一作用域的缓存即作废。

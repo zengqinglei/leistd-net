@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// <c>AddRedisDistributedLock</c> 以不同参数重复调用时的既定行为：连接串以首次为准，配置节都绑定、校验键名取首次的节。
-/// </summary>
+/// <summary><c>AddRedisDistributedLock</c> 以不同参数重复调用时的既定行为：连接串以首次为准，配置节都绑定、校验键名取首次的节。</summary>
 /// <remarks>
 /// 连接串指向不可达端口并关闭 <c>abortConnect</c>，解析多路复用器不需要真实 Redis，只读它记下的配置串。
 /// </remarks>

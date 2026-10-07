@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 按连接名读取租户连接。
-/// </summary>
+/// <summary>按连接名读取租户连接。</summary>
 /// <remarks>
 /// <para>同一个契约表达两种宿主形态，按注册方式二选一：</para>
 /// <list type="bullet">
@@ -21,9 +19,7 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// </remarks>
 public interface ITenantConnectionConfigurationStore
 {
-    /// <summary>
-    /// 读取租户在指定连接名下的连接。
-    /// </summary>
+    /// <summary>读取租户在指定连接名下的连接。</summary>
     /// <param name="tenantId">租户标识。</param>
     /// <param name="name">连接名，通常是使用方 DbContext 的 <c>[ConnectionStringName]</c>；大小写不敏感。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -36,9 +32,7 @@ public interface ITenantConnectionConfigurationStore
         string name,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 枚举所有登记了连接的未删除租户在该名字下解析出的连接，供 DbMigrator 计算迁移目标。
-    /// </summary>
+    /// <summary>枚举所有登记了连接的未删除租户在该名字下解析出的连接，供 DbMigrator 计算迁移目标。</summary>
     /// <remarks>
     /// <para>一条连接都没有的租户不出现——它们跟着宿主自己的库迁移。</para>
     /// <para>登记过连接却取不出这个名字下连接串的租户（名字解析不出、密文解不开）列进
@@ -60,9 +54,7 @@ public sealed record TenantMigrationConnectionListResult(
     IReadOnlyList<TenantMigrationConnection> Connections,
     IReadOnlyList<TenantDatabaseFailure> FailedTenants);
 
-/// <summary>
-/// 某个租户在某个连接名下解析出的连接。
-/// </summary>
+/// <summary>某个租户在某个连接名下解析出的连接。</summary>
 /// <param name="TenantId">租户标识。</param>
 /// <param name="Name">实际命中的连接名（精确名或默认名回落），用于诊断迁移落点。</param>
 /// <param name="ConnectionString">明文连接串；<see cref="ToString"/> 不输出它。</param>

@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.Auditing.Tests;
 
-/// <summary>
-/// 审计组件的被测夹具：一个不继承 DDD 基座的普通 <see cref="DbContext"/>。
-/// </summary>
+/// <summary>审计组件的被测夹具：一个不继承 DDD 基座的普通 <see cref="DbContext"/>。</summary>
 /// <remarks>
 /// 刻意不用 <c>BaseDbContext</c>：审计要能独立于 DDD 基座工作（迁移作业、宿主控制面上下文
 /// 都是普通 DbContext）。用基座测会把两件事的失败混在一起，也测不出这条独立性。

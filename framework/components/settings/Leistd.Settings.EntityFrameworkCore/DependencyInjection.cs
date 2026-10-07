@@ -12,9 +12,7 @@ namespace Leistd.Settings.EntityFrameworkCore;
 /// <summary>设置 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 EF Core 设置存储（基于指定 DbContext）。
-    /// </summary>
+    /// <summary>注册 EF Core 设置存储（基于指定 DbContext）。</summary>
     /// <remarks>
     /// 宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>；
     /// 本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文。
@@ -33,7 +31,6 @@ public static class DependencyInjection
     /// </code>
     /// </example>
     /// <typeparam name="TDbContext">承载设置表的 DbContext。</typeparam>
-    /// <param name="services">服务集合。</param>
     public static IServiceCollection AddSettingsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
@@ -48,10 +45,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 将 <see cref="SettingRecord"/> 实体配置应用到 DbContext。在 OnModelCreating 中调用。
-    /// </summary>
-    /// <param name="modelBuilder">模型构建器。</param>
+    /// <summary>将 <see cref="SettingRecord"/> 实体配置应用到 DbContext。在 OnModelCreating 中调用。</summary>
     public static ModelBuilder ConfigureSettings(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new SettingRecordConfiguration());

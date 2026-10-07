@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// 租户管理与连接端点：策略名必填；机器端点只在配置了策略时映射；匿名探测端点显式放行。
-/// </summary>
+/// <summary>租户管理与连接端点：策略名必填；机器端点只在配置了策略时映射；匿名探测端点显式放行。</summary>
 public sealed class TenantEndpointMappingTests
 {
     [Fact]

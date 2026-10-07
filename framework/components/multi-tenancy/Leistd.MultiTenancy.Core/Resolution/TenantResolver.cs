@@ -2,9 +2,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.Resolution;
 
-/// <summary>
-/// 按配置顺序执行租户解析贡献者。
-/// </summary>
+/// <summary>按配置顺序执行租户解析贡献者。</summary>
 /// <remarks>
 /// 以 Scoped 注册：注入的 <paramref name="serviceProvider"/> 即当前请求作用域，
 /// 贡献者可从中解析 <c>IHttpContextAccessor</c> 等服务。

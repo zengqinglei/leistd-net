@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Lock.Tests.Contracts;
 
-/// <summary>
-/// 任何 <see cref="ILock"/> 实现都必须兑现的行为。
-/// </summary>
+/// <summary>任何 <see cref="ILock"/> 实现都必须兑现的行为。</summary>
 /// <remarks>
 /// <para><b>新增实现时必须派生本类。</b>这不是形式要求——契约很容易在实现间漂移：
 /// 例如 <c>TryLockAsync</c> 写成 <c>while (now &lt; deadline)</c> 时，

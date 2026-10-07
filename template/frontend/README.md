@@ -11,7 +11,7 @@ npm ci
 npm start
 ```
 
-浏览器打开 `http://localhost:4200`。`npm start` 即 `ng serve`，使用 `development` 构建配置与 `src/environments/environment.ts`，不需要复制或创建任何环境文件。
+打开 `http://localhost:4200`。`npm start` 使用 `development` 配置和 `src/environments/environment.ts`，无需创建环境文件。
 
 <!--#if (OpenIddictServer)-->
 开发服务器按 `proxy.conf.mjs` 把 `/api`、`/hubs`（SignalR，含 WebSocket）以及授权服务的 `/connect`、`/.well-known` 转发给本机后端。
@@ -49,8 +49,6 @@ API_PROXY_TARGET=http://localhost:5250 npm start -- --port 4201
 
 `environment.ts` 的 `useMock` 控制 Mock：`true` 全部由 Mock 应答；对象形态按接口开关，`include` 列出的接口走 Mock（列了 `include` 时以它为准），
 命中 `exclude` 的一律走真实后端。只有 `development` 构建会把 Mock 编进包里，其他构建里 `useMock` 不起作用。
-
----
 
 ## 环境配置
 
@@ -101,8 +99,6 @@ http.get('/api/v1/orders', {
 详见 [浏览器认证](../docs/standards/auth.md#浏览器认证)。
 <!--#endif-->
 
----
-
 ## 构建项目
 
 构建产物输出到 dist 目录，各部署环境共用同一份产物。
@@ -120,14 +116,12 @@ npm run build                   # 默认 production 配置
 
 页面与所属 API 必须同源：默认由后端同镜像托管构建产物，也可分进程部署、由网关统一外部源。同源要求见 [浏览器认证](../docs/standards/auth.md#浏览器认证)，镜像构建与转发规则见 [部署说明](../docs/deploy/README.md)。
 
----
 <!--#if (IncludeLocalization)-->
 
 ## 多语言
 
 词条位于 `public/i18n/`，文案归属、scope 登记与接线见 [前端多语言规范](../docs/standards/frontend-i18n.md)。
 
----
 <!--#endif-->
 <!--#if (IncludeNotifications || IncludeRealTime)-->
 
@@ -147,38 +141,16 @@ npm run build                   # 默认 production 配置
 
 客户端日志默认使用 `Warning`。排障时可以临时提高等级；生产日志与代理访问日志仍须遵循项目的凭据脱敏规范。
 
----
 <!--#endif-->
 
 ## 代码质量
 
-### 代码检查
-
 ```bash
-npm run lint           # 运行所有检查
-npm run lint:ts        # TypeScript/HTML 检查
-npm run lint:style     # CSS 检查
-npm run format         # 检查代码格式
+npm run lint       # TypeScript、HTML、CSS 与格式检查
+npm run lint:fix   # 自动修复
 ```
 
-自动修复：
-
-```bash
-npm run lint:fix       # 修复所有可自动修复的问题
-npm run lint:ts:fix    # 修复 TypeScript/HTML 问题
-npm run lint:style:fix # 修复 CSS 问题
-npm run format:fix     # 自动格式化代码
-```
-
-### 预提交钩子
-
-项目使用 Husky 和 lint-staged 在提交前自动运行代码检查：
-
-- TypeScript/HTML 文件使用 ESLint 检查
-- CSS 文件使用 Stylelint 检查
-- 所有文件使用 Prettier 格式化
-
----
+单独检查用 `lint:ts`、`lint:style` 或 `format`，对应修复命令加 `:fix`。Husky 与 lint-staged 在提交前执行相同检查。
 
 ## 运行测试
 

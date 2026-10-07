@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Infrastructure.Persistence;
 
-/// <summary>
-/// 本服务在数据库中占用的 schema 与迁移历史表名
-/// </summary>
+/// <summary>本服务在数据库中占用的 schema 与迁移历史表名。</summary>
 /// <remarks>
 /// <para><b>这是本服务的身份，不是装饰。</b>多个服务共用同一个物理数据库时，靠 schema 分开各自的
 /// 表；<see cref="Name"/> 与迁移历史表名<b>必须配对</b>修改——只改 schema 会让多个服务争用同一张

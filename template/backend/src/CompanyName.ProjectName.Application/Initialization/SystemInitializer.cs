@@ -26,9 +26,7 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Initialization;
 
-/// <summary>
-/// 系统初始化器实现
-/// </summary>
+/// <summary>系统初始化器实现。</summary>
 public class SystemInitializer(
 #if (LocalIdentity)
     IUserRepository userRepository,
@@ -49,9 +47,7 @@ public class SystemInitializer(
     IDistributedLock distributedLock,
     ILogger<SystemInitializer> logger) : ISystemInitializer
 {
-    /// <summary>
-    /// 初始化互斥锁的键。
-    /// </summary>
+    /// <summary>初始化互斥锁的键。</summary>
     /// <remarks>
 #if (LocalIdentity)
     /// 公开是为了让集成测试能对同一把锁断言互斥，而不是各写一份字面量。
@@ -171,9 +167,7 @@ public class SystemInitializer(
 
 #endif
 
-    /// <summary>
-    /// 在 Admin 角色尚未有过任何授予写入时，把宿主侧可用的全部权限授予它。
-    /// </summary>
+    /// <summary>在 Admin 角色尚未有过任何授予写入时，把宿主侧可用的全部权限授予它。</summary>
     /// <remarks>
     /// 授权版本为 0 表示从未写入授予，可覆盖角色已创建但播种中断的状态。
     /// 首次播种后 Admin 按普通角色管理：权限可撤销，启动过程不会自动补回缺失权限。

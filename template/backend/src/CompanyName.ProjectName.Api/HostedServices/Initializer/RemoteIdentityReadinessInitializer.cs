@@ -6,9 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Api.HostedServices.Initializer;
 
-/// <summary>
-/// 启动期确认签发方的元数据与签名密钥可用，成功即打开 <see cref="RemoteIdentityReadinessHealthCheck"/>
-/// </summary>
+/// <summary>启动期确认签发方的元数据与签名密钥可用，成功即打开 <see cref="RemoteIdentityReadinessHealthCheck"/>。</summary>
 /// <remarks>
 /// 探针要求发现文档可解析、<c>issuer</c> 与本地配置精确一致，且 <c>jwks_uri</c>
 /// 至少返回一把签名密钥；仅有成功状态码不足以打开门禁。租户路由端点需要业务凭据
@@ -22,9 +20,7 @@ internal sealed class RemoteIdentityReadinessInitializer(
 {
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(3);
 
-    /// <summary>
-    /// 解析发现文档、比对 issuer、取回 JWKS。任一步不成立即抛出
-    /// </summary>
+    /// <summary>解析发现文档、比对 issuer、取回 JWKS。任一步不成立即抛出。</summary>
     internal static async Task ConfirmAsync(
         HttpClient client,
         string issuer,

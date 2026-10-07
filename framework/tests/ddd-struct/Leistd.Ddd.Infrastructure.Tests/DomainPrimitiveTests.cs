@@ -10,9 +10,7 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// DDD 建模原语：值对象相等性、聚合根标记、并发标记的模型配置。
-/// </summary>
+/// <summary>DDD 建模原语：值对象相等性、聚合根标记、并发标记的模型配置。</summary>
 public class DomainPrimitiveTests
 {
     private sealed class Money(decimal amount, string currency) : ValueObject

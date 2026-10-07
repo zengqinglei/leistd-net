@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.Auth.Constants;
 
-/// <summary>
-/// 两步验证相关的会话声明。
-/// </summary>
+/// <summary>两步验证相关的会话声明。</summary>
 public static class TwoFactorClaimTypes
 {
     /// <summary>

@@ -14,9 +14,7 @@ using Leistd.Notifications.Dtos;
 
 namespace CompanyName.ProjectName.Api.Notifications;
 
-/// <summary>
-/// 经通知组件发出安全提醒：站内通知总会送达（必达组合），邮件按本人偏好（通知偏好组件读收件人的设置）。
-/// </summary>
+/// <summary>经通知组件发出安全提醒：站内通知总会送达（必达组合），邮件按本人偏好（通知偏好组件读收件人的设置）。</summary>
 /// <remarks>
 /// 文案按<b>收件人</b>的界面语言渲染：本人设过语言就用它，没设过用本次请求的语言——
 /// 触发提醒的请求往往就是本人发出的（改密码、启用两步验证）。

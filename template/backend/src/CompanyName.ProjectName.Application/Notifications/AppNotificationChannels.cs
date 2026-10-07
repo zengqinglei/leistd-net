@@ -3,9 +3,7 @@ using Leistd.Notifications.Channels;
 
 namespace CompanyName.ProjectName.Application.Notifications;
 
-/// <summary>
-/// 本项目的通知渠道名（渠道的 <c>INotificationChannel.Name</c>）。
-/// </summary>
+/// <summary>本项目的通知渠道名（渠道的 <c>INotificationChannel.Name</c>）。</summary>
 /// <remarks>
 /// <para>不是"选一个渠道"：每条通知发布时依次经过<b>所有</b>已注册的渠道，由投递过滤器按收件人的偏好
 /// <b>逐个渠道</b>决定投不投，同一条通知可以既进站内、又发邮件。</para>

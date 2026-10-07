@@ -5,9 +5,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 选项模式接入与 <c>Initialize</c> 的一次性约定。
-/// </summary>
+/// <summary>选项模式接入与 <c>Initialize</c> 的一次性约定。</summary>
 public class UnitOfWorkOptionsLifecycleTests
 {
     private static IServiceProvider Build(Action<UnitOfWorkOptions>? configure = null)
@@ -17,9 +15,7 @@ public class UnitOfWorkOptionsLifecycleTests
             .AddLogging()
             .BuildServiceProvider();
 
-    /// <summary>
-    /// <c>Begin</c> 默认<b>并入</b>当前工作单元，不新建。
-    /// </summary>
+    /// <summary><c>Begin</c> 默认<b>并入</b>当前工作单元，不新建。</summary>
     /// <remarks>
     /// 默认新建的那一支代价不对称：独立 DI 作用域、独立 DbContext、同一个库上的第二个事务，
     /// 与外层未提交的写入互相加锁。框架自己的拦截器一直显式传 <c>false</c>——

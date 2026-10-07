@@ -12,9 +12,7 @@ using Leistd.Ddd.Infrastructure.Tests.TestDoubles;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// 租户全局过滤器与软删除过滤器的组合行为（Sqlite 真实翻译，InMemory 会静默放行隔离缺口）。
-/// </summary>
+/// <summary>租户全局过滤器与软删除过滤器的组合行为（Sqlite 真实翻译，InMemory 会静默放行隔离缺口）。</summary>
 public class MultiTenantFilterTests : IAsyncLifetime
 {
     private static readonly Guid TenantA = Guid.NewGuid();

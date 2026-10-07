@@ -21,9 +21,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.Core;
 
-/// <summary>
-/// 查询用例：读者判定、筛选展开、字段裁剪与导出，分页与导出共用同一份判定。
-/// </summary>
+/// <summary>查询用例：读者判定、筛选展开、字段裁剪与导出，分页与导出共用同一份判定。</summary>
 /// <remarks>
 /// 读者判定写错的症状是越权而不是报错：租户读者看到宿主层记录、仅宿主字段下发给租户、
 /// "界面看不到的记录能被导出来"。这些都只在建了租户之后才暴露。
@@ -99,9 +97,7 @@ public sealed class OperationRecordQueryTests
         Assert.Equal(("db timeout", "trace-1", TenantId), (row.FailureDetail, row.CorrelationId, row.ActorTenantId));
     }
 
-    /// <summary>
-    /// 租户读者：范围按本人收窄，仅宿主字段裁掉
-    /// </summary>
+    /// <summary>租户读者：范围按本人收窄，仅宿主字段裁掉。</summary>
     /// <remarks>读者标识与所属租户和记录器取操作人同一口径（claim 原始值与主体的租户 claim），机器主体因此也读得到自己的 Actor 层记录。</remarks>
     [Fact]
     public async Task A_tenant_reader_is_scoped_to_itself_and_host_only_fields_are_trimmed()
@@ -134,9 +130,7 @@ public sealed class OperationRecordQueryTests
         Assert.Equal(["user.created"], store.LastQuery!.Value.Filter.Actions);
     }
 
-    /// <summary>
-    /// 筛了但展开为空时返回空页，不下传
-    /// </summary>
+    /// <summary>筛了但展开为空时返回空页，不下传。</summary>
     /// <remarks>存储把空集合当"不过滤"；下传就把"筛了但没有"显示成了"这就是全部"。</remarks>
     [Fact]
     public async Task A_filter_that_expands_to_nothing_returns_an_empty_page_without_querying()
@@ -193,9 +187,7 @@ public sealed class OperationRecordQueryTests
         Assert.Equal(["StartTime", "EndTime"], error.ValidationResult?.MemberNames);
     }
 
-    /// <summary>
-    /// 导出：带 BOM、用户可控字段防公式注入、仅宿主列只在宿主导出时成列，文件生成后才记导出
-    /// </summary>
+    /// <summary>导出：带 BOM、用户可控字段防公式注入、仅宿主列只在宿主导出时成列，文件生成后才记导出。</summary>
     /// <remarks>
     /// 目标名是用户可控内容：显示名改成 <c>=cmd|...</c> 的人能让打开审计文件的管理员执行命令。
     /// </remarks>
@@ -228,9 +220,7 @@ public sealed class OperationRecordQueryTests
         ["zh-CN"] = new() { ["User:EmailTaken"] = "邮箱 '{Email}' 已被使用（{Attempts} 次）。" }
     });
 
-    /// <summary>
-    /// 失败原因按码查文案、用参数填具名占位符；数值参数按字面量填入
-    /// </summary>
+    /// <summary>失败原因按码查文案、用参数填具名占位符；数值参数按字面量填入。</summary>
     [Fact]
     public async Task The_failure_message_is_the_localized_text_filled_with_the_recorded_parameters()
     {
@@ -245,9 +235,7 @@ public sealed class OperationRecordQueryTests
         Assert.Equal("Email 'a@b.com' is already in use (3 attempts).", row.FailureMessage);
     }
 
-    /// <summary>
-    /// 同一条记录按读取时的请求语言渲染，库里不存句子
-    /// </summary>
+    /// <summary>同一条记录按读取时的请求语言渲染，库里不存句子。</summary>
     [Fact]
     public async Task Readers_in_different_languages_get_the_failure_message_in_their_own_language()
     {
@@ -265,9 +253,7 @@ public sealed class OperationRecordQueryTests
             (english, chinese));
     }
 
-    /// <summary>
-    /// 取不到文案时为空，由调用方回落：没有本地化器、词条缺失、没有失败码
-    /// </summary>
+    /// <summary>取不到文案时为空，由调用方回落：没有本地化器、词条缺失、没有失败码。</summary>
     [Theory]
     [InlineData(false, "User:EmailTaken")]
     [InlineData(true, "Order:Unknown")]
@@ -280,9 +266,7 @@ public sealed class OperationRecordQueryTests
         Assert.Null(await InCulture("en", () => ReadFailureMessageAsync(service)));
     }
 
-    /// <summary>
-    /// 参数 JSON 坏了按无参数渲染：一条坏记录不能拖垮整页，占位符原样保留
-    /// </summary>
+    /// <summary>参数 JSON 坏了按无参数渲染：一条坏记录不能拖垮整页，占位符原样保留。</summary>
     [Theory]
     [InlineData("{not json")]
     [InlineData("""["a@b.com"]""")]
@@ -296,9 +280,7 @@ public sealed class OperationRecordQueryTests
             await InCulture("en", () => ReadFailureMessageAsync(service)));
     }
 
-    /// <summary>
-    /// 导出与列表同一口径：码与参数两列之外，另有按导出请求语言渲染的原因列
-    /// </summary>
+    /// <summary>导出与列表同一口径：码与参数两列之外，另有按导出请求语言渲染的原因列。</summary>
     [Fact]
     public async Task An_export_carries_the_failure_message_in_the_exporting_language()
     {
@@ -317,9 +299,7 @@ public sealed class OperationRecordQueryTests
         Assert.EndsWith("邮箱 'a@b.com' 已被使用（3 次）。", lines[1], StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 审计专用的 <c>{码}:Record</c> 优先于码本身，二者都用记录的参数填占位符
-    /// </summary>
+    /// <summary>审计专用的 <c>{码}:Record</c> 优先于码本身，二者都用记录的参数填占位符。</summary>
     /// <remarks>
     /// 登录失败这类记录带着接口报错没有的参数（次数、时长），措辞只能另备一条。
     /// </remarks>
@@ -370,9 +350,7 @@ public sealed class OperationRecordQueryTests
         Assert.Equal("Record text a@b.com", await InCulture("zh-CN", () => ReadFailureMessageAsync(service)));
     }
 
-    /// <summary>
-    /// 审计键在整条回落链上都没有，才用码本身的文案（同样按请求语言回落）
-    /// </summary>
+    /// <summary>审计键在整条回落链上都没有，才用码本身的文案（同样按请求语言回落）。</summary>
     [Fact]
     public async Task Without_a_record_specific_text_on_the_fallback_chain_the_error_text_is_used()
     {
@@ -390,9 +368,7 @@ public sealed class OperationRecordQueryTests
         Assert.Equal("邮箱 'a@b.com' 已被使用。", await InCulture("zh-CN", () => ReadFailureMessageAsync(service)));
     }
 
-    /// <summary>
-    /// 组件自产的失败码由组件自带译文：宿主只注册本地化与本组件、资源里没有这条词条时，原因照样渲染成句子。
-    /// </summary>
+    /// <summary>组件自产的失败码由组件自带译文：宿主只注册本地化与本组件、资源里没有这条词条时，原因照样渲染成句子。</summary>
     [Theory]
     [InlineData("en", "Not allowed to perform this action.")]
     [InlineData("zh-CN", "没有执行该操作的权限。")]

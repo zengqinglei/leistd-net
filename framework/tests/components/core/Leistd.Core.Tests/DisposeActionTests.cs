@@ -3,9 +3,7 @@ using Xunit;
 
 namespace Leistd.Core.Tests;
 
-/// <summary>
-/// 作用域还原的通用载体：全框架的 <c>Change()</c> 都返回它。
-/// </summary>
+/// <summary>作用域还原的通用载体：全框架的 <c>Change()</c> 都返回它。</summary>
 public class DisposeActionTests
 {
     [Fact]

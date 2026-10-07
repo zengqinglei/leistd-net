@@ -4,9 +4,7 @@ using Leistd.Settings.Resolution;
 
 namespace CompanyName.ProjectName.UnitTests.Application;
 
-/// <summary>
-/// 展示时区的解析与换算。
-/// </summary>
+/// <summary>展示时区的解析与换算。</summary>
 /// <remarks>
 /// 回落行为是这里的重点：设置缺失或值失效时必须退回服务器时区，而不是抛异常——
 /// 一个坏掉的偏好设置不该让整张列表报 500。时区数据库会更名（如 Europe/Kiev → Europe/Kyiv），

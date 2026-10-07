@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
-/// <summary>
-/// 更新用户输入 DTO
-/// </summary>
+/// <summary>更新用户输入 DTO。</summary>
 /// <remarks>
 /// 不包含角色字段：角色分配是独立的命令，走 <c>PUT /api/v1/users/{id}/roles</c>
 /// 并要求 <c>App.Users.ManageRoles</c>。否则任何持有用户编辑权限的主体都能提权。

@@ -4,9 +4,7 @@ using Leistd.ObjectMapping.Abstractions;
 
 namespace Leistd.ObjectMapping.Mapster.Services;
 
-/// <summary>
-/// 使用 Mapster 执行对象映射。
-/// </summary>
+/// <summary>使用 Mapster 执行对象映射。</summary>
 public class MapsterObjectMapper(IMapper mapper) : IObjectMapper
 {
     /// <inheritdoc />

@@ -3,9 +3,7 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
-/// <summary>
-/// 密码策略：服务端唯一权威，不建宿主就能验的典型领域规则。
-/// </summary>
+/// <summary>密码策略：服务端唯一权威，不建宿主就能验的典型领域规则。</summary>
 /// <remarks>
 /// 这是单元测试该覆盖的形状——纯函数、没有依赖、分支全部可枚举。
 /// 超级管理员初始化曾只检查口令非空，因此各服务端入口统一使用 PasswordPolicy 校验。

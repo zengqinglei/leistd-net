@@ -4,9 +4,7 @@ using Leistd.EventBus.Events;
 
 namespace CompanyName.ProjectName.Application.Auth.Events;
 
-/// <summary>
-/// 某个用例要求给账号本人发一条安全提醒（改密、管理员重置、两步验证变更）。
-/// </summary>
+/// <summary>某个用例要求给账号本人发一条安全提醒（改密、管理员重置、两步验证变更）。</summary>
 /// <remarks>
 /// 由应用服务按用例发布：本人修改与管理员重置是同一次实体变更的两种用例语义，实体分不出来。
 /// 有工作单元时提交之后分发，回滚的变更不发提醒。

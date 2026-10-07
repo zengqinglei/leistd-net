@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.Context;
 
-/// <summary>
-/// 提供当前异步流的租户上下文。
-/// </summary>
+/// <summary>提供当前异步流的租户上下文。</summary>
 public interface ICurrentTenant
 {
     /// <summary>当前是否处于租户（而非宿主）上下文。</summary>
@@ -14,9 +12,7 @@ public interface ICurrentTenant
     /// <summary>当前租户名称，仅用于展示与日志。</summary>
     string? Name { get; }
 
-    /// <summary>
-    /// 切换当前租户，并在释放返回句柄时恢复父上下文。
-    /// </summary>
+    /// <summary>切换当前租户，并在释放返回句柄时恢复父上下文。</summary>
     /// <param name="id">目标租户 Id；<see langword="null"/> 切换到宿主视角。</param>
     /// <param name="name">目标租户名称，可省略。</param>
     /// <example>

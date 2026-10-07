@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Email.Tests.Core;
 
-/// <summary>
-/// 空发送器的行为与它的告警级别。
-/// </summary>
+/// <summary>空发送器的行为与它的告警级别。</summary>
 /// <remarks>
 /// 级别是这批用例的重点：它是"本环境不会真的发信"的唯一信号。降级成 Debug 之后，
 /// 一个误把它注册进生产的部署会完全静默地丢掉每一封信。

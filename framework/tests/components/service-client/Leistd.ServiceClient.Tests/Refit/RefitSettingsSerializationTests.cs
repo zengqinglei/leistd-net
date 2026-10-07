@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.ServiceClient.Tests.Refit;
 
-/// <summary>
-/// 框架统一 <see cref="RefitSettings"/> 的序列化契约。
-/// </summary>
+/// <summary>框架统一 <see cref="RefitSettings"/> 的序列化契约。</summary>
 /// <remarks>
 /// <para>这里钉的是<b>跨服务契约</b>：调用方与被调方各自独立配置序列化，两侧不一致时只有真实
 /// 跨服务调用才会暴露——而那种调用在单服务集成测试与模板矩阵里都不发生（假客户端替掉了这一层）。

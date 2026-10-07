@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Auditing.Tests;
 
-/// <summary>
-/// 审计字段的落值规则：谁写、写什么、什么时候不写。
-/// </summary>
+/// <summary>审计字段的落值规则：谁写、写什么、什么时候不写。</summary>
 public class AuditPropertySetterTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);

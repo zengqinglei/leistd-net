@@ -10,9 +10,7 @@ using Leistd.Timing;
 
 namespace CompanyName.ProjectName.Application.Auth.Policies;
 
-/// <summary>
-/// 再认证的失败约束：已登录的人要再证明一次自己知道口令或验证码时，失败按登录的同一套计数与锁定处理。
-/// </summary>
+/// <summary>再认证的失败约束：已登录的人要再证明一次自己知道口令或验证码时，失败按登录的同一套计数与锁定处理。</summary>
 /// <remarks>
 /// <para><b>为什么需要这一层。</b>登录页有锁定，再认证入口（改口令、停用两步验证、重发恢复码）
 /// 如果没有，那条"连续失败 N 次锁定"的设置就名不副实：会话被盗用的人能在改口令接口上
@@ -30,9 +28,7 @@ internal interface IReauthenticationGuard
     /// <summary>锁定期内直接拒绝，不进入校验。必须在比对口令或验证码<b>之前</b>调用。</summary>
     Task EnsureAllowedAsync(User user, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 登记一次再认证失败（计数、必要时锁定、留下审计），并<b>返回该抛给调用方的异常</b>。
-    /// </summary>
+    /// <summary>登记一次再认证失败（计数、必要时锁定、留下审计），并<b>返回该抛给调用方的异常</b>。</summary>
     /// <remarks>
     /// 返回异常而不是由调用方自己构造：<b>这一次恰好触发锁定时，答案不再是"口令不正确"而是"已锁定"</b>
     /// ——与登录页一致（见 <c>LoginLockoutTests</c>）。把这个判断留给三个调用点各写一次，

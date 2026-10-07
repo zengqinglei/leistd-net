@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.AspNetCore.Endpoints;
 
-/// <summary>
-/// 操作记录端点的授权口径，全部必填。
-/// </summary>
+/// <summary>操作记录端点的授权口径，全部必填。</summary>
 /// <remarks>组件不内置默认策略，漏配任何一项时 <c>MapOperationRecords</c> 映射即抛出。</remarks>
 public sealed class OperationRecordEndpointOptions
 {

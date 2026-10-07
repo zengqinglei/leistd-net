@@ -25,9 +25,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 会话 Cookie 里的角色能被官方 <c>IsInRole</c> / <c>RequireRole</c> 认出。
-/// </summary>
+/// <summary>会话 Cookie 里的角色能被官方 <c>IsInRole</c> / <c>RequireRole</c> 认出。</summary>
 /// <remarks>
 /// 角色写成 <c>role</c> claim，身份的 RoleClaimType 必须同名；否则官方判定按默认的
 /// <c>ClaimTypes.Role</c> 去找，静默判为不在角色中。探针走真实链路：登录发出 Cookie，
@@ -56,9 +54,7 @@ public sealed class SessionRoleClaimTests(ProjectWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Forbidden, (await session.Client.GetAsync($"{ProbePath}?role=other_{suffix}")).StatusCode);
     }
 
-    /// <summary>
-    /// 注册、首次外部登录、管理员不指定角色建用户，三条路径都得到默认角色，签发的会话带对应角色声明。
-    /// </summary>
+    /// <summary>注册、首次外部登录、管理员不指定角色建用户，三条路径都得到默认角色，签发的会话带对应角色声明。</summary>
     /// <remarks>
     /// 默认角色由本用例新建并标为默认：只看种子里的默认角色的话，"没分配"与"恰好断言了别的角色"分不开。
     /// 反向：非默认角色不得出现在任何一条路径上。

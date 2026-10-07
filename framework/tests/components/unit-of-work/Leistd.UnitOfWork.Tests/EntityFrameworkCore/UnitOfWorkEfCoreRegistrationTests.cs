@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// <c>AddUnitOfWorkEfCore</c> 的注册面：生命周期、幂等与宿主提供的上下文来源并存。
-/// </summary>
+/// <summary><c>AddUnitOfWorkEfCore</c> 的注册面：生命周期、幂等与宿主提供的上下文来源并存。</summary>
 public sealed class UnitOfWorkEfCoreRegistrationTests
 {
     // 连接绑定是 Scoped：同一请求内的多个工作单元共用一个绑定，才能拒绝中途改道到另一个库

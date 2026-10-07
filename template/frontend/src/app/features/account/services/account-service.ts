@@ -106,7 +106,6 @@ export class AccountService {
   }
 //#if (Email)
 
-  /** 给自己当前的邮箱发验证码。 */
   sendCurrentEmailCode(): Observable<EmailVerificationChallengeOutputDto> {
     return this.http.post<EmailVerificationChallengeOutputDto>(
       '/api/v1/auth/me/email-verification',
@@ -163,7 +162,6 @@ export class AccountService {
     return this.http.get<UserSessionOutputDto[]>('/api/v1/auth/me/sessions');
   }
 
-  /** 让自己的某台设备退出登录。 */
   revokeSession(id: string): Observable<void> {
     return this.http.delete(`/api/v1/auth/me/sessions/${id}`).pipe(map(() => undefined));
   }
@@ -179,7 +177,6 @@ export class AccountService {
     return this.http.get<ExternalLoginProvidersOutputDto>('/api/v1/external-auth/providers');
   }
 
-  /** 本人的外部账号绑定情况。 */
   getExternalLogins(): Observable<ExternalLoginsOutputDto> {
     return this.http.get<ExternalLoginsOutputDto>('/api/v1/external-auth/links');
   }

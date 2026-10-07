@@ -3,9 +3,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.Recording;
 
-/// <summary>
-/// 在关键操作成功或被拒之后显式调用的审计记录器。
-/// </summary>
+/// <summary>在关键操作成功或被拒之后显式调用的审计记录器。</summary>
 /// <remarks>
 /// <para>显式调用，不由拦截器自动记录：哪些操作值得留痕由业务判断。动作码与授权依据由业务项目定义
 /// （如 <c>identity.user.created</c>、<c>AuthenticatedSelf</c>），框架只存不读。</para>

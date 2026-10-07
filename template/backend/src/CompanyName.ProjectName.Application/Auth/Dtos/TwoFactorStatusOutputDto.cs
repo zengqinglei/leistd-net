@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 本人的两步验证状态
-/// </summary>
+/// <summary>本人的两步验证状态。</summary>
 public sealed record TwoFactorStatusOutputDto
 {
     /// <summary>是否已启用。</summary>

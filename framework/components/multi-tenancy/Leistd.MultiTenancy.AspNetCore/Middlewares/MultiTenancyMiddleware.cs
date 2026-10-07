@@ -11,9 +11,7 @@ using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 
-/// <summary>
-/// 解析并校验租户，然后在租户上下文中执行后续管道。
-/// </summary>
+/// <summary>解析并校验租户，然后在租户上下文中执行后续管道。</summary>
 /// <remarks>
 /// 放置顺序：<c>UseAuthentication()</c> 之后、<c>UseAuthorization()</c> 之前。
 /// 解析出的租户不存在抛 <see cref="TenantNotFoundException"/>（404）；已停用时，已认证主体抛

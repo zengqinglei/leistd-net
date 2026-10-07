@@ -3,9 +3,7 @@ using Leistd.Settings.Management;
 
 namespace Leistd.Settings.Validation;
 
-/// <summary>
-/// 业务取值校验：定义上的值元数据表达不了的规则（时区标识、邮箱地址、开启前提）。
-/// </summary>
+/// <summary>业务取值校验：定义上的值元数据表达不了的规则（时区标识、邮箱地址、开启前提）。</summary>
 /// <remarks>
 /// <para>在 <see cref="ISettingManager"/> 写入前、通过类型、区间与候选校验之后依次调用，
 /// 清除（值为 <see langword="null"/>）不经过它。每个校验器自己按设置名判断是否适用。</para>

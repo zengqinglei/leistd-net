@@ -34,9 +34,7 @@ public class OpenApplicationAppService(
 {
     private const string PkceRequirement = "ft:pkce";
 
-    /// <summary>
-    /// 本服务能签发的 scope 与其中仅限机器的那些，都取自 scope 目录（见 <see cref="OAuthScopes"/>）。
-    /// </summary>
+    /// <summary>本服务能签发的 scope 与其中仅限机器的那些，都取自 scope 目录（见 <see cref="OAuthScopes"/>）。</summary>
     /// <remarks>
     /// <para>写入时按目录校验 scope 与 audience，并校验交换客户端的权限组合，
     /// 避免保存可登记但无法使用的客户端；不维护完整的官方权限词汇表。</para>
@@ -45,9 +43,7 @@ public class OpenApplicationAppService(
     /// </remarks>
     private IReadOnlyList<OAuthScope> ScopeCatalog => OAuthScopes.All(oauthOptions.Value);
 
-    /// <summary>
-    /// 代表自然人的授权流：与内部控制面 scope 互斥
-    /// </summary>
+    /// <summary>代表自然人的授权流：与内部控制面 scope 互斥。</summary>
     /// <remarks>
     /// 同一个客户端既能拿 client credentials 机器令牌、又能走用户授权流时，
     /// 机器 scope 会随用户令牌一起签发——那个令牌的 <c>sub</c> 是用户 GUID，
@@ -352,9 +348,7 @@ public class OpenApplicationAppService(
         }
     }
 
-    /// <summary>
-    /// 开放应用列表的可排序字段
-    /// </summary>
+    /// <summary>开放应用列表的可排序字段。</summary>
     /// <remarks>
     /// 这一处排的是内存集合（OpenIddict 的管理器没有可组合的 <c>IQueryable</c>），
     /// 但白名单的理由与另外两处相同：字段集必须由服务端定，非法字段要 400 而不是 500。
@@ -376,9 +370,7 @@ public class OpenApplicationAppService(
         return ordered.ThenBy(item => item.ClientId, StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// 内部控制面 scope 的四条组合约束
-    /// </summary>
+    /// <summary>内部控制面 scope 的四条组合约束。</summary>
     /// <remarks>
     /// 内部控制面 scope 只允许 confidential 客户端，并要求 <c>client_credentials</c>
     /// 与 <c>ept:token</c> 权限；缺少任一项都无法从令牌端点取得该 scope。

@@ -3,9 +3,7 @@ using System.Security.Claims;
 
 namespace CompanyName.ProjectName.Application.Auth.Sessions;
 
-/// <summary>
-/// 会话 Cookie 的服务端校验：Cookie 里的会话仍然有效才放行。
-/// </summary>
+/// <summary>会话 Cookie 的服务端校验：Cookie 里的会话仍然有效才放行。</summary>
 public interface IUserSessionValidator
 {
     /// <summary>

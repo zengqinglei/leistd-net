@@ -18,6 +18,8 @@ description: 在 leistd-net 仓库中处理跨 framework、template、skills、d
 
 跨多个交付面且需要任务分解时使用一份实施计划，分别完成受影响层的验证。
 
+注释与文档按所属交付面读取[框架规范](../../../docs/framework/development-guide.md#4-文档注释)或[项目通用规范](../../../template/docs/standards/coding-common.md#1-语言与敏感信息)，前端再读[前端规范](../../../template/docs/standards/coding-frontend.md#3-命名)。规则只维护在这些入口，Skill 不复制。
+
 ## 方案与实施计划
 
 评估、计划、报告与稳定规范的归属和生命周期，以及 `framework/docs/`、`template/` 两个分发载荷不得写入的仓库信息，以 [`docs/README.md`](../../../docs/README.md) 为准。

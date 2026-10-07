@@ -10,14 +10,10 @@ using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// Redis 锁的契约边界：零超时语义与选项启动校验。
-/// </summary>
+/// <summary>Redis 锁的契约边界：零超时语义与选项启动校验。</summary>
 public class RedisLockContractTests
 {
-    /// <summary>
-    /// 零超时必须"尝试一次"，与内存实现一致。
-    /// </summary>
+    /// <summary>零超时必须"尝试一次"，与内存实现一致。</summary>
     /// <remarks>
     /// 若 <c>TryLockAsync</c> 写成 <c>while (now &lt; deadline)</c>，
     /// <c>TimeSpan.Zero</c> 使循环一次都不进——同一个 <see cref="ILock"/> 契约在两个实现上

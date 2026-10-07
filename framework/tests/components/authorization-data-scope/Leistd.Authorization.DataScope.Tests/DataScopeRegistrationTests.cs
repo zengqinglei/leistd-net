@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.Authorization.DataScope.Tests;
 
-/// <summary>
-/// 数据范围的注册面：应用器可替换且只有一份，范围 Provider 按实现累加、同一实现不重复。
-/// </summary>
+/// <summary>数据范围的注册面：应用器可替换且只有一份，范围 Provider 按实现累加、同一实现不重复。</summary>
 /// <remarks>
 /// 同一 Provider 登记两份时并集结果不变，但每次查询都多构造一遍谓词；
 /// 反过来按 TryAdd 去重会让同一实体的第二种范围静默丢失，可见性因此变窄却不报错。

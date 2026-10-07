@@ -16,9 +16,7 @@ using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 授予存储与管理器的关系型行为验证。
-/// </summary>
+/// <summary>授予存储与管理器的关系型行为验证。</summary>
 /// <remarks>
 /// 使用 Sqlite 而非 InMemory：只有关系型 Provider 才会真正强制唯一索引、真正翻译查询表达式，
 /// InMemory 全部在内存求值，会让不可翻译的查询和被违反的唯一约束静默通过。

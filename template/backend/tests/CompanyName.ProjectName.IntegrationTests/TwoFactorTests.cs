@@ -14,9 +14,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 两步验证：设置与启用、登录第二步、恢复码、强制启用与管理员重置。
-/// </summary>
+/// <summary>两步验证：设置与启用、登录第二步、恢复码、强制启用与管理员重置。</summary>
 /// <remarks>
 /// 时钟换成手动推进的：同一步的验证码只认一次（防重放），用例要在不同的步上各取一个码，
 /// 靠真实时钟就得等 30 秒或碰运气。
@@ -71,12 +69,9 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             await SecondStepErrorAsync(host, new { Token = replayToken, Code = code }));
     }
 
-    /// <summary>
-    /// 第一步通过之后凭据变了，未完成的挑战随之作废
-    /// </summary>
+    /// <summary>第一步通过之后凭据变了，未完成的挑战随之作废。</summary>
     /// <remarks>
-    /// 回归点：挑战不绑定账号安全版本时，管理员在这段窗口里重置了口令，凭旧口令换来的第一步
-    /// 仍能配合有效验证码完成登录。撤销会话挡不住它——挑战不是会话。
+    /// 挑战绑定账号安全版本；重置口令时必须作废，撤销已有会话无法替代这一检查。
     /// </remarks>
     [Fact]
     public async Task A_password_reset_after_the_first_step_voids_the_pending_challenge()
@@ -100,9 +95,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
     }
 
-    /// <summary>
-    /// 验证码与恢复码都没给是入参校验失败：400 字段错误、不带业务码，也不消耗这次挑战
-    /// </summary>
+    /// <summary>验证码与恢复码都没给是入参校验失败：400 字段错误、不带业务码，也不消耗这次挑战。</summary>
     [Fact]
     public async Task Submitting_neither_code_is_a_field_error_and_keeps_the_challenge()
     {
@@ -128,12 +121,9 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>
-    /// 输错不延长挑战的有效期
-    /// </summary>
+    /// <summary>输错不延长挑战的有效期。</summary>
     /// <remarks>
-    /// 回归点：每次输错都把有效期重新算满，最多 5 次尝试把 5 分钟的挑战拉长到约 25 分钟。
-    /// 这里在第 4 分钟输错一次，第 6 分钟的正确验证码必须按原时刻过期。
+    /// 第 4 分钟输错后，第 6 分钟的正确验证码仍按原到期时刻拒绝，避免重试延长挑战。
     /// </remarks>
     [Fact]
     public async Task A_wrong_code_does_not_extend_the_challenge()
@@ -313,9 +303,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         }
     }
 
-    /// <summary>
-    /// 两步验证限制在授权之前拒绝，不能被记成"授权通过之后的业务拒绝"
-    /// </summary>
+    /// <summary>两步验证限制在授权之前拒绝，不能被记成"授权通过之后的业务拒绝"。</summary>
     /// <remarks>
     /// 限制中间件在 <c>UseAuthorization()</c> 之前抛业务异常。补记业务拒绝的中间件紧接授权之后，
     /// 这类请求到不了它；若改放到全局异常处理器里，会把端点的权限策略当成已通过的依据写进记录。

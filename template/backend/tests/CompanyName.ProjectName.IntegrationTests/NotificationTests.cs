@@ -23,9 +23,7 @@ using Leistd.Notifications.AspNetCore.SignalR;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 通知：持久化、经 Hub 推送、已读与清除，以及保留期清理。
-/// </summary>
+/// <summary>通知：持久化、经 Hub 推送、已读与清除，以及保留期清理。</summary>
 public sealed class NotificationTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {

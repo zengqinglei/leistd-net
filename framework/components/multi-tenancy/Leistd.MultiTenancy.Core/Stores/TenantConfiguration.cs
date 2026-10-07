@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.Stores;
 
-/// <summary>
-/// 表示与存储实现无关的租户配置快照。
-/// </summary>
+/// <summary>表示与存储实现无关的租户配置快照。</summary>
 public class TenantConfiguration
 {
     /// <summary>租户名的最大长度，即单个 DNS 标签的上限。</summary>
@@ -11,9 +9,7 @@ public class TenantConfiguration
     /// <summary>租户名的存储容量；名称不变的更新按此容量原样保存，新名称上限由 <see cref="MaxNameLength"/> 约束。</summary>
     public const int MaxStoredNameLength = 64;
 
-    /// <summary>
-    /// 租户名的合法形态：单个 DNS 标签——字母、数字与连字符，不以连字符开头或结尾，至多 63 个字符。
-    /// </summary>
+    /// <summary>租户名的合法形态：单个 DNS 标签——字母、数字与连字符，不以连字符开头或结尾，至多 63 个字符。</summary>
     /// <remarks>
     /// 按子域名解析租户（<c>MultiTenancyOptions.DomainFormat</c>）时租户名就是主机名的一段。
     /// 大小写不限：名字大小写不敏感唯一。

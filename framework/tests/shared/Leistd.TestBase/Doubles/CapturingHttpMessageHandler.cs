@@ -2,9 +2,7 @@ using System.Net;
 
 namespace Leistd.TestBase.Doubles;
 
-/// <summary>
-/// 捕获出站请求并按委托应答的终端处理器，替代真实网络。
-/// </summary>
+/// <summary>捕获出站请求并按委托应答的终端处理器，替代真实网络。</summary>
 /// <example>
 /// <code>
 /// var handler = new CapturingHttpMessageHandler();
@@ -45,9 +43,7 @@ public sealed class CapturingHttpMessageHandler : HttpMessageHandler
     }
 }
 
-/// <summary>
-/// 恒抛异常的终端处理器：用于验证调用方对传输层故障的处理。
-/// </summary>
+/// <summary>恒抛异常的终端处理器：用于验证调用方对传输层故障的处理。</summary>
 public sealed class ThrowingHttpMessageHandler(Func<CancellationToken, Exception> exceptionFactory)
     : HttpMessageHandler
 {

@@ -8,9 +8,7 @@ using Xunit;
 
 namespace Leistd.Tracing.Tests.Core;
 
-/// <summary>
-/// 没有入站请求时的关联标识：环境上下文贡献者（Hub 调用、后台作业、消息消费）。
-/// </summary>
+/// <summary>没有入站请求时的关联标识：环境上下文贡献者（Hub 调用、后台作业、消息消费）。</summary>
 /// <remarks>
 /// 链路追踪的价值恰恰在后台作业、消息消费者、Hub 调用里能续上标识。
 /// 只测 HTTP 中间件等于只测了它最不容易出问题的那一半。

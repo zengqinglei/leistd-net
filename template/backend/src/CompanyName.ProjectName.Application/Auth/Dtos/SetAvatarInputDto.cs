@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 设置自己的头像
-/// </summary>
+/// <summary>设置自己的头像。</summary>
 public record SetAvatarInputDto
 {
     /// <summary>

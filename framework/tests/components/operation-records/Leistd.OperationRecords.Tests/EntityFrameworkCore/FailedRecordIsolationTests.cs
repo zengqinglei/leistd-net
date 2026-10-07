@@ -17,9 +17,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 存储按记录结果决定事务边界：成功跟随调用方，失败在记录所在的层里独立提交。
-/// </summary>
+/// <summary>存储按记录结果决定事务边界：成功跟随调用方，失败在记录所在的层里独立提交。</summary>
 /// <remarks>
 /// 宿主库与租户库是两个独立的 SQLite 内存库，连接按当前租户路由——与分库租户的真实形态一致，
 /// "写进了哪个库"因此可以直接断言。
@@ -70,9 +68,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
         await _tenantAnchor.DisposeAsync();
     }
 
-    /// <summary>
-    /// 失败记录扛过调用方的回滚
-    /// </summary>
+    /// <summary>失败记录扛过调用方的回滚。</summary>
     /// <remarks>
     /// 业务在工作单元内记完失败紧接着抛出、整体回滚，是被拒路径最常见的形态。
     /// 写入若落在调用方的工作单元里，就会随回滚一起消失——"谁在反复做他不被允许的事"就这样丢了。
@@ -103,9 +99,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
         Assert.Equal(0, await CountAsync(_tenantConnectionString));
     }
 
-    /// <summary>
-    /// 归属宿主层的失败记录写进宿主库，即便此刻处在分库租户的上下文里
-    /// </summary>
+    /// <summary>归属宿主层的失败记录写进宿主库，即便此刻处在分库租户的上下文里。</summary>
     /// <remarks>只改 <c>TenantId</c> 不切连接的话，这一行会带着宿主归属落进租户库，两边都查不到。</remarks>
     [Fact]
     public async Task A_host_layer_failed_record_lands_in_the_host_database_from_a_tenant_context()

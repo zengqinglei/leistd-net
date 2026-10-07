@@ -4,9 +4,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.Dtos;
 
-/// <summary>
-/// 操作记录的查询输出：一条记录按读者裁剪后的形态。
-/// </summary>
+/// <summary>操作记录的查询输出：一条记录按读者裁剪后的形态。</summary>
 /// <remarks>
 /// <see cref="FailureDetail"/>、<see cref="CorrelationId"/> 与 <see cref="ActorTenantId"/> 只下发给宿主读者，
 /// 租户读者拿到的恒为空（服务端裁剪）。
@@ -40,9 +38,7 @@ public sealed record OperationRecordOutputDto
     /// <summary>操作人名快照。</summary>
     public string? ActorName { get; init; }
 
-    /// <summary>
-    /// 目标即操作人：自证类动作成功且记录里没有操作人时为 <see langword="true"/>，界面把目标显示在操作人列。
-    /// </summary>
+    /// <summary>目标即操作人：自证类动作成功且记录里没有操作人时为 <see langword="true"/>，界面把目标显示在操作人列。</summary>
     public bool ActorIsTarget { get; init; }
 
     /// <summary>模拟登录时的真实操作人名。</summary>
@@ -77,9 +73,7 @@ public sealed record OperationRecordOutputDto
 
 }
 
-/// <summary>
-/// 筛选项：对当前读者可见的类别与动作。
-/// </summary>
+/// <summary>筛选项：对当前读者可见的类别与动作。</summary>
 public sealed record OperationRecordFilterOptionsOutputDto
 {
     /// <summary>类别，按登记顺序去重。</summary>
@@ -89,9 +83,7 @@ public sealed record OperationRecordFilterOptionsOutputDto
     public required IReadOnlyList<OperationActionOptionDto> Actions { get; init; }
 }
 
-/// <summary>
-/// 一个可筛选的动作。
-/// </summary>
+/// <summary>一个可筛选的动作。</summary>
 public sealed record OperationActionOptionDto
 {
     /// <summary>动作码。</summary>
@@ -104,9 +96,7 @@ public sealed record OperationActionOptionDto
     public required string Severity { get; init; }
 }
 
-/// <summary>
-/// 分页查询条件。
-/// </summary>
+/// <summary>分页查询条件。</summary>
 /// <remarks>
 /// 类别与动作是两个筛选维度：维度内多选取并集，维度之间取交集。
 /// 时间按 UTC 比较，两端都是闭区间。
@@ -151,9 +141,7 @@ public record GetOperationRecordPagedInputDto : PageRequest, IValidatableObject
     }
 }
 
-/// <summary>
-/// 导出条件：与分页查询同一组筛选，另有导出条数上限。
-/// </summary>
+/// <summary>导出条件：与分页查询同一组筛选，另有导出条数上限。</summary>
 public sealed record ExportOperationRecordsInputDto : IValidatableObject
 {
     /// <summary>单次导出的最大条数。</summary>
@@ -201,17 +189,13 @@ public sealed record ExportOperationRecordsInputDto : IValidatableObject
     }
 }
 
-/// <summary>
-/// 导出文件。
-/// </summary>
+/// <summary>导出文件。</summary>
 /// <param name="Content">文件内容（带 BOM 的 UTF-8 CSV）。</param>
 /// <param name="ContentType">内容类型。</param>
 /// <param name="FileName">建议的文件名。</param>
 public sealed record OperationRecordExportFileDto(byte[] Content, string ContentType, string FileName);
 
-/// <summary>
-/// 导出本身的审计：动作码与授权依据由宿主定义，组件只负责在导出成功后记下这一笔。
-/// </summary>
+/// <summary>导出本身的审计：动作码与授权依据由宿主定义，组件只负责在导出成功后记下这一笔。</summary>
 /// <param name="Action">已登记的动作码（如 <c>operation-records.exported</c>）。</param>
 /// <param name="AuthorizationBasis">授权依据，通常是导出权限名。</param>
 public sealed record OperationRecordExportAudit(string Action, string AuthorizationBasis);

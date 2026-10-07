@@ -6,9 +6,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
-/// <summary>
-/// 往令牌主体写主体标识：协议要求的 sub 始终签发，<see cref="ClaimTypeOptions.UserIds"/> 不含 sub 时按其首选类型同值再写一条。
-/// </summary>
+/// <summary>往令牌主体写主体标识：协议要求的 sub 始终签发，<see cref="ClaimTypeOptions.UserIds"/> 不含 sub 时按其首选类型同值再写一条。</summary>
 /// <remarks>
 /// 令牌的读取方（换码、userinfo、资源服务的当前用户与判权）都按 <see cref="ClaimTypeOptions"/> 读主体标识；
 /// 列表里还有 sub 时读取自然回落到它，不必写副本；去掉了 sub 的宿主只签 sub 的话，签出的令牌自己读不回来。

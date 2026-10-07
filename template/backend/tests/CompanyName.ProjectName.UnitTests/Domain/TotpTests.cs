@@ -5,9 +5,7 @@ using CompanyName.ProjectName.Domain.Shared.Text;
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
-/// <summary>
-/// TOTP 自己实现，所以按 RFC 6238 附录 B 的测试向量核对（取 8 位结果的末 6 位）。
-/// </summary>
+/// <summary>TOTP 自己实现，所以按 RFC 6238 附录 B 的测试向量核对（取 8 位结果的末 6 位）。</summary>
 public class TotpTests
 {
     private static readonly byte[] RfcSecret = Encoding.ASCII.GetBytes("12345678901234567890");

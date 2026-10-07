@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.Management;
 
-/// <summary>
-/// 租户管理用例（宿主侧）：查询、创建编排与补偿、更新、启停、删除。
-/// </summary>
+/// <summary>租户管理用例（宿主侧）：查询、创建编排与补偿、更新、启停、删除。</summary>
 /// <remarks>
 /// <para>创建顺序固定：先以停用态登记租户，并在同一控制面工作单元里登记连接；
 /// 再在新租户上下文与新工作单元里经 <see cref="Provisioning.ITenantProvisioner"/> 开通；最后启用。

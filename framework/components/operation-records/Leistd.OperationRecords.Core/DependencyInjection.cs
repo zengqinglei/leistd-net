@@ -13,9 +13,7 @@ namespace Leistd.OperationRecords;
 /// <summary>操作记录核心服务注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册操作记录的记录器与动作定义，并登记 <see cref="OperationFailureCodes"/> 的默认中英译文。
-    /// </summary>
+    /// <summary>注册操作记录的记录器与动作定义，并登记 <see cref="OperationFailureCodes"/> 的默认中英译文。</summary>
     /// <remarks>
     /// <para>还需要一个 <see cref="IOperationRecordWriter"/> 实现（数据库存储
     /// <c>AddOperationRecordsEfCore&lt;TDbContext&gt;()</c>，或结构化日志输出 <c>AddOperationRecordsLogging()</c>），
@@ -64,15 +62,12 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 注册历史查询与导出用例（<see cref="IOperationRecordQueryService"/>）。
-    /// </summary>
+    /// <summary>注册历史查询与导出用例（<see cref="IOperationRecordQueryService"/>）。</summary>
     /// <remarks>
     /// 由能回读历史的存储适配调用（如 <c>AddOperationRecordsEfCore&lt;TDbContext&gt;()</c>），宿主通常不直接调用。
     /// 要求已注册 <see cref="IOperationRecordReader"/>。
     /// 可重复调用：服务只注册一次。
     /// </remarks>
-    /// <param name="services">服务集合。</param>
     public static IServiceCollection AddOperationRecordQueries(this IServiceCollection services)
     {
         services.AddOperationRecords();

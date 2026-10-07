@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Tracing.Tests.HttpClient;
 
-/// <summary>
-/// 出站透传的注册面：<c>AddCorrelationIdForwarding()</c>。
-/// </summary>
+/// <summary>出站透传的注册面：<c>AddCorrelationIdForwarding()</c>。</summary>
 /// <remarks>
 /// 挂在 <see cref="IHttpClientBuilder"/> 上（命名客户端），而不是全局替宿主改 HttpClient——
 /// 这条边界一旦被"顺手改成全局"，所有出站请求都会带上内部标识，包括发往第三方的。

@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 控制库存储与本地连接解析的注册面：存储按控制库上下文登记为 Transient，重复调用不叠加，宿主实现保留。
-/// </summary>
+/// <summary>控制库存储与本地连接解析的注册面：存储按控制库上下文登记为 Transient，重复调用不叠加，宿主实现保留。</summary>
 public sealed class MultiTenancyEfCoreRegistrationTests
 {
     [Fact]

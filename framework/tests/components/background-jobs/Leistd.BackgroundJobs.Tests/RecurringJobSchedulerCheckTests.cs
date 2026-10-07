@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.BackgroundJobs.Tests;
 
-/// <summary>
-/// 登记了周期任务却没有调度器时，任务永远不跑且不报错；启动时要在日志里留下这件事。
-/// </summary>
+/// <summary>登记了周期任务却没有调度器时，任务永远不跑且不报错；启动时要在日志里留下这件事。</summary>
 /// <remarks>只告警不抛出：迁移作业等进程可能有意不跑周期任务，但注册的是同一批组件。</remarks>
 public class RecurringJobSchedulerCheckTests
 {

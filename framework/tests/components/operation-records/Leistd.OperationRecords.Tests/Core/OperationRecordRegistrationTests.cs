@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.Core;
 
-/// <summary>
-/// <c>AddOperationRecords</c> 与 <c>AddOperationRecordQueries</c> 的注册面。
-/// </summary>
+/// <summary><c>AddOperationRecords</c> 与 <c>AddOperationRecordQueries</c> 的注册面。</summary>
 /// <remarks>
 /// Leistd 靠宿主显式调用 <c>AddXxx()</c> 组合，注册结果就是公共契约的一部分：
 /// 生命周期写错、重复注册、组件之间意外互相覆盖，编译期一个都发现不了。

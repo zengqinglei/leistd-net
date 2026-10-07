@@ -18,9 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 用户模块的自定义仓储：查询只看当前租户、未删除的行，按名称排序；登记后通用仓储接口也解析到同一实现。
-/// </summary>
+/// <summary>用户模块的自定义仓储：查询只看当前租户、未删除的行，按名称排序；登记后通用仓储接口也解析到同一实现。</summary>
 /// <remarks>
 /// 过滤是否生效用"关掉过滤器后能看到"来证伪：被排除的行确实还在库里，排除它们的是全局过滤器，
 /// 而不是删除把行物理删掉了或种子没写进去。
@@ -233,9 +231,7 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 本地身份下租户要先登记才能解析连接：经宿主管理员开通一个，开通会写入该租户自己的默认角色与管理员。
-    /// </summary>
+    /// <summary>本地身份下租户要先登记才能解析连接：经宿主管理员开通一个，开通会写入该租户自己的默认角色与管理员。</summary>
     private async Task<Guid> NewTenantAsync()
     {
         using var hostAdmin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -317,9 +313,7 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
         return (user.Id, names);
     }
 
-    /// <summary>
-    /// 写入四个角色：两个默认、一个默认但已删除、一个非默认。
-    /// </summary>
+    /// <summary>写入四个角色：两个默认、一个默认但已删除、一个非默认。</summary>
     private async Task<SeededNames> SeedRolesAsync(Guid? tenantId, string suffix)
     {
         var names = new SeededNames($"b_{suffix}", $"c_{suffix}", $"d_{suffix}", $"e_{suffix}");

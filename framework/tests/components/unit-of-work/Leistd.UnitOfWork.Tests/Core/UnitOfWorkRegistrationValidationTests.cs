@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 注册形式校验：声明失效必须让宿主起不来。
-/// </summary>
+/// <summary>注册形式校验：声明失效必须让宿主起不来。</summary>
 /// <remarks>
 /// <para>阶段过滤靠动态代理实现，挂不上去是<b>完全静默</b>的：代码看起来是对的，
 /// 过滤却根本不存在，处理器在两趟发布里各跑一次。因此<b>从描述符看得出来</b>的无法织入形态
@@ -22,9 +20,7 @@ namespace Leistd.UnitOfWork.Tests.Core;
 /// </remarks>
 public sealed class UnitOfWorkRegistrationValidationTests
 {
-    /// <summary>
-    /// 工厂委托注册的事件处理器同样参与阶段过滤。
-    /// </summary>
+    /// <summary>工厂委托注册的事件处理器同样参与阶段过滤。</summary>
     /// <remarks>
     /// "同实例别名"是常见且正当的注册形态（一个实现只注册一次，接口做别名转发）：
     /// <c>services.AddSingleton&lt;IEventHandler&lt;T&gt;&gt;(sp =&gt; sp.GetRequiredService&lt;H&gt;())</c>。
@@ -76,9 +72,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
         Assert.NotNull(provider.GetService<IEventHandler<ProbeEvent>>());
     }
 
-    /// <summary>
-    /// 带 <c>[UnitOfWork]</c> 的开放泛型实现被拒绝。
-    /// </summary>
+    /// <summary>带 <c>[UnitOfWork]</c> 的开放泛型实现被拒绝。</summary>
     /// <remarks>
     /// 开放泛型服务类型无法织入（织入器要把描述符改写成工厂型，而 Microsoft DI 不接受
     /// "开放泛型服务类型 + 工厂委托"），因此特性会静默失效。这一条从描述符就看得出来。
@@ -94,9 +88,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
         Assert.Contains("open generic implementation", exception.Message);
     }
 
-    /// <summary>
-    /// 有待发事件却没有 <c>ILocalEventDispatcher</c> 时立即失败，而不是静默丢弃。
-    /// </summary>
+    /// <summary>有待发事件却没有 <c>ILocalEventDispatcher</c> 时立即失败，而不是静默丢弃。</summary>
     /// <remarks>
     /// 事件已经被登记，调用方有理由认为它会被发布。没有待发事件时不作要求——
     /// 工作单元可以独立使用，不强制安装事件总线。

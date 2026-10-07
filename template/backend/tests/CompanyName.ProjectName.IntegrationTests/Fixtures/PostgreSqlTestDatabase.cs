@@ -5,9 +5,7 @@ using Testcontainers.PostgreSql;
 
 namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
-/// <summary>
-/// 集成测试的 PostgreSQL：一次测试运行一个容器、迁移一次模板库，每个测试宿主克隆一份独立的库。
-/// </summary>
+/// <summary>集成测试的 PostgreSQL：一次测试运行一个容器、迁移一次模板库，每个测试宿主克隆一份独立的库。</summary>
 /// <remarks>
 /// <para>迁移用与 DbMigrator 相同的上下文选项（迁移历史表、schema）。两边一旦不一致，宿主启动时的
 /// 迁移校验会以"有待执行迁移"失败，不会静默放行。</para>

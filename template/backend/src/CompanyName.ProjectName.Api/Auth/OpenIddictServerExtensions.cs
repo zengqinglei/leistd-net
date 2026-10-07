@@ -9,14 +9,10 @@ using OpenIddict.Server;
 
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 授权服务器（OpenIddict Server）与本地令牌校验的注册入口。
-/// </summary>
+/// <summary>授权服务器（OpenIddict Server）与本地令牌校验的注册入口。</summary>
 public static class OpenIddictServerExtensions
 {
-    /// <summary>
-    /// 注册 OAuth 选项、退出确认所需的防伪与交互凭据，以及 OpenIddict 的存储、签发端与本地校验。
-    /// </summary>
+    /// <summary>注册 OAuth 选项、退出确认所需的防伪与交互凭据，以及 OpenIddict 的存储、签发端与本地校验。</summary>
     public static WebApplicationBuilder AddMyProjectOpenIddictServer(this WebApplicationBuilder builder)
     {
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OAuthOptions>, OAuthOptionsValidator>());

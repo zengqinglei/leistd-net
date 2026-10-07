@@ -17,9 +17,7 @@ using Xunit;
 
 namespace Leistd.Response.Tests;
 
-/// <summary>
-/// Minimal API 端点的统一响应包装：与 MVC 侧同一口径，只包 2xx 且带值的响应。
-/// </summary>
+/// <summary>Minimal API 端点的统一响应包装：与 MVC 侧同一口径，只包 2xx 且带值的响应。</summary>
 /// <remarks>
 /// 组件经 <c>Map*</c> 提供的端点不走 MVC 过滤器；宿主若用信封形状，靠的就是这一层。
 /// 包错（把错误或文件流包进信封）与漏包（信封形状在组件端点上缺席）都只在响应体里显形。
@@ -46,9 +44,7 @@ public sealed class EndpointResultWrappingTests(EndpointResultWrappingTests.Host
         Assert.Equal("order", body.GetProperty("data").GetProperty("name").GetString());
     }
 
-    /// <summary>
-    /// <c>Created</c> 原样放行：重建成 JSON 会丢掉 <c>Location</c>，而状态码看上去还是 201。
-    /// </summary>
+    /// <summary><c>Created</c> 原样放行：重建成 JSON 会丢掉 <c>Location</c>，而状态码看上去还是 201。</summary>
     [Fact]
     public async Task Created_passes_through_with_its_location_header()
     {
@@ -102,9 +98,7 @@ public sealed class EndpointResultWrappingTests(EndpointResultWrappingTests.Host
         Assert.Equal("x", body.GetProperty("data").GetString());
     }
 
-    /// <summary>
-    /// 200 的响应类型元数据同步改写成 <c>Result&lt;T&gt;</c>。
-    /// </summary>
+    /// <summary>200 的响应类型元数据同步改写成 <c>Result&lt;T&gt;</c>。</summary>
     /// <remarks>
     /// Minimal API 从处理器返回类型推断响应形状，包装后实际发出的是信封；元数据不跟着改，
     /// 生成的 OpenAPI 描述的就是另一种形状，而调用方是照着文档写代码的。
@@ -147,9 +141,7 @@ public sealed class EndpointResultWrappingTests(EndpointResultWrappingTests.Host
             metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
     }
 
-    /// <summary>
-    /// 运行时不包装的结果，元数据也不能被改成信封。
-    /// </summary>
+    /// <summary>运行时不包装的结果，元数据也不能被改成信封。</summary>
     /// <remarks>
     /// 改写的判据必须与过滤器的包装判据同源（看处理器返回类型），只按"状态码是 200"改，
     /// 就会让 <c>Json(...)</c>、文件这类原样放行的端点在文档里被声明成 <c>Result&lt;T&gt;</c>，
@@ -189,9 +181,7 @@ public sealed class EndpointResultWrappingTests(EndpointResultWrappingTests.Host
             metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
     }
 
-    /// <summary>
-    /// 声明成 <c>object</c> 的处理器：运行时按裸值包装，元数据也必须改写。
-    /// </summary>
+    /// <summary>声明成 <c>object</c> 的处理器：运行时按裸值包装，元数据也必须改写。</summary>
     /// <remarks>把 object 排除在外，就会出现"响应里有信封、文档里没有"的不一致。</remarks>
     [Fact]
     public async Task An_object_returning_handler_is_wrapped_and_its_metadata_rewritten()
@@ -248,9 +238,7 @@ public sealed class EndpointResultWrappingTests(EndpointResultWrappingTests.Host
         Assert.Equal("order", body.GetProperty("name").GetString());
     }
 
-    /// <summary>
-    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
-    /// </summary>
+    /// <summary>本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

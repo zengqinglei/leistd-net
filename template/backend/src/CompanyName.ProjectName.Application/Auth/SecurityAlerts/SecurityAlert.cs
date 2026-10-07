@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 
-/// <summary>
-/// 一条安全提醒。
-/// </summary>
+/// <summary>一条安全提醒。</summary>
 /// <param name="Kind">种类。</param>
 /// <param name="IpAddress">相关请求的 IP（新设备登录）。</param>
 /// <param name="UserAgent">相关请求的 User-Agent（新设备登录）。</param>

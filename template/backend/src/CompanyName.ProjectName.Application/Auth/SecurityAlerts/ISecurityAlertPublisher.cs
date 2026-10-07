@@ -1,9 +1,7 @@
 #if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 
-/// <summary>
-/// 把账号安全相关的事件告知本人。
-/// </summary>
+/// <summary>把账号安全相关的事件告知本人。</summary>
 /// <remarks>
 /// <para>提醒是尽力而为的：投递失败只记日志，不让触发它的操作（登录、改密码）失败——
 /// 实现必须自己吞掉异常。</para>

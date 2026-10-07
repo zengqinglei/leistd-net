@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.Errors;
 
-/// <summary>
-/// 多租户组件抛出的错误码，默认译文随包分发，宿主资源里的同名词条优先。
-/// </summary>
+/// <summary>多租户组件抛出的错误码，默认译文随包分发，宿主资源里的同名词条优先。</summary>
 public static class MultiTenancyErrorCodes
 {
     /// <summary>租户不存在或已删除。</summary>

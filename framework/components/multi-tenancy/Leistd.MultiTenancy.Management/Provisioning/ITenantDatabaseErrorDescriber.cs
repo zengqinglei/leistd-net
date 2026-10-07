@@ -2,9 +2,7 @@ using Leistd.ExceptionHandling;
 
 namespace Leistd.MultiTenancy.Management.Provisioning;
 
-/// <summary>
-/// 把开通时的数据库错误翻译成调用方能照着修正的业务失败。
-/// </summary>
+/// <summary>把开通时的数据库错误翻译成调用方能照着修正的业务失败。</summary>
 /// <remarks>
 /// <para>专属库连不上、不存在、未迁移或凭据不对都是调用方能改对的错误，对应
 /// <see cref="Leistd.MultiTenancy.Errors.MultiTenancyErrorCodes"/> 的专属库错误码；把具体数据库的错误映射到它们由宿主实现。</para>

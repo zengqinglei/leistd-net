@@ -10,9 +10,7 @@ using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.DbMigrator;
 
-/// <summary>
-/// 预演或施加所有物理数据库目标的 EF Core 迁移。
-/// </summary>
+/// <summary>预演或施加所有物理数据库目标的 EF Core 迁移。</summary>
 /// <remarks>
 /// 默认只输出计划和 SQL；显式施加时由 EF Core 管理迁移锁和事务，不得再包裹外层事务。
 /// 日志和报告使用连接串的 SHA256 指纹标识目标。
@@ -24,9 +22,7 @@ public sealed class DatabaseMigrationRunner(
 #endif
     ILogger<DatabaseMigrationRunner> logger)
 {
-    /// <summary>
-    /// 业务上下文的连接名，即租户连接登记里要查的名字。
-    /// </summary>
+    /// <summary>业务上下文的连接名，即租户连接登记里要查的名字。</summary>
     /// <remarks>
     /// <c>MyProjectDbContext</c> 没有声明 <c>[ConnectionStringName]</c>，因此用默认名。
     /// 业务项目把上下文改名为服务名（如 <c>Crm</c>）时，这里要跟着改成同一个名字——
@@ -54,9 +50,7 @@ public sealed class DatabaseMigrationRunner(
         string Script,
         IReadOnlyList<string> Targets);
 
-    /// <summary>
-    /// 按模型范围和 SQL 合并预演计划。
-    /// </summary>
+    /// <summary>按模型范围和 SQL 合并预演计划。</summary>
     /// <remarks>
     /// 只有实际执行相同 SQL 的目标才会合并。
     /// </remarks>
@@ -109,9 +103,7 @@ public sealed class DatabaseMigrationRunner(
     public sealed record MigrationReport(IReadOnlyList<MigrationPlan> Plans);
 #endif
 
-    /// <summary>
-    /// 计算所有物理目标的计划，并按 <paramref name="apply"/> 决定是否施加迁移。
-    /// </summary>
+    /// <summary>计算所有物理目标的计划，并按 <paramref name="apply"/> 决定是否施加迁移。</summary>
     /// <param name="apply"><see langword="false"/> 时只输出清单和 SQL。</param>
     /// <remarks>
     /// 首次安装缺少租户注册表时按无独立目标处理；其他枚举失败均上抛。

@@ -7,9 +7,7 @@ using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Tests.Redis;
 
-/// <summary>
-/// Redis 锁句柄的续期与失锁行为。
-/// </summary>
+/// <summary>Redis 锁句柄的续期与失锁行为。</summary>
 /// <remarks>
 /// 不续期的租约只保证"拿到锁的那一刻是独占的"：临界区一旦超过租约时长，锁自动过期，
 /// 另一个实例合法进入，而当前进程仍在写。这条路径没有测试就等于没有。
@@ -136,9 +134,7 @@ public class RedisLockRenewalTests
         public ILockHandle CreateHandle()
             => new RedisLockHandle("k", Expiry, ExtendAsync, ReleaseAsync, NullLogger.Instance, time);
 
-        /// <summary>
-        /// 按续期间隔推进假时钟，直到条件成立。
-        /// </summary>
+        /// <summary>按续期间隔推进假时钟，直到条件成立。</summary>
         /// <remarks>
         /// 一次推进到位是不行的：续期循环每轮重新注册一次定时器，时间一次跨过多个周期，
         /// 也只会触发一次续期。所以按间隔逐步推进。

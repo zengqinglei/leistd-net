@@ -7,9 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Domain.Auth.DomainServices;
 
-/// <summary>
-/// 登录会话的登记与撤销规则。
-/// </summary>
+/// <summary>登录会话的登记与撤销规则。</summary>
 /// <remarks>
 /// <para>撤销即删除，并由 <see cref="UserSession.Revoke(DateTime)"/> 发出事件：会话校验结果带短缓存，
 /// 订阅方在事务提交后作废它，撤销才能对已发出的 Cookie 立即生效。</para>
@@ -21,9 +19,7 @@ public class UserSessionDomainService(
     IOptions<UserSessionOptions> options,
     IClock clock)
 {
-    /// <summary>
-    /// 为一次登录登记会话，返回的会话 Id 写进 <c>sid</c> 声明。
-    /// </summary>
+    /// <summary>为一次登录登记会话，返回的会话 Id 写进 <c>sid</c> 声明。</summary>
     /// <remarks>顺手删掉此人已过期的会话。不再登录的用户没有这个时机，由每日的过期会话清理作业兜底。</remarks>
     public async Task<UserSession> StartAsync(
         Guid userId,

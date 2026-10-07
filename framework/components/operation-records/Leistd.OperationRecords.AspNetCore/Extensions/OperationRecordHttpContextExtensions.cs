@@ -11,9 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.OperationRecords.AspNetCore.Extensions;
 
-/// <summary>
-/// 按端点上的 <see cref="OperationRecordActionAttribute"/>，在授权阶段的拒绝或授权之后的业务拒绝上补记一条失败的操作记录。
-/// </summary>
+/// <summary>按端点上的 <see cref="OperationRecordActionAttribute"/>，在授权阶段的拒绝或授权之后的业务拒绝上补记一条失败的操作记录。</summary>
 /// <remarks>
 /// <para>框架不占用宿主的处置入口：被拒路径在宿主的 <c>IAuthorizationMiddlewareResultHandler</c> 里调用，
 /// 业务拒绝在宿主自己的中间件里调用。</para>
@@ -27,9 +25,7 @@ public static class OperationRecordHttpContextExtensions
     // 没有目标标识时的占位；与上面同值但概念不同，不共用常量
     private const string NoTargetId = "-";
 
-    /// <summary>
-    /// 若当前请求是被拒的写操作且端点声明了动作码，记录一条失败记录；否则什么都不做。
-    /// </summary>
+    /// <summary>若当前请求是被拒的写操作且端点声明了动作码，记录一条失败记录；否则什么都不做。</summary>
     /// <remarks>
     /// <para>端点打了 <see cref="OperationRecordActionAttribute"/> 就记，不再按 HTTP 方法等启发式筛选。</para>
     /// <para>匿名请求一律不记，避免审计表成为无需凭据的写入面；任一身份已认证即不算匿名，
@@ -79,9 +75,7 @@ public static class OperationRecordHttpContextExtensions
                 : failure);
     }
 
-    /// <summary>
-    /// 若当前请求的端点声明了动作码，在授权通过之后的业务拒绝上记录一条失败记录；否则什么都不做。
-    /// </summary>
+    /// <summary>若当前请求的端点声明了动作码，在授权通过之后的业务拒绝上记录一条失败记录；否则什么都不做。</summary>
     /// <remarks>
     /// <para>在宿主紧接 <c>UseAuthorization()</c> 的中间件里调用：捕获下游业务异常，记录后原样重抛。
     /// 此处授权已通过，且请求仍在租户作用域内。不要在 <c>IExceptionHandler</c> 里调用：那时租户作用域已退出，

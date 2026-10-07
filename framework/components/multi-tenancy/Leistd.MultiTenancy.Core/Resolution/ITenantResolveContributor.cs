@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.Resolution;
 
-/// <summary>
-/// 从单一来源尝试确定当前租户。
-/// </summary>
+/// <summary>从单一来源尝试确定当前租户。</summary>
 public interface ITenantResolveContributor
 {
     /// <summary>贡献者名称，用于诊断日志。</summary>

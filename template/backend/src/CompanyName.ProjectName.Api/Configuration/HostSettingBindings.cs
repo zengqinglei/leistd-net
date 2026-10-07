@@ -11,9 +11,7 @@ using Serilog.Events;
 
 namespace CompanyName.ProjectName.Api.Configuration;
 
-/// <summary>
-/// 哪些宿主级设置覆盖哪些配置键。
-/// </summary>
+/// <summary>哪些宿主级设置覆盖哪些配置键。</summary>
 /// <remarks>
 /// <para>新增一项运行期可改的部署配置只需三步：定义宿主级设置（带值域）、在这里加一行绑定、
 /// 消费方注入 <c>IOptionsMonitor&lt;T&gt;</c>。属性名用 <c>nameof</c> 取，改名时编译期就能发现映射断了。</para>

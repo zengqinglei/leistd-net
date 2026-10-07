@@ -7,9 +7,7 @@ using static Leistd.DependencyInjection.Tests.KeyedServiceWeavingTests;
 
 namespace Leistd.DependencyInjection.Tests;
 
-/// <summary>
-/// 组件的 <c>AddXxx</c> 被调用两次时回调会登记两次；同一拦截器不得因此被织入两层。
-/// </summary>
+/// <summary>组件的 <c>AddXxx</c> 被调用两次时回调会登记两次；同一拦截器不得因此被织入两层。</summary>
 public class InterceptorDeduplicationTests
 {
     [Fact]

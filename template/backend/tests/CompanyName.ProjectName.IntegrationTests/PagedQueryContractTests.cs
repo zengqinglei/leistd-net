@@ -6,9 +6,7 @@ using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 列表查询的分页与排序契约：越界与非法排序都必须是 400，且排序字段限于白名单。
-/// </summary>
+/// <summary>列表查询的分页与排序契约：越界与非法排序都必须是 400，且排序字段限于白名单。</summary>
 /// <remarks>
 /// <para>钉两件可观察的事：越界分页与非法排序都返回 400（而不是 500），
 /// 以及可排序字段只限于各接口自己的白名单——按实体上真实存在、但不属于该列表契约的字段

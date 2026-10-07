@@ -6,9 +6,7 @@ using System.Net;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
 
-/// <summary>
-/// 资源服务启动门禁的语义：确认前拒绝流量，确认后锁存
-/// </summary>
+/// <summary>资源服务启动门禁的语义：确认前拒绝流量，确认后锁存。</summary>
 /// <remarks>
 /// 集成测试宿主会把门禁预置为已开（那里没有真实 Identity，探针永远探不通），
 /// 所以门禁本身必须单独钉——否则"预置已开"会把这条能力整个遮掉，
@@ -19,9 +17,7 @@ public class ResourceReadinessGateTests
     private const string Issuer = "https://identity.example.com/";
     private static readonly Uri MetadataUrl = new("https://identity.example.com/.well-known/openid-configuration");
 
-    /// <summary>
-    /// 只返回 2xx 不算确认
-    /// </summary>
+    /// <summary>只返回 2xx 不算确认。</summary>
     /// <remarks>
     /// 反向代理的错误页、登录跳转页、返回 200 的占位服务都能通过
     /// <c>EnsureSuccessStatusCode()</c>。门禁一旦被它们骗开，Pod 就进流量，
@@ -87,9 +83,7 @@ public class ResourceReadinessGateTests
         await RemoteIdentityReadinessInitializer.ConfirmAsync(client, Issuer, MetadataUrl, CancellationToken.None);
     }
 
-    /// <summary>
-    /// issuer 只在大小写或尾斜杠上不同，也必须拒绝
-    /// </summary>
+    /// <summary>issuer 只在大小写或尾斜杠上不同，也必须拒绝。</summary>
     /// <remarks>
     /// 令牌校验器按配置的规范值原样比对。门禁比它宽松只会放行一个随后必然拒绝令牌的部署，
     /// 把失败从启动期推迟到线上——恰好抵消门禁存在的理由。
@@ -146,9 +140,7 @@ public class ResourceReadinessGateTests
         Assert.Equal(HealthStatus.Healthy, after.Status);
     }
 
-    /// <summary>
-    /// 确认之后锁存：不因签发方后续抖动回落
-    /// </summary>
+    /// <summary>确认之后锁存：不因签发方后续抖动回落。</summary>
     /// <remarks>
     /// 这是刻意的取舍。持续同步探测签发方会让它一次短暂故障把已经在正常服务的实例
     /// 一起摘掉——那些实例的签名密钥与租户路由都还在缓存里，本来完全可以继续服务。

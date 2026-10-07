@@ -6,9 +6,7 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 
 namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
-/// <summary>
-/// 从请求头解析匿名请求的租户。
-/// </summary>
+/// <summary>从请求头解析匿名请求的租户。</summary>
 /// <remarks>请求头只选择认证分区，不授予数据访问权限。</remarks>
 public class HeaderTenantResolveContributor : ITenantResolveContributor
 {

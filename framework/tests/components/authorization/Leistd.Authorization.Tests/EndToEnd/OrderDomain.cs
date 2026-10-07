@@ -12,9 +12,7 @@ using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Tests.EndToEnd;
 
-/// <summary>
-/// 被测业务领域：一个带所有者、组织和状态的订单。
-/// </summary>
+/// <summary>被测业务领域：一个带所有者、组织和状态的订单。</summary>
 /// <remarks>
 /// 这是三层授权各自都能作用到的最小形状：所有者用于资源规则、组织用于数据范围、
 /// 状态用于"规则拒绝优先于 ACL 允许"。

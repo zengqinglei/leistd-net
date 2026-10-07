@@ -3,9 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 前端静态文件的缓存头：带内容哈希的构建产物长期缓存，其余每次校验。
-/// </summary>
+/// <summary>前端静态文件的缓存头：带内容哈希的构建产物长期缓存，其余每次校验。</summary>
 /// <remarks>
 /// 缺了 no-cache，发版后浏览器会继续用旧的 index.html 与词条文件；
 /// 反过来把不带哈希的文件标成 immutable，更新后一年内都取不到新内容。两头都不报错，只能在这里钉住。

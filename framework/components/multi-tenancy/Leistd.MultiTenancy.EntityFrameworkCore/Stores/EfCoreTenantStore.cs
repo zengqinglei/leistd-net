@@ -6,9 +6,7 @@ using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// 使用 EF Core 直接查询租户配置。
-/// </summary>
+/// <summary>使用 EF Core 直接查询租户配置。</summary>
 /// <remarks>
 /// 不缓存，每次解析都读库：<see cref="TenantConfiguration.IsActive"/> 是访问控制状态，直读让停用与删除在提交时对所有节点生效。
 /// 成本是每请求一次索引查找，复用当前请求的 <typeparamref name="TDbContext"/>。确需缓存时自行包装 <see cref="ITenantStore"/> 装饰器。

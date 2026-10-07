@@ -2,9 +2,7 @@
 using System.Text;
 namespace CompanyName.ProjectName.Domain.Shared.Text;
 
-/// <summary>
-/// RFC 4648 Base32（不带填充）。身份验证器应用按这种写法导入密钥。
-/// </summary>
+/// <summary>RFC 4648 Base32（不带填充）。身份验证器应用按这种写法导入密钥。</summary>
 public static class Base32
 {
     private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";

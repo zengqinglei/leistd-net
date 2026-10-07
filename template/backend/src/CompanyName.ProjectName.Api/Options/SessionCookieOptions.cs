@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Api.Options;
 
-/// <summary>
-/// 会话 Cookie 的站点策略与时长（配置节 <c>SessionCookie</c>）
-/// </summary>
+/// <summary>会话 Cookie 的站点策略与时长（配置节 <c>SessionCookie</c>）。</summary>
 /// <remarks>
 /// <para>默认沿用 Cookie 认证的 <c>Lax</c>，浏览器页面与所属 API 同源。</para>
 /// <para>第三方站点以顶层 POST 进入授权或退出端点时，如需附带会话可评估 <c>None</c>，

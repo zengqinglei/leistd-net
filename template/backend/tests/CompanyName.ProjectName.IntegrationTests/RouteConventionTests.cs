@@ -5,9 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 路由约定：业务端点以 <c>/api/v1/</c> 开头（api.md §6）。
-/// </summary>
+/// <summary>路由约定：业务端点以 <c>/api/v1/</c> 开头（api.md §6）。</summary>
 /// <remarks>
 /// 判定在宿主实际映射出的端点上做，控制器与组件的 Minimal API 端点一起覆盖；
 /// 协议与基础设施端点的路径由外部约定决定，列入带理由的白名单。
@@ -15,9 +13,7 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class RouteConventionTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
-    /// <summary>
-    /// 不受版本前缀约束的路由，每项写明理由；以 <c>/</c> 结尾的按前缀匹配，其余按整条路由匹配。
-    /// </summary>
+    /// <summary>不受版本前缀约束的路由，每项写明理由；以 <c>/</c> 结尾的按前缀匹配，其余按整条路由匹配。</summary>
     private static readonly RouteExemption[] Exemptions =
     [
         new("/connect/", "OIDC 协议端点，路径由客户端配置与发现文档约定"),
@@ -28,9 +24,7 @@ public sealed class RouteConventionTests(ProjectWebApplicationFactory factory)
         new("/api/{**path}", "同上，覆盖 /api 下的任意未知路径"),
     ];
 
-    /// <summary>
-    /// 宿主映射的端点全部满足约定
-    /// </summary>
+    /// <summary>宿主映射的端点全部满足约定。</summary>
     [Fact]
     public void Mapped_endpoints_are_versioned_or_exempted()
     {
@@ -41,9 +35,7 @@ public sealed class RouteConventionTests(ProjectWebApplicationFactory factory)
         Assert.Empty(FindViolations(endpoints, Exemptions));
     }
 
-    /// <summary>
-    /// 合规、违规与白名单的端点各一：只有不带版本前缀且不在白名单的被报出
-    /// </summary>
+    /// <summary>合规、违规与白名单的端点各一：只有不带版本前缀且不在白名单的被报出。</summary>
     [Fact]
     public void Unversioned_routes_outside_the_exemptions_are_reported()
     {

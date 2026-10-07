@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 租户在某个连接名下登记的连接配置快照。
-/// </summary>
+/// <summary>租户在某个连接名下登记的连接配置快照。</summary>
 /// <remarks>
 /// <para>连接名对应使用方 DbContext 的 <c>[ConnectionStringName]</c>，一个租户可按服务各登记一条；
 /// 一条都没有即该租户不单独分库，各服务使用自己配置的数据库。</para>

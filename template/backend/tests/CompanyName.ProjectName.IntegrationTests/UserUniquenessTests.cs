@@ -8,9 +8,7 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 用户名、邮箱与角色名的可用性判定必须和数据库实际允许的插入一致。
-/// </summary>
+/// <summary>用户名、邮箱与角色名的可用性判定必须和数据库实际允许的插入一致。</summary>
 /// <remarks>
 /// 三者的唯一索引都没有排除 <c>IsDeleted</c>，被删的用户或角色仍然占着名字和邮箱，
 /// 而仓储默认把软删除行过滤掉。可用性判定不关掉这层过滤就会答"可用"，随后落库撞唯一索引：
@@ -92,9 +90,7 @@ public sealed class UserUniquenessTests(ProjectWebApplicationFactory factory)
         }
     }
 
-    /// <summary>
-    /// 管理员改邮箱与建号、改本人资料同一判定、同一个码：看得见软删除行，按唯一索引的原样比较。
-    /// </summary>
+    /// <summary>管理员改邮箱与建号、改本人资料同一判定、同一个码：看得见软删除行，按唯一索引的原样比较。</summary>
     [Fact]
     public async Task Admin_email_change_reports_the_same_conflict_as_the_other_entries()
     {

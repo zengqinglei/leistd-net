@@ -16,9 +16,7 @@ namespace Leistd.MultiTenancy;
 /// <summary>平台无关的多租户服务注册。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册当前租户上下文和租户解析器。
-    /// </summary>
+    /// <summary>注册当前租户上下文和租户解析器。</summary>
     /// <remarks>
     /// 不注册 <see cref="ITenantStore"/>；宿主必须选择 EF Core 或内存实现。
     /// ASP.NET Core 宿主应使用 Web 集成包的 <c>AddMultiTenancy()</c>。可重复调用，结果与调用一次相同。
@@ -51,9 +49,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 注册远端连接解析：向持有控制库的服务回源租户连接配置，按 <c>Leistd:MultiTenancy:Routing:CacheLifetime</c> 缓存。
-    /// </summary>
+    /// <summary>注册远端连接解析：向持有控制库的服务回源租户连接配置，按 <c>Leistd:MultiTenancy:Routing:CacheLifetime</c> 缓存。</summary>
     /// <param name="services">服务集合。</param>
     /// <param name="configSectionPath"><see cref="TenantRouteCacheOptions"/> 绑定的配置节，校验消息按它报键名。</param>
     /// <remarks>

@@ -4,9 +4,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.Queries;
 
-/// <summary>
-/// 操作记录的查询、筛选项与导出用例：按当前读者裁剪可见范围与字段。
-/// </summary>
+/// <summary>操作记录的查询、筛选项与导出用例：按当前读者裁剪可见范围与字段。</summary>
 /// <remarks>
 /// <para>无租户上下文即宿主读者，看得到全部可见层与仅宿主字段；租户读者看不到
 /// <see cref="OperationVisibility.Host"/> 层，<see cref="OperationVisibility.Actor"/> 层只看本人的。分页与导出共用同一判定。</para>

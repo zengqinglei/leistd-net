@@ -10,9 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 宿主与租户的能力边界，以及宿主进入租户的正途（模拟登录）。
-/// </summary>
+/// <summary>宿主与租户的能力边界，以及宿主进入租户的正途（模拟登录）。</summary>
 /// <remarks>
 /// <para>这两组断言合在一处，因为它们是同一个判据的两面：宿主<b>看不见</b>租户的数据
 /// （全局过滤器按 TenantId 分区），所以要在租户里做事只能<b>进到租户上下文</b>；
@@ -106,9 +104,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     }
 
 #if (OpenIddictServer)
-    /// <summary>
-    /// 开放应用是宿主全局资源，租户管理员一条都碰不到。
-    /// </summary>
+    /// <summary>开放应用是宿主全局资源，租户管理员一条都碰不到。</summary>
     /// <remarks>
     /// OpenIddict 的表没有 TenantId，不是 <c>IMultiTenant</c>，全局租户过滤器对它们不生效——
     /// 因此这里没有"只看到自己那部分"这种中间态：要么全系统可见，要么一律拒绝。
@@ -127,9 +123,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    /// <summary>
-    /// 租户的 Admin 角色不应被播种 <c>App.OpenApplications*</c>。
-    /// </summary>
+    /// <summary>租户的 Admin 角色不应被播种 <c>App.OpenApplications*</c>。</summary>
     /// <remarks>
     /// 播种按 <c>Side.HasFlag(MultiTenancySides.Tenant)</c> 过滤，因此侧别一旦漏标成默认的
     /// <c>Both</c>，这组权限会被授给每一个租户的管理员——而授予记录写进去之后不会自动撤销。
@@ -150,9 +144,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     }
 #endif
 
-    /// <summary>
-    /// 宿主经模拟登录进入租户，再退回自己。
-    /// </summary>
+    /// <summary>宿主经模拟登录进入租户，再退回自己。</summary>
     /// <remarks>
     /// 已认证请求的租户由会话 Cookie 的 claim 定案（解析链首位的
     /// <c>CurrentPrincipalTenantResolveContributor</c> 对任何已认证主体都终止解析，
@@ -206,9 +198,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Unauthorized, (await impersonated.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>
-    /// 一次模拟在宿主与租户两侧各留开始、结束两条，且每条的操作人都是真实的那个人。
-    /// </summary>
+    /// <summary>一次模拟在宿主与租户两侧各留开始、结束两条，且每条的操作人都是真实的那个人。</summary>
     /// <remarks>
     /// <para>两侧各答各的问题：宿主要知道"我们的人进了哪家"，租户要知道"谁以我的名义进来、什么时候走的"。
     /// 只记一侧时，另一侧的操作记录里这件事根本不存在。</para>
@@ -256,9 +246,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
         Assert.DoesNotContain(tenantRecords, r => r.Action.StartsWith("tenant.impersonation", StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// 操作记录的类别与动作同时筛选时取交集。
-    /// </summary>
+    /// <summary>操作记录的类别与动作同时筛选时取交集。</summary>
     /// <remarks>
     /// 放在这里是因为模拟登录的宿主侧记录与"创建租户"同属租户类，正好凑出同一类别下的两个动作。
     /// 取并集时，选了类别再选动作一条都不会少——界面上的动作候选随类别联动，就是在类别之内收窄。
@@ -282,9 +270,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
         Assert.All(both, r => Assert.Equal("tenant.impersonation-started", r.Action));
     }
 
-    /// <summary>
-    /// 租户上下文内不得发起模拟登录。
-    /// </summary>
+    /// <summary>租户上下文内不得发起模拟登录。</summary>
     /// <remarks>
     /// 用例先把这条宿主侧权限<b>强行授予</b>租户内的主体，再断言仍被拒——
     /// 证明侧别检查与"有没有被授予"无关：手工写进库的一条授予记录不会变成越权。

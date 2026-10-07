@@ -30,9 +30,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.Logging;
 
-/// <summary>
-/// 日志输出模式：成功记录只在事务真正提交之后写出，失败记录立即写出。
-/// </summary>
+/// <summary>日志输出模式：成功记录只在事务真正提交之后写出，失败记录立即写出。</summary>
 /// <remarks>
 /// 断言的是调用方能观察到的后果——日志里出现了什么、什么时候出现、带着哪些字段——
 /// 用真实的工作单元、本地事件总线与拦截器织入，而不是替身。
@@ -228,9 +226,7 @@ public sealed class LoggingOperationRecordWriterTests
         Assert.Single(Records(logs));
     }
 
-    /// <summary>
-    /// 记录在调用时冻结：提交之前上下文变了（切回宿主、换了链路），写出的仍是记录当时的事实。
-    /// </summary>
+    /// <summary>记录在调用时冻结：提交之前上下文变了（切回宿主、换了链路），写出的仍是记录当时的事实。</summary>
     [Fact]
     public async Task The_record_is_frozen_when_recorded_not_when_written()
     {
@@ -257,9 +253,7 @@ public sealed class LoggingOperationRecordWriterTests
         Assert.False(string.IsNullOrEmpty(Field(record, "OperationTime")));
     }
 
-    /// <summary>
-    /// 业务提交之后日志写不出去：不能把已提交的业务报成失败，也不能被当作失败再补记一条失败记录。
-    /// </summary>
+    /// <summary>业务提交之后日志写不出去：不能把已提交的业务报成失败，也不能被当作失败再补记一条失败记录。</summary>
     [Fact]
     public async Task A_delivery_failure_after_commit_does_not_fail_the_unit_of_work()
     {

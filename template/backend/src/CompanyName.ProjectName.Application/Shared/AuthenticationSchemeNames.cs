@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.Shared;
 
-/// <summary>
-/// 认证方案名
-/// </summary>
+/// <summary>认证方案名。</summary>
 /// <remarks>
 /// <para>方案名同时被三处使用：Api 的认证组装与授权策略、Controller 的
 /// <c>SignInAsync</c> / <c>SignOutAsync</c>、以及应用层构造会话主体时的

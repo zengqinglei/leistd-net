@@ -1,8 +1,6 @@
 namespace Leistd.Settings.Definitions;
 
-/// <summary>
-/// 设置值的类型。
-/// </summary>
+/// <summary>设置值的类型。</summary>
 /// <remarks>设置值一律以字符串存储，类型只决定写入时接受哪些写法。</remarks>
 public enum SettingValueType
 {

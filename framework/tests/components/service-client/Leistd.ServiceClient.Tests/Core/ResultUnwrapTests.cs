@@ -78,9 +78,7 @@ public class ResultUnwrapTests
         Assert.Equal(("name", "必填", "Required"), (error.Field, error.Detail, error.Code));
     }
 
-    /// <summary>
-    /// 官方 <c>HttpValidationProblemDetails</c> 的字典形 <c>errors</c>：每条消息各成一项，字段名与全部消息都保留。
-    /// </summary>
+    /// <summary>官方 <c>HttpValidationProblemDetails</c> 的字典形 <c>errors</c>：每条消息各成一项，字段名与全部消息都保留。</summary>
     [Fact]
     public async Task Dictionary_shaped_errors_keep_every_message_per_field()
     {

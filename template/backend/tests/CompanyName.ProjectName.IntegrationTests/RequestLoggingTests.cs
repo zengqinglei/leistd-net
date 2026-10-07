@@ -7,9 +7,7 @@ using Serilog.Events;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 请求完成日志走宿主的日志管道：与业务日志同一份配置里的格式、sink 与 enrich。
-/// </summary>
+/// <summary>请求完成日志走宿主的日志管道：与业务日志同一份配置里的格式、sink 与 enrich。</summary>
 /// <remarks>
 /// 宿主 logger 由容器独立持有、不替换静态 logger。请求日志中间件没有显式拿到宿主 logger 时，
 /// 会写进启动期那个只输出纯文本的静态 logger——不报错，只是这一类事件不再结构化、也不带 enrich 的字段。

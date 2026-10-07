@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Roles.Dtos;
 
-/// <summary>
-/// 更新角色输入 DTO。角色名称是稳定业务标识，创建后不可修改。
-/// </summary>
+/// <summary>更新角色输入 DTO。角色名称是稳定业务标识，创建后不可修改。</summary>
 public record UpdateRoleInputDto
 {
     [Display(Name = "Display name")]

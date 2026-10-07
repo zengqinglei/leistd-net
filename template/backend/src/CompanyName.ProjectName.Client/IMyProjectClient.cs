@@ -9,9 +9,7 @@ namespace CompanyName.ProjectName.Client;
 /// </summary>
 public interface IMyProjectClient
 {
-    /// <summary>
-    /// 获取服务基础信息（匿名端点，可用于探活与联调）。
-    /// </summary>
+    /// <summary>获取服务基础信息（匿名端点，可用于探活与联调）。</summary>
     /// <param name="cancellationToken">取消令牌</param>
     [Get("/api/v1/service-info")]
     Task<ServiceInfoDto> GetServiceInfoAsync(CancellationToken cancellationToken = default);

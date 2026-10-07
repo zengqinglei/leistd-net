@@ -16,9 +16,7 @@ using Xunit;
 
 namespace Leistd.BackgroundJobs.Tests;
 
-/// <summary>
-/// 进程内队列：有界背压、入队时的上下文在执行时还原、单项失败不影响后续工作项。
-/// </summary>
+/// <summary>进程内队列：有界背压、入队时的上下文在执行时还原、单项失败不影响后续工作项。</summary>
 public sealed class BackgroundTaskQueueTests
 {
     private static ServiceProvider Build(
@@ -64,9 +62,7 @@ public sealed class BackgroundTaskQueueTests
         Assert.False(queue.TryQueue((_, _) => ValueTask.CompletedTask));
     }
 
-    /// <summary>
-    /// 入队时捕获的上下文在执行时还原：后台任务读到的是入队请求的主体、租户与链路标识
-    /// </summary>
+    /// <summary>入队时捕获的上下文在执行时还原：后台任务读到的是入队请求的主体、租户与链路标识。</summary>
     /// <remarks>执行流是消费者自己的，不做还原的话任务在空上下文里运行，写下的数据归属与审计操作人都会丢失。</remarks>
     [Fact]
     public async Task The_context_captured_at_enqueue_is_restored_while_the_item_runs()
@@ -109,9 +105,7 @@ public sealed class BackgroundTaskQueueTests
         Assert.True(ran);
     }
 
-    /// <summary>
-    /// 工作项接上入队时的链路：没有监听者（未接 OpenTelemetry）时也要接上，日志里的 TraceId 才能与请求串起来。
-    /// </summary>
+    /// <summary>工作项接上入队时的链路：没有监听者（未接 OpenTelemetry）时也要接上，日志里的 TraceId 才能与请求串起来。</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -159,9 +153,7 @@ public sealed class BackgroundTaskQueueTests
         Assert.Contains(request.TraceId, logged);
     }
 
-    /// <summary>
-    /// 入队时没有链路就开新的根链路，不继承消费循环里残留的上下文；两项互不串链路，执行完还原消费者原来的 Activity。
-    /// </summary>
+    /// <summary>入队时没有链路就开新的根链路，不继承消费循环里残留的上下文；两项互不串链路，执行完还原消费者原来的 Activity。</summary>
     [Fact]
     public async Task Items_without_a_parent_start_their_own_root_trace()
     {

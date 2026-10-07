@@ -9,9 +9,7 @@ namespace Leistd.Notifications.Settings;
 /// <summary>通知偏好的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 用收件人的用户级设置决定每类通知经每个渠道是否投递，替换默认的"一律投递"。
-    /// </summary>
+    /// <summary>用收件人的用户级设置决定每类通知经每个渠道是否投递，替换默认的"一律投递"。</summary>
     /// <remarks>
     /// <para>偏好设置由宿主定义：为需要可关闭的组合定义用户级布尔设置，名为 <c>{前缀}.{通知类型}.{渠道名}</c>；
     /// 没有定义的组合一律投递。必达组合经 <see cref="NotificationPreferenceOptions.MandatoryDeliveries"/> 给出。</para>

@@ -5,9 +5,7 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 
 namespace CompanyName.ProjectName.Application.Users.Avatars;
 
-/// <summary>
-/// 头像对外的地址。
-/// </summary>
+/// <summary>头像对外的地址。</summary>
 /// <remarks>
 /// <para>上传的图片不内联进 DTO：内联的话 <c>/auth/me</c> 与每一行用户列表都要背一整张图。
 /// 对外只给 <c>/api/v1/users/{id}/avatar?v=…</c>，版本号取自内容摘要——换了头像地址就变，
@@ -34,9 +32,7 @@ public static class AvatarUrls
         return $"/api/v1/users/{userId}/avatar?v={digest[..12].ToLowerInvariant()}";
     }
 
-    /// <summary>
-    /// 客户端提交的头像值：原样送回的对外地址表示"不变"，换回存储的原值；其余照收（仍须另行校验）。
-    /// </summary>
+    /// <summary>客户端提交的头像值：原样送回的对外地址表示"不变"，换回存储的原值；其余照收（仍须另行校验）。</summary>
     public static string? ResolveSubmitted(User user, string? submitted)
     {
         var trimmed = submitted?.Trim();

@@ -9,9 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.UnitTests.Application;
 
-/// <summary>
-/// 映射配置里的嵌套映射必须沿用本项目登记的那份配置。
-/// </summary>
+/// <summary>映射配置里的嵌套映射必须沿用本项目登记的那份配置。</summary>
 /// <remarks>
 /// 在配置里写无参 <c>Adapt&lt;T&gt;()</c> 用的是 Mapster 的全局配置，本项目给 <c>Role → RoleBriefOutputDto</c>
 /// 登记的规则在那里不存在，嵌套处静默按约定映射。这里给角色映射加一条非默认规则，看它是否出现在用户的角色列表里。

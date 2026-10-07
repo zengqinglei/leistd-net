@@ -7,9 +7,7 @@ namespace Leistd.Localization;
 /// <summary>组件登记自带默认译文的入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 把程序集里嵌入的 <c>Resources/{culture}.json</c> 登记为 JSON 本地化资源，供该组件发出的错误码取默认文案。
-    /// </summary>
+    /// <summary>把程序集里嵌入的 <c>Resources/{culture}.json</c> 登记为 JSON 本地化资源，供该组件发出的错误码取默认文案。</summary>
     /// <remarks>
     /// <para>发出错误码的组件在自己的 <c>Add*</c> 里调用一次，宿主不必知道组件有哪些词条。
     /// 未注册 JSON 本地化时登记无副作用：错误响应退回异常自带的英文诊断。</para>

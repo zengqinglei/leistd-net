@@ -1,8 +1,6 @@
 namespace Leistd.Notifications.EntityFrameworkCore.Options;
 
-/// <summary>
-/// 通知保留期。配置节 <c>Leistd:Notifications:Retention</c>。
-/// </summary>
+/// <summary>通知保留期。配置节 <c>Leistd:Notifications:Retention</c>。</summary>
 /// <remarks>默认开启；已读与未读分开计时，未读保留更久。</remarks>
 public sealed class NotificationRetentionOptions
 {

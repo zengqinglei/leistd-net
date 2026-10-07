@@ -11,9 +11,7 @@ using Microsoft.Extensions.Localization;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 权限目录的后端约定：每个权限与分组都有可读的默认显示名，常规动作措辞统一，词条与默认文案一致。
-/// </summary>
+/// <summary>权限目录的后端约定：每个权限与分组都有可读的默认显示名，常规动作措辞统一，词条与默认文案一致。</summary>
 /// <remarks>
 /// 权限是授权定义，与前端菜单各自独立演进：菜单引用哪些权限、如何分组，由前端自己的测试约束，这里不读前端源码。
 /// </remarks>

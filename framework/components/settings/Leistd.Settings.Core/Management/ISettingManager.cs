@@ -3,9 +3,7 @@ using Leistd.Settings.Stores;
 
 namespace Leistd.Settings.Management;
 
-/// <summary>
-/// 设置值的写入入口，写前对照定义校验。
-/// </summary>
+/// <summary>设置值的写入入口，写前对照定义校验。</summary>
 /// <remarks>业务写入经本接口而不是直接调用 <see cref="ISettingStore"/>：未定义的名称与定义不允许的层级在写入时拒绝。</remarks>
 public interface ISettingManager
 {

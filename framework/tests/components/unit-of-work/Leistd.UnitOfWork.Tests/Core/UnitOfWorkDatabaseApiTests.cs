@@ -31,9 +31,7 @@ public class UnitOfWorkDatabaseApiTests
         Assert.Equal(1, secondTransaction.CommitCount);
     }
 
-    /// <summary>
-    /// 手动冲刷把变更推到每个数据库 API，但<b>不</b>提交事务。
-    /// </summary>
+    /// <summary>手动冲刷把变更推到每个数据库 API，但<b>不</b>提交事务。</summary>
     /// <remarks>
     /// 这是自增主键、计算列、换发后的并发标记等"必须先落库才能取值"场景的唯一手段。
     /// 断言的关键是提交次数仍为 0——冲刷不等于提交，原子性不因它削弱。
@@ -139,9 +137,7 @@ public class UnitOfWorkDatabaseApiTests
         Assert.Throws<InvalidOperationException>(() => unitOfWork.AddTransactionApi("first", secondTransaction));
     }
 
-    /// <summary>
-    /// 前一个事务已提交、后一个失败时，异常消息必须点明已提交与失败的 key。
-    /// </summary>
+    /// <summary>前一个事务已提交、后一个失败时，异常消息必须点明已提交与失败的 key。</summary>
     /// <remarks>
     /// 已提交的事务无法回滚，运维需要知道该核对哪一部分。不为它单列异常类型——
     /// 与普通提交失败的处置方式相同（都是 500、都需要人工核对），信息全部由消息承载；
@@ -165,9 +161,7 @@ public class UnitOfWorkDatabaseApiTests
         Assert.IsType<InvalidOperationException>(error.InnerException);
     }
 
-    /// <summary>
-    /// 第一个事务就失败时不是部分提交——什么都没提交，回滚足以收场，原异常原样上抛。
-    /// </summary>
+    /// <summary>第一个事务就失败时不是部分提交——什么都没提交，回滚足以收场，原异常原样上抛。</summary>
     [Fact]
     public async Task Failure_on_the_first_commit_is_not_reported_as_a_partial_commit()
     {

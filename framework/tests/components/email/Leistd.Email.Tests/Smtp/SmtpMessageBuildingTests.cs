@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Email.Tests.Smtp;
 
-/// <summary>
-/// MimeMessage 的构造结果。
-/// </summary>
+/// <summary>MimeMessage 的构造结果。</summary>
 /// <remarks>
 /// 这一批全是"错了不报错、只让收件人拿到错东西"：从错误身份发出、收到裸 HTML 源码。
 /// 断言构造结果而不是连真实服务器——真实 SMTP 能多证明的是连接与认证，那两者失败都以异常收场。

@@ -7,9 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
 
-/// <summary>
-/// 带服务端密钥的 HMAC-SHA256 验证码摘要
-/// </summary>
+/// <summary>带服务端密钥的 HMAC-SHA256 验证码摘要。</summary>
 /// <remarks>
 /// 确定性、开销恒定、可直接比对。密钥来自 <see cref="VerificationCodeOptions"/>，
 /// 其可用性由启动期校验保证——跨实例跨重启稳定是正确性要求，不是优化。
@@ -17,9 +15,7 @@ namespace CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCod
 internal sealed class HmacVerificationCodeDigest(IOptions<VerificationCodeOptions> options)
     : IVerificationCodeDigest
 {
-    /// <summary>
-    /// 密钥在首次真正使用时才校验，不在构造函数里
-    /// </summary>
+    /// <summary>密钥在首次真正使用时才校验，不在构造函数里。</summary>
     /// <remarks>
     /// 认证应用服务依赖邮箱验证服务，后者依赖本类型——构造期抛异常会让登录也一起失败，
     /// 而登录与验证码无关。邮箱验证默认关闭，那种部署根本不需要这把密钥；

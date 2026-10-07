@@ -1,97 +1,70 @@
 # 核心原语：时钟与脱敏
 
-`Leistd.Core` 是最底层的基础包，只放跨组件复用的原语：`IClock` 让「现在」可注入可测试，`TextRedactor` 把敏感值换成可安全输出的形态（写日志与对外展示共用）。
+`Leistd.Core` 提供可注入的 UTC 时钟和文本脱敏，供各组件复用。
 
 ## 何时使用
 
 | 场景 | 用法 |
 | --- | --- |
-| 需要获取当前时间且希望单元测试可控（mock 时间） | 注入 `IClock`，不要直接用 `DateTime.UtcNow` |
-| 按"自然日"做统计，需消除时区漂移 | `IClock` + `ClockExtensions.GetMidnightInUtc(timeZone)`（时区显式传入） |
-| 标准化外部传入的 `DateTime`（统一为 UTC） | `IClock.Normalize(dateTime)` |
-| 要把邮箱写进日志或展示给非本人 | `TextRedactor.RedactEmail(address)` → `al***@example.com` |
-| 要把手机号、卡号、证件号这类值脱敏 | `TextRedactor.RedactPartially(value, keepStart, keepEnd)` → `158***90`；位数由业务定 |
-
-> `Leistd.Core` 是被依赖项，通常无需直接添加——你引用的上层组件（异常处理、DDD 等）已传递引用它。
+| 可控制当前时间、测试时间边界 | 注入 `IClock` |
+| 按业务时区统计自然日 | `GetMidnightInUtc(timeZone)` |
+| 归一化外部时间 | `IClock.Normalize(dateTime)` |
+| 脱敏邮箱 | `TextRedactor.RedactEmail(address)` |
+| 脱敏手机号、卡号或证件号 | `TextRedactor.RedactPartially(value, keepStart, keepEnd)` |
 
 ## 安装
 
+上层组件已传递引用时无需单独安装：
+
 ```bash
-# 核心原语（基础包，通常由上层组件传递引用，一般无需单独添加）
 dotnet add package Leistd.Core
 ```
 
 ## 注册
 
-`Leistd.Core` 自身不提供 DI 扩展方法。`IClock` 的默认实现 `UtcClockProvider` 由 DDD 基础设施包（`Leistd.Ddd.Infrastructure`）注册：
+本包不注册服务。DDD 基础设施已注册默认时钟；单独使用时手动注册：
 
 ```csharp
-// 在基础设施层注册（已由 Leistd.Ddd.Infrastructure 完成）
+using Leistd.Timing;
+using Microsoft.Extensions.DependencyInjection;
+
 services.AddSingleton<IClock, UtcClockProvider>();
 ```
 
-若你的项目未引用 DDD 分组而需要单独使用 `IClock`，按上面这行手动注册即可。
-
 ## 使用
 
-注入 `IClock` 获取当前时间，避免直接依赖系统时钟，从而让逻辑可测试：
-
 ```csharp
+using Leistd.Timing;
+
 public class DailyReportService(IClock clock)
 {
-    public DateTime NowUtc() => clock.Now; // 默认实现始终返回 UTC
-
-    // 统计"今天"的数据：用本地自然日零点的 UTC 锚点做范围下界，避免时区漂移
-    public (DateTime from, DateTime to) TodayRangeUtc(TimeZoneInfo tenantTimeZone)
-    {
-        // 时区必须显式给出：它是业务输入（租户设置/用户偏好），不是宿主的环境属性
-        var from = clock.GetMidnightInUtc(tenantTimeZone);   // 该时区今日 00:00 对应的 UTC 时刻
-        return (from, clock.Now);
-    }
-
-    // 标准化外部传入时间：Unspecified 视为 UTC，Local 转 UTC
-    public DateTime NormalizeInput(DateTime input) => clock.Normalize(input);
+    public (DateTime from, DateTime to) TodayRangeUtc(TimeZoneInfo businessTimeZone)
+        => (clock.GetMidnightInUtc(businessTimeZone), clock.Now);
 }
 ```
 
+时区显式来自业务配置；例如当前 UTC 为 `2026-05-27T20:00:00Z`，`Asia/Shanghai` 的当天零点对应 `2026-05-27T16:00:00Z`。
+
 ## 接口参考
 
-时钟成员位于 `Leistd.Timing` 命名空间，`TextRedactor` 位于 `Leistd.Redaction` 命名空间：
+时钟位于 `Leistd.Timing`，脱敏位于 `Leistd.Redaction`。
 
-| 成员 | 说明 |
+| 成员 | 契约 |
 | --- | --- |
-| `IClock` | 时钟抽象接口，统一时间获取入口，便于测试 mock 与时区策略统一 |
-| `IClock.Now` | 当前时间（`DateTime`）；默认实现返回 UTC |
-| `IClock.Normalize(dateTime)` | 归一化为 UTC：`Unspecified` 视为 UTC，`Local` 转 UTC，`Utc` 原样返回 |
-| `UtcClockProvider : IClock` | 默认实现，取值委托给 `TimeProvider`（默认 `TimeProvider.System`） |
-| `ClockExtensions.GetMidnightInUtc(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**今日零点对应的 UTC 时刻，按天统计的基准锚点 |
-| `ClockExtensions.GetUtcOffsetHours(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**当前相对 UTC 的偏移小时数（`double`，已计入夏令时） |
-| `TextRedactor.RedactEmail(address)` | 保本地部开头几位 + 完整域名；拿不到域名时不回落原文 |
-| `TextRedactor.RedactPartially(value, keepStart, keepEnd)` | 保两端各若干位，中间 `***`；短到留不住两端时整体掩掉 |
-
-## 实现行为
-
-### Leistd.Core（UtcClockProvider）
-
-- `Now` 取自注入的 `TimeProvider`（默认 `TimeProvider.System`），固定为 UTC。
-- 不提供本地时间开关；持久化和服务间传递使用 UTC，按用户时区展示由呈现层处理。
-- 测试可注入 `FakeTimeProvider`；未注册 `TimeProvider` 时等同使用 `TimeProvider.System`。
-- `Normalize` 的规则：`Unspecified` 假定为 UTC（`SpecifyKind`）；`Local` 调用 `ToUniversalTime()` 转 UTC；`Utc` 原样返回。
-- `GetMidnightInUtc(timeZone)` 返回传入时区今日零点对应的 UTC 时刻。例如时区为 `Asia/Shanghai`、当前 UTC 为 `2026-05-27T20:00:00Z` 时（该时区已是 05-28），返回 `2026-05-27T16:00:00Z`。
-- 该实现无状态，以 Singleton 注册即可。
-
-- `TextRedactor` 只提供形态：邮箱用 `RedactEmail`，手机号、证件号、卡号等用 `RedactPartially` 传业务自己的保留位数。
-  要不要脱敏、对谁脱敏由调用方决定，写日志与对外展示都可用。
-- 邮箱本地部从第一个字母或数字起最多留 3 位，且不超过本地部的一半；域名完整保留。
-  效果：`zhangsan@` → `zha***@`，`alice@` → `al***@`，`bob@` → `b***@`，`a@` → `***@`。
-- 掩码固定三个星号，不按原值长度补齐。
-- 脱敏形态写在调用点，不能按部署切换。需要集中管控日志脱敏策略时用官方 `Microsoft.Extensions.Compliance.Redaction`（只作用于日志管道，展示侧仍用本类）。
+| `IClock.Now` | 当前 UTC 时间 |
+| `IClock.Normalize(dateTime)` | `Unspecified` 视为 UTC，`Local` 转 UTC，`Utc` 原样返回 |
+| `UtcClockProvider` | 无状态；使用注入的 `TimeProvider`，默认 `TimeProvider.System`；测试可用 `FakeTimeProvider` |
+| `GetMidnightInUtc(timeZone)` | 指定时区今日零点对应的 UTC 时刻 |
+| `GetUtcOffsetHours(timeZone)` | 指定时区当前相对 UTC 的小时偏移，含夏令时 |
+| `TextRedactor.RedactEmail(address)` | 本地部从首个字母或数字起最多保留 3 位，且不超过本地部的一半；域名完整保留，无法取得域名时不回显原文 |
+| `TextRedactor.RedactPartially(value, keepStart, keepEnd)` | 保留两端指定字符数；不足以保留两端时整体掩码 |
 
 ## 注意事项
 
-- 默认实现始终基于 UTC。日边界扩展必须显式传入业务时区，不能用宿主的 `TimeZoneInfo.Local` 代替租户或用户时区。
-- `Leistd.Core` 本身不注册任何服务；脱离 DDD 分组单独使用 `IClock` 时手动 `AddSingleton<IClock, UtcClockProvider>()`。
-- 底层 Core 不定义框架通用异常基类。优先使用 .NET 内置异常；可预期业务失败使用[异常处理](./exception-handling.md)组件的 `BusinessException`。
+- 持久化与跨服务传递用 UTC，按用户时区展示由呈现层转换；不能用宿主 `TimeZoneInfo.Local` 代替业务时区。
+- 掩码固定为三个星号，不反映原值长度；邮箱示例：`alice@` → `al***@`、`bob@` → `b***@`、`a@` → `***@`。
+- 调用方决定是否脱敏及保留位数，写日志与对外展示共用同一形态，不按部署环境切换。集中日志脱敏策略可用 `Microsoft.Extensions.Compliance.Redaction`，展示仍由本类处理。
+- Core 不定义通用异常基类；优先使用 .NET 内置异常，可预期业务失败使用 `BusinessException`。
 
 ## 相关
 

@@ -26,9 +26,7 @@ using FileSystemDirectory = System.IO.Directory;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 部署安全：开发环境以外，只在单机上成立的回落必须缺配即失败，而不是带着隐患照常启动。
-/// </summary>
+/// <summary>部署安全：开发环境以外，只在单机上成立的回落必须缺配即失败，而不是带着隐患照常启动。</summary>
 /// <remarks>
 /// 测试宿主跑在 Testing 环境（非开发环境），与预发、生产走同一条校验路径。
 /// 每条用例只撤掉一项配置，断言启动失败且错误指明缺的是哪个键。

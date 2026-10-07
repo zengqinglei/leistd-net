@@ -13,9 +13,7 @@ using Serilog.Events;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 设置接口的层级与值域契约。
-/// </summary>
+/// <summary>设置接口的层级与值域契约。</summary>
 /// <remarks>
 /// 重点在<b>进程级设置</b>（<c>SettingScopes.Host</c>）：日志级别这类东西一个进程只有一份，
 /// 按租户各存一份根本无从生效。这里钉住三件事——租户上下文既看不到也改不了它、
@@ -35,9 +33,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         }
     }
 
-    /// <summary>
-    /// 另起一个宿主，只改几个配置键；数据库与基础工厂共用。
-    /// </summary>
+    /// <summary>另起一个宿主，只改几个配置键；数据库与基础工厂共用。</summary>
     /// <remarks>
     /// 每个字典各成一个配置源，<b>越靠后优先级越高</b>——配置合并的优先级只有多个源才测得出来。
     /// </remarks>
@@ -57,9 +53,8 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
 
     /// <summary>宿主此刻真正生效的全局最小级别。</summary>
     /// <remarks>
-    /// 问的是本宿主容器里那个 Serilog logger 实例：最小级别由 Serilog 从配置读、并随配置重载更新，
-    /// 本轮要钉的就是"设置覆盖后真的生效、清除后回到部署基线"。只断言接口下发的
-    /// <c>defaultValue</c> 不够：那只证明界面显示对了，证明不了 logger 真的按这个级别打。
+    /// 读取宿主容器的 Serilog logger，验证设置覆盖与清除真正改变日志级别；
+    /// 接口的 <c>defaultValue</c> 只能证明展示值，不能证明运行时生效。
     /// <para>
     /// 刻意不走静态的 <c>Log.Logger</c> 或 <c>ILoggerFactory</c>：别的测试类的宿主释放时会把静态 logger 关掉，
     /// 那种断言在单独跑这一个类时是绿的、全量跑就红。容器里的实例是本宿主自己的，级别判定不受此影响。
@@ -91,9 +86,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     private static Task<HttpResponseMessage> WriteAsync(HttpClient client, string name, string? value)
         => client.PutAsJsonAsync("/api/v1/settings/current-tenant", new { Name = name, Value = value });
 
-    /// <summary>
-    /// 日志级别的默认值来自部署基线，清除覆盖值即回落到它。
-    /// </summary>
+    /// <summary>日志级别的默认值来自部署基线，清除覆盖值即回落到它。</summary>
     /// <remarks>
     /// 分工是"部署配置给基线、设置表给运行期覆盖"。若把默认值写死成 Information，
     /// 部署把 <c>Serilog:MinimumLevel:Default</c> 配成 Warning 也会被顶掉，
@@ -175,9 +168,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         Assert.Equal("Error", level.GetProperty("defaultValue").GetString());
     }
 
-    /// <summary>
-    /// 两种写法并存时按<b>配置源优先级</b>裁决，而不是固定优先某一种。
-    /// </summary>
+    /// <summary>两种写法并存时按<b>配置源优先级</b>裁决，而不是固定优先某一种。</summary>
     /// <remarks>
     /// 这是最常见的真实形态：模板 <c>appsettings.json</c> 里已有对象写法，部署再用环境变量
     /// 给出标量写法。固定优先对象写法，就会让文件里的级别顶掉环境变量里的——而 Serilog 自己
@@ -231,9 +222,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     }
 
 #if (Email)
-    /// <summary>
-    /// 缺少摘要密钥的部署不允许开启邮箱验证。
-    /// </summary>
+    /// <summary>缺少摘要密钥的部署不允许开启邮箱验证。</summary>
     /// <remarks>
     /// 启动校验只看配置里的那个布尔值，所以默认部署（关闭邮箱验证、未配密钥）启动是正常的。
     /// 管理员随后在设置页打开时，若写入端只校验布尔值就放行，直到真的发码时才在摘要计算处
@@ -299,9 +288,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 布尔型设置由服务端标注，界面据此渲染开关；写入同样按这份清单把关。
-    /// </summary>
+    /// <summary>布尔型设置由服务端标注，界面据此渲染开关；写入同样按这份清单把关。</summary>
     /// <remarks>界面各记一份清单时，漏登记的布尔设置会渲染成要手打 true 的文本框。</remarks>
     [Fact]
     public async Task Boolean_settings_are_flagged_and_accept_only_true_or_false()
@@ -364,9 +351,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     }
 #if (IncludeMultiTenancy)
 
-    /// <summary>
-    /// 进程级设置在租户上下文下既不下发也不可写。
-    /// </summary>
+    /// <summary>进程级设置在租户上下文下既不下发也不可写。</summary>
     /// <remarks>
     /// 下发的话租户管理员会看到一个改不动的项；能写的话那条租户行永远不会被任何 logger 读到，
     /// 界面却把它显示成已生效。两条都要拦。

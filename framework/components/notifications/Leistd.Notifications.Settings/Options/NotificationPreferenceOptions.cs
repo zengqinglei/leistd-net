@@ -1,8 +1,6 @@
 namespace Leistd.Notifications.Settings.Options;
 
-/// <summary>
-/// 通知偏好：按 <c>{前缀}.{通知类型}.{渠道名}</c> 的用户级布尔设置决定是否投递。
-/// </summary>
+/// <summary>通知偏好：按 <c>{前缀}.{通知类型}.{渠道名}</c> 的用户级布尔设置决定是否投递。</summary>
 public sealed class NotificationPreferenceOptions
 {
     /// <summary>默认的设置名前缀。</summary>

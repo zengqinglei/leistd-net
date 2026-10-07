@@ -1,8 +1,6 @@
 namespace Leistd.Authorization.Subjects;
 
-/// <summary>
-/// 按授予对象查找主体：确认它存在，并给出显示名。由宿主按自己的用户、角色模型实现。
-/// </summary>
+/// <summary>按授予对象查找主体：确认它存在，并给出显示名。由宿主按自己的用户、角色模型实现。</summary>
 /// <remarks>管理用例据此拒绝不存在的主体，并为审计事件提供显示名。</remarks>
 /// <example>
 /// <code>

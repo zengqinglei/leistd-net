@@ -31,9 +31,7 @@ using Leistd.Timing;
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
 
-/// <summary>
-/// 角色应用服务
-/// </summary>
+/// <summary>角色应用服务。</summary>
 public class RoleAppService(
     IRepository<Role, Guid> roleRepository,
     RoleDomainService roleDomainService,
@@ -73,9 +71,7 @@ public class RoleAppService(
         return new PagedResult<RoleOutputDto>(totalCount, result);
     }
 
-    /// <summary>
-    /// 角色列表的可排序字段
-    /// </summary>
+    /// <summary>角色列表的可排序字段。</summary>
     /// <remarks>
     /// <para>不给"未传 sorting"单开一条分支：<see cref="SortingRequest.Parse"/> 已经把缺省字段
     /// 定为 <c>sort</c>，于是省略排序与显式 <c>sort asc</c> 走的是同一段代码、结果必然一致。
@@ -258,9 +254,7 @@ public class RoleAppService(
         return objectMapper.Map<List<Role>, List<RoleOutputDto>>(roles, context);
     }
 
-    /// <summary>
-    /// 一次性取回本批角色的用户数与授予数：两者都走批量查询，往返次数与角色数量无关。
-    /// </summary>
+    /// <summary>一次性取回本批角色的用户数与授予数：两者都走批量查询，往返次数与角色数量无关。</summary>
     private async Task<Dictionary<string, object>> CreateMappingContextAsync(
         IReadOnlyCollection<Role> roles,
         CancellationToken cancellationToken)
@@ -295,9 +289,7 @@ public class RoleAppService(
     private async Task<IQueryable<UserRole>> AssignmentsOfExistingUsersAsync(CancellationToken cancellationToken)
         => (await userRepository.GetQueryableAsync(cancellationToken)).SelectMany(u => u.Roles);
 
-    /// <summary>
-    /// 剩下的成员关系都属于已删除的用户，随角色一并撤销，不留指向已删角色的成员关系。
-    /// </summary>
+    /// <summary>剩下的成员关系都属于已删除的用户，随角色一并撤销，不留指向已删角色的成员关系。</summary>
     /// <remarks>
     /// 必须在删除角色之后加载：成员关系在角色删除前就被跟踪时，限制删除的外键会让 EF 当场报错。
     /// </remarks>

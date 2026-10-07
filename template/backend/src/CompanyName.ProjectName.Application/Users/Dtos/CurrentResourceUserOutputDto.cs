@@ -1,9 +1,7 @@
 #if (RemoteTokenAuth)
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
-/// <summary>
-/// 资源服务的当前主体：身份资料取自签发方令牌，超管标记与角色取本服务的授权数据。
-/// </summary>
+/// <summary>资源服务的当前主体：身份资料取自签发方令牌，超管标记与角色取本服务的授权数据。</summary>
 public sealed record CurrentResourceUserOutputDto
 {
     /// <summary>用户 Id（令牌的主体标识）；非用户主体为 null。</summary>

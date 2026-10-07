@@ -2,9 +2,7 @@ using CompanyName.ProjectName.Application.Roles.Dtos;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
-/// <summary>
-/// 用户管理输出 DTO
-/// </summary>
+/// <summary>用户管理输出 DTO。</summary>
 public record UserManagementOutputDto
 {
     public required Guid Id { get; init; }
@@ -16,9 +14,7 @@ public record UserManagementOutputDto
 #if (LocalIdentity)
     public bool IsEmailVerified { get; init; }
 #endif
-    /// <summary>
-    /// 已分配角色。携带 Id 供提交使用，Name 与 DisplayName 只用于展示。
-    /// </summary>
+    /// <summary>已分配角色。携带 Id 供提交使用，Name 与 DisplayName 只用于展示。</summary>
     public required IReadOnlyList<RoleBriefOutputDto> Roles { get; init; }
     public bool IsSuperAdmin { get; init; }
     public DateTime CreationTime { get; init; }

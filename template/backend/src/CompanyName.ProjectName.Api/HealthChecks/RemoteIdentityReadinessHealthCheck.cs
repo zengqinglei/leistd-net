@@ -3,9 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace CompanyName.ProjectName.Api.HealthChecks;
 
-/// <summary>
-/// 资源服务的 readiness：确认远端 Identity 可达之后才接流量。
-/// </summary>
+/// <summary>资源服务的 readiness：确认远端 Identity 可达之后才接流量。</summary>
 /// <remarks>
 /// <para>资源服务只有取得远端 OIDC 元数据与签名密钥后才可接收流量；启动期确认由
 /// <c>RemoteIdentityReadinessInitializer</c> 完成后调用 <see cref="MarkReady"/>。</para>

@@ -18,18 +18,14 @@ public interface ISettingDefinition
     /// <summary>允许覆盖该设置的层级。</summary>
     SettingScopes Scopes { get; }
 
-    /// <summary>
-    /// 所属分组的稳定标识；<see langword="null"/> 表示未分组。
-    /// </summary>
+    /// <summary>所属分组的稳定标识；<see langword="null"/> 表示未分组。</summary>
     /// <remarks>只承载分组标识，展示文案由宿主按标识查词条表。</remarks>
     string? Group { get; set; }
 
     /// <summary>是否允许下发到客户端，默认 <see langword="false"/>。</summary>
     bool IsVisibleToClients { get; set; }
 
-    /// <summary>
-    /// 是否为机密设置：值落库前加密，读取时解密。
-    /// </summary>
+    /// <summary>是否为机密设置：值落库前加密，读取时解密。</summary>
     /// <remarks>
     /// <para>用于口令、令牌一类的值。加解密用宿主的 Data Protection（<c>IDataProtectionProvider</c>）；
     /// 宿主没注册时，读写机密设置会失败，不会存成明文。</para>
@@ -49,9 +45,7 @@ public interface ISettingDefinition
     /// <summary>整数设置的上界（含）；<see langword="null"/> 表示不限。</summary>
     int? Maximum { get; set; }
 
-    /// <summary>
-    /// 允许的取值（按序号比较）；<see langword="null"/> 表示不限。
-    /// </summary>
+    /// <summary>允许的取值（按序号比较）；<see langword="null"/> 表示不限。</summary>
     /// <remarks>写入端据此拒绝候选之外的值，界面据此渲染下拉框。</remarks>
     IReadOnlyList<string>? AllowedValues { get; set; }
 }

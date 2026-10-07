@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.Roles.Dtos;
 
-/// <summary>
-/// 角色输出 DTO
-/// </summary>
+/// <summary>角色输出 DTO。</summary>
 public record RoleOutputDto
 {
     public required Guid Id { get; init; }

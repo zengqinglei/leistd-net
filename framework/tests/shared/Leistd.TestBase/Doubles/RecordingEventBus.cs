@@ -3,9 +3,7 @@ using Leistd.EventBus.Events;
 
 namespace Leistd.TestBase.Doubles;
 
-/// <summary>
-/// 只记录、不分发的本地事件总线，用于断言被测代码发布了哪些事件。
-/// </summary>
+/// <summary>只记录、不分发的本地事件总线，用于断言被测代码发布了哪些事件。</summary>
 public sealed class RecordingEventBus : ILocalEventBus
 {
     /// <summary>按发布顺序记录的事件。</summary>

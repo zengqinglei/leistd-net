@@ -3,9 +3,7 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 表示宿主侧的持久化租户记录。
-/// </summary>
+/// <summary>表示宿主侧的持久化租户记录。</summary>
 /// <remarks>
 /// 写入请统一通过 <see cref="ITenantManager"/>：它负责名称归一化与未删除行内的唯一性校验。
 /// 直接写库不会留下陈旧读取（存储直接读库），但会绕开这两项校验。
@@ -30,9 +28,7 @@ public class TenantRecord : IFullAuditedObject
     /// <summary>租户是否启用。</summary>
     public bool IsActive { get; set; } = true;
 
-    /// <summary>
-    /// 租户生命周期的并发版本，同时作为 EF 并发令牌。
-    /// </summary>
+    /// <summary>租户生命周期的并发版本，同时作为 EF 并发令牌。</summary>
     /// <remarks>
     /// 启用、停用、改名与连接配置的创建/修改全部竞争这一个版本，因此同一租户的这些管理操作互斥，
     /// 并发时落败方抛 <c>TenantConcurrencyConflictException</c>（409），使“改路由前必须已停用”成为数据库层面的不变量。

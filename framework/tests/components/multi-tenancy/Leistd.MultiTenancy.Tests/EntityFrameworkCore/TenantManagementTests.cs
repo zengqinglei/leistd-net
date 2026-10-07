@@ -101,9 +101,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         Assert.Equal("default", Assert.Single((await Connections().GetListAsync(tenant.Id))).Name);
     }
 
-    /// <summary>
-    /// 多服务部署一次登记多条：开通钩子第一次执行时看到的就是完整集合。
-    /// </summary>
+    /// <summary>多服务部署一次登记多条：开通钩子第一次执行时看到的就是完整集合。</summary>
     /// <remarks>
     /// 建完租户再逐条调连接管理接口会留下"租户已启用、某条连接还没登记"的中间状态，
     /// 那一刻用该连接名的服务解析到的是回落库，数据会落错地方。
@@ -123,9 +121,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         Assert.Equal(["crm", "default"], (await Connections().GetListAsync(tenant.Id)).Select(c => c.Name).Order());
     }
 
-    /// <summary>
-    /// 请求体显式传 <c>connections: null</c> 按"不分库"处理，不是 500。
-    /// </summary>
+    /// <summary>请求体显式传 <c>connections: null</c> 按"不分库"处理，不是 500。</summary>
     /// <remarks>集合属性的默认值挡不住显式 null：反序列化会把它写进去，而下游按非空用它。</remarks>
     [Fact]
     public async Task An_explicit_null_connection_list_is_treated_as_no_dedicated_database()

@@ -17,9 +17,7 @@ using Xunit;
 
 namespace Leistd.AspNetCore.SignalR.Tests.EndToEnd;
 
-/// <summary>
-/// 组件映射的 Hub 在握手与调用两个阶段按同一个策略授权：<see cref="HubIdentityOptions.PolicyName"/>。
-/// </summary>
+/// <summary>组件映射的 Hub 在握手与调用两个阶段按同一个策略授权：<see cref="HubIdentityOptions.PolicyName"/>。</summary>
 /// <remarks>
 /// <para>握手是一次 HTTP 请求，跑端点上的授权元数据；此后的方法调用不经中间件，由 Hub 过滤器复评。
 /// 两边各取一份策略时，宿主指定的策略只在其中一个阶段生效：握手按默认策略拒掉本该放行的主体，

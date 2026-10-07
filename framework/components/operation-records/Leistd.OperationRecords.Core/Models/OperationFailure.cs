@@ -5,9 +5,7 @@ using System.Text.Json;
 
 namespace Leistd.OperationRecords.Models;
 
-/// <summary>
-/// 一次操作失败的原因。
-/// </summary>
+/// <summary>一次操作失败的原因。</summary>
 /// <remarks>
 /// <para>可枚举的业务规则拒绝存 <see cref="Code"/> + <see cref="Data"/>，查询时按读者的请求语言渲染（见
 /// <see cref="Dtos.OperationRecordOutputDto.FailureMessage"/>）；不可枚举的技术异常走 <see cref="Detail"/>，不本地化。</para>

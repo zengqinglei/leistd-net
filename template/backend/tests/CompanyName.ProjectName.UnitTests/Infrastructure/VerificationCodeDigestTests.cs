@@ -4,9 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
-/// <summary>
-/// 验证码摘要：确定性、与口令哈希分开
-/// </summary>
+/// <summary>验证码摘要：确定性、与口令哈希分开。</summary>
 /// <remarks>
 /// 摘要必须跨实例跨重启稳定，否则同一验证码在签发它的 Pod 之外校验不过，
 /// 多副本下表现为"验证码时灵时不灵"。曾试过用 Data Protection 派生密钥——
@@ -43,9 +41,7 @@ public class VerificationCodeDigestTests
         Assert.False(Create().Matches("not-base64!!", "123456"));
     }
 
-    /// <summary>
-    /// 缺密钥或密钥过短时，在使用处失败，而不是回落到某个可推导的值
-    /// </summary>
+    /// <summary>缺密钥或密钥过短时，在使用处失败，而不是回落到某个可推导的值。</summary>
     /// <remarks>
     /// 失败点刻意不在构造函数：认证应用服务依赖邮箱验证服务、后者依赖本类型，
     /// 构造期抛会让登录也一起失败——而登录与验证码无关。

@@ -2,9 +2,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 操作记录的归档形态：列与 <see cref="OperationRecord"/> 逐一对齐，外加一列归档时刻。
-/// </summary>
+/// <summary>操作记录的归档形态：列与 <see cref="OperationRecord"/> 逐一对齐，外加一列归档时刻。</summary>
 /// <remarks>
 /// <para>不实现 <c>IMultiTenant</c>：归档作业跑在无租户过滤的查询里。<see cref="TenantId"/> 是普通列，
 /// 查询归档表时须自行按租户过滤。</para>

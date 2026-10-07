@@ -12,9 +12,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 事件处理器的阶段归属：每个处理器每个事件<b>恰好执行一次</b>。
-/// </summary>
+/// <summary>事件处理器的阶段归属：每个处理器每个事件<b>恰好执行一次</b>。</summary>
 /// <remarks>
 /// <para>这一组钉的是"缺省阶段"。<c>CompleteAsync</c> 对每个事件发布两趟
 /// （BeforeCommit 一趟、AfterCommit 一趟），靠拦截器挡掉不属于当前阶段的那趟。
@@ -102,9 +100,7 @@ public sealed class UnitOfWorkEventPhaseTests
         Assert.Equal([false], recorder.AfterCommitSawUnitOfWork);
     }
 
-    /// <summary>
-    /// 嵌套独立工作单元不得改坏外层的阶段。
-    /// </summary>
+    /// <summary>嵌套独立工作单元不得改坏外层的阶段。</summary>
     /// <remarks>
     /// BeforeCommit 处理器里开一个 <c>requiresNew</c> 的工作单元是真实形态，它自己也会走一遍阶段。
     /// 若阶段在退出时被清空而不是还原，外层剩余处理器会读到 <see langword="null"/>——
@@ -128,9 +124,7 @@ public sealed class UnitOfWorkEventPhaseTests
             recorder.NestingObserved);
     }
 
-    /// <summary>
-    /// 嵌套独立工作单元的 <c>AfterCommit</c> 阶段同样没有环境工作单元。
-    /// </summary>
+    /// <summary>嵌套独立工作单元的 <c>AfterCommit</c> 阶段同样没有环境工作单元。</summary>
     /// <remarks>
     /// 管理器只跳过"已完成"的工作单元、随后顺 <c>Outer</c> 链返回外层，因此嵌套场景下
     /// 若不显式置空，处理器会拿到<b>外层</b>工作单元：写入并入外层事务，既不是契约声明的
@@ -159,9 +153,7 @@ public sealed class UnitOfWorkEventPhaseTests
         Assert.Same(outer, manager.Current);
     }
 
-    /// <summary>
-    /// 活动工作单元内<b>直接</b>发布的事件，同样按阶段调度，而不是立即分发。
-    /// </summary>
+    /// <summary>活动工作单元内<b>直接</b>发布的事件，同样按阶段调度，而不是立即分发。</summary>
     /// <remarks>
     /// 业务代码在 <c>[UnitOfWork]</c> 方法里调 <c>ILocalEventBus.PublishAsync</c> 是常见写法。
     /// 若立即分发：未标注与 AfterCommit 处理器在提交前就执行（事务随后回滚也收不回），

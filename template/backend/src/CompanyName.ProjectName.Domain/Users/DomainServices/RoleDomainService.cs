@@ -9,9 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 
-/// <summary>
-/// 角色领域服务：角色名在租户内唯一，内置角色的定义与保障，以及删除前的校验。
-/// </summary>
+/// <summary>角色领域服务：角色名在租户内唯一，内置角色的定义与保障，以及删除前的校验。</summary>
 public sealed class RoleDomainService(
     IRepository<Role, Guid> roleRepository,
     IRepository<User, Guid> userRepository,
@@ -21,9 +19,7 @@ public sealed class RoleDomainService(
     /// <summary>默认角色：新用户未指定角色时分配。</summary>
     public const string MemberRoleName = "Member";
 
-    /// <summary>
-    /// 创建自定义角色（非内置），角色名已被占用时以 <see cref="RoleErrorCodes.NameAlreadyUsed"/> 拒绝。
-    /// </summary>
+    /// <summary>创建自定义角色（非内置），角色名已被占用时以 <see cref="RoleErrorCodes.NameAlreadyUsed"/> 拒绝。</summary>
     /// <remarks>
     /// 查重要看见被软删除的行：角色名的唯一索引没有排除 <c>IsDeleted</c>，删掉的角色仍然占着名字，
     /// 而仓储默认把这些行过滤掉。不关掉过滤，这里会答"可用"，随后落库撞唯一索引——
@@ -57,9 +53,7 @@ public sealed class RoleDomainService(
         return role;
     }
 
-    /// <summary>
-    /// 确保内置的管理员与默认成员角色存在，不存在就建。宿主初始化与租户初始化共用这一份定义。
-    /// </summary>
+    /// <summary>确保内置的管理员与默认成员角色存在，不存在就建。宿主初始化与租户初始化共用这一份定义。</summary>
     /// <param name="adminDescription">管理员角色的说明，宿主与租户的管理范围不同。</param>
     /// <param name="cancellationToken">取消标记。</param>
     /// <exception cref="InvalidOperationException">同名内置角色已被删除：它仍占着角色名，不能另建一个。</exception>
@@ -74,9 +68,7 @@ public sealed class RoleDomainService(
         return (admin, member);
     }
 
-    /// <summary>
-    /// 删除角色：内置角色不可删，仍分配给未删除用户的角色不可删。
-    /// </summary>
+    /// <summary>删除角色：内置角色不可删，仍分配给未删除用户的角色不可删。</summary>
     /// <remarks>
     /// 只数还在的用户：删除用户是软删除，成员关系随用户保留（恢复时一并回来），
     /// 数进去的话角色就被一个界面上看不到、也无法改派的人永久卡住。已删除用户名下的成员关系由调用方随后撤销。

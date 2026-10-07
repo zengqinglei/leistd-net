@@ -16,9 +16,7 @@ using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 租户存储与管理器的关系型行为验证（Sqlite，见 csproj 内注释）。
-/// </summary>
+/// <summary>租户存储与管理器的关系型行为验证（Sqlite，见 csproj 内注释）。</summary>
 public class TenantStoreManagerTests : IAsyncLifetime
 {
     private SqliteConnection _connection = default!;
@@ -104,9 +102,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal(record.Id, byName.Id);
     }
 
-    /// <summary>
-    /// 停用态创建：调用方要在创建后继续初始化租户数据时，租户不能一出生就对外可用。
-    /// </summary>
+    /// <summary>停用态创建：调用方要在创建后继续初始化租户数据时，租户不能一出生就对外可用。</summary>
     [Fact]
     public async Task Tenant_can_be_created_inactive_and_activated_afterwards()
     {
@@ -184,9 +180,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal("Contoso", byId.Name);
     }
 
-    /// <summary>
-    /// 停用在提交那一刻即生效，不存在"已提交但存储仍放行"的窗口。
-    /// </summary>
+    /// <summary>停用在提交那一刻即生效，不存在"已提交但存储仍放行"的窗口。</summary>
     /// <remarks>
     /// 存储返回值里带 IsActive，中间件据此放行或 403——它是访问控制状态。
     /// 若这里挂分布式缓存，停用的生效就依赖尽力而为的失效：缓存不可用时
@@ -205,9 +199,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.False((await _store.FindByNameAsync("ACME"))!.IsActive);
     }
 
-    /// <summary>
-    /// 绕过管理器直接改库也立即可见：存储没有自己的状态可陈旧。
-    /// </summary>
+    /// <summary>绕过管理器直接改库也立即可见：存储没有自己的状态可陈旧。</summary>
     /// <remarks>
     /// 有缓存的实现在这里会读到旧值，于是"写入必须经 ITenantManager"成了正确性前提；
     /// 直接读库把它降级为一条约定（管理器负责归一化与唯一校验），
@@ -256,9 +248,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal(second.Id, (await _store.FindByNameAsync("ACME"))!.Id);
     }
 
-    /// <summary>
-    /// 租户名按单个 DNS 标签校验：按子域名解析租户时名字就是主机名的一段，不合法的名字建得出来却永远访问不到。
-    /// </summary>
+    /// <summary>租户名按单个 DNS 标签校验：按子域名解析租户时名字就是主机名的一段，不合法的名字建得出来却永远访问不到。</summary>
     [Theory]
     [InlineData("a")]
     [InlineData("Acme")]
@@ -327,9 +317,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal("Acme", (await _store.FindAsync(record.Id))!.Name);
     }
 
-    /// <summary>
-    /// 名称规则只管新写入的名称：存量租户的名称可能早于规则，不改名的编辑照常保存，改名才按规则校验
-    /// </summary>
+    /// <summary>名称规则只管新写入的名称：存量租户的名称可能早于规则，不改名的编辑照常保存，改名才按规则校验。</summary>
     [Fact]
     public async Task A_pre_rule_name_can_be_kept_on_update_but_not_renamed_to_another_invalid_name()
     {
@@ -369,9 +357,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         _db.ChangeTracker.Clear();
     }
 
-    /// <summary>
-    /// 真实竞争：预检通过之后、SaveChanges 落库之前，另一方抢先写入同名租户。
-    /// </summary>
+    /// <summary>真实竞争：预检通过之后、SaveChanges 落库之前，另一方抢先写入同名租户。</summary>
     /// <remarks>
     /// 用 SaveChanges 拦截器精确插入竞争写入——这是唯一能越过管理器预检的时点。
     /// 若竞争者提前提交，预检就会直接拒绝，唯一索引那条路径一次都走不到，用例空转。
@@ -418,9 +404,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Null((await _manager.FindAsync(record.Id))!.DisplayName);
     }
 
-    /// <summary>
-    /// 管理器的 DbContext 可能就是宿主的工作单元：名称冲突不能连带丢掉调用方尚未提交的业务变更。
-    /// </summary>
+    /// <summary>管理器的 DbContext 可能就是宿主的工作单元：名称冲突不能连带丢掉调用方尚未提交的业务变更。</summary>
     /// <remarks>
     /// 名称冲突只丢弃本次租户变更，不能 <c>ChangeTracker.Clear()</c> 清掉其他待提交实体。
     /// 必须模拟预检通过后被唯一索引拒绝的竞争；预检拒绝不会调用 SaveChanges，测不到保存失败的丢弃逻辑。
@@ -454,9 +438,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal("caller's pending work", (await racedDb.Set<TestNote>().SingleAsync()).Text);
     }
 
-    /// <summary>
-    /// 预检拒绝时实体完全未被触碰——赋值必须发生在预检之后。
-    /// </summary>
+    /// <summary>预检拒绝时实体完全未被触碰——赋值必须发生在预检之后。</summary>
     /// <remarks>
     /// 若把赋值提到预检之前，被拒绝的改名会留在跟踪器里，下一次保存就把它写出去了。
     /// 保存失败路径的回滚由 <c>Other_constraint_failures_are_not_reported_as_duplicate_name</c> 覆盖。
@@ -477,9 +459,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal("Acme", reloaded!.Name);
     }
 
-    /// <summary>
-    /// 删除在提交那一刻即不可达——这条路径无法靠重试补救，访问控制不能依赖事后失效。
-    /// </summary>
+    /// <summary>删除在提交那一刻即不可达——这条路径无法靠重试补救，访问控制不能依赖事后失效。</summary>
     /// <remarks>直接读库保证提交即不可达；软删后重试删除会被 <c>!IsDeleted</c> 查询拒绝，不能依赖事后缓存失效补救。</remarks>
     [Fact]
     public async Task Deletion_takes_effect_immediately_and_needs_no_compensating_action()
@@ -508,9 +488,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.NotEqual(first.Id, recreated.Id);
     }
 
-    /// <summary>
-    /// 在被测 DbContext 执行 SaveChanges 之前，用另一个连接抢先写入同名租户。
-    /// </summary>
+    /// <summary>在被测 DbContext 执行 SaveChanges 之前，用另一个连接抢先写入同名租户。</summary>
     private sealed class RaceInjectingInterceptor(
         SqliteConnection connection,
         string name,

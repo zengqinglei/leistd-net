@@ -229,9 +229,7 @@ public class ValidationErrorNamingPipelineTests(ValidationErrorNamingPipelineTes
         return doc.RootElement.TryGetProperty("type", out var t) ? t.GetString() : null;
     }
 
-    /// <summary>
-    /// 默认配置的共享宿主；需要替换本地化器的用例另建宿主。
-    /// </summary>
+    /// <summary>默认配置的共享宿主；需要替换本地化器的用例另建宿主。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

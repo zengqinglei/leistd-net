@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 保留期的注册面：配置节可换、校验消息按实际配置节报键、重复调用不叠加验证器与周期任务。
-/// </summary>
+/// <summary>保留期的注册面：配置节可换、校验消息按实际配置节报键、重复调用不叠加验证器与周期任务。</summary>
 public sealed class OperationRecordRetentionRegistrationTests
 {
     private static ServiceProvider Build(Dictionary<string, string?> settings, Action<IServiceCollection> register)
@@ -50,9 +48,7 @@ public sealed class OperationRecordRetentionRegistrationTests
         Assert.All(failure.Failures, message => Assert.StartsWith($"{path}:", message, StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// 保留天数没有默认值：启用时必填，关闭时可以不填，填了照样校验区间。
-    /// </summary>
+    /// <summary>保留天数没有默认值：启用时必填，关闭时可以不填，填了照样校验区间。</summary>
     /// <remarks>保留期受法律与合同约束，组件给不出一个替部署方负责的天数。</remarks>
     [Theory]
     [InlineData("true", null, "RetentionDays is required when Enabled is true.")]

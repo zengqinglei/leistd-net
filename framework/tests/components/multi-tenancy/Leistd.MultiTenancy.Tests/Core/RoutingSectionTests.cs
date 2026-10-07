@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// 远端解析的路由缓存配置节：默认 <c>Leistd:MultiTenancy:Routing</c>，可另指配置节，校验消息按实际路径报键。
-/// </summary>
+/// <summary>远端解析的路由缓存配置节：默认 <c>Leistd:MultiTenancy:Routing</c>，可另指配置节，校验消息按实际路径报键。</summary>
 public sealed class RoutingSectionTests
 {
     private static ServiceProvider Build(IDictionary<string, string?> settings, string? configSectionPath = null)

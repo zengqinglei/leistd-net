@@ -10,9 +10,7 @@ namespace Leistd.Authorization.Resource.AspNetCore;
 /// <summary>资源实例授权的注册入口：判定接入官方授权管线。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册资源实例授权：业务入口 <see cref="IResourceAuthorizationService"/>、资源 ACL 处理器与官方授权核心服务。
-    /// </summary>
+    /// <summary>注册资源实例授权：业务入口 <see cref="IResourceAuthorizationService"/>、资源 ACL 处理器与官方授权核心服务。</summary>
     /// <remarks>
     /// <para>领域规则写成官方的 <c>AuthorizationHandler&lt;OperationAuthorizationRequirement, TResource&gt;</c>，
     /// 按官方方式注册为 <c>IAuthorizationHandler</c>。任一处理器 <c>Fail()</c> 即拒绝（ACL 明确拒绝、资源状态不允许），

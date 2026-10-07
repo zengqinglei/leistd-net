@@ -3,9 +3,7 @@ using Leistd.Notifications.Dtos;
 
 namespace CompanyName.ProjectName.Application.Notifications;
 
-/// <summary>
-/// 本项目发布的通知类别（通知的 <c>Type</c>）。
-/// </summary>
+/// <summary>本项目发布的通知类别（通知的 <c>Type</c>）。</summary>
 /// <remarks>
 /// 类别由业务项目定义，框架只约定未指定时的默认类型。通知偏好按"类别 × 渠道"存为用户设置，
 /// 设置名由类别与渠道拼出（见 <c>SettingConstant.Notifications</c>）；前端按类别选铃铛里的图标。

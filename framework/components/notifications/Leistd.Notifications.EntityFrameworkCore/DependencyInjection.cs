@@ -16,9 +16,7 @@ namespace Leistd.Notifications.EntityFrameworkCore;
 /// <summary>通知 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 EF Core 通知持久化存储（基于指定 DbContext）。
-    /// </summary>
+    /// <summary>注册 EF Core 通知持久化存储（基于指定 DbContext）。</summary>
     /// <remarks>
     /// <para>本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文，
     /// 因此宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>。</para>
@@ -53,9 +51,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 启用通知保留期：到期通知每天按物理库逐个删除，作为集群周期任务执行。
-    /// </summary>
+    /// <summary>启用通知保留期：到期通知每天按物理库逐个删除，作为集群周期任务执行。</summary>
     /// <remarks>
     /// <para>选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:Notifications:Retention</c>）并在启动期校验，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>；默认开启，已读保留 90 天、未读保留 365 天，
     /// 均按创建时间计。开关与天数每轮取当前值，执行时刻只在排期时取一次。</para>

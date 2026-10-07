@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
-/// <summary>
-/// 用户的角色成员关系：<see cref="User"/> 聚合的子实体，按 <see cref="RoleId"/> 引用角色聚合。
-/// </summary>
+/// <summary>用户的角色成员关系：<see cref="User"/> 聚合的子实体，按 <see cref="RoleId"/> 引用角色聚合。</summary>
 /// <remarks>
 /// 只经 <see cref="User"/> 的方法分配与撤销，没有独立仓储。撤销是软删除：已撤销的行留作历史，
 /// 资源管理员引导据此不再把撤销过的 Admin 成员关系加回来。
@@ -13,19 +11,13 @@ namespace CompanyName.ProjectName.Domain.Users.Entities;
 /// </remarks>
 public class UserRole : DeletionAuditedEntity<Guid>, IMultiTenant
 {
-    /// <summary>
-    /// 所属租户 ID；<see langword="null"/> 表示宿主。
-    /// </summary>
+    /// <summary>所属租户 ID；<see langword="null"/> 表示宿主。</summary>
     public Guid? TenantId { get; private set; }
 
-    /// <summary>
-    /// 用户 ID
-    /// </summary>
+    /// <summary>用户 ID。</summary>
     public Guid UserId { get; private set; }
 
-    /// <summary>
-    /// 角色 ID
-    /// </summary>
+    /// <summary>角色 ID。</summary>
     public Guid RoleId { get; private set; }
 
     private UserRole() { }

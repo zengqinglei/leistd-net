@@ -16,9 +16,7 @@ using Xunit;
 
 namespace Leistd.BackgroundJobs.Tests;
 
-/// <summary>
-/// 登记面：任务名全局唯一、范围必须显式、调度器与水位存储的注册与调用顺序无关。
-/// </summary>
+/// <summary>登记面：任务名全局唯一、范围必须显式、调度器与水位存储的注册与调用顺序无关。</summary>
 public class RecurringJobRegistrationTests
 {
     private static readonly RecurringJobSchedule Hourly = RecurringJobSchedule.Every(TimeSpan.FromHours(1));

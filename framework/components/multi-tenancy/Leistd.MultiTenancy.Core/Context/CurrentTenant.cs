@@ -3,9 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.MultiTenancy.Context;
 
-/// <summary>
-/// 通过 <see cref="ICurrentTenantAccessor"/> 提供当前租户上下文。
-/// </summary>
+/// <summary>通过 <see cref="ICurrentTenantAccessor"/> 提供当前租户上下文。</summary>
 /// <remarks>
 /// 切换租户的同时打开日志作用域（<see cref="TenantLogKeys.TenantId"/>）：所有切换入口的日志都带上租户，
 /// 切回宿主时写入 <see langword="null"/>，覆盖外层租户。

@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Client;
 
-/// <summary>
-/// 客户端常量。
-/// </summary>
+/// <summary>客户端常量。</summary>
 public static class MyProjectClientDefaults
 {
     /// <summary>

@@ -12,16 +12,12 @@ using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
-/// <summary>
-/// 用户管理控制器
-/// </summary>
+/// <summary>用户管理控制器。</summary>
 [Authorize]
 [Route("api/v1/users")]
 public sealed class UserController(IUserAppService userAppService) : BaseController
 {
-    /// <summary>
-    /// 获取用户列表（需要用户查看权限）
-    /// </summary>
+    /// <summary>获取用户列表（需要用户查看权限）。</summary>
     [HttpGet]
     [Authorize(Policy = PermissionConstant.Users.Default)]
     public async Task<PagedResult<UserManagementOutputDto>> GetPagedListAsync(
@@ -31,9 +27,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         return await userAppService.GetPagedListAsync(input, cancellationToken);
     }
 
-    /// <summary>
-    /// 获取用户详情（需要用户查看权限）
-    /// </summary>
+    /// <summary>获取用户详情（需要用户查看权限）。</summary>
     [HttpGet("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Default)]
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -42,9 +36,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     }
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 创建用户（需要用户创建权限）
-    /// </summary>
+    /// <summary>创建用户（需要用户创建权限）。</summary>
     [HttpPost]
     [Authorize(Policy = PermissionConstant.Users.Create)]
     // 创建类端点还没有目标标识，省略路由键，被拒记录的目标记为 "-"
@@ -56,9 +48,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         return await userAppService.CreateAsync(input, cancellationToken);
     }
 
-    /// <summary>
-    /// 更新用户（需要用户更新权限）
-    /// </summary>
+    /// <summary>更新用户（需要用户更新权限）。</summary>
     [HttpPut("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
     [OperationRecordAction(OperationRecordActions.UserUpdated, "id")]
@@ -71,9 +61,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     }
 
 #endif
-    /// <summary>
-    /// 启用用户（需要用户更新权限）
-    /// </summary>
+    /// <summary>启用用户（需要用户更新权限）。</summary>
     [HttpPatch("{id}/enable")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
     [OperationRecordAction(OperationRecordActions.UserEnabled, "id")]
@@ -82,9 +70,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         await userAppService.EnableAsync(id, cancellationToken);
     }
 
-    /// <summary>
-    /// 禁用用户（需要用户更新权限）
-    /// </summary>
+    /// <summary>禁用用户（需要用户更新权限）。</summary>
     [HttpPatch("{id}/disable")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
     [OperationRecordAction(OperationRecordActions.UserDisabled, "id")]
@@ -93,9 +79,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         await userAppService.DisableAsync(id, cancellationToken);
     }
 
-    /// <summary>
-    /// 重置用户密码（需要用户更新权限）
-    /// </summary>
+    /// <summary>重置用户密码（需要用户更新权限）。</summary>
 #if (LocalIdentity)
     [HttpPost("{id}/reset-password")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
@@ -108,9 +92,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         await userAppService.ResetPasswordAsync(id, input, cancellationToken);
     }
 
-    /// <summary>
-    /// 解除用户的登录锁定（需要用户更新权限）
-    /// </summary>
+    /// <summary>解除用户的登录锁定（需要用户更新权限）。</summary>
     [HttpPost("{id}/unlock")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
     [OperationRecordAction(OperationRecordActions.UserUnlocked, "id")]
@@ -119,9 +101,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         await userAppService.UnlockAsync(id, cancellationToken);
     }
 
-    /// <summary>
-    /// 重置用户的两步验证（需要用户更新权限）
-    /// </summary>
+    /// <summary>重置用户的两步验证（需要用户更新权限）。</summary>
     [HttpPost("{id}/reset-two-factor")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
     [OperationRecordAction(OperationRecordActions.UserTwoFactorReset, "id")]
@@ -132,9 +112,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
 #endif
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 删除用户（需要用户删除权限；幂等：不存在时同样成功）
-    /// </summary>
+    /// <summary>删除用户（需要用户删除权限；幂等：不存在时同样成功）。</summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Delete)]
     // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
@@ -146,9 +124,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
 
 #endif
 
-    /// <summary>
-    /// 取用户上传的头像图片（已登录即可）
-    /// </summary>
+    /// <summary>取用户上传的头像图片（已登录即可）。</summary>
     /// <remarks>
     /// <para>DTO 里的头像地址指向这里（带内容摘要作版本号，见 <c>AvatarUrls</c>），图片本身不进 DTO。
     /// 地址随内容变化，所以按不可变资源长期缓存；ETag 让地址没带版本号的请求也能走 304。</para>
@@ -169,9 +145,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         return File(avatar.Content, avatar.ContentType, lastModified: null, entityTag: entityTag);
     }
 
-    /// <summary>
-    /// 查询用户角色（需要角色分配权限）
-    /// </summary>
+    /// <summary>查询用户角色（需要角色分配权限）。</summary>
     [HttpGet("{id}/roles")]
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
     public async Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken)
@@ -179,9 +153,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         return await userAppService.GetRolesAsync(id, cancellationToken);
     }
 
-    /// <summary>
-    /// 替换用户角色（需要角色分配权限）
-    /// </summary>
+    /// <summary>替换用户角色（需要角色分配权限）。</summary>
     /// <remarks>
     /// 与 <c>PUT /api/v1/users/{id}</c> 是两个独立命令：只持有 Users.Update 的主体
     /// 无法改变任何人的角色，只持有 Users.ManageRoles 的主体也无法修改用户资料。

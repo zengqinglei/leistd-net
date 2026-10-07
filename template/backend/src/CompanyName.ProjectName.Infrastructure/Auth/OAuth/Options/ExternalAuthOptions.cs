@@ -1,9 +1,7 @@
 #if (ExternalLogin)
 namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 
-/// <summary>
-/// 外部身份提供商的部署配置。
-/// </summary>
+/// <summary>外部身份提供商的部署配置。</summary>
 public sealed class ExternalAuthOptions
 {
     public const string SectionName = "ExternalAuth";

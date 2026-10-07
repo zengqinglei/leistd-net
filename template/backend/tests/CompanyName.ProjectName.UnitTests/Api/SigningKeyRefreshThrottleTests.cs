@@ -7,9 +7,7 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
 
-/// <summary>
-/// 请求刷新在最短间隔内只转交一次：签发方不可用时，伪造 kid 的请求不能让每个请求都去抓一次 JWKS。
-/// </summary>
+/// <summary>请求刷新在最短间隔内只转交一次：签发方不可用时，伪造 kid 的请求不能让每个请求都去抓一次 JWKS。</summary>
 public sealed class SigningKeyRefreshThrottleTests
 {
     [Fact]

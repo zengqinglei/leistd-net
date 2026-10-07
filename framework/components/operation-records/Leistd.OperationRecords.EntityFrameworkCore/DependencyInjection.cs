@@ -17,9 +17,7 @@ namespace Leistd.OperationRecords.EntityFrameworkCore;
 /// <summary>操作记录 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 EF Core 操作记录存储（基于指定 DbContext），同时提供历史读取与查询用例。
-    /// </summary>
+    /// <summary>注册 EF Core 操作记录存储（基于指定 DbContext），同时提供历史读取与查询用例。</summary>
     /// <remarks>
     /// <para>登记 <see cref="IOperationRecordWriter"/> 与 <see cref="IOperationRecordReader"/>，并调用
     /// <c>AddOperationRecordQueries()</c>；HTTP 端点与保留期归档仍由宿主显式映射与注册。</para>
@@ -47,7 +45,6 @@ public static class DependencyInjection
     /// </code>
     /// </example>
     /// <typeparam name="TDbContext">承载操作记录表的 DbContext。</typeparam>
-    /// <param name="services">服务集合。</param>
     public static IServiceCollection AddOperationRecordsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
@@ -66,9 +63,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 启用保留期归档：到期记录按天搬入归档表，作为集群周期任务执行。
-    /// </summary>
+    /// <summary>启用保留期归档：到期记录按天搬入归档表，作为集群周期任务执行。</summary>
     /// <remarks>
     /// <para>选项绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:OperationRecords:Retention</c>）并在启动期校验，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>；默认 <c>Enabled = false</c>，
     /// 任务照常排期、到点跳过，打开开关下一轮即生效。</para>
@@ -121,11 +116,8 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 将 <see cref="OperationRecord"/> 与 <see cref="OperationRecordArchive"/> 的实体配置应用到 DbContext。在 OnModelCreating 中调用。
-    /// </summary>
+    /// <summary>将 <see cref="OperationRecord"/> 与 <see cref="OperationRecordArchive"/> 的实体配置应用到 DbContext。在 OnModelCreating 中调用。</summary>
     /// <remarks>归档表随原表一起映射，启用保留期不需要改模型。</remarks>
-    /// <param name="modelBuilder">模型构建器。</param>
     public static ModelBuilder ConfigureOperationRecords(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new OperationRecordConfiguration());

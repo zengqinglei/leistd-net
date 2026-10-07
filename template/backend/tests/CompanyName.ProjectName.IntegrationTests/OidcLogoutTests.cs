@@ -11,9 +11,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 依赖方发起的退出（RP-Initiated Logout 1.0 §2）：hint 指向当前会话时直接退出，否则必须由用户在本源确认。
-/// </summary>
+/// <summary>依赖方发起的退出（RP-Initiated Logout 1.0 §2）：hint 指向当前会话时直接退出，否则必须由用户在本源确认。</summary>
 /// <remarks>
 /// 断言落在"会话还在不在"和"回没回到依赖方"上：被跨站页面悄悄登出（logout CSRF）、
 /// 旧确认页结束了新会话、确认后停在 Identity 不回依赖方，都是要防的结果。

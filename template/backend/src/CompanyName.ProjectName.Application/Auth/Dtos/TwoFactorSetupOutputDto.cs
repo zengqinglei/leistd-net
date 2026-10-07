@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
-/// <summary>
-/// 开始设置两步验证：把密钥添加到身份验证器应用
-/// </summary>
+/// <summary>开始设置两步验证：把密钥添加到身份验证器应用。</summary>
 public sealed record TwoFactorSetupOutputDto
 {
     /// <summary>Base32 密钥，供无法扫码时手动输入。</summary>

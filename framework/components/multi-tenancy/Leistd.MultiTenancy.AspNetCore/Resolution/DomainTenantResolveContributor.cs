@@ -6,9 +6,7 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 
 namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
-/// <summary>
-/// 从主机名解析租户，格式形如 <c>{0}.example.com</c>（<c>acme.example.com</c> → <c>acme</c>）
-/// </summary>
+/// <summary>从主机名解析租户，格式形如 <c>{0}.example.com</c>（<c>acme.example.com</c> → <c>acme</c>）。</summary>
 /// <remarks>
 /// 排在 Claim 贡献者之后、请求头与查询串之前：已认证主体的租户仍由 claim 定案；匿名请求的域名结论不被请求头改写。
 /// 只把用于租户的通配子域指向本应用，否则 <c>www.example.com</c> 会被解析成名为 <c>www</c> 的租户。

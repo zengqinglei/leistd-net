@@ -14,9 +14,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 [Route("api/v1/service-info")]
 public sealed class ServiceInfoController(IClock clock) : BaseController
 {
-    /// <summary>
-    /// 服务基础信息（匿名）：服务名、版本与服务器时间。
-    /// </summary>
+    /// <summary>服务基础信息（匿名）：服务名、版本与服务器时间。</summary>
     [AllowAnonymous]
     [HttpGet]
     public ServiceInfoOutputDto Get()

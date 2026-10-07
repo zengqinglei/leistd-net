@@ -1,17 +1,13 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 列出逐库作业要走的全部库：宿主库，加上该连接名下的独立库。
-/// </summary>
+/// <summary>列出逐库作业要走的全部库：宿主库，加上该连接名下的独立库。</summary>
 /// <remarks>
 /// <para>清单不含连接串：拿到 <see cref="TenantDatabase.TenantId"/> 切进租户上下文后，连接由正常解析链给出。</para>
 /// <para>没有注册任何租户连接解析时，所有租户都在宿主库里，清单就只有宿主库。</para>
 /// </remarks>
 public interface ITenantDatabaseEnumerator
 {
-    /// <summary>
-    /// 列出宿主库与独立库。
-    /// </summary>
+    /// <summary>列出宿主库与独立库。</summary>
     /// <param name="name">连接名（使用方 DbContext 的 <c>[ConnectionStringName]</c>）。</param>
     /// <param name="activeOnly">
     /// 只列启用租户的库。必须显式给出：保留期一类作业要连停用租户的数据一起处理，

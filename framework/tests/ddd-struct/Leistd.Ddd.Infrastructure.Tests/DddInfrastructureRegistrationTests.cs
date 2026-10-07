@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
-/// <summary>
-/// <c>AddDddInfrastructure</c> 的注册面：生命周期、幂等，以及宿主先注册的实现保留。
-/// </summary>
+/// <summary><c>AddDddInfrastructure</c> 的注册面：生命周期、幂等，以及宿主先注册的实现保留。</summary>
 /// <remarks>
 /// 数据过滤器的状态在 AsyncLocal 里，按单例共享；领域事件拦截器的待发布事件按 DbContext 暂存在静态弱表里，
 /// 拦截器本身无状态，按 Transient 登记。宿主重复调用（组合根拆分、测试宿主再调一次）不得多出描述符，

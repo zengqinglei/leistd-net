@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.Ddd.Domain.Tests;
 
-/// <summary>
-/// 实体基类：主键暴露与领域事件的登记、取出、清空。
-/// </summary>
+/// <summary>实体基类：主键暴露与领域事件的登记、取出、清空。</summary>
 public class EntityTests
 {
     private sealed record OrderPlaced(Guid OrderId) : ILocalEvent

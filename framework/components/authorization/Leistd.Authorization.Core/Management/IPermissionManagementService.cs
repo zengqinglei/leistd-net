@@ -4,9 +4,7 @@ using Leistd.Authorization.Subjects;
 
 namespace Leistd.Authorization.Management;
 
-/// <summary>
-/// 权限管理用例：当前用户的有效权限、定义树、主体授予的读取与整体替换。
-/// </summary>
+/// <summary>权限管理用例：当前用户的有效权限、定义树、主体授予的读取与整体替换。</summary>
 /// <remarks>
 /// <para>全部按当前侧别过滤（<see cref="IPermissionDefinitionManager.IsAvailableOn"/>），与权限检查器同一判据。</para>
 /// <para>不做权限检查——谁能读定义、谁能改谁的授予由端点的授权策略决定。
@@ -18,11 +16,9 @@ public interface IPermissionManagementService
     /// <remarks>
     /// 当前身份不在本权限主体空间里时返回空集合而不抛 401（调用方已认证，401 会让客户端反复重新登录）。
     /// </remarks>
-    /// <param name="cancellationToken">取消令牌。</param>
     Task<CurrentPermissionsOutputDto> GetCurrentAsync(CancellationToken cancellationToken = default);
 
     /// <summary>获取权限定义树，剔除停用项、当前侧别不可用的项与因此变空的分组。</summary>
-    /// <param name="cancellationToken">取消令牌。</param>
     Task<IReadOnlyList<PermissionDefinitionGroupOutputDto>> GetDefinitionsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>获取某个主体的直接授予状态与并发版本。</summary>
@@ -35,9 +31,7 @@ public interface IPermissionManagementService
         string providerKey,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 带版本整体替换某个主体的授予，成功后发布 <see cref="Events.PermissionGrantsReplacedEvent"/>。
-    /// </summary>
+    /// <summary>带版本整体替换某个主体的授予，成功后发布 <see cref="Events.PermissionGrantsReplacedEvent"/>。</summary>
     /// <param name="providerName">授予对象类型。</param>
     /// <param name="providerKey">授予对象 Key。</param>
     /// <param name="input">目标权限集合与期望版本。</param>

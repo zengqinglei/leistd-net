@@ -6,9 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
 
-/// <summary>
-/// 重新认证证明比较的是会话开始时间的亚秒精度：auth_time 只到秒，同一秒里已经存在的会话凭它分辨不出。
-/// </summary>
+/// <summary>重新认证证明比较的是会话开始时间的亚秒精度：auth_time 只到秒，同一秒里已经存在的会话凭它分辨不出。</summary>
 public sealed class ConnectInteractionProtectorTests
 {
     private static readonly DateTime IssuedAt = new(2026, 10, 3, 0, 0, 0, 500, DateTimeKind.Utc);

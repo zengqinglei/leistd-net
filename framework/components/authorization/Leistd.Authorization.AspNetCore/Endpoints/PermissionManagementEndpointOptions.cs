@@ -3,9 +3,7 @@ using Leistd.Authorization.Constants;
 
 namespace Leistd.Authorization.AspNetCore.Endpoints;
 
-/// <summary>
-/// 权限管理端点的授权口径与开放的主体类型。
-/// </summary>
+/// <summary>权限管理端点的授权口径与开放的主体类型。</summary>
 /// <remarks>
 /// 组件不内置默认策略，也不在路由组上叠加宿主默认策略。漏配 <see cref="CurrentPolicy"/>、<see cref="DefinitionsPolicy"/>
 /// 或某个主体类型的策略为空时，<c>MapPermissionManagement</c> 映射即抛出。
@@ -18,9 +16,7 @@ public sealed class PermissionManagementEndpointOptions
     /// <summary>读取权限定义树所需的授权策略名。</summary>
     public string DefinitionsPolicy { get; set; } = string.Empty;
 
-    /// <summary>
-    /// 开放授予管理的主体类型 → 所需授权策略名；未列出的类型不映射端点。
-    /// </summary>
+    /// <summary>开放授予管理的主体类型 → 所需授权策略名；未列出的类型不映射端点。</summary>
     /// <remarks>键取 <see cref="PermissionGrantProviderNames"/>：<c>Role</c> 映射到 <c>grants/roles/{key}</c>，<c>User</c> 映射到 <c>grants/users/{key}</c>。</remarks>
     public IDictionary<string, string> GrantPolicies { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
 

@@ -2,9 +2,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.Stores;
 
-/// <summary>
-/// 操作记录的写入契约：记录器经它把已定案的记录交给存储或输出端。
-/// </summary>
+/// <summary>操作记录的写入契约：记录器经它把已定案的记录交给存储或输出端。</summary>
 /// <remarks>
 /// <para>只负责写入，动作码校验与租户判定已在记录器完成。一个宿主只能有一个写入实现。</para>
 /// <para>没有更新与删除：审计记录写下后不再修改。</para>

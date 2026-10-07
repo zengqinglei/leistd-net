@@ -22,9 +22,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
-/// <summary>
-/// OpenID Connect 协议端点：授权、令牌、注销与 userinfo。
-/// </summary>
+/// <summary>OpenID Connect 协议端点：授权、令牌、注销与 userinfo。</summary>
 /// <remarks>
 /// 本类是全项目唯一不继承 <c>BaseController</c> 的控制器，属规范允许的例外：这些端点要返回
 /// <c>SignIn</c> / <c>SignOut</c> / <c>Challenge</c> / <c>Redirect</c> 这类结果并与 Cookie 方案交互，

@@ -5,8 +5,6 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public interface ICaptchaAppService : IAppService
 {
-    /// <summary>
-    /// 生成图形验证码
-    /// </summary>
+    /// <summary>生成图形验证码。</summary>
     Task<CaptchaOutputDto> GenerateCaptchaAsync(CancellationToken cancellationToken = default);
 }

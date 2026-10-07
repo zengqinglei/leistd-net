@@ -2,9 +2,7 @@ using Leistd.OperationRecords.Models;
 
 namespace Leistd.OperationRecords.Definitions;
 
-/// <summary>
-/// 向定义上下文登记本模块的操作动作。
-/// </summary>
+/// <summary>向定义上下文登记本模块的操作动作。</summary>
 /// <remarks>
 /// <para>登记后的定义提供类别筛选、可见性与严重度；记录器拒绝未登记的动作码。</para>
 /// <para>动作码一经发布不要修改：它是历史记录的含义本身。</para>
@@ -29,15 +27,11 @@ public interface IOperationActionDefinitionProvider
     void Define(IOperationActionDefinitionContext context);
 }
 
-/// <summary>
-/// 操作动作的登记与查询上下文。
-/// </summary>
+/// <summary>操作动作的登记与查询上下文。</summary>
 /// <remarks>动作码全局唯一，重复登记在启动期抛出。</remarks>
 public interface IOperationActionDefinitionContext
 {
-    /// <summary>
-    /// 登记一个操作动作。
-    /// </summary>
+    /// <summary>登记一个操作动作。</summary>
     /// <param name="code">动作码，全局唯一且一经发布不可更改（如 <c>user.created</c>）。</param>
     /// <param name="category">
     /// 类别，驱动界面分类筛选；取值由业务定义（如 <c>"account"</c>），框架不预置清单。
@@ -50,7 +44,6 @@ public interface IOperationActionDefinitionContext
     /// 目标即操作人：用于主体在动作完成时才被证实的自证类动作（登录成功、注册、改密）。
     /// 只标经过凭据验证的动作；失败登录的用户名这类未经验证的标识不能标。
     /// </param>
-    /// <returns>登记后的定义。</returns>
     IOperationActionDefinition Add(
         string code,
         string category,
@@ -62,9 +55,7 @@ public interface IOperationActionDefinitionContext
     IOperationActionDefinition? GetOrNull(string code);
 }
 
-/// <summary>
-/// 一个已登记的操作动作定义。
-/// </summary>
+/// <summary>一个已登记的操作动作定义。</summary>
 public interface IOperationActionDefinition
 {
     /// <summary>动作码（全局唯一标识）。</summary>
@@ -83,9 +74,7 @@ public interface IOperationActionDefinition
     bool TargetIsActor { get; }
 }
 
-/// <summary>
-/// 提供操作动作定义的只读索引。
-/// </summary>
+/// <summary>提供操作动作定义的只读索引。</summary>
 public interface IOperationActionDefinitionManager
 {
     /// <summary>按动作码查找；不存在时返回 <see langword="null"/>。</summary>

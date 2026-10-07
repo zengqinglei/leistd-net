@@ -20,7 +20,7 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 
 模板通过 `PackageReference` 消费框架；`Api` 是组合根，Application 不依赖 Infrastructure。模板源可编辑不等于交付完成，必须验证实际生成结果。
 
-模板源码不产随包 XML，非公开成员可按需使用 XML 注释；统一注释原则见[项目通用规范](../../../template/docs/standards/coding-common.md#1-语言与敏感信息)，前端写法见[前端编码规范](../../../template/docs/standards/coding-frontend.md#3-命名)。
+模板源码不产随包 XML。注释先读[通用规范](../../../template/docs/standards/coding-common.md#1-语言与敏感信息)，XML 格式读[后端规范](../../../template/docs/standards/coding-backend.md#文档注释)，JSDoc 读[前端规范](../../../template/docs/standards/coding-frontend.md#3-命名)。
 
 ## 方案与实施计划
 

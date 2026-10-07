@@ -6,9 +6,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;
 
-/// <summary>
-/// 外部登录连接实体（GitHub、Google 等第三方身份提供商）
-/// </summary>
+/// <summary>外部登录连接实体（GitHub、Google 等第三方身份提供商）。</summary>
 /// <remarks>
 /// 实现 <see cref="IMultiTenant"/>：外部身份的 (Provider, ProviderUserId) 由第三方决定，
 /// 只在租户内唯一。不分区的话，同一个 GitHub 账号在租户 A 绑定后，租户 B 的登录会命中 A 的连接，
@@ -16,29 +14,19 @@ namespace CompanyName.ProjectName.Domain.Auth.Entities;
 /// </remarks>
 public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 {
-    /// <summary>
-    /// 所属租户（null 为宿主），由多租户落值拦截器在创建时填充
-    /// </summary>
+    /// <summary>所属租户（null 为宿主），由多租户落值拦截器在创建时填充。</summary>
     public Guid? TenantId { get; private set; }
 
-    /// <summary>
-    /// 用户 ID
-    /// </summary>
+    /// <summary>用户 ID。</summary>
     public Guid UserId { get; private set; }
 
-    /// <summary>
-    /// 外部身份提供商（GitHub, Google）
-    /// </summary>
+    /// <summary>外部身份提供商（GitHub, Google）。</summary>
     public string Provider { get; private set; }
 
-    /// <summary>
-    /// 外部身份提供商的用户 ID
-    /// </summary>
+    /// <summary>外部身份提供商的用户 ID。</summary>
     public string ProviderUserId { get; private set; }
 
-    /// <summary>
-    /// 提供商侧的账号资料快照
-    /// </summary>
+    /// <summary>提供商侧的账号资料快照。</summary>
     /// <remarks>
     /// 只用于在"已绑定哪些登录方式"里显示是哪个账号，不是本地用户名，也不是身份标识：
     /// 身份按 <see cref="Provider"/> + <see cref="ProviderUserId"/> 认，本地用户名由用户领域服务生成。

@@ -9,9 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
-/// <summary>
-/// 设置里的业务动作：发信测试。
-/// </summary>
+/// <summary>设置里的业务动作：发信测试。</summary>
 /// <remarks>
 /// 设置的读取与写入由设置组件映射在同一前缀下（见 <c>ComponentEndpoints</c>）；
 /// 这里只放组件不认识的业务动作，路由与组件端点不重叠。

@@ -21,9 +21,7 @@ using Leistd.MultiTenancy.Context;
 
 namespace CompanyName.ProjectName.Application.Auth.EmailVerification;
 
-/// <summary>
-/// 邮箱验证码挑战：签发（含按邮箱限流）与一次性校验。注册与验证已有账号的邮箱各用一种用途，互不通用。
-/// </summary>
+/// <summary>邮箱验证码挑战：签发（含按邮箱限流）与一次性校验。注册与验证已有账号的邮箱各用一种用途，互不通用。</summary>
 public class EmailChallengeStore(
     IDistributedCache distributedCache,
     IDistributedLock distributedLock,

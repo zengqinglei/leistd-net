@@ -3,9 +3,7 @@ using Xunit;
 
 namespace Leistd.ExceptionHandling.Tests;
 
-/// <summary>
-/// 错误码映射只接受 4xx、5xx 状态。
-/// </summary>
+/// <summary>错误码映射只接受 4xx、5xx 状态。</summary>
 /// <remarks>
 /// 2xx、3xx 会把失败伪装成成功或跳转，调用方据状态码判断结果时会误读，因此在登记时就拒绝。
 /// </remarks>

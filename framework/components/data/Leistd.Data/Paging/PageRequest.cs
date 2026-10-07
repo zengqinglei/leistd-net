@@ -2,9 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Leistd.Data.Paging;
 
-/// <summary>
-/// 分页查询请求：跳过条数、返回条数与排序表达式。
-/// </summary>
+/// <summary>分页查询请求：跳过条数、返回条数与排序表达式。</summary>
 /// <remarks>
 /// <para>存储、用例与端点共用这一个类型，参数名因此在全框架只有 <c>offset</c> / <c>limit</c> / <c>sorting</c> 一套。
 /// MVC 的 <c>[FromQuery]</c> 可直接绑定它（含派生类型）；Minimal API 的 <c>[AsParameters]</c> 会把

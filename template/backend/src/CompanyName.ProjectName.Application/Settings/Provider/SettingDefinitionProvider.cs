@@ -7,9 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Application.Settings.Provider;
 
-/// <summary>
-/// 设置定义提供器
-/// </summary>
+/// <summary>设置定义提供器。</summary>
 /// <remarks>
 /// 这里只声明<b>运行期可改</b>的业务偏好。连接串、密钥、认证协议等部署期配置一律留在
 /// <c>appsettings</c> 与 <c>IOptions&lt;T&gt;</c>：把它们搬进设置表等于给运行期一个能悄悄

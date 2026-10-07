@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 保留期的注册面：配置节可换、校验消息按实际配置节报键、重复调用不叠加验证器与周期任务。
-/// </summary>
+/// <summary>保留期的注册面：配置节可换、校验消息按实际配置节报键、重复调用不叠加验证器与周期任务。</summary>
 public sealed class NotificationRetentionRegistrationTests
 {
     private static ServiceProvider Build(Dictionary<string, string?> settings, Action<IServiceCollection> register)

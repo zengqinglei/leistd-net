@@ -9,9 +9,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 用户通知的分页、仅未读与删除：只作用于收件人自己的通知。
-/// </summary>
+/// <summary>用户通知的分页、仅未读与删除：只作用于收件人自己的通知。</summary>
 public sealed class NotificationStoreQueryTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("DataSource=:memory:");

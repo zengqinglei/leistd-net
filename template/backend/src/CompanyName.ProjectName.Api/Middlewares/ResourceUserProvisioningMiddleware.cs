@@ -4,9 +4,7 @@ using Leistd.Security.Users;
 
 namespace CompanyName.ProjectName.Api.Middlewares;
 
-/// <summary>
-/// 资源服务形态：首次持令牌访问时，把签发方的主体投影成本地用户行。
-/// </summary>
+/// <summary>资源服务形态：首次持令牌访问时，把签发方的主体投影成本地用户行。</summary>
 /// <remarks>
 /// <para><b>为什么必须是自动的。</b>本形态下本地用户行的主键<b>就是</b>签发方的 <c>sub</c>
 /// （见 <c>User</c> 的构造函数），而角色授予按这个主键落。让人手填主体标识，抄错一位得到的是

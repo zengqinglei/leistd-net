@@ -1,8 +1,6 @@
-# 前端组件库选型
+# 前端组件体系
 
-> 架构决策记录。只记「决定 + 依据 + 影响 + 备选」这类长期约束，不记执行细节。
-
-## 决定
+## 技术组成
 
 模板前端（`template/frontend`）采用 **Spartan UI（spartan.ng）** 作为 UI 组件库。
 
@@ -29,14 +27,3 @@
 - helm 组件升级与定制登记见生成项目的 [Spartan 维护约定](../../template/docs/standards/frontend-spartan.md)。
 - 修改组件约定时同步 `template/docs/standards/` 与生成项目 Skill。
 - 仓库根与模板各带一份 Spartan Skill；当前本地调整为先核对锁定版本和已复制 Helm 代码、按需运行 CLI info、避免交互式生成。同步上游 Skill 时核对这些差异并保持两份一致。
-
-## 备选（未采纳）
-
-| 候选 | 未采纳原因 |
-| --- | --- |
-| PrimeNG v22 | 商业许可 + 供应商锁定，未解决根本问题 |
-| PrimeNG v21 停留 | 仓库已归档不再维护，且锁死 Angular 21 |
-| Angular Material | 非 Tailwind-first，主题/深色需桥接；仍是第三方 npm 依赖 |
-| ng-zorro / Taiga | 同上锁定问题；ng-zorro 深色模式机制与现有 class 切换差距大 |
-| HyperUI / DaisyUI / Flowbite / Preline | 静态片段/纯 CSS/停更封装/非 MIT，均非合格的 Angular 组件库 |
-| PrimeNG 社区 fork（Optimus UI） | 早期、无企业赞助，存续性不可依赖 |

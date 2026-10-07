@@ -1,8 +1,6 @@
 namespace Leistd.OperationRecords.AspNetCore.Attributes;
 
-/// <summary>
-/// 声明写端点对应的业务动作码，让授权阶段的拒绝也能落一条失败记录。
-/// </summary>
+/// <summary>声明写端点对应的业务动作码，让授权阶段的拒绝也能落一条失败记录。</summary>
 /// <remarks>
 /// 授权阶段的拒绝到不了应用服务；本特性把动作码带到端点元数据上，供 <c>HttpContext.RecordDeniedOperationAsync()</c>
 /// 在拒绝时读取。动作码显式声明、不从路由推断，且须与成功路径写下的动作码逐字一致。
@@ -17,14 +15,10 @@ public sealed class OperationRecordActionAttribute(string action, params string[
     /// <summary>业务动作码。</summary>
     public string Action { get; } = action;
 
-    /// <summary>
-    /// 目标标识的路由参数名，按顺序以 <c>/</c> 连接；为空表示该端点没有目标标识。
-    /// </summary>
+    /// <summary>目标标识的路由参数名，按顺序以 <c>/</c> 连接；为空表示该端点没有目标标识。</summary>
     /// <remarks>多段目标（如 <c>{tenantId}/{name}</c>）须全部列出，写法与成功路径一致。</remarks>
     public IReadOnlyList<string> TargetRouteKeys { get; } = targetRouteKeys;
 
-    /// <summary>
-    /// 加在路由值前面的前缀，让被拒记录的目标标识与成功路径写法一致（如权限授予记为 <c>Role/{roleId}</c>）。
-    /// </summary>
+    /// <summary>加在路由值前面的前缀，让被拒记录的目标标识与成功路径写法一致（如权限授予记为 <c>Role/{roleId}</c>）。</summary>
     public string TargetIdPrefix { get; set; } = string.Empty;
 }

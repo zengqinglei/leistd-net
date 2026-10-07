@@ -49,19 +49,17 @@ dotnet add package Leistd.Ddd.Infrastructure
 注册基础设施、每个 DbContext 和所需拦截器：
 
 ```csharp
-// 1. 拦截器织入与漏登记校验都由这个工厂驱动，不装则两者都不生效
+// 拦截器织入与漏登记校验依赖此工厂。
 builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
 
-// 2. 工作单元、EF Core 支持与数据过滤器
 builder.Services.AddDddInfrastructure(options =>
 {
     options.IsTransactional = true;
 });
 
-// 3. DbContext 只配置连接
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
-// 4. 每个 DbContext 显式登记一次；不需要仓储的调无参重载
+// 每个 DbContext 显式登记一次；不需要仓储时用无参重载。
 builder.Services.AddDddDbContext<AppDbContext>(o => o.AddDefaultRepositories());
 builder.Services.AddDddDbContext<ControlPlaneDbContext>();
 ```

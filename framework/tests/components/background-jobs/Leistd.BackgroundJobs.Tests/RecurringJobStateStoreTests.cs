@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.BackgroundJobs.Tests;
 
-/// <summary>
-/// 共享水位：多副本读到同一个"已完成时段"，且水位只前进。
-/// </summary>
+/// <summary>共享水位：多副本读到同一个"已完成时段"，且水位只前进。</summary>
 public sealed class RecurringJobStateStoreTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("DataSource=:memory:");

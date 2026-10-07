@@ -27,9 +27,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 保留期归档：按物理库逐个搬运，同库的其余租户一并覆盖，列逐一对齐。
-/// </summary>
+/// <summary>保留期归档：按物理库逐个搬运，同库的其余租户一并覆盖，列逐一对齐。</summary>
 /// <remarks>
 /// <para>两个错了都不报错的陷阱：无租户上下文里的租户过滤器只放行宿主自己的行（漏 <c>IgnoreQueryFilters</c>
 /// 则租户记录永远留着）；只连宿主库则独立库租户的记录永远留着。日志照样打印"归档成功 N 条"。</para>
@@ -147,9 +145,7 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
         Assert.Equal(0, archive.Calls);
     }
 
-    /// <summary>
-    /// 有库失败、或有租户解析不出库时抛出，让调度器不记水位。
-    /// </summary>
+    /// <summary>有库失败、或有租户解析不出库时抛出，让调度器不记水位。</summary>
     /// <remarks>
     /// 解析不出连接的租户同样一条都没搬走。这一档报成功的话，积压虽然会被
     /// 下一轮按截止时间扫到，但"有一批库进不去"这件事没有任何人知道，直到它一直进不去。

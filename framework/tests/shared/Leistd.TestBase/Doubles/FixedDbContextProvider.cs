@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.TestBase.Doubles;
 
-/// <summary>
-/// 返回固定 <see cref="DbContext"/> 实例的提供器，供不经工作单元的单元测试使用。
-/// </summary>
+/// <summary>返回固定 <see cref="DbContext"/> 实例的提供器，供不经工作单元的单元测试使用。</summary>
 /// <remarks>
 /// 组件的 EF 存储与管理器一律经 <see cref="IDbContextProvider{TDbContext}"/> 取上下文
 /// （只有它会设置 <c>DbContextCreationContext.Current</c>，从而拿到工作单元已解析的连接）。
@@ -20,9 +18,7 @@ public sealed class FixedDbContextProvider<TDbContext>(TDbContext dbContext) : I
         => Task.FromResult(dbContext);
 }
 
-/// <summary>
-/// <see cref="FixedDbContextProvider{TDbContext}"/> 的构造快捷方式，省去重复写泛型参数。
-/// </summary>
+/// <summary><see cref="FixedDbContextProvider{TDbContext}"/> 的构造快捷方式，省去重复写泛型参数。</summary>
 /// <remarks>用法：<c>using static Leistd.TestBase.Doubles.DbContextProviderFor;</c> 后写 <c>Fixed(db)</c>。</remarks>
 public static class DbContextProviderFor
 {

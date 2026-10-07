@@ -3,9 +3,7 @@ using Leistd.Settings.Resolution;
 
 namespace CompanyName.ProjectName.Application.Auth.Policies;
 
-/// <summary>
-/// 当前上下文生效的注册策略快照
-/// </summary>
+/// <summary>当前上下文生效的注册策略快照。</summary>
 /// <remarks>
 /// 字段与 <c>UserRegistrationOptions</c> 一一对应：消费方原来读 <c>IOptions&lt;T&gt;.Value</c>，
 /// 换成读这份快照，除了多一次 <c>await</c> 之外用法不变。
@@ -30,9 +28,7 @@ public sealed record UserRegistrationPolicy
 #endif
 }
 
-/// <summary>
-/// 解析当前租户生效的注册策略
-/// </summary>
+/// <summary>解析当前租户生效的注册策略。</summary>
 /// <remarks>
 /// 注册策略是<b>按租户</b>的：同一套部署下不同租户可以有不同的注册门槛，
 /// 而 <c>IOptions&lt;T&gt;</c> 来自 <c>IConfiguration</c>，整个进程只有一份，表达不了这件事。

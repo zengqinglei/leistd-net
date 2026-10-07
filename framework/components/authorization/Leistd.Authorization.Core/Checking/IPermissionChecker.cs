@@ -30,9 +30,7 @@ public interface IPermissionChecker
     /// </remarks>
     Task<bool> IsGrantedAsync(ClaimsPrincipal principal, string name, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 检查指定认证主体是否拥有指定的多个权限，规则同 <see cref="IsGrantedAsync(ClaimsPrincipal, string, CancellationToken)"/>。
-    /// </summary>
+    /// <summary>检查指定认证主体是否拥有指定的多个权限，规则同 <see cref="IsGrantedAsync(ClaimsPrincipal, string, CancellationToken)"/>。</summary>
     Task<MultiplePermissionGrantResult> IsGrantedAsync(
         ClaimsPrincipal principal,
         string[] names,

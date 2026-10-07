@@ -11,9 +11,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Ddd.Infrastructure.Tests.TestDoubles;
 
-/// <summary>
-/// 过滤器与落值测试的共享基础设施：多租户 + 软删除的双过滤器实体、BaseDbContext 宿主、最小服务图。
-/// </summary>
+/// <summary>过滤器与落值测试的共享基础设施：多租户 + 软删除的双过滤器实体、BaseDbContext 宿主、最小服务图。</summary>
 internal class TestOrder : FullAuditedEntity<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; set; }

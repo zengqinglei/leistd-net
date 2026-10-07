@@ -16,7 +16,6 @@ namespace Leistd.Response.AspNetCore.Filters;
 /// 直接挂本过滤器而不经该扩展方法时，元数据不会被改写。</para>
 /// <para>错误不经本过滤器：抛出的异常交给异常处理组件输出 Problem Details，与 MVC 侧一致。</para>
 /// </remarks>
-/// <param name="logger">日志。</param>
 public sealed class ResultWrapperEndpointFilter(ILogger<ResultWrapperEndpointFilter> logger) : IEndpointFilter
 {
     /// <inheritdoc />

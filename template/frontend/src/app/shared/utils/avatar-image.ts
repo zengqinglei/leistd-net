@@ -69,9 +69,7 @@ export async function prepareAvatarImage(file: File): Promise<string> {
   }
 }
 
-/**
- * 这个值能直接放进 `<img src>`：上传后的站内地址（`/api/v1/users/{id}/avatar?v=…`）、外部地址或尚未提交的 data URL。
- */
+/** 这个值能直接放进 `<img src>`：上传后的站内地址（`/api/v1/users/{id}/avatar?v=…`）、外部地址或尚未提交的 data URL。 */
 export function isAvatarImageUrl(value: string | null | undefined): boolean {
   return (
     !!value &&

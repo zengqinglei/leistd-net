@@ -6,14 +6,10 @@ using StackExchange.Redis;
 
 namespace CompanyName.ProjectName.Infrastructure;
 
-/// <summary>
-/// 提供本服务的 Data Protection 密钥环注册。
-/// </summary>
+/// <summary>提供本服务的 Data Protection 密钥环注册。</summary>
 public static class DataProtectionExtensions
 {
-    /// <summary>
-    /// 注册持久化的 Data Protection 密钥环：配置了 Redis 时存 Redis，否则存文件系统。
-    /// </summary>
+    /// <summary>注册持久化的 Data Protection 密钥环：配置了 Redis 时存 Redis，否则存文件系统。</summary>
     /// <remarks>
     /// <para>除认证 Cookie 与防伪令牌外，启用本地身份时还有三类落库数据用这套密钥环加密：
     /// 控制库里租户独立库的连接串、设置表里的机密设置（如发信口令）、用户的两步验证密钥。

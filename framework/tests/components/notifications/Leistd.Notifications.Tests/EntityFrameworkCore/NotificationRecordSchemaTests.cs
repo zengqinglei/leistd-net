@@ -6,9 +6,7 @@ using Xunit;
 
 namespace Leistd.Notifications.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 通知表的模型配置：长度约束与查询索引。
-/// </summary>
+/// <summary>通知表的模型配置：长度约束与查询索引。</summary>
 /// <remarks>
 /// 用 SQLite 而不是 InMemory：长度约束与复合索引只有真正建库时才产生 DDL，
 /// InMemory 全内存求值会让整个 <c>NotificationRecordConfiguration</c> 静默通过。

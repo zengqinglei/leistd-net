@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 在宿主库与每个独立库里各执行一次同一段逻辑，逐库隔离失败。
-/// </summary>
+/// <summary>在宿主库与每个独立库里各执行一次同一段逻辑，逐库隔离失败。</summary>
 /// <remarks>
 /// <para>回调运行时已切到该库的代表租户上下文。执行器不开工作单元：需要事务时在回调里
 /// <c>Begin(requiresNew: true)</c> 后经 <c>IDbContextProvider</c> 取上下文。</para>
@@ -35,9 +33,7 @@ public interface ITenantDatabaseRunner
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// 一次逐库执行的结果。
-/// </summary>
+/// <summary>一次逐库执行的结果。</summary>
 /// <param name="Databases">处理的物理库数（含宿主库）。</param>
 /// <param name="UnresolvedTenants">解析不出连接、本轮被跳过的租户。</param>
 /// <param name="FailedDatabases">执行失败的库；错误已记日志。</param>

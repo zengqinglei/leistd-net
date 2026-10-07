@@ -7,9 +7,7 @@ using Leistd.Authorization.Grants;
 
 namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
-/// <summary>
-/// 授权类集成测试的共享装配：建用户、授予权限，以及两处共用的常量。
-/// </summary>
+/// <summary>授权类集成测试的共享装配：建用户、授予权限，以及两处共用的常量。</summary>
 /// <remarks>
 /// <para>提到基类是因为这些装配被<b>两批剪裁归属不同</b>的用例共用：
 /// <c>AuthorizationAndAuditingTests</c> 覆盖权限、审计、撤权等横切主题，只要有本地身份就成立；

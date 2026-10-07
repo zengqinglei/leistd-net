@@ -13,9 +13,7 @@ using Xunit;
 
 namespace Leistd.ExceptionHandling.Tests;
 
-/// <summary>
-/// 框架判定的请求错误与无响应体的错误状态码走 ASP.NET Core 自己的问题详情管道，两种 <c>ThrowOnBadRequest</c> 取值同形。
-/// </summary>
+/// <summary>框架判定的请求错误与无响应体的错误状态码走 ASP.NET Core 自己的问题详情管道，两种 <c>ThrowOnBadRequest</c> 取值同形。</summary>
 /// <remarks>
 /// <c>ThrowOnBadRequest</c> 默认只在开发环境开启：开发环境抛 <c>BadHttpRequestException</c>，处理器放行后由
 /// 异常中间件按其状态码写出；生产环境只写状态码，由状态码页写出。两条路径都经 <c>IProblemDetailsService</c>，

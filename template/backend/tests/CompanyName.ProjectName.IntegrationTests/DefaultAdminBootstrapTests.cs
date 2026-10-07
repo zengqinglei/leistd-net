@@ -18,9 +18,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 默认管理员只在需要创建时才要口令：克隆即可运行，已有管理员的部署不必再提供，首次部署漏配仍然启动失败。
-/// </summary>
+/// <summary>默认管理员只在需要创建时才要口令：克隆即可运行，已有管理员的部署不必再提供，首次部署漏配仍然启动失败。</summary>
 public sealed class DefaultAdminBootstrapTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {

@@ -20,9 +20,7 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 外部账号绑定：已登录用户绑定 / 解绑外部账号，绑定与登录的授权凭据互不通用。
-/// </summary>
+/// <summary>外部账号绑定：已登录用户绑定 / 解绑外部账号，绑定与登录的授权凭据互不通用。</summary>
 public sealed class ExternalLoginLinkTests
 {
     private const string StateCookieName = "__Host-CompanyName.ProjectName.External";
@@ -213,9 +211,7 @@ public sealed class ExternalLoginLinkTests
         Assert.Equal(JsonValueKind.Undefined, link.ValueKind);
     }
 
-    /// <summary>
-    /// 未验证的外部邮箱不写进新账号：否则就占用了别人的地址，本人随后注册会被挡、找回时接手的是对方建的号。
-    /// </summary>
+    /// <summary>未验证的外部邮箱不写进新账号：否则就占用了别人的地址，本人随后注册会被挡、找回时接手的是对方建的号。</summary>
     [Fact]
     public async Task Unverified_external_email_is_not_taken_by_a_new_account()
     {
@@ -244,9 +240,7 @@ public sealed class ExternalLoginLinkTests
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
     }
 
-    /// <summary>
-    /// 以已验证邮箱新建的账号记为已确认：本人再用另一个外部账号（同一已验证邮箱）登录，关联回同一个用户，而不是被拒。
-    /// </summary>
+    /// <summary>以已验证邮箱新建的账号记为已确认：本人再用另一个外部账号（同一已验证邮箱）登录，关联回同一个用户，而不是被拒。</summary>
     [Fact]
     public async Task Account_created_from_a_verified_email_links_the_next_verified_sign_in()
     {

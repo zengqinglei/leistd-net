@@ -6,9 +6,7 @@ using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
-/// <summary>
-/// 从已认证主体的租户声明解析租户。
-/// </summary>
+/// <summary>从已认证主体的租户声明解析租户。</summary>
 /// <remarks>
 /// 必须位于解析链首；无租户声明表示宿主用户，且认证主体一旦处理便不允许后续来源改写租户。
 /// </remarks>

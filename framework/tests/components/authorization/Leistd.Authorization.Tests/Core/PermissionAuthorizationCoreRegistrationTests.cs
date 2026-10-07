@@ -10,9 +10,7 @@ using Xunit;
 
 namespace Leistd.Authorization.Tests.Core;
 
-/// <summary>
-/// <c>AddPermissionAuthorizationCore</c> 的注册面：生命周期、幂等与宿主替换。
-/// </summary>
+/// <summary><c>AddPermissionAuthorizationCore</c> 的注册面：生命周期、幂等与宿主替换。</summary>
 public sealed class PermissionAuthorizationCoreRegistrationTests
 {
     // 检查器是 Scoped：一次请求内的多次检查共享主体与授予快照；改成 Singleton 会把一个人的快照带给下一个请求

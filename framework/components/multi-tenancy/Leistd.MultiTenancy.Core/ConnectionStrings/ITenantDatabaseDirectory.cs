@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 某个连接名下有哪些独立的物理库，以及每个库住着哪些租户。
-/// </summary>
+/// <summary>某个连接名下有哪些独立的物理库，以及每个库住着哪些租户。</summary>
 /// <remarks>
 /// <para>不下发连接串：运行时逐库作业只需要“有哪些库、用哪个租户进得去”，连接由该租户的正常解析链取得。
 /// 需要明文连接串的迁移场景走 <see cref="ITenantMigrationTargetProvider"/>，两者权限不同。</para>

@@ -23,9 +23,7 @@ using Xunit;
 
 namespace Leistd.Authorization.Tests.Core;
 
-/// <summary>
-/// 权限管理用例：与检查器同一侧别判据、主体经宿主目录确认、替换带版本并发布事件；首次授予只写一次。
-/// </summary>
+/// <summary>权限管理用例：与检查器同一侧别判据、主体经宿主目录确认、替换带版本并发布事件；首次授予只写一次。</summary>
 public sealed class PermissionManagementTests
 {
     private const string HostOnly = "App.Tenants";

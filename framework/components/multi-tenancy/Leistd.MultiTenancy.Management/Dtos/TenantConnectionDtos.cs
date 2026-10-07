@@ -3,9 +3,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 
 namespace Leistd.MultiTenancy.Management.Dtos;
 
-/// <summary>
-/// 租户的一条连接登记（管理面）。
-/// </summary>
+/// <summary>租户的一条连接登记（管理面）。</summary>
 /// <remarks>连接串只写不读：管理面只回名字与版本。租户一条登记都没有，就表示它不单独分库。</remarks>
 public sealed record TenantConnectionOutputDto
 {
@@ -19,15 +17,11 @@ public sealed record TenantConnectionOutputDto
     public required long Version { get; init; }
 }
 
-/// <summary>
-/// 登记或更新一条租户连接；连接名走路由。
-/// </summary>
+/// <summary>登记或更新一条租户连接；连接名走路由。</summary>
 /// <remarks>想让某个名字回到"用服务自己的库"，删掉这一条，而不是提交空连接串。</remarks>
 public sealed record UpsertTenantConnectionInputDto
 {
-    /// <summary>
-    /// 调用方读到的该行版本；<see langword="null"/> 表示预期这一行尚不存在（首次登记）。
-    /// </summary>
+    /// <summary>调用方读到的该行版本；<see langword="null"/> 表示预期这一行尚不存在（首次登记）。</summary>
     /// <remarks>声明为 <c>required</c>：缺失时直接拒绝输入，而不是静默按后写者胜出处理。</remarks>
     public required long? ExpectedVersion { get; init; }
 

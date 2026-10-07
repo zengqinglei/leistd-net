@@ -16,9 +16,7 @@ namespace CompanyName.ProjectName.Application.Auth.Policies;
 /// <param name="LockoutTriggered">本次失败恰好触发了锁定。</param>
 internal readonly record struct AccessFailureOutcome(User? User, bool LockoutTriggered);
 
-/// <summary>
-/// 认证失败的累计与锁定：口令登录、两步验证登录、再认证三条路径共用同一套计数。
-/// </summary>
+/// <summary>认证失败的累计与锁定：口令登录、两步验证登录、再认证三条路径共用同一套计数。</summary>
 /// <remarks>
 /// <para><b>为什么要有这一层。</b>这三处此前各写一份"累计、写入、然后紧接着抛出"，
 /// 正确性都挂在同一个隐含前提上——调用方不在工作单元内，写入才会即时落库。
@@ -29,9 +27,7 @@ internal readonly record struct AccessFailureOutcome(User? User, bool LockoutTri
 /// </remarks>
 internal interface IAccessFailureCounter
 {
-    /// <summary>
-    /// 在<b>独立工作单元</b>里累计一次失败并提交，与调用方的事务无关。
-    /// </summary>
+    /// <summary>在<b>独立工作单元</b>里累计一次失败并提交，与调用方的事务无关。</summary>
     /// <remarks>
     /// 边界只包这一次写入：审计按组件契约本就独立提交，安全提醒是提交后副作用，
     /// 包进来只会把无关失败拖进同一个回滚范围。
@@ -40,9 +36,7 @@ internal interface IAccessFailureCounter
     /// <param name="cancellationToken">取消令牌。</param>
     Task<AccessFailureOutcome> CountAsync(Guid userId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 这一次恰好触发锁定时的后续：给本人发安全提醒，并留一条锁定审计。
-    /// </summary>
+    /// <summary>这一次恰好触发锁定时的后续：给本人发安全提醒，并留一条锁定审计。</summary>
     /// <remarks>
     /// 只在触发的那一次调用，一个锁定期内至多一条，写入量有界；锁定期内的后续尝试不再记。
     /// </remarks>

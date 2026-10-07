@@ -4,9 +4,7 @@ using Leistd.OperationRecords.Models;
 
 namespace CompanyName.ProjectName.Api.Middlewares;
 
-/// <summary>
-/// 授权通过之后被业务规则拒绝的写操作，补一条失败的操作记录；异常原样重抛，响应仍由全局异常处理写出。
-/// </summary>
+/// <summary>授权通过之后被业务规则拒绝的写操作，补一条失败的操作记录；异常原样重抛，响应仍由全局异常处理写出。</summary>
 /// <remarks>
 /// <para><b>这是兜底，覆盖所有带注解的端点</b>——组件映射的端点与本项目的控制器都在内。
 /// 最初要解决的是组件端点的缺口：权限管理这类由组件映射的端点，业务拒绝（并发冲突、权限未定义、

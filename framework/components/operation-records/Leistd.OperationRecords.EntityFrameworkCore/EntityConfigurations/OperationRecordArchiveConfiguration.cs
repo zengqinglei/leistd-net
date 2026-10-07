@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Leistd.OperationRecords.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// <see cref="OperationRecordArchive"/> 的实体配置。
-/// </summary>
+/// <summary><see cref="OperationRecordArchive"/> 的实体配置。</summary>
 /// <remarks>列长度引用 <see cref="OperationRecordInfo"/> 的上限常量，与原表同源，搬运时不截断。</remarks>
 public class OperationRecordArchiveConfiguration : IEntityTypeConfiguration<OperationRecordArchive>
 {

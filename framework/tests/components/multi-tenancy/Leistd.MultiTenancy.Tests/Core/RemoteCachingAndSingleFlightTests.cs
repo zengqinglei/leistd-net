@@ -5,9 +5,7 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// 缓存与单飞：同租户同连接名的并发只回源一次，调用方取消只取消自己的等待。
-/// </summary>
+/// <summary>缓存与单飞：同租户同连接名的并发只回源一次，调用方取消只取消自己的等待。</summary>
 public sealed class RemoteCachingAndSingleFlightTests : IDisposable
 {
     private readonly RemoteHost _host = new();

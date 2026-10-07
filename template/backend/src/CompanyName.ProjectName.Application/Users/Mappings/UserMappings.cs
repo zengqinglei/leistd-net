@@ -11,9 +11,7 @@ using Mapster;
 
 namespace CompanyName.ProjectName.Application.Users.Mappings;
 
-/// <summary>
-/// 用户映射配置
-/// </summary>
+/// <summary>用户映射配置。</summary>
 public class UserMappings : IRegister
 {
 #if (LocalIdentity)

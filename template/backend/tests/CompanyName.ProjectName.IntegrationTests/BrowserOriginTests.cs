@@ -13,9 +13,7 @@ using System.Net.WebSockets;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 来源检查的用例共用一个派生宿主（同一份 CORS 配置与日志替身）；同类用例顺序执行，每例开头清空日志。
-/// </summary>
+/// <summary>来源检查的用例共用一个派生宿主（同一份 CORS 配置与日志替身）；同类用例顺序执行，每例开头清空日志。</summary>
 public sealed class BrowserOriginTests(BrowserOriginTests.OriginHost origin) : IClassFixture<BrowserOriginTests.OriginHost>
 {
     [Theory]

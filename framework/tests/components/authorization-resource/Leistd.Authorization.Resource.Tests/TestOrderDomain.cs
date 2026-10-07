@@ -6,9 +6,7 @@ using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Resource.Tests;
 
-/// <summary>
-/// 测试用最小业务领域：一个带所有者与组织的订单。
-/// </summary>
+/// <summary>测试用最小业务领域：一个带所有者与组织的订单。</summary>
 /// <remarks>
 /// 原语的正确性风险不在代码量，而在没有真实消费者。用一个真实存在的实体在关系型数据库上
 /// 跑通"实例判定"与"把 ACL 合并进集合查询"，才能证明契约在实际用法下成立。

@@ -12,9 +12,7 @@ using Xunit;
 
 namespace Leistd.Security.Tests;
 
-/// <summary>
-/// <c>AddAmbientContext</c> / <c>AddSecurity</c> 的注册面：生命周期、幂等与宿主替换。
-/// </summary>
+/// <summary><c>AddAmbientContext</c> / <c>AddSecurity</c> 的注册面：生命周期、幂等与宿主替换。</summary>
 /// <remarks>
 /// 主体访问器是 Singleton（状态在 AsyncLocal 里），读主体的服务是 Transient：
 /// 若被改成 Scoped，后台作业在根作用域解析时会被作用域校验拒绝，或在不校验时捕获一份过期主体。

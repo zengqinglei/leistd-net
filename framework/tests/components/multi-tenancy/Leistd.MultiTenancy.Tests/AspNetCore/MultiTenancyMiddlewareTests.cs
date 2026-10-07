@@ -15,9 +15,7 @@ using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
-/// <summary>
-/// 多租户中间件端到端：解析链优先级、Store 校验失败语义、Change 覆盖下游管道。
-/// </summary>
+/// <summary>多租户中间件端到端：解析链优先级、Store 校验失败语义、Change 覆盖下游管道。</summary>
 public class MultiTenancyMiddlewareTests(MultiTenancyMiddlewareTests.HostFixture fixture)
     : IClassFixture<MultiTenancyMiddlewareTests.HostFixture>
 {
@@ -66,9 +64,7 @@ public class MultiTenancyMiddlewareTests(MultiTenancyMiddlewareTests.HostFixture
         Assert.Equal(ActiveTenantId.ToString(), body);
     }
 
-    /// <summary>
-    /// 已认证请求的未知/停用租户照常失败：只能探到自己的租户，明确报错对运维有价值。
-    /// </summary>
+    /// <summary>已认证请求的未知/停用租户照常失败：只能探到自己的租户，明确报错对运维有价值。</summary>
     /// <remarks>
     /// 未配置全局异常处理器的 TestServer 会把异常原样抛给调用方；真实宿主由 Leistd.ExceptionHandling 映射。
     /// </remarks>
@@ -87,9 +83,7 @@ public class MultiTenancyMiddlewareTests(MultiTenancyMiddlewareTests.HostFixture
             () => GetAsync("/", ("X-Test-Auth", "u1"), ("X-Test-Tenant-Claim", InactiveTenantId.ToString())));
     }
 
-    /// <summary>
-    /// 未认证请求下，"不存在"与"已停用"必须给出同一种失败。
-    /// </summary>
+    /// <summary>未认证请求下，"不存在"与"已停用"必须给出同一种失败。</summary>
     /// <remarks>
     /// <para>两者不同就等于把租户的存在与启用状态告诉任何人：带上租户头打任意匿名端点，看状态码即可枚举。</para>
     /// <para>也不能放行继续走——那样请求会落到宿主上下文，租户用户输错租户名时凭据会拿去和宿主用户比对。</para>
@@ -129,9 +123,7 @@ public class MultiTenancyMiddlewareTests(MultiTenancyMiddlewareTests.HostFixture
         Assert.Equal("host", body);
     }
 
-    /// <summary>
-    /// 只有后续身份已认证的主体同样由 claim 定案租户，请求头改写不了
-    /// </summary>
+    /// <summary>只有后续身份已认证的主体同样由 claim 定案租户，请求头改写不了。</summary>
     /// <remarks>
     /// 租户解析若只看第一个身份，这样的主体会被当成匿名，解析继续交给请求头——
     /// 而授权管线与当前用户都认为它已认证，于是它在一个由请求头选中的租户里被判权、被留痕。
@@ -158,9 +150,7 @@ public class MultiTenancyMiddlewareTests(MultiTenancyMiddlewareTests.HostFixture
             ("X-Test-Tenant-Claim", InactiveTenantId.ToString())));
     }
 
-    /// <summary>
-    /// 本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。
-    /// </summary>
+    /// <summary>本类用例共享的宿主：配置固定、用例之间没有逐测可变的宿主状态。</summary>
     public sealed class HostFixture : IAsyncLifetime
     {
         public IHost Host { get; private set; } = default!;

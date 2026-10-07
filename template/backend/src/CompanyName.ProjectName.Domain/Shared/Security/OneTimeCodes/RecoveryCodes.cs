@@ -4,9 +4,7 @@ using System.Text;
 
 namespace CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 
-/// <summary>
-/// 两步验证的恢复码：手机丢了时替代验证码登录，每个只能用一次。
-/// </summary>
+/// <summary>两步验证的恢复码：手机丢了时替代验证码登录，每个只能用一次。</summary>
 /// <remarks>
 /// 每个码 80 位随机（16 个 Base32 字符，按 4 位一组显示），库里只存 SHA-256 摘要。
 /// 这个长度下不加盐的快速哈希也无法离线穷举，所以不必走口令那套慢哈希——
@@ -40,9 +38,7 @@ public static class RecoveryCodes
         return codes;
     }
 
-    /// <summary>
-    /// 摘要。先规整（去掉分隔符与空白、转小写）：用户照抄时多一个空格或少一个短横线都应当认。
-    /// </summary>
+    /// <summary>摘要。先规整（去掉分隔符与空白、转小写）：用户照抄时多一个空格或少一个短横线都应当认。</summary>
     public static string Hash(string code)
     {
         var normalized = new string(code

@@ -16,9 +16,7 @@ public static class DependencyInjection
     /// <summary>通知 Hub 路径。</summary>
     public const string DefaultNotificationHubPath = "/hubs/notifications";
 
-    /// <summary>
-    /// 注册基于 SignalR 的通知发布器，经通知自己的 <see cref="NotificationHub"/> 推送。
-    /// </summary>
+    /// <summary>注册基于 SignalR 的通知发布器，经通知自己的 <see cref="NotificationHub"/> 推送。</summary>
     /// <remarks>
     /// 等价于 <c>AddNotificationsSignalR&lt;NotificationHub&gt;()</c>，配合 <see cref="MapNotificationHub"/> 使用。
     /// 内部只注册通知传输所需的 SignalR 能力，不注册实时业务 Hub、在线状态或业务事件发布器。
@@ -35,9 +33,7 @@ public static class DependencyInjection
     public static IServiceCollection AddNotificationsSignalR(this IServiceCollection services)
         => services.AddNotificationsSignalR<NotificationHub>();
 
-    /// <summary>
-    /// 注册基于 SignalR 的通知发布器，经宿主指定的 Hub 推送。
-    /// </summary>
+    /// <summary>注册基于 SignalR 的通知发布器，经宿主指定的 Hub 推送。</summary>
     /// <remarks>
     /// <para>用于让通知与业务实时事件共用一个 Hub、一条客户端连接：通知按用户寻址推送到 <typeparamref name="THub"/>，
     /// 客户端方法名为 <see cref="NotificationClientMethods.Received"/>。该 Hub 由宿主自行映射，

@@ -6,9 +6,7 @@ using System.Text;
 
 namespace CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 
-/// <summary>
-/// 基于时间的一次性密码（RFC 6238，HMAC-SHA1、30 秒步长、6 位），与主流身份验证器应用一致。
-/// </summary>
+/// <summary>基于时间的一次性密码（RFC 6238，HMAC-SHA1、30 秒步长、6 位），与主流身份验证器应用一致。</summary>
 /// <remarks>
 /// 在模板里自己实现而不是引包：算法本身几十行，且 RFC 附带测试向量可直接验证（见单元测试）。
 /// </remarks>
@@ -23,9 +21,7 @@ public static class Totp
     /// <summary>步长（秒）。</summary>
     public const int StepSeconds = 30;
 
-    /// <summary>
-    /// 前后各容忍几个步长：手机与服务器的时钟总有偏差，输入也要时间。
-    /// </summary>
+    /// <summary>前后各容忍几个步长：手机与服务器的时钟总有偏差，输入也要时间。</summary>
     public const int AllowedDrift = 1;
 
     /// <summary>生成一个新的随机密钥。</summary>
@@ -57,9 +53,7 @@ public static class Totp
         return (binary % 1_000_000).ToString("D6", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>
-    /// 校验验证码，返回命中的步序号；不匹配或该步已用过时返回 null。
-    /// </summary>
+    /// <summary>校验验证码，返回命中的步序号；不匹配或该步已用过时返回 null。</summary>
     /// <param name="secret">密钥。</param>
     /// <param name="code">用户输入（容忍空格）。</param>
     /// <param name="now">当前时刻。</param>
@@ -87,9 +81,7 @@ public static class Totp
         return null;
     }
 
-    /// <summary>
-    /// 身份验证器应用识别的 <c>otpauth://</c> 地址（二维码的内容）。
-    /// </summary>
+    /// <summary>身份验证器应用识别的 <c>otpauth://</c> 地址（二维码的内容）。</summary>
     /// <param name="issuer">发行方，显示在应用里的条目标题。</param>
     /// <param name="account">账号名，区分同一发行方下的多个账号。</param>
     /// <param name="base32Secret">Base32 密钥。</param>

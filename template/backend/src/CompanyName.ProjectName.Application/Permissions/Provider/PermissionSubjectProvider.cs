@@ -10,9 +10,7 @@ using Leistd.Timing;
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 
-/// <summary>
-/// 将模板身份模型适配为权限检查主体。
-/// </summary>
+/// <summary>将模板身份模型适配为权限检查主体。</summary>
 public class PermissionSubjectProvider(
     ICurrentUser currentUser,
     IRepository<User, Guid> userRepository,

@@ -18,9 +18,7 @@ using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.EntityFrameworkCore;
 
-/// <summary>
-/// 授权存储必须写进<b>工作单元绑定的那个</b>数据库，并进同一个事务。
-/// </summary>
+/// <summary>授权存储必须写进<b>工作单元绑定的那个</b>数据库，并进同一个事务。</summary>
 /// <remarks>
 /// <para>守的是租户路由的失败边界，刻意走完整链路：真实 <c>IUnitOfWorkManager</c> +
 /// 真实 <c>IConnectionStringResolver</c> + 宿主形态的 <c>AddDbContext</c> 回调

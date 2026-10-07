@@ -6,9 +6,7 @@ using Npgsql;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 控制面的连接遵循 <c>IdentityControl → Default</c> 回落链：未单独配置时与业务同库，配置后切到自己的库，业务不跟着动。
-/// </summary>
+/// <summary>控制面的连接遵循 <c>IdentityControl → Default</c> 回落链：未单独配置时与业务同库，配置后切到自己的库，业务不跟着动。</summary>
 /// <remarks>
 /// <para><c>ControlPlaneModelSeparationTests</c> 验的是"哪个实体属于哪个上下文"。这条验的是运行期 DI 实际连到哪：
 /// 把控制面上下文直接接到默认连接，模型边界一字未改、单库部署照常可用，但"控制库拆到独立实例"从此失效。</para>

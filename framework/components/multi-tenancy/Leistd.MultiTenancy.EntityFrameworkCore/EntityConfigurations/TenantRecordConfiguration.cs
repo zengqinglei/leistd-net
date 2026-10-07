@@ -5,9 +5,7 @@ using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// 配置租户记录的 EF Core 映射。
-/// </summary>
+/// <summary>配置租户记录的 EF Core 映射。</summary>
 public class TenantRecordConfiguration : IEntityTypeConfiguration<TenantRecord>
 {
     /// <inheritdoc />

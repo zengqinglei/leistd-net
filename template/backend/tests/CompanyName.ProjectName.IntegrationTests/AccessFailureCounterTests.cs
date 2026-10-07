@@ -10,9 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 认证失败计数器自身的契约：提交独立于调用方的事务。
-/// </summary>
+/// <summary>认证失败计数器自身的契约：提交独立于调用方的事务。</summary>
 /// <remarks>
 /// <para>口令登录、两步验证登录、再认证三条路径都靠它累计失败。三处此前各写一份
 /// "累计、写入、然后紧接着抛出"，正确性都挂在同一个隐含前提上——调用方不在工作单元内，

@@ -7,9 +7,7 @@ using Xunit;
 
 namespace Leistd.ServiceClient.Tests.AspNetCore;
 
-/// <summary>
-/// <c>AddUserAccessTokenAccessor</c> 的注册面：一个单例读取器，宿主先注册的实现不被替换。
-/// </summary>
+/// <summary><c>AddUserAccessTokenAccessor</c> 的注册面：一个单例读取器，宿主先注册的实现不被替换。</summary>
 /// <remarks>
 /// 读取器在发送请求时才读 <see cref="HttpContext"/>，因此可以是单例；被池化的处理器捕获的也只是这一个无状态实例。
 /// </remarks>

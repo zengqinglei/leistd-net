@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 按连接名查询租户连接的结果。
-/// </summary>
+/// <summary>按连接名查询租户连接的结果。</summary>
 /// <remarks>
 /// <list type="bullet">
 /// <item><see cref="HasAnyConnection"/> 为 <see langword="false"/>：租户一条连接都没登记，用宿主配置；</item>
@@ -20,9 +18,7 @@ public sealed class TenantConnectionLookupResult
     /// <summary>该租户是否登记过任意连接。</summary>
     public required bool HasAnyConnection { get; init; }
 
-    /// <summary>
-    /// 命中的连接；<see langword="null"/> 表示这个名字（及默认名）都没有登记。
-    /// </summary>
+    /// <summary>命中的连接；<see langword="null"/> 表示这个名字（及默认名）都没有登记。</summary>
     public TenantConnectionConfiguration? Connection { get; init; }
 
     /// <inheritdoc />

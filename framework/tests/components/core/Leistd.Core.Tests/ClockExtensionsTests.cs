@@ -4,9 +4,7 @@ using Xunit;
 
 namespace Leistd.Core.Tests;
 
-/// <summary>
-/// 自然日与时区偏移的换算：全框架"今天"的口径都由这两个扩展给出。
-/// </summary>
+/// <summary>自然日与时区偏移的换算：全框架"今天"的口径都由这两个扩展给出。</summary>
 public class ClockExtensionsTests
 {
     // 东八区不设夏令时，用来钉固定偏移下的日界；北美东部有夏令时，用来钉偏移随时刻变化。
@@ -16,8 +14,7 @@ public class ClockExtensionsTests
     private static IClock ClockAt(string utcInstant) =>
         new UtcClockProvider(new FakeTimeProvider(DateTimeOffset.Parse(utcInstant + "Z").ToUniversalTime()));
 
-    // 日界的整个意义就在于"UTC 还在昨天、目标时区已经是今天"这一段。
-    // 组件文档里写死的就是这个例子，它同时是回归点。
+    // UTC 与目标时区跨日，验证日界取目标时区。
     [Fact]
     public void Midnight_follows_the_target_time_zone_across_the_utc_date_boundary()
     {

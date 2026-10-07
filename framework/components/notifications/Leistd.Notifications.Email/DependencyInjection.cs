@@ -10,9 +10,7 @@ namespace Leistd.Notifications.Email;
 /// <summary>通知邮件渠道的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 登记邮件渠道 <see cref="EmailNotificationChannel"/>：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
-    /// </summary>
+    /// <summary>登记邮件渠道 <see cref="EmailNotificationChannel"/>：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。</summary>
     /// <remarks>
     /// 宿主还需注册 <c>INotificationRecipientResolver</c>（从自己的用户模型取已验证地址）、一个 <c>IEmailSender</c>
     /// 与后台任务队列（如 <c>AddInProcessBackgroundJobs()</c>）。启用通知偏好时，渠道段取 <see cref="EmailNotificationChannel.ChannelName"/>。

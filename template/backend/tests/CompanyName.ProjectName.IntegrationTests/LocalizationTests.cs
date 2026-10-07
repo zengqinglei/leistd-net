@@ -10,9 +10,7 @@ using Leistd.Authorization.Errors;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 验证后端错误消息随请求 <c>Accept-Language</c> 本地化（仅在启用多语言 + Identity 时生成）。
-/// </summary>
+/// <summary>验证后端错误消息随请求 <c>Accept-Language</c> 本地化（仅在启用多语言 + Identity 时生成）。</summary>
 public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {
     private static async Task<string?> PostBadLoginAndReadMessageAsync(HttpClient client)
@@ -63,9 +61,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         Assert.NotEqual(enMessage, zhMessage);
     }
 
-    /// <summary>
-    /// 自定义校验（<c>IValidatableObject</c>）的文案与特性文案一样随请求语言本地化，字段名与查询参数同名
-    /// </summary>
+    /// <summary>自定义校验（<c>IValidatableObject</c>）的文案与特性文案一样随请求语言本地化，字段名与查询参数同名。</summary>
     [Fact]
     public async Task Custom_validation_message_localizes_to_chinese()
     {
@@ -83,9 +79,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         Assert.Equal("每个角色名长度不能超过 64 个字符", error.GetProperty("detail").GetString());
     }
 
-    /// <summary>
-    /// 业务校验的<b>具体原因</b>要传到客户端，不能被通用文案盖掉。
-    /// </summary>
+    /// <summary>业务校验的<b>具体原因</b>要传到客户端，不能被通用文案盖掉。</summary>
     /// <remarks>
     /// 异常处理器按错误码查词条，未命中时回落到抛出点的安全英文文案。
     /// 这里用"给日志级别写一个非法取值"这条真实场景钉住：400，
@@ -166,9 +160,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
     }
 
 #if (IncludeOperationRecords)
-    /// <summary>
-    /// 被业务规则拒绝的操作记录，失败原因按读取请求的语言由后端渲染
-    /// </summary>
+    /// <summary>被业务规则拒绝的操作记录，失败原因按读取请求的语言由后端渲染。</summary>
     /// <remarks>
     /// 记录里只存码；同一条记录换 <c>Accept-Language</c> 读，得到的是各自语言的句子，
     /// 与该码的错误响应同一条词条（这里是权限组件随包的译文）。
@@ -209,12 +201,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
             await ReadFailureAsync("zh-CN"));
     }
 
-    /// <summary>
-    /// 业务拒绝留痕带上异常的消息参数，失败原因里是被拒的那个用户名或邮箱
-    /// </summary>
-    /// <remarks>
-    /// 回归点：留痕曾只记错误码，带占位符的码在审计里显示成 <c>Username '{Username}' already exists.</c>。
-    /// </remarks>
+    /// <summary>业务拒绝留痕带上异常的消息参数，失败原因里是被拒的那个用户名或邮箱。</summary>
     [Fact]
     public async Task A_rejected_duplicate_is_recorded_with_the_value_that_collided()
     {
@@ -250,9 +237,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
             (await EmailReasonAsync("en-US"), await EmailReasonAsync("zh-CN")));
     }
 
-    /// <summary>
-    /// 登录失败与锁定的记录用审计专用词条（<c>{码}:Record</c>），带上次数与时长
-    /// </summary>
+    /// <summary>登录失败与锁定的记录用审计专用词条（<c>{码}:Record</c>），带上次数与时长。</summary>
     /// <remarks>
     /// 这两条记录的参数（窗口内失败次数、锁定阈值与时长）接口报错里没有，措辞只能另备；
     /// 键名与记录写入的参数逐字一致，填不上会留下 <c>{attempts}</c> 这类原样占位符。

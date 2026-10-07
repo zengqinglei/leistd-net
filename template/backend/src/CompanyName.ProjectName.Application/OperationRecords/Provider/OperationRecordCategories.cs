@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Application.OperationRecords.Provider;
 
-/// <summary>
-/// 操作动作的类别，驱动界面的分类筛选。
-/// </summary>
+/// <summary>操作动作的类别，驱动界面的分类筛选。</summary>
 /// <remarks>
 /// <para>类别是业务词汇，由本项目定义：框架只接受字符串，不预置清单。业务增长时直接在这里加
 /// （如"订单""结算"），不需要改框架。</para>

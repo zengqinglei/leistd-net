@@ -4,9 +4,7 @@ using Mapster;
 
 namespace CompanyName.ProjectName.Application.Roles.Mappings;
 
-/// <summary>
-/// 角色映射配置
-/// </summary>
+/// <summary>角色映射配置。</summary>
 /// <remarks>
 /// 用户数与权限数不在角色实体上，需要由调用方额外查询后经 <c>MapContext</c> 传入——
 /// 与 <c>UserMappings</c> 解析角色名的做法保持同一形态，不在应用服务里手工 new DTO。

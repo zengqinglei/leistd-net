@@ -1,8 +1,6 @@
 namespace Leistd.Settings.Definitions;
 
-/// <summary>
-/// 声明设置值元数据的链式写法。
-/// </summary>
+/// <summary>声明设置值元数据的链式写法。</summary>
 /// <example>
 /// <code>
 /// context.Add("Security.RequireTwoFactor", "false").AsBoolean();

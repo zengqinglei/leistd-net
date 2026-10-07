@@ -15,9 +15,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Domain.Auth.DomainServices;
 
-/// <summary>
-/// 外部认证领域服务：外部身份与本地用户的匹配、绑定与解绑。
-/// </summary>
+/// <summary>外部认证领域服务：外部身份与本地用户的匹配、绑定与解绑。</summary>
 /// <remarks>
 /// 依赖 <see cref="UserDomainService"/> 只为复用建号（用户名生成、查重与头像校验）：外部登录不另写一套建用户的出口。
 /// 用户聚合只读，不在这里修改。
@@ -30,9 +28,7 @@ public class ExternalAuthDomainService(
     IClock clock,
     ILogger<ExternalAuthDomainService> logger)
 {
-    /// <summary>
-    /// 查找或创建外部登录用户
-    /// </summary>
+    /// <summary>查找或创建外部登录用户。</summary>
     /// <returns>
     /// 用户；以及本次是否新建了用户。新建的用户还没有任何角色：默认角色属于入口相关的分配，由应用层完成。
     /// </returns>
@@ -139,9 +135,7 @@ public class ExternalAuthDomainService(
         return (user, created);
     }
 
-    /// <summary>
-    /// 把一个外部身份绑定到已登录的用户（"绑定"模式，而不是登录或建号）。
-    /// </summary>
+    /// <summary>把一个外部身份绑定到已登录的用户（"绑定"模式，而不是登录或建号）。</summary>
     /// <remarks>
     /// 一个外部身份只能属于一个用户：已绑在别人名下时拒绝，而不是改绑——
     /// 改绑等于让任何能登录这个外部账号的人把它从原主人那里抢走。
@@ -187,9 +181,7 @@ public class ExternalAuthDomainService(
         return connection;
     }
 
-    /// <summary>
-    /// 解绑用户的一个外部身份。
-    /// </summary>
+    /// <summary>解绑用户的一个外部身份。</summary>
     /// <remarks>
     /// 必须还剩一种登录方式（设有密码，或还有别的绑定），否则解绑之后这个账号就再也登不进来了。
     /// 解绑后要轮换用户的安全版本，让此前用这个外部账号完成第一步的登录挑战作废；那是对用户聚合的修改，由应用层在同一工作单元里完成。

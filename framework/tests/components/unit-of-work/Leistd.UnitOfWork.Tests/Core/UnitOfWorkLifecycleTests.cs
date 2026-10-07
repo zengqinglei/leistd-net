@@ -11,9 +11,7 @@ using Xunit;
 
 namespace Leistd.UnitOfWork.Tests.Core;
 
-/// <summary>
-/// 工作单元的终结生命周期：作用域释放、阶段调度与 exactly-once。
-/// </summary>
+/// <summary>工作单元的终结生命周期：作用域释放、阶段调度与 exactly-once。</summary>
 /// <remarks>
 /// <para>这一组钉的是<b>拦截器路径</b>。显式 <c>using (await Begin())</c> 的调用点由
 /// <c>using</c> 保证释放，而 <c>[UnitOfWork]</c> 特性的调用点完全依赖拦截器——
@@ -157,9 +155,7 @@ public sealed class UnitOfWorkLifecycleTests
         Assert.False(probe.Transaction.RolledBack);
     }
 
-    /// <summary>
-    /// AfterCommit 处理器在作用域仍存活时被 await 完成
-    /// </summary>
+    /// <summary>AfterCommit 处理器在作用域仍存活时被 await 完成。</summary>
     /// <remarks>
     /// 处理器解析的是同一作用域里的 Scoped 探针。若阶段事件被 fire-and-forget，
     /// 这里要么拿不到调用记录、要么在探针已释放后才跑到。

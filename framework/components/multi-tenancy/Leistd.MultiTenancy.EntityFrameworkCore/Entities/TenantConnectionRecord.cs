@@ -3,9 +3,7 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 表示宿主控制库中租户的一条连接登记。
-/// </summary>
+/// <summary>表示宿主控制库中租户的一条连接登记。</summary>
 /// <remarks>
 /// 这一行决定该租户在这个服务的数据落在哪个库，因此除并发令牌外还带审计字段。
 /// 主键是 <see cref="TenantId"/> + <see cref="Name"/>；一条都没有即该租户不单独分库。

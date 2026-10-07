@@ -2,9 +2,7 @@ using Mapster;
 
 namespace Leistd.ObjectMapping.Mapster.Options;
 
-/// <summary>
-/// 配置 Mapster 对象映射。
-/// </summary>
+/// <summary>配置 Mapster 对象映射。</summary>
 public class MapsterOptions
 {
     /// <summary>映射配置操作，按添加顺序作用于组件自己的 <see cref="TypeAdapterConfig"/>。</summary>

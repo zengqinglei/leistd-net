@@ -1,8 +1,6 @@
 namespace CompanyName.ProjectName.Api.Auth;
 
-/// <summary>
-/// 与权限无关、只描述主体形态的授权策略名
-/// </summary>
+/// <summary>与权限无关、只描述主体形态的授权策略名。</summary>
 /// <remarks>
 /// 权限点对应的策略名在 <c>PermissionConstant</c>；这里放的是"谁算一个可以操作自己数据的主体"。
 /// 组件端点不接受隐式的默认策略（那会把宿主对默认主体的要求悄悄叠到每个端点上），

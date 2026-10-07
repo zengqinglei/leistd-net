@@ -8,9 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 权限主体的两个解析入口同一口径：按当前主体与按显式主体解析，得到同一个权限主体。
-/// </summary>
+/// <summary>权限主体的两个解析入口同一口径：按当前主体与按显式主体解析，得到同一个权限主体。</summary>
 /// <remarks>
 /// 策略管道为被授权的主体判权时走显式入口；两边口径一旦分叉，同一个人在不同入口下权限不同。
 /// </remarks>

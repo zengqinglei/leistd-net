@@ -36,9 +36,7 @@ using System.Text.RegularExpressions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// Identity 轮换签名证书后，资源服务的四条验签链路在第一个请求就认得新公钥；伪造 kid 的请求不能把抓取放大。
-/// </summary>
+/// <summary>Identity 轮换签名证书后，资源服务的四条验签链路在第一个请求就认得新公钥；伪造 kid 的请求不能把抓取放大。</summary>
 /// <remarks>
 /// 两个配置管理器都是真实的（OpenIddict 验证、ASP.NET Core OIDC 处理器），只把它们的 HTTP 指向签发方替身，
 /// 替身按路径计数，断言落在真实抓取次数上。

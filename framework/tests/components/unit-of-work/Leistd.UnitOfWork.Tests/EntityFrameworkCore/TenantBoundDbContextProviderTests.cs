@@ -131,9 +131,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// 切换租户后复用同一个 DbContext 类型同样必须被拒绝。
-    /// </summary>
+    /// <summary>切换租户后复用同一个 DbContext 类型同样必须被拒绝。</summary>
     /// <remarks>
     /// 与上一条的区别在于走的是"命中已创建实例"的快路径：那条路径在解析连接之前就返回，
     /// 因此不经过 <c>Bind</c>。归属校验必须独立地放在快路径之前，否则同一个 DbContext
@@ -177,9 +175,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// 工作单元超时按整秒向上取整成命令超时：不足整秒的部分不能被截掉，更不能截成表示不限时的 0。
-    /// </summary>
+    /// <summary>工作单元超时按整秒向上取整成命令超时：不足整秒的部分不能被截掉，更不能截成表示不限时的 0。</summary>
     [Theory]
     [InlineData(1000, 1)]
     [InlineData(1500, 2)]
@@ -228,9 +224,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         await unitOfWork.CompleteAsync();
     }
 
-    /// <summary>
-    /// 无解析器、两个 DbContext 分别配置到不同数据库时必须立即失败
-    /// </summary>
+    /// <summary>无解析器、两个 DbContext 分别配置到不同数据库时必须立即失败。</summary>
     /// <remarks>
     /// 不拦的话后果是静默写错库：第二个 DbContext 会收到第一个已绑定目标的连接，
     /// 宿主回调采纳 <c>ExistingConnection</c> 后，它本来配置的库根本不会被访问。
@@ -273,9 +267,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         Assert.Contains("different physical database", error.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 工作单元之外，改道后的连接不能静默复用作用域里已创建的 DbContext
-    /// </summary>
+    /// <summary>工作单元之外，改道后的连接不能静默复用作用域里已创建的 DbContext。</summary>
     /// <remarks>
     /// <c>AddDbContext</c> 默认 Scoped，首次解析后不再执行配置回调；切换物理库时不能复用先前的上下文。
     /// 改写连接解析结果模拟切到分库租户，覆盖工作单元之外的路径；工作单元内由另一用例覆盖。
@@ -293,9 +285,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         Assert.Contains("unit of work", error.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 工作单元之外，连接未变时照旧复用作用域里的同一个 DbContext
-    /// </summary>
+    /// <summary>工作单元之外，连接未变时照旧复用作用域里的同一个 DbContext。</summary>
     /// <remarks>
     /// 校验只拦"改道"，不能误伤宿主侧大量本来就在工作单元之外的读取——
     /// 那些路径每次解析出的都是同一个连接。

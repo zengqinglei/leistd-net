@@ -1,8 +1,6 @@
 namespace Leistd.Data.Connections;
 
-/// <summary>
-/// 指定 DbContext 解析连接字符串时使用的连接名称。
-/// </summary>
+/// <summary>指定 DbContext 解析连接字符串时使用的连接名称。</summary>
 /// <remarks>
 /// 未声明的 DbContext 使用 <see cref="ConnectionStringNames.Default"/>。
 /// 典型用法是把控制面 DbContext 钉在一个独立的命名连接上，

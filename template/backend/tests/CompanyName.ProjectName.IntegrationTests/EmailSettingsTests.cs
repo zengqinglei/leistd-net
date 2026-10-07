@@ -20,9 +20,7 @@ using Leistd.Settings.EntityFrameworkCore.Entities;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 发信参数由系统设置维护：口令加密落库、只写不读，设置经配置源覆盖配置文件、发信端从 <c>IOptionsMonitor</c> 取值，测试邮件如实报告失败。
-/// </summary>
+/// <summary>发信参数由系统设置维护：口令加密落库、只写不读，设置经配置源覆盖配置文件、发信端从 <c>IOptionsMonitor</c> 取值，测试邮件如实报告失败。</summary>
 /// <remarks>用例在同一个夹具里顺序执行，结束时清掉覆盖值，回到配置文件里的基线。</remarks>
 public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {

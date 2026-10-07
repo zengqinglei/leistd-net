@@ -11,9 +11,7 @@ using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
-/// <summary>
-/// <c>AddTenantManagement()</c> 的注册契约：不带 EF 也能装，生命周期是 Transient，宿主可替换。
-/// </summary>
+/// <summary><c>AddTenantManagement()</c> 的注册契约：不带 EF 也能装，生命周期是 Transient，宿主可替换。</summary>
 /// <remarks>
 /// 这两个用例只依赖契约与工作单元，因此换存储实现（Dapper、远端控制面）时应当照样可用——
 /// 所以按"只引用 Management + 自带存储"的形态钉住。反过来，只读控制库的宿主（租户连接解析、迁移作业）

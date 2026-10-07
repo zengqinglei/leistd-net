@@ -14,9 +14,7 @@ using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 
-/// <summary>
-/// 设置页用例：分层读取原始覆盖值、只处理对客户端开放的设置、层级越权就地拒绝。
-/// </summary>
+/// <summary>设置页用例：分层读取原始覆盖值、只处理对客户端开放的设置、层级越权就地拒绝。</summary>
 public class SettingManagementTests
 {
     private static readonly Guid UserId = Guid.NewGuid();

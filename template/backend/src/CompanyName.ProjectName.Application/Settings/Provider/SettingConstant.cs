@@ -5,17 +5,13 @@ using Leistd.Notifications.Settings.Options;
 #endif
 namespace CompanyName.ProjectName.Application.Settings.Provider;
 
-/// <summary>
-/// 设置名称常量
-/// </summary>
+/// <summary>设置名称常量。</summary>
 /// <remarks>
 /// 设置名是跨前后端的字符串契约，集中在此避免两侧各写一份字面量后漂移。
 /// </remarks>
 public static class SettingConstant
 {
-    /// <summary>
-    /// 设置分组标识。
-    /// </summary>
+    /// <summary>设置分组标识。</summary>
     /// <remarks>
     /// 分组决定设置页左侧的分类，词条键按 <c>SettingGroup:{标识}</c> 推导。
     /// 与设置名一样是跨前后端的字符串契约：界面按标识选中分类，因此它不能随文案改动。
@@ -71,9 +67,7 @@ public static class SettingConstant
         public const string TimeZone = "Display.TimeZone";
     }
 
-    /// <summary>
-    /// 日志开关。
-    /// </summary>
+    /// <summary>日志开关。</summary>
     /// <remarks>
     /// 都是<b>进程级</b>（<c>SettingScopes.Host</c>）：一个进程只有一个 logger，
     /// 按租户各存一份根本无从生效。改完立即对本进程生效，其它实例在下一次刷新周期跟上
@@ -87,9 +81,7 @@ public static class SettingConstant
         /// <summary>正常完成的请求记成哪一级；调高即等于关掉请求日志。</summary>
         public const string RequestLevel = "Logging.RequestLevel";
 
-        /// <summary>
-        /// 合法的日志级别取值，与 Serilog 的 <c>LogEventLevel</c> 一致。
-        /// </summary>
+        /// <summary>合法的日志级别取值，与 Serilog 的 <c>LogEventLevel</c> 一致。</summary>
         /// <remarks>
         /// 定义的默认值、写入校验与界面候选项都读这一份：分开写几份时，
         /// 加一档只改了一处，就会变成"选得出却写不进"或者反过来。
@@ -99,9 +91,7 @@ public static class SettingConstant
     }
 
 #if (IncludeOperationRecords)
-    /// <summary>
-    /// 操作记录保留期。
-    /// </summary>
+    /// <summary>操作记录保留期。</summary>
     /// <remarks>
     /// <b>进程级</b>：归档由一个后台任务跨租户统一执行，按租户各存一份无从生效。
     /// 设置值经宿主级设置配置源覆盖 <c>appsettings</c> 的 <c>Leistd:OperationRecords:Retention</c> 节，代码默认值就是该节的部署基线；
@@ -119,9 +109,7 @@ public static class SettingConstant
 #endif
 
 #if (LocalIdentity)
-    /// <summary>
-    /// 注册与验证策略。
-    /// </summary>
+    /// <summary>注册与验证策略。</summary>
     /// <remarks>
     /// 租户级：每个租户可以有自己的注册策略。代码默认值取自 <c>appsettings</c> 的
     /// <c>UserRegistration</c> 段——配置仍是部署基线，设置只是租户级覆盖，
@@ -150,9 +138,7 @@ public static class SettingConstant
 
     }
 
-    /// <summary>
-    /// 登录安全策略（租户级）。
-    /// </summary>
+    /// <summary>登录安全策略（租户级）。</summary>
     /// <remarks>代码默认值即推荐值，不另设配置节：它们不是部署环境相关的参数。</remarks>
     public static class Security
     {
@@ -174,9 +160,7 @@ public static class SettingConstant
     }
 
 #if (Email)
-    /// <summary>
-    /// 发信参数（SMTP）。
-    /// </summary>
+    /// <summary>发信参数（SMTP）。</summary>
     /// <remarks>
     /// <para><b>进程级</b>（<c>SettingScopes.Host</c>）：发信通道是整个部署共用的，不按租户各配一套。</para>
     /// <para>设置值经宿主级设置配置源覆盖配置文件的 <c>Leistd:Email:Smtp</c> 节，发信端照常读 <c>IOptionsMonitor&lt;SmtpOptions&gt;</c>；
@@ -210,9 +194,7 @@ public static class SettingConstant
 
 #endif
 #if (IncludeNotifications)
-    /// <summary>
-    /// 通知偏好（用户级），命名为 <c>Notifications.{通知类别}.{渠道}</c>。
-    /// </summary>
+    /// <summary>通知偏好（用户级），命名为 <c>Notifications.{通知类别}.{渠道}</c>。</summary>
     /// <remarks>
     /// 类别即通知的 <c>Type</c>，渠道即 <c>INotificationChannel.Name</c>：通知偏好组件按这两者拼出设置名，
     /// 读<b>收件人</b>的生效值；没有对应设置的组合一律投递——新加一个类别不会因为忘了定义偏好而收不到。

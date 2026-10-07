@@ -1,8 +1,6 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-/// <summary>
-/// 枚举租户登记的独立物理库，每个库一条。
-/// </summary>
+/// <summary>枚举租户登记的独立物理库，每个库一条。</summary>
 /// <remarks>
 /// <para>结果带明文连接串，直接调用仅限迁移作业（DbMigrator 一类的一次性进程）；请求入口与后台作业改用
 /// 只回指纹与租户归属的 <see cref="ITenantDatabaseEnumerator"/>。</para>
@@ -11,9 +9,7 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// </remarks>
 public interface ITenantMigrationTargetProvider
 {
-    /// <summary>
-    /// 读取全部登记了连接的租户在指定连接名下的物理库，同一连接串只出现一次。
-    /// </summary>
+    /// <summary>读取全部登记了连接的租户在指定连接名下的物理库，同一连接串只出现一次。</summary>
     /// <remarks>
     /// 多个租户共用一个库时，<see cref="TenantMigrationTarget.TenantId"/> 取其中标识最小者，结果稳定；
     /// 库的顺序按首次出现。去重按连接串全文比较，写法不同但指向同一个库的连接串会各出现一次，
@@ -33,9 +29,7 @@ public sealed record TenantMigrationTargetSet(
     IReadOnlyList<TenantMigrationTarget> Targets,
     IReadOnlyList<TenantDatabaseFailure> FailedTenants);
 
-/// <summary>
-/// 一个独立物理库目标。
-/// </summary>
+/// <summary>一个独立物理库目标。</summary>
 /// <param name="TenantId">进入该库时切换到的代表租户；多个租户共用该库时取标识最小者。</param>
 /// <param name="ConnectionString">明文连接串；<see cref="ToString"/> 不输出它。</param>
 public sealed record TenantMigrationTarget(Guid TenantId, string ConnectionString)

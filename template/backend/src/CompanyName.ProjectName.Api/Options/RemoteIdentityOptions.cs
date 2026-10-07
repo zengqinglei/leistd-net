@@ -1,9 +1,7 @@
 #if (RemoteTokenAuth)
 namespace CompanyName.ProjectName.Api.Options;
 
-/// <summary>
-/// 远端签发方配置（配置节 <c>Authentication</c>）
-/// </summary>
+/// <summary>远端签发方配置（配置节 <c>Authentication</c>）。</summary>
 /// <remarks>
 /// <para>"什么样的签发方配置算可用"只在这里定义一次。<c>RemoteTokenAuthenticationExtensions</c>
 /// 以它做启动期校验，并在解析 OpenIddict 校验器选项时取 issuer；
@@ -43,9 +41,7 @@ internal sealed class RemoteIdentityOptions
     /// <summary>配置是否可用</summary>
     public bool IsUsable => IssuerUri is not null && !string.IsNullOrWhiteSpace(Audience);
 
-    /// <summary>
-    /// 发现文档地址
-    /// </summary>
+    /// <summary>发现文档地址。</summary>
     /// <remarks>仅在 <see cref="IsUsable"/> 成立后取用；启动期校验保证了这一点。</remarks>
     public Uri MetadataUrl => new(IssuerUri!, ".well-known/openid-configuration");
 }

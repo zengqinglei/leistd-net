@@ -21,9 +21,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.AspNetCore;
 
-/// <summary>
-/// 授权通过之后的业务拒绝：与被拒路径同一套判据，端点与路由值取自原请求。
-/// </summary>
+/// <summary>授权通过之后的业务拒绝：与被拒路径同一套判据，端点与路由值取自原请求。</summary>
 /// <remarks>
 /// 组件映射的端点里宿主没有代码可写，业务拒绝（并发冲突、目标不存在）由宿主紧接授权之后的中间件补记。
 /// </remarks>
@@ -355,9 +353,7 @@ public sealed class FailedOperationRecordingTests
         Assert.Equal("Permission:ConcurrencyConflict", written.FailureCode);
     }
 
-    /// <summary>
-    /// 业务拒绝按文档写法（错误码 + 消息参数）记录，基类 <c>Exception.Data</c> 不进记录
-    /// </summary>
+    /// <summary>业务拒绝按文档写法（错误码 + 消息参数）记录，基类 <c>Exception.Data</c> 不进记录。</summary>
     /// <remarks>
     /// 消息参数是异常作者为展示提供的值，查询时据此渲染出带具体值的原因；
     /// <c>Exception.Data</c> 没有"可公开展示"的约定，带进来就是泄露面。
@@ -393,9 +389,7 @@ public sealed class FailedOperationRecordingTests
         Assert.Single(store.Written);
     }
 
-    /// <summary>
-    /// 叠了多个策略时取最后声明的，不重新评估
-    /// </summary>
+    /// <summary>叠了多个策略时取最后声明的，不重新评估。</summary>
     /// <remarks>
     /// 走到业务拒绝说明授权已全部通过。主体此刻不满足任何一个策略也照样取最后声明的——
     /// 重新评估会让这条记录随请求期状态漂移，而它要回答的只是"凭哪个策略放行进来的"。

@@ -3,9 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
-/// <summary>
-/// Web API 的 JSON 序列化策略
-/// </summary>
+/// <summary>Web API 的 JSON 序列化策略。</summary>
 public static class WebApiJson
 {
     /// <summary>

@@ -17,9 +17,7 @@ using Xunit;
 
 namespace Leistd.OperationRecords.Tests.AspNetCore;
 
-/// <summary>
-/// 端点：授权口径必填、按策略把守、查询参数与控制器形态一致。
-/// </summary>
+/// <summary>端点：授权口径必填、按策略把守、查询参数与控制器形态一致。</summary>
 /// <remarks>
 /// 参数绑定写错的症状是前端请求整批 400 或筛选条件被静默丢掉；授权口径缺省的症状是审计数据对任何登录用户开放。
 /// </remarks>

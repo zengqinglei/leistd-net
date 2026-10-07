@@ -6,9 +6,7 @@ using System.Buffers.Binary;
 
 namespace CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
-/// <summary>
-/// 口令哈希：PBKDF2-HMAC-SHA256，<b>带格式版本与工作因子</b>
-/// </summary>
+/// <summary>口令哈希：PBKDF2-HMAC-SHA256，<b>带格式版本与工作因子</b>。</summary>
 /// <remarks>
 /// 密文自描述格式为 <c>[版本][大端迭代数][16 字节盐][32 字节哈希]</c>，
 /// 校验按密文记录的参数重算。新密文的迭代数取 <see cref="PasswordHashOptions"/>。
