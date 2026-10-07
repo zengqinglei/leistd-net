@@ -16,7 +16,7 @@
 
 ### 2.1 成功响应
 
-直接返回业务对象，HTTP 200。
+直接返回业务对象，HTTP 200：Controller 返回 `Task<TOutputDto>`，无 I/O 时可同步返回 DTO。
 
 ```json
 {
@@ -76,14 +76,14 @@ HTTP/1.1 200 OK
 | status | number | HTTP 状态码 |
 | detail | string | 业务错误面向用户的说明，按错误码本地化或回落为安全文案；协议层失败不带 |
 | instance | string | 出错的请求路径 |
-| code | string | **稳定错误码**：只出现在业务错误上，`BusinessException` 在构造时必填，形如 `User:UsernameTaken`；也是本地化词条键 |
+| code | string | **稳定错误码**：只出现在业务错误上，形如 `User:UsernameTaken`；也是本地化词条键 |
 | traceId | string | 链路标识（W3C 格式，第二段是 TraceId，用于检索日志；无 Activity 时为请求标识）；业务关联标识在响应头 `X-Correlation-Id` |
 
 > `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；开启后仅额外输出 `stackTrace`，只用于本地调试，生产环境不开启。
 
 ### 2.5 验证错误响应
 
-`[ApiController]` 自动模型校验和内部调用抛出的 `System.ComponentModel.DataAnnotations.ValidationException` 都返回 HTTP **400**，使用 `urn:leistd:problem:validation-error` 与 Leistd `errors` 对象数组。跨字段或用例规则失败抛 `BusinessException`，未配置状态时同样默认为 400。
+`[ApiController]` 自动模型校验和内部调用抛出的 `System.ComponentModel.DataAnnotations.ValidationException` 都返回 HTTP **400**，使用 `urn:leistd:problem:validation-error` 与 Leistd `errors` 对象数组。跨字段或用例规则失败抛 `BusinessException`，状态见 §4。
 
 ```json
 {
@@ -111,7 +111,7 @@ HTTP/1.1 200 OK
 | 状态码 | 场景 |
 | --- | --- |
 | 200 | 查询或操作成功（含创建：本项目业务接口有响应体时直接返回 DTO） |
-| 400 | 服务端认为是客户端导致的请求错误；包括结构、字段、协议参数和默认业务拒绝 |
+| 400 | 服务端认为是客户端导致的请求错误；包括结构、字段、协议参数和未登记状态的业务拒绝 |
 | 401 | 未认证 |
 | 403 | 无权限 |
 | 404 | 资源不存在 |
@@ -124,33 +124,33 @@ HTTP/1.1 200 OK
 | 503 | 本服务连接上游失败，或明确知道所依赖能力暂时不可用 |
 | 504 | 本服务等待上游响应超时 |
 
-> **请求结构/字段校验**用 400 + `errors`；**业务规则失败**用 `BusinessException`，默认 400。仅对特殊状态在 API 组合根按错误码显式映射，不重复登记 400。
-
 ## 4. 异常与 HTTP 映射
 
-后端只保留一个业务异常 `BusinessException(code, safeMessage, innerException?)`。错误码是必填且不可变的机器契约；各 API 业务模块只登记自己的非默认 HTTP 状态，由组合根汇总；框架组件的默认状态由组件在自己的 `AddXxx` 里登记，需要改时在组合根用 `MapCode` / `MapException` 覆盖：
+后端只保留一个业务异常 `BusinessException(code, safeMessage, innerException?)`。各 API 业务模块只登记自己的非默认 HTTP 状态（不重复登记 400），由组合根汇总；框架组件的默认状态由组件在自己的 `AddXxx` 里登记，需要改时在组合根用 `MapCode` / `MapException` 覆盖：
 
 | 来源 | 默认 HTTP | 说明 |
 | --- | --- | --- |
 | `BusinessException` 命中错误码映射 | 400 / 401 / 403 / 404 / 409 等 | 宿主按稳定业务语义精确决定 |
-| 未命中的 `BusinessException` | 400 | 广义的客户端请求错误；防止新错误码意外变成稀有状态 |
+| 未命中的 `BusinessException` | 400 | 广义的客户端请求错误；防止新错误码意外变成稀有状态。错误码在构造时必填且不可变，没有 `WithCode` |
 | DataAnnotations 自动校验 / `ValidationException` | 400 | 请求字段或结构不合法，返回 `errors` |
 | 未捕获的 BCL/技术异常 | 500 | 只返回通用安全文案，细节记日志 |
-| 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致。前端按状态码处理这类失败 |
-| `ServiceClientException` | 500/502/503/504（注册客户端时自动登记） | 按本地观测的失败来源映射，不透传远端状态；细节见[服务间调用](./service-invocation.md) |
+| 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致 |
+| `ServiceClientException` | 500/502/503/504（注册客户端时自动登记） | 映射规则见[服务间调用](./service-invocation.md) |
 
 框架不根据 BCL 异常类型猜测为 400/503；认证和授权拒绝交给 ASP.NET Core 管道，不用业务异常模拟。只有两类例外用业务码：界面靠稳定码路由的拒绝（未完成两步验证设置），以及取决于请求体的附加权限（建用户时分配角色）。
 
-`WithData("Name", value)` 为本地化文案的 `{Name}` 占位符传值，无论是否启用多语言都可保留。不提供 `WithCode` 或 `WithDetails`：错误码必须在构造时完整，技术详情只进入 `InnerException` 和日志。
+`WithData("Name", value)` 为本地化文案的 `{Name}` 占位符传值，无论是否启用多语言都可保留。不提供 `WithDetails`：技术详情只进入 `InnerException` 和日志。
 
 错误码不随是否启用多语言而变化，命名与放置：
 
 - 采用 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等），前缀由一个模块独占，常量成员名与语义后缀一致。
 - 一个模块的码集中在一个 `Errors/` 文件，放在用到其中任一码的最低层（Domain 或 Application）；`Domain/Shared` 只放真正跨模块的契约；组件错误码引用组件常量。
 - 错误码是对外契约（变更见 §8），前端分支与状态映射都要有针对性测试。
-- 前端直接显示后端 `detail`，不重复翻译业务错误。
 
-公开文案只写用户能采取的下一步。非敏感且确有帮助的输入可以保留，例如已登录管理员操作中的订单号；密码、令牌、连接串以及登录/找回密码等匿名场景中可用于枚举账号的用户名、邮箱不回显。未预期 5xx 只展示通用文案与 `traceId`。
+公开文案的回显边界见[通用约定 §1](./coding-common.md#1-语言与敏感信息)；未预期 5xx 只展示通用文案与 `traceId`。
+<!--#if (SpaFrontend)-->
+前端如何展示 `detail`、何时按 `code` 或状态码分支见[前端错误处理](./coding-frontend.md#6-错误处理)。
+<!--#endif-->
 
 <!--#if (IncludeLocalization)-->
 ### 4.1 异常本地化
@@ -160,7 +160,7 @@ HTTP/1.1 200 OK
 | 职责 | 载体 | 说明 |
 | --- | --- | --- |
 | 安全回落 | `Message`（构造参数） | 可读英文，资源未命中或未启用多语言时会直接给用户，不得含内部细节 |
-| 身份 + 展示 | `Code`（构造参数） | 必填的稳定机器契约，也是本地化词条键 |
+| 身份 + 展示 | `Code`（构造参数） | 稳定机器契约，也是本地化词条键 |
 
 - 资源 `Resources/{en,zh-CN}.json` 的 `texts` 段按错误码给出各语言文案（`en` 为默认/回落），占位符与 `WithData` 的键同名：`"User:UsernameTaken": "Username '{Username}' already exists."`。抛出写法见[后端开发规范 §3.4](./coding-backend.md#34-领域服务)。
 - 全局处理器按 **`Code` 词条 → 安全 `Message`** 解析，本地化失败不改写 `code` 或 HTTP 语义。
@@ -183,8 +183,6 @@ if (user is null)
 
 ## 5. 分页规范
 
-### 5.1 请求参数
-
 分页查询使用 `offset/limit` 偏移分页（与 `PageRequest` 一致），不使用 `page/pageSize`。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
@@ -194,10 +192,7 @@ if (user is null)
 | keyword | string | 否 | 空 | 搜索关键字 |
 | sorting | string | 否 | 空 | 排序字段，如 `name asc`、`creationTime desc`；**字段取自各接口自己的白名单，不在白名单内返回 400**，方向词只认 `asc` / `desc` |
 
-### 5.2 后端 DTO 命名
-
-- 分页查询输入：`Get{Entity}PagedInputDto`，继承 `PageRequest`。
-- 分页返回：`PagedResult<{Entity}OutputDto>`，字段为 `totalCount` + `items`。
+后端排序在白名单字段之后追加唯一键（如 `Id`）保证分页稳定；输入 DTO 命名见[后端开发规范 §5](./coding-backend.md#5-命名与-dto)，返回体见 §2.3。
 
 ## 6. HTTP 方法与路由规范
 

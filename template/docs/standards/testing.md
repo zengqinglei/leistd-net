@@ -55,10 +55,6 @@
 
 新模块只有涉及权限时才验证权限登记与种子，涉及持久化模型时才验证迁移与快照，涉及本地化时才检查词条键。关键用户流程变化运行项目已配置的 E2E；没有对应入口时明确启动条件、操作、预期结果并完成真实运行验证，不杜撰命令。共享组件、公共契约和基础设施按实际依赖扩大回归，完整责任按 §1.1 分配。
 
-### 1.3 审查与失败重跑
-
-完整可审查改动形成后核对代码与文档一致性，可与已配置的 CI 并行；高风险难返工的边界可提前审查。失败时先复现目标路径，修复后跑目标验证与受影响回归；不反复运行未变化的无关全套。
-
 ## 2. 后端
 
 从 `backend/` 的解决方案或目标测试项目执行：
@@ -86,31 +82,23 @@ backend/tests/
 
 集成测试跑在真实 PostgreSQL 上，需要本机 Docker：`PostgreSqlTestDatabase` 每次运行起一个容器，用项目迁移建好模板库，每个 `ProjectWebApplicationFactory` 克隆一份独立的库。唯一约束、查询翻译、事务回滚与独立事务因此与生产一致。单元测试不连库。
 
-宿主初始化、容器启动、迁移、库克隆与播种都有成本，且不因测试类所在目录而改变。因此：
+每个宿主都要初始化、迁移、克隆库与播种，因此：
 
-- 能在单元测试里验证的规则不要放进集成测试。§1 的风险分级表就是这条线。
+- 能在单元测试里验证的规则不放进集成测试（分界见 §1）。
 - 集成测试每类一个 `IClassFixture<ProjectWebApplicationFactory>`，**不要每个用例建宿主**。
-- 需要改配置的用例用 `WithWebHostBuilder` 派生宿主，但**同类配置变体应当归组复用**，
-  而不是每个用例一个——一个测试类里起七八个派生宿主，这个类就会独占整套测试的大部分时间。
-  前提是用例不依赖空库：断言精确用户名、全表计数或修改租户级设置的用例共享宿主会互相干扰，
-  这类用例保留独立宿主。
+- 需要改配置的用例用 `WithWebHostBuilder` 派生宿主，**同类配置变体归组复用**；断言精确用户名、全表计数或修改租户级设置等依赖空库的用例例外，保留独立宿主。
 <!--#if (LocalIdentity)-->
-- 宿主里与被测行为无关的固定成本要压低。`ProjectWebApplicationFactory` 把口令哈希的工作因子
-  （`PasswordHash:IterationCount`）调到 1000：每个宿主都要播种管理员、每次登录都要校验口令，
-  生产默认值会让这两步占去集成测试一半以上的 CPU。默认值本身由 `PasswordHashingTests` 钉住。
+- 宿主里与被测行为无关的固定成本要压低：`ProjectWebApplicationFactory` 把 `PasswordHash:IterationCount` 调到 1000，生产默认值由 `PasswordHashingTests` 钉住。
 <!--#endif-->
 
 ### 2.2 通用要求
 
 - 测试方法名用英文句子、单词以下划线分隔，写出行为与条件，力求简短（如 `Revoked_device_cookie_stops_working_immediately`）；不用中文标识符。名字装不下的前因后果写进 XML 注释。
 - 数据库测试使用隔离数据库、独立 schema 或可靠清理机制；集成测试的每个宿主已经各有一份库。
-- 实体配置、唯一索引与全局查询过滤器在集成测试里验证。不用 EF InMemory 或 SQLite 代替：
-  前者全内存求值，会让被违反的约束和不可翻译的查询静默通过；后者只有一个写者，
-  "已写入后再开独立事务写入"这种生产上合法的写法会在测试里锁死。
-- 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言删除或更新结果时换一个作用域读，
-  否则读到的是同一 DbContext 里仍被跟踪的旧实体。
+- 实体配置、唯一索引与全局查询过滤器在集成测试里验证，不用 EF InMemory 或 SQLite 代替（前者放过违反的约束与不可翻译的查询，后者会锁死独立事务写入）。
+- 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言结果时换一个作用域读，否则读到仍被跟踪的旧实体。
 - 外部服务使用 fake、mock 或明确的测试环境；日志用 `FakeLogger`，不手写替身。
-- 时间边界（锁定、挑战与验证码有效期、令牌到期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟，`IClock`、Cookie 认证与 OpenIddict 随之跟随；起点取当前时刻。缓存过期不跟随该时钟：测试自身的缓存 TTL 时保留真实 MemoryCache/HybridCache，经 `MemoryCacheOptions.Clock` 接入同一假时钟，让 TTL 计算与本地到期一起推进，验证到期前与到期时刻，不用主动删除冒充到期；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制，不手写替代判定来快进。项目自己的挑战规则把到期时刻存在挑战里、用注入的时钟判定，因此能快进。
+- 时间边界（锁定、挑战与验证码有效期、令牌到期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟，`IClock`、Cookie 认证与 OpenIddict 随之跟随；起点取当前时刻。缓存过期不跟随该时钟：测试缓存 TTL 时保留真实 MemoryCache/HybridCache，经 `MemoryCacheOptions.Clock` 接入同一假时钟，验证到期前与到期时刻，不用主动删除冒充到期；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制，不手写替代判定来快进。
 - 端到端只验接线与生效值，不等安全窗口过期；确需观察真实到期时用配置缩短窗口（如[部署说明](../deploy/README.md)中的 `OAuth:AccessTokenLifetime`）并断言已生效。网络、取消、超时等有上限、等可观察结果的等待不在此列。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。
 - 各层注册入口覆盖注册结果、生命周期与相同登记重复调用不重复生效，有意覆盖组件默认实现的登记验证两种调用顺序；有注册或配置决策（选择实现、派生 Options）的宿主扩展测行为，单纯转调由启动集成测试覆盖（见[后端开发规范 §4](./coding-backend.md#4-依赖注入)）。注册面是契约，编译期看不出错。

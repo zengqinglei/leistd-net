@@ -1,10 +1,9 @@
 # Spartan 维护约定
 
-加组件、升级 Spartan 或修改 `libs/ui` 中的 helm 组件时遵循本文。组件用法见 [前端界面规范](./frontend-ui.md)，组件 API 以项目 `spartan` Skill、本地 `libs/ui` 源码与锁定版本为准。
+加组件、升级 Spartan 或修改 `frontend/libs/ui` 中的 helm 组件时遵循本文。组件用法见 [前端界面规范](./frontend-ui.md)，组件 API 以项目 `spartan` Skill、本地 `frontend/libs/ui` 源码与锁定版本为准。
 
-- **两层结构**：brain 层 `@spartan-ng/brain` 是无头基元，作为 npm 依赖引入、不改；helm 层是样式实现，通过 CLI **复制进本项目** `libs/ui/`，属自有代码，可自由修改。
-- **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `libs/ui/`。
-- **升级**：升级 `@spartan-ng/brain` + `@spartan-ng/cli` 后跑 `ng g @spartan-ng/cli:healthcheck` 检查兼容性；**已改过的 helm 组件禁用 `migrate-helm-libraries`**（它会用上游版本覆盖自定义改动），需对照上游变更**手动合入**。为保稳定，锁定 brain / CLI 的小版本，只走官方 `healthcheck` 流程升级。
+- **两层结构**：brain 层 `@spartan-ng/brain` 是无头基元，作为 npm 依赖引入、不改；helm 层是样式实现，通过 CLI **复制进本项目** `frontend/libs/ui/`，属自有代码，可自由修改。
+- **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `frontend/libs/ui/`。
 - **已定制的 helm 组件**（升级时逐个对照上游手动合入）：
 
 | 组件                                              | 改动                                                                                      | 原因                                                                                                                                                                                                                             |
@@ -23,4 +22,4 @@
 
 用 `pointer-coarse` 而不是屏幕宽度判断：平板横屏很宽，但仍是手指操作。
 
-升级步骤：升级 brain / CLI 后跑 `healthcheck`；未定制的组件用 `ng g @spartan-ng/cli:migrate-helm-libraries --libraries=<name>` 同步到新版本（传 `--libraries` 即非交互）；表中已定制的组件不执行覆盖式迁移，对照上游变更逐个手动合入。helm 与 CLI 版本脱节时，新参数与无障碍改进不会自动到位——升级 CLI 不等于 helm 已更新。
+升级步骤：`@spartan-ng/brain` 与 `@spartan-ng/cli` 在 `frontend/package.json` 锁定为同一精确版本，一起升级后跑 `ng g @spartan-ng/cli:healthcheck`；未定制的组件用 `ng g @spartan-ng/cli:migrate-helm-libraries --libraries=<name>` 同步到新版本（传 `--libraries` 即非交互）；表中已定制的组件不执行 `migrate-helm-libraries`（会用上游版本覆盖自定义改动），对照上游变更逐个手动合入。helm 与 CLI 版本脱节时，新参数与无障碍改进不会自动到位——升级 CLI 不等于 helm 已更新。

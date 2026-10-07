@@ -7,7 +7,7 @@
 
 ## 1. 技术栈
 
-Angular（Signals、zoneless、Angular CLI）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元 + 项目持有的 helm 样式层）、Tailwind CSS 4、Angular Signal Forms（`@angular/forms/signals`）、TanStack Table。项目采用的精确版本以 `package.json` 与锁文件为准。禁止 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 拦截）。
+Angular（Signals、zoneless、Angular CLI）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元 + 项目持有的 helm 样式层）、Tailwind CSS 4、Angular Signal Forms（`@angular/forms/signals`）、TanStack Table。精确版本以 `frontend/package.json` 与锁文件为准。表单写法见[前端界面规范 §2.6](./frontend-ui.md#26-表单规范)，`FormsModule`/`ReactiveFormsModule`/`ngModel` 由 eslint 拦截。
 
 ## 2. 目录与依赖方向
 
@@ -27,21 +27,10 @@ frontend/
 └── public/                # 构建后映射到站点根的静态资源
 ```
 
-依赖方向（行依赖列，✓ 允许）：
+依赖方向由 `frontend/eslint.config.mjs` 按解析出的真实文件检查，报错消息即规则：`shared` 只依赖自身，`core` 只依赖 `core` 与 `shared`，`layout` 与各功能另可依赖自身，功能之间只有路由文件可经 `loadComponent`/`loadChildren` 懒加载；应用装配点（`app.*.ts`）不被反向依赖，业务代码中只有它们引入 `_mock`。导入路径写普通字符串字面量。
 
-| 依赖方 \ 被依赖 | `core` | `layout` | 同一 `features/<x>` | 其他 `features/<y>` | `shared` | `_mock` |
-| --- | --- | --- | --- | --- | --- | --- |
-| `core` | ✓ | | | | ✓ | |
-| `layout` | ✓ | ✓ | | | ✓ | |
-| `features/<x>` | ✓ | | ✓ | | ✓ | |
-| `shared` | | | | | ✓ | |
-| `_mock` | ✓ | | ✓ | ✓ | ✓ | ✓ |
-
-- 应用装配点（`app.config.ts`、`app.interceptors.ts`、`app.routes.ts`、根组件 `app.ts`）与 `src/environments/` 可依赖全部目录，是业务代码之外唯一引入 `_mock` 的位置。各目录可读取 `environment`，不反向依赖应用装配点，需要装配结果的用例写成 `app.*.spec.ts`。测试文件可引用 `_mock`，不放开其他方向。
-- 功能路由文件（`features/<x>/<x>.routes.ts`）可以经 `loadComponent`/`loadChildren` 懒加载其他功能的页面，其他引用仍不允许。
 - 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`；依赖 `core` 服务的组件不放 `shared`。功能内复用的组件放该页面的 `widgets/`。
-- 业务代码判断请求是否走 Mock 时注入 `core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
-- 以上方向由 `eslint.config.mjs` 按解析出的真实文件检查（`import-x/no-restricted-paths`、项目内规则 `local/feature-boundaries`、`import-x/no-unresolved`），因此导入路径一律写成普通字符串字面量。
+- 业务代码判断请求是否走 Mock 时注入 `frontend/src/app/core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
 
 ## 3. 命名
 
@@ -78,7 +67,7 @@ frontend/
 
 - 组件内部与简单父子组件间的状态用 Signals。
 - 媒体查询（断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia`。
-- 启动流程、拦截器判断当前路由用 `core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。
+- 启动流程、拦截器判断当前路由用 `frontend/src/app/core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。
 - 列表的分页、排序、筛选以 URL query params 为唯一来源（`queryParamMap` 派生 + `router.navigate({ queryParams })` 回写），非法参数回退默认，不存 localStorage。
 
 **显示偏好同源**：语言、主题、时区等显示偏好的切换器与偏好页必须写同一处存储。
@@ -97,12 +86,13 @@ frontend/
 - 发起操作的 feature 决定反馈：字段错误优先回填到表单，其余可展示的 4xx 按 `detail`、`title` 顺序取安全文案 toast（`@spartan-ng/brain/sonner`），或显示空状态、静默；同一错误不重复提示。
 - 5xx 不展示技术细节，使用通用文案，响应含 `traceId` 时附上本地化的追踪 ID 标签。
 - `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误。
-- 可以用 `catchError` 处理特定错误，但不吞掉错误；需要特定交互时按稳定 `code` 分支，不按单个状态码。
+- 状态码与 `code` 的分工：认证与协议层处置（401 跳转、受限会话的 403、启动时的未登录判定）由 `http-error-interceptor` 与 `startup-service` 按状态码处理，eslint 只对它们放行 `local/no-status-code-branch`；feature 使用归一化后的错误反馈，需要特定业务交互时按稳定 `code` 分支。业务错误缺少 `code` 不构成 feature 按状态码分支的理由，应在后端补码。
+- 可以用 `catchError` 处理特定错误，但不吞掉错误。
 - 前端不兼容框架可选的响应信封（`AddResponseWrapper()`），开启须同时改拦截器。
 
 ## 7. Mock
 
-- 每个后端新端点同步补 Mock（`_mock/data` + `_mock/api` + `_mock/index.ts` 注册），前端可脱离后端运行。
+- 每个后端新端点同步补 Mock（`_mock/data` + `_mock/api` + `frontend/_mock/index.ts` 注册），前端可脱离后端运行。
 - Mock 代码只放 `_mock`，引入规则见第 2 节；Mock 自身的单测与被测文件相邻放在 `_mock/`。
 - Mock 与后端保持可观察行为一致：认证、权限、参数校验、过滤语义与失败响应；不复制后端内部实现。
 
@@ -111,7 +101,7 @@ frontend/
 ## 8. 测试
 
 - 含参数映射、分支或状态的服务、`pipe` 与含复杂业务逻辑的函数必须有单元测试；只把参数原样转发给 `HttpClient` 的服务由使用它的页面测试覆盖。用例名规则见 [测试规范](./testing.md)。
-- 单测跑在真实 Chromium 里，不得触发真实的下载、打印或页面跳转：对副作用那一步打桩（`saveBlob`，或 `vi.spyOn(HTMLAnchorElement.prototype, 'click').mockReturnValue(undefined)`——`vi.spyOn` 默认仍调用原实现），断言"发起了什么"，见 `shared/utils/download-file.spec.ts`。
+- 单测跑在真实 Chromium 里，不得触发真实的下载、打印或页面跳转：对副作用那一步打桩（`saveBlob`，或 `vi.spyOn(HTMLAnchorElement.prototype, 'click').mockReturnValue(undefined)`——`vi.spyOn` 默认仍调用原实现），断言"发起了什么"，见 `frontend/src/app/shared/utils/download-file.spec.ts`。
 
 ## 9. 日期与时区
 

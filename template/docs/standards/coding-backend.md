@@ -33,7 +33,6 @@
 | --- | --- |
 | 主构造函数 | 服务类 |
 | `record` + `init` + `required` | DTO |
-| 文件范围 namespace | 所有文件 |
 
 异步：I/O 一律 `async/await`，方法名以 `Async` 结尾（协议规定的名字除外），不用 `.Result`/`.Wait()`。
 
@@ -114,7 +113,7 @@ public class UserAppService(
 }
 ```
 
-排序字段取自各接口的白名单，末尾追加唯一键（如 `Id`）保证分页稳定。
+排序字段与稳定排序见 [API 规范 §5](./api.md#5-分页规范)。
 
 ### 3.6 事务与工作单元
 
@@ -127,8 +126,7 @@ public class UserAppService(
 框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 用组件的 `Map*` 给前缀与授权策略。组件不认识的业务动作才写 Controller，路由不与组件端点重叠。
 
 - Controller 命名 `*Controller`，继承 `BaseController`（视图渲染、透传代理、机器端点等例外就近注释）；只做路由、鉴权与调用应用服务。
-- 有响应体返回 `Task<TOutputDto>`（无 I/O 可同步返回 DTO），无响应体返回 `Task`（HTTP 200 空响应）；返回协议结果（`Challenge`、`SignIn`、`Redirect` 等，含 `/connect/*`）或文件时用 `IActionResult`。
-- 方法名与路由以 [API 规范 §6](./api.md#6-http-方法与路由规范) 为准。
+- 返回类型（含何时用 `IActionResult`）见 [API 规范 §2](./api.md#2-响应格式)，方法名与路由见 [§6](./api.md#6-http-方法与路由规范)。
 
 操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由 `ApiAuthorizationResultHandler`、`OperationFailureRecordingMiddleware` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
 
@@ -173,7 +171,7 @@ public class UserAppService(
 | 跨请求共享且线程安全（定义提供方、连接复用） | 可 Singleton |
 | 其余（AppService、领域服务、事件处理器等无状态服务） | Transient |
 
-Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transient 必须在正确作用域解析。Development 环境开启 `ValidateScopes` 与 `ValidateOnBuild`。
+Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transient 必须在正确作用域解析。生产以外的环境都开启 `ValidateScopes` 与 `ValidateOnBuild`。
 
 **注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。注册测试范围见[测试规范](./testing.md)。
 
@@ -190,7 +188,7 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 - DTO 全部为 record；一个文件一个对外 DTO，仅被它内嵌使用的 item 类型可同文件；业务入参 DTO 放应用层模块，不放 Api。
 - 入参 DTO 写成属性式（`{ get; init; }`），不用位置记录：校验错误的 `errors[].field` 按 JSON 命名策略与请求体字段同名。
-- 校验只在入口 DTO 用 DataAnnotations 完成，内层信任 DTO（多入口共享的实体守卫除外）。参与字段校验消息的属性（带校验特性、消息里用到 `{0}`）写 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
+- 字段校验（必填、长度、范围）只在入口 DTO 用 DataAnnotations 完成，应用层与领域层信任 DTO 已保证的前置条件、不重复校验；例外是实体构造另有不经该 DTO 的调用路径时，其守卫是多入口共享的不变量保护，保留。参与字段校验消息的属性（带校验特性、消息里用到 `{0}`）写 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
 - 变量：DTO 参数 `input`，返回对象 `result`，`IQueryable` 为 `query`/`xxxQuery`；仓储注入 `{entity}Repository`，领域服务注入 `{entity}DomainService`。
 
 ## 6. 数据访问
@@ -216,7 +214,7 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 - 部署配置错误在启动期失败：`AddOptions<T>().Validate(...).ValidateOnStart()`。连接串在宿主启动前就要用，缺失时由创建 DbContext 直接抛出并指明键名。
 - 组合期只为**选择注册哪种实现**（是否接 Redis、加载哪些证书）读配置，在读取处校验并报出键名；集成测试用 `UseSetting` 覆盖这类键。其余取值经 Options 派生，合法性用 `ValidateOnStart()` 判定。
-- 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`。不记录密码、令牌、联系方式等敏感信息。
+- 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`；不可记录的内容见[通用约定 §1](./coding-common.md#1-语言与敏感信息)。
 
 ## 8. Api 目录
 

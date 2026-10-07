@@ -11,7 +11,7 @@
 
 ### 1.1 数据表格与列表
 
-- 表格用 TanStack Table（`@tanstack/angular-table`，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页与筛选复用 `shared/components/table-paginator`、`faceted-filter`。
+- 表格用 TanStack Table（`@tanstack/angular-table`，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页与筛选复用 `frontend/src/app/shared/components/table-paginator`、`faceted-filter`。
 - 列按优先级（`primary`/`secondary`/`tertiary`）裁剪：视口档位（`tableViewportSignal()`）给上限，带吸附操作列的表格外框挂 `[appTableFit]="tableViewport()" [appTableFitContent]="rows()"`，放不下再降一档（更新数据须换新数组）。被裁的列由 TanStack 行展开补偿（按 `getRowId` 的实体 id 记），不另建展开状态。主列用 `TITLE_COLUMN_META` 与 `TITLE_CONTENT_CLASS`：最窄档截断长名称。
 - 操作列按"常用优先、破坏性置后"排序：≤3 项桌面端平铺（icon 按钮 + tooltip），>3 项显示 2 个高频操作 + `…` 溢出菜单；`<sm` 一律收进 `…`，破坏性操作用 `variant="destructive"` 并以分隔线隔开。
 
@@ -19,7 +19,7 @@
 
 ### 2.1 组件库优先
 
-- 先查本地 `libs/ui` 的现成组件与锁定版本；新增组件或核对 API 时再查项目内 `spartan` Skill 与匹配版本的 [Spartan UI 官方文档](https://spartan.ng/)
+- 先查本地 `frontend/libs/ui` 的现成组件与锁定版本；新增组件或核对 API 时再查项目内 `spartan` Skill 与匹配版本的 [Spartan UI 官方文档](https://spartan.ng/)
 - 尽量沿用 Spartan 的默认组件与风格（`hlm*` 指令 / `hlm-*` 组件）
 - 仅在无法满足需求时才可创建自定义组件，不在 `shared` 重建组件库
 
@@ -27,9 +27,9 @@
 
 - **必须** 优先使用 Tailwind CSS v4 的原子类进行布局和微调
 - 任何自定义样式都**必须**与 Spartan UI 的主题风格保持一致（基于 Spartan 主题的 CSS 变量与 `.dark` class）
-- 所有页面一律使用语义化主题变量，不写具体色值（`blue-*`、hex 等）。换品牌改 `src/styles.css` 里的令牌：品牌色亮暗成对改（同一色相，亮色 L≈0.52、暗色 L≈0.72），中性色带一点跟随品牌色相的彩度
+- 所有页面一律使用语义化主题变量，不写具体色值（`blue-*`、hex 等）。换品牌改 `frontend/src/styles.css` 里的令牌：品牌色亮暗成对改（同一色相，亮色 L≈0.52、暗色 L≈0.72），中性色带一点跟随品牌色相的彩度
   - 例外只有三类：图像遮罩及其上文字（`bg-black/25 text-white`）、二维码底色（`bg-white`，扫码需浅底）、第三方品牌标识 SVG 的官方色值
-- 登录、注册、强制启用两步验证共用 `features/account/components/auth-shell`（品牌标识 + 居中卡片 + 主题/语言切换）。这几页在一次登录里连续经过，外观必须一致
+- 登录、注册、强制启用两步验证共用 `frontend/src/app/features/account/components/auth-shell`（品牌标识 + 居中卡片 + 主题/语言切换）。这几页在一次登录里连续经过，外观必须一致
 
 ### 2.3 有限语义色板
 
@@ -51,9 +51,9 @@
 
 ### 2.6 表单规范
 
-- **必须** 使用 Angular Signal Forms（`@angular/forms/signals`）：以 `form()` 构建表单模型，模板用 `[formField]` 绑定字段，不用 `[(ngModel)]` / Reactive Forms。
+- **必须** 使用 Angular Signal Forms（`@angular/forms/signals`）：以 `form()` 构建表单模型，模板用 `[formField]` 绑定字段，不用 `[(ngModel)]` / Reactive Forms（eslint 拦截 `FormsModule`、`ReactiveFormsModule`）。
 - 表单 UI **必须** 走 Spartan Field 组件族：`hlm-field` 容器 + `hlmFieldLabel` 标签 + `hlm-field-error` 错误展示，配合 `hlmInput` / `hlm-select` 等输入组件。校验态由 brain 层（`BrnField`）读取，与具体表单引擎解耦。
-- **校验提示按错误类型取词条**：验证器不带 `message`，模板按 `error.kind` 取 `validation.<kind>`，错误对象整个作参数：
+- **校验提示按错误类型取词条**：验证器不带 `message`，模板按 `error.kind` 取 `validation.<kind>`，错误对象整个作参数（项目 `spartan` Skill 的表单示例显示 `error.message`，以本节为准）：
 
   ```html
   @for (error of form.email().errors(); track error.kind) {
@@ -65,13 +65,13 @@
 <!--#if (IncludeLocalization)-->
 - 新的错误类型在 `public/i18n/{en,zh-CN}.json` 的 `validation` 段各加一句；键是拼出来的，静态引用查不到，所以表单用到的每种类型（自定义 `kind`、所用内置验证器、没给 `error` 的 `pattern`）都要在两种语言里有句子。服务端返回的字段错误不走这里（见[错误处理](./coding-frontend.md#6-错误处理)）。
 <!--#else-->
-- 新的错误类型在 `shared/utils/english-text.ts` 的校验提示表里加一句，它并入每个组件的 `t`。服务端返回的字段错误不走这里（见[错误处理](./coding-frontend.md#6-错误处理)）。
+- 新的错误类型在 `frontend/src/app/shared/utils/english-text.ts` 的校验提示表里加一句，它并入每个组件的 `t`。服务端返回的字段错误不走这里（见[错误处理](./coding-frontend.md#6-错误处理)）。
 <!--#endif-->
 - Signal Forms 仍为 experimental，API 可能在小版本间变化：锁定 Angular 版本，升级后回归所有表单。
 
 ### 2.7 Spartan 维护
 
-加组件、升级 Spartan 或修改 `libs/ui` 中的 helm 组件时读 [Spartan 维护约定](./frontend-spartan.md)：其中登记了已定制组件，升级时须逐个手动合入。
+加组件、升级 Spartan 或修改 `frontend/libs/ui` 中的 helm 组件时读 [Spartan 维护约定](./frontend-spartan.md)：其中登记了已定制组件，升级时须逐个手动合入。
 
 ### 2.8 视觉规范
 
@@ -110,7 +110,7 @@
 
 ## 3. 导航与菜单分组
 
-导航菜单是**信息架构**，不是控件清单：分组摆错了既不报错也不影响功能，只是让人找不到入口。两个区各有一套菜单，都定义在 `layout/services/navigation-service.ts` 一处，管理平台的侧栏与工作空间的顶栏都从这里读，判据相同。
+导航菜单是**信息架构**，不是控件清单：分组摆错了既不报错也不影响功能，只是让人找不到入口。两个区各有一套菜单，都定义在 `frontend/src/app/layout/services/navigation-service.ts` 一处，管理平台的侧栏与工作空间的顶栏都从这里读，判据相同。
 
 | 分组               | 放什么                                     | 现有入口                                                                             |
 | ------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -130,13 +130,13 @@
 - 菜单项只按权限裁剪（`permissions` 任一命中即可见），整组为空时**整组消失**，不留空标题——空标题看起来像加载失败。
 - **按"能不能做"分支，不按"我是谁"分支。** 区分宿主侧与租户侧看权限：服务端下发的权限已按侧别过滤。不要从 `TenantContextService` 推导侧别——本地身份形态下它只是登录页的路由提示，可能与会话租户不一致。权限表达不了的显示决定由页面所属的业务端点连同数据下发结论。
 - 侧栏分组骨架由 `default-sidebar.spec.ts`、头像菜单构成由 `user-menu.spec.ts`（按完整序列断言）钉住，改导航同时改用例。
-- **页面标题只设 `LayoutService.title`**（面包屑末级）：每个布局页在构造函数或 `effect` 里设一次，本地化形态用 `translateSignal`，语言切换随之更新。浏览器标签页标题由根组件统一合成为「页面标题 · 应用名」（`Title` 服务），页面不要自己调 `Title`；页头随布局销毁时清空页面标题，登录页、落地页等不设标题的页因此只显示应用名。应用名是 `app.ts` 的 `APP_NAME`，本地化形态取词条 `app.name`、缺词条时回落到它；改项目名时两处连同 `index.html` 的 `<title>` 一起改。
+- **页面标题只设 `LayoutService.title`**（面包屑末级）：每个布局页在构造函数或 `effect` 里设一次，本地化形态用 `translateSignal`，语言切换随之更新。浏览器标签页标题由根组件统一合成为「页面标题 · 应用名」（`Title` 服务），页面不要自己调 `Title`；页头随布局销毁时清空页面标题，登录页、落地页等不设标题的页因此只显示应用名。应用名是 `frontend/src/app/app.ts` 的 `APP_NAME`，本地化形态取词条 `app.name`、缺词条时回落到它；改项目名时两处连同 `frontend/src/index.html` 的 `<title>` 一起改。
 - 设置页的面板（个人设置、系统设置各一套）走子路由，面板名进 URL：刷新、分享、头像菜单直达都落在同一面板。
 - **布局按服务对象选**：管理平台面向内部员工，条目多、会增长、需要按权限整组裁剪，用侧栏（`DefaultLayout`）；工作空间面向业务用户，内容优先，用顶栏（`WorkspaceLayout`），菜单组默认靠左、用文字链接；标 `placement: 'end'` 的组靠右、以图标按钮呈现（与主题、通知、语言同排，名称放在提示与可访问名里），模板自带的分组都不标。工作空间的主导航超过 7 项，或需要分组标题与按权限整组裁剪时，把路由换回 `DefaultLayout`——菜单定义不用动。
 <!--#if (!IncludeLocalization)-->
 
 ## 4. 界面文案
 
-- 组件模板里的界面文案写成 `t('模块.语义')`，解析到组件的 `protected readonly t = englishText(ENGLISH)`：按组件文件末尾的英文表 `ENGLISH` 取值，`{{name}}` 占位按参数替换（`shared/utils/english-text.ts`）。新增文案在同一组件的表里加一条键；表里没有的键会原样显示成键名。
+- 组件模板里的界面文案写成 `t('模块.语义')`，解析到组件的 `protected readonly t = englishText(ENGLISH)`：按组件文件末尾的英文表 `ENGLISH` 取值，`{{name}}` 占位按参数替换（`frontend/src/app/shared/utils/english-text.ts`）。新增文案在同一组件的表里加一条键；表里没有的键会原样显示成键名。
 - 组件 TS 里的提示文案（toast、确认框）直接写英文，或经同一个 `t` 取表里的键。
 <!--#endif-->

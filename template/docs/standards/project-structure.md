@@ -32,39 +32,14 @@ backend/src/
 └── CompanyName.ProjectName.Api/
 ```
 
-- Domain 保存领域模型和内层抽象。
-- Application 编排用例并依赖 Domain，不依赖 Infrastructure。
-- Infrastructure 实现持久化和外部适配。
-- Client 提供给其他服务消费的强类型 SDK。
-- DbMigrator 是独立的一次性数据库迁移入口。
-- Api 是组合根，组合各层与组件的注册入口、映射端点并启动应用。
-
-各层目录与职责见 [后端开发规范](./coding-backend.md#2-分层与目录)。
+Client 是提供给其他服务消费的强类型 SDK，DbMigrator 是独立的一次性数据库迁移入口；其余各层的职责、依赖方向与目录见 [后端开发规范 §2](./coding-backend.md#2-分层与目录)。
 
 测试项目按实际测试类型放在 `backend/tests/` 或解决方案现有位置，不为目录完整性创建空项目。
 
 <!--#if (SpaFrontend)-->
 ## 3. 前端分层
 
-```text
-frontend/
-├── _mock/
-├── libs/ui/                 # Spartan helm 组件（CLI 复制进来的自有代码）
-├── public/
-├── src/app/
-│   ├── core/
-│   ├── features/
-│   ├── layout/
-│   └── shared/
-└── package.json
-```
-
-- `core/` 保存单例服务、认证和全局基础设施。
-- `features/` 按业务能力组织页面和局部服务。
-- `layout/` 保存应用壳与导航。
-- `shared/` 保存无状态的展示组件、工具与跨功能契约，不依赖 `core`。
-
-目录职责与依赖方向见 [前端开发规范](./coding-frontend.md#2-目录与依赖方向)。
+前端目录树、目录职责与依赖方向见 [前端开发规范 §2](./coding-frontend.md#2-目录与依赖方向)。
 
 <!--#endif-->
 
