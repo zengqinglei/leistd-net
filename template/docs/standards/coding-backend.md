@@ -123,7 +123,7 @@ public class UserAppService(
 
 ### 3.7 Controller 与组件端点
 
-框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 用组件的 `Map*` 给前缀与授权策略。组件不认识的业务动作才写 Controller，路由不与组件端点重叠。
+框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不写 Controller：在 `backend/src/CompanyName.ProjectName.Api/Hosting/ComponentEndpoints.cs` 用组件的 `Map*` 给前缀与授权策略。组件不认识的业务动作才写 Controller，路由不与组件端点重叠。
 
 - Controller 命名 `*Controller`，继承 `BaseController`（视图渲染、透传代理、机器端点等例外就近注释）；只做路由、鉴权与调用应用服务。
 - 返回类型（含何时用 `IActionResult`）见 [API 规范 §2](./api.md#2-响应格式)，方法名与路由见 [§6](./api.md#6-http-方法与路由规范)。
@@ -231,7 +231,7 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | `Options/` | 强类型 Options |
 | `Middlewares/` | 中间件 |
 | `HealthChecks/` | `*HealthCheck` |
-| `HostedServices/Initializer/` | 一次性启动引导 `*Initializer` |
+| `HostedServices/` 下的 `Initializer/` | 一次性启动引导 `*Initializer` |
 | `Filters/` | MVC/Hub 管道过滤器（按需创建）；名字以 `Filter` 结尾的业务策略按所属功能域放 |
 
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。

@@ -38,7 +38,7 @@
 HTTP/1.1 200 OK
 ```
 
-框架组件自带的端点（设置、权限、操作记录、通知、租户与租户连接，映射在 `Api/Hosting/ComponentEndpoints.cs`）按 Minimal API 惯例，无返回对象的写操作返回 **HTTP 204**。客户端把 200 空响应与 204 一样当作成功处理，不按状态码分支。
+框架组件自带的端点（设置、权限、操作记录、通知、租户与租户连接，映射在 `backend/src/CompanyName.ProjectName.Api/Hosting/ComponentEndpoints.cs`）按 Minimal API 惯例，无返回对象的写操作返回 **HTTP 204**。客户端把 200 空响应与 204 一样当作成功处理，不按状态码分支。
 
 ### 2.3 分页响应
 

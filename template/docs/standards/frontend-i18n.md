@@ -7,7 +7,7 @@
 - **运行时库 Transloco**（`@jsverse/transloco`）：JSON 词条运行时加载，用户即时切换语言、单包部署——**不用** Angular 编译期 `$localize`（那是按 locale 出多包、无法运行时切换）。
 - **默认语言英语（`en`）**，支持 `en` + `zh-CN`；回落语言 `en`。
 - 全局词条 `frontend/public/i18n/{en,zh-CN}.json` 只放跨功能文案（common、validation、layout、menu 等）；功能词条放 `frontend/public/i18n/<scope>/{en,zh-CN}.json`，现有 scope 即该目录下的子目录。
-- scope 文件直接放该命名空间的内容，不重复包一层 scope 名：`users/en.json` 的 `page.title` 对应运行时键 `users.page.title`。
+- scope 文件直接放该命名空间的内容，不重复包一层 scope 名：`frontend/public/i18n/roles/en.json` 的 `create` 对应运行时键 `roles.create`。
 
 ## 2. 文案归属
 
