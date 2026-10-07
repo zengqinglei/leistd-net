@@ -18,6 +18,7 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 | 公共 API 设计或变更 | 目标家族公共类型、消费者；[§6 公共 API](../../../docs/framework/development-guide.md#6-公共-api-的设计与变更)、`docs/framework/versioning.md` | 构建和包内容；依赖或集成契约变化时隔离消费，影响模板时验证生成场景 |
 | 测试 | 同家族测试项目；[§7 测试](../../../docs/framework/development-guide.md#7-测试) | 测试布局与测试名闸门 |
 | 随包文档、XML 注释 | 目标 `framework/docs/` 和相关源码；[§4 文档注释](../../../docs/framework/development-guide.md#4-文档注释) | 检查引用、示例与打包内容；不因纯文档改动运行隔离消费 |
+| 缺陷修复 | 复现路径、相关测试与调用方 | 先写修复前失败的回归测试，修复后按 L1 扩大回归 |
 | 审查或排障 | 当前行为、复现、相关规范 | 证据与未检查范围，不自动实施 |
 
 源码和项目引用定义实际 API 与行为；文档冲突时修正权威文档，不为兼容旧说明保留错误实现。
