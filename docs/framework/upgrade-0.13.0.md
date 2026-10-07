@@ -920,3 +920,17 @@ BeforeCommit 处理器收到同一个令牌；客户端在提交开始前断开�
 数据库模式只有在同一业务事务和存储内记录，才提供原子持久化；提交后处理器中的记录另行持久化。日志模式在真实提交后输出成功，回滚不输出成功，失败立即输出，仍有提交后进程退出的丢失窗口。采集、保留和访问策略由宿主日志平台负责。
 
 工作单元 AfterCommit 队列在某个事件分发失败后继续处理后续事件，全部分发完再上抛：单个异常保留原实例、类型与堆栈，多个异常聚合。事务已经提交，不再回滚；调用方不能将该异常当作事务未提交而盲目重试。诊断区分提交失败与已提交后的处理失败。
+
+## 44. 模板：Resource 会话主体不再被默认 ClaimActions 删声明
+
+- **现象**：Resource 浏览器会话登录时，访问令牌里的 `acr`、`aud`、`azp`、`iss`、`iat`、`nbf`、`exp`、`nonce` 等声明被删掉；首次续期后这些声明又出现。
+  按这类声明做判断的派生项目（如以 `acr` 判定近期多因素认证），结果随会话是否续期过而变。
+- **原因**：会话主体由 `ResourceSessionRefresher.ValidateAccessTokenAsync` 按访问令牌构建，登录（`OnTokenValidated`）与续期同源；
+  但官方 `OpenIdConnectHandler` 在 `OnTokenValidated` 之后，还会用空载荷对换上的主体执行 `OpenIdConnectOptions.ClaimActions`，
+  其默认的 `DeleteClaim` 不看载荷，按类型直接删除。续期由模板自行实现，不经过这一步。
+  官方 Blazor OIDC 示例使用 id_token 主体，它的续期器同样不执行 ClaimActions；示例没有基于这些声明做本项目这类判定。
+- **修正**：模板在 Resource 的 `AddOpenIdConnect` 中 `options.ClaimActions.Clear()`，表明这个处理器不做声明映射，会话主体只由上述构建函数决定。
+  不影响签名、issuer、受众、nonce、PKCE 等协议校验。新增集成测试断言登录后保留访问令牌的 `acr`、`aud`，且首次续期前后声明类型一致、不混入 id_token 的声明。
+- **派生项目**：照此加一行；已自行 `ClaimActions.Clear()` 的保持即可。已存入服务端的会话票据不会立即补回声明，
+  下次续期或重新登录后才按新规则构建；无需清空票据库或强制退出。会话里多出的这些声明若参与派生项目的声明判定，请据此复核。
+- §29 中"会话主体来自访问令牌，id_token 声明不进会话"的说明由本节补全。
