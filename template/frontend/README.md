@@ -188,4 +188,4 @@ npm run format:fix     # 自动格式化代码
 npm test -- --watch=false
 ```
 
-测试范围与写法见 [测试规范](../docs/standards/testing.md#3-前端)。`angular.json` 的 test 目标开启 `isolate`（每个 spec 文件独占页面，避免全局桩跨文件串扰）并使用不做 Mock 替换的 `unit-test` 构建配置，不要关闭或改用开发配置。
+测试范围与写法见 [测试规范](../docs/standards/testing.md#3-前端)。
