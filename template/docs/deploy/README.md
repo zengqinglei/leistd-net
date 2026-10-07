@@ -5,18 +5,12 @@
 ## 配置与机密的分层
 
 <!--#if (SpaFrontend)-->
-各环境共用同一套配置键，只换值的来源。浏览器页面与所属 API 必须同源，支持同镜像托管，也支持分进程经部署代理统一外部源。认证导航、`/api/**` 协议回调与前端回跳都以该外部源为准；独立跨源 API 地址不属于模板浏览器认证的部署契约。前端构建不注入 API 地址，`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。
-
-会话 Cookie 默认 `SameSite=Lax`。外部 OAuth correlation 与 OIDC nonce Cookie 保持官方 `SameSite=None`、`Secure=Always`，协议回调须 HTTPS。放宽会话 Cookie 到 `None` 不会补齐跨源浏览器认证导航。
+各环境共用同一套配置键，只换值的来源。浏览器页面与所属 API 必须同源（同镜像托管，或分进程经部署代理统一外部源），前端构建不注入 API 地址；同源、Cookie 与 SameSite 规则见 [浏览器认证](../standards/auth.md#浏览器认证)。
 <!--#else-->
 各环境共用同一套配置键，只换值的来源。纯 API 通过 Bearer 认证，不配置浏览器 Cookie、OIDC 回调或前端网关。
 <!--#endif-->
-<!--#if (OpenIddictServer)-->
-
-第三方站点以顶层 POST 进入授权或退出端点时不需要放宽 SameSite：请求先缓存，再以顶层 GET 重入，Lax 会话 Cookie 即可送达（见 [依赖方的登录与退出](../standards/auth.md#依赖方的登录与退出)）。
-<!--#endif-->
-
 <!--#if (LocalIdentity)-->
+
 口令哈希默认 PBKDF2-HMAC-SHA256 600,000 次迭代（OWASP 现行建议）。硬件基准表明可以承受更高成本时用 `PasswordHash__IterationCount` 调高；新值只作用于此后设置或修改的口令，存量密文按自身记录的迭代数校验，照常可用。
 <!--#endif-->
 <!--#if (OpenIddictServer)-->
@@ -30,7 +24,7 @@
 
 | 环境 | `ASPNETCORE_ENVIRONMENT` | 非机密配置 | 机密 |
 | --- | --- | --- | --- |
-| 本机开发 | `Development` | `appsettings.Development.json`（随仓库提交，全队共用） | `dotnet user-secrets`（每人一份，见根 README「本地运行」） |
+| 本机开发 | `Development` | `appsettings.Development.json`（随仓库提交，全队共用） | `dotnet user-secrets`（每人一份，见 [后端说明](../../backend/README.md#开发配置)） |
 | 集成测试 | `Testing` | 测试夹具显式给出 | 测试夹具给出确定性的假值 |
 | 测试 / 预发 | `Staging` | 环境变量，需要时加 `appsettings.Staging.json` | CI/CD 的 secret 注入为环境变量 |
 | 生产 | `Production` | 环境变量与 `appsettings.Production.json` | 密钥管理系统，经环境变量或挂载文件注入 |
@@ -39,6 +33,9 @@
 
 <!--#if (SpaFrontend)-->
 - Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+<!--#endif-->
+<!--#if (LocalIdentity && IncludeMultiTenancy)-->
+- 控制库用 Data Protection 加密租户连接串，API 与 `DbMigrator` 必须使用同一个密钥环与应用名。
 <!--#endif-->
 <!--#if (SpaFrontend)-->
 - 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，启动日志各有一条 Warning；多副本必须配置 Redis，并共享 Data Protection 密钥。
@@ -51,7 +48,7 @@
 <!--#endif-->
 <!--#if (OpenIddictServer)-->
 - 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificates`、`OAuth:EncryptionCertificates` 各至少一项，每项 `Path`、`Password`），与 HTTPS 证书分开；开发证书只用于本机开发。任何一项缺路径、无法加载或没有 RSA 私钥，启动失败并指出带下标的键名。
-- TLS 在网关或 ingress 终结时，配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 让应用还原原始协议，不要打开 `OAuth:DisableHttpsRequirement`——OpenIddict 明确要求生产环境即使在反向代理后也不关闭传输安全检查。
+- TLS 在网关或 ingress 终结时不要打开 `OAuth:DisableHttpsRequirement`：OpenIddict 要求生产环境即使在反向代理后也不关闭传输安全检查，按上一条配置转发头即可。
 <!--#endif-->
 <!--#if (Email)-->
 - 发信基线指向本机邮件捕获器（`localhost:1025`）。部署时覆盖 `Leistd:Email:Smtp` 的 `Host`、`Port`、`EnableSsl`、`DefaultFromAddress`，`Username` 与 `Password` 成对提供或都不提供；compose 以 `SMTP_HOST`、`SMTP_PORT`、`SMTP_FROM_ADDRESS` 为必填，账号口令只填一项时启动失败。
@@ -158,7 +155,7 @@ docker build --build-arg APP_VERSION=1.4.0 --build-arg APP_REVISION="$(git rev-p
 <!--#if (OpenIddictServer)-->
 - 浏览器整页进入授权端点，发现文档、JWKS、令牌与 UserInfo 由 Resource 后端访问，不要求为这些服务端协议通信开放浏览器 CORS。本机 Angular 开发代理将 `/api/**` 转到 API。
   生产 API 的 `Cors:AllowedOrigins` 默认为空；仅供显式需要的其他 API 集成使用，不负责浏览器认证导航。
-- 下游资源服务的 API 标识以对象登记在 `OAuth:ApiResources` 的 Name，与该服务的 `Authentication:Audience` 相同；Scope 与 OwnerClientId 可独立配置，默认资源名。
+- 下游资源服务与各类客户端的登记（含 `OAuth:ApiResources`）见 [服务间调用](../standards/service-invocation.md#identity-与资源服务对接)。
 - 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期由 `OAuth:AccessTokenLifetime` 决定（默认 10 分钟）。
   调短它让下面的窗口收敛更快，代价是依赖方续期更频繁；它必须是整秒且长于 1 分钟——资源服务的浏览器会话在令牌剩余 1 分钟时续期，
   不长于这个窗口时每个请求都要续期，启动时拒绝并指出该键。测试与 CI 要观察真实到期时，用环境变量把它缩短（如 `OAuth__AccessTokenLifetime=00:01:30`），
@@ -215,18 +212,16 @@ docker build --build-arg APP_VERSION=1.4.0 --build-arg APP_REVISION="$(git rev-p
 <!--#endif-->
 - 模板不内置限流。对外提供登录的服务应在网关或 ASP.NET Core 限流中间件上按来源 IP 限流：
   应用内的失败登录计数按账号聚合，同一 IP 轮换账号的撞库不会触发它。
-- API 启动时不执行 DDL。部署流水线先以 Migration Secret 运行一次性 `DbMigrator`，成功后再发布 API，详见 [后端迁移策略](../../backend/README.md#数据库迁移)。
-- API 使用 Runtime Secret 且只持有 DML 权限；`DbMigrator` 使用独立 DDL 身份。部署前必须审查迁移，并明确备份、超时、失败恢复及新旧版本并存时的兼容性。
+- API 启动时不执行 DDL。部署流水线先以 Migration Secret（DDL 身份）运行一次性 `DbMigrator`，任一目标失败即以非零码退出并阻断发布，成功后再发布 API；API 使用 Runtime Secret 且只持有 DML 权限。命令与预演见 [后端说明](../../backend/README.md#数据库迁移)。
+- 部署前必须审查迁移，并明确备份、超时、失败恢复、回滚、健康检查与新旧版本并存时的兼容性。
 - **破坏性 schema 变更按 Expand → Backfill/Switch → Contract 三个有序阶段推进**，不在一次发布里完成。约束的是阶段顺序与下面两道闸门，不是发布次数——Backfill 可能是一次独立运维任务，也可能分多个批次：
   - `DbMigrator` 先于新 API 执行，此刻旧 Pod 仍在运行，因此 **Expand 阶段的迁移必须同时兼容当前生产版本和新版本**（只加不减：新增可空列、新增表、新增索引，不改语义、不删不改名）。
   - 全部目标迁移完成后，再发布新代码并完成 Backfill 或读写切换。
   - **确认旧版本实例全部退出后**，才在之后的受控发布里执行 Contract（删除旧列/旧表/兼容代码）。过渡结构只允许存在于这段窗口，不留长期历史兼容层。
-  - 模板仓库 CI 用真实 PostgreSQL 验证从当前模板建库、迁移及租户隔离。具体项目发布前，需另用当前生产版本的数据副本验证「当前生产版本 → 新版本」的升级路径与迁移重跑；模板 CI 没有该项目的生产基线，不能替代这项验收。
+  - 发布前用当前生产版本的数据副本验证「当前生产版本 → 新版本」的升级路径与迁移重跑。
 <!--#if (IncludeMultiTenancy)-->
-- DedicatedDatabase 首次建库时，先对目标连接以 `ConnectionStrings__MigrationTarget` 运行每个服务的 DbMigrator，再在 Identity 创建租户。该模式只迁移当前服务的业务 schema，不会把 Identity Control schema 写入租户目标。
-- DbMigrator 非零退出时先看它报出的租户与库：单个租户的问题不挡住其他租户，健康的独立库在这一次已经迁移完，不会回滚。发布在此停下，新版本 API 不上线；修好之后重跑，成功后再继续发布。部分库已迁移、旧版本 API 仍在运行的这段时间，靠的正是上面 Expand 阶段"同时兼容新旧版本"的要求。
+- DedicatedDatabase 首次建库时，先以 `ConnectionStrings__MigrationTarget` 对目标连接运行每个服务的 DbMigrator，再在 Identity 创建租户，见 [后端说明](../../backend/README.md#数据库迁移)。
+- DbMigrator 非零退出时发布在此停下，新版本 API 不上线；单个租户失败时其余独立库可能已经迁移且不回滚（边界见后端说明），修好之后重跑，成功后再继续发布。部分库已迁移、旧版本 API 仍在运行的这段时间，靠的正是上面 Expand 阶段"同时兼容新旧版本"的要求。
 <!--#endif-->
-- 数据迁移、备份、回滚、健康检查和核心路径验证必须在执行前明确。
-- 生产部署、回滚、重启、流量切换及真实数据操作前核对用户已有授权是否覆盖目标、环境和动作；未授权或范围变化时再确认。
 
 只有项目已经确定真实环境和运维流程时，才在本目录新增或更新文档。先参考最新同类记录，没有可参考内容时与负责人确认最小必要信息，不创建服务器配置或部署报告模板。

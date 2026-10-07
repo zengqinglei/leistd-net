@@ -1,6 +1,6 @@
 # 认证与授权
 
-接口的认证方式、授权与权限侧别、浏览器会话。响应与错误契约见 [API 规范](api.md)。
+接口的认证方式、授权与权限侧别、浏览器会话。响应与错误契约见 [API 规范](api.md)，密钥、令牌与个人信息不进日志和响应的边界见 [通用约定](coding-common.md#1-语言与敏感信息)。
 
 ## 认证方式与授权要求
 
@@ -30,11 +30,6 @@
 - 写操作必须校验资源归属或角色权限。
 - 批量操作必须逐项校验权限或明确全局权限。
 - 管理接口必须与普通用户接口隔离权限。
-
-### 敏感信息
-
-- 不在响应、日志、错误消息中返回密钥、Token、连接串。
-- 邮箱、手机号、证件号等敏感字段按项目规则脱敏。
 
 ## 权限侧别与租户维度
 
@@ -76,7 +71,7 @@
 服务端会话（登录设备）的空闲时限从同一份选项派生，两者不会不一致。
 <!--#endif-->
 
-`SessionCookie:SameSite` 只控制应用会话 Cookie；默认 Lax。OAuth correlation 与 OIDC nonce Cookie 保持官方 SameSite=None、Secure=Always，HTTPS 回调不可省略。开发回调在 `/api/**` 下，由开发代理转发。
+`SessionCookie:SameSite` 只控制应用会话 Cookie；默认 Lax，放宽到 None 也不会让跨源浏览器认证导航成立。OAuth correlation 与 OIDC nonce Cookie 保持官方 SameSite=None、Secure=Always，HTTPS 回调不可省略。开发回调在 `/api/**` 下，由开发代理转发。
 
 浏览器写 API 请求与实时 Hub（`/hubs/**`，含 WebSocket 握手）检查 Origin，接受本源及显式 `Cors:AllowedOrigins`。带 Authorization 头的 API 写请求不依赖 Cookie，跳过来源检查；CORS 不约束 WebSocket，Hub 的来源检查不因带该头而跳过。没有 Origin 时看 `Sec-Fetch-Site`：值为 `cross-site` 或 `same-site` 的拒绝，`same-origin`、`none` 放行；两个头都没有的非浏览器调用保持支持。API 写请求不使用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护；唯一用到官方 antiforgery 的是 Identity 的退出确认表单（见下文）。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
 
@@ -99,9 +94,9 @@
 - 开启时，授权码、刷新令牌与 id_token 带上会话标识（访问令牌不带）；换取或刷新令牌时会话已退出、被撤销或空闲到期即返回 `invalid_grant`。判定不记活跃，后台续期不会延长 Identity 会话。服务端会话类客户端（BFF，如 Resource 的浏览器登录）应开启：用户在 Identity 退出后，它在访问令牌到期时随之收敛。
 - 关闭时授权与会话无关，适合需要持续离线续期的客户端（桌面端、原生应用）。管理界面新建 Web 应用默认开启，桌面端与服务模板默认关闭。
 - 授权按签发时的事实处理：开启前签发的刷新令牌在开启后被拒，客户端须重新授权；签发时已绑定的授权在关闭后仍受约束。早于该设置的登记读作未设置（按关闭处理），编辑时须明确选择。
-- 修改登记只在当前实例立即生效：OpenIddict 应用缓存只在本进程失效、没有时间过期，多实例修改后滚动重启 Identity。
+- 修改登记只在当前实例立即生效，多实例须滚动重启 Identity（见部署文档）。
 
-依赖方须登记 `ept:end_session` 与退出回调；退出确认、重新认证证明与 Cookie 都依赖 Data Protection，多实例除共享缓存外还要共享控制库、令牌证书、Data Protection 密钥环与应用名，以及分布式锁（见部署文档）。
+依赖方的登记见 [服务间调用](service-invocation.md#identity-与资源服务对接)。退出确认、重新认证证明与 Cookie 都依赖 Data Protection，多实例 Identity 须共享的资源见 [部署说明](../deploy/README.md#配置与机密的分层)。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 ### 外部账号
@@ -111,7 +106,7 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 0. 登录页匿名读取 `GET /api/v1/external-auth/providers`，只为已登记的提供商显示入口；读取失败时单独提示并可重试（5xx 附追踪 ID），不当作"未配置"。登录页只内置 GitHub、Google 两个入口，新增提供商时要同时补前端入口和 `getExternalLoginUrl` 的提供商类型。
 1. 浏览器导航至 `GET /api/v1/external-auth/{provider}/challenge`，可带站内 `returnUrl`（外站地址返回 400）。绑定使用 `GET /api/v1/external-auth/{provider}/link/challenge`，要求通过自然人策略的非受限会话。
 2. 提供商回调至 `/api/v1/external-auth/{provider}/signin`，官方处理器完成 code/state/correlation/PKCE 与 UserInfo，签发五分钟外部票据引用，然后重定向前端 `/auth/external-callback/{provider}?intent=...`。用户在提供商处取消或协议校验失败（state、correlation 等）时，不签发外部票据，重定向前端 `/auth/external-callback/{provider}?intent=...&error=cancelled|failed`：登录意图显示原因并提供返回登录入口（会话仍有效时直接回到应用，例如后退键重放旧回调），绑定意图回到安全设置页并提示。业务提示中的提供商名使用官方 scheme 的显示名（`ExternalUserInfo.ProviderDisplayName`）。
-3. 前端 `POST /api/v1/external-auth/{provider}/complete` 或受保护的 `POST /api/v1/external-auth/{provider}/link/complete`，请求体为空对象。后端匹配受保护的提供商、意图、绑定发起者与租户，先一次消费外部票据，再执行账号政策；登录返回最终会话结果或第二步凭据及受保护的 `returnUrl`，前端在登录或第二步成功后接续该地址；绑定成功为空响应（HTTP 200），结果以绑定列表为准。登录与第二步的会话 Cookie 统一由 `Api/Auth/SessionCookieIssuer` 签发：先结束当前会话再签发，要求第二步时只返回凭据、不签发最终会话。
+3. 前端 `POST /api/v1/external-auth/{provider}/complete` 或受保护的 `POST /api/v1/external-auth/{provider}/link/complete`，请求体为空对象。后端匹配受保护的提供商、意图、绑定发起者与租户，先一次消费外部票据，再执行账号政策；登录返回最终会话结果或第二步凭据及受保护的 `returnUrl`，前端在登录或第二步成功后接续该地址；绑定成功为空响应（HTTP 200），结果以绑定列表为准。登录与第二步的会话 Cookie 统一由 `backend/src/CompanyName.ProjectName.Api/Auth/SessionCookieIssuer.cs` 签发：先结束当前会话再签发，要求第二步时只返回凭据、不签发最终会话。
 
 完成端点失败也不能重用票据，须重新 challenge；查询参数不能改变保护过的登录/绑定意图。提供商后台需分别登记上述完整 HTTPS signin 地址。Google v3 使用 `sub/email_verified`。邮箱接口失败或未验证邮箱不允许按邮箱关联账号。
 <!--#endif-->
@@ -120,7 +115,7 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 
 后端是 OIDC 机密客户端，使用 code、PKCE、SaveTokens 与服务端票据。配置 `Authentication:Issuer`、`Audience`、`ClientId`、`ClientSecret`，缺键启动失败；`Scope` 可省略，默认与 Audience 同名。密钥只放后端机密配置。
 
-Identity 登记 web/confidential 客户端，开启会话绑定，允许 authorization code、refresh token、退出端点、PKCE、openid/profile/email/roles/offline_access 和本 API scope。登录回调登记完整 `/api/v1/auth/signin`，退出回调登记完整 `/api/v1/auth/signout`。会话绑定使 Identity 退出后本服务的会话在访问令牌到期时收敛，而不是靠刷新令牌继续存活。
+本服务须在 Identity 登记为开启会话绑定的浏览器依赖方，登记项见 [服务间调用](service-invocation.md#identity-与资源服务对接)；会话绑定使 Identity 退出后本服务的会话在访问令牌到期时收敛，而不是靠刷新令牌继续存活。
 
 前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。授权与退出请求都以官方 FormPost（`AuthenticationMethod = FormPost`）发往 Identity：响应是一张自动提交的表单，参数不进地址栏。`POST /api/v1/auth/logout` 先删除本服务端票据（旧 Cookie 立即失效），再以表单携带 `id_token_hint` 发起退出，Identity 据其中的会话标识免确认退出。表单依赖一段内联脚本自动提交（禁用脚本时显示提交按钮）；宿主若加内容安全策略，要放行这段脚本或接受手动提交。
 
@@ -128,7 +123,7 @@ Identity 登记 web/confidential 客户端，开启会话绑定，允许 authori
 
 访问令牌按只签名的 JWT 本地验签（issuer、audience、签名、有效期），本服务不持有解密凭据；签发方若改为加密令牌或 introspection，这里要同步配置。
 
-签发方轮换签名证书后，遇到不认识的 kid 时先向配置的签发方刷新一次公钥再验（`Auth/SigningKeyRefresh.cs`，覆盖 Bearer、登录回调与服务端续期；id_token 由 OIDC 处理器自身刷新重试）。只处理可读的 JWS，公钥只来自配置的发现文档，验签规则不放宽。同一时刻的刷新合并成一次抓取，抓取超时 10 秒，请求刷新每分钟至多转交一次（签发方不可用时，伪造 kid 的请求不会逐个触发抓取）；抓取失败时沿用已有公钥；抓取成功则本次只用返回的公钥集，签发方撤掉的公钥不再参与验签。逐请求结果只记 Debug，真实的刷新请求每次记一条 Information。这依赖进程级开关 `Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking`（Api 与集成测试项目以 `RuntimeHostConfigurationOption` 设置）：它也让定期自动刷新改为由到点的请求等待完成。签发方刚刷新过（IdentityModel 的 5 分钟间隔、本服务的 1 分钟限频）或不可达时，新 kid 的请求仍会失败，所以轮换仍按签发方部署文档的顺序先发布、后切换。
+签发方轮换签名证书后，遇到不认识的 kid 时先向配置的签发方刷新一次公钥再验（`backend/src/CompanyName.ProjectName.Api/Auth/SigningKeyRefresh.cs`，覆盖 Bearer、登录回调与服务端续期；id_token 由 OIDC 处理器自身刷新重试）。只处理可读的 JWS，公钥只来自配置的发现文档，验签规则不放宽。同一时刻的刷新合并成一次抓取，抓取超时 10 秒，请求刷新每分钟至多转交一次（签发方不可用时，伪造 kid 的请求不会逐个触发抓取）；抓取失败时沿用已有公钥；抓取成功则本次只用返回的公钥集，签发方撤掉的公钥不再参与验签。逐请求结果只记 Debug，真实的刷新请求每次记一条 Information。这依赖进程级开关 `Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking`（Api 与集成测试项目以 `RuntimeHostConfigurationOption` 设置）：它也让定期自动刷新改为由到点的请求等待完成。签发方刚刷新过（IdentityModel 的 5 分钟间隔、本服务的 1 分钟限频）或不可达时，新 kid 的请求仍会失败，所以轮换仍按签发方部署文档的顺序先发布、后切换。
 
 退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。账号或租户停用后的本地验签窗口由访问令牌有效期（Identity 的 `OAuth:AccessTokenLifetime`，默认 10 分钟）决定，后续刷新失败收敛会话。
 <!--#endif-->
