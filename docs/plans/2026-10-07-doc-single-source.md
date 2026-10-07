@@ -109,7 +109,7 @@ Spartan Skill 的 Nx 分支属于上游维护内容，不在本阶段删改。
      - `npm run <脚本>` 对应生成项目的 `frontend/package.json`，这是唯一的 npm 项目，映射写死。
      - `ng <执行目标>`（build、serve、test、lint、e2e、extract-i18n 等）对照 `frontend/angular.json` 的 architect 目标；`ng generate`、`ng new` 是 generator，不检查。
      - `python3|py scripts/*.py`、`pwsh *.ps1` 按交付根解析。
-     - 仓库文档里的 npm/ng 命令不在检查范围内；出现时须在映射表里登记所属项目，否则失败。
+     - 仓库文档里的 npm/ng 命令不由本闸门校验。
    - **失败条件**：目标缺失、配置解析失败、所属项目无法确定、扫描到的文档或引用数量为零。
    - **白名单**：放在脚本内，每条写明来源文件、引用原文、适用模式和理由，精确匹配，不做前缀或模糊匹配。“生成后才出现”只豁免源码模式，生成模式仍须存在。
    - **自检反例**：
