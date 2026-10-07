@@ -40,13 +40,13 @@ $problems = New-Object System.Collections.Generic.List[string]
 $historicalPaths = @(
     "docs/framework/versioning.md",
     # 升级清单的职责就是说"这个东西以前叫什么、现在改成什么"，不提旧名就没法用。
-    # 按前缀豁免，覆盖 upgrade-0.13.0.md 及后续各版本。
-    "docs/framework/upgrade-",
+    # 按目录豁免，覆盖 upgrades/ 下各版本的升级指南及其附录。
+    "docs/framework/upgrades/",
     "docs/plans/",
     "docs/assessments/"
 )
 
-# 与 docs/framework/ 下的升级清单保持一致：那些清单列了什么被删除，这里就该拦什么。
+# 与 docs/framework/upgrades/ 下的升级指南保持一致：那些指南列了什么被删除，这里就该拦什么。
 #
 # 用正则而不是子串：好几个被删掉的名字是现存名字的前缀或后缀，直接按子串拦会误伤。
 #   \bPermissionGrant\b   —— PermissionGrantSet/Store/Record/Manager 都还活着，必须靠单词边界排除；
@@ -133,10 +133,11 @@ $todoMarker = '(?-i:(?:(?<!:)//|/\*|<!--|@\*|^\s*\*|^\s*#|^\s*(?:[-*]\s+)?(?=(?:
 # 注释写"由 .github/workflows/release.yml 替换""仓库根 VERSION"，读者在生成项目里找不到对应物。
 # .template.config/ 是模板引擎的配置，不进生成项目，不受约束。
 # `leistd-net-framework` 是随框架包分发的 Skill 名，生成项目里确实存在，属于例外（负向断言排除）。
+# 生成项目自己的 CI 薄壳 `.github/workflows/ci.yml`（Ci=github）也确实存在：目录本身与 ci.yml 不拦，点名其他 workflow 文件照拦。
 $maintenanceFactScope = "template/"
 $maintenanceFactExemptPaths = @("template/.template.config/")
 $maintenanceFactPatterns = @(
-    "\.github/workflows",
+    "\.github/workflows/(?!ci\.yml(?![\w.-]))[\w.-]",
     "仓库根",
     "(?<![\w-])leistd-net(?![\w-])"
 )
@@ -223,6 +224,9 @@ if ($SelfTest) {
         @{ Rule = "todo"; Text = "const next = Status.TODO;";                                   ShouldMatch = $false }
         @{ Rule = "todo"; Text = 'var url = "http://host/TODO";';                              ShouldMatch = $false }
         @{ Rule = "maintenance"; Text = "由 .github/workflows/release.yml 替换版本号";               ShouldMatch = $true }
+        @{ Rule = "maintenance"; Text = "由 .github/workflows/ci.yml.bak 替换";                      ShouldMatch = $true }
+        @{ Rule = "maintenance"; Text = "附带的 ``.github/workflows/ci.yml`` 调用 verify";          ShouldMatch = $false }
+        @{ Rule = "maintenance"; Text = "|-- .github/workflows/       # CI 薄壳";                  ShouldMatch = $false }
         @{ Rule = "maintenance"; Text = "版本号来自仓库根 VERSION";                                 ShouldMatch = $true }
         @{ Rule = "maintenance"; Text = "源码位于 leistd-net 仓库";                                  ShouldMatch = $true }
         @{ Rule = "maintenance"; Text = "使用 leistd-net-framework Skill 定位包内文档";              ShouldMatch = $false }

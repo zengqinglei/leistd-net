@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Exercise the actual workflow scope steps in isolated Git repositories.
 
-Run when changing CI/release scope selection; this is not a per-feature gate.
+Run when changing CI/release scope selection or the release link policy
+(PackageReleaseNotes and the upgrade-guide link); this is not a per-feature gate.
+The release link check packs a fixture project, so it also requires the .NET SDK.
 Requires PowerShell and the same PyYAML dependency used by Skill validation.
 """
 
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
+from xml.etree import ElementTree
+import zipfile
 
 import yaml
 
@@ -281,10 +286,145 @@ def check_quality_aggregation():
             print(f'PASS aggregation docs_only={docs_only}, framework_tests={framework_tests}: missing/failed/cancelled/wrong skip, wrong candidate/plan and static mutation')
 
 
+def release_step(step_id):
+    data = yaml.safe_load((ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8'))
+    return next(s for s in data['jobs']['release']['steps'] if s.get('id') == step_id)
+
+
+def substitute(script, values):
+    """Replace every ${{ expr }} with a fixture value; an unmodelled expression fails the test."""
+    def replace(match):
+        expression = match.group(1).strip()
+        assert expression in values, ('workflow expression not modelled by the release fixture', expression)
+        return values[expression]
+    return re.sub(r'\$\{\{(.*?)\}\}', replace, script)
+
+
+def run_pwsh(repo, script, env=None):
+    output = repo / 'output.txt'
+    output.unlink(missing_ok=True)
+    path = repo.parent / f'{repo.name}-step.ps1'
+    path.write_text(script, encoding='utf-8')
+    result = subprocess.run(['pwsh', '-NoProfile', '-File', str(path)], cwd=repo,
+                            env={**os.environ, 'GITHUB_OUTPUT': str(output), **(env or {})},
+                            capture_output=True, text=True, encoding='utf-8', errors='replace')
+    return result.returncode, output.read_text(encoding='utf-8') if output.exists() else '', result.stdout + result.stderr
+
+
+def parse_outputs(text):
+    outputs, lines, index = {}, text.splitlines(), 0
+    while index < len(lines):
+        line = lines[index]
+        if '<<' in line and '=' not in line.split('<<', 1)[0]:
+            name, marker = line.split('<<', 1)
+            end = lines.index(marker, index + 1)
+            outputs[name] = '\n'.join(lines[index + 1:end])
+            index = end + 1
+            continue
+        name, _, value = line.partition('=')
+        outputs[name] = value
+        index += 1
+    return outputs
+
+
+def packed_release_notes(repo):
+    packages = list((repo / 'framework/artifacts').glob('*.nupkg'))
+    assert len(packages) == 1, ('expected exactly one fixture package', packages)
+    with zipfile.ZipFile(packages[0]) as package:
+        nuspec = next(name for name in package.namelist() if name.endswith('.nuspec'))
+        root = ElementTree.fromstring(package.read(nuspec))
+    notes = [element.text for element in root.iter() if element.tag.endswith('}releaseNotes') or element.tag == 'releaseNotes']
+    return notes[0] if notes else None
+
+
+def check_release_links():
+    """Release link policy: every channel, with and without a guide, down to the packed .nuspec."""
+    repository = 'zengqinglei/leistd-net'
+    repo_url = f'https://github.com/{repository}'
+    links, notes, pack = release_step('links'), release_step('notes'), release_step('pack')
+    channels = {
+        'stable': '0.13.0',
+        'beta': '0.13.0-beta.7',
+        'nightly': '0.13.0-preview.20261007.12',
+    }
+    with tempfile.TemporaryDirectory(prefix='leistd-release-links-') as directory:
+        for channel, version in channels.items():
+            for has_guide in (True, False):
+                tag = f'v{version}'
+                repo = Path(directory) / f'{channel}-{"guide" if has_guide else "none"}'
+                repo.mkdir()
+                git(repo, 'init', '-q')
+                git(repo, 'config', 'user.email', 'release-test@example.invalid')
+                git(repo, 'config', 'user.name', 'Release test')
+                project = repo / 'framework/Fixture/Fixture.csproj'
+                project.parent.mkdir(parents=True)
+                project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
+                                   '<TargetFramework>net10.0</TargetFramework><PackageId>Leistd.ReleaseFixture</PackageId>'
+                                   '<Authors>fixture</Authors><Description>fixture</Description>'
+                                   '</PropertyGroup></Project>\n', encoding='utf-8')
+                (project.parent / 'Fixture.cs').write_text('namespace Fixture;\npublic static class Marker;\n', encoding='utf-8')
+                (repo / 'framework/Leistd.Framework.slnx').write_text(
+                    '<Solution>\n  <Project Path="Fixture/Fixture.csproj" />\n</Solution>\n', encoding='utf-8')
+                if has_guide:
+                    guide = repo / 'docs/framework/upgrades/0.13.0.md'
+                    guide.parent.mkdir(parents=True)
+                    guide.write_text('# guide\n', encoding='utf-8')
+                git(repo, 'add', '-A')
+                git(repo, 'commit', '-qm', 'fix: fixture')
+                values = {
+                    'github.repository': repository,
+                    'steps.ch.outputs.channel': channel,
+                    'steps.ver.outputs.tag': tag,
+                    'steps.ver.outputs.version': version,
+                    'steps.ver.outputs.baseVersion': '0.13.0',
+                    'steps.ver.outputs.lastStableTag': '',
+                }
+                guide_url = f'{repo_url}/blob/{tag}/docs/framework/upgrades/0.13.0.md'
+                expected = guide_url if has_guide else {
+                    'stable': f'{repo_url}/releases/tag/{tag}',
+                    'beta': f'{repo_url}/releases/tag/{tag}',
+                    'nightly': f'{repo_url}/commit/{tag}',
+                }[channel]
+
+                code, output, log = run_pwsh(repo, substitute(links['run'], values))
+                assert code == 0, (channel, has_guide, log)
+                outputs = parse_outputs(output)
+                assert outputs.get('guideUrl') == (guide_url if has_guide else ''), (channel, has_guide, outputs)
+                assert outputs.get('packageReleaseNotes') == expected, (channel, has_guide, outputs)
+                # 变异：改成分支链接必须被拒，证明判据读的是 tag 固定的地址
+                mutated = links['run'].replace('blob/$tag/', 'blob/develop/')
+                assert mutated != links['run'], 'mutation did not apply: guide URL literal changed'
+                code, output, _ = run_pwsh(repo, substitute(mutated, values))
+                assert not has_guide or parse_outputs(output).get('packageReleaseNotes') != expected, 'branch link not detected'
+
+                values['steps.links.outputs.guideUrl'] = outputs['guideUrl']
+                code, output, log = run_pwsh(repo, substitute(notes['run'], values))
+                assert code == 0, (channel, has_guide, 'notes', log)
+                body = parse_outputs(output)['content']
+                assert ('## 升级指南' in body) == has_guide and (guide_url in body) == has_guide, (channel, has_guide, body)
+
+                values['steps.links.outputs.packageReleaseNotes'] = outputs['packageReleaseNotes']
+                env = {name: substitute(value, values) for name, value in pack.get('env', {}).items()}
+                code, _, log = run_pwsh(repo, substitute(pack['run'], values), env)
+                assert code == 0, (channel, has_guide, 'pack', log)
+                packed = packed_release_notes(repo)
+                assert packed == expected, (channel, has_guide, 'nuspec', packed)
+                assert f'/{tag}/' in packed + '/' and '/main/' not in packed and '/develop/' not in packed, packed
+                print(f'PASS release links {channel} guide={has_guide}: {packed}')
+
+        code, _, log = run_pwsh(repo, substitute(pack['run'], values), {'PACKAGE_RELEASE_NOTES': ''})
+        assert code != 0, ('pack must refuse a missing release notes link', log)
+        values['steps.ch.outputs.channel'] = 'unknown'
+        code, _, _ = run_pwsh(repo, substitute(links['run'], values))
+        assert code != 0, 'unknown channel must fail closed'
+        print('PASS release links: missing link and unknown channel fail closed')
+
+
 def main():
     check_existing_scopes()
     check_docs_scope()
     check_quality_aggregation()
+    check_release_links()
 
 
 if __name__ == '__main__':

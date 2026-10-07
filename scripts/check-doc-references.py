@@ -115,7 +115,7 @@ WHITELIST = [
      'reason': 'CI 构建输出目录，不入库'},
     {'source': 'docs/template/development-guide.md', 'ref': 'framework/artifacts', 'mode': 'source',
      'reason': 'CI 构建输出目录，不入库'},
-    {'source': 'docs/framework/upgrade-0.13.0.md', 'ref': '.cache/lint/', 'mode': 'source',
+    {'source': 'docs/framework/upgrades/0.13.0.md', 'ref': '.cache/lint/', 'mode': 'source',
      'reason': '生成项目前端运行 lint 时创建的缓存目录，不入库'},
     {'source': 'docs/template/quality-assurance.md', 'ref': '.cache/lint/', 'mode': 'source',
      'reason': '生成项目前端运行 lint 时创建的缓存目录，不入库'},
