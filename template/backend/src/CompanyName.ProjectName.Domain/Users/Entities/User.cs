@@ -2,6 +2,7 @@
 using CompanyName.ProjectName.Domain.Auth.Errors;
 using Leistd.ExceptionHandling;
 #endif
+using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
@@ -12,7 +13,7 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
-public class User : FullAuditedEntity<Guid>, IMultiTenant
+public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 {
     /// <summary>
     /// 所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充

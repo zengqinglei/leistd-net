@@ -92,7 +92,7 @@ internal static class IdentityEntityConfiguration
                 .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NOT NULL AND NOT \"{nameof(ExternalLoginConnection.IsDeleted)}\"");
             b.HasIndex(e => e.UserId);
 
-            b.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 #endif

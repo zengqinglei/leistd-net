@@ -41,15 +41,6 @@ public sealed class UserModuleRepositoryTests(ProjectWebApplicationFactory facto
     }
 
     [Fact]
-    public async Task Role_memberships_are_part_of_the_user_aggregate_and_have_no_repository()
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-
-        Assert.Null(scope.ServiceProvider.GetService<IRepository<UserRole>>());
-        Assert.Null(scope.ServiceProvider.GetService<IRepository<UserRole, Guid>>());
-    }
-
-    [Fact]
     public async Task Roles_load_only_through_the_explicit_read_and_include_revoked_ones_when_soft_delete_is_off()
     {
         var (userId, _) = await SeedUserWithRolesAsync(tenantId: null, NewSuffix());

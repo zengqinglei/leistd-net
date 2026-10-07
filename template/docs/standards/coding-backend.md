@@ -13,8 +13,8 @@
 | 层 | 职责 | 不做 |
 | --- | --- | --- |
 | Api | 路由、鉴权、调用应用服务、宿主组装 | 业务校验与编排、直接操作实体或仓储；HTTP 信息不传入 Application |
-| Application | 编排用例：收发 DTO、调用领域对象与领域服务、查询聚合、跨聚合校验、事务边界、发布事件 | 核心业务规则 |
-| Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、查询聚合 |
+| Application | 编排用例：收发 DTO、调用领域对象与领域服务、查询与组装输出、入口相关的跨聚合校验与协调（见[通用约定 §3.2](./coding-common.md#32-校验按规则归属分层)）、事务边界、发布事件 | 核心业务规则 |
+| Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、供展示的查询 |
 | Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
 目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
@@ -48,7 +48,7 @@
 属性 `private set`；保留 EF Core 用的 `private` 无参构造；状态只经公共方法修改；构造函数做必要校验；Id 用 `Guid.CreateVersion7()`；创建审计字段由框架在跟踪时填充。
 
 ```csharp
-public class User : FullAuditedEntity<Guid>
+public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>
 {
     public string Username { get; private set; }
     public bool IsActive { get; private set; } = true;
@@ -67,7 +67,7 @@ public class User : FullAuditedEntity<Guid>
 
 ### 3.4 领域服务
 
-命名 `*DomainService`，不定义接口。负责单聚合规则与实体增删改的核心逻辑；不做 DTO 转换、事务管理、查询聚合。
+命名 `*DomainService`，不定义接口。承载需经仓储判定的规则（如用户名唯一）与实体的创建、变更，方法按业务行为命名；读取只为判定规则或执行变更，可读外聚合、不改外聚合；不提供供展示的查询方法，不做 DTO 转换、事务管理。
 
 规则判定在实体或领域服务；应用服务据其结果（如 `user.CanBeManagedBy(...)`）按用例选码抛出，自行组合实体字段做判定属于违规。
 
@@ -193,8 +193,8 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 
 ## 6. 数据访问
 
-- **聚合**：有独立仓储即聚合根；子实体（如 `UserRole`）不声明 DbSet，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。
-- **仓储**只为聚合根提供：通用 `IRepository<T, TKey>` 覆盖增删改与单个用例的查询组合（`ISoftDelete` 实体为逻辑删除）。聚合特有、被多个用例复用的查询（连接、投影）加到该聚合的自定义仓储：Domain `<模块>/Repositories/I{聚合}Repository`，Infrastructure `EfCore{聚合}Repository`，经 `AddRepository<{聚合}, EfCore{聚合}Repository>()` 登记，方法按返回内容命名（`IUserRepository.GetRoleNamesAsync`）。不在领域服务里拼查询，不新增 `*Reader`、`*Query` 等查询类型。
+- **聚合**：聚合根实现 `IAggregateRoot<Guid>`，只有它声明 DbSet、拥有仓储（`EntityModelConventionTests` 核对）；子实体（如 `UserRole`）不声明 DbSet，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。
+- **仓储**只为聚合根提供：通用 `IRepository<T, TKey>` 覆盖增删改与单个用例的查询组合（`ISoftDelete` 实体为逻辑删除）。聚合特有、被多个用例复用的查询（连接、投影）加到该聚合的自定义仓储：Domain `<模块>/Repositories/I{聚合}Repository`，Infrastructure `EfCore{聚合}Repository`，经 `AddRepository<{聚合}, EfCore{聚合}Repository>()` 登记，方法按返回内容命名（`IUserRepository.GetRoleNamesAsync`）。领域服务的读取范围见 §3.4，不新增 `*Reader`、`*Query` 等查询类型。
 - Application 不使用 EF Core 扩展：`IQueryable` 经 `IQueryableAsyncExecuter`（`ToListAsync`、`CountAsync`、`FirstOrDefaultAsync`、`AnyAsync` 等）执行；关联数据用查询组合（子查询、`Join`）或分别查询，不用 `Include`。
 - 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 获取，不直接构造注入：直接注入的实例按宿主库创建，分库租户下会落到宿主库（框架拒绝，表现为 500）。控制库上下文固定宿主连接，可以直接注入。
 - 对象映射：实体、存储模型或框架模型到 DTO 的投影走模块 `Mappings/` 下实现 `IRegister` 的类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；不调用无参 `Adapt<T>()`（它用全局配置，本项目的规则静默失效）；调用方才知道的值经 MapContext 传入；由多个来源拼装、带计算或本地化的 DTO 直接构造；不在 DTO 上写 `FromXxx` 静态方法。

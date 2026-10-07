@@ -1,3 +1,4 @@
+using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy.Tenancy;
 
@@ -6,7 +7,7 @@ namespace CompanyName.ProjectName.Domain.Users.Entities;
 /// <summary>
 /// 角色实体
 /// </summary>
-public class Role : FullAuditedEntity<Guid>, IMultiTenant
+public class Role : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 {
     /// <summary>
     /// 所属租户（null 为宿主角色），由多租户落值拦截器在创建时填充
