@@ -43,4 +43,4 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 ## 验证入口
 
-编辑循环运行目标测试；完整改动形成后运行框架测试全集和必要包验证。命令见[开发规范 §8 提交前自检](../../../docs/framework/development-guide.md#8-提交前自检)，执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，不是每次编辑的固定命令序列。只读任务不运行无关测试；未执行项和原因必须如实说明。
+编辑循环运行目标测试；完整改动提交后，用 `scripts/plan-quality-checks.py --local-framework-tests` 按清单运行受影响测试项目，并做必要包验证；选择器退回全集时运行全集，全集另由 L3 承担。命令见[开发规范 §8 提交前自检](../../../docs/framework/development-guide.md#8-提交前自检)，执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，不是每次编辑的固定命令序列。只读任务不运行无关测试；未执行项和原因必须如实说明。

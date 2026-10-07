@@ -116,15 +116,19 @@ def main():
             (out / (label + '-local.json')).write_text(json.dumps(local, indent=2), encoding='utf-8')
             if expected_mode != 'full':
                 assert plan['FrameworkTests'] is False and plan['ConsumerProjects'] == []
+                assert plan['FrameworkTestProjects'] == [] and plan['FrameworkTestSelection'] == 'none'
                 assert {'identity', 'identity-all-features'} <= set(plan['Scenarios']) <= registered
             elif label == 'framework-source':
                 assert plan['ConsumerProjects'] == ['Leistd.Email.Smtp'] and plan['FrameworkTests']
+                assert plan['FrameworkTestProjects'] == [EMAIL_TESTS] and plan['FrameworkTestSelection'] == 'affected', plan
             else:
                 assert plan['ConsumerProjects'] is None and plan['FrameworkTests'] and set(plan['Scenarios']) == registered
+                assert plan['FrameworkTestSelection'] == 'all' and plan['FrameworkTestProjects'] == planner.all_framework_tests('HEAD'), plan
             for tier, event, baseline, candidate in [('full','pull_request',base,''), ('pr','workflow_dispatch',base,''),
                 ('pr','pull_request','0'*40,''), ('pr','pull_request',base,'b'*40), ('pr','pull_request',git('rev-parse','HEAD'),'')]:
                 conservative = planner.create_plan(tier, baseline, event, candidate)
                 assert conservative['Mode'] == 'full' and conservative['FrameworkTests'] and conservative['ConsumerProjects'] is None
+                assert conservative['FrameworkTestSelection'] == 'all' and conservative['FrameworkTestProjects'] == planner.all_framework_tests('HEAD')
             (out / (label + '-plan.json')).write_text(json.dumps(plan, indent=2), encoding='utf-8')
             print('PASS complete-input plan:', label, flush=True)
             if label in ('frontend-feature', 'backend-api'):
@@ -150,6 +154,7 @@ def main():
         (repo / back).write_text((repo / back).read_text(encoding='utf-8') + '\n// Uncommitted backend edit\n', encoding='utf-8')
         dirty = planner.create_plan('pr', base, 'pull_request', '')
         assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
+        assert dirty['FrameworkTestSelection'] == 'all' and dirty['FrameworkTestProjects'] == planner.all_framework_tests('HEAD')
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
         (repo / 'untracked-input.ts').write_text('untracked', encoding='utf-8')
@@ -180,7 +185,110 @@ def main():
             (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2), encoding='utf-8')
             print('PASS unknown engine rule conservative fallback:', label, flush=True)
         prove_local_products(repo, base, planner, scenarios, out, run, git)
+        prove_framework_tests(repo, base, planner, out, run, git)
     print('Selection and receipt evidence:', out, flush=True)
+
+
+EMAIL_TESTS = 'framework/tests/components/email/Leistd.Email.Tests/Leistd.Email.Tests.csproj'
+
+
+def prove_framework_tests(repo, base, planner, out, run, git):
+    """Framework test list: changed file -> project -> reverse closure -> tests; anything unproven -> all."""
+    smtp_dir = 'framework/components/email/Leistd.Email.Smtp'
+    smtp = next(path for path in git('ls-files', smtp_dir).split('\n') if path.endswith('.cs'))
+    core = next(path for path in git('ls-files', 'framework/components/core/Leistd.Core').split('\n') if path.endswith('.cs'))
+    email_test = next(path for path in git('ls-files', posixpath_dir(EMAIL_TESTS)).split('\n') if path.endswith('.cs'))
+    test_base = next(path for path in git('ls-files', 'framework/tests/shared/Leistd.TestBase').split('\n') if path.endswith('.cs'))
+    everything = planner.all_framework_tests('HEAD')
+    assert len(everything) > 20
+
+    def append(path, text='\n// Framework selection fixture\n'):
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((target.read_text(encoding='utf-8') if target.exists() else '') + text, encoding='utf-8')
+
+    def edit(path, old, new):
+        target = repo / path
+        content = target.read_text(encoding='utf-8')
+        assert old in content, (path, old)
+        target.write_text(content.replace(old, new, 1), encoding='utf-8')
+
+    def select(label, change, prepare=None):
+        """prepare runs in its own commit, so the guard holds on BOTH sides of the diff."""
+        git('reset', '--hard', base)
+        case_base = base
+        if prepare:
+            prepare(); git('add', '-A'); git('commit', '-qm', label + ' baseline')
+            case_base = git('rev-parse', 'HEAD')
+        change(); git('add', '-A'); git('commit', '-qm', label)
+        plan = planner.create_plan('pr', case_base, 'pull_request', '')
+        assert plan['BaseSha'] == case_base and plan['CandidateSha'] == git('rev-parse', 'HEAD'), plan
+        assert plan['FrameworkTests'] and plan['FrameworkTestProjects'], plan
+        (out / f'framework-{label}-plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
+        return plan
+
+    def expect_all(label, change, reason, prepare=None):
+        plan = select(label, change, prepare)
+        assert plan['FrameworkTestSelection'] == 'all' and plan['FrameworkTestProjects'] == planner.all_framework_tests('HEAD'), (label, plan)
+        assert reason in plan['FrameworkTestReason'], (label, reason, plan['FrameworkTestReason'])
+        print('PASS framework tests fall back to all:', label, flush=True)
+
+    single = select('single-family', lambda: append(smtp))
+    assert single['FrameworkTestSelection'] == 'affected' and single['FrameworkTestProjects'] == [EMAIL_TESTS], single
+    many = select('core-many-dependents', lambda: append(core))
+    families = {path.split('/')[3] for path in many['FrameworkTestProjects']}
+    assert many['FrameworkTestSelection'] == 'affected' and len(families) >= 5, many
+    assert EMAIL_TESTS in many['FrameworkTestProjects'] and len(many['FrameworkTestProjects']) < len(everything), many
+    own = select('test-project-itself', lambda: append(email_test))
+    assert own['FrameworkTestSelection'] == 'affected' and own['FrameworkTestProjects'] == [EMAIL_TESTS], own
+    # Mapped edits combine: the union of both closures, still bound to this base.
+    both = select('two-projects-one-test', lambda: (append(smtp), append(email_test)))
+    assert both['FrameworkTestProjects'] == [EMAIL_TESTS]
+    print('PASS framework tests: single family, Core reverse closure, test project itself', flush=True)
+    local_file = out / 'framework-local.json'
+    run('framework-local-cli', [sys.executable, 'scripts/plan-quality-checks.py', '--local-framework-tests', '--tier', 'pr',
+                                '--base', both['BaseSha'], '--output', str(local_file)], repo)
+    local = json.loads(local_file.read_text(encoding='utf-8'))
+    assert local['Kind'] == 'local-framework-tests' and local['Projects'] == both['FrameworkTestProjects'] and local['Selection'] == 'affected'
+    run('framework-local-both-modes', [sys.executable, 'scripts/plan-quality-checks.py', '--local-framework-tests', '--local-scenarios',
+                                       '--tier', 'pr', '--base', base, '--output', str(local_file)], repo, success=False)
+
+    for label, path in [('shared-tests-props', 'framework/tests/Directory.Build.props'), ('shared-common-props', 'framework/common.props'),
+                        ('shared-packages', 'framework/Directory.Packages.props'), ('shared-build-script', 'framework/build/pack-local-feed.ps1'),
+                        ('shared-test-base', test_base), ('root-build-targets', 'Directory.Build.targets')]:
+        expect_all(label, lambda path=path: append(path, '\n<!-- fixture -->\n' if path.endswith(('.props', '.targets')) else '\n# fixture\n'),
+                   'shared')
+    for label, paths in [('unmappable-package-doc', ['framework/docs/components/email.md']),
+                         ('unmappable-family-file', ['framework/components/email/notes.txt']),
+                         ('mixed-with-template', [smtp, 'template/backend/src/CompanyName.ProjectName.Api/Program.cs'])]:
+        expect_all(label, lambda paths=paths: [append(path) for path in paths], 'belongs to no framework project')
+    smtp_project = f'{smtp_dir}/Leistd.Email.Smtp.csproj'
+    renamed_dir = 'framework/components/email/Leistd.Email.Smtp2'
+    expect_all('project-rename', lambda: (git('mv', smtp_dir, renamed_dir),
+                                          git('mv', f'{renamed_dir}/Leistd.Email.Smtp.csproj', f'{renamed_dir}/Leistd.Email.Smtp2.csproj')),
+               'missing project')
+    expect_all('project-delete', lambda: git('rm', '-rq', posixpath_dir(EMAIL_TESTS)), 'added, removed or renamed')
+    expect_all('reference-added', lambda: edit(EMAIL_TESTS, '<ProjectReference ',
+               '<ProjectReference Include="..\\..\\..\\..\\components\\core\\Leistd.Core\\Leistd.Core.csproj" />\n    <ProjectReference '),
+               'added, removed or renamed')
+    smtp_reference = 'Include="..\\..\\..\\..\\components\\email\\Leistd.Email.Smtp\\Leistd.Email.Smtp.csproj"'
+    expect_all('unresolvable-reference', lambda: append(smtp), 'unresolvable',
+               prepare=lambda: edit(EMAIL_TESTS, smtp_reference, 'Include="$(LeistdRoot)\\Leistd.Email.Smtp.csproj"'))
+    expect_all('missing-referenced-project', lambda: append(smtp), 'missing project',
+               prepare=lambda: edit(EMAIL_TESTS, smtp_reference, smtp_reference.replace('Smtp.csproj', 'Missing.csproj')))
+    expect_all('unresolvable-import', lambda: append(smtp), 'Import',
+               prepare=lambda: edit(EMAIL_TESTS, '<ItemGroup>', '<Import Project="shared.targets" />\n  <ItemGroup>'))
+    expect_all('linked-compile-input', lambda: append(smtp), 'compile input',
+               prepare=lambda: edit(smtp_project, '</Project>', '<ItemGroup><Compile Include="..\\Leistd.Email.Core\\Shared.cs" /></ItemGroup>\n</Project>'))
+    expect_all('unmodelled-props', lambda: append(smtp), 'unmodelled MSBuild import',
+               prepare=lambda: append('framework/components/email/Directory.Build.props', '<Project />\n'))
+    expect_all('empty-selection', lambda: append(smtp), 'no test project',
+               prepare=lambda: edit(EMAIL_TESTS, f'<ProjectReference {smtp_reference} />', ''))
+    git('reset', '--hard', base)
+
+
+def posixpath_dir(path):
+    return path.rsplit('/', 1)[0]
 
 
 def prove_local_products(repo, base, planner, scenarios, out, run, git):
@@ -302,6 +410,11 @@ def prove_generation(repo, base, plan, scenarios, out, run, git):
 
 def prove_receipts(repo, plan, scenarios, out, run):
     label = plan['Mode']
+    # Scenarios whose full stages run through the generated project's own verify.ps1.
+    verified = set(json.loads(subprocess.check_output(['pwsh', '-NoProfile', '-Command',
+        ". ./scripts/template-matrix-scenarios.ps1; @($AllScenarios | Where-Object { $scenarioMap[$_].Verify }) | ConvertTo-Json -AsArray"],
+        cwd=repo, text=True, encoding='utf-8')))
+    assert verified, 'no scenario registered with Verify'
     expected_file = out / (label + '-expected.json')
     expected_file.write_text(json.dumps(plan), encoding='utf-8')
     receipt_dir = out / (label + '-receipts'); receipt_dir.mkdir(exist_ok=True)
@@ -309,7 +422,8 @@ def prove_receipts(repo, plan, scenarios, out, run):
     for group in plan['Slices']:
         receipt = receipts[group['key']] = dict(Version=2,Tier='pr',Slice=group['key'],CandidateSha=plan['CandidateSha'],Mode=label,Results=[])
         for name in group['Scenarios']:
-            result = dict(Scenario=name, Container='pass' if name in group['Containers'] else 'skipped')
+            result = dict(Scenario=name, Container='pass' if name in group['Containers'] else 'skipped',
+                          Verify='pass' if label == 'full' and name in verified else 'not-run')
             for stage in ['Backend','Runtime','Lint','Frontend','Test']:
                 omitted = (label == 'frontend' and stage in ['Backend','Runtime']) or ((label == 'backend' or not scenarios[name].get('Frontend', True)) and stage in ['Lint','Frontend','Test'])
                 result[stage] = 'not-applicable' if omitted else 'pass'
@@ -340,6 +454,22 @@ def prove_receipts(repo, plan, scenarios, out, run):
     first_file.unlink();run(label+'-reject-missing-slice',command,repo,False);write()
     duplicate = receipt_dir / 'matrix-duplicate.json';duplicate.write_text(json.dumps(first), encoding='utf-8')
     run(label+'-reject-duplicate-slice',command,repo,False);duplicate.unlink()
+    # Verify: a registered scenario must report pass in full mode; nobody else may claim it ran.
+    results = [r for receipt in receipts.values() for r in receipt['Results']]
+    samples = [next(r for r in results if r['Verify'] == 'not-run')] if any(r['Verify'] == 'not-run' for r in results) else []
+    samples += [r for r in results if r['Verify'] == 'pass'][:1]
+    assert label != 'full' or any(r['Verify'] == 'pass' for r in samples), 'full fixture lacks a Verify scenario'
+    for result in samples:
+        saved = result['Verify']
+        for bad in (['not-run', 'skipped', 'failure', None] if saved == 'pass' else ['pass', None]):
+            if bad is None:
+                del result['Verify']
+            else:
+                result['Verify'] = bad
+            write(); run(f"{label}-reject-verify-{result['Scenario']}-{bad or 'missing'}", command, repo, False)
+            assert 'Verify expected' in (out / f"{label}-reject-verify-{result['Scenario']}-{bad or 'missing'}.log").read_text(encoding='utf-8')
+            result['Verify'] = saved
+    write()
     result = first['Results'][0];saved = result['Container']
     result['Container'] = 'skipped' if saved == 'pass' else 'pass';write();run(label+'-reject-container-claim',command,repo,False);result['Container'] = saved
     if plan['ContainerSmoke']:

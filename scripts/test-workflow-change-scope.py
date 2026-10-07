@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the actual workflow scope steps in isolated Git repositories.
 
-Run when changing CI/release scope selection or the release link policy
+Run when changing CI/release scope selection, framework test receipts or the release link policy
 (PackageReleaseNotes and the upgrade-guide link); this is not a per-feature gate.
 The release link check packs a fixture project, so it also requires the .NET SDK.
 Requires PowerShell and the same PyYAML dependency used by Skill validation.
@@ -235,7 +235,9 @@ def check_quality_aggregation():
             if step.get('uses', '').startswith('actions/checkout@'):
                 assert step['with']['ref'] == '${{ inputs.candidate_sha || github.sha }}', 'candidate SHA differs across checks'
     for step in quality['steps'][1:]:
-        assert step['if'] == "steps.quality.outputs.dynamic == 'true'", 'docs-only must not consume scene receipts'
+        assert step['if'] in ("steps.quality.outputs.dynamic == 'true'", "steps.quality.outputs.framework_tests == 'true'"), \
+            'docs-only must not consume scene or framework test receipts'
+    assert any(s.get('id') == 'framework_receipts' for s in quality['steps']), 'aggregation must verify framework test receipts'
     matrix_step = next(s for s in jobs['template-slices']['steps'] if s.get('id') == 'matrix')
     assert '-SkipSourcePreflight' in matrix_step['run'], 'same-candidate preflight dedup missing'
     static_step = next(s for s in jobs['docs-sync']['steps'] if 'run' in s and 'check-all' in s['run'])
@@ -248,7 +250,9 @@ def check_quality_aggregation():
             normal = {name: {'result': 'success', 'outputs': {}} for name in required}
             plan = dict(Version=2,ContainerSmoke=False, CandidateSha=candidate, Tier='pr', DocsOnly=docs_only == 'true',
                         Mode='frontend' if docs_only == 'false' and not framework_tests else 'full',
-                        FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'])
+                        FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'],
+                        FrameworkTestProjects=[TEST_PROJECTS[0]] if framework_tests else [],
+                        FrameworkTestSelection='affected' if framework_tests else 'none')
             normal['framework-pack']['outputs'] = dict(docs_only=docs_only, validation_plan=json.dumps(plan))
             for name in dynamic:
                 normal[name]['result'] = 'skipped' if docs_only == 'true' or (name == 'test' and not framework_tests) else 'success'
@@ -258,7 +262,8 @@ def check_quality_aggregation():
                     'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'pr'})
                 assert (code == 0) == success, (docs_only, framework_tests, state, code, output, error)
                 if success:
-                    assert output == f"dynamic={'false' if docs_only == 'true' else 'true'}", output
+                    assert output == (f"dynamic={'false' if docs_only == 'true' else 'true'}\n"
+                                      f"framework_tests={str(framework_tests).lower()}"), output
 
             check(normal, True)
             for name in required:
@@ -278,12 +283,132 @@ def check_quality_aggregation():
                 check(state, False)
             state = json.loads(json.dumps(normal)); state['framework-pack']['outputs'].pop('validation_plan')
             check(state, False)
+            # The test list must agree with FrameworkTests and be a unique list of test projects.
+            selected = 'affected' if framework_tests else 'none'
+            lists = [('missing list', None, selected), ('string list', TEST_PROJECTS[0], selected),
+                     ('unknown selection', plan['FrameworkTestProjects'], 'some'),
+                     ('selection disagrees', plan['FrameworkTestProjects'], 'all' if not framework_tests else 'none'),
+                     ('non-test project', ['framework/components/core/Leistd.Core/Leistd.Core.csproj'], selected),
+                     ('duplicate project', [TEST_PROJECTS[0]] * 2, selected)]
+            lists.append(('empty with responsibility', [], selected) if framework_tests else ('list without responsibility', [TEST_PROJECTS[0]], selected))
+            for label, projects, selection in lists:
+                invalid = dict(plan, FrameworkTestSelection=selection)
+                if projects is None:
+                    invalid.pop('FrameworkTestProjects')
+                else:
+                    invalid['FrameworkTestProjects'] = projects
+                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(invalid)
+                check(state, False)
+            if framework_tests:
+                # A full-tier plan can never narrow framework tests.
+                full = dict(plan, Tier='full')
+                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(full)
+                code, _, error = evaluate(repo, script, '', extra_env={
+                    'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'full'})
+                assert code != 0 and '框架测试清单' in error, ('full tier accepted affected selection', error)
             # 变异：把 docs-sync 从必需清单里拿掉，失败的 docs-sync 就不再阻断——证明判据真的读这份清单
             mutated = script.replace("'framework-pack', 'docs-sync', ", "'framework-pack', ")
             assert mutated != script, 'mutation did not apply: required-job list literal changed'
             state = json.loads(json.dumps(normal)); state['docs-sync']['result'] = 'failure'
             check(state, True, mutated)
             print(f'PASS aggregation docs_only={docs_only}, framework_tests={framework_tests}: missing/failed/cancelled/wrong skip, wrong candidate/plan and static mutation')
+
+
+TEST_PROJECTS = [
+    'framework/tests/components/core/Leistd.Core.Tests/Leistd.Core.Tests.csproj',
+    'framework/tests/components/email/Leistd.Email.Tests/Leistd.Email.Tests.csproj',
+    'framework/tests/ddd-struct/Leistd.Ddd.Domain.Tests/Leistd.Ddd.Domain.Tests.csproj',
+]
+
+
+def check_framework_test_receipts():
+    """Run the real test-list step with a fake dotnet, then the real aggregation check on its receipts."""
+    run_step = next(s for s in yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))['jobs']['test']['steps']
+                    if s.get('id') == 'framework_tests')
+    assert '${{ needs.framework-pack.outputs.validation_plan }}' == run_step['env']['VALIDATION_PLAN'], 'test list must come from the candidate plan'
+    verify = scope_step('ci.yml', 'template-matrix', 'framework_receipts')
+    with tempfile.TemporaryDirectory(prefix='leistd-framework-receipts-') as directory:
+        repo = Path(directory) / 'repo'
+        repo.mkdir()
+        git(repo, 'init', '-q')
+        git(repo, 'config', 'user.email', 'scope-test@example.invalid')
+        git(repo, 'config', 'user.name', 'Scope test')
+        for project in TEST_PROJECTS + ['framework/tests/shared/Leistd.TestBase/Leistd.TestBase.csproj']:
+            (repo / project).parent.mkdir(parents=True)
+            (repo / project).write_text('<Project />\n', encoding='utf-8')
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-qm', 'fixture')
+        candidate = git(repo, 'rev-parse', 'HEAD')
+        fake_bin = Path(directory) / 'fake-bin'
+        fake_bin.mkdir()
+        log = Path(directory) / 'dotnet.log'
+        # Fake dotnet: record the call, fail exactly the project named by FAIL_PROJECT.
+        shim = fake_bin / 'dotnet'
+        shim.write_text('#!/bin/sh\necho "$*" >> "' + str(log) + '"\n'
+                        '[ -n "$FAIL_PROJECT" ] && [ "$2" = "$FAIL_PROJECT" ] && exit 1\nexit 0\n', encoding='utf-8')
+        shim.chmod(0o755)
+        receipts = repo / '.tmp/framework-test-receipts'
+
+        def plan(projects, selection='affected', candidate_sha=candidate):
+            return dict(Version=2, CandidateSha=candidate_sha, BaseSha='b' * 40, FrameworkTests=True,
+                        FrameworkTestProjects=projects, FrameworkTestSelection=selection, FrameworkTestReason='fixture')
+
+        def run_tests(value, fail=''):
+            for item in receipts.glob('*.json'):
+                item.unlink()
+            log.unlink(missing_ok=True)
+            return evaluate(repo, run_step['run'], '', extra_env={
+                'VALIDATION_PLAN': json.dumps(value), 'FAIL_PROJECT': fail,
+                'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']})
+
+        def aggregate(value, success, reason=''):
+            code, _, error = evaluate(repo, verify, '', extra_env={
+                'VALIDATION_PLAN': json.dumps(value), 'CANDIDATE_SHA': candidate})
+            assert (code == 0) == success, (value, code, error)
+            assert success or reason in error, (reason, error)
+
+        selected = TEST_PROJECTS[:2]
+        code, _, error = run_tests(plan(selected))
+        assert code == 0, error
+        assert [line.split()[1] for line in log.read_text(encoding='utf-8').splitlines()] == selected, 'step must run exactly the list'
+        assert sorted(item.name for item in receipts.glob('*.json')) == ['Leistd.Core.Tests.json', 'Leistd.Email.Tests.json']
+        aggregate(plan(selected), True)
+        print('PASS framework tests: the list runs exactly, one receipt per project, aggregation accepts')
+        # One selected project not run (no receipt) is rejected, whichever one it is.
+        for project in selected:
+            name = Path(project).stem + '.json'
+            saved = (receipts / name).read_text(encoding='utf-8')
+            (receipts / name).unlink()
+            aggregate(plan(selected), False, '缺少回执')
+            (receipts / name).write_text(saved, encoding='utf-8')
+        # A plan that grew after the run (receipts for only part of it) is rejected too.
+        aggregate(plan(TEST_PROJECTS), False, '缺少回执')
+        # A receipt outside the list, a duplicate, a failure claim or another candidate/base is illegal.
+        original = json.loads((receipts / 'Leistd.Core.Tests.json').read_text(encoding='utf-8-sig'))
+        for field, value in [('Project', TEST_PROJECTS[2]), ('Result', 'failure'), ('CandidateSha', 'c' * 40),
+                             ('BaseSha', 'd' * 40), ('Version', 2)]:
+            (receipts / 'extra.json').write_text(json.dumps(dict(original, **{field: value})), encoding='utf-8')
+            aggregate(plan(selected), False, '非法框架测试回执')
+        (receipts / 'extra.json').write_text(json.dumps(original), encoding='utf-8')
+        aggregate(plan(selected), False, '非法框架测试回执')
+        (receipts / 'extra.json').unlink()
+        # A failing project leaves no receipt and fails the job; aggregation also rejects what remains.
+        code, _, error = run_tests(plan(selected), fail=selected[1])
+        assert code != 0 and '框架测试失败' in error, error
+        assert sorted(item.name for item in receipts.glob('*.json')) == ['Leistd.Core.Tests.json']
+        aggregate(plan(selected), False, '缺少回执')
+        # The step refuses a list from another candidate or an empty list.
+        for value in (plan(selected, candidate_sha='c' * 40), plan([])):
+            code, _, error = run_tests(value)
+            assert code != 0 and '测试清单与当前候选不符' in error and not log.exists(), error
+        # A full selection must equal every registered test project, not a self-declared subset.
+        code, _, error = run_tests(plan(TEST_PROJECTS, 'all'))
+        assert code == 0, error
+        aggregate(plan(TEST_PROJECTS, 'all'), True)
+        code, _, error = run_tests(plan(selected, 'all'))
+        assert code == 0, error
+        aggregate(plan(selected, 'all'), False, '全集清单')
+        print('PASS framework test receipts: missing, extra, duplicate, failed, foreign candidate/base and narrowed full set rejected')
 
 
 def release_step(step_id):
@@ -424,6 +549,7 @@ def main():
     check_existing_scopes()
     check_docs_scope()
     check_quality_aggregation()
+    check_framework_test_receipts()
     check_release_links()
 
 

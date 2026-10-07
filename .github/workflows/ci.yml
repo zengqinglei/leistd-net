@@ -10,7 +10,7 @@ name: CI
 #     候选计划按模式输出均衡执行组，每组一个作业，消费同一候选包；
 #     PR 跑 pr 档子集，release 复用与手动触发默认跑 full 全集
 #   - template-matrix：保留必过检查名，核对范围、静态及所有必要动态作业和场景回执
-#   - test：框架单元测试（含真实 Redis 的分布式锁契约）
+#   - test：按计划清单运行框架测试项目（含真实 Redis 的分布式锁契约），每个通过的项目留一份回执
 #   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
 #   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
 on:
@@ -366,7 +366,17 @@ jobs:
               ($docsOnly -ceq 'false' -and @($plan.Scenarios).Count -eq 0)) { throw '缺少合法同候选验证计划' }
           $frameworkExpected = if ($docsOnly -ceq 'false' -and $plan.FrameworkTests) { 'success' } else { 'skipped' }
           if ($jobs['test'].result -cne $frameworkExpected) { throw '框架测试失败、缺失、取消或范围不一致' }
+          # 框架测试清单与同一计划的 BaseSha/CandidateSha 绑定；none 只对应没有框架测试责任。
+          $testProjects = @($plan.FrameworkTestProjects)
+          $selection = $plan.FrameworkTestSelection
+          if ($plan.FrameworkTestProjects -isnot [array] -or $selection -cnotin @('none', 'affected', 'all') -or
+              ($selection -ceq 'none') -ne (-not $plan.FrameworkTests) -or
+              ($frameworkExpected -ceq 'success') -ne ($testProjects.Count -gt 0) -or
+              ($env:MATRIX_TIER -ceq 'full' -and $selection -cne 'all') -or
+              @($testProjects | Where-Object { $_ -isnot [string] -or $_ -cnotmatch '^framework/tests/[^\s]+\.Tests\.csproj$' }).Count -gt 0 -or
+              @($testProjects | Sort-Object -Unique -CaseSensitive).Count -ne $testProjects.Count) { throw '缺少合法框架测试清单' }
           "dynamic=$($docsOnly -ceq 'false' ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+          "framework_tests=$($frameworkExpected -ceq 'success' ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
           if ($docsOnly -ceq 'true') {
             '仅修改内部文档：完整静态闸门通过，动态验证不适用。' | Out-File $env:GITHUB_STEP_SUMMARY -Append
           }
@@ -389,6 +399,42 @@ jobs:
           $env:VALIDATION_PLAN | Set-Content .tmp/quality-plan.json -Encoding utf8
           pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -ValidationPlanPath .tmp/quality-plan.json -Tier $env:MATRIX_TIER
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵证明不完整' }
+      - uses: actions/download-artifact@v4
+        if: steps.quality.outputs.framework_tests == 'true'
+        with:
+          name: framework-test-receipts
+          path: .tmp/framework-test-receipts
+      # 回执与清单一一对应：缺一个、多一个、重复、失败或候选/基线不符都拒绝；
+      # 全集计划另与候选里登记的全部测试项目比对，不能由清单自行缩小。
+      - name: 核对框架测试回执
+        id: framework_receipts
+        if: steps.quality.outputs.framework_tests == 'true'
+        shell: pwsh
+        env:
+          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha || github.sha }}
+        run: |
+          $plan = $env:VALIDATION_PLAN | ConvertFrom-Json
+          $expected = @($plan.FrameworkTestProjects)
+          if ($plan.FrameworkTestSelection -ceq 'all') {
+            $registered = @(git ls-files -- 'framework/tests/*.Tests.csproj' | Sort-Object -CaseSensitive)
+            if ($LASTEXITCODE -ne 0 -or $registered.Count -eq 0 -or
+                (Compare-Object $registered @($expected | Sort-Object -CaseSensitive) -CaseSensitive -SyncWindow 0)) {
+              throw '全集清单与候选登记的测试项目不一致'
+            }
+          }
+          $seen = @{}
+          foreach ($file in @(Get-ChildItem .tmp/framework-test-receipts -Filter *.json -File -ErrorAction SilentlyContinue)) {
+            $receipt = Get-Content $file.FullName -Raw | ConvertFrom-Json
+            if ($receipt.Version -ne 1 -or $receipt.CandidateSha -cne $env:CANDIDATE_SHA -or $receipt.BaseSha -cne $plan.BaseSha -or
+                $receipt.Result -cne 'pass' -or $receipt.Project -cnotin $expected -or $seen.ContainsKey($receipt.Project)) {
+              throw "非法框架测试回执：$($file.Name)"
+            }
+            $seen[$receipt.Project] = $true
+          }
+          $missing = @($expected | Where-Object { -not $seen.ContainsKey($_) })
+          if ($missing) { throw "选中的框架测试项目缺少回执：$($missing -join '、')" }
+          "框架测试回执：$($expected.Count) 个项目全部通过。" | Out-File $env:GITHUB_STEP_SUMMARY -Append
 
   test:
     name: 框架单元测试
@@ -418,8 +464,6 @@ jobs:
           dotnet-version: '10.0.x'
       - name: 还原
         run: dotnet restore framework/Leistd.Framework.slnx
-      - name: 构建
-        run: dotnet build framework/Leistd.Framework.slnx -c Release --no-restore
       # 不收集覆盖率：此前收集 23 份 cobertura 却没有任何下游步骤消费，
       # 产物直接丢弃，只留下"我们在度量覆盖率"的假信号。
       # 覆盖率定位为按需体检，命令见 framework/build/coverage.runsettings
@@ -429,8 +473,35 @@ jobs:
         run: |
           docker run --rm --network host redis:7-alpine \
             redis-cli -h 127.0.0.1 -p 6379 ping | grep -q PONG
-      - name: 测试
-        run: dotnet test framework/Leistd.Framework.slnx -c Release --no-build
+      # 清单来自同候选计划：受影响项目及其反向依赖闭包里的测试项目，无法证明时为全集。
+      # 只有通过的项目写回执；汇总按清单逐项核对，漏跑或失败都缺回执。
+      - name: 按清单测试
+        id: framework_tests
+        shell: pwsh
+        env:
+          VALIDATION_PLAN: ${{ needs.framework-pack.outputs.validation_plan }}
+        run: |
+          $plan = $env:VALIDATION_PLAN | ConvertFrom-Json
+          $projects = @($plan.FrameworkTestProjects)
+          if ($plan.CandidateSha -cne (git rev-parse HEAD) -or $projects.Count -eq 0) { throw '测试清单与当前候选不符或为空' }
+          $receipts = '.tmp/framework-test-receipts'
+          New-Item -ItemType Directory -Force $receipts | Out-Null
+          $failed = @()
+          foreach ($project in $projects) {
+            dotnet test $project -c Release --no-restore
+            if ($LASTEXITCODE -ne 0) { $failed += $project; continue }
+            [ordered]@{ Version = 1; CandidateSha = $plan.CandidateSha; BaseSha = $plan.BaseSha; Project = $project; Result = 'pass' } |
+              ConvertTo-Json -Compress | Set-Content (Join-Path $receipts ([IO.Path]::GetFileNameWithoutExtension($project) + '.json')) -Encoding utf8
+          }
+          "框架测试（$($plan.FrameworkTestSelection)，$($projects.Count) 个项目）：$($plan.FrameworkTestReason)" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          if ($failed) { throw "框架测试失败：$($failed -join '、')" }
+      - name: 保留逐项目回执
+        uses: actions/upload-artifact@v4
+        with:
+          name: framework-test-receipts
+          overwrite: true
+          path: .tmp/framework-test-receipts/*.json
+          if-no-files-found: error
 
   postgresql-e2e:
     name: 模板 PostgreSQL 端到端

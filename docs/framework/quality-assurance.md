@@ -19,13 +19,13 @@ L1 按改动路径选择入口：
 | --- | --- | --- |
 | 只改内部文档或 Skill（CI 白名单见 `ci.yml` 的 `framework-pack/scope`，含根 `skills/`） | `check-all.ps1` | — |
 | 随包 `framework/docs/`、模板 `template/docs/` 或项目 Skill | `check-all.ps1` + 打包内容或代表性生成检查 | 影响运行契约时加相应隔离消费或生成场景验证 |
-| 框架某组件家族的实现 | 框架测试全集 + `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时验证实际生成产品 |
+| 框架某组件家族的实现 | 按清单运行受影响测试项目（见下节）+ `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时验证实际生成产品 |
 | 模板支持的局部前端/后端源码，含文件内条件块 | 按下节计算场景，执行每个产品的完整适用阶段 | 前端交互变化做浏览器验证；真实依赖变化加目标集成 |
 | 模板参数/符号、computed、modifiers、公共生成逻辑、共享依赖、构建配置或未知输入 | `test-template-matrix.ps1 -Tier pr` | 静态条件覆盖辅助定位，不能替代实际生成、lint、构建和行为验证 |
 | 数据库映射、迁移、租户路由 | 受影响场景 + `test-template-postgresql-e2e.ps1` | — |
 | 认证、令牌、外部登录协议 | 受影响场景 + `test-template-oidc-e2e.ps1` | 浏览器链路加 `-IncludeBrowserScenarios`；令牌到期变更的 `-IncludeExpiryWait` 责任见[模板质量规范](../template/quality-assurance.md) |
 | Dockerfile、部署资产 | `-Scenarios standalone -ContainerSmokeScenarios standalone` | — |
-| CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围/聚合变化运行 `python scripts/test-workflow-change-scope.py`，选测/回执变化运行 `python scripts/test-quality-validation-plan.py`；预检接替变化运行 `python scripts/test-template-source-preflight.py`；影响调度时用远端 CI 验收 |
+| CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 范围/聚合、框架测试回执或发布链接（`PackageReleaseNotes` 与升级指南链接）变化运行 `python scripts/test-workflow-change-scope.py`，选测/回执变化运行 `python scripts/test-quality-validation-plan.py`；预检接替变化运行 `python scripts/test-template-source-preflight.py`；影响调度时用远端 CI 验收 |
 
 L0–L2 不以真实时间流逝等待安全有效期（锁定、挑战、令牌寿命、缓存寿命、限频窗口）来验证时间边界：应用控制的判据用官方 `FakeTimeProvider` 或显式时刻在单元、集成测试里验证；端到端只验接线与生效值。跨进程的真实到期只放在 L3：OIDC 端到端的 `-IncludeExpiryWait` 由 `full` 档传入，以快速档（`OAuth__AccessTokenLifetime=00:01:30`）执行撤销到期与交换令牌到期，并从签发的令牌断言快速档已生效。实际 I/O、同步、取消与超时用有上限且观察目标完成的等待，不在此列。生成项目的同一原则见模板 [`testing.md`](../../template/docs/standards/testing.md) §2.2。
 
@@ -33,7 +33,18 @@ L0–L2 不以真实时间流逝等待安全有效期（锁定、挑战、令牌
 
 ### 框架与真实依赖
 
-框架 L0 可收窄到目标类或家族；L1 跑 `dotnet test framework/Leistd.Framework.slnx -c Release`，覆盖其他家族的反向依赖，保留必要的还原与构建。该全集包含关系型 Provider、TestServer 和真实 Redis 契约，不全是纯单测。本地缺 Redis 时按现有规则显式跳过并列为未执行；变化涉及锁实现或 Redis 接线时，必须在可达环境验证相关契约。无关的纯内存规则不因此启动 Redis。
+框架 L0 可收窄到目标类或家族；L1 按清单运行受影响测试项目：与 CI 同一选择器，从任务基线到已提交 HEAD 的差异求改动项目的反向依赖闭包，覆盖其他家族的反向依赖。
+
+```powershell
+$taskBase = git merge-base origin/develop HEAD
+python3 scripts/plan-quality-checks.py --local-framework-tests --tier pr --base $taskBase --output .tmp/local-framework-tests.json
+foreach ($project in (Get-Content .tmp/local-framework-tests.json -Raw | ConvertFrom-Json).Projects) {
+    dotnet test $project -c Release
+    if ($LASTEXITCODE -ne 0) { throw "$project 失败" }
+}
+```
+
+`Selection` 为 `all` 时清单即全集，`Reason` 说明退回原因；脏树同样退回全集，先形成提交再选择。全集（`dotnet test framework/Leistd.Framework.slnx -c Release`）留给 L3 与无法证明的输入。测试项目包含关系型 Provider、TestServer 和真实 Redis 契约，不全是纯单测。本地缺 Redis 时按现有规则显式跳过并列为未执行；变化涉及锁实现或 Redis 接线时，必须在可达环境验证相关契约。无关的纯内存规则不因此启动 Redis。
 
 纯领域拒绝或参数判断用单测；数据库事务、HTTP 授权、协议和网络取消等依赖协作契约用目标真实集成。CI 承担完整回归，不意味着已知失败要等到 CI 才第一次复现。`--no-build` 必须先构建本次源码。
 
@@ -114,7 +125,7 @@ CI 执行组取登记逻辑组与所选场景的交集，保留登记成员及�
 | --- | --- | --- | --- | --- |
 | 仅模板前端 src/public/_mock 的支持文件 | 不适用，输入未变 | 全部包内容；消费构建不适用 | 生成/形态、audit、npm ci、healthcheck、lint、build、spec 发现与真实 Chromium | 保留 |
 | 仅模板 backend/src 或 tests 的 C# | 不适用，输入未变 | 全部包内容；消费构建不适用 | 生成/形态、audit、restore/build、真实运行时、后端单元/集成 | 保留 |
-| Framework 组件/DDD 项目内局部 C# | 全量 | 全部内容；该包与候选 nuspec 反向传递依赖的隔离消费 | 完整 PR 场景/阶段 | 保留 |
+| Framework 组件/DDD/测试项目内的文件 | 改动项目反向依赖闭包内的测试项目 | 全部内容；该包与候选 nuspec 反向传递依赖的隔离消费 | 完整 PR 场景/阶段 | 保留 |
 | 跨前后端、共享配置/依赖、随包/生成文档、脚本/workflow、未知输入 | 全量 | 全部内容与全部消费 | 完整 PR 场景/阶段；适用容器 | 保留 |
 | 手动/复用/full 或未知/无效 base | 全量 | 全部内容与全部消费 | 所选档位完整场景/阶段 | 保留 |
 
@@ -122,7 +133,9 @@ CI 执行组取登记逻辑组与所选场景的交集，保留登记成员及�
 
 Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/build 消费项目；全包内容、源码包集、DLL/XML/文档、重复包、缺失候选依赖仍先核对。它不裁剪 Framework 用例、DI/反射/配置语义、模板或服务闭环；出现显式跨项目编译输入时回退全量。人工 `-PackageIds` 保持已有局部入口，CI 使用独立计划并仍要求完整候选 feed。
 
-汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确执行组、场景、阶段、SHA 与档位。每个必要场景必须唯一分配；回执不能自行缩小范围。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、跨组移动、错版本／SHA／档位／阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；没有计划的人工入口使用原逻辑组，不能拿 CI 执行组回执代替。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
+Framework 测试清单 `FrameworkTestProjects` 由 `framework/**/*.csproj` 的 `ProjectReference` 图求出：改动文件映射到所属项目，取反向依赖闭包中的 `*.Tests` 项目，与计划的 BaseSha/CandidateSha 绑定（`FrameworkTestSelection` 为 `affected`、`all` 或 `none`）。以下情形取全集：共享输入（`framework/*.props`、`framework/build/**`、`framework/tests/Directory.Build.props`、`framework/tests/shared/**` 共享测试基座、根构建输入与 `VERSION`）、文件不属于任何项目、项目或引用增删改名、引用指向不存在的项目、无法解析的属性或 `Import`、未登记的 props/targets、链接文件或显式跨项目编译输入、选择为空；不确定基线与脏树同样取全集。`test` 作业按清单逐项目运行，每个通过的项目写一份回执；汇总核对回执与清单一一对应，缺失、多出、重复、失败或候选/基线不符均失败，全集清单还须等于候选中登记的全部测试项目。
+
+汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确执行组、场景、阶段、SHA 与档位。每个必要场景必须唯一分配；回执不能自行缩小范围。登记 `Verify` 的场景在完整模式须回执 `Verify=pass`，其余为 `not-run`。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、跨组移动、错版本／SHA／档位／阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；没有计划的人工入口使用原逻辑组，不能拿 CI 执行组回执代替。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
 
 本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`；单组复现的 `-Slice` 必须取计划中的 key。容器适用时，生成计划增加 `--container-smoke true`，完整模式执行登记的容器责任。默认人工入口不自动推测 base，继续完整执行；不能将计划与手动跳过、`-Scenarios` 或手选容器场景混用，full 不接受裁剪计划。修改选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`：它实际生成 PR 档产品做前后对照，核对省略阶段/场景的输入并验证错误回执被拒绝；这是维护回归入口，不加入每日静态闸门。
 
