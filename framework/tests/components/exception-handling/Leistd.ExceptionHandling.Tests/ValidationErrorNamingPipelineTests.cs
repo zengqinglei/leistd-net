@@ -18,15 +18,11 @@ using Leistd.ExceptionHandling.AspNetCore.Constants;
 
 namespace Leistd.ExceptionHandling.Tests;
 
-/// <summary>
-/// 真实 ASP.NET 管道：自动 400（[ApiController] 模型校验 → <see cref="DependencyInjection.ConfigureApiValidation"/>
-/// 的 InvalidModelStateResponseFactory，经 MVC AddJsonOptions 序列化）与显式验证异常（<see cref="BusinessExceptionHandler"/>
-/// → IProblemDetailsService，经 ConfigureHttpJsonOptions 序列化）走的是**两套独立 JSON 配置**。本用例给两者施加**同一条
-/// 会改名所有属性的自定义命名策略（全大写）**，断言两条响应中 errors 数组内 <see cref="ErrorItem"/> 的属性名一致地变为
-/// FIELD/DETAIL——两套配置一旦被拆开就会变红，并证明 ErrorItem 未固定 [JsonPropertyName]。
-/// （命名策略只作用于扩展项的值对象；顶层 type/title/status/detail/instance 由内置 ProblemDetailsJsonConverter 固定小写
-/// 写出，扩展键 errors 按字典键原样写出——两者本就不随策略变化，故不作为断言目标。）
-/// </summary>
+/// <summary>两条验证错误响应路径均遵循宿主的属性命名策略。</summary>
+/// <remarks>
+/// 自动 400 使用 MVC 的 AddJsonOptions，显式验证异常经 IProblemDetailsService 使用 ConfigureHttpJsonOptions，须分别配置。
+/// 全大写策略验证 <see cref="ErrorItem"/> 的 FIELD/DETAIL；顶层 ProblemDetails 字段与扩展键 errors 不随属性命名策略变化。
+/// </remarks>
 public class ValidationErrorNamingPipelineTests(ValidationErrorNamingPipelineTests.HostFixture fixture)
     : IClassFixture<ValidationErrorNamingPipelineTests.HostFixture>
 {
@@ -42,8 +38,7 @@ public class ValidationErrorNamingPipelineTests(ValidationErrorNamingPipelineTes
         options.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     }
 
-    // 非弃用宿主构建（.NET 10）：HostBuilder + ConfigureWebHost(UseTestServer)，避免 WebHostBuilder(ASPDEPR004)
-    // 与 TestServer(IWebHostBuilder)(ASPDEPR008)。TestServer/UseTestServer/GetTestClient 由 Microsoft.AspNetCore.TestHost 提供。
+    // 使用 HostBuilder + UseTestServer，避开 WebHostBuilder 与 TestServer(IWebHostBuilder) 的 .NET 10 弃用 API。
     private static Task<IHost> StartHostAsync(IStringLocalizer? localizer = null)
     {
         return new HostBuilder()

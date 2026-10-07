@@ -3,17 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.MultiTenancy.Tests.TestDoubles;
 
-/// <summary>
-/// 测试用的配置型 <see cref="ITenantStore"/>：让"宿主形态"的用例有一个注册表可查。
-/// </summary>
-/// <remarks>
-/// <para>本类只作测试替身，不作为公开 API：它对应的场景在本框架里不存在——持有注册表的宿主用 EF 实现，
-/// 资源服务把 <c>ValidateResolvedTenant</c> 置为 <see langword="false"/> 后根本不查 Store。
-/// 而 <c>IsActive</c> 是访问控制状态，配置型清单改一次要重启进程，
-/// 陈旧窗口比框架明令禁止的缓存还长（见 <c>EfCoreTenantStore</c> 的"刻意不缓存"）。</para>
-/// <para>这里只服务两类用例：中间件要校验租户存在与启用，以及启动期校验要看到
-/// 一个已注册的 <see cref="ITenantStore"/>。</para>
-/// </remarks>
+/// <summary>测试用配置型租户注册表，支持中间件校验与启动期注册探测。</summary>
+/// <remarks>不作生产实现：租户启用状态不能依赖重启才更新的配置清单；资源服务关闭注册表校验后不查 Store。</remarks>
 internal sealed class InMemoryTenantStore(InMemoryTenantStoreOptions options) : ITenantStore
 {
     public Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
@@ -40,8 +31,6 @@ internal static class InMemoryTenantStoreExtensions
         var options = new InMemoryTenantStoreOptions();
         configure(options);
 
-        // 注册成实现实例而非工厂：TenantStoreRegistrationValidator 用
-        // IServiceProviderIsService 探测注册面，两种写法都能被探测到。
         services.AddSingleton<ITenantStore>(new InMemoryTenantStore(options));
         return services;
     }

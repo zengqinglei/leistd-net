@@ -60,6 +60,7 @@ frontend/
 - **应用级服务**（认证、主题、语言、设置上下文、启动）放 `core/services`，可持有自身状态与行为。
 - **页面状态**优先放组件 signal；状态复杂且有复用或生命周期收益时，抽成组件级 `@Injectable()` 状态类并在组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
+- 路由守卫与按钮显隐只改善交互体验；服务端必须对每个请求独立校验权限。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
 - 依赖注入一律用 `inject()`。构造函数只做属性赋值、需要注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅）与进入页面的首次只读查询；写请求、多步流程和清理会话放 `ngOnInit`（判据：构造不改变服务端或会话状态）；在注入上下文之外（如 `ngOnInit`）调用这些 API 时显式传入 `destroyRef` 或 `{ injector }`。
 

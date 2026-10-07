@@ -69,11 +69,8 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
     /// 建租户 + 登记连接在同一个原子边界内，且租户注册表与连接行始终同库同事务。
     /// </summary>
     /// <remarks>
-    /// <para>租户创建这一步永远只碰控制库，"分库"影响的是该租户日后的业务数据落在哪儿，
-    /// 而不是它的注册记录落在哪儿。这条不变量若被破坏（比如有人把连接登记搬去租户库），
-    /// 建租户就会跨两个物理目标、被工作单元的连接绑定拦下——这个测试是那条设计的回归锁。</para>
-    /// <para>不分库的租户在新模型里<b>没有连接行</b>，所以"共享"那一档不再是一条特殊记录，
-    /// 而是下面 <c>A_tenant_without_registrations_commits_with_no_connection_rows</c> 的形态。</para>
+    /// 租户注册表与连接行都在控制库；分库只影响后续业务数据，不能让创建流程跨物理库。
+    /// 不分库租户没有连接行，由 <c>A_tenant_without_registrations_commits_with_no_connection_rows</c> 覆盖。
     /// </remarks>
     [Theory]
     [InlineData("default")]

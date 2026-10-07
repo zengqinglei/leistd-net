@@ -1,6 +1,7 @@
 #if (LocalIdentity)
 using System.Linq.Expressions;
 using CompanyName.ProjectName.Domain.Auth.Events;
+using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy.Tenancy;
 
@@ -15,7 +16,7 @@ namespace CompanyName.ProjectName.Domain.Auth.Entities;
 /// <b>撤销即删除</b>，不留"已撤销"状态：撤销的历史由操作记录承载，这张表只回答"现在有哪些会话有效"。</para>
 /// <para>实现 <see cref="IMultiTenant"/>：会话随用户落在其租户的库里，分库租户也不例外。</para>
 /// </remarks>
-public class UserSession : CreationAuditedEntity<Guid>, IMultiTenant
+public class UserSession : CreationAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 {
     /// <summary>IP 地址列宽（IPv6 文本形式的最大长度）。</summary>
     public const int IpAddressMaxLength = 45;

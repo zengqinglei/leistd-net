@@ -786,13 +786,11 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 #if (ExternalLogin)
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Auth.Entities.ExternalLoginConnection", b =>
                 {
-                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", "User")
+                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("User");
                 });
 #endif
 

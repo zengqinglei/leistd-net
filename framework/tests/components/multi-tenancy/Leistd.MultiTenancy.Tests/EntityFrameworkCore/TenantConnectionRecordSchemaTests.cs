@@ -11,11 +11,7 @@ namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 /// <summary>
 /// 租户连接登记的表级形态：主键是 <c>(TenantId, Name)</c>，密文非空，同一租户可登记多条。
 /// </summary>
-/// <remarks>
-/// 去掉模式标志位之后，<b>行的存在本身就是判据</b>，所以旧的"模式与连接串一致性"检查约束也一并删掉了。
-/// 现在需要数据库钉住的是另外两件事：同一租户同一名字不能重复登记（复合主键），
-/// 以及不能登记一条没有连接串的空行（密文非空）——那样的行会让解析既不回落也取不到值。
-/// </remarks>
+/// <remarks>以行是否存在判断登记状态；复合主键防止同名重复，密文非空防止出现既不能回落也无连接可用的空行。</remarks>
 public class TenantConnectionRecordSchemaTests : IAsyncLifetime
 {
     private SqliteConnection _connection = default!;
@@ -37,7 +33,6 @@ public class TenantConnectionRecordSchemaTests : IAsyncLifetime
         await _connection.DisposeAsync();
     }
 
-    // 一个租户在 identity、foundation、crm 各一条，正是这次改造的目标形态
     [Fact]
     public async Task One_tenant_can_register_several_named_connections()
     {

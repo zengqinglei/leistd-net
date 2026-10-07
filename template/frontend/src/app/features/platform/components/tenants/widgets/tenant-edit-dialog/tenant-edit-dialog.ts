@@ -159,7 +159,6 @@ export class TenantEditDialog {
 
     const model = this.formModel();
     const displayName = model.displayName.trim() || undefined;
-    // 编辑时清空描述传 null：undefined 会被 JSON 序列化丢掉，后端视为未提供而保留旧值。
     const description = model.description.trim();
 
     if (this.isEdit()) {

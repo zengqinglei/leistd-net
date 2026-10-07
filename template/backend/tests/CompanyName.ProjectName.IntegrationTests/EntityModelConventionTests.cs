@@ -1,6 +1,8 @@
 using System.Reflection;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.Ddd.Domain.Entities;
+using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -9,12 +11,14 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CompanyName.ProjectName.IntegrationTests;
 
 /// <summary>
-/// 实体模型约定：本项目实体实现 <see cref="IMultiTenant"/>（auth.md），枚举属性按字符串持久化（coding-backend.md §3.8）。
+/// 实体模型约定：本项目实体实现 <see cref="IMultiTenant"/>（auth.md），枚举属性按字符串持久化（coding-backend.md §3.8），
+/// 只有聚合根拥有仓储（coding-backend.md §6）。
 /// </summary>
 /// <remarks>
 /// 判定在业务上下文的实际模型上做，只检查本项目 Domain 程序集里的实体；组件自带的实体由各组件负责。
 /// 漏实现 <see cref="IMultiTenant"/> 的实体不受租户过滤、也不落租户归属，数据会在租户间可见；
-/// 枚举按整数存时，调整成员顺序就会把历史数据静默改成另一个值。
+/// 枚举按整数存时，调整成员顺序就会把历史数据静默改成另一个值；
+/// 子实体一旦声明 DbSet 就会被自动登记仓储，绕过聚合根直接修改。
 /// </remarks>
 public sealed class EntityModelConventionTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
@@ -37,6 +41,31 @@ public sealed class EntityModelConventionTests(ProjectWebApplicationFactory fact
         // 防止程序集过滤失效后变成"零个实体、零个问题"的空转通过
         Assert.Contains(model.GetEntityTypes(), entity => entity.ClrType == typeof(User));
         Assert.Empty(FindViolations(model, domain, Exemptions));
+    }
+
+    /// <summary>
+    /// 实现 <see cref="IAggregateRoot"/> 的实体有仓储，其余实体没有
+    /// </summary>
+    [Fact]
+    public void Only_aggregate_roots_have_repositories()
+    {
+        using var scope = factory.Services.CreateScope();
+        var model = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>().Model;
+        var domain = typeof(User).Assembly;
+        var entities = model.GetEntityTypes()
+            .Where(e => e.ClrType.Assembly == domain && !e.IsOwned())
+            .Select(e => e.ClrType)
+            .ToList();
+
+        // 两种实体都在模型里，比对才有正反两面
+        Assert.Contains(typeof(User), entities);
+        Assert.Contains(typeof(UserRole), entities);
+        var mismatched = entities
+            .Where(type => typeof(IAggregateRoot).IsAssignableFrom(type)
+                != (scope.ServiceProvider.GetService(typeof(IRepository<>).MakeGenericType(type)) is not null))
+            .Select(type => type.Name)
+            .ToList();
+        Assert.Empty(mismatched);
     }
 
     /// <summary>

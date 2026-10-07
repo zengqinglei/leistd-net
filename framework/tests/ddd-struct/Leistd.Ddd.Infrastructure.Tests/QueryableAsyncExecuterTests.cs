@@ -61,7 +61,7 @@ public sealed class QueryableAsyncExecuterTests : IDisposable
         Assert.Equal([1, 2, 3], result.Select(i => i.Id));
     }
 
-    // 谓词必须被翻译成 SQL 而不是拉全表再内存过滤——后者在大表上是生产事故。
+    // 检查 SQL 含 WHERE，避免拉全表后在内存过滤。
     [Fact]
     public async Task Where_is_translated_rather_than_evaluated_in_memory()
     {

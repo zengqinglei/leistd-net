@@ -9,7 +9,7 @@ using Leistd.Ddd.Infrastructure.Tests.TestDoubles;
 namespace Leistd.Ddd.Infrastructure.Tests;
 
 /// <summary>
-/// 租户落值：新增实体在**进入变更跟踪时**自动填充当前租户，显式赋值不覆盖，
+/// 租户落值：新增实体在进入变更跟踪时自动填充当前租户，显式赋值不覆盖，
 /// 宿主上下文保持 null。落值由 <c>BaseDbContext</c> 完成，不挂任何拦截器。
 /// </summary>
 public class TenantStampingTests : IAsyncLifetime
@@ -48,7 +48,7 @@ public class TenantStampingTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// 仓储在工作单元内不立即保存（由 UoW 统一提交），因此新增与保存之间可能跨越
-    /// <c>Change</c> 的边界。若在**保存时刻**取当前租户，这条数据会静默落成宿主行——
+    /// <c>Change</c> 的边界。若在保存时刻取当前租户，这条数据会静默落成宿主行——
     /// 该租户自己看不见（过滤器要求 TenantId 等于当前租户），宿主管理员却看得见，
     /// 且没有任何报错。落值时机必须是"进入跟踪"。
     /// </remarks>

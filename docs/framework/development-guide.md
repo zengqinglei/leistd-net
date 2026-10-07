@@ -166,21 +166,17 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 - 行内注释解释“为什么必须这样”，不复述代码正在做什么。工具指令（`#pragma`、`#if`、`SuppressMessage` 的 `Justification`）与版权声明不在精简范围。
 - 示例中的 API、依赖和变量必须可用；XML 内的代码不会自动参与 C# 编译，关键路径需单独验证。
 
-示例（前者每句都可从签名读出，后者只留调用方需要的契约）：
+示例：`HubIdentityOptions.RevalidationInterval` 的摘要只补默认值与 `null` 的含义；其 remarks 中的配置方式等契约仍须保留，以下只展示摘要对照。
 
 ```csharp
 // 精简前
-/// <summary>
-/// 获取或设置锁的过期时间。
-/// </summary>
-/// <param name="key">锁的键。</param>
-/// <param name="cancellationToken">取消令牌。</param>
-/// <returns>返回锁句柄。</returns>
-// 1. 构造键  2. 调用存储
+/// <summary>获取或设置两次 Hub 授权复评之间的最小间隔。</summary>
+/// <value>两次 Hub 授权复评之间的最小间隔。</value>
+public TimeSpan? RevalidationInterval { get; set; }
 
 // 精简后
-/// <summary>尝试获取锁；已被占用时返回 <c>null</c>，不等待。</summary>
-/// <remarks>租约到期自动释放，持有者需在到期前完成或续租。</remarks>
+/// <summary>两次复评之间的最小间隔；为 <see langword="null"/>（默认）时每次调用都复评。</summary>
+public TimeSpan? RevalidationInterval { get; set; }
 ```
 
 Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓库也不为这些数字设硬闸门；统计只用于发现趋势，审查仍回到必要性、准确性与唯一性。

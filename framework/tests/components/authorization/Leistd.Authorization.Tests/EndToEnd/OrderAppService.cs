@@ -61,14 +61,9 @@ public sealed class OrderAppService(
     /// 详情：在可见范围内定位，范围外当作不存在。
     /// </summary>
     /// <remarks>
-    /// 可见性只在 <see cref="VisibleQueryAsync"/> 判一次。这里刻意不再叠一层
-    /// <c>IsGrantedAsync(order, Read)</c>：那个入口的判据是"Handler 放行或 ACL 显式 Granted"，
-    /// 与集合的 <c>(数据范围 OR ACL 允许) AND NOT ACL 拒绝</c> 不是同一个式子。
-    /// 两个式子对同一个 Read 操作各判一次，结果就是列表里列得出来、详情却坚称不存在——
-    /// 而两边 DTO 字段完全一样，那个 404 想防的存在性泄漏早已被列表泄光，只剩下自相矛盾。
-    ///
-    /// 实例判定留在写路径：那里的 Handler 表达的是资源状态本身允不允许（已归档不可改），
-    /// 不是重新决定看不看得见。"看得见但改不动"不矛盾，"列表里有但详情说没有"才矛盾。
+    /// <para>只经 <see cref="VisibleQueryAsync"/> 判可见性，与列表返回同样的 DTO。
+    /// 不再叠加实例 Read 判定：Handler 或 ACL Granted 的口径不同于集合的（数据范围 OR ACL 允许）AND NOT ACL 拒绝。</para>
+    /// <para>实例判定用于写路径的资源状态规则，例如已归档不可改。</para>
     /// </remarks>
     public async Task<OrderDto?> GetAsync(string resourceKey, CancellationToken ct)
     {
