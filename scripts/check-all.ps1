@@ -255,7 +255,9 @@ try {
         if (-not $ok -and $env:GITHUB_ACTIONS -eq 'true') {
             $tail = if (-not $g.Run -and $gateOutput) { @($gateOutput | ForEach-Object { "$_" } | Select-Object -Last 30) -join "`n" } else { "见作业日志" }
             $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
-            Write-Host "::error title=check-all：$($g.Name)::$escaped"
+            # 属性值另需转义 : 与 ,（GitHub 工作流命令的属性规则）
+            $title = "check-all：$($g.Name)".Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A').Replace(':', '%3A').Replace(',', '%2C')
+            Write-Host "::error title=$title::$escaped"
         }
         $gateOutput = $null
         if (-not $ok -and $StopOnFirstFailure) { break }
