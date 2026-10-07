@@ -6,7 +6,7 @@
 
 | # | 缺口（阶段五回顾） | 决策 | 行业依据 |
 | --- | --- | --- | --- |
-| A | 下游项目升级 Leistd 版本没有闭环：升级说明只在仓库 `docs/framework/upgrade-0.13.0.md`（约 130K，框架与模板混写），不随包分发；消费方 Skill 与项目 Skill 都没有“升级版本”场景 | 框架升级说明按家族拆分、随该家族的包分发，累计保留各版本；模板侧变更留仓库，由 Release 链接；消费方 Skill 增加升级工作流 | ABP 每版一份迁移指南加 `abp update`；.NET 按版本与技术领域分页，标注二进制、源码、行为三类不兼容 |
+| A | 下游项目升级 Leistd 版本没有闭环：升级说明 `docs/framework/upgrade-0.13.0.md`（约 130K，框架与模板混写）无版本化位置与发布链接；消费方 Skill 没有“升级版本”场景 | 每版一份升级指南留仓库，Release Notes 与包元数据 `PackageReleaseNotes` 链接到它；消费方 Skill 增加升级工作流（用户改定：不随包分发） | 微软 NuGet 包作者最佳实践（README + PackageReleaseNotes）；.NET 破坏性变更按版本在文档站发布；ABP 每版迁移指南 |
 | B | 生成项目没有 CI，testing §1.1 因此要求每次阶段完成都本地跑受影响测试项目全量（含全部集成测试） | 生成项目增加平台无关的验证入口 `scripts/verify`；GitHub Actions 与 GitLab CI 只做薄壳调用它；模板参数 `ci`：`github`（默认）、`gitlab`、`none` | GitHub “Scripts to Rule Them All”（CI 只调 `script/cibuild`）；主流 .NET 模板自带 GitHub Actions |
 | C | 框架测试全有或全无：本地 L1 与 CI 都在任何框架改动后跑 28 个测试项目 | 按 csproj 依赖图选择“受影响家族 + 反向依赖家族”的测试项目；全集留给 L3 与未知输入 | 与模板场景选择同一机制（已有 `plan-quality-checks.py`） |
 
@@ -19,46 +19,47 @@
 
 ## 2. A：升级说明
 
-### 2.1 位置与打包
+用户在复审后改定方案：不随 NuGet 包分发升级说明，避免包体积随历史版本增长。改用微软与生态的通行做法：包内只放 README 与 `PackageReleaseNotes` 链接；破坏性变更与迁移指南按版本发布在文档位置（.NET 的 learn.microsoft.com compatibility 页面、ABP 的每版迁移指南）。
 
-- **框架侧**：`framework/docs/upgrades/<版本>/<家族>.md`。家族划分与 `framework/docs/components/<家族>.md` 一致，DDD 基座为 `ddd-struct`。
-- **打包**：`framework/common.props` 把本家族所有版本的升级说明打进包内 `docs/upgrades/<版本>.md`，与现有家族文档的打包规则同处维护。消费方只要读已安装或目标版本的包，就能拿到该家族全部历史版本的说明。
-- **跨家族条目**（如命名空间搬迁、Core 契约）：完整写入受影响的每个家族文件，不做包间相对链接，因为消费方本地只有自己安装的包。条目短时复制；条目长时写入 Core 家族文件，其他家族写一句“另见 `Leistd.Core` 包内 `docs/upgrades/<版本>.md`；项目未安装 Core 时，单独下载目标版本的 Core 包读取，不为取得说明新增运行时依赖”。并非所有家族都依赖 Core（如 `Leistd.Lock.Core`、`Leistd.Data`），验收包含“只消费一个不依赖 Core 的家族”的情形。
-- **包内链接**：同一包内的升级说明之间只用相对链接；指向仓库的内容（模板侧说明、API 差异附录）一律用固定到版本 tag 的绝对 URL，不用分支链接。
-- **模板侧**：模板 HTTP 契约、生成项目文件等变更移到 `docs/template/upgrade-<版本>.md`，仓库内维护，不进 NuGet。
-- **0.13.0 现有内容**：
-  - 按家族拆到新位置，模板条目移到模板文件。逐项核对旧文件 43 节和 API 差异 212 条成员的去向，不能只核对标题数量。去向清单（旧节号或成员 → 新文件与条目）随提交保留在 `.tmp`，并在评审时给出；每条迁移动作原样保留。
-  - 原 `docs/framework/upgrade-0.13.0.md` 删除；`upgrade-0.13.0-api-diff.md` 的逐成员清单按家族并入对应文件的附录，或保留在仓库并由各家族文件链接，以篇幅和使用频率定。
-  - 提交脚注里的“§n”引用指向已删除文件，属于历史提交，不改写。`versioning.md` 写明：从本次位置切换的提交起，脚注指向新的家族文件；当前 `VERSION` 仍为 0.12.0，所以 0.13.0 发布时的说明就来自新位置。
+### 2.1 位置
+
+- 每个版本一份升级指南：`docs/framework/upgrades/<版本>.md`，仓库内维护，不进 NuGet 包。
+- 文件内分“框架”和“模板（生成项目）”两部分；框架部分按家族分小节，便于消费方只读自己引用的家族。
+- 0.13.0 现有内容：
+  - `docs/framework/upgrade-0.13.0.md` 迁到 `docs/framework/upgrades/0.13.0.md`，按上述结构重排；
+  - `upgrade-0.13.0-api-diff.md` 作为同目录附录 `0.13.0-api-diff.md`，由正文链接；
+  - 逐项核对旧 43 节（含合入 develop 新增的 §44）的去向，迁移动作原样保留，去向清单在评审时给出；
+  - 仓库内对旧文件的引用全部更新（历史提交脚注不改写）。
+- 包内家族文档（`framework/docs/components/*.md`）描述当前版本契约，不变。
 
 ### 2.2 格式
 
-每个家族文件按条目写四项：受影响的是什么、原来怎么写、现在怎么写、必须执行的迁移动作。每条标注不兼容类型：二进制、源码或行为。“只有调用方必须改代码才写”的规则不变。
+每条写四项：受影响的是什么、原来怎么写、现在怎么写、必须执行的迁移动作。每条标注不兼容类型：二进制、源码或行为。“只有调用方必须改代码才写”的规则不变。
 
-### 2.3 规则与链接
+### 2.3 链接与规则
 
-- `docs/framework/versioning.md`：改写“破坏性变更怎么让下游知道”与升级清单一节，写明新位置、格式、模板侧位置；文末列表改为链接两处目录。
-- 包元数据：`PackageReleaseNotes` 链接到该版本 GitHub Release；Release 正文由 `release.yml` 追加两处升级说明的链接，不复制内容。
-- 闸门：
-  - `check-retired-terms.ps1` 现按前缀豁免升级文档，改为豁免新目录（路线图短语规则对升级说明不适用）。
-  - 打包内容检查：在 `test-package-consumption.ps1` 的包内容断言中，按家族核对预期的升级文件。规则是：每个有升级说明的家族，其每个包都含 `docs/upgrades/<版本>.md`，内容来自本家族文件；无升级说明的家族不含该目录。另外检查包内相对链接可解析，仓库链接是固定版本的绝对 URL。
-  - G5：扫描范围覆盖新目录，并把原指向 `upgrade-0.13.0.md` 的白名单项迁到新文件。
-  - 规范边界：`docs/README.md` 的分发边界目前禁止在分发载荷写迁移步骤，`docs/framework/development-guide.md` 也有同类表述。改为“升级说明是分发载荷中唯一允许写迁移步骤的位置”。
-- 框架开发指南与框架 Skill：破坏性变更的提交须同时写对应家族的升级说明，与提交脚注一致。
+- **包元数据**：`framework/common.props` 的 `PackageReleaseNotes` 设为该版本 GitHub Release 的 URL（按发版 tag 生成，不用分支链接）。消费方离线也能从已安装包的 `.nuspec` 读到它。
+- **Release 正文**：`release.yml` 生成的 Release Notes 追加一行“升级指南”链接，指向 `docs/framework/upgrades/<版本>.md` 在该 tag 下的地址；该版本没有升级指南时不加。
+- **`docs/framework/versioning.md`**：改写“破坏性变更怎么让下游知道”与升级清单一节，写明位置、格式与链接方式；脚注从本次切换起指向 `upgrades/<版本>.md` 的小节；文末列表链接 `upgrades/` 目录。
+- **闸门**：
+  - `check-retired-terms.ps1` 的前缀豁免改到新目录；
+  - G5 白名单中指向 `upgrade-0.13.0.md` 的条目迁到新文件；
+  - `release.yml` 的链接拼接逻辑若可抽成脚本，加自检，验证有、无升级指南两种情形。
+- **分发边界不变**：`docs/README.md` 仍禁止分发载荷写迁移步骤，升级指南留在仓库。
 
 ### 2.4 消费方 Skill（`skills/leistd-net-framework`）
 
 新增“升级版本”工作流：
 
 1. 确认当前版本与目标版本。
-2. 先取得目标版本的升级说明，再改动项目：可用 `dotnet nuget` 或下载 `Leistd.Core` 与项目所用各家族的目标版本包，按版本顺序读取当前版本之后的条目，只读项目实际引用的家族。
-3. 先处理包级前置动作：包改名、包移除、新增必需包。
+2. 取得目标版本的升级指南，二选一：读目标版本包 `.nuspec` 的 `PackageReleaseNotes` 链接；或执行 `gh release view v<版本>`。按版本顺序读取当前版本之后各版的指南，框架部分只读项目引用的家族。
+3. 先处理包级前置动作：包改名、移除、新增必需包。
 4. 再按项目的 CPM 或统一版本属性修改版本与包引用，然后还原。
-5. 逐条迁移源码与配置；有数据库模型变化时，按项目规范生成并检查迁移。
+5. 逐条迁移源码与配置；有数据库模型变化时按项目规范生成并检查迁移。
 6. 按受影响组件构建、测试，并启动真实宿主验证主路径。
-7. 报告已迁移条目与未覆盖风险。
+7. 报告已迁移条目与未覆盖风险。取不到升级指南（无网络、无权限）时明确报告，不凭记忆迁移。
 
-项目 Skill（`leistd-project-workflow`）的意图表不增加 Leistd 专属内容（保持技术栈无关）；升级框架依赖属于“实现”意图，由消费方 Skill 提供细节。
+项目 Skill（`leistd-project-workflow`）保持技术栈无关，不增加 Leistd 专属内容。
 
 ## 3. B：生成项目 CI
 
@@ -205,20 +206,20 @@
   - 框架 Release 构建（XML、cref）与打包内容；
   - 生成场景的格式与 lint；
   - G5、锚点、读取成本、Skill 校验。
-- 与 A 的关系：升级说明的内容与表达全部归 U1，G 不触碰 `framework/docs/upgrades/` 与模板升级说明。U1 按本节原则书写，保留必要的“旧用法 → 新用法”。
+- 与 A 的关系：升级说明的内容与表达全部归 U1，G 不触碰 `docs/framework/upgrades/`。U1 按本节原则书写，保留必要的“旧用法 → 新用法”。
 
 ## 9. 工作包
 
 | 包 | 文件 | 依赖 |
 | --- | --- | --- |
-| U1 | `framework/docs/upgrades/**`、仓库 `docs/README.md` 的分发边界、`scripts/check-doc-references.py` 的白名单迁移、`docs/template/upgrade-0.13.0.md`、删除 `docs/framework/upgrade-0.13.0*.md`、`docs/framework/versioning.md`、`framework/common.props`、`release.yml` 的 Release 正文与包元数据、`check-retired-terms.ps1`、包内容检查 | 无 |
+| U1 | `docs/framework/upgrades/**`（新建并迁移 0.13.0）、删除 `docs/framework/upgrade-0.13.0*.md`、`docs/framework/versioning.md`、`framework/common.props` 的 `PackageReleaseNotes`、`release.yml` 的 Release 正文链接、`check-retired-terms.ps1`、`scripts/check-doc-references.py` 白名单、仓库内对旧文件的引用 | 无 |
 | U2 | `skills/leistd-net-framework/**`、`.agents/skills/developing-leistd-framework/SKILL.md` 的升级说明规则、`docs/framework/development-guide.md` 的升级说明规则 | U1 |
 | V1 | `template/scripts/verify.ps1`、CI 薄壳、`template.json` 参数与排除、`template/docs/standards/testing.md`、`template/README.md`、`template/docs/README.md`、矩阵与生成测试接线 | 无 |
 | S1 | `scripts/plan-quality-checks.py`、`.github/workflows/ci.yml` 的 test 作业与聚合、`test-quality-validation-plan.py`、`test-workflow-change-scope.py`、`docs/framework/quality-assurance.md` 的框架部分、框架 Skill 的验证入口段 | U2（与它共用框架 Skill，在其后改） |
 | D1 | `framework/components/settings/Leistd.Settings.Hosting/**`、`framework/tests/components/settings/Leistd.Settings.Tests/Hosting/**`、`framework/docs/components/settings.md` | 无 |
 | E1 | 第 6 节列出的 7 个消费点及 `User`、`UserRole` 实体、EF 映射与 `DependencyInjection`、两套模型快照、相关测试；`coding-backend.md`、`coding-common.md` 的聚合条目 | 无 |
 | F1 | `scripts/measure-template-read-cost.py`（口径与自检先行；最终上限在 V1、E1、G2 完成后确定） | 口径部分无；上限依赖 V1、E1、G2 |
-| G1 | `framework/components/**`、`framework/ddd-struct/**` 的注释与 `framework/docs/**`（不含 `upgrades/`）；`docs/framework/development-guide.md` §4 | U1、U2（共用开发指南，在其后改）、D1 |
+| G1 | `framework/components/**`、`framework/ddd-struct/**` 的注释与 `framework/docs/**`；`docs/framework/development-guide.md` §4 | U1、U2（共用开发指南，在其后改）、D1 |
 | G2 | `template/frontend/**` 自有源码注释与 README；`template/docs/standards/coding-common.md`、`coding-frontend.md` 的注释规则 | E1、V1 |
 | Z | Codex 终审、全量验证、删除本计划、推送、更新 PR | 全部 |
 
