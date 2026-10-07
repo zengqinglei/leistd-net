@@ -212,6 +212,9 @@ $gates = @(
     # 源码含全部条件分支的标题（并集），条件标记不会造成误报，只可能漏掉裁剪类问题。
     @{ Name = "章节锚点规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-markdown-anchors.py", "--self-test") }
     @{ Name = "模板文档章节锚点";          Cmd = $pythonCmd; Args = @("scripts/check-markdown-anchors.py", "template") }
+    # 源码模式只查路径与链接；命令对照的是条件裁剪后的配置，由矩阵在生成产物上以 --root 执行
+    @{ Name = "文档引用规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-doc-references.py", "--self-test") }
+    @{ Name = "文档引用存在性";            Cmd = $pythonCmd; Args = @("scripts/check-doc-references.py") }
 )
 
 if ($List) {

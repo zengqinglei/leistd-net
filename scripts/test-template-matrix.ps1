@@ -25,7 +25,7 @@ param(
     [string[]]$ContainerSmokeScenarios = @(),
     # 在登记的容器场景（若在本片）上执行容器检查；CI 用它，不在 workflow 重抄场景名。
     [switch]$ContainerSmoke,
-    # 只生成并执行形态断言与文档检查（文件集合、入口指针、条件裁剪、文件与章节锚点链接）；
+    # 只生成并执行形态断言与文档检查（文件集合、入口指针、条件裁剪、文档引用与章节锚点）；
     # 不打包、不 restore/构建/测试、不跑前端与运行时，也不产出回执。用于改模板文档或 Skill 时的快速验证。
     [switch]$GenerateOnly
 )
@@ -190,49 +190,11 @@ function Get-ScenarioProjectName([string]$Scenario) {
     return "Matrix.$suffix"
 }
 
-function Assert-MarkdownLinks([string]$ProjectRoot) {
-    $brokenLinks = [System.Collections.Generic.List[string]]::new()
-    foreach ($file in Get-ChildItem -LiteralPath $ProjectRoot -Recurse -File -Filter "*.md") {
-        $lineNumber = 0
-        foreach ($line in Get-Content -LiteralPath $file.FullName -Encoding UTF8) {
-            $lineNumber++
-            foreach ($match in [regex]::Matches($line, '!?\[[^\]]*\]\((?<target>[^)]+)\)')) {
-                $rawTarget = $match.Groups['target'].Value.Trim()
-                if ($rawTarget -match '^(?:https?://|mailto:|tel:|#)') {
-                    continue
-                }
-
-                $pathPart = ($rawTarget -split '#', 2)[0].Trim()
-                if ($pathPart.StartsWith('<') -and $pathPart.EndsWith('>')) {
-                    $pathPart = $pathPart.Trim('<', '>')
-                }
-                else {
-                    $pathPart = ($pathPart -split '\s+', 2)[0]
-                }
-                $pathPart = ($pathPart -split '\?', 2)[0]
-                if ([string]::IsNullOrWhiteSpace($pathPart) -or $pathPart -match '[{}*]') {
-                    continue
-                }
-
-                $pathPart = [Uri]::UnescapeDataString($pathPart)
-                $targetPath = if ($pathPart.StartsWith('/')) {
-                    Join-Path $ProjectRoot $pathPart.TrimStart('/')
-                }
-                else {
-                    Join-Path $file.DirectoryName $pathPart
-                }
-                $targetPath = [IO.Path]::GetFullPath($targetPath)
-                if (-not (Test-Path -LiteralPath $targetPath)) {
-                    $relativeFile = [IO.Path]::GetRelativePath($ProjectRoot, $file.FullName)
-                    $brokenLinks.Add("${relativeFile}:${lineNumber} -> $rawTarget")
-                }
-            }
-        }
-    }
-
-    if ($brokenLinks.Count -gt 0) {
-        throw "Generated project contains broken Markdown links:`n$($brokenLinks -join "`n")"
-    }
+# 文档引用（链接、反引号路径、npm/ng/脚本命令）按条件裁剪后的产物检查：命令只存在于未启用分支、
+# 文件被裁掉而文档仍引用时，只有生成产物上看得见。规则、白名单与自检在 check-doc-references.py，
+# check-all 登记其自检与源码模式。
+function Assert-DocReferences([string]$ProjectRoot) {
+    Invoke-External (Get-Python3Command '检查生成项目的文档引用') @((Join-Path $repoRoot 'scripts/check-doc-references.py'), '--root', $ProjectRoot)
 }
 
 # 章节锚点按生成后的标题计算：条件裁剪删掉被链接章节时，只有生成产物上看得见。
@@ -399,7 +361,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated backend guidance must explain the independent DbMigrator boundary."
     }
 
-    Assert-MarkdownLinks $ProjectRoot
+    Assert-DocReferences $ProjectRoot
     Assert-MarkdownAnchors $ProjectRoot
     Assert-I18nGate $ProjectRoot
     Assert-ErrorCodeGate $ProjectRoot

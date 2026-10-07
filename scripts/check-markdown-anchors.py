@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Markdown 章节锚点检查：`[文字](file.md#章节)` 与 `[文字](#章节)` 指向的标题必须存在。
 
-文件级链接由 `test-template-matrix.ps1` 的 Assert-MarkdownLinks 检查，它丢弃 `#` 之后的部分；
+文件级链接由 `check-doc-references.py` 检查，它丢弃 `#` 之后的部分；
 章节改名、拆分到别的文件、或被模板条件裁剪删掉时，链接照样"能打开"，只是落在文件顶部——
 读者与 AI 都不会察觉跳错了位置。本检查补上这一半：
 
@@ -11,7 +11,7 @@
 - 围栏代码块里的 `#` 行不是标题，里面的链接也不检查；行内代码里的链接同样不检查。
 - `<a id="x">` / `<a name="x">` 显式锚点视为有效。
 - 只检查指向 `.md` 的链接；外链、非 Markdown 目标与目标文件不存在的链接不在本检查范围
-  （文件存在性由 Assert-MarkdownLinks 负责）。
+  （文件存在性由 check-doc-references.py 负责）。
 
 用法：
   python3 scripts/check-markdown-anchors.py <目录>...   检查目录下全部 .md
