@@ -1,0 +1,39 @@
+# 只准备运行环境，验证步骤全部在 scripts/verify.ps1（与本地完整回归同一入口）。
+# 设为合并必过的方法见 docs/standards/testing.md §1.1。
+#
+# Runner 前提：Docker executor 且 privileged = true（Docker-in-Docker）。集成测试经 Testcontainers
+# 在 dind 服务里启动 PostgreSQL；连接方式按 Testcontainers 官方 GitLab CI 配置：
+# DOCKER_HOST 指向 dind 服务，关闭 TLS（DOCKER_TLS_CERTDIR 置空，daemon 带 --tls=false 避免启动延迟）。
+stages:
+  - verify
+
+verify:
+  stage: verify
+  # .NET SDK 镜像自带 PowerShell 与 curl；Python 与 Node.js 在 before_script 安装
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  services:
+    - name: docker:dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  timeout: 1h
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends python3
+#if (SpaFrontend)
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+    # 前端单测跑在 Playwright 驱动的 Chromium 里，浏览器版本取锁文件里的 playwright
+    - >-
+      pwsh -NoProfile -Command '$version = (Get-Content frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages["node_modules/playwright"].version;
+      if (-not $version) { throw "playwright is missing from frontend/package-lock.json" };
+      npx --yes "playwright@$version" install --with-deps chromium; exit $LASTEXITCODE'
+#endif
+  script:
+    - pwsh -NoProfile -File scripts/verify.ps1

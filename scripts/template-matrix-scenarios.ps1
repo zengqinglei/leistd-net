@@ -8,6 +8,7 @@ $scenarioMap = [ordered]@{
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @(); Frontend = $true; Lint = $true
         Present = @(
+            ".github/workflows/ci.yml",
             "backend/src/{name}.Api/Controllers/AuthController.cs",
             "backend/src/{name}.Api/Controllers/TenantController.cs",
             "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
@@ -15,6 +16,7 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.DbMigrator"
         )
         Absent = @(
+            ".gitlab-ci.yml",
             "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
             "backend/src/{name}.Api/Notifications",
@@ -152,7 +154,7 @@ $scenarioMap = [ordered]@{
     "identity-all-features" = @{
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--include-notifications","--include-real-time","--include-external-login","--include-localization")
-        Frontend = $true; Lint = $true
+        Frontend = $true; Lint = $true; Verify = $true
         Present = @(
             "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
             "backend/src/{name}.Api/Controllers/ExternalAuthController.cs",
@@ -242,10 +244,10 @@ $scenarioMap = [ordered]@{
     }
     "identity-capabilities-08" = @{
         Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
-        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
-        Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
-        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts")
+        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--ci", "gitlab")
+        Frontend = $true; Lint = $true; Verify = $true
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", ".gitlab-ci.yml")
+        Absent = @(".github", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-capabilities-09" = @{
@@ -258,10 +260,10 @@ $scenarioMap = [ordered]@{
     }
     "resource-host-api-realtime" = @{
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-operation-records", "false")
-        Frontend = $false; Lint = $true
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-operation-records", "false", "--ci", "none")
+        Frontend = $false; Lint = $true; Verify = $true
         Present = @("backend/tests/{name}.IntegrationTests/ResourceHostPrincipalTests.cs", "backend/tests/{name}.IntegrationTests/RealTimeSubscriptionTests.cs")
-        Absent = @("frontend", "backend/src/{name}.Api/Notifications", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs")
+        Absent = @(".github", ".gitlab-ci.yml", "frontend", "backend/src/{name}.Api/Notifications", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
     "resource-host-browser-notifications" = @{
@@ -313,6 +315,8 @@ $MatrixSlices = [ordered]@{
 }
 
 # 同时认证含前端镜像与纯资源 API 镜像；后者还实际迁移并启动容器。
+# Verify = $true 的场景在完整阶段经生成项目的 scripts/verify.ps1 执行构建与测试（有/无前端、开/关本地化、三种 Ci 取值）；
+# 其余场景由矩阵逐阶段执行，并核对 verify -List 与矩阵阶段一致。
 $ContainerScenarios = @("standalone-external-login", "resource-capabilities-03")
 
 # 本文件被各入口 dot-source：变量名不得与调用方参数同名（PowerShell 变量名不分大小写，

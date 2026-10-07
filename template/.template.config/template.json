@@ -270,6 +270,26 @@
       "datatype": "bool",
       "description": "是否包含多语言（i18n）支持：前端 Transloco 运行时切换（有前端时）+ 后端按 culture 本地化（默认语言英语）",
       "defaultValue": "false"
+    },
+    "Ci": {
+      "type": "parameter",
+      "datatype": "choice",
+      "defaultValue": "github",
+      "description": "生成的 CI 流水线薄壳：只准备运行环境并调用 scripts/verify.ps1（完整回归入口，总是生成）",
+      "choices": [
+        {
+          "choice": "github",
+          "description": "GitHub Actions：.github/workflows/ci.yml"
+        },
+        {
+          "choice": "gitlab",
+          "description": "GitLab CI：.gitlab-ci.yml（Runner 须允许 Docker-in-Docker）"
+        },
+        {
+          "choice": "none",
+          "description": "不生成流水线文件"
+        }
+      ]
     }
   },
   "sources": [
@@ -387,6 +407,18 @@
             "frontend/_mock/data/password-policy.ts",
             "frontend/src/app/core/interceptors/tenant-interceptor.ts",
             "frontend/src/app/core/validation/password-rule.ts"
+          ]
+        },
+        {
+          "condition": "(Ci != \"github\")",
+          "exclude": [
+            ".github/**"
+          ]
+        },
+        {
+          "condition": "(Ci != \"gitlab\")",
+          "exclude": [
+            ".gitlab-ci.yml"
           ]
         },
         {

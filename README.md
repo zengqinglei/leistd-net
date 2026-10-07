@@ -109,6 +109,7 @@ dotnet new fullstack-app -n Acme.Shop
 | `--include-notifications` | `false` | 全部角色；通知发布、历史、未读数、通知中心、推送及个人偏好，独立于业务实时 |
 | `--include-external-login` | `false` | 仅 Identity/Standalone；GitHub/Google 等第三方身份提供商登录 |
 | `--include-localization` | `false` | 全部角色；后端按 culture 本地化，有前端时同时包含语言资源与运行时切换 |
+| `--ci` | `github` | 全部角色；CI 流水线薄壳：`github` 生成 `.github/workflows/ci.yml`，`gitlab` 生成 `.gitlab-ci.yml`，`none` 不生成。薄壳只准备环境并调用随项目生成的完整回归入口 `template/scripts/verify.ps1`（生成后位于 `scripts/`） |
 
 **常用项目怎么选：** 按场景选一条命令，仅指定需要改变的参数，其余采用表中默认值；多租户默认开启，不需要额外传参。
 

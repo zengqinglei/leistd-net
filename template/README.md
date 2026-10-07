@@ -15,8 +15,13 @@ CompanyName.ProjectName/
 <!--#endif-->
 |-- deploy/                  # Docker Compose 配置
 |-- docs/                    # 项目规范与按需沉淀文档
-|-- scripts/                 # 静态检查脚本（Python 3）
+|-- scripts/                 # 完整回归入口 verify.ps1 与静态检查脚本（Python 3）
 |-- .agents/skills/          # 跨工具项目 Skill
+<!--#if (Ci == "github")-->
+|-- .github/workflows/       # CI 薄壳，调用 scripts/verify.ps1
+<!--#elseif (Ci == "gitlab")-->
+|-- .gitlab-ci.yml           # CI 薄壳，调用 scripts/verify.ps1
+<!--#endif-->
 `-- Dockerfile
 ```
 
@@ -93,23 +98,13 @@ npm start
 <!--#endif-->
 ## 验证
 
-Windows 上把 `python3` 换成 `py`；各命令的范围与判据见 [测试规范](docs/standards/testing.md)。
+完整回归（随包静态检查、构建、全部测试）只有一个入口，本地与 CI 共用；需要 Docker（集成测试），步骤清单用 `-List` 查看：
 
 ```bash
-dotnet test backend/CompanyName.ProjectName.sln
-<!--#if (SpaFrontend)-->
-npm --prefix frontend test -- --watch=false
-npm --prefix frontend run lint
-npm --prefix frontend run build
-<!--#endif-->
-python3 scripts/check-error-codes.py
-<!--#if (IncludeLocalization)-->
-python3 scripts/check-i18n.py
-<!--#endif-->
-<!--#if (SpaFrontend && IncludeOperationRecords)-->
-python3 scripts/check-operation-action-i18n.py
-<!--#endif-->
+pwsh scripts/verify.ps1
 ```
+
+运行前提、何时跑全量以及编辑中按改动收窄的命令见 [测试规范](docs/standards/testing.md#11-完整验证由谁承担)。
 
 ## AI 协作
 

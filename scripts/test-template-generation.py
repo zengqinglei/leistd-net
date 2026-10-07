@@ -6,6 +6,9 @@
 - compose 里的 `Section__Key` 能对上 appsettings 的键或 Options 类型的属性链；
 - Serilog 的 Override 类别是本项目命名空间、所引用包或 Microsoft/System 的前缀；
 - 生成项目根目录与 `docs/standards/project-structure.md` §1 的清单一致。
+
+CI 交付参数 `Ci` 不是能力：全部形态按默认值生成，有无前端两类形态另生成其余取值，核对差异只落在
+CI 薄壳与描述它的文档；每种 `scripts/verify.ps1` 产物核对步骤清单与失败即停（命令换成记录调用的替身）。
 """
 from __future__ import annotations
 
@@ -15,6 +18,7 @@ import hashlib
 import importlib.util
 import itertools
 import json
+import os
 from pathlib import Path
 import posixpath
 import re
@@ -216,8 +220,9 @@ def check_root_entries(entries, project_structure):
     if section is None:
         return ['project-structure.md: missing §1 project root listing']
     documented = {m[1].rstrip('/') for m in re.finditer(r'^[├└]── (\S+)', section[1], re.M)}
-    actual = {entry for entry in entries if not entry.startswith('.') or entry == '.agents'}
     documented = {entry.split('/')[0] for entry in documented}
+    # 点开头的条目（.gitignore 等）不要求登记；登记了的（.agents、CI 薄壳）必须存在
+    actual = {entry for entry in entries if not entry.startswith('.') or entry in documented or entry == '.agents'}
     return ([f'root entry not listed in project-structure.md §1: {entry}' for entry in sorted(actual - documented)]
             + [f'project-structure.md §1 lists a missing root entry: {entry}' for entry in sorted(documented - actual)])
 
@@ -337,6 +342,59 @@ public sealed class EndpointOptions { public string? Path { get; init; } }
     return 0
 
 
+VERIFY_CHECKED = set()
+VERIFY_LOCK = threading.Lock()
+SHIM_COMMANDS = ('dotnet', 'npm', 'python3', 'py')
+
+
+def expected_verify_steps(values):
+    steps = ['check-error-codes']
+    steps += ['check-i18n'] if values['IncludeLocalization'] else []
+    steps += ['check-operation-action-i18n'] if values['SpaFrontend'] and values['IncludeOperationRecords'] else []
+    steps += ['backend-restore', 'backend-build', 'backend-test:Generation.Probe.UnitTests', 'backend-test:Generation.Probe.IntegrationTests']
+    steps += ['frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build'] if values['SpaFrontend'] else []
+    return steps
+
+
+def check_verify_script(output, values):
+    """scripts/verify.ps1：步骤清单符合启用的能力；注入失败时以该步退出码退出，后续步骤不执行。
+
+    命令换成记录调用的替身（PATH 最前），判据只看实际被调用的命令序列与退出码。
+    同一脚本内容与相同相关取值只核对一次。
+    """
+    script = output / 'scripts/verify.ps1'
+    expected = expected_verify_steps(values)
+    key = (hashlib.sha256(script.read_bytes()).hexdigest(), tuple(expected))
+    with VERIFY_LOCK:
+        if key in VERIFY_CHECKED:
+            return
+    pwsh = shutil.which('pwsh')
+    assert pwsh, 'pwsh is required to check scripts/verify.ps1'
+    listed = subprocess.run([pwsh, '-NoProfile', '-File', str(script), '-List'], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    assert listed.returncode == 0, f'verify -List failed: {listed.stdout}{listed.stderr}'
+    rows = [line.split('\t') for line in listed.stdout.splitlines() if line.strip()]
+    assert [row[0] for row in rows] == expected, f'verify steps {[row[0] for row in rows]} != {expected}'
+    with tempfile.TemporaryDirectory(dir=output.parent) as shim_root:
+        shims = Path(shim_root)
+        for name in SHIM_COMMANDS:
+            if os.name == 'nt':
+                (shims / f'{name}.cmd').write_text('@echo off\r\necho %~n0 %*>>"%SHIM_LOG%"\r\nif "%~n0 %*"=="%SHIM_FAIL%" exit /b 7\r\nexit /b 0\r\n', encoding='utf-8')
+            else:
+                shim = shims / name
+                shim.write_text('#!/bin/sh\nline="$(basename "$0") $*"\nprintf \'%s\\n\' "$line" >> "$SHIM_LOG"\n[ "$line" = "$SHIM_FAIL" ] && exit 7\nexit 0\n', encoding='utf-8')
+                shim.chmod(0o755)
+        commands = [row[2] for row in rows]
+        failing = len(commands) // 2
+        log = shims / 'calls.log'
+        environment = dict(os.environ, PATH=str(shims) + os.pathsep + os.environ.get('PATH', ''), SHIM_LOG=str(log), SHIM_FAIL=commands[failing])
+        run = subprocess.run([pwsh, '-NoProfile', '-File', str(script)], capture_output=True, text=True, encoding='utf-8', errors='replace', env=environment)
+        calls = log.read_text(encoding='utf-8').splitlines() if log.exists() else []
+    assert run.returncode == 7, f'verify must exit with the failing step code 7, got {run.returncode}: {run.stdout}{run.stderr}'
+    assert calls == commands[:failing + 1], f'verify must stop at the failing step: ran {calls}, expected {commands[:failing + 1]}'
+    with VERIFY_LOCK:
+        VERIFY_CHECKED.add(key)
+
+
 def validate(output, values, config):
     digests = {}
     for path in sorted(output.rglob('*')):
@@ -353,7 +411,7 @@ def validate(output, values, config):
             json.loads(content)
         if relative.startswith('frontend/public/i18n/') and path.suffix == '.json':
             json.loads(content)
-        if path.suffix in ('.cs', '.ts', '.json', '.csproj', '.html', '.mjs', '.md', '.yml'):
+        if path.suffix in ('.cs', '.ts', '.json', '.csproj', '.html', '.mjs', '.md', '.yml', '.ps1'):
             assert not re.search(rb'^\s*(?://|<!--|/\*)?\s*#(?:if|else|endif|elif)\b', content, re.M), f'Unprocessed condition: {relative}'
     validate_relative_modules(output, digests)
     for relative in digests:
@@ -382,7 +440,28 @@ def validate(output, values, config):
     assert (action_check in testing) == (action_check in digests), 'Testing instructions reference an excluded action checker'
     i18n_check = 'scripts/check-i18n.py'
     assert (i18n_check in digests) == values['IncludeLocalization'], 'i18n checker applicability'
-    assert (i18n_check in testing) == (i18n_check in readme) == (i18n_check in digests), 'Instructions reference an excluded i18n checker'
+    assert (i18n_check in testing) == (i18n_check in digests), 'Instructions reference an excluded i18n checker'
+    assert 'pwsh scripts/verify.ps1' in readme and 'pwsh scripts/verify.ps1' in testing, 'Full regression entry is not documented'
+    ci_files = {'github': '.github/workflows/ci.yml', 'gitlab': '.gitlab-ci.yml'}
+    for choice, ci_file in ci_files.items():
+        assert (ci_file in digests) == (values['Ci'] == choice), f'CI wrapper file set: {ci_file}'
+        assert (ci_file in testing) == (values['Ci'] == choice), f'CI wrapper instructions: {ci_file}'
+        if ci_file in digests:
+            wrapper = (output / ci_file).read_text(encoding='utf-8')
+            assert '\t' not in wrapper, f'CI wrapper YAML must not contain tabs: {ci_file}'
+            assert 'scripts/verify.ps1' in wrapper, f'CI wrapper must call verify: {ci_file}'
+            assert ('playwright' in wrapper) == values['SpaFrontend'], f'CI wrapper browser setup applicability: {ci_file}'
+    if values['Ci'] == 'gitlab':
+        # 结构与必需键（不依赖 YAML 库）：单一 verify 作业、DinD 服务与 Testcontainers 官方连接变量
+        gitlab = (output / ci_files['gitlab']).read_text(encoding='utf-8')
+        top_level = re.findall(r'^([A-Za-z_][\w-]*):', gitlab, re.M)
+        assert top_level == ['stages', 'verify'], f'GitLab CI top-level keys: {top_level}'
+        for required in (r'^  stage: verify$', r'^  image: mcr\.microsoft\.com/dotnet/sdk:', r'^    - name: docker:dind$',
+                         r'^      command: \["--tls=false"\]$', r'^    DOCKER_HOST: "tcp://docker:2375"$', r'^    DOCKER_TLS_CERTDIR: ""$',
+                         r'^  before_script:$', r'^  script:\n    - pwsh -NoProfile -File scripts/verify\.ps1$'):
+            assert re.search(required, gitlab, re.M), f'GitLab CI is missing {required}'
+    assert not any(p.startswith('.github/') and p != ci_files['github'] for p in digests), 'Unexpected files under .github'
+    check_verify_script(output, values)
     assert ('单实例配 `KeysPath`' in deployment) == values['SpaFrontend'], 'Browser session deployment prerequisite applicability'
     assert ('/api/v1/auth/signin' in invocation) == (values['OpenIddictServer'] or values['ResourceBrowserSession']), 'Browser relying-party instructions applicability'
     assert ('tenant-routing.read' in invocation) == values['IncludeMultiTenancy'], 'Tenant machine scope instructions applicability'
@@ -451,7 +530,9 @@ def main():
                 and not any(part in ('node_modules', 'bin', 'obj', '.cache') for part in p.relative_to(ROOT / 'template').parts)}
     candidate_sources = source_digests()
     config = json.loads(model.CONFIG_PATH.read_text(encoding='utf-8'))
-    combinations = model.all_combinations(config)
+    # Ci 只选择 CI 薄壳，不是产品能力：能力形态按默认 Ci 生成，三种取值另行比对
+    default_ci = config['symbols']['Ci']['defaultValue']
+    combinations = [values for values in model.all_combinations(config) if values['Ci'] == default_ci]
     groups = {}
     for values in combinations:
         groups.setdefault(model.effective_shape(values), []).append(values)
@@ -499,14 +580,26 @@ def main():
                 _, digest = generate((variant_id, variant))
                 assert digest == digests[index], f'Ignored role parameter changed actual bytes: {role}/{variant_id}'
                 comparisons.append({'variant': variant_id, 'representative': index})
+    # Ci 取值只改变 CI 薄壳与描述它的文档；有无前端两类形态各比一次
+    ci_variants = []
+    ci_dependent = {'.github/workflows/ci.yml', '.gitlab-ci.yml', 'README.md', 'docs/standards/testing.md', 'docs/standards/project-structure.md'}
+    for frontend in (True, False):
+        index = next(i for i, v in enumerate(representatives) if v['SpaFrontend'] == frontend)
+        for choice in [c['choice'] for c in config['symbols']['Ci']['choices'] if c['choice'] != default_ci]:
+            variant_id = len(representatives) + len(comparisons) + len(ci_variants)
+            _, digest = generate((variant_id, dict(representatives[index], Ci=choice)))
+            changed = {path for path in digest.keys() | digests[index].keys() if digest.get(path) != digests[index].get(path)}
+            assert changed - ci_dependent == set(), f'Ci={choice} changed files outside the CI wrapper: {sorted(changed - ci_dependent)}'
+            ci_variants.append({'variant': variant_id, 'representative': index, 'ci': choice, 'changed': sorted(changed)})
     assert candidate_sources == source_digests(), 'Template source changed during generation; evidence does not describe one candidate.'
     report = {'candidateSha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, encoding='utf-8', errors='replace').strip(),
               'templateSourceDigests': candidate_sources,
-              'rawInputs': len(combinations), 'effectiveShapes': len(groups), 'equivalenceComparisons': comparisons,
+              'rawInputs': len(combinations), 'effectiveShapes': len(groups), 'equivalenceComparisons': comparisons, 'ciVariants': ci_variants,
               'inputMapping': [{'input': cli_arguments(config, v), 'effective': list(model.effective_shape(v))} for v in combinations],
               'digests': digests}
     (root / 'generation-results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
-    print(f'PASS: {len(groups)} generated shapes, {len(combinations)} input mappings, {len(comparisons)} actual equivalence comparisons: {root}')
+    print(f'PASS: {len(groups)} generated shapes, {len(combinations)} input mappings, {len(comparisons)} actual equivalence comparisons, '
+          f'{len(ci_variants)} Ci variants, {len(VERIFY_CHECKED)} verify.ps1 variants: {root}')
 
 
 if __name__ == '__main__':

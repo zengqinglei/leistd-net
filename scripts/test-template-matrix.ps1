@@ -443,6 +443,29 @@ function Assert-EveryFrontendSpecDiscovered([string]$FrontendRoot) {
 }
 
 
+# 生成项目的完整回归入口 scripts/verify.ps1：步骤清单须与矩阵按产物判定的阶段一致——
+# 随包闸门按脚本是否随包、测试项目按矩阵的发现范围（backend 下全部 *Tests.csproj，单元测试在前）、前端按目录是否存在。
+function Assert-VerifySteps([string]$ProjectRoot) {
+    $listing = @(Invoke-ExternalCapture 'pwsh' @('-NoProfile', '-File', (Join-Path $ProjectRoot 'scripts/verify.ps1'), '-List') $ProjectRoot)
+    $actual = @($listing | Where-Object { $_.Trim() } | ForEach-Object { ($_ -split "`t")[0] })
+    $expected = [Collections.Generic.List[string]]::new()
+    $expected.Add('check-error-codes')
+    foreach ($gate in @('check-i18n', 'check-operation-action-i18n')) {
+        if (Test-Path -LiteralPath (Join-Path $ProjectRoot "scripts/$gate.py")) { $expected.Add($gate) }
+    }
+    $expected.Add('backend-restore')
+    $expected.Add('backend-build')
+    Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'backend') -Filter '*Tests.csproj' -Recurse |
+        Sort-Object @{ Expression = { $_.BaseName -notlike '*.UnitTests' } }, BaseName |
+        ForEach-Object { $expected.Add("backend-test:$($_.BaseName)") }
+    if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'frontend')) {
+        foreach ($stage in @('frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build')) { $expected.Add($stage) }
+    }
+    if (($actual -join '|') -cne ($expected -join '|')) {
+        throw "scripts/verify.ps1 steps differ from the matrix stages.`n  verify: $($actual -join ', ')`n  matrix: $($expected -join ', ')"
+    }
+}
+
 function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hashtable]$Definition) {
     foreach ($relativePath in $Definition.Present) {
         $expandedPath = $relativePath.Replace('{name}', $ProjectName)
@@ -893,6 +916,8 @@ $nugetConfig = @"
 </configuration>
 "@
 [IO.File]::WriteAllText($nugetConfigPath, $nugetConfig, [Text.UTF8Encoding]::new($false))
+# 生成项目自己的 restore（scripts/verify.ps1）不带 --configfile，按目录层级取到这份同内容配置
+[IO.File]::WriteAllText((Join-Path $generatedRoot "NuGet.Config"), $nugetConfig, [Text.UTF8Encoding]::new($false))
 
 if ($GenerateOnly) {
     # 只生成：模板从源码目录安装，不消费 Leistd 包，无需本地包源
@@ -920,6 +945,7 @@ try {
         Invoke-External "dotnet" $newArguments
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
+        Assert-VerifySteps $projectRoot
         if ($GenerateOnly) {
             $results.Add([PSCustomObject]@{
                 Scenario = $scenario
@@ -934,7 +960,37 @@ try {
 
         $backendValidated = $false
         $runtimeValidated = $false
-        if ($validationMode -cne 'frontend') {
+        $frontendValidated = $false
+        $lintValidated = $false
+        $testValidated = $false
+        # 登记了 Verify 的场景在完整阶段由生成项目自己的 verify.ps1 完成构建与测试，矩阵只补运行时冒烟、
+        # 前端 spec 发现范围与产物断言。verify 固定 Release、无头浏览器且前后端一起跑，人工改了这些开关时回到逐阶段执行。
+        # 包源：本 run 的 NuGet.Config 放在生成目录上层，verify 的 dotnet restore 按目录层级取到它（候选 Leistd 包）。
+        $useVerify = $definition.Verify -and $validationMode -ceq 'full' -and -not $SkipFrontend -and
+            $Configuration -ceq 'Release' -and $FrontendBrowser -ceq 'chromiumHeadless'
+        if ($definition.Verify -and -not $useVerify) {
+            Write-Warning "Scenario '$scenario' runs matrix stages instead of scripts/verify.ps1 (mode, configuration, browser or frontend skip differs)."
+        }
+        if ($useVerify) {
+            $env:HUSKY = "0"
+            Invoke-External 'pwsh' @('-NoProfile', '-File', (Join-Path $projectRoot 'scripts/verify.ps1')) $projectRoot
+            $backendValidated = $true
+            if (-not $SkipRuntime) {
+                Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
+                $runtimeValidated = $true
+            }
+            if ($definition.Frontend) {
+                $frontendRoot = Join-Path $projectRoot "frontend"
+                Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
+                Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
+                Assert-OptimizedTranslations $frontendRoot
+                Assert-EveryFrontendSpecDiscovered $frontendRoot
+                $lintValidated = $true
+                $frontendValidated = $true
+                $testValidated = $true
+            }
+        }
+        if (-not $useVerify -and $validationMode -cne 'frontend') {
             $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
             # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
             Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
@@ -954,10 +1010,7 @@ try {
             $backendValidated = $true
         }
 
-        $frontendValidated = $false
-        $lintValidated = $false
-        $testValidated = $false
-        if (-not $SkipFrontend -and $definition.Frontend -and $validationMode -cne 'backend') {
+        if (-not $useVerify -and -not $SkipFrontend -and $definition.Frontend -and $validationMode -cne 'backend') {
             $frontendRoot = Join-Path $projectRoot "frontend"
             $env:HUSKY = "0"
             Invoke-External "npm" @("ci") $frontendRoot
@@ -1033,6 +1086,7 @@ try {
             Frontend = if ($frontendValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
             Test = if ($testValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
             Container = if ($containerValidated) { "pass" } else { "skipped" }
+            Verify = if ($useVerify) { 'pass' } else { 'not-run' }
             Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
         })
     }

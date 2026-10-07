@@ -30,6 +30,8 @@
 <!--#endif-->
 <!--#endif-->
 
+完整回归入口：`scripts/verify.ps1`。
+
 业务开发和环境交付由项目 Skill [leistd-project-workflow](../.agents/skills/leistd-project-workflow/SKILL.md) 处理。
 
 需求决策、模块契约等按需文档只在产生已确认、需复用的信息时创建，并登记到本索引；一个事实只维护一处，其他位置链接。

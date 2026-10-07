@@ -5,13 +5,18 @@
 ```text
 {project-root}/
 ├── .agents/skills/          # 跨工具项目 Skill
+<!--#if (Ci == "github")-->
+├── .github/workflows/       # CI 薄壳，只准备环境并调用 scripts/verify.ps1
+<!--#elseif (Ci == "gitlab")-->
+├── .gitlab-ci.yml           # CI 薄壳，只准备环境并调用 scripts/verify.ps1
+<!--#endif-->
 ├── backend/                 # .NET 后端
 <!--#if (SpaFrontend)-->
 ├── frontend/                # Angular 前端
 <!--#endif-->
 ├── deploy/                  # 容器编排配置
 ├── docs/                    # 长期规范与按需沉淀文档
-├── scripts/                 # 静态检查脚本（错误码闸门总在，其余按启用的功能生成）
+├── scripts/                 # 完整回归入口 verify.ps1；静态检查脚本（错误码闸门总在，其余按启用的功能生成）
 ├── AGENTS.md                # AI 协作入口指针（CLAUDE.md 引用它）
 ├── CLAUDE.md
 ├── Dockerfile
