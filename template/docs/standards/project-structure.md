@@ -18,7 +18,11 @@
 └── README.md
 ```
 
-项目根包含 `backend/` 和 `docs/`，启用交互前端时同时包含 `frontend/`；monorepo 中所有项目相对路径仍以该层为准。
+<!--#if (SpaFrontend)-->
+项目根包含 `backend/`、`frontend/` 和 `docs/`；monorepo 中所有项目相对路径仍以该层为准。
+<!--#else-->
+项目根包含 `backend/` 和 `docs/`；monorepo 中所有项目相对路径仍以该层为准。
+<!--#endif-->
 
 ## 2. 后端分层
 

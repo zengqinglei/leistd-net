@@ -23,14 +23,19 @@
   check-markdown-anchors.py 负责。
 - 反引号路径：一律按交付根解析；上下文根不同的文档在 CONTEXT_ROOTS 中逐个登记。
   不做“尝试多个目录，找到就通过”。
-  只有形如路径的行内代码才算：含 `/`、不以 `/` 或 `@` 开头、无空白与占位符，且满足其一：
-  末段带已登记的文件扩展名；以 `/` 结尾且至少两段；首段在解析根下真实存在。
+  只有形如路径的行内代码才算：含 `/`、不以 `/` 或 `@` 开头、无空白与占位符（允许中文等非 ASCII
+  字符），且满足其一：末段带已登记的文件扩展名；多段且以 `/` 结尾；首段是交付根登记的
+  顶层目录（KNOWN_ROOTS）。单段的 `name/` 只有 name 在 KNOWN_ROOTS 中才算引用，其余单段
+  （`widgets/`、`Dtos/`、`architecture/` 这类正文里的目录名）一律视为名字、不检查。
+  是否算引用只看写法与写死的清单，不看目标是否存在：登记的顶层目录消失、或拼错的首段带着
+  第二段（`scrpits/x.py`）仍会失败。已知局限：拼错的单段目录（`scrpits/`）不是引用，不会被拦下。
   `:行号` 后缀先去掉再解析；作为链接文字的行内代码不重复检查（链接目标已检查）。
 - 存在性按精确大小写判定，越出交付根视为缺失（分发后读者拿不到）。
 
 命令解析（仅生成模式）：只看行内代码与 shell 类围栏代码块。
 
-- `npm run <脚本>`、`npm test|start|stop|restart` 对照 `frontend/package.json` 的 scripts。
+- `npm run <脚本>`、`npm test|start|stop|restart` 对照 `frontend/package.json` 的 scripts；
+  带 `--prefix <目录>` 时对照交付根下该目录的 package.json。
 - `ng <执行目标>` 对照 `frontend/angular.json` 的 architect；`ng generate`、`ng new`
   等 generator 与内置命令不检查。
 - `python3|python|py <脚本>.py`、`pwsh <脚本>.ps1` 按交付根解析。
@@ -61,6 +66,13 @@ SOURCE_EXCLUDED_DIRS = (
     'docs/reports',      # 跨层验证结果：引用的是当次运行的 .tmp 产物
 )
 TEMPLATE_PREFIX = 'template/'
+
+# 交付根的顶层目录：单段 `name/` 与无扩展名、不以 / 结尾的多段路径，只有首段是这些名字之一才算引用。
+# 写死而不读文件系统，是为了让“算不算引用”与“目标在不在”无关。
+KNOWN_ROOTS = {
+    'repository': {'framework', 'template', 'docs', 'scripts', 'skills', '.agents', '.github'},
+    'template': {'backend', 'frontend', 'docs', 'scripts', 'deploy', '.agents'},
+}
 SKIPPED_DIR_NAMES = {'node_modules', 'bin', 'obj', 'dist', '.angular', '.git', '.tmp'}
 SKIPPED_DIR_SUFFIXES = ('libs/ui',)
 
@@ -120,11 +132,11 @@ FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})\s*([^`\s]*)')
 LINK_RE = re.compile(r'!?\[(?P<text>[^\]]*)\]\((?P<target>[^)]+)\)')
 INLINE_CODE_RE = re.compile(r'(`+)(.+?)\1')
 SCHEME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:')
-PATH_SPAN_RE = re.compile(r'^(?:\.{1,2}/)*[A-Za-z0-9_.+-]+(?:/[A-Za-z0-9_.+-]+)*/?$')
+PATH_SPAN_RE = re.compile(r'^(?:\.{1,2}/)*[\w.+-]+(?:/[\w.+-]+)*/?$')
 LINE_SUFFIX_RE = re.compile(r'^(?P<path>.+?)(?::\d+(?:[-,]\d+)*|#L\d+(?:-L?\d+)?)$')
 
-NPM_RE = re.compile(r'(?<![\w-])npm\s+(?:(?:run|run-script)\s+(?P<script>[A-Za-z0-9:_.-]+)'
-                    r'|(?P<lifecycle>test|start|stop|restart)\b)')
+NPM_RE = re.compile(r'(?<![\w-])npm\s+(?:--prefix(?:=|\s+)(?P<prefix>[^\s|;&`]+)\s+)?'
+                    r'(?:(?:run|run-script)\s+(?P<script>[A-Za-z0-9:_.-]+)|(?P<lifecycle>test|start|stop|restart)\b)')
 NG_RE = re.compile(r'(?<![\w./-])ng\s+(?P<command>[a-z][a-z0-9-]*)(?:\s+(?P<arg>[^\s|;&`]+))?')
 SCRIPT_RE = re.compile(r'(?<![\w-])(?P<runner>python3|python|py|pwsh)(?:\s+-[^\s]+)*\s+'
                        r'(?P<script>[^\s|;&`]+\.(?:py|ps1))(?![\w.])')
@@ -151,8 +163,9 @@ class Problem:
 class Delivery:
     """一棵交付树：解析根与精确大小写的存在性缓存。"""
 
-    def __init__(self, root):
+    def __init__(self, root, known_roots):
         self.root = os.path.abspath(root)
+        self.known_roots = known_roots
         self._listing = {}
 
     def _entries(self, directory):
@@ -277,7 +290,9 @@ def is_checked_path(path, resolution_root, delivery):
             return True
     if path.endswith('/') and len(segments) >= 2:
         return True
-    return delivery.exists(os.path.join(resolution_root, segments[0])) if segments[0] != '..' else True
+    if segments[0] == '..':
+        return True
+    return os.path.normpath(resolution_root) == delivery.root and segments[0] in delivery.known_roots
 
 
 class Config:
@@ -299,15 +314,21 @@ class Config:
                     self._cache[relative] = (None, f'配置解析失败：{relative}：{error}')
         return self._cache[relative]
 
-    def npm_problem(self, script):
-        package, error = self.load('frontend/package.json')
+    def npm_problem(self, script, prefix=None):
+        relative = 'frontend/package.json'
+        if prefix:
+            directory = self.delivery.relative(os.path.join(self.delivery.root, prefix))
+            if directory is None:
+                return f'所属项目无法确定：--prefix {prefix} 越出交付根'
+            relative = (directory.replace(os.sep, '/') + '/' if directory else '') + 'package.json'
+        package, error = self.load(relative)
         if error:
             return error
         scripts = package.get('scripts') if isinstance(package, dict) else None
         if not isinstance(scripts, dict):
-            return '配置解析失败：frontend/package.json 没有 scripts 对象'
+            return f'配置解析失败：{relative} 没有 scripts 对象'
         if script not in scripts:
-            return f'frontend/package.json 没有脚本 "{script}"'
+            return f'{relative} 没有脚本 "{script}"'
         return None
 
     def ng_problem(self, command, argument):
@@ -343,13 +364,13 @@ def collect(repo_root, generated_root, context_roots, whitelist):
     """返回 (问题列表, 文档数, 引用数, 命中的白名单下标集合, 扫描到的文档键集合)。"""
     mode = 'generated' if generated_root else 'source'
     if generated_root:
-        project = Delivery(generated_root)
+        project = Delivery(generated_root, KNOWN_ROOTS['template'])
         docs = [(path, project, TEMPLATE_PREFIX + os.path.relpath(path, project.root).replace(os.sep, '/'))
                 for path in iter_markdown(project.root, ['.'])]
         config = Config(project)
     else:
-        repository = Delivery(repo_root)
-        template = Delivery(os.path.join(repo_root, 'template'))
+        repository = Delivery(repo_root, KNOWN_ROOTS['repository'])
+        template = Delivery(os.path.join(repo_root, 'template'), KNOWN_ROOTS['template'])
         docs = []
         for path in iter_markdown(repository.root, SOURCE_SCAN, SOURCE_EXCLUDED_DIRS):
             key = os.path.relpath(path, repository.root).replace(os.sep, '/')
@@ -417,7 +438,7 @@ def check_commands(text, config, delivery, doc_key, display, number, report):
     for match in NPM_RE.finditer(text):
         count += 1
         script = match.group('script') or match.group('lifecycle')
-        problem = config.npm_problem(script)
+        problem = config.npm_problem(script, match.group('prefix'))
         if problem:
             report(doc_key, display, number, match.group(0), problem)
     for match in NG_RE.finditer(text):
@@ -495,6 +516,11 @@ SOURCE_FIXTURE = {
         '[大小写不符](docs/GUIDE.md)',
         '有效反引号 `docs/guide.md`、`docs/guide.md:12`、`scripts/run.ps1`、`docs/`。',
         '缺失反引号 `docs/absent.md`。',
+        '算不算引用与目标是否存在无关：登记的顶层目录已删 `skills/`、`.github/workflows`；'
+        '目标已删 `docs/removed`、`docs/removed/`；拼错的首段带第二段 `scrpits/run.ps1`。',
+        '单段目录有效 `scripts/`；未登记的单段是目录名，不检查 `widgets/`、`Dtos/`、`architecture/`；'
+        '已知局限：拼错的单段 `scrpits/` 同样只是名字。',
+        '中文文件名 `docs/指南.md` 有效，`docs/缺失.md` 缺失。',
         '非路径不检查 `Asia/Shanghai`、`try/catch`、`@scope/pkg`、`/api/v1/x`、`bg-black/25`、`npm run nope`、'
         '`Path=/`、`sub/email_verified`。',
         '占位路径不检查 `{缓存根}/docs/missing.md`、`lib/{tfm}/x.xml`、`docs/<topic>.md`、`docs/*.md`、`docs/…/x.md`。',
@@ -554,6 +580,12 @@ SOURCE_EXPECTED = {
     ('README.md', 'docs/missing.md'),
     ('README.md', 'docs/GUIDE.md'),
     ('README.md', 'docs/absent.md'),
+    ('README.md', 'scrpits/run.ps1'),
+    ('README.md', 'skills/'),
+    ('README.md', 'docs/removed'),
+    ('README.md', 'docs/removed/'),
+    ('README.md', '.github/workflows'),
+    ('README.md', 'docs/缺失.md'),
     ('docs/notes.md', 'deploy/.ENV'),
     ('docs/notes.md', './deploy/.env'),
     ('docs/architecture/a.md', 'missing.md'),
@@ -577,6 +609,9 @@ GENERATED_FIXTURE = {
         '缺 npm 脚本 `npm run nope`；只在未启用分支 `npm run i18n:check`；缺 Angular 目标 `ng e2e`。',
         'generator 不检查 `ng generate component x`、`ng g @spartan-ng/cli:ui`、`ng new x`、`ng version`。',
         '非命令不检查 `string username`、`npm ci`、`npm install`。',
+        '指定项目目录 `npm --prefix frontend run build`、`npm --prefix frontend test`；'
+        '缺脚本 `npm --prefix frontend run nope`；目录不是 npm 项目 `npm --prefix backend run build`；'
+        '越出交付根 `npm --prefix=../x run build`。',
         '```bash',
         'cd frontend && npm run lint && npm run missing-in-fence',
         'pwsh scripts/missing.ps1',
@@ -601,6 +636,9 @@ GENERATED_EXPECTED = {
     ('README.md', 'frontend/src/app/i18n-only.ts'),
     ('README.md', 'deploy/.env'),
     ('README.md', 'npm run nope'),
+    ('README.md', 'npm --prefix frontend run nope'),
+    ('README.md', 'npm --prefix backend run build'),
+    ('README.md', 'npm --prefix=../x run build'),
     ('README.md', 'npm run i18n:check'),
     ('README.md', 'ng e2e'),
     ('README.md', 'npm run missing-in-fence'),
