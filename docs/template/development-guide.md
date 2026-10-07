@@ -46,6 +46,8 @@
 | `IncludeExternalLogin` | false | 本地口令身份 |
 | `IncludeLocalization` | false | 全部角色，前端载荷还要求有效前端存在 |
 
+交付参数 `Ci`（choice：`github` 默认、`gitlab`、`none`）只选择 CI 薄壳文件，不是产品能力：不进入有效形态与两两组合，`template/scripts/verify.ps1` 总是生成。薄壳只准备环境并调用 `verify`，验证步骤只在该脚本维护。
+
 Framework 提供通用契约与适配器，不感知角色或模板参数。Template 在组合根选择能力并裁剪用例、依赖、迁移、界面、Mock、测试、配置及文档。六个后端项目名称保持 Api、Application、Domain、Infrastructure、DbMigrator、Client；服务职责通过项目名前缀表达。
 
 ### 3.2 有效能力集中派生
@@ -80,16 +82,7 @@ Resource 的首位管理员通过正式 DbMigrator `--grant-admin <sub> [--tenan
 | **只查 `.cs`/`.ts` 会漏 `.csproj`** | 包引用没剪掉，产物仍带着该依赖 |
 | **`isEnabled` 引用 computed 符号** | `String 'X' was not recognized as a valid Boolean`；只接受 parameter |
 
-修改参数结构后先运行 `pwsh scripts/check-all.ps1`，再运行 `-Tier pr` 场景矩阵。与模板直接相关的检查如下：
-
-| 脚本 | 拦什么 |
-| --- | --- |
-| `scripts/check-template-symbols.ps1` | 悬空符号（`isEnabled`、computed `value`、modifier `condition`、代码 `#if` 四处）、注释里的指令字面形式、恒真嵌套、与 `#if` 同义的 `#elif` |
-| `scripts/check-using-guards.py` | 五项：C# using 守卫（双向）、前端 TS import 守卫、`InternalsVisibleTo` 无条件、csproj XML 良构、无仅含空行的条件块。详见该文件头 |
-| `scripts/check-async-boundaries.py` | 动态连接路径（UoW、多租户、`Leistd.Data`、模板 `TenantConnections`）里的 `.Result` / `.Wait()` / `GetAwaiter().GetResult()` |
-| `scripts/check-test-names.py` | 前端 `describe` / `it` / `test` 标题、后端 `[Fact]` / `[Theory]` 方法名与 `DisplayName` 含中日韩字符；只查名字，注释与测试数据不在内 |
-
-`check-using-guards.py` 验证全部符号取值组合；场景矩阵只编译 `$Scenarios` 中列出的组合。
+修改参数结构后先运行 `pwsh scripts/check-all.ps1`，再按[质量规范](../framework/quality-assurance.md#分层执行与时间预算)运行场景矩阵。模板相关的静态检查是 `check-template-symbols.ps1`（悬空符号、注释里的指令字面形式、恒真嵌套）、`check-using-guards.py`（在全部符号取值组合下检查守卫与 csproj 良构）和 `check-async-boundaries.py`（动态连接路径上的同步阻塞），判据见各脚本文件头；场景矩阵只编译登记的场景。
 
 ### 3.4 前端条件块：`//#if` 紧贴上一单元，空行留在块内首行
 
@@ -117,7 +110,9 @@ export const next = 1;
 
 场景、档位、分片及形态断言唯一维护在 `scripts/template-matrix-scenarios.ps1`。保留原有回归场景，同时覆盖最小本地身份、Resource 纯 API、单租户、日志模式、邮件关闭及通知/实时交互。PR 档覆盖全部可达条件行和有效能力两两取值；高阶交互由关键场景与真实端到端补齐，full 档执行全部登记场景。
 
-原始输入共 768 组，有效形态共 320 组。`test-template-generation.py` 实际生成全部有效形态，检查资产、JSON、项目结构、迁移与依赖不变量，并以实际生成结果验证角色无效参数的代表性内容等价。随机 UserSecretsId 是唯一排除的非确定性字段。轻量生成不能替代矩阵编译、数据库运行或浏览器验证。
+登记 `Verify` 的场景（有/无前端、开/关本地化、三种 `Ci`）在完整阶段直接运行生成项目的 `verify.ps1` 完成构建与测试，矩阵补运行时冒烟、spec 发现范围与产物断言；其余场景与按前后端拆分的阶段由矩阵逐步执行，因为 `verify` 不提供子集开关。每个场景都核对 `verify -List` 与矩阵阶段一致，两处步骤不会漂移。
+
+能力参数原始输入共 768 组，有效形态共 320 组。`test-template-generation.py` 以默认 `Ci` 实际生成全部有效形态，另以有无前端两类形态核对 `Ci` 三种取值只改变 CI 文件集合及描述它们的文档，并在每种 `verify.ps1` 产物上核对步骤清单与失败即停；检查资产、JSON、项目结构、迁移与依赖不变量，并以实际生成结果验证角色无效参数的代表性内容等价。随机 UserSecretsId 是唯一排除的非确定性字段。轻量生成不能替代矩阵编译、数据库运行或浏览器验证。
 
 生成检查还验证 TypeScript 相对模块与组件模板/样式资产闭包，防止文件已裁掉但调用方仍引用。词条源码可用模板条件指令包住可选键；源码检查只识别这些指令并校验完整词条集合，不接受普通 JSON 注释或非法内容。全部有效形态的实际词条产物必须是严格 JSON，en/zh 键和占位符逐形态一致；条件结构与符号由独立源码闸门验证。
 
@@ -139,20 +134,16 @@ Identity 形态用 `MapTenantConnections` 映射端点，Resource 形态用 `Lei
 
 ### 3.7 错误码不随本地化裁剪
 
-`BusinessException` 在构造时必填错误码，因此模板不再用 `#if (IncludeLocalization)` 裁掉业务码。多语言形态用它查词条，非多语言形态仍用它做客户端分支和日志聚合；两种形态的机器契约完全一致。
-
-错误码改名按破坏性变更处理，对前端分支和 API 状态映射都要有针对性测试。
-业务错误码按所属模块和最低实际使用层放置：Domain 规则码归对应 Domain 模块，纯用例码归 Application 模块，`Domain/Shared` 只保留真正跨模块的契约。组件错误码始终引用组件常量。API 各模块只登记非默认 HTTP 状态，由组合根汇总；框架组件的默认状态由组件在自己的 `AddXxx` 里登记，组合根不再逐个调用，只在需要时覆盖。宿主覆盖优先且与调用顺序无关，默认 400 不建第二张清单。
-错误码采用 `模块:语义名`，前缀由一个模块独占、后缀与常量成员名一致；`*ErrorCodes` 检查同时验证唯一性、格式和资源键。未命中映射的 `BusinessException` 回落 400；422 仅在客户端需要区分“内容可解析但无法处理”时显式映射。
+`BusinessException` 在构造时必填错误码，模板不用 `#if (IncludeLocalization)` 裁掉业务码：多语言形态用它查词条，非多语言形态仍用它做客户端分支和日志聚合，两种形态的机器契约一致。错误码的命名、放置与 HTTP 映射规则见生成项目 [API 规范](../../template/docs/standards/api.md#4-异常与-http-映射)；`*ErrorCodes` 检查验证唯一性、格式和资源键。
 
 ## 4. Skill 与规范
 
-- `leistd-project-workflow` 覆盖业务开发与环境交付，按最终意图加载对应 reference；不依赖工具专属入口文件触发。
-- `template/docs/README.md` 是生成项目唯一文档索引，`docs/standards/` 只保存工程事实，不重复 Skill 流程。
-- Skill 安装后即使项目没有文档，也必须从源码、配置、测试和 CI 继续低风险任务；只有产生长期可复用信息时才按需创建最小权威文档。
-- 不携带固定需求、规范或报告模板，不预建按需目录。
+- Skill、生成项目规范与入口文件的分工以 [三层交付与 AI 协作](../architecture/collaboration-scenarios.md#2-skill-边界) 为准。
+- `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。调整规范结构或篇幅时运行 `python3 scripts/measure-template-read-cost.py --check`：它按读取表统计五类典型任务去重后的读取字符数（含项目 Skill 的 `SKILL.md` 与所需 reference），超过登记的上限即失败；有意放宽时连同理由修改上限。
+- `template/docs/standards/` 只保存工程事实，不重复 Skill 流程；不携带固定需求、规范或报告模板，不预建按需目录。
 - 修改任何 Skill 时使用官方 `skill-creator` 并运行 `scripts/validate-skills.ps1`。
-- 前端 UI 走 Spartan UI：选型依据与主题/能力取舍见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法规范见 [`template/docs/standards/coding-frontend.md`](../../template/docs/standards/coding-frontend.md)；新增、修改或排查 Spartan 组件时，按「`spartan` skill（`.agents/skills/spartan/`，含 `rules/`）→ 本地 `libs/ui` 源码与锁定版本 → 匹配版本的官方文档」确认组件 API，不臆造 Helm/Brain API。`@spartan-ng/mcp` 是仓库维护者的可选工具（根 `.mcp.json`），模板不内置。
+- 前端 UI 走 Spartan UI：选型依据见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法见生成项目 [前端界面规范](../../template/docs/standards/frontend-ui.md)；确认组件 API 按「`spartan` skill → 本地 `libs/ui` 源码与锁定版本 → 匹配版本的官方文档」，不臆造 Helm/Brain API。`@spartan-ng/mcp` 是仓库维护者的可选工具（根 `.mcp.json`），模板不内置。
+- 生成项目 [Spartan 维护约定](../../template/docs/standards/frontend-spartan.md) 的定制登记表由 `scripts/check-spartan-customizations.mjs` 核对，边界是组件集合：用锁定版本的 Spartan CLI 还原上游后，与上游有差异的组件集合必须等于登记表列出的组件集合；它不核对行内改动描述，改 helm 组件或升级时人工逐项核对描述与源码一致。
 
 ## 5. 本地框架联调
 
@@ -181,99 +172,27 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 
 ## 7. 事务边界
 
-工作单元**按需引入**，不是每个写方法的必需装饰。默认不开启，写业务代码可以先不理解它。
-
-- **只有跨多次提交边界的方法才标 `[UnitOfWork]`。** 单次 `SaveChanges` 本身已在数据库隐式事务里；
-  写入由管理器以一次 `SaveChanges` 完成的（权限授予、租户连接配置）也已自证原子；
-  不走本框架仓储的第三方存储（OpenIddict 自带 store）标了也管不到。判据见
-  [工作单元组件文档](../../framework/docs/components/unit-of-work.md#何时不需要)。
-- **写方法一律用仓储返回值构造输出，不回查数据库。** `InsertAsync` / `UpdateAsync` 返回实体，
-  且 `Id`（Guid v7 领域生成）与创建审计、租户值都在实体进入跟踪时就已落定，返回时即完整。
-  回查有两处害处：多一次往返；且在工作单元内那些行还没落库，回查得到空结果——
-  "创建后返回创建结果"会变成 404 或少掉全部关联。
-- 需要把刚写入的关联数据回显时，让写方法**回传**它写了什么（如 `AssignDefaultRolesToUserAsync`
-  返回角色名），而不是让调用方按 id 再查一遍。
-- 已有反向决定的地方不要覆盖：`RoleAppService.DeleteAsync` 刻意不做成一个事务并写明了失败形态选择。
+生成项目的工作单元与写后返回规则见 [后端开发规范 §3.6](../../template/docs/standards/coding-backend.md#36-事务与工作单元)。模板内写明了取舍的事务边界不要按通用规则改写，例如 `RoleAppService.DeleteAsync` 在一个工作单元里提交删角色、清关联、清授权与成功记录，原因与失败形态见其 `<remarks>`。
 
 ## 8. 宿主与租户侧别
 
-新增平台能力时先回答一个问题：**这条权限背后的数据带不带 `TenantId`？**
-
-| 数据形态 | 侧别 | 模板中的例子 |
-| --- | --- | --- |
-| 实体实现 `IMultiTenant`，受全局租户过滤器分区 | `Both` | 用户、角色、设置、权限目录 |
-| 宿主全局，无 `TenantId`，过滤器不生效 | `Host` | 租户注册表、OpenIddict 开放应用 |
-| 只在租户内成立 | `Tenant` | 模板当前没有 |
-
-**省略 `side` 等于选择 `Both`**，而 `Both` 的含义是"租户管理员也拿得到"。对宿主全局资源来说这就是跨租户越权：`TenantSeeder` 按 `Side.HasFlag(MultiTenancySides.Tenant)` 播种，`Both` 会命中，于是每个租户的 Admin 角色都被授予该权限；宿主全局的表又不受租户过滤器约束，接口返回的就是全系统的数据。**这条只在真的建了租户之后才暴露**，单租户本地开发和单场景测试永远是绿的。
-
-**侧别为 `Host` 时，权限检查本身就是边界，不要在服务里再拦一次。**
-`DefaultPermissionChecker` 按当前侧别判定，且**与是否授予无关**——即便有人手工往库里写一条授予记录，
-租户上下文下仍然不通过。在应用服务入口重复一遍同一个不变量，只是把它写两处、且没有任何东西保证两处同步。
-
-**只有一种情形需要服务内再校验：权限必须保持 `Both`，而它管辖的内容里有一部分是宿主专属的。**
-`App.Settings` 就是这一种——两侧都要能改自己的设置，所以侧别不能收成 `Host`；
-但 `SettingScopes.Host` 那几项（日志级别这类进程级配置）只有宿主能写，
-这一层租户过滤器和权限侧别都表达不了，由设置组件的设置页用例在读取时隐藏、在写入时拒绝（`Setting:HostOnly`）。
-
-判断口径：**先问侧别能不能表达。能，就只写侧别；不能，才在服务里补。**
-
-### 实体的租户维度
-
-同一条判据对持久化对象同样适用，问法换成：**这个实体会不会被独立查询？**
-
-| 情形 | 要求 |
-| --- | --- |
-| 会被独立查询（有自己的仓储 / `DbSet`，或被 `Where` 直接命中） | **必须 `IMultiTenant`** |
-| 只经聚合根访问，没有任何独立查询入口 | 不需要；但必须**真的**没有入口 |
-
-**没有第三种状态。**"当前所有调用路径恰好都先经过了受过滤的表"不是一种设计——它不被任何机制保证，新增一条直查路径就破防；而 `MultiTenantFilterGuard` 只扫 `IMultiTenant` 实体，对这种实体一个字都不会说。
-
-宿主全局的数据（控制面表、OpenIddict 这类第三方表）走另一条路：**不映射进租户上下文**，能力边界由权限侧别把守。
-
-**侧别是 `AddPermission` 的必填参数**，漏声明连编译都过不去——编译器本身就是那张"已决定"清单，不需要另立一张表来对账。（早先的 `PermissionContractTests.ExpectedSides` 是侧别还可省略时的补偿闸门；根因消除后它已随之删除。）
-
-**收紧侧别不会撤销已经授出去的记录。** `SeedAdminRolePermissionsAsync` 只在授权版本为 0 时播种，既不自动补齐也不自动撤销——因此把某条权限从 `Both` 改成 `Host` 时，必须同时给既有部署一条撤销 SQL，否则已建租户仍持有该权限。
+权限侧别、服务内补校验与实体租户维度的规则见生成项目 [认证与授权](../../template/docs/standards/auth.md#权限侧别与租户维度)。侧别是 `AddPermission` 的必填参数，由编译器保证每条权限都已决定侧别，不另建对账测试。
 
 ## 9. 测试与开发只用 PostgreSQL（为什么不用 InMemory 或 SQLite）
 
-生成项目只有 Npgsql 一个提供程序：开发连接 `deploy/docker-compose.dev.yml` 的本机库，集成测试由
-`PostgreSqlTestDatabase` 用 Testcontainers 起容器、迁移一次模板库、每个测试宿主克隆一份。
-这条被反复讨论过，结论与依据记在这里：
+生成项目只有 Npgsql 一个提供程序：开发连接 `template/deploy/docker-compose.dev.yml` 的本机库，集成测试的建库方式见生成项目 [`testing.md`](../../template/docs/standards/testing.md) §2.1。
 
-1. **InMemory 让生产代码迁就测试。** 它没有事务、不强制唯一约束、不支持 `ExecuteUpdate`/`ExecuteDelete`；
-   为它绕开批量写法、刻意不写回滚断言，都是在为测试降低生产代码与测试的质量。EF Core 官方也不建议用它测试。
-2. **SQLite 与工作单元的独立事务冲突。** 框架与模板大量使用 `Begin(requiresNew: true)`；SQLite 每个库只有一个写者，
-   外层事务写入后再开独立事务写入会互相等待到超时。原型实测 364 个集成用例中有 2 个因此锁死，
-   而 PostgreSQL 是行级锁，这种写法在生产上完全正常。SQLite 还没有 schema、执行不了 Npgsql 迁移，
-   `decimal`/`DateTimeOffset` 的排序与比较也受限，业务项目加金额字段就会撞上。
-3. **代价可接受。** 同一生成项目上，集成测试墙钟约为 InMemory 的 1.5 倍，换来与生产一致的约束、翻译、事务和迁移；
-   单元测试不连库，不受影响。
+1. **InMemory 让生产代码迁就测试**：没有事务、不强制唯一约束、不支持 `ExecuteUpdate`/`ExecuteDelete`，EF Core 官方也不建议用它测试。
+2. **SQLite 与工作单元的独立事务冲突**：框架与模板大量使用 `Begin(requiresNew: true)`，SQLite 每个库只有一个写者，外层未提交写入后再开独立事务会等锁超时；它也没有 schema、执行不了 Npgsql 迁移，`decimal`/`DateTimeOffset` 的排序与比较受限。
+3. **代价**：集成测试比 InMemory 慢，换来与生产一致的约束、翻译、事务和迁移；单元测试不连库。
 
-分工：集成测试覆盖单个服务在真实库上的全部行为；`scripts/test-template-postgresql-e2e.ps1` 覆盖必须跨进程、
-跨库验证的部分——`DbMigrator` 命令行与预演、控制库与业务库拆到不同实例、共享与专属租户库的物理隔离、
-跨进程共用的 Data Protection 密钥环。专属租户库的路由也可以在集成测试里另克隆一个库来验证，
-但不为此在生产组合根里加只服务于测试的分支。
-
-下游仓库各自维护多连接测试宿主这件事，**解法不在模板**：模板是 `dotnet new` 的一次性脚手架，
-已生成的项目不跟随模板更新。若那份重复确实成立，载体应是框架侧的测试支撑包（随版本升级下发）——
-当前 `framework/tests` 全部 `IsPackable=false`，那会是一个新的交付面，动手前先看各处宿主真正共用的是什么。
+分工：集成测试覆盖单个服务在真实库上的全部行为；`scripts/test-template-postgresql-e2e.ps1` 覆盖必须跨进程、跨库验证的部分——`DbMigrator` 命令行与预演、控制库与业务库拆到不同实例、共享与专属租户库的物理隔离、跨进程共用的 Data Protection 密钥环。专属租户库的路由可以在集成测试里另克隆一个库来验证，但不为此在生产组合根里加只服务于测试的分支。
 
 ## 10. 验证
 
-测试分层、真实库与端到端的分工、lint 缓存口径见[模板质量验证](./quality-assurance.md)。检查删除/替换必须逐项完成接替与变异验收。
+按改动选择档位与入口见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)的 L1 表；测试分层、端到端分工与 lint 缓存口径见[模板质量验证](./quality-assurance.md)。检查删除/替换必须逐项完成接替与变异验收。
 
-以下按改动选择，不要求每次全部运行；矩阵和 PostgreSQL 示例默认各自打包当前 Framework 源码。
-
-```powershell
-pwsh scripts/check-all.ps1                                 # 全部静态闸门（-List 看清单）
-pwsh scripts/test-template-matrix.ps1 -Tier pr             # PR 档场景；不带参数为全部场景
-pwsh scripts/test-template-postgresql-e2e.ps1
-pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScenarios standalone
-```
-
-按改动选哪一档、哪些场景见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)。第三条在真实 PostgreSQL 上验证本地 Framework NuGet 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路；它要求本机已安装 Docker、`psql` 和 PowerShell。
-第四条验证生成项目的 API 与 Migrator 镜像可构建、.NET 运行时层可用。它不启动应用；部署配置或迁移行为变化时另做对应环境启动和健康检查。
+`test-template-postgresql-e2e.ps1` 在真实 PostgreSQL 上验证本地 Framework 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路，要求本机 Docker 与 PowerShell（psql 用容器自带的）。矩阵与该脚本默认各自打包当前 Framework 源码。
 
 每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`、`local-feed/`、`template-hive/`、`nuget-cache/` 与一次性 NuGet 配置——生成物、包源和 `globalPackagesFolder` 都不跨 run 写入，因此**多个 AI/终端可并行执行**。不得共享解包目录后再“定点清理 Leistd.*”：本地包会在版本号不变时重新 pack，清理会在另一个并发 build 期间抽走 DLL。NuGet 自身的 HTTP 缓存仍会避免重复下载。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。
 
@@ -285,4 +204,4 @@ pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScena
 
 - **兼容要么完整，要么不留。** 模板只兼容它明确支持的来源和配置组合，并且要完整覆盖该来源产生的全部形状（如响应信封的成功与失败两侧）。只兼容一半的按删除处理，在文档写明启用该来源时要做的适配——半套兼容会让人误以为它被支持。
 - **没有读取方的配置键和字段直接删。** 它们承诺了不存在的能力，比缺一个扩展点更误导人。示范性质的通用代码（工具函数、样例端点）若与项目无关或已有官方等价物（Angular 管道、`Intl`），也删；与业务开发者常用能力相关的，保留并至少有一处真实调用。
-- **不留待办。** 模板载荷是生成项目的起点，留下的 `TODO` 会原样复制进每个派生项目，且没有人负责清掉。迁移工具（如 Angular 的 `refactor-jasmine-vitest`）标出的待办，在同一阶段按终局做法改完；只有按上游原样维护的第三方生成代码（`frontend/libs/ui`）例外。闸门见设计原则 §4。
+- **不留待办。** 规则与闸门见[设计原则 §4](../architecture/design-principles.md#4-验证原则)；模板里留下的待办会原样复制进每个派生项目。模板中豁免的上游生成代码是 `frontend/libs/ui`。

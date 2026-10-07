@@ -25,3 +25,23 @@ dotnet_diagnostic.IDE0130.severity = error
 # 已不存在或无关的命名空间。IDE0005 在构建期报出（需要 GenerateDocumentationFile，common.props 已开），
 # Release 下随 TreatWarningsAsErrors 升为错误。
 dotnet_diagnostic.IDE0005.severity = warning
+
+# ── 参数守卫、取消令牌与异常类型 ──────────────────────────────────────────────
+#
+# 开发指南 §6.2 要求参数守卫用 BCL 的 ThrowIf* 辅助方法，不手写 if-throw、不建 Check 类；
+# 这几条约定此前只靠评审维持，下列分析器把它们变成构建期错误：
+#   CA1510–CA1513  能用 ArgumentNullException / ArgumentException / ArgumentOutOfRangeException /
+#                  ObjectDisposedException 的 ThrowIf* 时不手写守卫；
+#   CA2016         方法有 CancellationToken 时传给接受它的下游调用；
+#   CA2208         ArgumentException 系列的 paramName 必须是真实参数名、构造参数顺序正确；
+#   CA2201         不抛 Exception、SystemException、NullReferenceException 等保留或过于宽泛的异常类型。
+# 边界：CA1510–CA1513 只认不带自定义消息的手写 throw（带消息时 ThrowIf* 无法等价替换，分析器不报），
+# 也不覆盖 IsNullOrWhiteSpace；这部分仍靠评审。
+# 例外：确需违反时用 [SuppressMessage] 并写明 Justification，不在此处整体降级。
+dotnet_diagnostic.CA1510.severity = error
+dotnet_diagnostic.CA1511.severity = error
+dotnet_diagnostic.CA1512.severity = error
+dotnet_diagnostic.CA1513.severity = error
+dotnet_diagnostic.CA2016.severity = error
+dotnet_diagnostic.CA2208.severity = error
+dotnet_diagnostic.CA2201.severity = error

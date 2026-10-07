@@ -1,5 +1,7 @@
+#if (LocalIdentity)
 using System.Net;
 using System.Net.Http.Json;
+#endif
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
@@ -17,13 +19,17 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+#if (IncludeMultiTenancy)
 using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
-using CompanyName.ProjectName.Domain.Users.Policies;
+#if (!IncludeOperationRecords)
+using Serilog.Core;
+#endif
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>
 /// 集成测试宿主：每个实例一份从已迁移模板库克隆出的 PostgreSQL 库（见 <see cref="PostgreSqlTestDatabase"/>）。
@@ -112,7 +118,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
 #endif
 #if (RemoteTokenAuth)
-        // 组合期即校验的签发方地址：基线配置刻意留空，缺失即启动失败
+        // 启动期校验的签发方地址：基线配置刻意留空，缺失即启动失败
         builder.UseSetting("Authentication:Issuer", "https://identity.test/");
 #if (ResourceBrowserSession)
         builder.UseSetting("Authentication:ClientId", "resource-test");
@@ -151,7 +157,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         {
 #if (!IncludeOperationRecords)
             services.AddSingleton<OperationRecordLogCapture>();
-            services.AddSingleton<Serilog.Core.ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());
+            services.AddSingleton<ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());
 #endif
 #if (RemoteTokenAuth)
             // 测试宿主里没有真实 Identity，启动探针永远探不通。这里直接把门禁置为已开：

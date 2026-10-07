@@ -70,11 +70,13 @@ app.MapGroup("/api/v1/settings").MapSettings(options =>
 ```csharp
 builder.Services.AddHostSettings(bindings => bindings
     .Bind("Logging.MinimumLevel", ["Serilog:MinimumLevel", "Serilog:MinimumLevel:Default"], fallback: "Information")
-    .BindOption<SmtpOptions>("Email.SmtpHost", SmtpOptions.SectionName, nameof(SmtpOptions.Host)));
+    .BindOption<ExportOptions>("Export.Endpoint", ExportOptions.SectionName, nameof(ExportOptions.Endpoint)));
 
 var app = builder.Build();
 app.UseHostSettings();   // 构建之后挂配置源，漏了启动失败
 ```
+
+组合根拆分时可多次调用 `AddHostSettings`：同一设置的绑定以设置名、按顺序的配置键、兜底值与选项类型判定是否相同，相同即不重复生效，不同则在调用 `AddHostSettings` 时抛出 `InvalidOperationException` 并列出两处登记。
 
 ## 使用
 
@@ -89,10 +91,10 @@ public class DisplaySettingDefinitionProvider : ISettingDefinitionProvider
         context.Add("Display.TimeZone", defaultValue: "Asia/Shanghai", scopes: SettingScopes.All)
                .IsVisibleToClients = true;
 
-        // 只允许租户级覆盖，且不下发客户端（运维阈值不该出现在界面上）
+                // 只允许租户级覆盖，且不下发客户端
         context.Add("Export.MaxRowsPerFile", defaultValue: "50000", scopes: SettingScopes.Tenant);
 
-        // 进程级：一个进程只有一个 logger，按租户各存一份无从生效。只允许在宿主上下文读写
+                // 进程级：只允许在宿主上下文读写
         context.Add(
             "Logging.MinimumLevel",
             defaultValue: "Information",
@@ -133,6 +135,7 @@ builder.Services.AddTransient<ISettingValueValidator, TimeZoneSettingValidator>(
 
 读取当前生效值：
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 public class ReportService(ISettingProvider settings)
 {
@@ -210,7 +213,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 | `AddSettingsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddSettingsCore()` |
 | `ConfigureSettings(modelBuilder)` | 映射 `SettingRecord` 实体 |
 | `MapSettings(configure)` | AspNetCore 包：`GET /`、`PUT /current-user`、`PUT /current-tenant`；`AccessPolicy` 与 `TenantWritePolicy` 均必填（组件不套宿主默认策略），端点名前缀 `SettingEndpoints.NamePrefix` |
-| `AddHostSettings(bind)` / `UseHostSettings()` | Hosting 包：声明绑定并注册应用与刷新；构建后挂配置源 |
+| `AddHostSettings(bind, configSectionPath?)` / `UseHostSettings()` | Hosting 包：声明绑定并注册应用与刷新，刷新周期绑定 `configSectionPath`（默认 `Leistd:Settings:Hosting`），重复调用时不同设置的绑定累加、完全相同的绑定不重复生效，同一设置名绑定不同（含只换兜底值或键的顺序）或换用另一配置节时在该次调用抛出；构建后挂配置源 |
 | `HostSettingBindingBuilder.Bind(name, keys, fallback?)` / `BindOption<TOptions>(name, section, property)` | 设置 → 配置键；后者兜底值取选项类型上的属性默认值，并参与整组校验 |
 
 ## 配置项（Leistd:Settings:Hosting）
@@ -221,31 +224,40 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 
 ## 实现行为
 
-- 回落顺序为 **用户级 → 租户级 → 代码默认值**。宿主视角走租户级那一层（`TenantId` 为 `null` 的行），不额外引入「全局」层。
-- 定义未允许的层级即使库里有值也不参与回落——改一次 `Scopes` 不会让历史遗留行悄悄重新生效。
-- `SettingScopes.Host` 是**进程级**：整个进程只有一份值，且**不与其它层级组合**——`Host | User` 这类组合在定义阶段就被拒绝（`ArgumentException`），因为它没有一致的读取解释。给的是日志级别这类一个进程只有一个实例的东西：按租户各存一份无从生效，写进去只会让界面显示一个不起作用的值。它与宿主的租户级共用同一行（`ScopeKey` 为 `host:t`，宿主视角本就走租户层），读写都只允许发生在宿主上下文：租户上下文下查询过滤器会滤掉宿主行（专属库形态连的还是租户自己的库），因此存储实现就地抛异常，而不是静默读到空或写成租户行。
-- 进程级设置**不接在回落链上**：`ISettingProvider` 在宿主上下文直接读宿主那一行，没有值才用代码默认值；租户上下文下它读不到——`GetOrNullAsync` 抛 `HostScopeUnavailableException`，`GetAllAsync` 干脆不包含它。刻意不返回代码默认值：那个值看着有效，调用方分不出「这就是当前生效的级别」和「这一层在当前上下文根本读不到」。存储侧由 `ISettingStore.CanAccessHostScope` 回答可达性，解析端据此决定要不要去读，而不是靠捕获异常判断上下文。
-- **同一作用域先写后读读到新值**：`ISettingProvider` 按作用域记忆化，经 `ISettingManager` 写入后，同一作用域的记忆化结果即作废，下次读取重新查存储。
-- **写入校验按固定顺序**：空串（`Setting:EmptyValueRejected`，清除只用 `null`）→ 值类型与区间（`BooleanRequired`、`IntegerRequired`、`ValueOutOfRange`）→ 候选值（`ValueNotAllowed`，按序号比较）→ 宿主注册的 `ISettingValueValidator`。任何一步不过都不落库、不发事件。清除只校验名称与层级，不会被一个已经不合法的历史值卡住。错误提示的 `{Name}` 与设置页同一取法——按 `Setting:{设置名}` 查 `LocalizationResource`，查不到用定义上的 `DisplayName`，再没有才用设置名；只有 `Setting:Undefined`、`Setting:NotAvailable` 回显调用方传入的名字，因为这两种情况没有可对外展示的定义。
-- **写入后发布 `SettingChangedEvent`**（注册了本地事件总线时）。事件不带值——机密设置的明文不进事件。没有事件总线时，宿主级设置写入后不会在本进程立即生效，要等下一轮周期刷新。
-- **设置页用例读原始覆盖值**：各层分别给出，不给回落后的生效值，否则租户页会显示当前用户的个人偏好、一保存就写成租户默认值。只处理 `IsVisibleToClients` 的设置（不可见的读不到、写入 404）；租户上下文不下发进程级设置，写入它返回 403（`Setting:HostOnly`）；进程级设置的值放在 `TenantValue`；机密设置不下发任何值，只给 `HasSecretValue`。显示名按 `Setting:{设置名}`、分组按 `SettingGroup:{分组}` 查 `LocalizationResource`，查不到回落到定义文案；未分组归入 `DefaultGroup`。用例不查权限，改租户值的授权由端点策略决定。
-- **宿主级设置经配置源进入 Options（Hosting 包）**：设过的宿主级设置作为优先级最高的配置源覆盖绑定的配置键，没设的不出现、自然回落到部署配置；机密设置在进程内解密后进配置，库里仍是密文。三处推进：宿主开始接收请求之前一次（失败只记告警，库还没迁移时不拦启动）、写入宿主级设置的事务提交后本进程立即一次、每个副本上的 `EveryInstance` 周期任务 `settings.host-refresh`。
-- **整组原子生效**：推进后按 `BindOption<TOptions>` 涉及的选项类型逐个新建并校验，任何一个不合规就整组退回上一组（只记错误），成对的项（发信账号与口令）设齐之前停在上一组。与当前一组或上次被拒的一组相同时什么都不做。
-- **校验不过不抛异常，也不阻断写入**：值已经落库，推进只是把它送进 Options。三处推进的失败表现依次是——启动时记告警并沿用部署配置（不拦住应用起来）、写入提交后的那次记告警且**下一轮周期刷新会再试**（短暂失败会自愈）、周期刷新记错误。运维要观察这件事，看日志里那条 `keeping the previous values`，而不是保存设置的接口返回值——那一步已经成功了。
-- **被绑定设置的代码默认值是部署基线**：在 `PostDefine` 阶段逐个配置提供程序查绑定的键（跳过宿主设置配置源本身，后加入的源优先），按定义的值元数据归一（候选值取定义里的写法、布尔小写），认不出时用兜底值；机密设置没有默认值。被绑定的设置必须已定义且是进程级，否则首次访问定义时抛出。
-- `Group` 只承载**分组标识**，不承载分组文案，理由与 `DisplayName` 相同：定义一次性加载并缓存，拿不到请求 culture。分组是信息架构而非控件元数据——设置多起来之后界面要按关注点分类摆放，而"哪些设置属于同一件事"只有定义方知道；放到客户端另抄一份，新增设置忘了登记就会落在界面之外，既不报错也查不出来。未分组返回 `null`，由宿主决定归处。
-- **机密设置**（`IsEncrypted`）：`ISettingManager` 写入前加密，`ISettingProvider` 读出落库值时解密，用的是宿主的 Data Protection。宿主须配置持久化、可共享的密钥环并纳入备份。未注册 Data Protection 或密文无法解密时抛 `InvalidOperationException`，API 边界安全兜底为 500，不回落默认值也不泄露密文。
-  `Leistd.Settings.Core` 因此引用 `Microsoft.AspNetCore.DataProtection.Abstractions`。它**名字里带 `AspNetCore` 但是纯抽象包**（只有 `IDataProtectionProvider` 与 `IDataProtector` 两个接口，不含 Web 运行时），非 Web 宿主同样可用，微软自己在控制台与后台服务里也这样用。业务项目若在架构门禁里限制应用层/领域层可引用的包，这一项按"允许 `*.Abstractions`"放行，不必逐包登记白名单——框架侧的 Core 包一律只依赖抽象，见 `docs/architecture/design-principles.md` §1.1。
+- 回落顺序为用户级 → 租户级 → 代码默认值；宿主视角走租户级那一层（`TenantId` 为 `null` 的行）。定义未允许的层级即使库里有值也不参与回落。
+- `SettingScopes.Host` 是进程级：整个进程只有一份值，不与其它层级组合（`Host | User` 在定义阶段抛 `ArgumentException`）。
+  它与宿主的租户级共用同一行（`ScopeKey` 为 `host:t`），读写只允许在宿主上下文，租户上下文下存储就地抛异常。
+- 进程级设置不接在回落链上：宿主上下文读宿主那一行，没有值才用代码默认值；租户上下文下 `GetOrNullAsync` 抛 `HostScopeUnavailableException`，
+  `GetAllAsync` 不包含它，不返回代码默认值。存储由 `ISettingStore.CanAccessHostScope` 回答可达性。
+- 同一作用域先写后读读到新值：经 `ISettingManager` 写入后，同一作用域 `ISettingProvider` 的记忆化结果即作废。
+- 写入校验顺序：空串（`Setting:EmptyValueRejected`，清除只用 `null`）→ 值类型与区间（`BooleanRequired`、`IntegerRequired`、`ValueOutOfRange`）→
+  候选值（`ValueNotAllowed`，按序号比较）→ 宿主注册的 `ISettingValueValidator`；任何一步不过都不落库、不发事件。清除只校验名称与层级。
+  错误提示的 `{Name}` 按 `Setting:{设置名}` 查 `LocalizationResource`，查不到用定义上的 `DisplayName`，再没有才用设置名；`Setting:Undefined`、`Setting:NotAvailable` 回显调用方传入的名字。
+- 写入后发布 `SettingChangedEvent`（注册了本地事件总线时），事件不带值。没有事件总线时，宿主级设置写入后要等下一轮周期刷新才在本进程生效。
+- 设置页用例按层给出原始覆盖值，不给回落后的生效值。只处理 `IsVisibleToClients` 的设置（不可见的读不到、写入 404）；租户上下文不下发进程级设置，
+  写入它返回 403（`Setting:HostOnly`）；进程级设置的值放在 `TenantValue`；机密设置不下发任何值，只给 `HasSecretValue`。
+  显示名按 `Setting:{设置名}`、分组按 `SettingGroup:{分组}` 查 `LocalizationResource`，查不到回落到定义文案；未分组归入 `DefaultGroup`。用例不查权限，由端点策略决定。
+- 宿主级设置经配置源进入 Options（Hosting 包）：设过的宿主级设置作为优先级最高的配置源覆盖绑定的配置键，没设的回落到部署配置；
+  机密设置在进程内解密后进配置。三处推进：宿主开始接收请求之前一次、写入宿主级设置的事务提交后本进程立即一次、每个副本上的 `EveryInstance` 周期任务 `settings.host-refresh`。
+- 整组原子生效：推进后按 `BindOption<TOptions>` 涉及的选项类型逐个校验，任何一个不合规就整组退回上一组；与当前一组或上次被拒的一组相同时不做任何事。
+- 推进失败不抛异常、不阻断写入（值已落库）：启动时记告警并沿用部署配置，写入提交后的那次记告警、下一轮周期刷新再试，周期刷新记错误。
+  观察日志里的 `keeping the previous values`，而不是保存接口的返回值。
+- 被绑定设置的代码默认值是部署基线：在 `PostDefine` 阶段逐个配置提供程序查绑定的键（跳过宿主设置配置源本身，后加入的源优先），
+  按定义的值元数据归一，认不出时用兜底值；机密设置没有默认值。被绑定的设置必须已定义且是进程级，否则首次访问定义时抛出。
+- `DisplayName` 与 `Group` 原样返回、不翻译（定义只加载一次，拿不到请求 culture）；`Group` 只承载分组标识，未分组返回 `null`。
+- 机密设置（`IsEncrypted`）：`ISettingManager` 写入前加密，`ISettingProvider` 读出落库值时解密，用宿主的 Data Protection；宿主须配置持久化、可共享的密钥环并纳入备份。
+  未注册 Data Protection 或密文无法解密时抛 `InvalidOperationException`（API 边界为 500），不回落默认值。
+  `Leistd.Settings.Core` 因此引用 `Microsoft.AspNetCore.DataProtection.Abstractions`，这是纯抽象包，非 Web 宿主同样可用；架构门禁可按 `*.Abstractions` 放行。
 - 匿名调用只回落到租户级，不查用户级。
 - `ISettingProvider` 为 Scoped，一次请求内每个层级只查一次库并复用结果；`ISettingDefinitionManager` 为 Singleton。
 - 设置名重复在首次访问定义时失败。读写未定义名称抛 `UndefinedSettingException`；写入未允许层级抛 `SettingScopeNotAllowedException`。
-- 层级由 `SettingRecord` 的两个字段共同表达：`TenantId` 交给多租户查询过滤器隔离，`UserId` 为 `null` 即租户级。不设可独立修改的 Scope 列，避免出现自相矛盾的第二事实源。
-- 唯一索引为 `(ScopeKey, Name)`；`ScopeKey` 由租户和层级派生，避免可空 `TenantId`/`UserId` 使唯一约束失效。
+- 层级由 `SettingRecord` 的 `TenantId`（多租户查询过滤器隔离）与 `UserId`（`null` 即租户级）共同表达，没有独立的 Scope 列。
+- 唯一索引为 `(ScopeKey, Name)`；`ScopeKey` 由租户和层级派生，可空的 `TenantId`/`UserId` 因此不影响唯一约束。
 - 表名沿用宿主 `DbSet` 属性名，组件不写死。
 
 ## 按用户时区展示时间
 
-时间一律以 UTC 存储，只在展示时换算——这是 .NET 官方对 `TimeProvider` 的建议，也是本框架的既定口径。「换算成谁的时区」由设置提供，因此这里定下设置层面的约定；具体怎么渲染、服务端要不要参与，属于宿主的事。
+时间一律以 UTC 存储，只在展示时换算。换算用的时区由设置提供，约定如下；具体渲染由宿主决定。
 
 | 项 | 约定 |
 | --- | --- |
@@ -257,20 +269,19 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 
 写入端必须用 `TimeZoneInfo.HasIanaId` 将值域限制为 IANA；只调用 `TryFindSystemTimeZoneById` 会同时接受浏览器不支持的 Windows 时区 ID。
 
-设置组件本身不做时区转换：转换是 `TimeZoneInfo` 的事，「用谁的时区、日边界怎么算」是宿主的决定。项目模板给出了服务端与前端两侧的完整做法。
+设置组件本身不做时区转换；项目模板给出了服务端与前端两侧的做法。
 
 ## 注意事项
 
-- **设置值一律是字符串**。`GetAsync<T>` 用不变文化转换，避免同一份值在不同区域设置的节点上解析出不同结果；复杂结构自行序列化。
-- **跨请求的变更下一请求可见**，请求内不可见——这是「请求内一致」的代价，也因此不需要分布式缓存、没有跨节点失效问题。
-- **`ISettingStore` 只能有一个实现**。为第二个 DbContext 注册时在注册期直接拒绝：静默取最后一条会让设置写进宿主没预期的库。
-- **机密设置只给"管理员要在运行期维护的第三方凭据"**，例如发信服务的口令。连接串、签名密钥这类部署期密钥仍属配置提供程序与密钥管理服务，不要落进设置表。宿主给机密设置的界面应当是只写的：不回显值，只显示「已设置」。
-- **写入不经 `ISettingStore` 直接操作实体会绕过定义校验**，写出的孤儿行永远读不到。
-- **只声明运行期可改的业务偏好**。连接串、密钥、认证协议属于部署期配置，留在配置提供程序与 `IOptions<T>`；搬进设置表等于给运行期一个能拆掉安全与正确性保证的开关。
-- **已经是实体字段的东西不要再定义成设置**。两处都能写就有两个互相矛盾的事实源，读的人不知道该信哪个。
-- **值域声明在定义上，业务规则写成校验器**。客户端的候选项约束不了脚本和历史数据；框架认识的值域（类型、区间、候选）写进定义，其余（时区、邮箱地址、开启前提）实现 `ISettingValueValidator`，不要只在界面上限制。
-- **宿主级设置刷新需要调度器**：`AddHostSettings` 只登记周期任务，宿主不注册 `AddInProcessBackgroundJobs()` 之类的调度器时，其它实例上的修改只会在重启后生效。刷新周期留在部署配置而不是做成设置项：它自己做成设置就成了自举依赖。
-- **要在租户请求里读进程级配置**，注入对应的 `IOptionsMonitor<T>`（经 Hosting 包绑定），不要每个请求去问设置存储——租户上下文下宿主行本来就读不到。
+- 设置值一律是字符串；`GetAsync<T>` 用不变文化转换，复杂结构自行序列化。
+- 跨请求的变更下一请求可见，请求内不可见；不使用分布式缓存。
+- `ISettingStore` 只能有一个实现，为第二个 DbContext 注册时在注册期拒绝。
+- 机密设置只用于管理员在运行期维护的第三方凭据（如发信口令）；连接串、签名密钥留在配置提供程序与密钥管理服务。机密设置的界面应只写不回显。
+- 业务写入经 `ISettingManager`；直接操作存储或实体会绕过定义校验。
+- 只声明运行期可改的业务偏好；连接串、密钥、认证协议属于部署期配置。已经是实体字段的东西不要再定义成设置。
+- 框架认识的值域（类型、区间、候选）写进定义，其余规则（时区、邮箱地址、开启前提）实现 `ISettingValueValidator`，不要只在界面上限制。
+- 宿主级设置刷新需要调度器：宿主未注册 `AddInProcessBackgroundJobs()` 之类的调度器时，其它实例上的修改只在重启后生效。
+- 在租户请求里读进程级配置时，注入经 Hosting 包绑定的 `IOptionsMonitor<T>`，不要读设置存储。
 
 ## 相关
 

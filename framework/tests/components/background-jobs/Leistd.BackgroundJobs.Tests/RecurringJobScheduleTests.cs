@@ -40,6 +40,15 @@ public class RecurringJobScheduleTests
     [Fact]
     public void A_sub_second_interval_is_rejected()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => RecurringJobSchedule.Every(TimeSpan.FromMilliseconds(500)));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => RecurringJobSchedule.Every(TimeSpan.FromMilliseconds(500)));
+        Assert.Equal("interval", exception.ParamName);
+    }
+
+    [Fact]
+    public void A_one_second_interval_is_accepted()
+    {
+        var schedule = RecurringJobSchedule.Every(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(At("2026-09-20T10:07:31Z"), schedule.GetNextRun(At("2026-09-20T10:07:30.500Z")));
     }
 }

@@ -5,18 +5,14 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Notifications.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 表示持久化的用户通知。
-/// </summary>
+/// <summary>持久化的用户通知。</summary>
 /// <remarks>
-/// 实现 <see cref="IMultiTenant"/>：通知按 <c>UserId</c> 独立查询，属于"能被独立查询"的对象，
-/// 因此自带租户维度，而不是依赖用户标识全局唯一这一间接事实。
-/// <para>宿主若把本实体映射进继承 <c>BaseDbContext</c> 的上下文，查询过滤与写入落值由基座接管；
-/// 在无租户上下文（后台作业）中发布的通知会落成宿主行。</para>
+/// 实现 <see cref="IMultiTenant"/>：映射进继承 <c>BaseDbContext</c> 的上下文时，查询过滤与写入落值由基座接管；
+/// 在无租户上下文（后台作业）中发布的通知会落成宿主行。
 /// </remarks>
 public class NotificationRecord : ICreationAuditedObject, IMultiTenant
 {
-    /// <summary>所属租户 ID；<see langword="null"/> 表示宿主。</summary>
+    /// <inheritdoc />
     public Guid? TenantId { get; set; }
 
     /// <summary>通知 ID（有序 Guid v7）。</summary>
@@ -61,15 +57,12 @@ public class NotificationRecord : ICreationAuditedObject, IMultiTenant
     /// <inheritdoc />
     public string? CreatorId { get; set; }
 
-    /// <summary>
-    /// 从 <see cref="NotificationOutputDto"/> 创建持久化实体。
-    /// </summary>
+    /// <summary>从 <see cref="NotificationOutputDto"/> 创建持久化实体；<c>Id</c> 不是 GUID 时抛出。</summary>
     public static NotificationRecord FromDto(NotificationOutputDto notification, string userId)
     {
         return new NotificationRecord
         {
-            // 身份由发布器定案，存储不替它发明：解析不出来就是上游给了个非法 ID，
-            // 悄悄换一个会让客户端手里的 ID 与库里的对不上，标记已读永远命不中。
+            // 身份由发布器定案，存储不替换：解析不出即上游给了非法 ID
             Id = Guid.TryParse(notification.Id, out var id)
                 ? id
                 : throw new ArgumentException(
@@ -92,9 +85,7 @@ public class NotificationRecord : ICreationAuditedObject, IMultiTenant
         };
     }
 
-    /// <summary>
-    /// 转换为 <see cref="NotificationOutputDto"/>。
-    /// </summary>
+    /// <summary>转换为 <see cref="NotificationOutputDto"/>。</summary>
     public NotificationOutputDto ToDto()
     {
         return new NotificationOutputDto

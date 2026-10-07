@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Leistd.Timing;
 using Microsoft.Extensions.Caching.Distributed;
+using System.Text;
 
 namespace CompanyName.ProjectName.Application.Auth.TwoFactor;
 
@@ -85,7 +86,7 @@ internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock cl
 
     // 键里不放令牌原文：缓存是另一套存储，能读到键名的人不该因此拿到可用的令牌
     private static string Key(string token) =>
-        KeyPrefix + Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+        KeyPrefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
 }
 

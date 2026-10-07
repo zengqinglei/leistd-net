@@ -21,7 +21,7 @@ public class RoleMappings : IRegister
 
     public void Register(TypeAdapterConfig config)
     {
-        config.NewConfig<Role, RoleBriefDto>();
+        config.NewConfig<Role, RoleBriefOutputDto>();
 
         config.NewConfig<Role, RoleOutputDto>()
             .Map(dest => dest.UserCount, src => ResolveCount(UserCountsKey, src.Id))

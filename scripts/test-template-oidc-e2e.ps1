@@ -458,7 +458,7 @@ function Add-FixtureRegistration([string]$Name, [string]$Role, [string]$ApiDirec
     if ($Name -eq "orders") {
         $extraUsings = "using Leistd.ServiceClient.Refit;`nusing Leistd.ServiceClient.OAuth;"
         $registration += "`n" + 'services.AddServiceAuthentication();
-services.AddRefitServiceClient<IBillingProbe, BillingOptions>("Billing", configuration).AddTokenExchange();'
+services.AddRefitServiceClient<IBillingProbe, BillingOptions>("Billing").AddTokenExchange();'
         # 用 XML API 添加本轮探针的依赖，避免文本替换 csproj 结构。
         $projectPath = Join-Path $ApiDirectory "E2E.Orders.Api.csproj"
         $project = [xml][IO.File]::ReadAllText($projectPath)
@@ -784,7 +784,7 @@ function Initialize-Environment {
             $environment.Leistd__ServiceClients__Identity__BaseAddress = $urls.idp
             $environment.Leistd__ServiceClients__Identity__Scope = "tenant-routing.read"
             $environment.Leistd__ServiceAuth__Authority = $urls.idp
-            $environment.TenantRouting__CacheLifetime = "00:00:01"
+            $environment.Leistd__MultiTenancy__Routing__CacheLifetime = "00:00:01"
         }
         $frontends = if ($IncludeMultiTenantScenarios) { @("idp", "orders", "billing") } else { @("idp", "orders") }
         if ($IncludeBrowserScenarios -and $name -in $frontends) { Build-BrowserFrontend $name $generated $apiDirectory }

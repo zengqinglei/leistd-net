@@ -64,6 +64,9 @@ foreach ($file in $files) {
             $expectedStage = if ($notApplicable) { 'not-applicable' } else { 'pass' }
             if ($result.$stage -cne $expectedStage) { throw "$($result.Scenario): $stage expected $expectedStage." }
         }
+        # 登记 Verify 的场景在完整阶段必须经生成项目的 verify.ps1 通过；其余场景与非完整模式不得声称执行过
+        $verifyExpected = if ($mode -ceq 'full' -and $scenarioMap[$result.Scenario].Verify) { 'pass' } else { 'not-run' }
+        if ($result.Verify -cne $verifyExpected) { throw "$($result.Scenario): Verify expected $verifyExpected." }
         $containerExpected = if ($ContainerSmoke -and $result.Scenario -cin $ContainerScenarios) { 'pass' } else { 'skipped' }
         if ($result.Container -cne $containerExpected) {
             throw "$($result.Scenario): Container expected $containerExpected."

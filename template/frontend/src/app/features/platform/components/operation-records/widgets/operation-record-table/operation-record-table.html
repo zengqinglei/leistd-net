@@ -12,7 +12,7 @@
               @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
                 <tr hlmTr class="text-sm font-medium">
                   @for (header of headerGroup.headers; track header.id) {
-                    <th hlmTh [class]="header.column.columnDef.meta?.headClass ?? 'px-6'">
+                    <th hlmTh [class]="header.column.columnDef.meta?.headClass ?? 'px-4 sm:px-6'">
                       @switch (header.column.id) {
                         @case ('action') {
                           <span class="whitespace-nowrap">{{
@@ -57,10 +57,16 @@
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
                     @for (cell of row.getVisibleCells(); track cell.id) {
-                      <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'px-6 py-2'">
+                      <td
+                        hlmTd
+                        [class]="cell.column.columnDef.meta?.cellClass ?? 'px-4 py-2 sm:px-6'"
+                      >
                         @switch (cell.column.id) {
                           @case ('action') {
-                            <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                            <!-- 手机宽度下句子折行（长邮箱等无空格的串也断开）：本表没有吸附列，三列必显，单行的长句会把整表撑出横向滚动。 -->
+                            <div
+                              class="flex min-w-0 items-center gap-2 whitespace-normal sm:whitespace-nowrap"
+                            >
                               <!-- 展开箭头常驻，不像用户等列表那样只在窄屏出现：链路标识与主体标识从不占列，桌面端同样有内容要展开。 -->
                               <button
                                 hlmBtn
@@ -77,10 +83,9 @@
                                   [class.rotate-90]="row.getIsExpanded()"
                                 />
                               </button>
-                              <!-- 操作内容是一句话：句子整条来自语言包，**不含操作人**（它独立成列，
-                                 否则同一个名字一行印两遍）。未登记的动作码降级为裸码，见 actionSentence。 -->
+                              <!-- 句子整条来自语言包，不含操作人（独立成列）；未登记的动作码降级为裸码，见 actionSentence。 -->
                               @if (recordTexts().get(row.original.id)?.sentence; as sentence) {
-                                <span class="text-sm text-foreground truncate">{{
+                                <span class="text-sm text-foreground wrap-anywhere sm:truncate">{{
                                   sentence.key ? t(sentence.key, sentence.params) : sentence.text
                                 }}</span>
                               }
@@ -93,8 +98,7 @@
                                   t('operationRecords.outcome.succeeded')
                                 }}</span>
                               } @else {
-                                <!-- 被拒绝的操作是这张表最该被一眼看到的行：destructive 变体让它在整列里跳出来。
-                                   与用户/租户列表的状态徽章一样只用文字与配色，不嵌图标。 -->
+                                <!-- 被拒绝的操作用 destructive 变体突出；与其他列表的状态徽章一样只用文字与配色。 -->
                                 <span hlmBadge variant="destructive">{{
                                   t('operationRecords.outcome.failed')
                                 }}</span>
@@ -106,8 +110,7 @@
                               <span class="text-sm text-foreground truncate">{{
                                 actorOf(row.original) ?? t('operationRecords.table.unknownActor')
                               }}</span>
-                              <!-- 模拟登录提示与操作人名同格显示：actorName 是被模拟的租户用户，
-                                 真正按下按钮的是这里的人。只显示前者会把责任指向一个什么都没做的人。 -->
+                              <!-- 模拟登录时与操作人名同格显示真实操作人，否则责任会指向被模拟的用户。 -->
                               @if (row.original.impersonatorName; as name) {
                                 <span
                                   class="flex items-center gap-1 text-xs text-warning truncate"
@@ -122,10 +125,13 @@
                             </div>
                           }
                           @case ('creationTime') {
-                            <span class="text-xs text-muted-foreground whitespace-nowrap">{{
-                              row.original.creationTime
-                                | appDate: 'full' : displayTimeZone() : displayLocale()
-                            }}</span>
+                            <span
+                              class="text-xs text-muted-foreground whitespace-normal sm:whitespace-nowrap"
+                              >{{
+                                row.original.creationTime
+                                  | appDate: 'full' : displayTimeZone() : displayLocale()
+                              }}</span
+                            >
                           }
                         }
                       </td>
@@ -137,7 +143,7 @@
                       <td
                         hlmTd
                         [attr.colspan]="table.getVisibleLeafColumns().length"
-                        class="px-6 pb-3 pt-2"
+                        class="px-4 pb-3 pt-2 sm:px-6"
                       >
                         <dl
                           class="grid grid-cols-[minmax(5rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
@@ -157,8 +163,7 @@
                               }
                             </dd>
                           }
-                          <!-- 目标标识常驻展开区：它不再占列（名字已并进句子），
-                             但"对谁做的"这一问的精确答案只在标识里。 -->
+                          <!-- 目标标识常驻展开区："对谁做的"的精确答案。 -->
                           <dt class="text-muted-foreground">
                             {{ t('operationRecords.table.colTarget') }}
                           </dt>
@@ -191,8 +196,7 @@
                               }}
                             </dd>
                           }
-                          <!-- 授权依据常驻展开区：它回答"凭什么"，是审计四问之外的第五问，
-                             但只在追查时才有人看，不值得占一列。 -->
+                          <!-- 授权依据常驻展开区：回答"凭什么"，只在追查时看，不占列。 -->
                           <dt class="text-muted-foreground">
                             {{ t('operationRecords.table.colBasis') }}
                           </dt>
@@ -224,26 +228,43 @@
                       class="!p-0 !border-0"
                     >
                       <div
-                        class="flex flex-col items-center justify-center h-64 text-muted-foreground"
+                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
                       >
-                        <ng-icon
-                          [name]="filtered() ? 'lucideSearchX' : 'lucideDatabase'"
-                          class="text-5xl opacity-30 mb-3"
-                        />
-                        @if (filtered()) {
-                          <p class="text-base font-medium m-0">
-                            {{ t('operationRecords.table.emptyFilteredTitle') }}
+                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                        @if (loadError(); as error) {
+                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
+                          <p class="text-base font-medium" role="alert">
+                            {{ t('common.loadFailed') }}
                           </p>
-                          <p class="text-sm mt-1 opacity-70">
-                            {{ t('operationRecords.table.emptyFilteredHint') }}
-                          </p>
+                          <p class="text-sm opacity-70">{{ error }}</p>
+                          <button
+                            hlmBtn
+                            variant="outline"
+                            data-testid="table-retry"
+                            (click)="retry.emit()"
+                          >
+                            {{ t('common.retry') }}
+                          </button>
                         } @else {
-                          <p class="text-base font-medium m-0">
-                            {{ t('operationRecords.table.emptyTitle') }}
-                          </p>
-                          <p class="text-sm mt-1 opacity-70">
-                            {{ t('operationRecords.table.emptyHint') }}
-                          </p>
+                          <ng-icon
+                            [name]="filtered() ? 'lucideSearchX' : 'lucideDatabase'"
+                            class="text-5xl opacity-30"
+                          />
+                          @if (filtered()) {
+                            <p class="text-base font-medium">
+                              {{ t('operationRecords.table.emptyFilteredTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('operationRecords.table.emptyFilteredHint') }}
+                            </p>
+                          } @else {
+                            <p class="text-base font-medium">
+                              {{ t('operationRecords.table.emptyTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('operationRecords.table.emptyHint') }}
+                            </p>
+                          }
                         }
                       </div>
                     </td>

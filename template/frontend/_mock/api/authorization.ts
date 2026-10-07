@@ -1,5 +1,5 @@
-import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
-import { PERMISSIONS } from '../../src/app/shared/models/permission';
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
+import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';
 import {
@@ -168,9 +168,7 @@ function sortRoles(rows: MockRoleRow[], sorting: string): void {
 
 export function getRoleOptions() {
   requirePermission('App.Users.ManageRoles');
-  // 与后端 GetAllAsync 同为 Sort → Name（角色名唯一，因此不需要再补稳定键）。
-  // 排副本而不是 ROLES 本身：ROLES.sort() 会原地重排这份全局 Mock 数据，
-  // 把"取一次选项"变成对其他接口可见的副作用
+  // 与后端 GetAllAsync 同为 Sort → Name；排副本，原地排序会改动全局 Mock 数据。
   return [...ROLES]
     .sort((left, right) => left.sort - right.sort || left.name.localeCompare(right.name))
     .map((role) => ({
@@ -231,9 +229,10 @@ export function updateRole(id: string, body: Record<string, unknown>) {
 export function deleteRole(id: string) {
   requirePermission('App.Roles.Delete');
 
+  // 与后端一致：删除幂等，不存在（含已删除）即成功
   const index = ROLES.findIndex((candidate) => candidate.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 'Role:NotFound', message: 'Role does not exist' });
+    return;
   }
 
   const role = ROLES[index];

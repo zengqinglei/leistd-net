@@ -160,9 +160,7 @@ describe('SignalRService connection lifecycle', () => {
 
     vi.spyOn(console, 'error').mockReturnValue(undefined);
 
-    // 只替换 build，让真正的 builder 负责链式调用；URL 从 withUrl 的调用记录里取。
-    // 不去 spy 类导出本身：那要求 fake 与构造签名兼容，类型上通不过，
-    // 而且会把"构造 builder"这件事也一并接管，测试就开始验证 SignalR 客户端而不是本服务。
+    // 只替换 build，链式调用仍由真实 builder 完成；spy 类导出会接管构造，变成在验证 SignalR 客户端。
     withUrl = vi.spyOn(signalR.HubConnectionBuilder.prototype, 'withUrl');
     vi.spyOn(signalR.HubConnectionBuilder.prototype, 'build').mockImplementation(() => {
       const url = vi.mocked(withUrl).mock.lastCall?.[0];
@@ -505,9 +503,8 @@ describe('SignalRService connection lifecycle', () => {
       service.watchResource('b-order', holder().ref);
       await settle();
     } finally {
-      // 先关掉拦截再释放：缺陷被重新引入时，循环会对 b-order 再发一次 invoke，
-      // 只释放已排队的那次会让它继续挂住，用例最终以 5 秒超时收场——
-      // 杀得死缺陷，但失败得又慢又看不出原因。
+      // 先关掉拦截再释放：缺陷重新引入时会对 b-order 再发 invoke，只释放已排队的那次
+      // 会让用例以超时失败、看不出原因。
       staleBusiness.gateInvoke = false;
       staleBusiness.releaseInvoke();
     }
@@ -537,10 +534,7 @@ describe('SignalRService connection lifecycle', () => {
   });
   //#if (IncludeRealTime)
 
-  /**
-   * 资源订阅的持有与对账：需求（谁还持有）与现状（服务端连接上订阅了什么）分开记，
-   * 每个键一条链按差值补齐。下列用例各对应一种曾在下游项目里复现过的交错。
-   */
+  /** 资源订阅的持有与对账：需求与现状分开记，每个键一条链按差值补齐；下列用例各对应一种交错时序。 */
   describe('resource subscription lifecycle', () => {
     it('does not subscribe for a page destroyed before the connection is up', async () => {
       const page = holder();

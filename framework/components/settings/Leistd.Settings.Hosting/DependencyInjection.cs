@@ -15,9 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Hosting;
 
-/// <summary>
-/// 宿主级设置 → 配置源 → <c>IOptionsMonitor</c> 的注册入口。
-/// </summary>
+/// <summary>宿主级设置 → 配置源 → <c>IOptionsMonitor</c> 的注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -28,7 +26,9 @@ public static class DependencyInjection
     /// 其余时候由每个副本上的 <c>EveryInstance</c> 周期任务按 <see cref="HostSettingOptions.RefreshInterval"/> 跟上
     /// （需要宿主注册调度器，如 <c>AddInProcessBackgroundJobs()</c>）。</para>
     /// <para>构建之后还要调用 <see cref="UseHostSettings{THost}"/> 把配置源挂上，漏了启动时抛出。
-    /// 可重复调用，绑定累加。</para>
+    /// 可重复调用：不同设置的绑定累加，完全相同的绑定不重复生效；同一设置名的绑定不同时在本次调用就抛出
+    /// <see cref="InvalidOperationException"/>（判定见 <see cref="HostSettingBindingBuilder"/>），<paramref name="bind"/> 在调用时即执行。
+    /// 刷新周期绑定 <paramref name="configSectionPath"/>，重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -42,14 +42,36 @@ public static class DependencyInjection
     /// </example>
     /// <param name="services">服务集合。</param>
     /// <param name="bind">声明绑定。</param>
+    /// <param name="configSectionPath"><see cref="HostSettingOptions"/> 绑定的配置节，校验消息按它报键名。</param>
     public static IServiceCollection AddHostSettings(
         this IServiceCollection services,
-        Action<HostSettingBindingBuilder> bind)
+        Action<HostSettingBindingBuilder> bind,
+        string configSectionPath = HostSettingOptions.SectionName)
     {
         ArgumentNullException.ThrowIfNull(bind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
 
-        services.AddOptions<HostSettingBindingCollection>()
-            .Configure(collection => bind(new HostSettingBindingBuilder(collection.Bindings)));
+        // 刷新周期只有一份：换用另一配置节的重复调用会让校验消息报错键名
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<HostSettingOptionsValidator>().FirstOrDefault()
+                is { } registered && registered.ConfigSectionPath != configSectionPath)
+        {
+            throw new InvalidOperationException(
+                $"AddHostSettings() already binds '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+        }
+
+        // 在登记时执行绑定声明：冲突此时就抛出，且失败时已登记的绑定保持不变
+        var collection = services.Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<IOptions<HostSettingBindingCollection>>().FirstOrDefault()?.Value;
+        List<HostSettingBinding> pending = [.. collection?.Bindings ?? []];
+        bind(new HostSettingBindingBuilder(pending));
+        if (collection is null)
+        {
+            collection = new HostSettingBindingCollection();
+            services.AddSingleton<IOptions<HostSettingBindingCollection>>(new OptionsWrapper<HostSettingBindingCollection>(collection));
+        }
+
+        collection.Bindings.Clear();
+        collection.Bindings.AddRange(pending);
 
         if (services.Any(descriptor => descriptor.ServiceType == typeof(HostSettingsConfigurationProvider)))
         {
@@ -63,10 +85,9 @@ public static class DependencyInjection
         services.AddHostedService<HostSettingStartupService>();
 
         services.AddOptions<HostSettingOptions>()
-            .BindConfiguration(HostSettingOptions.SectionName)
-            .Validate(options => options.RefreshInterval >= TimeSpan.FromSeconds(1),
-                $"{HostSettingOptions.SectionName}:{nameof(HostSettingOptions.RefreshInterval)} must be at least one second.")
+            .BindConfiguration(configSectionPath)
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<HostSettingOptions>>(new HostSettingOptionsValidator(configSectionPath));
         services.AddRecurringJob<HostSettingRefreshJob>(
             HostSettingRefreshJob.Name,
             provider => RecurringJobSchedule.Every(provider.GetRequiredService<IOptions<HostSettingOptions>>().Value.RefreshInterval),
@@ -79,8 +100,7 @@ public static class DependencyInjection
     /// 把宿主级设置作为优先级最高的配置源挂到宿主配置上。
     /// </summary>
     /// <remarks>
-    /// 要在构建<b>之后</b>调用：构建期间还会追加配置源（例如测试宿主的覆盖配置），
-    /// 在那之前挂上的话它们会排在后面、压过设置。配置在构建之后仍可追加，追加即触发一次重载。
+    /// 须在构建之后调用：构建期间追加的配置源（如测试宿主的覆盖配置）否则会排在后面、压过设置。
     /// </remarks>
     /// <typeparam name="THost">宿主类型。</typeparam>
     /// <param name="host">已构建的宿主。</param>

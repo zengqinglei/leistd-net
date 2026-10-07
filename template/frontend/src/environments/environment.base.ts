@@ -4,11 +4,8 @@ export interface Environment {
   production: boolean;
   //#if (LocalIdentity)
   /**
-   * 是否启用哈希路由（`#/path` 形态）。
-   *
-   * 只在本地身份形态下提供：OIDC 回调地址 `/auth/callback` 是无 fragment 的普通路径，
-   * 而哈希路由只从 fragment 读路由，回调组件因此不会被渲染——那个组合运行期不成立，
-   * 所以远端令牌形态直接不生成这个开关。
+   * 是否启用哈希路由（`#/path`）。只在本地身份形态下提供：OIDC 回调地址是无 fragment 的普通路径，
+   * 哈希路由下回调组件不会渲染。
    */
   useHash: boolean;
   //#endif
@@ -20,12 +17,11 @@ export interface Environment {
    */
   useMock: boolean | MockConfig;
   api: {
-    /** 网关地址；为空时请求保持相对路径（同源部署或开发代理）。 */
+    /** 网关地址；保持空值，请求以相对路径访问同源 API（同镜像托管、部署代理或开发代理）。 */
     gateway: string;
   };
 }
 
-// 这是所有环境共享的基础配置
 export const environmentBase: Environment = {
   production: false,
   //#if (LocalIdentity)
@@ -33,6 +29,6 @@ export const environmentBase: Environment = {
   //#endif
   useMock: false, // 默认关闭
   api: {
-    gateway: 'https://example.com',
+    gateway: '',
   },
 };

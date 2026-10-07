@@ -1,5 +1,5 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Api.Auth;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using Leistd.ExceptionHandling;

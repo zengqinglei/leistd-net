@@ -29,7 +29,6 @@
           class="flex min-h-0 flex-1 flex-col gap-4"
         >
           <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
-            <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
             <div class="flex items-center gap-4 border-b border-border pb-5">
               <!-- 头像上传：无图时常驻居中图标；有图时 hover / 键盘 focus-visible 显示（对话框自动聚焦不触发）、触屏（pointer-coarse）常驻。 -->
               <label
@@ -38,7 +37,7 @@
                 @if (hasAvatarImage()) {
                   <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
                 } @else {
-                  <!-- 无图占位：常驻居中上传图标即完整语义，不再叠加首字母。 -->
+                  <!-- 无图占位：常驻居中上传图标即完整语义。 -->
                   <span class="block h-full w-full bg-primary/10"></span>
                 }
                 <input
@@ -58,23 +57,22 @@
                 </span>
               </label>
 
-              <div class="min-w-0 flex-1">
+              <div class="flex min-w-0 flex-1 flex-col gap-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="m-0 truncate text-base font-semibold">
+                  <h3 class="truncate text-base font-medium">
                     {{ displayName() || t('users.editDialog.unnamedUser') }}
                   </h3>
                 </div>
-                <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+                <p class="truncate text-sm text-muted-foreground">
                   {{ formModel().email || t('users.editDialog.noEmail') }}
                 </p>
-                <p class="mt-2 mb-0 text-xs text-muted-foreground">
+                <p class="text-xs text-muted-foreground">
                   {{ t('users.editDialog.avatarHint') }}
                 </p>
               </div>
             </div>
 
             <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <!-- Username -->
               <div hlmField>
                 <label hlmFieldLabel for="user-username">{{
                   t('users.editDialog.usernameLabel')
@@ -82,6 +80,7 @@
                 <input
                   hlmInput
                   id="user-username"
+                  autocomplete="off"
                   class="w-full"
                   [formField]="userForm.username"
                   [placeholder]="t('users.editDialog.usernamePlaceholder')"
@@ -93,12 +92,12 @@
                 }
               </div>
 
-              <!-- Email -->
               <div hlmField>
                 <label hlmFieldLabel for="user-email">{{ t('users.editDialog.emailLabel') }}</label>
                 <input
                   hlmInput
                   id="user-email"
+                  autocomplete="off"
                   type="email"
                   class="w-full"
                   [formField]="userForm.email"
@@ -111,7 +110,6 @@
                 }
               </div>
 
-              <!-- Display name -->
               <div hlmField>
                 <label hlmFieldLabel for="user-display-name">{{
                   t('users.editDialog.displayNameLabel')
@@ -130,7 +128,6 @@
                 }
               </div>
               <!--#if (LocalIdentity)-->
-              <!-- Initial password（仅新建模式） -->
               @if (!isEditMode()) {
                 <div hlmField>
                   <label hlmFieldLabel for="user-password">{{
@@ -140,6 +137,7 @@
                     <input
                       hlmInputGroupInput
                       id="user-password"
+                      autocomplete="new-password"
                       [type]="showPassword() ? 'text' : 'password'"
                       [formField]="userForm.password"
                       [placeholder]="t('users.editDialog.passwordPlaceholder')"
@@ -170,11 +168,7 @@
             <hlm-separator />
 
             <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <!--
-              初始角色：仅「新建 + 持有角色分配权限」时可见。
-              编辑态不在此处改角色——资料更新与角色分配是两个命令、两个权限，
-              只持有 Users.Update 的主体在这里既看不到也提交不了角色。
-            -->
+              <!-- 初始角色仅「新建 + 持有角色分配权限」时可见；编辑态的角色分配走独立入口与权限。 -->
               @if (showRoleField()) {
                 <div hlmField class="md:col-span-2">
                   <label hlmFieldLabel for="user-roles">{{
@@ -207,43 +201,41 @@
                 </div>
               }
 
-              <!-- Enable user：仅新建时设置初始状态。已存在账号的启用/禁用只有列表页那两个命令一个入口，
-                 保护规则（超级管理员不得禁用自己）也只写在那里；这里再放一个开关就是第二个入口。 -->
+              <!-- 启用状态仅新建时设置；已存在账号的启停只走列表页的命令入口，保护规则也只在那里。 -->
               @if (!isEditMode()) {
-                <div class="rounded-lg border border-border p-3">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <div class="text-sm font-medium">
-                        {{ t('users.editDialog.activeTitle') }}
-                      </div>
-                      <div class="mt-1 text-xs text-muted-foreground">
-                        {{ t('users.editDialog.activeHint') }}
-                      </div>
-                    </div>
-                    <hlm-switch
-                      [checked]="formModel().isActive"
-                      (checkedChange)="setActive($event)"
-                    />
+                <div hlmField orientation="horizontal">
+                  <div hlmFieldContent>
+                    <label hlmFieldLabel for="user-is-active">{{
+                      t('users.editDialog.activeTitle')
+                    }}</label>
+                    <p hlmFieldDescription id="user-is-active-hint">
+                      {{ t('users.editDialog.activeHint') }}
+                    </p>
                   </div>
+                  <hlm-switch
+                    inputId="user-is-active"
+                    aria-describedby="user-is-active-hint"
+                    [checked]="formModel().isActive"
+                    (checkedChange)="setActive($event)"
+                  />
                 </div>
               }
               <!--#if (LocalIdentity)-->
-              <!-- Email verified -->
-              <div class="rounded-lg border border-border p-3">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-medium">
-                      {{ t('users.editDialog.emailVerifiedTitle') }}
-                    </div>
-                    <div class="mt-1 text-xs text-muted-foreground">
-                      {{ t('users.editDialog.emailVerifiedHint') }}
-                    </div>
-                  </div>
-                  <hlm-switch
-                    [checked]="formModel().isEmailVerified"
-                    (checkedChange)="setEmailVerified($event)"
-                  />
+              <div hlmField orientation="horizontal">
+                <div hlmFieldContent>
+                  <label hlmFieldLabel for="user-email-verified">{{
+                    t('users.editDialog.emailVerifiedTitle')
+                  }}</label>
+                  <p hlmFieldDescription id="user-email-verified-hint">
+                    {{ t('users.editDialog.emailVerifiedHint') }}
+                  </p>
                 </div>
+                <hlm-switch
+                  inputId="user-email-verified"
+                  aria-describedby="user-email-verified-hint"
+                  [checked]="formModel().isEmailVerified"
+                  (checkedChange)="setEmailVerified($event)"
+                />
               </div>
               <!--#endif-->
             </section>

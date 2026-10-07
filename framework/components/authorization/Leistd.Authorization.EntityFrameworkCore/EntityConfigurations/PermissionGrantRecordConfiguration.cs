@@ -4,9 +4,7 @@ using Leistd.Authorization.EntityFrameworkCore.Entities;
 
 namespace Leistd.Authorization.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// PermissionGrantRecord EF Core 实体配置。
-/// </summary>
+/// <summary><see cref="PermissionGrantRecord"/> 的实体配置。</summary>
 public class PermissionGrantRecordConfiguration : IEntityTypeConfiguration<PermissionGrantRecord>
 {
     /// <inheritdoc />
@@ -42,9 +40,7 @@ public class PermissionGrantRecordConfiguration : IEntityTypeConfiguration<Permi
     }
 }
 
-/// <summary>
-/// AuthorizationVersionRecord EF Core 实体配置。
-/// </summary>
+/// <summary><see cref="AuthorizationVersionRecord"/> 的实体配置。</summary>
 public class AuthorizationVersionRecordConfiguration : IEntityTypeConfiguration<AuthorizationVersionRecord>
 {
     /// <inheritdoc />
@@ -60,8 +56,7 @@ public class AuthorizationVersionRecordConfiguration : IEntityTypeConfiguration<
             .HasMaxLength(128)
             .IsRequired();
 
-        // 并发令牌：EF 会在 UPDATE 上带 WHERE Version = @original，
-        // 使「读版本→比较→写入」这段窗口由数据库收口，而不是靠应用层的先读后比。
+        // 并发令牌：UPDATE 带 WHERE Version = @original，由数据库收口读-比-写窗口
         builder.Property(x => x.Version)
             .IsConcurrencyToken()
             .IsRequired();

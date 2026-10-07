@@ -23,8 +23,6 @@
     <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.ServiceClient\Leistd.MultiTenancy.ServiceClient.csproj" />
     <ProjectReference Include="..\..\..\..\components\unit-of-work\Leistd.UnitOfWork.Core\Leistd.UnitOfWork.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\ddd-struct\Leistd.Ddd.Domain\Leistd.Ddd.Domain.csproj" />
-    <ProjectReference Include="..\..\..\..\ddd-struct\Leistd.Ddd.Infrastructure\Leistd.Ddd.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 

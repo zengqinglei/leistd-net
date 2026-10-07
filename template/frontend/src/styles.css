@@ -6,7 +6,7 @@
 
 @import '@spartan-ng/brain/hlm-tailwind-preset.css';
 
-/* 正文字体：Geist（对齐参考站）。业务项目可替换为品牌字体或改回系统字体栈。 */
+/* 正文字体 Geist；业务项目可替换为品牌字体或系统字体栈。 */
 @import '@fontsource/geist';
 
 /*
@@ -32,25 +32,18 @@ body {
  * - warning（amber）   : 需注意但非错误（一次性密钥提示、重置告警）
  * - success（绿）      : 正态 / 成功（启用、已验证、成功 toast）
  * - secondary / muted  : 次要 / 中性（普通分类、禁用态、辅助文字）
- * 字号、字重、圆角与当前项样式的规则见 docs/standards/coding-frontend.md §4.8。
+ * 用法见 docs/standards/frontend-ui.md §2.3 与 §2.8。
  */
 
 /*
- * Spartan UI 主题变量。业务项目按品牌改这些 CSS 变量即可换掉整套配色，不必改组件。
+ * Spartan UI 主题变量，按品牌改这些变量即可换整套配色。
  *
- * - 品牌色：色相 250 的蓝。亮色 L=0.52 保证白字可读，暗色提到 L=0.72 保证深底上够亮——
- *   两套同一色相，只调明度与彩度，换品牌时也按这个办法成对改。
- * - 中性色：带一点跟随品牌色相的彩度（C≈0.004–0.01），纯灰与品牌色并置会显得脏。
- * - destructive / warning / success 在页面里既当文字色（text-*）又当淡色底（bg-*\/10~25），
- *   两者同源，所以判据是"该色作为文字压在它自己的淡色底上 ≥ 4.5:1"，亮暗必须分开定值：
- *   同一个亮琥珀在白底上只有约 2:1。alpha 越大底色越接近文字色，对比必然下降，
- *   因此**淡色底的 alpha 上限是 0.25**；再高就得换成与文字色不同源的底色标记。
- *   改这三个值或新增更高的 alpha 用法后，重新核算这个判据，别凭观感定。
- * - 暗色不用纯黑：近黑底配纯白字对比过高会产生光晕。表面分五层逐级提亮
- *   （sidebar < background < card < popover < muted），暗色下"浮起"只能靠更亮来表达。
- * - 品牌色相跨主题恒定（oklch 第三位 250）：亮暗只调明度与彩度。色相一变，
- *   切主题时品牌色会肉眼可见地偏蓝/偏紫，而这四个标记
- *   （--primary / --ring / --sidebar-primary / --sidebar-ring）必须始终是同一个颜色。
+ * - 品牌色相 250 跨主题恒定，亮暗只调明度与彩度（亮色 L=0.52 保证白字可读，暗色 L=0.72）；
+ *   --primary / --ring / --sidebar-primary / --sidebar-ring 必须始终同色。
+ * - 中性色带少量跟随品牌色相的彩度（C≈0.004–0.01），纯灰与品牌色并置显脏。
+ * - destructive / warning / success 既作文字色又作淡色底（bg-*\/10~25），判据是文字压在自身
+ *   淡色底上 ≥ 4.5:1，亮暗分开定值；淡色底 alpha 上限 0.25。改这些值后重新核算。
+ * - 暗色不用纯黑，表面分五层逐级提亮（sidebar < background < card < popover < muted）。
  */
 :root {
   --radius: 0.625rem;
@@ -155,7 +148,7 @@ body {
     color: var(--color-foreground);
   }
 
-  /* Tailwind v4 preflight 不再给 button 默认手型光标，这里补回（对齐参考站）。 */
+  /* Tailwind v4 preflight 不再给 button 默认手型光标，这里补回。 */
   button:not([disabled]),
   [role='button']:not([disabled]) {
     cursor: pointer;

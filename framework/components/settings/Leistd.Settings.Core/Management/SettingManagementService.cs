@@ -10,8 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Management;
 
-// 读取直接按层取原始覆盖值而不是 ISettingProvider 的回落结果：
-// 设置页要分层编辑，回落后的值分不出"这层设过"和"从下一层继承来的"。
+// 按层取原始覆盖值而不是 ISettingProvider 的回落结果，设置页才能分层编辑
 internal sealed class SettingManagementService(
     ISettingStore settingStore,
     ISettingDefinitionManager definitionManager,
@@ -59,8 +58,7 @@ internal sealed class SettingManagementService(
         ArgumentNullException.ThrowIfNull(input);
         var definition = EnsureVisibleToClients(input.Name);
 
-        // 进程级设置只有宿主那一行。租户上下文下就地拒绝，而不是写成一条租户行：
-        // 那条行永远不会被读到，界面却会把它显示成"已生效"。
+        // 进程级设置只有宿主那一行，租户上下文下由写入入口拒绝
         var scope = definition.Scopes.HasFlag(SettingScopes.Host) ? SettingScopes.Host : SettingScopes.Tenant;
         if (scope == SettingScopes.Host && !settingStore.CanAccessHostScope)
         {

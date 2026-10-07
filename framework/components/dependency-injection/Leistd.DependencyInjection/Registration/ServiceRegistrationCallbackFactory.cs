@@ -4,33 +4,25 @@ using Leistd.DependencyInjection.Abstractions;
 
 namespace Leistd.DependencyInjection.Registration;
 
-/// <summary>
-/// 在构建服务提供程序前执行注册校验和描述符回调。
-/// </summary>
+/// <summary>在构建服务提供程序前执行注册校验和描述符回调。</summary>
 public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServiceCollection>
 {
     private readonly ServiceProviderOptions _options;
 
-    /// <summary>
-    /// 创建工厂。
-    /// </summary>
+    /// <summary>创建工厂。</summary>
     /// <param name="options">服务提供器校验选项；未指定时使用 Microsoft DI 默认值。</param>
     public ServiceRegistrationCallbackFactory(ServiceProviderOptions? options = null)
     {
         _options = options ?? new ServiceProviderOptions();
     }
 
-    /// <summary>
-    /// 返回待处理的服务集合。
-    /// </summary>
+    /// <summary>返回待处理的服务集合。</summary>
     public virtual IServiceCollection CreateBuilder(IServiceCollection services)
     {
         return services;
     }
 
-    /// <summary>
-    /// 执行校验和回调后构建服务提供程序。
-    /// </summary>
+    /// <summary>依次执行校验器与描述符回调，再构建服务提供程序。</summary>
     public IServiceProvider CreateServiceProvider(IServiceCollection services)
     {
         // 校验必须先执行，否则回调改写后的工厂描述符会与原始工厂注册混淆。
@@ -108,9 +100,7 @@ public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServi
         }
     }
 
-    /// <summary>
-    /// 单个服务注册回调执行完成后的扩展点。
-    /// </summary>
+    /// <summary>单个描述符的回调执行完成后的扩展点。</summary>
     protected virtual void OnRegistrationProcessed(
         IServiceCollection services,
         ServiceDescriptor descriptor,

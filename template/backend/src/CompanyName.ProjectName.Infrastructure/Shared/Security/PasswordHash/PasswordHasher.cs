@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.Extensions.Options;
+using System.Buffers.Binary;
 
 namespace CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
@@ -32,7 +33,7 @@ public class PasswordHasher(IOptions<PasswordHashOptions> options) : IPasswordHa
 
         var payload = new byte[HeaderSize + SaltSize + HashSize];
         payload[0] = FormatVersion;
-        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(1, 4), iterations);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(1, 4), iterations);
         salt.CopyTo(payload.AsSpan(HeaderSize, SaltSize));
         hash.CopyTo(payload.AsSpan(HeaderSize + SaltSize, HashSize));
 
@@ -89,7 +90,7 @@ public class PasswordHasher(IOptions<PasswordHashOptions> options) : IPasswordHa
             return false;
         }
 
-        iterations = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(1, 4));
+        iterations = BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(1, 4));
         if (iterations <= 0)
         {
             return false;

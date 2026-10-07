@@ -10,8 +10,8 @@ namespace Leistd.Lock.Tests.Contracts;
 /// 任何 <see cref="ILock"/> 实现都必须兑现的行为。
 /// </summary>
 /// <remarks>
-/// <para><b>新增实现时必须派生本类。</b>这不是形式要求——契约已经漂移过一次：
-/// <c>RedisDistributedLock.TryLockAsync</c> 曾写成 <c>while (now &lt; deadline)</c>，
+/// <para><b>新增实现时必须派生本类。</b>这不是形式要求——契约很容易在实现间漂移：
+/// 例如 <c>TryLockAsync</c> 写成 <c>while (now &lt; deadline)</c> 时，
 /// <see cref="TimeSpan.Zero"/> 使循环一次都不进，于是同一个 <see cref="ILock"/> 在内存与 Redis 上
 /// 给出不同行为，而按接口编程的调用方完全看不出来。靠人记得"两边都改"挡不住这类问题。</para>
 /// <para>只断言接口承诺的部分。租约、续期、清理这些是实现自己的话题，留在各实现的用例里。</para>

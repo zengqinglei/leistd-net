@@ -1,18 +1,11 @@
 #if (LocalIdentity)
-using Leistd.Authorization;
 using System.Net;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
-using CompanyName.ProjectName.Domain.Users.Policies;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>
 /// 授权类集成测试的共享装配：建用户、授予权限，以及两处共用的常量。

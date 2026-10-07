@@ -9,14 +9,13 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
-import { isMockedUrl } from '../../../../../../_mock/core/providers';
-import { environment } from '../../../../../environments/environment';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import { MOCKED_URL } from '../../../../core/mock/mocked-url';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { LogoutConfirmationOutputDto } from '../../models/account.dto';
+import { LogoutConfirmationOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
 
@@ -47,6 +46,7 @@ export class LogoutConfirm implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly isMockedUrl = inject(MOCKED_URL);
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -86,7 +86,7 @@ export class LogoutConfirm implements OnInit {
       return;
     }
     this.submitting.set(true);
-    if (isMockedUrl(environment.useMock, '/api/v1/auth/logout-confirmation')) {
+    if (this.isMockedUrl('/api/v1/auth/logout-confirmation')) {
       // 确认信息来自 Mock（防伪令牌是合成的）：不能提交真实协议端点，走既有的本地退出，确认后的会话状态与真实后端一致
       this.authService.logout();
       return;

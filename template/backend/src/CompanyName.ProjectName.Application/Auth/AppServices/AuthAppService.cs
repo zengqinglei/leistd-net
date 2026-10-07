@@ -2,6 +2,7 @@ using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
@@ -9,45 +10,41 @@ using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Users.Mappings;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Caching.Distributed;
 using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Domain.Repositories;
+using Leistd.EventBus.Abstractions;
 using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
-using CompanyName.ProjectName.Domain.Users.Options;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.Timing;
 using Leistd.Lock.Abstractions;
 using System.Security.Claims;
 using Leistd.ExceptionHandling;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 internal sealed class AuthAppService(
-    IRepository<User, Guid> userRepository,
+    IUserRepository userRepository,
     UserDomainService userDomainService,
+    IRoleRepository roleRepository,
     ICurrentUser currentUser,
     ICaptchaAppService captchaAppService,
 #if (Email)
@@ -66,7 +63,7 @@ internal sealed class AuthAppService(
 #endif
     IReauthenticationGuard reauthenticationGuard,
     IAccessFailureCounter accessFailureCounter,
-    ISecurityAlertPublisher securityAlerts,
+    ILocalEventBus localEventBus,
     ICurrentTenant currentTenant,
     IClock clock,
     IDistributedLock distributedLock,
@@ -190,18 +187,14 @@ internal sealed class AuthAppService(
 
         bool verified;
         var usedRecoveryCode = false;
+        // 入参 DTO 已保证两者至少有一个；都给了时以恢复码为准
         if (!string.IsNullOrWhiteSpace(input.RecoveryCode))
         {
             verified = usedRecoveryCode = twoFactorDomainService.UseRecoveryCode(user, input.RecoveryCode);
         }
-        else if (!string.IsNullOrWhiteSpace(input.Code))
-        {
-            verified = twoFactorDomainService.VerifyCode(user, input.Code, now);
-        }
         else
         {
-            throw new BusinessException(AuthErrorCodes.TwoFactorCodeRequired, "Enter the verification code or a recovery code.")
-                ;
+            verified = twoFactorDomainService.VerifyCode(user, input.Code!, now);
         }
 
         if (!verified)
@@ -267,8 +260,7 @@ internal sealed class AuthAppService(
             user, OperationRecordAuthorizations.CredentialsPresented, cancellationToken);
 
     private static BusinessException TwoFactorChallengeExpired() =>
-        new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.")
-        ;
+        new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.");
 
     /// <summary>失败登录的计数窗口（分钟）。</summary>
     private const int FailedLoginWindowMinutes = 5;
@@ -307,7 +299,7 @@ internal sealed class AuthAppService(
 
         await distributedCache.SetStringAsync(
             key,
-            attempts.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            attempts.ToString(CultureInfo.InvariantCulture),
             new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(FailedLoginWindowMinutes)
@@ -341,8 +333,7 @@ internal sealed class AuthAppService(
         {
             if (input.EmailVerification is null || input.EmailVerification.ChallengeId == Guid.Empty)
             {
-                throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.")
-                    ;
+                throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.");
             }
 
             var isValidEmailCode = await emailVerificationAppService.ValidateEmailChallengeAsync(
@@ -351,8 +342,7 @@ internal sealed class AuthAppService(
                 cancellationToken);
             if (!isValidEmailCode)
             {
-                throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
-                    ;
+                throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.");
             }
         }
         else
@@ -360,8 +350,7 @@ internal sealed class AuthAppService(
             var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
             if (!isValidCaptcha)
             {
-                throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.")
-                    ;
+                throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
             }
         }
 #else
@@ -376,7 +365,11 @@ internal sealed class AuthAppService(
         var user = await userDomainService.CreateUserAsync(
             input.Username, input.Email, input.Password, input.DisplayName,
             cancellationToken: cancellationToken);
-        var roleNames = await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
+        var defaultRoles = await roleRepository.GetDefaultRolesAsync(cancellationToken);
+        user.AssignRoles(defaultRoles.Select(role => role.Id));
+        await userRepository.UpdateAsync(user, cancellationToken);
+        // 用刚分配的角色名，不回查：成员关系在本工作单元内尚未落库
+        var roleNames = defaultRoles.Select(role => role.Name).ToList();
 
         logger.LogInformation("User registered (ID: {Id})", user.Id);
 
@@ -395,8 +388,7 @@ internal sealed class AuthAppService(
     /// </summary>
     public async Task<UserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
-        var userId = currentUser.Id!.Value;
-        var output = await GetCurrentUserOutputAsync(userId, cancellationToken);
+        var output = await ToOutputAsync(await GetCurrentUserEntityAsync(cancellationToken), cancellationToken);
         // 受限会话由会话声明而不是账号字段决定：同一个账号换个没开强制的租户登录就不受限
         return output with { TwoFactorSetupRequired = currentUser.FindClaim(TwoFactorClaimTypes.SetupRequired) is not null };
     }
@@ -427,12 +419,17 @@ internal sealed class AuthAppService(
         await userRepository.UpdateAsync(user, cancellationToken);
         logger.LogInformation("Current user profile updated (ID: {UserId})", user.Id);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return await ToOutputAsync(user, cancellationToken);
     }
 
     /// <summary>
     /// 修改密码，并撤销除当前以外的全部会话
     /// </summary>
+    /// <remarks>
+    /// 口令与会话撤销同生共死：撤不掉就整体失败，不留"口令换了、旧会话还在"的状态。
+    /// 再认证失败的计数与审计各自独立提交，不随本方法的回滚丢失；提醒在提交之后发出。
+    /// </remarks>
+    [UnitOfWork]
     public async Task ChangePasswordAsync(ChangePasswordInputDto input, CancellationToken cancellationToken = default)
     {
         var userId = currentUser.Id!.Value;
@@ -471,7 +468,9 @@ internal sealed class AuthAppService(
 
         // 凭据换了，以旧密码建立的其他会话随之失效；发起修改的这台保留，免得改完密码自己也被踢出去
         await userSessionDomainService.RevokeAllAsync(user.Id, currentUser.GetSessionId(), cancellationToken);
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordChanged), cancellationToken);
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.PasswordChanged), clock.Now),
+            cancellationToken);
 
         logger.LogInformation("Current user password changed (ID: {UserId})", user.Id);
 
@@ -487,19 +486,13 @@ internal sealed class AuthAppService(
     /// 设置或清除自己的头像
     /// </summary>
     /// <remarks>
-    /// 本人只能上传图片（外部地址来自外部登录提供方，不由本人随手填）；
+    /// 本人只能上传图片，入参 DTO 已挡掉外部地址（它来自外部登录提供方，不由本人随手填）；
     /// 浏览器端已裁剪缩放，这里按 <see cref="AvatarPolicy"/> 校验体积与真实类型。
     /// </remarks>
     public async Task<UserOutputDto> SetCurrentUserAvatarAsync(SetAvatarInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        if (!string.IsNullOrEmpty(input.Avatar) && !AvatarPolicy.TryReadImage(input.Avatar, out _))
-        {
-            AvatarPolicy.EnsureValid(input.Avatar);
-            // 外部地址本身合法，但不是本人上传的入口能写的东西
-            throw new BusinessException(UserErrorCodes.AvatarInvalid, "The avatar must be a PNG, JPEG or WebP image.")
-                ;
-        }
+        AvatarPolicy.EnsureValid(input.Avatar);
 
         user.SetAvatar(input.Avatar);
         await userRepository.UpdateAsync(user, cancellationToken);
@@ -510,7 +503,7 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return await ToOutputAsync(user, cancellationToken);
     }
 #if (Email)
 
@@ -520,11 +513,7 @@ internal sealed class AuthAppService(
     public async Task<EmailVerificationChallengeOutputDto> SendCurrentUserEmailCodeAsync(CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        if (user.EmailConfirmed)
-        {
-            throw new BusinessException(AuthErrorCodes.EmailAlreadyVerified, "This email address has already been verified.")
-                ;
-        }
+        user.EnsureEmailUnconfirmed();
 
         return await emailVerificationAppService.SendAccountEmailCodeAsync(user.Email, cancellationToken);
     }
@@ -541,8 +530,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (!await emailVerificationAppService.ValidateAccountEmailChallengeAsync(user.Email, input, cancellationToken))
         {
-            throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
-                ;
+            throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.");
         }
 
         user.ConfirmEmail();
@@ -554,7 +542,7 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return await ToOutputAsync(user, cancellationToken);
     }
 #endif
 
@@ -566,17 +554,12 @@ internal sealed class AuthAppService(
                 .WithData("Id", userId);
     }
 
-    private async Task<UserOutputDto> GetCurrentUserOutputAsync(Guid userId, CancellationToken cancellationToken)
+    /// <remarks>
+    /// 写路径直接用手里刚改过的实体，不回查用户行；角色不随这些写入变化，按已落库的关联读取。
+    /// </remarks>
+    private async Task<UserOutputDto> ToOutputAsync(User user, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-        if (user == null)
-        {
-            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
-                .WithData("Id", userId);
-        }
-
-        var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
-
+        var roleNames = await userRepository.GetRoleNamesAsync(user.Id, cancellationToken);
         return ToOutput(user, roleNames);
     }
 

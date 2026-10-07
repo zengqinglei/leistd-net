@@ -14,6 +14,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowUpDown,
   lucideChevronRight,
+  lucideCircleAlert,
   lucideEllipsis,
   lucideInbox,
   lucidePencil,
@@ -37,18 +38,20 @@ import { SettingContextService } from '../../../../../../core/settings/setting-c
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+  TITLE_COLUMN_META,
+  TITLE_CONTENT_CLASS,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -59,7 +62,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
 import {
   OpenApplicationOutputDto,
   OpenApplicationType,
-} from '../../../../models/open-application.dto';
+} from '../../../../dtos/open-application.dto';
 
 const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
   web: 'openApp.appType.web',
@@ -67,8 +70,7 @@ const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
   service: 'openApp.appType.service',
 };
 
-/** Badge 变体。 */
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+type BadgeVariant = 'secondary' | 'outline';
 
 @Component({
   selector: 'app-open-application-table',
@@ -93,6 +95,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     provideIcons({
       lucideArrowUpDown,
       lucideChevronRight,
+      lucideCircleAlert,
       lucideEllipsis,
       lucideInbox,
       lucidePencil,
@@ -108,8 +111,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationTable {
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -122,6 +124,9 @@ export class OpenApplicationTable {
   readonly sorting = input<SortingState>([]);
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  readonly retry = output<void>();
 
   /**
    * 行操作按权限裁剪。默认全开，未启用权限模块的生成物行为不变；
@@ -143,6 +148,8 @@ export class OpenApplicationTable {
   readonly resetSecret = output<string>();
 
   protected readonly tableViewport = tableViewportSignal();
+  /** 主列内容外层：最窄一档下长名称截断，不撑宽表格（见 TITLE_COLUMN_META）。 */
+  protected readonly titleContentClass = TITLE_CONTENT_CLASS;
   private readonly tableFit = viewChild(TableFit);
   /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
   private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
@@ -152,7 +159,7 @@ export class OpenApplicationTable {
       accessorKey: 'clientId',
       id: 'clientId',
       enableHiding: false,
-      meta: { priority: 'primary', locked: true },
+      meta: TITLE_COLUMN_META,
     },
     {
       accessorKey: 'applicationType',
@@ -216,7 +223,6 @@ export class OpenApplicationTable {
     },
   }));
 
-  // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
@@ -249,7 +255,7 @@ export class OpenApplicationTable {
   }
 
   getClientTypeVariant(value: string): BadgeVariant {
-    return value === 'public' ? 'secondary' : 'default';
+    return value === 'public' ? 'secondary' : 'outline';
   }
 
   /** 已授予的授权方式摘要；一个都没有时为空串，由模板给出"未配置"。 */
@@ -268,6 +274,8 @@ export class OpenApplicationTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'openApp.table.colApp': 'Application',
   'openApp.table.colType': 'Type',
   'openApp.table.colPermissions': 'Capabilities',

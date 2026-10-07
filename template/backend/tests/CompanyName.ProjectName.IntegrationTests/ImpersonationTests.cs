@@ -4,14 +4,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Constants;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;

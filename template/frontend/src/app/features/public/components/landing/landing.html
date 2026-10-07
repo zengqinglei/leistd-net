@@ -4,7 +4,6 @@
 <ng-container>
 <!--#endif-->
   <div class="min-h-screen flex flex-col items-center justify-center bg-background px-6 relative">
-    <!-- Theme Toggle -->
     <div class="absolute top-4 right-4 flex gap-2 z-50">
       <app-theme-mode-toggle />
       <!--#if (IncludeLocalization)-->
@@ -13,10 +12,10 @@
     </div>
 
     <div class="flex max-w-2xl flex-col gap-8 text-center">
-      <h1 class="text-3xl font-semibold tracking-tight text-balance">
+      <h1 class="text-2xl font-semibold tracking-tight text-balance">
         {{ t('hero.title') }}
       </h1>
-      <p class="text-base text-muted-foreground">{{ t('hero.subtitle') }}</p>
+      <p class="text-muted-foreground text-sm">{{ t('hero.subtitle') }}</p>
 
       <div class="flex items-center justify-center gap-4">
         <!--#if (LocalIdentity)-->
@@ -29,24 +28,24 @@
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
-        <div class="p-6 rounded-xl bg-card border border-border">
-          <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('feature.authTitle') }}</h3>
-          <p class="text-sm text-muted-foreground mt-2">
+        <div class="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-6">
+          <ng-icon name="lucideShield" class="text-3xl text-primary" />
+          <h3 class="text-base font-medium">{{ t('feature.authTitle') }}</h3>
+          <p class="text-sm text-muted-foreground">
             {{ t('feature.authDesc') }}
           </p>
         </div>
-        <div class="p-6 rounded-xl bg-card border border-border">
-          <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('feature.usersTitle') }}</h3>
-          <p class="text-sm text-muted-foreground mt-2">
+        <div class="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-6">
+          <ng-icon name="lucideUsers" class="text-3xl text-primary" />
+          <h3 class="text-base font-medium">{{ t('feature.usersTitle') }}</h3>
+          <p class="text-sm text-muted-foreground">
             {{ t('feature.usersDesc') }}
           </p>
         </div>
-        <div class="p-6 rounded-xl bg-card border border-border">
-          <ng-icon name="lucideSunMoon" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('feature.themeTitle') }}</h3>
-          <p class="text-sm text-muted-foreground mt-2">
+        <div class="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-6">
+          <ng-icon name="lucideSunMoon" class="text-3xl text-primary" />
+          <h3 class="text-base font-medium">{{ t('feature.themeTitle') }}</h3>
+          <p class="text-sm text-muted-foreground">
             {{ t('feature.themeDesc') }}
           </p>
         </div>

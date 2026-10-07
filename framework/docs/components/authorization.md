@@ -85,7 +85,8 @@ public class OrdersPermissionDefinitionProvider : IPermissionDefinitionProvider
 }
 ```
 
-每个权限必须属于权限组，名称全局唯一。**多租户侧别必填**，没有默认值：省略会静默落到 `Both`（"租户管理员也拿得到"），而宿主全局资源落成 `Both` 就是跨租户越权，且只在真的建了租户之后才暴露。判据是这条权限背后的数据带不带租户维度。子权限不声明时继承父权限；宿主侧权限在租户上下文中始终拒绝。
+每个权限必须属于权限组，名称全局唯一。多租户侧别必填：按这条权限背后的数据是否带租户维度选择，宿主全局资源误设为 `Both` 即跨租户越权。
+子权限不声明时继承父权限；宿主侧权限在租户上下文中始终拒绝。
 
 定义在 `PermissionDefinitionManager` 首次构造时加载并预计算祖先、子孙与有效状态。修改定义需重启进程；授予可运行时更改。
 
@@ -104,7 +105,8 @@ var granted = await permissionChecker.IsGrantedAsync(
 3. `IPermissionSubjectProvider` 必须返回主体。
 4. 超级管理员直接允许；其余主体以用户授予与角色授予的并集判定。
 
-未定义、未启用、侧别不匹配或无主体时都默认拒绝。同一 Scoped 作用域内，当前主体与当前租户不变期间授予快照只加载一次；主体或租户切换后重新加载。主体的租户 claim 非法（规则见安全组件的 `ClaimTypeOptions.ReadTenant`）时一律拒绝；显式传入的非当前主体还须属于当前租户，当前主体则不作此要求（宿主主体显式切入租户是正当用法）。批量检查的空集合 `AllGranted` 为 `false`。
+未定义、未启用、侧别不匹配或无主体时都默认拒绝。同一 Scoped 作用域内，当前主体与当前租户不变期间授予快照只加载一次。
+主体的租户 claim 非法（规则见安全组件的 `ClaimTypeOptions.ReadTenant`）时一律拒绝。批量检查的空集合 `AllGranted` 为 `false`。
 
 为指定主体判权用带 `ClaimsPrincipal` 的重载，ASP.NET Core 策略管道即按它评估被授权的主体（`AuthorizationHandlerContext.User`）：
 
@@ -112,9 +114,9 @@ var granted = await permissionChecker.IsGrantedAsync(
 var granted = await permissionChecker.IsGrantedAsync(principal, "Orders.Read", cancellationToken);
 ```
 
-- 传入的就是当前主体（同一引用）时与无主体重载共用作用域快照；其他主体经 `IPermissionSubjectProvider.GetSubjectAsync` 单独解析，不进快照，同一作用域先后判不同主体不会串用授予。
-- 其他主体的租户 claim 按 `ClaimTypeOptions.ReadTenant` 读取（与租户解析、`ICurrentUser.TenantId` 同一规则与同一处配置），须与当前租户一致：宿主主体在租户上下文、别的租户、非法租户 claim 一律拒绝。未接多租户时不比对。
-- 当前主体或当前租户在作用域内被切换（`ICurrentPrincipalAccessor.Change`、`IAmbientContext.Begin`、策略按认证方案重设 `HttpContext.User`、`ICurrentTenant.Change`）时，快照按新的主体与租户重新加载。
+- 传入的就是当前主体（同一引用）时与无主体重载共用作用域快照；其他主体经 `IPermissionSubjectProvider.GetSubjectAsync` 单独解析，不进快照。
+- 其他主体的租户须与当前租户一致：宿主主体在租户上下文、别的租户一律拒绝；未接多租户时不比对。当前主体不作此要求（宿主主体可显式切入租户）。
+- 当前主体或当前租户在作用域内被切换（`ICurrentPrincipalAccessor.Change`、`IAmbientContext.Begin`、策略按认证方案重设 `HttpContext.User`、`ICurrentTenant.Change`）时，快照重新加载。
 
 ### 使用 ASP.NET Core 策略
 
@@ -201,12 +203,16 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 
 ## 实现行为
 
-- `PermissionGrantRecord` 与 `AuthorizationVersionRecord` 按当前租户过滤。宿主行与租户行使用分离的部分唯一索引，避免可空 `TenantId` 使宿主授予失去唯一性。
+- `PermissionGrantRecord` 与 `AuthorizationVersionRecord` 按当前租户过滤；宿主行与租户行使用分离的部分唯一索引。
 - `ReplaceGrantsAsync` 在一次 `SaveChangesAsync` 中原子替换，只在内容变化时递增版本。版本同时是 EF Core 并发令牌。
 - 用户与角色授予的读取为常数数量的数据库往返，不按角色或权限逐条查询。
 - `SubjectPermissionGrants.VersionToken` 组合用户版本与按 key 排序的角色版本，可用于判断客户端权限缓存是否过期。
-- **管理用例与检查器同一判据**：定义树、授予状态与当前有效权限都只含当前侧别上可用（已定义、自身与祖先启用、侧别匹配）的权限；子节点同样过滤，整组都不可用时不下发空分组。超级管理员的当前权限是全部可用权限，版本标记固定为 `super-admin`。
-- 管理用例不查权限（交给端点策略）；主体不存在返回 404（`Permission:SubjectNotFound`），单次替换超过 500 项按输入校验返回 400。**读自己的权限（`GET current`）时，当前身份不是权限主体不算错误，返回空集合**——端点挂着授权策略，走到用例的调用方必然已认证，回 401 是在说假话，客户端会据此重新登录、再问、再拿到 401。双 realm 部署（一套身份走 RBAC、另一套不走）按设计就会出现这种调用方。空集合意味着任何权限判定都不通过，拒绝效果与报错一致。显示名按约定键查 `LocalizationResource`：权限为 `Permission:{权限名}`，分组为 `PermissionGroup:{组名}`；查不到用定义里的 `DisplayName` 作为默认文案，再没有才用名称。因此定义里写可读的英文默认文案，不写词条键——不启用本地化的宿主看到的就是它。
+- 管理用例与检查器同一判据：定义树、授予状态与当前有效权限都只含当前侧别上可用的权限，整组都不可用时不下发空分组。
+  超级管理员的当前权限是全部可用权限，版本标记固定为 `super-admin`。
+- 管理用例不查权限（交给端点策略）；主体不存在返回 404（`Permission:SubjectNotFound`），单次替换超过 500 项返回 400。
+  读自己的权限（`GET current`）时，当前身份不是权限主体（如双 realm 部署中的另一套身份）返回空集合而不是 401。
+- 显示名按约定键查 `LocalizationResource`：权限为 `Permission:{权限名}`，分组为 `PermissionGroup:{组名}`；查不到用定义里的 `DisplayName`，再没有才用名称。
+  定义里写可读的英文默认文案，不写词条键。
 - 首次授予带期望版本 0 写入，并发的第二次视为已播种。
 
 ## 注意事项
@@ -220,19 +226,16 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 
 ### 删除或改名一个权限定义
 
-授予按<b>名字</b>存，不随定义一起消失。定义删掉之后，旧授予行仍留在表里：
+授予按名字存，不随定义一起消失。定义删掉之后，旧授予行仍留在表里：
 
 | 环节 | 行为 |
 | --- | --- |
 | 权限检查 | 未定义即拒绝，旧授予不生效 |
 | 下发给前端 | 按可用定义过滤，旧授予不出现 |
 | 对话框全量替换 | 该主体的旧授予被这次替换顺带清掉 |
-| 再次定义同名权限 | **旧授予立即生效**，而且无声 |
+| 再次定义同名权限 | 旧授予立即生效 |
 
-前三行是安全的，所以这件事不会立刻出问题；踩中的是最后一行——半年后有人复用了同一个名字
-（`App.Orders.Approve` 这类名字很容易被复用），当年被授予过的人直接就有了权限。
-
-因此**删除或改名权限时带一条迁移删掉该名字的授予**，与删除定义同一次提交：
+因此删除或改名权限时，带一条迁移删掉该名字的授予，与删除定义同一次提交：
 
 ```csharp
 // 表名由宿主的 DbSet<PermissionGrantRecord> 决定（模板里是 PermissionGrantRecords）
@@ -242,11 +245,9 @@ migrationBuilder.Sql(
     """);
 ```
 
-改名按同一条处理：旧名删掉，新名由使用者重新授予。不要就地 `UPDATE` 成新名——
-那等于替所有人做了"这两个权限是同一件事"的判断，而改名往往同时在改语义。
+改名按同一条处理：旧名删掉，新名由使用者重新授予，不要就地 `UPDATE` 成新名。
 
-框架不自动清理：一个名字从定义里消失，可能是"删了"，也可能是"这次启动没注册"
-（条件编译、模块未加载、按租户裁剪都会造成后者）。自动删会在那些场景下误伤真实授予。
+框架不自动清理：定义缺失也可能只是本次启动没注册（条件编译、模块未加载）。
 
 ## 相关
 

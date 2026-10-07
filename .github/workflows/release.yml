@@ -157,7 +157,7 @@ jobs:
           # 只有 ! 的提交不在那个结果里，对应的改动会被整体漏掉（versioning.md 第 57 节起）。
           #
           # 只查这个提交之后的历史。闸门落地时，上一个稳定 tag 到 HEAD 之间已经有 20 条带 ! 缺脚注的旧提交，
-          # 不加起点的话第一次发布就会被自己拦下；而历史不能改写，那批的破坏性内容由 docs/framework/upgrade-*.md 承载。
+          # 不加起点的话第一次发布就会被自己拦下；而历史不能改写，那批的破坏性内容由 docs/framework/upgrades/0.13.0.md 承载。
           # 这是写死的一次性切换点，不是可开可关的开关，也不会随时间扩大豁免范围——之后的每一条提交都要守这条规则。
           # 升版推算仍然用完整范围（$commits），只有脚注检查用这个起点。
           $footnoteAnchor = '802b4dca012bda2e6d64f4a7939860bf950cd302'
@@ -240,6 +240,26 @@ jobs:
             throw "tag 已存在: $tag。请检查是否重复运行同一发布。"
           }
           $global:LASTEXITCODE = 0
+
+      # 包内 PackageReleaseNotes 与 Release 正文的链接都固定到本次 tag，不用分支链接：
+      # 已安装的包要对应发版时的说明。预发布版本按基础版本找指南（0.13.0-beta.N → upgrades/0.13.0.md）。
+      # 没有指南时 stable/beta 指向本次 Release；nightly 不建 Release，指向 tag 的提交页。
+      - name: 确定升级指南与包发布说明链接
+        id: links
+        shell: pwsh
+        run: |
+          $repoUrl = 'https://github.com/${{ github.repository }}'
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $channel = '${{ steps.ch.outputs.channel }}'
+          $guide = 'docs/framework/upgrades/${{ steps.ver.outputs.baseVersion }}.md'
+          $guideUrl = if (Test-Path -LiteralPath $guide -PathType Leaf) { "$repoUrl/blob/$tag/$guide" } else { '' }
+          if ($channel -notin 'stable', 'beta', 'nightly') { throw "未知发布通道: $channel" }
+          $packageReleaseNotes = if ($guideUrl) { $guideUrl }
+            elseif ($channel -eq 'nightly') { "$repoUrl/commit/$tag" }
+            else { "$repoUrl/releases/tag/$tag" }
+          "guideUrl=$guideUrl" | Out-File $env:GITHUB_OUTPUT -Append
+          "packageReleaseNotes=$packageReleaseNotes" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "升级指南: $(if ($guideUrl) { $guideUrl } else { '无' })；PackageReleaseNotes: $packageReleaseNotes"
 
       - name: 生成发布说明
         id: notes
@@ -324,6 +344,14 @@ jobs:
           if ($others.Count -gt 0) { $lines.Add('## 其他更新'); $lines.Add(''); $others | ForEach-Object { $lines.Add($_) }; $lines.Add('') }
           if ($breaking.Count + $features.Count + $fixes.Count + $others.Count -eq 0) { $lines.Add('## 更新内容'); $lines.Add(''); $lines.Add('- 代码优化和维护更新。'); $lines.Add('') }
 
+          $guideUrl = '${{ steps.links.outputs.guideUrl }}'
+          if ($guideUrl) {
+            $lines.Add('## 升级指南')
+            $lines.Add('')
+            $lines.Add("- [从上一版本升级到 ${{ steps.ver.outputs.baseVersion }}]($guideUrl)")
+            $lines.Add('')
+          }
+
           if ($preTags.Count -gt 0 -and '${{ steps.ch.outputs.channel }}' -eq 'stable') {
             $lines.Add('## 已验证的预发布版本')
             $lines.Add('')
@@ -362,13 +390,18 @@ jobs:
           git tag -a '${{ steps.ver.outputs.tag }}' -m 'Release ${{ steps.ver.outputs.tag }}'
 
       - name: 打包
+        id: pack
         shell: pwsh
+        env:
+          PACKAGE_RELEASE_NOTES: ${{ steps.links.outputs.packageReleaseNotes }}
         run: |
+          if (-not $env:PACKAGE_RELEASE_NOTES) { throw '缺少 PackageReleaseNotes 链接' }
           if (Test-Path framework/artifacts) { Remove-Item -Recurse -Force framework/artifacts }
           dotnet pack framework/Leistd.Framework.slnx -c Release `
             -o framework/artifacts `
             -p:Version="${{ steps.ver.outputs.version }}" `
             -p:PackageVersion="${{ steps.ver.outputs.version }}" `
+            -p:PackageReleaseNotes="$env:PACKAGE_RELEASE_NOTES" `
             -p:ContinuousIntegrationBuild=true
           if ($LASTEXITCODE -ne 0) { throw 'dotnet pack 失败' }
 

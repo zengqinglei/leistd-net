@@ -4,9 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Localization;
 
-/// <summary>
-/// 组件登记自带默认译文的入口。
-/// </summary>
+/// <summary>组件登记自带默认译文的入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -15,9 +13,8 @@ public static class DependencyInjection
     /// <remarks>
     /// <para>发出错误码的组件在自己的 <c>Add*</c> 里调用一次，宿主不必知道组件有哪些词条。
     /// 未注册 JSON 本地化时登记无副作用：错误响应退回异常自带的英文诊断。</para>
-    /// <para><b>登记位置恒在最前</b>：同一键出现在多个程序集时后登记者生效，而组件的 <c>Add*</c>
-    /// 可能在宿主 <c>AddJsonLocalization(...)</c> 之后调用。插在最前才能保证宿主资源总能覆盖组件默认文案，
-    /// 与调用顺序无关。重复登记同一程序集只保留一份。</para>
+    /// <para>登记位置恒在最前：同一键后登记者生效，因此宿主资源总能覆盖组件默认文案，与调用顺序无关。
+    /// 重复登记同一程序集只保留一份。</para>
     /// </remarks>
     /// <example>
     /// <code>

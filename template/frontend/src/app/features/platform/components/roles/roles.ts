@@ -45,11 +45,11 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthService } from '../../../../core/services/auth-service';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 //#if (IncludeRealTime)
 import { realtimeResourceKey, SignalRService } from '../../../../core/services/signalr-service';
 //#endif
-import { LayoutService } from '../../../../layout/services/layout-service';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -64,7 +64,7 @@ import {
   GetRolesInputDto,
   RoleOutputDto,
   UpdateRoleInputDto,
-} from '../../models/role.dto';
+} from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
 import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/permission-grant-dialog';
 
@@ -77,12 +77,7 @@ const ROLE_LIST_RESOURCE = 'roles';
 const ROLES_CHANGED_EVENT = 'Roles.Changed';
 //#endif
 
-/**
- * 角色管理页。
- *
- * 角色数据以 API 为唯一数据源，新建的角色立即可用于用户分配。
- * 列表状态（分页、排序、关键字）落在 URL 查询参数上，刷新与前进后退均可复原。
- */
+/** 角色管理页。列表状态（分页、排序、关键字）落在 URL 查询参数上。 */
 @Component({
   selector: 'app-roles',
   imports: [
@@ -130,6 +125,8 @@ export class Roles {
   readonly roles = signal<RoleOutputDto[]>([]);
   readonly totalCount = signal(0);
   readonly loading = signal(false);
+  /** 列表加载失败且没有旧行可保留时的原因：有值时表格显示错误态与重试，不显示"暂无数据"。 */
+  readonly loadError = signal<string | null>(null);
 
   // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
   readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
@@ -173,7 +170,12 @@ export class Roles {
             this.loading.set(true);
             return this.roleService.getRoles(this.queryFromParams(params)).pipe(
               catchError((error: unknown) => {
-                toast.error(applicationErrorMessage(error));
+                // 已有行时刷新失败：保留旧行，只做提示
+                if (this.roles().length > 0) {
+                  toast.error(applicationErrorMessage(error));
+                } else {
+                  this.loadError.set(applicationErrorMessage(error));
+                }
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -183,6 +185,7 @@ export class Roles {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((result) => {
+        this.loadError.set(null);
         this.roles.set([...result.items]);
         this.totalCount.set(result.totalCount);
       });
@@ -205,11 +208,7 @@ export class Roles {
   }
   //#if (IncludeRealTime)
 
-  /**
-   * 角色列表在别处被改（另一位管理员、另一个标签页）时自动刷新。
-   *
-   * 订阅本作用域的角色列表资源；推送只是"该刷新了"的提示，列表内容仍经受权限保护的查询接口获取。
-   */
+  /** 角色列表在别处被改时自动刷新：推送只是刷新提示，内容仍经受权限保护的查询接口获取。 */
   private followRoleListChanges(): void {
     const resourceKey = realtimeResourceKey(
       ROLE_LIST_RESOURCE,

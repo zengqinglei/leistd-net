@@ -9,12 +9,10 @@ using Leistd.EventBus.Abstractions;
 
 namespace Leistd.Ddd.Infrastructure.EventBus;
 
-/// <summary>
-/// 在 EF Core 保存周期中收集并发布本地事件。
-/// </summary>
+/// <summary>在 EF Core 保存周期中收集并发布本地事件。</summary>
 /// <remarks>
-/// 收集在 <c>SavingChanges</c>（保存前）、发布在 <c>SavedChanges</c>（保存成功后），
-/// 保证"先持久化成功、再发事件"。事件按 DbContext 实例暂存，发布后清理。
+/// 收集在 <c>SavingChanges</c>（保存前）、发布在 <c>SavedChanges</c>（保存成功后）；保存失败时丢弃已收集的事件。
+/// 事件按 DbContext 实例暂存，发布后清理。
 /// </remarks>
 public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
 {
@@ -25,9 +23,7 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
     // 弱引用按 DbContext 隔离待发布事件，避免延长上下文生命周期。
     private static readonly ConditionalWeakTable<DbContext, List<ILocalEvent>> _pendingByContext = new();
 
-    /// <summary>
-    /// 创建拦截器。两个依赖都由 <c>AddDddInfrastructure</c> 注册。
-    /// </summary>
+    /// <summary>创建拦截器；依赖由 <c>AddDddInfrastructure</c> 注册。</summary>
     public LocalEventSaveChangesInterceptor(
         ILocalEventBus localEventBus,
         IUnitOfWorkManager unitOfWorkManager,

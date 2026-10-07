@@ -3,22 +3,16 @@ namespace Leistd.MultiTenancy.Resolution;
 /// <summary>
 /// 在租户解析贡献者之间传递解析状态。
 /// </summary>
-/// <param name="serviceProvider">当前（请求）作用域的服务提供器，贡献者从中解析所需服务</param>
+/// <param name="serviceProvider">当前请求作用域的服务提供器。</param>
 public class TenantResolveContext(IServiceProvider serviceProvider)
 {
-    /// <summary>
-    /// 获取当前作用域的服务提供器。
-    /// </summary>
+    /// <summary>当前请求作用域的服务提供器，贡献者从中解析所需服务。</summary>
     public IServiceProvider ServiceProvider { get; } = serviceProvider;
 
-    /// <summary>
-    /// 获取或设置解析出的租户标识或名称。
-    /// </summary>
+    /// <summary>解析出的租户 Id 或名称。</summary>
     public string? TenantIdOrName { get; set; }
 
-    /// <summary>
-    /// 获取或设置是否已确定解析结果。
-    /// </summary>
+    /// <summary>是否已给出结论；为 <see langword="true"/> 且无租户时即定案为宿主，后续贡献者不再执行。</summary>
     public bool Handled { get; set; }
 
     /// <summary>

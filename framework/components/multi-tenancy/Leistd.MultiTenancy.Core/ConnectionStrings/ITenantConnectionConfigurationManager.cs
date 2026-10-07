@@ -13,23 +13,16 @@ public interface ITenantConnectionConfigurationManager
     /// <summary>
     /// 登记或更新租户在某个连接名下的连接。
     /// </summary>
-    /// <param name="tenantId">目标租户</param>
-    /// <param name="name">
-    /// 连接名，通常是使用方 DbContext 的 <c>[ConnectionStringName]</c>。归一化为小写后存储，
-    /// 须匹配 <see cref="TenantConnectionConfiguration.NamePattern"/>
-    /// </param>
-    /// <param name="connectionString">
-    /// 连接串（明文），运行时与迁移共用，最长
-    /// <see cref="TenantConnectionConfiguration.MaxConnectionStringLength"/> 个字符
-    /// </param>
+    /// <param name="tenantId">目标租户。</param>
+    /// <param name="name">连接名，通常是使用方 DbContext 的 <c>[ConnectionStringName]</c>；归一化为小写后须匹配 <see cref="TenantConnectionConfiguration.NamePattern"/>。</param>
+    /// <param name="connectionString">明文连接串，运行时与迁移共用，最长 <see cref="TenantConnectionConfiguration.MaxConnectionStringLength"/> 个字符。</param>
     /// <param name="expectedVersion">
     /// 调用方读到的该行版本；<see langword="null"/> 表示预期这一行尚不存在，不表示跳过并发校验。
     /// </param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除。</exception>
     /// <exception cref="ExceptionHandling.BusinessException">
     /// 名字不合法（<c>TenantConnection:NameInvalid</c>），或连接串为空、超长、不是键值对语法（<c>TenantConnection:ConnectionStringInvalid</c>）。
-    /// 名字与连接串通常来自管理员输入，是调用方能改对的错误。
     /// </exception>
     /// <exception cref="TenantConnectionVersionConflictException">
     /// <paramref name="expectedVersion"/> 与实际不符，含"预期存在却不存在"与"预期不存在却已存在"两种。
@@ -45,14 +38,11 @@ public interface ITenantConnectionConfigurationManager
     /// <summary>
     /// 删除租户在某个连接名下的连接。
     /// </summary>
-    /// <remarks>
-    /// 把租户从分库改回不分库，就是删掉它的连接行——删完之后该名字回落到服务自己的配置。
-    /// 与修改同理，删除前必须先停用租户。
-    /// </remarks>
-    /// <param name="tenantId">目标租户</param>
-    /// <param name="name">连接名；大小写不敏感</param>
-    /// <param name="expectedVersion">调用方读到的该行版本</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <remarks>删除后该名字回落到服务自己的配置。与修改相同，删除前必须先停用租户。</remarks>
+    /// <param name="tenantId">目标租户。</param>
+    /// <param name="name">连接名，大小写不敏感。</param>
+    /// <param name="expectedVersion">调用方读到的该行版本。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除。</exception>
     /// <exception cref="ExceptionHandling.BusinessException">名字不合法（<c>TenantConnection:NameInvalid</c>）。</exception>
     /// <exception cref="TenantConnectionVersionConflictException">该行不存在，或版本与实际不符。</exception>

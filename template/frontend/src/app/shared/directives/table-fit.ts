@@ -11,7 +11,7 @@ import {
   signal,
 } from '@angular/core';
 
-import { TableViewport } from '../models/table-column-meta';
+import { TableViewport } from '../utils/table-column-meta';
 
 /** 列折叠档位从宽到窄：desktop 显示全部列，tablet 收起 tertiary，mobile 只留 primary。 */
 const LEVELS: readonly TableViewport[] = ['desktop', 'tablet', 'mobile'];
@@ -24,18 +24,17 @@ interface FitBasis {
 }
 
 /**
- * 按表格容器的实际宽度决定列折叠档位，挂在包住表格的容器上。
+ * 按表格容器的实际宽度决定列折叠档位，挂在包住表格的容器上。视口档位（`tableViewportSignal()`）
+ * 给出上限，容器放不下全部可见列时再降一档，降下的列进展开详情：表格宽度还取决于列内容与侧栏状态。
  *
- * 视口档位（`tableViewportSignal()`）给出上限；容器在这一档放不下全部可见列时再降一档，
- * 降下来的列进展开详情。只看视口不够：表格宽度取决于列内容（长邮箱、回调地址、界面语言），
- * 侧栏展开与折叠也会改变可用宽度，同一视口下有的表放得下、有的放不下，放不下时
- * 右侧吸附的操作列会压住被横向滚走的内容。
- *
- * 每次渲染后检查一次：溢出就降一档。决定各列宽度的事实——容器宽度、视口上限、表格数据、
- * 界面语言——任何一项变了，先回到上限再逐档降到放得下。被收起的列不在页面上，量不到，
- * 只能凭这些事实判断它们可能变了；降档在同一轮渲染里完成，界面不会闪。
+ * 容器宽度、视口上限、表格数据或界面语言变化时，先回到上限再逐档降到放得下，在同一轮渲染里完成。
+ * 实际档位写在容器的 `data-table-fit` 上；最窄一档时主列（`TITLE_COLUMN_META`）占满剩余宽度并截断。
  */
-@Directive({ selector: '[appTableFit]', exportAs: 'appTableFit' })
+@Directive({
+  selector: '[appTableFit]',
+  exportAs: 'appTableFit',
+  host: { '[attr.data-table-fit]': 'level()' },
+})
 export class TableFit {
   /**
    * 视口档位，作为折叠的上限。不设为必填：宿主表格在自身的 computed 里读 `level`，

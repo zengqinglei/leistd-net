@@ -1,6 +1,5 @@
 namespace Leistd.Settings.Definitions;
 
-// 设置定义
 internal sealed class SettingDefinition : ISettingDefinition
 {
     public SettingDefinition(
@@ -10,9 +9,7 @@ internal sealed class SettingDefinition : ISettingDefinition
         string? displayName,
         string? group)
     {
-        // 进程级与可分层覆盖是互斥的两种东西：Host | User 这种组合没有一致的解释——
-        // 读取要么按宿主那一行、要么按用户覆盖，两者不可能同时成立。文档已把它定为互斥，
-        // 那就在构造处拒绝，而不是留给每个消费者各自解释。
+        // 进程级与可分层覆盖互斥（Host | User 没有一致的读取语义），在构造处拒绝
         if (scopes.HasFlag(SettingScopes.Host) && scopes != SettingScopes.Host)
         {
             throw new ArgumentException(

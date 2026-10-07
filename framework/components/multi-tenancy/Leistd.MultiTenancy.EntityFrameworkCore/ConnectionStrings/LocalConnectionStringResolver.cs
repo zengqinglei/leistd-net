@@ -11,10 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 
 // 本地解析：宿主自己持有控制库，直接按连接名查询租户连接并解密。
-//
-// 不变量：控制库上下文必须直接注入，不能经 IDbContextProvider 获取。Provider 在创建任何 DbContext 之前
-// 都会先调用本解析器，若本解析器反过来经 Provider 拿上下文就形成递归。控制库固定在宿主连接上、不参与租户路由，
-// 本来也不需要 Provider 那层。
+// 控制库上下文必须直接注入而不经 IDbContextProvider：Provider 创建任何 DbContext 前都会调用本解析器，否则形成递归。
 internal sealed class LocalConnectionStringResolver<TControlDbContext>(
     ICurrentTenant currentTenant,
     TControlDbContext controlDbContext,

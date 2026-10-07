@@ -6,19 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Response.AspNetCore;
 
-/// <summary>
-/// 统一响应包装的注册入口。
-/// </summary>
+/// <summary>统一响应包装的注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 在宿主的 MVC 链上挂载统一响应包装过滤器。
-    /// </summary>
-    /// <remarks>
-    /// 挂在 <see cref="IMvcBuilder"/> 上而不是 <c>IServiceCollection</c>：MVC 由宿主组装，
-    /// 组件替宿主调 <c>AddControllers()</c> 会形成第二个 MVC 入口，与宿主自己的
-    /// <c>AddJsonOptions(...)</c> 等配置顺序不清。
-    /// </remarks>
+    /// <summary>在宿主的 MVC 链上挂载统一响应包装过滤器。</summary>
+    /// <remarks>可重复调用：响应包装过滤器与问题详情写入器都只挂一份。</remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddControllers()
@@ -45,8 +37,7 @@ public static class DependencyInjection
 
         builder.AddMvcOptions(options =>
         {
-            // 幂等：宿主组合根拆分时重复调用是常态，挂两遍会把响应包两层信封，
-            // 而症状只在运行时的响应体里显形。
+            // 幂等：挂两遍会把响应包两层信封
             if (options.Filters.OfType<TypeFilterAttribute>()
                 .Any(f => f.ImplementationType == typeof(ResultWrapperFilter)))
             {

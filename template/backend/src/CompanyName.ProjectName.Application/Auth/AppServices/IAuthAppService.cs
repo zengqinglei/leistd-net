@@ -32,7 +32,7 @@ public interface IAuthAppService : IAppService
     /// <summary>
     /// 用户注册
     /// </summary>
-    Task<UserOutputDto> RegisterAsync(RegisterInputDto request, CancellationToken cancellationToken = default);
+    Task<UserOutputDto> RegisterAsync(RegisterInputDto input, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 获取当前用户信息

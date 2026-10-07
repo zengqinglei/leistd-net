@@ -69,8 +69,7 @@ export class StartupService {
 
     try {
       await this.authService.initializeAuth();
-      // 权限与设置在同一次启动中就位：Guard 与菜单按权限裁剪、界面按设置渲染由它派生的
-      // 状态，未就位前一律按无权限处理，避免受保护入口闪现。
+      // 权限与设置在同一次启动中就位，未就位前按无权限处理，避免受保护入口闪现。
       await this.sessionContext.establish();
       //#if (Impersonation)
       // 模拟态只有服务端的会话声明知道；顶栏的模拟提示要在外壳首帧就位，否则会闪一下"正常会话"。

@@ -12,7 +12,7 @@ namespace Leistd.MultiTenancy.Exceptions;
 public class TenantConcurrencyConflictException : BusinessException
 {
     /// <summary>构造异常。</summary>
-    /// <param name="tenantId">目标租户</param>
+    /// <param name="tenantId">目标租户。</param>
     public TenantConcurrencyConflictException(Guid tenantId)
         : base(MultiTenancyErrorCodes.ConcurrencyConflict,
             $"Tenant '{tenantId}' was modified concurrently. Activation, deactivation, renaming and " +
@@ -22,6 +22,6 @@ public class TenantConcurrencyConflictException : BusinessException
         TenantId = tenantId;
     }
 
-    /// <summary>获取目标租户标识。</summary>
+    /// <summary>目标租户标识。</summary>
     public Guid TenantId { get; }
 }

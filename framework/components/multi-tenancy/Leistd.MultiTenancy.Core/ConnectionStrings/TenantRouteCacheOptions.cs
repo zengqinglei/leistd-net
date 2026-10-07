@@ -1,7 +1,7 @@
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
 /// <summary>
-/// 远端解析结果的路由缓存（配置节 <c>TenantRouting</c>）。
+/// 远端解析结果的路由缓存（默认配置节 <c>Leistd:MultiTenancy:Routing</c>）。
 /// </summary>
 /// <remarks>
 /// <para><see cref="CacheLifetime"/> 默认 <see cref="DefaultCacheLifetime"/>，可在配置中覆盖。改租户数据落点的流程是：
@@ -10,8 +10,8 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// </remarks>
 public sealed class TenantRouteCacheOptions
 {
-    /// <summary>配置节名 <c>TenantRouting</c>。</summary>
-    public const string SectionName = "TenantRouting";
+    /// <summary>默认配置节路径 <c>Leistd:MultiTenancy:Routing</c>。</summary>
+    public const string SectionName = "Leistd:MultiTenancy:Routing";
 
     /// <summary>默认路由缓存生存期：10 分钟。</summary>
     public static readonly TimeSpan DefaultCacheLifetime = TimeSpan.FromMinutes(10);

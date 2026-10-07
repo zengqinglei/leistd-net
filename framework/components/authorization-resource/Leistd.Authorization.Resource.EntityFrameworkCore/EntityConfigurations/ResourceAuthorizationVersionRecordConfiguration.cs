@@ -4,9 +4,7 @@ using Leistd.Authorization.Resource.EntityFrameworkCore.Entities;
 
 namespace Leistd.Authorization.Resource.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// ResourceAuthorizationVersionRecord EF Core 实体配置。
-/// </summary>
+/// <summary><see cref="ResourceAuthorizationVersionRecord"/> 的实体配置。</summary>
 public class ResourceAuthorizationVersionRecordConfiguration
     : IEntityTypeConfiguration<ResourceAuthorizationVersionRecord>
 {
@@ -25,8 +23,7 @@ public class ResourceAuthorizationVersionRecordConfiguration
             .HasMaxLength(128)
             .IsRequired();
 
-        // 并发令牌：EF 会在 UPDATE 上带 WHERE Version = @original，
-        // 使「读版本→比较→写入」这段窗口由数据库收口，而不是靠应用层的先读后比。
+        // 并发令牌：UPDATE 带 WHERE Version = @original，由数据库收口读-比-写窗口
         builder.Property(x => x.Version)
             .IsConcurrencyToken()
             .IsRequired();

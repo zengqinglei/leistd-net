@@ -14,6 +14,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowUpDown,
   lucideChevronRight,
+  lucideCircleAlert,
   lucideEllipsis,
   lucideKeyRound,
   lucidePencil,
@@ -34,18 +35,20 @@ import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-tabl
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+  TITLE_COLUMN_META,
+  TITLE_CONTENT_CLASS,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -53,14 +56,9 @@ import {
   toggleTableSort,
 } from '../../../../../../shared/utils/table-sorting';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
-import { RoleOutputDto } from '../../../../models/role.dto';
+import { RoleOutputDto } from '../../../../dtos/role.dto';
 
-/**
- * 角色列表表格。
- *
- * 与用户列表同一形态：列优先级驱动响应式收纳、被隐藏的列由行展开补偿、
- * 分页与排序状态由父组件（URL 查询参数）单向下发。
- */
+/** 角色列表表格：列优先级驱动响应式收纳，隐藏列由行展开补偿，分页与排序状态由父组件单向下发。 */
 @Component({
   selector: 'app-role-table',
   imports: [
@@ -82,6 +80,7 @@ import { RoleOutputDto } from '../../../../models/role.dto';
     provideIcons({
       lucideArrowUpDown,
       lucideChevronRight,
+      lucideCircleAlert,
       lucideEllipsis,
       lucideKeyRound,
       lucidePencil,
@@ -96,8 +95,7 @@ import { RoleOutputDto } from '../../../../models/role.dto';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RoleTable {
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -110,6 +108,9 @@ export class RoleTable {
   readonly sorting = input<SortingState>([]);
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  readonly retry = output<void>();
 
   /** 行操作按权限裁剪；隐藏只影响体验，服务端仍对每个请求独立校验。 */
   readonly canUpdate = input(true);
@@ -128,6 +129,8 @@ export class RoleTable {
   readonly managePermissions = output<RoleOutputDto>();
 
   protected readonly tableViewport = tableViewportSignal();
+  /** 主列内容外层：最窄一档下长名称截断，不撑宽表格（见 TITLE_COLUMN_META）。 */
+  protected readonly titleContentClass = TITLE_CONTENT_CLASS;
   private readonly tableFit = viewChild(TableFit);
   /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
   private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
@@ -137,7 +140,7 @@ export class RoleTable {
       accessorKey: 'displayName',
       id: 'displayName',
       enableHiding: false,
-      meta: { priority: 'primary', locked: true },
+      meta: TITLE_COLUMN_META,
     },
     {
       accessorKey: 'userCount',
@@ -213,6 +216,8 @@ export class RoleTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'roles.colName': 'Role',
   'roles.colUsers': 'Users',
   'roles.colPermissions': 'Permissions',

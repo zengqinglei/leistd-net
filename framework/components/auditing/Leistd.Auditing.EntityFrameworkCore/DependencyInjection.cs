@@ -7,18 +7,15 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Auditing.EntityFrameworkCore;
 
-/// <summary>
-/// 提供 EF Core 审计服务注册入口。
-/// </summary>
+/// <summary>EF Core 审计服务注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册 Leistd 审计能力（审计属性设置器 + 审计拦截器）。
-    /// </summary>
+    /// <summary>注册审计属性设置器与审计拦截器。</summary>
     /// <remarks>
     /// 调用方仍需把 <see cref="AuditSaveChangesInterceptor"/> 经 <c>DbContextOptionsBuilder.AddInterceptors(...)</c> 挂到目标 DbContext。
-    /// 依赖 <see cref="IClock"/> 已注册；<see cref="Leistd.Security.Users.ICurrentUser"/> <b>可选</b>——
+    /// 依赖 <see cref="IClock"/> 已注册；<see cref="Leistd.Security.Users.ICurrentUser"/> 可选，
     /// 未注册时按匿名处理，时间审计照常落值、用户字段留空。
+    /// 可重复调用：服务只注册一次。
     /// </remarks>
     /// <example>
     /// <code>

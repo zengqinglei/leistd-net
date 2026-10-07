@@ -8,7 +8,7 @@ import { LogoutConfirm } from './logout-confirm';
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
-import { LogoutConfirmationOutputDto } from '../../models/account.dto';
+import { LogoutConfirmationOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 
 /**

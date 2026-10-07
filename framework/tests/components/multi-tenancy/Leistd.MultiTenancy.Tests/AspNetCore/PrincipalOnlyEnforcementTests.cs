@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Leistd.MultiTenancy.Resolution;
+using Leistd.MultiTenancy.Tests.TestDoubles;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
@@ -99,7 +100,7 @@ public class PrincipalOnlyEnforcementTests
     /// 开着注册表校验却没注册 <c>ITenantStore</c>：必须在读取选项时就失败，不能留到运行期
     /// </summary>
     /// <remarks>
-    /// 此前这个前提只在中间件里发现——每个带租户的请求失败一次、而进程"健康"地跑着。
+    /// 若这个前提只在中间件里发现，每个带租户的请求都会失败一次、而进程"健康"地跑着。
     /// </remarks>
     [Fact]
     public void Validation_enabled_without_a_tenant_store_fails_fast()

@@ -12,13 +12,10 @@ namespace Leistd.MultiTenancy.Exceptions;
 public class TenantConnectionVersionConflictException : BusinessException
 {
     /// <summary>构造异常。</summary>
-    /// <param name="tenantId">目标租户</param>
-    /// <param name="expectedVersion">调用方预期的版本；<see langword="null"/> 表示调用方预期该配置尚不存在</param>
-    /// <param name="actualVersion">实际版本；<see langword="null"/> 表示配置实际不存在</param>
-    /// <param name="innerException">
-    /// 底层并发异常。预检失败时为 <see langword="null"/>；真正同时提交、由数据库并发令牌拦下时，
-    /// 这里带上 <c>DbUpdateConcurrencyException</c> 以保留现场
-    /// </param>
+    /// <param name="tenantId">目标租户。</param>
+    /// <param name="expectedVersion">调用方预期的版本；<see langword="null"/> 表示预期该配置尚不存在。</param>
+    /// <param name="actualVersion">实际版本；<see langword="null"/> 表示配置实际不存在。</param>
+    /// <param name="innerException">预检失败时为 <see langword="null"/>；由数据库并发令牌拦下时为 <c>DbUpdateConcurrencyException</c>。</param>
     public TenantConnectionVersionConflictException(
         Guid tenantId,
         long? expectedVersion,
@@ -35,13 +32,13 @@ public class TenantConnectionVersionConflictException : BusinessException
         ActualVersion = actualVersion;
     }
 
-    /// <summary>获取目标租户标识。</summary>
+    /// <summary>目标租户标识。</summary>
     public Guid TenantId { get; }
 
-    /// <summary>获取预期版本；<see langword="null"/> 表示预期配置不存在。</summary>
+    /// <summary>预期版本；<see langword="null"/> 表示预期配置不存在。</summary>
     public long? ExpectedVersion { get; }
 
-    /// <summary>获取实际版本；<see langword="null"/> 表示配置不存在。</summary>
+    /// <summary>实际版本；<see langword="null"/> 表示配置不存在。</summary>
     public long? ActualVersion { get; }
 
     private static string Describe(long? version) =>

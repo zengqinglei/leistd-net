@@ -31,15 +31,11 @@ public interface ITenantConnectionManagementService
     Task<TenantMigrationConnectionListOutputDto> GetMigrationListAsync(string name, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 列出某个连接名下的独立库与住在里面的租户，<b>不含连接串</b>。
+    /// 列出某个连接名下的独立库与住在里面的租户，不含连接串，供资源服务的逐库作业使用。
     /// </summary>
     /// <param name="name">连接名。</param>
     /// <param name="activeOnly">只列启用租户的库。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <remarks>
-    /// 给资源服务的逐库作业用：它只需要"有哪些库、用哪个租户进得去"，连接由该租户的正常解析链取得。
-    /// 因此这条路只要"读路由"这一档权限，与下发明文连接串的迁移端点不是一回事。
-    /// </remarks>
     Task<TenantDatabaseListOutputDto> GetDatabaseListAsync(
         string name,
         bool activeOnly,

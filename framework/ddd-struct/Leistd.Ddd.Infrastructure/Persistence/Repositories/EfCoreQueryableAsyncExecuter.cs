@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.Ddd.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// 使用 EF Core 执行异步查询。
-/// </summary>
+/// <summary>使用 EF Core 执行异步查询。</summary>
 public class EfCoreQueryableAsyncExecuter : IQueryableAsyncExecuter
 {
     /// <inheritdoc />

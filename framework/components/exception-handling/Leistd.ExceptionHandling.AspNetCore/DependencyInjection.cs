@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
@@ -7,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling.AspNetCore.Handlers;
+using Leistd.ExceptionHandling.AspNetCore.Validation;
+using Microsoft.AspNetCore.Mvc.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Leistd.ExceptionHandling.Options;
 using Leistd.ExceptionHandling.Descriptors;
 using Microsoft.AspNetCore.WebUtilities;
@@ -14,9 +18,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.ExceptionHandling.AspNetCore;
 
-/// <summary>
-/// 全局异常处理的注册与管道接入入口。
-/// </summary>
+/// <summary>全局异常处理的注册与管道接入入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -25,9 +27,16 @@ public static class DependencyInjection
     /// <remarks>
     /// <para>在 <c>AddControllers()</c> 后调用，使 400 与业务校验的 <c>errors</c> 结构一致。</para>
     /// <para><c>errors[].field</c> 跟随宿主的 JSON 命名策略（请求体里叫 <c>name</c>，这里就是 <c>name</c>），
-    /// 调用方据此把错误落回对应的输入项；默认 Problem Details 的标题按 <c>Title:{状态码}</c> 本地化。</para>
+    /// 请求体、查询参数与嵌套对象（<c>address.city</c>）一致，调用方据此把错误落回对应的输入项；
+    /// 默认 Problem Details 的标题按 <c>Title:{状态码}</c> 本地化。</para>
     /// <para>字段名换算只作用于属性式 DTO（<c>{ get; init; }</c>）。位置记录（<c>record X([Required] string Name)</c>）
     /// 的校验键取自构造参数，ASP.NET 不对它应用命名策略，仍是 C# 参数名——输入 DTO 应写成属性式。</para>
+    /// <para><see cref="System.ComponentModel.DataAnnotations.IValidatableObject"/> 产出的错误与特性错误同一口径：
+    /// <c>MemberNames</c> 写 C# 属性名（<c>nameof(Roles)</c>），字段名同样换成 JSON 名；对不上任何属性的成员名原样使用，
+    /// 不给成员名的错误落在模型自身的键上。
+    /// 宿主启用了 DataAnnotations 本地化（<c>AddDataAnnotationsLocalization</c>）时，<c>ErrorMessage</c> 作资源键、
+    /// 经 <c>DataAnnotationLocalizerProvider</c> 按该 DTO 类型取本地化器翻译，因此应写不含运行时值的固定英文句；
+    /// 未启用时原文返回。</para>
     /// </remarks>
     public static IMvcBuilder ConfigureApiValidation(this IMvcBuilder builder)
     {
@@ -37,8 +46,8 @@ public static class DependencyInjection
         builder.Services.AddProblemDetails();
         RegisterProblemDetailsConventions(builder.Services);
 
-        // 模型校验的键默认是 C# 属性名，而请求体与显式验证的字段名都按 JSON 命名策略写——
-        // 同一个字段两种叫法，调用方只能大小写不敏感地去猜。宿主没设命名策略时属性名即 JSON 名，无需处理。
+        // 模型校验键默认是 C# 属性名，改用 JSON 命名策略，与请求体和显式验证的字段名一致；宿主没设命名策略时无需处理。
+        // 绑定时已按属性名建好的条目与 IValidatableObject 的成员名由写出时的换算补齐。
         builder.Services.AddOptions<MvcOptions>()
             .Configure<IOptions<JsonOptions>>((mvcOptions, jsonOptions) =>
             {
@@ -49,20 +58,29 @@ public static class DependencyInjection
                 }
             });
 
-        // 请求体读不成 JSON 时，System.Text.Json 的异常消息（行号、字节位置、内部路径）默认会写进字段错误，
-        // 原样回给调用方。这是协议层失败，调用方只需知道哪个字段读不成；与 Minimal API 路径不带解析细节一致。
+        // IValidatableObject.Validate 的文案默认不本地化，与特性文案两种口径。替换 DataAnnotations 提供器为它追加的
+        // 那一项，须排在该提供器之后：MVC 在 Configure 阶段登记它，这里用 PostConfigure。
+        builder.Services.AddOptions<MvcOptions>()
+            .PostConfigure<IOptions<MvcDataAnnotationsLocalizationOptions>, IServiceProvider>(
+                (mvcOptions, localizationOptions, serviceProvider) => mvcOptions.ModelValidatorProviders.Add(
+                    new ValidatableObjectModelValidatorProvider(
+                        localizationOptions, serviceProvider.GetService<IStringLocalizerFactory>())));
+
+        // 请求体读不成 JSON 时不回显 System.Text.Json 的解析细节，与 Minimal API 路径一致
         builder.Services.Configure<JsonOptions>(options => options.AllowInputFormatterExceptionMessages = false);
 
         builder.Services.PostConfigure<ApiBehaviorOptions>(options =>
         {
             options.InvalidModelStateResponseFactory = context =>
             {
+                var metadataProvider = context.HttpContext.RequestServices.GetRequiredService<IModelMetadataProvider>();
                 var errors = context.ModelState
                     .Where(entry => entry.Value is { Errors.Count: > 0 })
                     .SelectMany(entry => entry.Value!.Errors.Select(error => new ErrorItem(
                         // 只有异常、没有文案的错误（如读不成 JSON）与 MVC 自带的校验问题同样回落到通用句
                         Detail: string.IsNullOrEmpty(error.ErrorMessage) ? "The input was not valid." : error.ErrorMessage,
-                        Field: entry.Key,
+                        // 查询参数等逐属性绑定的来源，模型状态的键是绑定时的属性名，换回校验模型名
+                        Field: ValidationFieldNames.Resolve(context, metadataProvider, entry.Key),
                         Code: null)))
                     .ToArray();
                 var localizer = context.HttpContext.RequestServices.GetService<IStringLocalizer>();
@@ -78,6 +96,10 @@ public static class DependencyInjection
     }
 
     /// <summary>注册全局异常处理器：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。</summary>
+    /// <remarks>
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
+    /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键）。
+    /// </remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">编程式配置（如错误码映射），在配置节绑定之后应用。</param>
     /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:GlobalException</c>。</param>
@@ -106,7 +128,7 @@ public static class DependencyInjection
             options.Configure(configure);
         }
 
-        services.AddExceptionHandler<BusinessExceptionHandler>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IExceptionHandler, BusinessExceptionHandler>());
 
         return services;
     }

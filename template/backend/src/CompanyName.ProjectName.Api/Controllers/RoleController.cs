@@ -2,7 +2,6 @@ using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 using CompanyName.ProjectName.Application.Roles.Dtos;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,7 +33,7 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpGet("options")]
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
-    public async Task<IReadOnlyList<RoleBriefDto>> GetOptionsAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetOptionsAsync(CancellationToken cancellationToken)
     {
         return await roleAppService.GetAllAsync(cancellationToken);
     }
@@ -68,6 +67,7 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Policy = PermissionConstant.Roles.Update)]
+    [OperationRecordAction(OperationRecordActions.RoleUpdated, "id")]
     public async Task<RoleOutputDto> UpdateAsync(
         Guid id,
         [FromBody] UpdateRoleInputDto input,

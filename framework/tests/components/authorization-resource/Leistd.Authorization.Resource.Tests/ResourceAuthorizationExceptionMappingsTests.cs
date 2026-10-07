@@ -31,8 +31,8 @@ public sealed class ResourceAuthorizationExceptionMappingsTests
             hostFirst.CodeStatusMappings[ResourceAuthorizationErrorCodes.ConcurrencyConflict]);
     }
 
-    // N9 的回归守卫：这条映射曾经要宿主在自己的 ExceptionMappings 里手写一行，
-    // 漏了不会有编译或启动错误，只会静默回落成 400。现在由组件注册时自己登记。
+    // 映射由组件注册时自己登记：若要宿主在自己的 ExceptionMappings 里手写一行，
+    // 漏了不会有编译或启动错误，只会静默回落成 400。
     [Fact]
     public void Component_registration_applies_the_defaults_without_host_wiring()
     {

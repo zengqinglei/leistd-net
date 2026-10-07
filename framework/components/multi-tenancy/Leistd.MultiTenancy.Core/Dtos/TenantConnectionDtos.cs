@@ -5,9 +5,7 @@ namespace Leistd.MultiTenancy.Dtos;
 /// <summary>
 /// 下发给资源服务的运行时查询结果，形态与 <see cref="TenantConnectionLookupResult"/> 一致。
 /// </summary>
-/// <remarks>
-/// 控制面端点与远端连接存储共用这一份线上契约：两边各写一份，改一边另一边就静默解析失败。
-/// </remarks>
+/// <remarks>控制面端点与远端连接存储共用这一份线上契约。</remarks>
 public sealed record TenantRuntimeConnectionOutputDto
 {
     /// <summary>被查询的租户。</summary>
@@ -37,7 +35,7 @@ public sealed record TenantConnectionDetailOutputDto
     /// <summary>该行的版本。</summary>
     public required long Version { get; init; }
 
-    /// <summary>不输出连接串：记录类型默认打印全部属性，随手写进日志就是泄露。</summary>
+    /// <summary>不输出连接串（记录类型默认打印全部属性）。</summary>
     public override string ToString() =>
         $"{nameof(TenantConnectionDetailOutputDto)} {{ Name = {Name}, Version = {Version} }}";
 }
@@ -75,10 +73,7 @@ public sealed record TenantMigrationConnectionListOutputDto
 /// <summary>
 /// 一个独立库，以及住在里面的租户。
 /// </summary>
-/// <remarks>
-/// 逐库作业用的线上形状：<b>不含连接串</b>。真正的连接由各租户的正常解析链取得，
-/// 因此这个端点只要"读路由"这一档权限，不需要迁移用的 DDL 身份。
-/// </remarks>
+/// <remarks>不含连接串：连接由各租户的正常解析链取得，因此只需读路由权限。</remarks>
 public sealed record TenantDatabaseOutputDto
 {
     /// <summary>连接串指纹，用于判定"是不是同一个库"；不可逆推连接串。</summary>
@@ -91,7 +86,7 @@ public sealed record TenantDatabaseOutputDto
 /// <summary>
 /// 一个解析不出连接的租户。
 /// </summary>
-/// <remarks>坏掉一个租户不该让整轮逐库作业或迁移不执行，因此它们与清单一起下发，由调用方报出。</remarks>
+/// <remarks>与清单一起下发，不阻止其余库的作业或迁移，由调用方报出。</remarks>
 public sealed record TenantDatabaseFailureOutputDto
 {
     /// <summary>租户标识。</summary>

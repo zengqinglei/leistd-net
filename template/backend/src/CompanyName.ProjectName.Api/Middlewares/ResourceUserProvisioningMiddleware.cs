@@ -1,7 +1,6 @@
 #if (!LocalIdentity)
-using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.Security.Users;
-using Leistd.UnitOfWork;
 
 namespace CompanyName.ProjectName.Api.Middlewares;
 
@@ -22,7 +21,7 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// <c>(TenantId, Username)</c> 唯一索引是最典型的）把该用户的<b>每一个</b>请求都变成 500。
 /// 失败时记 Warning 并放行，由授权按"没有成员行 = 没有权限"自然处理。</para>
 /// <para><b>代价与边界。</b>每个已认证请求多一次主键查询（命中即返回）。
-/// 首次访问的并发由重试一次兜底，见下面的注释。</para>
+/// 投影本身（独立工作单元、首次访问并发时重试一次）在 <see cref="IUserAppService.EnsureCurrentUserProjectedAsync"/>。</para>
 /// <para><b>做不到的事要如实说：无法按人名预先授权。</b>那需要一条向签发方查人的契约，
 /// 本模板没有——用手填 GUID 假装有，才是前面那个缺陷的由来。</para>
 /// <para><b>拿到了对方的 <c>sub</c> 时，首位管理员走部署命令。</b>角色关联 <c>UserRole.UserId</c> 对
@@ -33,58 +32,21 @@ public sealed class ResourceUserProvisioningMiddleware(
     RequestDelegate next,
     ILogger<ResourceUserProvisioningMiddleware> logger)
 {
-    public async Task InvokeAsync(
-        HttpContext context,
-        ICurrentUser currentUser,
-        IUnitOfWorkManager unitOfWorkManager,
-        UserDomainService userDomainService)
+    public async Task InvokeAsync(HttpContext context, ICurrentUser currentUser, IUserAppService userAppService)
     {
-        if (currentUser.IsAuthenticated && currentUser.Id is { } subjectId)
+        try
         {
-            try
-            {
-                await ProjectAsync(context, unitOfWorkManager, userDomainService, currentUser, subjectId);
-            }
-            catch (Exception first) when (first is not OperationCanceledException)
-            {
-                // 首次访问的并发：同一个 sub 的两个请求同时插入，输的那个在提交时撞主键。
-                // 这在资源服务里不是罕见路径——前端登录后往往并行发好几个请求，第一次访问正好都在投影。
-                // 重来一次就会读到赢家写下的行，用户这次请求照样有权限。只重试一次，不做退避循环：
-                // 第二次还失败就不是竞争，是真有问题。
-                try
-                {
-                    await ProjectAsync(context, unitOfWorkManager, userDomainService, currentUser, subjectId);
-                }
-                catch (Exception second) when (second is not OperationCanceledException)
-                {
-                    logger.LogWarning(
-                        second,
-                        "Projecting issuer subject {SubjectId} failed; continuing without a local user row.",
-                        subjectId);
-                }
-            }
+            await userAppService.EnsureCurrentUserProjectedAsync(context.RequestAborted);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                exception,
+                "Projecting issuer subject {SubjectId} failed; continuing without a local user row.",
+                currentUser.Id);
         }
 
         await next(context);
-    }
-
-    private static async Task ProjectAsync(
-        HttpContext context,
-        IUnitOfWorkManager unitOfWorkManager,
-        UserDomainService userDomainService,
-        ICurrentUser currentUser,
-        Guid subjectId)
-    {
-        // 独立工作单元：投影是请求的前置动作，不该被后续业务失败连带回滚——
-        // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关。
-        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
-        await userDomainService.EnsureProjectedAsync(
-            subjectId,
-            currentUser.Username,
-            currentUser.Email,
-            currentUser.Name,
-            context.RequestAborted);
-        await unitOfWork.CompleteAsync(context.RequestAborted);
     }
 }
 #endif

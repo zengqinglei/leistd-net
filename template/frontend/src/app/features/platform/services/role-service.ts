@@ -2,14 +2,14 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { PagedResultDto } from '../../../shared/models/paged-result.dto';
+import { PagedResultDto } from '../../../shared/dtos/paged-result.dto';
 import {
   CreateRoleInputDto,
   GetRolesInputDto,
   RoleBriefDto,
   RoleOutputDto,
   UpdateRoleInputDto,
-} from '../models/role.dto';
+} from '../dtos/role.dto';
 
 @Injectable({ providedIn: 'root' })
 export class RoleService {

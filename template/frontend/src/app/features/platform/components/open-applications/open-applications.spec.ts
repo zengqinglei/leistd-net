@@ -4,8 +4,9 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
+import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { OpenApplications } from './open-applications';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
@@ -15,8 +16,8 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import { PERMISSIONS } from '../../../../shared/models/permission';
-import { GetOpenApplicationsInputDto } from '../../models/open-application.dto';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import { GetOpenApplicationsInputDto } from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 
 import type { MockedObject } from 'vitest';
@@ -28,7 +29,6 @@ describe('OpenApplications page query round trip', () => {
   let router: Router;
   let service: Pick<MockedObject<OpenApplicationService>, 'getOpenApplications' | 'getScopes'>;
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetOpenApplicationsInputDto {
     const calls = vi.mocked(service.getOpenApplications).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -76,8 +76,7 @@ describe('OpenApplications page query round trip', () => {
       versionToken: 'r1',
     });
 
-    // 应用启动时会话设置（连带语言服务）早已建好；留到首帧渲染途中才惰性创建的话，
-    // 语言服务构造时激活语言，会让模板结构指令在创建视图的半途重入
+    // 先建好设置上下文（连带语言服务），否则首帧渲染途中创建它会让结构指令重入。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(OpenApplications);
     component = fixture.componentInstance;
@@ -172,5 +171,68 @@ describe('OpenApplications page query round trip', () => {
     second.next({ items: [], totalCount: 0 });
     second.complete();
     expect(component.loading()).toBe(false);
+  });
+
+  /** 加载成功时的一行：表格会真的渲染它，字段要齐。 */
+  const loadedRow = {
+    id: 'row-1',
+    clientId: 'spa',
+    applicationType: 'web',
+    clientType: 'public',
+    redirectUris: [],
+    postLogoutRedirectUris: [],
+    permissions: [],
+    requirements: [],
+    settings: {},
+    properties: {},
+    hasClientSecret: false,
+    sessionBound: true,
+    creationTime: '2026-01-01T00:00:00Z',
+  };
+
+  /** 以首次请求失败重建页面：此时没有任何旧行可保留。 */
+  async function openWithFailedFirstLoad(): Promise<void> {
+    fixture.destroy();
+    service.getOpenApplications.mockReturnValue(throwError(() => new Error('boom')) as never);
+    fixture = TestBed.createComponent(OpenApplications);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('shows the load failure with retry instead of the empty state when the first load fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await openWithFailedFirstLoad();
+
+    // 没有旧行时不能落到"暂无数据"：表格拿到失败原因，显示错误态与重试
+    expect(component.loadError()).toBe('boom');
+    expect(table().loadError()).toBe('boom');
+    expect(component.applications()).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
+
+    const requests = service.getOpenApplications.mock.calls.length;
+    service.getOpenApplications.mockReturnValue(of({ items: [loadedRow], totalCount: 1 }) as never);
+    table().retry.emit();
+    await fixture.whenStable();
+
+    expect(service.getOpenApplications).toHaveBeenCalledTimes(requests + 1);
+    expect(component.loadError()).toBeNull();
+    expect(component.applications()).toHaveLength(1);
+  });
+
+  it('keeps the loaded rows and only notifies when a refresh fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    service.getOpenApplications.mockReturnValue(of({ items: [loadedRow], totalCount: 1 }) as never);
+    component.reloadList();
+    await fixture.whenStable();
+
+    service.getOpenApplications.mockReturnValue(throwError(() => new Error('boom')) as never);
+    component.reloadList();
+    await fixture.whenStable();
+
+    expect(component.applications()).toHaveLength(1);
+    expect(component.loadError()).toBeNull();
+    expect(notify).toHaveBeenCalledOnce();
   });
 });

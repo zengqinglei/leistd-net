@@ -8,12 +8,9 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Tracing.AspNetCore.Middlewares;
 
-/// <summary>
-/// 入站关联标识中间件：定案本次请求的关联标识、写入日志作用域，并按配置回写响应头。
-/// </summary>
+/// <summary>入站关联标识中间件：定案本次请求的关联标识、写入日志作用域，并按配置回写响应头。</summary>
 /// <remarks>
-/// <para>取值顺序：合法的入站请求头 → 当前 Activity 的 TraceId → 新建。入站值优先，
-/// 上游显式指定的标识才能经出站转发一路传到底；不合法的值忽略，不让请求失败。</para>
+/// <para>取值顺序：合法的入站请求头 → 当前 Activity 的 TraceId → 新建；不合法的入站值忽略，不让请求失败。</para>
 /// <para>不改写 <see cref="HttpContext.TraceIdentifier"/>：错误响应的 <c>traceId</c> 保持官方的链路标识。</para>
 /// <para>应尽量靠近管道前端，使后续中间件的日志都带上关联标识。</para>
 /// </remarks>

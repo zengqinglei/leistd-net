@@ -1,8 +1,6 @@
 namespace Leistd.BackgroundJobs.EntityFrameworkCore.Entities;
 
-/// <summary>
-/// 集群周期任务的完成水位：每个任务一行。
-/// </summary>
+/// <summary>集群周期任务的完成水位：每个任务一行。</summary>
 public class RecurringJobState
 {
     /// <summary>任务名长度上限。</summary>

@@ -10,21 +10,16 @@ import { HlmNavigationMenuImports } from '@spartan-ng/helm/navigation-menu';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
+import { LayoutService } from '../../../core/services/layout-service';
 import { Logo } from '../../../shared/components/logo/logo';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
-import { LayoutService } from '../../services/layout-service';
 import { MenuItem, NavigationService } from '../../services/navigation-service';
 
 /**
- * 工作空间顶栏的导航。
- *
- * 顶栏放两份：`start` 在左侧（品牌、窄屏抽屉、这个区能做的事，文字链接），
- * `end` 在右侧（关于我自己的，与主题、通知、语言同款的图标按钮，名称在提示与可访问名里）。
- * 分到哪一侧看菜单分组的 `placement`；顶栏不显示分组标题，同侧各组首尾相接。
- * 窄屏只剩左侧的抽屉按钮，抽屉里按分组列出全部入口。
- * 新增菜单项用了新图标时，要在这里的 `provideIcons` 登记（抽屉里显示图标）。
+ * 工作空间顶栏的导航：按菜单分组的 `placement` 放在左侧（文字链接）或右侧（图标按钮），不显示分组标题；
+ * 窄屏只剩左侧的抽屉按钮。新增菜单项用了新图标时在这里的 `provideIcons` 登记。
  */
 @Component({
   selector: 'app-workspace-nav',

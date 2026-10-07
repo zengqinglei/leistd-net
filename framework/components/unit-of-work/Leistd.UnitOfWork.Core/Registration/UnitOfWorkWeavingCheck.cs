@@ -4,10 +4,8 @@ using Microsoft.Extensions.Hosting;
 
 namespace Leistd.UnitOfWork.Registration;
 
-// 工作单元的声明式边界与事件阶段过滤都靠拦截器织入。宿主漏接代理工厂时，
-// [UnitOfWork] 不生效、事件处理器在 BeforeCommit 与 AfterCommit 各执行一次，且不报任何错。
-// 检查放在 StartingAsync：它先于所有托管服务的 StartAsync，注册在前的托管服务不会先在未织入的容器上跑。
-// 直接 BuildServiceProvider、不经 Host 启动的场景不在本检查范围内。
+// 宿主漏接代理工厂时 [UnitOfWork] 不生效、事件处理器两个阶段各执行一次，且不报错；启动期在此拒绝。
+// 放在 StartingAsync：先于所有托管服务的 StartAsync。不经 Host 启动的场景不在检查范围内。
 internal sealed class UnitOfWorkWeavingCheck(IServiceProvider serviceProvider) : IHostedLifecycleService
 {
     public Task StartingAsync(CancellationToken cancellationToken)

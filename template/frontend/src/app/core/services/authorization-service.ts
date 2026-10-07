@@ -2,10 +2,8 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
 
-import {
-  CurrentPermissionsOutputDto,
-  PLATFORM_ENTRY_PERMISSIONS,
-} from '../../shared/models/permission';
+import { PLATFORM_ENTRY_PERMISSIONS } from '../../shared/constants/permission.constants';
+import { CurrentPermissionsOutputDto } from '../../shared/dtos/permission.dto';
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 
 /**
@@ -30,12 +28,7 @@ export class AuthorizationService {
   /** 是否已加载过权限。未加载完成前一律按"无权限"处理，避免闪现受保护入口。 */
   readonly loaded = computed(() => this._versionToken() !== '');
 
-  /**
-   * 是否可以进入平台管理区。
-   *
-   * 判据是"拥有任一平台入口权限"，而不是"是不是 Admin 角色"或"是不是超级管理员"——
-   * 后两者都会让前端可见性与后端的权限语义再次分叉。
-   */
+  /** 是否可以进入平台管理区：判据是拥有任一平台入口权限，而不是角色名或超级管理员标志。 */
   readonly canAccessPlatform = computed(() => this.hasAny(...PLATFORM_ENTRY_PERMISSIONS));
 
   async initialize(): Promise<void> {
@@ -69,17 +62,14 @@ export class AuthorizationService {
     this._versionToken.set('');
   }
 
-  /** 是否拥有指定权限。 */
   has(permission: string): boolean {
     return this._permissions().has(permission);
   }
 
-  /** 是否拥有其中任意一个权限。 */
   hasAny(...permissions: string[]): boolean {
     return permissions.some((permission) => this.has(permission));
   }
 
-  /** 是否拥有全部指定权限。 */
   hasAll(...permissions: string[]): boolean {
     return permissions.every((permission) => this.has(permission));
   }

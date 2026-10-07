@@ -9,9 +9,7 @@ using Leistd.DynamicProxy.Interceptors;
 
 namespace Leistd.UnitOfWork.Interceptors;
 
-/// <summary>
-    /// 为同步和异步方法建立声明式工作单元边界。
-/// </summary>
+/// <summary>为同步和异步方法建立声明式工作单元边界。</summary>
 public class UnitOfWorkInterceptor : BaseAsyncInterceptor
 {
     // 特性只取决于 MethodInfo，可按程序集生命周期缓存。

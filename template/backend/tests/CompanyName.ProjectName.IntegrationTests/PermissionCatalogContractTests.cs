@@ -1,9 +1,11 @@
+#if (RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Permissions.Provider;
+#endif
 using Leistd.Authorization.Definitions;
 using Microsoft.Extensions.DependencyInjection;
 #if (IncludeLocalization)
 using System.Globalization;
-using CompanyName.ProjectName.Api;
+using CompanyName.ProjectName.Api.Localization;
 using Microsoft.Extensions.Localization;
 #endif
 

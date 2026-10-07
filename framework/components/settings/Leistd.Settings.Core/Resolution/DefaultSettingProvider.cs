@@ -16,27 +16,19 @@ namespace Leistd.Settings.Resolution;
 /// <remarks>
 /// 按作用域缓存已读取的设置，同一作用域内保持一致；跨作用域重新读取，不使用分布式缓存。
 /// 经 <see cref="ISettingManager"/> 写入后，同一作用域的缓存即作废。
-/// <para>
-/// 宿主层的可达性问 <see cref="ISettingStore.CanAccessHostScope"/>，不靠捕获异常判断：
-/// 可达才去读它、并单独缓存一份；不可达时那份缓存保持 <see langword="null"/>，
-/// 正是"读不到"这个状态本身（读取语义见 <see cref="ISettingProvider"/>）。
-/// </para>
+/// <para>宿主层的可达性由 <see cref="ISettingStore.CanAccessHostScope"/> 判断，读取语义见 <see cref="ISettingProvider"/>。</para>
 /// </remarks>
 /// <param name="definitionManager">设置定义。</param>
 /// <param name="store">设置值存储。</param>
 /// <param name="currentUser">当前用户；匿名时只回落到租户级。</param>
-/// <param name="dataProtectionProvider">
-/// 机密设置的解密用宿主的 Data Protection，只在读取落过库的机密设置时用到；没注册时只有读取机密设置会失败。
-/// </param>
+/// <param name="dataProtectionProvider">机密设置的解密用宿主的 Data Protection；为 <see langword="null"/> 时只有读取落过库的机密设置会失败。</param>
 public sealed class DefaultSettingProvider(
     ISettingDefinitionManager definitionManager,
     ISettingStore store,
     ICurrentUser currentUser,
     IDataProtectionProvider? dataProtectionProvider = null) : ISettingProvider
 {
-    // 机密设置的用途字符串：密钥环沿用宿主的 Data Protection 配置，本组件不管理密钥。
-    // 固定不变——改它等于让已存密文全部不可解；每个设置再以设置名作子用途，
-    // 一个设置的密文挪到别的设置名下解不开，不能靠挪行换值。
+    // 机密设置的用途字符串，固定不变（改动会让已存密文不可解）；每个设置再以设置名作子用途，密文不能挪到别的设置名下。
     internal const string ProtectionPurpose = "Leistd.Settings.EncryptedValue.v1";
 
     // 按官方用法在构造时创建一次、之后复用（IDataProtector 线程安全）
@@ -137,8 +129,7 @@ public sealed class DefaultSettingProvider(
     // 返回解析出的原始值，以及它是否来自存储（而不是代码默认值）
     private (string? Value, bool Stored) ResolveRaw(ISettingDefinition definition, IReadOnlyDictionary<string, string> userValues)
     {
-        // 进程级设置不与其它层级组合（定义阶段就拒绝了组合），所以它是一条独立分支，
-        // 不接在用户级→租户级的回落链上。
+        // 进程级设置不与其它层级组合，是独立分支，不接在用户级→租户级的回落链上
         if (definition.Scopes.HasFlag(SettingScopes.Host))
         {
             if (_hostValues is null)
@@ -181,10 +172,8 @@ public sealed class DefaultSettingProvider(
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : await store.GetAllAsync(SettingScopes.User, userId, cancellationToken);
 
-        // 只有真的定义了进程级设置、且当前上下文读得到宿主那一行时才去查它：
-        // 租户请求下不查（也查不了），`_hostValues` 保持 null，正是"不可达"这个状态本身。
-        // 单独查一次而不是复用租户级那份：两者同一行只是当前存储实现的巧合
-        // （见 EfCoreSettingStore 的说明），把它写进解析逻辑就等于绑死实现细节。
+        // 只有定义了进程级设置且宿主层可达时才查；不可达时 _hostValues 保持 null。
+        // 单独查一次而不复用租户级结果：两者同一行只是 EfCoreSettingStore 的实现细节。
         var hostValues = store.CanAccessHostScope
                          && definitionManager.GetAll().Any(d => d.Scopes.HasFlag(SettingScopes.Host))
             ? await store.GetAllAsync(SettingScopes.Host, userId: null, cancellationToken)
@@ -204,8 +193,7 @@ public sealed class DefaultSettingProvider(
             return (T)Enum.Parse(target, value, ignoreCase: true);
         }
 
-        // TypeDescriptor 覆盖基元类型与带 TypeConverter 的自定义类型；
-        // 固定用不变文化，否则同一份值在不同区域设置的节点上会解析出不同结果。
+        // TypeDescriptor 覆盖基元类型与带 TypeConverter 的类型；固定用不变文化，结果不随节点区域设置变化
         return (T)TypeDescriptor.GetConverter(target).ConvertFromString(null, CultureInfo.InvariantCulture, value)!;
     }
 }

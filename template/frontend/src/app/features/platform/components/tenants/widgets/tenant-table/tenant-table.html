@@ -16,7 +16,7 @@
               @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
                 <tr hlmTr class="text-sm font-medium">
                   @for (header of headerGroup.headers; track header.id) {
-                    <th hlmTh [class]="header.column.columnDef.meta?.headClass ?? 'px-6'">
+                    <th hlmTh [class]="header.column.columnDef.meta?.headClass ?? 'px-4 sm:px-6'">
                       @switch (header.column.id) {
                         @case ('name') {
                           <span class="whitespace-nowrap">{{ t('tenants.colName') }}</span>
@@ -59,10 +59,16 @@
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
                     @for (cell of row.getVisibleCells(); track cell.id) {
-                      <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'px-6 py-2'">
+                      <td
+                        hlmTd
+                        [class]="cell.column.columnDef.meta?.cellClass ?? 'px-4 py-2 sm:px-6'"
+                      >
                         @switch (cell.column.id) {
                           @case ('name') {
-                            <div class="flex min-w-0 items-center gap-3">
+                            <div
+                              class="flex min-w-0 items-center gap-3"
+                              [class]="titleContentClass"
+                            >
                               @if (hasCollapsedColumns()) {
                                 <button
                                   hlmBtn
@@ -111,7 +117,7 @@
                           }
                           @case ('actions') {
                             <!-- 操作列（5 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。
-                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
+                               规则见 docs/standards/frontend-ui.md §1.1。 -->
                             <div class="flex items-center justify-end gap-1">
                               <!-- 详情只读，不按修改权限裁剪：能看到这张列表就能看详情。 -->
                               <button
@@ -239,7 +245,7 @@
                       <td
                         hlmTd
                         [attr.colspan]="table.getVisibleLeafColumns().length"
-                        class="px-6 pb-3 pt-2"
+                        class="px-4 pb-3 pt-2 sm:px-6"
                       >
                         <dl
                           class="grid grid-cols-[minmax(5rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
@@ -281,26 +287,43 @@
                       class="!p-0 !border-0"
                     >
                       <div
-                        class="flex flex-col items-center justify-center h-64 text-muted-foreground"
+                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
                       >
-                        <ng-icon
-                          [name]="filtered() ? 'lucideSearchX' : 'lucideBuilding2'"
-                          class="text-5xl opacity-30 mb-3"
-                        />
-                        @if (filtered()) {
-                          <p class="text-base font-medium m-0">
-                            {{ t('tenants.table.emptyFilteredTitle') }}
+                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                        @if (loadError(); as error) {
+                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
+                          <p class="text-base font-medium" role="alert">
+                            {{ t('common.loadFailed') }}
                           </p>
-                          <p class="text-sm mt-1 opacity-70">
-                            {{ t('tenants.table.emptyFilteredHint') }}
-                          </p>
+                          <p class="text-sm opacity-70">{{ error }}</p>
+                          <button
+                            hlmBtn
+                            variant="outline"
+                            data-testid="table-retry"
+                            (click)="retry.emit()"
+                          >
+                            {{ t('common.retry') }}
+                          </button>
                         } @else {
-                          <p class="text-base font-medium m-0">
-                            {{ t('tenants.table.emptyTitle') }}
-                          </p>
-                          <p class="text-sm mt-1 opacity-70">
-                            {{ t('tenants.table.emptyHint') }}
-                          </p>
+                          <ng-icon
+                            [name]="filtered() ? 'lucideSearchX' : 'lucideBuilding2'"
+                            class="text-5xl opacity-30"
+                          />
+                          @if (filtered()) {
+                            <p class="text-base font-medium">
+                              {{ t('tenants.table.emptyFilteredTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('tenants.table.emptyFilteredHint') }}
+                            </p>
+                          } @else {
+                            <p class="text-base font-medium">
+                              {{ t('tenants.table.emptyTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('tenants.table.emptyHint') }}
+                            </p>
+                          }
                         }
                       </div>
                     </td>

@@ -1,5 +1,6 @@
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Domain.Auth.Options;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.UnitTests.Domain;
 
@@ -41,7 +42,7 @@ public sealed class OAuthOptionsValidatorTests
             var options = new OAuthOptions
             {
                 UseDevelopmentCertificates = development,
-                AccessTokenLifetime = TimeSpan.Parse(lifetime, System.Globalization.CultureInfo.InvariantCulture),
+                AccessTokenLifetime = TimeSpan.Parse(lifetime, CultureInfo.InvariantCulture),
                 SigningCertificates = [new OAuthCertificate { Path = "signing.pfx" }],
                 EncryptionCertificates = [new OAuthCertificate { Path = "encryption.pfx" }]
             };

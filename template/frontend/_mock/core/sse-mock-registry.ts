@@ -1,6 +1,4 @@
-/**
- * SSE Mock Registry - 统一管理 SSE 流式请求的 mock 数据
- */
+/** SSE 流式请求的 Mock 数据登记。 */
 
 interface SseMockContext {
   method: string;

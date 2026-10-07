@@ -15,16 +15,8 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { ApplicationHttpError } from '../errors/application-http-error';
 
 /**
- * 全局错误处理器
- *
- * 职责：
- * - 捕获所有未被处理的错误（作为最后的兜底）
- * - 处理非 HTTP 错误（JavaScript 运行时错误、Promise rejection 等）
- * - HTTP 错误已由 httpErrorInterceptor 处理，这里会忽略
- *
- * 注意：
- * - HTTP 错误应该已经被 httpErrorInterceptor 拦截并终止传播
- * - 如果 HTTP 错误到达这里，说明拦截器配置有问题
+ * 全局错误处理器：兜底未处理的非 HTTP 错误。已归一化的 `ApplicationHttpError` 静默忽略（反馈由
+ * feature 负责）；未归一化的 `HttpErrorResponse` 说明请求绕过了拦截器链，只记录配置问题。
  */
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
@@ -33,18 +25,19 @@ export class GlobalErrorHandler implements ErrorHandler {
 
   //#endif
   handleError(error: unknown): void {
+    if (error instanceof ApplicationHttpError) {
+      return;
+    }
+
     console.error('Global error caught:', error);
 
-    // HTTP 错误应该已经被 httpErrorInterceptor 处理
-    // 如果到达这里，记录警告但不重复显示
-    if (error instanceof HttpErrorResponse || error instanceof ApplicationHttpError) {
+    if (error instanceof HttpErrorResponse) {
       console.warn(
-        'HTTP error reached GlobalErrorHandler, this should not happen. Check interceptor configuration.',
+        'An HTTP error bypassed the application interceptor chain. Check how the request was sent.',
       );
       return;
     }
 
-    // 处理 JavaScript 运行时错误
     if (error instanceof Error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('common.appError'), { description: error.message });
@@ -54,7 +47,6 @@ export class GlobalErrorHandler implements ErrorHandler {
       return;
     }
 
-    // 处理未知类型的错误
     //#if (IncludeLocalization)
     toast.error(this.transloco.translate('common.unknownError'), {
       description: this.transloco.translate('common.unexpectedError'),

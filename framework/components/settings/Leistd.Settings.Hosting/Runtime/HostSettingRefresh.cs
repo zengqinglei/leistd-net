@@ -20,8 +20,8 @@ internal sealed class HostSettingRefreshJob(HostSettingApplier applier) : IRecur
         => applier.ApplyAsync(cancellationToken);
 }
 
-// 本进程立即生效：在写入所在事务提交后执行（本地事件处理器的默认阶段），回滚的写入不会先被用上。
-// 应用失败只记告警：设置已经落库，此时报错只会让保存请求显得失败；下一轮周期刷新会再应用。
+// 本进程立即生效：在写入所在事务提交后执行，回滚的写入不会被用上。
+// 应用失败只记告警（设置已落库），下一轮周期刷新会再应用。
 internal sealed class HostSettingChangedHandler(
     HostSettingApplier applier,
     IOptions<HostSettingBindingCollection> bindings,
@@ -46,8 +46,8 @@ internal sealed class HostSettingChangedHandler(
     }
 }
 
-// 开始接收请求之前把库里的值接上来：与官方配置提供程序在构建时加载一致，最早的请求与日志用的就是设置里的值。
-// 此时库可能还没迁移（全新部署的第一次启动），失败只记录不抛——拿不到就用部署配置，不该拦住整个应用。
+// 开始接收请求之前加载库里的值，最早的请求与日志即使用设置值。
+// 库可能尚未迁移（全新部署首次启动），失败只记录不抛，沿用部署配置。
 internal sealed class HostSettingStartupService(
     HostSettingsConfigurationProvider configuration,
     IServiceScopeFactory scopeFactory,

@@ -15,15 +15,7 @@ import { AuthService } from '../../../../core/services/auth-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { AccountService } from '../../services/account-service';
 
-/**
- * 外部登录回调的接线。
- *
- * 会话上下文必须在导航之前建立。删掉那一行，其它任何用例都不会变红，
- * 而表现是保存过的显示偏好在外部登录后不生效（SPA 内跳转不会重跑应用初始化器），
- * 以及落地页在权限未就位时按无权限渲染。
- *
- * 业务拒绝展示服务端下发的原因：该邮箱已有账号时用户要据此先登录、再绑定。
- */
+/** 外部登录回调的接线：会话上下文须在导航之前建立；业务拒绝展示服务端下发的原因。 */
 describe('ExternalAuthCallback', () => {
   let fixture: ComponentFixture<ExternalAuthCallback>;
   let calls: string[];

@@ -3,8 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Email.Smtp.Options;
 
-// 只校验本地配置；连通性与认证由发送路径验证。
-// 报错里的键名按实际绑定的配置节给出，宿主改了节路径时照提示去改才对得上
+// 只校验本地配置，连通性与认证由发送路径验证；报错键名按实际绑定的配置节给出
 internal sealed class SmtpOptionsValidator(string sectionPath = SmtpOptions.SectionName) : IValidateOptions<SmtpOptions>
 {
     /// <inheritdoc />

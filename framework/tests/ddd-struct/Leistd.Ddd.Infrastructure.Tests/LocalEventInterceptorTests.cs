@@ -16,10 +16,10 @@ using Leistd.EventBus.Abstractions;
 namespace Leistd.Ddd.Infrastructure.Tests;
 
 /// <summary>
-/// 回归测试：领域对象 AddLocalEvent → 仓储/DbContext SaveChanges → 本地事件被发布到 handler。
+/// 领域对象 AddLocalEvent → 仓储/DbContext SaveChanges → 本地事件被发布到 handler。
 /// </summary>
 /// <remarks>
-/// 锁死“收集时机”bug：曾在 SavedChanges（保存后实体已 Unchanged）收集，导致收集到 0 个事件、handler 不触发。
+/// 收集时机：若在 SavedChanges（保存后实体已 Unchanged）收集，会收集到 0 个事件、handler 不触发。
 /// 此测试走真实 SaveChanges 拦截器链路（非直接 PublishAsync），覆盖业务真实路径。
 /// </remarks>
 public class LocalEventInterceptorTests

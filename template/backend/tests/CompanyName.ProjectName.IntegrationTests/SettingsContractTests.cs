@@ -5,16 +5,11 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Api.Options;
 using Leistd.Settings.Definitions;
-using Leistd.Settings.Errors;
-using Leistd.Settings.Management;
-using Leistd.Settings.Resolution;
-using Leistd.Settings.Stores;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Serilog.Events;
-using Xunit;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -367,6 +362,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         // 收尾清掉：这一行在本类共用的那套库里，留着会让基线相关的用例依赖执行顺序
         await WriteAsync(hostAdmin.Client, SettingConstant.Logging.MinimumLevel, null);
     }
+#if (IncludeMultiTenancy)
 
     /// <summary>
     /// 进程级设置在租户上下文下既不下发也不可写。
@@ -375,7 +371,6 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     /// 下发的话租户管理员会看到一个改不动的项；能写的话那条租户行永远不会被任何 logger 读到，
     /// 界面却把它显示成已生效。两条都要拦。
     /// </remarks>
-#if (IncludeMultiTenancy)
     [Fact]
     public async Task Tenant_context_can_neither_see_nor_change_process_settings()
     {

@@ -1,12 +1,7 @@
 namespace Leistd.Ddd.Domain.Repositories;
 
-/// <summary>
-/// <see cref="IQueryable{T}"/> 的异步执行入口。
-/// </summary>
-/// <remarks>
-/// Domain 层不引用 EF Core，因此拿到 <see cref="IRepository{TEntity}.GetQueryableAsync"/> 的查询后
-/// 无法直接调 <c>ToListAsync</c> 等扩展方法。注入本接口由 Infrastructure 层的实现完成异步执行。
-/// </remarks>
+/// <summary><see cref="IQueryable{T}"/> 的异步执行入口。</summary>
+/// <remarks>Domain 层不引用 EF Core，<see cref="IRepository{TEntity}.GetQueryableAsync"/> 返回的查询经本接口异步执行。</remarks>
 public interface IQueryableAsyncExecuter
 {
     /// <summary>异步物化为列表。</summary>

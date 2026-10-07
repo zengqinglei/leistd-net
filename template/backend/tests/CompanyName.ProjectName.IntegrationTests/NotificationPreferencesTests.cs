@@ -6,7 +6,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 #if (Email)
-using CompanyName.ProjectName.Api.Notifications;
+using CompanyName.ProjectName.Application.Notifications.Provider;
 #endif
 using CompanyName.ProjectName.Application.Notifications;
 using CompanyName.ProjectName.Application.Settings.Provider;
@@ -18,15 +18,14 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Email.Abstractions;
 using Leistd.Notifications.Email.Recipients;
 #endif
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
-using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
 #if (!LocalIdentity)
 using Leistd.MultiTenancy.Context;
 #endif
+#if (LocalIdentity)
 using Microsoft.AspNetCore.Mvc.Testing;
+#endif
 #if (Email)
 using Microsoft.AspNetCore.TestHost;
 #endif
@@ -132,8 +131,8 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(mailbox);
             services.RemoveAll<INotificationRecipientResolver>();
-            services.AddScoped<UserEmailRecipientResolver>();
-            services.AddScoped<INotificationRecipientResolver>(provider =>
+            services.AddTransient<UserEmailRecipientResolver>();
+            services.AddTransient<INotificationRecipientResolver>(provider =>
                 new RecordingRecipientResolver(provider.GetRequiredService<UserEmailRecipientResolver>(), mailbox));
         }));
         return (host, mailbox);

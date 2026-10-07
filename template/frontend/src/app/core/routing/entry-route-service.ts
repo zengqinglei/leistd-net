@@ -2,12 +2,8 @@ import { Location } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 
 /**
- * 当前停在哪条应用路由上，读自 Angular 的 `Location`。
- *
- * 为什么不读 `Router.url`：启动流跑在 `provideAppInitializer` 里、初始导航之前，那时它一律是 `/`——
- * 直接打开 `/platform/users` 这种深链时，用它记落地地址会记成 `/`，用它判断"当前在哪条路由上"
- * 会把 OIDC 回调页误判成普通页面。`Location` 按所配置的路径或哈希策略直接解析地址栏并去掉
- * base href，初始导航前后都准。
+ * 当前停在哪条应用路由上，读自 Angular 的 `Location`。不读 `Router.url`：启动流跑在初始导航之前，
+ * 那时它一律是 `/`；`Location` 按路径或哈希策略直接解析地址栏，初始导航前后都准。
  */
 @Injectable({ providedIn: 'root' })
 export class EntryRouteService {
@@ -24,11 +20,8 @@ export class EntryRouteService {
   }
 
   /**
-   * 应用路径（去掉查询串），供路由归类使用。
-   *
-   * 归类要拿路径去比，不能拿整条 URL 去 includes：`/#/workspace?returnUrl=/auth/callback`
-   * 里出现 `/auth/callback`，人并不在回调页——那样的误判会让普通会话过期走进认证流程
-   * 专用的处置分支。
+   * 应用路径（去掉查询串），供路由归类：查询串里可能出现 `/auth/callback`，不能对整条 URL
+   * 做 includes。
    */
   path(): string {
     return this.url().split('?')[0];

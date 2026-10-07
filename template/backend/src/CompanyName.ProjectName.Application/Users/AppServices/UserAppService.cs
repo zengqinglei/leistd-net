@@ -1,51 +1,45 @@
 using Leistd.UnitOfWork.Attributes;
-using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (RemoteTokenAuth)
+using Leistd.MultiTenancy.Context;
+using Leistd.UnitOfWork;
+#endif
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Events;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Application.Users.Mappings;
+using Leistd.EventBus.Abstractions;
 using Leistd.Timing;
 #endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.Users.Avatars;
+#endif
 using CompanyName.ProjectName.Application.Users.Dtos;
+using CompanyName.ProjectName.Application.Users.Mappings;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Authorization;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
 using Leistd.Security.Users;
 using Leistd.ExceptionHandling;
-using Leistd.ObjectMapping;
 using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
-#if (IncludeNotifications)
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
+#if (LocalIdentity && IncludeNotifications)
 using Leistd.Notifications.Stores;
 #endif
 
@@ -55,23 +49,24 @@ namespace CompanyName.ProjectName.Application.Users.AppServices;
 /// 用户应用服务
 /// </summary>
 public class UserAppService(
-    IRepository<User, Guid> userRepository,
-    IRepository<Role, Guid> roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
+    IUserRepository userRepository,
+    IRoleRepository roleRepository,
     IPermissionChecker permissionChecker,
     IOperationRecorder operationRecorder,
-#if (LocalIdentity)
-    // 资源服务形态下用户由令牌投影而来：没有新建、改邮箱、重置口令这些入口，
-    // 这个依赖的三处用法全在本形态内，那边留着只会是一个未读参数
     UserDomainService userDomainService,
+#if (RemoteTokenAuth)
+    ICurrentTenant currentTenant,
+    IUnitOfWorkManager unitOfWorkManager,
+#endif
+#if (LocalIdentity)
     UserSessionDomainService userSessionDomainService,
-    ISecurityAlertPublisher securityAlerts,
+    ILocalEventBus localEventBus,
 #endif
 #if (OpenIddictServer)
     IOpenIddictTokenManager tokenManager,
 #endif
     ICurrentUser currentUser,
-#if (IncludeNotifications)
+#if (LocalIdentity && IncludeNotifications)
     INotificationStore notificationStore,
 #endif
     ILogger<UserAppService> logger,
@@ -81,9 +76,11 @@ public class UserAppService(
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
-    /// <summary>角色名称最大长度，与 Role 实体的持久化约束保持一致。</summary>
-    private const int RoleNameMaxLength = 64;
+#if (RemoteTokenAuth)
+    /// <summary>OIDC 标准声明：签发方是否已验证该邮箱。</summary>
+    private const string EmailVerifiedClaimType = "email_verified";
 
+#endif
     /// <summary>
     /// 获取用户列表（分页）
     /// </summary>
@@ -91,7 +88,7 @@ public class UserAppService(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var userQuery = await userRepository.GetQueryableAsync(cancellationToken);
+        var userQuery = await userRepository.GetQueryableWithRolesAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(input.Keyword))
         {
@@ -113,18 +110,12 @@ public class UserAppService(
 
         if (input.Roles is { Count: > 0 })
         {
-            // 规范化：去 null/空白（模型绑定会把空白项转为 null）、去重；单项超长直接拒绝。
+            // 规范化：去 null/空白（模型绑定会把空白项转为 null）、去重；单项长度已由入参 DTO 校验。
             var roleNames = input.Roles
                 .Where(r => !string.IsNullOrWhiteSpace(r))
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
-            if (roleNames.Exists(r => r.Length > RoleNameMaxLength))
-            {
-                throw new BusinessException(RoleErrorCodes.NameTooLong,
-                    $"Role name cannot exceed {RoleNameMaxLength} characters.")
-                    .WithData("MaximumLength", RoleNameMaxLength);
-            }
             if (roleNames.Count > 0)
             {
                 var matchedRoles = await roleRepository.GetListAsync(r => roleNames.Contains(r.Name), cancellationToken);
@@ -134,8 +125,7 @@ public class UserAppService(
                     return new PagedResult<UserManagementOutputDto>(0, []);
                 }
 
-                var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
-                userQuery = userQuery.Where(u => userRoleQuery.Any(ur => roleIds.Contains(ur.RoleId) && ur.UserId == u.Id));
+                userQuery = userQuery.Where(u => u.Roles.Any(ur => roleIds.Contains(ur.RoleId)));
             }
         }
 
@@ -178,16 +168,63 @@ public class UserAppService(
     /// </summary>
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
         return await MapToOutputAsync(user, cancellationToken);
     }
 #if (RemoteTokenAuth)
 
     /// <inheritdoc />
-    public async Task<UserManagementOutputDto?> FindAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<CurrentResourceUserOutputDto> GetCurrentResourceUserAsync(CancellationToken cancellationToken = default)
     {
-        var user = await userRepository.GetByIdAsync(id, cancellationToken);
-        return user is null ? null : await MapToOutputAsync(user, cancellationToken);
+        var user = currentUser.Id is { } id ? await userRepository.GetWithRolesAsync(id, cancellationToken) : null;
+        var local = user is null ? null : await MapToOutputAsync(user, cancellationToken);
+        return new CurrentResourceUserOutputDto
+        {
+            Id = currentUser.Id,
+            Username = currentUser.Username ?? "",
+            Email = currentUser.Email ?? "",
+            DisplayName = currentUser.Name,
+            IsEmailVerified = currentUser.FindClaim(EmailVerifiedClaimType)?.Value == "true",
+            IsSuperAdmin = local?.IsSuperAdmin ?? false,
+            Roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
+            TenantId = currentTenant.Id
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!currentUser.IsAuthenticated || currentUser.Id is not { } subjectId)
+        {
+            return;
+        }
+
+        try
+        {
+            await ProjectCurrentUserAsync(subjectId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // 首次访问的并发：同一个 sub 的两个请求同时插入，输的那个在提交时撞主键。
+            // 前端登录后往往并行发好几个请求，第一次访问正好都在投影；重来一次就会读到赢家写下的行。
+            // 只重试一次，不做退避循环：第二次还失败就不是竞争，是真有问题，交给调用方
+            logger.LogDebug(exception, "Projecting issuer subject {SubjectId} failed once; retrying", subjectId);
+            await ProjectCurrentUserAsync(subjectId, cancellationToken);
+        }
+    }
+
+    // 独立工作单元：投影是请求的前置动作，不该被后续业务失败连带回滚——
+    // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关
+    private async Task ProjectCurrentUserAsync(Guid subjectId, CancellationToken cancellationToken)
+    {
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
+        await userDomainService.EnsureProjectedAsync(
+            subjectId,
+            currentUser.Username,
+            currentUser.Email,
+            currentUser.Name,
+            cancellationToken);
+        await unitOfWork.CompleteAsync(cancellationToken);
     }
 #endif
 
@@ -211,13 +248,13 @@ public class UserAppService(
         // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
         var roles = input.RoleIds.Count > 0
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
-            : await GetDefaultRolesAsync(cancellationToken);
+            : await roleRepository.GetDefaultRolesAsync(cancellationToken);
         AvatarPolicy.EnsureValid(input.Avatar?.Trim());
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
+        user.AssignRoles(roles.Select(role => role.Id));
         await userRepository.UpdateAsync(user, cancellationToken);
-        var userRoles = await AssignRolesAsync(user.Id, roles, cancellationToken);
 
         logger.LogInformation("User created (ID: {Id})", user.Id);
 
@@ -228,7 +265,7 @@ public class UserAppService(
             PermissionConstant.Users.Create,
             cancellationToken);
 
-        return MapToOutput(user, userRoles, roles);
+        return MapToOutput(user, roles);
     }
 
     /// <summary>
@@ -242,17 +279,16 @@ public class UserAppService(
     {
         logger.LogInformation("Updating user {Id}", id);
 
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
         }
 
         var email = input.Email.Trim();
         if (!await userDomainService.IsEmailAvailableAsync(id, email, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.EmailAlreadyUsed, $"Email '{email}' is already in use.")
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
                 .WithData("Email", email);
         }
 
@@ -294,8 +330,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.");
         }
 
         // 已启用时静默成功、不留记录（同解锁）：重复点击不该留下一串没发生过的事
@@ -317,30 +352,27 @@ public class UserAppService(
     /// <summary>
     /// 禁用用户
     /// </summary>
+#if (LocalIdentity)
+    /// <remarks>停用与撤销同生共死；撤销的时序见 <see cref="RevokeAllAccessAsync"/>。</remarks>
+    [UnitOfWork]
+#endif
     public async Task DisableAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminDisableForbidden, "The built-in super administrator cannot be disabled by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableForbidden, "The built-in super administrator cannot be disabled by other administrators.");
         }
         if (!user.CanBeDisabled())
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminDisableSelfForbidden, "The built-in super administrator cannot disable itself.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableSelfForbidden, "The built-in super administrator cannot disable itself.");
         }
 
         var wasActive = user.IsActive;
         user.Disable();
         await userRepository.UpdateAsync(user, cancellationToken);
-#if (LocalIdentity)
 
-        // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
-        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
-#endif
-
-        // 撤销照做（兜住此前遗留的会话），记录只在状态真正变化时写
+        // 记录只在状态真正变化时写；下面的撤销照做，兜住此前遗留的会话与令牌
         if (wasActive)
         {
             await operationRecorder.RecordSucceededAsync(
@@ -349,35 +381,44 @@ public class UserAppService(
                 PermissionConstant.Users.Update,
                 cancellationToken);
         }
+#if (LocalIdentity)
+
+        // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
+        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
+#endif
     }
 
 #if (LocalIdentity)
     /// <summary>
     /// 重置用户密码，并撤销该用户的全部会话
     /// </summary>
+    /// <remarks>口令与撤销同生共死；提醒在提交之后发出。</remarks>
+    [UnitOfWork]
     public async Task ResetPasswordAsync(Guid id, ResetUserPasswordInputDto input, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminResetPasswordForbidden, "The built-in super administrator's password cannot be reset by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminResetPasswordForbidden, "The built-in super administrator's password cannot be reset by other administrators.");
         }
 
         userDomainService.ResetPassword(user, input.Password);
         await userRepository.UpdateAsync(user, cancellationToken);
+
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), clock.Now),
+            cancellationToken);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserPasswordReset,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
 
         // 密码被管理员重置，意味着账号可能已不在本人掌控之下：此前的会话全部作废。
         // 重置的是自己时保留当前这台，免得操作完把自己踢出去
         await RevokeAllAccessAsync(
             user.Id,
             user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
-            cancellationToken);
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), cancellationToken);
-        await operationRecorder.RecordSucceededAsync(
-            OperationRecordActions.UserPasswordReset,
-            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
-            PermissionConstant.Users.Update,
             cancellationToken);
     }
 
@@ -411,14 +452,15 @@ public class UserAppService(
     /// <remarks>
     /// 给丢了手机又没了恢复码的人用。会话一并作废：能走到这一步，说明账号的第二道门已经不在本人手里。
     /// 所在租户要求两步验证时，本人下次登录会被带去重新设置。
+    /// 停用与撤销同生共死；提醒在提交之后发出。
     /// </remarks>
+    [UnitOfWork]
     public async Task ResetTwoFactorAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.");
         }
 
         if (!user.TwoFactorEnabled)
@@ -428,16 +470,19 @@ public class UserAppService(
 
         user.DisableTwoFactor();
         await userRepository.UpdateAsync(user, cancellationToken);
-        await RevokeAllAccessAsync(
-            user.Id,
-            user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
-            cancellationToken);
 
-        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorReset), cancellationToken);
+        await localEventBus.PublishAsync(
+            new SecurityAlertRequestedEvent(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorReset), clock.Now),
+            cancellationToken);
         await operationRecorder.RecordSucceededAsync(
             OperationRecordActions.UserTwoFactorReset,
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             PermissionConstant.Users.Update,
+            cancellationToken);
+
+        await RevokeAllAccessAsync(
+            user.Id,
+            user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
             cancellationToken);
     }
 #endif
@@ -452,19 +497,22 @@ public class UserAppService(
     /// 主体被永久删除时才调用 <c>IPermissionGrantManager.RemoveProviderAsync</c> 清理，
     /// 例如角色删除（<c>RoleAppService.DeleteAsync</c>）。
     /// <para>站内通知一并删掉：它们只对本人有意义，留下来就是没人能读、也没人能删的孤儿行。</para>
+    /// <para>删除、清理与撤销同生共死；撤销的时序见 <see cref="RevokeAllAccessAsync"/>。</para>
+    /// <para>删除幂等：用户不存在（含已删除）时直接成功，不写操作记录——什么也没删。</para>
     /// </remarks>
+    [UnitOfWork]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Deleting user {Id}", id);
+        var user = await userRepository.GetByIdAsync(id, cancellationToken);
+        if (user is null)
+            return;
 
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        logger.LogInformation("Deleting user {Id}", id);
         if (!user.CanBeDeleted())
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.");
         }
 
-        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
         await userRepository.DeleteAsync(user, cancellationToken);
 #if (IncludeNotifications)
         await notificationStore.DeleteAllAsync(id.ToString(), cancellationToken);
@@ -478,20 +526,19 @@ public class UserAppService(
             OperationTarget.For(id, user.DisplayName ?? user.Username),
             PermissionConstant.Users.Delete,
             cancellationToken);
+
+        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
     }
 
 #endif
     private async Task<User> GetUserOrThrowAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var user = await userRepository.GetByIdAsync(id, cancellationToken);
-        if (user is null)
-        {
-            throw new BusinessException(UserErrorCodes.NotFound, $"User {id} not found.")
-                .WithData("Id", id);
-        }
+        => await userRepository.GetByIdAsync(id, cancellationToken) ?? throw UserNotFound(id);
 
-        return user;
-    }
+    private async Task<User> GetUserWithRolesOrThrowAsync(Guid id, CancellationToken cancellationToken)
+        => await userRepository.GetWithRolesAsync(id, cancellationToken) ?? throw UserNotFound(id);
+
+    private static BusinessException UserNotFound(Guid id)
+        => new BusinessException(UserErrorCodes.NotFound, $"User {id} not found.").WithData("Id", id);
 
     /// <inheritdoc />
     public async Task<UserAvatarOutputDto?> GetAvatarAsync(Guid id, CancellationToken cancellationToken = default)
@@ -505,14 +552,11 @@ public class UserAppService(
     /// <summary>
     /// 查询用户当前角色。
     /// </summary>
-    public async Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        await GetUserOrThrowAsync(id, cancellationToken);
-
-        var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == id, cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
+        var roleIds = (await GetUserWithRolesOrThrowAsync(id, cancellationToken)).GetRoleIds();
         if (roleIds.Count == 0)
         {
             return [];
@@ -525,22 +569,22 @@ public class UserAppService(
     /// <summary>
     /// 替换用户角色。调用方必须持有 App.Users.ManageRoles，由 Controller 上的策略保证。
     /// </summary>
-    /// <remarks>先删旧角色再插新角色：拆成两次提交时，插入失败会把用户留在零角色状态。</remarks>
+    /// <remarks>撤销与新增在同一工作单元提交：拆成两次提交时，后一步失败会把用户留在零角色状态。</remarks>
     [UnitOfWork]
-    public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
         Guid id,
         UpdateUserRolesInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        var user = await GetUserWithRolesOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
-                ;
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.");
         }
 
         var roles = await GetRolesByIdsAsync(input.RoleIds, cancellationToken);
-        await ReplaceUserRolesAsync(id, roles, cancellationToken);
+        user.ReplaceRoles(roles.Select(role => role.Id));
+        await userRepository.UpdateAsync(user, cancellationToken);
 
         logger.LogInformation("User roles replaced (ID: {Id}, role count: {Count})", id, roles.Count);
 
@@ -564,8 +608,7 @@ public class UserAppService(
     {
         if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Users.ManageRoles, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.ManageRolesRequired, "Assigning roles requires the user role management permission.")
-                ;
+            throw new BusinessException(UserErrorCodes.ManageRolesRequired, "Assigning roles requires the user role management permission.");
         }
 
         return await GetRolesByIdsAsync(roleIds, cancellationToken);
@@ -593,42 +636,6 @@ public class UserAppService(
         return roles;
     }
 
-    /// <summary>
-    /// 没有显式指定角色时使用默认角色，保证新用户不会处于"零角色"状态。
-    /// </summary>
-    private async Task<List<Role>> GetDefaultRolesAsync(CancellationToken cancellationToken)
-        => [.. await roleRepository.GetListAsync(r => r.IsDefault, cancellationToken)];
-
-    /// <returns>本次写入的用户角色关联行。</returns>
-    /// <remarks>
-    /// 回传而不是让调用方回查：在工作单元内这些行还没落库，回查查不到。
-    /// 调用方要的本来就是"我刚写进去的那些"，回查多一次往返还多一层不确定。
-    /// </remarks>
-    private async Task<List<UserRole>> AssignRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
-    {
-        if (roles.Count == 0)
-        {
-            return [];
-        }
-
-        var userRoles = roles.Select(role => new UserRole(userId, role.Id)).ToList();
-        await userRoleRepository.InsertManyAsync(userRoles, cancellationToken);
-        return userRoles;
-    }
-
-    /// <returns>替换后的用户角色关联行。</returns>
-    /// <remarks><inheritdoc cref="AssignRolesAsync" path="/remarks"/></remarks>
-    private async Task<List<UserRole>> ReplaceUserRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
-    {
-        var currentRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken)).ToList();
-        if (currentRoles.Count != 0)
-        {
-            await userRoleRepository.DeleteManyAsync(currentRoles, cancellationToken);
-        }
-
-        return await AssignRolesAsync(userId, roles, cancellationToken);
-    }
-
     private async Task<List<UserManagementOutputDto>> MapToOutputsAsync(List<User> users, CancellationToken cancellationToken)
     {
         if (users.Count == 0)
@@ -636,47 +643,47 @@ public class UserAppService(
             return [];
         }
 
-        var userIds = users.Select(u => u.Id).ToList();
-        var userRoles = (await userRoleRepository.GetListAsync(ur => userIds.Contains(ur.UserId), cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
-        var roles = roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
-
-        return objectMapper.Map<List<User>, List<UserManagementOutputDto>>(users, CreateMappingContext(userRoles, roles));
+        var roles = await GetRolesOfAsync(users, cancellationToken);
+        return objectMapper.Map<List<User>, List<UserManagementOutputDto>>(users, CreateMappingContext(roles));
     }
 
+    /// <remarks>用户须已带角色读取。</remarks>
     private async Task<UserManagementOutputDto> MapToOutputAsync(User user, CancellationToken cancellationToken)
     {
-        var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == user.Id, cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
-        var roles = roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
-        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(userRoles, roles));
+        var roles = await GetRolesOfAsync([user], cancellationToken);
+        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(roles));
+    }
+
+    private async Task<List<Role>> GetRolesOfAsync(List<User> users, CancellationToken cancellationToken)
+    {
+        var roleIds = users.SelectMany(u => u.GetRoleIds()).Distinct().ToList();
+        return roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
     }
 
     /// <remarks>
-    /// 供刚写入的路径使用：角色数据由调用方给出，不回查数据库。
-    /// 写方法本来就知道自己产出了什么，回查既多一次往返，又要求那些行已经落库。
+    /// 供刚写入的路径使用：角色实体由调用方给出，不回查数据库。
+    /// 写方法本来就知道自己分配了哪些角色，回查既多一次往返，又要求成员关系已经落库。
     /// </remarks>
-    private UserManagementOutputDto MapToOutput(User user, List<UserRole> userRoles, List<Role> roles)
+    private UserManagementOutputDto MapToOutput(User user, List<Role> roles)
     {
-        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(userRoles, roles));
+        return objectMapper.Map<User, UserManagementOutputDto>(user, CreateMappingContext(roles));
     }
 
-    /// <remarks>排序是展示口径，映射交给已注册的 <c>Role → RoleBriefDto</c>，不在此手工构造 DTO。</remarks>
-    private List<RoleBriefDto> ToRoleBriefs(List<Role> roles)
+    /// <remarks>排序是展示口径，映射交给已注册的 <c>Role → RoleBriefOutputDto</c>，不在此手工构造 DTO。</remarks>
+    private List<RoleBriefOutputDto> ToRoleBriefs(List<Role> roles)
     {
         var ordered = roles
             .OrderBy(r => r.Sort)
             .ThenBy(r => r.Name, StringComparer.Ordinal)
             .ToList();
-        return objectMapper.Map<List<Role>, List<RoleBriefDto>>(ordered);
+        return objectMapper.Map<List<Role>, List<RoleBriefOutputDto>>(ordered);
     }
 
-    private Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)
+    private Dictionary<string, object> CreateMappingContext(List<Role> roles)
     {
         return new Dictionary<string, object>
         {
-            ["UserRoles"] = userRoles,
-            ["Roles"] = roles,
+            [UserMappings.RolesKey] = roles,
 #if (LocalIdentity)
             [UserMappings.NowKey] = clock.Now,
 #endif
@@ -685,11 +692,18 @@ public class UserAppService(
 
 #if (LocalIdentity)
     /// <summary>
-    /// 作废该用户已建立的会话与已签发的令牌。
+    /// 作废该用户已建立的会话与已签发的令牌。调用方在工作单元内、把它放在最后一步。
     /// </summary>
     /// <remarks>
-    /// 撤权要对已签发的凭据生效：会话 Cookie 由会话校验按登记的会话拒绝，Bearer 令牌由令牌记录校验按撤销状态拒绝，
-    /// 两者都在认证阶段就失效。与写入同在一个工作单元里，撤不掉就整体失败，不留"账号停了、令牌还能用"的状态。
+    /// <para>撤权要对已签发的凭据生效：会话 Cookie 由会话校验按登记的会话拒绝，Bearer 令牌由令牌记录校验按撤销状态拒绝，
+    /// 两者都在认证阶段就失效。</para>
+    /// <para>会话删除与调用方的写入同在一个事务里提交。</para>
+#if (OpenIddictServer)
+    /// <para>令牌撤销不在这个事务里：OpenIddict 存储用自己的上下文与连接（多租户时用户还在另一个库），
+    /// 撤销语句当场生效。所以它放在最后、提交之前：撤不掉就抛出，整个用例回滚，不留"账号停了、令牌还能用"的状态；
+    /// 撤销之后只剩提交本身可能失败，那时令牌已作废而用例回滚，结果是本人需要重新登录，错在安全一侧。
+    /// 不放到提交后处理器：那里失败时变更已提交、令牌仍然有效，而重置两步验证与删除的重试会在前置检查处返回，不再撤销。</para>
+#endif
     /// </remarks>
     /// <param name="userId">用户 Id。</param>
     /// <param name="keepSessionId">保留的会话（管理员操作的是自己时保留当前这台），没有则为 null。</param>

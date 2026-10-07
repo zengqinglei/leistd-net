@@ -49,9 +49,9 @@ import {
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 //#if (Email)
-import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
+import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../dtos/account.dto';
 //#else
-import { CaptchaOutputDto } from '../../models/account.dto';
+import { CaptchaOutputDto } from '../../dtos/account.dto';
 //#endif
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -104,7 +104,6 @@ export class Register implements OnInit {
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
 
-  // 密码可见性
   protected readonly showPassword = signal(false);
 
   protected readonly showConfirmPassword = signal(false);
@@ -126,7 +125,6 @@ export class Register implements OnInit {
   public readonly isSendingEmailCode = this._isSendingEmailCode.asReadonly();
 
 //#endif
-  // 注册表单模型（Signal Forms）
   private readonly model = signal({
     email: '',
     username: '',
@@ -173,8 +171,7 @@ export class Register implements OnInit {
     this.destroyRef.onDestroy(() => this.clearCountdown());
 
 //#endif
-    // 监听 email/username 变化：从邮箱前缀自动推导 username，
-    // 一旦用户手动改动 username 即停止推导（等价原 valueChanges 逻辑）。
+    // 从邮箱前缀自动推导 username，用户手动改过 username 后停止推导。
     effect(() => {
       const email = this.model().email;
 //#if (Email)

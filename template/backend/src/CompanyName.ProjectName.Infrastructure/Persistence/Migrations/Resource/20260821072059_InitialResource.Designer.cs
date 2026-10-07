@@ -167,7 +167,6 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.UserRole", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreationTime")
@@ -606,21 +605,22 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.UserRole", b =>
                 {
-                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.Role", "Role")
+                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.Role", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", "User")
-                        .WithMany()
+                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", null)
+                        .WithMany("Roles")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
 
-                    b.Navigation("Role");
-
-                    b.Navigation("User");
+            modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.User", b =>
+                {
+                    b.Navigation("Roles");
                 });
 #pragma warning restore 612, 618
         }

@@ -4,8 +4,9 @@ namespace CompanyName.ProjectName.Application.Tenants.Errors;
 public static class TenantErrorCodes
 {
     public const string ActivateWithoutUsers = "Tenant:ActivateWithoutUsers";
+#if (Impersonation)
     public const string AdministratorNotFound = "Tenant:AdministratorNotFound";
     public const string AlreadyImpersonating = "Tenant:AlreadyImpersonating";
-    public const string ImpersonationRequiresAuthentication = "Tenant:ImpersonationRequiresAuthentication";
     public const string NotImpersonating = "Tenant:NotImpersonating";
+#endif
 }

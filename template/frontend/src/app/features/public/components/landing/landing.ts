@@ -8,9 +8,9 @@ import { lucideShield, lucideSunMoon, lucideUsers } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
 
 //#if (IncludeLocalization)
-import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
+import { LanguageSwitcher } from '../../../../core/components/language-switcher/language-switcher';
 //#endif
-import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
+import { ThemeModeToggle } from '../../../../core/components/theme-mode-toggle/theme-mode-toggle';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif

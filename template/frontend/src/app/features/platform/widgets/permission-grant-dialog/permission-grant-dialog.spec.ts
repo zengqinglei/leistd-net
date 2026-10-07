@@ -1,19 +1,24 @@
-import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpErrorResponse,
+  HttpInterceptorFn,
+  provideHttpClient,
+  withInterceptors,
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { toast } from '@spartan-ng/brain/sonner';
+import { catchError, throwError } from 'rxjs';
 
 import { PermissionGrantDialog } from './permission-grant-dialog';
+import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 
 /**
- * 权限弹窗的加载竞态回归。
- *
- * 弹窗是角色与用户共用的，主体可以在两次请求之间切换。若加载不取消也不校验归属，
- * 晚到的响应会落到新主体上，保存时就会把上一个主体的授予写给当前主体——两边版本
- * 都是 0 时乐观并发也拦不住，因此这三条必须由前端自己守住。
+ * 权限弹窗的加载竞态：弹窗供角色与用户共用，晚到的响应若落到新主体，两边版本同为 0 时
+ * 乐观并发也拦不住，须由前端自己守住。
  */
 @Component({
   imports: [PermissionGrantDialog],
@@ -25,6 +30,16 @@ class HostComponent {
 }
 
 const DEFINITIONS_URL = '/api/v1/permissions/definitions';
+
+/** 与应用的错误拦截器一样把失败归一化为 `ApplicationHttpError`，弹窗按其中的错误码分支。 */
+const normalizeErrors: HttpInterceptorFn = (req, next) =>
+  next(req).pipe(
+    catchError((error: unknown) =>
+      throwError(() =>
+        error instanceof HttpErrorResponse ? ApplicationHttpError.from(error) : error,
+      ),
+    ),
+  );
 
 function definitions() {
   return [
@@ -64,7 +79,7 @@ describe('PermissionGrantDialog', () => {
       // prettier-ignore
       providers: [
                 provideZonelessChangeDetection(),
-                provideHttpClient(),
+                provideHttpClient(withInterceptors([normalizeErrors])),
                 provideHttpClientTesting(),
                 //#if (IncludeLocalization)
                 ...provideTranslocoTesting(),
@@ -133,6 +148,34 @@ describe('PermissionGrantDialog', () => {
     expect(dialog().canSave()).toBe(false);
   });
 
+  it('shows the load failure with retry instead of an empty list, and retry reloads', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting
+      .expectOne('/api/v1/permissions/grants/roles/role-a')
+      .flush({ detail: 'boom' }, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+
+    // 失败要说出来并给重试：不能停在一张看似"没有任何权限"的空列表上
+    expect(dialog().loadError()).not.toBeNull();
+    expect(errorToast).not.toHaveBeenCalled();
+    expect(document.querySelector('hlm-accordion-trigger')).toBeNull();
+    const retry = document.querySelector<HTMLButtonElement>('[data-testid="permissions-retry"]');
+    expect(retry, 'retry button should be rendered').not.toBeNull();
+
+    retry!.click();
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await fixture.whenStable();
+
+    expect(dialog().loadError()).toBeNull();
+    expect(dialog().isGranted('App.Users')).toBe(true);
+    expect(dialog().canSave()).toBe(true);
+    expect(document.querySelector('[data-testid="permissions-retry"]')).toBeNull();
+  });
+
   it('blocks saving until the current subject has loaded successfully', async () => {
     await fixture.whenStable();
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
@@ -147,6 +190,7 @@ describe('PermissionGrantDialog', () => {
   });
 
   it('reloads the subject after a concurrency conflict', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
     await fixture.whenStable();
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
@@ -155,8 +199,15 @@ describe('PermissionGrantDialog', () => {
     dialog().onSave();
     httpTesting
       .expectOne({ method: 'PUT', url: '/api/v1/permissions/grants/roles/role-a' })
-      .flush({ detail: 'conflict' }, { status: 409, statusText: 'Conflict' });
+      .flush(
+        { code: 'Permission:ConcurrencyConflict', detail: 'conflict' },
+        { status: 409, statusText: 'Conflict' },
+      );
     await fixture.whenStable();
+
+    expect(errorToast).toHaveBeenCalledOnce();
+    expect(errorToast).not.toHaveBeenCalledWith('conflict');
+    expect(dialog().saving()).toBe(false);
 
     // 409 后必须真的重新拉取，否则用户只能拿着旧版本反复重试、反复 409。
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
@@ -166,6 +217,30 @@ describe('PermissionGrantDialog', () => {
     await fixture.whenStable();
 
     expect(dialog().isGranted('App.Users')).toBe(false);
+  });
+
+  it('only reports a 409 whose code is not a concurrency conflict, without reloading', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await fixture.whenStable();
+
+    dialog().onSave();
+    httpTesting
+      .expectOne({ method: 'PUT', url: '/api/v1/permissions/grants/roles/role-a' })
+      .flush(
+        { code: 'Permission:SomethingElse', detail: 'Other conflict' },
+        { status: 409, statusText: 'Conflict' },
+      );
+    await fixture.whenStable();
+
+    // 只按服务端文案提示一次；不重新加载，界面上的勾选与版本原样保留，可以改后再存。
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith('Other conflict');
+    httpTesting.expectNone(DEFINITIONS_URL);
+    expect(dialog().isGranted('App.Users')).toBe(true);
+    expect(dialog().version()).toBe(7);
+    expect(dialog().saving()).toBe(false);
   });
 
   it('keeps the spinner up until the next subject has loaded', async () => {

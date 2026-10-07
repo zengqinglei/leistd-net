@@ -9,9 +9,7 @@ using Leistd.Settings.EntityFrameworkCore.Stores;
 
 namespace Leistd.Settings.EntityFrameworkCore;
 
-/// <summary>
-/// 设置 EF Core 持久化依赖注入与模型配置。
-/// </summary>
+/// <summary>设置 EF Core 持久化的注册与模型配置。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -20,6 +18,7 @@ public static class DependencyInjection
     /// <remarks>
     /// 宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>；
     /// 本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文。
+    /// 同一 DbContext 重复调用幂等；已用另一 DbContext 或其他实现注册过设置存储时抛出 <see cref="InvalidOperationException"/>。
     /// </remarks>
     /// <example>
     /// <code>
@@ -38,8 +37,7 @@ public static class DependencyInjection
     public static IServiceCollection AddSettingsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-
-        // 设置只有一个权威存储：两个上下文各注册一次时会静默取一条，值写进宿主没预期的库。
+        // 设置只有一个权威存储：两个上下文各注册一次时会静默取其一
         services.EnsureSingleAuthoritative<ISettingStore, EfCoreSettingStore<TDbContext>>(
             ServiceLifetime.Transient,
             "Settings have a single authoritative store; map SettingRecord in one DbContext.");

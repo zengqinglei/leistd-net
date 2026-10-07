@@ -1,12 +1,7 @@
 namespace Leistd.Disposables;
 
-/// <summary>
-/// 在释放时执行一次指定操作。
-/// </summary>
-/// <remarks>
-/// 可用于释放时恢复父上下文。重复调用 <c>Dispose()</c> 不会再次执行动作。
-/// </remarks>
-/// <param name="action">释放时执行的动作</param>
+/// <summary>在释放时执行一次指定操作；重复或并发调用 <c>Dispose()</c> 只执行一次。</summary>
+/// <param name="action">释放时执行的动作。</param>
 public sealed class DisposeAction(Action action) : IDisposable
 {
     private Action? _action = action ?? throw new ArgumentNullException(nameof(action));

@@ -22,11 +22,11 @@ import {
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
+import { LayoutService } from '../../../core/services/layout-service';
 import { Logo } from '../../../shared/components/logo/logo';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
-import { LayoutService } from '../../services/layout-service';
 import { MenuItem, NavigationService } from '../../services/navigation-service';
 import { UserMenu } from '../user-menu/user-menu';
 

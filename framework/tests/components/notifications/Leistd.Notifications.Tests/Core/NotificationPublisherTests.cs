@@ -85,7 +85,7 @@ public class NotificationPublisherTests
         Assert.Equal(DateTimeKind.Utc, store.Saved[0].Notification.CreationTime.Kind);
     }
 
-    // 同一份内容扇出给多个用户是多条独立记录。入参曾是带 Id 的输出 DTO，调用方复用一个对象
+    // 同一份内容扇出给多个用户是多条独立记录。入参若是带 Id 的输出 DTO，调用方复用一个对象
     // 逐人发布时两条记录带同一个主键，第二次落库直接冲突——身份必须在收件人边界产生。
     [Fact]
     public async Task The_same_content_becomes_an_independent_record_per_recipient()
@@ -124,7 +124,7 @@ public class NotificationPublisherTests
     }
 
     // 跨渠道隔离归发布器：一个宿主自定义渠道抛错，后面的渠道仍要收到，历史也已经落库。
-    // 契约曾要求"每个实现自己吞异常"——那让这条保证取决于每个实现者是否记得。
+    // 吞异常由发布方统一负责：若要求"每个实现自己吞异常"，这条保证就取决于每个实现者是否记得。
     [Fact]
     public async Task A_failing_channel_does_not_stop_the_remaining_channels()
     {

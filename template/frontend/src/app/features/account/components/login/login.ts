@@ -1,6 +1,6 @@
 // prettier-ignore
 import {
-  ChangeDetectionStrategy, Component, inject, signal,
+  ChangeDetectionStrategy, Component, inject, OnInit, signal,
   //#if (IncludeMultiTenancy)
   computed,
   //#endif
@@ -25,8 +25,6 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
-import { isMockedUrl } from '../../../../../../_mock/core/providers';
-import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
   applicationErrorMessage,
@@ -34,6 +32,7 @@ import {
   ApplicationHttpError,
   //#endif
 } from '../../../../core/errors/application-http-error';
+import { MOCKED_URL } from '../../../../core/mock/mocked-url';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
@@ -41,14 +40,11 @@ import { SessionContextService } from '../../../../core/services/session-context
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
-//#if (IncludeMultiTenancy)
-import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
-//#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 //#if (IncludeMultiTenancy)
-import { TenantService } from '../../../platform/services/tenant-service';
+import { HostTenantDecision } from '../../dtos/tenant-by-host.dto';
 //#endif
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -91,7 +87,7 @@ const githubIcon =
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class Login {
+export class Login implements OnInit {
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
   private readonly authorizationService = inject(AuthorizationService);
@@ -104,17 +100,12 @@ export class Login {
   protected readonly t = englishText(ENGLISH);
   //#endif
 //#if (IncludeMultiTenancy)
-  private readonly tenantService = inject(TenantService);
-//#endif
-//#if (IncludeMultiTenancy)
   protected readonly tenantContext = inject(TenantContextService);
 //#endif
 
-  // 加载状态
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
 
-  // 密码可见性
   protected readonly showPassword = signal(false);
   //#if (ExternalLogin)
 
@@ -126,9 +117,8 @@ export class Login {
   //#endif
 
   // 登录接口由 Mock 应答时才提示演示账号：只 Mock 了别的模块时，演示账号登不进真实后端
-  public readonly isMockEnabled = signal(isMockedUrl(environment.useMock, AuthService.loginUrl));
+  public readonly isMockEnabled = signal(inject(MOCKED_URL)(AuthService.loginUrl));
 
-  // 登录表单模型（Signal Forms）
   private readonly model = signal({
     usernameOrEmail: '',
     password: '',
@@ -157,14 +147,10 @@ export class Login {
       ?.twoFactorToken ?? null,
   );
 
+//#if (IncludeMultiTenancy || ExternalLogin)
   constructor() {
-    // 普通登录清理旧主体；重新认证保留当前上下文并始终显示表单，凭据成功后再替换。
-    if (this.route.snapshot.queryParamMap.get('reauthenticate') !== 'true') {
-      this.sessionContext.clear();
-    }
-
-    // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
 //#if (IncludeMultiTenancy)
+    // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
     void this.resolveTenantFromHost();
 //#endif
     //#if (ExternalLogin)
@@ -172,9 +158,15 @@ export class Login {
     //#endif
   }
 
-  /**
-   * 提交登录表单
-   */
+//#endif
+  ngOnInit(): void {
+    // 普通登录清理旧主体；重新认证保留当前上下文并始终显示表单，凭据成功后再替换。
+    // 清理会话属于改变会话状态的流程，不放构造函数。
+    if (this.route.snapshot.queryParamMap.get('reauthenticate') !== 'true') {
+      this.sessionContext.clear();
+    }
+  }
+
   async onSubmit() {
     // 租户上下文没定案就不发认证请求。按钮已经禁用，这里再挡一次是因为回车提交、
     // 以及探测在"表单填完、按钮刚点下"之间才失败的时序都绕不过表单事件。
@@ -247,10 +239,8 @@ export class Login {
       return;
     }
 
-    // 会话上下文必须在任何跳转之前建立完成。旧主体已被清空，此时直接跳 returnUrl：
-    // permissionGuard 会在空权限下判定并把人踢到 403——从受保护页面的深链登录，
-    // 本该落到那个页面，却落在拒绝页。设置也在这里就位，否则保存过的显示偏好
-    // 要到下一次硬刷新才生效（SPA 内跳转不会重跑应用初始化器）。
+    // 会话上下文在任何跳转前建立：旧主体已清空，空权限下 permissionGuard 会把深链登录踢到 403；
+    // 设置也要就位，SPA 内跳转不会重跑应用初始化器。
     await this.sessionContext.establish();
 
     // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
@@ -301,62 +291,40 @@ export class Login {
   readonly tenantError = signal<string | null>(null);
 
   /**
-   * 主机名探测的进度与结果。
-   *
-   * 五档，缺一不可：
-   * - `pending` 探测未回来。它一旦定案就会覆盖当前上下文，所以这段时间租户区不可操作，
-   *   认证入口也不能放行——否则用户会带着一个即将被换掉的租户点下登录。
-   * - `tenant` / `host` 域名已定案，界面不能再改。
-   * - `undecided` 域名不表态（未配置子域名格式的部署），交回用户手填。
-   * - `failed` 探测**没能完成**。这不等于"域名不表态"：域名不存在的租户时租户解析中间件
-   *   直接 404，那是"这个地址指向一个用不了的租户"；瞬时网络故障也证明不了域名没有约束。
-   *   把失败折进 undecided，等于在不知道域名会怎么解析的情况下让人手选一个注定被覆盖的
-   *   租户，然后带着它去登录。
+   * 主机名探测的进度与结果：
+   * - `pending` 未回来：定案会覆盖当前上下文，租户区与认证入口都不放行；
+   * - `tenant` / `host` 域名已定案，不能再改；
+   * - `undecided` 域名不表态（未配置子域名格式），交回用户手填；
+   * - `failed` 探测没能完成（租户不可用时中间件返回 404，或网络故障），不能当作 `undecided`。
    */
   readonly hostProbe = signal<HostTenantDecision | 'pending' | 'failed'>('pending');
 
   /**
-   * 租户由**域名**定案，界面不能再改。
-   *
-   * 两种定案都要锁：指向某个租户，或指向宿主。服务端按主机名解析且不允许请求头改写，
-   * 前端放开选择只会让界面显示的租户与服务端将要用的那个不一致——
-   * 用户以为在某个租户下登录，请求其实落在宿主（或反之）。
+   * 租户由域名定案（指向租户或宿主）时锁定：服务端按主机名解析且不允许请求头改写，
+   * 放开选择会让界面显示的租户与请求实际落到的上下文不一致。
    */
   readonly tenantLocked = computed(() => {
     const decision = this.hostProbe();
     return decision === 'host' || decision === 'tenant';
   });
 
-  /**
-   * 租户区不接受操作：探测还没回来、探测失败，或域名已经定案。
-   *
-   * 只有明确拿到 `undecided` 才开放手选。前两种情形下界面并不知道域名会怎么解析，
-   * 让人先挑一个，结果只会被随后的定案无声换掉。
-   */
+  /** 租户区不接受操作：探测未回来、失败或已定案；只有 `undecided` 开放手选。 */
   readonly tenantSelectionBlocked = computed(
     () => this.hostProbe() !== 'undecided' || this.tenantLocked(),
   );
 
   /**
-   * 租户上下文还没定案，认证入口一律等它。
-   *
-   * 与 {@link tenantSelectionBlocked} 分开：域名已经定案时不允许**选择**，但恰恰应该允许
-   * 登录。反过来，探测未回来或失败时不能登录——服务端按主机名解析且不接受请求头改写，
-   * 此时提交等于在前端显示着一个租户、请求却落到另一个上下文里。
+   * 租户上下文未定案时认证入口一律等待。与 {@link tenantSelectionBlocked} 不同：已定案时
+   * 不许选择但允许登录；探测未回来或失败时提交会落到与界面不一致的上下文。
    */
   readonly authBlocked = computed(
     () => this.hostProbe() === 'pending' || this.hostProbe() === 'failed',
   );
 
-  /**
-   * 开机按主机名探测一次租户：子域名部署下用户完全不必填。
-   *
-   * 三档结果分别处理——把"宿主定案"和"域名不表态"混成一档，会让宿主域上残留着
-   * 上次记住的租户，而请求已经按宿主发出去了。
-   */
+  /** 启动时按主机名探测租户。宿主定案与不表态分开处理，否则宿主域上会残留上次记住的租户。 */
   private async resolveTenantFromHost(): Promise<void> {
     try {
-      const result = await lastValueFrom(this.tenantService.getByHost());
+      const result = await lastValueFrom(this.accountService.getTenantByHost());
       switch (result.decision) {
         case 'tenant':
           // 租户不存在或已停用时 tenant 为空：清掉记住的那个，并保持锁定，
@@ -381,19 +349,14 @@ export class Login {
 
       this.hostProbe.set(result.decision);
     } catch {
-      // 保留成独立的失败态：未配置子域名格式的部署本来就正常返回 undecided，走不到这里。
-      // 能走到这里的是"域名指向的租户解析不了"（中间件 404）或后端不可达，两者都不能
-      // 推断成"域名不表态"，所以不开放手选、也不放行登录，只给出原因和重试。
+      // 未配置子域名格式的部署正常返回 undecided，走不到这里；失败只能是租户解析不了（404）
+      // 或后端不可达，因此不开放手选也不放行登录，只给原因和重试。
       this.hostProbe.set('failed');
       this.tenantError.set('account.login.tenantProbeFailed');
     }
   }
 
-  /**
-   * 重试域名探测。
-   *
-   * 瞬时故障不该让人只剩"刷新整页"这一条路——尤其表单可能已经填好了。
-   */
+  /** 重试域名探测：瞬时故障不该只剩刷新整页（表单可能已填好）。 */
   async retryHostProbe(): Promise<void> {
     if (this.hostProbe() !== 'failed') {
       return;
@@ -468,9 +431,6 @@ export class Login {
     this.loginWithExternalProvider('google', 'Google');
   }
 
-  /**
-   * 通用第三方登录
-   */
   private loginWithExternalProvider(provider: 'github' | 'google', label: string) {
     // 与本地登录同一条约束：第三方回调最终也落在按主机名解析出的那个上下文里。
     if (this.authBlocked()) {

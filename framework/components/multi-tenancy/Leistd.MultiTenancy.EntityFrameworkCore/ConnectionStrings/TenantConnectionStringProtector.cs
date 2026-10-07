@@ -3,9 +3,8 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 
-// 连接串的加解密：写入时加密、读取时解密，库、备份与只读账号里只有密文。
-// 密钥环完全沿用宿主的 Data Protection 配置（应用名、持久化位置、轮换），本组件不管理密钥。
-// purpose 固定：改它等于让所有已存密文不可解密。
+// 连接串写入时加密、读取时解密；密钥环沿用宿主的 Data Protection 配置，本组件不管理密钥。
+// purpose 固定：改动会让所有已存密文不可解密。
 internal sealed class TenantConnectionStringProtector(IDataProtectionProvider provider)
 {
     public const string Purpose = "Leistd.MultiTenancy.TenantConnectionString.v1";

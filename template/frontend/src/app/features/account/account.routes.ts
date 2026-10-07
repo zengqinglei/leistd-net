@@ -2,10 +2,7 @@ import { Routes } from '@angular/router';
 
 import { twoFactorSetupGuard } from './guards/two-factor-setup-guard';
 
-/**
- * 认证模块路由配置
- * 用于 Empty Layout 的子路由
- */
+/** 认证模块路由，作为 Empty Layout 的子路由。 */
 export const AUTH_ROUTES: Routes = [
   {
     path: 'login',

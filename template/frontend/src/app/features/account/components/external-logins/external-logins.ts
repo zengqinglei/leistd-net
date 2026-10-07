@@ -17,16 +17,14 @@ import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { ExternalLoginsOutputDto } from '../../models/account.dto';
+import { ExternalLoginsOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 
 const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', google: 'Google' };
 
 /**
- * 「账户与安全」面板的一节：已绑定的外部账号，可以绑定或解绑。
- *
- * 绑定走完整外部授权，后端票据保护提供商、意图、发起人与租户。
- * 走绑定端点。至少要留一种登录方式，服务端会拒绝解绑最后一个（没有密码时）。
+ * 「账户与安全」面板的一节：已绑定的外部账号，可绑定或解绑。绑定走完整外部授权；没有密码时
+ * 服务端拒绝解绑最后一个。
  */
 @Component({
   selector: 'app-external-logins',

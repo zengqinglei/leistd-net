@@ -7,8 +7,7 @@ namespace Leistd.MultiTenancy.Management.Provisioning;
 /// 租户开通：创建租户时在新租户里写入初始数据（角色、权限、管理员），失败时清掉写过的东西。由宿主实现。
 /// </summary>
 /// <remarks>
-/// <para>两个方法都在<b>目标租户上下文</b>与各自新开的工作单元里调用，写入的行由落值拦截器归属该租户；
-/// 分库租户的写入因此直接落进它的专属库。</para>
+/// <para>两个方法都在目标租户上下文与各自新开的工作单元里调用，写入归属该租户，分库租户的写入落进它的专属库。</para>
 /// <para><see cref="ProvisionAsync"/> 抛出即触发补偿：先 <see cref="PurgeAsync"/>，再删连接登记，最后删注册表记录。
 /// <see cref="PurgeAsync"/> 必须幂等——它可能面对只开通了一半的租户。</para>
 /// <para>宿主要收集更多开通信息（如管理员邮箱与口令）时，派生 <see cref="CreateTenantInputDto"/>，

@@ -15,6 +15,12 @@
 <!--#endif-->
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 超管标记只经 UserDomainService 落值（它挡住租户上下文），测试准备数据时直接标记 -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
+    <InternalsVisibleTo Include="CompanyName.ProjectName.UnitTests" />
+  </ItemGroup>
+
   <!-- Leistd 框架引用 -->
   <ItemGroup>
     <PackageReference Include="Leistd.Auditing.Core" />

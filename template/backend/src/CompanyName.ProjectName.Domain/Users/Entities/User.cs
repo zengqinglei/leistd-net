@@ -1,11 +1,13 @@
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Errors;
+using Leistd.ExceptionHandling;
+#endif
 using Leistd.Ddd.Domain.Entities.Auditing;
-using Leistd.MultiTenancy;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
+#endif
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
@@ -126,6 +128,17 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     public string SecurityStamp { get; private set; }
 #endif
 
+    private readonly List<UserRole> _roles = [];
+
+    /// <summary>
+    /// 角色成员关系（子实体）
+    /// </summary>
+    /// <remarks>
+    /// 只在经 <c>IUserRepository</c> 带角色读取时加载，<c>GetByIdAsync</c> 读出的用户这里为空：修改角色前必须带角色读取。
+    /// 本工作单元内撤销的行仍在集合里（<c>IsDeleted</c> 为真），判断成员关系用 <see cref="IsInRole"/> 或 <see cref="GetRoleIds"/>。
+    /// </remarks>
+    public IReadOnlyCollection<UserRole> Roles => _roles;
+
     private User()
     {
         Username = null!;
@@ -221,7 +234,9 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         Avatar = string.IsNullOrEmpty(avatar) ? null : avatar;
     }
 
-    public void MarkAsSuperAdmin()
+    /// <summary>标记为宿主超级管理员。</summary>
+    /// <remarks>只由 <see cref="UserDomainService"/> 调用：它在标记之前挡住租户上下文，超管必须只在宿主。</remarks>
+    internal void MarkAsSuperAdmin()
     {
         IsSuperAdmin = true;
     }
@@ -240,6 +255,56 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     {
         return !IsSuperAdmin;
     }
+
+    /// <summary>当前持有该角色（未撤销）。</summary>
+    public bool IsInRole(Guid roleId) => _roles.Any(role => role.RoleId == roleId && !role.IsDeleted);
+
+    /// <summary>当前持有的角色 Id（不含已撤销的）。</summary>
+    public IReadOnlyList<Guid> GetRoleIds() => [.. _roles.Where(role => !role.IsDeleted).Select(role => role.RoleId)];
+
+    /// <summary>
+    /// 分配角色；已持有的跳过。
+    /// </summary>
+    /// <remarks>角色是否存在由调用方经角色仓储确认：这里只按 Id 引用，不读角色聚合。</remarks>
+    public void AssignRoles(IEnumerable<Guid> roleIds)
+    {
+        ArgumentNullException.ThrowIfNull(roleIds);
+        foreach (var roleId in roleIds.Distinct())
+        {
+            if (!IsInRole(roleId))
+            {
+                _roles.Add(new UserRole(Id, roleId));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 用给定角色整体替换现有角色：不在其中的撤销，缺的补上，保留的不动；为空即清空。
+    /// </summary>
+    /// <remarks>撤销与补上随同一次保存落库，不会出现中途失败后零角色的状态。</remarks>
+    public void ReplaceRoles(IEnumerable<Guid> roleIds)
+    {
+        ArgumentNullException.ThrowIfNull(roleIds);
+        var target = roleIds.ToHashSet();
+        foreach (var membership in _roles.Where(role => !role.IsDeleted && !target.Contains(role.RoleId)))
+        {
+            membership.Revoke();
+        }
+
+        AssignRoles(target);
+    }
+
+    /// <summary>撤销该角色的成员关系；未持有时什么也不做。</summary>
+    public void RemoveRole(Guid roleId)
+    {
+        foreach (var membership in _roles.Where(role => role.RoleId == roleId && !role.IsDeleted))
+        {
+            membership.Revoke();
+        }
+    }
+
+    /// <summary>撤销全部角色成员关系。</summary>
+    public void RemoveAllRoles() => ReplaceRoles([]);
 
     public void Enable()
     {
@@ -271,6 +336,17 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     {
         EmailConfirmed = true;
     }
+#if (Email)
+
+    /// <summary>邮箱尚未验证；已验证时以 <see cref="AuthErrorCodes.EmailAlreadyVerified"/> 拒绝再发验证码。</summary>
+    public void EnsureEmailUnconfirmed()
+    {
+        if (EmailConfirmed)
+        {
+            throw new BusinessException(AuthErrorCodes.EmailAlreadyVerified, "This email address has already been verified.");
+        }
+    }
+#endif
 
     public void ConfirmPhoneNumber()
     {
@@ -355,8 +431,10 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     /// <param name="protectedSecret">已加密的密钥。</param>
     /// <param name="recoveryCodeHashes">恢复码摘要。</param>
     /// <param name="usedStep">启用时校验通过的那一步，随即记为已用：同一个码不能紧接着再拿去登录。</param>
+    /// <exception cref="BusinessException">两步验证已启用（<see cref="AuthErrorCodes.TwoFactorAlreadyEnabled"/>）：重新启用会静默换掉正在使用的密钥。</exception>
     public void EnableTwoFactor(string protectedSecret, IEnumerable<string> recoveryCodeHashes, long usedStep)
     {
+        EnsureTwoFactorDisabled();
         TwoFactorEnabled = true;
         TwoFactorSecret = protectedSecret;
         TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
@@ -375,9 +453,29 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     }
 
     /// <summary>换一组恢复码，旧的全部作废。</summary>
+    /// <exception cref="BusinessException">两步验证未启用（<see cref="AuthErrorCodes.TwoFactorNotEnabled"/>）。</exception>
     public void ReplaceRecoveryCodes(IEnumerable<string> recoveryCodeHashes)
     {
+        EnsureTwoFactorEnabled();
         TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
+    }
+
+    /// <summary>两步验证尚未启用；已启用时以 <see cref="AuthErrorCodes.TwoFactorAlreadyEnabled"/> 拒绝。</summary>
+    public void EnsureTwoFactorDisabled()
+    {
+        if (TwoFactorEnabled)
+        {
+            throw new BusinessException(AuthErrorCodes.TwoFactorAlreadyEnabled, "Two-factor authentication is already turned on.");
+        }
+    }
+
+    /// <summary>两步验证已启用；未启用时以 <see cref="AuthErrorCodes.TwoFactorNotEnabled"/> 拒绝。</summary>
+    public void EnsureTwoFactorEnabled()
+    {
+        if (!TwoFactorEnabled)
+        {
+            throw new BusinessException(AuthErrorCodes.TwoFactorNotEnabled, "Two-factor authentication is not turned on.");
+        }
     }
 
     /// <summary>记下校验通过的步序号。</summary>

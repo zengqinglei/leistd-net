@@ -1,4 +1,3 @@
-using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore;
 #if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -10,7 +9,6 @@ using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
-using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Lock.Redis;
 using Leistd.Lock.Memory;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +18,12 @@ using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using CompanyName.ProjectName.Infrastructure.Persistence.Repositories;
+using CompanyName.ProjectName.Domain.Users.Entities;
+// StackExchange.Redis 也有 Role 类型
+using Role = CompanyName.ProjectName.Domain.Users.Entities.Role;
 using Leistd.MultiTenancy;
 #if (RemoteTokenAuth && IncludeMultiTenancy)
 using Leistd.MultiTenancy.ServiceClient;
@@ -49,13 +52,13 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 using Leistd.Email.Smtp;
 #endif
 #if (ExternalLogin)
-using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Options;
 #endif
 using StackExchange.Redis;
+#if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
-using Leistd.Data;
+#endif
 using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure;
@@ -72,12 +75,20 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // 相同登记重复调用不重复生效：EF 的上下文选项、Redis 缓存与选项校验器都按调用追加，
+        // 重复调用会让拦截器挂两次、校验跑两遍。用本入口自己的标记判定
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(InfrastructureRegistrationMarker)))
+        {
+            return services;
+        }
+
+        services.AddSingleton<InfrastructureRegistrationMarker>();
         services.AddPersistenceServices(configuration);
 
 #if (LocalIdentity && IncludeMultiTenancy)
         // 开通失败的数据库错误翻译：SQLSTATE 表是 PostgreSQL 方言，属本项目的技术适配。
-        // 组件按 TryAdd 挂"不翻译"的默认实现，这里直接登记，与注册先后无关
-        services.AddSingleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>();
+        // 有意覆盖组件按 TryAdd 挂的"不翻译"默认实现；Replace 与组件入口的调用先后无关
+        services.Replace(ServiceDescriptor.Singleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>());
 #endif
 
 #if (IncludeNotifications)
@@ -100,7 +111,7 @@ public static class DependencyInjection
 
         if (!string.IsNullOrEmpty(redisConnStr))
         {
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
+            services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
 
             services.AddStackExchangeRedisCache(options =>
             {
@@ -121,16 +132,16 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(PasswordHashOptions.SectionName))
             .Validate(options => options.IterationCount > 0, $"{PasswordHashOptions.SectionName}:IterationCount must be greater than 0.")
             .ValidateOnStart();
-        services.AddTransient<IPasswordHasher, PasswordHasher>();
+        services.TryAddTransient<IPasswordHasher, PasswordHasher>();
 #endif
 #if (Email)
         // 验证码摘要与口令哈希具有不同的密钥和成本契约。
-        services.AddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
+        services.TryAddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
         services.AddSmtpEmailSender();
 #endif
 
 #if (ExternalLogin)
-        services.AddSingleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>());
         services.AddOptions<ExternalAuthOptions>()
             .Configure<IConfiguration>((options, config) =>
             {
@@ -156,6 +167,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // 迁移作业与 API 都经这里登记上下文；重复调用不重复追加上下文选项（理由同 AddInfrastructureServices）
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceRegistrationMarker)))
+        {
+            return services;
+        }
+
+        services.AddSingleton<PersistenceRegistrationMarker>();
+
         // 缺连接串在首次创建上下文时失败并指明键名。API 在接流量之前校验迁移（会创建全部上下文），
         // 因此这个错误发生在启动期，不会变成每个请求一次的 500。
         string RequireConnection(string? connectionString) =>
@@ -170,11 +189,11 @@ public static class DependencyInjection
 
 #if (IncludeMultiTenancy)
 #if (RemoteTokenAuth)
-        // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（默认 10 分钟，
+        // 远端解析：向 Identity 回源租户连接配置，按 Leistd:MultiTenancy:Routing:CacheLifetime 缓存（默认 10 分钟，
         // 它决定租户改路由前的排空等待，可按环境覆盖）；同租户并发回源合并为一次。
         // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
         services.AddRemoteTenantConnectionResolution();
-        var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
+        var identityClient = services.AddRemoteTenantConnectionStore("Identity");
         if (configuration.GetSection(ServiceAuthenticationOptions.SectionName).Exists())
         {
             services.AddServiceAuthentication();
@@ -252,7 +271,12 @@ public static class DependencyInjection
         // 每个注册过的 DbContext 都必须显式接入：漏掉的上下文会逃出租户过滤器闸门，
         // 构建容器时会直接失败。不传选项即"只登记、不注册仓储"。
         // 业务上下文继承 BaseDbContext，登记时同时挂上审计、领域事件与并发标记三个保存拦截器。
-        services.AddDddDbContext<MyProjectDbContext>(options => options.AddDefaultRepositories());
+        // 自定义仓储一并注册为其聚合的自定义接口与默认仓储接口。
+        // 默认仓储按 DbSet 声明登记，聚合子实体（UserRole）不声明 DbSet，因而没有独立仓储
+        services.AddDddDbContext<MyProjectDbContext>(options => options
+            .AddDefaultRepositories()
+            .AddRepository<User, EfCoreUserRepository>()
+            .AddRepository<Role, EfCoreRoleRepository>());
 #if (LocalIdentity && IncludeMultiTenancy)
         // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
         services.AddDddDbContext<IdentityControlDbContext>();
@@ -274,4 +298,9 @@ public static class DependencyInjection
         options.ClientSecret = configuration[nameof(options.ClientSecret)];
     }
 #endif
+
+    // 独立标记区分"本入口已注册过"与宿主自行添加的同类服务
+    private sealed class InfrastructureRegistrationMarker;
+
+    private sealed class PersistenceRegistrationMarker;
 }

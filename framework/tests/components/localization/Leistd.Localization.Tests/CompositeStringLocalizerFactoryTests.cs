@@ -49,7 +49,7 @@ public class CompositeStringLocalizerFactoryTests
     {
         var factory = CreateFactory();
 
-        // 关键回归：ResxResource 与 JsonResource 同程序集，但未登记 → 必须走官方 RESX，不被吞进 JSON。
+        // ResxResource 与 JsonResource 同程序集，但未登记 → 必须走官方 RESX，不被吞进 JSON。
         var localizer = factory.Create(typeof(ResxResource));
 
         Assert.IsNotType<JsonStringLocalizer>(localizer);
@@ -84,7 +84,7 @@ public class CompositeStringLocalizerFactoryTests
     [Fact]
     public void Parameterless_localizer_resolves_to_json_not_resource_manager()
     {
-        // 回归守卫：无参 IStringLocalizer 是框架全局 JSON 词条视图（业务/框架键），直取 JSON 工厂、不经组合工厂。
+        // 无参 IStringLocalizer 是框架全局 JSON 词条视图（业务/框架键），直取 JSON 工厂、不经组合工厂。
         using var provider = new ServiceCollection()
             .AddLogging()
             .AddJsonLocalization()

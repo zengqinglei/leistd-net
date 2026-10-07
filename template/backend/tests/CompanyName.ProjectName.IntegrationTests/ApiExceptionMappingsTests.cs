@@ -1,15 +1,11 @@
-using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Shared.Paging.Errors;
-using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 #if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Errors;
 #endif
-using CompanyName.ProjectName.Application.Auth.Errors;
-#endif
-#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 #if (OpenIddictServer)
@@ -34,7 +30,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Hosting;
-using Xunit;
+using System.Reflection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -65,13 +61,16 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 #endif
 #if (LocalIdentity)
     [InlineData(AuthErrorCodes.CannotRevokeCurrentSession, StatusCodes.Status409Conflict)]
-    [InlineData(AuthErrorCodes.EmailAlreadyUsed, StatusCodes.Status409Conflict)]
 #endif
-    [InlineData(UserErrorCodes.EmailAlreadyUsed, StatusCodes.Status409Conflict)]
+    [InlineData(UserErrorCodes.EmailTaken, StatusCodes.Status409Conflict)]
+#if (ExternalLogin)
+    [InlineData(ExternalAuthErrorCodes.UsernameAllocationFailed, StatusCodes.Status409Conflict)]
+#endif
 #if (IncludeMultiTenancy)
     [InlineData(MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant, StatusCodes.Status409Conflict)]
 #endif
 #if (Email)
+    [InlineData(AppSettingErrorCodes.TestEmailHostOnly, StatusCodes.Status403Forbidden)]
     [InlineData(AppSettingErrorCodes.EmailVerificationKeyMissing, StatusCodes.Status409Conflict)]
     [InlineData(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests)]
     [InlineData(AuthErrorCodes.EmailVerificationUnavailable, StatusCodes.Status503ServiceUnavailable)]
@@ -89,10 +88,10 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 
         var codeTypes = new[]
         {
-            typeof(PagingErrorCodes), typeof(RoleErrorCodes), typeof(SecurityErrorCodes),
+            typeof(PagingErrorCodes), typeof(RoleErrorCodes),
             typeof(AppSettingErrorCodes), typeof(UserErrorCodes),
 #if (LocalIdentity)
-            typeof(AuthErrorCodes),
+            typeof(AuthErrorCodes), typeof(SecurityErrorCodes),
 #if (IncludeMultiTenancy)
             typeof(TenantErrorCodes),
 #endif
@@ -109,7 +108,7 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 #endif
         };
         var knownCodes = codeTypes
-            .SelectMany(type => type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            .SelectMany(type => type.GetFields(BindingFlags.Public | BindingFlags.Static))
             .Where(field => field.IsLiteral && field.FieldType == typeof(string))
             .Select(field => (string)field.GetRawConstantValue()!)
             .ToHashSet(StringComparer.Ordinal);

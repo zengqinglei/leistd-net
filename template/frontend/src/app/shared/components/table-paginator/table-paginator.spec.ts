@@ -3,13 +3,7 @@ import { By } from '@angular/platform-browser';
 
 import { TablePaginator, TablePaginatorLabels } from './table-paginator';
 
-/**
- * 分页栏是所有管理表格共用的导航入口。
- *
- * 这里验的是边界状态与意图回传：按钮的禁用完全由 canPrev/canNext 决定，
- * 组件自身不推断页码。禁用判断一旦失准，用户会在首页点"上一页"、
- * 或在末页点"下一页"，父表格据此发出越界请求。
- */
+/** 分页栏的边界状态与意图回传：按钮禁用完全由 canPrev/canNext 决定，组件不自行推断页码。 */
 describe('TablePaginator', () => {
   let fixture: ComponentFixture<TablePaginator>;
   let component: TablePaginator;

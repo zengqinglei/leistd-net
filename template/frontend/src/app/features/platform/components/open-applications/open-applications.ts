@@ -45,9 +45,9 @@ import {
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -64,7 +64,7 @@ import {
   OpenApplicationOutputDto,
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
-} from '../../models/open-application.dto';
+} from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
@@ -128,6 +128,8 @@ export class OpenApplications {
   applications = signal<OpenApplicationOutputDto[]>([]);
   totalRecords = signal(0);
   loading = signal(false);
+  /** 列表加载失败且没有旧行可保留时的原因：有值时表格显示错误态与重试，不显示"暂无数据"。 */
+  loadError = signal<string | null>(null);
 
   // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
   readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
@@ -161,13 +163,7 @@ export class OpenApplications {
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);
 
-  /**
-   * 弹窗可见性变化的唯一入口。
-   *
-   * 关闭时连带清空 secret 与标题：留着的话，下一次误打开弹窗会显示上一次的 secret。
-   * 这是状态正确性，不是"擦除内存明文"——JavaScript 字符串无法可靠擦除，
-   * 服务端的保证是"一次生成、一次返回、以后不可读取"。
-   */
+  /** 弹窗可见性变化的唯一入口：关闭时清空 secret 与标题，免得下次打开显示上一次的 secret。 */
   onSecretDialogVisibleChange(visible: boolean): void {
     if (!visible) {
       this.secretValue.set('');
@@ -280,7 +276,12 @@ export class OpenApplications {
             this.loading.set(true);
             return this.service.getOpenApplications(this.queryFromParams(params)).pipe(
               catchError((error: unknown) => {
-                this.showRequestError(error);
+                // 已有行时刷新失败：保留旧行，只做提示
+                if (this.applications().length > 0) {
+                  this.showRequestError(error);
+                } else {
+                  this.loadError.set(applicationErrorMessage(error));
+                }
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -290,6 +291,7 @@ export class OpenApplications {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((data) => {
+        this.loadError.set(null);
         this.applications.set(data.items);
         this.totalRecords.set(data.totalCount);
       });

@@ -7,20 +7,11 @@ export const COPIED_FEEDBACK_MS = 2000;
 export interface CopyToClipboard {
   /** 刚复制成功后的 {@link COPIED_FEEDBACK_MS} 内为 `true`，供按钮切成「已复制」。 */
   readonly copied: Signal<boolean>;
-  /**
-   * 复制文本。
-   *
-   * 剪贴板不可用（非安全上下文、权限被拒）时返回 `false` 而不抛出：
-   * 调用方仍可让用户手动选中复制，不该为此弹错误。
-   */
+  /** 复制文本；剪贴板不可用（非安全上下文、权限被拒）时返回 `false` 而不抛出。 */
   copy(text: string): Promise<boolean>;
 }
 
-/**
- * 在注入上下文里创建复制动作。
- *
- * 「已复制」状态的计时器随组件销毁清理，连点时重新计时。
- */
+/** 在注入上下文里创建复制动作；「已复制」计时器随组件销毁清理，连点时重新计时。 */
 export function injectCopyToClipboard(): CopyToClipboard {
   const copied = signal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;

@@ -8,13 +8,13 @@
 
 ```csharp
 builder.Services.AddServiceAuthentication();
-builder.Services.AddOrderServiceClient(builder.Configuration).AddClientCredentials();
-builder.Services.AddBillingServiceClient(builder.Configuration).AddTokenExchange();
+builder.Services.AddOrderClient().AddClientCredentials();   // 目标服务 Client 包的注册入口
+builder.Services.AddBillingClient().AddTokenExchange();
 ```
 
 机器调用只代表客户端，范围绑定在 Leistd:ServiceClients:{Name}:Scope。用户调用从 Resource 请求读取已验证的 Bearer；带浏览器会话时也可读取服务端保存的访问令牌并交换，不能通过设置 ICurrentUser、ICurrentTenant 或请求头制造用户凭据。Identity/Standalone 的 Cookie 和后台用户上下文不提供交换证明；用户委托需要已验证的用户访问令牌。
 
-远端失败以 RemoteServiceException 携带业务码、远端 traceId 和错误字段；协议取令牌失败为 ServiceClientException，默认 API 返回安全的 502。可预期业务失败由本服务明确翻译。
+远端失败以 RemoteServiceException 携带业务码、远端 traceId 和错误字段；协议取令牌失败为 ServiceClientException。ServiceClientException 按本地观测的失败来源映射：本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502，连接失败 503、等待超时 504；不从远端状态推断本地状态，原始 URL 与响应片段只留服务端诊断，已知上游契约可由宿主覆盖。可预期业务失败由本服务明确翻译。
 
 ## 被其他服务调用
 
@@ -24,12 +24,15 @@ Token Exchange 令牌保留用户、租户与身份库的用户名/邮箱/显示
 
 ## Identity 与资源服务对接
 
-Identity 的 OAuth:ApiResources 登记资源对象，例如 { "Name": "orders-api", "OwnerClientId": "orders-worker" }，Scope 可单独配置、默认资源名；同一资源仅一个归属，客户端可拥有多个资源。Resource 的 Authentication:Audience 使用自己的 API ID，Authentication:Issuer 与 Identity 的 OAuth:Issuer 精确一致，含路径与尾斜杠。
+Identity 的 OAuth:ApiResources 登记由它签发令牌的下游资源对象，例如 { "Name": "orders-api", "OwnerClientId": "orders-worker" }，Scope 与 OwnerClientId 可单独配置、默认资源名；同一资源仅一个归属，客户端可拥有多个资源。Resource 的 Authentication:Audience 使用资源 Name，Authentication:Issuer 与 Identity 的 OAuth:Issuer 精确一致，含路径与尾斜杠。
+<!--#if (OpenIddictServer)-->
+Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服务只接受受众是它的令牌。访问令牌的受众由授予的 scope 推出，能签发哪些 scope 只由 `backend/src/CompanyName.ProjectName.Application/Auth/OAuth/OAuthScopes.cs` 定义（服务端登记、scope 表、开放应用的权限校验都读它）。
+<!--#endif-->
 
 开放应用仅使用 implicit consent，不提供同意类型输入和同意页。按调用场景登记权限：
 
 <!--#if (OpenIddictServer || ResourceBrowserSession)-->
-- 为带浏览器会话的资源服务登记依赖方：web/confidential、authorization code、refresh token、PKCE；只授予 openid/profile/email/roles/offline_access 与自己的 API scope，登记后端 /api/v1/auth/signin、/api/v1/auth/signout 回调，不申请下游 scope。第三方 public client 仍可单独登记。
+- 为带浏览器会话的资源服务登记依赖方：web/confidential、开启会话绑定、authorization code、refresh token、退出端点（ept:end_session）、PKCE；只授予 openid/profile/email/roles/offline_access 与自己的 API scope，登记本服务对外源下完整的 /api/v1/auth/signin、/api/v1/auth/signout 回调，不申请下游 scope。第三方 public client 仍可单独登记。
 <!--#endif-->
 - 调用方为 service/confidential，client ID 是来源资源的 OwnerClientId（默认资源名，例如 orders-api），启用 Token Exchange grant、ept:token、aud:billing-api、scp:billing-api。subject 令牌必须面向 orders-api，但无需带 billing-api scope；目标权限取调用方应用的登记值。只接受单跳访问令牌，不支持 actor_token 和请求覆盖身份。
 - 机器调用启用 client credentials 与目标 scope，工作负载不混用用户授权流。
@@ -66,7 +69,7 @@ Resource 已注册用户访问令牌适配器。
 <!--#endif-->
 <!--#endif-->
 <!--#if (ResourceBrowserSession)-->
-OIDC authority 在 Resource 后端配置并与 Identity issuer 一致；回调登记本服务前端源的 /api/v1/auth/signin、/api/v1/auth/signout。前端与本服务 API 使用同源部署，开发时由前端代理 API；跨源浏览器会话不属于本项目默认支持的部署方式。
+浏览器会话要求前端与本服务 API 同源，见 [浏览器认证](auth.md#浏览器认证)。
 <!--#endif-->
 
 交换 JWT 有效期 120 秒且不超过 subject exp；进程内 HybridCache 按官方客户端返回的到期时间提前 10 秒失效，键含完整 subject 摘要，不把 Bearer 写入 Redis。没有真实用户令牌时拒绝委托，不回退为机器身份。401 清除缓存，重试由业务层按幂等性决定。
@@ -77,6 +80,6 @@ OIDC authority 在 Resource 后端配置并与 Identity issuer 一致；回调�
 
 ## 发布本服务的 Client 包
 
-src/{ProjectName}.Client 只依赖 Refit 与服务客户端框架，不引用服务内部程序集；DTO 独立演进。新增接口经 Refit 特性声明，并由 AddRefitServiceClient 注册，以统一还原远端异常。Client 注册返回 IHttpClientBuilder，由消费宿主选择机器认证或用户交换，不自行猜测身份模式。以 NuGet 发布并按服务版本升级。
+src/CompanyName.ProjectName.Client 只依赖 Refit 与服务客户端框架，不引用服务内部程序集；DTO 独立演进。新增接口经 Refit 特性声明，并由 AddRefitServiceClient 注册，以统一还原远端异常。Client 注册返回 IHttpClientBuilder，由消费宿主选择机器认证或用户交换，不自行猜测身份模式。以 NuGet 发布并按服务版本升级。
 
 认证变更需运行本项目已配置的认证与服务调用集成测试，并在部署环境验证跨服务 Token Exchange 正反例、租户成员关系与用户资料一致性。

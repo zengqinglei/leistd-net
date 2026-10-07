@@ -4,27 +4,29 @@ using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
-using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
+using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Claims;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Stores;
+#endif
 using Leistd.MultiTenancy.Context;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 public class AuthPrincipalFactory(
-    IRepository<User, Guid> userRepository,
-    IRepository<UserSession, Guid> sessionRepository,
+    IUserRepository userRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
     IOptions<UserSessionOptions> sessionOptions,
-    UserDomainService userDomainService,
     IClock clock,
     IOptions<OAuthOptions> oauthOptions,
     IOptions<ClaimTypeOptions> claimTypes,
@@ -57,7 +59,7 @@ public class AuthPrincipalFactory(
             var principal = await CreateAsync(userId, scopes, cancellationToken);
             if (principal is null) return null;
             if (tokenPrincipal.GetClaim(Claims.AuthenticationTime) is { } authenticationTime)
-                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, System.Globalization.CultureInfo.InvariantCulture));
+                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, CultureInfo.InvariantCulture));
             if (sessionClaim is not null)
                 principal.SetClaim(CustomClaimTypes.SessionId, sessionClaim);
             principal.SetDestinations(GetDestinations);
@@ -79,7 +81,7 @@ public class AuthPrincipalFactory(
             return null;
         }
 
-        var roleNames = await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken);
+        var roleNames = await userRepository.GetRoleNamesAsync(user.Id, cancellationToken);
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
         SubjectClaims.Set(identity, claimTypes.Value, user.Id.ToString());
@@ -87,7 +89,7 @@ public class AuthPrincipalFactory(
         identity.SetClaim(Claims.PreferredUsername, user.Username);
         identity.SetClaim(Claims.Email, user.Email);
 
-        if (IsHttpUrl(user.Avatar))
+        if (AvatarPolicy.IsExternalUrl(user.Avatar))
         {
             identity.SetClaim(Claims.Picture, user.Avatar!);
         }
@@ -139,7 +141,7 @@ public class AuthPrincipalFactory(
         {
             claims[Claims.Name] = user.DisplayName ?? user.Username;
             claims[Claims.PreferredUsername] = user.Username;
-            if (IsHttpUrl(user.Avatar))
+            if (AvatarPolicy.IsExternalUrl(user.Avatar))
             {
                 claims[Claims.Picture] = user.Avatar!;
             }
@@ -188,15 +190,9 @@ public class AuthPrincipalFactory(
 
     private sealed record TokenTenant(Guid? Id, string? Name);
 
-    private static bool IsHttpUrl(string? value)
-    {
-        return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-    }
-
     private async Task<bool> IsSessionActiveAsync(string sessionClaim, Guid userId, CancellationToken cancellationToken) =>
         Guid.TryParse(sessionClaim, out var sessionId) &&
-        await sessionRepository.GetByIdAsync(sessionId, cancellationToken) is { } session &&
+        await userSessionRepository.GetByIdAsync(sessionId, cancellationToken) is { } session &&
         session.UserId == userId &&
         !session.IsExpired(clock.Now, sessionOptions.Value.IdleTimeout);
 

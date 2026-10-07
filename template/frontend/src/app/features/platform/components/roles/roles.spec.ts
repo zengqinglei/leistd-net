@@ -10,8 +10,9 @@ import {
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
+import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { Roles } from './roles';
 import { RoleTable } from './widgets/role-table/role-table';
@@ -24,16 +25,13 @@ import { SignalRService } from '../../../../core/services/signalr-service';
 //#endif
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import { PERMISSIONS } from '../../../../shared/models/permission';
-import { GetRolesInputDto, RoleOutputDto } from '../../models/role.dto';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import { GetRolesInputDto, RoleOutputDto } from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
 
 import type { MockedObject } from 'vitest';
 
-/**
- * 角色页面的查询闭环。与用户页各写一份：两个页面各自实现这一层，
- * 其中一个接线写错，另一个的用例不会有任何反应。
- */
+/** 角色页面的查询闭环；与用户页各自实现，因此各写一份。 */
 describe('Roles page query round trip', () => {
   let fixture: ComponentFixture<Roles>;
   let component: Roles;
@@ -49,7 +47,6 @@ describe('Roles page query round trip', () => {
   };
   //#endif
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetRolesInputDto {
     const calls = vi.mocked(service.getRoles).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -97,9 +94,8 @@ describe('Roles page query round trip', () => {
       versionToken: 'r1',
     });
 
-    // 应用里设置上下文（连带语言服务）在启动流中就已创建，首帧之前语言已经激活。
-    // 这里同样先建好：否则它要到页面首次渲染途中才被子表格注入，构造时激活语言会让
-    // 页面外层的 *transloco 在视图还没建完时再建一次。
+    // 先建好设置上下文（连带语言服务），与应用启动一致；否则子表格首次渲染时才注入它，
+    // 激活语言会让外层 *transloco 在视图未建完时重建。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Roles);
     component = fixture.componentInstance;
@@ -212,4 +208,67 @@ describe('Roles page query round trip', () => {
     expect(destroyRef?.destroyed).toBe(true);
   });
   //#endif
+
+  /** 加载成功时的一行：表格会真的渲染它，字段要齐。 */
+  const loadedRow = {
+    id: 'row-1',
+    name: 'auditor',
+    displayName: 'Auditor',
+    isDefault: false,
+    isStatic: false,
+    sort: 1,
+    userCount: 0,
+    permissionCount: 0,
+    creationTime: '2026-01-01T00:00:00Z',
+  };
+
+  /** 以首次请求失败重建页面：此时没有任何旧行可保留。 */
+  async function openWithFailedFirstLoad(): Promise<void> {
+    fixture.destroy();
+    //#if (IncludeRealTime)
+    // 推送桩在用例间共享：前面用例留下的"角色已变更"会让新页面多补查一次
+    realtime.lastResourceEvent.set(null);
+    //#endif
+    service.getRoles.mockReturnValue(throwError(() => new Error('boom')) as never);
+    fixture = TestBed.createComponent(Roles);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('shows the load failure with retry instead of the empty state when the first load fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await openWithFailedFirstLoad();
+
+    // 没有旧行时不能落到"暂无数据"：表格拿到失败原因，显示错误态与重试
+    expect(component.loadError()).toBe('boom');
+    expect(table().loadError()).toBe('boom');
+    expect(component.roles()).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
+
+    const requests = service.getRoles.mock.calls.length;
+    service.getRoles.mockReturnValue(of({ items: [loadedRow], totalCount: 1 }) as never);
+    table().retry.emit();
+    await fixture.whenStable();
+
+    expect(service.getRoles).toHaveBeenCalledTimes(requests + 1);
+    expect(component.loadError()).toBeNull();
+    expect(component.roles()).toHaveLength(1);
+  });
+
+  it('keeps the loaded rows and only notifies when a refresh fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    service.getRoles.mockReturnValue(of({ items: [loadedRow], totalCount: 1 }) as never);
+    component.reload();
+    await fixture.whenStable();
+
+    service.getRoles.mockReturnValue(throwError(() => new Error('boom')) as never);
+    component.reload();
+    await fixture.whenStable();
+
+    expect(component.roles()).toHaveLength(1);
+    expect(component.loadError()).toBeNull();
+    expect(notify).toHaveBeenCalledOnce();
+  });
 });

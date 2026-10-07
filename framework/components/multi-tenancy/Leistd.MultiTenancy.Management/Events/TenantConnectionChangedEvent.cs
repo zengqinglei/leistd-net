@@ -6,9 +6,8 @@ namespace Leistd.MultiTenancy.Management.Events;
 /// 某个租户的一条命名连接被登记、改写或删除。
 /// </summary>
 /// <remarks>
-/// <para><b>不含连接串</b>：它是凭据，事件会进日志、审计与订阅者的存储。</para>
-/// <para>连接决定租户数据落在哪个库，改动必须留痕。但"留成什么"是业务词汇——多租户组件不依赖
-/// 操作记录组件，宿主订阅本事件后自行记录。</para>
+/// <para>不含连接串：事件会进入日志、审计与订阅者的存储。</para>
+/// <para>多租户组件不依赖操作记录组件，宿主订阅本事件后自行留痕。</para>
 /// </remarks>
 /// <param name="tenantId">租户标识。</param>
 /// <param name="tenantDisplayName">租户显示名快照（没有显示名时为名称）；取不到为 <see langword="null"/>。</param>
@@ -26,13 +25,9 @@ public sealed class TenantConnectionChangedEvent(
     public Guid TenantId { get; } = tenantId;
 
     /// <summary>
-    /// 租户显示名快照，与 <see cref="TenantChangedEvent.DisplayName"/> 同一口径。
+    /// 租户显示名快照，与 <see cref="TenantChangedEvent.DisplayName"/> 同一口径；记录“为哪个租户改的”时用它，
+    /// 不要用连接名 <see cref="Name"/> 顶替。
     /// </summary>
-    /// <remarks>
-    /// 订阅者要写"给谁改的"时用它。<b>不要拿 <see cref="Name"/> 顶替</b>：那是连接名
-    /// （<c>default</c>、<c>crm</c>），写进审计的目标名列会变成"为租户 default 登记了连接"。
-    /// 快照而非外键的理由同 <see cref="TenantChangedEvent"/>：审计要回答"当时是什么"。
-    /// </remarks>
     public string? TenantDisplayName { get; } = tenantDisplayName;
 
     /// <summary>连接名（已归一化），例如 <c>default</c>、<c>crm</c>。不是租户名。</summary>

@@ -1,6 +1,6 @@
 import { RowData, Table } from '@tanstack/angular-table';
 
-import type { AppTableFeatures } from '../models/table-features';
+import type { AppTableFeatures } from './table-features';
 
 /** 切换某列排序：升序 → 降序 → 升序。 */
 export function toggleTableSort<TData extends RowData>(
@@ -24,11 +24,7 @@ export function tableSortIcon<TData extends RowData>(
       : 'lucideArrowUpDown';
 }
 
-/**
- * 表头的 `aria-sort` 取值。
- *
- * 必须与图标同源：两处各自判断时，视觉与读屏会说出不同的排序方向。
- */
+/** 表头的 `aria-sort` 取值，与图标同源，免得视觉与读屏说出不同方向。 */
 export function tableSortAria<TData extends RowData>(
   table: Table<AppTableFeatures, TData>,
   columnId: string,

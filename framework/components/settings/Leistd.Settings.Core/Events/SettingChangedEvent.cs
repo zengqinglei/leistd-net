@@ -9,7 +9,7 @@ namespace Leistd.Settings.Events;
 /// </summary>
 /// <remarks>
 /// 由 <see cref="ISettingManager"/> 在写入后发布；在工作单元内发布时推迟到提交后分发，
-/// 处理器看到的总是已经落库的值。事件不带值本身：机密设置的明文不该进事件，处理器需要时自己读。
+/// 处理器看到的总是已经落库的值。事件不带值（避免机密设置明文进入事件），处理器需要时自己读。
 /// </remarks>
 /// <param name="name">设置名。</param>
 /// <param name="scope">写入的层级。</param>

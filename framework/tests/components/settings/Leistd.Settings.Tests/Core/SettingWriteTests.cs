@@ -4,6 +4,7 @@ using Leistd.Settings.Resolution;
 using Leistd.Settings.Exceptions;
 using Leistd.TestBase.Doubles;
 using Xunit;
+using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 

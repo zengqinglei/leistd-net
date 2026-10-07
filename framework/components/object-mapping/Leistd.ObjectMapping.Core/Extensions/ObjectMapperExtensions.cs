@@ -2,9 +2,7 @@ using Leistd.ObjectMapping.Abstractions;
 
 namespace Leistd.ObjectMapping.Extensions;
 
-/// <summary>
-/// 提供集合对象映射扩展。
-/// </summary>
+/// <summary><see cref="IObjectMapper"/> 的集合映射扩展。</summary>
 public static class ObjectMapperExtensions
 {
     /// <summary>

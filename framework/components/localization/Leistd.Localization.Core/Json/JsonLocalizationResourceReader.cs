@@ -8,9 +8,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Localization.Json;
 
-/// <summary>
-/// 读取并缓存随程序集嵌入的 JSON 本地化资源。
-/// </summary>
+/// <summary>读取并缓存随程序集嵌入的 JSON 本地化资源。</summary>
 /// <remarks>
 /// 资源文件结构：<c>{ "culture": "en", "texts": { "Key": "Value" } }</c>；
 /// 缺 <c>culture</c> 段的文件被忽略。同一 culture 的键在多个程序集出现时，
@@ -25,9 +23,7 @@ public sealed class JsonLocalizationResourceReader(
     private readonly ILogger _logger = logger ?? NullLogger<JsonLocalizationResourceReader>.Instance;
     private readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> _cache = new();
 
-    /// <summary>
-    /// 取指定 culture 的全部键值（已合并各程序集、已缓存）。未找到资源时返回空字典。
-    /// </summary>
+    /// <summary>取指定 culture 的全部键值（已合并各程序集、已缓存）；未找到资源时返回空字典。</summary>
     public IReadOnlyDictionary<string, string> GetTexts(string culture)
         => _cache.GetOrAdd(culture, LoadCulture);
 
@@ -88,7 +84,7 @@ public sealed class JsonLocalizationResourceReader(
         }
         catch (JsonException ex)
         {
-            // 坏文件不该拖垮整个本地化：跳过并告警，其余程序集/键正常加载
+            // 坏文件跳过并告警，其余程序集与键正常加载
             _logger.LogWarning(ex, "Localization resource {ResourceName} is not valid JSON; skipped.", resourceName);
             return null;
         }
@@ -102,7 +98,7 @@ public sealed class JsonLocalizationResourceReader(
                 || cultureElement.ValueKind != JsonValueKind.String)
                 return null;
 
-            // 声明的 culture 应与文件名解析出的 culture 一致，否则很可能是复制粘贴漏改 → 告警但仍加载
+            // 声明的 culture 与文件名不一致时告警但仍加载
             var declaredCulture = cultureElement.GetString();
             if (!string.Equals(declaredCulture, expectedCulture, StringComparison.OrdinalIgnoreCase))
             {

@@ -8,17 +8,15 @@ import { permissionGuard } from './core/guards/permission-guard';
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from './core/i18n/translation-scopes';
 //#endif
-// 布局组件导入
 import { DefaultLayout } from './layout/default/default-layout';
 //#if (LocalIdentity)
 import { EmptyLayout } from './layout/empty/empty-layout';
 //#endif
 import { WorkspaceLayout } from './layout/workspace/workspace-layout';
-import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
+import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 export const routes: Routes = [
   //#if (LocalIdentity)
-  // Empty Layout - 认证相关页面（登录、注册等）
   {
     path: 'auth',
     //#if (IncludeLocalization)
@@ -36,7 +34,7 @@ export const routes: Routes = [
       import('./core/components/resource-login/resource-login').then((m) => m.ResourceLogin),
   },
   //#endif
-  // 工作空间：面向业务用户，顶栏导航。入口多了需要分组时换回 DefaultLayout（见 coding-frontend.md §8）
+  // 工作空间：面向业务用户，顶栏导航。入口多了需要分组时换回 DefaultLayout（见 frontend-ui.md「导航与菜单分组」）
   {
     path: 'workspace',
     component: WorkspaceLayout,
@@ -55,7 +53,6 @@ export const routes: Routes = [
       import('./features/public/components/forbidden/forbidden').then((m) => m.Forbidden),
   },
 
-  // Default Layout - 平台管理
   {
     path: 'platform',
     component: DefaultLayout,
@@ -75,6 +72,5 @@ export const routes: Routes = [
     loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
   },
 
-  // 兜底路由
   { path: '**', redirectTo: '' },
 ];

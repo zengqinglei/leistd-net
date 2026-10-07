@@ -179,7 +179,7 @@ public class DomainPrimitiveTests
     [Fact]
     public async Task A_concurrent_write_loses_instead_of_silently_overwriting()
     {
-        // 回归点：并发保护必须真的生效——本测试全程不调用任何换发方法。
+        // 并发保护必须真的生效——本测试全程不调用任何换发方法。
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Filename=:memory:");
         await connection.OpenAsync();
 

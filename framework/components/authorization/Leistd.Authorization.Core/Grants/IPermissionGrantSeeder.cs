@@ -2,13 +2,10 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Authorization.Grants;
 
-/// <summary>
-/// 初始化时的首次授予：主体从未写过授予时，把某一侧别上的全部可用权限授给它。
-/// </summary>
+/// <summary>初始化时的首次授予：主体从未写过授予时，把某一侧别上的全部可用权限授给它。</summary>
 /// <remarks>
-/// <para>"从未写过"按授权版本为 0 判断，能覆盖"角色已建好、播种中途失败"的状态；写过一次之后按普通主体管理，
-/// 权限可以撤销，再次调用不会补回——新增的权限由管理员显式授予。</para>
-/// <para>并发的两次初始化只有一次写入：替换带期望版本 0，后到的一方视为已播种。</para>
+/// <para>“从未写过”按授权版本为 0 判断；写过一次之后再次调用不会补回已撤销或新增的权限。</para>
+/// <para>并发的两次初始化只有一次写入，后到的一方视为已播种。</para>
 /// </remarks>
 public interface IPermissionGrantSeeder
 {

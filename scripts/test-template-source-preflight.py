@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -39,13 +40,14 @@ def main():
 
         # Extract the actual functions with PowerShell's parser, not a test implementation.
         runner = repo / 'preflight-functions.ps1'
-        runner.write_text('''param([switch]$Skip)
+        runner.write_text('''#!/usr/bin/env pwsh
+param([switch]$Skip)
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'scripts/test-template-matrix.ps1'), [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "Matrix script parse failed: $errors" }
-foreach ($name in @('Invoke-External', 'Invoke-SourcePreflight')) {
+foreach ($name in @('Invoke-External', 'Get-Python3Command', 'Invoke-SourcePreflight')) {
     $fn = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
     if (-not $fn) { throw "Missing actual function: $name" }
     . ([scriptblock]::Create($fn.Extent.Text))
@@ -56,7 +58,7 @@ Invoke-SourcePreflight -Skip:$Skip
         def run(label, command, success, diagnostic=None, ci=False):
             env = dict(os.environ, GITHUB_ACTIONS='true' if ci else 'false')
             started = time.monotonic()
-            result = subprocess.run(command, cwd=repo, env=env, capture_output=True, text=True)
+            result = subprocess.run(command, cwd=repo, env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
             log = result.stdout + result.stderr
             (output / (label + '.log')).write_text(log, encoding='utf-8')
             records.append({'label': label, 'command': command, 'seconds': round(time.monotonic() - started, 3),
@@ -82,10 +84,10 @@ Invoke-SourcePreflight -Skip:$Skip
              ['pwsh', '-NoProfile', '-File', 'scripts/check-template-symbols.ps1']),
             ('using', 'template/backend/src/CompanyName.ProjectName.Api/QualityPreflightFixture.csproj',
              '<Project>\n<!--#if (IncludeLocalization)-->\n<ItemGroup>\n<InternalsVisibleTo Include="Fixture" />\n</ItemGroup>\n<!--#endif-->\n</Project>\n',
-             'InternalsVisibleTo', ['python3', 'scripts/check-using-guards.py']),
+             'InternalsVisibleTo', [sys.executable, 'scripts/check-using-guards.py']),
             ('async', 'template/backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/QualityPreflightFixture.cs',
              'internal static class QualityPreflightFixture { internal static void Block() { System.Threading.Tasks.Task.Delay(1).GetAwaiter().GetResult(); } }\n',
-             'GetAwaiter().GetResult()', ['python3', 'scripts/check-async-boundaries.py']),
+             'GetAwaiter().GetResult()', [sys.executable, 'scripts/check-async-boundaries.py']),
         ]
         for name, path, content, diagnostic, original in mutations:
             target = repo / path

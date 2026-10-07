@@ -4,14 +4,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore;
 
-/// <summary>
-/// 提供工作单元的 EF Core 集成注册入口。
-/// </summary>
+/// <summary>工作单元的 EF Core 集成注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册工作单元的 EF Core 支持。
-    /// </summary>
+    /// <summary>注册工作单元的 EF Core 支持。</summary>
+    /// <remarks>可重复调用：服务只注册一次。</remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddUnitOfWork();

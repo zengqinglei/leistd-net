@@ -43,6 +43,9 @@ public static class OperationRecordActions
     /// <summary>创建角色。</summary>
     public const string RoleCreated = "role.created";
 
+    /// <summary>更新角色资料（显示名、描述、排序、是否默认角色）。</summary>
+    public const string RoleUpdated = "role.updated";
+
     /// <summary>删除角色。</summary>
     public const string RoleDeleted = "role.deleted";
 
@@ -82,6 +85,31 @@ public static class OperationRecordActions
     /// <summary>设置变更。作用域（宿主／租户／用户）随目标标识带出。</summary>
     public const string SettingChanged = "setting.changed";
 
+#if (LocalIdentity && Email)
+    /// <summary>
+    /// 用当前发信参数发送了一封测试邮件。
+    /// </summary>
+    /// <remarks>
+    /// 它不改任何状态，记它是为了被拒的那一半：没有权限却反复尝试、或在租户里尝试，
+    /// 都要留下"谁在试"的痕迹。不带目标——收件人是任意填写的地址。
+    /// </remarks>
+    public const string SettingTestEmailSent = "setting.test-email-sent";
+#endif
+
+#if (OpenIddictServer)
+    /// <summary>登记开放应用（OAuth 客户端）。</summary>
+    public const string OpenApplicationCreated = "open-application.created";
+
+    /// <summary>修改开放应用的类型、回调地址或授权能力。</summary>
+    public const string OpenApplicationUpdated = "open-application.updated";
+
+    /// <summary>删除开放应用，该客户端随即无法再取得令牌。</summary>
+    public const string OpenApplicationDeleted = "open-application.deleted";
+
+    /// <summary>重置开放应用的密钥：旧密钥立即失效。</summary>
+    public const string OpenApplicationSecretReset = "open-application.secret-reset";
+
+#endif
     /// <summary>导出操作记录。<b>导出审计日志这件事本身要被审计</b>——谁把历史带走了是安全事件。</summary>
     public const string OperationRecordsExported = "operation-records.exported";
 

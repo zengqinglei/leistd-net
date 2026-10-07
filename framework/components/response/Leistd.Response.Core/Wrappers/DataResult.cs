@@ -1,8 +1,6 @@
 namespace Leistd.Response.Wrappers;
 
-/// <summary>
-/// 带数据的统一响应结果。
-/// </summary>
+/// <summary>带数据的统一响应结果。</summary>
 /// <typeparam name="T">载荷类型。</typeparam>
 public record Result<T> : Result
 {

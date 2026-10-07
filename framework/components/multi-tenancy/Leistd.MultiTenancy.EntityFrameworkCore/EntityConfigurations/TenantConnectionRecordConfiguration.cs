@@ -6,10 +6,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 namespace Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 
 /// <summary>租户连接登记的 EF Core 配置。</summary>
-/// <remarks>
-/// 主键是 <c>(TenantId, Name)</c>，一个租户可登记多条。没有"模式与连接串是否匹配"这类检查约束——
-/// 行的存在本身就是判据，密文列非空。
-/// </remarks>
+/// <remarks>主键是 <c>(TenantId, Name)</c>，一个租户可登记多条；密文列非空。</remarks>
 public class TenantConnectionRecordConfiguration : IEntityTypeConfiguration<TenantConnectionRecord>
 {
     /// <summary>密文列的最大长度：明文上限经 Data Protection 加密并 Base64Url 编码后的余量。</summary>
@@ -24,7 +21,7 @@ public class TenantConnectionRecordConfiguration : IEntityTypeConfiguration<Tena
             .IsRequired()
             .HasMaxLength(TenantConnectionConfiguration.MaxNameLength);
 
-        // 密文不进索引也不进唯一约束：它是配置值不是标识符，进索引等于在更多地方留副本
+        // 密文不进索引：它是配置值不是标识符，进索引只会多留副本
         builder.Property(x => x.ProtectedConnectionString)
             .IsRequired()
             .HasMaxLength(MaxProtectedConnectionStringLength);

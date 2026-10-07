@@ -34,7 +34,7 @@
         </button>
         <button hlmBtn type="button" [disabled]="saving()" (click)="onSave()">
           @if (saving()) {
-            <hlm-spinner class="mr-2 size-4" />
+            <hlm-spinner class="size-4" data-icon="inline-start" />
           }
           {{ t('common.save') }}
         </button>

@@ -16,8 +16,7 @@ using Microsoft.Extensions.Localization;
 
 namespace Leistd.OperationRecords.Queries;
 
-// 查询、筛选项与导出共用同一份读者判定与字段裁剪：两条路径各写一份迟早漂移，
-// 症状是"界面看不到的记录能被导出来"——那是越权，不是显示差异。
+// 查询、筛选项与导出共用同一份读者判定与字段裁剪，避免界面看不到的记录能被导出
 internal sealed class OperationRecordQueryService(
     IOperationRecordReader store,
     IOperationActionDefinitionManager actionDefinitions,
@@ -36,8 +35,7 @@ internal sealed class OperationRecordQueryService(
 
         var reader = ResolveReader();
 
-        // 给了筛选条件但展开为空必须返回空页：存储把空集合当"不过滤"，
-        // 下传就把"筛了但没有"显示成了"这就是全部"
+        // 筛选展开为空时返回空页：存储把空集合当“不过滤”
         var actions = ResolveRequestedActions(input.Categories, input.Actions, reader.IsHost);
         if (actions is { Count: 0 })
         {
@@ -54,8 +52,7 @@ internal sealed class OperationRecordQueryService(
 
     public Task<OperationRecordFilterOptionsOutputDto> GetFilterOptionsAsync(CancellationToken cancellationToken = default)
     {
-        // 筛选项按可见性裁剪：否则筛选框里摆着一堆读者永远筛不出东西的项，
-        // 而"筛了没有"与"看不到"在界面上长得一样
+        // 筛选项按可见性裁剪
         var visible = VisibleDefinitions(ResolveReader().IsHost).ToList();
 
         return Task.FromResult(new OperationRecordFilterOptionsOutputDto
@@ -85,7 +82,7 @@ internal sealed class OperationRecordQueryService(
         var reader = ResolveReader();
         var actions = ResolveRequestedActions(input.Categories, input.Actions, reader.IsHost);
 
-        // "筛了但展开为空"导出只有表头的文件，与分页返回空页同语义；不下传筛选条件就成了导出全量
+        // 筛选展开为空时只导出表头，与分页空页同语义
         IReadOnlyList<OperationRecordOutputDto> rows = [];
         if (actions is not { Count: 0 })
         {
@@ -98,7 +95,7 @@ internal sealed class OperationRecordQueryService(
 
         var content = BuildCsv(rows, reader.IsHost);
 
-        // 文件生成之后才记：记在前面，一旦后续抛异常就成了"记了但没发生"
+        // 文件生成之后才记，失败的导出不留记录
         await recorder.RecordSucceededAsync(audit.Action, OperationTarget.None, audit.AuthorizationBasis, cancellationToken);
 
         return new OperationRecordExportFileDto(
@@ -114,8 +111,7 @@ internal sealed class OperationRecordQueryService(
             return (OperationRecordVisibilityScope.Host, true);
         }
 
-        // 读者标识与所属租户和记录器取操作人的口径一致（claim 原始值与主体的租户 claim）：
-        // 只认 ICurrentUser.Id 的话，机器主体读不到自己写下的 Actor 层记录
+        // 与记录器取操作人的口径一致（claim 原始值与主体的租户 claim），机器主体才能读到自己的 Actor 层记录
         return (OperationRecordVisibilityScope.ForTenantReader(currentUser.SubjectId, currentUser.TenantId), false);
     }
 
@@ -136,9 +132,8 @@ internal sealed class OperationRecordQueryService(
             Outcome = outcome is null ? null : Enum.Parse<OperationRecordOutcome>(outcome)
         };
 
-    // 类别与动作是两个维度：维度内并集、维度间交集。返回 null 表示"没按动作筛"，
-    // 空集合表示"筛了但一个都不匹配"——调用处据此决定是下传还是直接返回空页。
-    // 显式给出的动作码同样过一遍可见性，否则租户读者能通过直接传码试探宿主侧动作是否存在。
+    // 维度内并集、维度间交集。null 表示没按动作筛，空集合表示筛了但一个都不匹配。
+    // 显式给出的动作码同样按可见性过滤，租户读者无法借此试探宿主侧动作。
     private List<string>? ResolveRequestedActions(
         IReadOnlyList<string>? categories,
         IReadOnlyList<string>? requestedActions,
@@ -204,10 +199,8 @@ internal sealed class OperationRecordQueryService(
         ActorTenantId = isHost ? record.ActorTenantId : null
     };
 
-    // 与错误响应同一个非泛型本地化器、同一套占位符填充：同一个码在接口报错和记录里读起来是同一句话。
-    // 审计要换措辞或用上接口报错没有的参数时，资源里备 "{码}:Record"，它优先于码本身。
-    // 两步各交给本地化器回落文化：审计键在整条回落链（含默认语言）上都未命中，才查码本身。
-    // 按读取时的请求语言渲染，库里仍只存码与参数（理由见 OperationFailure）。
+    // 与错误响应同一个非泛型本地化器与占位符填充；"{码}:Record" 优先于码本身，
+    // 审计键在整条文化回落链上都未命中才查码本身。
     private string? LocalizeFailure(string? code, string? data)
     {
         if (localizer is null || code is null)
@@ -226,8 +219,7 @@ internal sealed class OperationRecordQueryService(
 
     private const string RecordTextSuffix = ":Record";
 
-    // 参数由 OperationFailure 序列化成扁平 JSON 对象；解析不了（被改坏、旧格式）按无参数处理，
-    // 一条记录的参数坏了不能让整页查询失败
+    // 参数解析不了时按无参数处理，不让整页查询失败
     private static Dictionary<string, object?>? ReadFailureData(string? data)
     {
         if (string.IsNullOrWhiteSpace(data))
@@ -259,9 +251,8 @@ internal sealed class OperationRecordQueryService(
         }
     }
 
-    // CSV：带 UTF-8 BOM（否则 Excel 按本地代码页解释，中文全是乱码）；动作码存原样不渲染句子。
-    // 失败原因另起一列按导出请求的语言渲染：文件离开系统后没有词条可查，只有码读者看不懂；
-    // 码与参数两列照旧保留，换语言重渲染仍有依据。仅宿主那几列只在宿主导出时成列，而不是有列但为空。
+    // 带 UTF-8 BOM，Excel 才按 UTF-8 解析。失败原因另起一列按导出请求语言渲染（文件离开系统后无词条可查），
+    // 码与参数两列照旧保留。仅宿主列只在宿主导出时成列。
     private static byte[] BuildCsv(IReadOnlyList<OperationRecordOutputDto> rows, bool includeHostOnlyColumns)
     {
         var builder = new StringBuilder();
@@ -303,8 +294,7 @@ internal sealed class OperationRecordQueryService(
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(builder.ToString())];
     }
 
-    // 两件事：CSV 转义，以及公式注入——以 = + - @ 开头的字段会被 Excel／WPS 当公式执行，
-    // 而目标名与操作人名是用户可控内容。前缀单引号让整格退化成文本；\t 与 \r 会被吃掉，同样列入。
+    // CSV 转义与公式注入防护：以 = + - @ \t \r 开头的字段前缀单引号，按文本处理。
     private static string EscapeCsv(string value)
     {
         var neutralized = value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\t' or '\r'

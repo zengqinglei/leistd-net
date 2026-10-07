@@ -31,10 +31,10 @@ def main():
 
     def run(label, command, cwd, success=True):
         started = time.monotonic()
-        result = subprocess.run(command, cwd=cwd, text=True, capture_output=True)
+        result = subprocess.run(command, cwd=cwd, text=True, encoding='utf-8', errors='replace', capture_output=True)
         (out / (label + '.log')).write_text(result.stdout + result.stderr, encoding='utf-8')
         records.append(dict(label=label, seconds=round(time.monotonic() - started, 3), exit_code=result.returncode))
-        (out / 'results.json').write_text(json.dumps(records, indent=2))
+        (out / 'results.json').write_text(json.dumps(records, indent=2), encoding='utf-8')
         assert (result.returncode == 0) == success, (label, result.stdout[-1000:], result.stderr[-1500:])
         return result.stdout
 
@@ -49,7 +49,7 @@ def main():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
         def git(*args):
-            return subprocess.check_output(['git', *args], cwd=repo, text=True, stderr=subprocess.PIPE).strip()
+            return subprocess.check_output(['git', *args], cwd=repo, text=True, encoding='utf-8', errors='replace', stderr=subprocess.PIPE).strip()
         git('init', '-q'); git('config', 'user.name', 'Quality fixture'); git('config', 'user.email', 'fixture@example.invalid')
         git('add', '.'); git('commit', '-qm', 'fixture baseline')
         base = git('rev-parse', 'HEAD')
@@ -57,7 +57,7 @@ def main():
         planner = importlib.util.module_from_spec(spec); spec.loader.exec_module(planner)
         scenarios = planner.coverage.load_scenarios()
         registered = {name for name, info in scenarios.items() if 'pr' in info['Slices']}
-        front = 'template/frontend/src/app/layout/components/notifications/notification-service.ts'
+        front = 'template/frontend/src/app/layout/services/notification-service.ts'
         back = 'template/backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs'
         fw = next(path for path in paths if path.startswith('framework/components/email/Leistd.Email.Smtp/') and path.endswith('.cs'))
         cases = [
@@ -79,7 +79,7 @@ def main():
                 target = repo / path; target.parent.mkdir(parents=True, exist_ok=True)
                 # No need for valid source in a classifier-only fixture; actual
                 # generation uses the first two cases and their valid comments.
-                target.write_text((target.read_text() if target.exists() else '') + '\n// Quality scope fixture\n')
+                target.write_text((target.read_text(encoding='utf-8') if target.exists() else '') + '\n// Quality scope fixture\n', encoding='utf-8')
             git('add', '.'); git('commit', '-qm', label)
             plan = planner.create_plan('pr', base, 'pull_request', '', container_smoke=label == 'cross-layer')
             assert plan['Mode'] == expected_mode, (label, plan)
@@ -108,24 +108,28 @@ def main():
                 assert local['Scenarios'] == plan['Scenarios']
             elif label == 'cross-layer':
                 # Independently validated single-side PR plans, excluding full-only products.
-                expected = set(json.loads((out / 'frontend-feature-plan.json').read_text())['Scenarios'])
-                expected |= set(json.loads((out / 'backend-api-plan.json').read_text())['Scenarios'])
+                expected = set(json.loads((out / 'frontend-feature-plan.json').read_text(encoding='utf-8'))['Scenarios'])
+                expected |= set(json.loads((out / 'backend-api-plan.json').read_text(encoding='utf-8'))['Scenarios'])
                 assert local['Selection'] == 'source-products' and set(local['Scenarios']) == expected, local
             else:
                 assert local['Selection'] == 'complete-pr' and set(local['Scenarios']) == registered
-            (out / (label + '-local.json')).write_text(json.dumps(local, indent=2))
+            (out / (label + '-local.json')).write_text(json.dumps(local, indent=2), encoding='utf-8')
             if expected_mode != 'full':
                 assert plan['FrameworkTests'] is False and plan['ConsumerProjects'] == []
+                assert plan['FrameworkTestProjects'] == [] and plan['FrameworkTestSelection'] == 'none'
                 assert {'identity', 'identity-all-features'} <= set(plan['Scenarios']) <= registered
             elif label == 'framework-source':
                 assert plan['ConsumerProjects'] == ['Leistd.Email.Smtp'] and plan['FrameworkTests']
+                assert plan['FrameworkTestProjects'] == [EMAIL_TESTS] and plan['FrameworkTestSelection'] == 'affected', plan
             else:
                 assert plan['ConsumerProjects'] is None and plan['FrameworkTests'] and set(plan['Scenarios']) == registered
+                assert plan['FrameworkTestSelection'] == 'all' and plan['FrameworkTestProjects'] == planner.all_framework_tests('HEAD'), plan
             for tier, event, baseline, candidate in [('full','pull_request',base,''), ('pr','workflow_dispatch',base,''),
                 ('pr','pull_request','0'*40,''), ('pr','pull_request',base,'b'*40), ('pr','pull_request',git('rev-parse','HEAD'),'')]:
                 conservative = planner.create_plan(tier, baseline, event, candidate)
                 assert conservative['Mode'] == 'full' and conservative['FrameworkTests'] and conservative['ConsumerProjects'] is None
-            (out / (label + '-plan.json')).write_text(json.dumps(plan, indent=2))
+                assert conservative['FrameworkTestSelection'] == 'all' and conservative['FrameworkTestProjects'] == planner.all_framework_tests('HEAD')
+            (out / (label + '-plan.json')).write_text(json.dumps(plan, indent=2), encoding='utf-8')
             print('PASS complete-input plan:', label, flush=True)
             if label in ('frontend-feature', 'backend-api'):
                 prove_generation(repo, base, plan, scenarios, out, run, git)
@@ -139,20 +143,21 @@ def main():
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'frontend'
         assert planner.local_scenarios(base)['Selection'] == 'source-products'
         git('reset', '--hard', base); git('mv',front,'docs/moved-source.ts'); git('commit','-qm','cross boundary move')
-        (repo / 'docs/later.md').write_text('later documentation')
+        (repo / 'docs/later.md').write_text('later documentation', encoding='utf-8')
         git('add','.'); git('commit','-qm','later doc change')
         assert planner.create_plan('pr',base,'pull_request','')['Mode'] == 'full'
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
-        (repo / front).write_text((repo / front).read_text() + '\n// Uncommitted edit\n')
+        (repo / front).write_text((repo / front).read_text(encoding='utf-8') + '\n// Uncommitted edit\n', encoding='utf-8')
         git('add', front); git('commit', '-qm', 'committed frontend input')
         assert planner.create_plan('pr', base, 'pull_request', '')['Mode'] == 'frontend'
-        (repo / back).write_text((repo / back).read_text() + '\n// Uncommitted backend edit\n')
+        (repo / back).write_text((repo / back).read_text(encoding='utf-8') + '\n// Uncommitted backend edit\n', encoding='utf-8')
         dirty = planner.create_plan('pr', base, 'pull_request', '')
         assert dirty['Mode'] == 'full' and dirty['FrameworkTests'] and dirty['ConsumerProjects'] is None and 'working tree' in dirty['Reason']
+        assert dirty['FrameworkTestSelection'] == 'all' and dirty['FrameworkTestProjects'] == planner.all_framework_tests('HEAD')
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         git('reset', '--hard', base)
-        (repo / 'untracked-input.ts').write_text('untracked')
+        (repo / 'untracked-input.ts').write_text('untracked', encoding='utf-8')
         assert planner.local_scenarios(base)['Selection'] == 'complete-pr'
         (repo / 'untracked-input.ts').unlink()
         for invalid in ('', '0'*40, git('rev-parse','HEAD')):
@@ -165,22 +170,125 @@ def main():
         config_path = repo / 'template/.template.config/template.json'
         for label, modifier in [('unknown-source-rule', False), ('unknown-modifier-rule', True)]:
             git('reset', '--hard', base)
-            config = json.loads(config_path.read_text())
+            config = json.loads(config_path.read_text(encoding='utf-8'))
             target = config['sources'][0]['modifiers'][0] if modifier else config['sources'][0]
             target['include'] = ['**/*']
-            config_path.write_text(json.dumps(config))
+            config_path.write_text(json.dumps(config), encoding='utf-8')
             git('add', '.'); git('commit', '-qm', label + ' baseline')
             rule_base = git('rev-parse', 'HEAD')
-            (repo / front).write_text((repo / front).read_text() + '\n// Quality scope fixture\n')
+            (repo / front).write_text((repo / front).read_text(encoding='utf-8') + '\n// Quality scope fixture\n', encoding='utf-8')
             git('add', '.'); git('commit', '-qm', label + ' source edit')
             guarded = planner.create_plan('pr', rule_base, 'pull_request', '')
             assert guarded['Mode'] == 'full' and guarded['FrameworkTests'] and guarded['ConsumerProjects'] is None
             assert set(guarded['Scenarios']) == registered and 'proof unavailable' in guarded['Reason']
             assert planner.local_scenarios(rule_base)['Selection'] == 'complete-pr'
-            (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2))
+            (out / (label + '-plan.json')).write_text(json.dumps(guarded, indent=2), encoding='utf-8')
             print('PASS unknown engine rule conservative fallback:', label, flush=True)
         prove_local_products(repo, base, planner, scenarios, out, run, git)
+        prove_framework_tests(repo, base, planner, out, run, git)
     print('Selection and receipt evidence:', out, flush=True)
+
+
+EMAIL_TESTS = 'framework/tests/components/email/Leistd.Email.Tests/Leistd.Email.Tests.csproj'
+
+
+def prove_framework_tests(repo, base, planner, out, run, git):
+    """Framework test list: changed file -> project -> reverse closure -> tests; anything unproven -> all."""
+    smtp_dir = 'framework/components/email/Leistd.Email.Smtp'
+    smtp = next(path for path in git('ls-files', smtp_dir).split('\n') if path.endswith('.cs'))
+    core = next(path for path in git('ls-files', 'framework/components/core/Leistd.Core').split('\n') if path.endswith('.cs'))
+    email_test = next(path for path in git('ls-files', posixpath_dir(EMAIL_TESTS)).split('\n') if path.endswith('.cs'))
+    test_base = next(path for path in git('ls-files', 'framework/tests/shared/Leistd.TestBase').split('\n') if path.endswith('.cs'))
+    everything = planner.all_framework_tests('HEAD')
+    assert len(everything) > 20
+
+    def append(path, text='\n// Framework selection fixture\n'):
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((target.read_text(encoding='utf-8') if target.exists() else '') + text, encoding='utf-8')
+
+    def edit(path, old, new):
+        target = repo / path
+        content = target.read_text(encoding='utf-8')
+        assert old in content, (path, old)
+        target.write_text(content.replace(old, new, 1), encoding='utf-8')
+
+    def select(label, change, prepare=None):
+        """prepare runs in its own commit, so the guard holds on BOTH sides of the diff."""
+        git('reset', '--hard', base)
+        case_base = base
+        if prepare:
+            prepare(); git('add', '-A'); git('commit', '-qm', label + ' baseline')
+            case_base = git('rev-parse', 'HEAD')
+        change(); git('add', '-A'); git('commit', '-qm', label)
+        plan = planner.create_plan('pr', case_base, 'pull_request', '')
+        assert plan['BaseSha'] == case_base and plan['CandidateSha'] == git('rev-parse', 'HEAD'), plan
+        assert plan['FrameworkTests'] and plan['FrameworkTestProjects'], plan
+        (out / f'framework-{label}-plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
+        return plan
+
+    def expect_all(label, change, reason, prepare=None):
+        plan = select(label, change, prepare)
+        assert plan['FrameworkTestSelection'] == 'all' and plan['FrameworkTestProjects'] == planner.all_framework_tests('HEAD'), (label, plan)
+        assert reason in plan['FrameworkTestReason'], (label, reason, plan['FrameworkTestReason'])
+        print('PASS framework tests fall back to all:', label, flush=True)
+
+    single = select('single-family', lambda: append(smtp))
+    assert single['FrameworkTestSelection'] == 'affected' and single['FrameworkTestProjects'] == [EMAIL_TESTS], single
+    many = select('core-many-dependents', lambda: append(core))
+    families = {path.split('/')[3] for path in many['FrameworkTestProjects']}
+    assert many['FrameworkTestSelection'] == 'affected' and len(families) >= 5, many
+    assert EMAIL_TESTS in many['FrameworkTestProjects'] and len(many['FrameworkTestProjects']) < len(everything), many
+    own = select('test-project-itself', lambda: append(email_test))
+    assert own['FrameworkTestSelection'] == 'affected' and own['FrameworkTestProjects'] == [EMAIL_TESTS], own
+    # Mapped edits combine: the union of both closures, still bound to this base.
+    both = select('two-projects-one-test', lambda: (append(smtp), append(email_test)))
+    assert both['FrameworkTestProjects'] == [EMAIL_TESTS]
+    print('PASS framework tests: single family, Core reverse closure, test project itself', flush=True)
+    local_file = out / 'framework-local.json'
+    run('framework-local-cli', [sys.executable, 'scripts/plan-quality-checks.py', '--local-framework-tests', '--tier', 'pr',
+                                '--base', both['BaseSha'], '--output', str(local_file)], repo)
+    local = json.loads(local_file.read_text(encoding='utf-8'))
+    assert local['Kind'] == 'local-framework-tests' and local['Projects'] == both['FrameworkTestProjects'] and local['Selection'] == 'affected'
+    run('framework-local-both-modes', [sys.executable, 'scripts/plan-quality-checks.py', '--local-framework-tests', '--local-scenarios',
+                                       '--tier', 'pr', '--base', base, '--output', str(local_file)], repo, success=False)
+
+    for label, path in [('shared-tests-props', 'framework/tests/Directory.Build.props'), ('shared-common-props', 'framework/common.props'),
+                        ('shared-packages', 'framework/Directory.Packages.props'), ('shared-build-script', 'framework/build/pack-local-feed.ps1'),
+                        ('shared-test-base', test_base), ('root-build-targets', 'Directory.Build.targets')]:
+        expect_all(label, lambda path=path: append(path, '\n<!-- fixture -->\n' if path.endswith(('.props', '.targets')) else '\n# fixture\n'),
+                   'shared')
+    for label, paths in [('unmappable-package-doc', ['framework/docs/components/email.md']),
+                         ('unmappable-family-file', ['framework/components/email/notes.txt']),
+                         ('mixed-with-template', [smtp, 'template/backend/src/CompanyName.ProjectName.Api/Program.cs'])]:
+        expect_all(label, lambda paths=paths: [append(path) for path in paths], 'belongs to no framework project')
+    smtp_project = f'{smtp_dir}/Leistd.Email.Smtp.csproj'
+    renamed_dir = 'framework/components/email/Leistd.Email.Smtp2'
+    expect_all('project-rename', lambda: (git('mv', smtp_dir, renamed_dir),
+                                          git('mv', f'{renamed_dir}/Leistd.Email.Smtp.csproj', f'{renamed_dir}/Leistd.Email.Smtp2.csproj')),
+               'missing project')
+    expect_all('project-delete', lambda: git('rm', '-rq', posixpath_dir(EMAIL_TESTS)), 'added, removed or renamed')
+    expect_all('reference-added', lambda: edit(EMAIL_TESTS, '<ProjectReference ',
+               '<ProjectReference Include="..\\..\\..\\..\\components\\core\\Leistd.Core\\Leistd.Core.csproj" />\n    <ProjectReference '),
+               'added, removed or renamed')
+    smtp_reference = 'Include="..\\..\\..\\..\\components\\email\\Leistd.Email.Smtp\\Leistd.Email.Smtp.csproj"'
+    expect_all('unresolvable-reference', lambda: append(smtp), 'unresolvable',
+               prepare=lambda: edit(EMAIL_TESTS, smtp_reference, 'Include="$(LeistdRoot)\\Leistd.Email.Smtp.csproj"'))
+    expect_all('missing-referenced-project', lambda: append(smtp), 'missing project',
+               prepare=lambda: edit(EMAIL_TESTS, smtp_reference, smtp_reference.replace('Smtp.csproj', 'Missing.csproj')))
+    expect_all('unresolvable-import', lambda: append(smtp), 'Import',
+               prepare=lambda: edit(EMAIL_TESTS, '<ItemGroup>', '<Import Project="shared.targets" />\n  <ItemGroup>'))
+    expect_all('linked-compile-input', lambda: append(smtp), 'compile input',
+               prepare=lambda: edit(smtp_project, '</Project>', '<ItemGroup><Compile Include="..\\Leistd.Email.Core\\Shared.cs" /></ItemGroup>\n</Project>'))
+    expect_all('unmodelled-props', lambda: append(smtp), 'unmodelled MSBuild import',
+               prepare=lambda: append('framework/components/email/Directory.Build.props', '<Project />\n'))
+    expect_all('empty-selection', lambda: append(smtp), 'no test project',
+               prepare=lambda: edit(EMAIL_TESTS, f'<ProjectReference {smtp_reference} />', ''))
+    git('reset', '--hard', base)
+
+
+def posixpath_dir(path):
+    return path.rsplit('/', 1)[0]
 
 
 def prove_local_products(repo, base, planner, scenarios, out, run, git):
@@ -188,11 +296,11 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
     git('reset', '--hard', base)
     source = 'template/frontend/src/app/app.spec.ts'
     path = repo / source
-    path.write_text(path.read_text() + '\n//#if (IncludeNotifications)\n// local branch fixture\n//#endif\n')
+    path.write_text(path.read_text(encoding='utf-8') + '\n//#if (IncludeNotifications)\n// local branch fixture\n//#endif\n', encoding='utf-8')
     git('add', '.'); git('commit', '-qm', 'local conditional source')
     selected = planner.local_scenarios(base)
     assert selected['Selection'] == 'source-products', selected
-    config = json.loads((repo / 'template/.template.config/template.json').read_text())
+    config = json.loads((repo / 'template/.template.config/template.json').read_text(encoding='utf-8'))
     symbols = {name: planner.coverage.symbol_values(config, planner.coverage.parse_cli_arguments(config, info['Arguments']))
                for name, info in scenarios.items() if name in selected['Scenarios']}
     assert all(values['SpaFrontend'] for values in symbols.values()), selected
@@ -202,18 +310,18 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
     assert plan['Scenarios'] == selected['Scenarios']
     prove_generation(repo, base, dict(plan, Mode='local-conditional'), scenarios, out, run, git)
     local_file = out / 'conditional-local.json'
-    run('local-cli', ['python3','scripts/plan-quality-checks.py','--local-scenarios','--tier','pr',
+    run('local-cli', [sys.executable,'scripts/plan-quality-checks.py','--local-scenarios','--tier','pr',
                      '--base',base,'--output',str(local_file)], repo)
-    assert json.loads(local_file.read_text()) == selected
+    assert json.loads(local_file.read_text(encoding='utf-8')) == selected
     for flags in (['--tier','full'], ['--tier','pr','--github-output'],
                   ['--tier','pr','--docs-only','true'], ['--tier','pr','--candidate-input','a'*40]):
         run('local-invalid-' + str(len(flags)) + '-' + flags[-1],
-            ['python3','scripts/plan-quality-checks.py','--local-scenarios',*flags,
+            [sys.executable,'scripts/plan-quality-checks.py','--local-scenarios',*flags,
              '--output',str(out/'invalid-local.json')], repo, success=False)
     run('local-not-ci-plan', ['pwsh','-NoProfile','-Command',
         "$ErrorActionPreference='Stop'; . ./scripts/quality-validation-plan.ps1; . ./scripts/template-matrix-scenarios.ps1; "
         f"Read-QualityValidationPlan -Path '{local_file}' -ExpectedTier pr"], repo, success=False)
-    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text()
+    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text(encoding='utf-8')
     # A real new commit during selection must invalidate the computed snapshot.
     original = planner.git
     fixture_head = git('rev-parse', 'HEAD')
@@ -241,7 +349,7 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
         producer_calls += 1
         # create_plan first evaluates old/new; inject during local selection itself.
         if producer_calls == 3:
-            untracked.write_text('new input')
+            untracked.write_text('new input', encoding='utf-8')
         return producers
     try:
         planner.source_producers = changing_tree
@@ -265,11 +373,14 @@ def prove_generation(repo, base, plan, scenarios, out, run, git):
     old = out / (label + '-base-template')
     old.mkdir(exist_ok=True)
     data = subprocess.check_output(['git','archive',base,'template'],cwd=repo)
+    # 解压过滤器（PEP 706）在 3.12 起提供，并回移到 3.10.12+、3.11.4+；
+    # 缺少时明确报错，不回落到不带过滤器的旧行为。
+    if not hasattr(tarfile, 'data_filter'):
+        raise SystemExit('Python with tarfile extraction filters is required (3.12+, or 3.10.12+/3.11.4+)')
     with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-        # Locally produced git archive, supporting the repository's Python 3.9
-        # machines as well as CI 3.12. Reject any unexpected archive path.
+        # 本地 git archive 的产物：先拒绝意外路径，再以 'data' 过滤器解压。
         assert all(member.name.startswith('template/') or member.name == 'template' for member in archive.getmembers())
-        archive.extractall(old)
+        archive.extractall(old, filter='data')
     digests = {}
     for version, template in [('base', old / 'template'), ('head', repo / 'template')]:
         hive = out / f'{label}-{version}-hive'
@@ -293,26 +404,32 @@ def prove_generation(repo, base, plan, scenarios, out, run, git):
         delta = {path for path in old_files.keys() | new_files.keys() if old_files.get(path) != new_files.get(path)}
         assert omitted is None or not any(path.startswith(omitted) for path in delta), (label,name,'omitted stage input changed',delta)
         assert name in selected or not delta, (label,name,'omitted scenario output changed',delta)
-    (out / (label + '-generation-digests.json')).write_text(json.dumps({f'{version}/{name}': files for (version,name),files in digests.items()},indent=2))
+    (out / (label + '-generation-digests.json')).write_text(json.dumps({f'{version}/{name}': files for (version,name),files in digests.items()},indent=2), encoding='utf-8')
     print('PASS actual generation: omitted inputs and unselected products unchanged:', label, flush=True)
 
 
 def prove_receipts(repo, plan, scenarios, out, run):
     label = plan['Mode']
+    # Scenarios whose full stages run through the generated project's own verify.ps1.
+    verified = set(json.loads(subprocess.check_output(['pwsh', '-NoProfile', '-Command',
+        ". ./scripts/template-matrix-scenarios.ps1; @($AllScenarios | Where-Object { $scenarioMap[$_].Verify }) | ConvertTo-Json -AsArray"],
+        cwd=repo, text=True, encoding='utf-8')))
+    assert verified, 'no scenario registered with Verify'
     expected_file = out / (label + '-expected.json')
-    expected_file.write_text(json.dumps(plan))
+    expected_file.write_text(json.dumps(plan), encoding='utf-8')
     receipt_dir = out / (label + '-receipts'); receipt_dir.mkdir(exist_ok=True)
     receipts = {}
     for group in plan['Slices']:
         receipt = receipts[group['key']] = dict(Version=2,Tier='pr',Slice=group['key'],CandidateSha=plan['CandidateSha'],Mode=label,Results=[])
         for name in group['Scenarios']:
-            result = dict(Scenario=name, Container='pass' if name in group['Containers'] else 'skipped')
+            result = dict(Scenario=name, Container='pass' if name in group['Containers'] else 'skipped',
+                          Verify='pass' if label == 'full' and name in verified else 'not-run')
             for stage in ['Backend','Runtime','Lint','Frontend','Test']:
                 omitted = (label == 'frontend' and stage in ['Backend','Runtime']) or ((label == 'backend' or not scenarios[name].get('Frontend', True)) and stage in ['Lint','Frontend','Test'])
                 result[stage] = 'not-applicable' if omitted else 'pass'
             receipt['Results'].append(result)
     def write():
-        for key, receipt in receipts.items(): (receipt_dir / f'matrix-{key}.json').write_text(json.dumps(receipt))
+        for key, receipt in receipts.items(): (receipt_dir / f'matrix-{key}.json').write_text(json.dumps(receipt), encoding='utf-8')
     write()
     command=['pwsh','-NoProfile','-File','scripts/check-template-matrix-results.ps1','-ResultsPath',str(receipt_dir),'-Tier','pr','-ValidationPlanPath',str(expected_file)]
     run(label+'-receipts-valid',command,repo)
@@ -335,8 +452,24 @@ def prove_receipts(repo, plan, scenarios, out, run):
     write()
     first_file = receipt_dir / f"matrix-{first['Slice']}.json"
     first_file.unlink();run(label+'-reject-missing-slice',command,repo,False);write()
-    duplicate = receipt_dir / 'matrix-duplicate.json';duplicate.write_text(json.dumps(first))
+    duplicate = receipt_dir / 'matrix-duplicate.json';duplicate.write_text(json.dumps(first), encoding='utf-8')
     run(label+'-reject-duplicate-slice',command,repo,False);duplicate.unlink()
+    # Verify: a registered scenario must report pass in full mode; nobody else may claim it ran.
+    results = [r for receipt in receipts.values() for r in receipt['Results']]
+    samples = [next(r for r in results if r['Verify'] == 'not-run')] if any(r['Verify'] == 'not-run' for r in results) else []
+    samples += [r for r in results if r['Verify'] == 'pass'][:1]
+    assert label != 'full' or any(r['Verify'] == 'pass' for r in samples), 'full fixture lacks a Verify scenario'
+    for result in samples:
+        saved = result['Verify']
+        for bad in (['not-run', 'skipped', 'failure', None] if saved == 'pass' else ['pass', None]):
+            if bad is None:
+                del result['Verify']
+            else:
+                result['Verify'] = bad
+            write(); run(f"{label}-reject-verify-{result['Scenario']}-{bad or 'missing'}", command, repo, False)
+            assert 'Verify expected' in (out / f"{label}-reject-verify-{result['Scenario']}-{bad or 'missing'}.log").read_text(encoding='utf-8')
+            result['Verify'] = saved
+    write()
     result = first['Results'][0];saved = result['Container']
     result['Container'] = 'skipped' if saved == 'pass' else 'pass';write();run(label+'-reject-container-claim',command,repo,False);result['Container'] = saved
     if plan['ContainerSmoke']:
@@ -363,11 +496,11 @@ def prove_receipts(repo, plan, scenarios, out, run):
     if plan['ContainerSmoke']:
         mutations['missing-container-assignment'] = lambda p:next(g for g in p['Slices'] if g['Containers']).update(Containers=[])
     for mutation,apply in mutations.items():
-        invalid = json.loads(json.dumps(plan));apply(invalid);expected_file.write_text(json.dumps(invalid))
+        invalid = json.loads(json.dumps(plan));apply(invalid);expected_file.write_text(json.dumps(invalid), encoding='utf-8')
         run(label+'-reject-plan-'+mutation,command,repo,False)
         if mutation in ('reordered-members', 'moved-plan-members'):
-            assert 'preserve registered group members and order' in (out/(label+'-reject-plan-'+mutation+'.log')).read_text()
-    expected_file.write_text(json.dumps(plan))
+            assert 'preserve registered group members and order' in (out/(label+'-reject-plan-'+mutation+'.log')).read_text(encoding='utf-8')
+    expected_file.write_text(json.dumps(plan), encoding='utf-8')
     if label == 'full':
         pure_api = next(result for receipt in receipts.values() for result in receipt['Results'] if not scenarios[result['Scenario']].get('Frontend', True))
         for stage in ['Lint', 'Frontend', 'Test']:

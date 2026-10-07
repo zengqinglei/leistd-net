@@ -1,7 +1,6 @@
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Leistd.Ddd.Application.Contracts.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;
@@ -25,12 +24,21 @@ public interface IUserAppService : IAppService
 #if (RemoteTokenAuth)
 
     /// <summary>
-    /// 按标识查找用户；本地还没有投影这个主体时返回 <see langword="null"/>
+    /// 当前主体：身份资料取自签发方令牌，超管标记与角色取本服务的授权数据
     /// </summary>
     /// <remarks>
-    /// 供"当前用户"使用：本服务的超管标记与角色是本地授权事实，与签发方令牌里的同名声明无关。
+    /// 签发方令牌里的超管与角色声明属于签发方，不授予本服务任何权限；本地还没有投影这个主体时两者为空。
     /// </remarks>
-    Task<UserManagementOutputDto?> FindAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<CurrentResourceUserOutputDto> GetCurrentResourceUserAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 把当前已认证主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段；未认证或非用户主体时不做任何事
+    /// </summary>
+    /// <remarks>
+    /// 在独立工作单元内提交，不随调用方的业务失败回滚。首次访问并发撞主键时重试一次，
+    /// 仍失败则抛出，由调用方决定是否放行（见 <c>ResourceUserProvisioningMiddleware</c>）。
+    /// </remarks>
+    Task EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default);
 #endif
 
 #if (LocalIdentity)
@@ -94,7 +102,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 查询用户当前角色
     /// </summary>
-    Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 取用户上传的头像图片；用户不存在、没有头像或头像是外部地址时为 <see langword="null"/>。
@@ -108,7 +116,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 替换用户角色。需要 App.Users.ManageRoles。
     /// </summary>
-    Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+    Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
         Guid id,
         UpdateUserRolesInputDto input,
         CancellationToken cancellationToken = default);

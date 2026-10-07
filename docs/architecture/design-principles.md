@@ -8,14 +8,9 @@
 ### 1.1 Framework：提供可组合能力
 
 - `framework/components/` 提供与业务无关的通用能力；`framework/ddd-struct/` 提供可选的 DDD 分层基座。
-- `components` 不依赖 `ddd-struct`；Core/Domain 不依赖 Web、EF Core、SignalR 等具体实现。
-- **Core 包只依赖抽象**：`PackageReference` 限于 `Microsoft.Extensions.*` 与 `*.Abstractions`，
-  不得引用 `.AspNetCore` / `.EntityFrameworkCore` 等宿主与基础设施包。这条不是洁癖——
-  业务项目在架构门禁里限制"应用层/领域层能引用什么"，而 Core 的依赖会顺着传递引用进它们的闭包；
-  渗进去一个实现，它们就只能往白名单里加一行。跨家族的 Core → Core 引用不禁止
-  （禁了就等于禁掉"错误码译文随包分发"这类能力），被引用方受同一条约束，因此传递进去的仍然只有抽象。
-  由 `scripts/check-csproj-conventions.py` 守住。
-- 每个组件家族职责单一，通过宿主显式调用 `Add*`、`Map*` 和 Options 进行组合，不替其他组件隐式注册基础设施。
+- `components` 不依赖 `ddd-struct`；Core/Domain 不依赖 Web、EF Core、SignalR 等可替换的具体实现，层间方向与动态代理闭集例外见[框架开发规范 §5](../framework/development-guide.md#5-依赖方向不可违反)。
+- Core 包只依赖抽象，规则与闸门见[框架开发规范 §5](../framework/development-guide.md#5-依赖方向不可违反)。
+- 每个组件家族职责单一，只注册完成自身功能必需且在契约中声明的依赖；实现选择、业务端点与应用管道由宿主经 `Add*`、`Map*` 和 Options 显式组合（[框架开发规范 §5](../framework/development-guide.md#5-依赖方向不可违反)）。
 - 公共 API、注册方式和运行时语义以源码为准，面向使用者的说明位于 `framework/docs/` 并随 NuGet 包分发。
 - 组件文档示例只使用该组件真实依赖和原生 .NET API；DDD 组合示例由 `framework/docs/ddd-struct/` 承载。
 - 本地包固定输出到 `.tmp/local-feed`；仓库 `NuGet.Config` 不登记本地源。
@@ -63,7 +58,7 @@
 - references、scripts、assets 仅在能减少重复工作或提高确定性时保留；不为完整目录结构而创建资源。
 - 每个 Skill 都遵循“先找最新同类文档，只沉淀已验证且需长期复用的信息”的规则，不强制生成 Plan、registry、context、handoff 或阶段报告。
 - 每种用户最终意图只有一个交付所有者；组合其他 Skill 不转移完成责任，也不强制所有任务经过同一阶段状态机。
-- 所有 Skill 必须通过 `skill-creator/scripts/quick_validate.py`；变更触发描述或流程后，还应使用架构地图中的真实请求验证能否正确触发和执行。
+- 所有 Skill 必须通过 `scripts/validate-skills.ps1`（含官方 skill-creator 的 quick_validate）；变更触发描述或流程后，还应使用[三层交付与 AI 协作 §6](./collaboration-scenarios.md#6-skill-验收)中的真实请求验证能否正确触发和执行。
 
 ## 4. 验证原则
 
@@ -78,7 +73,7 @@
 
 评审和实施框架与模板的改动时，按以下八条取舍。冲突时以前面的条目为准。
 
-1. **终局，不留中间态。** 未发布的 API 直接改到位，不留兼容层和过渡开关；破坏性变更写进升级说明。
+1. **终局，不留中间态。** 未发布的 API 直接改到位，不留兼容层和过渡开关；破坏性变更进入 release notes，需要调用方迁移时补升级说明。
 2. **优先官方机制。** 先查平台与同类成熟框架有没有现成做法，不自建平行实现。替换的是平行实现；有官方没有的语义或替换点的抽象保留，默认实现取官方值（框架规范 §6.5）。
 3. **不过度设计。** 新的类型、选项、扩展点要有两个以上真实调用点，或说得出具体的替换场景；只有一个调用点的辅助类并回调用方；说不出用途的配置项删除。
 4. **只修"默认就会出错"。** 安全上只处理静默的危险默认值、缺配置照常启动这类问题；宿主的显式选择和低概率场景写进文档，不为它们加门槛。宿主组合错误同理：框架能从已登记的事实推断的，在启动期报出；推断不了的写组合规范，不为它加声明式 API（框架规范 §6.2 第 5 条）。
@@ -86,15 +81,3 @@
 6. **开发者视角。** 克隆即可运行；报错指明缺的是哪个配置键；必填项尽量少；组件在普通业务项目里按文档简单配置就能用。
 7. **组件保持通用。** 组件只处理自己的类型，不改写官方类型（框架规范 §6.1）；能力由宿主显式组合，组件不替宿主决定部署策略。
 8. **保留扩展性。** 业务项目需要的替换与定制点要保留；判断一个点是否该删，按框架规范 §6.5 的三问。
-
-## 6. 规范入口
-
-| 范围 | 权威入口 |
-| --- | --- |
-| 三层场景与文档读写链路 | `docs/architecture/collaboration-scenarios.md` |
-| 仓库内部 AI 协作 | `.agents/skills/developing-leistd-framework/SKILL.md`、`.agents/skills/developing-leistd-template/SKILL.md`、`.agents/skills/maintaining-leistd-repository/SKILL.md` |
-| 框架开发 | `docs/framework/development-guide.md` |
-| 框架版本与发布 | `docs/framework/versioning.md` |
-| 模板维护 | `docs/template/development-guide.md` |
-| 生成项目 AI 协作 | `template/.agents/skills/leistd-project-workflow/SKILL.md`、`template/docs/README.md` |
-| 组件与 DDD 使用 | `framework/docs/README.md` |

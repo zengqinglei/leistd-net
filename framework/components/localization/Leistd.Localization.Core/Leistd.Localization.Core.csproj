@@ -17,4 +17,9 @@
     <EmbeddedResource Include="Resources\*.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 选项验证器随选项放在 Core，由 AspNetCore 的注册入口登记 -->
+    <InternalsVisibleTo Include="Leistd.Localization.AspNetCore" />
+  </ItemGroup>
+
 </Project>

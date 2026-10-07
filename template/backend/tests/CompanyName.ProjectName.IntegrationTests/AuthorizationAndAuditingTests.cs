@@ -1,16 +1,14 @@
 #if (LocalIdentity)
-using Leistd.Authorization;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Dtos;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
-using Leistd.Lock;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using CompanyName.ProjectName.Application.Roles.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
@@ -18,16 +16,12 @@ using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.Authorization.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.Lock.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -660,7 +654,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
         await using var scope = Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
-        Assert.False(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+        Assert.False(await db.Set<UserRole>().AnyAsync(userRole => userRole.RoleId == role.Id));
     }
 
     /// <summary>
@@ -694,7 +688,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         Assert.True(await db.Roles.AnyAsync(existing => existing.Id == role.Id));
-        Assert.True(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+        Assert.True(await db.Set<UserRole>().AnyAsync(userRole => userRole.RoleId == role.Id));
         var providerKey = role.Id.ToString();
         Assert.True(await db.Set<PermissionGrantRecord>()
             .AnyAsync(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey));
@@ -737,6 +731,132 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, OperationRecordActions.UserEnabled, targetId));
         Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, OperationRecordActions.UserPasswordReset, targetId));
     }
+
+    /// <summary>
+    /// 删除不存在的用户即成功：重复删除与删除从未存在的 Id 都返回 200，且不新增删除记录
+    /// </summary>
+    [Fact]
+    public async Task Deleting_a_missing_user_succeeds_without_a_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var user = await CreateUserAsync(superAdmin.Client);
+        var neverExisted = Guid.NewGuid();
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{neverExisted}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await superAdmin.Client.GetAsync($"/api/v1/users/{user.Id}")).StatusCode);
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(
+            Factory, superAdmin.Client, OperationRecordActions.UserDeleted, user.Id.ToString()));
+        Assert.Equal(0, await OperationRecordQueries.CountSucceededAsync(
+            Factory, superAdmin.Client, OperationRecordActions.UserDeleted, neverExisted.ToString()));
+    }
+
+    /// <summary>
+    /// 角色资料更新留成功记录；无更新权限被拒时由端点注解补一条失败记录，角色不变
+    /// </summary>
+    [Fact]
+    public async Task Updating_a_role_leaves_an_operation_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+        var update = new { DisplayName = "Renamed role", Description = "Updated", Sort = 5, IsDefault = false };
+
+        var updated = await superAdmin.Client.PutAsJsonAsync($"/api/v1/roles/{role.Id}", update);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(
+            Factory, superAdmin.Client, OperationRecordActions.RoleUpdated, role.Id.ToString()));
+
+        var reader = await CreateUserAsync(superAdmin.Client);
+        await GrantAsync(PermissionGrantProviderNames.User, reader.Id, PermissionConstant.Roles.Default);
+        using var readerSession = await Factory.LoginAsync(reader.Username, TestPassword);
+        var rejected = await readerSession.Client.PutAsJsonAsync(
+            $"/api/v1/roles/{role.Id}", update with { DisplayName = "Hijacked" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
+        Assert.Equal("Renamed role", (await ReadRoleAsync(superAdmin.Client, role.Id)).GetProperty("displayName").GetString());
+        var failures = await OperationRecordQueries.GetFailuresAsync(
+            Factory, superAdmin.Client, OperationRecordActions.RoleUpdated, role.Id.ToString());
+        Assert.Contains(failures, failure => failure.AuthorizationBasis == PermissionConstant.Roles.Update);
+    }
+
+#if (OpenIddictServer)
+    /// <summary>
+    /// 开放应用的四个写操作各留一条成功记录；删除幂等，重复删除返回 200 且不新增记录
+    /// </summary>
+    [Fact]
+    public async Task Open_application_writes_leave_records_and_deletion_is_idempotent()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var clientId = $"audit-{Guid.NewGuid():N}"[..20];
+        var body = new
+        {
+            ClientId = clientId,
+            DisplayName = "Audited client",
+            ApplicationType = "service",
+            ClientType = "confidential",
+            Permissions = new[] { "ept:token", "gt:client_credentials" },
+            SessionBound = false
+        };
+
+        var created = await superAdmin.Client.PostAsJsonAsync("/api/v1/open-applications", body);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
+        Assert.Equal(HttpStatusCode.OK,
+            (await superAdmin.Client.PutAsJsonAsync($"/api/v1/open-applications/{id}", body with { DisplayName = "Renamed client" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await superAdmin.Client.PostAsync($"/api/v1/open-applications/{id}/reset-secret", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/open-applications/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/open-applications/{id}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await superAdmin.Client.GetAsync($"/api/v1/open-applications/{id}")).StatusCode);
+        foreach (var action in new[]
+                 {
+                     OperationRecordActions.OpenApplicationCreated,
+                     OperationRecordActions.OpenApplicationUpdated,
+                     OperationRecordActions.OpenApplicationSecretReset,
+                     OperationRecordActions.OpenApplicationDeleted
+                 })
+        {
+            Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(Factory, superAdmin.Client, action, id));
+        }
+    }
+
+    /// <summary>
+    /// 取值范围与回调地址格式是入参校验：400 且字段错误落在对应字段，不带业务码，也不会建出客户端
+    /// </summary>
+    [Theory]
+    [InlineData("clientId", "   ", "web", "confidential", "https://localhost/cb")]
+    [InlineData("applicationType", "bad-type-client", "desktop", "confidential", "https://localhost/cb")]
+    [InlineData("clientType", "bad-kind-client", "web", "hybrid", "https://localhost/cb")]
+    [InlineData("redirectUris", "bad-uri-client", "web", "confidential", "https://localhost/cb#fragment")]
+    public async Task Invalid_open_application_input_is_a_field_error(
+        string field, string clientId, string applicationType, string clientType, string redirectUri)
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+
+        var response = await superAdmin.Client.PostAsJsonAsync("/api/v1/open-applications", new
+        {
+            ClientId = clientId,
+            ApplicationType = applicationType,
+            ClientType = clientType,
+            RedirectUris = new[] { redirectUri },
+            Permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code" },
+            Requirements = new[] { "ft:pkce" },
+            SessionBound = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(problem.RootElement.TryGetProperty("code", out _));
+        Assert.Contains(problem.RootElement.GetProperty("errors").EnumerateArray(),
+            error => error.GetProperty("field").GetString() == field);
+        var page = await superAdmin.Client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/open-applications?offset=0&limit=10&keyword={clientId.Trim()}");
+        Assert.True(clientId.Trim().Length == 0 || page.GetProperty("totalCount").GetInt32() == 0);
+    }
+#endif
 
     private static async Task<JsonElement> ReadRoleAsync(HttpClient client, Guid roleId)
     {

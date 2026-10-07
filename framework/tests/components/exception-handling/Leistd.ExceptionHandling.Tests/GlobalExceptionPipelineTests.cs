@@ -22,11 +22,11 @@ namespace Leistd.ExceptionHandling.Tests;
 /// </summary>
 /// <remarks>
 /// <c>AddGlobalExceptionHandler</c> / <c>UseGlobalExceptionHandler</c> 是这个家族唯一的接入方式，
-/// 此前两者都是零覆盖——handler 本身测过，"它有没有被挂上去"没测过。
+/// 只测 handler 本身证明不了"它有没有被挂上去"，这里经真实管道验证两者。
 /// </remarks>
 public class GlobalExceptionPipelineTests
 {
-    private static async Task<TestServer> StartAsync(
+    private static async Task<IHost> StartAsync(
         Action<IServiceCollection> configureServices,
         Action<IApplicationBuilder>? configureApp = null)
     {
@@ -49,7 +49,7 @@ public class GlobalExceptionPipelineTests
                         if (path == "/api/custom")
                             throw new CustomApiException("custom failure");
                         if (path == "/api/programmer-error")
-                            throw new ArgumentNullException("input", "developer-only detail");
+                            throw new ArgumentNullException(nameof(context), "developer-only detail");
 
                         context.Response.ContentType = "application/json";
                         await context.Response.WriteAsync("""{"ok":true}""");
@@ -57,7 +57,7 @@ public class GlobalExceptionPipelineTests
                 }))
             .StartAsync();
 
-        return host.GetTestServer();
+        return host;
     }
 
     private static Action<IServiceCollection> WithOptions(Action<GlobalExceptionOptions>? configure = null) =>
@@ -70,9 +70,9 @@ public class GlobalExceptionPipelineTests
     [Fact]
     public async Task Business_exception_becomes_problem_details_with_its_own_status()
     {
-        using var server = await StartAsync(WithOptions());
+        using var host = await StartAsync(WithOptions());
 
-        var response = await server.CreateClient().GetAsync("/api/orders/1001");
+        var response = await host.GetTestClient().GetAsync("/api/orders/1001");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -85,7 +85,7 @@ public class GlobalExceptionPipelineTests
     [InlineData(false)]
     public async Task Host_problem_details_customization_survives_trace_id_registration(bool hostFirst)
     {
-        using var server = await StartAsync(services =>
+        using var host = await StartAsync(services =>
         {
             void ConfigureHost() => services.AddProblemDetails(options =>
                 options.CustomizeProblemDetails = context =>
@@ -98,7 +98,7 @@ public class GlobalExceptionPipelineTests
                 ConfigureHost();
         });
 
-        var response = await server.CreateClient().GetAsync("/api/programmer-error");
+        var response = await host.GetTestClient().GetAsync("/api/programmer-error");
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal("retained", problem.GetProperty("hostMarker").GetString());
@@ -108,9 +108,9 @@ public class GlobalExceptionPipelineTests
     [Fact]
     public async Task Bcl_programming_exception_is_a_safe_internal_server_error()
     {
-        using var server = await StartAsync(WithOptions());
+        using var host = await StartAsync(WithOptions());
 
-        var response = await server.CreateClient().GetAsync("/api/programmer-error");
+        var response = await host.GetTestClient().GetAsync("/api/programmer-error");
         var content = await response.Content.ReadAsStringAsync();
         using var problem = JsonDocument.Parse(content);
 
@@ -133,11 +133,11 @@ public class GlobalExceptionPipelineTests
             })
             .Build();
 
-        using var server = await StartAsync(services => services
+        using var host = await StartAsync(services => services
             .AddSingleton<IConfiguration>(configuration)
             .AddGlobalExceptionHandler());
 
-        var response = await server.CreateClient().GetAsync("/api/programmer-error");
+        var response = await host.GetTestClient().GetAsync("/api/programmer-error");
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
@@ -172,7 +172,7 @@ public class GlobalExceptionPipelineTests
     [InlineData(false)]
     public async Task Host_code_mapping_overrides_component_default_in_either_order(bool hostFirst)
     {
-        using var server = await StartAsync(services => services.AddGlobalExceptionHandler(options =>
+        using var host = await StartAsync(services => services.AddGlobalExceptionHandler(options =>
         {
             if (hostFirst)
                 options.MapCode("OrderNotFound", StatusCodes.Status409Conflict);
@@ -181,7 +181,7 @@ public class GlobalExceptionPipelineTests
                 options.MapCode("OrderNotFound", StatusCodes.Status409Conflict);
         }));
 
-        var response = await server.CreateClient().GetAsync("/api/orders/7");
+        var response = await host.GetTestClient().GetAsync("/api/orders/7");
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
@@ -189,9 +189,9 @@ public class GlobalExceptionPipelineTests
     [Fact]
     public async Task Successful_requests_pass_through_untouched()
     {
-        using var server = await StartAsync(WithOptions());
+        using var host = await StartAsync(WithOptions());
 
-        var response = await server.CreateClient().GetAsync("/api/ok");
+        var response = await host.GetTestClient().GetAsync("/api/ok");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
@@ -211,13 +211,13 @@ public class GlobalExceptionPipelineTests
     [Fact]
     public async Task Host_can_map_a_custom_exception_without_changing_the_handler()
     {
-        using var server = await StartAsync(WithOptions(options =>
+        using var host = await StartAsync(WithOptions(options =>
             options.MapException<CustomApiException>(exception => new ExceptionDescriptor(
                 StatusCodes.Status409Conflict,
                 "Custom:Conflict",
                 exception.Message))));
 
-        var response = await server.CreateClient().GetAsync("/api/custom");
+        var response = await host.GetTestClient().GetAsync("/api/custom");
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -229,7 +229,7 @@ public class GlobalExceptionPipelineTests
     [InlineData(false)]
     public async Task Host_type_mapping_overrides_component_default_in_either_order(bool hostFirst)
     {
-        using var server = await StartAsync(services => services.AddGlobalExceptionHandler(options =>
+        using var host = await StartAsync(services => services.AddGlobalExceptionHandler(options =>
         {
             if (hostFirst)
                 options.MapException<CustomApiException>(_ => new ExceptionDescriptor(409, "Host:Conflict", "Host"));
@@ -238,7 +238,7 @@ public class GlobalExceptionPipelineTests
                 options.MapException<CustomApiException>(_ => new ExceptionDescriptor(409, "Host:Conflict", "Host"));
         }));
 
-        var response = await server.CreateClient().GetAsync("/api/custom");
+        var response = await host.GetTestClient().GetAsync("/api/custom");
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);

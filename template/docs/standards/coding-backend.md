@@ -1,604 +1,238 @@
 # 后端开发规范
 
-本文档为模板项目默认的 .NET 10、EF Core、DDD 后端开发规范。若新项目未采用该技术栈，不应把本文规则作为通用默认事实。
+本项目后端编码规范，同时遵循 [项目通用约定](./coding-common.md)。接口契约见 [API 规范](./api.md)，认证与权限侧别见 [认证与授权](./auth.md)。`Leistd.*` 的 API 以实际还原版本的包内文档与 XML 为准，定位方法见 [后端说明](../../backend/README.md#leistd-框架-api)。
 
-同时遵循 [项目通用开发规范](./coding-common.md)。
+## 1. 技术栈
 
-## 1. 核心技术栈
+.NET 10、EF Core 10、PostgreSQL、Redis（多实例部署）、Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）、Serilog。精确版本以项目文件为准。
 
-- **框架**: .NET 10+
-- **ORM**: EF Core 10+
-- **数据库**: PostgreSQL 15+
-- **缓存**: Redis 7+
-- **对象映射**: Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）
-- **依赖注入**: Microsoft.Extensions.DependencyInjection
-- **日志**: Serilog
+## 2. 分层与目录
 
-## 2. 分层架构规范
+依赖方向：Domain ← Application ← Api；Infrastructure → Domain；Api 是组合根。Application 不引用 Infrastructure 与 `Microsoft.EntityFrameworkCore`。
 
-项目采用 DDD（领域驱动设计）分层架构：
+| 层 | 职责 | 不做 |
+| --- | --- | --- |
+| Api | 路由、鉴权、调用应用服务、宿主组装 | 业务校验与编排、直接操作实体或仓储；HTTP 信息不传入 Application |
+| Application | 编排用例：收发 DTO、调用领域对象与领域服务、查询聚合、跨聚合校验、事务边界、发布事件 | 核心业务规则 |
+| Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、查询聚合 |
+| Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
-```
-┌─────────────────────────────────────────┐
-│         API Layer ({ProjectName}.Api)   │  ← HTTP 相关处理
-├─────────────────────────────────────────┤
-│   Application Layer (Application)       │  ← 业务流程编排
-├─────────────────────────────────────────┤
-│      Domain Layer (Domain)              │  ← 核心业务逻辑
-└─────────────────────────────────────────┘
-         ↑
-         │ 依赖
-         │
-┌─────────────────────────────────────────┐
-│  Infrastructure Layer (Infrastructure)  │  ← 技术实现
-└─────────────────────────────────────────┘
-```
+目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
 
-### 2.1 各层职责
+- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
+- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
+- **Infrastructure**：自定义仓储实现放 `Persistence/Repositories`；外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
 
-#### API Layer（{ProjectName}.Api）
-- **职责**: HTTP 相关处理（HttpContext、请求响应、路由）
-- **原则**: HTTP 相关信息不应传递到 Application 层，保障 Application 层可用于多种架构（BS/CS）
-- **包含**: Controllers、Middleware、Authentication
+领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 `ValidateOnBuild` 检出（见 §4）。
 
-#### Application Layer（{ProjectName}.Application）
-- **职责**: 协调业务逻辑（调用领域对象行为、领域服务、发布/订阅事件）
-- **包含**: AppServices、Dtos、Mappings、Events、EventHandlers，以及按需的 Constants（名字常量）、Abstractions（由宿主实现的端口）、
-  Provider（框架扩展点的实现，如定义提供程序、权限主体提供程序，与它们用到的名字常量）、Policies（策略及其提供程序）
-- **目录归类**: 按类型分的目录都是功能模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`、`Settings/Hosting`）只放不属于这些类型的协作类型。类名以 `Event` 结尾的放模块的 `Events/`（这里只放由应用层发布、不来自实体的事件），以 `EventHandler` 结尾的放 `EventHandlers/`（如 `Settings/Events`、`Settings/EventHandlers`、`Auth/EventHandlers`）。后台任务同理按运行形态归类，与表现层（§7.2）同名：周期任务（`IRecurringJob`，类名 `*Job`）放模块的 `BackgroundJobs/`（如 `Auth/BackgroundJobs`），常驻消费者（类名 `*Worker`）放 `Workers/`；不建跨模块的顶层 `Jobs/`，任务跟着它清理或处理的那个模块走。
-- **可以**: 使用 EF Core 的 `Include`、`GetQueryIncludingAsync` 进行数据查询和聚合
+## 3. 编码
 
-#### Domain Layer（{ProjectName}.Domain）
-- **职责**: 核心业务逻辑（领域对象行为、领域服务、业务规则）
-- **包含**: Entities、ValueObjects、DomainServices、Events、Specifications
-- **目录归类**: 实体发出的事件放模块的 `Events/`（如 `Auth/Events`），处理器在应用层；以 `Policy` 结尾的规则类型放模块的 `Policies/`（如 `Users/Policies`）；
-  认得实体、按实体做判定的无状态服务是领域服务，归 `DomainServices/` 并以 `DomainService` 结尾；不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`、`Shared/Security/OneTimeCodes`），
-  `Shared` 是领域层共享内核而非无法归类代码的兜底目录；子目录名不得与常用 BCL 类型同名（例如 `Shared/Encoding` 会遮住 `System.Text.Encoding`）。`Entities` 只放实体和聚合；`ValueObjects` 放领域内部的不可变值类型（包括有限状态枚举）；只有在多个领域模块共用且没有明确所有者的枚举才放 `Shared/Enums`。`Options` 只放内层本身消费的配置绑定类型；第三方适配器的客户端标识、密钥和回调地址归 Infrastructure。端口的输入/输出模型按所属接口放在 `Abstractions`，不因为使用 `record` 就归为值对象。
-- **接口定义**: 第三方服务接口、持久化接口（IRepository）
-- **严格禁止**:
-  - 引用 `Microsoft.EntityFrameworkCore`
-  - 使用 EF Core 特性（Include、ThenInclude）
-  - 领域服务之间形成依赖**环**
-- **领域服务之间的单向依赖**：仅用于复用另一个领域服务的**变更行为**（例如"首次外部登录分配默认角色"这类领域策略——把它挪到应用层编排会让规则漂出领域），并在类上就近注释说明为什么这段不属于应用层。**读取不要跨领域服务调用**，由调用方自己取。
-  - 环由 DI 保障，不设静态闸门：构造注入的环会被 Microsoft DI 检出并响亮失败（`ValidateOnBuild` 时在容器构建期，否则首次解析时抛 `A circular dependency was detected`）。集成测试的宿主以 `Development` 环境启动，而 `Program.cs` 在该环境开 `ValidateOnBuild`/`ValidateScopes`——真实组合根的可解析性因此已在 CI 里被校验；而仓库禁止服务定位器，不存在绕过构造注入的隐藏环。
+### 3.1 语言特性
 
-#### Infrastructure Layer（{ProjectName}.Infrastructure）
-- **职责**: 数据持久化、第三方服务对接实现
-- **包含**: EF Core Configurations、Repositories、ExternalServices、Caching，以及外部适配器专属的 Options
-- **配置边界**: 外部适配器自己绑定和校验配置，Application 只依赖内层端口暴露的能力与可用状态，不直接读取 ClientId、ClientSecret、RedirectUri 等适配器细节
+| 特性 | 场景 |
+| --- | --- |
+| 主构造函数 | 服务类 |
+| `record` + `init` + `required` | DTO |
 
----
+异步：I/O 一律 `async/await`，方法名以 `Async` 结尾（协议规定的名字除外），不用 `.Result`/`.Wait()`。
 
-## 3. 编码规范
+### 3.2 时间
 
-### 3.1 .NET 10 新特性（强制使用）
+- 业务代码注入 `Leistd.Timing.IClock`（`clock.Now`，恒为 UTC）。不就地读取 `DateTime.Now`/`UtcNow`、`DateTimeOffset.Now`/`UtcNow`、`TimeProvider.System.GetUtcNow()`：它们隐藏依赖、不可测。
+- ASP.NET Core 认证、Cookie、票据等框架集成回调要求 `TimeProvider` 时可注入 `TimeProvider`。
+- 实体不注入服务：时间相关方法接收 `DateTime now`，由调用方传入。
+- 契约里的时间字段写明单位（秒或毫秒）。
 
-| 特性 | 使用场景 | 示例 |
-|------|---------|------|
-| **主构造函数** | 所有服务类 | `public class UserService(IRepository<User> repo) { }` |
-| **record 类型** | 所有 DTO | `public record CreateUserInputDto { }` |
-| **init 属性** | DTO 属性 | `public string Name { get; init; }` |
-| **required 修饰符** | DTO 必填属性 | `public required string Name { get; init; }` |
-| **文件范围 namespace** | 所有文件 | `namespace {ProjectName}.Application.Users;` |
+### 3.3 实体
 
-**示例**:
-```csharp
-namespace {ProjectName}.Application.Users;
-
-/// <summary>
-/// 用户应用服务
-/// </summary>
-public class UserAppService(
-    IRepository<User, Guid> userRepository,
-    UserDomainService userDomainService,
-    IObjectMapper objectMapper) : IAppService
-{
-    public async Task<UserOutputDto> CreateAsync(
-        CreateUserInputDto input,
-        CancellationToken cancellationToken = default)
-    {
-        var user = await userDomainService.CreateUserAsync(
-            input.Username, input.Email, cancellationToken);
-
-        var result = objectMapper.Map<User, UserOutputDto>(user);
-        return result;
-    }
-}
-```
-
-### 3.2 异步编程
-
-- **强制异步**: 所有 I/O 操作必须使用 `async/await`
-- **命名约定**: 异步方法名必须以 `Async` 结尾
-- **禁止阻塞**: 不得使用 `.Result` 或 `.Wait()`
-
-### 3.2.1 时间获取（IClock）
-
-- **禁止就地读取当前时间**：`DateTime.Now` / `DateTime.UtcNow` / `DateTimeOffset.Now` / `DateTimeOffset.UtcNow` / `TimeProvider.System.GetUtcNow()` 一律不用。它们隐藏依赖、不可测、易引入时区/时钟问题；只点名 `DateTime` 挡不住 `DateTimeOffset.UtcNow`——两者问题相同。
-  - **把 `TimeProvider.System` 当默认时间源传进来不在此列**：`TimeProvider? timeProvider = null` + `timeProvider ?? TimeProvider.System` 是 .NET 官方的可测时钟形态，接缝在构造签名上，测试用 `FakeTimeProvider` 覆盖。框架组件用这一形态（业务项目注入 `IClock` 即可）。
-- **统一通过** `Leistd.Timing.IClock` 获取当前时间（`clock.Now`）。`IClock` 由框架注册，直接注入即可。
-- **领域对象（实体）保持 POCO，不注入服务**：实体的时间赋值方法应接收 `DateTime now` 参数，由调用方（领域服务/应用服务）注入 `IClock` 后传入。
+属性 `private set`；保留 EF Core 用的 `private` 无参构造；状态只经公共方法修改；构造函数做必要校验；Id 用 `Guid.CreateVersion7()`；创建审计字段由框架在跟踪时填充。
 
 ```csharp
-// ✅ 领域服务/应用服务：注入 IClock
-public class UserDomainService(
-    IRepository<User, Guid> userRepository,
-    IClock clock)
-{
-    public async Task RecordLoginAsync(User user, string? ip)
-    {
-        user.RecordLoginSuccess(clock.Now, ip); // 把 now 传给实体
-        await userRepository.UpdateAsync(user);
-    }
-}
-
-// ✅ 实体：接收 now 参数，不注入服务
-public void RecordLoginSuccess(DateTime now, string? ip = null)
-{
-    LastLoginTime = now;
-    LastLoginIp = ip;
-}
-
-// ❌ 错误：实体内部直接取时间
-public void RecordLoginSuccess(string? ip = null)
-{
-    LastLoginTime = DateTime.UtcNow; // 隐藏依赖、不可测
-}
-```
-
-补充约定：
-
-- **契约里的时间字段写明单位**，避免消费方误判量级（普通事件用秒、需亚秒精度的用毫秒），字段名或文档标注单位。
-- **对外的线缆时间戳同样注入 `IClock`**。`IClock` 已承诺一律 UTC（且刻意不提供切换开关），因此不存在「边界可以用另一种取时间方式」的例外——序列化成 `DateTimeOffset` 时由 UTC 的 `DateTime` 隐式转换得到 `+00:00`。
-
-### 3.3 充血模型设计
-
-**实体设计原则**:
-1. ✅ 属性使用 `private set`，封装内部状态
-2. ✅ 必须有 `private` 无参构造函数（EF Core 需要）
-3. ✅ 通过公共方法修改状态
-4. ✅ 构造函数中进行必要的业务验证
-5. ✅ 包含业务方法（如 `Enable()`, `Disable()`）
-
-**示例**:
-```csharp
-namespace {ProjectName}.Domain.Users.Entities;
-
 public class User : FullAuditedEntity<Guid>
 {
     public string Username { get; private set; }
-    public string Email { get; private set; }
     public bool IsActive { get; private set; } = true;
 
-    // EF Core 构造函数
-    private User()
-    {
-        Username = null!;
-        Email = null!;
-    }
+    private User() { Username = null!; }
 
-    // 业务构造函数
-    public User(string username, string email)
+    public User(string username)
     {
-        Id = Guid.NewGuid();
+        Id = Guid.CreateVersion7();
         Username = username;
-        Email = email;
-        // CreationTime 等创建审计字段在实体进入变更跟踪时由框架自动填充，
-        // 不在实体内手写；如需业务时间字段，方法应接收 DateTime now 参数（见 §3.2.1）
     }
 
-    // 业务方法
-    public void Enable() => IsActive = true;
     public void Disable() => IsActive = false;
 }
 ```
 
-### 3.4 领域服务规范
+### 3.4 领域服务
 
-**命名**: `*DomainService`（无需定义接口）
-**注入命名**: `userDomainService`（camelCase）
+命名 `*DomainService`，不定义接口。负责单聚合规则与实体增删改的核心逻辑；不做 DTO 转换、事务管理、查询聚合。
 
-**职责范围**:
-- ✅ 跨实体的业务逻辑
-- ✅ 复杂业务规则验证
-- ✅ 实体的创建、更新、删除的核心逻辑
-- ❌ DTO 转换
-- ❌ 事务管理
-- ❌ 数据查询和聚合
-- ❌ 缓存、通知等副作用：由实体 `AddLocalEvent(...)` 发出本地事件，事务提交后由事件处理器处理，领域服务与调用方都不必各自记得去做；处理器实现 `IEventHandler<TEvent>` 并在应用层 `DependencyInjection` 显式注册
+规则判定在实体或领域服务；应用服务据其结果（如 `user.CanBeManagedBy(...)`）按用例选码抛出，自行组合实体字段做判定属于违规。
 
-**示例**:
+缓存、通知等副作用经本地事件在提交后由应用层 `IEventHandler<TEvent>` 执行：纯实体变更的由实体 `AddLocalEvent(...)` 发出；随用例而异的（如本人改密与管理员重置的提醒）由应用服务发布。
+
 ```csharp
-namespace {ProjectName}.Domain.Users.DomainServices;
-
-public class UserDomainService(
-    IRepository<User, Guid> userRepository,
-    IPasswordHasher passwordHasher)
+public class UserDomainService(IRepository<User, Guid> userRepository)
 {
-    public async Task<User> CreateUserAsync(
-        string username,
-        string email,
-        string password,
-        CancellationToken cancellationToken = default)
+    public async Task<User> CreateUserAsync(string username, CancellationToken cancellationToken = default)
     {
-        // 唯一性校验
         if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-            throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
+            throw new BusinessException(UserErrorCodes.UsernameTaken, $"Username '{username}' already exists.")
                 .WithData("Username", username);
 
-        // 密码哈希
-        var passwordHash = passwordHasher.HashPassword(password);
-
-        // 创建用户
-        var user = new User(username, email, passwordHash);
-        await userRepository.InsertAsync(user, cancellationToken: cancellationToken);
-
-        return user;
+        return await userRepository.InsertAsync(new User(username), cancellationToken);
     }
 }
 ```
 
-### 3.5 应用服务规范
+### 3.5 应用服务
 
-**命名**: 接口 `I*AppService`，实现 `*AppService`
-**基类**: 继承 `IAppService`
-**注入命名**:
-- 仓储：`userRepository`（camelCase）
-- 领域服务：`userDomainService`（camelCase）
+接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经 `IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。
 
-**职责**:
-- ✅ 接收/返回 DTO
-- ✅ 调用领域服务和仓储
-- ✅ 事务管理（通过 UnitOfWork）
-- ✅ DTO 映射（使用 Mapster `IObjectMapper`）
-- ✅ 数据查询和聚合
-- ❌ 核心业务规则（应在领域层）
-
-**示例**:
 ```csharp
-namespace {ProjectName}.Application.Users.AppServices;
-
 public class UserAppService(
     IRepository<User, Guid> userRepository,
-    UserDomainService userDomainService,
-    IObjectMapper objectMapper) : IAppService
+    IObjectMapper objectMapper,
+    IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
     public async Task<PagedResult<UserOutputDto>> GetPagedListAsync(
-        GetUserPagedInputDto input,
-        CancellationToken cancellationToken = default)
+        GetUserPagedInputDto input, CancellationToken cancellationToken = default)
     {
         var query = await userRepository.GetQueryableAsync(cancellationToken);
-
-        // 应用过滤条件
         if (!string.IsNullOrWhiteSpace(input.Keyword))
-        {
             query = query.Where(u => u.Username.Contains(input.Keyword));
-        }
 
-        // 获取总数
-        var totalCount = await query.CountAsync(cancellationToken);
-
-        // 分页查询
-        var users = await query
-            .OrderByDescending(u => u.CreationTime)
-            .Skip(input.Offset)
-            .Take(input.Limit)
-            .ToListAsync(cancellationToken);
-
-        // 映射
-        var result = objectMapper.Map<List<User>, List<UserOutputDto>>(users);
-
-        return new PagedResult<UserOutputDto>(totalCount, result);
+        var totalCount = await asyncExecuter.CountAsync(query, cancellationToken);
+        var users = await asyncExecuter.ToListAsync(
+            query.OrderBy(u => u.Username).ThenBy(u => u.Id).Skip(input.Offset).Take(input.Limit),
+            cancellationToken);
+        return new PagedResult<UserOutputDto>(totalCount, objectMapper.Map<List<User>, List<UserOutputDto>>(users));
     }
 }
 ```
 
-### 3.6 Controller 规范
+排序字段与稳定排序见 [API 规范 §5](./api.md#5-分页规范)。
 
-框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不再写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 里用组件的 `Map*` 给前缀与授权策略，
-个别端点要追加元数据（两步验证放行、授权被拒留痕）按组件公开的端点名定位；组件不认识的业务动作（发信测试、模拟登录）才写 Controller，路由与组件端点不重叠。
+### 3.6 事务与工作单元
 
-组件端点要留痕时挂 `[OperationRecordAction]`：授权阶段被拒由 `Api/Auth/ApiAuthorizationResultHandler` 补记，授权之后的业务拒绝（`BusinessException`）由紧接 `UseAuthorization()` 的 `Api/Middlewares/OperationFailureRecordingMiddleware` 补记，参数校验失败不记。挂了注解的端点，应用服务照常可以在拒绝处调 `RecordFailedAsync`（那条带文案参数与业务目标名，信息更全）：记录器写出后会登记动作码与目标，**兜底遇到已登记的同一动作与目标就跳过**，所以留下的是先记的那条，不会一次失败两条记录。注解里的目标（含 `TargetIdPrefix`）要与应用服务记录的目标逐字一致，否则去重失效。被跳过的只有兜底——`RecordFailedAsync` 自身不判重，同一动作连调两次仍写两条。
+- 工作单元按需引入，不是写方法的必需装饰。单次 `SaveChanges` 已在数据库隐式事务里；只有跨多次提交边界的方法才标 `[UnitOfWork]`。判据见 `unit-of-work` 组件随包文档的"何时不需要"。
+- 工作单元内仓储写入延迟到冲刷或提交：唯一约束等数据库异常在那时才抛出，不在 `InsertAsync` 调用处。
+- 写方法用仓储返回值构造输出，不回查数据库：`Id`、创建审计与租户值在实体进入跟踪时已落定，而工作单元内回查得不到尚未落库的行。需要回显关联数据时让写方法回传它写了什么。
 
-**命名**: `*Controller`
-**基类**: 继承 `BaseController`
-**返回值**:
-- 有响应体的普通业务接口直接返回具体 DTO，即 `Task<TOutputDto>`，不使用 `ActionResult<T>` 包装。
-- 无返回对象的普通业务接口使用无泛型 `Task`；ASP.NET Core 将成功结果写为 HTTP 200 空响应体。
-- 同一方法确需返回 `Redirect`、`Forbid`、`SignIn` 等多种 MVC 或协议结果时使用 `IActionResult`。
+### 3.7 Controller 与组件端点
 
-**方法命名与路由**：以 [API 规范](./api.md) §7 的操作→方法名→路由映射表为**单一权威**（分页 `GetPagedListAsync`、查询 `GetAsync`、创建 `CreateAsync`、更新 `UpdateAsync`/`PatchAsync`、删除 `DeleteAsync`，均 `/api/v1/{resource}` 前缀），此处不重复表格。
+框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不写 Controller：在 `backend/src/CompanyName.ProjectName.Api/Hosting/ComponentEndpoints.cs` 用组件的 `Map*` 给前缀与授权策略。组件不认识的业务动作才写 Controller，路由不与组件端点重叠。
 
-**示例**:
-```csharp
-namespace {ProjectName}.Api.Controllers;
+- Controller 命名 `*Controller`，继承 `BaseController`（视图渲染、透传代理、机器端点等例外就近注释）；只做路由、鉴权与调用应用服务。
+- 返回类型（含何时用 `IActionResult`）见 [API 规范 §2](./api.md#2-响应格式)，方法名与路由见 [§6](./api.md#6-http-方法与路由规范)。
 
-[Authorize]
-public class UserController(IUserAppService userAppService) : BaseController
-{
-    [HttpGet]
-    public async Task<PagedResult<UserOutputDto>> GetPagedListAsync(
-        [FromQuery] GetUserPagedInputDto input,
-        CancellationToken cancellationToken)
-    {
-        return await userAppService.GetPagedListAsync(input, cancellationToken);
-    }
+操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由 `ApiAuthorizationResultHandler`、`OperationFailureRecordingMiddleware` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
 
-    [HttpPost]
-    public async Task<UserOutputDto> CreateAsync(
-        [FromBody] CreateUserInputDto input,
-        CancellationToken cancellationToken)
-    {
-        return await userAppService.CreateAsync(input, cancellationToken);
-    }
+### 3.8 枚举持久化
 
-    [HttpDelete("{id}")]
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
-    {
-        await userAppService.DeleteAsync(id, cancellationToken);
-    }
-}
-```
+枚举以字符串持久化：`builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32)`。数据迁移中按字符串比较（`Status = 'Active'`），对 varchar 列写整数比较会在 PostgreSQL 报 42883。
 
-### 3.7 枚举持久化用字符串
+### 3.9 权限
 
-枚举**一律以字符串持久化**（可读、可演进、不怕重排序），不存序数值。这是 [通用编码规范 §5.7](./coding-common.md) 「枚举边界转换」在 EF Core 的落地：
-
-```csharp
-// ✅ EF 配置：枚举转字符串列
-builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
-```
-
-- 数据迁移里做数据转换时**按字符串比较**，不要对字符串列用整数比较（如对 varchar 列写 `Status = 3` 会在 PostgreSQL 报 42883 崩溃；应用 `Status = 'Active'` 或 `::text` 比较）。
-
-### 3.8 授权/策略标识符用常量
-
-- 授权策略名、权限名等**跨处引用的标识符用常量**，禁裸魔法串在多处各写——否则单侧改动漂移会致授权静默失配，且无编译报错。
-- 参见 [API 规范](./api.md) 的权限命名约定。
-
-#### 3.8.1 权限定义与界面一一对应
-
-管理员在权限配置里看到的结构，应与用户在界面上看到的结构一致。这是前后端各自遵守的命名约定，不是代码依赖：两端独立演进、各自测试，不互相读取源码。
+授权策略名、权限名等跨处引用的标识符用常量（`PermissionConstant`）。权限结构与界面一一对应，两端各自遵守、不互读源码：
 
 | 权限定义 | 对应界面 | 显示名 |
 | --- | --- | --- |
-| 分组（`PermissionConstant.Groups`） | 管理平台的菜单分组 | 与菜单分组标题一致 |
-| 根权限（`App.{模块}`） | 菜单项与页面 | 与菜单项标题一致 |
-| 子权限（`App.{模块}.{动作}`） | 页面上的操作按钮 | 常规动作统一为 Create / Edit / Delete（新建 / 编辑 / 删除），其余与按钮文案一致 |
+| 分组（`PermissionConstant.Groups`） | 菜单分组 | 与分组标题一致 |
+| 根权限 `App.{模块}` | 菜单项与页面 | 与菜单项标题一致 |
+| 子权限 `App.{模块}.{动作}` | 页面操作按钮 | 常规动作统一为 Create / Edit / Delete，其余与按钮文案一致 |
 
-- 定义里的 `displayName` 写**英文默认文案**，不写词条键：不启用多语言时界面直接展示它。译文按约定键 `Permission:{权限名}`、`PermissionGroup:{分组名}` 写在资源里；英文资源保留同名键（各语言键集合一致），其值必须等于默认文案。
-- 权限是授权定义，可以没有菜单入口（只经接口使用）。但一个权限若只是另一个权限的前提（例如权限树只为授予而读，由「配置权限」守着即可），不单独定义。
-- 后端的 `PermissionCatalogContractTests` 只核对后端自己：默认显示名可读、常规动作措辞统一、词条齐全且英文与默认文案一致。新增模块时权限定义、资源与前端菜单按本表各自改齐。
+- `displayName` 写英文默认文案；译文键为 `Permission:{权限名}`、`PermissionGroup:{分组名}`，英文资源保留同名键且值等于默认文案（`PermissionCatalogContractTests` 核对）。
+- 只作为另一个权限前提的权限不单独定义。侧别选择见 [认证与授权](./auth.md#权限侧别与租户维度)。
 
-### 3.9 运行期可改的配置：设置与 Options 的分工
+### 3.10 设置与 Options
 
-按取值的层级选路，不要为某个配置另写一套"提供方 + 快照 + 应用器"：
-
-| 层级 | 做法 |
+| 取值层级 | 做法 |
 | --- | --- |
-| 租户级、用户级 | 消费方经应用层的策略提供方读 `ISettingProvider`；不做成 Options——`IConfiguration` 整个进程一份，没有租户维度。替别人判断（如按收件人偏好）用 `GetOrNullForUserAsync` |
-| 宿主级 | 在 `Api/Configuration/HostSettingBindings` 加一行绑定（`Bind` / `BindOption<T>`），消费方注入 `IOptionsMonitor<T>` / `IOptionsSnapshot<T>`（不要 `IOptions<T>`，它启动后不再读新值）；本身订阅配置重载的库（如 Serilog 的 `MinimumLevel`）直接绑定到它读的键 |
+| 租户级、用户级 | 经应用层策略提供方读 `ISettingProvider`；替别人判断用 `GetOrNullForUserAsync`。不做成 Options |
+| 宿主级、运行期可改 | 在 `Api/Configuration/HostSettingBindings` 加一行绑定，消费方注入 `IOptionsMonitor<T>`/`IOptionsSnapshot<T>`；自带配置重载的库直接绑定它读的键 |
+| 部署期定死（凭据、连接、协议参数） | `IOptions<T>`；不在服务里读 `IConfiguration["键"]` |
 
-- 宿主级设置由设置组件经优先级最高的配置源覆盖部署配置：宿主开始接收请求之前先推入一次，写入提交后本进程随即生效，其它实例由周期任务跟上（`Leistd:Settings:Hosting:RefreshInterval`）；没设的项自然回落到配置文件与环境变量。
-- 逐项合规、组合起来让 Options 校验不过的一组（如只设了发信账号、还没设口令）整组不生效，沿用上一组并记错误日志，消费方不会在改正之前每次取值都抛异常。
-- 绑定了配置键的宿主级设置不写代码默认值：组件取部署基线作默认值，清除覆盖值即回到部署配置，「重置」不会回到一个写死的值。
-- 值域声明在设置定义上（`AsBoolean()`、`AsInteger(min, max)`、`WithAllowedValues(...)`），写入端据此校验、设置页据此渲染控件；定义表达不了的规则（时区、发件地址、开启前提）写成 `Application/Settings/Validators` 下的 `ISettingValueValidator`。
-- 部署期就定死的配置（凭据、连接、协议参数）照常用 `IOptions<T>`，也不要在服务里直接读 `IConfiguration["键"]`——已有 Options 类型就用它。
+- 宿主级设置以最高优先级配置源覆盖部署配置，写入后本进程即时生效，其他实例由周期任务跟上；组合起来让 Options 校验不过的一组整组不生效并记错误日志。
+- 绑定了配置键的宿主级设置不写代码默认值，清除即回到部署配置。
+- 值域声明在设置定义上（`AsBoolean()`、`AsInteger(min, max)`、`WithAllowedValues(...)`）；定义表达不了的规则写成 `Application/Settings/Validators` 下的 `ISettingValueValidator`。
 
----
+## 4. 依赖注入
 
-## 4. 命名规范
+**注册归属**：每层的 `DependencyInjection.cs`（`AddDomainServices`、`AddApplicationServices`、`AddInfrastructureServices`/`AddPersistenceServices`、`AddApiAuthorization` 等）注册本层类型，可调用实现本层能力所需的组件注册入口。Api 自有类型按关注点注册在 `Api/Auth`、`Api/Hosting` 的扩展方法里（如 `AddMyProjectAuthentication`、`AddMyProjectWebHost`）；`Program.cs` 只组合各层、组件与这些入口并配置管道。部署基线 Options 在声明它的层或组合根绑定，宿主定向配置留在组合根；需要校验的用 `AddOptions<T>()...ValidateOnStart()`。
 
-### 4.1 DTO 命名规范
+**生命周期**：先看状态所有权、并发安全、依赖链与实际消费作用域。
 
-| DTO 类型 | 命名规范 | 示例 |
-|---------|---------|------|
-| 分页查询输入 | `Get{Entity}PagedInputDto` | `GetUserPagedInputDto` |
-| 创建输入 | `Create{Entity}InputDto` | `CreateUserInputDto` |
-| 更新输入 | `Update{Entity}InputDto` | `UpdateUserInputDto` |
-| 输出 | `{Entity}OutputDto` | `UserOutputDto` |
-| SDK 单形态响应 | `{Concept}Dto` | `ServiceInfoDto`、`WhoAmIDto` |
+| 情形 | 生命周期 |
+| --- | --- |
+| 持有请求或工作单元内状态、依赖 DbContext | Scoped |
+| 跨请求共享且线程安全（定义提供方、连接复用） | 可 Singleton |
+| 其余（AppService、领域服务、事件处理器等无状态服务） | Transient |
 
-> 分页输入 DTO 继承 `PageRequest`、字段约定见 [API 规范](./api.md) §6。
->
-> `Client` SDK（`{ProjectName}.Client`）里没有请求/响应成对关系的单形态响应用 `{Concept}Dto`，不强套 `OutputDto`——Input/Output 后缀的作用是区分成对的请求与响应类型。
+Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transient 必须在正确作用域解析。生产以外的环境都开启 `ValidateScopes` 与 `ValidateOnBuild`。
 
-**分页 DTO 示例**:
-```csharp
-namespace {ProjectName}.Application.Users.Dtos;
+**注册方式**：可替换的单实现用 `TryAdd*`；多实现用 `TryAddEnumerable`；按业务键登记（周期任务名等）与命名 Options 按各入口契约；有意覆盖组件默认实现用 `Replace` 并注释原因（`Replace` 与组件入口的调用先后无关）。相同登记重复调用不得重复生效。注册测试范围见[测试规范](./testing.md)。
 
-/// <summary>
-/// 获取用户分页列表输入 DTO
-/// </summary>
-public record GetUserPagedInputDto : PageRequest
-{
-    [Display(Name = "Search keyword")]
-    [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
-    public string? Keyword { get; init; }
+没有约定式自动注册：`IAppService` 只是标记，服务需显式注册；`[UnitOfWork]` 依靠代理织入，注册时使用实现类型。
 
-    [Display(Name = "Active status")]
-    public bool? IsActive { get; init; }
-}
-```
+## 5. 命名与 DTO
 
-**DTO 验证规范**:
-- ✅ 使用 Data Annotations 进行模型验证
-- ✅ `Display(Name)` 与 `ErrorMessage` 写**英文原文**，它们同时是本地化资源键：中文由 `Api/Resources/zh-CN.json` 的同名词条提供。直接写中文会绕过本地化，英文界面也显示中文
-- ✅ 错误消息使用占位符（`{0} is required.`），优先复用资源里已有的模板
-- ✅ 每个校验特性都显式写 `ErrorMessage`：不写时落成 .NET 内置英文（"The Name field is required."），它不是资源键，中文界面照样是英文
-- ✅ 所有属性必须添加 `[Display(Name = "xxx")]`
-- ✅ 入参 DTO 写成属性式（`{ get; init; }`），不用位置记录：校验失败返回的 `errors[].field` 按 JSON 命名策略与请求体字段同名，位置记录的键取自构造参数，不在换算范围内
-- ✅ 前端表单按同一组规则做即时校验（长度、格式），服务端校验是兜底而不是用户第一次得知规则的地方
-- ✅ 必填属性使用 `required` 修饰符
-- ✅ 字段验证只在入口 DTO 做，内层信任（见 [通用编码规范 §5.2](./coding-common.md)）
+| DTO | 命名 |
+| --- | --- |
+| 分页查询输入 | `Get{Entity}PagedInputDto`（继承 `PageRequest`，参数见 [API 规范 §5](./api.md#5-分页规范)） |
+| 创建、更新输入 | `Create{Entity}InputDto`、`Update{Entity}InputDto` |
+| 输出 | `{Entity}OutputDto` |
+| Client SDK 中不成对的响应 | `{Concept}Dto` |
 
-**DTO 文件组织**：**一个用途一个 DTO 文件**；仅作为某父 DTO 内嵌成员的 item 类型可留在父文件中。业务入参 DTO 放应用层对应模块，**不落在表现层**（Api 层）。
+- DTO 全部为 record；一个文件一个对外 DTO，仅被它内嵌使用的 item 类型可同文件；业务入参 DTO 放应用层模块，不放 Api。
+- 入参 DTO 写成属性式（`{ get; init; }`），不用位置记录：校验错误的 `errors[].field` 按 JSON 命名策略与请求体字段同名。
+- 字段校验（必填、长度、范围）只在入口 DTO 用 DataAnnotations 完成，应用层与领域层信任 DTO 已保证的前置条件、不重复校验；例外是实体构造另有不经该 DTO 的调用路径时，其守卫是多入口共享的不变量保护，保留。参与字段校验消息的属性（带校验特性、消息里用到 `{0}`）写 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
+- 变量：DTO 参数 `input`，返回对象 `result`，`IQueryable` 为 `query`/`xxxQuery`；仓储注入 `{entity}Repository`，领域服务注入 `{entity}DomainService`。
 
-### 4.2 变量与注入命名规范
+## 6. 数据访问
 
-- DTO 参数统一命名 `input`；返回对象统一命名 `result`；`IQueryable` 变量命名 `query` / `xxxQuery`。
-- 仓储注入命名 `{entity}Repository`（如 `userRepository`）；领域服务命名 `{Entity}DomainService`。
+- **聚合**：有独立仓储即聚合根；子实体（如 `UserRole`）不声明 DbSet，只经根的方法修改、随根持久化，修改前经根仓储显式加载。聚合间按 Id 引用，跨聚合协调在应用服务。
+- **仓储**只为聚合根提供：通用 `IRepository<T, TKey>` 覆盖增删改与单个用例的查询组合（`ISoftDelete` 实体为逻辑删除）。聚合特有、被多个用例复用的查询（连接、投影）加到该聚合的自定义仓储：Domain `<模块>/Repositories/I{聚合}Repository`，Infrastructure `EfCore{聚合}Repository`，经 `AddRepository<{聚合}, EfCore{聚合}Repository>()` 登记，方法按返回内容命名（`IUserRepository.GetRoleNamesAsync`）。不在领域服务里拼查询，不新增 `*Reader`、`*Query` 等查询类型。
+- Application 不使用 EF Core 扩展：`IQueryable` 经 `IQueryableAsyncExecuter`（`ToListAsync`、`CountAsync`、`FirstOrDefaultAsync`、`AnyAsync` 等）执行；关联数据用查询组合（子查询、`Join`）或分别查询，不用 `Include`。
+- 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 获取，不直接构造注入：直接注入的实例按宿主库创建，分库租户下会落到宿主库（框架拒绝，表现为 500）。控制库上下文固定宿主连接，可以直接注入。
+- 对象映射：实体、存储模型或框架模型到 DTO 的投影走模块 `Mappings/` 下实现 `IRegister` 的类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；不调用无参 `Adapt<T>()`（它用全局配置，本项目的规则静默失效）；调用方才知道的值经 MapContext 传入；由多个来源拼装、带计算或本地化的 DTO 直接构造；不在 DTO 上写 `FromXxx` 静态方法。
+- 请求外的异步工作交给 `IBackgroundTaskQueue`，跨实例互斥用 `IDistributedLock`，定期维护登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）；不另起线程或自造跨实例锁（只护进程内状态的 `lock` 除外）。
+- 可还原的加密用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串带版本，解密只捕获 `CryptographicException`，可并列同一载荷的 Base64/JSON 解析异常。
 
----
+## 7. 异常与日志
 
-## 5. 数据访问规范
+按失败语义选异常；HTTP 映射、错误码规则与示例见 [API 规范 §4](./api.md#4-异常与-http-映射)。
 
-### 5.1 Leistd 框架能力优先
+| 位置 | 异常 |
+| --- | --- |
+| Domain / Application 业务规则 | `BusinessException(code, safeMessage)` |
+| Infrastructure 传输、配置、解析失败 | BCL 或专用技术异常（对外兜底 500，细节进日志） |
+| 启动期与组合期（`Program.cs`、`Add*Services`、`IValidateOptions`）、DbMigrator 等一次性作业 | BCL 异常（`InvalidOperationException` 等） |
+| 参数与编程契约 | BCL 异常 |
 
-**优先使用 Leistd 框架已有能力**:
-- ✅ 分页查询使用 `GetPagedListAsync`（来自 `Leistd.Ddd.Infrastructure.Persistence.Repositories.EfCoreRepository`）
-- ✅ IQueryable 异步扩展使用 `Leistd.Ddd.Infrastructure.Persistence.Repositories` 提供的方法
-- ✅ 实体基类使用 `Entity<TKey>`、`FullAuditedEntity<TKey>` 等
-- ✅ 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 取，**不直接构造注入**：直接注入的实例在对象激活时就按宿主库创建，
-  分库租户下读写会落到宿主库（框架在同一作用域再按租户取上下文时会拒绝，表现为 500）。控制库上下文固定在宿主连接、不参与租户路由，可以直接注入
-- ✅ DTO 映射使用 Mapster 官方的 `IRegister`（结构参考现有 `*Mappings`）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的注册类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；配置里的嵌套映射直接映射源对象或集合，由 Mapster 按同一份配置完成，**不调用无参 `Adapt<T>()`**（它用全局配置，本项目登记的规则在那里静默失效），
-  调用方才知道的值（当前时刻、当前会话、读者身份）经 MapContext 传入；由多个来源**拼装**、带计算或本地化的结果 DTO 直接构造。不在 DTO 上写 `FromXxx` 之类的映射静态方法
-- ✅ 请求外的异步活（发邮件等）交给 `IBackgroundTaskQueue`（后台作业组件，入队时的租户、主体与链路随工作项带到执行时），并发互斥用 `IDistributedLock`，不另起线程或自造锁；定期的维护活登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）
-- ✅ 可还原的加密直接用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串固定带版本，解密只捕获 `CryptographicException`；不另立加密接口
+- 部署配置错误在启动期失败：`AddOptions<T>().Validate(...).ValidateOnStart()`。连接串在宿主启动前就要用，缺失时由创建 DbContext 直接抛出并指明键名。
+- 组合期只为**选择注册哪种实现**（是否接 Redis、加载哪些证书）读配置，在读取处校验并报出键名；集成测试用 `UseSetting` 覆盖这类键。其余取值经 Options 派生，合法性用 `ValidateOnStart()` 判定。
+- 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`；不可记录的内容见[通用约定 §1](./coding-common.md#1-语言与敏感信息)。
 
-### 5.2 仓储常用方法
+## 8. Api 目录
 
-| 方法 | 说明 |
-|------|------|
-| `GetByIdAsync(id)` | 根据 ID 获取单个实体 |
-| `GetListAsync(predicate)` | 根据条件获取列表 |
-| `GetQueryableAsync()` | 获取 IQueryable 用于复杂查询 |
-| `GetQueryIncludingAsync(...)` | 获取带 Include 的 IQueryable |
-| `InsertAsync(entity)` | 插入实体 |
-| `UpdateAsync(entity)` | 更新实体 |
-| `DeleteAsync(entity)` | 删除实体（软删除） |
-| `AnyAsync(predicate)` | 判断是否存在 |
+Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 
-### 5.3 应用层使用 EF Core 规范
+| 目录 | 内容 |
+| --- | --- |
+| `Controllers/` | 业务 Controller 与 `BaseController` |
+| `Auth/` | 授权策略与处理器、认证方案组装（`*Extensions`）、会话签发 |
+| `Hosting/` | 宿主组装扩展（`*Extensions`）、组件端点映射、`ExceptionMappings/` |
+| `Localization/` | 本地化资源标记类型（`ApiResource`） |
+| `Notifications/` | 只放依赖宿主资源的通知扩展点实现 |
+| `Configuration/` | 宿主级设置绑定 |
+| `Options/` | 强类型 Options |
+| `Middlewares/` | 中间件 |
+| `HealthChecks/` | `*HealthCheck` |
+| `HostedServices/` 下的 `Initializer/` | 一次性启动引导 `*Initializer` |
+| `Filters/` | MVC/Hub 管道过滤器（按需创建）；名字以 `Filter` 结尾的业务策略按所属功能域放 |
 
-**规范**:
-- ✅ 可以使用 `GetQueryableAsync` + `Include` 加载导航属性
-- ✅ 可以使用 `GetQueryIncludingAsync` 扩展方法
-- ✅ 使用 `using Leistd.Ddd.Infrastructure.Repositories;` 引入异步扩展
-- ❌ 禁止在 Application/Domain 层引入 `using Microsoft.EntityFrameworkCore;`
-
-**示例**:
-```csharp
-using Leistd.Ddd.Infrastructure.Repositories;  // 引入扩展方法
-
-var query = await apiKeyRepository.GetQueryIncludingAsync(
-    k => k.Bindings,
-    k => k.Bindings.Select(b => b.ProviderGroup));
-
-var apiKeys = await query
-    .Where(k => k.UserId == userId)
-    .ToListAsync(cancellationToken);
-```
-
-### 5.4 分页查询命名
-
-分页查询方法命名 / 路由 / 分页参数 / 输入 DTO 命名，以 [API 规范](./api.md) §6/§7 为单一权威（必须 `GetPagedListAsync`、`/api/v1/{resource}`、`offset/limit`、`Get{Entity}PagedInputDto`）；完整应用服务示例见 §3.5。
-
-### 5.5 避免重复验证
-
-验证只在入口 DTO 做、内层信任（含"第二条调用路径"例外），以 [通用编码规范](./coding-common.md) §5.2 为准，此处不重复展开。
-
----
-
-## 6. 异常处理与日志
-
-### 6.1 异常类型
-
-优先使用 .NET 内置异常；仅可预期、用户可恢复的业务规则失败使用 `BusinessException`。HTTP 映射以 [API 规范](./api.md) §4 为单一权威来源。
-
-#### 用哪一类：看失败语义，不看是否位于请求路径
-
-| 位置 | 用什么 | 为什么 |
-| --- | --- | --- |
-| **Domain / Application 业务规则** | `BusinessException(code, safeMessage)` | 错误码是机器契约和本地化键；默认 400，API 组合根可按码映射 |
-| **Infrastructure 传输/配置/解析失败** | BCL 或专用技术异常 | 未显式映射时对外安全兜底为 500，细节进日志 |
-| **启动期 / 组合期**（`Program.cs`、`Add*Services`、`IValidateOptions`） | BCL 异常（`InvalidOperationException` 等） | 没有 HTTP 响应也没有终端用户，进程就该起不来 |
-| **参数与编程契约**（`ArgumentException`、重复 key、不该发生的状态） | BCL 异常 | 是缺陷不是业务失败，不该被翻译成状态码 |
-| **一次性作业**（DbMigrator 之类控制台入口） | BCL 异常 | 同启动期；同一能力若同时有请求入口，由请求入口转换为 `Leistd.ExceptionHandling.Core` 异常 |
-
-不要为 BCL 异常增加 `WithCode`：如果失败确实是业务契约，直接构造 `BusinessException`；如果是技术故障，保留原类型和异常链。
-
-#### 配置错误在启动期失败，不要留到运行期
-
-格式写错的 `DomainFormat`、缺必填凭据这类**部署配置错误**，若留到运行期，表现是每个请求失败一次、而进程"健康"地跑着。用 `AddOptions<T>().Validate(...).ValidateOnStart()`。
-
-`ValidateOnStart` 在宿主启动时才执行，晚于 `app.Run()` 之前的步骤。数据库连接串属于这一类之前就要用到的配置：API 在接流量前校验迁移、DbMigrator 从不启动宿主，因此缺连接串由创建 DbContext 时直接抛出并指明键名，不另建选项类。
-
-> **组合期不能直接读配置来做判断。**`Add*Services(configuration)` 拿到的配置还不是最终值——集成测试通过 `WebApplicationFactory` 追加的覆盖此刻尚未合入，直接判断会误伤测试。要用 `.Configure<IConfiguration>((o, c) => ...)` 从 DI 取，让求值发生在配置定案之后。
-
-**示例**:
-```csharp
-// 业务规则验证失败
-if (await userRepository.AnyAsync(u => u.Username == username))
-    throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
-        .WithData("Username", username);
-
-// 资源不存在
-var user = await userRepository.GetByIdAsync(id);
-if (user == null)
-    throw new BusinessException("User:NotFound", $"User {id} not found.")
-        .WithData("Id", id);
-```
-
-### 6.2 日志记录
-
-**使用场景**:
-```csharp
-// Information: 关键业务操作
-logger.LogInformation("创建用户成功: {Username}", user.Username);
-
-// Warning: 潜在问题
-logger.LogWarning("用户 {UserId} 登录失败次数过多", userId);
-
-// Error: 异常错误
-logger.LogError(ex, "创建用户失败: {Username}", input.Username);
-```
-
-**最佳实践**:
-- ✅ 使用结构化日志（消息模板 + 参数）
-- ✅ 记录关键业务操作
-- ❌ 不记录敏感信息（密码、Token）
-
----
-
-## 7. 表现层（API）目录组织
-
-表现层文件**按功能域归类收纳**，避免随业务增长在 Api 根目录平铺散乱；新增代码按分类归位。命名空间跟随目录层级。
-
-### 7.1 按功能域分类
-
-把表现层文件按关注点归入少数几个顶层分类，每类下再按模块收纳。通用分类思路（按项目实际有的才建，没有的不强建）：
-
-- **实时/长连类**：WebSocket 端点、推送 Hub、连接注册表 → 一个"实时通信"大类。
-- **网关/代理类**：反向代理转发、网关中间件。
-- **鉴权类**：授权策略、授权特性、身份/凭据组装 → `Auth/`。
-- **配置/组装类**：强类型 Options → `Options/`；宿主组装用的扩展方法（`*Extensions`）→ `Hosting/`。命名空间用描述性名称，
-  不用笼统的 `Extensions`（微软《框架设计准则》：避免给专放扩展方法的命名空间起 "Extensions" 这类泛名），
-  也不把非扩展类放进去。
-- **健康检查类**：`IHealthCheck` 实现 → `HealthChecks/`，类名 `*HealthCheck`；启动期锁存的就绪标志与检查放在同一个类里（官方示例同一写法）。
-- **后台服务类**：见 §7.2。
-- **过滤器类**：类名以 `Filter` 结尾的（MVC/Hub 过滤器、通知投递过滤器等）统一放顶层 `Filters/`，不按所属功能域分散收纳。
-
-已是清晰单一关注点的目录保持顶层，不强行再套壳。
-
-请求体上限沿用 Kestrel 默认（约 30 MB），不在全局放宽；需要更大上传的端点用 `[RequestSizeLimit]` / `[RequestFormLimits]` 单独放宽（微软文件上传文档的建议：全局放宽扩大了拒绝服务的攻击面）。
-
-### 7.2 后台服务按运行形态三分 + 后缀统一
-
-后台服务（`IHostedService`/`BackgroundService`）按**运行形态**分类，类名后缀与目录对齐：
-
-- **一次性启动引导** → `Initializer/`，类名 `*Initializer`。
-- **常驻消费者**（持有队列/长循环消费）→ `Workers/`，类名 `*Worker`。
-- **周期任务**（定时触发跑一轮）→ `BackgroundJobs/`，类名 `*Job`。
-
-> 机制上"周期编排器"与"周期 Job"无区别（都是定时器+循环+每 tick 干活），故**统一 `*Job` 后缀**，不混用 `*Orchestrator`/`*Service`。
-
-### 7.3 表现层职责红线（呼应 §2.1）
-
-- **Controller/端点只做路由 + 鉴权 + 调应用服务**，不含业务校验/编排/直接操作实体或仓储；参数解析、越权守卫编排、多步领域调用下沉应用服务。
-- **业务入参 DTO 不落表现层**，放应用层对应模块（见 §4.1）。
-- **授权策略名等标识符用常量**，禁裸魔法串多处各写（见 §3.8）。
-- **Controller 统一继承 `BaseController`**（见 §3.6）；确有特殊性的（视图渲染、纯透传代理、机器对机器端点）可用不同基类，属合理例外，就近注释说明。
-- **以下留在表现层属合理边界、不算越层**（避免过度下沉）：后台服务取请求作用域服务推进工单状态机（调度编排）、连接/端点准入的存在性探针（等价鉴权）、后台 Worker 直写技术性日志实体（fire-and-forget 技术数据）、下发外部的 UTC 线缆时间戳直接用明确 UTC 取法（见 §3.2.1）。
-
----
+- 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
+- 请求体上限沿用 Kestrel 默认，大上传端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽；不用笼统的 `Extensions` 命名空间。

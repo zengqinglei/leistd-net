@@ -16,7 +16,7 @@ import { TranslocoDirective, translateSignal } from '@jsverse/transloco';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
 import { AuthService } from '../../../../core/services/auth-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif

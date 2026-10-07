@@ -6,16 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.Response.AspNetCore.Filters;
 
-/// <summary>
-/// 将 Minimal API 端点的成功响应包装为统一结果，与 MVC 的 <see cref="ResultWrapperFilter"/> 同一口径。
-/// </summary>
+/// <summary>将 Minimal API 端点的成功响应包装为统一结果，与 MVC 的 <see cref="ResultWrapperFilter"/> 同一口径。</summary>
 /// <remarks>
-/// <para>只包装两种形态：处理器直接返回的对象，以及 <c>TypedResults.Ok(value)</c>。这两种都只表达"200 加这个值"，
-/// 换成信封不丢任何 HTTP 语义。</para>
-/// <para>其余 <see cref="IResult"/> 一律原样放行，包括 <c>Created</c>、<c>Accepted</c>、文件与流、
-/// 重定向、<c>NoContent</c> 与非 2xx：它们各自带着响应头（<c>Location</c>）、内容类型或序列化选项，
-/// 重建成 JSON 会把这些语义丢掉，而状态码看上去还是对的。要让这类端点也走信封，
-/// 由端点自己把信封放进结果：<c>TypedResults.Created(location, Result&lt;T&gt;.Ok(dto))</c>。</para>
+/// <para>只包装处理器直接返回的对象与 <c>TypedResults.Ok(value)</c>。</para>
+/// <para>其余 <see cref="IResult"/> 原样放行（<c>Created</c>、<c>Accepted</c>、文件与流、重定向、<c>NoContent</c> 与非 2xx），
+/// 以保留响应头与内容类型；需要信封时由端点自己放进结果，如 <c>TypedResults.Created(location, Result&lt;T&gt;.Ok(dto))</c>。</para>
 /// <para>已是 <see cref="Result"/> 的值与标了 <see cref="NoWrapAttribute"/> 的端点同样原样放行。</para>
 /// <para>200 的响应类型元数据由 <c>WithResultWrapper()</c> 同步改写成 <c>Result&lt;T&gt;</c>，文档与实际响应一致；
 /// 直接挂本过滤器而不经该扩展方法时，元数据不会被改写。</para>

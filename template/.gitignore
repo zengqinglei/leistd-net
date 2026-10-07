@@ -55,3 +55,6 @@ Logs/
 *.tmp
 *.temp
 *.bak
+
+# Python 闸门脚本运行时的字节码缓存
+__pycache__/

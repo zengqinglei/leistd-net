@@ -6,8 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.BackgroundJobs.InProcess.Queues;
 
-// 队列消费者。单项失败不停服：ExecuteAsync 一旦抛出就不会再被调度，后续工作项全部静默不执行。
-// 停机时先关写入口；正在执行的一项收到取消令牌，尚未开始的项被丢弃（进程内队列的固有性质）。
+// 队列消费者。单项失败只记日志：ExecuteAsync 一旦抛出，后续工作项都不再执行。
+// 停机时先关写入口；正在执行的一项收到取消令牌，尚未开始的项被丢弃。
 internal sealed class BackgroundTaskQueueWorker(
     BackgroundTaskQueue queue,
     IServiceScopeFactory scopeFactory,

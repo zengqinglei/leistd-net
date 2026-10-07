@@ -6,9 +6,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace Leistd.Settings.AspNetCore.Endpoints;
 
-/// <summary>
-/// 设置页的 HTTP 端点。
-/// </summary>
+/// <summary>设置页的 HTTP 端点。</summary>
 public static class SettingEndpoints
 {
     /// <summary>端点名前缀，宿主按名字给个别端点追加约定时使用。</summary>
@@ -27,9 +25,8 @@ public static class SettingEndpoints
     /// 映射设置页端点：<c>GET /</c>、<c>PUT /current-user</c>、<c>PUT /current-tenant</c>。
     /// </summary>
     /// <remarks>
-    /// <para>写入分成两个端点而不是一个带层级参数的端点：两者的授权要求不同——改自己的偏好走
-    /// <see cref="SettingEndpointOptions.AccessPolicy"/>，改租户值走 <see cref="SettingEndpointOptions.TenantWritePolicy"/>。
-    /// 合成一个会让这层差异藏进请求体。</para>
+    /// <para>两个写入端点授权不同：改自己的偏好走 <see cref="SettingEndpointOptions.AccessPolicy"/>，
+    /// 改租户值走 <see cref="SettingEndpointOptions.TenantWritePolicy"/>。</para>
     /// <para>写入成功返回 204；取值、层级与可见性错误是带码的 400 / 403 / 404。
     /// 前缀由宿主的路由组决定；返回的路由组可继续追加约定。</para>
     /// </remarks>

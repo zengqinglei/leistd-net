@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Exercise the actual workflow scope steps in isolated Git repositories.
 
-Run when changing CI/release scope selection; this is not a per-feature gate.
+Run when changing CI/release scope selection, framework test receipts or the release link policy
+(PackageReleaseNotes and the upgrade-guide link); this is not a per-feature gate.
+The release link check packs a fixture project, so it also requires the .NET SDK.
 Requires PowerShell and the same PyYAML dependency used by Skill validation.
 """
 
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
+from xml.etree import ElementTree
+import zipfile
 
 import yaml
 
@@ -23,7 +28,7 @@ def scope_step(workflow, job, step_id):
 
 
 def git(repo, *args):
-    return subprocess.check_output(['git', '-C', str(repo), *args], text=True).strip()
+    return subprocess.check_output(['git', '-C', str(repo), *args], text=True, encoding='utf-8', errors='replace').strip()
 
 
 def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
@@ -42,7 +47,7 @@ def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
                                      GITHUB_STEP_SUMMARY=str(repo / 'summary.txt'),
                                      PR_BASE_SHA=base, EVENT_NAME=event, CANDIDATE_SHA=candidate),
                                  **(extra_env or {})},
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding='utf-8', errors='replace')
     return result.returncode, output.read_text(encoding='utf-8').strip() if output.exists() else '', result.stderr
 
 
@@ -146,7 +151,7 @@ def check_docs_scope():
             git(repo, 'commit', '-qm', 'base')
             base = git(repo, 'rev-parse', 'HEAD')
             if target == source:
-                path.write_text(path.read_text() + 'change\n', encoding='utf-8')
+                path.write_text(path.read_text(encoding='utf-8') + 'change\n', encoding='utf-8')
                 git(repo, 'add', source)
             elif target:
                 (repo / target).parent.mkdir(parents=True, exist_ok=True)
@@ -182,16 +187,16 @@ def check_docs_scope():
         # Force git diff to fail after a valid base lookup, rather than merely use an unknown SHA.
         fake_bin = repo / 'fake-bin'
         fake_bin.mkdir()
-        actual_git = subprocess.check_output(['which', 'git'], text=True).strip()
+        actual_git = subprocess.check_output(['which', 'git'], text=True, encoding='utf-8', errors='replace').strip()
         shim = fake_bin / 'git'
-        shim.write_text('#!/bin/sh\ncase " $* " in *" diff "*) exit 23;; esac\nexec "' + actual_git + '" "$@"\n')
+        shim.write_text('#!/bin/sh\ncase " $* " in *" diff "*) exit 23;; esac\nexec "' + actual_git + '" "$@"\n', encoding='utf-8')
         shim.chmod(0o755)
         code, output, error = evaluate(repo, script, parent, 'pull_request', extra_env={'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']})
         assert code == 0 and output == 'docs_only=false', ('failed diff', code, output, error)
         print('PASS empty and failed diff fall back to full')
         # Model GitHub's actual PR merge checkout: base is the first parent.
         merge = subprocess.check_output(['git', '-C', str(repo), 'commit-tree', 'HEAD^{tree}', '-p', base, '-p', 'HEAD'],
-                                        input='PR merge fixture\n', text=True).strip()
+                                        input='PR merge fixture\n', text=True, encoding='utf-8', errors='replace').strip()
         git(repo, 'update-ref', 'refs/heads/pr-merge', merge)
         git(repo, 'symbolic-ref', 'HEAD', 'refs/heads/pr-merge')
         for depth in (1, 2):
@@ -211,7 +216,7 @@ def check_quality_aggregation():
     jobs = workflow['jobs']
     quality = jobs['template-matrix']
     dynamic = ['test', 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
-    required = ['framework-pack', 'docs-sync', *dynamic]
+    required = ['framework-pack', 'docs-sync', 'docs-sync-windows', 'frontend-gates', *dynamic]
     assert set(quality['needs']) == set(required), 'aggregation must wait for every required result'
     assert quality['if'] == 'always()', 'aggregation must run after failure/skip/cancellation'
     assert 'needs' not in jobs['framework-pack'], 'packing must start without waiting for another runner'
@@ -230,7 +235,9 @@ def check_quality_aggregation():
             if step.get('uses', '').startswith('actions/checkout@'):
                 assert step['with']['ref'] == '${{ inputs.candidate_sha || github.sha }}', 'candidate SHA differs across checks'
     for step in quality['steps'][1:]:
-        assert step['if'] == "steps.quality.outputs.dynamic == 'true'", 'docs-only must not consume scene receipts'
+        assert step['if'] in ("steps.quality.outputs.dynamic == 'true'", "steps.quality.outputs.framework_tests == 'true'"), \
+            'docs-only must not consume scene or framework test receipts'
+    assert any(s.get('id') == 'framework_receipts' for s in quality['steps']), 'aggregation must verify framework test receipts'
     matrix_step = next(s for s in jobs['template-slices']['steps'] if s.get('id') == 'matrix')
     assert '-SkipSourcePreflight' in matrix_step['run'], 'same-candidate preflight dedup missing'
     static_step = next(s for s in jobs['docs-sync']['steps'] if 'run' in s and 'check-all' in s['run'])
@@ -243,7 +250,9 @@ def check_quality_aggregation():
             normal = {name: {'result': 'success', 'outputs': {}} for name in required}
             plan = dict(Version=2,ContainerSmoke=False, CandidateSha=candidate, Tier='pr', DocsOnly=docs_only == 'true',
                         Mode='frontend' if docs_only == 'false' and not framework_tests else 'full',
-                        FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'])
+                        FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'],
+                        FrameworkTestProjects=[TEST_PROJECTS[0]] if framework_tests else [],
+                        FrameworkTestSelection='affected' if framework_tests else 'none')
             normal['framework-pack']['outputs'] = dict(docs_only=docs_only, validation_plan=json.dumps(plan))
             for name in dynamic:
                 normal[name]['result'] = 'skipped' if docs_only == 'true' or (name == 'test' and not framework_tests) else 'success'
@@ -253,7 +262,8 @@ def check_quality_aggregation():
                     'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'pr'})
                 assert (code == 0) == success, (docs_only, framework_tests, state, code, output, error)
                 if success:
-                    assert output == f"dynamic={'false' if docs_only == 'true' else 'true'}", output
+                    assert output == (f"dynamic={'false' if docs_only == 'true' else 'true'}\n"
+                                      f"framework_tests={str(framework_tests).lower()}"), output
 
             check(normal, True)
             for name in required:
@@ -273,15 +283,274 @@ def check_quality_aggregation():
                 check(state, False)
             state = json.loads(json.dumps(normal)); state['framework-pack']['outputs'].pop('validation_plan')
             check(state, False)
+            # The test list must agree with FrameworkTests and be a unique list of test projects.
+            selected = 'affected' if framework_tests else 'none'
+            lists = [('missing list', None, selected), ('string list', TEST_PROJECTS[0], selected),
+                     ('unknown selection', plan['FrameworkTestProjects'], 'some'),
+                     ('selection disagrees', plan['FrameworkTestProjects'], 'all' if not framework_tests else 'none'),
+                     ('non-test project', ['framework/components/core/Leistd.Core/Leistd.Core.csproj'], selected),
+                     ('duplicate project', [TEST_PROJECTS[0]] * 2, selected)]
+            lists.append(('empty with responsibility', [], selected) if framework_tests else ('list without responsibility', [TEST_PROJECTS[0]], selected))
+            for label, projects, selection in lists:
+                invalid = dict(plan, FrameworkTestSelection=selection)
+                if projects is None:
+                    invalid.pop('FrameworkTestProjects')
+                else:
+                    invalid['FrameworkTestProjects'] = projects
+                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(invalid)
+                check(state, False)
+            if framework_tests:
+                # A full-tier plan can never narrow framework tests.
+                full = dict(plan, Tier='full')
+                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(full)
+                code, _, error = evaluate(repo, script, '', extra_env={
+                    'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'full'})
+                assert code != 0 and '框架测试清单' in error, ('full tier accepted affected selection', error)
+            # 变异：把 docs-sync 从必需清单里拿掉，失败的 docs-sync 就不再阻断——证明判据真的读这份清单
+            mutated = script.replace("'framework-pack', 'docs-sync', ", "'framework-pack', ")
+            assert mutated != script, 'mutation did not apply: required-job list literal changed'
             state = json.loads(json.dumps(normal)); state['docs-sync']['result'] = 'failure'
-            check(state, True, script.replace("@('framework-pack', 'docs-sync')", "@('framework-pack')"))
+            check(state, True, mutated)
             print(f'PASS aggregation docs_only={docs_only}, framework_tests={framework_tests}: missing/failed/cancelled/wrong skip, wrong candidate/plan and static mutation')
+
+
+TEST_PROJECTS = [
+    'framework/tests/components/core/Leistd.Core.Tests/Leistd.Core.Tests.csproj',
+    'framework/tests/components/email/Leistd.Email.Tests/Leistd.Email.Tests.csproj',
+    'framework/tests/ddd-struct/Leistd.Ddd.Domain.Tests/Leistd.Ddd.Domain.Tests.csproj',
+]
+
+
+def check_framework_test_receipts():
+    """Run the real test-list step with a fake dotnet, then the real aggregation check on its receipts."""
+    run_step = next(s for s in yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))['jobs']['test']['steps']
+                    if s.get('id') == 'framework_tests')
+    assert '${{ needs.framework-pack.outputs.validation_plan }}' == run_step['env']['VALIDATION_PLAN'], 'test list must come from the candidate plan'
+    verify = scope_step('ci.yml', 'template-matrix', 'framework_receipts')
+    with tempfile.TemporaryDirectory(prefix='leistd-framework-receipts-') as directory:
+        repo = Path(directory) / 'repo'
+        repo.mkdir()
+        git(repo, 'init', '-q')
+        git(repo, 'config', 'user.email', 'scope-test@example.invalid')
+        git(repo, 'config', 'user.name', 'Scope test')
+        for project in TEST_PROJECTS + ['framework/tests/shared/Leistd.TestBase/Leistd.TestBase.csproj']:
+            (repo / project).parent.mkdir(parents=True)
+            (repo / project).write_text('<Project />\n', encoding='utf-8')
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-qm', 'fixture')
+        candidate = git(repo, 'rev-parse', 'HEAD')
+        fake_bin = Path(directory) / 'fake-bin'
+        fake_bin.mkdir()
+        log = Path(directory) / 'dotnet.log'
+        # Fake dotnet: record the call, fail exactly the project named by FAIL_PROJECT.
+        shim = fake_bin / 'dotnet'
+        shim.write_text('#!/bin/sh\necho "$*" >> "' + str(log) + '"\n'
+                        '[ -n "$FAIL_PROJECT" ] && [ "$2" = "$FAIL_PROJECT" ] && exit 1\nexit 0\n', encoding='utf-8')
+        shim.chmod(0o755)
+        receipts = repo / '.tmp/framework-test-receipts'
+
+        def plan(projects, selection='affected', candidate_sha=candidate):
+            return dict(Version=2, CandidateSha=candidate_sha, BaseSha='b' * 40, FrameworkTests=True,
+                        FrameworkTestProjects=projects, FrameworkTestSelection=selection, FrameworkTestReason='fixture')
+
+        def run_tests(value, fail=''):
+            for item in receipts.glob('*.json'):
+                item.unlink()
+            log.unlink(missing_ok=True)
+            return evaluate(repo, run_step['run'], '', extra_env={
+                'VALIDATION_PLAN': json.dumps(value), 'FAIL_PROJECT': fail,
+                'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']})
+
+        def aggregate(value, success, reason=''):
+            code, _, error = evaluate(repo, verify, '', extra_env={
+                'VALIDATION_PLAN': json.dumps(value), 'CANDIDATE_SHA': candidate})
+            assert (code == 0) == success, (value, code, error)
+            assert success or reason in error, (reason, error)
+
+        selected = TEST_PROJECTS[:2]
+        code, _, error = run_tests(plan(selected))
+        assert code == 0, error
+        assert [line.split()[1] for line in log.read_text(encoding='utf-8').splitlines()] == selected, 'step must run exactly the list'
+        assert sorted(item.name for item in receipts.glob('*.json')) == ['Leistd.Core.Tests.json', 'Leistd.Email.Tests.json']
+        aggregate(plan(selected), True)
+        print('PASS framework tests: the list runs exactly, one receipt per project, aggregation accepts')
+        # One selected project not run (no receipt) is rejected, whichever one it is.
+        for project in selected:
+            name = Path(project).stem + '.json'
+            saved = (receipts / name).read_text(encoding='utf-8')
+            (receipts / name).unlink()
+            aggregate(plan(selected), False, '缺少回执')
+            (receipts / name).write_text(saved, encoding='utf-8')
+        # A plan that grew after the run (receipts for only part of it) is rejected too.
+        aggregate(plan(TEST_PROJECTS), False, '缺少回执')
+        # A receipt outside the list, a duplicate, a failure claim or another candidate/base is illegal.
+        original = json.loads((receipts / 'Leistd.Core.Tests.json').read_text(encoding='utf-8-sig'))
+        for field, value in [('Project', TEST_PROJECTS[2]), ('Result', 'failure'), ('CandidateSha', 'c' * 40),
+                             ('BaseSha', 'd' * 40), ('Version', 2)]:
+            (receipts / 'extra.json').write_text(json.dumps(dict(original, **{field: value})), encoding='utf-8')
+            aggregate(plan(selected), False, '非法框架测试回执')
+        (receipts / 'extra.json').write_text(json.dumps(original), encoding='utf-8')
+        aggregate(plan(selected), False, '非法框架测试回执')
+        (receipts / 'extra.json').unlink()
+        # A failing project leaves no receipt and fails the job; aggregation also rejects what remains.
+        code, _, error = run_tests(plan(selected), fail=selected[1])
+        assert code != 0 and '框架测试失败' in error, error
+        assert sorted(item.name for item in receipts.glob('*.json')) == ['Leistd.Core.Tests.json']
+        aggregate(plan(selected), False, '缺少回执')
+        # The step refuses a list from another candidate or an empty list.
+        for value in (plan(selected, candidate_sha='c' * 40), plan([])):
+            code, _, error = run_tests(value)
+            assert code != 0 and '测试清单与当前候选不符' in error and not log.exists(), error
+        # A full selection must equal every registered test project, not a self-declared subset.
+        code, _, error = run_tests(plan(TEST_PROJECTS, 'all'))
+        assert code == 0, error
+        aggregate(plan(TEST_PROJECTS, 'all'), True)
+        code, _, error = run_tests(plan(selected, 'all'))
+        assert code == 0, error
+        aggregate(plan(selected, 'all'), False, '全集清单')
+        print('PASS framework test receipts: missing, extra, duplicate, failed, foreign candidate/base and narrowed full set rejected')
+
+
+def release_step(step_id):
+    data = yaml.safe_load((ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8'))
+    return next(s for s in data['jobs']['release']['steps'] if s.get('id') == step_id)
+
+
+def substitute(script, values):
+    """Replace every ${{ expr }} with a fixture value; an unmodelled expression fails the test."""
+    def replace(match):
+        expression = match.group(1).strip()
+        assert expression in values, ('workflow expression not modelled by the release fixture', expression)
+        return values[expression]
+    return re.sub(r'\$\{\{(.*?)\}\}', replace, script)
+
+
+def run_pwsh(repo, script, env=None):
+    output = repo / 'output.txt'
+    output.unlink(missing_ok=True)
+    path = repo.parent / f'{repo.name}-step.ps1'
+    path.write_text(script, encoding='utf-8')
+    result = subprocess.run(['pwsh', '-NoProfile', '-File', str(path)], cwd=repo,
+                            env={**os.environ, 'GITHUB_OUTPUT': str(output), **(env or {})},
+                            capture_output=True, text=True, encoding='utf-8', errors='replace')
+    return result.returncode, output.read_text(encoding='utf-8') if output.exists() else '', result.stdout + result.stderr
+
+
+def parse_outputs(text):
+    outputs, lines, index = {}, text.splitlines(), 0
+    while index < len(lines):
+        line = lines[index]
+        if '<<' in line and '=' not in line.split('<<', 1)[0]:
+            name, marker = line.split('<<', 1)
+            end = lines.index(marker, index + 1)
+            outputs[name] = '\n'.join(lines[index + 1:end])
+            index = end + 1
+            continue
+        name, _, value = line.partition('=')
+        outputs[name] = value
+        index += 1
+    return outputs
+
+
+def packed_release_notes(repo):
+    packages = list((repo / 'framework/artifacts').glob('*.nupkg'))
+    assert len(packages) == 1, ('expected exactly one fixture package', packages)
+    with zipfile.ZipFile(packages[0]) as package:
+        nuspec = next(name for name in package.namelist() if name.endswith('.nuspec'))
+        root = ElementTree.fromstring(package.read(nuspec))
+    notes = [element.text for element in root.iter() if element.tag.endswith('}releaseNotes') or element.tag == 'releaseNotes']
+    return notes[0] if notes else None
+
+
+def check_release_links():
+    """Release link policy: every channel, with and without a guide, down to the packed .nuspec."""
+    repository = 'zengqinglei/leistd-net'
+    repo_url = f'https://github.com/{repository}'
+    links, notes, pack = release_step('links'), release_step('notes'), release_step('pack')
+    channels = {
+        'stable': '0.13.0',
+        'beta': '0.13.0-beta.7',
+        'nightly': '0.13.0-preview.20261007.12',
+    }
+    with tempfile.TemporaryDirectory(prefix='leistd-release-links-') as directory:
+        for channel, version in channels.items():
+            for has_guide in (True, False):
+                tag = f'v{version}'
+                repo = Path(directory) / f'{channel}-{"guide" if has_guide else "none"}'
+                repo.mkdir()
+                git(repo, 'init', '-q')
+                git(repo, 'config', 'user.email', 'release-test@example.invalid')
+                git(repo, 'config', 'user.name', 'Release test')
+                project = repo / 'framework/Fixture/Fixture.csproj'
+                project.parent.mkdir(parents=True)
+                project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
+                                   '<TargetFramework>net10.0</TargetFramework><PackageId>Leistd.ReleaseFixture</PackageId>'
+                                   '<Authors>fixture</Authors><Description>fixture</Description>'
+                                   '</PropertyGroup></Project>\n', encoding='utf-8')
+                (project.parent / 'Fixture.cs').write_text('namespace Fixture;\npublic static class Marker;\n', encoding='utf-8')
+                (repo / 'framework/Leistd.Framework.slnx').write_text(
+                    '<Solution>\n  <Project Path="Fixture/Fixture.csproj" />\n</Solution>\n', encoding='utf-8')
+                if has_guide:
+                    guide = repo / 'docs/framework/upgrades/0.13.0.md'
+                    guide.parent.mkdir(parents=True)
+                    guide.write_text('# guide\n', encoding='utf-8')
+                git(repo, 'add', '-A')
+                git(repo, 'commit', '-qm', 'fix: fixture')
+                values = {
+                    'github.repository': repository,
+                    'steps.ch.outputs.channel': channel,
+                    'steps.ver.outputs.tag': tag,
+                    'steps.ver.outputs.version': version,
+                    'steps.ver.outputs.baseVersion': '0.13.0',
+                    'steps.ver.outputs.lastStableTag': '',
+                }
+                guide_url = f'{repo_url}/blob/{tag}/docs/framework/upgrades/0.13.0.md'
+                expected = guide_url if has_guide else {
+                    'stable': f'{repo_url}/releases/tag/{tag}',
+                    'beta': f'{repo_url}/releases/tag/{tag}',
+                    'nightly': f'{repo_url}/commit/{tag}',
+                }[channel]
+
+                code, output, log = run_pwsh(repo, substitute(links['run'], values))
+                assert code == 0, (channel, has_guide, log)
+                outputs = parse_outputs(output)
+                assert outputs.get('guideUrl') == (guide_url if has_guide else ''), (channel, has_guide, outputs)
+                assert outputs.get('packageReleaseNotes') == expected, (channel, has_guide, outputs)
+                # 变异：改成分支链接必须被拒，证明判据读的是 tag 固定的地址
+                mutated = links['run'].replace('blob/$tag/', 'blob/develop/')
+                assert mutated != links['run'], 'mutation did not apply: guide URL literal changed'
+                code, output, _ = run_pwsh(repo, substitute(mutated, values))
+                assert not has_guide or parse_outputs(output).get('packageReleaseNotes') != expected, 'branch link not detected'
+
+                values['steps.links.outputs.guideUrl'] = outputs['guideUrl']
+                code, output, log = run_pwsh(repo, substitute(notes['run'], values))
+                assert code == 0, (channel, has_guide, 'notes', log)
+                body = parse_outputs(output)['content']
+                assert ('## 升级指南' in body) == has_guide and (guide_url in body) == has_guide, (channel, has_guide, body)
+
+                values['steps.links.outputs.packageReleaseNotes'] = outputs['packageReleaseNotes']
+                env = {name: substitute(value, values) for name, value in pack.get('env', {}).items()}
+                code, _, log = run_pwsh(repo, substitute(pack['run'], values), env)
+                assert code == 0, (channel, has_guide, 'pack', log)
+                packed = packed_release_notes(repo)
+                assert packed == expected, (channel, has_guide, 'nuspec', packed)
+                assert f'/{tag}/' in packed + '/' and '/main/' not in packed and '/develop/' not in packed, packed
+                print(f'PASS release links {channel} guide={has_guide}: {packed}')
+
+        code, _, log = run_pwsh(repo, substitute(pack['run'], values), {'PACKAGE_RELEASE_NOTES': ''})
+        assert code != 0, ('pack must refuse a missing release notes link', log)
+        values['steps.ch.outputs.channel'] = 'unknown'
+        code, _, _ = run_pwsh(repo, substitute(links['run'], values))
+        assert code != 0, 'unknown channel must fail closed'
+        print('PASS release links: missing link and unknown channel fail closed')
 
 
 def main():
     check_existing_scopes()
     check_docs_scope()
     check_quality_aggregation()
+    check_framework_test_receipts()
+    check_release_links()
 
 
 if __name__ == '__main__':

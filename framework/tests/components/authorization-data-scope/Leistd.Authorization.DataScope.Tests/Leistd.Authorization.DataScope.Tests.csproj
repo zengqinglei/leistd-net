@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\authorization-data-scope\Leistd.Authorization.DataScope.Core\Leistd.Authorization.DataScope.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 
 </Project>

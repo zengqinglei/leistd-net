@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>
 /// 集成测试的 PostgreSQL：一次测试运行一个容器、迁移一次模板库，每个测试宿主克隆一份独立的库。

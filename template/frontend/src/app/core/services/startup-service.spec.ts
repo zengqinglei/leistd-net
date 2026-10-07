@@ -11,10 +11,8 @@ import type { Mock, MockedObject } from 'vitest';
 
 describe('StartupService', () => {
   let authService: Pick<MockedObject<AuthService>, 'initializeAuth'>;
-  // 会话上下文（当前用户、权限、设置）整个桩掉：它自己有独立单测，本组用例只关心
-  // 状态机的分支。用真实实现的话，这里就要连它内部那些依赖一起打桩——启动状态机的
-  // 测试没有理由知道那些，而漏掉一个就会向测试服务器发真实请求，
-  // 靠 404 被降级逻辑吞掉后照样变绿。
+  // 会话上下文整个桩掉（它有独立单测），本组只关心状态机分支；用真实实现要连带打桩其依赖，
+  // 漏掉的真实请求还会被降级逻辑吞掉而照样变绿。
   let sessionContext: Pick<MockedObject<SessionContextService>, 'establish' | 'clear'>;
   let service: StartupService;
   let isProtectedRoute: Mock;
@@ -102,13 +100,7 @@ describe('StartupService', () => {
     expect(service.error()).toBeNull();
   });
 
-  /**
-   * 入口路由判据本身，用真实实现跑。
-   *
-   * 上面的用例把它打桩成 true 以隔离状态机，因此判据坏掉不会有任何用例变红：
-   * 恒 false 时受保护深链会在无主体状态下启动，Guard 按无权限把已登录的人踢去登录页；
-   * 恒 true 时公开页也要探一次认证。两种都得钉住。
-   */
+  /** 入口路由判据用真实实现跑：上面的用例把它打桩成 true，判据坏掉不会变红。 */
   describe('entry route gate', () => {
     it('establishes the subject on a protected route', async () => {
       isProtectedRoute.mockRestore();
@@ -151,17 +143,11 @@ describe('StartupService', () => {
   //#if (RemoteTokenAuth)
 
   /**
-   * OIDC 回调页上的 401。
-   *
-   * 这一刻刚从授权服务器换到令牌，401 是 API 拒了它，不是「未登录」。当作未登录判成功
-   * 走下去，外壳就会渲染 router-outlet，回调组件跳进受保护路由，Guard 发现没有主体
-   * 又发起一次授权；授权服务器那边会话还在，立刻带着新 code 回到回调页，同样被拒——
-   * 一圈一圈在浏览器和 IdP 之间打转，而每一圈的结果都一样。
+   * OIDC 回调页上的 401 是 API 拒了刚换到的令牌，不是未登录；按未登录处理会在浏览器与 IdP
+   * 之间循环授权。
    */
   describe('on the OIDC callback', () => {
-    // 回调判据必须落在路径上。查询串里出现 `/auth/callback` 的人并不在回调页，
-    // 误判的代价是普通会话过期被当成"刚换到的令牌被 API 拒了"，直接进故障页，
-    // 而正确行为是按已登出处理、让 Guard 把人送去登录。
+    // 回调判据落在路径上：查询串里含 `/auth/callback` 的普通页面会话过期时应按已登出处理。
     it('does not mistake an auth path inside the query string for the callback', async () => {
       isProtectedRoute.mockRestore();
       openAt('/workspace?returnUrl=/auth/callback');

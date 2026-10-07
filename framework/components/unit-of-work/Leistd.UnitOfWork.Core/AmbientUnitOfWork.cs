@@ -1,8 +1,6 @@
 namespace Leistd.UnitOfWork;
 
-/// <summary>
-/// 使用 <see cref="AsyncLocal{T}"/> 隔离当前工作单元。
-/// </summary>
+/// <summary>使用 <see cref="AsyncLocal{T}"/> 隔离当前工作单元。</summary>
 public class AmbientUnitOfWork : IAmbientUnitOfWork
 {
     private readonly AsyncLocal<IUnitOfWork?> _currentUow = new();

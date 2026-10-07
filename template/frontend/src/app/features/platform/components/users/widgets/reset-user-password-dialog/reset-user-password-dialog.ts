@@ -23,7 +23,7 @@ import {
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { ResetUserPasswordInputDto } from '../../../../models/user-management.dto';
+import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto';
 
 @Component({
   selector: 'app-reset-user-password-dialog',
@@ -53,10 +53,8 @@ export class ResetUserPasswordDialog {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  // 密码可见性
   protected readonly showPassword = signal(false);
 
-  // 表单模型（Signal Forms）
   private readonly formModel = signal({ password: '' });
 
   readonly resetForm = form(this.formModel, (path) => {

@@ -4,9 +4,8 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// 在宿主库与每个独立库里各执行一次同一段逻辑，逐库隔离失败。
 /// </summary>
 /// <remarks>
-/// <para>封装"取物理库清单 → 切到代表租户的上下文 → 执行 → 记录失败、继续下一个库"。回调运行时租户上下文已切好，
-/// 需要事务时在回调里 <c>Begin(requiresNew: true)</c>、经 <c>IDbContextProvider</c> 取上下文，顺序自然正确；
-/// 执行器不替回调开工作单元，批量任务可以一批一个事务。</para>
+/// <para>回调运行时已切到该库的代表租户上下文。执行器不开工作单元：需要事务时在回调里
+/// <c>Begin(requiresNew: true)</c> 后经 <c>IDbContextProvider</c> 取上下文。</para>
 /// <para>一个库失败只记日志并计入结果，其余库照常执行；调用方取消时停止并抛出。</para>
 /// </remarks>
 /// <example>

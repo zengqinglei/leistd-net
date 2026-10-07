@@ -1,10 +1,6 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
-#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Errors;
-#endif
 using Leistd.ExceptionHandling.Options;
-using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.Api.Hosting.ExceptionMappings;
 
@@ -27,8 +23,7 @@ internal static class AuthExceptionMappings
             AuthErrorCodes.EmailAlreadyVerified,
 #endif
             AuthErrorCodes.TwoFactorAlreadyEnabled,
-            AuthErrorCodes.TwoFactorNotEnabled,
-            AuthErrorCodes.EmailAlreadyUsed);
+            AuthErrorCodes.TwoFactorNotEnabled);
 #if (Email)
         options.MapCode(AuthErrorCodes.EmailVerificationUnavailable, StatusCodes.Status503ServiceUnavailable);
         options.MapCode(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests);
@@ -39,7 +34,8 @@ internal static class AuthExceptionMappings
             ExternalAuthErrorCodes.AlreadyLinked,
             ExternalAuthErrorCodes.EmailOwnedByDeletedAccount,
             ExternalAuthErrorCodes.LastSignInMethod,
-            ExternalAuthErrorCodes.ProviderAlreadyLinked);
+            ExternalAuthErrorCodes.ProviderAlreadyLinked,
+            ExternalAuthErrorCodes.UsernameAllocationFailed);
         options.MapCode(ExternalAuthErrorCodes.ProviderNotConfigured, StatusCodes.Status503ServiceUnavailable);
 #endif
     }

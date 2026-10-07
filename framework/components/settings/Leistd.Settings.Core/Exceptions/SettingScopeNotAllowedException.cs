@@ -4,12 +4,8 @@ using Leistd.Settings.Errors;
 
 namespace Leistd.Settings.Exceptions;
 
-/// <summary>
-/// 表示把设置写入了它的定义未允许的层级。
-/// </summary>
-/// <remarks>
-/// 由写入方校验设置定义允许的层级。错误码为 <see cref="SettingErrorCodes.ScopeNotAllowed"/>。
-/// </remarks>
+/// <summary>把设置写入了定义未允许的层级。</summary>
+/// <remarks>错误码为 <see cref="SettingErrorCodes.ScopeNotAllowed"/>。</remarks>
 public class SettingScopeNotAllowedException : BusinessException
 {
     /// <summary>以设置名与层级构造。</summary>

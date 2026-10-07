@@ -89,15 +89,32 @@ public class PermissionDefinitionManagerTests
     {
         // 含 '|' 的权限名会在策略解析时被拆开，每段都找不到定义，
         // 最终以"策略不存在"的形式失败——在定义阶段就拒绝，别把问题推到运行时。
-        var exception = Assert.Throws<InvalidOperationException>(
+        var exception = Assert.Throws<ArgumentException>(
             () => TestPermissionDefinitions.CreateManager(new SeparatorInNameProvider()).GetAll().ToList());
 
         Assert.Contains(PermissionPolicyNames.AnyOfSeparator, exception.Message);
+        Assert.Equal("permission", exception.ParamName);
     }
 
     private sealed class SeparatorInNameProvider : IPermissionDefinitionProvider
     {
         public void Define(IPermissionDefinitionContext context)
             => context.GetOrAddGroup("App", "应用").AddPermission("App.A|App.B", MultiTenancySides.Both, "非法名");
+    }
+
+    // 子权限与顶层权限走同一登记入口，同样在定义阶段拒绝
+    [Fact]
+    public void Child_permission_names_cannot_contain_the_any_of_separator()
+    {
+        var exception = Assert.Throws<ArgumentException>(
+            () => TestPermissionDefinitions.CreateManager(new SeparatorInChildNameProvider()).GetAll().ToList());
+
+        Assert.Contains(PermissionPolicyNames.AnyOfSeparator, exception.Message);
+    }
+
+    private sealed class SeparatorInChildNameProvider : IPermissionDefinitionProvider
+    {
+        public void Define(IPermissionDefinitionContext context)
+            => context.GetOrAddGroup("App", "应用").AddPermission("App.Orders", MultiTenancySides.Both).AddChild("App.Orders.A|B");
     }
 }

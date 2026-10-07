@@ -56,8 +56,7 @@ public class CaptchaAppService(
     /// get-and-delete，"读出来再删掉"之间存在窗口：同一个 token 并发提交时两个请求
     /// 都会读到验证码、都判定通过，于是"一次性挑战"只是名义上的一次——
     /// 解一次验证码就能并发提交任意多次注册，正是验证码要挡的那件事。
-    /// 锁形态与 <see cref="EmailVerificationAppService"/> 一致：模板已装分布式锁，
-    /// 不为此另建验证码专用存储或 Redis 脚本。
+    /// 临界区用模板已装的分布式锁，不为此另建验证码专用存储或 Redis 脚本。
     /// </remarks>
     public async Task<bool> ValidateCaptchaAsync(string token, string code, CancellationToken cancellationToken = default)
     {

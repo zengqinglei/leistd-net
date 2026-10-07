@@ -1,5 +1,5 @@
 import { ROLES } from './authorization';
-import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
+import { UserManagementOutputDto } from '../../src/app/features/platform/dtos/user-management.dto';
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
 
 export interface MockUser {
@@ -17,6 +17,12 @@ export interface MockUser {
   lastLoginTime?: string;
   /** 登录锁定：有值即锁定中；null 表示无期限（管理员锁定）。 */
   lockoutEnd?: string | null;
+  //#if (LocalIdentity)
+  /** 已启用两步验证；登录第二步、管理员重置都读写这一项。 */
+  twoFactorEnabled?: boolean;
+  /** 尚未用过的恢复码，个数即"剩余恢复码"。 */
+  recoveryCodes?: string[];
+  //#endif
   roles: string[];
 }
 
@@ -50,6 +56,29 @@ export const USERS: MockUser[] = [
     roles: ['Member'],
   },
 ];
+//#if (LocalIdentity)
+
+/**
+ * 已删除的用户：不出现在任何列表与查询里，但仍占着用户名和邮箱。
+ * 与后端一致：唯一索引不排除软删除行，查重关掉了软删除过滤。
+ */
+export const DELETED_USERS: MockUser[] = [];
+
+/** 用户名是否已被占用（含已删除用户），按唯一索引原样比较。 */
+export function isUsernameTaken(username: string, excludeUserId?: string): boolean {
+  return [...USERS, ...DELETED_USERS].some(
+    (user) => user.username === username && user.id !== excludeUserId,
+  );
+}
+
+/** 邮箱是否已被占用（含已删除用户），按唯一索引原样比较，只差大小写的是另一个地址。 */
+export function isEmailTaken(email: string, excludeUserId?: string): boolean {
+  return [...USERS, ...DELETED_USERS].some(
+    (user) => user.email === email && user.id !== excludeUserId,
+  );
+}
+//#endif
+
 export function toUserOutput(user: MockUser): UserOutputDto {
   return {
     id: user.id,
@@ -96,6 +125,7 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
       user.lockoutEnd === null ||
       (user.lockoutEnd !== undefined && new Date(user.lockoutEnd).getTime() > Date.now()),
     lockoutEnd: user.lockoutEnd ?? null,
+    isTwoFactorEnabled: user.twoFactorEnabled === true,
     //#endif
   };
 }

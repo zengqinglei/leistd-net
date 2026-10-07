@@ -19,7 +19,7 @@ import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import { DeviceKind, describeUserAgent } from '../../../../shared/utils/user-agent';
-import { UserSessionOutputDto } from '../../models/account.dto';
+import { UserSessionOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 
 const DEVICE_ICONS: Record<DeviceKind, string> = {

@@ -11,15 +11,12 @@ using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 using Npgsql;
-using Leistd.Authorization;
 using Leistd.Authorization.Errors;
-using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.MultiTenancy;
-using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -38,15 +35,17 @@ using Leistd.Notifications.EntityFrameworkCore.Entities;
 #endif
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.Data.Paging;
+#if (ExternalLogin)
 using Leistd.Timing;
+#endif
 using Leistd.UnitOfWork;
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -199,8 +198,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.True(tenantAdmin.CanBeDisabled());
             Assert.True(tenantAdmin.CanBeDeleted());
 
-            var userRoles = scope.ServiceProvider.GetRequiredService<IRepository<UserRole, Guid>>();
-            Assert.True(await userRoles.AnyAsync(ur => ur.UserId == tenantAdmin.Id));
+            var withRoles = await scope.ServiceProvider.GetRequiredService<IUserRepository>().GetWithRolesAsync(tenantAdmin.Id);
+            Assert.NotEmpty(withRoles!.GetRoleIds());
         }
     }
 
@@ -233,7 +232,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         using var scope = _factory.Services.CreateScope();
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
         var users = scope.ServiceProvider
-            .GetRequiredService<CompanyName.ProjectName.Domain.Users.DomainServices.UserDomainService>();
+            .GetRequiredService<UserDomainService>();
 
         using (currentTenant.Change(tenantId))
         {

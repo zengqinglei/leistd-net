@@ -6,7 +6,7 @@ namespace Leistd.MultiTenancy.Management.Events;
 /// 租户经管理用例被创建、更新、启停或删除。
 /// </summary>
 /// <remarks>
-/// 在各步写入都已提交后发布：创建失败并已补偿时不会发布，宿主据此记审计不会留下"记了但没发生"的假账。
+/// 在各步写入都已提交后发布；创建失败并已补偿时不发布。
 /// </remarks>
 /// <param name="tenantId">租户标识。</param>
 /// <param name="displayName">显示名快照（没有显示名时为名称）；删除时取删除前的值，取不到为 <see langword="null"/>。</param>

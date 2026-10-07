@@ -4,9 +4,9 @@ import { Router, isActive } from '@angular/router';
 import { translateObjectSignal, translateSignal } from '@jsverse/transloco';
 //#endif
 
-import { LayoutService } from './layout-service';
 import { AuthorizationService } from '../../core/services/authorization-service';
-import { PERMISSIONS } from '../../shared/models/permission';
+import { LayoutService } from '../../core/services/layout-service';
+import { PERMISSIONS } from '../../shared/constants/permission.constants';
 
 //#if (IncludeLocalization)
 /** 本地化形态下菜单项的 label 是这个前缀下的词条键。 */
@@ -22,7 +22,7 @@ export interface MenuItem {
 }
 
 export interface MenuGroup {
-  /** 分组标题，必填：没有标题的组就是变相的兜底组（见 docs/standards/coding-frontend.md §8）。 */
+  /** 分组标题，必填：没有标题的组就是变相的兜底组（见 docs/standards/frontend-ui.md「导航与菜单分组」）。 */
   label: string;
   items: MenuItem[];
   /**
@@ -32,18 +32,10 @@ export interface MenuGroup {
   placement?: 'start' | 'end';
 }
 
-/*
- * 下面两套菜单是这个系统的**信息架构**，不是控件清单。
- *
- * 分组判据（工作 / 业务 / 系统 / 开发者 / 运维 各放什么，以及"不设兜底组"等规则）
- * 只写在 docs/standards/coding-frontend.md §8 一处——新增入口先去那张表里找落位，
- * 落不进就在那里新开一类。判据在这里再抄一份，改的时候必然只改一边。
- * 侧栏与工作空间顶栏共用这一份；分组骨架由 default-sidebar.spec.ts 钉住。
- */
-
 /**
- * 两个区的菜单与区域切换：侧栏（管理平台）与顶栏（工作空间）读同一份，
- * 换布局不会分叉出第二套信息架构。
+ * 两个区的菜单与区域切换：侧栏（管理平台）与顶栏（工作空间）读同一份信息架构。分组判据只写在
+ * docs/standards/frontend-ui.md「导航与菜单分组」，新增入口先在那里找落位；分组骨架由
+ * default-sidebar.spec.ts 钉住。
  */
 @Injectable({ providedIn: 'root' })
 export class NavigationService {
@@ -117,8 +109,7 @@ export class NavigationService {
       ],
     },
     //#endif
-    // 系统设置是本租户（或宿主）的默认值与策略，按 App.Settings 裁剪；
-    // 个人设置不在这里，在工作空间的「个人」组——两者作用域不同，混在一处容易把私人偏好当成全租户默认值改。
+    // 系统设置是本租户（或宿主）的默认值与策略，按 App.Settings 裁剪；个人设置在工作空间的「个人」组。
     {
       label: 'layout.sidebar.groupSystem',
       items: [
@@ -240,12 +231,7 @@ export class NavigationService {
   ];
   //#endif
 
-  /**
-   * 可去的区域。
-   *
-   * 只有一个可去区域时（无平台权限的普通用户），品牌块退回普通链接——
-   * 给一个只有当前项的下拉，点开只会让人以为坏了。
-   */
+  /** 可去的区域；只有一个时（无平台权限）品牌块退回普通链接，不给只有当前项的下拉。 */
   readonly areaOptions = computed(() => {
     const isPlatform = this.layoutService.isPlatform();
     const areas = [
@@ -310,11 +296,7 @@ export class NavigationService {
       .filter((group) => group.items.length > 0);
   });
 
-  /**
-   * 菜单可见性只按权限判断。
-   *
-   * 超级管理员旁路已体现在下发的权限集合中，前端不另建身份判据。
-   */
+  /** 菜单可见性只按权限判断；超级管理员旁路已体现在下发的权限集合中。 */
   private isItemVisible(item: MenuItem): boolean {
     return !item.permissions?.length || this.authorizationService.hasAny(...item.permissions);
   }

@@ -174,8 +174,8 @@ public sealed class ServiceClientExceptionMappingsTests
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
-    // N9 的回归守卫：这条映射曾经要宿主在自己的 ExceptionMappings 里手写一行，
-    // 漏了不会有编译或启动错误，只会让 502/503/504 静默变成 500。现在注册客户端即登记，
+    // 映射在注册客户端时登记：若要宿主在自己的 ExceptionMappings 里手写一行，
+    // 漏了不会有编译或启动错误，只会让 502/503/504 静默变成 500。
     // 所以这里**故意不传** ServiceClientExceptionMappings.Configure。
     [Fact]
     public async Task Client_registration_applies_the_defaults_without_host_wiring()

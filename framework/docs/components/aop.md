@@ -10,7 +10,7 @@
 | 一个服务上叠加多个拦截器，需控制执行先后 | 重写 `Order`（值越小越外层、越先执行） |
 | 只想使用框架已内置的拦截能力（追踪 / 工作单元） | 无需直接引用本包，改用对应组件 |
 
-> 本包只提供拦截器**基类**。把拦截器织入到具体服务上的注册与代理生成由 [依赖注入](./dependency-injection.md) 组件完成，本包不含 DI 扩展方法。
+> 本包只提供拦截器基类；织入与代理生成由[依赖注入](./dependency-injection.md)组件完成，本包不含 DI 扩展方法。
 
 ## 安装
 
@@ -73,7 +73,7 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 
 ## 接口参考
 
-`Leistd.DynamicProxy` 命名空间：
+`Leistd.DynamicProxy.Interceptors` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |
@@ -84,10 +84,10 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 
 ## 注意事项
 
-- `Order` 语义是**数值越小越先执行（越靠外层）**，可为负数。需要最先建立上下文的拦截器取较小的负值，确保位于最外层。
+- `Order` 数值越小越先执行（越靠外层），可为负数。
 - 必须重写两个 `InterceptAsync` 重载：有返回值的方法走泛型重载，无返回值的方法走非泛型重载，二者逻辑通常一致，需分别实现。
 - 不要忘记在两个重载里都调用 `proceed(invocation, proceedInfo)`；不调用则原方法不会执行。
-- 本包仅是拦截器基类，自身不会让任何服务“自动被拦截”。织入需配合 [依赖注入](./dependency-injection.md) 组件完成；类代理要求被拦截方法为 `virtual`，接口代理则无此限制。
+- 类代理要求被拦截方法为 `virtual`，接口代理无此限制。
 
 ## 相关
 

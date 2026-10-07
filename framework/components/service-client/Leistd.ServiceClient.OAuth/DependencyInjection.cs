@@ -14,12 +14,27 @@ public static class DependencyInjection
     internal const string RegistrationId = "Leistd.ServiceClient";
 
     /// <summary>绑定工作负载身份，启用官方发现与客户端认证；令牌不进入官方数据库存储。</summary>
+    /// <remarks>
+    /// 本服务只有一个工作负载身份：以相同 <paramref name="configSectionPath"/> 重复调用只追加 <paramref name="configure"/>，
+    /// 不重复登记验证器与官方客户端处理器；换用另一配置节时抛出 <see cref="InvalidOperationException"/>。
+    /// </remarks>
     public static IServiceCollection AddServiceAuthentication(this IServiceCollection services,
         Action<ServiceAuthenticationOptions>? configure = null,
         string configSectionPath = ServiceAuthenticationOptions.SectionName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
-        var options = services.AddOptions<ServiceAuthenticationOptions>().BindConfiguration(configSectionPath);
+        var options = services.AddOptions<ServiceAuthenticationOptions>();
+        if (services.Select(descriptor => descriptor.ImplementationInstance).OfType<ServiceAuthenticationOptionsValidator>().FirstOrDefault()
+            is { } registered)
+        {
+            if (registered.ConfigSectionPath != configSectionPath)
+                throw new InvalidOperationException(
+                    $"Service authentication is already bound to '{registered.ConfigSectionPath}'; it cannot also bind '{configSectionPath}'.");
+            if (configure is not null) options.Configure(configure);
+            return services;
+        }
+
+        options.BindConfiguration(configSectionPath);
         if (configure is not null) options.Configure(configure);
         services.AddSingleton<IValidateOptions<ServiceAuthenticationOptions>>(new ServiceAuthenticationOptionsValidator(configSectionPath));
         options.ValidateOnStart();
@@ -46,12 +61,22 @@ public static class DependencyInjection
     }
 
     /// <summary>为命名客户端追加机器认证；默认绑定 Leistd:ServiceClients:{Name}。</summary>
+    /// <remarks>
+    /// 每个命名客户端只有一种认证方式：以相同配置节重复调用只追加 <paramref name="configure"/>，不重复挂处理器；
+    /// 换用另一配置节或该客户端已挂 Token Exchange 时抛出 <see cref="InvalidOperationException"/>。
+    /// </remarks>
     public static IHttpClientBuilder AddClientCredentials(this IHttpClientBuilder builder,
         Action<ClientCredentialsOptions>? configure = null, string? configSectionPath = null)
     {
-        RegisterAuthentication(builder);
         var path = configSectionPath ?? $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{builder.Name}";
-        var options = builder.Services.AddOptions<ClientCredentialsOptions>(builder.Name).BindConfiguration(path);
+        var options = builder.Services.AddOptions<ClientCredentialsOptions>(builder.Name);
+        if (!RegisterAuthentication(builder, nameof(AddClientCredentials), path))
+        {
+            if (configure is not null) options.Configure(configure);
+            return builder;
+        }
+
+        options.BindConfiguration(path);
         if (configure is not null) options.Configure(configure);
         options.ValidateOnStart();
         return builder.AddHttpMessageHandler(provider => new ClientCredentialsDelegatingHandler(builder.Name,
@@ -61,12 +86,22 @@ public static class DependencyInjection
     }
 
     /// <summary>追加单跳 Token Exchange；没有已验证的用户令牌时拒绝调用，不回退为机器身份。</summary>
+    /// <remarks>
+    /// 每个命名客户端只有一种认证方式：以相同配置节重复调用只追加 <paramref name="configure"/>，不重复挂处理器与验证器；
+    /// 换用另一配置节或该客户端已挂机器认证时抛出 <see cref="InvalidOperationException"/>。
+    /// </remarks>
     public static IHttpClientBuilder AddTokenExchange(this IHttpClientBuilder builder,
         Action<TokenExchangeOptions>? configure = null, string? configSectionPath = null)
     {
-        RegisterAuthentication(builder);
         var path = configSectionPath ?? $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{builder.Name}:TokenExchange";
-        var options = builder.Services.AddOptions<TokenExchangeOptions>(builder.Name).BindConfiguration(path);
+        var options = builder.Services.AddOptions<TokenExchangeOptions>(builder.Name);
+        if (!RegisterAuthentication(builder, nameof(AddTokenExchange), path))
+        {
+            if (configure is not null) options.Configure(configure);
+            return builder;
+        }
+
+        options.BindConfiguration(path);
         if (configure is not null) options.Configure(configure);
         builder.Services.AddSingleton<IValidateOptions<TokenExchangeOptions>>(new TokenExchangeOptionsValidator(builder.Name, path));
         options.ValidateOnStart();
@@ -77,12 +112,24 @@ public static class DependencyInjection
             provider.GetRequiredService<IUserAccessTokenAccessor>()));
     }
 
-    private sealed record AuthenticationMode(string Name);
-    private static void RegisterAuthentication(IHttpClientBuilder builder)
+    private sealed record AuthenticationMode(string Name, string Kind, string ConfigSectionPath);
+
+    // 首次登记返回 true；相同登记的重复调用返回 false，由调用方跳过处理器与验证器。
+    private static bool RegisterAuthentication(IHttpClientBuilder builder, string kind, string configSectionPath)
     {
-        if (builder.Services.Any(descriptor => descriptor.ImplementationInstance is AuthenticationMode existing && existing.Name == builder.Name))
-            throw new InvalidOperationException($"Service client '{builder.Name}' already has an authentication handler.");
-        builder.Services.AddSingleton(new AuthenticationMode(builder.Name));
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+        var mode = new AuthenticationMode(builder.Name, kind, configSectionPath);
+        if (builder.Services.Select(descriptor => descriptor.ImplementationInstance).OfType<AuthenticationMode>()
+                .FirstOrDefault(existing => existing.Name == builder.Name) is { } registered)
+        {
+            if (registered == mode) return false;
+            throw new InvalidOperationException(
+                $"Service client '{builder.Name}' already has an authentication handler ({registered.Kind}, section " +
+                $"'{registered.ConfigSectionPath}'); it cannot also use {kind} with section '{configSectionPath}'.");
+        }
+
+        builder.Services.AddSingleton(mode);
+        return true;
     }
 
 }

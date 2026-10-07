@@ -12,6 +12,7 @@ using Xunit;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Time.Testing;
+using Leistd.AspNetCore.SignalR.Tests.TestDoubles;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 

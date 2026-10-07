@@ -35,6 +35,8 @@ builder.Services.AddMapsterObjectMapper(options =>
 映射配置用 Mapster 官方的 `IRegister` 书写，`config.Scan(...)` 把程序集里的注册类登记到组件自己的 `TypeAdapterConfig`：
 
 ```csharp
+using Mapster;
+
 public class OrderMappings : IRegister
 {
     public void Register(TypeAdapterConfig config) =>
@@ -65,7 +67,7 @@ public class OrderMapping(IObjectMapper mapper)
 
 批量映射 `MapList` 是 `Leistd.ObjectMapping.Extensions` 命名空间下的扩展方法，需 `using Leistd.ObjectMapping.Extensions;`。
 
-需要把"只查目标字段"下推到数据库时，**写显式 `Select`，不要走映射库**：
+需要把“只查目标字段”下推到数据库时，写显式 `Select`，不要走映射库：
 
 ```csharp
 IQueryable<OrderDto> query = orders
@@ -80,7 +82,7 @@ IQueryable<OrderDto> query = orders
 - 业务服务只注入 `IObjectMapper`。
 - 能按名称约定映射的不写配置；只为不同名、需计算或需忽略的成员写 `IRegister`。
 - 复杂转换（跨多个来源、带业务判断）写普通方法，不塞进映射表达式。
-- 配置里的嵌套映射交给 Mapster：目标成员直接映射源集合或对象即可，它按同一份配置递归完成。**不要在配置里调用无参 `Adapt<T>()`**——它用的是 `TypeAdapterConfig.GlobalSettings`，组件登记的规则在那里不存在，会静默失效。
+- 配置里的嵌套映射交给 Mapster 按同一份配置递归完成。不要在配置里调用无参 `Adapt<T>()`：它用 `TypeAdapterConfig.GlobalSettings`，组件登记的规则在那里静默失效。
 
 ## 接口参考
 

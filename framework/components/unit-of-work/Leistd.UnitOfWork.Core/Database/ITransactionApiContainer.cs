@@ -1,8 +1,6 @@
 namespace Leistd.UnitOfWork.Database;
 
-/// <summary>
-/// 管理挂在同一个工作单元上的事务 API。
-/// </summary>
+/// <summary>管理挂在同一个工作单元上的事务 API。</summary>
 public interface ITransactionApiContainer
 {
     /// <summary>按稳定键查找事务 API；不存在返回 <see langword="null"/>。</summary>

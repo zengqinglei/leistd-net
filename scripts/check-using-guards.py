@@ -15,6 +15,10 @@
    而其它闸门都看不见畸形 XML。
 5. **无仅含空行的条件块**：裁剪后留下的空块会被 prettier/lint 判为格式问题。
 
+using 别名同样适用两个方向：别名名本身按"类型名"要求被用法蕴含，别名目标的命名空间不得窄于别名守卫。
+识别用法时剥掉字符串字面量，跳过本文件声明的同名方法与匿名对象成员名。
+判据自检：`python3 scripts/check-using-guards.py --self-test`。
+
 判定在**全部符号取值组合**上求值，而不是靠人工维护蕴含关系表；因此比只编译
 9 个场景的矩阵更严，能覆盖矩阵没排到的组合。
 """
@@ -31,6 +35,42 @@ DIR_RE = re.compile(r'^\s*#(if|elif|else|endif)\b\s*(?:\(\s*(.*?)\s*\))?\s*$')
 NS_RE = re.compile(r'^\s*namespace\s+([\w.]+)', re.M)
 USING_RE = re.compile(r'^\s*using\s+(?!static)([\w.]+)\s*;')
 DECL_RE = re.compile(r'\b(?:class|interface|record|struct|enum)\s+([A-Z]\w*)')
+# `using 别名 = 命名空间.类型;` 或 `using 别名 = 命名空间;`
+ALIAS_RE = re.compile(r'^\s*using\s+(\w+)\s*=\s*([\w.]+)\s*;')
+# 本文件声明的方法：与外部类型同名时（如 Groups()），调用处不是类型引用
+METHOD_DECL_RE = re.compile(
+    r'^\s*(?:(?:public|private|protected|internal|static|async|override|virtual|sealed|abstract|partial|new)\s+)+'
+    r'[\w<>\[\],.?]+(?:\s*<[^>]*>)?\s+([A-Z]\w*)\s*[(<]', re.M)
+# 普通与逐字字符串字面量；插值字符串的花括号里是代码，保留不剥
+STRING_RE = re.compile(r'(?<![$\w])@?"(?:\\.|""|[^"\\\n])*"')
+
+
+def code_without_strings(line):
+    """去掉字符串字面量，`"Logging.MinimumLevel"` 这类文本不算类型引用。"""
+    return STRING_RE.sub('""', line)
+
+
+def local_names(text):
+    """本文件声明的类型与方法名：同名的外部类型在本文件里不靠 using 解析。"""
+    return set(DECL_RE.findall(text)) | set(METHOD_DECL_RE.findall(text))
+
+
+def referenced_type(line, types, local):
+    """该行引用到的第一个外部类型名；没有返回 None。"""
+    code = code_without_strings(line)
+    return next((t for t in types
+                 if t not in local
+                 # 后跟单个 `=` 的是成员名（匿名对象、对象初始化器），类型名后面不会直接出现赋值
+                 if re.search(r'(?<![\w.])' + re.escape(t) + r'(?![\w])(?!\s*=[^=>])', code)), None)
+
+
+def alias_target_namespaces(line):
+    """别名 using 指向的命名空间候选：目标本身是命名空间，或目标是类型时取其所在命名空间。"""
+    m = ALIAS_RE.match(line)
+    if not m:
+        return None
+    target = m.group(2)
+    return [target] + ([target.rsplit('.', 1)[0]] if '.' in target else [])
 
 
 def load_exclusions():
@@ -363,6 +403,8 @@ def main():
 
     ns_types = collections.defaultdict(set)
     ns_guards = collections.defaultdict(list)
+    # 类型的存在条件（别名指向具体类型时用）：命名空间在、类型却被裁掉，生成后报 CS0234
+    type_guards = collections.defaultdict(list)
     for p in files:
         txt = io.open(p, encoding='utf-8', errors='replace').read()
         m = NS_RE.search(txt)
@@ -375,6 +417,12 @@ def main():
         # 按首行判断会把这类文件整个误判成条件生成，从而报出大量假阳性。
         decl_lines = txt.split('\n')
         decl_guards = guard_map(decl_lines)
+        rel_decl = os.path.relpath(p, os.path.join(ROOT, 'template')).replace(os.sep, '/')
+        for line_no, line in enumerate(decl_lines, 1):
+            if (d := DECL_RE.search(line)) and not line.strip().startswith(('//', '///', '*')):
+                stack = decl_guards[line_no]
+                type_guards[f'{m.group(1)}.{d.group(1)}'].append(
+                    (rel_decl, ' && '.join(stack) if stack else None))
         for line_no, line in enumerate(decl_lines, 1):
             if DECL_RE.search(line) and not line.strip().startswith(('//', '///', '*')):
                 stack = decl_guards[line_no]
@@ -398,25 +446,25 @@ def main():
     for p in files:
         lines = io.open(p, encoding='utf-8', errors='replace').read().split('\n')
         gm = guard_map(lines)
-        local_types = set(DECL_RE.findall('\n'.join(lines)))
-        usings = [(i, m.group(1)) for i, l in enumerate(lines, 1)
+        local_types = local_names('\n'.join(lines))
+        usings = [(i, m.group(1), ns_types.get(m.group(1))) for i, l in enumerate(lines, 1)
                   if (m := USING_RE.match(l)) and gm[i]]
+        # 受守卫的别名：别名本身就是要被用法蕴含的"类型名"
+        usings += [(i, m.group(2), {m.group(1)}) for i, l in enumerate(lines, 1)
+                   if (m := ALIAS_RE.match(l)) and gm[i]]
         if not usings:
             continue
-        for i, ns in usings:
-            types = ns_types.get(ns)
+        for i, ns, types in usings:
             if not types:
                 continue                       # 外部/框架命名空间，不在本仓库内
             S = gm[i]
             for j, l2 in enumerate(lines, 1):
-                if j == i or USING_RE.match(l2) or DIR_RE.match(l2):
+                if j == i or USING_RE.match(l2) or ALIAS_RE.match(l2) or DIR_RE.match(l2):
                     continue
                 st = l2.strip()
                 if st.startswith(('//', '///', '*', '/*')):
                     continue
-                hit = next((t for t in types
-                            if t not in local_types
-                            if re.search(r'(?<![\w.])' + re.escape(t) + r'(?![\w])', l2)), None)
+                hit = referenced_type(l2, types, local_types)
                 if not hit:
                     continue
                 U = gm[j]
@@ -436,9 +484,13 @@ def main():
         source_guards = guard_map(lines)
         for i, line in enumerate(lines, 1):
             m = USING_RE.match(line)
-            if not m:
+            targets = [m.group(1)] if m else alias_target_namespaces(line)
+            if not targets:
                 continue
-            declared = ns_guards.get(m.group(1))
+            # 别名的目标可能是类型或命名空间：类型优先按它自己的声明处判定
+            target = next((ns for ns in targets if ns in type_guards or ns in ns_guards), None)
+            declared = type_guards.get(target) if not m else None
+            declared = declared or ns_guards.get(target)
             if not declared:
                 continue
 
@@ -457,7 +509,7 @@ def main():
                         and conj(using_guard, env) is not False
                         and not namespace_available(env)), None)
             if bad:
-                print(f'❌ {os.path.relpath(source, ROOT)}:{i} using {m.group(1)}')
+                print(f'❌ {os.path.relpath(source, ROOT)}:{i} using {target}')
                 where = " || ".join(g or f'{d}（无条件声明但按场景排除）'
                                     for d, g in declared)
                 print(f'   该命名空间只在 {where} 下存在，'
@@ -488,5 +540,52 @@ def main():
     return 1
 
 
+def self_test():
+    """用法识别与别名解析的判据自检：合法、违规与例外各至少一例。"""
+    types = {'UserRole', 'Groups', 'Logging', 'Email', 'Permission'}
+    local = local_names('    private IReadOnlyList<IPermissionGroupDefinition> Groups()\n'
+                        '        => manager.GetGroups();\n')
+    cases = [
+        # 违规：真实的类型引用必须识别出来
+        ('variable declaration', 'var role = new UserRole(id);', 'UserRole'),
+        ('static member access', 'if (Permission.Users.Default == name)', 'Permission'),
+        ('generic argument', 'GetRequiredService<IRepository<UserRole, Guid>>()', 'UserRole'),
+        ('attribute', '[Logging(Level = 1)]', 'Logging'),
+        ('interpolated string keeps code', '$"{Permission.Users.Default}"', 'Permission'),
+        ('alias name is a type', 'var x = new ProjectOAuthOptions();', 'ProjectOAuthOptions'),
+        # 例外：不是类型引用
+        ('string literal', 'new { Name = "Logging.MinimumLevel" }', None),
+        ('verbatim string literal', 'var s = @"Permission.Users";', None),
+        ('locally declared method', 'foreach (var group in Groups())', None),
+        ('anonymous object member', 'new { Username = "", Email = "x" }', None),
+        ('member access is qualified', 'options.Email.Enabled', None),
+    ]
+    failures = []
+    for name, line, expected in cases:
+        candidates = {'ProjectOAuthOptions'} if expected == 'ProjectOAuthOptions' else types
+        actual = referenced_type(line, candidates, local)
+        if actual != expected:
+            failures.append(f'{name}: expected {expected!r}, got {actual!r}')
+    aliases = [
+        ('type alias', 'using Role = CompanyName.ProjectName.Domain.Users.Entities.Role;',
+         ['CompanyName.ProjectName.Domain.Users.Entities.Role', 'CompanyName.ProjectName.Domain.Users.Entities']),
+        ('namespace alias', 'using Entities = CompanyName.ProjectName.Domain.Users.Entities;',
+         ['CompanyName.ProjectName.Domain.Users.Entities', 'CompanyName.ProjectName.Domain.Users']),
+        ('plain using is not an alias', 'using CompanyName.ProjectName.Domain.Users.Entities;', None),
+        ('static using is not an alias', 'using static OpenIddict.Abstractions.OpenIddictConstants;', None),
+    ]
+    for name, line, expected in aliases:
+        actual = alias_target_namespaces(line)
+        if actual != expected:
+            failures.append(f'{name}: expected {expected!r}, got {actual!r}')
+    if failures:
+        print('FAIL: check-using-guards self-test')
+        for failure in failures:
+            print(f'  - {failure}')
+        return 1
+    print(f'PASS: check-using-guards self-test ({len(cases)} usage cases, {len(aliases)} alias cases)')
+    return 0
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(self_test() if '--self-test' in sys.argv[1:] else main())

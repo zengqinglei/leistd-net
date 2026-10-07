@@ -8,7 +8,7 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-import { LayoutService } from '../../services/layout-service';
+import { LayoutService } from '../../../core/services/layout-service';
 
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以按**键**断言：改一句中文不该让这组用例变红。
@@ -24,21 +24,13 @@ const LOGOUT = 'Sign out';
 //#endif
 
 /**
- * 头像菜单的构成。
- *
- * 这里钉住的是两条决定，它们改错了都不报错：
- * 1. **个人设置在这儿有一个入口**，管理平台上也能直达（侧栏只在工作空间放它，
- *    管理人员不回工作空间就只能靠这里）。
- * 2. **没有「切换租户」**。理由见 `docs/standards/coding-frontend.md` §8：会话租户由
- *    cookie claim 定案，换租户只能重新登录。所以用例按**完整序列**断言而不是逐项存在，
- *    多出一项就会红。
+ * 头像菜单的构成按完整序列断言：个人设置在这里有入口（管理平台也能直达），且没有「切换租户」
+ * （见 docs/standards/frontend-ui.md「导航与菜单分组」）。
  */
 describe('UserMenu items', () => {
   /**
-   * `platform`（此刻在哪个区）与 `canAccessPlatform`（有没有权限进管理侧）是两个独立输入。
-   *
-   * 把它们绑成同一个布尔值，就漏掉了最常见的那个状态：管理员待在工作空间。
-   * 而"回管理平台"这个入口只在那个状态下出现——绑在一起时，整段删掉用例也不会红。
+   * `platform`（当前所在区）与 `canAccessPlatform`（能否进管理侧）是独立输入：
+   * "回管理平台"只在管理员待在工作空间时出现。
    */
   function build(options: { platform: boolean; canAccessPlatform?: boolean }): UserMenu {
     TestBed.configureTestingModule({

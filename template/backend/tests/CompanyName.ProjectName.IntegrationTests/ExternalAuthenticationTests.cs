@@ -4,14 +4,22 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using CompanyName.ProjectName.Api.Auth;
-using Microsoft.AspNetCore.Authentication.OAuth;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
+using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-#if (IncludeMultiTenancy)
+using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
+using Leistd.Timing;
+using Microsoft.Extensions.Logging;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+#if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.UnitOfWork;
@@ -24,6 +32,16 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using CompanyName.ProjectName.Application.Shared;
+#if (OpenIddictServer)
+using OpenIddict.Abstractions;
+// 与 Microsoft.AspNetCore.Authentication.OAuth.OAuthOptions 同名，用别名指定项目自己的选项
+using ProjectOAuthOptions = CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions;
+#endif
+#if (OpenIddictServer)
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -224,6 +242,31 @@ public sealed class ExternalAuthenticationTests
         copy.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
         using var replay = await copy.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
         Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+    }
+
+    [Fact]
+    public async Task Concurrent_completions_of_one_external_ticket_succeed_only_once()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel();
+        using var host = backchannel.CreateHost(factory);
+        using var starter = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var flow = await ExternalOAuthBackchannel.StartAsync(starter);
+        var clients = Enumerable.Range(0, 4).Select(_ =>
+        {
+            var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+            client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
+            return client;
+        }).ToList();
+
+        var responses = await Task.WhenAll(clients.Select(client =>
+            client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { })));
+
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.All(responses.Where(response => response.StatusCode != HttpStatusCode.OK),
+            response => Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode));
+        foreach (var response in responses) response.Dispose();
+        foreach (var client in clients) client.Dispose();
     }
 
     [Fact]
@@ -430,11 +473,14 @@ public sealed class ExternalAuthenticationTests
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         var challenge = await ExternalOAuthBackchannel.StartAsync(client);
         client.DefaultRequestHeaders.Add("Cookie", challenge.Cookie);
-        var callback = await client.PostAsJsonAsync(
+        using var callback = await client.PostAsJsonAsync(
             "/api/v1/external-auth/github/complete",
             new { });
 
         Assert.Equal(HttpStatusCode.Unauthorized, callback.StatusCode);
+        // 票据在账号政策之前已被消费：被拒之后同一张票据不能再提交
+        using var retry = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, retry.StatusCode);
     }
 
 
@@ -539,18 +585,18 @@ public sealed class ExternalAuthenticationTests
         const string clientId = "external-resource";
         const string clientSecret = "ExternalResource!Secret123";
         const string redirectUri = "https://resource.test/api/v1/auth/signin";
-        var scopeName = new CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions().Resource;
+        var scopeName = new ProjectOAuthOptions().Resource;
         using (var scope = host.Services.CreateScope())
         {
-            var applications = scope.ServiceProvider.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>();
-            var descriptor = new OpenIddict.Abstractions.OpenIddictApplicationDescriptor
+            var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            var descriptor = new OpenIddictApplicationDescriptor
             { ClientId = clientId, ClientSecret = clientSecret, ClientType = "confidential", ApplicationType = "web" };
             descriptor.RedirectUris.Add(new Uri(redirectUri));
             descriptor.Permissions.UnionWith(["ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", "scp:" + scopeName]);
             await applications.CreateAsync(descriptor);
         }
-        var verifier = System.Buffers.Text.Base64Url.EncodeToString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-        var challenge = System.Buffers.Text.Base64Url.EncodeToString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier)));
+        var verifier = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+        var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         using var browser = ProjectWebApplicationFactory.CreateProjectClient(host);
         browser.BaseAddress = new Uri("https://localhost");
         using var initial = await browser.GetCachedAsync(QueryHelpers.AddQueryString("/connect/authorize", new Dictionary<string, string?>
@@ -595,6 +641,75 @@ public sealed class ExternalAuthenticationTests
         Assert.False(string.IsNullOrEmpty((await exchanged.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("access_token").GetString()));
     }
 #endif
+
+    /// <summary>
+    /// 候选用户名全被占用时以专用码拒绝首次外部登录：不说"用户名已存在"、不回显本服务生成的用户名，也不留下半个账号。
+    /// </summary>
+    [Fact]
+    public async Task First_external_sign_in_is_refused_with_a_dedicated_code_when_no_username_can_be_allocated()
+    {
+        const string handle = "crowded";
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel
+        {
+            User = new ExternalUserInfo { ProviderId = "crowded-id", ProviderAccountLabel = handle, SuggestedUsername = handle }
+        };
+        using var host = backchannel.CreateHost(factory).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddTransient(provider => new ExternalAuthDomainService(
+                EveryUsernameTaken.Create(provider.GetRequiredService<IRepository<User, Guid>>()),
+                provider.GetRequiredService<IRepository<ExternalLoginConnection, Guid>>(),
+                provider.GetRequiredService<IDataFilter>(),
+                provider.GetRequiredService<IClock>(),
+                provider.GetRequiredService<ILogger<ExternalAuthDomainService>>()))));
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var flow = await ExternalOAuthBackchannel.StartAsync(client);
+        client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
+
+        using var complete = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+
+        Assert.Equal(HttpStatusCode.Conflict, complete.StatusCode);
+        var body = await complete.Content.ReadAsStringAsync();
+        Assert.Equal(ExternalAuthErrorCodes.UsernameAllocationFailed, JsonDocument.Parse(body).RootElement.GetProperty("code").GetString());
+        Assert.DoesNotContain(handle, body, StringComparison.OrdinalIgnoreCase);
+        Assert.False(complete.Headers.TryGetValues("Set-Cookie", out var cookies)
+            && cookies.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal)));
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        Assert.False(await db.Set<User>().IgnoreQueryFilters().AnyAsync(user => user.Username.StartsWith(handle)));
+        Assert.False(await db.Set<ExternalLoginConnection>().IgnoreQueryFilters().AnyAsync(connection => connection.ProviderUserId == "crowded-id"));
+    }
+
+    /// <summary>用户仓储的替身：查重一律答"已占用"，其余调用转给真实仓储。</summary>
+    public class EveryUsernameTaken : DispatchProxy
+    {
+        private IRepository<User, Guid> inner = null!;
+
+        public static IRepository<User, Guid> Create(IRepository<User, Guid> inner)
+        {
+            var proxy = DispatchProxy.Create<IRepository<User, Guid>, EveryUsernameTaken>();
+            ((EveryUsernameTaken)(object)proxy).inner = inner;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            ArgumentNullException.ThrowIfNull(targetMethod);
+            if (targetMethod.Name == nameof(IRepository<User, Guid>.AnyAsync)
+                && args is [Expression<Func<User, bool>>, ..])
+                return Task.FromResult(true);
+
+            try
+            {
+                return targetMethod.Invoke(inner, args);
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Throw(exception.InnerException);
+                throw;
+            }
+        }
+    }
 
     private static WebApplicationFactory<Program> CreateExternalAuthHost(ProjectWebApplicationFactory factory, ExternalUserInfo user) =>
         new ExternalOAuthBackchannel { User = user }.CreateHost(factory);

@@ -2,8 +2,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Lock.Redis.Options;
 
-// 启动期校验锁有效期与重试间隔为正，避免锁立即失效或忙轮询；键前缀不作格式限制。
-// 报错里的键名按实际绑定的配置节给出，宿主改了节路径时照提示去改才对得上
+// 启动期校验租约与重试间隔为正；键前缀不作格式限制。报错键名按实际绑定的配置节给出。
 internal sealed class RedisLockOptionsValidator(string sectionPath = RedisLockOptions.SectionName) : IValidateOptions<RedisLockOptions>
 {
     /// <inheritdoc />

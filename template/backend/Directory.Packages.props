@@ -8,8 +8,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
-  <!-- Leistd.* 框架包（NuGet 模式下使用；本地源码模式由 ProjectReference 取代）。
-       版本统一取 $(LeistdFrameworkVersion)，单点维护。 -->
+  <!-- Leistd.* 框架包，版本统一取 Directory.Build.props 的 $(LeistdFrameworkVersion)；
+       升级框架只改那一处。 -->
   <ItemGroup>
     <PackageVersion Include="Leistd.ExceptionHandling.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Data" Version="$(LeistdFrameworkVersion)" />

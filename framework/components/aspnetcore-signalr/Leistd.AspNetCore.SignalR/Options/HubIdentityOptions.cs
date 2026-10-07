@@ -1,28 +1,16 @@
-
 namespace Leistd.AspNetCore.SignalR.Options;
 
-/// <summary>
-/// Hub 连接主体的解析与有效性复检配置。
-/// </summary>
+/// <summary>Hub 连接主体的解析与有效性复检配置。</summary>
 public sealed class HubIdentityOptions
 {
-    /// <summary>
-    /// 每次 Hub 调用前复评的授权策略名；为 <see langword="null"/> 时使用宿主的默认策略。
-    /// </summary>
-    /// <remarks>
-    /// 复评的目的是让"账号被禁用/锁定"对<b>已建立的连接</b>生效。ASP.NET Core 只在
-    /// 握手那次 HTTP 请求上跑端点策略，此后连接一直有效；宿主的默认策略里通常已经
-    /// 有宿主自定义的账号有效性要求，复评即复用同一份判定，
-    /// 不引入第二处定义。
-    /// </remarks>
+    /// <summary>每次 Hub 调用前复评的授权策略名；为 <see langword="null"/> 时使用宿主的默认策略。</summary>
+    /// <remarks>ASP.NET Core 只在握手时跑端点策略；复评让账号禁用或锁定对已建立的连接生效。</remarks>
     public string? PolicyName { get; set; }
 
-    /// <summary>
-    /// 两次复评之间的最小间隔；为 <see langword="null"/>（默认）时每次调用都复评。
-    /// </summary>
+    /// <summary>两次复评之间的最小间隔；为 <see langword="null"/>（默认）时每次调用都复评。</summary>
     /// <remarks>
-    /// 默认不节流：Hub 调用频率远低于 HTTP 请求，而账号有效性判定通常是一次主键查询。
-    /// 高频 Hub（如光标同步）再按实测放宽。
+    /// <para>高频 Hub（如光标同步）按实测放宽。</para>
+    /// <para>只经代码配置（<c>AddSignalRAmbientContext</c> 的委托或 <c>services.Configure</c>），不绑定配置节。</para>
     /// </remarks>
     public TimeSpan? RevalidationInterval { get; set; }
 }

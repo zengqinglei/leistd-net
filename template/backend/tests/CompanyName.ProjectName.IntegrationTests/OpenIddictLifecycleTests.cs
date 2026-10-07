@@ -303,22 +303,22 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var tokens = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
         var authorizations = scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
         var now = DateTimeOffset.UtcNow;
-        async Task<object> Token(DateTimeOffset created, DateTimeOffset expiry) => await tokens.CreateAsync(new OpenIddictTokenDescriptor
+        async Task<object> TokenAsync(DateTimeOffset created, DateTimeOffset expiry) => await tokens.CreateAsync(new OpenIddictTokenDescriptor
         {
             Subject = Guid.NewGuid().ToString(), Type = TokenTypeHints.AccessToken, Status = Statuses.Valid,
             CreationDate = created, ExpirationDate = expiry
         });
-        var oldExpired = await Token(now.AddDays(-15), now.AddDays(-1));
-        var youngExpired = await Token(now.AddDays(-13), now.AddDays(-1));
-        var oldValid = await Token(now.AddDays(-15), now.AddDays(1));
-        async Task<object> Authorization(DateTimeOffset created, string status, string type) => await authorizations.CreateAsync(new OpenIddictAuthorizationDescriptor
+        var oldExpired = await TokenAsync(now.AddDays(-15), now.AddDays(-1));
+        var youngExpired = await TokenAsync(now.AddDays(-13), now.AddDays(-1));
+        var oldValid = await TokenAsync(now.AddDays(-15), now.AddDays(1));
+        async Task<object> AuthorizationAsync(DateTimeOffset created, string status, string type) => await authorizations.CreateAsync(new OpenIddictAuthorizationDescriptor
         {
             Subject = Guid.NewGuid().ToString(), Type = type, Status = status, CreationDate = created
         });
-        var oldRevoked = await Authorization(now.AddDays(-15), Statuses.Revoked, AuthorizationTypes.Permanent);
-        var youngRevoked = await Authorization(now.AddDays(-13), Statuses.Revoked, AuthorizationTypes.Permanent);
-        var oldPermanent = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent);
-        var oldAdHoc = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc);
+        var oldRevoked = await AuthorizationAsync(now.AddDays(-15), Statuses.Revoked, AuthorizationTypes.Permanent);
+        var youngRevoked = await AuthorizationAsync(now.AddDays(-13), Statuses.Revoked, AuthorizationTypes.Permanent);
+        var oldPermanent = await AuthorizationAsync(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent);
+        var oldAdHoc = await AuthorizationAsync(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc);
         var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
         Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
         var job = (IRecurringJob)scope.ServiceProvider.GetRequiredService(definition.JobType);

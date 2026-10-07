@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 
 namespace Leistd.Ddd.Infrastructure.Persistence.Conventions;
 
-/// <summary>
-/// 按实体实现的契约配置审计字段与并发标记列的 EF Core 模型约定。
-/// </summary>
+/// <summary>按实体实现的契约配置审计字段与并发标记列的 EF Core 模型约定。</summary>
 /// <remarks>
 /// <para>审计人字段（<c>CreatorId</c>、<c>LastModifierId</c>、<c>DeleterId</c>）限长 64；
 /// <see cref="IHasConcurrencyStamp.ConcurrencyStamp"/> 限长 40、必填并作为并发令牌。

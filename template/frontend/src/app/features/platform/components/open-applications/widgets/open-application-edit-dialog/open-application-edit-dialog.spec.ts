@@ -10,14 +10,11 @@ import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
   UpdateOpenApplicationInputDto,
-} from '../../../../models/open-application.dto';
+} from '../../../../dtos/open-application.dto';
 
 /**
- * 下拉触发器与选项文案一致性回归。
- *
- * Select 的触发器渲染的是 `itemToString(value)`，不传就退化成把值本身字符串化——
- * 下拉里写着"桌面/原生"，选完输入框里却是 `native`，同一个东西两个说法。
- * 这类不一致编译期与 lint 都发现不了，只有把选项点开、选中、再读触发器才暴露得出来。
+ * 下拉触发器与选项文案一致：不传 `itemToString` 时触发器显示原始值，只有点开、选中再读触发器
+ * 才暴露得出来。
  */
 @Component({
   imports: [OpenApplicationEditDialog],
@@ -120,6 +117,26 @@ describe('OpenApplicationEditDialog', () => {
     document.getElementById('application-session-bound')!.click();
     await fixture.whenStable();
   }
+
+  // 开关的标签经 for 关联到开关本身（点标签即切换、读屏读出名称），说明与它同属一个字段
+  it('labels and describes the session binding switch', () => {
+    const label = document.querySelector('label[for="application-session-bound"]');
+    expect(label).not.toBeNull();
+    const field = label!.closest('[hlmField]')!;
+    expect(field.contains(document.getElementById('application-session-bound'))).toBe(true);
+
+    const description = field.querySelector('[hlmFieldDescription]')?.textContent?.trim();
+    //#if (IncludeLocalization)
+    // 测试不装词条，缺失的键原样渲染：正好能看出读的是哪一条
+    expect(description).toBe('openApp.sessionBound.hint');
+    //#else
+    expect(description).toMatch(/^Authorization codes and refresh tokens stop working/);
+    //#endif
+    // 读屏软件聚焦开关时连同说明一起读
+    const describedBy = field.querySelector('[role="switch"]')?.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent?.trim()).toBe(description);
+  });
 
   it('binds new browser applications to the sign-in session by default', async () => {
     await typeClientId('spa');

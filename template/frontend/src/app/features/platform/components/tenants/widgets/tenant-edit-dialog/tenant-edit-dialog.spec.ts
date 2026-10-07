@@ -13,15 +13,11 @@ import {
   CreateTenantInputDto,
   TenantOutputDto,
   UpdateTenantInputDto,
-} from '../../../../../../shared/dtos/tenant.dto';
+} from '../../../../dtos/tenant.dto';
 
 /**
- * 新建与编辑共用一个对话框，两种模式的字段集与提交载荷都不一样：
- * 新建要连租户初始管理员一起建出来，编辑只改名称与显示名。
- *
- * 这条差异全靠 `isEdit()` 一个信号分流——校验规则的 `when`、模板里的 `@if`、
- * onSubmit 里的分支各写一遍。漏掉任何一处，编译期与 lint 都看不出来：
- * 要么新建时把管理员账号漏成空、要么编辑时把空邮箱和空密码发给后端。
+ * 新建与编辑共用对话框：新建连带初始管理员，编辑只改名称与显示名。分流靠 `isEdit()`，
+ * 漏掉一处编译与 lint 都看不出。
  */
 @Component({
   imports: [TenantEditDialog],
@@ -233,8 +229,7 @@ describe('TenantEditDialog', () => {
     expect(dto.adminPassword).toBe('TenantSpec!Pw1 ');
   });
 
-  // 分库只在新建时定案，所以连接串是新建载荷的一部分：登记先于播种，种子才会落进那个库。
-  // 建好之后再登记第一条连接，后端会以 409 拒绝——那时数据已经在回落库里，登记不会把它们搬过去。
+  // 分库只在新建时定案：登记先于播种，种子才落进那个库；建好后再登记第一条连接会被 409 拒绝。
   it('includes the connection string in the create payload', async () => {
     dialog().tenantForm.name().value.set('acme');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');

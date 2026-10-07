@@ -1,9 +1,7 @@
 
 namespace Leistd.UnitOfWork.Events;
 
-/// <summary>
-/// 工作单元未完成即结束时的事件参数。
-/// </summary>
+/// <summary>工作单元未完成即结束时的事件参数。</summary>
 public class UnitOfWorkFailedEventArgs(
     IUnitOfWork unitOfWork,
     Exception? exception,

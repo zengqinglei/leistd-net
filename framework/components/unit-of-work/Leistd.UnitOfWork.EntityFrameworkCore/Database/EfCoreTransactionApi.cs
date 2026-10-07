@@ -4,14 +4,8 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
-/// <summary>
-/// 把一个 EF Core 事务挂到工作单元上，并在提交/回滚时带上加入该事务的其它上下文。
-/// </summary>
-/// <remarks>
-/// 事务由提供方为本工作单元开启，所有权因此在工作单元这边——本类实现
-/// <see cref="IDisposable"/>，工作单元释放时一并释放事务。与
-/// <see cref="EfCoreDatabaseApi{TDbContext}"/> 的差别见 <see cref="IDatabaseApi"/>。
-/// </remarks>
+/// <summary>把一个 EF Core 事务挂到工作单元上，并在提交与回滚时带上加入该事务的其它上下文。</summary>
+/// <remarks>事务归工作单元所有，工作单元释放时一并释放（见 <see cref="IDatabaseApi"/>）。</remarks>
 public class EfCoreTransactionApi(IDbContextTransaction dbContextTransaction, DbContext starterDbContext)
     : ITransactionApi, ISupportsRollback
 {
@@ -27,42 +21,36 @@ public class EfCoreTransactionApi(IDbContextTransaction dbContextTransaction, Db
     /// <inheritdoc />
     public async Task CommitAsync()
     {
-        // 先处理所有 AttendedDbContexts
         foreach (var dbContext in AttendedDbContexts)
         {
-            // 关系型数据库且共享同一连接时，跳过（会随主事务一起提交）
+            // 共享同一连接的关系型上下文已加入主事务，随主事务一起提交
             if (dbContext.HasRelationalTransactionManager() &&
                 dbContext.Database.GetDbConnection() == DbContextTransaction.GetDbTransaction().Connection)
             {
                 continue;
             }
 
-            // 非关系型数据库或使用不同连接的数据库，需要单独提交
             await dbContext.Database.CommitTransactionAsync();
         }
 
-        // 最后提交主事务
         await DbContextTransaction.CommitAsync();
     }
 
     /// <inheritdoc />
     public async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
-        // 先处理所有 AttendedDbContexts
         foreach (var dbContext in AttendedDbContexts)
         {
-            // 关系型数据库且共享同一连接时，跳过（会随主事务一起回滚）
+            // 共享同一连接的关系型上下文随主事务回滚
             if (dbContext.HasRelationalTransactionManager() &&
                 dbContext.Database.GetDbConnection() == DbContextTransaction.GetDbTransaction().Connection)
             {
                 continue;
             }
 
-            // 非关系型数据库或使用不同连接的数据库，需要单独回滚
             await dbContext.Database.RollbackTransactionAsync(cancellationToken);
         }
 
-        // 最后回滚主事务
         await DbContextTransaction.RollbackAsync(cancellationToken);
     }
 

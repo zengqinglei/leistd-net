@@ -52,13 +52,7 @@ function languageSetting(userValue: string | null): SettingOutputDto {
 }
 //#endif
 
-/**
- * 会话上下文：主体确立与主体离开的唯一入口。
- *
- * 这里锁住的都是真实踩过的坑：SPA 内登录跳转不会重跑应用初始化器，所以登录成功后
- * 必须由这里把设置载入，否则保存过的显示偏好要硬刷新才生效；主体离开时权限与设置
- * 必须一起清掉，否则下一个登录的人会看到上一个人的偏好。
- */
+/** 会话上下文：登录后由这里载入设置（SPA 跳转不重跑初始化器）；主体离开时权限与设置一起清掉。 */
 describe('SessionContextService', () => {
   let service: SessionContextService;
   let settingContext: SettingContextService;
@@ -67,9 +61,7 @@ describe('SessionContextService', () => {
 
   beforeEach(() => {
     //#if (IncludeLocalization)
-    // 显式定住本设备语言。不定的话初始语言会跟随**运行测试那台机器**的系统语言
-    // （LanguageService 现在会读 navigator.languages），于是断言初始值是 'en' 的用例
-    // 在系统语言为中文的机器上就红了——那不是被测行为变了，是用例依赖了环境。
+    // 显式定住本设备语言，否则初始语言跟随运行测试那台机器的系统语言。
     localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
     //#endif
     authService = {
@@ -108,11 +100,8 @@ describe('SessionContextService', () => {
   });
 
   /**
-   * 依次完成 establish() 内部的两次请求。
-   *
-   * 权限与设置是顺序 await，设置请求要等权限响应被消化后才发出——中间必须把控制权
-   * 交回事件循环，否则 expectOne 找不到那条请求。权限那边还有一层 lastValueFrom，
-   * 单个微任务不够，用一次宏任务把整条链推完。
+   * 依次完成 establish() 内部的权限与设置请求：两者顺序 await，中间用一次宏任务把链推完，
+   * 否则 expectOne 找不到设置请求。
    */
   async function flushEstablish(settings: SettingOutputDto[] | 'fail'): Promise<void> {
     http
@@ -177,9 +166,7 @@ describe('SessionContextService', () => {
     expect(languageService.activeLang()).toBe('zh-CN');
   });
 
-  // 语言是唯一一个「清了快照也收不回来」的派生状态：它已经落在 LanguageService 上。
-  // 共享机器上前一个人退出后，下一个人会在登录页看到前一个人的语言——这是最常见的形态，
-  // 不需要任何请求失败。同时钉住根因：账户语言不能写进设备存储，否则两个来源分不开。
+  // 语言已落在 LanguageService 上，清快照收不回来；同时钉住账户语言不写进设备存储。
   it('reverts the language to the device preference when the subject leaves', async () => {
     localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
     const languageService = TestBed.inject(LanguageService);
@@ -221,9 +208,7 @@ describe('SessionContextService', () => {
     }
   });
 
-  // 请求成功不等于拿到了可用的语言：缺项、或值是本端不认的语言（存量数据、绕过接口直写、
-  // 服务端先支持了本端还没有的语言）时，这一支若什么都不做，就等于沿用上一个主体的语言——
-  // 泄漏换了个门进来，而且这次连清理都没被触发。
+  // 请求成功但缺项或值不受支持时也要退回设备偏好，否则沿用上一个主体的语言。
   for (const [label, settings] of [
     ['缺少语言项', [timeZoneSetting(null)]],
     ['语言值本端不认', [languageSetting('ja')]],

@@ -3,10 +3,14 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Api.Middlewares;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -62,6 +66,44 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.Equal(before, await CountAllUsersAsync());
     }
 
+    /// <summary>
+    /// 当前主体的响应契约：字段集合与缺省值固定；超管标记与角色只取本服务的授权数据。
+    /// </summary>
+    /// <remarks>令牌里没有用户名与邮箱时为空串，显示名与租户为空时不输出（JSON 忽略 null）。</remarks>
+    [Fact]
+    public async Task Current_user_reports_local_super_admin_and_roles_with_a_stable_shape()
+    {
+        var subjectId = Guid.CreateVersion7();
+        using var session = factory.CreateResourceSession(subjectId, tenantId: null);
+
+        var before = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(
+            ["email", "id", "isEmailVerified", "isSuperAdmin", "roles", "username"],
+            before.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(subjectId, before.GetProperty("id").GetGuid());
+        Assert.Equal("", before.GetProperty("username").GetString());
+        Assert.Equal("", before.GetProperty("email").GetString());
+        Assert.False(before.GetProperty("isEmailVerified").GetBoolean());
+        Assert.False(before.GetProperty("isSuperAdmin").GetBoolean());
+        Assert.Empty(before.GetProperty("roles").EnumerateArray());
+
+        string roleName;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var user = await db.Set<User>().SingleAsync(user => user.Id == subjectId);
+            user.MarkAsSuperAdmin();
+            var role = await db.Set<Role>().OrderBy(role => role.Name).FirstAsync();
+            roleName = role.Name;
+            user.AssignRoles([role.Id]);
+            await db.SaveChangesAsync();
+        }
+
+        var after = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.True(after.GetProperty("isSuperAdmin").GetBoolean());
+        Assert.Equal([roleName], after.GetProperty("roles").EnumerateArray().Select(role => role.GetString()));
+    }
+
     /// <summary>同一个 sub 的并发首访：输的一方重试后投影成功，只建一行，两个请求都成功。</summary>
     /// <remarks>
     /// <para>回归点有两处。其一，<c>EnsureProjectedAsync</c> 里曾包着 <c>InsertAsync</c> 的 catch
@@ -77,12 +119,14 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         var subjectId = Guid.CreateVersion7();
         var tenantId = ProjectWebApplicationFactory.NewTenantId();
         var race = new FirstInsertRace(subjectId, participants: 2);
-        var warnings = new WarningLogCapture();
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(race));
-            // 不换回标准日志工厂，"没有记下警告"就恒成立、证伪不了
-            warnings.Install(services);
+            // 宿主用 Serilog 接管了日志工厂，不换回标准工厂，"没有记下警告"就恒成立、证伪不了
+            services.RemoveAll<ILoggerFactory>();
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
+                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
+                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
         }));
         using var first = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
         using var second = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
@@ -96,10 +140,63 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.True(race.Released, "两个请求没有同时走到提交，竞争没有发生，用例证明不了任何事");
         // 输的一方第一次提交撞键时 EF 与工作单元会各记一条错误，那是竞争本身；要看的是投影最终有没有失败
         Assert.DoesNotContain(
-            warnings.Entries,
-            entry => entry.Category.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal)
-                && entry.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
+            host.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Category?.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal) == true
+                && record.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
         Assert.Equal(1, await CountUsersAsync(subjectId, host.Services));
+    }
+
+    /// <summary>投影持续失败：只重试一次，记下警告后放行请求，不留下用户行。</summary>
+    /// <remarks>投影不是安全闸门：拦下请求只会让一个可预见的写入故障把该用户的每个请求都变成 500。</remarks>
+    [Fact]
+    public async Task A_projection_that_keeps_failing_is_retried_once_then_logged_and_the_request_proceeds()
+    {
+        var subjectId = Guid.CreateVersion7();
+        var failing = new FailingUserInsert(subjectId);
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(failing));
+            services.RemoveAll<ILoggerFactory>();
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
+                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
+                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
+        }));
+        using var session = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, ProjectWebApplicationFactory.NewTenantId());
+
+        using var response = await session.Client.GetAsync("/api/health/live");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // 两次：首次加一次重试；不重试是 1，重试循环会大于 2
+        Assert.Equal(2, failing.Attempts);
+        Assert.Contains(
+            host.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Category?.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal) == true
+                && record.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
+        Assert.Equal(0, await CountUsersAsync(subjectId, host.Services));
+    }
+
+    // 只拦插入这个主体的提交，其余写入照常
+    private sealed class FailingUserInsert(Guid subjectId) : SaveChangesInterceptor
+    {
+        private int attempts;
+
+        public int Attempts => Volatile.Read(ref attempts);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var inserting = eventData.Context?.ChangeTracker.Entries<User>()
+                .Any(entry => entry.State == EntityState.Added && entry.Entity.Id == subjectId) == true;
+            if (inserting)
+            {
+                Interlocked.Increment(ref attempts);
+                throw new InvalidOperationException("Simulated projection failure.");
+            }
+
+            return ValueTask.FromResult(result);
+        }
     }
 
     // 两个上下文都要提交同一个新用户行时才一起放行：两边都已读到"不存在"，提交时必有一方撞键

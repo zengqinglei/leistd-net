@@ -27,6 +27,9 @@
     },
     "IncludeOperationRecords": {
       "longName": "include-operation-records"
+    },
+    "Ci": {
+      "longName": "ci"
     }
   }
 }

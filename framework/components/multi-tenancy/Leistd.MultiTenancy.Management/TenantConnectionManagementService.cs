@@ -21,8 +21,7 @@ internal sealed class TenantConnectionManagementService(
         bool activeOnly,
         CancellationToken cancellationToken = default)
     {
-        // 不能把原始入参直接交给目录：目录用的是代码级归一化（非法即 ArgumentException → 500），
-        // 而这个名字来自 URL，非法是调用方能改对的输入错误
+        // 名字来自 URL，按输入归一化（非法为 400），不用目录的代码级归一化（非法为 500）
         var normalized = TenantConnectionNames.NormalizeInput(name);
         var listed = await databaseDirectory.GetDatabasesAsync(normalized, activeOnly, cancellationToken);
 
@@ -110,7 +109,7 @@ internal sealed class TenantConnectionManagementService(
         ArgumentNullException.ThrowIfNull(input);
         var configuration = await manager.SetAsync(tenantId, name, input.ConnectionString, input.ExpectedVersion, cancellationToken);
 
-        // 连接决定租户数据落在哪个库，改动必须留痕；记成什么由宿主定，组件只发事件（不含连接串）
+        // 组件只发事件（不含连接串），留痕方式由宿主决定
         await PublishAsync(
             configuration.TenantId,
             configuration.Name,
@@ -128,8 +127,7 @@ internal sealed class TenantConnectionManagementService(
 
     public async Task RemoveAsync(Guid tenantId, string name, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        // 先归一化再往下传：删除拿不到写入路径那样的权威返回值（SetAsync 发的是 manager 回的
-        // configuration.Name），照原样发事件会让 "CRM" 与 "crm" 在审计里变成两个目标标识
+        // 先归一化：删除没有管理器返回的权威名字，原样发事件会让 "CRM" 与 "crm" 成为两个目标标识
         var normalized = TenantConnectionNames.NormalizeInput(name);
         await manager.RemoveAsync(tenantId, normalized, expectedVersion, cancellationToken);
         await PublishAsync(tenantId, normalized, TenantConnectionChangeKind.Removed, expectedVersion, cancellationToken);
@@ -147,8 +145,7 @@ internal sealed class TenantConnectionManagementService(
             return;
         }
 
-        // 显示名要在发事件时取快照：订阅者事后按标识反查，拿到的是改名后的名字，或者什么都没有。
-        // 写入已经落定，所以查不到只能是并发删除——那种情况留 null，不让留痕本身失败
+        // 发事件时取显示名快照；写入已落定，查不到只能是并发删除，此时留 null 不让留痕失败
         var tenant = await tenants.FindAsync(tenantId, cancellationToken);
 
         await eventBus.PublishAsync(

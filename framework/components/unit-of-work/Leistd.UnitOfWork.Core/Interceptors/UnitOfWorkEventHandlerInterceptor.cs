@@ -8,13 +8,10 @@ using Leistd.EventBus.Events;
 
 namespace Leistd.UnitOfWork.Interceptors;
 
-/// <summary>
-/// 按工作单元阶段调度事件处理器。
-/// </summary>
+/// <summary>按工作单元阶段调度事件处理器。</summary>
 /// <remarks>
-/// 挂在<b>所有</b> <see cref="IEventHandler{TEvent}"/> 上：<c>CompleteAsync</c> 对每个事件发布两趟
-/// （BeforeCommit 与 AfterCommit），由本拦截器挡掉不属于当前阶段的那趟；未被代理的处理器两趟都会执行。
-/// 因此"未标注特性"被解释成确定的 <c>AfterCommit</c> 阶段，而不是放行。
+/// 挂在所有 <see cref="IEventHandler{TEvent}"/> 上：<c>CompleteAsync</c> 对每个事件发布两趟（BeforeCommit 与 AfterCommit），
+/// 本拦截器挡掉不属于当前阶段的那趟；未标注特性的处理器按 <c>AfterCommit</c> 执行。
 /// </remarks>
 public class UnitOfWorkEventHandlerInterceptor(ILogger<UnitOfWorkEventHandlerInterceptor>? logger = null)
     : BaseAsyncInterceptor
@@ -88,17 +85,14 @@ public class UnitOfWorkEventHandlerInterceptor(ILogger<UnitOfWorkEventHandlerInt
             return Decision.Execute;
         }
 
-        // 处理器声明的阶段。未标注特性时取 AfterCommit——与 UnitOfWorkEventHandlerAttribute
-        // 的构造函数默认值一致。这里绝不能返回"放行"：那会让处理器在两趟发布里各跑一次
+        // 未标注特性时取 AfterCommit（与特性默认值一致）；放行会让处理器在两趟发布里各跑一次
         var handlerType = invocation.TargetType;
         var declaredPhase = handlerType?.GetCustomAttribute<UnitOfWorkEventHandlerAttribute>()?.Phase
             ?? UnitOfWorkPhase.AfterCommit;
 
         var currentPhase = UnitOfWorkContext.CurrentPhase;
 
-        // 不在工作单元的提交流程里（直接发布，或工作单元外发布）：按 AfterCommit 语义执行一次。
-        //
-        // 没有工作单元时无法兑现 BeforeCommit 回滚契约，跳过处理器并记录告警。
+        // 不在提交流程里：AfterCommit 处理器执行一次；BeforeCommit 无法兑现回滚契约，跳过并记录告警
         if (currentPhase is null)
         {
             if (declaredPhase == UnitOfWorkPhase.BeforeCommit)

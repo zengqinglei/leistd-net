@@ -15,6 +15,7 @@ import {
   lucideBan,
   lucideBuilding2,
   lucideChevronRight,
+  lucideCircleAlert,
   lucideCircleCheck,
   lucideEllipsis,
   lucideInfo,
@@ -36,28 +37,25 @@ import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+  TITLE_COLUMN_META,
+  TITLE_CONTENT_CLASS,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
+import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 
-/**
- * 租户列表表格。
- *
- * 与角色/用户列表同一形态：列优先级驱动响应式收纳、被隐藏的列由行展开补偿、
- * 分页状态由父组件（URL 查询参数）单向下发。
- */
+/** 租户列表表格：列优先级驱动响应式收纳，隐藏列由行展开补偿，分页状态由父组件单向下发。 */
 @Component({
   selector: 'app-tenant-table',
   imports: [
@@ -80,6 +78,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
       lucideBan,
       lucideBuilding2,
       lucideChevronRight,
+      lucideCircleAlert,
       lucideCircleCheck,
       lucideEllipsis,
       lucideInfo,
@@ -95,8 +94,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantTable {
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -107,6 +105,9 @@ export class TenantTable {
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  readonly retry = output<void>();
 
   /** 行操作按权限裁剪；隐藏只影响体验，服务端仍对每个请求独立校验。 */
   readonly canUpdate = input(true);
@@ -127,6 +128,8 @@ export class TenantTable {
   readonly delete = output<TenantOutputDto>();
 
   protected readonly tableViewport = tableViewportSignal();
+  /** 主列内容外层：最窄一档下长名称截断，不撑宽表格（见 TITLE_COLUMN_META）。 */
+  protected readonly titleContentClass = TITLE_CONTENT_CLASS;
   private readonly tableFit = viewChild(TableFit);
   /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
   private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
@@ -138,7 +141,7 @@ export class TenantTable {
       id: 'name',
       enableSorting: false,
       enableHiding: false,
-      meta: { priority: 'primary', locked: true },
+      meta: TITLE_COLUMN_META,
     },
     {
       accessorKey: 'displayName',
@@ -208,6 +211,8 @@ export class TenantTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'tenants.colName': 'Name',
   'tenants.colDisplayName': 'Display name',
   'tenants.colDescription': 'Description',

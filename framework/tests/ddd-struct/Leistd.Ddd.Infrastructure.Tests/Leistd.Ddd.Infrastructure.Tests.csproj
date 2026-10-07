@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\..\components\event-bus\Leistd.EventBus.Local\Leistd.EventBus.Local.csproj" />
     <ProjectReference Include="..\..\..\components\auditing\Leistd.Auditing.EntityFrameworkCore\Leistd.Auditing.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <ProjectReference Include="..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 
 </Project>

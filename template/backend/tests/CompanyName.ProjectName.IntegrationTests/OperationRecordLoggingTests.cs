@@ -13,6 +13,7 @@ using Leistd.OperationRecords.Stores;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog.Events;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -91,7 +92,7 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
         Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(OperationRecordLogCapture.Field(record, "OperationTime")).Kind);
         foreach (var field in new[] { "OperationActorTenantId", "OperationTenantId", "OperationImpersonatorId", "OperationImpersonatorName", "OperationOutcome", "OperationFailureCode", "OperationFailureData", "OperationFailureDetail", "OperationVisibility" })
             Assert.True(record.Properties.ContainsKey(field), field);
-        Serilog.Events.LogEvent[] Records() => capture.Snapshot().Where(e =>
+        LogEvent[] Records() => capture.Snapshot().Where(e =>
             Equals(OperationRecordLogCapture.Field(e, "OperationCorrelationId"), correlation)).ToArray();
     }
 }

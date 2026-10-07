@@ -8,6 +8,8 @@ namespace Leistd.Settings.Hosting.Options;
 /// <remarks>
 /// <para>设置有值时，它绑定的每个配置键都写成这个值；没有值的设置不出现在配置源里，自然回落到部署配置。
 /// 被绑定的设置必须已定义且是进程级（<c>SettingScopes.Host</c>），否则首次访问定义时抛出。</para>
+/// <para>同一设置名重复绑定时，设置名、按顺序的配置键、兜底值与选项类型全部相同即视为同一登记、不重复生效；
+/// 任一项不同（只换兜底值或只换键的顺序也算）在绑定时抛出 <see cref="InvalidOperationException"/>，消息列出两处登记。</para>
 /// <para>被绑定设置的代码默认值由组件改写成<b>部署基线</b>（部署配置里这些键的值），清除设置即回到部署配置。
 /// 基线按定义的值元数据归一（布尔小写、候选值取定义里的写法），认不出时用兜底值；机密设置没有默认值。</para>
 /// </remarks>
@@ -34,12 +36,17 @@ public sealed class HostSettingBindingBuilder
             throw new ArgumentException("At least one non-empty configuration key is required.", nameof(configurationKeys));
         }
 
-        if (_bindings.Any(binding => binding.SettingName == settingName))
+        var binding = new HostSettingBinding(settingName, keys, fallback, optionsType);
+        if (_bindings.Find(existing => existing.SettingName == settingName) is not { } registered)
         {
-            throw new InvalidOperationException($"Host setting '{settingName}' is already bound.");
+            _bindings.Add(binding);
+        }
+        else if (!registered.Matches(binding))
+        {
+            throw new InvalidOperationException(
+                $"Host setting '{settingName}' is already bound to {registered.Describe()}; it cannot also be bound to {binding.Describe()}.");
         }
 
-        _bindings.Add(new HostSettingBinding(settingName, keys, fallback, optionsType));
         return this;
     }
 
@@ -78,9 +85,21 @@ internal sealed record HostSettingBinding(
     string SettingName,
     IReadOnlyList<string> ConfigurationKeys,
     string? Fallback,
-    Type? OptionsType);
+    Type? OptionsType)
+{
+    // 相同登记：配置键按顺序逐个相等，兜底值与选项类型也相等
+    public bool Matches(HostSettingBinding other)
+        => SettingName == other.SettingName
+            && ConfigurationKeys.SequenceEqual(other.ConfigurationKeys, StringComparer.Ordinal)
+            && Fallback == other.Fallback
+            && OptionsType == other.OptionsType;
 
-// 多次 AddHostSettings 的绑定累加在这里
+    public string Describe()
+        => $"keys [{string.Join(", ", ConfigurationKeys)}], fallback {(Fallback is null ? "none" : $"'{Fallback}'")}, "
+            + $"options type {OptionsType?.FullName ?? "none"}";
+}
+
+// 多次 AddHostSettings 的绑定在登记时就并入这里，作为单例实例注册，不经选项配置回调
 internal sealed class HostSettingBindingCollection
 {
     public List<HostSettingBinding> Bindings { get; } = [];

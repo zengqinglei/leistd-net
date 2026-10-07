@@ -78,7 +78,7 @@ public static class PermissionConstant
     /// 开放应用持有 ClientId/ClientSecret，能代表本系统对外颁发令牌，
     /// 因此与用户、角色同级独立成权限族，而不是复用用户管理权限。
     /// <para>定义时声明 Host 侧别：OpenIddict 的表没有 TenantId，不是 <c>IMultiTenant</c>，
-    /// 全局租户过滤器对它们不生效，因此这是一组<b>宿主全局</b>资源。落到默认的 Both 会让
+    /// 全局租户过滤器对它们不生效，因此这是一组<b>宿主全局</b>资源。设为 Both 会让
     /// 租户管理员拿到它，进而读写全系统的 OAuth 客户端。</para>
     /// </remarks>
     public static class OpenApplications
@@ -107,6 +107,7 @@ public static class PermissionConstant
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
+#if (Impersonation)
 
         /// <summary>
         /// 以租户管理员身份登录该租户（模拟登录）。
@@ -115,7 +116,6 @@ public static class PermissionConstant
         /// 与 <see cref="Update"/> 分开授权：改租户的注册信息和"进到租户里面去操作"
         /// 是两种不同量级的能力，后者能看到并改动该租户的全部业务数据。
         /// </remarks>
-#if (Impersonation)
         public const string Impersonation = Default + ".Impersonation";
 #endif
     }

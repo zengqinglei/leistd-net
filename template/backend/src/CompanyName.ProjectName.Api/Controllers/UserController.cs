@@ -4,7 +4,6 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Application.Users.Dtos;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -134,7 +133,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
 
 #if (LocalIdentity)
     /// <summary>
-    /// 删除用户（需要用户删除权限）
+    /// 删除用户（需要用户删除权限；幂等：不存在时同样成功）
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Delete)]
@@ -175,7 +174,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpGet("{id}/roles")]
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
-    public async Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken)
     {
         return await userAppService.GetRolesAsync(id, cancellationToken);
     }
@@ -191,7 +190,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
     // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
     [OperationRecordAction(OperationRecordActions.UserRolesReplaced, "id")]
-    public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> ReplaceRolesAsync(
         Guid id,
         [FromBody] UpdateUserRolesInputDto input,
         CancellationToken cancellationToken)

@@ -23,7 +23,7 @@ public class LocalizationPreloadTests
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddFakeLogging());
-        services.AddJsonLocalization(cultures);
+        services.AddJsonLocalization(options => options.SupportedCultures = cultures);
         extra?.Invoke(services);
         return services.BuildServiceProvider();
     }

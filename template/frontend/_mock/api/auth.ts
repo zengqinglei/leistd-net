@@ -1,5 +1,8 @@
+//#if (Impersonation)
+import { ImpersonationStatus } from '../../src/app/core/services/impersonation-service';
+//#endif
 //#if (IncludeMultiTenancy)
-import { TENANT_HEADER } from '../../src/app/core/services/tenant-protocol';
+import { TENANT_HEADER } from '../../src/app/core/tenancy/tenant-protocol';
 //#endif
 import {
   ChangePasswordInputDto,
@@ -20,27 +23,30 @@ import {
   //#endif
   SetAvatarInputDto,
   UserSessionOutputDto,
+  TwoFactorLoginInputDto,
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   TwoFactorStatusOutputDto,
   //#if (OpenIddictServer)
   LogoutConfirmationOutputDto,
   //#endif
-} from '../../src/app/features/account/models/account.dto';
-//#if (ExternalLogin)
+} from '../../src/app/features/account/dtos/account.dto';
 import { SessionLoginOutputDto, UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
-//#else
-import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
-//#endif
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 //#if (IncludeMultiTenancy)
 import { TENANTS } from '../data/tenant';
 //#endif
-import { MockUser, USERS, toUserOutput } from '../data/user';
+import { MockUser, USERS, isEmailTaken, isUsernameTaken, toUserOutput } from '../data/user';
 import {
   MOCK_SESSION_USER_ID,
+  //#if (Impersonation)
+  getMockImpersonator,
+  //#endif
   getMockSessionTenantKey,
+  //#if (Impersonation)
+  setMockImpersonator,
+  //#endif
   setMockSessionTenantKey,
   setMockSessionUserId,
 } from '../utils/current-user';
@@ -69,9 +75,8 @@ const emailChallengeStore = new Map<string, EmailVerificationChallenge>();
 const emailRateLimitStore = new Map<string, number>();
 
 //#endif
-function ensureUsernameAvailable(username: string, currentUserId: string): void {
-  const exists = USERS.some((user) => user.username === username && user.id !== currentUserId);
-  if (exists) {
+function ensureUsernameAvailable(username: string, currentUserId?: string): void {
+  if (isUsernameTaken(username, currentUserId)) {
     throw new MockException(409, {
       code: 'User:UsernameTaken',
       message: 'Username already exists',
@@ -79,9 +84,8 @@ function ensureUsernameAvailable(username: string, currentUserId: string): void 
   }
 }
 
-function ensureEmailAvailable(email: string, currentUserId: string): void {
-  const exists = USERS.some((user) => user.email === email && user.id !== currentUserId);
-  if (exists) {
+function ensureEmailAvailable(email: string, currentUserId?: string): void {
+  if (isEmailTaken(email, currentUserId)) {
     throw new MockException(409, { code: 'User:EmailTaken', message: 'Email is already in use' });
   }
 }
@@ -100,15 +104,23 @@ function ensureTenantActive(req: MockRequest): void {
 }
 //#endif
 
-function sessionLogin(usernameOrEmail: string, password: string, tenantKey: string): 'ok' {
+function sessionLogin(
+  usernameOrEmail: string,
+  password: string,
+  tenantKey: string,
+): SessionLoginOutputDto {
   const user = USERS.find((u) => u.username === usernameOrEmail || u.email === usernameOrEmail);
 
   if (user && user.password === password) {
+    // 与后端一致：启用了两步验证时密码对了也不下发会话，只给第二步凭据
+    if (user.twoFactorEnabled) {
+      return beginTwoFactorChallenge(user, tenantKey);
+    }
     setMockSessionUserId(user.id);
     // 租户在登录这一刻定案，之后由会话（真实环境是 cookie 里的租户声明）说话；
     // 认证后的接口不再看租户提示头，与后端的解析链一致。
     setMockSessionTenantKey(tenantKey);
-    return 'ok';
+    return {};
   }
 
   throw new MockException(401, {
@@ -118,12 +130,8 @@ function sessionLogin(usernameOrEmail: string, password: string, tenantKey: stri
 }
 
 /**
- * 当前认证主体——受保护端点的唯一入口。
- *
- * 没有会话、或会话里的 ID 匹配不到 Mock 用户，一律 401。**不能回落到 USERS[0]**：
- * 那会让匿名的资料修改与改密码"成功"，改掉的还是默认用户，于是 Mock 证明了一个
- * 生产环境不存在的行为——真后端在这两个端点上都是 401。
- * 展示用的 persona 回落只属于 Resource 形态的权限演示路径，不能进数据修改路径。
+ * 当前认证主体，受保护端点的唯一入口。没有会话或匹配不到 Mock 用户一律 401，不回落到 USERS[0]：
+ * 否则匿名的资料修改与改密码会"成功"，与真后端不一致。persona 回落只用于 Resource 形态的权限演示。
  */
 function requireCurrentMockUser(): MockUser {
   const user = MOCK_SESSION_USER_ID ? USERS.find((u) => u.id === MOCK_SESSION_USER_ID) : undefined;
@@ -170,10 +178,19 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
   return toUserOutput(user);
 }
 
+/** 与后端 `SetAvatarInputDto` 同一判据：本人入口只收图片 data URL，空值表示清除。 */
+const AVATAR_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]*$/;
+
 function setCurrentUserAvatar(req: MockRequest): UserOutputDto {
   const user = requireCurrentMockUser();
   const body = req.body as SetAvatarInputDto;
-  user.avatar = body.avatar?.trim() || undefined;
+  // 入参校验：外部地址等非图片 data URL 是 400 字段错误、不带业务码
+  if (body.avatar && !AVATAR_DATA_URL.test(body.avatar)) {
+    throw new MockException(400, {
+      errors: [{ field: 'avatar', detail: 'Avatar must be a PNG, JPEG or WebP image.' }],
+    });
+  }
+  user.avatar = body.avatar || undefined;
   return toUserOutput(user);
 }
 //#if (Email)
@@ -294,18 +311,94 @@ let mockSessions: UserSessionOutputDto[] = [
 ];
 
 /**
- * 两步验证：mock 下验证码固定为 {@link MOCK_TWO_FACTOR_CODE}，只演示设置与管理界面；
- * 登录不走第二步（mock 没有服务端会话可言）。
+ * 两步验证：mock 下验证码固定为 {@link MOCK_TWO_FACTOR_CODE}，启用状态与恢复码记在各 Mock 用户上，
+ * 因此登录第二步与管理员重置都能演示。
  */
 const MOCK_TWO_FACTOR_CODE = '123456';
-let mockTwoFactor = { enabled: false, recoveryCodesLeft: 0 };
+/** 与后端单个挑战的尝试上限同一量级：输错到上限即作废，只能回到第一步。 */
+const TWO_FACTOR_CHALLENGE_MAX_ATTEMPTS = 5;
 
-function mockRecoveryCodes(): TwoFactorRecoveryCodesOutputDto {
+interface TwoFactorChallenge {
+  userId: string;
+  tenantKey: string;
+  remainingAttempts: number;
+}
+
+const twoFactorChallengeStore = new Map<string, TwoFactorChallenge>();
+
+function beginTwoFactorChallenge(user: MockUser, tenantKey: string): SessionLoginOutputDto {
+  const twoFactorToken = crypto.randomUUID();
+  twoFactorChallengeStore.set(twoFactorToken, {
+    userId: user.id,
+    tenantKey,
+    remainingAttempts: TWO_FACTOR_CHALLENGE_MAX_ATTEMPTS,
+  });
+  return { requiresTwoFactor: true, twoFactorToken };
+}
+
+function twoFactorChallengeExpired(): MockException {
+  return new MockException(401, {
+    code: 'Auth:TwoFactorChallengeExpired',
+    message: 'The sign-in attempt has expired. Sign in again.',
+  });
+}
+
+/**
+ * 登录第二步。入参校验与后端 `TwoFactorLoginInputDto` 一致（400 字段错误、不带业务码）；
+ * 凭据不存在、不属于当前租户或已用尽尝试次数一律 401，验证码错误 400。
+ */
+function completeTwoFactorLogin(req: MockRequest): 'ok' {
+  const body = (req.body ?? {}) as TwoFactorLoginInputDto;
+  const errors = [];
+  if (!body.token?.trim()) {
+    errors.push({ field: 'token', detail: 'Two-factor token is required.' });
+  }
+  if (!body.code?.trim() && !body.recoveryCode?.trim()) {
+    errors.push({ field: 'code', detail: 'Enter the verification code or a recovery code.' });
+  }
+  if (errors.length > 0) {
+    throw new MockException(400, { errors });
+  }
+
+  const challenge = twoFactorChallengeStore.get(body.token);
+  const user = challenge ? USERS.find((u) => u.id === challenge.userId) : undefined;
+  if (!challenge || !user || challenge.tenantKey !== getRequestScope(req)) {
+    throw twoFactorChallengeExpired();
+  }
+
+  // 都给了时以恢复码为准，与后端同一取舍；恢复码用一次即作废
+  const recoveryCode = body.recoveryCode?.trim();
+  const verified = recoveryCode
+    ? (user.recoveryCodes ?? []).includes(recoveryCode)
+    : body.code?.replace(/\s/g, '') === MOCK_TWO_FACTOR_CODE;
+  if (!verified) {
+    challenge.remainingAttempts--;
+    if (challenge.remainingAttempts <= 0) {
+      twoFactorChallengeStore.delete(body.token);
+      throw twoFactorChallengeExpired();
+    }
+    throw new MockException(400, {
+      code: 'Auth:TwoFactorCodeInvalid',
+      message: `The verification code is incorrect (mock code: ${MOCK_TWO_FACTOR_CODE}).`,
+    });
+  }
+
+  if (recoveryCode) {
+    user.recoveryCodes = (user.recoveryCodes ?? []).filter((code) => code !== recoveryCode);
+  }
+  twoFactorChallengeStore.delete(body.token);
+  setMockSessionUserId(user.id);
+  setMockSessionTenantKey(challenge.tenantKey);
+  return 'ok';
+}
+
+function issueRecoveryCodes(user: MockUser): TwoFactorRecoveryCodesOutputDto {
   const codes = Array.from(
     { length: 10 },
     (_, i) => `mock-${String(i).padStart(4, '0')}-code-demo`,
   );
-  mockTwoFactor = { enabled: true, recoveryCodesLeft: codes.length };
+  user.twoFactorEnabled = true;
+  user.recoveryCodes = [...codes];
   return { recoveryCodes: codes };
 }
 
@@ -319,8 +412,12 @@ function ensureMockTwoFactorCode(code: string | undefined): void {
 }
 
 function getTwoFactorStatus(): TwoFactorStatusOutputDto {
-  requireCurrentMockUser();
-  return { ...mockTwoFactor, requiredByPolicy: false };
+  const user = requireCurrentMockUser();
+  return {
+    enabled: user.twoFactorEnabled === true,
+    recoveryCodesLeft: user.recoveryCodes?.length ?? 0,
+    requiredByPolicy: false,
+  };
 }
 
 function beginTwoFactorSetup(): TwoFactorSetupOutputDto {
@@ -333,10 +430,10 @@ function beginTwoFactorSetup(): TwoFactorSetupOutputDto {
 }
 
 function enableTwoFactor(req: MockRequest): TwoFactorRecoveryCodesOutputDto {
-  requireCurrentMockUser();
+  const user = requireCurrentMockUser();
   ensureMockTwoFactorCode(req.body?.code);
   mockSessions = mockSessions.filter((s) => s.isCurrent);
-  return mockRecoveryCodes();
+  return issueRecoveryCodes(user);
 }
 
 function disableTwoFactor(req: MockRequest): 'ok' {
@@ -348,15 +445,16 @@ function disableTwoFactor(req: MockRequest): 'ok' {
     });
   }
   ensureMockTwoFactorCode(req.body?.code);
-  mockTwoFactor = { enabled: false, recoveryCodesLeft: 0 };
+  user.twoFactorEnabled = false;
+  user.recoveryCodes = [];
   mockSessions = mockSessions.filter((s) => s.isCurrent);
   return 'ok';
 }
 
 function regenerateRecoveryCodes(req: MockRequest): TwoFactorRecoveryCodesOutputDto {
-  requireCurrentMockUser();
+  const user = requireCurrentMockUser();
   ensureMockTwoFactorCode(req.body?.code);
-  return mockRecoveryCodes();
+  return issueRecoveryCodes(user);
 }
 
 function getSessions(): UserSessionOutputDto[] {
@@ -388,6 +486,45 @@ function logout(): 'ok' {
   setMockSessionUserId(null);
   return 'ok';
 }
+//#if (Impersonation)
+
+/** 模拟状态读会话里记下的发起人；不在模拟态时只回 `isImpersonating: false`。 */
+function getImpersonationStatus(): ImpersonationStatus {
+  requireCurrentMockUser();
+  const impersonator = getMockImpersonator();
+  if (!impersonator) {
+    return { isImpersonating: false };
+  }
+  const tenant = TENANTS.find((t) => t.id === getMockSessionTenantKey());
+  return {
+    isImpersonating: true,
+    impersonatorName: impersonator.name,
+    tenantName: tenant?.displayName ?? tenant?.name,
+  };
+}
+
+/** 结束模拟：会话切回发起人所在的宿主上下文。不在模拟态时 409，与后端同码。 */
+function endImpersonation(): 'ok' {
+  requireCurrentMockUser();
+  const impersonator = getMockImpersonator();
+  if (!impersonator) {
+    throw new MockException(409, {
+      code: 'Tenant:NotImpersonating',
+      message: 'The current session is not impersonating.',
+    });
+  }
+  if (!USERS.some((u) => u.id === impersonator.userId)) {
+    throw new MockException(404, {
+      code: 'User:NotFound',
+      message: 'The impersonating user no longer exists.',
+    });
+  }
+  setMockSessionUserId(impersonator.userId);
+  setMockSessionTenantKey(impersonator.tenantKey);
+  setMockImpersonator(null);
+  return 'ok';
+}
+//#endif
 //#if (OpenIddictServer)
 
 function getLogoutConfirmation(req: MockRequest): LogoutConfirmationOutputDto {
@@ -464,8 +601,9 @@ function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const body = req.body as SendEmailCodeInputDto;
   validateCaptcha(body.captchaToken, body.captchaCode);
 
+  // 占用判定与后端同一口径：按唯一索引原样比较，只差大小写的是另一个地址
+  ensureEmailAvailable(body.email.trim());
   const email = normalizeEmail(body.email);
-  ensureEmailAvailable(email, '');
   const scope = getRequestScope(req);
   const rateKey = `${scope}:${email}`;
   const now = Date.now();
@@ -499,14 +637,16 @@ function register(req: MockRequest): 'ok' {
   const body = req.body as RegisterInputDto;
 
   const username = body.username.trim();
-  const email = normalizeEmail(body.email);
+  // 与后端一致：占用判定与保存都用原样地址（只差大小写的是另一个地址）；
+  // 只有验证码按规范化地址归档
+  const email = body.email.trim();
 
-  ensureUsernameAvailable(username, '');
-  ensureEmailAvailable(email, '');
+  ensureUsernameAvailable(username);
+  ensureEmailAvailable(email);
 
   //#if (Email)
   if (EMAIL_VERIFICATION_ENABLED) {
-    validateEmailChallenge(req, email, body);
+    validateEmailChallenge(req, normalizeEmail(email), body);
   } else {
     validateCaptcha(body.captchaToken, body.captchaCode);
   }
@@ -516,7 +656,6 @@ function register(req: MockRequest): 'ok' {
 
   ensureAcceptablePassword(body.password, 'Password');
 
-  // 模拟写入用户
   const newUser = {
     id: `user_${Date.now()}`,
     username: username,
@@ -622,6 +761,37 @@ function getExternalLinks() {
   };
 }
 
+/**
+ * 外部授权回来后完成绑定。真实后端还要核对一次性票据，Mock 没有提供商往返，视票据有效；
+ * 提供商未登记时按票据无效处理（400 `ExternalAuth:InvalidState`），已绑过同一提供商时 409。
+ */
+function completeExternalLink(req: MockRequest): 'ok' {
+  const user = requireCurrentMockUser();
+  const provider = String(req.params.provider);
+  if (!MOCK_EXTERNAL_PROVIDERS.includes(provider)) {
+    throw new MockException(400, {
+      code: 'ExternalAuth:InvalidState',
+      message: 'Invalid or expired external authentication intent.',
+    });
+  }
+  if (mockExternalLinks.some((l) => l.provider === provider)) {
+    throw new MockException(409, {
+      code: 'ExternalAuth:ProviderAlreadyLinked',
+      message: `A ${provider} account is already linked. Unlink it first.`,
+    });
+  }
+  mockExternalLinks = [
+    ...mockExternalLinks,
+    {
+      id: `mock-link-${provider}`,
+      provider,
+      providerAccountLabel: user.username,
+      creationTime: new Date().toISOString(),
+    },
+  ];
+  return 'ok';
+}
+
 function unlinkExternalLogin(req: MockRequest): 'ok' {
   requireCurrentMockUser();
   mockExternalLinks = mockExternalLinks.filter((l) => l.id !== String(req.params.id));
@@ -649,6 +819,11 @@ export const AUTH_API = {
     // 登录是匿名阶段，此时租户提示头决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
     return sessionLogin(req.body.usernameOrEmail, req.body.password, getRequestScope(req));
   },
+  'POST /api/v1/auth/two-factor': (req: MockRequest) => completeTwoFactorLogin(req),
+  //#if (Impersonation)
+  'GET /api/v1/auth/impersonation': () => getImpersonationStatus(),
+  'POST /api/v1/auth/end-impersonation': () => endImpersonation(),
+  //#endif
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
   'PUT /api/v1/auth/me/avatar': (req: MockRequest) => setCurrentUserAvatar(req),
@@ -671,6 +846,8 @@ export const AUTH_API = {
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
   //#if (ExternalLogin)
   'POST /api/v1/external-auth/:provider/complete': (req: MockRequest) => externalLoginCallback(req),
+  'POST /api/v1/external-auth/:provider/link/complete': (req: MockRequest) =>
+    completeExternalLink(req),
   'GET /api/v1/external-auth/providers': () => ({ providers: MOCK_EXTERNAL_PROVIDERS }),
   'GET /api/v1/external-auth/links': () => getExternalLinks(),
   'DELETE /api/v1/external-auth/links/:id': (req: MockRequest) => unlinkExternalLogin(req),

@@ -9,9 +9,7 @@ namespace Leistd.MultiTenancy.Context;
 /// </remarks>
 public sealed class AsyncLocalCurrentTenantAccessor : ICurrentTenantAccessor
 {
-    /// <summary>
-    /// 获取全局实例。
-    /// </summary>
+    /// <summary>全局实例。</summary>
     public static AsyncLocalCurrentTenantAccessor Instance { get; } = new();
 
     private readonly AsyncLocal<BasicTenantInfo?> _currentScope = new();

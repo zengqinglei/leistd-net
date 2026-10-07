@@ -1,5 +1,5 @@
 import { requirePermission } from './authorization';
-import { PERMISSIONS } from '../../src/app/shared/models/permission';
+import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { MockException, MockRequest } from '../core/models';
 // prettier-ignore
 import {
@@ -31,14 +31,9 @@ function localizedText(req: MockRequest, key: string, english: string): string {
 }
 
 //#endif
-// 租户取自会话，不看租户提示头：真实后端的租户解析链首位是「已认证主体的租户声明」，
-// 主体一经处理就终止解析，请求头改不了已登录用户的租户。照请求头取会让 Mock 锁定一个
-// 生产环境不存在的行为。
-//
-// 键的形状对齐真实 Store 的 ScopeKey：`{tenant}:t` 与 `{tenant}:u:{userId}`——
-// 用户级也带租户，因为设置行本身带租户归属。
-// 用主体标识而不是 Mock persona 的 id 做隔离键：Resource 形态下 persona 是所有令牌
-// 共用的那个测试用户，拿它做键会让同租户下的两个真实用户共用一份个人偏好。
+// 租户取自会话而非租户提示头：真实后端优先用已认证主体的租户声明。键形状对齐真实 Store 的
+// ScopeKey（`{tenant}:t` 与 `{tenant}:u:{userId}`）；用主体标识而非 Mock persona 做键，
+// Resource 形态下 persona 是所有令牌共用的测试用户。
 function requireSubjectId(): string {
   const subjectId = getCurrentUser() && getMockSessionSubjectId();
   if (!subjectId) {

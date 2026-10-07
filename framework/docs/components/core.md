@@ -23,7 +23,7 @@ dotnet add package Leistd.Core
 
 ## 注册
 
-`Leistd.Core` 自身**不提供** DI 扩展方法。`IClock` 的默认实现 `UtcClockProvider` 由上层的 DDD 基础设施包注册（参见 `Leistd.Ddd.Infrastructure`）：
+`Leistd.Core` 自身不提供 DI 扩展方法。`IClock` 的默认实现 `UtcClockProvider` 由 DDD 基础设施包（`Leistd.Ddd.Infrastructure`）注册：
 
 ```csharp
 // 在基础设施层注册（已由 Leistd.Ddd.Infrastructure 完成）
@@ -56,7 +56,7 @@ public class DailyReportService(IClock clock)
 
 ## 接口参考
 
-`Leistd.Timing` 命名空间：
+时钟成员位于 `Leistd.Timing` 命名空间，`TextRedactor` 位于 `Leistd.Redaction` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |
@@ -77,29 +77,20 @@ public class DailyReportService(IClock clock)
 - 不提供本地时间开关；持久化和服务间传递使用 UTC，按用户时区展示由呈现层处理。
 - 测试可注入 `FakeTimeProvider`；未注册 `TimeProvider` 时等同使用 `TimeProvider.System`。
 - `Normalize` 的规则：`Unspecified` 假定为 UTC（`SpecifyKind`）；`Local` 调用 `ToUniversalTime()` 转 UTC；`Utc` 原样返回。
-- `GetMidnightInUtc(timeZone)` 按**传入时区**计算：取当前 UTC → 转该时区 → 取当日零点 → 再转回 UTC。例如时区为 `Asia/Shanghai`、当前 UTC 为 `2026-05-27T20:00:00Z` 时（该时区已是 05-28），返回 `2026-05-27T16:00:00Z`。
+- `GetMidnightInUtc(timeZone)` 返回传入时区今日零点对应的 UTC 时刻。例如时区为 `Asia/Shanghai`、当前 UTC 为 `2026-05-27T20:00:00Z` 时（该时区已是 05-28），返回 `2026-05-27T16:00:00Z`。
 - 该实现无状态，以 Singleton 注册即可。
 
-- **`TextRedactor` 只提供形态，不维护数据类型目录。** 邮箱有专门方法，是因为它的 `'@'` 语义固定、
-  而框架自己也处理邮箱（邮件组件把收件人写进投递日志）；手机号、证件号、卡号这类"保留几位"属业务判断，
-  用 `RedactPartially` 传自己的参数，不在这里各加一个方法——那会让通用组件跟着业务长。
-- **放在 `Leistd.Redaction` 而不是日志命名空间下**：写日志与对外展示是同一件事的两面，
-  页面上只让人认出"是我那个"同样要脱敏。**要不要脱敏、对谁脱敏由调用方决定**——
-  同一个字段给本人看可能要真值（他要核对自己的联系方式），给运维看只要够聚合。
-- **邮箱保留位数是可读性与暴露面的权衡**：从第一个字母或数字起**最多留 3 位，且不超过本地部的一半**。
-  只留一位常常认不出是谁（工单里一堆 `a***@`）；封顶 3 位是因为再多对识别帮助有限、暴露面却线性上升；
-  半数上限是硬的——只按固定位数留，`alice` 这类短本地部会被交出去大半，`bob` 更会变成 `bo***`。
-  实际效果：`zhangsan@` → `zha***@`，`alice@` → `al***@`，`bob@` → `b***@`，`a@` → `***@`。
-- **掩码固定三个星号，不按长度补。** 定长掩码（如 PCI 示例 `1234 56XX XXXX 1121`）会暴露原值长度。
-  卡号长度本来公开所以无妨，通用形态上不这么做；确需定长时自己写。
-- **形态写在调用点，改形态要改代码、也无法按部署切换。** 业务要对自己的多种数据类型集中管控
-  **日志**脱敏策略时，用官方 `Microsoft.Extensions.Compliance.Redaction`（在业务侧声明自己的数据分类、
-  注册脱敏器）。注意它**只作用于日志管道，不覆盖对外展示**，展示侧仍用本类。
+- `TextRedactor` 只提供形态：邮箱用 `RedactEmail`，手机号、证件号、卡号等用 `RedactPartially` 传业务自己的保留位数。
+  要不要脱敏、对谁脱敏由调用方决定，写日志与对外展示都可用。
+- 邮箱本地部从第一个字母或数字起最多留 3 位，且不超过本地部的一半；域名完整保留。
+  效果：`zhangsan@` → `zha***@`，`alice@` → `al***@`，`bob@` → `b***@`，`a@` → `***@`。
+- 掩码固定三个星号，不按原值长度补齐。
+- 脱敏形态写在调用点，不能按部署切换。需要集中管控日志脱敏策略时用官方 `Microsoft.Extensions.Compliance.Redaction`（只作用于日志管道，展示侧仍用本类）。
 
 ## 注意事项
 
 - 默认实现始终基于 UTC。日边界扩展必须显式传入业务时区，不能用宿主的 `TimeZoneInfo.Local` 代替租户或用户时区。
-- `Leistd.Core` 本身不注册任何服务；`IClock` 的注册由 `Leistd.Ddd.Infrastructure` 完成。脱离 DDD 分组单独使用时务必手动 `AddSingleton<IClock, UtcClockProvider>()`，否则注入会失败。
+- `Leistd.Core` 本身不注册任何服务；脱离 DDD 分组单独使用 `IClock` 时手动 `AddSingleton<IClock, UtcClockProvider>()`。
 - 底层 Core 不定义框架通用异常基类。优先使用 .NET 内置异常；可预期业务失败使用[异常处理](./exception-handling.md)组件的 `BusinessException`。
 
 ## 相关

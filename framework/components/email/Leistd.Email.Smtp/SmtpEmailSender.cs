@@ -10,14 +10,11 @@ using MimeKit.Text;
 
 namespace Leistd.Email.Smtp;
 
-/// <summary>
-/// 经 SMTP 发信的 <see cref="IEmailSender"/>。
-/// </summary>
+/// <summary>经 SMTP 发信的 <see cref="IEmailSender"/>。</summary>
 /// <remarks>
 /// <para>每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。</para>
-/// <para>参数每封信取一次 <see cref="IOptionsMonitor{TOptions}.CurrentValue"/>：配置源重载后（文件改动，
-/// 或宿主注册的可重载配置源）下一封信即用新值。重算出的参数同样经注册的 <see cref="IValidateOptions{TOptions}"/> 校验，
-/// 不合规时抛 <see cref="OptionsValidationException"/>，不会带着残缺参数去连服务器。</para>
+/// <para>每封信取一次 <see cref="IOptionsMonitor{TOptions}.CurrentValue"/>，配置源重载后下一封信即用新值；
+/// 新值同样经 <see cref="IValidateOptions{TOptions}"/> 校验，不合规时抛 <see cref="OptionsValidationException"/>。</para>
 /// </remarks>
 public sealed class SmtpEmailSender(
     IOptionsMonitor<SmtpOptions> options,
@@ -36,24 +33,14 @@ public sealed class SmtpEmailSender(
 
         if (!string.IsNullOrWhiteSpace(current.Username))
         {
-            // 即使绕过启动校验，也不能把缺少口令误当作匿名投递。
-            var password = current.Password
-                ?? throw new InvalidOperationException(
-                    $"{SmtpOptions.SectionName}: Username is set but Password is missing. " +
-                    "Both must be provided together; startup validation should have rejected this.");
-
-            await client.AuthenticateAsync(current.Username, password, cancellationToken);
+            // CurrentValue 经 SmtpOptionsValidator 校验，只有用户名、没有口令的配置到不了这里。
+            await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
         }
 
         await client.SendAsync(mime, cancellationToken);
         await client.DisconnectAsync(quit: true, cancellationToken);
 
-        // 收件人脱敏后再记：邮箱是个人数据，日志通常被集中采集、保留更久、可见范围更大。
-        // 留下的形态（al***@example.com）既保住按域名聚合的排障能力，又不暴露到个人。
-        //
-        // 主题不脱敏：它是宿主给的文案，脱敏了就失去"这封是什么信"的排障价值，而那正是这条日志的用途。
-        // 本框架与模板产出的主题都是固定或本地化文案，不含个人数据；宿主若把人名之类放进主题，
-        // 那是它的显式选择——组件文档已写明这条边界，不在这里替它判断。
+        // 收件人脱敏后再记（保留域名便于按域名聚合）；主题不脱敏，它是宿主给的文案，组件文档写明不要放个人数据。
         logger.LogInformation(
             "Email sent to {To} with subject {Subject}",
             TextRedactor.RedactEmail(message.To),

@@ -11,8 +11,8 @@ namespace Leistd.DependencyInjection.Tests;
 // 织入把描述符改写成工厂型，Microsoft DI 就再也看不到它的构造函数图。
 // 若不在改写前补校验，开着 ValidateOnBuild 恰好漏掉 AOP 服务。
 //
-// 这条补覆盖的前提是注册回调为纯函数。曾经不是（DDD 基座在回调里注册仓储），
-// 那时预校验会把尚未注册的依赖误报成缺失；仓储改由 AddDddDbContext<T>() 显式注册后前提成立。
+// 这条补覆盖的前提是注册回调为纯函数：回调里若再注册服务（如在回调里注册仓储），
+// 预校验会把尚未注册的依赖误报成缺失。仓储由 AddDddDbContext<T>() 显式注册，前提成立。
 public class ValidateOnBuildCoverageTests
 {
     [Theory]

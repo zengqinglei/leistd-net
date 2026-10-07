@@ -11,14 +11,10 @@ namespace Leistd.Authorization.Subjects;
 /// </remarks>
 public interface IPermissionSubjectProvider
 {
-    /// <summary>
-    /// 获取当前权限检查主体；未登录或无法识别时返回 null。
-    /// </summary>
+    /// <summary>获取当前权限检查主体；未登录或无法识别时返回 <see langword="null"/>。</summary>
     Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 获取指定认证主体对应的权限检查主体；无法识别时返回 null。
-    /// </summary>
+    /// <summary>获取指定认证主体对应的权限检查主体；无法识别时返回 <see langword="null"/>。</summary>
     /// <remarks>
     /// 用于授权处理器评估 <c>AuthorizationHandlerContext.User</c> 这类显式传入、未必是当前请求用户的主体。
     /// 实现不应读取 <c>ICurrentUser</c> 等环境态，只按 <paramref name="principal"/> 的声明解析。

@@ -1,4 +1,4 @@
-import type { NotificationOutputDto } from '../../src/app/core/services/signalr-service';
+import type { NotificationOutputDto } from '../../src/app/shared/dtos/notification.dto';
 
 /** Mock 通知数据（内存）。 */
 export const NOTIFICATIONS: NotificationOutputDto[] = [

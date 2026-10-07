@@ -1,22 +1,9 @@
 /**
- * 展示时区与 UTC 之间的换算。
- *
- * 为什么需要它：列表里的时间按**展示时区**（`SettingContextService.timeZone`）渲染，而接口
- * 收的是 UTC。用户在筛选器里选的"3 月 1 日"指的是展示时区里的那一天，直接 `toISOString()`
- * 用的却是**浏览器时区**——两者不一致时，筛选范围会和眼前看到的时间对不上，表现为
- * "明明列表里有这一天的记录，按这一天筛却查不到"。
- *
- * 不引第三方日期库：原生 `Intl` 已经能拿到任意时区的墙上时间，而为这一个换算引入 luxon
- * 会让整个模板多一个运行时依赖。
+ * 展示时区与 UTC 之间的换算：列表按展示时区渲染，接口收 UTC，筛选选中的日期须按展示时区换算，
+ * 不能直接 `toISOString()`（那是浏览器时区）。只用原生 `Intl`，不引入日期库。
  */
 
-/**
- * 解析展示时区，未设置时回落到浏览器默认时区。
- *
- * 与 `AppDate` 管道同一口径——那里是 `...(timeZone ? { timeZone } : {})`，
- * 即不传 `timeZone` 就让 `Intl` 用浏览器默认。两处必须一致：表格按一套基准渲染、
- * 筛选却按另一套换算的话，选中的区间会和眼前看到的时间对不上。
- */
+/** 解析展示时区，未设置时回落到浏览器默认时区，与 `AppDate` 管道同一口径。 */
 function resolveZone(timeZone?: string): string {
   return timeZone || new Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
@@ -49,10 +36,7 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
     read('second'),
   );
 
-  // **两边都对齐到整秒再相减**：`Intl` 只给到秒，`wallAsUtc` 天然没有毫秒，
-  // 若直接减带毫秒的 `instant`，那部分毫秒会被当成偏移的一部分算进去——
-  // 结果是 23:59:59.999 这种上界被推后将近一秒、跨进次日，
-  // 于是"选一天"变成"选到第二天"，反解回选择器也会显示成次日。
+  // 两边对齐到整秒再相减：`Intl` 只给到秒，否则毫秒被算进偏移，23:59:59.999 会跨进次日。
   return wallAsUtc - (instant.getTime() - instant.getMilliseconds());
 }
 
@@ -96,11 +80,7 @@ export function zonedStartOfDayIso(date: Date, timeZone?: string): string {
   ).toISOString();
 }
 
-/**
- * 取「该日期在指定时区的当天 23:59:59.999」对应的 UTC ISO 串。
- *
- * 必须取到当天最后一刻：后端是闭区间，若上界停在 00:00:00，选中的那一天会整天查不到记录。
- */
+/** 取「该日期在指定时区的当天 23:59:59.999」对应的 UTC ISO 串；后端是闭区间。 */
 export function zonedEndOfDayIso(date: Date, timeZone?: string): string {
   return wallTimeToInstant(
     date.getFullYear(),
@@ -115,10 +95,8 @@ export function zonedEndOfDayIso(date: Date, timeZone?: string): string {
 }
 
 /**
- * 把 UTC ISO 串还原成「展示时区里的那一天」，用于从 URL 回填选择器。
- *
- * 返回的是浏览器本地 `Date`，其年月日等于该时刻在 `timeZone` 里的日历日期——
- * 选择器只认年月日，这样回填才与当初选的那天一致。
+ * 把 UTC ISO 串还原成展示时区里的那一天，用于回填选择器；返回浏览器本地 `Date`，
+ * 其年月日等于该时刻在 `timeZone` 里的日历日。
  */
 export function isoToZonedDate(iso: string, timeZone?: string): Date | null {
   const instant = new Date(iso);

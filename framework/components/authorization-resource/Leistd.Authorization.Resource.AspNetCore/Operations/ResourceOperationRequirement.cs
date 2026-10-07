@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Authorization.Infrastructure;
 
 namespace Leistd.Authorization.Resource.AspNetCore.Operations;
 
-/// <summary>
-/// 对一个资源实例执行某个操作的授权要求：官方 <see cref="OperationAuthorizationRequirement"/> 加上资源的 ACL 定位。
-/// </summary>
+/// <summary>对一个资源实例执行某个操作的授权要求：官方 <see cref="OperationAuthorizationRequirement"/> 加上资源的 ACL 定位。</summary>
 /// <remarks>
 /// 业务规则写成官方的 <c>AuthorizationHandler&lt;OperationAuthorizationRequirement, TResource&gt;</c> 即可匹配本要求，
 /// 按 <see cref="OperationAuthorizationRequirement.Name"/> 区分操作；资源名与资源 Key 供 ACL 处理器查询授予。

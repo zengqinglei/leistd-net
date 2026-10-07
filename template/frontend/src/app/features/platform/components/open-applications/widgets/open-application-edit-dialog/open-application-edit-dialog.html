@@ -116,7 +116,7 @@
                   t('openApp.field.clientType')
                 }}</label>
                 @if (isTemplateLocked()) {
-                  <span hlmBadge [variant]="isConfidentialClient() ? 'default' : 'secondary'">{{
+                  <span hlmBadge [variant]="isConfidentialClient() ? 'outline' : 'secondary'">{{
                     clientTypeLabels()[formModel().clientType]
                   }}</span>
                 } @else {
@@ -190,23 +190,21 @@
             </div>
 
             @if (isServiceType()) {
-              <!-- service 类型：简化显示 -->
-              <div class="rounded-lg border border-border bg-muted/40 p-4">
-                <div class="mb-2 flex items-center gap-2">
+              <div class="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-4">
+                <div class="flex items-center gap-2">
                   <ng-icon name="lucideCircleCheck" class="text-success" />
                   <span class="text-sm font-medium">{{ t('openApp.service.autoConfigured') }}</span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   @for (p of formModel().permissions; track p) {
-                    <span hlmBadge variant="default">{{ permissionLabels()[p] ?? p }}</span>
+                    <span hlmBadge variant="secondary">{{ permissionLabels()[p] ?? p }}</span>
                   }
                 </div>
-                <p class="mt-2 text-xs text-muted-foreground">
+                <p class="text-xs text-muted-foreground">
                   {{ t('openApp.service.description') }}
                 </p>
               </div>
             } @else {
-              <!-- web/desktop 类型：完整编辑 -->
               <div hlmField>
                 <label hlmFieldLabel for="application-permissions">{{
                   t('openApp.field.permissions')
@@ -283,24 +281,25 @@
                 }
               </div>
 
-              <div class="rounded-lg border border-border p-3">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <label class="text-sm font-medium" for="application-session-bound">{{
+              <div class="flex flex-col gap-2">
+                <div hlmField orientation="horizontal">
+                  <div hlmFieldContent>
+                    <label hlmFieldLabel for="application-session-bound">{{
                       t('openApp.sessionBound.title')
                     }}</label>
-                    <div class="mt-1 text-xs text-muted-foreground">
+                    <p hlmFieldDescription id="application-session-bound-hint">
                       {{ t('openApp.sessionBound.hint') }}
-                    </div>
+                    </p>
                   </div>
                   <hlm-switch
                     inputId="application-session-bound"
+                    aria-describedby="application-session-bound-hint"
                     [checked]="formModel().sessionBound === true"
                     (checkedChange)="setSessionBound($event)"
                   />
                 </div>
                 @if (formModel().sessionBound === null) {
-                  <p class="mt-2 text-sm text-warning" data-testid="session-bound-unset">
+                  <p class="text-sm text-warning" data-testid="session-bound-unset">
                     {{ t('openApp.sessionBound.unset') }}
                   </p>
                 }

@@ -270,6 +270,26 @@
       "datatype": "bool",
       "description": "是否包含多语言（i18n）支持：前端 Transloco 运行时切换（有前端时）+ 后端按 culture 本地化（默认语言英语）",
       "defaultValue": "false"
+    },
+    "Ci": {
+      "type": "parameter",
+      "datatype": "choice",
+      "defaultValue": "github",
+      "description": "生成的 CI 流水线薄壳：只准备运行环境并调用 scripts/verify.ps1（完整回归入口，总是生成）",
+      "choices": [
+        {
+          "choice": "github",
+          "description": "GitHub Actions：.github/workflows/ci.yml"
+        },
+        {
+          "choice": "gitlab",
+          "description": "GitLab CI：.gitlab-ci.yml（Runner 须允许 Docker-in-Docker）"
+        },
+        {
+          "choice": "none",
+          "description": "不生成流水线文件"
+        }
+      ]
     }
   },
   "sources": [
@@ -302,7 +322,7 @@
         {
           "condition": "!LocalIdentity",
           "exclude": [
-            "frontend/src/app/features/settings/email-test/**",
+            "frontend/src/app/features/settings/components/setting-section/widgets/email-test/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Identity/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Control/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/IdentityControlDbContext.cs",
@@ -316,11 +336,9 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/PostgresTenantDatabaseErrorDescriber.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/TenantDatabaseErrorDescriberTests.cs",
-            "backend/src/CompanyName.ProjectName.Client/Dtos/WhoAmIDto.cs",
             "frontend/src/app/features/account/**",
             "frontend/src/app/features/platform/components/users/widgets/reset-user-password-dialog/**",
             "frontend/src/app/features/platform/components/users/widgets/user-edit-dialog/**",
-            "frontend/src/app/core/errors/api-error-codes.ts",
             "frontend/_mock/api/auth.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
             "backend/src/CompanyName.ProjectName.Application/Tenants/**",
@@ -330,8 +348,9 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SettingsContractTests.cs",
             "frontend/src/app/features/platform/components/tenants/**",
             "frontend/src/app/features/platform/services/tenant-service.ts",
+            "frontend/src/app/features/platform/services/tenant-service.spec.ts",
             "frontend/src/app/features/platform/services/tenant-connection-service.ts",
-            "frontend/src/app/shared/dtos/tenant-connection.dto.ts",
+            "frontend/src/app/features/platform/dtos/tenant-connection.dto.ts",
             "frontend/_mock/api/tenant.ts",
             "frontend/_mock/api/tenant.spec.ts",
             "frontend/_mock/data/tenant.ts",
@@ -339,7 +358,8 @@
             "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
             "frontend/src/app/core/services/impersonation-service.spec.ts",
             "frontend/src/app/core/services/tenant-context-service.spec.ts",
-            "frontend/src/app/core/settings/auth-mock-subject.spec.ts",
+            "frontend/_mock/api/auth.spec.ts",
+            "frontend/_mock/api/user.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/UserUniquenessTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs",
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/DefaultAdminOptions.cs",
@@ -348,9 +368,13 @@
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/PasswordHashingTests.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/AllowDuringTwoFactorSetupAttribute.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/HttpRequestClientInfo.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/LocalSessionAuthenticationExtensions.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/SessionCookieIssuer.cs",
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/AuthExceptionMappings.cs",
             "backend/src/CompanyName.ProjectName.Api/Middlewares/TwoFactorSetupEnforcementMiddleware.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/ResetUserPasswordInputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/CreateUserInputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserInputDto.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/OneTimeCodes/RecoveryCodes.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/OneTimeCodes/Totp.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Text/Base32.cs",
@@ -361,6 +385,7 @@
             "backend/src/CompanyName.ProjectName.Domain/Users/ValueObjects/CredentialValidationResult.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/ControlPlaneConnectionStrings.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AccessFailureCounterTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/CredentialChangeTransactionTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AvatarTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/DefaultAdminBootstrapTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Fixtures/AuthorizationTestBase.cs",
@@ -385,13 +410,29 @@
           ]
         },
         {
+          "condition": "(Ci != \"github\")",
+          "exclude": [
+            ".github/**"
+          ]
+        },
+        {
+          "condition": "(Ci != \"gitlab\")",
+          "exclude": [
+            ".gitlab-ci.yml"
+          ]
+        },
+        {
           "condition": "!IncludeNotifications",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Notifications/**",
+            "backend/src/CompanyName.ProjectName.Api/Hosting/NotificationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Application/Notifications/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationPreferencesTests.cs",
             "frontend/src/app/layout/components/notifications/**",
+            "frontend/src/app/layout/services/notification-service.ts",
+            "frontend/src/app/layout/services/notification-service.spec.ts",
+            "frontend/src/app/shared/dtos/notification.dto.ts",
             "frontend/_mock/api/notification.ts",
             "frontend/_mock/data/notifications.ts"
           ]
@@ -399,11 +440,13 @@
         {
           "condition": "!RemoteTokenAuth",
           "exclude": [
-            "frontend/src/app/core/settings/mock-subject.spec.ts",
+            "frontend/_mock/api/resource-auth.spec.ts",
             "frontend/src/app/core/components/resource-login/**",
             "frontend/_mock/api/resource-auth.ts",
             "backend/src/CompanyName.ProjectName.Api/Auth/SigningKeyRefresh.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/RemoteTokenAuthenticationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ResourceAuthController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/CurrentResourceUserOutputDto.cs",
             "backend/src/CompanyName.ProjectName.DbMigrator/ResourceAdminBootstrap*.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/ResourceUserAccessTokenAccessor.cs",
             "backend/src/CompanyName.ProjectName.Api/HealthChecks/RemoteIdentityReadinessHealthCheck.cs",
@@ -423,7 +466,7 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/ExternalAuthAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IExternalAuthAppService.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginLinkDtos.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginsOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginProvidersOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/DomainServices/ExternalAuthDomainService.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Errors/ExternalAuthErrorCodes.cs",
@@ -435,7 +478,6 @@
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/ExternalAuthOptionsValidatorTests.cs",
             "frontend/src/app/features/account/components/external-auth-callback/**",
             "frontend/src/app/features/account/components/external-logins/**",
-            "frontend/src/app/features/account/services/account-service.spec.ts",
             "backend/tests/CompanyName.ProjectName.UnitTests/Domain/ExternalLoginConnectionTests.cs"
           ]
         },
@@ -443,7 +485,7 @@
           "condition": "LocalIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Resource/**",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceReadinessGateTests.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Api/ResourceReadinessGateTests.cs",
             "backend/src/CompanyName.ProjectName.Api/Middlewares/ResourceUserProvisioningMiddleware.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceUserProjectionTests.cs"
           ]
@@ -452,12 +494,16 @@
           "condition": "!IncludeLocalization",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Resources/**",
+            "backend/src/CompanyName.ProjectName.Api/Localization/**",
+            "docs/standards/frontend-i18n.md",
             "frontend/public/i18n/**",
             "frontend/src/app/core/i18n/**",
             "frontend/src/app/core/services/language-service.ts",
             "frontend/src/app/core/services/language-service.spec.ts",
             "frontend/src/app/core/interceptors/accept-language-interceptor.ts",
-            "frontend/src/app/shared/components/language-switcher/**"
+            "frontend/src/app/core/components/language-switcher/**",
+            "frontend/src/app/app.interceptors.spec.ts",
+            "scripts/check-i18n.py"
           ]
         },
         {
@@ -472,7 +518,8 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/ConnectInteractionProtector.cs",
-            "backend/src/CompanyName.ProjectName.Api/Configuration/OAuthCertificateLoader.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/OAuthCertificateLoader.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/OpenIddictServerExtensions.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/LogoutConfirmationOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/AuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs",
@@ -483,10 +530,11 @@
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/account/components/logout-confirm/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
-            "frontend/src/app/features/platform/models/open-application.dto.ts",
+            "frontend/src/app/features/platform/services/open-application-service.spec.ts",
+            "frontend/src/app/features/platform/dtos/open-application.dto.ts",
             "frontend/_mock/api/open-application.ts",
+            "frontend/_mock/api/open-application.spec.ts",
             "frontend/_mock/data/open-applications.ts",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/OpenIddictDbContext.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/OpenIddict/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/DesignTime/OpenIddictDbContextFactory.cs",
@@ -512,7 +560,9 @@
           "exclude": [
             "frontend/**",
             "docs/standards/coding-frontend.md",
-            "docs/standards/ui-design.md",
+            "docs/standards/frontend-ui.md",
+            "docs/standards/frontend-spartan.md",
+            "docs/standards/frontend-i18n.md",
             "backend/src/CompanyName.ProjectName.Api/Hosting/SpaExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Middlewares/BrowserOriginMiddleware.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/DistributedTicketStore.cs",
@@ -521,14 +571,13 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/BrowserOriginTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SpaStaticFileCachingTests.cs",
             ".gitattributes",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/DeploymentSafeguardsTests.cs",
             ".agents/skills/spartan/**"
           ]
         },
         {
           "condition": "!ResourceBrowserSession",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Api/Auth/ResourceSessionAuthentication.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/ResourceSessionRefresher.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceBrowserSessionTests.cs"
           ]
         },
@@ -557,7 +606,7 @@
         {
           "condition": "!(IncludeNotifications && Email)",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Api/Notifications/UserEmailRecipientResolver.cs"
+            "backend/src/CompanyName.ProjectName.Application/Notifications/Provider/UserEmailRecipientResolver.cs"
           ]
         },
         {
@@ -572,7 +621,8 @@
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IEmailVerificationAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/EmailVerificationAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/SendEmailCodeInputDto.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/EmailVerificationDtos.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/EmailVerificationChallengeOutputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/EmailVerificationInputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/SecurityConfigOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Settings/AppServices/**",
             "backend/src/CompanyName.ProjectName.Application/Settings/Validators/EmailSettingValidator.cs",
@@ -583,7 +633,7 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailSettingsTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailVerificationChallengeTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs",
-            "frontend/src/app/features/settings/email-test/**",
+            "frontend/src/app/features/settings/components/setting-section/widgets/email-test/**",
             "backend/src/CompanyName.ProjectName.Application/Settings/Dtos/**"
           ]
         },
@@ -602,15 +652,17 @@
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/TenantDatabaseErrorDescriberTests.cs",
             "frontend/src/app/features/platform/components/tenants/**",
             "frontend/src/app/features/platform/services/tenant-service.ts",
+            "frontend/src/app/features/platform/services/tenant-service.spec.ts",
             "frontend/src/app/features/platform/services/tenant-connection-service.ts",
-            "frontend/src/app/shared/dtos/tenant-connection.dto.ts",
+            "frontend/src/app/features/platform/dtos/tenant-connection.dto.ts",
             "frontend/_mock/api/tenant.ts",
             "frontend/_mock/api/tenant.spec.ts",
             "frontend/_mock/data/tenant.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ControlPlaneModelSeparationTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ControlPlaneStoreSeparationTests.cs",
             "frontend/public/i18n/tenants/**",
-            "frontend/src/app/shared/dtos/tenant.dto.ts",
+            "frontend/src/app/features/platform/dtos/tenant.dto.ts",
+            "frontend/src/app/features/account/dtos/tenant-by-host.dto.ts",
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/TenantExceptionMappings.cs"
           ]
         },
@@ -637,9 +689,11 @@
           "exclude": [
             "frontend/src/app/features/platform/components/operation-records/**",
             "frontend/src/app/features/platform/services/operation-record-service.ts",
+            "frontend/src/app/features/platform/services/operation-record-service.spec.ts",
             "frontend/_mock/api/operation-record.ts",
+            "frontend/_mock/api/operation-record.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/OperationRecordArchiveTests.cs",
-            "frontend/src/app/features/platform/models/operation-record.dto.ts",
+            "frontend/src/app/features/platform/dtos/operation-record.dto.ts",
             "frontend/_mock/data/operation-record.ts",
             "frontend/public/i18n/operationRecords/**"
           ]
@@ -663,7 +717,9 @@
         {
           "condition": "!(OpenIddictServer || RemoteTokenAuth)",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Domain/Shared/Security/AccessTokenRenewal.cs"
+            "backend/src/CompanyName.ProjectName.Domain/Shared/Security/AccessTokenRenewal.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthenticationModeTests.cs"
           ]
         },
         {

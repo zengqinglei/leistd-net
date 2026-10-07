@@ -110,6 +110,103 @@ function Get-PackageMetadata([IO.FileInfo]$PackageFile) {
     }
 }
 
+function New-SnippetProject([string]$Directory, [object]$PackageSelection, [object[]]$ExtraPackages) {
+    $ids = if ($PackageSelection -is [string] -and $PackageSelection -eq '*') { @($feedPackages.Id) } else { @($PackageSelection) }
+    $references = foreach ($id in ($ids | Sort-Object)) {
+        $package = @($feedPackages | Where-Object Id -ceq $id)
+        if ($package.Count -ne 1) { throw "Doc snippet project references a package missing from the feed: $id" }
+        '    <PackageReference Include="{0}" Version="{1}" />' -f [Security.SecurityElement]::Escape($id), [Security.SecurityElement]::Escape($package[0].Version)
+    }
+    $references += foreach ($extra in $ExtraPackages) {
+        '    <PackageReference Include="{0}" Version="{1}" />' -f [Security.SecurityElement]::Escape($extra.id), [Security.SecurityElement]::Escape($extra.version)
+    }
+    # Web SDK: snippets are host code and get its implicit usings, nothing more.
+    # CS4014 (missing await) and CS0618 (obsolete API) are defects in a documented example.
+    $project = @"
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- #line points at Markdown (and at virtual counterexample paths); no PDB must open them. -->
+    <DebugType>none</DebugType>
+    <WarningsAsErrors>`$(WarningsAsErrors);CS4014;CS0618</WarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+$($references -join "`n")
+  </ItemGroup>
+</Project>
+"@
+    $path = Join-Path $Directory "DocSnippets.csproj"
+    [IO.File]::WriteAllText($path, $project, [Text.UTF8Encoding]::new($false))
+    return $path
+}
+
+function New-SnippetSolution([string]$Path, [string[]]$Projects) {
+    $document = [Xml.XmlDocument]::new()
+    $root = $document.CreateElement("Solution")
+    $null = $document.AppendChild($root)
+    foreach ($project in $Projects) {
+        $relative = [IO.Path]::GetRelativePath((Split-Path $Path), $project).Replace('\', '/')
+        $folder = $document.CreateElement("Folder")
+        $folder.SetAttribute("Name", "/$(Split-Path (Split-Path $project) -Leaf)/")
+        $element = $document.CreateElement("Project")
+        $element.SetAttribute("Path", $relative)
+        $null = $folder.AppendChild($element)
+        $null = $root.AppendChild($folder)
+    }
+    $document.Save($Path)
+}
+
+# Component-doc examples in `## 注册` / `## 使用` must compile against the packed
+# packages (development-guide §5.1/§6.3). The extractor also emits compile-time
+# counterexamples (original P4-5..P4-7 snippets, an injected missing using);
+# each must fail with its expected diagnostic, otherwise the gate proves nothing.
+function Invoke-DocSnippetCompilation {
+    $python = $null
+    foreach ($candidate in @("python3", "python")) {
+        $command = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($command -and ((& $command.Source --version 2>&1) -match '^Python 3\.')) { $python = $command.Source; break }
+    }
+    if (-not $python) { throw "Python 3 (python3/python) is required to extract doc snippets." }
+
+    $snippetRoot = Join-Path $consumerRoot "doc-snippets"
+    Assert-TempPath $snippetRoot
+    Invoke-External $python @((Join-Path $repoRoot "scripts/extract-doc-snippets.py"), "--output", $snippetRoot)
+    $manifest = Get-Content -LiteralPath (Join-Path $snippetRoot "manifest.json") -Raw | ConvertFrom-Json
+
+    $passing = [System.Collections.Generic.List[string]]::new()
+    $failing = [System.Collections.Generic.List[object]]::new()
+    foreach ($entry in $manifest.projects) {
+        $path = New-SnippetProject (Join-Path $snippetRoot $entry.name) $entry.packages @($manifest.extraPackages)
+        if ($entry.expect -eq "pass") { $passing.Add($path) } else { $failing.Add([PSCustomObject]@{ Entry = $entry; Path = $path }) }
+    }
+
+    $passSolution = Join-Path $snippetRoot "DocSnippets.slnx"
+    New-SnippetSolution $passSolution $passing
+    Invoke-External "dotnet" @("restore", $passSolution, "--configfile", $nugetConfigPath) $snippetRoot
+    Invoke-External "dotnet" @("build", $passSolution, "-c", $Configuration, "--no-restore", "-maxcpucount:4") $snippetRoot
+
+    $failSolution = Join-Path $snippetRoot "SelfTest.slnx"
+    New-SnippetSolution $failSolution @($failing.Path)
+    Invoke-External "dotnet" @("restore", $failSolution, "--configfile", $nugetConfigPath) $snippetRoot
+    foreach ($item in $failing) {
+        Write-Host "> dotnet build $($item.Path) (expected to fail)" -ForegroundColor DarkGray
+        $output = (& dotnet build $item.Path -c $Configuration --no-restore 2>&1 | Out-String)
+        if ($LASTEXITCODE -eq 0) { throw "Doc snippet counterexample $($item.Entry.name) compiled; the snippet gate no longer detects it." }
+        foreach ($diagnostic in $item.Entry.diagnostics) {
+            $pattern = '{0}\(\d+,\d+\): error (?:{1}):' -f [regex]::Escape($diagnostic.path), (($diagnostic.codes | ForEach-Object { [regex]::Escape($_) }) -join '|')
+            if ($output -notmatch $pattern) {
+                Write-Host $output
+                throw "Doc snippet counterexample $($item.Entry.name) failed without $($diagnostic.codes -join '/') at $($diagnostic.path)."
+            }
+        }
+        Write-Host "Counterexample $($item.Entry.name) rejected with $($diagnostic.codes -join '/')." -ForegroundColor DarkGray
+    }
+    Write-Host "Doc snippets compiled: $($manifest.snippets) block(s) in $($passing.Count) project(s), $(@($manifest.exempt).Count) exempt; $($failing.Count) counterexample(s) rejected." -ForegroundColor Green
+}
+
 if (-not (Test-Path -LiteralPath $feedRoot -PathType Container)) {
     throw "Package feed does not exist: $feedRoot. Run dotnet pack first."
 }
@@ -121,6 +218,7 @@ if ($packageFiles.Count -eq 0) {
 
 $packages = @($packageFiles | ForEach-Object { Get-PackageMetadata $_ })
 $allPackageCount = $packages.Count
+$feedPackages = $packages
 
 # feed 里不得存在没有对应源码项目的包。持久化 feed 会保留已被删除的组件——
 # 消费它等于在验证一个仓库里已经不存在的东西，而它带来的告警（例如已删组件的
@@ -271,3 +369,11 @@ Invoke-External "dotnet" @("build", $solutionPath, "-c", $Configuration, "--no-r
 
 $results | Format-Table -AutoSize
 Write-Host "Package consumption passed for $($results.Count) package(s)." -ForegroundColor Green
+
+# Snippets reference every family, so they need the complete feed; manual -PackageIds may point at a partial one.
+if ($PackageIds.Count -gt 0) {
+    Write-Host "Doc snippet compilation not run: -PackageIds narrows the feed." -ForegroundColor Yellow
+}
+else {
+    Invoke-DocSnippetCompilation
+}

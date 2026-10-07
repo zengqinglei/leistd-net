@@ -3,6 +3,7 @@ import { Route, Routes } from '@angular/router';
 import { routes } from './app.routes';
 import { authGuard } from './core/guards/auth-guard';
 import { PROTECTED_ROUTE_PREFIXES } from './core/services/startup-service';
+import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 describe('top-level routes', () => {
   const isCatchAllPrefix = (r: Route) => r.path === '' && !!r.loadChildren;
@@ -49,5 +50,13 @@ describe('top-level routes', () => {
       [...PROTECTED_ROUTE_PREFIXES].sort() as string[],
       `路由表里使用 authGuard 的是 ${authGuarded.join(', ')}`,
     ).toEqual(authGuarded);
+  });
+
+  /** 路由守卫与菜单、重定向必须用同一份权限清单；断言同源，防止有人在路由里手写补项。 */
+  it('shares the /platform route allowlist with canAccessPlatform', () => {
+    const platformRoute = routes.find((route) => route.path === 'platform');
+
+    expect(platformRoute, '/platform 路由不存在').toBeDefined();
+    expect(platformRoute?.data?.['permissions']).toEqual([...PLATFORM_ENTRY_PERMISSIONS]);
   });
 });

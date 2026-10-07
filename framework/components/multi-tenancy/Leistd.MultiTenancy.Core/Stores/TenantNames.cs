@@ -4,8 +4,7 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.Stores;
 
-// 租户名的写入前校验，创建与改名共用。名字来自管理员输入，不合法是调用方能改对的错误：400 而不是 500。
-// 只校验不改写：落库的仍是调用方给的原值，大小写归一由 ITenantNormalizer 负责。
+// 租户名的写入前校验（创建与改名共用），不合法为 400。只校验不改写，大小写归一由 ITenantNormalizer 负责。
 internal static class TenantNames
 {
     private static readonly Regex Pattern =

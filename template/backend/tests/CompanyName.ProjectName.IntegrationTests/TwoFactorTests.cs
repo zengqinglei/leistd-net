@@ -101,6 +101,34 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
     }
 
     /// <summary>
+    /// 验证码与恢复码都没给是入参校验失败：400 字段错误、不带业务码，也不消耗这次挑战
+    /// </summary>
+    [Fact]
+    public async Task Submitting_neither_code_is_a_field_error_and_keeps_the_challenge()
+    {
+        var (host, clock) = CreateHost();
+        using var ownedHost = host;
+        var username = await CreateUserAsync(host, "tfa_empty");
+        var secret = await EnableForAsync(host, username, clock);
+
+        Step(clock);
+        var (_, token) = await PasswordStepAsync(host, username);
+
+        using (var client = ProjectWebApplicationFactory.CreateProjectClient(host))
+        using (var empty = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, RecoveryCode = "  " }))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+            using var body = JsonDocument.Parse(await empty.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.TryGetProperty("code", out _));
+            Assert.Contains(body.RootElement.GetProperty("errors").EnumerateArray(),
+                error => error.GetProperty("field").GetString() == "code");
+        }
+
+        using var signedIn = await SecondStepAsync(host, token, new { Token = token, Code = Code(secret, clock) });
+        Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
     /// 输错不延长挑战的有效期
     /// </summary>
     /// <remarks>
@@ -190,6 +218,51 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
 
         using var direct = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
         Assert.Equal(HttpStatusCode.OK, (await direct.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
+    /// 前置状态由用户实体守卫：未启用时不能重发恢复码，已启用时不能再设置或再启用；
+    /// 拒绝码与状态码不变，被拒的请求不改两步验证状态。
+    /// </summary>
+    [Fact]
+    public async Task Two_factor_state_preconditions_are_rejected_with_conflict()
+    {
+        var (host, clock) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_state");
+        using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+
+        using (var regenerate = await session.Client.PostAsJsonAsync(
+                   "/api/v1/auth/me/two-factor/recovery-codes", new { Code = "000000" }))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, regenerate.StatusCode);
+            Assert.Equal("Auth:TwoFactorNotEnabled", await ErrorCodeAsync(regenerate));
+        }
+
+        var secret = await BeginSetupAsync(session.Client);
+        await EnableAsync(session.Client, secret, clock);
+        Step(clock);
+
+        using (var setupAgain = await session.Client.PostAsync("/api/v1/auth/me/two-factor/setup", null))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, setupAgain.StatusCode);
+            Assert.Equal("Auth:TwoFactorAlreadyEnabled", await ErrorCodeAsync(setupAgain));
+        }
+
+        using (var enableAgain = await session.Client.PostAsJsonAsync(
+                   "/api/v1/auth/me/two-factor/enable", new { Code = Code(secret, clock) }))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, enableAgain.StatusCode);
+            Assert.Equal("Auth:TwoFactorAlreadyEnabled", await ErrorCodeAsync(enableAgain));
+        }
+
+        // 原密钥仍在用：恢复码数没变，下一步的验证码照样能重发恢复码
+        var status = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me/two-factor");
+        Assert.True(status.GetProperty("enabled").GetBoolean());
+        Assert.Equal(RecoveryCodes.Count, status.GetProperty("recoveryCodesLeft").GetInt32());
+        using var regenerated = await session.Client.PostAsJsonAsync(
+            "/api/v1/auth/me/two-factor/recovery-codes", new { Code = Code(secret, clock) });
+        Assert.Equal(HttpStatusCode.OK, regenerated.StatusCode);
     }
 
     [Fact]

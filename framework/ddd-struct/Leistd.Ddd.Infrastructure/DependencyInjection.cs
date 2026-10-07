@@ -22,14 +22,13 @@ using Leistd.DependencyInjection.Extensions;
 
 namespace Leistd.Ddd.Infrastructure;
 
-/// <summary>
-/// 提供 DDD 基础设施服务注册。
-/// </summary>
+/// <summary>DDD 基础设施服务注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。
-    /// </summary>
+    /// <summary>注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。</summary>
+    /// <remarks>
+    /// 可重复调用：服务只注册一次，<paramref name="configureUnitOfWork"/> 每次都叠加；工作单元配置节的规则同 <c>AddUnitOfWork</c>。
+    /// </remarks>
     /// <example>
     /// <code>
     /// // 必要步骤：拦截器织入与漏登记校验都由这个工厂驱动，不装则两者都不生效。
@@ -48,21 +47,22 @@ public static class DependencyInjection
         this IServiceCollection services,
         Action<UnitOfWorkOptions>? configureUnitOfWork = null)
     {
-        services.AddSingleton<IQueryableAsyncExecuter, EfCoreQueryableAsyncExecuter>();
+        services.TryAddSingleton<IQueryableAsyncExecuter, EfCoreQueryableAsyncExecuter>();
 
         // 保留宿主或测试预先注册的时钟实现。
         services.TryAddSingleton<IClock, UtcClockProvider>();
 
         services.AddAuditingEfCore();
 
-        // 领域事件由保存拦截器收集后发布，事件总线是基座的组成部分，不留给宿主记得注册
+        // 领域事件由保存拦截器收集后发布，事件总线由基座注册
         services.AddLocalEventBus();
-        services.AddScoped<LocalEventSaveChangesInterceptor>();
+        // 待发布事件按 DbContext 暂存在静态弱表中，拦截器本身无状态。
+        services.TryAddTransient<LocalEventSaveChangesInterceptor>();
 
         services.TryAddSingleton<ConcurrencyStampSaveChangesInterceptor>();
 
-        services.AddSingleton<IDataFilter, DataFilter>();
-        services.AddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>)); // 状态由 AsyncLocal 隔离
+        services.TryAddSingleton<IDataFilter, DataFilter>();
+        services.TryAddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>)); // 状态由 AsyncLocal 隔离
 
         services.AddUnitOfWork(configureUnitOfWork);
 
@@ -79,9 +79,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// 把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，挂载保存拦截器，并按选项注册仓储。
-    /// </summary>
+    /// <summary>把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，挂载保存拦截器，并按选项注册仓储。</summary>
     /// <remarks>
     /// <para>派生自 <see cref="BaseDbContext"/> 的上下文经 <c>ConfigureDbContext&lt;TDbContext&gt;</c> 挂载三个保存拦截器：
     /// 修改/删除审计（含软删除转换）、领域事件收集与发布、并发标记换发；与 <c>AddDbContext</c> 的先后无关。
@@ -91,6 +89,10 @@ public static class DependencyInjection
     /// <para>每个已注册 DbContext 都须登记，包括不需要仓储的上下文。
     /// 宿主必须使用 Leistd 服务提供器工厂，才能在构建容器时检测漏登记。
     /// 省略选项时仅登记上下文，不注册仓储。</para>
+    /// <para>同一上下文重复调用只登记一次、保存拦截器只挂一份；为已有仓储的实体再次登记相同实现时不重复注册，
+    /// 登记不同实现（含另一个上下文的默认仓储）抛出 <see cref="InvalidOperationException"/>。</para>
+    /// <para>仓储实现另外实现的、派生自 <c>IRepository&lt;TEntity&gt;</c> 的自定义接口一并按 Scoped 注册，
+    /// 重复与冲突规则同上。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -207,11 +209,24 @@ public static class DependencyInjection
 
                 AddRepositoryDescriptor(services, keyedInterface, implementationType, entityType);
             }
+
+            // 自定义仓储接口（如 IUserRepository : IRepository<User, Guid>）与默认接口同属一个实现，
+            // 按同样的生命周期与唯一性规则注册，业务代码才能直接注入它。
+            var entityRepository = typeof(IRepository<>).MakeGenericType(entityType);
+            foreach (var customInterface in implementationType.GetInterfaces())
+            {
+                if (customInterface != entityRepository &&
+                    !(customInterface.IsGenericType &&
+                      customInterface.GetGenericTypeDefinition() == typeof(IRepository<,>)) &&
+                    entityRepository.IsAssignableFrom(customInterface))
+                {
+                    AddRepositoryDescriptor(services, customInterface, implementationType, entityType);
+                }
+            }
         }
     }
 
-    // 同一实体被两个上下文各注册一次时，Microsoft DI 让后注册的静默胜出——
-    // 调用方拿到的是哪个库的仓储由注册顺序决定，且没有任何信号。此处直接拒绝。
+    // 同一实体被两个上下文各注册一次时 Microsoft DI 会让后注册者静默胜出，此处直接拒绝；相同实现的重复登记幂等跳过。
     private static void AddRepositoryDescriptor(
         IServiceCollection services,
         Type repositoryInterface,
@@ -220,6 +235,11 @@ public static class DependencyInjection
     {
         if (services.FirstOrDefault(d => d.ServiceType == repositoryInterface) is { } existing)
         {
+            if (existing.ImplementationType == implementationType && existing.Lifetime == ServiceLifetime.Scoped)
+            {
+                return;
+            }
+
             throw new InvalidOperationException(
                 $"A repository for '{entityType.FullName}' is already registered as " +
                 $"'{existing.ImplementationType?.FullName ?? "<factory>"}'. Registering " +
@@ -231,8 +251,8 @@ public static class DependencyInjection
         services.AddScoped(repositoryInterface, implementationType);
     }
 
-    // 注册了 DbContext 却没有显式接入的，直接让宿主起不来：那个上下文会逃出
-    // 租户过滤器闸门。不要仓储的上下文调用无参重载即可（只登记，不注册仓储）。
+    // 注册了 DbContext 却没有显式接入的，宿主启动即失败：那个上下文会绕过租户过滤器闸门。
+    // 不要仓储的上下文调用无参重载即可。
     private static void EnsureEveryDbContextIsDeclared(IServiceCollection services)
     {
         if (services.FirstOrDefault(d => d.ServiceType == typeof(TrackedDbContextTypes))

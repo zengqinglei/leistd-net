@@ -2,7 +2,6 @@
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 #endif
-using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
@@ -11,15 +10,11 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Auditing.Abstractions;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
-#if (LocalIdentity)
-using Leistd.MultiTenancy;
-#endif
 using Microsoft.Extensions.Logging;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
+#if (LocalIdentity)
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
+#endif
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 
@@ -30,10 +25,8 @@ public class UserDomainService(
     IRepository<User, Guid> userRepository,
     IDataFilter dataFilter,
 #if (LocalIdentity)
-    // 只有 CreateSuperAdminAsync 用它挡"租户上下文里造超管"，而那个方法只在本地身份形态存在
+    // CreateSuperAdminAsync 与 PromoteToSuperAdmin 用它挡"租户上下文里造超管"，两者只在本地身份形态存在
     ICurrentTenant currentTenant,
-    IRepository<Role, Guid> roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
     IPasswordHasher passwordHasher,
 #endif
     ILogger<UserDomainService> logger)
@@ -50,7 +43,7 @@ public class UserDomainService(
     /// <para><b>角色与启停不碰。</b>那两样是本服务自己的授权决定，刷新资料时必须原样保留，
     /// 否则每次请求都会把管理员刚做的授权冲掉。</para>
     /// <para>首次访问的并发不在这里处理：撞主键要到冲刷时才抛，本方法内接不到。
-    /// 由持有事务边界的调用方重试一次，见 <c>ResourceUserProvisioningMiddleware</c>。</para>
+    /// 由持有事务边界的调用方重试一次，见 <c>IUserAppService.EnsureCurrentUserProjectedAsync</c>。</para>
     /// </remarks>
     /// <param name="subjectId">签发方主体标识，取自令牌的 <c>sub</c>。</param>
     /// <param name="username">令牌里的用户名；缺失时回落为主体标识，保证非空且可检索。</param>
@@ -216,13 +209,7 @@ public class UserDomainService(
         string passwordSubject,
         CancellationToken cancellationToken = default)
     {
-        if (currentTenant.IsAvailable)
-        {
-            throw new InvalidOperationException(
-                $"Cannot create a super admin inside tenant '{currentTenant.Id}'. IsSuperAdmin is the host " +
-                "bootstrap escape hatch and must stay host-only; tenant administrators are ordinary users " +
-                "holding the tenant's Admin role. Use CreateUserAsync and assign the Admin role instead.");
-        }
+        EnsureHostContextForSuperAdmin();
 
         var user = new User(username, email, HashWithPolicy(password, passwordSubject), displayName);
         user.MarkAsSuperAdmin();
@@ -230,6 +217,29 @@ public class UserDomainService(
 
         logger.LogInformation("Host super admin created: {Username} (ID: {UserId})", user.Username, user.Id);
         return user;
+    }
+
+    /// <summary>
+    /// 把已有的<b>宿主</b>用户提升为超级管理员，守卫与 <see cref="CreateSuperAdminAsync"/> 相同。
+    /// </summary>
+    /// <remarks>只改实体，调用方负责保存。</remarks>
+    /// <exception cref="InvalidOperationException">当前存在租户上下文。</exception>
+    public void PromoteToSuperAdmin(User user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        EnsureHostContextForSuperAdmin();
+        user.MarkAsSuperAdmin();
+    }
+
+    private void EnsureHostContextForSuperAdmin()
+    {
+        if (currentTenant.IsAvailable)
+        {
+            throw new InvalidOperationException(
+                $"Cannot make a super admin inside tenant '{currentTenant.Id}'. IsSuperAdmin is the host " +
+                "bootstrap escape hatch and must stay host-only; tenant administrators are ordinary users " +
+                "holding the tenant's Admin role. Use CreateUserAsync and assign the Admin role instead.");
+        }
     }
 
     /// <summary>
@@ -244,7 +254,7 @@ public class UserDomainService(
     /// 创建用户
     /// </summary>
     /// <remarks>
-    /// 资源服务形态没有这个方法：那一侧的用户行由 <see cref="EnsureProjectedAsync"/> 按令牌投影，
+    /// 资源服务形态没有这个方法：那一侧的用户行由 <c>EnsureProjectedAsync</c> 按令牌投影，
     /// 不存在"由本服务决定一个新主体的标识"这回事。
     /// </remarks>
     /// <param name="passwordSubject">
@@ -332,7 +342,7 @@ public class UserDomainService(
             return ChangePasswordStatus.NoLocalPassword;
         }
 
-        if (!passwordHasher.VerifyPassword(user.PasswordHash, currentPassword))
+        if (!VerifyCurrentPassword(user, currentPassword))
         {
             return ChangePasswordStatus.CurrentPasswordIncorrect;
         }
@@ -341,75 +351,14 @@ public class UserDomainService(
         return ChangePasswordStatus.Succeeded;
     }
 
-    public async Task<User> CreateUserWithRolesAsync(
-        string username,
-        string email,
-        string password,
-        string? displayName,
-        List<Guid>? roleIds,
-        CancellationToken cancellationToken = default)
-    {
-        var user = await CreateUserAsync(
-            username, email, password, displayName, cancellationToken: cancellationToken);
-
-        // 分配角色
-        if (roleIds != null && roleIds.Count > 0)
-        {
-            await AssignRolesToUserAsync(user.Id, roleIds, cancellationToken);
-        }
-
-        return user;
-    }
-
     /// <summary>
-    /// 为用户分配角色
+    /// 再认证时核对本人的当前口令，只给判定；没有本地口令（只经外部登录）的账号一律不通过。
     /// </summary>
-    public async Task AssignRolesToUserAsync(Guid userId, List<Guid> roleIds, CancellationToken cancellationToken = default)
+    /// <remarks>失败计数与锁定由应用层的再认证守卫负责，这里不改用户。</remarks>
+    public bool VerifyCurrentPassword(User user, string password)
     {
-        var userRoles = roleIds.Select(roleId => new UserRole(userId, roleId)).ToList();
-        await userRoleRepository.InsertManyAsync(userRoles, cancellationToken);
-    }
-
-    /// <summary>
-    /// 为用户分配默认角色
-    /// </summary>
-    /// <returns>本次分配的角色名称；没有默认角色时为空。</returns>
-    /// <remarks>
-    /// 回传角色名而不是让调用方回查：在工作单元内这些关联行还没落库，
-    /// <see cref="GetUserRoleNamesAsync"/> 查不到。调用方要的本就是"我刚分配的那些"。
-    /// </remarks>
-    public async Task<List<string>> AssignDefaultRolesToUserAsync(Guid userId, CancellationToken cancellationToken = default)
-    {
-        var defaultRoles = (await roleRepository.GetListAsync(r => r.IsDefault, cancellationToken)).ToList();
-
-        if (defaultRoles.Count == 0)
-        {
-            logger.LogWarning("No default roles found; user {UserId} was not assigned any role", userId);
-            return [];
-        }
-
-        var userRoles = defaultRoles.Select(role => new UserRole(userId, role.Id)).ToList();
-        await userRoleRepository.InsertManyAsync(userRoles, cancellationToken);
-
-        logger.LogInformation("User {UserId} was assigned {Count} default role(s)", userId, defaultRoles.Count);
-        return [.. defaultRoles.Select(role => role.Name)];
-    }
-
-    /// <summary>
-    /// 获取用户的角色名称列表
-    /// </summary>
-    public async Task<List<string>> GetUserRoleNamesAsync(Guid userId, CancellationToken cancellationToken = default)
-    {
-        var userRoles = await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken);
-        var roleIds = userRoles.Select(ur => ur.RoleId).ToList();
-
-        if (roleIds.Count == 0)
-        {
-            return [];
-        }
-
-        var roles = await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken);
-        return roles.Select(r => r.Name).ToList();
+        ArgumentNullException.ThrowIfNull(user);
+        return user.PasswordHash is not null && passwordHasher.VerifyPassword(user.PasswordHash, password);
     }
 
     /// <summary>

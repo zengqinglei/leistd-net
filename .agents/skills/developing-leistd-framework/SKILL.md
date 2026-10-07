@@ -7,37 +7,25 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 ## 事实与边界
 
-从目标文件和直接依赖建立事实；证据不足或涉及公共边界时再扩大范围。同类实现和测试提供写法，公共契约、安全或版本结论以权威规范及实际验证为准。
+从目标文件和直接依赖建立事实；证据不足或涉及公共边界时再扩大范围。同类实现和测试提供写法，公共契约、安全或版本结论以权威规范及实际验证为准。规则按任务读取[开发指南](../../../docs/framework/development-guide.md)对应章节，不在此复述。
 
 | 场景 | 补充事实与规范 | 验证重点 |
 | --- | --- | --- |
-| 组件内部实现 | 目标实现、测试、调用方；开发指南相关章节 | 相关单测，外部语义用真实依赖 |
-| DI、Options、生命周期 | 注册入口、宿主、组件文档 | 真实容器或最小宿主、默认值消费者 |
-| DDD 分层或组合 | 各层项目引用、组合根；`docs/architecture/design-principles.md` | 层依赖、组合宿主、受影响模板场景 |
-| 公共 API、包依赖 | 目标家族公共类型、`.csproj`、消费者；`docs/framework/versioning.md`、目标 `framework/docs/` | 构建和包内容；依赖或集成契约变化时隔离消费，影响模板时验证生成场景 |
-| 随包文档 | 目标 `framework/docs/` 和相关源码 | 检查引用、示例与打包内容；不因纯文档改动运行隔离消费 |
+| 新增包、类型或注册入口 | 同家族包与目录；[§1 命名与分组](../../../docs/framework/development-guide.md#1-命名与分组) | csproj 约定、命名空间闸门 |
+| 组件内部实现 | 目标实现、测试、调用方 | 相关单测，外部语义用真实依赖 |
+| DI、Options、生命周期 | 注册入口、宿主、组件文档；[§6.6 依赖注入](../../../docs/framework/development-guide.md#66-依赖注入)、[§6.2 参数与配置校验](../../../docs/framework/development-guide.md#62-参数与配置校验) | 真实容器或最小宿主、默认值消费者 |
+| 包依赖、DDD 分层或组合 | 各层项目引用、组合根；[§5 依赖方向](../../../docs/framework/development-guide.md#5-依赖方向不可违反) | 层依赖、组合宿主、受影响模板场景 |
+| 公共 API 设计或变更 | 目标家族公共类型、消费者；[§6 公共 API](../../../docs/framework/development-guide.md#6-公共-api-的设计与变更)、`docs/framework/versioning.md` | 构建和包内容；依赖或集成契约变化时隔离消费，影响模板时验证生成场景 |
+| 测试 | 同家族测试项目；[§7 测试](../../../docs/framework/development-guide.md#7-测试) | 测试布局与测试名闸门 |
+| 随包文档、XML 注释 | 目标 `framework/docs/` 和相关源码；[§4 文档注释](../../../docs/framework/development-guide.md#4-文档注释) | 检查引用、示例与打包内容；不因纯文档改动运行隔离消费 |
+| 缺陷修复 | 复现路径、相关测试与调用方 | 先写修复前失败的回归测试，修复后按 L1 扩大回归 |
 | 审查或排障 | 当前行为、复现、相关规范 | 证据与未检查范围，不自动实施 |
 
 源码和项目引用定义实际 API 与行为；文档冲突时修正权威文档，不为兼容旧说明保留错误实现。
 
-保持以下边界：
-
-- `components` 不依赖 `ddd-struct`；Core/Domain 不依赖 Web、EF Core 或其他具体基础设施。
-- 组件通过宿主显式组合，不替其他组件注册服务、映射端点或隐式挂载拦截器。
-- 公共 API、命名、目录和依赖沿用同类组件规范，避免无实际收益的新抽象。
-- 组件文档示例只使用该组件真实依赖；DDD 组合示例留在 DDD 文档。
-- 注释与组件文档按 `docs/framework/development-guide.md` §4 编写；公共契约在接口或基类定义，实现使用继承文档。
-
 ## 方案与实施计划
 
-涉及通用组件、DDD 基座、公共 API 或包边界的方案设计时，先读取 `docs/README.md` 并搜索同主题最新文档：
-
-- 仍在比较候选或诊断现状时，跨会话材料写入 `docs/assessments/YYYY-MM-DD-<topic>.md`；
-- 方案已经选定且需要任务分解、实施顺序和验收时，写入 `docs/plans/YYYY-MM-DD-<topic>.md`；
-- 长期维护规则才写入 `docs/framework/`；
-- 已实现且使用者必须知道的公共契约才写入 `framework/docs/`。
-
-临时分析默认留在当前答复。不得把未实施方案、迁移步骤、任务状态、分支记录或仓库验证过程写入随 NuGet 分发的 `framework/docs/`。同时影响 Template、Skill、CI 或发布流程时，改用 `maintaining-leistd-repository` 维护一份跨交付面计划。
+涉及通用组件、DDD 基座、公共 API 或包边界的方案设计时，先搜索同主题最新文档；评估、计划与稳定规范的归属和生命周期见 [`docs/README.md`](../../../docs/README.md)。`framework/docs/` 随 NuGet 分发，只写已实现且使用者必须知道的公共契约，分发边界同见该文。同时影响 Template、Skill、CI 或发布流程时，改用 `maintaining-leistd-repository` 维护一份跨交付面计划。
 
 ## 工作流
 
@@ -46,23 +34,13 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 3. 实施最小变更，并为行为风险补充对应测试和 XML 注释。
 4. 公共 API、包依赖、注册、默认值或运行时语义变化时同步所有当前消费者和目标家族文档，不保留未发布兼容层。
 5. 按变化选择验证：Markdown 检查引用与骨架；XML 变更构建受影响项目，关键示例单独编译；行为变化运行相关测试。
-6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时验证隔离消费。
+6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时用 `framework/build/test-package-consumption.ps1` 验证隔离消费。
 7. 影响 Template 消费方式时使用 `developing-leistd-template` 验证相关生成场景；其他运行时语义由组件测试或最小宿主验证。
 
-用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
+用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。破坏性提交须在同一提交中新增或更新 `docs/framework/upgrades/<基础版本>.md` 的对应条目，并与 `BREAKING CHANGE:` 脚注一致，判定见[什么时候写升级指南](../../../docs/framework/versioning.md#什么时候写升级指南)。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
 
 组件契约归 `framework/docs/components/{family}.md`，DDD 组合归 `framework/docs/ddd-struct/`，维护规则归 `docs/framework/`。缺少必要文档时创建最小权威说明并更新索引，不复制精确签名或维护过程。
 
 ## 验证入口
 
-编辑循环运行目标测试；完整改动形成后运行框架测试全集和必要包验证。执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，以下不是每次编辑的固定命令序列。
-
-```powershell
-dotnet build framework/Leistd.Framework.slnx -c Release
-dotnet test framework/Leistd.Framework.slnx -c Release
-pwsh scripts/check-all.ps1            # 全部静态闸门（唯一清单来源，-List 只看清单）
-pwsh framework/build/pack-local-feed.ps1
-pwsh framework/build/test-package-consumption.ps1
-```
-
-本地可用 `-PackageIds Leistd.Xxx` 检查受影响包；CI 按候选计划与实际包依赖闭包选择，完整档消费全部包。目标测试用 `--filter` 收窄到类；只读任务不运行无关测试。未执行项和原因必须如实说明。
+编辑循环运行目标测试；完整改动提交后，用 `scripts/plan-quality-checks.py --local-framework-tests` 按清单运行受影响测试项目，并做必要包验证；选择器退回全集时运行全集，全集另由 L3 承担。命令见[开发规范 §8 提交前自检](../../../docs/framework/development-guide.md#8-提交前自检)，执行位置、真实依赖及审查证据按[质量规范](../../../docs/framework/quality-assurance.md)选择，不是每次编辑的固定命令序列。只读任务不运行无关测试；未执行项和原因必须如实说明。

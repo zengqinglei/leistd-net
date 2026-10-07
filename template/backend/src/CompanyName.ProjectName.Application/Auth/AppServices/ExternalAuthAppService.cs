@@ -6,17 +6,15 @@ using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Security.Users;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
@@ -26,9 +24,10 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// </summary>
 internal sealed class ExternalAuthAppService(
     ExternalAuthDomainService externalAuthDomainService,
+    IRoleRepository roleRepository,
     SessionSignInService sessionSignInService,
     IRepository<User, Guid> userRepository,
-    IRepository<ExternalLoginConnection, Guid> externalLoginRepository,
+    IRepository<ExternalLoginConnection, Guid> externalLoginConnectionRepository,
     ICurrentUser currentUser,
     IOperationRecorder operationRecorder,
     IObjectMapper objectMapper) : BaseAppService(), IExternalAuthAppService
@@ -46,10 +45,21 @@ internal sealed class ExternalAuthAppService(
         ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default)
     {
-        var (user, roleNames) = await externalAuthDomainService.FindOrCreateUserAsync(
+        var (user, created) = await externalAuthDomainService.FindOrCreateUserAsync(
             provider,
             externalUserInfo,
             cancellationToken);
+
+        // 新建用户带出刚分配的角色名（成员关系在本工作单元内尚未落库，回查不到）；
+        // 既有用户传 null，由 SessionSignInService 按已落库的角色回查
+        List<string>? roleNames = null;
+        if (created)
+        {
+            var defaultRoles = await roleRepository.GetDefaultRolesAsync(cancellationToken);
+            user.AssignRoles(defaultRoles.Select(role => role.Id));
+            await userRepository.UpdateAsync(user, cancellationToken);
+            roleNames = [.. defaultRoles.Select(role => role.Name)];
+        }
 
         return await sessionSignInService.StartAsync(user, roleNames, cancellationToken);
     }
@@ -60,7 +70,7 @@ internal sealed class ExternalAuthAppService(
     public async Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(IEnumerable<string> availableProviders, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        var links = (await externalLoginRepository.GetListAsync(c => c.UserId == user.Id, cancellationToken)).ToList();
+        var links = (await externalLoginConnectionRepository.GetListAsync(c => c.UserId == user.Id, cancellationToken)).ToList();
 
         return new ExternalLoginsOutputDto
         {

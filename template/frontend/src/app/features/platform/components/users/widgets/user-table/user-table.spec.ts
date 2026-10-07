@@ -4,23 +4,21 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
+import { page } from 'vitest/browser';
 
 import { UserTable } from './user-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../../../core/services/auth-service';
-import { UserManagementOutputDto } from '../../../../models/user-management.dto';
+import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 
-/**
- * 用户表格的交互状态。
- *
- * 分页与排序都是 manual 模式：表格自己不切数据，只把意图回传给父级去取下一页。
- * 因此这里验的是"回传了什么"，而不是"表格里剩几行"——把这两件事搞混，
- * 就会出现界面翻了页、请求却没换参数。
- */
+/** 用户表格的交互状态：分页与排序是 manual 模式，验证回传给父级的意图，而不是表格里剩几行。 */
 describe('UserTable', () => {
   let fixture: ComponentFixture<UserTable>;
   let component: UserTable;
@@ -200,6 +198,45 @@ describe('UserTable', () => {
     expandButtons()[1].click();
     await fixture.whenStable();
     expect(expandedStates()).toEqual(['false', 'false']);
+  });
+
+  // 最窄一档无列可收时主列截断，表格不横向滚动，状态列与操作列完整可见。
+  it('truncates a long name instead of scrolling the table at the narrowest level', async () => {
+    // 手机视口：`sm:` 断点（单元格内边距、行内操作按钮）也要按手机生效，只模拟档位不够
+    await page.viewport(390, 844);
+    onTestFinished(() => page.viewport(1280, 800));
+    //#if (IncludeLocalization)
+    // 测试不装词条时表头渲染成键名，比真实文案宽得多；量宽度要用真实长度的文案
+    TestBed.inject(TranslocoService).setTranslation(
+      { table: { colUser: 'User', colStatus: 'Status' }, status: { active: 'Active' } },
+      'users/en',
+    );
+    //#endif
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    host.style.width = '356px';
+    viewport.next(desktop(false));
+    fixture.componentRef.setInput('users', [
+      { ...user('1', 'admin'), displayName: 'System Administrator of the Whole Organization' },
+    ]);
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.autoDetectChanges();
+
+    const scroller = host.querySelector<HTMLElement>('[hlmTableContainer]')!;
+    await expect
+      .poll(() => host.querySelector('[data-table-fit]')?.getAttribute('data-table-fit'))
+      .toBe('mobile');
+    await expect.poll(() => scroller.scrollWidth <= scroller.clientWidth).toBe(true);
+
+    const name = host.querySelector<HTMLElement>('tbody span.truncate')!;
+    expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
+    const status = host.querySelector<HTMLElement>('tbody [hlmBadge]')!;
+    const actions = host.querySelector<HTMLElement>('tbody td:last-child')!;
+    expect(status.getBoundingClientRect().right).toBeLessThanOrEqual(
+      actions.getBoundingClientRect().left,
+    );
   });
 
   function expandButtons(): HTMLButtonElement[] {

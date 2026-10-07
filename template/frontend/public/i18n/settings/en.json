@@ -1,6 +1,7 @@
 {
   "reset": "Reset to default",
   "empty": "No configurable items in this section",
+  "loadFailed": "Couldn't load settings",
   "timeZoneSearch": "Search city or UTC offset",
   "timeZoneEmpty": "No matching time zone",
   "timeZoneToggle": "Show time zones",

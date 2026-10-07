@@ -101,6 +101,29 @@ public sealed class SmtpDependencyInjectionTests
         Assert.All(failure.Failures, message => Assert.StartsWith(SmtpOptions.SectionName, message, StringComparison.Ordinal));
     }
 
+    // 发送路径不再复查口令，只配用户名必须在启动期失败，否则发信会带着残缺凭据去连服务器
+    [Fact]
+    public void Username_without_password_fails_the_host_at_startup()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging().AddSingleton(EmptyConfiguration);
+        services.AddSmtpEmailSender(o =>
+        {
+            o.Host = "127.0.0.1";
+            o.DefaultFromAddress = "noreply@example.com";
+            o.Username = "mailer";
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var startupValidators = provider.GetServices<IStartupValidator>().ToList();
+        Assert.NotEmpty(startupValidators);
+        var failure = Assert.Throws<OptionsValidationException>(() => startupValidators[0].Validate());
+        var message = Assert.Single(failure.Failures);
+        Assert.StartsWith($"{SmtpOptions.SectionName}:", message, StringComparison.Ordinal);
+        Assert.Contains("Username and Password must be set together", message, StringComparison.Ordinal);
+    }
+
     // 编程式配置在配置节之后应用：同一键两边都给时以代码为准
     [Fact]
     public void Programmatic_configuration_overrides_the_section()

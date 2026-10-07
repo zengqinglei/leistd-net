@@ -13,7 +13,12 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideChevronDown, lucideChevronRight, lucideSearch } from '@ng-icons/lucide';
+import {
+  lucideChevronDown,
+  lucideChevronRight,
+  lucideCircleAlert,
+  lucideSearch,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAccordionImports } from '@spartan-ng/helm/accordion';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -29,12 +34,16 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
 import { catchError, filter, finalize, startWith, switchMap, tap } from 'rxjs/operators';
 
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import { API_ERROR_CODES } from '../../../../core/errors/api-error-codes';
+import {
+  applicationErrorMessage,
+  ApplicationHttpError,
+} from '../../../../core/errors/application-http-error';
 import {
   PermissionDefinitionGroupOutputDto,
   PermissionDefinitionOutputDto,
   PermissionGrantsOutputDto,
-} from '../../../../shared/models/permission';
+} from '../../../../shared/dtos/permission.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -61,14 +70,10 @@ interface PermissionGroupRender extends PermissionGroupView {
 }
 
 /**
- * 角色权限编辑器。
+ * 角色权限编辑器。授予是纯加法，没有"拒绝"：收回能力应调整角色构成，减法会让有效权限不可组合。
  *
- * 授予是纯加法：勾选即授予，取消即不授予，没有"拒绝"。要收回某人的能力应当调整他的角色构成，
- * 而不是在权限位上做减法——减法会让有效权限不可组合，排查"他为什么没权限"时必须遍历全部来源。
- *
- * 三层展示与后端定义一一对应：分组是模块，depth 0 是资源（勾上即"能看到这份列表"），
- * 更深的是可在其上执行的动作。动作以资源为前置，因此勾动作会补齐资源、
- * 取消资源会连带取消其动作；这与后端写入时的归一化一致，此处只是即时反馈。
+ * 分组是模块，depth 0 是资源（勾上即能查看列表），更深的是其上的动作。勾动作补齐资源、取消资源
+ * 连带取消动作，与后端写入时的归一化一致，此处只是即时反馈。
  */
 @Component({
   selector: 'app-permission-grant-dialog',
@@ -87,7 +92,9 @@ interface PermissionGroupRender extends PermissionGroupView {
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideSearch, lucideChevronDown, lucideChevronRight })],
+  providers: [
+    provideIcons({ lucideSearch, lucideChevronDown, lucideChevronRight, lucideCircleAlert }),
+  ],
   templateUrl: './permission-grant-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -106,6 +113,8 @@ export class PermissionGrantDialog {
   //#endif
 
   readonly loading = signal(false);
+  /** 加载失败的原因：打开时编辑状态已清空、没有内容可保留，因此显示错误态与重试而不是空列表。 */
+  readonly loadError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly groups = signal<PermissionGroupView[]>([]);
   readonly version = signal(0);
@@ -114,10 +123,8 @@ export class PermissionGrantDialog {
   private readonly granted = signal<ReadonlySet<string>>(new Set<string>());
 
   /**
-   * 当前界面状态属于哪个角色；未成功加载时为 null。
-   *
-   * 只清空状态还不够：加载失败时界面会停在"空但可编辑"，用户仍能点保存并写出一份空授予。
-   * 因此显式记录归属，保存前要求它与当前角色一致。
+   * 当前界面状态所属的角色，未成功加载时为 null。保存前要求与当前角色一致，
+   * 免得把加载失败后"空但可编辑"的状态写成一份空授予。
    */
   private readonly loadedRoleId = signal<string | null>(null);
 
@@ -136,13 +143,7 @@ export class PermissionGrantDialog {
 
   readonly grantedCount = computed(() => this.granted().size);
 
-  /**
-   * 过滤并统计后的分组。
-   *
-   * 分组一律折叠展示，并在组标题上显示本组的授予数（按**过滤后**的行统计），
-   * 便于在几十上百个权限里快速定位。搜索把某个组过滤成一行时也不特殊处理——
-   * 为此加一条"单组直接平铺"的分支，是给一个实际不出现的情形增加代码路径。
-   */
+  /** 过滤并统计后的分组；组标题显示过滤后的授予数。 */
   readonly visibleGroups = computed<PermissionGroupRender[]>(() => {
     const keyword = this.keyword().trim().toLowerCase();
     const granted = this.granted();
@@ -176,10 +177,8 @@ export class PermissionGrantDialog {
   }
 
   /**
-   * 展开的分组。
-   *
-   * 只在加载完成时给一次初值，之后归用户掌握：若把它算成"本组已有授予"，
-   * 取消最后一项授予就会让整个组自己折叠起来——用户只是想改一个勾。
+   * 展开的分组：加载完成时给一次初值，之后归用户掌握。若按"本组已有授予"计算，
+   * 取消最后一项会让整组自行折叠。
    */
   private readonly expandedGroups = signal<ReadonlySet<string>>(new Set<string>());
 
@@ -188,12 +187,7 @@ export class PermissionGrantDialog {
     return this.keyword().trim() !== '' || this.expandedGroups().has(groupName);
   }
 
-  /**
-   * 把用户手动的展开/折叠写回来。
-   *
-   * 不回写的话这个信号只反映初值：用户手动折叠某组后再搜索，isExpanded() 本来就是 true、
-   * 输入值没有变化，手风琴不会重新打开它已经关掉的组，命中项就一直藏着。
-   */
+  /** 回写手动展开与折叠：否则手动折叠后再搜索，isExpanded() 仍为 true 不变，手风琴不会重新打开。 */
   onGroupOpenedChange(groupName: string, opened: boolean): void {
     const next = new Set(this.expandedGroups());
 
@@ -231,21 +225,22 @@ export class PermissionGrantDialog {
   /** 清空编辑状态并解除归属，使保存在重新加载成功前不可用。 */
   private resetState(): void {
     this.loadedRoleId.set(null);
+    this.loadError.set(null);
     this.granted.set(new Set<string>());
     this.expandedGroups.set(new Set<string>());
     this.version.set(0);
+  }
+
+  /** 错误态里的重试：与 409 后的重新加载共用同一条请求流。 */
+  retry(): void {
+    this.reloadRequests.next();
   }
 
   isGranted(name: string): boolean {
     return this.granted().has(name);
   }
 
-  /**
-   * 勾选：补齐全部祖先；取消：连带取消全部子孙。
-   *
-   * 与后端写入时的归一化一致——父权限是子权限的前置条件，
-   * 允许"子有父无"会产生一条运行时永远不成立的授予。
-   */
+  /** 勾选补齐全部祖先，取消连带取消全部子孙，与后端写入时的归一化一致。 */
   onCheckedChange(name: string, checked: boolean): void {
     const next = new Set(this.granted());
 
@@ -287,10 +282,12 @@ export class PermissionGrantDialog {
           //#endif
           this.saved.emit();
         },
-        error: (error) => {
+        error: (error: unknown) => {
           this.saving.set(false);
-          // 409 说明另一位管理员抢先保存：重新加载，不静默覆盖。
-          if (error?.status === 409) {
+          // 版本冲突说明另一位管理员抢先保存：重新加载，不静默覆盖。按错误码而不是 409 分支，
+          // 其他同样映射为 409 的错误不该触发重新加载。
+          const code = error instanceof ApplicationHttpError ? error.code : undefined;
+          if (code === API_ERROR_CODES.permissionConcurrencyConflict) {
             //#if (IncludeLocalization)
             toast.error(this.transloco.translate('permissions.conflict'));
             //#else
@@ -320,7 +317,7 @@ export class PermissionGrantDialog {
       filter((grants) => grants.providerKey === roleId),
       tap((grants) => this.applyGrants(grants)),
       catchError((error: unknown) => {
-        toast.error(applicationErrorMessage(error));
+        this.loadError.set(applicationErrorMessage(error));
         return EMPTY;
       }),
       finalize(() => this.loading.set(false)),
@@ -402,5 +399,7 @@ const ENGLISH: Record<string, string> = {
   'permissions.viewAccessHint': 'view list',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
+  'permissions.loadFailed': "Couldn't load permissions",
+  'common.retry': 'Retry',
 };
 //#endif

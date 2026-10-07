@@ -11,9 +11,8 @@
     <div hlmSidebarHeader>
       <ul hlmSidebarMenu>
         <li hlmSidebarMenuItem>
-          <!-- Spartan 品牌头：用 menu-button 基元（size=lg），折叠为 icon 时自动收成居中的方形图标，避免自绘容器溢出裁剪。
-             同时是**区域切换器**：副标题显示当前区域（原来写死 "Admin Platform"，在工作空间区是错的），
-             点开可切到另一区。切换入口也在头像菜单里，但那里不易发现，而区域标识本就该在这。 -->
+          <!-- 品牌头用 menu-button 基元（size=lg），折叠为 icon 时收成方形图标。同时是区域切换器：
+               副标题显示当前区域，点开可切到另一区。 -->
           @if (areaOptions().length > 1) {
             <!-- 弹出方向照官方 nav-user：桌面从侧栏右侧弹出、与顶部对齐；手机上侧栏是抽屉，改为向下。
                按钮默认点击即关掉手机端抽屉，这里点开的是菜单，抽屉必须留着（同头像菜单）。 -->
@@ -54,7 +53,7 @@
                       (click)="goToArea(area.route)"
                     >
                       <span
-                        class="flex size-6 shrink-0 items-center justify-center rounded-md border"
+                        class="flex size-6 shrink-0 items-center justify-center rounded-lg border"
                       >
                         <ng-icon [name]="area.icon" class="text-[length:--spacing(3.5)]" />
                       </span>

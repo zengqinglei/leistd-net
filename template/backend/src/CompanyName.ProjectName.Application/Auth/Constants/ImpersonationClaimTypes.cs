@@ -8,7 +8,7 @@ namespace CompanyName.ProjectName.Application.Auth.Constants;
 /// </summary>
 /// <remarks>
 /// <para>放在应用层而不是框架：模拟登录是本模板的产品能力，不是 Leistd 的通用原语。
-/// 与 <see cref="AuthenticationSchemeNames"/> 同型——应用层构造主体时需要它，而应用层不能引用 Api。</para>
+/// 与 <see cref="Shared.AuthenticationSchemeNames"/> 同型——应用层构造主体时需要它，而应用层不能引用 Api。</para>
 /// <para>发起人是宿主用户时 <see cref="ImpersonatorTenantId"/> <b>缺席</b>，
 /// 与 <c>CustomClaimTypes.TenantId</c> "宿主用户无此声明"是同一口径；
 /// 若改成写入空串，结束模拟时就分不清"发起人在宿主"和"声明写坏了"。</para>

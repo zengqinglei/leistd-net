@@ -1,7 +1,6 @@
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Errors;
 using Leistd.ExceptionHandling.Options;
-using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.Api.Hosting.ExceptionMappings;
 
@@ -9,12 +8,13 @@ internal static class TenantExceptionMappings
 {
     public static void Configure(GlobalExceptionOptions options)
     {
-        options.MapCode(TenantErrorCodes.ImpersonationRequiresAuthentication, StatusCodes.Status401Unauthorized);
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
-            TenantErrorCodes.ActivateWithoutUsers,
+#if (Impersonation)
             TenantErrorCodes.AdministratorNotFound,
             TenantErrorCodes.AlreadyImpersonating,
-            TenantErrorCodes.NotImpersonating);
+            TenantErrorCodes.NotImpersonating,
+#endif
+            TenantErrorCodes.ActivateWithoutUsers);
     }
 }
 #endif

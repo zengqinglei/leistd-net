@@ -5,9 +5,7 @@ using Leistd.Authorization.Resource.Grants;
 
 namespace Leistd.Authorization.Resource.EntityFrameworkCore.EntityConfigurations;
 
-/// <summary>
-/// ResourcePermissionGrantRecord EF Core 实体配置。
-/// </summary>
+/// <summary><see cref="ResourcePermissionGrantRecord"/> 的实体配置。</summary>
 public class ResourcePermissionGrantRecordConfiguration
     : IEntityTypeConfiguration<ResourcePermissionGrantRecord>
 {
@@ -42,8 +40,7 @@ public class ResourcePermissionGrantRecordConfiguration
             .HasMaxLength(32)
             .IsRequired();
 
-        // 字符串列挡不住越界值：EF 的枚举转换会把 (ResourceGrantEffect)999 存成 "999"，
-        // 读回来还能解析成 999。约束写在数据库上，绕过 Manager 的直连写入也逃不掉。
+        // 字符串列挡不住越界值（999 会存成 "999"），检查约束让绕过管理器的写入同样受限
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ResourcePermissionGrants_Effect",
             $"\"{nameof(ResourcePermissionGrantRecord.Effect)}\" IN ('{nameof(ResourceGrantEffect.Granted)}', '{nameof(ResourceGrantEffect.Prohibited)}')"));

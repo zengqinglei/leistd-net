@@ -5,12 +5,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Tracing.AspNetCore;
 
-/// <summary>
-/// 关联标识的 ASP.NET Core 接入入口：入站中间件与配置绑定。
-/// </summary>
+/// <summary>关联标识的 ASP.NET Core 接入入口：入站中间件与配置绑定。</summary>
 public static class DependencyInjection
 {
     /// <summary>注册关联标识（含核心能力）。</summary>
+    /// <remarks>重复调用的规则同 <c>AddCorrelationIdCore</c>。</remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">在配置节绑定之后应用的覆盖。</param>
     /// <param name="configSectionPath">选项绑定的配置节路径。</param>

@@ -9,9 +9,7 @@ namespace Leistd.UnitOfWork.Registration;
 // 不执行工厂来猜测隐藏实现类型，以免提前解析依赖并触发副作用。
 internal static class UnitOfWorkRegistrationValidator
 {
-    /// <summary>
-    /// 校验工作单元相关的注册形式。不通过直接抛 <see cref="InvalidOperationException"/>。
-    /// </summary>
+    /// <summary>校验工作单元相关的注册形式；不通过抛 <see cref="InvalidOperationException"/>。</summary>
     /// <remarks>
     /// 必须在任何注册回调改写描述符之前执行，否则读到的都是织入后的工厂型描述符。
     /// 调用时机由 <c>AddRegistrationValidator</c> 保证。

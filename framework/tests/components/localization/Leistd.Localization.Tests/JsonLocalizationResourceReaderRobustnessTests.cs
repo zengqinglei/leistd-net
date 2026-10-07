@@ -6,7 +6,7 @@ using Xunit;
 namespace Leistd.Localization.Tests;
 
 /// <summary>
-/// 读取器健壮化验证（P4）：坏 JSON 被跳过而非拖垮整体；culture 声明与文件名不一致时仍加载（仅告警）。
+/// 读取器的健壮性：坏 JSON 被跳过而非拖垮整体；culture 声明与文件名不一致时仍加载（仅告警）。
 /// 夹具资源嵌入在本测试程序集的 TestResources/{Case} 目录，用 ResourcesPath 精确定位单个文件。
 /// </summary>
 public class JsonLocalizationResourceReaderRobustnessTests

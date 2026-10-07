@@ -10,13 +10,7 @@ import { applicationErrorMessage } from '../../core/errors/application-http-erro
 import { SettingService } from '../../core/settings/setting-service';
 import { SettingOutputDto } from '../../core/settings/setting.dto';
 
-/**
- * 设置作用域。
- *
- * `account` 写当前用户自己的偏好，`system` 写当前上下文的默认值——登录后租户已经确定，
- * 这里写的就是「本租户（或宿主）下所有人的默认值」，不是在管理别的租户；
- * 给指定租户配置属于租户管理的事。两者的写入授权也不同，因此分开。
- */
+/** 设置作用域：`account` 写当前用户偏好；`system` 写当前租户（或宿主）下所有人的默认值，写入授权不同。 */
 export type SettingScope = 'account' | 'system';
 
 /** 一个分组及归到它下面的设置项；分组标识、顺序与显示名都来自后端。 */
@@ -38,12 +32,7 @@ export function settingsInScope(
     : settings.filter((s) => s.allowsTenantScope || s.allowsHostScope);
 }
 
-/**
- * 按分组切分，分组标识与顺序都来自后端。
- *
- * 分类不在前端另列一份：漏登记一项设置的后果是它从界面上消失，而这既不报错也查不出来。
- * 后端已经把未分组的归入 `Other`，所以这里不需要再兜一次底。
- */
+/** 按分组切分，分组标识与顺序来自后端（未分组的已归入 `Other`），前端不另列清单。 */
 export function groupSettings(settings: readonly SettingOutputDto[]): SettingGroup[] {
   const byKey = new Map<string, SettingGroup>();
   for (const setting of settings) {
@@ -65,10 +54,8 @@ export function groupPath(key: string): string {
 }
 
 /**
- * 一个设置页（个人设置或系统设置）共用的设置快照。
- *
- * 由设置页外壳提供、各面板注入：外壳要用它决定有哪些面板，面板要用它渲染与写入，
- * 各自请求一次既浪费，也会在其中一次失败时让导航和内容对不上。
+ * 一个设置页（个人或系统设置）共用的设置快照：外壳据此决定面板，面板据此渲染与写入，
+ * 避免重复请求以及导航与内容不一致。
  */
 @Injectable()
 export class SettingsPageState {
@@ -82,16 +69,15 @@ export class SettingsPageState {
   readonly loading = signal(false);
   /** 至少成功取到过一次。外壳据此决定何时把空地址导向第一个面板。 */
   readonly loaded = signal(false);
+  /** 还没有快照可保留时的加载失败原因：有值时页面显示错误态与重试，不显示"暂无可配置项"。 */
+  readonly loadError = signal<string | null>(null);
 
   constructor() {
     this.load();
     //#if (IncludeLocalization)
 
-    // 设置项与分组的显示名由**后端**按请求语言本地化。切换语言只重绘视图没用——手里那份 DTO
-    // 仍是旧语言文案，必须重新取一次让服务端按新语言渲染。
-    //
-    // langChanges$ 在订阅那一刻也会发出**当前**语言（背后是 BehaviorSubject），
-    // 所以要跟上一次见到的语言比一下，否则每次进页面都白发一次请求。
+    // 显示名由后端按请求语言本地化，切换语言须重取。langChanges$ 订阅时先发出当前语言，
+    // 比对上次的语言以免进页面白发一次请求。
     let seenLang = this.transloco.getActiveLang();
     this.transloco.langChanges$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((lang) => {
       if (lang === seenLang) {
@@ -114,13 +100,19 @@ export class SettingsPageState {
       .getSettings()
       .pipe(
         catchError((error: unknown) => {
-          toast.error(applicationErrorMessage(error));
+          // 已有快照时刷新失败（切换语言、写入后重取）：保留原内容，只做提示
+          if (this.loaded()) {
+            toast.error(applicationErrorMessage(error));
+          } else {
+            this.loadError.set(applicationErrorMessage(error));
+          }
           return EMPTY;
         }),
         finalize(() => this.loading.set(false)),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((settings) => {
+        this.loadError.set(null);
         this.settings.set(settings);
         this.loaded.set(true);
       });

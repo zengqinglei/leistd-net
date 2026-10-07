@@ -6,9 +6,6 @@ public static class AppSettingErrorCodes
 #if (Email)
     public const string EmailAddressInvalid = "AppSetting:EmailAddressInvalid";
     public const string EmailVerificationKeyMissing = "AppSetting:EmailVerificationKeyMissing";
-#endif
-    public const string ManagePermissionRequired = "AppSetting:ManagePermissionRequired";
-#if (Email)
     public const string TestEmailFailed = "AppSetting:TestEmailFailed";
     public const string TestEmailHostOnly = "AppSetting:TestEmailHostOnly";
 #endif

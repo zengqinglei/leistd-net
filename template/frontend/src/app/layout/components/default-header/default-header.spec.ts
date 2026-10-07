@@ -9,7 +9,7 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#if (Impersonation)
 import { ImpersonationService } from '../../../core/services/impersonation-service';
 //#endif
-import { LayoutService } from '../../services/layout-service';
+import { LayoutService } from '../../../core/services/layout-service';
 
 /**
  * 页面标题只在带页头的布局里设置；离开布局（去登录页、落地页）时页头负责清掉，

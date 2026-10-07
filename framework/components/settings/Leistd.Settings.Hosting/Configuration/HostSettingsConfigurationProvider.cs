@@ -3,9 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Hosting.Configuration;
 
-// 宿主级设置作为配置源：设置里有值的项覆盖部署配置的对应键，没有值的项不出现，自然回落到配置文件。
-// 这是 .NET 让运行期可改的值流进 Options 的正规做法（自定义配置提供程序 + 重载令牌）：
-// 数据变化时 OnReload，所有按配置节绑定的 IOptionsMonitor 随之重算，消费方不必知道值来自设置表。
+// 宿主级设置作为配置源：有值的项覆盖部署配置的对应键，没有值的项回落到配置文件。
+// 数据变化时 OnReload，按配置节绑定的 IOptionsMonitor 随之重算。
 internal sealed class HostSettingsConfigurationProvider : ConfigurationProvider
 {
     // 写入后的立即应用与周期刷新可能同时到来，换数据与重载要成对完成
@@ -16,10 +15,9 @@ internal sealed class HostSettingsConfigurationProvider : ConfigurationProvider
 
     public void MarkAttached() => IsAttached = true;
 
-    // 换上新的一组配置键值；新值让某个 Options 校验不过时整组不生效，沿用上一组。
-    // 校验失败有两处来源：订阅了变更的 IOptionsMonitor 在重载回调里就重算并抛出；没人订阅的由 validate 显式检验。
-    // 这时换回上一组再重载一次，消费方始终取到合规的值。成对的项（发信账号与口令）只设了一半时停在上一组，设齐后整组生效。
-    // 与当前一组或上次被拒的一组相同时什么都不做：周期刷新既不无谓地重算，也不每轮重复报告同一个错误。
+    // 换上新的一组配置键值；新值让某个 Options 校验不过时换回上一组再重载，整组不生效。
+    // 校验失败来自重载回调（已订阅的 IOptionsMonitor）或 validate（无人订阅的选项）。
+    // 与当前一组或上次被拒的一组相同时不做任何事，周期刷新不重复重算或报错。
     public IReadOnlyList<string> Apply(IReadOnlyDictionary<string, string?> values, Func<IReadOnlyList<string>> validate)
     {
         lock (_gate)

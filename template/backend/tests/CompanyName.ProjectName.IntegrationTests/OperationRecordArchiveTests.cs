@@ -2,22 +2,13 @@ using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Options;
 using Leistd.OperationRecords.EntityFrameworkCore.Retention;
 using Leistd.Settings.Definitions;
-using Leistd.Settings.Errors;
 using Leistd.Settings.Management;
-using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Settings.Events;
 using Leistd.UnitOfWork;
@@ -125,13 +116,13 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     public async Task Retention_follows_host_settings_and_keeps_the_last_valid_values()
     {
         var monitor = factory.Services.GetRequiredService<IOptionsMonitor<OperationRecordRetentionOptions>>();
-        Assert.Equal((false, 365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
+        Assert.Equal((false, (int?)365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
 
         try
         {
             await SetHostAsync(SettingConstant.Audit.RetentionEnabled, "true");
             await SetHostAsync(SettingConstant.Audit.RetentionDays, "90");
-            Assert.Equal((true, 90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
+            Assert.Equal((true, (int?)90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
 
             // 写入端按定义上的区间拒绝过小值
             await Assert.ThrowsAsync<BusinessException>(() => SetHostAsync(SettingConstant.Audit.RetentionDays, "5"));
@@ -139,7 +130,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
             // 绕过写入端直接落库的过小值（脚本、迁移数据）：应用不报错，按 Options 的区间校验被拒、整组不生效——
             // 归档照旧按上一组合规值运行，不会把最近的记录搬走，也不会在有人改正之前每次取值都抛异常
             await WriteRawHostValueAsync(SettingConstant.Audit.RetentionDays, "5");
-            Assert.Equal((true, 90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
+            Assert.Equal((true, (int?)90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
         }
         finally
         {
@@ -147,7 +138,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
             await SetHostAsync(SettingConstant.Audit.RetentionDays, null);
         }
 
-        Assert.Equal((false, 365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
+        Assert.Equal((false, (int?)365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
     }
 
     /// <summary>

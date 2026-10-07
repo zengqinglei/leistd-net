@@ -18,7 +18,7 @@
                   @for (header of headerGroup.headers; track header.id) {
                     <th
                       hlmTh
-                      [class]="header.column.columnDef.meta?.headClass ?? 'px-6'"
+                      [class]="header.column.columnDef.meta?.headClass ?? 'px-4 sm:px-6'"
                       [attr.aria-sort]="sortAria(header.column.id)"
                     >
                       @switch (header.column.id) {
@@ -86,10 +86,16 @@
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
                     @for (cell of row.getVisibleCells(); track cell.id) {
-                      <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'px-6 py-2'">
+                      <td
+                        hlmTd
+                        [class]="cell.column.columnDef.meta?.cellClass ?? 'px-4 py-2 sm:px-6'"
+                      >
                         @switch (cell.column.id) {
                           @case ('clientId') {
-                            <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                            <div
+                              class="flex min-w-0 items-center gap-2 whitespace-nowrap"
+                              [class]="titleContentClass"
+                            >
                               @if (hasCollapsedColumns()) {
                                 <button
                                   hlmBtn
@@ -154,7 +160,7 @@
                                 class="min-w-72 max-w-xl"
                                 [appPopoverAria]="t('openApp.section.authorization')"
                               >
-                                <div class="mb-3 text-sm font-semibold">
+                                <div class="text-sm font-semibold">
                                   {{ t('openApp.section.authorization') }}
                                 </div>
                                 <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -198,7 +204,7 @@
                                       class="min-w-72 max-w-xl"
                                       [appPopoverAria]="t('openApp.table.colRedirectUris')"
                                     >
-                                      <div class="mb-3 text-sm font-semibold">
+                                      <div class="text-sm font-semibold">
                                         {{ t('openApp.table.colRedirectUris') }}
                                       </div>
                                       <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -225,7 +231,7 @@
                             <div class="flex items-center gap-1.5 whitespace-nowrap">
                               <span
                                 hlmBadge
-                                [variant]="hasPkce(row.original) ? 'default' : 'destructive'"
+                                [variant]="hasPkce(row.original) ? 'success' : 'destructive'"
                                 >{{
                                   hasPkce(row.original) ? 'PKCE' : t('openApp.table.noPkce')
                                 }}</span
@@ -250,7 +256,7 @@
                           }
                           @case ('actions') {
                             <!-- 操作列（3 项 ≤ 3）：桌面端全部平铺；<sm 收进 … 菜单省列宽。
-                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
+                               规则见 docs/standards/frontend-ui.md §1.1。 -->
                             <div class="flex items-center justify-end gap-1">
                               @if (canUpdate()) {
                                 <button
@@ -353,7 +359,7 @@
                       <td
                         hlmTd
                         [attr.colspan]="table.getVisibleLeafColumns().length"
-                        class="px-6 pb-3 pt-2"
+                        class="px-4 pb-3 pt-2 sm:px-6"
                       >
                         <dl
                           class="grid grid-cols-[minmax(5rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
@@ -381,7 +387,7 @@
                                   class="min-w-72 max-w-xl"
                                   [appPopoverAria]="t('openApp.section.authorization')"
                                 >
-                                  <div class="mb-3 text-sm font-semibold">
+                                  <div class="text-sm font-semibold">
                                     {{ t('openApp.section.authorization') }}
                                   </div>
                                   <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
@@ -419,7 +425,7 @@
                             <dd class="flex flex-wrap gap-1.5">
                               <span
                                 hlmBadge
-                                [variant]="hasPkce(row.original) ? 'default' : 'destructive'"
+                                [variant]="hasPkce(row.original) ? 'success' : 'destructive'"
                                 >{{
                                   hasPkce(row.original) ? 'PKCE' : t('openApp.table.noPkce')
                                 }}</span
@@ -458,26 +464,43 @@
                       class="!p-0 !border-0"
                     >
                       <div
-                        class="flex flex-col items-center justify-center h-64 text-muted-foreground"
+                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
                       >
-                        <ng-icon
-                          [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'"
-                          class="text-5xl opacity-30 mb-3"
-                        />
-                        @if (filtered()) {
-                          <p class="text-base font-medium m-0">
-                            {{ t('openApp.table.emptyFilteredTitle') }}
+                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                        @if (loadError(); as error) {
+                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
+                          <p class="text-base font-medium" role="alert">
+                            {{ t('common.loadFailed') }}
                           </p>
-                          <p class="text-sm mt-1 opacity-70">
-                            {{ t('openApp.table.emptyFilteredHint') }}
-                          </p>
+                          <p class="text-sm opacity-70">{{ error }}</p>
+                          <button
+                            hlmBtn
+                            variant="outline"
+                            data-testid="table-retry"
+                            (click)="retry.emit()"
+                          >
+                            {{ t('common.retry') }}
+                          </button>
                         } @else {
-                          <p class="text-base font-medium m-0">
-                            {{ t('openApp.table.emptyTitle') }}
-                          </p>
-                          <p class="text-sm mt-1 opacity-70">
-                            {{ t('openApp.table.emptyHint') }}
-                          </p>
+                          <ng-icon
+                            [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'"
+                            class="text-5xl opacity-30"
+                          />
+                          @if (filtered()) {
+                            <p class="text-base font-medium">
+                              {{ t('openApp.table.emptyFilteredTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('openApp.table.emptyFilteredHint') }}
+                            </p>
+                          } @else {
+                            <p class="text-base font-medium">
+                              {{ t('openApp.table.emptyTitle') }}
+                            </p>
+                            <p class="text-sm opacity-70">
+                              {{ t('openApp.table.emptyHint') }}
+                            </p>
+                          }
                         }
                       </div>
                     </td>
@@ -490,7 +513,7 @@
       }
     </div>
 
-    <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
+    <!-- 分页栏独立于表格卡片，置于其下方。 -->
     @if (totalCount() > 0) {
       <app-table-paginator
         [labels]="{

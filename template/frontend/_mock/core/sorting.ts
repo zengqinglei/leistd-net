@@ -1,11 +1,8 @@
 import { MockException } from './models';
 
 /**
- * 解析 `"字段 asc|desc"` 排序串，并按白名单校验字段。
- *
- * 与后端 `SortingRequest` 同形：解析在一处，字段白名单由各接口自己给。
- * Mock 必须复刻这条契约——它比真实后端宽松时，只在 Mock 下开发的页面会把
- * "后端根本不支持的排序字段"当成可用，直到接上真实服务才收到 400。
+ * 解析 `"字段 asc|desc"` 排序串并按白名单校验字段，与后端 `SortingRequest` 同形；Mock 不能比后端宽松，
+ * 否则只在 Mock 下可用的排序字段接上真实服务才收到 400。
  */
 export function parseMockSorting<TField extends string>(
   sorting: unknown,

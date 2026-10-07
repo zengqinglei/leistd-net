@@ -1,4 +1,7 @@
 using CompanyName.ProjectName.DbMigrator;
+#if (RemoteTokenAuth)
+using Leistd.DependencyInjection.DynamicProxy.Registration;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -68,7 +71,7 @@ var builder = Host.CreateApplicationBuilder();
 #if (RemoteTokenAuth)
 if (adminSubject.HasValue)
 {
-    builder.ConfigureContainer(new Leistd.DependencyInjection.DynamicProxy.Registration.DynamicProxyServiceRegistrationCallbackFactory());
+    builder.ConfigureContainer(new DynamicProxyServiceRegistrationCallbackFactory());
     builder.Services.AddResourceAdminBootstrapServices(builder.Configuration);
 }
 else

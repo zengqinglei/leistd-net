@@ -30,6 +30,8 @@ dotnet add package Leistd.UnitOfWork.EntityFrameworkCore
 ## 注册
 
 ```csharp
+using System.Data;
+
 builder.Services.AddUnitOfWork(options =>
 {
     options.IsTransactional = true;
@@ -49,6 +51,7 @@ builder.Services.AddUnitOfWorkEfCore();
 
 ```csharp
 using Leistd.UnitOfWork.Attributes;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
 [UnitOfWork]
 public class OrderPlacementService(
@@ -66,6 +69,7 @@ public class OrderPlacementService(
 方法正常返回时拦截器统一保存并提交；异常时回滚。声明式用法不手动调用 `SaveChanges` 或 `CommitAsync`。
 提交使用方法声明的第一个 `CancellationToken` 参数（没有时不可取消），BeforeCommit 处理器收到的也是它；取消边界见下文。
 
+<!-- no-compile: 省略号代表与本例无关的参数和实现 -->
 ```csharp
 [UnitOfWork(IsolationLevel = IsolationLevel.Serializable)]
 public Task TransferAsync(...) => ...;
@@ -98,7 +102,7 @@ finally
 
 `requiresNew` 默认为 `false`：存在当前工作单元时返回复用父边界的子工作单元，只有最外层真正提交。传 `true` 创建独立作用域与提交边界，但不改变事务选项。
 
-**由使用它的那个方法自己开启。** 当前工作单元存放在 `AsyncLocal` 里：`async` 方法内设置的值只对该方法及其下游可见，返回后不会带回调用方。把"预读 + 开启工作单元"抽成 `async` 辅助方法再返回，调用方拿到的对象就不是它的当前工作单元，随后的写入各自提交、不在同一事务里，而且没有任何报错。`Begin()` 因此是同步的；需要先 `await` 的准备工作放在调用方里，开启这一步留给用它的方法。
+工作单元由使用它的方法自己开启：当前工作单元存放在 `AsyncLocal` 里，在 `async` 辅助方法内开启后不会带回调用方，调用方随后的写入会各自提交且不报错。`Begin()` 因此是同步的。
 
 ### 在事务内提前冲刷
 
@@ -115,23 +119,27 @@ dbContext.OrderLines.AddRange(CreateLines(order.Id));
 
 `SaveChangesAsync()` 只冲刷挂起变更，不提交事务；后续回滚仍会撤销这些写入。
 
-**要就地捕获数据库约束冲突，也必须先冲刷。** 唯一索引、外键与检查约束的冲突由数据库在收到语句时才报出，
-而工作单元内的仓储写入在冲刷前根本没发到数据库——把 `try { InsertAsync } catch` 写在工作单元内，
-那个 `catch` 永不触发，异常最终在 `CompleteAsync` 抛出，已经离开了你想处理它的位置：
+要就地捕获数据库约束冲突，也必须先冲刷：工作单元内的写入在冲刷前不会发到数据库，`catch` 须包住冲刷本身，
+否则异常在 `CompleteAsync` 才抛出：
 
 ```csharp
-// 错：catch 永不触发，写法却"看起来在处理并发首次写入"
-try { await repository.InsertAsync(entity, ct); }
+using Microsoft.EntityFrameworkCore;
+
+var dbContext = await dbContextProvider.GetDbContextAsync(ct);
+
+// 错：Add 只登记到变更跟踪，catch 永不触发，写法却"看起来在处理并发首次写入"
+try { dbContext.Orders.Add(order); }
 catch (DbUpdateException) { /* 死代码 */ }
 
 // 对：先冲刷，冲刷才是抛出点
-repository.InsertAsync(entity, ct);
+dbContext.Orders.Add(order);
 try { await unitOfWorkManager.Current!.SaveChangesAsync(ct); }
 catch (DbUpdateException) { /* 这里才捕获得到 */ }
 ```
 
-这条与上面四种"要回填值"的理由不同：漏了那四种会立刻拿到空的 Id、报错醒目；漏了这一条**完全无声**，
-代码编译通过、读起来也对，只在真的并发时才暴露。不确定要不要捕获时，优先让异常传播到工作单元边界。
+经 DDD 基座仓储写入时同理，写法见 [DDD 四层基座](../ddd-struct/ddd-struct.md#通过仓储读写)。
+
+不确定要不要捕获时，让异常传播到工作单元边界。
 
 ### 事件阶段
 
@@ -146,9 +154,10 @@ catch (DbUpdateException) { /* 这里才捕获得到 */ }
 
 ```csharp
 [UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)]
-public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
+public class ValidateOrderHandler(OrderValidator validator) : IEventHandler<OrderCreatedEvent>
 {
-    public Task HandleAsync(OrderCreatedEvent @event) => ValidateAsync(@event);
+    public Task HandleAsync(OrderCreatedEvent @event, CancellationToken cancellationToken = default)
+        => validator.ValidateAsync(@event, cancellationToken);
 }
 ```
 
@@ -162,7 +171,9 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 宿主注册 `IConnectionStringResolver` 时，Provider 根据 `[ConnectionStringName]` 异步解析连接，并通过 `DbContextCreationContext.Current` 传入同步 `AddDbContext` 回调。该回调不得再执行远程调用或 sync-over-async。
 
-首次获取 DbContext 时，工作单元绑定连接归属与物理目标。生命周期内任一值改变都立即失败，以防止一个原子边界跨库或跨租户。不在工作单元内时不建立这两道绑定，但也不静默改道：此时 DbContext 由当前 DI 作用域持有（`AddDbContext` 默认 Scoped），同一作用域内首次创建后即被复用、宿主回调不再执行。若本次解析出的连接与该实例的实际连接不一致——典型场景是 `ICurrentTenant.Change` 切到分库租户——立即抛出 `InvalidOperationException`，而不是在原来的库上继续读写。需要访问另一个租户的库时，在该租户上下文内以 `Begin(requiresNew: true)` 开工作单元；它自带作用域，DbContext 会按解析出的连接重新创建。
+首次获取 DbContext 时，工作单元绑定连接归属与物理目标，生命周期内任一值改变都立即失败。
+不在工作单元内时不建立绑定，DbContext 由当前 DI 作用域持有并复用；本次解析出的连接与该实例的实际连接不一致时（如 `ICurrentTenant.Change` 切到分库租户）
+抛 `InvalidOperationException`。访问另一个租户的库时，在该租户上下文内以 `Begin(requiresNew: true)` 开工作单元。
 
 本组件不提供跨物理事务原子性。多个事务按顺序提交时，后续失败可能已造成部分提交；此时抛出带已提交与失败 key 的 `InvalidOperationException`，详细信息只进日志。
 
@@ -177,7 +188,8 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 进入 Commit 前会最后检查一次取消。Commit 已开始后不再响应取消，避免向调用方返回“无法确定是否已提交”的结果。
 
-日志口径：调用方主动取消（取消异常且令牌已取消）且发生在提交开始之前，事务型记 Debug（什么都没提交），非事务型记 Warning（已保存的部分不会回滚）；提交开始之后的任何失败，以及令牌未取消的取消异常（如数据库超时），都记 Error。工作单元尚未完成时记录提交失败；已经完成时明确记录“已提交，但提交后处理失败”，避免误判数据未落库。回滚一律记 Debug：它是结果不是原因，原因已由异常处理或错误日志记下。
+日志级别：提交开始之前的调用方取消，事务型记 Debug（什么都没提交），非事务型记 Warning（已保存的部分不会回滚）；
+提交开始之后的失败，以及令牌未取消的取消异常（如数据库超时），记 Error，已提交时注明“已提交，但提交后处理失败”。回滚记 Debug。
 
 非事务工作单元没有该边界：每次保存可能已独立持久化，`BeforeCommit` 异常不承诺回滚已完成的写入。
 
@@ -191,7 +203,7 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 | `IUnitOfWork.CompleteAsync` | 完成并提交；不可重复调用 |
 | `IUnitOfWork.RollbackAsync` | 回滚；幂等 |
 | `IUnitOfWork.Failed` | 未完成即释放时同步触发 |
-| `IUnitOfWork.Disposed` | 释放时同步触发，无论是否已完成；管理器靠它回收边界作用域并恢复外层环境。**自定义实现必须发出它，且只发一次，`Dispose()` 必须幂等**——不发出则该边界的 DI 作用域永不释放 |
+| `IUnitOfWork.Disposed` | 释放时同步触发，无论是否已完成；管理器靠它回收边界作用域并恢复外层环境。自定义实现必须发出它且只发一次，`Dispose()` 必须幂等 |
 | `[UnitOfWork]` | 声明工作单元边界并可覆盖选项 |
 | `[UnitOfWorkEventHandler]` | 声明事件处理阶段 |
 | `IDbContextProvider<TDbContext>` | 获取受当前工作单元管理的 DbContext |
@@ -219,14 +231,17 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
 | `IsTransactional` | `true` | 是否开启数据库事务 |
-| `IsolationLevel` | `null` | 事务隔离级别；默认使用数据库设置 |
-| `Timeout` | `null` | EF Core 关系数据库命令超时 |
+| `IsolationLevel` | `null` | 事务隔离级别，须为已定义的枚举值；默认使用数据库设置 |
+| `Timeout` | `null` | EF Core 关系数据库命令超时，取 1 秒至 `int.MaxValue` 秒，按整秒向上取整；默认使用数据库设置 |
+
+默认选项在宿主启动时校验，越界时启动失败（`OptionsValidationException`），消息以实际配置节的键开头。不足 1 秒的超时被拒绝（命令超时 0 表示不限时）。
+传给 `Begin(options)` 的单次选项按同一判据校验，不合法时抛 `ArgumentOutOfRangeException`。重复调用 `AddUnitOfWork` 换用另一配置节时抛 `InvalidOperationException`。
 
 ## 注意事项
 
 - 直接 `new` 的对象不会被拦截；工厂委托隐藏实现类型时也无法织入特性。
 - 工作单元内不回查刚写入的行。优先使用现有实体；只有需要数据库回填值时手动冲刷。
-- 约束冲突在冲刷时抛出，不在 `InsertAsync` 抛出；工作单元内的 `try { InsertAsync } catch` 是死代码。
+- 约束冲突在冲刷时抛出，不在 `InsertAsync` 抛出。
 - 嵌套调用只由最外层提交；不要依赖子工作单元的 `CompleteAsync()` 立即落库。
 - `BeforeCommit` 仅承载必须影响事务的逻辑。发通知、刷缓存与远程调用放在 `AfterCommit` 或 Outbox。
 - 非事务工作单元不承诺整体回滚，也不提供跨多个物理事务的原子性。

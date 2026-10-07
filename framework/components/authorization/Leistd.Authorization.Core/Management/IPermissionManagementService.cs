@@ -8,8 +8,7 @@ namespace Leistd.Authorization.Management;
 /// 权限管理用例：当前用户的有效权限、定义树、主体授予的读取与整体替换。
 /// </summary>
 /// <remarks>
-/// <para>全部按当前侧别过滤（<see cref="IPermissionDefinitionManager.IsAvailableOn"/>），与权限检查器同一判据：
-/// 能不能勾选与能不能保存、能不能用始终一致。</para>
+/// <para>全部按当前侧别过滤（<see cref="IPermissionDefinitionManager.IsAvailableOn"/>），与权限检查器同一判据。</para>
 /// <para>不做权限检查——谁能读定义、谁能改谁的授予由端点的授权策略决定。
 /// 主体是否存在与显示名经 <see cref="IPermissionSubjectDirectory"/> 由宿主回答。</para>
 /// </remarks>
@@ -17,8 +16,7 @@ public interface IPermissionManagementService
 {
     /// <summary>获取当前用户的有效权限；超级管理员返回全部可用权限。</summary>
     /// <remarks>
-    /// 当前身份不在本权限主体空间里时返回<b>空集合</b>，不抛异常：端点已要求认证，回 401 是在说假话，
-    /// 而客户端据此重新登录、再问、再拿到 401 就是死循环。空集合下任何权限判定都不通过，拒绝效果一致。
+    /// 当前身份不在本权限主体空间里时返回空集合而不抛 401（调用方已认证，401 会让客户端反复重新登录）。
     /// </remarks>
     /// <param name="cancellationToken">取消令牌。</param>
     Task<CurrentPermissionsOutputDto> GetCurrentAsync(CancellationToken cancellationToken = default);

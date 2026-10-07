@@ -1,12 +1,10 @@
 namespace Leistd.Ddd.Domain.Values;
 
-/// <summary>
-/// 提供按值比较且没有标识的值对象基类。
-/// </summary>
+/// <summary>按值比较、没有标识的值对象基类。</summary>
 /// <remarks>
 /// 派生类实现 <see cref="GetAtomicValues"/> 返回参与相等判定的分量，基类据此给出
 /// <see cref="Equals(object?)"/>、<see cref="GetHashCode"/> 与 <c>==</c>/<c>!=</c>。
-/// <b>类型必须严格相等</b>：派生类型不同的两个值对象永不相等。
+/// 类型必须严格相等：派生类型不同的两个值对象永不相等。
 /// 何时用它、何时直接用 <c>record</c>，见 ddd-struct 文档。
 /// </remarks>
 /// <example>
@@ -26,9 +24,7 @@ namespace Leistd.Ddd.Domain.Values;
 /// </example>
 public abstract class ValueObject
 {
-    /// <summary>
-    /// 返回按稳定顺序参与相等性判定的分量。
-    /// </summary>
+    /// <summary>返回按稳定顺序参与相等性判定的分量。</summary>
     /// <remarks>顺序同时决定相等性与哈希，变更顺序会让已缓存的哈希失效。</remarks>
     protected abstract IEnumerable<object?> GetAtomicValues();
 

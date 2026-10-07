@@ -52,7 +52,7 @@ public sealed class SmtpEmailSenderTests
         await Assert.ThrowsAnyAsync<Exception>(() => Sender().SendAsync(Message(), cts.Token));
     }
 
-    // 空 Host 曾是"静默跳过发送"的触发条件之一，现在必须与其它连接失败一样抛
+    // 空 Host 不是"静默跳过发送"的信号，必须与其它连接失败一样抛
     [Fact]
     public async Task A_blank_host_throws_rather_than_skipping_the_send()
     {
@@ -62,13 +62,16 @@ public sealed class SmtpEmailSenderTests
             () => Sender(o => o.Host = string.Empty).SendAsync(Message(), cts.Token));
     }
 
-    // 曾经的哨兵值：配置像默认示例就假装发出去。现在它只是一个连不通的主机名
+    // 示例主机名不是哨兵值：配置像默认示例也不能假装发出去。
+    // 令牌预先取消，发送只要走到连接这一步就抛取消异常，无需解析主机名；
+    // 按示例主机名提前静默返回的实现不会抛，用例因此变红。
     [Fact]
-    public async Task The_former_placeholder_host_is_no_longer_treated_as_a_skip_signal()
+    public async Task An_example_host_is_not_treated_as_a_skip_signal()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
 
-        await Assert.ThrowsAnyAsync<Exception>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => Sender(o => o.Host = "smtp.example.com").SendAsync(Message(), cts.Token));
     }
 

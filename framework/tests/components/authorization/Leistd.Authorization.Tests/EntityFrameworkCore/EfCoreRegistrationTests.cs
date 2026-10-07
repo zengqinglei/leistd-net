@@ -70,8 +70,8 @@ public class EfCoreRegistrationTests
     }
 
     // Manager 是业务编排，不是存储：宿主在组合根先注册自己的实现，框架不该覆盖，也不该
-    // 追加第二条。这正是 TryAdd 表达的标准 DI 语义——曾经给它也加了"唯一权威"断言，
-    // 于是合法的替换被当成冲突拒掉。
+    // 追加第二条。这正是 TryAdd 表达的标准 DI 语义——若也套用"唯一权威"断言，
+    // 合法的替换会被当成冲突拒掉。
     [Fact]
     public void A_host_registered_manager_is_kept_and_not_duplicated()
     {

@@ -51,7 +51,7 @@ export class HlmDropdownMenuTrigger {
       const previous = this._cdkTrigger.menuPosition;
       const position = this._menuPosition();
       this._cdkTrigger.menuPosition = position;
-      // 本项目定制（登记见 coding-frontend.md §4.7）：直接赋值不经过 CDK 的 ngOnChanges，
+      // 本项目定制（登记见 frontend-spartan.md）：直接赋值不经过 CDK 的 ngOnChanges，
       // 菜单打开过一次、overlay 建好之后再改 side / align 不会生效（例如侧栏内容在桌面与手机抽屉间
       // 复用同一实例，弹出方向随断点变化）。走 CDK 自己的变更入口，让它更新已有 overlay 的定位策略。
       this._cdkTrigger.ngOnChanges({

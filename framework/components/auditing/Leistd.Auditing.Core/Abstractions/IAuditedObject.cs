@@ -5,9 +5,7 @@ namespace Leistd.Auditing.Abstractions;
 /// </summary>
 public interface IHasCreationTime
 {
-    /// <summary>
-    /// 获取创建时间。
-    /// </summary>
+    /// <summary>创建时间。</summary>
     DateTime CreationTime { get; }
 }
 
@@ -16,9 +14,7 @@ public interface IHasCreationTime
 /// </summary>
 public interface ICreationAuditedObject : IHasCreationTime
 {
-    /// <summary>
-    /// 获取创建者标识。
-    /// </summary>
+    /// <summary>创建者标识；匿名或机器主体创建时为 <see langword="null"/>。</summary>
     string? CreatorId { get; }
 }
 
@@ -27,9 +23,7 @@ public interface ICreationAuditedObject : IHasCreationTime
 /// </summary>
 public interface IHasModificationTime
 {
-    /// <summary>
-    /// 获取最后修改时间。
-    /// </summary>
+    /// <summary>最后修改时间；未修改过时为 <see langword="null"/>。</summary>
     DateTime? LastModificationTime { get; }
 }
 
@@ -38,9 +32,7 @@ public interface IHasModificationTime
 /// </summary>
 public interface IModificationAuditedObject : IHasModificationTime
 {
-    /// <summary>
-    /// 获取最后修改者标识。
-    /// </summary>
+    /// <summary>最后修改者标识。</summary>
     string? LastModifierId { get; }
 }
 
@@ -49,9 +41,7 @@ public interface IModificationAuditedObject : IHasModificationTime
 /// </summary>
 public interface IHasDeletionTime
 {
-    /// <summary>
-    /// 获取删除时间。
-    /// </summary>
+    /// <summary>删除时间；未删除时为 <see langword="null"/>。</summary>
     DateTime? DeletionTime { get; }
 }
 
@@ -60,9 +50,7 @@ public interface IHasDeletionTime
 /// </summary>
 public interface ISoftDelete
 {
-    /// <summary>
-    /// 获取对象是否已删除。
-    /// </summary>
+    /// <summary>是否已软删除；DDD 基座的全局查询过滤器默认排除为 <see langword="true"/> 的行。</summary>
     bool IsDeleted { get; }
 }
 
@@ -71,9 +59,7 @@ public interface ISoftDelete
 /// </summary>
 public interface IDeletionAuditedObject : IHasDeletionTime, ISoftDelete
 {
-    /// <summary>
-    /// 获取删除者标识。
-    /// </summary>
+    /// <summary>删除者标识。</summary>
     string? DeleterId { get; }
 }
 

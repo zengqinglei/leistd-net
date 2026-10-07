@@ -5,12 +5,7 @@ import { Translation, TranslocoLoader } from '@jsverse/transloco';
 
 import { SKIP_GATEWAY } from '../interceptors/http-context-tokens';
 
-/**
- * 运行时词条加载器：从 {baseHref}i18n/{lang}.json 加载翻译。
- *
- * 词条文件位于 public/ 下（Angular public 资源约定），构建后位于站点 baseHref 下的 i18n/。
- * 用 baseHref 前缀而非绝对 /i18n/，以便应用部署在子路径（如 /app/）时仍能正确取词条。
- */
+/** 运行时词条加载器：从 `{baseHref}i18n/{lang}.json` 加载，用 baseHref 前缀以支持子路径部署。 */
 @Injectable({ providedIn: 'root' })
 export class TranslocoHttpLoader implements TranslocoLoader {
   private readonly http = inject(HttpClient);

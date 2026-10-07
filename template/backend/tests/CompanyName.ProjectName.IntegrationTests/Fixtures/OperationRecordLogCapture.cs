@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using Serilog.Core;
 using Serilog.Events;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 // 观察真实 Serilog 输出，不替换记录器或写入适配。
 internal sealed class OperationRecordLogCapture : ILogEventSink

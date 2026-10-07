@@ -1,7 +1,7 @@
 import {
   OpenApplicationOutputDto,
   OpenApplicationScopeOutputDto,
-} from '../../src/app/features/platform/models/open-application.dto';
+} from '../../src/app/features/platform/dtos/open-application.dto';
 
 export interface MockOpenApplication extends OpenApplicationOutputDto {
   clientSecret?: string;

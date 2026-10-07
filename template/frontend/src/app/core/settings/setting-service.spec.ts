@@ -4,12 +4,7 @@ import { TestBed } from '@angular/core/testing';
 
 import { SettingService } from './setting-service';
 
-/**
- * 路由契约。
- *
- * 用户偏好与系统默认值走两个端点而不是一个带 scope 参数的端点——两者授权要求不同，
- * 打错端点的表现是「改自己的偏好被 403」或「越权改了全局默认值」，都不会在编译期暴露。
- */
+/** 路由契约：用户偏好与系统默认值走两个端点，打错端点会被 403 或越权改全局默认值。 */
 describe('SettingService', () => {
   let service: SettingService;
   let http: HttpTestingController;

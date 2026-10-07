@@ -8,9 +8,7 @@ using Leistd.Notifications.Stores;
 
 namespace Leistd.Notifications.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// 使用 EF Core 持久化用户通知和已读状态。
-/// </summary>
+/// <summary>使用 EF Core 持久化用户通知和已读状态。</summary>
 /// <remarks>
 /// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接，参与工作单元。
 /// </remarks>

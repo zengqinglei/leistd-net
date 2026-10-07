@@ -1,8 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
-import { AuthService } from '../../../core/services/auth-service';
 //#if (ExternalLogin && IncludeMultiTenancy)
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 //#endif
@@ -42,7 +41,10 @@ import {
   //#if (OpenIddictServer)
   LogoutConfirmationOutputDto,
   //#endif
-} from '../models/account.dto';
+} from '../dtos/account.dto';
+//#if (IncludeMultiTenancy)
+import { TenantByHostOutputDto } from '../dtos/tenant-by-host.dto';
+//#endif
 
 @Injectable({ providedIn: 'root' })
 export class AccountService {
@@ -50,7 +52,6 @@ export class AccountService {
   //#if (ExternalLogin && IncludeMultiTenancy)
   private readonly tenantContext = inject(TenantContextService);
   //#endif
-  private authService = inject(AuthService);
   //#if (Email)
 
   getSecurityConfig(): Observable<SecurityConfigOutputDto> {
@@ -69,6 +70,14 @@ export class AccountService {
     });
   }
   //#endif
+  //#if (IncludeMultiTenancy)
+
+  /** 按当前主机名探测租户（匿名），返回三档定案结果（见 {@link TenantByHostOutputDto}）。 */
+  getTenantByHost(): Observable<TenantByHostOutputDto> {
+    return this.http.get<TenantByHostOutputDto>('/api/v1/tenants/by-host');
+  }
+  //#endif
+
   getCaptcha(): Observable<CaptchaOutputDto> {
     return this.http.get<CaptchaOutputDto>('/api/v1/auth/captcha');
   }
@@ -86,17 +95,14 @@ export class AccountService {
     return this.http.post('/api/v1/auth/register', data).pipe(map(() => undefined));
   }
 
+  /** 更新自己的资料，返回服务端保存后的资料；写回当前用户由调用方负责。 */
   updateCurrentUser(data: UpdateCurrentUserInputDto): Observable<UserOutputDto> {
-    return this.http
-      .put<UserOutputDto>('/api/v1/auth/me', data)
-      .pipe(tap((user) => this.authService.setCurrentUser(user)));
+    return this.http.put<UserOutputDto>('/api/v1/auth/me', data);
   }
 
-  /** 设置或清除自己的头像；成功后用服务端返回的资料刷新当前用户（头像地址带新的版本号）。 */
+  /** 设置或清除自己的头像，返回的资料里头像地址带新的版本号；写回当前用户由调用方负责。 */
   setAvatar(data: SetAvatarInputDto): Observable<UserOutputDto> {
-    return this.http
-      .put<UserOutputDto>('/api/v1/auth/me/avatar', data)
-      .pipe(tap((user) => this.authService.setCurrentUser(user)));
+    return this.http.put<UserOutputDto>('/api/v1/auth/me/avatar', data);
   }
 //#if (Email)
 
@@ -110,11 +116,9 @@ export class AccountService {
 //#endif
 //#if (Email)
 
-  /** 用验证码确认自己当前的邮箱。 */
+  /** 用验证码确认自己当前的邮箱，返回确认后的资料；写回当前用户由调用方负责。 */
   confirmCurrentEmail(data: EmailVerificationInputDto): Observable<UserOutputDto> {
-    return this.http
-      .post<UserOutputDto>('/api/v1/auth/me/email-verification/confirm', data)
-      .pipe(tap((user) => this.authService.setCurrentUser(user)));
+    return this.http.post<UserOutputDto>('/api/v1/auth/me/email-verification/confirm', data);
   }
 //#endif
 

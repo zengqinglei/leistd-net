@@ -1,7 +1,7 @@
 using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Domain.Auth.Options;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 using System.Globalization;
@@ -11,22 +11,16 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Email.Abstractions;
-using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
-using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Domain.Repositories;
-using Leistd.MultiTenancy;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling;
 using Leistd.Timing;
-using Leistd.Lock;
 using Leistd.Lock.Abstractions;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
@@ -39,7 +33,7 @@ public class EmailVerificationAppService(
     IEmailSender emailSender,
     ILogger<EmailVerificationAppService> logger,
     IClock clock,
-    IRepository<User, Guid> userRepository
+    UserDomainService userDomainService
     , ICurrentTenant currentTenant
     , IOptions<VerificationCodeOptions> verificationCodeOptions
     ) : BaseAppService, IEmailVerificationAppService
@@ -50,6 +44,19 @@ public class EmailVerificationAppService(
     // 注册时发出的验证码不能拿来验证已有账号的邮箱，反之亦然。
     private const string AccountEmailPurpose = "account-email";
     private const string CacheKeyPrefix = "MyProject:email-verification";
+
+    public async Task<SecurityConfigOutputDto> GetSecurityConfigAsync(CancellationToken cancellationToken = default)
+    {
+        // 按租户解析：同一套部署下，不同租户的注册门槛可以不同，
+        // 而登录页拿到的必须是它所在那个租户的那一份
+        var policy = await registrationPolicy.GetAsync(cancellationToken);
+
+        return new SecurityConfigOutputDto
+        {
+            EnableEmailVerification = policy.EnableEmailVerification,
+            EmailVerificationAvailable = verificationCodeOptions.Value.IsKeyUsable
+        };
+    }
 
     public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
         SendEmailCodeInputDto input,
@@ -74,12 +81,13 @@ public class EmailVerificationAppService(
             throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
         }
 
-        var existingUser = await userRepository.GetFirstAsync(
-            u => u.Email.ToLower() == normalizedEmail,
-            cancellationToken: cancellationToken);
-        if (existingUser != null)
+        // 与建号、改邮箱同一判定：看得见软删除行、按唯一索引的原样比较。
+        // 这里先放行、建号时再撞上，用户就白收了一封验证码。
+        var email = input.Email.Trim();
+        if (!await userDomainService.IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BusinessException(AuthErrorCodes.EmailAlreadyUsed, "This email address is already in use.");
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         return await IssueChallengeAsync(normalizedEmail, RegistrationPurpose, policy, cancellationToken);
@@ -192,33 +200,33 @@ public class EmailVerificationAppService(
 
     public Task<bool> ValidateEmailChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         CancellationToken cancellationToken = default)
-        => ValidateChallengeAsync(email, verification, RegistrationPurpose, cancellationToken);
+        => ValidateChallengeAsync(email, input, RegistrationPurpose, cancellationToken);
 
     /// <inheritdoc />
     public Task<bool> ValidateAccountEmailChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         CancellationToken cancellationToken = default)
-        => ValidateChallengeAsync(email, verification, AccountEmailPurpose, cancellationToken);
+        => ValidateChallengeAsync(email, input, AccountEmailPurpose, cancellationToken);
 
     private async Task<bool> ValidateChallengeAsync(
         string email,
-        EmailVerificationInputDto verification,
+        EmailVerificationInputDto input,
         string purpose,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(email) ||
-            verification.ChallengeId == Guid.Empty ||
-            string.IsNullOrWhiteSpace(verification.Code))
+            input.ChallengeId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(input.Code))
         {
             return false;
         }
 
-        var challengeKey = GetChallengeCacheKey(verification.ChallengeId);
+        var challengeKey = GetChallengeCacheKey(input.ChallengeId);
         await using var challengeLock = await distributedLock.LockAsync(
-            GetChallengeLockKey(verification.ChallengeId),
+            GetChallengeLockKey(input.ChallengeId),
             cancellationToken);
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -267,7 +275,7 @@ public class EmailVerificationAppService(
         bool codeMatches;
         try
         {
-            codeMatches = codeDigest.Matches(challenge.CodeHash, verification.Code.Trim());
+            codeMatches = codeDigest.Matches(challenge.CodeHash, input.Code.Trim());
         }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {

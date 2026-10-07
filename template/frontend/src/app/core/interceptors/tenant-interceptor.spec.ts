@@ -6,7 +6,7 @@ import { of } from 'rxjs';
 
 import { tenantInterceptor } from './tenant-interceptor';
 import { TenantContextService } from '../services/tenant-context-service';
-import { TENANT_HEADER } from '../services/tenant-protocol';
+import { TENANT_HEADER } from '../tenancy/tenant-protocol';
 
 /**
  * 直接以 runInInjectionContext 驱动拦截器（与 http-error-interceptor.spec 同形态），
@@ -56,13 +56,7 @@ describe('tenantInterceptor', () => {
     expect(send('/assets/config.json').headers.has(TENANT_HEADER)).toBe(false);
   });
 
-  /**
-   * 按主机名探测不附租户头。
-   *
-   * 它是宿主级匿名查询：附上失效租户头，这一问本身会先被租户解析拒掉，
-   * 而登录页在探测失败时会锁住租户区不许改，于是重试仍带同一个头、仍失败——
-   * 失效的本地租户谁也清不掉。
-   */
+  /** 按主机名探测不附租户头：失效租户头会让探测先被拒，而登录页在探测失败时锁住租户区，形成死锁。 */
   for (const url of ['/api/v1/tenants/by-host'] as const) {
     it(`adds no tenant header to the tenant probe endpoint: ${url}`, () => {
       context.set(tenantName);

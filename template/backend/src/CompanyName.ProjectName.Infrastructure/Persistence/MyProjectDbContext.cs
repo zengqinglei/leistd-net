@@ -30,7 +30,7 @@ public class MyProjectDbContext(
     public DbSet<User> Users { get; set; } = null!;
     // Identity 角色模型
     public DbSet<Role> Roles { get; set; } = null!;
-    public DbSet<UserRole> UserRoles { get; set; } = null!;
+    // 角色成员关系是 User 聚合的子实体，不声明 DbSet：声明即自动登记 IRepository<UserRole>
 #if (LocalIdentity)
     public DbSet<UserSession> UserSessions { get; set; } = null!;
 #endif

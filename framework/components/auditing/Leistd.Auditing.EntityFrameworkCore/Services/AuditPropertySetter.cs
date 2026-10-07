@@ -5,13 +5,9 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Auditing.EntityFrameworkCore.Services;
 
-/// <summary>
-/// 使用 EF Core 变更跟踪器填充审计属性。
-/// </summary>
+/// <summary>使用 EF Core 变更跟踪器填充审计属性。</summary>
 /// <remarks>
-/// 只处理时间与用户审计，不处理租户归属或机器客户端身份。
-/// <b><see cref="ICurrentUser"/> 是可选依赖</b>：未注册时按匿名处理——<b>时间审计照常落值</b>，用户字段保持 <see langword="null"/>，
-/// 因此迁移作业、后台任务与设计时工具不必为了写审计而引入 ASP.NET Core 的身份栈。
+/// 只处理时间与用户审计，不处理租户归属。<see cref="ICurrentUser"/> 可选：未注册时时间审计照常落值，用户字段保持 <see langword="null"/>。
 /// </remarks>
 public class AuditPropertySetter(
     IClock clock,

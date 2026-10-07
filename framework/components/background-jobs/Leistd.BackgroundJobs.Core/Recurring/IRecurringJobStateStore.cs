@@ -1,11 +1,8 @@
 namespace Leistd.BackgroundJobs.Recurring;
 
-/// <summary>
-/// 记录 <see cref="RecurringJobScope.Cluster"/> 任务最近成功完成的时段。
-/// </summary>
+/// <summary>记录 <see cref="RecurringJobScope.Cluster"/> 任务最近成功完成的时段。</summary>
 /// <remarks>
-/// 只靠分布式锁只能防止同一时段<b>并发</b>执行，防不住<b>先后</b>重复：副本 A 执行完释放锁后，
-/// 时钟稍慢的副本 B 在同一时段醒来照样能拿到锁。水位让 B 看到"这个时段已经做过"。
+/// 分布式锁只防并发，水位防止同一时段被时钟稍慢的副本先后重复执行。
 /// 多副本部署必须使用共享存储的实现（如 EF 实现）；进程内默认实现只对单副本成立。
 /// </remarks>
 public interface IRecurringJobStateStore

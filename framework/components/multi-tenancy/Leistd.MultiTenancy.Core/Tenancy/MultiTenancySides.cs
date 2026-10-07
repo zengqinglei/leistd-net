@@ -6,18 +6,12 @@ namespace Leistd.MultiTenancy.Tenancy;
 [Flags]
 public enum MultiTenancySides
 {
-    /// <summary>
-    /// 表示租户侧。
-    /// </summary>
+    /// <summary>租户侧。</summary>
     Tenant = 1,
 
-    /// <summary>
-    /// 表示宿主侧。
-    /// </summary>
+    /// <summary>宿主侧。</summary>
     Host = 2,
 
-    /// <summary>
-    /// 表示租户侧和宿主侧。
-    /// </summary>
+    /// <summary>租户侧和宿主侧。</summary>
     Both = Tenant | Host
 }

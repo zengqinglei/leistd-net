@@ -9,7 +9,7 @@ services:
     # **必须显式传 --apply。**DbMigrator 默认只做只读预演（迁移是不可逆的生产数据变更，
     # "跑一下看看"和"改掉生产库"不该是同一个动作）。不传的话它 dry-run 后以 0 退出，
     # backend 的 service_completed_successfully 被满足、随即因 schema 未迁移而启动失败。
-    # 预演留给发布前的人工/流水线审核步骤，不要用它充当部署 Job
+    # 预演命令见 docs/deploy/README.md 的"本地验证"：以 --entrypoint 重新指定入口，这里的 --apply 不再附加
     command: ["--apply"]
     environment:
       - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=postgres;Password=${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required};GSS Encryption Mode=Disable
@@ -74,7 +74,7 @@ services:
       # 运行时身份只查路由，不给迁移元数据 scope
       - Leistd__ServiceClients__Identity__Scope=tenant-routing.read
       # 路由缓存 TTL：改租户数据落点前的排空等待取 max(令牌有效期, 本值)
-      - TenantRouting__CacheLifetime=${TENANT_ROUTE_CACHE_TTL:-00:10:00}
+      - Leistd__MultiTenancy__Routing__CacheLifetime=${TENANT_ROUTE_CACHE_TTL:-00:10:00}
 #endif
 #endif
 
@@ -94,6 +94,20 @@ services:
       - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:-}
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
       - DefaultAdmin__DisplayName=System Administrator # optional
+#endif
+#if (Email)
+      # 发信（SMTP）：主机、端口与发件地址没有可用默认值，漏配时 compose 带着变量名失败；
+      # 账号与口令成对填写或都留空（服务器不要求认证时），只填一项启动失败
+      - Leistd__Email__Smtp__Host=${SMTP_HOST:?SMTP_HOST is required}
+      - Leistd__Email__Smtp__Port=${SMTP_PORT:?SMTP_PORT is required}
+      - Leistd__Email__Smtp__EnableSsl=${SMTP_ENABLE_SSL:-true}
+      - Leistd__Email__Smtp__DefaultFromAddress=${SMTP_FROM_ADDRESS:?SMTP_FROM_ADDRESS is required}
+      - Leistd__Email__Smtp__Username=${SMTP_USERNAME:-}
+      - Leistd__Email__Smtp__Password=${SMTP_PASSWORD:-}
+      # 注册邮箱验证（默认关闭）。开启时必须提供验证码摘要密钥（Base64，至少 32 字节，跨实例跨重启不变），
+      # 缺失或无效即启动失败；关闭时可以不提供。生成方式见 docs/deploy/README.md
+      - UserRegistration__EnableEmailVerification=${ENABLE_EMAIL_VERIFICATION:-false}
+      - VerificationCodes__Key=${VERIFICATION_CODES_KEY:-}
 #endif
 #if (IncludeNotifications && Email)
       # 可选：站点对外地址，通知邮件据此把站内链接拼成绝对地址；不配则邮件不附站内链接
@@ -118,20 +132,16 @@ services:
       # - Cors__AllowedOrigins__0=https://your-domain.com
 
 #if (ExternalLogin)
-      # External OAuth (Optional - uncomment and configure if needed)
-      # - ExternalAuth__GitHub__ClientId=your-github-client-id
-      # - ExternalAuth__GitHub__ClientSecret=your-github-client-secret
-      # 回调地址是前端页面（它再把授权码提交给 API），与提供商后台登记的回调逐字一致
-      # - ExternalAuth__GitHub__RedirectUri=https://your-domain.com/auth/external-callback/github
-      # - ExternalAuth__Google__ClientId=your-google-client-id
-      # - ExternalAuth__Google__ClientSecret=your-google-client-secret
-      # - ExternalAuth__Google__RedirectUri=https://your-domain.com/auth/external-callback/google
-
+      # 外部登录：提供商的 ClientId 与 ClientSecret 成对填写，只填一项启动失败；都不填则不启用该提供商。
+      # 在提供商后台登记的回调地址是 API 端点 https://<站点对外地址>/api/v1/external-auth/{github,google}/signin
+      - ExternalAuth__Github__ClientId=${GITHUB_CLIENT_ID:-}
+      - ExternalAuth__Github__ClientSecret=${GITHUB_CLIENT_SECRET:-}
+      - ExternalAuth__Google__ClientId=${GOOGLE_CLIENT_ID:-}
+      - ExternalAuth__Google__ClientSecret=${GOOGLE_CLIENT_SECRET:-}
 #endif
 
       # Logging (optional)
       - Serilog__MinimumLevel__Default=Information
-      - Serilog__MinimumLevel__Override__MyProject=Information
       - Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Warning
       - Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore=Warning
 

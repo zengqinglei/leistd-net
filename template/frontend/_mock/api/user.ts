@@ -1,11 +1,25 @@
-import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';
-import { ROLES } from '../data/authorization';
 //#if (LocalIdentity)
+import { ROLES } from '../data/authorization';
 import { ensureAcceptablePassword } from '../data/password-policy';
 //#endif
-import { USERS, toUserManagementOutput } from '../data/user';
+// prettier-ignore
+import {
+  //#if (LocalIdentity)
+  DELETED_USERS,
+  //#endif
+  USERS,
+  //#if (LocalIdentity)
+  isEmailTaken,
+  isUsernameTaken,
+  //#endif
+  toUserManagementOutput,
+} from '../data/user';
+//#if (LocalIdentity)
+import { getCurrentUser } from '../utils/current-user';
+//#endif
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
@@ -83,39 +97,28 @@ export function getUserById(id: string) {
   return toUserManagementOutput(user);
 }
 
+//#if (LocalIdentity)
 export function addUser(value: any) {
   const username = String(value.username ?? '').trim();
   const email = String(value.email ?? '').trim();
-  if (USERS.some((w) => w.username === username)) {
+  // 与后端一致：已删除用户仍占着用户名与邮箱
+  if (isUsernameTaken(username)) {
     throw new MockException(409, {
       code: 'User:UsernameTaken',
       message: `Username '${username}' already exists.`,
     });
   }
-  if (USERS.some((w) => w.email === email)) {
+  if (isEmailTaken(email)) {
     throw new MockException(409, {
       code: 'User:EmailTaken',
       message: `Email '${email}' is already in use.`,
     });
   }
-  //#if (LocalIdentity)
   // 复刻后端口令策略：创建用户必须显式给出合规口令，没有默认值。
   ensureAcceptablePassword(value.password, 'Password');
 
-  //#else
-  // 复刻后端 CreateUserInputDto：SubjectId 必填，且就是本服务 Membership 的主键。
-  const subjectId = String(value.subjectId ?? '').trim();
-  if (!subjectId) {
-    throw new MockException(400, { message: 'SubjectId is required.' });
-  }
-
-  //#endif
   const newUser = {
-    //#if (LocalIdentity)
     id: crypto.randomUUID(),
-    //#else
-    id: subjectId,
-    //#endif
     username,
     email,
     displayName: value.displayName,
@@ -135,12 +138,7 @@ export function addUser(value: any) {
       : ROLES.filter((role: { isDefault: boolean }) => role.isDefault).map(
           (role: { name: string }) => role.name,
         )) as string[],
-    //#if (LocalIdentity)
     password: value.password,
-    //#else
-    // Resource 形态没有本地口令，空串仅满足 MockUser 结构。
-    password: '',
-    //#endif
   };
   USERS.push(newUser);
   return toUserManagementOutput(newUser);
@@ -154,16 +152,17 @@ export function updateUser(id: string, value: any) {
       message: 'User does not exist or has been deleted',
     });
   }
-  // 与后端一致：邮箱被其他用户占用时 409，不静默覆盖
-  if (value.email && USERS.some((w) => w.id !== id && w.email === value.email)) {
+  // 与后端一致：邮箱先去掉首尾空白再判占用与保存；被其他用户占用时 409，不静默覆盖
+  const email = String(value.email ?? '').trim();
+  if (email && isEmailTaken(email, id)) {
     throw new MockException(409, {
-      code: 'User:EmailAlreadyUsed',
-      message: `Email '${value.email}' is already in use.`,
+      code: 'User:EmailTaken',
+      message: `Email '${email}' is already in use.`,
     });
   }
 
   Object.assign(user, {
-    email: value.email,
+    email,
     displayName: value.displayName,
     avatar: value.avatar,
     isActive: value.isActive,
@@ -173,6 +172,7 @@ export function updateUser(id: string, value: any) {
   return toUserManagementOutput(user);
 }
 
+//#endif
 export function enableUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
@@ -226,14 +226,36 @@ export function unlockUser(id: string) {
   delete user.lockoutEnd;
 }
 
-//#endif
+/**
+ * 管理员重置两步验证。超级管理员只能由本人重置（403）；未启用时什么也不做，与后端一致。
+ * 真实后端还会撤销该用户的全部会话，Mock 的会话列表只有当前用户自己的，这里不复刻。
+ */
+export function resetTwoFactor(id: string) {
+  const user = USERS.find((w) => w.id === id);
+  if (!user) {
+    throw new MockException(404, {
+      code: 'User:NotFound',
+      message: `User ${id} not found.`,
+    });
+  }
+  if (user.isSuperAdmin && user.id !== getCurrentUser()?.id) {
+    throw new MockException(403, {
+      code: 'User:SuperAdminOperationForbidden',
+      message: 'The built-in super administrator cannot be operated on by other administrators.',
+    });
+  }
+  user.twoFactorEnabled = false;
+  user.recoveryCodes = [];
+}
+
+/**
+ * 与后端一致：删除幂等，不存在（含已删除）即成功；内置超级管理员不可删（403）。
+ * 删除是软删除：移出列表但仍占着用户名与邮箱。
+ */
 export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
   if (index < 0) {
-    throw new MockException(404, {
-      code: 'User:NotFound',
-      message: 'User does not exist or has been deleted',
-    });
+    return;
   }
   if (USERS[index].isSuperAdmin) {
     throw new MockException(403, {
@@ -241,20 +263,24 @@ export function deleteUser(id: string) {
       message: 'The built-in super administrator cannot be deleted',
     });
   }
-  USERS.splice(index, 1);
+  DELETED_USERS.push(...USERS.splice(index, 1));
 }
 
+//#endif
 export const USER_API = {
   'GET /api/v1/users': (req: MockRequest) => getUsers(req.queryParams),
   'GET /api/v1/users/:id': (req: MockRequest) => getUserById(req.params.id),
+  //#if (LocalIdentity)
   'POST /api/v1/users': (req: MockRequest) => addUser(req.body),
   'PUT /api/v1/users/:id': (req: MockRequest) => updateUser(req.params.id, req.body),
+  //#endif
   'PATCH /api/v1/users/:id/enable': (req: MockRequest) => enableUser(req.params.id),
   'PATCH /api/v1/users/:id/disable': (req: MockRequest) => disableUser(req.params.id),
   //#if (LocalIdentity)
   'POST /api/v1/users/:id/reset-password': (req: MockRequest) =>
     resetPassword(req.params.id, req.body),
   'POST /api/v1/users/:id/unlock': (req: MockRequest) => unlockUser(req.params.id),
-  //#endif
+  'POST /api/v1/users/:id/reset-two-factor': (req: MockRequest) => resetTwoFactor(req.params.id),
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
+  //#endif
 };

@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 import { BrnDialogRef } from '@spartan-ng/brain/dialog';
 import { HlmDialogContent } from '@spartan-ng/helm/dialog';
+import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
 import { firstValueFrom, of } from 'rxjs';
 
@@ -10,11 +11,8 @@ import { provideAppA11yLabels } from './a11y-labels';
 import { provideTranslocoTesting } from './transloco.testing';
 
 /**
- * `libs/ui` 组件内部的读屏文案必须跟着语言走。
- *
- * 回归点：接线（`provideAppA11yLabels`）与消费（组件模板读令牌）是两处，
- * 一次 spartan 升级只改掉了后者——两个组件把读屏名改回写死英文，接线还在、却没人读它。
- * 界面上看不出来（`sr-only` 不可见），所以判据只能是"渲染出的读屏名不是英文默认值"。
+ * `libs/ui` 组件内部的读屏文案必须跟着语言走。接线（`provideAppA11yLabels`）与消费（组件模板读令牌）
+ * 是两处，读屏名不可见，判据是渲染出的读屏名不是英文默认值。
  */
 const translations: Record<string, Record<string, string>> = {
   en: { 'common.close': 'Close', 'layout.sidebar.toggle': 'Toggle Sidebar' },
@@ -36,6 +34,17 @@ class SidebarTriggerHost {}
   template: `<hlm-dialog-content />`,
 })
 class DialogContentHost {}
+
+@Component({
+  imports: [HlmSheetImports],
+  // 抽屉内容渲染在 document 上的浮层里，要真实打开一次才有关闭按钮
+  template: `
+    <hlm-sheet side="left" state="open">
+      <hlm-sheet-content *hlmSheetPortal />
+    </hlm-sheet>
+  `,
+})
+class SheetContentHost {}
 
 describe('libs/ui screen reader labels', () => {
   function configure(): void {
@@ -83,5 +92,21 @@ describe('libs/ui screen reader labels', () => {
 
     expect(text).toBe('关闭');
     expect(text).not.toBe('Close');
+  });
+
+  it('labels the sheet close button in the active language, not hardcoded English', async () => {
+    configure();
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load('zh-CN'));
+    transloco.setActiveLang('zh-CN');
+
+    const fixture = TestBed.createComponent(SheetContentHost);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const label = document.querySelector<HTMLElement>('hlm-sheet-content .sr-only');
+    expect(label, '抽屉没有渲染出关闭按钮的读屏文案').not.toBeNull();
+    expect(label!.textContent!.trim()).toBe('关闭');
+    fixture.destroy();
   });
 });

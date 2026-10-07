@@ -2,9 +2,7 @@ using System.Data.Common;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
-/// <summary>
-/// 把异步解析完成的连接信息传入 EF Core 同步 Options 回调。
-/// </summary>
+/// <summary>把异步解析完成的连接信息传入 EF Core 同步 Options 回调。</summary>
 /// <remarks>
 /// 宿主的 <c>AddDbContext</c> 回调只读取 <see cref="Current"/>，不得在回调中执行远程调用。
 /// </remarks>

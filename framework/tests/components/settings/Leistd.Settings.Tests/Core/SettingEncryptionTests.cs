@@ -4,6 +4,7 @@ using Leistd.Settings.Resolution;
 using Leistd.TestBase.Doubles;
 using Microsoft.AspNetCore.DataProtection;
 using Xunit;
+using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 

@@ -33,8 +33,7 @@ builder.Services.AddSingleton<IRealTimeSubscriptionAuthorizer, MyResourceAuthori
 builder.Services.AddAllowAllRealTimeSubscriptions();
 ```
 
-未注册授权器时 `MapRealTimeHub()` 让宿主起不来——「谁能订阅什么」是必须由宿主做出的决定，
-框架不给默认值。
+未注册授权器时 `MapRealTimeHub()` 映射即失败，框架不提供默认授权器。
 
 映射 Hub 端点（需登录）：
 
@@ -42,7 +41,9 @@ builder.Services.AddAllowAllRealTimeSubscriptions();
 app.MapRealTimeHub();
 ```
 
-`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，返回官方的 `HubEndpointConventionBuilder`（可继续链式追加授权策略、CORS 等），并在授权器缺失时抛异常。映射时只确认授权器已注册、不在根容器里解析它，因此授权器可以按 `Scoped`/`Transient` 注册并依赖作用域服务（如权限检查器）；每次 `Subscribe` 在 Hub 调用的作用域里解析。
+`AddRealTimeSignalR` 注册 SignalR 基座与事件发布，不注册授权器；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，授权器缺失时抛异常。
+握手按 `HubIdentityOptions.PolicyName` 授权（未设置时按默认策略），与调用期复评同一策略；要换策略就设置该选项，不要在返回的构建器上追加 `RequireAuthorization`（只在握手时生效）。
+授权器可以按 `Scoped`/`Transient` 注册并依赖作用域服务，每次 `Subscribe` 在 Hub 调用的作用域里解析。
 
 心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；解析 `UserIdentifier` 的 claim 顺序是 `ClaimTypeOptions.UserIds`（Security.Core），与框架其他组件读主体标识同一处配置。
 
@@ -81,7 +82,7 @@ public class ProductProfileService(IBusinessEventPublisher eventPublisher)
 ## 实现行为
 
 - Hub 只做资源订阅，不建任何用户分组：按用户寻址用 SignalR 自带的 `Clients.User(userId)`。
-- `Subscribe` **无条件**经过 `IRealTimeSubscriptionAuthorizer`，被拒绝时抛出 `HubException`；`Unsubscribe` 始终允许。
+- `Subscribe` 无条件经过 `IRealTimeSubscriptionAuthorizer`，被拒绝时抛出 `HubException`；`Unsubscribe` 始终允许。
 - 资源组名为 `resource:{resourceKey}`，不会自动拼租户；租户隔离必须由 `IRealTimeSubscriptionAuthorizer` 判定。推送失败只记录错误。
 
 ## 配置项
@@ -90,43 +91,15 @@ public class ProductProfileService(IBusinessEventPublisher eventPublisher)
 
 SignalR 传输层的配置不在本组件：心跳、超时、详细错误是 SignalR 的 `HubOptions`，用户标识解析在 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions`。
 
-## Bearer 认证下的 Hub 令牌传递
-
-用 Cookie 会话时不涉及本节。
-
-浏览器的 WebSocket 与 SSE 无法设置自定义请求头，SignalR 因此通过 `?access_token=` 传递 Bearer 令牌。
-
-若宿主只接受 `Authorization: Bearer`（例如显式关闭了 query 形式的令牌提取），需要在认证中间件之前，把 Hub 路径上的 query 令牌搬进请求头：
-
-```csharp
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/hubs/realtime") &&
-        context.Request.Headers.Authorization.Count == 0 &&
-        context.Request.Query.TryGetValue("access_token", out var token) &&
-        token.Count == 1 &&
-        !string.IsNullOrWhiteSpace(token[0]))
-    {
-        context.Request.Headers.Authorization = $"Bearer {token[0]}";
-    }
-
-    await next();
-});
-```
-
-该中间件必须放在 `UseAuthentication()` 之前，路径必须与 `MapRealTimeHub` 映射的路径一致。只接受单个非空令牌，且仅在缺少 `Authorization` 头时采信 query；不要将范围放宽到全部 API 或所有 Hub。
-
 ## 注意事项
 
-- **多副本部署必须配置 SignalR 背板**，否则发布方所在节点之外的订阅者收不到事件，且静默无信号。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
+- 多副本部署必须配置 SignalR 背板，否则发布方所在节点之外的订阅者收不到事件，见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
+- 用 Bearer 认证时，浏览器客户端只能把令牌放进查询串，宿主须在认证之前接入 SignalR 基座的 `UseHubAccessToken()`，见 [SignalR 基座](./aspnetcore-signalr.md#注册)。
 - 本组件不提供在线状态查询；多实例在线状态需要宿主维护共享连接注册表。
-- 订阅授权**没有开关**：授权器无条件参与每一次 `Subscribe`。未注册授权器时宿主启动失败；`AddAllowAllRealTimeSubscriptions()` 是「公共资源随便订阅」的显式选择。
-- `PublishToResourceAsync` 推送失败只记日志、不抛异常：调用成功返回不代表订阅方一定收到消息（例如客户端未连接/未订阅该资源）。
-- **Hub 方法调用的上下文与有效性由 SignalR 基座保证**。`AddRealTimeSignalR()` 内部走
-  `Leistd.AspNetCore.SignalR` 的 `AddSignalRAmbientContext()`：每次 Hub 调用前按连接主体建立
-  `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`，并复评宿主的默认授权策略，
-  不通过即 `Abort()` 连接。**复评只发生在客户端调用 Hub 方法时**——账号被禁用后，既有连接要到下一次 `Subscribe`/`Unsubscribe` 才会被中止；只被动接收事件的连接不会触发复评。框架不主动关闭既有连接。
-  复评频率可用 `HubIdentityOptions.RevalidationInterval` 节流（默认每次调用都评）。
+- 订阅授权没有开关；`AddAllowAllRealTimeSubscriptions()` 是公共资源场景的显式选择。
+- `PublishToResourceAsync` 推送失败只记日志、不抛异常，成功返回不代表订阅方一定收到。
+- Hub 调用的环境上下文与有效性复评由 [SignalR 基座](./aspnetcore-signalr.md)提供：复评只在客户端调用 Hub 方法时发生，账号被禁用后既有连接要到下一次 `Subscribe`/`Unsubscribe` 才被中止，
+  只接收事件的连接不触发复评。复评频率可用 `HubIdentityOptions.RevalidationInterval` 节流。
 
 ## 相关
 

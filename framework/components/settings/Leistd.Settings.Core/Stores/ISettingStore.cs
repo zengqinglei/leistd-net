@@ -13,14 +13,8 @@ namespace Leistd.Settings.Stores;
 /// </remarks>
 public interface ISettingStore
 {
-    /// <summary>
-    /// 当前上下文能否读写<b>宿主层</b>（<see cref="SettingScopes.Host"/>）。
-    /// </summary>
-    /// <remarks>
-    /// 由存储实现回答：宿主层只有一行，它是否可达取决于当前连的是哪个库、以及租户过滤器
-    /// 会不会把它滤掉——这两件事只有存储知道。租户上下文下它不可达，读出来的既不是那一行，
-    /// 也不能当成"没设过"，因此调用方必须先问这一项，而不是拿到空值就回落到代码默认值。
-    /// </remarks>
+    /// <summary>当前上下文能否读写宿主层（<see cref="SettingScopes.Host"/>）。</summary>
+    /// <remarks>不可达时读到的空值不代表“没设过”，调用方必须先判断这一项。</remarks>
     bool CanAccessHostScope { get; }
 
     /// <summary>读取当前租户下某一层级的全部设置值。</summary>
@@ -33,10 +27,7 @@ public interface ISettingStore
         CancellationToken cancellationToken = default);
 
     /// <summary>移除当前租户下的全部设置值，含各用户在该租户内的偏好。</summary>
-    /// <remarks>
-    /// 供永久废弃租户时清理孤儿行使用——设置行带租户归属，租户没了它们读不到也删不掉。
-    /// 与本契约的其它方法一样按当前租户隐式限定：在宿主上下文调用会清掉宿主的设置。
-    /// </remarks>
+    /// <remarks>供永久废弃租户时清理。按当前租户隐式限定：在宿主上下文调用会清掉宿主的设置。</remarks>
     /// <param name="cancellationToken">取消令牌。</param>
     Task RemoveAllAsync(CancellationToken cancellationToken = default);
 

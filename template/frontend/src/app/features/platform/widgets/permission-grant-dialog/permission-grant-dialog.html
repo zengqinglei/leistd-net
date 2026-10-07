@@ -17,6 +17,22 @@
         <div class="flex items-center justify-center py-12">
           <hlm-spinner />
         </div>
+      } @else if (loadError(); as error) {
+        <!-- 加载失败与"没有权限"分开表达：说出原因并给重试。 -->
+        <div class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
+          <p class="text-base font-medium" role="alert">{{ t('permissions.loadFailed') }}</p>
+          <p class="text-sm opacity-70">{{ error }}</p>
+          <button
+            hlmBtn
+            variant="outline"
+            type="button"
+            data-testid="permissions-retry"
+            (click)="retry()"
+          >
+            {{ t('common.retry') }}
+          </button>
+        </div>
       } @else {
         <div class="flex flex-col items-stretch gap-3 pb-3 sm:flex-row sm:items-center">
           <hlm-input-group class="w-full sm:max-w-xs sm:flex-1">
@@ -39,10 +55,7 @@
           }}</span>
         </div>
 
-        <!--
-        滚动容器必须是画边框的这一层本身：套一层第三方滚动组件时它会撑到内容高度而不是被
-        flex 约束住，视口永远不溢出，于是分组全部展开后内容被直接裁掉且没有滚动条。
-      -->
+        <!-- 滚动容器必须是画边框的这一层：第三方滚动组件会撑到内容高度，不被 flex 约束。 -->
         <div class="min-h-0 flex-1 overflow-y-auto rounded-lg border">
           @if (hasNoMatch()) {
             <p class="py-10 text-center text-sm text-muted-foreground">
@@ -57,10 +70,7 @@
                 [isOpened]="isExpanded(group.name)"
                 (openedChange)="onGroupOpenedChange(group.name, $event)"
               >
-                <!--
-                组标题不带复选框：组是容器不是权限，标题旁摆一个与权限行同款的复选框，
-                会让人以为组本身也能被授予。折叠时的授予情况由 n/总数 徽标回显。
-              -->
+                <!-- 组标题不带复选框：组是容器不是权限；授予情况由 n/总数 徽标回显。 -->
                 <div class="flex items-center bg-muted/50 px-3">
                   <!-- 组标题只是展开开关，不是链接：去掉 hover 下划线。类要给 triggerClass，
                      它才会合并进内部按钮；写在宿主上管不到那个按钮。 -->
@@ -80,10 +90,7 @@
                 </div>
 
                 <hlm-accordion-content>
-                  <!--
-                  缩进表达前置关系：depth 0 是资源本身（勾上即"能看到这份列表"），
-                  更深的是可在其上执行的动作。层级不可见时，勾动作把资源一并勾上会像是随机跳动。
-                -->
+                  <!-- 缩进表达前置关系：depth 0 是资源，更深的是其上的动作。 -->
                   <ul class="flex list-none flex-col p-0">
                     @for (row of group.rows; track row.name) {
                       <li
@@ -96,14 +103,14 @@
                           [checked]="isGranted(row.name)"
                           (checkedChange)="onCheckedChange(row.name, $event)"
                         />
-                        <label class="min-w-0 flex-1 cursor-pointer text-sm" [attr.for]="row.name">
+                        <label
+                          class="flex min-w-0 flex-1 cursor-pointer flex-wrap items-baseline gap-x-1 text-sm"
+                          [attr.for]="row.name"
+                        >
                           {{ row.displayName }}
-                          <!--
-                          顶层那条勾上等于"能看到这份列表"，光看"用户管理"四个字读不出来，
-                          会被当成分类标题。这里直接把它是什么写在旁边。
-                        -->
+                          <!-- 顶层行勾上等于能看到这份列表，名称本身读不出来，旁边写明。 -->
                           @if (row.depth === 0 && row.hasChildren) {
-                            <span class="ml-1 text-xs font-normal text-muted-foreground">
+                            <span class="text-xs font-normal text-muted-foreground">
                               {{ t('permissions.viewAccessHint') }}
                             </span>
                           }

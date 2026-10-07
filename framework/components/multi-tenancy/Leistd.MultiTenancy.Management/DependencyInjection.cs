@@ -11,17 +11,14 @@ namespace Leistd.MultiTenancy.Management;
 /// </summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册租户管理与连接管理两个用例。
-    /// </summary>
-    /// <param name="services">服务集合</param>
+    /// <summary>注册租户管理与连接管理两个用例。</summary>
+    /// <param name="services">服务集合。</param>
     /// <remarks>
     /// <para>用例只依赖契约（<see cref="ITenantManager"/>、<see cref="ITenantStore"/>、
     /// <see cref="ITenantConnectionConfigurationManager"/>、<see cref="ITenantConnectionDirectory"/>、
     /// <c>ITenantDatabaseDirectory</c>）与工作单元，
-    /// 因此换存储实现时这套开通编排、失败补偿与 DTO 投影照旧可用。<b>六个存储契约与
-    /// <c>AddUnitOfWork()</c> 都要由调用方先就位</b>，漏了哪个在首次解析用例时才会暴露；
-    /// EF 存储的 <c>AddMultiTenancyEfCore</c> 注册了其中的存储，宿主再调用本方法。</para>
+    /// 六个存储契约与 <c>AddUnitOfWork()</c> 须由调用方先注册，缺失时在首次解析用例时才暴露；
+    /// EF 存储的 <c>AddMultiTenancyEfCore</c> 注册了其中的存储。</para>
     /// <para>同时注册开通失败的数据库错误翻译默认实现（不翻译）；宿主注册自己的 <see cref="ITenantDatabaseErrorDescriber"/> 即可替换。</para>
     /// <para>开通编排的顺序与补偿见 <see cref="ITenantProvisioner"/>。</para>
     /// </remarks>

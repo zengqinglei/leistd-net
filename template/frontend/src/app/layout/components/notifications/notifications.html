@@ -61,7 +61,7 @@
               type="button"
               hlmBtn
               variant="link"
-              size="xs"
+              size="sm"
               class="shrink-0"
               data-testid="notifications-retry"
               (click)="retryLoad()"
@@ -71,9 +71,7 @@
           </div>
         }
         @if (notifications().length === 0) {
-          <!-- 图标与文案各自成行、整体居中：原来靠 ng-icon 上的 `block` 让图标独占一行，
-             而组件自身的 host 样式把它按行内盒渲染，结果是图标与文字挤在一行、基线还错开。
-             改用 flex 列布局，对齐不再取决于哪一条 display 规则赢。 -->
+          <!-- 图标与文案各自成行、整体居中：用 flex 列布局，不依赖 ng-icon 的 display。 -->
           <div
             class="text-muted-foreground flex flex-col items-center justify-center gap-2 py-10 text-sm"
             [attr.aria-busy]="notificationService.loading() || null"
@@ -99,7 +97,7 @@
             }
           </div>
         } @else {
-          <div class="flex max-h-[360px] flex-col overflow-y-auto p-1">
+          <div class="flex max-h-[360px] flex-col gap-1 overflow-y-auto p-1">
             @for (n of notifications(); track n.id; let last = $last) {
               <!-- 主操作用原生 button（自带 Enter/Space 语义），删除按钮是兄弟节点，避免交互元素嵌套。 -->
               <div
@@ -152,7 +150,7 @@
                 </button>
               </div>
               @if (!last) {
-                <div class="border-t border-dashed border-border my-1"></div>
+                <div class="border-t border-dashed border-border"></div>
               }
             }
           </div>

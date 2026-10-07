@@ -7,14 +7,10 @@ using Leistd.Authorization.Resource.EntityFrameworkCore.Entities;
 
 namespace Leistd.Authorization.Resource.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// EF Core 资源 ACL 存储。
-/// </summary>
+/// <summary>EF Core 资源 ACL 存储。</summary>
 /// <remarks>
-/// DbContext 一律经 <see cref="IDbContextProvider{TDbContext}"/> 获取。除了"独立库租户不能落到
-/// 默认连接"这条通用理由，本存储还有一条独有的：两个 <c>Query*ResourceKeysAsync</c> 返回的
-/// <see cref="IQueryable{T}"/> 会被调用方以 <c>Contains</c> 合并进业务查询，
-/// <b>两侧必须出自同一个 DbContext 实例</b>，否则 EF 翻译不进同一条 SQL。
+/// DbContext 经 <see cref="IDbContextProvider{TDbContext}"/> 获取：<c>Query*ResourceKeysAsync</c> 返回的查询须与业务查询出自同一个
+/// DbContext 实例，EF 才能翻译进同一条 SQL。
 /// </remarks>
 public class EfCoreResourceGrantStore<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider)
     : IResourceGrantStore

@@ -104,7 +104,7 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// 解析失败被逐库执行器隔离掉了（一个坏租户不该让整轮不执行），但"隔离"不等于"没事"：
-    /// 那个租户的通知一条都没清。之前任务只看失败的库，于是把这一轮报成成功，
+    /// 那个租户的通知一条都没清。任务若只看失败的库，就会把这一轮报成成功，
     /// 一批库长期进不去也不会有任何告警。
     /// </remarks>
     [Fact]

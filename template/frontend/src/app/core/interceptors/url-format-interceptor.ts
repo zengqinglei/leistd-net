@@ -5,23 +5,19 @@ import {
   HttpInterceptorFn,
   HttpRequest,
 } from '@angular/common/http';
+import { inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { SKIP_GATEWAY } from './http-context-tokens';
-import { isMockedUrl } from '../../../../_mock/core/providers';
 import { environment } from '../../../environments/environment';
+import { MOCKED_URL } from '../mock/mocked-url';
 
-/**
- * 定义一个上下文令牌，用于在请求中标记是是否传递服务在网关中的名字。
- */
+/** 请求上下文令牌：本服务在网关中的名字。 */
 export const GATEWAY_SERVICE_NAME = new HttpContextToken<string>(() => '');
 
 /**
- * URL格式化拦截器。
- * 为本服务的相对地址加上网关与微服务前缀，并携带凭据（Cookie 会话）。
- *
- * 调用方提供的绝对地址原样转发，不自动添加凭据。
- * 浏览器认证与所属 API 同源，gateway 保持空值；其他服务可使用同源微服务路由前缀。
+ * URL 格式化拦截器：为本服务的相对地址加上网关与微服务前缀并携带凭据（Cookie 会话）；
+ * 绝对地址原样转发，不加凭据。
  */
 export const urlFormatInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
@@ -29,7 +25,8 @@ export const urlFormatInterceptor: HttpInterceptorFn = (
 ): Observable<HttpEvent<unknown>> => {
   const url = req.url;
 
-  if (req.context.get(SKIP_GATEWAY) || isAbsoluteUrl(url) || shouldSkipUrlFormat(url)) {
+  // 由 Mock 应答的请求保持原样：Mock 按路径匹配，不加网关与服务前缀
+  if (req.context.get(SKIP_GATEWAY) || isAbsoluteUrl(url) || inject(MOCKED_URL)(url)) {
     return next(req);
   }
 
@@ -54,9 +51,4 @@ export const urlFormatInterceptor: HttpInterceptorFn = (
 
 function isAbsoluteUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
-}
-
-// 由 Mock 应答的请求保持原样：Mock 按路径匹配，不加网关与服务前缀
-function shouldSkipUrlFormat(url: string): boolean {
-  return isMockedUrl(environment.useMock, url);
 }

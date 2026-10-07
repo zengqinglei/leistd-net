@@ -5,13 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.BackgroundJobs.EntityFrameworkCore.Stores;
 
-/// <summary>
-/// 用宿主 DbContext 存储集群周期任务的完成水位，多副本共享。
-/// </summary>
-/// <remarks>
-/// 调度器在宿主上下文里读写水位，记录落在宿主库。写入即时保存：水位描述的是已经完成的执行，
-/// 不与任何业务事务同生共死。
-/// </remarks>
+/// <summary>用宿主 DbContext 存储集群周期任务的完成水位，多副本共享。</summary>
+/// <remarks>调度器在宿主上下文里读写水位，记录落在宿主库；写入即时保存，不参与业务事务。</remarks>
 /// <typeparam name="TDbContext">映射了 <see cref="RecurringJobState"/> 的宿主 DbContext。</typeparam>
 /// <param name="dbContextProvider">DbContext 提供器。</param>
 public class EfCoreRecurringJobStateStore<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider)

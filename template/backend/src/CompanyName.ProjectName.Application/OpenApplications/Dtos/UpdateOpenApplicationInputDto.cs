@@ -6,7 +6,7 @@ namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 /// <summary>
 /// 更新开放应用输入 DTO
 /// </summary>
-public record UpdateOpenApplicationInputDto
+public record UpdateOpenApplicationInputDto : IValidatableObject
 {
     /// <summary>
     /// 显示名称
@@ -20,6 +20,7 @@ public record UpdateOpenApplicationInputDto
     /// </summary>
     [Display(Name = "Application type")]
     [Required(ErrorMessage = "{0} is required.")]
+    [RegularExpression("^(web|native|service)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ApplicationType { get; init; }
 
     /// <summary>
@@ -27,6 +28,7 @@ public record UpdateOpenApplicationInputDto
     /// </summary>
     [Display(Name = "Client type")]
     [Required(ErrorMessage = "{0} is required.")]
+    [RegularExpression("^(public|confidential)$", ErrorMessage = "{0} is not an allowed value.")]
     public required string ClientType { get; init; }
 
     /// <summary>
@@ -56,5 +58,28 @@ public record UpdateOpenApplicationInputDto
     [Display(Name = "Session bound")]
     [Required(ErrorMessage = "{0} is required.")]
     public required bool? SessionBound { get; init; }
+
+    /// <inheritdoc />
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
+        ValidateUris(RedirectUris, PostLogoutRedirectUris);
+
+    /// <summary>
+    /// 回调地址逐项校验：绝对 URI、不含空白与片段。创建与更新共用这一份。
+    /// </summary>
+    /// <remarks>逐项校验没有对应的内置特性；文案与特性文案一样是本地化键。</remarks>
+    internal static IEnumerable<ValidationResult> ValidateUris(
+        IEnumerable<string> redirectUris,
+        IEnumerable<string> postLogoutRedirectUris)
+    {
+        const string message = "Each callback URI must be an absolute URI without whitespace or a fragment.";
+        if (!redirectUris.All(IsValidUri))
+            yield return new ValidationResult(message, [nameof(RedirectUris)]);
+        if (!postLogoutRedirectUris.All(IsValidUri))
+            yield return new ValidationResult(message, [nameof(PostLogoutRedirectUris)]);
+    }
+
+    private static bool IsValidUri(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && !value.Any(char.IsWhiteSpace) &&
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && string.IsNullOrEmpty(uri.Fragment);
 }
 #endif

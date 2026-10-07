@@ -18,12 +18,12 @@ public class BusinessExceptionHandlerLocalizationTests
     [Fact]
     public async Task Uses_code_as_resource_key_and_fills_named_placeholders()
     {
-        using var server = await StartAsync(new StubLocalizer(new Dictionary<string, string>
+        using var host = await StartAsync(new StubLocalizer(new Dictionary<string, string>
         {
             ["User:EmailAlreadyUsed"] = "邮箱 '{Email}' 已被占用"
         }));
 
-        var response = await server.CreateClient().GetAsync("/");
+        var response = await host.GetTestClient().GetAsync("/");
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(400, (int)response.StatusCode);
@@ -34,9 +34,9 @@ public class BusinessExceptionHandlerLocalizationTests
     [Fact]
     public async Task Falls_back_to_the_safe_business_message_without_a_resource()
     {
-        using var server = await StartAsync();
+        using var host = await StartAsync();
 
-        var response = await server.CreateClient().GetAsync("/");
+        var response = await host.GetTestClient().GetAsync("/");
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal("Email already in use.", problem.GetProperty("detail").GetString());
@@ -72,7 +72,7 @@ public class BusinessExceptionHandlerLocalizationTests
         Assert.DoesNotContain("private endpoint", body.ToString());
     }
 
-    private static async Task<TestServer> StartAsync(IStringLocalizer? localizer = null)
+    private static async Task<IHost> StartAsync(IStringLocalizer? localizer = null)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
@@ -89,7 +89,7 @@ public class BusinessExceptionHandlerLocalizationTests
                         .WithData("Email", "a@b.com"));
                 }))
             .StartAsync();
-        return host.GetTestServer();
+        return host;
     }
 
     private sealed class StubLocalizer(IReadOnlyDictionary<string, string> map) : IStringLocalizer

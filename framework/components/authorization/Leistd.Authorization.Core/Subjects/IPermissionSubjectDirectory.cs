@@ -3,10 +3,7 @@ namespace Leistd.Authorization.Subjects;
 /// <summary>
 /// 按授予对象查找主体：确认它存在，并给出显示名。由宿主按自己的用户、角色模型实现。
 /// </summary>
-/// <remarks>
-/// 权限组件不认识宿主的用户与角色实体，管理用例只经这个窄钩子问两件事：
-/// 给不存在的主体写授予会留下孤儿行，而审计记录里的目标若只是裸 Key，最该被看懂的记录最难看懂。
-/// </remarks>
+/// <remarks>管理用例据此拒绝不存在的主体，并为审计事件提供显示名。</remarks>
 /// <example>
 /// <code>
 /// internal sealed class RoleSubjectDirectory(IRepository&lt;Role, Guid&gt; roles) : IPermissionSubjectDirectory

@@ -1,9 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-// Username 的校验常量无条件使用：本文件在资源服务形态下也参与编译
 using CompanyName.ProjectName.Domain.Users.Constants;
-#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
-#endif
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
@@ -32,20 +29,16 @@ public record CreateUserInputDto
     [StringLength(1500000, ErrorMessage = "{0} is too large. Compress it and try again.")]
     public string? Avatar { get; init; }
 
-#if (LocalIdentity)
     [Display(Name = "Password")]
     [Required(ErrorMessage = "{0} is required.")]
     // 仅快速反馈；权威在服务端 PasswordPolicy
     [StringLength(PasswordPolicy.MaximumLength, MinimumLength = PasswordPolicy.MinimumLength,
         ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string Password { get; init; }
-#endif
 
     public bool IsActive { get; init; } = true;
 
-#if (LocalIdentity)
     public bool IsEmailVerified { get; init; }
-#endif
 
     /// <summary>
     /// 初始角色 Id 集合。按 Id 提交而非角色名，角色名只用于展示。

@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
-using Leistd.ExceptionHandling;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;

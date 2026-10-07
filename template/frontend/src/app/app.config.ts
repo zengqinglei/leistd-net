@@ -38,16 +38,11 @@ import {
 import { StartupService } from './core/services/startup-service';
 import { provideMock } from '../../_mock/core/providers';
 
-// 定义路由特性，用于增强应用功能和用户体验
 const routerFeatures: RouterFeatures[] = [
-  // 启用路由参数到组件输入的自动绑定
   withComponentInputBinding(),
-  // 启用基于浏览器 View Transitions API 的页面过渡动画
   withViewTransitions(),
-  // 配置导航时的滚动行为，导航后滚动到页面顶部
   withInMemoryScrolling({ anchorScrolling: 'enabled', scrollPositionRestoration: 'enabled' }),
   //#if (LocalIdentity)
-  // 根据环境配置决定是否启用哈希路由
   ...(environment.useHash ? [withHashLocation()] : []),
   //#endif
 ];
@@ -59,9 +54,7 @@ export const appConfig: ApplicationConfig = {
     provideSpartanHlm(),
     // 移动端点击侧栏菜单项（导航）后自动收起遮罩侧栏；非导航的下拉触发器单独关闭该行为。
     provideHlmSidebarConfig({ closeMobileSidebarOnMenuButtonClick: true }),
-    // 注册全局错误监听器
     provideBrowserGlobalErrorListeners(),
-    // 注册全局错误处理器，替换 Angular 默认的 ErrorHandler
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideRouter(routes, ...routerFeatures),
     //#if (IncludeLocalization)
@@ -88,9 +81,7 @@ export const appConfig: ApplicationConfig = {
     // 首帧前加载活动语言词条，首次渲染不出裸键（理由见 provideLanguageInitializer）。
     provideLanguageInitializer(),
     //#endif
-    // 在应用初始化时加载关键数据
     provideAppInitializer(() => inject(StartupService).load()),
-    // 注册 Mock 服务
     ...provideMock(environment.useMock),
   ],
 };

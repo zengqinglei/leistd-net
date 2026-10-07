@@ -21,21 +21,21 @@ import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../core/components/language-switcher/language-switcher';
+//#endif
+import { ThemeModeToggle } from '../../../core/components/theme-mode-toggle/theme-mode-toggle';
 //#if (Impersonation)
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ImpersonationService } from '../../../core/services/impersonation-service';
 //#endif
-//#if (IncludeLocalization)
-import { LanguageSwitcher } from '../../../shared/components/language-switcher/language-switcher';
-//#endif
-import { ThemeModeToggle } from '../../../shared/components/theme-mode-toggle/theme-mode-toggle';
+import { LayoutService } from '../../../core/services/layout-service';
 //#if (Impersonation)
 import { PopoverAria } from '../../../shared/directives/popover-aria';
 //#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
-import { LayoutService } from '../../services/layout-service';
 //#if (IncludeNotifications)
 import { Notifications } from '../notifications/notifications';
 //#endif
@@ -94,8 +94,7 @@ export class DefaultHeader {
   //#endif
 
   constructor() {
-    // 页面标题只在带页头的布局里有意义，离开布局时清掉：登录页、落地页等不设标题，
-    // 不清的话浏览器标签页会一直挂着上一个布局页的标题。页头随布局销毁，早于下一页设置标题
+    // 离开布局时清掉页面标题：页头随布局销毁、早于下一页设置标题，不清的话认证页会挂着上一页的标题。
     inject(DestroyRef).onDestroy(() => this.layoutService.title.set(''));
     //#if (Impersonation)
 
@@ -113,11 +112,7 @@ export class DefaultHeader {
   }
   //#if (Impersonation)
 
-  /**
-   * 结束模拟。失败时不跳转，让顶栏里的模拟状态留在原处，并说明原因——
-   * 悄悄跳走会让人以为已经回到自己的账号，而会话其实还在租户里；
-   * 什么都不说则像按钮没反应，用户会一直重试。
-   */
+  /** 结束模拟。失败时不跳转，保留顶栏的模拟状态并说明原因。 */
   async endImpersonation(): Promise<void> {
     try {
       await this.impersonation.end();

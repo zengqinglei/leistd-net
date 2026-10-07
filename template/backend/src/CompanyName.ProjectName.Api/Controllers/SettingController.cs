@@ -1,6 +1,9 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.AppServices;
 using CompanyName.ProjectName.Application.Settings.Dtos;
+using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,6 +22,8 @@ public sealed class SettingController(IEmailSettingsAppService emailSettingsAppS
 {
     /// <summary>用当前生效的发信参数发一封测试邮件（宿主，需要设置管理权限）。</summary>
     [HttpPost("email/test")]
+    [Authorize(Policy = PermissionConstant.Settings.Default)]
+    [OperationRecordAction(OperationRecordActions.SettingTestEmailSent)]
     public Task SendTestEmailAsync(
         [FromBody] SendTestEmailInputDto input,
         CancellationToken cancellationToken = default)

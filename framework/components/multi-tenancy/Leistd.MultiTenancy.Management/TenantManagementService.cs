@@ -49,8 +49,7 @@ internal sealed class TenantManagementService(
         ArgumentNullException.ThrowIfNull(input);
         Validator.ValidateObject(input, new ValidationContext(input), validateAllProperties: true);
 
-        // 名字与连接串填错是这条路径上最常见的错误，整批校验排在任何库操作之前，
-        // 没道理先建租户、再靠补偿把半批登记擦掉
+        // 整批校验排在任何库操作之前，避免先建租户再靠补偿撤销
         var connections = NormalizeConnections(input.Connections);
 
         // 登记版本仅用于补偿时删除；返回值必须接住，删除是带版本的乐观并发接口
@@ -61,8 +60,7 @@ internal sealed class TenantManagementService(
             tenant = await tenantManager.CreateAsync(
                 input.Name, input.DisplayName, isActive: false, input.Description, cancellationToken);
 
-            // 分库在开通之前定案，且与登记租户同一个工作单元：不会留下"有租户没连接"或只登记了一半的状态，
-            // 开通钩子第一次执行时看到的就是完整的连接集合
+            // 与登记租户同一个工作单元，开通钩子首次执行时即看到完整的连接集合
             foreach (var (name, connectionString) in connections)
             {
                 var connection = await connectionManager.SetAsync(
@@ -132,7 +130,7 @@ internal sealed class TenantManagementService(
 
         if (input.IsActive)
         {
-            // 存在性先判：不存在的租户里"没有用户"同样成立，不先判就会把 404 讲成前置条件不满足
+            // 先判存在性，否则不存在的租户会被启用前置条件拒绝，而不是 404
             var existing = await tenantManager.FindAsync(id, cancellationToken) ?? throw new TenantNotFoundException(id.ToString());
             foreach (var guard in activationGuards)
             {
@@ -147,7 +145,7 @@ internal sealed class TenantManagementService(
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        // 名字在删除前取：删完什么都查不到，而审计要回答的正是"当时删掉的是哪一个"
+        // 删除前取名字快照，供事件使用
         var doomed = await tenantManager.FindAsync(id, cancellationToken);
 
         await tenantManager.DeleteAsync(id, cancellationToken);
@@ -161,8 +159,7 @@ internal sealed class TenantManagementService(
         }
     }
 
-    // 整批归一化：名字按 ^[a-z0-9-]{1,64}$ 归一（大小写不敏感），连接串按键值对语法校验，
-    // 重名在写库前拒绝——否则第二条会以"改已有登记"的语义覆盖第一条，而调用方以为登记了两个库
+    // 整批归一化名字、校验连接串语法；重名在写库前拒绝，否则第二条会覆盖第一条
     private static List<(string Name, string ConnectionString)> NormalizeConnections(
         IReadOnlyList<CreateTenantConnectionInputDto> connections)
     {
@@ -171,7 +168,7 @@ internal sealed class TenantManagementService(
 
         foreach (var connection in connections)
         {
-            // 数组里的 null 元素：DataAnnotations 不递归进集合，不挡住就在下一行变成 NRE→500
+            // DataAnnotations 不递归进集合，null 元素在此拒绝
             if (connection is null)
             {
                 throw new ValidationException(
@@ -193,9 +190,8 @@ internal sealed class TenantManagementService(
         return normalized;
     }
 
-    // 回滚一次失败的创建：清开通数据 → 删连接登记 → 删租户。
-    // 每步用干净的作用域（不复用失败 DbContext 的跟踪状态）、独立捕获并记录，前一步失败仍继续后一步，
-    // 且用独立令牌，不随调用方取消而中止。删连接必须排在删租户之前：已删租户的连接行再也删不掉。
+    // 回滚失败的创建：清开通数据 → 删连接登记 → 删租户（已删租户的连接行无法再删，故连接在前）。
+    // 每步用新作用域、独立捕获并记录，前一步失败仍继续；用独立令牌，不随调用方取消而中止。
     private async Task CompensateAsync(TenantProvisioningContext context, IReadOnlyList<(string Name, long Version)> registered)
     {
         var tenant = context.Tenant;
@@ -218,7 +214,7 @@ internal sealed class TenantManagementService(
             }
         }
 
-        // 逐条删，且每条独立捕获：一条删不掉不能让后面几条连同删租户一起放弃
+        // 逐条独立捕获，一条失败不放弃后续步骤
         foreach (var (name, version) in registered)
         {
             try

@@ -8,20 +8,16 @@ using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Memory;
 
-/// <summary>
-/// 提供进程内锁注册入口。
-/// </summary>
+/// <summary>进程内锁注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 注册进程内锁和清理服务；尚无分布式锁实现时，同时用它兜底 <see cref="IDistributedLock"/>。
-    /// </summary>
+    /// <summary>注册进程内锁和清理服务；尚无分布式锁实现时，同时用它兜底 <see cref="IDistributedLock"/>。</summary>
     /// <remarks>
     /// 单副本部署用本方法即可；多副本部署另外注册 <c>AddRedisDistributedLock(...)</c>，它会替换这里的兜底、
     /// 与调用顺序无关，<see cref="ILocalLock"/> 继续可用于只需进程内互斥的场景（如各实例各自预热缓存）。
     /// 宿主已自行注册 <see cref="IDistributedLock"/> 时不兜底、不覆盖。
-    /// <b>兜底是一条静默降级路径</b>：扩到多副本后互斥当场失效而没有任何报错，
-    /// 因此兜底的 <see cref="IDistributedLock"/> 首次被解析时打一条 Warning，启动日志里有据可查。
+    /// 兜底在多副本下不提供跨副本互斥，因此兜底的 <see cref="IDistributedLock"/> 首次被解析时记一条 Warning。
+    /// 可重复调用：服务、兜底与清理服务都只注册一次。
     /// </remarks>
     /// <example>
     /// <code>

@@ -9,8 +9,6 @@ import { SignalRService } from './signalr-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from './tenant-context-service';
 //#endif
-import { isMockedUrl } from '../../../../_mock/core/providers';
-import { environment } from '../../../environments/environment';
 //#endif
 //#if (LocalIdentity)
 import { LoginInputDto, SessionLoginOutputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
@@ -19,11 +17,13 @@ import { UserOutputDto } from '../../shared/dtos/auth.dto';
 //#endif
 import { User } from '../../shared/models/user.model';
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
+//#if (RemoteTokenAuth)
+import { MOCKED_URL } from '../mock/mocked-url';
+//#endif
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   //#if (LocalIdentity)
-  /** 账号密码登录接口。 */
   static readonly loginUrl = '/api/v1/auth/session-login';
 
   //#endif
@@ -35,6 +35,9 @@ export class AuthService {
   //#endif
   //#if (IncludeNotifications || IncludeRealTime)
   private readonly signalR = inject(SignalRService);
+  //#endif
+  //#if (RemoteTokenAuth)
+  private readonly isMockedUrl = inject(MOCKED_URL);
   //#endif
 
   private readonly _currentUser = signal<User | null>(null);
@@ -77,11 +80,8 @@ export class AuthService {
   }
 
   /**
-   * 清空当前认证主体的一切本地状态。
-   *
-   * 只清认证数据。权限与设置也跟着主体走，但它们的清理在 <c>SessionContextService.clear()</c>：
-   * 非静默 401 与启动流进登录页都走那个入口，一处清三样，避免各自记得调而漏掉一条。
-   * <c>logout()</c> 之后是整页跳转，内存状态随页面重建，不必再走一遍。
+   * 清空认证数据。权限与设置的清理在 `SessionContextService.clear()`，非静默 401 与启动流都走那里；
+   * `logout()` 之后整页跳转，不必再走一遍。
    */
   clearAuthData(): void {
     this._currentUser.set(null);
@@ -100,7 +100,7 @@ export class AuthService {
   logout(): void {
     this.clearAuthData();
     //#if (RemoteTokenAuth)
-    if (isMockedUrl(environment.useMock, '/api/v1/auth/logout')) {
+    if (this.isMockedUrl('/api/v1/auth/logout')) {
       this.http
         .post('/api/v1/auth/logout', {})
         .subscribe(() => (window.location.href = '/auth/login'));
@@ -122,7 +122,7 @@ export class AuthService {
   //#if (RemoteTokenAuth)
 
   startLogin(returnUrl = '/workspace'): void {
-    if (isMockedUrl(environment.useMock, '/api/v1/auth/login')) {
+    if (this.isMockedUrl('/api/v1/auth/login')) {
       this.http.post('/api/v1/auth/login', {}).subscribe(() => (window.location.href = returnUrl));
       return;
     }

@@ -1,31 +1,24 @@
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using CompanyName.ProjectName.Application.Roles.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
 using CompanyName.ProjectName.Application.Shared.Paging;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Authorization;
+using CompanyName.ProjectName.Domain.Users.Repositories;
+using Leistd.Auditing.Abstractions;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
 using Leistd.ExceptionHandling;
-using Leistd.ObjectMapping;
 using Leistd.UnitOfWork.Attributes;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
 #if (IncludeRealTime)
 using CompanyName.ProjectName.Application.RealTime;
@@ -33,6 +26,7 @@ using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.EventBus.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Extensions;
+using Leistd.Timing;
 #endif
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
@@ -42,8 +36,9 @@ namespace CompanyName.ProjectName.Application.Roles.AppServices;
 /// </summary>
 public class RoleAppService(
     IRepository<Role, Guid> roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
-    IRepository<User, Guid> userRepository,
+    RoleDomainService roleDomainService,
+    IUserRepository userRepository,
+    IDataFilter dataFilter,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
     IOperationRecorder operationRecorder,
@@ -52,6 +47,7 @@ public class RoleAppService(
 #if (IncludeRealTime)
     ILocalEventBus localEventBus,
     ICurrentTenant currentTenant,
+    IClock clock,
 #endif
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IRoleAppService
 {
@@ -104,14 +100,14 @@ public class RoleAppService(
         return ordered.ThenBy(r => r.Id);
     }
 
-    public async Task<IReadOnlyList<RoleBriefDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<RoleBriefOutputDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var query = await roleRepository.GetQueryableAsync(cancellationToken);
         var roles = await asyncExecuter.ToListAsync(
             query.OrderBy(r => r.Sort).ThenBy(r => r.Name),
             cancellationToken);
 
-        return objectMapper.Map<List<Role>, List<RoleBriefDto>>(roles);
+        return objectMapper.Map<List<Role>, List<RoleBriefOutputDto>>(roles);
     }
 
     public async Task<RoleOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
@@ -124,24 +120,13 @@ public class RoleAppService(
         CreateRoleInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var name = input.Name.Trim();
-
-        if (await roleRepository.AnyAsync(r => r.Name == name, cancellationToken))
-        {
-            throw new BusinessException(RoleErrorCodes.NameAlreadyUsed, $"Role '{name}' already exists.")
-                .WithData("Name", name);
-        }
-
-        var role = new Role(
-            name,
+        var role = await roleDomainService.CreateAsync(
+            input.Name.Trim(),
             input.DisplayName.Trim(),
             input.Description?.Trim(),
-            isStatic: false,
-            isDefault: input.IsDefault,
-            sort: input.Sort);
-
-        await roleRepository.InsertAsync(role, cancellationToken);
-        logger.LogInformation("Role created: {Name} (ID: {Id})", role.Name, role.Id);
+            input.IsDefault,
+            input.Sort,
+            cancellationToken);
 
         // 目标名取显示名、退到名称：同类记录必须用同一套取值规则，
         // 一半存显示名一半存名称会让同一张表里的同类行长得不一样。
@@ -177,6 +162,11 @@ public class RoleAppService(
 
         await roleRepository.UpdateAsync(role, cancellationToken);
         logger.LogInformation("Role updated: {Name} (ID: {Id})", role.Name, role.Id);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.RoleUpdated,
+            OperationTarget.For(role.Id, role.DisplayName ?? role.Name),
+            PermissionConstant.Roles.Update,
+            cancellationToken);
 #if (IncludeRealTime)
         await PublishRoleListChangedAsync(cancellationToken);
 #endif
@@ -222,10 +212,7 @@ public class RoleAppService(
         }
 
         await roleRepository.DeleteAsync(role, cancellationToken);
-        // 剩下的关联都属于已删除的用户，随角色一并删除，不留指向已删角色的孤儿行
-        await userRoleRepository.DeleteManyAsync(
-            await userRoleRepository.GetListAsync(ur => ur.RoleId == id, cancellationToken),
-            cancellationToken);
+        await RevokeFromDeletedUsersAsync(id, cancellationToken);
 
         // 角色被永久删除，授予与授权版本一并清理。
         // 不能用"替换为空集合"：那是撤销语义，会保留并递增版本（给"还有人在编辑"用），
@@ -255,7 +242,7 @@ public class RoleAppService(
     // 有工作单元时事件推迟到提交之后分发，回滚的写入不推送；新建、修改没有工作单元，仓储已保存后立即发布
     private Task PublishRoleListChangedAsync(CancellationToken cancellationToken) =>
         localEventBus.PublishAsync(
-            new RoleListChangedEvent(currentTenant.ScopeKey(AppRealTimeResources.Roles)),
+            new RoleListChangedEvent(currentTenant.ScopeKey(AppRealTimeResources.Roles), clock.Now),
             cancellationToken);
 #endif
 
@@ -323,11 +310,31 @@ public class RoleAppService(
         };
     }
 
-    /// <summary>未删除用户的角色关联：已删除用户的关联行保留着，但不算"已分配"。</summary>
+    /// <summary>未删除用户的角色成员关系：已删除用户的成员关系保留着，但不算"已分配"。</summary>
     private async Task<IQueryable<UserRole>> AssignmentsOfExistingUsersAsync(CancellationToken cancellationToken)
+        => (await userRepository.GetQueryableAsync(cancellationToken)).SelectMany(u => u.Roles);
+
+    /// <summary>
+    /// 剩下的成员关系都属于已删除的用户，随角色一并撤销，不留指向已删角色的成员关系。
+    /// </summary>
+    /// <remarks>
+    /// 必须在删除角色之后加载：成员关系在角色删除前就被跟踪时，限制删除的外键会让 EF 当场报错。
+    /// </remarks>
+    private async Task RevokeFromDeletedUsersAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        var users = await userRepository.GetQueryableAsync(cancellationToken);
-        var userRoles = await userRoleRepository.GetQueryableAsync(cancellationToken);
-        return userRoles.Where(ur => users.Any(u => u.Id == ur.UserId));
+        List<User> holders;
+        using (dataFilter.Disable<ISoftDelete>())
+        {
+            var query = await userRepository.GetQueryableWithRolesAsync(cancellationToken);
+            holders = await asyncExecuter.ToListAsync(
+                query.Where(u => u.IsDeleted && u.Roles.Any(ur => ur.RoleId == roleId && !ur.IsDeleted)),
+                cancellationToken);
+        }
+
+        foreach (var holder in holders)
+        {
+            holder.RemoveRole(roleId);
+            await userRepository.UpdateAsync(holder, cancellationToken);
+        }
     }
 }

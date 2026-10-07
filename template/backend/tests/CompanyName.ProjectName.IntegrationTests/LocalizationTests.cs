@@ -3,10 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 #if (IncludeOperationRecords)
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using Leistd.Authorization.Errors;
-#endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
+using Leistd.Authorization.Errors;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -63,6 +63,25 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         Assert.NotEqual(enMessage, zhMessage);
     }
 
+    /// <summary>
+    /// 自定义校验（<c>IValidatableObject</c>）的文案与特性文案一样随请求语言本地化，字段名与查询参数同名
+    /// </summary>
+    [Fact]
+    public async Task Custom_validation_message_localizes_to_chinese()
+    {
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"/api/v1/users?offset=0&limit=10&roles={new string('r', 65)}");
+        request.Headers.AcceptLanguage.ParseAdd("zh-CN");
+
+        var response = await admin.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = Assert.Single(body.RootElement.GetProperty("errors").EnumerateArray());
+        Assert.Equal("roles", error.GetProperty("field").GetString());
+        Assert.Equal("每个角色名长度不能超过 64 个字符", error.GetProperty("detail").GetString());
+    }
 
     /// <summary>
     /// 业务校验的<b>具体原因</b>要传到客户端，不能被通用文案盖掉。

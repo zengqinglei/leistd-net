@@ -3,10 +3,6 @@ using CompanyName.ProjectName.Application;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using Leistd.OperationRecords;
 using Leistd.OperationRecords.Definitions;
-using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.UnitTests.Application;

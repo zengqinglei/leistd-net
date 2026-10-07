@@ -31,11 +31,7 @@ import { ExternalLogins } from '../external-logins/external-logins';
 import { LoginDevices } from '../login-devices/login-devices';
 import { TwoFactorSettings } from '../two-factor-settings/two-factor-settings';
 
-/**
- * 个人设置 ·「账户与安全」面板。
- *
- * 每节一个卡片：修改密码、两步验证、已绑定的外部账号（启用外部登录时）、登录设备。
- */
+/** 个人设置 ·「账户与安全」面板：修改密码、两步验证、已绑定的外部账号（启用外部登录时）、登录设备。 */
 @Component({
   selector: 'app-security-panel',
   standalone: true,
@@ -73,13 +69,11 @@ export class SecurityPanel {
 
   readonly saving = signal(false);
 
-  // 密码可见性
   protected readonly showCurrentPassword = signal(false);
 
   protected readonly showNewPassword = signal(false);
   protected readonly showConfirmPassword = signal(false);
 
-  // 表单模型（Signal Forms）
   private readonly formModel = signal({
     currentPassword: '',
     newPassword: '',
@@ -108,11 +102,7 @@ export class SecurityPanel {
     });
   });
 
-  /**
-   * 清空表单并收起明文显示。
-   *
-   * 改密成功后必须清：面板不像弹窗那样一关就销毁，旧密码与新密码会一直留在页面上。
-   */
+  /** 清空表单并收起明文显示：面板不随改密成功销毁，旧密码与新密码不能留在页面上。 */
   private resetForm(): void {
     this.formModel.set({ currentPassword: '', newPassword: '', confirmPassword: '' });
     this.changeForm().reset();

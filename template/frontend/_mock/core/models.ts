@@ -18,17 +18,11 @@ export interface MockResponse {
 }
 
 export interface MockRequest {
-  /** 请求原始对象 */
   readonly original: HttpRequest<any>;
-  /** 请求URL */
   readonly url: string;
-  /** URL查询参数 */
   readonly queryParams: Record<string, any>;
-  /** 请求标头 */
   readonly headers: HttpHeaders;
-  /** 请求体 */
   readonly body: any;
-  /** URL路由参数 */
   params: any;
 }
 
@@ -38,6 +32,5 @@ export interface MockConfig {
   exclude?: string | string[];
   /** 模拟延迟，单位：毫秒 */
   delay?: number;
-  /** 是否打印 Mock 日志 */
   log?: boolean;
 }

@@ -132,3 +132,6 @@ Desktop.ini
 .claude/settings.local.json
 skills-lock.json
 .superpowers/
+
+# Python 字节码缓存
+__pycache__/

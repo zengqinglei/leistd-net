@@ -11,7 +11,7 @@ namespace Leistd.Ddd.Infrastructure.Tests;
 /// </summary>
 public class UnitOfWorkOptionsBindingTests
 {
-    // 曾经走委托重载注册工作单元，配置节从未绑定：appsettings 里写的超时静默不生效
+    // 走委托重载注册时配置节同样要绑定，否则 appsettings 里写的超时静默不生效
     [Fact]
     public void The_section_is_bound_and_the_delegate_overrides_it()
     {

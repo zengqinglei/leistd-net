@@ -3,6 +3,7 @@ using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using Leistd.AmbientContext;
 using Leistd.Auditing.Abstractions;
@@ -15,7 +16,6 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.Data.Connections;
 using Leistd.MultiTenancy.ConnectionStrings;
 #endif
-using Leistd.Lock;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Tenancy;
@@ -45,8 +45,7 @@ internal sealed class ResourceAdminBootstrapRunner(
     IDistributedLock distributedLock,
     IDataFilter dataFilter,
     IRepository<Role, Guid> roleRepository,
-    IRepository<User, Guid> userRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
+    IUserRepository userRepository,
     UserDomainService userDomainService,
     IPermissionDefinitionManager definitions,
     IPermissionGrantStore grants,
@@ -86,9 +85,10 @@ internal sealed class ResourceAdminBootstrapRunner(
         var side = tenant.HasValue ? MultiTenancySides.Tenant : MultiTenancySides.Host;
         var adminRole = await FindAdminRoleAsync(cancellationToken);
         User? user;
+        // 软删除的成员关系就是"曾被移出"的历史，随用户一并加载；租户过滤保持开启
         using (dataFilter.Disable<ISoftDelete>())
         {
-            user = await userRepository.GetByIdAsync(subject, cancellationToken);
+            user = await userRepository.GetWithRolesAsync(subject, cancellationToken);
         }
 
         if (user is { IsDeleted: true })
@@ -96,14 +96,7 @@ internal sealed class ResourceAdminBootstrapRunner(
 
         if (adminRole is not null && user is not null)
         {
-            List<UserRole> memberships;
-            // 软删除的成员关系就是"曾被移出"的历史；租户过滤保持开启
-            using (dataFilter.Disable<ISoftDelete>())
-            {
-                memberships = [.. await userRoleRepository.GetListAsync(
-                    ur => ur.UserId == subject && ur.RoleId == adminRole.Id, cancellationToken)];
-            }
-
+            var memberships = user.Roles.Where(ur => ur.RoleId == adminRole.Id).ToList();
             if (memberships.Any(ur => !ur.IsDeleted))
                 return $"User {key} already holds the {AdminConstant.RoleName} role; nothing changed.";
             if (memberships.Count != 0)
@@ -124,8 +117,9 @@ internal sealed class ResourceAdminBootstrapRunner(
 
         adminRole = await initializer.InitializeWithinLockAsync(cancellationToken);
 
-        var (_, created) = await userDomainService.EnsureSubjectAsync(subject, cancellationToken);
-        await userRoleRepository.InsertAsync(new UserRole(subject, adminRole.Id), cancellationToken);
+        var (subjectUser, created) = await userDomainService.EnsureSubjectAsync(subject, cancellationToken);
+        subjectUser.AssignRoles([adminRole.Id]);
+        await userRepository.UpdateAsync(subjectUser, cancellationToken);
         await recorder.RecordSucceededAsync(OperationRecordActions.ResourceAdminGranted,
             OperationTarget.For($"User/{key}", key), OperationRecordAuthorizations.DeploymentBootstrap, cancellationToken);
         await uow.CompleteAsync(cancellationToken);

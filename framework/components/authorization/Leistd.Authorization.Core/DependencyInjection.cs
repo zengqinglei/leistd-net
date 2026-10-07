@@ -13,9 +13,7 @@ using Leistd.Authorization.Options;
 
 namespace Leistd.Authorization;
 
-/// <summary>
-/// 权限定义与检查的核心依赖注入扩展。
-/// </summary>
+/// <summary>权限定义与检查的核心注册入口。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -52,8 +50,7 @@ public static class DependencyInjection
         }
 
         services.AddJsonLocalizationResources(typeof(PermissionErrorCodes).Assembly);
-        // 错误码的状态语义与默认译文同属本组件的默认值，一并在这里登记：
-        // 交给宿主逐个 Configure 的话，漏一个不会有编译或启动错误，只会静默回落成 400。
+        // 错误码的状态语义与默认译文属于本组件默认值，在此登记，避免宿主漏配时静默回落成 400。
         // 宿主的 MapCode / MapException 覆盖同一码或同一类型，与调用顺序无关。
         services.Configure<GlobalExceptionOptions>(AuthorizationExceptionMappings.Configure);
         return services;

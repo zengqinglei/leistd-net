@@ -5,12 +5,8 @@ using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Auditing.EntityFrameworkCore.Interceptors;
 
-/// <summary>
-    /// 在保存时填充修改与删除审计，并将软删除转为更新。
-/// </summary>
-/// <remarks>
-    /// 创建审计在实体进入跟踪时落定；本拦截器不处理新增实体。
-/// </remarks>
+/// <summary>在保存时填充修改与删除审计，并将软删除转为更新。</summary>
+/// <remarks>创建审计在实体进入跟踪时落定，本拦截器不处理新增实体。</remarks>
 public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
     private readonly IAuditPropertySetter _auditPropertySetter;

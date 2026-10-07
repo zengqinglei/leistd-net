@@ -10,13 +10,19 @@ import {
 } from './tenant';
 import { MockException } from '../core/models';
 import { MockTenant, TENANTS } from '../data/tenant';
+//#if (Impersonation)
+import {
+  MOCK_SESSION_USER_ID,
+  getMockImpersonator,
+  getMockSessionTenantKey,
+  setMockSessionTenantKey,
+  setMockSessionUserId,
+} from '../utils/current-user';
+//#endif
 
 /**
- * Mock 与真实后端的契约对齐。
- *
- * Mock 是模板的一个交付面（`useMock` 模式下整套界面都跑在它上面），真实后端的 E2E
- * 替代不了它：契约加了字段而 Mock 没跟上时，Mock 模式下的表现是"填了保存、值没了"，
- * 而所有针对真实后端的测试全绿。
+ * Mock 与真实后端的契约对齐：Mock 是 `useMock` 模式下的后端，契约加了字段而 Mock 没跟上时，
+ * 只在 Mock 模式下表现为"填了保存、值没了"。
  */
 describe('tenant mock', () => {
   let snapshot: MockTenant[];
@@ -91,7 +97,6 @@ describe('tenant mock', () => {
   });
 
   // 路由顺序：by-host 必须排在 :id 之前，否则会被当成一个 id 走错分支。
-  // 按名字查租户的匿名端点已被移除：它是租户存在性 oracle
   it('registers the by-host probe and the three connection routes, with the probe before the by-id lookup', () => {
     const routes = Object.keys(TENANT_API);
 
@@ -241,3 +246,80 @@ describe('tenant mock', () => {
     );
   });
 });
+//#if (Impersonation)
+
+/**
+ * 模拟登录：拒绝时会话原样保留（不能"拒绝了却已经换了身份"），成功时会话整体换成租户管理员、
+ * 并记下发起人——顶栏提示与结束模拟都只认这一份。
+ */
+describe('tenant impersonation mock', () => {
+  const impersonate = TENANT_API['POST /api/v1/tenants/:id/impersonate'] as (req: {
+    params: { id: string };
+  }) => unknown;
+
+  afterEach(() => setMockSessionUserId(null));
+
+  function errorOf(action: () => unknown): MockException {
+    try {
+      action();
+    } catch (error) {
+      expect(error).toBeInstanceOf(MockException);
+      return error as MockException;
+    }
+    throw new Error('expected the handler to reject');
+  }
+
+  function signIn(userId: string): void {
+    setMockSessionUserId(userId);
+    setMockSessionTenantKey('host');
+  }
+
+  it('rejects an anonymous caller with 401', () => {
+    expect(errorOf(() => impersonate({ params: { id: 'tenant_acme' } })).status).toBe(401);
+    expect(getMockImpersonator()).toBeNull();
+  });
+
+  it('rejects a user without the impersonation permission with 403 and keeps the session', () => {
+    signIn('user_demo');
+
+    expect(errorOf(() => impersonate({ params: { id: 'tenant_acme' } })).status).toBe(403);
+
+    expect(MOCK_SESSION_USER_ID).toBe('user_demo');
+    expect(getMockSessionTenantKey()).toBe('host');
+    expect(getMockImpersonator()).toBeNull();
+  });
+
+  it('rejects a missing tenant with 404 and a deactivated one with 403', () => {
+    signIn('user_admin');
+
+    const missing = errorOf(() => impersonate({ params: { id: 'tenant_missing' } }));
+    expect(missing.status).toBe(404);
+    expect(missing.error.code).toBe('Tenant:NotFound');
+
+    const inactive = errorOf(() => impersonate({ params: { id: 'tenant_globex' } }));
+    expect(inactive.status).toBe(403);
+    expect(inactive.error.code).toBe('Tenant:NotActive');
+
+    expect(getMockSessionTenantKey()).toBe('host');
+    expect(getMockImpersonator()).toBeNull();
+  });
+
+  it('enters the tenant as its admin, records the impersonator and refuses nesting', () => {
+    signIn('user_admin');
+
+    impersonate({ params: { id: 'tenant_acme' } });
+
+    expect(MOCK_SESSION_USER_ID).toBe('user_admin');
+    expect(getMockSessionTenantKey()).toBe('tenant_acme');
+    expect(getMockImpersonator()).toEqual({
+      userId: 'user_admin',
+      name: 'Administrator',
+      tenantKey: 'host',
+    });
+
+    const nested = errorOf(() => impersonate({ params: { id: 'tenant_acme' } }));
+    expect(nested.status).toBe(409);
+    expect(nested.error.code).toBe('Tenant:AlreadyImpersonating');
+  });
+});
+//#endif

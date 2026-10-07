@@ -1,0 +1,70 @@
+import { RoleBriefDto } from './role.dto';
+import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
+
+export interface UserManagementOutputDto {
+  id: string;
+  username: string;
+  email: string;
+  displayName?: string;
+  avatar?: string;
+  isActive: boolean;
+  //#if (LocalIdentity)
+  isEmailVerified: boolean;
+  //#endif
+  /** 已分配角色。Id 用于提交，name/displayName 只用于展示。 */
+  roles?: RoleBriefDto[];
+  isSuperAdmin: boolean;
+  creationTime: string;
+  //#if (LocalIdentity)
+  lastLoginTime?: string;
+  /** 登录锁定正在生效（登录失败触发的临时锁定，或管理员锁定）。 */
+  isLockedOut?: boolean;
+  /** 锁定截止时间；无期限时为空。 */
+  lockoutEnd?: string | null;
+  isTwoFactorEnabled?: boolean;
+  //#endif
+}
+
+export interface GetUsersInputDto extends PagedRequestDto {
+  keyword?: string;
+  isActive?: boolean;
+  //#if (LocalIdentity)
+  isEmailVerified?: boolean;
+  //#endif
+  roles?: string[];
+}
+
+//#if (LocalIdentity)
+export interface CreateUserInputDto {
+  username: string;
+  email: string;
+  displayName?: string;
+  avatar?: string;
+  password: string;
+  isActive: boolean;
+  isEmailVerified: boolean;
+  /**
+   * 初始角色 Id 集合。非空时后端额外要求 App.Users.ManageRoles，
+   * 只持有创建权限的主体无法在创建时造出管理员。
+   */
+  roleIds: string[];
+}
+//#endif
+/** 替换用户角色。与资料更新是两个独立命令、两个独立权限。 */
+export interface UpdateUserRolesInputDto {
+  roleIds: string[];
+}
+
+/** 不含角色字段：角色分配走 PUT /api/v1/users/{id}/roles 并要求 App.Users.ManageRoles。 */
+/** 不含启用状态：改变账号可用性只有启用/禁用两个命令一个入口，保护规则也只写在那里。 */
+//#if (LocalIdentity)
+export interface UpdateUserInputDto {
+  email: string;
+  displayName?: string;
+  avatar?: string;
+  isEmailVerified: boolean;
+}
+export interface ResetUserPasswordInputDto {
+  password: string;
+}
+//#endif

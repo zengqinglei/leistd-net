@@ -116,6 +116,35 @@ public class MapsterRegistrationTests
         });
     }
 
+    // 宿主已有自己的 Mapster 实例（含全套配置）时，组件不另建一份：IObjectMapper 走宿主那份
+    [Fact]
+    public void Host_registered_mapster_mapper_is_kept_and_used()
+    {
+        var hostConfig = new TypeAdapterConfig();
+        hostConfig.NewConfig<Order, OrderDto>().Map(d => d.Display, s => "host");
+        var services = new ServiceCollection().AddLogging();
+        services.AddSingleton<IMapper>(new Mapper(hostConfig));
+
+        services.AddMapsterObjectMapper(ScanThisAssembly);
+
+        Assert.NotNull(services.AssertSingle<IMapper>(ServiceLifetime.Singleton).ImplementationInstance);
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal("host", provider.GetRequiredService<IObjectMapper>().Map<Order, OrderDto>(new Order("A-3", 1m)).Display);
+    }
+
+    // 组合根拆分时各处登记的配置都要进同一份 TypeAdapterConfig
+    [Fact]
+    public void Repeated_registration_accumulates_configurators()
+    {
+        using var provider = new ServiceCollection().AddLogging()
+            .AddMapsterObjectMapper(o => o.Configurators.Add(_ => { }))
+            .AddMapsterObjectMapper(ScanThisAssembly)
+            .BuildServiceProvider();
+
+        Assert.Equal(2, provider.GetRequiredService<IOptions<MapsterOptions>>().Value.Configurators.Count);
+        Assert.Equal("A-4:1", provider.GetRequiredService<IObjectMapper>().Map<Order, OrderDto>(new Order("A-4", 1m)).Display);
+    }
+
     private static ServiceProvider Build(Action<MapsterOptions> configure) =>
         new ServiceCollection().AddLogging().AddMapsterObjectMapper(configure).BuildServiceProvider();
 }

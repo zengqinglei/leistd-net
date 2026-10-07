@@ -1,12 +1,7 @@
 namespace Leistd.BackgroundJobs.Recurring;
 
-/// <summary>
-/// 周期任务的排期：把时间切成首尾相接的时段，每个时段执行一次。
-/// </summary>
-/// <remarks>
-/// 时段按 UTC 对齐到固定起点，而不是相对进程启动时间：不同副本、重启前后算出的是同一个时段，
-/// <see cref="RecurringJobScope.Cluster"/> 的水位比对才有意义；执行时间也不会随重启漂移。
-/// </remarks>
+/// <summary>周期任务的排期：把时间切成首尾相接的时段，每个时段执行一次。</summary>
+/// <remarks>时段按 UTC 对齐到固定起点，不同副本与重启前后算出同一时段。</remarks>
 public abstract class RecurringJobSchedule
 {
     private protected RecurringJobSchedule()
@@ -17,10 +12,7 @@ public abstract class RecurringJobSchedule
     /// <param name="interval">间隔，不小于 1 秒。</param>
     public static RecurringJobSchedule Every(TimeSpan interval)
     {
-        if (interval < TimeSpan.FromSeconds(1))
-        {
-            throw new ArgumentOutOfRangeException(nameof(interval), interval, "The interval must be at least one second.");
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(interval, TimeSpan.FromSeconds(1));
 
         return new IntervalSchedule(interval);
     }
@@ -38,8 +30,7 @@ public abstract class RecurringJobSchedule
     public abstract DateTimeOffset GetNextRun(DateTimeOffset now);
 
     /// <summary>
-    /// 进程启动后首次执行前的最大随机延迟：按间隔排期的任务启动后在这个范围内先跑一次，
-    /// 多副本同时启动时各自错开；按每日时刻排期的任务为零，只在排定时刻执行。
+    /// 进程启动后首次执行前的最大随机延迟：按间隔排期的任务在此范围内先跑一次；按每日时刻排期的为零，只在排定时刻执行。
     /// </summary>
     public abstract TimeSpan MaxStartupJitter { get; }
 

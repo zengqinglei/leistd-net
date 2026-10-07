@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 param(
     # 不给就跑全量：全量清单是 $AllScenarios（见下），不写死在这里，
     # 否则「加了场景定义却忘了加进清单」会让新场景静默不跑——下面有断言兜住
@@ -23,7 +24,10 @@ param(
     # 只为选中的场景构建并运行容器入口；Dockerfile/Compose 变化时使用，不随每个普通代码修改运行。
     [string[]]$ContainerSmokeScenarios = @(),
     # 在登记的容器场景（若在本片）上执行容器检查；CI 用它，不在 workflow 重抄场景名。
-    [switch]$ContainerSmoke
+    [switch]$ContainerSmoke,
+    # 只生成并执行形态断言与文档检查（文件集合、入口指针、条件裁剪、文档引用与章节锚点）；
+    # 不打包、不 restore/构建/测试、不跑前端与运行时，也不产出回执。用于改模板文档或 Skill 时的快速验证。
+    [switch]$GenerateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -111,6 +115,14 @@ function Invoke-External([string]$Command, [string[]]$Arguments, [string]$Workin
     }
 }
 
+function Get-Python3Command([string]$Purpose) {
+    foreach ($candidate in @('python3', 'python')) {
+        $found = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { return $found.Name }
+    }
+    throw "未找到 Python 3 解释器（python3/python），无法$Purpose。"
+}
+
 function Invoke-SourcePreflight([switch]$Skip) {
     if ($Skip) {
         if ($env:GITHUB_ACTIONS -cne 'true') { throw '-SkipSourcePreflight 仅用于具有同候选静态作业与必过汇总的 GitHub CI。' }
@@ -128,12 +140,7 @@ function Invoke-SourcePreflight([switch]$Skip) {
 
     # 模板引擎不能可靠诊断悬空符号、指令字面形式与恒真嵌套，先检查源码再准备生成。
     Invoke-External 'pwsh' @('-File', (Join-Path $repoRoot 'scripts/check-template-symbols.ps1'))
-    $pythonCmd = $null
-    foreach ($candidate in @('python3', 'python')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
-    }
-    if (-not $pythonCmd) { throw '未找到 Python 3 解释器（python3/python），无法运行 Python 静态闸门。' }
+    $pythonCmd = Get-Python3Command '运行 Python 静态闸门'
 
     # using/import 守卫在全部符号取值上求值，严于登记的生成场景。
     Invoke-External $pythonCmd @((Join-Path $repoRoot 'scripts/check-using-guards.py'))
@@ -183,54 +190,64 @@ function Get-ScenarioProjectName([string]$Scenario) {
     return "Matrix.$suffix"
 }
 
-function Assert-MarkdownLinks([string]$ProjectRoot) {
-    $brokenLinks = [System.Collections.Generic.List[string]]::new()
-    foreach ($file in Get-ChildItem -LiteralPath $ProjectRoot -Recurse -File -Filter "*.md") {
-        $lineNumber = 0
-        foreach ($line in Get-Content -LiteralPath $file.FullName -Encoding UTF8) {
-            $lineNumber++
-            foreach ($match in [regex]::Matches($line, '!?\[[^\]]*\]\((?<target>[^)]+)\)')) {
-                $rawTarget = $match.Groups['target'].Value.Trim()
-                if ($rawTarget -match '^(?:https?://|mailto:|tel:|#)') {
-                    continue
-                }
+# 文档引用（链接、反引号路径、npm/ng/脚本命令）按条件裁剪后的产物检查：命令只存在于未启用分支、
+# 文件被裁掉而文档仍引用时，只有生成产物上看得见。规则、白名单与自检在 check-doc-references.py，
+# check-all 登记其自检与源码模式。
+function Assert-DocReferences([string]$ProjectRoot) {
+    Invoke-External (Get-Python3Command '检查生成项目的文档引用') @((Join-Path $repoRoot 'scripts/check-doc-references.py'), '--root', $ProjectRoot)
+}
 
-                $pathPart = ($rawTarget -split '#', 2)[0].Trim()
-                if ($pathPart.StartsWith('<') -and $pathPart.EndsWith('>')) {
-                    $pathPart = $pathPart.Trim('<', '>')
-                }
-                else {
-                    $pathPart = ($pathPart -split '\s+', 2)[0]
-                }
-                $pathPart = ($pathPart -split '\?', 2)[0]
-                if ([string]::IsNullOrWhiteSpace($pathPart) -or $pathPart -match '[{}*]') {
-                    continue
-                }
+# 章节锚点按生成后的标题计算：条件裁剪删掉被链接章节时，只有生成产物上看得见。
+# 规则与自检夹具在 check-markdown-anchors.py，check-all 登记其自检。
+function Assert-MarkdownAnchors([string]$ProjectRoot) {
+    Invoke-External (Get-Python3Command '检查 Markdown 章节锚点') @((Join-Path $repoRoot 'scripts/check-markdown-anchors.py'), $ProjectRoot)
+}
 
-                $pathPart = [Uri]::UnescapeDataString($pathPart)
-                $targetPath = if ($pathPart.StartsWith('/')) {
-                    Join-Path $ProjectRoot $pathPart.TrimStart('/')
-                }
-                else {
-                    Join-Path $file.DirectoryName $pathPart
-                }
-                $targetPath = [IO.Path]::GetFullPath($targetPath)
-                if (-not (Test-Path -LiteralPath $targetPath)) {
-                    $relativeFile = [IO.Path]::GetRelativePath($ProjectRoot, $file.FullName)
-                    $brokenLinks.Add("${relativeFile}:${lineNumber} -> $rawTarget")
-                }
-            }
+# 随模板分发的 i18n 闸门与本地化同进退（template.json 的 !IncludeLocalization 排除项），
+# 并且必须在生成产物上跑通：它按项目相对路径定位，模板源码上通过不代表生成后通过。
+function Assert-I18nGate([string]$ProjectRoot) {
+    $gate = Join-Path $ProjectRoot "scripts/check-i18n.py"
+    $hasLocalization = @(Get-ChildItem -Path (Join-Path $ProjectRoot "backend/src/*.Api/Resources") -Directory -ErrorAction SilentlyContinue).Count -gt 0
+    if ((Test-Path -LiteralPath $gate) -ne $hasLocalization) {
+        throw "scripts/check-i18n.py must ship exactly when localization is enabled (localization: $hasLocalization)"
+    }
+    if ($hasLocalization) {
+        Invoke-External (Get-Python3Command '运行生成项目的 i18n 闸门') @($gate) $ProjectRoot
+    }
+}
+
+# 错误码闸门不随任何参数裁剪，每个生成项目都必须带上并在产物上跑通：
+# 关闭本地化或邮件时，被裁掉的抛出处会让对应映射或常量变成死码，只有生成产物上看得见。
+function Assert-ErrorCodeGate([string]$ProjectRoot) {
+    $gate = Join-Path $ProjectRoot "scripts/check-error-codes.py"
+    if (-not (Test-Path -LiteralPath $gate)) {
+        throw "scripts/check-error-codes.py must ship with every generated project"
+    }
+    Invoke-External (Get-Python3Command '运行生成项目的错误码闸门') @($gate) $ProjectRoot
+}
+
+# 入口指针：AGENTS.md 只指向协作 Skill 与文档索引，CLAUDE.md 只导入 AGENTS.md。
+function Assert-AgentEntryPoints([string]$ProjectRoot) {
+    $agents = Get-Content -LiteralPath (Join-Path $ProjectRoot "AGENTS.md") -Raw -Encoding UTF8
+    foreach ($pointer in @(".agents/skills/leistd-project-workflow/SKILL.md", "docs/README.md")) {
+        if (-not $agents.Contains("]($pointer)")) {
+            throw "Generated AGENTS.md must link $pointer"
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $pointer))) {
+            throw "Generated AGENTS.md points to a missing file: $pointer"
         }
     }
-
-    if ($brokenLinks.Count -gt 0) {
-        throw "Generated project contains broken Markdown links:`n$($brokenLinks -join "`n")"
+    $claude = (Get-Content -LiteralPath (Join-Path $ProjectRoot "CLAUDE.md") -Raw -Encoding UTF8).Trim()
+    if ($claude -cne "@AGENTS.md") {
+        throw "Generated CLAUDE.md must contain only '@AGENTS.md', found: $claude"
     }
 }
 
 function Assert-GeneratedProject([string]$ProjectRoot) {
     $hasFrontend = Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend")
     $requiredFiles = @(
+        "AGENTS.md",
+        "CLAUDE.md",
         ".agents/skills/leistd-project-workflow/SKILL.md",
         ".agents/skills/leistd-project-workflow/references/bootstrap.md",
         ".agents/skills/leistd-project-workflow/references/delivery.md",
@@ -239,21 +256,20 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         ".agents/skills/leistd-project-workflow/references/documentation.md",
         ".agents/skills/spartan/SKILL.md",
         "docs/README.md",
-        "docs/standards/api.md",
-        "docs/standards/coding-common.md",
-        "docs/standards/coding-backend.md",
-        "docs/standards/coding-frontend.md",
-        "docs/standards/project-structure.md",
-        "docs/standards/tech-stack.md",
-        "docs/standards/testing.md",
-        "docs/standards/ui-design.md",
         "docs/deploy/README.md",
         "backend/README.md",
         "frontend/components.json"
     )
+    # 规范文件集合的唯一登记处：前端专属规范随 SpaFrontend 裁剪（template.json 的 !SpaFrontend 排除项），
+    # frontend-i18n.md 另随 IncludeLocalization 裁剪（!IncludeLocalization 排除项），前端词条目录与它同进退。
+    $hasFrontendI18n = Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend/public/i18n")
+    $expectedStandards = @("api.md", "auth.md", "coding-backend.md", "coding-common.md", "project-structure.md",
+        "service-invocation.md", "tech-stack.md", "testing.md")
+    if ($hasFrontend) { $expectedStandards += @("coding-frontend.md", "frontend-ui.md", "frontend-spartan.md") }
+    if ($hasFrontendI18n) { $expectedStandards += "frontend-i18n.md" }
+    $requiredFiles += @($expectedStandards | ForEach-Object { "docs/standards/$_" })
     if (-not $hasFrontend) {
-        $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(
-            ".agents/skills/spartan/SKILL.md", "docs/standards/coding-frontend.md", "docs/standards/ui-design.md", "frontend/components.json") })
+        $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(".agents/skills/spartan/SKILL.md", "frontend/components.json") })
     }
     foreach ($relativePath in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $relativePath))) {
@@ -280,8 +296,6 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         }
     }
 
-    $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "service-invocation.md", "tech-stack.md", "testing.md", "ui-design.md")
-    if (-not $hasFrontend) { $expectedStandards = @($expectedStandards | Where-Object { $_ -notin @("coding-frontend.md", "ui-design.md") }) }
     $standardsRoot = Join-Path $ProjectRoot "docs/standards"
     $actualStandards = @(Get-ChildItem -LiteralPath $standardsRoot -File -Filter "*.md" | ForEach-Object Name | Sort-Object)
     $standardDifference = Compare-Object ($expectedStandards | Sort-Object) $actualStandards
@@ -289,10 +303,10 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated project standards must be flat and contain only the expected files: $($expectedStandards -join ', ')"
     }
 
+    Assert-AgentEntryPoints $ProjectRoot
+
     $forbiddenPaths = @(
         ".claude",
-        "CLAUDE.md",
-        "AGENTS.md",
         "backend/CLAUDE.md",
         "backend/AGENTS.md",
         "docs/guides",
@@ -301,6 +315,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         "docs/standards/api-standard.md",
         "docs/standards/code-standard",
         "docs/standards/test.md",
+        "docs/standards/ui-design.md",
         "docs/standards/ui-design-strategy.md"
     )
     foreach ($relativePath in $forbiddenPaths) {
@@ -320,7 +335,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated project contains template residue:`n$($sample -join "`n")"
     }
 
-    $removedGuidanceReferences = $textFiles | Select-String -Pattern 'template/\.claude', 'agent-workflow\.md', 'api-standard\.md', 'code-standard/(common|backend|frontend)-develop\.md', 'ui-design-strategy\.md'
+    $removedGuidanceReferences = $textFiles | Select-String -Pattern 'template/\.claude', 'agent-workflow\.md', 'api-standard\.md', 'code-standard/(common|backend|frontend)-develop\.md', 'ui-design-strategy\.md', '(?<![\w-])ui-design\.md'
     if ($removedGuidanceReferences) {
         $sample = $removedGuidanceReferences | Select-Object -First 20 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
         throw "Generated project references removed guidance:`n$($sample -join "`n")"
@@ -346,7 +361,10 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated backend guidance must explain the independent DbMigrator boundary."
     }
 
-    Assert-MarkdownLinks $ProjectRoot
+    Assert-DocReferences $ProjectRoot
+    Assert-MarkdownAnchors $ProjectRoot
+    Assert-I18nGate $ProjectRoot
+    Assert-ErrorCodeGate $ProjectRoot
 }
 
 # 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
@@ -425,6 +443,29 @@ function Assert-EveryFrontendSpecDiscovered([string]$FrontendRoot) {
 }
 
 
+# 生成项目的完整回归入口 scripts/verify.ps1：步骤清单须与矩阵按产物判定的阶段一致——
+# 随包闸门按脚本是否随包、测试项目按矩阵的发现范围（backend 下全部 *Tests.csproj，单元测试在前）、前端按目录是否存在。
+function Assert-VerifySteps([string]$ProjectRoot) {
+    $listing = @(Invoke-ExternalCapture 'pwsh' @('-NoProfile', '-File', (Join-Path $ProjectRoot 'scripts/verify.ps1'), '-List') $ProjectRoot)
+    $actual = @($listing | Where-Object { $_.Trim() } | ForEach-Object { ($_ -split "`t")[0] })
+    $expected = [Collections.Generic.List[string]]::new()
+    $expected.Add('check-error-codes')
+    foreach ($gate in @('check-i18n', 'check-operation-action-i18n')) {
+        if (Test-Path -LiteralPath (Join-Path $ProjectRoot "scripts/$gate.py")) { $expected.Add($gate) }
+    }
+    $expected.Add('backend-restore')
+    $expected.Add('backend-build')
+    Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'backend') -Filter '*Tests.csproj' -Recurse |
+        Sort-Object @{ Expression = { $_.BaseName -notlike '*.UnitTests' } }, BaseName |
+        ForEach-Object { $expected.Add("backend-test:$($_.BaseName)") }
+    if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'frontend')) {
+        foreach ($stage in @('frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build')) { $expected.Add($stage) }
+    }
+    if (($actual -join '|') -cne ($expected -join '|')) {
+        throw "scripts/verify.ps1 steps differ from the matrix stages.`n  verify: $($actual -join ', ')`n  matrix: $($expected -join ', ')"
+    }
+}
+
 function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hashtable]$Definition) {
     foreach ($relativePath in $Definition.Present) {
         $expandedPath = $relativePath.Replace('{name}', $ProjectName)
@@ -497,7 +538,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
-    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
+    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/services/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
         foreach ($marker in @("await this.signalR.connect()")) {
@@ -510,7 +551,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
     $signalRPath = Join-Path $ProjectRoot 'frontend/src/app/core/services/signalr-service.ts'
     if (Test-Path -LiteralPath $signalRPath) {
         $signalR = Get-Content -LiteralPath $signalRPath -Raw -Encoding UTF8
-        foreach ($marker in @('environment.useMock', 'isMockedUrl(')) {
+        foreach ($marker in @('inject(MOCKED_URL)', 'this.isMockedUrl(SignalRService.hubPath)')) {
             if (-not $signalR.Contains($marker)) { throw "Scenario '$($Definition.Name)' shared connection lacks Mock isolation: $marker" }
         }
     }
@@ -770,6 +811,10 @@ if ($ValidationPlanPath) {
     $ContainerSmoke = $validationPlan.ContainerSmoke
 }
 
+if ($GenerateOnly -and ($ValidationPlanPath -or $ContainerSmoke -or $ContainerSmokeScenarios.Count -gt 0 -or $SkipPack -or $LocalFeedPath)) {
+    # 这些开关都作用于打包、构建或容器阶段；与只生成同用时没有可执行的含义，直接拒绝而不是静默忽略。
+    throw '-GenerateOnly cannot be combined with -ValidationPlanPath, -ContainerSmoke, -ContainerSmokeScenarios, -SkipPack or -LocalFeedPath.'
+}
 if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
 if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
 if ($Tier) {
@@ -871,8 +916,13 @@ $nugetConfig = @"
 </configuration>
 "@
 [IO.File]::WriteAllText($nugetConfigPath, $nugetConfig, [Text.UTF8Encoding]::new($false))
+# 生成项目自己的 restore（scripts/verify.ps1）不带 --configfile，按目录层级取到这份同内容配置
+[IO.File]::WriteAllText((Join-Path $generatedRoot "NuGet.Config"), $nugetConfig, [Text.UTF8Encoding]::new($false))
 
-if (-not $SkipPack) {
+if ($GenerateOnly) {
+    # 只生成：模板从源码目录安装，不消费 Leistd 包，无需本地包源
+}
+elseif (-not $SkipPack) {
     Reset-Directory $feedRoot
     Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
 }
@@ -895,17 +945,57 @@ try {
         Invoke-External "dotnet" $newArguments
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
+        Assert-VerifySteps $projectRoot
+        if ($GenerateOnly) {
+            $results.Add([PSCustomObject]@{
+                Scenario = $scenario
+                Generate = 'pass'
+                Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
+            })
+            continue
+        }
         if (-not $SkipFrontend -and $definition.Frontend) {
             Assert-FrontendDependencySecurity (Join-Path $projectRoot 'frontend')
         }
 
         $backendValidated = $false
         $runtimeValidated = $false
-        if ($validationMode -cne 'frontend') {
+        $frontendValidated = $false
+        $lintValidated = $false
+        $testValidated = $false
+        # 登记了 Verify 的场景在完整阶段由生成项目自己的 verify.ps1 完成构建与测试，矩阵只补运行时冒烟、
+        # 前端 spec 发现范围与产物断言。verify 固定 Release、无头浏览器且前后端一起跑，人工改了这些开关时回到逐阶段执行。
+        # 包源：本 run 的 NuGet.Config 放在生成目录上层，verify 的 dotnet restore 按目录层级取到它（候选 Leistd 包）。
+        $useVerify = $definition.Verify -and $validationMode -ceq 'full' -and -not $SkipFrontend -and
+            $Configuration -ceq 'Release' -and $FrontendBrowser -ceq 'chromiumHeadless'
+        if ($definition.Verify -and -not $useVerify) {
+            Write-Warning "Scenario '$scenario' runs matrix stages instead of scripts/verify.ps1 (mode, configuration, browser or frontend skip differs)."
+        }
+        if ($useVerify) {
+            $env:HUSKY = "0"
+            Invoke-External 'pwsh' @('-NoProfile', '-File', (Join-Path $projectRoot 'scripts/verify.ps1')) $projectRoot
+            $backendValidated = $true
+            if (-not $SkipRuntime) {
+                Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
+                $runtimeValidated = $true
+            }
+            if ($definition.Frontend) {
+                $frontendRoot = Join-Path $projectRoot "frontend"
+                Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
+                Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
+                Assert-OptimizedTranslations $frontendRoot
+                Assert-EveryFrontendSpecDiscovered $frontendRoot
+                $lintValidated = $true
+                $frontendValidated = $true
+                $testValidated = $true
+            }
+        }
+        if (-not $useVerify -and $validationMode -cne 'frontend') {
             $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
             # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
             Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
-            Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
+            # 警告即错误：backend/.editorconfig 的风格规则以 warning 交付，生成项目的构建线是 0 警告
+            Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore", "-p:TreatWarningsAsErrors=true")
 
             if (-not $SkipRuntime) {
                 Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
@@ -920,10 +1010,7 @@ try {
             $backendValidated = $true
         }
 
-        $frontendValidated = $false
-        $lintValidated = $false
-        $testValidated = $false
-        if (-not $SkipFrontend -and $definition.Frontend -and $validationMode -cne 'backend') {
+        if (-not $useVerify -and -not $SkipFrontend -and $definition.Frontend -and $validationMode -cne 'backend') {
             $frontendRoot = Join-Path $projectRoot "frontend"
             $env:HUSKY = "0"
             Invoke-External "npm" @("ci") $frontendRoot
@@ -999,6 +1086,7 @@ try {
             Frontend = if ($frontendValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
             Test = if ($testValidated) { 'pass' } elseif ($validationMode -ceq 'backend' -or -not $definition.Frontend) { 'not-applicable' } else { 'skipped' }
             Container = if ($containerValidated) { "pass" } else { "skipped" }
+            Verify = if ($useVerify) { 'pass' } else { 'not-run' }
             Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
         })
     }
@@ -1008,6 +1096,11 @@ finally {
 }
 
 $results | Format-Table -AutoSize
+if ($GenerateOnly) {
+    # 只生成模式不产出回执：回执代表完整阶段通过，汇总作业不能把形态检查当成构建与测试证据
+    Write-Host "Template generation and document checks passed for $($results.Count) scenario(s); pack, build, test and runtime were not run." -ForegroundColor Green
+    exit 0
+}
 Write-Host "Template matrix passed for $($results.Count) scenario(s)." -ForegroundColor Green
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。

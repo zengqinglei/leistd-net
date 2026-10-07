@@ -10,6 +10,7 @@ using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Xunit;
+using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 
@@ -264,22 +265,5 @@ public class SettingManagementTests
 
         public Task SetAsync(string name, string? value, SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
-    }
-
-    private sealed class DictionaryLocalizerFactory(Dictionary<string, string> texts) : IStringLocalizerFactory
-    {
-        public IStringLocalizer Create(Type resourceSource) => new DictionaryLocalizer(texts);
-
-        public IStringLocalizer Create(string baseName, string location) => new DictionaryLocalizer(texts);
-    }
-
-    private sealed class DictionaryLocalizer(Dictionary<string, string> texts) : IStringLocalizer
-    {
-        public LocalizedString this[string name]
-            => texts.TryGetValue(name, out var value) ? new(name, value) : new(name, name, resourceNotFound: true);
-
-        public LocalizedString this[string name, params object[] arguments] => this[name];
-
-        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) => [];
     }
 }

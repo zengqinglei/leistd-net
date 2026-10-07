@@ -19,12 +19,7 @@ export class SettingService {
     return this.http.put<void>(`${this.baseUrl}/current-user`, data);
   }
 
-  /**
-   * 写入当前租户的默认值。
-   *
-   * 与用户偏好分成两个端点而不是一个带 scope 参数的端点：两者授权要求不同，
-   * 合成一个会让这层差异藏进请求体。
-   */
+  /** 写入当前租户的默认值；与用户偏好分成两个端点，因为两者授权要求不同。 */
   setForCurrentTenant(data: SetSettingInputDto): Observable<void> {
     return this.http.put<void>(`${this.baseUrl}/current-tenant`, data);
   }

@@ -20,14 +20,12 @@ public static class TenantManagementEndpoints
     /// <summary>
     /// 映射租户管理：<c>GET /</c>、<c>GET /{id}</c>、<c>POST /</c>、<c>PUT /{id}</c>、<c>PUT /{id}/activation</c>、
     /// <c>DELETE /{id}</c>，以及匿名的 <c>GET /by-host</c>。
-    /// <para>没有按名称查租户的匿名端点：它会把"这个租户存不存在、启没启用"告诉任何人。
-    /// 登录页拿租户名直接发登录请求即可，不必先探测。</para>
     /// </summary>
     /// <remarks>
     /// <para>创建请求体按 <typeparamref name="TCreateInput"/> 绑定：宿主派生 <see cref="CreateTenantInputDto"/>
     /// 携带开通需要的更多信息，开通器从上下文里取回。</para>
-    /// <para>匿名探测只回选择租户所需的最小信息；<c>by-host</c> 回答"这个请求会落在哪个租户"，跑的是宿主配置的解析链，不接受账号一类入参——
-    /// 那会需要一个匿名的"这个账号属于哪些租户"查询，一份邮箱字典就能刷出租户拓扑。</para>
+    /// <para>匿名端点只有 <c>by-host</c>：按宿主配置的解析链回答“这个请求会落在哪个租户”，只回租户名；
+    /// 不提供按名称或账号查租户的匿名端点，避免暴露租户存在性、启用状态与账号归属。登录页拿租户名直接发登录请求即可。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -107,15 +105,12 @@ public static class TenantManagementEndpoints
 
         group.MapGet("by-host", async (ITenantResolver resolver, ICurrentTenant currentTenant) =>
             {
-                // 跑宿主配置的解析链，而不是在这里另起一个域名贡献者：宿主替换或定制了解析方式时，
-                // 探测与真实请求必须给出同一个答案。登录页在未登录、未选租户时调用它，此时起作用的通常是按主机名解析的那一环；
-                // 请求若已带会话或租户提示，答案也随之与真实请求一致
+                // 跑宿主配置的解析链而不是另起域名贡献者：宿主定制解析方式时，探测与真实请求必须给出同一个答案。
                 var resolved = await resolver.ResolveAsync();
 
                 if (resolved.TenantIdOrName is { Length: > 0 } tenantIdOrName)
                 {
-                    // 走到这里中间件已按同一条链解析并校验过该租户（不存在或已停用在那里就被拒）。
-                    // 只回名字：主机名本就公开，但租户标识与启用状态不该在匿名响应里出现；客户端把名字随请求发出即可
+                    // 中间件已按同一条链校验过该租户（不存在或已停用已被拒）。匿名响应只回名字，不含标识与启用状态。
                     return new TenantByHostOutputDto
                     {
                         Decision = HostTenantDecision.Tenant,
@@ -150,11 +145,10 @@ public static class TenantManagementEndpoints
     /// （前两者同属 <c>RuntimeReadPolicy</c>）与 <c>GET /migration?name=</c>（<c>MigrationReadPolicy</c>）。
     /// </summary>
     /// <remarks>
-    /// <para>管理面只回名字与版本。机器端点分两档：<c>/runtime</c> 与 <c>/migration</c> 下发明文连接串，
-    /// 按名字问、按名字答，一次只回被问到的那一条，不把该租户在别的服务的连接串也发出去；
-    /// <c>/databases</c> <b>不下发连接串</b>，只回指纹与租户归属，因此它与 <c>/runtime</c> 同属读路由权限，
-    /// 常驻服务不必为逐库作业申请 DDL 身份。远端连接存储（<c>Leistd.MultiTenancy.ServiceClient</c>）按这三条路由回源。</para>
-    /// <para>每个端点只挂自己的命名策略，路由组上不叠宿主的默认策略——默认策略通常要求自然人，叠上去机器令牌就进不来。
+    /// <para>管理面只回名字与版本。<c>/runtime</c> 与 <c>/migration</c> 下发明文连接串，一次只回被问到的那个连接名；
+    /// <c>/databases</c> 不下发连接串，只回指纹与租户归属，因此与 <c>/runtime</c> 同属读路由权限。
+    /// 远端连接存储（<c>Leistd.MultiTenancy.ServiceClient</c>）按这三条路由回源。</para>
+    /// <para>每个端点只挂自己的命名策略，路由组上不叠宿主的默认策略（默认策略通常要求自然人，会拒绝机器令牌）。
     /// 连接名不合法返回带码的 400；启用中的租户改变数据落点返回 409。</para>
     /// </remarks>
     /// <example>
@@ -181,8 +175,7 @@ public static class TenantManagementEndpoints
         configure(options);
         options.Validate();
 
-        // 路由组上不挂默认策略：宿主的默认策略通常表达"一个自然人"，叠在机器端点上会让机器令牌永远 403。
-        // 每个端点都有自己的命名策略，已经隐含"已认证"。
+        // 路由组上不挂默认策略：它通常要求自然人，会让机器令牌 403；每个端点的命名策略已隐含“已认证”。
         var group = endpoints.MapGroup(string.Empty);
 
         group.MapGet("{tenantId:guid}", (Guid tenantId, ITenantConnectionManagementService service, CancellationToken cancellationToken)
@@ -227,10 +220,8 @@ public static class TenantManagementEndpoints
 
         if (!string.IsNullOrWhiteSpace(options.RuntimeReadPolicy))
         {
-            // 逐库作业的库清单：只回指纹与租户归属，不含连接串，因此与运行时路由同一档权限。
-            // 把它挂在迁移策略下会逼着常驻服务去申请 DDL 身份——那正是要避免的
-            // activeOnly 必填，不给默认值：它决定停用租户的库进不进这一轮逐库作业，
-            // 悄悄按 true 处理等于替调用方做了一次数据范围的选择。缺失即 400。
+            // 不含连接串，因此与运行时路由同一档权限，常驻服务不必申请 DDL 身份。
+            // activeOnly 必填、缺失即 400：它决定停用租户的库是否参与，不替调用方选数据范围。
             group.MapGet("databases", (
                     string? name,
                     bool activeOnly,

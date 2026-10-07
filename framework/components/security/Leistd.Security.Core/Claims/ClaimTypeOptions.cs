@@ -6,10 +6,8 @@ namespace Leistd.Security.Claims;
 /// 主体标识与租户的 claim 类型，以及读取它们的唯一规则。
 /// </summary>
 /// <remarks>
-/// <para>框架读写这两类 claim 的每一处（当前用户、租户解析、权限判定、SignalR 寻址、操作记录、服务间还原）
-/// 都从这里取类型、按这里的规则解析；签发主体的宿主改了 claim 名，只在这里改一次，整条链路随之一致。</para>
-/// <para>在代码里经 <c>services.Configure&lt;ClaimTypeOptions&gt;(...)</c> 设置：claim 名是宿主与签发方之间的契约，
-/// 不随部署环境变化。</para>
+/// <para>框架读这两类 claim 的每一处（当前用户、租户解析、权限判定、SignalR 寻址、操作记录、服务间还原）都按这里解析。</para>
+/// <para>只在代码里经 <c>services.Configure&lt;ClaimTypeOptions&gt;(...)</c> 设置，不绑定配置节。</para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -18,32 +16,24 @@ namespace Leistd.Security.Claims;
 /// </example>
 public sealed class ClaimTypeOptions
 {
-    /// <summary>
-    /// 主体标识的读取顺序，取第一个非空白值。默认 <c>sub</c>，其次 <see cref="ClaimTypes.NameIdentifier"/>。
-    /// </summary>
+    /// <summary>主体标识的读取顺序，取第一个非空白值；默认 <c>sub</c>，其次 <see cref="ClaimTypes.NameIdentifier"/>。</summary>
     /// <remarks>
     /// 原始值可能是 GUID 用户 Id、<see cref="ClientSubject"/> 格式的机器主体或宿主约定的其他标识；
     /// 要自然人用户 Id 读 <c>ICurrentUser.Id</c>（在原始值之上只接受 GUID）。
     /// </remarks>
     public IReadOnlyList<string> UserIds { get; set; } = [CustomClaimTypes.Subject, ClaimTypes.NameIdentifier];
 
-    /// <summary>
-    /// 租户标识的 claim 类型。默认 <see cref="CustomClaimTypes.TenantId"/>（<c>tenant_id</c>）。
-    /// </summary>
+    /// <summary>租户标识的 claim 类型，默认 <see cref="CustomClaimTypes.TenantId"/>（<c>tenant_id</c>）。</summary>
     /// <remarks>值必须是租户 GUID；没有该 claim 表示宿主主体。租户名只经匿名请求提示传递，不进身份。</remarks>
     public string TenantId { get; set; } = CustomClaimTypes.TenantId;
 
-    /// <summary>
-    /// 按 <see cref="UserIds"/> 读取主体标识的原始值。
-    /// </summary>
+    /// <summary>按 <see cref="UserIds"/> 读取主体标识的原始值。</summary>
     /// <param name="principal">主体；为 <see langword="null"/> 时返回 <see langword="null"/>。</param>
     /// <returns>主体身份（见 <see cref="FindSubjectIdentity"/>）上第一个非空白的值；没有带标识的身份时为 <see langword="null"/>。</returns>
     public string? FindUserId(ClaimsPrincipal? principal)
         => FindSubjectIdentity(principal) is { } identity ? FindUserId(identity) : null;
 
-    /// <summary>
-    /// 取主体身份：按顺序第一个带用户标识（按 <see cref="UserIds"/>）的身份。
-    /// </summary>
+    /// <summary>取主体身份：按顺序第一个带用户标识（按 <see cref="UserIds"/>）的身份。</summary>
     /// <param name="principal">主体；为 <see langword="null"/> 时返回 <see langword="null"/>。</param>
     /// <returns>主体身份；没有带标识的身份时为 <see langword="null"/>。</returns>
     /// <remarks>
@@ -68,15 +58,12 @@ public sealed class ClaimTypeOptions
         return null;
     }
 
-    /// <summary>
-    /// 按 <see cref="TenantId"/> 读取主体所属租户。
-    /// </summary>
+    /// <summary>按 <see cref="TenantId"/> 读取主体所属租户。</summary>
     /// <param name="principal">主体；为 <see langword="null"/> 时视为宿主。</param>
     /// <returns>合法时为主体所属租户（宿主为 <see langword="null"/>）；非法由调用方失败关闭。</returns>
     /// <remarks>
-    /// <para><b>用户标识与租户取自同一个身份。</b>按顺序第一个带用户标识的身份是主体身份，<see cref="FindUserId(ClaimsPrincipal?)"/>
-    /// 取它的标识，这里取它的租户。分别从整个主体里取的话，同一请求携带的两份凭据（宿主的 42 号与租户 T 的 7 号）
-    /// 会拼出"租户 T 的 42 号"——标识只在租户内唯一时，那是另一个人。</para>
+    /// <para>用户标识与租户取自同一个身份（主体身份），<see cref="FindUserId(ClaimsPrincipal?)"/> 取它的标识，这里取它的租户；
+    /// 分别从整个主体取会把两份凭据拼成另一个人。</para>
     /// <para>非法的情形：同一身份内租户 claim 多于一条（即使值相同，也只可能来自签发错误或拼接篡改）或不是 GUID；
     /// 其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）。同一主体被多个认证方案认证时，
     /// 各身份带同一租户，合法。</para>
@@ -163,9 +150,7 @@ public sealed class ClaimTypeOptions
     }
 }
 
-/// <summary>
-/// 主体上租户 claim 的解析结果。
-/// </summary>
+/// <summary>主体上租户 claim 的解析结果。</summary>
 /// <param name="IsValid">claim 是否合法，规则见 <see cref="ClaimTypeOptions.ReadTenant"/>。</param>
 /// <param name="TenantId">合法时的租户；<see langword="null"/> 表示宿主。</param>
 public readonly record struct TenantClaim(bool IsValid, Guid? TenantId)

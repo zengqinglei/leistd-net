@@ -26,6 +26,12 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation;
+using Leistd.Lock.Abstractions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using System.Text.RegularExpressions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -388,22 +394,22 @@ public sealed class ResourceBrowserSessionTests
         Assert.Null(response.Headers.Location);
         Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
         var html = await response.Content.ReadAsStringAsync();
-        var form = System.Text.RegularExpressions.Regex.Match(html, "<form(?=[^>]*method=\"post\")[^>]*action=\"([^\"]+)\"",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var form = Regex.Match(html, "<form(?=[^>]*method=\"post\")[^>]*action=\"([^\"]+)\"",
+            RegexOptions.IgnoreCase);
         Assert.True(form.Success, html);
         Assert.Equal(action, WebUtility.HtmlDecode(form.Groups[1].Value));
-        return System.Text.RegularExpressions.Regex.Matches(html, "<input type=\"hidden\" name=\"([^\"]+)\" value=\"([^\"]*)\"")
+        return Regex.Matches(html, "<input type=\"hidden\" name=\"([^\"]+)\" value=\"([^\"]*)\"")
             .ToDictionary(match => WebUtility.HtmlDecode(match.Groups[1].Value), match => WebUtility.HtmlDecode(match.Groups[2].Value));
     }
 
-    private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, Issuer issuer) =>
+    private static WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, Issuer issuer) =>
         factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", "resource-api").ConfigureTestServices(services =>
         {
-            services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, AccessTokenProbe>();
+            services.AddSingleton<IStartupFilter, AccessTokenProbe>();
             services.AddSingleton<RefreshLockProbe>();
-            services.AddSingleton<Leistd.Lock.Abstractions.IDistributedLock>(provider => provider.GetRequiredService<RefreshLockProbe>());
+            services.AddSingleton<IDistributedLock>(provider => provider.GetRequiredService<RefreshLockProbe>());
             services.AddSingleton<TicketCacheProbe>();
-            services.AddSingleton<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(provider => provider.GetRequiredService<TicketCacheProbe>());
+            services.AddSingleton<IDistributedCache>(provider => provider.GetRequiredService<TicketCacheProbe>());
             services.Configure<OpenIdConnectOptions>(AuthenticationSchemeNames.OpenIdConnect, options =>
             {
                 options.BackchannelHttpHandler = issuer;
@@ -422,7 +428,7 @@ public sealed class ResourceBrowserSessionTests
         }));
 
     // 经测试分支走一次真实请求：OpenIddict 验证要求认证中间件先为请求建好上下文，脱离管道的 HttpContext 认证不了
-    private static async Task<string?> AccessTokenAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host, string header, string value)
+    private static async Task<string?> AccessTokenAsync(WebApplicationFactory<Program> host, string header, string value)
     {
         using var client = Client(host);
         using var request = new HttpRequestMessage(HttpMethod.Get, AccessTokenProbe.Path);
@@ -432,7 +438,7 @@ public sealed class ResourceBrowserSessionTests
     }
 
     /// <summary>在生产管道前加一个测试分支：分支内先认证，再调用宿主登记的用户访问令牌读取器。</summary>
-    private sealed class AccessTokenProbe : Microsoft.AspNetCore.Hosting.IStartupFilter
+    private sealed class AccessTokenProbe : IStartupFilter
     {
         public const string Path = "/test/user-access-token";
 
@@ -452,7 +458,7 @@ public sealed class ResourceBrowserSessionTests
         };
     }
 
-    private static HttpClient Client(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host, string? cookie = null)
+    private static HttpClient Client(WebApplicationFactory<Program> host, string? cookie = null)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         client.BaseAddress = new Uri("https://localhost");
@@ -460,7 +466,7 @@ public sealed class ResourceBrowserSessionTests
         return client;
     }
 
-    private static async Task<string> LoginAsync(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host, Issuer issuer)
+    private static async Task<string> LoginAsync(WebApplicationFactory<Program> host, Issuer issuer)
     {
         using var browser = Client(host);
         using var challenge = await browser.GetAsync("/api/v1/auth/login?returnUrl=/workspace");
@@ -477,13 +483,13 @@ public sealed class ResourceBrowserSessionTests
         return ProjectWebApplicationFactory.AssertSessionCookieContract(callback);
     }
 
-    private sealed class RefreshLockProbe(Leistd.Lock.Abstractions.ILocalLock inner) : Leistd.Lock.Abstractions.IDistributedLock
+    private sealed class RefreshLockProbe(ILocalLock inner) : IDistributedLock
     {
         private int _refreshLocks;
         public int RefreshLocks => _refreshLocks;
         public bool Unavailable { get; set; }
         public bool AllLocksUnavailable { get; set; }
-        public Task<Leistd.Lock.Abstractions.ILockHandle> LockAsync(string key, CancellationToken cancellationToken = default)
+        public Task<ILockHandle> LockAsync(string key, CancellationToken cancellationToken = default)
         {
             if (key.EndsWith(":refresh", StringComparison.Ordinal))
             {
@@ -493,14 +499,14 @@ public sealed class ResourceBrowserSessionTests
             if (AllLocksUnavailable) throw new InvalidOperationException("Lock service unavailable.");
             return inner.LockAsync(key, cancellationToken);
         }
-        public Task<Leistd.Lock.Abstractions.ILockHandle?> TryLockAsync(string key, TimeSpan timeout, CancellationToken cancellationToken = default) =>
+        public Task<ILockHandle?> TryLockAsync(string key, TimeSpan timeout, CancellationToken cancellationToken = default) =>
             inner.TryLockAsync(key, timeout, cancellationToken);
     }
 
-    private sealed class TicketCacheProbe : Microsoft.Extensions.Caching.Distributed.IDistributedCache
+    private sealed class TicketCacheProbe : IDistributedCache
     {
-        private readonly Microsoft.Extensions.Caching.Distributed.MemoryDistributedCache _inner = new(
-            Options.Create(new Microsoft.Extensions.Caching.Memory.MemoryDistributedCacheOptions()));
+        private readonly MemoryDistributedCache _inner = new(
+            Options.Create(new MemoryDistributedCacheOptions()));
         private int _ticketReads;
         public int TicketReads => _ticketReads;
         public byte[]? Get(string key) => _inner.Get(key);
@@ -513,8 +519,8 @@ public sealed class ResourceBrowserSessionTests
         public Task RefreshAsync(string key, CancellationToken token = default) => _inner.RefreshAsync(key, token);
         public void Remove(string key) => _inner.Remove(key);
         public Task RemoveAsync(string key, CancellationToken token = default) => _inner.RemoveAsync(key, token);
-        public void Set(string key, byte[] value, Microsoft.Extensions.Caching.Distributed.DistributedCacheEntryOptions options) => _inner.Set(key, value, options);
-        public Task SetAsync(string key, byte[] value, Microsoft.Extensions.Caching.Distributed.DistributedCacheEntryOptions options, CancellationToken token = default) =>
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => _inner.Set(key, value, options);
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default) =>
             _inner.SetAsync(key, value, options, token);
     }
 

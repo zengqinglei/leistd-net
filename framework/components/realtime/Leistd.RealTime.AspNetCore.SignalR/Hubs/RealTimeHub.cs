@@ -5,19 +5,14 @@ using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime.AspNetCore.SignalR.Hubs;
 
-/// <summary>
-/// 实时业务事件 Hub：客户端订阅/取消订阅资源，资源变更时收到推送。
-/// </summary>
+/// <summary>实时业务事件 Hub：客户端订阅或取消订阅资源，资源变更时收到推送。</summary>
 public class RealTimeHub(
     ICurrentUser currentUser,
     IRealTimeSubscriptionAuthorizer subscriptionAuthorizer,
     ILogger<RealTimeHub> logger) : Hub
 {
     /// <summary>订阅资源变更。</summary>
-    /// <remarks>
-    /// 授权器<b>无条件</b>参与判定：没有"关掉校验"的开关。公共资源场景显式注册
-    /// <c>AllowAllRealTimeSubscriptionAuthorizer</c>，把那个决定写在宿主代码里。
-    /// </remarks>
+    /// <remarks>授权器无条件参与判定；公共资源场景显式注册 <c>AllowAllRealTimeSubscriptionAuthorizer</c>。</remarks>
     /// <param name="resourceKey">资源标识（如 "product-profile:{id}"）。</param>
     public async Task Subscribe(string resourceKey)
     {

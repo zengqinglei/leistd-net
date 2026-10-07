@@ -15,6 +15,7 @@ import {
   lucideArrowUpDown,
   lucideBan,
   lucideChevronRight,
+  lucideCircleAlert,
   lucideCircleCheck,
   lucideEllipsis,
   lucideKey,
@@ -43,18 +44,20 @@ import { SettingContextService } from '../../../../../../core/settings/setting-c
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
-import {
-  ACTIONS_COLUMN_META,
-  tableColumnVisibility,
-} from '../../../../../../shared/models/table-column-meta';
-import {
-  injectAppTable,
-  type AppTableFeatures,
-} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+  TITLE_COLUMN_META,
+  TITLE_CONTENT_CLASS,
+} from '../../../../../../shared/utils/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/utils/table-features';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -62,10 +65,9 @@ import {
   toggleTableSort,
 } from '../../../../../../shared/utils/table-sorting';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
-import { RoleBriefDto } from '../../../../models/role.dto';
-import { UserManagementOutputDto } from '../../../../models/user-management.dto';
+import { RoleBriefDto } from '../../../../dtos/role.dto';
+import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 
-/** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
 @Component({
@@ -93,6 +95,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideArrowUpDown,
       lucideBan,
       lucideChevronRight,
+      lucideCircleAlert,
       lucideCircleCheck,
       lucideEllipsis,
       lucideKey,
@@ -112,8 +115,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 })
 export class UserTable {
   private readonly authService = inject(AuthService);
-  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
-  // 会让同一时刻在不同页面显示成不同时间。
+  // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (!IncludeLocalization)
@@ -126,6 +128,9 @@ export class UserTable {
   readonly sorting = input<SortingState>([]);
   readonly loading = input(false);
   readonly filtered = input(false);
+  /** 加载失败的原因：有值且没有行时显示错误态与重试，与"暂无数据"区分。 */
+  readonly loadError = input<string | null>(null);
+  readonly retry = output<void>();
 
   /**
    * 行操作按权限裁剪。默认全开，未启用权限模块的生成物行为不变；
@@ -159,6 +164,8 @@ export class UserTable {
   readonly manageRoles = output<UserManagementOutputDto>();
 
   protected readonly tableViewport = tableViewportSignal();
+  /** 主列内容外层：最窄一档下长名称截断，不撑宽表格（见 TITLE_COLUMN_META）。 */
+  protected readonly titleContentClass = TITLE_CONTENT_CLASS;
   private readonly tableFit = viewChild(TableFit);
   /** 实际折叠档位：视口给上限，容器放不下再降一档（见 TableFit）。 */
   private readonly foldLevel = computed(() => this.tableFit()?.level() ?? this.tableViewport());
@@ -168,7 +175,7 @@ export class UserTable {
       accessorKey: 'username',
       id: 'username',
       enableHiding: false,
-      meta: { priority: 'primary', locked: true },
+      meta: TITLE_COLUMN_META,
     },
     { accessorKey: 'email', id: 'email', meta: { priority: 'secondary' } },
     { accessorKey: 'roles', id: 'roles', enableSorting: false, meta: { priority: 'secondary' } },
@@ -219,7 +226,6 @@ export class UserTable {
     },
   }));
 
-  // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
@@ -256,12 +262,7 @@ export class UserTable {
     return user.isSuperAdmin && user.id !== this.authService.currentUser()?.id;
   }
 
-  /**
-   * 角色徽章样式。
-   *
-   * 角色由管理员自由创建，前端无法也不应预知有哪些角色，因此统一使用中性样式，
-   * 只用「是否默认角色」这类结构信息做弱区分；红色（destructive）专留给危险/删除操作。
-   */
+  /** 角色徽章样式：角色由管理员自由创建，统一用中性样式，只按是否默认角色弱区分。 */
   getRoleVariant(): BadgeVariant {
     return 'outline';
   }
@@ -270,6 +271,8 @@ export class UserTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.loadFailed': "Couldn't load the list",
+  'common.retry': 'Retry',
   'users.table.colUser': 'User',
   'users.table.colEmail': 'Email',
   'users.table.colRole': 'Role',

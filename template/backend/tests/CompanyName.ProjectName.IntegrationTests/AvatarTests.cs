@@ -1,6 +1,5 @@
 #if (LocalIdentity)
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -83,7 +82,13 @@ public sealed class AvatarTests(ProjectWebApplicationFactory factory) : IClassFi
 
         using var put = await user.Client.PutAsJsonAsync("/api/v1/auth/me/avatar", new { Avatar = "https://example.com/a.png" });
 
+        // 入参校验失败：字段错误落在 avatar 上，不带业务码，头像不变
         Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
+        using var body = JsonDocument.Parse(await put.Content.ReadAsStringAsync());
+        Assert.False(body.RootElement.TryGetProperty("code", out _));
+        Assert.Contains(body.RootElement.GetProperty("errors").EnumerateArray(),
+            error => error.GetProperty("field").GetString() == "avatar");
+        Assert.Null(await ReadAvatarAsync(user.Client));
     }
 
     [Fact]

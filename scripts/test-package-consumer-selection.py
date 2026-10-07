@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 import xml.etree.ElementTree as ET
 import zipfile
@@ -33,16 +34,16 @@ def main():
         packages[name] = path
     assert len(graph) > 1, 'complete candidate feed required'
     plan_file = out / 'plan.json'
-    subprocess.run(['python3','scripts/plan-quality-checks.py','--tier','pr','--output',str(plan_file)],cwd=ROOT,check=True,stdout=subprocess.DEVNULL)
-    baseline = json.loads(plan_file.read_text())
+    subprocess.run([sys.executable,'scripts/plan-quality-checks.py','--tier','pr','--output',str(plan_file)],cwd=ROOT,check=True,stdout=subprocess.DEVNULL)
+    baseline = json.loads(plan_file.read_text(encoding='utf-8'))
     records = []
     def run(label, plan, feed, success=True, diagnostic=None):
-        plan_file.write_text(json.dumps(plan))
+        plan_file.write_text(json.dumps(plan), encoding='utf-8')
         command = ['pwsh','-NoProfile','-File','framework/build/test-package-consumption.ps1','-FeedPath',str(feed),'-ValidationPlanPath',str(plan_file)]
-        started=time.monotonic(); result=subprocess.run(command,cwd=ROOT,text=True,capture_output=True)
-        log=result.stdout+result.stderr; (out/(label+'.log')).write_text(log)
+        started=time.monotonic(); result=subprocess.run(command,cwd=ROOT,text=True, encoding='utf-8', errors='replace',capture_output=True)
+        log=result.stdout+result.stderr; (out/(label+'.log')).write_text(log, encoding='utf-8')
         records.append(dict(label=label,seconds=round(time.monotonic()-started,3),exit_code=result.returncode))
-        (out/'results.json').write_text(json.dumps(records,indent=2))
+        (out/'results.json').write_text(json.dumps(records,indent=2), encoding='utf-8')
         assert (result.returncode==0)==success,(label,log[-2500:])
         if diagnostic: assert diagnostic in log,(label,diagnostic,log[-2000:])
         print('PASS',label,flush=True)
@@ -56,7 +57,7 @@ def main():
         log=run(seed,dict(baseline,ConsumerProjects=[seed]),args.feed)
         assert f'selected {len(expected)} isolated consumers' in log
         assert f'Package consumption passed for {len(expected)} package(s)' in log
-        (out/(seed+'-expected.json')).write_text(json.dumps(sorted(expected)))
+        (out/(seed+'-expected.json')).write_text(json.dumps(sorted(expected)), encoding='utf-8')
     content_only=dict(baseline,Mode='frontend',FrameworkTests=False,ConsumerProjects=[])
     log=run('template-inputs-content-only',content_only,args.feed)
     assert 'Consumer build not applicable' in log and '> dotnet' not in log

@@ -42,25 +42,21 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 //#if (Impersonation)
 import { ImpersonationService } from '../../../../core/services/impersonation-service';
 //#endif
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
+import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
 import {
   CreateTenantInputDto,
   GetTenantsInputDto,
   TenantOutputDto,
   UpdateTenantInputDto,
-} from '../../../../shared/dtos/tenant.dto';
-import { PERMISSIONS } from '../../../../shared/models/permission';
-//#if (!IncludeLocalization)
-import { englishText } from '../../../../shared/utils/english-text';
-//#endif
-import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
+} from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
 
-/**
- * 租户管理页（仅宿主侧可见：租户用户的 current 权限里不会出现 App.Tenants）。
- *
- * 列表状态（分页、关键字）落在 URL 查询参数上，刷新与前进后退均可复原。
- */
+/** 租户管理页（仅宿主侧可见），列表状态（分页、关键字）落在 URL 查询参数上。 */
 @Component({
   selector: 'app-tenants',
   imports: [
@@ -107,6 +103,8 @@ export class Tenants {
   readonly tenants = signal<TenantOutputDto[]>([]);
   readonly totalCount = signal(0);
   readonly loading = signal(false);
+  /** 列表加载失败且没有旧行可保留时的原因：有值时表格显示错误态与重试，不显示"暂无数据"。 */
+  readonly loadError = signal<string | null>(null);
 
   // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
   readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
@@ -150,7 +148,12 @@ export class Tenants {
             this.loading.set(true);
             return this.tenantService.getTenants(this.queryFromParams(params)).pipe(
               catchError((error: unknown) => {
-                toast.error(applicationErrorMessage(error));
+                // 已有行时刷新失败：保留旧行，只做提示
+                if (this.tenants().length > 0) {
+                  toast.error(applicationErrorMessage(error));
+                } else {
+                  this.loadError.set(applicationErrorMessage(error));
+                }
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -160,6 +163,7 @@ export class Tenants {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((result) => {
+        this.loadError.set(null);
         this.tenants.set([...result.items]);
         this.totalCount.set(result.totalCount);
       });
@@ -250,10 +254,8 @@ export class Tenants {
 
   //#if (Impersonation)
   /**
-   * 以该租户管理员身份登录。
-   *
-   * 成功后整页跳转（由 ImpersonationService 负责）：会话 Cookie 被整体换掉，
-   * 权限、菜单、已加载的列表数据全部作废，留在本页逐个刷新必然漏掉某处。
+   * 以该租户管理员身份登录。成功后由 ImpersonationService 整页跳转：会话被整体替换，
+   * 本页状态全部作废。
    */
   async onImpersonate(tenant: TenantOutputDto): Promise<void> {
     const confirmed = await this.confirmService.open({

@@ -8,9 +8,7 @@ using System.Linq.Expressions;
 
 namespace Leistd.Ddd.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// 使用 EF Core 访问无强类型主键的实体。
-/// </summary>
+/// <summary>使用 EF Core 访问无强类型主键的实体。</summary>
 /// <remarks>
 /// 上下文经 <see cref="IDbContextProvider{TDbContext}"/> 取得，因此始终绑定当前工作单元已解析的连接；
 /// 不在工作单元内时每个写方法各自保存，在工作单元内只登记变更、由工作单元统一提交。
@@ -155,9 +153,7 @@ public class EfCoreRepository<TDbContext, TEntity>(
         await SaveChangesIfNeededAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// 在工作单元外立即保存更改。
-    /// </summary>
+    /// <summary>不在工作单元内时立即保存更改；在工作单元内时不操作。</summary>
     protected async Task SaveChangesIfNeededAsync(CancellationToken cancellationToken = default)
     {
         if (Uow.Current != null)
@@ -171,9 +167,7 @@ public class EfCoreRepository<TDbContext, TEntity>(
 }
 
 
-/// <summary>
-/// 使用 EF Core 访问具有强类型主键的实体。
-/// </summary>
+/// <summary>使用 EF Core 访问具有强类型主键的实体。</summary>
 /// <typeparam name="TDbContext">上下文类型。</typeparam>
 /// <typeparam name="TEntity">实体类型。</typeparam>
 /// <typeparam name="TKey">主键类型。</typeparam>
@@ -189,8 +183,7 @@ public class EfCoreRepository<TDbContext, TEntity, TKey>(
     public virtual async Task<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync(cancellationToken);
-        // 必须走 LINQ 查询而非 FindAsync：FindAsync 绕过全局查询过滤器（软删除/租户隔离），
-        // 会让按 Id 的读取越过隔离边界
+        // 走 LINQ 查询而非 FindAsync：FindAsync 可能返回已跟踪实体，绕过全局查询过滤器
         return await dbSet.FirstOrDefaultAsync(e => e.Id.Equals(id), cancellationToken);
     }
 

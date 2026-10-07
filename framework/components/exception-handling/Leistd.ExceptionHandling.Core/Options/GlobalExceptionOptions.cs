@@ -2,9 +2,7 @@ using Leistd.ExceptionHandling.Descriptors;
 
 namespace Leistd.ExceptionHandling.Options;
 
-/// <summary>
-/// 配置全局异常响应。
-/// </summary>
+/// <summary>全局异常响应配置。</summary>
 public class GlobalExceptionOptions
 {
     /// <summary>配置节名 <c>Leistd:GlobalException</c>。</summary>
@@ -61,7 +59,7 @@ public class GlobalExceptionOptions
 
     private static void ValidateStatusCode(int statusCode)
     {
-        if (statusCode is < 400 or > 599)
-            throw new ArgumentOutOfRangeException(nameof(statusCode), statusCode, "Exception status codes must be between 400 and 599.");
+        ArgumentOutOfRangeException.ThrowIfLessThan(statusCode, 400);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(statusCode, 599);
     }
 }

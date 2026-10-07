@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Leistd.Ddd.Infrastructure.Persistence.Interceptors;
 
-/// <summary>
-/// 在保存前初始化或换发实体的并发标记。
-/// </summary>
+/// <summary>在保存前初始化或换发实体的并发标记。</summary>
 /// <remarks>
 /// 领域代码只需给初值；漏写时插入前补种，使列不会带着 <see langword="null"/> 落库把并发校验废掉。
 /// 删除不动：它的校验用的正是读出来的原值。

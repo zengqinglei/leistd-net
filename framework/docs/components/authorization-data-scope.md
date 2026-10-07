@@ -1,6 +1,6 @@
 # 数据范围
 
-数据范围决定列表、统计、导出能看到**哪些候选数据**，在查询构造阶段翻译成 SQL 谓词而不是先加载再过滤。Framework 只定义策略与组合语义，「本人」「本部门」等业务概念由业务项目注册 Provider 实现。
+数据范围决定列表、统计、导出能看到哪些候选数据，在查询构造阶段翻译成 SQL 谓词而不是先加载再过滤。框架只定义策略与组合语义，「本人」「本部门」等业务概念由业务项目注册 Provider 实现。
 
 ## 何时使用
 
@@ -32,13 +32,15 @@ builder.Services.AddScoped<IDataScopeAssignmentProvider, OrganizationScopeAssign
 builder.Services.AddDataScopeProvider<Order, OwnOrderScopeProvider>();
 ```
 
-依赖调用方已注册 `IPermissionSubjectProvider`；`IDataScopeAssignmentProvider` 必须由业务项目提供，Framework 不规定范围分配存放在哪里（可以是角色配置表、组织架构，或外部策略服务）。
+依赖调用方已注册 `IPermissionSubjectProvider`；`IDataScopeAssignmentProvider` 由业务项目提供（角色配置表、组织架构或外部策略服务等）。
 
 ## 使用
 
 实现范围 Provider，返回谓词以便多个范围取并集：
 
 ```csharp
+using System.Linq.Expressions;
+
 public class OwnOrderScopeProvider : IDataScopeProvider<Order>
 {
     public const string Scope = "Own";
@@ -60,6 +62,8 @@ public class OwnOrderScopeProvider : IDataScopeProvider<Order>
 分配来源按操作返回范围；"能看"不等于"能改"：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
     : IDataScopeAssignmentProvider
 {
@@ -87,6 +91,8 @@ public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
 列表、总数和导出必须复用施加范围后的同一查询：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Read, ct);
 
 if (!string.IsNullOrWhiteSpace(keyword))
@@ -101,6 +107,8 @@ var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).T
 批量操作应先在范围内定位目标并核对数量，不能静默跳过越权项：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Update, ct);
 
 var targets = await scoped.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
@@ -140,18 +148,19 @@ DDD 仓储与分页组合见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 1. 主体不可识别：返回空结果集（`Where(_ => false)`），默认拒绝而不是放行全部。
 2. `IsSuperAdmin`：原样返回查询，不施加范围。
 3. 没有任何分配：返回空结果集。
-4. 分配了一个没有对应 Provider 的范围：跳过该分配，**不会**因此放宽范围。
-5. 多个分配之间取**并集**（OR）：一个主体常常同时拥有多种范围（例如"本人"加"某几个组织"）。
-6. 谓词签名不可空：`_ => true` 表示"全部可见"，`_ => false` 表示"本范围不贡献可见性"。并集之下这两者含义分明，不存在"没返回谓词"这一态——它一旦被解释成"不限制"，整张表就当场放开。
+4. 分配了一个没有对应 Provider 的范围：跳过该分配，不放宽范围。
+5. 多个分配之间取并集（OR）。
+6. 谓词不可空：`_ => true` 表示“全部可见”，`_ => false` 表示“本范围不贡献可见性”。
 
 ## 注意事项
 
-- **谓词必须可被数据库翻译**。不要在 `BuildPredicateAsync` 返回的表达式里调用只能客户端求值的方法，也不要先把候选加载到内存再过滤。请在**关系型** Provider 上编写测试：EF Core 的 InMemory Provider 全部在内存求值，不可翻译的谓词会静默通过，等于没有验证。
-- **列表、总数、导出、批量必须共用同一个范围入口**，否则分页总数会与实际可见数据不一致。
-- **读和写可以用不同范围**。`DataScopeAssignment` 带 `Operation` 维度，不要假设"能看就能改"。
-- **硬边界不归本组件管**。租户隔离、软删除应通过 EF Core 全局查询过滤器始终生效，因此永远与业务范围做 AND，不会被这里的并集放宽。
-- **不要把集合关系展开成资源 ACL**。组织或负责人一变就要重写大量记录并产生孤儿；反之，文档分享这类一次性授予也不适合做成范围。
-- **同一资源既有范围又有 ACL 授予时，组合公式由[资源实例授权](./authorization-resource.md#将-acl-合并进列表)定义**：`(数据范围 OR ACL 允许) AND NOT ACL 拒绝`。本组件只承担 `OR` 的那一半——它没有"拒绝"语义，`ApplyAsync` 之后仍须在同一个查询入口扣除 ACL 拒绝集合，否则"范围放行但被显式拒绝"的资源仍然可见。ACL 允许要并入并集时可写成一个 `IDataScopeProvider`，但主体必须同时拿到对应 `ScopeName` 的 `DataScopeAssignment`——ACL 记录本身不产生分配。
+- 谓词必须可被数据库翻译，不要依赖客户端求值或先加载候选。在关系型 Provider 上编写测试：EF Core InMemory 不验证可翻译性。
+- 列表、总数、导出、批量必须共用同一个范围入口，否则分页总数与实际可见数据不一致。
+- 读和写可以用不同范围：`DataScopeAssignment` 带 `Operation` 维度。
+- 租户隔离、软删除等全局查询过滤器始终与业务范围取交集，不会被这里的并集放宽。
+- 不要把组织、负责人这类集合关系展开成资源 ACL；文档分享这类一次性授予也不适合做成范围。
+- 同一资源既有范围又有 ACL 时，组合公式见[资源实例授权](./authorization-resource.md#将-acl-合并进列表)：`(数据范围 OR ACL 允许) AND NOT ACL 拒绝`。
+  本组件只承担 `OR` 的那一半，`ApplyAsync` 之后仍须在同一查询入口扣除 ACL 拒绝集合。ACL 允许并入并集时可写成一个 `IDataScopeProvider`，主体还需拿到对应 `ScopeName` 的分配。
 - `IPermissionSubjectProvider` 与 `IDataScopeAssignmentProvider` 都没有默认实现，必须由业务项目提供。
 
 ## 相关

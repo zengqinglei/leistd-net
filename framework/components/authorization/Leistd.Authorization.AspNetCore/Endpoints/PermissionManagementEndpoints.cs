@@ -6,9 +6,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace Leistd.Authorization.AspNetCore.Endpoints;
 
-/// <summary>
-/// 权限管理的 HTTP 端点。
-/// </summary>
+/// <summary>权限管理的 HTTP 端点。</summary>
 public static class PermissionManagementEndpoints
 {
     /// <summary>端点名前缀，宿主按名字给个别端点追加约定时使用。</summary>

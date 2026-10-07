@@ -2,14 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.DependencyInjection.Extensions;
 
-/// <summary>
-/// 「同一服务只能有一个权威实现」的注册期断言。
-/// </summary>
+/// <summary>“同一服务只能有一个权威实现”的注册期断言。</summary>
 public static class SingleAuthoritativeServiceExtensions
 {
-    /// <summary>
-    /// 验证已有的非 keyed 注册均匹配预期实现类型与生命周期。
-    /// </summary>
+    /// <summary>验证已有的非 keyed 注册均匹配预期实现类型与生命周期。</summary>
     /// <remarks>
     /// <para>用于只能有一个权威实现的存储，不用于允许宿主替换的 Manager 等服务。
     /// 本方法只验证，不登记服务；通过后使用 <c>TryAdd*</c> 注册。</para>

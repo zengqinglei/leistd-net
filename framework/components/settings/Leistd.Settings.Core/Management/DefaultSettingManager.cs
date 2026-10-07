@@ -22,18 +22,14 @@ namespace Leistd.Settings.Management;
 /// <para>取值校验依次是：空串拒绝、<see cref="ISettingDefinition.ValueType"/> 与区间、
 /// <see cref="ISettingDefinition.AllowedValues"/>、宿主注册的 <see cref="ISettingValueValidator"/>。
 /// 清除（值为 <see langword="null"/>）只校验名称与层级。</para>
-/// <para>写入后让同一作用域的 <see cref="ISettingProvider"/> 重新读取：它按作用域记忆化，
-/// 不作废的话，同一请求里"先写后读"读到的是写入前的值。</para>
+/// <para>写入后作废同一作用域 <see cref="ISettingProvider"/> 的记忆化结果，同一请求里先写后读能读到新值。</para>
 /// </remarks>
 /// <param name="definitionManager">设置定义。</param>
 /// <param name="store">设置值存储。</param>
 /// <param name="settingProvider">同一作用域的设置读取器，写入后作废它的记忆化结果。</param>
 /// <param name="validators">业务取值校验器。</param>
 /// <param name="eventBus">发布变更事件；未注册本地事件总线时不发布。</param>
-/// <param name="dataProtectionProvider">
-/// 机密设置（<see cref="ISettingDefinition.IsEncrypted"/>）的加密用宿主的 Data Protection；
-/// 没注册时只有写入机密设置会失败。
-/// </param>
+/// <param name="dataProtectionProvider">机密设置的加密用宿主的 Data Protection；为 <see langword="null"/> 时只有写入机密设置会失败。</param>
 /// <param name="localizerFactory">校验失败时按请求语言取设置显示名；未启用本地化时用定义上的显示名。</param>
 /// <param name="managementOptions">提供显示名词条所在的资源类型。</param>
 public sealed class DefaultSettingManager(
@@ -60,7 +56,7 @@ public sealed class DefaultSettingManager(
     {
         var definition = definitionManager.GetOrNull(name) ?? throw new UndefinedSettingException(name);
 
-        // 只有这三个是"能落到某一行"的层级：None 不是层级，All 是定义侧的"两层都允许"。
+        // 只有这三个能落到某一行：None 不是层级，All 是定义侧的“两层都允许”。
         if (scope is not (SettingScopes.Tenant or SettingScopes.User or SettingScopes.Host)
             || !definition.Scopes.HasFlag(scope))
         {
@@ -101,14 +97,13 @@ public sealed class DefaultSettingManager(
         }
     }
 
-    // 报错里给用户看的是界面上的字段名，不是技术键；只在失败路径上解析，按当前请求语言取词条
+    // 报错用界面上的显示名，只在失败路径上按当前请求语言解析
     private string DisplayName(ISettingDefinition definition)
         => SettingDisplayNames.Resolve(
             definition,
             SettingDisplayNames.CreateLocalizer(localizerFactory, managementOptions?.Value));
 
-    // 只有 null 表示清除。空串若放行，会作为真实值落库：既挡住向下一层的回落，
-    // 又被消费方当成"未设置"——一个值同时是两种意思。
+    // 只有 null 表示清除；空串会挡住回落、又被消费方当成未设置，因此拒绝
     private void EnsureWellFormed(ISettingDefinition definition, string value)
     {
         if (value.Length == 0)

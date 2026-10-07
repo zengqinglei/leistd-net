@@ -3,17 +3,11 @@ using Leistd.Notifications.Dtos;
 
 namespace Leistd.Notifications.Stores;
 
-/// <summary>
-/// 持久化用户通知、已读状态和未读计数。
-/// </summary>
+/// <summary>持久化用户通知、已读状态和未读计数。</summary>
 public interface INotificationStore
 {
     /// <summary>保存通知。</summary>
-    /// <param name="notification">
-    /// <b>已定案</b>的用户通知：<c>Id</c>、<c>CreationTime</c>、<c>IsRead</c> 由发布器在收件人
-    /// 边界给定。存储只负责落库，<b>不生成也不替换</b>这三项——替换会让客户端手里的 ID 与库里
-    /// 的对不上，标记已读永远命不中。
-    /// </param>
+    /// <param name="notification">已定案的用户通知：存储原样保存 <c>Id</c>、<c>CreationTime</c>、<c>IsRead</c>，不生成也不替换。</param>
     /// <param name="userId">收件人。</param>
     /// <param name="ct">取消令牌。</param>
     Task SaveAsync(NotificationOutputDto notification, string userId, CancellationToken ct = default);
@@ -45,7 +39,7 @@ public interface INotificationStore
     Task<bool> DeleteAsync(string notificationId, string userId, CancellationToken ct = default);
 
     /// <summary>删除用户的全部通知，返回删除条数。</summary>
-    /// <remarks>用于"清空通知"，也用于删除账号时一并清理——否则被删用户的通知会作为孤儿行一直留在表里。</remarks>
+    /// <remarks>用于清空通知，也用于删除账号时清理。</remarks>
     /// <param name="userId">收件人。</param>
     /// <param name="ct">取消令牌。</param>
     Task<int> DeleteAllAsync(string userId, CancellationToken ct = default);

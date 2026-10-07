@@ -9,8 +9,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.OperationRecords.EntityFrameworkCore.Retention;
 
-// 逐库执行：IgnoreQueryFilters 只能放开同一个库里的租户，独立库租户的记录在它自己的库里。
-// 采用 AddRange + RemoveRange 而非 ExecuteDelete：兼容所有 EF 提供程序（含内存库），并复用 DbContext 上的拦截器。
+// 逐库执行：IgnoreQueryFilters 只能放开同一个库里的租户。
+// 用 AddRange + RemoveRange 而非 ExecuteDelete：兼容所有 EF 提供程序（含内存库），并经过 DbContext 拦截器。
 internal sealed class OperationRecordArchiveService<TDbContext>(
     ITenantDatabaseRunner databaseRunner,
     IUnitOfWorkManager unitOfWorkManager,
@@ -29,7 +29,7 @@ internal sealed class OperationRecordArchiveService<TDbContext>(
         ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);
 
         var archived = 0;
-        // 停用租户的库照样要归档：保留期是合规义务，不随租户停用消失
+        // 停用租户的库照样归档
         var result = await databaseRunner.ForEachDatabaseAsync(ConnectionStringName, activeOnly: false, async (_, ct) =>
         {
             archived += await ArchiveCurrentDatabaseAsync(cutoffUtc, batchSize, ct);
@@ -50,7 +50,7 @@ internal sealed class OperationRecordArchiveService<TDbContext>(
             using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
-            // IgnoreQueryFilters 是必需的：租户过滤器只放行当前上下文那一个租户，同库其余租户的记录不加就永远留着
+            // IgnoreQueryFilters：同库其余租户的记录一并归档
             var batch = await dbContext.Set<OperationRecord>()
                 .IgnoreQueryFilters()
                 .Where(record => record.CreationTime < cutoffUtc)
@@ -67,7 +67,7 @@ internal sealed class OperationRecordArchiveService<TDbContext>(
             dbContext.Set<OperationRecordArchive>().AddRange(batch.Select(record => OperationRecordArchive.From(record, archivedTime)));
             dbContext.Set<OperationRecord>().RemoveRange(batch);
 
-            // 一次提交覆盖"写归档 + 删原表"：分两次会出现"已删除但没归档"的窗口，那是不可逆的数据丢失
+            // 写归档与删原表一次提交，不出现已删除但未归档的窗口
             await unitOfWork.CompleteAsync(cancellationToken);
 
             total += batch.Count;

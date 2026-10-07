@@ -47,9 +47,9 @@ import {
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -59,7 +59,7 @@ import {
   tableStateToQuery,
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
-import { RoleBriefDto } from '../../models/role.dto';
+import { RoleBriefDto } from '../../dtos/role.dto';
 // 裁掉这几个 DTO 之后剩余项能并成一行，而 prettier 会要求那样写；
 // 条件块不能随形态换折行方式，因此在这里固定住
 // prettier-ignore
@@ -75,7 +75,7 @@ import {
   UpdateUserInputDto,
   //#endif
   UserManagementOutputDto,
-} from '../../models/user-management.dto';
+} from '../../dtos/user-management.dto';
 import { RoleService } from '../../services/role-service';
 import { UserManagementService } from '../../services/user-management-service';
 //#if (LocalIdentity)
@@ -157,6 +157,8 @@ export class Users {
   users = signal<UserManagementOutputDto[]>([]);
   totalRecords = signal(0);
   loading = signal(false);
+  /** 列表加载失败且没有旧行可保留时的原因：有值时表格显示错误态与重试，不显示"暂无数据"。 */
+  loadError = signal<string | null>(null);
 
   // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
   readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
@@ -239,10 +241,7 @@ export class Users {
   ]);
   //#endif
   //#endif
-  /**
-   * 角色筛选项来自角色 API：新建的角色立即出现在筛选器里。
-   * 不要改回硬编码列表——那样筛选项会与后端实际角色脱节。
-   */
+  /** 角色筛选项来自角色 API，新建的角色立即出现在筛选器里。 */
   readonly availableRoles = signal<RoleBriefDto[]>([]);
   readonly roleOptions = computed(() =>
     this.availableRoles().map((role) => ({
@@ -299,7 +298,12 @@ export class Users {
             this.loading.set(true);
             return this.service.getUsers(this.queryFromParams(params)).pipe(
               catchError((error: unknown) => {
-                this.showRequestError(error);
+                // 已有行时刷新失败：保留旧行，只做提示
+                if (this.users().length > 0) {
+                  this.showRequestError(error);
+                } else {
+                  this.loadError.set(applicationErrorMessage(error));
+                }
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -309,6 +313,7 @@ export class Users {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((data) => {
+        this.loadError.set(null);
         this.users.set(data.items);
         this.totalRecords.set(data.totalCount);
       });

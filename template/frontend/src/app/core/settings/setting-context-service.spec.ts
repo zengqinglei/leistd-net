@@ -98,13 +98,7 @@ describe('SettingContextService', () => {
   });
 
   //#if (IncludeLocalization)
-  /**
-   * 日期书写用的 locale 取自**活动语言**，不是语言设置那一项。
-   *
-   * 两者不是同一个东西：设置是这份偏好的持久化，活动语言才是此刻界面正在用的那个。
-   * 从快照去推导，就会出现"文案已经换了、日期还按旧地区写"——切语言时要等快照回来，
-   * 写入失败时更是一直分叉，访客在登录页切的语言则根本推不出来。
-   */
+  /** 日期书写用的 locale 取自活动语言而非语言设置：从快照推导会让文案与日期分叉。 */
   it('derives the date locale from the active language, not the settings snapshot', async () => {
     const language = TestBed.inject(LanguageService);
     expect(service.displayLocale()).toBe('en');
@@ -112,8 +106,7 @@ describe('SettingContextService', () => {
     await language.applyAccountLang('zh-CN');
     expect(service.displayLocale()).toBe('zh-CN');
 
-    // 快照里那一项仍是旧值也不影响：把设置应用到活动语言上是会话上下文的事，
-    // 本服务不再从快照里另算一份"当前语言"。
+    // 快照里那一项仍是旧值也不影响：把设置应用到活动语言由会话上下文负责。
     const load = service.load();
     http
       .expectOne('/api/v1/settings')

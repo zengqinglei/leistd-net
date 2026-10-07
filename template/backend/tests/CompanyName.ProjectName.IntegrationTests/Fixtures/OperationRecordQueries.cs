@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 #endif
 using Microsoft.AspNetCore.Mvc.Testing;
 
-namespace CompanyName.ProjectName.IntegrationTests;
+namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
 /// <summary>按实际输出适配读取证据：数据库经受保护端点，日志经真实 Serilog sink。</summary>
 internal static class OperationRecordQueries

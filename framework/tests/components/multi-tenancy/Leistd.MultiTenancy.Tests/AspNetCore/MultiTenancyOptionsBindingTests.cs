@@ -8,8 +8,8 @@ using Xunit;
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
 /// <summary>
-/// 传了委托也绑定配置节：此前委托重载完全不读 <c>Leistd:MultiTenancy</c>，宿主只想改一项时，
-/// 配置文件里的其余项被静默忽略。
+/// 传了委托也绑定配置节：委托重载若不读 <c>Leistd:MultiTenancy</c>，宿主只想改一项时，
+/// 配置文件里的其余项会被静默忽略。
 /// </summary>
 public class MultiTenancyOptionsBindingTests
 {

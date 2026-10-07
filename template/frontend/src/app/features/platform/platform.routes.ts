@@ -7,12 +7,9 @@ import { permissionGuard } from '../../core/guards/permission-guard';
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from '../../core/i18n/translation-scopes';
 //#endif
-import { PERMISSIONS } from '../../shared/models/permission';
+import { PERMISSIONS } from '../../shared/constants/permission.constants';
 
-/**
- * 平台管理模块路由配置
- * 用于 Default Layout 的子路由
- */
+/** 平台管理模块路由，作为 Default Layout 的子路由。 */
 export const PLATFORM_ROUTES: Routes = [
   {
     path: '',
@@ -43,16 +40,16 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.roles.default },
   },
   {
-    // 系统设置在平台侧：读者是管理员，影响本租户（或宿主）下所有人。
-    // 一个后端设置分组就是一个面板（:group 是分组标识的短横线写法），面板清单由后端决定；
-    // 空路径由外壳在设置取回后导向第一个面板，见 SystemSettings。
+    // 系统设置：一个后端设置分组就是一个面板（:group 是分组标识的短横线写法），空路径由外壳导向第一个面板。
     path: 'settings',
     //#if (IncludeLocalization)
     providers: [provideTranslocoScope('settings')],
     resolve: { translations: resolveTranslationScopes },
     //#endif
     loadComponent: () =>
-      import('../settings/system-settings/system-settings').then((m) => m.SystemSettings),
+      import('../settings/components/system-settings/system-settings').then(
+        (m) => m.SystemSettings,
+      ),
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.settings.default },
     children: [
@@ -60,7 +57,9 @@ export const PLATFORM_ROUTES: Routes = [
       {
         path: ':group',
         loadComponent: () =>
-          import('../settings/setting-section/setting-section').then((m) => m.SettingSection),
+          import('../settings/components/setting-section/setting-section').then(
+            (m) => m.SettingSection,
+          ),
         data: { scope: 'system' },
       },
     ],

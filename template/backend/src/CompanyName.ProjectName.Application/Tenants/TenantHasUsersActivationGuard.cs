@@ -5,10 +5,7 @@ using CompanyName.ProjectName.Application.Tenants.Errors;
 #endif
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 
@@ -41,8 +38,7 @@ internal sealed class TenantHasUsersActivationGuard(
         if (userCount == 0)
         {
             throw new BusinessException(TenantErrorCodes.ActivateWithoutUsers,
-                    "This tenant has no users yet; activating it would let nobody in. Finish provisioning first.")
-                ;
+                    "This tenant has no users yet; activating it would let nobody in. Finish provisioning first.");
         }
     }
 }

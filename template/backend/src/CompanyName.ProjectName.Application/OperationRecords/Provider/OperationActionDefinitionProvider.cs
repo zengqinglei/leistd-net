@@ -1,8 +1,5 @@
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 
 namespace CompanyName.ProjectName.Application.OperationRecords.Provider;
 
@@ -53,6 +50,10 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.RoleCreated,
+            OperationRecordCategories.Account,
+            OperationVisibility.Tenant);
+        context.Add(
+            OperationRecordActions.RoleUpdated,
             OperationRecordCategories.Account,
             OperationVisibility.Tenant);
         context.Add(
@@ -111,12 +112,44 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
                 OperationSeverity.Critical);
         }
 
+#if (OpenIddictServer)
+        // 开放应用：决定哪个客户端能取得什么令牌，归"授权"类。它是宿主全局资源（OpenIddict 表不分租户），
+        // 可见性必须是 Host，否则租户管理员会看到全系统的客户端变更。
+        // 重置密钥是 Critical：旧密钥立即失效，拿到新密钥的人即拥有该客户端的全部能力。
+        foreach (var openApplicationAction in new[]
+                 {
+                     OperationRecordActions.OpenApplicationCreated,
+                     OperationRecordActions.OpenApplicationUpdated,
+                     OperationRecordActions.OpenApplicationDeleted
+                 })
+        {
+            context.Add(
+                openApplicationAction,
+                OperationRecordCategories.Authorization,
+                OperationVisibility.Host,
+                OperationSeverity.Notice);
+        }
+
+        context.Add(
+            OperationRecordActions.OpenApplicationSecretReset,
+            OperationRecordCategories.Authorization,
+            OperationVisibility.Host,
+            OperationSeverity.Critical);
+
+#endif
         // 设置变更：作用域随目标标识带出，可见性取租户级——租户设置的变更租户要看得见。
         // 宿主级设置的记录由写入时的租户上下文（null）自然落到宿主侧。
         context.Add(
             OperationRecordActions.SettingChanged,
             OperationRecordCategories.Configuration,
             OperationVisibility.Tenant);
+#if (LocalIdentity && Email)
+        // 只有宿主能发测试邮件；租户里的尝试被拒后记在租户层，租户管理员看得见自己人试过。
+        context.Add(
+            OperationRecordActions.SettingTestEmailSent,
+            OperationRecordCategories.Configuration,
+            OperationVisibility.Tenant);
+#endif
 
         // 导出审计日志本身是安全事件：谁把历史带走了必须留痕。
         // 可见性取租户级——导出的是该租户自己的记录，租户管理员有权知道谁导走了。

@@ -4,13 +4,8 @@
 <ng-container>
 <!--#endif-->
   <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
-    <!-- 宽度必须用 min-w 定，只写 max-w 撑不开：弹窗挂在按内容撑开的浮层容器里，
-       w-full 只等于"内容那么宽"，max-w 只是上限。本弹窗内容是几行标识加连接列表，
-       不设下限时实测只有约 282px，连接行里的两个按钮会把名字挤成省略号。
-       写法与 open-application-edit-dialog 一致（min-w 取定宽与视口减边距中的较小者）；
-       42rem 比它的 64rem 小一档，因为这里是详情而不是复杂表单。
-       sm:max-w-2xl 同为 42rem，让大屏上下限与上限相等，不留"最小比最大还大"的歧义。
-       同时约束高度：连接条数不受限，不加 max-h 会顶出视口。 -->
+    <!-- 宽度用 min-w 定：弹窗挂在按内容撑开的浮层里，只写 max-w 撑不开（不设下限约 282px）。
+         写法与 open-application-edit-dialog 一致，42rem 小一档；同时约束高度，连接条数不受限。 -->
     <hlm-dialog-content
       *hlmDialogPortal
       class="flex max-h-[calc(100dvh-2rem)] min-w-[min(42rem,calc(100vw_-_2rem))] flex-col overflow-hidden sm:max-w-2xl"
@@ -117,10 +112,7 @@
                       </div>
                     </div>
                   } @empty {
-                    <!--
-                    去掉标志位之后，"故意不分库"与"漏登记"在数据上没有任何区别，
-                    这句话是界面上唯一能让人看出当前是哪一种的东西，不能省。
-                  -->
+                    <!-- 空列表须显式说明不分库，否则与漏登记无法区分。 -->
                     <p class="text-muted-foreground text-sm">{{ t('tenants.connectionsEmpty') }}</p>
                   }
                 </div>

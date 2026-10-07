@@ -11,6 +11,10 @@ namespace Leistd.ServiceClient.AspNetCore;
 public static class DependencyInjection
 {
     /// <summary>注册请求时读取的访问令牌适配器。必须传入宿主的 Bearer 验证方案，不能传 Cookie 方案。</summary>
+    /// <remarks>
+    /// 可重复调用：适配器只注册一次。验证方案以首次调用为准，之后传入的不同方案被忽略；
+    /// 已注册其他 <see cref="IUserAccessTokenAccessor"/> 时不覆盖。
+    /// </remarks>
     public static IServiceCollection AddUserAccessTokenAccessor(this IServiceCollection services, string authenticationSchemeName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authenticationSchemeName);

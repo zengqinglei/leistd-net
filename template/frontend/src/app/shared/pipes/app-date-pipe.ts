@@ -1,11 +1,8 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 /**
- * 语义槽位：调用点声明"这里要显示什么、要多细"。
- *
- * 精度是**槽位**的属性，不是用户偏好。一列要不要秒由这一列的用途决定：通知列表要窄，
- * 审计详情要能对时。把精度提成一个全局设置，等于让这两处被同一个值拽着走，
- * 而用户根本不会为了看通知去改一个叫"日期格式"的开关。
+ * 语义槽位：调用点按用途声明显示什么、要多细。精度属于槽位而不是用户偏好：通知列表要窄，
+ * 审计详情要能对时。
  */
 const SLOTS = {
   full: { date: 'full', time: true, seconds: true },
@@ -27,12 +24,7 @@ interface Writing {
   stripComma: boolean;
 }
 
-/**
- * `YYYY-MM-DD HH:mm:ss`，24 小时制。
- *
- * 也是**拿不到界面语言时的回落**（未登录、设置还没加载、浏览器不报语言）：它不随环境漂移，
- * 且年月日顺序固定，不会被读成别的日期。
- */
+/** `YYYY-MM-DD HH:mm:ss`，24 小时制；也是拿不到界面语言时的回落：不随环境漂移，年月日顺序固定。 */
 const ISO_DASHED: Writing = {
   locale: 'en-CA',
   month: '2-digit',
@@ -42,26 +34,17 @@ const ISO_DASHED: Writing = {
 };
 
 /**
- * 按界面语言的地区习惯书写，月份用**名称**而不是数字。
- *
- * 数字月日在跨地区时是有歧义的——`09/04/2026` 在美国是 9 月 4 日，在英国是 4 月 9 日，
- * 而看的人无从判断这一列用了哪一种。月份名把这个歧义直接消掉：`Sep 4, 2026` 只有一种读法。
- * 12/24 小时制交给 locale，那正是"地区习惯"的一部分。
+ * 按界面语言的地区习惯书写，月份用名称：数字月日跨地区有歧义（`09/04/2026` 美英读法相反）。
+ * 12/24 小时制交给 locale。
  */
 function regional(locale: string): Writing {
   return { locale, month: 'short', day: 'numeric', stripComma: false };
 }
 
 /**
- * 按界面语言语种覆盖书写方式。
- *
- * 中文是**唯一一处刻意例外**：CLDR 给 zh 的数字写法是 `2026/09/04`（斜杠），
- * 而中文软件的惯例和 GB/T 7408 都是短横线，所以改用同序、带短横线的 en-CA 渲染，
- * 并固定 24 小时制。
- *
- * 不要把这里扩成一张 locale → pattern 表：那等于把"日期格式"重新做成了配置，
- * 而手写 pattern 填错既不报错也查不出来，只会静默渲染出错误的日期。
- * 要给某个语种改写法，就在这里加一条并说明依据。
+ * 按界面语言语种覆盖书写方式。中文是唯一例外：CLDR 的 zh 写法用斜杠，中文惯例与 GB/T 7408
+ * 用短横线，因此改用同序带短横线的 en-CA 并固定 24 小时制。不要扩成 locale → pattern 表：
+ * 手写 pattern 填错不报错，只会静默渲染错误日期。新增覆盖须说明依据。
  */
 const WRITING_OVERRIDES: Record<string, Writing> = {
   zh: ISO_DASHED,
@@ -99,12 +82,9 @@ export function formatAppDate(
 }
 
 /**
- * 把按 {@link formatAppDate} 的 `date` 槽位写出的日期解析回**浏览器本地**的日历日；
- * 同时接受 `YYYY-MM-DD`（任何语言下都认，手输最省事）。认不出就返回 `null`。
- *
- * 不为每种语言写一套解析规则：先找四位年份，再把这一年的每一天按同一写法渲染出来比对
- * （忽略大小写、空白与标点）。写法由 `Intl` 决定、随语言变化，逐语种手写的解析规则
- * 迟早与它对不上；反查则天然对称——能显示出来的就能认回去，认回去的一定是存在的日期。
+ * 把 {@link formatAppDate} 的 `date` 槽位写法解析回浏览器本地的日历日，也接受 `YYYY-MM-DD`；
+ * 认不出返回 `null`。不逐语种写解析规则：找出四位年份后把这一年每天按同一写法渲染比对
+ * （忽略大小写、空白与标点），能显示的就能认回，认回的一定是存在的日期。
  */
 export function parseAppCalendarDate(text: string, locale?: string): Date | null {
   const trimmed = text.trim();
@@ -204,25 +184,13 @@ function optionsFor(format: AppDateFormat, writing: Writing): Intl.DateTimeForma
 }
 
 /**
- * 按指定 IANA 时区渲染时刻。
+ * 按指定 IANA 时区渲染时刻。不用 Angular 的 `date` 管道：传 IANA 名会静默回落到浏览器时区，
+ * 固定偏移也表达不了夏令时；`Intl.DateTimeFormat` 直接接受 IANA 名。
  *
- * **不要用 Angular 自带的 `date` 管道渲染业务时间**：它的时区参数只接受 `+0800` 这类固定偏移，
- * 传 IANA 名会在内部 `Date.parse` 失败后**静默回落到浏览器时区**——设置看着生效，实际没有。
- * 固定偏移也表达不了夏令时（同一地区冬夏偏移不同）。这里改用原生 `Intl.DateTimeFormat`，
- * 它直接接受 IANA 名并自带夏令时规则。
- *
- * 三个维度互不相干，由三个不同的地方决定：
- * - `format` 是**语义槽位**（这一处要日期还是要时刻、要不要秒），由调用点决定；
- * - `timeZone` 决定**哪一刻**，来自 `SettingContextService.timeZone`；
- * - `locale` 决定**怎么写**，来自 `SettingContextService.displayLocale`（界面语言）。
- *
- * 写法刻意由**界面语言**驱动，不由时区驱动：时区回答"哪一刻"，locale 才编码"日期怎么读"。
- * Web 平台也没有时区→地区的映射——`Intl` 只给时区 id，要从 `Asia/Shanghai` 推出 `zh-CN`
- * 得自带一份 IANA `zone.tab` 的时区→国家表，而它既会随时区拆分改名而漂移，
- * 又不是个函数（`Europe/Zurich` 对应德/法/意三种写法，`UTC` 没有国家）。
- *
- * 时区与语言都由调用方传入，管道保持 pure：入参变化时 Angular 自会重算，
- * 不必每轮变更检测都跑一遍。
+ * `format` 是语义槽位，由调用点决定；`timeZone` 决定哪一刻，来自 `SettingContextService.timeZone`；
+ * `locale` 决定怎么写，来自 `SettingContextService.displayLocale`（界面语言），不由时区推导：
+ * 时区与地区不是一一对应（`Europe/Zurich` 有三种写法，`UTC` 没有国家）。两者由调用方传入，
+ * 管道保持 pure。
  */
 @Pipe({ name: 'appDate' })
 export class AppDate implements PipeTransform {

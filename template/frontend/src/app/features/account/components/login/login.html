@@ -12,7 +12,6 @@
         (cancelled)="twoFactorToken.set(null)"
       />
     } @else {
-      <!-- Form Header -->
       <div class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold tracking-tight">{{ t('account.login.title') }}</h2>
         <p class="text-muted-foreground text-sm">{{ t('account.login.subtitle') }}</p>
@@ -20,7 +19,6 @@
 
       <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
 <!--#if (IncludeMultiTenancy)-->
-        <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附租户提示头 -->
         <div hlmField>
           <label hlmFieldLabel for="tenantName">{{ t('account.login.tenant') }}</label>
           @if (tenantContext.current(); as tenant) {
@@ -32,6 +30,7 @@
                 <button
                   hlmInputGroupButton
                   type="button"
+                  size="icon-xs"
                   align="inline-end"
                   [attr.aria-label]="t('account.login.tenantClear')"
                   (click)="clearTenant()"
@@ -86,8 +85,6 @@
             <hlm-field-error forceShow>{{ t(error) }}</hlm-field-error>
           }
           @if (hostProbe() === 'failed') {
-            <!-- 探测失败时登录被挡住，必须给一条出路：不给重试，用户只剩刷新整页，
-             而表单可能已经填好了。 -->
             <!-- 按钮套一层 div：hlm-field 的容器给直接子元素铺了整行宽的规则，
              那条规则的优先级高于按钮自己的 w-fit，套一层让 div 去铺满，
              按钮就按内容宽度收住了。 -->
@@ -107,7 +104,6 @@
         </div>
 
 <!--#endif-->
-        <!-- Username/Email -->
         <div hlmField>
           <label hlmFieldLabel for="usernameOrEmail">{{
             t('account.login.usernameOrEmail')
@@ -115,6 +111,7 @@
           <input
             hlmInput
             id="usernameOrEmail"
+            autocomplete="username"
             class="w-full"
             [formField]="loginForm.usernameOrEmail"
             [placeholder]="t('account.login.usernameOrEmailPlaceholder')"
@@ -126,13 +123,13 @@
           }
         </div>
 
-        <!-- Password -->
         <div hlmField>
           <label hlmFieldLabel for="password">{{ t('account.login.password') }}</label>
           <hlm-input-group>
             <input
               hlmInputGroupInput
               id="password"
+              autocomplete="current-password"
               [type]="showPassword() ? 'text' : 'password'"
               [formField]="loginForm.password"
               [placeholder]="t('account.login.passwordPlaceholder')"
@@ -167,9 +164,6 @@
           >
         </div>
 
-        <!-- Submit Button -->
-        <!-- 租户上下文没定案时不放行：服务端按主机名解析，此时提交等于在界面上显示着
-         一个租户、请求却落到另一个上下文里。 -->
         <button hlmBtn type="submit" class="w-full" [disabled]="isLoading() || authBlocked()">
           @if (isLoading()) {
             <hlm-spinner class="text-base" data-icon="inline-start" />
@@ -199,16 +193,14 @@
             </p>
           }
         } @else if (hasRenderableExternalProvider()) {
-          <!-- Divider -->
-          <div class="relative flex py-2 items-center my-2" data-testid="external-divider">
+          <div class="relative flex items-center gap-6 py-4" data-testid="external-divider">
             <div class="flex-grow border-t border-border"></div>
-            <span class="flex-shrink mx-4 text-muted-foreground text-sm px-2">{{
+            <span class="flex-shrink text-muted-foreground text-sm">{{
               t('account.login.or')
             }}</span>
             <div class="flex-grow border-t border-border"></div>
           </div>
 
-          <!-- Social Login: Full Width -->
           <div class="flex gap-4">
             @if (hasExternalProvider('github')) {
               <button
@@ -271,9 +263,9 @@
         </h4>
         <div class="bg-muted flex flex-col gap-1 rounded-lg px-3 py-2">
           <span class="text-muted-foreground text-xs">{{ t('account.login.adminRole') }}</span>
-          <span>
+          <span class="flex items-center gap-1">
             <span class="font-mono">admin</span>
-            <span class="text-muted-foreground mx-1">/</span>
+            <span class="text-muted-foreground">/</span>
             <span class="font-mono">Admin&#64;123456</span>
           </span>
         </div>

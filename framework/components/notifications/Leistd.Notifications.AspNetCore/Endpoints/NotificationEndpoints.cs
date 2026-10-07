@@ -10,9 +10,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace Leistd.Notifications.AspNetCore.Endpoints;
 
-/// <summary>
-/// 当前用户的通知中心端点。
-/// </summary>
+/// <summary>当前用户的通知中心端点。</summary>
 public static class NotificationEndpoints
 {
     /// <summary>端点名前缀，宿主按名字给个别端点追加约定时使用。</summary>

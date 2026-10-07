@@ -1,11 +1,8 @@
 import { timeZoneGroups, timeZoneMatches, TimeZoneOption } from './setting-choices';
 
 /**
- * 时区清单的合法性判定。
- *
- * 上一版拿 `Intl.supportedValuesOf('timeZone')` 当"全部合法时区"去过滤一份手挑清单，
- * 结果把 `UTC`、`Asia/Kolkata`、`America/Argentina/Buenos_Aires` 静默删掉了——
- * 它只列**规范名**，而这些别名同样能用于渲染。这组用例钉住"按能否渲染判定"这条口径。
+ * 时区清单的合法性按能否渲染判定，不按 `Intl.supportedValuesOf('timeZone')` 过滤：它只列规范名，
+ * 不含 `UTC`、`Asia/Kolkata` 等可用值。
  */
 describe('time zone choices', () => {
   const groups = timeZoneGroups();

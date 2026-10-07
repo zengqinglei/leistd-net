@@ -1,5 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
+using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Data.Connections;
@@ -43,6 +44,26 @@ public sealed class ExpiredUserSessionCleanupTests
         Assert.Equal(cancellation.Token, runner.Token);
         Assert.Equal(ConnectionStringNames.Default, runner.ConnectionName);
         Assert.False(runner.ActiveOnly);
+    }
+
+    /// <summary>
+    /// 清理作业、登录时顺手清理、设备列表、新设备判定与会话校验共用同一条过期判据：
+    /// 空闲恰好满时长（<c>LastSeenTime + idle == now</c>）即已结束，差一个刻度仍有效。
+    /// </summary>
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(-1, false)]
+    [InlineData(1, true)]
+    public void Session_expiry_has_one_boundary_for_queries_and_in_memory_checks(long offsetTicks, bool expired)
+    {
+        var idle = TimeSpan.FromMinutes(30);
+        var lastSeen = new DateTime(2026, 1, 1, 8, 0, 0, DateTimeKind.Utc);
+        var session = new UserSession(Guid.NewGuid(), lastSeen, ipAddress: null, userAgent: null);
+        var now = lastSeen + idle + TimeSpan.FromTicks(offsetTicks);
+
+        Assert.Equal(expired, session.IsExpired(now, idle));
+        Assert.Equal(expired, UserSession.ExpiredAt(now, idle).Compile()(session));
+        Assert.Equal(!expired, UserSession.ActiveAt(now, idle).Compile()(session));
     }
 
     private static ExpiredUserSessionCleanupJob CreateJob(ITenantDatabaseRunner runner)

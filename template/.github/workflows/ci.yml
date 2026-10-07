@@ -1,0 +1,49 @@
+# 只准备运行环境，验证步骤全部在 scripts/verify.ps1（与本地完整回归同一入口）。
+# 设为合并必过的方法见 docs/standards/testing.md §1.1。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    # 托管 Runner 自带 Docker（集成测试经 Testcontainers 使用）与 PowerShell
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+#if (SpaFrontend)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # 前端单测跑在 Playwright 驱动的 Chromium 里，浏览器版本取锁文件里的 playwright
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: |
+          $version = (Get-Content frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages['node_modules/playwright'].version
+          if (-not $version) { throw 'playwright is missing from frontend/package-lock.json' }
+          npx --yes "playwright@$version" install --with-deps chromium
+          if ($LASTEXITCODE -ne 0) { throw 'Playwright Chromium installation failed' }
+#endif
+      - name: Verify
+        shell: pwsh
+        run: ./scripts/verify.ps1

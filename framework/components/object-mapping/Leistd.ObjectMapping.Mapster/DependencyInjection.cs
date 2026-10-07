@@ -23,6 +23,7 @@ public static class DependencyInjection
     /// <see cref="TypeAdapterConfig"/>（不是 <c>TypeAdapterConfig.GlobalSettings</c>）。业务代码只注入
     /// <c>IObjectMapper</c>；配置里的嵌套映射交给 Mapster 按同一份配置完成，不调用无参 <c>Adapt&lt;T&gt;()</c>——
     /// 那会改用全局配置，本组件登记的规则在嵌套处静默失效。
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加（各次加入的 <c>Configurators</c> 依次生效）。
     /// </remarks>
     /// <example>
     /// <code>

@@ -4,6 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
+import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState } from '@tanstack/angular-table';
 import { of, Subject, throwError } from 'rxjs';
 
@@ -17,20 +18,13 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
-import {
-  CreateTenantInputDto,
-  GetTenantsInputDto,
-  TenantOutputDto,
-} from '../../../../shared/dtos/tenant.dto';
-import { PERMISSIONS } from '../../../../shared/models/permission';
+import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import { CreateTenantInputDto, GetTenantsInputDto, TenantOutputDto } from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
 
 import type { MockedObject } from 'vitest';
 
-/**
- * 租户页面的查询与写操作闭环。与用户/角色页各写一份：三个页面各自实现这一层，
- * 其中一个接线写错，另外两个的用例不会有任何反应。
- */
+/** 租户页面的查询与写操作闭环；与用户、角色页各自实现，因此各写一份。 */
 describe('Tenants page query and write flow', () => {
   let fixture: ComponentFixture<Tenants>;
   let component: Tenants;
@@ -49,7 +43,6 @@ describe('Tenants page query and write flow', () => {
     creationTime: '2026-08-14T00:00:00Z',
   };
 
-  /** 最近一次列表请求的参数。 */
   function lastQuery(): GetTenantsInputDto {
     const calls = vi.mocked(service.getTenants).mock.calls;
     const query = calls.at(-1)?.[0];
@@ -125,8 +118,7 @@ describe('Tenants page query and write flow', () => {
       versionToken: 'r1',
     });
 
-    // 应用启动时会话设置（连带语言服务）早已建好；留到首帧渲染途中才惰性创建的话，
-    // 语言服务构造时激活语言，会让模板结构指令在创建视图的半途重入
+    // 先建好设置上下文（连带语言服务），否则首帧渲染途中创建它会让结构指令重入。
     TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Tenants);
     component = fixture.componentInstance;
@@ -274,5 +266,51 @@ describe('Tenants page query and write flow', () => {
     second.next({ items: [], totalCount: 0 });
     second.complete();
     expect(component.loading()).toBe(false);
+  });
+
+  /** 以首次请求失败重建页面：此时没有任何旧行可保留。 */
+  async function openWithFailedFirstLoad(): Promise<void> {
+    fixture.destroy();
+    service.getTenants.mockReturnValue(throwError(() => new Error('boom')) as never);
+    fixture = TestBed.createComponent(Tenants);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('shows the load failure with retry instead of the empty state when the first load fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await openWithFailedFirstLoad();
+
+    // 没有旧行时不能落到"暂无数据"：表格拿到失败原因，显示错误态与重试
+    expect(component.loadError()).toBe('boom');
+    expect(table().loadError()).toBe('boom');
+    expect(component.tenants()).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
+
+    const requests = service.getTenants.mock.calls.length;
+    service.getTenants.mockReturnValue(of({ items: [tenant], totalCount: 1 }) as never);
+    table().retry.emit();
+    await fixture.whenStable();
+
+    expect(service.getTenants).toHaveBeenCalledTimes(requests + 1);
+    expect(component.loadError()).toBeNull();
+    expect(component.tenants()).toHaveLength(1);
+  });
+
+  it('keeps the loaded rows and only notifies when a refresh fails', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    service.getTenants.mockReturnValue(of({ items: [tenant], totalCount: 1 }) as never);
+    component.reload();
+    await fixture.whenStable();
+
+    service.getTenants.mockReturnValue(throwError(() => new Error('boom')) as never);
+    component.reload();
+    await fixture.whenStable();
+
+    expect(component.tenants()).toHaveLength(1);
+    expect(component.loadError()).toBeNull();
+    expect(notify).toHaveBeenCalledOnce();
   });
 });

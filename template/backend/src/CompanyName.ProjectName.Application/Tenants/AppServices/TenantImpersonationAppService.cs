@@ -8,20 +8,15 @@ using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
 using Leistd.Security.Users;
@@ -62,8 +57,10 @@ internal sealed class TenantImpersonationAppService(
             throw new BusinessException(TenantErrorCodes.AlreadyImpersonating, "Already impersonating; end the current impersonation first.");
         }
 
+        // 端点要求 App.Tenants.Impersonation 权限，未认证的请求在授权阶段已被挡下；
+        // 这里取不到用户说明调用方绕过了端点授权，是编程错误。
         var impersonatorId = currentUser.Id
-            ?? throw new BusinessException(TenantErrorCodes.ImpersonationRequiresAuthentication, "Only an authenticated user can start impersonation.");
+            ?? throw new InvalidOperationException("Impersonation requires an authenticated caller; the endpoint authorization was bypassed.");
 
         var tenant = await tenantStore.FindAsync(tenantId, cancellationToken)
                      ?? throw new BusinessException(MultiTenancyErrorCodes.NotFound, $"Tenant '{tenantId}' not found.");

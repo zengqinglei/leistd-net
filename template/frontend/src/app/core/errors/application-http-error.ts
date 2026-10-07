@@ -40,10 +40,8 @@ export class ApplicationHttpError extends Error {
     traceIdLabel: string,
   ) {
     const details = readErrors(problem.errors);
-    // 有字段错误时由它们组成消息，而不是 detail / title：校验失败时那两项只是概括
-    // （"One or more validation errors occurred." / "提交的信息有误。"），说不出哪条规则没过，
-    // 而字段错误是服务端已按当前语言本地化好的具体原因。先前把 title 排在前面，
-    // 用户看到的永远是那句概括，真正的原因只剩在网络面板里。
+    // 有字段错误时由它们组成消息：校验失败时 detail / title 只是概括，
+    // 字段错误才是服务端已按当前语言本地化的具体原因。
     const fieldMessages = firstMessagePerField(details);
     const message =
       (fieldMessages.length > 0 ? fieldMessages.join('\n') : undefined) ||

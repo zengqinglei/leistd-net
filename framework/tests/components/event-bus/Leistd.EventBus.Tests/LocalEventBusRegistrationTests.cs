@@ -1,5 +1,6 @@
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.Local;
+using Leistd.TestBase.Assertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -22,6 +23,23 @@ public class LocalEventBusRegistrationTests
         using var provider = services.BuildServiceProvider();
         Assert.Same(provider.GetRequiredService<ILocalEventBus>(), provider.GetRequiredService<ILocalEventDispatcher>());
     }
+
+    // 待发布事件挂在总线实例上：总线或调度器不是单例时，调度器排空的不是发布方写进去的那一份，事件静默丢失
+    [Fact]
+    public void The_bus_and_its_dispatcher_are_singletons()
+    {
+        var services = new ServiceCollection();
+
+        services.AddLocalEventBus();
+
+        services.AssertSingle<LocalEventBus>(ServiceLifetime.Singleton);
+        services.AssertSingle<ILocalEventBus>(ServiceLifetime.Singleton);
+        services.AssertSingle<ILocalEventDispatcher>(ServiceLifetime.Singleton);
+    }
+
+    [Fact]
+    public void Registration_is_idempotent()
+        => ServiceCollectionAssertions.AssertIdempotent(services => services.AddLocalEventBus());
 
     // IEventBus 只作共同基接口、不注册为服务：将来分布式总线也注册它时，注入它的发布方会静默换成另一种投递语义
     [Fact]

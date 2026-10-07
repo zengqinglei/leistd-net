@@ -1,3 +1,5 @@
+#!/usr/bin/env pwsh
+
 <#
 .SYNOPSIS
 校验模板符号定义与引用的一致性。

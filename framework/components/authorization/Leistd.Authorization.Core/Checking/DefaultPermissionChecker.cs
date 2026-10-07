@@ -9,9 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Authorization.Checking;
 
-/// <summary>
-/// 默认权限检查器。
-/// </summary>
+/// <summary>默认权限检查器。</summary>
 /// <remarks>
 /// <para>以 Scoped 注册：当前主体的解析与授予读取在作用域内缓存，其后的检查都是内存查找；
 /// 当前主体或租户在作用域内被切换时按新的主体与租户重新加载。
@@ -69,9 +67,7 @@ public class DefaultPermissionChecker(
         return EvaluateAsync(names, ct => LoadAsync(principal, ct), cancellationToken);
     }
 
-    /// <summary>
-    /// 释放加载闸门。
-    /// </summary>
+    /// <summary>释放加载闸门。</summary>
     public void Dispose() => _loadLock.Dispose();
 
     private async Task<MultiplePermissionGrantResult> EvaluateAsync(
@@ -106,8 +102,7 @@ public class DefaultPermissionChecker(
             ? LoadCurrentAsync(cancellationToken)
             : LoadExplicitAsync(principal, cancellationToken);
 
-    // 快照记下为哪个主体、哪个租户加载：同一作用域里当前主体被换掉（Change / Begin，
-    // 或官方策略按认证方案重设 HttpContext.User）或切换了租户时重新加载，不串用前一份授予
+    // 快照记下为哪个主体、哪个租户加载：作用域内当前主体或租户被切换时重新加载，不串用前一份授予
     private async Task<SubjectGrants> LoadCurrentAsync(CancellationToken cancellationToken)
     {
         var principal = principalAccessor?.Principal;
@@ -121,8 +116,7 @@ public class DefaultPermissionChecker(
             if (_current is { } reloaded && reloaded.IsFor(principal, tenantId))
                 return reloaded;
 
-            // 主体的租户声明非法（如两份用户凭据被合并成一个主体）时失败关闭：提供器按主体身份取标识，
-            // 那份标识不能拿到当前租户里去查授予。只校验合法性，不要求等于当前租户——宿主主体显式切入租户是正当用法
+            // 主体的租户声明非法时失败关闭。只校验合法性，不要求等于当前租户：宿主主体可显式切入租户
             var grants = principal is not null && !_claimTypes.ReadTenant(principal).IsValid
                 ? SubjectGrants.None
                 : await ReadGrantsAsync(
@@ -147,8 +141,7 @@ public class DefaultPermissionChecker(
             cancellationToken);
     }
 
-    // 租户声明按 ClaimTypeOptions 读取，与租户解析、ICurrentUser.TenantId 同一规则；非法声明失败关闭，
-    // 与当前主体路径一致。未接多租户时没有可比的作用域，只校验合法性
+    // 租户声明按 ClaimTypeOptions 读取（与租户解析同一规则），非法声明失败关闭；未接多租户时只校验合法性
     private bool BelongsToCurrentTenant(ClaimsPrincipal principal)
     {
         var tenant = _claimTypes.ReadTenant(principal);

@@ -8,8 +8,6 @@ public record class OnServiceRegisteredContext(
     Type? ImplementationType,
     object? ServiceKey = null) : IOnServiceRegisteredContext
 {
-    /// <summary>
-    /// 扩展数据。
-    /// </summary>
+    /// <inheritdoc/>
     public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>();
 }

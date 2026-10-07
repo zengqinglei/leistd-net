@@ -1,10 +1,6 @@
 /**
- * 操作记录样本数据。
- *
- * 刻意混入三类真实世界里最容易出问题的行，让前端在联调前就撞上它们：
- *   - 被拒绝的操作（`Failed`）——这张表的价值有一半在这里；
- *   - 模拟登录产生的行（`impersonatorName` 有值）——操作人与真正按下按钮的人不是同一个；
- *   - 非自然人主体（`client:` / `job:` 前缀的 actorId）——它们没有 GUID，也没有头像。
+ * 操作记录样本数据，刻意包含被拒绝的操作、模拟登录产生的行与非自然人主体
+ * （`client:` / `job:` 前缀的 actorId）。
  */
 export interface MockOperationRecord {
   id: string;
@@ -18,6 +14,31 @@ export interface MockOperationRecord {
   impersonatorName?: string;
   correlationId?: string;
 }
+
+/** 动作定义：与后端 `OperationActionDefinitionProvider` 登记的类别、严重度同一口径。 */
+export interface MockOperationActionDefinition {
+  code: string;
+  category: string;
+  severity: 'Info' | 'Notice' | 'Critical';
+}
+
+/** 样本用到的动作定义，取自后端登记表的同名条目；筛选项与按类别筛选都靠它，记录本身不带类别。 */
+export const OPERATION_ACTION_DEFINITIONS: MockOperationActionDefinition[] = [
+  { code: 'user.created', category: 'account', severity: 'Info' },
+  { code: 'user.updated', category: 'account', severity: 'Info' },
+  { code: 'user.deleted', category: 'account', severity: 'Notice' },
+  { code: 'user.disabled', category: 'account', severity: 'Notice' },
+  //#if (LocalIdentity)
+  { code: 'user.password-reset', category: 'account', severity: 'Notice' },
+  //#endif
+  { code: 'role.created', category: 'account', severity: 'Info' },
+  { code: 'role.deleted', category: 'account', severity: 'Notice' },
+  { code: 'user.roles-replaced', category: 'authorization', severity: 'Critical' },
+  { code: 'permission-grants.replaced', category: 'authorization', severity: 'Critical' },
+  { code: 'tenant.connection-registered', category: 'tenant', severity: 'Critical' },
+  { code: 'setting.changed', category: 'configuration', severity: 'Info' },
+  { code: 'operation-records.exported', category: 'data', severity: 'Notice' },
+];
 
 // 固定基准时刻：样本数据不随运行时间漂移，截图与断言才稳定。
 const BASE_TIME = Date.parse('2026-09-17T09:00:00.000Z');
@@ -102,7 +123,7 @@ export const OPERATION_RECORDS: MockOperationRecord[] = [
   // App.Tenants 权限一起随守卫裁掉——否则生成物里会留下一个该形态下根本不存在的权限名。
   {
     id: '0199a1f0-0007-7000-8000-000000000007',
-    action: 'tenant.connection.registered',
+    action: 'tenant.connection-registered',
     targetId: 'd4c3b2a1-9f8e-4d7c-b6a5-4938271605f4',
     authorizationBasis: 'App.Tenants.Update',
     outcome: 'Failed',
@@ -136,8 +157,9 @@ export const OPERATION_RECORDS: MockOperationRecord[] = [
   },
   {
     id: '0199a1f0-000a-7000-8000-00000000000a',
-    action: 'role.permissions.replaced',
-    targetId: 'a2b4c6d8-0e1f-4a3b-8c5d-6e7f809a1b2c',
+    action: 'permission-grants.replaced',
+    // 与后端同形：权限授予的目标标识带提供者前缀，按目标检索时与授权阶段被拒的记录逐字一致。
+    targetId: 'Role/a2b4c6d8-0e1f-4a3b-8c5d-6e7f809a1b2c',
     authorizationBasis: 'App.Roles.ManagePermissions',
     outcome: 'Succeeded',
     creationTime: minutesBefore(420),
@@ -148,7 +170,7 @@ export const OPERATION_RECORDS: MockOperationRecord[] = [
   },
   {
     id: '0199a1f0-000b-7000-8000-00000000000b',
-    action: 'user.roles.replaced',
+    action: 'user.roles-replaced',
     targetId: 'b6f0c4e2-1d3a-4c7b-9e11-2f5a8d0c7a01',
     authorizationBasis: 'App.Users.ManageRoles',
     outcome: 'Failed',
@@ -157,9 +179,11 @@ export const OPERATION_RECORDS: MockOperationRecord[] = [
     actorId: 'client:legacy-importer',
     correlationId: '7a4c9e2d0b6f1853',
   },
+  //#if (LocalIdentity)
+  // 重置他人密码只存在于本地身份形态，动作定义随之裁掉，样本一并守卫。
   {
     id: '0199a1f0-000c-7000-8000-00000000000c',
-    action: 'user.password.reset',
+    action: 'user.password-reset',
     targetId: 'e5d4c3b2-a190-4f8e-9d7c-6b5a49382716',
     authorizationBasis: 'App.Users.Update',
     outcome: 'Succeeded',
@@ -168,4 +192,5 @@ export const OPERATION_RECORDS: MockOperationRecord[] = [
     actorName: 'Alice Chen',
     correlationId: '9e5b1d7f3a0c4682',
   },
+  //#endif
 ];

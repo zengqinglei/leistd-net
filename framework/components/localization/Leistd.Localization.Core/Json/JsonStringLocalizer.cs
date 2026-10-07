@@ -5,13 +5,10 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Localization.Json;
 
-/// <summary>
-/// 基于嵌入 JSON 资源的 <see cref="IStringLocalizer"/> 实现。
-/// </summary>
+/// <summary>基于嵌入 JSON 资源的 <see cref="IStringLocalizer"/> 实现。</summary>
 /// <remarks>
 /// 查表按 <see cref="CultureInfo.CurrentUICulture"/> 逐级回落（如 <c>zh-Hans-CN</c> → <c>zh-Hans</c> → <c>zh</c>），
-/// 再回落到 <see cref="JsonLocalizationOptions.DefaultCulture"/>；仍未命中则返回<b>键本身</b>
-/// （.NET "键即默认值" 语义，使未启用/漏配资源时行为等于直出原字符串）。
+/// 再回落到 <see cref="JsonLocalizationOptions.DefaultCulture"/>；仍未命中则返回键本身。
 /// 参数化通过标准 <see cref="string.Format(IFormatProvider?, string, object?[])"/>（位置占位 <c>{0}</c>）。
 /// </remarks>
 public sealed class JsonStringLocalizer(
@@ -20,9 +17,7 @@ public sealed class JsonStringLocalizer(
 {
     private readonly JsonLocalizationOptions _options = options.Value;
 
-    /// <summary>
-    /// 按键取文案；未命中时返回键本身，且 <c>ResourceNotFound</c> 为 <see langword="true"/>。
-    /// </summary>
+    /// <summary>按键取文案；未命中时返回键本身，且 <c>ResourceNotFound</c> 为 <see langword="true"/>。</summary>
     /// <param name="name">文案键。</param>
     public LocalizedString this[string name]
     {
@@ -33,9 +28,7 @@ public sealed class JsonStringLocalizer(
         }
     }
 
-    /// <summary>
-    /// 按键取文案并填充位置参数；未命中时以键本身作为格式串。
-    /// </summary>
+    /// <summary>按键取文案并填充位置参数；未命中时以键本身作为格式串。</summary>
     /// <param name="name">文案键。</param>
     /// <param name="arguments">格式化参数。</param>
     public LocalizedString this[string name, params object[] arguments]

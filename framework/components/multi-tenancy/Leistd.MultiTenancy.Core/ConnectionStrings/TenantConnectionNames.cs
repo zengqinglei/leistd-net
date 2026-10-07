@@ -6,9 +6,8 @@ using Leistd.MultiTenancy.Errors;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-// 连接名的归一化与校验。名字来自两处：使用方 DbContext 的 [ConnectionStringName]，以及管理员在租户管理里填的值。
-// 统一小写后存储与查询，"Crm" 与 "crm" 因此命中同一行——大小写差异本来会表现成"登记过却解析不到"，
-// 那是最难排查的一类支持问题。
+// 连接名的归一化与校验。名字来自 DbContext 的 [ConnectionStringName] 与管理员输入，
+// 统一小写后存储与查询，避免大小写差异表现为“登记过却解析不到”。
 internal static class TenantConnectionNames
 {
     // 归一化之后才匹配，所以模式里只有小写
@@ -43,9 +42,9 @@ internal static class TenantConnectionNames
     }
 }
 
-// 连接串的写入前校验：空、超长与"根本不是 键=值; 语法"都是调用方能改对的输入错误。
-// 语法用 BCL 的 DbConnectionStringBuilder 判断，不引用任何数据库驱动；连不连得上要真的连一次才知道，不在这里。
-// 异常消息只描述规则，不回显连接串——它带着数据库口令，回显一次就同时进了响应、前端提示与日志。
+// 连接串的写入前校验：空、超长与非“键=值;”语法都是输入错误（400）。
+// 语法用 BCL 的 DbConnectionStringBuilder 判断，不引用数据库驱动，也不验证可达性。
+// 异常消息只描述规则，不回显连接串（含数据库口令）。
 internal static class TenantConnectionStrings
 {
     public static string NormalizeInput(string? connectionString)

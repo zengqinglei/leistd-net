@@ -7,9 +7,8 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Hosting.Definitions;
 
-// 被绑定设置的代码默认值 = 部署基线。默认值不能从 IConfiguration 现取：设置加载进配置之后读到的就是覆盖后的值，
-// 界面上的默认值随之变成当前值，"重置"也回不到部署基线。因此逐个配置提供程序查值并跳过宿主设置那一个；
-// 取值规则与 IConfiguration 一致——后加入的配置源优先，同一配置源内按键的顺序取。
+// 被绑定设置的代码默认值 = 部署基线。不能从 IConfiguration 现取（会读到设置覆盖后的值），
+// 因此逐个配置提供程序查值并跳过宿主设置那一个；后加入的配置源优先，同一配置源内按键的顺序取。
 internal sealed class HostSettingDefaultsProvider(
     IConfiguration configuration,
     HostSettingsConfigurationProvider hostSettings,
@@ -69,8 +68,7 @@ internal sealed class HostSettingDefaultsProvider(
         return null;
     }
 
-    // 归一到设置值的写法：设置值按序号比对，配置里写成 "warning"、"True" 也要对得上；
-    // 认不出的取值返回 null，由调用方退回兜底值，而不是下发一个连写入端都不接受的默认值
+    // 归一到设置值的写法（配置里的 "warning"、"True" 也要对得上）；认不出时返回 null，由调用方用兜底值
     private static string? Normalize(ISettingDefinition definition, string? value)
     {
         if (string.IsNullOrEmpty(value))

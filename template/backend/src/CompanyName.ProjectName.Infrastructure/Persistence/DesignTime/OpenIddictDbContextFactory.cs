@@ -1,9 +1,7 @@
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-using OpenIddict.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.DesignTime;
 

@@ -24,6 +24,8 @@ dotnet add package Leistd.Data
 实现契约并注册；连接名由 DbContext 上的特性决定。
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 [ConnectionStringName("Control")]
 public class ControlDbContext(DbContextOptions<ControlDbContext> options) : DbContext(options);
 
@@ -44,6 +46,8 @@ builder.Services.AddScoped<IConnectionStringResolver, ConfigurationConnectionStr
 分页查询直接接收请求类型，排序字段按白名单解析：
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+
 public async Task<PagedResult<Order>> GetPagedListAsync(PageRequest page, CancellationToken ct)
 {
     var query = dbContext.Orders.AsNoTracking();
@@ -82,8 +86,9 @@ public async Task<PagedResult<Order>> GetPagedListAsync(PageRequest page, Cancel
 
 ## 注意事项
 
-- 租户感知的 `IConnectionStringResolver` 由[多租户](./multi-tenancy.md)提供（本地直连控制库或远端回源）。**解析用的名字就是本 DbContext 的 `[ConnectionStringName]`**：租户按 `(租户, 连接名)` 逐行登记连接，一条都没登记即用本服务自己配置的库。连接串加密存放在控制库里，宿主须配置持久化的 Data Protection 密钥环。
+- 租户感知的 `IConnectionStringResolver` 由[多租户](./multi-tenancy.md)提供，解析用的名字就是 DbContext 的 `[ConnectionStringName]`。
 - 解析器按请求解析，注册为 `Scoped`；`AffinityKey` 的实现必须避免 I/O，否则每次取 DbContext 都会付代价。
-- **`Sorting` 不得原样拼进查询。** 它来自调用方，各查询只接受自己白名单里的排序字段，其余一律拒绝。
-- **Minimal API 不要用 `[AsParameters]` 绑定 `PageRequest`。** 它把没有默认值的非空属性当成必填参数，属性初始化器不算默认值，省略 `offset` 的请求直接 400。声明 `int offset = 0, int limit = PageRequest.DefaultLimit, string? sorting = null` 这样的显式参数（可直接在参数上标 `[Range]`，由宿主的 `AddValidation()` 校验），再构造 `PageRequest`。
-- **先计数再分页。** `TotalCount` 必须基于与当前页相同的筛选条件计算，分页参数只作用于取条目这一步。
+- `Sorting` 不得原样拼进查询：各查询只接受白名单里的排序字段，其余拒绝。
+- Minimal API 不要用 `[AsParameters]` 绑定 `PageRequest`：它把没有默认值的非空属性当成必填，省略 `offset` 的请求会 400。
+  声明 `int offset = 0, int limit = PageRequest.DefaultLimit, string? sorting = null` 这样的显式参数（可标 `[Range]` 由 `AddValidation()` 校验），再构造 `PageRequest`。
+- `TotalCount` 与当前页基于相同的筛选条件计算，分页参数只作用于取条目。

@@ -3,7 +3,6 @@ using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Authorization.Definitions;
 
-// 权限定义
 internal sealed class PermissionDefinition : IPermissionDefinition
 {
     private readonly List<PermissionDefinition> _children = [];
@@ -40,7 +39,6 @@ internal sealed class PermissionDefinition : IPermissionDefinition
     }
 }
 
-// 权限组定义
 internal sealed class PermissionGroupDefinition : IPermissionGroupDefinition
 {
     private readonly List<PermissionDefinition> _permissions = [];
@@ -61,7 +59,7 @@ internal sealed class PermissionGroupDefinition : IPermissionGroupDefinition
         DisplayName = displayName;
     }
 
-    // 组不承载侧别：侧别必须逐条权限显式声明，组级默认值会让"忘了声明"变成"看起来声明过"
+    // 组不承载侧别：侧别逐条权限显式声明
     public IPermissionDefinition AddPermission(string name, MultiTenancySides side, string? displayName = null)
     {
         var permission = new PermissionDefinition(_registry, name, side, displayName, parent: null);
@@ -124,13 +122,13 @@ internal sealed class PermissionDefinitionRegistry
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(permission.Name, nameof(permission));
 
-        // '|' 是"任一满足"策略名的分隔符：名字里带它的权限会在解析时被拆开，
-        // 每一段都找不到定义，最终以"策略不存在"的形式失败，排查成本很高。
+        // '|' 是“任一满足”策略名的分隔符，权限名带它会在解析策略时被拆开
         if (permission.Name.Contains(PermissionPolicyNames.AnyOfSeparator, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
+            throw new ArgumentException(
                 $"Permission '{permission.Name}' contains the reserved character '{PermissionPolicyNames.AnyOfSeparator}', "
-                + "which separates multiple permission names in an any-of policy.");
+                + "which separates multiple permission names in an any-of policy.",
+                nameof(permission));
         }
 
         if (!_permissions.TryAdd(permission.Name, permission))
@@ -141,7 +139,6 @@ internal sealed class PermissionDefinitionRegistry
         => _permissions.TryGetValue(name, out var permission) ? permission : null;
 }
 
-// 权限定义上下文
 internal sealed class PermissionDefinitionContext : IPermissionDefinitionContext
 {
     private readonly Dictionary<string, PermissionGroupDefinition> _groups = new(StringComparer.Ordinal);

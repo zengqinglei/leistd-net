@@ -7,9 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.Notifications.Publishing;
 
-/// <summary>
-/// 为收件人创建并持久化通知记录，再交各渠道投递。
-/// </summary>
+/// <summary>为收件人创建并持久化通知记录，再交各渠道投递。</summary>
 /// <remarks>
 /// 必须注册一个权威存储；可注册多个投递渠道。存储失败终止发布，渠道失败相互隔离。
 /// 每个渠道投不投由 <see cref="INotificationDeliveryFilter"/> 决定，站内渠道同时决定是否落库。

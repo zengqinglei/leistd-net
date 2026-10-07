@@ -1,3 +1,4 @@
+using Leistd.TestBase.Doubles;
 using System.ComponentModel.DataAnnotations;
 using System.Data.Common;
 using Leistd.EventBus.Abstractions;
@@ -275,8 +276,8 @@ public sealed class TenantManagementTests : IAsyncLifetime
     /// <summary>连接名来自 URL：不合法是 400，不以 500 出去——每个按名字查的入口都算。</summary>
     /// <remarks>
     /// 逐条列出来是因为它们各自调用一次归一化，漏一个不会有任何编译或运行期提示：
-    /// 库清单那个入口就曾把原始入参直接交给目录，目录用的是代码级归一化
-    /// （非法即 <see cref="ArgumentException"/>），于是同一个错输入在这个路由上变成 500。
+    /// 某个入口若把原始入参直接交给目录，目录用的是代码级归一化
+    /// （非法即 <see cref="ArgumentException"/>），同一个错输入在这个路由上就变成 500。
     /// </remarks>
     [Theory]
     [InlineData("runtime")]
@@ -404,23 +405,6 @@ public sealed class TenantManagementTests : IAsyncLifetime
             }
 
             return null;
-        }
-    }
-
-    private sealed class RecordingEventBus : ILocalEventBus
-    {
-        public List<IEvent> Published { get; } = [];
-
-        public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
-        }
-
-        public Task PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
-        {
-            Published.Add(@event);
-            return Task.CompletedTask;
         }
     }
 

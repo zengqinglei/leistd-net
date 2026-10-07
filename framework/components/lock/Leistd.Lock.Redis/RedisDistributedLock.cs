@@ -6,9 +6,7 @@ using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Redis;
 
-/// <summary>
-/// 通过 Redis 租约提供跨进程互斥。
-/// </summary>
+/// <summary>通过 Redis 租约提供跨进程互斥。</summary>
 public sealed class RedisDistributedLock(
     IConnectionMultiplexer connectionMultiplexer,
     IOptions<RedisLockOptions> options,

@@ -1,10 +1,9 @@
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Users.AppServices;
+using CompanyName.ProjectName.Application.Users.Dtos;
 #if (ResourceBrowserSession)
 using CompanyName.ProjectName.Application.Shared;
 #endif
-using Leistd.Security.Users;
-using Leistd.MultiTenancy.Context;
 #if (ResourceBrowserSession)
 using Microsoft.AspNetCore.Authentication;
 #endif
@@ -14,10 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CompanyName.ProjectName.Api.Controllers;
 
 [Route("api/v1/auth")]
-public sealed class ResourceAuthController(
-    ICurrentUser currentUser,
-    ICurrentTenant currentTenant,
-    IUserAppService userAppService) : BaseController
+public sealed class ResourceAuthController(IUserAppService userAppService) : BaseController
 {
 #if (ResourceBrowserSession)
     [AllowAnonymous]
@@ -32,24 +28,13 @@ public sealed class ResourceAuthController(
     /// <remarks>签发方令牌里的超管与角色声明属于签发方，不授予本服务任何权限。</remarks>
     [Authorize]
     [HttpGet("me")]
-    public async Task<IActionResult> Me(CancellationToken cancellationToken)
-    {
-        var local = currentUser.Id is { } id ? await userAppService.FindAsync(id, cancellationToken) : null;
-        return Ok(new
-        {
-            id = currentUser.Id, username = currentUser.Username ?? "", email = currentUser.Email ?? "",
-            displayName = currentUser.Name,
-            isEmailVerified = User.FindFirst("email_verified")?.Value == "true",
-            isSuperAdmin = local?.IsSuperAdmin ?? false,
-            roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
-            tenantId = currentTenant.Id
-        });
-    }
+    public Task<CurrentResourceUserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken)
+        => userAppService.GetCurrentResourceUserAsync(cancellationToken);
 #if (ResourceBrowserSession)
 
     [AllowAnonymous]
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> LogoutAsync()
     {
         // 本地会话单独退出且不带回跳地址：Cookie 处理器见到回跳地址就写 302，会盖过官方退出表单（FormPost 不改状态码）
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);

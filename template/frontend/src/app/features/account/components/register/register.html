@@ -4,7 +4,6 @@
 <ng-container>
 <!--#endif-->
   <app-auth-shell>
-    <!-- Form Header -->
     <div class="flex flex-col gap-2">
       <h2 class="text-2xl font-semibold tracking-tight">
         {{ t('account.register.title') }}
@@ -13,12 +12,12 @@
     </div>
 
     <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
-      <!-- Email -->
       <div hlmField>
         <label hlmFieldLabel for="email">{{ t('account.register.email') }}</label>
         <input
           hlmInput
           id="email"
+          autocomplete="email"
           class="w-full"
           [formField]="registerForm.email"
           [placeholder]="t('account.register.emailPlaceholder')"
@@ -30,12 +29,12 @@
         }
       </div>
 
-      <!-- Username -->
       <div hlmField>
         <label hlmFieldLabel for="username">{{ t('account.register.username') }}</label>
         <input
           hlmInput
           id="username"
+          autocomplete="username"
           class="w-full"
           [formField]="registerForm.username"
           [placeholder]="t('account.register.usernamePlaceholder')"
@@ -47,13 +46,13 @@
         }
       </div>
 
-      <!-- Captcha -->
       <div hlmField>
         <label hlmFieldLabel for="captchaCode">{{ t('account.register.captcha') }}</label>
         <div class="flex gap-3 h-8 items-center">
           <input
             hlmInput
             id="captchaCode"
+            autocomplete="off"
             class="w-full flex-1"
             [formField]="registerForm.captchaCode"
             [placeholder]="t('account.register.captchaPlaceholder')"
@@ -81,7 +80,6 @@
         }
       </div>
 
-      <!-- Email Code (Optional) -->
 <!--#if (Email)-->
       @if (securityConfig()?.enableEmailVerification) {
         <div hlmField>
@@ -92,6 +90,7 @@
             <input
               hlmInput
               id="emailVerificationCode"
+              autocomplete="one-time-code"
               class="w-full flex-1"
               [formField]="registerForm.emailVerificationCode"
               [placeholder]="t('account.register.emailCodePlaceholder')"
@@ -122,7 +121,6 @@
       }
 
 <!--#endif-->
-      <!-- Password -->
       <div class="flex flex-col gap-5">
         <div hlmField>
           <label hlmFieldLabel for="password">{{ t('account.register.password') }}</label>
@@ -130,6 +128,7 @@
             <input
               hlmInputGroupInput
               id="password"
+              autocomplete="new-password"
               [type]="showPassword() ? 'text' : 'password'"
               [formField]="registerForm.password"
               [placeholder]="t('account.register.passwordPlaceholder')"
@@ -154,7 +153,6 @@
           }
         </div>
 
-        <!-- Confirm Password -->
         <div hlmField>
           <label hlmFieldLabel for="confirmPassword">{{
             t('account.register.confirmPassword')
@@ -163,6 +161,7 @@
             <input
               hlmInputGroupInput
               id="confirmPassword"
+              autocomplete="new-password"
               [type]="showConfirmPassword() ? 'text' : 'password'"
               [formField]="registerForm.confirmPassword"
               [placeholder]="t('account.register.confirmPasswordPlaceholder')"
@@ -188,8 +187,7 @@
         </div>
       </div>
 
-      <!-- Submit Button -->
-      <button hlmBtn type="submit" class="w-full mt-3" [disabled]="isLoading()">
+      <button hlmBtn type="submit" class="w-full" [disabled]="isLoading()">
         @if (isLoading()) {
           <hlm-spinner class="text-base" data-icon="inline-start" />
         }
@@ -197,7 +195,6 @@
       </button>
     </form>
 
-    <!-- Bottom Login Link -->
     <div class="text-center text-sm">
       {{ t('account.register.haveAccount') }}
       <a

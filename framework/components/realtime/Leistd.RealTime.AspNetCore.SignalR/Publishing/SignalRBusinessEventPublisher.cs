@@ -17,7 +17,7 @@ internal class SignalRBusinessEventPublisher(
         CancellationToken ct = default)
         where TEvent : class
     {
-        // 与订阅侧共用同一生成处：分开写会导致"推送成功但没人收到"。
+        // 与订阅侧共用组名生成处
         var groupName = RealTimeGroups.Resource(resourceKey);
         try
         {

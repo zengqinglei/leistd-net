@@ -1,6 +1,6 @@
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
@@ -19,14 +19,15 @@ using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.Abstractions;
+using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 internal sealed class SessionSignInService(
-    IRepository<User, Guid> userRepository,
-    UserDomainService userDomainService,
+    IUserRepository userRepository,
     UserSessionDomainService userSessionDomainService,
-    IRepository<UserSession, Guid> sessionRepository,
+    IRepository<UserSession, Guid> userSessionRepository,
+    IQueryableAsyncExecuter asyncExecuter,
     IOptions<UserSessionOptions> sessionOptions,
     TwoFactorChallengeStore twoFactorChallengeStore,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
@@ -128,7 +129,7 @@ internal sealed class SessionSignInService(
         identity.AddClaim(new Claim(CustomClaimTypes.SessionId, session.Id.ToString()));
         // 真正认证时记录，Cookie 滑动续期不能更新 OIDC max_age 的基准。
         identity.AddClaim(new Claim("auth_time", new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc))
-            .ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
+            .ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         // ICurrentUser 的约定：Username 取 preferred_username，Name 是显示名、取 name。
         // 只写 ClaimTypes.Name 时两者都读到登录名，操作记录的操作人列就与目标列口径不一——
@@ -147,7 +148,7 @@ internal sealed class SessionSignInService(
         }
 
         foreach (var roleName in roleNames
-            ?? await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
+            ?? await userRepository.GetRoleNamesAsync(user.Id, cancellationToken))
         {
             identity.AddClaim(new Claim(RoleClaimType, roleName));
         }
@@ -172,9 +173,10 @@ internal sealed class SessionSignInService(
         if (impersonatorName is not null || previousIp is null || previousIp == clientInfo.IpAddress)
             return false;
 
-        var cutoff = clock.Now - sessionOptions.Value.IdleTimeout;
-        return !await sessionRepository.AnyAsync(
-            s => s.UserId == userId && s.LastSeenTime > cutoff && s.UserAgent == clientInfo.UserAgent,
+        return !await asyncExecuter.AnyAsync(
+            (await userSessionRepository.GetQueryableAsync(cancellationToken))
+                .Where(s => s.UserId == userId && s.UserAgent == clientInfo.UserAgent)
+                .Where(UserSession.ActiveAt(clock.Now, sessionOptions.Value.IdleTimeout)),
             cancellationToken);
     }
 
@@ -207,8 +209,7 @@ internal sealed class SessionSignInService(
                 .WithData("Minutes", minutes);
         }
 
-        return new BusinessException(AuthErrorCodes.UserLockedOut, "This account is locked. Contact your administrator.")
-            ;
+        return new BusinessException(AuthErrorCodes.UserLockedOut, "This account is locked. Contact your administrator.");
     }
 
     internal static void EnsureAllowed(User user, DateTime now)

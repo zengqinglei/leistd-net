@@ -1,11 +1,6 @@
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Microsoft.Extensions.DependencyInjection;
 #if (RemoteTokenAuth)
+using Leistd.Authorization.Definitions;
 using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth;
 using Leistd.Security.AspNetCore;
@@ -15,21 +10,15 @@ using System.Security.Claims;
 #endif
 #if (OpenIddictServer)
 #if (IncludeMultiTenancy)
-using CompanyName.ProjectName.Application.TenantConnections;
-#endif
-#if (IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
-using Leistd.Authorization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
+#if (IncludeMultiTenancy)
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using OpenIddict.Abstractions;
-using CompanyName.ProjectName.Domain.Users.Entities;
-using CompanyName.ProjectName.Infrastructure.Persistence;
-#if (IncludeMultiTenancy)
-using Leistd.MultiTenancy.EntityFrameworkCore;
+using Leistd.Security.Claims;
 #endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -102,7 +91,7 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
             [
                 new Claim(OpenIddictConstants.Claims.Subject, "8f14e45f-ea6a-4c4b-9b2b-7c1f0a2d3e4f"),
-                new Claim(Leistd.Security.Claims.CustomClaimTypes.IsSuperAdmin, "true")
+                new Claim(CustomClaimTypes.IsSuperAdmin, "true")
             ],
             "test"));
 

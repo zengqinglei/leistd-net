@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Memory\Leistd.Lock.Memory.csproj" />
     <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Redis\Leistd.Lock.Redis.csproj" />
+    <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 
 </Project>

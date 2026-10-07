@@ -14,9 +14,7 @@ using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
-/// <summary>
-/// 提供多租户 EF Core 存储注册和模型配置。
-/// </summary>
+/// <summary>多租户 EF Core 存储注册与模型配置。</summary>
 public static class DependencyInjection
 {
     /// <summary>
@@ -24,8 +22,6 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// <para>不注册租户落值组件；DDD 基座在实体进入跟踪时写入 <c>TenantId</c>。</para>
-    /// <para>连接按 <c>(租户, 连接名)</c> 逐行登记：一个租户可以在 identity、foundation、crm 各有一条，
-    /// 一条都没有即该租户不单独分库。</para>
     /// <para>只注册存储：只读控制库的宿主（租户连接解析、迁移作业）到此为止。要租户管理与连接管理用例的宿主
     /// 再调用 <c>Leistd.MultiTenancy.Management</c> 的 <c>AddTenantManagement()</c>（需要工作单元；
     /// 开通新租户的数据经宿主实现的 <c>ITenantProvisioner</c>）。</para>
@@ -48,9 +44,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IClock, UtcClockProvider>();
         services.TryAddTransient<ITenantStore, EfCoreTenantStore<TDbContext>>();
         services.TryAddTransient<ITenantManager, EfCoreTenantManager<TDbContext>>();
-        // 连接配置只能有一个权威来源：控制库的 EF 实现，或资源服务回源控制面的 HTTP 实现。
-        // 两者同为 ITenantConnectionConfigurationStore，同时注册会按顺序静默定胜负，
-        // 而输的那一方决定的是"租户数据落在哪个库"。
+        // 连接配置只能有一个权威来源（控制库 EF 实现或回源控制面的 HTTP 实现），同时注册会按顺序静默定胜负。
         services.EnsureSingleAuthoritative<ITenantConnectionConfigurationStore,
             EfCoreTenantConnectionConfigurationStore<TDbContext>>(
             ServiceLifetime.Transient,
@@ -62,10 +56,8 @@ public static class DependencyInjection
         services.TryAddTransient<ITenantConnectionConfigurationManager,
             EfCoreTenantConnectionConfigurationManager<TDbContext>>();
         services.TryAddTransient<ITenantConnectionDirectory, EfCoreTenantConnectionDirectory<TDbContext>>();
-        // 逐库作业的库目录：同样只读控制库、只回指纹与租户归属。它是控制库的存储之一，
-        // 因此跟着这里走，而不是跟着"宿主是否也用本地连接解析"走——只承担控制面的服务
-        // （自己不分库、却要对外提供库清单端点）不会调用 AddLocalTenantConnectionResolution，
-        // 目录缺席时那个端点曾静默返回空清单，逐库作业于是只处理宿主库。
+        // 库目录属于控制库存储，随这里注册：只承担控制面、自己不分库的服务不调用
+        // AddLocalTenantConnectionResolution，却仍要对外提供库清单端点。
         services.TryAddTransient<ITenantDatabaseDirectory, EfCoreTenantDatabaseDirectory<TDbContext>>();
         return services;
     }
@@ -73,20 +65,21 @@ public static class DependencyInjection
     /// <summary>
     /// 注册本地连接解析：宿主直连控制库，按 DbContext 的连接名查租户登记的连接。
     /// </summary>
-    /// <typeparam name="TControlDbContext">映射了租户注册表（<see cref="ConfigureMultiTenancy"/>）的控制库上下文</typeparam>
-    /// <param name="services">服务集合</param>
-    /// <param name="configure">配置控制库连接名；启动期校验</param>
+    /// <typeparam name="TControlDbContext">映射了租户注册表（<see cref="ConfigureMultiTenancy"/>）的控制库上下文。</typeparam>
+    /// <param name="services">服务集合。</param>
+    /// <param name="configure">配置控制库连接名，启动期校验。</param>
     /// <remarks>
-    /// <para>解析用的名字<b>就是使用方 DbContext 的 <c>[ConnectionStringName]</c></b>，不需要额外配置。
+    /// <para>解析用的名字就是使用方 DbContext 的 <c>[ConnectionStringName]</c>。
     /// 三级落点：租户一条连接都没登记就用本服务自己的配置；登记了就按"精确名 → 默认名"取；
     /// 登记过却两者都没有则拒绝，不回落本服务的库。</para>
     /// <para>宿主须注册：控制库上下文（<c>AddDbContext</c>，直接注入、不经工作单元）；
     /// 迁移目标需要的 <see cref="AddMultiTenancyEfCore{TDbContext}"/>；
     /// 与写入方共享密钥环的 <c>AddDataProtection()</c>——连接串在这里解密，解不开即拒绝，不静默回落。</para>
     /// <para>同时注册多租户核心服务（<c>AddMultiTenancyCore()</c>）与 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
-    /// 逐库作业的库目录 <c>ITenantDatabaseDirectory</c> <b>不在这里</b>：它是控制库的存储，由
-    /// <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
+    /// 库目录 <c>ITenantDatabaseDirectory</c> 由 <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
     /// 连接配置在另一个服务时改用 Core 包的 <c>AddRemoteTenantConnectionResolution</c>，两者二选一。</para>
+    /// <para>可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加。换用另一控制库上下文再调用时，
+    /// 解析器仍是首次登记的那个（按 <c>TryAdd</c> 保留），不报错。</para>
     /// </remarks>
     /// <example>
     /// <code>

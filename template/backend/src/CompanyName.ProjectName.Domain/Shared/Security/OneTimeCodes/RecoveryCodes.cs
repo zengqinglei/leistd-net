@@ -1,7 +1,6 @@
 #if (LocalIdentity)
 using System.Security.Cryptography;
 using System.Text;
-using CompanyName.ProjectName.Domain.Shared.Text;
 
 namespace CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 

@@ -21,17 +21,11 @@ import { applicationErrorMessage } from '../../../../../../core/errors/applicati
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { RoleBriefDto } from '../../../../models/role.dto';
-import { UserManagementOutputDto } from '../../../../models/user-management.dto';
+import { RoleBriefDto } from '../../../../dtos/role.dto';
+import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
 import { UserManagementService } from '../../../../services/user-management-service';
 
-/**
- * 用户角色分配对话框。
- *
- * 与用户资料编辑分离：本对话框只调用 `PUT /api/v1/users/{id}/roles`，
- * 该端点要求 `App.Users.ManageRoles`。持有资料编辑权限但没有角色分配权限的主体
- * 看不到入口，即便直接调用接口也会被服务端拒绝。
- */
+/** 用户角色分配对话框：与资料编辑分离，只调用 `PUT /api/v1/users/{id}/roles`（要求 `App.Users.ManageRoles`）。 */
 @Component({
   selector: 'app-user-roles-dialog',
   // prettier-ignore

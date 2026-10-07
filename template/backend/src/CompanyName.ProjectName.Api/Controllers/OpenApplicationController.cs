@@ -1,8 +1,9 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Leistd.Data.Paging;
@@ -50,6 +51,8 @@ public sealed class OpenApplicationController(IOpenApplicationAppService openApp
     /// </summary>
     [HttpPost]
     [Authorize(Policy = PermissionConstant.OpenApplications.Create)]
+    // 创建类端点还没有目标标识，省略路由键，被拒记录的目标记为 "-"
+    [OperationRecordAction(OperationRecordActions.OpenApplicationCreated)]
     public async Task<OpenApplicationOutputDto> CreateAsync(
         [FromBody] CreateOpenApplicationInputDto input,
         CancellationToken cancellationToken)
@@ -62,6 +65,7 @@ public sealed class OpenApplicationController(IOpenApplicationAppService openApp
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Policy = PermissionConstant.OpenApplications.Update)]
+    [OperationRecordAction(OperationRecordActions.OpenApplicationUpdated, "id")]
     public async Task<OpenApplicationOutputDto> UpdateAsync(
         string id,
         [FromBody] UpdateOpenApplicationInputDto input,
@@ -71,10 +75,11 @@ public sealed class OpenApplicationController(IOpenApplicationAppService openApp
     }
 
     /// <summary>
-    /// 删除开放应用
+    /// 删除开放应用（幂等：不存在时同样成功）
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.OpenApplications.Delete)]
+    [OperationRecordAction(OperationRecordActions.OpenApplicationDeleted, "id")]
     public async Task DeleteAsync(string id, CancellationToken cancellationToken)
     {
         await openApplicationAppService.DeleteAsync(id, cancellationToken);
@@ -85,6 +90,7 @@ public sealed class OpenApplicationController(IOpenApplicationAppService openApp
     /// </summary>
     [HttpPost("{id}/reset-secret")]
     [Authorize(Policy = PermissionConstant.OpenApplications.ResetSecret)]
+    [OperationRecordAction(OperationRecordActions.OpenApplicationSecretReset, "id")]
     public async Task<ResetOpenApplicationSecretOutputDto> ResetSecretAsync(
         string id,
         CancellationToken cancellationToken)

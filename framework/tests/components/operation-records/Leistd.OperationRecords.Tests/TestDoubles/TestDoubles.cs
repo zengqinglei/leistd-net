@@ -1,3 +1,4 @@
+using Leistd.TestBase.Doubles;
 using Leistd.Data.Paging;
 using Leistd.MultiTenancy.Context;
 using Leistd.OperationRecords.Definitions;
@@ -10,15 +11,6 @@ using Leistd.Tracing.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.OperationRecords.Tests.TestDoubles;
-
-/// <summary>固定租户上下文。</summary>
-internal sealed class FakeCurrentTenant(Guid? id) : ICurrentTenant
-{
-    public bool IsAvailable => Id.HasValue;
-    public Guid? Id { get; } = id;
-    public string? Name => null;
-    public IDisposable Change(Guid? id, string? name = null) => throw new NotSupportedException();
-}
 
 /// <summary>一条最小的动作定义，只承载断言要用到的字段。</summary>
 internal sealed class FakeOperationActionDefinition(

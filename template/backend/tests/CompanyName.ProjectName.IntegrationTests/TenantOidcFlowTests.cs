@@ -136,7 +136,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         {
             var source = await AuthorizeAndExchangeAsync(host, admin, presenter.ClientId, presenter.ClientSecret, sourceScope);
             using var client = CreateHttpsClient(host);
-            async Task<HttpResponseMessage> Exchange((string Id, string Secret) caller) => await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            async Task<HttpResponseMessage> ExchangeAsync((string Id, string Secret) caller) => await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
                 ["client_id"] = caller.Id, ["client_secret"] = caller.Secret,
@@ -145,14 +145,14 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
                 ["requested_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
                 ["audience"] = "https://api.example.test/billing", ["scope"] = "billing.read"
             }));
-            using var accepted = await Exchange(authorized);
+            using var accepted = await ExchangeAsync(authorized);
             Assert.True(accepted.IsSuccessStatusCode, await accepted.Content.ReadAsStringAsync());
             var token = await accepted.Content.ReadFromJsonAsync<TokenResponse>();
             Assert.Equal(["https://api.example.test/billing"], ReadAudiences(token!.AccessToken));
             // 默认寿命：源令牌 10 分钟，交换令牌取 120 秒上限（源令牌剩余寿命更长）
             Assert.Equal(600, Lifetime(source.AccessToken));
             Assert.Equal(120, Lifetime(token.AccessToken));
-            using var rejected = await Exchange(unauthorized);
+            using var rejected = await ExchangeAsync(unauthorized);
             Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         }
     }
