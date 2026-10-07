@@ -7,6 +7,11 @@ The release link check packs a fixture project, so it also requires the .NET SDK
 Requires PowerShell and the same PyYAML dependency used by Skill validation.
 """
 
+from contextlib import contextmanager
+import importlib.util
+import io
+import shutil
+from unittest import mock
 import json
 import os
 from pathlib import Path
@@ -51,267 +56,232 @@ def evaluate(repo, script, base, event='push', candidate='', extra_env=None):
     return result.returncode, output.read_text(encoding='utf-8').strip() if output.exists() else '', result.stderr
 
 
-def check_existing_scopes():
-    container = scope_step('ci.yml', 'framework-pack', 'container_scope')
-    release = scope_step('release.yml', 'candidate', 'scope')
-    cases = [
-        ('container moved out', 'template/Dockerfile', 'deploy/Dockerfile', True, False),
-        ('deployment moved out', 'template/deploy/compose.yml', 'docs/compose.yml', True, False),
-        ('source moved out', 'framework/components/Foo.cs', 'docs/Foo.cs', False, True),
-        ('package docs moved out', 'framework/docs/foo.md', 'docs/foo.md', False, True),
-        ('container deleted', 'template/Dockerfile', None, True, False),
-        ('source deleted', 'framework/components/Foo.cs', None, False, True),
-        ('same directory rename', 'framework/components/Foo.cs', 'framework/components/Bar.cs', False, True),
-        ('unrelated docs', 'docs/foo.md', 'docs/bar.md', False, False),
-    ]
+@contextmanager
+def candidate_fixture():
     with tempfile.TemporaryDirectory(prefix='leistd-scope-') as directory:
-        for number, (name, source, target, ci_needed, release_needed) in enumerate(cases):
-            repo = Path(directory) / str(number)
-            repo.mkdir()
-            git(repo, 'init', '-q')
-            git(repo, 'config', 'user.email', 'scope-test@example.invalid')
-            git(repo, 'config', 'user.name', 'Scope test')
-            # Force rename detection to exercise the original blind spot.
-            git(repo, 'config', 'diff.renames', 'true')
-            path = repo / source
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('scope fixture\n' * 20, encoding='utf-8')
-            git(repo, 'add', source)
-            git(repo, 'commit', '-qm', 'fixture base')
-            base = git(repo, 'rev-parse', 'HEAD')
-            git(repo, 'update-ref', 'refs/remotes/origin/main', base)
-            if target:
-                (repo / target).parent.mkdir(parents=True, exist_ok=True)
-                git(repo, 'mv', source, target)
-            else:
-                git(repo, 'rm', source)
-            git(repo, 'commit', '-qm', 'fixture change')
-            # A later docs-only commit must not hide the first commit's impact.
-            (repo / 'note.txt').write_text('later commit\n', encoding='utf-8')
-            git(repo, 'add', 'note.txt')
-            git(repo, 'commit', '-qm', 'second change')
-            for label, script, expected in [('CI', container, ci_needed), ('Release', release, release_needed)]:
-                code, output, error = evaluate(repo, script, base)
-                assert code == 0 and output == f'needed={str(expected).lower()}', (name, label, code, output, error)
-                if name in ('container moved out', 'source moved out', 'package docs moved out') and expected:
-                    code, output, _ = evaluate(repo, script.replace('--no-renames ', ''), base)
-                    assert code == 0 and output == 'needed=false', ('original blind spot not reproduced', name, label)
-            # Dispatch/reusable CI has no PR base and must compare against merge-base.
-            code, output, error = evaluate(repo, container, '')
-            assert code == 0 and output == f'needed={str(ci_needed).lower()}', (name, 'merge-base fallback', code, output, error)
-            # Missing commits: CI conservatively checks containers; Release fails closed.
-            code, output, error = evaluate(repo, container, '1' * 40)
-            assert code == 0 and output == 'needed=true', (name, 'unknown CI base', error)
-            code, _, _ = evaluate(repo, release, '1' * 40)
-            assert code != 0, (name, 'unknown release base')
-            code, _, _ = evaluate(repo, release, '0' * 40)
-            assert code != 0, (name, 'zero release base')
-            # Equal merge-base/HEAD cannot establish a useful comparison: fail conservatively.
-            git(repo, 'update-ref', 'refs/remotes/origin/main', git(repo, 'rev-parse', 'HEAD'))
-            code, output, error = evaluate(repo, container, '')
-            assert code == 0 and output == 'needed=true', (name, 'merge-base equals HEAD', code, output, error)
-            print(f'PASS {name}: both workflows, multi-commit, merge-base and missing-base cases')
+        repo = Path(directory)
+        paths = git(ROOT, 'ls-files', '--cached', '--others', '--exclude-standard', '-z').split('\0')
+        for path in paths:
+            if not path or path.startswith('docs/reports/'):
+                continue
+            source = ROOT / path
+            if source.is_file():
+                target = repo / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+        git(repo, 'init', '-q')
+        git(repo, 'config', 'user.name', 'Scope fixture')
+        git(repo, 'config', 'user.email', 'scope@example.invalid')
+        git(repo, 'add', '.')
+        git(repo, 'commit', '-qm', 'fixture base')
+        spec = importlib.util.spec_from_file_location('planner_fixture', repo / 'scripts/plan-quality-checks.py')
+        planner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(planner)
+        yield repo, planner, git(repo, 'rev-parse', 'HEAD')
+
+
+def append_input(repo, path):
+    target = repo / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text((target.read_text(encoding='utf-8') if target.exists() else '') + '\n<!-- scope fixture -->\n', encoding='utf-8')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-qm', 'input change')
+
+
+def check_existing_scopes():
+    with candidate_fixture() as (repo, planner, base):
+        git(repo, 'tag', 'v0.13.0-beta.10', base)
+        git(repo, 'tag', 'v1.0.0-beta.9999', base)
+        front = 'template/frontend/src/app/app.ts'
+        append_input(repo, front)
+        before = git(repo, 'rev-parse', 'HEAD')
+        git(repo, 'tag', 'v0.13.0-preview.20261008.99')
+        append_input(repo, 'README.md')
+        head = git(repo, 'rev-parse', 'HEAD')
+        assert planner.release_tag('beta', head)[1] == base
+        run = dict(id=1, run_attempt=2, head_sha=before, head_branch='develop', event='push',
+                   path='.github/workflows/release.yml', status='completed', conclusion='success')
+        aggregate = dict(name='quality / 模板全场景矩阵', status='completed', conclusion='success')
+        class Response:
+            def __init__(self, payload): self.payload = payload
+            def __enter__(self): return io.StringIO(json.dumps(self.payload))
+            def __exit__(self, *args): return False
+        def api(request, timeout):
+            assert timeout == 15
+            assert request.full_url.startswith('https://api.github.com/repos/fixture/repo/actions/')
+            if '/workflows/release.yml/runs?' in request.full_url:
+                assert 'head_sha=' + before in request.full_url and 'branch=develop' in request.full_url and 'event=push' in request.full_url
+                return Response(dict(total_count=1, workflow_runs=[run]))
+            assert '/runs/1/attempts/2/jobs?' in request.full_url
+            return Response(dict(total_count=1, jobs=[aggregate]))
+        env = dict(GITHUB_REPOSITORY='fixture/repo', GITHUB_REF_NAME='develop', GH_TOKEN='fixture-token', GITHUB_API_URL='https://api.github.com')
+        with mock.patch.dict(os.environ, env), mock.patch.object(planner, 'urlopen', side_effect=api):
+            plan = planner.create_plan('full', before, 'push', head, release_channel='beta')
+            assert plan['Mode'] == 'documentation' and plan['QualityBaseline']['Verified'] and not plan['ReleaseRequired']
+            for state in ['failure', 'cancelled', 'timed_out', None]:
+                run['conclusion'] = state
+                plan = planner.create_plan('full', before, 'push', head, release_channel='beta')
+                assert plan['Mode'] == 'full' and not plan['QualityBaseline']['Verified']
+            run['conclusion'] = 'success'
+            run['status'] = 'in_progress'
+            assert planner.create_plan('full', before, 'push', head, release_channel='beta')['Mode'] == 'full'
+            run['status'] = 'completed'
+            aggregate['conclusion'] = 'skipped'
+            assert not planner.verified_quality_base(before, head)['Verified']
+            aggregate['conclusion'] = 'success'
+            aggregate['name'] = 'quality / 模板全场景矩阵 fake'
+            assert not planner.verified_quality_base(before, head)['Verified']
+        with mock.patch.dict(os.environ, env), mock.patch.object(planner, 'urlopen', side_effect=OSError('API unavailable')):
+            assert planner.create_plan('full', before, 'push', head, release_channel='beta')['Mode'] == 'full'
+        with mock.patch.dict(os.environ, env), mock.patch.object(planner, 'urlopen', return_value=Response(dict(total_count=0, workflow_runs=[]))):
+            assert not planner.verified_quality_base(before, head)['Verified']
+        # A failed Docker change cannot disappear from the next known-source push.
+        git(repo, 'reset', '--hard', base)
+        append_input(repo, 'template/Dockerfile')
+        before = git(repo, 'rev-parse', 'HEAD')
+        append_input(repo, front)
+        head = git(repo, 'rev-parse', 'HEAD')
+        run.update(head_sha=before, status='completed', conclusion='success')
+        aggregate.update(name='quality / 模板全场景矩阵', conclusion='success')
+        with mock.patch.dict(os.environ, env), mock.patch.object(planner, 'urlopen', side_effect=api):
+            successful = planner.create_plan('full', before, 'push', head, release_channel='beta')
+            assert successful['Mode'] == 'full' and not successful['ContainerSmoke'] and not successful['ReleaseRequired']
+            for state in ['failure', 'cancelled']:
+                run['conclusion'] = state
+                carried = planner.create_plan('full', before, 'push', head, release_channel='beta')
+                assert carried['Mode'] == 'full' and carried['ContainerSmoke'] and not carried['ReleaseRequired']
+        # Pending/failed package publication has no tag: a later docs push still publishes and validates full.
+        git(repo, 'reset', '--hard', base)
+        append_input(repo, 'framework/NuGet.md')
+        before = git(repo, 'rev-parse', 'HEAD')
+        append_input(repo, 'README.md')
+        head = git(repo, 'rev-parse', 'HEAD')
+        plan = planner.create_plan('full', before, 'push', head, release_channel='beta')
+        assert plan['ReleaseRequired'] and plan['Mode'] == 'full' and all(plan['Jobs'].values())
+        for path in ['VERSION', 'framework/common.props', 'Directory.Build.props', 'Directory.Packages.props', 'global.json', 'NuGet.config']:
+            git(repo, 'reset', '--hard', base)
+            append_input(repo, path)
+            assert planner.needs_release(base, git(repo, 'rev-parse', 'HEAD'))[0], path
+        # A main-only stable tag is not an ancestor of develop.
+        git(repo, 'reset', '--hard', base)
+        append_input(repo, 'VERSION')
+        stable = git(repo, 'rev-parse', 'HEAD')
+        git(repo, 'tag', 'v0.14.0', stable)
+        git(repo, 'reset', '--hard', base)
+        append_input(repo, front)
+        candidate = git(repo, 'rev-parse', 'HEAD')
+        assert planner.release_tag('beta', candidate)[1] == base
+        assert planner.create_plan('pr', stable, 'pull_request', '')['Mode'] == 'full'
+        assert planner.create_plan('pr', '0' * 40, 'pull_request', '')['ContainerSmoke']
+    print('PASS publication baselines, explicit inputs, cancelled/failed push carry-forward, API fallback, nightly and force push')
 
 
 def check_docs_scope():
-    script = scope_step('ci.yml', 'framework-pack', 'scope')
     cases = [
-        ('root readme', 'README.md', 'README.md', True),
-        ('internal docs', 'docs/foo.md', 'docs/bar.md', True),
-        ('repository skill', '.agents/skills/foo/SKILL.md', '.agents/skills/bar/SKILL.md', True),
-        ('distributed skill', 'skills/foo/SKILL.md', 'skills/bar/SKILL.md', True),
-        ('package docs', 'framework/docs/foo.md', 'framework/docs/bar.md', False),
-        ('generated docs', 'template/docs/foo.md', 'template/docs/bar.md', False),
-        ('generated skill', 'template/.agents/foo.md', 'template/.agents/bar.md', False),
-        ('package docs moved out', 'framework/docs/foo.md', 'docs/foo.md', False),
-        ('docs moved into package', 'docs/foo.md', 'framework/docs/foo.md', False),
-        ('deleted code', 'framework/components/Foo.cs', None, False),
-        ('workflow input', '.github/workflows/foo.yml', '.github/workflows/bar.yml', False),
-        ('script input', 'scripts/foo.py', 'scripts/bar.py', False),
-        ('root build input', 'Directory.Build.targets', 'Directory.Build.targets', False),
-        ('unknown path', 'unknown.md', 'unknown.md', False),
-        ('case sensitive readme', 'readme.md', 'readme.md', False),
-        ('case sensitive directory', 'Docs/foo.md', 'Docs/bar.md', False),
-        ('leading whitespace boundary', ' docs/foo.md', ' docs/bar.md', False),
-        ('leading whitespace single file', ' README.md', ' README.md', False),
-        ('unicode documentation', 'docs/说明.md', 'docs/规范.md', True),
+        ('README.md', 'documentation', False, False), ('docs/foo.md', 'documentation', False, False),
+        ('.agents/skills/foo/SKILL.md', 'documentation', False, False), ('skills/foo/SKILL.md', 'documentation', False, False),
+        ('framework/README.md', 'documentation', False, False), ('framework/docs/README.md', 'documentation', False, False),
+        ('framework/NuGet.md', 'documentation', True, False), ('framework/docs/components/email.md', 'documentation', True, False),
+        ('template/docs/standards/testing.md', 'documentation', False, True),
+        ('template/.agents/skills/leistd-project-workflow/SKILL.md', 'documentation', False, True),
+        ('template/docs/standards/frontend-spartan.md', 'documentation', False, True),
+        ('scripts/unknown.py', 'full', True, True), ('docs/executable.py', 'full', True, True),
+        ('unknown.md', 'full', True, True), ('readme.md', 'full', True, True),
+        ('Docs/foo.md', 'full', True, True), (' README.md', 'full', True, True), ('docs/说明.md', 'documentation', False, False),
     ]
-    with tempfile.TemporaryDirectory(prefix='leistd-docs-scope-') as directory:
-        for number, (name, source, target, expected) in enumerate(cases):
-            repo = Path(directory) / str(number)
-            repo.mkdir()
-            git(repo, 'init', '-q')
-            git(repo, 'config', 'user.email', 'scope-test@example.invalid')
-            git(repo, 'config', 'user.name', 'Scope test')
-            git(repo, 'config', 'diff.renames', 'true')
-            path = repo / source
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('scope fixture\n' * 20, encoding='utf-8')
-            git(repo, 'add', source)
-            git(repo, 'commit', '-qm', 'base')
-            base = git(repo, 'rev-parse', 'HEAD')
-            if target == source:
-                path.write_text(path.read_text(encoding='utf-8') + 'change\n', encoding='utf-8')
-                git(repo, 'add', source)
-            elif target:
-                (repo / target).parent.mkdir(parents=True, exist_ok=True)
-                git(repo, 'mv', source, target)
-            else:
-                git(repo, 'rm', source)
-            git(repo, 'commit', '-qm', 'first change')
-            (repo / 'docs').mkdir(exist_ok=True)
-            (repo / 'docs/note.md').write_text('later docs-only change\n', encoding='utf-8')
-            git(repo, 'add', 'docs/note.md')
-            git(repo, 'commit', '-qm', 'second change')
-
-            def expect(base_value=base, event='pull_request', candidate='', wanted=expected, variant=script, extra_env=None):
-                code, output, error = evaluate(repo, variant, base_value, event, candidate, extra_env)
-                assert code == 0 and output == f'docs_only={str(wanted).lower()}', (name, event, base_value, code, output, error)
-
-            expect()
-            for bad_base in ('', '0' * 40, '1' * 40, git(repo, 'rev-parse', 'HEAD')):
-                expect(bad_base, wanted=False)
-            for event in ('workflow_dispatch', 'workflow_call', 'push', 'schedule'):
-                expect(event=event, wanted=False)
-            # A called workflow inherits its caller's event; explicit candidate still forces full.
-            expect(candidate=git(repo, 'rev-parse', 'HEAD'), wanted=False)
-            if name == 'package docs moved out':
-                expect(wanted=True, variant=script.replace("'--no-renames', ", ''))
-            print(f'PASS docs scope {name}: complete diff, unknown base, non-PR and reusable caller')
-
-        # A different commit with the same tree has no changed paths: remain conservative.
-        git(repo, 'commit', '--allow-empty', '-qm', 'empty change')
-        parent = git(repo, 'rev-parse', 'HEAD^')
-        code, output, error = evaluate(repo, script, parent, 'pull_request')
-        assert code == 0 and output == 'docs_only=false', ('empty diff', code, output, error)
-        # Force git diff to fail after a valid base lookup, rather than merely use an unknown SHA.
-        fake_bin = repo / 'fake-bin'
-        fake_bin.mkdir()
-        actual_git = subprocess.check_output(['which', 'git'], text=True, encoding='utf-8', errors='replace').strip()
-        shim = fake_bin / 'git'
-        shim.write_text('#!/bin/sh\ncase " $* " in *" diff "*) exit 23;; esac\nexec "' + actual_git + '" "$@"\n', encoding='utf-8')
-        shim.chmod(0o755)
-        code, output, error = evaluate(repo, script, parent, 'pull_request', extra_env={'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']})
-        assert code == 0 and output == 'docs_only=false', ('failed diff', code, output, error)
-        print('PASS empty and failed diff fall back to full')
-        # Model GitHub's actual PR merge checkout: base is the first parent.
-        merge = subprocess.check_output(['git', '-C', str(repo), 'commit-tree', 'HEAD^{tree}', '-p', base, '-p', 'HEAD'],
-                                        input='PR merge fixture\n', text=True, encoding='utf-8', errors='replace').strip()
-        git(repo, 'update-ref', 'refs/heads/pr-merge', merge)
-        git(repo, 'symbolic-ref', 'HEAD', 'refs/heads/pr-merge')
-        for depth in (1, 2):
-            clone = Path(directory) / f'shallow-{depth}'
-            subprocess.run(['git', 'clone', '-q', '--depth', str(depth), repo.as_uri(), str(clone)], check=True)
-            present = subprocess.run(['git', '-C', str(clone), 'cat-file', '-e', f'{base}^{{commit}}'],
-                                     capture_output=True).returncode == 0
-            assert present == (depth == 2), ('unexpected shallow baseline availability', depth)
-            code, output, error = evaluate(clone, script, base, 'pull_request')
-            assert code == 0 and output == 'docs_only=true', ('shallow PR baseline', depth, code, output, error)
-            assert subprocess.run(['git', '-C', str(clone), 'cat-file', '-e', f'{base}^{{commit}}'], capture_output=True).returncode == 0
-            print(f'PASS shallow PR checkout depth={depth}: baseline {"available directly" if present else "fetched conservatively"}')
+    with candidate_fixture() as (repo, planner, base):
+        for path, mode, package, generated in cases:
+            git(repo, 'reset', '--hard', base)
+            git(repo, 'clean', '-fd')
+            if path in ('readme.md', 'Docs/foo.md'):
+                assert planner.classify_inputs(base, base, [path])['unknown'] == [path]
+                continue
+            append_input(repo, path)
+            plan = planner.create_plan('pr', base, 'pull_request', '')
+            assert plan['Mode'] == mode and plan['PackageDocumentation'] == package and plan['GeneratedDocumentation'] == generated, (path, plan)
+            assert plan['Jobs']['frontend-gates'] == (mode == 'full' or path.endswith('frontend-spartan.md')), (path, plan)
+            assert plan['DocsOnly'] == (mode == 'documentation' and not package and not generated)
+        for source, target, expected in [('framework/NuGet.md', 'docs/NuGet.md', 'documentation'),
+                                         ('template/frontend/src/app/app.ts', 'docs/app.ts', 'full'),
+                                         ('template/Dockerfile', 'docs/Dockerfile', 'full')]:
+            git(repo, 'reset', '--hard', base)
+            git(repo, 'clean', '-fd')
+            git(repo, 'mv', source, target)
+            git(repo, 'commit', '-qm', 'move input')
+            append_input(repo, 'README.md')
+            plan = planner.create_plan('pr', base, 'pull_request', '')
+            assert plan['Mode'] == expected and source in plan['ChangedPaths'] and target in plan['ChangedPaths'], plan
+            if source == 'framework/NuGet.md': assert plan['PackageDocumentation']
+            if source == 'template/Dockerfile': assert plan['ContainerSmoke']
+        for source, mode in [('template/frontend/src/app/app.ts', 'frontend'),
+                             ('template/backend/src/CompanyName.ProjectName.Api/Program.cs', 'backend')]:
+            git(repo, 'reset', '--hard', base)
+            git(repo, 'clean', '-fd')
+            append_input(repo, source)
+            append_input(repo, 'template/docs/standards/frontend-spartan.md')
+            append_input(repo, 'framework/NuGet.md')
+            plan = planner.create_plan('pr', base, 'pull_request', '')
+            assert plan['Mode'] == mode and plan['GeneratedDocumentation'] and plan['PackageDocumentation'] and plan['Jobs']['frontend-gates']
+    print('PASS documentation responsibilities, gate-read Markdown, mixed unions, path boundaries, deletions and moves')
 
 
 def check_quality_aggregation():
     workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))
     jobs = workflow['jobs']
-    quality = jobs['template-matrix']
-    dynamic = ['test', 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
-    required = ['framework-pack', 'docs-sync', 'docs-sync-windows', 'frontend-gates', *dynamic]
-    assert set(quality['needs']) == set(required), 'aggregation must wait for every required result'
-    assert quality['if'] == 'always()', 'aggregation must run after failure/skip/cancellation'
-    assert 'needs' not in jobs['framework-pack'], 'packing must start without waiting for another runner'
-    assert 'template-slice-plan' not in jobs, 'no redundant planning runner'
-    for job in dynamic:
-        assert jobs[job]['needs'] == 'framework-pack', ('scope dependency missing', job)
-        assert "needs.framework-pack.outputs.docs_only == 'false'" in jobs[job]['if'], ('scope guard missing', job)
-    assert 'FrameworkTests' in jobs['test']['if'], 'template-only must not run unchanged framework tests'
-    pack = jobs['framework-pack']
-    assert pack['steps'][0]['with']['fetch-depth'] == "${{ github.event_name == 'pull_request' && !inputs.candidate_sha && 2 || 0 }}", 'PR keeps two parents; dispatch needs complete main comparison'
-    for step in pack['steps']:
-        if step.get('uses', '').startswith(('actions/setup-dotnet@', 'actions/upload-artifact@')) or step.get('name') == '打包当前 Framework':
-            assert step['if'] == "steps.scope.outputs.docs_only == 'false'", 'docs-only must not pack/upload'
+    required = ['quality-plan', 'docs-sync', 'docs-sync-windows', 'frontend-gates', 'framework-pack', 'test',
+                'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
+    assert set(jobs['template-matrix']['needs']) == set(required) and jobs['template-matrix']['if'] == 'always()'
+    assert jobs['quality-plan']['steps'][0]['with']['fetch-depth'] == 0
+    assert workflow['permissions']['actions'] == 'read'
+    for name in ['frontend-gates', 'framework-pack', 'test', 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']:
+        assert 'quality-plan' in jobs[name]['needs']
+        assert jobs[name]['if'] == ('fromJSON(needs.quality-plan.outputs.validation_plan).Jobs.test' if name == 'test' else f"fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['{name}']"), name
+        if name in ['template-slices', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']:
+            assert 'framework-pack' in jobs[name]['needs']
     for job in jobs.values():
         for step in job['steps']:
             if step.get('uses', '').startswith('actions/checkout@'):
-                assert step['with']['ref'] == '${{ inputs.candidate_sha || github.sha }}', 'candidate SHA differs across checks'
-    for step in quality['steps'][1:]:
-        assert step['if'] in ("steps.quality.outputs.dynamic == 'true'", "steps.quality.outputs.framework_tests == 'true'"), \
-            'docs-only must not consume scene or framework test receipts'
-    assert any(s.get('id') == 'framework_receipts' for s in quality['steps']), 'aggregation must verify framework test receipts'
-    matrix_step = next(s for s in jobs['template-slices']['steps'] if s.get('id') == 'matrix')
-    assert '-SkipSourcePreflight' in matrix_step['run'], 'same-candidate preflight dedup missing'
-    static_step = next(s for s in jobs['docs-sync']['steps'] if 'run' in s and 'check-all' in s['run'])
-    assert static_step['run'] == 'pwsh scripts/check-all.ps1', 'replacement must execute the complete static entry'
+                assert step['with']['ref'] == '${{ inputs.candidate_sha || github.sha }}'
+    assert '-SkipSourcePreflight' in next(s for s in jobs['template-slices']['steps'] if s.get('id') == 'matrix')['run']
+    for name in ['docs-sync', 'docs-sync-windows']:
+        assert any(s.get('run') == 'pwsh scripts/check-all.ps1' for s in jobs[name]['steps'])
     script = scope_step('ci.yml', 'template-matrix', 'quality')
-    with tempfile.TemporaryDirectory(prefix='leistd-quality-') as directory:
-        repo = Path(directory)
-        candidate = 'a' * 40
-        for docs_only, framework_tests in [('true', False), ('false', True), ('false', False)]:
-            normal = {name: {'result': 'success', 'outputs': {}} for name in required}
-            plan = dict(Version=2,ContainerSmoke=False, CandidateSha=candidate, Tier='pr', DocsOnly=docs_only == 'true',
-                        Mode='frontend' if docs_only == 'false' and not framework_tests else 'full',
-                        FrameworkTests=framework_tests, Scenarios=[] if docs_only == 'true' else ['identity'],
-                        FrameworkTestProjects=[TEST_PROJECTS[0]] if framework_tests else [],
-                        FrameworkTestSelection='affected' if framework_tests else 'none')
-            normal['framework-pack']['outputs'] = dict(docs_only=docs_only, validation_plan=json.dumps(plan))
-            for name in dynamic:
-                normal[name]['result'] = 'skipped' if docs_only == 'true' or (name == 'test' and not framework_tests) else 'success'
-
+    with candidate_fixture() as (repo, planner, base):
+        for mode, path in [('internal', 'README.md'), ('generated', 'template/docs/standards/testing.md'),
+                           ('package', 'framework/NuGet.md'), ('gate-document', 'template/docs/standards/frontend-spartan.md'),
+                           ('frontend', 'template/frontend/src/app/app.ts'), ('full', '.github/workflows/ci.yml')]:
+            git(repo, 'reset', '--hard', base)
+            git(repo, 'clean', '-fd')
+            append_input(repo, path)
+            plan = planner.create_plan('pr', base, 'pull_request', '')
+            candidate = plan['CandidateSha']
+            normal = {name: dict(result='success', outputs={}) for name in required}
+            for name, needed in plan['Jobs'].items(): normal[name]['result'] = 'success' if needed else 'skipped'
+            normal['quality-plan']['outputs']['validation_plan'] = json.dumps(plan)
             def check(state, success, variant=script):
-                code, output, error = evaluate(repo, variant, '', extra_env={
-                    'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'pr'})
-                assert (code == 0) == success, (docs_only, framework_tests, state, code, output, error)
+                code, output, error = evaluate(repo, variant, base, extra_env=dict(NEEDS_JSON=json.dumps(state), CANDIDATE_SHA=candidate, MATRIX_TIER='pr'))
+                assert (code == 0) == success, (mode, error[-1200:], state)
                 if success:
-                    assert output == (f"dynamic={'false' if docs_only == 'true' else 'true'}\n"
-                                      f"framework_tests={str(framework_tests).lower()}"), output
-
+                    assert output == f"dynamic={str(plan['Jobs']['template-slices']).lower()}\nframework_tests={str(plan['FrameworkTests']).lower()}"
             check(normal, True)
             for name in required:
-                expected = normal[name]['result']
-                for bad in ('failure', 'cancelled', '', 'success' if expected == 'skipped' else 'skipped'):
+                for bad in ['failure', 'cancelled', '', 'success' if normal[name]['result'] == 'skipped' else 'skipped']:
                     state = json.loads(json.dumps(normal)); state[name]['result'] = bad
                     check(state, False)
                 state = json.loads(json.dumps(normal)); del state[name]
                 check(state, False)
-            for value in ('', 'TRUE', None, 'unknown'):
-                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['docs_only'] = value
-                check(state, False)
             for field, value in [('CandidateSha', 'b' * 40), ('Tier', 'full'), ('FrameworkTests', 'false'),
-                                 ('Mode', 'unknown'), ('Version', 9), ('DocsOnly', not plan['DocsOnly'])]:
+                                 ('Mode', 'unknown'), ('Version', 9), ('DocsOnly', not plan['DocsOnly']),
+                                 ('FrameworkTestProjects', None), ('Jobs', {}), ('Slices', [])]:
                 invalid = dict(plan); invalid[field] = value
-                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(invalid)
+                if invalid == plan: continue
+                state = json.loads(json.dumps(normal)); state['quality-plan']['outputs']['validation_plan'] = json.dumps(invalid)
                 check(state, False)
-            state = json.loads(json.dumps(normal)); state['framework-pack']['outputs'].pop('validation_plan')
-            check(state, False)
-            # The test list must agree with FrameworkTests and be a unique list of test projects.
-            selected = 'affected' if framework_tests else 'none'
-            lists = [('missing list', None, selected), ('string list', TEST_PROJECTS[0], selected),
-                     ('unknown selection', plan['FrameworkTestProjects'], 'some'),
-                     ('selection disagrees', plan['FrameworkTestProjects'], 'all' if not framework_tests else 'none'),
-                     ('non-test project', ['framework/components/core/Leistd.Core/Leistd.Core.csproj'], selected),
-                     ('duplicate project', [TEST_PROJECTS[0]] * 2, selected)]
-            lists.append(('empty with responsibility', [], selected) if framework_tests else ('list without responsibility', [TEST_PROJECTS[0]], selected))
-            for label, projects, selection in lists:
-                invalid = dict(plan, FrameworkTestSelection=selection)
-                if projects is None:
-                    invalid.pop('FrameworkTestProjects')
-                else:
-                    invalid['FrameworkTestProjects'] = projects
-                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(invalid)
-                check(state, False)
-            if framework_tests:
-                # A full-tier plan can never narrow framework tests.
-                full = dict(plan, Tier='full')
-                state = json.loads(json.dumps(normal)); state['framework-pack']['outputs']['validation_plan'] = json.dumps(full)
-                code, _, error = evaluate(repo, script, '', extra_env={
-                    'NEEDS_JSON': json.dumps(state), 'CANDIDATE_SHA': candidate, 'MATRIX_TIER': 'full'})
-                assert code != 0 and '框架测试清单' in error, ('full tier accepted affected selection', error)
-            # 变异：把 docs-sync 从必需清单里拿掉，失败的 docs-sync 就不再阻断——证明判据真的读这份清单
-            mutated = script.replace("'framework-pack', 'docs-sync', ", "'framework-pack', ")
-            assert mutated != script, 'mutation did not apply: required-job list literal changed'
+            mutated = script.replace("'quality-plan', 'docs-sync', ", "'quality-plan', ")
+            assert mutated != script
             state = json.loads(json.dumps(normal)); state['docs-sync']['result'] = 'failure'
             check(state, True, mutated)
-            print(f'PASS aggregation docs_only={docs_only}, framework_tests={framework_tests}: missing/failed/cancelled/wrong skip, wrong candidate/plan and static mutation')
+            print('PASS strict job aggregation:', mode)
 
 
 TEST_PROJECTS = [
@@ -325,7 +295,7 @@ def check_framework_test_receipts():
     """Run the real test-list step with a fake dotnet, then the real aggregation check on its receipts."""
     run_step = next(s for s in yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))['jobs']['test']['steps']
                     if s.get('id') == 'framework_tests')
-    assert '${{ needs.framework-pack.outputs.validation_plan }}' == run_step['env']['VALIDATION_PLAN'], 'test list must come from the candidate plan'
+    assert '${{ needs.quality-plan.outputs.validation_plan }}' == run_step['env']['VALIDATION_PLAN'], 'test list must come from the candidate plan'
     verify = scope_step('ci.yml', 'template-matrix', 'framework_receipts')
     with tempfile.TemporaryDirectory(prefix='leistd-framework-receipts-') as directory:
         repo = Path(directory) / 'repo'

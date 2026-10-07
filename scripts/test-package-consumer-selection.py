@@ -58,9 +58,14 @@ def main():
         assert f'selected {len(expected)} isolated consumers' in log
         assert f'Package consumption passed for {len(expected)} package(s)' in log
         (out/(seed+'-expected.json')).write_text(json.dumps(sorted(expected)), encoding='utf-8')
-    content_only=dict(baseline,Mode='frontend',FrameworkTests=False,ConsumerProjects=[])
+    content_only=dict(baseline,ContainerSmoke=False,Slices=[dict(group,Containers=[]) for group in baseline['Slices']],Mode='frontend',FrameworkTests=False,ConsumerProjects=[], FrameworkTestProjects=[], FrameworkTestSelection='none', PackageDocumentation=False, GeneratedDocumentation=False, Jobs=dict(baseline['Jobs'], test=False))
     log=run('template-inputs-content-only',content_only,args.feed)
     assert 'Consumer build not applicable' in log and '> dotnet' not in log
+    documentation=dict(content_only,Mode='documentation',Scenarios=[],Slices=[],PackageDocumentation=True, Jobs={name:name in ('framework-pack','package-consumption') for name in baseline['Jobs']})
+    log=run('documentation-without-empty-consumer-builds',documentation,args.feed)
+    assert 'Consumer build not applicable' in log and 'Doc snippets compiled:' in log and 'Consumers.slnx' not in log
+    proof=json.loads((ROOT/'.tmp/package-consumer/package-results.json').read_text(encoding='utf-8-sig'))
+    assert proof['Consumers']==0 and proof['SnippetBlocks']>0 and proof['SnippetProjects']>0 and proof['Counterexamples']>0
     # Defects in an unselected package still block content-only and scoped modes.
     corrupt=out/'corrupt-feed'; corrupt.mkdir(exist_ok=True)
     for path in args.feed.glob('*.nupkg'): shutil.copy2(path,corrupt/path.name)
@@ -74,13 +79,18 @@ def main():
     rewrite({name:content for name,content in entries.items() if not (name.startswith('lib/') and name.endswith('.xml'))})
     run('unselected-xml-defect',content_only,corrupt,False,'missing XML documentation')
     victim.write_bytes(original)
+    data=dict(entries); data['NuGet.md']=b'outdated readme'
+    rewrite(data);run('stale-markdown',content_only,corrupt,False,'Markdown differs from candidate');victim.write_bytes(original)
+    data=dict(entries); xml_name=next(name for name in data if name.startswith('lib/') and name.endswith('.xml'))
+    data[xml_name]=b'<invalid'
+    rewrite(data);run('malformed-xml',content_only,corrupt,False);victim.write_bytes(original)
     victim.unlink();run('missing-unselected-package',content_only,corrupt,False,'missing source packages');victim.write_bytes(original)
     data=dict(entries); nuspec=next(name for name in data if name.endswith('.nuspec'))
     text=data[nuspec].decode(); assert '<dependencies>' in text
     data[nuspec]=text.replace('<dependencies>','<dependencies><dependency id="Leistd.Missing.QualityFixture" version="[0.12.0]" />',1).encode()
     rewrite(data);run('missing-candidate-dependency',content_only,corrupt,False,'Candidate dependency missing');victim.write_bytes(original)
     run('unknown-consumer-seed',dict(baseline,ConsumerProjects=['Leistd.Unknown.QualityFixture']),args.feed,False,'Unknown consumer seed')
-    run('full-cannot-narrow',dict(baseline,Tier='full',ConsumerProjects=['Leistd.Email.Smtp']),args.feed,False,'must retain all scenarios')
+    run('full-cannot-narrow',dict(baseline,Tier='full',ConsumerProjects=['Leistd.Email.Smtp']),args.feed,False,'Full mode must retain all scenarios')
     run('restored-content-only',content_only,corrupt)
     if args.benchmark:
         for number in range(3):

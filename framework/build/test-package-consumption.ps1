@@ -53,6 +53,18 @@ function Invoke-External([string]$Command, [string[]]$Arguments, [string]$Workin
     }
 }
 
+$script:docStats = @{ Blocks = 0; Projects = 0; Counterexamples = 0 }
+function Write-PackageProof {
+    if (-not $ValidationPlanPath) { return }
+    [ordered]@{
+        Version = 1; CandidateSha = $validationPlan.CandidateSha; Result = 'pass'
+        Packages = $allPackageCount; Consumers = $packages.Count
+        Documentation = $validationPlan.PackageDocumentation
+        SnippetBlocks = $script:docStats.Blocks; SnippetProjects = $script:docStats.Projects
+        Counterexamples = $script:docStats.Counterexamples
+    } | ConvertTo-Json -Compress | Set-Content (Join-Path $consumerRoot 'package-results.json') -Encoding utf8
+}
+
 function Get-PackageMetadata([IO.FileInfo]$PackageFile) {
     $archive = [IO.Compression.ZipFile]::OpenRead($PackageFile.FullName)
     try {
@@ -87,6 +99,11 @@ function Get-PackageMetadata([IO.FileInfo]$PackageFile) {
             if ($xmlPath -notin $entryNames) {
                 throw "$id $version is missing XML documentation for $assembly."
             }
+            $reader = [IO.StreamReader]::new($archive.GetEntry($xmlPath).Open())
+            try {
+                [xml]$xmlDocumentation = $reader.ReadToEnd()
+                if ($xmlDocumentation.DocumentElement.Name -cne 'doc') { throw "Invalid package XML: $xmlPath" }
+            } finally { $reader.Dispose() }
         }
 
         if (-not ($entryNames | Where-Object { $_ -match '^docs/[^/]+\.md$' })) {
@@ -94,6 +111,25 @@ function Get-PackageMetadata([IO.FileInfo]$PackageFile) {
         }
         if ("NuGet.md" -notin $entryNames) {
             throw "$id $version does not contain NuGet.md."
+        }
+
+        $sourceProject = @($sourceProjects | Where-Object BaseName -ceq $id)
+        if ($sourceProject.Count -ne 1) { throw "Package has no unique source project: $id" }
+        $family = Split-Path (Split-Path $sourceProject[0].DirectoryName) -Leaf
+        $expectedDocuments = @{ 'NuGet.md' = (Join-Path $repoRoot 'framework/NuGet.md') }
+        $familyDoc = Join-Path $repoRoot "framework/docs/components/$family.md"
+        if (Test-Path $familyDoc) { $expectedDocuments["docs/$family.md"] = $familyDoc }
+        if ($family -ceq 'ddd-struct') { $expectedDocuments['docs/ddd-struct.md'] = Join-Path $repoRoot 'framework/docs/ddd-struct/ddd-struct.md' }
+        if (Compare-Object @($expectedDocuments.Keys | Sort-Object) @($entryNames | Where-Object { $_ -ceq 'NuGet.md' -or $_ -cmatch '^docs/.*\.md$' } | Sort-Object) -CaseSensitive) {
+            throw "Package Markdown set differs from current Pack sources: $id"
+        }
+        foreach ($entry in $expectedDocuments.GetEnumerator()) {
+            $stream = $archive.GetEntry($entry.Key).Open()
+            try { $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)) }
+            finally { $stream.Dispose() }
+            if ($hash -cne (Get-FileHash -LiteralPath $entry.Value -Algorithm SHA256).Hash) {
+                throw "Package Markdown differs from candidate source: $id / $($entry.Key)"
+            }
         }
 
         return [PSCustomObject]@{
@@ -204,6 +240,8 @@ function Invoke-DocSnippetCompilation {
         }
         Write-Host "Counterexample $($item.Entry.name) rejected with $($diagnostic.codes -join '/')." -ForegroundColor DarkGray
     }
+    if ($manifest.snippets -le 0 -or $passing.Count -le 0 -or $failing.Count -le 0) { throw 'Documentation compilation produced no proof.' }
+    $script:docStats = @{ Blocks = $manifest.snippets; Projects = $passing.Count; Counterexamples = $failing.Count }
     Write-Host "Doc snippets compiled: $($manifest.snippets) block(s) in $($passing.Count) project(s), $(@($manifest.exempt).Count) exempt; $($failing.Count) counterexample(s) rejected." -ForegroundColor Green
 }
 
@@ -216,6 +254,8 @@ if ($packageFiles.Count -eq 0) {
     throw "No nupkg files were found in $feedRoot. Run dotnet pack first."
 }
 
+$sourceProjects = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'framework') -Recurse -File -Filter 'Leistd.*.csproj' |
+    Where-Object { $_.FullName -notmatch '[\\/](obj|bin|tests)[\\/]' })
 $packages = @($packageFiles | ForEach-Object { Get-PackageMetadata $_ })
 $allPackageCount = $packages.Count
 $feedPackages = $packages
@@ -265,7 +305,7 @@ if ($ValidationPlanPath) {
     $declaredTier = (Get-Content -LiteralPath $ValidationPlanPath -Raw | ConvertFrom-Json).Tier
     if ($declaredTier -cnotin @('pr', 'full')) { throw 'Invalid consumer plan tier.' }
     $validationPlan = Read-QualityValidationPlan $ValidationPlanPath $declaredTier
-    if ($validationPlan.DocsOnly) { throw 'Internal-document plan has no package consumer job.' }
+    if (-not $validationPlan.Jobs.'package-consumption') { throw 'Plan has no package consumer responsibility.' }
     foreach ($package in $packages) {
         $missingDependencies = @($package.Dependencies | Where-Object { $_ -cnotin $packages.Id })
         if ($missingDependencies.Count -gt 0) { throw "Candidate dependency missing: $($missingDependencies -join ', ')" }
@@ -286,11 +326,6 @@ if ($ValidationPlanPath) {
 }
 
 Write-Host "Verified contents of $allPackageCount packages; selected $($packages.Count) isolated consumers."
-if ($packages.Count -eq 0) {
-    if (-not $ValidationPlanPath) { throw 'No package consumers selected without a validation plan.' }
-    Write-Host 'Consumer build not applicable: template-only inputs; all candidate package contents verified.'
-    return
-}
 
 Reset-Directory $consumerRoot
 New-Item -ItemType Directory -Path $projectsRoot, $packagesRoot -Force | Out-Null
@@ -319,6 +354,15 @@ $nugetConfig = @"
 </configuration>
 "@
 [IO.File]::WriteAllText($nugetConfigPath, $nugetConfig, [Text.UTF8Encoding]::new($false))
+
+$checkSnippets = -not $ValidationPlanPath -or $validationPlan.PackageDocumentation
+if ($packages.Count -eq 0) {
+    if (-not $ValidationPlanPath) { throw 'No package consumers selected without a validation plan.' }
+    Write-Host 'Consumer build not applicable; all candidate package contents verified.'
+    if ($checkSnippets) { Invoke-DocSnippetCompilation }
+    Write-PackageProof
+    return
+}
 
 $results = [System.Collections.Generic.List[object]]::new()
 $solution = [Xml.XmlDocument]::new()
@@ -374,6 +418,7 @@ Write-Host "Package consumption passed for $($results.Count) package(s)." -Foreg
 if ($PackageIds.Count -gt 0) {
     Write-Host "Doc snippet compilation not run: -PackageIds narrows the feed." -ForegroundColor Yellow
 }
-else {
+elseif ($checkSnippets) {
     Invoke-DocSnippetCompilation
 }
+Write-PackageProof

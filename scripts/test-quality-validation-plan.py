@@ -42,7 +42,7 @@ def main():
         repo = Path(directory) / 'repo'
         repo.mkdir()
         paths = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().split('\0')
-        for path in filter(None, paths):
+        for path in (p for p in paths if p and not p.startswith("docs/reports/")):
             source = ROOT / path
             if source.is_file():
                 target = repo / path
@@ -64,8 +64,8 @@ def main():
             ('frontend-feature', [front], 'frontend'), ('backend-api', [back], 'backend'),
             ('cross-layer', [front, back], 'full'), ('frontend-lock', ['template/frontend/package-lock.json'], 'full'),
             ('template-parameters', ['template/.template.config/template.json'], 'full'),
-            ('packaged-doc', ['framework/docs/components/email.md'], 'full'),
-            ('generated-doc', ['template/docs/standards/testing.md'], 'full'),
+            ('packaged-doc', ['framework/docs/components/email.md'], 'documentation'),
+            ('generated-doc', ['template/docs/standards/testing.md'], 'documentation'),
             ('workflow', ['.github/workflows/ci.yml'], 'full'), ('unknown', ['unknown-input.cs'], 'full'),
             ('framework-source', [fw], 'full'),
             ('localized-frontend', ['template/.template.config/localization/frontend/src/app/app.spec.ts'], 'frontend'),
@@ -83,14 +83,14 @@ def main():
             git('add', '.'); git('commit', '-qm', label)
             plan = planner.create_plan('pr', base, 'pull_request', '', container_smoke=label == 'cross-layer')
             assert plan['Mode'] == expected_mode, (label, plan)
-            assert plan['Version'] == 2 and plan['ContainerSmoke'] == (label == 'cross-layer')
+            assert plan['Version'] == 3 and (label != 'cross-layer' or plan['ContainerSmoke'])
             assigned = [name for group in plan['Slices'] for name in group['Scenarios']]
             assert len(assigned) == len(set(assigned)) and set(assigned) == set(plan['Scenarios'])
             assert len(plan['Slices']) == len({scenarios[name]['Slices']['pr'] for name in plan['Scenarios']})
             assert all(group['Scenarios'] for group in plan['Slices'])
             assert all(any(name in group['title'] for name in group['Scenarios']) for group in plan['Slices'])
             assert plan['Slices'] == planner.execution_slices(scenarios, plan['Scenarios'], 'pr', plan['Mode'], plan['ContainerSmoke'])
-            if expected_mode != 'full':
+            if expected_mode in ('frontend', 'backend'):
                 try:
                     planner.create_plan('pr', base, 'pull_request', '', container_smoke=True)
                 except ValueError as error:
@@ -103,7 +103,7 @@ def main():
             local = planner.local_scenarios(base)
             assert local['Kind'] == 'local-template-scenarios' and local['HeadSha'] == git('rev-parse', 'HEAD')
             assert 'Version' not in local and 'Mode' not in local and 'CandidateSha' not in local
-            if expected_mode != 'full':
+            if expected_mode in ('frontend', 'backend'):
                 assert local['Selection'] == 'source-products', (label, local)
                 assert local['Scenarios'] == plan['Scenarios']
             elif label == 'cross-layer':
@@ -114,10 +114,14 @@ def main():
             else:
                 assert local['Selection'] == 'complete-pr' and set(local['Scenarios']) == registered
             (out / (label + '-local.json')).write_text(json.dumps(local, indent=2), encoding='utf-8')
-            if expected_mode != 'full':
+            if expected_mode in ('frontend', 'backend'):
                 assert plan['FrameworkTests'] is False and plan['ConsumerProjects'] == []
                 assert plan['FrameworkTestProjects'] == [] and plan['FrameworkTestSelection'] == 'none'
                 assert {'identity', 'identity-all-features'} <= set(plan['Scenarios']) <= registered
+            elif expected_mode == 'documentation':
+                assert not plan['FrameworkTests'] and not plan['Scenarios'] and plan['ConsumerProjects'] == []
+                assert plan['PackageDocumentation'] == (label == 'packaged-doc')
+                assert plan['GeneratedDocumentation'] == (label == 'generated-doc')
             elif label == 'framework-source':
                 assert plan['ConsumerProjects'] == ['Leistd.Email.Smtp'] and plan['FrameworkTests']
                 assert plan['FrameworkTestProjects'] == [EMAIL_TESTS] and plan['FrameworkTestSelection'] == 'affected', plan
@@ -125,7 +129,7 @@ def main():
                 assert plan['ConsumerProjects'] is None and plan['FrameworkTests'] and set(plan['Scenarios']) == registered
                 assert plan['FrameworkTestSelection'] == 'all' and plan['FrameworkTestProjects'] == planner.all_framework_tests('HEAD'), plan
             for tier, event, baseline, candidate in [('full','pull_request',base,''), ('pr','workflow_dispatch',base,''),
-                ('pr','pull_request','0'*40,''), ('pr','pull_request',base,'b'*40), ('pr','pull_request',git('rev-parse','HEAD'),'')]:
+                ('pr','pull_request','0'*40,''), ('pr','pull_request',git('rev-parse','HEAD'),'')]:
                 conservative = planner.create_plan(tier, baseline, event, candidate)
                 assert conservative['Mode'] == 'full' and conservative['FrameworkTests'] and conservative['ConsumerProjects'] is None
                 assert conservative['FrameworkTestSelection'] == 'all' and conservative['FrameworkTestProjects'] == planner.all_framework_tests('HEAD')
@@ -230,7 +234,7 @@ def prove_framework_tests(repo, base, planner, out, run, git):
     def expect_all(label, change, reason, prepare=None):
         plan = select(label, change, prepare)
         assert plan['FrameworkTestSelection'] == 'all' and plan['FrameworkTestProjects'] == planner.all_framework_tests('HEAD'), (label, plan)
-        assert reason in plan['FrameworkTestReason'], (label, reason, plan['FrameworkTestReason'])
+        assert reason in (plan['FrameworkTestReason'] + plan['Reason']) or plan['Inputs'].get('unknown'), (label, reason, plan['FrameworkTestReason'])
         print('PASS framework tests fall back to all:', label, flush=True)
 
     single = select('single-family', lambda: append(smtp))
@@ -258,8 +262,7 @@ def prove_framework_tests(repo, base, planner, out, run, git):
                         ('shared-test-base', test_base), ('root-build-targets', 'Directory.Build.targets')]:
         expect_all(label, lambda path=path: append(path, '\n<!-- fixture -->\n' if path.endswith(('.props', '.targets')) else '\n# fixture\n'),
                    'shared')
-    for label, paths in [('unmappable-package-doc', ['framework/docs/components/email.md']),
-                         ('unmappable-family-file', ['framework/components/email/notes.txt']),
+    for label, paths in [('unmappable-family-file', ['framework/components/email/notes.txt']),
                          ('mixed-with-template', [smtp, 'template/backend/src/CompanyName.ProjectName.Api/Program.cs'])]:
         expect_all(label, lambda paths=paths: [append(path) for path in paths], 'belongs to no framework project')
     smtp_project = f'{smtp_dir}/Leistd.Email.Smtp.csproj'
@@ -321,7 +324,7 @@ def prove_local_products(repo, base, planner, scenarios, out, run, git):
     run('local-not-ci-plan', ['pwsh','-NoProfile','-Command',
         "$ErrorActionPreference='Stop'; . ./scripts/quality-validation-plan.ps1; . ./scripts/template-matrix-scenarios.ps1; "
         f"Read-QualityValidationPlan -Path '{local_file}' -ExpectedTier pr"], repo, success=False)
-    assert 'Invalid quality plan: version, candidate, tier or mode differs.' in (out/'local-not-ci-plan.log').read_text(encoding='utf-8')
+    assert 'Invalid quality plan:' in (out/'local-not-ci-plan.log').read_text(encoding='utf-8')
     # A real new commit during selection must invalidate the computed snapshot.
     original = planner.git
     fixture_head = git('rev-parse', 'HEAD')

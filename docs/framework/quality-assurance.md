@@ -11,13 +11,13 @@
 | L0 编辑循环 | 每次小改动 | ≤ 1 分钟 | 受影响项目构建 + `dotnet test <测试项目> --filter "FullyQualifiedName~<类>"`；改了某道闸门就单跑它 |
 | L1 阶段完成 / 推送前 | 完整改动形成后 | 框架 ≤ 5 分钟；模板以实测为准，通常目标 ≤ 10 分钟 | `check-all.ps1` + 下表按路径选的入口；不为预算跳过检查 |
 | L2 PR CI | 每次推送 PR | 墙钟 ≤ 8.5 分钟 | 完整静态闸门；依据同候选验证计划执行必要框架测试、包内容/消费、PostgreSQL/OIDC 与模板场景/阶段；未知及共享输入取完整 PR 档 |
-| L3 全集 | develop 推送、工作日夜间、发布（main 推送仅在框架或 VERSION 变化时） | 不设严格预算 | 同 L2，模板跑 `full` 档全部场景；发布等待同 SHA 的 L3 结果 |
+| L3 全集 | 代码/共享输入推送、工作日夜间与实际发布；已验证基线的纯文档推送按下述责任执行 | 不设严格预算 | 同 L2，模板跑 `full` 档全部场景；发布等待同 SHA 的 L3 结果 |
 
 L1 按改动路径选择入口：
 
 | 改动 | 必跑 | 视情况加跑 |
 | --- | --- | --- |
-| 只改内部文档或 Skill（CI 白名单见 `ci.yml` 的 `framework-pack/scope`，含根 `skills/`） | `check-all.ps1` | — |
+| 只改内部文档或 Skill（分类定义见 `scripts/plan-quality-checks.py`，含根 `skills/` 中的 Markdown） | `check-all.ps1` | — |
 | 随包 `framework/docs/`、模板 `template/docs/` 或项目 Skill | `check-all.ps1` + 打包内容或代表性生成检查 | 影响运行契约时加相应隔离消费或生成场景验证 |
 | 框架某组件家族的实现 | 按清单运行受影响测试项目（见下节）+ `check-all.ps1` | 公共 API、注册、包依赖变化时加打包与 `-PackageIds` 隔离消费；模板消费方式变化时验证实际生成产品 |
 | 模板支持的局部前端/后端源码，含文件内条件块 | 按下节计算场景，执行每个产品的完整适用阶段 | 前端交互变化做浏览器验证；真实依赖变化加目标集成 |
@@ -79,9 +79,20 @@ $selection = Get-Content .tmp/local-template-scenarios.json -Raw | ConvertFrom-J
 
 ## PR 的内部文档例外
 
-直接 PR 的纯内部文档资格只由 [CI 范围步骤](../../.github/workflows/ci.yml) `framework-pack/scope` 的路径白名单决定。它读取 base 到实际候选的完整差异，跨边界重命名按两端处理；空差异、未知路径或无法确定基准均取全集。Framework 随包文档、Template 的全部载荷、脚本、workflow 和根构建输入不属于该例外。手动和复用入口不享受 docs-only，按所选档位执行，发布仍为 full。
+文档与代码使用 [计划器](../../scripts/plan-quality-checks.py) 的唯一输入分类，读取完整 base→候选差异；删除和跨边界移动计入两端。未知路径、空差异、force push、无法确认依赖或基准均完整验证。直接 PR 可按责任缩小；手动、定时和实际发布候选完整执行。
 
-docs-only 仍运行完整静态闸门、范围/计划与必过质量汇总；动态作业按规则跳过，汇总报告“不适用”。不使用 workflow 级 `paths-ignore`。范围失败、取消、输出缺失或静态失败均阻止汇总通过；不能把缺少矩阵回执称为执行成功。代码 PR 的责任由下述输入计划决定，不能按文件数或需求大小省略测试。
+| 文档输入 | 必过责任 |
+| --- | --- |
+| 根 README、根 docs、仓库 Skill 的已登记 Markdown | Linux/Windows 完整静态检查、计划与汇总 |
+| Template Markdown、项目 Skill 与 AI 入口 | 上述检查，加全部有效形态及 Ci 变体的实际生成、文档引用/锚点、模板残留、AI 入口、Skill 元数据及生成前端 Markdown 格式 |
+| 实际随包 Markdown（包括 framework/NuGet.md） | 候选打包、全包内容与源码 Markdown 字节一致、XML 文档、文档示例编译及反例；空消费清单不跳过示例 |
+| frontend-spartan.md 登记表 | 生成文档加 frontend-gates，验证实际组件与登记一致 |
+
+扩展名不能代替输入依赖。前端闸门读取 UI 组件、components.json、两份前端 package/lock、angular.json、Prettier/ESLint 配置与规则、模板配置、两个前端闸门脚本及 Spartan 登记表；这些输入变化必须保留该闸门。纯后端与无关内部说明可以跳过。文档与代码同改取责任并集，文档不把已证明的局部代码变更扩大到完整阶段。
+
+不使用 workflow 级 paths-ignore。汇总严格核对每项 success/skipped、候选、计划与适用证明；检查数为零、失败、取消、意外跳过或缺失回执均失败。格式直接读取生成 frontend 文件，使用锁定 Prettier 与实际配置/忽略范围，避免 .tmp 被 Git 忽略后假绿；不扩展到根 docs。
+
+非发布 push 只有在 before 是候选祖先，且同一分支 release workflow 的最新 before 推送运行和尝试成功、质量汇总成功时才允许轻量文档责任。candidate 与 CI 分别查询 Actions API；失败、取消、进行中、缺失或 API/权限错误均完整验证。机器人或 [skip ci] 的 before 没有成功质量汇总，也按完整验证处理。发布基线另见[版本规范](./versioning.md#正式版发布全自动)。
 
 ## 编译器、分析器与静态闸门
 
@@ -115,19 +126,19 @@ Job 的集群锁、水位和失败重试仍由执行器契约测试承担。模�
 
 CI 执行组取登记逻辑组与所选场景的交集，保留登记成员及执行顺序，空组不创建。完整与局部模式使用同一规则；PR最多三组、full最多两组。候选计划明确列出各组的实际成员，检查标题展示成员摘要、阶段和容器责任，编号仅作内部ID。不依据未验收的时长模型重排场景，不保留成本登记或实验开关；调度调整先满足下文墙钟与runner的联合门槛。完整 PR 墙钟 ≤510 秒且 runner 不增加的联合性能目标尚未达成，不能以功能验收或单次耗时认定达标。
 
-`framework-pack` 无作业依赖，checkout 候选后执行内部文档判定、独立容器范围判定与 `plan-quality-checks.py`，生成绑定 SHA／档位／模式的 Version 2 计划，明确每个执行组的场景和容器责任。直接 PR 保留两层提交深度；手动／发布候选读取完整历史以判断 main 差异。它同时承担范围结果成功责任；docs-only 不安装 SDK、不打包、不上传产物。其他输入只打包一次，immutable artifact 供各消费者只读下载。所有动态作业显式检查范围，不能依赖打包作业被跳过来间接过滤；不增加独立规划 runner。
+`quality-plan` 独立 checkout 固定候选与完整历史，输出 Version 3 的输入分类、Jobs、档位/模式、场景/容器及两份基线。被调用 CI 独立重算 candidate 的期望计划。framework-pack 按责任只打包一次，不可变 artifact 供消费者下载；不适用时连 SDK 安装一起跳过。每个作业直接检查计划中的自身责任，汇总始终运行。规划作业的新增 runner 时间计入净成本。
 
 ### 同候选输入计划
 
-选择规则唯一实现为 `scripts/plan-quality-checks.py`；内部文档白名单仍只在 workflow。完整 base→候选差异非空，且只包含支持的前端源码或后端 C# 时，才允许模板阶段裁剪：
+选择与发布输入分类唯一实现为 `scripts/plan-quality-checks.py`。完整 base→候选差异非空，代码部分只含支持的前端源码或后端 C# 时允许模板阶段裁剪；文档责任另取并集：
 
 | 输入 | Framework 测试 | 包内容/隔离消费 | 模板阶段 | 独立 PG/OIDC |
 | --- | --- | --- | --- | --- |
 | 仅模板前端 src/public/_mock 的支持文件 | 不适用，输入未变 | 全部包内容；消费构建不适用 | 生成/形态、audit、npm ci、healthcheck、lint、build、spec 发现与真实 Chromium | 保留 |
 | 仅模板 backend/src 或 tests 的 C# | 不适用，输入未变 | 全部包内容；消费构建不适用 | 生成/形态、audit、restore/build、真实运行时、后端单元/集成 | 保留 |
 | Framework 组件/DDD/测试项目内的文件 | 改动项目反向依赖闭包内的测试项目 | 全部内容；该包与候选 nuspec 反向传递依赖的隔离消费 | 完整 PR 场景/阶段 | 保留 |
-| 跨前后端、共享配置/依赖、随包/生成文档、脚本/workflow、未知输入 | 全量 | 全部内容与全部消费 | 完整 PR 场景/阶段；适用容器 | 保留 |
-| 手动/复用/full 或未知/无效 base | 全量 | 全部内容与全部消费 | 所选档位完整场景/阶段 | 保留 |
+| 跨前后端、共享配置/依赖、脚本/workflow、未知输入 | 全量 | 全部内容与全部消费 | 完整 PR 场景/阶段；适用容器 | 保留 |
+| 手动/定时/发布或未知/无效 base | 全量 | 全部内容与全部消费 | 所选档位完整场景/阶段 | 保留 |
 
 局部模板场景依据现有 template.json 的 sources/modifiers/computed 条件求文件生产场景，纳入旧/新树两侧与默认/全特性代表；不另建特性目录映射。模板参数、项目/前端配置、依赖变化及未建模的 source/modifier 字段取完整档。选测证明是输入闭包。后端变化仍需真实 PG/OIDC 检查契约，前端 mocks 不能替代该职责；纯前端模式同样保留 PG/OIDC，直到逐项证明其全部入口的输入闭包不含该前端源码。前后端各自省略的阶段要求实际生成输入保持不变。实际生成锁文件的生产依赖 audit 阈值、每片执行与网络重试保留；同片内内容相同的锁文件只审计一次，不以源码不变推断漏洞库不变。
 
@@ -135,13 +146,13 @@ Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/b
 
 Framework 测试清单 `FrameworkTestProjects` 由 `framework/**/*.csproj` 的 `ProjectReference` 图求出：改动文件映射到所属项目，取反向依赖闭包中的 `*.Tests` 项目，与计划的 BaseSha/CandidateSha 绑定（`FrameworkTestSelection` 为 `affected`、`all` 或 `none`）。以下情形取全集：共享输入（`framework/*.props`、`framework/build/**`、`framework/tests/Directory.Build.props`、`framework/tests/shared/**` 共享测试基座、根构建输入与 `VERSION`）、文件不属于任何项目、项目或引用增删改名、引用指向不存在的项目、无法解析的属性或 `Import`、未登记的 props/targets、链接文件或显式跨项目编译输入、选择为空；不确定基线与脏树同样取全集。`test` 作业按清单逐项目运行，每个通过的项目写一份回执；汇总核对回执与清单一一对应，缺失、多出、重复、失败或候选/基线不符均失败，全集清单还须等于候选中登记的全部测试项目。
 
-汇总 `template-matrix` 使用 always，要求静态与范围/打包作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立预期计划核对准确执行组、场景、阶段、SHA 与档位。每个必要场景必须唯一分配；回执不能自行缩小范围。登记 `Verify` 的场景在完整模式须回执 `Verify=pass`，其余为 `not-run`。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、跨组移动、错版本／SHA／档位／阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；没有计划的人工入口使用原逻辑组，不能拿 CI 执行组回执代替。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
+汇总 `template-matrix` 使用 always，要求静态与独立 quality-plan 作业成功，按计划严格核对每个动态作业的 success/skipped，再按独立重算的 Version 3 计划核对准确执行组、场景、阶段、SHA、档位、包与生成文档证明。每个必要场景必须唯一分配；回执不能自行缩小范围。登记 `Verify` 的场景在完整模式须回执 `Verify=pass`，其余为 `not-run`。省略阶段写 `not-applicable`，不能用 skipped/pass 冒充执行；失败、取消、意外跳过、缺片、重复、跨组移动、错版本／SHA／档位／阶段及缺少容器责任全部拒绝。矩阵和检查器共享计划验证入口 `quality-validation-plan.ps1`；没有计划的人工入口使用原逻辑组，不能拿 CI 执行组回执代替。生成目录、数据库、feed/hive、包解包缓存和端口仍隔离，不共享可变产物。
 
-本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`；单组复现的 `-Slice` 必须取计划中的 key。容器适用时，生成计划增加 `--container-smoke true`，完整模式执行登记的容器责任。默认人工入口不自动推测 base，继续完整执行；不能将计划与手动跳过、`-Scenarios` 或手选容器场景混用，full 不接受裁剪计划。修改选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`：它实际生成 PR 档产品做前后对照，核对省略阶段/场景的输入并验证错误回执被拒绝；这是维护回归入口，不加入每日静态闸门。
+本地也可显式生成同候选计划：`python scripts/plan-quality-checks.py --tier pr --event pull_request --base <完整SHA> --output .tmp/quality-plan.json`，矩阵传 `-Tier pr -ValidationPlanPath .tmp/quality-plan.json`；单组复现的 `-Slice` 必须取计划中的 key。容器适用时，生成计划增加 `--container-smoke true`，完整模式执行登记的容器责任。默认人工入口不自动推测 base，继续完整执行；不能将计划与手动跳过、`-Scenarios` 或手选容器场景混用，full 运行阶段不接受裁剪计划；已验证基线的非发布文档推送仅执行登记文档责任。修改选择规则或回执时运行 `python scripts/test-quality-validation-plan.py`：它实际生成 PR 档产品做前后对照，核对省略阶段/场景的输入并验证错误回执被拒绝；这是维护回归入口，不加入每日静态闸门。
 
 范围裁剪必须基于 PR base/merge-base 到 head 的完整差异及实际依赖，不用单一 `HEAD^` 代替多提交 PR。无法确定范围时全量执行；随包文档、props、lock、脚本与 workflow 都是质量输入。只有接替责任和变异证据完整时才削减组合入口的重复工作。
 
-独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 三项源码预检，再打包、生成并审计实际生成的锁文件；预检职责不由生成编译替代。同一 CI 候选的源码预检由 `docs-sync` 完整运行 `check-all.ps1` 承担，矩阵传入 `-SkipSourcePreflight` 省略重复扫描，并核对总入口仍登记了这三个预检入口。所有作业显式 checkout 相同候选 SHA；生成可与静态检查并行，必过汇总必须等待并核对范围、静态、打包、Framework 测试、包消费、PostgreSQL、OIDC 和各模板分片全部成功，再核对本档完整回执。独立人工矩阵默认在生成前预检，不使用该 CI 开关。清单存在不能代替缺陷注入和失败传播验证。
+独立 `test-template-matrix.ps1` 默认先执行 symbols、using-guards、async-boundaries 三项源码预检，再打包、生成并审计实际生成的锁文件；预检职责不由生成编译替代。同一 CI 候选的源码预检由 `docs-sync` 完整运行 `check-all.ps1` 承担，矩阵传入 `-SkipSourcePreflight` 省略重复扫描，并核对总入口仍登记了这三个预检入口。所有作业显式 checkout 相同候选 SHA；生成可与静态检查并行，必过汇总必须等待并按计划核对范围、静态、打包、Framework 测试、包消费、PostgreSQL、OIDC 与模板分片的成功或不适用，再核对本档完整回执。独立人工矩阵默认在生成前预检，不使用该 CI 开关。清单存在不能代替缺陷注入和失败传播验证。
 
 ## 效率证据
 
