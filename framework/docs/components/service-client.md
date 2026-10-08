@@ -73,6 +73,8 @@ var order = await response.ReadContentAsync<OrderDto>();
 
 返回 `HttpResponseMessage` 的 Refit 方法不经错误工厂；读取流前必须调用 `EnsureRemoteSuccessAsync()`。
 
+默认 Refit 配置通过 `TransportExceptionFactory` 原样传递发送阶段的异常，保留标准管道的故障分类与 .NET 原生取消语义。全局异常处理中，远端故障映射为 502、不可达映射为 503、弹性管道超时映射为 504。`Task<ApiResponse<T>>` 的发送阶段遇到组件异常时也会直接抛出，不写入 Refit 的 `Error`；自定义配置请从 `ServiceClientRefitSettings.Create()` 开始，以保留此契约。
+
 远程错误映射为：
 
 | 响应 | 结果 |

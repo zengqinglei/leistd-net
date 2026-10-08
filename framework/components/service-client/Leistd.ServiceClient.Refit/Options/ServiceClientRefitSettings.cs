@@ -12,6 +12,7 @@ public static class ServiceClientRefitSettings
     /// <summary>创建统一配置的 <see cref="RefitSettings"/>。</summary>
     /// <param name="jsonOptions">自定义序列化选项；默认见 <see cref="CreateDefaultJsonOptions"/>。</param>
     /// <remarks>
+    /// 发送阶段保留标准管道的异常分类与 .NET 原生取消语义，不再包装为 Refit 请求异常。
     /// <c>ExceptionFactory</c> 只作用于由 Refit 反序列化的返回形态（<c>Task&lt;T&gt;</c> 等）。
     /// 返回 <c>Task&lt;HttpResponseMessage&gt;</c> 的方法（文件下载等）拿到的是原始响应，
     /// 须自行调用 <c>EnsureRemoteSuccessAsync()</c> 完成错误还原。
@@ -24,6 +25,7 @@ public static class ServiceClientRefitSettings
                 jsonOptions ?? CreateDefaultJsonOptions()),
             ExceptionFactory = async response =>
                 response.IsSuccessStatusCode ? null : await response.CreateRemoteErrorAsync(),
+            TransportExceptionFactory = static (_, exception, _) => exception,
         };
     }
 
