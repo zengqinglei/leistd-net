@@ -1,6 +1,6 @@
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
-import { parseMockSorting } from '../core/sorting';
+import { MockSortFields, sortMockRows } from '../core/sorting';
 //#if (LocalIdentity)
 import { ROLES } from '../data/authorization';
 import { ensureAcceptablePassword } from '../data/password-policy';
@@ -28,25 +28,18 @@ function getQueryValue(value: unknown) {
     : String(normalized);
 }
 
-/** 与后端 `UserAppService.ApplySorting` 同一份字段清单。 */
-//#if (LocalIdentity)
-const USER_SORT_FIELDS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
-//#else
-const USER_SORT_FIELDS = ['username', 'email', 'creationTime'] as const;
-//#endif
+const USER_SORT_FIELDS: MockSortFields<(typeof USERS)[number]> = {
+  username: (user) => user.username,
+  email: (user) => user.email,
+  creationTime: (user) => Date.parse(user.creationTime),
+  id: (user) => user.id,
+  //#if (LocalIdentity)
+  'lastLogin.Time': (user) => (user.lastLoginTime ? Date.parse(user.lastLoginTime) : null),
+  //#endif
+};
 
 function sortUsers(users: typeof USERS, sorting?: string) {
-  const { field, descending } = parseMockSorting(sorting, USER_SORT_FIELDS, 'username');
-  const order = descending ? -1 : 1;
-
-  return users.sort((a, b) => {
-    const left = a[field as keyof typeof a];
-    const right = b[field as keyof typeof b];
-    const compared = String(left ?? '').localeCompare(String(right ?? '')) * order;
-    // 与后端一样固定追加 id 作为稳定次序，且不随方向反转：否则排序键有并列值时，
-    // 翻页会重复或漏掉同一行
-    return compared !== 0 ? compared : a.id.localeCompare(b.id);
-  });
+  return sortMockRows(users, sorting, USER_SORT_FIELDS, 'creationTime desc', 'id');
 }
 
 export function getUsers(params: any): PagedResultDto<any> {

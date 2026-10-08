@@ -1,5 +1,4 @@
 using CompanyName.ProjectName.Application.Settings.Errors;
-using CompanyName.ProjectName.Application.Shared.Paging.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 #if (LocalIdentity)
 #if (IncludeMultiTenancy)
@@ -30,6 +29,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Hosting;
 using System.Reflection;
+using System.Linq.Dynamic.Core.Exceptions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -44,6 +44,27 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 {
     private GlobalExceptionOptions ComposedOptions()
         => factory.Services.GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;
+
+    [Fact]
+    public async Task Parse_failures_outside_sorting_are_not_labeled_as_sorting_validation()
+    {
+        using var host = await new HostBuilder()
+            .ConfigureWebHost(web => web.UseTestServer()
+                .ConfigureServices(services => services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure))
+                .Configure(app =>
+                {
+                    app.UseGlobalExceptionHandler();
+                    app.Run(_ => throw new ParseException("private configuration expression", 0));
+                }))
+            .StartAsync();
+
+        var response = await host.GetTestClient().GetAsync("/");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, (int)response.StatusCode);
+        Assert.DoesNotContain("sorting", body);
+        Assert.DoesNotContain("private configuration expression", body);
+    }
 
     [Theory]
 #if (LocalIdentity)
@@ -87,7 +108,7 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 
         var codeTypes = new[]
         {
-            typeof(PagingErrorCodes), typeof(RoleErrorCodes),
+            typeof(RoleErrorCodes),
             typeof(AppSettingErrorCodes), typeof(UserErrorCodes),
 #if (LocalIdentity)
             typeof(AuthErrorCodes), typeof(SecurityErrorCodes),

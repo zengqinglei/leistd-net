@@ -96,6 +96,15 @@ describe('table-query-state', () => {
   });
 
   describe('toApiSorting', () => {
+    it('serializes all sorting keys in caller order', () => {
+      expect(
+        toApiSorting([
+          { id: 'creationTime', desc: true },
+          { id: 'username', desc: false },
+        ]),
+      ).toBe('creationTime desc, username asc');
+    });
+
     it('formats the active sort as "field dir"', () => {
       expect(toApiSorting([{ id: 'email', desc: true }])).toBe('email desc');
       expect(toApiSorting([{ id: 'username', desc: false }])).toBe('username asc');

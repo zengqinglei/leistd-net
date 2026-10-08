@@ -16,6 +16,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+<!--#if (LocalIdentity)-->
+    <PackageReference Include="System.Linq.Dynamic.Core" />
+<!--#endif-->
     <!-- AddApplicationServices 里的映射器注册依赖 ILogger<>；单元测试不建宿主，自己带日志实现 -->
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

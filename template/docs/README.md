@@ -8,7 +8,7 @@
 
 | 任务 | 必读 | 按需 |
 | --- | --- | --- |
-| 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口读 [API](standards/api.md)；涉及登录、会话、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md) |
+| 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口、分页排序或输入验证读 [API](standards/api.md)；涉及登录、会话、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md) |
 <!--#if (SpaFrontend)-->
 <!--#if (IncludeLocalization)-->
 | 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面、表单、导航读 [前端界面](standards/frontend-ui.md)；加组件或升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md)；新增文案读 [前端多语言](standards/frontend-i18n.md) |

@@ -1,11 +1,20 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using Leistd.Data.Paging;
+using CompanyName.ProjectName.Domain.Users.Entities;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
 /// <summary>获取用户分页列表输入 DTO。</summary>
 public record GetUserPagedInputDto : PageRequest, IValidatableObject
 {
+    [AllowNull]
+    public override string Sorting
+    {
+        get => string.IsNullOrWhiteSpace(field) ? $"{nameof(User.CreationTime)} desc" : field;
+        init;
+    }
+
     /// <summary>单个角色名的长度上限，与角色名的持久化约束一致。</summary>
     private const int RoleNameMaxLength = 64;
 

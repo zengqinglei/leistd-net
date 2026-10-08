@@ -22,6 +22,8 @@
 <!--#endif-->
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="System.Linq.Dynamic.Core" />
+    <PackageReference Include="Leistd.Data" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
 <!--#if (LocalIdentity || IncludeNotifications || IncludeRealTime)-->
     <!-- 两步验证、清理任务与实时订阅的截止边界用官方时间替身 -->

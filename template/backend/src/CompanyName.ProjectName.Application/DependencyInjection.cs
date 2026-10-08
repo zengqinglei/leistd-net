@@ -10,6 +10,7 @@ using CompanyName.ProjectName.Application.Settings.AppServices;
 #endif
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Application.Users.Validators;
 #endif
 using CompanyName.ProjectName.Application.Settings.Timing;
 #if (LocalIdentity)
@@ -82,6 +83,7 @@ public static class DependencyInjection
         services.TryAddTransient<ISystemInitializer, SystemInitializer>();
 
 #if (LocalIdentity)
+        services.TryAddTransient<UserSortingValidator>();
         services.TryAddTransient<ICaptchaVerifier, CaptchaVerifier>();
         services.TryAddTransient<ICaptchaAppService, CaptchaAppService>();
 #if (Email)

@@ -1,5 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Leistd.Data.Paging;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Leistd.Data.Tests;
@@ -24,6 +27,72 @@ public class PagingContractTests
         Assert.Null(request.Sorting);
         Assert.Empty(Validate(request));
     }
+
+    [Fact]
+    public void Derived_defaults_are_visible_through_the_base_type_and_serialization()
+    {
+        PageRequest request = new ExpandedPageRequest();
+
+        Assert.Equal(20, request.Limit);
+        Assert.Equal("Name desc", request.Sorting);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(request));
+        Assert.Equal(20, json.RootElement.GetProperty(nameof(PageRequest.Limit)).GetInt32());
+        Assert.Equal("Name desc", json.RootElement.GetProperty(nameof(PageRequest.Sorting)).GetString());
+    }
+
+    [Fact]
+    public void Derived_records_keep_equality_and_with_semantics()
+    {
+        PageRequest request = new ExpandedPageRequest();
+        var copy = request with { Limit = 30 };
+
+        Assert.IsType<ExpandedPageRequest>(copy);
+        Assert.Equal(new ExpandedPageRequest { Limit = 30 }, copy);
+        Assert.Equal(20, request.Limit);
+        Assert.NotEqual(request, copy);
+    }
+
+    [Fact]
+    public void Overrides_can_expand_or_narrow_validation_without_changing_base_requests()
+    {
+        Assert.Empty(Validate(new ExpandedPageRequest { Limit = 1500 }));
+        Assert.NotEmpty(Validate(new ExpandedPageRequest { Limit = 2001 }));
+        Assert.Empty(Validate(new NarrowPageRequest { Limit = 50 }));
+        Assert.NotEmpty(Validate(new NarrowPageRequest { Limit = 51 }));
+        Assert.NotEmpty(Validate(new PageRequest { Limit = 1500 }));
+        Assert.NotEmpty(Validate(new InheritedPageRequest { Limit = 1500 }));
+    }
+
+    [Fact]
+    public void Mvc_metadata_uses_the_overridden_validation_range()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddControllers();
+        using var provider = services.BuildServiceProvider();
+        var metadata = provider.GetRequiredService<IModelMetadataProvider>()
+            .GetMetadataForType(typeof(ExpandedPageRequest));
+
+        var limit = metadata.Properties.Single(property => property.PropertyName == nameof(PageRequest.Limit));
+        var range = Assert.Single(limit.ValidatorMetadata.OfType<RangeAttribute>());
+        Assert.Equal(1, range.Minimum);
+        Assert.Equal(2000, range.Maximum);
+    }
+
+    private sealed record ExpandedPageRequest : PageRequest
+    {
+        [Range(1, 2000)]
+        public override int Limit { get; init; } = 20;
+        public override string? Sorting { get; init; } = "Name desc";
+    }
+
+    private sealed record NarrowPageRequest : PageRequest
+    {
+        [Range(1, 50)]
+        public override int Limit { get; init; } = 20;
+    }
+
+    private sealed record InheritedPageRequest : PageRequest;
 
     // 边界值必须放行：写成 Range(1, 999) 之类的差一错误只有边界用例能发现。
     [Theory]

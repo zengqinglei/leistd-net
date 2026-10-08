@@ -6,12 +6,7 @@ using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>列表查询的分页与排序契约：越界与非法排序都必须是 400，且排序字段限于白名单。</summary>
-/// <remarks>
-/// <para>钉两件可观察的事：越界分页与非法排序都返回 400（而不是 500），
-/// 以及可排序字段只限于各接口自己的白名单——按实体上真实存在、但不属于该列表契约的字段
-/// （<c>PasswordHash</c>、<c>IsSuperAdmin</c>）排序必须被拒绝。</para>
-/// </remarks>
+/// <summary>列表的分页、Dynamic LINQ 排序及凭据限制。</summary>
 public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory)
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
@@ -48,34 +43,55 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
                 $"/api/v1/users?offset=0&limit={PageRequest.MaximumLimit + 1}")).StatusCode);
     }
 
-    /// <summary>只有白名单内的字段可排序，其余一律 400</summary>
+    /// <summary>可查询属性直接排序；凭据由业务规则拒绝，解析异常交给框架。</summary>
     [Theory]
-    [InlineData("/api/v1/users", "username desc", true)]
-    [InlineData("/api/v1/users", "email asc", true)]
-    [InlineData("/api/v1/users", "creationTime desc", true)]
-    // 实体上真实存在、但不属于本列表契约的字段
-    [InlineData("/api/v1/users", "passwordHash asc", false)]
-    [InlineData("/api/v1/users", "isSuperAdmin desc", false)]
-    [InlineData("/api/v1/users", "nonsense asc", false)]
-    // 方向词只认 asc/desc
-    [InlineData("/api/v1/users", "username sideways", false)]
-    [InlineData("/api/v1/roles", "displayName desc", true)]
-    [InlineData("/api/v1/roles", "sort asc", true)]
-    [InlineData("/api/v1/roles", "name asc", false)]
-    public async Task Sorting_is_limited_to_the_documented_fields(
-        string path, string sorting, bool expectedAccepted)
+    [InlineData("/api/v1/users", "username desc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", "email asc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", "creationTime desc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", "passwordHash asc", HttpStatusCode.BadRequest)]
+    [InlineData("/api/v1/users", "isSuperAdmin desc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", "DisplayName asc, Username desc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", "lastLogin.Time desc, USERNAME ASC", HttpStatusCode.OK)]
+    [InlineData("/api/v1/users", "securityStamp", HttpStatusCode.BadRequest)]
+    [InlineData("/api/v1/users", "username, TwoFactor.Secret", HttpStatusCode.BadRequest)]
+    [InlineData("/api/v1/users", "twofactor.recoverycodes", HttpStatusCode.BadRequest)]
+    [InlineData("/api/v1/users", "PasswordHash.Substring(0,1)", HttpStatusCode.BadRequest)]
+    [InlineData("/api/v1/users", "iif(PasswordHash > \"$2b\", 0, 1)", HttpStatusCode.InternalServerError)]
+    [InlineData("/api/v1/users", "Username,", HttpStatusCode.InternalServerError)]
+    [InlineData("/api/v1/users", "nonsense asc", HttpStatusCode.InternalServerError)]
+    [InlineData("/api/v1/users", "username sideways", HttpStatusCode.InternalServerError)]
+    [InlineData("/api/v1/roles", "displayName desc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/roles", "sort asc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/roles", "name asc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/roles", "sort descending, name ascending", HttpStatusCode.OK)]
+#if (OpenIddictServer)
+    [InlineData("/api/v1/open-applications", "clientType desc, ClientId asc", HttpStatusCode.OK)]
+    [InlineData("/api/v1/open-applications", "Application", HttpStatusCode.InternalServerError)]
+    [InlineData("/api/v1/open-applications", "Application.ClientSecret", HttpStatusCode.InternalServerError)]
+#endif
+    public async Task Sorting_uses_query_properties_and_rejects_invalid_or_sensitive_expressions(
+        string path, string sorting, HttpStatusCode expectedStatus)
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var response = await superAdmin.Client.GetAsync(
             $"{path}?offset=0&limit=10&sorting={Uri.EscapeDataString(sorting)}");
 
-        Assert.Equal(
-            expectedAccepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest,
-            response.StatusCode);
+        Assert.Equal(expectedStatus, response.StatusCode);
+        if (expectedStatus == HttpStatusCode.InternalServerError)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.DoesNotContain(sorting, body);
+            Assert.DoesNotContain("No property or field", body);
+        }
+        else if (expectedStatus == HttpStatusCode.BadRequest)
+        {
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal("User:SortingCredentialsForbidden", body.RootElement.GetProperty("code").GetString());
+        }
     }
 
-    /// <summary>白名单命中的排序确实生效（不是被默默忽略）</summary>
+    /// <summary>排序改变返回条目的顺序。</summary>
     [Fact]
     public async Task Accepted_sorting_actually_orders_the_result()
     {
@@ -92,23 +108,13 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         Assert.Equal(ascending.AsEnumerable().Reverse(), descending);
     }
 
-    /// <remarks>
-    /// 走 <see cref="JsonDocument"/> 而不是反序列化成 <c>PagedResult&lt;T&gt;</c>：
-    /// 那个记录有两个构造函数，System.Text.Json 认不出该用哪个（与仓库里其余读列表的用例同解）。
-    /// </remarks>
-    /// <summary>省略 sorting 与显式传默认排序，结果必须完全一致</summary>
-    /// <remarks>
-    /// <para>前端即使 URL 上没有排序参数，也会把默认排序状态转成 <c>sort asc</c> 发出来。
-    /// 因此"省略"和"显式默认值"是同一个列表的两种调用方式，顺序必须一样——两条路径各写一遍时
-    /// 它们会各自漂移。</para>
-    /// <para>用两个<b>排序号相同</b>的角色才测得出来：排序号不并列时次级键根本不参与比较。</para>
-    /// </remarks>
+    /// <summary>省略排序与显式默认排序的并列记录次序一致。</summary>
     [Fact]
     public async Task Omitted_sorting_matches_the_explicit_default()
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
 
-        var suffix = Guid.CreateVersion7().ToString("N")[..8];
+        var suffix = Guid.NewGuid().ToString("N")[..8];
         foreach (var name in new[] { $"zeta_{suffix}", $"alpha_{suffix}" })
         {
             var created = await superAdmin.Client.PostAsJsonAsync("/api/v1/roles", new
@@ -129,6 +135,109 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         // 并列排序号内按名称升序（与 GetAllAsync 同口径），因此 alpha 在 zeta 之前
         var tied = omitted.Where(name => name.EndsWith(suffix, StringComparison.Ordinal)).ToList();
         Assert.Equal([$"alpha_{suffix}", $"zeta_{suffix}"], tied);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/users")]
+    [InlineData("/api/v1/roles")]
+#if (OpenIddictServer)
+    [InlineData("/api/v1/open-applications")]
+#endif
+    public async Task Unknown_sorting_uses_the_safe_framework_default_even_when_no_rows_match(string path)
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var response = await admin.Client.GetAsync($"{path}?keyword={Guid.NewGuid():N}&sorting=unknownProperty");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        using var body = JsonDocument.Parse(content);
+        Assert.False(body.RootElement.TryGetProperty("code", out _));
+        Assert.False(body.RootElement.TryGetProperty("errors", out _));
+        Assert.DoesNotContain("unknownProperty", content);
+    }
+
+    [Fact]
+    public async Task Missing_roles_do_not_bypass_sorting_validation()
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var response = await admin.Client.GetAsync($"/api/v1/users?roles={Guid.NewGuid():N}&sorting=passwordHash");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Query_translation_failures_are_not_reported_as_sorting_parse_errors()
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var response = await admin.Client.GetAsync("/api/v1/users?sorting=HasLocalPassword");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Explicit_secondary_sort_takes_precedence_over_default_tie_breakers()
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        foreach (var name in new[] { $"alpha_{suffix}", $"zeta_{suffix}" })
+        {
+            var response = await admin.Client.PostAsJsonAsync("/api/v1/roles", new
+            {
+                name, displayName = name, sort = 4343, isDefault = false
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        var names = await ReadRoleNamesAsync(admin.Client, "sort asc, name desc");
+        Assert.Equal([$"zeta_{suffix}", $"alpha_{suffix}"],
+            names.Where(name => name.EndsWith(suffix, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Equal_primary_keys_use_unique_ids_across_page_boundaries()
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        await CreateUserAsync(admin.Client);
+
+        async Task<List<Guid>> ReadIds(int offset, int limit)
+        {
+            var response = await admin.Client.GetAsync(
+                $"/api/v1/users?offset={offset}&limit={limit}&sorting=isActive");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return body.RootElement.GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetGuid()).ToList();
+        }
+
+        var all = await ReadIds(0, PageRequest.MaximumLimit);
+        var first = await ReadIds(0, 1);
+        var second = await ReadIds(1, 1);
+        Assert.True(all.Count > 1);
+        Assert.Equal(all.Take(2), first.Concat(second));
+        Assert.NotEqual(first[0], second[0]);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/users")]
+#if (OpenIddictServer)
+    [InlineData("/api/v1/open-applications")]
+#endif
+    public async Task Dto_default_sorting_matches_blank_and_explicit_default(string path)
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        async Task<List<string>> ReadIds(string query)
+        {
+            var response = await admin.Client.GetAsync($"{path}?limit=100&{query}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return body.RootElement.GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetString()!).ToList();
+        }
+
+        var omitted = await ReadIds("");
+        Assert.Equal(omitted, await ReadIds("sorting="));
+        Assert.Equal(omitted, await ReadIds("sorting=%20%20"));
+        Assert.Equal(omitted, await ReadIds("sorting=CreationTime%20desc"));
     }
 
     private static async Task<List<string>> ReadRoleNamesAsync(HttpClient client, string? sorting)

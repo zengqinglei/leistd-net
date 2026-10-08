@@ -11,7 +11,7 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 
 | 场景 | 补充事实与规范 | 验证重点 |
 | --- | --- | --- |
-| 后端或前端骨架 | 同类实现、测试与 `template/docs/standards/` 对应章节；Spartan 组件用专项 Skill | 受影响场景生成、构建、测试；交互变化做浏览器验证 |
+| 后端或前端骨架 | 同类实现、测试与 `template/docs/standards/` 对应章节；分页排序读 [API 规范 §5](../../../template/docs/standards/api.md#5-分页规范)，业务验证器读 [后端规范 §5](../../../template/docs/standards/coding-backend.md#5-命名与-dto)；Spartan 组件用专项 Skill | 受影响场景生成、构建、测试；交互变化做浏览器验证 |
 | 参数、条件、文件裁剪 | `template.json`、相邻条件块、`docs/template/development-guide.md` | 按质量规范区分局部源条件与全局生成输入，验证实际产物 |
 | 架构边界、权限、租户、数据库 | 调用链、Migrator、`docs/architecture/design-principles.md` 及相关后端规范 | 真实 PostgreSQL 与受影响生成场景 |
 | Dockerfile、Compose、部署入口 | 实际容器配置、`template/docs/deploy/README.md` | 镜像可构建、.NET 运行时层可用；实际启动另验 |

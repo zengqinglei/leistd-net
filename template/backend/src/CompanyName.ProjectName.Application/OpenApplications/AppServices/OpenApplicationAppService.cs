@@ -8,7 +8,7 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using CompanyName.ProjectName.Application.Shared.Paging;
+using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Ddd.Application.AppServices;
@@ -64,10 +64,10 @@ public class OpenApplicationAppService(
         GetOpenApplicationPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var intermediateItems = new List<IntermediateAppDto>();
+        var intermediateItems = new List<OpenApplicationQueryItem>();
         await foreach (var app in applicationManager.ListAsync(count: null, offset: null, cancellationToken))
         {
-            intermediateItems.Add(new IntermediateAppDto
+            intermediateItems.Add(new OpenApplicationQueryItem
             {
                 Application = app,
                 ClientId = await applicationManager.GetClientIdAsync(app, cancellationToken) ?? string.Empty,
@@ -98,7 +98,8 @@ public class OpenApplicationAppService(
             query = query.Where(item => item.ClientType == input.ClientType);
         }
 
-        var filteredItems = ApplySorting(query, input.Sorting).ToList();
+        var filteredItems = query.AsQueryable().OrderBy(input.Sorting)
+            .ThenBy(item => item.ClientId, StringComparer.Ordinal).ToList();
         var totalCount = filteredItems.Count;
         var pagedItems = filteredItems
             .Skip(input.Offset)
@@ -348,27 +349,6 @@ public class OpenApplicationAppService(
         }
     }
 
-    /// <summary>开放应用列表的可排序字段。</summary>
-    /// <remarks>
-    /// 这一处排的是内存集合（OpenIddict 的管理器没有可组合的 <c>IQueryable</c>），
-    /// 但白名单的理由与另外两处相同：字段集必须由服务端定，非法字段要 400 而不是 500。
-    /// 末尾固定追加 <c>ClientId</c>：它在本服务内唯一，作为稳定次序保证翻页不重不漏。
-    /// </remarks>
-    private static IEnumerable<IntermediateAppDto> ApplySorting(
-        IEnumerable<IntermediateAppDto> items, string? sorting)
-    {
-        var (field, descending) = SortingRequest.Parse(sorting, "clientId");
-
-        var ordered = field switch
-        {
-            "clientId" => SortingRequest.By(items, item => item.ClientId, descending),
-            "displayName" => SortingRequest.By(items, item => item.DisplayName, descending),
-            "creationTime" => SortingRequest.By(items, item => item.CreationTime, descending),
-            _ => throw SortingRequest.UnknownField(field)
-        };
-
-        return ordered.ThenBy(item => item.ClientId, StringComparer.Ordinal);
-    }
 
     /// <summary>内部控制面 scope 的四条组合约束。</summary>
     /// <remarks>
@@ -462,14 +442,5 @@ public class OpenApplicationAppService(
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 
-    private class IntermediateAppDto
-    {
-        public required object Application { get; init; }
-        public required string ClientId { get; init; }
-        public string? DisplayName { get; init; }
-        public string? ApplicationType { get; init; }
-        public string? ClientType { get; init; }
-        public DateTimeOffset CreationTime { get; init; }
-    }
 }
 #endif
