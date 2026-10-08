@@ -1,9 +1,10 @@
 using Leistd.Ddd.Infrastructure.Persistence;
 using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.DependencyInjection.Registration;
 using Leistd.EventBus.Local;
@@ -75,6 +76,16 @@ public class MultiTenantFilterGuardTests
         await StartHostedServicesAsync(provider);
     }
 
+    [Fact]
+    public async Task Owned_tenant_contracts_are_governed_by_the_owner_query_filter()
+    {
+        await using var provider = BuildProvider<OwnedTenantDbContext>(withTenancy: true);
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OwnedTenantDbContext>();
+        Assert.True(db.Model.FindEntityType(typeof(OwnedTenantDetails))!.IsOwned());
+        await StartHostedServicesAsync(provider);
+    }
+
     /// <summary>非多租户宿主零影响：没注册 ICurrentTenant 就不该有任何判定。</summary>
     /// <remarks>
     /// 这条同时防住"闸门变成新的启动失败来源"：
@@ -109,6 +120,7 @@ public class MultiTenantFilterGuardTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         if (withTenancy)
         {
             services.AddMultiTenancyCore();
@@ -159,6 +171,23 @@ public class MultiTenantFilterGuardTests
         : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<TenantScopedOrder> Orders => Set<TenantScopedOrder>();
+    }
+
+    private sealed class OwnedTenantDbContext(DbContextOptions<OwnedTenantDbContext> options) : BaseDbContext(options, null)
+    {
+        protected override void ConfigureModel(ModelBuilder modelBuilder) => modelBuilder.Entity<OwnedTenantOrder>().OwnsOne(order => order.Details);
+    }
+
+    private sealed class OwnedTenantOrder : IMultiTenant
+    {
+        public Guid Id { get; set; }
+        public Guid? TenantId { get; set; }
+        public OwnedTenantDetails Details { get; set; } = new();
+    }
+
+    private sealed class OwnedTenantDetails : IMultiTenant
+    {
+        public Guid? TenantId { get; set; }
     }
 
     /// <summary>真实体（实现 IEntity&lt;TKey&gt;），会进入仓储派生</summary>

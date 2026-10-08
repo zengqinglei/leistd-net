@@ -8,7 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Dtos;
@@ -32,7 +32,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     private const string TenantAdminPassword = "Tenant@123456";
 
     // 调用本服务 API 的令牌必须申请它的 scope：受众由授予的 scope 推出，API 只接受受众是自己的令牌
-    private static readonly string ApiScope = new OAuthOptions().Resource;
+    private static readonly string ApiScope = new OAuthResourceOptions().Resource;
 
     private const string DownstreamApi = "orders-api";
 
@@ -45,7 +45,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     public async Task A_downstream_api_scope_yields_a_token_for_that_api_only()
     {
         using var host = Factory.WithWebHostBuilder(builder =>
-            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", DownstreamApi));
+            builder.UseSetting($"{OAuthResourceOptions.SectionName}:ApiResources:0:Name", DownstreamApi));
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -70,13 +70,13 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     public async Task A_removed_api_resource_disappears_from_the_scope_table()
     {
         using (var configured = Factory.WithWebHostBuilder(builder =>
-                   builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", DownstreamApi)))
+                   builder.UseSetting($"{OAuthResourceOptions.SectionName}:ApiResources:0:Name", DownstreamApi)))
         {
             Assert.True(await ScopeExistsAsync(configured, DownstreamApi));
         }
 
         using var removed = Factory.WithWebHostBuilder(builder =>
-            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", "other-api"));
+            builder.UseSetting($"{OAuthResourceOptions.SectionName}:ApiResources:0:Name", "other-api"));
 
         Assert.False(await ScopeExistsAsync(removed, DownstreamApi));
         Assert.True(await ScopeExistsAsync(removed, "other-api"));
@@ -98,10 +98,10 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     {
         using var host = Factory.WithWebHostBuilder(builder =>
         {
-            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", first);
+            builder.UseSetting($"{OAuthResourceOptions.SectionName}:ApiResources:0:Name", first);
             if (second is not null)
             {
-                builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:1:Name", second);
+                builder.UseSetting($"{OAuthResourceOptions.SectionName}:ApiResources:1:Name", second);
             }
         });
 

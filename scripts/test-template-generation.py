@@ -104,7 +104,7 @@ def check_compose_variables(compose, env_example):
 
 
 def options_catalog(sources):
-    """从 C# 源码收集 Options 形态：类 -> (属性 -> 类型名, 基类)，配置节 -> (类名, 是否按名字分节)。"""
+    """从 C# 源码收集 Options 形态：类 -> (属性 -> 类型名, 基类)，配置节 -> [(类名, 是否按名字分节)]。"""
     classes, sections, constants = {}, {}, {}
     for text in sources:
         text = re.sub(r'/\*[\s\S]*?\*/', lambda m: ' ' * len(m[0]), text)
@@ -147,7 +147,7 @@ def options_catalog(sources):
         return re.sub(r'\{([\w.]+)\}', part, value)
     for (owner, name), _ in constants.items():
         if name == 'SectionName' or name.endswith('SectionPrefix'):
-            sections[resolve(owner, name).lower()] = (owner, name.endswith('SectionPrefix'))
+            sections.setdefault(resolve(owner, name).lower(), []).append((owner, name.endswith('SectionPrefix')))
     return classes, sections
 
 
@@ -175,8 +175,18 @@ def check_configuration_key(key, catalog, settings_keys):
     matched = max((s for s in sections if lowered[:len(s.split(':'))] == s.split(':')), key=lambda s: len(s.split(':')), default=None)
     if matched is None:
         return f'{key}: no Options section or appsettings key for {segments[0]}'
-    owner, by_name = sections[matched]
     remaining = segments[len(matched.split(':')):]
+    problems = []
+    for owner, by_name in sections[matched]:
+        problem = check_options_path(key, owner, by_name, remaining, classes)
+        if problem is None:
+            return None
+        problems.append(problem)
+    return '; '.join(problems)
+
+
+def check_options_path(key, owner, by_name, remaining, classes):
+    """一条属性路径须完整匹配同一 Options 类型。"""
     current, free = (None, True) if by_name else (owner, False)
     all_properties = {prop for props, _ in classes.values() for prop in props}
     for segment in remaining:
@@ -340,6 +350,26 @@ public sealed class EndpointOptions { public string? Path { get; init; } }
         ('appsettings key with index', check_configuration_key('Cors__AllowedOrigins__0', catalog, settings), None),
         ('connection strings are free', check_configuration_key('ConnectionStrings__Default', catalog, settings), None),
     ]
+    shared_options = [
+        'public class ServerOptions { public const string SectionName = "OAuth"; public CertificateOptions[] Certificates { get; set; } }',
+        'public class ResourceOptions { public const string SectionName = "OAuth"; public ResourceItemOptions[] ApiResources { get; set; } }',
+        'public class CertificateOptions { public string Path { get; set; } } public class ResourceItemOptions { public string Scope { get; set; } }',
+        'public class NamedOptions { public const string SectionPrefix = "Shared"; public string BaseAddress { get; set; } }',
+        'public class FixedOptions { public const string SectionName = "Shared"; public int Retries { get; set; } }',
+    ]
+    for label, sources in [('forward', shared_options), ('reverse', list(reversed(shared_options)))]:
+        shared_catalog = options_catalog(sources)
+        for name, key, expected in [
+            ('server path', 'OAuth__Certificates__0__Path', None),
+            ('resource path', 'OAuth__ApiResources__0__Scope', None),
+            ('unknown certificate property', 'OAuth__Certificates__0__Unknown', 'Unknown is not a property'),
+            ('cross-type certificate property', 'OAuth__Certificates__0__Scope', 'Scope is not a property of CertificateOptions'),
+            ('cross-type resource property', 'OAuth__ApiResources__0__Path', 'Path is not a property of ResourceItemOptions'),
+            ('shared named section', 'Shared__Identity__BaseAddress', None),
+            ('shared fixed section', 'Shared__Retries', None),
+            ('unknown named property', 'Shared__Identity__Unknown', 'Unknown is not an Options property'),
+        ]:
+            cases.append((f'{label}: {name}', check_configuration_key(key, shared_catalog, settings), expected))
     failures = [f'{name}: expected {expected!r}, got {actual!r}' for name, actual, expected in cases
                 if (expected is None) != (actual is None) or (expected and expected not in actual)]
     compose = 'services:\n  api:\n    image: ${IMAGE:-api}\n    environment:\n      - A__B=${SMTP_HOST:?required}\n      # - C__D=${COMMENTED}\n'

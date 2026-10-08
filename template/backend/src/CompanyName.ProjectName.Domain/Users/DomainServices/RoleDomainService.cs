@@ -2,7 +2,7 @@ using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.Auditing.Abstractions;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
 using Microsoft.Extensions.Logging;

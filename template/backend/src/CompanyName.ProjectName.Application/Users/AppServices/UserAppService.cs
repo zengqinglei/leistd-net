@@ -1,3 +1,4 @@
+using Leistd.Data.Querying;
 using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
@@ -27,7 +28,6 @@ using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 
 using Leistd.Security.Users;

@@ -17,12 +17,14 @@
 | Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、供展示的查询 |
 | Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
+与宿主实体、业务政策无关的通用机制由框架组件提供；模板保留业务模型、组件扩展点适配和宿主组合，不另建平行技术实现。
+
 目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。
 
 分类优先采用已有职责目录（DTO、应用服务、事件处理器、后台任务、映射、验证器等）。没有专属分类的框架扩展点实现放 `Provider/`，必要的配套定义可与实现共置（如实时资源与权限对应表）。未分类的少量协作类型可留模块根（如 `OpenApplications/OpenApplicationQueryItem`）。
 
-- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
-- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
+- **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`、`Options`（仅应用用例消费的配置）。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
+- **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（仅领域自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`，它不是兜底目录；子目录名不与常用 BCL 类型同名。
 - **Infrastructure**：自定义仓储实现放 `Persistence/Repositories`；外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
 
 领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 `ValidateOnBuild` 检出（见 §4）。
@@ -93,7 +95,7 @@ public class UserDomainService(IRepository<User, Guid> userRepository)
 
 ### 3.5 应用服务
 
-接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经 `IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。同模块应用服务不互相调用，共用逻辑提为协作类（如 `ICaptchaVerifier`）或下沉领域层。
+接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经数据组件的 `Leistd.Data.Querying.IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。同模块应用服务不互相调用，共用逻辑提为协作类（如 `ICaptchaVerifier`）或下沉领域层。
 
 ```csharp
 public class UserAppService(
@@ -132,7 +134,7 @@ public class UserAppService(
 - Controller 命名 `*Controller`，继承 `BaseController`（视图渲染、透传代理、机器端点等例外就近注释）；只做路由、鉴权与调用应用服务。
 - 返回类型（含何时用 `IActionResult`）见 [API 规范 §2](./api.md#2-响应格式)，方法名与路由见 [§6](./api.md#6-http-方法与路由规范)。
 
-操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由 `ApiAuthorizationResultHandler`、`OperationFailureRecordingMiddleware` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
+操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由宿主 `ApiAuthorizationResultHandler` 和组件 `UseOperationFailureRecording()` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
 
 ### 3.8 枚举持久化
 
@@ -250,9 +252,8 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | --- | --- |
 | `Authentication/` | 本地会话、远端令牌、外部登录的认证方案注册与签名密钥刷新 |
 | `Authorization/` | 授权策略、授权结果处理器与访问控制元数据 |
-| `Sessions/` | 服务端票据存储、会话签发与续期 |
+| `Sessions/` | 会话签发与续期；通用票据存储使用 Security 组件 |
 | `OpenIddict/` | 签发服务注册、证书加载、交互保护与协议处理器 |
-| `RequestContext/` | 从当前 HTTP 请求读取信息的适配器，包括项目端口与框架接口的实现 |
 
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
 - 请求体上限沿用 Kestrel 默认，大上传端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽；不用笼统的 `Extensions` 命名空间。

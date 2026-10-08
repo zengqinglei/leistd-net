@@ -650,7 +650,7 @@ public sealed class PruningProbeController(IOpenIddictTokenManager tokens, IOpen
             oldPermanent = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent),
             oldAdHoc = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc)
         };
-        var definition = services.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
+        var definition = services.GetServices<RecurringJobDefinition>().Single(job => job.Name == Leistd.Security.OpenIddict.Server.Pruning.OpenIddictPruningJob.Name);
         var job = (IRecurringJob)services.GetRequiredService(definition.JobType);
         await job.ExecuteAsync(new RecurringJobContext(definition.Name, now), cancellationToken);
         return new { seeded, provider = db.Database.ProviderName, bulkDisabled = options.Value.DisableBulkOperations,
@@ -753,7 +753,7 @@ function Initialize-Environment {
             ASPNETCORE_ENVIRONMENT = $serviceEnvironment; ASPNETCORE_URLS = $urls[$name]
             ConnectionStrings__Redis = ""; DataProtection__KeysPath = (Join-Path $runRoot "keys-$name")
             DefaultAdmin__Username = "admin"; DefaultAdmin__Password = $adminPassword
-            VerificationCodes__Key = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+            Leistd__Security__VerificationCodes__Key = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
         }
         if ($IncludeBrowserScenarios) {
             $environment.ASPNETCORE_Kestrel__Certificates__Default__Path = Join-Path $runRoot "browser-tls.pfx"

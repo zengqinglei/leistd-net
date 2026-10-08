@@ -1,3 +1,4 @@
+using Leistd.Data.Querying;
 using Microsoft.Extensions.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;

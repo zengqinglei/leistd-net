@@ -1,7 +1,12 @@
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Api.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.BackgroundJobs;
+using Leistd.BackgroundJobs.Recurring;
+using Leistd.Security.OpenIddict.Server;
+using Leistd.Security.OpenIddict.Server.Pruning;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
@@ -15,9 +20,9 @@ public static class OpenIddictServerExtensions
     /// <summary>注册 OAuth 选项、退出确认所需的防伪与交互凭据，以及 OpenIddict 的存储、签发端与本地校验。</summary>
     public static WebApplicationBuilder AddMyProjectOpenIddictServer(this WebApplicationBuilder builder)
     {
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OAuthOptions>, OAuthOptionsValidator>());
-        builder.Services.AddOptions<OAuthOptions>()
-            .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName))
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OAuthServerOptions>, OAuthServerOptionsValidator>());
+        builder.Services.AddOptions<OAuthServerOptions>()
+            .Bind(builder.Configuration.GetSection(OAuthServerOptions.SectionName))
             .ValidateOnStart();
         // 退出确认是本源表单 POST，用官方防伪令牌校验；Cookie 规则与会话 Cookie 一致（部署环境 __Host- 前缀、仅 HTTPS）
         builder.Services.AddAntiforgery(options =>
@@ -32,28 +37,20 @@ public static class OpenIddictServerExtensions
         // 组合期读取并校验：下面 AddServer 的回调要到首次解析 OpenIddict 选项时才执行，那时才报错已经晚了。
         // 默认必须显式提供证书：开发证书生成在运行用户的证书存储里、每台机器各一份，多副本互不认，
         // 重建容器后已签发的令牌全部失效，只适合本机开发（由 appsettings.Development.json 打开）。
-        var oauthOpts = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
+        var oauthOpts = builder.Configuration.GetSection(OAuthServerOptions.SectionName).Get<OAuthServerOptions>() ?? new OAuthServerOptions();
         // 与启动期校验同一个验证器：这里更早，是因为下面组合 OpenIddict 时就要加载证书
-        if (new OAuthOptionsValidator().Validate(null, oauthOpts) is { Failed: true } oauthValidation)
-            throw new OptionsValidationException(OAuthOptions.SectionName, typeof(OAuthOptions), oauthValidation.Failures);
+        if (new OAuthServerOptionsValidator().Validate(null, oauthOpts) is { Failed: true } oauthValidation)
+            throw new OptionsValidationException(OAuthServerOptions.SectionName, typeof(OAuthServerOptions), oauthValidation.Failures);
         // 证书在组合期逐张加载：路径缺失、文件损坏或口令错误时报出带下标的键名，而不是首个请求时的笼统异常
         var signingCertificates = oauthOpts.UseDevelopmentCertificates ? []
             : OAuthCertificateLoader.Load(oauthOpts.SigningCertificates, "OAuth:SigningCertificates");
         var encryptionCertificates = oauthOpts.UseDevelopmentCertificates ? []
             : OAuthCertificateLoader.Load(oauthOpts.EncryptionCertificates, "OAuth:EncryptionCertificates");
 
-        var oauthScopes = OAuthScopes.All(oauthOpts);
-        var conflictingScope = oauthScopes.GroupBy(scope => scope.Name, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1)?.Key;
-        if (oauthOpts.ApiResources.Any(api => string.IsNullOrWhiteSpace(api.Name) ||
-                string.IsNullOrWhiteSpace(api.ScopeName) || string.IsNullOrWhiteSpace(api.Owner)) ||
-            oauthOpts.ApiResources.GroupBy(api => api.Name, StringComparer.Ordinal).Any(group => group.Count() > 1) ||
-            oauthOpts.ApiResources.Any(api => api.Name == oauthOpts.Resource) || conflictingScope is not null)
-        {
-            throw new InvalidOperationException(
-                "OAuth:ApiResources entries must be non-empty and distinct from each other, from OAuth:Resource " +
-                $"and from the built-in scopes (conflict: '{conflictingScope}').");
-        }
+        var resources = builder.Configuration.GetSection(OAuthResourceOptions.SectionName).Get<OAuthResourceOptions>() ?? new OAuthResourceOptions();
+        if (new OAuthResourceOptionsValidator().Validate(null, resources) is { Failed: true } resourceValidation)
+            throw new OptionsValidationException(OAuthResourceOptions.SectionName, typeof(OAuthResourceOptions), resourceValidation.Failures);
+        var oauthScopes = OAuthScopes.All(resources);
 
         builder.Services.AddOpenIddict()
             .AddCore(options =>
@@ -96,9 +93,6 @@ public static class OpenIddictServerExtensions
                     handler.UseScopedHandler<ResourceOwnerAuthorizedPartyHandler>()
                         .SetOrder(OpenIddictServerHandlers.Exchange.ValidateAuthorizedParty.Descriptor.Order));
                 options.RegisterAudiences(oauthScopes.SelectMany(scope => scope.Resources).Distinct().ToArray());
-                options.AddEventHandler<OpenIddictServerEvents.ProcessSignInContext>(handler =>
-                    handler.UseScopedHandler<TokenExchangeExpirationHandler>()
-                        .SetOrder(OpenIddictServerHandlers.PrepareIssuedTokenPrincipal.Descriptor.Order + 1));
 
                 // 跨服务用签名 JWT：资源服务经 discovery/JWKS 验签，无需分发解密密钥；claim 对持有者可读（见 auth.md 用户认证小节）。
                 options.DisableAccessTokenEncryption();
@@ -131,7 +125,7 @@ public static class OpenIddictServerExtensions
             {
                 options.UseLocalServer();
                 // 只接受签给本服务 API 的令牌：签给下游 API 的令牌（受众是那个 API）不能用来调用这里
-                options.AddAudiences(oauthOpts.Resource);
+                options.AddAudiences(resources.Resource);
 
                 // 每个请求按令牌记录确认令牌未被撤销：停用、删除账号时撤销的令牌立即失效，
                 // 在认证阶段就以 invalid_token 拒绝。API 与授权服务器同库部署，这次查库替代了逐请求查用户
@@ -142,6 +136,11 @@ public static class OpenIddictServerExtensions
                        .DisableAccessTokenExtractionFromQueryString()
                        .DisableAccessTokenExtractionFromBodyForm();
             });
+
+        builder.Services.AddTokenExchangeExpirationLimit();
+        builder.Services.AddOpenIddictPruning();
+        builder.Services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
+            RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
 
         return builder;
     }

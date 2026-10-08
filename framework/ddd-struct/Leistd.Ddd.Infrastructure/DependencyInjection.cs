@@ -2,7 +2,8 @@ using Leistd.EventBus.Local;
 using System.Reflection;
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data;
+using Leistd.Data.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Ddd.Infrastructure.EventBus;
@@ -47,7 +48,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         Action<UnitOfWorkOptions>? configureUnitOfWork = null)
     {
-        services.TryAddSingleton<IQueryableAsyncExecuter, EfCoreQueryableAsyncExecuter>();
+        services.AddDataFilters();
+        services.AddDataEfCore();
 
         // 保留宿主或测试预先注册的时钟实现。
         services.TryAddSingleton<IClock, UtcClockProvider>();
@@ -60,9 +62,6 @@ public static class DependencyInjection
         services.TryAddTransient<LocalEventSaveChangesInterceptor>();
 
         services.TryAddSingleton<ConcurrencyStampSaveChangesInterceptor>();
-
-        services.TryAddSingleton<IDataFilter, DataFilter>();
-        services.TryAddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>)); // 状态由 AsyncLocal 隔离
 
         services.AddUnitOfWork(configureUnitOfWork);
 

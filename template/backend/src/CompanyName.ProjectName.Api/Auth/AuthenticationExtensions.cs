@@ -1,11 +1,10 @@
 using CompanyName.ProjectName.Api.Auth.Authentication;
 #if (SpaFrontend)
-using CompanyName.ProjectName.Api.Auth.Sessions;
+using Leistd.Security.AspNetCore;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Infrastructure;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 #endif
 
@@ -36,24 +35,23 @@ public static class AuthenticationExtensions
     private static void AddBrowserSession(WebApplicationBuilder builder)
     {
         builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
-        builder.Services.TryAddSingleton<DistributedTicketStore>();
+        builder.Services.AddDistributedTicketStore(AuthenticationSchemeNames.SessionCookie,
+            options => options.KeyPrefix = "CompanyName.ProjectName:AuthTicket:");
         builder.Services.AddOptions<SessionCookieOptions>()
             .BindConfiguration(SessionCookieOptions.SectionName)
             .Validate(options => options.ExpireDays >= 1,
                 $"{SessionCookieOptions.SectionName}:ExpireDays must be at least 1.")
             .ValidateOnStart();
         builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
-            .Configure<DistributedTicketStore, IOptions<SessionCookieOptions>>((cookie, store, sessionCookie) =>
+            .Configure<IOptions<SessionCookieOptions>>((cookie, sessionCookie) =>
             {
-                cookie.SessionStore = store;
                 // 滑动过期取会话时长；本地身份的服务端会话空闲时限取同一个值
                 cookie.ExpireTimeSpan = sessionCookie.Value.Lifetime;
                 cookie.SlidingExpiration = true;
                 // 默认 Lax；放宽前先看部署文档的 SameSite 说明（协议端点的跨站进入不需要放宽）。
                 // 只作用于应用会话 Cookie，不覆盖协议 correlation/nonce Cookie
                 cookie.Cookie.SameSite = sessionCookie.Value.SameSite ?? SameSiteMode.Lax;
-            })
-            .PostConfigure(DistributedTicketStore.ConfigureCookie);
+            });
     }
 #endif
 }

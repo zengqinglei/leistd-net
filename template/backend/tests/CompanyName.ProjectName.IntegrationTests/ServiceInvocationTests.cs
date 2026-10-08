@@ -6,7 +6,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
+using CompanyName.ProjectName.Api.Options;
 using Leistd.ServiceClient.OAuth;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
@@ -44,17 +45,17 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
                 {
                     OpenIddictConstants.Permissions.Endpoints.Token,
                     OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + new OAuthOptions().Resource
+                    OpenIddictConstants.Permissions.Prefixes.Scope + new OAuthResourceOptions().Resource
                 }
             });
         }
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Leistd:ServiceAuth:Authority"] = factory.Services.GetRequiredService<IOptions<OAuthOptions>>().Value.Issuer ?? "https://localhost/",
+            ["Leistd:ServiceAuth:Authority"] = factory.Services.GetRequiredService<IOptions<OAuthServerOptions>>().Value.Issuer ?? "https://localhost/",
             ["Leistd:ServiceAuth:ClientId"] = clientId,
             ["Leistd:ServiceAuth:ClientSecret"] = secret,
             ["Leistd:ServiceClients:MyProject:BaseAddress"] = "https://localhost/",
-            ["Leistd:ServiceClients:MyProject:Scope"] = new OAuthOptions().Resource
+            ["Leistd:ServiceClients:MyProject:Scope"] = new OAuthResourceOptions().Resource
         }).Build();
         var services = new ServiceCollection();
         services.AddLogging(); services.AddSingleton<IConfiguration>(configuration);

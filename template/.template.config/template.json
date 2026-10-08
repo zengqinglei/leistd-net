@@ -331,7 +331,7 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/**",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Options/UserRegistrationOptions.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/PostgresTenantDatabaseErrorDescriber.cs",
@@ -361,13 +361,13 @@
             "frontend/_mock/api/auth.spec.ts",
             "frontend/_mock/api/user.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/UserUniquenessTests.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Options/DefaultAdminOptions.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Options/DefaultAdminOptions.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/PasswordHash/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Shared/Security/PasswordHash/**",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/PasswordHashingTests.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Domain/TwoFactorDomainServiceTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/PasswordRehashTests.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authorization/AllowDuringTwoFactorSetupAttribute.cs",
-            "backend/src/CompanyName.ProjectName.Api/Auth/RequestContext/HttpRequestClientInfo.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/LocalSessionAuthenticationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Sessions/SessionCookieIssuer.cs",
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/AuthExceptionMappings.cs",
@@ -376,9 +376,6 @@
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/CreateUserInputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserInputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Validators/UserSortingValidator.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Shared/Security/OneTimeCodes/RecoveryCodes.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Shared/Security/OneTimeCodes/Totp.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Shared/Text/Base32.cs",
             "backend/src/CompanyName.ProjectName.Domain/Users/DomainServices/TwoFactorDomainService.cs",
             "backend/src/CompanyName.ProjectName.Domain/Users/Policies/LoginLockoutPolicy.cs",
             "backend/src/CompanyName.ProjectName.Domain/Users/Policies/PasswordPolicy.cs",
@@ -409,7 +406,6 @@
             "backend/tests/CompanyName.ProjectName.UnitTests/Application/OperationActionDefinitionTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Domain/PasswordPolicyTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Users/UserSortingValidatorTests.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Domain/TotpTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Domain/UserAccessStatusTests.cs",
             "frontend/_mock/data/password-policy.ts",
             "frontend/src/app/core/interceptors/tenant-interceptor.ts",
@@ -450,18 +446,15 @@
             "frontend/_mock/api/resource-auth.spec.ts",
             "frontend/src/app/core/components/resource-login/**",
             "frontend/_mock/api/resource-auth.ts",
-            "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/SigningKeyRefresh.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/RemoteTokenAuthenticationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ResourceAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/CurrentResourceUserOutputDto.cs",
             "backend/src/CompanyName.ProjectName.DbMigrator/ResourceAdminBootstrap*.cs",
-            "backend/src/CompanyName.ProjectName.Api/Auth/RequestContext/ResourceUserAccessTokenAccessor.cs",
             "backend/src/CompanyName.ProjectName.Api/HealthChecks/RemoteIdentityReadinessHealthCheck.cs",
             "backend/src/CompanyName.ProjectName.Api/HostedServices/Initializer/RemoteIdentityReadinessInitializer.cs",
             "backend/src/CompanyName.ProjectName.Api/Options/RemoteIdentityOptions.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceAdminBootstrapTests.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/SigningKeyRotationTests.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Api/SigningKeyRefreshThrottleTests.cs"
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/SigningKeyRotationTests.cs"
           ]
         },
         {
@@ -531,8 +524,12 @@
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/SubjectClaims.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
-            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptionsValidator.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Options/OAuthResourceOptions.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Options/OAuthApiResource.cs",
+            "backend/src/CompanyName.ProjectName.Api/Options/OAuthServerOptions.cs",
+            "backend/src/CompanyName.ProjectName.Api/Options/OAuthCertificate.cs",
+            "backend/src/CompanyName.ProjectName.Api/Options/OAuthServerOptionsValidator.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Options/OAuthResourceOptionsValidator.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/account/components/logout-confirm/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
@@ -545,7 +542,6 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/OpenIddict/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/DesignTime/OpenIddictDbContextFactory.cs",
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/OpenApplicationExceptionMappings.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/BackgroundJobs/OpenIddictPruningJob.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/OAuth/OAuthScopes.cs",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/Constants/TenantConnectionPolicies.cs",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/Constants/TenantConnectionScopes.cs",
@@ -556,7 +552,8 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/OpenIddictLifecycleTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenantOidcFlowTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Api/ConnectInteractionProtectorTests.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Domain/OAuthOptionsValidatorTests.cs"
+            "backend/tests/CompanyName.ProjectName.UnitTests/Api/OAuthServerOptionsValidatorTests.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Application/OAuthResourceOptionsValidatorTests.cs"
           ]
         },
         {
@@ -568,8 +565,6 @@
             "docs/standards/frontend-spartan.md",
             "docs/standards/frontend-i18n.md",
             "backend/src/CompanyName.ProjectName.Api/Hosting/SpaExtensions.cs",
-            "backend/src/CompanyName.ProjectName.Api/Middlewares/BrowserOriginMiddleware.cs",
-            "backend/src/CompanyName.ProjectName.Api/Auth/Sessions/DistributedTicketStore.cs",
             "backend/src/CompanyName.ProjectName.Api/Options/SessionCookieOptions.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/DataProtectionExtensions.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/BrowserOriginTests.cs",
@@ -633,12 +628,10 @@
             "backend/src/CompanyName.ProjectName.Application/Settings/Validators/EmailSettingValidator.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/SettingController.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/VerificationCodes/**",
-            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/VerificationCodeOptions.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Shared/Security/VerificationCodes/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailSettingsTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailVerificationChallengeTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Application/EmailChallengeStoreTests.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs",
             "frontend/src/app/features/settings/components/setting-section/widgets/email-test/**",
             "backend/src/CompanyName.ProjectName.Application/Settings/Dtos/**"
           ]
@@ -723,7 +716,7 @@
         {
           "condition": "!(OpenIddictServer || RemoteTokenAuth)",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Domain/Shared/Security/AccessTokenRenewal.cs",
+            "backend/src/CompanyName.ProjectName.Api/Auth/Sessions/AccessTokenRenewal.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthenticationModeTests.cs"
           ]

@@ -10,8 +10,7 @@ using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
-using CompanyName.ProjectName.Domain.Shared.Text;
+using Leistd.Security.OneTimeCodes;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.EventBus.Abstractions;
@@ -78,7 +77,7 @@ internal sealed class TwoFactorAppService(
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = SetupLifetime },
             cancellationToken);
 
-        var base32 = Base32.Encode(secret);
+        var base32 = Totp.FormatSecret(secret);
         // 同名账号在不同租户各有一个，账号名带上租户，应用里才分得清
         var account = currentTenant.Name is { Length: > 0 } tenantName
             ? $"{user.Username}@{tenantName}"
@@ -86,7 +85,7 @@ internal sealed class TwoFactorAppService(
         return new TwoFactorSetupOutputDto
         {
             Secret = base32,
-            OtpAuthUri = Totp.BuildUri(Issuer, account, base32)
+            OtpAuthUri = Totp.BuildUri(Issuer, account, secret)
         };
     }
 

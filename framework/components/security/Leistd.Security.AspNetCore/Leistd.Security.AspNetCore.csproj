@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Leistd.Security.Core/Leistd.Security.Core.csproj" />
+    <ProjectReference Include="../../lock/Leistd.Lock.Core/Leistd.Lock.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Ddd.Infrastructure.Persistence;
 using Leistd.UnitOfWork.Options;

@@ -15,5 +15,6 @@ namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 public sealed record CredentialValidationResult(
     CredentialValidationStatus Status,
     User? User,
-    bool Countable = false);
+    bool Countable = false,
+    bool PasswordRehashNeeded = false);
 #endif

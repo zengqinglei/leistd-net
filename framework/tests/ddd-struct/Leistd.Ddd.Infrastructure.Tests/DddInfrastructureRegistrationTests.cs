@@ -1,8 +1,8 @@
-using Leistd.Ddd.Domain.DataFilters;
-using Leistd.Ddd.Domain.Repositories;
+using Leistd.Data.EntityFrameworkCore.Querying;
+using Leistd.Data.Querying;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Ddd.Infrastructure.Persistence.Interceptors;
-using Leistd.Ddd.Infrastructure.Persistence.Repositories;
 using Leistd.TestBase.Assertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

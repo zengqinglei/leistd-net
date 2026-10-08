@@ -19,7 +19,7 @@
 <!--#if (RemoteTokenAuth)-->
   <ItemGroup>
     <!-- 进程级运行时开关：签名公钥轮换后，配置刷新在本次请求内完成（而不是只在后台更新）。
-         OpenIddict 验证与 OIDC 处理器的两条配置链路都依赖它，见 Auth/SigningKeyRefresh.cs。
+         OpenIddict 验证与 OIDC 处理器的两条配置链路都依赖它，参数由 AddSigningKeyRefresh 配置。
          只在资源服务宿主设置；测试项目另设一份，因为 testhost 不读本项目的 runtimeconfig。 -->
     <RuntimeHostConfigurationOption Include="Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking" Value="true" />
   </ItemGroup>
@@ -36,9 +36,12 @@
   <ItemGroup>
 <!--#if (OpenIddictServer || RemoteTokenAuth)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
+<!--#if (OpenIddictServer)-->
+    <PackageReference Include="Leistd.Security.OpenIddict.Server" />
+<!--#endif-->
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
-    <PackageReference Include="OpenIddict.Validation.SystemNetHttp" />
+    <PackageReference Include="Leistd.Security.OpenIddict.Validation" />
 <!--#endif-->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Serilog.AspNetCore" />

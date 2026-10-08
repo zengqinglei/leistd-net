@@ -1,5 +1,5 @@
-using CompanyName.ProjectName.Domain.Auth.Options;
 #if (LocalIdentity)
+using Leistd.Security.OneTimeCodes.VerificationCodes;
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using CompanyName.ProjectName.Application.Auth.Captcha;

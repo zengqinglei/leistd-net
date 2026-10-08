@@ -4,7 +4,7 @@ using System.Net;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Users.Options;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using Leistd.Ddd.Domain.Repositories;
 #if (IncludeMultiTenancy)

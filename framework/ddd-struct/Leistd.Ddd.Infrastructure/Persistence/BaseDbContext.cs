@@ -1,10 +1,11 @@
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Infrastructure.Persistence.Conventions;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
+using Leistd.Data.EntityFrameworkCore.Modeling;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Auditing.EntityFrameworkCore.Extensions;
+using Leistd.Auditing.EntityFrameworkCore.Conventions;
 using Leistd.Auditing.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Tenancy;
@@ -16,7 +17,7 @@ namespace Leistd.Ddd.Infrastructure.Persistence;
 /// 提供三件事：新增实体的环境值（<c>TenantId</c> / 创建审计）在进入跟踪时落定、
 /// 软删除与租户隔离的全局查询过滤器、领域事件的收集。
 /// <c>OnModelCreating</c> 与 <c>ConfigureConventions</c> 被封闭，派生类改覆盖 <c>ConfigureModel</c> 与
-/// <c>ConfigureModelConventions</c>，且无需调 <c>base</c>。审计字段与并发标记列由 <see cref="DddEntityConvention"/> 按约定配置。
+/// <c>ConfigureModelConventions</c>，且无需调 <c>base</c>。审计字段与并发标记分别由 <see cref="AuditingEntityConvention"/> 与 <see cref="DddEntityConvention"/> 配置。
 /// 修改/删除审计、领域事件发布与并发标记换发依赖 SaveChanges 拦截器，由 <c>AddDddDbContext&lt;TDbContext&gt;()</c> 挂载。
 /// </remarks>
 public abstract class BaseDbContext : DbContext
@@ -150,10 +151,11 @@ public abstract class BaseDbContext : DbContext
             EF.Property<Guid?>(e, nameof(IMultiTenant.TenantId)) == CurrentTenantId);
     }
 
-    /// <summary>注册 <see cref="DddEntityConvention"/>，再交由 <see cref="ConfigureModelConventions"/> 追加宿主约定。</summary>
+    /// <summary>注册审计与并发标记约定，再交由 <see cref="ConfigureModelConventions"/> 追加宿主约定。</summary>
     protected sealed override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.Conventions.Add(_ => new AuditingEntityConvention());
         configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
         ConfigureModelConventions(configurationBuilder);
     }

@@ -11,7 +11,7 @@
 <!--#endif-->
 <!--#if (LocalIdentity)-->
 
-口令哈希默认 PBKDF2-HMAC-SHA256 600,000 次迭代（OWASP 现行建议）。硬件基准表明可以承受更高成本时用 `PasswordHash__IterationCount` 调高；新值只作用于此后设置或修改的口令，存量密文按自身记录的迭代数校验，照常可用。
+口令哈希使用 Identity 原生 IdentityV3 格式（PBKDF2-HMAC-SHA512），模板默认迭代 220,000 次。通过 `PasswordHash__IterationCount` 按部署硬件调整成本；提高成本后，存量口令在正确且允许登录时自动重新哈希，保留安全版本与已有会话。算法与格式由原生实现维护，参数政策见 [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2)。
 <!--#endif-->
 <!--#if (OpenIddictServer)-->
 
@@ -52,7 +52,7 @@
 <!--#endif-->
 <!--#if (Email)-->
 - 发信基线指向本机邮件捕获器（`localhost:1025`）。部署时覆盖 `Leistd:Email:Smtp` 的 `Host`、`Port`、`EnableSsl`、`DefaultFromAddress`，`Username` 与 `Password` 成对提供或都不提供；compose 以 `SMTP_HOST`、`SMTP_PORT`、`SMTP_FROM_ADDRESS` 为必填，账号口令只填一项时启动失败。
-- 开启注册邮箱验证（`UserRegistration:EnableEmailVerification`，compose 的 `ENABLE_EMAIL_VERIFICATION`）时必须提供 `VerificationCodes:Key`（compose 的 `VERIFICATION_CODES_KEY`）：Base64、至少 32 字节，所有实例相同且跨重启不变，可用 `openssl rand -base64 32` 生成。缺失或无效即启动失败并报出键名；关闭时可以不提供，但之后在系统设置里也无法开启。
+- 开启注册邮箱验证（`UserRegistration:EnableEmailVerification`，compose 的 `ENABLE_EMAIL_VERIFICATION`）时必须提供 `Leistd:Security:VerificationCodes:Key`（compose 的 `VERIFICATION_CODES_KEY`）：Base64、至少 32 字节，所有实例相同且跨重启不变，可用 `openssl rand -base64 32` 生成。缺失或无效即启动失败并报出键名；关闭时可不提供；非空无效密钥始终在启动时失败，缺失时无法在系统设置里开启。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 - 外部登录提供商（`ExternalAuth:Github`、`ExternalAuth:Google`）的 `ClientId` 与 `ClientSecret` 成对提供，只给一项启动失败；都不给则不启用该提供商。提供商后台登记的回调地址是 `https://<站点对外地址>/api/v1/external-auth/{github,google}/signin`。

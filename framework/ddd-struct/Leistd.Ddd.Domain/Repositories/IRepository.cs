@@ -1,3 +1,4 @@
+using Leistd.Data.Querying;
 using Leistd.Ddd.Domain.Entities;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
@@ -23,6 +24,7 @@ public interface IRepository<TEntity> : IRepository where TEntity : class, IEnti
     /// <summary>取本实体的可组合查询，用于仓储方法覆盖不到的复杂查询。</summary>
     /// <remarks>
     /// 返回的 <see cref="IQueryable{T}"/> 已套用全局过滤器，并绑定当前工作单元的上下文实例；
+    /// EF 仓储的所有读取经此入口；覆写须保留原实体身份和跟踪，不得投影或禁用跟踪。
     /// 异步执行请用 <see cref="IQueryableAsyncExecuter"/>，不要直接调 EF Core 的扩展方法。
     /// </remarks>
     Task<IQueryable<TEntity>> GetQueryableAsync(CancellationToken cancellationToken = default);
@@ -74,7 +76,7 @@ public interface IRepository<TEntity> : IRepository where TEntity : class, IEnti
     Task DeleteManyAsync([NotNull] IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
 
     /// <summary>按条件删除。</summary>
-    /// <remarks>先查出匹配实体再逐个删除，因此审计与软删除照常生效，但会把匹配集加载进内存。</remarks>
+    /// <remarks>使用原始实体集合，不受自定义读筛选影响；全局过滤器仍生效。先加载匹配集再删除，审计与软删除照常生效。</remarks>
     Task DeleteManyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
 }
 
@@ -88,8 +90,10 @@ public interface IRepository<TEntity, TKey> : IRepository<TEntity> where TEntity
     Task<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default);
 
     /// <summary>按主键删除；实体不存在时静默返回。实体实现 <c>ISoftDelete</c> 时为逻辑删除。</summary>
+    /// <remarks>先经读入口查找，受自定义读筛选及全局过滤器影响。</remarks>
     Task DeleteAsync(TKey id, CancellationToken cancellationToken = default);
 
     /// <summary>按主键批量删除；不存在的主键被忽略。实体实现 <c>ISoftDelete</c> 时为逻辑删除。</summary>
+    /// <remarks>使用原始实体集合，不受自定义读筛选影响；全局过滤器仍生效。</remarks>
     Task DeleteManyAsync([NotNull] IEnumerable<TKey> ids, CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,5 @@
 #if (RemoteTokenAuth)
+using Leistd.Security.AspNetCore.Cookies;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -352,7 +353,7 @@ public sealed class ResourceBrowserSessionTests
         if (refreshFailure)
         {
             oldAuthentication.Properties!.UpdateTokenValue("expires_at", TimeProvider.System.GetUtcNow().AddSeconds(-1).ToString("o"));
-            var oldKey = oldAuthentication.Properties.Items["ticket.key"]!;
+            var oldKey = oldAuthentication.Properties.Items[DistributedTicketStore.TicketKeyProperty]!;
             await options.SessionStore!.RenewAsync(oldKey, oldAuthentication.Ticket!);
             issuer.RefreshStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
             issuer.ContinueRefresh = new(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -48,6 +48,7 @@ using Leistd.OperationRecords.Logging;
 #if (IncludeRealTime)
 using Leistd.RealTime.AspNetCore.SignalR;
 #endif
+using Leistd.OperationRecords.AspNetCore;
 using Leistd.Security.AspNetCore;
 using Leistd.Settings.Hosting;
 #if (IncludeLocalization)
@@ -228,7 +229,7 @@ try
     app.UseAuthentication();
 #if (SpaFrontend)
     // 浏览器会话靠 Cookie：跨源写请求与 Hub 握手只接受本源与登记的前端源
-    app.UseMiddleware<BrowserOriginMiddleware>();
+    app.UseBrowserOriginProtection();
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
     // 租户失效时注销 Cookie，避免会话困在不可用租户中。
@@ -256,8 +257,7 @@ try
     app.UseMiddleware<TwoFactorSetupEnforcementMiddleware>();
 #endif
     app.UseAuthorization();
-    // 授权之后、租户作用域之内：组件端点被业务规则拒绝时补一条操作记录（见中间件注释）
-    app.UseMiddleware<OperationFailureRecordingMiddleware>();
+    app.UseOperationFailureRecording();
 
     app.MapControllers();
     // 组件自带的端点（设置、权限、操作记录、通知、租户与租户连接），路由与原控制器一致

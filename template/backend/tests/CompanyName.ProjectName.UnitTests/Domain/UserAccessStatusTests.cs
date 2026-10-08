@@ -113,6 +113,20 @@ public sealed class UserAccessStatusTests
         Assert.False(user.IsTemporarilyLockedOut(Now));
     }
 
+    [Fact]
+    public void Rehash_preserves_the_security_version_but_a_password_change_rotates_it()
+    {
+        var user = CreateUser();
+        var stamp = user.SecurityStamp;
+
+        user.RehashPassword("upgraded-hash");
+        Assert.Equal("upgraded-hash", user.PasswordHash);
+        Assert.Equal(stamp, user.SecurityStamp);
+
+        user.UpdatePasswordHash("changed-password-hash");
+        Assert.NotEqual(stamp, user.SecurityStamp);
+    }
+
     private static readonly LoginLockoutPolicy Lockout = new(5, TimeSpan.FromMinutes(15));
 
     private static User CreateUser() =>

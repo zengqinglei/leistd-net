@@ -1,5 +1,5 @@
 #if (ExternalLogin)
-using CompanyName.ProjectName.Api.Auth.Sessions;
+using Leistd.Security.AspNetCore;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
@@ -31,12 +31,12 @@ internal static class ExternalAuthenticationExtensions
             cookie.ExpireTimeSpan = TimeSpan.FromMinutes(5);
             cookie.SlidingExpiration = false;
         });
+        services.AddDistributedTicketStore(AuthenticationSchemeNames.ExternalCookie);
         services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.ExternalCookie)
-            .Configure<DistributedTicketStore, IOptions<SessionCookieOptions>>((cookie, store, session) =>
+            .Configure<IOptions<SessionCookieOptions>>((cookie, session) =>
             {
-                cookie.SessionStore = store;
                 cookie.Cookie.SameSite = session.Value.SameSite ?? SameSiteMode.Lax;
-            }).PostConfigure(DistributedTicketStore.ConfigureCookie);
+            });
         if (providers.Google.IsAvailable)
             authentication.AddGoogle(AuthenticationSchemeNames.ExternalProviderPrefix + "google", options =>
             {

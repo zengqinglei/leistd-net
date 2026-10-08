@@ -1,18 +1,18 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Api.Options;
 
 namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 /// <summary>
 /// 在组合期逐张加载令牌证书：任何一张文件损坏、口令错误、没有 RSA 私钥或重复，都以带下标的键名报错
-/// （集合与路径的结构由 <see cref="OAuthOptionsValidator"/> 先行校验）。
+/// （集合与路径的结构由 <see cref="OAuthServerOptionsValidator"/> 先行校验）。
 /// </summary>
 /// <remarks>
 /// 证书集合用于重叠轮换（新旧同时登记），一张坏了不能静默跳过——跳过签名证书会让 JWKS 少一个 kid，
 /// 跳过加密证书会让已签发的授权码与刷新令牌无法解密，两者都要等到请求失败才暴露。
 /// </remarks>
-public static class OAuthCertificateLoader
+internal static class OAuthCertificateLoader
 {
     public static X509Certificate2[] Load(IReadOnlyList<OAuthCertificate> certificates, string section)
     {

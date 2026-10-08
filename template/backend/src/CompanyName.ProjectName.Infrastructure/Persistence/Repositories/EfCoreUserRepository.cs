@@ -41,7 +41,7 @@ public class EfCoreUserRepository(
     /// <remarks>成员关系与用户各自带租户与软删除的全局过滤器。</remarks>
     public async Task<IQueryable<User>> GetQueryableWithRolesAsync(CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
-        return dbSet.Include(user => user.Roles);
+        var query = await GetQueryableAsync(cancellationToken);
+        return query.Include(user => user.Roles);
     }
 }

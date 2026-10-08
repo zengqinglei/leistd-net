@@ -46,9 +46,9 @@
 
 - 扩展类在按层次分的包中放 `Extensions/`；按内容分的包中与被扩展类型同目录。
 
-- `Filters/` 只放 MVC / Hub 管道过滤器（如 `Leistd.Response.AspNetCore.Filters`、`Leistd.AspNetCore.SignalR.Filters`）；
-  名称以 `Filter` 结尾但不在请求管道上的类型放所属内容目录。登记的例外：通知投递筛选
-  （`Leistd.Notifications.Filters.INotificationDeliveryFilter` 及其实现）已是公共契约，按终局原则保留原命名空间，不为目录规则迁移。
+- `Filters/` 按所属过滤语义组织：MVC/Hub 管道过滤器（如 `Leistd.Response.AspNetCore.Filters`）、
+  数据过滤状态（`Leistd.Data.Filters`）或通知投递筛选（`Leistd.Notifications.Filters`）。
+  其他名称以 `Filter` 结尾的类型放所属内容目录，不据后缀归类。
 - 端点映射：组件只映射一个 Hub 时，`Map*Hub` 随注册入口放包根 `DependencyInjection.cs`；映射多个 Minimal API 端点的放 `Endpoints/`
   （如 `Leistd.Settings.AspNetCore.Endpoints`）。
 - 事件类型（以 `Event` 结尾）放 `Events/`，事件处理器（以 `EventHandler` 结尾）放 `EventHandlers/`，
@@ -271,6 +271,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 默认值必须可读、可用，并与 Options 验证和运行时行为一致。
 - 共享映射与常量放在所有消费者可引用的最低层，派生值不得维护第二份。
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
+- 扩展点先说明实际需求：部署参数用 Options，替换实现用窄接口与 TryAdd，HTTP/EF 定制优先采用原生钩子；仅为明确继承需求开放 protected virtual。写明生命周期、缺失状态及不可绕过的租户、身份、撤销或防重放约束，不将所有成员机械设为 virtual。
 - **组件不改写官方类型。** 官方类型的形状与语义属于普通宿主的标准行为，组件不认领、不改写（如不把 `HttpValidationProblemDetails` 改成自己的数组形、不覆盖 `HttpContext.TraceIdentifier`）。组件自己产出的类型可以有自己的形状；需要同时消费两者的一方（服务客户端、模板前端）两种都识别。
 - **行为差异按类型契约区分，不加选项开关。** 能从类型判断的就按类型判断：`AddDddDbContext<T>()` 只在 `T : BaseDbContext` 时挂 DDD 拦截器，控制库这类普通上下文自然不挂，不需要 `EnableDddInterceptors` 之类的选项。也不要拿"某个服务注册了没有"推断模式——那是代理变量，换个依赖就会推错；确需模式标记时由注册方显式登记标记服务（如锁组件的"本地锁充当分布式锁"标记）。
 - **由宿主配置的组件，注册入口只有一种形态：** `AddXxx(Action<TOptions>? configure = null, string configSectionPath = TOptions.SectionName)`。内部先 `AddOptions<TOptions>().BindConfiguration(configSectionPath)`，再应用 `configure`，并挂上 `ValidateOnStart()`；校验消息按实际传入的配置节报键名（§6.2）。
@@ -334,6 +335,8 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 业务接缝只开**窄钩子**：组件确实依赖宿主模型的地方（主体目录、租户开通与启用前置、设置值校验、收件人解析）声明一个小接口，由宿主实现，组件不引用宿主实体。组件状态变化需要让宿主留痕或联动时，经可选的 `ILocalEventBus` 发本地事件（如 `SettingChangedEvent`、`PermissionGrantsReplacedEvent`、`TenantChangedEvent`），在工作单元内推迟到提交后分发，不为审计另开钩子。
 
 周期任务注册时必填 `RecurringJobScope`，不提供通用的 AOP 锁特性：锁只保效率，正确性靠作业幂等与水位（Kleppmann）。保留期默认值按数据性质定：审计类默认关闭、启用时天数必填（期限受法律合同约束，类库无从知道）；运营类默认开启。
+
+内聚按完整消费能力与依赖边界判断：通用机制归组件，业务实体、权限、配额和锁/事务边界归用例或宿主。优先复用原生契约与扩展点；只为实际替换场景增加窄接口、Options或钩子。不因相似流程抽泛型状态机，也不为单一助手建立实现包、迫使应用层引用传输栈。审视候选必须形成迁入或保留的明确结论，并同步当前调用方与稳定契约。
 
 ### 6.5 替换与删除
 

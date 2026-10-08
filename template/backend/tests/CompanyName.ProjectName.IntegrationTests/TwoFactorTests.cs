@@ -4,8 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
-using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
-using CompanyName.ProjectName.Domain.Shared.Text;
+using Leistd.Security.OneTimeCodes;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -433,7 +432,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]));
 
     private static string Code(string secret, FakeTimeProvider clock) =>
-        Totp.ComputeCode(Base32.Decode(secret)!, Totp.TimeStepAt(clock.GetUtcNow().UtcDateTime));
+        Totp.ComputeCode(Totp.ParseSecret(secret)!, Totp.TimeStepAt(clock.GetUtcNow()));
 
     private static async Task<string> CreateUserAsync(WebApplicationFactory<Program> host, string prefix)
     {

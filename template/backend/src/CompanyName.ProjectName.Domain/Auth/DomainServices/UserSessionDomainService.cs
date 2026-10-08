@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using Leistd.Data.Querying;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Ddd.Domain.Repositories;

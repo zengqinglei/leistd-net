@@ -1,4 +1,5 @@
 #if (OpenIddictServer)
+using Leistd.Security.AspNetCore.Cookies;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,12 +12,13 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
+using Leistd.Security.OpenIddict.Server.Pruning;
 using OpenIddict.Core;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -33,7 +35,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         {
             sessionBound = false,
             clientId = id, applicationType = "web", clientType = "public", redirectUris = new[] { Callback },
-            permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthOptions().Resource}" },
+            permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthResourceOptions().Resource}" },
             requirements = new[] { "ft:pkce" }
         });
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
@@ -56,7 +58,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
 
     private static string AuthorizationUrl(string client, string parameters) =>
         $"/connect/authorize?client_id={client}&redirect_uri={Uri.EscapeDataString(Callback)}&response_type=code" +
-        $"&scope=openid%20{new OAuthOptions().Resource}&code_challenge={Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(new string('x', 64))))}&code_challenge_method=S256{parameters}";
+        $"&scope=openid%20{new OAuthResourceOptions().Resource}&code_challenge={Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(new string('x', 64))))}&code_challenge_method=S256{parameters}";
 
     [Fact]
     public async Task Prompt_none_without_a_session_returns_login_required_to_the_protocol_callback()
@@ -236,7 +238,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     {
         var cookieOptions = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(AuthenticationSchemeNames.SessionCookie);
-        var key = ticket.Properties.Items["ticket.key"]!;
+        var key = ticket.Properties.Items[DistributedTicketStore.TicketKeyProperty]!;
         cookieOptions.SessionStore!.RenewAsync(key, ticket).GetAwaiter().GetResult();
         var reference = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim("Microsoft.AspNetCore.Authentication.Cookies-SessionId", key)], AuthenticationSchemeNames.SessionCookie)),
@@ -317,7 +319,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var youngRevoked = await AuthorizationAsync(now.AddDays(-13), Statuses.Revoked, AuthorizationTypes.Permanent);
         var oldPermanent = await AuthorizationAsync(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent);
         var oldAdHoc = await AuthorizationAsync(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc);
-        var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
+        var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>().Single(job => job.Name == OpenIddictPruningJob.Name);
         Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
         var job = (IRecurringJob)scope.ServiceProvider.GetRequiredService(definition.JobType);
         var oldExpiredId = (await tokens.GetIdAsync(oldExpired))!;

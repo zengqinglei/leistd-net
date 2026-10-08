@@ -1,6 +1,6 @@
-# 数据访问共享契约：连接与分页
+# 数据访问：连接、分页、过滤与查询
 
-`Leistd.Data` 定义与持久化实现无关的数据访问契约：连接解析与归属让工作单元与配置、Secret 服务或多租户实现解耦；分页请求与结果让存储、用例与端点共用一套参数与返回形状。
+`Leistd.Data` 定义与持久化实现无关的数据访问契约：连接解析与归属让工作单元与配置、Secret 服务或多租户实现解耦；分页请求与结果让存储、用例与端点共用一套参数与返回形状；过滤状态与异步查询执行可脱离 DDD 使用。
 
 ## 何时使用
 
@@ -17,7 +17,23 @@
 dotnet add package Leistd.Data
 ```
 
-通常无需单独添加：工作单元、多租户与带列表查询的组件已传递引用它。
+工作单元、多租户与带列表查询的组件传递引用 `Leistd.Data`。它依赖 Core（复用作用域释放）和 DI 抽象，不依赖 EF 或 DDD；引用它的契约包同样传递这些依赖。EF 查询执行器与通用建模原语由可选的 `Leistd.Data.EntityFrameworkCore` 分发。
+
+## 注册
+
+```csharp
+using Leistd.Data;
+using Leistd.Data.EntityFrameworkCore;
+
+builder.Services.AddDataFilters();
+builder.Services.AddDataEfCore();
+```
+
+`AddDataFilters()` 登记 `IDataFilter` 及泛型端口，`AddDataEfCore()` 登记 `IQueryableAsyncExecuter`。两者独立、幂等，默认实现为单例，保留宿主预先登记的实现；DDD 基础设施组合这两个入口。
+
+过滤端口位于 `Leistd.Data.Filters`：默认启用，`Disable<TFilter>()` / `Enable<TFilter>()` 的嵌套作用域按进入逆序释放，恢复原状态。状态在当前异步流中生效，并行分支不相互修改。该组件只管理状态，查询 provider 负责实际过滤；标记接口与租户、软删除模型仍由各自组件或 DDD 提供。
+
+`Leistd.Data.Querying.IQueryableAsyncExecuter` 接受可组合查询，经持久化 provider 异步执行列表、计数、唯一项与存在性判断，并传递取消令牌。EF 实现需要原生 EF 查询 provider，不将内存 IQueryable 伪装为异步查询，也不改变跟踪、连接或过滤规则。
 
 ## 使用
 
@@ -77,6 +93,34 @@ public sealed record OrderPageRequest : PageRequest
 }
 ```
 
+### EF 命名过滤器
+
+普通 `DbContext` 可独立使用 `Leistd.Data.EntityFrameworkCore.Modeling` 的建模扩展，无需 DDD 或 DI 注册：
+
+```csharp
+using Leistd.Data.EntityFrameworkCore.Modeling;
+using Microsoft.EntityFrameworkCore;
+
+public interface IVisibleRecord { bool Visible { get; } }
+public sealed class VisibleRecord : IVisibleRecord
+{
+    public int Id { get; set; }
+    public bool Visible { get; set; }
+}
+
+public sealed class VisibleDbContext(DbContextOptions<VisibleDbContext> options) : DbContext(options)
+{
+    public DbSet<VisibleRecord> Records => Set<VisibleRecord>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyGlobalFilters<IVisibleRecord>("Visible", item => item.Visible);
+    }
+}
+```
+
+`ApplyGlobalFilters` 为实现契约的非 owned 根实体设置原生命名过滤器，支持 shared-type，派生类型沿用根声明。不同名称按 AND 组合，同名后写覆盖；调用方可用原生 `IgnoreQueryFilters(["Visible"])` 按名忽略。Owned 对象通过所属实体加载，不配置独立过滤器。过滤表达式、名字、启用状态与业务政策由调用方确定；空模型也校验构建器、名称和表达式参数。
+
 ## 接口参考
 
 | 成员 | 作用 |
@@ -93,8 +137,6 @@ public sealed record OrderPageRequest : PageRequest
 解析器必须返回非空连接字符串。配置缺失、外部依赖不可达或凭据无法解析时必须抛出异常，不得回退到调用方未选择的数据库。租户感知解析见[多租户](./multi-tenancy.md)。
 
 `PageRequest` 的基础上限为 `MaximumLimit`。业务请求可覆写属性和校验特性；越界由宿主校验拒绝，类型本身不截断。用派生类型声明实例规则，不修改全局默认值。
-
-
 
 `AffinityKey` 表示逻辑归属，不等同于物理连接。共享库中不同租户可指向同一连接，工作单元仍必须拒绝跨归属写入。该值在每次获取 DbContext 时读取，实现不得执行 I/O；未注册时为 `null`。
 

@@ -25,7 +25,14 @@
     <PackageVersion Include="Leistd.Lock.Memory" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Redis" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Security.OneTimeCodes" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <!--#if (OpenIddictServer)-->
+    <PackageVersion Include="Leistd.Security.OpenIddict.Server" Version="$(LeistdFrameworkVersion)" />
+    <!--#endif-->
+    <!--#if (RemoteTokenAuth)-->
+    <PackageVersion Include="Leistd.Security.OpenIddict.Validation" Version="$(LeistdFrameworkVersion)" />
+    <!--#endif-->
     <PackageVersion Include="Leistd.Authorization.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Authorization.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Authorization.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
@@ -103,13 +110,12 @@
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.11" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="MailKit" Version="4.17.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.11" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Refit" Version="15.2.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.7.1" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.7.1" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.1" />
-    <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.7.1" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="StackExchange.Redis" Version="3.1.31" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />

@@ -7,6 +7,9 @@ using CompanyName.ProjectName.Api.HostedServices.Initializer;
 using CompanyName.ProjectName.Api.Localization;
 #endif
 using Leistd.ExceptionHandling.AspNetCore;
+#if (SpaFrontend)
+using Leistd.Security.AspNetCore;
+#endif
 #if (LocalIdentity && IncludeMultiTenancy)
 using Leistd.MultiTenancy.AspNetCore.Options;
 #endif
@@ -90,6 +93,16 @@ public static class WebHostExtensions
                 }
             });
         });
+
+#if (SpaFrontend)
+        services.AddBrowserOriginProtection(options =>
+        {
+            options.WritePaths = ["/api"];
+#if (IncludeNotifications || IncludeRealTime)
+            options.AllMethodPaths = ["/hubs"];
+#endif
+        });
+#endif
 
         return services;
     }

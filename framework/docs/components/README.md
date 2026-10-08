@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、65 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、69 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
@@ -14,7 +14,7 @@
 | 资源实例授权 | 对已加载的单个资源实例裁决：走官方授权管线，领域规则处理器与资源 ACL 合并，拒绝优先、默认拒绝；并提供把 ACL 合并进集合查询的入口 | `Leistd.Authorization.Resource.Core`、`Leistd.Authorization.Resource.AspNetCore`、`Leistd.Authorization.Resource.EntityFrameworkCore` | [`authorization-resource`](./authorization-resource.md) |
 | 数据范围 | 把"能看到哪些候选数据"翻译成可由数据库执行的查询谓词，多个范围取并集；不内置组织模型 | `Leistd.Authorization.DataScope.Core` | [`authorization-data-scope`](./authorization-data-scope.md) |
 | 核心原语 | 时钟抽象（IClock/UtcClockProvider）、环境上下文契约、释放动作与文本脱敏 | `Leistd.Core` | [`core`](./core.md) |
-| 数据访问共享契约 | 零依赖叶子包：连接解析与归属（IConnectionStringResolver / [ConnectionStringName] / IConnectionAffinityProvider），以及存储、用例与端点共用的分页请求与结果（PageRequest / PagedResult） | `Leistd.Data` | [`data`](./data.md) |
+| 数据访问共享契约 | 连接解析、连接归属、分页、异步流过滤状态及 provider 中立的查询执行契约；EF 实现为可选包 | `Leistd.Data`、`Leistd.Data.EntityFrameworkCore` | [`data`](./data.md) |
 | 服务注册回调与拦截器织入 | DI 包提供服务注册回调；DynamicProxy 扩展包在此基础上按约定织入 AOP 拦截器。 | `Leistd.DependencyInjection`、`Leistd.DependencyInjection.DynamicProxy` | [`dependency-injection`](./dependency-injection.md) |
 | 邮件发送 | 统一的 IEmailSender 抽象与 SMTP 实现：发送失败抛异常，不需要投递的环境显式注册空发送器 | `Leistd.Email.Core`、`Leistd.Email.Smtp` | [`email`](./email.md) |
 | 事件总线 | 进程内发布/订阅事件总线，发布方与 IEventHandler 处理器解耦，由 DI 同步消费 | `Leistd.EventBus.Core`、`Leistd.EventBus.Local` | [`event-bus`](./event-bus.md) |
@@ -29,7 +29,7 @@
 | 统一 API 响应 | 统一 {code, message, data} 响应模型与 ASP.NET Core 自动包装过滤器 | `Leistd.Response.Core`、`Leistd.Response.AspNetCore` | [`response`](./response.md) |
 | 设置 | 运行期可改的设置：业务声明定义与值域，框架按 用户 → 租户 → 代码默认值 回落解析并持久化；自带设置页端点，宿主级设置可经配置源覆盖部署配置 | `Leistd.Settings.Core`、`Leistd.Settings.EntityFrameworkCore`、`Leistd.Settings.AspNetCore`、`Leistd.Settings.Hosting` | [`settings`](./settings.md) |
 | 服务间调用客户端 | 服务互调标准管道：Refit 与手写强类型客户端注册、链路标识透传、client credentials 与 Token Exchange 认证（令牌缓存、401 后重新获取）、响应读取与远端错误还原 | `Leistd.ServiceClient.Core`、`Leistd.ServiceClient.Refit`、`Leistd.ServiceClient.OAuth`、`Leistd.ServiceClient.AspNetCore` | [`service-client`](./service-client.md) |
-| 当前用户与身份信息 | 通过 ICurrentUser / ICurrentClient / ICurrentPrincipalAccessor 强类型读取当前登录用户与客户端身份，并支持临时切换主体。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore` | [`security`](./security.md) |
+| 身份与会话安全 | 主体访问、请求信息、Cookie 票据、浏览器来源防护、一次码和可选 OpenIddict 集成。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore`、`Leistd.Security.OneTimeCodes`、`Leistd.Security.OpenIddict.Validation`、`Leistd.Security.OpenIddict.Server` | [`security`](./security.md) |
 | 关联标识 | 业务关联标识：默认等于 `Activity` 的 TraceId，可由调用方或入口显式指定；写入日志作用域，在 ASP.NET Core 入站、HttpClient 出站与后台任务之间传递。 | `Leistd.Tracing.Core`、`Leistd.Tracing.AspNetCore`、`Leistd.Tracing.HttpClient` | [`tracing`](./tracing.md) |
 | 工作单元与事务 | 用 [UnitOfWork] 特性与 AOP 拦截器声明式管理数据库事务边界，并按提交阶段编排领域事件发布。 | `Leistd.UnitOfWork.Core`、`Leistd.UnitOfWork.EntityFrameworkCore` | [`unit-of-work`](./unit-of-work.md) |
 

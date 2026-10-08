@@ -31,6 +31,8 @@ using Leistd.BackgroundJobs;
 using Leistd.BackgroundJobs.Recurring;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
+using CompanyName.ProjectName.Application.Auth.Options;
+using Microsoft.Extensions.Options;
 #endif
 #endif
 using CompanyName.ProjectName.Application.Initialization;
@@ -111,8 +113,16 @@ public static class DependencyInjection
         services.TryAddTransient<IAuthAppService, AuthAppService>();
 
 #if (OpenIddictServer)
-        services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
-            RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
+        // 验证器与变更令牌源共同标识已绑定；重复绑定会追加资源数组。
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IOptionsChangeTokenSource<OAuthResourceOptions>)) ||
+            !services.Any(descriptor => descriptor.ServiceType == typeof(IValidateOptions<OAuthResourceOptions>) &&
+                descriptor.ImplementationType == typeof(OAuthResourceOptionsValidator)))
+        {
+            services.AddOptions<OAuthResourceOptions>()
+                .BindConfiguration(OAuthResourceOptions.SectionName)
+                .ValidateOnStart();
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OAuthResourceOptions>, OAuthResourceOptionsValidator>());
+        }
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
         services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.TryAddTransient<IOpenApplicationAppService, OpenApplicationAppService>();

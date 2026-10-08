@@ -572,7 +572,7 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration, [stri
     $startInfo.Environment['OAuth__DisableHttpsRequirement'] = 'true'
     # 不注入管理员口令：新库首次启动要建管理员，口令取自生成项目的 appsettings.Development.json，
     # 这正是克隆后首次运行的路径
-    $startInfo.Environment['VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
+    $startInfo.Environment['Leistd__Security__VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
     # Resource 形态的签发方在基线配置里刻意留空、组合期必填；其余形态不读这一项。
     # 冒烟只探存活，不回源，给一个不可达的地址即可
     $startInfo.Environment['Authentication__Issuer'] = 'https://identity.matrix.test/'

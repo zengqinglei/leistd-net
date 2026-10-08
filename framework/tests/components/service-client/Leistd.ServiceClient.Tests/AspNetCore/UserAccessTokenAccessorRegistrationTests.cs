@@ -40,6 +40,17 @@ public sealed class UserAccessTokenAccessorRegistrationTests
         services.AssertResolvesTo<IUserAccessTokenAccessor, HostAccessor>();
     }
 
+    [Fact]
+    public void Authenticated_ticket_registration_is_idempotent_and_keeps_a_host_accessor()
+    {
+        ServiceCollectionAssertions.AssertIdempotent(services => services.AddAuthenticatedUserAccessTokenAccessor("Session"));
+        var services = new ServiceCollection();
+        services.AddSingleton<IUserAccessTokenAccessor, HostAccessor>();
+        services.AddAuthenticatedUserAccessTokenAccessor("Session");
+        services.AssertSingle<IHttpContextAccessor>(ServiceLifetime.Singleton);
+        services.AssertResolvesTo<IUserAccessTokenAccessor, HostAccessor>();
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" ")]

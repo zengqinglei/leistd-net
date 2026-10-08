@@ -189,29 +189,28 @@ public class AppDbContext(
 }
 ```
 
-`BaseDbContext.OnModelCreating` 与 `ConfigureConventions` 已封闭；派生类覆盖 `ConfigureModel` 配置实体、覆盖 `ConfigureModelConventions` 追加模型约定（如枚举统一存为字符串）。基类在派生配置完成后为所有已进入模型的实体（含未声明 `DbSet` 的组件实体）添加命名过滤器。
+`BaseDbContext.OnModelCreating` 与 `ConfigureConventions` 已封闭；派生类覆盖 `ConfigureModel` 配置实体、覆盖 `ConfigureModelConventions` 追加模型约定（如枚举统一存为字符串）。基类在派生配置完成后为已进入模型的非 owned 根实体（含未声明 `DbSet` 的组件实体）添加命名过滤器，使用数据 EF 组件的建模原语；owned 与派生类型沿所属查询根的过滤规则加载。
 
-基类注册 EF Core 约定 `DddEntityConvention`：审计人字段（`CreatorId`、`LastModifierId`、`DeleterId`）最长 64，`ConcurrencyStamp` 见[乐观并发标记](#乐观并发标记)。约定以约定来源写入，实体上的显式 Fluent 配置优先。不继承基类的上下文可在 `ConfigureConventions` 中注册同一约定：
-
-```csharp
-protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-    => configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
-```
+基类分别登记 `AuditingEntityConvention`（审计人字段最长 64）与 `DddEntityConvention`（[乐观并发标记](#乐观并发标记)）。两者采用约定来源，Fluent 配置与数据注解优先。普通上下文只需审计时登记审计约定；另需 DDD 并发标记时再登记 DDD 约定，详见[审计组件](../components/auditing.md)。
 
 需要审计、租户上下文或运行时过滤开关时，DbContext 必须接收 `IServiceProvider` 并传给基类。否则它固定为宿主视角，创建审计与 `IDataFilter` 作用域均无法生效。
 
-软删除与租户过滤器分别命名为 `SoftDelete` 和 `MultiTenant`，同时命中时以 AND 叠加。注册了 `ICurrentTenant` 后，启动检查会拒绝任何未带 `MultiTenant` 过滤器的 `IMultiTenant` 实体。
+软删除与租户过滤器分别命名为 `SoftDelete` 和 `MultiTenant`，同时命中时以 AND 叠加。注册了 `ICurrentTenant` 后，启动检查会拒绝任何未带 `MultiTenant` 过滤器的非 owned 根 `IMultiTenant` 实体。
 
 ## 接口参考
 
 | 包 | 关键类型 |
 | --- | --- |
-| `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>`、`IDataFilter` |
+| `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>` |
 | `Leistd.Ddd.Application.Contracts` | `AppServices.IAppService`、`EntityDto<TKey>`、`PageRequest`、`PagedResult<T>` |
 | `Leistd.Ddd.Application` | `AppServices.BaseAppService`、`MapPagedResult<TSource, TDestination>` |
 | `Leistd.Ddd.Infrastructure` | `AddDddInfrastructure`、`AddDddDbContext`、`BaseDbContext`、`DddEntityConvention`、`EfCoreRepository` |
 
-`IRepository<TEntity>` 提供查询、计数、存在性与批量写入；带主键的接口另提供按 Id 读取和删除。`IQueryableAsyncExecuter` 使 Domain 可异步执行 `IQueryable`，而不直接依赖 EF Core。
+`IRepository<TEntity>` 提供查询、计数、存在性与批量写入；带主键的接口另提供按 Id 读取和删除。数据过滤端口与异步查询端口由[数据组件](../components/data.md)提供：`Leistd.Data.Filters.IDataFilter`、`Leistd.Data.Querying.IQueryableAsyncExecuter`。DDD 基础设施组合其注册与可选 EF 执行器。
+
+EF 仓储的所有读方法均经 `GetQueryableAsync`：覆写可追加 Where、Include 或拆分查询，必须保留原实体身份和跟踪，不投影或使用 AsNoTracking。Count/Any 使用相同筛选，由 provider 执行标量而不物化关联。普通读取不自动加载业务关联，具体仓储按需要显式追加。
+
+写入使用原始 DbSet。按 Id 删除先经读入口查找，受自定义读筛选影响；按条件或主键集合批量删除使用原始集合，仅受全局过滤器影响。
 
 审计实体层次为 `CreationAuditedEntity<TKey>` → `ModificationAuditedEntity<TKey>` → `DeletionAuditedEntity<TKey>`；`FullAuditedEntity<TKey>` 聚合创建、修改与删除审计契约。
 
@@ -220,7 +219,7 @@ protected override void ConfigureConventions(ModelConfigurationBuilder configura
 - `AddDddDbContext<TDbContext>(o => o.AddDefaultRepositories())` 扫描该上下文的 public `DbSet<>` 属性，为其中的聚合根注册 Scoped 仓储；不传选项即只登记上下文、不注册仓储。未声明 `DbSet<>` 的聚合根用 `AddDefaultRepository<TEntity>()` 点名。
 - `LocalEventSaveChangesInterceptor` 在保存前收集并清空实体事件，保存成功后加入当前工作单元；无工作单元时直接发布。保存失败会丢弃本次收集。
 - 使用同步 `SaveChanges()` 时，本地事件发布需要 sync-over-async 并记录 Warning；应优先使用 `SaveChangesAsync()`。
-- 全局过滤器只应用于 EF Core 模型中的根实体类型，派生实体不重复添加。
+- 全局过滤器只应用于 EF Core 模型中的非 owned 根实体类型，派生实体不重复添加，owned 不设置独立过滤器。
 
 ## 建模原语
 

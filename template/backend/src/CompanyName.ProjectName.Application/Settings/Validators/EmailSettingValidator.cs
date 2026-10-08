@@ -1,7 +1,7 @@
 #if (LocalIdentity)
+using Leistd.Security.OneTimeCodes.VerificationCodes;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
-using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.ExceptionHandling;
 using Leistd.Settings.Validation;
 using Microsoft.Extensions.Options;

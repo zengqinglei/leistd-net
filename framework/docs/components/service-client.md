@@ -10,7 +10,7 @@
 | 手写客户端与错误读取 | `AddServiceClient`、`ReadContentAsync`、`EnsureRemoteSuccessAsync` | `Leistd.ServiceClient.Core` |
 | 工作负载身份与机器令牌 | `AddServiceAuthentication`、`AddClientCredentials` | `Leistd.ServiceClient.OAuth` |
 | 单跳用户委托 | `AddTokenExchange` | `Leistd.ServiceClient.OAuth` |
-| 当前请求的用户访问令牌 | `AddUserAccessTokenAccessor` | `Leistd.ServiceClient.AspNetCore` |
+| 当前请求的用户访问令牌 | `AddUserAccessTokenAccessor` 或 `AddAuthenticatedUserAccessTokenAccessor` | `Leistd.ServiceClient.AspNetCore` |
 
 Core 的 `IUserAccessTokenAccessor` 只定义证明来源，不依赖 ASP.NET Core 或 OpenIddict。OAuth 复用官方 OpenIddict.Client 7.7 的发现文档与客户端认证，不推导令牌端点；机器回源与用户交换使用同一工作负载注册。
 
@@ -46,7 +46,16 @@ builder.Services.AddUserAccessTokenAccessor("OpenIddict.Validation.AspNetCore");
 - `AddServiceAuthentication` 只有一个工作负载身份：相同配置节重复调用幂等，换用另一配置节时抛出。
 - 每个命名客户端只能安装一个认证处理器：同一方式、同一配置节重复调用幂等；换用另一方式或配置节时抛出。
 
-宿主自行配置 OpenIddict Validation 或等价 JWT Bearer 验证；令牌读取适配器只读取指定方案认证票据中保存的 access_token，不以 Cookie 的已认证状态采信任意 Authorization 头。OpenIddict Validation 自动保存此令牌；使用 JwtBearer 时应启用 SaveToken。适配器在发送请求时读取 HttpContext，池化 handler 不捕获请求作用域。非 Web 宿主可实现 `IUserAccessTokenAccessor`，但返回值必须是真实的已验证用户访问令牌。
+访问令牌读取入口二选一，两者均注册 Singleton，不覆盖宿主实现；同时调用时首次登记的入口与方案生效：
+
+| 入口 | 前提 |
+| --- | --- |
+| `AddUserAccessTokenAccessor(scheme)` | 请求携带 Bearer 头，指定 Bearer 方案认证成功 |
+| `AddAuthenticatedUserAccessTokenAccessor(scheme)` | 宿主显式选择可信服务端会话或策略方案；指定方案认证成功 |
+
+两者要求指定方案认证成功且主体至少有一个已认证身份，只读取票据保存的 `access_token`，不读取原始请求头。OpenIddict Validation 自动保存令牌；JwtBearer 需启用 SaveToken，OIDC 会话需由可信处理器验证并保存访问令牌。策略方案如何转发由宿主决定，组件不回退其他方案。
+
+适配器在发送请求时读取 HttpContext，池化 handler 不捕获请求作用域。无请求、认证失败、未认证主体或无令牌时返回 null；取消照常传播。非 Web 宿主可实现 `IUserAccessTokenAccessor`，返回值必须是已验证用户访问令牌。
 
 ## 使用
 
@@ -102,7 +111,7 @@ API 边界的默认响应：未处理的远端拒绝及无效或提前中断的�
 关联标识经追踪组件透传，未注册时直通。Core 不转发用户或租户请求头；下游从已验证 JWT 的主体读取用户与租户。
 
 机器模式只代表 client credentials 的工作负载，不恢复自然人身份。用户模式通过 `IUserAccessTokenAccessor` 获取当前请求的访问令牌作为 subject；
-默认 ASP.NET Core accessor 只读取已验证 Bearer 方案保存的令牌，Cookie 与后台用户上下文不能提供证明，宿主可显式替换 accessor。
+ASP.NET Core 宿主按上面的注册契约选择证明来源；仅有 Cookie 或后台用户身份不能提供访问令牌证明。
 没有令牌或请求预设 Authorization 时拒绝调用，不回退为机器身份。授权关系与目标 audience/scope 由签发方策略决定，下游仍按本地权限判定。
 
 用户交换目标通过命名客户端的 Audience、Scope 指定。输出主体、声明与令牌有效期由身份服务决定；组件提交用户访问令牌作为 subject，不从环境用户或租户构造证明。
@@ -127,6 +136,7 @@ API 边界的默认响应：未处理的远端拒绝及无效或提前中断的�
 | `AddClientCredentials` | 命名客户端机器认证 |
 | `AddTokenExchange` | 命名客户端用户委托 |
 | `AddUserAccessTokenAccessor` | 当前请求的 Bearer 证明适配 |
+| `AddAuthenticatedUserAccessTokenAccessor` | 指定可信认证票据的访问令牌适配 |
 | `IUserAccessTokenAccessor.GetAccessTokenAsync` | 非 Web 宿主的证明来源接缝 |
 | `AddServiceClient(serviceName, configure?, configSectionPath?)` / `AddServiceClientPipeline` | 手写客户端与标准管道 |
 | `AddRefitServiceClient(serviceName, configure?, configSectionPath?, settings?)` | Refit 客户端、序列化与统一远端异常 |
@@ -156,7 +166,7 @@ API 边界的默认响应：未处理的远端拒绝及无效或提前中断的�
 ## 注意事项
 
 - ClientSecret 由密钥管理或环境变量注入，不进入源码或已提交配置。
-- 默认 ASP.NET Core 适配器不把 Cookie 或后台用户上下文当作交换证明；用户委托必须提供已验证的用户访问令牌。
+- 用户委托必须提供已验证的用户访问令牌，仅有会话身份不足以构成证明。
 - 机器范围按命名客户端配置，令牌端点由签发者发现文档提供。
 - 机器认证不自动传递环境租户；租户业务端点以路由或请求参数显式接收租户，并自行校验调用权限与租户有效性。
 - `AddServiceAuthentication` 设置官方 OpenIddict.Client 的全局 `DisableTokenStorage`，同一宿主的交互式登录也会关闭 state 令牌存储。

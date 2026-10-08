@@ -233,7 +233,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     {
         var host = HostWith(new Dictionary<string, string?>
         {
-            ["VerificationCodes:Key"] = ""
+            ["Leistd:Security:VerificationCodes:Key"] = ""
         });
         using var admin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);

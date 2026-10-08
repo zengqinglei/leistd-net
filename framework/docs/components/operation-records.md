@@ -9,7 +9,7 @@
 | 事后要能回答"这条数据是谁改的、凭什么改" | 在用例里调 `IOperationRecorder.RecordSucceededAsync` |
 | 业务规则拒绝了一次操作 | 调 `RecordFailedAsync`；独立提交，业务随后回滚也留得住；写不进去只记日志，不会把 403 变成 500 |
 | 权限不足在**授权阶段**就被拒（请求到不了应用服务） | 端点打 `[OperationRecordAction]`，在授权结果处理器里调一行扩展方法 |
-| **组件映射的端点**在授权之后被业务规则拒绝（宿主在那里没有代码可写） | 同一个注解，在宿主紧接授权之后的中间件里调一行扩展方法 |
+| 授权通过后，控制器或组件端点被业务规则拒绝 | 同一个注解，紧接授权启用 `UseOperationFailureRecording()` |
 | 管理界面要列表、筛选、导出操作记录 | 路由组上调 `MapOperationRecords(...)`；自定义路由或 DTO 时直接用 `IOperationRecordQueryService` |
 | 记录要有保留期（到期搬入归档表） | `AddOperationRecordRetention<TDbContext>()`，默认关闭 |
 | 不要产品内的历史查询，记录交给日志采集链路（SIEM 等） | `AddOperationRecordsLogging()` 代替数据库存储；记录器与调用点完全不变 |
@@ -316,32 +316,14 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 不传原因时补上 `OperationFailureCodes.Forbidden`（`Error:Forbidden`）。这是本组件唯一自产的失败原因码，
 不出现在错误响应里；中英默认译文由 `AddOperationRecords()` 登记，宿主资源里的同名键覆盖它。
 
-授权通过之后的业务拒绝（如组件映射的权限管理端点抛出并发冲突）：在宿主紧接 `UseAuthorization()` 的中间件里捕获、补记、原样重抛。
-判据与被拒路径相同（端点有注解才记，匿名请求不记）；传入错误码与 `LocalizationData` 时，查询渲染出与接口报错同一句原因：
+授权通过之后的业务拒绝，通过组件中间件补记并原样重抛：
 
 ```csharp
-public sealed class OperationFailureRecordingMiddleware(RequestDelegate next)
-{
-    public async Task InvokeAsync(HttpContext context)
-    {
-        try
-        {
-            await next(context);
-        }
-        catch (BusinessException exception)
-        {
-            await context.RecordFailedOperationAsync(
-                OperationFailure.FromCode(exception.Code, exception.LocalizationData));
-            throw; // 响应仍由外层的异常处理写出
-        }
-    }
-}
-
 app.UseAuthorization();
-app.UseMiddleware<OperationFailureRecordingMiddleware>();
+app.UseOperationFailureRecording();
 ```
 
-使用 Leistd 异常处理组件时，捕获的是它的 `BusinessException`。
+只处理 `BusinessException`，记录错误码与 `LocalizationData`，不记录异常文本或 `Exception.Data`。端点需有操作注解；匿名请求跳过，先行记录的失败按动作与目标去重。也可在自定义管道中调用 `RecordFailedOperationAsync`。
 
 - 必须紧接 `UseAuthorization()`：此处授权已通过，且请求仍在租户作用域内。不要放进 `IExceptionHandler`：
   那时租户作用域已随异常退出，租户内的失败会写进宿主层，授权之前抛出的业务异常也会流到那里。
@@ -388,6 +370,7 @@ app.UseMiddleware<OperationFailureRecordingMiddleware>();
 | `IOperationActionDefinitionContext.Add(..., targetIsActor)` | 标记自证类动作：成功且没有操作人时，查询输出的 `ActorIsTarget` 为真，界面把目标显示在操作人列 |
 | `[OperationRecordAction(action, params targetRouteKeys)]` | 声明写端点的动作码；`TargetIdPrefix` 可对齐成功路径的目标标识写法 |
 | `HttpContext.RecordDeniedOperationAsync()` | 在授权结果处理器里补记一条失败；端点有注解才记，匿名请求（没有任何已认证身份）一律不记；授权依据取实际未通过的具名策略 |
+| `UseOperationFailureRecording()` | 紧接授权、位于租户作用域内，补记带操作注解的端点业务失败并原样重抛 |
 | `HttpContext.RecordFailedOperationAsync(failure)` | 在紧接 `UseAuthorization()` 的中间件里补记授权通过之后的业务拒绝；判据同上，授权依据取最后声明的具名策略；`failure` 为空抛 `ArgumentException`。业务异常传 `OperationFailure.FromCode(exception.Code, exception.LocalizationData)`，参数进审计与导出 |
 
 ## 实现行为
@@ -422,7 +405,7 @@ app.UseMiddleware<OperationFailureRecordingMiddleware>();
 - Minimal API 端点的查询参数不要改成 `[AsParameters]` 绑定：它把没有默认值的非空属性当必填，省略 `offset` 的请求会 400。
 - 不要加请求维度字段（IP、UA、URL）或变更明细，按 `CorrelationId` 回查请求日志。
 - `IOperationRecordWriter` 只能有一个实现：为第二个 DbContext 注册，或数据库存储与日志输出同时注册时，在注册期拒绝。
-- 框架不接管 `IAuthorizationMiddlewareResultHandler`，也不替宿主挂业务拒绝的中间件，只提供 `RecordDeniedOperationAsync` 与 `RecordFailedOperationAsync`。
+- 授权结果处理器由宿主实现；业务失败中间件由宿主显式调用 `UseOperationFailureRecording()`。
 - 不要用“发布领域事件、由处理器统一订阅”取代记录器：授权阶段的拒绝没有领域事件；工作单元内拒绝并抛出时，事件随回滚丢失；授权依据只有调用点知道。
 - 被拒记录只看注解，匿名请求一律不记：匿名请求没有操作人，记录会成为无需凭据的写入面。
 

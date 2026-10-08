@@ -96,7 +96,7 @@ backend/tests/
 - 集成测试每类一个 `IClassFixture<ProjectWebApplicationFactory>`，**不要每个用例建宿主**。
 - 需要改配置的用例用 `WithWebHostBuilder` 派生宿主，**同类配置变体归组复用**；断言精确用户名、全表计数或修改租户级设置等依赖空库的用例例外，保留独立宿主。
 <!--#if (LocalIdentity)-->
-- 宿主里与被测行为无关的固定成本要压低：`ProjectWebApplicationFactory` 把 `PasswordHash:IterationCount` 调到 1000，生产默认值由 `PasswordHashingTests` 钉住。
+- 宿主里与被测行为无关的固定成本要压低：`ProjectWebApplicationFactory` 把 `PasswordHash:IterationCount` 调到 1000，生产成本与原生 Options 绑定由 `PasswordHashingTests` 验证。
 <!--#endif-->
 
 ### 2.2 通用要求

@@ -7,7 +7,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using System.Text.Json.Serialization;
 
@@ -25,7 +25,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
     // 调用本服务 API 的令牌必须申请它的 scope：受众由授予的 scope 推出，API 只接受受众是自己的令牌
-    private static readonly string ApiScope = new OAuthOptions().Resource;
+    private static readonly string ApiScope = new OAuthResourceOptions().Resource;
 
     [Fact]
     public async Task Creating_an_application_rejects_scopes_this_server_does_not_register()

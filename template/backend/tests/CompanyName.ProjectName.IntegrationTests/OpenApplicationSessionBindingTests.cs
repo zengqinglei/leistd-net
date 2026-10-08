@@ -8,6 +8,7 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -228,7 +229,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         ["permissions"] = new[]
         {
             "ept:authorization", "ept:token", "gt:authorization_code", "gt:refresh_token", "rst:code",
-            "scp:openid", "scp:offline_access", $"scp:{new OAuthOptions().Resource}"
+            "scp:openid", "scp:offline_access", $"scp:{new OAuthResourceOptions().Resource}"
         },
         ["requirements"] = new[] { "ft:pkce" }
     };
@@ -276,7 +277,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(Verifier)));
         using var authorize = await browser.GetCachedAsync(
             $"/connect/authorize?client_id={clientId}&redirect_uri={Uri.EscapeDataString(Callback)}&response_type=code" +
-            $"&scope=openid%20offline_access%20{new OAuthOptions().Resource}&code_challenge={challenge}&code_challenge_method=S256");
+            $"&scope=openid%20offline_access%20{new OAuthResourceOptions().Resource}&code_challenge={challenge}&code_challenge_method=S256");
         Assert.Equal(HttpStatusCode.Found, authorize.StatusCode);
         Assert.StartsWith(Callback, authorize.Headers.Location!.AbsoluteUri);
         var code = authorize.Headers.Location.Query.TrimStart('?').Split('&')

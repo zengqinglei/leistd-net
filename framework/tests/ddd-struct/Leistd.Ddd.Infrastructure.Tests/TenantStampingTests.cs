@@ -153,7 +153,7 @@ public class TenantStampingTests : IAsyncLifetime
 
         // 在另一个租户上下文里修改：TenantId 不被改写（落值只发生在 Added）
         using (_currentTenant.Change(Guid.NewGuid()))
-        using (_provider.GetRequiredService<Leistd.Ddd.Domain.DataFilters.IDataFilter>().Disable<IMultiTenant>())
+        using (_provider.GetRequiredService<Leistd.Data.Filters.IDataFilter>().Disable<IMultiTenant>())
         {
             order.Title = "updated";
             await _db.SaveChangesAsync();
