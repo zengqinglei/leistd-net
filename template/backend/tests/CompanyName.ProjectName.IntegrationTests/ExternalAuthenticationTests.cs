@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using CompanyName.ProjectName.Api.Auth.Authentication;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
+using Leistd.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Auth.Entities;
@@ -331,7 +331,7 @@ public sealed class ExternalAuthenticationTests
         Assert.True(result.RootElement.GetProperty("requiresTwoFactor").GetBoolean());
         Assert.False(string.IsNullOrEmpty(result.RootElement.GetProperty("twoFactorToken").GetString()));
         Assert.Equal("/connect/authorize?client_id=resource", result.RootElement.GetProperty("returnUrl").GetString());
-        var code = Totp.ComputeCode(Enumerable.Range(1, 20).Select(value => (byte)value).ToArray(), Totp.TimeStepAt(DateTime.UtcNow));
+        var code = Totp.ComputeCode(Enumerable.Range(1, 20).Select(value => (byte)value).ToArray(), Totp.TimeStepAt(DateTimeOffset.UtcNow));
         using var secondStep = await client.PostAsJsonAsync("/api/v1/auth/two-factor",
             new { Token = result.RootElement.GetProperty("twoFactorToken").GetString(), Code = code });
         Assert.True(secondStep.IsSuccessStatusCode, await secondStep.Content.ReadAsStringAsync());
@@ -616,7 +616,7 @@ public sealed class ExternalAuthenticationTests
         if (twoFactor)
         {
             Assert.True(result.GetProperty("requiresTwoFactor").GetBoolean());
-            var code = Totp.ComputeCode(secret, Totp.TimeStepAt(DateTime.UtcNow));
+            var code = Totp.ComputeCode(secret, Totp.TimeStepAt(DateTimeOffset.UtcNow));
             using var second = await browser.PostAsJsonAsync("/api/v1/auth/two-factor",
                 new { Token = result.GetProperty("twoFactorToken").GetString(), Code = code });
             Assert.True(second.IsSuccessStatusCode, await second.Content.ReadAsStringAsync());

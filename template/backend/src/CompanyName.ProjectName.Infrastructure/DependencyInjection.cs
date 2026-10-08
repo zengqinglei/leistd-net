@@ -41,8 +41,7 @@ using Leistd.Notifications.EntityFrameworkCore;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #endif
 #if (Email)
-using CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
-using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
+using Leistd.Security.OneTimeCodes;
 #endif
 #if (LocalIdentity)
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
@@ -136,8 +135,7 @@ public static class DependencyInjection
         services.TryAddTransient<IPasswordHasher, IdentityPasswordHasher>();
 #endif
 #if (Email)
-        // 验证码摘要与口令哈希具有不同的密钥和成本契约。
-        services.TryAddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
+        services.AddVerificationCodeDigest();
         services.AddSmtpEmailSender();
 #endif
 

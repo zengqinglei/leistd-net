@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using Leistd.Security.OneTimeCodes.VerificationCodes;
 using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
@@ -113,7 +114,6 @@ internal static class LocalSessionAuthenticationExtensions
 #if (Email)
         // 邮箱验证开启时，HMAC 密钥必须跨实例和重启稳定。
         services.AddOptions<VerificationCodeOptions>()
-            .Bind(configuration.GetSection(VerificationCodeOptions.SectionName))
             .Validate<IConfiguration>(
                 (options, config) =>
                     !config.GetValue<bool>("UserRegistration:EnableEmailVerification")

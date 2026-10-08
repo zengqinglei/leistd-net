@@ -1,11 +1,10 @@
+using Leistd.Security.OneTimeCodes.VerificationCodes;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.EmailVerification;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Auth.Errors;
-using CompanyName.ProjectName.Domain.Auth.Options;
-using CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
 using Leistd.Email.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.Lock.Abstractions;

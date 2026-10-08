@@ -1,15 +1,10 @@
-#if (LocalIdentity)
 using System.Security.Cryptography;
 using System.Text;
 
-namespace CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
+namespace Leistd.Security.OneTimeCodes;
 
-/// <summary>两步验证的恢复码：手机丢了时替代验证码登录，每个只能用一次。</summary>
-/// <remarks>
-/// 每个码 80 位随机（16 个 Base32 字符，按 4 位一组显示），库里只存 SHA-256 摘要。
-/// 这个长度下不加盐的快速哈希也无法离线穷举，所以不必走口令那套慢哈希——
-/// 登录时要逐个比对十个摘要，慢哈希会把一次恢复登录拖成秒级。
-/// </remarks>
+/// <summary>生成每组 10 个、每个 80 位随机的恢复码，使用 SHA-256 摘要存储。</summary>
+/// <remarks>调用方只展示一次明文，并原子消费已保存摘要；组件不保存消费状态。</remarks>
 public static class RecoveryCodes
 {
     /// <summary>每次生成的个数。</summary>
@@ -38,9 +33,10 @@ public static class RecoveryCodes
         return codes;
     }
 
-    /// <summary>摘要。先规整（去掉分隔符与空白、转小写）：用户照抄时多一个空格或少一个短横线都应当认。</summary>
+    /// <summary>去掉空白与分隔符、转小写后计算 SHA-256 摘要。</summary>
     public static string Hash(string code)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
         var normalized = new string(code
             .Where(c => !char.IsWhiteSpace(c) && c != '-')
             .Select(char.ToLowerInvariant)
@@ -48,4 +44,3 @@ public static class RecoveryCodes
         return Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(normalized)));
     }
 }
-#endif

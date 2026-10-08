@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <ProjectReference Include="../../../../components/security/Leistd.Security.OneTimeCodes/Leistd.Security.OneTimeCodes.csproj" />
     <ProjectReference Include="../../../../components/lock/Leistd.Lock.Memory/Leistd.Lock.Memory.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>

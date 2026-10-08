@@ -107,7 +107,7 @@ services:
       # 注册邮箱验证（默认关闭）。开启时必须提供验证码摘要密钥（Base64，至少 32 字节，跨实例跨重启不变），
       # 缺失或无效即启动失败；关闭时可以不提供。生成方式见 docs/deploy/README.md
       - UserRegistration__EnableEmailVerification=${ENABLE_EMAIL_VERIFICATION:-false}
-      - VerificationCodes__Key=${VERIFICATION_CODES_KEY:-}
+      - Leistd__Security__VerificationCodes__Key=${VERIFICATION_CODES_KEY:-}
 #endif
 #if (IncludeNotifications && Email)
       # 可选：站点对外地址，通知邮件据此把站内链接拼成绝对地址；不配则邮件不附站内链接

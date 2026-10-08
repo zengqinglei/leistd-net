@@ -102,6 +102,7 @@
   <Folder Name="/components/security/">
     <Project Path="components/security/Leistd.Security.AspNetCore/Leistd.Security.AspNetCore.csproj" />
     <Project Path="components/security/Leistd.Security.Core/Leistd.Security.Core.csproj" />
+    <Project Path="components/security/Leistd.Security.OneTimeCodes/Leistd.Security.OneTimeCodes.csproj" />
   </Folder>
   <Folder Name="/components/service-client/">
     <Project Path="components/service-client/Leistd.ServiceClient.AspNetCore/Leistd.ServiceClient.AspNetCore.csproj" />

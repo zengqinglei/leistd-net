@@ -1,6 +1,6 @@
-# 当前用户与身份信息
+# 身份与会话安全
 
-`ICurrentUser` / `ICurrentClient` 暴露当前身份，`ICurrentPrincipalAccessor` 提供底层 `ClaimsPrincipal` 和临时切换能力。
+提供当前主体访问、请求客户端信息、服务端 Cookie 票据和可选的一次码能力。
 
 ## 何时使用
 
@@ -10,6 +10,7 @@
 | 机器客户端场景下识别调用方（ClientId） | 注入 `ICurrentClient` |
 | 直接访问原始 `ClaimsPrincipal`，或在后台任务/测试中临时切换身份 | 注入 `ICurrentPrincipalAccessor` |
 | 在领域/应用层使用平台中立的身份访问 | 引用 `Leistd.Security.Core` |
+| 身份验证器、恢复码或短期验证码摘要 | 引用可选 `Leistd.Security.OneTimeCodes`，无 Web、Identity 或 DDD 依赖 |
 | ASP.NET Core 宿主，需要从 `HttpContext` 取真实身份 | 引用 `Leistd.Security.AspNetCore` 并注册 |
 
 ## 安装
@@ -18,6 +19,8 @@
 dotnet add package Leistd.Security.Core
 dotnet add package Leistd.Security.AspNetCore
 ```
+
+一次码能力单独安装 `Leistd.Security.OneTimeCodes`；其原生 DI/Options 依赖随包传递。
 
 ## 注册
 
@@ -90,6 +93,16 @@ builder.Services.AddDistributedTicketStore("Session");
 
 直接服务端重载面向可信调用方；HTTP 读取、续期与删除校验 Cookie 引用版本；显式登录由原生事件标记。`DistributedTicketStore.TicketKeyProperty` 保存本机制的缓存键，需要它的宿主替换实现须提供相同元数据。数据保护用途固定，密钥环隔离由宿主的应用名负责。
 
+### 验证码摘要
+
+```csharp
+builder.Services.AddVerificationCodeDigest();
+```
+
+默认 `IVerificationCodeDigest` 为单例 HMAC-SHA256 实现，可由宿主预先注册替换。`VerificationCodeOptions` 绑定 `Leistd:Security:VerificationCodes`，也可指定 `configSectionPath`；先绑定再应用配置委托。`Key` 是 Base64 格式、至少 32 字节的稳定服务端密钥，各副本和重启使用同一值。非空无效配置启动即失败，消息指明传入配置节。
+
+缺失密钥允许解析服务，默认实现使用时抛出配置异常；宿主决定功能何时启用并补充“启用时必需密钥”的启动或业务设置验证。组件不生成回落密钥，不读取业务功能开关。
+
 ## 使用
 
 注入 `ICurrentUser`，直接读取强类型属性与方法：
@@ -143,6 +156,27 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 
 非 HTTP 宿主注册 `AddAmbientContext()` 即可（见[注册](#注册)）；`ICurrentPrincipalAccessor.Change`
 仍然可用，但只切主体这一维。
+
+### 身份验证器与恢复码
+
+```csharp
+var secret = Totp.GenerateSecret();
+var manualKey = Totp.FormatSecret(secret);
+var uri = Totp.BuildUri("Example", "user@example.com", secret);
+var now = DateTimeOffset.UtcNow;
+var code = Totp.ComputeCode(secret, Totp.TimeStepAt(now));
+long? usedStep = Totp.Verify(secret, code, now, lastUsedStep: null);
+var recoveryCodes = RecoveryCodes.Generate();
+var recoveryDigest = RecoveryCodes.Hash(recoveryCodes[0]);
+```
+
+TOTP 使用 RFC 6238 的 HMAC-SHA1、30 秒步长和 6 位码，容忍前后各一步；默认生成 20 字节随机密钥。`Verify` 返回命中的步序号，格式错误、不匹配或不大于 `lastUsedStep` 时返回 null。时间使用 `DateTimeOffset`，调用方显式提供；空密钥、负时间步等编程错误抛 BCL 异常。
+
+`FormatSecret` 导出大写无填充 Base32，`ParseSecret` 容忍大小写、空白、分隔符和正确尾填充，非法或不完整编码返回 null；Base32 实现不作为公共文本工具发布。`BuildUri` 编码密钥并转义发行方与账号。
+
+恢复码每组 10 个，每个为 16 个随机 Base32 字符（80 位），按 4 字符分组；`Hash` 去掉空白和分隔符、转小写后计算 SHA-256。调用方保护 TOTP 密钥、只展示一次恢复码明文，并原子保存已用时间步或消费摘要。组件不存储使用记录、不限制业务尝试次数，也不接管事务。
+
+验证码摘要使用带密钥 HMAC-SHA256，`Matches` 按固定时间比较；格式损坏摘要返回 false。验证码有效期、用途、租户/收件人绑定、尝试次数与原子消费仍由宿主实现。[RFC 6238](https://www.rfc-editor.org/rfc/rfc6238)、[RFC 4648](https://www.rfc-editor.org/rfc/rfc4648)。
 
 ## 接口参考
 
@@ -238,4 +272,4 @@ bool isNaturalPerson = Guid.TryParse(claimTypes.Value.FindUserId(principal), out
 - 业务代码判断当前用户的角色用 `ICurrentUser.IsInRole`（只看主体身份）；授权策略 `RequireRole` 与官方 `ClaimsPrincipal.IsInRole` 看整个主体。两者都只认身份的 `RoleClaimType`、角色名区分大小写。自行构造 `ClaimsIdentity` 时，`roleType` 要与写入角色 claim 的类型一致（如 OIDC 的 `role`），否则判定静默为 `false`。
 - `Change(...)` 基于 `AsyncLocal` 支持异步传播和嵌套，但返回的 `IDisposable` 必须释放。
 - `HttpContextCurrentPrincipalAccessor` 依赖 `IHttpContextAccessor`，在没有 HTTP 上下文的后台任务里 `Principal` 为 `null`；此类场景用 `IAmbientContext.Begin(...)` 显式建立系统主体。
-- 领域层/应用层应只引用 `Leistd.Security.Core`，避免把 ASP.NET Core 依赖泄漏进核心层。
+- 领域层/应用层使用 `Leistd.Security.Core` 与按需的 `Leistd.Security.OneTimeCodes`，避免引入 ASP.NET Core 集成包。

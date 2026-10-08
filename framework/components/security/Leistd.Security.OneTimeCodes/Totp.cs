@@ -1,15 +1,12 @@
-#if (LocalIdentity)
 using System.Security.Cryptography;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 
-namespace CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
+namespace Leistd.Security.OneTimeCodes;
 
-/// <summary>基于时间的一次性密码（RFC 6238，HMAC-SHA1、30 秒步长、6 位），与主流身份验证器应用一致。</summary>
-/// <remarks>
-/// 在模板里自己实现而不是引包：算法本身几十行，且 RFC 附带测试向量可直接验证（见单元测试）。
-/// </remarks>
+/// <summary>RFC 6238 TOTP：HMAC-SHA1、30 秒步长、6 位码，容忍前后各一步。</summary>
+/// <remarks>调用方保护密钥并原子保存成功验证返回的步序号；组件不存储消费状态。</remarks>
 public static class Totp
 {
     /// <summary>验证码位数。</summary>
@@ -28,15 +25,18 @@ public static class Totp
     public static byte[] GenerateSecret() => RandomNumberGenerator.GetBytes(SecretBytes);
 
     /// <summary>某一时刻所在的步序号。</summary>
-    public static long TimeStepAt(DateTime now)
+    public static long TimeStepAt(DateTimeOffset now)
     {
-        var utc = now.Kind == DateTimeKind.Local ? now.ToUniversalTime() : now;
-        return (long)Math.Floor((utc - DateTime.UnixEpoch).TotalSeconds / StepSeconds);
+        ArgumentOutOfRangeException.ThrowIfLessThan(now, DateTimeOffset.UnixEpoch);
+        return now.ToUnixTimeSeconds() / StepSeconds;
     }
 
     /// <summary>计算某一步的验证码。</summary>
     public static string ComputeCode(byte[] secret, long timeStep)
     {
+        ArgumentNullException.ThrowIfNull(secret);
+        if (secret.Length == 0) throw new ArgumentException("Secret must not be empty.", nameof(secret));
+        ArgumentOutOfRangeException.ThrowIfNegative(timeStep);
         Span<byte> counter = stackalloc byte[8];
         BinaryPrimitives.WriteInt64BigEndian(counter, timeStep);
 
@@ -54,18 +54,18 @@ public static class Totp
     }
 
     /// <summary>校验验证码，返回命中的步序号；不匹配或该步已用过时返回 null。</summary>
-    /// <param name="secret">密钥。</param>
-    /// <param name="code">用户输入（容忍空格）。</param>
-    /// <param name="now">当前时刻。</param>
-    /// <param name="lastUsedStep">上次成功校验用掉的步；不大于它的步一律拒绝，同一个码不能用两次。</param>
-    public static long? Verify(byte[] secret, string code, DateTime now, long? lastUsedStep)
+    /// <remarks>容忍空格；拒绝不大于 lastUsedStep 的步，消费与并发控制由调用方负责。</remarks>
+    public static long? Verify(byte[] secret, string code, DateTimeOffset now, long? lastUsedStep)
     {
+        ArgumentNullException.ThrowIfNull(secret);
+        if (secret.Length == 0) throw new ArgumentException("Secret must not be empty.", nameof(secret));
+        ArgumentNullException.ThrowIfNull(code);
         var normalized = code.Replace(" ", string.Empty, StringComparison.Ordinal);
         if (normalized.Length != Digits || !normalized.All(char.IsAsciiDigit))
             return null;
 
         var current = TimeStepAt(now);
-        for (var step = current - AllowedDrift; step <= current + AllowedDrift; step++)
+        for (var step = Math.Max(0, current - AllowedDrift); step <= current + AllowedDrift; step++)
         {
             if (lastUsedStep is { } used && step <= used)
                 continue;
@@ -81,15 +81,28 @@ public static class Totp
         return null;
     }
 
-    /// <summary>身份验证器应用识别的 <c>otpauth://</c> 地址（二维码的内容）。</summary>
-    /// <param name="issuer">发行方，显示在应用里的条目标题。</param>
-    /// <param name="account">账号名，区分同一发行方下的多个账号。</param>
-    /// <param name="base32Secret">Base32 密钥。</param>
-    public static string BuildUri(string issuer, string account, string base32Secret)
+    /// <summary>导出大写、无填充的 Base32 密钥。</summary>
+    public static string FormatSecret(byte[] secret)
     {
+        ArgumentNullException.ThrowIfNull(secret);
+        if (secret.Length == 0) throw new ArgumentException("Secret must not be empty.", nameof(secret));
+        return Base32.Encode(secret);
+    }
+
+    /// <summary>导入 Base32 密钥；容忍大小写、空白、分隔符和尾填充，非法编码返回 null。</summary>
+    public static byte[]? ParseSecret(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return Base32.Decode(text);
+    }
+
+    /// <summary>生成身份验证器应用的 otpauth 地址。</summary>
+    public static string BuildUri(string issuer, string account, byte[] secret)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(issuer);
+        ArgumentException.ThrowIfNullOrWhiteSpace(account);
         var label = Uri.EscapeDataString(issuer) + ":" + Uri.EscapeDataString(account);
-        return $"otpauth://totp/{label}?secret={base32Secret}&issuer={Uri.EscapeDataString(issuer)}"
+        return $"otpauth://totp/{label}?secret={FormatSecret(secret)}&issuer={Uri.EscapeDataString(issuer)}"
                + $"&algorithm=SHA1&digits={Digits}&period={StepSeconds}";
     }
 }
-#endif

@@ -138,7 +138,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 ["PasswordHash:IterationCount"] = "1000",
 #if (Email)
                 // 固定值即可：测试要的是确定性，不是保密性
-                ["VerificationCodes:Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+                ["Leistd:Security:VerificationCodes:Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
                 ["UserRegistration:EnableEmailVerification"] = "false",
 #endif
             });

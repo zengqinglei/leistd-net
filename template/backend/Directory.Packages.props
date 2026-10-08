@@ -25,6 +25,7 @@
     <PackageVersion Include="Leistd.Lock.Memory" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Redis" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Security.OneTimeCodes" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Authorization.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Authorization.AspNetCore" Version="$(LeistdFrameworkVersion)" />

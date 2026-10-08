@@ -9,8 +9,7 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
-using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
-using CompanyName.ProjectName.Domain.Shared.Text;
+using Leistd.Security.OneTimeCodes;
 using Leistd.OperationRecords.Recording;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -402,7 +401,7 @@ public sealed class CredentialChangeTransactionTests(CredentialChangeTransaction
         public void Step() => Clock.Advance(TimeSpan.FromSeconds(30));
 
         public string Code(string secret) =>
-            Totp.ComputeCode(Base32.Decode(secret)!, Totp.TimeStepAt(Clock.GetUtcNow().UtcDateTime));
+            Totp.ComputeCode(Totp.ParseSecret(secret)!, Totp.TimeStepAt(Clock.GetUtcNow()));
 
         public void Dispose()
         {

@@ -12,6 +12,7 @@
 <!--#if (LocalIdentity)-->
     <!-- 两步验证密钥用宿主的 Data Protection 加密，只引用抽象 -->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
+    <PackageReference Include="Leistd.Security.OneTimeCodes" />
 <!--#endif-->
   </ItemGroup>
 

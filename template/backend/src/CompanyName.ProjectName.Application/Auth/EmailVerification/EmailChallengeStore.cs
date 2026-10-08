@@ -1,9 +1,8 @@
 using Leistd.MultiTenancy.Extensions;
-using CompanyName.ProjectName.Domain.Auth.Options;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
-using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
+using Leistd.Security.OneTimeCodes.VerificationCodes;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;

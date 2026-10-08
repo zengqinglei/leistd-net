@@ -52,7 +52,7 @@
 <!--#endif-->
 <!--#if (Email)-->
 - 发信基线指向本机邮件捕获器（`localhost:1025`）。部署时覆盖 `Leistd:Email:Smtp` 的 `Host`、`Port`、`EnableSsl`、`DefaultFromAddress`，`Username` 与 `Password` 成对提供或都不提供；compose 以 `SMTP_HOST`、`SMTP_PORT`、`SMTP_FROM_ADDRESS` 为必填，账号口令只填一项时启动失败。
-- 开启注册邮箱验证（`UserRegistration:EnableEmailVerification`，compose 的 `ENABLE_EMAIL_VERIFICATION`）时必须提供 `VerificationCodes:Key`（compose 的 `VERIFICATION_CODES_KEY`）：Base64、至少 32 字节，所有实例相同且跨重启不变，可用 `openssl rand -base64 32` 生成。缺失或无效即启动失败并报出键名；关闭时可以不提供，但之后在系统设置里也无法开启。
+- 开启注册邮箱验证（`UserRegistration:EnableEmailVerification`，compose 的 `ENABLE_EMAIL_VERIFICATION`）时必须提供 `Leistd:Security:VerificationCodes:Key`（compose 的 `VERIFICATION_CODES_KEY`）：Base64、至少 32 字节，所有实例相同且跨重启不变，可用 `openssl rand -base64 32` 生成。缺失或无效即启动失败并报出键名；关闭时可不提供；非空无效密钥始终在启动时失败，缺失时无法在系统设置里开启。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 - 外部登录提供商（`ExternalAuth:Github`、`ExternalAuth:Google`）的 `ClientId` 与 `ClientSecret` 成对提供，只给一项启动失败；都不给则不启用该提供商。提供商后台登记的回调地址是 `https://<站点对外地址>/api/v1/external-auth/{github,google}/signin`。

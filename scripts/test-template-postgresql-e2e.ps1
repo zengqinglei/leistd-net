@@ -344,7 +344,7 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
     $startInfo.Environment["DefaultAdmin__Username"] = "admin"
     # 不用模板曾发布过的示例密码：生产校验会拒绝它们，沿用就等于测不到那条校验
     $startInfo.Environment["DefaultAdmin__Password"] = "E2ETests!Adm1n"
-    $startInfo.Environment["VerificationCodes__Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+    $startInfo.Environment["Leistd__Security__VerificationCodes__Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
 
     $apiProcess = [Diagnostics.Process]::new()
     $apiProcess.StartInfo = $startInfo
