@@ -1,5 +1,7 @@
 #if (LocalIdentity)
+#if (Email)
 using Leistd.Security.OneTimeCodes.VerificationCodes;
+#endif
 using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
