@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
-using CompanyName.ProjectName.Application.Shared.Paging;
+using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
@@ -61,40 +61,17 @@ public class RoleAppService(
             query = query.Where(r => r.Name.Contains(keyword) || r.DisplayName.Contains(keyword));
         }
 
+        var ordered = query.OrderBy(input.Sorting).ThenBy(role => role.Name).ThenBy(role => role.Id);
         var totalCount = await asyncExecuter.LongCountAsync(query, cancellationToken);
 
         var roles = await asyncExecuter.ToListAsync(
-            ApplySorting(query, input.Sorting).Skip(input.Offset).Take(input.Limit),
+            ordered.Skip(input.Offset).Take(input.Limit),
             cancellationToken);
 
         var result = await MapToOutputsAsync(roles, cancellationToken);
         return new PagedResult<RoleOutputDto>(totalCount, result);
     }
 
-    /// <summary>角色列表的可排序字段。</summary>
-    /// <remarks>
-    /// <para>不给"未传 sorting"单开一条分支：<see cref="SortingRequest.Parse"/> 已经把缺省字段
-    /// 定为 <c>sort</c>，于是省略排序与显式 <c>sort asc</c> 走的是同一段代码、结果必然一致。
-    /// 这两者必须一致——列表页即使 URL 上没有排序参数，也会把默认排序状态转成 <c>sort asc</c>
-    /// 发出来，所以它们是同一个列表的两种调用方式；各写一遍就会各自漂移。</para>
-    /// <para>排序号相同时按名称，与 <see cref="GetAllAsync"/> 同口径。名称始终升序：
-    /// 它是给人看的次序，不是调用方选的排序键。末尾固定追加 <c>Id</c> 收口——排序键有并列值时，
-    /// 缺少稳定次序会让同一行在翻页时重复出现或整行漏掉。</para>
-    /// </remarks>
-    private static IQueryable<Role> ApplySorting(IQueryable<Role> query, string? sorting)
-    {
-        var (field, descending) = SortingRequest.Parse(sorting, "sort");
-
-        var ordered = field switch
-        {
-            "displayName" => SortingRequest.By(query, r => r.DisplayName, descending),
-            "sort" => SortingRequest.By(query, r => r.Sort, descending).ThenBy(r => r.Name),
-            "creationTime" => SortingRequest.By(query, r => r.CreationTime, descending),
-            _ => throw SortingRequest.UnknownField(field)
-        };
-
-        return ordered.ThenBy(r => r.Id);
-    }
 
     public async Task<IReadOnlyList<RoleBriefOutputDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {

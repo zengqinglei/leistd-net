@@ -1,3 +1,5 @@
+import { HttpHeaders, HttpRequest } from '@angular/common/http';
+
 import { OPEN_APPLICATION_API } from './open-application';
 import { CreateOpenApplicationInputDto } from '../../src/app/features/platform/dtos/open-application.dto';
 import { MockException } from '../core/models';
@@ -52,6 +54,40 @@ describe('open application mock', () => {
   function fieldsOf(error: MockException): string[] {
     return error.error.errors.map((item: { field: string }) => item.field);
   }
+
+  it('supports multiple sorting keys and rejects private metadata with an empty result', () => {
+    const list = OPEN_APPLICATION_API['GET /api/v1/open-applications'];
+    const request = {
+      original: new HttpRequest('GET', '/api/v1/open-applications'),
+      url: '/api/v1/open-applications',
+      headers: new HttpHeaders(),
+      body: null,
+      params: {},
+    };
+    OPEN_APPLICATIONS.splice(
+      0,
+      OPEN_APPLICATIONS.length,
+      ...OPEN_APPLICATIONS.map((item) => ({ ...item, displayName: 'Same' })),
+    );
+    const result = list({
+      ...request,
+      queryParams: { sorting: 'DISPLAYNAME asc, clientId desc', limit: 100 },
+    });
+    const expected = snapshot
+      .map((item) => item.clientId)
+      .sort()
+      .reverse();
+    expect(result.items.map((item) => item.clientId)).toEqual(expected);
+
+    const error = rejectionOf(() =>
+      list({
+        ...request,
+        queryParams: { keyword: 'missing', sorting: 'Application.ClientSecret' },
+      }),
+    );
+    expect(error.status).toBe(500);
+    expect(error.error.code).toBeUndefined();
+  });
 
   it('reports every missing field at once as 400 field errors without a code', () => {
     const error = rejectionOf(() =>

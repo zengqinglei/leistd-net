@@ -71,7 +71,7 @@ import { OpenApplicationTable } from './widgets/open-application-table/open-appl
 import { SecretRevealDialog } from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 
 const APPLICATION_SORT_COLUMNS = ['clientId', 'creationTime'] as const;
-const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'clientId', desc: false }];
+const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'creationTime', desc: true }];
 
 @Component({
   selector: 'app-open-applications',

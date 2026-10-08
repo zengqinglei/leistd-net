@@ -18,11 +18,12 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Users.Avatars;
+using CompanyName.ProjectName.Application.Users.Validators;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using CompanyName.ProjectName.Domain.Users.Policies;
-using CompanyName.ProjectName.Application.Shared.Paging;
+using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
@@ -57,6 +58,7 @@ public class UserAppService(
     IUnitOfWorkManager unitOfWorkManager,
 #endif
 #if (LocalIdentity)
+    UserSortingValidator userSortingValidator,
     UserSessionDomainService userSessionDomainService,
     ILocalEventBus localEventBus,
 #endif
@@ -84,7 +86,11 @@ public class UserAppService(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var userQuery = await userRepository.GetQueryableWithRolesAsync(cancellationToken);
+        var ordered = (await userRepository.GetQueryableWithRolesAsync(cancellationToken)).OrderBy(input.Sorting);
+#if (LocalIdentity)
+        userSortingValidator.Validate(ordered);
+#endif
+        IQueryable<User> userQuery = ordered.ThenBy(user => user.Id);
 
         if (!string.IsNullOrWhiteSpace(input.Keyword))
         {
@@ -127,35 +133,13 @@ public class UserAppService(
 
         var totalCount = await asyncExecuter.CountAsync(userQuery, cancellationToken);
         var users = await asyncExecuter.ToListAsync(
-            ApplySorting(userQuery, input.Sorting).Skip(input.Offset).Take(input.Limit),
+            userQuery.Skip(input.Offset).Take(input.Limit),
             cancellationToken);
 
         var userDtos = await MapToOutputsAsync(users, cancellationToken);
         return new PagedResult<UserManagementOutputDto>(totalCount, userDtos);
     }
 
-    /// <summary>用户列表的可排序字段。</summary>
-    /// <remarks>
-    /// 白名单为什么在这一层见 <see cref="SortingRequest"/>。末尾固定追加 <c>Id</c> 是分页
-    /// 正确性要求：排序键有重复值时，缺少稳定的次序会让同一行在翻页时重复出现或整行漏掉。
-    /// </remarks>
-    private static IQueryable<User> ApplySorting(IQueryable<User> query, string? sorting)
-    {
-        var (field, descending) = SortingRequest.Parse(sorting, "username");
-
-        var ordered = field switch
-        {
-            "username" => SortingRequest.By(query, u => u.Username, descending),
-            "email" => SortingRequest.By(query, u => u.Email, descending),
-#if (LocalIdentity)
-            "lastLoginTime" => SortingRequest.By(query, u => u.LastLogin!.Time, descending),
-#endif
-            "creationTime" => SortingRequest.By(query, u => u.CreationTime, descending),
-            _ => throw SortingRequest.UnknownField(field)
-        };
-
-        return ordered.ThenBy(u => u.Id);
-    }
 
     /// <summary>获取用户详情。</summary>
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)

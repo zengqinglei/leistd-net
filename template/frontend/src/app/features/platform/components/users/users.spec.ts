@@ -114,7 +114,26 @@ describe('Users page query round trip', () => {
     // 停在第 3 页换排序，看到的是另一批数据的第 3 页，等于结果错乱。
     expect(router.url).toContain('page=1');
     expect(lastQuery().offset).toBe(0);
-    expect(lastQuery().sorting).toBeTruthy();
+    expect(lastQuery().sorting).toBe('username desc');
+  });
+  //#if (LocalIdentity)
+
+  it('maps the last login table column to the entity path while preserving URL state', async () => {
+    table().sortingChange.emit([{ id: 'lastLoginTime', desc: true }]);
+    await fixture.whenStable();
+
+    expect(router.url).toContain('sort=lastLoginTime');
+    expect(lastQuery().sorting).toBe('lastLogin.Time desc');
+  });
+
+  //#endif
+  it('uses the DTO default when the URL contains an unknown sort column', async () => {
+    await router.navigate(['/platform/users'], {
+      queryParams: { sort: 'passwordHash', direction: 'asc' },
+    });
+    await fixture.whenStable();
+
+    expect(lastQuery().sorting).toBe('creationTime desc');
   });
 
   it('restores component state from the URL on reload and back/forward navigation', async () => {

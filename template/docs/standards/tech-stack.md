@@ -23,6 +23,7 @@
 <!--#endif-->
 | 后端框架 | .NET / ASP.NET Core | 10+ | API 与业务服务 |
 | ORM | EF Core | 10+ | 数据访问 |
+| 动态查询 | System.Linq.Dynamic.Core | 中央包版本 | 应用层动态排序；规则见 [API 规范 §5](./api.md#5-分页规范) |
 | 架构 | DDD 分层 | 项目约定 | Api/Application/Domain/Infrastructure |
 | 数据库 | PostgreSQL | 15+ | 默认主数据存储，可覆盖 |
 | 缓存 | Redis | 7+ | 可选缓存/队列 |

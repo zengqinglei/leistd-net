@@ -7,7 +7,7 @@ import {
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
-import { parseMockSorting } from '../core/sorting';
+import { MockSortFields, sortMockRows } from '../core/sorting';
 import {
   MockOpenApplication,
   OPEN_APPLICATION_SCOPES,
@@ -28,20 +28,22 @@ function getQueryValue(value: unknown) {
     : String(normalized);
 }
 
-/** 与后端 `OpenApplicationAppService.ApplySorting` 同一份字段清单。 */
-const APPLICATION_SORT_FIELDS = ['clientId', 'displayName', 'creationTime'] as const;
+const APPLICATION_SORT_FIELDS: MockSortFields<MockOpenApplication> = {
+  clientId: (item) => item.clientId,
+  displayName: (item) => item.displayName,
+  creationTime: (item) => Date.parse(item.creationTime),
+};
 
 function sortApplications(items: MockOpenApplication[], sorting?: unknown) {
-  const { field, descending } = parseMockSorting(sorting, APPLICATION_SORT_FIELDS, 'clientId');
-  const multiplier = descending ? -1 : 1;
-
-  return [...items].sort((a, b) => {
-    const left = String(a[field as keyof MockOpenApplication] ?? '').toLowerCase();
-    const right = String(b[field as keyof MockOpenApplication] ?? '').toLowerCase();
-    const compared = left.localeCompare(right) * multiplier;
-    // 与后端一样固定追加 clientId 作为稳定次序，且不随方向反转
-    return compared !== 0 ? compared : a.clientId.localeCompare(b.clientId);
-  });
+  // 内存 LINQ 升序 null 前置；用户和角色的 PostgreSQL 查询 null 后置。
+  return sortMockRows(
+    items,
+    sorting,
+    APPLICATION_SORT_FIELDS,
+    'creationTime desc',
+    'clientId',
+    'first',
+  );
 }
 
 function getOpenApplications(req: MockRequest) {

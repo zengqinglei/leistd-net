@@ -1,4 +1,4 @@
-import { AUTHORIZATION_API, getRoleOptions } from './authorization';
+import { AUTHORIZATION_API, getRoleOptions, getRoles } from './authorization';
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PERMISSION_DEFINITIONS, ROLES } from '../data/authorization';
 import { setMockSessionUserId } from '../utils/current-user';
@@ -101,6 +101,43 @@ describe('getRoleOptions', () => {
 });
 
 // 与后端一致：删除幂等，角色不存在（含已删除）即成功，重试不报错
+describe('role mock sorting', () => {
+  let snapshot: typeof ROLES;
+
+  beforeEach(() => {
+    snapshot = [...ROLES];
+    setMockSessionUserId('user_admin');
+    ROLES.push(
+      ...['Zeta', 'Alpha'].map((name) => ({
+        id: `sorting_${name}`,
+        name,
+        displayName: name,
+        sort: 4242,
+        isStatic: false,
+        isDefault: false,
+        creationTime: '2025-01-01T00:00:00Z',
+      })),
+    );
+  });
+
+  afterEach(() => {
+    ROLES.splice(0, ROLES.length, ...snapshot);
+    setMockSessionUserId(null);
+  });
+
+  function names(sorting?: string) {
+    return (getRoles({ sorting, limit: 100 }).items as { id: string; name: string }[])
+      .filter((role) => role.id.startsWith('sorting_'))
+      .map((role) => role.name);
+  }
+
+  it('uses the same default and explicit sort, and honors an explicit secondary direction', () => {
+    expect(names()).toEqual(['Alpha', 'Zeta']);
+    expect(names('sort asc')).toEqual(names());
+    expect(names('SORT ascending, name descending')).toEqual(['Zeta', 'Alpha']);
+  });
+});
+
 describe('deleteRole', () => {
   const remove = AUTHORIZATION_API['DELETE /api/v1/roles/:id'] as (req: {
     params: { id: string };

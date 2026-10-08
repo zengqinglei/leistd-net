@@ -92,7 +92,7 @@ const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime']
 //#else
 const USER_SORT_COLUMNS = ['username', 'email', 'creationTime'] as const;
 //#endif
-const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
+const DEFAULT_USER_SORTING: SortingState = [{ id: 'creationTime', desc: true }];
 
 @Component({
   selector: 'app-users',
@@ -633,7 +633,13 @@ export class Users {
       isEmailVerified: readBoolean(params.get('isEmailVerified')) ?? undefined,
       //#endif
       roles: roles.length ? roles : undefined,
-      sorting: toApiSorting(sortingFromQuery(params, USER_SORT_COLUMNS, DEFAULT_USER_SORTING)),
+      // prettier-ignore
+      sorting: toApiSorting(
+        sortingFromQuery(params, USER_SORT_COLUMNS, DEFAULT_USER_SORTING)
+          //#if (LocalIdentity)
+          .map((item) => ({ ...item, id: item.id === 'lastLoginTime' ? 'lastLogin.Time' : item.id }))
+          //#endif
+      ),
     };
   }
 

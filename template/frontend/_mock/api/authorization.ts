@@ -1,7 +1,7 @@
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
-import { parseMockSorting } from '../core/sorting';
+import { MockSortFields, sortMockRows } from '../core/sorting';
 import {
   ALL_PERMISSIONS,
   MockRole,
@@ -116,54 +116,24 @@ export function getRoles(params: Record<string, unknown>): PagedResultDto<unknow
     permissionCount: PERMISSION_GRANTS[grantKey('Role', role.id)]?.permissionNames.length ?? 0,
   }));
 
-  sortRoles(matched, String(params['sorting'] ?? ''));
-  const items = matched.slice(offset, offset + limit);
+  const ordered = sortRoles(matched, String(params['sorting'] ?? ''));
+  const items = ordered.slice(offset, offset + limit);
 
   return { totalCount: matched.length, items };
 }
 
 type MockRoleRow = MockRole & { userCount: number; permissionCount: number };
 
-/** 与后端 `RoleAppService.ApplySorting` 同一份字段清单。 */
-const ROLE_SORT_FIELDS = ['displayName', 'sort', 'creationTime'] as const;
+const ROLE_SORT_FIELDS: MockSortFields<MockRoleRow> = {
+  displayName: (role) => role.displayName,
+  sort: (role) => role.sort,
+  creationTime: (role) => Date.parse(role.creationTime),
+  name: (role) => role.name,
+  id: (role) => role.id,
+};
 
-/** 复刻列表页的列排序；不在白名单内的字段与后端一样是 400。 */
-function sortRoles(rows: MockRoleRow[], sorting: string): void {
-  const { field, descending } = parseMockSorting(sorting, ROLE_SORT_FIELDS, 'sort');
-  const pick = (row: MockRoleRow): string | number => {
-    switch (field) {
-      case 'displayName':
-        return row.displayName;
-      case 'creationTime':
-        return row.creationTime;
-      default:
-        return row.sort;
-    }
-  };
-
-  rows.sort((left, right) => {
-    const leftValue = pick(left);
-    const rightValue = pick(right);
-    const compared =
-      typeof leftValue === 'number' && typeof rightValue === 'number'
-        ? leftValue - rightValue
-        : String(leftValue).localeCompare(String(rightValue));
-    const directed = compared * (descending ? -1 : 1);
-    if (directed !== 0) {
-      return directed;
-    }
-
-    // 与后端一致：排序号相同时按名称，名称始终升序（它是给人看的次序，不随主排序方向反转）
-    if (field === 'sort') {
-      const byName = left.name.localeCompare(right.name);
-      if (byName !== 0) {
-        return byName;
-      }
-    }
-
-    // 稳定次序与后端同为 id，同样不随方向反转
-    return left.id.localeCompare(right.id);
-  });
+function sortRoles(rows: MockRoleRow[], sorting: string): MockRoleRow[] {
+  return sortMockRows(rows, sorting, ROLE_SORT_FIELDS, 'sort', 'name, id');
 }
 
 export function getRoleOptions() {

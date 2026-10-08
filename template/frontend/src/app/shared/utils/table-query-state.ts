@@ -40,8 +40,9 @@ export function tableStateToQuery(pagination: PaginationState, sorting: SortingS
 }
 
 export function toApiSorting(sorting: SortingState): string | undefined {
-  const activeSort = sorting[0];
-  return activeSort ? `${activeSort.id} ${activeSort.desc ? 'desc' : 'asc'}` : undefined;
+  return sorting.length
+    ? sorting.map((item) => `${item.id} ${item.desc ? 'desc' : 'asc'}`).join(', ')
+    : undefined;
 }
 
 export function resolveTableUpdater<T>(updater: Updater<T>, current: T): T {

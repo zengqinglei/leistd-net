@@ -31,6 +31,25 @@ describe('user mock', () => {
     DELETED_USERS.length = 0;
   });
 
+  it('orders multiple user keys and validates sorting before returning an empty result', () => {
+    USERS.forEach((user) => (user.email = 'same@example.test'));
+    const result = getUsers({ sorting: 'EMAIL ascending, username descending' });
+    expect(result.items.map((user) => user.username)).toEqual(['demo', 'admin']);
+
+    const error = rejectionOf(() => getUsers({ keyword: 'missing', sorting: 'unknownProperty' }));
+    expect(error.status).toBe(500);
+    expect(error.error.code).toBeUndefined();
+  });
+
+  //#if (LocalIdentity)
+  it('sorts the nested last-login API path and places absent timestamps last in ascending order', () => {
+    USERS[0].lastLoginTime = undefined;
+    const result = getUsers({ sorting: 'lastLogin.Time asc' });
+
+    expect(result.items.map((user) => user.username)).toEqual(['demo', 'admin']);
+  });
+  //#endif
+
   describe('delete', () => {
     const remove = USER_API['DELETE /api/v1/users/:id'] as Handler;
 

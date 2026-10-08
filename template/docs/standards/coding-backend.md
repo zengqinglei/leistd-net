@@ -115,7 +115,7 @@ public class UserAppService(
 }
 ```
 
-排序字段与稳定排序见 [API 规范 §5](./api.md#5-分页规范)。
+动态排序统一使用 Dynamic LINQ；输入、验证边界和稳定次序见 [API 规范 §5](./api.md#5-分页规范)。
 
 ### 3.6 事务与工作单元
 
@@ -191,6 +191,7 @@ Singleton 不得直接或间接捕获 Scoped；依赖作用域服务的 Transien
 - DTO 全部为 record；一个文件一个对外 DTO，仅被它内嵌使用的 item 类型可同文件；业务入参 DTO 放应用层模块，不放 Api。
 - 入参 DTO 写成属性式（`{ get; init; }`），不用位置记录：校验错误的 `errors[].field` 按 JSON 命名策略与请求体字段同名。
 - 字段校验（必填、长度、范围）只在入口 DTO 用 DataAnnotations 完成，应用层与领域层信任 DTO 已保证的前置条件、不重复校验；例外是实体构造另有不经该 DTO 的调用路径时，其守卫是多入口共享的不变量保护，保留。参与字段校验消息的属性（带校验特性、消息里用到 `{0}`）写 `[Display(Name = "...")]`，每个校验特性显式写 `ErrorMessage`；两者写英文原文并作为本地化键，占位符形如 `{0} is required.`。前端按同一规则即时校验。
+- 跨字段、依赖业务状态或 DTO 值域无法表达的规则放所属模块 `Validators/`；涉及实体不变量的规则留在领域层。验证器必须显式注册并由调用路径执行，目录名不提供自动验证。排序规则的边界见 [API 规范 §5](./api.md#5-分页规范)。
 - 变量：DTO 参数 `input`，返回对象 `result`，`IQueryable` 为 `query`/`xxxQuery`；仓储注入 `{entity}Repository`，领域服务注入 `{entity}DomainService`。
 
 ### 文档注释

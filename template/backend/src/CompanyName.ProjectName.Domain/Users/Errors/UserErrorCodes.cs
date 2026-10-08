@@ -10,6 +10,7 @@ public static class UserErrorCodes
     public const string NotFound = "User:NotFound";
     public const string RolesNotFound = "User:RolesNotFound";
 #if (LocalIdentity)
+    public const string SortingCredentialsForbidden = "User:SortingCredentialsForbidden";
     public const string SuperAdminDeleteForbidden = "User:SuperAdminDeleteForbidden";
 #endif
     public const string SuperAdminDisableForbidden = "User:SuperAdminDisableForbidden";
