@@ -252,7 +252,7 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | --- | --- |
 | `Authentication/` | 本地会话、远端令牌、外部登录的认证方案注册与签名密钥刷新 |
 | `Authorization/` | 授权策略、授权结果处理器与访问控制元数据 |
-| `Sessions/` | 服务端票据存储、会话签发与续期 |
+| `Sessions/` | 会话签发与续期；通用票据存储使用 Security 组件 |
 | `OpenIddict/` | 签发服务注册、证书加载、交互保护与协议处理器 |
 
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。

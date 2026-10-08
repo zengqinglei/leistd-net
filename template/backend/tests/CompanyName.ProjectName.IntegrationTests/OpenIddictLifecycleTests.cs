@@ -1,4 +1,5 @@
 #if (OpenIddictServer)
+using Leistd.Security.AspNetCore.Cookies;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -236,7 +237,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     {
         var cookieOptions = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(AuthenticationSchemeNames.SessionCookie);
-        var key = ticket.Properties.Items["ticket.key"]!;
+        var key = ticket.Properties.Items[DistributedTicketStore.TicketKeyProperty]!;
         cookieOptions.SessionStore!.RenewAsync(key, ticket).GetAwaiter().GetResult();
         var reference = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim("Microsoft.AspNetCore.Authentication.Cookies-SessionId", key)], AuthenticationSchemeNames.SessionCookie)),

@@ -1,4 +1,5 @@
 #if (ExternalLogin)
+using Leistd.Security.AspNetCore.Cookies;
 using System.Text.Json;
 using CompanyName.ProjectName.Api.Auth.Authentication;
 using CompanyName.ProjectName.Api.Auth.Sessions;
@@ -19,6 +20,7 @@ using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
 using Leistd.Timing;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -31,7 +33,7 @@ public sealed class ExternalAuthController(
     IAuthenticationSchemeProvider schemes,
     IOptions<ClaimTypeOptions> claimTypes,
     ICurrentTenant currentTenant,
-    DistributedTicketStore ticketStore,
+    ITicketStore ticketStore,
     IDistributedLock distributedLock,
     SessionCookieIssuer sessionCookieIssuer,
 #if (IncludeMultiTenancy)
@@ -117,7 +119,7 @@ public sealed class ExternalAuthController(
 #else
         if (Read("external.tenant") is not null) throw InvalidIntent();
 #endif
-        var key = Read("ticket.key") ?? throw InvalidIntent();
+        var key = Read(DistributedTicketStore.TicketKeyProperty) ?? throw InvalidIntent();
         await using var handle = await distributedLock.TryLockAsync(key + ":complete", TimeSpan.FromSeconds(2), cancellationToken);
         if (handle is null || await ticketStore.RetrieveAsync(key) is null) throw InvalidIntent();
         // 一次消费发生在业务前：失败也不能重用这张外部票据。

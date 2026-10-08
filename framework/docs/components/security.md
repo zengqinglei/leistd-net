@@ -66,6 +66,30 @@ builder.Services.AddRequestClientInfo();
 
 默认实现为 Transient，调用时读取当前请求的 IP 与 User-Agent；无请求时两者为 null，空白 User-Agent 为 null。IP 取 RemoteIpAddress，宿主负责先执行转发头处理并配置受信代理。注册幂等，不覆盖宿主提供的接口实现。
 
+### 服务端 Cookie 票据
+
+浏览器票据可显式接入服务端存储：
+
+```csharp
+builder.Services.AddAuthentication("Session").AddCookie("Session");
+builder.Services.AddDistributedTicketStore("Session");
+```
+
+宿主先提供 `IDistributedCache`、`IDataProtectionProvider` 和 `IDistributedLock`，并配置共享密钥环、应用名与缓存/锁实现。`Leistd.Security.AspNetCore` 因票据能力传递引用 `Leistd.Lock.Core`，不会替宿主选择这些实现。
+
+入口登记单例 `ITicketStore`，保留宿主预先登记的实现；每个命名 Cookie 方案只挂载一次，配置委托按调用叠加。不同方案共用存储配置，Cookie 寿命、属性和原生事件由宿主决定。原生 callback、Events 子类与 EventsType 均保留，同请求同方案的事件共用实例。
+
+`DistributedTicketStoreOptions` 默认绑定 `Leistd:Security:Tickets`，也可传 `configSectionPath`；先绑定后应用委托，启动校验：
+
+| 属性 | 默认值 | 约束 |
+| --- | --- | --- |
+| KeyPrefix | Leistd:AuthTicket: | 非空白 |
+| FallbackLifetime | 5 分钟 | 正值；仅在票据未指定到期时间时使用 |
+
+默认实现将票据与 OAuth 令牌保护后存入缓存，浏览器仅持引用。显式再次登录换引用版本，旧引用不能读取或撤销新票据；滑动续期不能复活已删除或到期票据。读写和删除传递取消令牌，持锁操作同时响应失锁取消。
+
+直接服务端重载面向可信调用方；HTTP 读取、续期与删除校验 Cookie 引用版本；显式登录由原生事件标记。`DistributedTicketStore.TicketKeyProperty` 保存本机制的缓存键，需要它的宿主替换实现须提供相同元数据。数据保护用途固定，密钥环隔离由宿主的应用名负责。
+
 ## 使用
 
 注入 `ICurrentUser`，直接读取强类型属性与方法：

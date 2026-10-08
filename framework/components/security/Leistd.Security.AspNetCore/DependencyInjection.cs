@@ -1,5 +1,7 @@
 using Leistd.Security.AspNetCore.Claims;
 using Leistd.Security.AspNetCore.RequestContext;
+using Leistd.Security.AspNetCore.Cookies;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Leistd.Security.RequestContext;
 using Leistd.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,5 +44,40 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.TryAddTransient<IRequestClientInfo, HttpRequestClientInfo>();
         return services;
+    }
+
+    /// <summary>为命名 Cookie 方案配置服务端票据，保留宿主先注册的 ITicketStore。</summary>
+    /// <remarks>宿主提供缓存、数据保护与锁。存储为单例，各方案共享配置；重复登记同一方案只挂载一次，配置委托仍叠加。</remarks>
+    public static IServiceCollection AddDistributedTicketStore(
+        this IServiceCollection services,
+        string authenticationScheme,
+        Action<DistributedTicketStoreOptions>? configure = null,
+        string configSectionPath = DistributedTicketStoreOptions.SectionName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(authenticationScheme);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+        var options = services.AddOptions<DistributedTicketStoreOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null) options.Configure(configure);
+        options.Validate(value => !string.IsNullOrWhiteSpace(value.KeyPrefix), $"{configSectionPath}:KeyPrefix is required.")
+            .Validate(value => value.FallbackLifetime > TimeSpan.Zero, $"{configSectionPath}:FallbackLifetime must be positive.")
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<ITicketStore, DistributedTicketStore>();
+        var registration = services.FirstOrDefault(item => item.ServiceType == typeof(TicketStoreRegistration))?.ImplementationInstance as TicketStoreRegistration;
+        if (registration is null)
+        {
+            registration = new TicketStoreRegistration();
+            services.AddSingleton(registration);
+        }
+        if (registration.Schemes.Add(authenticationScheme))
+            services.AddOptions<CookieAuthenticationOptions>(authenticationScheme)
+                .Configure<ITicketStore>((cookie, store) => cookie.SessionStore = store)
+                .PostConfigure(DistributedTicketStore.ConfigureCookie);
+        return services;
+    }
+
+    private sealed class TicketStoreRegistration
+    {
+        public HashSet<string> Schemes { get; } = new(StringComparer.Ordinal);
     }
 }

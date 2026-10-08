@@ -1,4 +1,5 @@
 #if (RemoteTokenAuth)
+using Leistd.Security.AspNetCore.Cookies;
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
@@ -19,7 +20,7 @@ namespace CompanyName.ProjectName.Api.Auth.Sessions;
 
 /// <summary>机密客户端在服务端续期；同一票据的并发刷新由已有分布式锁串行化。</summary>
 internal sealed class ResourceSessionRefresher(
-    DistributedTicketStore store,
+    ITicketStore store,
     IDistributedLock locks,
     IOptionsMonitor<OpenIdConnectOptions> oidcOptions,
     TimeProvider clock)
@@ -38,7 +39,7 @@ internal sealed class ResourceSessionRefresher(
     public async Task ValidateAsync(CookieValidatePrincipalContext context)
     {
         var cancellationToken = context.HttpContext.RequestAborted;
-        var key = context.Properties.Items.TryGetValue("ticket.key", out var ticketKey) ? ticketKey : null;
+        var key = context.Properties.Items.TryGetValue(DistributedTicketStore.TicketKeyProperty, out var ticketKey) ? ticketKey : null;
         if (key is null) { context.RejectPrincipal(); return; }
         if (!DateTimeOffset.TryParse(context.Properties.GetTokenValue("expires_at"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expiration))
         {

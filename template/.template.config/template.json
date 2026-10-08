@@ -568,7 +568,6 @@
             "docs/standards/frontend-i18n.md",
             "backend/src/CompanyName.ProjectName.Api/Hosting/SpaExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Middlewares/BrowserOriginMiddleware.cs",
-            "backend/src/CompanyName.ProjectName.Api/Auth/Sessions/DistributedTicketStore.cs",
             "backend/src/CompanyName.ProjectName.Api/Options/SessionCookieOptions.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/DataProtectionExtensions.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/BrowserOriginTests.cs",
