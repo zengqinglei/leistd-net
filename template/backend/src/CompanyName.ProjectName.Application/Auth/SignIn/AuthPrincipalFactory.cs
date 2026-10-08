@@ -4,6 +4,7 @@ using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
@@ -28,7 +29,7 @@ public class AuthPrincipalFactory(
     IRepository<UserSession, Guid> userSessionRepository,
     IOptions<UserSessionOptions> sessionOptions,
     IClock clock,
-    IOptions<OAuthOptions> oauthOptions,
+    IOptions<OAuthResourceOptions> oauthOptions,
     IOptions<ClaimTypeOptions> claimTypes,
     ICurrentTenant currentTenant,
 #if (IncludeMultiTenancy)

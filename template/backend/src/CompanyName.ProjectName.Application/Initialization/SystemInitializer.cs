@@ -2,13 +2,13 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 #if (LocalIdentity)
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 #endif
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Constants;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Users.Options;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 #endif
 using Microsoft.Extensions.Logging;
@@ -39,7 +39,7 @@ public class SystemInitializer(
     ICurrentTenant currentTenant,
 #if (OpenIddictServer)
     IOpenIddictScopeManager scopeManager,
-    IOptions<OAuthOptions> oauthOptions,
+    IOptions<OAuthResourceOptions> oauthOptions,
 #endif
 #if (LocalIdentity)
     IOptions<DefaultAdminOptions> adminOptions,

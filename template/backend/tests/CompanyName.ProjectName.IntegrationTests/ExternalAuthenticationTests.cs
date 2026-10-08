@@ -33,8 +33,7 @@ using Microsoft.AspNetCore.Authentication;
 using CompanyName.ProjectName.Application.Shared;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
-// 与 Microsoft.AspNetCore.Authentication.OAuth.OAuthOptions 同名，用别名指定项目自己的选项
-using ProjectOAuthOptions = CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions;
+using CompanyName.ProjectName.Application.Auth.Options;
 #endif
 #if (OpenIddictServer)
 using System.Buffers.Text;
@@ -584,7 +583,7 @@ public sealed class ExternalAuthenticationTests
         const string clientId = "external-resource";
         const string clientSecret = "ExternalResource!Secret123";
         const string redirectUri = "https://resource.test/api/v1/auth/signin";
-        var scopeName = new ProjectOAuthOptions().Resource;
+        var scopeName = new OAuthResourceOptions().Resource;
         using (var scope = host.Services.CreateScope())
         {
             var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();

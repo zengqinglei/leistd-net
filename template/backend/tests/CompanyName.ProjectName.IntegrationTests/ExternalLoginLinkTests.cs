@@ -12,7 +12,7 @@ using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 #endif
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
@@ -556,7 +556,7 @@ public sealed class ExternalLoginLinkTests
         using var host = CreateHost(factory, provider);
         const string clientId = "link-machine";
         const string secret = "LinkMachine!Secret123";
-        var scopeName = new OAuthOptions().Resource;
+        var scopeName = new OAuthResourceOptions().Resource;
         using (var scope = host.Services.CreateScope())
         {
             var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();

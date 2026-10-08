@@ -10,7 +10,7 @@ using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
 using CompanyName.ProjectName.Application.Auth.OAuth;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.Ddd.Application.AppServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,7 +26,7 @@ namespace CompanyName.ProjectName.Application.OpenApplications.AppServices;
 
 public class OpenApplicationAppService(
     IOpenIddictApplicationManager applicationManager,
-    IOptions<OAuthOptions> oauthOptions,
+    IOptions<OAuthResourceOptions> oauthOptions,
     IObjectMapper objectMapper,
     IOperationRecorder operationRecorder,
     IClock clock,

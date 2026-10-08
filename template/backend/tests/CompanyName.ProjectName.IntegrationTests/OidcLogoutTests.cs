@@ -5,7 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Microsoft.AspNetCore.WebUtilities;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -229,7 +229,7 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
                {
                    clientId = client, applicationType = "web", clientType = "public", sessionBound = true,
                    redirectUris = new[] { Callback }, postLogoutRedirectUris = new[] { SignedOut },
-                   permissions = new[] { "ept:authorization", "ept:token", "ept:end_session", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthOptions().Resource}" },
+                   permissions = new[] { "ept:authorization", "ept:token", "ept:end_session", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthResourceOptions().Resource}" },
                    requirements = new[] { "ft:pkce" }
                }))
             Assert.True(registered.IsSuccessStatusCode, await registered.Content.ReadAsStringAsync());
@@ -242,7 +242,7 @@ public sealed class OidcLogoutTests(ProjectWebApplicationFactory factory) : ICla
         var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(Verifier)));
         using var authorize = await browser.GetCachedAsync(
             $"/connect/authorize?client_id={client}&redirect_uri={Uri.EscapeDataString(Callback)}&response_type=code" +
-            $"&scope=openid%20{new OAuthOptions().Resource}&code_challenge={challenge}&code_challenge_method=S256");
+            $"&scope=openid%20{new OAuthResourceOptions().Resource}&code_challenge={challenge}&code_challenge_method=S256");
         Assert.StartsWith(Callback, authorize.Headers.Location!.AbsoluteUri);
         using var exchange = Browser();
         using var token = await exchange.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>

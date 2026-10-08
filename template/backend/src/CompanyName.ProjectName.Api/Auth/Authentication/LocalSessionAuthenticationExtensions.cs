@@ -9,7 +9,7 @@ using Leistd.Security.AspNetCore;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Domain.Auth.Options;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Users.Options;
 #if (!IncludeMultiTenancy)
 using Leistd.Security.Claims;
 #endif

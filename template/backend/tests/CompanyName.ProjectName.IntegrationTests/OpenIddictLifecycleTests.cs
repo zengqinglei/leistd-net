@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
@@ -34,7 +34,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         {
             sessionBound = false,
             clientId = id, applicationType = "web", clientType = "public", redirectUris = new[] { Callback },
-            permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthOptions().Resource}" },
+            permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthResourceOptions().Resource}" },
             requirements = new[] { "ft:pkce" }
         });
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
@@ -57,7 +57,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
 
     private static string AuthorizationUrl(string client, string parameters) =>
         $"/connect/authorize?client_id={client}&redirect_uri={Uri.EscapeDataString(Callback)}&response_type=code" +
-        $"&scope=openid%20{new OAuthOptions().Resource}&code_challenge={Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(new string('x', 64))))}&code_challenge_method=S256{parameters}";
+        $"&scope=openid%20{new OAuthResourceOptions().Resource}&code_challenge={Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(new string('x', 64))))}&code_challenge_method=S256{parameters}";
 
     [Fact]
     public async Task Prompt_none_without_a_session_returns_login_required_to_the_protocol_callback()

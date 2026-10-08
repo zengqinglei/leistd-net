@@ -1,7 +1,7 @@
 using Leistd.Settings.Definitions;
 #if (LocalIdentity)
 using System.Globalization;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Users.Options;
 using Microsoft.Extensions.Options;
 #endif
 

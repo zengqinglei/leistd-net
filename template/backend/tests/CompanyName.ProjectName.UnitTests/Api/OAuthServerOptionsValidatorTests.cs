@@ -1,18 +1,18 @@
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Api.Options;
 using System.Globalization;
 
-namespace CompanyName.ProjectName.UnitTests.Domain;
+namespace CompanyName.ProjectName.UnitTests.Api;
 
 /// <summary>令牌签发配置的校验：一条失败一项、以配置键开头，访问令牌寿命与两个证书集合的问题一次报全。</summary>
-public sealed class OAuthOptionsValidatorTests
+public sealed class OAuthServerOptionsValidatorTests
 {
-    private readonly OAuthOptionsValidator _validator = new();
+    private readonly OAuthServerOptionsValidator _validator = new();
 
     [Fact]
     public void Development_certificates_need_no_certificate_files()
     {
-        Assert.True(_validator.Validate(null, new OAuthOptions { UseDevelopmentCertificates = true }).Succeeded);
+        Assert.True(_validator.Validate(null, new OAuthServerOptions { UseDevelopmentCertificates = true }).Succeeded);
     }
 
     [Theory]
@@ -21,7 +21,7 @@ public sealed class OAuthOptionsValidatorTests
     [InlineData(600)]
     public void Whole_second_lifetimes_beyond_the_refresh_lead_are_accepted(int seconds)
     {
-        var options = new OAuthOptions { UseDevelopmentCertificates = true, AccessTokenLifetime = TimeSpan.FromSeconds(seconds) };
+        var options = new OAuthServerOptions { UseDevelopmentCertificates = true, AccessTokenLifetime = TimeSpan.FromSeconds(seconds) };
 
         Assert.True(_validator.Validate(null, options).Succeeded);
     }
@@ -37,7 +37,7 @@ public sealed class OAuthOptionsValidatorTests
     {
         foreach (var development in new[] { true, false })
         {
-            var options = new OAuthOptions
+            var options = new OAuthServerOptions
             {
                 UseDevelopmentCertificates = development,
                 AccessTokenLifetime = TimeSpan.Parse(lifetime, CultureInfo.InvariantCulture),
@@ -55,7 +55,7 @@ public sealed class OAuthOptionsValidatorTests
     [Fact]
     public void Problems_in_both_collections_are_reported_together()
     {
-        var options = new OAuthOptions
+        var options = new OAuthServerOptions
         {
             AccessTokenLifetime = TimeSpan.FromSeconds(30),
             SigningCertificates = [new OAuthCertificate { Path = "signing.pfx" }, new OAuthCertificate { Path = "" }],

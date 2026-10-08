@@ -1,6 +1,6 @@
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -9,7 +9,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 /// <summary>单跳访问令牌交换按资源归属验证调用者，其余授权方检查交给官方处理器。</summary>
-internal sealed class ResourceOwnerAuthorizedPartyHandler(IOptions<OAuthOptions> options)
+internal sealed class ResourceOwnerAuthorizedPartyHandler(IOptions<OAuthResourceOptions> options)
     : IOpenIddictServerHandler<OpenIddictServerEvents.ValidateTokenRequestContext>
 {
     private readonly OpenIddictServerHandlers.Exchange.ValidateAuthorizedParty _official = new();

@@ -31,6 +31,8 @@ using Leistd.BackgroundJobs;
 using Leistd.BackgroundJobs.Recurring;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
+using CompanyName.ProjectName.Application.Auth.Options;
+using Microsoft.Extensions.Options;
 #endif
 #endif
 using CompanyName.ProjectName.Application.Initialization;
@@ -111,6 +113,10 @@ public static class DependencyInjection
         services.TryAddTransient<IAuthAppService, AuthAppService>();
 
 #if (OpenIddictServer)
+        services.AddOptions<OAuthResourceOptions>()
+            .BindConfiguration(OAuthResourceOptions.SectionName)
+            .ValidateOnStart();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OAuthResourceOptions>, OAuthResourceOptionsValidator>());
         services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
             RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。

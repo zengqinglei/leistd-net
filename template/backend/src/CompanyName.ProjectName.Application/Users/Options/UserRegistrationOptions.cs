@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace CompanyName.ProjectName.Domain.Users.Options;
+namespace CompanyName.ProjectName.Application.Users.Options;
 
-/// <summary>用户注册相关配置（支持后台动态配置管理）。</summary>
+/// <summary>用户注册策略的部署基线；运行期覆盖经应用策略提供器读取。</summary>
 public class UserRegistrationOptions
 {
     public const string SectionName = "UserRegistration";

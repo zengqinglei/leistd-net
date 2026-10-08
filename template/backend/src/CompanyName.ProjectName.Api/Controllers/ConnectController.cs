@@ -8,7 +8,7 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Api.Auth.OpenIddict;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Application.OpenApplications;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Antiforgery;
@@ -36,7 +36,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 public sealed class ConnectController(
     IAuthPrincipalFactory principalFactory,
     IUserSessionAppService sessionAppService,
-    IOptions<OAuthOptions> oauthOptions,
+    IOptions<OAuthResourceOptions> oauthOptions,
     IOptions<ClaimTypeOptions> claimTypes,
     IOpenIddictApplicationManager applications,
     ConnectInteractionProtector interactions,
