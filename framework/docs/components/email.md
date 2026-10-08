@@ -117,7 +117,10 @@ await emailSender.SendAsync(new EmailMessage
 
 ## 实现行为
 
-SMTP 连接、认证或投递失败均原样抛出；重试和补偿由调用方决定。`NullEmailSender` 只能显式注册，不会在 SMTP 配置或发送失败时自动回落。
+实际投递的实现收到投递设施的接受确认后，`SendAsync` 正常返回，不保证收件人最终收到；收到确认之后的取消或断开故障不会再让它抛出。
+尚未收到确认时，SMTP 连接、认证或投递失败均原样抛出，重试和补偿由调用方决定；
+异常不保证服务器没有接受（例如接受回复在途中丢失），按失败补偿的调用方要能容忍偶发的"信已到、却按失败处理"。
+显式注册的 `NullEmailSender` 例外：它正常返回但不投递。`NullEmailSender` 只能显式注册，不会在 SMTP 配置或发送失败时自动回落。
 
 ### Leistd.Email.Core（`NullEmailSender`）
 
@@ -127,7 +130,7 @@ SMTP 连接、认证或投递失败均原样抛出；重试和补偿由调用方
 
 ### Leistd.Email.Smtp（`SmtpEmailSender`）
 
-- 每次发送新建一个 `SmtpClient`，发完 `QUIT` 断开，不复用连接。
+- 每次发送新建一个 `SmtpClient`，发完 `QUIT` 断开，不复用连接。收到接受确认后，`QUIT` 被取消不影响成功；`QUIT` 超时记 Warning，发送仍算成功。
 - `EnableSsl` 为 `true` 时按端口选握手方式：465 用隐式 TLS，其余用 STARTTLS。
 - 仅在 `Username` 非空时认证；用户名与口令由校验保证成对。
 - 每封信取 `IOptionsMonitor<SmtpOptions>.CurrentValue`，配置源重载后下一封信即用新值。新值同样经校验，不合规时发信抛 `OptionsValidationException`，

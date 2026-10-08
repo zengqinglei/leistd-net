@@ -639,6 +639,7 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Shared/Security/VerificationCodes/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailSettingsTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailVerificationChallengeTests.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Application/EmailChallengeStoreTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/VerificationCodeDigestTests.cs",
             "frontend/src/app/features/settings/components/setting-section/widgets/email-test/**",
             "backend/src/CompanyName.ProjectName.Application/Settings/Dtos/**"

@@ -12,7 +12,8 @@ namespace Leistd.Email.Smtp;
 
 /// <summary>经 SMTP 发信的 <see cref="IEmailSender"/>。</summary>
 /// <remarks>
-/// <para>每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。</para>
+/// <para>每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。
+/// 收到服务器的接受确认之后，断开连接被取消或超时都不改写发送结果；超时记 Warning。</para>
 /// <para>每封信取一次 <see cref="IOptionsMonitor{TOptions}.CurrentValue"/>，配置源重载后下一封信即用新值；
 /// 新值同样经 <see cref="IValidateOptions{TOptions}"/> 校验，不合规时抛 <see cref="OptionsValidationException"/>。</para>
 /// </remarks>
@@ -20,6 +21,9 @@ public sealed class SmtpEmailSender(
     IOptionsMonitor<SmtpOptions> options,
     ILogger<SmtpEmailSender> logger) : IEmailSender
 {
+    // 测试换成调短 Timeout 的真实客户端，不必等满默认两分钟的读超时
+    internal Func<SmtpClient> CreateClient { get; init; } = static () => new SmtpClient();
+
     /// <inheritdoc />
     public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
@@ -28,7 +32,7 @@ public sealed class SmtpEmailSender(
         var current = options.CurrentValue;
         var mime = BuildMessage(message, current);
 
-        using var client = new SmtpClient();
+        using var client = CreateClient();
         await client.ConnectAsync(current.Host, current.Port, ResolveSocketOptions(current), cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(current.Username))
@@ -38,7 +42,17 @@ public sealed class SmtpEmailSender(
         }
 
         await client.SendAsync(mime, cancellationToken);
-        await client.DisconnectAsync(quit: true, cancellationToken);
+
+        // 走到这里服务器已接受投递，QUIT 只是善后，它的失败不能把已投递的信报成失败。
+        // MailKit 在 QUIT 阶段已吞掉取消、I/O 与协议异常，唯独网络读超时以 TimeoutException 抛出。
+        try
+        {
+            await client.DisconnectAsync(quit: true, cancellationToken);
+        }
+        catch (TimeoutException exception)
+        {
+            logger.LogWarning(exception, "SMTP QUIT timed out after the message was accepted; the send is still reported as successful");
+        }
 
         // 收件人脱敏后再记（保留域名便于按域名聚合）；主题不脱敏，它是宿主给的文案，组件文档写明不要放个人数据。
         logger.LogInformation(
