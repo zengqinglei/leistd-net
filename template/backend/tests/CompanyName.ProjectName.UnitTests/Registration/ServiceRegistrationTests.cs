@@ -15,6 +15,9 @@ using CompanyName.ProjectName.Application.Notifications.Provider;
 using Leistd.Notifications.Email.Recipients;
 #endif
 using CompanyName.ProjectName.Application;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Application.Auth.Options;
+#endif
 #if (LocalIdentity)
 using Leistd.Security.RequestContext;
 #endif
@@ -130,8 +133,17 @@ public class ServiceRegistrationTests
     [Fact]
     public void Application_registration_is_idempotent()
     {
-        var once = new ServiceCollection().AddLogging().AddApplicationServices();
-        var twice = new ServiceCollection().AddLogging().AddApplicationServices().AddApplicationServices();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+#if (OpenIddictServer)
+            ["OAuth:Resource"] = "cohesion-api",
+            ["OAuth:ApiResources:0:Name"] = "downstream-api",
+            ["OAuth:ApiResources:0:Scope"] = "downstream.read",
+            ["OAuth:ApiResources:0:OwnerClientId"] = "caller-app"
+#endif
+        }).Build();
+        var once = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration).AddApplicationServices();
+        var twice = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration).AddApplicationServices().AddApplicationServices();
 
         Assert.Equal(Registrations(once), Registrations(twice));
         using var onceProvider = once.BuildServiceProvider();
@@ -139,7 +151,36 @@ public class ServiceRegistrationTests
         Assert.Equal(
             onceProvider.GetRequiredService<IOptions<MapsterOptions>>().Value.Configurators.Count,
             twiceProvider.GetRequiredService<IOptions<MapsterOptions>>().Value.Configurators.Count);
+#if (OpenIddictServer)
+        var onceOptions = onceProvider.GetRequiredService<IOptions<OAuthResourceOptions>>().Value;
+        var twiceOptions = twiceProvider.GetRequiredService<IOptions<OAuthResourceOptions>>().Value;
+        Assert.Equal("cohesion-api", onceOptions.Resource);
+        Assert.Equal(onceOptions.Resource, twiceOptions.Resource);
+        var onceResource = Assert.Single(onceOptions.ApiResources);
+        var twiceResource = Assert.Single(twiceOptions.ApiResources);
+        Assert.Equal(("downstream-api", "downstream.read", "caller-app"), (onceResource.Name, onceResource.Scope, onceResource.OwnerClientId));
+        Assert.Equal((onceResource.Name, onceResource.Scope, onceResource.OwnerClientId), (twiceResource.Name, twiceResource.Scope, twiceResource.OwnerClientId));
+#endif
     }
+#if (OpenIddictServer)
+
+    [Fact]
+    public void Application_registration_binds_configuration_with_a_host_registered_validator()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["OAuth:Resource"] = "host-api"
+        }).Build();
+        var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IValidateOptions<OAuthResourceOptions>, OAuthResourceOptionsValidator>();
+        services.AddApplicationServices().AddApplicationServices();
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal("host-api", provider.GetRequiredService<IOptions<OAuthResourceOptions>>().Value.Resource);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOptionsChangeTokenSource<OAuthResourceOptions>));
+        Assert.Single(provider.GetServices<IValidateOptions<OAuthResourceOptions>>());
+    }
+#endif
 #if (IncludeRealTime)
 
     // 实时 Hub 映射时要求订阅授权器已登记（框架不给默认实现）：它属于应用层的授权规则，随应用层入口登记

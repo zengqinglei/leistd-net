@@ -132,11 +132,10 @@ $scenarioMap = [ordered]@{
         Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-notifications-and-standalone" }
         Arguments = @("--service-role", "Standalone", "--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
-        Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Api/Options/OAuthServerOptions.cs", "backend/src/{name}.Application/Auth/Options/OAuthResourceOptions.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Api/Options/OAuthServerOptions.cs", "backend/src/{name}.Application/Auth/Options/OAuthResourceOptions.cs", "backend/src/{name}.Api/Auth/Sessions/DistributedTicketStore.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
         RequiredTokens = @{
-            "backend/src/{name}.Api/Auth/Authentication/ExternalAuthenticationExtensions.cs" = @("AddGoogle", "AddGitHub", "UsePkce = true", "UserEmailsEndpoint = string.Empty")
-            "backend/src/{name}.Api/Auth/Sessions/DistributedTicketStore.cs" = @("ITicketStore")
+            "backend/src/{name}.Api/Auth/Authentication/ExternalAuthenticationExtensions.cs" = @("AddGoogle", "AddGitHub", "UsePkce = true", "UserEmailsEndpoint = string.Empty", "AddDistributedTicketStore")
         }
         ForbiddenTokens = @("OpenIddict", "IOAuthProvider", "OAuthTokenInfo", "angular-auth-oidc-client")
     }
