@@ -1,6 +1,6 @@
 using Leistd.Data.Filters;
 using Leistd.Ddd.Infrastructure.Persistence.Conventions;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
+using Leistd.Data.EntityFrameworkCore.Modeling;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;

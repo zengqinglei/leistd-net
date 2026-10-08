@@ -17,7 +17,7 @@
 dotnet add package Leistd.Data
 ```
 
-工作单元、多租户与带列表查询的组件传递引用 `Leistd.Data`。它依赖 Core（复用作用域释放）和 DI 抽象，不依赖 EF 或 DDD；引用它的契约包同样传递这些依赖。EF 查询执行器由可选的 `Leistd.Data.EntityFrameworkCore` 分发。
+工作单元、多租户与带列表查询的组件传递引用 `Leistd.Data`。它依赖 Core（复用作用域释放）和 DI 抽象，不依赖 EF 或 DDD；引用它的契约包同样传递这些依赖。EF 查询执行器与通用建模原语由可选的 `Leistd.Data.EntityFrameworkCore` 分发。
 
 ## 注册
 
@@ -92,6 +92,34 @@ public sealed record OrderPageRequest : PageRequest
     }
 }
 ```
+
+### EF 命名过滤器
+
+普通 `DbContext` 可独立使用 `Leistd.Data.EntityFrameworkCore.Modeling` 的建模扩展，无需 DDD 或 DI 注册：
+
+```csharp
+using Leistd.Data.EntityFrameworkCore.Modeling;
+using Microsoft.EntityFrameworkCore;
+
+public interface IVisibleRecord { bool Visible { get; } }
+public sealed class VisibleRecord : IVisibleRecord
+{
+    public int Id { get; set; }
+    public bool Visible { get; set; }
+}
+
+public sealed class VisibleDbContext(DbContextOptions<VisibleDbContext> options) : DbContext(options)
+{
+    public DbSet<VisibleRecord> Records => Set<VisibleRecord>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyGlobalFilters<IVisibleRecord>("Visible", item => item.Visible);
+    }
+}
+```
+
+`ApplyGlobalFilters` 为实现契约的非 owned 根实体设置原生命名过滤器，支持 shared-type，派生类型沿用根声明。不同名称按 AND 组合，同名后写覆盖；调用方可用原生 `IgnoreQueryFilters(["Visible"])` 按名忽略。Owned 对象通过所属实体加载，不配置独立过滤器。过滤表达式、名字、启用状态与业务政策由调用方确定；空模型也校验构建器、名称和表达式参数。
 
 ## 接口参考
 

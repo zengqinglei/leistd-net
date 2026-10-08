@@ -6,7 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using Microsoft.IdentityModel.Protocols;
 using OpenIddict.Abstractions;
 
-namespace Leistd.Security.OpenIddict.Tests;
+namespace Leistd.Security.OpenIddict.Validation.Tests;
 
 /// <summary>请求刷新在最短间隔内只转交一次：签发方不可用时，伪造 kid 的请求不能让每个请求都去抓一次 JWKS。</summary>
 public sealed class SigningKeyRefreshThrottleTests

@@ -36,7 +36,7 @@ internal sealed class MultiTenantFilterGuard(
 
             // 过滤器定义在根实体上，派生类型沿用该声明。
             var unguarded = model.GetEntityTypes()
-                .Where(entityType => entityType.BaseType is null)
+                .Where(entityType => entityType.BaseType is null && !entityType.IsOwned())
                 .Where(entityType => typeof(IMultiTenant).IsAssignableFrom(entityType.ClrType))
                 .Where(entityType =>
                     entityType.FindDeclaredQueryFilter(BaseDbContext.MultiTenantFilterName) is null)

@@ -15,7 +15,7 @@ public sealed class VerificationCodeOptions
     /// <summary>密钥是否可用</summary>
     public bool IsKeyUsable => TryGetKeyBytes(out _);
 
-    /// <summary>解析密钥字节</summary>
+    // 解析密钥字节
     internal bool TryGetKeyBytes(out byte[] key)
     {
         key = [];

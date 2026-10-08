@@ -8,7 +8,7 @@ using global::OpenIddict.Abstractions;
 using global::OpenIddict.Validation;
 using Xunit;
 
-namespace Leistd.Security.OpenIddict.Tests;
+namespace Leistd.Security.OpenIddict.Validation.Tests;
 
 public sealed class SigningKeyRefreshCancellationTests
 {

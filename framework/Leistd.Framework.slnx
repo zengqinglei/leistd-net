@@ -192,7 +192,8 @@
   </Folder>
   <Folder Name="/tests/components/security/">
     <Project Path="tests/components/security/Leistd.Security.Tests/Leistd.Security.Tests.csproj" />
-    <Project Path="tests/components/security/Leistd.Security.OpenIddict.Tests/Leistd.Security.OpenIddict.Tests.csproj" />
+    <Project Path="tests/components/security/Leistd.Security.OpenIddict.Server.Tests/Leistd.Security.OpenIddict.Server.Tests.csproj" />
+    <Project Path="tests/components/security/Leistd.Security.OpenIddict.Validation.Tests/Leistd.Security.OpenIddict.Validation.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/components/settings/">
     <Project Path="tests/components/settings/Leistd.Settings.Tests/Leistd.Settings.Tests.csproj" />

@@ -14,7 +14,7 @@ using Microsoft.IdentityModel.Tokens;
 using global::OpenIddict.Validation.AspNetCore;
 using Xunit;
 
-namespace Leistd.Security.OpenIddict.Tests;
+namespace Leistd.Security.OpenIddict.Validation.Tests;
 
 public sealed class SigningKeyRotationTests
 {

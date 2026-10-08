@@ -6,7 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using global::OpenIddict.Abstractions;
 using Xunit;
 
-namespace Leistd.Security.OpenIddict.Tests;
+namespace Leistd.Security.OpenIddict.Server.Tests;
 
 public sealed class OpenIddictPruningJobTests
 {

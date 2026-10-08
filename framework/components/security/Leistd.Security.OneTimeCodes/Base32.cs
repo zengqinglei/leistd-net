@@ -1,12 +1,12 @@
 using System.Text;
 namespace Leistd.Security.OneTimeCodes;
 
-/// <summary>RFC 4648 Base32（不带填充）。身份验证器应用按这种写法导入密钥。</summary>
+// RFC 4648 Base32（不带填充）。身份验证器应用按这种写法导入密钥。
 internal static class Base32
 {
     private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-    /// <summary>编码为大写 Base32，不带 <c>=</c> 填充。</summary>
+    // 编码为大写 Base32，不带 = 填充。
     public static string Encode(ReadOnlySpan<byte> data)
     {
         var output = new StringBuilder((data.Length * 8 + 4) / 5);
@@ -30,7 +30,7 @@ internal static class Base32
         return output.ToString();
     }
 
-    /// <summary>解码；忽略大小写、空格与填充。含非法字符时返回 null。</summary>
+    // 解码；忽略大小写、空格与填充。含非法字符时返回 null。
     public static byte[]? Decode(string text)
     {
         var normalized = new string(text.Where(c => !char.IsWhiteSpace(c) && c != '-').Select(char.ToUpperInvariant).ToArray());

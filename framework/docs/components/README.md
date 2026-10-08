@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、65 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、69 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
