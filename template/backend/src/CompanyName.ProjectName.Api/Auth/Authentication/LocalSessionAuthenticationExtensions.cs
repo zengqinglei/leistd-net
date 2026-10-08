@@ -1,11 +1,10 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Api.Auth.RequestContext;
 using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
 #endif
 using CompanyName.ProjectName.Api.Options;
-using CompanyName.ProjectName.Application.Auth.Abstractions;
+using Leistd.Security.AspNetCore;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -33,8 +32,7 @@ internal static class LocalSessionAuthenticationExtensions
         // 会话 Cookie 的滑动过期与服务端会话的空闲时限是同一个值，取自同一份会话 Cookie 选项
         builder.Services.AddOptions<UserSessionOptions>()
             .Configure<IOptions<SessionCookieOptions>>((options, sessionCookie) => options.IdleTimeout = sessionCookie.Value.Lifetime);
-        builder.Services.AddHttpContextAccessor();
-        builder.Services.TryAddTransient<IRequestClientInfo, HttpRequestClientInfo>();
+        builder.Services.AddRequestClientInfo();
         builder.Services.TryAddTransient<SessionCookieIssuer>();
 
         builder.Services.AddAuthentication(options =>

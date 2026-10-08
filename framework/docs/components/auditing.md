@@ -36,6 +36,21 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 
 继承 `BaseDbContext` 时，应将作用域 `IServiceProvider` 传给基类构造函数；否则当前用户和运行时过滤开关不可用。普通 `DbContext` 可调用 `ChangeTracker.EnableCreationAuditing(serviceProvider)` 接入创建审计。
 
+审计人字段的默认列长通过 EF 约定单独登记，与拦截器注册独立：
+
+```csharp
+using Leistd.Auditing.EntityFrameworkCore.Conventions;
+using Microsoft.EntityFrameworkCore;
+
+public sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) : DbContext(options)
+{
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        => configurationBuilder.Conventions.Add(_ => new AuditingEntityConvention());
+}
+```
+
+`CreatorId`、`LastModifierId`、`DeleterId` 默认最长 64；显式 Fluent 配置与数据注解优先。DDD 基座已登记此约定。
+
 ## 使用
 
 ```csharp
@@ -70,6 +85,7 @@ await dbContext.SaveChangesAsync();
 | `IFullAuditedObject` | 组合全部审计契约 |
 | `IAuditPropertySetter` | 填充创建、修改和删除审计属性 |
 | `AuditSaveChangesInterceptor` | 在保存时处理修改审计和软删除 |
+| `AuditingEntityConvention` | 配置审计人字段默认列长，支持普通 DbContext |
 | `EntityTrackingExtensions` | 在实体进入 `Added` 状态时执行创建审计 |
 
 ## 实现行为

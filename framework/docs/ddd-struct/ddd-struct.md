@@ -191,12 +191,7 @@ public class AppDbContext(
 
 `BaseDbContext.OnModelCreating` 与 `ConfigureConventions` 已封闭；派生类覆盖 `ConfigureModel` 配置实体、覆盖 `ConfigureModelConventions` 追加模型约定（如枚举统一存为字符串）。基类在派生配置完成后为所有已进入模型的实体（含未声明 `DbSet` 的组件实体）添加命名过滤器。
 
-基类注册 EF Core 约定 `DddEntityConvention`：审计人字段（`CreatorId`、`LastModifierId`、`DeleterId`）最长 64，`ConcurrencyStamp` 见[乐观并发标记](#乐观并发标记)。约定以约定来源写入，实体上的显式 Fluent 配置优先。不继承基类的上下文可在 `ConfigureConventions` 中注册同一约定：
-
-```csharp
-protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-    => configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
-```
+基类分别登记 `AuditingEntityConvention`（审计人字段最长 64）与 `DddEntityConvention`（[乐观并发标记](#乐观并发标记)）。两者采用约定来源，Fluent 配置与数据注解优先。普通上下文只需审计时登记审计约定；另需 DDD 并发标记时再登记 DDD 约定，详见[审计组件](../components/auditing.md)。
 
 需要审计、租户上下文或运行时过滤开关时，DbContext 必须接收 `IServiceProvider` 并传给基类。否则它固定为宿主视角，创建审计与 `IDataFilter` 作用域均无法生效。
 

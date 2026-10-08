@@ -18,7 +18,7 @@ using Leistd.Timing;
 using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Shared;
-using CompanyName.ProjectName.Application.Auth.Abstractions;
+using Leistd.Security.RequestContext;
 using System.Globalization;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;

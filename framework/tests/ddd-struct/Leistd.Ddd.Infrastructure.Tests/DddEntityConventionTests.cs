@@ -1,3 +1,4 @@
+using Leistd.Auditing.EntityFrameworkCore.Conventions;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Ddd.Infrastructure.Persistence;
@@ -159,6 +160,9 @@ public sealed class DddEntityConventionTests
         public DbSet<Article> Articles => Set<Article>();
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-            => configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
+        {
+            configurationBuilder.Conventions.Add(_ => new AuditingEntityConvention());
+            configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
+        }
     }
 }

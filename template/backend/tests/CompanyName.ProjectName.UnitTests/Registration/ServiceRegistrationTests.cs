@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth.Authorization;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Api.Auth.Authentication;
-using CompanyName.ProjectName.Api.Auth.RequestContext;
+using Leistd.Security.AspNetCore.RequestContext;
 #endif
 using CompanyName.ProjectName.Api.Hosting;
 #if (IncludeNotifications && LocalIdentity)
@@ -16,7 +16,7 @@ using Leistd.Notifications.Email.Recipients;
 #endif
 using CompanyName.ProjectName.Application;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Abstractions;
+using Leistd.Security.RequestContext;
 #endif
 #if (IncludeRealTime)
 using CompanyName.ProjectName.Application.RealTime.Provider;

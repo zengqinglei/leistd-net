@@ -13,7 +13,7 @@ using Leistd.Timing;
 using Leistd.UnitOfWork;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
-using CompanyName.ProjectName.Application.Auth.Abstractions;
+using Leistd.Security.RequestContext;
 
 namespace CompanyName.ProjectName.Application.Auth.Sessions;
 

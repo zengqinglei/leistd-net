@@ -1,4 +1,6 @@
 using Leistd.Security.AspNetCore.Claims;
+using Leistd.Security.AspNetCore.RequestContext;
+using Leistd.Security.RequestContext;
 using Leistd.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -33,4 +35,12 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>注册请求客户端信息的 HTTP 实现。</summary>
+    /// <remarks>默认实现为 Transient，读取调用时的上下文；重复登记幂等，不覆盖宿主实现。</remarks>
+    public static IServiceCollection AddRequestClientInfo(this IServiceCollection services)
+    {
+        services.AddHttpContextAccessor();
+        services.TryAddTransient<IRequestClientInfo, HttpRequestClientInfo>();
+        return services;
+    }
 }

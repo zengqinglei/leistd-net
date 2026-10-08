@@ -1,11 +1,10 @@
 #if (RemoteTokenAuth)
-using CompanyName.ProjectName.Api.Auth.RequestContext;
 using CompanyName.ProjectName.Api.Options;
 #if (ResourceBrowserSession)
 using CompanyName.ProjectName.Api.Auth.Sessions;
 using CompanyName.ProjectName.Application.Shared;
 #endif
-using Leistd.ServiceClient.Abstractions;
+using Leistd.ServiceClient.AspNetCore;
 #if (ResourceBrowserSession)
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 #endif
@@ -65,8 +64,11 @@ internal static class RemoteTokenAuthenticationExtensions
             ServiceDescriptor.Singleton<IPostConfigureOptions<OpenIddictValidationOptions>, ThrottleSigningKeyRefresh>());
 
         // 下游 Token Exchange 取经过验证的请求令牌：会话取服务端票据里的，Bearer 取验证后的
-        builder.Services.AddHttpContextAccessor();
-        builder.Services.TryAddSingleton<IUserAccessTokenAccessor, ResourceUserAccessTokenAccessor>();
+#if (ResourceBrowserSession)
+        builder.Services.AddAuthenticatedUserAccessTokenAccessor(AuthenticationSchemeNames.Smart);
+#else
+        builder.Services.AddUserAccessTokenAccessor(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+#endif
 
 #if (ResourceBrowserSession)
         builder.AddResourceBrowserSession();

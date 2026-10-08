@@ -1,7 +1,7 @@
 using Leistd.Auditing.EntityFrameworkCore.Extensions;
 using Leistd.Data.Connections;
 #if (LocalIdentity && IncludeMultiTenancy)
-using Leistd.Ddd.Infrastructure.Persistence.Conventions;
+using Leistd.Auditing.EntityFrameworkCore.Conventions;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,10 +39,10 @@ public sealed class IdentityControlDbContext : DbContext
         ChangeTracker.EnableCreationAuditing(serviceProvider);
     }
 
-    // 不继承基座，审计字段的列约定需显式注册（与业务上下文同一约定）
+    // 普通上下文只登记审计约定。
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
+        configurationBuilder.Conventions.Add(_ => new AuditingEntityConvention());
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

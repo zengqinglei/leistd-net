@@ -43,7 +43,7 @@ services.AddAmbientContext();
 | `IAmbientContext` | `AmbientContext` | 同左 | Transient |
 
 `AddSecurity()` 就是在 `AddAmbientContext()` 之上把主体来源换成 `HttpContext.User`，
-并注册 `IHttpContextAccessor`；两者的调用顺序无关。本组件没有中间件。
+并注册 `IHttpContextAccessor`；两者的调用顺序无关。客户端信息可按需独立调用 `AddRequestClientInfo()`，不会随 `AddSecurity()` 自动登记。
 
 `Begin(...)` 建立哪些维度取决于已注册的贡献者：租户维度随 `Leistd.MultiTenancy.AspNetCore`
 分发，链路标识随 `Leistd.Tracing.Core`。没装的维度就是没有，不会给猜测值。
@@ -57,6 +57,14 @@ builder.Services.Configure<ClaimTypeOptions>(options =>
     options.UserIds = ["oid", "sub"];          // 默认 sub，其次 NameIdentifier
 });
 ```
+
+请求客户端信息由 `Leistd.Security.RequestContext.IRequestClientInfo` 提供，HTTP 宿主按需注册：
+
+```csharp
+builder.Services.AddRequestClientInfo();
+```
+
+默认实现为 Transient，调用时读取当前请求的 IP 与 User-Agent；无请求时两者为 null，空白 User-Agent 为 null。IP 取 RemoteIpAddress，宿主负责先执行转发头处理并配置受信代理。注册幂等，不覆盖宿主提供的接口实现。
 
 ## 使用
 

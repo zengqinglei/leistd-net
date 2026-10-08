@@ -17,6 +17,8 @@
 | Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、供展示的查询 |
 | Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
+与宿主实体、业务政策无关的通用机制由框架组件提供；模板保留业务模型、组件扩展点适配和宿主组合，不另建平行技术实现。
+
 目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。
 
 分类优先采用已有职责目录（DTO、应用服务、事件处理器、后台任务、映射、验证器等）。没有专属分类的框架扩展点实现放 `Provider/`，必要的配套定义可与实现共置（如实时资源与权限对应表）。未分类的少量协作类型可留模块根（如 `OpenApplications/OpenApplicationQueryItem`）。
@@ -132,7 +134,7 @@ public class UserAppService(
 - Controller 命名 `*Controller`，继承 `BaseController`（视图渲染、透传代理、机器端点等例外就近注释）；只做路由、鉴权与调用应用服务。
 - 返回类型（含何时用 `IActionResult`）见 [API 规范 §2](./api.md#2-响应格式)，方法名与路由见 [§6](./api.md#6-http-方法与路由规范)。
 
-操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由 `ApiAuthorizationResultHandler`、`OperationFailureRecordingMiddleware` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
+操作留痕：组件端点挂 `[OperationRecordAction]` 后，授权被拒与之后的 `BusinessException` 由宿主 `ApiAuthorizationResultHandler` 和组件 `UseOperationFailureRecording()` 兜底补记（参数校验失败不记）。应用服务在拒绝处调 `RecordFailedAsync` 时兜底按动作与目标去重跳过，因此注解里的目标（含 `TargetIdPrefix`）须与应用服务记录的逐字一致；`RecordFailedAsync` 自身不判重。
 
 ### 3.8 枚举持久化
 
@@ -252,7 +254,6 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | `Authorization/` | 授权策略、授权结果处理器与访问控制元数据 |
 | `Sessions/` | 服务端票据存储、会话签发与续期 |
 | `OpenIddict/` | 签发服务注册、证书加载、交互保护与协议处理器 |
-| `RequestContext/` | 从当前 HTTP 请求读取信息的适配器，包括项目端口与框架接口的实现 |
 
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
 - 请求体上限沿用 Kestrel 默认，大上传端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽；不用笼统的 `Extensions` 命名空间。
