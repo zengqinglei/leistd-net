@@ -1,6 +1,7 @@
 #if (ExternalLogin)
 using System.Text.Json;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Authentication;
+using CompanyName.ProjectName.Api.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.Dtos;

@@ -1,5 +1,5 @@
 using Leistd.EventBus.EventHandlers;
-using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.RealTime.Provider;
 using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.RealTime.Publishing;
 

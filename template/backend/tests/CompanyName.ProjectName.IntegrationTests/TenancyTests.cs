@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using Leistd.BackgroundJobs.Recurring;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
-using CompanyName.ProjectName.Application.Tenants;
+using CompanyName.ProjectName.Application.Tenants.Provider;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;

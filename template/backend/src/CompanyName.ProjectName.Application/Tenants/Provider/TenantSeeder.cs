@@ -15,7 +15,7 @@ using Leistd.MultiTenancy.Tenancy;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.MultiTenancy.Management.Provisioning;
 
-namespace CompanyName.ProjectName.Application.Tenants;
+namespace CompanyName.ProjectName.Application.Tenants.Provider;
 
 /// <summary>租户开通：在新租户里建初始角色、权限授予与租户管理员；创建失败时清掉写过的东西。</summary>
 /// <remarks>

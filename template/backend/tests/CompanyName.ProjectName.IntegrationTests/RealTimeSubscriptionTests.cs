@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.RealTime.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Events;

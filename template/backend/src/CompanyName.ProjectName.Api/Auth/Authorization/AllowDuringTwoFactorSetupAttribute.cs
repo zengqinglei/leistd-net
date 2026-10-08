@@ -1,5 +1,5 @@
 #if (LocalIdentity)
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authorization;
 
 /// <summary>受限会话（租户要求两步验证而本人尚未启用）也能调用的接口。</summary>
 /// <remarks>

@@ -1,6 +1,6 @@
 using CompanyName.ProjectName.Application.Permissions.Provider;
 
-namespace CompanyName.ProjectName.Application.RealTime;
+namespace CompanyName.ProjectName.Application.RealTime.Provider;
 
 /// <summary>客户端可订阅的实时资源与事件名。</summary>
 /// <remarks>

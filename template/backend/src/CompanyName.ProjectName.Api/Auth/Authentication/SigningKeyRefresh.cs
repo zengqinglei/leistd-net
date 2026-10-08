@@ -7,7 +7,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Validation.OpenIddictValidationEvents;
 using static OpenIddict.Validation.OpenIddictValidationHandlers;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authentication;
 
 /// <summary>Identity 轮换签名证书后，资源服务在同一个请求里取回新公钥，而不是先拒绝、下一次才认得。</summary>
 /// <remarks>

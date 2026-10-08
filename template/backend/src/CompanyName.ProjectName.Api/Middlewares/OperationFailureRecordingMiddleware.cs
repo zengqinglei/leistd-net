@@ -10,7 +10,7 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// 最初要解决的是组件端点的缺口：权限管理这类由组件映射的端点，业务拒绝（并发冲突、权限未定义、
 /// 主体不存在）发生在组件内部，这里没有代码能在拒绝处调记录器。但范围不按端点类型划——
 /// 记不记由端点上的 <c>[OperationRecordAction]</c> 决定，没打注解就什么都不做。
-/// 被拒那一半由 <see cref="Auth.ApiAuthorizationResultHandler"/> 补记，这里补另一半。</para>
+/// 被拒那一半由 <see cref="Auth.Authorization.ApiAuthorizationResultHandler"/> 补记，这里补另一半。</para>
 /// <para><b>应用服务照常可以自己记。</b>同一动作码在本次请求里已经记过，框架侧就跳过这里的兜底
 /// （见 <c>RecordFailedOperationAsync</c>），留下的是先记的那条——它带着文案参数与业务目标名。</para>
 /// <para><b>必须紧接 <c>UseAuthorization()</c>。</b>授权没通过的请求到不了这里，"授权已通过"才成立——

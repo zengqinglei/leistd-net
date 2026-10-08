@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 /// <summary>授权服务器（OpenIddict Server）与本地令牌校验的注册入口。</summary>
 public static class OpenIddictServerExtensions

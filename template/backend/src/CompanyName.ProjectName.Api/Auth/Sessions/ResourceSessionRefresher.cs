@@ -15,7 +15,7 @@ using CompanyName.ProjectName.Api.Middlewares;
 using Leistd.Security.Claims;
 #endif
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Sessions;
 
 /// <summary>机密客户端在服务端续期；同一票据的并发刷新由已有分布式锁串行化。</summary>
 internal sealed class ResourceSessionRefresher(

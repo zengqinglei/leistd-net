@@ -14,7 +14,7 @@ using Microsoft.Extensions.Hosting;
 #if (!LocalIdentity)
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;

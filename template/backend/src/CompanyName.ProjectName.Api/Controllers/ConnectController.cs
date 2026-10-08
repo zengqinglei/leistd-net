@@ -5,7 +5,7 @@ using Leistd.Timing;
 using System.Text.Json.Nodes;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.OpenIddict;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Application.OpenApplications;
 using CompanyName.ProjectName.Domain.Auth.Options;

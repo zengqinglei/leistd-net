@@ -3,7 +3,7 @@ using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Extensions;
 using Leistd.RealTime.Subscriptions;
 
-namespace CompanyName.ProjectName.Application.RealTime;
+namespace CompanyName.ProjectName.Application.RealTime.Provider;
 
 /// <summary>实时资源的订阅授权：资源键必须属于当前作用域，且订阅者持有查看该资源的权限。</summary>
 /// <remarks>

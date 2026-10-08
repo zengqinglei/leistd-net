@@ -126,7 +126,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using E2E.__NAME__.Api.Auth;
+using E2E.__NAME__.Api.Auth.Sessions;
 using E2E.__NAME__.Application.Shared;
 using System.Security.Cryptography;
 using System.Text;

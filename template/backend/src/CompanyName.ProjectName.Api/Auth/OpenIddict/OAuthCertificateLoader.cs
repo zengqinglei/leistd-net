@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using CompanyName.ProjectName.Domain.Auth.Options;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 /// <summary>
 /// 在组合期逐张加载令牌证书：任何一张文件损坏、口令错误、没有 RSA 私钥或重复，都以带下标的键名报错

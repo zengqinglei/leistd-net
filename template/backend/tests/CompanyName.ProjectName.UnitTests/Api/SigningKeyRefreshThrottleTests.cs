@@ -1,5 +1,5 @@
 #if (RemoteTokenAuth)
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Authentication;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.IdentityModel.Protocols;

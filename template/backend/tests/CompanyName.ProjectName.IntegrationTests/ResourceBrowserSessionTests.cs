@@ -10,7 +10,7 @@ using Leistd.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 #endif
 using CompanyName.ProjectName.Application.Shared;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Sessions;
 using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
