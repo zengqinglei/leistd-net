@@ -1,4 +1,5 @@
 #if (ExternalLogin)
+using CompanyName.ProjectName.Api.Auth.Sessions;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
@@ -12,7 +13,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.Extensions.Options;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authentication;
 
 internal static class ExternalAuthenticationExtensions
 {

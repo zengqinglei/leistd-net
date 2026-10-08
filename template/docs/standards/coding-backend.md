@@ -17,7 +17,9 @@
 | Domain | 实体行为、领域服务、业务规则；定义仓储与第三方服务接口 | 引用 EF Core、DTO 转换、供展示的查询 |
 | Infrastructure | 持久化、实体配置、外部适配器及其 Options | 业务规则 |
 
-目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。模块内少量协作类型（如 `Tenants/TenantSeeder`）可以直接放在模块根，但已有分类的类型（DTO、应用服务、事件处理器等）按分类归位。
+目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。
+
+分类优先采用已有职责目录（DTO、应用服务、事件处理器、后台任务、映射、验证器等）。没有专属分类的框架扩展点实现放 `Provider/`，必要的配套定义可与实现共置（如实时资源与权限对应表）。未分类的少量协作类型可留模块根（如 `OpenApplications/OpenApplicationQueryItem`）。
 
 - **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
 - **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（只放内层——Domain 与 Application——自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`），它不是兜底目录；子目录名不与常用 BCL 类型同名。
@@ -231,7 +233,7 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | 目录 | 内容 |
 | --- | --- |
 | `Controllers/` | 业务 Controller 与 `BaseController` |
-| `Auth/` | 授权策略与处理器、认证方案组装（`*Extensions`）、会话签发 |
+| `Auth/` | 认证与授权集成，按下表分类 |
 | `Hosting/` | 宿主组装扩展（`*Extensions`）、组件端点映射、`ExceptionMappings/` |
 | `Localization/` | 本地化资源标记类型（`ApiResource`） |
 | `Notifications/` | 只放依赖宿主资源的通知扩展点实现 |
@@ -241,6 +243,16 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 | `HealthChecks/` | `*HealthCheck` |
 | `HostedServices/` 下的 `Initializer/` | 一次性启动引导 `*Initializer` |
 | `Filters/` | MVC/Hub 管道过滤器（按需创建）；名字以 `Filter` 结尾的业务策略按所属功能域放 |
+
+`Auth/` 根目录保留总体注册入口 `AuthenticationExtensions`；其余按职责归位：
+
+| 子目录 | 内容 |
+| --- | --- |
+| `Authentication/` | 本地会话、远端令牌、外部登录的认证方案注册与签名密钥刷新 |
+| `Authorization/` | 授权策略、授权结果处理器与访问控制元数据 |
+| `Sessions/` | 服务端票据存储、会话签发与续期 |
+| `OpenIddict/` | 签发服务注册、证书加载、交互保护与协议处理器 |
+| `RequestContext/` | 从当前 HTTP 请求读取信息的适配器，包括项目端口与框架接口的实现 |
 
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
 - 请求体上限沿用 Kestrel 默认，大上传端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽；不用笼统的 `Extensions` 命名空间。

@@ -21,7 +21,7 @@ using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.Data.Paging;
 #if (IncludeRealTime)
-using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.RealTime.Provider;
 using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.EventBus.Abstractions;
 using Leistd.MultiTenancy.Context;

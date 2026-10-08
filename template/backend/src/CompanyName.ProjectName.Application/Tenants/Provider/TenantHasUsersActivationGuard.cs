@@ -9,7 +9,7 @@ using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 
-namespace CompanyName.ProjectName.Application.Tenants;
+namespace CompanyName.ProjectName.Application.Tenants.Provider;
 
 /// <summary>启用前要求租户里至少有一个用户。</summary>
 /// <remarks>

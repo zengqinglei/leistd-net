@@ -1,5 +1,8 @@
 using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Api.Auth.OpenIddict;
+#endif
 using CompanyName.ProjectName.Api.Configuration;
 using CompanyName.ProjectName.Api.Hosting;
 #if (IncludeLocalization)

@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
@@ -13,7 +14,10 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Sessions;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Api.Auth.OpenIddict;
+#endif
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif

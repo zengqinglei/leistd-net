@@ -1,6 +1,10 @@
 using Leistd.Settings.Validation;
 using CompanyName.ProjectName.Api;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Authorization;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth.Authentication;
+using CompanyName.ProjectName.Api.Auth.RequestContext;
+#endif
 using CompanyName.ProjectName.Api.Hosting;
 #if (IncludeNotifications && LocalIdentity)
 using CompanyName.ProjectName.Api.Notifications;
@@ -15,7 +19,7 @@ using CompanyName.ProjectName.Application;
 using CompanyName.ProjectName.Application.Auth.Abstractions;
 #endif
 #if (IncludeRealTime)
-using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.RealTime.Provider;
 #endif
 using CompanyName.ProjectName.Domain;
 using CompanyName.ProjectName.Domain.Users.DomainServices;

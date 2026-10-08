@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using CompanyName.ProjectName.Application.Tenants.Provider;
 using CompanyName.ProjectName.Domain.Users.Policies;
 using Leistd.MultiTenancy.Management.Dtos;
 

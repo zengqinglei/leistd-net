@@ -2,7 +2,7 @@
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 // 官方 PrepareIssuedTokenPrincipal 重置签发时间和到期时间后，再约束最终用于生成 JWT 的主体。
 internal sealed class TokenExchangeExpirationHandler : IOpenIddictServerHandler<OpenIddictServerEvents.ProcessSignInContext>

@@ -1,4 +1,6 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth.RequestContext;
+using CompanyName.ProjectName.Api.Auth.Sessions;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
 #endif
@@ -19,7 +21,7 @@ using Microsoft.Extensions.Options;
 using OpenIddict.Validation.AspNetCore;
 #endif
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authentication;
 
 /// <summary>本地身份的账号配置与认证：服务端登记的会话 Cookie（签发形态另有 Bearer）。</summary>
 internal static class LocalSessionAuthenticationExtensions

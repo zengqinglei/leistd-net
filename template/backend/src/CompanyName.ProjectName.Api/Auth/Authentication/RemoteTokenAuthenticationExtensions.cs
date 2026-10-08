@@ -1,6 +1,8 @@
 #if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api.Auth.RequestContext;
 using CompanyName.ProjectName.Api.Options;
 #if (ResourceBrowserSession)
+using CompanyName.ProjectName.Api.Auth.Sessions;
 using CompanyName.ProjectName.Application.Shared;
 #endif
 using Leistd.ServiceClient.Abstractions;
@@ -12,7 +14,7 @@ using Microsoft.Extensions.Options;
 using OpenIddict.Validation;
 using OpenIddict.Validation.AspNetCore;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authentication;
 
 /// <summary>资源服务的认证：远端签发方的 Bearer 校验，以及（带浏览器会话时）服务端 OIDC 会话。</summary>
 internal static class RemoteTokenAuthenticationExtensions

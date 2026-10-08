@@ -1,5 +1,5 @@
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.OpenIddict;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;

@@ -1,4 +1,6 @@
+using CompanyName.ProjectName.Api.Auth.Authentication;
 #if (SpaFrontend)
+using CompanyName.ProjectName.Api.Auth.Sessions;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Infrastructure;

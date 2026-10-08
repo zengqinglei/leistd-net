@@ -6,7 +6,7 @@ using OpenIddict.Abstractions;
 using OpenIddict.Server;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 /// <summary>单跳访问令牌交换按资源归属验证调用者，其余授权方检查交给官方处理器。</summary>
 internal sealed class ResourceOwnerAuthorizedPartyHandler(IOptions<OAuthOptions> options)

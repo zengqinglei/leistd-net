@@ -1,5 +1,5 @@
 // 授权结果处理器在所有服务形态下都存在（被拒的写端点要留痕），因此本 using 无条件
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Authorization;
 #if (!IncludeMultiTenancy)
 using CompanyName.ProjectName.Api.Middlewares;
 #endif

@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 #if (RemoteTokenAuth)
 using Leistd.Authorization.Definitions;
 using CompanyName.ProjectName.Api;
-using CompanyName.ProjectName.Api.Auth;
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using Leistd.Security.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;

@@ -1,4 +1,4 @@
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authorization;
 
 /// <summary>与权限无关、只描述主体形态的授权策略名。</summary>
 /// <remarks>

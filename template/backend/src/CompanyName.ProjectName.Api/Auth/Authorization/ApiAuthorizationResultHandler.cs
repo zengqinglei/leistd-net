@@ -2,7 +2,7 @@ using Leistd.OperationRecords.AspNetCore.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Authorization;
 
 /// <summary>授权结果里本应用专有的处置：<b>被拒的写操作补一条失败的操作记录</b>。其余一切按默认处理。</summary>
 /// <remarks>

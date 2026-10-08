@@ -43,13 +43,13 @@ using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 #if (IncludeRealTime)
-using CompanyName.ProjectName.Application.RealTime;
+using CompanyName.ProjectName.Application.RealTime.Provider;
 using CompanyName.ProjectName.Application.Roles.EventHandlers;
 using CompanyName.ProjectName.Application.Roles.Events;
 using Leistd.RealTime.Subscriptions;
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
-using CompanyName.ProjectName.Application.Tenants;
+using CompanyName.ProjectName.Application.Tenants.Provider;
 #if (Impersonation)
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 #endif

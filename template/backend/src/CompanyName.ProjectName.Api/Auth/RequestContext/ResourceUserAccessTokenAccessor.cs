@@ -6,7 +6,7 @@ using Leistd.ServiceClient.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using OpenIddict.Validation.AspNetCore;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.RequestContext;
 
 #if (ResourceBrowserSession)
 /// <summary>在请求期从已验证 Bearer 或服务端会话票据读取用户访问令牌。</summary>

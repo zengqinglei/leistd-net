@@ -6,7 +6,7 @@ using CompanyName.ProjectName.Application.Auth.SignIn;
 using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.Sessions;
 
 /// <summary>下发本地会话 Cookie：账号密码登录、第二步验证与外部登录共用同一条签发路径。</summary>
 /// <remarks>

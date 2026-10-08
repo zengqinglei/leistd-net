@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 
-namespace CompanyName.ProjectName.Api.Auth;
+namespace CompanyName.ProjectName.Api.Auth.OpenIddict;
 
 /// <summary>协议端点与 SPA 交互页之间往返的受保护凭据：重新认证已完成的证明、退出确认的绑定上下文。</summary>
 /// <remarks>
