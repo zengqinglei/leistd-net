@@ -46,6 +46,7 @@ using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 #endif
 #if (LocalIdentity)
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
+using Microsoft.AspNetCore.Identity;
 #endif
 
 #if (Email)
@@ -124,11 +125,15 @@ public static class DependencyInjection
         }
 
 #if (LocalIdentity)
-        services.AddOptions<PasswordHashOptions>()
-            .Bind(configuration.GetSection(PasswordHashOptions.SectionName))
-            .Validate(options => options.IterationCount > 0, $"{PasswordHashOptions.SectionName}:IterationCount must be greater than 0.")
+        services.AddOptions<PasswordHasherOptions>()
+            .Configure(options => options.IterationCount = 220_000)
+            .Bind(configuration.GetSection("PasswordHash"))
+            .Validate(options => options.IterationCount > 0, "PasswordHash:IterationCount must be greater than 0.")
+            .Validate(options => options.CompatibilityMode == PasswordHasherCompatibilityMode.IdentityV3,
+                "PasswordHash:CompatibilityMode must be IdentityV3.")
             .ValidateOnStart();
-        services.TryAddTransient<IPasswordHasher, PasswordHasher>();
+        services.TryAddTransient<IPasswordHasher<object>, PasswordHasher<object>>();
+        services.TryAddTransient<IPasswordHasher, IdentityPasswordHasher>();
 #endif
 #if (Email)
         // 验证码摘要与口令哈希具有不同的密钥和成本契约。

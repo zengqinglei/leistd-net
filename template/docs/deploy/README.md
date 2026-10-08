@@ -11,7 +11,7 @@
 <!--#endif-->
 <!--#if (LocalIdentity)-->
 
-口令哈希默认 PBKDF2-HMAC-SHA256 600,000 次迭代（OWASP 现行建议）。硬件基准表明可以承受更高成本时用 `PasswordHash__IterationCount` 调高；新值只作用于此后设置或修改的口令，存量密文按自身记录的迭代数校验，照常可用。
+口令哈希使用 Identity 原生 IdentityV3 格式（PBKDF2-HMAC-SHA512），模板默认迭代 220,000 次。通过 `PasswordHash__IterationCount` 按部署硬件调整成本；提高成本后，存量口令在正确且允许登录时自动重新哈希，保留安全版本与已有会话。算法与格式由原生实现维护，参数政策见 [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2)。
 <!--#endif-->
 <!--#if (OpenIddictServer)-->
 

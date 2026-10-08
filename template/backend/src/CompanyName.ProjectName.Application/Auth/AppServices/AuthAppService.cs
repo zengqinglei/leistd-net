@@ -128,6 +128,11 @@ internal sealed class AuthAppService(
 
         var user = result.User!;
         var outcome = await sessionIssuer.StartAsync(user, cancellationToken: cancellationToken);
+        if (result.PasswordRehashNeeded)
+        {
+            userDomainService.RehashPassword(user, input.Password);
+            await userRepository.UpdateAsync(user, cancellationToken);
+        }
 
         // 还要第二步时先不记成功：密码对了不等于登录成功，第二步通过时再记（见 CompleteTwoFactorLoginAsync）
         if (outcome.Principal is not null)

@@ -366,6 +366,7 @@
             "backend/src/CompanyName.ProjectName.Domain/Shared/Security/PasswordHash/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Shared/Security/PasswordHash/**",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/PasswordHashingTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/PasswordRehashTests.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authorization/AllowDuringTwoFactorSetupAttribute.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/LocalSessionAuthenticationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Sessions/SessionCookieIssuer.cs",

@@ -254,6 +254,13 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         RotateSecurityStamp();
     }
 
+    /// <summary>升级已验证口令的哈希参数，保留安全版本。</summary>
+    public void RehashPassword(string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(passwordHash);
+        PasswordHash = passwordHash;
+    }
+
     /// <summary>换一个新的安全版本，使此前签发、尚未完成的登录挑战作废。</summary>
     /// <remarks>改口令、启用或停用两步验证时自动调用；其余凭据变化（解绑外部登录）由调用方显式调用。</remarks>
     public void RotateSecurityStamp()

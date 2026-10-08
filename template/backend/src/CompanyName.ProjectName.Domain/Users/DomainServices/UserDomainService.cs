@@ -478,7 +478,15 @@ public class UserDomainService(
     public bool VerifyCurrentPassword(User user, string password)
     {
         ArgumentNullException.ThrowIfNull(user);
-        return user.PasswordHash is not null && passwordHasher.VerifyPassword(user.PasswordHash, password);
+        return user.PasswordHash is not null &&
+            passwordHasher.VerifyPassword(user.PasswordHash, password) != PasswordVerificationStatus.Failed;
+    }
+
+    /// <summary>为已经验证的当前口令升级哈希，不重新应用新口令策略。</summary>
+    public void RehashPassword(User user, string password)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        user.RehashPassword(passwordHasher.HashPassword(password));
     }
 
     /// <summary>校验用户名密码，只给判定。</summary>
@@ -512,9 +520,11 @@ public class UserDomainService(
             return new CredentialValidationResult(CredentialValidationStatus.LockedOut, user);
         }
 
-        if (passwordHasher.VerifyPassword(user.PasswordHash, password))
+        var verification = passwordHasher.VerifyPassword(user.PasswordHash, password);
+        if (verification != PasswordVerificationStatus.Failed)
         {
-            return new CredentialValidationResult(CredentialValidationStatus.Succeeded, user);
+            return new CredentialValidationResult(CredentialValidationStatus.Succeeded, user,
+                PasswordRehashNeeded: verification == PasswordVerificationStatus.RehashNeeded);
         }
 
         return new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user, Countable: true);
