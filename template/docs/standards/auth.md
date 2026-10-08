@@ -73,7 +73,7 @@
 
 `SessionCookie:SameSite` 只控制应用会话 Cookie；默认 Lax，放宽到 None 也不会让跨源浏览器认证导航成立。OAuth correlation 与 OIDC nonce Cookie 保持官方 SameSite=None、Secure=Always，HTTPS 回调不可省略。开发回调在 `/api/**` 下，由开发代理转发。
 
-浏览器写 API 请求与实时 Hub（`/hubs/**`，含 WebSocket 握手）检查 Origin，接受本源及显式 `Cors:AllowedOrigins`。带 Authorization 头的 API 写请求不依赖 Cookie，跳过来源检查；CORS 不约束 WebSocket，Hub 的来源检查不因带该头而跳过。没有 Origin 时看 `Sec-Fetch-Site`：值为 `cross-site` 或 `same-site` 的拒绝，`same-origin`、`none` 放行；两个头都没有的非浏览器调用保持支持。API 写请求不使用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护；唯一用到官方 antiforgery 的是 Identity 的退出确认表单（见下文）。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
+浏览器写 API 请求与实时 Hub（`/hubs/**`，含 WebSocket 握手）检查 Origin，接受本源及显式 `Cors:AllowedOrigins`。使用 `Leistd.Security.AspNetCore` 的显式来源防护，宿主选择 `/api` 写路径与 `/hubs` 全方法路径。Authorization 或成功 Bearer 均不豁免；跨源浏览器 Bearer 写请求也须来自允许携带凭据的 CORS 源，否则403。CORS 不约束 WebSocket，Hub 独立检查来源。没有 Origin 时看 `Sec-Fetch-Site`：单值 `same-origin`、`none` 放行，其余值或多值拒绝；两个头都没有的非浏览器调用保持支持。API 写请求不使用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护；唯一用到官方 antiforgery 的是 Identity 的退出确认表单（见下文）。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
 
 <!--#if (LocalIdentity)-->
 ### 本地账号
@@ -119,7 +119,7 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 
 前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。授权与退出请求都以官方 FormPost（`AuthenticationMethod = FormPost`）发往 Identity：响应是一张自动提交的表单，参数不进地址栏。`POST /api/v1/auth/logout` 先删除本服务端票据（旧 Cookie 立即失效），再以表单携带 `id_token_hint` 发起退出，Identity 据其中的会话标识免确认退出。表单依赖一段内联脚本自动提交（禁用脚本时显示提交按钮）；宿主若加内容安全策略，要放行这段脚本或接受手动提交。
 
-有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明：会话主体在登录（登录回调的 `OnTokenValidated`）与续期时都由同一处按访问令牌的验证结果构建：保留验证结果中的声明（签发方放进访问令牌的 `acr`、`amr`、`auth_time` 也在其中），只出现在 id_token 里的声明不进会话。这个 OIDC 处理器不做声明映射，默认 `ClaimActions` 已清空；不要往里加映射，需要额外声明时由签发方放进访问令牌。需要重新认证时，用官方 `OpenIdConnectChallengeProperties` 的 `MaxAge` 与 `Prompt` 发起挑战；它们只要求 Identity 重新验证身份，不是多因素或升级认证——那需要 Identity 把 `amr`/`acr` 签发进访问令牌，模板没有内置。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token；失败注销会话。访问令牌保存在服务器，模板自己的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
+有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明：会话主体在登录（登录回调的 `OnTokenValidated`）与续期时都由同一处按访问令牌的验证结果构建：保留验证结果中的声明（签发方放进访问令牌的 `acr`、`amr`、`auth_time` 也在其中），只出现在 id_token 里的声明不进会话。这个 OIDC 处理器不做声明映射，默认 `ClaimActions` 已清空；不要往里加映射，需要额外声明时由签发方放进访问令牌。需要重新认证时，用官方 `OpenIdConnectChallengeProperties` 的 `MaxAge` 与 `Prompt` 发起挑战；它们只要求 Identity 重新验证身份，不是多因素或升级认证——那需要 Identity 把 `amr`/`acr` 签发进访问令牌，模板没有内置。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token；失败注销会话。访问令牌保存在服务器，框架提供的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
 
 访问令牌按只签名的 JWT 本地验签（issuer、audience、签名、有效期），本服务不持有解密凭据；签发方若改为加密令牌或 introspection，这里要同步配置。
 

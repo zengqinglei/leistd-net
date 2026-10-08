@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using CompanyName.ProjectName.Api.Middlewares;
+using Leistd.Security.AspNetCore.BrowserOrigins;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,10 +62,8 @@ public sealed class BrowserOriginTests(BrowserOriginTests.OriginHost origin) : I
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    // 带 Authorization 头的 API 写请求不靠浏览器自动附带的 Cookie 取得身份，跨站页面无法借用受害者的凭据，
-    // 因此跳过来源检查，交给认证判定；同一来源去掉该头仍被拒，证明放行来自这个头
     [Fact]
-    public async Task An_API_write_carrying_an_authorization_header_skips_the_origin_check()
+    public async Task A_forged_authorization_header_does_not_bypass_the_origin_check()
     {
         static void CrossSite(HttpRequestMessage request)
         {
@@ -83,18 +81,21 @@ public sealed class BrowserOriginTests(BrowserOriginTests.OriginHost origin) : I
             CrossSite(request);
             request.Headers.TryAddWithoutValidation("Authorization", "Bearer forged");
         });
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Empty(Warnings());
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEmpty(Warnings());
     }
 
 #if (LocalIdentity)
-    [Fact]
-    public async Task A_rejected_cross_site_write_has_no_side_effect()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_rejected_cross_site_write_has_no_side_effect(bool forgedBearer)
     {
         // 每例自己登录，会话互不影响；被拒的退出请求不能结束这个会话。
         using var session = await ProjectWebApplicationFactory.LoginAsync(origin.Host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
         request.Headers.Add("Sec-Fetch-Site", "cross-site");
+        if (forgedBearer) request.Headers.TryAddWithoutValidation("Authorization", "Bearer forged");
         using var response = await session.Client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);

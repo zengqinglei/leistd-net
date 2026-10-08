@@ -1,4 +1,6 @@
 using Leistd.Security.AspNetCore.Claims;
+using Leistd.Security.AspNetCore.BrowserOrigins;
+using Microsoft.Extensions.Options;
 using Leistd.Security.AspNetCore.RequestContext;
 using Leistd.Security.AspNetCore.Cookies;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -73,6 +75,21 @@ public static class DependencyInjection
             services.AddOptions<CookieAuthenticationOptions>(authenticationScheme)
                 .Configure<ITicketStore>((cookie, store) => cookie.SessionStore = store)
                 .PostConfigure(DistributedTicketStore.ConfigureCookie);
+        return services;
+    }
+
+    /// <summary>注册显式路径的来源防护参数；宿主提供原生 CORS，按需调用 UseBrowserOriginProtection。</summary>
+    /// <remarks>先绑定后应用委托，启动验证；至少选择一个保护路径，不随 AddSecurity 自动开启。</remarks>
+    public static IServiceCollection AddBrowserOriginProtection(this IServiceCollection services,
+        Action<BrowserOriginProtectionOptions>? configure = null,
+        string configSectionPath = BrowserOriginProtectionOptions.SectionName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+        services.TryAddSingleton<BrowserOriginRegistration>();
+        var options = services.AddOptions<BrowserOriginProtectionOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null) options.Configure(configure);
+        services.AddSingleton<IValidateOptions<BrowserOriginProtectionOptions>>(new BrowserOriginProtectionOptionsValidator(configSectionPath));
+        options.ValidateOnStart();
         return services;
     }
 

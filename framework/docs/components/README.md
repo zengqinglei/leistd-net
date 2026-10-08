@@ -29,7 +29,7 @@
 | 统一 API 响应 | 统一 {code, message, data} 响应模型与 ASP.NET Core 自动包装过滤器 | `Leistd.Response.Core`、`Leistd.Response.AspNetCore` | [`response`](./response.md) |
 | 设置 | 运行期可改的设置：业务声明定义与值域，框架按 用户 → 租户 → 代码默认值 回落解析并持久化；自带设置页端点，宿主级设置可经配置源覆盖部署配置 | `Leistd.Settings.Core`、`Leistd.Settings.EntityFrameworkCore`、`Leistd.Settings.AspNetCore`、`Leistd.Settings.Hosting` | [`settings`](./settings.md) |
 | 服务间调用客户端 | 服务互调标准管道：Refit 与手写强类型客户端注册、链路标识透传、client credentials 与 Token Exchange 认证（令牌缓存、401 后重新获取）、响应读取与远端错误还原 | `Leistd.ServiceClient.Core`、`Leistd.ServiceClient.Refit`、`Leistd.ServiceClient.OAuth`、`Leistd.ServiceClient.AspNetCore` | [`service-client`](./service-client.md) |
-| 身份与会话安全 | 主体访问、请求信息、Cookie 票据、一次码和可选 OpenIddict 集成。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore`、`Leistd.Security.OneTimeCodes`、`Leistd.Security.OpenIddict.Validation`、`Leistd.Security.OpenIddict.Server` | [`security`](./security.md) |
+| 身份与会话安全 | 主体访问、请求信息、Cookie 票据、浏览器来源防护、一次码和可选 OpenIddict 集成。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore`、`Leistd.Security.OneTimeCodes`、`Leistd.Security.OpenIddict.Validation`、`Leistd.Security.OpenIddict.Server` | [`security`](./security.md) |
 | 关联标识 | 业务关联标识：默认等于 `Activity` 的 TraceId，可由调用方或入口显式指定；写入日志作用域，在 ASP.NET Core 入站、HttpClient 出站与后台任务之间传递。 | `Leistd.Tracing.Core`、`Leistd.Tracing.AspNetCore`、`Leistd.Tracing.HttpClient` | [`tracing`](./tracing.md) |
 | 工作单元与事务 | 用 [UnitOfWork] 特性与 AOP 拦截器声明式管理数据库事务边界，并按提交阶段编排领域事件发布。 | `Leistd.UnitOfWork.Core`、`Leistd.UnitOfWork.EntityFrameworkCore` | [`unit-of-work`](./unit-of-work.md) |
 

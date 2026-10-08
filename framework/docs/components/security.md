@@ -1,6 +1,6 @@
 # 身份与会话安全
 
-提供主体访问、请求信息、Cookie 票据、一次码和可选 OpenIddict 集成。
+提供主体访问、请求信息、Cookie 票据、浏览器来源防护、一次码和可选 OpenIddict 集成。
 
 ## 何时使用
 
@@ -11,6 +11,7 @@
 | 直接访问原始 `ClaimsPrincipal`，或在后台任务/测试中临时切换身份 | 注入 `ICurrentPrincipalAccessor` |
 | 在领域/应用层使用平台中立的身份访问 | 引用 `Leistd.Security.Core` |
 | 身份验证器、恢复码或短期验证码摘要 | 引用可选 `Leistd.Security.OneTimeCodes`，无 Web、Identity 或 DDD 依赖 |
+| Cookie 浏览器 API 写请求和 WebSocket 来源检查 | 显式注册并启用浏览器来源防护 |
 | OpenIddict 远端公钥轮换 | 引用 `Leistd.Security.OpenIddict.Validation` |
 | OpenIddict 交换令牌期限或存储维护 | 引用 `Leistd.Security.OpenIddict.Server` |
 | ASP.NET Core 宿主，需要从 `HttpContext` 取真实身份 | 引用 `Leistd.Security.AspNetCore` 并注册 |
@@ -104,6 +105,44 @@ builder.Services.AddVerificationCodeDigest();
 默认 `IVerificationCodeDigest` 为单例 HMAC-SHA256 实现，可由宿主预先注册替换。`VerificationCodeOptions` 绑定 `Leistd:Security:VerificationCodes`，也可指定 `configSectionPath`；先绑定再应用配置委托。`Key` 是 Base64 格式、至少 32 字节的稳定服务端密钥，各副本和重启使用同一值。非空无效配置启动即失败，消息指明传入配置节。
 
 缺失密钥允许解析服务，默认实现使用时抛出配置异常；宿主决定功能何时启用并补充“启用时必需密钥”的启动或业务设置验证。组件不生成回落密钥，不读取业务功能开关。
+
+### 浏览器来源防护
+
+`Leistd.Security.AspNetCore` 提供可选来源门禁，不随 `AddSecurity()` 开启。宿主提供原生 CORS，选择保护路径：
+
+```csharp
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+    policy.WithOrigins("https://frontend.example.com").AllowCredentials()));
+builder.Services.AddBrowserOriginProtection(options =>
+{
+    options.WritePaths = ["/api"];
+    options.AllMethodPaths = ["/hubs"];
+});
+```
+
+在受信转发头、Routing 与 CORS 之后启用；原生认证/授权和错误响应仍由宿主负责：
+
+```csharp
+app.UseRouting();
+app.UseCors();
+app.UseBrowserOriginProtection();
+```
+
+先调用 `AddBrowserOriginProtection()`；缺少注册时 `UseBrowserOriginProtection()` 抛配置异常。该入口以当前 `IApplicationBuilder.Properties` 标记防止重复挂载，重复调用返回同一构建器。放在 Routing 之前无法读取端点 CORS 元数据，宿主须保证上述顺序。
+
+`BrowserOriginProtectionOptions` 默认绑定 `Leistd:Security:BrowserOrigins`，支持配置委托及 `configSectionPath`；先绑定后应用委托，启动验证：
+
+| 属性 | 默认 | 契约 |
+| --- | --- | --- |
+| WritePaths | 空数组 | 非安全方法的路径前缀；GET/HEAD/OPTIONS/TRACE跳过 |
+| AllMethodPaths | 空数组 | 所有方法的路径前缀，包括 WebSocket 握手 |
+| CorsPolicyName | null | 无端点策略时使用的原生策略名；null使用默认策略 |
+
+至少选择一个路径；前缀以 `/` 开头，除 `/` 本身外不能以 `/` 结尾，无空白、查询、fragment 或反斜线。按原生路径段匹配，`/api` 不匹配 `/api-other`；`/` 匹配所有路径。
+
+单值 http(s) Origin 只接受本源或原生 CORS 的显式、允许凭据、非通配许可。`Origin: null`、多值和非法来源拒绝；端点禁用 CORS、内联策略或命名策略优先于默认。无 Origin 时仅 `Sec-Fetch-Site: same-origin/none` 放行，其余值或多值拒绝；两头均缺的非浏览器客户端放行。Origin 拒绝不能被 Fetch Metadata 覆盖。
+
+Authorization 或成功 Bearer 均不豁免。跨源浏览器 Bearer 写请求也须得到允许凭据的 CORS 许可，否则403；模板部署通过 `Cors:AllowedOrigins` 明确允许源。Hub 选择 `AllMethodPaths`，CORS 本身不限制 WebSocket。拒绝直接返回403，由宿主状态码管道补充错误正文。此入口不发行防伪令牌，也不替代原生认证或表单 antiforgery；代理信任、外部源和部署由宿主确定。[微软 WebSocket 指南](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/websockets?view=aspnetcore-10.0#websocket-origin-restriction)。
 
 ### OpenIddict 集成
 

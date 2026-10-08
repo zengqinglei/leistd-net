@@ -229,7 +229,7 @@ try
     app.UseAuthentication();
 #if (SpaFrontend)
     // 浏览器会话靠 Cookie：跨源写请求与 Hub 握手只接受本源与登记的前端源
-    app.UseMiddleware<BrowserOriginMiddleware>();
+    app.UseBrowserOriginProtection();
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
     // 租户失效时注销 Cookie，避免会话困在不可用租户中。
