@@ -7,7 +7,7 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Infrastructure.Persistence.Repositories;
 using Leistd.Auditing.Abstractions;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy.Context;
 #if (IncludeMultiTenancy)

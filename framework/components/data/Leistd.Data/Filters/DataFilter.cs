@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Leistd.Disposables;
 using System.Collections.Concurrent;
 
-namespace Leistd.Ddd.Domain.DataFilters;
+namespace Leistd.Data.Filters;
 
 /// <summary>按标记类型解析并控制数据过滤器。</summary>
 public class DataFilter(IServiceProvider serviceProvider) : IDataFilter

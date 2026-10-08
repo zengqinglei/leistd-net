@@ -1,4 +1,4 @@
-namespace Leistd.Ddd.Domain.DataFilters;
+namespace Leistd.Data.Filters;
 
 /// <summary>控制指定类型的数据过滤器状态。</summary>
 /// <typeparam name="TFilter">过滤器标记类型。</typeparam>

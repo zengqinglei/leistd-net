@@ -95,7 +95,7 @@ public class UserDomainService(IRepository<User, Guid> userRepository)
 
 ### 3.5 应用服务
 
-接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经 `IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。同模块应用服务不互相调用，共用逻辑提为协作类（如 `ICaptchaVerifier`）或下沉领域层。
+接口 `I*AppService : IAppService`，实现 `*AppService : BaseAppService, I*AppService`。查询用仓储的 `GetQueryableAsync` 组合条件，经数据组件的 `Leistd.Data.Querying.IQueryableAsyncExecuter` 执行；DTO 投影经 `IObjectMapper`。同模块应用服务不互相调用，共用逻辑提为协作类（如 `ICaptchaVerifier`）或下沉领域层。
 
 ```csharp
 public class UserAppService(

@@ -1,4 +1,4 @@
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Infrastructure.Persistence.Conventions;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;

@@ -14,7 +14,7 @@
 | 资源实例授权 | 对已加载的单个资源实例裁决：走官方授权管线，领域规则处理器与资源 ACL 合并，拒绝优先、默认拒绝；并提供把 ACL 合并进集合查询的入口 | `Leistd.Authorization.Resource.Core`、`Leistd.Authorization.Resource.AspNetCore`、`Leistd.Authorization.Resource.EntityFrameworkCore` | [`authorization-resource`](./authorization-resource.md) |
 | 数据范围 | 把"能看到哪些候选数据"翻译成可由数据库执行的查询谓词，多个范围取并集；不内置组织模型 | `Leistd.Authorization.DataScope.Core` | [`authorization-data-scope`](./authorization-data-scope.md) |
 | 核心原语 | 时钟抽象（IClock/UtcClockProvider）、环境上下文契约、释放动作与文本脱敏 | `Leistd.Core` | [`core`](./core.md) |
-| 数据访问共享契约 | 零依赖叶子包：连接解析与归属（IConnectionStringResolver / [ConnectionStringName] / IConnectionAffinityProvider），以及存储、用例与端点共用的分页请求与结果（PageRequest / PagedResult） | `Leistd.Data` | [`data`](./data.md) |
+| 数据访问共享契约 | 连接解析、连接归属、分页、异步流过滤状态及 provider 中立的查询执行契约；EF 实现为可选包 | `Leistd.Data`、`Leistd.Data.EntityFrameworkCore` | [`data`](./data.md) |
 | 服务注册回调与拦截器织入 | DI 包提供服务注册回调；DynamicProxy 扩展包在此基础上按约定织入 AOP 拦截器。 | `Leistd.DependencyInjection`、`Leistd.DependencyInjection.DynamicProxy` | [`dependency-injection`](./dependency-injection.md) |
 | 邮件发送 | 统一的 IEmailSender 抽象与 SMTP 实现：发送失败抛异常，不需要投递的环境显式注册空发送器 | `Leistd.Email.Core`、`Leistd.Email.Smtp` | [`email`](./email.md) |
 | 事件总线 | 进程内发布/订阅事件总线，发布方与 IEventHandler 处理器解耦，由 DI 同步消费 | `Leistd.EventBus.Core`、`Leistd.EventBus.Local` | [`event-bus`](./event-bus.md) |

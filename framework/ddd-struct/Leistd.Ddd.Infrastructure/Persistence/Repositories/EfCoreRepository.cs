@@ -32,7 +32,7 @@ public class EfCoreRepository<TDbContext, TEntity>(
         return await DbContextProvider.GetDbContextAsync(cancellationToken);
     }
 
-    /// <summary>取本实体的 <see cref="DbSet{TEntity}"/>。派生类可覆盖以追加 <c>Include</c> 等默认行为。</summary>
+    /// <summary>取本实体可写的 <see cref="DbSet{TEntity}"/>。</summary>
     protected virtual async Task<DbSet<TEntity>> GetDbSetAsync(CancellationToken cancellationToken = default)
     {
         var dbContext = await GetDbContextAsync(cancellationToken);
@@ -40,6 +40,7 @@ public class EfCoreRepository<TDbContext, TEntity>(
     }
 
     /// <inheritdoc />
+    /// <remarks>所有读取均经此入口。覆写须保留原实体身份及跟踪，可追加筛选、关联加载或拆分查询，不得投影或禁用跟踪。</remarks>
     public virtual async Task<IQueryable<TEntity>> GetQueryableAsync(CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync(cancellationToken);
@@ -49,43 +50,43 @@ public class EfCoreRepository<TDbContext, TEntity>(
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetFirstAsync(Expression<Func<TEntity, bool>> predicate, Func<IQueryable<TEntity>, IOrderedQueryable<TEntity>>? orderBy = null, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
-        var query = dbSet.Where(predicate);
+        var source = await GetQueryableAsync(cancellationToken);
+        var query = source.Where(predicate);
         return await (orderBy != null ? orderBy(query) : query).FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public virtual async Task<IEnumerable<TEntity>> GetListAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
+        var source = await GetQueryableAsync(cancellationToken);
         return predicate == null
-            ? await dbSet.ToListAsync(cancellationToken)
-            : await dbSet.Where(predicate).ToListAsync(cancellationToken);
+            ? await source.ToListAsync(cancellationToken)
+            : await source.Where(predicate).ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetOneAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
-        return await dbSet.SingleOrDefaultAsync(predicate, cancellationToken);
+        var source = await GetQueryableAsync(cancellationToken);
+        return await source.SingleOrDefaultAsync(predicate, cancellationToken);
     }
 
     /// <inheritdoc />
     public virtual async Task<long> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
+        var source = await GetQueryableAsync(cancellationToken);
         return predicate == null
-            ? await dbSet.LongCountAsync(cancellationToken)
-            : await dbSet.LongCountAsync(predicate, cancellationToken);
+            ? await source.LongCountAsync(cancellationToken)
+            : await source.LongCountAsync(predicate, cancellationToken);
     }
 
     /// <inheritdoc />
     public virtual async Task<bool> AnyAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
+        var source = await GetQueryableAsync(cancellationToken);
         return predicate == null
-            ? await dbSet.AnyAsync(cancellationToken)
-            : await dbSet.AnyAsync(predicate, cancellationToken);
+            ? await source.AnyAsync(cancellationToken)
+            : await source.AnyAsync(predicate, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -182,9 +183,9 @@ public class EfCoreRepository<TDbContext, TEntity, TKey>(
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync(cancellationToken);
+        var query = await GetQueryableAsync(cancellationToken);
         // 走 LINQ 查询而非 FindAsync：FindAsync 可能返回已跟踪实体，绕过全局查询过滤器
-        return await dbSet.FirstOrDefaultAsync(e => e.Id.Equals(id), cancellationToken);
+        return await query.FirstOrDefaultAsync(e => e.Id.Equals(id), cancellationToken);
     }
 
     /// <inheritdoc />

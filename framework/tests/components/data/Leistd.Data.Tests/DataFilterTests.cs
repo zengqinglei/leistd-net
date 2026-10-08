@@ -1,8 +1,8 @@
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Leistd.Ddd.Domain.Tests;
+namespace Leistd.Data.Tests;
 
 /// <summary>数据过滤器的嵌套开关：软删除与租户隔离都建立在它之上，还原错一次就是越权读。</summary>
 public class DataFilterTests
@@ -12,12 +12,32 @@ public class DataFilterTests
 
     private static IDataFilter NewFilter()
     {
-        var provider = new ServiceCollection()
-            .AddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>))
-            .BuildServiceProvider();
-
-        return new DataFilter(provider);
+        var provider = new ServiceCollection().AddDataFilters().BuildServiceProvider();
+        return provider.GetRequiredService<IDataFilter>();
     }
+
+    [Fact]
+    public void Standalone_registration_is_idempotent_and_preserves_host_filters()
+    {
+        var services = new ServiceCollection().AddDataFilters().AddDataFilters();
+        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services,
+            descriptor => descriptor.ServiceType == typeof(IDataFilter)).Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services,
+            descriptor => descriptor.ServiceType == typeof(IDataFilter<>)).Lifetime);
+        using var defaults = services.BuildServiceProvider();
+        Assert.True(defaults.GetRequiredService<IDataFilter>().IsEnabled<ITenantMarker>());
+
+        var host = NewFilter();
+        var custom = new ServiceCollection();
+        custom.AddSingleton(host);
+        custom.AddSingleton(typeof(IDataFilter<>), typeof(HostDataFilter<>));
+        custom.AddDataFilters().AddDataFilters();
+        using var provider = custom.BuildServiceProvider();
+        Assert.Same(host, provider.GetRequiredService<IDataFilter>());
+        Assert.IsType<HostDataFilter<ITenantMarker>>(provider.GetRequiredService<IDataFilter<ITenantMarker>>());
+    }
+
+    private sealed class HostDataFilter<TFilter> : DataFilter<TFilter> where TFilter : class;
 
     // 默认启用：过滤器的存在意义就是默认拦住，需要放行时显式开口子。
     [Fact]

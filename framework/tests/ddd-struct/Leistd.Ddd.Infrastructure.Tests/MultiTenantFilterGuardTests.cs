@@ -3,7 +3,7 @@ using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.DependencyInjection.Registration;
 using Leistd.EventBus.Local;

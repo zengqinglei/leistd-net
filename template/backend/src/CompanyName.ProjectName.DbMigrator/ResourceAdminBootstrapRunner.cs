@@ -10,7 +10,7 @@ using Leistd.Auditing.Abstractions;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Repositories;
 #if (IncludeMultiTenancy)
 using Leistd.Data.Connections;

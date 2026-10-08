@@ -13,7 +13,7 @@ using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Auditing.Abstractions;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.ExceptionHandling;

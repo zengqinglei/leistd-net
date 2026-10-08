@@ -1,7 +1,7 @@
-using Leistd.Ddd.Domain.Repositories;
+using Leistd.Data.Querying;
 using Microsoft.EntityFrameworkCore;
 
-namespace Leistd.Ddd.Infrastructure.Persistence.Repositories;
+namespace Leistd.Data.EntityFrameworkCore.Querying;
 
 /// <summary>使用 EF Core 执行异步查询。</summary>
 public class EfCoreQueryableAsyncExecuter : IQueryableAsyncExecuter

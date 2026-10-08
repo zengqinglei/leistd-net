@@ -201,12 +201,16 @@ public class AppDbContext(
 
 | 包 | 关键类型 |
 | --- | --- |
-| `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>`、`IDataFilter` |
+| `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>` |
 | `Leistd.Ddd.Application.Contracts` | `AppServices.IAppService`、`EntityDto<TKey>`、`PageRequest`、`PagedResult<T>` |
 | `Leistd.Ddd.Application` | `AppServices.BaseAppService`、`MapPagedResult<TSource, TDestination>` |
 | `Leistd.Ddd.Infrastructure` | `AddDddInfrastructure`、`AddDddDbContext`、`BaseDbContext`、`DddEntityConvention`、`EfCoreRepository` |
 
-`IRepository<TEntity>` 提供查询、计数、存在性与批量写入；带主键的接口另提供按 Id 读取和删除。`IQueryableAsyncExecuter` 使 Domain 可异步执行 `IQueryable`，而不直接依赖 EF Core。
+`IRepository<TEntity>` 提供查询、计数、存在性与批量写入；带主键的接口另提供按 Id 读取和删除。数据过滤端口与异步查询端口由[数据组件](../components/data.md)提供：`Leistd.Data.Filters.IDataFilter`、`Leistd.Data.Querying.IQueryableAsyncExecuter`。DDD 基础设施组合其注册与可选 EF 执行器。
+
+EF 仓储的所有读方法均经 `GetQueryableAsync`：覆写可追加 Where、Include 或拆分查询，必须保留原实体身份和跟踪，不投影或使用 AsNoTracking。Count/Any 使用相同筛选，由 provider 执行标量而不物化关联。普通读取不自动加载业务关联，具体仓储按需要显式追加。
+
+写入使用原始 DbSet。按 Id 删除先经读入口查找，受自定义读筛选影响；按条件或主键集合批量删除使用原始集合，仅受全局过滤器影响。
 
 审计实体层次为 `CreationAuditedEntity<TKey>` → `ModificationAuditedEntity<TKey>` → `DeletionAuditedEntity<TKey>`；`FullAuditedEntity<TKey>` 聚合创建、修改与删除审计契约。
 

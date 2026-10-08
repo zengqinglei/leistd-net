@@ -1,10 +1,10 @@
-using Leistd.Ddd.Domain.Repositories;
-using Leistd.Ddd.Infrastructure.Persistence.Repositories;
+using Leistd.Data.EntityFrameworkCore.Querying;
+using Leistd.Data.Querying;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace Leistd.Ddd.Infrastructure.Tests;
+namespace Leistd.Data.EntityFrameworkCore.Tests;
 
 /// <summary>Domain 层拿到 <see cref="IQueryable{T}"/> 之后的异步执行入口。</summary>
 /// <remarks>

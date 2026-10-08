@@ -1,3 +1,4 @@
+using Leistd.Data.Querying;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Errors;

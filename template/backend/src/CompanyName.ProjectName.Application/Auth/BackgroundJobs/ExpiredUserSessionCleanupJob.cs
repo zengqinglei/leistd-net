@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Data.Connections;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.ConnectionStrings;

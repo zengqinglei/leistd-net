@@ -1,3 +1,4 @@
+using Leistd.Data.Querying;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
@@ -9,7 +10,7 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Auditing.Abstractions;
 using Leistd.Ddd.Application.AppServices;
-using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Data.Filters;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
