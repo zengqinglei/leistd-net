@@ -82,8 +82,11 @@ public class EmailChallengeStore(
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, rateLock.LockLost);
         var operationToken = lockScope.Token;
 
-        var isLimited = await distributedCache.GetStringAsync(rateKey, operationToken);
-        if (!string.IsNullOrEmpty(isLimited))
+        // 配额键的值是占位那次的挑战 Id；那次发送失败时另写一个按 Id 的失败标记，它的预留随之作废。
+        var reservation = await distributedCache.GetStringAsync(rateKey, operationToken);
+        if (!string.IsNullOrEmpty(reservation) &&
+            string.IsNullOrEmpty(await distributedCache.GetStringAsync(
+                GetFailedReservationCacheKey(scope, reservation), operationToken)))
         {
             throw new BusinessException(AuthErrorCodes.EmailCodeSendTooFrequent, "Verification codes are being sent too frequently. Please try again later.");
         }
@@ -101,12 +104,14 @@ public class EmailChallengeStore(
             RemainingAttempts = policy.EmailCodeMaxAttempts
         };
         var challengeKey = GetChallengeCacheKey(challengeId);
-
-        // Reserve the send slot before the external email call so concurrent requests cannot both send.
-        await distributedCache.SetStringAsync(rateKey, "1", new DistributedCacheEntryOptions
+        var reservationId = challengeId.ToString("N");
+        var sendInterval = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(policy.EmailCodeSendIntervalSeconds)
-        }, operationToken);
+        };
+
+        // 发信之前先占住发送配额：并发的两个请求不能都发出去。
+        await distributedCache.SetStringAsync(rateKey, reservationId, sendInterval, operationToken);
         try
         {
             await distributedCache.SetStringAsync(
@@ -114,6 +119,9 @@ public class EmailChallengeStore(
                 JsonSerializer.Serialize(challenge),
                 new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn },
                 operationToken);
+
+            // 锁只保护上面的预留与挑战：此刻已丢锁就不发；发送开始后丢锁不再中止它，只有请求取消能中止。
+            operationToken.ThrowIfCancellationRequested();
             await emailSender.SendAsync(
                 new EmailMessage
                 {
@@ -123,16 +131,18 @@ public class EmailChallengeStore(
                         : "Account Registration Verification Code",
                     Body = BuildEmailBody(code, policy.EmailCodeExpiryMinutes, purpose),
                 },
-                operationToken);
+                cancellationToken);
         }
         catch
         {
-            // A failed send must not strand either an unusable challenge or a rate-limit reservation.
+            // 发送失败既不留下收不到码的挑战，也不白占发送间隔。只作废本次预留、不删共享配额键：
+            // 锁失效后新的持有者可能已经改写了它，删掉就绕过了限频。
             try
             {
                 await Task.WhenAll(
                     distributedCache.RemoveAsync(challengeKey, CancellationToken.None),
-                    distributedCache.RemoveAsync(rateKey, CancellationToken.None));
+                    distributedCache.SetStringAsync(
+                        GetFailedReservationCacheKey(scope, reservationId), "1", sendInterval, CancellationToken.None));
             }
             catch (Exception cleanupException)
             {
@@ -144,6 +154,7 @@ public class EmailChallengeStore(
             throw;
         }
 
+        // 发送器正常返回即投递设施已接受：挑战与配额都保留，之后的取消或丢锁不再回滚。
         return new EmailVerificationChallengeOutputDto
         {
             ChallengeId = challengeId,
@@ -305,6 +316,9 @@ public class EmailChallengeStore(
 
     private static string GetRateCacheKey(string scope, string emailDigest)
         => $"{scope}:rate:{emailDigest}";
+
+    private static string GetFailedReservationCacheKey(string scope, string reservationId)
+        => $"{scope}:rate-failed:{reservationId}";
 
     private static string GetRateLockKey(string scope, string emailDigest)
         => $"{scope}:lock:rate:{emailDigest}";
