@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
+using Leistd.Security.OpenIddict.Server.Pruning;
 using OpenIddict.Core;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -318,7 +319,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var youngRevoked = await AuthorizationAsync(now.AddDays(-13), Statuses.Revoked, AuthorizationTypes.Permanent);
         var oldPermanent = await AuthorizationAsync(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent);
         var oldAdHoc = await AuthorizationAsync(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc);
-        var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
+        var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>().Single(job => job.Name == OpenIddictPruningJob.Name);
         Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
         var job = (IRecurringJob)scope.ServiceProvider.GetRequiredService(definition.JobType);
         var oldExpiredId = (await tokens.GetIdAsync(oldExpired))!;

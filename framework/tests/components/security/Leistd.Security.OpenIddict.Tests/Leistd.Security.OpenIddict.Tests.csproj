@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="OpenIddict.Validation.AspNetCore" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <RuntimeHostConfigurationOption Include="Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking" Value="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../components/security/Leistd.Security.OpenIddict.Validation/Leistd.Security.OpenIddict.Validation.csproj" />
+    <ProjectReference Include="../../../../components/security/Leistd.Security.OpenIddict.Server/Leistd.Security.OpenIddict.Server.csproj" />
+  </ItemGroup>
+</Project>

@@ -117,8 +117,6 @@ public static class DependencyInjection
             .BindConfiguration(OAuthResourceOptions.SectionName)
             .ValidateOnStart();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<OAuthResourceOptions>, OAuthResourceOptionsValidator>());
-        services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
-            RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
         services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.TryAddTransient<IOpenApplicationAppService, OpenApplicationAppService>();

@@ -650,7 +650,7 @@ public sealed class PruningProbeController(IOpenIddictTokenManager tokens, IOpen
             oldPermanent = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent),
             oldAdHoc = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc)
         };
-        var definition = services.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
+        var definition = services.GetServices<RecurringJobDefinition>().Single(job => job.Name == Leistd.Security.OpenIddict.Server.Pruning.OpenIddictPruningJob.Name);
         var job = (IRecurringJob)services.GetRequiredService(definition.JobType);
         await job.ExecuteAsync(new RecurringJobContext(definition.Name, now), cancellationToken);
         return new { seeded, provider = db.Database.ProviderName, bulkDisabled = options.Value.DisableBulkOperations,

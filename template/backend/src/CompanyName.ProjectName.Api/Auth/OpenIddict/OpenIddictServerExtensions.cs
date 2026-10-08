@@ -3,6 +3,10 @@ using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.BackgroundJobs;
+using Leistd.BackgroundJobs.Recurring;
+using Leistd.Security.OpenIddict.Server;
+using Leistd.Security.OpenIddict.Server.Pruning;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
@@ -89,9 +93,6 @@ public static class OpenIddictServerExtensions
                     handler.UseScopedHandler<ResourceOwnerAuthorizedPartyHandler>()
                         .SetOrder(OpenIddictServerHandlers.Exchange.ValidateAuthorizedParty.Descriptor.Order));
                 options.RegisterAudiences(oauthScopes.SelectMany(scope => scope.Resources).Distinct().ToArray());
-                options.AddEventHandler<OpenIddictServerEvents.ProcessSignInContext>(handler =>
-                    handler.UseScopedHandler<TokenExchangeExpirationHandler>()
-                        .SetOrder(OpenIddictServerHandlers.PrepareIssuedTokenPrincipal.Descriptor.Order + 1));
 
                 // 跨服务用签名 JWT：资源服务经 discovery/JWKS 验签，无需分发解密密钥；claim 对持有者可读（见 auth.md 用户认证小节）。
                 options.DisableAccessTokenEncryption();
@@ -135,6 +136,11 @@ public static class OpenIddictServerExtensions
                        .DisableAccessTokenExtractionFromQueryString()
                        .DisableAccessTokenExtractionFromBodyForm();
             });
+
+        builder.Services.AddTokenExchangeExpirationLimit();
+        builder.Services.AddOpenIddictPruning();
+        builder.Services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
+            RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
 
         return builder;
     }

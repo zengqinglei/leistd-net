@@ -1,6 +1,6 @@
 # 身份与会话安全
 
-提供当前主体访问、请求客户端信息、服务端 Cookie 票据和可选的一次码能力。
+提供主体访问、请求信息、Cookie 票据、一次码和可选 OpenIddict 集成。
 
 ## 何时使用
 
@@ -11,6 +11,8 @@
 | 直接访问原始 `ClaimsPrincipal`，或在后台任务/测试中临时切换身份 | 注入 `ICurrentPrincipalAccessor` |
 | 在领域/应用层使用平台中立的身份访问 | 引用 `Leistd.Security.Core` |
 | 身份验证器、恢复码或短期验证码摘要 | 引用可选 `Leistd.Security.OneTimeCodes`，无 Web、Identity 或 DDD 依赖 |
+| OpenIddict 远端公钥轮换 | 引用 `Leistd.Security.OpenIddict.Validation` |
+| OpenIddict 交换令牌期限或存储维护 | 引用 `Leistd.Security.OpenIddict.Server` |
 | ASP.NET Core 宿主，需要从 `HttpContext` 取真实身份 | 引用 `Leistd.Security.AspNetCore` 并注册 |
 
 ## 安装
@@ -102,6 +104,40 @@ builder.Services.AddVerificationCodeDigest();
 默认 `IVerificationCodeDigest` 为单例 HMAC-SHA256 实现，可由宿主预先注册替换。`VerificationCodeOptions` 绑定 `Leistd:Security:VerificationCodes`，也可指定 `configSectionPath`；先绑定再应用配置委托。`Key` 是 Base64 格式、至少 32 字节的稳定服务端密钥，各副本和重启使用同一值。非空无效配置启动即失败，消息指明传入配置节。
 
 缺失密钥允许解析服务，默认实现使用时抛出配置异常；宿主决定功能何时启用并补充“启用时必需密钥”的启动或业务设置验证。组件不生成回落密钥，不读取业务功能开关。
+
+### OpenIddict 集成
+
+两个包均不依赖 Web、EF 或 DDD。`Validation` 只传递原生 Validation/SystemNetHttp；`Server` 传递原生 Server/Core 与 `Leistd.BackgroundJobs.Core`，不替宿主选择存储、传输或排期。应用主体工厂直接使用原生 Abstractions，业务权限和 scope 目录留在应用。
+
+远端宿主先注册原生 Validation 和 SystemNetHttp，再调用：
+
+```csharp
+builder.Services.AddSigningKeyRefresh();
+```
+
+宿主在 runtimeconfig 中显式启用 `Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking`；测试宿主也须设置，组件启动时验证此开关，不修改进程状态。配置节默认 `Leistd:Security:OpenIddict:SigningKeys`，入口先绑定、后应用委托，支持 `configSectionPath`：
+
+| 属性 | 默认 | 校验 |
+| --- | --- | --- |
+| FetchTimeout | 10 秒 | 正值且不超过 HttpClient 支持的最大毫秒数；同时约束原生 HTTP 与当前请求等待 |
+| MinimumInterval | 1 分钟 | 正值；按副本限制显式刷新，自动刷新仍交给原生配置管理器 |
+
+未知 `kid` 的可读 JWS 在当前请求内刷新动态公钥；保留显式静态键。公钥只来自配置的签发方，不采用令牌中的 `iss/jku/x5u`。已有主体、JWE、不可读或无 `kid` 的令牌跳过；签名、issuer、audience 和期限仍由原生管道验证。抓取失败沿用缓存，取消向调用方传播；当前刷新结果替换旧动态键。原生刷新间隔及组件限频仍可能推迟新键生效，签发方应先发布公钥再切换签名。
+
+默认时间源通过 `TryAdd` 注册，可由宿主提供 `TimeProvider`。重复注册只挂载一次原生处理器和限频包装，配置按调用叠加；宿主可经原生事件和配置 API 替换机制。
+
+签发宿主先配置原生 Server，再按需调用：
+
+```csharp
+builder.Services.AddTokenExchangeExpirationLimit();
+builder.Services.AddOpenIddictPruning();
+builder.Services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
+    RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
+```
+
+期限约束在原生签发主体准备后执行，只限制交换令牌到期不晚于源令牌；不决定交换权限。清理入口只登记参数和默认任务，不自动排程。宿主配置原生 Core/Store、调度器与时间源，也可登记自己的 `IRecurringJob`。
+
+`OpenIddictPruningOptions.MinimumRetention` 默认14天、至少10分钟，配置节默认 `Leistd:Security:OpenIddict:Pruning`；支持配置委托和自定义节，启动验证。任务名为 `security.openiddict.prune`，按 UTC 当前时间减保留期，先调用令牌、再调用授权管理器的原生 `PruneAsync`，传递取消。记录删除判据由原生管理器和存储负责。
 
 ## 使用
 

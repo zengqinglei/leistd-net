@@ -102,6 +102,8 @@
   <Folder Name="/components/security/">
     <Project Path="components/security/Leistd.Security.AspNetCore/Leistd.Security.AspNetCore.csproj" />
     <Project Path="components/security/Leistd.Security.Core/Leistd.Security.Core.csproj" />
+    <Project Path="components/security/Leistd.Security.OpenIddict.Validation/Leistd.Security.OpenIddict.Validation.csproj" />
+    <Project Path="components/security/Leistd.Security.OpenIddict.Server/Leistd.Security.OpenIddict.Server.csproj" />
     <Project Path="components/security/Leistd.Security.OneTimeCodes/Leistd.Security.OneTimeCodes.csproj" />
   </Folder>
   <Folder Name="/components/service-client/">
@@ -190,6 +192,7 @@
   </Folder>
   <Folder Name="/tests/components/security/">
     <Project Path="tests/components/security/Leistd.Security.Tests/Leistd.Security.Tests.csproj" />
+    <Project Path="tests/components/security/Leistd.Security.OpenIddict.Tests/Leistd.Security.OpenIddict.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/components/settings/">
     <Project Path="tests/components/settings/Leistd.Settings.Tests/Leistd.Settings.Tests.csproj" />

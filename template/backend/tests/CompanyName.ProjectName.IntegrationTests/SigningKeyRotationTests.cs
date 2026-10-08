@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
-using CompanyName.ProjectName.Api.Auth.Authentication;
+using Leistd.Security.OpenIddict.Validation.SigningKeys;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 #if (!ResourceBrowserSession)
@@ -226,7 +226,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
 
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
         var expected = TimeSpan.FromSeconds(10);
-        Assert.Equal(expected, RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout);
+        Assert.Equal(expected, host.Services.GetRequiredService<IOptions<SigningKeyRefreshOptions>>().Value.FetchTimeout);
         Assert.NotEmpty(timeouts);
         // 观察官方 SDK 实际创建的客户端，在生产配置完成后记录有效值，不猜动态客户端名称。
         Assert.All(timeouts, timeout => Assert.Equal(expected, timeout));
@@ -240,13 +240,13 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         using var host = Host(baseline.Factory, issuer);
         using var client = Client(host);
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
-        issuer.KeySetDelay = RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout * 3;
+        issuer.KeySetDelay = host.Services.GetRequiredService<IOptions<SigningKeyRefreshOptions>>().Value.FetchTimeout * 3;
         using var forgedRsa = RSA.Create(2048);
         var forged = new RsaSecurityKey(forgedRsa) { KeyId = "forged" };
 
         var watch = Stopwatch.StartNew();
         Assert.Equal(HttpStatusCode.Unauthorized, await MeAsync(client, issuer.AccessToken(forged)));
-        Assert.True(watch.Elapsed < RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout * 2, $"waited {watch.Elapsed}");
+        Assert.True(watch.Elapsed < host.Services.GetRequiredService<IOptions<SigningKeyRefreshOptions>>().Value.FetchTimeout * 2, $"waited {watch.Elapsed}");
 
         issuer.KeySetDelay = TimeSpan.Zero;
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));

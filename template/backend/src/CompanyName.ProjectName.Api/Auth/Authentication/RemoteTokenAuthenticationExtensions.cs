@@ -5,10 +5,13 @@ using CompanyName.ProjectName.Api.Auth.Sessions;
 using CompanyName.ProjectName.Application.Shared;
 #endif
 using Leistd.ServiceClient.AspNetCore;
+using Leistd.Security.OpenIddict.Validation;
 #if (ResourceBrowserSession)
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 #endif
+#if (ResourceBrowserSession)
 using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 using Microsoft.Extensions.Options;
 using OpenIddict.Validation;
 using OpenIddict.Validation.AspNetCore;
@@ -37,10 +40,7 @@ internal static class RemoteTokenAuthenticationExtensions
         builder.Services.AddOpenIddict()
             .AddValidation(options =>
             {
-                // 发现文档与 JWKS 的抓取有界：签名公钥按需刷新时请求会等它（含官方重试）
-                options.UseSystemNetHttp()
-                    .ConfigureHttpClient(client => client.Timeout = RefreshSigningKeysOnUnknownKeyIdentifier.FetchTimeout);
-                options.AddEventHandler(RefreshSigningKeysOnUnknownKeyIdentifier.Descriptor);
+                options.UseSystemNetHttp();
                 options.UseAspNetCore()
                     .DisableAccessTokenExtractionFromQueryString()
                     .DisableAccessTokenExtractionFromBodyForm();
@@ -59,9 +59,7 @@ internal static class RemoteTokenAuthenticationExtensions
                 options.Issuer = remoteIdentity.IssuerUri;
                 options.Audiences.Add(remoteIdentity.Audience!);
             });
-        // 在 OpenIddict 建好配置管理器之后给"请求刷新"限频（注册顺序即执行顺序）
-        builder.Services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IPostConfigureOptions<OpenIddictValidationOptions>, ThrottleSigningKeyRefresh>());
+        builder.Services.AddSigningKeyRefresh();
 
         // 下游 Token Exchange 取经过验证的请求令牌：会话取服务端票据里的，Bearer 取验证后的
 #if (ResourceBrowserSession)

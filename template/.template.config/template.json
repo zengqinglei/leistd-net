@@ -446,7 +446,6 @@
             "frontend/_mock/api/resource-auth.spec.ts",
             "frontend/src/app/core/components/resource-login/**",
             "frontend/_mock/api/resource-auth.ts",
-            "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/SigningKeyRefresh.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/RemoteTokenAuthenticationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ResourceAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/CurrentResourceUserOutputDto.cs",
@@ -455,8 +454,7 @@
             "backend/src/CompanyName.ProjectName.Api/HostedServices/Initializer/RemoteIdentityReadinessInitializer.cs",
             "backend/src/CompanyName.ProjectName.Api/Options/RemoteIdentityOptions.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceAdminBootstrapTests.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/SigningKeyRotationTests.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Api/SigningKeyRefreshThrottleTests.cs"
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/SigningKeyRotationTests.cs"
           ]
         },
         {
@@ -544,7 +542,6 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/OpenIddict/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/DesignTime/OpenIddictDbContextFactory.cs",
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/OpenApplicationExceptionMappings.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/BackgroundJobs/OpenIddictPruningJob.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/OAuth/OAuthScopes.cs",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/Constants/TenantConnectionPolicies.cs",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/Constants/TenantConnectionScopes.cs",
