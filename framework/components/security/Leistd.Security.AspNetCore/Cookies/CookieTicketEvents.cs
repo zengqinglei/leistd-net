@@ -1,34 +1,44 @@
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Security.AspNetCore.Cookies;
 
-internal sealed class CookieTicketEvents(CookieAuthenticationEvents original, Type? originalType) : CookieAuthenticationEvents
+// 默认委托转发原事件对象的虚方法，宿主后置改 OnXxx 按原生语义取代对应转发；只有 SigningIn 追加版本职责。
+internal sealed class CookieTicketEvents : CookieAuthenticationEvents
 {
+    private readonly CookieAuthenticationEvents _original;
+    private readonly Type? _originalType;
+
+    public CookieTicketEvents(CookieAuthenticationEvents original, Type? originalType)
+    {
+        _original = original;
+        _originalType = originalType;
+        OnValidatePrincipal = context => GetOriginal(context.HttpContext).ValidatePrincipal(context);
+        OnCheckSlidingExpiration = context => GetOriginal(context.HttpContext).CheckSlidingExpiration(context);
+        OnSigningIn = context => GetOriginal(context.HttpContext).SigningIn(context);
+        OnSignedIn = context => GetOriginal(context.HttpContext).SignedIn(context);
+        OnSigningOut = context => GetOriginal(context.HttpContext).SigningOut(context);
+        OnRedirectToLogin = context => GetOriginal(context.HttpContext).RedirectToLogin(context);
+        OnRedirectToAccessDenied = context => GetOriginal(context.HttpContext).RedirectToAccessDenied(context);
+        OnRedirectToLogout = context => GetOriginal(context.HttpContext).RedirectToLogout(context);
+        OnRedirectToReturnUrl = context => GetOriginal(context.HttpContext).RedirectToReturnUrl(context);
+    }
+
+    // EventsType 按请求解析一次，同请求同方案共用实例。
     private CookieAuthenticationEvents GetOriginal(HttpContext context)
     {
-        if (originalType is null) return original;
+        if (_originalType is null) return _original;
         if (context.Items.TryGetValue(this, out var cached)) return (CookieAuthenticationEvents)cached!;
-        var events = (CookieAuthenticationEvents)context.RequestServices.GetRequiredService(originalType);
+        var events = (CookieAuthenticationEvents)context.RequestServices.GetRequiredService(_originalType);
         context.Items[this] = events;
         return events;
     }
 
     public override async Task SigningIn(CookieSigningInContext context)
     {
-        await GetOriginal(context.HttpContext).SigningIn(context);
+        await base.SigningIn(context);
         context.Properties.Items[DistributedTicketStore.ReferenceVersion] = DistributedTicketStore.NewVersion();
         context.HttpContext.Items[DistributedTicketStore.ExplicitSignInKey(context.Scheme.Name)] = true;
     }
-
-    public override Task ValidatePrincipal(CookieValidatePrincipalContext context) => GetOriginal(context.HttpContext).ValidatePrincipal(context);
-    public override Task CheckSlidingExpiration(CookieSlidingExpirationContext context) => GetOriginal(context.HttpContext).CheckSlidingExpiration(context);
-    public override Task SignedIn(CookieSignedInContext context) => GetOriginal(context.HttpContext).SignedIn(context);
-    public override Task SigningOut(CookieSigningOutContext context) => GetOriginal(context.HttpContext).SigningOut(context);
-    public override Task RedirectToLogin(RedirectContext<CookieAuthenticationOptions> context) => GetOriginal(context.HttpContext).RedirectToLogin(context);
-    public override Task RedirectToAccessDenied(RedirectContext<CookieAuthenticationOptions> context) => GetOriginal(context.HttpContext).RedirectToAccessDenied(context);
-    public override Task RedirectToLogout(RedirectContext<CookieAuthenticationOptions> context) => GetOriginal(context.HttpContext).RedirectToLogout(context);
-    public override Task RedirectToReturnUrl(RedirectContext<CookieAuthenticationOptions> context) => GetOriginal(context.HttpContext).RedirectToReturnUrl(context);
 }
