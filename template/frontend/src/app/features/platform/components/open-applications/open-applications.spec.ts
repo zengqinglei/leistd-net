@@ -10,6 +10,7 @@ import { of, Subject, throwError } from 'rxjs';
 
 import { OpenApplications } from './open-applications';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
+import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -27,7 +28,10 @@ describe('OpenApplications page query round trip', () => {
   let fixture: ComponentFixture<OpenApplications>;
   let component: OpenApplications;
   let router: Router;
-  let service: Pick<MockedObject<OpenApplicationService>, 'getOpenApplications' | 'getScopes'>;
+  let service: Pick<
+    MockedObject<OpenApplicationService>,
+    'getOpenApplications' | 'getScopes' | 'resetSecret'
+  >;
 
   function lastQuery(): GetOpenApplicationsInputDto {
     const calls = vi.mocked(service.getOpenApplications).mock.calls;
@@ -49,6 +53,7 @@ describe('OpenApplications page query round trip', () => {
     service = {
       getOpenApplications: vi.fn().mockName('OpenApplicationService.getOpenApplications'),
       getScopes: vi.fn().mockName('OpenApplicationService.getScopes'),
+      resetSecret: vi.fn().mockName('OpenApplicationService.resetSecret'),
     };
     service.getOpenApplications.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
     service.getScopes.mockReturnValue(of([]));
@@ -118,27 +123,46 @@ describe('OpenApplications page query round trip', () => {
   });
 
   it('drops the previous secret after the secret dialog closes', () => {
-    // 关闭弹窗只更新 visible 时，secret 与标题会留在组件状态里，
+    // 关闭弹窗只更新 visible 时，secret 与所属应用会留在组件状态里，
     // 下一次误打开弹窗会显示上一次生成的 secret。
     component.secretValue.set('generated-secret');
-    component.secretHeader.set('Client created');
+    component.secretApplication.set({ clientId: 'demo-client' });
     component.secretDialogVisible.set(true);
 
     component.onSecretDialogVisibleChange(false);
 
     expect(component.secretDialogVisible()).toBe(false);
     expect(component.secretValue()).toBe('');
-    expect(component.secretHeader()).toBe('');
+    expect(component.secretApplication()).toBeNull();
   });
 
   it('keeps the secret while the secret dialog opens', () => {
     component.secretValue.set('generated-secret');
-    component.secretHeader.set('Client created');
+    component.secretApplication.set({ clientId: 'demo-client' });
 
     component.onSecretDialogVisibleChange(true);
 
     expect(component.secretDialogVisible()).toBe(true);
     expect(component.secretValue()).toBe('generated-secret');
+  });
+
+  it('shows the reset secret together with the application it belongs to', async () => {
+    vi.spyOn(TestBed.inject(ConfirmService), 'open').mockResolvedValue(true);
+    service.getOpenApplications.mockReturnValue(
+      of({ items: [{ ...loadedRow, displayName: 'Demo SPA' }], totalCount: 1 }) as never,
+    );
+    service.resetSecret.mockReturnValue(of({ clientSecret: 'reset-secret' }));
+    component.reloadList();
+    await fixture.whenStable();
+
+    await component.handleResetSecret('row-1');
+
+    expect(component.secretDialogVisible()).toBe(true);
+    expect(component.secretKind()).toBe('reset');
+    expect(component.secretValue()).toBe('reset-secret');
+    expect(component.secretApplication()).toEqual(
+      expect.objectContaining({ clientId: 'spa', displayName: 'Demo SPA' }),
+    );
   });
 
   it('restores component state from the URL on reload and back/forward navigation', async () => {

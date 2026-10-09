@@ -1,11 +1,14 @@
 import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 
 import { AuthService } from './auth-service';
 import { SessionContextService } from './session-context-service';
 import { StartupService } from './startup-service';
 import { ApplicationHttpError } from '../errors/application-http-error';
+import { EntryRouteService } from '../routing/entry-route-service';
 
 import type { Mock, MockedObject } from 'vitest';
 
@@ -30,6 +33,7 @@ describe('StartupService', () => {
     TestBed.configureTestingModule({
       providers: [
         StartupService,
+        provideRouter([{ path: 'platform/users', children: [] }]),
         { provide: AuthService, useValue: authService },
         { provide: SessionContextService, useValue: sessionContext },
       ],
@@ -98,6 +102,72 @@ describe('StartupService', () => {
     expect(sessionContext.establish).toHaveBeenCalled();
     expect(service.status()).toBe('success');
     expect(service.error()).toBeNull();
+  });
+
+  /** 守卫的共同前置：启动失败既不是未登录也不是无权限，导航被扣下，等重试。 */
+  describe('settled', () => {
+    it('waits while loading and lets the guard decide after success', async () => {
+      authService.initializeAuth.mockReturnValue(new Promise(() => undefined));
+      void service.load();
+
+      let decided: boolean | undefined;
+      const subscription = service.settled('/platform/users').subscribe((v) => (decided = v));
+      await Promise.resolve();
+      TestBed.tick();
+      expect(decided).toBeUndefined();
+      subscription.unsubscribe();
+
+      authService.initializeAuth.mockResolvedValue();
+      await service.load();
+
+      await expect(firstValueFrom(service.settled('/platform/users'))).resolves.toBe(true);
+      expect(TestBed.inject(EntryRouteService).takeHeld()).toBeNull();
+    });
+
+    it('holds the target url and rejects the navigation when startup failed', async () => {
+      authService.initializeAuth.mockRejectedValue(httpError(403));
+      await service.load();
+
+      await expect(firstValueFrom(service.settled('/platform/users?offset=20#list'))).resolves.toBe(
+        false,
+      );
+      expect(TestBed.inject(EntryRouteService).url()).toBe('/platform/users?offset=20#list');
+    });
+  });
+
+  describe('retry', () => {
+    it('lands on the held target once startup succeeds, without reading the address bar', async () => {
+      isProtectedRoute.mockRestore();
+      openAt('/platform/users?offset=20');
+      authService.initializeAuth.mockRejectedValue(httpError(503));
+      await service.load();
+      await firstValueFrom(service.settled('/platform/users?offset=20#list'));
+      // 守卫取消首次导航后 Router 会把地址栏还原成 /
+      openAt('/');
+
+      authService.initializeAuth.mockResolvedValue();
+      await service.retry();
+
+      // 入口按扣下的目标判定，仍是受保护路由：探测了会话，而不是按公开页直接放行
+      expect(authService.initializeAuth).toHaveBeenCalledTimes(2);
+      expect(service.status()).toBe('success');
+      const router = TestBed.inject(Router);
+      expect(router.url).toBe('/platform/users?offset=20#list');
+      expect(TestBed.inject(Location).path(true)).toBe('/platform/users?offset=20#list');
+      expect(TestBed.inject(EntryRouteService).takeHeld()).toBeNull();
+    });
+
+    it('keeps the held target while startup still fails', async () => {
+      authService.initializeAuth.mockRejectedValue(httpError(503));
+      await service.load();
+      await firstValueFrom(service.settled('/platform/users'));
+
+      await service.retry();
+
+      expect(service.status()).toBe('failed');
+      expect(TestBed.inject(Router).navigated).toBe(false);
+      expect(TestBed.inject(EntryRouteService).url()).toBe('/platform/users');
+    });
   });
 
   /** 入口路由判据用真实实现跑：上面的用例把它打桩成 true，判据坏掉不会变红。 */

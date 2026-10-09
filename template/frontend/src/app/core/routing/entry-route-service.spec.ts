@@ -1,11 +1,11 @@
-import { APP_BASE_HREF } from '@angular/common';
+import { APP_BASE_HREF, Location } from '@angular/common';
 import { MOCK_PLATFORM_LOCATION_CONFIG } from '@angular/common/testing';
 import { inject, provideAppInitializer, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 //#if (LocalIdentity)
-import { Router, provideRouter, withHashLocation } from '@angular/router';
+import { Router, Routes, provideRouter, withHashLocation } from '@angular/router';
 //#else
-import { Router, provideRouter } from '@angular/router';
+import { Router, Routes, provideRouter } from '@angular/router';
 //#endif
 
 import { EntryRouteService } from './entry-route-service';
@@ -17,7 +17,7 @@ import { EntryRouteService } from './entry-route-service';
 describe('EntryRouteService', () => {
   function configure(
     url: string,
-    options: { hash?: boolean; baseHref?: string; onInit?: () => void } = {},
+    options: { hash?: boolean; baseHref?: string; onInit?: () => void; routes?: Routes } = {},
   ): void {
     TestBed.configureTestingModule({
       providers: [
@@ -28,9 +28,9 @@ describe('EntryRouteService', () => {
         },
         { provide: APP_BASE_HREF, useValue: options.baseHref ?? '/' },
         //#if (LocalIdentity)
-        provideRouter([], ...(options.hash ? [withHashLocation()] : [])),
+        provideRouter(options.routes ?? [], ...(options.hash ? [withHashLocation()] : [])),
         //#else
-        provideRouter([]),
+        provideRouter(options.routes ?? []),
         //#endif
         ...(options.onInit ? [provideAppInitializer(options.onInit)] : []),
       ],
@@ -92,6 +92,40 @@ describe('EntryRouteService', () => {
 
       expect(entry.url()).toBe('/platform/users');
       expect(entry.isOnAuthRoute()).toBe(false);
+    });
+  });
+
+  /** 启动失败时守卫扣下导航目标：入口以目标为准，地址栏被 Router 还原后放回目标。 */
+  describe('with a held target', () => {
+    it('reports the held target instead of the address bar until it is taken', () => {
+      const entry = openAt('/');
+
+      entry.hold('/platform/users?page=2#list');
+
+      expect(entry.url()).toBe('/platform/users?page=2#list');
+      expect(entry.path()).toBe('/platform/users');
+      expect(entry.takeHeld()).toBe('/platform/users?page=2#list');
+      expect(entry.url()).toBe('/');
+      expect(entry.takeHeld()).toBeNull();
+    });
+
+    it('puts the held target back into the address bar after the router cancels the navigation', async () => {
+      const target = '/platform/users?page=2';
+      configure(target, {
+        routes: [{ path: 'platform/users', canActivate: [() => false], children: [] }],
+      });
+      const entry = TestBed.inject(EntryRouteService);
+      const router = TestBed.inject(Router);
+      const location = TestBed.inject(Location);
+
+      // 不扣目标时，取消首次导航让 Router 把地址栏还原成 /
+      await expect(router.navigateByUrl(target)).resolves.toBe(false);
+      expect(location.path()).toBe('');
+
+      location.replaceState(target);
+      entry.hold(target);
+      await expect(router.navigateByUrl(target)).resolves.toBe(false);
+      expect(location.path()).toBe(target);
     });
   });
   //#if (LocalIdentity)

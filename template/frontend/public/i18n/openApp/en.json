@@ -17,7 +17,8 @@
     "created": "Open application created successfully",
     "updated": "Open application updated successfully",
     "deleted": "Open application deleted",
-    "secretCopied": "Secret copied"
+    "secretCopied": "Secret copied",
+    "clientIdCopied": "Client ID copied"
   },
   "confirm": {
     "deleteHeader": "Confirm deletion",
@@ -27,7 +28,11 @@
   },
   "secret": {
     "resetHeader": "Client Secret reset",
-    "createdHeader": "Client secret",
+    "createdHeader": "Client credentials created",
+    "applicationLabel": "Application:",
+    "clientSecret": "Client Secret",
+    "copyClientId": "Copy Client ID",
+    "copySecret": "Copy Client Secret",
     "warning": "Please copy and store it securely now; the secret will not be shown in plain text again.",
     "copyAndClose": "Copy and close"
   },

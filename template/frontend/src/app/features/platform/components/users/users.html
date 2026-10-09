@@ -87,11 +87,10 @@
         [filtered]="hasActiveFilters()"
         [loadError]="loadError()"
         (retry)="reloadList()"
-        <!--#if (LocalIdentity)-->
         [canUpdate]="canUpdateUser()"
+        <!--#if (LocalIdentity)-->
         [canDelete]="canDeleteUser()"
         <!--#else-->
-        [canUpdate]="false"
         [canDelete]="false"
         <!--#endif-->
         (paginationChange)="onPaginationChange($event)"

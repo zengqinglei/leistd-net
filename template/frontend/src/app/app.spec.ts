@@ -1,20 +1,28 @@
-//#if (IncludeLocalization)
 import { Location } from '@angular/common';
-//#endif
+import { HttpErrorResponse } from '@angular/common/http';
+import { MOCK_PLATFORM_LOCATION_CONFIG } from '@angular/common/testing';
 // prettier-ignore
 import {
+  ApplicationInitStatus,
   ApplicationRef,
-  //#if (IncludeLocalization)
   Component,
+  //#if (IncludeLocalization)
   ErrorHandler,
   //#endif
+  inject,
+  provideAppInitializer,
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
+import {
+  NavigationCancel,
+  NavigationCancellationCode,
+  provideRouter,
+  Router,
+} from '@angular/router';
 //#if (IncludeLocalization)
-import { provideRouter, Router } from '@angular/router';
 import {
   provideTranslocoScope,
   Translation,
@@ -23,19 +31,30 @@ import {
   TranslocoService,
 } from '@jsverse/transloco';
 import { defer, of, Subject, throwError } from 'rxjs';
-//#else
-import { provideRouter } from '@angular/router';
 //#endif
 
 import { App } from './app';
+import { ApplicationHttpError } from './core/errors/application-http-error';
+import { authGuard } from './core/guards/auth-guard';
+import { permissionGuard } from './core/guards/permission-guard';
 //#if (IncludeLocalization)
 import { resolveTranslationScopes, TranslationScopeRecovery } from './core/i18n/translation-scopes';
 import { provideTranslocoTesting } from './core/i18n/transloco.testing';
+//#endif
+import { AuthService } from './core/services/auth-service';
+import { AuthorizationService } from './core/services/authorization-service';
+//#if (Impersonation)
+import { ImpersonationService } from './core/services/impersonation-service';
+//#endif
+//#if (IncludeLocalization)
 import { LanguageService } from './core/services/language-service';
 //#endif
 import { LayoutService } from './core/services/layout-service';
+import { SessionContextService } from './core/services/session-context-service';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
+import { PERMISSIONS } from './shared/constants/permission.constants';
+import { User } from './shared/models/user.model';
 
 /** 启动失败页必须显示得出来，包括词条没取到的时候：根组件不在结构指令里。 */
 describe('App startup failure page', () => {
@@ -189,6 +208,150 @@ describe('App document title', () => {
     expect(title.getTitle()).toBe('Template Project');
   });
   //#endif
+});
+
+@Component({
+  selector: 'app-protected-test-page',
+  template: `protected page`,
+})
+class ProtectedPage {}
+
+/**
+ * 深链首次加载时启动失败（会话探测 403/5xx/网络故障，或认证成功后权限、设置加载失败）：守卫拦下导航，
+ * 不跳登录、不跳 403，根组件显示启动失败卡片；重试成功后回到原深链（含查询与锚点）。
+ * Router、Location、守卫与启动流都是真实的，只桩掉会话探测与会话上下文。
+ */
+describe('App startup failure routing', () => {
+  const target = '/platform/users?offset=20#list';
+  const currentUser = signal<User | null>(null);
+  const initializeAuth = vi.fn<() => Promise<void>>();
+  const establish = vi.fn<() => Promise<void>>();
+  const startLogin = vi.fn();
+
+  function httpError(status: number): ApplicationHttpError {
+    return ApplicationHttpError.from(
+      new HttpErrorResponse({ status, statusText: `HTTP ${status}` }),
+    );
+  }
+
+  /** 会话探测成功：主体与权限就位。 */
+  function probeSucceeds(): void {
+    initializeAuth.mockImplementation(async () => {
+      currentUser.set(new User({ id: 'u1', username: 'alice', roles: [] }));
+    });
+    establish.mockImplementation(async () => {
+      TestBed.inject(AuthorizationService).setPermissions({
+        permissions: [PERMISSIONS.users.default],
+        isSuperAdmin: false,
+        versionToken: 'r1',
+      });
+    });
+  }
+
+  /** 从深链冷启动：应用初始化器跑完启动流后发起初始导航，返回被取消的导航。 */
+  async function openDeepLink() {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: MOCK_PLATFORM_LOCATION_CONFIG,
+          useValue: { startUrl: `http://localhost${target}` },
+        },
+        provideRouter([
+          {
+            path: 'platform',
+            canActivate: [authGuard, permissionGuard],
+            data: { permissions: [PERMISSIONS.users.default] },
+            children: [{ path: 'users', component: ProtectedPage }],
+          },
+          { path: 'auth/login', children: [] },
+          { path: 'forbidden', children: [] },
+        ]),
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => currentUser() !== null,
+            currentUser,
+            initializeAuth,
+            startLogin,
+          },
+        },
+        { provide: SessionContextService, useValue: { establish, clear: vi.fn() } },
+        //#if (Impersonation)
+        { provide: ImpersonationService, useValue: { load: () => Promise.resolve() } },
+        //#endif
+        { provide: ThemeService, useValue: {} },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(['en']),
+        //#endif
+        provideAppInitializer(() => inject(StartupService).load()),
+      ],
+    });
+    await TestBed.inject(ApplicationInitStatus).donePromise;
+    const fixture = TestBed.createComponent(App);
+    const router = TestBed.inject(Router);
+    const cancels: NavigationCancel[] = [];
+    router.events.subscribe((event) => event instanceof NavigationCancel && cancels.push(event));
+    router.initialNavigation();
+    await vi.waitFor(() => expect(cancels).toHaveLength(1));
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    return { fixture, host, router, cancel: cancels[0] };
+  }
+
+  beforeEach(() => {
+    currentUser.set(null);
+    startLogin.mockReset();
+    initializeAuth.mockReset();
+    establish.mockReset().mockResolvedValue();
+  });
+
+  for (const status of [403, 503, 0]) {
+    it(`shows the failure card instead of a login redirect when the session probe fails with ${status}`, async () => {
+      initializeAuth.mockRejectedValue(httpError(status));
+
+      const { host, router, cancel } = await openDeepLink();
+
+      expect(TestBed.inject(StartupService).status()).toBe('failed');
+      expect(cancel.url).toBe(target);
+      expect(cancel.code).toBe(NavigationCancellationCode.GuardRejected);
+      expect(startLogin).not.toHaveBeenCalled();
+      expect(router.url).toBe('/');
+      expect(host.querySelector('h3')!.textContent).toBe('Application Failed to Load');
+      // 地址栏仍是用户打开的深链，手动刷新同样回到这里
+      expect(TestBed.inject(Location).path(true)).toBe(target);
+    });
+  }
+
+  // 认证成功、权限或设置加载失败时主体已在：也不能放行，更不能按空权限跳 403
+  it('shows the failure card when loading permissions or settings fails after authentication', async () => {
+    probeSucceeds();
+    establish.mockRejectedValue(httpError(500));
+
+    const { host, router, cancel } = await openDeepLink();
+
+    expect(currentUser()).not.toBeNull();
+    expect(cancel.code).toBe(NavigationCancellationCode.GuardRejected);
+    expect(router.url).toBe('/');
+    expect(host.querySelector('h3')!.textContent).toBe('Application Failed to Load');
+  });
+
+  it('lands on the original deep link with its query and fragment after a successful retry', async () => {
+    initializeAuth.mockRejectedValue(httpError(503));
+    const { fixture, host, router } = await openDeepLink();
+    // 不依赖地址栏：Router 取消导航时可能已把它还原
+    TestBed.inject(Location).replaceState('/');
+
+    probeSucceeds();
+    host.querySelector('button')!.click();
+    await vi.waitFor(() => expect(router.url).toBe(target));
+    await fixture.whenStable();
+
+    expect(TestBed.inject(Location).path(true)).toBe(target);
+    expect(host.querySelector('h3')).toBeNull();
+    expect(host.textContent).toContain('protected page');
+    expect(startLogin).not.toHaveBeenCalled();
+  });
 });
 //#if (IncludeLocalization)
 

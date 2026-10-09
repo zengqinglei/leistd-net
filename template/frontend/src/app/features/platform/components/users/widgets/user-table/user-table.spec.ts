@@ -168,6 +168,51 @@ describe('UserTable', () => {
     expect(component.hasRowActions()).toBe(true);
   });
 
+  // 停用是本服务对人员的本地处置，所有形态都随 Users.Update 提供
+  it('offers enable or disable in the row menu only with the update permission', async () => {
+    fixture.componentRef.setInput('users', [user('1', 'alice')]);
+    fixture.componentRef.setInput('canDelete', false);
+    fixture.componentRef.setInput('canManageRoles', false);
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+
+    onTestFinished(() => document.querySelector('.cdk-overlay-container')?.remove());
+    const menu = await openRowMenu();
+    // 图标名是属性绑定，不反射成 attribute，按文案（或未装词条时的键名）找
+    expect(menu.textContent).toMatch(/Disable|users\.tooltip\.disable/);
+    //#if (!LocalIdentity)
+    // 资料由签发方维护，本服务不提供编辑入口
+    expect(menu.querySelector('ng-icon[name="lucidePencil"]')).toBeNull();
+    expect(host().querySelector('ng-icon[name="lucidePencil"]')).toBeNull();
+    //#else
+    expect(menu.querySelector('ng-icon[name="lucidePencil"]')).not.toBeNull();
+    //#endif
+
+    fixture.componentRef.setInput('canUpdate', false);
+    fixture.detectChanges();
+    expect(rowMenuTrigger()).toBeNull();
+  });
+
+  it('hides the menu trigger on desktop when it would only repeat the inline buttons', async () => {
+    await page.viewport(1280, 800);
+    fixture.componentRef.setInput('users', [user('1', 'alice')]);
+    fixture.componentRef.setInput('canUpdate', false);
+    fixture.componentRef.setInput('canDelete', false);
+    fixture.componentRef.setInput('canManageRoles', true);
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+
+    // 分配角色在桌面端是行内按钮，菜单里只有它的窄屏副本：桌面端点开会是空菜单
+    expect(getComputedStyle(rowMenuTrigger()!).display).toBe('none');
+
+    fixture.componentRef.setInput('canUpdate', true);
+    fixture.detectChanges();
+    expect(getComputedStyle(rowMenuTrigger()!).display).not.toBe('none');
+  });
+
   it('flags collapsed columns on narrow viewports but not on desktop', () => {
     expect(component.hasCollapsedColumns()).toBe(false);
 
@@ -238,6 +283,23 @@ describe('UserTable', () => {
       actions.getBoundingClientRect().left,
     );
   });
+
+  function host(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function rowMenuTrigger(): HTMLButtonElement | null {
+    const icon = host().querySelector('tbody ng-icon[name="lucideEllipsis"]');
+    return icon?.closest('button') ?? null;
+  }
+
+  /** 菜单经 CDK 浮层挂在 document 上，不在组件宿主里。 */
+  async function openRowMenu(): Promise<HTMLElement> {
+    rowMenuTrigger()!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return document.querySelector<HTMLElement>('[data-slot="dropdown-menu"]')!;
+  }
 
   function expandButtons(): HTMLButtonElement[] {
     const host = fixture.nativeElement as HTMLElement;

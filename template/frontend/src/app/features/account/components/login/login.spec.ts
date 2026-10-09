@@ -104,7 +104,7 @@ describe('Login', () => {
         //#endif
         { provide: AuthService, useValue: authService },
         // 真实 permissionGuard 会先等启动流结束；登录页自身不依赖它，给个已完成的桩即可。
-        { provide: StartupService, useValue: { status: signal('success' as const) } },
+        { provide: StartupService, useValue: { settled: () => of(true) } },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
@@ -427,7 +427,7 @@ describe('Login', () => {
         data: { permission: PERMISSIONS.users.default },
         children: [],
       },
-      { path: '403-forbidden', children: [] },
+      { path: 'forbidden', children: [] },
     ]);
 
     await component.onSubmit();

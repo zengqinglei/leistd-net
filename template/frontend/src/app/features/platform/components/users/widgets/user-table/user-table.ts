@@ -22,7 +22,9 @@ import {
   lucideLockOpen,
   lucideShieldCheck,
   lucideShieldOff,
+  //#if (LocalIdentity)
   lucidePencil,
+  //#endif
   lucideSearchX,
   lucideSortAsc,
   lucideSortDesc,
@@ -102,7 +104,9 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideLockOpen,
       lucideShieldCheck,
       lucideShieldOff,
+      //#if (LocalIdentity)
       lucidePencil,
+      //#endif
       lucideSearchX,
       lucideSortAsc,
       lucideSortDesc,
@@ -140,19 +144,16 @@ export class UserTable {
   readonly canDelete = input(true);
   readonly canManageRoles = input(false);
 
+  /** 只出现在溢出菜单里的操作；分配角色（及本地身份下的编辑）在桌面端是行内按钮。 */
+  readonly hasMenuOnlyActions = computed(() => this.canUpdate() || this.canDelete());
   /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
-  // prettier-ignore
-  readonly hasRowActions = computed(
-    () =>
-      this.canUpdate() ||
-      this.canDelete() ||
-      this.canManageRoles() ||
-      false,
-  );
+  readonly hasRowActions = computed(() => this.hasMenuOnlyActions() || this.canManageRoles());
 
   readonly paginationChange = output<PaginationState>();
   readonly sortingChange = output<SortingState>();
+  //#if (LocalIdentity)
   readonly edit = output<string>();
+  //#endif
   readonly toggleActive = output<UserManagementOutputDto>();
   //#if (LocalIdentity)
   readonly resetPassword = output<string>();

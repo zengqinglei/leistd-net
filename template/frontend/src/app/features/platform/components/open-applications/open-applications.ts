@@ -68,7 +68,10 @@ import {
 import { OpenApplicationService } from '../../services/open-application-service';
 import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
-import { SecretRevealDialog } from './widgets/secret-reveal-dialog/secret-reveal-dialog';
+import {
+  SecretRevealDialog,
+  SecretRevealKind,
+} from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 
 const APPLICATION_SORT_COLUMNS = ['clientId', 'creationTime'] as const;
 const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'creationTime', desc: true }];
@@ -163,16 +166,19 @@ export class OpenApplications {
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);
 
-  /** 弹窗可见性变化的唯一入口：关闭时清空 secret 与标题，免得下次打开显示上一次的 secret。 */
+  /** 弹窗可见性变化的唯一入口：关闭时清空 secret 与所属应用，免得下次打开显示上一次的 secret。 */
   onSecretDialogVisibleChange(visible: boolean): void {
     if (!visible) {
       this.secretValue.set('');
-      this.secretHeader.set('');
+      this.secretApplication.set(null);
     }
     this.secretDialogVisible.set(visible);
   }
   secretValue = signal('');
-  secretHeader = signal('');
+  secretKind = signal<SecretRevealKind>('created');
+  secretApplication = signal<Pick<OpenApplicationOutputDto, 'clientId' | 'displayName'> | null>(
+    null,
+  );
 
   // 搜索框即时值：随 URL 回填，输入时乐观更新，防抖后写回 URL。
   readonly searchQuery = signal(this.route.snapshot.queryParamMap.get('keyword') ?? '');
@@ -246,16 +252,6 @@ export class OpenApplications {
     { label: 'Public', value: 'public' as const, icon: 'lucideUnlock' },
     { label: 'Confidential', value: 'confidential' as const, icon: 'lucideLockKeyhole' },
   ]);
-  //#endif
-
-  // 揭示密钥弹窗的标题在事件发生时取一次：弹窗开着时不会切语言
-  //#if (IncludeLocalization)
-  private readonly resetSecretHeader = () => this.transloco.translate('openApp.secret.resetHeader');
-  private readonly createdSecretHeader = () =>
-    this.transloco.translate('openApp.secret.createdHeader');
-  //#else
-  private readonly resetSecretHeader = () => 'Client Secret reset';
-  private readonly createdSecretHeader = () => 'Client secret';
   //#endif
 
   constructor() {
@@ -387,7 +383,8 @@ export class OpenApplications {
           // 创建 Confidential 客户端后显示自动生成的 Secret
           if (!selected && result.clientSecret) {
             this.secretValue.set(result.clientSecret);
-            this.secretHeader.set(this.createdSecretHeader());
+            this.secretKind.set('created');
+            this.secretApplication.set(result);
             this.secretDialogVisible.set(true);
           }
 
@@ -451,13 +448,16 @@ export class OpenApplications {
       return;
     }
 
+    // 重置入口在列表行上，所属应用取自当前列表
+    const application = this.applications().find((item) => item.id === id) ?? null;
     this.service
       .resetSecret(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
           this.secretValue.set(result.clientSecret);
-          this.secretHeader.set(this.resetSecretHeader());
+          this.secretKind.set('reset');
+          this.secretApplication.set(application);
           this.secretDialogVisible.set(true);
           this.reloadList();
         },
