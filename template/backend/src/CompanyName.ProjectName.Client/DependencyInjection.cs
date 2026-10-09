@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Client.Options;
 using Leistd.ServiceClient.Refit;
 using Microsoft.Extensions.DependencyInjection;
 

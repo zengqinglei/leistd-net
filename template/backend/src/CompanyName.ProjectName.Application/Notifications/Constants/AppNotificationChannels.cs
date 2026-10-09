@@ -1,7 +1,7 @@
 #if (IncludeNotifications)
 using Leistd.Notifications.Channels;
 
-namespace CompanyName.ProjectName.Application.Notifications;
+namespace CompanyName.ProjectName.Application.Notifications.Constants;
 
 /// <summary>本项目的通知渠道名（渠道的 <c>INotificationChannel.Name</c>）。</summary>
 /// <remarks>

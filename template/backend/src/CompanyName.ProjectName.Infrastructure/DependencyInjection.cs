@@ -31,7 +31,7 @@ using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.OAuth.Options;
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
-using CompanyName.ProjectName.Infrastructure.TenantConnections;
+using CompanyName.ProjectName.Infrastructure.TenantConnections.Provider;
 #endif
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;

@@ -1,4 +1,5 @@
 using CompanyName.ProjectName.DbMigrator;
+using CompanyName.ProjectName.DbMigrator.Runners;
 #if (RemoteTokenAuth)
 using Leistd.DependencyInjection.DynamicProxy.Registration;
 #endif

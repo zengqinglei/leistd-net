@@ -2,7 +2,7 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Api.Notifications;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Application.Notifications;
+using CompanyName.ProjectName.Application.Notifications.Constants;
 #endif
 #if (Email)
 using CompanyName.ProjectName.Application.Notifications.Provider;

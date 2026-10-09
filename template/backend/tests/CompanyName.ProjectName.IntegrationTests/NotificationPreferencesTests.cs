@@ -8,7 +8,7 @@ using System.Text.Json;
 #if (Email)
 using CompanyName.ProjectName.Application.Notifications.Provider;
 #endif
-using CompanyName.ProjectName.Application.Notifications;
+using CompanyName.ProjectName.Application.Notifications.Constants;
 using CompanyName.ProjectName.Application.Settings.Provider;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Entities;

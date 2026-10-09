@@ -20,9 +20,9 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation;
-using DatabaseMigrationRunner = Migrator::CompanyName.ProjectName.DbMigrator.DatabaseMigrationRunner;
-using MigratorServices = Migrator::CompanyName.ProjectName.DbMigrator.MigratorServices;
-using ResourceAdminBootstrapRunner = Migrator::CompanyName.ProjectName.DbMigrator.ResourceAdminBootstrapRunner;
+using DatabaseMigrationRunner = Migrator::CompanyName.ProjectName.DbMigrator.Runners.DatabaseMigrationRunner;
+using MigratorDependencyInjection = Migrator::CompanyName.ProjectName.DbMigrator.DependencyInjection;
+using ResourceAdminBootstrapRunner = Migrator::CompanyName.ProjectName.DbMigrator.Runners.ResourceAdminBootstrapRunner;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -341,7 +341,7 @@ public sealed class ResourceAdminBootstrapTests
 #endif
         });
         builder.ConfigureContainer(new DynamicProxyServiceRegistrationCallbackFactory());
-        MigratorServices.AddResourceAdminBootstrapServices(builder.Services, builder.Configuration);
+        MigratorDependencyInjection.AddResourceAdminBootstrapServices(builder.Services, builder.Configuration);
         configure(builder.Services);
         return builder.Build();
     }

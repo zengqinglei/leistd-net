@@ -29,7 +29,7 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Infrastructure;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 #if (LocalIdentity && IncludeMultiTenancy)
-using CompanyName.ProjectName.Infrastructure.TenantConnections;
+using CompanyName.ProjectName.Infrastructure.TenantConnections.Provider;
 using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 using Leistd.Lock.Abstractions;

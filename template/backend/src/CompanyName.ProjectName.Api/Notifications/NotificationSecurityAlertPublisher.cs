@@ -2,7 +2,7 @@
 #if (IncludeNotifications)
 using System.Globalization;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using CompanyName.ProjectName.Application.Notifications;
+using CompanyName.ProjectName.Application.Notifications.Constants;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Api.Localization;
 using CompanyName.ProjectName.Application.Settings.Provider;

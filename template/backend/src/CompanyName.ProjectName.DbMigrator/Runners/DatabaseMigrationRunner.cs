@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Leistd.Data.Connections;
 
-namespace CompanyName.ProjectName.DbMigrator;
+namespace CompanyName.ProjectName.DbMigrator.Runners;
 
 /// <summary>预演或施加所有物理数据库目标的 EF Core 迁移。</summary>
 /// <remarks>
