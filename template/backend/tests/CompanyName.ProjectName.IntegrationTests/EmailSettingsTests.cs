@@ -12,9 +12,12 @@ using Leistd.Email.Smtp.Options;
 using Leistd.MultiTenancy.AspNetCore.Options;
 #endif
 using Leistd.OperationRecords.Errors;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 
@@ -197,16 +200,32 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
     }
 #endif
 
+    /// <summary>拒绝时日志只记错误码，不记填写的地址：联系方式不进日志。</summary>
     [Fact]
     public async Task Sender_address_must_be_a_bare_mailbox()
     {
-        using var admin = await LoginAdminAsync();
+        const string address = "Acme <noreply@acme.test>";
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            // 宿主用 Serilog 接管了日志工厂，不换回标准工厂，"日志里没有"就恒成立、证伪不了
+            services.RemoveAll<ILoggerFactory>();
+            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
+                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
+                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
+        }));
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         using var rejected = await admin.Client.PutAsJsonAsync(
             "/api/v1/settings/current-tenant",
-            new { Name = SettingConstant.Email.DefaultFromAddress, Value = "Acme <noreply@acme.test>" });
+            new { Name = SettingConstant.Email.DefaultFromAddress, Value = address });
 
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        using var body = JsonDocument.Parse(await rejected.Content.ReadAsStringAsync());
+        Assert.Equal(AppSettingErrorCodes.EmailAddressInvalid, body.RootElement.GetProperty("code").GetString());
+        var logs = host.Services.GetFakeLogCollector().GetSnapshot();
+        Assert.Contains(logs, record => record.Message.Contains(AppSettingErrorCodes.EmailAddressInvalid, StringComparison.Ordinal));
+        Assert.DoesNotContain(logs, record => record.Message.Contains("noreply@acme.test", StringComparison.Ordinal));
     }
 
     private const string MemberPassword = "EmailSettingsTests!Pw1";

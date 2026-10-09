@@ -140,14 +140,15 @@ public sealed class BusinessExceptionHandler(
             return;
         }
 
+        // 预期失败只记诊断字段：返回给调用方的 detail 面向提交者，可能回显其输入（邮箱等），不进日志。
+        // TraceId 与响应同值；有操作记录时按日志作用域里的关联标识对上审计内容。也不附带异常对象，免得异常链把文本带进来
         logger.Log(
             descriptor.LogLevel,
-            "Expected exception: TraceId={TraceId}, StatusCode={StatusCode}, Code={Code}, Message={Message}, " +
+            "Expected exception: TraceId={TraceId}, StatusCode={StatusCode}, Code={Code}, " +
             "ExceptionType={ExceptionType}, Path={Path}",
             traceId,
             descriptor.StatusCode,
             descriptor.Code,
-            descriptor.Message,
             exception.GetType().Name,
             httpContext.Request.Path);
     }

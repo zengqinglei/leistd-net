@@ -8,6 +8,7 @@
   <ItemGroup>
     <!-- 真实管道测试宿主：直接用 TestHost（TestServer/UseTestServer/GetTestClient），不引更重的 Mvc.Testing。 -->
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
   </ItemGroup>
 
   <ItemGroup>

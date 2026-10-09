@@ -1,17 +1,19 @@
+using System.Text.Json;
 using Leistd.OperationRecords.Logging.Constants;
 using Leistd.OperationRecords.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Leistd.OperationRecords.Logging.Recording;
 
-// 把一条已冻结的记录写成一条结构化日志，字段与数据库存储逐一对应
+// 把一条已冻结的记录写成一条结构化日志，字段与数据库存储逐一对应，失败参数除外：
+// 它是词条占位的原值，可能含提交者的邮箱等联系方式，日志只记参数名；原值只进数据库存储
 internal sealed class OperationRecordLogEmitter(ILoggerFactory loggerFactory)
 {
     private const string MessageTemplate =
         "Operation {OperationAction} {OperationOutcome} on {OperationTargetId} ({OperationTargetName}) "
         + "by {OperationActorId} ({OperationActorName}) of tenant {OperationActorTenantId} in tenant {OperationTenantId}; "
         + "basis {OperationAuthorizationBasis}, visibility {OperationVisibility}, impersonator {OperationImpersonatorId} ({OperationImpersonatorName}), "
-        + "failure {OperationFailureCode} {OperationFailureData} {OperationFailureDetail}, "
+        + "failure {OperationFailureCode} {OperationFailureDataKeys} {OperationFailureDetail}, "
         + "at {OperationTime:O}, correlation {OperationCorrelationId}, record {OperationRecordId}";
 
     private readonly ILogger _logger = loggerFactory.CreateLogger(OperationRecordLogging.CategoryName);
@@ -39,11 +41,32 @@ internal sealed class OperationRecordLogEmitter(ILoggerFactory loggerFactory)
             record.ImpersonatorId,
             record.ImpersonatorName,
             record.FailureCode,
-            record.FailureData,
+            DataKeys(record.FailureData),
             record.FailureDetail,
             record.CreationTime,
             record.CorrelationId,
             record.Id);
+    }
+
+    // 失败参数是 OperationFailure 写出的扁平 JSON 对象；解析不了时不记，也不回落到原文
+    private static string[] DataKeys(string? failureData)
+    {
+        if (string.IsNullOrEmpty(failureData))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(failureData);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? [.. document.RootElement.EnumerateObject().Select(property => property.Name)]
+                : [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     // 业务已提交后的写出：失败不改变业务结果，只在另一类别尽力报告记录标识与动作码

@@ -53,6 +53,7 @@ public readonly record struct OperationFailure
     /// <summary>由技术说明构造，用于不可枚举的异常。</summary>
     /// <remarks>
     /// 调用方对内容负责：不要传 <c>exception.ToString()</c> 或原始异常消息，而应传一句确认可以公开的说明，例如“调用支付网关超时”。
+    /// 日志模式下它原样进入日志，同样不能带联系方式等不能进日志的值。
     /// </remarks>
     /// <param name="detail">可公开的技术说明。</param>
     public static OperationFailure FromDetail(string? detail)

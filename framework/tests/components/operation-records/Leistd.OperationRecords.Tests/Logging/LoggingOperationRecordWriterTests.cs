@@ -226,6 +226,27 @@ public sealed class LoggingOperationRecordWriterTests
         Assert.Single(Records(logs));
     }
 
+    /// <summary>失败参数只记参数名：它是词条占位的原值，可能含提交者的邮箱，联系方式不进日志。</summary>
+    [Fact]
+    public async Task A_failed_record_logs_parameter_names_but_not_their_values()
+    {
+        const string email = "zhang.san@example.com";
+        await using var provider = Build();
+        var logs = provider.GetFakeLogCollector();
+
+        using var scope = provider.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IOperationRecorder>().RecordFailedAsync(
+            "user.created",
+            OperationTarget.For("u-1", "Ada"),
+            "App.Users.Create",
+            OperationFailure.FromCode("User:EmailTaken", new Dictionary<string, object?> { ["Email"] = email }));
+
+        var record = Assert.Single(Records(logs));
+        Assert.Equal("""["Email"]""", Field(record, "OperationFailureDataKeys"));
+        Assert.DoesNotContain(email, record.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(record.StructuredState!, pair => pair.Value?.Contains(email, StringComparison.Ordinal) == true);
+    }
+
     /// <summary>记录在调用时冻结：提交之前上下文变了（切回宿主、换了链路），写出的仍是记录当时的事实。</summary>
     [Fact]
     public async Task The_record_is_frozen_when_recorded_not_when_written()
