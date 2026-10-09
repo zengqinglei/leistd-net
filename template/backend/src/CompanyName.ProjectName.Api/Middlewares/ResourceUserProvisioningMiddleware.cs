@@ -1,5 +1,7 @@
 #if (!LocalIdentity)
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using CompanyName.ProjectName.Application.Users.AppServices;
+using Leistd.MultiTenancy.Context;
 using Leistd.Security.Users;
 
 namespace CompanyName.ProjectName.Api.Middlewares;
@@ -17,7 +19,10 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// <para><b>投影失败不拦请求。</b>JIT 投影的作用是让人能被看见、能被授权，<b>它本身不是安全闸门</b>：
 /// 拦住请求并不会让谁更安全，只会让一个可预见的写入故障（签发方改名后与本地另一行撞
 /// <c>(TenantId, Username)</c> 唯一索引是最典型的）把该用户的<b>每一个</b>请求都变成 500。
-/// 失败时记 Warning 并放行，由授权按"没有成员行 = 没有权限"自然处理。</para>
+/// 失败时记 Warning 并放行，匿名端点照常可用；需要身份的端点由授权按"没有成员行 = 不可用"拒绝
+/// （<see cref="LocalMemberAccessRequirement"/>，403 <c>User:LocalMemberMissing</c>）。</para>
+/// <para><b>状态快照。</b>投影读到的这一行的启停状态记进 <see cref="LocalMemberAccessSnapshot"/>，
+/// 授权阶段直接复用，正常请求不为判定成员状态再查一次库。</para>
 /// <para><b>代价与边界。</b>每个已认证请求多一次主键查询（命中即返回）。
 /// 投影本身（独立工作单元、首次访问并发时重试一次）在 <see cref="IUserAppService.EnsureCurrentUserProjectedAsync"/>。</para>
 /// <para><b>做不到的事要如实说：无法按人名预先授权。</b>那需要一条向签发方查人的契约，
@@ -30,11 +35,20 @@ public sealed class ResourceUserProvisioningMiddleware(
     RequestDelegate next,
     ILogger<ResourceUserProvisioningMiddleware> logger)
 {
-    public async Task InvokeAsync(HttpContext context, ICurrentUser currentUser, IUserAppService userAppService)
+    public async Task InvokeAsync(
+        HttpContext context,
+        ICurrentUser currentUser,
+        ICurrentTenant currentTenant,
+        IUserAppService userAppService,
+        LocalMemberAccessSnapshot accessSnapshot)
     {
         try
         {
-            await userAppService.EnsureCurrentUserProjectedAsync(context.RequestAborted);
+            if (await userAppService.EnsureCurrentUserProjectedAsync(context.RequestAborted) is { } status &&
+                currentUser.Id is { } userId)
+            {
+                accessSnapshot.Record(currentTenant.Id, userId, status);
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

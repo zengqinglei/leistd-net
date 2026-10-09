@@ -62,6 +62,9 @@ public class DailyReportService(IClock clock)
 ## 注意事项
 
 - 持久化与跨服务传递用 UTC，按用户时区展示由呈现层转换；不能用宿主 `TimeZoneInfo.Local` 代替业务时区。
+- `IClock.Now` 是 `DateTime`，精度 100 纳秒；存进 PostgreSQL（Npgsql）的 `timestamp`/`timestamptz` 只保留到微秒，多出的部分写入时丢弃。
+  所以内存里的时刻与读回的值可能差不到 1 微秒：比较持久化前后的时刻时，预期值先按微秒对齐，或换新作用域读回后再比较；
+  不为此改时钟或加全局转换器。
 - 掩码固定为三个星号，不反映原值长度；邮箱示例：`alice@` → `al***@`、`bob@` → `b***@`、`a@` → `***@`。
 - 调用方决定是否脱敏及保留位数，写日志与对外展示共用同一形态，不按部署环境切换。集中日志脱敏策略可用 `Microsoft.Extensions.Compliance.Redaction`，展示仍由本类处理。
 - Core 不定义通用异常基类；优先使用 .NET 内置异常，可预期业务失败使用 `BusinessException`。

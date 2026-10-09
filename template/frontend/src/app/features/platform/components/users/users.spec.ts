@@ -127,6 +127,20 @@ describe('Users page query round trip', () => {
   });
 
   //#endif
+  // 启停用户在所有形态都受 Users.Update 保护，表格的更新开关必须跟随该权限
+  it('passes the update permission to the table', () => {
+    expect(table().canUpdate()).toBe(false);
+
+    TestBed.inject(AuthorizationService).setPermissions({
+      permissions: [PERMISSIONS.users.default, PERMISSIONS.users.update],
+      isSuperAdmin: false,
+      versionToken: 'r2',
+    });
+    fixture.detectChanges();
+
+    expect(table().canUpdate()).toBe(true);
+  });
+
   it('uses the DTO default when the URL contains an unknown sort column', async () => {
     await router.navigate(['/platform/users'], {
       queryParams: { sort: 'passwordHash', direction: 'asc' },

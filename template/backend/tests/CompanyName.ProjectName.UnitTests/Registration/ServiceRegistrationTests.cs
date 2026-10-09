@@ -351,6 +351,15 @@ public class ServiceRegistrationTests
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthorizationMiddlewareResultHandler));
         Assert.Equal(typeof(ApiAuthorizationResultHandler), descriptor.ImplementationType);
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+#if (RemoteTokenAuth)
+
+        // 成员状态判定只登记一次：重复登记会让每次授权判两次、Hub 调用里查两次库
+        var snapshot = Assert.Single(services, d => d.ServiceType == typeof(LocalMemberAccessSnapshot));
+        Assert.Equal(ServiceLifetime.Scoped, snapshot.Lifetime);
+        var handler = Assert.Single(services, d => d.ImplementationType == typeof(LocalMemberAccessHandler));
+        Assert.Equal(typeof(IAuthorizationHandler), handler.ServiceType);
+        Assert.Equal(ServiceLifetime.Scoped, handler.Lifetime);
+#endif
     }
 
     private static IConfiguration Configuration(bool redis) =>

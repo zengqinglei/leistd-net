@@ -94,7 +94,7 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
         Assert.Equal(PermissionConstant.Users.Update, OperationRecordLogCapture.Field(record, "OperationAuthorizationBasis"));
         Assert.NotEqual(Guid.Empty, Assert.IsType<Guid>(OperationRecordLogCapture.Field(record, "OperationRecordId")));
         Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(OperationRecordLogCapture.Field(record, "OperationTime")).Kind);
-        foreach (var field in new[] { "OperationActorTenantId", "OperationTenantId", "OperationImpersonatorId", "OperationImpersonatorName", "OperationOutcome", "OperationFailureCode", "OperationFailureData", "OperationFailureDetail", "OperationVisibility" })
+        foreach (var field in new[] { "OperationActorTenantId", "OperationTenantId", "OperationImpersonatorId", "OperationImpersonatorName", "OperationOutcome", "OperationFailureCode", "OperationFailureDataKeys", "OperationFailureDetail", "OperationVisibility" })
             Assert.True(record.Properties.ContainsKey(field), field);
         LogEvent[] Records() => capture.Snapshot().Where(e =>
             Equals(OperationRecordLogCapture.Field(e, "OperationCorrelationId"), correlation)).ToArray();

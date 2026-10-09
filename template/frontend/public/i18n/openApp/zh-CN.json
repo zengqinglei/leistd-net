@@ -17,7 +17,8 @@
     "created": "开放应用创建成功",
     "updated": "开放应用更新成功",
     "deleted": "开放应用已删除",
-    "secretCopied": "已复制密钥"
+    "secretCopied": "已复制密钥",
+    "clientIdCopied": "已复制 Client ID"
   },
   "confirm": {
     "deleteHeader": "确认删除",
@@ -27,7 +28,11 @@
   },
   "secret": {
     "resetHeader": "Client Secret 已重置",
-    "createdHeader": "客户端密钥",
+    "createdHeader": "客户端凭据已生成",
+    "applicationLabel": "应用：",
+    "clientSecret": "Client Secret",
+    "copyClientId": "复制 Client ID",
+    "copySecret": "复制 Client Secret",
     "warning": "请立即复制并安全保存，该密钥后续不会再次明文展示。",
     "copyAndClose": "复制并关闭"
   },

@@ -113,6 +113,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
             query = query.Where(x =>
                 x.Action.Contains(trimmed)
                 || x.TargetId.Contains(trimmed)
+                || (x.TargetName != null && x.TargetName.Contains(trimmed))
                 || (x.ActorName != null && x.ActorName.Contains(trimmed)));
         }
 

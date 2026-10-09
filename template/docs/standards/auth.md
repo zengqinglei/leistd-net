@@ -22,6 +22,9 @@
 - 访问令牌是只签名、不加密的 JWT：资源服务经 discovery/JWKS 本地验签，不需要分发解密密钥。令牌中的 claim 对每个持有者可读（包括获准的 public/native 客户端），不要放入业务机密；授权码与 refresh token 不受此影响，仍然加密。要改为加密令牌，须删除 `DisableAccessTokenEncryption()` 并为每个资源服务配置解密凭据；要改用 introspection，须启用签发端点，并让资源服务以客户端身份调用。两者都要同时改动签发端与资源端。
 <!--#endif-->
 <!--#endif-->
+<!--#if (LocalIdentity && (IncludeNotifications || IncludeRealTime))-->
+- 实时连接（SignalR）不在撤销的即时范围内：握手时认证的主体沿用到连接结束，Hub 方法调用只按策略复评、不重新认证。会话被撤销或账号被停用后，已建立的连接仍收到服务端推送（通知、业务事件），直到断线重连（重连时认证失败）或页面关闭；`CloseOnAuthenticationExpiration` 只在认证票据到期时断开，不感知撤销。
+<!--#endif-->
 - 所有需要用户身份的接口必须校验认证状态。
 - 认证失败统一返回 401，不暴露内部认证细节。
 
@@ -30,6 +33,21 @@
 - 写操作必须校验资源归属或角色权限。
 - 批量操作必须逐项校验权限或明确全局权限。
 - 管理接口必须与普通用户接口隔离权限。
+<!--#if (RemoteTokenAuth)-->
+
+### 资源服务的成员启停
+
+成员的启用与禁用归本服务所有，签发方的令牌不知道它，认证阶段拦不住；由授权阶段的成员要求（`LocalMemberAccessRequirement`）把守：
+
+- 默认策略与 `App.CurrentUser`（读设置、读自己的权限、通知中心等组件自用端点）都要求本服务有这名成员的行且未被禁用，禁用在下一个请求生效，不等令牌过期。被拒答 403 ProblemDetails：`code` 为 `User:LocalAccessDisabled`（已禁用）或 `User:LocalMemberMissing`（没有成员行，通常是首次访问时投影失败，日志里有对应 Warning）。认证失败仍是 401；带权限点的端点同时由 RBAC 拒绝。
+- 只约束自然人；机器主体（`client:<client_id>`）照旧由自然人断言拒绝，不查成员行。
+- 状态取自本请求投影时读到的那一行（`ResourceUserProvisioningMiddleware`），不另查库；投影失败或 Hub 方法调用（每次调用是新的作用域）时按主键只读一次。读库失败答 500，不当作禁用；不跨请求缓存。
+<!--#if (IncludeRealTime)-->
+- 实时连接：Hub 握手与每次 Hub 方法调用都按默认策略判定，禁用后下一次方法调用（如 `Subscribe`）中止连接，重连被拒。在此之前已建立的连接仍收到服务端推送，直到断线重连或页面关闭；`CloseOnAuthenticationExpiration` 只在令牌到期时断开，不感知禁用。
+<!--#elseif (IncludeNotifications)-->
+- 实时连接：通知 Hub 的握手按默认策略判定，禁用后重连被拒；它没有客户端可调用的方法，连接中途不复评，已建立的连接仍收到通知推送，直到断线重连或页面关闭。`CloseOnAuthenticationExpiration` 只在令牌到期时断开，不感知禁用。
+<!--#endif-->
+<!--#endif-->
 
 ## 权限侧别与租户维度
 
@@ -125,6 +143,6 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 
 签发方轮换签名证书后，遇到不认识的 kid 时先向配置的签发方刷新一次公钥再验（`Leistd.Security.OpenIddict.Validation` 的 `AddSigningKeyRefresh()`，覆盖 Bearer、登录回调与服务端续期；id_token 由 OIDC 处理器自身刷新重试）。只处理可读的 JWS，公钥只来自配置的发现文档，验签规则不放宽。同一时刻的刷新合并成一次抓取，抓取超时 10 秒，请求刷新每分钟至多转交一次（签发方不可用时，伪造 kid 的请求不会逐个触发抓取）；抓取失败时沿用已有公钥；抓取成功则本次只用返回的公钥集，签发方撤掉的公钥不再参与验签。逐请求结果只记 Debug，真实的刷新请求每次记一条 Information。这依赖进程级开关 `Switch.Microsoft.IdentityModel.UpdateConfigAsBlocking`（Api 与集成测试项目以 `RuntimeHostConfigurationOption` 设置）：它也让定期自动刷新改为由到点的请求等待完成。签发方刚刷新过（IdentityModel 的 5 分钟间隔、本服务的 1 分钟限频）或不可达时，新 kid 的请求仍会失败，所以轮换仍按签发方部署文档的顺序先发布、后切换。
 
-退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。账号或租户停用后的本地验签窗口由访问令牌有效期（Identity 的 `OAuth:AccessTokenLifetime`，默认 10 分钟）决定，后续刷新失败收敛会话。
+退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。在 Identity 停用账号或租户后，本地验签窗口由访问令牌有效期（Identity 的 `OAuth:AccessTokenLifetime`，默认 10 分钟）决定，后续刷新失败收敛会话；本服务自己禁用成员则在下一个请求生效，见[资源服务的成员启停](#资源服务的成员启停)。
 <!--#endif-->
 <!--#endif-->

@@ -6,6 +6,12 @@ public static class UserErrorCodes
     public const string AvatarInvalid = "User:AvatarInvalid";
     public const string AvatarTooLarge = "User:AvatarTooLarge";
     public const string EmailTaken = "User:EmailTaken";
+#if (RemoteTokenAuth)
+    /// <summary>本服务停用了该成员：资源服务形态下由授权阶段拒绝，答 403。</summary>
+    public const string LocalAccessDisabled = "User:LocalAccessDisabled";
+    /// <summary>本服务没有该主体的成员行（投影未建成）：资源服务形态下由授权阶段拒绝，答 403。</summary>
+    public const string LocalMemberMissing = "User:LocalMemberMissing";
+#endif
     public const string ManageRolesRequired = "User:ManageRolesRequired";
     public const string NotFound = "User:NotFound";
     public const string RolesNotFound = "User:RolesNotFound";

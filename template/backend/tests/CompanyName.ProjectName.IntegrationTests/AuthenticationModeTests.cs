@@ -150,6 +150,9 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
         services.AddLogging();
         services.AddSecurity();
         services.AddApiAuthorization();
+        // 这里只看自然人断言：成员状态的判定要查库，由 ResourceMemberAccessTests 在真实宿主上验证，此处判为满足
+        services.Remove(services.Single(descriptor => descriptor.ImplementationType == typeof(LocalMemberAccessHandler)));
+        services.AddSingleton<IAuthorizationHandler, SatisfiedLocalMember>();
         await using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
         var authorization = provider.GetRequiredService<IAuthorizationService>();
@@ -158,6 +161,30 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
 
         Assert.Equal(expected, (await authorization.AuthorizeAsync(user, null, options.DefaultPolicy)).Succeeded);
         Assert.Equal(expected, (await authorization.AuthorizeAsync(user, null, options.GetPolicy(ApiPolicies.CurrentUser)!)).Succeeded);
+    }
+
+    [Fact]
+    public void Resource_default_and_current_user_policies_require_an_enabled_local_member()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSecurity();
+        services.AddApiAuthorization();
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
+
+        // Hub 握手与方法调用复评取默认策略，组件自用端点取 CurrentUser：两条都要带成员要求
+        Assert.Contains(options.DefaultPolicy.Requirements, requirement => requirement is LocalMemberAccessRequirement);
+        Assert.Contains(options.GetPolicy(ApiPolicies.CurrentUser)!.Requirements, requirement => requirement is LocalMemberAccessRequirement);
+    }
+
+    private sealed class SatisfiedLocalMember : AuthorizationHandler<LocalMemberAccessRequirement>
+    {
+        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, LocalMemberAccessRequirement requirement)
+        {
+            context.Succeed(requirement);
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]

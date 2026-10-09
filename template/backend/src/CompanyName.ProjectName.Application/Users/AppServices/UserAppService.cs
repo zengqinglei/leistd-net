@@ -4,6 +4,7 @@ using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 #if (RemoteTokenAuth)
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.MultiTenancy.Context;
 using Leistd.UnitOfWork;
 #endif
@@ -13,7 +14,6 @@ using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using Leistd.EventBus.Abstractions;
-using Leistd.Timing;
 #endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
@@ -37,6 +37,7 @@ using Leistd.ObjectMapping.Abstractions;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.Data.Paging;
+using Leistd.Timing;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
@@ -70,9 +71,7 @@ public class UserAppService(
     INotificationStore notificationStore,
 #endif
     ILogger<UserAppService> logger,
-#if (LocalIdentity)
     IClock clock,
-#endif
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
@@ -168,16 +167,16 @@ public class UserAppService(
     }
 
     /// <inheritdoc />
-    public async Task EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default)
+    public async Task<UserAccessStatus?> EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsAuthenticated || currentUser.Id is not { } subjectId)
         {
-            return;
+            return null;
         }
 
         try
         {
-            await ProjectCurrentUserAsync(subjectId, cancellationToken);
+            return await ProjectCurrentUserAsync(subjectId, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -185,22 +184,36 @@ public class UserAppService(
             // 前端登录后往往并行发好几个请求，第一次访问正好都在投影；重来一次就会读到赢家写下的行。
             // 只重试一次，不做退避循环：第二次还失败就不是竞争，是真有问题，交给调用方
             logger.LogDebug(exception, "Projecting issuer subject {SubjectId} failed once; retrying", subjectId);
-            await ProjectCurrentUserAsync(subjectId, cancellationToken);
+            return await ProjectCurrentUserAsync(subjectId, cancellationToken);
         }
     }
 
+    /// <inheritdoc />
+    public async Task<UserAccessStatus?> GetCurrentUserAccessStatusAsync(CancellationToken cancellationToken = default)
+    {
+        if (!currentUser.IsAuthenticated || currentUser.Id is not { } subjectId)
+        {
+            return null;
+        }
+
+        var user = await userRepository.GetByIdAsync(subjectId, cancellationToken);
+        return user?.GetAccessStatus(clock.Now);
+    }
+
     // 独立工作单元：投影是请求的前置动作，不该被后续业务失败连带回滚——
-    // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关
-    private async Task ProjectCurrentUserAsync(Guid subjectId, CancellationToken cancellationToken)
+    // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关。
+    // 状态取自投影读到（或新建）的同一行，提交成功才返回：调用方据此免去再查一次
+    private async Task<UserAccessStatus> ProjectCurrentUserAsync(Guid subjectId, CancellationToken cancellationToken)
     {
         using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
-        await userDomainService.EnsureProjectedAsync(
+        var user = await userDomainService.EnsureProjectedAsync(
             subjectId,
             currentUser.Username,
             currentUser.Email,
             currentUser.Name,
             cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
+        return user.GetAccessStatus(clock.Now);
     }
 #endif
 

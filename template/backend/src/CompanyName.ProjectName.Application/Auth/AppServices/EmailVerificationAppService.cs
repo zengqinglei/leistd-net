@@ -61,7 +61,7 @@ public class EmailVerificationAppService(
         var email = input.Email.Trim();
         if (!await userDomainService.IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+            throw new BusinessException(UserErrorCodes.EmailTaken, "Email is already in use.")
                 .WithData("Email", email);
         }
 

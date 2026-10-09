@@ -43,8 +43,9 @@ export const routes: Routes = [
       import('./features/workspace/workspace.routes').then((r) => r.WORKSPACE_ROUTES),
   },
   // 已登录但无权限：与 401 的登录跳转区分开，避免"登录成功又被弹回登录页"的循环。
+  // permissionGuard 跳到这里时地址栏显示被拒的目标，刷新即按它重新判定。
   {
-    path: '403-forbidden',
+    path: 'forbidden',
     //#if (IncludeLocalization)
     providers: [provideTranslocoScope('forbidden')],
     resolve: { translations: resolveTranslationScopes },
@@ -72,5 +73,14 @@ export const routes: Routes = [
     loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
   },
 
-  { path: '**', redirectTo: '' },
+  // 未知地址原地显示 404 页，不改写地址栏，也不悄悄送回首页。
+  {
+    path: '**',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('notFound')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
+    loadComponent: () =>
+      import('./features/public/components/not-found/not-found').then((m) => m.NotFound),
+  },
 ];

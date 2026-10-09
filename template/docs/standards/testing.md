@@ -106,14 +106,14 @@ backend/tests/
 - 实体配置、唯一索引与全局查询过滤器在集成测试里验证，不用 EF InMemory 或 SQLite 代替（前者放过违反的约束与不可翻译的查询，后者会锁死独立事务写入）。
 - 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言结果时换一个作用域读，否则读到仍被跟踪的旧实体。
 - 外部服务使用 fake、mock 或明确的测试环境；日志用 `FakeLogger`，不手写替身。
-- 时间边界（锁定、挑战与验证码有效期、令牌到期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟，`IClock`、Cookie 认证与 OpenIddict 随之跟随；起点取当前时刻。缓存过期不跟随该时钟：测试缓存 TTL 时保留真实 MemoryCache/HybridCache，经 `MemoryCacheOptions.Clock` 接入同一假时钟，验证到期前与到期时刻，不用主动删除冒充到期；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制，不手写替代判定来快进。
+- 时间边界（锁定、挑战与验证码有效期、令牌到期、限频窗口）用 `FakeTimeProvider` 或显式时刻验证，不靠真实时间流逝。集成测试在 `ConfigureTestServices` 里 `RemoveAll<TimeProvider>()` 后登记假时钟，`IClock`、Cookie 认证与 OpenIddict 随之跟随；起点取当前时刻。缓存过期不跟随该时钟：测试缓存 TTL 时保留真实 MemoryCache/HybridCache，经 `MemoryCacheOptions.Clock` 接入同一假时钟，验证到期前与到期时刻，不用主动删除冒充到期；Redis、Data Protection 限时保护器与 OIDC 处理器的寿命校验用各自机制，不手写替代判定来快进。PostgreSQL 时间只存到微秒：固定时钟起点按微秒对齐，持久化的时刻换新作用域读回再比较，不放大容差。
 - 端到端只验接线与生效值，不等安全窗口过期；确需观察真实到期时用配置缩短窗口（如[部署说明](../deploy/README.md)中的 `OAuth:AccessTokenLifetime`）并断言已生效。网络、取消、超时等有上限、等可观察结果的等待不在此列。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。
 - 各层注册入口覆盖注册结果、生命周期与相同登记重复调用不重复生效，有意覆盖组件默认实现的登记验证两种调用顺序；有注册或配置决策（选择实现、派生 Options）的宿主扩展测行为，单纯转调由启动集成测试覆盖（见[后端开发规范 §4](./coding-backend.md#4-依赖注入)）。注册面是契约，编译期看不出错。
 
 ### 2.3 后台维护任务
 
-Job 的截止判据与失败传播放单元测试；批量 SQL、租户过滤与 DI 接线放 PostgreSQL 集成测试；调度器自身行为由框架覆盖，不重复测。集成测试固定 `TimeProvider` 后经 DI 直接执行 Job（配置变体复用既有数据库，只在该变体关闭自动调度），用截止前、等于、后三组数据按业务定义核对 `<` 或 `<=`（时刻对齐 PostgreSQL 微秒精度、留毫秒间隔），批量 SQL 后换新作用域读取；涉及租户时宿主与租户都验证。不按 Job 数量增加容器、固定等待或独立 E2E，跨进程责任变化时才扩大到真实运行闭环。
+Job 的截止判据与失败传播放单元测试；批量 SQL、租户过滤与 DI 接线放 PostgreSQL 集成测试；调度器自身行为由框架覆盖，不重复测。集成测试固定 `TimeProvider` 后经 DI 直接执行 Job（配置变体复用既有数据库，只在该变体关闭自动调度），用截止前、等于、后三组数据按业务定义核对 `<` 或 `<=`（时刻按上文对齐微秒、留毫秒间隔），批量 SQL 后换新作用域读取；涉及租户时宿主与租户都验证。不按 Job 数量增加容器、固定等待或独立 E2E，跨进程责任变化时才扩大到真实运行闭环。
 
 <!--#if (SpaFrontend)-->
 ## 3. 前端

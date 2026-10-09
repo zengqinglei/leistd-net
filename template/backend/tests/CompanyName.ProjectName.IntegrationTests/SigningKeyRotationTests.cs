@@ -534,8 +534,10 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
             Current = NewKey($"key-{Guid.NewGuid():N}");
         }
 
+        // 用户名随主体变化：同一测试类共用一个库，固定用户名会让后来的主体投影撞 (TenantId, Username) 唯一索引，
+        // 没有成员行的主体在需要身份的端点上被拒（403 User:LocalMemberMissing）
         public string AccessToken(RsaSecurityKey key) => Token(key, "resource-api", "at+jwt", new()
-        { ["sub"] = Subject, ["preferred_username"] = "rotating-user", ["jti"] = Guid.NewGuid().ToString() });
+        { ["sub"] = Subject, ["preferred_username"] = $"rotating-{Subject}", ["jti"] = Guid.NewGuid().ToString() });
 
         private static string Token(RsaSecurityKey key, string audience, string type, Dictionary<string, object> claims) =>
             new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor

@@ -1,8 +1,15 @@
-import { Route, Routes } from '@angular/router';
+import { Location } from '@angular/common';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter, Route, Router, Routes } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 
 import { routes } from './app.routes';
 import { authGuard } from './core/guards/auth-guard';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from './core/i18n/transloco.testing';
+//#endif
 import { PROTECTED_ROUTE_PREFIXES } from './core/services/startup-service';
+import { NotFound } from './features/public/components/not-found/not-found';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 describe('top-level routes', () => {
@@ -50,6 +57,35 @@ describe('top-level routes', () => {
       [...PROTECTED_ROUTE_PREFIXES].sort() as string[],
       `路由表里使用 authGuard 的是 ${authGuarded.join(', ')}`,
     ).toEqual(authGuarded);
+  });
+
+  it('ends with a wildcard that renders the not-found page in place instead of redirecting', () => {
+    const wildcards = (routes as Routes).filter(isWildcard);
+
+    expect(wildcards).toHaveLength(1);
+    expect(routes.at(-1)).toBe(wildcards[0]);
+    expect(wildcards[0].redirectTo, '未知地址不能悄悄送回首页').toBeUndefined();
+    expect(wildcards[0].loadComponent).toBeDefined();
+  });
+
+  // 真实路由表：未知地址越过空路径公开区落到通配路由，地址栏保留原地址
+  it('shows the not-found page for an unknown url without changing the address', async () => {
+    TestBed.configureTestingModule({
+      // prettier-ignore
+      providers: [
+        provideRouter(routes),
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(['en']),
+        //#endif
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+
+    // 第二个参数断言落地组件的类型，不是它就抛错
+    await harness.navigateByUrl('/no-such-page?from=mail', NotFound);
+
+    expect(TestBed.inject(Router).url).toBe('/no-such-page?from=mail');
+    expect(TestBed.inject(Location).path()).toBe('/no-such-page?from=mail');
   });
 
   /** 路由守卫与菜单、重定向必须用同一份权限清单；断言同源，防止有人在路由里手写补项。 */

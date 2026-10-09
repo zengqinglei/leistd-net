@@ -1,5 +1,8 @@
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Dtos;
+#if (RemoteTokenAuth)
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
+#endif
 using Leistd.Ddd.Application.Contracts.AppServices;
 using Leistd.Data.Paging;
 
@@ -28,7 +31,12 @@ public interface IUserAppService : IAppService
     /// 在独立工作单元内提交，不随调用方的业务失败回滚。首次访问并发撞主键时重试一次，
     /// 仍失败则抛出，由调用方决定是否放行（见 <c>ResourceUserProvisioningMiddleware</c>）。
     /// </remarks>
-    Task EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default);
+    /// <returns>投影后本地用户行的访问状态（本服务的启停）；未认证或非用户主体时为 <see langword="null"/>。</returns>
+    Task<UserAccessStatus?> EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>按主键读当前主体本地用户行的访问状态，只读、不投影。</summary>
+    /// <returns>访问状态；本地没有这一行（投影未建成）或非用户主体时为 <see langword="null"/>。</returns>
+    Task<UserAccessStatus?> GetCurrentUserAccessStatusAsync(CancellationToken cancellationToken = default);
 #endif
 
 #if (LocalIdentity)

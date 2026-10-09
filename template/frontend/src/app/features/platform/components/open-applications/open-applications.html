@@ -99,6 +99,7 @@
     [visible]="secretDialogVisible()"
     (visibleChange)="onSecretDialogVisibleChange($event)"
     [secret]="secretValue()"
-    [header]="secretHeader()"
+    [kind]="secretKind()"
+    [application]="secretApplication()"
   />
 </ng-container>

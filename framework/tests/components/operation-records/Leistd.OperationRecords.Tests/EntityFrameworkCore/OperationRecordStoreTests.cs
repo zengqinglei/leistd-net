@@ -74,6 +74,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         string action = "identity.user.created",
         string targetId = "u-1",
         string? actorName = "Grace",
+        string? targetName = "Ada Lovelace",
         DateTime? creationTime = null,
         Guid? id = null,
         OperationRecordOutcome outcome = OperationRecordOutcome.Succeeded,
@@ -86,6 +87,7 @@ public sealed class OperationRecordStoreTests : IDisposable
             Id = id ?? Guid.CreateVersion7(),
             Action = action,
             TargetId = targetId,
+            TargetName = targetName,
             AuthorizationBasis = "App.Users.Create",
             Outcome = outcome,
             Visibility = visibility,
@@ -181,10 +183,12 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Equal(["new", "old"], page.Items.Select(x => x.Action));
     }
 
-    /// <summary>关键字同时匹配动作码、目标标识与操作人名。</summary>
+    /// <summary>关键字同时匹配动作码、目标标识、目标名与操作人名。</summary>
+    /// <remarks>列表展示目标时优先显示目标名，看得见的名字必须搜得到。</remarks>
     [Theory]
     [InlineData("user.created", 1)]
     [InlineData("u-1", 1)]
+    [InlineData("Ada Lovelace", 1)]
     [InlineData("Grace", 1)]
     [InlineData("nothing-matches", 0)]
     public async Task The_keyword_matches_action_target_and_actor(string keyword, int expected)
@@ -195,6 +199,19 @@ public sealed class OperationRecordStoreTests : IDisposable
 
         Assert.Equal(expected, page.Items.Count);
         Assert.Equal(expected, page.TotalCount);
+    }
+
+    /// <summary>按目标名命中不放宽可见性：其他读者看不到的记录，同名也搜不出来。</summary>
+    [Fact]
+    public async Task A_target_name_match_still_respects_visibility()
+    {
+        await _store.InsertAsync(Info(targetName: "Ada Lovelace", visibility: OperationVisibility.Host));
+        await _store.InsertAsync(Info(targetName: "Ada Lovelace", visibility: OperationVisibility.Tenant));
+
+        var page = await QueryAsync(keyword: "Lovelace", scope: OperationRecordVisibilityScope.ForTenantReader("reader", Guid.NewGuid()));
+
+        Assert.Equal(1, page.TotalCount);
+        Assert.Equal(OperationVisibility.Tenant, Assert.Single(page.Items).Visibility);
     }
 
     /// <summary>时间区间两端都是闭区间：边界那一刻的记录必须被选中。</summary>

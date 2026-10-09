@@ -82,9 +82,9 @@ if (order.Status == OrderStatus.Shipped)
 }
 ```
 
-`Code` 在构造时必填且不可变，同时是机器契约和本地化资源键。`Message` 必须是安全、可在未启用本地化时直接返回的默认文案；技术细节放入 `InnerException` 和日志。
+`Code` 在构造时必填且不可变，同时是机器契约和本地化资源键。`Message` 必须是安全、可在未启用本地化时直接返回的默认文案，并且可能随异常对象进入日志（5xx 的异常链、宿主自己记录的异常）：不拼入邮箱、手机号等不能进日志的值，这类值交给 `WithData`；技术细节放入 `InnerException`。
 能帮用户修正操作的非敏感输入可以回显；密码、令牌、连接串以及匿名场景中会帮助枚举账号的标识不得回显。
-`WithData` 写入 `LocalizationData`，供资源文案的具名占位符使用；这些值会随错误响应返回，也可能进入操作记录与导出，只放可公开展示的值。
+`WithData` 写入 `LocalizationData`，供资源文案的具名占位符使用；填好的文案作为 `detail` 返回给调用方，原值也可能进入操作记录与导出，只放这些读者可见的值。
 
 ## 默认映射与安全边界
 
@@ -105,7 +105,8 @@ if (order.Status == OrderStatus.Shipped)
 
 响应字段 `traceId` 是当前 `Activity.Id`（W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，取第二段检索；没有 Activity 时为 `HttpContext.TraceIdentifier`），不被关联标识覆盖；
 异常日志记下同一个值。业务层面的关联标识见[关联标识](./tracing.md)，它在响应头 `X-Correlation-Id` 与日志作用域里。
-预期的 4xx 记 Warning（只记公开消息），5xx 记 Error 并保留异常链与堆栈。
+预期的 4xx 记 Warning，只有 `TraceId`、`StatusCode`、`Code`、异常类型与路径；不记 `detail`、默认文案与参数，也不附带异常对象。
+`detail` 面向提交请求的人，可能回显其输入。`traceId` 把日志与响应、请求链路对上；端点有操作记录时，按日志作用域与响应头里的关联标识（见[关联标识](./tracing.md)）对上审计内容。5xx 记 Error 并保留异常链与堆栈。
 
 ## 无响应体的错误状态码
 

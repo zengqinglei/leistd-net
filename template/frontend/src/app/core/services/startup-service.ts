@@ -1,9 +1,14 @@
 // prettier-ignore
 import {
   Injectable,
+  Injector,
   inject,
   signal,
 } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
+import { Observable } from 'rxjs';
+import { filter, map, take } from 'rxjs/operators';
 
 import { AuthService } from './auth-service';
 //#if (Impersonation)
@@ -26,6 +31,8 @@ export class StartupService {
   private authService = inject(AuthService);
   private readonly sessionContext = inject(SessionContextService);
   private readonly entryRoute = inject(EntryRouteService);
+  private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
   //#if (Impersonation)
   private readonly impersonation = inject(ImpersonationService);
   //#endif
@@ -87,9 +94,44 @@ export class StartupService {
     }
   }
 
+  /**
+   * 重新跑启动流；成功后进入失败时被扣下的导航目标（含查询串与锚点）。
+   *
+   * 不读地址栏：守卫取消导航后 Router 可能已把它还原成上一条 URL。
+   */
   async retry(): Promise<void> {
     await this.load();
+    if (this._status() !== 'success') {
+      return;
+    }
+    const target = this.entryRoute.takeHeld();
+    if (target) {
+      await this.router.navigateByUrl(target);
+    }
   }
+
+  /**
+   * 路由守卫的共同前置：等启动流离开 `loading`。失败时扣下本次导航目标并给出 `false`，页面停在
+   * 启动失败卡片上由重试恢复。启动失败不是"未登录"也不是"无权限"：跳登录页在资源服务形态会与签发方
+   * 静默往返成死循环，在本地身份形态会把故障说成"请登录"；跳 403 则是拿空权限下结论。
+   *
+   * @param targetUrl 守卫拿到的 `RouterStateSnapshot.url`。
+   * @returns 启动成功时发出 `true` 后结束，由守卫继续自己的判定。
+   */
+  settled(targetUrl: string): Observable<boolean> {
+    return toObservable(this._status, { injector: this.injector }).pipe(
+      filter((status) => status !== 'loading'),
+      take(1),
+      map((status) => {
+        if (status === 'failed') {
+          this.entryRoute.hold(targetUrl);
+          return false;
+        }
+        return true;
+      }),
+    );
+  }
+
   private isProtectedRoute(): boolean {
     const route = this.entryRoute.path();
     return PROTECTED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));

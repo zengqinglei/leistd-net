@@ -268,6 +268,7 @@
                             <!-- 操作列（7 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。
                                规则见 docs/standards/frontend-ui.md §1.1。 -->
                             <div class="flex items-center justify-end gap-1">
+                              <!--#if (LocalIdentity)-->
                               @if (canUpdate()) {
                                 <button
                                   hlmBtn
@@ -282,6 +283,7 @@
                                   <ng-icon name="lucidePencil" />
                                 </button>
                               }
+                              <!--#endif-->
                               <!-- 角色分配与资料编辑分离：需要 App.Users.ManageRoles 才出现。 -->
                               @if (canManageRoles()) {
                                 <button
@@ -298,11 +300,14 @@
                                 </button>
                               }
                               @if (hasRowActions()) {
+                                <!-- 菜单里只剩行内按钮的窄屏副本时，桌面端不显示触发器，免得点开为空。 -->
                                 <button
                                   hlmBtn
                                   variant="ghost"
                                   size="icon"
                                   align="end"
+                                  class="sm:data-inline-only:hidden"
+                                  [attr.data-inline-only]="hasMenuOnlyActions() ? null : ''"
                                   [attr.aria-label]="t('common.actions')"
                                   [hlmDropdownMenuTrigger]="rowMenu"
                                 >
@@ -312,6 +317,7 @@
                               <ng-template #rowMenu>
                                 <hlm-dropdown-menu>
                                   <hlm-dropdown-menu-group>
+                                    <!--#if (LocalIdentity)-->
                                     @if (canUpdate()) {
                                       <button
                                         hlmDropdownMenuItem
@@ -323,6 +329,7 @@
                                         {{ t('common.edit') }}
                                       </button>
                                     }
+                                    <!--#endif-->
                                     @if (canManageRoles()) {
                                       <button
                                         hlmDropdownMenuItem
