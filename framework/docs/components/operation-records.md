@@ -120,7 +120,7 @@ builder.Services.AddOperationRecordsLogging();     // 记录器的四样前置�
 | 成功，无环境工作单元 | 立即写出——调用方在变更落库之后才记录，与数据库存储"即时生效"同一调用约定 |
 | 失败 | 立即写出，不等待、不跟随调用方的事务 |
 
-- 常量命名空间为 `Leistd.OperationRecords.Logging.Constants`。日志类别 `OperationRecordLogging.CategoryName`（`Leistd.OperationRecords`）；成功为 `Information`（事件 7100），失败为 `Warning`（事件 7101）。字段与数据库存储逐一对应：`OperationRecordId`、`OperationAction`、`OperationOutcome`、`OperationTargetId`/`Name`、`OperationActorId`/`Name`、`OperationActorTenantId`、`OperationTenantId`、`OperationAuthorizationBasis`、`OperationVisibility`、`OperationImpersonatorId`/`Name`、`OperationFailureCode`/`Data`/`Detail`、`OperationTime`（UTC）、`OperationCorrelationId`。
+- 常量命名空间为 `Leistd.OperationRecords.Logging.Constants`。日志类别 `OperationRecordLogging.CategoryName`（`Leistd.OperationRecords`）；成功为 `Information`（事件 7100），失败为 `Warning`（事件 7101）。字段与数据库存储逐一对应：`OperationRecordId`、`OperationAction`、`OperationOutcome`、`OperationTargetId`/`Name`、`OperationActorId`/`Name`、`OperationActorTenantId`、`OperationTenantId`、`OperationAuthorizationBasis`、`OperationVisibility`、`OperationImpersonatorId`/`Name`、`OperationFailureCode`/`Detail`、`OperationTime`（UTC）、`OperationCorrelationId`。失败参数例外：只记参数名 `OperationFailureDataKeys`，不记值——它是词条占位的原值，可能含提交者的邮箱等联系方式，按开发规范不进日志；需要参数原值的审计用数据库存储。
 - 记录在调用时冻结：标识、时间、操作人与租户都在记录器里定案，提交后写出时不再读取任何上下文。
 - 启动期校验：该类别对 `Information` 未开启，或缺少工作单元与本地事件总线时，宿主启动失败。
 - 持久化保证弱于数据库存储：事务已提交、日志尚未写出时进程退出，这条成功记录会丢失；日志的保留期与防篡改由采集链路负责。
@@ -329,8 +329,11 @@ app.UseOperationFailureRecording();
   那时租户作用域已随异常退出，租户内的失败会写进宿主层，授权之前抛出的业务异常也会流到那里。
 - 授权依据取端点最后声明的具名策略，不重新评估；没有具名策略时记 `-`。
 - 只记业务拒绝；参数校验失败（`ValidationException`）与技术异常属于请求日志。
-- 应用服务照常可以在拒绝处调 `RecordFailedAsync`（它有业务目标名）。本次请求里同一动作码与目标已记过时，兜底跳过，
-  留下先记的那条（契约见 `RecordedFailureTracker`）。
+- 兜底记录只有从路由推出的目标标识，**不带目标名**；目标来自请求体（如创建类端点）时记 `-`。
+  授权被拒发生在应用服务之前，这条路径始终没有目标名，这是有意的：回填名字会把无权访问的目标名写进记录。
+- 授权通过后的业务拒绝需要目标名或请求体里的目标时，由应用服务在拒绝处调 `RecordFailedAsync`。
+  本次请求里同一动作码与目标已记过时，兜底跳过，留下先记的那条（契约见 `RecordedFailureTracker`）；
+  `RecordFailedAsync` 自身不去重，多次调用记多条。
 - 注解声明的目标要与应用服务记录的目标逐字一致（含 `TargetIdPrefix`），否则一次失败记成两条。
 - 兜底推不出目标（端点没声明目标路由键或某段缺失）时只按动作码判，同一动作的第二次失败不会被补记；
   要逐条留痕就由应用服务按目标逐条调用 `RecordFailedAsync`。
@@ -355,7 +358,7 @@ app.UseOperationFailureRecording();
 | `IOperationActionDefinitionManager` | 动作定义的只读索引；`GetOrNull` 返回 `null` 即未登记。写入时记录器据此抛错；读取历史记录时调用方据此降级（原样显示裸码） |
 | `OperationRecordOptions` | `ImpersonatorIdClaimType` / `ImpersonatorNameClaimType` 默认值取自 `CustomClaimTypes`；操作人标识按 `ClaimTypeOptions.UserIds` 读取（`ICurrentUser.SubjectId`），不在这里另配 |
 | `IOperationRecordWriter.InsertAsync(record, ct)` | 写入；成功记录只在它描述的变更生效之后可见（有环境工作单元时跟随它），失败记录立即、独立于调用方事务写出。一个宿主只有一个写入方 |
-| `IOperationRecordReader.GetPagedListAsync(filter, page, ct)` | 只由可回读的存储实现； 按创建时间倒序分页，返回 `PagedResult<OperationRecordInfo>`；`OperationRecordFilter` 的 `Scope` 必填，关键字匹配动作码、目标标识与操作人名，时间两端都是**闭区间**且按 UTC 比较；`PageRequest.Sorting` 不生效 |
+| `IOperationRecordReader.GetPagedListAsync(filter, page, ct)` | 只由可回读的存储实现； 按创建时间倒序分页，返回 `PagedResult<OperationRecordInfo>`；`OperationRecordFilter` 的 `Scope` 必填，关键字匹配动作码、目标标识、目标名与操作人名，时间两端都是**闭区间**且按 UTC 比较；`PageRequest.Sorting` 不生效 |
 | `IOperationRecordQueryService` | 查询、筛选项与导出用例：无租户上下文即宿主读者；租户读者看不到 `Host` 层、`Actor` 层只看本人（`ActorId` 与 `ActorTenantId` 都与读者相同）；仅宿主字段（`FailureDetail`、`CorrelationId`、`ActorTenantId`）只下发给宿主读者；类别与动作维度间取交集，展开为空返回空页；`FailureMessage` 为按请求语言渲染的失败原因（导出另成 `FailureMessage` 列）。**不做权限判定**，由端点策略把守 |
 | `MapOperationRecords(configure)` | AspNetCore 包：`GET /`、`GET /filter-options`、`GET /export`；`ReadPolicy`、`ExportPolicy`、`ExportAction` 必填；未注册查询用例（日志输出模式）时映射即抛错；返回路由组，端点名前缀见 `OperationRecordEndpoints.NamePrefix` |
 | `AddOperationRecordRetention<TDbContext>(configure?, configSectionPath?)` | EF 包：绑定 `configSectionPath`（默认 `Leistd:OperationRecords:Retention`）并启动期校验，校验消息按实际路径报键，重复调用换用另一配置节时抛出；登记集群周期任务 `operation-records.archive`（每日 `DailyRunHourUtc` 执行） |
@@ -391,7 +394,7 @@ app.UseOperationFailureRecording();
   （如租户用户调用宿主接口被拒）改写进宿主层，来源租户记在 `ActorTenantId`；租户上下文里的成功记录直接抛错，这类动作应登记为 `Tenant`，
   或切到宿主上下文后再记。
 - 索引：`(TenantId, CreationTime DESC)`、`(TenantId, Visibility, CreationTime DESC)` 与单列 `CreationTime`（保留期归档整库按时间扫）。
-  关键字检索在时间裁剪后的结果上过滤，不单独建索引。
+  关键字是对动作码、目标与操作人列的包含匹配，不单独建索引；按时间区间筛选能让它只扫区间内的行。
 - 分页按 `CreationTime` 再按 `Id` 倒序，顺序确定；同一时刻内的先后取决于 Provider 的 Guid 比较方式。
 - 失败原因存码、读时渲染：查询与导出用容器里的非泛型 `IStringLocalizer`（`AddJsonLocalization` 会注册）按码取文案，
   用 `LocalizationPlaceholders.Fill` 填占位符；`FailureData` 解析不了时按无参数渲染。导出的 CSV 保留码与参数两列，另加按导出请求语言渲染的 `FailureMessage` 列。
