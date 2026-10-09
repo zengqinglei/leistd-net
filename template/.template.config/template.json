@@ -397,6 +397,7 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/PagedQueryContractTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/PermissionSubjectResolutionTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ReauthenticationLockoutTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/SettingConcurrencyTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SessionRoleClaimTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TwoFactorTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/UserRolesQueryTests.cs",
