@@ -180,6 +180,7 @@ docker build --build-arg APP_VERSION=1.4.0 --build-arg APP_REVISION="$(git rev-p
 - 浏览器使用后端 OIDC 机密客户端与 Cookie 会话，服务端保存并刷新令牌；配置、回调、缓存/密钥与 CSRF 边界见 [浏览器认证](../standards/auth.md#浏览器认证)。
 <!--#endif-->
 - 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
+- 本服务自己禁用成员（用户管理里的禁用）不依赖身份服务，下一个请求即答 403，边界见 [资源服务的成员启停](../standards/auth.md#资源服务的成员启停)。
 <!--#endif-->
 <!--#if (IncludeNotifications && Email)-->
 - 通知邮件要附可点开的站内链接时配置 `Leistd:Notifications:Email:PublicBaseUrl`（站点对外地址；哈希路由以 `/#` 结尾），不配则不附。

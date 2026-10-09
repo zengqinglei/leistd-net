@@ -50,6 +50,28 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.Equal(1, await CountUsersAsync(subjectId));
     }
 
+    /// <summary>令牌没带显示名时，重复访问不再写库：新建与比较用同一个回落值（用户名）。</summary>
+    /// <remarks>投影在每个已认证请求上都会走到，口径不一致会让每个请求都多一次 UPDATE。</remarks>
+    [Fact]
+    public async Task Repeated_requests_without_a_display_name_do_not_rewrite_the_row()
+    {
+        var subjectId = Guid.CreateVersion7();
+        var updates = new UserUpdateCounter(subjectId);
+        await using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(updates))));
+        using var session = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, ProjectWebApplicationFactory.NewTenantId());
+
+        await session.Client.GetAsync("/api/health/live");
+        await session.Client.GetAsync("/api/health/live");
+        await session.Client.GetAsync("/api/health/live");
+
+        Assert.Equal(0, updates.Count);
+        await using var scope = host.Services.CreateAsyncScope();
+        var user = await scope.ServiceProvider.GetRequiredService<MyProjectDbContext>().Users
+            .IgnoreQueryFilters().SingleAsync(u => u.Id == subjectId);
+        Assert.Equal(user.Username, user.DisplayName);
+    }
+
     /// <summary>未认证的请求不建行：没有主体就没什么可投影的。</summary>
     [Fact]
     public async Task An_anonymous_request_projects_nothing()
@@ -164,6 +186,28 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
             record => record.Category?.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal) == true
                 && record.Message.Contains(subjectId.ToString(), StringComparison.Ordinal));
         Assert.Equal(0, await CountUsersAsync(subjectId, host.Services));
+    }
+
+    // 数这个主体的用户行被改写了几次
+    private sealed class UserUpdateCounter(Guid subjectId) : SaveChangesInterceptor
+    {
+        private int count;
+
+        public int Count => Volatile.Read(ref count);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context?.ChangeTracker.Entries<User>()
+                    .Any(entry => entry.State == EntityState.Modified && entry.Entity.Id == subjectId) == true)
+            {
+                Interlocked.Increment(ref count);
+            }
+
+            return ValueTask.FromResult(result);
+        }
     }
 
     // 只拦插入这个主体的提交，其余写入照常

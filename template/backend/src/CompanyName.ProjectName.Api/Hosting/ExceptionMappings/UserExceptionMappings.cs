@@ -8,6 +8,10 @@ internal static class UserExceptionMappings
     public static void Configure(GlobalExceptionOptions options)
     {
         ApiExceptionMappings.Map(options, StatusCodes.Status403Forbidden,
+#if (RemoteTokenAuth)
+            UserErrorCodes.LocalAccessDisabled,
+            UserErrorCodes.LocalMemberMissing,
+#endif
             UserErrorCodes.ManageRolesRequired,
 #if (LocalIdentity)
             UserErrorCodes.SuperAdminDeleteForbidden,

@@ -33,7 +33,8 @@ public static class DependencyInjection
     /// <summary>注册 Api 层授权：默认策略、相关 Handler 与内部控制面策略。</summary>
     /// <remarks>
     /// 各形态都在这里定案，组合根只有一行调用：本地身份形态的主体来自 Bearer 或会话 Cookie
-    /// 并要求账号可用；资源服务形态来自 Bearer（带浏览器会话时还有服务端 Cookie）、账号状态由签发方负责。
+    /// 并要求账号可用；资源服务形态来自 Bearer（带浏览器会话时还有服务端 Cookie），签发方的账号状态由签发方负责，
+    /// 本服务自己的成员启停由 <c>LocalMemberAccessRequirement</c> 判定。
     /// </remarks>
     public static IServiceCollection AddApiAuthorization(this IServiceCollection services)
     {
@@ -44,26 +45,36 @@ public static class DependencyInjection
         services.Replace(ServiceDescriptor.Singleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationResultHandler>());
 
         services.AddAuthorization();
+#if (RemoteTokenAuth)
+        // 作用域服务：快照只活在一个请求里；Hub 每次方法调用是新作用域，取不到快照时按主键读一次
+        // 重复调用不得重复登记：授权会枚举全部处理器，登记两次就判两次、Hub 调用里查两次库
+        services.TryAddScoped<LocalMemberAccessSnapshot>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, LocalMemberAccessHandler>());
+#endif
         // 默认策略要按宿主配置的主体标识 claim 判定自然人，因此经 Options 管道取 ClaimTypeOptions
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claimTypeOptions) =>
         {
             var claimTypes = claimTypeOptions.Value;
 #if (ResourceBrowserSession)
-            // 资源服务按请求选择 Bearer 或 Cookie，默认策略要求自然人；机器端点另设策略。
+            // 资源服务按请求选择 Bearer 或 Cookie，默认策略要求自然人、且本服务没有停用这名成员；机器端点另设策略。
+            // Hub 握手与每次方法调用也按这条策略判定（HubIdentityOptions.PolicyName 未设置即取默认策略）
             var currentUser = new AuthorizationPolicyBuilder(
                     AuthenticationSchemeNames.Smart)
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
+                .AddRequirements(new LocalMemberAccessRequirement())
                 .Build();
             options.DefaultPolicy = currentUser;
             // 组件的自用端点按名字要这条策略，见 ApiPolicies.CurrentUser
             options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
 #elif (RemoteTokenAuth)
-            // 纯资源 API 只有 Bearer，默认策略要求自然人；机器端点另设策略。
+            // 纯资源 API 只有 Bearer，默认策略要求自然人、且本服务没有停用这名成员；机器端点另设策略。
+            // Hub 握手与每次方法调用也按这条策略判定（HubIdentityOptions.PolicyName 未设置即取默认策略）
             var currentUser = new AuthorizationPolicyBuilder(
                     OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
+                .AddRequirements(new LocalMemberAccessRequirement())
                 .Build();
             options.DefaultPolicy = currentUser;
             options.AddPolicy(ApiPolicies.CurrentUser, currentUser);

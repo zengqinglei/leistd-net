@@ -137,7 +137,15 @@ HTTP/1.1 200 OK
 | 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致 |
 | `ServiceClientException` | 500/502/503/504（注册客户端时自动登记） | 映射规则见[服务间调用](./service-invocation.md) |
 
-框架不根据 BCL 异常类型猜测为 400/503；认证和授权拒绝交给 ASP.NET Core 管道，不用业务异常模拟。只有两类例外用业务码：界面靠稳定码路由的拒绝（未完成两步验证设置），以及取决于请求体的附加权限（建用户时分配角色）。
+框架不根据 BCL 异常类型猜测为 400/503；认证和授权拒绝交给 ASP.NET Core 管道，不用业务异常模拟，授权拒绝只有 403 状态码、不带 `code`。以下例外用业务码：
+
+<!--#if (LocalIdentity)-->
+- 界面靠稳定码路由的拒绝：未完成两步验证设置（`Auth:TwoFactorSetupRequired`）。
+<!--#endif-->
+- 取决于请求体的附加权限：分配角色（`User:ManageRolesRequired`）。
+<!--#if (RemoteTokenAuth)-->
+- 成员被本服务禁用或没有成员行：403 带 `User:LocalAccessDisabled` / `User:LocalMemberMissing`，见[资源服务的成员启停](./auth.md#资源服务的成员启停)。
+<!--#endif-->
 
 `WithData("Name", value)` 为本地化文案的 `{Name}` 占位符传值，无论是否启用多语言都可保留。不提供 `WithDetails`：技术详情只进入 `InnerException` 和日志。
 

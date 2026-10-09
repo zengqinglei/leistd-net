@@ -10,7 +10,7 @@ Hub 握手是一次 HTTP 请求，会走完整中间件管道；WebSocket 升级
 | --- | --- |
 | 宿主映射了任何 Hub，且 Hub 方法里要读当前用户、租户或写日志 | 引入本包 |
 | 需要按用户寻址推送（`Clients.User(...)`） | 引入本包；用户标识按 `ClaimTypeOptions.UserIds` 解析 |
-| 需要让账号禁用或锁定在已建立连接的下一次 Hub 方法调用上生效 | 引入本包，并在宿主默认策略里表达账号有效性 |
+| 需要让账号禁用在已建立连接的下一次 Hub 方法调用上生效 | 引入本包，并在 Hub 所用策略里加入按持久状态判定账号的 requirement（复评不重新认证，见[有效性复评](#有效性复评)） |
 | 用 JWT 等请求头认证，浏览器连接 Hub 只能把令牌放在查询串 | 在路由之后、认证之前 `app.UseHubAccessToken()` |
 | 使用 `Leistd.RealTime` 或 `Leistd.Notifications` 的 SignalR 包 | 无需直接引入，它们已依赖本包 |
 
@@ -73,14 +73,15 @@ public class OrderHub(ICurrentUser currentUser) : Hub
 }
 ```
 
-宿主为 HTTP 路径写的授权 handler 无需改动即可在 Hub 上复评生效：
+宿主为 HTTP 路径写的授权 handler 只读环境态（`ICurrentUser`、`ICurrentTenant`）与持久状态时，可原样在 Hub 上复评；
+依赖 `HttpContext`、`AuthorizationHandlerContext.Resource` 或请求中间件写入的作用域数据的 handler 要自备回退路径，Hub 调用没有这些。在默认策略里加入 requirement：
 
 ```csharp
 using Microsoft.AspNetCore.Authorization;
 
 options.DefaultPolicy = new AuthorizationPolicyBuilder()
     .RequireAuthenticatedUser()
-    .AddRequirements(new AccountStillActiveRequirement())   // 宿主自定义；已建连接在下一次方法调用时复评
+    .AddRequirements(new AccountStillActiveRequirement())   // 宿主自定义，按库里的账号状态判定；已建连接在下一次方法调用时复评
     .Build();
 ```
 
@@ -109,7 +110,8 @@ options.DefaultPolicy = new AuthorizationPolicyBuilder()
 
 ### 有效性复评
 
-- 只在 `InvokeMethodAsync` 上复评；框架不主动断开已建立连接。纯接收 Hub 只在握手时授权，令牌到期关闭由 SignalR 的 `CloseOnAuthenticationExpiration` 决定。
+- 只在 `InvokeMethodAsync` 上复评；框架不主动断开已建立连接。复评失败之前（以及纯接收、从不调用方法的连接上），服务端推送照常送达，直到连接中止、断线或页面关闭；重连的握手按同一策略重新授权。
+- 令牌到期关闭由 SignalR 的 `CloseOnAuthenticationExpiration` 决定：它只看认证票据或令牌的到期时间，不感知账号禁用或会话、令牌撤销。
 - 在环境上下文之内执行，宿主为 HTTP 路径写的授权 handler（读 `ICurrentUser` 等环境态）可原样生效。
 - 不通过时 `HubCallerContext.Abort()` 并抛 `HubException`，客户端需重连并重新认证。
 - 节流状态存放在 `HubCallerContext.Items`，随连接生命周期。
@@ -140,7 +142,8 @@ builder.Services.AddSignalR().AddStackExchangeRedis(redisConnectionString);
 
 - `AddSignalRAmbientContext` 自己补齐 Hub 调用所需的非 HTTP 环境上下文，宿主无需先注册。同时有 Controller/HTTP 路径时再调宿主 security 包的注册入口，把主体来源换成 `HttpContext.User`；两者调用顺序无关。
 - 复评默认不节流；高频 Hub 应按实测配置 `RevalidationInterval`。
-- 复评只评估策略的 `Requirements`，不涉及认证方案；身份来自握手时已认证的连接主体。
+- 复评只评估策略的 `Requirements`，不涉及认证方案；身份来自握手时已认证的连接主体。会话或令牌被撤销不会在复评中被发现，只有按持久状态判定的 requirement（如账号停用）能让复评失败。
+- 复评时 `resource` 为 `null`、没有 `HttpContext`，每次方法调用是新的 DI 作用域：handler 不能依赖请求中间件准备的数据。
 - 本包只提供基座，不映射任何 Hub 端点，也不注册背板。
 - 本包不配置 `HubOptions`：心跳、超时、详细错误是 SignalR 自身的选项，由宿主用 `AddSignalR(o => ...)` 直接配置。
 

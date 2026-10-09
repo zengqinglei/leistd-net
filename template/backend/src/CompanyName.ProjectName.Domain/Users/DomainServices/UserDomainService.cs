@@ -66,7 +66,8 @@ public class UserDomainService(
         CancellationToken cancellationToken = default)
     {
         var (name, mail) = ProjectedIdentity(subjectId, username, email);
-        var display = displayName?.Trim();
+        // 与新建时同一口径：签发方没给显示名就用用户名。比较与写入用同一个值，否则每个请求都会判成"变了"
+        var display = string.IsNullOrWhiteSpace(displayName) ? name : displayName.Trim();
 
         var existing = await userRepository.GetByIdAsync(subjectId, cancellationToken);
         if (existing is not null)
@@ -267,7 +268,7 @@ public class UserDomainService(
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+            throw new BusinessException(UserErrorCodes.EmailTaken, "Email is already in use.")
                 .WithData("Email", email);
         }
 
@@ -411,7 +412,7 @@ public class UserDomainService(
         ArgumentNullException.ThrowIfNull(user);
         if (!await IsEmailAvailableAsync(user.Id, email, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+            throw new BusinessException(UserErrorCodes.EmailTaken, "Email is already in use.")
                 .WithData("Email", email);
         }
 
@@ -438,7 +439,7 @@ public class UserDomainService(
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(user.Id, email, cancellationToken))
         {
-            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+            throw new BusinessException(UserErrorCodes.EmailTaken, "Email is already in use.")
                 .WithData("Email", email);
         }
 

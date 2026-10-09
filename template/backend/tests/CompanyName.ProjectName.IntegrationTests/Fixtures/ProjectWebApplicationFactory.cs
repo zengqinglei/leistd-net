@@ -192,11 +192,14 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                     .AddScheme<AuthenticationSchemeOptions, ResourceTestAuthenticationHandler>(
                         ResourceTestAuthenticationHandler.SchemeName,
                         _ => { });
-                services.AddAuthorization(options =>
+                // 只把策略的认证方案换成替身，要求保持生产原样（自然人、本地成员未停用）：
+                // 换成"只要求已认证"的替身策略，成员停用这类判定在测试里会静默失效。
+                // PostConfigure 排在生产的 Configure 之后，读到的是生产已建好的默认策略
+                services.PostConfigure<AuthorizationOptions>(options =>
                 {
-                    var testPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
-                        .RequireAuthenticatedUser()
-                        .Build();
+                    var testPolicy = new AuthorizationPolicy(
+                        options.DefaultPolicy.Requirements,
+                        [ResourceTestAuthenticationHandler.SchemeName]);
                     options.DefaultPolicy = testPolicy;
                     // 组件端点按名字要这条策略（不套默认策略），替身方案必须把它一起换掉，
                     // 否则通知中心、读设置这些自用端点仍然要求生产 Bearer，测试里一律 401

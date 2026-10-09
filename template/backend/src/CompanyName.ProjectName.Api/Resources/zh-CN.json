@@ -218,6 +218,10 @@
     "User:AvatarInvalid": "头像必须是 PNG、JPEG 或 WebP 图片。",
     "User:AvatarTooLarge": "头像图片不能超过 {MaxKilobytes} KB。",
     "User:EmailTaken": "邮箱 '{Email}' 已被使用。",
+//#if (RemoteTokenAuth)
+    "User:LocalAccessDisabled": "该账号在本服务已被停用，请联系管理员。",
+    "User:LocalMemberMissing": "该账号尚未在本服务中就绪，请稍后重试或联系管理员。",
+//#endif
     "User:ManageRolesRequired": "分配角色需要用户角色管理权限。",
     "User:NotFound": "用户 {Id} 不存在。",
     "User:RoleRequired": "请至少选择一个角色。",

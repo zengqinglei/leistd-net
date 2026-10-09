@@ -222,11 +222,12 @@ public class MessageCenter(INotificationStore notificationStore)
   库里与推送里的 ID 一致。`NotificationRecord.FromDto` 遇到不是 Guid 的 `Id` 抛 `ArgumentException`。
 - 传给 `PublishToUserAsync` 的 `userId` 必须等于该客户端的 SignalR `UserIdentifier`（按 `ClaimTypeOptions.UserIds` 解析），否则推送静默落空。
 - `PublishToUserAsync` 成功返回不代表实时推送送达（客户端可能未连接）；需要送达保证时依赖持久化历史与客户端拉取未读数。
-- `NotificationHub` 要求登录；它没有客户端可调用的方法，授权只在握手时执行，账号之后被禁用不会主动关闭既有连接。
+- `NotificationHub` 要求登录；它没有客户端可调用的方法，授权只在握手时执行：账号之后被禁用或会话被撤销，既有连接不会被关闭，照常收到推送，直到断线重连（握手按 Hub 策略重新授权）或页面关闭。
+  经 `AddNotificationsSignalR<RealTimeHub>()` 共用实时 Hub 时，连接还会在下一次 `Subscribe`/`Unsubscribe` 复评失败时中止，前提见[实时通信](./realtime.md#注意事项)。
 - 发布方负责建立租户上下文：`NotificationRecord` 实现 `IMultiTenant`，`TenantId` 按实体进入跟踪时的当前租户落值。后台作业、消息消费者须先
   `ICurrentTenant.Change(tenantId)`（或 `IAmbientContext.Begin`）再发布，否则通知落成宿主行，表现为“推送收到了、未读数却是 0”。
 - 多副本部署须配置 SignalR 背板，否则推送只到达连在本节点的客户端，见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
-- 令牌到期不会自动断开连接（未配置 `CloseOnAuthenticationExpiration`）；确需到期即断时显式开启，并用真实 SignalR Client 验证。
+- 令牌到期不会自动断开连接（未配置 `CloseOnAuthenticationExpiration`）；确需到期即断时显式开启，并用真实 SignalR Client 验证。它只按认证到期断开，不感知账号禁用或撤销。
 - 用 Bearer 认证时，浏览器客户端的令牌只能放进查询串，宿主须在认证之前接入 SignalR 基座的 `UseHubAccessToken()`，见 [SignalR 基座](./aspnetcore-signalr.md#注册)。
 
 ## 相关

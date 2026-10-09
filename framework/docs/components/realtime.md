@@ -98,8 +98,9 @@ SignalR 传输层的配置不在本组件：心跳、超时、详细错误是 Si
 - 本组件不提供在线状态查询；多实例在线状态需要宿主维护共享连接注册表。
 - 订阅授权没有开关；`AddAllowAllRealTimeSubscriptions()` 是公共资源场景的显式选择。
 - `PublishToResourceAsync` 推送失败只记日志、不抛异常，成功返回不代表订阅方一定收到。
-- Hub 调用的环境上下文与有效性复评由 [SignalR 基座](./aspnetcore-signalr.md)提供：复评只在客户端调用 Hub 方法时发生，账号被禁用后既有连接要到下一次 `Subscribe`/`Unsubscribe` 才被中止，
-  只接收事件的连接不触发复评。复评频率可用 `HubIdentityOptions.RevalidationInterval` 节流。
+- Hub 调用的环境上下文与有效性复评由 [SignalR 基座](./aspnetcore-signalr.md#有效性复评)提供：复评只在客户端调用 Hub 方法时发生，且不重新认证、只评策略要求。
+  只有 Hub 所用策略里有按持久状态判定账号的 requirement 时，账号被禁用后既有连接才会在下一次 `Subscribe`/`Unsubscribe` 被中止；否则复评照常通过。
+  在此之前已加入的资源组照常收到推送，只接收事件的连接不触发复评，直到断线重连（握手重新授权）或页面关闭。复评频率可用 `HubIdentityOptions.RevalidationInterval` 节流。
 
 ## 相关
 

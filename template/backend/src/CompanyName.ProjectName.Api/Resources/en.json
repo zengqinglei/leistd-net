@@ -218,6 +218,10 @@
     "User:AvatarInvalid": "The avatar must be a PNG, JPEG or WebP image.",
     "User:AvatarTooLarge": "The avatar image cannot exceed {MaxKilobytes} KB.",
     "User:EmailTaken": "Email '{Email}' is already in use.",
+//#if (RemoteTokenAuth)
+    "User:LocalAccessDisabled": "This account has been disabled in this service. Contact an administrator.",
+    "User:LocalMemberMissing": "This account is not yet available in this service. Try again later or contact an administrator.",
+//#endif
     "User:ManageRolesRequired": "Assigning roles requires the user role management permission.",
     "User:NotFound": "User {Id} not found.",
     "User:RoleRequired": "Please select at least one role.",
