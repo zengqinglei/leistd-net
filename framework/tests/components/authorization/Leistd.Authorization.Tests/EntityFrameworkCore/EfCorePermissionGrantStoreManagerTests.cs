@@ -1,4 +1,5 @@
 using static Leistd.TestBase.Doubles.DbContextProviderFor;
+using Leistd.TestBase.Doubles;
 using System.Data.Common;
 using Leistd.Authorization.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
@@ -630,26 +631,6 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
             IReadOnlyCollection<string> roleIds,
             CancellationToken cancellationToken = default)
             => inner.GetGrantsForSubjectAsync(userId, roleIds, cancellationToken);
-    }
-
-    /// <summary>在被拦截上下文的首次 SaveChanges 之前执行一次给定动作，用于构造确定性的写入交错。</summary>
-    private sealed class RunOnceBeforeSaveInterceptor(Func<Task> action) : SaveChangesInterceptor
-    {
-        private bool _executed;
-
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
-            InterceptionResult<int> result,
-            CancellationToken cancellationToken = default)
-        {
-            if (!_executed)
-            {
-                _executed = true;
-                await action();
-            }
-
-            return result;
-        }
     }
 
     [Fact]
