@@ -3,15 +3,12 @@ using System.Text.Json;
 using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.Options;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 namespace CompanyName.ProjectName.Api.HostedServices.Initializer;
 
-/// <summary>启动期确认签发方的元数据与签名密钥可用，成功即打开 <see cref="RemoteIdentityReadinessHealthCheck"/>。</summary>
-/// <remarks>
-/// 探针要求发现文档可解析、<c>issuer</c> 与本地配置精确一致，且 <c>jwks_uri</c>
-/// 至少返回一把签名密钥；仅有成功状态码不足以打开门禁。租户路由端点需要业务凭据
-/// 和具体租户，不属于本探针声明的就绪范围。
-/// </remarks>
+/// <summary>启动时确认远端签发方及可用签名密钥，成功后锁存就绪状态。</summary>
+/// <remarks>HTTP 成功不足以就绪；需要业务凭据的租户路由不属于本探针的确认范围。</remarks>
 internal sealed class RemoteIdentityReadinessInitializer(
     RemoteIdentityReadinessHealthCheck readiness,
     IHttpClientFactory httpClientFactory,
@@ -20,7 +17,10 @@ internal sealed class RemoteIdentityReadinessInitializer(
 {
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(3);
 
-    /// <summary>解析发现文档、比对 issuer、取回 JWKS。任一步不成立即抛出。</summary>
+    /// <summary>确认 issuer 精确匹配，且至少有一把可解析的签名密钥。</summary>
+    /// <remarks>
+    /// JWKS 的完整协议校验由令牌验证器执行；包含缺损密钥的集合可能被整体拒绝。
+    /// </remarks>
     internal static async Task ConfirmAsync(
         HttpClient client,
         string issuer,
@@ -63,11 +63,9 @@ internal sealed class RemoteIdentityReadinessInitializer(
         using var jwksResponse = await client.GetAsync(jwksUri, cancellationToken);
         jwksResponse.EnsureSuccessStatusCode();
 
-        using var jwks = JsonDocument.Parse(
-            await jwksResponse.Content.ReadAsByteArrayAsync(cancellationToken));
-        if (!jwks.RootElement.TryGetProperty("keys", out var keys) ||
-            keys.ValueKind != JsonValueKind.Array ||
-            keys.GetArrayLength() == 0)
+        var jwks = new JsonWebKeySet(
+            await jwksResponse.Content.ReadAsStringAsync(cancellationToken));
+        if (jwks.GetSigningKeys().Count == 0)
         {
             throw new InvalidOperationException(
                 $"The JWKS at {jwksUri} contains no signing keys; token validation cannot succeed.");
