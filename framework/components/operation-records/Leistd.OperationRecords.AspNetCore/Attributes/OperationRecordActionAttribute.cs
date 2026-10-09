@@ -16,7 +16,10 @@ public sealed class OperationRecordActionAttribute(string action, params string[
     public string Action { get; } = action;
 
     /// <summary>目标标识的路由参数名，按顺序以 <c>/</c> 连接；为空表示该端点没有目标标识。</summary>
-    /// <remarks>多段目标（如 <c>{tenantId}/{name}</c>）须全部列出，写法与成功路径一致。</remarks>
+    /// <remarks>
+    /// <para>多段目标（如 <c>{tenantId}/{name}</c>）须全部列出，写法与成功路径一致。</para>
+    /// <para>绑定到 <see cref="Guid"/> 参数或带 <c>guid</c> 约束的段归一为小写 <c>D</c> 格式，其余段保留路由原文。</para>
+    /// </remarks>
     public IReadOnlyList<string> TargetRouteKeys { get; } = targetRouteKeys;
 
     /// <summary>加在路由值前面的前缀，让被拒记录的目标标识与成功路径写法一致（如权限授予记为 <c>Role/{roleId}</c>）。</summary>
