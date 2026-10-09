@@ -9,7 +9,7 @@
 | 任务 | 必读 | 按需 |
 | --- | --- | --- |
 | 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口、分页排序或输入验证读 [API](standards/api.md)；涉及登录、会话、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md) |
-| 调整后端目录 | [后端目录规则 §2](standards/coding-backend.md#2-分层与目录)、[Api 目录 §8](standards/coding-backend.md#8-api-目录)、[项目目录](standards/project-structure.md) | 按影响面读取测试与相关专题 |
+| 调整后端目录 | [后端目录规则 §2](standards/coding-backend.md#2-分层与目录)、[项目目录](standards/project-structure.md) | Api 读 [§8](standards/coding-backend.md#8-api-目录)，Client / DbMigrator 读 [§9](standards/coding-backend.md#9-client-与-dbmigrator-目录)；按影响面读取测试与相关专题 |
 <!--#if (SpaFrontend)-->
 <!--#if (IncludeLocalization)-->
 | 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面、表单、导航读 [前端界面](standards/frontend-ui.md)；加组件或升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md)；新增文案读 [前端多语言](standards/frontend-i18n.md) |

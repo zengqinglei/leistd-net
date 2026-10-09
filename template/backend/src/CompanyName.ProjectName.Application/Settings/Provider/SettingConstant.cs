@@ -1,5 +1,5 @@
 #if (IncludeNotifications)
-using CompanyName.ProjectName.Application.Notifications;
+using CompanyName.ProjectName.Application.Notifications.Constants;
 using Leistd.Notifications.Settings.Options;
 
 #endif

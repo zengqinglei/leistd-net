@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.DbMigrator.Runners;
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Application;
 using CompanyName.ProjectName.Domain;
@@ -20,7 +21,7 @@ using Microsoft.Extensions.Logging;
 namespace CompanyName.ProjectName.DbMigrator;
 
 /// <summary>迁移作业的服务组合。宿主与注册面测试共用这一份，测试校验的就是作业实际解析的组合。</summary>
-public static class MigratorServices
+public static class DependencyInjection
 {
     public static IServiceCollection AddMigratorServices(
         this IServiceCollection services,

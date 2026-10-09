@@ -23,7 +23,7 @@ using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.UnitOfWork;
 
-namespace CompanyName.ProjectName.DbMigrator;
+namespace CompanyName.ProjectName.DbMigrator.Runners;
 
 /// <summary>资源服务首位管理员引导：把远端主体加入 Administrator 角色；部署权限是依据，不伪造自然人身份。</summary>
 /// <remarks>

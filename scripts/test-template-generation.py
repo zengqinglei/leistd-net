@@ -563,7 +563,7 @@ def validate(output, values, config):
     assert (infra / 'Persistence/Migrations/Control').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control migrations'
     assert (infra / 'Persistence/IdentityControlDbContext.cs').exists() == (values['LocalIdentity'] and values['IncludeMultiTenancy']), 'Control context'
     assert (api / 'Controllers/SettingController.cs').exists() == values['Email'], 'Email test controller'
-    assert (output / 'backend/src/Generation.Probe.DbMigrator/ResourceAdminBootstrapRunner.cs').exists() == values['RemoteTokenAuth'], 'Resource bootstrap'
+    assert (output / 'backend/src/Generation.Probe.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs').exists() == values['RemoteTokenAuth'], 'Resource bootstrap'
     deployment_problems = check_deployment(output)
     assert not deployment_problems, 'Deployment assets: ' + '; '.join(deployment_problems)
     error_codes = subprocess.run([sys.executable, str(output / 'scripts/check-error-codes.py')], capture_output=True, text=True, encoding='utf-8', errors='replace')

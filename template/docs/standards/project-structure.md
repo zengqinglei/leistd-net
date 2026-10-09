@@ -41,7 +41,7 @@ backend/src/
 └── CompanyName.ProjectName.Api/
 ```
 
-Client 是提供给其他服务消费的强类型 SDK，DbMigrator 是独立的一次性数据库迁移入口；其余各层的职责、依赖方向与目录见 [后端开发规范 §2](./coding-backend.md#2-分层与目录)。
+各层职责、依赖方向与目录见 [后端开发规范 §2](./coding-backend.md#2-分层与目录)；Client SDK 与一次性迁移宿主的内部分类见 [§9](./coding-backend.md#9-client-与-dbmigrator-目录)。
 
 测试项目按实际测试类型放在 `backend/tests/` 或解决方案现有位置，不为目录完整性创建空项目。
 

@@ -4,7 +4,7 @@ using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management.Provisioning;
 
-namespace CompanyName.ProjectName.Infrastructure.TenantConnections;
+namespace CompanyName.ProjectName.Infrastructure.TenantConnections.Provider;
 
 /// <summary>按 PostgreSQL 的 SQLSTATE 把开通失败翻译成调用方能照着改的 400。</summary>
 /// <remarks>

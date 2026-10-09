@@ -21,11 +21,13 @@
 
 目录按功能模块组织，类型目录是模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`）只放不属于这些类型的协作类型，按职责命名（`*Store`、`*Verifier`、`*Factory`、`*Guard`），`*Service` 只用于应用服务与领域服务。
 
-分类优先采用已有职责目录（DTO、应用服务、事件处理器、后台任务、映射、验证器等）。没有专属分类的框架扩展点实现放 `Provider/`，必要的配套定义可与实现共置（如实时资源与权限对应表）。未分类的少量协作类型可留模块根（如 `OpenApplications/OpenApplicationQueryItem`）。
+分类优先采用已有职责目录（DTO、应用服务、事件处理器、后台任务、映射、验证器等）。各层没有专属分类的框架扩展点实现放所属模块的 `Provider/`，必要的配套定义可与实现共置（如实时资源与权限对应表）。未分类的少量协作类型可留模块根（如 `OpenApplications/OpenApplicationQueryItem`）；不预建空目录或没有实际职责的层级。
 
 - **Application**：`AppServices`（接口与实现）、`Dtos`、`Mappings`、`Errors`、`Events`（应用层发布、不来自实体的事件）、`EventHandlers`、`BackgroundJobs`，按需 `Constants`、`Abstractions`（由宿主实现的端口）、`Provider`（框架扩展点实现）、`Policies`、`Options`（仅应用用例消费的配置）。跨模块共用、不属于任何模块的约定（认证方案名、分页）放 `Shared/`，不作兜底目录。
 - **Domain**：`Entities`（实体与聚合）、`ValueObjects`（不可变值类型，含有限状态枚举）、`DomainServices`、`Events`（实体发出的事件）、`Policies`、`Errors`、`Options`（仅领域自身消费的配置）、`Abstractions`（端口及其输入输出模型）、`Repositories`（聚合的自定义仓储接口）。不认识任何实体的领域共享能力按语义放 `Shared/`，它不是兜底目录；子目录名不与常用 BCL 类型同名。
-- **Infrastructure**：自定义仓储实现放 `Persistence/Repositories`；外部适配器自己绑定和校验客户端标识、密钥、回调地址；Application 只依赖内层端口暴露的能力。
+- **Infrastructure**：持久化放 `Persistence/`，自定义仓储实现放其 `Repositories/`；外部适配器按功能归位，自己绑定和校验客户端标识、密钥、回调地址，Application 只依赖内层端口暴露的能力。租户连接扩展点实现放模块内的 `TenantConnections/Provider`。
+
+Client 与 DbMigrator 的职责分类及根目录例外见 [§9](#9-client-与-dbmigrator-目录)。
 
 领域服务之间只允许单向依赖，且仅用于复用另一个领域服务的**变更行为**，在类上注释原因；读取不跨领域服务调用。依赖环由 `ValidateOnBuild` 检出（见 §4）。
 
@@ -167,7 +169,7 @@ public class UserAppService(
 
 ## 4. 依赖注入
 
-**注册归属**：每层的 `DependencyInjection.cs`（`AddDomainServices`、`AddApplicationServices`、`AddInfrastructureServices`/`AddPersistenceServices`、`AddApiAuthorization` 等）注册本层类型，可调用实现本层能力所需的组件注册入口。Api 自有类型按关注点注册在 `Api/Auth`、`Api/Hosting` 的扩展方法里（如 `AddMyProjectAuthentication`、`AddMyProjectWebHost`）；`Program.cs` 只组合各层、组件与这些入口并配置管道。部署基线 Options 在声明它的层或组合根绑定，宿主定向配置留在组合根；需要校验的用 `AddOptions<T>()...ValidateOnStart()`。
+**注册归属**：每层的 `DependencyInjection.cs`（`AddDomainServices`、`AddApplicationServices`、`AddInfrastructureServices`/`AddPersistenceServices`、`AddApiAuthorization` 等）放项目根，注册本层类型，可调用实现本层能力所需的组件注册入口。跨宿主共用的专用注册入口也可留项目根，如 Infrastructure 的 `DataProtectionExtensions`。Api 自有类型按关注点注册在 `Api/Auth`、`Api/Hosting` 的扩展方法里（如 `AddMyProjectAuthentication`、`AddMyProjectWebHost`）；`Program.cs` 只组合各层、组件与这些入口并配置管道。部署基线 Options 在声明它的层或组合根绑定，宿主定向配置留在组合根；需要校验的用 `AddOptions<T>()...ValidateOnStart()`。
 
 **生命周期**：先看状态所有权、并发安全、依赖链与实际消费作用域。
 
@@ -257,3 +259,17 @@ Api 文件按关注点归入少数顶层目录，命名空间跟随目录：
 
 - 周期任务（`IRecurringJob`，`*Job`）放 Application 所属模块的 `BackgroundJobs/`；常驻消费者 `*Worker` 放所属模块的 `Workers/`。不建跨模块的顶层 `Jobs/`。
 - 请求体上限沿用 Kestrel 默认，大上传端点用 `[RequestSizeLimit]`/`[RequestFormLimits]` 单独放宽；不用笼统的 `Extensions` 命名空间。
+
+## 9. Client 与 DbMigrator 目录
+
+命名空间跟随目录。两类项目按实际职责分类，不照搬应用层目录。
+
+| 项目 | 目录 | 内容 |
+| --- | --- | --- |
+| Client | 根目录 | 注册入口 `DependencyInjection`；小型 SDK 的公开客户端接口与 `*Defaults` |
+| Client | `Options/` | 具体客户端的配置类型 |
+| Client | `Dtos/` | SDK 自有的请求与响应契约；不引用服务内部程序集 |
+| DbMigrator | 根目录 | `Program` 与注册入口 `DependencyInjection` |
+| DbMigrator | `Runners/` | 命令执行类 `*Runner`，包括迁移与部署引导 |
+
+SDK 扩展为多个业务模块时，客户端接口与 DTO 按模块归位；通用调用管道仍复用框架组件。执行器的内部结果模型可与执行器共置，不为它们另建 DTO 层。

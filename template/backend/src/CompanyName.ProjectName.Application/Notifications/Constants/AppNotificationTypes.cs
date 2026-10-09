@@ -1,7 +1,7 @@
 #if (IncludeNotifications)
 using Leistd.Notifications.Dtos;
 
-namespace CompanyName.ProjectName.Application.Notifications;
+namespace CompanyName.ProjectName.Application.Notifications.Constants;
 
 /// <summary>本项目发布的通知类别（通知的 <c>Type</c>）。</summary>
 /// <remarks>
