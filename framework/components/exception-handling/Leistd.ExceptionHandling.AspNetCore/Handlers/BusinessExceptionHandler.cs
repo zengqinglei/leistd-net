@@ -5,6 +5,7 @@ using Leistd.ExceptionHandling.Descriptors;
 using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,9 @@ public sealed class BusinessExceptionHandler(
     IProblemDetailsService problemDetailsService,
     IServiceProvider serviceProvider) : IExceptionHandler
 {
+    // OpenTelemetry 语义约定的错误类型标签，与官方诊断写入请求耗时指标的同名
+    private const string ErrorTypeTag = "error.type";
+
     private readonly IStringLocalizer? _localizer = serviceProvider.GetService<IStringLocalizer>();
     private readonly JsonNamingPolicy? _jsonNamingPolicy = serviceProvider
         .GetService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>()?
@@ -49,12 +53,26 @@ public sealed class BusinessExceptionHandler(
             problem.Extensions["stackTrace"] = exception.StackTrace;
 
         httpContext.Response.StatusCode = descriptor.StatusCode;
-        return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
+        var handled = await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
             ProblemDetails = problem,
             Exception = exception
         });
+        if (handled)
+            TagServerError(httpContext, exception);
+        return handled;
+    }
+
+    // 已处理的异常不再经官方诊断给请求耗时指标补 error.type（只有不抑制诊断时才补），5xx 由这里补回；
+    // 4xx 是预期失败，不标。宿主已写的同名标签不覆盖。
+    private static void TagServerError(HttpContext httpContext, Exception exception)
+    {
+        if (httpContext.Response.StatusCode < StatusCodes.Status500InternalServerError
+            || httpContext.Features.Get<IHttpMetricsTagsFeature>() is not { } metricsTags
+            || metricsTags.Tags.Any(tag => tag.Key == ErrorTypeTag))
+            return;
+        metricsTags.Tags.Add(new KeyValuePair<string, object?>(ErrorTypeTag, exception.GetType().FullName));
     }
 
     private ExceptionDescriptor Resolve(Exception exception, GlobalExceptionOptions options)

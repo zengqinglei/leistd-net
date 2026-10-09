@@ -108,6 +108,19 @@ if (order.Status == OrderStatus.Shipped)
 预期的 4xx 记 Warning，只有 `TraceId`、`StatusCode`、`Code`、异常类型与路径；不记 `detail`、默认文案与参数，也不附带异常对象。
 `detail` 面向提交请求的人，可能回显其输入。`traceId` 把日志与响应、请求链路对上；端点有操作记录时，按日志作用域与响应头里的关联标识（见[关联标识](./tracing.md)）对上审计内容。5xx 记 Error 并保留异常链与堆栈。
 
+## 诊断与遥测
+
+处理器成功处理的异常由处理器按上述级别记**一次**日志。`UseGlobalExceptionHandler` 沿用 ASP.NET Core 对 `IExceptionHandler` 已处理异常的默认抑制（`SuppressDiagnosticsCallback` 只额外放过处理器交还中间件写出的 `BadHttpRequestException`）：
+
+| 通道 | 处理器成功处理的异常 |
+| --- | --- |
+| `Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware` 的 Error 日志 | 不再记录 |
+| `Microsoft.AspNetCore.Diagnostics.HandledException` 诊断事件（DiagnosticListener，部分 APM 采集器据此报错） | 不再发出 |
+| 计数器 `aspnetcore.diagnostics.exceptions` | 照常记录，带异常类型 |
+| 请求耗时 `http.server.request.duration` 的 `error.type` | 最终状态 ≥ 500 时由处理器补上异常类型全名（已有同名标签不覆盖）；4xx 不带 |
+
+真正未处理、响应已开始或处理器写出失败的异常不受影响，保留官方的 Error 日志、诊断事件与 `error.type`。按 `HandledException` 事件统计错误的采集器改用处理器日志或上述指标。
+
 ## 无响应体的错误状态码
 
 所有失败响应都经 ASP.NET Core 的 `IProblemDetailsService` 写出（异常处理器、自动模型校验、状态码页、`Results.Problem()` 与框架各中间件）；
