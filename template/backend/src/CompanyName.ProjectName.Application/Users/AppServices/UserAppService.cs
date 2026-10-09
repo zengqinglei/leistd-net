@@ -24,7 +24,7 @@ using CompanyName.ProjectName.Application.Users.Validators;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using CompanyName.ProjectName.Domain.Users.Policies;
-using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
+using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using Leistd.Ddd.Application.AppServices;
@@ -85,7 +85,7 @@ public class UserAppService(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var ordered = (await userRepository.GetQueryableWithRolesAsync(cancellationToken)).OrderBy(input.Sorting);
+        var ordered = (await userRepository.GetQueryableWithRolesAsync(cancellationToken)).OrderBySorting(input.Sorting);
 #if (LocalIdentity)
         userSortingValidator.Validate(ordered);
 #endif

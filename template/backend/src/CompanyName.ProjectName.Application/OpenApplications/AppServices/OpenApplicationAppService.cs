@@ -8,7 +8,7 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
+using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.Ddd.Application.AppServices;
@@ -98,7 +98,7 @@ public class OpenApplicationAppService(
             query = query.Where(item => item.ClientType == input.ClientType);
         }
 
-        var filteredItems = query.AsQueryable().OrderBy(input.Sorting)
+        var filteredItems = query.AsQueryable().OrderBySorting(input.Sorting)
             .ThenBy(item => item.ClientId, StringComparer.Ordinal).ToList();
         var totalCount = filteredItems.Count;
         var pagedItems = filteredItems

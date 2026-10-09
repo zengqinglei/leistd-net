@@ -4,7 +4,7 @@ using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
-using static System.Linq.Dynamic.Core.DynamicQueryableExtensions;
+using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Repositories;
@@ -62,7 +62,7 @@ public class RoleAppService(
             query = query.Where(r => r.Name.Contains(keyword) || r.DisplayName.Contains(keyword));
         }
 
-        var ordered = query.OrderBy(input.Sorting).ThenBy(role => role.Name).ThenBy(role => role.Id);
+        var ordered = query.OrderBySorting(input.Sorting).ThenBy(role => role.Name).ThenBy(role => role.Id);
         var totalCount = await asyncExecuter.LongCountAsync(query, cancellationToken);
 
         var roles = await asyncExecuter.ToListAsync(
