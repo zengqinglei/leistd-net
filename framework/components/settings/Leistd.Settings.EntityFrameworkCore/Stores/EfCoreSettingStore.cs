@@ -1,5 +1,6 @@
 using Leistd.MultiTenancy.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Leistd.MultiTenancy.Context;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Stores;
@@ -47,6 +48,12 @@ public class EfCoreSettingStore<TDbContext>(
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// 先查后写，并发时由数据库约束与影响行数暴露冲突：首插撞唯一索引、改写或删除时行已被删。
+    /// 只恢复本次条目引发的这两类冲突，在调用方当前的上下文与事务内回库重读后重试一次，再次失败原样抛出。
+    /// 外层事务下依赖 EF 自动保存点：可串行化等更高隔离级别、关闭自动保存点或 SQL Server MARS 下不保证恢复；
+    /// 落败那次保存的数据库错误日志由 EF 照常输出。
+    /// </remarks>
     public async Task SetAsync(
         string name,
         string? value,
@@ -60,36 +67,107 @@ public class EfCoreSettingStore<TDbContext>(
         var record = await dbContext.Set<SettingRecord>()
             .FirstOrDefaultAsync(x => x.ScopeKey == scopeKey && x.Name == name, cancellationToken);
 
-        if (value is null)
+        // 清除该层级的值，使读取回落到下一层；本就没有值时不做任何事。
+        if (value is null && record is null)
         {
-            // 清除该层级的值，使读取回落到下一层；本就没有值时不做任何事。
-            if (record is not null)
-            {
-                dbContext.Set<SettingRecord>().Remove(record);
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
             return;
         }
 
-        if (record is null)
+        var entry = Stage(dbContext, record, name, value, scope, userId, scopeKey);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+            when (entry.State is EntityState.Modified or EntityState.Deleted && Involves(exception, entry))
+        {
+            // 改写或删除时行已被并发删除（或删后重建）：重读后按当前存储状态再写一次
+            entry.State = EntityState.Detached;
+            var current = await FindCurrentAsync(dbContext, scopeKey, name, cancellationToken);
+
+            if (value is null && current is null)
+            {
+                // 要清除的值已不在：幂等成功
+                return;
+            }
+
+            Stage(dbContext, current, name, value, scope, userId, scopeKey);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (entry.State is EntityState.Added && Involves(exception, entry))
+        {
+            // 首插失败只有在并发方已插入同键行时才可恢复；只撤下本条目，不动宿主的其他待写实体
+            entry.State = EntityState.Detached;
+            var winner = await FindCurrentAsync(dbContext, scopeKey, name, cancellationToken);
+
+            if (winner is null)
+            {
+                // 确认不到赢家：其他约束或数据库故障，不能再插一次
+                throw;
+            }
+
+            Stage(dbContext, winner, name, value, scope, userId, scopeKey);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    // 把本次写入登记为一个条目：existing 为空时插入，value 为空时删除，否则改值。
+    // existing 须是当前未被跟踪的实例或本上下文已跟踪的同一实例。
+    private static EntityEntry<SettingRecord> Stage(
+        DbContext dbContext,
+        SettingRecord? existing,
+        string name,
+        string? value,
+        SettingScopes scope,
+        string? userId,
+        string scopeKey)
+    {
+        var set = dbContext.Set<SettingRecord>();
+
+        if (existing is null)
         {
             // TenantId 由多租户组件在实体进入跟踪时落值，这里不手工赋值；ScopeKey 与它
             // 同刻取自同一个 ICurrentTenant，两者不会指向不同租户。
-            dbContext.Set<SettingRecord>().Add(new SettingRecord
+            return set.Add(new SettingRecord
             {
                 UserId = scope == SettingScopes.User ? userId : null,
                 ScopeKey = scopeKey,
                 Name = name,
-                Value = value
+                Value = value!
             });
         }
-        else
+
+        if (value is null)
         {
-            record.Value = value;
+            return set.Remove(existing);
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        var entry = dbContext.Entry(existing);
+        if (entry.State == EntityState.Detached)
+        {
+            entry.State = EntityState.Unchanged;
+        }
+
+        existing.Value = value;
+        entry.DetectChanges();
+        return entry;
     }
+
+    // 不跟踪地回库读取：失败条目已撤下，结果只反映数据库（含事务内）的当前状态
+    private static Task<SettingRecord?> FindCurrentAsync(
+        DbContext dbContext,
+        string scopeKey,
+        string name,
+        CancellationToken cancellationToken)
+        => dbContext.Set<SettingRecord>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.ScopeKey == scopeKey && x.Name == name, cancellationToken);
+
+    // 只认本次条目：同次保存中其他实体的失败原样上抛
+    private static bool Involves(DbUpdateException exception, EntityEntry<SettingRecord> entry)
+        => exception.Entries.Any(failed => ReferenceEquals(failed.Entity, entry.Entity));
 
     /// <inheritdoc />
     public async Task RemoveAllAsync(CancellationToken cancellationToken = default)

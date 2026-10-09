@@ -85,6 +85,15 @@ builder.Services.AddDistributedTicketStore("Session");
 
 入口登记单例 `ITicketStore`，保留宿主预先登记的实现；每个命名 Cookie 方案只挂载一次，配置委托按调用叠加。不同方案共用存储配置，Cookie 寿命、属性和原生事件由宿主决定。原生 callback、Events 子类与 EventsType 均保留，同请求同方案的事件共用实例。
 
+组件在该方案的 PostConfigure 阶段包装 `Events`、`EventsType` 与 `CookieManager`：包装事件把各回调转发给原事件对象（EventsType 按请求从容器解析），登录时追加引用版本；包装 Cookie 管理器把版本写进浏览器引用。登记顺序：
+
+| 配置 | 何时生效 |
+| --- | --- |
+| 整体设置 `Events`、`EventsType`、`CookieManager` | 在 `AddCookie`/`Configure` 或先于本入口登记的 PostConfigure 中设置，由组件包装 |
+| 改 `Events.OnXxx` 回调 | 任何阶段均可；组件之后赋值的回调按原生语义取代该事件对原事件对象的转发，执行一次，登录仍生成新版本 |
+
+接入方案启用启动校验：全部 PostConfigure 之后，`Events` 须仍为组件包装、`EventsType` 须为 null、`CookieManager` 须仍为组件包装，否则 `Host.StartAsync` 抛 `OptionsValidationException`，消息点名方案与属性。未接入的方案不校验；替换 `ITicketStore` 不受此限制。
+
 `DistributedTicketStoreOptions` 默认绑定 `Leistd:Security:Tickets`，也可传 `configSectionPath`；先绑定后应用委托，启动校验：
 
 | 属性 | 默认值 | 约束 |
@@ -93,6 +102,8 @@ builder.Services.AddDistributedTicketStore("Session");
 | FallbackLifetime | 5 分钟 | 正值；仅在票据未指定到期时间时使用 |
 
 默认实现将票据与 OAuth 令牌保护后存入缓存，浏览器仅持引用。显式再次登录换引用版本，旧引用不能读取或撤销新票据；滑动续期不能复活已删除或到期票据。读写和删除传递取消令牌，持锁操作同时响应失锁取消。
+
+票据被删除或到期后，浏览器仍带的旧引用只等同未认证（与原生 SessionStore 返回 null 一致），组件不下发删除 Cookie：在途旧请求的删除响应可能晚于重新登录到达，会删掉新 Cookie。重新登录直接覆盖旧引用。缓存读取抛出的异常（连接、超时等）按失败传播，不当作票据缺失降级为匿名；只有缓存中不存在、已到期或解保护失败的条目视为缺失。
 
 直接服务端重载面向可信调用方；HTTP 读取、续期与删除校验 Cookie 引用版本；显式登录由原生事件标记。`DistributedTicketStore.TicketKeyProperty` 保存本机制的缓存键，需要它的宿主替换实现须提供相同元数据。数据保护用途固定，密钥环隔离由宿主的应用名负责。
 

@@ -23,8 +23,11 @@ export function sortMockRows<T>(
       );
       const path = match?.[1].toLowerCase();
       const field = Object.keys(fields).find((key) => key.toLowerCase() === path);
+      // 与后端解析失败同形：sorting 字段的 400 验证错误，不带业务码
       if (!match || !field) {
-        throw new MockException(500, { title: 'Internal Server Error' });
+        throw new MockException(400, {
+          errors: [{ field: 'sorting', detail: 'The sorting expression is not valid.' }],
+        });
       }
       return { select: fields[field], descending: match[2]?.toLowerCase().startsWith('desc') };
     });

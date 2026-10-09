@@ -140,7 +140,7 @@ public sealed class DistributedTicketStore(
         return reference is not null && SameVersion(reference, ticket);
     }
 
-    private sealed class ReferenceCookieManager(ICookieManager inner, CookieAuthenticationOptions options) : ICookieManager
+    internal sealed class ReferenceCookieManager(ICookieManager inner, CookieAuthenticationOptions options) : ICookieManager
     {
         public string? GetRequestCookie(HttpContext context, string key) => inner.GetRequestCookie(context, key);
         public void DeleteCookie(HttpContext context, string key, CookieOptions cookieOptions) => inner.DeleteCookie(context, key, cookieOptions);

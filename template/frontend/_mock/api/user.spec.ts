@@ -37,8 +37,9 @@ describe('user mock', () => {
     expect(result.items.map((user) => user.username)).toEqual(['demo', 'admin']);
 
     const error = rejectionOf(() => getUsers({ keyword: 'missing', sorting: 'unknownProperty' }));
-    expect(error.status).toBe(500);
+    expect(error.status).toBe(400);
     expect(error.error.code).toBeUndefined();
+    expect(error.error.errors.map((item: { field: string }) => item.field)).toEqual(['sorting']);
   });
 
   //#if (LocalIdentity)

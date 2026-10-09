@@ -51,9 +51,11 @@ describe('mock property sorting', () => {
         throw new Error('Expected invalid sorting to fail');
       } catch (error) {
         expect(error).toBeInstanceOf(MockException);
-        expect((error as MockException).status).toBe(500);
+        expect((error as MockException).status).toBe(400);
         expect((error as MockException).error.code).toBeUndefined();
-        expect((error as MockException).error.title).toBe('Internal Server Error');
+        expect((error as MockException).error.errors).toEqual([
+          { field: 'sorting', detail: 'The sorting expression is not valid.' },
+        ]);
       }
     },
   );

@@ -1,6 +1,7 @@
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy;
 using static Leistd.TestBase.Doubles.DbContextProviderFor;
+using Leistd.TestBase.Doubles;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -509,26 +510,6 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             .SingleAsync();
 
         Assert.Equal(ResourceGrantEffect.Granted, tracked.Effect);
-    }
-
-    /// <summary>在被拦截上下文的首次 SaveChanges 之前执行一次给定动作，用于构造确定性的写入交错。</summary>
-    private sealed class RunOnceBeforeSaveInterceptor(Func<Task> action) : SaveChangesInterceptor
-    {
-        private bool executed;
-
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
-            InterceptionResult<int> result,
-            CancellationToken cancellationToken = default)
-        {
-            if (!executed)
-            {
-                executed = true;
-                await action();
-            }
-
-            return result;
-        }
     }
 
     /// <summary>返回损坏效果值的 Store，用于验证判定端 fail-closed。</summary>

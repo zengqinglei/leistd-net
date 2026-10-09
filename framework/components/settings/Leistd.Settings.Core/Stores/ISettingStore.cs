@@ -29,6 +29,15 @@ public interface ISettingStore
     Task RemoveAllAsync(CancellationToken cancellationToken = default);
 
     /// <summary>写入设置值；<paramref name="value"/> 为 <see langword="null"/> 时删除该层级的值。</summary>
+    /// <remarks>
+    /// <para>
+    /// 同一层级同一名称的并发写入收敛到存储实际写入的先后：后落库者的值保留，而不是按请求到达顺序。
+    /// 删除是“清空本键”：值本就不存在时成功；删除期间被并发重建的行也一并删掉。
+    /// </para>
+    /// <para>
+    /// 不承诺任意竞争下都能成功：实现无法收敛的冲突原样抛出，取消照常抛出。
+    /// </para>
+    /// </remarks>
     /// <param name="name">设置名称。</param>
     /// <param name="value">设置值；<see langword="null"/> 表示清除，使其回落到下一层。</param>
     /// <param name="scope">写入的层级。</param>

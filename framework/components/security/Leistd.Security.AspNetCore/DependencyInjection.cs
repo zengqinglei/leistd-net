@@ -49,7 +49,10 @@ public static class DependencyInjection
     }
 
     /// <summary>为命名 Cookie 方案配置服务端票据，保留宿主先注册的 ITicketStore。</summary>
-    /// <remarks>宿主提供缓存、数据保护与锁。存储为单例，各方案共享配置；重复登记同一方案只挂载一次，配置委托仍叠加。</remarks>
+    /// <remarks>
+    /// 宿主提供缓存、数据保护与锁。存储为单例，各方案共享配置；重复登记同一方案只挂载一次，配置委托仍叠加。
+    /// 组件在 PostConfigure 包装该方案的 Events/EventsType/CookieManager，之后整体替换它们会在启动时失败；后置改 OnXxx 回调有效。
+    /// </remarks>
     public static IServiceCollection AddDistributedTicketStore(
         this IServiceCollection services,
         string authenticationScheme,
@@ -70,11 +73,13 @@ public static class DependencyInjection
         {
             registration = new TicketStoreRegistration();
             services.AddSingleton(registration);
+            services.AddSingleton<IValidateOptions<CookieAuthenticationOptions>>(new TicketCookieOptionsValidator(registration.Schemes));
         }
         if (registration.Schemes.Add(authenticationScheme))
             services.AddOptions<CookieAuthenticationOptions>(authenticationScheme)
                 .Configure<ITicketStore>((cookie, store) => cookie.SessionStore = store)
-                .PostConfigure(DistributedTicketStore.ConfigureCookie);
+                .PostConfigure(DistributedTicketStore.ConfigureCookie)
+                .ValidateOnStart();
         return services;
     }
 

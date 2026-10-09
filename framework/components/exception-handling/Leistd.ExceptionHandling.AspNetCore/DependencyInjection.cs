@@ -144,11 +144,12 @@ public static class DependencyInjection
             StatusCodeSelector = exception => exception is BadHttpRequestException badRequest
                 ? badRequest.StatusCode
                 : StatusCodes.Status500InternalServerError,
-            // 预期业务异常不应产生框架错误诊断。客户端主动断开由官方中间件在调用处理器与本回调之前
-            // 直接以 499 返回（.NET 8+），这里无需再判。
+            // 官方默认：处理器成功处理的异常由处理器按状态记一次日志，不再产生中间件的 Error 日志与
+            // HandledException 诊断事件；未处理、处理失败的仍保留官方诊断。设置回调即完全取代默认，故须写回这一条。
+            // 客户端主动断开由官方中间件在调用处理器与本回调之前直接以 499 返回（.NET 8+），这里无需再判。
             SuppressDiagnosticsCallback = ctx =>
-                ctx.Exception is BusinessException
-                // 框架判定的请求错误是客户端问题，框架自己已记 Debug 日志
+                ctx.ExceptionHandledBy == ExceptionHandledType.ExceptionHandlerService
+                // 处理器放行的框架请求错误是客户端问题，框架自己已记 Debug 日志
                 || ctx.Exception is BadHttpRequestException
         });
     }

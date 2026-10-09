@@ -1,5 +1,4 @@
 using System.Net;
-using System.Reflection;
 using System.Security.Claims;
 using Leistd.Lock.Abstractions;
 using Leistd.Lock.Memory;
@@ -101,20 +100,176 @@ public sealed class DistributedTicketStoreTests
         Assert.NotEqual(instances[0], instances[2]);
     }
 
+    /// <summary>预先配置的 callback、子类与 EventsType 的验证、挑战回调都经包装执行。</summary>
+    [Theory]
+    [InlineData("callback")]
+    [InlineData("subclass")]
+    [InlineData("type")]
+    public async Task Pre_configured_validation_and_challenge_events_still_run(string mode)
+    {
+        using var host = new Harness(mode);
+        var cookie = await host.LoginAsync("A");
+        Assert.Equal(HttpStatusCode.OK, await host.MeAsync(cookie, "A"));
+        Assert.Equal(1, host.Events.ValidatePrincipal);
+        Assert.Equal(HttpStatusCode.Unauthorized, await host.ChallengeAsync("A"));
+        Assert.Equal(1, host.Events.RedirectToLogin);
+    }
+
+    /// <summary>宿主在组件之后改回调按原生语义生效且只执行一次，组件仍给再次登录换版本。</summary>
     [Fact]
-    public void Every_native_cookie_event_is_forwarded()
+    public async Task Callbacks_assigned_after_the_component_run_once_and_sign_in_still_rotates_the_reference()
+    {
+        var signingIn = 0;
+        var validated = 0;
+        var redirected = 0;
+        using var host = new Harness("callback", configure: builder =>
+            builder.Services.PostConfigure<CookieAuthenticationOptions>("A", options =>
+            {
+                options.Events.OnSigningIn = _ => { signingIn++; return Task.CompletedTask; };
+                options.Events.OnValidatePrincipal = _ => { validated++; return Task.CompletedTask; };
+                options.Events.OnRedirectToLogin = context => { redirected++; context.Response.StatusCode = 401; return Task.CompletedTask; };
+            }));
+        var first = await host.LoginAsync("A");
+        Assert.Equal(1, signingIn);
+        Assert.Equal(HttpStatusCode.OK, await host.MeAsync(first, "A"));
+        Assert.Equal(1, validated);
+        Assert.Equal(HttpStatusCode.Unauthorized, await host.ChallengeAsync("A"));
+        Assert.Equal(1, redirected);
+
+        var second = await host.LoginAsync("A", first, copy: true);
+        Assert.Equal(2, signingIn);
+        Assert.Equal(HttpStatusCode.Unauthorized, await host.MeAsync(first, "A"));
+        Assert.Equal(HttpStatusCode.OK, await host.MeAsync(second, "A"));
+    }
+
+    /// <summary>原事件子类重写的其余五个虚方法经包装各执行一次；方案 B 不受默认认证中间件干扰，计数只来自显式请求。</summary>
+    [Fact]
+    public async Task Pre_configured_subclass_overrides_for_the_remaining_events_each_run_once()
+    {
+        var probe = new RemainingEventsProbe();
+        using var host = new Harness("callback", configure: builder =>
+            builder.Services.Configure<CookieAuthenticationOptions>("B", options => options.Events = probe));
+        var cookie = await host.LoginAsync("B");
+        Assert.Empty(probe.Calls);
+
+        Assert.Equal(HttpStatusCode.OK, await host.MeAsync(cookie, "B"));
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.CheckSlidingExpiration)));
+
+        // 原生默认会 302，403 说明走的是重写
+        using (var forbid = await host.Client.GetAsync("/forbid?scheme=B"))
+            Assert.Equal(HttpStatusCode.Forbidden, forbid.StatusCode);
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.RedirectToAccessDenied)));
+
+        Assert.Equal(HttpStatusCode.NoContent, await host.LogoutAsync(cookie, "B"));
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.SigningOut)));
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.RedirectToReturnUrl)));
+
+        // 官方处理器不触发 RedirectToLogout，只能直接调包装后的事件对象
+        var options = host.Options("B");
+        Assert.IsNotType<RemainingEventsProbe>(options.Events);
+        await options.Events.RedirectToLogout(await host.RedirectContextAsync("B"));
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.RedirectToLogout)));
+
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.CheckSlidingExpiration)));
+        Assert.Equal(5, probe.Calls.Count);
+    }
+
+    /// <summary>组件之后赋值的回调取代对应转发：新回调执行一次，原子类重写不再执行。</summary>
+    [Fact]
+    public async Task Remaining_callbacks_assigned_after_the_component_replace_the_forwarding()
+    {
+        var probe = new RemainingEventsProbe();
+        var sliding = 0;
+        var denied = 0;
+        var loggedOut = 0;
+        using var host = new Harness("callback", configure: builder =>
+        {
+            builder.Services.Configure<CookieAuthenticationOptions>("B", options => options.Events = probe);
+            builder.Services.PostConfigure<CookieAuthenticationOptions>("B", options =>
+            {
+                options.Events.OnCheckSlidingExpiration = _ => { sliding++; return Task.CompletedTask; };
+                options.Events.OnRedirectToAccessDenied = context => { denied++; context.Response.StatusCode = 418; return Task.CompletedTask; };
+                options.Events.OnRedirectToLogout = _ => { loggedOut++; return Task.CompletedTask; };
+            });
+        });
+        var cookie = await host.LoginAsync("B");
+        Assert.Equal(HttpStatusCode.OK, await host.MeAsync(cookie, "B"));
+        Assert.Equal(1, sliding);
+        using (var forbid = await host.Client.GetAsync("/forbid?scheme=B"))
+            Assert.Equal((HttpStatusCode)418, forbid.StatusCode);
+        Assert.Equal(1, denied);
+        await host.Options("B").Events.RedirectToLogout(await host.RedirectContextAsync("B"));
+        Assert.Equal(1, loggedOut);
+        Assert.Empty(probe.Calls);
+
+        // 未改写的回调仍转发
+        Assert.Equal(HttpStatusCode.NoContent, await host.LogoutAsync(cookie, "B"));
+        Assert.Equal(1, probe.Count(nameof(CookieAuthenticationEvents.SigningOut)));
+    }
+
+    /// <summary>组件包装之后整体替换事件或 Cookie 管理器会脱掉引用版本契约，启动即失败并点名方案。</summary>
+    [Theory]
+    [InlineData("events", "Events")]
+    [InlineData("type", "EventsType")]
+    [InlineData("manager", "CookieManager")]
+    public void Replacing_wrapped_cookie_options_after_the_component_fails_at_host_start(string replace, string property)
+    {
+        var error = Assert.Throws<OptionsValidationException>(() => new Harness("callback", configure: builder =>
+            builder.Services.PostConfigure<CookieAuthenticationOptions>("B", options =>
+            {
+                if (replace == "events") options.Events = new CookieAuthenticationEvents();
+                else if (replace == "type") options.EventsType = typeof(StatefulEvents);
+                else options.CookieManager = new ChunkingCookieManager();
+            })));
+        Assert.Equal("B", error.OptionsName);
+        var failure = Assert.Single(error.Failures);
+        Assert.Contains($"CookieAuthenticationOptions.{property} for cookie scheme 'B'", failure);
+        Assert.Contains("before the AddDistributedTicketStore", failure);
+    }
+
+    /// <summary>未接入票据存储的方案不受组合校验约束。</summary>
+    [Fact]
+    public void Schemes_without_the_ticket_store_are_not_validated()
+    {
+        using var host = new Harness("callback", configure: builder =>
+        {
+            builder.Services.AddAuthentication().AddCookie("C");
+            builder.Services.PostConfigure<CookieAuthenticationOptions>("C", options =>
+            {
+                options.Events = new CookieAuthenticationEvents();
+                options.EventsType = typeof(StatefulEvents);
+                options.CookieManager = new ChunkingCookieManager();
+            });
+        });
+        Assert.IsType<ChunkingCookieManager>(host.Options("C").CookieManager);
+    }
+
+    /// <summary>票据缺失只等同未认证：不下发删除 Cookie（免得删掉并发的新登录），重新登录覆盖引用。</summary>
+    [Fact]
+    public async Task A_missing_ticket_is_unauthenticated_without_deleting_the_cookie_and_login_overwrites_it()
     {
         using var host = new Harness("callback");
-        var events = host.Options("A").Events.GetType();
-        var native = typeof(CookieAuthenticationEvents).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Where(method => method.IsVirtual);
-        foreach (var method in native)
+        var stale = await host.LoginAsync("A");
+        await host.Store.RemoveAsync(Assert.Single(host.Reference(stale, "A").Principal.Claims).Value);
+        using (var request = new HttpRequestMessage(HttpMethod.Get, "/me?scheme=A"))
         {
-            var forwarded = events.GetMethod(method.Name, method.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
-            Assert.NotNull(forwarded);
-            Assert.Equal(events, forwarded.DeclaringType);
-            Assert.Equal(method, forwarded.GetBaseDefinition());
+            request.Headers.Add("Cookie", stale);
+            using var response = await host.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.False(response.Headers.Contains("Set-Cookie"));
         }
+        var fresh = await host.LoginAsync("A", stale);
+        Assert.Equal(HttpStatusCode.OK, await host.MeAsync(fresh, "A"));
+    }
+
+    /// <summary>缓存读取故障是失败，不被当成缺失票据降级为匿名。</summary>
+    [Fact]
+    public async Task Cache_read_failures_propagate_instead_of_becoming_anonymous()
+    {
+        using var host = new Harness("callback");
+        var cookie = await host.LoginAsync("A");
+        host.Cache.FailReads = true;
+        await Assert.ThrowsAsync<IOException>(() => host.MeAsync(cookie, "A"));
     }
 
     [Fact]
@@ -207,6 +362,9 @@ public sealed class DistributedTicketStoreTests
         var descriptor = Assert.Single(services, item => item.ServiceType == typeof(ITicketStore));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
         Assert.Same(host.Store, descriptor.ImplementationInstance);
+        Assert.Single(services, item => item.ServiceType == typeof(IValidateOptions<CookieAuthenticationOptions>));
+        Assert.Single(services, item => item.ServiceType == typeof(IPostConfigureOptions<CookieAuthenticationOptions>)
+            && ((PostConfigureOptions<CookieAuthenticationOptions>)item.ImplementationInstance!).Name == "A");
     }
 
     [Fact]
@@ -280,6 +438,8 @@ public sealed class DistributedTicketStoreTests
                         {
                             options.Events.OnSigningIn = context => { Events.SigningIn++; return Task.CompletedTask; };
                             options.Events.OnSignedIn = context => { Events.SignedIn++; return Task.CompletedTask; };
+                            options.Events.OnValidatePrincipal = context => { Events.ValidatePrincipal++; return Task.CompletedTask; };
+                            options.Events.OnRedirectToLogin = context => { Events.RedirectToLogin++; context.Response.StatusCode = 401; return Task.CompletedTask; };
                         }
                     });
                     services.AddDistributedTicketStore(scheme).AddDistributedTicketStore(scheme);
@@ -305,6 +465,19 @@ public sealed class DistributedTicketStoreTests
                         properties.StoreTokens([new AuthenticationToken { Name = "access_token", Value = "private-token" }]);
                         await context.SignInAsync(scheme, Principal(scheme), properties);
                         context.Response.StatusCode = 204;
+                    }
+                    else if (context.Request.Path == "/challenge")
+                    {
+                        await context.ChallengeAsync(scheme);
+                    }
+                    else if (context.Request.Path == "/forbid")
+                    {
+                        await context.ForbidAsync(scheme);
+                    }
+                    else if (context.Request.Path == "/logout")
+                    {
+                        // 带 RedirectUri 才会走 RedirectToReturnUrl
+                        await context.SignOutAsync(scheme, new AuthenticationProperties { RedirectUri = "/signed-out" });
                     }
                     else
                     {
@@ -337,6 +510,24 @@ public sealed class DistributedTicketStoreTests
             using var response = await Client.SendAsync(request);
             return response.StatusCode;
         }
+        public async Task<HttpStatusCode> ChallengeAsync(string scheme)
+        {
+            using var response = await Client.GetAsync("/challenge?scheme=" + scheme);
+            return response.StatusCode;
+        }
+        public async Task<HttpStatusCode> LogoutAsync(string cookie, string scheme)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/logout?scheme=" + scheme);
+            request.Headers.Add("Cookie", cookie);
+            using var response = await Client.SendAsync(request);
+            return response.StatusCode;
+        }
+        public async Task<RedirectContext<CookieAuthenticationOptions>> RedirectContextAsync(string scheme)
+        {
+            var context = new DefaultHttpContext { RequestServices = Server.Services };
+            var definition = (await Server.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(scheme))!;
+            return new RedirectContext<CookieAuthenticationOptions>(context, definition, Options(scheme), new AuthenticationProperties(), "/signed-out");
+        }
         private static ClaimsPrincipal Principal(string scheme) => new(new ClaimsIdentity([new Claim("sub", "user")], scheme));
         public void Dispose() { Client.Dispose(); _app.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
     }
@@ -345,6 +536,8 @@ public sealed class DistributedTicketStoreTests
     {
         public int SigningIn { get; set; }
         public int SignedIn { get; set; }
+        public int ValidatePrincipal { get; set; }
+        public int RedirectToLogin { get; set; }
         public List<Guid> InstanceIds { get; } = [];
     }
 
@@ -365,6 +558,42 @@ public sealed class DistributedTicketStoreTests
             state.InstanceIds.Add(_id);
             return Task.CompletedTask;
         }
+        public override Task ValidatePrincipal(CookieValidatePrincipalContext context)
+        {
+            state.ValidatePrincipal++;
+            return Task.CompletedTask;
+        }
+        public override Task RedirectToLogin(RedirectContext<CookieAuthenticationOptions> context)
+        {
+            state.RedirectToLogin++;
+            context.Response.StatusCode = 401;
+            return Task.CompletedTask;
+        }
+    }
+
+    // 只重写测试关注的五个事件，状态码区别于原生默认的 302
+    private sealed class RemainingEventsProbe : CookieAuthenticationEvents
+    {
+        public Dictionary<string, int> Calls { get; } = [];
+        public int Count(string name) => Calls.GetValueOrDefault(name);
+        private Task Hit(string name)
+        {
+            Calls[name] = Count(name) + 1;
+            return Task.CompletedTask;
+        }
+        public override Task CheckSlidingExpiration(CookieSlidingExpirationContext context) => Hit(nameof(CheckSlidingExpiration));
+        public override Task SigningOut(CookieSigningOutContext context) => Hit(nameof(SigningOut));
+        public override Task RedirectToLogout(RedirectContext<CookieAuthenticationOptions> context) => Hit(nameof(RedirectToLogout));
+        public override Task RedirectToAccessDenied(RedirectContext<CookieAuthenticationOptions> context)
+        {
+            context.Response.StatusCode = 403;
+            return Hit(nameof(RedirectToAccessDenied));
+        }
+        public override Task RedirectToReturnUrl(RedirectContext<CookieAuthenticationOptions> context)
+        {
+            context.Response.StatusCode = 204;
+            return Hit(nameof(RedirectToReturnUrl));
+        }
     }
 
     private sealed class CacheProbe : IDistributedCache
@@ -373,9 +602,11 @@ public sealed class DistributedTicketStoreTests
         private bool _armed;
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool FailReads { get; set; }
         public void Arm() => _armed = true;
         public byte[]? Get(string key) => _inner.Get(key);
-        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => _inner.GetAsync(key, token);
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) =>
+            FailReads ? throw new IOException("Cache unavailable.") : _inner.GetAsync(key, token);
         public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => _inner.Set(key, value, options);
         public async Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
         {

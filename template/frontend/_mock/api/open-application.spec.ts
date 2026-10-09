@@ -85,8 +85,9 @@ describe('open application mock', () => {
         queryParams: { keyword: 'missing', sorting: 'Application.ClientSecret' },
       }),
     );
-    expect(error.status).toBe(500);
+    expect(error.status).toBe(400);
     expect(error.error.code).toBeUndefined();
+    expect(fieldsOf(error)).toEqual(['sorting']);
   });
 
   it('reports every missing field at once as 400 field errors without a code', () => {
