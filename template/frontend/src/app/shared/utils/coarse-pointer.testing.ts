@@ -1,5 +1,5 @@
 /// <reference types="@vitest/browser-playwright" />
-import { cdp, userEvent } from 'vitest/browser';
+import { cdp, server, userEvent } from 'vitest/browser';
 
 /** 触屏点按目标的最小边长（docs/standards/frontend-ui.md「可访问性」）。 */
 export const MIN_TOUCH_TARGET_PX = 44;
@@ -7,14 +7,32 @@ export const MIN_TOUCH_TARGET_PX = 44;
 /**
  * 切换当前测试页面是否按触屏设备运行。经 CDP 改变浏览器的输入设备能力，`(pointer: coarse)` 随之成立，
  * styles.css 与组件上的 pointer-coarse 规则由浏览器按原有级联真实套用；不替换 matchMedia。
- * 模拟作用于本 worker 的整个页面，同一页面随后还要运行别的测试文件：开启后必须在 afterEach 里 await 关闭。
+ * spec 直接调用本函数，vitest-base.config.ts 按源码里的 setCoarsePointer( 分入触屏实例；
+ * 不用别名或包装函数隐藏调用。非触屏实例会在发送 CDP 前抛错，使分组失效确定性暴露。
+ * 开启时 await setCoarsePointer(true)，在 afterEach 里 await 关闭，避免 coarse 规则影响后续用例。
+ * Linux Chromium 关闭后不恢复 fine/hover；isolate 只隔离 iframe，不能隔离整页的 CDP 状态。
  */
 export async function setCoarsePointer(enabled: boolean): Promise<void> {
+  if (!server.config.name?.endsWith(':pointer-touch')) {
+    throw new Error(
+      'Touch emulation requires the isolated :pointer-touch browser instance. Check vitest-base.config.ts grouping.',
+    );
+  }
   // maxTouchPoints 在关闭时也必须是 1–16
   await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 5 });
   if (matchMedia('(pointer: coarse)').matches !== enabled) {
     throw new Error(`Touch emulation did not switch (pointer: coarse) to ${enabled}.`);
   }
+}
+
+/**
+ * 依赖真实 fine/hover 媒体条件的用例放在独立的 *-fine-pointer.spec.ts，beforeEach 调本函数；
+ * 不与触屏仿真放在同一 spec，不替换 matchMedia、放宽断言或通过关闭仿真修复前提。
+ * 仅通过 JS 指针事件验证行为、不依赖媒体条件的用例无需拆分。
+ */
+export function requireFinePointer(): void {
+  expect(matchMedia('(pointer: fine)').matches, 'requires (pointer: fine)').toBe(true);
+  expect(matchMedia('(hover: hover)').matches, 'requires (hover: hover)').toBe(true);
 }
 
 /**

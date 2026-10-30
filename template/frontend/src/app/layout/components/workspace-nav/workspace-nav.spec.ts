@@ -220,15 +220,6 @@ describe('WorkspaceNav overflow', () => {
       expect(menuItems.length).toBeGreaterThan(0);
       menuItems.forEach(expectTouchTarget);
     });
-
-    it('keeps the compact sizes for a mouse', async () => {
-      const fixture = await render(560);
-
-      const { more, menuItems } = await openMore(fixture);
-
-      expect(more.getBoundingClientRect().height).toBeLessThan(44);
-      expect(menuItems[0].getBoundingClientRect().height).toBeLessThan(44);
-    });
   });
 });
 //#if (IncludeLocalization)
