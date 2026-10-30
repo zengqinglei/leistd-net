@@ -132,12 +132,20 @@ export class TwoFactorRequired {
     void this.continue();
   }
 
-  /** 恢复码已保存：先刷新当前用户、权限与设置，再回到原目标或按权限进入应用。 */
+  /** 恢复码已保存：回授权端点时直接整页离开；否则刷新当前用户、权限与设置，再回到原目标或按权限进入应用。 */
   protected async continue(): Promise<void> {
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    //#if (OpenIddictServer)
+    // 回到授权端点是整页离开：服务端会重新校验会话是否仍受限，离开前不必刷新当前用户与会话上下文
+    if (this.returnUrls.isServerPage(returnUrl)) {
+      this.returnUrls.loadPage(returnUrl);
+      return;
+    }
+    //#endif
     try {
       await lastValueFrom(this.authService.loadUser());
       await this.sessionContext.establish();
-      await this.returnUrls.navigate(this.route.snapshot.queryParamMap.get('returnUrl'), () =>
+      await this.returnUrls.navigate(returnUrl, () =>
         this.router.navigate([
           this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
         ]),

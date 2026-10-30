@@ -9,7 +9,7 @@ import { provideTranslocoScope, TranslocoService } from '@jsverse/transloco';
 import { toast } from '@spartan-ng/brain/sonner';
 // prettier-ignore
 import {
-  of, throwError,
+  of, Subject, throwError,
   //#if (IncludeMultiTenancy || ExternalLogin)
   Observable,
   //#endif
@@ -63,6 +63,22 @@ const PROMPT: TwoFactorPrompt = {
   defaultMethod: 'authenticator',
   maskedEmail: null,
 };
+//#if (OpenIddictServer)
+
+/** 授权端点送来的原目标：缓存请求的引用与重新认证证明原样带回。 */
+const AUTHORIZE =
+  '/connect/authorize?client_id=resource&request_uri=urn%3Aabc&reauthentication=proof';
+//#endif
+
+/** 按钮处于忙碌态：禁用并显示加载。 */
+function busy(button: Element | null): boolean {
+  return (button as HTMLButtonElement).disabled && button!.querySelector('hlm-spinner') !== null;
+}
+
+/** 等一串微任务（请求回来之后的收尾）落定。 */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve));
+}
 
 describe('Login', () => {
   let fixture: ComponentFixture<Login>;
@@ -426,6 +442,8 @@ describe('Login', () => {
 
     expect(authService.login).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/platform/users');
+    // SPA 内跳转后登录页随路由销毁；导航被守卫取消时人还在这里，按钮不能一直转
+    expect(component.isLoading()).toBe(false);
   });
 
   it('continues the external return address after completing the second step', async () => {
@@ -510,13 +528,51 @@ describe('Login', () => {
       '/auth/two-factor-setup?returnUrl=%2Fworkspace%2Fsettings%2Fsecurity',
     ]);
   });
+
+  // 第二步的忙碌分两段：验证请求在途由第二步自己持有，通过后的收尾（读当前用户、建立会话上下文）
+  // 由登录页持有。两段之间不能出现能再点一次的空档；收尾失败后恢复可操作
+  it('keeps the second step busy from verification through finishing and frees it on failure', async () => {
+    navigationState = { twoFactorPrompt: PROMPT, returnUrl: '/workspace/settings/security' };
+    await setUp();
+    const verification = new Subject<void>();
+    vi.spyOn(TestBed.inject(AccountService), 'completeTwoFactorLogin').mockReturnValue(
+      verification,
+    );
+    const user = new Subject<never>();
+    authService.loadUser.mockReturnValue(user as never);
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const host = fixture.nativeElement as HTMLElement;
+    const submit = () => host.querySelector('[data-testid="two-factor-submit"]');
+    const input = host.querySelector<HTMLInputElement>(
+      '[data-testid="two-factor-code-input"] input',
+    )!;
+
+    input.value = '123456';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await settle();
+    fixture.detectChanges();
+    expect(busy(submit())).toBe(true);
+
+    verification.next();
+    verification.complete();
+    await settle();
+    fixture.detectChanges();
+    expect(authService.loadUser).toHaveBeenCalledOnce();
+    expect(busy(submit())).toBe(true);
+
+    user.error(new Error('me unavailable'));
+    await settle();
+    fixture.detectChanges();
+    expect(busy(submit())).toBe(false);
+    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
+  });
   //#if (OpenIddictServer)
 
   // 授权端点把未登录的授权请求送来这里：登录后整页回到它，原样保留缓存请求的引用与证明
   it('returns to an authorization request with a full page load after signing in', async () => {
-    const target =
-      '/connect/authorize?client_id=resource&request_uri=urn%3Aabc&reauthentication=proof';
-    queryParams = { returnUrl: target };
+    queryParams = { returnUrl: AUTHORIZE };
     await setUp();
     const loadPage = vi
       .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
@@ -525,8 +581,65 @@ describe('Login', () => {
 
     await component.onSubmit();
 
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
+    expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  // 整页离开前不改界面：授权端点会重新校验会话、证明与首绑要求，资源应用启动时自建上下文。
+  // 这里再读当前用户、应用账户偏好或弹成功提示，即将离开的页面会先闪一下；按钮转到页面离开为止
+  it('leaves for an authorization request without changing the page it is leaving', async () => {
+    queryParams = { returnUrl: AUTHORIZE };
+    await setUp();
+    vi.spyOn(TestBed.inject(ReturnUrlService), 'loadPage').mockImplementation(() => undefined);
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    fillValidCredentials();
+
+    await component.onSubmit();
+    fixture.detectChanges();
+
+    expect(authService.loadUser).not.toHaveBeenCalled();
+    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
+    expect(success).not.toHaveBeenCalled();
+    expect(
+      busy((fixture.nativeElement as HTMLElement).querySelector('button[type="submit"]')),
+    ).toBe(true);
+  });
+
+  it('restores the form when the full page load cannot start', async () => {
+    queryParams = { returnUrl: AUTHORIZE };
+    await setUp();
+    vi.spyOn(TestBed.inject(ReturnUrlService), 'loadPage').mockImplementation(() => {
+      throw new Error('navigation blocked');
+    });
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    fillValidCredentials();
+
+    await component.onSubmit();
+
+    expect(error).toHaveBeenCalledOnce();
+    expect(component.isLoading()).toBe(false);
+  });
+
+  it('keeps the second step busy until it leaves for an authorization request', async () => {
+    navigationState = { twoFactorPrompt: PROMPT, returnUrl: AUTHORIZE };
+    await setUp();
+    const loadPage = vi
+      .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+      .mockImplementation(() => undefined);
+
+    await (
+      component as unknown as { onTwoFactorCompleted(): Promise<void> }
+    ).onTwoFactorCompleted();
+    fixture.detectChanges();
+
+    expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+    expect(authService.loadUser).not.toHaveBeenCalled();
+    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
+    expect(
+      busy(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="two-factor-submit"]'),
+      ),
+    ).toBe(true);
   });
   //#endif
 
@@ -1064,6 +1177,104 @@ describe('Login', () => {
       vi.spyOn(PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(false);
     });
     afterEach(() => vi.restoreAllMocks());
+
+    /** 取回注册摘要之前，通行密钥入口的占位。 */
+    function passkeyPlaceholder(): HTMLElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="passkey-sign-in-placeholder"]',
+      );
+    }
+
+    // 摘要回来之前先占住通行密钥入口的位置：回来后换成按钮，下方的外部登录与注册入口不跳动
+    it('reserves the passkey entry until the summary arrives, then swaps in the button', async () => {
+      await setUp();
+      const form = (fixture.nativeElement as HTMLElement).querySelector('form')!;
+
+      expect(passkeyPlaceholder()).not.toBeNull();
+      expect(passkeyButton()).toBeNull();
+      const reserved = form.getBoundingClientRect().height;
+
+      TestBed.inject(HttpTestingController)
+        .match('/api/v1/auth/security-config')
+        .forEach((request) =>
+          request.flush({ registrationEnabled: true, passkeysAvailable: true }),
+        );
+      fixture.detectChanges();
+
+      expect(passkeyPlaceholder()).toBeNull();
+      expect(passkeyButton()).not.toBeNull();
+      expect(form.getBoundingClientRect().height).toBe(reserved);
+    });
+
+    for (const [outcome, respond] of [
+      ['the deployment has no passkeys', { passkeysAvailable: false }],
+      ['the summary cannot be read', null],
+    ] as const) {
+      it(`leaves no placeholder behind when ${outcome}`, async () => {
+        await setUp();
+
+        TestBed.inject(HttpTestingController)
+          .match('/api/v1/auth/security-config')
+          .forEach((request) =>
+            respond
+              ? request.flush({ registrationEnabled: true, ...respond })
+              : request.flush(null, { status: 503, statusText: 'Unavailable' }),
+          );
+        fixture.detectChanges();
+
+        expect(passkeyPlaceholder()).toBeNull();
+        expect(passkeyButton()).toBeNull();
+      });
+    }
+
+    // 浏览器本就用不了通行密钥：入口不会出现，也就不占位
+    it('reserves nothing when the browser cannot use passkeys', async () => {
+      vi.stubGlobal('PublicKeyCredential', undefined);
+      await setUp();
+
+      expect(passkeyPlaceholder()).toBeNull();
+      expect(passkeyButton()).toBeNull();
+    });
+    //#if (OpenIddictServer)
+
+    // 通行密钥登录回到授权端点：按钮转到页面离开为止，不在离开前复位
+    it('keeps the passkey button busy until it leaves for an authorization request', async () => {
+      queryParams = { returnUrl: AUTHORIZE };
+      vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+      await setUpPasskeys();
+      const loadPage = vi
+        .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+        .mockImplementation(() => undefined);
+
+      await clickPasskey();
+
+      expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+      expect(authService.loadUser).not.toHaveBeenCalled();
+      expect(busy(passkeyButton())).toBe(true);
+    });
+
+    it('keeps the form busy after an autofilled passkey leaves for an authorization request', async () => {
+      queryParams = { returnUrl: AUTHORIZE };
+      vi.mocked(PublicKeyCredential.isConditionalMediationAvailable).mockResolvedValue(true);
+      let pick!: (credential: PublicKeyCredential) => void;
+      vi.spyOn(navigator.credentials, 'get').mockImplementation(
+        () => new Promise((resolve) => (pick = resolve)),
+      );
+      await setUpPasskeys();
+      const loadPage = vi
+        .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+        .mockImplementation(() => undefined);
+      await fixture.whenStable();
+
+      pick(fakeAssertion('cred-auto'));
+      await settle();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+      expect(busy(passkeyButton())).toBe(true);
+    });
+    //#endif
 
     it('offers the passkey button only when the deployment has passkeys', async () => {
       await setUpPasskeys({ passkeysAvailable: false });

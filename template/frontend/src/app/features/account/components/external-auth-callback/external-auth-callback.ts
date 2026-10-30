@@ -128,6 +128,15 @@ export class ExternalAuthCallback implements OnInit {
         });
         return;
       }
+      //#if (OpenIddictServer)
+
+      // 回到授权端点是整页离开：完成端点刚下发会话，服务端会重新校验会话与首绑要求，
+      // 不必先读当前用户、在即将离开的页面上建立会话上下文
+      if (this.returnUrls.isServerPage(result?.returnUrl)) {
+        this.returnUrls.loadPage(result.returnUrl);
+        return;
+      }
+      //#endif
 
       await lastValueFrom(this.authService.loadUser());
       await this.enterApplication(result?.returnUrl);

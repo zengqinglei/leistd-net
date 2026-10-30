@@ -187,7 +187,8 @@ describe('TwoFactorRequired', () => {
   });
   //#if (OpenIddictServer)
 
-  // 授权请求被受限会话拦下：设置完成后整页回到同一个缓存的授权请求
+  // 授权请求被受限会话拦下：设置完成后整页回到同一个缓存的授权请求。授权端点会重新校验会话，
+  // 离开前不再读当前用户、不建立会话上下文（不在即将离开的页面上应用账户偏好）
   it('continues an authorization request with a full page load', async () => {
     const target = '/connect/authorize?client_id=resource&request_uri=urn%3Aabc';
     queryParams = { returnUrl: target };
@@ -200,6 +201,8 @@ describe('TwoFactorRequired', () => {
 
     expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
     expect(navigateByUrl).not.toHaveBeenCalled();
+    expect(auth.loadUser).not.toHaveBeenCalled();
+    expect(establish).not.toHaveBeenCalled();
   });
   //#endif
 

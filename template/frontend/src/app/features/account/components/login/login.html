@@ -8,6 +8,7 @@
       <!-- 登录第二步：密码已通过，直接给出默认方式 -->
       <app-two-factor-challenge
         [prompt]="prompt"
+        [finishing]="isLoading()"
         (completed)="onTwoFactorCompleted()"
         (cancelled)="twoFactorPrompt.set(null)"
       />
@@ -223,6 +224,12 @@
               </p>
             }
           </div>
+        } @else if (passkeyPending()) {
+          <!-- 摘要回来前占住按钮的位置（与按钮同高），回来后换成按钮或收起 -->
+          <hlm-skeleton
+            class="h-9 w-full pointer-coarse:h-11"
+            data-testid="passkey-sign-in-placeholder"
+          />
         }
       </form>
       <!--#if (ExternalLogin)-->

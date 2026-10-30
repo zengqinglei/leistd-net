@@ -167,6 +167,7 @@ describe('ExternalAuthCallback', () => {
   });
   //#if (OpenIddictServer)
 
+  // 完成端点刚下发会话：授权端点会重新校验会话与首绑要求，离开前不读当前用户、不建立会话上下文
   it('continues an authorization request with a full page load', async () => {
     const target = '/connect/authorize?client_id=resource&request_uri=urn%3Aabc';
     accountService.externalLoginCallback.mockReturnValue(of({ returnUrl: target }));
@@ -177,7 +178,8 @@ describe('ExternalAuthCallback', () => {
     await new Promise((resolve) => setTimeout(resolve));
 
     expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
-    expect(calls.indexOf('establish')).toBeGreaterThanOrEqual(0);
+    expect(authService.loadUser).not.toHaveBeenCalled();
+    expect(calls).not.toContain('establish');
   });
   //#endif
 
@@ -340,6 +342,8 @@ describe('ExternalAuthCallback', () => {
     fixture.detectChanges();
 
     expect(accountService.externalLoginCallback).not.toHaveBeenCalled();
+    // 没有本次下发会话的结果：先读当前用户探测会话，再进入应用
+    expect(authService.loadUser).toHaveBeenCalledOnce();
     expect(calls).toEqual(['establish', 'navigate']);
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'),

@@ -159,6 +159,11 @@ export class TwoFactorChallenge {
 
   /** 第一步交来的第二步。 */
   readonly prompt = input.required<TwoFactorPrompt>();
+  /**
+   * 登录页正在收尾（读当前用户、建立会话上下文或整页离开）。`completed` 不等收尾完成：
+   * 本组件的验证请求一回来就复位，没有这一项的话，按钮会在页面跳走前恢复可点。
+   */
+  readonly finishing = input(false);
   /** 第二步通过，会话已下发。 */
   readonly completed = output<void>();
   /** 回到密码那一步（用户选择返回，或凭据已失效）。 */
@@ -173,7 +178,10 @@ export class TwoFactorChallenge {
   /** 两种以上备选时，"换一种验证方式"列表是否展开。 */
   protected readonly showAlternatives = signal(false);
   protected readonly value = signal('');
+  /** 本组件的验证请求在途。 */
   protected readonly submitting = signal(false);
+  /** 验证请求在途或登录页收尾中：提交入口禁用并显示加载。 */
+  protected readonly busy = computed(() => this.submitting() || this.finishing());
   /** 码被拒或发不出码的原因（服务端已本地化），显示在输入框下方。 */
   protected readonly error = signal<string | null>(null);
   /** 被拒的是码本身（不是方式不能用）。 */
@@ -210,7 +218,7 @@ export class TwoFactorChallenge {
 
   protected readonly canSubmit = computed(() => {
     const value = this.value().replace(/\s/g, '');
-    if (this.submitting() || this.method() === 'passkey') {
+    if (this.busy() || this.method() === 'passkey') {
       return false;
     }
 
@@ -335,7 +343,7 @@ export class TwoFactorChallenge {
 
   /** 用通行密钥完成第二步：本人点击后取断言选项、调起浏览器，再交回断言。 */
   protected async verifyWithPasskey(): Promise<void> {
-    if (this.submitting() || this.passkeySupport !== 'supported') {
+    if (this.busy() || this.passkeySupport !== 'supported') {
       return;
     }
 

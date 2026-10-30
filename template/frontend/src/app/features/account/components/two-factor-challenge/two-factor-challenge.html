@@ -47,10 +47,10 @@
           data-testid="two-factor-passkey-submit"
           [id]="inputIds.passkey"
           [attr.aria-describedby]="error() || passkeyFailure() ? errorId : null"
-          [disabled]="submitting() || passkeySupport !== 'supported'"
+          [disabled]="busy() || passkeySupport !== 'supported'"
           (click)="verifyWithPasskey()"
         >
-          @if (submitting()) {
+          @if (busy()) {
             <hlm-spinner class="text-base" data-icon="inline-start" />
           } @else {
             <ng-icon name="lucideFingerprint" data-icon="inline-start" />
@@ -174,7 +174,7 @@
           data-testid="two-factor-submit"
           [disabled]="!canSubmit()"
         >
-          @if (submitting()) {
+          @if (busy()) {
             <hlm-spinner class="text-base" data-icon="inline-start" />
           }
           {{ t('account.twoFactorLogin.submit') }}

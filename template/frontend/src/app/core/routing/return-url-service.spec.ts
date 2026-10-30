@@ -51,8 +51,7 @@ describe('ReturnUrlService', () => {
     const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
     const fallback = vi.fn(async () => undefined);
 
-    await service.navigate('/workspace/settings/security', fallback);
-
+    expect(await service.navigate('/workspace/settings/security', fallback)).toBe('routed');
     expect(navigateByUrl).toHaveBeenCalledExactlyOnceWith('/workspace/settings/security');
     expect(fallback).not.toHaveBeenCalled();
   });
@@ -61,8 +60,7 @@ describe('ReturnUrlService', () => {
     const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
     const fallback = vi.fn(async () => undefined);
 
-    await service.navigate('https://evil.example.com', fallback);
-
+    expect(await service.navigate('https://evil.example.com', fallback)).toBe('fallback');
     expect(fallback).toHaveBeenCalledOnce();
     expect(navigateByUrl).not.toHaveBeenCalled();
   });
@@ -75,10 +73,30 @@ describe('ReturnUrlService', () => {
     const target =
       '/connect/authorize?client_id=resource&request_uri=urn%3Aabc&reauthentication=proof';
 
-    await service.navigate(target, vi.fn());
-
+    // 调用方据此保持加载态：页面已经在离开，不该先复位再消失
+    expect(await service.navigate(target, vi.fn())).toBe('left');
     expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
     expect(navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  // 与站内目标同一套校验：只认站内的授权端点，外站与协议相对地址不算
+  it('tells a server page target apart from in-site and off-site targets', () => {
+    expect(service.isServerPage('/connect/authorize?client_id=resource')).toBe(true);
+    expect(service.isServerPage('/workspace')).toBe(false);
+    expect(service.isServerPage('//evil.example.com/connect/authorize')).toBe(false);
+    expect(service.isServerPage('https://evil.example.com/connect/authorize')).toBe(false);
+    expect(service.isServerPage(null)).toBe(false);
+  });
+
+  // 没能发起整页导航就不算离开：异常交给调用方，由它恢复界面
+  it('does not report leaving when the full page load cannot start', async () => {
+    vi.spyOn(service, 'loadPage').mockImplementation(() => {
+      throw new Error('navigation blocked');
+    });
+
+    await expect(
+      service.navigate('/connect/authorize?client_id=resource', vi.fn()),
+    ).rejects.toThrow('navigation blocked');
   });
   //#endif
 });

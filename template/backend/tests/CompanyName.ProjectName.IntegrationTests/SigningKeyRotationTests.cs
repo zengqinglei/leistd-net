@@ -6,8 +6,8 @@ using System.Text.Json;
 using Leistd.Security.OpenIddict.Validation.SigningKeys;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-#if (!ResourceBrowserSession)
 using Microsoft.AspNetCore.Http;
+#if (!ResourceBrowserSession)
 using Leistd.ServiceClient.Abstractions;
 #endif
 #if (ResourceBrowserSession)
@@ -30,9 +30,6 @@ using OpenIddict.Validation.SystemNetHttp;
 using OpenIddict.Validation;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-#if (ResourceBrowserSession)
-using System.Text.RegularExpressions;
-#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -433,13 +430,11 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
     {
         using var browser = Client(host);
         using var challenge = await browser.GetAsync("/api/v1/auth/login?returnUrl=/workspace");
-        Assert.Equal(HttpStatusCode.OK, challenge.StatusCode);
-        var html = await challenge.Content.ReadAsStringAsync();
-        string Field(string name) => WebUtility.HtmlDecode(Regex.Match(html,
-            $"<input type=\"hidden\" name=\"{name}\" value=\"([^\"]*)\"").Groups[1].Value);
-        issuer.Nonce = Field("nonce");
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/signin")
-        { Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["code"] = "test-code", ["state"] = Field("state") }) };
+        Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
+        var query = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query);
+        issuer.Nonce = query["nonce"].ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/signin" + QueryString.Create(
+            new Dictionary<string, string?> { ["code"] = "test-code", ["state"] = query["state"].ToString() }));
         request.Headers.Add("Cookie", string.Join("; ", challenge.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0])));
         using var callback = await browser.SendAsync(request);
         Assert.True(callback.StatusCode == HttpStatusCode.Found, await callback.Content.ReadAsStringAsync());
