@@ -121,8 +121,8 @@ export class AuthService {
   }
 
   /**
-   * 清空认证数据。权限与设置的清理在 `SessionContextService.clear()`，非静默 401 与启动流都走那里；
-   * `logout()` 之后整页跳转，不必再走一遍。
+   * 清空认证数据。权限与设置的清理在 `SessionContextService.clear()`，非静默 401 与启动流都走那里。
+   * 真实退出不调用它：之后整页离开，内存状态随页面重建，提前清空只会让离开前的页面先失去用户。
    */
   clearAuthData(): void {
     this._revision++;
@@ -141,14 +141,17 @@ export class AuthService {
   }
 
   logout(): void {
-    this.clearAuthData();
     //#if (RemoteTokenAuth)
+    // Mock 退出不经 OIDC 重定向链：XHR 应答后只跳一次，照旧先清空
     if (this.isMockedUrl('/api/v1/auth/logout')) {
-      this.http
-        .post('/api/v1/auth/logout', {})
-        .subscribe(() => (window.location.href = '/auth/login'));
+      this.clearAuthData();
+      this.http.post('/api/v1/auth/logout', {}).subscribe(() => this.loadPage('/auth/login'));
       return;
     }
+    //#if (IncludeNotifications || IncludeRealTime)
+    // 用户留在页面上直到离开；实时连接先作废，旧主体的推送与在途异步写入不再落到界面上
+    void this.signalR.reset();
+    //#endif
     // 整页 POST 让官方 OIDC 退出重定向由浏览器完成，不通过 XHR 跨站跟随。
     const form = document.createElement('form');
     form.method = 'POST';
@@ -166,7 +169,6 @@ export class AuthService {
    * 身份验证器）。待提交的修改与凭证都不进地址栏，回来后由本人重新发起。
    */
   signInAgain(returnUrl: string): void {
-    this.clearAuthData();
     this.endSessionAndGo(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
   }
 
@@ -181,11 +183,17 @@ export class AuthService {
     );
   }
 
-  // 退出请求失败也要离开：本地主体已清空，留在原页面只会看到一个没有用户的界面
+  /**
+   * 结束会话后整页离开，失败也离开：留在原页面只会对着一个已经退出（或状态不明）的会话。
+   * 请求在途时用户仍显示在页面上，内存状态随新页面重建；只先作废实时连接，旧主体的推送不再落到界面上。
+   */
   private endSessionAndGo(target: string): void {
+    //#if (IncludeNotifications || IncludeRealTime)
+    void this.signalR.reset();
+    //#endif
     this.http.post('/api/v1/auth/logout', {}).subscribe({
-      next: () => (window.location.href = target),
-      error: () => (window.location.href = target),
+      next: () => this.loadPage(target),
+      error: () => this.loadPage(target),
     });
   }
   //#endif
@@ -193,10 +201,15 @@ export class AuthService {
 
   startLogin(returnUrl = '/workspace'): void {
     if (this.isMockedUrl('/api/v1/auth/login')) {
-      this.http.post('/api/v1/auth/login', {}).subscribe(() => (window.location.href = returnUrl));
+      this.http.post('/api/v1/auth/login', {}).subscribe(() => this.loadPage(returnUrl));
       return;
     }
-    window.location.href = `/api/v1/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+    this.loadPage(`/api/v1/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
   }
   //#endif
+
+  /** 整页导航。单独成方法，测试据此观察跳转而不真的离开页面。 */
+  loadPage(url: string): void {
+    window.location.href = url;
+  }
 }

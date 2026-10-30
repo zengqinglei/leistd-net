@@ -8,6 +8,12 @@ import { Router, UrlTree } from '@angular/router';
 export const TWO_FACTOR_SETUP_URL = '/auth/two-factor-setup';
 
 /**
+ * {@link ReturnUrlService.navigate} 的去向：`left` 已发起整页导航（旧页面稍后才卸载，调用方不该再复位界面）；
+ * `routed` 已在应用内跳转到原目标；`fallback` 没有可接续的目标，已执行默认去向。
+ */
+export type ReturnNavigation = 'left' | 'routed' | 'fallback';
+
+/**
  * 认证流程之后回到原目标（`returnUrl`）：守卫、登录、外部登录完成、登录第二步与强制设置页共用一套判定与跳转。
  *
  * 只接受站内地址；`/connect/*`（OIDC 授权端点）要整页回到服务端，原样保留 `client_id`、`request_uri`
@@ -48,27 +54,38 @@ export class ReturnUrlService {
 
   /**
    * 回到原目标；没有可接续的目标时执行 `fallback`（通常按权限去默认页）。
-   * 调用前会话上下文（用户、权限、设置）必须已经就位：SPA 内跳转不会重跑应用初始化器。
+   * 应用内跳转与 `fallback` 之前会话上下文（用户、权限、设置）必须已经就位：SPA 内跳转不会重跑应用初始化器。
+//#if (OpenIddictServer)
+   * 服务端整页地址（见 {@link isServerPage}）不需要：新页面自己建立上下文，调用方可以跳过这些准备直接离开。
+//#endif
    */
   async navigate(
     returnUrl: string | null | undefined,
     fallback: () => Promise<unknown>,
-  ): Promise<void> {
+  ): Promise<ReturnNavigation> {
+    //#if (OpenIddictServer)
+    if (this.isServerPage(returnUrl)) {
+      this.loadPage(returnUrl);
+      return 'left';
+    }
+    //#endif
     const target = this.resolve(returnUrl);
     if (!target) {
       await fallback();
-      return;
+      return 'fallback';
     }
-    //#if (OpenIddictServer)
-    // 授权端点不是前端路由：整页回到服务端，由它继续同一个缓存的授权请求
-    if (target.startsWith('/connect/')) {
-      this.loadPage(target);
-      return;
-    }
-    //#endif
     await this.router.navigateByUrl(target);
+    return 'routed';
   }
   //#if (OpenIddictServer)
+
+  /**
+   * 原目标是授权端点（`/connect/*`）：它不是前端路由，要整页回到服务端继续同一个缓存的授权请求。
+   * 服务端会重新校验会话、重新认证证明与首绑要求，离开前不必再读当前用户或建立会话上下文。
+   */
+  isServerPage(returnUrl: string | null | undefined): returnUrl is string {
+    return this.resolve(returnUrl)?.startsWith('/connect/') === true;
+  }
 
   /** 整页导航到服务端地址。单独成方法，测试据此观察跳转而不真的离开页面。 */
   loadPage(url: string): void {

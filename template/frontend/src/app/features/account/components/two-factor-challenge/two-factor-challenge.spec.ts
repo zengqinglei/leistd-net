@@ -270,6 +270,47 @@ describe('TwoFactorChallenge', () => {
     response.complete();
   });
 
+  /** 提交按钮是否处于忙碌态：禁用并显示加载。 */
+  function busy(button: HTMLElement | null): boolean {
+    return (button as HTMLButtonElement).disabled && button!.querySelector('hlm-spinner') !== null;
+  }
+
+  // 验证请求在途：按钮忙碌；失败后恢复可操作（码被清空，重新输满即可再交）
+  it('keeps the button busy while the code is being verified and frees it on failure', async () => {
+    const response = new Subject<void>();
+    account.completeTwoFactorLogin.mockReturnValue(response);
+
+    type('123456');
+    await submit();
+
+    expect(busy(byTestId('two-factor-submit'))).toBe(true);
+
+    response.error(rejection('Error:InternalServerError', 'Something went wrong.', 500));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(busy(byTestId('two-factor-submit'))).toBe(false);
+    expect((byTestId('two-factor-submit') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // 第二步通过后由登录页收尾（读当前用户、建立会话上下文或整页离开）：收尾期间仍然忙碌，
+  // 收尾失败时登录页撤掉这个状态，按钮恢复可操作
+  it('stays busy while the login page finishes the sign-in', async () => {
+    fixture.componentRef.setInput('finishing', true);
+    fixture.detectChanges();
+    type('123456');
+
+    expect(busy(byTestId('two-factor-submit'))).toBe(true);
+    await submit();
+    expect(account.completeTwoFactorLogin).not.toHaveBeenCalled();
+
+    fixture.componentRef.setInput('finishing', false);
+    fixture.detectChanges();
+
+    expect(busy(byTestId('two-factor-submit'))).toBe(false);
+    expect((byTestId('two-factor-submit') as HTMLButtonElement).disabled).toBe(false);
+  });
+
   // 改用恢复码：可见标签，切换后焦点落在恢复码输入框
   it('labels the recovery code input and focuses it after switching', async () => {
     const host = fixture.nativeElement as HTMLElement;
@@ -599,6 +640,16 @@ describe('TwoFactorChallenge', () => {
 
       expect(byTestId('two-factor-passkey')).toBeNull();
       expect(byTestId('two-factor-challenge')!.getAttribute('data-method')).toBe('authenticator');
+    });
+
+    it('keeps the passkey button busy while the login page finishes the sign-in', async () => {
+      render(PASSKEY_DEFAULT);
+      fixture.componentRef.setInput('finishing', true);
+      fixture.detectChanges();
+
+      expect(busy(byTestId('two-factor-passkey-submit'))).toBe(true);
+      await clickPasskey();
+      expect(account.beginTwoFactorPasskey).not.toHaveBeenCalled();
     });
 
     it('offers the passkey as the only alternative with its own wording', () => {

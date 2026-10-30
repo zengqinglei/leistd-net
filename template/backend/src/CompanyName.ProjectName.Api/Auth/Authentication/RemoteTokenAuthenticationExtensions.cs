@@ -7,7 +7,9 @@ using CompanyName.ProjectName.Application.Shared;
 using Leistd.ServiceClient.AspNetCore;
 using Leistd.Security.OpenIddict.Validation;
 #if (ResourceBrowserSession)
+using System.Text;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 #endif
 #if (ResourceBrowserSession)
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -121,8 +123,9 @@ internal static class RemoteTokenAuthenticationExtensions
             // 对换上的访问令牌主体再跑一遍，删掉 acr、aud、iss、exp 等——只删登录这一条路，首次续期后它们又回来
             options.ClaimActions.Clear();
             options.CallbackPath = "/api/v1/auth/signin";
-            // 授权与退出请求都以自动提交的表单 POST 发往 Identity：id_token_hint 不进地址栏、历史记录与 Referer
-            options.AuthenticationMethod = OpenIdConnectRedirectBehavior.FormPost;
+            // 授权码随 302 回到回调的查询串，浏览器不再渲染一张无样式的自动提交中转页；
+            // 防护靠一次性授权码、机密客户端、PKCE 与官方的 state/correlation/nonce 校验
+            options.ResponseMode = OpenIdConnectResponseMode.Query;
             options.SignedOutCallbackPath = "/api/v1/auth/signout";
             options.Events.OnRemoteFailure = context =>
             {
@@ -136,11 +139,29 @@ internal static class RemoteTokenAuthenticationExtensions
                 context.Principal = await ResourceSessionRefresher.ValidateAccessTokenAsync(context.HttpContext,
                     context.TokenEndpointResponse!.AccessToken, context.HttpContext.RequestAborted);
             };
-            options.Events.OnRedirectToIdentityProviderForSignOut = context =>
+            // 登录挑战用官方默认的 302（参数本可公开）；只有退出以自动提交的表单 POST 发往 Identity，
+            // id_token_hint 不进地址栏、历史记录与 Referer
+            options.Events.OnRedirectToIdentityProviderForSignOut = async context =>
             {
+                var message = context.ProtocolMessage;
                 // 保留 id_token_hint：Identity 据其中的会话标识判断能否免确认退出；client_id 在 hint 缺失时关联退出回调
-                context.ProtocolMessage.ClientId = context.Options.ClientId;
-                return Task.CompletedTask;
+                message.ClientId = context.Options.ClientId;
+                if (string.IsNullOrEmpty(message.IssuerAddress))
+                    throw new InvalidOperationException("Cannot redirect to the end session endpoint, the configuration may be missing or invalid.");
+
+                // 事件先于官方管线封装 state：接管输出就照它的做法，先存下调用方放的 state，再封装，退出回调据此取回最终落点
+                if (!string.IsNullOrEmpty(message.State))
+                    context.Properties.Items[OpenIdConnectDefaults.UserstatePropertiesKey] = message.State;
+                message.State = context.Options.StateDataFormat.Protect(context.Properties);
+                var content = Encoding.UTF8.GetBytes(message.BuildFormPost());
+                var response = context.Response;
+                response.ContentLength = content.Length;
+                response.ContentType = "text/html;charset=UTF-8";
+                response.Headers.CacheControl = "no-cache, no-store";
+                response.Headers.Pragma = "no-cache";
+                response.Headers.Expires = "Thu, 01 Jan 1970 00:00:00 GMT";
+                context.HandleResponse();
+                await response.Body.WriteAsync(content, context.HttpContext.RequestAborted);
             };
         });
         builder.Services.AddOptions<OpenIdConnectOptions>(AuthenticationSchemeNames.OpenIdConnect)

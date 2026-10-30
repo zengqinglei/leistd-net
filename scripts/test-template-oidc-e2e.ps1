@@ -331,7 +331,7 @@ function Assert-CachedHttp(
     return Assert-Http $Label $Status $reentry.AbsoluteUri -Headers $Headers -Session $Session
 }
 
-# 官方 FormPost：Resource 以自动提交的表单把授权、退出请求发往 Identity，参数只在表单里，不在跳转地址上。
+# Resource 只把退出请求以自动提交的表单发往 Identity：id_token_hint 只在表单里，不在跳转地址上。
 function Read-FormPost($Response, [string]$Action) {
     Assert-Value "form-post-no-location" $true ([string]::IsNullOrEmpty($Response.Location))
     $html = [string]$Response.Data
@@ -807,20 +807,19 @@ function Test-Exchange([string]$Subject, [hashtable]$SourceClaims) {
 }
 
 function New-ResourceBrowserCookie {
-    $challenge = Assert-Http "resource-browser-challenge" 200 ($urls.orders + "/api/v1/auth/login?returnUrl=/workspace")
-    $parameters = Read-FormPost $challenge ($urls.idp + "/connect/authorize")
+    # 挑战与授权响应都是 302：浏览器不渲染自动提交的中转页，授权码随回调地址的查询串带回
+    $challenge = Assert-Http "resource-browser-challenge" 302 ($urls.orders + "/api/v1/auth/login?returnUrl=/workspace")
+    Assert-Value "browser-challenge-endpoint" ($urls.idp + "/connect/authorize") ([Uri]$challenge.Location).GetLeftPart([UriPartial]::Path)
+    $parameters = Read-Query $challenge.Location
     Assert-Value "browser-code-flow" "code" $parameters.response_type
     Assert-Value "browser-pkce" "S256" $parameters.code_challenge_method
-    $authorize = Assert-CachedHttp "browser-authorize" 200 ($urls.idp + "/connect/authorize") -Method POST `
-        -Body (ConvertTo-Form $parameters) -Session $sharedSession
-    $form = @{}
-    foreach ($input in [regex]::Matches([string]$authorize.Data, '<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"')) {
-        $form[$input.Groups[1].Value] = [Net.WebUtility]::HtmlDecode($input.Groups[2].Value)
-    }
-    if (-not $form.ContainsKey("code") -or -not $form.ContainsKey("state")) { throw "OIDC form_post response contains no code/state." }
+    $authorize = Assert-CachedHttp "browser-authorize" 302 $challenge.Location -Session $sharedSession
+    $callbackUrl = [Uri]::new([Uri]$urls.orders, $authorize.Location)
+    Assert-Value "browser-callback-endpoint" ($urls.orders + "/api/v1/auth/signin") $callbackUrl.GetLeftPart([UriPartial]::Path)
+    $response = Read-Query $callbackUrl.AbsoluteUri
+    if (-not $response.ContainsKey("code") -or -not $response.ContainsKey("state")) { throw "OIDC query response contains no code/state." }
     $correlation = ($challenge.Cookies | ForEach-Object { $_.Split(';')[0] }) -join "; "
-    $callback = Assert-Http "resource-browser-callback" 302 ($urls.orders + "/api/v1/auth/signin") -Method POST `
-        -Body (ConvertTo-Form $form) -Headers @{ Cookie = $correlation }
+    $callback = Assert-Http "resource-browser-callback" 302 $callbackUrl.AbsoluteUri -Headers @{ Cookie = $correlation }
     Assert-Value "browser-return-url" "/workspace" $callback.Location
     $cookie = ($callback.Cookies | Where-Object { $_.StartsWith("E2E.Orders.Auth=") } | ForEach-Object { $_.Split(';')[0] }) -join "; "
     if (-not $cookie) { throw "OIDC callback created no reference cookie." }

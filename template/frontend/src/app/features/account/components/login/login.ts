@@ -27,6 +27,7 @@ import {
   HlmInputGroupInput,
   HlmInputGroupButton,
 } from '@spartan-ng/helm/input-group';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
@@ -36,7 +37,7 @@ import {
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { MOCKED_URL } from '../../../../core/mock/mocked-url';
-import { ReturnUrlService } from '../../../../core/routing/return-url-service';
+import { ReturnNavigation, ReturnUrlService } from '../../../../core/routing/return-url-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
@@ -83,6 +84,7 @@ import {
     ...HlmAlertImports,
     HlmButton,
     HlmInput,
+    HlmSkeleton,
     HlmSpinner,
     HlmInputGroup,
     HlmInputGroupInput,
@@ -195,13 +197,20 @@ export class Login implements OnInit {
   private readonly passkeyWithdrawn = signal(false);
   /**
    * 给出"用通行密钥登录"与用户名框里的条件式自动填充：部署配了依赖方（注册摘要的 `passkeysAvailable`），
-   * 且浏览器支持、在安全上下文里。取回摘要前不给，免得给了又收。
+   * 且浏览器支持、在安全上下文里。取回摘要前不给，免得给了又收；那段时间由 {@link passkeyPending} 占位。
    */
   protected readonly showPasskey = computed(
     () =>
       passkeySupport() === 'supported' &&
       this.securityConfig.config()?.passkeysAvailable === true &&
       !this.passkeyWithdrawn(),
+  );
+  /**
+   * 摘要还没回来（`undefined`）而浏览器能用通行密钥：先占住按钮的位置，回来后等高换成按钮，
+   * 下方的外部登录与注册入口不跳动。取不到（`null`）、部署没配或浏览器不支持时不占位。
+   */
+  protected readonly passkeyPending = computed(
+    () => passkeySupport() === 'supported' && this.securityConfig.config() === undefined,
   );
   /** 通行密钥登录在途（按钮发起，或从自动填充选中后提交断言）。 */
   protected readonly passkeyBusy = signal(false);
@@ -254,6 +263,8 @@ export class Login implements OnInit {
 
     this._isLoading.set(true);
     this.loginError.set(null);
+    // 已发起整页离开时不复位加载态：旧页面要等一会儿才卸载，复位会让按钮在离开前先恢复一下
+    let left = false;
 
     try {
       const { usernameOrEmail, password } = this.model();
@@ -268,7 +279,7 @@ export class Login implements OnInit {
         return;
       }
 
-      await this.finishLogin(returnUrl);
+      left = (await this.finishLogin(returnUrl)) === 'left';
     } catch (error) {
       if (isRejection(error)) {
         this.loginError.set(applicationErrorMessage(error));
@@ -282,17 +293,23 @@ export class Login implements OnInit {
       toast.error('Login failed', { description: applicationErrorMessage(error) });
       //#endif
     } finally {
-      this._isLoading.set(false);
+      if (!left) {
+        this._isLoading.set(false);
+      }
     }
   }
 
-  /** 第二步通过、会话已下发：接着建立会话上下文并跳转。 */
-  protected async onTwoFactorCompleted(): Promise<void> {
+  /**
+   * 第二步通过、会话已下发：接着收尾。加载态同时交给第二步显示，验证请求回来到页面跳走之间按钮一直忙碌。
+   * @returns 是否已发起整页离开（离开时加载态不复位，原因见 {@link onSubmit}）。
+   */
+  protected async onTwoFactorCompleted(): Promise<boolean> {
     this._isLoading.set(true);
+    let left = false;
     try {
-      await this.finishLogin(
-        this.route.snapshot.queryParamMap.get('returnUrl') ?? this.callbackReturnUrl ?? null,
-      );
+      const returnUrl =
+        this.route.snapshot.queryParamMap.get('returnUrl') ?? this.callbackReturnUrl ?? null;
+      left = (await this.finishLogin(returnUrl)) === 'left';
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {
@@ -302,20 +319,30 @@ export class Login implements OnInit {
       toast.error('Login failed', { description: applicationErrorMessage(error) });
       //#endif
     } finally {
-      this._isLoading.set(false);
+      if (!left) {
+        this._isLoading.set(false);
+      }
     }
+    return left;
   }
 
-  /** 会话已下发之后的共同收尾：取当前用户、建立会话上下文、提示并跳转。 */
-  private async finishLogin(returnUrl: string | null): Promise<void> {
+  /** 会话已下发之后的共同收尾：回授权端点时直接整页离开；否则取当前用户、建立会话上下文、提示并跳转。 */
+  private async finishLogin(returnUrl: string | null): Promise<ReturnNavigation> {
     // 此时凭据（含所需 MFA）已经通过，才能清理旧主体；加载失败也不能沿用旧权限与设置。
     this.sessionContext.clear();
+    //#if (OpenIddictServer)
+    // 回到授权端点是整页离开：服务端会重新校验会话、重新认证证明与首绑要求（受限会话由它送去设置页），
+    // 资源应用启动时自建上下文。在这里读用户、应用账户偏好、弹成功提示，只会让即将离开的页面先变一下
+    if (this.returnUrls.isServerPage(returnUrl)) {
+      return this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
+    }
+    //#endif
     await lastValueFrom(this.authService.loadUser());
 
     // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去；设置完成后回到原目标
     if (this.authService.currentUser()?.twoFactorSetupRequired) {
       await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl));
-      return;
+      return 'routed';
     }
 
     // 会话上下文在任何跳转前建立：旧主体已清空，空权限下 permissionGuard 会把深链登录踢到 403；
@@ -333,13 +360,15 @@ export class Login implements OnInit {
     toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
     //#endif
 
-    // 有可接续的站内目标就回去（授权端点 /connect/* 整页回到服务端继续签发）；
-    // 否则按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
-    await this.returnUrls.navigate(returnUrl, () =>
-      this.router.navigate([
-        this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
-      ]),
-    );
+    // 有可接续的站内目标就回去，否则按权限进入默认页
+    return this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
+  }
+
+  /** 按权限进入默认页：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。 */
+  private enterLandingPage(): Promise<boolean> {
+    return this.router.navigate([
+      this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
+    ]);
   }
 
   /** 改动任一输入：上一次被拒的原因不再对应当前填写的内容。 */
@@ -358,14 +387,18 @@ export class Login implements OnInit {
     this.passkeyBusy.set(true);
     this.loginError.set(null);
     this.passkeyFailure.set(null);
+    // 已发起整页离开时保持忙碌，见 onSubmit
+    let left = false;
     try {
       const { options, ceremony } = await lastValueFrom(this.accountService.beginPasskeySignIn());
       const credential = await getPasskey(options);
-      await this.completePasskeySignIn(ceremony ?? '', credential);
+      left = await this.completePasskeySignIn(ceremony ?? '', credential);
     } catch (error) {
       this.showPasskeyError(error);
     } finally {
-      this.passkeyBusy.set(false);
+      if (!left) {
+        this.passkeyBusy.set(false);
+      }
     }
   }
 
@@ -402,12 +435,15 @@ export class Login implements OnInit {
     this.passkeyBusy.set(true);
     this.loginError.set(null);
     this.passkeyFailure.set(null);
+    let left = false;
     try {
-      await this.completePasskeySignIn(ceremony, credential);
+      left = await this.completePasskeySignIn(ceremony, credential);
     } catch (error) {
       this.showPasskeyError(error);
     } finally {
-      this.passkeyBusy.set(false);
+      if (!left) {
+        this.passkeyBusy.set(false);
+      }
     }
   }
 
@@ -416,10 +452,16 @@ export class Login implements OnInit {
     this.conditionalRequest = null;
   }
 
-  /** 交回断言；通过即下发会话，之后与第二步通过后同一条收尾（不再要求第二步）。 */
-  private async completePasskeySignIn(ceremony: string, credential: WebAuthnJson): Promise<void> {
+  /**
+   * 交回断言；通过即下发会话，之后与第二步通过后同一条收尾（不再要求第二步）。
+   * @returns 是否已发起整页离开。
+   */
+  private async completePasskeySignIn(
+    ceremony: string,
+    credential: WebAuthnJson,
+  ): Promise<boolean> {
     await lastValueFrom(this.accountService.completePasskeySignIn({ ceremony, credential }));
-    await this.onTwoFactorCompleted();
+    return this.onTwoFactorCompleted();
   }
 
   private showPasskeyError(error: unknown): void {
