@@ -4,7 +4,9 @@
 <!--#else-->
 <!-- 界面语言英语。 -->
 <!--#endif-->
-<html lang="en">
+<!-- 静态的 dark 类让构建期的关键 CSS 内联也带上暗色变量：内联只按静态 HTML 匹配选择器，运行时才加的类会被漏掉，
+     暗色用户首帧就按浅色绘制。下方脚本在首帧前按偏好保留或去掉它。 -->
+<html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
     <title>Template Project</title>
