@@ -5,7 +5,8 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
-    "test": "ng test",
+    "test": "npm run test:config && ng test",
+    "test:config": "node --test scripts/*.test.mjs",
     //#if (LocalIdentity)
     "e2e": "playwright test",
     //#endif

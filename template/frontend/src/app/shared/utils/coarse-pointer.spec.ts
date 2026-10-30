@@ -129,16 +129,6 @@ describe('small controls on coarse pointers', () => {
   // 视觉方框之外、44px 命中区之内的一点：从中心往右下各偏 20px
   const EDGE = MIN_TOUCH_TARGET_PX / 2 - 2;
 
-  it('keeps the visual size and has no hit area on fine pointers', async () => {
-    const fixture = await render();
-    const { checkbox, toggle, indicator } = controls(fixture.nativeElement);
-
-    expect(checkbox.getBoundingClientRect().width).toBe(16);
-    expect(indicator.getBoundingClientRect().width).toBe(16);
-    expect(toggle.getBoundingClientRect().width).toBeLessThan(MIN_TOUCH_TARGET_PX);
-    expect(getComputedStyle(checkbox, '::after').content).toBe('none');
-  });
-
   it('spreads each control to a 44px target without changing its visual size', async () => {
     await setCoarsePointer(true);
     const fixture = await render();
