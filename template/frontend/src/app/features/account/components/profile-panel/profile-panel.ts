@@ -8,8 +8,6 @@ import {
   untracked,
 } from '@angular/core';
 import {
-  form as signalForm,
-  required as requireValue,
   form,
   required,
   email as emailValidator,
@@ -42,7 +40,9 @@ import { injectFormSubmission } from '../../../../core/validation/form-submissio
 //#if (Email)
 import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
 //#endif
+//#if (Email)
 import { ImeGuard } from '../../../../shared/directives/ime-guard';
+//#endif
 import {
   AvatarImageRejected,
   isAvatarImageUrl,
@@ -95,10 +95,11 @@ interface EmailChallenge {
   selector: 'app-profile-panel',
   standalone: true,
   // prettier-ignore
-  imports: [ImeGuard,
+  imports: [
     FormField,
     //#if (Email)
     OtpCodeInput,
+    ImeGuard,
     //#endif
     NgIcon,
     HlmButton,
@@ -188,8 +189,8 @@ export class ProfilePanel {
 
   readonly emailChallenge = signal<EmailChallenge | null>(null);
   private readonly emailCodeModel = signal({ code: '' });
-  readonly emailCodeForm = signalForm(this.emailCodeModel, (path) => {
-    requireValue(path.code);
+  readonly emailCodeForm = form(this.emailCodeModel, (path) => {
+    required(path.code);
     pattern(path.code, /^\d{6}$/, { error: { kind: 'otpCode' } });
   });
   readonly emailCode = this.emailCodeForm.code().value;

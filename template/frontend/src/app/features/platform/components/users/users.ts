@@ -39,7 +39,11 @@ import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, RowSelectionState, SortingState } from '@tanstack/angular-table';
+//#if (LocalIdentity)
 import { Observable, tap, of, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+//#else
+import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+//#endif
 import {
   catchError,
   debounceTime,
