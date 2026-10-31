@@ -243,14 +243,27 @@ public static class DependencyInjection
             // 控制面不继承 BaseDbContext，必须显式挂载修改和删除审计拦截器。
             options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
 
-            options.UseNpgsql(RequireConnection(configuration.GetControlPlaneConnectionString()), npgsql =>
+            var creationContext = DbContextCreationContext.Current;
+            void ConfigureNpgsql(NpgsqlDbContextOptionsBuilder npgsql) =>
                 npgsql.MigrationsHistoryTable(
-                    DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name));
+                    DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name);
+
+            if (creationContext?.ExistingConnection is NpgsqlConnection existingConnection)
+            {
+                options.UseNpgsql(existingConnection, ConfigureNpgsql);
+            }
+            else
+            {
+                options.UseNpgsql(
+                    RequireConnection(creationContext?.ConnectionString
+                        ?? configuration.GetControlPlaneConnectionString()),
+                    ConfigureNpgsql);
+            }
         });
 #endif
 
 #if (OpenIddictServer)
-        // OIDC 与控制面同库同 schema，但使用独立迁移历史。
+        // OIDC 与控制面同库同 schema，使用独立迁移历史；EF 存储直接注入，不经 Provider 加入工作单元事务。
         // 动态注入的 OIDC 实体不在快照中，因此只在此处抑制模型差异警告。
         services.AddDbContext<OpenIddictDbContext>(options =>
         {

@@ -3,7 +3,7 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <app-auth-shell>
+  <app-auth-shell [entering]="entering()">
     @if (twoFactorPrompt(); as prompt) {
       <!-- 登录第二步：密码已通过，直接给出默认方式 -->
       <app-two-factor-challenge

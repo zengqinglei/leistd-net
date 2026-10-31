@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.MultiTenancy.Tests.TestDoubles;
 
@@ -24,6 +25,7 @@ public sealed class LocalResolutionTests : IDisposable
 
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
     private readonly ControlDbContext _db;
+    private readonly ServiceProvider _services;
     private readonly SettableCurrentTenant _tenant = new();
     private readonly IDataProtectionProvider _keyRing = new EphemeralDataProtectionProvider();
 
@@ -32,10 +34,14 @@ public sealed class LocalResolutionTests : IDisposable
         _connection.Open();
         _db = new ControlDbContext(new DbContextOptionsBuilder<ControlDbContext>().UseSqlite(_connection).Options);
         _db.Database.EnsureCreated();
+        _services = new ServiceCollection()
+            .AddDbContext<ControlDbContext>(o => o.UseSqlite(_connection))
+            .BuildServiceProvider();
     }
 
     public void Dispose()
     {
+        _services.Dispose();
         _db.Dispose();
         _connection.Dispose();
     }
@@ -45,7 +51,7 @@ public sealed class LocalResolutionTests : IDisposable
         string? crmConnection = null,
         IDataProtectionProvider? keyRing = null) => new(
         _tenant,
-        _db,
+        _services.GetRequiredService<IServiceScopeFactory>(),
         keyRing ?? _keyRing,
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {

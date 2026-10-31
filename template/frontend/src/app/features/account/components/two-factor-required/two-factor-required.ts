@@ -80,6 +80,8 @@ export class TwoFactorRequired {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
+  protected readonly entering = signal(false);
+
   /** 启用成功后的恢复码；为 null 时还在设置那一步。 */
   protected readonly codes = signal<string[] | null>(null);
 
@@ -142,6 +144,7 @@ export class TwoFactorRequired {
       return;
     }
     //#endif
+    this.entering.set(true);
     try {
       await lastValueFrom(this.authService.loadUser());
       await this.sessionContext.establish();
@@ -152,6 +155,8 @@ export class TwoFactorRequired {
       );
     } catch (error) {
       this.showError(error);
+    } finally {
+      this.entering.set(false);
     }
   }
 

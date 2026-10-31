@@ -129,6 +129,64 @@ describe('ExternalAuthCallback', () => {
     expect(calls).not.toContain('establish');
   });
 
+  it.each(['login', 'history', 'link'])(
+    'keeps %s neutral until navigation settles and then offers an exit on cancellation',
+    async (path) => {
+      if (path === 'history') returnWith({ intent: 'login', error: 'cancelled' });
+      if (path === 'link') {
+        returnWith({ intent: 'link' });
+        accountService.linkExternalLogin.mockReturnValue(of(undefined));
+      }
+      let releasePreferences!: () => void;
+      vi.mocked(TestBed.inject(SessionContextService).establish).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            releasePreferences = resolve;
+          }),
+      );
+      let releaseNavigation!: (value: boolean) => void;
+      vi.mocked(TestBed.inject(Router).navigate).mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            releaseNavigation = resolve;
+          }),
+      );
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.textContent?.trim()).toBe('');
+      expect(host.querySelector('hlm-spinner')?.getAttribute('aria-label')).toBe('Loading');
+      releasePreferences();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      expect(host.textContent?.trim()).toBe('');
+      releaseNavigation(false);
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      expect(host.querySelector('hlm-spinner')).toBeNull();
+      expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
+    },
+  );
+
+  it.each(['loadUser', 'establish', 'navigate'])(
+    'offers a usable exit when %s fails',
+    async (step) => {
+      vi.spyOn(console, 'error').mockReturnValue(undefined);
+      const error = new Error('Preparation failed');
+      if (step === 'loadUser') authService.loadUser.mockReturnValue(throwError(() => error));
+      if (step === 'establish')
+        vi.mocked(TestBed.inject(SessionContextService).establish).mockRejectedValue(error);
+      if (step === 'navigate') vi.mocked(TestBed.inject(Router).navigate).mockRejectedValue(error);
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('hlm-spinner')).toBeNull();
+      expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
+    },
+  );
+
   it('uses the protected return address after establishing a session', async () => {
     accountService.externalLoginCallback.mockReturnValue(
       of({ returnUrl: '/workspace/settings/security' }),
@@ -347,7 +405,7 @@ describe('ExternalAuthCallback', () => {
     expect(calls).toEqual(['establish', 'navigate']);
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'),
-    ).toBeNull();
+    ).not.toBeNull();
   });
 });
 //#endif

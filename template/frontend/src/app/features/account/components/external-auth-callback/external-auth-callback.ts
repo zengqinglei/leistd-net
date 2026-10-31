@@ -60,6 +60,8 @@ export class ExternalAuthCallback implements OnInit {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
+  protected readonly entering = signal(true);
+
   /**
    * 失败说明：本端的说法存词条键、由模板按当前语言取，服务端下发的原因原样显示。
    * 存成已翻译的文字的话，停在这页切换语言时它不会跟着变。
@@ -76,47 +78,51 @@ export class ExternalAuthCallback implements OnInit {
   }
 
   private async processCallback(): Promise<void> {
-    const params = this.route.snapshot.queryParamMap;
-    const intent = params.get('intent') ?? 'login';
-    const provider = this.route.snapshot.paramMap.get('provider');
-
-    if (!provider) {
-      this.error.set({ key: 'account.externalCallback.missingParams' });
-      return;
-    }
-
-    // 用户在提供商处取消或协议校验失败时，后端带原因码回到这里，不签发外部票据，也不调用完成端点。
-    const failure = params.get('error');
-    if (failure) {
-      const key =
-        failure === 'cancelled'
-          ? 'account.externalCallback.cancelled'
-          : 'account.externalCallback.failed';
-      if (intent === 'link') {
-        //#if (IncludeLocalization)
-        toast.error(this.transloco.translate(key));
-        //#else
-        toast.error(this.t(key));
-        //#endif
-        await this.returnToSecurity();
-        return;
-      }
-      // 后退重放旧回调时原会话往往仍然有效：直接回到应用，不展示"登录失败"。
-      if (await this.isSignedIn()) {
-        await this.enterApplication();
-        return;
-      }
-      this.error.set({ key });
-      return;
-    }
-
-    // 查询参数仅选择完成端点意图，必须匹配后端保护的票据。
-    if (intent === 'link') {
-      await this.completeLink(provider);
-      return;
-    }
-
+    //#if (OpenIddictServer)
+    // 整页回到授权端点时保持中性显示直到页面卸载
+    let left = false;
+    //#endif
     try {
+      const params = this.route.snapshot.queryParamMap;
+      const intent = params.get('intent') ?? 'login';
+      const provider = this.route.snapshot.paramMap.get('provider');
+
+      if (!provider) {
+        this.error.set({ key: 'account.externalCallback.missingParams' });
+        return;
+      }
+
+      // 用户在提供商处取消或协议校验失败时，后端带原因码回到这里，不签发外部票据，也不调用完成端点。
+      const failure = params.get('error');
+      if (failure) {
+        const key =
+          failure === 'cancelled'
+            ? 'account.externalCallback.cancelled'
+            : 'account.externalCallback.failed';
+        if (intent === 'link') {
+          //#if (IncludeLocalization)
+          toast.error(this.transloco.translate(key));
+          //#else
+          toast.error(this.t(key));
+          //#endif
+          await this.returnToSecurity();
+          return;
+        }
+        // 后退重放旧回调时原会话往往仍然有效：直接回到应用，不展示"登录失败"。
+        if (await this.isSignedIn()) {
+          await this.enterApplication();
+          return;
+        }
+        this.error.set({ key });
+        return;
+      }
+
+      // 查询参数仅选择完成端点意图，必须匹配后端保护的票据。
+      if (intent === 'link') {
+        await this.completeLink(provider);
+        return;
+      }
+
       // 后端验证并消费外部票据，决定最终会话或第二步凭据。
       const result = await lastValueFrom(this.accountService.externalLoginCallback(provider));
 
@@ -134,6 +140,7 @@ export class ExternalAuthCallback implements OnInit {
       // 不必先读当前用户、在即将离开的页面上建立会话上下文
       if (this.returnUrls.isServerPage(result?.returnUrl)) {
         this.returnUrls.loadPage(result.returnUrl);
+        left = true;
         return;
       }
       //#endif
@@ -149,6 +156,12 @@ export class ExternalAuthCallback implements OnInit {
         return;
       }
       this.error.set({ key: 'account.externalCallback.failed' });
+    } finally {
+      //#if (OpenIddictServer)
+      if (!left) this.entering.set(false);
+      //#else
+      this.entering.set(false);
+      //#endif
     }
   }
 
@@ -240,15 +253,20 @@ export class ExternalAuthCallback implements OnInit {
   }
 
   private async returnToSecurity(): Promise<void> {
-    // 回调页整页加载时启动流程不取当前用户（它按登录流程处理），这里补上再回设置页；
-    // 取不到说明会话已不在，交给路由守卫带去登录页
+    this.entering.set(true);
     try {
-      await lastValueFrom(this.authService.loadUser());
-      await this.sessionContext.establish();
-    } catch {
-      // 由守卫处理
+      // 回调页整页加载时启动流程不取当前用户（它按登录流程处理），这里补上再回设置页；
+      // 取不到说明会话已不在，交给路由守卫带去登录页。
+      try {
+        await lastValueFrom(this.authService.loadUser());
+        await this.sessionContext.establish();
+      } catch {
+        // 由守卫处理
+      }
+      await this.router.navigate(['/workspace/settings/security']);
+    } finally {
+      this.entering.set(false);
     }
-    await this.router.navigate(['/workspace/settings/security']);
   }
 }
 //#if (!IncludeLocalization)
@@ -256,8 +274,6 @@ export class ExternalAuthCallback implements OnInit {
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
   'account.login.loginFailed': 'Sign-in failed',
-  'account.externalCallback.processingAria': 'Completing sign-in',
-  'account.externalCallback.processing': 'Processing third-party sign-in',
   'account.externalCallback.missingParams': 'Missing required callback parameters',
   'account.externalCallback.failed': 'Third-party sign-in failed. Please go back and try again.',
   'account.externalCallback.cancelled': 'Third-party sign-in was cancelled.',

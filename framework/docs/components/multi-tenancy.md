@@ -349,7 +349,7 @@ IHttpClientBuilder controlPlane = builder.Services.AddRemoteTenantConnectionStor
 - 多个宿主时，把路由注册放进它们共用的组合方法；
 - 需要硬保证时，在业务 `DbContext` 里加守卫。
 
-- **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `TenantNotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`。
+- **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `TenantNotFoundException`。连接路由查询在独立异步作用域直接取得控制库上下文并释放，不经 `IDbContextProvider`，不占用调用方工作单元的实例；无租户和控制库连接名不创建查询上下文。租户管理与存储仍经 Provider 参与工作单元。
 - **远端解析**：结果按 `Leistd:MultiTenancy:Routing:CacheLifetime` 缓存；同租户并发请求合并为一次回源；连接失败、超时、408/429/5xx 时可在新鲜期后沿用最后确认的路由最多 `MaxStaleness`（默认 1 小时），每键 30 秒重试一次并记 Warning；明确拒绝立即丢弃旧值，取消照常传播；响应的 `TenantId` 与请求不一致时抛 `InvalidOperationException`，校验在使用连接串和写缓存之前。
 - **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按连接名枚举独立物理库，同一连接串只出现一次（代表租户取标识最小者）；
   一条连接都没登记的租户不出现（随宿主库迁移）。结果带明文连接串，只给迁移作业（`MigrationReadPolicy`）。

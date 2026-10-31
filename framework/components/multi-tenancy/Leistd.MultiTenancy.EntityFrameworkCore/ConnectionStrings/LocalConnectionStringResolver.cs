@@ -6,15 +6,16 @@ using Leistd.MultiTenancy.EntityFrameworkCore.Extensions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 
 // 本地解析：宿主自己持有控制库，直接按连接名查询租户连接并解密。
-// 控制库上下文必须直接注入而不经 IDbContextProvider：Provider 创建任何 DbContext 前都会调用本解析器，否则形成递归。
+// 连接路由查询在独立作用域直接取上下文，不占用调用方工作单元的实例，也不经 Provider 递归解析。
 internal sealed class LocalConnectionStringResolver<TControlDbContext>(
     ICurrentTenant currentTenant,
-    TControlDbContext controlDbContext,
+    IServiceScopeFactory scopeFactory,
     IDataProtectionProvider dataProtectionProvider,
     IConfiguration configuration,
     IOptions<LocalTenantConnectionOptions> options) : IConnectionStringResolver
@@ -40,6 +41,9 @@ internal sealed class LocalConnectionStringResolver<TControlDbContext>(
 
         var tenantId = currentTenant.Id!.Value;
         var name = TenantConnectionNames.Normalize(connectionStringName);
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var controlDbContext = scope.ServiceProvider.GetRequiredService<TControlDbContext>();
 
         // 控制库上下文通常没有软删除过滤器，必须从"未删除租户"入口起查
         var tenantExists = await controlDbContext.UndeletedTenants()

@@ -152,6 +152,60 @@ describe('TwoFactorRequired', () => {
     expect(navigate).toHaveBeenCalledExactlyOnceWith(['/workspace']);
   });
 
+  it('keeps the complete shell inert through preferences and a cancelled navigation', async () => {
+    await enable();
+    let releasePreferences!: () => void;
+    establish.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releasePreferences = resolve;
+        }),
+    );
+    let releaseNavigation!: (value: boolean) => void;
+    navigate.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseNavigation = resolve;
+        }),
+    );
+    const pending = (
+      fixture.componentInstance as unknown as { continue(): Promise<void> }
+    ).continue();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-auth-content]')?.hasAttribute('inert')).toBe(true);
+    expect(getComputedStyle(host.querySelector('[data-auth-content]')!).visibility).toBe('hidden');
+    releasePreferences();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+    expect(host.querySelector('[data-auth-transition]')).not.toBeNull();
+    releaseNavigation(false);
+    await pending;
+    fixture.detectChanges();
+    expect(host.querySelector('[data-auth-transition]')).toBeNull();
+    expect(host.querySelector('[inert]')).toBeNull();
+    expect(host.querySelector('button')?.closest('[inert]')).toBeNull();
+  });
+
+  it.each(['loadUser', 'establish', 'navigate'])(
+    'restores the setup page when %s fails',
+    async (step) => {
+      await enable();
+      const error = new Error('Preparation failed');
+      if (step === 'loadUser') auth.loadUser.mockReturnValue(throwError(() => error));
+      if (step === 'establish') establish.mockRejectedValue(error);
+      if (step === 'navigate') navigate.mockRejectedValue(error);
+      await (fixture.componentInstance as unknown as { continue(): Promise<void> }).continue();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('[inert]')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-auth-transition]'),
+      ).toBeNull();
+      expect(toast.error).toHaveBeenCalled();
+    },
+  );
+
   it('enters the platform when the user may access it', async () => {
     canAccessPlatform.mockReturnValue(true);
     await enable();
