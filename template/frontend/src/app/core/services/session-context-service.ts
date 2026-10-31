@@ -64,6 +64,8 @@ export class SessionContextService {
    */
   async establish(): Promise<void> {
     const { ticket, read } = await this.loadContext();
+    // 等账户语言的词条到达再返回：启动流结束外壳才渲染，首帧就是带着词条的账户语言；
+    // 不等的话外壳会先空白，渲染后立即发出的一次性提示（如退出模拟）也可能取到裸键。
     await this.preferences.applyRead(ticket, read, 'establish');
   }
 
@@ -118,8 +120,10 @@ export class SessionContextService {
     try {
       await this.refreshSettings();
     } catch {
+      // 不保留上一份快照：主体已经换人，旧快照属于上一个用户。
       this.settingContext.clear();
     }
+    // 用 /me 发起时取的号：初始化等待期间写入成功或主体离开，那份 /me 已过期，不能盖掉写入结果。
     return (
       this.authService.lastReadPreferences() ?? {
         ticket: this.preferences.beginRead(),

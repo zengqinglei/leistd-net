@@ -155,6 +155,7 @@ export class LanguageService {
     const generation = ++this.generation;
     const done = (async () => {
       const loaded = await this.loadLanguage(lang, () => generation === this.generation);
+      // 最终代次检查与激活在同一个微任务内，避免导航插入空隙。
       if (generation !== this.generation) {
         return;
       }
@@ -175,6 +176,7 @@ export class LanguageService {
   private async loadLanguage(lang: Lang, current: () => boolean): Promise<boolean> {
     if (!(await this.load(lang))) return false;
     const ready = new Set<string>();
+    // 等待过程中新增的 scope 也要加载，不能只准备开始时的一份快照。
     while (current()) {
       const scopes = [...this.loadedScopes.values()].filter((scope) => !ready.has(scope.scope));
       const results = await Promise.all(scopes.map((scope) => this.loadScope(scope, lang)));
