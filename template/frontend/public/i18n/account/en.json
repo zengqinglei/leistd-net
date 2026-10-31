@@ -385,6 +385,8 @@
     "backToLogin": "Back to sign in"
   },
   "externalCallback": {
+    "processing": "Completing sign-in…",
+    "processingAria": "Completing sign-in",
     "missingParams": "Missing required callback parameters",
     "failed": "Third-party sign-in failed. Please go back and try again.",
     "cancelled": "Third-party sign-in was cancelled.",

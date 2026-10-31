@@ -44,7 +44,16 @@ describe('twoFactorSetupGuard', () => {
           },
         },
         { provide: AuthorizationService, useValue: { canAccessPlatform } },
-        { provide: SessionContextService, useValue: { establish } },
+        {
+          provide: SessionContextService,
+          useValue: {
+            establish,
+            enter: async (navigate: () => Promise<UrlTree>) => {
+              await establish();
+              return navigate();
+            },
+          },
+        },
       ],
     });
   });

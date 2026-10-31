@@ -135,8 +135,6 @@ export class Login implements OnInit {
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
 
-  protected readonly entering = signal(false);
-
   protected readonly showPassword = signal(false);
 
   /**
@@ -339,22 +337,19 @@ export class Login implements OnInit {
       return this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
     }
     //#endif
-    // clear 本身会退回设备语言，因此也必须在完整外壳的遮盖下执行。
-    this.entering.set(true);
-    try {
-      this.sessionContext.clear();
-      await lastValueFrom(this.authService.loadUser());
-      // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去；设置完成后回到原目标。
-      if (this.authService.currentUser()?.twoFactorSetupRequired) {
-        await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl));
-        return 'routed';
-      }
-      // 会话上下文在任何跳转前建立：旧主体已清空，空权限下 permissionGuard 会把深链登录踢到 403；
-      // 设置也要就位，SPA 内跳转不会重跑应用初始化器；账户语言同时就位，目标页首帧即使用账户偏好。
-      await this.sessionContext.establish();
-
-      // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
-      // 提前提示会让用户先看到成功、紧接着看到失败，而人还停在登录页。
+    this.sessionContext.clear();
+    await lastValueFrom(this.authService.loadUser());
+    // 受限会话先完成首绑，不应用账户偏好。
+    if (this.authService.currentUser()?.twoFactorSetupRequired) {
+      return (await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl)))
+        ? 'routed'
+        : 'cancelled';
+    }
+    const result = await this.sessionContext.enter(() =>
+      this.returnUrls.navigate(returnUrl, () => this.enterLandingPage()),
+    );
+    if (result !== 'cancelled') {
+      // 导航成功且偏好已提交，提示使用目标页的语言。
       //#if (IncludeLocalization)
       toast.success(this.transloco.translate('account.login.loginSuccess'), {
         description: this.transloco.translate('account.login.welcomeBack'),
@@ -363,12 +358,8 @@ export class Login implements OnInit {
       //#else
       toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
       //#endif
-      // 有可接续的站内目标就回去，否则按权限进入默认页。
-      return await this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
-    } finally {
-      // 等待导航 Promise 后再恢复；取消或抛错时当前视图仍可操作。
-      this.entering.set(false);
     }
+    return result;
   }
 
   /** 按权限进入默认页：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。 */

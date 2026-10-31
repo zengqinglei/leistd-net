@@ -16,7 +16,7 @@ import { LanguageService } from '../../services/language-service';
 
 import type { MockedObject } from 'vitest';
 
-/** 语言选择的归属由切换器决定：已登录的选择写进账户偏好，未登录的才落本地存储。 */
+/** 语言选择的归属由切换器决定：已登录由账户偏好状态保存并应用，未登录生效后记在设备。 */
 describe('LanguageSwitcher', () => {
   let component: LanguageSwitcher;
   let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
@@ -53,14 +53,14 @@ describe('LanguageSwitcher', () => {
   afterEach(() => localStorage.removeItem(LanguageService.STORAGE_KEY));
 
   // 切换由偏好状态按写入响应完成，不在这里先切：先切的话保存失败时界面与账户就分叉了
-  it('writes an authenticated choice to the account without touching the device preference', async () => {
+  it('delegates an authenticated choice to the account without applying it early', async () => {
     setUp(true);
 
     component.select('zh-CN');
     await Promise.resolve();
 
     expect(preferences.write).toHaveBeenCalledWith('language', 'zh-CN');
-    // 落盘就分不清「这台机器的偏好」和「上一个登录者的偏好」了。
+    // 替身没有应用账户响应，本组件也不能提前切换或落盘。
     expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
     expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
   });
@@ -90,14 +90,15 @@ describe('LanguageSwitcher', () => {
     expect(preferences.write).toHaveBeenCalledOnce();
   });
 
-  it('records an anonymous choice as the device preference and writes no setting', async () => {
+  it('records an anonymous choice only after it becomes active and writes no setting', async () => {
     setUp(false);
 
     component.select('zh-CN');
 
-    // 访客没有账户可写；不落盘的话这次选择一刷新就没了。
-    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
+    // 加载期间保留最后生效值，成功切换后才记住本次选择；访客不写账户。
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
     await vi.waitFor(() => expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN'));
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
     expect(preferences.write).not.toHaveBeenCalled();
   });
 

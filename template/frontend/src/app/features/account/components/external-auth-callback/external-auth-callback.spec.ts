@@ -54,6 +54,10 @@ describe('ExternalAuthCallback', () => {
     authService.loadUser.mockReturnValue(of(undefined) as never);
 
     const sessionContext = {
+      enter: async (navigate: () => Promise<unknown>) => {
+        await sessionContext.establish();
+        return navigate();
+      },
       establish: vi
         .fn()
         .mockName('establish')
@@ -129,46 +133,6 @@ describe('ExternalAuthCallback', () => {
     expect(calls).not.toContain('establish');
   });
 
-  it.each(['login', 'history', 'link'])(
-    'keeps %s neutral until navigation settles and then offers an exit on cancellation',
-    async (path) => {
-      if (path === 'history') returnWith({ intent: 'login', error: 'cancelled' });
-      if (path === 'link') {
-        returnWith({ intent: 'link' });
-        accountService.linkExternalLogin.mockReturnValue(of(undefined));
-      }
-      let releasePreferences!: () => void;
-      vi.mocked(TestBed.inject(SessionContextService).establish).mockImplementation(
-        () =>
-          new Promise<void>((resolve) => {
-            releasePreferences = resolve;
-          }),
-      );
-      let releaseNavigation!: (value: boolean) => void;
-      vi.mocked(TestBed.inject(Router).navigate).mockImplementation(
-        () =>
-          new Promise<boolean>((resolve) => {
-            releaseNavigation = resolve;
-          }),
-      );
-      fixture.detectChanges();
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
-      const host = fixture.nativeElement as HTMLElement;
-      expect(host.textContent?.trim()).toBe('');
-      expect(host.querySelector('hlm-spinner')?.getAttribute('aria-label')).toBe('Loading');
-      releasePreferences();
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
-      expect(host.textContent?.trim()).toBe('');
-      releaseNavigation(false);
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
-      expect(host.querySelector('hlm-spinner')).toBeNull();
-      expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
-    },
-  );
-
   it.each(['loadUser', 'establish', 'navigate'])(
     'offers a usable exit when %s fails',
     async (step) => {
@@ -182,7 +146,7 @@ describe('ExternalAuthCallback', () => {
       await new Promise((resolve) => setTimeout(resolve));
       fixture.detectChanges();
       const host = fixture.nativeElement as HTMLElement;
-      expect(host.querySelector('hlm-spinner')).toBeNull();
+      expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
       expect(host.querySelector('a')?.getAttribute('href')).toBe('/auth/login');
     },
   );

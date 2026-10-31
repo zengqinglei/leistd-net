@@ -29,8 +29,8 @@ public sealed class AccountPreferencesTests(ProjectWebApplicationFactory factory
 
         var me = await GetMeAsync(session.Client);
 
-        // 外观三层都没设时取定义默认值「跟随系统」；本人没有覆盖
-        Assert.Equal("system", Field(me, "preferences", "theme"));
+        // 未设置账户外观时保留 null，前端据此沿用设备当前值。
+        Assert.Null(Field(me, "preferences", "theme"));
         Assert.Null(Field(me, "preferenceOverrides", "theme"));
     }
 

@@ -1,8 +1,18 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { DestroyRef, Injectable, PLATFORM_ID, inject } from '@angular/core';
+import {
+  NavigationCancel,
+  NavigationCancellationCode,
+  NavigationEnd,
+  NavigationError,
+  NavigationSkipped,
+  NavigationStart,
+  Router,
+  UrlTree,
+} from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { AccountPreferencesService } from './account-preferences-service';
+import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
 import { SettingContextService } from '../settings/setting-context-service';
@@ -10,8 +20,8 @@ import { SettingOutputDto } from '../settings/setting.dto';
 
 /**
  * 认证会话上下文：主体确立与离开的唯一入口。当前用户、权限、设置、账户偏好四份状态跟着主体一起建立、
- * 一起清空；偏好由 {@link AccountPreferencesService} 应用到语言与外观，主体离开时由它退回。
- * 主体的建立与离开一律走 {@link establish} 与 {@link clear}，设置刷新走 {@link refreshSettings}，
+ * 一起清空；偏好由 {@link AccountPreferencesService} 应用到语言与外观，主体离开后保留界面偏好。
+ * 主体建立走 {@link establish}（启动）或 {@link enter}（登录导航），离开走 {@link clear}，设置刷新走 {@link refreshSettings}，
  * 不单独调下层的 load/clear。
  *
  * 页签回到前台时只重查 `/me`（见 {@link revalidate}）：别处改了偏好或资料、或者会话已经失效，打开着的页签
@@ -24,6 +34,7 @@ export class SessionContextService {
   private readonly authorizationService = inject(AuthorizationService);
   private readonly settingContext = inject(SettingContextService);
   private readonly preferences = inject(AccountPreferencesService);
+  private readonly router = inject(Router);
   /** 在途的重查：页签反复切换时不重复发请求。 */
   private revalidating: Promise<void> | undefined;
 
@@ -49,26 +60,75 @@ export class SessionContextService {
    *
    * 权限失败向上抛：Guard 和菜单按它裁剪，拿不到就只能当无权限，让调用方决定怎么办。
    * 设置失败只清空不抛：它不是进入应用的硬依赖，各消费端有自己的默认行为。
-   * 偏好读不到时清掉前一人的语言与时区、退回设备，同样不抛。
+   * 偏好读不到时清掉账户状态，保留最后生效的语言、主题，同样不抛。
    */
   async establish(): Promise<void> {
-    await this.authorizationService.initialize();
+    const { ticket, read } = await this.loadContext();
+    // 等账户语言的词条到达再返回：启动流结束外壳才渲染，首帧就是带着词条的账户语言；
+    // 不等的话外壳会先空白，渲染后立即发出的一次性提示（如退出模拟）也可能取到裸键。
+    await this.preferences.applyRead(ticket, read, 'establish');
+  }
 
+  /**
+   * 登录收尾：权限与设置先就位，偏好只准备；本次导航链最终成功时在首次渲染前同步提交。
+   * 取消、失败、跳过及被其他导航取代时丢弃；UrlTree 改道继续等待同一链的最终结果。
+   */
+  async enter<T>(navigate: () => Promise<T>): Promise<T> {
+    const { ticket, read } = await this.loadContext();
+    const commit = await this.preferences.prepareRead(ticket, read);
+    let navigationId: number | undefined = this.router.currentNavigation()?.id;
+    let redirecting = false;
+    const subscription = this.router.events.subscribe((event) => {
+      if (event instanceof NavigationStart && navigationId === undefined) {
+        navigationId = event.id;
+      }
+      if (!('id' in event) || event.id !== navigationId) return;
+      if (event instanceof NavigationEnd) {
+        commit();
+        subscription.unsubscribe();
+        this.preferences.discardPrepared();
+      } else if (
+        event instanceof NavigationCancel &&
+        event.code === NavigationCancellationCode.Redirect
+      ) {
+        navigationId = undefined;
+      } else if (
+        event instanceof NavigationCancel ||
+        event instanceof NavigationError ||
+        event instanceof NavigationSkipped
+      ) {
+        subscription.unsubscribe();
+        this.preferences.discardPrepared();
+      }
+    });
+    try {
+      const result = await navigate();
+      // 守卫返回 UrlTree 后路由器才继续改道，订阅需保留到新导航的最终结果。
+      redirecting = result instanceof UrlTree;
+      return result;
+    } finally {
+      if (!redirecting) {
+        subscription.unsubscribe();
+        this.preferences.discardPrepared();
+      }
+    }
+  }
+
+  /** 权限失败阻止进入；设置失败清掉旧主体快照。偏好保留 `/me` 发起时的读取号。 */
+  private async loadContext(): Promise<PreferenceRead> {
+    await this.authorizationService.initialize();
     try {
       await this.refreshSettings();
     } catch {
       // 不保留上一份快照：主体已经换人，旧快照属于上一个用户。
       this.settingContext.clear();
     }
-
-    // 等账户语言的词条到达再返回：启动流结束外壳才渲染，这样首帧就是账户语言且带着词条——
-    // 不等的话外壳先空白一下，渲染后立即发出的一次性提示（如退出模拟）还会取到裸键。
-    // 用 /me 发起时取的号：初始化等待期间写入成功或主体离开，那份 /me 已过期，不能盖掉写入结果
-    const last = this.authService.lastReadPreferences();
-    await this.preferences.applyRead(
-      last?.ticket ?? this.preferences.beginRead(),
-      last?.read ?? { preferences: null, preferenceOverrides: null },
-      'establish',
+    // 用 /me 发起时取的号：初始化等待期间写入成功或主体离开，那份 /me 已过期，不能盖掉写入结果。
+    return (
+      this.authService.lastReadPreferences() ?? {
+        ticket: this.preferences.beginRead(),
+        read: { preferences: null, preferenceOverrides: null },
+      }
     );
   }
 
@@ -118,7 +178,6 @@ export class SessionContextService {
     this.authService.clearAuthData();
     this.authorizationService.clear();
     this.settingContext.clear();
-    // 语言已应用到语言服务上，清状态收不回来：不退回的话，共享机器上前一个人的语言会留给下一个人
     void this.preferences.clear();
   }
 }

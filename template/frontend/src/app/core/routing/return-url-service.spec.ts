@@ -49,7 +49,7 @@ describe('ReturnUrlService', () => {
 
   it('navigates inside the application to an in-site target', async () => {
     const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
-    const fallback = vi.fn(async () => undefined);
+    const fallback = vi.fn(async () => true);
 
     expect(await service.navigate('/workspace/settings/security', fallback)).toBe('routed');
     expect(navigateByUrl).toHaveBeenCalledExactlyOnceWith('/workspace/settings/security');
@@ -58,11 +58,15 @@ describe('ReturnUrlService', () => {
 
   it('falls back when there is no usable target', async () => {
     const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
-    const fallback = vi.fn(async () => undefined);
+    const fallback = vi.fn(async () => true);
 
     expect(await service.navigate('https://evil.example.com', fallback)).toBe('fallback');
     expect(fallback).toHaveBeenCalledOnce();
     expect(navigateByUrl).not.toHaveBeenCalled();
+  });
+  it.each([null, '/workspace'])('preserves cancellation for target %s', async (target) => {
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(false);
+    expect(await service.navigate(target, async () => false)).toBe('cancelled');
   });
   //#if (OpenIddictServer)
 

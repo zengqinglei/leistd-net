@@ -100,7 +100,7 @@ export class LanguageSwitcher {
       return;
     }
 
-    // 未登录的选择属于这台设备：落盘，作为访客页面与主体离开后的回落值。
+    // 未登录的选择在词条就绪并生效后记在本设备，主体离开后仍保持最后生效值。
     this.languageService.setDeviceLang(lang);
   }
 }

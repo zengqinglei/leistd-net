@@ -43,11 +43,11 @@ export const twoFactorSetupGuard: CanActivateFn = async (route) => {
   //#endif
 
   // 原目标可能在需要权限的区域：先把权限与设置就位，SPA 内跳转不会重跑应用初始化器
-  await sessionContext.establish();
-  if (!target) {
-    return router.createUrlTree([
-      authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
-    ]);
-  }
-  return router.parseUrl(target);
+  return sessionContext.enter(async () =>
+    target
+      ? router.parseUrl(target)
+      : router.createUrlTree([
+          authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
+        ]),
+  );
 };

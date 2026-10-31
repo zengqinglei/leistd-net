@@ -4,12 +4,7 @@
 <ng-container>
 <!--#endif-->
   <div class="relative min-h-svh">
-    <div
-      class="bg-background grid min-h-svh lg:grid-cols-2"
-      data-auth-content
-      [attr.inert]="entering() ? '' : null"
-      [class.invisible]="entering()"
-    >
+    <div class="bg-background grid min-h-svh lg:grid-cols-2">
       <!--
         左栏是独立的品牌面板，贴边铺满半屏；窄屏不显示，表单独占一屏，品牌标识改由表单栏顶部给出。
         面板用固定深色的 hero 表面，亮暗主题同色，与表单栏形成明暗对照
@@ -120,13 +115,5 @@
         </p>
       </div>
     </div>
-    @if (entering()) {
-      <div
-        class="bg-background absolute inset-0 flex items-center justify-center"
-        data-auth-transition
-      >
-        <hlm-spinner aria-label="Loading" lang="en" />
-      </div>
-    }
   </div>
 </ng-container>

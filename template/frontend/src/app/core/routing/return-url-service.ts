@@ -9,9 +9,9 @@ export const TWO_FACTOR_SETUP_URL = '/auth/two-factor-setup';
 
 /**
  * {@link ReturnUrlService.navigate} 的去向：`left` 已发起整页导航（旧页面稍后才卸载，调用方不该再复位界面）；
- * `routed` 已在应用内跳转到原目标；`fallback` 没有可接续的目标，已执行默认去向。
+ * `routed` 已在应用内跳转到原目标；`fallback` 已进入默认去向；`cancelled` 应用内导航未成功。
  */
-export type ReturnNavigation = 'left' | 'routed' | 'fallback';
+export type ReturnNavigation = 'left' | 'routed' | 'fallback' | 'cancelled';
 
 /**
  * 认证流程之后回到原目标（`returnUrl`）：守卫、登录、外部登录完成、登录第二步与强制设置页共用一套判定与跳转。
@@ -61,7 +61,7 @@ export class ReturnUrlService {
    */
   async navigate(
     returnUrl: string | null | undefined,
-    fallback: () => Promise<unknown>,
+    fallback: () => Promise<boolean>,
   ): Promise<ReturnNavigation> {
     //#if (OpenIddictServer)
     if (this.isServerPage(returnUrl)) {
@@ -71,11 +71,9 @@ export class ReturnUrlService {
     //#endif
     const target = this.resolve(returnUrl);
     if (!target) {
-      await fallback();
-      return 'fallback';
+      return (await fallback()) ? 'fallback' : 'cancelled';
     }
-    await this.router.navigateByUrl(target);
-    return 'routed';
+    return (await this.router.navigateByUrl(target)) ? 'routed' : 'cancelled';
   }
   //#if (OpenIddictServer)
 

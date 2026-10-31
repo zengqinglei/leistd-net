@@ -419,7 +419,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         var theme = listed.EnumerateArray()
             .Single(s => s.GetProperty("name").GetString() == SettingConstant.Display.Theme);
         Assert.Equal("dark", theme.GetProperty("userValue").GetString());
-        Assert.Equal("system", theme.GetProperty("defaultValue").GetString());
+        Assert.True(!theme.TryGetProperty("defaultValue", out var defaultTheme) || defaultTheme.ValueKind == JsonValueKind.Null);
         Assert.False(theme.GetProperty("allowsTenantScope").GetBoolean());
 
         var unknown = await hostAdmin.Client.PutAsJsonAsync(

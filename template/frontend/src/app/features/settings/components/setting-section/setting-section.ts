@@ -41,6 +41,7 @@ import {
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
 import { SessionContextService } from '../../../../core/services/session-context-service';
+import { ThemeService } from '../../../../core/services/theme-service';
 import { SettingService } from '../../../../core/settings/setting-service';
 import { SETTINGS } from '../../../../core/settings/setting.constants';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
@@ -188,6 +189,7 @@ export class SettingSection {
   private readonly sessionContext = inject(SessionContextService);
   private readonly pageState = inject(SettingsPageState);
   private readonly preferences = inject(AccountPreferencesService);
+  private readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
@@ -405,7 +407,7 @@ export class SettingSection {
   }
 
   /**
-   * 「跟随系统」时本设备上实际生效的值：语言与时区三层都没设时，占位符须显示探测到的值，
+   * 「跟随系统」时本设备上实际生效的值：语言、时区、外观未设置时，占位符须显示设备生效值，
    * 否则空框看着像没配置。只对个人页有意义——系统页的"跟随系统"指组织里每台设备各自决定，
    * 管理员自己这台设备的探测值不是组织的值，显示出来会误导。
    */
@@ -416,6 +418,9 @@ export class SettingSection {
 
     if (setting.name === SETTINGS.display.timeZone) {
       return browserTimeZone() ?? '';
+    }
+    if (setting.name === SETTINGS.display.theme) {
+      return this.themeService.mode();
     }
 
     //#if (IncludeLocalization)
@@ -492,7 +497,7 @@ export class SettingSection {
       row(SETTINGS.display.language, 'language', null),
       //#endif
       row(SETTINGS.display.timeZone, 'timeZone', null),
-      row(SETTINGS.display.theme, 'theme', 'system'),
+      row(SETTINGS.display.theme, 'theme', null),
     ];
   }
 

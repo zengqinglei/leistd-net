@@ -385,6 +385,8 @@
     "backToLogin": "返回登录"
   },
   "externalCallback": {
+    "processing": "正在完成登录…",
+    "processingAria": "正在完成登录",
     "missingParams": "缺少必要的回调参数",
     "failed": "第三方登录失败，请返回重试",
     "cancelled": "已取消第三方登录。",

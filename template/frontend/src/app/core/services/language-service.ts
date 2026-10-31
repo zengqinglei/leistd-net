@@ -46,9 +46,8 @@ export const DEFAULT_LANG: Lang = LANG_OPTIONS[0].id;
 /**
  * 语言服务：管理活动语言并驱动 Transloco 文案。
  *
- * localStorage 只存本设备偏好（未登录访客的显式选择，也是主体离开后的回落值）；账户语言只在内存
- * 生效，否则共享机器上 A 退出后 B 会在登录页看到 A 的语言。外壳在启动流成功后才渲染，启动流会等
- * 账户语言的词条激活（见 {@link applyAccountLang}），因此不会先闪一下默认语言。
+ * localStorage 记住最后一次生效的语言，未登录选择与账户语言共用；主体离开后保持。
+ * 启动流等待账户词条；登录收尾先准备词条，在成功导航的首次渲染前同步提交。
  *
  * 切换先加载全局与已访问功能的词条、成功后才激活：一次性文案用同步 `translate()`，先激活会让途中
  * 返回的请求取到裸键。加载期间停在原语言，失败时保持原语言并上报；连续切换只让最后一次生效。
@@ -71,6 +70,9 @@ export class LanguageService {
   private pending: { lang: Lang; done: Promise<void> } | undefined;
   /** 每次发起切换加一；加载完成时编号已变，说明被后发起的切换取代，不再激活。 */
   private generation = 0;
+
+  /** 登录导航待生效的语言：解析器同时为它准备首次访问的功能词条。 */
+  private prepared: { lang: Lang; ready: boolean } | undefined;
 
   /** 已成功进入的功能：切换语言时连同这些词条一起预加载，覆盖仍打开的弹窗。 */
   private readonly loadedScopes = new Map<string, ProviderScope>();
@@ -95,22 +97,43 @@ export class LanguageService {
     this.initialized = this.switchTo(initial);
   }
 
-  /** 切到指定语言并记为本设备偏好；只用于未登录时的显式选择，已登录走 {@link applyAccountLang}。 */
+  /** 切到指定语言并记为本设备偏好；未登录时显式选择使用，已登录走 {@link applyAccountLang}。 */
   setDeviceLang(lang: Lang): Promise<void> {
-    if (isPlatformBrowser(this.platformId)) {
-      localStorage.setItem(LanguageService.STORAGE_KEY, lang);
-    }
     return this.setActive(lang);
   }
 
-  /** 应用账户设置里的语言，只改内存不落盘（理由见类注释）。 */
+  /** 应用账户语言，词条就绪后生效并记在本设备。 */
   applyAccountLang(lang: Lang): Promise<void> {
     return this.setActive(lang);
   }
 
-  /** 回到本设备偏好：主体离开、或新主体的设置没加载上来时用。 */
-  resetToDeviceLang(): Promise<void> {
-    return this.setActive(this.loadDeviceLang());
+  /** 准备账户语言但不激活；失败由既有加载入口上报，保留当前语言。 */
+  async prepare(lang: Lang): Promise<void> {
+    const prepared = { lang, ready: false };
+    this.prepared = prepared;
+    prepared.ready = await this.loadLanguage(lang, () => this.prepared === prepared);
+    if (!prepared.ready && this.prepared === prepared) this.discard();
+  }
+
+  /** 导航成功时同步激活已经准备好的语言，并记住最后一次生效值。 */
+  commit(): void {
+    const prepared = this.prepared;
+    this.discard();
+    if (prepared?.ready) this.activate(prepared.lang);
+  }
+
+  /** 导航取消、失败或主体离开时丢弃准备结果，不改变活动语言与设备存储。 */
+  discard(): void {
+    this.prepared = undefined;
+  }
+
+  /** 同步应用与持久化只发生在词条准备完成之后。 */
+  private activate(lang: Lang): void {
+    this.activeLangState.set(lang);
+    this.applyLang(lang);
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.setItem(LanguageService.STORAGE_KEY, lang);
+    }
   }
 
   /**
@@ -131,25 +154,14 @@ export class LanguageService {
   private switchTo(lang: Lang): Promise<void> {
     const generation = ++this.generation;
     const done = (async () => {
-      let loaded = await this.load(lang);
-      const ready = new Set<string>();
-      // 等待过程中新增的 scope 也要加载；最终检查与激活在同一个微任务内，避免导航插入空隙。
-      while (loaded && generation === this.generation) {
-        const scopes = [...this.loadedScopes.values()].filter((scope) => !ready.has(scope.scope));
-        const results = await Promise.all(scopes.map((scope) => this.loadScope(scope, lang)));
-        loaded = results.every((success) => success);
-        scopes.forEach((scope) => ready.add(scope.scope));
-        if ([...this.loadedScopes.keys()].every((scope) => ready.has(scope))) {
-          break;
-        }
-      }
+      const loaded = await this.loadLanguage(lang, () => generation === this.generation);
+      // 最终代次检查与激活在同一个微任务内，避免导航插入空隙。
       if (generation !== this.generation) {
         return;
       }
       this.pending = undefined;
       if (loaded) {
-        this.activeLangState.set(lang);
-        this.applyLang(lang);
+        this.activate(lang);
         return;
       }
       if (lang === this.activeLang() && lang !== DEFAULT_LANG) {
@@ -160,20 +172,38 @@ export class LanguageService {
     return done;
   }
 
-  /** 路由在创建功能组件前等待词条；等待期间切换语言时重新加载最终活动语言。 */
+  /** 全局与已访问的功能均就绪后才允许激活；等待中新增的功能同样加载。 */
+  private async loadLanguage(lang: Lang, current: () => boolean): Promise<boolean> {
+    if (!(await this.load(lang))) return false;
+    const ready = new Set<string>();
+    // 等待过程中新增的 scope 也要加载，不能只准备开始时的一份快照。
+    while (current()) {
+      const scopes = [...this.loadedScopes.values()].filter((scope) => !ready.has(scope.scope));
+      const results = await Promise.all(scopes.map((scope) => this.loadScope(scope, lang)));
+      if (results.some((success) => !success)) return false;
+      scopes.forEach((scope) => ready.add(scope.scope));
+      if ([...this.loadedScopes.keys()].every((scope) => ready.has(scope))) return true;
+    }
+    return false;
+  }
+
+  /** 路由解析时准备活动语言及登录待生效语言，保证成功和取消两种结局都有词条。 */
   async loadScopes(provided: readonly (string | ProviderScope)[]): Promise<boolean> {
     await this.initialized;
     const scopes = provided.map((scope) => (typeof scope === 'string' ? { scope } : scope));
     while (true) {
       const lang = this.activeLang();
+      const prepared = this.prepared;
       const results = await Promise.all(scopes.map((scope) => this.loadScope(scope, lang)));
-      if (results.some((loaded) => !loaded)) {
-        return false;
-      }
+      if (results.some((loaded) => !loaded)) return false;
       scopes.forEach((scope) => this.loadedScopes.set(scope.scope, scope));
-      if (lang === this.activeLang()) {
-        return true;
+      if (prepared && prepared.lang !== lang) {
+        const pending = await Promise.all(
+          scopes.map((scope) => this.loadScope(scope, prepared.lang)),
+        );
+        if (pending.some((loaded) => !loaded) && this.prepared === prepared) this.discard();
       }
+      if (lang === this.activeLang() && (!this.prepared || this.prepared === prepared)) return true;
     }
   }
 

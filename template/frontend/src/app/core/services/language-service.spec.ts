@@ -177,6 +177,29 @@ describe('LanguageService', () => {
     expect(greeting()).toBe('你好');
   });
 
+  it('prepares without changing the device and commits synchronously after loading', async () => {
+    const { service, transloco } = await startInEnglish();
+    const prepared = service.prepare('zh-CN');
+    loader.resolve('zh-CN', { greeting: '你好' });
+    await prepared;
+    expectActive(service, transloco, 'en', 'Hello');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
+    service.commit();
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
+  });
+
+  it('discards a prepared language without activating it when its request finishes later', async () => {
+    const { service, transloco } = await startInEnglish();
+    const prepared = service.prepare('zh-CN');
+    service.discard();
+    loader.resolve('zh-CN', { greeting: '你好' });
+    await prepared;
+    service.commit();
+    expectActive(service, transloco, 'en', 'Hello');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
+  });
+
   it('preloads every visited scope before activating a language', async () => {
     const { service, transloco } = await startInEnglish();
     const entered = service.loadScopes(['users', 'roles']);
@@ -390,7 +413,7 @@ describe('LanguageService', () => {
     const service = TestBed.inject(LanguageService);
 
     void service.applyAccountLang('en');
-    const back = service.resetToDeviceLang();
+    const back = service.setDeviceLang('zh-CN');
     expect(await isSettled(back)).toBe(false);
 
     loader.fail('zh-CN');

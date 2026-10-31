@@ -87,7 +87,7 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     name: 'Display.Theme',
     displayName: 'Appearance',
     group: 'Display',
-    defaultValue: 'system',
+    defaultValue: null,
     allowsTenantScope: false,
     allowsUserScope: true,
   },
