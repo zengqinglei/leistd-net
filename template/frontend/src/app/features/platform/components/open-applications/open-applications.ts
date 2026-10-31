@@ -32,7 +32,7 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { firstValueFrom, combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
+import { tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
@@ -42,6 +42,12 @@ import {
   switchMap,
 } from 'rxjs/operators';
 
+import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
+import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
+import {
+  SecretRevealDialog,
+  SecretRevealKind,
+} from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -58,6 +64,7 @@ import {
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
 import {
+  OpenApplicationScopeOutputDto,
   CreateOpenApplicationInputDto,
   GetOpenApplicationsInputDto,
   OpenApplicationClientType,
@@ -66,12 +73,6 @@ import {
   UpdateOpenApplicationInputDto,
 } from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
-import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
-import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
-import {
-  SecretRevealDialog,
-  SecretRevealKind,
-} from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 
 const APPLICATION_SORT_COLUMNS = ['clientId', 'creationTime'] as const;
 const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'creationTime', desc: true }];
@@ -159,12 +160,25 @@ export class OpenApplications {
 
   editDialogVisible = signal(false);
   editDialogLoading = signal(false);
-  editDialogSaving = signal(false);
   selectedApplication = signal<OpenApplicationOutputDto | null>(null);
-  // 可授予的 scope：取不到时编辑框里只是没有 scope 选项，列表照常可用
-  readonly scopes = toSignal(this.service.getScopes().pipe(catchError(() => of([]))), {
-    initialValue: [],
-  });
+  readonly scopes = signal<OpenApplicationScopeOutputDto[]>([]);
+  readonly scopesLoading = signal(false);
+  readonly scopesError = signal<string | null>(null);
+  loadScopes(): void {
+    if (this.scopesLoading()) return;
+    this.scopesLoading.set(true);
+    this.scopesError.set(null);
+    this.service
+      .getScopes()
+      .pipe(
+        finalize(() => this.scopesLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (scopes) => this.scopes.set(scopes),
+        error: (error) => this.scopesError.set(applicationErrorMessage(error)),
+      });
+  }
 
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);
@@ -258,6 +272,7 @@ export class OpenApplications {
   //#endif
 
   constructor() {
+    this.loadScopes();
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
@@ -331,12 +346,23 @@ export class OpenApplications {
     this.refreshRequests.next();
   }
 
+  readonly editingApplicationId = signal<string | null>(null);
+  readonly editDialogError = signal<string | null>(null);
+  retryApplicationDetail(): void {
+    const id = this.editingApplicationId();
+    if (id) this.openEditDialog(id);
+  }
+
   openAddDialog() {
+    this.editingApplicationId.set(null);
+    this.editDialogError.set(null);
     this.selectedApplication.set(null);
     this.editDialogVisible.set(true);
   }
 
   openEditDialog(id: string) {
+    this.editingApplicationId.set(id);
+    this.editDialogError.set(null);
     this.selectedApplication.set(null);
     this.editDialogVisible.set(true);
     this.editDialogLoading.set(true);
@@ -349,53 +375,46 @@ export class OpenApplications {
       )
       .subscribe({
         next: (application) => this.selectedApplication.set(application),
-        error: (error) => this.showRequestError(error),
+        error: (error) => this.editDialogError.set(applicationErrorMessage(error)),
       });
   }
 
-  handleSave(data: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) {
-    this.editDialogSaving.set(true);
+  readonly handleSave = (data: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) => {
     const selected = this.selectedApplication();
 
     const request = selected
       ? this.service.updateOpenApplication(selected.id, data as UpdateOpenApplicationInputDto)
       : this.service.createOpenApplication(data as CreateOpenApplicationInputDto);
 
-    request
-      .pipe(
-        finalize(() => this.editDialogSaving.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (result) => {
-          //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('common.success'), {
-            description: this.transloco.translate(
-              selected ? 'openApp.toast.updated' : 'openApp.toast.created',
-            ),
-          });
-          //#else
-          toast.success('Success', {
-            description: selected
-              ? 'Open application updated successfully'
-              : 'Open application created successfully',
-          });
-          //#endif
-          this.editDialogVisible.set(false);
+    return request.pipe(
+      tap((result) => {
+        //#if (IncludeLocalization)
+        toast.success(this.transloco.translate('common.success'), {
+          description: this.transloco.translate(
+            selected ? 'openApp.toast.updated' : 'openApp.toast.created',
+          ),
+        });
+        //#else
+        toast.success('Success', {
+          description: selected
+            ? 'Open application updated successfully'
+            : 'Open application created successfully',
+        });
+        //#endif
+        this.editDialogVisible.set(false);
 
-          // 创建 Confidential 客户端后显示自动生成的 Secret
-          if (!selected && result.clientSecret) {
-            this.secretValue.set(result.clientSecret);
-            this.secretKind.set('created');
-            this.secretApplication.set(result);
-            this.secretDialogVisible.set(true);
-          }
+        // 创建 Confidential 客户端后显示自动生成的 Secret
+        if (!selected && result.clientSecret) {
+          this.secretValue.set(result.clientSecret);
+          this.secretKind.set('created');
+          this.secretApplication.set(result);
+          this.secretDialogVisible.set(true);
+        }
 
-          this.reloadList();
-        },
-        error: (error) => this.showRequestError(error),
-      });
-  }
+        this.reloadList();
+      }),
+    );
+  };
 
   async handleDelete(id: string) {
     if (this.deletingId() !== null) return;

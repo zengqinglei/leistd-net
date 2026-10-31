@@ -15,6 +15,10 @@
               <ng-icon name="lucideSearch" />
             </hlm-input-group-addon>
             <input
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [attr.aria-label]="t('users.filter.searchPlaceholder')"
               hlmInputGroupInput
               type="text"
               [placeholder]="t('users.filter.searchPlaceholder')"
@@ -202,31 +206,40 @@
   <app-user-edit-dialog
     [(visible)]="editDialogVisible"
     [loading]="editDialogLoading()"
-    [saving]="editDialogSaving()"
+    [editing]="editingUserId() !== null"
+    [loadError]="editDialogError()"
+    (retry)="retryUserDetail()"
     [user]="selectedUser()"
     [availableRoles]="availableRoles()"
+    [rolesLoading]="rolesLoading()"
+    [rolesError]="rolesError()"
+    (reloadRoles)="loadRoleOptions()"
     [canAssignRoles]="canManageUserRoles()"
-    (saved)="handleSave($event)"
+    [saveAction]="handleSave"
   />
   <!--#endif-->
   <app-batch-roles-dialog
     [(open)]="batchRolesVisible"
     [userCount]="selectedIds().length"
     [availableRoles]="availableRoles()"
-    [saving]="batchBusy()"
-    (assign)="batchAssignRoles($event)"
+    [rolesLoading]="rolesLoading()"
+    [rolesError]="rolesError()"
+    (reloadRoles)="loadRoleOptions()"
+    [saveAction]="batchAssignRoles"
   />
   <app-user-roles-dialog
     [(open)]="rolesDialogVisible"
     [user]="rolesDialogUser()"
     [availableRoles]="availableRoles()"
+    [rolesLoading]="rolesLoading()"
+    [rolesError]="rolesError()"
+    (reloadRoles)="loadRoleOptions()"
     (saved)="onRolesSaved()"
   />
   <!--#if (LocalIdentity)-->
   <app-reset-user-password-dialog
     [(visible)]="resetPasswordDialogVisible"
-    [(saving)]="resetPasswordSaving"
-    (saved)="handleResetPassword($event)"
+    [saveAction]="handleResetPassword"
   />
   <app-reauthenticate-dialog
     [visible]="reauth.visible()"

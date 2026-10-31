@@ -103,29 +103,29 @@
         "name": "身份验证器应用",
         "hint": "输入应用上的 6 位验证码"
       },
-//#if (Email)
+      //#if (Email)
       "email": {
         "name": "邮箱验证码",
         "hint": "发送验证码到 {{email}}"
       },
-//#endif
+      //#endif
       "recoveryCode": {
         "name": "恢复码",
         "hint": "使用你保存的恢复码之一"
       }
     },
     "emailLabel": "邮箱验证码",
-//#if (Email)
+    //#if (Email)
     "emailHint": "验证码已发送到 {{email}}，请输入邮件里的 6 位数字。",
     "emailSending": "正在把验证码发送到 {{email}}…",
     "emailPending": "验证码将发送到 {{email}}。",
     "resend": "重新发送",
     "resendIn": "{{seconds}} 秒后可重新发送",
     "useEmail": "改用邮箱验证码",
-//#endif
+    //#endif
     "back": "返回登录"
   },
-//#if (Email)
+  //#if (Email)
   "twoFactorEmail": {
     "header": "邮箱验证码",
     "subtitle": "登录第二步也可以用发到 {{email}} 的验证码。它只作补充，组织要求两步验证时不算满足。",
@@ -149,7 +149,7 @@
     "disabledToast": "邮箱验证码已停用，其他设备上的登录已退出。",
     "reauthDescription": "更改登录方式前，请先确认是你本人。"
   },
-//#endif
+  //#endif
   "passkeys": {
     "header": "通行密钥",
     "subtitle": "用指纹、面容或屏幕锁代替密码登录。通行密钥不会被钓鱼网站骗走。",
@@ -256,7 +256,6 @@
     "resendCode": "重新发送",
     "resendIn": "{{seconds}} 秒后可重发",
     "codeLabel": "验证码",
-    "codePlaceholder": "邮件中的 6 位验证码",
     "confirmCode": "验证",
     "codeSent": "验证码已发送到 {{email}}",
     "emailVerifiedSuccess": "邮箱已验证",
@@ -335,13 +334,13 @@
     "tenantSwitch": "切换租户"
   },
   "register": {
+    "challengeExpired": "请重新获取邮件验证码后注册。",
     "title": "创建账号",
     "email": "邮箱",
     "emailPlaceholder": "输入您的邮箱地址",
     "username": "用户名",
     "usernamePlaceholder": "由邮箱前缀提取，允许字母数字下划线",
     "emailCode": "邮箱验证码",
-    "emailCodePlaceholder": "输入 6 位验证码",
     "resendCountdown": "{{seconds}}s 后重发",
     "sendCode": "获取验证码",
     "password": "密码",

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { UriListEditor } from './uri-list-editor';
+import { renderSubmission } from '../../../../../../core/validation/form-submission.testing';
 
 describe('UriListEditor', () => {
   function createEditor(uris: string[] = []): ComponentFixture<UriListEditor> {
@@ -24,28 +25,28 @@ describe('UriListEditor', () => {
 
   beforeEach(() => TestBed.configureTestingModule({ imports: [UriListEditor] }));
 
-  it('emits a trimmed URI when a valid value is added', () => {
+  it('emits the exact URI when a valid value is added', () => {
     const fixture = createEditor();
     const emitted: string[] = [];
     fixture.componentInstance.add.subscribe((uri) => emitted.push(uri));
 
-    enterValue(fixture, '  https://example.com/callback  ');
+    enterValue(fixture, 'https://example.com/callback');
     (fixture.nativeElement.querySelector('button') as HTMLButtonElement).click();
 
     expect(emitted).toEqual(['https://example.com/callback']);
   });
 
-  it('disables the add button for empty, malformed, and fragment values', () => {
+  it('keeps invalid submission available and shows the field error', () => {
     const fixture = createEditor();
     const button = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
 
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
 
     enterValue(fixture, 'not-a-uri');
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
 
     enterValue(fixture, 'https://example.com/callback#fragment');
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
 
     enterValue(fixture, 'https://example.com/callback');
     expect(button.disabled).toBe(false);
@@ -62,5 +63,18 @@ describe('UriListEditor', () => {
     removeButton.click();
 
     expect(removed).toBe('https://one.example/callback');
+  });
+
+  it('review R1 focuses the URI input and shows invalid submissions', async () => {
+    const fixture = createEditor();
+    await renderSubmission(fixture, () => fixture.componentInstance['onAdd']());
+    const input = (fixture.nativeElement as HTMLElement).querySelector('input')!;
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('hlm-field-error')!
+        .hasAttribute('hidden'),
+    ).toBe(false);
   });
 });

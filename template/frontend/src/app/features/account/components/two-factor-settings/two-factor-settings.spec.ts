@@ -10,6 +10,10 @@ import { ApplicationHttpError } from '../../../../core/errors/application-http-e
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
 import { AccountService } from '../../services/account-service';
 
@@ -149,7 +153,7 @@ describe('TwoFactorSettings', () => {
     fixture.detectChanges();
 
     expect(account.beginTwoFactorSetup).toHaveBeenCalledWith({
-      recoveryCode: 'AAAA-BBBB',
+      recoveryCode: ' AAAA-BBBB ',
       password: undefined,
     });
     expect(host.querySelector('[data-testid="two-factor-secret"]')).not.toBeNull();
@@ -292,7 +296,7 @@ describe('TwoFactorSettings', () => {
       const submit = host.querySelector<HTMLButtonElement>(
         '[data-testid="two-factor-disable-submit"]',
       )!;
-      expect(submit.disabled).toBe(true);
+      expect(submit.disabled).toBe(false);
 
       await typeCode(host);
       expect(submit.disabled).toBe(false);
@@ -346,5 +350,88 @@ describe('TwoFactorSettings', () => {
       ]);
       //#endif
     });
+  });
+
+  it('review R1 displays recovery and password errors, resets modes and focuses server errors', async () => {
+    await render({
+      enabled: true,
+      passkeys: [],
+      passkeysAvailable: true,
+      recoveryCodesLeft: 8,
+      requiredByPolicy: false,
+    });
+    const panel = fixture.componentInstance;
+    panel['setMode']('replace');
+    panel['toggleRecoveryCode']();
+    await fixture.whenStable();
+    await renderSubmission(fixture, () => panel['startReplace']());
+    const recovery = (fixture.nativeElement as HTMLElement).querySelector(
+      '#two-factor-replace-recovery-code',
+    )!;
+    expect(document.activeElement).toBe(recovery);
+    expect(
+      recovery
+        .closest('[data-slot="field"]')!
+        .querySelector('hlm-field-error')!
+        .hasAttribute('hidden'),
+    ).toBe(false);
+    panel.verificationForm.recoveryCode().value.set('x'.repeat(65));
+    expect(
+      panel.verificationForm
+        .recoveryCode()
+        .errors()
+        .map((e) => e.kind),
+    ).toContain('maxLength');
+    panel['setMode']('disable');
+    await fixture.whenStable();
+    expect(panel.verificationForm().touched()).toBe(false);
+    expect(panel.verificationForm().dirty()).toBe(false);
+    await renderSubmission(fixture, () => panel['disable']());
+    expect(document.activeElement?.id).toBe('two-factor-disable-password');
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('#two-factor-disable-password')!
+        .closest('[data-slot="field"]')!
+        .querySelector('hlm-field-error')!
+        .hasAttribute('hidden'),
+    ).toBe(false);
+    panel.verificationForm.password().value.set('raw password');
+    panel.verificationForm.code().value.set('123456');
+    account.disableTwoFactor.mockReturnValue(throwError(() => rejectedField('Password')));
+    await renderSubmission(fixture, () => panel['disable']());
+    expect(document.activeElement?.id).toBe('two-factor-disable-password');
+  });
+
+  it('review R1 only toasts the unmapped part of a mixed field response', async () => {
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    await render({
+      enabled: true,
+      passkeys: [],
+      passkeysAvailable: true,
+      recoveryCodesLeft: 8,
+      requiredByPolicy: false,
+    });
+    const panel = fixture.componentInstance;
+    panel['setMode']('disable');
+    await fixture.whenStable();
+    panel.verificationForm.password().value.set('password');
+    panel.verificationForm.code().value.set('123456');
+    account.disableTwoFactor.mockReturnValue(
+      throwError(() =>
+        ApplicationHttpError.from(
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              errors: [{ field: 'Password', detail: 'Only at field' }, { detail: 'Only in toast' }],
+            },
+          }),
+        ),
+      ),
+    );
+    await renderSubmission(fixture, () => panel['disable']());
+    expect(notify).toHaveBeenCalledExactlyOnceWith(expect.any(String), {
+      description: 'Only in toast',
+    });
+    expect(document.activeElement?.id).toBe('two-factor-disable-password');
   });
 });

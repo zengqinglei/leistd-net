@@ -1,11 +1,16 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { throwError, Observable, Subject, of } from 'rxjs';
 
 import { ResetUserPasswordDialog } from './reset-user-password-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -19,18 +24,17 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
  */
 @Component({
   imports: [ResetUserPasswordDialog],
-  template: `
-    <app-reset-user-password-dialog
-      [(visible)]="visible"
-      [(saving)]="saving"
-      (saved)="saved.push($event)"
-    />
-  `,
+  template: ` <app-reset-user-password-dialog [(visible)]="visible" [saveAction]="saveAction" /> `,
 })
 class HostComponent {
   readonly visible = signal(true);
   readonly saving = signal(false);
   readonly saved: ResetUserPasswordInputDto[] = [];
+  request: Observable<unknown> = of(undefined);
+  readonly saveAction = (dto: ResetUserPasswordInputDto) => {
+    this.saved.push(dto);
+    return this.request;
+  };
 }
 
 describe('ResetUserPasswordDialog', () => {
@@ -126,12 +130,13 @@ describe('ResetUserPasswordDialog', () => {
 
   it('blocks a second submit while the reset is in flight', async () => {
     await typePassword('Reset!Passw0rd');
-    host.saving.set(true);
+    host.request = new Subject<unknown>();
+    dialog().save();
     await fixture.whenStable();
 
     expect(submitButton().disabled).toBe(true);
     submitButton().click();
-    expect(host.saved).toEqual([]);
+    expect(host.saved).toHaveLength(1);
   });
 
   it('toggles the password visibility', async () => {
@@ -158,5 +163,15 @@ describe('ResetUserPasswordDialog', () => {
     expect(dialog().resetForm.password().value()).toBe('');
     expect(passwordInput().value).toBe('');
     expect(passwordInput().type).toBe('password');
+  });
+
+  it('review R1 focuses reset errors and preserves the exact password', async () => {
+    await renderSubmission(fixture, () => dialog().save());
+    expect(document.activeElement?.id).toBe('reset-password');
+    dialog().resetForm.password().value.set(' Password123! strong ');
+    host.request = throwError(() => rejectedField('Password'));
+    await renderSubmission(fixture, () => dialog().save());
+    expect(host.saved[0]).toEqual({ password: ' Password123! strong ' });
+    expect(document.activeElement?.id).toBe('reset-password');
   });
 });

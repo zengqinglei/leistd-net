@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -15,8 +17,14 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-// prettier-ignore
-import { lucideBuilding2, lucideCircleAlert, lucideFingerprint, lucideInfo, lucideEye, lucideEyeOff } from '@ng-icons/lucide';
+import {
+  lucideBuilding2,
+  lucideCircleAlert,
+  lucideFingerprint,
+  lucideInfo,
+  lucideEye,
+  lucideEyeOff,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -45,6 +53,7 @@ import { SessionContextService } from '../../../../core/services/session-context
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
 import {
   getPasskey,
@@ -56,6 +65,7 @@ import {
   isWebAuthnError,
   WebAuthnFailure,
 } from '../../../../core/webauthn/webauthn-error';
+import { ImeGuard } from '../../../../shared/directives/ime-guard';
 import { WebAuthnJson } from '../../../../shared/dtos/account-security.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
@@ -78,6 +88,7 @@ import {
   selector: 'app-login',
   standalone: true,
   imports: [
+    ImeGuard,
     FormField,
     RouterModule,
     NgIcon,
@@ -114,6 +125,8 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Login implements OnInit {
+  private readonly loginFormRoot = viewChild.required<ElementRef<HTMLElement>>('loginFormRoot');
+  private readonly submitForm = injectFormSubmission();
   private authService = inject(AuthService);
   private readonly authorizationService = inject(AuthorizationService);
   private readonly sessionContext = inject(SessionContextService);
@@ -133,7 +146,7 @@ export class Login implements OnInit {
   //#endif
 
   private _isLoading = signal(false);
-  public readonly isLoading = this._isLoading.asReadonly();
+  public readonly isLoading = computed(() => this._isLoading() || this.loginForm().submitting());
 
   protected readonly showPassword = signal(false);
 
@@ -251,53 +264,51 @@ export class Login implements OnInit {
   }
 
   async onSubmit() {
-    // 租户上下文没定案就不发认证请求。按钮已经禁用，这里再挡一次是因为回车提交、
-    // 以及探测在"表单填完、按钮刚点下"之间才失败的时序都绕不过表单事件。
-    if (this.authBlocked()) {
-      return;
-    }
-
-    if (this.loginForm().invalid()) {
-      this.loginForm().markAsTouched();
-      return;
-    }
-
-    this._isLoading.set(true);
-    this.loginError.set(null);
-    // 已发起整页离开时不复位加载态：旧页面要等一会儿才卸载，复位会让按钮在离开前先恢复一下
-    let left = false;
-
-    try {
-      const { usernameOrEmail, password } = this.model();
-
-      const loginInput = { usernameOrEmail, password };
-      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-
-      const result = await lastValueFrom(this.authService.login(loginInput));
-      const prompt = twoFactorPromptOf(result);
-      if (prompt) {
-        this.twoFactorPrompt.set(prompt);
+    this.model.update((value) => ({ ...value, usernameOrEmail: value.usernameOrEmail.trim() }));
+    await this.submitForm(this.loginForm, this.loginFormRoot().nativeElement, async () => {
+      // 租户上下文没定案就不发认证请求。按钮已经禁用，这里再挡一次是因为回车提交、
+      // 以及探测在"表单填完、按钮刚点下"之间才失败的时序都绕不过表单事件。
+      if (this.authBlocked()) {
         return;
       }
 
-      left = (await this.finishLogin(returnUrl)) === 'left';
-    } catch (error) {
-      if (isRejection(error)) {
-        this.loginError.set(applicationErrorMessage(error));
-        return;
+      this._isLoading.set(true);
+      this.loginError.set(null);
+      // 已发起整页离开时不复位加载态：旧页面要等一会儿才卸载，复位会让按钮在离开前先恢复一下
+      let left = false;
+
+      try {
+        const { usernameOrEmail, password } = this.model();
+
+        const loginInput = { usernameOrEmail, password };
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+
+        const result = await lastValueFrom(this.authService.login(loginInput));
+        const prompt = twoFactorPromptOf(result);
+        if (prompt) {
+          this.twoFactorPrompt.set(prompt);
+          return;
+        }
+
+        left = (await this.finishLogin(returnUrl)) === 'left';
+      } catch (error) {
+        if (isRejection(error)) {
+          this.loginError.set(applicationErrorMessage(error));
+          return;
+        }
+        //#if (IncludeLocalization)
+        toast.error(this.transloco.translate('account.login.loginFailed'), {
+          description: applicationErrorMessage(error),
+        });
+        //#else
+        toast.error('Login failed', { description: applicationErrorMessage(error) });
+        //#endif
+      } finally {
+        if (!left) {
+          this._isLoading.set(false);
+        }
       }
-      //#if (IncludeLocalization)
-      toast.error(this.transloco.translate('account.login.loginFailed'), {
-        description: applicationErrorMessage(error),
-      });
-      //#else
-      toast.error('Login failed', { description: applicationErrorMessage(error) });
-      //#endif
-    } finally {
-      if (!left) {
-        this._isLoading.set(false);
-      }
-    }
+    });
   }
 
   /**

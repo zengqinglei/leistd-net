@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 /**
  * 字段级错误。数组形的 `field` 按服务端 JSON 命名策略写出（与请求体字段同名）；
- * 官方字典形的键是属性名（PascalCase）。只用于分组展示消息，不按它定位表单控件。
+ * 官方字典形的键是属性名（PascalCase）。按已声明顶层字段匹配表单；别名、嵌套和索引路径须显式映射。
  */
 export interface ApiErrorItem {
   code?: string;

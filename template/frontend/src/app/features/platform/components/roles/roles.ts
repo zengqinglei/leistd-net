@@ -23,7 +23,7 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 // prettier-ignore
 import {
   catchError,
@@ -267,14 +267,14 @@ export class Roles {
     this.permissionDialogOpen.set(true);
   }
 
-  onSave(payload: CreateRoleInputDto | UpdateRoleInputDto): void {
+  readonly onSave = (payload: CreateRoleInputDto | UpdateRoleInputDto): Observable<unknown> => {
     const editing = this.editingRole();
     const request$ = editing
       ? this.roleService.updateRole(editing.id, payload as UpdateRoleInputDto)
       : this.roleService.createRole(payload as CreateRoleInputDto);
 
-    request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
+    return request$.pipe(
+      tap(() => {
         this.editDialogOpen.set(false);
         this.reload();
         //#if (IncludeLocalization)
@@ -282,10 +282,9 @@ export class Roles {
         //#else
         toast.success('Role saved');
         //#endif
-      },
-      error: (error) => toast.error(applicationErrorMessage(error)),
-    });
-  }
+      }),
+    );
+  };
 
   async onDelete(role: RoleOutputDto): Promise<void> {
     if (this.deletingId() !== null) return;

@@ -1,17 +1,22 @@
-<div class="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4">
+<div hlmField #editor class="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4">
   <div class="flex items-center justify-between gap-3">
     <label hlmFieldLabel [for]="inputId()">{{ label() }}</label>
-    <span class="text-xs text-muted-foreground">{{ hint() }}</span>
+    @if (!uriForm.uri().invalid() || !uriForm.uri().touched()) {
+      <span hlmFieldDescription>{{ hint() }}</span>
+    }
   </div>
   <div class="flex flex-col gap-2">
     <div class="flex flex-col gap-2 sm:flex-row">
       <input
+        appImeGuard
         hlmInput
         [id]="inputId()"
         class="w-full font-mono"
-        [value]="value()"
-        (input)="onInput($event)"
-        (keydown.enter)="$event.preventDefault(); onAdd()"
+        [formField]="uriForm.uri"
+        autocomplete="off"
+        spellcheck="false"
+        autocapitalize="off"
+        (keydown.enter)="onAdd($event)"
         [placeholder]="placeholder()"
       />
       <button
@@ -19,14 +24,14 @@
         type="button"
         class="min-w-24 whitespace-nowrap"
         (click)="onAdd()"
-        [disabled]="!value() || isInvalid()"
+        [disabled]="uriForm().submitting()"
       >
         <ng-icon name="lucidePlus" data-icon="inline-start" />
         {{ addLabel() }}
       </button>
     </div>
-    @if (isInvalid()) {
-      <hlm-field-error>{{ invalidText() }}</hlm-field-error>
+    @if (uriForm.uri().invalid() && uriForm.uri().touched()) {
+      <hlm-field-error [forceShow]="true">{{ invalidText() }}</hlm-field-error>
     }
   </div>
   <div class="flex flex-wrap gap-2">

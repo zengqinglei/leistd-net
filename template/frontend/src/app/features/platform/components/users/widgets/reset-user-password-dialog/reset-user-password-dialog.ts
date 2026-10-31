@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, model, output, signal } from '@angular/core';
+import {
+  viewChild,
+  ElementRef,
+  computed,
+  effect,
+  input,
+  ChangeDetectionStrategy,
+  Component,
+  model,
+  signal,
+} from '@angular/core';
 import { form, maxLength, minLength, required, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -15,12 +25,16 @@ import {
   HlmInputGroupButton,
 } from '@spartan-ng/helm/input-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { firstValueFrom, Observable } from 'rxjs';
 
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
 import { PasswordLengthMeter } from '../../../../../../core/components/password-length-meter/password-length-meter';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../../../../../../core/validation/password-rule';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
@@ -29,6 +43,8 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
 @Component({
   selector: 'app-reset-user-password-dialog',
   imports: [
+    ImeGuard,
+    DialogClose,
     FormField,
     NgIcon,
     HlmButton,
@@ -48,9 +64,11 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResetUserPasswordDialog {
+  private readonly resetFormRoot = viewChild.required<ElementRef<HTMLElement>>('resetFormRoot');
+  private readonly submitForm = injectFormSubmission();
+  readonly saving = computed(() => this.resetForm().submitting());
   readonly visible = model(false);
-  readonly saving = model(false);
-  readonly saved = output<ResetUserPasswordInputDto>();
+  readonly saveAction = input.required<(dto: ResetUserPasswordInputDto) => Observable<unknown>>();
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -65,11 +83,21 @@ export class ResetUserPasswordDialog {
     maxLength(path.password, PASSWORD_MAX_LENGTH);
   });
 
+  constructor() {
+    effect(() => {
+      if (this.visible()) {
+        this.resetForm().reset();
+        this.formModel.set({ password: '' });
+      }
+    });
+  }
+
   /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约；关闭时重置表单。 */
   onDialogStateChange(state: BrnDialogState): void {
     const open = state === 'open';
     this.visible.set(open);
     if (!open) {
+      this.resetForm().reset();
       this.formModel.set({ password: '' });
       this.showPassword.set(false);
     }
@@ -79,12 +107,12 @@ export class ResetUserPasswordDialog {
     this.visible.set(false);
   }
 
-  save(): void {
-    if (this.resetForm().invalid()) {
-      this.resetForm().markAsTouched();
-      return;
-    }
-    this.saved.emit({ password: this.formModel().password });
+  async save(): Promise<void> {
+    await this.submitForm(this.resetForm, this.resetFormRoot().nativeElement, async () => {
+      await firstValueFrom(this.saveAction()({ password: this.formModel().password }), {
+        defaultValue: undefined,
+      });
+    });
   }
 }
 //#if (!IncludeLocalization)

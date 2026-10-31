@@ -1,6 +1,6 @@
 import { computed, inject, Signal, signal, WritableSignal } from '@angular/core';
 import { Router } from '@angular/router';
-import { lastValueFrom } from 'rxjs';
+import { lastValueFrom, Observable, Subscription } from 'rxjs';
 
 import { ReauthenticationProof } from './reauthenticate-dialog';
 import { API_ERROR_CODES } from '../../errors/api-error-codes';
@@ -39,6 +39,8 @@ const PASSKEY_UNUSABLE: ReadonlySet<string> = new Set([
  * 由 {@link injectReauthentication} 在调用方组件里创建，随组件销毁。
  */
 export interface Reauthentication {
+  /** 保持原请求的异步边界，确认身份后重试，取消时完成而不发出成功值。 */
+  execute<T>(request: (proof?: ReauthenticationProof) => Observable<T>): Observable<T>;
   readonly visible: Signal<boolean>;
   readonly saving: Signal<boolean>;
   /** 对话框里就地显示的原因；对话框在本人改动输入时清掉它。 */
@@ -100,6 +102,7 @@ export function injectReauthentication(): Reauthentication {
   const twoFactorEnabled = computed(() => authService.currentUser()?.isTwoFactorEnabled ?? false);
   const hasPasskeys = computed(() => authService.currentUser()?.hasPasskeys ?? false);
   const passkeyFailure = signal<WebAuthnFailure | null>(null);
+  let cancelRequest: (() => void) | null = null;
   let pending: ((proof: ReauthenticationProof) => void) | null = null;
 
   // 账号状态与服务端不一致（别处设了口令、停用了两步验证）：重新取当前用户，对话框随之换成可用的方式
@@ -129,6 +132,30 @@ export function injectReauthentication(): Reauthentication {
     twoFactorEnabled,
     hasPasskeys,
     passkeyFailure,
+
+    execute<T>(request: (proof?: ReauthenticationProof) => Observable<T>): Observable<T> {
+      return new Observable<T>((subscriber) => {
+        const subscriptions = new Subscription();
+        const cancel = () => subscriber.complete();
+        cancelRequest = cancel;
+        const attempt = (proof?: ReauthenticationProof) => {
+          subscriptions.add(
+            request(proof).subscribe({
+              next: (value) => subscriber.next(value),
+              complete: () => subscriber.complete(),
+              error: (failure) => {
+                if (!this.handleError(failure, proof, attempt)) subscriber.error(failure);
+              },
+            }),
+          );
+        };
+        attempt();
+        return () => {
+          subscriptions.unsubscribe();
+          if (cancelRequest === cancel) cancelRequest = null;
+        };
+      });
+    },
 
     handleError(failure, proof, retry) {
       saving.set(false);
@@ -215,6 +242,7 @@ export function injectReauthentication(): Reauthentication {
     complete,
 
     setVisible(value) {
+      if (!value) cancelRequest?.();
       visible.set(value);
       if (!value) {
         pending = null;

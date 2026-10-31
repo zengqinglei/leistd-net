@@ -1,4 +1,7 @@
 import {
+  viewChild,
+  ElementRef,
+  computed,
   ChangeDetectionStrategy,
   Component,
   effect,
@@ -8,6 +11,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { form } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -16,8 +20,11 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { firstValueFrom } from 'rxjs';
 
-import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
@@ -29,7 +36,7 @@ import { UserManagementService } from '../../../../services/user-management-serv
 @Component({
   selector: 'app-user-roles-dialog',
   // prettier-ignore
-  imports: [
+  imports: [ImeGuard, DialogClose,
     HlmButton,
     HlmSpinner,
     ...HlmDialogImports,
@@ -42,8 +49,13 @@ import { UserManagementService } from '../../../../services/user-management-serv
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserRolesDialog {
+  private readonly selectionFormRoot =
+    viewChild.required<ElementRef<HTMLElement>>('selectionFormRoot');
   readonly open = model(false);
   readonly user = input<UserManagementOutputDto | null>(null);
+  readonly rolesLoading = input(false);
+  readonly rolesError = input<string | null>(null);
+  readonly reloadRoles = output<void>();
   readonly availableRoles = input<RoleBriefDto[]>([]);
   readonly saved = output<void>();
 
@@ -54,7 +66,18 @@ export class UserRolesDialog {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  readonly saving = signal(false);
+  private readonly submitForm = injectFormSubmission();
+  private readonly submitModel = signal({});
+  readonly selectionForm = form(this.submitModel);
+  readonly saving = computed(() => this.selectionForm().submitting());
+  readonly selectionDirty = computed(
+    () =>
+      [...this.selected()].sort().join(',') !==
+      (this.user()?.roles ?? [])
+        .map((role) => role.id)
+        .sort()
+        .join(','),
+  );
   private readonly selected = signal<ReadonlySet<string>>(new Set<string>());
 
   constructor() {
@@ -82,27 +105,24 @@ export class UserRolesDialog {
     this.selected.set(next);
   }
 
-  onSave(): void {
+  async onSave(): Promise<void> {
+    if (this.rolesLoading() || this.rolesError()) return;
     const user = this.user();
     if (!user) {
       return;
     }
 
-    this.saving.set(true);
-    this.userService.replaceUserRoles(user.id, { roleIds: [...this.selected()] }).subscribe({
-      next: () => {
-        this.saving.set(false);
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('users.rolesDialog.saved'));
-        //#else
-        toast.success('Roles updated');
-        //#endif
-        this.saved.emit();
-      },
-      error: (error) => {
-        this.saving.set(false);
-        toast.error(applicationErrorMessage(error));
-      },
+    await this.submitForm(this.selectionForm, this.selectionFormRoot().nativeElement, async () => {
+      await firstValueFrom(
+        this.userService.replaceUserRoles(user.id, { roleIds: [...this.selected()] }),
+      );
+
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('users.rolesDialog.saved'));
+      //#else
+      toast.success('Roles updated');
+      //#endif
+      this.saved.emit();
     });
   }
 }
@@ -110,6 +130,8 @@ export class UserRolesDialog {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
+  'common.retry': 'Retry',
   'users.rolesDialog.title': 'Roles · {{name}}',
   'users.rolesDialog.description':
     'The user inherits every permission granted to the selected roles.',

@@ -3,12 +3,17 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, Subject } from 'rxjs';
+import { userEvent } from 'vitest/browser';
 
 import { TenantDetailDialog } from './tenant-detail-dialog';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 import { TenantConnectionDto } from '../../../../dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
@@ -366,5 +371,48 @@ describe('TenantDetailDialog', () => {
     }
     fixture.detectChanges();
     expect(button.disabled).toBe(false);
+  });
+
+  it('review R1 enters one connection request and retains the editor after failure', async () => {
+    await setUp();
+    await openWith(tenant('t-a', 'acme'), []);
+    component.startAdd();
+    await fixture.whenStable();
+    const response = new Subject<TenantConnectionDto>();
+    setConnection.mockReturnValue(response);
+    await userEvent.fill(document.getElementById('tenant-connection-name')!, '  crm  ');
+    await userEvent.fill(connectionStringField()!, ' raw connection string ');
+    await userEvent.keyboard('{Enter}');
+    await fixture.whenStable();
+    expect(setConnection).toHaveBeenCalledExactlyOnceWith('t-a', 'crm', {
+      expectedVersion: null,
+      connectionString: ' raw connection string ',
+    });
+    expect(component.connectionForm().submitting()).toBe(true);
+    await userEvent.keyboard('{Enter}');
+    expect(setConnection).toHaveBeenCalledOnce();
+    response.error(rejectedField('ConnectionString'));
+    await renderSubmission(fixture, () => undefined);
+    expect(connectionStringField()!.value).toBe(' raw connection string ');
+    expect(document.activeElement).toBe(connectionStringField());
+    expect(component.connectionForm().submitting()).toBe(false);
+    expect(document.body.textContent).toContain('Server rejected this field');
+  });
+  it('review R1 confirms abandoning a dirty connection and preserves it when declined', async () => {
+    await setUp();
+    await openWith(tenant('t-a', 'acme'), []);
+    component.startAdd();
+    await fixture.whenStable();
+    await userEvent.fill(document.getElementById('tenant-connection-name')!, 'crm');
+    confirm.open.mockResolvedValueOnce(false);
+    document
+      .querySelector<HTMLElement>('hlm-dialog-content')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    await fixture.whenStable();
+    expect(confirm.open).toHaveBeenCalledOnce();
+    expect(component.open()).toBe(true);
+    expect(document.getElementById('tenant-connection-name')).not.toBeNull();
   });
 });

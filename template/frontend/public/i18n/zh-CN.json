@@ -1,5 +1,8 @@
 {
   "common": {
+    "unsavedChanges": "放弃尚未保存的修改？",
+    "discardChanges": "放弃修改",
+    "continueEditing": "继续编辑",
     "signIn": "登录",
     "continueToSignIn": "继续登录",
     "workspace": "工作区",
@@ -92,6 +95,9 @@
     }
   },
   "validation": {
+    "server": "服务端拒绝了此值。",
+    "uri": "请输入不含片段或空白的绝对 URI。",
+    "otpCode": "请输入完整的 6 位验证码。",
     "required": "此字段为必填项",
     "email": "请输入有效的邮箱地址",
     "minLength": "至少需要 {{minLength}} 个字符",

@@ -23,7 +23,7 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
-import { firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
@@ -214,21 +214,20 @@ export class Tenants {
     this.openEdit(tenant);
   }
 
-  onSave(payload: CreateTenantInputDto | UpdateTenantInputDto): void {
+  readonly onSave = (payload: CreateTenantInputDto | UpdateTenantInputDto): Observable<unknown> => {
     const editing = this.editingTenant();
     const request$ = editing
       ? this.tenantService.updateTenant(editing.id, payload as UpdateTenantInputDto)
       : this.tenantService.createTenant(payload as CreateTenantInputDto);
 
-    request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
+    return request$.pipe(
+      tap(() => {
         this.editDialogOpen.set(false);
         this.reload();
         toast.success(this.savedMessage());
-      },
-      error: (error) => toast.error(applicationErrorMessage(error)),
-    });
-  }
+      }),
+    );
+  };
 
   /** 启停切换：停用会阻止该租户用户登录，先确认再提交。 */
   async onToggleActive(tenant: TenantOutputDto): Promise<void> {

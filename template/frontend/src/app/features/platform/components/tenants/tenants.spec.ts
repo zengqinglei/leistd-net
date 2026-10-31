@@ -6,7 +6,7 @@ import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState } from '@tanstack/angular-table';
-import { of, Subject, throwError } from 'rxjs';
+import { lastValueFrom, of, Subject, throwError } from 'rxjs';
 
 import { Tenants } from './tenants';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
@@ -193,7 +193,7 @@ describe('Tenants page query and write flow', () => {
     component.openCreate();
     fixture.detectChanges();
 
-    editDialog().save.emit(newTenantPayload);
+    await lastValueFrom(editDialog().saveAction()(newTenantPayload)).catch(() => undefined);
     await fixture.whenStable();
 
     // 创建与更新走同一个 (save) 出口，选错分支会把新建打成"更新一个不存在的租户"
@@ -209,7 +209,7 @@ describe('Tenants page query and write flow', () => {
     fixture.detectChanges();
 
     const payload = { name: 'acme', displayName: 'Acme Renamed' };
-    editDialog().save.emit(payload);
+    await lastValueFrom(editDialog().saveAction()(payload));
     await fixture.whenStable();
 
     expect(service.updateTenant).toHaveBeenCalledWith(tenant.id, payload);
@@ -223,7 +223,7 @@ describe('Tenants page query and write flow', () => {
     component.openCreate();
     fixture.detectChanges();
 
-    editDialog().save.emit(newTenantPayload);
+    await lastValueFrom(editDialog().saveAction()(newTenantPayload)).catch(() => undefined);
     await fixture.whenStable();
 
     // 关掉对话框等于连同用户填的表单一起丢掉，只能报错并留在原地

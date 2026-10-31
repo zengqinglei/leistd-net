@@ -39,7 +39,11 @@ import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, RowSelectionState, SortingState } from '@tanstack/angular-table';
-import { firstValueFrom, combineLatest, defer, EMPTY, Observable, Subject } from 'rxjs';
+//#if (LocalIdentity)
+import { Observable, tap, of, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+//#else
+import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+//#endif
 import {
   catchError,
   debounceTime,
@@ -49,11 +53,22 @@ import {
   switchMap,
 } from 'rxjs/operators';
 
+import { BatchRolesDialog } from './widgets/batch-roles-dialog/batch-roles-dialog';
+//#if (LocalIdentity)
+import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
+//#endif
+//#if (LocalIdentity)
+import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
+//#endif
+import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
+import { UserTable } from './widgets/user-table/user-table';
 //#if (LocalIdentity)
 import {
   ReauthenticateDialog,
   ReauthenticationProof,
 } from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog';
+//#endif
+//#if (LocalIdentity)
 import { injectReauthentication } from '../../../../core/components/reauthenticate-dialog/reauthentication';
 //#endif
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -91,15 +106,6 @@ import {
 } from '../../dtos/user-management.dto';
 import { RoleService } from '../../services/role-service';
 import { UserManagementService } from '../../services/user-management-service';
-import { BatchRolesDialog } from './widgets/batch-roles-dialog/batch-roles-dialog';
-//#if (LocalIdentity)
-import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
-//#endif
-//#if (LocalIdentity)
-import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
-//#endif
-import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
-import { UserTable } from './widgets/user-table/user-table';
 
 //#if (LocalIdentity)
 const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
@@ -197,11 +203,9 @@ export class Users {
 
   editDialogVisible = signal(false);
   editDialogLoading = signal(false);
-  editDialogSaving = signal(false);
   selectedUser = signal<UserManagementOutputDto | null>(null);
   //#if (LocalIdentity)
   resetPasswordDialogVisible = signal(false);
-  resetPasswordSaving = signal(false);
   resettingUserId = signal<string | null>(null);
   /**
    * 改邮箱或标为已验证、重置口令、重置两步验证而管理员的会话不够新时，确认的是管理员本人：
@@ -322,13 +326,28 @@ export class Users {
     this.authorizationService.reload().subscribe({ error: () => undefined });
   }
 
+  readonly rolesLoading = signal(false);
+  readonly rolesError = signal<string | null>(null);
+  loadRoleOptions(): void {
+    if (this.rolesLoading()) return;
+    this.rolesLoading.set(true);
+    this.rolesError.set(null);
+    this.roleService
+      .getOptions()
+      .pipe(
+        finalize(() => this.rolesLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (roles) => this.availableRoles.set(roles),
+        error: (error) => this.rolesError.set(applicationErrorMessage(error)),
+      });
+  }
+
   constructor() {
     // 角色选项端点要求 ManageRoles；无该权限时不请求，避免制造必然 403 的噪声。
     if (this.authorizationService.has(PERMISSIONS.users.manageRoles)) {
-      this.roleService.getOptions().subscribe({
-        next: (roles) => this.availableRoles.set(roles),
-        error: () => this.availableRoles.set([]),
-      });
+      this.loadRoleOptions();
     }
 
     this.searchSubject
@@ -422,7 +441,16 @@ export class Users {
   }
 
   //#if (LocalIdentity)
+  readonly editingUserId = signal<string | null>(null);
+  readonly editDialogError = signal<string | null>(null);
+  retryUserDetail(): void {
+    const id = this.editingUserId();
+    if (id) this.openEditDialog(id);
+  }
+
   openAddDialog() {
+    this.editingUserId.set(null);
+    this.editDialogError.set(null);
     this.selectedUser.set(null);
     this.editDialogVisible.set(true);
   }
@@ -430,6 +458,8 @@ export class Users {
   //#endif
   //#if (LocalIdentity)
   openEditDialog(id: string) {
+    this.editingUserId.set(id);
+    this.editDialogError.set(null);
     this.selectedUser.set(null);
     this.editDialogVisible.set(true);
     this.editDialogLoading.set(true);
@@ -442,31 +472,29 @@ export class Users {
       )
       .subscribe({
         next: (user) => this.selectedUser.set(user),
-        error: (error) => this.showRequestError(error),
+        error: (error) => this.editDialogError.set(applicationErrorMessage(error)),
       });
   }
 
   //#endif
   //#if (LocalIdentity)
-  handleSave(data: CreateUserInputDto | UpdateUserInputDto, proof?: ReauthenticationProof) {
-    this.editDialogSaving.set(true);
+  // 改邮箱或标为已验证而管理员的会话不够新：先确认身份再重试。
+  readonly handleSave = (data: CreateUserInputDto | UpdateUserInputDto) => {
+    this.reauthAction.set('update');
     const selected = this.selectedUser();
-    const request = selected
-      ? this.service.updateUser(selected.id, {
-          ...(data as UpdateUserInputDto),
-          password: proof?.password,
-          twoFactorCode: proof?.twoFactorCode,
-          passkey: proof?.passkey,
-        })
-      : this.service.createUser(data as CreateUserInputDto);
-
-    request
+    return this.reauth
+      .execute((proof) => {
+        return selected
+          ? this.service.updateUser(selected.id, {
+              ...(data as UpdateUserInputDto),
+              password: proof?.password,
+              twoFactorCode: proof?.twoFactorCode,
+              passkey: proof?.passkey,
+            })
+          : this.service.createUser(data as CreateUserInputDto);
+      })
       .pipe(
-        finalize(() => this.editDialogSaving.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: () => {
+        tap(() => {
           this.reauth.complete();
           //#if (IncludeLocalization)
           toast.success(this.transloco.translate('common.success'), {
@@ -481,14 +509,9 @@ export class Users {
           //#endif
           this.editDialogVisible.set(false);
           this.reloadList();
-        },
-        // 改邮箱或标为已验证而管理员的会话不够新：先确认身份再重试
-        error: (error) =>
-          this.handleReauthenticationError('update', error, proof, (next) =>
-            this.handleSave(data, next),
-          ),
-      });
-  }
+        }),
+      );
+  };
 
   //#endif
   async handleToggleActive(user: UserManagementOutputDto) {
@@ -727,26 +750,25 @@ export class Users {
     this.resetPasswordDialogVisible.set(true);
   }
 
-  handleResetPassword(data: ResetUserPasswordInputDto, proof?: ReauthenticationProof) {
+  // 重置口令总要管理员的会话刚认证过：不够新时先确认身份再重试。
+  readonly handleResetPassword = (data: ResetUserPasswordInputDto) => {
+    this.reauthAction.set('resetPassword');
     const id = this.resettingUserId();
     if (!id) {
-      return;
+      return of(undefined);
     }
 
-    this.resetPasswordSaving.set(true);
-    this.service
-      .resetPassword(id, {
-        ...data,
-        currentPassword: proof?.password,
-        twoFactorCode: proof?.twoFactorCode,
-        passkey: proof?.passkey,
-      })
-      .pipe(
-        finalize(() => this.resetPasswordSaving.set(false)),
-        takeUntilDestroyed(this.destroyRef),
+    return this.reauth
+      .execute((proof) =>
+        this.service.resetPassword(id, {
+          ...data,
+          currentPassword: proof?.password,
+          twoFactorCode: proof?.twoFactorCode,
+          passkey: proof?.passkey,
+        }),
       )
-      .subscribe({
-        next: () => {
+      .pipe(
+        tap(() => {
           this.reauth.complete();
           //#if (IncludeLocalization)
           toast.success(this.transloco.translate('common.success'), {
@@ -757,14 +779,9 @@ export class Users {
           //#endif
           this.resetPasswordDialogVisible.set(false);
           this.resettingUserId.set(null);
-        },
-        // 重置口令总要管理员的会话刚认证过：不够新时先确认身份再重试
-        error: (error) =>
-          this.handleReauthenticationError('resetPassword', error, proof, (next) =>
-            this.handleResetPassword(data, next),
-          ),
-      });
-  }
+        }),
+      );
+  };
 
   //#endif
   private queryFromParams(params: ParamMap): GetUsersInputDto {
@@ -872,19 +889,17 @@ export class Users {
   }
   //#endif
 
-  batchAssignRoles(roleIds: string[]): void {
-    if (this.batchBusy()) return;
-    this.runBatch(
-      this.service
-        .batchAssignUserRoles({ ids: this.selectedIds(), roleIds })
-        .pipe(takeUntilDestroyed(this.destroyRef)),
-      () => {
+  readonly batchAssignRoles = (roleIds: string[]) =>
+    this.service.batchAssignUserRoles({ ids: this.selectedIds(), roleIds }).pipe(
+      tap((result) => {
+        this.reportBatch(result);
+        this.clearSelection();
+        this.reloadList();
         this.batchRolesVisible.set(false);
-        // 角色变化会改变有效权限，选中的可能包括自己
+        // 角色变化会改变有效权限，选中的可能包括自己。
         this.authorizationService.reload().subscribe({ error: () => undefined });
-      },
+      }),
     );
-  }
 
   /**
    * 执行一次批量操作并汇总逐条结果：全部成功给成功提示；有失败时列出失败的用户与原因（说明来自
@@ -954,6 +969,7 @@ function serializeBoolean(value: boolean | null | undefined): string | null {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.retry': 'Retry',
   'users.filter.searchPlaceholder': 'Search username / email / display name...',
   'users.table.colStatus': 'Status',
   'common.clearFilter': 'Clear filter',

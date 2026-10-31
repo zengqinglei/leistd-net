@@ -7,9 +7,11 @@ import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { UserRolesDialog } from './user-roles-dialog';
 import { ApplicationHttpError } from '../../../../../../core/errors/application-http-error';
+import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import { renderSubmission } from '../../../../../../core/validation/form-submission.testing';
 import {
   expectTouchTarget,
   setCoarsePointer,
@@ -109,7 +111,7 @@ describe('UserRolesDialog', () => {
 
   afterEach(() => fixture.destroy());
 
-  it('labels every role checkbox with the role name', () => {
+  it('labels every role checkbox with the role name', async () => {
     for (const role of host.roles) {
       const label = document.querySelector(`label[for="role-${role.id}"]`);
       expect(label?.textContent).toContain(role.displayName);
@@ -136,7 +138,7 @@ describe('UserRolesDialog', () => {
     expect(dialog.isSelected('role-admin')).toBe(true);
   });
 
-  it('starts from the roles the user already has', () => {
+  it('starts from the roles the user already has', async () => {
     const dialog = fixture.debugElement.query(By.directive(UserRolesDialog))
       .componentInstance as UserRolesDialog;
 
@@ -184,7 +186,7 @@ describe('UserRolesDialog', () => {
     response.next([]);
     response.complete();
     await fixture.whenStable();
-    expect(saveButton().disabled).toBe(false);
+    await expect.poll(() => saveButton().disabled).toBe(false);
   });
 
   it('shows the server reason, keeps the selection and allows retrying when saving fails', async () => {
@@ -200,10 +202,19 @@ describe('UserRolesDialog', () => {
     saveButton().click();
     await fixture.whenStable();
 
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith('Role does not exist.');
+    //#if (IncludeLocalization)
+    const title = (fixture.debugElement.children[0].componentInstance as UserRolesDialog)[
+      'transloco'
+    ].translate('common.requestError');
+    //#else
+    const title = 'Request error';
+    //#endif
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(title, {
+      description: 'Role does not exist.',
+    });
     expect(toast.success).not.toHaveBeenCalled();
     expect(host.savedCount).toBe(0);
-    expect(saveButton().disabled).toBe(false);
+    await expect.poll(() => saveButton().disabled).toBe(false);
 
     replaceUserRoles.mockReturnValue(of([]));
     saveButton().click();
@@ -235,5 +246,20 @@ describe('UserRolesDialog', () => {
     await fixture.whenStable();
 
     expect(replaceUserRoles).not.toHaveBeenCalled();
+  });
+
+  it('review R1 compares role selections with the initial set before confirming exit', async () => {
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'open').mockResolvedValue(false);
+    const dialog = fixture.debugElement.children[0].componentInstance as UserRolesDialog;
+    expect(dialog.selectionDirty()).toBe(false);
+    await toggle('role-auditor');
+    expect(dialog.selectionDirty()).toBe(true);
+    await renderSubmission(fixture, () =>
+      document.querySelector<HTMLButtonElement>('app-dialog-close button')!.click(),
+    );
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(host.open()).toBe(true);
+    await toggle('role-auditor');
+    expect(dialog.selectionDirty()).toBe(false);
   });
 });

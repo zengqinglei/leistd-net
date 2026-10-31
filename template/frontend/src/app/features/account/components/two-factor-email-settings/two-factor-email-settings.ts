@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -6,6 +8,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { FormField, form, required, pattern } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -16,6 +19,7 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { firstValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import {
@@ -25,6 +29,7 @@ import {
 import { injectReauthentication } from '../../../../core/components/reauthenticate-dialog/reauthentication';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
 import { StatusDot } from '../../../../shared/directives/status-dot';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
@@ -47,7 +52,7 @@ const CODE_INPUT_ID = 'two-factor-email-code';
 @Component({
   selector: 'app-two-factor-email-settings',
   // prettier-ignore
-  imports: [
+  imports: [FormField,
     NgIcon,
     HlmBadge,
     HlmButton,
@@ -65,6 +70,8 @@ const CODE_INPUT_ID = 'two-factor-email-code';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TwoFactorEmailSettings {
+  private readonly verificationRoot =
+    viewChild.required<ElementRef<HTMLElement>>('verificationRoot');
   private readonly accountService = inject(AccountService);
   private readonly confirmService = inject(ConfirmService);
   //#if (IncludeLocalization)
@@ -82,12 +89,20 @@ export class TwoFactorEmailSettings {
   protected readonly resend = resendCountdown();
   protected readonly status = signal<TwoFactorStatusOutputDto | null>(null);
   protected readonly loadFailed = signal(false);
-  protected readonly busy = signal(false);
+  private readonly operationBusy = signal(false);
+  protected readonly busy = computed(
+    () => this.operationBusy() || this.verificationForm().submitting(),
+  );
   /** 开启中：确认码已发出，等本人输入的挑战 Id。 */
   protected readonly challengeId = signal<string | null>(null);
-  protected readonly code = signal('');
+  private readonly submitForm = injectFormSubmission();
+  private readonly verificationModel = signal({ code: '' });
+  readonly verificationForm = form(this.verificationModel, (path) => {
+    required(path.code);
+    pattern(path.code, /^\d{6}$/, { error: { kind: 'otpCode' } });
+  });
+  protected readonly code = this.verificationForm.code().value;
   protected readonly codeInputId = CODE_INPUT_ID;
-  protected readonly codeValid = computed(() => /^\d{6}$/.test(this.code().trim()));
   /** 邮箱验证码能用、还有别的方式可选（通行密钥、身份验证器）：才有"默认"可言。 */
   protected readonly defaultChoice = computed(() => canChooseDefault(this.status(), 'email'));
 
@@ -106,14 +121,14 @@ export class TwoFactorEmailSettings {
 
   /** 开始开启：确认是本人后发确认码。 */
   protected begin(proof?: ReauthenticationProof): void {
-    this.busy.set(true);
+    this.operationBusy.set(true);
     this.accountService
       .beginEmailTwoFactorSetup({
         password: proof?.password,
         twoFactorCode: proof?.twoFactorCode,
         passkey: proof?.passkey,
       })
-      .pipe(finalize(() => this.busy.set(false)))
+      .pipe(finalize(() => this.operationBusy.set(false)))
       .subscribe({
         next: (challenge) => {
           this.reauth.complete();
@@ -129,25 +144,25 @@ export class TwoFactorEmailSettings {
       });
   }
 
-  protected confirm(): void {
-    const challengeId = this.challengeId();
-    if (!challengeId || !this.codeValid() || this.busy()) {
-      return;
-    }
+  protected async confirm(): Promise<void> {
+    await this.submitForm(
+      this.verificationForm,
+      this.verificationRoot().nativeElement,
+      async () => {
+        const challengeId = this.challengeId();
+        if (!challengeId) {
+          return;
+        }
 
-    this.busy.set(true);
-    this.accountService
-      .enableEmailTwoFactor({ challengeId, code: this.code().trim() })
-      .pipe(finalize(() => this.busy.set(false)))
-      .subscribe({
-        next: () => {
-          this.cancel();
-          this.reload();
-          this.sessionsChanged.emit();
-          this.showSuccess('account.twoFactorEmail.enabledToast');
-        },
-        error: (error) => this.showError(error),
-      });
+        await firstValueFrom(
+          this.accountService.enableEmailTwoFactor({ challengeId, code: this.code().trim() }),
+        );
+        this.cancel();
+        this.reload();
+        this.sessionsChanged.emit();
+        this.showSuccess('account.twoFactorEmail.enabledToast');
+      },
+    );
   }
 
   protected cancel(): void {
@@ -159,11 +174,11 @@ export class TwoFactorEmailSettings {
   protected onReauthenticationVisibleChange(visible: boolean): void {
     const saving = this.reauth.saving();
     this.reauth.setVisible(visible);
-    if (!visible && !saving) this.busy.set(false);
+    if (!visible && !saving) this.operationBusy.set(false);
   }
   protected async turnOff(): Promise<void> {
     if (this.busy()) return;
-    this.busy.set(true);
+    this.operationBusy.set(true);
     let submitted = false;
     try {
       const confirmed = await this.confirmService.open({
@@ -181,7 +196,7 @@ export class TwoFactorEmailSettings {
         submitted = true;
       }
     } finally {
-      if (!submitted) this.busy.set(false);
+      if (!submitted) this.operationBusy.set(false);
     }
   }
 
@@ -191,10 +206,10 @@ export class TwoFactorEmailSettings {
       return;
     }
 
-    this.busy.set(true);
+    this.operationBusy.set(true);
     this.accountService
       .setPreferredTwoFactorMethod('email')
-      .pipe(finalize(() => this.busy.set(false)))
+      .pipe(finalize(() => this.operationBusy.set(false)))
       .subscribe({
         next: () => {
           this.reload();
@@ -206,7 +221,7 @@ export class TwoFactorEmailSettings {
   }
 
   private disable(proof?: ReauthenticationProof): void {
-    this.busy.set(true);
+    this.operationBusy.set(true);
     this.accountService
       .disableEmailTwoFactor({
         password: proof?.password,
@@ -215,7 +230,7 @@ export class TwoFactorEmailSettings {
       })
       .pipe(
         finalize(() => {
-          if (!this.reauth.visible()) this.busy.set(false);
+          if (!this.reauth.visible()) this.operationBusy.set(false);
         }),
       )
       .subscribe({

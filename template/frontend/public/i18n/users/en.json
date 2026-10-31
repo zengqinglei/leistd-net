@@ -121,6 +121,7 @@
     "saved": "Roles updated"
   },
   "batch": {
+    "selectRolesHint": "Select at least one role to add.",
     "toolbar": "Bulk actions",
     "selected": "{{count}} selected",
     "enable": "Enable",

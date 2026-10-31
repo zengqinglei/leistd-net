@@ -21,6 +21,10 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 //#endif
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { PASSWORD_MIN_LENGTH } from '../../../../core/validation/password-rule';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
 // prettier-ignore
@@ -173,7 +177,7 @@ describe('SecurityPanel', () => {
   });
   //#endif
 
-  it('associates every password label with its input', () => {
+  it('associates every password label with its input', async () => {
     for (const id of ['current-password', 'new-password', 'confirm-password']) {
       expect((fixture.nativeElement as HTMLElement).querySelector(`label[for="${id}"]`)).not.toBe(
         null,
@@ -273,7 +277,7 @@ describe('SecurityPanel', () => {
     response.next();
     response.complete();
     await fixture.whenStable();
-    expect(submitButton().disabled).toBe(false);
+    await expect.poll(() => submitButton().disabled).toBe(false);
   });
 
   it('keeps the input and shows the server reason when the change is rejected', async () => {
@@ -292,16 +296,16 @@ describe('SecurityPanel', () => {
     submitButton().click();
     await fixture.whenStable();
 
-    expect(toast.error).toHaveBeenCalledOnce();
-    expect(vi.mocked(toast.error).mock.calls[0][1]).toEqual({
-      description: 'Current password is wrong.',
-    });
+    await expect
+      .poll(() => panel.changeForm.currentPassword().errors()[0]?.message)
+      .toBe('Current password is wrong.');
+    expect(toast.error).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
     expect(panel.changeForm.currentPassword().value()).toBe(valid.currentPassword);
     expect(panel.changeForm.newPassword().value()).toBe(valid.newPassword);
     expect(account.getSessions).toHaveBeenCalledTimes(sessionLoads);
     expect(panel.saving()).toBe(false);
-    expect(submitButton().disabled).toBe(false);
+    await expect.poll(() => submitButton().disabled).toBe(false);
   });
   //#if (ExternalLogin)
 
@@ -328,7 +332,7 @@ describe('SecurityPanel', () => {
       await fixture.whenStable();
     }
 
-    it('replaces the change-password form with a set-password form', () => {
+    it('replaces the change-password form with a set-password form', async () => {
       const host = fixture.nativeElement as HTMLElement;
 
       expect(host.querySelector('[data-testid="security-password"]')).toBeNull();
@@ -381,6 +385,33 @@ describe('SecurityPanel', () => {
       });
       expect(toast.success).toHaveBeenCalledOnce();
     });
+  });
+  //#endif
+
+  it('review R1 focuses local and server errors in the change-password form', async () => {
+    await renderSubmission(fixture, () => panel.onSubmit());
+    expect(document.activeElement).toBe(input('current-password'));
+    expect(input('current-password').getAttribute('aria-invalid')).toBe('true');
+    await fill(valid);
+    account.changePassword.mockReturnValue(throwError(() => rejectedField('NewPassword')));
+    await renderSubmission(fixture, () => panel.onSubmit());
+    expect(document.activeElement).toBe(input('new-password'));
+    expect(document.body.textContent).toContain('Server rejected this field');
+  });
+  //#if (ExternalLogin)
+  it('review R1 focuses the set-password form rather than the change form', async () => {
+    currentUser.set({ hasPassword: false });
+    await fixture.whenStable();
+    await renderSubmission(fixture, () => panel.onSetPasswordSubmit());
+    const root = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="set-password-form"]',
+    )!;
+    expect(document.activeElement).toBe(root.querySelector('input'));
+    panel.setForm.newPassword().value.set(valid.newPassword);
+    panel.setForm.confirmPassword().value.set(valid.confirmPassword);
+    account.setPassword.mockReturnValue(throwError(() => rejectedField('NewPassword')));
+    await renderSubmission(fixture, () => panel.onSetPasswordSubmit());
+    expect(document.activeElement).toBe(root.querySelector('input'));
   });
   //#endif
 });

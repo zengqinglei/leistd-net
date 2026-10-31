@@ -1,5 +1,6 @@
-// prettier-ignore
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -11,7 +12,6 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormField, form, maxLength, required, validate } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
@@ -24,9 +24,12 @@ import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom, catchError, EMPTY, finalize, Subscription, tap } from 'rxjs';
 
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
@@ -58,7 +61,7 @@ interface ConnectionEditorModel {
 @Component({
   selector: 'app-tenant-detail-dialog',
   // prettier-ignore
-  imports: [
+  imports: [ImeGuard, DialogClose,
     AppDate,
     FormField,
     HlmButton,
@@ -75,6 +78,7 @@ interface ConnectionEditorModel {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantDetailDialog {
+  private readonly connectionRoot = viewChild.required<ElementRef<HTMLElement>>('connectionRoot');
   readonly removingConnection = signal<string | null>(null);
 
   readonly open = model(false);
@@ -120,7 +124,10 @@ export class TenantDetailDialog {
 
   /** 写操作的失败面与列表查询分开：一条改不动，不该把已经列出来的连接一起清掉。 */
   protected readonly actionError = signal<string | null>(null);
-  protected readonly submitting = signal(false);
+  private readonly submitForm = injectFormSubmission();
+  protected readonly submitting = computed(() => this.connectionForm().submitting());
+  readonly cancelConnection = () => this.closeEditor();
+  readonly editFromDetail = () => this.onEdit();
 
   protected readonly editorMode = signal<ConnectionEditorMode>('idle');
   /** 'edit' 档下正在改的那条；决定提交时用哪个名字与哪个版本。 */
@@ -199,6 +206,7 @@ export class TenantDetailDialog {
     this.actionError.set(null);
     this.editingConnection.set(null);
     this.editorModel.set({ name: '', connectionString: '' });
+    this.connectionForm().reset();
     this.editorMode.set('add');
   }
 
@@ -207,6 +215,7 @@ export class TenantDetailDialog {
     this.editingConnection.set(connection);
     // 连接串不预填：接口从不返回它，填一个占位值只会被原样提交回去覆盖真值
     this.editorModel.set({ name: connection.name, connectionString: '' });
+    this.connectionForm().reset();
     this.editorMode.set('edit');
   }
 
@@ -218,39 +227,44 @@ export class TenantDetailDialog {
   }
 
   /** 提交登记或改连接串。`PUT` 整串覆盖，没有"不传即保留"，因此连接串留空按必填报错。 */
-  submitEditor(): void {
-    const tenant = this.tenant();
-    if (!tenant || this.editorMode() === 'idle' || this.connectionForm().invalid()) {
-      return;
+  async submitEditor(event?: Event): Promise<void> {
+    if (event instanceof KeyboardEvent) {
+      if (event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
     }
+    this.editorModel.update((value) => ({ ...value, name: value.name.trim() }));
+    // 失败时留着编辑器不关：连接串是手敲进来的，不能让用户因一次失败重新输入。
+    await this.submitForm(
+      this.connectionForm,
+      this.connectionRoot().nativeElement,
+      async () => {
+        const tenant = this.tenant();
+        if (!tenant || this.editorMode() === 'idle') {
+          return;
+        }
 
-    const editing = this.editingConnection();
-    const model = this.editorModel();
-    // 名字大小写不敏感：先归一化再提交，免得界面上看着是新的一条、写进去是同一行
-    const name = editing ? editing.name : normalizeTenantConnectionName(model.name);
-    // 首次登记预期这一条尚不存在（null）；改已有的那条必须带上读到的版本，
-    // 否则后端按"忘了带版本"拒绝，而不是让后写者悄悄盖掉别人的改动。
-    const expectedVersion = editing ? editing.version : null;
+        const editing = this.editingConnection();
+        const model = this.editorModel();
+        // 名字大小写不敏感：先归一化再提交，免得界面上看着是新的一条、写进去是同一行
+        const name = editing ? editing.name : normalizeTenantConnectionName(model.name);
+        // 首次登记预期这一条尚不存在（null）；改已有的那条必须带上读到的版本，
+        // 否则后端按"忘了带版本"拒绝，而不是让后写者悄悄盖掉别人的改动。
+        const expectedVersion = editing ? editing.version : null;
 
-    this.actionError.set(null);
-    this.submitting.set(true);
-    this.connectionService
-      .setConnection(tenant.id, name, {
-        expectedVersion,
-        connectionString: model.connectionString,
-      })
-      .pipe(
-        finalize(() => this.submitting.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: () => {
-          this.closeEditor();
-          this.reload();
-        },
-        // 失败时留着编辑器不关：连接串是手敲进来的，关掉等于让人重敲一遍
-        error: (error: unknown) => this.actionError.set(applicationErrorMessage(error)),
-      });
+        this.actionError.set(null);
+
+        await firstValueFrom(
+          this.connectionService.setConnection(tenant.id, name, {
+            expectedVersion,
+            connectionString: model.connectionString,
+          }),
+        );
+        this.closeEditor();
+        this.connectionForm().reset();
+        this.reload();
+      },
+      (message) => this.actionError.set(message),
+    );
   }
 
   async removeConnection(connection: TenantConnectionDto): Promise<void> {

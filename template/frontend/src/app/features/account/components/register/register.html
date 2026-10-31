@@ -14,10 +14,18 @@
         {{ t('account.register.closed') }}
       </p>
     } @else {
-      <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+      <form
+        #registerFormRoot
+        novalidate
+        (submit)="$event.preventDefault(); onSubmit()"
+        class="flex flex-col gap-5"
+      >
         <div hlmField>
           <label hlmFieldLabel for="email">{{ t('account.register.email') }}</label>
           <input
+            autocapitalize="off"
+            spellcheck="false"
+            type="email"
             hlmInput
             id="email"
             autocomplete="email"
@@ -27,7 +35,7 @@
           />
           @for (error of registerForm.email().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </div>
@@ -35,6 +43,8 @@
         <div hlmField>
           <label hlmFieldLabel for="username">{{ t('account.register.username') }}</label>
           <input
+            autocapitalize="off"
+            spellcheck="false"
             hlmInput
             id="username"
             autocomplete="username"
@@ -44,7 +54,7 @@
           />
           @for (error of registerForm.username().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </div>
@@ -76,7 +86,7 @@
           <app-password-length-meter [password]="registerForm.password().value()" />
           @for (error of registerForm.password().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </div>
@@ -86,6 +96,9 @@
           <label hlmFieldLabel for="captchaCode">{{ t('account.captcha.label') }}</label>
           <div class="flex items-center gap-3">
             <input
+              inputmode="numeric"
+              autocapitalize="off"
+              spellcheck="false"
               hlmInput
               id="captchaCode"
               autocomplete="off"
@@ -97,31 +110,27 @@
           </div>
           @for (error of registerForm.captchaCode().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </div>
 
-<!--#if (Email)-->
+        <!--#if (Email)-->
         @if (securityConfig()?.enableEmailVerification) {
           <div hlmField>
             <label hlmFieldLabel for="emailVerificationCode">{{
               t('account.register.emailCode')
             }}</label>
-            <div class="flex gap-2">
-              <input
-                hlmInput
-                id="emailVerificationCode"
-                autocomplete="one-time-code"
-                class="w-full flex-1"
+            <div class="flex flex-col gap-3">
+              <app-otp-code-input
+                inputId="emailVerificationCode"
                 [formField]="registerForm.emailVerificationCode"
-                [placeholder]="t('account.register.emailCodePlaceholder')"
               />
               <button
                 hlmBtn
                 type="button"
                 variant="outline"
-                class="w-[120px] whitespace-nowrap px-0 shrink-0"
+                class="self-start whitespace-nowrap"
                 [disabled]="countdown.remaining() > 0 || isSendingEmailCode()"
                 (click)="sendEmailCode()"
               >
@@ -136,13 +145,13 @@
             </div>
             @for (error of registerForm.emailVerificationCode().errors(); track error.kind) {
               <hlm-field-error [validator]="error.kind">{{
-                t('validation.' + error.kind, error)
+                error.message ?? t('validation.' + error.kind, error)
               }}</hlm-field-error>
             }
           </div>
         }
 
-<!--#endif-->
+        <!--#endif-->
         <button hlmBtn type="submit" class="w-full" [disabled]="isLoading()">
           @if (isLoading()) {
             <hlm-spinner class="text-base" data-icon="inline-start" />
@@ -160,9 +169,9 @@
       <!--#endif-->
     }
     <!--
-      去登录是次要入口，排在最后、居中一行（与 Spartan 注册 block 一致）；关闭自助注册时它就是唯一去处，两种状态都显示。
-      提示语与链接之间不留空白：中文全角问号后不加空格，英文的空格写在译文里
-    -->
+    去登录是次要入口，排在最后、居中一行（与 Spartan 注册 block 一致）；关闭自助注册时它就是唯一去处，两种状态都显示。
+    提示语与链接之间不留空白：中文全角问号后不加空格，英文的空格写在译文里
+  -->
     <p class="text-muted-foreground text-center text-sm" data-testid="login-prompt">
       {{ t('account.register.haveAccount')
       }}<a

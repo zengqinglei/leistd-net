@@ -252,9 +252,11 @@ body {
  * 组合框的值区没有任何收缩约束，长文字会把箭头挤出边框。隐藏状态（无值且无占位）不覆盖。
  */
 :is([data-slot='select-value'], [data-slot='combobox-value']):not([data-hidden]) {
-  display: block;
-  min-width: 0;
   overflow: hidden;
+  display: block;
+
+  min-width: 0;
+
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -370,4 +372,36 @@ body {
 [data-slot='dialog-title'],
 [data-slot='sheet-title'] {
   @apply text-base;
+}
+
+/* 弹窗正文独立滚动，避免短视口裁掉操作区；CDK 的 block 策略负责锁住背景。 */
+[data-slot='dialog-content'] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2rem);
+}
+
+[data-slot='dialog-content'] > form {
+  overflow: hidden;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1rem;
+
+  min-width: 0;
+  min-height: 0;
+}
+
+[data-slot='dialog-content'] [data-dialog-body] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+
+  min-width: 0;
+  min-height: 0;
+}
+
+[data-slot='dialog-content'] > :is(hlm-dialog-header, hlm-dialog-footer, app-dialog-close) {
+  flex-shrink: 0;
 }

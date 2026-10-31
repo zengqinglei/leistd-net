@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -9,6 +11,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { form } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -30,15 +33,20 @@ import {
   HlmInputGroupAddon,
   HlmInputGroupInput,
 } from '@spartan-ng/helm/input-group';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
+import { firstValueFrom, combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
 import { catchError, filter, finalize, startWith, switchMap, tap } from 'rxjs/operators';
 
+import { DialogClose } from '../../../../core/components/dialog-close/dialog-close';
 import { API_ERROR_CODES } from '../../../../core/errors/api-error-codes';
 import {
   applicationErrorMessage,
   ApplicationHttpError,
 } from '../../../../core/errors/application-http-error';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
+import { DialogFocus } from '../../../../shared/directives/dialog-focus';
+import { ImeGuard } from '../../../../shared/directives/ime-guard';
 import {
   PermissionDefinitionGroupOutputDto,
   PermissionDefinitionOutputDto,
@@ -78,6 +86,10 @@ interface PermissionGroupRender extends PermissionGroupView {
 @Component({
   selector: 'app-permission-grant-dialog',
   imports: [
+    HlmSkeleton,
+    DialogFocus,
+    ImeGuard,
+    DialogClose,
     NgIcon,
     HlmBadge,
     HlmButton,
@@ -99,6 +111,7 @@ interface PermissionGroupRender extends PermissionGroupView {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PermissionGrantDialog {
+  private readonly selectionRoot = viewChild.required<ElementRef<HTMLElement>>('selectionRoot');
   readonly open = model(false);
   readonly roleId = input<string | null>(null);
   /** 角色展示名，仅用于标题。 */
@@ -115,11 +128,18 @@ export class PermissionGrantDialog {
   readonly loading = signal(false);
   /** 加载失败的原因：打开时编辑状态已清空、没有内容可保留，因此显示错误态与重试而不是空列表。 */
   readonly loadError = signal<string | null>(null);
-  readonly saving = signal(false);
+  private readonly submitForm = injectFormSubmission();
+  private readonly submitModel = signal({});
+  readonly selectionForm = form(this.submitModel);
+  readonly saving = computed(() => this.selectionForm().submitting());
   readonly groups = signal<PermissionGroupView[]>([]);
   readonly version = signal(0);
 
   /** 已授予的权限名。 */
+  private readonly initialGranted = signal('');
+  readonly selectionDirty = computed(
+    () => [...this.granted()].sort().join(',') !== this.initialGranted(),
+  );
   private readonly granted = signal<ReadonlySet<string>>(new Set<string>());
 
   /**
@@ -227,6 +247,7 @@ export class PermissionGrantDialog {
     this.loadedRoleId.set(null);
     this.loadError.set(null);
     this.granted.set(new Set<string>());
+    this.initialGranted.set('');
     this.expandedGroups.set(new Set<string>());
     this.version.set(0);
   }
@@ -259,48 +280,46 @@ export class PermissionGrantDialog {
     this.granted.set(next);
   }
 
-  onSave(): void {
+  async onSave(): Promise<void> {
     const roleId = this.roleId();
     // 未成功加载当前角色就保存，等于把界面上的残留内容写给它。
     if (!roleId || !this.canSave()) {
       return;
     }
 
-    this.saving.set(true);
-    this.permissionService
-      .replaceRoleGrants(roleId, {
-        expectedVersion: this.version(),
-        permissionNames: [...this.granted()],
-      })
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
+    await this.submitForm(this.selectionForm, this.selectionRoot().nativeElement, async () => {
+      try {
+        await firstValueFrom(
+          this.permissionService.replaceRoleGrants(roleId, {
+            expectedVersion: this.version(),
+            permissionNames: [...this.granted()],
+          }),
+        );
+
+        //#if (IncludeLocalization)
+        toast.success(this.transloco.translate('permissions.saved'));
+        //#else
+        toast.success('Permissions saved');
+        //#endif
+        this.saved.emit();
+      } catch (error) {
+        // 版本冲突说明另一位管理员抢先保存：重新加载，不静默覆盖。按错误码而不是 409 分支，
+        // 其他同样映射为 409 的错误不该触发重新加载。
+        const code = error instanceof ApplicationHttpError ? error.code : undefined;
+        if (code === API_ERROR_CODES.permissionConcurrencyConflict) {
           //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('permissions.saved'));
+          toast.error(this.transloco.translate('permissions.conflict'));
           //#else
-          toast.success('Permissions saved');
+          toast.error(
+            'Someone else changed these permissions. The latest values have been reloaded.',
+          );
           //#endif
-          this.saved.emit();
-        },
-        error: (error: unknown) => {
-          this.saving.set(false);
-          // 版本冲突说明另一位管理员抢先保存：重新加载，不静默覆盖。按错误码而不是 409 分支，
-          // 其他同样映射为 409 的错误不该触发重新加载。
-          const code = error instanceof ApplicationHttpError ? error.code : undefined;
-          if (code === API_ERROR_CODES.permissionConcurrencyConflict) {
-            //#if (IncludeLocalization)
-            toast.error(this.transloco.translate('permissions.conflict'));
-            //#else
-            toast.error(
-              'Someone else changed these permissions. The latest values have been reloaded.',
-            );
-            //#endif
-            this.reloadRequests.next();
-            return;
-          }
-          toast.error(applicationErrorMessage(error));
-        },
-      });
+          this.reloadRequests.next();
+          return;
+        }
+        throw error;
+      }
+    });
   }
 
   private loadFor(roleId: string) {
@@ -334,6 +353,7 @@ export class PermissionGrantDialog {
       grants.grants.filter((grant) => grant.granted).map((grant) => grant.name),
     );
     this.granted.set(granted);
+    this.initialGranted.set([...granted].sort().join(','));
 
     // 默认展开已有授予的模块，免得一进来全是折叠的空壳；此后展开与否由用户决定。
     this.expandedGroups.set(

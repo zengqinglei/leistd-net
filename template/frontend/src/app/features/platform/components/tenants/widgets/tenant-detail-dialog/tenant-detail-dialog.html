@@ -3,19 +3,27 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
+  <hlm-dialog
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
+    [state]="open() ? 'open' : 'closed'"
+    (stateChanged)="open.set($event === 'open')"
+  >
     <!-- 宽度用 min-w 定：弹窗挂在按内容撑开的浮层里，只写 max-w 撑不开（不设下限约 282px）。
-         写法与 open-application-edit-dialog 一致，42rem 小一档；同时约束高度，连接条数不受限。 -->
+       写法与 open-application-edit-dialog 一致，42rem 小一档；同时约束高度，连接条数不受限。 -->
     <hlm-dialog-content
+      appImeGuard
       *hlmDialogPortal
-      class="flex max-h-[calc(100dvh-2rem)] min-w-[min(42rem,calc(100vw_-_2rem))] flex-col overflow-hidden sm:max-w-2xl"
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="h-160 min-w-[min(42rem,calc(100vw_-_2rem))] sm:max-w-2xl"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ t('tenants.detailTitle') }}</h2>
       </hlm-dialog-header>
 
       @if (tenant(); as current) {
-        <div class="flex flex-col gap-4 py-2">
+        <div data-dialog-body class="flex flex-col gap-4 py-2">
           <section class="flex flex-col gap-2">
             <h3 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {{ t('tenants.detailSectionIdentity') }}
@@ -117,29 +125,38 @@
                     </div>
                   } @empty {
                     <!-- 空列表须显式说明不分库，否则与漏登记无法区分。 -->
-                    <p class="text-muted-foreground text-sm">{{ t('tenants.connectionsEmpty') }}</p>
+                    <p class="text-muted-foreground text-sm">
+                      {{ t('tenants.connectionsEmpty') }}
+                    </p>
                   }
                 </div>
 
                 @if (editorMode() !== 'idle') {
-                  <div class="border-border flex flex-col gap-3 rounded-md border p-3">
+                  <form
+                    #connectionRoot
+                    novalidate
+                    (submit)="$event.preventDefault(); submitEditor()"
+                    class="border-border flex flex-col gap-3 rounded-md border p-3"
+                  >
                     @if (editorMode() === 'add') {
                       <hlm-field>
                         <label hlmFieldLabel for="tenant-connection-name">
                           {{ t('tenants.fieldConnectionName') }}
                         </label>
                         <input
+                          autocapitalize="off"
+                          appImeGuard
                           hlmInput
                           id="tenant-connection-name"
                           class="w-full font-mono"
                           autocomplete="off"
                           spellcheck="false"
                           [formField]="connectionForm.name"
-                          (keydown.enter)="$event.preventDefault(); submitEditor()"
+                          (keydown.enter)="submitEditor($event)"
                         />
                         @for (error of connectionForm.name().errors(); track error.kind) {
                           <hlm-field-error [validator]="error.kind">{{
-                            t('validation.' + error.kind, error)
+                            error.message ?? t('validation.' + error.kind, error)
                           }}</hlm-field-error>
                         }
                       </hlm-field>
@@ -151,23 +168,32 @@
                         {{ t('tenants.fieldConnectionString') }}
                       </label>
                       <input
+                        autocapitalize="off"
+                        appImeGuard
                         hlmInput
                         id="tenant-connection-string"
                         type="password"
                         class="w-full"
-                        autocomplete="off"
+                        autocomplete="new-password"
                         spellcheck="false"
                         [formField]="connectionForm.connectionString"
-                        (keydown.enter)="$event.preventDefault(); submitEditor()"
+                        (keydown.enter)="submitEditor($event)"
                       />
                       @for (error of connectionForm.connectionString().errors(); track error.kind) {
                         <hlm-field-error [validator]="error.kind">{{
-                          t('validation.' + error.kind, error)
+                          error.message ?? t('validation.' + error.kind, error)
                         }}</hlm-field-error>
                       }
                     </hlm-field>
 
-                    <p class="text-muted-foreground text-xs">{{ t('tenants.detailSecretHint') }}</p>
+                    @if (
+                      !connectionForm.connectionString().invalid() ||
+                      !connectionForm.connectionString().touched()
+                    ) {
+                      <p class="text-muted-foreground text-xs">
+                        {{ t('tenants.detailSecretHint') }}
+                      </p>
+                    }
 
                     @if (actionError(); as error) {
                       <p class="text-destructive text-sm" role="alert">{{ error }}</p>
@@ -175,11 +201,12 @@
 
                     <div class="flex justify-end gap-2">
                       <button
+                        [disabled]="closeGuard.busy()"
                         hlmBtn
                         size="sm"
                         variant="outline"
                         type="button"
-                        (click)="closeEditor()"
+                        (click)="closeGuard.requestClose(undefined, cancelConnection)"
                       >
                         {{ t('common.cancel') }}
                       </button>
@@ -187,13 +214,16 @@
                         hlmBtn
                         size="sm"
                         type="button"
-                        [disabled]="connectionForm().invalid() || submitting()"
+                        [disabled]="submitting()"
                         (click)="submitEditor()"
                       >
+                        @if (submitting()) {
+                          <hlm-spinner data-icon="inline-start" />
+                        }
                         {{ t('common.save') }}
                       </button>
                     </div>
-                  </div>
+                  </form>
                 } @else if (actionError(); as error) {
                   <p class="text-destructive text-sm" role="alert">{{ error }}</p>
                 }
@@ -205,12 +235,31 @@
 
       <hlm-dialog-footer>
         @if (canManage()) {
-          <button hlmBtn variant="outline" type="button" (click)="onEdit()">
+          <button
+            [disabled]="closeGuard.busy()"
+            hlmBtn
+            variant="outline"
+            type="button"
+            (click)="closeGuard.requestClose(undefined, editFromDetail)"
+          >
             {{ t('common.edit') }}
           </button>
         }
-        <button hlmBtn type="button" (click)="open.set(false)">{{ t('common.close') }}</button>
+        <button
+          [disabled]="closeGuard.busy()"
+          hlmBtn
+          type="button"
+          (click)="closeGuard.requestClose()"
+        >
+          {{ t('common.close') }}
+        </button>
       </hlm-dialog-footer>
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="editorMode() !== 'idle' && connectionForm().dirty()"
+        [busy]="submitting() || removingConnection() !== null"
+        (dismissed)="open.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>

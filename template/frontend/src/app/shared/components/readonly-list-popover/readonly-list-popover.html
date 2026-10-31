@@ -39,6 +39,9 @@
             <ng-icon name="lucideSearch" />
           </hlm-input-group-addon>
           <input
+            autocapitalize="off"
+            spellcheck="false"
+            [attr.aria-label]="filterLabel()"
             hlmInputGroupInput
             type="search"
             autocomplete="off"

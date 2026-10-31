@@ -36,6 +36,7 @@ import {
   HlmInputGroupInput,
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 // 导出与刷新按钮上的 hlmTooltip 指令要在作用域内，否则只是无效属性。
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
@@ -89,6 +90,7 @@ import { OperationRecordService } from '../../services/operation-record-service'
 @Component({
   selector: 'app-operation-records',
   imports: [
+    HlmSpinner,
     NgIcon,
     HlmButton,
     HlmInputGroup,
@@ -273,6 +275,24 @@ export class OperationRecords {
     }));
   });
 
+  readonly filtersLoading = signal(false);
+  readonly filtersError = signal<string | null>(null);
+  loadFilterOptions(): void {
+    if (this.filtersLoading()) return;
+    this.filtersLoading.set(true);
+    this.filtersError.set(null);
+    this.service
+      .getFilterOptions()
+      .pipe(
+        finalize(() => this.filtersLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (options) => this.filterOptions.set(options),
+        error: (error) => this.filtersError.set(applicationErrorMessage(error)),
+      });
+  }
+
   constructor() {
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
@@ -281,14 +301,8 @@ export class OperationRecords {
     // 搜索框即时值随 URL 回填（前进后退、分享链接）。
     effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
 
-    // 筛选项加载一次：动作定义是启动期事实。失败时不提示，下拉为空而列表照常可用。
-    this.service
-      .getFilterOptions()
-      .pipe(
-        catchError(() => EMPTY),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((options) => this.filterOptions.set(options));
+    // 筛选项加载一次：动作定义是启动期事实。
+    this.loadFilterOptions();
 
     // URL 变化或显式刷新时重新拉取列表。
     combineLatest([this.route.queryParamMap, this.refreshRequests.pipe(startWith(undefined))])
@@ -526,6 +540,8 @@ export class OperationRecords {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
+  'common.retry': 'Retry',
   'operationRecords.filter.searchPlaceholder': 'Search action / target / operator...',
   'operationRecords.filter.category': 'Category',
   'common.clearFilter': 'Clear filter',

@@ -16,6 +16,9 @@ export function englishText(table: Readonly<Record<string, string>>) {
  * 两边同时补。
  */
 const ENGLISH_VALIDATION: Record<string, string> = {
+  'validation.server': 'The server rejected this value.',
+  'validation.uri': 'Enter an absolute URI without a fragment or whitespace.',
+  'validation.otpCode': 'Enter the complete 6-digit verification code.',
   'validation.required': 'This field is required.',
   'validation.email': 'Please enter a valid email address.',
   'validation.minLength': 'Must be at least {{minLength}} characters.',

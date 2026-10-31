@@ -1,11 +1,16 @@
 //#if (LocalIdentity)
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { throwError, Observable, of } from 'rxjs';
 
 import { OpenApplicationEditDialog } from './open-application-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
@@ -22,14 +27,25 @@ import {
     <app-open-application-edit-dialog
       [(visible)]="visible"
       [application]="application()"
-      (saved)="saved.push($event)"
+      [saveAction]="saveAction"
+      [editing]="editing()"
+      [loadError]="loadError()"
+      [scopesError]="scopesError()"
     />
   `,
 })
 class HostComponent {
   readonly visible = signal(true);
+  readonly editing = signal(false);
+  readonly loadError = signal<string | null>(null);
+  readonly scopesError = signal<string | null>(null);
   readonly application = signal<OpenApplicationOutputDto | null>(null);
   readonly saved: (CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto)[] = [];
+  request: Observable<unknown> = of(undefined);
+  readonly saveAction = (dto: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) => {
+    this.saved.push(dto);
+    return this.request;
+  };
 }
 
 function registered(sessionBound: boolean | null): OpenApplicationOutputDto {
@@ -193,5 +209,45 @@ describe('OpenApplicationEditDialog', () => {
       expect(triggerText).toBe(optionText);
     });
   }
+
+  it('review R1 keeps failed detail in edit mode and blocks saving until retry', async () => {
+    const retry = vi.fn();
+    dialog().retry.subscribe(retry);
+    fixture.componentInstance.editing.set(true);
+    fixture.componentInstance.loadError.set('Detail unavailable');
+    await fixture.whenStable();
+    expect(document.querySelector('form')).toBeNull();
+    expect(document.body.textContent).toContain('Detail unavailable');
+    await dialog().save();
+    expect(fixture.componentInstance.saved).toEqual([]);
+    document.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+    expect(retry).toHaveBeenCalledOnce();
+  });
+  it('review R1 shows failed authorization options with retry and blocks saving', async () => {
+    fixture.componentInstance.scopesError.set('Options unavailable');
+    await fixture.whenStable();
+    expect(document.body.textContent).toContain('Options unavailable');
+    expect(
+      document.querySelector<HTMLButtonElement>('hlm-dialog-footer button[type="submit"]')!
+        .disabled,
+    ).toBe(true);
+    await dialog().save();
+    expect(fixture.componentInstance.saved).toEqual([]);
+  });
+
+  it('review R1 normalizes application identifiers and focuses local and server errors', async () => {
+    await renderSubmission(fixture, () => dialog().save());
+    expect(document.activeElement?.id).toBe('application-client-id');
+    dialog().applicationForm.sessionBound().value.set(false);
+    dialog().applicationForm.clientId().value.set('  browser-client  ');
+    dialog().applicationForm.displayName().value.set('  Browser client  ');
+    fixture.componentInstance.request = throwError(() => rejectedField('ClientId'));
+    await renderSubmission(fixture, () => dialog().save());
+    expect(fixture.componentInstance.saved[0]).toMatchObject({
+      clientId: 'browser-client',
+      displayName: 'Browser client',
+    });
+    expect(document.activeElement?.id).toBe('application-client-id');
+  });
 });
 //#endif

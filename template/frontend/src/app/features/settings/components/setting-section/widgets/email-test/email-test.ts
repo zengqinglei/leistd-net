@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  viewChild,
+  ElementRef,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { FormField, form, required, email } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -6,13 +15,14 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideSend } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { finalize } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 
-import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { SettingService } from '../../../../../../core/settings/setting-service';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
@@ -22,6 +32,8 @@ import { englishText } from '../../../../../../shared/utils/english-text';
   selector: 'app-email-test',
   // prettier-ignore
   imports: [
+    FormField,
+    ...HlmFieldImports,
     NgIcon,
     HlmButton,
     HlmInput,
@@ -35,6 +47,7 @@ import { englishText } from '../../../../../../shared/utils/english-text';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class EmailTest {
+  private readonly emailTestRoot = viewChild.required<ElementRef<HTMLElement>>('emailTestRoot');
   private readonly settingService = inject(SettingService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -43,37 +56,26 @@ export class EmailTest {
   //#endif
 
   /** 默认发给自己：最常见的用法就是"发一封给我看看收不收得到"。 */
-  protected readonly to = signal(inject(AuthService).currentUser()?.email ?? '');
-  protected readonly sending = signal(false);
-  protected readonly canSend = computed(() => /^\S+@\S+\.\S+$/.test(this.to()) && !this.sending());
+  private readonly submitForm = injectFormSubmission();
+  private readonly model = signal({ to: inject(AuthService).currentUser()?.email ?? '' });
+  readonly emailForm = form(this.model, (path) => {
+    required(path.to);
+    email(path.to);
+  });
+  protected readonly to = computed(() => this.model().to);
+  protected readonly sending = computed(() => this.emailForm().submitting());
 
-  protected send(): void {
-    if (!this.canSend()) {
-      return;
-    }
-
-    this.sending.set(true);
-    this.settingService
-      .sendTestEmail(this.to())
-      .pipe(finalize(() => this.sending.set(false)))
-      .subscribe({
-        //#if (IncludeLocalization)
-        next: () =>
-          toast.success(this.transloco.translate('settings.emailTest.sent', { to: this.to() })),
-        // 服务端的原因里已经带着"测试邮件发送失败"，标题不再重复一遍
-        error: (error) =>
-          toast.error(this.transloco.translate('common.requestError'), {
-            description: applicationErrorMessage(error),
-          }),
-        //#else
-        next: () => toast.success(this.t('settings.emailTest.sent', { to: this.to() })),
-        // 服务端的原因里已经带着"测试邮件发送失败"，标题不再重复一遍
-        error: (error) =>
-          toast.error(this.t('common.requestError'), {
-            description: applicationErrorMessage(error),
-          }),
-        //#endif
-      });
+  protected async send(): Promise<void> {
+    this.model.update((value) => ({ to: value.to.trim() }));
+    // 服务端的原因里已经带着“测试邮件发送失败”，标题不再重复一遍。
+    await this.submitForm(this.emailForm, this.emailTestRoot().nativeElement, async () => {
+      await firstValueFrom(this.settingService.sendTestEmail(this.to()));
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('settings.emailTest.sent', { to: this.to() }));
+      //#else
+      toast.success(this.t('settings.emailTest.sent', { to: this.to() }));
+      //#endif
+    });
   }
 }
 //#if (!IncludeLocalization)

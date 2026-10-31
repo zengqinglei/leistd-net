@@ -13,6 +13,7 @@ import {
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
+import { renderSubmission } from '../../validation/form-submission.testing';
 import { WebAuthnFailure } from '../../webauthn/webauthn-error';
 
 /**
@@ -280,7 +281,6 @@ describe('ReauthenticateDialog', () => {
       //#endif
       expect(input.getAttribute('aria-invalid')).toBe('true');
       expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([
-        'reauthenticate-code-description',
         'reauthenticate-code-error',
         'reauthenticate-code-reuse-hint',
       ]);
@@ -292,7 +292,8 @@ describe('ReauthenticateDialog', () => {
 
       expect(host.error()).toBeNull();
       expect(reauthenticateCodeReuseHint()).toBe('');
-      expect(input.hasAttribute('aria-invalid')).toBe(false);
+      // 服务端原因已清除；只输入一位时仍有 Signal Forms 的本地位数错误。
+      expect(input.getAttribute('aria-invalid')).toBe('true');
     });
 
     // 被拒的原因与验证码本身无关（如再认证失败过多被锁定）：等新码也无济于事，不提示
@@ -439,5 +440,28 @@ describe('ReauthenticateDialog', () => {
 
       expect(host.confirmed).toEqual([{ twoFactorCode: '123456' }]);
     });
+  });
+
+  it('review R1 locks the active credential dialog while a proof is in flight', async () => {
+    await render({ hasPassword: true, twoFactorEnabled: false });
+    host.saving.set(true);
+    await fixture.whenStable();
+    const root = document.querySelector('hlm-dialog-content') as HTMLElement;
+    root.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    root.querySelector<HTMLButtonElement>('app-dialog-close button')!.click();
+    root.querySelector<HTMLButtonElement>('hlm-dialog-footer button')!.click();
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    await fixture.whenStable();
+    expect(host.visible()).toBe(true);
+    expect(root.isConnected).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('app-dialog-close button')!.disabled).toBe(true);
+  });
+  it('review R1 focuses a local credential error without identifying a rejected login field', async () => {
+    await render({ hasPassword: true, twoFactorEnabled: false });
+    await renderSubmission(fixture, () => button('reauthenticate-submit')!.click());
+    expect(document.activeElement).toBe(passwordInput());
   });
 });

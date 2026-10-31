@@ -7,7 +7,7 @@
 
 ## 1. 技术栈
 
-Angular（Signals、zoneless、Angular CLI）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元 + 项目持有的 helm 样式层）、Tailwind CSS 4、Angular Signal Forms（`@angular/forms/signals`）、TanStack Table。版本以 `frontend/package.json` 与锁文件为准。表单写法见[前端表单规范](./frontend-forms.md)，`FormsModule`/`ReactiveFormsModule`/`ngModel` 由 eslint 拦截。
+Angular（Signals、zoneless、CLI、Signal Forms `@angular/forms/signals`）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元与项目持有的 Helm 样式层）、Tailwind CSS 4、TanStack Table。版本以 `frontend/package.json` 与锁文件为准。表单写法与 ESLint 约束见[前端表单规范](./frontend-forms.md)。
 
 ## 2. 目录与依赖方向
 
@@ -62,17 +62,16 @@ frontend/
 
 ## 4. 分层与依赖注入
 
-- **API 数据访问服务**（功能的 `services/*-service.ts`）只封装 HTTP，返回 DTO 的 `Observable`，不持有页面状态。
+- 功能的 `services/*-service.ts` 只封装 HTTP，返回 DTO `Observable`，不持有页面状态。
 - **应用级服务**（认证、主题、语言、设置上下文、启动）放 `core/services`，可持有自身状态与行为。
-- **页面状态**优先放组件 signal；状态复杂且有复用或生命周期收益时，抽成组件级 `@Injectable()` 状态类并在组件 `providers` 提供。
+- 组件与简单父子状态用 Signals，页面状态优先放组件；复杂且有复用或生命周期收益时，才抽成组件级 `@Injectable()` 状态类，由组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
 - 路由守卫与按钮显隐只改善交互体验；服务端必须对每个请求独立校验权限。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
-- 依赖注入一律用 `inject()`。构造函数只做属性赋值、需要注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅）与进入页面的首次只读查询；写请求、多步流程和清理会话放 `ngOnInit`（判据：构造不改变服务端或会话状态）；在注入上下文之外（如 `ngOnInit`）调用这些 API 时显式传入 `destroyRef` 或 `{ injector }`。
+- 依赖注入用 `inject()`。构造仅做属性赋值、需注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅）及页面首次只读查询。写请求、多步流程与会话清理放 `ngOnInit`，构造不得改变服务端或会话状态；在注入上下文外（如 `ngOnInit`）调用上述 API 时须传 `destroyRef` 或 `{ injector }`。
 
 ## 5. 状态
 
-- 组件内部与简单父子组件间的状态用 Signals。
 - 确认写入口点击即禁用并显示 spinner（含确认框打开期间），实际请求结束才复位；确认即关框，不等请求。
 - 媒体查询（断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia`。
 - 启动流程、拦截器判断当前路由用 `frontend/src/app/core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。

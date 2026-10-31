@@ -3,7 +3,12 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <form novalidate class="flex flex-col gap-6" (submit)="$event.preventDefault(); onSubmit()">
+  <form
+    #profileRoot
+    novalidate
+    class="flex flex-col gap-6"
+    (submit)="$event.preventDefault(); onSubmit()"
+  >
     <div class="flex flex-col gap-6">
       <div class="flex items-center gap-4 border-b border-border pb-5">
         <!-- 头像上传：无图时常驻居中图标；有图时 hover / 键盘 focus-visible 显示、触屏（pointer-coarse）常驻。 -->
@@ -96,6 +101,8 @@
             class="flex min-w-0 flex-col gap-2 @md/field-group:shrink-0 @md/field-group:basis-74 @md/field-group:pointer-coarse:basis-77"
           >
             <input
+              autocapitalize="off"
+              spellcheck="false"
               hlmInput
               id="profile-username"
               autocomplete="username"
@@ -105,7 +112,7 @@
             />
             @for (error of profileForm.username().errors(); track error.kind) {
               <hlm-field-error [validator]="error.kind">{{
-                t('validation.' + error.kind, error)
+                error.message ?? t('validation.' + error.kind, error)
               }}</hlm-field-error>
             }
           </div>
@@ -118,7 +125,7 @@
               class="flex flex-wrap items-center gap-x-2 gap-y-1 @md/field-group:min-h-9 @md/field-group:pointer-coarse:min-h-11"
             >
               <label hlmFieldLabel for="profile-email">{{ t('account.profile.email') }}</label>
-<!--#if (Email)-->
+              <!--#if (Email)-->
               <!-- 验证状态针对的是**已保存**的邮箱：表单里改了还没保存时，先提示保存后再验证 -->
               @if (emailEdited()) {
                 <span class="text-muted-foreground text-xs" data-testid="email-change-hint">
@@ -141,15 +148,18 @@
                   {{ t('account.profile.emailUnverified') }}
                 </span>
               }
-<!--#endif-->
+              <!--#endif-->
             </div>
           </div>
           <!-- 两列网格：输入一列、按钮一列，两行按钮同宽，输入框左右对齐。间距由按钮的左外边距给出，
-               没有按钮时按钮列宽为 0，输入占满整列 -->
+             没有按钮时按钮列宽为 0，输入占满整列 -->
           <div
             class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-y-2 @md/field-group:shrink-0 @md/field-group:basis-74 @md/field-group:pointer-coarse:basis-77"
           >
             <input
+              autocapitalize="off"
+              spellcheck="false"
+              type="email"
               hlmInput
               id="profile-email"
               autocomplete="email"
@@ -157,7 +167,7 @@
               [formField]="profileForm.email"
               [placeholder]="t('account.profile.emailPlaceholder')"
             />
-<!--#if (Email)-->
+            <!--#if (Email)-->
             @if (!emailEdited() && !user()?.isEmailVerified && emailVerificationAvailable()) {
               <!-- 最小宽度容纳默认间隔（两位数秒）的倒计时文案，倒数时输入框不跟着伸缩；间隔调到三位数以上时按钮按内容加宽 -->
               <button
@@ -178,13 +188,13 @@
                 }
               </button>
             }
-<!--#endif-->
+            <!--#endif-->
             @for (error of profileForm.email().errors(); track error.kind) {
               <hlm-field-error class="col-span-2" [validator]="error.kind">{{
-                t('validation.' + error.kind, error)
+                error.message ?? t('validation.' + error.kind, error)
               }}</hlm-field-error>
             }
-<!--#if (Email)-->
+            <!--#if (Email)-->
             @if (!emailEdited() && !user()?.isEmailVerified) {
               @if (!emailVerificationAvailable()) {
                 <p
@@ -194,32 +204,40 @@
                   {{ t('account.profile.emailVerificationUnavailable') }}
                 </p>
               } @else if (emailChallenge()) {
-                <input
-                  hlmInput
-                  id="profile-email-code"
-                  class="w-full"
-                  inputmode="numeric"
-                  autocomplete="one-time-code"
-                  maxlength="6"
-                  [attr.aria-label]="t('account.profile.codeLabel')"
-                  [placeholder]="t('account.profile.codePlaceholder')"
-                  [value]="emailCode()"
-                  (input)="onEmailCodeInput($event)"
-                  (keydown.enter)="$event.preventDefault(); confirmEmailCode()"
-                />
-                <button
-                  hlmBtn
-                  type="button"
-                  class="ml-2 min-w-28"
-                  data-testid="email-confirm-code"
-                  [disabled]="confirmingCode() || emailCode().trim().length === 0"
-                  (click)="confirmEmailCode()"
-                >
-                  {{ t('account.profile.confirmCode') }}
-                </button>
+                <div #emailCodeRoot class="col-span-2 flex min-w-0 flex-col gap-3">
+                  <div hlmField class="min-w-0 flex-1">
+                    <label hlmFieldLabel class="sr-only" for="profile-email-code">{{
+                      t('account.profile.codeLabel')
+                    }}</label>
+                    <app-otp-code-input
+                      appImeGuard
+                      inputId="profile-email-code"
+                      [formField]="emailCodeForm.code"
+                      (keydown.enter)="$event.preventDefault(); confirmEmailCode()"
+                    />
+                    @for (error of emailCodeForm.code().errors(); track error.kind) {
+                      <hlm-field-error [validator]="error.kind">{{
+                        error.message ?? t('validation.' + error.kind, error)
+                      }}</hlm-field-error>
+                    }
+                  </div>
+                  <button
+                    hlmBtn
+                    type="button"
+                    class="min-w-28 self-end"
+                    data-testid="email-confirm-code"
+                    [disabled]="confirmingCode()"
+                    (click)="confirmEmailCode()"
+                  >
+                    @if (confirmingCode()) {
+                      <hlm-spinner data-icon="inline-start" />
+                    }
+                    {{ t('account.profile.confirmCode') }}
+                  </button>
+                </div>
               }
             }
-<!--#endif-->
+            <!--#endif-->
           </div>
         </div>
 
@@ -237,6 +255,7 @@
             class="flex min-w-0 flex-col gap-2 @md/field-group:shrink-0 @md/field-group:basis-74 @md/field-group:pointer-coarse:basis-77"
           >
             <input
+              autocomplete="off"
               hlmInput
               id="profile-display-name"
               class="w-full"
@@ -245,7 +264,7 @@
             />
             @for (error of profileForm.displayName().errors(); track error.kind) {
               <hlm-field-error [validator]="error.kind">{{
-                t('validation.' + error.kind, error)
+                error.message ?? t('validation.' + error.kind, error)
               }}</hlm-field-error>
             }
           </div>
@@ -265,6 +284,8 @@
             class="flex min-w-0 flex-col gap-2 @md/field-group:shrink-0 @md/field-group:basis-74 @md/field-group:pointer-coarse:basis-77"
           >
             <input
+              type="tel"
+              inputmode="tel"
               hlmInput
               id="profile-phone-number"
               autocomplete="tel"
@@ -274,7 +295,7 @@
             />
             @for (error of profileForm.phoneNumber().errors(); track error.kind) {
               <hlm-field-error [validator]="error.kind">{{
-                t('validation.' + error.kind, error)
+                error.message ?? t('validation.' + error.kind, error)
               }}</hlm-field-error>
             }
           </div>

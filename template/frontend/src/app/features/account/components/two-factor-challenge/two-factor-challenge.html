@@ -82,7 +82,12 @@
         }
       </div>
     } @else {
-      <form class="flex flex-col gap-4" novalidate (submit)="$event.preventDefault(); submit()">
+      <form
+        #verificationRoot
+        class="flex flex-col gap-4"
+        novalidate
+        (submit)="$event.preventDefault(); submit()"
+      >
         @if (method() === 'recoveryCode') {
           <div hlmField>
             <label hlmFieldLabel [for]="inputIds.recoveryCode">{{
@@ -94,13 +99,19 @@
               autocomplete="off"
               autocapitalize="off"
               spellcheck="false"
-              maxlength="64"
               data-testid="two-factor-recovery-input"
               [id]="inputIds.recoveryCode"
               [attr.aria-invalid]="error() ? 'true' : null"
-              [value]="value()"
-              (input)="onInput($event)"
+              [formField]="verificationForm.value"
+              (input)="onValueChange($any($event.target).value)"
             />
+            @if (!error()) {
+              @for (error of verificationForm.value().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
+            }
             @if (error(); as message) {
               <hlm-field-error forceShow data-testid="two-factor-error" [id]="errorId">{{
                 message
@@ -119,12 +130,18 @@
                   : t('account.twoFactorLogin.codeLabel')
               "
               [autofocus]="true"
-              [invalid]="!!error()"
               [describedBy]="codeDescribedBy()"
-              [value]="value()"
+              [formField]="verificationForm.value"
               (valueChange)="onValueChange($event)"
               (completed)="submit()"
             />
+            @if (!error()) {
+              @for (error of verificationForm.value().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
+            }
             @if (error(); as message) {
               <hlm-field-error forceShow data-testid="two-factor-error" [id]="errorId">{{
                 message
@@ -172,7 +189,7 @@
           type="submit"
           class="w-full"
           data-testid="two-factor-submit"
-          [disabled]="!canSubmit()"
+          [disabled]="busy()"
         >
           @if (busy()) {
             <hlm-spinner class="text-base" data-icon="inline-start" />
@@ -216,9 +233,9 @@
     }
 
     <!--
-      主按钮下一行左右分置：左边退回上一步（淡色），右边换一种方式（主色）。
-      放不下时右边整体换到下一行，仍靠右
-    -->
+    主按钮下一行左右分置：左边退回上一步（淡色），右边换一种方式（主色）。
+    放不下时右边整体换到下一行，仍靠右
+  -->
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
       <button
         hlmBtn

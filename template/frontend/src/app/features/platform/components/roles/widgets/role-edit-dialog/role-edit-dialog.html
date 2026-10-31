@@ -3,76 +3,103 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
-    <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+  <hlm-dialog
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
+    [state]="open() ? 'open' : 'closed'"
+    (stateChanged)="open.set($event === 'open')"
+  >
+    <hlm-dialog-content
+      appImeGuard
+      *hlmDialogPortal
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="sm:max-w-lg"
+    >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ isEdit() ? t('roles.editTitle') : t('roles.createTitle') }}</h2>
         <p hlmDialogDescription>{{ t('roles.editDescription') }}</p>
       </hlm-dialog-header>
 
-      <form class="flex flex-col gap-4 py-2" (ngSubmit)="onSubmit()">
-        <hlm-field>
-          <label hlmFieldLabel for="role-name">{{ t('roles.fieldName') }}</label>
-          <input
-            hlmInput
-            id="role-name"
-            class="w-full"
-            autocomplete="off"
-            [formField]="roleForm.name"
-          />
-          @for (error of roleForm.name().errors(); track error.kind) {
-            <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
-            }}</hlm-field-error>
-          }
-        </hlm-field>
+      <form (submit)="$event.preventDefault(); onSubmit()" #roleFormRoot novalidate>
+        <div data-dialog-body class="flex flex-col gap-4 py-1">
+          <hlm-field>
+            <label hlmFieldLabel for="role-name">{{ t('roles.fieldName') }}</label>
+            <input
+              hlmInput
+              id="role-name"
+              class="w-full"
+              autocomplete="off"
+              [formField]="roleForm.name"
+            />
+            @for (error of roleForm.name().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
+          </hlm-field>
 
-        <hlm-field>
-          <label hlmFieldLabel for="role-display-name">{{ t('roles.fieldDisplayName') }}</label>
-          <input
-            hlmInput
-            id="role-display-name"
-            class="w-full"
-            autocomplete="off"
-            [formField]="roleForm.displayName"
-          />
-          @for (error of roleForm.displayName().errors(); track error.kind) {
-            <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
-            }}</hlm-field-error>
-          }
-        </hlm-field>
+          <hlm-field>
+            <label hlmFieldLabel for="role-display-name">{{ t('roles.fieldDisplayName') }}</label>
+            <input
+              hlmInput
+              id="role-display-name"
+              class="w-full"
+              autocomplete="off"
+              [formField]="roleForm.displayName"
+            />
+            @for (error of roleForm.displayName().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
+          </hlm-field>
 
-        <hlm-field>
-          <label hlmFieldLabel for="role-description">{{ t('roles.fieldDescription') }}</label>
-          <input
-            hlmInput
-            id="role-description"
-            class="w-full"
-            autocomplete="off"
-            [formField]="roleForm.description"
-          />
-          @for (error of roleForm.description().errors(); track error.kind) {
-            <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
-            }}</hlm-field-error>
-          }
-        </hlm-field>
+          <hlm-field>
+            <label hlmFieldLabel for="role-description">{{ t('roles.fieldDescription') }}</label>
+            <input
+              hlmInput
+              id="role-description"
+              class="w-full"
+              autocomplete="off"
+              [formField]="roleForm.description"
+            />
+            @for (error of roleForm.description().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
+          </hlm-field>
 
-        <div hlmField orientation="horizontal">
-          <hlm-checkbox inputId="role-is-default" [formField]="roleForm.isDefault" />
-          <label hlmFieldLabel for="role-is-default">{{ t('roles.fieldIsDefault') }}</label>
+          <div hlmField orientation="horizontal">
+            <hlm-checkbox inputId="role-is-default" [formField]="roleForm.isDefault" />
+            <label hlmFieldLabel for="role-is-default">{{ t('roles.fieldIsDefault') }}</label>
+          </div>
         </div>
+        <hlm-dialog-footer>
+          <button
+            [disabled]="closeGuard.busy()"
+            hlmBtn
+            variant="outline"
+            type="button"
+            (click)="closeGuard.requestClose()"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button hlmBtn type="submit" [disabled]="saving()">
+            @if (saving()) {
+              <hlm-spinner data-icon="inline-start" />
+            }
+            {{ t('common.save') }}
+          </button>
+        </hlm-dialog-footer>
       </form>
-
-      <hlm-dialog-footer>
-        <button hlmBtn variant="outline" type="button" (click)="open.set(false)">
-          {{ t('common.cancel') }}
-        </button>
-        <button hlmBtn type="button" [disabled]="roleForm().invalid()" (click)="onSubmit()">
-          {{ t('common.save') }}
-        </button>
-      </hlm-dialog-footer>
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="roleForm().dirty()"
+        [busy]="saving()"
+        (dismissed)="open.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>

@@ -4,15 +4,18 @@
 <ng-container>
 <!--#endif-->
   <hlm-dialog
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
     [state]="visible() ? 'open' : 'closed'"
     (stateChanged)="onDialogStateChange($event)"
-    [closeOnOutsidePointerEvents]="!saving()"
   >
     <!-- 定宽：切换口令/验证码、出现错误时对话框不随内容变宽变窄 -->
     <hlm-dialog-content
+      appImeGuard
       *hlmDialogPortal
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
       class="min-w-[min(28rem,calc(100vw_-_2rem))] sm:max-w-md"
-      [showCloseButton]="!saving()"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ t('common.reauthenticate.header') }}</h2>
@@ -22,150 +25,160 @@
       </hlm-dialog-header>
 
       <form
-        novalidate
-        class="flex flex-col gap-4"
+        #reauthFormRoot
         data-testid="reauthenticate-form"
         [attr.data-method]="method()"
         (submit)="$event.preventDefault(); confirm()"
+        novalidate
       >
-        @switch (method()) {
-          @case ('password') {
-            <div hlmField>
-              <label hlmFieldLabel [for]="passwordInputId">{{
-                t('common.reauthenticate.passwordLabel')
-              }}</label>
-              <input
-                hlmInput
-                type="password"
-                autocomplete="current-password"
-                [id]="passwordInputId"
-                [formField]="reauthForm.password"
-                (input)="onPasswordInput()"
-              />
-              <!-- 服务端拒绝的原因（口令不对、已锁定等）原样显示，其余按校验类型取词条 -->
-              @for (error of reauthForm.password().errors(); track error.kind) {
-                <hlm-field-error [validator]="error.kind">{{
-                  error.message ?? t('validation.' + error.kind, error)
-                }}</hlm-field-error>
-              }
-            </div>
-          }
-          @case ('code') {
-            <div hlmField>
-              <label hlmFieldLabel [for]="codeInputId">{{
-                t('common.reauthenticate.codeLabel')
-              }}</label>
-              <hlm-field-description [id]="codeDescriptionId">{{
-                t('common.reauthenticate.codeHint')
-              }}</hlm-field-description>
-              <app-otp-code-input
-                [inputId]="codeInputId"
-                [autofocus]="true"
-                [invalid]="!!error()"
-                [describedBy]="codeDescribedBy()"
-                [value]="code()"
-                (valueChange)="onCodeChange($event)"
-                (completed)="submitCode()"
-              />
-              @if (error(); as message) {
-                <hlm-field-error forceShow [id]="codeErrorId">{{ message }}</hlm-field-error>
-              }
-              @if (showCodeReuseHint()) {
-                <hlm-field-description
-                  data-testid="reauthenticate-code-reuse-hint"
-                  [id]="codeReuseHintId"
-                  >{{ t('common.twoFactorCodeReuseHint') }}</hlm-field-description
-                >
-              }
-            </div>
-          }
-          @case ('passkey') {
-            <div class="flex flex-col gap-2" data-testid="reauthenticate-passkey-method">
-              <p class="text-muted-foreground text-sm">
-                {{ t('common.reauthenticate.passkeyHint') }}
-              </p>
-              @if (error(); as message) {
-                <hlm-field-error forceShow [id]="passkeyErrorId">{{ message }}</hlm-field-error>
-              } @else if (passkeyFailure() === 'cancelled') {
-                <!-- 本人取消不是错误：中性说明，再点一次即可 -->
-                <p
-                  class="text-muted-foreground text-sm"
-                  role="status"
-                  data-testid="reauthenticate-passkey-cancelled"
-                  [id]="passkeyErrorId"
-                >
-                  {{ t('common.reauthenticate.passkeyCancelled') }}
-                </p>
-              } @else if (passkeyFailure()) {
-                <hlm-field-error forceShow [id]="passkeyErrorId">{{
-                  t('common.reauthenticate.passkeyFailed')
-                }}</hlm-field-error>
-              }
-            </div>
-          }
-          @case ('signInAgain') {
-            <p class="text-muted-foreground text-sm" data-testid="reauthenticate-sign-in-again">
-              {{ t('common.reauthenticate.signInAgainHint') }}
-            </p>
-          }
-        }
-
-        @if (alternatives().length > 0 || (!hasPassword() && method() !== 'signInAgain')) {
-          <div class="flex flex-col items-start gap-1">
-            @for (alternative of alternatives(); track alternative) {
-              <button
-                hlmBtn
-                type="button"
-                variant="link"
-                size="sm"
-                class="px-0"
-                data-testid="reauthenticate-switch"
-                [attr.data-method]="alternative"
-                [disabled]="saving()"
-                (click)="selectMethod(alternative)"
-              >
-                @switch (alternative) {
-                  @case ('passkey') {
-                    {{ t('common.reauthenticate.usePasskeyInstead') }}
-                  }
-                  @case ('password') {
-                    {{ t('common.reauthenticate.usePassword') }}
-                  }
-                  @default {
-                    {{ t('common.reauthenticate.useCode') }}
+        <div data-dialog-body class="flex flex-col gap-4 py-1">
+          @switch (method()) {
+            @case ('password') {
+              <div hlmField>
+                <label hlmFieldLabel [for]="passwordInputId">{{
+                  t('common.reauthenticate.passwordLabel')
+                }}</label>
+                <input
+                  hlmInput
+                  type="password"
+                  autocomplete="current-password"
+                  [id]="passwordInputId"
+                  [formField]="reauthForm.password"
+                  (input)="onPasswordInput()"
+                />
+                <!-- 服务端拒绝的原因（口令不对、已锁定等）原样显示，其余按校验类型取词条 -->
+                @for (error of reauthForm.password().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{
+                    error.message ?? t('validation.' + error.kind, error)
+                  }}</hlm-field-error>
+                }
+              </div>
+            }
+            @case ('code') {
+              <div hlmField>
+                <label hlmFieldLabel [for]="codeInputId">{{
+                  t('common.reauthenticate.codeLabel')
+                }}</label>
+                @if (!error() && !(reauthForm.code().invalid() && reauthForm.code().touched())) {
+                  <hlm-field-description [id]="codeDescriptionId">{{
+                    t('common.reauthenticate.codeHint')
+                  }}</hlm-field-description>
+                }
+                <app-otp-code-input
+                  [inputId]="codeInputId"
+                  [autofocus]="true"
+                  [describedBy]="codeDescribedBy()"
+                  [formField]="reauthForm.code"
+                  (valueChange)="onCodeChange($event)"
+                  (completed)="submitCode()"
+                />
+                @if (!error()) {
+                  @for (error of reauthForm.code().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('validation.' + error.kind, error)
+                    }}</hlm-field-error>
                   }
                 }
-              </button>
+                @if (error(); as message) {
+                  <hlm-field-error forceShow [id]="codeErrorId">{{ message }}</hlm-field-error>
+                }
+                @if (showCodeReuseHint()) {
+                  <hlm-field-description
+                    data-testid="reauthenticate-code-reuse-hint"
+                    [id]="codeReuseHintId"
+                    >{{ t('common.twoFactorCodeReuseHint') }}</hlm-field-description
+                  >
+                }
+              </div>
             }
-            @if (!hasPassword() && method() !== 'signInAgain') {
-              <!-- 没有口令又用不了手上的方式：重新登录（登录第二步可用恢复码）后再回来 -->
-              <button
-                hlmBtn
-                type="button"
-                variant="link"
-                size="sm"
-                class="px-0"
-                data-testid="reauthenticate-sign-in-again-link"
-                [disabled]="saving()"
-                (click)="signInAgain.emit()"
-              >
-                {{
-                  method() === 'passkey'
-                    ? t('common.reauthenticate.cannotUsePasskey')
-                    : t('common.reauthenticate.cannotUseAuthenticator')
-                }}
-              </button>
+            @case ('passkey') {
+              <div class="flex flex-col gap-2" data-testid="reauthenticate-passkey-method">
+                <p class="text-muted-foreground text-sm">
+                  {{ t('common.reauthenticate.passkeyHint') }}
+                </p>
+                @if (error(); as message) {
+                  <hlm-field-error forceShow [id]="passkeyErrorId">{{ message }}</hlm-field-error>
+                } @else if (passkeyFailure() === 'cancelled') {
+                  <!-- 本人取消不是错误：中性说明，再点一次即可 -->
+                  <p
+                    class="text-muted-foreground text-sm"
+                    role="status"
+                    data-testid="reauthenticate-passkey-cancelled"
+                    [id]="passkeyErrorId"
+                  >
+                    {{ t('common.reauthenticate.passkeyCancelled') }}
+                  </p>
+                } @else if (passkeyFailure()) {
+                  <hlm-field-error forceShow [id]="passkeyErrorId">{{
+                    t('common.reauthenticate.passkeyFailed')
+                  }}</hlm-field-error>
+                }
+              </div>
             }
-          </div>
-        }
+            @case ('signInAgain') {
+              <p class="text-muted-foreground text-sm" data-testid="reauthenticate-sign-in-again">
+                {{ t('common.reauthenticate.signInAgainHint') }}
+              </p>
+            }
+          }
 
+          @if (alternatives().length > 0 || (!hasPassword() && method() !== 'signInAgain')) {
+            <div class="flex flex-col items-start gap-1">
+              @for (alternative of alternatives(); track alternative) {
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  class="px-0"
+                  data-testid="reauthenticate-switch"
+                  [attr.data-method]="alternative"
+                  [disabled]="saving()"
+                  (click)="selectMethod(alternative)"
+                >
+                  @switch (alternative) {
+                    @case ('passkey') {
+                      {{ t('common.reauthenticate.usePasskeyInstead') }}
+                    }
+                    @case ('password') {
+                      {{ t('common.reauthenticate.usePassword') }}
+                    }
+                    @default {
+                      {{ t('common.reauthenticate.useCode') }}
+                    }
+                  }
+                </button>
+              }
+              @if (!hasPassword() && method() !== 'signInAgain') {
+                <!-- 没有口令又用不了手上的方式：重新登录（登录第二步可用恢复码）后再回来 -->
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  class="px-0"
+                  data-testid="reauthenticate-sign-in-again-link"
+                  [disabled]="saving()"
+                  (click)="signInAgain.emit()"
+                >
+                  {{
+                    method() === 'passkey'
+                      ? t('common.reauthenticate.cannotUsePasskey')
+                      : t('common.reauthenticate.cannotUseAuthenticator')
+                  }}
+                </button>
+              }
+            </div>
+          }
+        </div>
         <hlm-dialog-footer>
           <button
+            [disabled]="closeGuard.busy()"
             hlmBtn
             type="button"
             variant="ghost"
             data-testid="reauthenticate-cancel"
-            (click)="hide()"
+            (click)="closeGuard.requestClose()"
           >
             {{ t('common.cancel') }}
           </button>
@@ -191,12 +204,7 @@
               {{ t('common.reauthenticate.usePasskey') }}
             </button>
           } @else {
-            <button
-              hlmBtn
-              type="submit"
-              data-testid="reauthenticate-submit"
-              [disabled]="saving() || (method() === 'code' && !codeValid())"
-            >
+            <button hlmBtn type="submit" data-testid="reauthenticate-submit" [disabled]="saving()">
               @if (saving()) {
                 <hlm-spinner class="text-base" data-icon="inline-start" />
               }
@@ -205,6 +213,12 @@
           }
         </hlm-dialog-footer>
       </form>
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="false"
+        [busy]="saving()"
+        (dismissed)="visible.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>
