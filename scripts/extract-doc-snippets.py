@@ -154,16 +154,16 @@ public interface IJobRunStore
         global::Leistd.BackgroundJobs.Recurring.RecurringJobRunResult result, CancellationToken cancellationToken);
 }
 
-public class LeadService
+public class InvoiceService
 {
-    public Task RecycleStaleAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ProcessPendingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public Task ArchiveClosedAsync(TimeSpan closedFor, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ArchiveSettledAsync(TimeSpan settledFor, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
-public class LeadOptions
+public class InvoiceOptions
 {
-    public TimeOnly RecycleAt { get; set; }
+    public TimeOnly ProcessAt { get; set; }
 
     public bool ArchiveEnabled { get; set; }
 

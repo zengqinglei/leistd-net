@@ -516,6 +516,8 @@ def prove_pr_documentation(planner, repo, base, out, run):
             merge(document); event(document, before=source_head)
             document_plan = planner.create_plan('core', base, 'pull_request', '')
             assert document_plan['PrDocumentation']['Verified'] and document_plan['Jobs'][job], document_plan['Reason']
+            if job == 'template-generation':
+                generated_plan = clone(document_plan)
         # A successful inherited increment preserves its original source when the next docs commit lands.
         second = commit(head, 'docs/increment.md', 'Second increment\n')
         second_merge = merge(second); event(second, before=head)
@@ -546,8 +548,8 @@ def prove_pr_documentation(planner, repo, base, out, run):
     states = {name: dict(result='skipped', outputs={}) for name in workflow['jobs']['template-matrix']['needs']}
     states['quality-plan'] = dict(result='success', outputs=dict(validation_plan=json.dumps(second_plan)))
     states['docs-sync']['result'] = states['docs-sync-windows']['result'] = 'success'
-    def aggregate(label, value, success=True):
-        with mock.patch.dict(os.environ, dict(env, NEEDS_JSON=json.dumps(value), CANDIDATE_SHA=second_merge,
+    def aggregate(label, value, success=True, candidate=second_merge):
+        with mock.patch.dict(os.environ, dict(env, NEEDS_JSON=json.dumps(value), CANDIDATE_SHA=candidate,
                                              PLAN_SCOPE='core', GITHUB_OUTPUT=str(output))):
             run(label, ['pwsh', '-NoProfile', '-File', str(script)], repo, success)
     aggregate('pr-documentation-summary-pass', states)
@@ -556,9 +558,26 @@ def prove_pr_documentation(planner, repo, base, out, run):
         changed['PrDocumentation']['Sources'][0][field] = value
         invalid['quality-plan']['outputs']['validation_plan'] = json.dumps(changed)
         aggregate('pr-documentation-summary-reject-' + field, invalid, False)
+    invalid = clone(states); changed = clone(second_plan)
+    changed['PullRequest']['Number'] = 18
+    invalid['quality-plan']['outputs']['validation_plan'] = json.dumps(changed)
+    aggregate('pr-documentation-summary-wrong-pr', invalid, False)
     for job in ('docs-sync', 'docs-sync-windows', 'test'):
         invalid = clone(states); invalid[job]['result'] = 'skipped' if job.startswith('docs-sync') else 'success'
         aggregate('pr-documentation-summary-job-' + job, invalid, False)
+    # Keep the mutated shape internally consistent, so only recomputing actual doc responsibilities catches it.
+    git('checkout', '--detach', '-q', generated_plan['CandidateSha'])
+    event(generated_plan['PullRequest']['HeadSha'], before=source_head)
+    generated_states = clone(states)
+    generated_states['quality-plan']['outputs']['validation_plan'] = json.dumps(generated_plan)
+    generated_states['template-generation']['result'] = 'success'
+    aggregate('pr-documentation-generated-summary-pass', generated_states, candidate=generated_plan['CandidateSha'])
+    altered = clone(generated_plan)
+    altered['Jobs']['template-generation'] = altered['GeneratedDocumentation'] = False
+    altered['DocsOnly'] = True
+    generated_states['quality-plan']['outputs']['validation_plan'] = json.dumps(altered)
+    generated_states['template-generation']['result'] = 'skipped'
+    aggregate('pr-documentation-generated-responsibility-tamper', generated_states, False, generated_plan['CandidateSha'])
     (out / 'pr-documentation-fixtures.json').write_text(json.dumps(records, indent=2))
     git('checkout', '--detach', '-q', base)
     print(f'PASS PR documentation increments: same base, generated/package scope, two-edge chain, {len(records)} fallbacks and real aggregation', flush=True)

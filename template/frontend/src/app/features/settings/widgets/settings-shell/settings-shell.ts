@@ -6,6 +6,7 @@ import { lucideChevronDown } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
+import { injectHlmA11yLabels } from '@spartan-ng/helm/utils';
 import { filter, map } from 'rxjs';
 
 import { InfoHint } from '../../../../shared/components/info-hint/info-hint';
@@ -41,6 +42,7 @@ export interface SettingsPanelLink {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SettingsShell {
+  protected readonly a11y = injectHlmA11yLabels();
   private readonly router = inject(Router);
 
   readonly heading = input.required<string>();

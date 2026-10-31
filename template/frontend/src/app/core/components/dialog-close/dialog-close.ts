@@ -53,6 +53,8 @@ export class DialogClose {
       return;
     if (this.busy() || this.confirming) return;
     event?.preventDefault();
+    // 原 Esc 不能再到全局浮层分派器，否则它会关闭刚打开的放弃确认框。
+    event?.stopPropagation();
     if (!this.dirty()) {
       action();
       return;

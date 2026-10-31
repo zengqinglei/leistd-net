@@ -42,13 +42,13 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 ## 使用
 
 ```csharp
-public sealed class LeadRecycleJob(LeadService leads) : IRecurringJob
+public sealed class InvoiceProcessJob(InvoiceService invoices) : IRecurringJob
 {
     public Task ExecuteAsync(RecurringJobContext context, CancellationToken cancellationToken)
-        => leads.RecycleStaleAsync(cancellationToken);
+        => invoices.ProcessPendingAsync(cancellationToken);
 }
 
-builder.Services.AddRecurringJob<LeadRecycleJob>(
+builder.Services.AddRecurringJob<InvoiceProcessJob>(
     "billing.invoice-process",
     RecurringJobSchedule.DailyAt(new TimeOnly(18, 0)),
     RecurringJobScope.Cluster);
@@ -59,9 +59,9 @@ builder.Services.AddRecurringJob<LeadRecycleJob>(
 ```csharp
 using Microsoft.Extensions.Options;
 
-builder.Services.AddRecurringJob<LeadRecycleJob>(
+builder.Services.AddRecurringJob<InvoiceProcessJob>(
     "billing.invoice-process",
-    sp => RecurringJobSchedule.DailyAt(sp.GetRequiredService<IOptions<LeadOptions>>().Value.RecycleAt),
+    sp => RecurringJobSchedule.DailyAt(sp.GetRequiredService<IOptions<InvoiceOptions>>().Value.ProcessAt),
     RecurringJobScope.Cluster);
 ```
 
@@ -70,17 +70,17 @@ builder.Services.AddRecurringJob<LeadRecycleJob>(
 ```csharp
 using Microsoft.Extensions.Options;
 
-builder.Services.AddRecurringJob<LeadArchiveJob>(
+builder.Services.AddRecurringJob<InvoiceArchiveJob>(
     "billing.invoice-archive",
     RecurringJobSchedule.DailyAt(new TimeOnly(19, 0)),
     RecurringJobScope.Cluster,
-    isEnabled: sp => sp.GetRequiredService<IOptionsSnapshot<LeadOptions>>().Value.ArchiveEnabled);
+    isEnabled: sp => sp.GetRequiredService<IOptionsSnapshot<InvoiceOptions>>().Value.ArchiveEnabled);
 
 // 任务里同样用 IOptionsSnapshot 读其余参数，不再判断开关
-public sealed class LeadArchiveJob(IOptionsSnapshot<LeadOptions> options, LeadService leads) : IRecurringJob
+public sealed class InvoiceArchiveJob(IOptionsSnapshot<InvoiceOptions> options, InvoiceService invoices) : IRecurringJob
 {
     public Task ExecuteAsync(RecurringJobContext context, CancellationToken cancellationToken)
-        => leads.ArchiveClosedAsync(options.Value.ArchiveAfter, cancellationToken);
+        => invoices.ArchiveSettledAsync(options.Value.ArchiveAfter, cancellationToken);
 }
 ```
 

@@ -1,10 +1,8 @@
 import {
-  computed,
   afterRenderEffect,
+  computed,
   ChangeDetectionStrategy,
   Component,
-  effect,
-  ElementRef,
   inject,
   input,
   model,
@@ -14,8 +12,12 @@ import {
 } from '@angular/core';
 import { FormValueControl } from '@angular/forms/signals';
 import { BrnFieldA11yService, BrnFieldControl, provideBrnLabelable } from '@spartan-ng/brain/field';
-import { BrnInputOtp, BrnInputOtpImports } from '@spartan-ng/brain/input-otp';
-import { HlmInputOtpImports } from '@spartan-ng/helm/input-otp';
+import { BrnInputOtp, BrnInputOtpInput } from '@spartan-ng/brain/input-otp';
+import {
+  HlmInputOtpGroup,
+  HlmInputOtpSeparator,
+  HlmInputOtpSlot,
+} from '@spartan-ng/helm/input-otp';
 
 const CODE_LENGTH = 6;
 
@@ -24,30 +26,39 @@ const CODE_LENGTH = 6;
  * 粘贴与键入只保留数字。标签须以 `for` 关联内部输入框（`inputId`），宿主上的 aria-label 读不到；
  * 页面已有可见 `<label for>` 时不传 `label`。
  *
- * 官方组件不把 `aria-invalid`、`aria-describedby` 转发到内部输入框，由 {@link invalid} 与
- * {@link describedBy} 补上：验证码被拒时读屏能读到"无效"和就地的错误说明。
+ * 原生输入框通过官方指令接入，在模板上关联错误与说明；拒绝验证码时，读屏能读到无效状态和错误。
  */
 @Component({
   selector: 'app-otp-code-input',
   hostDirectives: [BrnFieldControl],
   providers: [provideBrnLabelable(OtpCodeInput)],
   host: { '(focusout)': 'touch.emit()' },
-  imports: [...BrnInputOtpImports, ...HlmInputOtpImports],
+  imports: [BrnInputOtp, BrnInputOtpInput, HlmInputOtpGroup, HlmInputOtpSeparator, HlmInputOtpSlot],
   template: `
     @if (label(); as text) {
       <label class="sr-only" [for]="inputId()">{{ text }}</label>
     }
     <brn-input-otp
-      hlmInputOtp
+      class="flex items-center gap-2 has-disabled:opacity-50"
       [length]="length"
       [inputId]="inputId()"
       [value]="value()"
       [autofocus]="autofocus()"
       [disabled]="disabled()"
-      [transformPaste]="digitsOnly"
+      slotPattern="[0-9]"
       (valueChange)="onValueChange($event)"
-      (completed)="completed.emit(digitsOnly($event))"
+      (completed)="completed.emit($event)"
     >
+      <input
+        brnInputOtpInput
+        class="disabled:cursor-not-allowed"
+        autocomplete="one-time-code"
+        inputMode="numeric"
+        [spellcheck]="false"
+        autocapitalize="off"
+        [attr.aria-invalid]="displayInvalid() ? 'true' : null"
+        [attr.aria-describedby]="descriptionIds()"
+      />
       <div hlmInputOtpGroup>
         <hlm-input-otp-slot index="0" [forceInvalid]="displayInvalid()" />
         <hlm-input-otp-slot index="1" [forceInvalid]="displayInvalid()" />
@@ -70,7 +81,6 @@ export class OtpCodeInput implements FormValueControl<string> {
   );
   private readonly fieldA11y = inject(BrnFieldA11yService, { optional: true });
   readonly touch = output<void>();
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** 内部输入框的 id，供 `<label for>` 关联。 */
   readonly inputId = input.required<string>();
@@ -92,60 +102,34 @@ export class OtpCodeInput implements FormValueControl<string> {
   private readonly otp = viewChild(BrnInputOtp);
 
   constructor() {
-    // 调用方清空（验证码被拒）可能与本次输入落在同一轮变更检测里：模板绑定看不出值变过，
-    // 官方组件仍留着旧码，下一次输满也不再触发 completed。值不一致时直接同步过去。
-    effect(() => {
+    // 同轮输满并被拒时，父值清回空串，模板绑定可能仍记着空串，Brain 会保留旧码。
+    // 渲染后再同步公开 value：新版 length 为必填输入，普通 effect 会在它初始化前读取。
+    afterRenderEffect(() => {
       const value = this.value();
       untracked(() => {
         const otp = this.otp();
-        if (otp && (otp.value() ?? '') !== value) {
-          otp.value.set(value);
-        }
+        if (otp && (otp.value() ?? '') !== value) otp.value.set(value);
       });
     });
-    // 内部输入框在官方组件的模板里，渲染之后才能写它的属性
-    afterRenderEffect(() => {
-      const element = this.innerInput();
-      if (!element) {
-        return;
-      }
-      setOptionalAttribute(element, 'aria-invalid', this.displayInvalid() ? 'true' : null);
-      setOptionalAttribute(
-        element,
-        'aria-describedby',
-        [
-          ...new Set(
-            [this.describedBy(), this.fieldA11y?.describedBy()]
-              .flatMap((ids) => (ids ?? '').split(/\s+/))
-              .filter(Boolean),
-          ),
-        ].join(' ') || null,
-      );
-      element.spellcheck = false;
-      element.autocapitalize = 'off';
-    });
   }
+
+  protected readonly descriptionIds = computed(
+    () =>
+      [
+        ...new Set(
+          [this.describedBy(), this.fieldA11y?.describedBy()]
+            .flatMap((ids) => (ids ?? '').split(/\s+/))
+            .filter(Boolean),
+        ),
+      ].join(' ') || null,
+  );
 
   /** 把焦点放进内部输入框（切换方式或输错清空后请本人重输时用）。 */
   focus(): void {
-    this.innerInput()?.focus();
+    this.otp()?.focus();
   }
 
-  protected readonly digitsOnly = (text: string): string => text.replace(/\D/g, '');
-
-  protected onValueChange(raw: string): void {
-    this.value.set(this.digitsOnly(raw));
-  }
-
-  private innerInput(): HTMLInputElement | null {
-    return this.host.nativeElement.querySelector('input');
-  }
-}
-
-function setOptionalAttribute(element: HTMLElement, name: string, value: string | null): void {
-  if (value) {
-    element.setAttribute(name, value);
-  } else {
-    element.removeAttribute(name);
+  protected onValueChange(value: string): void {
+    this.value.set(value);
   }
 }

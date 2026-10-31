@@ -94,7 +94,7 @@ function Test-PublicContent([string]$Text, [string]$RelativePath = '') {
     }
     # 只排除完整的无关单词；受限词本身按子串查找，中文相邻与嵌入类型名都不漏。
     foreach ($word in $publicTerms.AllowedWords) {
-        $Text = $Text -replace ('(?<![a-zA-Z])' + [regex]::Escape($word) + '(?![a-zA-Z])'), ''
+        $Text = $Text -creplace ('(?<![a-zA-Z])' + [regex]::Escape($word) + '(?![a-zA-Z])'), ''
     }
     foreach ($term in $allPublicTerms) {
         if ($Text -match [regex]::Escape($term)) { return $true }
@@ -301,6 +301,7 @@ if ($SelfTest) {
     foreach ($word in $publicTerms.AllowedWords) {
         if (Test-PublicContent $word) { $failures.Add('公开内容规则误报无关单词') }
     }
+    if (-not (Test-PublicContent ($allPublicTerms[-1].Substring(0,1).ToUpperInvariant() + $allPublicTerms[-1].Substring(1) + 'X'))) { $failures.Add('公开内容规则漏报类型名前缀') }
     if (-not (Test-PublicContent ('"name": "' + $allPublicTerms[0] + '"') 'template/frontend/package-lock.json')) {
         $failures.Add('锁文件非哈希内容被错误豁免')
     }

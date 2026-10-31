@@ -257,6 +257,35 @@ def actions_quality_plan(artifact_id: int) -> dict:
         return json.loads(bundle.read('quality-plan.json'))
 
 
+def quality_attempt(run: dict, source: str, branch: str | None = None) -> tuple[int, int, dict, list, dict]:
+    """Read the same immutable attempt and owned plan artifact for either quality reuse path."""
+    run_id, attempt = run['id'], run['run_attempt']
+    if type(run_id) is not int or run_id <= 0 or type(attempt) is not int or attempt <= 0:
+        raise ValueError('Invalid source run identity')
+    jobs = complete_actions_list(f'runs/{run_id}/attempts/{attempt}/jobs?per_page=100', 'jobs')
+    artifacts = complete_actions_list(f'runs/{run_id}/artifacts?per_page=100', 'artifacts')
+    matches = [item for item in artifacts if item['name'] == f'quality-plan-{run_id}-{attempt}']
+    if len(matches) != 1 or matches[0]['expired'] is not False:
+        raise ValueError('Source plan artifact missing, expired or duplicated')
+    artifact = matches[0]
+    owner = artifact['workflow_run']
+    if (owner['id'] != run_id or owner['head_sha'] != source or
+            (branch is not None and owner['head_branch'] != branch) or
+            owner['repository_id'] != run['repository']['id'] or
+            owner['head_repository_id'] != run['repository']['id'] or
+            type(artifact['id']) is not int or artifact['id'] <= 0):
+        raise ValueError('Source plan artifact ownership differs')
+    # The immutable name binds the attempt; each caller also requires its uploading job to pass.
+    return run_id, attempt, artifact, jobs, actions_quality_plan(artifact['id'])
+
+
+def verify_quality_attempt(run_id: int, attempt: int, trust) -> None:
+    current = actions_get(f'runs/{run_id}')
+    trust(current)
+    if current['id'] != run_id or current['run_attempt'] != attempt:
+        raise ValueError('Source attempt changed during verification')
+
+
 def full_quality_source(plan: dict, sha: str) -> None:
     """Compare actual responsibilities with the catalog, not a source plan's claim to be full."""
     scenarios = coverage.load_scenarios()
@@ -296,31 +325,13 @@ def verified_release_quality(head: str) -> tuple[dict, str]:
         if (run['repository']['full_name'].lower() != repository or
                 run['head_repository']['full_name'].lower() != repository):
             raise ValueError('Source repository differs')
-        run_id, attempt = run['id'], run['run_attempt']
-        if type(run_id) is not int or run_id <= 0 or type(attempt) is not int or attempt <= 0:
-            raise ValueError('Invalid source run identity')
-        jobs = complete_actions_list(f'runs/{run_id}/attempts/{attempt}/jobs?per_page=100', 'jobs')
-        artifacts = complete_actions_list(f'runs/{run_id}/artifacts?per_page=100', 'artifacts')
-        matches = [item for item in artifacts if item['name'] == f'quality-plan-{run_id}-{attempt}']
-        if len(matches) != 1 or matches[0]['expired'] is not False:
-            raise ValueError('Source plan artifact missing, expired or duplicated')
-        artifact = matches[0]
-        owner = artifact['workflow_run']
-        if (owner['id'] != run_id or owner['head_sha'] != source or owner['head_branch'] != 'develop' or
-                owner['repository_id'] != run['repository']['id'] or owner['head_repository_id'] != run['repository']['id'] or
-                type(artifact['id']) is not int or artifact['id'] <= 0):
-            raise ValueError('Source plan artifact ownership differs')
-        # The immutable artifact name binds the attempt; its uploading job must succeed in that exact attempt.
-        plan = actions_quality_plan(artifact['id'])
+        run_id, attempt, artifact, jobs, plan = quality_attempt(run, source, 'develop')
         full_quality_source(plan, source)
         for name in quality_job_names(plan):
             found = [job for job in jobs if job['name'] == name]
             if len(found) != 1 or found[0]['status'] != 'completed' or found[0]['conclusion'] != 'success':
                 raise ValueError('Source quality job missing or unsuccessful: ' + name)
-        current = actions_get(f'runs/{run_id}')
-        trusted_quality_run(current, source, 'develop')
-        if current['id'] != run_id or current['run_attempt'] != attempt:
-            raise ValueError('Source attempt changed during verification')
+        verify_quality_attempt(run_id, attempt, lambda current: trusted_quality_run(current, source, 'develop'))
         return dict(Verified=True, RunId=run_id, Attempt=attempt, HeadSha=source, Tree=tree,
                     PlanArtifactId=artifact['id']), f'Reused full code quality from run {run_id}, attempt {attempt}'
     except (ValueError, KeyError, TypeError, AttributeError, OSError, HTTPException, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
@@ -753,6 +764,14 @@ def select_scenarios(requirements: list[tuple[str, set[str]]], initial: set[str]
     return [name for name in order if name in selected]
 
 
+def documentation_responsibilities(classes: dict) -> dict:
+    generated, packaged = bool(classes['generated-doc']), bool(classes['package-doc'])
+    jobs = {name: False for name in JOB_NAMES}
+    jobs.update({'frontend-gates': 'template/docs/standards/frontend-spartan.md' in classes['generated-doc'],
+                 'framework-pack': packaged, 'package-consumption': packaged, 'template-generation': generated})
+    return dict(Jobs=jobs, GeneratedDocumentation=generated, PackageDocumentation=packaged)
+
+
 def complete_plan(tier: str, base: str, event: str, candidate_input: str,
                 container_smoke: bool = False, release_channel: str = '', release_base_tag: str = '',
                 release_base_sha: str = '') -> dict:
@@ -886,8 +905,9 @@ def complete_plan(tier: str, base: str, event: str, candidate_input: str,
             return finish(dict(plan, Reason='Full: shared or unknown inputs: ' + ', '.join(classes['unknown'])))
         template_code = classes['frontend'] + classes['backend']
         code = template_code + classes['framework']
-        generated_docs, package_docs = bool(classes['generated-doc']), bool(classes['package-doc'])
-        gate_document = 'template/docs/standards/frontend-spartan.md' in paths
+        documents = documentation_responsibilities(classes)
+        generated_docs, package_docs = documents['GeneratedDocumentation'], documents['PackageDocumentation']
+        gate_document = documents['Jobs']['frontend-gates']
         narrowed = 'core' if direct_pr else 'full'
         if generated_docs or template_code:
             old = json.loads(git('show', f'{base}:{CONFIG_PATH}'))
@@ -901,12 +921,8 @@ def complete_plan(tier: str, base: str, event: str, candidate_input: str,
                 source_producers(old, path, scenarios)
                 source_producers(current, path, scenarios)
         if not code:
-            jobs = {name: False for name in JOB_NAMES}
-            jobs.update({'frontend-gates': gate_document, 'framework-pack': package_docs, 'package-consumption': package_docs,
-                         'template-generation': generated_docs})
-            return finish(dict(plan, Tier=narrowed, Mode='documentation', Scenarios=[], FrameworkTests=False,
-                               ConsumerProjects=[], Jobs=jobs, GeneratedDocumentation=generated_docs,
-                               PackageDocumentation=package_docs, Reason='Documentation responsibilities only'))
+            return finish(dict(plan, **documents, Tier=narrowed, Mode='documentation', Scenarios=[],
+                               FrameworkTests=False, ConsumerProjects=[], Reason='Documentation responsibilities only'))
         if not direct_pr:
             return finish(plan)
         front = bool(classes['frontend']) and not classes['backend'] and not classes['framework']
@@ -1036,8 +1052,8 @@ def validate_pr_documentation(plan: dict) -> None:
 
 
 def pr_documentation_scope(plan: dict, paths: list[str], classes: dict) -> dict:
-    generated, packaged = bool(classes['generated-doc']), bool(classes['package-doc'])
-    if generated:
+    documents = documentation_responsibilities(classes)
+    if documents['GeneratedDocumentation']:
         source = plan['PrDocumentation']['Sources'][0]['CandidateSha']
         old = json.loads(git('show', f'{source}:{CONFIG_PATH}'))
         current = json.loads(git('show', f"{plan['CandidateSha']}:{CONFIG_PATH}"))
@@ -1046,14 +1062,10 @@ def pr_documentation_scope(plan: dict, paths: list[str], classes: dict) -> dict:
         for path in classes['generated-doc']:
             source_producers(old, path, coverage.load_scenarios())
             source_producers(current, path, coverage.load_scenarios())
-    jobs = {key: False for key in JOB_NAMES}
-    jobs.update({'frontend-gates': 'template/docs/standards/frontend-spartan.md' in paths,
-                 'framework-pack': packaged, 'package-consumption': packaged, 'template-generation': generated})
-    return dict(plan, Mode='documentation', Tier='core', Scenarios=[], ScenarioSelection='none',
+    return dict(plan, **documents, Mode='documentation', Tier='core', Scenarios=[], ScenarioSelection='none',
                 FrameworkTests=False, FrameworkTestProjects=[], FrameworkTestSelection='none',
                 FrameworkTestReason='Previously validated PR; current documentation increment only',
-                ConsumerProjects=[], Jobs=jobs, GeneratedDocumentation=generated, PackageDocumentation=packaged,
-                ContainerSmoke=False, Slices=[], DocsOnly=not any(jobs.values()),
+                ConsumerProjects=[], ContainerSmoke=False, Slices=[], DocsOnly=not any(documents['Jobs'].values()),
                 DependencyAudit=dependency_audit('', 'pull_request', paths))
 
 
@@ -1084,26 +1096,11 @@ def verified_pr_documentation(plan: dict, payload: dict) -> dict:
             raise ValueError('Preceding PR quality run is not trusted and successful')
 
     trusted_run(run)
-    run_id, attempt = run['id'], run['run_attempt']
-    if type(run_id) is not int or run_id <= 0 or type(attempt) is not int or attempt <= 0:
-        raise ValueError('Invalid PR run identity')
-    jobs = complete_actions_list(f'runs/{run_id}/attempts/{attempt}/jobs?per_page=100', 'jobs')
+    run_id, attempt, artifact, jobs, source = quality_attempt(run, before)
     for name in ('计算候选验证责任', '模板全场景矩阵'):
         found = [job for job in jobs if job['name'] == name]
         if len(found) != 1 or found[0]['status'] != 'completed' or found[0]['conclusion'] != 'success':
             raise ValueError('Preceding PR aggregate or plan job not successful')
-    artifacts = complete_actions_list(f'runs/{run_id}/artifacts?per_page=100', 'artifacts')
-    artifacts = [item for item in artifacts if item['name'] == f'quality-plan-{run_id}-{attempt}']
-    if len(artifacts) != 1 or artifacts[0]['expired'] is not False:
-        raise ValueError('Preceding PR plan missing, expired or duplicated')
-    artifact = artifacts[0]
-    owner = artifact['workflow_run']
-    if (owner['id'] != run_id or owner['head_sha'] != before or
-            owner['repository_id'] != run['repository']['id'] or
-            owner['head_repository_id'] != run['repository']['id'] or
-            type(artifact['id']) is not int or artifact['id'] <= 0):
-        raise ValueError('Preceding PR artifact ownership differs')
-    source = actions_quality_plan(artifact['id'])
     previous = source['PullRequest']
     if (source['Version'] != 4 or source['QualityExecution'] != 'current' or source['QualityValidated'] is not False or
             source['Event'] != 'pull_request' or source['ReleaseChannel'] or source['Tier'] != 'core' or
@@ -1135,10 +1132,7 @@ def verified_pr_documentation(plan: dict, payload: dict) -> dict:
     result = pr_documentation_scope(result, paths, classes)
     result['Reason'] = f'PR documentation increment; previous responsibilities from run {run_id}, attempt {attempt}'
     validate_pr_documentation(result)
-    current = actions_get(f'runs/{run_id}')
-    trusted_run(current)
-    if current['id'] != run_id or current['run_attempt'] != attempt:
-        raise ValueError('Preceding PR attempt changed during verification')
+    verify_quality_attempt(run_id, attempt, trusted_run)
     return result
 
 

@@ -250,9 +250,9 @@ PostgreSQL 与 Redis 按全局约定先探测 `windows` 上下文、回退 `orbs
    - Started：插入 `Running` 记录。`Instance` 取宿主的进程实例标识：k8s 下用 Pod 名，同机多进程时用启动时生成的 GUID（见 §2"实例标识"）。`TraceId = Activity.Current?.TraceId`。
    - Completed：`Succeeded` → 成功；`Failed` → 记 `Exception.GetType().Name` 与 `(Exception as BusinessException)?.Code`；`Canceled` → Cancelled；`LockLost` → Cancelled，失败类型可写 `LockLost`，由业务决定是否单列。
    - 写库用自建作用域落宿主库，写入失败只记日志。原有的"切回宿主"守卫保留。
-3. identity 的 `IJobRunContext`：在 Started 里开启，在 Completed 里读取扇出统计，`TenantFanOutJobRunner` 不改。
+3. 下游项目的 `IJobRunContext`：在 Started 里开启，在 Completed 里读取扇出统计，`TenantFanOutJobRunner` 不改。
 4. 所有 `AddRecordedRecurringJob<T>` 改回 `AddRecurringJob<T>`；任务名不变，水位沿用。删除 `RecordedRecurringJob*`、`RecordedRecurringJobRegistration/Extensions`、`RecordedJobMarker`，以及包装里自建 Activity 的代码（周期任务的活动追踪包装）。
-5. 作业页：所有任务都有执行明细。接口的 `recorded` 字段删除或恒为 `true`；前端删除"框架任务，暂无执行明细"分支；下游项目Worker 心跳去掉 recorded 标记。附录 A 契约同步修改。
+5. 作业页：所有任务都有执行明细。接口的 `recorded` 字段删除或恒为 `true`；前端删除"框架任务，暂无执行明细"分支；下游项目 Worker 心跳去掉 recorded 标记。附录 A 契约同步修改。
 6. 测试：包装测试改写为观察者映射测试（四种结果 → JobRun 字段）。另加一条集成测试：框架组件任务（如 `settings.host-refresh`）到点后产生 `JobRun`。
 
 ### 不做的事

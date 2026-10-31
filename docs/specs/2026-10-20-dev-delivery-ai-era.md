@@ -11,7 +11,7 @@
 - **依据**：
   - 外部调研 `.tmp/devflow/research.md`，38 个一手来源；
   - 两份盘点 `.tmp/devflow/inventory-{framework,business}.md`；
-  -下游项目origin/main 的实际文档。
+  - 下游项目 origin/main 的实际文档。
 - **评审取舍原则**：
   - 终局，但不过度设计；
   - 不强制所有任务走同一个阶段状态机（`docs/architecture/design-principles.md` 第 22、60 行）；
@@ -53,7 +53,7 @@
 | F1 新组件、新能力 | 规划、下游需求 | 中或高 | developing-leistd-framework |
 | F2 框架缺陷修复 | 测试、下游反馈 | 低或中 | developing-leistd-framework |
 | F3 破坏性变更、依赖与运行时升级 | 规划、.NET 发版 | 高 | developing-leistd-framework |
-| F4 下游反馈处理 |下游项目| 按每一项分档 | maintaining-leistd-repository |
+| F4 下游反馈处理 | 下游项目 | 按每一项分档 | maintaining-leistd-repository |
 | F5 模板功能开发 | 规划、下游需求 | 中或高 | developing-leistd-template |
 | F6 模板缺陷修复 | 生成项目、下游反馈 | 低或中 | developing-leistd-template |
 | F7 模板向下游同步 | 模板发版 | 中 | maintaining（发布侧）/ 项目 Skill（消费侧） |
