@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -15,6 +17,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom, Observable } from 'rxjs';
 
@@ -37,6 +40,7 @@ import { RoleBriefDto } from '../../../../dtos/role.dto';
     HlmButton,
     HlmSpinner,
     ...HlmDialogImports,
+    ...HlmFieldImports,
     ...HlmCheckboxImports,
     //#if (IncludeLocalization)
     TranslocoDirective,
@@ -46,6 +50,7 @@ import { RoleBriefDto } from '../../../../dtos/role.dto';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BatchRolesDialog {
+  private readonly selectionRoot = viewChild.required<ElementRef<HTMLElement>>('selectionRoot');
   readonly open = model(false);
   readonly userCount = input(0);
   readonly rolesLoading = input(false);
@@ -53,14 +58,14 @@ export class BatchRolesDialog {
   readonly reloadRoles = output<void>();
   readonly availableRoles = input<RoleBriefDto[]>([]);
   readonly saveAction = input.required<(ids: string[]) => Observable<unknown>>();
-  private readonly submitModel = signal({});
+  private readonly submitModel = signal({ roleIds: [] as string[] });
   readonly selectionForm = form(this.submitModel);
   readonly saving = computed(() => this.selectionForm().submitting());
   private readonly submitForm = injectFormSubmission();
   async onSave(): Promise<void> {
     if (this.rolesLoading() || this.rolesError()) return;
     if (!this.selectedIds().length) return;
-    await this.submitForm(this.selectionForm, 'batch-roles-form', async () => {
+    await this.submitForm(this.selectionForm, this.selectionRoot().nativeElement, async () => {
       await firstValueFrom(this.saveAction()(this.selectedIds()));
     });
   }
@@ -68,35 +73,35 @@ export class BatchRolesDialog {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  private readonly selected = signal<ReadonlySet<string>>(new Set<string>());
-  readonly selectedIds = computed(() => [...this.selected()]);
+  readonly selectedIds = computed(() => this.submitModel().roleIds);
 
   constructor() {
     // 每次打开都从空白开始：上一批选过的角色不该悄悄带到下一批
     effect(() => {
       if (this.open()) {
-        this.selected.set(new Set<string>());
+        this.selectionForm().reset({ roleIds: [] });
       }
     });
   }
 
   isSelected(roleId: string): boolean {
-    return this.selected().has(roleId);
+    return this.selectedIds().includes(roleId);
   }
 
   toggle(roleId: string): void {
-    const next = new Set(this.selected());
+    const next = new Set(this.selectedIds());
     if (next.has(roleId)) {
       next.delete(roleId);
     } else {
       next.add(roleId);
     }
-    this.selected.set(next);
+    this.submitModel.set({ roleIds: [...next] });
   }
 }
 //#if (!IncludeLocalization)
 
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
   'common.retry': 'Retry',
   'users.batch.selectRolesHint': 'Select at least one role to add.',
   'users.batch.rolesTitle': 'Add roles to {{count}} users',

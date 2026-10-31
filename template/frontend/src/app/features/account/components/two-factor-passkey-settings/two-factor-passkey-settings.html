@@ -135,7 +135,7 @@
                     appImeGuard
                     novalidate
                     class="flex min-w-0 flex-1 flex-wrap items-start gap-2"
-                    id="passkey-rename-form"
+                    #renameRoot
                     data-testid="passkey-rename-form"
                     (submit)="$event.preventDefault(); saveRename(passkey)"
                     (keydown.escape)="cancelRename()"

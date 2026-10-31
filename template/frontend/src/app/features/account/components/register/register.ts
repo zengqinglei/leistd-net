@@ -1,4 +1,5 @@
 import {
+  ElementRef,
   computed,
   ChangeDetectionStrategy,
   Component,
@@ -97,6 +98,8 @@ import { AuthShell } from '../auth-shell/auth-shell';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Register implements OnInit {
+  private readonly registerFormRoot =
+    viewChild.required<ElementRef<HTMLElement>>('registerFormRoot');
   private readonly submitForm = injectFormSubmission();
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
@@ -287,7 +290,7 @@ export class Register implements OnInit {
     //#endif
     await this.submitForm(
       this.registerForm,
-      'registerForm-form',
+      this.registerFormRoot().nativeElement,
       async () => {
         const formValue = this.model();
         //#if (Email)
@@ -306,7 +309,7 @@ export class Register implements OnInit {
             //#if (IncludeLocalization)
             message: this.transloco.translate('account.register.challengeExpired'),
             //#else
-            message: 'Request a new email code before registering.',
+            message: this.t('account.register.challengeExpired'),
             //#endif
           };
         }
@@ -398,7 +401,6 @@ const ENGLISH: Record<string, string> = {
   'account.captcha.label': 'Captcha',
   'account.captcha.placeholder': 'Enter the captcha on the right',
   'account.register.emailCode': 'Email Verification Code',
-  'account.register.emailCodePlaceholder': 'Enter the 6-digit code',
   'account.register.resendCountdown': 'Resend in {{seconds}}s',
   'account.register.sendCode': 'Get Code',
   'account.register.password': 'Password',

@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -76,6 +78,7 @@ interface ConnectionEditorModel {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantDetailDialog {
+  private readonly connectionRoot = viewChild.required<ElementRef<HTMLElement>>('connectionRoot');
   readonly removingConnection = signal<string | null>(null);
 
   readonly open = model(false);
@@ -230,9 +233,10 @@ export class TenantDetailDialog {
       event.preventDefault();
     }
     this.editorModel.update((value) => ({ ...value, name: value.name.trim() }));
+    // 失败时留着编辑器不关：连接串是手敲进来的，不能让用户因一次失败重新输入。
     await this.submitForm(
       this.connectionForm,
-      'connection-editor-form',
+      this.connectionRoot().nativeElement,
       async () => {
         const tenant = this.tenant();
         if (!tenant || this.editorMode() === 'idle') {

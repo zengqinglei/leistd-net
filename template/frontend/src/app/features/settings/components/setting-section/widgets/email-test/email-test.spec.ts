@@ -11,6 +11,10 @@ import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.t
 //#endif
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { SettingService } from '../../../../../../core/settings/setting-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 
 import type { Mock } from 'vitest';
 
@@ -138,5 +142,25 @@ describe('EmailTest', () => {
     expect(toast.success).not.toHaveBeenCalled();
     expect(recipient().value).toBe('ops@example.test');
     await expect.poll(() => sendButton().disabled).toBe(false);
+  });
+
+  it('review R1 shows invalid recipient errors and focuses local and server rejection', async () => {
+    await typeRecipient('bad address');
+    await renderSubmission(fixture, () => submit());
+    expect(document.activeElement).toBe(recipient());
+    const error = (fixture.nativeElement as HTMLElement).querySelector(
+      'hlm-field-error',
+    ) as HTMLElement;
+    expect(error.hidden).toBe(false);
+    await typeRecipient(' good@example.com ');
+    sendTestEmail.mockReturnValue(throwError(() => rejectedField('To')));
+    await renderSubmission(fixture, () => submit());
+    expect(sendTestEmail).toHaveBeenCalledWith('good@example.com');
+    expect(document.activeElement).toBe(recipient());
+    const serverError = (fixture.nativeElement as HTMLElement).querySelector(
+      'hlm-field-error',
+    ) as HTMLElement;
+    expect(serverError.hidden).toBe(false);
+    expect(serverError.textContent).toContain('Server rejected this field');
   });
 });

@@ -1,6 +1,8 @@
 import {
   afterNextRender,
   Injector,
+  ElementRef,
+  viewChild,
   ChangeDetectionStrategy,
   Component,
   inject,
@@ -32,6 +34,7 @@ import { focusFirstInvalid } from '../../../../../../shared/utils/form-focus';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UriListEditor {
+  private readonly editor = viewChild.required<ElementRef<HTMLElement>>('editor');
   readonly inputId = input.required<string>();
   readonly label = input('');
   readonly hint = input('');
@@ -63,10 +66,9 @@ export class UriListEditor {
     }
     await submit(this.uriForm, {
       onInvalid: () =>
-        afterNextRender(
-          () => focusFirstInvalid(document.getElementById(`${this.inputId()}-editor`)),
-          { injector: this.injector },
-        ),
+        afterNextRender(() => focusFirstInvalid(this.editor().nativeElement), {
+          injector: this.injector,
+        }),
       action: async () => {
         this.add.emit(this.model().uri);
         this.uriForm().reset({ uri: '' });

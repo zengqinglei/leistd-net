@@ -83,7 +83,7 @@
       </div>
     } @else {
       <form
-        id="two-factor-challenge-form"
+        #verificationRoot
         class="flex flex-col gap-4"
         novalidate
         (submit)="$event.preventDefault(); submit()"
@@ -103,8 +103,15 @@
               [id]="inputIds.recoveryCode"
               [attr.aria-invalid]="error() ? 'true' : null"
               [formField]="verificationForm.value"
-              (input)="onInput($event)"
+              (input)="onValueChange($any($event.target).value)"
             />
+            @if (!error()) {
+              @for (error of verificationForm.value().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
+            }
             @if (error(); as message) {
               <hlm-field-error forceShow data-testid="two-factor-error" [id]="errorId">{{
                 message

@@ -1,5 +1,14 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import {
+  afterRenderEffect,
+  ElementRef,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService, translateObjectSignal } from '@jsverse/transloco';
 //#endif
@@ -221,6 +230,26 @@ export class SettingSection {
 
   /** 按行记录写入状态：用户会连续操作多个控件，整页一个状态无法把反馈落到对应行。 */
   private readonly rowState = signal<Record<string, RowState>>({});
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  constructor() {
+    afterRenderEffect(() => {
+      this.rowState();
+      this.settings();
+      this.scope();
+      this.group();
+      // switch/combobox 的可操作元素在 Helm 模板内；渲染后关联行反馈，不另建一套控件包装。
+      for (const row of this.host.nativeElement.querySelectorAll<HTMLElement>(
+        '[data-setting-name]',
+      )) {
+        const control = row.querySelector<HTMLElement>('input, [role="switch"], [role="combobox"]');
+        if (!control) continue;
+        if (row.dataset['settingInvalid'] === 'true') control.setAttribute('aria-invalid', 'true');
+        else control.removeAttribute('aria-invalid');
+        control.setAttribute('aria-describedby', `${row.dataset['settingName']}-description`);
+      }
+    });
+  }
 
   /** 写入链的队尾。见 {@link write} 里为什么必须串行。 */
   private writeQueue: Promise<void> = Promise.resolve();
@@ -600,8 +629,15 @@ export class SettingSection {
 
   /** 输入类控件在原生 `change`（失焦或回车）时提交，不按键即写：输入 60 会途经同样合法的 6。 */
   protected onCommit(setting: SettingOutputDto, scope: SettingScope, event: Event): void {
-    const raw = (event.target as HTMLInputElement).value;
+    const control = event.target as HTMLInputElement;
+    const raw = control.value;
     const value = setting.isSecret ? raw : raw.trim();
+    if (!control.validity.valid) {
+      const key = this.draftKey(setting, scope);
+      this.drafts.update((drafts) => ({ ...drafts, [key]: value }));
+      this.setRowState(key, { status: 'error', message: control.validationMessage });
+      return;
+    }
 
     // 写入裁剪后的值：草稿随之同步（见 write），界面显示的就是实际存入的值。
     void this.write(setting, value.length === 0 ? null : value, scope);

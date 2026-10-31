@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  viewChild,
+  ElementRef,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormField, form, required, email } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
@@ -39,6 +47,7 @@ import { englishText } from '../../../../../../shared/utils/english-text';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class EmailTest {
+  private readonly emailTestRoot = viewChild.required<ElementRef<HTMLElement>>('emailTestRoot');
   private readonly settingService = inject(SettingService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -58,25 +67,15 @@ export class EmailTest {
 
   protected async send(): Promise<void> {
     this.model.update((value) => ({ to: value.to.trim() }));
-    await this.submitForm(
-      this.emailForm,
-      'email-test-form',
-      async () => {
-        await firstValueFrom(this.settingService.sendTestEmail(this.to()));
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('settings.emailTest.sent', { to: this.to() }));
-        //#else
-        toast.success(this.t('settings.emailTest.sent', { to: this.to() }));
-        //#endif
-      },
-      (message) => {
-        //#if (IncludeLocalization)
-        toast.error(this.transloco.translate('common.requestError'), { description: message });
-        //#else
-        toast.error(this.t('common.requestError'), { description: message });
-        //#endif
-      },
-    );
+    // 服务端的原因里已经带着“测试邮件发送失败”，标题不再重复一遍。
+    await this.submitForm(this.emailForm, this.emailTestRoot().nativeElement, async () => {
+      await firstValueFrom(this.settingService.sendTestEmail(this.to()));
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('settings.emailTest.sent', { to: this.to() }));
+      //#else
+      toast.success(this.t('settings.emailTest.sent', { to: this.to() }));
+      //#endif
+    });
   }
 }
 //#if (!IncludeLocalization)

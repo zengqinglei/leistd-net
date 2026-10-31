@@ -17,6 +17,10 @@ import { ApplicationHttpError } from '../../../../core/errors/application-http-e
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { AccountService } from '../../services/account-service';
 
 import type { MockedObject } from 'vitest';
@@ -317,6 +321,21 @@ describe('TwoFactorSetup', () => {
       new HttpErrorResponse({ status: 400, error: { code, detail } }),
     );
   }
+
+  it('review R1 focuses local and server OTP errors in setup', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const panel = fixture.componentInstance;
+    await renderSubmission(fixture, () => panel['submit']());
+    expect(document.activeElement?.id).toBe('two-factor-setup-code');
+    panel.verificationForm.code().value.set('123456');
+    account.enableTwoFactor.mockReturnValue(throwError(() => rejectedField('Code')));
+    await renderSubmission(fixture, () => panel['submit']());
+    expect(document.activeElement?.id).toBe('two-factor-setup-code');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Server rejected this field',
+    );
+  });
 });
 
 /** 组件里生成二维码的受保护方法，测试据它控制二维码何时生成完。 */

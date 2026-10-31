@@ -9,12 +9,15 @@ import { Component, provideZonelessChangeDetection, signal } from '@angular/core
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { catchError, throwError } from 'rxjs';
+import { userEvent } from 'vitest/browser';
 
 import { PermissionGrantDialog } from './permission-grant-dialog';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
+import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
+import { renderSubmission } from '../../../../core/validation/form-submission.testing';
 import {
   expectTouchTarget,
   setCoarsePointer,
@@ -240,8 +243,13 @@ describe('PermissionGrantDialog', () => {
       );
     await fixture.whenStable();
 
-    // 只按服务端文案提示一次；不重新加载，界面上的勾选与版本原样保留，可以改后再存。
-    expect(errorToast).toHaveBeenCalledExactlyOnceWith('Other conflict');
+    // 统一标题只报告一次服务端原因；不重新加载，保留勾选与版本供修改后重试。
+    //#if (IncludeLocalization)
+    const title = dialog()['transloco'].translate('common.requestError');
+    //#else
+    const title = 'Request error';
+    //#endif
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(title, { description: 'Other conflict' });
     httpTesting.expectNone(DEFINITIONS_URL);
     expect(dialog().isGranted('App.Users')).toBe(true);
     expect(dialog().version()).toBe(7);
@@ -368,5 +376,49 @@ describe('PermissionGrantDialog', () => {
     expect(() => pending.flush(grants('role-a', true))).toThrowError(
       /Cannot flush a cancelled request/,
     );
+  });
+
+  it('review R1 never saves grants when Enter is pressed in search', async () => {
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await fixture.whenStable();
+    await userEvent.fill(document.querySelector('input')!, 'Users');
+    await userEvent.keyboard('{Enter}');
+    await fixture.whenStable();
+    httpTesting.expectNone((req) => req.method === 'PUT');
+    expect(fixture.componentInstance.open()).toBe(true);
+  });
+  it('review R1 confirms changed grants but treats the initial selection as clean', async () => {
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'open').mockResolvedValue(false);
+    await fixture.whenStable();
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await fixture.whenStable();
+    dialog().onCheckedChange('App.Users', false);
+    await fixture.whenStable();
+    await renderSubmission(fixture, () =>
+      document.querySelector<HTMLButtonElement>('app-dialog-close button')!.click(),
+    );
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.open()).toBe(true);
+    dialog().onCheckedChange('App.Users', true);
+    await fixture.whenStable();
+    expect(dialog().selectionDirty()).toBe(false);
+    await renderSubmission(fixture, () =>
+      document.querySelector<HTMLButtonElement>('app-dialog-close button')!.click(),
+    );
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.open()).toBe(false);
+  });
+  it('review R1 moves focus from the loading heading to search after grants arrive', async () => {
+    await renderSubmission(fixture, () => undefined);
+    expect(document.querySelector('[hlmSkeleton]')).not.toBeNull();
+    expect(document.activeElement).toBe(document.querySelector('[hlmDialogTitle]'));
+    httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
+    httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
+    await renderSubmission(fixture, () => undefined);
+    expect(document.activeElement).toBe(document.querySelector('input'));
+    expect(document.querySelector('[hlmSkeleton]')).toBeNull();
   });
 });

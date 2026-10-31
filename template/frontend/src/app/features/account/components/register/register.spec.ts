@@ -10,6 +10,10 @@ import { Register } from './register';
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { AccountService } from '../../services/account-service';
 
 import type { MockedObject } from 'vitest';
@@ -342,4 +346,52 @@ describe('Register', () => {
     );
     //#endif
   });
+
+  it('review R1 focuses local and server registration fields after trimming', async () => {
+    await setUp();
+    await renderSubmission(fixture, () => component.onSubmit());
+    expect(document.activeElement?.id).toBe('email');
+    component.registerForm.email().value.set('  alice@example.com  ');
+    component.registerForm.username().value.set('  alice  ');
+    component.registerForm.password().value.set(' Password123! strong ');
+    component.registerForm.captchaCode().value.set('abcd');
+    accountService.register.mockReturnValue(throwError(() => rejectedField('Email')));
+    await renderSubmission(fixture, () => component.onSubmit());
+    expect(accountService.register.mock.calls[0][0]).toMatchObject({
+      email: 'alice@example.com',
+      username: 'alice',
+      password: ' Password123! strong ',
+    });
+    expect(document.activeElement?.id).toBe('email');
+  });
+  //#if (Email)
+  it.each(['missing', 'expired'])(
+    'review R1 shows and focuses a %s registration challenge',
+    async (state) => {
+      await setUp(true);
+      component.registerForm.email().value.set('alice@example.com');
+      component.registerForm.username().value.set('alice');
+      component.registerForm.password().value.set('Password123! strong');
+      component.registerForm.captchaCode().value.set('abcd');
+      component.registerForm.emailVerificationCode().value.set('123456');
+      if (state === 'expired')
+        component['emailVerificationChallenge'].set({
+          challengeId: 'expired',
+          email: 'alice@example.com',
+          expiresAt: Date.now() - 1,
+        });
+      await renderSubmission(fixture, () => component.onSubmit());
+      expect(accountService.register).not.toHaveBeenCalled();
+      expect(document.activeElement?.id).toBe('emailVerificationCode');
+      expect(component.registerForm.emailVerificationCode().errors()[0].message).toBeTruthy();
+      expect(
+        (
+          document
+            .getElementById('emailVerificationCode')!
+            .closest('[data-slot="field"]') as HTMLElement
+        ).textContent,
+      ).toContain(component.registerForm.emailVerificationCode().errors()[0].message);
+    },
+  );
+  //#endif
 });

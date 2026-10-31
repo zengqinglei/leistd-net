@@ -15,7 +15,7 @@
       </p>
     } @else {
       <form
-        id="registerForm-form"
+        #registerFormRoot
         novalidate
         (submit)="$event.preventDefault(); onSubmit()"
         class="flex flex-col gap-5"

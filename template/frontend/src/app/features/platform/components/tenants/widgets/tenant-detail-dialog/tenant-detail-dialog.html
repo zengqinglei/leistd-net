@@ -16,17 +16,14 @@
       *hlmDialogPortal
       [showCloseButton]="false"
       (keydown.escape)="closeGuard.requestClose($event)"
-      class="h-[min(40rem,calc(100dvh-2rem))] flex max-h-[calc(100dvh-2rem)] min-w-[min(42rem,calc(100vw_-_2rem))] flex-col overflow-hidden sm:max-w-2xl"
+      class="h-160 min-w-[min(42rem,calc(100vw_-_2rem))] sm:max-w-2xl"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ t('tenants.detailTitle') }}</h2>
       </hlm-dialog-header>
 
       @if (tenant(); as current) {
-        <div
-          data-dialog-body
-          class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain py-2"
-        >
+        <div data-dialog-body class="flex flex-col gap-4 py-2">
           <section class="flex flex-col gap-2">
             <h3 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {{ t('tenants.detailSectionIdentity') }}
@@ -136,7 +133,7 @@
 
                 @if (editorMode() !== 'idle') {
                   <form
-                    id="connection-editor-form"
+                    #connectionRoot
                     novalidate
                     (submit)="$event.preventDefault(); submitEditor()"
                     class="border-border flex flex-col gap-3 rounded-md border p-3"

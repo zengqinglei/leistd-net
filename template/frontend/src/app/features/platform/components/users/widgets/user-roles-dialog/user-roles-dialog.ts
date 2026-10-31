@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   computed,
   ChangeDetectionStrategy,
   Component,
@@ -47,6 +49,8 @@ import { UserManagementService } from '../../../../services/user-management-serv
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserRolesDialog {
+  private readonly selectionFormRoot =
+    viewChild.required<ElementRef<HTMLElement>>('selectionFormRoot');
   readonly open = model(false);
   readonly user = input<UserManagementOutputDto | null>(null);
   readonly rolesLoading = input(false);
@@ -108,7 +112,7 @@ export class UserRolesDialog {
       return;
     }
 
-    await this.submitForm(this.selectionForm, 'selectionForm-form', async () => {
+    await this.submitForm(this.selectionForm, this.selectionFormRoot().nativeElement, async () => {
       await firstValueFrom(
         this.userService.replaceUserRoles(user.id, { roleIds: [...this.selected()] }),
       );
@@ -126,6 +130,7 @@ export class UserRolesDialog {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
   'common.retry': 'Retry',
   'users.rolesDialog.title': 'Roles · {{name}}',
   'users.rolesDialog.description':

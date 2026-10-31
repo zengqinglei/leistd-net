@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -117,6 +119,10 @@ interface EmailChallenge {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfilePanel {
+  //#if (Email)
+  private readonly emailCodeRoot = viewChild.required<ElementRef<HTMLElement>>('emailCodeRoot');
+  //#endif
+  private readonly profileRoot = viewChild.required<ElementRef<HTMLElement>>('profileRoot');
   private readonly authService = inject(AuthService);
   private readonly accountService = inject(AccountService);
   //#if (Email)
@@ -333,7 +339,7 @@ export class ProfilePanel {
     this.emailCode.set(this.emailCode().trim());
     const challenge = this.emailChallenge();
     if (!challenge) return;
-    await this.submitForm(this.emailCodeForm, 'profileForm-form', async () => {
+    await this.submitForm(this.emailCodeForm, this.emailCodeRoot().nativeElement, async () => {
       const user = await firstValueFrom(
         this.accountService.confirmCurrentEmail({
           challengeId: challenge.challengeId,
@@ -350,10 +356,6 @@ export class ProfilePanel {
       toast.success(this.t('account.profile.emailVerifiedSuccess'));
       //#endif
     });
-  }
-
-  onEmailCodeInput(event: Event): void {
-    this.emailCode.set((event.target as HTMLInputElement).value);
   }
 
   private startResendCountdown(email: string, seconds: number): void {
@@ -380,7 +382,7 @@ export class ProfilePanel {
       displayName: value.displayName.trim(),
       phoneNumber: value.phoneNumber.trim(),
     }));
-    await this.submitForm(this.profileForm, 'profileForm-form', async () => {
+    await this.submitForm(this.profileForm, this.profileRoot().nativeElement, async () => {
       const { username, email, displayName, phoneNumber } = this.formModel();
       // 捕获本次资料，确认身份期间刷新用户不能改写待重试的载荷。
       const profile = {
@@ -458,7 +460,6 @@ const ENGLISH: Record<string, string> = {
   'account.profile.emailVerificationUnavailable':
     'Email verification is not set up on this deployment yet.',
   'account.profile.codeLabel': 'Verification code',
-  'account.profile.codePlaceholder': '6-digit code from the email',
   'account.profile.confirmCode': 'Verify',
   'account.profile.resendIn': 'Resend in {{seconds}}s',
   'account.profile.resendCode': 'Resend code',

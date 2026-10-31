@@ -35,6 +35,7 @@ import { StartupService } from '../../../../core/services/startup-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
+import { renderSubmission } from '../../../../core/validation/form-submission.testing';
 import {
   fakeAssertion,
   REQUEST_OPTIONS,
@@ -1481,6 +1482,21 @@ describe('Login', () => {
 
       expect(signals[0]?.aborted).toBe(true);
       expect(completePasskeySignIn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('review R1 focuses invalid login fields and trims only the identifier', async () => {
+    await setUp();
+    await renderSubmission(fixture, () => component.onSubmit());
+    const root = fixture.nativeElement as HTMLElement;
+    expect(document.activeElement).toBe(root.querySelector('form input'));
+    component.loginForm.usernameOrEmail().value.set('  alice  ');
+    component.loginForm.password().value.set(' Password with spaces ');
+    authService.login.mockReturnValue(throwError(() => new Error('Sign-in rejected')));
+    await renderSubmission(fixture, () => component.onSubmit());
+    expect(authService.login).toHaveBeenCalledWith({
+      usernameOrEmail: 'alice',
+      password: ' Password with spaces ',
     });
   });
 });

@@ -13,6 +13,7 @@ import {
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
+import { renderSubmission } from '../../validation/form-submission.testing';
 import { WebAuthnFailure } from '../../webauthn/webauthn-error';
 
 /**
@@ -439,5 +440,28 @@ describe('ReauthenticateDialog', () => {
 
       expect(host.confirmed).toEqual([{ twoFactorCode: '123456' }]);
     });
+  });
+
+  it('review R1 locks the active credential dialog while a proof is in flight', async () => {
+    await render({ hasPassword: true, twoFactorEnabled: false });
+    host.saving.set(true);
+    await fixture.whenStable();
+    const root = document.querySelector('hlm-dialog-content') as HTMLElement;
+    root.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    root.querySelector<HTMLButtonElement>('app-dialog-close button')!.click();
+    root.querySelector<HTMLButtonElement>('hlm-dialog-footer button')!.click();
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    await fixture.whenStable();
+    expect(host.visible()).toBe(true);
+    expect(root.isConnected).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('app-dialog-close button')!.disabled).toBe(true);
+  });
+  it('review R1 focuses a local credential error without identifying a rejected login field', async () => {
+    await render({ hasPassword: true, twoFactorEnabled: false });
+    await renderSubmission(fixture, () => button('reauthenticate-submit')!.click());
+    expect(document.activeElement).toBe(passwordInput());
   });
 });

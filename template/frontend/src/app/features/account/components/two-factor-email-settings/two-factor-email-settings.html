@@ -87,6 +87,7 @@
     } @else if (status(); as s) {
       @if (challengeId()) {
         <form
+          #verificationRoot
           class="flex flex-col gap-3"
           novalidate
           data-testid="two-factor-email-confirm-form"

@@ -4,12 +4,16 @@ import { By } from '@angular/platform-browser';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import { of } from 'rxjs';
+import { Observable, throwError, of } from 'rxjs';
 
 import { TenantEditDialog } from './tenant-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 import {
   CreateTenantInputDto,
   TenantOutputDto,
@@ -28,9 +32,10 @@ class HostComponent {
   readonly open = signal(true);
   readonly tenant = signal<TenantOutputDto | null>(null);
   readonly saved: (CreateTenantInputDto | UpdateTenantInputDto)[] = [];
+  request: Observable<unknown> = of(undefined);
   readonly save = (dto: CreateTenantInputDto | UpdateTenantInputDto) => {
     this.saved.push(dto);
-    return of(undefined);
+    return this.request;
   };
 }
 
@@ -297,5 +302,25 @@ describe('TenantEditDialog', () => {
     dialog().onSubmit();
 
     expect(host.saved[0]).toEqual(expect.objectContaining({ description: '华东区自营资金账户' }));
+  });
+
+  it('review R1 normalizes tenant identifiers and focuses local and server fields', async () => {
+    await renderSubmission(fixture, () => dialog().onSubmit());
+    expect(document.activeElement?.id).toBe('tenant-name');
+    dialog().tenantForm.name().value.set('  acme  ');
+    dialog().tenantForm.displayName().value.set('  Acme  ');
+    dialog().tenantForm.adminEmail().value.set('  admin@example.com  ');
+    dialog().tenantForm.adminPassword().value.set(' Password123! strong ');
+    dialog().tenantForm.connectionString().value.set(' raw connection ');
+    host.request = throwError(() => rejectedField('DisplayName'));
+    await renderSubmission(fixture, () => dialog().onSubmit());
+    expect(host.saved[0]).toMatchObject({
+      name: 'acme',
+      displayName: 'Acme',
+      adminEmail: 'admin@example.com',
+      adminPassword: ' Password123! strong ',
+      connections: [{ name: 'default', connectionString: ' raw connection ' }],
+    });
+    expect(document.activeElement?.id).toBe('tenant-display-name');
   });
 });

@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -19,7 +21,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { toDataURL } from 'qrcode';
-import { tap, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 import {
   ReauthenticateDialog,
@@ -67,6 +69,8 @@ import { AccountService } from '../../services/account-service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TwoFactorSetup implements OnInit {
+  private readonly verificationRoot =
+    viewChild.required<ElementRef<HTMLElement>>('verificationRoot');
   private readonly accountService = inject(AccountService);
   private readonly clipboard = injectCopyToClipboard();
   //#if (IncludeLocalization)
@@ -116,9 +120,6 @@ export class TwoFactorSetup implements OnInit {
       this.secret()
         ?.match(/.{1,4}/g)
         ?.join(' ') ?? '',
-  );
-  protected readonly canSubmit = computed(
-    () => /^\d{6}$/.test(this.code().replace(/\s/g, '')) && !this.submitting(),
   );
   protected readonly replacing = computed(() => this.proof() !== null);
 
@@ -209,29 +210,32 @@ export class TwoFactorSetup implements OnInit {
   }
 
   protected async submit(): Promise<void> {
-    await this.submitForm(this.verificationForm, 'two-factor-setup-form', async () => {
-      const setupId = this.setupId;
-      if (setupId === null) {
-        return;
-      }
-
-      try {
-        await firstValueFrom(
-          this.accountService
-            .enableTwoFactor(setupId, this.code().replace(/\s/g, ''))
-            .pipe(tap({ next: (result) => this.enabled.emit(result.recoveryCodes) })),
-        );
-      } catch (error) {
-        if (errorCode(error) === API_ERROR_CODES.twoFactorSetupExpired) {
-          // 这一份密钥再也确认不了：不留在页面上，请本人重新开始
-          this.generation++;
-          this.clearSetup();
-          this.stage.set('expired');
+    await this.submitForm(
+      this.verificationForm,
+      this.verificationRoot().nativeElement,
+      async () => {
+        const setupId = this.setupId;
+        if (setupId === null) {
           return;
         }
-        throw error;
-      }
-    });
+
+        try {
+          const result = await firstValueFrom(
+            this.accountService.enableTwoFactor(setupId, this.code().replace(/\s/g, '')),
+          );
+          this.enabled.emit(result.recoveryCodes);
+        } catch (error) {
+          if (errorCode(error) === API_ERROR_CODES.twoFactorSetupExpired) {
+            // 这一份密钥再也确认不了：不留在页面上，请本人重新开始
+            this.generation++;
+            this.clearSetup();
+            this.stage.set('expired');
+            return;
+          }
+          throw error;
+        }
+      },
+    );
   }
 
   /** 在浏览器里生成二维码，密钥不经过第三方服务。 */

@@ -16,15 +16,20 @@ export function injectFormSubmission() {
   //#endif
   return async <T>(
     fields: FieldTree<T>,
-    formId: string,
+    root: HTMLElement,
     action: () => Promise<TreeValidationResult>,
-    report: (message: string, error?: unknown) => void = (message) => toast.error(message),
+    report: (message: string, error?: unknown) => void = (message) => {
+      //#if (IncludeLocalization)
+      toast.error(transloco.translate('common.requestError'), { description: message });
+      //#else
+      toast.error('Request error', { description: message });
+      //#endif
+    },
     aliases: Readonly<Record<string, ValidationError.WithFieldTree['fieldTree']>> = {},
   ): Promise<boolean> => {
     let localInvalid = false;
     let requestFailed = false;
-    const focus = () =>
-      afterNextRender(() => focusFirstInvalid(document.getElementById(formId)), { injector });
+    const focus = () => afterNextRender(() => focusFirstInvalid(root), { injector });
     const success = await submit(fields, {
       onInvalid: () => {
         localInvalid = true;

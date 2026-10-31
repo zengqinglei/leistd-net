@@ -23,6 +23,14 @@ import { SecurityConfigService } from '../../../../core/services/security-config
 //#endif
 //#if (Email && IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
+//#endif
+//#if (Email)
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
+//#endif
+//#if (Email && IncludeMultiTenancy)
 import { TenantByHostOutputDto } from '../../dtos/tenant-by-host.dto';
 //#endif
 //#if (Email)
@@ -345,6 +353,28 @@ describe('ForgotPassword', () => {
     expect(host.querySelector('[data-testid="forgot-unavailable"]')).not.toBeNull();
     expect(host.querySelector('form')).toBeNull();
     expect(host.querySelector('[data-testid="back-to-login"]')).not.toBeNull();
+  });
+
+  it('review R1 focuses send and reset errors, trims email and preserves the new password', async () => {
+    await setUp();
+    await renderSubmission(fixture, () => component.sendCode());
+    expect(document.activeElement?.id).toBe('email');
+    component.sendForm.email().value.set('  alice@example.com  ');
+    component.sendForm.captchaCode().value.set('abcd');
+    account.sendPasswordResetCode.mockReturnValueOnce(throwError(() => rejectedField('Email')));
+    await renderSubmission(fixture, () => component.sendCode());
+    expect(document.activeElement?.id).toBe('email');
+    expect(account.sendPasswordResetCode.mock.calls[0][0].email).toBe('alice@example.com');
+    await sendCode();
+    await renderSubmission(fixture, () => component.reset());
+    expect(document.activeElement?.id).toBe('code');
+    expect(host.querySelector('[data-testid="resend-reset-code"]')).toBeNull();
+    component.resetForm.code().value.set('123456');
+    component.resetForm.newPassword().value.set(' Password123! strong ');
+    account.resetPassword.mockReturnValue(throwError(() => rejectedField('NewPassword')));
+    await renderSubmission(fixture, () => component.reset());
+    expect(document.activeElement?.id).toBe('newPassword');
+    expect(account.resetPassword.mock.calls[0][0].newPassword).toBe(' Password123! strong ');
   });
   //#else
 

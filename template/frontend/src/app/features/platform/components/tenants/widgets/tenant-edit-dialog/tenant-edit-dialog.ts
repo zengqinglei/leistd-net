@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   computed,
   effect,
   input,
@@ -95,6 +97,7 @@ interface TenantEditFormModel {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantEditDialog {
+  private readonly tenantFormRoot = viewChild.required<ElementRef<HTMLElement>>('tenantFormRoot');
   private readonly submitForm = injectFormSubmission();
   readonly saving = computed(() => this.tenantForm().submitting());
   readonly open = model(false);
@@ -182,7 +185,7 @@ export class TenantEditDialog {
     }));
     await this.submitForm(
       this.tenantForm,
-      'tenantForm-form',
+      this.tenantFormRoot().nativeElement,
       async () => {
         const model = this.formModel();
         const displayName = model.displayName.trim() || undefined;

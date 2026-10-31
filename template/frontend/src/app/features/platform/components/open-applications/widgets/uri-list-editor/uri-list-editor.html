@@ -1,8 +1,4 @@
-<div
-  hlmField
-  [id]="inputId() + '-editor'"
-  class="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4"
->
+<div hlmField #editor class="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4">
   <div class="flex items-center justify-between gap-3">
     <label hlmFieldLabel [for]="inputId()">{{ label() }}</label>
     @if (!uriForm.uri().invalid() || !uriForm.uri().touched()) {

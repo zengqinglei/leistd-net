@@ -478,6 +478,7 @@ export class Users {
 
   //#endif
   //#if (LocalIdentity)
+  // 改邮箱或标为已验证而管理员的会话不够新：先确认身份再重试。
   readonly handleSave = (data: CreateUserInputDto | UpdateUserInputDto) => {
     this.reauthAction.set('update');
     const selected = this.selectedUser();
@@ -749,6 +750,7 @@ export class Users {
     this.resetPasswordDialogVisible.set(true);
   }
 
+  // 重置口令总要管理员的会话刚认证过：不够新时先确认身份再重试。
   readonly handleResetPassword = (data: ResetUserPasswordInputDto) => {
     this.reauthAction.set('resetPassword');
     const id = this.resettingUserId();

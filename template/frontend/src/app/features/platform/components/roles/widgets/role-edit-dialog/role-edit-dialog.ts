@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   computed,
   effect,
   input,
@@ -59,6 +61,7 @@ const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]{2,64}$/;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RoleEditDialog {
+  private readonly roleFormRoot = viewChild.required<ElementRef<HTMLElement>>('roleFormRoot');
   private readonly submitForm = injectFormSubmission();
   readonly saving = computed(() => this.roleForm().submitting());
   readonly open = model(false);
@@ -116,7 +119,7 @@ export class RoleEditDialog {
       displayName: value.displayName.trim(),
       description: value.description.trim(),
     }));
-    await this.submitForm(this.roleForm, 'roleForm-form', async () => {
+    await this.submitForm(this.roleForm, this.roleFormRoot().nativeElement, async () => {
       const model = this.formModel();
       const description = model.description.trim() || undefined;
 

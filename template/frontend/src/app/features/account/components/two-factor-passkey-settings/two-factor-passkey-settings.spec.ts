@@ -18,6 +18,10 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
+import {
   CREATION_OPTIONS,
   fakeAssertion,
   fakeAttestation,
@@ -371,5 +375,23 @@ describe('TwoFactorPasskeySettings', () => {
 
     expect(byTestId('passkeys-default')).toBeNull();
     expect(byTestId('passkeys-set-default')).toBeNull();
+  });
+
+  it('review R1 normalizes rename input and focuses local and server errors', async () => {
+    await render({ ...NONE, passkeys: [LAPTOP] });
+    const panel = fixture.componentInstance;
+    panel['beginRename'](LAPTOP);
+    await fixture.whenStable();
+    panel['renameForm'].name().value.set('   ');
+    await renderSubmission(fixture, () => panel['saveRename'](LAPTOP));
+    const root = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="passkey-rename-form"]',
+    )!;
+    expect(document.activeElement).toBe(root.querySelector('input'));
+    panel['renameForm'].name().value.set('  New key  ');
+    account.renamePasskey.mockReturnValue(throwError(() => rejectedField('Name')));
+    await renderSubmission(fixture, () => panel['saveRename'](LAPTOP));
+    expect(account.renamePasskey).toHaveBeenCalledExactlyOnceWith(LAPTOP.id, 'New key');
+    expect(document.activeElement).toBe(root.querySelector('input'));
   });
 });

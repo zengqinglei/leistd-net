@@ -23,6 +23,10 @@ import { AuthService } from '../../../../core/services/auth-service';
 //#if (Email)
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { AccountService } from '../../services/account-service';
 
 import type { Mock } from 'vitest';
@@ -338,7 +342,9 @@ describe('ProfilePanel', () => {
     panel.emailChallenge.set({ challengeId: 'challenge-1', email: initialUser.email });
     panel.emailCode.set(' 123456 ');
 
-    panel.confirmEmailCode();
+    // 邮箱挑战先渲染出独立的验证码区域，提交入口才能取得真实范围。
+    await fixture.whenStable();
+    await panel.confirmEmailCode();
     await fixture.whenStable();
 
     expect(account.confirmCurrentEmail).toHaveBeenCalledExactlyOnceWith({
@@ -408,7 +414,9 @@ describe('ProfilePanel', () => {
     panel.emailChallenge.set({ challengeId: 'challenge-1', email: initialUser.email });
     panel.emailCode.set('123456');
 
-    panel.confirmEmailCode();
+    // 邮箱挑战先渲染出独立的验证码区域，提交入口才能取得真实范围。
+    await fixture.whenStable();
+    await panel.confirmEmailCode();
     await fixture.whenStable();
 
     expect(setCurrentUser).not.toHaveBeenCalled();
@@ -417,6 +425,40 @@ describe('ProfilePanel', () => {
       email: initialUser.email,
     });
     expect(panel.confirmingCode()).toBe(false);
+  });
+  //#endif
+
+  it('review R1 focuses local and server profile fields after normalization', async () => {
+    const panel = fixture.componentInstance;
+    panel.profileForm.username().value.set('   ');
+    await renderSubmission(fixture, () => panel.onSubmit());
+    expect(document.activeElement?.id).toBe('profile-username');
+    panel.profileForm.username().value.set('  alice  ');
+    panel.profileForm.email().value.set('  alice@example.com  ');
+    panel.profileForm.displayName().value.set('  Alice Smith  ');
+    panel.profileForm.phoneNumber().value.set('  +1234  ');
+    account.updateCurrentUser.mockReturnValue(throwError(() => rejectedField('Email')));
+    await renderSubmission(fixture, () => panel.onSubmit());
+    expect(account.updateCurrentUser.mock.calls[0][0]).toMatchObject({
+      username: 'alice',
+      email: 'alice@example.com',
+      displayName: 'Alice Smith',
+      phoneNumber: '+1234',
+    });
+    expect(document.activeElement?.id).toBe('profile-email');
+  });
+  //#if (Email)
+  it('review R1 isolates email-code errors from invalid profile fields', async () => {
+    const panel = fixture.componentInstance;
+    panel.emailChallenge.set({ challengeId: 'challenge-1', email: initialUser.email });
+    panel.profileForm.username().value.set('');
+    await renderSubmission(fixture, () => panel.onSubmit());
+    await renderSubmission(fixture, () => panel.confirmEmailCode());
+    expect(document.activeElement?.id).toBe('profile-email-code');
+    panel.emailCode.set('123456');
+    account.confirmCurrentEmail.mockReturnValue(throwError(() => rejectedField('Code')));
+    await renderSubmission(fixture, () => panel.confirmEmailCode());
+    expect(document.activeElement?.id).toBe('profile-email-code');
   });
   //#endif
 });

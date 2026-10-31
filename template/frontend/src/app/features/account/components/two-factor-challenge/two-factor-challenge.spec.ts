@@ -9,6 +9,10 @@ import { ApplicationHttpError } from '../../../../core/errors/application-http-e
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
+import {
   fakeAssertion,
   REQUEST_OPTIONS,
   webAuthnError,
@@ -668,5 +672,46 @@ describe('TwoFactorChallenge', () => {
 
       expect(byTestId('two-factor-passkey-submit')).not.toBeNull();
     });
+  });
+
+  it('review R1 focuses and displays recovery-code validation including the size limit', async () => {
+    render({
+      ...AUTHENTICATOR_ONLY,
+      methods: ['recoveryCode'],
+      defaultMethod: 'recoveryCode',
+    } as TwoFactorPrompt);
+    await renderSubmission(fixture, () => submit());
+    const input = (fixture.nativeElement as HTMLElement).querySelector('input')!;
+    expect(document.activeElement).toBe(input);
+    expect(
+      input
+        .closest('[data-slot="field"]')!
+        .querySelector('hlm-field-error')!
+        .hasAttribute('hidden'),
+    ).toBe(false);
+    type('x'.repeat(65));
+    await submit();
+    expect(
+      fixture.componentInstance.verificationForm
+        .value()
+        .errors()
+        .map((e) => e.kind),
+    ).toContain('maxLength');
+    expect(account.completeTwoFactorLogin).not.toHaveBeenCalled();
+  });
+
+  it('review R1 focuses a server code-field rejection while preserving the challenge', async () => {
+    const panel = fixture.componentInstance;
+    account.completeTwoFactorLogin.mockReturnValue(throwError(() => rejectedField('Code')));
+    panel.verificationForm.value().value.set('123456');
+    await renderSubmission(fixture, () => submit());
+    expect(document.activeElement).toBe(
+      (fixture.nativeElement as HTMLElement).querySelector('input'),
+    );
+    expect(panel.verificationForm.value().errors()[0].kind).toBe('server');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Server rejected this field',
+    );
+    expect(cancelled).toBe(0);
   });
 });

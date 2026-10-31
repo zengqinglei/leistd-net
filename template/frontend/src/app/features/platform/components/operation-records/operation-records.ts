@@ -301,6 +301,7 @@ export class OperationRecords {
     // 搜索框即时值随 URL 回填（前进后退、分享链接）。
     effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
 
+    // 筛选项加载一次：动作定义是启动期事实。
     this.loadFilterOptions();
 
     // URL 变化或显式刷新时重新拉取列表。
@@ -539,6 +540,7 @@ export class OperationRecords {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
   'common.retry': 'Retry',
   'operationRecords.filter.searchPlaceholder': 'Search action / target / operator...',
   'operationRecords.filter.category': 'Category',

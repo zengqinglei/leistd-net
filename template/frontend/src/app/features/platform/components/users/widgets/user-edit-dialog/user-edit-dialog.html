@@ -16,7 +16,7 @@
       [appDialogFocus]="loading()"
       [showCloseButton]="false"
       (keydown.escape)="closeGuard.requestClose($event)"
-      class="h-[min(40rem,calc(100dvh-2rem))] flex max-h-[calc(100dvh-2rem)] min-w-[min(42rem,calc(100vw_-_2rem))] flex-col overflow-hidden sm:max-w-2xl"
+      class="h-160 min-w-[min(42rem,calc(100vw_-_2rem))] sm:max-w-2xl"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle tabindex="-1">
@@ -41,243 +41,241 @@
           </button>
         </div>
       } @else {
-        <form
-          novalidate
-          (submit)="$event.preventDefault(); save()"
-          class="flex min-h-0 flex-1 flex-col gap-4"
-          id="userForm-form"
-          novalidate
-        >
-          <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
-            <div class="flex items-center gap-4 border-b border-border pb-5">
-              <!-- 头像上传：无图时常驻居中图标；有图时 hover / 键盘 focus-visible 显示（对话框自动聚焦不触发）、触屏（pointer-coarse）常驻。 -->
-              <label
-                class="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition-colors hover:border-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/30"
-              >
-                @if (hasAvatarImage()) {
-                  <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
-                } @else {
-                  <!-- 无图占位：常驻居中上传图标即完整语义。 -->
-                  <span class="block h-full w-full bg-primary/10"></span>
-                }
-                <input
-                  type="file"
-                  class="sr-only"
-                  accept="image/png,image/jpeg,image/webp"
-                  [attr.aria-label]="t('common.uploadAvatar')"
-                  (change)="onAvatarSelect($event)"
-                />
-
-                <span
-                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 text-white transition-opacity duration-200 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 pointer-coarse:opacity-100"
-                  [class.opacity-0]="hasAvatarImage()"
-                  aria-hidden="true"
+        <form (submit)="$event.preventDefault(); save()" #userFormRoot novalidate>
+          <div data-dialog-body class="flex flex-col gap-4 py-1">
+            <div class="flex flex-col gap-4">
+              <div class="flex items-center gap-4 border-b border-border pb-5">
+                <!-- 头像上传：无图时常驻居中图标；有图时 hover / 键盘 focus-visible 显示（对话框自动聚焦不触发）、触屏（pointer-coarse）常驻。 -->
+                <label
+                  class="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition-colors hover:border-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/30"
                 >
-                  <ng-icon name="lucideImagePlus" class="text-xl drop-shadow-sm" />
-                </span>
-              </label>
+                  @if (hasAvatarImage()) {
+                    <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
+                  } @else {
+                    <!-- 无图占位：常驻居中上传图标即完整语义。 -->
+                    <span class="block h-full w-full bg-primary/10"></span>
+                  }
+                  <input
+                    type="file"
+                    class="sr-only"
+                    accept="image/png,image/jpeg,image/webp"
+                    [attr.aria-label]="t('common.uploadAvatar')"
+                    (change)="onAvatarSelect($event)"
+                  />
 
-              <div class="flex min-w-0 flex-1 flex-col gap-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="truncate text-base font-medium">
-                    {{ displayName() || t('users.editDialog.unnamedUser') }}
-                  </h3>
+                  <span
+                    class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 text-white transition-opacity duration-200 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 pointer-coarse:opacity-100"
+                    [class.opacity-0]="hasAvatarImage()"
+                    aria-hidden="true"
+                  >
+                    <ng-icon name="lucideImagePlus" class="text-xl drop-shadow-sm" />
+                  </span>
+                </label>
+
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="truncate text-base font-medium">
+                      {{ displayName() || t('users.editDialog.unnamedUser') }}
+                    </h3>
+                  </div>
+                  <p class="truncate text-sm text-muted-foreground">
+                    {{ formModel().email || t('users.editDialog.noEmail') }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('users.editDialog.avatarHint') }}
+                  </p>
                 </div>
-                <p class="truncate text-sm text-muted-foreground">
-                  {{ formModel().email || t('users.editDialog.noEmail') }}
-                </p>
-                <p class="text-xs text-muted-foreground">
-                  {{ t('users.editDialog.avatarHint') }}
-                </p>
-              </div>
-            </div>
-
-            <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div hlmField>
-                <label hlmFieldLabel for="user-username">{{
-                  t('users.editDialog.usernameLabel')
-                }}</label>
-                <input
-                  autocapitalize="off"
-                  spellcheck="false"
-                  hlmInput
-                  id="user-username"
-                  autocomplete="off"
-                  class="w-full"
-                  [formField]="userForm.username"
-                  [placeholder]="t('users.editDialog.usernamePlaceholder')"
-                />
-                @for (error of userForm.username().errors(); track error.kind) {
-                  <hlm-field-error [validator]="error.kind">{{
-                    error.message ?? t('validation.' + error.kind, error)
-                  }}</hlm-field-error>
-                }
               </div>
 
-              <div hlmField>
-                <label hlmFieldLabel for="user-email">{{ t('users.editDialog.emailLabel') }}</label>
-                <input
-                  autocapitalize="off"
-                  spellcheck="false"
-                  hlmInput
-                  id="user-email"
-                  autocomplete="off"
-                  type="email"
-                  class="w-full"
-                  [formField]="userForm.email"
-                  [placeholder]="t('users.editDialog.emailPlaceholder')"
-                />
-                @for (error of userForm.email().errors(); track error.kind) {
-                  <hlm-field-error [validator]="error.kind">{{
-                    error.message ?? t('validation.' + error.kind, error)
-                  }}</hlm-field-error>
-                }
-              </div>
-
-              <div hlmField>
-                <label hlmFieldLabel for="user-display-name">{{
-                  t('users.editDialog.displayNameLabel')
-                }}</label>
-                <input
-                  autocomplete="off"
-                  hlmInput
-                  id="user-display-name"
-                  class="w-full"
-                  [formField]="userForm.displayName"
-                  [placeholder]="t('users.editDialog.displayNamePlaceholder')"
-                />
-                @for (error of userForm.displayName().errors(); track error.kind) {
-                  <hlm-field-error [validator]="error.kind">{{
-                    error.message ?? t('validation.' + error.kind, error)
-                  }}</hlm-field-error>
-                }
-              </div>
-              <!--#if (LocalIdentity)-->
-              @if (!isEditMode()) {
+              <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div hlmField>
-                  <label hlmFieldLabel for="user-password">{{
-                    t('users.editDialog.passwordLabel')
+                  <label hlmFieldLabel for="user-username">{{
+                    t('users.editDialog.usernameLabel')
                   }}</label>
-                  <hlm-input-group>
-                    <input
-                      hlmInputGroupInput
-                      id="user-password"
-                      autocomplete="new-password"
-                      [type]="showPassword() ? 'text' : 'password'"
-                      [formField]="userForm.password"
-                      [placeholder]="t('users.editDialog.passwordPlaceholder')"
-                    />
-                    <button
-                      hlmInputGroupButton
-                      type="button"
-                      size="icon-sm"
-                      align="inline-end"
-                      [attr.aria-label]="
-                        showPassword() ? t('common.hidePassword') : t('common.showPassword')
-                      "
-                      (click)="showPassword.set(!showPassword())"
-                    >
-                      <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
-                    </button>
-                  </hlm-input-group>
-                  @for (error of userForm.password().errors(); track error.kind) {
+                  <input
+                    autocapitalize="off"
+                    spellcheck="false"
+                    hlmInput
+                    id="user-username"
+                    autocomplete="off"
+                    class="w-full"
+                    [formField]="userForm.username"
+                    [placeholder]="t('users.editDialog.usernamePlaceholder')"
+                  />
+                  @for (error of userForm.username().errors(); track error.kind) {
                     <hlm-field-error [validator]="error.kind">{{
                       error.message ?? t('validation.' + error.kind, error)
                     }}</hlm-field-error>
                   }
                 </div>
-              }
-              <!--#endif-->
-            </section>
 
-            <hlm-separator />
-
-            <!-- 角色与开关各占整行：开关的说明不被半栏挤成两行，开关与上方输入框右缘对齐 -->
-            <section class="flex flex-col gap-4">
-              <!-- 初始角色仅「新建 + 持有角色分配权限」时可见；编辑态的角色分配走独立入口与权限。 -->
-              @if (showRoleField()) {
                 <div hlmField>
-                  <label hlmFieldLabel for="user-roles">{{
-                    t('users.editDialog.rolesLabel')
+                  <label hlmFieldLabel for="user-email">{{
+                    t('users.editDialog.emailLabel')
                   }}</label>
-                  <hlm-select-multiple class="w-full" [formField]="userForm.roleIds">
-                    <hlm-select-trigger buttonId="user-roles" class="w-full">
-                      <hlm-select-placeholder>{{
-                        t('users.editDialog.rolesPlaceholder')
-                      }}</hlm-select-placeholder>
-                      <ng-template hlmSelectValues let-values>
-                        <hlm-select-values-content>
-                          {{ roleLabel(values[0]) }}
-                          @if (values.length > 1) {
-                            (+{{ values.length - 1 }})
-                          }
-                        </hlm-select-values-content>
-                      </ng-template>
-                    </hlm-select-trigger>
-                    <hlm-select-content *hlmSelectPortal>
-                      <hlm-select-group>
-                        @for (option of roleOptions(); track option.value) {
-                          <hlm-select-item [value]="option.value">{{
-                            option.label
-                          }}</hlm-select-item>
-                        }
-                      </hlm-select-group>
-                    </hlm-select-content>
-                  </hlm-select-multiple>
+                  <input
+                    autocapitalize="off"
+                    spellcheck="false"
+                    hlmInput
+                    id="user-email"
+                    autocomplete="off"
+                    type="email"
+                    class="w-full"
+                    [formField]="userForm.email"
+                    [placeholder]="t('users.editDialog.emailPlaceholder')"
+                  />
+                  @for (error of userForm.email().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('validation.' + error.kind, error)
+                    }}</hlm-field-error>
+                  }
                 </div>
-              }
 
-              <!-- 启用状态仅新建时设置；已存在账号的启停只走列表页的命令入口，保护规则也只在那里。 -->
-              @if (!isEditMode()) {
+                <div hlmField>
+                  <label hlmFieldLabel for="user-display-name">{{
+                    t('users.editDialog.displayNameLabel')
+                  }}</label>
+                  <input
+                    autocomplete="off"
+                    hlmInput
+                    id="user-display-name"
+                    class="w-full"
+                    [formField]="userForm.displayName"
+                    [placeholder]="t('users.editDialog.displayNamePlaceholder')"
+                  />
+                  @for (error of userForm.displayName().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('validation.' + error.kind, error)
+                    }}</hlm-field-error>
+                  }
+                </div>
+                <!--#if (LocalIdentity)-->
+                @if (!isEditMode()) {
+                  <div hlmField>
+                    <label hlmFieldLabel for="user-password">{{
+                      t('users.editDialog.passwordLabel')
+                    }}</label>
+                    <hlm-input-group>
+                      <input
+                        hlmInputGroupInput
+                        id="user-password"
+                        autocomplete="new-password"
+                        [type]="showPassword() ? 'text' : 'password'"
+                        [formField]="userForm.password"
+                        [placeholder]="t('users.editDialog.passwordPlaceholder')"
+                      />
+                      <button
+                        hlmInputGroupButton
+                        type="button"
+                        size="icon-sm"
+                        align="inline-end"
+                        [attr.aria-label]="
+                          showPassword() ? t('common.hidePassword') : t('common.showPassword')
+                        "
+                        (click)="showPassword.set(!showPassword())"
+                      >
+                        <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+                      </button>
+                    </hlm-input-group>
+                    @for (error of userForm.password().errors(); track error.kind) {
+                      <hlm-field-error [validator]="error.kind">{{
+                        error.message ?? t('validation.' + error.kind, error)
+                      }}</hlm-field-error>
+                    }
+                  </div>
+                }
+                <!--#endif-->
+              </section>
+
+              <hlm-separator />
+
+              <!-- 角色与开关各占整行：开关的说明不被半栏挤成两行，开关与上方输入框右缘对齐 -->
+              <section class="flex flex-col gap-4">
+                <!-- 初始角色仅「新建 + 持有角色分配权限」时可见；编辑态的角色分配走独立入口与权限。 -->
+                @if (showRoleField()) {
+                  <div hlmField>
+                    <label hlmFieldLabel for="user-roles">{{
+                      t('users.editDialog.rolesLabel')
+                    }}</label>
+                    <hlm-select-multiple class="w-full" [formField]="userForm.roleIds">
+                      <hlm-select-trigger buttonId="user-roles" class="w-full">
+                        <hlm-select-placeholder>{{
+                          t('users.editDialog.rolesPlaceholder')
+                        }}</hlm-select-placeholder>
+                        <ng-template hlmSelectValues let-values>
+                          <hlm-select-values-content>
+                            {{ roleLabel(values[0]) }}
+                            @if (values.length > 1) {
+                              (+{{ values.length - 1 }})
+                            }
+                          </hlm-select-values-content>
+                        </ng-template>
+                      </hlm-select-trigger>
+                      <hlm-select-content *hlmSelectPortal>
+                        <hlm-select-group>
+                          @for (option of roleOptions(); track option.value) {
+                            <hlm-select-item [value]="option.value">{{
+                              option.label
+                            }}</hlm-select-item>
+                          }
+                        </hlm-select-group>
+                      </hlm-select-content>
+                    </hlm-select-multiple>
+                  </div>
+                }
+
+                <!-- 启用状态仅新建时设置；已存在账号的启停只走列表页的命令入口，保护规则也只在那里。 -->
+                @if (!isEditMode()) {
+                  <div hlmField orientation="horizontal">
+                    <div hlmFieldContent>
+                      <label hlmFieldLabel for="user-is-active">{{
+                        t('users.editDialog.activeTitle')
+                      }}</label>
+                      <p hlmFieldDescription id="user-is-active-hint">
+                        {{ t('users.editDialog.activeHint') }}
+                      </p>
+                    </div>
+                    <hlm-switch
+                      inputId="user-is-active"
+                      aria-describedby="user-is-active-hint"
+                      [checked]="formModel().isActive"
+                      (checkedChange)="setActive($event)"
+                    />
+                  </div>
+                }
+                <!--#if (LocalIdentity)-->
                 <div hlmField orientation="horizontal">
                   <div hlmFieldContent>
-                    <label hlmFieldLabel for="user-is-active">{{
-                      t('users.editDialog.activeTitle')
+                    <label hlmFieldLabel for="user-email-verified">{{
+                      t('users.editDialog.emailVerifiedTitle')
                     }}</label>
-                    <p hlmFieldDescription id="user-is-active-hint">
-                      {{ t('users.editDialog.activeHint') }}
+                    <p hlmFieldDescription id="user-email-verified-hint">
+                      {{ t('users.editDialog.emailVerifiedHint') }}
                     </p>
                   </div>
                   <hlm-switch
-                    inputId="user-is-active"
-                    aria-describedby="user-is-active-hint"
-                    [checked]="formModel().isActive"
-                    (checkedChange)="setActive($event)"
+                    inputId="user-email-verified"
+                    aria-describedby="user-email-verified-hint"
+                    [checked]="formModel().isEmailVerified"
+                    (checkedChange)="setEmailVerified($event)"
                   />
                 </div>
-              }
-              <!--#if (LocalIdentity)-->
-              <div hlmField orientation="horizontal">
-                <div hlmFieldContent>
-                  <label hlmFieldLabel for="user-email-verified">{{
-                    t('users.editDialog.emailVerifiedTitle')
-                  }}</label>
-                  <p hlmFieldDescription id="user-email-verified-hint">
-                    {{ t('users.editDialog.emailVerifiedHint') }}
-                  </p>
-                </div>
-                <hlm-switch
-                  inputId="user-email-verified"
-                  aria-describedby="user-email-verified-hint"
-                  [checked]="formModel().isEmailVerified"
-                  (checkedChange)="setEmailVerified($event)"
-                />
-              </div>
-              <!--#endif-->
-            </section>
-          </div>
+                <!--#endif-->
+              </section>
+            </div>
 
-          @if (rolesError(); as error) {
-            <p role="alert">
-              {{ error }}
-              <button hlmBtn variant="outline" type="button" (click)="reloadRoles.emit()">
-                {{ t('common.retry') }}
-              </button>
-            </p>
-          }
-          @if (rolesLoading()) {
-            <hlm-spinner />
-          }
+            @if (showRoleField() && rolesError(); as error) {
+              <p role="alert">
+                {{ error }}
+                <button hlmBtn variant="outline" type="button" (click)="reloadRoles.emit()">
+                  {{ t('common.retry') }}
+                </button>
+              </p>
+            }
+            @if (showRoleField() && rolesLoading()) {
+              <hlm-spinner [aria-label]="t('app.startup.loading')" />
+            }
+          </div>
           <hlm-dialog-footer>
             <button
               hlmBtn
@@ -288,9 +286,17 @@
             >
               {{ t('common.cancel') }}
             </button>
-            <button hlmBtn type="submit" [disabled]="saving() || rolesLoading() || !!rolesError()">
+            <button
+              hlmBtn
+              type="submit"
+              [disabled]="saving() || (showRoleField() && (rolesLoading() || !!rolesError()))"
+            >
               @if (saving()) {
-                <hlm-spinner class="text-base" data-icon="inline-start" />
+                <hlm-spinner
+                  [aria-label]="t('app.startup.loading')"
+                  class="text-base"
+                  data-icon="inline-start"
+                />
               }
               {{ isEditMode() ? t('common.save') : t('common.create') }}
             </button>

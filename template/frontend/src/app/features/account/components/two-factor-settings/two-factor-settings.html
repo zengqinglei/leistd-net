@@ -3,11 +3,7 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <section
-    id="two-factor-settings-form"
-    class="flex flex-col gap-5"
-    data-testid="security-two-factor"
-  >
+  <section class="flex flex-col gap-5" data-testid="security-two-factor">
     <header
       class="flex flex-col gap-3 @md/panel:flex-row @md/panel:items-start @md/panel:justify-between border-b pb-3"
     >
@@ -72,6 +68,7 @@
         }
         @case ('replace') {
           <form
+            #verificationRoot
             class="flex flex-col gap-3"
             novalidate
             data-testid="two-factor-replace-form"
@@ -93,20 +90,26 @@
                     spellcheck="false"
                     data-testid="two-factor-replace-recovery-code"
                     [formField]="verificationForm.recoveryCode"
-                    (input)="onRecoveryCodeInput($event)"
                   />
+                  @for (error of verificationForm.recoveryCode().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('validation.' + error.kind, error)
+                    }}</hlm-field-error>
+                  }
                 </div>
               } @else {
-                <app-otp-code-input
-                  inputId="two-factor-replace-code"
-                  [label]="t('account.twoFactor.codeLabel')"
-                  [formField]="verificationForm.code"
-                />
-                @for (error of verificationForm.code().errors(); track error.kind) {
-                  <hlm-field-error [validator]="error.kind">{{
-                    error.message ?? t('validation.' + error.kind, error)
-                  }}</hlm-field-error>
-                }
+                <div hlmField class="flex-1 basis-56">
+                  <app-otp-code-input
+                    inputId="two-factor-replace-code"
+                    [label]="t('account.twoFactor.codeLabel')"
+                    [formField]="verificationForm.code"
+                  />
+                  @for (error of verificationForm.code().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('validation.' + error.kind, error)
+                    }}</hlm-field-error>
+                  }
+                </div>
               }
               <div class="flex gap-2">
                 <button hlmBtn type="submit" [disabled]="busy()">
@@ -140,6 +143,7 @@
         @case ('disable') {
           <!-- 与修改密码同一版式：标签在左、输入在右；没有口令的账号只填验证码 -->
           <form
+            #verificationRoot
             class="flex flex-col gap-5"
             novalidate
             data-testid="two-factor-disable-form"
@@ -174,8 +178,12 @@
                       autocomplete="current-password"
                       data-testid="two-factor-disable-password"
                       [formField]="verificationForm.password"
-                      (input)="onPasswordInput($event)"
                     />
+                    @for (error of verificationForm.password().errors(); track error.kind) {
+                      <hlm-field-error [validator]="error.kind">{{
+                        error.message ?? t('validation.' + error.kind, error)
+                      }}</hlm-field-error>
+                    }
                   </div>
                 </div>
               }
@@ -225,6 +233,7 @@
         }
         @case ('regenerate') {
           <form
+            #verificationRoot
             class="flex flex-col gap-3"
             novalidate
             data-testid="two-factor-regenerate-form"

@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -123,6 +125,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Login implements OnInit {
+  private readonly loginFormRoot = viewChild.required<ElementRef<HTMLElement>>('loginFormRoot');
   private readonly submitForm = injectFormSubmission();
   private authService = inject(AuthService);
   private readonly authorizationService = inject(AuthorizationService);
@@ -262,7 +265,7 @@ export class Login implements OnInit {
 
   async onSubmit() {
     this.model.update((value) => ({ ...value, usernameOrEmail: value.usernameOrEmail.trim() }));
-    await this.submitForm(this.loginForm, 'loginForm-form', async () => {
+    await this.submitForm(this.loginForm, this.loginFormRoot().nativeElement, async () => {
       // 租户上下文没定案就不发认证请求。按钮已经禁用，这里再挡一次是因为回车提交、
       // 以及探测在"表单填完、按钮刚点下"之间才失败的时序都绕不过表单事件。
       if (this.authBlocked()) {

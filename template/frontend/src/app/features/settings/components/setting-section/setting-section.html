@@ -86,6 +86,8 @@
         deploymentDefault: t('settings.deploymentDefault'),
       };
     <hlm-field
+      [attr.data-setting-name]="setting.name"
+      [attr.data-setting-invalid]="stateOf(setting, scope())?.status === 'error'"
       [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
       [orientation]="isBoolean(setting) ? 'horizontal' : 'responsive'"
     >
@@ -148,13 +150,6 @@
                       }}
                     </span>
                   }
-                  @case ('error') {
-                    <!-- 失败必须带原因，否则无从修正。 -->
-                    <span class="text-destructive inline-flex items-center gap-1" role="alert">
-                      <ng-icon name="lucideCircleX" size="12" class="shrink-0" />
-                      {{ state.messageKey ? t(state.messageKey) : state.message }}
-                    </span>
-                  }
                 }
               } @else if (inheritedSourceOf(setting, scope(), sourceLabels); as source) {
                 <span class="text-muted-foreground" data-testid="setting-source">{{ source }}</span>
@@ -173,6 +168,7 @@
       >
         @if (isBoolean(setting)) {
           <hlm-switch
+            [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
             [inputId]="setting.name"
             [checked]="isChecked(setting, scope())"
             [aria-describedby]="descriptionIdOf(setting)"
@@ -194,6 +190,7 @@
                data-placeholder 给出。 -->
             @let zoneText = timeZoneTextOf(setting, scope(), sourceLabels);
             <hlm-combobox-trigger
+              [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
               [buttonId]="setting.name"
               class="w-full justify-between font-normal"
               [attr.title]="
@@ -251,6 +248,8 @@
             (valueChange)="onSelect(setting, scope(), $event)"
           >
             <hlm-select-trigger
+              [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
+              [aria-invalid]="stateOf(setting, scope())?.status === 'error'"
               [buttonId]="setting.name"
               class="w-full"
               [attr.title]="displayTextOf(setting, scope(), sourceLabels) || null"
@@ -270,6 +269,7 @@
            不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。 -->
           <input
             [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
+            [attr.aria-invalid]="stateOf(setting, scope())?.status === 'error' ? 'true' : null"
             hlmInput
             class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
             [id]="setting.name"

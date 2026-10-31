@@ -2,12 +2,16 @@ import { Component, provideZonelessChangeDetection, signal } from '@angular/core
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
-import { Observable, Subject, of } from 'rxjs';
+import { throwError, Observable, Subject, of } from 'rxjs';
 
 import { UserEditDialog } from './user-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 import { PASSWORD_MIN_LENGTH } from '../../../../../../core/validation/password-rule';
 import {
   expectTouchTarget,
@@ -37,6 +41,7 @@ import {
       (retry)="retried = retried + 1"
       [user]="user()"
       [availableRoles]="roles"
+      [rolesError]="rolesError()"
       [canAssignRoles]="canAssignRoles()"
       [saveAction]="saveAction"
     />
@@ -48,6 +53,7 @@ class HostComponent {
   readonly loadError = signal<string | null>(null);
   retried = 0;
   readonly loading = signal(false);
+  readonly rolesError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly user = signal<UserManagementOutputDto | null>(null);
   readonly canAssignRoles = signal(false);
@@ -260,7 +266,7 @@ describe('UserEditDialog', () => {
     },
   );
 
-  // 与后端口径一致：首尾空白不是邮箱的一部分。这里拒绝而不是替用户 trim，提交的值即用户看到的值
+  // 与后端口径一致：首尾空白不是邮箱的一部分，校验与提交都使用规范化后的同一值。
   it('normalizes a pasted email before validating and submitting it', async () => {
     await fillValidCreate();
     await fill({ email: ' bob@example.test ' });
@@ -452,5 +458,48 @@ describe('UserEditDialog', () => {
     host.loading.set(false);
     await fixture.whenStable();
     expect(document.activeElement).toBe(close);
+  });
+
+  it('review R1 focuses user fields and submits normalized identity values', async () => {
+    await renderSubmission(fixture, () => dialog().save());
+    expect(document.activeElement?.id).toBe('user-username');
+    dialog().userForm.username().value.set('  alice  ');
+    dialog().userForm.email().value.set('  alice@example.com  ');
+    dialog().userForm.displayName().value.set('  Alice  ');
+    //#if (LocalIdentity)
+    dialog().userForm.password().value.set(' Password123! strong ');
+    //#endif
+    host.request = throwError(() => rejectedField('Email'));
+    await renderSubmission(fixture, () => dialog().save());
+    expect(host.saved[0]).toMatchObject({
+      username: 'alice',
+      email: 'alice@example.com',
+      displayName: 'Alice',
+    });
+    expect(document.activeElement?.id).toBe('user-email');
+  });
+  it('review R1 ignores role option failure when editing hides the role field', async () => {
+    host.user.set({
+      id: 'existing',
+      username: 'alice',
+      email: 'alice@example.com',
+      displayName: 'Alice',
+      isActive: true,
+      //#if (LocalIdentity)
+      isEmailVerified: true,
+      //#endif
+      isSuperAdmin: false,
+      roles: [],
+      creationTime: '2026-01-01',
+    });
+    host.rolesError.set('Role options failed');
+    host.canAssignRoles.set(true);
+    await fixture.whenStable();
+    expect(dialog().showRoleField()).toBe(false);
+    expect(
+      document.querySelector<HTMLButtonElement>('hlm-dialog-footer button[type="submit"]')!
+        .disabled,
+    ).toBe(false);
+    expect(document.body.textContent).not.toContain('Role options failed');
   });
 });

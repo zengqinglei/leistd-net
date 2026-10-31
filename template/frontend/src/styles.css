@@ -382,10 +382,23 @@ body {
   max-height: calc(100dvh - 2rem);
 }
 
-[data-slot='dialog-content'] > :is(form, [data-dialog-body]) {
+[data-slot='dialog-content'] > form {
+  overflow: hidden;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1rem;
+
+  min-width: 0;
+  min-height: 0;
+}
+
+[data-slot='dialog-content'] [data-dialog-body] {
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1 1 auto;
+
+  min-width: 0;
   min-height: 0;
 }
 

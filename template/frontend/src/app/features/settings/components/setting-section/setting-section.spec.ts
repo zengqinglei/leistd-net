@@ -1712,3 +1712,87 @@ describe('SettingSection account preferences', () => {
     expect(host.querySelector('[role="alert"]')).toBeNull();
   });
 });
+
+/** 行级错误必须写到可操作元素，而不是只改变 Field 或包装组件的样式。 */
+describe('SettingSection row validation', () => {
+  let fixture: ComponentFixture<SettingSection>;
+  let http: HttpTestingController;
+
+  afterEach(() => {
+    try {
+      http.verify();
+    } finally {
+      fixture.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  async function render(setting: SettingOutputDto): Promise<HTMLElement> {
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    fixture = TestBed.createComponent(SettingSection);
+    fixture.componentRef.setInput('scope', 'system');
+    http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/settings').flush([setting]);
+    await fixture.whenStable();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it.each([
+    { name: 'Display.FreeTextProbe', kind: 'text' },
+    { name: 'Probe.Boolean', kind: 'switch', isBoolean: true, defaultValue: 'true' },
+    { name: 'Logging.MinimumLevel', kind: 'select', defaultValue: 'Information' },
+    { name: 'Display.TimeZone', kind: 'combobox', defaultValue: 'UTC' },
+  ])(
+    'review R1 associates a server field rejection with the actual $kind control',
+    async ({ kind, ...values }) => {
+      const setting = row(values);
+      const host = await render(setting);
+      const panel = fixture.componentInstance;
+      if (kind === 'switch') panel['onToggle'](setting, 'system', false);
+      else if (kind !== 'text')
+        panel['onSelect'](setting, 'system', kind === 'combobox' ? 'Asia/Tokyo' : 'Warning');
+      else {
+        const field = host.querySelector<HTMLInputElement>('input')!;
+        field.value = 'user draft';
+        field.dispatchEvent(new Event('input'));
+        field.dispatchEvent(new Event('change'));
+      }
+      await fixture.whenStable();
+      http
+        .expectOne({ method: 'PUT', url: '/api/v1/settings/current-tenant' })
+        .flush(
+          { errors: [{ field: 'Value', detail: 'Server rejected the setting value' }] },
+          { status: 400, statusText: 'Bad Request' },
+        );
+      await vi.advanceTimersByTimeAsync(400);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const control = document.getElementById(setting.name)!;
+      expect(control.matches('input,button,[role="switch"],[role="combobox"]')).toBe(true);
+      expect(control.getAttribute('aria-invalid')).toBe('true');
+      expect(control.getAttribute('aria-describedby')?.split(' ')).toContain(
+        `${setting.name}-description`,
+      );
+      const error = document.getElementById(`${setting.name}-description`)!;
+      expect(error.tagName).toBe('HLM-FIELD-ERROR');
+      expect(error.hasAttribute('hidden')).toBe(false);
+      expect(error.textContent?.trim()).toBeTruthy();
+    },
+  );
+
+  it('review R1 displays native numeric validation and keeps the draft without an HTTP request', async () => {
+    const host = await render(row({ name: 'Numeric.Probe', minimum: 1, maximum: 10 }));
+    const field = host.querySelector<HTMLInputElement>('input')!;
+    field.value = '11';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    http.expectNone((req) => req.method === 'PUT');
+    expect(field.value).toBe('11');
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById('Numeric.Probe-description')!.tagName).toBe('HLM-FIELD-ERROR');
+  });
+});

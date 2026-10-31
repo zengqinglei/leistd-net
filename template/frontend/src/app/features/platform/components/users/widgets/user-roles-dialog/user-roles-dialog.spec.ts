@@ -7,9 +7,11 @@ import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { UserRolesDialog } from './user-roles-dialog';
 import { ApplicationHttpError } from '../../../../../../core/errors/application-http-error';
+import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import { renderSubmission } from '../../../../../../core/validation/form-submission.testing';
 import {
   expectTouchTarget,
   setCoarsePointer,
@@ -200,7 +202,16 @@ describe('UserRolesDialog', () => {
     saveButton().click();
     await fixture.whenStable();
 
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith('Role does not exist.');
+    //#if (IncludeLocalization)
+    const title = (fixture.debugElement.children[0].componentInstance as UserRolesDialog)[
+      'transloco'
+    ].translate('common.requestError');
+    //#else
+    const title = 'Request error';
+    //#endif
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(title, {
+      description: 'Role does not exist.',
+    });
     expect(toast.success).not.toHaveBeenCalled();
     expect(host.savedCount).toBe(0);
     await expect.poll(() => saveButton().disabled).toBe(false);
@@ -235,5 +246,20 @@ describe('UserRolesDialog', () => {
     await fixture.whenStable();
 
     expect(replaceUserRoles).not.toHaveBeenCalled();
+  });
+
+  it('review R1 compares role selections with the initial set before confirming exit', async () => {
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'open').mockResolvedValue(false);
+    const dialog = fixture.debugElement.children[0].componentInstance as UserRolesDialog;
+    expect(dialog.selectionDirty()).toBe(false);
+    await toggle('role-auditor');
+    expect(dialog.selectionDirty()).toBe(true);
+    await renderSubmission(fixture, () =>
+      document.querySelector<HTMLButtonElement>('app-dialog-close button')!.click(),
+    );
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(host.open()).toBe(true);
+    await toggle('role-auditor');
+    expect(dialog.selectionDirty()).toBe(false);
   });
 });

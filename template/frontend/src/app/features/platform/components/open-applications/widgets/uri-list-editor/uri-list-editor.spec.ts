@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { UriListEditor } from './uri-list-editor';
+import { renderSubmission } from '../../../../../../core/validation/form-submission.testing';
 
 describe('UriListEditor', () => {
   function createEditor(uris: string[] = []): ComponentFixture<UriListEditor> {
@@ -62,5 +63,18 @@ describe('UriListEditor', () => {
     removeButton.click();
 
     expect(removed).toBe('https://one.example/callback');
+  });
+
+  it('review R1 focuses the URI input and shows invalid submissions', async () => {
+    const fixture = createEditor();
+    await renderSubmission(fixture, () => fixture.componentInstance['onAdd']());
+    const input = (fixture.nativeElement as HTMLElement).querySelector('input')!;
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('hlm-field-error')!
+        .hasAttribute('hidden'),
+    ).toBe(false);
   });
 });

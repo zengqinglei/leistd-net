@@ -21,83 +21,79 @@
         <p hlmDialogDescription>{{ t('roles.editDescription') }}</p>
       </hlm-dialog-header>
 
-      <form
-        class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain py-2"
-        (submit)="$event.preventDefault(); onSubmit()"
-        id="roleForm-form"
-        novalidate
-      >
-        <hlm-field>
-          <label hlmFieldLabel for="role-name">{{ t('roles.fieldName') }}</label>
-          <input
-            hlmInput
-            id="role-name"
-            class="w-full"
-            autocomplete="off"
-            [formField]="roleForm.name"
-          />
-          @for (error of roleForm.name().errors(); track error.kind) {
-            <hlm-field-error [validator]="error.kind">{{
-              error.message ?? t('validation.' + error.kind, error)
-            }}</hlm-field-error>
-          }
-        </hlm-field>
+      <form (submit)="$event.preventDefault(); onSubmit()" #roleFormRoot novalidate>
+        <div data-dialog-body class="flex flex-col gap-4 py-1">
+          <hlm-field>
+            <label hlmFieldLabel for="role-name">{{ t('roles.fieldName') }}</label>
+            <input
+              hlmInput
+              id="role-name"
+              class="w-full"
+              autocomplete="off"
+              [formField]="roleForm.name"
+            />
+            @for (error of roleForm.name().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
+          </hlm-field>
 
-        <hlm-field>
-          <label hlmFieldLabel for="role-display-name">{{ t('roles.fieldDisplayName') }}</label>
-          <input
-            hlmInput
-            id="role-display-name"
-            class="w-full"
-            autocomplete="off"
-            [formField]="roleForm.displayName"
-          />
-          @for (error of roleForm.displayName().errors(); track error.kind) {
-            <hlm-field-error [validator]="error.kind">{{
-              error.message ?? t('validation.' + error.kind, error)
-            }}</hlm-field-error>
-          }
-        </hlm-field>
+          <hlm-field>
+            <label hlmFieldLabel for="role-display-name">{{ t('roles.fieldDisplayName') }}</label>
+            <input
+              hlmInput
+              id="role-display-name"
+              class="w-full"
+              autocomplete="off"
+              [formField]="roleForm.displayName"
+            />
+            @for (error of roleForm.displayName().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
+          </hlm-field>
 
-        <hlm-field>
-          <label hlmFieldLabel for="role-description">{{ t('roles.fieldDescription') }}</label>
-          <input
-            hlmInput
-            id="role-description"
-            class="w-full"
-            autocomplete="off"
-            [formField]="roleForm.description"
-          />
-          @for (error of roleForm.description().errors(); track error.kind) {
-            <hlm-field-error [validator]="error.kind">{{
-              error.message ?? t('validation.' + error.kind, error)
-            }}</hlm-field-error>
-          }
-        </hlm-field>
+          <hlm-field>
+            <label hlmFieldLabel for="role-description">{{ t('roles.fieldDescription') }}</label>
+            <input
+              hlmInput
+              id="role-description"
+              class="w-full"
+              autocomplete="off"
+              [formField]="roleForm.description"
+            />
+            @for (error of roleForm.description().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
+          </hlm-field>
 
-        <div hlmField orientation="horizontal">
-          <hlm-checkbox inputId="role-is-default" [formField]="roleForm.isDefault" />
-          <label hlmFieldLabel for="role-is-default">{{ t('roles.fieldIsDefault') }}</label>
+          <div hlmField orientation="horizontal">
+            <hlm-checkbox inputId="role-is-default" [formField]="roleForm.isDefault" />
+            <label hlmFieldLabel for="role-is-default">{{ t('roles.fieldIsDefault') }}</label>
+          </div>
         </div>
+        <hlm-dialog-footer>
+          <button
+            [disabled]="closeGuard.busy()"
+            hlmBtn
+            variant="outline"
+            type="button"
+            (click)="closeGuard.requestClose()"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button hlmBtn type="submit" [disabled]="saving()">
+            @if (saving()) {
+              <hlm-spinner data-icon="inline-start" />
+            }
+            {{ t('common.save') }}
+          </button>
+        </hlm-dialog-footer>
       </form>
-
-      <hlm-dialog-footer>
-        <button
-          [disabled]="closeGuard.busy()"
-          hlmBtn
-          variant="outline"
-          type="button"
-          (click)="closeGuard.requestClose()"
-        >
-          {{ t('common.cancel') }}
-        </button>
-        <button hlmBtn type="submit" form="roleForm-form" [disabled]="saving()">
-          @if (saving()) {
-            <hlm-spinner data-icon="inline-start" />
-          }
-          {{ t('common.save') }}
-        </button>
-      </hlm-dialog-footer>
       <app-dialog-close
         #closeGuard="appDialogClose"
         [dirty]="roleForm().dirty()"

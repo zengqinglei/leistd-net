@@ -21,6 +21,10 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 //#endif
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { PASSWORD_MIN_LENGTH } from '../../../../core/validation/password-rule';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
 // prettier-ignore
@@ -381,6 +385,33 @@ describe('SecurityPanel', () => {
       });
       expect(toast.success).toHaveBeenCalledOnce();
     });
+  });
+  //#endif
+
+  it('review R1 focuses local and server errors in the change-password form', async () => {
+    await renderSubmission(fixture, () => panel.onSubmit());
+    expect(document.activeElement).toBe(input('current-password'));
+    expect(input('current-password').getAttribute('aria-invalid')).toBe('true');
+    await fill(valid);
+    account.changePassword.mockReturnValue(throwError(() => rejectedField('NewPassword')));
+    await renderSubmission(fixture, () => panel.onSubmit());
+    expect(document.activeElement).toBe(input('new-password'));
+    expect(document.body.textContent).toContain('Server rejected this field');
+  });
+  //#if (ExternalLogin)
+  it('review R1 focuses the set-password form rather than the change form', async () => {
+    currentUser.set({ hasPassword: false });
+    await fixture.whenStable();
+    await renderSubmission(fixture, () => panel.onSetPasswordSubmit());
+    const root = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="set-password-form"]',
+    )!;
+    expect(document.activeElement).toBe(root.querySelector('input'));
+    panel.setForm.newPassword().value.set(valid.newPassword);
+    panel.setForm.confirmPassword().value.set(valid.confirmPassword);
+    account.setPassword.mockReturnValue(throwError(() => rejectedField('NewPassword')));
+    await renderSubmission(fixture, () => panel.onSetPasswordSubmit());
+    expect(document.activeElement).toBe(root.querySelector('input'));
   });
   //#endif
 });

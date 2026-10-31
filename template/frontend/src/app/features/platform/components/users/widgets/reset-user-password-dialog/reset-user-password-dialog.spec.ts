@@ -1,12 +1,16 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { Observable, Subject, of } from 'rxjs';
+import { throwError, Observable, Subject, of } from 'rxjs';
 
 import { ResetUserPasswordDialog } from './reset-user-password-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../../../core/validation/form-submission.testing';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -159,5 +163,15 @@ describe('ResetUserPasswordDialog', () => {
     expect(dialog().resetForm.password().value()).toBe('');
     expect(passwordInput().value).toBe('');
     expect(passwordInput().type).toBe('password');
+  });
+
+  it('review R1 focuses reset errors and preserves the exact password', async () => {
+    await renderSubmission(fixture, () => dialog().save());
+    expect(document.activeElement?.id).toBe('reset-password');
+    dialog().resetForm.password().value.set(' Password123! strong ');
+    host.request = throwError(() => rejectedField('Password'));
+    await renderSubmission(fixture, () => dialog().save());
+    expect(host.saved[0]).toEqual({ password: ' Password123! strong ' });
+    expect(document.activeElement?.id).toBe('reset-password');
   });
 });

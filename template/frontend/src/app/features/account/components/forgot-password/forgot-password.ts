@@ -2,7 +2,7 @@
 import {
   ChangeDetectionStrategy, Component, inject,
   //#if (Email)
-  computed, signal, viewChild,
+  ElementRef, computed, signal, viewChild,
   //#endif
 } from '@angular/core';
 //#if (Email)
@@ -64,7 +64,6 @@ import { lastValueFrom } from 'rxjs';
 import { PasswordLengthMeter } from '../../../../core/components/password-length-meter/password-length-meter';
 //#endif
 //#if (Email)
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#endif
 //#if (Email)
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
@@ -144,6 +143,10 @@ import { AuthShell } from '../auth-shell/auth-shell';
 })
 export class ForgotPassword {
   //#if (Email)
+  private readonly resetFormRoot = viewChild.required<ElementRef<HTMLElement>>('resetFormRoot');
+  private readonly sendFormRoot = viewChild.required<ElementRef<HTMLElement>>('sendFormRoot');
+  //#endif
+  //#if (Email)
   private readonly submitForm = injectFormSubmission();
   //#endif
   //#if (!IncludeLocalization)
@@ -215,7 +218,7 @@ export class ForgotPassword {
 
   async sendCode(): Promise<void> {
     this.sendModel.update((value) => ({ ...value, email: value.email.trim() }));
-    await this.submitForm(this.sendForm, 'sendForm-form', async () => {
+    await this.submitForm(this.sendForm, this.sendFormRoot().nativeElement, async () => {
       const captchaToken = this.captcha()?.token();
       if (this.tenantBlocked()) {
         return;
@@ -250,7 +253,7 @@ export class ForgotPassword {
   }
 
   async reset(): Promise<void> {
-    await this.submitForm(this.resetForm, 'resetForm-form', async () => {
+    await this.submitForm(this.resetForm, this.resetFormRoot().nativeElement, async () => {
       const challenge = this.challenge();
       if (!challenge) {
         this.resetForm().markAsTouched();
@@ -278,16 +281,6 @@ export class ForgotPassword {
         queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined,
       });
     });
-  }
-
-  private showRequestError(error: unknown): void {
-    //#if (IncludeLocalization)
-    toast.error(this.transloco.translate('common.requestError'), {
-      description: applicationErrorMessage(error),
-    });
-    //#else
-    toast.error('Request failed', { description: applicationErrorMessage(error) });
-    //#endif
   }
   //#endif
 }

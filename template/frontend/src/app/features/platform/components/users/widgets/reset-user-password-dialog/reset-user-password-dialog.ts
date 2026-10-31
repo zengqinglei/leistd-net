@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   computed,
   effect,
   input,
@@ -62,6 +64,7 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResetUserPasswordDialog {
+  private readonly resetFormRoot = viewChild.required<ElementRef<HTMLElement>>('resetFormRoot');
   private readonly submitForm = injectFormSubmission();
   readonly saving = computed(() => this.resetForm().submitting());
   readonly visible = model(false);
@@ -105,7 +108,7 @@ export class ResetUserPasswordDialog {
   }
 
   async save(): Promise<void> {
-    await this.submitForm(this.resetForm, 'resetForm-form', async () => {
+    await this.submitForm(this.resetForm, this.resetFormRoot().nativeElement, async () => {
       await firstValueFrom(this.saveAction()({ password: this.formModel().password }), {
         defaultValue: undefined,
       });

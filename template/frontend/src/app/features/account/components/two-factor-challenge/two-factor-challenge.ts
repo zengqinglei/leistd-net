@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  ElementRef,
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
@@ -12,7 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { FormField, form, required, pattern } from '@angular/forms/signals';
+import { maxLength, FormField, form, required, pattern } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -149,6 +150,8 @@ const METHOD_ICONS: Record<TwoFactorMethod, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TwoFactorChallenge {
+  private readonly verificationRoot =
+    viewChild.required<ElementRef<HTMLElement>>('verificationRoot');
   private readonly accountService = inject(AccountService);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
@@ -182,6 +185,7 @@ export class TwoFactorChallenge {
   private readonly submitForm = injectFormSubmission();
   private readonly verificationModel = signal({ value: '' });
   readonly verificationForm = form(this.verificationModel, (path) => {
+    maxLength(path.value, 64);
     required(path.value);
     pattern(path.value, /^\d{6}$/, {
       when: () => this.method() !== 'recoveryCode',
@@ -228,15 +232,6 @@ export class TwoFactorChallenge {
     }
     return this.showReuseHint() ? `${ERROR_ID} ${REUSE_HINT_ID}` : ERROR_ID;
   });
-
-  protected readonly canSubmit = computed(() => {
-    const value = this.value().replace(/\s/g, '');
-    if (this.busy() || this.method() === 'passkey') {
-      return false;
-    }
-
-    return this.method() === 'recoveryCode' ? value.length >= 8 : /^\d{6}$/.test(value);
-  });
   //#if (Email)
 
   constructor() {
@@ -277,12 +272,8 @@ export class TwoFactorChallenge {
     this.focusInput();
   }
 
-  protected onInput(event: Event): void {
-    this.onValueChange((event.target as HTMLInputElement).value);
-  }
-
   protected onValueChange(value: string): void {
-    this.setValue(value);
+    this.submittedValue = null;
     // 清空不算改动：被拒后由本组件清空，说明要留到本人开始重输
     if (value.length > 0) {
       this.error.set(null);
@@ -320,37 +311,52 @@ export class TwoFactorChallenge {
   //#endif
 
   protected async submit(): Promise<void> {
-    await this.submitForm(this.verificationForm, 'two-factor-challenge-form', async () => {
-      if (this.finishing() || this.submitting() || this.value() === this.submittedValue) {
-        return;
-      }
-
-      this.submittedValue = this.value();
-      try {
-        await lastValueFrom(this.accountService.completeTwoFactorLogin(this.loginInput()));
-        this.completed.emit();
-      } catch (error) {
-        const code = error instanceof ApplicationHttpError ? error.code : undefined;
-        // 只有这次第二步已经无法继续（凭据过期、账号锁定或停用）才回到密码那一步
-        if (code !== undefined && SECOND_STEP_ENDED.has(code)) {
-          this.leave(error);
+    await this.submitForm(
+      this.verificationForm,
+      this.verificationRoot().nativeElement,
+      async () => {
+        if (this.finishing() || this.submitting() || this.value() === this.submittedValue) {
           return;
         }
 
-        this.error.set(applicationErrorMessage(error));
-        if (code === API_ERROR_CODES.twoFactorCodeInvalid) {
-          // 码不对：清空重输
-          this.codeRejected.set(true);
-          this.setValue('');
+        this.submittedValue = this.value();
+        try {
+          await lastValueFrom(this.accountService.completeTwoFactorLogin(this.loginInput()));
+          this.completed.emit();
+        } catch (error) {
+          const code = error instanceof ApplicationHttpError ? error.code : undefined;
+          // 只有这次第二步已经无法继续（凭据过期、账号锁定或停用）才回到密码那一步
+          if (code !== undefined && SECOND_STEP_ENDED.has(code)) {
+            this.leave(error);
+            return;
+          }
+
+          // 凭据拒绝仍清空重输；其余可定位字段交共同入口，且允许用同一码重试。
+          if (
+            code !== API_ERROR_CODES.twoFactorCodeInvalid &&
+            error instanceof ApplicationHttpError &&
+            error.details.some((item) => item.field && item.detail)
+          ) {
+            this.submittedValue = null;
+            throw error;
+          }
+          this.error.set(applicationErrorMessage(error));
+          if (code === API_ERROR_CODES.twoFactorCodeInvalid) {
+            // 码不对：清空重输
+            this.codeRejected.set(true);
+            this.setValue('');
+            this.focusInput();
+            return;
+          }
+
+          // 方式此刻不能用、邮箱码已失效、网络错误或服务端故障：挑战仍有效，就地说明，同一个码也可以再提交一次
+          this.submittedValue = null;
           this.focusInput();
-          return;
         }
-
-        // 方式此刻不能用、邮箱码已失效、网络错误或服务端故障：挑战仍有效，就地说明，同一个码也可以再提交一次
-        this.submittedValue = null;
-        this.focusInput();
-      }
-    });
+      },
+      undefined,
+      { code: this.verificationForm.value, recoveryCode: this.verificationForm.value },
+    );
   }
 
   /** 用通行密钥完成第二步：本人点击后取断言选项、调起浏览器，再交回断言。 */

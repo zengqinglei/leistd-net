@@ -1,4 +1,5 @@
 import {
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -41,7 +42,6 @@ import { ReauthenticateDialog } from '../../../../core/components/reauthenticate
 //#if (ExternalLogin)
 import { injectReauthentication } from '../../../../core/components/reauthenticate-dialog/reauthentication';
 //#endif
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import {
@@ -108,6 +108,10 @@ import { TwoFactorSettings } from '../two-factor-settings/two-factor-settings';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SecurityPanel {
+  private readonly changeFormRoot = viewChild.required<ElementRef<HTMLElement>>('changeFormRoot');
+  //#if (ExternalLogin)
+  private readonly setFormRoot = viewChild.required<ElementRef<HTMLElement>>('setFormRoot');
+  //#endif
   private readonly accountService = inject(AccountService);
   private readonly authService = inject(AuthService);
   //#if (IncludeLocalization)
@@ -199,7 +203,7 @@ export class SecurityPanel {
    * 成功后刷新当前用户（区块换回"修改密码"）和外部绑定列表（有了口令，最后一个绑定也能解绑了）。
    */
   async onSetPasswordSubmit(): Promise<void> {
-    await this.submitForm(this.setForm, 'setForm-form', async () => {
+    await this.submitForm(this.setForm, this.setFormRoot().nativeElement, async () => {
       const { newPassword, confirmPassword } = this.setModel();
       const result = await firstValueFrom(
         this.reauth.execute((proof) =>
@@ -247,7 +251,7 @@ export class SecurityPanel {
   }
 
   async onSubmit(): Promise<void> {
-    await this.submitForm(this.changeForm, 'changeForm-form', async () => {
+    await this.submitForm(this.changeForm, this.changeFormRoot().nativeElement, async () => {
       const { currentPassword, newPassword, confirmPassword } = this.formModel();
       await firstValueFrom(
         this.accountService.changePassword({ currentPassword, newPassword, confirmPassword }),
@@ -265,16 +269,6 @@ export class SecurityPanel {
       // 服务端已让其他设备退出，列表跟着刷新
       this.loginDevices()?.reload();
     });
-  }
-
-  private showRequestError(error: unknown): void {
-    //#if (IncludeLocalization)
-    toast.error(this.transloco.translate('common.requestError'), {
-      description: applicationErrorMessage(error),
-    });
-    //#else
-    toast.error('Request failed', { description: applicationErrorMessage(error) });
-    //#endif
   }
 }
 //#if (!IncludeLocalization)

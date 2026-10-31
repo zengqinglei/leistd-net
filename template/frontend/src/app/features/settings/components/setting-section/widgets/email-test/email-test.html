@@ -10,7 +10,7 @@
       <p class="text-muted-foreground text-sm">{{ t('settings.emailTest.description') }}</p>
     </header>
     <form
-      id="email-test-form"
+      #emailTestRoot
       class="flex flex-col gap-2 @md/panel:flex-row"
       novalidate
       (submit)="$event.preventDefault(); send()"

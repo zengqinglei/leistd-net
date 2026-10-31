@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
-import { of } from 'rxjs';
+import { throwError, of } from 'rxjs';
 
 import { TwoFactorEmailSettings } from './two-factor-email-settings';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
@@ -10,6 +10,10 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
+import {
+  renderSubmission,
+  rejectedField,
+} from '../../../../core/validation/form-submission.testing';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
 import { AccountService } from '../../services/account-service';
 
@@ -193,5 +197,24 @@ describe('TwoFactorEmailSettings', () => {
     await Promise.resolve();
     fixture.detectChanges();
     expect(button.disabled).toBe(false);
+  });
+
+  it('review R1 focuses local and server confirmation fields without string ids', async () => {
+    await render(OFF);
+    account.beginEmailTwoFactorSetup.mockReturnValue(
+      of({ challengeId: 'challenge', retryAfterSeconds: 1, expiresInSeconds: 60 }),
+    );
+    const panel = fixture.componentInstance;
+    panel['begin']();
+    await fixture.whenStable();
+    await renderSubmission(fixture, () => panel['confirm']());
+    expect(document.activeElement?.id).toBe('two-factor-email-code');
+    panel.verificationForm.code().value.set('123456');
+    account.enableEmailTwoFactor.mockReturnValue(throwError(() => rejectedField('Code')));
+    await renderSubmission(fixture, () => panel['confirm']());
+    expect(document.activeElement?.id).toBe('two-factor-email-code');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Server rejected this field',
+    );
   });
 });

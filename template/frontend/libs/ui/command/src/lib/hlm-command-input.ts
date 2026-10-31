@@ -24,7 +24,7 @@ import { classes } from '@spartan-ng/helm/utils';
         class="w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
         [id]="inputId()"
         [placeholder]="placeholder()"
-        [attr.aria-label]="ariaLabel() ?? placeholder()"
+        [attr.aria-label]="ariaLabel() || placeholder() || null"
       />
 
       <hlm-input-group-addon>

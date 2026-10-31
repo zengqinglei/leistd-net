@@ -1,5 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  viewChild,
+  ElementRef,
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
@@ -99,6 +101,7 @@ type PasskeyUnavailableReason = 'notConfigured' | 'unsupported' | 'insecureConte
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TwoFactorPasskeySettings {
+  private readonly renameRoot = viewChild.required<ElementRef<HTMLElement>>('renameRoot');
   private readonly accountService = inject(AccountService);
   private readonly authService = inject(AuthService);
   private readonly confirmService = inject(ConfirmService);
@@ -215,7 +218,7 @@ export class TwoFactorPasskeySettings {
     this.renameModel.update((value) => ({ name: value.name.trim() }));
     await this.submitForm(
       this.renameForm,
-      'passkey-rename-form',
+      this.renameRoot().nativeElement,
       async () => {
         const name = this.renameModel().name;
         if (name === passkey.name) {
@@ -235,7 +238,7 @@ export class TwoFactorPasskeySettings {
         );
         toast.success(this.text('account.passkeys.renamedToast'));
       },
-      (_message, error) => this.showError(error),
+      (message, error) => this.showError(error, message),
     );
   }
 
@@ -344,7 +347,7 @@ export class TwoFactorPasskeySettings {
    * 浏览器这一侧的失败按归类给本地化提示（取消只是中性提示），不显示浏览器原文；服务端的原因原样显示，
    * 部署此刻没配依赖方时顺带刷新，按钮随之不可用。
    */
-  private showError(error: unknown): void {
+  private showError(error: unknown, remainingMessage?: string): void {
     if (notifyWebAuthnFailure(error, (key) => this.text(key))) {
       return;
     }
@@ -355,7 +358,7 @@ export class TwoFactorPasskeySettings {
       this.reload();
     }
     toast.error(this.text('common.requestError'), {
-      description: applicationErrorMessage(error),
+      description: remainingMessage ?? applicationErrorMessage(error),
     });
   }
 

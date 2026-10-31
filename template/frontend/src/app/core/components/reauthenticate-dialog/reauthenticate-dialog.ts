@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import {
+  ElementRef,
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
@@ -109,6 +110,7 @@ const METHOD_FOCUS_IDS: Record<ProofMethod, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ReauthenticateDialog {
+  private readonly reauthFormRoot = viewChild.required<ElementRef<HTMLElement>>('reauthFormRoot');
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
   //#if (!IncludeLocalization)
@@ -185,7 +187,6 @@ export class ReauthenticateDialog {
 
   protected readonly code = this.reauthForm.code().value;
   private readonly codeInput = viewChild(OtpCodeInput);
-  protected readonly codeValid = computed(() => CODE_PATTERN.test(this.code()));
   /** 最近交出的验证码：输满自动提交与回车提交同时到达时只交一次，改动输入后才允许再交。 */
   private submittedCode: string | null = null;
 
@@ -236,10 +237,6 @@ export class ReauthenticateDialog {
     }
   }
 
-  protected hide(): void {
-    this.visible.set(false);
-  }
-
   protected selectMethod(method: ProofMethod): void {
     this.chosen.set(method);
     this.error.set(null);
@@ -252,7 +249,6 @@ export class ReauthenticateDialog {
   }
 
   protected onCodeChange(value: string): void {
-    this.code.set(value);
     this.submittedCode = null;
     // 清空不算改动：被拒后由本组件清空验证码，错误要留到本人开始重输
     if (value.length > 0) {
@@ -279,7 +275,7 @@ export class ReauthenticateDialog {
 
   private async submitPassword(): Promise<void> {
     if (this.saving()) return;
-    await this.submitForm(this.reauthForm, 'reauthForm-form', async () => {
+    await this.submitForm(this.reauthForm, this.reauthFormRoot().nativeElement, async () => {
       this.confirmed.emit({ password: this.formModel().password });
     });
   }
@@ -295,7 +291,7 @@ export class ReauthenticateDialog {
 
   protected async submitCode(): Promise<void> {
     if (this.saving() || this.code() === this.submittedCode) return;
-    await this.submitForm(this.reauthForm, 'reauthForm-form', async () => {
+    await this.submitForm(this.reauthForm, this.reauthFormRoot().nativeElement, async () => {
       const code = this.code();
       this.submittedCode = code;
       this.confirmed.emit({ twoFactorCode: code });

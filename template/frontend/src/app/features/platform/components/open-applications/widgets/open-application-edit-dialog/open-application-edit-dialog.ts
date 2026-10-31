@@ -1,5 +1,7 @@
 // prettier-ignore
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -105,6 +107,8 @@ const authorizationCodePermissions = [
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationEditDialog {
+  private readonly applicationFormRoot =
+    viewChild.required<ElementRef<HTMLElement>>('applicationFormRoot');
   private readonly submitForm = injectFormSubmission();
   readonly saving = computed(() => this.applicationForm().submitting());
   //#if (IncludeLocalization)
@@ -560,14 +564,34 @@ export class OpenApplicationEditDialog {
       clientId: value.clientId.trim(),
       displayName: value.displayName.trim(),
     }));
-    await this.submitForm(this.applicationForm, 'applicationForm-form', async () => {
-      const model = this.formModel();
-      // 校验已保证非服务类型时有值；机器客户端没有用户会话，固定为否
-      const sessionBound =
-        model.applicationType === 'service' ? false : model.sessionBound === true;
-      if (this.isEditMode()) {
+    await this.submitForm(
+      this.applicationForm,
+      this.applicationFormRoot().nativeElement,
+      async () => {
+        const model = this.formModel();
+        // 校验已保证非服务类型时有值；机器客户端没有用户会话，固定为否
+        const sessionBound =
+          model.applicationType === 'service' ? false : model.sessionBound === true;
+        if (this.isEditMode()) {
+          await firstValueFrom(
+            this.saveAction()({
+              displayName: model.displayName,
+              applicationType: model.applicationType,
+              clientType: model.clientType,
+              redirectUris: model.redirectUris,
+              postLogoutRedirectUris: model.postLogoutRedirectUris,
+              permissions: model.permissions,
+              requirements: model.requirements,
+              sessionBound,
+            }),
+            { defaultValue: undefined },
+          );
+          return;
+        }
+
         await firstValueFrom(
           this.saveAction()({
+            clientId: model.clientId.trim(),
             displayName: model.displayName,
             applicationType: model.applicationType,
             clientType: model.clientType,
@@ -579,24 +603,8 @@ export class OpenApplicationEditDialog {
           }),
           { defaultValue: undefined },
         );
-        return;
-      }
-
-      await firstValueFrom(
-        this.saveAction()({
-          clientId: model.clientId.trim(),
-          displayName: model.displayName,
-          applicationType: model.applicationType,
-          clientType: model.clientType,
-          redirectUris: model.redirectUris,
-          postLogoutRedirectUris: model.postLogoutRedirectUris,
-          permissions: model.permissions,
-          requirements: model.requirements,
-          sessionBound,
-        }),
-        { defaultValue: undefined },
-      );
-    });
+      },
+    );
   }
 
   private ensurePkce(requirements: string[]) {
@@ -607,6 +615,7 @@ export class OpenApplicationEditDialog {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
   'common.retry': 'Retry',
   'openApp.dialog.editHeader': 'Edit open application',
   'openApp.dialog.createHeader': 'New open application',

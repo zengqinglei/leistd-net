@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -109,6 +111,7 @@ interface PermissionGroupRender extends PermissionGroupView {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PermissionGrantDialog {
+  private readonly selectionRoot = viewChild.required<ElementRef<HTMLElement>>('selectionRoot');
   readonly open = model(false);
   readonly roleId = input<string | null>(null);
   /** 角色展示名，仅用于标题。 */
@@ -284,7 +287,7 @@ export class PermissionGrantDialog {
       return;
     }
 
-    await this.submitForm(this.selectionForm, 'permission-selection-form', async () => {
+    await this.submitForm(this.selectionForm, this.selectionRoot().nativeElement, async () => {
       try {
         await firstValueFrom(
           this.permissionService.replaceRoleGrants(roleId, {

@@ -1,4 +1,6 @@
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -17,7 +19,7 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { tap, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import {
@@ -68,6 +70,8 @@ const CODE_INPUT_ID = 'two-factor-email-code';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TwoFactorEmailSettings {
+  private readonly verificationRoot =
+    viewChild.required<ElementRef<HTMLElement>>('verificationRoot');
   private readonly accountService = inject(AccountService);
   private readonly confirmService = inject(ConfirmService);
   //#if (IncludeLocalization)
@@ -99,7 +103,6 @@ export class TwoFactorEmailSettings {
   });
   protected readonly code = this.verificationForm.code().value;
   protected readonly codeInputId = CODE_INPUT_ID;
-  protected readonly codeValid = computed(() => /^\d{6}$/.test(this.code().trim()));
   /** 邮箱验证码能用、还有别的方式可选（通行密钥、身份验证器）：才有"默认"可言。 */
   protected readonly defaultChoice = computed(() => canChooseDefault(this.status(), 'email'));
 
@@ -142,25 +145,24 @@ export class TwoFactorEmailSettings {
   }
 
   protected async confirm(): Promise<void> {
-    await this.submitForm(this.verificationForm, 'two-factor-email-settings-form', async () => {
-      const challengeId = this.challengeId();
-      if (!challengeId) {
-        return;
-      }
+    await this.submitForm(
+      this.verificationForm,
+      this.verificationRoot().nativeElement,
+      async () => {
+        const challengeId = this.challengeId();
+        if (!challengeId) {
+          return;
+        }
 
-      await firstValueFrom(
-        this.accountService.enableEmailTwoFactor({ challengeId, code: this.code().trim() }).pipe(
-          tap({
-            next: () => {
-              this.cancel();
-              this.reload();
-              this.sessionsChanged.emit();
-              this.showSuccess('account.twoFactorEmail.enabledToast');
-            },
-          }),
-        ),
-      );
-    });
+        await firstValueFrom(
+          this.accountService.enableEmailTwoFactor({ challengeId, code: this.code().trim() }),
+        );
+        this.cancel();
+        this.reload();
+        this.sessionsChanged.emit();
+        this.showSuccess('account.twoFactorEmail.enabledToast');
+      },
+    );
   }
 
   protected cancel(): void {

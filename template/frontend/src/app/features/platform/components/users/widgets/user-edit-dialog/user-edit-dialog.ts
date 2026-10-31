@@ -1,5 +1,7 @@
 // prettier-ignore
 import {
+  viewChild,
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -119,6 +121,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserEditDialog {
+  private readonly userFormRoot = viewChild.required<ElementRef<HTMLElement>>('userFormRoot');
   private readonly submitForm = injectFormSubmission();
   readonly saving = computed(() => this.userForm().submitting());
   readonly visible = model(false);
@@ -176,7 +179,7 @@ export class UserEditDialog {
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
     disabled(path.username, { when: () => this.isEditMode() });
     required(path.email);
-    // 首尾空白按格式错误拒绝，因此提交时邮箱原样发出、不再 trim（后端同样先 trim）。
+    // 标识在提交入口先规范化，校验值与发给后端的值保持一致。
     emailValidator(path.email);
     maxLength(path.email, 256);
     maxLength(path.displayName, 128);
@@ -187,14 +190,14 @@ export class UserEditDialog {
     maxLength(path.password, PASSWORD_MAX_LENGTH, { when: () => !this.isEditMode() });
     //#endif
   });
+  readonly rolesLoading = input(false);
+  readonly rolesError = input<string | null>(null);
+  readonly reloadRoles = output<void>();
   /**
    * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
    * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
    * 因此只持有 Users.Update 的主体在这里看不到也提交不了角色。
    */
-  readonly rolesLoading = input(false);
-  readonly rolesError = input<string | null>(null);
-  readonly reloadRoles = output<void>();
   readonly availableRoles = input<RoleBriefDto[]>([]);
   readonly canAssignRoles = input(false);
 
@@ -311,7 +314,7 @@ export class UserEditDialog {
       displayName: value.displayName.trim(),
       avatar: value.avatar.trim(),
     }));
-    await this.submitForm(this.userForm, 'userForm-form', async () => {
+    await this.submitForm(this.userForm, this.userFormRoot().nativeElement, async () => {
       const model = this.formModel();
       if (this.isEditMode()) {
         await firstValueFrom(
@@ -355,6 +358,7 @@ export class UserEditDialog {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'app.startup.loading': 'Loading...',
   'common.retry': 'Retry',
   'users.editDialog.editHeader': 'Edit user',
   'users.editDialog.createHeader': 'New user',

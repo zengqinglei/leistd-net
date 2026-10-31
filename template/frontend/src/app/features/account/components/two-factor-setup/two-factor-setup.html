@@ -95,7 +95,7 @@
           </div>
         </div>
 
-        <form id="two-factor-setup-form" novalidate (submit)="$event.preventDefault(); submit()">
+        <form #verificationRoot novalidate (submit)="$event.preventDefault(); submit()">
           <div hlmField>
             <label hlmFieldLabel for="two-factor-setup-code">{{
               t('account.twoFactor.verifyTitle')
