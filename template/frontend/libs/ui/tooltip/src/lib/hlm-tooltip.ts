@@ -38,7 +38,14 @@ export const tooltipPositionVariants = cva('absolute', {
   hostDirectives: [
     {
       directive: BrnTooltip,
-      inputs: ['brnTooltip: hlmTooltip', 'position', 'hideDelay', 'showDelay', 'tooltipDisabled'],
+      inputs: [
+        'brnTooltip: hlmTooltip',
+        'position',
+        'hideDelay',
+        'showDelay',
+        'sideOffset',
+        'tooltipDisabled',
+      ],
     },
   ],
 })

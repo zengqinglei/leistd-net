@@ -257,6 +257,35 @@ def actions_quality_plan(artifact_id: int) -> dict:
         return json.loads(bundle.read('quality-plan.json'))
 
 
+def quality_attempt(run: dict, source: str, branch: str | None = None) -> tuple[int, int, dict, list, dict]:
+    """Read the same immutable attempt and owned plan artifact for either quality reuse path."""
+    run_id, attempt = run['id'], run['run_attempt']
+    if type(run_id) is not int or run_id <= 0 or type(attempt) is not int or attempt <= 0:
+        raise ValueError('Invalid source run identity')
+    jobs = complete_actions_list(f'runs/{run_id}/attempts/{attempt}/jobs?per_page=100', 'jobs')
+    artifacts = complete_actions_list(f'runs/{run_id}/artifacts?per_page=100', 'artifacts')
+    matches = [item for item in artifacts if item['name'] == f'quality-plan-{run_id}-{attempt}']
+    if len(matches) != 1 or matches[0]['expired'] is not False:
+        raise ValueError('Source plan artifact missing, expired or duplicated')
+    artifact = matches[0]
+    owner = artifact['workflow_run']
+    if (owner['id'] != run_id or owner['head_sha'] != source or
+            (branch is not None and owner['head_branch'] != branch) or
+            owner['repository_id'] != run['repository']['id'] or
+            owner['head_repository_id'] != run['repository']['id'] or
+            type(artifact['id']) is not int or artifact['id'] <= 0):
+        raise ValueError('Source plan artifact ownership differs')
+    # The immutable name binds the attempt; each caller also requires its uploading job to pass.
+    return run_id, attempt, artifact, jobs, actions_quality_plan(artifact['id'])
+
+
+def verify_quality_attempt(run_id: int, attempt: int, trust) -> None:
+    current = actions_get(f'runs/{run_id}')
+    trust(current)
+    if current['id'] != run_id or current['run_attempt'] != attempt:
+        raise ValueError('Source attempt changed during verification')
+
+
 def full_quality_source(plan: dict, sha: str) -> None:
     """Compare actual responsibilities with the catalog, not a source plan's claim to be full."""
     scenarios = coverage.load_scenarios()
@@ -296,31 +325,13 @@ def verified_release_quality(head: str) -> tuple[dict, str]:
         if (run['repository']['full_name'].lower() != repository or
                 run['head_repository']['full_name'].lower() != repository):
             raise ValueError('Source repository differs')
-        run_id, attempt = run['id'], run['run_attempt']
-        if type(run_id) is not int or run_id <= 0 or type(attempt) is not int or attempt <= 0:
-            raise ValueError('Invalid source run identity')
-        jobs = complete_actions_list(f'runs/{run_id}/attempts/{attempt}/jobs?per_page=100', 'jobs')
-        artifacts = complete_actions_list(f'runs/{run_id}/artifacts?per_page=100', 'artifacts')
-        matches = [item for item in artifacts if item['name'] == f'quality-plan-{run_id}-{attempt}']
-        if len(matches) != 1 or matches[0]['expired'] is not False:
-            raise ValueError('Source plan artifact missing, expired or duplicated')
-        artifact = matches[0]
-        owner = artifact['workflow_run']
-        if (owner['id'] != run_id or owner['head_sha'] != source or owner['head_branch'] != 'develop' or
-                owner['repository_id'] != run['repository']['id'] or owner['head_repository_id'] != run['repository']['id'] or
-                type(artifact['id']) is not int or artifact['id'] <= 0):
-            raise ValueError('Source plan artifact ownership differs')
-        # The immutable artifact name binds the attempt; its uploading job must succeed in that exact attempt.
-        plan = actions_quality_plan(artifact['id'])
+        run_id, attempt, artifact, jobs, plan = quality_attempt(run, source, 'develop')
         full_quality_source(plan, source)
         for name in quality_job_names(plan):
             found = [job for job in jobs if job['name'] == name]
             if len(found) != 1 or found[0]['status'] != 'completed' or found[0]['conclusion'] != 'success':
                 raise ValueError('Source quality job missing or unsuccessful: ' + name)
-        current = actions_get(f'runs/{run_id}')
-        trusted_quality_run(current, source, 'develop')
-        if current['id'] != run_id or current['run_attempt'] != attempt:
-            raise ValueError('Source attempt changed during verification')
+        verify_quality_attempt(run_id, attempt, lambda current: trusted_quality_run(current, source, 'develop'))
         return dict(Verified=True, RunId=run_id, Attempt=attempt, HeadSha=source, Tree=tree,
                     PlanArtifactId=artifact['id']), f'Reused full code quality from run {run_id}, attempt {attempt}'
     except (ValueError, KeyError, TypeError, AttributeError, OSError, HTTPException, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
@@ -753,7 +764,15 @@ def select_scenarios(requirements: list[tuple[str, set[str]]], initial: set[str]
     return [name for name in order if name in selected]
 
 
-def create_plan(tier: str, base: str, event: str, candidate_input: str,
+def documentation_responsibilities(classes: dict) -> dict:
+    generated, packaged = bool(classes['generated-doc']), bool(classes['package-doc'])
+    jobs = {name: False for name in JOB_NAMES}
+    jobs.update({'frontend-gates': 'template/docs/standards/frontend-spartan.md' in classes['generated-doc'],
+                 'framework-pack': packaged, 'package-consumption': packaged, 'template-generation': generated})
+    return dict(Jobs=jobs, GeneratedDocumentation=generated, PackageDocumentation=packaged)
+
+
+def complete_plan(tier: str, base: str, event: str, candidate_input: str,
                 container_smoke: bool = False, release_channel: str = '', release_base_tag: str = '',
                 release_base_sha: str = '') -> dict:
     """tier core on a direct PR yields Tier core (selector or representative); every other request is the full tier."""
@@ -886,8 +905,9 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str,
             return finish(dict(plan, Reason='Full: shared or unknown inputs: ' + ', '.join(classes['unknown'])))
         template_code = classes['frontend'] + classes['backend']
         code = template_code + classes['framework']
-        generated_docs, package_docs = bool(classes['generated-doc']), bool(classes['package-doc'])
-        gate_document = 'template/docs/standards/frontend-spartan.md' in paths
+        documents = documentation_responsibilities(classes)
+        generated_docs, package_docs = documents['GeneratedDocumentation'], documents['PackageDocumentation']
+        gate_document = documents['Jobs']['frontend-gates']
         narrowed = 'core' if direct_pr else 'full'
         if generated_docs or template_code:
             old = json.loads(git('show', f'{base}:{CONFIG_PATH}'))
@@ -901,12 +921,8 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str,
                 source_producers(old, path, scenarios)
                 source_producers(current, path, scenarios)
         if not code:
-            jobs = {name: False for name in JOB_NAMES}
-            jobs.update({'frontend-gates': gate_document, 'framework-pack': package_docs, 'package-consumption': package_docs,
-                         'template-generation': generated_docs})
-            return finish(dict(plan, Tier=narrowed, Mode='documentation', Scenarios=[], FrameworkTests=False,
-                               ConsumerProjects=[], Jobs=jobs, GeneratedDocumentation=generated_docs,
-                               PackageDocumentation=package_docs, Reason='Documentation responsibilities only'))
+            return finish(dict(plan, **documents, Tier=narrowed, Mode='documentation', Scenarios=[],
+                               FrameworkTests=False, ConsumerProjects=[], Reason='Documentation responsibilities only'))
         if not direct_pr:
             return finish(plan)
         front = bool(classes['frontend']) and not classes['backend'] and not classes['framework']
@@ -955,6 +971,190 @@ def create_plan(tier: str, base: str, event: str, candidate_input: str,
         return finish(dict(complete, ChangedPaths=plan['ChangedPaths'], Inputs=plan['Inputs'], QualityBaseline=plan['QualityBaseline'],
                            Reason=f'Full: input/dependency proof unavailable ({error})'))
     return finish(plan)
+
+
+def pr_context(event: str, candidate_input: str, base: str, head: str) -> tuple[dict, dict]:
+    """Bind a direct PR to its tested merge, rather than equating its head with github.sha."""
+    if event != 'pull_request' or candidate_input:
+        return {}, {}
+    try:
+        payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+        pr = payload['pull_request']
+        repository = os.environ['GITHUB_REPOSITORY']
+        context = dict(Number=pr['number'], Repository=repository, HeadSha=pr['head']['sha'],
+                       BaseSha=pr['base']['sha'], CandidateSha=head)
+        if (type(context['Number']) is not int or context['Number'] <= 0 or
+                pr['base']['repo']['full_name'].lower() != repository.lower() or
+                pr['head']['repo']['full_name'].lower() != repository.lower() or context['BaseSha'] != base):
+            raise ValueError('PR ownership or baseline differs')
+        validate_pr_context(context)
+        return context, payload
+    except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError):
+        return {}, {}
+
+
+def validate_pr_context(context: dict) -> None:
+    if (set(context) != {'Number', 'Repository', 'HeadSha', 'BaseSha', 'CandidateSha'} or
+            type(context['Number']) is not int or context['Number'] <= 0 or
+            not re.fullmatch(r'[\w.-]+/[\w.-]+', context['Repository']) or
+            any(not re.fullmatch('[0-9a-f]{40}', context[key]) for key in ('HeadSha', 'BaseSha', 'CandidateSha'))):
+        raise ValueError('Invalid PR candidate identity')
+    parents = git('show', '-s', '--format=%P', context['CandidateSha']).split()
+    if parents != [context['BaseSha'], context['HeadSha']]:
+        raise ValueError('PR merge parents differ from tested base and head')
+
+
+def document_delta(base: str, head: str, ancestor: bool = True) -> tuple[list[str], dict]:
+    if ancestor:
+        git('merge-base', '--is-ancestor', base, head)
+    paths = git('-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, head).split('\0')[:-1]
+    if not paths:
+        raise ValueError('Empty documentation increment')
+    classes = classify_inputs(base, head, paths)
+    if any(classes[key] for key in ('frontend', 'backend', 'framework', 'unknown')):
+        raise ValueError('Increment contains non-documentation inputs')
+    return paths, classes
+
+
+def validate_pr_documentation(plan: dict) -> None:
+    """Aggregate-time, offline check of the frozen source chain and actual documentation scope."""
+    evidence = plan['PrDocumentation']
+    if evidence == dict(Verified=False, Sources=[]):
+        return
+    context = plan['PullRequest']
+    validate_pr_context(context)
+    if (evidence['Verified'] is not True or set(evidence) != {'Verified', 'Sources'} or
+            not isinstance(evidence['Sources'], list) or not evidence['Sources'] or
+            plan['CandidateSha'] != context['CandidateSha'] or plan['BaseSha'] != context['BaseSha'] or
+            plan['Event'] != 'pull_request' or plan['ReleaseChannel'] or plan['Tier'] != 'core' or
+            plan['Mode'] != 'documentation' or plan['QualityExecution'] != 'current'):
+        raise ValueError('Invalid PR documentation reuse context')
+    seen = set()
+    current = context
+    for source in evidence['Sources']:
+        if (set(source) != {'RunId', 'Attempt', 'HeadSha', 'BaseSha', 'CandidateSha', 'PlanArtifactId'} or
+                any(type(source[key]) is not int or source[key] <= 0 for key in ('RunId', 'Attempt', 'PlanArtifactId')) or
+                source['RunId'] in seen or source['BaseSha'] != context['BaseSha']):
+            raise ValueError('Invalid PR documentation source chain')
+        seen.add(source['RunId'])
+        previous = dict(context, **{key: source[key] for key in ('HeadSha', 'BaseSha', 'CandidateSha')})
+        validate_pr_context(previous)
+        document_delta(previous['HeadSha'], current['HeadSha'])
+        document_delta(previous['CandidateSha'], current['CandidateSha'], ancestor=False)
+        current = previous
+    paths, classes = document_delta(evidence['Sources'][0]['CandidateSha'], context['CandidateSha'], ancestor=False)
+    expected = pr_documentation_scope(plan, paths, classes)
+    for key in ('Mode', 'Scenarios', 'ScenarioSelection', 'FrameworkTests', 'FrameworkTestProjects',
+                'FrameworkTestSelection', 'ConsumerProjects', 'Jobs', 'GeneratedDocumentation',
+                'PackageDocumentation', 'ContainerSmoke', 'Slices', 'DependencyAudit', 'DocsOnly'):
+        if plan[key] != expected[key]:
+            raise ValueError('PR documentation responsibility differs: ' + key)
+
+
+def pr_documentation_scope(plan: dict, paths: list[str], classes: dict) -> dict:
+    documents = documentation_responsibilities(classes)
+    if documents['GeneratedDocumentation']:
+        source = plan['PrDocumentation']['Sources'][0]['CandidateSha']
+        old = json.loads(git('show', f'{source}:{CONFIG_PATH}'))
+        current = json.loads(git('show', f"{plan['CandidateSha']}:{CONFIG_PATH}"))
+        if old != current:
+            raise ValueError('Generated documentation configuration differs')
+        for path in classes['generated-doc']:
+            source_producers(old, path, coverage.load_scenarios())
+            source_producers(current, path, coverage.load_scenarios())
+    return dict(plan, **documents, Mode='documentation', Tier='core', Scenarios=[], ScenarioSelection='none',
+                FrameworkTests=False, FrameworkTestProjects=[], FrameworkTestSelection='none',
+                FrameworkTestReason='Previously validated PR; current documentation increment only',
+                ConsumerProjects=[], ContainerSmoke=False, Slices=[], DocsOnly=not any(documents['Jobs'].values()),
+                DependencyAudit=dependency_audit('', 'pull_request', paths))
+
+
+def verified_pr_documentation(plan: dict, payload: dict) -> dict:
+    """Use only the latest successful attempt on the same PR and unchanged merge base."""
+    context = plan['PullRequest']
+    before = payload['before']
+    if not re.fullmatch('[0-9a-f]{40}', before) or before == context['HeadSha']:
+        raise ValueError('Invalid preceding head')
+    document_delta(before, context['HeadSha'])
+    query = urlencode(dict(head_sha=before, event='pull_request', per_page=100))
+    runs = complete_actions_list('workflows/ci.yml/runs?' + query, 'workflow_runs')
+    # The API relationship can be empty; the fixed attempt's plan must still prove the PR number.
+    matches = [run for run in runs if not run['pull_requests'] or
+               any(pr['number'] == context['Number'] for pr in run['pull_requests'])]
+    if not matches:
+        raise ValueError('No preceding PR quality run')
+    run = max(matches, key=lambda entry: entry['id'])
+
+    def trusted_run(value):
+        if (value['head_sha'] != before or value['event'] != 'pull_request' or
+                value['path'] != '.github/workflows/ci.yml' or value['status'] != 'completed' or
+                value['conclusion'] != 'success' or
+                value['repository']['full_name'].lower() != context['Repository'].lower() or
+                value['head_repository']['full_name'].lower() != context['Repository'].lower() or
+                (value['pull_requests'] and not any(pr['number'] == context['Number']
+                                                   for pr in value['pull_requests']))):
+            raise ValueError('Preceding PR quality run is not trusted and successful')
+
+    trusted_run(run)
+    run_id, attempt, artifact, jobs, source = quality_attempt(run, before)
+    for name in ('计算候选验证责任', '模板全场景矩阵'):
+        found = [job for job in jobs if job['name'] == name]
+        if len(found) != 1 or found[0]['status'] != 'completed' or found[0]['conclusion'] != 'success':
+            raise ValueError('Preceding PR aggregate or plan job not successful')
+    previous = source['PullRequest']
+    if (source['Version'] != 4 or source['QualityExecution'] != 'current' or source['QualityValidated'] is not False or
+            source['Event'] != 'pull_request' or source['ReleaseChannel'] or source['Tier'] != 'core' or
+            previous['Number'] != context['Number'] or previous['Repository'] != context['Repository'] or
+            previous['HeadSha'] != before or previous['BaseSha'] != context['BaseSha'] or
+            source['CandidateSha'] != previous['CandidateSha'] or source['BaseSha'] != previous['BaseSha']):
+        raise ValueError('Preceding PR plan identity differs')
+    candidate = previous['CandidateSha']
+    if not re.fullmatch('[0-9a-f]{40}', candidate):
+        raise ValueError('Invalid preceding merge candidate')
+    try:
+        git('cat-file', '-e', candidate + '^{commit}')
+    except subprocess.CalledProcessError:
+        git('fetch', '--no-tags', 'origin', candidate)
+    validate_pr_context(previous)
+    # A prior successful aggregate already validated its chain. Preserve it and verify all local edges again.
+    for ancestor in source['PrDocumentation']['Sources']:
+        if not re.fullmatch('[0-9a-f]{40}', ancestor['CandidateSha']):
+            raise ValueError('Invalid inherited candidate')
+        try:
+            git('cat-file', '-e', ancestor['CandidateSha'] + '^{commit}')
+        except subprocess.CalledProcessError:
+            git('fetch', '--no-tags', 'origin', ancestor['CandidateSha'])
+    validate_pr_documentation(source)
+    paths, classes = document_delta(candidate, context['CandidateSha'], ancestor=False)
+    result = dict(plan, PrDocumentation=dict(Verified=True, Sources=[dict(RunId=run_id, Attempt=attempt,
+                  HeadSha=before, BaseSha=previous['BaseSha'], CandidateSha=candidate, PlanArtifactId=artifact['id'])]
+                  + source['PrDocumentation']['Sources']))
+    result = pr_documentation_scope(result, paths, classes)
+    result['Reason'] = f'PR documentation increment; previous responsibilities from run {run_id}, attempt {attempt}'
+    validate_pr_documentation(result)
+    verify_quality_attempt(run_id, attempt, trusted_run)
+    return result
+
+
+def create_plan(tier: str, base: str, event: str, candidate_input: str,
+                container_smoke: bool = False, release_channel: str = '', release_base_tag: str = '',
+                release_base_sha: str = '') -> dict:
+    plan = complete_plan(tier, base, event, candidate_input, container_smoke,
+                         release_channel, release_base_tag, release_base_sha)
+    context, payload = pr_context(event, candidate_input, base, plan['CandidateSha'])
+    plan.update(PullRequest=context, PrDocumentation=dict(Verified=False, Sources=[]))
+    if (tier == 'core' and context and not release_channel and payload.get('action') == 'synchronize' and
+            not git('status', '--porcelain', '--untracked-files=normal')):
+        try:
+            result = verified_pr_documentation(plan, payload)
+            if len(json.dumps(emitted_plan(result)).encode('utf-8')) > PLAN_OUTPUT_LIMIT:
+                raise ValueError('Documentation source chain exceeds plan output budget')
+            return result
+        except (ValueError, KeyError, TypeError, AttributeError, OSError, HTTPException,
+                subprocess.CalledProcessError, zipfile.BadZipFile) as error:
+            reason = str(error) if type(error) is ValueError else type(error).__name__
+            plan['Reason'] += '; PR documentation reuse unavailable (' + reason + ')'
+    return plan
 
 
 def local_scenarios(base: str) -> dict:
@@ -1023,15 +1223,35 @@ def main() -> None:
     parser.add_argument('--release-base-sha', default='')
     parser.add_argument('--container-smoke', choices=['true', 'false'], default='false',
                         help='Bind the independent container-scope decision into this candidate plan')
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--output', type=Path)
     parser.add_argument('--github-output', action='store_true')
     parser.add_argument('--check-same-as-stable', action='store_true',
                         help='Only compare develop push content with the highest stable tag; do not generate a quality plan')
+    parser.add_argument('--verify-pr-documentation', type=Path, help='Verify the frozen PR documentation evidence at aggregation')
     parser.add_argument('--local-scenarios', action='store_true',
                         help='Output the PR plan scenarios for local -GenerateOnly checks (selector or representative; full only for a dirty tree)')
     parser.add_argument('--local-framework-tests', action='store_true',
                         help='Output local L1 framework test projects (Projects) affected since --base')
     args = parser.parse_args()
+    if args.verify_pr_documentation:
+        plan = json.loads(args.verify_pr_documentation.read_text(encoding='utf-8'))
+        if plan['PrDocumentation']['Verified']:
+            context, _ = pr_context('pull_request', '', plan['BaseSha'], git('rev-parse', 'HEAD'))
+            if context != plan['PullRequest']:
+                raise ValueError('Frozen PR identity differs from aggregation event')
+            for source in plan['PrDocumentation']['Sources']:
+                sha = source['CandidateSha']
+                if not re.fullmatch('[0-9a-f]{40}', sha):
+                    raise ValueError('Invalid frozen candidate')
+                try:
+                    git('cat-file', '-e', sha + '^{commit}')
+                except subprocess.CalledProcessError:
+                    git('fetch', '--no-tags', 'origin', sha)
+        validate_pr_documentation(plan)
+        print('PR documentation evidence verified')
+        return
+    if args.output is None:
+        parser.error('--output is required for planning')
     if args.check_same_as_stable:
         if (args.local_scenarios or args.local_framework_tests or args.release_channel or args.release_base_tag or
                 args.release_base_sha or args.container_smoke != 'false' or args.tier != 'full'):

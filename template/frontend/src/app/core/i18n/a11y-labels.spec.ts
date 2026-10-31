@@ -5,6 +5,7 @@ import { BrnDialogRef } from '@spartan-ng/brain/dialog';
 import { HlmDialogContent } from '@spartan-ng/helm/dialog';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
+import { injectHlmA11yLabels } from '@spartan-ng/helm/utils';
 import { firstValueFrom, of } from 'rxjs';
 
 import { provideAppA11yLabels } from './a11y-labels';
@@ -40,11 +41,13 @@ class DialogContentHost {}
   // 抽屉内容渲染在 document 上的浮层里，要真实打开一次才有关闭按钮
   template: `
     <hlm-sheet side="left" state="open">
-      <hlm-sheet-content *hlmSheetPortal />
+      <hlm-sheet-content *hlmSheetPortal [closeLabel]="a11y.close()" />
     </hlm-sheet>
   `,
 })
-class SheetContentHost {}
+class SheetContentHost {
+  readonly a11y = injectHlmA11yLabels();
+}
 
 describe('libs/ui screen reader labels', () => {
   function configure(): void {

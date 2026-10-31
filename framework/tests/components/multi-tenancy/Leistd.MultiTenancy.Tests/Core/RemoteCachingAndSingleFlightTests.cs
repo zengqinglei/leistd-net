@@ -42,15 +42,15 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
         Assert.Equal(2, _host.Source.RuntimeCalls);
     }
 
-    // 缓存键带连接名：同一个租户在 crm 与 foundation 是两条路由，不能互相顶掉
+    // 缓存键带连接名：同一个租户在 billing 与 inventory 是两条路由，不能互相顶掉
     [Fact]
     public async Task Each_connection_name_has_its_own_cache_entry()
     {
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, $"Data Source={name}");
 
-        Assert.Equal("Data Source=crm", await _host.ResolveAsync("Crm"));
-        Assert.Equal("Data Source=foundation", await _host.ResolveAsync("Foundation"));
+        Assert.Equal("Data Source=billing", await _host.ResolveAsync("Billing"));
+        Assert.Equal("Data Source=inventory", await _host.ResolveAsync("Inventory"));
 
         Assert.Equal(2, _host.Source.RuntimeCalls);
     }
@@ -60,11 +60,11 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
     public async Task Names_differing_only_in_case_share_one_cache_entry()
     {
         _host.Tenant.Id = Guid.NewGuid();
-        _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, "Data Source=acme-crm");
+        _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, "Data Source=acme-billing");
 
-        await _host.ResolveAsync("Crm");
-        await _host.ResolveAsync("crm");
-        await _host.ResolveAsync("CRM");
+        await _host.ResolveAsync("Billing");
+        await _host.ResolveAsync("billing");
+        await _host.ResolveAsync("BILLING");
 
         Assert.Equal(1, _host.Source.RuntimeCalls);
     }

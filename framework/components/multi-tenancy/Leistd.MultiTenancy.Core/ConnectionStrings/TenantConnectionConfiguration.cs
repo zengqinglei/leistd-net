@@ -15,7 +15,7 @@ public sealed class TenantConnectionConfiguration
     /// <summary>连接名的最大长度。</summary>
     public const int MaxNameLength = 64;
 
-    /// <summary>连接名的合法形态：小写字母、数字与连字符。输入先归一化为小写，<c>Crm</c> 与 <c>crm</c> 命中同一行。</summary>
+    /// <summary>连接名的合法形态：小写字母、数字与连字符。输入先归一化为小写，<c>Billing</c> 与 <c>billing</c> 命中同一行。</summary>
     public const string NamePattern = "^[a-z0-9-]{1,64}$";
 
     /// <summary>租户 Id。</summary>

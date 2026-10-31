@@ -1,5 +1,5 @@
 /**
- * 租户的一条连接登记。每个服务可登记一条，连接名是使用方 DbContext 的连接名（default / crm）；
+ * 租户的一条连接登记。每个服务可登记一条，连接名是使用方 DbContext 的连接名（default / billing）；
  * 一条都没有即不单独分库。连接串只写，任何接口都不返回，这里只有名字与版本。
  */
 export interface TenantConnectionDto {

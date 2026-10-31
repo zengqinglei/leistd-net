@@ -18,7 +18,7 @@
       >
         <ng-icon name="lucideMenu" />
       </button>
-      <hlm-sheet-content *hlmSheetPortal="let ctx">
+      <hlm-sheet-content *hlmSheetPortal="let ctx" [closeLabel]="a11y.close()">
         <!-- 页头右侧为关闭按钮让位；底边距由下面导航的 p-4 承担 -->
         <div hlmSheetHeader class="pb-0">
           <h2 hlmSheetTitle>

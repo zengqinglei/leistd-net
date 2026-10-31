@@ -216,11 +216,11 @@ public sealed class DeniedOperationRecordingTests
         var (context, store) = Create(metadata:
         [
             new OperationRecordActionAttribute("tenant-connection.updated", "tenantId", "name")
-        ], routeValues: new() { ["tenantId"] = "t-1", ["name"] = "crm" });
+        ], routeValues: new() { ["tenantId"] = "t-1", ["name"] = "billing" });
 
         await context.RecordDeniedOperationAsync();
 
-        Assert.Equal("t-1/crm", Assert.Single(store.Written).TargetId);
+        Assert.Equal("t-1/billing", Assert.Single(store.Written).TargetId);
     }
 
     /// <summary>缺任何一段就整体记为占位值，不记半截。</summary>

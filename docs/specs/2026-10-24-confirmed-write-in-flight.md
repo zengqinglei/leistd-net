@@ -6,9 +6,9 @@
 
 ### 问题与背景
 
-CRM V2 三仓在 2026-10-24 反馈：模板通知铃铛的"清空全部"可以重复进入。连点会弹两个确认框；确认后、请求返回前再点一次，会再发一次删除。"全部标为已读"已经用 `markingAllRead()` 禁用了按钮，两者不一致。
+下游项目在 2026-10-24 反馈：模板通知铃铛的"清空全部"可以重复进入。连点会弹两个确认框；确认后、请求返回前再点一次，会再发一次删除。"全部标为已读"已经用 `markingAllRead()` 禁用了按钮，两者不一致。
 
-审视结论见协调目录 `/Users/quincy/orca/workspaces/.crm-v2-adaptation/backlog-20261019/framework-receipt-notification-bell-guards.md`。要点：
+审视结论按以下通用问题归纳。要点：
 
 - Spartan 没有专门的防重复点击 API。官方写法是触发按钮 `[disabled]` 绑定进行中状态，按钮内放 `<hlm-spinner data-icon="inline-start" />`。`BrnButton` 只有 `disabled` 一个输入。
 - 模板里的普通按钮、弹窗表单、整页表单都已符合这个写法。缺口只在"先确认、再写"的流程：

@@ -17,8 +17,8 @@ public static class DependencyInjection
     /// </remarks>
     /// <example>
     /// <code>
-    /// services.AddRecurringJob&lt;LeadRecycleJob&gt;(
-    ///     "crm.lead-recycle",
+    /// services.AddRecurringJob&lt;InvoiceProcessJob&gt;(
+    ///     "billing.invoice-process",
     ///     RecurringJobSchedule.DailyAt(new TimeOnly(18, 0)),
     ///     RecurringJobScope.Cluster);
     /// </code>

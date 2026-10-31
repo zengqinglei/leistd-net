@@ -13,7 +13,7 @@
 - 实测：
   - 2026-10-23 的 nightly（run `40023447654`）在 `f53a2d83` 上跑了全量，用 114 runner 分钟；这个提交 1 小时前推送时，它的 push 运行刚刚完成全量；
   - 2026-10-21 的 nightly（run `39677313555`）同样如此，用 119 runner 分钟。
-- 消费方：三个下游业务仓（abroker crm、identity、foundation）都没有配置 GitHub Packages 包源，它们跟进的是 nuget.org 上的 beta。
+- 消费方：下游项目都没有配置 GitHub Packages 包源，它们跟进的是 nuget.org 上的 beta。
 - develop 每次推送都会按需发布 beta，已经覆盖了预发布消费需求。随时间变化的外部检查（前端依赖全量审计、NuGet 漏洞扫描、模板升级闸门 verify Fast），由 `scheduled-checks.yml` 每个工作日承担。
 
 **二、发布后的回合并在 develop 上重跑全量，还发布一个内容相同的 beta。**

@@ -1,21 +1,12 @@
 import type { BooleanInput } from '@angular/cdk/coercion';
-import {
-  booleanAttribute,
-  ChangeDetectionStrategy,
-  Component,
-  effect,
-  ElementRef,
-  inject,
-  input,
-  Renderer2,
-  signal,
-} from '@angular/core';
+import { booleanAttribute, ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideX } from '@ng-icons/lucide';
-import { injectExposedSideProvider, injectExposesStateProvider } from '@spartan-ng/brain/core';
+import { BrnDialogRef } from '@spartan-ng/brain/dialog';
+import { BrnSheet } from '@spartan-ng/brain/sheet';
 import { HlmButton } from '@spartan-ng/helm/button';
 
-import { classes, injectHlmA11yLabels } from '@spartan-ng/helm/utils';
+import { classes } from '@spartan-ng/helm/utils';
 import { HlmSheetClose } from './hlm-sheet-close';
 
 @Component({
@@ -26,7 +17,7 @@ import { HlmSheetClose } from './hlm-sheet-close';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     'data-slot': 'sheet-content',
-    '[attr.data-side]': '_sideProvider.side()',
+    '[attr.data-side]': '_sheet.sideState()',
     '[attr.data-state]': 'state()',
   },
   template: `
@@ -34,23 +25,22 @@ import { HlmSheetClose } from './hlm-sheet-close';
 
     @if (showCloseButton()) {
       <button hlmBtn variant="ghost" size="icon-sm" class="absolute end-4 top-4" hlmSheetClose>
-        <span class="sr-only">{{ a11y.close() }}</span>
+        <span class="sr-only">{{ closeLabel() }}</span>
         <ng-icon name="lucideX" />
       </button>
     }
   `,
 })
 export class HlmSheetContent {
-  protected readonly a11y = injectHlmA11yLabels();
-  private readonly _stateProvider = injectExposesStateProvider({ host: true });
-  protected readonly _sideProvider = injectExposedSideProvider({ host: true });
-  public readonly state = this._stateProvider.state ?? signal('closed');
-  private readonly _renderer = inject(Renderer2);
-  private readonly _element = inject(ElementRef);
+  private readonly _dialogRef = inject(BrnDialogRef);
+  protected readonly _sheet = inject(BrnSheet);
+
+  public readonly state = this._dialogRef.state;
 
   public readonly showCloseButton = input<boolean, BooleanInput>(true, {
     transform: booleanAttribute,
   });
+  public readonly closeLabel = input<string>('Close');
 
   constructor() {
     classes(() => [
@@ -61,8 +51,5 @@ export class HlmSheetContent {
       'data-[side=left]:data-closed:slide-out-to-left data-[side=left]:data-open:slide-in-from-left',
       'data-[side=right]:data-closed:slide-out-to-right data-[side=right]:data-open:slide-in-from-right',
     ]);
-    effect(() => {
-      this._renderer.setAttribute(this._element.nativeElement, 'data-state', this.state());
-    });
   }
 }

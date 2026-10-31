@@ -30,14 +30,14 @@ public sealed class RemoteTenantConnectionStoreTests
     public async Task A_runtime_lookup_is_asked_by_name_and_mapped()
     {
         _handler.Responder = _ => Json(HttpStatusCode.OK, $$$"""
-            {"tenantId":"{{{TenantId}}}","hasAnyConnection":true,"connection":{"name":"crm","connectionString":"Host=crm","version":3}}
+            {"tenantId":"{{{TenantId}}}","hasAnyConnection":true,"connection":{"name":"billing","connectionString":"Host=billing","version":3}}
             """);
 
-        var lookup = await Store("/api/v1/tenant-connections/").FindAsync(TenantId, "crm");
+        var lookup = await Store("/api/v1/tenant-connections/").FindAsync(TenantId, "billing");
 
         Assert.Equal($"/api/v1/tenant-connections/runtime/{TenantId}", _handler.Requests[0].RequestUri!.AbsolutePath);
-        Assert.Equal("?name=crm", _handler.Requests[0].RequestUri!.Query);
-        Assert.Equal((TenantId, true, "crm", "Host=crm", 3L),
+        Assert.Equal("?name=billing", _handler.Requests[0].RequestUri!.Query);
+        Assert.Equal((TenantId, true, "billing", "Host=billing", 3L),
             (lookup!.TenantId, lookup.HasAnyConnection, lookup.Connection!.Name, lookup.Connection.ConnectionString, lookup.Connection.Version));
     }
 
@@ -46,7 +46,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => Json(HttpStatusCode.NotFound, """{"status":404,"code":"Tenant:NotFound"}""");
 
-        Assert.Null(await Store().FindAsync(TenantId, "crm"));
+        Assert.Null(await Store().FindAsync(TenantId, "billing"));
     }
 
     // 路由配错也是 404：翻成 null 会表现成"所有租户都不存在"，必须大声失败
@@ -55,7 +55,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.NotFound);
 
-        var error = await Assert.ThrowsAsync<RemoteServiceException>(() => Store().FindAsync(TenantId, "crm"));
+        var error = await Assert.ThrowsAsync<RemoteServiceException>(() => Store().FindAsync(TenantId, "billing"));
 
         Assert.Equal(404, error.RemoteStatusCode);
     }
@@ -66,7 +66,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
-        var exception = await Assert.ThrowsAsync<TenantConnectionUnavailableException>(() => Store().FindAsync(TenantId, "crm"));
+        var exception = await Assert.ThrowsAsync<TenantConnectionUnavailableException>(() => Store().FindAsync(TenantId, "billing"));
         Assert.Equal(503, Assert.IsType<RemoteServiceException>(exception.InnerException).RemoteStatusCode);
     }
 
@@ -78,7 +78,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => Json(HttpStatusCode.OK, body);
 
-        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().FindAsync(TenantId, "crm"));
+        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().FindAsync(TenantId, "billing"));
 
         Assert.Equal(ServiceClientFailureKind.InvalidResponse, error.FailureKind);
     }
@@ -89,14 +89,14 @@ public sealed class RemoteTenantConnectionStoreTests
         var failed = Guid.NewGuid();
         _handler.Responder = _ => Json(HttpStatusCode.OK, $$"""
             {"connections":[{"tenantId":"{{TenantId}}","name":"default","connectionString":"Host=a"}],
-             "failedTenants":[{"tenantId":"{{failed}}","reason":"no connection named 'crm'"}]}
+             "failedTenants":[{"tenantId":"{{failed}}","reason":"no connection named 'billing'"}]}
             """);
 
-        var list = await Store().GetListAsync("crm");
+        var list = await Store().GetListAsync("billing");
 
         Assert.Equal("/api/v1/tenant-connections/migration", _handler.Requests[0].RequestUri!.AbsolutePath);
         Assert.Equal(new TenantMigrationConnection(TenantId, "default", "Host=a"), Assert.Single(list.Connections));
-        Assert.Equal(new TenantDatabaseFailure(failed, "no connection named 'crm'"), Assert.Single(list.FailedTenants));
+        Assert.Equal(new TenantDatabaseFailure(failed, "no connection named 'billing'"), Assert.Single(list.FailedTenants));
     }
 
     // 空响应不能当成"没有目标"：迁移作业会以为一切正常，漏掉本该迁移的库
@@ -105,7 +105,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => Json(HttpStatusCode.OK, "null");
 
-        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetListAsync("crm"));
+        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetListAsync("billing"));
 
         Assert.Equal(ServiceClientFailureKind.InvalidResponse, error.FailureKind);
     }
@@ -116,7 +116,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => Json(HttpStatusCode.OK, "null");
 
-        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetDatabasesAsync("crm", activeOnly: true));
+        var error = await Assert.ThrowsAsync<ServiceClientException>(() => Store().GetDatabasesAsync("billing", activeOnly: true));
 
         Assert.Equal(ServiceClientFailureKind.InvalidResponse, error.FailureKind);
     }
@@ -126,7 +126,7 @@ public sealed class RemoteTenantConnectionStoreTests
     {
         _handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
-        await Assert.ThrowsAsync<RemoteServiceException>(() => Store().GetListAsync("crm"));
+        await Assert.ThrowsAsync<RemoteServiceException>(() => Store().GetListAsync("billing"));
     }
 
     [Fact]

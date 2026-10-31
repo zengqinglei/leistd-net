@@ -6,7 +6,7 @@
 
 ### 问题与背景
 
-CRM V2 三仓（crm、identity、foundation）在 2026-10-24 做了两轮配置清理，删掉了部署样例、Compose、测试夹具和 appsettings 里取值等于"删掉这一行后的生效值"的显式配置，共 107 项。这类配置是噪音，而且代码默认值以后调整时，它们会把旧值悄悄钉住，造成环境漂移。
+下游项目在 2026-10-24 做了两轮配置清理，删掉了部署样例、Compose、测试夹具和 appsettings 里取值等于"删掉这一行后的生效值"的显式配置，共 107 项。这类配置是噪音，而且代码默认值以后调整时，它们会把旧值悄悄钉住，造成环境漂移。
 
 清理时发现，其中很多项注明"照 template"，源头在模板：
 - 模板的 `appsettings.json`、`deploy/docker-compose.yml`、`.env.example` 带着同值配置；
@@ -14,7 +14,7 @@ CRM V2 三仓（crm、identity、foundation）在 2026-10-24 做了两轮配置�
 
 这些项不从模板删掉，业务项目下次同步模板时会被重新引入。
 
-框架会话的审视结论见 `/Users/quincy/orca/workspaces/.crm-v2-adaptation/foundation-integration-20261023/config-defaults-framework-review.md`，用户 2026-10-24 裁决其中 4 项全部执行。
+框架会话已核实以下结论，用户 2026-10-24 裁决其中 4 项全部执行。
 
 ### 目标
 
@@ -25,7 +25,7 @@ CRM V2 三仓（crm、identity、foundation）在 2026-10-24 做了两轮配置�
 
 ### 非目标
 
-- 不改业务三仓。crm Worker 的 `RetentionDays` 基线隐患由业务侧自行确认。
+- 不改下游项目。下游项目 Worker 的 `RetentionDays` 基线隐患由业务侧自行确认。
 - 不改框架组件的默认值或行为，不新增"配置同值检测"门禁。
 - 不改 `AllowedHosts` 等 ASP.NET 官方模板约定。
 
@@ -107,7 +107,7 @@ CRM V2 三仓（crm、identity、foundation）在 2026-10-24 做了两轮配置�
 用户 2026-10-24 确认以下事项：
 - 执行审视结论 §5 的 1–4 项；
 - 沿用此前的工作方式：方案交 Codex 审查直到明确通过，再由 Codex 实施并验证，Claude 审查代码，然后交付合并。
-- 业务侧 2026-10-24 转达同一裁决：规则"作为新一节"写进 `settings.md`；完成后由 Claude 把提交、PR、CI 和业务三仓下次同步要做的事，追加到审视结论末尾的"实施结果"一节。crm Worker 基线由业务侧处理，不在本规格范围。
+- 业务侧 2026-10-24 转达同一裁决：规则"作为新一节"写进 `settings.md`；完成后由 Claude 把提交、PR、CI 和下游项目下次同步要做的事，追加到审视结论末尾的"实施结果"一节。下游项目 Worker 基线由业务侧处理，不在本规格范围。
 
 ### 影响说明
 
@@ -161,7 +161,7 @@ PR #167（分支 `zengqinglei/config-defaults-cleanup`，基于 develop `095037d
 ### 遗留项
 
 - 合入 develop 后，csproj 注释会让发布分类判为框架发布输入，发布 `1.2.0-beta.<N>`；模板正式包随下一次 develop→main 同号发布。
-- 业务三仓下次同步模板时，按"影响说明"处理 TTL 变量入口的移除。
+- 下游项目下次同步模板时，按"影响说明"处理 TTL 变量入口的移除。
 
 ### 已上收的常驻文档
 

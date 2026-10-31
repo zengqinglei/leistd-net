@@ -1,0 +1,20 @@
+{
+  "Terms": [
+    "abroker",
+    "crm",
+    "foundation",
+    "volo",
+    "LeadRecycleJob",
+    "LeadArchiveJob",
+    "LeadService",
+    "LeadOptions",
+    "RecycleStaleAsync",
+    "ArchiveClosedAsync",
+    "线索回收",
+    "abp"
+  ],
+  "AllowedWords": [
+    "labpartner",
+    "abpx"
+  ]
+}

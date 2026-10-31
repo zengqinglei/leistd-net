@@ -1,4 +1,4 @@
-# 吸收 CRM 对齐模板基线的反馈
+# 吸收下游项目对齐模板基线的反馈
 
 状态：已完成 · 风险档：中 · 关联：https://github.com/zengqinglei/leistd-net/pull/135
 
@@ -6,15 +6,15 @@
 
 ### 问题
 
-CRM 三仓把 `docs/standards/` 与项目 Skill 恢复为模板基线（develop `6463debd`）后，逐段比对整理出 26 条模板改进项，见仓库外 `~/orca/workspaces/.crm-v2-adaptation/backlog-20261019/framework-feedback-standards-align.md`。这些条目分三类：项目写法比模板好且通用；模板文档与模板代码自相矛盾；项目侧的特有做法。
+下游项目把 `docs/standards/` 与项目 Skill 恢复为模板基线（develop `6463debd`）后，逐段比对整理出 26 条模板改进项。这些条目分三类：项目写法比模板好且通用；模板文档与模板代码自相矛盾；项目侧的特有做法。
 
 ### 目标
 
 - 逐条按框架规范、开发规范与"终局不过度设计"判断，采纳的落到模板对应层（规范、代码或项目 Skill），不采纳的写明理由。
 - 文档与代码矛盾一律修正，以代码为准，代码有缺陷时修代码。
-- 回执写到同目录 `framework-receipt-standards-align.md`，说明 CRM 可删掉哪些项目补充。
+- 回执保存在仓库外的下游目录，说明下游项目可删掉哪些项目补充。
 
-非目标：CRM 特有的视觉输入（`activeTone`、表格 `edge`）、语言状态与长度门禁、安全参数的额外启动校验。
+非目标：下游项目特有的视觉输入（`activeTone`、表格 `edge`）、语言状态与长度门禁、安全参数的额外启动校验。
 
 ### 验收标准
 
@@ -33,7 +33,7 @@ CRM 三仓把 `docs/standards/` 与项目 Skill 恢复为模板基线（develop 
 
 ### 实际交付
 
-逐条结论与 CRM 可删项见回执。采纳与部分采纳的落点：
+逐条结论与下游项目可删项见回执。采纳与部分采纳的落点：
 
 - 项目 Skill：验证入口以项目测试规范为准；等待 CI 写成通用原则；先复现目标失败；零执行或缺报告不算通过。
 - 规范：`api.md`（前缀与完整码、组件码译文、动作路由）、`auth.md`（来源防护路径）、`background-jobs.md`（`isEnabled` 与失败抛出）、`coding-backend.md` §3.7（偏离组件默认的层级、无参授权）、`service-invocation.md`（不绕开标准管道、类级 `[Authorize]`、共用地址节）、`testing.md`（`UseSetting`、E2E 等待与因果屏障、动作码单向）、`settings.md`（提示位置、外观行存储）、`frontend-lists.md`（展开详情写法、时间列 Tooltip）、`frontend-navigation.md`（句首大写）、`coding-frontend.md` §6（错误归一化）、`frontend-spartan.md` 与 `frontend-ui.md`（定制登记、验证码格 44px）、`frontend-i18n.md`（语言清单少一处）。

@@ -94,7 +94,7 @@ public record CreateTenantInputDto
     /// <summary>该租户的专属库连接，按名字登记；留空即不分库，各服务用自己配置的库。</summary>
     /// <remarks>
     /// <para>库要先建好并迁移过，这里只登记；开通紧随登记之后，解析到的已经是这些库。</para>
-    /// <para>多服务部署可一次登记多条（如 <c>default</c>、<c>crm</c>），租户与全部连接在同一个控制面工作单元里落库。
+    /// <para>多服务部署可一次登记多条（如 <c>default</c>、<c>billing</c>），租户与全部连接在同一个控制面工作单元里落库。
     /// 请求体显式传 <see langword="null"/> 时按空列表处理。</para>
     /// </remarks>
     public IReadOnlyList<CreateTenantConnectionInputDto> Connections

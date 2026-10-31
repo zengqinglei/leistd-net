@@ -6,18 +6,18 @@
 
 ### 问题与背景
 
-CRM V2 三个服务（crm、identity、foundation）基于 Leistd.BackgroundJobs 1.1.2。它们的后台作业页要回答两件事：每次触发是否正常；不正常的原因是什么。框架目前做不到：
+下游项目的多个服务基于 Leistd.BackgroundJobs 1.1.2。它们的后台作业页要回答两件事：每次触发是否正常；不正常的原因是什么。框架目前做不到：
 
 - 调度器失败时不写水位，异常只进日志，每次执行的结果与原因都不保留（`RecurringJobRunner.cs:68-82`）。
 - `IRecurringJobStatusReader` 只提供登记信息、开关、排期、当前时段与集群完成水位。
 
-三仓的临时方案是包装类型 `AddRecordedRecurringJob<TJob>` → `RecordedRecurringJob<TJob>`：在任务前后各写一条 `JobRun`（crm `backend/src/Crm.Infrastructure/BackgroundJobs/RecordedRecurringJob.cs`，identity、foundation 各有一份等价实现）。这个方案有三个缺口：
+下游项目的临时方案是包装类型 `AddRecordedRecurringJob<TJob>` → `RecordedRecurringJob<TJob>`：在任务前后各写一条 `JobRun`（多个服务各维护一份等价实现）。这个方案有三个缺口：
 
 1. **框架组件登记的任务包不到。** 例如 `operation-records.archive`、`notifications.retention`、`settings.host-refresh`，以及模板的 OpenIddict 清理，这些任务在页面上只能显示水位。
-2. **三份等价包装各自维护。** 包括首写放在 try 内、取消补写、记录失败与任务隔离、开 Activity 等。
+2. **多份等价包装各自维护。** 包括首写放在 try 内、取消补写、记录失败与任务隔离、开 Activity 等。
 3. **包装层看不到调度器内部的事实。** 失锁取消在包装里与停机无法区分；完成水位写入失败时，任务已"成功"，而这一时段会被重做。
 
-业务侧的建议（协调目录 `framework-feedback-job-run-observer.md`）是由调度器提供 `IRecurringJobRunObserver`。本规格在此基础上独立定型。
+通用需求是由调度器提供 `IRecurringJobRunObserver`。本规格在此基础上独立定型。
 
 另外，阅读源码时发现一个现存缺陷：`RecurringJobRunner` 把**所有**非停机引起的 `OperationCanceledException` 都当作"失去集群锁"（`RecurringJobRunner.cs:72-76`）。任务内 HttpClient 超时抛出的 `TaskCanceledException` 也会被记成失锁；每副本任务不持锁，同样会记成失锁。
 
@@ -174,7 +174,7 @@ Core 包新增 4 个公共类型，带 XML 注释。`IRecurringJob.ExecuteAsync`
 
 - **A 观察者（采用）。** 只观察，不能改变控制流，水位与重试语义不受影响。同类先例：Quartz 的 `IJobListener`（`JobToBeExecuted` / `JobWasExecuted`），Hangfire 的 `IServerFilter`（`OnPerforming` / `OnPerformed`）。
 - **B 执行管道 / 中间件（否决）。** 包装器能吞异常、改写结果、跳过调用，等于把水位正确性交给宿主代码，而业务需求只是"看"。观察者满足全部需求，权限更小。
-- **C 框架内置执行记录（本轮不做）。** 三仓在实体、存储、保留期、查询上仍各有一份，内置看上去能消除这部分重复。不做的理由在职责与成本：
+- **C 框架内置执行记录（本轮不做）。** 下游项目在实体、存储、保留期、查询上仍各有一份，内置看上去能消除这部分重复。不做的理由在职责与成本：
   - 记录形状里有业务语义：扇出租户统计、错误码口径、保留策略、页面查询契约。这些属于宿主，不属于调度器。
   - 内置意味着框架为每个使用者新增一张表、一条迁移、一个保留期任务和一套查询 API，而本次的通用需求只是"让宿主看见每次执行"。
 
@@ -243,16 +243,16 @@ PostgreSQL 与 Redis 按全局约定先探测 `windows` 上下文、回退 `orbs
 - PR 合入 `develop` 后发布 `1.2.0-beta.<N>`，实际后缀以包源为准。正式版 `1.2.0` 需要单独授权 `develop` → `main`。
 - 业务侧在 beta 发布前可以先用本地包 `1.1.3-local.<时间戳>`（`.tmp/local-feed`）试接。这个版本号只是本地候选的约定，不代表发布版本。
 
-### 业务项目迁移（三仓各自执行）
+### 业务项目迁移（下游项目各自执行）
 
 1. 升级 `Leistd.*` 到 `1.2.0`（试点期为 `1.2.0-beta.<N>`）。
 2. 新增 `JobRunRecorder : IRecurringJobRunObserver`，按 Scoped 用 `TryAddEnumerable` 注册：
    - Started：插入 `Running` 记录。`Instance` 取宿主的进程实例标识：k8s 下用 Pod 名，同机多进程时用启动时生成的 GUID（见 §2"实例标识"）。`TraceId = Activity.Current?.TraceId`。
    - Completed：`Succeeded` → 成功；`Failed` → 记 `Exception.GetType().Name` 与 `(Exception as BusinessException)?.Code`；`Canceled` → Cancelled；`LockLost` → Cancelled，失败类型可写 `LockLost`，由业务决定是否单列。
    - 写库用自建作用域落宿主库，写入失败只记日志。原有的"切回宿主"守卫保留。
-3. identity 的 `IJobRunContext`：在 Started 里开启，在 Completed 里读取扇出统计，`TenantFanOutJobRunner` 不改。
-4. 所有 `AddRecordedRecurringJob<T>` 改回 `AddRecurringJob<T>`；任务名不变，水位沿用。删除 `RecordedRecurringJob*`、`RecordedRecurringJobRegistration/Extensions`、`RecordedJobMarker`，以及包装里自建 Activity 的代码（crm `CrmBackgroundActivity` 的周期任务用法）。
-5. 作业页：所有任务都有执行明细。接口的 `recorded` 字段删除或恒为 `true`；前端删除"框架任务，暂无执行明细"分支；crm Worker 心跳去掉 recorded 标记。附录 A 契约同步修改。
+3. 下游项目的 `IJobRunContext`：在 Started 里开启，在 Completed 里读取扇出统计，`TenantFanOutJobRunner` 不改。
+4. 所有 `AddRecordedRecurringJob<T>` 改回 `AddRecurringJob<T>`；任务名不变，水位沿用。删除 `RecordedRecurringJob*`、`RecordedRecurringJobRegistration/Extensions`、`RecordedJobMarker`，以及包装里自建 Activity 的代码（周期任务的活动追踪包装）。
+5. 作业页：所有任务都有执行明细。接口的 `recorded` 字段删除或恒为 `true`；前端删除"框架任务，暂无执行明细"分支；下游项目 Worker 心跳去掉 recorded 标记。附录 A 契约同步修改。
 6. 测试：包装测试改写为观察者映射测试（四种结果 → JobRun 字段）。另加一条集成测试：框架组件任务（如 `settings.host-refresh`）到点后产生 `JobRun`。
 
 ### 不做的事
@@ -302,7 +302,7 @@ E1–E4 跑在 R1 修复之前。R1 只影响"取消信号与非取消异常同�
 ### 遗留项
 
 - PR #166 合入 develop 后发布 `1.2.0-beta.<N>`；正式版 1.2.0 需要单独授权。
-- 三仓迁移按 §3"业务项目迁移"执行，由业务侧负责。
+- 下游项目迁移按 §3"业务项目迁移"执行，由业务侧负责。
 - 远端 CI、模板全量矩阵与前端测试未在本地执行，由 PR CI 承担。
 
 ### 已上收的常驻文档

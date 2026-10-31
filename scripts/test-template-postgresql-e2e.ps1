@@ -477,7 +477,7 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
     # 名字归一化为小写后须匹配 ^[a-z0-9-]{1,64}$，下划线不在其中。
     $badNameStatus = $null
     try {
-        Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)/crm_db" -Method Put `
+        Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)/billing_db" -Method Put `
             -ContentType "application/json" -Body $connectionBody -WebSession $apiSession | Out-Null
         $badNameStatus = 200
     }

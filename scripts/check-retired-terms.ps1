@@ -14,9 +14,9 @@
     判据示例：AI 按训练记忆写已删除的 API（会复发，留）；某次移植遗留的跨语言对照
     （一次性，清理完即删除该规则，2026-09-03 已按此删掉 java 规则）。
 
-    三类规则，都刻意收窄，宁可漏也不要吵：
+    现行符号、公开内容与短语按各自作用域扫描：
       1. 已删除的符号 —— 名字本身就是证据；
-      2. 外部参考框架的痕迹 —— 交付面里不应出现"照 ABP 怎么做"这类指引；
+      2. 公开内容 —— 全部跟踪文件不写下游名称和外部参考框架指引；
       3. 断言旧模型的**短语** —— 不用裸词。"三态""显式拒绝"在别处是合法的：
          主题切换是亮/暗/跟随系统三态，资源实例授权保留了自己的 ResourceGrantEffect，
          而"没有显式拒绝"这类否定句正是新模型的正确表述。裸词黑名单会把它们一并报掉，
@@ -81,26 +81,26 @@ $retiredSymbols = @(
     "\.MessageExposure\b"
 )
 
-# 外部参考框架的痕迹。设计时参考过别的框架是正常的，但**交付面里不该留下指向它的引用**：
-#
-#   - framework/docs/ 与 template/ 是对外分发内容，出现"参考 ABP 的做法"会把使用者引向
-#     一份我们并不遵循、也不会同步的外部契约；
-#   - docs/ 里的稳定规范同理，读者无法判断哪部分是我们的决定、哪部分是照抄。
-#
-# 规格文档（docs/specs/）里记录"当时参考了什么"是证据，因此走 $historicalPaths 豁免。
-#
-# 用单词边界而不是子串：abp 是常见的 base64/哈希片段（package-lock 已排除，但 .md 里的
-# 校验和、示例令牌同样会命中），裸子串会把它们一并报掉。
-#
-# 类型名那条必须显式关掉大小写不敏感（`(?-i:...)`）：PowerShell 的 `-match` 默认忽略大小写，
-# 于是 `[A-Z]` 连小写也匹配，`abpx` 这种普通词会被当成 `AbpXxx` 类型名报出来。
-# 自测里就有这个样例，别把它删掉。
-$foreignFrameworkSymbols = @(
-    "\bABP\b",
-    "(?-i:\bAbp[A-Z]\w*)",
-    "\bVolo\.",
-    "abp\.io"
-)
+# 词表独立存放，公开内容扫描只豁免该文件；历史规格也必须扫描。
+$publicTermsPath = 'scripts/retired-public-terms.json'
+$publicTerms = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'retired-public-terms.json') | ConvertFrom-Json
+$allPublicTerms = @($publicTerms.Terms)
+if ($allPublicTerms.Count -eq 0) { throw '公开内容词表为空。' }
+
+function Test-PublicContent([string]$Text, [string]$RelativePath = '') {
+    # 锁文件只排除 integrity 的哈希值，依赖名、URL 与其他内容照常扫描。
+    if ($RelativePath -like '*package-lock.json') {
+        $Text = $Text -replace '("integrity"\s*:\s*")[^"]*(")', '$1$2'
+    }
+    # 只排除完整的无关单词；受限词本身按子串查找，中文相邻与嵌入类型名都不漏。
+    foreach ($word in $publicTerms.AllowedWords) {
+        $Text = $Text -creplace ('(?<![a-zA-Z])' + [regex]::Escape($word) + '(?![a-zA-Z])'), ''
+    }
+    foreach ($term in $allPublicTerms) {
+        if ($Text -match [regex]::Escape($term)) { return $true }
+    }
+    return $false
+}
 
 # 路线图与升级动作短语。§4.1 把"曾经是什么样、为什么改、升级动作"归给
 # docs/framework/versioning.md（仓库内、不分发），把"将来会怎样"排除在随包内容之外：
@@ -199,12 +199,6 @@ if ($SelfTest) {
         @{ Rule = "symbol"; Text = "options.MessageExposure = All";                  ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "任一来源三态组合后取并集";                        ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "亮/暗/跟随系统三态";                              ShouldMatch = $false }
-        @{ Rule = "foreign"; Text = "参考 ABP 的多租户实现";                          ShouldMatch = $true }
-        @{ Rule = "foreign"; Text = "using Volo.Abp.MultiTenancy;";                   ShouldMatch = $true }
-        @{ Rule = "foreign"; Text = "详见 https://abp.io/docs";                       ShouldMatch = $true }
-        @{ Rule = "foreign"; Text = "AbpTenantResolver 的形态";                       ShouldMatch = $true }
-        @{ Rule = "foreign"; Text = "sha512-4fjYABPvFnQ7iyaBPKKS9";                   ShouldMatch = $false }
-        @{ Rule = "foreign"; Text = "labpartner 与 abpx 都是普通单词";                 ShouldMatch = $false }
         @{ Rule = "roadmap"; Text = "以及后续引入分布式权限缓存时的失效信号";                ShouldMatch = $true }
         @{ Rule = "roadmap"; Text = "需把存储改成 1:N，届时第 3、4 级按名字查";              ShouldMatch = $true }
         @{ Rule = "roadmap"; Text = "升级到本版本需要一次 EF 迁移";                        ShouldMatch = $true }
@@ -259,11 +253,6 @@ if ($SelfTest) {
                 if ($case.Text -match $symbol) { $matched = $true; break }
             }
         }
-        elseif ($case.Rule -eq "foreign") {
-            foreach ($symbol in $foreignFrameworkSymbols) {
-                if ($case.Text -match $symbol) { $matched = $true; break }
-            }
-        }
         elseif ($case.Rule -eq "todo") {
             $matched = $case.Text -match $todoMarker
             # 诊断信息要能说出命中的是哪个标记
@@ -301,14 +290,48 @@ if ($SelfTest) {
         }
     }
 
+    foreach ($term in $allPublicTerms) {
+        foreach ($text in @($term, $term.ToUpperInvariant(), "中文$term", "$term（示例）", "using Vendor.$($term.Substring(0,1).ToUpperInvariant() + $term.Substring(1))Tenant;", "My$($term.Substring(0,1).ToUpperInvariant() + $term.Substring(1))XML")) {
+            if (-not (Test-PublicContent $text)) { $failures.Add('公开内容规则漏报词表或中文边界') }
+        }
+        if (Test-PublicContent ('"integrity": "sha512-' + $term + '"') 'template/frontend/package-lock.json') {
+            $failures.Add('公开内容规则误报完整性哈希')
+        }
+    }
+    foreach ($word in $publicTerms.AllowedWords) {
+        if (Test-PublicContent $word) { $failures.Add('公开内容规则误报无关单词') }
+    }
+    if (-not (Test-PublicContent ($allPublicTerms[-1].Substring(0,1).ToUpperInvariant() + $allPublicTerms[-1].Substring(1) + 'X'))) { $failures.Add('公开内容规则漏报类型名前缀') }
+    if (-not (Test-PublicContent ('"name": "' + $allPublicTerms[0] + '"') 'template/frontend/package-lock.json')) {
+        $failures.Add('锁文件非哈希内容被错误豁免')
+    }
     if ($failures.Count -gt 0) {
         Write-Host "规则自测失败：" -ForegroundColor Red
         foreach ($failure in $failures) { Write-Host "  $failure" -ForegroundColor Red }
         exit 1
     }
 
-    Write-Host "✅ 规则自测通过（$($cases.Count) 个样例）。" -ForegroundColor Green
+    Write-Host "✅ 规则自测通过（$($cases.Count) 个符号/短语样例，公开内容按词表逐项校验）。" -ForegroundColor Green
     exit 0
+}
+
+# 公开内容不继承旧符号的历史文档、扩展名或交付面豁免。
+$publicFiles = @(git -C $RepoRoot -c core.quotepath=off ls-files --cached --others --exclude-standard)
+if ($LASTEXITCODE -ne 0) { throw '无法确定公开内容扫描范围。' }
+$publicScanned = 0
+foreach ($relative in $publicFiles) {
+    if ($relative -ceq $publicTermsPath) { continue }
+    $path = Join-Path $RepoRoot $relative
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+    if (Test-PublicContent $relative) { $problems.Add("$relative 文件名包含受限公开表述") }
+    $content = [IO.File]::ReadAllText($path)
+    if ($content.Contains([char]0)) { continue }
+    $publicScanned++
+    $index = 0
+    foreach ($line in ($content -split '\r?\n')) {
+        $index++
+        if (Test-PublicContent $line $relative) { $problems.Add("$relative`:$index 包含受限公开表述") }
+    }
 }
 
 # 清单取 Git 已跟踪与未跟踪但未忽略的文件：新建未提交的文件照样被扫，node_modules 等忽略目录不必先遍历再过滤，
@@ -343,12 +366,6 @@ foreach ($relative in $files) {
         foreach ($symbol in $(if ($isSource) { $retiredSymbols } else { @() })) {
             if ($line -match $symbol) {
                 $problems.Add("$relative`:$($index + 1) 引用了已删除的符号 '$symbol'")
-            }
-        }
-
-        foreach ($symbol in $(if ($isSource -or $isBuild) { $foreignFrameworkSymbols } else { @() })) {
-            if ($line -match $symbol) {
-                $problems.Add("$relative`:$($index + 1) 引用了外部参考框架 '$symbol'")
             }
         }
 
@@ -417,4 +434,4 @@ if ($problems.Count -gt 0) {
     exit 1
 }
 
-Write-Host "✅ 废弃符号/外部框架痕迹扫描通过（已扫描 $scanned 个文件）。" -ForegroundColor Green
+Write-Host "✅ 废弃符号/公开内容扫描通过（现行规则 $scanned 个文件，公开内容 $publicScanned 个文件）。" -ForegroundColor Green

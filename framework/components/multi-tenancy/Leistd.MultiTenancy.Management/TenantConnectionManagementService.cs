@@ -130,7 +130,7 @@ internal sealed class TenantConnectionManagementService(
 
     public async Task RemoveAsync(Guid tenantId, string name, long expectedVersion, CancellationToken cancellationToken = default)
     {
-        // 先归一化：删除没有管理器返回的权威名字，原样发事件会让 "CRM" 与 "crm" 成为两个目标标识
+        // 先归一化：删除没有管理器返回的权威名字，原样发事件会让 "BILLING" 与 "billing" 成为两个目标标识
         var normalized = TenantConnectionNames.NormalizeInput(name);
         await manager.RemoveAsync(tenantId, normalized, expectedVersion, cancellationToken);
         await PublishAsync(tenantId, normalized, TenantConnectionChangeKind.Removed, expectedVersion, cancellationToken);

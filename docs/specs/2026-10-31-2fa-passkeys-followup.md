@@ -31,4 +31,4 @@
 
 常驻文档已同步 `template/docs/standards/auth.md`、`template/docs/deploy/configuration.md`、`template/docs/README.md` 与 `template/backend/README.md`；compose 来源注释同步。本轮没有新增生产类型、配置项或异常捕获。
 
-用户要求保留未提交改动：当前没有 PR、提交或推送，等待 Claude 审查；下游三仓及回执输入保持只读。
+用户要求保留未提交改动：当前没有 PR、提交或推送，等待 Claude 审查；下游项目及回执输入保持只读。

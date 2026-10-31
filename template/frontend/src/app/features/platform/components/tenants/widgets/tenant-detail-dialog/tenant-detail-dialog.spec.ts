@@ -53,7 +53,7 @@ describe('TenantDetailDialog', () => {
     setConnection = vi
       .fn()
       .mockName('setConnection')
-      .mockReturnValue(of(connectionOf('t-a', 'crm')));
+      .mockReturnValue(of(connectionOf('t-a', 'billing')));
     removeConnection = vi.fn().mockName('removeConnection').mockReturnValue(of(undefined));
 
     confirm = {
@@ -146,10 +146,10 @@ describe('TenantDetailDialog', () => {
     expect(requested).toEqual(['t-a', 't-b']);
 
     // globex 先回来，acme 迟到。发完要 complete，否则界面一直停在加载态。
-    await resolve('t-b', [connectionOf('t-b', 'globex-crm')]);
+    await resolve('t-b', [connectionOf('t-b', 'globex-billing')]);
     await resolve('t-a', [connectionOf('t-a', 'acme-legacy')]);
 
-    expect(text()).toContain('globex-crm');
+    expect(text()).toContain('globex-billing');
     // 取消掉的那次请求不该再写回界面，否则 globex 的身份信息会配上 acme 的连接列表
     expect(text()).not.toContain('acme-legacy');
   });
@@ -169,11 +169,11 @@ describe('TenantDetailDialog', () => {
 
     await openWith(tenant('t-a', 'acme'), [
       connectionOf('t-a', 'default', 3),
-      connectionOf('t-a', 'crm', 1),
+      connectionOf('t-a', 'billing', 1),
     ]);
 
     expect(text()).toContain('default');
-    expect(text()).toContain('crm');
+    expect(text()).toContain('billing');
     expect(text()).toContain(label('tenants.fieldConnectionVersion'));
     expect(text()).not.toContain(label('tenants.connectionsEmpty'));
     expect(text()).not.toMatch(/Host=|Password=|User ID=/i);
@@ -184,14 +184,14 @@ describe('TenantDetailDialog', () => {
     await openWith(tenant('t-a', 'acme'), []);
 
     component.startAdd();
-    // 填 Crm 也放行：后端按小写归一化存取，两种写法命中同一条
-    component.connectionForm.name().value.set('Crm');
+    // 填 Billing 也放行：后端按小写归一化存取，两种写法命中同一条
+    component.connectionForm.name().value.set('Billing');
     component.connectionForm.connectionString().value.set('Host=db;Password=spec');
     await fixture.whenStable();
 
     component.submitEditor();
 
-    expect(setConnection).toHaveBeenCalledWith('t-a', 'crm', {
+    expect(setConnection).toHaveBeenCalledWith('t-a', 'billing', {
       expectedVersion: null,
       connectionString: 'Host=db;Password=spec',
     });
@@ -199,7 +199,7 @@ describe('TenantDetailDialog', () => {
 
   it('change connection string: keeps the name, sends the version read, and never prefills the input', async () => {
     await setUp();
-    const existing = connectionOf('t-a', 'crm', 5);
+    const existing = connectionOf('t-a', 'billing', 5);
     await openWith(tenant('t-a', 'acme'), [existing]);
 
     component.startEdit(existing);
@@ -214,7 +214,7 @@ describe('TenantDetailDialog', () => {
     component.submitEditor();
 
     // 版本传错（比如照搬 null）后端会按"忘了带版本"拒绝，或者让后写者盖掉别人的改动
-    expect(setConnection).toHaveBeenCalledWith('t-a', 'crm', {
+    expect(setConnection).toHaveBeenCalledWith('t-a', 'billing', {
       expectedVersion: 5,
       connectionString: 'Host=db;Password=rotated',
     });
@@ -223,7 +223,7 @@ describe('TenantDetailDialog', () => {
   // PUT 是整串覆盖，后端没有"不传即保留原值"这一档：留空静默不提交会让人以为已经保存
   it('marks the form invalid and does not submit when the connection string is empty', async () => {
     await setUp();
-    const existing = connectionOf('t-a', 'crm', 5);
+    const existing = connectionOf('t-a', 'billing', 5);
     await openWith(tenant('t-a', 'acme'), [existing]);
 
     component.startEdit(existing);
@@ -240,7 +240,7 @@ describe('TenantDetailDialog', () => {
     await openWith(tenant('t-a', 'acme'), []);
 
     component.startAdd();
-    component.connectionForm.name().value.set('crm db!');
+    component.connectionForm.name().value.set('billing db!');
     component.connectionForm.connectionString().value.set('Host=db;Password=spec');
     await fixture.whenStable();
 
@@ -259,10 +259,10 @@ describe('TenantDetailDialog', () => {
   // 同名再"添加"一次会被后端按版本冲突拒掉，在提交前就说清楚该走"改连接串"
   it('marks the form invalid and does not submit when the connection name is already registered', async () => {
     await setUp();
-    await openWith(tenant('t-a', 'acme'), [connectionOf('t-a', 'crm', 2)]);
+    await openWith(tenant('t-a', 'acme'), [connectionOf('t-a', 'billing', 2)]);
 
     component.startAdd();
-    component.connectionForm.name().value.set('CRM');
+    component.connectionForm.name().value.set('BILLING');
     component.connectionForm.connectionString().value.set('Host=db;Password=spec');
     await fixture.whenStable();
 
@@ -280,18 +280,18 @@ describe('TenantDetailDialog', () => {
 
   it('confirms before deleting a connection, then sends the version read', async () => {
     await setUp();
-    const existing = connectionOf('t-a', 'crm', 7);
+    const existing = connectionOf('t-a', 'billing', 7);
     await openWith(tenant('t-a', 'acme'), [existing]);
 
     await component.removeConnection(existing);
 
     expect(confirm.open).toHaveBeenCalled();
-    expect(removeConnection).toHaveBeenCalledWith('t-a', 'crm', 7);
+    expect(removeConnection).toHaveBeenCalledWith('t-a', 'billing', 7);
   });
 
   it('does not send a request when the delete confirmation is cancelled', async () => {
     await setUp();
-    const existing = connectionOf('t-a', 'crm', 7);
+    const existing = connectionOf('t-a', 'billing', 7);
     await openWith(tenant('t-a', 'acme'), [existing]);
     confirm.open.mockResolvedValue(false);
 
@@ -352,11 +352,11 @@ describe('TenantDetailDialog', () => {
     await setUp();
     const target = tenant('t-a', 'a');
     await open(target);
-    await resolve(target.id, [connectionOf(target.id, 'crm')]);
+    await resolve(target.id, [connectionOf(target.id, 'billing')]);
     let answer!: (value: boolean) => void;
     confirm.open.mockReturnValue(new Promise<boolean>((done) => (answer = done)));
-    const pending = component.removeConnection(connectionOf(target.id, 'crm'));
-    const duplicate = component.removeConnection(connectionOf(target.id, 'crm'));
+    const pending = component.removeConnection(connectionOf(target.id, 'billing'));
+    const duplicate = component.removeConnection(connectionOf(target.id, 'billing'));
     fixture.detectChanges();
     const button = Array.from(
       document.querySelectorAll<HTMLButtonElement>('.cdk-overlay-container button'),
@@ -380,11 +380,11 @@ describe('TenantDetailDialog', () => {
     await fixture.whenStable();
     const response = new Subject<TenantConnectionDto>();
     setConnection.mockReturnValue(response);
-    await userEvent.fill(document.getElementById('tenant-connection-name')!, '  crm  ');
+    await userEvent.fill(document.getElementById('tenant-connection-name')!, '  billing  ');
     await userEvent.fill(connectionStringField()!, ' raw connection string ');
     await userEvent.keyboard('{Enter}');
     await fixture.whenStable();
-    expect(setConnection).toHaveBeenCalledExactlyOnceWith('t-a', 'crm', {
+    expect(setConnection).toHaveBeenCalledExactlyOnceWith('t-a', 'billing', {
       expectedVersion: null,
       connectionString: ' raw connection string ',
     });
@@ -403,7 +403,7 @@ describe('TenantDetailDialog', () => {
     await openWith(tenant('t-a', 'acme'), []);
     component.startAdd();
     await fixture.whenStable();
-    await userEvent.fill(document.getElementById('tenant-connection-name')!, 'crm');
+    await userEvent.fill(document.getElementById('tenant-connection-name')!, 'billing');
     confirm.open.mockResolvedValueOnce(false);
     document
       .querySelector<HTMLElement>('hlm-dialog-content')!

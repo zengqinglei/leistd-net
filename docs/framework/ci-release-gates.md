@@ -28,6 +28,18 @@
 
 不使用 workflow 级 paths-ignore。汇总严格核对每项 success/skipped、候选、计划与适用证明；检查数为零、失败、取消、意外跳过或缺失回执均失败。格式直接读取生成 frontend 文件，使用锁定 Prettier 与实际配置/忽略范围，避免 .tmp 被 Git 忽略后假绿；不扩展到根 docs。
 
+### 同一 PR 的文档增量
+
+直接 PR 的 `synchronize` 可承接前一 head 已成功的责任，合并候选验证方式保持不变。`PullRequest` 分别记录 Number、Repository、HeadSha、BaseSha、CandidateSha；`PrDocumentation` 冻结来源链。
+
+- 先确认 `before` 是当前分支 head 的祖先，分支增量全部属于已有 `internal`、`generated-doc`、`package-doc` 分类。
+- 使用工作流自带 token 的 `actions: read` 查询同仓库、同 PR、同 `ci.yml` 对 `before` 的最新运行与最新 attempt；计划作业、必过汇总及运行均须成功。固定该 attempt 的计划构件，并核对其归属、head/base/合并候选与实际 Git 父提交。
+- 来源与当前合并候选的 base 必须相同，两个合并候选的完整差异也须全部是文档。目标分支前移直接回退，不跨基线承接。
+- 依赖输入未变时承接来源的依赖审计结论，新增公告由定时审计兜底。当前静态闸门照常执行，生成文档加实际生成与文档检查；随包文档加打包与包内容、XML、示例编译等原职责；Spartan 登记文档仍加前端闸门。其余责任承接旧成功结论，跳过不记作本次执行通过。
+- 计划保留来源 RunId、Attempt、HeadSha、BaseSha、CandidateSha、PlanArtifactId；连续文档增量携带先前的来源链。新候选汇总重新核对每段 Git 关系、文档差异与当前应执行责任，再给当前候选成功结论。
+
+来源失败、取消、缺失、attempt 变化、构件缺失/过期、API/权限/分页/查询失败、force-push、未知或非文档输入、证据链不全及计划超过既有传输预算，均回到原 PR 完整差异计划。其他 PR 事件、手动、合并后的 develop 与发布计划保持原规则。正反例由 `scripts/test-quality-validation-plan.py` 验证。
+
 非发布 push 只有同时满足下列条件，才允许轻量文档责任：
 
 - before 是候选祖先；

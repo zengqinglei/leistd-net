@@ -6,22 +6,22 @@
 
 ### 问题与背景
 
-下游反馈 `framework-feedback-topup-deleted-tenants-20261026.md`（abroker-crm 协调会话）：下游吸收模板 `AdminGrantTopUpRunner` 后，Identity 的 `DbMigrator` 预演退出 1。原因是 45 个已软删除的租户在业务库里还残留着 Admin 角色行，`AdminTenantsAsync` 把它们列为候选；随后 `currentTenant.Change` 按正式路由进入这些租户时，路由抛出 `TenantNotFoundException`。每个这样的租户都记为失败，结果阻断发布。只要环境里删除过租户，就会触发。
+下游反馈：下游吸收模板 `AdminGrantTopUpRunner` 后，Identity 的 `DbMigrator` 预演退出 1。原因是已软删除的租户在业务库里还残留着 Admin 角色行，`AdminTenantsAsync` 把它们列为候选；随后 `currentTenant.Change` 按正式路由进入这些租户时，路由抛出 `TenantNotFoundException`。每个这样的租户都记为失败，结果阻断发布。只要环境里删除过租户，就会触发。
 
 核对模板时还发现第二个问题（反馈未提及）：资源服务的 compose 只给迁移身份 `tenant-migration.read`。补齐要按正式路由进入租户，路由回源 `/runtime` 要求 `tenant-routing.read`，所以资源服务的补齐对每个租户都会失败。现有 E2E 只跑单库模式（`MigrationTarget`），不会执行补齐，因此没有暴露。
 
-### ABP 对照（2026-10-27 核对 abpframework/abp dev 分支源码）
+### 租户筛选与恢复边界
 
-| 环节 | ABP | 本模板 |
+| 环节 | 判定依据 | 本模板 |
 | --- | --- | --- |
-| 遍历哪些租户 | 应用模板 `MyProjectNameDbMigrationService` 用 `_tenantRepository.GetListAsync(includeDetails: true)`，软删除过滤器排除已删除租户，停用状态不过滤 | 资源服务无法列出全部租户：迁移端点只列有独立库的租户，这是有意设计。所以从 Admin 角色行出发，再按连接登记判定租户是否存在 |
-| 进入租户 | `_currentTenant.Change(tenant.Id)` 后执行种子数据，连接解析与运行时相同 | 同样按正式路由进入，和 API 写授予走同一条路径 |
-| 补 Admin 权限 | `PermissionDataSeedContributor` 在租户上下文里，把本侧权限授予 `admin` 角色 | `IPermissionGrantSeeder.TopUpAsync` |
-| 找不到租户 | `MultiTenantConnectionStringResolver` 退回宿主默认连接 | 直接拒绝。这是正确的，不改 |
+| 遍历哪些租户 | 软删除租户不再参与维护；停用只限制业务访问，不排除迁移 | 资源服务无法列出全部租户：迁移端点只列有独立库的租户，这是有意设计。所以从 Admin 角色行出发，再按连接登记判定租户是否存在 |
+| 进入租户 | 按运行时相同的租户上下文解析连接，避免绕开线上隔离 | 同样按正式路由进入，和 API 写授予走同一条路径 |
+| 补 Admin 权限 | 在租户上下文中给管理员角色补齐当前侧别缺失的权限 | `IPermissionGrantSeeder.TopUpAsync` |
+| 找不到租户 | 缺失租户不得误落到宿主默认连接 | 直接拒绝。这是正确的，不改 |
 
 ### 决定（用户 2026-10-27 确认按此执行）
 
-- 补齐对象是存在且未删除的租户，与 ABP 一致：已删除租户计入跳过，不算失败；停用租户照常补齐。
+- 补齐对象是存在且未删除的租户：已删除租户计入跳过，不算失败；停用租户照常补齐。
 - 判定放在模板 DbMigrator，复用现有的 `ITenantConnectionConfigurationStore.FindAsync`，返回 `null` 即视为租户不存在或已删除。框架不加新能力，也不放进 `IPermissionGrantSeeder`：遍历租户是迁移作业的职责，种子组件只管一个租户内的事。
 - 报告保留跳过计数，并列出被跳过的租户标识。
 - 资源服务迁移身份按方案 A，在 `tenant-migration.read` 之外再授予 `tenant-routing.read`。不采用方案 B（用迁移连接串直接写库），因为它绕开了正式路由。
@@ -48,7 +48,7 @@
 
 ### 不做的事
 
-- 删除租户时不级联清理业务库数据：与 ABP 一致，软删除保留数据，可以恢复。
+- 删除租户时不级联清理业务库数据：软删除保留数据，可以恢复。
 - 不让 `/runtime` 接受 `tenant-migration.read`：两档权限保持分开。
 
 ## 4. 结果

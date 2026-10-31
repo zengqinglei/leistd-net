@@ -213,7 +213,7 @@ app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDt
 3. 在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`；
 4. 启用。
 
-多服务部署在创建时一次给出多条连接（`default`、`crm`……），不要建完租户再逐条补登记。`connections` 传空数组或 `null` 表示不分库；
+多服务部署在创建时一次给出多条连接（`default`、`billing`……），不要建完租户再逐条补登记。`connections` 传空数组或 `null` 表示不分库；
 数组里有 `null` 元素返回 400，重名返回带 `TenantConnection:NameDuplicated` 的 400。
 
 任一步失败按 `PurgeAsync` → 逐条删连接登记 → 删租户补偿，每步独立作用域、独立令牌、各自记录失败。
@@ -260,7 +260,7 @@ app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDt
 | 登记了这个名字 | 该行的连接串 | 每个服务仍使用固定 schema + `TenantId` |
 | 只登记了默认名 | 默认名那一行（一租户一库，各服务不同 schema） | 同上 |
 
-连接串运行时与迁移共用，因此它需要 DDL 权限。名字归一化为小写后须匹配 `TenantConnectionConfiguration.NamePattern`（`^[a-z0-9-]{1,64}$`），管理员填 `Crm` 与 `crm` 命中同一行；连接串最长 `TenantConnectionConfiguration.MaxConnectionStringLength`（2048）个字符。
+连接串运行时与迁移共用，因此它需要 DDL 权限。名字归一化为小写后须匹配 `TenantConnectionConfiguration.NamePattern`（`^[a-z0-9-]{1,64}$`），管理员填 `Billing` 与 `billing` 命中同一行；连接串最长 `TenantConnectionConfiguration.MaxConnectionStringLength`（2048）个字符。
 
 ```csharp
 // 一租户一库、各服务不同 schema：只登记默认名这一条，所有服务都回落到它
@@ -271,10 +271,10 @@ await connectionManager.SetAsync(
     expectedVersion);
 
 // 某个服务单独用另一个库：再给它登记一条
-await connectionManager.SetAsync(tenantId, "crm", "Host=db-tenant-a-crm;...", expectedVersion: null);
+await connectionManager.SetAsync(tenantId, "billing", "Host=db-tenant-a-billing;...", expectedVersion: null);
 
 // 改回"用服务自己的库"就是删掉这一行，而不是提交空连接串
-await connectionManager.RemoveAsync(tenantId, "crm", expectedVersion);
+await connectionManager.RemoveAsync(tenantId, "billing", expectedVersion);
 ```
 
 连接串加密存储：写入时用 ASP.NET Core Data Protection（`IDataProtectionProvider` + 固定 purpose）加密，读取时解密。表 `TenantConnectionRecord` 的主键是 `(TenantId, Name)`，连接列只有密文 `ProtectedConnectionString`（非空，最长 4096）。数据库、备份和只读账号里看不到明文。`TenantConnectionConfiguration` 携带明文 `ConnectionString`，它与 `TenantConnectionLookupResult`、记录实体的 `ToString` 都不输出连接串；校验与解密失败的异常消息也不回显它。

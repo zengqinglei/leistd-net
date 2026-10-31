@@ -51,7 +51,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     [Fact]
     public async Task An_unknown_tenant_returns_null()
     {
-        Assert.Null(await Store.FindAsync(Guid.NewGuid(), "crm"));
+        Assert.Null(await Store.FindAsync(Guid.NewGuid(), "billing"));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     {
         var tenant = await Tenants.CreateAsync("plain", null, isActive: false);
 
-        var lookup = await Store.FindAsync(tenant.Id, "crm");
+        var lookup = await Store.FindAsync(tenant.Id, "billing");
 
         Assert.NotNull(lookup);
         Assert.Equal(tenant.Id, lookup.TenantId);
@@ -71,13 +71,13 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     public async Task An_exact_name_hit_is_returned()
     {
         var tenant = await Tenants.CreateAsync("exact", null, isActive: false);
-        await Manager.SetAsync(tenant.Id, "crm", "Host=crm", expectedVersion: null);
+        await Manager.SetAsync(tenant.Id, "billing", "Host=billing", expectedVersion: null);
 
-        var lookup = await Store.FindAsync(tenant.Id, "Crm");
+        var lookup = await Store.FindAsync(tenant.Id, "Billing");
 
         Assert.True(lookup!.HasAnyConnection);
-        Assert.Equal("crm", lookup.Connection!.Name);
-        Assert.Equal("Host=crm", lookup.Connection.ConnectionString);
+        Assert.Equal("billing", lookup.Connection!.Name);
+        Assert.Equal("Host=billing", lookup.Connection.ConnectionString);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
         var tenant = await Tenants.CreateAsync("fallback", null, isActive: false);
         await Manager.SetAsync(tenant.Id, "default", "Host=one-db", expectedVersion: null);
 
-        var lookup = await Store.FindAsync(tenant.Id, "crm");
+        var lookup = await Store.FindAsync(tenant.Id, "billing");
 
         Assert.Equal("default", lookup!.Connection!.Name);
         Assert.Equal("Host=one-db", lookup.Connection.ConnectionString);
@@ -97,10 +97,10 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     {
         var tenant = await Tenants.CreateAsync("both", null, isActive: false);
         await Manager.SetAsync(tenant.Id, "default", "Host=one-db", expectedVersion: null);
-        await Manager.SetAsync(tenant.Id, "crm", "Host=crm-db", expectedVersion: null);
+        await Manager.SetAsync(tenant.Id, "billing", "Host=billing-db", expectedVersion: null);
 
-        Assert.Equal("Host=crm-db", (await Store.FindAsync(tenant.Id, "crm"))!.Connection!.ConnectionString);
-        Assert.Equal("Host=one-db", (await Store.FindAsync(tenant.Id, "foundation"))!.Connection!.ConnectionString);
+        Assert.Equal("Host=billing-db", (await Store.FindAsync(tenant.Id, "billing"))!.Connection!.ConnectionString);
+        Assert.Equal("Host=one-db", (await Store.FindAsync(tenant.Id, "inventory"))!.Connection!.ConnectionString);
     }
 
     // 分库租户缺这个名字：由调用方失败关闭，存储只如实报告
@@ -108,9 +108,9 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     public async Task A_registered_tenant_missing_this_name_reports_no_connection()
     {
         var tenant = await Tenants.CreateAsync("partial", null, isActive: false);
-        await Manager.SetAsync(tenant.Id, "foundation", "Host=foundation", expectedVersion: null);
+        await Manager.SetAsync(tenant.Id, "inventory", "Host=inventory", expectedVersion: null);
 
-        var lookup = await Store.FindAsync(tenant.Id, "crm");
+        var lookup = await Store.FindAsync(tenant.Id, "billing");
 
         Assert.True(lookup!.HasAnyConnection);
         Assert.Null(lookup.Connection);
@@ -145,15 +145,15 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
         var exact = await Tenants.CreateAsync("exact", null, isActive: false);
         var fallback = await Tenants.CreateAsync("fallback", null, isActive: false);
         await Tenants.CreateAsync("plain", null, isActive: false);
-        await Manager.SetAsync(exact.Id, "crm", "Host=crm-db", expectedVersion: null);
+        await Manager.SetAsync(exact.Id, "billing", "Host=billing-db", expectedVersion: null);
         await Manager.SetAsync(fallback.Id, "default", "Host=one-db", expectedVersion: null);
 
-        var list = await Store.GetListAsync("Crm");
+        var list = await Store.GetListAsync("Billing");
         var connections = list.Connections;
 
         // 没登记的租户不出现——它跟着宿主自己的库迁移
         Assert.Equal(2, connections.Count);
-        Assert.Equal("Host=crm-db", connections.Single(x => x.TenantId == exact.Id).ConnectionString);
+        Assert.Equal("Host=billing-db", connections.Single(x => x.TenantId == exact.Id).ConnectionString);
         Assert.Equal("default", connections.Single(x => x.TenantId == fallback.Id).Name);
         Assert.Empty(list.FailedTenants);
     }
@@ -168,10 +168,10 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
     {
         var healthy = await Tenants.CreateAsync("healthy", null, isActive: false);
         var partial = await Tenants.CreateAsync("partial", null, isActive: false);
-        await Manager.SetAsync(healthy.Id, "crm", "Host=crm-db", expectedVersion: null);
-        await Manager.SetAsync(partial.Id, "foundation", "Host=foundation;Password=secret", expectedVersion: null);
+        await Manager.SetAsync(healthy.Id, "billing", "Host=billing-db", expectedVersion: null);
+        await Manager.SetAsync(partial.Id, "inventory", "Host=inventory;Password=secret", expectedVersion: null);
 
-        var list = await Store.GetListAsync("crm");
+        var list = await Store.GetListAsync("billing");
 
         Assert.Equal(healthy.Id, Assert.Single(list.Connections).TenantId);
         var failure = Assert.Single(list.FailedTenants);

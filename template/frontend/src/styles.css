@@ -374,6 +374,11 @@ body {
   @apply text-base;
 }
 
+/* 可操作徽章由内部文字自行截断；外壳不裁掉子按钮外扩的焦点环。 */
+[data-slot='badge']:has(> button) {
+  overflow: visible;
+}
+
 /* 弹窗正文独立滚动，避免短视口裁掉操作区；CDK 的 block 策略负责锁住背景。 */
 [data-slot='dialog-content'] {
   overflow: hidden;
@@ -383,7 +388,6 @@ body {
 }
 
 [data-slot='dialog-content'] > form {
-  overflow: hidden;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -393,6 +397,9 @@ body {
   min-height: 0;
 }
 
+/* 正文向内边距区延伸，再补回同量留白：控件仍与标题对齐，外扩焦点环不会贴着滚动裁剪边界。
+ * 内边距取 Helm 同一个变量；表单只用 min-height 收缩，不在正文外再裁一次。
+ */
 [data-slot='dialog-content'] [data-dialog-body] {
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -400,6 +407,9 @@ body {
 
   min-width: 0;
   min-height: 0;
+  margin-inline: calc(-1 * var(--dialog-padding));
+  padding-block: max(var(--spacing), 3px);
+  padding-inline: var(--dialog-padding);
 }
 
 [data-slot='dialog-content'] > :is(hlm-dialog-header, hlm-dialog-footer, app-dialog-close) {

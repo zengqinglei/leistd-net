@@ -6,12 +6,7 @@
 
 ### 问题与背景
 
-下游三仓在运维页改造中提交了两份反馈，评审结论已写成回执：
-
-- `framework-feedback-ops-ui-20261026.md`，回执为 `framework-receipt-ops-ui-20261026.md`；
-- `framework-feedback-host-admin-20261026.md`，回执为 `framework-receipt-host-admin-20261026.md`。
-
-本规格只覆盖经用户授权实施的条目（2026-10-26）。其余条目的不采纳理由见回执：ops-ui 第 2、6 条，host-admin 第 3 条。
+下游项目反馈了运维页交互与管理员权限补齐问题。本规格覆盖用户于 2026-10-26 授权实施的通用条目；项目专属意见由下游维护。
 
 ### 条目与决定
 

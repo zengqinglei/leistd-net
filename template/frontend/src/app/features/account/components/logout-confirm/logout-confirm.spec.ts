@@ -72,7 +72,7 @@ describe('LogoutConfirm', () => {
       { request_uri: 'urn:request', confirmation: 'protected' },
       {
         isValid: true,
-        applicationName: 'CRM',
+        applicationName: 'BILLING',
         antiforgeryFieldName: '__RequestVerificationToken',
         antiforgeryToken: 'csrf-token',
       },

@@ -65,6 +65,32 @@ describe('UriListEditor', () => {
     expect(removed).toBe('https://one.example/callback');
   });
 
+  it('keeps the remove action focus ring inside every clipping ancestor', async () => {
+    const fixture = createEditor(['https://one.example/callback']);
+    await fixture.whenStable();
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove: https://one.example/callback"]',
+    )!;
+    button.focus();
+    const ring = button.getBoundingClientRect();
+    for (let parent = button.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      const bounds = parent.getBoundingClientRect();
+      if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
+        expect(ring.left - 2).toBeGreaterThanOrEqual(bounds.left + parent.clientLeft);
+        expect(ring.right + 2).toBeLessThanOrEqual(
+          bounds.left + parent.clientLeft + parent.clientWidth,
+        );
+      }
+      if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
+        expect(ring.top - 2).toBeGreaterThanOrEqual(bounds.top + parent.clientTop);
+        expect(ring.bottom + 2).toBeLessThanOrEqual(
+          bounds.top + parent.clientTop + parent.clientHeight,
+        );
+      }
+    }
+  });
+
   it('review R1 focuses the URI input and shows invalid submissions', async () => {
     const fixture = createEditor();
     await renderSubmission(fixture, () => fixture.componentInstance['onAdd']());

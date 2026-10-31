@@ -77,13 +77,13 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
     [Fact]
     public async Task Connection_name_and_active_only_each_have_their_own_entry()
     {
-        await ListAsync("crm", activeOnly: true);
-        await ListAsync("crm", activeOnly: false);
-        await ListAsync("foundation", activeOnly: true);
+        await ListAsync("billing", activeOnly: true);
+        await ListAsync("billing", activeOnly: false);
+        await ListAsync("inventory", activeOnly: true);
 
         Assert.Equal(3, _controlPlane.Calls);
         Assert.Equal(
-            ["name=crm&activeOnly=true", "name=crm&activeOnly=false", "name=foundation&activeOnly=true"],
+            ["name=billing&activeOnly=true", "name=billing&activeOnly=false", "name=inventory&activeOnly=true"],
             _controlPlane.Queries);
     }
 
@@ -91,11 +91,11 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
     [Fact]
     public async Task Names_differing_only_in_case_share_one_entry_and_reach_the_control_plane_lowercased()
     {
-        await ListAsync("Crm");
-        await ListAsync("CRM");
+        await ListAsync("Billing");
+        await ListAsync("BILLING");
 
         Assert.Equal(1, _controlPlane.Calls);
-        Assert.Equal(["name=crm&activeOnly=true"], _controlPlane.Queries);
+        Assert.Equal(["name=billing&activeOnly=true"], _controlPlane.Queries);
     }
 
     // 命中直接复用实例：不复用就意味着每次都反序列化，且超过载荷上限的清单根本进不了缓存
@@ -231,7 +231,7 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
     }
 
     private async Task<TenantDatabaseListResult> ListAsync(
-        string name = "crm",
+        string name = "billing",
         bool activeOnly = true,
         ServiceProvider? provider = null,
         CancellationToken cancellationToken = default)
@@ -266,7 +266,7 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
             Assert.Same(initial, await ListAsync());
             Assert.Equal(2, _controlPlane.Calls);
             var completion = _provider.GetRequiredService<HybridCache>().GetOrCreateAsync<CachedTenantDatabaseDirectory.CachedListing>(
-                "leistd:tenant-databases:crm:active:fetch",
+                "leistd:tenant-databases:billing:active:fetch",
                 static _ => throw new InvalidOperationException("The original listing must still be running."),
                 new HybridCacheEntryOptions { Flags = HybridCacheEntryFlags.DisableDistributedCache | HybridCacheEntryFlags.DisableLocalCacheWrite }).AsTask();
             gate.SetResult();

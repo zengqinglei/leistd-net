@@ -112,7 +112,7 @@ public sealed class RemoteHost : IDisposable
         string? cacheLifetime = "00:05:00",
         string? defaultConnection = DefaultConnection,
         string? namedConnection = null,
-        string namedConnectionName = "Crm",
+        string namedConnectionName = "Billing",
         Action<IServiceCollection>? configure = null)
     {
         var settings = new Dictionary<string, string?>

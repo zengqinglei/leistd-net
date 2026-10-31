@@ -6,7 +6,7 @@
 
 ### 问题与背景
 
-下游（abroker CRM：员工侧经 SSO 到 Identity，客户侧自有登录）反馈：点"登录"后页面闪烁、像快速刷新；退出回到登录页时像刷新两次。模板 Mock 模式没有这些现象。
+下游（分别使用 SSO 与本地登录）反馈：点"登录"后页面闪烁、像快速刷新；退出回到登录页时像刷新两次。模板 Mock 模式没有这些现象。
 
 真实 SSO 环境（develop `ee7a7402` 生成的 Identity + 带浏览器会话的 Resource、真实 PostgreSQL 与 OpenIddict、生产构建前端）逐帧录屏确认：
 
@@ -24,7 +24,7 @@ Mock 不经 OIDC 链、接口即时返回、Mock 用户偏好与设备一致，�
 
 ### 非目标与保留行为
 
-交付时不宣称消除：整页启动单页应用的预加载页；退出仍以表单 POST 发往 Identity（`id_token_hint` 不进地址栏）的中转页；重新认证路径 `clear()` 先退回设备语言；退出时 `SignalRService.reset()` 先清空通知列表；首次访问出现过一次、未复现的浅色预加载帧；portal 登录后 SPA 跳转时的偏好切换时序（下游另议）。
+交付时不宣称消除：整页启动单页应用的预加载页；退出仍以表单 POST 发往 Identity（`id_token_hint` 不进地址栏）的中转页；重新认证路径 `clear()` 先退回设备语言；退出时 `SignalRService.reset()` 先清空通知列表；首次访问出现过一次、未复现的浅色预加载帧；下游自有登录后 SPA 跳转时的偏好切换时序（下游另议）。
 
 ### 功能要求与验收
 
@@ -79,7 +79,7 @@ Mock 不经 OIDC 链、接口即时返回、Mock 用户偏好与设备一致，�
 | 真实环境验收 | 复录逐帧对比 | 人工验收 |
 | 审查 | Codex 审查实施 | 明确通过 |
 
-不做：替换 OpenIddict 中转页、改退出为 302、portal 偏好时序、浅色首帧推测性修复。
+不做：替换 OpenIddict 中转页、改退出为 302、下游自有登录的偏好时序、浅色首帧推测性修复。
 
 ## 4. 结果
 
@@ -100,7 +100,7 @@ Mock 不经 OIDC 链、接口即时返回、Mock 用户偏好与设备一致，�
 
 ### 遗留项
 - 首次访问新源（或部署后样式表哈希变化）时预加载页先浅色：根因是 Angular 生产构建的关键 CSS 内联按静态 HTML 匹配，运行时加在 `<html>` 上的 `dark` 类不在其中，内联 CSS 缺 `.dark` 覆盖。`/* beasties:include */` 注释经实测会被 Angular 的 CSS 压缩去掉、`allowRules` 未开放；候选为 `optimization.styles.inlineCritical: false`，待测首次内容绘制后另行决定。
-- 下游同步：CRM platform 退出回跳直接到 SSO 入口、identity 仓三处整页离开、portal 注册入口占位，由下游按回执处理。
+- 下游同步：下游项目的 SSO 退出回跳、整页离开与注册入口占位，由下游按回执处理。
 
 ### 已上收的常驻文档
 `docs/template/browser-authentication.md`、`template/docs/standards/auth.md`、`ReturnUrlService.navigate` 与 `endSessionAndGo` 注释。

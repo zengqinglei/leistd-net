@@ -34,7 +34,7 @@ internal sealed class RemoteConnectionStringResolver(
         }
 
         var tenantId = currentTenant.Id!.Value;
-        // 归一化后做缓存键：Crm 与 crm 是同一条路由
+        // 归一化后做缓存键：Billing 与 billing 是同一条路由
         var name = TenantConnectionNames.Normalize(connectionStringName);
         // 期限同时定义租户改路由前的排空等待时间；启动期已校验
         var lifetime = routeCacheOptions.Value.CacheLifetime;

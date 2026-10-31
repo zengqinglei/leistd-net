@@ -6,10 +6,7 @@
 
 ### 问题与背景
 
-CRM V2 三仓在适配模板 develop `0a3e7399` 时提交了一份反馈（机器 scope、部署配置、周期任务观察者、项目 Skill 路由），协调目录 `/Users/quincy/orca/workspaces/.crm-v2-adaptation/backlog-20261019/` 下：
-
-- 回执 `framework-receipt-scope-config-jobs.md`：核实结论（含文件:行证据）、最终策略与实施策略，是本次实施的权威来源；
-- 用户裁决 `framework-feedback-decisions-2fa-scope.md` 第二节（2026-10-25）：内部服务通讯不把权限控制得太细，机器 scope 不走配置、默认不细分。
+下游项目反馈了机器 scope、部署配置、周期任务观察者与项目 Skill 路由问题。用户于 2026-10-25 明确：内部服务通讯默认使用服务级 scope，确有需要时才细分，不再增加机器 scope 配置。
 
 核实基线为 develop `8fe7736f`，`0a3e7399` 之后涉及的文件没有改动。
 

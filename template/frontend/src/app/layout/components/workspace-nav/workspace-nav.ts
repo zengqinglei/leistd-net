@@ -27,6 +27,7 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmNavigationMenuImports } from '@spartan-ng/helm/navigation-menu';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
+import { injectHlmA11yLabels } from '@spartan-ng/helm/utils';
 
 import { LayoutService } from '../../../core/services/layout-service';
 import { Logo } from '../../../shared/components/logo/logo';
@@ -66,6 +67,7 @@ import { MenuItem, NavigationService } from '../../services/navigation-service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WorkspaceNav {
+  protected readonly a11y = injectHlmA11yLabels();
   readonly placement = input<'start' | 'end'>('start');
 
   readonly layoutService = inject(LayoutService);

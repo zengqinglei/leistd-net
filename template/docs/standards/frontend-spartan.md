@@ -7,6 +7,7 @@
 - **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `frontend/libs/ui/`。
 - **风格**：`components.json` 的 `style` 为 `vega`。新增或重新生成组件都按它输出，页面上的尺寸与圆角跟随组件，不另写一套。
 - **先用样式表，再改组件**：能用语义 token 或 `frontend/src/styles.css` 里按 `data-slot`、状态属性写的规则实现的调整，不改 helm。由样式表承担的调整以 `styles.css` 为准，例如：系统开启"减少动效"时关闭浮层的进出场动画与侧栏、抽屉、导航菜单的位移过渡；对话框与抽屉页头为右上角关闭按钮让出宽度；选择框与组合框的值区放不下时单行省略，箭头留在控件内（上游把选择框值区写成 flex，省略号不生效；组合框值区没有收缩约束）；触屏下菜单项、选项、导航链接、侧栏菜单按钮、分段控件项与验证码格补足 44px，折叠的图标侧栏随之加宽。只有样式表区分不了（按尺寸档位改高度）、要新增变体或改组件模板时才改 helm，并在下表登记。
+- Sheet 关闭文案由调用处通过官方 `closeLabel` 传入；工作区导航与设置外壳读取共享读屏词条。
 - **已定制的 helm 组件**（升级时逐个对照上游手动合入）：
 
 | 组件 | 改动 | 原因 |
@@ -18,7 +19,7 @@
 | `sidebar`（`hlm-sidebar-menu-button`） | 折叠为图标时加 `pointer-coarse:group-data-[collapsible=icon]:size-11!`、`pointer-coarse:group-data-[collapsible=icon]:p-3.5!`；`lg` 档加 `pointer-coarse:group-data-[collapsible=icon]:p-1.5!` | 上游把折叠按钮写成带 `!` 的 32px 见方，样式表里不分层的 `!important` 盖不过层内的重要声明；为保持上游的级联关系与图标居中，在组件里加触屏档，内边距按 16px 图标与 `lg` 档 32px 头像重新居中。侧栏的加宽与其余项的最小高度在 `styles.css` |
 | `badge` | `destructive` 暗色底 `dark:bg-destructive/20` 改 `/10`；新增 `success`、`warning` 变体（`bg-success/10`、`bg-warning/10` 底 + 同源文字色、无描边，与 `destructive` 同构） | 暗色对比理由同 `button`；正向状态（启用、已验证、成功）与待处理状态（需要关注的计数）各收成一个变体，页面不各写一串工具类，对比度只在一处调整 |
 | `dropdown-menu`（`hlm-dropdown-menu-focus-on-hover`） | 菜单项随指针移焦点的监听由 `mouseenter` 改为 `pointermove`，触屏拖动不移焦点，已是焦点项不重复设置 | 菜单弹在静止的光标下时浏览器也派发 `mouseenter`，焦点被抢到光标下那一项，键盘打开本应落在首项（Radix 同样跟随 `pointermove`）；上游至今仍是 `mouseenter` |
-| `dialog`（`hlm-dialog-content`）、`sheet`（`hlm-sheet-content`）、`sidebar`（`hlm-sidebar-trigger`）、`utils`（新增 `hlm-a11y-labels.token.ts` 并从 `utils` 入口导出） | 关闭按钮与侧栏开关的读屏名改读 `injectHlmA11yLabels()`；`hlm-dialog-content` 的 `closeLabel`、`hlm-sidebar-trigger` 的 `srOnlyText` 未传时取令牌 | 这些文案渲染在组件模板里，页面无处传入；令牌默认英文，多语言项目在应用配置里用 `provideHlmA11yLabels` 接上随语言切换的译文。上游升级曾把读取改回写死英文，合入时逐个保留 |
+| `dialog`（`hlm-dialog-content`）、`sidebar`（`hlm-sidebar-trigger`）、`utils`（新增 `hlm-a11y-labels.token.ts` 并从 `utils` 入口导出） | 弹窗内边距 `--dialog-padding` 同供滚动正文；关闭按钮与侧栏开关的读屏名改读 `injectHlmA11yLabels()`；`hlm-dialog-content` 的 `closeLabel`、`hlm-sidebar-trigger` 的 `srOnlyText` 未传时取令牌 | 上游缺省英文；共享令牌统一缺省译文，显式输入仍可覆盖。多语言项目用 `provideHlmA11yLabels` 接上随语言切换的词条，升级时保留 |
 | `command`（`hlm-command`、`hlm-command-input`） | 根捕获阶段忽略 isComposing/keyCode 229 的 Enter；内部 input 转发 ariaLabel，缺省使用 placeholder | Brain 根回车未判断组字；命令输入须有稳定可访问名 |
 
 登记表按组件对照上游：凡与上游有差异的组件都必须有一行，没有差异的组件不登记；行内写全该组件的全部改动，升级或评审时逐项核对改动内容与源码一致。

@@ -54,7 +54,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
             var connectionManager = scope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
 
             var tenant = await tenantManager.CreateAsync("atomic-tenant", null, isActive: false);
-            await connectionManager.SetAsync(tenant.Id, "crm", "Host=acme;Database=acme", expectedVersion: null);
+            await connectionManager.SetAsync(tenant.Id, "billing", "Host=acme;Database=acme", expectedVersion: null);
 
             await unitOfWork.RollbackAsync();
         }
@@ -72,7 +72,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
     /// </remarks>
     [Theory]
     [InlineData("default")]
-    [InlineData("crm")]
+    [InlineData("billing")]
     public async Task Tenant_and_connection_registration_commit_together(string name)
     {
         const string ConnectionString = "Host=acme;Database=acme";
@@ -130,7 +130,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
         Assert.Empty(await dbContext.Set<TenantConnectionRecord>().Where(x => x.TenantId == tenantId).ToListAsync());
 
         var lookup = await verificationScope.ServiceProvider
-            .GetRequiredService<ITenantConnectionConfigurationStore>().FindAsync(tenantId, "crm");
+            .GetRequiredService<ITenantConnectionConfigurationStore>().FindAsync(tenantId, "billing");
         Assert.NotNull(lookup);
         Assert.False(lookup.HasAnyConnection);
         Assert.Null(lookup.Connection);
