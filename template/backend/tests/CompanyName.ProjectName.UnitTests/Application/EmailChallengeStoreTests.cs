@@ -423,6 +423,40 @@ public sealed partial class EmailChallengeStoreTests
         Assert.Null(await ValidatePasswordResetAsync(email, issued.ChallengeId, "000000"));
     }
 
+    [Fact]
+    public async Task A_used_sign_in_code_frees_the_send_interval()
+    {
+        var recipient = new EmailCodeRecipient(Guid.NewGuid(), "used@example.test", "stamp-1");
+        var first = await _store.IssueTwoFactorSignInAsync(recipient);
+        await _queue.RunAllAsync(_sender, _time);
+
+        Assert.Equal(EmailCodeOutcome.Valid,
+            (await ValidateSignInAsync(recipient.Email, first.ChallengeId, _sender.Calls.Last().Code)).Outcome);
+
+        var next = await _store.IssueTwoFactorSignInAsync(recipient);
+        Assert.NotEqual(first.ChallengeId, next.ChallengeId);
+        Assert.Single(_queue.Items);
+    }
+
+    [Fact]
+    public async Task An_exhausted_sign_in_code_keeps_the_send_interval()
+    {
+        var recipient = new EmailCodeRecipient(Guid.NewGuid(), "exhausted@example.test", "stamp-1");
+        var first = await _store.IssueTwoFactorSignInAsync(recipient);
+        await _queue.RunAllAsync(_sender, _time);
+        var wrong = _sender.Calls.Last().Code == "000000" ? "111111" : "000000";
+        for (var i = 0; i < FixedRegistrationPolicy.Policy.EmailCodeMaxAttempts; i++)
+        {
+            Assert.Equal(EmailCodeOutcome.Wrong,
+                (await ValidateSignInAsync(recipient.Email, first.ChallengeId, wrong)).Outcome);
+        }
+
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _store.IssueTwoFactorSignInAsync(recipient));
+        Assert.Equal(AuthErrorCodes.EmailCodeSendTooFrequent, error.Code);
+        _time.Advance(SendInterval);
+        Assert.NotEqual(first.ChallengeId, (await _store.IssueTwoFactorSignInAsync(recipient)).ChallengeId);
+    }
+
     private Task<EmailCodeCheck> ValidateSignInAsync(string email, Guid challengeId, string code)
         => _store.ValidateTwoFactorSignInAsync(email, new EmailVerificationInputDto { ChallengeId = challengeId, Code = code });
 

@@ -2,6 +2,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.Settings.Provider;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +14,7 @@ namespace CompanyName.ProjectName.IntegrationTests;
 
 /// <summary>
 /// 用通行密钥确认身份：开久了的会话做敏感操作时出示通行密钥断言即可放行；选项按本人与会话签发、只认一次，
-/// 校验不通过按再认证失败计数。只有通行密钥的人也能凭它重新生成恢复码。
+/// 校验不通过保留失败记录、不计入账号锁定。只有通行密钥的人也能凭它重新生成恢复码。
 /// </summary>
 public sealed class PasskeyReauthenticationTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
@@ -52,22 +54,33 @@ public sealed class PasskeyReauthenticationTests(ProjectWebApplicationFactory fa
     }
 
     [Fact]
-    public async Task A_failed_passkey_confirmation_counts_as_a_reauthentication_failure()
+    public async Task Failed_passkey_confirmations_are_recorded_without_locking_out_the_account()
     {
         var (host, clock) = CreateHost();
         using var _ = host;
         var (username, session, passkey) = await CreateUserWithPasskeyAsync(host, "pkr_failed");
+        using var ownedSession = session;
+        await ProjectWebApplicationFactory.SetTenantSettingAsync(host, SettingConstant.Security.LockoutMaxFailedAttempts, "2");
+        var userId = (await session.GetFromJsonAsync<JsonElement>("/api/v1/auth/me")).GetProperty("id").GetString()!;
         clock.Advance(StaleSessionAge);
-
-        var options = await ReauthOptionsAsync(session);
-        using var rejected = await session.PutAsJsonAsync("/api/v1/auth/me", new
+        for (var i = 0; i < 2; i++)
         {
-            Username = username,
-            Email = $"new-{username}@example.test",
-            Passkey = passkey.Sign(options, origin: "https://evil.example")
-        });
+            var options = await ReauthOptionsAsync(session);
+            using var rejected = await session.PutAsJsonAsync("/api/v1/auth/me", new
+            {
+                Username = username,
+                Email = $"new-{username}@example.test",
+                Passkey = passkey.Sign(options, origin: "https://evil.example")
+            });
+            Assert.Equal("Auth:PasskeyVerificationFailed", await ErrorCodeAsync(rejected));
+        }
 
-        Assert.Equal("Auth:PasskeyVerificationFailed", await ErrorCodeAsync(rejected));
+        using var password = await session.PostAsJsonAsync("/api/v1/auth/session-login", new { UsernameOrEmail = username, Password });
+        Assert.Equal(HttpStatusCode.OK, password.StatusCode);
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var failures = await OperationRecordQueries.GetFailuresAsync(host, admin.Client, OperationRecordActions.AuthEmailChanged, userId);
+        Assert.Equal(2, failures.Count);
+        Assert.All(failures, failure => Assert.Equal("Auth:PasskeyVerificationFailed", failure.FailureCode));
     }
 
     [Fact]

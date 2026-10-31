@@ -6,6 +6,10 @@ using Fido2NetLib;
 using Fido2NetLib.Objects;
 using Fido2NetLib.Serialization;
 using Microsoft.Extensions.Options;
+#if (IncludeMultiTenancy)
+using Leistd.MultiTenancy.Context;
+using Microsoft.Extensions.Configuration;
+#endif
 
 namespace CompanyName.ProjectName.Infrastructure.Auth.Passkeys;
 
@@ -16,12 +20,15 @@ namespace CompanyName.ProjectName.Infrastructure.Auth.Passkeys;
 /// <para>选项、状态与浏览器响应都按 Fido2 自己的序列化上下文读写：COSE 算法要保持数字，
 /// <c>public-key</c> 等字面量也不能被宿主的全局枚举转换器改写。</para>
 /// </remarks>
-internal sealed class Fido2PasskeyProtocol(IOptions<PasskeyOptions> options) : IPasskeyProtocol
+internal sealed class Fido2PasskeyProtocol(
+#if (IncludeMultiTenancy)
+    ICurrentTenant currentTenant,
+    IConfiguration configuration,
+#endif
+    IOptions<PasskeyOptions> options) : IPasskeyProtocol
 {
     // 登记响应不在 Fido2 的源生成上下文里，按它自带的 JSON 特性反射读取；用独立的默认选项，不受宿主全局选项影响
     private static readonly JsonSerializerOptions AttestationJson = new(JsonSerializerDefaults.General);
-
-    private readonly Lazy<IFido2?> _fido2 = new(() => Create(options.Value));
 
     public bool IsAvailable => options.Value.IsConfigured;
 
@@ -132,18 +139,32 @@ internal sealed class Fido2PasskeyProtocol(IOptions<PasskeyOptions> options) : I
         return new PasskeyAssertion(result.CredentialId, result.SignCount, result.IsBackedUp);
     }
 
-    private IFido2 Fido2() =>
-        _fido2.Value ?? throw new InvalidOperationException($"{PasskeyOptions.SectionName} is not configured; check IsAvailable first.");
+    private IFido2 Fido2()
+    {
+        var configured = options.Value;
+        if (!configured.IsConfigured)
+            throw new InvalidOperationException($"{PasskeyOptions.SectionName} is not configured; check IsAvailable first.");
 
-    private static IFido2? Create(PasskeyOptions options) =>
-        options.IsConfigured
-            ? new Fido2(new Fido2Configuration
+        var origins = new HashSet<string>(configured.ConfiguredOrigins, StringComparer.OrdinalIgnoreCase);
+#if (IncludeMultiTenancy)
+        // 只加入服务端定案的当前租户，不按请求 Origin 放行；协议与端口沿用部署已允许的来源。
+        if (currentTenant.Name is { Length: > 0 } tenantName &&
+            configuration["Leistd:MultiTenancy:DomainFormat"] is { Length: > 0 } domainFormat)
+        {
+            var host = domainFormat.Replace("{0}", tenantName, StringComparison.Ordinal);
+            foreach (var origin in configured.ConfiguredOrigins)
             {
-                RPID = options.RelyingPartyId!.Trim(),
-                RPName = options.RelyingPartyName,
-                Origins = new HashSet<string>(options.ConfiguredOrigins, StringComparer.OrdinalIgnoreCase)
-            })
-            : null;
+                origins.Add(new UriBuilder(origin) { Host = host }.Uri.GetLeftPart(UriPartial.Authority));
+            }
+        }
+#endif
+        return new Fido2(new Fido2Configuration
+        {
+            RPID = configured.RelyingPartyId!.Trim(),
+            RPName = configured.RelyingPartyName,
+            Origins = origins
+        });
+    }
 
     private static T Read<T>(Func<T?> read, string what)
     {

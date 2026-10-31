@@ -14,7 +14,7 @@ namespace CompanyName.ProjectName.Application.Auth.TwoFactor;
 /// <para>凭据放在缓存里、只把随机令牌交给浏览器：这一段还不是会话，不能发 Cookie——
 /// 发了就等于第一步即登录成功，第二步形同虚设。</para>
 /// <para>同一挑战最多试 <see cref="MaxAttempts"/> 次，用完须重新输入密码；
-/// 每次输错同时计入账号的登录失败次数，所以换挑战重试也绕不过锁定。</para>
+/// 身份验证器、邮箱码和恢复码输错同时计入账号失败次数；通行密钥失败只占用挑战次数。</para>
 /// <para>有效期从签发那一刻算起，输错不会延长：到期时刻记在挑战里，重写只沿用剩余时长。
 /// 到期以注入的时钟为准，缓存条目的过期只负责回收。</para>
 /// </remarks>
@@ -67,7 +67,7 @@ internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock cl
             return false;
         }
 
-        await SaveAsync(token, challenge with { Attempts = attempts }, cancellationToken);
+        await SaveAsync(token, challenge with { Attempts = attempts, PasskeyState = null }, cancellationToken);
         return true;
     }
 

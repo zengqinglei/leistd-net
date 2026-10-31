@@ -8,7 +8,7 @@
 
 | 任务 | 必读 | 按需 |
 | --- | --- | --- |
-| 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口、分页排序或输入验证读 [API](standards/api.md)，批量或统计接口另读 [批量与统计](standards/api-batch-statistics.md)；设置项读 [设置](standards/settings.md)，后台或周期任务读 [后台任务](standards/background-jobs.md)；涉及登录、会话、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md)；远端测试读 [容器](standards/testing-containers.md) |
+| 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口、分页排序或输入验证读 [API](standards/api.md)，批量或统计接口另读 [批量与统计](standards/api-batch-statistics.md)；设置项读 [设置](standards/settings.md)，后台或周期任务读 [后台任务](standards/background-jobs.md)；认证（含通行密钥）、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md)；远端测试读 [容器](standards/testing-containers.md) |
 | 调整后端目录 | [后端目录规则 §2](standards/coding-backend.md#2-分层与目录)、[项目目录](standards/project-structure.md) | 按影响面读取测试与相关专题 |
 <!--#if (SpaFrontend)-->
 | 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面读 [前端界面](standards/frontend-ui.md)，按内容另读 [列表与表格](standards/frontend-lists.md)、[表单](standards/frontend-forms.md)、[导航](standards/frontend-navigation.md)（新页面、菜单）、[路由守卫](standards/frontend-routing.md)、[时间、图表与推送](standards/frontend-data.md)，设置页读 [设置](standards/settings.md)；加组件或升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md) |

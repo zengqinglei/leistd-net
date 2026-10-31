@@ -114,6 +114,32 @@ public sealed class IndependentFactorTests
         Assert.Throws<InvalidOperationException>(() => NewUser().RecordPasskeyRemoved());
     }
 
+#if (Email)
+    [Theory]
+    [InlineData("password")]
+    [InlineData("authenticator")]
+    [InlineData("email")]
+    public void Setting_a_password_or_enabling_a_factor_clears_the_email_recovery_marker(string change)
+    {
+        var user = NewUser();
+        user.RecoverPasswordHash("recovered-hash");
+        Assert.True(user.PasswordSetByEmailRecovery);
+
+        switch (change)
+        {
+            case "password": user.UpdatePasswordHash("new-hash"); break;
+            case "authenticator": user.EnableTwoFactor("secret", Codes, 1); break;
+            case "email":
+                user.ConfirmEmail();
+                user.EnableEmailTwoFactor();
+                break;
+        }
+
+        Assert.False(user.PasswordSetByEmailRecovery);
+    }
+
+#endif
+
     private static User NewUser() => new("passkey_user", "passkey@example.test", "hash");
 }
 #endif

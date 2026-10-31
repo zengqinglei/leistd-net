@@ -18,6 +18,9 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.Lock.Abstractions;
+#if (IncludeMultiTenancy)
+using Leistd.MultiTenancy.Context;
+#endif
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.Security.OneTimeCodes;
@@ -46,6 +49,9 @@ internal sealed class PasskeyAppService(
     IOperationRecorder operationRecorder,
     ILocalEventBus localEventBus,
     ICurrentUser currentUser,
+#if (IncludeMultiTenancy)
+    ICurrentTenant currentTenant,
+#endif
     IDistributedLock distributedLock,
     IUnitOfWorkManager unitOfWorkManager,
     IClock clock,
@@ -77,8 +83,18 @@ internal sealed class PasskeyAppService(
 
         var user = await GetCurrentUserAsync(cancellationToken);
         var existing = await passkeyDomainService.GetListAsync(user.Id, cancellationToken);
+        var name = user.Username;
+        var displayName = user.DisplayName ?? user.Username;
+#if (IncludeMultiTenancy)
+        // 共享 RP 的同名账号在浏览器凭据列表里须能按租户区分。
+        if (currentTenant.Name is { Length: > 0 } tenantName)
+        {
+            name = $"{name}@{tenantName}";
+            displayName = $"{displayName}@{tenantName}";
+        }
+#endif
         var ceremony = passkeyProtocol.BeginRegistration(
-            new PasskeyAccount(user.Id.ToByteArray(), user.Username, user.DisplayName ?? user.Username),
+            new PasskeyAccount(user.Id.ToByteArray(), name, displayName),
             existing.Select(p => new PasskeyDescriptor(p.CredentialId, p.GetTransports())));
         await ceremonies.SaveForSessionAsync(
             PasskeyCeremonyPurpose.Registration, user.Id, currentUser.GetSessionId(), ceremony.State, user.SecurityStamp, cancellationToken);

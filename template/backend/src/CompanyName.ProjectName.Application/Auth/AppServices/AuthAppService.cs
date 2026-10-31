@@ -259,13 +259,20 @@ internal sealed class AuthAppService(
 
         if (!verified)
         {
-            // 与口令登录、再认证同一份计数实现：独立工作单元提交，不随下面的抛出回滚
-            var counted = await accessFailureCounter.CountAsync(user.Id, cancellationToken);
-            if (counted is { LockoutTriggered: true, User: { } lockedUser })
+            if (usedMethod == TwoFactorMethod.Passkey)
             {
-                await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
-                await RecordLockedOutAsync(lockedUser, cancellationToken);
-                throw SessionIssuer.LockedOut(lockedUser, now);
+                await RecordPasskeyLoginFailedAsync(user);
+            }
+            else
+            {
+                // 与口令登录、再认证同一份计数实现：独立工作单元提交，不随下面的抛出回滚
+                var counted = await accessFailureCounter.CountAsync(user.Id, cancellationToken);
+                if (counted is { LockoutTriggered: true, User: { } lockedUser })
+                {
+                    await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+                    await RecordLockedOutAsync(lockedUser, cancellationToken);
+                    throw SessionIssuer.LockedOut(lockedUser, now);
+                }
             }
 
             if (!await twoFactorChallengeStore.RecordFailureAsync(input.Token, challenge, cancellationToken))
@@ -460,8 +467,8 @@ internal sealed class AuthAppService(
     /// <summary>免口令登录：校验浏览器交回的断言，通过即签发会话，不再要求第二步。</summary>
     /// <remarks>
     /// <para>通行密钥要求用户验证（生物识别或 PIN），一次就具备"持有 + 本人"：满足组织"要求两步验证"，也不看口令是不是经邮件找回的。</para>
-    /// <para>认不出凭据（没登记过、属于别的租户）时没有可计数的账号，只按验证失败拒绝；认出了账号而校验不通过，
-    /// 与口令输错同样计入登录失败与锁定。在本人的凭据锁内判定账号状态、校验并登记会话。</para>
+    /// <para>断言失败不计入账号失败与锁定，认出账号时保留失败记录与日志。
+    /// 在本人的凭据锁内判定账号状态、校验并登记会话。</para>
     /// </remarks>
     public async Task<ClaimsPrincipal> CompletePasskeySignInAsync(
         PasskeySignInInputDto input,
@@ -489,13 +496,7 @@ internal sealed class AuthAppService(
         SessionIssuer.EnsureAllowed(user, now);
         if (!await passkeyVerifier.VerifyAsync(passkey, state, response, cancellationToken))
         {
-            var counted = await accessFailureCounter.CountAsync(user.Id, cancellationToken);
-            if (counted is { LockoutTriggered: true, User: { } lockedUser })
-            {
-                await RecordLockedOutAsync(lockedUser, cancellationToken);
-                throw SessionIssuer.LockedOut(lockedUser, now);
-            }
-
+            await RecordPasskeyLoginFailedAsync(user);
             throw PasskeyAppService.VerificationFailed();
         }
 
@@ -508,7 +509,7 @@ internal sealed class AuthAppService(
         return principal;
     }
 
-    // 方式此刻不能用、或还没取过选项不算猜错，不计入失败；认不出凭据或不是本人的凭据按验证失败计数
+    // 方式不可用或还没取选项直接拒绝；校验失败只占用第二步挑战次数。
     private async Task<bool> VerifyPasskeyStepAsync(
         User user,
         TwoFactorChallenge challenge,
@@ -532,6 +533,13 @@ internal sealed class AuthAppService(
 
     private static BusinessException TwoFactorMethodUnavailable() =>
         new(AuthErrorCodes.TwoFactorMethodUnavailable, "This verification method isn't available for your account.");
+
+    private Task RecordPasskeyLoginFailedAsync(User user) =>
+        operationRecorder.RecordFailedAsync(
+            OperationRecordActions.AuthLoginFailed,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            OperationRecordAuthorizations.CredentialsPresented,
+            OperationFailure.FromCode(AuthErrorCodes.PasskeyVerificationFailed));
 
     // 登录成功的"什么人"由目标承载：SignInAsync 只往响应里种 Cookie，
     // 本次请求的主体仍是匿名，操作人字段为空是诚实的。

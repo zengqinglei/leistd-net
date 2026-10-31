@@ -1176,7 +1176,10 @@ describe('Login', () => {
       // 条件式界面默认不可用：按钮用例只看到按钮发起的那一次请求
       vi.spyOn(PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(false);
     });
-    afterEach(() => vi.restoreAllMocks());
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
 
     /** 取回注册摘要之前，通行密钥入口的占位。 */
     function passkeyPlaceholder(): HTMLElement | null {
@@ -1390,6 +1393,30 @@ describe('Login', () => {
 
       fixture.destroy();
       expect(signal?.aborted).toBe(true);
+    });
+
+    it('renews autofill before the server ceremony expires and stops renewing on leaving', async () => {
+      vi.mocked(PublicKeyCredential.isConditionalMediationAvailable).mockResolvedValue(true);
+      const signals: AbortSignal[] = [];
+      vi.spyOn(navigator.credentials, 'get').mockImplementation((request) => {
+        signals.push(request!.signal!);
+        return new Promise(() => undefined);
+      });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      await setUpPasskeys();
+      await fixture.whenStable();
+
+      await vi.advanceTimersByTimeAsync(270_000);
+
+      expect(signals[0].aborted).toBe(true);
+      expect(beginPasskeySignIn).toHaveBeenCalledTimes(2);
+      expect(signals[1].aborted).toBe(false);
+      expect(completePasskeySignIn).not.toHaveBeenCalled();
+      fixture.destroy();
+      await vi.advanceTimersByTimeAsync(270_000);
+      expect(signals[1].aborted).toBe(true);
+      expect(beginPasskeySignIn).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
     });
 
     it('aborts the autofill request before the button starts its own', async () => {

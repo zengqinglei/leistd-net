@@ -90,7 +90,7 @@ internal sealed class SessionIssuer(
             case TwoFactorSignInRefusal.IndependentFactorRequired:
                 throw new BusinessException(
                     AuthErrorCodes.TwoFactorIndependentFactorRequired,
-                    "This way of signing in needs your authenticator app or a recovery code. Sign in with your password instead.");
+                    "This way of signing in needs a passkey, your authenticator app or a recovery code. Sign in with your password instead, or unlink and link the external account again in settings.");
             case TwoFactorSignInRefusal.PasskeyUnavailable:
                 throw new BusinessException(
                     AuthErrorCodes.PasskeyUnavailable,

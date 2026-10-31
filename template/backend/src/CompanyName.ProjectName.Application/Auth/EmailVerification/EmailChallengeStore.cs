@@ -213,6 +213,16 @@ public class EmailChallengeStore(
         CancellationToken cancellationToken = default)
     {
         var (challenge, outcome) = await ConsumeAsync(email, input, TwoFactorSignInPurpose, cancellationToken);
+        if (outcome == EmailCodeOutcome.Valid)
+        {
+            // 成功登录后可再进第二步；次数耗尽仍保留间隔，避免换挑战绕过限速。
+            var rateKey = GetSignInRateCacheKey(GetScope(), GetEmailDigest(NormalizeEmail(email)));
+            if (await distributedCache.GetStringAsync(rateKey, cancellationToken) == input.ChallengeId!.Value.ToString("N"))
+            {
+                await distributedCache.RemoveAsync(rateKey, cancellationToken);
+            }
+        }
+
         return outcome == EmailCodeOutcome.Valid && ToProof(challenge) is { } proof
             ? new EmailCodeCheck(EmailCodeOutcome.Valid, proof)
             : outcome == EmailCodeOutcome.Valid ? EmailCodeCheck.Wrong : new EmailCodeCheck(outcome, null);

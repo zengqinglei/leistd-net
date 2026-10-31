@@ -27,7 +27,7 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 <!--#if (LocalIdentity)-->
 | `UserRegistration:Enabled`、`CaptchaExpiryMinutes` | 自助注册默认开放，图形验证码默认有效 5 分钟；注册开关可在「注册设置」覆盖 |
 <!--#if (Email)-->
-| `UserRegistration:EnableEmailVerification`、`EmailCodeExpiryMinutes`、`EmailCodeSendIntervalSeconds`、`EmailCodeMaxAttempts` | 邮箱验证默认关闭；验证码有效期 5 分钟，发送间隔 60 秒，最多错误 5 次；验证开关在「注册设置」覆盖，开启前先提供摘要密钥（见下文） |
+| `UserRegistration:EnableEmailVerification`、`EmailCodeExpiryMinutes`、`EmailCodeSendIntervalSeconds`、`EmailCodeMaxAttempts` | 邮箱验证默认关闭；验证码有效期 5 分钟，发送间隔 60 秒（不应长于有效期），最多错误 5 次；验证开关在「注册设置」覆盖，开启前先提供摘要密钥（见下文） |
 <!--#endif-->
 | `Passkeys:RelyingPartyName` | 通行密钥显示的站点名称，默认 `MyProject`；域名与来源见下文 |
 <!--#endif-->
@@ -102,7 +102,7 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 - 外部登录提供商（`ExternalAuth:Github`、`ExternalAuth:Google`）默认关闭，`Enabled`（compose 的 `GITHUB_LOGIN_ENABLED`、`GOOGLE_LOGIN_ENABLED`）打开且 `ClientId`、`ClientSecret` 都提供时才生效；缺一项不阻止启动，只是不提供该入口并记警告日志。宿主管理员也可在「系统设置 → 外部登录」运行期覆盖开关与凭据，清除覆盖值即回到这里的部署配置。从只填凭据的旧版本升级时，要显式打开开关才会继续提供入口。提供商后台登记的回调地址是 `https://<站点对外地址>/api/v1/external-auth/{github,google}/signin`，设置页的状态部件按当前请求地址显示。
 <!--#endif-->
 <!--#if (LocalIdentity)-->
-- 通行密钥的依赖方在 `Passkeys`：`RelyingPartyId` 是站点的可注册域名（不含协议与端口），`Origins` 列出浏览器页面的来源（协议 + 域名 + 端口，须落在 RP ID 之下，除环回地址外只收 https）；compose 的 `PASSKEY_RP_ID`、`PASSKEY_ORIGIN`。两项都不填时通行密钥不可用、照常启动；填了却不合法即启动失败并指出键名。登记过的通行密钥绑定 RP ID，部署后改它会让已登记的全部失效；多租户按子域名部署时 RP ID 取共同的父域。
+- 通行密钥的依赖方在 `Passkeys`：`RelyingPartyId` 是站点的可注册域名（不含协议与端口），`Origins` 列出浏览器页面的来源（协议 + 域名 + 端口，须落在 RP ID 之下，除环回地址外只收 https）；compose 的 `PASSKEY_RP_ID`、`PASSKEY_ORIGIN`。两项都不填时通行密钥不可用、照常启动；填了却不合法即启动失败并指出键名。登记过的通行密钥绑定 RP ID，部署后改它会让已登记的全部失效；多租户按子域名部署时 RP ID 取共同的父域；配置 `Leistd:MultiTenancy:DomainFormat` 后，每次仪式在静态 `Origins` 上加入当前租户的来源，协议与端口取各配置来源。仅当前租户的子域有效，不接受通配域；多项静态来源可用 `Passkeys__Origins__N` 配置。
 <!--#endif-->
 
 ## 生产边界
@@ -167,5 +167,4 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 <!--#endif-->
   - **用户的最近登录 IP**：是当前状态字段而非历史，随用户记录保留、不单设保留期。删除用户是软删除，**不会**清掉它；合规要求删除时须物理删除用户记录或显式清空该字段。
 <!--#endif-->
-- 模板不内置限流。对外提供登录的服务应在网关或 ASP.NET Core 限流中间件上按来源 IP 限流：
-  应用内的失败登录计数按账号聚合，同一 IP 轮换账号的撞库不会触发它。
+- 模板不内置限流。匿名认证端点（`captcha`、`passkey-login/options`、`session-login` 等）由网关按来源 IP 限流；应用内的失败计数按账号聚合，轮换账号的撞库不会触发它。
