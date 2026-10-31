@@ -86,7 +86,8 @@ services:
       # 首次部署缺失即启动失败并报出键名；已有管理员的部署可以不再提供
       - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:-}
       # 通行密钥：站点的可注册域名与页面来源（协议 + 域名 + 端口），都不填时通行密钥不可用、照常启动。
-      # 登记过的通行密钥绑定 RP ID，部署后不要再改；多租户按子域名部署时 RP ID 取共同的父域
+      # 登记过的通行密钥绑定 RP ID，部署后不要再改；子域名多租户取共同父域。
+      # 配置 DomainFormat 后自动加入当前租户来源，协议与端口取 Origins；静态多来源可加 Passkeys__Origins__N。
       - Passkeys__RelyingPartyId=${PASSKEY_RP_ID:-}
       - Passkeys__Origins__0=${PASSKEY_ORIGIN:-}
 #endif

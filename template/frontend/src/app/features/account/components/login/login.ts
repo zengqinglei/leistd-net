@@ -216,6 +216,7 @@ export class Login implements OnInit {
   protected readonly passkeyBusy = signal(false);
   /** 通行密钥在浏览器这一侧没成：按归类就地说明，不显示浏览器原文；改动输入或再试时清掉。 */
   protected readonly passkeyFailure = signal<WebAuthnFailure | null>(null);
+  private conditionalRenewal: ReturnType<typeof setTimeout> | undefined;
   /** 进行中的条件式请求；换成按钮发起、进入第二步或离开页面时中止。 */
   private conditionalRequest: AbortController | null = null;
 
@@ -417,6 +418,11 @@ export class Login implements OnInit {
         return;
       }
       ceremony = result.ceremony ?? '';
+      // 服务端仪式五分钟到期；自动填充可能久挂，提前重挂避免本人白做一次验证。
+      this.conditionalRenewal = setTimeout(() => {
+        this.stopConditionalRequest();
+        void this.startConditionalRequest();
+      }, 270_000);
       credential = await getPasskey(result.options, {
         mediation: 'conditional',
         signal: controller.signal,
@@ -427,6 +433,11 @@ export class Login implements OnInit {
         this.passkeyWithdrawn.set(true);
       }
       return;
+    } finally {
+      if (this.conditionalRequest === controller) {
+        clearTimeout(this.conditionalRenewal);
+        this.conditionalRenewal = undefined;
+      }
     }
     if (this.conditionalRequest === controller) {
       this.conditionalRequest = null;
@@ -448,6 +459,8 @@ export class Login implements OnInit {
   }
 
   private stopConditionalRequest(): void {
+    clearTimeout(this.conditionalRenewal);
+    this.conditionalRenewal = undefined;
     this.conditionalRequest?.abort();
     this.conditionalRequest = null;
   }

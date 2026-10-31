@@ -190,7 +190,7 @@ function sessionLogin(
       throw new MockException(400, {
         code: 'Auth:TwoFactorIndependentFactorRequired',
         message:
-          'This way of signing in needs your authenticator app or a recovery code. Sign in with your password instead.',
+          'This way of signing in needs a passkey, your authenticator app or a recovery code. Sign in with your password instead, or unlink and link the external account again in settings.',
       });
     }
     if (options.defaultMethod) {

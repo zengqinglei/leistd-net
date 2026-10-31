@@ -29,7 +29,7 @@
     "Auth:TwoFactorAlreadyEnabled": "两步验证已经启用。",
     "Auth:TwoFactorChallengeExpired": "登录已过期，请重新登录。",
     "Auth:TwoFactorCodeInvalid": "验证码不正确。",
-    "Auth:TwoFactorIndependentFactorRequired": "这种登录方式需要身份验证器或恢复码完成第二步，请改用口令登录。",
+    "Auth:TwoFactorIndependentFactorRequired": "这种登录方式需要通行密钥、身份验证器或恢复码完成第二步。请改用口令登录，或在设置里解绑外部账号后重新绑定。",
     "Auth:TwoFactorMethodUnavailable": "你的账号当前不能使用这种验证方式。",
     "Auth:TwoFactorNotEnabled": "两步验证尚未启用。",
     "Auth:TwoFactorRequiredByPolicy": "所在组织要求启用两步验证，不能停用。",

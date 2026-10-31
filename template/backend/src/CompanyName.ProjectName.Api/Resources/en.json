@@ -29,7 +29,7 @@
     "Auth:TwoFactorAlreadyEnabled": "Two-factor authentication is already turned on.",
     "Auth:TwoFactorChallengeExpired": "The sign-in attempt has expired. Sign in again.",
     "Auth:TwoFactorCodeInvalid": "The verification code is incorrect.",
-    "Auth:TwoFactorIndependentFactorRequired": "This way of signing in needs your authenticator app or a recovery code. Sign in with your password instead.",
+    "Auth:TwoFactorIndependentFactorRequired": "This way of signing in needs a passkey, your authenticator app or a recovery code. Sign in with your password instead, or unlink and link the external account again in settings.",
     "Auth:TwoFactorMethodUnavailable": "This verification method isn't available for your account.",
     "Auth:TwoFactorNotEnabled": "Two-factor authentication is not turned on.",
     "Auth:TwoFactorRequiredByPolicy": "Two-factor authentication is required here and cannot be turned off.",

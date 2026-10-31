@@ -85,7 +85,7 @@ internal enum ReauthenticationMethod
     Passkey
 }
 
-/// <summary>再认证：已登录的人改动"谁能登进这个账号"之前，再证明一次是本人；失败按登录的同一套计数与锁定处理。</summary>
+/// <summary>再认证：已登录的人改动"谁能登进这个账号"之前，再证明一次是本人；口令与验证码失败共用登录计数与锁定，通行密钥失败只留记录与日志。</summary>
 /// <remarks>
 /// <para><b>为什么需要这一层。</b>登录页有锁定，再认证入口（改口令、停用两步验证、重发恢复码）
 /// 如果没有，那条"连续失败 N 次锁定"的设置就名不副实：会话被盗用的人能在改口令接口上
@@ -114,7 +114,7 @@ internal interface IReauthenticationGuard
     /// 之后业务失败也不退回；调用方的业务阶段要另开工作单元重新读取用户，不能沿用此前读到的实体。</para>
     /// <para>判定顺序：锁定期内先拒绝。出示了凭证时不回落到会话时间或另一种凭证：本账号不具备这种方式
     /// （没有口令却给口令、没开两步验证却给验证码）以 <see cref="AuthErrorCodes.ReauthenticationMethodUnavailable"/> 拒绝且不计数；
-    /// 凭证错误按再认证失败计数与锁定（同 <see cref="RejectAsync"/>）。没有出示凭证而会话不够新时，没有口令也没开两步验证的账号
+    /// 口令或验证码错误计数与锁定（同 <see cref="RejectAsync"/>），通行密钥失败只留记录与日志。没有出示凭证而会话不够新，且没有口令、身份验证器或通行密钥的账号
     /// 以 <see cref="AuthErrorCodes.SignInAgainRequired"/> 要求重新登录，其余以 <see cref="AuthErrorCodes.ReauthenticationRequired"/>
     /// 要求出示凭证。只看会话是否受限不够：受限会话可能已经开着很久；模拟登录签发的会话不算刚认证——那是发起人认证的时间。</para>
     /// <para>只对当次操作有效：不改写会话的认证时间，不开宽限期。</para>
@@ -346,12 +346,12 @@ internal sealed class ReauthenticationGuard(
                 return ReauthenticationMethod.Passkey;
             }
 
-            throw await RejectAsync(
-                user,
+            await operationRecorder.RecordFailedAsync(
                 action,
-                AuthErrorCodes.PasskeyVerificationFailed,
-                "The passkey couldn't be verified. Try again.",
-                cancellationToken);
+                OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+                OperationRecordAuthorizations.AuthenticatedSelf,
+                OperationFailure.FromCode(AuthErrorCodes.PasskeyVerificationFailed));
+            throw new BusinessException(AuthErrorCodes.PasskeyVerificationFailed, "The passkey couldn't be verified. Try again.");
         }
 
         if (IsRecentSession())
