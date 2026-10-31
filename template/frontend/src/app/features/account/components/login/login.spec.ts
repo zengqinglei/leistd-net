@@ -142,6 +142,12 @@ describe('Login', () => {
     // 永远等不到响应，用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
     vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
+    vi.spyOn(TestBed.inject(SessionContextService), 'enter').mockImplementation(
+      async (navigate) => {
+        await TestBed.inject(SessionContextService).establish();
+        return navigate();
+      },
+    );
     vi.spyOn(TestBed.inject(SessionContextService), 'clear');
     //#if (IncludeMultiTenancy)
     // 登录页构造时就会按主机名探测一次租户；不打桩的话它会挂在一个永不返回的请求上，
@@ -177,7 +183,7 @@ describe('Login', () => {
     fixture.detectChanges();
     //#if (IncludeLocalization)
     // 登录页初始化时清理旧主体，等待这次退回设备语言后再测试用户切换。
-    await TestBed.inject(LanguageService).resetToDeviceLang();
+    await TestBed.inject(LanguageService).setDeviceLang('en');
     //#endif
   }
 
@@ -433,64 +439,19 @@ describe('Login', () => {
     expect(host.querySelector('#password')?.getAttribute('autocomplete')).toBe('current-password');
   });
 
-  it.each(['returnUrl', 'landing', 'setup'])(
-    'covers the whole shell before clear until %s navigation settles',
-    async (target) => {
-      queryParams = target === 'returnUrl' ? { returnUrl: '/workspace' } : {};
-      await setUp();
-      fillValidCredentials();
-      //#if (IncludeLocalization)
-      await TestBed.inject(LanguageService).setDeviceLang('en');
-      //#endif
-      if (target === 'setup') currentUser.set({ twoFactorSetupRequired: true });
-      const session = TestBed.inject(SessionContextService);
-      const covered = () => {
-        fixture.detectChanges();
-        const host = fixture.nativeElement as HTMLElement;
-        expect(host.querySelector('[data-auth-content]')?.hasAttribute('inert')).toBe(true);
-        expect(host.querySelector('[data-auth-transition]')).not.toBeNull();
-        expect(getComputedStyle(host.querySelector('[data-auth-content]')!).visibility).toBe(
-          'hidden',
-        );
-      };
-      vi.mocked(session.clear).mockImplementation(covered);
-      let releasePreferences!: () => void;
-      vi.mocked(session.establish).mockImplementation(async () => {
-        await new Promise<void>((resolve) => {
-          releasePreferences = resolve;
-        });
-        //#if (IncludeLocalization)
-        await TestBed.inject(LanguageService).applyAccountLang('zh-CN');
-        //#endif
-      });
-      let releaseNavigation!: (value: boolean) => void;
-      const navigation = () =>
-        new Promise<boolean>((resolve) => {
-          releaseNavigation = resolve;
-        });
-      vi.mocked(router.navigate).mockImplementation(navigation);
-      vi.mocked(router.navigateByUrl).mockImplementation(navigation);
-      const pending = component.onSubmit();
-      await settle();
-      covered();
-      if (target !== 'setup') {
-        releasePreferences();
-        await settle();
-        covered();
-        //#if (IncludeLocalization)
-        expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
-        //#endif
-      }
-      releaseNavigation(false);
-      await pending;
-      fixture.detectChanges();
-      expect((fixture.nativeElement as HTMLElement).querySelector('[inert]')).toBeNull();
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('[data-auth-transition]'),
-      ).toBeNull();
-      expect(component.isLoading()).toBe(false);
-    },
-  );
+  it('keeps the login shell visible and does not show success when navigation is cancelled', async () => {
+    await setUp();
+    fillValidCredentials();
+    vi.spyOn(toast, 'success').mockReturnValue('');
+    vi.mocked(router.navigate).mockResolvedValue(false);
+    await component.onSubmit();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('app-auth-shell')).not.toBeNull();
+    expect(host.querySelector('[inert], .invisible, [data-auth-transition]')).toBeNull();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(component.isLoading()).toBe(false);
+  });
 
   it.each(['clear', 'loadUser', 'establish', 'navigate'])(
     'restores the shell after %s throws',

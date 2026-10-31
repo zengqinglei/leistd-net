@@ -22,7 +22,7 @@ const SETTING_NAMES: Readonly<Record<AccountPreferenceField, string>> = {
   theme: 'Display.Theme',
 };
 
-/** 代码默认值取设置定义（与设置页同一份）：语言、时区留空即跟随设备，外观跟随系统。 */
+/** 代码默认值取设置定义（与设置页同一份）：语言、时区留空即跟随设备，外观未设时沿用设备当前值。 */
 function defaultOf(field: AccountPreferenceField): string | null {
   return (
     SETTING_DEFINITIONS.find((definition) => definition.name === SETTING_NAMES[field])

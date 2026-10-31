@@ -56,7 +56,7 @@ describe('account preferences mock', () => {
     TENANT_SETTING_VALUES.set('host:Display.TimeZone', 'Asia/Tokyo');
 
     expect(currentAccountPreferences()).toEqual({
-      preferences: { language: null, timeZone: 'Asia/Tokyo', theme: 'system' },
+      preferences: { language: null, timeZone: 'Asia/Tokyo', theme: null },
       preferenceOverrides: { language: null, timeZone: null, theme: null },
     });
   });
@@ -67,7 +67,7 @@ describe('account preferences mock', () => {
 
     const written = patch(request({ timeZone: 'Europe/London' }));
     expect(written).toEqual({
-      preferences: { language: null, timeZone: 'Europe/London', theme: 'system' },
+      preferences: { language: null, timeZone: 'Europe/London', theme: null },
       preferenceOverrides: { language: null, timeZone: 'Europe/London', theme: null },
     });
 

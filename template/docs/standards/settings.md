@@ -41,7 +41,7 @@
 
 - 值域声明在设置定义上（`AsBoolean()`、`AsInteger(min, max)`、`WithAllowedValues(...)`）；定义表达不了的规则写成 `Application/Settings/Validators` 下的 `ISettingValueValidator`。跨设置的约束（如未读通知保留不短于已读）读另一项的设置链值而不是 `IOptionsMonitor`；清除也经校验器，候选值是回落后的值。
 - 分组按管理员要完成的事归组，不按组件归组：新设置先归入已有分组（保留期一类都进 `Retention`），讲不进任何现有分组才新建；同一作用域的设置不散落到多个分组。允许用户覆盖的设置（`SettingScopes.All`）可以同时出现在系统与个人设置页，不为此拆定义。
-- 界面语言与时区（`Display.*`）是组织默认、个人可覆盖（`SettingScopes.All`），代码默认值取部署基线 `DisplayDefaults`（启动期绑定与校验，空为跟随设备）；外观 `Display.Theme` 只有个人层，默认跟随系统。它们是账户偏好，服务端读写都经 `IAccountPreferenceStore`，不直接读这几项设置。服务端给某个收件人产出文本时按收件人解析：语言用 `IAccountPreferenceStore.GetForUserAsync`，时区用 `IUserTimeZoneProvider.GetForUserAsync`，写出的时刻注明时区；不用当前用户的值，也不把当地时刻标成 UTC。
+- 界面语言与时区（`Display.*`）是组织默认、个人可覆盖（`SettingScopes.All`），代码默认值取部署基线 `DisplayDefaults`（启动期绑定与校验，空为跟随设备）；外观 `Display.Theme` 只有个人层，未设置时沿用设备当前值，设备无记录时跟随系统。它们是账户偏好，服务端读写都经 `IAccountPreferenceStore`，不直接读这几项设置。服务端给某个收件人产出文本时按收件人解析：语言用 `IAccountPreferenceStore.GetForUserAsync`，时区用 `IUserTimeZoneProvider.GetForUserAsync`，写出的时刻注明时区；不用当前用户的值，也不把当地时刻标成 UTC。
 - 系统设置的每个分组一条 `App.Settings.*` 子权限，登记在 `Application/Settings/Provider/SettingGroupPermissions`（设置端点的分组策略与操作记录的授权依据都从这里取）；只含进程级设置的分组子权限侧别为 `Host`。新建系统设置分组时同时加子权限定义、中英译文、前端 `PERMISSIONS.settings` 与 Mock。
 <!--#if (SpaFrontend)-->
 
@@ -59,8 +59,9 @@
 
 语言、时区、外观是账户偏好：身份服务（单体形态即本服务）持有并计算，资源服务转交，三种形态同一契约。
 
-- 读：`GET /auth/me` 的 `preferences`（生效值）与 `preferenceOverrides`（个人覆盖），由 `AccountPreferencesService` 应用，不取设置快照。两者同为 null 表示暂时读不到：新主体退回设备，同一主体保留已应用的值。
+- 读：`GET /auth/me` 的 `preferences`（生效值）与 `preferenceOverrides`（个人覆盖），由 `AccountPreferencesService` 应用，不取设置快照。两者同为 null 表示暂时读不到：新主体清掉账户状态与时区，同一主体保留已应用的值；语言与外观始终保留最后生效值。
 - 写：偏好行与页头切换器都经 `AccountPreferencesService.write` 发 `PATCH /auth/me/preferences`（一次一个字段），共用一个串行队列，用响应里的完整偏好更新，不另行回读。明确拒绝提示未保存；没有可判定的响应提示"未能确认保存"，不重放。
-- 未登录时切换器只记在本设备。外观的生效值缓存在本设备供首帧使用，主体离开后保留；语言的账户值只在内存。
+- 未登录时切换器只记在本设备，不自动写入账户。登录后账户语言（个人 → 组织默认 → 部署基线）与外观有值时优先，无值沿用本设备。每次生效的语言与外观都记在现有 localStorage 的 `app_lang`、`theme_config`，退出后与重开浏览器时保持；按源隔离，不跨 SSO 应用共享。
+- 登录收尾先读取权限、设置和偏好并准备词条，目标路由解析时也准备首次访问的功能词条；导航最终成功时同步提交语言、时区和外观，成功提示随后发出。导航取消或失败不改变显示偏好与设备记录。账户语言词条加载失败时保持当前语言，其他偏好仍可生效。已登录刷新在首帧前应用，页签回到前台时重查同一主体偏好。
 - 项目在偏好里加字段时改三处：Domain 的 `AccountPreferenceValues`、资源服务响应的 `ToSnapshot`（判定表示是否完整），以及输出 DTO 的映射。
 <!--#endif-->

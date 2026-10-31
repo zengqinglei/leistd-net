@@ -1,7 +1,24 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component, ErrorHandler, OnInit, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject, throwError } from 'rxjs';
+import { NavigationEnd, Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+//#if (IncludeLocalization)
+import {
+  provideTranslocoScope,
+  TranslocoLoader,
+  TranslocoService,
+  Translation,
+} from '@jsverse/transloco';
+//#endif
+// prettier-ignore
+import {
+  //#if (IncludeLocalization)
+  defer,
+  //#endif
+  of, Subject, throwError,
+} from 'rxjs';
 
 import { AccountPreferencesService } from './account-preferences-service';
 import { AuthService } from './auth-service';
@@ -17,6 +34,7 @@ import {
 } from '../../shared/dtos/account-preferences.dto';
 import { UserOutputDto } from '../../shared/dtos/auth.dto';
 //#if (IncludeLocalization)
+import { resolveTranslationScopes } from '../i18n/translation-scopes';
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
 import { SettingContextService } from '../settings/setting-context-service';
@@ -99,6 +117,7 @@ describe('SessionContextService', () => {
     TestBed.configureTestingModule({
       //#if (IncludeLocalization)
       providers: [
+        provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
         // 真实 AuthService 会拉起认证栈（无本地身份的形态下是整个 OIDC 客户端）；
@@ -108,6 +127,7 @@ describe('SessionContextService', () => {
       ],
       //#else
       providers: [
+        provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
         // 真实 AuthService 会拉起认证栈（无本地身份的形态下是整个 OIDC 客户端）；
@@ -206,7 +226,7 @@ describe('SessionContextService', () => {
     expect(preferences.timeZone()).toBe('Asia/Tokyo');
   });
 
-  // 新主体读不到偏好：上一个人的语言与时区不能留下来
+  // 新主体读不到偏好：清掉账户状态与时区，界面偏好保持
   it('drops the previous subject preferences when the new subject cannot read them', async () => {
     //#if (IncludeLocalization)
     await establishWith(readOf({ language: 'zh-CN', timeZone: 'Asia/Tokyo' }));
@@ -219,17 +239,19 @@ describe('SessionContextService', () => {
     expect(preferences.known()).toBe(false);
     expect(preferences.timeZone()).toBeUndefined();
     //#if (IncludeLocalization)
-    expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
     //#endif
   });
 
   //#if (IncludeLocalization)
-  // 共享机器：A 退出后 B 在登录页不能看到 A 的语言
-  it('reverts the language to the device preference when the subject leaves', async () => {
+  // 退出后登录页保持最后一次生效的语言
+  it('keeps the last effective language when the subject leaves', async () => {
     await establishWith(readOf({ language: 'zh-CN' }));
 
     service.clear();
-    await vi.waitFor(() => expect(TestBed.inject(LanguageService).activeLang()).toBe('en'));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
   });
 
   //#endif
@@ -418,4 +440,211 @@ describe('SessionContextService', () => {
       expect(authService.setCurrentUser).toHaveBeenLastCalledWith({ username: 'saved' });
     });
   });
+});
+
+/** 真路由首次渲染探针：在 ngOnInit 同步取文案，不能靠随后异步重绘修补。 */
+@Component({ template: '<p>{{ text }}</p>' })
+class EntryPage implements OnInit {
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
+  text = '';
+  ngOnInit(): void {
+    //#if (IncludeLocalization)
+    this.text = this.transloco.translate('workspace.title');
+    //#else
+    this.text = 'Ready';
+    //#endif
+  }
+}
+
+@Component({ template: '<p>Sign in</p>' })
+class EntryLogin {}
+//#if (IncludeLocalization)
+
+/** 全局英文已就绪，首次功能中文由测试释放或拒绝。 */
+class EntryLoader implements TranslocoLoader {
+  scope = new Subject<Translation>();
+  failScope = false;
+  readonly requests: string[] = [];
+  getTranslation(path: string) {
+    return defer(() => {
+      this.requests.push(path);
+      if (path === 'workspace/zh-CN') {
+        return this.failScope ? throwError(() => new Error('Scope unavailable')) : this.scope;
+      }
+      return of(path === 'workspace/en' ? { title: 'Workspace' } : {});
+    });
+  }
+}
+//#endif
+
+/** NavigationEnd 的提交时序、改道归属及首次功能词条，用真实 Router 验证。 */
+describe('SessionContextService navigation entry', () => {
+  let context: SessionContextService;
+  let preferences: AccountPreferencesService;
+  let http: HttpTestingController;
+  let harness: RouterTestingHarness;
+  let errorHandler: { handleError: ReturnType<typeof vi.fn> };
+  //#if (IncludeLocalization)
+  let loader: EntryLoader;
+  //#endif
+
+  beforeEach(async () => {
+    localStorage.setItem(ThemeService.STORAGE_KEY, JSON.stringify({ mode: 'light' }));
+    //#if (IncludeLocalization)
+    localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
+    loader = new EntryLoader();
+    //#endif
+    errorHandler = { handleError: vi.fn() };
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: 'login', component: EntryLogin },
+          {
+            path: 'target',
+            component: EntryPage,
+            //#if (IncludeLocalization)
+            providers: [provideTranslocoScope('workspace')],
+            resolve: { translations: resolveTranslationScopes },
+            //#endif
+          },
+          {
+            path: 'guard-entry',
+            component: EntryPage,
+            canActivate: [
+              () => {
+                const router = inject(Router);
+                return inject(SessionContextService).enter(async () => router.parseUrl('/target'));
+              },
+            ],
+          },
+          { path: 'denied', component: EntryPage, canActivate: [() => false] },
+          {
+            path: 'broken',
+            component: EntryPage,
+            resolve: {
+              data: () => {
+                throw new Error('Resolver failed');
+              },
+            },
+          },
+          {
+            path: 'redirect',
+            component: EntryPage,
+            canActivate: [() => inject(Router).parseUrl('/target')],
+          },
+        ]),
+        { provide: ErrorHandler, useValue: errorHandler },
+        {
+          provide: AuthService,
+          useValue: {
+            lastReadPreferences: () => ({
+              ticket: TestBed.inject(AccountPreferencesService).beginRead(),
+              read: readOf({ language: 'zh-CN', theme: 'dark', timeZone: 'Asia/Tokyo' }),
+            }),
+            isAuthenticated: () => false,
+          },
+        },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(['en', 'zh-CN'], loader),
+        //#endif
+      ],
+    });
+    context = TestBed.inject(SessionContextService);
+    preferences = TestBed.inject(AccountPreferencesService);
+    harness = await RouterTestingHarness.create('/login');
+  });
+
+  afterEach(() => {
+    http.verify();
+  });
+
+  /** 只模拟服务端 I/O，导航、解析、语言、偏好和主题均使用真实实现。 */
+  async function start(target: string): Promise<{ done: Promise<boolean> }> {
+    http = TestBed.inject(HttpTestingController);
+    const router = TestBed.inject(Router);
+    const done =
+      target === '/guard-entry'
+        ? router.navigateByUrl(target)
+        : context.enter(() => router.navigateByUrl(target));
+    await vi.waitFor(() =>
+      http
+        .expectOne('/api/v1/permissions/current')
+        .flush({ permissions: [], isSuperAdmin: false, versionToken: 'v1' }),
+    );
+    await vi.waitFor(() => http.expectOne('/api/v1/settings').flush([]));
+    return { done };
+  }
+
+  function expectUnchanged(): void {
+    expect(preferences.timeZone()).toBeUndefined();
+    expect(TestBed.inject(ThemeService).mode()).toBe('light');
+    expect(JSON.parse(localStorage.getItem(ThemeService.STORAGE_KEY)!).mode).toBe('light');
+    //#if (IncludeLocalization)
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
+    //#endif
+  }
+
+  for (const target of ['/target', '/redirect', '/guard-entry']) {
+    it(`commits before the first target render after navigating to ${target}`, async () => {
+      const observed: (string | undefined)[] = [];
+      TestBed.inject(Router).events.subscribe((event) => {
+        if (event instanceof NavigationEnd) observed.push(preferences.timeZone());
+      });
+      const { done } = await start(target);
+      //#if (IncludeLocalization)
+      await vi.waitFor(() => expect(loader.requests).toContain('workspace/zh-CN'));
+      expectUnchanged();
+      expect(harness.routeNativeElement?.textContent).toBe('Sign in');
+      loader.scope.next({ title: '工作区' });
+      loader.scope.complete();
+      //#endif
+      expect(await done).toBe(true);
+      harness.detectChanges();
+      expect(preferences.timeZone()).toBe('Asia/Tokyo');
+      expect(TestBed.inject(ThemeService).mode()).toBe('dark');
+      // 外部订阅早于本次提交，所以先观察到旧状态；返回 Promise 前必须已提交。
+      expect(observed).toEqual([undefined]);
+      //#if (IncludeLocalization)
+      expect(harness.routeNativeElement?.textContent).toBe('工作区');
+      expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
+      //#else
+      expect(harness.routeNativeElement?.textContent).toBe('Ready');
+      //#endif
+    });
+  }
+
+  for (const target of ['/denied', '/login', '/broken']) {
+    it(`discards preferences when navigating to ${target} does not succeed`, async () => {
+      const { done } = await start(target);
+      if (target === '/broken') await expect(done).rejects.toThrow('Resolver failed');
+      else expect(await done).toBe(false);
+      expectUnchanged();
+      harness.detectChanges();
+      expect(harness.routeNativeElement?.textContent).toBe('Sign in');
+      // 失败后独立导航不能提交旧偏好。
+      await TestBed.inject(Router).navigateByUrl('/denied');
+      expectUnchanged();
+    });
+  }
+  //#if (IncludeLocalization)
+
+  it('keeps the active language when a first target scope fails, while committing other preferences', async () => {
+    vi.spyOn(console, 'error').mockReturnValue(undefined);
+    loader.failScope = true;
+    const { done } = await start('/target');
+    expect(await done).toBe(true);
+    harness.detectChanges();
+    expect(harness.routeNativeElement?.textContent).toBe('Workspace');
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
+    expect(preferences.timeZone()).toBe('Asia/Tokyo');
+    expect(TestBed.inject(ThemeService).mode()).toBe('dark');
+    expect(errorHandler.handleError).toHaveBeenCalled();
+  });
+  //#endif
 });

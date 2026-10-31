@@ -40,8 +40,14 @@ export type PreferenceWriteOutcome =
   | { status: 'unconfirmed'; error: unknown }
   | { status: 'discarded' };
 
-/** 读取 `/me` 时的应用方式：新主体读不到偏好要清掉前一人的，同一主体后台重查读不到则保留已应用的。 */
+/** 读取 `/me` 时的应用方式：新主体读不到偏好清掉前一人的时区，同一主体后台重查读不到则保留已应用的。 */
 export type PreferenceReadKind = 'establish' | 'refresh';
+
+/** 一次 `/me` 读到的偏好及发起时取的号（见 {@link AccountPreferencesService.beginRead}）。 */
+export interface PreferenceRead {
+  readonly ticket: number;
+  readonly read: AccountPreferencesOutputDto;
+}
 
 /**
  * 会话的账户偏好状态：语言、时区、外观的唯一前端来源。偏好由身份服务持有并计算，经 `GET /auth/me` 读取、
@@ -51,12 +57,6 @@ export type PreferenceReadKind = 'establish' | 'refresh';
  * 不再覆盖。写入一律经 {@link write} 排成一个队列：偏好面板与页头切换器各自发起的写入若并发，后到的旧完整响应
  * 会盖掉先到的新值，串行后每一项都在前一项的结果之上。
  */
-/** 一次 `/me` 读到的偏好及发起时取的号（见 {@link AccountPreferencesService.beginRead}）。 */
-export interface PreferenceRead {
-  readonly ticket: number;
-  readonly read: AccountPreferencesOutputDto;
-}
-
 @Injectable({ providedIn: 'root' })
 export class AccountPreferencesService {
   static readonly url = '/api/v1/auth/me/preferences';
@@ -99,7 +99,7 @@ export class AccountPreferencesService {
 
   /**
    * 应用一次 `/me` 读到的偏好。号已过期（期间有写入成功或主体离开）时什么都不做。
-   * 读不到（两个对象缺一或为 null）时：新主体清掉前一人的语言与时区、退回设备；同一主体保留已应用的值。
+   * 读不到（两个对象缺一或为 null）时：新主体清空账户状态，语言与主题保持最后生效值；同一主体保留已应用的值。
    * 返回的 Promise 在语言词条落定时完成，启动流据此让首帧就是账户语言。
    */
   applyRead(
@@ -118,7 +118,7 @@ export class AccountPreferencesService {
       }
 
       this.state.set(null);
-      return this.resetLanguage();
+      return Promise.resolve();
     }
 
     return this.apply(known, false);
@@ -175,43 +175,68 @@ export class AccountPreferencesService {
     return next;
   }
 
-  /** 主体离开：偏好作废，排队未发的写入丢弃，语言退回设备。外观保留最近一次值（见 {@link ThemeService}）。 */
+  /** 为登录导航准备偏好；返回同步提交动作，由成功导航调用，过期读取不再应用。 */
+  async prepareRead(
+    ticket: number,
+    read: Partial<AccountPreferencesOutputDto>,
+  ): Promise<() => void> {
+    const known = toKnown(read);
+    if (ticket !== this.revision) return () => undefined;
+    //#if (IncludeLocalization)
+    const language = known?.preferences.language;
+    if (language && (SUPPORTED_LANGS as readonly string[]).includes(language)) {
+      await this.languageService.prepare(language as Lang);
+    }
+    //#endif
+    return () => {
+      if (ticket !== this.revision) return;
+      this.state.set(known);
+      if (known) this.applyTheme(known, false);
+      //#if (IncludeLocalization)
+      this.languageService.commit();
+      //#endif
+    };
+  }
+
+  /** 导航结束后释放待生效词条，不改变已应用偏好。 */
+  discardPrepared(): void {
+    //#if (IncludeLocalization)
+    this.languageService.discard();
+    //#else
+    return;
+    //#endif
+  }
+
+  /** 主体离开：账户状态与排队写入作废；保留最后生效的语言、主题。 */
   clear(): Promise<void> {
     this.session++;
     this.revision++;
     this.state.set(null);
-    return this.resetLanguage();
+    this.discardPrepared();
+    return Promise.resolve();
   }
 
   /** @param animate 本人刚改的外观带过渡切换；读取 `/me` 得到的值直接生效。 */
   private apply(known: KnownPreferences, animate: boolean): Promise<void> {
     this.state.set(known);
-    // 外观未设置即跟随系统
-    const theme = known.preferences.theme ?? 'system';
-    if (animate && theme !== this.themeService.mode()) {
-      this.themeService.transitionTo(theme);
-    } else {
-      this.themeService.applyAccountMode(theme);
-    }
+    this.applyTheme(known, animate);
     //#if (IncludeLocalization)
     const language = known.preferences.language;
     if (language && (SUPPORTED_LANGS as readonly string[]).includes(language)) {
       return this.languageService.applyAccountLang(language as Lang);
     }
-
-    // 未设置或本版不支持的语言退回设备；什么都不做会沿用上一个主体的语言
-    return this.languageService.resetToDeviceLang();
-    //#else
-    return Promise.resolve();
     //#endif
+    return Promise.resolve();
   }
 
-  private resetLanguage(): Promise<void> {
-    //#if (IncludeLocalization)
-    return this.languageService.resetToDeviceLang();
-    //#else
-    return Promise.resolve();
-    //#endif
+  private applyTheme(known: KnownPreferences, animate: boolean): void {
+    const theme = known.preferences.theme;
+    if (theme === null) return;
+    if (animate && theme !== this.themeService.mode()) {
+      this.themeService.transitionTo(theme);
+    } else {
+      this.themeService.applyAccountMode(theme);
+    }
   }
 
   //#if (IncludeLocalization)

@@ -60,7 +60,7 @@ export class ExternalAuthCallback implements OnInit {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  protected readonly entering = signal(true);
+  protected readonly processing = signal(true);
 
   /**
    * 失败说明：本端的说法存词条键、由模板按当前语言取，服务端下发的原因原样显示。
@@ -79,7 +79,7 @@ export class ExternalAuthCallback implements OnInit {
 
   private async processCallback(): Promise<void> {
     //#if (OpenIddictServer)
-    // 整页回到授权端点时保持中性显示直到页面卸载
+    // 整页回到授权端点时保留处理中提示直到页面卸载
     let left = false;
     //#endif
     try {
@@ -158,9 +158,9 @@ export class ExternalAuthCallback implements OnInit {
       this.error.set({ key: 'account.externalCallback.failed' });
     } finally {
       //#if (OpenIddictServer)
-      if (!left) this.entering.set(false);
+      if (!left) this.processing.set(false);
       //#else
-      this.entering.set(false);
+      this.processing.set(false);
       //#endif
     }
   }
@@ -175,11 +175,12 @@ export class ExternalAuthCallback implements OnInit {
       await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl));
       return;
     }
-    await this.sessionContext.establish();
-    await this.returnUrls.navigate(returnUrl, () =>
-      this.router.navigate([
-        this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
-      ]),
+    await this.sessionContext.enter(() =>
+      this.returnUrls.navigate(returnUrl, () =>
+        this.router.navigate([
+          this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
+        ]),
+      ),
     );
   }
 
@@ -253,19 +254,18 @@ export class ExternalAuthCallback implements OnInit {
   }
 
   private async returnToSecurity(): Promise<void> {
-    this.entering.set(true);
+    this.processing.set(true);
     try {
       // 回调页整页加载时启动流程不取当前用户（它按登录流程处理），这里补上再回设置页；
       // 取不到说明会话已不在，交给路由守卫带去登录页。
       try {
         await lastValueFrom(this.authService.loadUser());
-        await this.sessionContext.establish();
       } catch {
         // 由守卫处理
       }
-      await this.router.navigate(['/workspace/settings/security']);
+      await this.sessionContext.enter(() => this.router.navigate(['/workspace/settings/security']));
     } finally {
-      this.entering.set(false);
+      this.processing.set(false);
     }
   }
 }
@@ -274,6 +274,8 @@ export class ExternalAuthCallback implements OnInit {
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
   'account.login.loginFailed': 'Sign-in failed',
+  'account.externalCallback.processing': 'Completing sign-in…',
+  'account.externalCallback.processingAria': 'Completing sign-in',
   'account.externalCallback.missingParams': 'Missing required callback parameters',
   'account.externalCallback.failed': 'Third-party sign-in failed. Please go back and try again.',
   'account.externalCallback.cancelled': 'Third-party sign-in was cancelled.',

@@ -5,7 +5,6 @@ import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLayers, lucideShieldCheck, lucideUser, lucideUsers } from '@ng-icons/lucide';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../core/components/language-switcher/language-switcher';
@@ -25,7 +24,6 @@ import { englishText } from '../../../../shared/utils/english-text';
   selector: 'app-auth-shell',
   // prettier-ignore
   imports: [
-    HlmSpinner,
     RouterLink,
     NgIcon,
     Logo,
@@ -40,8 +38,6 @@ import { englishText } from '../../../../shared/utils/english-text';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AuthShell {
-  /** 会话偏好与导航准备期间遮盖整个认证视图，保留布局并暂停底层交互。 */
-  readonly entering = input(false);
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
 

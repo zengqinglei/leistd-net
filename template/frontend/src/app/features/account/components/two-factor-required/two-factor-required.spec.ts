@@ -102,7 +102,7 @@ describe('TwoFactorRequired', () => {
         //#endif
         { provide: AuthService, useValue: auth },
         { provide: AuthorizationService, useValue: { canAccessPlatform } },
-        { provide: SessionContextService, useValue: { establish } },
+        { provide: SessionContextService, useValue: { establish, enter: async (navigate: () => Promise<unknown>) => { await establish(); return navigate(); } } },
         // 设置组件只需能完成首次加载，它自己的流程由它的用例负责
         { provide: AccountService, useValue: account },
         { provide: SecurityConfigService, useValue: { config, refresh: vi.fn() } },
@@ -150,42 +150,6 @@ describe('TwoFactorRequired', () => {
       establish.mock.invocationCallOrder[0],
     );
     expect(navigate).toHaveBeenCalledExactlyOnceWith(['/workspace']);
-  });
-
-  it('keeps the complete shell inert through preferences and a cancelled navigation', async () => {
-    await enable();
-    let releasePreferences!: () => void;
-    establish.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          releasePreferences = resolve;
-        }),
-    );
-    let releaseNavigation!: (value: boolean) => void;
-    navigate.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          releaseNavigation = resolve;
-        }),
-    );
-    const pending = (
-      fixture.componentInstance as unknown as { continue(): Promise<void> }
-    ).continue();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
-    const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-auth-content]')?.hasAttribute('inert')).toBe(true);
-    expect(getComputedStyle(host.querySelector('[data-auth-content]')!).visibility).toBe('hidden');
-    releasePreferences();
-    await new Promise((resolve) => setTimeout(resolve));
-    fixture.detectChanges();
-    expect(host.querySelector('[data-auth-transition]')).not.toBeNull();
-    releaseNavigation(false);
-    await pending;
-    fixture.detectChanges();
-    expect(host.querySelector('[data-auth-transition]')).toBeNull();
-    expect(host.querySelector('[inert]')).toBeNull();
-    expect(host.querySelector('button')?.closest('[inert]')).toBeNull();
   });
 
   it.each(['loadUser', 'establish', 'navigate'])(

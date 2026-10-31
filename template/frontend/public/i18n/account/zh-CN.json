@@ -103,29 +103,29 @@
         "name": "身份验证器应用",
         "hint": "输入应用上的 6 位验证码"
       },
-//#if (Email)
+      //#if (Email)
       "email": {
         "name": "邮箱验证码",
         "hint": "发送验证码到 {{email}}"
       },
-//#endif
+      //#endif
       "recoveryCode": {
         "name": "恢复码",
         "hint": "使用你保存的恢复码之一"
       }
     },
     "emailLabel": "邮箱验证码",
-//#if (Email)
+    //#if (Email)
     "emailHint": "验证码已发送到 {{email}}，请输入邮件里的 6 位数字。",
     "emailSending": "正在把验证码发送到 {{email}}…",
     "emailPending": "验证码将发送到 {{email}}。",
     "resend": "重新发送",
     "resendIn": "{{seconds}} 秒后可重新发送",
     "useEmail": "改用邮箱验证码",
-//#endif
+    //#endif
     "back": "返回登录"
   },
-//#if (Email)
+  //#if (Email)
   "twoFactorEmail": {
     "header": "邮箱验证码",
     "subtitle": "登录第二步也可以用发到 {{email}} 的验证码。它只作补充，组织要求两步验证时不算满足。",
@@ -149,7 +149,7 @@
     "disabledToast": "邮箱验证码已停用，其他设备上的登录已退出。",
     "reauthDescription": "更改登录方式前，请先确认是你本人。"
   },
-//#endif
+  //#endif
   "passkeys": {
     "header": "通行密钥",
     "subtitle": "用指纹、面容或屏幕锁代替密码登录。通行密钥不会被钓鱼网站骗走。",
@@ -385,6 +385,8 @@
     "backToLogin": "返回登录"
   },
   "externalCallback": {
+    "processing": "正在完成登录…",
+    "processingAria": "正在完成登录",
     "missingParams": "缺少必要的回调参数",
     "failed": "第三方登录失败，请返回重试",
     "cancelled": "已取消第三方登录。",

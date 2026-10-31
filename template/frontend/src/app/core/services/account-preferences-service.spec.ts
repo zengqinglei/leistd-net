@@ -87,9 +87,12 @@ describe('AccountPreferencesService', () => {
       expect(service.timeZone()).toBe('Asia/Tokyo');
       expect(TestBed.inject(ThemeService).mode()).toBe('dark');
       expect(service.known()).toBe(true);
+      //#if (IncludeLocalization)
+      expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
+      //#endif
     });
 
-    // 字段为 null 是"已知未设置"：时区按浏览器，外观跟随系统
+    // 字段为 null 是"已知未设置"：时区按浏览器，外观保持设备值
     it('treats unset fields as following the device', async () => {
       TestBed.inject(ThemeService).setMode('dark');
 
@@ -97,10 +100,10 @@ describe('AccountPreferencesService', () => {
 
       expect(service.known()).toBe(true);
       expect(service.timeZone()).toBeUndefined();
-      expect(TestBed.inject(ThemeService).mode()).toBe('system');
+      expect(TestBed.inject(ThemeService).mode()).toBe('dark');
     });
 
-    // 新主体读不到偏好：清掉前一人的，退回设备
+    // 新主体读不到偏好：清掉账户状态，保留最后生效的界面偏好
     it('drops the previous preferences when a new subject cannot read them', async () => {
       //#if (IncludeLocalization)
       await read(knownOf({ language: 'zh-CN', timeZone: 'Asia/Tokyo' }));
@@ -113,7 +116,7 @@ describe('AccountPreferencesService', () => {
       expect(service.known()).toBe(false);
       expect(service.timeZone()).toBeUndefined();
       //#if (IncludeLocalization)
-      expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
+      expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
       //#endif
     });
 
@@ -172,6 +175,21 @@ describe('AccountPreferencesService', () => {
 
       expect(service.known()).toBe(false);
     });
+  });
+
+  it('does not commit a prepared read after the subject leaves', async () => {
+    const commit = await service.prepareRead(
+      service.beginRead(),
+      knownOf({ theme: 'dark', timeZone: 'Asia/Tokyo', language: 'zh-CN' }),
+    );
+    await service.clear();
+    commit();
+    expect(service.known()).toBe(false);
+    expect(service.timeZone()).toBeUndefined();
+    //#if (IncludeLocalization)
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
+    expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
+    //#endif
   });
 
   describe('writing', () => {

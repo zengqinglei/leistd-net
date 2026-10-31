@@ -84,10 +84,10 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             displayName: "Time zone",
             group: SettingConstant.Groups.Display).IsVisibleToClients = true;
 
-        // 外观跟账户走，换设备也是同一主题；默认跟随系统，按设备亮暗实时切换。
+        // 外观只在个人层；未设置时由前端保留设备当前值，显式 system 才跟随设备亮暗。
         context.Add(
             SettingConstant.Display.Theme,
-            defaultValue: "system",
+            defaultValue: null,
             scopes: SettingScopes.User,
             displayName: "Appearance",
             group: SettingConstant.Groups.Display)

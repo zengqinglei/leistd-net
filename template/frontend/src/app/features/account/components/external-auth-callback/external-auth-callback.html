@@ -5,7 +5,7 @@
 <!--#endif-->
   <main class="flex min-h-screen items-center justify-center bg-background px-4">
     <section class="text-center">
-      @if (!entering() && error(); as error) {
+      @if (!processing() && error(); as error) {
         <div class="flex flex-col items-center gap-6">
           <div class="flex flex-col gap-3">
             <h1 class="text-destructive text-2xl font-semibold tracking-tight">
@@ -17,8 +17,11 @@
             {{ t('account.externalCallback.backToLogin') }}
           </a>
         </div>
-      } @else if (entering()) {
-        <hlm-spinner aria-label="Loading" lang="en" />
+      } @else if (processing()) {
+        <div class="flex flex-col items-center gap-4">
+          <hlm-spinner [attr.aria-label]="t('account.externalCallback.processingAria')" />
+          <p class="text-muted-foreground">{{ t('account.externalCallback.processing') }}</p>
+        </div>
       } @else {
         <a hlmBtn routerLink="/auth/login">
           {{ t('account.externalCallback.backToLogin') }}

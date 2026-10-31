@@ -16,6 +16,7 @@ import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
+import { ThemeService } from '../../../../core/services/theme-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
 import { AccountThemeMode } from '../../../../shared/dtos/account-preferences.dto';
 import {
@@ -1496,6 +1497,33 @@ describe('SettingSection language', () => {
 
 /** 外观：账户级的个人设置，与语言、时区同一套行与写入链。 */
 describe('SettingSection appearance', () => {
+  it('shows the current device appearance when the account has no appearance', async () => {
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    const theme = row({
+      name: 'Display.Theme',
+      group: 'Display',
+      groupDisplayName: 'Display',
+      defaultValue: null,
+      allowsTenantScope: false,
+    });
+    await seedPreferences([theme]);
+    TestBed.inject(ThemeService).setMode('dark');
+    const fixture = TestBed.createComponent(SettingSection);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/settings').flush([theme]);
+    await fixture.whenStable();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="setting-select-Display.Theme"]',
+    );
+    //#if (IncludeLocalization)
+    expect(trigger?.textContent?.trim()).toBe('theme.mode.dark');
+    //#else
+    expect(trigger?.textContent?.trim()).toBe('Dark');
+    //#endif
+    http.verify();
+  });
+
   // 外观是普通的个人设置行：候选项文案取主题词条，未设置时占位写正在生效的"跟随系统"
   it('renders appearance as a personal setting row with translated modes', async () => {
     TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
