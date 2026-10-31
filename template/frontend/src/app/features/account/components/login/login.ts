@@ -135,6 +135,8 @@ export class Login implements OnInit {
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
 
+  protected readonly entering = signal(false);
+
   protected readonly showPassword = signal(false);
 
   /**
@@ -329,40 +331,44 @@ export class Login implements OnInit {
 
   /** 会话已下发之后的共同收尾：回授权端点时直接整页离开；否则取当前用户、建立会话上下文、提示并跳转。 */
   private async finishLogin(returnUrl: string | null): Promise<ReturnNavigation> {
-    // 此时凭据（含所需 MFA）已经通过，才能清理旧主体；加载失败也不能沿用旧权限与设置。
-    this.sessionContext.clear();
     //#if (OpenIddictServer)
     // 回到授权端点是整页离开：服务端会重新校验会话、重新认证证明与首绑要求（受限会话由它送去设置页），
     // 资源应用启动时自建上下文。在这里读用户、应用账户偏好、弹成功提示，只会让即将离开的页面先变一下
     if (this.returnUrls.isServerPage(returnUrl)) {
+      this.sessionContext.clear();
       return this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
     }
     //#endif
-    await lastValueFrom(this.authService.loadUser());
+    // clear 本身会退回设备语言，因此也必须在完整外壳的遮盖下执行。
+    this.entering.set(true);
+    try {
+      this.sessionContext.clear();
+      await lastValueFrom(this.authService.loadUser());
+      // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去；设置完成后回到原目标。
+      if (this.authService.currentUser()?.twoFactorSetupRequired) {
+        await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl));
+        return 'routed';
+      }
+      // 会话上下文在任何跳转前建立：旧主体已清空，空权限下 permissionGuard 会把深链登录踢到 403；
+      // 设置也要就位，SPA 内跳转不会重跑应用初始化器；账户语言同时就位，目标页首帧即使用账户偏好。
+      await this.sessionContext.establish();
 
-    // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去；设置完成后回到原目标
-    if (this.authService.currentUser()?.twoFactorSetupRequired) {
-      await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl));
-      return 'routed';
+      // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
+      // 提前提示会让用户先看到成功、紧接着看到失败，而人还停在登录页。
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('account.login.loginSuccess'), {
+        description: this.transloco.translate('account.login.welcomeBack'),
+        duration: 3000,
+      });
+      //#else
+      toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
+      //#endif
+      // 有可接续的站内目标就回去，否则按权限进入默认页。
+      return await this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
+    } finally {
+      // 等待导航 Promise 后再恢复；取消或抛错时当前视图仍可操作。
+      this.entering.set(false);
     }
-
-    // 会话上下文在任何跳转前建立：旧主体已清空，空权限下 permissionGuard 会把深链登录踢到 403；
-    // 设置也要就位，SPA 内跳转不会重跑应用初始化器。
-    await this.sessionContext.establish();
-
-    // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
-    // 提前提示会让用户先看到成功、紧接着看到失败，而人还停在登录页。
-    //#if (IncludeLocalization)
-    toast.success(this.transloco.translate('account.login.loginSuccess'), {
-      description: this.transloco.translate('account.login.welcomeBack'),
-      duration: 3000,
-    });
-    //#else
-    toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
-    //#endif
-
-    // 有可接续的站内目标就回去，否则按权限进入默认页
-    return this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
   }
 
   /** 按权限进入默认页：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。 */

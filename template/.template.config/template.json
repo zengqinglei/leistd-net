@@ -842,6 +842,7 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenantAdminRestoreTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ControlContextSharedTransactionTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenantOidcFlowTests.cs",
             "backend/src/CompanyName.ProjectName.DbMigrator/Runners/TenantAdminRestoreRunner.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/TenantDatabaseErrorDescriberTests.cs",

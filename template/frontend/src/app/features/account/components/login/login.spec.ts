@@ -433,6 +433,91 @@ describe('Login', () => {
     expect(host.querySelector('#password')?.getAttribute('autocomplete')).toBe('current-password');
   });
 
+  it.each(['returnUrl', 'landing', 'setup'])(
+    'covers the whole shell before clear until %s navigation settles',
+    async (target) => {
+      queryParams = target === 'returnUrl' ? { returnUrl: '/workspace' } : {};
+      await setUp();
+      fillValidCredentials();
+      //#if (IncludeLocalization)
+      await TestBed.inject(LanguageService).setDeviceLang('en');
+      //#endif
+      if (target === 'setup') currentUser.set({ twoFactorSetupRequired: true });
+      const session = TestBed.inject(SessionContextService);
+      const covered = () => {
+        fixture.detectChanges();
+        const host = fixture.nativeElement as HTMLElement;
+        expect(host.querySelector('[data-auth-content]')?.hasAttribute('inert')).toBe(true);
+        expect(host.querySelector('[data-auth-transition]')).not.toBeNull();
+        expect(getComputedStyle(host.querySelector('[data-auth-content]')!).visibility).toBe(
+          'hidden',
+        );
+      };
+      vi.mocked(session.clear).mockImplementation(covered);
+      let releasePreferences!: () => void;
+      vi.mocked(session.establish).mockImplementation(async () => {
+        await new Promise<void>((resolve) => {
+          releasePreferences = resolve;
+        });
+        //#if (IncludeLocalization)
+        await TestBed.inject(LanguageService).applyAccountLang('zh-CN');
+        //#endif
+      });
+      let releaseNavigation!: (value: boolean) => void;
+      const navigation = () =>
+        new Promise<boolean>((resolve) => {
+          releaseNavigation = resolve;
+        });
+      vi.mocked(router.navigate).mockImplementation(navigation);
+      vi.mocked(router.navigateByUrl).mockImplementation(navigation);
+      const pending = component.onSubmit();
+      await settle();
+      covered();
+      if (target !== 'setup') {
+        releasePreferences();
+        await settle();
+        covered();
+        //#if (IncludeLocalization)
+        expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
+        //#endif
+      }
+      releaseNavigation(false);
+      await pending;
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('[inert]')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-auth-transition]'),
+      ).toBeNull();
+      expect(component.isLoading()).toBe(false);
+    },
+  );
+
+  it.each(['clear', 'loadUser', 'establish', 'navigate'])(
+    'restores the shell after %s throws',
+    async (step) => {
+      await setUp();
+      fillValidCredentials();
+      vi.spyOn(toast, 'error').mockReturnValue('');
+      const error = new Error('Preparation failed');
+      const session = TestBed.inject(SessionContextService);
+      if (step === 'clear')
+        vi.mocked(session.clear).mockImplementation(() => {
+          throw error;
+        });
+      if (step === 'loadUser') authService.loadUser.mockReturnValue(throwError(() => error));
+      if (step === 'establish') vi.mocked(session.establish).mockRejectedValue(error);
+      if (step === 'navigate') vi.mocked(router.navigate).mockRejectedValue(error);
+      await component.onSubmit();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('[inert]')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-auth-transition]'),
+      ).toBeNull();
+      expect(component.isLoading()).toBe(false);
+      expect(toast.error).toHaveBeenCalled();
+    },
+  );
+
   it('navigates to a safe local returnUrl after a successful login', async () => {
     queryParams = { returnUrl: '/platform/users' };
     await setUp();

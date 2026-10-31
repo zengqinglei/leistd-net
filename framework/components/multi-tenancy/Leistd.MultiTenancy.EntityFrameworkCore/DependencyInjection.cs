@@ -68,9 +68,11 @@ public static class DependencyInjection
     /// <para>解析用的名字就是使用方 DbContext 的 <c>[ConnectionStringName]</c>。
     /// 三级落点：租户一条连接都没登记就用本服务自己的配置；登记了就按"精确名 → 默认名"取；
     /// 登记过却两者都没有则拒绝，不回落本服务的库。</para>
-    /// <para>宿主须注册：控制库上下文（<c>AddDbContext</c>，直接注入、不经工作单元）；
+    /// <para>宿主须注册：控制库上下文（<c>AddDbContext</c>）；
     /// 迁移目标需要的 <see cref="AddMultiTenancyEfCore{TDbContext}"/>；
     /// 与写入方共享密钥环的 <c>AddDataProtection()</c>——连接串在这里解密，解不开即拒绝，不静默回落。</para>
+    /// <para>仅连接路由查询在独立异步作用域直接解析控制库上下文并释放，不占用调用方工作单元的实例。
+    /// 无租户及控制库连接名不创建查询上下文；管理与存储仍经 Provider 参与工作单元。</para>
     /// <para>同时注册多租户核心服务（<c>AddMultiTenancyCore()</c>）与 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
     /// 库目录 <c>ITenantDatabaseDirectory</c> 由 <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
     /// 连接配置在另一个服务时改用 Core 包的 <c>AddRemoteTenantConnectionResolution</c>，两者二选一。</para>
