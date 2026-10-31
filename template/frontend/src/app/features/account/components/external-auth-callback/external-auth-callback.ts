@@ -78,7 +78,10 @@ export class ExternalAuthCallback implements OnInit {
   }
 
   private async processCallback(): Promise<void> {
+    //#if (OpenIddictServer)
+    // 整页回到授权端点时保持中性显示直到页面卸载
     let left = false;
+    //#endif
     try {
       const params = this.route.snapshot.queryParamMap;
       const intent = params.get('intent') ?? 'login';
@@ -154,7 +157,11 @@ export class ExternalAuthCallback implements OnInit {
       }
       this.error.set({ key: 'account.externalCallback.failed' });
     } finally {
+      //#if (OpenIddictServer)
       if (!left) this.entering.set(false);
+      //#else
+      this.entering.set(false);
+      //#endif
     }
   }
 
