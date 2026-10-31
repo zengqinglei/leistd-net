@@ -1,6 +1,6 @@
 # 表单、弹窗与输入行为
 
-状态：已完成 · 风险档：高
+状态：已完成 · 风险档：高 · 关联：[PR #214](https://github.com/zengqinglei/leistd-net/pull/214)
 
 ## 1. 需求
 
@@ -30,4 +30,4 @@
 
 两种前端生成模式的全量单测、lint，四场景生成、control 分片、全部静态闸门与读取成本均通过。Mock 浏览器完成短视口、未保存确认、延迟保存关闭锁定、真实 Enter、CDP 组字及异步焦点验收。实际 Safari 补发 Enter、真实软键盘、全部能力开关组合与复杂叠层返回焦点仍待人工或后续专项验收。
 
-长期规则已上收到 frontend-forms、frontend-ui、frontend-spartan 和模板文档任务索引。实现随本 PR 交付；独立审查与 CI 是合并条件，不发布正式版。
+长期规则已上收到 frontend-forms、frontend-ui、frontend-spartan 和模板文档任务索引。实现随 [PR #214](https://github.com/zengqinglei/leistd-net/pull/214) 交付；独立审查与 CI 是合并条件，不发布正式版。
