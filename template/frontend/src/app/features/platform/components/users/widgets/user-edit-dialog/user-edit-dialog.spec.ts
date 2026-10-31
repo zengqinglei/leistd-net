@@ -2,6 +2,7 @@ import { Component, provideZonelessChangeDetection, signal } from '@angular/core
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
+import { Observable, Subject, of } from 'rxjs';
 
 import { UserEditDialog } from './user-edit-dialog';
 //#if (IncludeLocalization)
@@ -23,7 +24,7 @@ import {
 /**
  * 用户新建与编辑共用一个对话框，两种模式的字段集与提交载荷不同：
  * 新建带用户名、初始口令、启用状态与（有权时的）初始角色；编辑只改资料，
- * 用户名不可改，角色与启停各有独立入口和权限。保存请求与失败提示由用户页处理。
+ * 用户名不可改，角色与启停各有独立入口和权限。父级提供请求和成功副作用，弹窗持有提交与字段错误。
  */
 @Component({
   imports: [UserEditDialog],
@@ -31,16 +32,21 @@ import {
     <app-user-edit-dialog
       [(visible)]="visible"
       [loading]="loading()"
-      [saving]="saving()"
+      [editing]="editing()"
+      [loadError]="loadError()"
+      (retry)="retried = retried + 1"
       [user]="user()"
       [availableRoles]="roles"
       [canAssignRoles]="canAssignRoles()"
-      (saved)="saved.push($event)"
+      [saveAction]="saveAction"
     />
   `,
 })
 class HostComponent {
   readonly visible = signal(true);
+  readonly editing = signal(false);
+  readonly loadError = signal<string | null>(null);
+  retried = 0;
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly user = signal<UserManagementOutputDto | null>(null);
@@ -50,6 +56,11 @@ class HostComponent {
     { id: 'role-auditor', name: 'auditor', displayName: 'Auditor' },
   ];
   readonly saved: (CreateUserInputDto | UpdateUserInputDto)[] = [];
+  request: Observable<unknown> = of(undefined);
+  readonly saveAction = (dto: CreateUserInputDto | UpdateUserInputDto) => {
+    this.saved.push(dto);
+    return this.request;
+  };
 }
 
 //#if (!IncludeLocalization)
@@ -250,13 +261,14 @@ describe('UserEditDialog', () => {
   );
 
   // 与后端口径一致：首尾空白不是邮箱的一部分。这里拒绝而不是替用户 trim，提交的值即用户看到的值
-  it('rejects an email with surrounding whitespace instead of trimming it', async () => {
+  it('normalizes a pasted email before validating and submitting it', async () => {
     await fillValidCreate();
     await fill({ email: ' bob@example.test ' });
 
-    expect(errorKinds('email')).toEqual(['email']);
     submitButton().click();
-    expect(host.saved).toEqual([]);
+    await fixture.whenStable();
+    expect(errorKinds('email')).toEqual([]);
+    expect(host.saved[0]).toMatchObject({ email: 'bob@example.test' });
   });
 
   it('rejects an invalid email and a short initial password', async () => {
@@ -345,12 +357,13 @@ describe('UserEditDialog', () => {
 
   it('blocks a second submit while the save is in flight', async () => {
     await fillValidCreate();
-    host.saving.set(true);
+    host.request = new Subject<unknown>();
+    dialog().save();
     await fixture.whenStable();
 
     expect(submitButton().disabled).toBe(true);
     submitButton().click();
-    expect(host.saved).toEqual([]);
+    expect(host.saved).toHaveLength(1);
   });
 
   it('shows the loading state instead of the form while the user loads', async () => {
@@ -391,5 +404,53 @@ describe('UserEditDialog', () => {
     expect(dialog().avatarPreview()).toBe('');
     // 清空选择：同一个文件再选一次仍要触发 change
     expect(picker.value).toBe('');
+  });
+  it('keeps edit intent after a detail failure and exposes retry instead of a create form', async () => {
+    host.editing.set(true);
+    host.loadError.set('Unable to load this user');
+    await fixture.whenStable();
+    expect(dialog().isEditMode()).toBe(true);
+    expect(document.querySelector('hlm-dialog-content [role="alert"]')?.textContent).toContain(
+      'Unable to load this user',
+    );
+    expect(document.getElementById('user-username')).toBeNull();
+    (
+      document.querySelector('hlm-dialog-content [role="alert"] button') as HTMLButtonElement
+    ).click();
+    expect(host.retried).toBe(1);
+    dialog().save();
+    expect(host.saved).toEqual([]);
+  });
+
+  it('keeps its loading height and moves title focus to the loaded input', async () => {
+    host.visible.set(false);
+    await fixture.whenStable();
+    await expect.poll(() => document.querySelector('hlm-dialog-content')).toBeNull();
+    host.loading.set(true);
+    host.visible.set(true);
+    await fixture.whenStable();
+    const content = document.querySelector('hlm-dialog-content') as HTMLElement;
+    const height = content.getBoundingClientRect().height;
+    await expect.poll(() => document.activeElement).toBe(content.querySelector('[hlmDialogTitle]'));
+    host.user.set(existing);
+    host.loading.set(false);
+    await fixture.whenStable();
+    expect(Math.abs(content.getBoundingClientRect().height - height)).toBeLessThan(1);
+    expect(document.activeElement?.tagName).toBe('INPUT');
+    expect((document.activeElement as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('does not steal focus from a person who moved it during loading', async () => {
+    host.visible.set(false);
+    await fixture.whenStable();
+    host.loading.set(true);
+    host.visible.set(true);
+    await fixture.whenStable();
+    const close = document.querySelector('app-dialog-close button') as HTMLButtonElement;
+    close.focus();
+    host.user.set(existing);
+    host.loading.set(false);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(close);
   });
 });

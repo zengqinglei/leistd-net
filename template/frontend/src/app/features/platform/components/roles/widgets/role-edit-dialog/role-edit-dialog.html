@@ -3,14 +3,30 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
-    <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+  <hlm-dialog
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
+    [state]="open() ? 'open' : 'closed'"
+    (stateChanged)="open.set($event === 'open')"
+  >
+    <hlm-dialog-content
+      appImeGuard
+      *hlmDialogPortal
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="sm:max-w-lg"
+    >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ isEdit() ? t('roles.editTitle') : t('roles.createTitle') }}</h2>
         <p hlmDialogDescription>{{ t('roles.editDescription') }}</p>
       </hlm-dialog-header>
 
-      <form class="flex flex-col gap-4 py-2" (ngSubmit)="onSubmit()">
+      <form
+        class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain py-2"
+        (submit)="$event.preventDefault(); onSubmit()"
+        id="roleForm-form"
+        novalidate
+      >
         <hlm-field>
           <label hlmFieldLabel for="role-name">{{ t('roles.fieldName') }}</label>
           <input
@@ -22,7 +38,7 @@
           />
           @for (error of roleForm.name().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </hlm-field>
@@ -38,7 +54,7 @@
           />
           @for (error of roleForm.displayName().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </hlm-field>
@@ -54,7 +70,7 @@
           />
           @for (error of roleForm.description().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </hlm-field>
@@ -66,13 +82,28 @@
       </form>
 
       <hlm-dialog-footer>
-        <button hlmBtn variant="outline" type="button" (click)="open.set(false)">
+        <button
+          [disabled]="closeGuard.busy()"
+          hlmBtn
+          variant="outline"
+          type="button"
+          (click)="closeGuard.requestClose()"
+        >
           {{ t('common.cancel') }}
         </button>
-        <button hlmBtn type="button" [disabled]="roleForm().invalid()" (click)="onSubmit()">
+        <button hlmBtn type="submit" form="roleForm-form" [disabled]="saving()">
+          @if (saving()) {
+            <hlm-spinner data-icon="inline-start" />
+          }
           {{ t('common.save') }}
         </button>
       </hlm-dialog-footer>
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="roleForm().dirty()"
+        [busy]="saving()"
+        (dismissed)="open.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>

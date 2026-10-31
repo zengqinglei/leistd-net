@@ -16,6 +16,7 @@
           </p>
         </header>
         <form
+          id="setForm-form"
           novalidate
           class="flex flex-col gap-5"
           data-testid="change-password-form"
@@ -59,7 +60,7 @@
                 </hlm-input-group>
                 @for (error of changeForm.currentPassword().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -103,7 +104,7 @@
                 <app-password-length-meter [password]="changeForm.newPassword().value()" />
                 @for (error of changeForm.newPassword().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -145,7 +146,7 @@
                 </hlm-input-group>
                 @for (error of changeForm.confirmPassword().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -163,7 +164,7 @@
           </div>
         </form>
       </section>
-<!--#if (ExternalLogin)-->
+      <!--#if (ExternalLogin)-->
     } @else {
       <!-- 只经外部登录建立的账号：没有当前密码可出示，会话不够新时由服务端要求再确认身份 -->
       <section class="flex flex-col gap-5" data-testid="security-set-password">
@@ -176,6 +177,7 @@
           </p>
         </header>
         <form
+          id="changeForm-form"
           novalidate
           class="flex flex-col gap-5"
           data-testid="set-password-form"
@@ -220,7 +222,7 @@
                 <app-password-length-meter [password]="setForm.newPassword().value()" />
                 @for (error of setForm.newPassword().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -262,7 +264,7 @@
                 </hlm-input-group>
                 @for (error of setForm.confirmPassword().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -280,14 +282,14 @@
           </div>
         </form>
       </section>
-<!--#endif-->
+      <!--#endif-->
     }
 
     <!--
-      通行密钥、身份验证器与邮箱验证码各一节：任一节增减方式或改了默认，其余各节的"默认/设为默认"、
-      恢复码的归属（只有通行密钥时在通行密钥一节）与组织要求下能否去掉跟着刷新
-    -->
-<!--#if (Email)-->
+    通行密钥、身份验证器与邮箱验证码各一节：任一节增减方式或改了默认，其余各节的"默认/设为默认"、
+    恢复码的归属（只有通行密钥时在通行密钥一节）与组织要求下能否去掉跟着刷新
+  -->
+    <!--#if (Email)-->
     <app-two-factor-passkey-settings
       (sessionsChanged)="loginDevices()?.reload()"
       (defaultChanged)="twoFactor()?.reload(); emailTwoFactor()?.reload()"
@@ -302,7 +304,7 @@
       (sessionsChanged)="loginDevices()?.reload(); twoFactor()?.reload(); passkeys()?.reload()"
       (defaultChanged)="twoFactor()?.reload(); passkeys()?.reload()"
     />
-<!--#else-->
+    <!--#else-->
     <app-two-factor-passkey-settings
       (sessionsChanged)="loginDevices()?.reload()"
       (defaultChanged)="twoFactor()?.reload()"
@@ -312,7 +314,7 @@
       (sessionsChanged)="loginDevices()?.reload()"
       (defaultChanged)="passkeys()?.reload()"
     />
-<!--#endif-->
+    <!--#endif-->
     <!--#if (ExternalLogin)-->
 
     <app-external-logins />

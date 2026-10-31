@@ -10,22 +10,31 @@
       <p class="text-muted-foreground text-sm">{{ t('settings.emailTest.description') }}</p>
     </header>
     <form
+      id="email-test-form"
       class="flex flex-col gap-2 @md/panel:flex-row"
       novalidate
       (submit)="$event.preventDefault(); send()"
     >
-      <input
-        hlmInput
-        type="email"
-        autocomplete="email"
-        class="@md/panel:max-w-sm @md/panel:flex-1"
-        data-testid="email-test-to"
-        [attr.aria-label]="t('settings.emailTest.recipient')"
-        [placeholder]="t('settings.emailTest.recipient')"
-        [value]="to()"
-        (input)="to.set($any($event.target).value)"
-      />
-      <button hlmBtn type="submit" data-testid="email-test-send" [disabled]="!canSend()">
+      <hlm-field>
+        <input
+          hlmInput
+          type="email"
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="off"
+          class="@md/panel:max-w-sm @md/panel:flex-1"
+          data-testid="email-test-to"
+          [attr.aria-label]="t('settings.emailTest.recipient')"
+          [placeholder]="t('settings.emailTest.recipient')"
+          [formField]="emailForm.to"
+        />
+        @for (error of emailForm.to().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{
+            error.message ?? t('validation.' + error.kind, error)
+          }}</hlm-field-error>
+        }
+      </hlm-field>
+      <button hlmBtn type="submit" data-testid="email-test-send" [disabled]="sending()">
         @if (sending()) {
           <hlm-spinner class="text-base" data-icon="inline-start" />
         } @else {

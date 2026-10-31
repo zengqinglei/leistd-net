@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 //#if (!IncludeLocalization)
 
 import { englishText } from '../../utils/english-text';
@@ -13,7 +13,7 @@ import { englishText } from '../../utils/english-text';
   standalone: true,
   // prettier-ignore
   imports: [
-    HlmSpinner,
+    HlmSkeleton,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif

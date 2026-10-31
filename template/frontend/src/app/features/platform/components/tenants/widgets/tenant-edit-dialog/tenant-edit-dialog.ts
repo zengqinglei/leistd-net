@@ -1,11 +1,10 @@
 import {
-  ChangeDetectionStrategy,
-  Component,
   computed,
   effect,
   input,
+  ChangeDetectionStrategy,
+  Component,
   model,
-  output,
   signal,
 } from '@angular/core';
 import {
@@ -24,11 +23,16 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { firstValueFrom, Observable } from 'rxjs';
 
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../../../../../../core/validation/password-rule';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
@@ -65,6 +69,9 @@ interface TenantEditFormModel {
   // prettier 会要求压成一行，而带上它就超过 100 必须换行——同一份写法满足不了两种取值
   //#if (IncludeLocalization)
   imports: [
+    ImeGuard,
+    DialogClose,
+    HlmSpinner,
     FormField,
     HlmButton,
     HlmInput,
@@ -73,15 +80,27 @@ interface TenantEditFormModel {
     TranslocoDirective,
   ],
   //#else
-  imports: [FormField, HlmButton, HlmInput, ...HlmDialogImports, ...HlmFieldImports],
+  imports: [
+    ImeGuard,
+    DialogClose,
+    HlmSpinner,
+    FormField,
+    HlmButton,
+    HlmInput,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+  ],
   //#endif
   templateUrl: './tenant-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantEditDialog {
+  private readonly submitForm = injectFormSubmission();
+  readonly saving = computed(() => this.tenantForm().submitting());
   readonly open = model(false);
   readonly tenant = input<TenantOutputDto | null>(null);
-  readonly save = output<CreateTenantInputDto | UpdateTenantInputDto>();
+  readonly saveAction =
+    input.required<(dto: CreateTenantInputDto | UpdateTenantInputDto) => Observable<unknown>>();
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -140,6 +159,7 @@ export class TenantEditDialog {
       }
 
       const tenant = this.tenant();
+      this.tenantForm().reset();
       this.formModel.set({
         name: tenant?.name ?? '',
         displayName: tenant?.displayName ?? '',
@@ -152,41 +172,58 @@ export class TenantEditDialog {
     });
   }
 
-  onSubmit(): void {
-    if (this.tenantForm().invalid()) {
-      return;
-    }
+  async onSubmit(): Promise<void> {
+    this.formModel.update((value) => ({
+      ...value,
+      name: this.isUnchangedName(value.name) ? value.name : value.name.trim(),
+      displayName: value.displayName.trim(),
+      description: value.description.trim(),
+      adminEmail: value.adminEmail.trim(),
+    }));
+    await this.submitForm(
+      this.tenantForm,
+      'tenantForm-form',
+      async () => {
+        const model = this.formModel();
+        const displayName = model.displayName.trim() || undefined;
+        const description = model.description.trim();
 
-    const model = this.formModel();
-    const displayName = model.displayName.trim() || undefined;
-    const description = model.description.trim();
+        if (this.isEdit()) {
+          await firstValueFrom(
+            this.saveAction()({
+              name: this.isUnchangedName(model.name) ? model.name : model.name.trim(),
+              displayName,
+              description: description || null,
+            } satisfies UpdateTenantInputDto),
+            { defaultValue: undefined },
+          );
+          return;
+        }
 
-    if (this.isEdit()) {
-      this.save.emit({
-        name: this.isUnchangedName(model.name) ? model.name : model.name.trim(),
-        displayName,
-        description: description || null,
-      } satisfies UpdateTenantInputDto);
-      return;
-    }
-
-    this.save.emit({
-      name: model.name.trim(),
-      displayName,
-      description: description || undefined,
-      adminEmail: model.adminEmail.trim(),
-      adminPassword: model.adminPassword,
-      // 留空即不分库：传空数组而不是空串条目。界面只收默认库一条，
-      // 契约本身支持多条命名连接（多服务部署时一次登记 default、crm……）
-      connections: model.connectionString.trim()
-        ? [
-            {
-              name: TENANT_DEFAULT_CONNECTION_NAME,
-              connectionString: model.connectionString.trim(),
-            },
-          ]
-        : [],
-    } satisfies CreateTenantInputDto);
+        await firstValueFrom(
+          this.saveAction()({
+            name: model.name.trim(),
+            displayName,
+            description: description || undefined,
+            adminEmail: model.adminEmail.trim(),
+            adminPassword: model.adminPassword,
+            // 留空即不分库：传空数组而不是空串条目。界面只收默认库一条，
+            // 契约本身支持多条命名连接（多服务部署时一次登记 default、crm……）
+            connections: model.connectionString.trim()
+              ? [
+                  {
+                    name: TENANT_DEFAULT_CONNECTION_NAME,
+                    connectionString: model.connectionString,
+                  },
+                ]
+              : [],
+          } satisfies CreateTenantInputDto),
+          { defaultValue: undefined },
+        );
+      },
+      undefined,
+      { 'connections[0].connectionString': this.tenantForm.connectionString },
+    );
   }
 }
 //#if (!IncludeLocalization)

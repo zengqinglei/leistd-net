@@ -1,4 +1,5 @@
 import {
+  computed,
   afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
@@ -11,6 +12,8 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { FormValueControl } from '@angular/forms/signals';
+import { BrnFieldA11yService, BrnFieldControl, provideBrnLabelable } from '@spartan-ng/brain/field';
 import { BrnInputOtp, BrnInputOtpImports } from '@spartan-ng/brain/input-otp';
 import { HlmInputOtpImports } from '@spartan-ng/helm/input-otp';
 
@@ -26,6 +29,9 @@ const CODE_LENGTH = 6;
  */
 @Component({
   selector: 'app-otp-code-input',
+  hostDirectives: [BrnFieldControl],
+  providers: [provideBrnLabelable(OtpCodeInput)],
+  host: { '(focusout)': 'touch.emit()' },
   imports: [...BrnInputOtpImports, ...HlmInputOtpImports],
   template: `
     @if (label(); as text) {
@@ -43,25 +49,32 @@ const CODE_LENGTH = 6;
       (completed)="completed.emit(digitsOnly($event))"
     >
       <div hlmInputOtpGroup>
-        <hlm-input-otp-slot index="0" [forceInvalid]="invalid()" />
-        <hlm-input-otp-slot index="1" [forceInvalid]="invalid()" />
-        <hlm-input-otp-slot index="2" [forceInvalid]="invalid()" />
+        <hlm-input-otp-slot index="0" [forceInvalid]="displayInvalid()" />
+        <hlm-input-otp-slot index="1" [forceInvalid]="displayInvalid()" />
+        <hlm-input-otp-slot index="2" [forceInvalid]="displayInvalid()" />
       </div>
       <hlm-input-otp-separator />
       <div hlmInputOtpGroup>
-        <hlm-input-otp-slot index="3" [forceInvalid]="invalid()" />
-        <hlm-input-otp-slot index="4" [forceInvalid]="invalid()" />
-        <hlm-input-otp-slot index="5" [forceInvalid]="invalid()" />
+        <hlm-input-otp-slot index="3" [forceInvalid]="displayInvalid()" />
+        <hlm-input-otp-slot index="4" [forceInvalid]="displayInvalid()" />
+        <hlm-input-otp-slot index="5" [forceInvalid]="displayInvalid()" />
       </div>
     </brn-input-otp>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class OtpCodeInput {
+export class OtpCodeInput implements FormValueControl<string> {
+  private readonly fieldControl = inject(BrnFieldControl);
+  protected readonly displayInvalid = computed(
+    () => this.fieldControl.spartanInvalid() ?? this.invalid(),
+  );
+  private readonly fieldA11y = inject(BrnFieldA11yService, { optional: true });
+  readonly touch = output<void>();
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** 内部输入框的 id，供 `<label for>` 关联。 */
   readonly inputId = input.required<string>();
+  readonly labelableId = this.inputId;
   /** 仅供读屏器的标签；页面上已有可见标签时留空。 */
   readonly label = input<string>('');
   readonly autofocus = input(false);
@@ -96,8 +109,20 @@ export class OtpCodeInput {
       if (!element) {
         return;
       }
-      setOptionalAttribute(element, 'aria-invalid', this.invalid() ? 'true' : null);
-      setOptionalAttribute(element, 'aria-describedby', this.describedBy());
+      setOptionalAttribute(element, 'aria-invalid', this.displayInvalid() ? 'true' : null);
+      setOptionalAttribute(
+        element,
+        'aria-describedby',
+        [
+          ...new Set(
+            [this.describedBy(), this.fieldA11y?.describedBy()]
+              .flatMap((ids) => (ids ?? '').split(/\s+/))
+              .filter(Boolean),
+          ),
+        ].join(' ') || null,
+      );
+      element.spellcheck = false;
+      element.autocapitalize = 'off';
     });
   }
 

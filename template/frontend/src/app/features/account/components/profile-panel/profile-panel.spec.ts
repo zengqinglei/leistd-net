@@ -349,8 +349,8 @@ describe('ProfilePanel', () => {
     expect(panel.emailChallenge()).toBeNull();
   });
 
-  // 发送按钮在邮箱右侧、验证按钮在验证码右侧，按钮与输入同高；两行输入框与按钮各自左右对齐
-  it('lines up the send and verify buttons beside their inputs in two equal rows', async () => {
+  // OTP 六格需要固定宽度：验证码与确认按钮分行，窄列内仍完整可见，操作对齐邮箱右侧。
+  it('keeps the OTP slots and confirm button inside the email column', async () => {
     fixture.componentInstance.emailChallenge.set({
       challengeId: 'challenge-1',
       email: initialUser.email,
@@ -360,17 +360,15 @@ describe('ProfilePanel', () => {
     const rect = (selector: string) => root.querySelector(selector)!.getBoundingClientRect();
     const email = rect('#profile-email');
     const send = rect('[data-testid="email-send-code"]');
-    const code = rect('#profile-email-code');
+    const code = rect('app-otp-code-input brn-input-otp');
     const verify = rect('[data-testid="email-confirm-code"]');
 
     expect(send.top).toBe(email.top);
     expect(send.height).toBe(email.height);
-    expect(verify.top).toBe(code.top);
-    expect(verify.height).toBe(code.height);
     expect(code.top).toBeGreaterThan(email.bottom);
     expect(code.left).toBe(email.left);
-    expect(code.right).toBe(email.right);
-    expect(verify.left).toBe(send.left);
+    expect(code.right).toBeLessThanOrEqual(send.right);
+    expect(verify.top).toBeGreaterThanOrEqual(code.bottom);
     expect(verify.right).toBe(send.right);
   });
 

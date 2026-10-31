@@ -1,11 +1,10 @@
 import {
-  ChangeDetectionStrategy,
-  Component,
   computed,
   effect,
   input,
+  ChangeDetectionStrategy,
+  Component,
   model,
-  output,
   signal,
 } from '@angular/core';
 import { FormField, disabled, form, maxLength, pattern, required } from '@angular/forms/signals';
@@ -17,7 +16,12 @@ import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { firstValueFrom, Observable } from 'rxjs';
 
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
@@ -38,7 +42,9 @@ const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]{2,64}$/;
 @Component({
   selector: 'app-role-edit-dialog',
   // prettier-ignore
-  imports: [
+  imports: [ImeGuard,
+    DialogClose,
+    HlmSpinner,
     FormField,
     HlmButton,
     HlmInput,
@@ -53,9 +59,12 @@ const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]{2,64}$/;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RoleEditDialog {
+  private readonly submitForm = injectFormSubmission();
+  readonly saving = computed(() => this.roleForm().submitting());
   readonly open = model(false);
   readonly role = input<RoleOutputDto | null>(null);
-  readonly save = output<CreateRoleInputDto | UpdateRoleInputDto>();
+  readonly saveAction =
+    input.required<(dto: CreateRoleInputDto | UpdateRoleInputDto) => Observable<unknown>>();
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -89,6 +98,7 @@ export class RoleEditDialog {
       }
 
       const role = this.role();
+      this.roleForm().reset();
       this.formModel.set({
         name: role?.name ?? '',
         displayName: role?.displayName ?? '',
@@ -99,31 +109,41 @@ export class RoleEditDialog {
     });
   }
 
-  onSubmit(): void {
-    if (this.roleForm().invalid()) {
-      return;
-    }
+  async onSubmit(): Promise<void> {
+    this.formModel.update((value) => ({
+      ...value,
+      name: value.name.trim(),
+      displayName: value.displayName.trim(),
+      description: value.description.trim(),
+    }));
+    await this.submitForm(this.roleForm, 'roleForm-form', async () => {
+      const model = this.formModel();
+      const description = model.description.trim() || undefined;
 
-    const model = this.formModel();
-    const description = model.description.trim() || undefined;
+      if (this.isEdit()) {
+        await firstValueFrom(
+          this.saveAction()({
+            displayName: model.displayName.trim(),
+            description,
+            sort: model.sort,
+            isDefault: model.isDefault,
+          } satisfies UpdateRoleInputDto),
+          { defaultValue: undefined },
+        );
+        return;
+      }
 
-    if (this.isEdit()) {
-      this.save.emit({
-        displayName: model.displayName.trim(),
-        description,
-        sort: model.sort,
-        isDefault: model.isDefault,
-      } satisfies UpdateRoleInputDto);
-      return;
-    }
-
-    this.save.emit({
-      name: model.name.trim(),
-      displayName: model.displayName.trim(),
-      description,
-      sort: model.sort,
-      isDefault: model.isDefault,
-    } satisfies CreateRoleInputDto);
+      await firstValueFrom(
+        this.saveAction()({
+          name: model.name.trim(),
+          displayName: model.displayName.trim(),
+          description,
+          sort: model.sort,
+          isDefault: model.isDefault,
+        } satisfies CreateRoleInputDto),
+        { defaultValue: undefined },
+      );
+    });
   }
 }
 //#if (!IncludeLocalization)

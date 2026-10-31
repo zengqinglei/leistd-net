@@ -14,7 +14,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { form, FormField, maxLength, required, validate } from '@angular/forms/signals';
+import { pattern, form, FormField, maxLength, required, validate } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
@@ -28,12 +28,15 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
 import { OtpCodeInput } from '../../../shared/components/otp-code-input/otp-code-input';
+import { ImeGuard } from '../../../shared/directives/ime-guard';
 import { WebAuthnJson } from '../../../shared/dtos/account-security.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
+import { injectFormSubmission } from '../../validation/form-submission';
 import { PASSWORD_MAX_LENGTH } from '../../validation/password-rule';
 import { WebAuthnFailure } from '../../webauthn/webauthn-error';
+import { DialogClose } from '../dialog-close/dialog-close';
 
 /** 本人出示的凭证：恰好一种，调用方按各自接口的字段名带上后重试原操作。 */
 export type ReauthenticationProof =
@@ -88,7 +91,7 @@ const METHOD_FOCUS_IDS: Record<ProofMethod, string> = {
   // 内容经浮层渲染在 body 上，宿主本身不占位：放在 gap 布局里（如账户与安全页的各节之间）不多出一道间距
   host: { class: 'hidden' },
   // prettier-ignore
-  imports: [
+  imports: [ImeGuard, DialogClose,
     FormField,
     HlmButton,
     HlmInput,
@@ -162,11 +165,17 @@ export class ReauthenticateDialog {
     this.methods().filter((method) => method !== this.method()),
   );
 
-  private readonly formModel = signal({ password: '' });
+  private readonly submitForm = injectFormSubmission();
+  private readonly formModel = signal({ password: '', code: '' });
   // 只做必填与长度的快速反馈；口令对不对由服务端判定，被拒的原因作为该字段的错误显示，
   // 输入框随之带上 aria-invalid，并经 aria-describedby 关联到这条错误
   protected readonly reauthForm = form(this.formModel, (path) => {
-    required(path.password);
+    required(path.password, { when: () => this.method() === 'password' });
+    required(path.code, { when: () => this.method() === 'code' });
+    pattern(path.code, CODE_PATTERN, {
+      when: () => this.method() === 'code',
+      error: { kind: 'otpCode' },
+    });
     maxLength(path.password, PASSWORD_MAX_LENGTH);
     validate(path.password, () => {
       const message = this.error();
@@ -174,7 +183,7 @@ export class ReauthenticateDialog {
     });
   });
 
-  protected readonly code = signal('');
+  protected readonly code = this.reauthForm.code().value;
   private readonly codeInput = viewChild(OtpCodeInput);
   protected readonly codeValid = computed(() => CODE_PATTERN.test(this.code()));
   /** 最近交出的验证码：输满自动提交与回车提交同时到达时只交一次，改动输入后才允许再交。 */
@@ -190,9 +199,11 @@ export class ReauthenticateDialog {
   protected readonly showCodeReuseHint = computed(() => !!this.error() && this.codeRejected());
   protected readonly codeDescribedBy = computed(() => {
     if (!this.error()) {
-      return CODE_DESCRIPTION_ID;
+      return this.reauthForm.code().invalid() && this.reauthForm.code().touched()
+        ? null
+        : CODE_DESCRIPTION_ID;
     }
-    const ids = `${CODE_DESCRIPTION_ID} ${CODE_ERROR_ID}`;
+    const ids = CODE_ERROR_ID;
     return this.showCodeReuseHint() ? `${ids} ${CODE_REUSE_HINT_ID}` : ids;
   });
 
@@ -266,15 +277,11 @@ export class ReauthenticateDialog {
     }
   }
 
-  private submitPassword(): void {
-    if (this.saving()) {
-      return;
-    }
-    if (this.reauthForm().invalid()) {
-      this.reauthForm().markAsTouched();
-      return;
-    }
-    this.confirmed.emit({ password: this.formModel().password });
+  private async submitPassword(): Promise<void> {
+    if (this.saving()) return;
+    await this.submitForm(this.reauthForm, 'reauthForm-form', async () => {
+      this.confirmed.emit({ password: this.formModel().password });
+    });
   }
 
   private requestPasskey(): void {
@@ -286,13 +293,13 @@ export class ReauthenticateDialog {
     this.passkeyRequested.emit();
   }
 
-  protected submitCode(): void {
-    const code = this.code();
-    if (this.saving() || !CODE_PATTERN.test(code) || code === this.submittedCode) {
-      return;
-    }
-    this.submittedCode = code;
-    this.confirmed.emit({ twoFactorCode: code });
+  protected async submitCode(): Promise<void> {
+    if (this.saving() || this.code() === this.submittedCode) return;
+    await this.submitForm(this.reauthForm, 'reauthForm-form', async () => {
+      const code = this.code();
+      this.submittedCode = code;
+      this.confirmed.emit({ twoFactorCode: code });
+    });
   }
 
   private presentError(): void {
@@ -315,7 +322,7 @@ export class ReauthenticateDialog {
   }
 
   private clearInputs(): void {
-    this.formModel.set({ password: '' });
+    this.formModel.set({ password: '', code: '' });
     this.reauthForm().reset();
     this.clearCode();
   }

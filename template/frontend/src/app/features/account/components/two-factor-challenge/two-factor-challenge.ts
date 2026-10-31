@@ -12,6 +12,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { FormField, form, required, pattern } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -35,6 +36,7 @@ import {
   ApplicationHttpError,
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import { getPasskey, passkeySupport } from '../../../../core/webauthn/webauthn';
 import {
   classifyWebAuthnError,
@@ -123,7 +125,7 @@ const METHOD_ICONS: Record<TwoFactorMethod, string> = {
 @Component({
   selector: 'app-two-factor-challenge',
   // prettier-ignore
-  imports: [
+  imports: [FormField,
     NgIcon,
     HlmButton,
     ...HlmFieldImports,
@@ -177,11 +179,22 @@ export class TwoFactorChallenge {
   );
   /** 两种以上备选时，"换一种验证方式"列表是否展开。 */
   protected readonly showAlternatives = signal(false);
-  protected readonly value = signal('');
+  private readonly submitForm = injectFormSubmission();
+  private readonly verificationModel = signal({ value: '' });
+  readonly verificationForm = form(this.verificationModel, (path) => {
+    required(path.value);
+    pattern(path.value, /^\d{6}$/, {
+      when: () => this.method() !== 'recoveryCode',
+      error: { kind: 'otpCode' },
+    });
+  });
+  protected readonly value = this.verificationForm.value().value;
   /** 本组件的验证请求在途。 */
   protected readonly submitting = signal(false);
   /** 验证请求在途或登录页收尾中：提交入口禁用并显示加载。 */
-  protected readonly busy = computed(() => this.submitting() || this.finishing());
+  protected readonly busy = computed(
+    () => this.submitting() || this.verificationForm().submitting() || this.finishing(),
+  );
   /** 码被拒或发不出码的原因（服务端已本地化），显示在输入框下方。 */
   protected readonly error = signal<string | null>(null);
   /** 被拒的是码本身（不是方式不能用）。 */
@@ -307,38 +320,37 @@ export class TwoFactorChallenge {
   //#endif
 
   protected async submit(): Promise<void> {
-    if (!this.canSubmit() || this.value() === this.submittedValue) {
-      return;
-    }
-
-    this.submitting.set(true);
-    this.submittedValue = this.value();
-    try {
-      await lastValueFrom(this.accountService.completeTwoFactorLogin(this.loginInput()));
-      this.completed.emit();
-    } catch (error) {
-      const code = error instanceof ApplicationHttpError ? error.code : undefined;
-      // 只有这次第二步已经无法继续（凭据过期、账号锁定或停用）才回到密码那一步
-      if (code !== undefined && SECOND_STEP_ENDED.has(code)) {
-        this.leave(error);
+    await this.submitForm(this.verificationForm, 'two-factor-challenge-form', async () => {
+      if (this.finishing() || this.submitting() || this.value() === this.submittedValue) {
         return;
       }
 
-      this.error.set(applicationErrorMessage(error));
-      if (code === API_ERROR_CODES.twoFactorCodeInvalid) {
-        // 码不对：清空重输
-        this.codeRejected.set(true);
-        this.setValue('');
+      this.submittedValue = this.value();
+      try {
+        await lastValueFrom(this.accountService.completeTwoFactorLogin(this.loginInput()));
+        this.completed.emit();
+      } catch (error) {
+        const code = error instanceof ApplicationHttpError ? error.code : undefined;
+        // 只有这次第二步已经无法继续（凭据过期、账号锁定或停用）才回到密码那一步
+        if (code !== undefined && SECOND_STEP_ENDED.has(code)) {
+          this.leave(error);
+          return;
+        }
+
+        this.error.set(applicationErrorMessage(error));
+        if (code === API_ERROR_CODES.twoFactorCodeInvalid) {
+          // 码不对：清空重输
+          this.codeRejected.set(true);
+          this.setValue('');
+          this.focusInput();
+          return;
+        }
+
+        // 方式此刻不能用、邮箱码已失效、网络错误或服务端故障：挑战仍有效，就地说明，同一个码也可以再提交一次
+        this.submittedValue = null;
         this.focusInput();
-        return;
       }
-
-      // 方式此刻不能用、邮箱码已失效、网络错误或服务端故障：挑战仍有效，就地说明，同一个码也可以再提交一次
-      this.submittedValue = null;
-      this.focusInput();
-    } finally {
-      this.submitting.set(false);
-    }
+    });
   }
 
   /** 用通行密钥完成第二步：本人点击后取断言选项、调起浏览器，再交回断言。 */
@@ -376,7 +388,7 @@ export class TwoFactorChallenge {
 
   private loginInput(): TwoFactorLoginInputDto {
     const token = this.prompt().token;
-    const value = this.value().trim();
+    const value = this.value();
     switch (this.method()) {
       case 'recoveryCode':
         return { token, recoveryCode: value };

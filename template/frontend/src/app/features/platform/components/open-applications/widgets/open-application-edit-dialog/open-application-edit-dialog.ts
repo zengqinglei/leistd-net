@@ -28,8 +28,13 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
+import { firstValueFrom, Observable } from 'rxjs';
 
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { DialogFocus } from '../../../../../../shared/directives/dialog-focus';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
@@ -75,6 +80,9 @@ const authorizationCodePermissions = [
 @Component({
   selector: 'app-open-application-edit-dialog',
   imports: [
+    DialogFocus,
+    ImeGuard,
+    DialogClose,
     FormField,
     NgIcon,
     HlmBadge,
@@ -97,18 +105,28 @@ const authorizationCodePermissions = [
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationEditDialog {
+  private readonly submitForm = injectFormSubmission();
+  readonly saving = computed(() => this.applicationForm().submitting());
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
   protected readonly t = englishText(ENGLISH);
   //#endif
   readonly visible = model(false);
+  readonly scopesLoading = input(false);
+  readonly scopesError = input<string | null>(null);
+  readonly reloadScopes = output<void>();
   readonly loading = input(false);
-  readonly saving = input(false);
+  readonly editing = input(false);
+  readonly loadError = input<string | null>(null);
+  readonly retry = output<void>();
   readonly application = input<OpenApplicationOutputDto | null>(null);
   /** 可授予的 scope，由父页面从服务端取得：服务端能签发哪些 scope（含配置的下游 API）只有它知道。 */
   readonly scopes = input<OpenApplicationScopeOutputDto[]>([]);
-  readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
+  readonly saveAction =
+    input.required<
+      (dto: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) => Observable<unknown>
+    >();
 
   // 标准 scope 用本地译名，其余（本服务与下游 API、机器 scope）用服务端给的展示名
   private readonly scopeOptions = computed(() =>
@@ -122,7 +140,7 @@ export class OpenApplicationEditDialog {
   protected readonly formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
 
-  isEditMode = computed(() => !!this.application());
+  isEditMode = computed(() => this.editing() || !!this.application());
   isTemplateLocked = computed(() => !!this.selectedTemplate() && !this.isEditMode());
   isConfidentialClient = computed(() => this.formModel().clientType === 'confidential');
   isServiceType = computed(() => this.formModel().applicationType === 'service');
@@ -366,6 +384,7 @@ export class OpenApplicationEditDialog {
         return;
       }
       if (application) {
+        this.applicationForm().reset();
         this.formModel.set({
           clientId: application.clientId,
           displayName: application.displayName ?? '',
@@ -379,6 +398,7 @@ export class OpenApplicationEditDialog {
           sessionBound: application.sessionBound,
         });
       } else {
+        this.applicationForm().reset();
         this.formModel.set(this.createEmptyModel());
       }
     });
@@ -400,6 +420,7 @@ export class OpenApplicationEditDialog {
   }
 
   applyTemplate(template: OpenApplicationTemplate | null | undefined) {
+    this.applicationForm().markAsDirty();
     if (!template) {
       this.selectedTemplate.set(null);
       return;
@@ -454,11 +475,13 @@ export class OpenApplicationEditDialog {
   // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；
   // 直接以 [checked]/(checkedChange) 回写模型信号。
   setSessionBound(checked: boolean): void {
+    this.applicationForm().markAsDirty();
     this.formModel.update((model) => ({ ...model, sessionBound: checked }));
     this.applicationForm.sessionBound().markAsTouched();
   }
 
   onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
+    this.applicationForm().markAsDirty();
     if (!value) {
       return;
     }
@@ -466,6 +489,7 @@ export class OpenApplicationEditDialog {
   }
 
   onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
+    this.applicationForm().markAsDirty();
     if (!clientType) {
       return;
     }
@@ -480,6 +504,7 @@ export class OpenApplicationEditDialog {
   }
 
   addRedirectUri(uri: string) {
+    this.applicationForm().markAsDirty();
     this.formModel.update((model) => ({
       ...model,
       redirectUris: model.redirectUris.includes(uri)
@@ -489,6 +514,7 @@ export class OpenApplicationEditDialog {
   }
 
   addPostLogoutRedirectUri(uri: string) {
+    this.applicationForm().markAsDirty();
     this.formModel.update((model) => ({
       ...model,
       postLogoutRedirectUris: model.postLogoutRedirectUris.includes(uri)
@@ -498,6 +524,7 @@ export class OpenApplicationEditDialog {
   }
 
   removeRedirectUri(uri: string) {
+    this.applicationForm().markAsDirty();
     this.formModel.update((model) => ({
       ...model,
       redirectUris: model.redirectUris.filter((item) => item !== uri),
@@ -505,6 +532,7 @@ export class OpenApplicationEditDialog {
   }
 
   removePostLogoutRedirectUri(uri: string) {
+    this.applicationForm().markAsDirty();
     this.formModel.update((model) => ({
       ...model,
       postLogoutRedirectUris: model.postLogoutRedirectUris.filter((item) => item !== uri),
@@ -525,39 +553,49 @@ export class OpenApplicationEditDialog {
     this.selectedTemplate.set(null);
   }
 
-  save() {
-    if (this.applicationForm().invalid()) {
-      this.applicationForm().markAsTouched();
-      return;
-    }
+  async save(): Promise<void> {
+    if (this.loading() || this.loadError() || this.scopesLoading() || this.scopesError()) return;
+    this.formModel.update((value) => ({
+      ...value,
+      clientId: value.clientId.trim(),
+      displayName: value.displayName.trim(),
+    }));
+    await this.submitForm(this.applicationForm, 'applicationForm-form', async () => {
+      const model = this.formModel();
+      // 校验已保证非服务类型时有值；机器客户端没有用户会话，固定为否
+      const sessionBound =
+        model.applicationType === 'service' ? false : model.sessionBound === true;
+      if (this.isEditMode()) {
+        await firstValueFrom(
+          this.saveAction()({
+            displayName: model.displayName,
+            applicationType: model.applicationType,
+            clientType: model.clientType,
+            redirectUris: model.redirectUris,
+            postLogoutRedirectUris: model.postLogoutRedirectUris,
+            permissions: model.permissions,
+            requirements: model.requirements,
+            sessionBound,
+          }),
+          { defaultValue: undefined },
+        );
+        return;
+      }
 
-    const model = this.formModel();
-    // 校验已保证非服务类型时有值；机器客户端没有用户会话，固定为否
-    const sessionBound = model.applicationType === 'service' ? false : model.sessionBound === true;
-    if (this.isEditMode()) {
-      this.saved.emit({
-        displayName: model.displayName,
-        applicationType: model.applicationType,
-        clientType: model.clientType,
-        redirectUris: model.redirectUris,
-        postLogoutRedirectUris: model.postLogoutRedirectUris,
-        permissions: model.permissions,
-        requirements: model.requirements,
-        sessionBound,
-      });
-      return;
-    }
-
-    this.saved.emit({
-      clientId: model.clientId.trim(),
-      displayName: model.displayName,
-      applicationType: model.applicationType,
-      clientType: model.clientType,
-      redirectUris: model.redirectUris,
-      postLogoutRedirectUris: model.postLogoutRedirectUris,
-      permissions: model.permissions,
-      requirements: model.requirements,
-      sessionBound,
+      await firstValueFrom(
+        this.saveAction()({
+          clientId: model.clientId.trim(),
+          displayName: model.displayName,
+          applicationType: model.applicationType,
+          clientType: model.clientType,
+          redirectUris: model.redirectUris,
+          postLogoutRedirectUris: model.postLogoutRedirectUris,
+          permissions: model.permissions,
+          requirements: model.requirements,
+          sessionBound,
+        }),
+        { defaultValue: undefined },
+      );
     });
   }
 
@@ -569,6 +607,7 @@ export class OpenApplicationEditDialog {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.retry': 'Retry',
   'openApp.dialog.editHeader': 'Edit open application',
   'openApp.dialog.createHeader': 'New open application',
   'openApp.dialog.description': "Configure the client's identity, type, and OAuth capabilities.",

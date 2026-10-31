@@ -20,7 +20,6 @@ import { firstValueFrom } from 'rxjs';
 import { EmailTest } from './widgets/email-test/email-test';
 //#endif
 //#if (ExternalLogin)
-// prettier-ignore
 import {
   EXTERNAL_LOGIN_GROUP,
   ExternalLoginProviders,
@@ -32,7 +31,6 @@ import { applicationErrorMessage } from '../../../../core/errors/application-htt
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
-// prettier-ignore
 import {
   AccountPreferences,
   AccountPreferencesService,
@@ -51,7 +49,6 @@ import { AccountPreferenceField } from '../../../../shared/dtos/account-preferen
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-// prettier-ignore
 import {
   browserTimeZone,
   LOG_LEVEL_DESCRIPTIONS,
@@ -61,7 +58,6 @@ import {
   timeZoneMatches,
   timeZoneOffsetLabel,
 } from '../../setting-choices';
-// prettier-ignore
 import {
   groupPath,
   groupSettings,
@@ -604,7 +600,8 @@ export class SettingSection {
 
   /** 输入类控件在原生 `change`（失焦或回车）时提交，不按键即写：输入 60 会途经同样合法的 6。 */
   protected onCommit(setting: SettingOutputDto, scope: SettingScope, event: Event): void {
-    const value = (event.target as HTMLInputElement).value.trim();
+    const raw = (event.target as HTMLInputElement).value;
+    const value = setting.isSecret ? raw : raw.trim();
 
     // 写入裁剪后的值：草稿随之同步（见 write），界面显示的就是实际存入的值。
     void this.write(setting, value.length === 0 ? null : value, scope);

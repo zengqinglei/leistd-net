@@ -3,7 +3,11 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <section class="flex flex-col gap-5" data-testid="security-two-factor">
+  <section
+    id="two-factor-settings-form"
+    class="flex flex-col gap-5"
+    data-testid="security-two-factor"
+  >
     <header
       class="flex flex-col gap-3 @md/panel:flex-row @md/panel:items-start @md/panel:justify-between border-b pb-3"
     >
@@ -88,7 +92,7 @@
                     autocapitalize="off"
                     spellcheck="false"
                     data-testid="two-factor-replace-recovery-code"
-                    [value]="recoveryCode()"
+                    [formField]="verificationForm.recoveryCode"
                     (input)="onRecoveryCodeInput($event)"
                   />
                 </div>
@@ -96,11 +100,16 @@
                 <app-otp-code-input
                   inputId="two-factor-replace-code"
                   [label]="t('account.twoFactor.codeLabel')"
-                  [(value)]="code"
+                  [formField]="verificationForm.code"
                 />
+                @for (error of verificationForm.code().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{
+                    error.message ?? t('validation.' + error.kind, error)
+                  }}</hlm-field-error>
+                }
               }
               <div class="flex gap-2">
-                <button hlmBtn type="submit" [disabled]="!canReplace()">
+                <button hlmBtn type="submit" [disabled]="busy()">
                   {{ t('account.twoFactor.continue') }}
                 </button>
                 <button hlmBtn variant="ghost" type="button" (click)="setMode('idle')">
@@ -164,7 +173,7 @@
                       type="password"
                       autocomplete="current-password"
                       data-testid="two-factor-disable-password"
-                      [value]="password()"
+                      [formField]="verificationForm.password"
                       (input)="onPasswordInput($event)"
                     />
                   </div>
@@ -183,7 +192,15 @@
                 <div
                   class="flex min-w-0 flex-col gap-2 @md/field-group:shrink-0 @md/field-group:basis-64"
                 >
-                  <app-otp-code-input inputId="two-factor-disable-code" [(value)]="code" />
+                  <app-otp-code-input
+                    inputId="two-factor-disable-code"
+                    [formField]="verificationForm.code"
+                  />
+                  @for (error of verificationForm.code().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('validation.' + error.kind, error)
+                    }}</hlm-field-error>
+                  }
                 </div>
               </div>
             </div>
@@ -196,7 +213,7 @@
                 variant="destructive"
                 type="submit"
                 data-testid="two-factor-disable-submit"
-                [disabled]="!canDisable()"
+                [disabled]="busy() || disableBlocked()"
               >
                 @if (busy()) {
                   <hlm-spinner class="text-base" data-icon="inline-start" />
@@ -220,10 +237,15 @@
               <app-otp-code-input
                 inputId="two-factor-regenerate-code"
                 [label]="t('account.twoFactor.codeLabel')"
-                [(value)]="code"
+                [formField]="verificationForm.code"
               />
+              @for (error of verificationForm.code().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
               <div class="flex gap-2">
-                <button hlmBtn type="submit" [disabled]="!codeValid() || busy()">
+                <button hlmBtn type="submit" [disabled]="busy()">
                   @if (busy()) {
                     <hlm-spinner class="text-base" data-icon="inline-start" />
                   }

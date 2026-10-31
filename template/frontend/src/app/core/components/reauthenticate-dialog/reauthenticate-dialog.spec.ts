@@ -280,7 +280,6 @@ describe('ReauthenticateDialog', () => {
       //#endif
       expect(input.getAttribute('aria-invalid')).toBe('true');
       expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([
-        'reauthenticate-code-description',
         'reauthenticate-code-error',
         'reauthenticate-code-reuse-hint',
       ]);
@@ -292,7 +291,8 @@ describe('ReauthenticateDialog', () => {
 
       expect(host.error()).toBeNull();
       expect(reauthenticateCodeReuseHint()).toBe('');
-      expect(input.hasAttribute('aria-invalid')).toBe(false);
+      // 服务端原因已清除；只输入一位时仍有 Signal Forms 的本地位数错误。
+      expect(input.getAttribute('aria-invalid')).toBe('true');
     });
 
     // 被拒的原因与验证码本身无关（如再认证失败过多被锁定）：等新码也无济于事，不提示

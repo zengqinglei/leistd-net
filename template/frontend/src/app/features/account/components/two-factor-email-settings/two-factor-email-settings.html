@@ -100,11 +100,16 @@
               [inputId]="codeInputId"
               [label]="t('account.twoFactorEmail.codeLabel')"
               [autofocus]="true"
-              [(value)]="code"
+              [formField]="verificationForm.code"
               (completed)="confirm()"
             />
+            @for (error of verificationForm.code().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{
+                error.message ?? t('validation.' + error.kind, error)
+              }}</hlm-field-error>
+            }
             <div class="flex gap-2">
-              <button hlmBtn type="submit" [disabled]="!codeValid() || busy()">
+              <button hlmBtn type="submit" [disabled]="busy()">
                 @if (busy()) {
                   <hlm-spinner class="text-base" data-icon="inline-start" />
                 }

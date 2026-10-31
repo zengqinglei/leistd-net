@@ -24,6 +24,8 @@ import {
   reauthenticateErrorText,
   reauthenticateForm,
 } from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog.testing';
+//#endif
+//#if (LocalIdentity)
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#endif
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
@@ -157,7 +159,7 @@ describe('Users page query round trip', () => {
       service.resetPassword.mockReturnValueOnce(of(undefined));
 
       component.openResetPasswordDialog('user-2');
-      component.handleResetPassword({ password: 'New!Passw0rd' });
+      component.handleResetPassword({ password: 'New!Passw0rd' }).subscribe();
       await fixture.whenStable();
 
       expect(service.resetPassword).toHaveBeenCalledWith('user-2', {
@@ -186,7 +188,7 @@ describe('Users page query round trip', () => {
       service.updateUser.mockReturnValueOnce(of(undefined) as never);
       component.selectedUser.set({ id: 'user-2', username: 'bob' } as never);
 
-      component.handleSave(update);
+      component.handleSave(update).subscribe();
       await fixture.whenStable();
       await confirmWithCode(fixture, '000000');
 

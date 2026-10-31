@@ -9,6 +9,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { FormField, form, required, pattern } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -21,6 +22,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { tap, firstValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { API_ERROR_CODES } from '../../../../core/errors/api-error-codes';
@@ -29,6 +31,7 @@ import {
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
 import { StatusDot } from '../../../../shared/directives/status-dot';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
@@ -55,7 +58,7 @@ const RECOVERY_CODES_LOW = 3;
 @Component({
   selector: 'app-two-factor-settings',
   // prettier-ignore
-  imports: [
+  imports: [FormField,
     NgIcon,
     ...HlmAlertImports,
     HlmBadge,
@@ -95,11 +98,29 @@ export class TwoFactorSettings {
   protected readonly loadFailed = signal(false);
   protected readonly mode = signal<Mode>('idle');
   protected readonly codes = signal<string[]>([]);
-  protected readonly busy = signal(false);
+  private readonly operationBusy = signal(false);
+  protected readonly busy = computed(
+    () => this.operationBusy() || this.verificationForm().submitting(),
+  );
 
-  protected readonly password = signal('');
-  protected readonly code = signal('');
-  protected readonly recoveryCode = signal('');
+  private readonly submitForm = injectFormSubmission();
+  private readonly verificationModel = signal({ code: '', password: '', recoveryCode: '' });
+  readonly verificationForm = form(this.verificationModel, (path) => {
+    const needsCode = () =>
+      this.mode() === 'disable' ||
+      this.mode() === 'regenerate' ||
+      (this.mode() === 'replace' && !this.useRecoveryCode());
+    required(path.code, { when: needsCode });
+    pattern(path.code, /^\d{6}$/, { when: needsCode, error: { kind: 'otpCode' } });
+    required(path.password, { when: () => this.mode() === 'disable' && this.hasPassword() });
+    required(path.recoveryCode, {
+      when: () => this.mode() === 'replace' && this.useRecoveryCode(),
+    });
+  });
+  protected readonly code = this.verificationForm.code().value;
+  protected readonly password = this.verificationForm.password().value;
+
+  protected readonly recoveryCode = this.verificationForm.recoveryCode().value;
   /** 换绑时用恢复码代替验证码（验证器已经丢了）。 */
   protected readonly useRecoveryCode = signal(false);
   /** 换绑出示的第二因素，交给设置组件随开始设置一并提交。 */
@@ -173,17 +194,19 @@ export class TwoFactorSettings {
     return this.useRecoveryCode() ? this.recoveryCode().trim().length > 0 : this.codeValid();
   }
 
-  protected startReplace(): void {
-    if (!this.canReplace()) {
-      return;
-    }
+  protected async startReplace(): Promise<void> {
+    await this.submitForm(this.verificationForm, 'two-factor-settings-form', async () => {
+      if (this.operationBusy()) {
+        return;
+      }
 
-    this.proof.set(
-      this.useRecoveryCode()
-        ? { recoveryCode: this.recoveryCode().trim() }
-        : { code: this.code().replace(/\s/g, '') },
-    );
-    this.setMode('replaceSetup');
+      this.proof.set(
+        this.useRecoveryCode()
+          ? { recoveryCode: this.recoveryCode() }
+          : { code: this.code().replace(/\s/g, '') },
+      );
+      this.setMode('replaceSetup');
+    });
   }
 
   protected onPasswordInput(event: Event): void {
@@ -213,53 +236,65 @@ export class TwoFactorSettings {
     this.setMode('idle');
   }
 
-  protected disable(): void {
-    if (!this.canDisable()) {
-      return;
-    }
+  protected async disable(): Promise<void> {
+    await this.submitForm(
+      this.verificationForm,
+      'two-factor-settings-form',
+      async () => {
+        if (this.disableBlocked()) {
+          return;
+        }
 
-    this.busy.set(true);
-    this.accountService
-      .disableTwoFactor({
-        // 没有口令的账号只带验证码：带了口令服务端按"方式不具备"拒绝
-        password: this.hasPassword() ? this.password() : undefined,
-        code: this.code().replace(/\s/g, ''),
-      })
-      .pipe(finalize(() => this.busy.set(false)))
-      .subscribe({
-        next: () => {
-          this.setMode('idle');
-          this.reload();
-          this.refreshCurrentUser();
-          this.sessionsChanged.emit();
-          this.defaultChanged.emit();
-          //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('account.twoFactor.disabledToast'));
-          //#else
-          toast.success(this.t('account.twoFactor.disabledToast'));
-          //#endif
-        },
-        error: (error) => this.showError(error),
-      });
+        await firstValueFrom(
+          this.accountService
+            .disableTwoFactor({
+              // 没有口令的账号只带验证码：带了口令服务端按"方式不具备"拒绝
+              password: this.hasPassword() ? this.password() : undefined,
+              code: this.code().replace(/\s/g, ''),
+            })
+            .pipe(
+              tap({
+                next: () => {
+                  this.setMode('idle');
+                  this.reload();
+                  this.refreshCurrentUser();
+                  this.sessionsChanged.emit();
+                  this.defaultChanged.emit();
+                  //#if (IncludeLocalization)
+                  toast.success(this.transloco.translate('account.twoFactor.disabledToast'));
+                  //#else
+                  toast.success(this.t('account.twoFactor.disabledToast'));
+                  //#endif
+                },
+              }),
+            ),
+        );
+      },
+      (_message, error) => this.showError(error),
+    );
   }
 
-  protected regenerate(): void {
-    if (!this.codeValid() || this.busy()) {
-      return;
-    }
-
-    this.busy.set(true);
-    this.accountService
-      .regenerateRecoveryCodes({ code: this.code().replace(/\s/g, '') })
-      .pipe(finalize(() => this.busy.set(false)))
-      .subscribe({
-        next: (result) => {
-          this.codes.set(result.recoveryCodes);
-          this.mode.set('codes');
-          this.reload();
-        },
-        error: (error) => this.showError(error),
-      });
+  protected async regenerate(): Promise<void> {
+    await this.submitForm(
+      this.verificationForm,
+      'two-factor-settings-form',
+      async () => {
+        await firstValueFrom(
+          this.accountService
+            .regenerateRecoveryCodes({ code: this.code().replace(/\s/g, '') })
+            .pipe(
+              tap({
+                next: (result) => {
+                  this.codes.set(result.recoveryCodes);
+                  this.mode.set('codes');
+                  this.reload();
+                },
+              }),
+            ),
+        );
+      },
+      (_message, error) => this.showError(error),
+    );
   }
 
   /** 登录时默认先给身份验证器；不增减方式，不要求确认身份。 */
@@ -268,10 +303,10 @@ export class TwoFactorSettings {
       return;
     }
 
-    this.busy.set(true);
+    this.operationBusy.set(true);
     this.accountService
       .setPreferredTwoFactorMethod('authenticator')
-      .pipe(finalize(() => this.busy.set(false)))
+      .pipe(finalize(() => this.operationBusy.set(false)))
       .subscribe({
         next: () => {
           this.reload();

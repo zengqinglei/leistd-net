@@ -4,15 +4,18 @@
 <ng-container>
 <!--#endif-->
   <hlm-dialog
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
     [state]="visible() ? 'open' : 'closed'"
     (stateChanged)="onDialogStateChange($event)"
-    [closeOnOutsidePointerEvents]="!saving()"
   >
     <!-- 定宽：切换口令/验证码、出现错误时对话框不随内容变宽变窄 -->
     <hlm-dialog-content
+      appImeGuard
       *hlmDialogPortal
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
       class="min-w-[min(28rem,calc(100vw_-_2rem))] sm:max-w-md"
-      [showCloseButton]="!saving()"
     >
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ t('common.reauthenticate.header') }}</h2>
@@ -22,6 +25,7 @@
       </hlm-dialog-header>
 
       <form
+        id="reauthForm-form"
         novalidate
         class="flex flex-col gap-4"
         data-testid="reauthenticate-form"
@@ -55,18 +59,26 @@
               <label hlmFieldLabel [for]="codeInputId">{{
                 t('common.reauthenticate.codeLabel')
               }}</label>
-              <hlm-field-description [id]="codeDescriptionId">{{
-                t('common.reauthenticate.codeHint')
-              }}</hlm-field-description>
+              @if (!error() && !(reauthForm.code().invalid() && reauthForm.code().touched())) {
+                <hlm-field-description [id]="codeDescriptionId">{{
+                  t('common.reauthenticate.codeHint')
+                }}</hlm-field-description>
+              }
               <app-otp-code-input
                 [inputId]="codeInputId"
                 [autofocus]="true"
-                [invalid]="!!error()"
                 [describedBy]="codeDescribedBy()"
-                [value]="code()"
+                [formField]="reauthForm.code"
                 (valueChange)="onCodeChange($event)"
                 (completed)="submitCode()"
               />
+              @if (!error()) {
+                @for (error of reauthForm.code().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{
+                    error.message ?? t('validation.' + error.kind, error)
+                  }}</hlm-field-error>
+                }
+              }
               @if (error(); as message) {
                 <hlm-field-error forceShow [id]="codeErrorId">{{ message }}</hlm-field-error>
               }
@@ -161,11 +173,12 @@
 
         <hlm-dialog-footer>
           <button
+            [disabled]="closeGuard.busy()"
             hlmBtn
             type="button"
             variant="ghost"
             data-testid="reauthenticate-cancel"
-            (click)="hide()"
+            (click)="closeGuard.requestClose()"
           >
             {{ t('common.cancel') }}
           </button>
@@ -191,12 +204,7 @@
               {{ t('common.reauthenticate.usePasskey') }}
             </button>
           } @else {
-            <button
-              hlmBtn
-              type="submit"
-              data-testid="reauthenticate-submit"
-              [disabled]="saving() || (method() === 'code' && !codeValid())"
-            >
+            <button hlmBtn type="submit" data-testid="reauthenticate-submit" [disabled]="saving()">
               @if (saving()) {
                 <hlm-spinner class="text-base" data-icon="inline-start" />
               }
@@ -205,6 +213,12 @@
           }
         </hlm-dialog-footer>
       </form>
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="false"
+        [busy]="saving()"
+        (dismissed)="visible.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>

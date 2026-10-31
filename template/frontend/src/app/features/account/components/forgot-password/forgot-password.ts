@@ -7,6 +7,8 @@ import {
 } from '@angular/core';
 //#if (Email)
 import { form, required, minLength, maxLength, email, FormField } from '@angular/forms/signals';
+//#endif
+//#if (Email)
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#else
 import { ActivatedRoute, RouterModule } from '@angular/router';
@@ -34,25 +36,46 @@ import {
 } from '@ng-icons/lucide';
 //#if (Email)
 import { toast } from '@spartan-ng/brain/sonner';
+//#endif
+//#if (Email)
 import { HlmButton } from '@spartan-ng/helm/button';
+//#endif
+//#if (Email)
 import { HlmFieldImports } from '@spartan-ng/helm/field';
+//#endif
+//#if (Email)
 import { HlmInput } from '@spartan-ng/helm/input';
+//#endif
+//#if (Email)
 import {
   HlmInputGroup,
   HlmInputGroupInput,
   HlmInputGroupButton,
 } from '@spartan-ng/helm/input-group';
+//#endif
+//#if (Email)
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+//#endif
+//#if (Email)
 import { lastValueFrom } from 'rxjs';
 //#endif
 
 //#if (Email)
 import { PasswordLengthMeter } from '../../../../core/components/password-length-meter/password-length-meter';
+//#endif
+//#if (Email)
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+//#endif
+//#if (Email)
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
-//#if (IncludeMultiTenancy)
+//#endif
+//#if (((Email) && (IncludeMultiTenancy)))
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
+//#if (Email)
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
+//#endif
+//#if (Email)
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -63,10 +86,14 @@ import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 //#if (Email)
 import { AccountService } from '../../services/account-service';
-//#if (IncludeMultiTenancy)
+//#endif
+//#if (((Email) && (IncludeMultiTenancy)))
 import { hostTenantProbe } from '../../utils/host-tenant-probe';
 //#endif
+//#if (Email)
 import { resendCountdown } from '../../utils/resend-countdown';
+//#endif
+//#if (Email)
 import { CaptchaImage } from '../../widgets/captcha-image/captcha-image';
 //#endif
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -116,6 +143,9 @@ import { AuthShell } from '../auth-shell/auth-shell';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ForgotPassword {
+  //#if (Email)
+  private readonly submitForm = injectFormSubmission();
+  //#endif
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -143,7 +173,9 @@ export class ForgotPassword {
     () => this.securityConfig.config()?.emailVerificationAvailable ?? true,
   );
 
-  readonly isLoading = signal(false);
+  readonly isLoading = computed(
+    () => this.sendForm().submitting() || this.resetForm().submitting(),
+  );
   protected readonly showPassword = signal(false);
   private readonly captcha = viewChild(CaptchaImage);
   readonly countdown = resendCountdown();
@@ -182,34 +214,34 @@ export class ForgotPassword {
   }
 
   async sendCode(): Promise<void> {
-    const captchaToken = this.captcha()?.token();
-    if (this.tenantBlocked()) {
-      return;
-    }
-    if (this.sendForm().invalid() || !captchaToken) {
-      this.sendForm().markAsTouched();
-      return;
-    }
+    this.sendModel.update((value) => ({ ...value, email: value.email.trim() }));
+    await this.submitForm(this.sendForm, 'sendForm-form', async () => {
+      const captchaToken = this.captcha()?.token();
+      if (this.tenantBlocked()) {
+        return;
+      }
+      if (!captchaToken) {
+        this.sendForm().markAsTouched();
+        return;
+      }
 
-    this.isLoading.set(true);
-    try {
-      const { email: address, captchaCode } = this.sendModel();
-      const result = await lastValueFrom(
-        this.accountService.sendPasswordResetCode({
-          email: address.trim(),
-          captchaToken,
-          captchaCode,
-        }),
-      );
-      this.challenge.set({ challengeId: result.challengeId, email: address.trim() });
-      this.resetModel.set({ code: '', newPassword: '' });
-      this.countdown.start(result.retryAfterSeconds);
-    } catch (error) {
-      this.showRequestError(error);
-      void this.captcha()?.reload(); // 令牌只能用一次：失败后换一张
-    } finally {
-      this.isLoading.set(false);
-    }
+      try {
+        const { email: address, captchaCode } = this.sendModel();
+        const result = await lastValueFrom(
+          this.accountService.sendPasswordResetCode({
+            email: address.trim(),
+            captchaToken,
+            captchaCode,
+          }),
+        );
+        this.challenge.set({ challengeId: result.challengeId, email: address.trim() });
+        this.resetModel.set({ code: '', newPassword: '' });
+        this.countdown.start(result.retryAfterSeconds);
+      } catch (error) {
+        void this.captcha()?.reload(); // 令牌只能用一次：失败后换一张
+        throw error;
+      }
+    });
   }
 
   /** 回到发码一步：换邮箱或重发都要重新过图形验证码（回到这一步时验证码图片重新创建，自带一张新图）。 */
@@ -218,14 +250,13 @@ export class ForgotPassword {
   }
 
   async reset(): Promise<void> {
-    const challenge = this.challenge();
-    if (!challenge || this.resetForm().invalid()) {
-      this.resetForm().markAsTouched();
-      return;
-    }
+    await this.submitForm(this.resetForm, 'resetForm-form', async () => {
+      const challenge = this.challenge();
+      if (!challenge) {
+        this.resetForm().markAsTouched();
+        return;
+      }
 
-    this.isLoading.set(true);
-    try {
       const { code, newPassword } = this.resetModel();
       await lastValueFrom(
         this.accountService.resetPassword({
@@ -246,11 +277,7 @@ export class ForgotPassword {
       await this.router.navigate(['/auth/login'], {
         queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined,
       });
-    } catch (error) {
-      this.showRequestError(error);
-    } finally {
-      this.isLoading.set(false);
-    }
+    });
   }
 
   private showRequestError(error: unknown): void {

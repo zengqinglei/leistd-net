@@ -4,17 +4,22 @@
 <ng-container>
 <!--#endif-->
   <hlm-dialog
+    [autoFocus]="loading() ? 'first-heading' : 'first-tabbable'"
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
     [state]="visible() ? 'open' : 'closed'"
     (stateChanged)="onDialogStateChange($event)"
-    [closeOnOutsidePointerEvents]="!saving()"
   >
     <hlm-dialog-content
+      appImeGuard
       *hlmDialogPortal
-      class="flex max-h-[calc(100dvh-2rem)] min-w-[min(42rem,calc(100vw_-_2rem))] flex-col overflow-hidden sm:max-w-2xl"
-      [showCloseButton]="!saving()"
+      [appDialogFocus]="loading()"
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="h-[min(40rem,calc(100dvh-2rem))] flex max-h-[calc(100dvh-2rem)] min-w-[min(42rem,calc(100vw_-_2rem))] flex-col overflow-hidden sm:max-w-2xl"
     >
       <hlm-dialog-header>
-        <h2 hlmDialogTitle>
+        <h2 hlmDialogTitle tabindex="-1">
           {{ isEditMode() ? t('users.editDialog.editHeader') : t('users.editDialog.createHeader') }}
         </h2>
         <p hlmDialogDescription>
@@ -28,11 +33,20 @@
 
       @if (loading()) {
         <app-dialog-loading [text]="t('users.editDialog.loading')" />
+      } @else if (loadError(); as error) {
+        <div role="alert" data-dialog-body>
+          <p>{{ error }}</p>
+          <button hlmBtn variant="outline" type="button" (click)="retry.emit()">
+            {{ t('common.retry') }}
+          </button>
+        </div>
       } @else {
         <form
           novalidate
           (submit)="$event.preventDefault(); save()"
           class="flex min-h-0 flex-1 flex-col gap-4"
+          id="userForm-form"
+          novalidate
         >
           <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
             <div class="flex items-center gap-4 border-b border-border pb-5">
@@ -84,6 +98,8 @@
                   t('users.editDialog.usernameLabel')
                 }}</label>
                 <input
+                  autocapitalize="off"
+                  spellcheck="false"
                   hlmInput
                   id="user-username"
                   autocomplete="off"
@@ -93,7 +109,7 @@
                 />
                 @for (error of userForm.username().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -101,6 +117,8 @@
               <div hlmField>
                 <label hlmFieldLabel for="user-email">{{ t('users.editDialog.emailLabel') }}</label>
                 <input
+                  autocapitalize="off"
+                  spellcheck="false"
                   hlmInput
                   id="user-email"
                   autocomplete="off"
@@ -111,7 +129,7 @@
                 />
                 @for (error of userForm.email().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -121,6 +139,7 @@
                   t('users.editDialog.displayNameLabel')
                 }}</label>
                 <input
+                  autocomplete="off"
                   hlmInput
                   id="user-display-name"
                   class="w-full"
@@ -129,7 +148,7 @@
                 />
                 @for (error of userForm.displayName().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -163,7 +182,7 @@
                   </hlm-input-group>
                   @for (error of userForm.password().errors(); track error.kind) {
                     <hlm-field-error [validator]="error.kind">{{
-                      t('validation.' + error.kind, error)
+                      error.message ?? t('validation.' + error.kind, error)
                     }}</hlm-field-error>
                   }
                 </div>
@@ -248,11 +267,28 @@
             </section>
           </div>
 
+          @if (rolesError(); as error) {
+            <p role="alert">
+              {{ error }}
+              <button hlmBtn variant="outline" type="button" (click)="reloadRoles.emit()">
+                {{ t('common.retry') }}
+              </button>
+            </p>
+          }
+          @if (rolesLoading()) {
+            <hlm-spinner />
+          }
           <hlm-dialog-footer>
-            <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              [disabled]="saving()"
+              (click)="closeGuard.requestClose()"
+            >
               {{ t('common.cancel') }}
             </button>
-            <button hlmBtn type="submit" [disabled]="saving()">
+            <button hlmBtn type="submit" [disabled]="saving() || rolesLoading() || !!rolesError()">
               @if (saving()) {
                 <hlm-spinner class="text-base" data-icon="inline-start" />
               }
@@ -261,6 +297,12 @@
           </hlm-dialog-footer>
         </form>
       }
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="userForm().dirty()"
+        [busy]="saving()"
+        (dismissed)="visible.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>

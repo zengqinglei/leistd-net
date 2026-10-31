@@ -109,7 +109,7 @@ describe('UserRolesDialog', () => {
 
   afterEach(() => fixture.destroy());
 
-  it('labels every role checkbox with the role name', () => {
+  it('labels every role checkbox with the role name', async () => {
     for (const role of host.roles) {
       const label = document.querySelector(`label[for="role-${role.id}"]`);
       expect(label?.textContent).toContain(role.displayName);
@@ -136,7 +136,7 @@ describe('UserRolesDialog', () => {
     expect(dialog.isSelected('role-admin')).toBe(true);
   });
 
-  it('starts from the roles the user already has', () => {
+  it('starts from the roles the user already has', async () => {
     const dialog = fixture.debugElement.query(By.directive(UserRolesDialog))
       .componentInstance as UserRolesDialog;
 
@@ -184,7 +184,7 @@ describe('UserRolesDialog', () => {
     response.next([]);
     response.complete();
     await fixture.whenStable();
-    expect(saveButton().disabled).toBe(false);
+    await expect.poll(() => saveButton().disabled).toBe(false);
   });
 
   it('shows the server reason, keeps the selection and allows retrying when saving fails', async () => {
@@ -203,7 +203,7 @@ describe('UserRolesDialog', () => {
     expect(toast.error).toHaveBeenCalledExactlyOnceWith('Role does not exist.');
     expect(toast.success).not.toHaveBeenCalled();
     expect(host.savedCount).toBe(0);
-    expect(saveButton().disabled).toBe(false);
+    await expect.poll(() => saveButton().disabled).toBe(false);
 
     replaceUserRoles.mockReturnValue(of([]));
     saveButton().click();

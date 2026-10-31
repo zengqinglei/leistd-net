@@ -12,6 +12,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+// prettier-ignore
 import {
   form,
   required,
@@ -50,7 +51,10 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
+import { firstValueFrom, Observable } from 'rxjs';
 
+import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 //#if (LocalIdentity)
 import {
   PASSWORD_MAX_LENGTH,
@@ -58,6 +62,8 @@ import {
 } from '../../../../../../core/validation/password-rule';
 //#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { DialogFocus } from '../../../../../../shared/directives/dialog-focus';
+import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 import {
   AvatarImageRejected,
   isAvatarImageUrl,
@@ -77,6 +83,9 @@ import {
   selector: 'app-user-edit-dialog',
   standalone: true,
   imports: [
+    DialogFocus,
+    ImeGuard,
+    DialogClose,
     FormField,
     NgIcon,
     HlmButton,
@@ -110,11 +119,16 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserEditDialog {
+  private readonly submitForm = injectFormSubmission();
+  readonly saving = computed(() => this.userForm().submitting());
   readonly visible = model(false);
   readonly loading = input(false);
-  readonly saving = input(false);
+  readonly editing = input(false);
+  readonly loadError = input<string | null>(null);
+  readonly retry = output<void>();
   readonly user = input<UserManagementOutputDto | null>(null);
-  readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
+  readonly saveAction =
+    input.required<(dto: CreateUserInputDto | UpdateUserInputDto) => Observable<unknown>>();
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   private readonly avatarMessages = () => ({
@@ -178,6 +192,9 @@ export class UserEditDialog {
    * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
    * 因此只持有 Users.Update 的主体在这里看不到也提交不了角色。
    */
+  readonly rolesLoading = input(false);
+  readonly rolesError = input<string | null>(null);
+  readonly reloadRoles = output<void>();
   readonly availableRoles = input<RoleBriefDto[]>([]);
   readonly canAssignRoles = input(false);
 
@@ -200,6 +217,7 @@ export class UserEditDialog {
         return;
       }
       const avatar = user?.avatar ?? '';
+      this.userForm().reset();
       this.formModel.set({
         username: user?.username ?? '',
         email: user?.email ?? '',
@@ -219,7 +237,7 @@ export class UserEditDialog {
   }
 
   isEditMode() {
-    return !!this.user();
+    return this.editing() || !!this.user();
   }
 
   hasAvatarImage() {
@@ -243,6 +261,7 @@ export class UserEditDialog {
       const result = await prepareAvatarImage(file);
       this.formModel.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
+      this.userForm().markAsDirty();
     } catch (error: unknown) {
       const messages = this.avatarMessages();
       const reason = error instanceof AvatarImageRejected ? error.reason : 'decode';
@@ -259,10 +278,12 @@ export class UserEditDialog {
   // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；
   // 直接以 [checked]/(checkedChange) 双向绑定回写模型信号。
   setActive(checked: boolean): void {
+    this.userForm().markAsDirty();
     this.formModel.update((m) => ({ ...m, isActive: checked }));
   }
   //#if (LocalIdentity)
   setEmailVerified(checked: boolean): void {
+    this.userForm().markAsDirty();
     this.formModel.update((m) => ({ ...m, isEmailVerified: checked }));
   }
   //#endif
@@ -276,38 +297,54 @@ export class UserEditDialog {
     this.visible.set(false);
   }
 
-  save() {
-    if (this.userForm().invalid()) {
-      this.userForm().markAsTouched();
+  async save(): Promise<void> {
+    if (
+      this.loading() ||
+      this.loadError() ||
+      (this.showRoleField() && (this.rolesLoading() || this.rolesError()))
+    )
       return;
-    }
+    this.formModel.update((value) => ({
+      ...value,
+      username: value.username.trim(),
+      email: value.email.trim(),
+      displayName: value.displayName.trim(),
+      avatar: value.avatar.trim(),
+    }));
+    await this.submitForm(this.userForm, 'userForm-form', async () => {
+      const model = this.formModel();
+      if (this.isEditMode()) {
+        await firstValueFrom(
+          this.saveAction()({
+            email: model.email,
+            displayName: model.displayName.trim() || undefined,
+            avatar: model.avatar.trim() || undefined,
+            //#if (LocalIdentity)
+            isEmailVerified: model.isEmailVerified,
+            //#endif
+          }),
+          { defaultValue: undefined },
+        );
+        return;
+      }
 
-    const model = this.formModel();
-    if (this.isEditMode()) {
-      this.saved.emit({
-        email: model.email,
-        displayName: model.displayName.trim() || undefined,
-        avatar: model.avatar.trim() || undefined,
-        //#if (LocalIdentity)
-        isEmailVerified: model.isEmailVerified,
-        //#endif
-      });
-      return;
-    }
-
-    this.saved.emit({
-      username: model.username.trim(),
-      email: model.email,
-      displayName: model.displayName.trim() || undefined,
-      avatar: model.avatar.trim() || undefined,
-      //#if (LocalIdentity)
-      password: model.password,
-      //#endif
-      isActive: model.isActive,
-      //#if (LocalIdentity)
-      isEmailVerified: model.isEmailVerified,
-      //#endif
-      roleIds: this.canAssignRoles() ? model.roleIds : [],
+      await firstValueFrom(
+        this.saveAction()({
+          username: model.username.trim(),
+          email: model.email,
+          displayName: model.displayName.trim() || undefined,
+          avatar: model.avatar.trim() || undefined,
+          //#if (LocalIdentity)
+          password: model.password,
+          //#endif
+          isActive: model.isActive,
+          //#if (LocalIdentity)
+          isEmailVerified: model.isEmailVerified,
+          //#endif
+          roleIds: this.canAssignRoles() ? model.roleIds : [],
+        }),
+        { defaultValue: undefined },
+      );
     });
   }
   //#if (LocalIdentity)
@@ -318,6 +355,7 @@ export class UserEditDialog {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'common.retry': 'Retry',
   'users.editDialog.editHeader': 'Edit user',
   'users.editDialog.createHeader': 'New user',
   'users.editDialog.createDescription':

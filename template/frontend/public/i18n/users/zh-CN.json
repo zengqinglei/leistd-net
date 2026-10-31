@@ -121,6 +121,7 @@
     "saved": "角色已更新"
   },
   "batch": {
+    "selectRolesHint": "请至少选择一个要追加的角色。",
     "toolbar": "批量操作",
     "selected": "已选 {{count}} 位",
     "enable": "启用",

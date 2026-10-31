@@ -55,17 +55,19 @@
           <p class="text-sm font-medium">{{ t('account.twoFactor.scanTitle') }}</p>
           <p class="text-muted-foreground text-sm">{{ t('account.twoFactor.scanHint') }}</p>
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-            @if (qrDataUrl(); as qr) {
-              <!-- 白底：深色主题下二维码也要保持足够对比度，否则部分应用扫不出来 -->
-              <img
-                [src]="qr"
-                [alt]="t('account.twoFactor.qrAlt')"
-                width="160"
-                height="160"
-                class="size-40 shrink-0 self-center rounded-md border border-border bg-white p-1 sm:self-auto"
-                data-testid="two-factor-qr"
-              />
-            }
+            <div class="size-40 shrink-0 self-center sm:self-auto">
+              @if (qrDataUrl(); as qr) {
+                <!-- 白底：深色主题下二维码也要保持足够对比度，否则部分应用扫不出来 -->
+                <img
+                  [src]="qr"
+                  [alt]="t('account.twoFactor.qrAlt')"
+                  width="160"
+                  height="160"
+                  class="size-40 shrink-0 self-center rounded-md border border-border bg-white p-1 sm:self-auto"
+                  data-testid="two-factor-qr"
+                />
+              }
+            </div>
             <div class="flex min-w-0 flex-col gap-2">
               <span class="text-muted-foreground text-xs">{{
                 t('account.twoFactor.manualHint')
@@ -93,7 +95,7 @@
           </div>
         </div>
 
-        <form novalidate (submit)="$event.preventDefault(); submit()">
+        <form id="two-factor-setup-form" novalidate (submit)="$event.preventDefault(); submit()">
           <div hlmField>
             <label hlmFieldLabel for="two-factor-setup-code">{{
               t('account.twoFactor.verifyTitle')
@@ -102,13 +104,18 @@
               <app-otp-code-input
                 inputId="two-factor-setup-code"
                 data-testid="two-factor-setup-code"
-                [(value)]="code"
+                [formField]="verificationForm.code"
               />
+              @for (error of verificationForm.code().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
               <div class="flex gap-2">
                 <button
                   hlmBtn
                   type="submit"
-                  [disabled]="!canSubmit()"
+                  [disabled]="submitting()"
                   data-testid="two-factor-enable"
                 >
                   @if (submitting()) {

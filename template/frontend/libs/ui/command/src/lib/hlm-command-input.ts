@@ -24,6 +24,7 @@ import { classes } from '@spartan-ng/helm/utils';
         class="w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
         [id]="inputId()"
         [placeholder]="placeholder()"
+        [attr.aria-label]="ariaLabel() ?? placeholder()"
       />
 
       <hlm-input-group-addon>
@@ -33,6 +34,7 @@ import { classes } from '@spartan-ng/helm/utils';
   `,
 })
 export class HlmCommandInput {
+  public readonly ariaLabel = input<string | undefined>();
   public readonly inputId = input<string | undefined>();
   public readonly placeholder = input<string>('');
 

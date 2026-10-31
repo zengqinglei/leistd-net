@@ -24,28 +24,28 @@ describe('UriListEditor', () => {
 
   beforeEach(() => TestBed.configureTestingModule({ imports: [UriListEditor] }));
 
-  it('emits a trimmed URI when a valid value is added', () => {
+  it('emits the exact URI when a valid value is added', () => {
     const fixture = createEditor();
     const emitted: string[] = [];
     fixture.componentInstance.add.subscribe((uri) => emitted.push(uri));
 
-    enterValue(fixture, '  https://example.com/callback  ');
+    enterValue(fixture, 'https://example.com/callback');
     (fixture.nativeElement.querySelector('button') as HTMLButtonElement).click();
 
     expect(emitted).toEqual(['https://example.com/callback']);
   });
 
-  it('disables the add button for empty, malformed, and fragment values', () => {
+  it('keeps invalid submission available and shows the field error', () => {
     const fixture = createEditor();
     const button = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
 
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
 
     enterValue(fixture, 'not-a-uri');
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
 
     enterValue(fixture, 'https://example.com/callback#fragment');
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
 
     enterValue(fixture, 'https://example.com/callback');
     expect(button.disabled).toBe(false);

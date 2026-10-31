@@ -1,5 +1,8 @@
 {
   "common": {
+    "unsavedChanges": "Discard your unsaved changes?",
+    "discardChanges": "Discard changes",
+    "continueEditing": "Continue editing",
     "signIn": "Sign in",
     "continueToSignIn": "Continue to sign in",
     "workspace": "Workspace",
@@ -92,6 +95,9 @@
     }
   },
   "validation": {
+    "server": "The server rejected this value.",
+    "uri": "Enter an absolute URI without a fragment or whitespace.",
+    "otpCode": "Enter the complete 6-digit verification code.",
     "required": "This field is required.",
     "email": "Please enter a valid email address.",
     "minLength": "Must be at least {{minLength}} characters.",

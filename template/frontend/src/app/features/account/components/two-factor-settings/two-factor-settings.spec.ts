@@ -149,7 +149,7 @@ describe('TwoFactorSettings', () => {
     fixture.detectChanges();
 
     expect(account.beginTwoFactorSetup).toHaveBeenCalledWith({
-      recoveryCode: 'AAAA-BBBB',
+      recoveryCode: ' AAAA-BBBB ',
       password: undefined,
     });
     expect(host.querySelector('[data-testid="two-factor-secret"]')).not.toBeNull();
@@ -292,7 +292,7 @@ describe('TwoFactorSettings', () => {
       const submit = host.querySelector<HTMLButtonElement>(
         '[data-testid="two-factor-disable-submit"]',
       )!;
-      expect(submit.disabled).toBe(true);
+      expect(submit.disabled).toBe(false);
 
       await typeCode(host);
       expect(submit.disabled).toBe(false);

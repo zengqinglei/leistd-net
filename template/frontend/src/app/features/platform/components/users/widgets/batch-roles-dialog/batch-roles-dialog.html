@@ -3,8 +3,25 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
-    <hlm-dialog-content *hlmDialogPortal class="sm:max-w-md">
+  <hlm-dialog
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
+    [state]="open() ? 'open' : 'closed'"
+    (stateChanged)="open.set($event === 'open')"
+  >
+    <hlm-dialog-content
+      appImeGuard
+      *hlmDialogPortal
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="sm:max-w-md"
+    >
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="selectedIds().length > 0"
+        [busy]="saving()"
+        (dismissed)="open.set(false)"
+      />
       <hlm-dialog-header>
         <h2 hlmDialogTitle>{{ t('users.batch.rolesTitle', { count: userCount() }) }}</h2>
         <p hlmDialogDescription>{{ t('users.batch.rolesDescription') }}</p>
@@ -30,15 +47,35 @@
         }
       </div>
 
+      @if (selectedIds().length === 0) {
+        <p role="status">{{ t('users.batch.selectRolesHint') }}</p>
+      }
+      @if (rolesError(); as error) {
+        <p role="alert">
+          {{ error }}
+          <button hlmBtn variant="outline" type="button" (click)="reloadRoles.emit()">
+            {{ t('common.retry') }}
+          </button>
+        </p>
+      }
+      @if (rolesLoading()) {
+        <hlm-spinner />
+      }
       <hlm-dialog-footer>
-        <button hlmBtn variant="outline" type="button" (click)="open.set(false)">
+        <button
+          [disabled]="closeGuard.busy()"
+          hlmBtn
+          variant="outline"
+          type="button"
+          (click)="closeGuard.requestClose()"
+        >
           {{ t('common.cancel') }}
         </button>
         <button
           hlmBtn
           type="button"
-          [disabled]="saving() || selectedIds().length === 0"
-          (click)="assign.emit(selectedIds())"
+          [disabled]="saving() || rolesLoading() || !!rolesError() || selectedIds().length === 0"
+          (click)="onSave()"
         >
           @if (saving()) {
             <hlm-spinner class="size-4" data-icon="inline-start" />

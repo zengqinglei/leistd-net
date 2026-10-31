@@ -173,7 +173,7 @@ describe('SecurityPanel', () => {
   });
   //#endif
 
-  it('associates every password label with its input', () => {
+  it('associates every password label with its input', async () => {
     for (const id of ['current-password', 'new-password', 'confirm-password']) {
       expect((fixture.nativeElement as HTMLElement).querySelector(`label[for="${id}"]`)).not.toBe(
         null,
@@ -273,7 +273,7 @@ describe('SecurityPanel', () => {
     response.next();
     response.complete();
     await fixture.whenStable();
-    expect(submitButton().disabled).toBe(false);
+    await expect.poll(() => submitButton().disabled).toBe(false);
   });
 
   it('keeps the input and shows the server reason when the change is rejected', async () => {
@@ -292,16 +292,16 @@ describe('SecurityPanel', () => {
     submitButton().click();
     await fixture.whenStable();
 
-    expect(toast.error).toHaveBeenCalledOnce();
-    expect(vi.mocked(toast.error).mock.calls[0][1]).toEqual({
-      description: 'Current password is wrong.',
-    });
+    await expect
+      .poll(() => panel.changeForm.currentPassword().errors()[0]?.message)
+      .toBe('Current password is wrong.');
+    expect(toast.error).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
     expect(panel.changeForm.currentPassword().value()).toBe(valid.currentPassword);
     expect(panel.changeForm.newPassword().value()).toBe(valid.newPassword);
     expect(account.getSessions).toHaveBeenCalledTimes(sessionLoads);
     expect(panel.saving()).toBe(false);
-    expect(submitButton().disabled).toBe(false);
+    await expect.poll(() => submitButton().disabled).toBe(false);
   });
   //#if (ExternalLogin)
 
@@ -328,7 +328,7 @@ describe('SecurityPanel', () => {
       await fixture.whenStable();
     }
 
-    it('replaces the change-password form with a set-password form', () => {
+    it('replaces the change-password form with a set-password form', async () => {
       const host = fixture.nativeElement as HTMLElement;
 
       expect(host.querySelector('[data-testid="security-password"]')).toBeNull();

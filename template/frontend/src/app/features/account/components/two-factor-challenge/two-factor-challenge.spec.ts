@@ -231,7 +231,8 @@ describe('TwoFactorChallenge', () => {
 
     expect(shownError()).toBeNull();
     expect(reuseHint()).toBeNull();
-    expect(input.hasAttribute('aria-invalid')).toBe(false);
+    // 服务端原因已清除；只输入一位时仍有 Signal Forms 的本地位数错误。
+    expect(input.getAttribute('aria-invalid')).toBe('true');
   });
 
   // 恢复码各不相同、用过即作废，不提示等待新码
@@ -289,7 +290,7 @@ describe('TwoFactorChallenge', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(busy(byTestId('two-factor-submit'))).toBe(false);
+    await expect.poll(() => busy(byTestId('two-factor-submit'))).toBe(false);
     expect((byTestId('two-factor-submit') as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -307,7 +308,7 @@ describe('TwoFactorChallenge', () => {
     fixture.componentRef.setInput('finishing', false);
     fixture.detectChanges();
 
-    expect(busy(byTestId('two-factor-submit'))).toBe(false);
+    await expect.poll(() => busy(byTestId('two-factor-submit'))).toBe(false);
     expect((byTestId('two-factor-submit') as HTMLButtonElement).disabled).toBe(false);
   });
 

@@ -4,6 +4,7 @@ import { By } from '@angular/platform-browser';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
+import { of } from 'rxjs';
 
 import { TenantEditDialog } from './tenant-edit-dialog';
 //#if (IncludeLocalization)
@@ -21,14 +22,16 @@ import {
  */
 @Component({
   imports: [TenantEditDialog],
-  template: `
-    <app-tenant-edit-dialog [(open)]="open" [tenant]="tenant()" (save)="saved.push($event)" />
-  `,
+  template: ` <app-tenant-edit-dialog [(open)]="open" [tenant]="tenant()" [saveAction]="save" /> `,
 })
 class HostComponent {
   readonly open = signal(true);
   readonly tenant = signal<TenantOutputDto | null>(null);
   readonly saved: (CreateTenantInputDto | UpdateTenantInputDto)[] = [];
+  readonly save = (dto: CreateTenantInputDto | UpdateTenantInputDto) => {
+    this.saved.push(dto);
+    return of(undefined);
+  };
 }
 
 describe('TenantEditDialog', () => {
@@ -249,7 +252,7 @@ describe('TenantEditDialog', () => {
     ]);
     // 界面只收默认库一条，契约本身是命名连接数组
     expect((host.saved[0] as CreateTenantInputDto).connections).toEqual([
-      { name: 'default', connectionString: 'Host=acme;Database=acme' },
+      { name: 'default', connectionString: '  Host=acme;Database=acme  ' },
     ]);
   });
 

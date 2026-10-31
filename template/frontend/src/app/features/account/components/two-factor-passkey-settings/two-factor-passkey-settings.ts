@@ -23,7 +23,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmItemImports } from '@spartan-ng/helm/item';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { lastValueFrom } from 'rxjs';
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 import {
   ReauthenticateDialog,
@@ -37,8 +37,10 @@ import {
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import { PASSKEY_NAME_MAX_LENGTH } from '../../../../core/webauthn/passkey-device-name';
 import { getPasskey, passkeySupport } from '../../../../core/webauthn/webauthn';
+import { ImeGuard } from '../../../../shared/directives/ime-guard';
 import { StatusDot } from '../../../../shared/directives/status-dot';
 import {
   PasskeyOutputDto,
@@ -74,7 +76,7 @@ type PasskeyUnavailableReason = 'notConfigured' | 'unsupported' | 'insecureConte
 @Component({
   selector: 'app-two-factor-passkey-settings',
   // prettier-ignore
-  imports: [
+  imports: [ImeGuard,
     AppDate,
     FormField,
     NgIcon,
@@ -133,13 +135,16 @@ export class TwoFactorPasskeySettings {
   protected readonly loadFailed = signal(false);
   protected readonly busy = signal(false);
   /** 有操作在途（改名、删除、设为默认、重新生成，或添加）：其余操作按钮不可用。 */
-  protected readonly working = computed(() => this.busy() || this.registration.adding());
+  protected readonly working = computed(
+    () => this.busy() || this.registration.adding() || this.renameForm().submitting(),
+  );
   /** 正在删除的通行密钥 Id：只在那一行显示转圈。 */
   protected readonly removingId = signal<string | null>(null);
   /** 刚发下的恢复码（第一个独立因子，或重新生成）：一次性展示。 */
   protected readonly codes = signal<string[]>([]);
 
   protected readonly renamingId = signal<string | null>(null);
+  private readonly submitForm = injectFormSubmission();
   private readonly renameModel = signal({ name: '' });
   protected readonly renameForm = form(this.renameModel, (path) => {
     required(path.name);
@@ -205,23 +210,20 @@ export class TwoFactorPasskeySettings {
     this.renamingId.set(null);
   }
 
-  protected saveRename(passkey: PasskeyOutputDto): void {
-    const name = this.renameModel().name.trim();
-    if (this.working()) {
-      return;
-    }
-    if (this.renameForm().invalid() || !name) {
-      this.renameForm().markAsTouched();
-      return;
-    }
-    if (name === passkey.name) {
-      this.renamingId.set(null);
-      return;
-    }
-    this.busy.set(true);
-    this.accountService.renamePasskey(passkey.id, name).subscribe({
-      next: (renamed) => {
-        this.busy.set(false);
+  protected async saveRename(passkey: PasskeyOutputDto): Promise<void> {
+    if (this.working()) return;
+    this.renameModel.update((value) => ({ name: value.name.trim() }));
+    await this.submitForm(
+      this.renameForm,
+      'passkey-rename-form',
+      async () => {
+        const name = this.renameModel().name;
+        if (name === passkey.name) {
+          this.renamingId.set(null);
+          return;
+        }
+        const renamed = await firstValueFrom(this.accountService.renamePasskey(passkey.id, name));
+
         this.renamingId.set(null);
         this.status.update((status) =>
           status
@@ -233,11 +235,8 @@ export class TwoFactorPasskeySettings {
         );
         toast.success(this.text('account.passkeys.renamedToast'));
       },
-      error: (error) => {
-        this.busy.set(false);
-        this.showError(error);
-      },
-    });
+      (_message, error) => this.showError(error),
+    );
   }
 
   /** 删除前先确认；会话不够新时服务端要求确认身份，凭证随请求体出示。 */

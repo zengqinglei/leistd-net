@@ -1,4 +1,5 @@
 import {
+  computed,
   ChangeDetectionStrategy,
   Component,
   OnInit,
@@ -38,10 +39,14 @@ import { lastValueFrom } from 'rxjs';
 import { PasswordLengthMeter } from '../../../../core/components/password-length-meter/password-length-meter';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../../../../core/validation/password-rule';
+//#if (Email)
+import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
+//#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -60,6 +65,9 @@ import { AuthShell } from '../auth-shell/auth-shell';
   standalone: true,
   imports: [
     FormField,
+    //#if (Email)
+    OtpCodeInput,
+    //#endif
     RouterModule,
     NgIcon,
     HlmButton,
@@ -89,6 +97,7 @@ import { AuthShell } from '../auth-shell/auth-shell';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Register implements OnInit {
+  private readonly submitForm = injectFormSubmission();
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -101,20 +110,19 @@ export class Register implements OnInit {
   // returnUrl：注册成功后跳转 login 时传递
   returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
-  private _isLoading = signal(false);
-  public readonly isLoading = this._isLoading.asReadonly();
+  public readonly isLoading = computed(() => this.registerForm().submitting());
 
   protected readonly showPassword = signal(false);
 
   /** 当前租户的注册摘要（登录入口选定的租户）；关闭自助注册时不给表单，只给说明。 */
   private readonly securityConfigService = inject(SecurityConfigService);
   protected readonly registrationOpen = this.securityConfigService.registrationOpen;
-//#if (Email)
+  //#if (Email)
   protected readonly securityConfig = this.securityConfigService.config;
-//#endif
+  //#endif
   private readonly captcha = viewChild.required(CaptchaImage);
 
-//#if (Email)
+  //#if (Email)
   readonly countdown = resendCountdown();
   private readonly emailVerificationChallenge = signal<{
     challengeId: string;
@@ -124,14 +132,14 @@ export class Register implements OnInit {
   private _isSendingEmailCode = signal(false);
   public readonly isSendingEmailCode = this._isSendingEmailCode.asReadonly();
 
-//#endif
+  //#endif
   private readonly model = signal({
     email: '',
     username: '',
     captchaCode: '',
-//#if (Email)
+    //#if (Email)
     emailVerificationCode: '',
-//#endif
+    //#endif
     password: '',
   });
 
@@ -144,11 +152,15 @@ export class Register implements OnInit {
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
     required(path.captchaCode);
     maxLength(path.captchaCode, 10);
-//#if (Email)
+    //#if (Email)
     required(path.emailVerificationCode, {
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
-//#endif
+    pattern(path.emailVerificationCode, /^\d{6}$/, {
+      when: () => this.securityConfig()?.enableEmailVerification === true,
+      error: { kind: 'otpCode' },
+    });
+    //#endif
     required(path.password);
     minLength(path.password, PASSWORD_MIN_LENGTH);
     maxLength(path.password, PASSWORD_MAX_LENGTH);
@@ -163,18 +175,18 @@ export class Register implements OnInit {
     // 从邮箱前缀自动推导 username，用户手动改过 username 后停止推导。
     effect(() => {
       const email = this.model().email;
-//#if (Email)
+      //#if (Email)
       const challenge = this.emailVerificationChallenge();
-//#endif
+      //#endif
       untracked(() => {
-//#if (Email)
+        //#if (Email)
         if (challenge && challenge.email !== this.normalizeEmail(email)) {
           this.emailVerificationChallenge.set(null);
           this.model.update((m) => ({ ...m, emailVerificationCode: '' }));
           this.countdown.stop();
         }
 
-//#endif
+        //#endif
         const currentUsername = this.model().username;
 
         // 用户手动改动了 username（当前值既非空也不等于我们上次自动写入的值）
@@ -202,6 +214,8 @@ export class Register implements OnInit {
   //#if (Email)
 
   async sendEmailCode() {
+    if (this.isSendingEmailCode() || this.countdown.remaining() > 0 || this.isLoading()) return;
+    this.model.update((value) => ({ ...value, email: value.email.trim() }));
     const { email, captchaCode } = this.model();
     const captchaToken = this.captcha().token();
 
@@ -236,6 +250,8 @@ export class Register implements OnInit {
           captchaToken,
         }),
       );
+      // 新挑战不能沿用上一轮输入和服务端字段错误。
+      this.registerForm.emailVerificationCode().reset('');
       this.emailVerificationChallenge.set({
         challengeId: challenge.challengeId,
         email: this.normalizeEmail(email),
@@ -259,77 +275,97 @@ export class Register implements OnInit {
   //#endif
 
   async onSubmit() {
-    if (this.registerForm().invalid()) {
-      this.registerForm().markAsTouched();
-      return;
-    }
-
-    const formValue = this.model();
+    this.model.update((value) => ({
+      ...value,
+      email: value.email.trim(),
+      username: value.username.trim(),
+    }));
     //#if (Email)
-
-    const emailVerificationEnabled = this.securityConfig()?.enableEmailVerification === true;
-    const challenge = this.emailVerificationChallenge();
-    if (
-      emailVerificationEnabled &&
-      (!challenge ||
-        challenge.email !== this.normalizeEmail(formValue.email) ||
-        challenge.expiresAt <= Date.now())
-    ) {
-      this.registerForm.emailVerificationCode().markAsTouched();
-      return;
-    }
+    const aliases = { 'emailVerification.code': this.registerForm.emailVerificationCode };
+    //#else
+    const aliases = {};
     //#endif
-    this._isLoading.set(true);
-    try {
-      const captchaToken = this.captcha().token();
+    await this.submitForm(
+      this.registerForm,
+      'registerForm-form',
+      async () => {
+        const formValue = this.model();
+        //#if (Email)
 
-      if (!captchaToken) {
-        //#if (IncludeLocalization)
-        toast.error(this.transloco.translate('common.error'), {
-          description: this.transloco.translate('account.register.captchaTokenMissing'),
-        });
-        //#else
-        toast.error('Error', { description: 'Please refresh to get the captcha' });
+        const emailVerificationEnabled = this.securityConfig()?.enableEmailVerification === true;
+        const challenge = this.emailVerificationChallenge();
+        if (
+          emailVerificationEnabled &&
+          (!challenge ||
+            challenge.email !== this.normalizeEmail(formValue.email) ||
+            challenge.expiresAt <= Date.now())
+        ) {
+          return {
+            kind: 'server',
+            fieldTree: this.registerForm.emailVerificationCode,
+            //#if (IncludeLocalization)
+            message: this.transloco.translate('account.register.challengeExpired'),
+            //#else
+            message: 'Request a new email code before registering.',
+            //#endif
+          };
+        }
         //#endif
-        return;
-      }
 
-      await lastValueFrom(
-        this.accountService.register({
-          email: formValue.email,
-          username: formValue.username,
-          password: formValue.password,
-          captchaCode: formValue.captchaCode,
-          captchaToken: captchaToken,
-//#if (Email)
-          emailVerification: emailVerificationEnabled
-            ? {
-                challengeId: challenge!.challengeId,
-                code: formValue.emailVerificationCode,
-              }
-            : undefined,
-//#endif
-        }),
-      );
+        try {
+          const captchaToken = this.captcha().token();
 
-      //#if (IncludeLocalization)
-      toast.success(this.transloco.translate('account.register.registerSuccess'), {
-        description: this.transloco.translate('account.register.registerSuccessDetail'),
-      });
-      //#else
-      toast.success('Account created', {
-        description: 'Account created successfully, please sign in',
-      });
-      //#endif
-      this.router.navigate(['/auth/login'], {
-        queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined,
-      });
-    } catch (error) {
-      this.showRequestError(error);
-      void this.captcha().reload();
-    } finally {
-      this._isLoading.set(false);
-    }
+          if (!captchaToken) {
+            //#if (IncludeLocalization)
+            toast.error(this.transloco.translate('common.error'), {
+              description: this.transloco.translate('account.register.captchaTokenMissing'),
+            });
+            //#else
+            toast.error('Error', { description: 'Please refresh to get the captcha' });
+            //#endif
+            return;
+          }
+
+          await lastValueFrom(
+            this.accountService.register({
+              email: formValue.email,
+              username: formValue.username,
+              password: formValue.password,
+              captchaCode: formValue.captchaCode,
+              captchaToken: captchaToken,
+              //#if (Email)
+              emailVerification: emailVerificationEnabled
+                ? {
+                    challengeId: challenge!.challengeId,
+                    code: formValue.emailVerificationCode,
+                  }
+                : undefined,
+              //#endif
+            }),
+          );
+
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.register.registerSuccess'), {
+            description: this.transloco.translate('account.register.registerSuccessDetail'),
+          });
+          //#else
+          toast.success('Account created', {
+            description: 'Account created successfully, please sign in',
+          });
+          //#endif
+          this.router.navigate(['/auth/login'], {
+            queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined,
+          });
+        } catch (error) {
+          void this.captcha().reload();
+          throw error;
+        }
+
+        return undefined;
+      },
+      undefined,
+      aliases,
+    );
   }
 
   private showRequestError(error: unknown): void {
@@ -352,6 +388,7 @@ export class Register implements OnInit {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  'account.register.challengeExpired': 'Request a new email code before registering.',
   'account.register.title': 'Create your account',
   'account.register.email': 'Email',
   'account.register.emailPlaceholder': 'Enter your email address',

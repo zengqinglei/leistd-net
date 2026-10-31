@@ -8,6 +8,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { FormField, form, required, pattern } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -18,7 +19,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { toDataURL } from 'qrcode';
-import { finalize } from 'rxjs/operators';
+import { tap, firstValueFrom } from 'rxjs';
 
 import {
   ReauthenticateDialog,
@@ -30,6 +31,7 @@ import {
   ApplicationHttpError,
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
 import { injectCopyToClipboard } from '../../../../shared/utils/clipboard';
 //#if (!IncludeLocalization)
@@ -49,7 +51,7 @@ import { AccountService } from '../../services/account-service';
 @Component({
   selector: 'app-two-factor-setup',
   // prettier-ignore
-  imports: [
+  imports: [FormField,
     NgIcon,
     HlmButton,
     ...HlmFieldImports,
@@ -92,8 +94,14 @@ export class TwoFactorSetup implements OnInit {
   );
   protected readonly secret = signal<string | null>(null);
   protected readonly qrDataUrl = signal<string | null>(null);
-  protected readonly code = signal('');
-  protected readonly submitting = signal(false);
+  private readonly submitForm = injectFormSubmission();
+  private readonly verificationModel = signal({ code: '' });
+  readonly verificationForm = form(this.verificationModel, (path) => {
+    required(path.code);
+    pattern(path.code, /^\d{6}$/, { error: { kind: 'otpCode' } });
+  });
+  protected readonly code = this.verificationForm.code().value;
+  protected readonly submitting = computed(() => this.verificationForm().submitting());
   /** 会话不够新：确认身份后带上凭证重新开始。 */
   protected readonly reauth = injectReauthentication();
   protected readonly copied = this.clipboard.copied;
@@ -200,29 +208,30 @@ export class TwoFactorSetup implements OnInit {
     }
   }
 
-  protected submit(): void {
-    const setupId = this.setupId;
-    if (!this.canSubmit() || setupId === null) {
-      return;
-    }
+  protected async submit(): Promise<void> {
+    await this.submitForm(this.verificationForm, 'two-factor-setup-form', async () => {
+      const setupId = this.setupId;
+      if (setupId === null) {
+        return;
+      }
 
-    this.submitting.set(true);
-    this.accountService
-      .enableTwoFactor(setupId, this.code().replace(/\s/g, ''))
-      .pipe(finalize(() => this.submitting.set(false)))
-      .subscribe({
-        next: (result) => this.enabled.emit(result.recoveryCodes),
-        error: (error: unknown) => {
-          if (errorCode(error) === API_ERROR_CODES.twoFactorSetupExpired) {
-            // 这一份密钥再也确认不了：不留在页面上，请本人重新开始
-            this.generation++;
-            this.clearSetup();
-            this.stage.set('expired');
-            return;
-          }
-          this.showError(error);
-        },
-      });
+      try {
+        await firstValueFrom(
+          this.accountService
+            .enableTwoFactor(setupId, this.code().replace(/\s/g, ''))
+            .pipe(tap({ next: (result) => this.enabled.emit(result.recoveryCodes) })),
+        );
+      } catch (error) {
+        if (errorCode(error) === API_ERROR_CODES.twoFactorSetupExpired) {
+          // 这一份密钥再也确认不了：不留在页面上，请本人重新开始
+          this.generation++;
+          this.clearSetup();
+          this.stage.set('expired');
+          return;
+        }
+        throw error;
+      }
+    });
   }
 
   /** 在浏览器里生成二维码，密钥不经过第三方服务。 */

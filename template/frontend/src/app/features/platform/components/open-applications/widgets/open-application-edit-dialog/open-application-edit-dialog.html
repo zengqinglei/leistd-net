@@ -4,17 +4,22 @@
 <ng-container>
 <!--#endif-->
   <hlm-dialog
+    [autoFocus]="loading() ? 'first-heading' : 'first-tabbable'"
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
     [state]="visible() ? 'open' : 'closed'"
     (stateChanged)="onDialogStateChange($event)"
-    [closeOnOutsidePointerEvents]="!saving()"
   >
     <hlm-dialog-content
+      appImeGuard
       *hlmDialogPortal
-      class="flex max-h-[calc(100dvh-2rem)] min-w-[min(64rem,calc(100vw_-_2rem))] flex-col overflow-hidden"
-      [showCloseButton]="!saving()"
+      [appDialogFocus]="loading()"
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="h-[min(40rem,calc(100dvh-2rem))] flex max-h-[calc(100dvh-2rem)] min-w-[min(64rem,calc(100vw_-_2rem))] flex-col overflow-hidden"
     >
       <hlm-dialog-header>
-        <h2 hlmDialogTitle>
+        <h2 hlmDialogTitle tabindex="-1">
           {{ isEditMode() ? t('openApp.dialog.editHeader') : t('openApp.dialog.createHeader') }}
         </h2>
         <p hlmDialogDescription>{{ t('openApp.dialog.description') }}</p>
@@ -22,11 +27,20 @@
 
       @if (loading()) {
         <app-dialog-loading [text]="t('openApp.dialog.loading')" />
+      } @else if (loadError(); as error) {
+        <div role="alert" data-dialog-body>
+          <p>{{ error }}</p>
+          <button hlmBtn variant="outline" type="button" (click)="retry.emit()">
+            {{ t('common.retry') }}
+          </button>
+        </div>
       } @else {
         <form
           novalidate
           (submit)="$event.preventDefault(); save()"
           class="flex min-h-0 flex-1 flex-col gap-4"
+          id="applicationForm-form"
+          novalidate
         >
           <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
             @if (!isEditMode()) {
@@ -58,6 +72,7 @@
                   t('openApp.field.displayName')
                 }}</label>
                 <input
+                  autocomplete="off"
                   hlmInput
                   id="application-display-name"
                   class="w-full"
@@ -70,6 +85,9 @@
                   t('openApp.field.clientId')
                 }}</label>
                 <input
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
                   hlmInput
                   id="application-client-id"
                   class="w-full font-mono"
@@ -78,7 +96,7 @@
                 />
                 @for (error of applicationForm.clientId().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
               </div>
@@ -268,7 +286,7 @@
                 </hlm-select-multiple>
                 @for (error of applicationForm.requirements().errors(); track error.kind) {
                   <hlm-field-error [validator]="error.kind">{{
-                    t('validation.' + error.kind, error)
+                    error.message ?? t('validation.' + error.kind, error)
                   }}</hlm-field-error>
                 }
                 @if (
@@ -282,18 +300,47 @@
               </div>
 
               <div class="flex flex-col gap-2">
-                <div hlmField orientation="horizontal">
+                <div
+                  hlmField
+                  orientation="horizontal"
+                  [forceInvalid]="
+                    applicationForm.sessionBound().invalid() &&
+                    applicationForm.sessionBound().touched()
+                  "
+                >
                   <div hlmFieldContent>
                     <label hlmFieldLabel for="application-session-bound">{{
                       t('openApp.sessionBound.title')
                     }}</label>
-                    <p hlmFieldDescription id="application-session-bound-hint">
-                      {{ t('openApp.sessionBound.hint') }}
-                    </p>
+                    @if (
+                      !(
+                        applicationForm.sessionBound().invalid() &&
+                        applicationForm.sessionBound().touched()
+                      )
+                    ) {
+                      <p hlmFieldDescription id="application-session-bound-hint">
+                        {{ t('openApp.sessionBound.hint') }}
+                      </p>
+                    } @else {
+                      @for (error of applicationForm.sessionBound().errors(); track error.kind) {
+                        <hlm-field-error forceShow id="application-session-bound-error">{{
+                          error.message ?? t('validation.' + error.kind, error)
+                        }}</hlm-field-error>
+                      }
+                    }
                   </div>
                   <hlm-switch
                     inputId="application-session-bound"
-                    aria-describedby="application-session-bound-hint"
+                    [forceInvalid]="
+                      applicationForm.sessionBound().invalid() &&
+                      applicationForm.sessionBound().touched()
+                    "
+                    [aria-describedby]="
+                      applicationForm.sessionBound().invalid() &&
+                      applicationForm.sessionBound().touched()
+                        ? 'application-session-bound-error'
+                        : 'application-session-bound-hint'
+                    "
                     [checked]="formModel().sessionBound === true"
                     (checkedChange)="setSessionBound($event)"
                   />
@@ -307,11 +354,32 @@
             }
           </div>
 
+          @if (scopesError(); as error) {
+            <p role="alert">
+              {{ error }}
+              <button hlmBtn variant="outline" type="button" (click)="reloadScopes.emit()">
+                {{ t('common.retry') }}
+              </button>
+            </p>
+          }
+          @if (scopesLoading()) {
+            <hlm-spinner />
+          }
           <hlm-dialog-footer>
-            <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              [disabled]="saving()"
+              (click)="closeGuard.requestClose()"
+            >
               {{ t('common.cancel') }}
             </button>
-            <button hlmBtn type="submit" [disabled]="saving()">
+            <button
+              hlmBtn
+              type="submit"
+              [disabled]="saving() || scopesLoading() || !!scopesError()"
+            >
               @if (saving()) {
                 <hlm-spinner class="text-base" data-icon="inline-start" />
               }
@@ -320,6 +388,12 @@
           </hlm-dialog-footer>
         </form>
       }
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="applicationForm().dirty()"
+        [busy]="saving()"
+        (dismissed)="visible.set(false)"
+      />
     </hlm-dialog-content>
   </hlm-dialog>
 </ng-container>

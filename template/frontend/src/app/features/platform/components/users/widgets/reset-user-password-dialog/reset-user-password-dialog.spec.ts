@@ -1,6 +1,7 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { Observable, Subject, of } from 'rxjs';
 
 import { ResetUserPasswordDialog } from './reset-user-password-dialog';
 //#if (IncludeLocalization)
@@ -19,18 +20,17 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
  */
 @Component({
   imports: [ResetUserPasswordDialog],
-  template: `
-    <app-reset-user-password-dialog
-      [(visible)]="visible"
-      [(saving)]="saving"
-      (saved)="saved.push($event)"
-    />
-  `,
+  template: ` <app-reset-user-password-dialog [(visible)]="visible" [saveAction]="saveAction" /> `,
 })
 class HostComponent {
   readonly visible = signal(true);
   readonly saving = signal(false);
   readonly saved: ResetUserPasswordInputDto[] = [];
+  request: Observable<unknown> = of(undefined);
+  readonly saveAction = (dto: ResetUserPasswordInputDto) => {
+    this.saved.push(dto);
+    return this.request;
+  };
 }
 
 describe('ResetUserPasswordDialog', () => {
@@ -126,12 +126,13 @@ describe('ResetUserPasswordDialog', () => {
 
   it('blocks a second submit while the reset is in flight', async () => {
     await typePassword('Reset!Passw0rd');
-    host.saving.set(true);
+    host.request = new Subject<unknown>();
+    dialog().save();
     await fixture.whenStable();
 
     expect(submitButton().disabled).toBe(true);
     submitButton().click();
-    expect(host.saved).toEqual([]);
+    expect(host.saved).toHaveLength(1);
   });
 
   it('toggles the password visibility', async () => {

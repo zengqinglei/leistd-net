@@ -8,6 +8,8 @@ import {
   untracked,
 } from '@angular/core';
 import {
+  form as signalForm,
+  required as requireValue,
   form,
   required,
   email as emailValidator,
@@ -26,18 +28,21 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { firstValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
-import {
-  ReauthenticateDialog,
-  ReauthenticationProof,
-} from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog';
+import { ReauthenticateDialog } from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog';
 import { injectReauthentication } from '../../../../core/components/reauthenticate-dialog/reauthentication';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (Email)
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
 //#endif
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
+//#if (Email)
+import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
+//#endif
+import { ImeGuard } from '../../../../shared/directives/ime-guard';
 import {
   AvatarImageRejected,
   isAvatarImageUrl,
@@ -46,7 +51,6 @@ import {
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { UpdateCurrentUserInputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 //#if (Email)
 import { resendCountdown } from '../../utils/resend-countdown';
@@ -91,8 +95,11 @@ interface EmailChallenge {
   selector: 'app-profile-panel',
   standalone: true,
   // prettier-ignore
-  imports: [
+  imports: [ImeGuard,
     FormField,
+    //#if (Email)
+    OtpCodeInput,
+    //#endif
     NgIcon,
     HlmButton,
     HlmSpinner,
@@ -120,7 +127,8 @@ export class ProfilePanel {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  readonly saving = signal(false);
+  private readonly submitForm = injectFormSubmission();
+  readonly saving = computed(() => this.profileForm().submitting());
   /** 换邮箱而会话不够新时，请本人确认身份后重试保存。 */
   protected readonly reauth = injectReauthentication();
   readonly user = computed(() => this.authService.currentUser());
@@ -179,9 +187,14 @@ export class ProfilePanel {
   );
 
   readonly emailChallenge = signal<EmailChallenge | null>(null);
-  readonly emailCode = signal('');
+  private readonly emailCodeModel = signal({ code: '' });
+  readonly emailCodeForm = signalForm(this.emailCodeModel, (path) => {
+    requireValue(path.code);
+    pattern(path.code, /^\d{6}$/, { error: { kind: 'otpCode' } });
+  });
+  readonly emailCode = this.emailCodeForm.code().value;
   readonly sendingCode = signal(false);
-  readonly confirmingCode = signal(false);
+  readonly confirmingCode = computed(() => this.emailCodeForm().submitting());
   private readonly resendCountdown = resendCountdown();
   /** 距离可以重发还剩几秒；0 表示可以发。 */
   readonly resendSeconds = this.resendCountdown.remaining;
@@ -315,30 +328,27 @@ export class ProfilePanel {
       });
   }
 
-  confirmEmailCode(): void {
+  async confirmEmailCode(): Promise<void> {
+    this.emailCode.set(this.emailCode().trim());
     const challenge = this.emailChallenge();
-    const code = this.emailCode().trim();
-    if (!challenge || code.length === 0) {
-      return;
-    }
+    if (!challenge) return;
+    await this.submitForm(this.emailCodeForm, 'profileForm-form', async () => {
+      const user = await firstValueFrom(
+        this.accountService.confirmCurrentEmail({
+          challengeId: challenge.challengeId,
+          code: this.emailCode(),
+        }),
+      );
 
-    this.confirmingCode.set(true);
-    this.accountService
-      .confirmCurrentEmail({ challengeId: challenge.challengeId, code })
-      .pipe(finalize(() => this.confirmingCode.set(false)))
-      .subscribe({
-        next: (user) => {
-          this.authService.setCurrentUser(user);
-          this.emailChallenge.set(null);
-          this.emailCode.set('');
-          //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('account.profile.emailVerifiedSuccess'));
-          //#else
-          toast.success(this.t('account.profile.emailVerifiedSuccess'));
-          //#endif
-        },
-        error: (error) => this.showRequestError(error),
-      });
+      this.authService.setCurrentUser(user);
+      this.emailChallenge.set(null);
+      this.emailCode.set('');
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('account.profile.emailVerifiedSuccess'));
+      //#else
+      toast.success(this.t('account.profile.emailVerifiedSuccess'));
+      //#endif
+    });
   }
 
   onEmailCodeInput(event: Event): void {
@@ -361,53 +371,50 @@ export class ProfilePanel {
    * 口令或验证码重试**这一次提交时的资料**：等确认期间当前用户可能被刷新、表单可能被重填，重试不再读表单。
    * 凭证被拒时留在对话框里就地说明，取消则不保存。
    */
-  onSubmit(): void {
-    if (this.profileForm().invalid()) {
-      this.profileForm().markAsTouched();
-      return;
-    }
+  async onSubmit(): Promise<void> {
+    this.formModel.update((value) => ({
+      ...value,
+      username: value.username.trim(),
+      email: value.email.trim(),
+      displayName: value.displayName.trim(),
+      phoneNumber: value.phoneNumber.trim(),
+    }));
+    await this.submitForm(this.profileForm, 'profileForm-form', async () => {
+      const { username, email, displayName, phoneNumber } = this.formModel();
+      // 捕获本次资料，确认身份期间刷新用户不能改写待重试的载荷。
+      const profile = {
+        username,
+        email,
+        displayName: displayName || undefined,
+        phoneNumber: phoneNumber || undefined,
+      };
+      const user = await firstValueFrom(
+        this.reauth.execute((proof) =>
+          this.accountService.updateCurrentUser({
+            ...profile,
+            currentPassword: proof?.password,
+            twoFactorCode: proof?.twoFactorCode,
+            passkey: proof?.passkey,
+          }),
+        ),
+        { defaultValue: undefined },
+      );
+      if (!user) return;
 
-    const { username, email, displayName, phoneNumber } = this.formModel();
-    this.save({
-      username: username.trim(),
-      email: email.trim(),
-      displayName: displayName.trim() || undefined,
-      phoneNumber: phoneNumber.trim() || undefined,
-    });
-  }
-
-  private save(profile: UpdateCurrentUserInputDto, proof?: ReauthenticationProof): void {
-    this.saving.set(true);
-    this.accountService
-      .updateCurrentUser({
-        ...profile,
-        currentPassword: proof?.password,
-        twoFactorCode: proof?.twoFactorCode,
-        passkey: proof?.passkey,
-      })
-      .pipe(finalize(() => this.saving.set(false)))
-      .subscribe({
-        next: (user) => {
-          this.reauth.complete();
-          this.authService.setCurrentUser(user);
-          // 服务端规整后的资料可能与写回前相同（只改了首尾空白），不会触发重填，这里显式按它重填
-          this.reset();
-          //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('common.success'), {
-            description: this.transloco.translate('account.profile.updateSuccess'),
-          });
-          //#else
-          toast.success(this.t('common.success'), {
-            description: this.t('account.profile.updateSuccess'),
-          });
-          //#endif
-        },
-        error: (error) => {
-          if (!this.reauth.handleError(error, proof, (next) => this.save(profile, next))) {
-            this.showRequestError(error);
-          }
-        },
+      this.reauth.complete();
+      this.authService.setCurrentUser(user);
+      // 服务端规整后的资料可能与写回前相同（只改了首尾空白），不会触发重填，这里显式按它重填
+      this.reset();
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('account.profile.updateSuccess'),
       });
+      //#else
+      toast.success(this.t('common.success'), {
+        description: this.t('account.profile.updateSuccess'),
+      });
+      //#endif
+    });
   }
 
   private showRequestError(error: unknown): void {

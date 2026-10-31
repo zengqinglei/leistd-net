@@ -15,6 +15,10 @@
               <ng-icon name="lucideSearch" />
             </hlm-input-group-addon>
             <input
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [attr.aria-label]="t('tenants.searchPlaceholder')"
               hlmInputGroupInput
               type="text"
               [placeholder]="t('tenants.searchPlaceholder')"
@@ -83,6 +87,6 @@
   <app-tenant-edit-dialog
     [(open)]="editDialogOpen"
     [tenant]="editingTenant()"
-    (save)="onSave($event)"
+    [saveAction]="onSave"
   />
 </ng-container>

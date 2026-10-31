@@ -1,6 +1,7 @@
 //#if (LocalIdentity)
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Observable, of } from 'rxjs';
 
 import { OpenApplicationEditDialog } from './open-application-edit-dialog';
 //#if (IncludeLocalization)
@@ -22,7 +23,7 @@ import {
     <app-open-application-edit-dialog
       [(visible)]="visible"
       [application]="application()"
-      (saved)="saved.push($event)"
+      [saveAction]="saveAction"
     />
   `,
 })
@@ -30,6 +31,11 @@ class HostComponent {
   readonly visible = signal(true);
   readonly application = signal<OpenApplicationOutputDto | null>(null);
   readonly saved: (CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto)[] = [];
+  request: Observable<unknown> = of(undefined);
+  readonly saveAction = (dto: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) => {
+    this.saved.push(dto);
+    return this.request;
+  };
 }
 
 function registered(sessionBound: boolean | null): OpenApplicationOutputDto {

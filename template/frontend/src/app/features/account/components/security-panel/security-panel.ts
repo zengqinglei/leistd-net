@@ -29,18 +29,21 @@ import {
   HlmInputGroupButton,
 } from '@spartan-ng/helm/input-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { finalize } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
+//#if (ExternalLogin)
+import { map } from 'rxjs/operators';
+//#endif
 
 import { PasswordLengthMeter } from '../../../../core/components/password-length-meter/password-length-meter';
 //#if (ExternalLogin)
-import {
-  ReauthenticateDialog,
-  ReauthenticationProof,
-} from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog';
+import { ReauthenticateDialog } from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog';
+//#endif
+//#if (ExternalLogin)
 import { injectReauthentication } from '../../../../core/components/reauthenticate-dialog/reauthentication';
 //#endif
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -131,7 +134,12 @@ export class SecurityPanel {
     () => this.authService.currentUser()?.hasPassword ?? true,
   );
 
-  readonly saving = signal(false);
+  private readonly submitForm = injectFormSubmission();
+  //#if (ExternalLogin)
+  readonly saving = computed(() => this.changeForm().submitting() || this.setForm().submitting());
+  //#else
+  readonly saving = computed(() => this.changeForm().submitting());
+  //#endif
 
   protected readonly showCurrentPassword = signal(false);
 
@@ -190,50 +198,42 @@ export class SecurityPanel {
    * 设置第一个口令。先不带凭证提交，服务端要求确认身份时才弹出对话框；刚完成外部登录的会话可以直接设置。
    * 成功后刷新当前用户（区块换回"修改密码"）和外部绑定列表（有了口令，最后一个绑定也能解绑了）。
    */
-  onSetPasswordSubmit(proof?: ReauthenticationProof): void {
-    if (this.setForm().invalid()) {
-      this.setForm().markAsTouched();
-      return;
-    }
-
-    this.saving.set(true);
-    const { newPassword, confirmPassword } = this.setModel();
-    this.accountService
-      .setPassword({
-        newPassword,
-        confirmPassword,
-        twoFactorCode: proof?.twoFactorCode,
-        passkey: proof?.passkey,
-      })
-      .pipe(finalize(() => this.saving.set(false)))
-      .subscribe({
-        next: () => {
-          this.reauth.complete();
-          this.setModel.set({ newPassword: '', confirmPassword: '' });
-          this.setForm().reset();
-          this.showNewPassword.set(false);
-          this.showConfirmPassword.set(false);
-          this.authService.loadUser().subscribe({ error: () => undefined });
-          this.externalLogins()?.reload();
-          // 与改口令一致，服务端已让其他设备退出
-          this.loginDevices()?.reload();
-          //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('common.success'), {
-            description: this.transloco.translate('account.setPassword.success'),
-          });
-          //#else
-          toast.success('Success', {
-            description: 'Password set. You can now also sign in with your email and password.',
-          });
-          //#endif
-        },
-        error: (error) => {
-          if (this.reauth.handleError(error, proof, (next) => this.onSetPasswordSubmit(next))) {
-            return;
-          }
-          this.showRequestError(error);
-        },
+  async onSetPasswordSubmit(): Promise<void> {
+    await this.submitForm(this.setForm, 'setForm-form', async () => {
+      const { newPassword, confirmPassword } = this.setModel();
+      const result = await firstValueFrom(
+        this.reauth.execute((proof) =>
+          this.accountService
+            .setPassword({
+              newPassword,
+              confirmPassword,
+              twoFactorCode: proof?.twoFactorCode,
+              passkey: proof?.passkey,
+            })
+            .pipe(map(() => true)),
+        ),
+        { defaultValue: undefined },
+      );
+      if (result === undefined) return;
+      this.reauth.complete();
+      this.setModel.set({ newPassword: '', confirmPassword: '' });
+      this.setForm().reset();
+      this.showNewPassword.set(false);
+      this.showConfirmPassword.set(false);
+      this.authService.loadUser().subscribe({ error: () => undefined });
+      this.externalLogins()?.reload();
+      // 与改口令一致，服务端已让其他设备退出
+      this.loginDevices()?.reload();
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('account.setPassword.success'),
       });
+      //#else
+      toast.success('Success', {
+        description: 'Password set. You can now also sign in with your email and password.',
+      });
+      //#endif
+    });
   }
 
   //#endif
@@ -246,36 +246,25 @@ export class SecurityPanel {
     this.showConfirmPassword.set(false);
   }
 
-  onSubmit(): void {
-    if (this.changeForm().invalid()) {
-      this.changeForm().markAsTouched();
-      return;
-    }
-
-    this.saving.set(true);
-
-    const { currentPassword, newPassword, confirmPassword } = this.formModel();
-
-    this.accountService
-      .changePassword({ currentPassword, newPassword, confirmPassword })
-      .pipe(finalize(() => this.saving.set(false)))
-      .subscribe({
-        next: () => {
-          //#if (IncludeLocalization)
-          toast.success(this.transloco.translate('common.success'), {
-            description: this.transloco.translate('account.changePassword.updateSuccess'),
-          });
-          //#else
-          toast.success('Success', {
-            description: 'Password updated. Other devices have been signed out.',
-          });
-          //#endif
-          this.resetForm();
-          // 服务端已让其他设备退出，列表跟着刷新
-          this.loginDevices()?.reload();
-        },
-        error: (error) => this.showRequestError(error),
+  async onSubmit(): Promise<void> {
+    await this.submitForm(this.changeForm, 'changeForm-form', async () => {
+      const { currentPassword, newPassword, confirmPassword } = this.formModel();
+      await firstValueFrom(
+        this.accountService.changePassword({ currentPassword, newPassword, confirmPassword }),
+      );
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('account.changePassword.updateSuccess'),
       });
+      //#else
+      toast.success('Success', {
+        description: 'Password updated. Other devices have been signed out.',
+      });
+      //#endif
+      this.resetForm();
+      // 服务端已让其他设备退出，列表跟着刷新
+      this.loginDevices()?.reload();
+    });
   }
 
   private showRequestError(error: unknown): void {

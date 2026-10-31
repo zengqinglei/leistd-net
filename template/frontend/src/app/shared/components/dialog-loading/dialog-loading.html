@@ -3,11 +3,13 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <div class="flex min-h-64 flex-col items-center justify-center gap-4 py-10 text-center">
-    <!-- 状态由 spinner（role="status"）播报，可见文字不再重复读一遍 -->
-    <hlm-spinner class="text-3xl" [aria-label]="text() ?? t('app.startup.loading')" />
-    <div class="text-sm text-muted-foreground" aria-hidden="true">
-      {{ text() ?? t('app.startup.loading') }}
-    </div>
+  <div class="flex min-h-0 flex-1 flex-col gap-6 py-2" role="status" aria-live="polite">
+    <span class="sr-only">{{ text() || t('app.startup.loading') }}</span>
+    @for (row of [1, 2, 3, 4, 5]; track row) {
+      <div class="flex flex-col gap-3">
+        <div hlmSkeleton class="h-4 w-24"></div>
+        <div hlmSkeleton class="h-9 w-full"></div>
+      </div>
+    }
   </div>
 </ng-container>

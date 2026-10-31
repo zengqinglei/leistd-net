@@ -14,16 +14,17 @@
       />
     } @else {
       <h1 class="text-2xl font-semibold tracking-tight">{{ t('account.login.title') }}</h1>
-<!--#if (IncludeMultiTenancy)-->
+      <!--#if (IncludeMultiTenancy)-->
       <!--
-        租户在最前：它决定凭据在哪里校验，也决定下面的注册、外部登录与找回入口。
-        默认收成一行（当前租户 + 切换），点「切换租户」才展开输入框；留空即宿主
-      -->
+      租户在最前：它决定凭据在哪里校验，也决定下面的注册、外部登录与找回入口。
+      默认收成一行（当前租户 + 切换），点「切换租户」才展开输入框；留空即宿主
+    -->
       <div hlmField>
         @if (tenantEditing()) {
           <label hlmFieldLabel for="tenantName">{{ t('account.login.tenant') }}</label>
           <hlm-input-group>
             <input
+              appImeGuard
               hlmInputGroupInput
               id="tenantName"
               autocomplete="off"
@@ -75,13 +76,13 @@
         }
         @if (tenantError(); as error) {
           <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
-           没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
+         没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
           <hlm-field-error forceShow>{{ t(error) }}</hlm-field-error>
         }
         @if (hostProbe() === 'failed') {
           <!-- 按钮套一层 div：hlm-field 的容器给直接子元素铺了整行宽的规则，
-           那条规则的优先级高于按钮自己的 w-fit，套一层让 div 去铺满，
-           按钮就按内容宽度收住了。 -->
+         那条规则的优先级高于按钮自己的 w-fit，套一层让 div 去铺满，
+         按钮就按内容宽度收住了。 -->
           <div>
             <button
               hlmBtn
@@ -96,8 +97,9 @@
           </div>
         }
       </div>
-<!--#endif-->
+      <!--#endif-->
       <form
+        id="loginForm-form"
         novalidate
         class="flex flex-col gap-5"
         (submit)="$event.preventDefault(); onSubmit()"
@@ -108,6 +110,8 @@
             t('account.login.usernameOrEmail')
           }}</label>
           <input
+            autocapitalize="off"
+            spellcheck="false"
             hlmInput
             id="usernameOrEmail"
             autocomplete="username webauthn"
@@ -117,7 +121,7 @@
           />
           @for (error of loginForm.usernameOrEmail().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
         </div>
@@ -149,7 +153,7 @@
           </hlm-input-group>
           @for (error of loginForm.password().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{
-              t('validation.' + error.kind, error)
+              error.message ?? t('validation.' + error.kind, error)
             }}</hlm-field-error>
           }
           <!-- 找回入口紧跟口令框：忘记的正是它。套一层 div 的原因见租户区的重试按钮 -->
@@ -241,10 +245,10 @@
       />
       <!--#endif-->
       <!--
-        注册是次要入口，排在登录与外部登录之后，居中一行（与 Spartan 登录 block 一致）。
-        租户关闭自助注册时不给入口；外部登录首次登录仍可建号。
-        提示语与链接之间不留空白：中文全角问号后不加空格，英文的空格写在译文里
-      -->
+      注册是次要入口，排在登录与外部登录之后，居中一行（与 Spartan 登录 block 一致）。
+      租户关闭自助注册时不给入口；外部登录首次登录仍可建号。
+      提示语与链接之间不留空白：中文全角问号后不加空格，英文的空格写在译文里
+    -->
       @if (registrationOpen()) {
         <p class="text-muted-foreground text-center text-sm" data-testid="register-prompt">
           {{ t('account.login.noAccount')

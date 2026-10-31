@@ -15,7 +15,7 @@
         [attr.data-group]="group.key"
       >
         <!-- 分区不套卡片。一页里有多个分组时才出分组标题（标题下一条实线）：单组面板的标题已经由外壳给出，再写一遍是重复。
-             整组都是进程级设置时，生效范围与延迟由外壳在面板标题旁说明；混有其他层级的分组在行内标注。 -->
+           整组都是进程级设置时，生效范围与延迟由外壳在面板标题旁说明；混有其他层级的分组在行内标注。 -->
         @if (groups().length > 1) {
           <div class="border-b pb-3">
             <h4 class="text-sm leading-none font-semibold">{{ group.label }}</h4>
@@ -65,7 +65,7 @@
   </div>
 
   <!-- 设置行列表：单列，行间只留白不画线。开关与输入框混排时两列网格的格子高度不一、对不齐；
-       单列左右排让每行的标签列与控件列各自对齐（Spartan Field 的设置行写法）。 -->
+     单列左右排让每行的标签列与控件列各自对齐（Spartan Field 的设置行写法）。 -->
   <ng-template #rowList let-rows>
     <div hlmFieldGroup class="gap-5">
       @for (setting of rows; track setting.name) {
@@ -75,8 +75,8 @@
   </ng-template>
 
   <!-- 一行设置的渲染：普通分组与外部登录的提供方卡片共用，控件、校验与即改即存只有这一份。
-       左边是标签（其后接生效范围与写入状态）与说明，右边是控件与恢复按钮。输入类控件在列表够宽时固定宽度、右端对齐，
-       不够宽时落到标签下方；开关没有宽度，始终左右排。每项只有一个 Field，开关经 aria-describedby 显式关联描述。 -->
+     左边是标签（其后接生效范围与写入状态）与说明，右边是控件与恢复按钮。输入类控件在列表够宽时固定宽度、右端对齐，
+     不够宽时落到标签下方；开关没有宽度，始终左右排。每项只有一个 Field，开关经 aria-describedby 显式关联描述。 -->
   <ng-template #settingRow let-setting>
     <!-- 语言与时区的继承来源：占位只写生效值，来源写在标签后面（见 inheritedSourceOf） -->
     @let sourceLabels =
@@ -85,14 +85,17 @@
         followOrganization: t('settings.followOrganization'),
         deploymentDefault: t('settings.deploymentDefault'),
       };
-    <hlm-field [orientation]="isBoolean(setting) ? 'horizontal' : 'responsive'">
+    <hlm-field
+      [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
+      [orientation]="isBoolean(setting) ? 'horizontal' : 'responsive'"
+    >
       <!-- min-w-0 + wrap-anywhere：内容列可收缩，长标签与长错误（设置标识、地址这类连续文本）在列内折行，
-           不把右侧控件挤出面板 -->
+         不把右侧控件挤出面板 -->
       <div hlmFieldContent class="min-w-0 wrap-anywhere">
         <!-- 标签行：生效范围与写入状态接在标签后面，不另占一行，状态进出不改变行高（长错误照常折行）；
-             左右排时标签行至少与右侧控件同高（开关行按恢复按钮、输入行按输入框，触屏下二者都是 44px）并垂直居中：
-             单行标签与控件在一条线上；标签折行时控件按整个内容块居中。长错误在行内任意处折行。
-             描述常驻在 DOM 里：开关经 aria-describedby 指向它，输入类控件由 Field 自动关联。 -->
+           左右排时标签行至少与右侧控件同高（开关行按恢复按钮、输入行按输入框，触屏下二者都是 44px）并垂直居中：
+           单行标签与控件在一条线上；标签折行时控件按整个内容块居中。长错误在行内任意处折行。
+           说明与错误互斥：开关经稳定 id 关联，输入类控件由 Field 自动关联。 -->
         <div
           class="flex flex-wrap items-center gap-x-2 gap-y-1"
           [class]="
@@ -109,41 +112,55 @@
               [text]="t('settings.hostScope.hint')"
             />
           }
-          <hlm-field-description
-            class="inline-flex flex-wrap items-center gap-x-2 text-xs leading-4"
-            [id]="descriptionIdOf(setting)"
-          >
-            <!-- 写入状态接在标签后面，与刚操作的控件同一行；没有状态时这里写继承来源。 -->
-            @if (stateOf(setting, scope()); as state) {
-              @switch (state.status) {
-                @case ('saving') {
-                  <span class="text-muted-foreground inline-flex items-center gap-1">
-                    <hlm-spinner class="text-[10px]" />
-                    {{ t('settings.saving') }}
-                  </span>
-                }
-                @case ('saved') {
-                  <!-- 成功用语义色 success：主色在别处表示可点。 -->
-                  <span class="text-success inline-flex items-center gap-1" role="status">
-                    <ng-icon name="lucideCircleCheck" size="12" />
-                    <!-- 进程级设置：保存成功时说明多久在所有服务器生效，这是唯一需要知道延迟的时刻 -->
-                    {{
-                      setting.allowsHostScope ? t('settings.savedEverywhere') : t('settings.saved')
-                    }}
-                  </span>
-                }
-                @case ('error') {
-                  <!-- 失败必须带原因，否则无从修正。 -->
-                  <span class="text-destructive inline-flex items-center gap-1" role="alert">
-                    <ng-icon name="lucideCircleX" size="12" class="shrink-0" />
-                    {{ state.messageKey ? t(state.messageKey) : state.message }}
-                  </span>
-                }
-              }
-            } @else if (inheritedSourceOf(setting, scope(), sourceLabels); as source) {
-              <span class="text-muted-foreground" data-testid="setting-source">{{ source }}</span>
+          @if (stateOf(setting, scope()); as state) {
+            @if (state.status === 'error') {
+              <!-- 失败必须带原因；错误与说明使用同一稳定 id，让各类控件均能读到本行反馈。 -->
+              <hlm-field-error forceShow [id]="descriptionIdOf(setting)"
+                ><ng-icon name="lucideCircleX" size="12" class="shrink-0" />{{
+                  state.messageKey ? t(state.messageKey) : state.message
+                }}</hlm-field-error
+              >
             }
-          </hlm-field-description>
+          }
+          @if (stateOf(setting, scope())?.status !== 'error') {
+            <hlm-field-description
+              class="inline-flex flex-wrap items-center gap-x-2 text-xs leading-4"
+              [id]="descriptionIdOf(setting)"
+            >
+              <!-- 写入状态接在标签后面，与刚操作的控件同一行；没有状态时这里写继承来源。 -->
+              @if (stateOf(setting, scope()); as state) {
+                @switch (state.status) {
+                  @case ('saving') {
+                    <span class="text-muted-foreground inline-flex items-center gap-1">
+                      <hlm-spinner class="text-[10px]" />
+                      {{ t('settings.saving') }}
+                    </span>
+                  }
+                  @case ('saved') {
+                    <!-- 成功用语义色 success：主色在别处表示可点。 -->
+                    <span class="text-success inline-flex items-center gap-1" role="status">
+                      <ng-icon name="lucideCircleCheck" size="12" />
+                      <!-- 进程级设置：保存成功时说明多久在所有服务器生效，这是唯一需要知道延迟的时刻 -->
+                      {{
+                        setting.allowsHostScope
+                          ? t('settings.savedEverywhere')
+                          : t('settings.saved')
+                      }}
+                    </span>
+                  }
+                  @case ('error') {
+                    <!-- 失败必须带原因，否则无从修正。 -->
+                    <span class="text-destructive inline-flex items-center gap-1" role="alert">
+                      <ng-icon name="lucideCircleX" size="12" class="shrink-0" />
+                      {{ state.messageKey ? t(state.messageKey) : state.message }}
+                    </span>
+                  }
+                }
+              } @else if (inheritedSourceOf(setting, scope(), sourceLabels); as source) {
+                <span class="text-muted-foreground" data-testid="setting-source">{{ source }}</span>
+              }
+            </hlm-field-description>
+          }
         </div>
         @if (levelHintKeyOf(setting, scope()); as levelHint) {
           <p class="text-muted-foreground text-xs">{{ t(levelHint) }}</p>
@@ -173,8 +190,8 @@
           >
             <!-- justify-between + font-normal 是官方用法：触发器是 hlmBtn，默认居中且加粗。 -->
             <!-- 时区名与偏移分两段：放不下时只省略时区名，偏移始终可见，悬停提示给出全文。不用
-                 hlm-combobox-value：它只写一段纯文本，选中值与占位也走两条路。占位的淡色由触发器的
-                 data-placeholder 给出。 -->
+               hlm-combobox-value：它只写一段纯文本，选中值与占位也走两条路。占位的淡色由触发器的
+               data-placeholder 给出。 -->
             @let zoneText = timeZoneTextOf(setting, scope(), sourceLabels);
             <hlm-combobox-trigger
               [buttonId]="setting.name"
@@ -208,7 +225,7 @@
                     @for (zone of group.zones; track zone.value) {
                       <hlm-combobox-item [value]="zone.value">
                         <!-- 城市名不截断：触发器上放不下的时区名，展开后在这里能看到全名。放不下时按词折行，
-                             不收窄到比单词还窄（徽章文案较长时也不会把城市名挤没） -->
+                           不收窄到比单词还窄（徽章文案较长时也不会把城市名挤没） -->
                         <span class="break-words">{{ zone.city }}</span>
                         @if (zone.isBrowser) {
                           <span hlmBadge variant="secondary">
@@ -250,8 +267,9 @@
           </hlm-select>
         } @else {
           <!-- 数值型把上下界交给浏览器（值域以服务端为准）。用 change 提交；与本行其他控件一样
-             不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。 -->
+           不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。 -->
           <input
+            [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
             hlmInput
             class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
             [id]="setting.name"
@@ -259,7 +277,7 @@
             [attr.min]="setting.minimum"
             [attr.max]="setting.maximum"
             [attr.inputmode]="isNumeric(setting) ? 'numeric' : null"
-            [attr.autocomplete]="setting.isSecret ? 'new-password' : null"
+            [attr.autocomplete]="setting.isSecret ? 'new-password' : 'off'"
             [attr.data-testid]="'setting-input-' + setting.name"
             [value]="draftOf(setting, scope())"
             [placeholder]="

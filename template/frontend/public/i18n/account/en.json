@@ -103,29 +103,29 @@
         "name": "Authenticator app",
         "hint": "Enter the 6-digit code from the app"
       },
-//#if (Email)
+      //#if (Email)
       "email": {
         "name": "Email verification code",
         "hint": "Send a code to {{email}}"
       },
-//#endif
+      //#endif
       "recoveryCode": {
         "name": "Recovery code",
         "hint": "Use one of the codes you saved"
       }
     },
     "emailLabel": "Email verification code",
-//#if (Email)
+    //#if (Email)
     "emailHint": "We sent a 6-digit code to {{email}}.",
     "emailSending": "Sending a code to {{email}}…",
     "emailPending": "A code will be sent to {{email}}.",
     "resend": "Resend code",
     "resendIn": "Resend in {{seconds}}s",
     "useEmail": "Use an email code",
-//#endif
+    //#endif
     "back": "Back to sign in"
   },
-//#if (Email)
+  //#if (Email)
   "twoFactorEmail": {
     "header": "Email verification codes",
     "subtitle": "Sign-in can also use a code sent to {{email}}. It adds to your authenticator but does not count as two-factor authentication where your organization requires it.",
@@ -149,7 +149,7 @@
     "disabledToast": "Email verification codes are off. Other devices were signed out.",
     "reauthDescription": "Confirm it is you before changing how you sign in."
   },
-//#endif
+  //#endif
   "passkeys": {
     "header": "Passkeys",
     "subtitle": "Sign in with your fingerprint, face or screen lock instead of a password. Passkeys can't be phished.",
@@ -335,6 +335,7 @@
     "tenantSwitch": "Switch tenant"
   },
   "register": {
+    "challengeExpired": "Request a new email code before registering.",
     "title": "Create your account",
     "email": "Email",
     "emailPlaceholder": "Enter your email address",
