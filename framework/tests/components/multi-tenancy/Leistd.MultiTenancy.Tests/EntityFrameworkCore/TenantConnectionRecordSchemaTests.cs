@@ -37,8 +37,8 @@ public class TenantConnectionRecordSchemaTests : IAsyncLifetime
         var tenantId = await SeedTenantAsync();
 
         Add(tenantId, "default", "ciphertext-default");
-        Add(tenantId, "crm", "ciphertext-crm");
-        Add(tenantId, "foundation", "ciphertext-foundation");
+        Add(tenantId, "billing", "ciphertext-billing");
+        Add(tenantId, "inventory", "ciphertext-inventory");
         await _dbContext.SaveChangesAsync();
 
         Assert.Equal(3, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.TenantId == tenantId));
@@ -49,28 +49,28 @@ public class TenantConnectionRecordSchemaTests : IAsyncLifetime
     public async Task The_same_name_cannot_be_registered_twice_for_one_tenant()
     {
         var tenantId = await SeedTenantAsync();
-        Add(tenantId, "crm", "ciphertext-one");
+        Add(tenantId, "billing", "ciphertext-one");
         await _dbContext.SaveChangesAsync();
         _dbContext.ChangeTracker.Clear();
 
-        Add(tenantId, "crm", "ciphertext-two");
+        Add(tenantId, "billing", "ciphertext-two");
 
         Assert.NotNull(await Record.ExceptionAsync(() => _dbContext.SaveChangesAsync()));
         _dbContext.ChangeTracker.Clear();
     }
 
-    // 不同租户用同一个名字是正常的：crm 服务在每个分库租户那里都有一条
+    // 不同租户用同一个名字是正常的：billing 服务在每个分库租户那里都有一条
     [Fact]
     public async Task Different_tenants_may_use_the_same_name()
     {
         var first = await SeedTenantAsync();
         var second = await SeedTenantAsync();
 
-        Add(first, "crm", "ciphertext-one");
-        Add(second, "crm", "ciphertext-two");
+        Add(first, "billing", "ciphertext-one");
+        Add(second, "billing", "ciphertext-two");
         await _dbContext.SaveChangesAsync();
 
-        Assert.Equal(2, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.Name == "crm"));
+        Assert.Equal(2, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.Name == "billing"));
     }
 
     // 空密文的行解析既不回落也取不到值，是纯粹的坏数据
@@ -78,7 +78,7 @@ public class TenantConnectionRecordSchemaTests : IAsyncLifetime
     public async Task A_registration_without_a_ciphertext_is_rejected_by_the_database()
     {
         var tenantId = await SeedTenantAsync();
-        Add(tenantId, "crm", null!);
+        Add(tenantId, "billing", null!);
 
         Assert.NotNull(await Record.ExceptionAsync(() => _dbContext.SaveChangesAsync()));
         _dbContext.ChangeTracker.Clear();

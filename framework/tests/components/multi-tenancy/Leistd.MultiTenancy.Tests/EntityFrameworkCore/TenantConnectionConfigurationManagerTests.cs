@@ -18,7 +18,7 @@ namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
 public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
 {
-    private const string Name = "crm";
+    private const string Name = "billing";
 
     private ServiceProvider _provider = default!;
     private SqliteConnection _connection = default!;
@@ -104,25 +104,25 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.Equal("Host=tenant", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
     }
 
-    // 管理员填 Crm 还是 crm 都命中同一行，避免"大小写不同于是走到拒绝分支"的支持问题
+    // 管理员填 Billing 还是 billing 都命中同一行，避免"大小写不同于是走到拒绝分支"的支持问题
     [Theory]
-    [InlineData("Crm")]
-    [InlineData("CRM")]
-    [InlineData("  crm  ")]
+    [InlineData("Billing")]
+    [InlineData("BILLING")]
+    [InlineData("  billing  ")]
     public async Task Names_are_normalized_to_lower_case(string name)
     {
         var tenant = await CreateTenantAsync();
 
         var configuration = await _manager.SetAsync(tenant.Id, name, "Host=tenant", expectedVersion: null);
 
-        Assert.Equal("crm", configuration.Name);
-        Assert.Equal("crm", (await _store.FindAsync(tenant.Id, "crm"))!.Connection!.Name);
+        Assert.Equal("billing", configuration.Name);
+        Assert.Equal("billing", (await _store.FindAsync(tenant.Id, "billing"))!.Connection!.Name);
     }
 
     [Theory]
-    [InlineData("crm_db")]
-    [InlineData("crm db")]
-    [InlineData("crm.db")]
+    [InlineData("billing_db")]
+    [InlineData("billing db")]
+    [InlineData("billing.db")]
     [InlineData("")]
     public async Task Invalid_names_are_rejected(string name)
     {
@@ -140,11 +140,11 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var crm = await _manager.SetAsync(tenant.Id, "crm", "Host=crm", expectedVersion: null);
-        var foundation = await _manager.SetAsync(tenant.Id, "foundation", "Host=foundation", expectedVersion: null);
+        var billing = await _manager.SetAsync(tenant.Id, "billing", "Host=billing", expectedVersion: null);
+        var inventory = await _manager.SetAsync(tenant.Id, "inventory", "Host=inventory", expectedVersion: null);
 
-        Assert.Equal(1, crm.Version);
-        Assert.Equal(1, foundation.Version);
+        Assert.Equal(1, billing.Version);
+        Assert.Equal(1, inventory.Version);
         Assert.Equal(2, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.TenantId == tenant.Id));
     }
 
@@ -326,10 +326,10 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         await _manager.SetAsync(tenant.Id, "default", "Host=one-db", expectedVersion: null);
         await _tenantManager.SetActiveAsync(tenant.Id, true);
 
-        var added = await _manager.SetAsync(tenant.Id, Name, "Host=crm-db", expectedVersion: null);
+        var added = await _manager.SetAsync(tenant.Id, Name, "Host=billing-db", expectedVersion: null);
 
         Assert.Equal(1, added.Version);
-        Assert.Equal("Host=crm-db", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
+        Assert.Equal("Host=billing-db", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
     }
 
     // 删除把租户从分库改回不分库：该名字之后回落到服务自己的配置
@@ -358,7 +358,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
 
         // 删一个根本不存在的名字同样是冲突：调用方以为自己读到过它
         var missing = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
-            () => _manager.RemoveAsync(tenant.Id, "foundation", expectedVersion: 1));
+            () => _manager.RemoveAsync(tenant.Id, "inventory", expectedVersion: 1));
         Assert.Null(missing.ActualVersion);
 
         Assert.NotNull((await _store.FindAsync(tenant.Id, Name))!.Connection);

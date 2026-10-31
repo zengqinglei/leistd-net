@@ -124,32 +124,32 @@ describe('tenant mock', () => {
   it('lists a registered connection, starting at version 1', () => {
     const created = create();
 
-    const connection = setTenantConnection(created.id, 'crm', {
+    const connection = setTenantConnection(created.id, 'billing', {
       expectedVersion: null,
       connectionString: 'Host=db;Database=probe;Password=probe-secret',
     });
 
-    expect(connection).toEqual({ tenantId: created.id, name: 'crm', version: 1 });
+    expect(connection).toEqual({ tenantId: created.id, name: 'billing', version: 1 });
     expect(getTenantConnections(created.id)).toEqual([
-      { tenantId: created.id, name: 'crm', version: 1 },
+      { tenantId: created.id, name: 'billing', version: 1 },
     ]);
   });
 
-  // 名字归一化为小写：填 Crm 与 crm 命中同一条，不会变成看着两条、写进去一条。
+  // 名字归一化为小写：填 Billing 与 billing 命中同一条，不会变成看着两条、写进去一条。
   it('normalizes connection names to lowercase', () => {
     const created = create();
 
     expect(
-      setTenantConnection(created.id, 'Crm', {
+      setTenantConnection(created.id, 'Billing', {
         expectedVersion: null,
         connectionString: 'Host=db;Password=probe-secret',
       }).name,
-    ).toBe('crm');
+    ).toBe('billing');
 
     // 同一个名字再首次登记一次，预期"这条不存在"已经落空
     expectStatus(
       () =>
-        setTenantConnection(created.id, 'crm', {
+        setTenantConnection(created.id, 'billing', {
           expectedVersion: null,
           connectionString: 'Host=db;Password=probe-secret',
         }),
@@ -159,14 +159,14 @@ describe('tenant mock', () => {
 
   it('rejects an update on a version mismatch', () => {
     const created = create();
-    setTenantConnection(created.id, 'crm', {
+    setTenantConnection(created.id, 'billing', {
       expectedVersion: null,
       connectionString: 'Host=db;Password=probe-secret',
     });
 
     expectStatus(
       () =>
-        setTenantConnection(created.id, 'crm', {
+        setTenantConnection(created.id, 'billing', {
           expectedVersion: 99,
           connectionString: 'Host=db;Password=probe-secret',
         }),
@@ -187,15 +187,15 @@ describe('tenant mock', () => {
 
   it('empties the list after deletion and does not delete on a version mismatch', () => {
     const created = create();
-    const connection = setTenantConnection(created.id, 'crm', {
+    const connection = setTenantConnection(created.id, 'billing', {
       expectedVersion: null,
       connectionString: 'Host=db;Password=probe-secret',
     });
 
-    expectStatus(() => removeTenantConnection(created.id, 'crm', '99'), 409);
+    expectStatus(() => removeTenantConnection(created.id, 'billing', '99'), 409);
     expect(getTenantConnections(created.id).length).toBe(1);
 
-    removeTenantConnection(created.id, 'crm', String(connection.version));
+    removeTenantConnection(created.id, 'billing', String(connection.version));
 
     expect(getTenantConnections(created.id)).toEqual([]);
   });
@@ -204,7 +204,7 @@ describe('tenant mock', () => {
   it('keeps connection strings out of the mock data and every response', () => {
     const created = create();
 
-    const connection = setTenantConnection(created.id, 'crm', {
+    const connection = setTenantConnection(created.id, 'billing', {
       expectedVersion: null,
       connectionString: 'Host=db;Database=probe;Password=probe-secret',
     });
@@ -223,7 +223,10 @@ describe('tenant mock', () => {
       adminPassword: 'MockTenant!Adm1n',
       connections: [
         { name: 'default', connectionString: 'Host=db;Database=probe;Password=probe-secret' },
-        { name: 'CRM', connectionString: 'Host=db;Database=probe-crm;Password=probe-secret' },
+        {
+          name: 'BILLING',
+          connectionString: 'Host=db;Database=probe-billing;Password=probe-secret',
+        },
       ],
     });
 
@@ -232,7 +235,7 @@ describe('tenant mock', () => {
       getTenantConnections(created.id)
         .map((connection) => connection.name)
         .sort(),
-    ).toEqual(['crm', 'default']);
+    ).toEqual(['billing', 'default']);
     // 连接串既不回显，也不落进 Mock 的内部数据——存了迟早有人把它读出来
     expect(JSON.stringify(getTenantConnections(created.id))).not.toContain('probe-secret');
     expect(JSON.stringify(created)).not.toContain('probe-secret');
@@ -249,8 +252,8 @@ describe('tenant mock', () => {
           adminEmail: 'probe@example.test',
           adminPassword: 'MockTenant!Adm1n',
           connections: [
-            { name: 'crm', connectionString: 'Host=a' },
-            { name: 'CRM', connectionString: 'Host=b' },
+            { name: 'billing', connectionString: 'Host=a' },
+            { name: 'BILLING', connectionString: 'Host=b' },
           ],
         }),
       400,

@@ -25,7 +25,7 @@
 
 - OIDC `profile` 范围下有标准声明 `locale`、`zoneinfo`。Google 的 ID 令牌带 `locale`；Keycloak 把 `locale` 存为用户属性再映射成令牌声明。
 - Microsoft 的用户属性有 `preferredLanguage`，Graph 提供 `/me/settings/regionalAndLanguageSettings`。
-- abroker 三仓：`/me` 带偏好，资源服务经 Identity 读取。
+- 服务组合：身份服务持有账户偏好，资源服务经身份服务读取。
 
 ### 范围
 
@@ -289,8 +289,8 @@
 
 | # | 问题 | 处理 |
 | --- | --- | --- |
-| R1 | 转交写入失败时，公开说明用了带上游地址与 traceId 的诊断消息 | 框架 service-client 新增 `RemoteServiceException.Detail`：只在远端是带业务码的错误时，还原 ProblemDetails 的 `detail`。模板改为只用它作说明，取不到时用固定安全文案。依据微软的生产环境不外露异常细节、RFC 9457 的 `detail` 语义，以及 ABP 转发远端 `RemoteServiceErrorInfo` 而非异常消息 |
-| R2 | 带业务码的 403 被当作依赖故障（502） | 框架 exception-handling 新增 `IHasHttpStatusCode`：处理器对 `BusinessException` 先看它，再查码映射，最后回落到 400。这与 ABP `DefaultHttpExceptionStatusCodeFinder` 的优先级一致。service-client 新增 `ToBusinessException`：只有带业务码的 4xx 才转为 `RemoteBusinessException`，沿用上游的码、状态与说明。模板只对 400/403/404/409 调用它；401 即使带码也按依赖故障处理（P6） |
+| R1 | 转交写入失败时，公开说明用了带上游地址与 traceId 的诊断消息 | 框架 service-client 新增 `RemoteServiceException.Detail`：只在远端是带业务码的错误时，还原 ProblemDetails 的 `detail`。模板改为只用它作说明，取不到时用固定安全文案。依据微软的生产环境不外露异常细节、RFC 9457 的 `detail` 语义，以及跨服务边界只转发安全业务错误而非异常消息的原则 |
+| R2 | 带业务码的 403 被当作依赖故障（502） | 框架 exception-handling 新增 `IHasHttpStatusCode`：处理器对 `BusinessException` 先看它，再查码映射，最后回落到 400。优先尊重异常声明的状态，再按业务码映射与默认值回退。service-client 新增 `ToBusinessException`：只有带业务码的 4xx 才转为 `RemoteBusinessException`，沿用上游的码、状态与说明。模板只对 400/403/404/409 调用它；401 即使带码也按依赖故障处理（P6） |
 | R3 | 单例缓存条目只增不删 | 条目记录在途回源数与最近访问时刻。读写入口每个 `FreshFor` 至多清扫一次，移除闲置超过 `RetainFor` 且没有在途读取的条目；移除前在锁内标记退役，持有退役条目的调用改取新条目 |
 | R4 | 会话初始化晚取读取号，旧 `/me` 能覆盖成功写入 | `AuthService.loadUser()` 在请求发出时取号（经 `Injector` 按需取偏好服务，避开构造期成环），号随读取结果一起留存，`establish()` 用这个号 |
 | 建议 | `If-None-Match` 只做整值匹配 | 改用类型化头解析：支持标签列表、`W/` 弱比较与 `*` |

@@ -120,12 +120,12 @@ public class TenantDatabaseDirectoryTests : IAsyncLifetime
     {
         var tenant = await Tenants.CreateAsync("acme", null, isActive: false);
         await Connections.SetAsync(tenant.Id, "default", "Host=fallback", expectedVersion: null);
-        await Connections.SetAsync(tenant.Id, "crm", "Host=crm", expectedVersion: null);
+        await Connections.SetAsync(tenant.Id, "billing", "Host=billing", expectedVersion: null);
         await Tenants.SetActiveAsync(tenant.Id, true);
 
-        var listed = await Directory.GetDatabasesAsync("crm", activeOnly: true);
+        var listed = await Directory.GetDatabasesAsync("billing", activeOnly: true);
 
-        Assert.Equal(TenantDatabaseFingerprint.Of("Host=crm"), Assert.Single(listed.Databases).Fingerprint);
+        Assert.Equal(TenantDatabaseFingerprint.Of("Host=billing"), Assert.Single(listed.Databases).Fingerprint);
     }
 
     /// <summary>登记过连接、却解析不出目标名：进失败清单，不能当成"住在宿主库里"。</summary>
@@ -138,7 +138,7 @@ public class TenantDatabaseDirectoryTests : IAsyncLifetime
     public async Task A_registered_tenant_that_cannot_resolve_the_name_fails_instead_of_falling_back_to_the_host()
     {
         var tenant = await Tenants.CreateAsync("acme", null, isActive: false);
-        await Connections.SetAsync(tenant.Id, "crm", "Host=crm", expectedVersion: null);
+        await Connections.SetAsync(tenant.Id, "billing", "Host=billing", expectedVersion: null);
         await Tenants.SetActiveAsync(tenant.Id, true);
 
         var listed = await Directory.GetDatabasesAsync("default", activeOnly: true);

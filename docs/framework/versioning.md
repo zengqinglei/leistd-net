@@ -142,7 +142,7 @@ tag 记录已发布版本，不能因发布后发现的问题而删除后复用�
 
 `release.yml` 按 Conventional Commits 生成 release notes，`!` 与 `BREAKING CHANGE` 脚注进入“破坏性变更”。每个小节内按提交的 scope（组件家族，如 `settings`、`multi-tenancy`）分组，没有 scope 的条目归入最后的“未标注范围”。Release 正文就是变更记录，不另建 CHANGELOG 文件；因此提交标题的 scope 应写组件家族名。公共 API、配置、路由、授权、数据库模型与译文变化同步源码、消费者和当前文档；不保留过渡 API 或旧版对照。
 
-stable 或模板版本发布后，按下游清单通知使用方（目前只有 CRM）：给出版本与 Release 链接，含破坏性变更时附上必要动作。
+stable 或模板版本发布后，按下游清单通知使用方：给出版本与 Release 链接，含破坏性变更时附上必要动作。
 
 开发期不强制独立升级指南。用户明确要求迁移说明时按需提供，发布工具仍支持 `docs/framework/upgrades/<基础版本>.md` 这一可选文件；没有指南不能推断无需改代码，最终用法以目标包文档、XML 和程序集为准。
 

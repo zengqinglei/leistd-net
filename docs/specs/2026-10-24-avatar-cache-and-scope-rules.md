@@ -6,7 +6,7 @@
 
 ### 问题与背景
 
-CRM V2 三仓（abroker）在头像对接中发现了缓存问题，并整理了多服务对接的写法，反馈给框架。审视结论见协调目录 `/Users/quincy/orca/workspaces/.crm-v2-adaptation/avatar-sync-20261020/framework-feedback.md` 的「框架结论」一节。用户 2026-10-24 授权按最佳实践终局决策并实施。
+下游项目在头像对接中发现了缓存问题，并整理了多服务对接的写法，反馈给框架。审视结论已按以下通用问题归纳。用户 2026-10-24 授权按最佳实践终局决策并实施。
 
 **缺陷（当前行为）**：
 - `UserController.GetAvatarAsync`（`template/backend/src/CompanyName.ProjectName.Api/Controllers/UserController.cs`）不看请求里的 `v`，一律返回 `private, max-age=31536000, immutable`。

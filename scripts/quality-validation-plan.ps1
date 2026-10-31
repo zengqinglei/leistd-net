@@ -17,6 +17,29 @@ function Read-QualityValidationPlan([string]$Path, [string]$ExpectedTier) {
         (Compare-Object ($jobNames | Sort-Object) @($plan.Jobs.PSObject.Properties.Name | Sort-Object))) {
         throw 'Invalid quality plan: version, candidate, tier, mode or responsibilities differ.'
     }
+    # 文档增量仍现场执行静态与文档责任；它不是 stable 的整套作业跳过。
+    $documents = $plan.PrDocumentation
+    if ($documents -isnot [pscustomobject] -or $documents.Verified -isnot [bool] -or
+        $documents.Sources -isnot [array] -or
+        (Compare-Object @('Verified', 'Sources') @($documents.PSObject.Properties.Name)) -or
+        ($documents.Verified -ne (@($documents.Sources).Count -gt 0))) {
+        throw 'Invalid PR documentation evidence.'
+    }
+    if ($documents.Verified) {
+        $pr = $plan.PullRequest
+        if ($plan.Event -cne 'pull_request' -or $plan.ReleaseChannel -cne '' -or $plan.Tier -cne 'core' -or
+            $plan.Mode -cne 'documentation' -or $plan.QualityExecution -cne 'current' -or
+            $pr.CandidateSha -cne $head -or $pr.BaseSha -cne $plan.BaseSha -or
+            $pr.HeadSha -cnotmatch '^[0-9a-f]{40}$' -or $pr.Number -isnot [long] -or $pr.Number -le 0) {
+            throw 'Invalid PR documentation candidate.'
+        }
+        foreach ($source in $documents.Sources) {
+            if ($source.RunId -isnot [long] -or $source.RunId -le 0 -or $source.Attempt -isnot [long] -or $source.Attempt -le 0 -or
+                $source.PlanArtifactId -isnot [long] -or $source.PlanArtifactId -le 0 -or
+                $source.CandidateSha -cnotmatch '^[0-9a-f]{40}$' -or $source.HeadSha -cnotmatch '^[0-9a-f]{40}$' -or
+                $source.BaseSha -cne $plan.BaseSha) { throw 'Invalid PR documentation source.' }
+        }
+    }
     $reuse = $plan.QualityReuse
     $reuseFields = @('Verified', 'RunId', 'Attempt', 'HeadSha', 'Tree', 'PlanArtifactId')
     if ($plan.QualityExecution -cnotin @('current', 'reuse') -or $plan.QualityValidated -isnot [bool] -or

@@ -38,7 +38,7 @@ export const TENANTS: MockTenant[] = [
     creationTime: '2025-04-15T00:00:00Z',
     connections: [
       { name: 'default', version: 3 },
-      { name: 'crm', version: 1 },
+      { name: 'billing', version: 1 },
     ],
   },
 ];

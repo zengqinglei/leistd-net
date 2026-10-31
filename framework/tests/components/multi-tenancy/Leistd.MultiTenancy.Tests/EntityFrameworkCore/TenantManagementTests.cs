@@ -122,11 +122,11 @@ public sealed class TenantManagementTests : IAsyncLifetime
                 await services.GetRequiredService<ITenantConnectionDirectory>().ListAsync(tenant.Id);
 
         var tenant = await _service.CreateAsync(
-            Create("acme", ("default", "Host=acme;Database=acme"), ("CRM", "Host=crm;Database=acme-crm")));
+            Create("acme", ("default", "Host=acme;Database=acme"), ("BILLING", "Host=billing;Database=acme-billing")));
 
         // 名字大小写不敏感：登记与解析都用归一化后的小写
-        Assert.Equal(["crm", "default"], _provisioner.ConnectionsSeenDuringProvisioning!.Select(c => c.Name).Order());
-        Assert.Equal(["crm", "default"], (await Connections().GetListAsync(tenant.Id)).Select(c => c.Name).Order());
+        Assert.Equal(["billing", "default"], _provisioner.ConnectionsSeenDuringProvisioning!.Select(c => c.Name).Order());
+        Assert.Equal(["billing", "default"], (await Connections().GetListAsync(tenant.Id)).Select(c => c.Name).Order());
     }
 
     /// <summary>请求体显式传 <c>connections: null</c> 按"不分库"处理，不是 500。</summary>
@@ -160,7 +160,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     public async Task A_duplicated_connection_name_is_rejected_before_anything_is_written()
     {
         var error = await Assert.ThrowsAsync<BusinessException>(
-            () => _service.CreateAsync(Create("acme", ("crm", "Host=a"), ("CRM", "Host=b"))));
+            () => _service.CreateAsync(Create("acme", ("billing", "Host=a"), ("BILLING", "Host=b"))));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameDuplicated, error.Code);
         Assert.Empty(await NamedAsync("acme"));
@@ -173,7 +173,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         var error = await Assert.ThrowsAsync<BusinessException>(
             () => _service.CreateAsync(
-                Create("acme", ("default", "Host=acme;Database=missing"), ("crm", "Host=crm;Database=missing"))));
+                Create("acme", ("default", "Host=acme;Database=missing"), ("billing", "Host=billing;Database=missing"))));
 
         Assert.Equal(MultiTenancyErrorCodes.DedicatedDatabaseMissing, error.Code);
         Assert.NotNull(_provisioner.PurgedTenant);
@@ -358,9 +358,9 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         var error = await Assert.ThrowsAsync<BusinessException>(() => entry switch
         {
-            "runtime" => Connections().GetRuntimeAsync(tenant.Id, "crm_db"),
-            "databases" => Connections().GetDatabaseListAsync("crm_db", activeOnly: true),
-            _ => Connections().GetMigrationListAsync("crm_db")
+            "runtime" => Connections().GetRuntimeAsync(tenant.Id, "billing_db"),
+            "databases" => Connections().GetDatabaseListAsync("billing_db", activeOnly: true),
+            _ => Connections().GetMigrationListAsync("billing_db")
         });
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameInvalid, error.Code);
@@ -372,12 +372,12 @@ public sealed class TenantManagementTests : IAsyncLifetime
         var tenant = await _service.CreateAsync(new CreateTenantInputDto { Name = "acme" });
         await _service.SetActivationAsync(tenant.Id, new UpdateTenantActivationInputDto { IsActive = false });
 
-        var set = await Connections().SetAsync(tenant.Id, "CRM", new UpsertTenantConnectionInputDto { ExpectedVersion = null, ConnectionString = "Host=crm" });
-        var runtime = await Connections().GetRuntimeAsync(tenant.Id, "crm");
-        await Connections().RemoveAsync(tenant.Id, "crm", set.Version);
+        var set = await Connections().SetAsync(tenant.Id, "BILLING", new UpsertTenantConnectionInputDto { ExpectedVersion = null, ConnectionString = "Host=billing" });
+        var runtime = await Connections().GetRuntimeAsync(tenant.Id, "billing");
+        await Connections().RemoveAsync(tenant.Id, "billing", set.Version);
 
-        Assert.Equal(("crm", 1L), (set.Name, set.Version));
-        Assert.Equal("Host=crm", runtime.Connection!.ConnectionString);
+        Assert.Equal(("billing", 1L), (set.Name, set.Version));
+        Assert.Equal("Host=billing", runtime.Connection!.ConnectionString);
         Assert.Empty(await Connections().GetListAsync(tenant.Id));
     }
 

@@ -49,7 +49,7 @@ public sealed class LeadRecycleJob(LeadService leads) : IRecurringJob
 }
 
 builder.Services.AddRecurringJob<LeadRecycleJob>(
-    "crm.lead-recycle",
+    "billing.invoice-process",
     RecurringJobSchedule.DailyAt(new TimeOnly(18, 0)),
     RecurringJobScope.Cluster);
 ```
@@ -60,7 +60,7 @@ builder.Services.AddRecurringJob<LeadRecycleJob>(
 using Microsoft.Extensions.Options;
 
 builder.Services.AddRecurringJob<LeadRecycleJob>(
-    "crm.lead-recycle",
+    "billing.invoice-process",
     sp => RecurringJobSchedule.DailyAt(sp.GetRequiredService<IOptions<LeadOptions>>().Value.RecycleAt),
     RecurringJobScope.Cluster);
 ```
@@ -71,7 +71,7 @@ builder.Services.AddRecurringJob<LeadRecycleJob>(
 using Microsoft.Extensions.Options;
 
 builder.Services.AddRecurringJob<LeadArchiveJob>(
-    "crm.lead-archive",
+    "billing.invoice-archive",
     RecurringJobSchedule.DailyAt(new TimeOnly(19, 0)),
     RecurringJobScope.Cluster,
     isEnabled: sp => sp.GetRequiredService<IOptionsSnapshot<LeadOptions>>().Value.ArchiveEnabled);

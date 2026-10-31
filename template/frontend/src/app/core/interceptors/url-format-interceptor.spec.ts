@@ -46,9 +46,9 @@ describe('urlFormatInterceptor', () => {
   it('inserts the gateway service name between the gateway and the path', () => {
     environment.api.gateway = 'https://gateway.example.com';
 
-    const request = send('/api/v1/users', new HttpContext().set(GATEWAY_SERVICE_NAME, '/crm'));
+    const request = send('/api/v1/users', new HttpContext().set(GATEWAY_SERVICE_NAME, '/billing'));
 
-    expect(request.url).toBe('https://gateway.example.com/crm/api/v1/users');
+    expect(request.url).toBe('https://gateway.example.com/billing/api/v1/users');
   });
 
   // 调用方给的绝对地址是别的服务，不能把本服务的会话 Cookie 带过去

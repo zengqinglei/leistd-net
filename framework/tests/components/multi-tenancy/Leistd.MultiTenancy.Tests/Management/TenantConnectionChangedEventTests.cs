@@ -110,7 +110,7 @@ public class TenantConnectionChangedEventTests
     /// <summary>事件带租户显示名快照：订阅者写"给谁改的"时不必拿连接名顶替。</summary>
     /// <remarks>
     /// 没有这一项时，宿主手上只有租户标识与连接名，审计的目标名列就会被填进
-    /// <c>default</c>、<c>crm</c> 这样的连接名，界面上显示成"为租户 default 登记了连接"。
+    /// <c>default</c>、<c>billing</c> 这样的连接名，界面上显示成"为租户 default 登记了连接"。
     /// 快照而非外键：事后按标识反查只能得到改名后的值。
     /// </remarks>
     [Fact]
@@ -118,20 +118,20 @@ public class TenantConnectionChangedEventTests
     {
         var (service, bus, _) = Create();
 
-        await service.SetAsync(Tenant, "crm", new UpsertTenantConnectionInputDto
+        await service.SetAsync(Tenant, "billing", new UpsertTenantConnectionInputDto
         {
-            ConnectionString = "Host=crm",
+            ConnectionString = "Host=billing",
             ExpectedVersion = null
         });
 
         var published = Assert.Single(bus.Published);
-        Assert.Equal((StubTenants.DisplayName, "crm"), (published.TenantDisplayName, published.Name));
+        Assert.Equal((StubTenants.DisplayName, "billing"), (published.TenantDisplayName, published.Name));
     }
 
     /// <summary>事件里的连接名是归一化后的值，删除这条路径也不例外。</summary>
     /// <remarks>
     /// 写入路径发的是管理器回的 <c>configuration.Name</c>（权威值），删除没有这个返回值，
-    /// 照原样转发就会让 <c>" CRM "</c> 与 <c>crm</c> 在审计里落成两个目标标识，
+    /// 照原样转发就会让 <c>" BILLING "</c> 与 <c>billing</c> 在审计里落成两个目标标识，
     /// 同一条连接的登记与删除从此检索不到一起。
     /// </remarks>
     [Fact]
@@ -139,9 +139,9 @@ public class TenantConnectionChangedEventTests
     {
         var (service, bus, _) = Create();
 
-        await service.RemoveAsync(Tenant, "  CRM  ", expectedVersion: 3);
+        await service.RemoveAsync(Tenant, "  BILLING  ", expectedVersion: 3);
 
-        Assert.Equal("crm", Assert.Single(bus.Published).Name);
+        Assert.Equal("billing", Assert.Single(bus.Published).Name);
     }
 
     private sealed class RecordingEventBus : ILocalEventBus

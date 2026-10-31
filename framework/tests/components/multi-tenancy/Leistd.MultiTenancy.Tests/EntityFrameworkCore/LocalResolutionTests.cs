@@ -19,7 +19,7 @@ namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 public sealed class LocalResolutionTests : IDisposable
 {
     private const string DefaultConnection = "Data Source=shared";
-    private const string CrmHostConnection = "Data Source=crm-host";
+    private const string BillingHostConnection = "Data Source=billing-host";
     private const string ControlConnection = "Data Source=control";
     private const string AcmeConnection = "Data Source=acme;Password=acme-secret";
 
@@ -48,7 +48,7 @@ public sealed class LocalResolutionTests : IDisposable
 
     private LocalConnectionStringResolver<ControlDbContext> Resolver(
         string? controlConnection = ControlConnection,
-        string? crmConnection = null,
+        string? billingConnection = null,
         IDataProtectionProvider? keyRing = null) => new(
         _tenant,
         _services.GetRequiredService<IServiceScopeFactory>(),
@@ -56,7 +56,7 @@ public sealed class LocalResolutionTests : IDisposable
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Default"] = DefaultConnection,
-            ["ConnectionStrings:Crm"] = crmConnection,
+            ["ConnectionStrings:Billing"] = billingConnection,
             ["ConnectionStrings:Control"] = controlConnection
         }).Build(),
         Microsoft.Extensions.Options.Options.Create(
@@ -106,7 +106,7 @@ public sealed class LocalResolutionTests : IDisposable
     public async Task Without_a_tenant_the_host_connection_is_used()
     {
         Assert.Equal(DefaultConnection, await Resolver().ResolveAsync("Default"));
-        Assert.Equal(CrmHostConnection, await Resolver(crmConnection: CrmHostConnection).ResolveAsync("Crm"));
+        Assert.Equal(BillingHostConnection, await Resolver(billingConnection: BillingHostConnection).ResolveAsync("Billing"));
     }
 
     // 一条连接都没登记 = 不分库
@@ -116,16 +116,16 @@ public sealed class LocalResolutionTests : IDisposable
         _tenant.Id = await SeedTenantAsync();
 
         Assert.Equal(DefaultConnection, await Resolver().ResolveAsync("Default"));
-        Assert.Equal(CrmHostConnection, await Resolver(crmConnection: CrmHostConnection).ResolveAsync("Crm"));
+        Assert.Equal(BillingHostConnection, await Resolver(billingConnection: BillingHostConnection).ResolveAsync("Billing"));
     }
 
     [Fact]
     public async Task An_exact_name_hit_is_used_and_decrypted()
     {
         _tenant.Id = await SeedTenantAsync();
-        await RegisterAsync(_tenant.Id!.Value, "crm", AcmeConnection);
+        await RegisterAsync(_tenant.Id!.Value, "billing", AcmeConnection);
 
-        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Crm"));
+        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Billing"));
     }
 
     // 一租户一库、各服务不同 schema：只登记 default 一条
@@ -135,8 +135,8 @@ public sealed class LocalResolutionTests : IDisposable
         _tenant.Id = await SeedTenantAsync();
         await RegisterAsync(_tenant.Id!.Value, "default", AcmeConnection);
 
-        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Crm"));
-        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Foundation"));
+        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Billing"));
+        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Inventory"));
     }
 
     // 精确名优先于默认名
@@ -145,10 +145,10 @@ public sealed class LocalResolutionTests : IDisposable
     {
         _tenant.Id = await SeedTenantAsync();
         await RegisterAsync(_tenant.Id!.Value, "default", "Data Source=acme-shared");
-        await RegisterAsync(_tenant.Id!.Value, "crm", AcmeConnection);
+        await RegisterAsync(_tenant.Id!.Value, "billing", AcmeConnection);
 
-        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Crm"));
-        Assert.Equal("Data Source=acme-shared", await Resolver().ResolveAsync("Foundation"));
+        Assert.Equal(AcmeConnection, await Resolver().ResolveAsync("Billing"));
+        Assert.Equal("Data Source=acme-shared", await Resolver().ResolveAsync("Inventory"));
     }
 
     // 唯一的失败关闭点：分库租户缺这个服务的连接，也没有默认名可回落
@@ -156,23 +156,23 @@ public sealed class LocalResolutionTests : IDisposable
     public async Task A_registered_tenant_missing_this_name_is_refused()
     {
         _tenant.Id = await SeedTenantAsync();
-        await RegisterAsync(_tenant.Id!.Value, "foundation", AcmeConnection);
+        await RegisterAsync(_tenant.Id!.Value, "inventory", AcmeConnection);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Resolver(crmConnection: CrmHostConnection).ResolveAsync("Crm"));
+            () => Resolver(billingConnection: BillingHostConnection).ResolveAsync("Billing"));
 
         Assert.DoesNotContain("acme-secret", error.ToString());
     }
 
-    // 管理员填 Crm 还是 crm 命中同一行
+    // 管理员填 Billing 还是 billing 命中同一行
     [Theory]
-    [InlineData("Crm")]
-    [InlineData("crm")]
-    [InlineData("CRM")]
+    [InlineData("Billing")]
+    [InlineData("billing")]
+    [InlineData("BILLING")]
     public async Task Names_are_matched_case_insensitively(string requested)
     {
         _tenant.Id = await SeedTenantAsync();
-        await RegisterAsync(_tenant.Id!.Value, "crm", AcmeConnection);
+        await RegisterAsync(_tenant.Id!.Value, "billing", AcmeConnection);
 
         Assert.Equal(AcmeConnection, await Resolver().ResolveAsync(requested));
     }
@@ -213,7 +213,7 @@ public sealed class LocalResolutionTests : IDisposable
     {
         _tenant.Id = await SeedTenantAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => Resolver().ResolveAsync("crm_db"));
+        await Assert.ThrowsAsync<ArgumentException>(() => Resolver().ResolveAsync("billing_db"));
     }
 
     public sealed class ControlDbContext(DbContextOptions<ControlDbContext> options) : DbContext(options)

@@ -444,6 +444,10 @@ jobs:
           if ($env:PLAN_SCOPE -cne 'core' -and $tier -cne 'full') { throw '非直接 PR 的计划必须是 full 档' }
           $plan = Read-QualityValidationPlan .tmp/quality-plan.json $tier
           if ($plan.CandidateSha -cne $env:CANDIDATE_SHA -or $plan.QualityValidated) { throw '汇总候选身份或计划状态不一致' }
+          if ($plan.PrDocumentation.Verified) {
+            python3 scripts/plan-quality-checks.py --verify-pr-documentation .tmp/quality-plan.json
+            if ($LASTEXITCODE -ne 0) { throw '文档增量来源、候选或责任不一致' }
+          }
           $reuse = $plan.QualityExecution -ceq 'reuse'
           foreach ($required in @('docs-sync', 'docs-sync-windows')) {
             $expected = $reuse ? 'skipped' : 'success'

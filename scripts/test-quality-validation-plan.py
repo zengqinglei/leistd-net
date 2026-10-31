@@ -64,6 +64,7 @@ def main():
         registered = set(scenarios)
         prove_dependency_audit_inputs(planner)
         prove_release_reuse(planner, repo, base, out, run)
+        prove_pr_documentation(planner, repo, base, out, run)
         core = {name for name, info in scenarios.items() if 'core' in info['Slices']}
         front = 'template/frontend/src/app/core/services/notification-service.ts'
         back = 'template/backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs'
@@ -403,6 +404,164 @@ def prove_release_reuse(planner, repo, base, out, run):
         assert final['QualityValidated'] is True and final['QualityReuse'] == plan['QualityReuse']
     git('reset', '--hard', base)
     print(f'PASS same-tree reuse: {len(records)} source counterexamples, full fallback and real summary states', flush=True)
+
+
+def prove_pr_documentation(planner, repo, base, out, run):
+    """Real merge commits, unchanged/advanced bases, immutable attempts and two inherited increments."""
+    clone = lambda value: json.loads(json.dumps(value))
+    def git(*args):
+        return subprocess.check_output(['git', *args], cwd=repo, text=True, stderr=subprocess.PIPE).strip()
+    def commit(parent, path, content):
+        git('checkout', '--detach', '-q', parent)
+        target = repo / path; target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((target.read_text() if target.exists() else '') + content)
+        git('add', path); git('commit', '-qm', 'fixture input')
+        return git('rev-parse', 'HEAD')
+    def merge(head, baseline=base):
+        candidate = git('commit-tree', head + '^{tree}', '-p', baseline, '-p', head, '-m', 'fixture merge')
+        git('checkout', '--detach', '-q', candidate)
+        return candidate
+    source_head = commit(base, 'template/frontend/src/app/core/services/notification-service.ts', '\n// fixture source\n')
+    source_merge = merge(source_head)
+    event_path = out / 'pr-documentation-event.json'
+    env = dict(GITHUB_EVENT_PATH=str(event_path), GITHUB_REPOSITORY='example/project')
+    def event(head, baseline=base, before='', action='synchronize'):
+        payload = dict(action=action, before=before, pull_request=dict(number=17,
+                       head=dict(sha=head, repo=dict(full_name='example/project')),
+                       base=dict(sha=baseline, repo=dict(full_name='example/project'))))
+        event_path.write_text(json.dumps(payload)); return payload
+    event(source_head, action='opened')
+    with mock.patch.dict(os.environ, env):
+        source = planner.create_plan('core', base, 'pull_request', '')
+    assert source['PullRequest']['CandidateSha'] == source_merge and source['PrDocumentation']['Verified'] is False
+    head = commit(source_head, 'docs/increment.md', 'Documentation increment\n')
+    candidate = merge(head)
+    payload = event(head, before=source_head)
+    previous_run = dict(id=41, run_attempt=2, head_sha=source_head, event='pull_request', path='.github/workflows/ci.yml',
+                        status='completed', conclusion='success', repository=dict(id=7, full_name='example/project'),
+                        head_repository=dict(id=7, full_name='example/project'),
+                        pull_requests=[dict(number=17, head=dict(sha=source_head))])
+    state = dict(runs=[previous_run], current=clone(previous_run), source=source,
+                 jobs=[dict(name=name, status='completed', conclusion='success')
+                       for name in ('计算候选验证责任', '模板全场景矩阵')],
+                 artifacts=[dict(id=73, name='quality-plan-41-2', expired=False,
+                                 workflow_run=dict(id=41, head_sha=source_head, repository_id=7, head_repository_id=7))])
+    def request(endpoint):
+        if endpoint.startswith('workflows/ci.yml/runs?'): return dict(total_count=len(state['runs']), workflow_runs=state['runs'])
+        if endpoint.endswith('/jobs?per_page=100'): return dict(total_count=len(state['jobs']), jobs=state['jobs'])
+        if endpoint.endswith('/artifacts?per_page=100'): return dict(total_count=len(state['artifacts']), artifacts=state['artifacts'])
+        if endpoint.startswith('runs/'): return state['current']
+        raise AssertionError(endpoint)
+    records = []
+    with mock.patch.dict(os.environ, env), mock.patch.object(planner, 'actions_get', side_effect=request), \
+            mock.patch.object(planner, 'actions_quality_plan', side_effect=lambda _: state['source']):
+        plan = planner.create_plan('core', base, 'pull_request', '')
+        assert plan['PrDocumentation']['Verified'] and plan['Mode'] == 'documentation' and not any(plan['Jobs'].values()), plan
+        assert plan['CandidateSha'] == candidate and plan['BaseSha'] == base and len(plan['PrDocumentation']['Sources']) == 1
+        original = clone(state)
+        # GitHub may omit run-to-PR relationships; the immutable candidate plan still binds the source PR.
+        state['runs'][0]['pull_requests'] = []; state['current']['pull_requests'] = []
+        assert planner.create_plan('core', base, 'pull_request', '')['PrDocumentation']['Verified']
+        state = clone(original)
+        def reject(label, mutate):
+            nonlocal state
+            state = clone(original); mutate(state)
+            fallback = planner.create_plan('core', base, 'pull_request', '')
+            assert not fallback['PrDocumentation']['Verified'] and fallback['Mode'] == source['Mode'], (label, fallback['Reason'])
+            records.append(label)
+        reject('previous-failure', lambda s: s['runs'][0].update(conclusion='failure'))
+        reject('previous-cancelled', lambda s: s['runs'][0].update(conclusion='cancelled'))
+        reject('previous-missing', lambda s: s.update(runs=[]))
+        reject('wrong-pr', lambda s: s['runs'][0]['pull_requests'][0].update(number=18))
+        reject('wrong-workflow', lambda s: s['runs'][0].update(path='.github/workflows/other.yml'))
+        reject('wrong-repository', lambda s: s['runs'][0]['head_repository'].update(full_name='other/project'))
+        reject('summary-failed', lambda s: s['jobs'][1].update(conclusion='failure'))
+        reject('summary-skipped', lambda s: s['jobs'][1].update(conclusion='skipped'))
+        reject('summary-missing', lambda s: s.update(jobs=s['jobs'][:1]))
+        reject('artifact-missing', lambda s: s.update(artifacts=[]))
+        reject('artifact-expired', lambda s: s['artifacts'][0].update(expired=True))
+        reject('artifact-old-attempt', lambda s: s['artifacts'][0].update(name='quality-plan-41-1'))
+        reject('artifact-wrong-owner', lambda s: s['artifacts'][0]['workflow_run'].update(repository_id=9))
+        reject('plan-wrong-head', lambda s: s['source']['PullRequest'].update(HeadSha=head))
+        reject('plan-wrong-base', lambda s: s['source']['PullRequest'].update(BaseSha=source_head))
+        reject('plan-wrong-candidate', lambda s: s['source'].update(CandidateSha=candidate))
+        reject('plan-wrong-pr', lambda s: s['source']['PullRequest'].update(Number=18))
+        reject('attempt-changed', lambda s: s['current'].update(run_attempt=3))
+        reject('latest-run-failed', lambda s: s['runs'].append(dict(previous_run, id=42, conclusion='failure')))
+        state = clone(original)
+        with mock.patch.object(planner, 'actions_get', side_effect=OSError('fixture unavailable')):
+            assert not planner.create_plan('core', base, 'pull_request', '')['PrDocumentation']['Verified']
+        records.append('query-failed')
+        # Advanced target base must fall back even though the branch delta remains documentation only.
+        advanced = commit(base, 'docs/target-update.md', 'Target update\n')
+        merge(head, advanced); event(head, baseline=advanced, before=source_head)
+        assert not planner.create_plan('core', advanced, 'pull_request', '')['PrDocumentation']['Verified']
+        records.append('target-base-advanced')
+        # An unrelated preceding head is a force-push; code mixed into docs also fails closed.
+        merge(head); event(head, before=advanced)
+        assert not planner.create_plan('core', base, 'pull_request', '')['PrDocumentation']['Verified']
+        records.append('force-push')
+        mixed = commit(head, 'template/frontend/src/app/core/services/notification-service.ts', '\n// mixed code\n')
+        merge(mixed); event(mixed, before=source_head)
+        assert not planner.create_plan('core', base, 'pull_request', '')['PrDocumentation']['Verified']
+        records.append('mixed-code')
+        unknown = commit(head, 'unknown.increment', 'unknown\n')
+        merge(unknown); event(unknown, before=source_head)
+        assert not planner.create_plan('core', base, 'pull_request', '')['PrDocumentation']['Verified']
+        records.append('unknown-input')
+        # Generated and package documentation keep their own actual responsibilities.
+        for path, job in [('template/docs/standards/testing.md', 'template-generation'),
+                          ('framework/docs/components/email.md', 'package-consumption')]:
+            document = commit(source_head, path, '\nDocumentation fixture\n')
+            merge(document); event(document, before=source_head)
+            document_plan = planner.create_plan('core', base, 'pull_request', '')
+            assert document_plan['PrDocumentation']['Verified'] and document_plan['Jobs'][job], document_plan['Reason']
+        # A successful inherited increment preserves its original source when the next docs commit lands.
+        second = commit(head, 'docs/increment.md', 'Second increment\n')
+        second_merge = merge(second); event(second, before=head)
+        state['source'] = clone(plan)
+        state['runs'] = [dict(previous_run, id=43, head_sha=head, pull_requests=[dict(number=17, head=dict(sha=head))])]
+        state['current'] = clone(state['runs'][0])
+        state['artifacts'] = [dict(id=74, name='quality-plan-43-2', expired=False,
+                                  workflow_run=dict(id=43, head_sha=head, repository_id=7, head_repository_id=7))]
+        second_plan = clone(planner.create_plan('core', base, 'pull_request', ''))
+        assert second_plan['PrDocumentation']['Verified'] and [s['RunId'] for s in second_plan['PrDocumentation']['Sources']] == [43, 41], second_plan['Reason']
+        state['source']['PrDocumentation']['Sources'][0]['Attempt'] = 0
+        assert not planner.create_plan('core', base, 'pull_request', '')['PrDocumentation']['Verified']
+        records.append('inherited-chain-corrupt')
+        # Other events and publication inputs retain the existing complete plan.
+        for action in ('opened', 'reopened'):
+            event(second, before=head, action=action)
+            ordinary = planner.create_plan('core', base, 'pull_request', '')
+            assert not ordinary['PrDocumentation']['Verified'] and ordinary['Mode'] != 'documentation'
+        event(second, before=head)
+    # Execute the actual aggregate for the new merge, then inject corrupt evidence and unexpected skips.
+    workflow = planner.coverage.yaml.safe_load((repo / '.github/workflows/ci.yml').read_text()) if hasattr(planner.coverage, 'yaml') else None
+    if workflow is None:
+        import yaml
+        workflow = yaml.safe_load((repo / '.github/workflows/ci.yml').read_text())
+    summary = next(s['run'] for s in workflow['jobs']['template-matrix']['steps'] if s.get('id') == 'quality')
+    script = out / 'pr-documentation-summary.ps1'; script.write_text(summary)
+    output = out / 'pr-documentation-summary-output.txt'
+    states = {name: dict(result='skipped', outputs={}) for name in workflow['jobs']['template-matrix']['needs']}
+    states['quality-plan'] = dict(result='success', outputs=dict(validation_plan=json.dumps(second_plan)))
+    states['docs-sync']['result'] = states['docs-sync-windows']['result'] = 'success'
+    def aggregate(label, value, success=True):
+        with mock.patch.dict(os.environ, dict(env, NEEDS_JSON=json.dumps(value), CANDIDATE_SHA=second_merge,
+                                             PLAN_SCOPE='core', GITHUB_OUTPUT=str(output))):
+            run(label, ['pwsh', '-NoProfile', '-File', str(script)], repo, success)
+    aggregate('pr-documentation-summary-pass', states)
+    for field, value in [('Attempt', 0), ('BaseSha', advanced), ('CandidateSha', second_merge)]:
+        invalid = clone(states); changed = clone(second_plan)
+        changed['PrDocumentation']['Sources'][0][field] = value
+        invalid['quality-plan']['outputs']['validation_plan'] = json.dumps(changed)
+        aggregate('pr-documentation-summary-reject-' + field, invalid, False)
+    for job in ('docs-sync', 'docs-sync-windows', 'test'):
+        invalid = clone(states); invalid[job]['result'] = 'skipped' if job.startswith('docs-sync') else 'success'
+        aggregate('pr-documentation-summary-job-' + job, invalid, False)
+    (out / 'pr-documentation-fixtures.json').write_text(json.dumps(records, indent=2))
+    git('checkout', '--detach', '-q', base)
+    print(f'PASS PR documentation increments: same base, generated/package scope, two-edge chain, {len(records)} fallbacks and real aggregation', flush=True)
 
 
 def prove_dependency_audit_inputs(planner):

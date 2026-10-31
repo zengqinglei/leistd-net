@@ -26,7 +26,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
 {
     private const string Secret = "Pa55word-do-not-leak";
     private const string ConnectionString = $"Host=tenant-db;Database=acme;Username=acme;Password={Secret}";
-    private const string Name = "crm";
+    private const string Name = "billing";
 
     private readonly ConcurrentQueue<string> _efLog = new();
     private SqliteConnection _connection = default!;

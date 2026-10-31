@@ -28,7 +28,7 @@ public sealed class TenantConnectionChangedEvent(
     /// </summary>
     public string? TenantDisplayName { get; } = tenantDisplayName;
 
-    /// <summary>连接名（已归一化），例如 <c>default</c>、<c>crm</c>。不是租户名。</summary>
+    /// <summary>连接名（已归一化），例如 <c>default</c>、<c>billing</c>。不是租户名。</summary>
     public string Name { get; } = name;
 
     /// <summary>变化类型。</summary>

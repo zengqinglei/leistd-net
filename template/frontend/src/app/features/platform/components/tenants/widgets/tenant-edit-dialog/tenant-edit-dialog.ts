@@ -211,7 +211,7 @@ export class TenantEditDialog {
             adminEmail: model.adminEmail.trim(),
             adminPassword: model.adminPassword,
             // 留空即不分库：传空数组而不是空串条目。界面只收默认库一条，
-            // 契约本身支持多条命名连接（多服务部署时一次登记 default、crm……）
+            // 契约本身支持多条命名连接（多服务部署时一次登记 default、billing……）
             connections: model.connectionString.trim()
               ? [
                   {

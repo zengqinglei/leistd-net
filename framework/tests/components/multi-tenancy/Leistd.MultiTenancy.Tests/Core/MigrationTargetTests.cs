@@ -31,7 +31,7 @@ public class MigrationTargetTests
         var tenantId = Guid.NewGuid();
 
         var target = Assert.Single(
-            (await Create(new TenantMigrationConnection(tenantId, "crm", AcmeConnection)).GetDedicatedTargetsAsync("Crm")).Targets);
+            (await Create(new TenantMigrationConnection(tenantId, "billing", AcmeConnection)).GetDedicatedTargetsAsync("Billing")).Targets);
 
         Assert.Equal((tenantId, AcmeConnection), (target.TenantId, target.ConnectionString));
         // 指纹给日志用，文本形态不能带出连接串
@@ -51,7 +51,7 @@ public class MigrationTargetTests
     [Fact]
     public async Task Tenants_without_any_registration_simply_do_not_appear()
     {
-        var set = await Create().GetDedicatedTargetsAsync("Crm");
+        var set = await Create().GetDedicatedTargetsAsync("Billing");
 
         Assert.Empty(set.Targets);
         Assert.Empty(set.FailedTenants);
@@ -64,8 +64,8 @@ public class MigrationTargetTests
         var second = Guid.NewGuid();
 
         var targets = (await Create(
-            new TenantMigrationConnection(first, "crm", "Data Source=one"),
-            new TenantMigrationConnection(second, "default", "Data Source=two")).GetDedicatedTargetsAsync("Crm")).Targets;
+            new TenantMigrationConnection(first, "billing", "Data Source=one"),
+            new TenantMigrationConnection(second, "default", "Data Source=two")).GetDedicatedTargetsAsync("Billing")).Targets;
 
         Assert.Equal(2, targets.Count);
         Assert.Equal([first, second], targets.Select(x => x.TenantId));
@@ -84,7 +84,7 @@ public class MigrationTargetTests
 
         var target = Assert.Single((await Create(
             new TenantMigrationConnection(higher, "default", AcmeConnection),
-            new TenantMigrationConnection(lower, "default", AcmeConnection)).GetDedicatedTargetsAsync("Crm")).Targets);
+            new TenantMigrationConnection(lower, "default", AcmeConnection)).GetDedicatedTargetsAsync("Billing")).Targets);
 
         Assert.Equal(lower, target.TenantId);
         Assert.DoesNotContain("acme-secret", target.Fingerprint, StringComparison.OrdinalIgnoreCase);
@@ -96,11 +96,11 @@ public class MigrationTargetTests
     public async Task Failed_tenants_travel_with_the_targets_of_healthy_tenants()
     {
         var healthy = Guid.NewGuid();
-        var broken = new TenantDatabaseFailure(Guid.NewGuid(), "no connection named 'crm'");
+        var broken = new TenantDatabaseFailure(Guid.NewGuid(), "no connection named 'billing'");
 
         var set = await Create(
-            [new TenantMigrationConnection(healthy, "crm", AcmeConnection)],
-            [broken]).GetDedicatedTargetsAsync("Crm");
+            [new TenantMigrationConnection(healthy, "billing", AcmeConnection)],
+            [broken]).GetDedicatedTargetsAsync("Billing");
 
         Assert.Equal(healthy, Assert.Single(set.Targets).TenantId);
         Assert.Equal(broken, Assert.Single(set.FailedTenants));

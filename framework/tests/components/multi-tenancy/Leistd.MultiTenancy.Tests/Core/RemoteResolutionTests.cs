@@ -34,9 +34,9 @@ public sealed class RemoteResolutionTests : IDisposable
     public async Task An_exact_name_hit_is_used()
     {
         _host.Tenant.Id = Guid.NewGuid();
-        _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, "Data Source=acme-crm");
+        _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, "Data Source=acme-billing");
 
-        Assert.Equal("Data Source=acme-crm", await _host.ResolveAsync("Crm"));
+        Assert.Equal("Data Source=acme-billing", await _host.ResolveAsync("Billing"));
     }
 
     // 一租户一库、各服务不同 schema：只登记 default 一条，所有服务都回落到它
@@ -46,7 +46,7 @@ public sealed class RemoteResolutionTests : IDisposable
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (id, _) => ScriptedRemoteSource.Hit(id, "default", "Data Source=acme");
 
-        Assert.Equal("Data Source=acme", await _host.ResolveAsync("Crm"));
+        Assert.Equal("Data Source=acme", await _host.ResolveAsync("Billing"));
     }
 
     // 分库租户缺少当前连接名且无 default 时须失败关闭，回落本服务配置会把写入落到错误的物理库。
@@ -56,9 +56,9 @@ public sealed class RemoteResolutionTests : IDisposable
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (id, _) => ScriptedRemoteSource.RegisteredButMissing(id);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _host.ResolveAsync("Crm"));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _host.ResolveAsync("Billing"));
 
-        Assert.Contains("Crm", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Billing", error.Message, StringComparison.Ordinal);
     }
 
     // 租户不存在或已删除：404，且同样不回落
@@ -93,19 +93,19 @@ public sealed class RemoteResolutionTests : IDisposable
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, $"Data Source={name}");
 
-        Assert.Equal("Data Source=foundation", await _host.ResolveAsync("Foundation"));
+        Assert.Equal("Data Source=inventory", await _host.ResolveAsync("Inventory"));
     }
 
-    // 传给存储的必须是归一化后的名字：管理员填 Crm 还是 crm 命中同一行
+    // 传给存储的必须是归一化后的名字：管理员填 Billing 还是 billing 命中同一行
     [Fact]
     public async Task The_store_is_asked_with_the_normalized_name()
     {
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, "Data Source=acme");
 
-        await _host.ResolveAsync("Crm");
+        await _host.ResolveAsync("Billing");
 
-        Assert.Equal(["crm"], _host.Source.RequestedNames);
+        Assert.Equal(["billing"], _host.Source.RequestedNames);
     }
 
     // 宿主连接按名字找不到时回落 Default：业务项目把上下文改名后不用改部署
@@ -115,17 +115,17 @@ public sealed class RemoteResolutionTests : IDisposable
         using var host = new RemoteHost();
         host.Tenant.Id = Guid.NewGuid();
 
-        Assert.Equal(RemoteHost.DefaultConnection, await host.ResolveAsync("Crm"));
+        Assert.Equal(RemoteHost.DefaultConnection, await host.ResolveAsync("Billing"));
     }
 
     // 配了同名连接就优先用它，不再回落 Default
     [Fact]
     public async Task A_named_host_connection_wins_over_the_default_name()
     {
-        using var host = new RemoteHost(namedConnection: "Data Source=crm-host");
+        using var host = new RemoteHost(namedConnection: "Data Source=billing-host");
         host.Tenant.Id = Guid.NewGuid();
 
-        Assert.Equal("Data Source=crm-host", await host.ResolveAsync("Crm"));
+        Assert.Equal("Data Source=billing-host", await host.ResolveAsync("Billing"));
     }
 
     [Fact]
@@ -138,9 +138,9 @@ public sealed class RemoteResolutionTests : IDisposable
 
     // 名字本身不合法是配置错误，不该被当成"查不到"
     [Theory]
-    [InlineData("crm_db")]
-    [InlineData("Crm Db")]
-    [InlineData("crm.db")]
+    [InlineData("billing_db")]
+    [InlineData("Billing Db")]
+    [InlineData("billing.db")]
     public async Task An_invalid_connection_name_is_rejected(string name)
     {
         _host.Tenant.Id = Guid.NewGuid();

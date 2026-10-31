@@ -11,7 +11,7 @@
 - **依据**：
   - 外部调研 `.tmp/devflow/research.md`，38 个一手来源；
   - 两份盘点 `.tmp/devflow/inventory-{framework,business}.md`；
-  - CRM 三仓 origin/main 的实际文档。
+  -下游项目origin/main 的实际文档。
 - **评审取舍原则**：
   - 终局，但不过度设计；
   - 不强制所有任务走同一个阶段状态机（`docs/architecture/design-principles.md` 第 22、60 行）；
@@ -53,7 +53,7 @@
 | F1 新组件、新能力 | 规划、下游需求 | 中或高 | developing-leistd-framework |
 | F2 框架缺陷修复 | 测试、下游反馈 | 低或中 | developing-leistd-framework |
 | F3 破坏性变更、依赖与运行时升级 | 规划、.NET 发版 | 高 | developing-leistd-framework |
-| F4 下游反馈处理 | CRM 等业务项目 | 按每一项分档 | maintaining-leistd-repository |
+| F4 下游反馈处理 |下游项目| 按每一项分档 | maintaining-leistd-repository |
 | F5 模板功能开发 | 规划、下游需求 | 中或高 | developing-leistd-template |
 | F6 模板缺陷修复 | 生成项目、下游反馈 | 低或中 | developing-leistd-template |
 | F7 模板向下游同步 | 模板发版 | 中 | maintaining（发布侧）/ 项目 Skill（消费侧） |
@@ -352,12 +352,12 @@ leistd-net/
 
 | 阶段 | 现状 | 主要缺口 |
 | --- | --- | --- |
-| S1–S3 | 项目 Skill 的 `references/development.md` 写了通用四步 | 没有按档决定产出什么，没有缺陷三段式；需求文档只有归属，没有废弃和归档规则（CRM 自己补了 `archive/`） |
+| S1–S3 | 项目 Skill 的 `references/development.md` 写了通用四步 | 没有按档决定产出什么，没有缺陷三段式；需求文档只有归属，没有废弃和归档规则（下游项目自己补了 `archive/`） |
 | S4 | 最完整（testing.md、verify、风险档） | — |
 | S5 | 模板 CI 只做验证 | **没有镜像构建和推送**，部署文档要求"不用 latest"，模板却不提供做到这一点的流水线 |
 | S6 | 部署文档的环境表里只有一行 | 环境晋级（同一 digest 从测试到生产）、按验收标准取证，都没有 |
-| S7 | 部署文档对迁移和回滚写得很细 | **发布说明在模板和 CRM 都不存在**；部署文档 321 行、84 个条件标记，把配置参考、操作手册和架构边界混在一起 |
-| S8 | 只有"规范演进" | 观测和复盘没有骨架；CRM 引用的 Runbook 和已知错误库并不存在 |
+| S7 | 部署文档对迁移和回滚写得很细 | **发布说明在模板和下游项目都不存在**；部署文档 321 行、84 个条件标记，把配置参考、操作手册和架构边界混在一起 |
+| S8 | 只有"规范演进" | 观测和复盘没有骨架；下游项目引用的 Runbook 和已知错误库并不存在 |
 | 运维 B3/B4/B5/B9 | 项目 Skill 路由表里没有这几类意图，只能落到"测试或定位故障"，而那一条只讲本地测试 | 只读查询纪律、排查流程、数据修正固定流程、热修通道，全部空白；数据修正规则只写在个人全局 CLAUDE.md，生成的项目拿不到 |
 | 路径 | — | references 混用三种路径基准；`docs/README.md`、testing.md 用 `../.agents/...` 反向链接到 Skill |
 
@@ -367,7 +367,7 @@ leistd-net/
 - 通用 Skill：模板里的 `leistd-project-workflow`，跟技术栈无关；
 - 模板规范：`template/docs/`；
 - 框架仓库：`.agents/skills/`、`docs/`；
-- 项目级：CRM 自己维护。
+- 项目级：下游项目自己维护。
 
 ### 5.1 框架仓库（F 层）
 
@@ -380,7 +380,7 @@ leistd-net/
 | F-e | 明确替代入口的承载位置 | DG §6.5 | 两处并不冲突，只是表述含糊。写明"升级说明"指破坏性变更脚注和 Release 正文，不要求独立的升级指南文件；组件当前文档仍须给出替代入口 |
 | F-f | 文档按交付面归位、去重 | `docs/framework/` → `docs/template/` | 模板工作区、模板矩阵、模板包发布移到 `docs/template/`；4 处工作区描述和 6 处"定向证据"收为各一处，其他地方改成链接 |
 | F-g | 拆分 QA，降低读取成本 | `docs/framework/quality-assurance.md` | 拆成本地配方（开发者读）和 CI 放行实现（维护 CI 时才读），超长单行重新排版。验收：以同一个真实 F1 任务的实际读取范围前后对比；不另建统计设施，也不为降低体量删除契约 |
-| F-h | 预发布验收与下游通知 | VR 补两句 | beta 由下游试点项目验收；stable 或模板发版后，按下游清单通知（目前只有 CRM），破坏性变更附必要动作 |
+| F-h | 预发布验收与下游通知 | VR 补两句 | beta 由下游试点项目验收；stable 或模板发版后，按下游清单通知，破坏性变更附必要动作 |
 | F-j | 写入文档沉淀规则 | `docs/README.md`、DP §2.2 与第 59 行、三个仓库 Skill 的"方案与实施计划"、根 AGENTS.md | 按 §3.1–§3.4、§3.7 改写：常驻与依据分开、规格文档的结构与按档要求、提交规则；同步修改 §3.8 所列的旧规定 |
 | F-i | 闭环遗留项 | 发布操作 | 合入 main（同时修正 nightly 版本、首发模板包）、nuget.org unlist。两项都需要你单独授权，不在本方案内执行 |
 
@@ -401,22 +401,22 @@ leistd-net/
 | --- | --- | --- | --- |
 | T-a | 拆分部署文档 | `template/docs/deploy/`、`template/docs/operations/runbooks/` | 拆成三部分：<br>- `deploy/README.md`：索引、部署形态、环境晋级；<br>- `deploy/configuration.md`：配置参考；<br>- 操作手册（令牌证书轮换、大版本升级、管理员恢复、两步验证重置）移到 `operations/runbooks/`，一个操作一份，和项目自己的 Runbook 放在同一处。<br><br>`docs/README.md` 的任务读取清单按动作路由，AI 只读取需要的那一份。<br><br>**保持条件裁剪**：OpenIddictServer、LocalIdentity、SpaFrontend 等条件继续生效。只适用于部分形态的 Runbook 要配文件级排除，避免 Resource 等形态生成不可执行的操作说明。同步更新 Dockerfile、规范、Skill 和模板配置中引用的旧路径与锚点。 |
 | T-b | 镜像作业（已确认实施） | `template/.github/workflows/ci.yml`、`.gitlab-ci.yml` | **触发**：只在默认分支的 push 时发布，并且要等同一提交的完整 verify 和全部适用审计都成功。下列情况不发布：PR/MR、merge_group、只做审计的 schedule。手动触发也要先跑完整验证，不能只凭分支名放行。GitLab 不用 `needs` 绕过阶段屏障，要放在 verify 和审计之后的阶段。<br><br>**产物**：用 `template/Dockerfile` 的 `api`、`migrator` 两个 target，镜像名按平台命名空间来定：GitLab 用 `$CI_REGISTRY_IMAGE/api`、`$CI_REGISTRY_IMAGE/migrator`；GitHub 用 `ghcr.io/<owner>/<repo>-api`、`ghcr.io/<owner>/<repo>-migrator`。<br>- 注入 `APP_REVISION`，值为当前提交 SHA；<br>- `APP_VERSION` 取仓库根的 `VERSION` 文件，没有这个文件时用 Dockerfile 默认值；<br>- 以提交 SHA 为标签，作业摘要输出两个镜像的 digest。<br><br>**部署晋级**：按 digest 晋级；SHA 标签可以被重写，不能作为不可变的内容标识。部署本身不在范围内。<br><br>**权限**：GitHub 作业声明 `packages: write`，GitLab 要求已启用项目的 Container Registry。不需要自建密钥，但需要这些权限配置。<br><br>**同步修改**：<br>- `test-template-generation.py:491–492` 对 GitLab 顶层作业和 stages 的精确断言；<br>- 第 905 行的 Ci 差异允许集合；<br>- `deploy/README.md#确认已部署版本`，把手工命令改为流水线说明，在 P2 落地时一并修改，不提前写成现状。 |
-| T-c | 日志链路验收 | `testing.md` 或 `coding-backend.md §7` | 上收 CRM `logging.md §8.1` 的前 4 条：同一 traceId、入口和出口成对、带业务键、后台作业带 traceId |
+| T-c | 日志链路验收 | `testing.md` 或 `coding-backend.md §7` | 统一以下日志要求：同一 traceId、入口和出口成对、带业务键、后台作业带 traceId |
 | T-f | 测试规范补测试环境验收 | `template/docs/standards/testing.md` 新增 §7 | 现有 §1–§6 已覆盖本地与 CI：按风险选测试、前后端分层、E2E 范围、闸门。缺少测试环境这一段，补充：<br>- 验收依据：规格文档 §1 中的 Given/When/Then；<br>- 已有自动化测试覆盖的条目，在测试环境只做冒烟；<br>- 标注"人工验收"的条目，逐条取证；<br>- 验收结论写进规格文档 §4，截图和日志放 MR 附件；<br>- 测试账号和测试数据只写获取方式，不写凭据。<br><br>项目特有的测试规则写在 `docs/project/testing.md`，不改基线。 |
-| T-d | 配置归属判定表 | `settings.md` | 部署键、宿主设置、租户设置三者怎么判定，上收 CRM 的判定表，删掉 Nacos 等特有内容 |
+| T-d | 配置归属判定表 | `settings.md` | 部署键、宿主设置、租户设置三者怎么判定，采用通用判定表，不引入特定配置中心的约定 |
 | T-e | 运维目录 | `template/docs/operations/` | 模板只带 `runbooks/`，内容由 T-a 迁入，所以不是空目录。`queries/`、`data-fixes/`、`incidents/` 不预建，第一次有内容时按 §3.6 的结构创建 |
 
-### 5.4 留给 CRM 的项目级建议
+### 5.4 留给下游项目的项目级建议
 
-随回执发给 CRM，不在本仓库实施：
+随回执发给下游项目，不在本仓库实施：
 
 1. `delivery-workflow.md`、`logging.md`、`configuration-management.md` 从 `docs/standards/` 移到 `docs/project/`，否则下次同步模板会冲突。
 2. 部署文档里按 "Round N" 写的 14 个章节，按主题合并成现状描述。
 3. 要么补上 Runbook 和已知错误库，要么删掉悬空引用。
 4. 模板首发后，用 `sync-template.ps1 -Adopt` 接入来源标记，之后按版本同步。
-5. 补写 `k8s-agents` 的 README（部署通道和授权范围）。数据库查询工具改为强制只读事务。
-6. 个人 Skill `crm-v2-delivery-loop` 不再复述项目规则，只保留个人协作约束。
-7. `docs/requirements/` 已经符合新结构，不用动。日常需求的方案现在放在仓库外的 `~/orca/workspaces/...`，今后改为写进仓库的 `docs/specs/`。`crm-v2-refactoring/` 是一个大型变更专题，可以原样保留，作为依据。
+5. 部署工具写明通道与授权范围，数据库查询工具强制只读事务。
+6. 个人 Skill 不再复述项目规则，只保留个人协作约束。
+7. `docs/requirements/` 已经符合新结构，不用动。日常需求的方案现在放在仓库外的 `~/orca/workspaces/...`，今后改为写进仓库的 `docs/specs/`。已有重构资料是一个大型变更专题，可以原样保留，作为依据。
 
 ## 6. 不做
 
@@ -433,7 +433,7 @@ leistd-net/
 | --- | --- | --- | --- |
 | P1 | 纯文档和 Skill：F-a 至 F-h、F-j、B-a 至 B-f、T-c、T-d、T-f；本方案自身随 F-d 移入 `docs/specs/` | 中 | `check-all`（validate-skills、读取成本、断链），包括检查器自检。<br><br>Skill 评测覆盖四种差异：需求明确直接实施、只要方案、只读查询、紧急止损；只在替身或隔离的生成项目里试跑，不触及生产。<br><br>生成控制片。<br><br>F-f、F-g 移动章节后，同步更新入链、任务路由和锚点；常驻说明只写本期已经实现的内容 |
 | P2 | T-a 拆分部署文档并迁入 Runbook、T-b 镜像作业、T-e | 中或高 | 全量生成证明，包括条件标记和文件级排除。<br><br>覆盖 Ci=github/gitlab/none，以及有前端、无前端两种形态。<br><br>按生成后的 YAML 原文演练 T-b 的正反路径：push 发布；PR、MR、merge_group、schedule 不发布；审计失败不发布。<br><br>取得目标仓库授权后，至少实际推送一组 api、migrator 镜像，并核对 digest 和版本身份。不因镜像推送成功就宣称部署通过 |
-| P3 | 回执与通知 CRM（§5.4）；F-i 待你授权 | — | — |
+| P3 | 回执与通知下游项目（§5.4）；F-i 待你授权 | — | — |
 
 每期完成后提醒你审查，审查方须明确给出"通过"，你指示后再提交。
 
@@ -474,5 +474,5 @@ P1 与 P2 合在同一个 PR 交付，Codex 实施审查两轮后通过。
 
 ### 遗留
 
-- **P3**：合入后，给 CRM 发回执，附 §5.4 的 7 条建议。
+- **P3**：合入后，给下游项目发回执，附 §5.4 的 7 条建议。
 - **F-i**：合入 main（含模板包首发）和 nuget.org unlist，都需要用户单独授权。

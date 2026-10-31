@@ -26,7 +26,7 @@ public static class DependencyInjection
     /// builder.Services.AddRedisDistributedLock(redisConnectionString);
     /// builder.Services.AddInProcessBackgroundJobs();
     /// builder.Services.AddRecurringJob&lt;LeadRecycleJob&gt;(
-    ///     "crm.lead-recycle", RecurringJobSchedule.DailyAt(new TimeOnly(18, 0)), RecurringJobScope.Cluster);
+    ///     "billing.invoice-process", RecurringJobSchedule.DailyAt(new TimeOnly(18, 0)), RecurringJobScope.Cluster);
     /// </code>
     /// </example>
     /// <param name="services">服务集合。</param>

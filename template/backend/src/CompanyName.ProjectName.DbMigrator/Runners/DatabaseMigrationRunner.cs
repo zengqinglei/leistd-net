@@ -25,7 +25,7 @@ public sealed class DatabaseMigrationRunner(
     /// <summary>业务上下文的连接名，即租户连接登记里要查的名字。</summary>
     /// <remarks>
     /// <c>MyProjectDbContext</c> 没有声明 <c>[ConnectionStringName]</c>，因此用默认名。
-    /// 业务项目把上下文改名为服务名（如 <c>Crm</c>）时，这里要跟着改成同一个名字——
+    /// 业务项目把上下文改名为服务名（如 <c>Billing</c>）时，这里要跟着改成同一个名字——
     /// 迁移作业与运行时必须问同一个名字，否则会迁错库。
     /// </remarks>
     internal const string BusinessConnectionStringName = ConnectionStringNames.Default;
