@@ -28,6 +28,7 @@ import {
 //#if (LocalIdentity)
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#endif
+import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -52,6 +53,7 @@ describe('Users page query round trip', () => {
   // prettier-ignore
   let service: Pick<
     MockedObject<UserManagementService>,
+    | 'disableUser'
     | 'getUsers'
     | 'batchDisableUsers'
     //#if (LocalIdentity)
@@ -78,6 +80,7 @@ describe('Users page query round trip', () => {
 
   beforeEach(async () => {
     service = {
+      disableUser: vi.fn(),
       getUsers: vi.fn().mockName('UserManagementService.getUsers'),
       batchDisableUsers: vi.fn().mockName('UserManagementService.batchDisableUsers'),
       //#if (LocalIdentity)
@@ -102,7 +105,7 @@ describe('Users page query round trip', () => {
         ...provideTranslocoTesting(['en']),
         //#endif
         { provide: UserManagementService, useValue: service },
-        { provide: ConfirmService, useValue: { open: () => Promise.resolve(true) } },
+        { provide: ConfirmService, useValue: { open: acceptConfirmAction } },
         { provide: StartupService, useValue: { status: signal('success' as const) } },
       ],
     }).compileComponents();
@@ -543,6 +546,28 @@ describe('Users page query round trip', () => {
       expect(component.rowSelection()).toEqual({});
     });
   });
+  it('reports success and refreshes only after the confirmation action succeeds', async () => {
+    service.disableUser.mockReturnValue(of(undefined));
+    const notify = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const before = service.getUsers.mock.calls.length;
+    await component.handleToggleActive(loadedRow);
+    expect(service.disableUser).toHaveBeenCalledWith(loadedRow.id);
+    expect(notify).toHaveBeenCalledOnce();
+    expect(service.getUsers.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it('does not toast or refresh a failed confirmation action', async () => {
+    service.disableUser.mockReturnValue(throwError(() => new Error('Conflict')));
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const before = service.getUsers.mock.calls.length;
+    await component.handleToggleActive(loadedRow);
+    expect(service.disableUser).toHaveBeenCalledOnce();
+    expect(success).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(service.getUsers).toHaveBeenCalledTimes(before);
+  });
+
   it('locks toggle before confirmation and unlocks after cancellation', async () => {
     let answer!: (value: boolean) => void;
     const confirm = vi
@@ -554,7 +579,9 @@ describe('Users page query round trip', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.activationId()).toBeTruthy();
-      expect(table().activationId()).toBe(component.activationId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);
@@ -574,7 +601,9 @@ describe('Users page query round trip', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.deletingId()).toBeTruthy();
-      expect(table().deletingId()).toBe(component.deletingId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);
@@ -595,7 +624,9 @@ describe('Users page query round trip', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.unlockingId()).toBeTruthy();
-      expect(table().unlockingId()).toBe(component.unlockingId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);

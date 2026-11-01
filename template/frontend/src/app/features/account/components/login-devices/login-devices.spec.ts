@@ -1,9 +1,11 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { toast } from '@spartan-ng/brain/sonner';
+import { of, throwError } from 'rxjs';
 
 import { LoginDevices } from './login-devices';
-import { ConfirmService } from '../../../../core/feedback/confirm-service';
+import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
+import { ConfirmOptions, ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -55,7 +57,13 @@ describe('LoginDevices', () => {
       imports: [LoginDevices],
       providers: [
         { provide: AccountService, useValue: account },
-        { provide: ConfirmService, useValue: { open: () => Promise.resolve(confirmed) } },
+        {
+          provide: ConfirmService,
+          useValue: {
+            open: (options: ConfirmOptions) =>
+              confirmed ? acceptConfirmAction(options) : Promise.resolve(false),
+          },
+        },
         {
           provide: AccountPreferencesService,
           useValue: { timeZone: signal<string | undefined>('UTC'), displayLocale: signal('en') },
@@ -128,7 +136,18 @@ describe('LoginDevices', () => {
     expect(account.revokeOtherSessions).toHaveBeenCalledTimes(1);
     expect(host.querySelectorAll('[data-testid="session-row"]').length).toBe(1);
   });
-  it('disables the trigger during confirmation and restores it on cancellation', async () => {
+  it('retains a device and leaves request errors to the confirmation', async () => {
+    account.revokeSession.mockReturnValue(throwError(() => new Error('Conflict')));
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const host = await render([session({ id: 'phone', isCurrent: false })]);
+    host.querySelector<HTMLButtonElement>('[data-testid="revoke-session"]')!.click();
+    await fixture.whenStable();
+    expect(account.revokeSession).toHaveBeenCalledOnce();
+    expect(host.querySelectorAll('[data-testid="session-row"]')).toHaveLength(1);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('keeps the trigger unchanged and prevents duplicate confirmations', async () => {
     let answer!: (value: boolean) => void;
     const confirmation = vi
       .spyOn(TestBed.inject(ConfirmService), 'open')
@@ -140,8 +159,8 @@ describe('LoginDevices', () => {
     fixture.detectChanges();
     try {
       expect(confirmation).toHaveBeenCalledOnce();
-      expect(button.disabled).toBe(true);
-      expect(button.querySelector('hlm-spinner')).not.toBeNull();
+      expect(button.disabled).toBe(false);
+      expect(button.querySelector('hlm-spinner')).toBeNull();
     } finally {
       answer(false);
       await fixture.whenStable();

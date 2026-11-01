@@ -24,7 +24,7 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+import { Observable, tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 // prettier-ignore
 import {
   catchError,
@@ -101,6 +101,7 @@ const ROLES_CHANGED_EVENT = 'Roles.Changed';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Roles {
+  // 仅防确认流程重入，不驱动行内禁用或 spinner。
   readonly deletingId = signal<string | null>(null);
 
   private readonly roleService = inject(RoleService);
@@ -294,6 +295,8 @@ export class Roles {
 
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.roleService.deleteRole(role.id),
         //#if (IncludeLocalization)
         header: this.transloco.translate('roles.deleteTitle'),
         message: this.transloco.translate('roles.deleteDescription', { name: role.displayName }),
@@ -310,18 +313,12 @@ export class Roles {
         return;
       }
 
-      try {
-        await firstValueFrom(this.roleService.deleteRole(role.id));
-
-        this.reload();
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('roles.deleted'));
-        //#else
-        toast.success('Role deleted');
-        //#endif
-      } catch (error: unknown) {
-        toast.error(applicationErrorMessage(error));
-      }
+      this.reload();
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('roles.deleted'));
+      //#else
+      toast.success('Role deleted');
+      //#endif
     } finally {
       this.deletingId.set(null);
     }

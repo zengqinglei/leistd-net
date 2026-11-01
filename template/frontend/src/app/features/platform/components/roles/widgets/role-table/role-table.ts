@@ -29,7 +29,6 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-table';
@@ -83,7 +82,6 @@ import { RoleOutputDto } from '../../../../dtos/role.dto';
     NgIcon,
     HlmBadge,
     HlmButton,
-    HlmSpinner,
     TablePaginator,
     ...HlmDropdownMenuImports,
     ...HlmTableImports,
@@ -118,7 +116,6 @@ export class RoleTable {
   protected readonly t = englishText(ENGLISH);
 
   //#endif
-  readonly deletingId = input<string | null>(null);
   readonly roles = input<RoleOutputDto[]>([]);
   readonly totalCount = input(0);
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });

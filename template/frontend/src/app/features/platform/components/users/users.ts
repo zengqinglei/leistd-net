@@ -40,9 +40,9 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, RowSelectionState, SortingState } from '@tanstack/angular-table';
 //#if (LocalIdentity)
-import { Observable, tap, of, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+import { tap, of, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#else
-import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+import { tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#endif
 import {
   catchError,
@@ -164,6 +164,7 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'creationTime', desc: true }];
 export class Users {
   readonly resettingTwoFactorId = signal<string | null>(null);
 
+  // 仅防确认流程重入，不驱动行内禁用或 spinner。
   readonly activationId = signal<string | null>(null);
   readonly deletingId = signal<string | null>(null);
   readonly unlockingId = signal<string | null>(null);
@@ -520,6 +521,9 @@ export class Users {
 
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () =>
+          user.isActive ? this.service.disableUser(user.id) : this.service.enableUser(user.id),
         //#if (IncludeLocalization)
         message: this.transloco.translate(
           user.isActive ? 'users.confirm.disableMessage' : 'users.confirm.enableMessage',
@@ -541,28 +545,18 @@ export class Users {
         return;
       }
 
-      const request = user.isActive
-        ? this.service.disableUser(user.id)
-        : this.service.enableUser(user.id);
-
-      try {
-        await firstValueFrom(request);
-
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('common.success'), {
-          description: this.transloco.translate(
-            user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
-          ),
-        });
-        //#else
-        toast.success('Success', {
-          description: user.isActive ? 'User disabled' : 'User enabled',
-        });
-        //#endif
-        this.reloadList();
-      } catch (error: unknown) {
-        this.showRequestError(error);
-      }
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate(
+          user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
+        ),
+      });
+      //#else
+      toast.success('Success', {
+        description: user.isActive ? 'User disabled' : 'User enabled',
+      });
+      //#endif
+      this.reloadList();
     } finally {
       this.activationId.set(null);
     }
@@ -588,6 +582,8 @@ export class Users {
       }
 
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.service.deleteUser(user.id),
         //#if (IncludeLocalization)
         message: this.transloco.translate('users.confirm.deleteMessage', { name: user.username }),
         header: this.transloco.translate('users.confirm.deleteHeader'),
@@ -603,20 +599,14 @@ export class Users {
         return;
       }
 
-      try {
-        await firstValueFrom(this.service.deleteUser(user.id));
-
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('common.success'), {
-          description: this.transloco.translate('users.toast.deleted'),
-        });
-        //#else
-        toast.success('Success', { description: 'User deleted' });
-        //#endif
-        this.reloadList();
-      } catch (error: unknown) {
-        this.showRequestError(error);
-      }
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('users.toast.deleted'),
+      });
+      //#else
+      toast.success('Success', { description: 'User deleted' });
+      //#endif
+      this.reloadList();
     } finally {
       this.deletingId.set(null);
     }
@@ -629,6 +619,8 @@ export class Users {
 
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.service.unlockUser(user.id),
         //#if (IncludeLocalization)
         message: this.transloco.translate('users.confirm.unlockMessage', { name: user.username }),
         header: this.transloco.translate('users.confirm.unlockHeader'),
@@ -643,20 +635,14 @@ export class Users {
         return;
       }
 
-      try {
-        await firstValueFrom(this.service.unlockUser(user.id));
-
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('common.success'), {
-          description: this.transloco.translate('users.toast.unlocked'),
-        });
-        //#else
-        toast.success('Success', { description: 'User unlocked' });
-        //#endif
-        this.reloadList();
-      } catch (error: unknown) {
-        this.showRequestError(error);
-      }
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('users.toast.unlocked'),
+      });
+      //#else
+      toast.success('Success', { description: 'User unlocked' });
+      //#endif
+      this.reloadList();
     } finally {
       this.unlockingId.set(null);
     }
@@ -839,12 +825,23 @@ export class Users {
   async batchSetActive(active: boolean): Promise<void> {
     if (this.batchBusy()) return;
     this.batchBusy.set(true);
-    let submitted = false;
+    // 确认与重试始终针对打开时的选择，后台刷新不能悄悄改变写入目标。
+    const ids = this.selectedIds();
+    let result!: BatchOperationOutputDto;
     try {
-      const count = this.selectedIds().length;
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () =>
+          (active
+            ? this.service.batchEnableUsers({ ids })
+            : this.service.batchDisableUsers({ ids })
+          ).pipe(
+            tap((value) => {
+              result = value;
+            }),
+          ),
         message: this.text(active ? 'users.batch.enableMessage' : 'users.batch.disableMessage', {
-          count,
+          count: ids.length,
         }),
         header: this.text(active ? 'users.batch.enableHeader' : 'users.batch.disableHeader'),
         //#if (IncludeLocalization)
@@ -853,15 +850,9 @@ export class Users {
         //#endif
         variant: active ? undefined : 'destructive',
       });
-      if (confirmed) {
-        const ids = this.selectedIds();
-        submitted = true;
-        this.runBatch(
-          active ? this.service.batchEnableUsers({ ids }) : this.service.batchDisableUsers({ ids }),
-        );
-      }
+      if (confirmed) this.completeBatch(result);
     } finally {
-      if (!submitted) this.batchBusy.set(false);
+      this.batchBusy.set(false);
     }
   }
   //#if (LocalIdentity)
@@ -869,22 +860,27 @@ export class Users {
   async batchUnlock(): Promise<void> {
     if (this.batchBusy()) return;
     this.batchBusy.set(true);
-    let submitted = false;
+    const ids = this.selectedIds();
+    let result!: BatchOperationOutputDto;
     try {
       const confirmed = await this.confirmService.open({
-        message: this.text('users.batch.unlockMessage', { count: this.selectedIds().length }),
+        owner: this.destroyRef,
+        action: () =>
+          this.service.batchUnlockUsers({ ids }).pipe(
+            tap((value) => {
+              result = value;
+            }),
+          ),
+        message: this.text('users.batch.unlockMessage', { count: ids.length }),
         header: this.text('users.batch.unlockHeader'),
         //#if (IncludeLocalization)
         confirmText: this.text('common.ok'),
         cancelText: this.text('common.cancel'),
         //#endif
       });
-      if (confirmed) {
-        submitted = true;
-        this.runBatch(this.service.batchUnlockUsers({ ids: this.selectedIds() }));
-      }
+      if (confirmed) this.completeBatch(result);
     } finally {
-      if (!submitted) this.batchBusy.set(false);
+      this.batchBusy.set(false);
     }
   }
   //#endif
@@ -905,17 +901,10 @@ export class Users {
    * 执行一次批量操作并汇总逐条结果：全部成功给成功提示；有失败时列出失败的用户与原因（说明来自
    * 服务端，已本地化）。完成后清空选择并刷新当前页；整批被拒（如角色不存在）时保留选择以便重试。
    */
-  private runBatch(request: Observable<BatchOperationOutputDto>, onDone?: () => void): void {
-    this.batchBusy.set(true);
-    request.pipe(finalize(() => this.batchBusy.set(false))).subscribe({
-      next: (result) => {
-        this.reportBatch(result);
-        this.rowSelection.set({});
-        onDone?.();
-        this.reloadList();
-      },
-      error: (error) => this.showRequestError(error),
-    });
+  private completeBatch(result: BatchOperationOutputDto): void {
+    this.reportBatch(result);
+    this.rowSelection.set({});
+    this.reloadList();
   }
 
   private reportBatch(result: BatchOperationOutputDto): void {

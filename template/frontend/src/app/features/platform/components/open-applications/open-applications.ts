@@ -112,6 +112,7 @@ const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'creationTime', desc: t
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplications {
+  // 仅防确认流程重入，不驱动行内禁用或 spinner。
   readonly deletingId = signal<string | null>(null);
   readonly resettingSecretId = signal<string | null>(null);
 
@@ -424,6 +425,8 @@ export class OpenApplications {
 
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.service.deleteOpenApplication(id),
         //#if (IncludeLocalization)
         message: this.transloco.translate('openApp.confirm.deleteMessage'),
         header: this.transloco.translate('openApp.confirm.deleteHeader'),
@@ -440,20 +443,14 @@ export class OpenApplications {
         return;
       }
 
-      try {
-        await firstValueFrom(this.service.deleteOpenApplication(id));
-
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('common.success'), {
-          description: this.transloco.translate('openApp.toast.deleted'),
-        });
-        //#else
-        toast.success('Success', { description: 'Open application deleted' });
-        //#endif
-        this.reloadList();
-      } catch (error: unknown) {
-        this.showRequestError(error);
-      }
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('openApp.toast.deleted'),
+      });
+      //#else
+      toast.success('Success', { description: 'Open application deleted' });
+      //#endif
+      this.reloadList();
     } finally {
       this.deletingId.set(null);
     }

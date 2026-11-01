@@ -209,12 +209,7 @@
                               @if (hasRowActions()) {
                                 <!-- 菜单里只剩行内按钮的窄屏副本时，桌面端不显示触发器，免得点开为空。 -->
                                 <button
-                                  [disabled]="
-                                    deletingId() === row.original.id ||
-                                    activationId() === row.original.id ||
-                                    unlockingId() === row.original.id ||
-                                    resettingTwoFactorId() === row.original.id
-                                  "
+                                  [disabled]="resettingTwoFactorId() === row.original.id"
                                   hlmBtn
                                   variant="ghost"
                                   size="icon-sm"
@@ -224,12 +219,7 @@
                                   [attr.aria-label]="t('common.actions')"
                                   [hlmDropdownMenuTrigger]="rowMenu"
                                 >
-                                  @if (
-                                    deletingId() === row.original.id ||
-                                    activationId() === row.original.id ||
-                                    unlockingId() === row.original.id ||
-                                    resettingTwoFactorId() === row.original.id
-                                  ) {
+                                  @if (resettingTwoFactorId() === row.original.id) {
                                     <hlm-spinner class="text-base" />
                                   } @else {
                                     <ng-icon name="lucideEllipsis" />
@@ -290,16 +280,12 @@
                                     }
                                     @if (canUpdate() && row.original.isLockedOut) {
                                       <button
-                                        [disabled]="unlockingId() !== null"
                                         hlmDropdownMenuItem
                                         data-testid="user-unlock"
                                         (click)="unlock.emit(row.original)"
                                       >
-                                        @if (unlockingId() === row.original.id) {
-                                          <hlm-spinner class="text-base" data-icon="inline-start" />
-                                        } @else {
-                                          <ng-icon name="lucideLockOpen" />
-                                        }
+                                        <ng-icon name="lucideLockOpen" />
+
                                         {{ t('users.tooltip.unlock') }}
                                       </button>
                                     }
@@ -343,9 +329,7 @@
                                       <button
                                         hlmDropdownMenuItem
                                         [disabled]="
-                                          activationId() !== null ||
-                                          isSuperAdmin(row.original) ||
-                                          isSelf(row.original)
+                                          isSuperAdmin(row.original) || isSelf(row.original)
                                         "
                                         [attr.aria-describedby]="
                                           isSelf(row.original)
@@ -354,17 +338,14 @@
                                         "
                                         (click)="toggleActive.emit(row.original)"
                                       >
-                                        @if (activationId() === row.original.id) {
-                                          <hlm-spinner class="text-base" data-icon="inline-start" />
-                                        } @else {
-                                          <ng-icon
-                                            [name]="
-                                              row.original.isActive
-                                                ? 'lucideBan'
-                                                : 'lucideCircleCheck'
-                                            "
-                                          />
-                                        }
+                                        <ng-icon
+                                          [name]="
+                                            row.original.isActive
+                                              ? 'lucideBan'
+                                              : 'lucideCircleCheck'
+                                          "
+                                        />
+
                                         {{
                                           row.original.isActive
                                             ? t('users.tooltip.disable')
@@ -388,9 +369,7 @@
                                       hlmDropdownMenuItem
                                       variant="destructive"
                                       [disabled]="
-                                        deletingId() !== null ||
-                                        isSuperAdmin(row.original) ||
-                                        isSelf(row.original)
+                                        isSuperAdmin(row.original) || isSelf(row.original)
                                       "
                                       [attr.aria-describedby]="
                                         isSelf(row.original)
@@ -399,11 +378,8 @@
                                       "
                                       (click)="delete.emit(row.original)"
                                     >
-                                      @if (deletingId() === row.original.id) {
-                                        <hlm-spinner class="text-base" data-icon="inline-start" />
-                                      } @else {
-                                        <ng-icon name="lucideTrash2" />
-                                      }
+                                      <ng-icon name="lucideTrash2" />
+
                                       {{ t('common.delete') }}
                                     </button>
                                     @if (isSelf(row.original)) {
