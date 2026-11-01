@@ -5,7 +5,7 @@
 - **两层结构**：brain 层 `@spartan-ng/brain` 是无头基元，作为 npm 依赖引入、不改；helm 层是样式实现，通过 CLI **复制进本项目** `frontend/libs/ui/`，属自有代码，可自由修改。
 - **摇树**：`frontend/libs/package.json` 声明 `"sideEffects": false`，未用到的 helm 模块不进产物。因此 libs 下的模块不能靠被导入本身产生必须保留的全局效果（裸导入样式或 polyfill、顶层注册、改全局对象）；顶层纯初始化、导出函数里的 DOM 操作与 Angular 声明不受影响。加组件或升级同步 Spartan 文件时逐个核对。
 - **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `frontend/libs/ui/`。
-- **风格**：`components.json` 的 `style` 为 `vega`。新增或重新生成组件都按它输出，页面上的尺寸与圆角跟随组件，不另写一套。
+- **风格**：`components.json` 的 `style` 为 `vega`。只用当前 Vega 的类与解剖，不照搬 Nova 等其他风格的示例；生成组件、页面尺寸与圆角均随 Vega。
 - **先用样式表，再改组件**：能用语义 token 或 `frontend/src/styles.css` 里按 `data-slot`、状态属性写的规则实现的调整，不改 helm。由样式表承担的调整以 `styles.css` 为准，例如：系统开启"减少动效"时关闭浮层的进出场动画与侧栏、抽屉、导航菜单的位移过渡；对话框与抽屉页头为右上角关闭按钮让出宽度；选择框与组合框的值区放不下时单行省略，箭头留在控件内（上游把选择框值区写成 flex，省略号不生效；组合框值区没有收缩约束）；触屏下菜单项、选项、导航链接、侧栏菜单按钮、分段控件项与验证码格补足 44px，折叠的图标侧栏随之加宽。只有样式表区分不了（按尺寸档位改高度）、要新增变体或改组件模板时才改 helm，并在下表登记。
 - Sheet 关闭文案由调用处通过官方 `closeLabel` 传入；工作区导航与设置外壳读取共享读屏词条。
 - **已定制的 helm 组件**（升级时逐个对照上游手动合入）：
@@ -22,7 +22,7 @@
 | `dialog`（`hlm-dialog-content`）、`sidebar`（`hlm-sidebar-trigger`）、`utils`（新增 `hlm-a11y-labels.token.ts` 并从 `utils` 入口导出） | 弹窗内边距 `--dialog-padding` 同供滚动正文；关闭按钮与侧栏开关的读屏名改读 `injectHlmA11yLabels()`；`hlm-dialog-content` 的 `closeLabel`、`hlm-sidebar-trigger` 的 `srOnlyText` 未传时取令牌 | 上游缺省英文；共享令牌统一缺省译文，显式输入仍可覆盖。多语言项目用 `provideHlmA11yLabels` 接上随语言切换的词条，升级时保留 |
 | `command`（`hlm-command`、`hlm-command-input`） | 根捕获阶段忽略 isComposing/keyCode 229 的 Enter；内部 input 转发 ariaLabel，缺省使用 placeholder | Brain 根回车未判断组字；命令输入须有稳定可访问名 |
 
-登记表按组件对照上游：凡与上游有差异的组件都必须有一行，没有差异的组件不登记；行内写全该组件的全部改动，升级或评审时逐项核对改动内容与源码一致。
+登记有上游差异的组件及其全部改动；无差异不登记。升级、评审须逐项核对源码。
 
 用 `pointer-coarse` 而不是屏幕宽度判断：平板横屏很宽，但仍是手指操作。
 

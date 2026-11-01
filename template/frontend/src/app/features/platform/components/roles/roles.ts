@@ -21,6 +21,7 @@ import {
   HlmInputGroupAddon,
   HlmInputGroupInput,
 } from '@spartan-ng/helm/input-group';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
@@ -83,6 +84,7 @@ const ROLES_CHANGED_EVENT = 'Roles.Changed';
   imports: [
     NgIcon,
     HlmButton,
+    HlmSpinner,
     HlmInputGroup,
     HlmInputGroupAddon,
     HlmInputGroupInput,

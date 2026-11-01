@@ -3,6 +3,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideTriangleAlert } from '@ng-icons/lucide';
 import { BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogFooter } from '@spartan-ng/helm/dialog';
 
 /** confirm 对话框的上下文（由 ConfirmService 传入）。 */
 export interface ConfirmContext {
@@ -22,28 +23,37 @@ export interface ConfirmContext {
   selector: 'app-confirm-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, NgIcon],
+  imports: [HlmButton, HlmDialogFooter, NgIcon],
   providers: [provideIcons({ lucideTriangleAlert })],
-  // 结构对齐 Spartan alert-dialog 默认解剖：media 图标块 + header + muted footer 条。
+  host: { class: 'flex min-h-0 flex-col' },
+  // 动态内容位于 DialogContent 内，无 alert-dialog 的命名 group/data-size，且 Brain 根不同；
+  // 在此等价展开 Vega 默认尺寸的 header/media/title 布局，保留服务给出的 aria 关联。
   template: `
-    <div class="flex flex-col gap-4">
-      <div class="flex items-start gap-4">
-        <div class="bg-muted inline-flex size-10 shrink-0 items-center justify-center rounded-md">
-          <ng-icon name="lucideTriangleAlert" class="text-destructive text-2xl" />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <h2 id="confirm-dialog-title" class="text-base font-medium">{{ ctx.header }}</h2>
-          <p id="confirm-dialog-description" class="text-muted-foreground text-sm text-balance">
-            {{ ctx.message }}
-          </p>
-        </div>
-      </div>
+    <div class="flex min-h-0 flex-1 flex-col gap-(--dialog-padding)">
       <div
-        class="bg-muted/50 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t p-4 sm:flex-row sm:justify-end"
+        data-dialog-body
+        class="grid grid-rows-[auto_auto_1fr] place-items-center gap-1.5 gap-x-6 text-center sm:grid-rows-[auto_1fr] sm:place-items-start sm:text-start"
       >
+        <div
+          class="bg-muted mb-2 inline-flex size-16 shrink-0 items-center justify-center rounded-md sm:row-span-2"
+          aria-hidden="true"
+        >
+          <ng-icon name="lucideTriangleAlert" class="text-destructive text-3xl" />
+        </div>
+        <h2 id="confirm-dialog-title" class="text-lg font-medium sm:col-start-2">
+          {{ ctx.header }}
+        </h2>
+        <p
+          id="confirm-dialog-description"
+          class="text-muted-foreground text-sm text-balance md:text-pretty"
+        >
+          {{ ctx.message }}
+        </p>
+      </div>
+      <hlm-dialog-footer class="shrink-0">
         <button hlmBtn variant="outline" (click)="close(false)">{{ ctx.cancelText }}</button>
         <button hlmBtn [variant]="ctx.variant" (click)="close(true)">{{ ctx.confirmText }}</button>
-      </div>
+      </hlm-dialog-footer>
     </div>
   `,
 })

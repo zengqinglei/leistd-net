@@ -391,14 +391,14 @@ body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--dialog-padding);
 
   min-width: 0;
   min-height: 0;
 }
 
 /* 正文向内边距区延伸，再补回同量留白：控件仍与标题对齐，外扩焦点环不会贴着滚动裁剪边界。
- * 内边距取 Helm 同一个变量；表单只用 min-height 收缩，不在正文外再裁一次。
+ * 横纵两轴都用等量负外边距抵消留白，视觉 gap 仍取 Helm 同源变量；表单不在正文外再裁一次。
  */
 [data-slot='dialog-content'] [data-dialog-body] {
   overflow-y: auto;
@@ -407,6 +407,7 @@ body {
 
   min-width: 0;
   min-height: 0;
+  margin-block: calc(-1 * max(var(--spacing), 3px));
   margin-inline: calc(-1 * var(--dialog-padding));
   padding-block: max(var(--spacing), 3px);
   padding-inline: var(--dialog-padding);

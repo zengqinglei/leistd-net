@@ -36,6 +36,10 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
+import {
+  TableLoading,
+  TableLoadingBody,
+} from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { ColumnValue } from '../../../../../../shared/directives/column-value';
 import { StatusDot } from '../../../../../../shared/directives/status-dot';
@@ -68,6 +72,8 @@ import { TenantOutputDto } from '../../../../dtos/tenant.dto';
     ColumnValue,
     StatusDot,
     TableFit,
+    TableLoading,
+    TableLoadingBody,
     AppDate,
     AppNumber,
     NgIcon,

@@ -4,7 +4,15 @@
 <ng-container>
 <!--#endif-->
   <div class="flex flex-col gap-4">
-    <div class="@container rounded-xl border border-border overflow-hidden">
+    <app-table-loading
+      class="@container rounded-xl border border-border overflow-hidden"
+      #loadingState="appTableLoading"
+      [loading]="loading()"
+      [hasRows]="records().length > 0"
+      [columns]="table.getVisibleLeafColumns().length"
+      [rowHeight]="49"
+      [compactRowHeight]="57"
+    >
       @defer {
         <div hlmTableContainer class="w-full overflow-x-auto">
           <table hlmTable class="w-full">
@@ -23,18 +31,9 @@
               }
             </thead>
 
-            <tbody hlmTBody>
-              @if (loading()) {
-                <tr hlmTr>
-                  <td
-                    hlmTd
-                    [attr.colspan]="table.getVisibleLeafColumns().length"
-                    class="h-32 text-center"
-                  >
-                    <hlm-spinner class="mx-auto" />
-                    <span class="sr-only">Loading</span>
-                  </td>
-                </tr>
+            <tbody hlmTBody appTableLoadingBody>
+              @if (loadingState.initialLoading()) {
+                <ng-container [ngTemplateOutlet]="loadingState.skeleton() ?? null" />
               } @else {
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
@@ -222,7 +221,7 @@
           }
         </ng-template>
       }
-    </div>
+    </app-table-loading>
 
     <!-- 分页栏：独立于表格卡片，置于其下方（与用户 / 角色列表同一布局）。 -->
     @if (totalCount() > 0) {

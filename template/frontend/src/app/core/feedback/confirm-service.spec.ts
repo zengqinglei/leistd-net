@@ -74,6 +74,9 @@ describe('ConfirmService', () => {
     document.body.append(fixture.nativeElement);
     await fixture.whenStable();
     const trigger = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
+    const closeHost = fixture.nativeElement.querySelector('app-dialog-close') as HTMLElement;
+    expect(getComputedStyle(closeHost).display).toBe('contents');
+    expect(getComputedStyle(trigger).position).toBe('absolute');
     trigger.focus();
     trigger.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
@@ -100,6 +103,14 @@ describe('ConfirmService', () => {
     const describedBy = document.getElementById(dialog.getAttribute('aria-describedby')!);
     expect(labelledBy?.textContent?.trim()).toBe('Delete user');
     expect(describedBy?.textContent?.trim()).toBe('Delete alice?');
+    const content = dialog.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+    const body = content.querySelector<HTMLElement>('[data-dialog-body]')!;
+    const footer = content.querySelector<HTMLElement>('[data-slot="dialog-footer"]')!;
+    expect(body.contains(describedBy)).toBe(true);
+    expect(body.contains(footer)).toBe(false);
+    expect(getComputedStyle(footer).flexShrink).toBe('0');
+    expect(getComputedStyle(footer).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(footer).borderTopWidth).toBe('0px');
 
     button(dialog, 'Cancel').click();
     await result;

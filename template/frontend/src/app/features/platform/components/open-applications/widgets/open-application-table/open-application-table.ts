@@ -39,6 +39,10 @@ import {
   type ReadonlyListItem,
   ReadonlyListPopover,
 } from '../../../../../../shared/components/readonly-list-popover/readonly-list-popover';
+import {
+  TableLoading,
+  TableLoadingBody,
+} from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { ColumnValue } from '../../../../../../shared/directives/column-value';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
@@ -87,6 +91,8 @@ type BadgeVariant = 'secondary' | 'outline';
     ColumnValue,
     ReadonlyListPopover,
     TableFit,
+    TableLoading,
+    TableLoadingBody,
     TruncatedTooltip,
     AppDate,
     AppNumber,

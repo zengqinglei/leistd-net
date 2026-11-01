@@ -4,8 +4,13 @@
 <ng-container>
 <!--#endif-->
   <div class="flex flex-col gap-4">
-    <div
+    <app-table-loading
       class="@container rounded-xl border border-border overflow-hidden"
+      #loadingState="appTableLoading"
+      [loading]="loading()"
+      [hasRows]="applications().length > 0"
+      [columns]="table.getVisibleLeafColumns().length"
+      [rowHeight]="foldLevel() === 'mobile' ? 53 : 49"
       [appTableFit]="tableViewport()"
       [appTableFitContent]="applications()"
     >
@@ -49,18 +54,9 @@
               }
             </thead>
 
-            <tbody hlmTBody>
-              @if (loading()) {
-                <tr hlmTr>
-                  <td
-                    hlmTd
-                    [attr.colspan]="table.getVisibleLeafColumns().length"
-                    class="h-32 text-center"
-                  >
-                    <hlm-spinner class="mx-auto" />
-                    <span class="sr-only">Loading</span>
-                  </td>
-                </tr>
+            <tbody hlmTBody appTableLoadingBody>
+              @if (loadingState.initialLoading()) {
+                <ng-container [ngTemplateOutlet]="loadingState.skeleton() ?? null" />
               } @else {
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
@@ -512,7 +508,7 @@
           }
         </ng-template>
       }
-    </div>
+    </app-table-loading>
 
     <!-- 分页栏独立于表格卡片，置于其下方。 -->
     @if (totalCount() > 0) {

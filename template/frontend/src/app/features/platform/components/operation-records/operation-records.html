@@ -119,9 +119,14 @@
             variant="secondary"
             class="flex-1 sm:flex-none"
             (click)="reloadList()"
+            [disabled]="loading()"
             [hlmTooltip]="t('common.refresh')"
           >
-            <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+            @if (loading()) {
+              <hlm-spinner data-icon="inline-start" />
+            } @else {
+              <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+            }
             {{ t('common.refresh') }}
           </button>
         </div>

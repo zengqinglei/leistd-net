@@ -53,6 +53,10 @@ import {
   type ReadonlyListItem,
   ReadonlyListPopover,
 } from '../../../../../../shared/components/readonly-list-popover/readonly-list-popover';
+import {
+  TableLoading,
+  TableLoadingBody,
+} from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { ColumnValue } from '../../../../../../shared/directives/column-value';
 import { StatusDot } from '../../../../../../shared/directives/status-dot';
@@ -94,6 +98,8 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     ReadonlyListPopover,
     StatusDot,
     TableFit,
+    TableLoading,
+    TableLoadingBody,
     AppDate,
     AppNumber,
     NgIcon,
