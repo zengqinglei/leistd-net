@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { BrnDialogService } from '@spartan-ng/brain/dialog';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmDialogService } from '@spartan-ng/helm/dialog';
-import { of, Subject, throwError } from 'rxjs';
+import { EMPTY, of, Subject, throwError } from 'rxjs';
 
 import { ConfirmService } from './confirm-service';
 import { DialogClose } from '../components/dialog-close/dialog-close';
@@ -225,7 +225,9 @@ describe('ConfirmService', () => {
     await vi.waitFor(() => expect(write.disabled).toBe(true));
     expect(write.querySelector('hlm-spinner')).not.toBeNull();
     expect(button(dialog, 'Cancel').disabled).toBe(true);
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    const body = dialog.querySelector<HTMLElement>('[data-dialog-body]')!;
+    expect(document.activeElement).toBe(body);
+    expect(getComputedStyle(body).outlineStyle).toBe('none');
     button(dialog, 'Cancel').click();
     document.activeElement!.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
@@ -239,6 +241,24 @@ describe('ConfirmService', () => {
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+
+  it('closes as cancelled without a toast when the action completes without a value', async () => {
+    const result = actionDialog(() => EMPTY);
+    const dialog = await openedDialog();
+    button(dialog, 'Write').click();
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+    await expect(result).resolves.toBe(false);
+    expect(errorToast).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, null])('treats an emitted %s as successful completion', async (value) => {
+    const result = actionDialog(() => of(value));
+    const dialog = await openedDialog();
+    button(dialog, 'Write').click();
+    await expect(result).resolves.toBe(true);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(errorToast).not.toHaveBeenCalled();
   });
 
   it('toasts a normalized failure once, keeps the dialog open, restores focus, and retries', async () => {

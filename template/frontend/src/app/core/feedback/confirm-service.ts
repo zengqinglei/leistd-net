@@ -9,7 +9,11 @@ import { ConfirmContext, ConfirmDialog } from './confirm-dialog';
 
 export interface ConfirmOptions {
   message: string;
-  /** 写请求由框内执行；成功才返回 true，失败留框供重试或取消。 */
+  /**
+   * 框内只执行一次写请求，成功须发值（含 undefined/null）；失败 toast 一次并留框重试。
+   * 不发值即完成按取消处理：关框并返回 false，不提示错误。
+   * 可取消的前置验证须在 open() 前完成；需再认证重试、请求后接弹窗或跳转的流程不用 action。
+   */
   action?: () => Observable<unknown>;
   /** 调用组件销毁时强制关闭，停止尚未完成的请求订阅。 */
   owner?: DestroyRef;
