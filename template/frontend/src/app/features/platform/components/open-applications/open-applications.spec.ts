@@ -10,6 +10,7 @@ import { of, Subject, throwError } from 'rxjs';
 
 import { OpenApplications } from './open-applications';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
+import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -30,7 +31,7 @@ describe('OpenApplications page query round trip', () => {
   let router: Router;
   let service: Pick<
     MockedObject<OpenApplicationService>,
-    'getOpenApplications' | 'getScopes' | 'resetSecret'
+    'getOpenApplications' | 'getScopes' | 'resetSecret' | 'deleteOpenApplication'
   >;
 
   function lastQuery(): GetOpenApplicationsInputDto {
@@ -53,6 +54,7 @@ describe('OpenApplications page query round trip', () => {
     service = {
       getOpenApplications: vi.fn().mockName('OpenApplicationService.getOpenApplications'),
       getScopes: vi.fn().mockName('OpenApplicationService.getScopes'),
+      deleteOpenApplication: vi.fn(),
       resetSecret: vi.fn().mockName('OpenApplicationService.resetSecret'),
     };
     service.getOpenApplications.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
@@ -147,7 +149,7 @@ describe('OpenApplications page query round trip', () => {
   });
 
   it('shows the reset secret together with the application it belongs to', async () => {
-    vi.spyOn(TestBed.inject(ConfirmService), 'open').mockResolvedValue(true);
+    vi.spyOn(TestBed.inject(ConfirmService), 'open').mockImplementation(acceptConfirmAction);
     service.getOpenApplications.mockReturnValue(
       of({ items: [{ ...loadedRow, displayName: 'Demo SPA' }], totalCount: 1 }) as never,
     );
@@ -259,6 +261,23 @@ describe('OpenApplications page query round trip', () => {
     expect(component.loadError()).toBeNull();
     expect(notify).toHaveBeenCalledOnce();
   });
+  it('refreshes and toasts only for a successful deletion action', async () => {
+    vi.spyOn(TestBed.inject(ConfirmService), 'open').mockImplementation(acceptConfirmAction);
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    service.deleteOpenApplication.mockReturnValue(of(undefined));
+    const before = service.getOpenApplications.mock.calls.length;
+    await component.handleDelete(loadedRow.id);
+    expect(success).toHaveBeenCalledOnce();
+    expect(service.getOpenApplications.mock.calls.length).toBeGreaterThan(before);
+    const after = service.getOpenApplications.mock.calls.length;
+    service.deleteOpenApplication.mockReturnValue(throwError(() => new Error('Conflict')));
+    await component.handleDelete(loadedRow.id);
+    expect(service.getOpenApplications).toHaveBeenCalledTimes(after);
+    expect(success).toHaveBeenCalledOnce();
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('locks delete before confirmation and unlocks after cancellation', async () => {
     let answer!: (value: boolean) => void;
     const confirm = vi
@@ -270,7 +289,9 @@ describe('OpenApplications page query round trip', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.deletingId()).toBeTruthy();
-      expect(table().deletingId()).toBe(component.deletingId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);

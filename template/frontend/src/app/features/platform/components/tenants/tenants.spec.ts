@@ -11,6 +11,7 @@ import { lastValueFrom, of, Subject, throwError } from 'rxjs';
 import { Tenants } from './tenants';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
 import { TenantTable } from './widgets/tenant-table/tenant-table';
+import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -88,7 +89,7 @@ describe('Tenants page query and write flow', () => {
     confirm = {
       open: vi.fn().mockName('ConfirmService.open'),
     };
-    confirm.open.mockResolvedValue(true);
+    confirm.open.mockImplementation(acceptConfirmAction);
 
     await TestBed.configureTestingModule({
       imports: [Tenants],
@@ -240,6 +241,16 @@ describe('Tenants page query and write flow', () => {
     expect(vi.mocked(service.getTenants).mock.calls.length).toBeGreaterThan(before);
   });
 
+  it('leaves failed deletion feedback to the confirmation and keeps the list', async () => {
+    service.deleteTenant.mockReturnValue(throwError(() => new Error('Conflict')));
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const before = service.getTenants.mock.calls.length;
+    await component.onDelete(tenant);
+    expect(service.deleteTenant).toHaveBeenCalledOnce();
+    expect(service.getTenants).toHaveBeenCalledTimes(before);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it('does not call the API when the delete confirmation is cancelled', async () => {
     confirm.open.mockResolvedValue(false);
 
@@ -324,7 +335,9 @@ describe('Tenants page query and write flow', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.activationId()).toBeTruthy();
-      expect(table().activationId()).toBe(component.activationId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);
@@ -343,7 +356,9 @@ describe('Tenants page query and write flow', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.deletingId()).toBeTruthy();
-      expect(table().deletingId()).toBe(component.deletingId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);

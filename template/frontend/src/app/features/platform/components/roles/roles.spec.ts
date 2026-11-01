@@ -16,6 +16,7 @@ import { of, Subject, throwError } from 'rxjs';
 
 import { Roles } from './roles';
 import { RoleTable } from './widgets/role-table/role-table';
+import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -284,7 +285,9 @@ describe('Roles page query round trip', () => {
     try {
       expect(confirm).toHaveBeenCalledOnce();
       expect(component.deletingId()).toBeTruthy();
-      expect(table().deletingId()).toBe(component.deletingId());
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('tbody button hlm-spinner'),
+      ).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);
@@ -292,24 +295,31 @@ describe('Roles page query round trip', () => {
     expect(component.deletingId()).toBeFalsy();
   });
 
-  it('keeps the confirmed write alive and busy after its component is destroyed', async () => {
-    const response = new Subject<void>();
-    service.deleteRole.mockReturnValue(response);
-    vi.spyOn(TestBed.inject(ConfirmService), 'open').mockResolvedValue(true);
-    const notify = vi.spyOn(toast, 'success').mockImplementation(() => '');
-    const pending = component.onDelete(loadedRow);
-    await Promise.resolve();
-    expect(component.deletingId()).toBe(loadedRow.id);
-    expect(service.deleteRole).toHaveBeenCalledOnce();
+  it('leaves failed deletion feedback to the confirmation and keeps the list', async () => {
+    service.deleteRole.mockReturnValue(throwError(() => new Error('Conflict')));
+    vi.spyOn(TestBed.inject(ConfirmService), 'open').mockImplementation(acceptConfirmAction);
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const before = service.getRoles.mock.calls.length;
     await component.onDelete(loadedRow);
     expect(service.deleteRole).toHaveBeenCalledOnce();
-    fixture.destroy();
+    expect(service.getRoles).toHaveBeenCalledTimes(before);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('closes the confirmation on component destruction without a success toast', async () => {
+    const response = new Subject<void>();
+    service.deleteRole.mockReturnValue(response);
+    const notify = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const pending = component.onDelete(loadedRow);
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
+    document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')[1].click();
+    await vi.waitFor(() => expect(service.deleteRole).toHaveBeenCalledOnce());
     expect(response.observed).toBe(true);
-    response.next();
-    response.complete();
+    fixture.destroy();
     await pending;
+    expect(response.observed).toBe(false);
     expect(component.deletingId()).toBeNull();
-    expect(notify).toHaveBeenCalledOnce();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   // 页面骨架（各列表页同一写法，这里以角色页为代表）：滚动列的直接子项不收缩。

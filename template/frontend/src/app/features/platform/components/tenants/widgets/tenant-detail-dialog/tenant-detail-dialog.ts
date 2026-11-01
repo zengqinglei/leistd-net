@@ -79,6 +79,7 @@ interface ConnectionEditorModel {
 })
 export class TenantDetailDialog {
   private readonly connectionRoot = viewChild.required<ElementRef<HTMLElement>>('connectionRoot');
+  // 仅防确认流程重入，不驱动行内禁用或 spinner。
   readonly removingConnection = signal<string | null>(null);
 
   readonly open = model(false);
@@ -278,6 +279,9 @@ export class TenantDetailDialog {
       }
 
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () =>
+          this.connectionService.removeConnection(tenant.id, connection.name, connection.version),
         //#if (IncludeLocalization)
         header: this.transloco.translate('tenants.deleteConnectionTitle'),
         message: this.transloco.translate('tenants.deleteConnectionDescription', {
@@ -297,15 +301,7 @@ export class TenantDetailDialog {
       }
 
       this.actionError.set(null);
-
-      try {
-        await firstValueFrom(
-          this.connectionService.removeConnection(tenant.id, connection.name, connection.version),
-        );
-        this.reload();
-      } catch (error: unknown) {
-        this.actionError.set(applicationErrorMessage(error));
-      }
+      this.reload();
     } finally {
       this.removingConnection.set(null);
     }

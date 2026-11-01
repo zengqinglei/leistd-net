@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  DestroyRef,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -9,9 +16,8 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmItemImports } from '@spartan-ng/helm/item';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { firstValueFrom } from 'rxjs';
+import { tap } from 'rxjs';
 
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { StatusDot } from '../../../../shared/directives/status-dot';
@@ -57,6 +63,7 @@ const OTHERS = 'others';
 })
 export class LoginDevices {
   private readonly accountService = inject(AccountService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
   private readonly accountPreferences = inject(AccountPreferencesService);
   //#if (IncludeLocalization)
@@ -68,9 +75,8 @@ export class LoginDevices {
   /** null 表示尚未取回。 */
   protected readonly sessions = signal<UserSessionOutputDto[] | null>(null);
   protected readonly loadFailed = signal(false);
-  /** 正在撤销的会话 Id，或 {@link OTHERS}。 */
+  /** 确认流程防重入标记：会话 Id 或 {@link OTHERS}，不驱动行内加载态。 */
   protected readonly busy = signal<string | null>(null);
-  protected readonly othersBusy = computed(() => this.busy() === OTHERS);
 
   protected readonly hasOthers = computed(() => (this.sessions() ?? []).some((s) => !s.isCurrent));
 
@@ -118,6 +124,8 @@ export class LoginDevices {
 
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.accountService.revokeSession(id),
         //#if (IncludeLocalization)
         message: this.transloco.translate('account.sessions.revokeConfirm'),
         confirmText: this.transloco.translate('account.sessions.revoke'),
@@ -131,18 +139,12 @@ export class LoginDevices {
         return;
       }
 
-      try {
-        await firstValueFrom(this.accountService.revokeSession(id));
-
-        this.sessions.update((list) => list?.filter((s) => s.id !== id) ?? null);
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('account.sessions.revoked'));
-        //#else
-        toast.success(this.t('account.sessions.revoked'));
-        //#endif
-      } catch (error: unknown) {
-        this.showError(error);
-      }
+      this.sessions.update((list) => list?.filter((s) => s.id !== id) ?? null);
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('account.sessions.revoked'));
+      //#else
+      toast.success(this.t('account.sessions.revoked'));
+      //#endif
     } finally {
       this.busy.set(null);
     }
@@ -152,8 +154,16 @@ export class LoginDevices {
     if (this.busy() !== null) return;
     this.busy.set(OTHERS);
 
+    let count = 0;
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () =>
+          this.accountService.revokeOtherSessions().pipe(
+            tap((value) => {
+              count = value;
+            }),
+          ),
         //#if (IncludeLocalization)
         message: this.transloco.translate('account.sessions.revokeOthersConfirm'),
         confirmText: this.transloco.translate('account.sessions.revokeOthers'),
@@ -167,31 +177,15 @@ export class LoginDevices {
         return;
       }
 
-      try {
-        const count = await firstValueFrom(this.accountService.revokeOtherSessions());
-
-        this.sessions.update((list) => list?.filter((s) => s.isCurrent) ?? null);
-        //#if (IncludeLocalization)
-        toast.success(this.transloco.translate('account.sessions.revokedOthers', { count }));
-        //#else
-        toast.success(this.t('account.sessions.revokedOthers', { count }));
-        //#endif
-      } catch (error: unknown) {
-        this.showError(error);
-      }
+      this.sessions.update((list) => list?.filter((s) => s.isCurrent) ?? null);
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('account.sessions.revokedOthers', { count }));
+      //#else
+      toast.success(this.t('account.sessions.revokedOthers', { count }));
+      //#endif
     } finally {
       this.busy.set(null);
     }
-  }
-
-  private showError(error: unknown): void {
-    //#if (IncludeLocalization)
-    toast.error(this.transloco.translate('common.requestError'), {
-      description: applicationErrorMessage(error),
-    });
-    //#else
-    toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
-    //#endif
   }
 }
 //#if (!IncludeLocalization)

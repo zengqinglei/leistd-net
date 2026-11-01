@@ -107,11 +107,7 @@
                               <!-- 溢出菜单不按修改权限裁剪：它恒有"详情"这一项，
                                  按 canUpdate||canDelete 藏起来时，只有查看权限的人在 <sm 就没有任何入口。 -->
                               <button
-                                [disabled]="
-                                  deletingId() === row.original.id ||
-                                  activationId() === row.original.id ||
-                                  impersonatingId() === row.original.id
-                                "
+                                [disabled]="impersonatingId() === row.original.id"
                                 hlmBtn
                                 variant="ghost"
                                 size="icon-sm"
@@ -119,11 +115,7 @@
                                 [attr.aria-label]="t('common.actions')"
                                 [hlmDropdownMenuTrigger]="rowMenu"
                               >
-                                @if (
-                                  deletingId() === row.original.id ||
-                                  activationId() === row.original.id ||
-                                  impersonatingId() === row.original.id
-                                ) {
+                                @if (impersonatingId() === row.original.id) {
                                   <hlm-spinner class="text-base" />
                                 } @else {
                                   <ng-icon name="lucideEllipsis" />
@@ -152,21 +144,17 @@
                                     }
                                     @if (canUpdate()) {
                                       <button
-                                        [disabled]="activationId() !== null"
                                         hlmDropdownMenuItem
                                         (click)="toggleActive.emit(row.original)"
                                       >
-                                        @if (activationId() === row.original.id) {
-                                          <hlm-spinner class="text-base" data-icon="inline-start" />
-                                        } @else {
-                                          <ng-icon
-                                            [name]="
-                                              row.original.isActive
-                                                ? 'lucideBan'
-                                                : 'lucideCircleCheck'
-                                            "
-                                          />
-                                        }
+                                        <ng-icon
+                                          [name]="
+                                            row.original.isActive
+                                              ? 'lucideBan'
+                                              : 'lucideCircleCheck'
+                                          "
+                                        />
+
                                         {{
                                           row.original.isActive
                                             ? t('tenants.deactivate')
@@ -207,16 +195,12 @@
                                   @if (canDelete()) {
                                     <hlm-dropdown-menu-separator />
                                     <button
-                                      [disabled]="deletingId() !== null"
                                       hlmDropdownMenuItem
                                       variant="destructive"
                                       (click)="delete.emit(row.original)"
                                     >
-                                      @if (deletingId() === row.original.id) {
-                                        <hlm-spinner class="text-base" data-icon="inline-start" />
-                                      } @else {
-                                        <ng-icon name="lucideTrash2" />
-                                      }
+                                      <ng-icon name="lucideTrash2" />
+
                                       {{ t('common.delete') }}
                                     </button>
                                   }

@@ -11,7 +11,7 @@ Angular（Signals、zoneless、CLI、Signal Forms `@angular/forms/signals`）、
 
 ## 2. 目录与依赖方向
 
-目录按职责划分，按需建子目录，不预建空层级。
+目录按需创建。
 
 ```text
 frontend/
@@ -52,37 +52,37 @@ frontend/
 | 路由 | `{name}.routes.ts` | |
 | 测试装配 | `{name}.testing.ts` | |
 
-组件 selector 用 `app-` + kebab-case（eslint 检查）；API 请求与响应须有类型定义。
+selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类型。
 
-- JSDoc 按需补服务边界、状态归属和协议契约，不逐成员翻译名称；`@param`、`@returns` 只补单位、空值、失败等非显然信息，不重复 TypeScript 类型。
-- 实现原因用独占行 `//`，保留订阅清理、竞态、安全与可访问性约束；模板、样式不写显然的区块标签。
+- JSDoc 按需补服务边界、状态归属和协议契约，`@param`、`@returns` 只补单位、空值、失败等非显然信息，不重复 TypeScript 类型。
+- 实现原因用独占行 `//`，保留订阅清理、竞态、安全与可访问性约束；模板/样式不写显然标签。
 - 上游 Skill 与 helm 原样内容遵循上游风格，不为注释精简制造定制差异；本地改动见[Spartan 维护约定](./frontend-spartan.md)。
 
 注释原则参考 [Angular 框架规范](https://github.com/angular/angular/blob/main/contributing-docs/coding-standards.md#write-useful-comments)与 [TypeScript JSDoc](https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html)。
 
 ## 4. 分层与依赖注入
 
-- 功能的 `services/*-service.ts` 只封装 HTTP，返回 DTO `Observable`，不持有页面状态。
+- `services/*-service.ts` 封装 HTTP，返回 DTO `Observable`，不持有页面状态。
 - **应用级服务**（认证、主题、语言、设置上下文、启动）放 `core/services`，可持有自身状态与行为。
-- 组件与简单父子状态用 Signals，页面状态优先放组件；复杂且有复用或生命周期收益时，才抽成组件级 `@Injectable()` 状态类，由组件 `providers` 提供。
+- 页面与父子状态用 Signals；复杂且有复用或生命周期收益时抽成组件级 `@Injectable()` 状态类，由组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
-- 路由守卫与按钮显隐只改善交互体验；服务端必须对每个请求独立校验权限。
+- 路由守卫与按钮显隐只改善交互体验；服务端必须对每次请求校验权限。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
 - 依赖注入用 `inject()`。构造仅做属性赋值、需注入上下文的生命周期接线（`effect()`、`takeUntilDestroyed()`、随 `DestroyRef` 释放的订阅）及页面首次只读查询。写请求、多步流程与会话清理放 `ngOnInit`，构造不得改变服务端或会话状态；在注入上下文外（如 `ngOnInit`）调用上述 API 时须传 `destroyRef` 或 `{ injector }`。
 
 ## 5. 状态
 
-- 确认写入口点击即禁用并显示 spinner（含确认框打开期间），实际请求结束才复位；确认即关框，不等请求。
+- 确认写请求交给 `ConfirmService.action`：框内确认钮 spinner+禁用，忙时禁取消/Esc；成功关框后调用方提示、刷新，失败留框显示归一化错误、复位可重试/取消，不重复 toast。禁外点、无 ✕；强制关闭/销毁仍可退出。入口防重入、不变形。
 - 媒体查询（断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia`。
 - 启动流程、拦截器判断当前路由用 `frontend/src/app/core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。
 
 ## 6. 错误处理
 
 - `http-error-interceptor` 负责认证处置（401 跳转）并把 RFC 9457 Problem Details 归一化为 `ApplicationHttpError`（`errors` 兼容框架的数组与官方字典两种形状）；页面不自己猜测响应形状。
-- 发起操作的 feature 决定反馈：字段错误优先回填到表单，其余错误以归一化后的 `message` toast（`@spartan-ng/brain/sonner`），或显示空状态、静默；同一错误不重复提示。
-- 公开文案只取 Problem Details 里校验过的字段错误、`detail`、`title`（5xx 限带码读请求），不从 `statusText`、正文或原始异常回落；其余按 `category` 用本地化通用文案，有 `traceId` 时附上。拦截器传入方法：写请求遇到无响应、5xx 或 2xx 解析失败归为 `uncertain`，提示可能已完成、先核实，不自动重放。
+- 发起操作的 feature 决定反馈：字段错误回填表单，其余用归一化 `message` toast（`@spartan-ng/brain/sonner`），或显示空状态、静默；同一错误不重复提示。
+- 公开文案只取 Problem Details 里校验过的字段错误/`detail`/`title`（5xx 限带码读请求），不回落 `statusText`/正文/原始异常；其余按 `category` 用本地化兜底，附 `traceId`。拦截器传入方法：写请求遇到无响应、5xx 或 2xx 解析失败归为 `uncertain`，提示可能已完成、先核实，不自动重放。
 - `GlobalErrorHandler` 只兜底未处理的非 HTTP 错误，识别并忽略已归一化的 HTTP 错误。
-- 状态码与 `code` 的分工：认证与协议层处置（401 跳转、受限会话的 403、启动时的未登录判定）由 `http-error-interceptor` 与 `startup-service` 按状态码处理，eslint 只对它们放行 `local/no-status-code-branch`；feature 使用归一化后的错误反馈，需要特定业务交互时按稳定 `code` 分支。业务错误缺少 `code` 不构成 feature 按状态码分支的理由，应在后端补码。
+- 认证与协议层处置（401 跳转、受限会话的 403、启动时的未登录判定）由 `http-error-interceptor` 与 `startup-service` 按状态码处理，eslint 只对它们放行 `local/no-status-code-branch`；feature 使用归一化后的错误反馈，按稳定 `code` 分支处理业务交互。业务错误缺少 `code` 不构成 feature 按状态码分支的理由，应在后端补码。
 - 启动失败（非 401）时守卫取消导航并记下目标，重试成功后进入；`/forbidden` 与 404 页地址栏保留目标（刷新与前进/后退时的行为见[前端路由规范](./frontend-routing.md)）。
 - `catchError` 只处理特定错误，不吞掉错误。
 - 前端不兼容框架可选的响应信封（`AddResponseWrapper()`），开启须同时改拦截器。

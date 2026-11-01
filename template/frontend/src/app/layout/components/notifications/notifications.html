@@ -135,16 +135,7 @@
             }
           </div>
           <div class="border-t border-border p-1">
-            <button
-              hlmBtn
-              variant="ghost"
-              class="w-full"
-              [disabled]="clearingAll()"
-              (click)="clearAllNotifications()"
-            >
-              @if (clearingAll()) {
-                <hlm-spinner class="text-base" data-icon="inline-start" />
-              }
+            <button hlmBtn variant="ghost" class="w-full" (click)="clearAllNotifications()">
               {{ t('layout.notifications.clearAll') }}
             </button>
           </div>

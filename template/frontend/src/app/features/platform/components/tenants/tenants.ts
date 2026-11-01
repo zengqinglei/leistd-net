@@ -24,7 +24,7 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
-import { Observable, tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+import { Observable, tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
@@ -82,6 +82,7 @@ import { TenantService } from '../../services/tenant-service';
 export class Tenants {
   readonly activationId = signal<string | null>(null);
   readonly impersonatingId = signal<string | null>(null);
+  // 仅防确认流程重入，不驱动行内禁用或 spinner。
   readonly deletingId = signal<string | null>(null);
 
   private readonly tenantService = inject(TenantService);
@@ -239,6 +240,8 @@ export class Tenants {
     try {
       const nextActive = !tenant.isActive;
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.tenantService.setActivation(tenant.id, nextActive),
         header: this.toggleTitle(nextActive),
         message: this.toggleDescription(tenant, nextActive),
         confirmText: this.toggleConfirmLabel(nextActive),
@@ -249,14 +252,8 @@ export class Tenants {
         return;
       }
 
-      try {
-        await firstValueFrom(this.tenantService.setActivation(tenant.id, nextActive));
-
-        this.reload();
-        toast.success(this.toggledMessage(nextActive));
-      } catch (error: unknown) {
-        toast.error(applicationErrorMessage(error));
-      }
+      this.reload();
+      toast.success(this.toggledMessage(nextActive));
     } finally {
       this.activationId.set(null);
     }
@@ -318,6 +315,8 @@ export class Tenants {
 
     try {
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => this.tenantService.deleteTenant(tenant.id),
         header: this.deleteTitle(),
         message: this.deleteDescription(tenant),
         confirmText: this.deleteConfirmLabel(),
@@ -328,14 +327,8 @@ export class Tenants {
         return;
       }
 
-      try {
-        await firstValueFrom(this.tenantService.deleteTenant(tenant.id));
-
-        this.reload();
-        toast.success(this.deletedMessage());
-      } catch (error: unknown) {
-        toast.error(applicationErrorMessage(error));
-      }
+      this.reload();
+      toast.success(this.deletedMessage());
     } finally {
       this.deletingId.set(null);
     }

@@ -2,10 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observable, of, Subject } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
 import { TenantDetailDialog } from './tenant-detail-dialog';
+import { acceptConfirmAction } from '../../../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
@@ -59,7 +60,7 @@ describe('TenantDetailDialog', () => {
     confirm = {
       open: vi.fn().mockName('ConfirmService.open'),
     };
-    confirm.open.mockResolvedValue(true);
+    confirm.open.mockImplementation(acceptConfirmAction);
 
     TestBed.configureTestingModule({
       imports: [TenantDetailDialog],
@@ -289,6 +290,17 @@ describe('TenantDetailDialog', () => {
     expect(removeConnection).toHaveBeenCalledWith('t-a', 'billing', 7);
   });
 
+  it('keeps connection deletion errors in the confirmation without parent duplication', async () => {
+    await setUp();
+    const existing = connectionOf('t-a', 'billing', 7);
+    await openWith(tenant('t-a', 'acme'), [existing]);
+    removeConnection.mockReturnValue(throwError(() => new Error('Conflict')));
+    await component.removeConnection(existing);
+    expect(removeConnection).toHaveBeenCalledOnce();
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"] [role="alert"]')).toBeNull();
+  });
+
   it('does not send a request when the delete confirmation is cancelled', async () => {
     await setUp();
     const existing = connectionOf('t-a', 'billing', 7);
@@ -363,8 +375,8 @@ describe('TenantDetailDialog', () => {
     ).find((item) => /delete/i.test(item.textContent ?? ''))!;
     try {
       expect(confirm.open).toHaveBeenCalledOnce();
-      expect(button.disabled).toBe(true);
-      expect(button.querySelector('hlm-spinner')).not.toBeNull();
+      expect(button.disabled).toBe(false);
+      expect(button.querySelector('hlm-spinner')).toBeNull();
     } finally {
       answer(false);
       await Promise.all([pending, duplicate]);

@@ -18,14 +18,10 @@
           size="sm"
           class="shrink-0 self-start"
           data-testid="revoke-other-sessions"
-          [disabled]="busy() !== null"
           (click)="revokeOthers()"
         >
-          @if (othersBusy()) {
-            <hlm-spinner class="text-base" data-icon="inline-start" />
-          } @else {
-            <ng-icon name="lucideLogOut" data-icon="inline-start" />
-          }
+          <ng-icon name="lucideLogOut" data-icon="inline-start" />
+
           {{ t('account.sessions.revokeOthers') }}
         </button>
       }
@@ -78,12 +74,8 @@
                   variant="ghost"
                   size="sm"
                   data-testid="revoke-session"
-                  [disabled]="busy() !== null"
                   (click)="revoke(row.id)"
                 >
-                  @if (busy() === row.id) {
-                    <hlm-spinner class="text-base" data-icon="inline-start" />
-                  }
                   {{ t('account.sessions.revoke') }}
                 </button>
               </div>

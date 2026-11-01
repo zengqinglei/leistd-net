@@ -102,29 +102,17 @@
               hlmBtn
               variant="ghost"
               size="sm"
-              [disabled]="batchBusy() || loading()"
+              [disabled]="loading()"
               (click)="batchSetActive(true)"
             >
-              @if (batchBusy()) {
-                <hlm-spinner class="text-base" data-icon="inline-start" />
-              } @else {
-                <ng-icon name="lucideCircleCheck" data-icon="inline-start" />
-              }
+              <ng-icon name="lucideCircleCheck" data-icon="inline-start" />
+
               {{ t('users.batch.enable') }}
             </button>
             <!--#if (LocalIdentity)-->
-            <button
-              hlmBtn
-              variant="ghost"
-              size="sm"
-              [disabled]="batchBusy() || loading()"
-              (click)="batchUnlock()"
-            >
-              @if (batchBusy()) {
-                <hlm-spinner class="text-base" data-icon="inline-start" />
-              } @else {
-                <ng-icon name="lucideLockOpen" data-icon="inline-start" />
-              }
+            <button hlmBtn variant="ghost" size="sm" [disabled]="loading()" (click)="batchUnlock()">
+              <ng-icon name="lucideLockOpen" data-icon="inline-start" />
+
               {{ t('users.batch.unlock') }}
             </button>
             <!--#endif-->
@@ -134,7 +122,7 @@
               hlmBtn
               variant="ghost"
               size="sm"
-              [disabled]="batchBusy() || loading()"
+              [disabled]="loading()"
               (click)="batchRolesVisible.set(true)"
             >
               <ng-icon name="lucideShieldCheck" data-icon="inline-start" />
@@ -147,14 +135,11 @@
               variant="ghost"
               size="sm"
               class="text-destructive"
-              [disabled]="batchBusy() || loading()"
+              [disabled]="loading()"
               (click)="batchSetActive(false)"
             >
-              @if (batchBusy()) {
-                <hlm-spinner class="text-base" data-icon="inline-start" />
-              } @else {
-                <ng-icon name="lucideBan" data-icon="inline-start" />
-              }
+              <ng-icon name="lucideBan" data-icon="inline-start" />
+
               {{ t('users.batch.disable') }}
             </button>
           }
@@ -166,9 +151,6 @@
       }
 
       <app-user-table
-        [deletingId]="deletingId()"
-        [activationId]="activationId()"
-        [unlockingId]="unlockingId()"
         [resettingTwoFactorId]="resettingTwoFactorId()"
         [users]="users()"
         [totalCount]="totalRecords()"

@@ -20,7 +20,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { interval } from 'rxjs';
+import { defer, interval } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
@@ -71,6 +71,7 @@ import { resolveDisplayTimeZone } from '../../../shared/utils/zoned-time';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Notifications implements OnInit {
+  // 仅防确认流程重入，不驱动行内禁用或 spinner。
   readonly clearingAll = signal<boolean>(false);
 
   private readonly router = inject(Router);
@@ -83,6 +84,7 @@ export class Notifications implements OnInit {
   /** 分钟级时钟："多久以前"随它更新，组件销毁时停止。 */
   protected readonly now = signal(Date.now());
   protected readonly displayLocale = inject(AccountPreferencesService).displayLocale;
+  private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -172,6 +174,8 @@ export class Notifications implements OnInit {
     try {
       // 清空不可撤销，先确认。
       const confirmed = await this.confirmService.open({
+        owner: this.destroyRef,
+        action: () => defer(() => this.notificationService.clearAll()),
         //#if (IncludeLocalization)
         message: this.transloco.translate('layout.notifications.clearAllConfirm'),
         header: this.transloco.translate('layout.notifications.clearAll'),
@@ -186,13 +190,6 @@ export class Notifications implements OnInit {
         variant: 'destructive',
       });
       if (!confirmed) {
-        return;
-      }
-      try {
-        await this.notificationService.clearAll();
-      } catch (error: unknown) {
-        // 删除失败：保持面板打开并提示，避免「看起来成功、重开还在」。
-        this.showRequestError(error);
         return;
       }
       this.notificationOpen.set('closed');

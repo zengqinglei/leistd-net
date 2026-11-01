@@ -10,6 +10,7 @@ import { toast } from '@spartan-ng/brain/sonner';
 
 import { Notifications } from './notifications';
 import { ApplicationHttpError } from '../../../core/errors/application-http-error';
+import { acceptConfirmAction } from '../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
@@ -61,7 +62,7 @@ describe('Notifications', () => {
     confirmService = {
       open: vi.fn().mockName('ConfirmService.open'),
     };
-    confirmService.open.mockResolvedValue(true);
+    confirmService.open.mockImplementation(acceptConfirmAction);
     errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
     currentUser = signal({ id: 'u-1' });
 
@@ -103,7 +104,10 @@ describe('Notifications', () => {
   it('blocks reentry while confirmation and the clear request are pending', async () => {
     let answer!: (value: boolean) => void;
     let finish!: () => void;
-    confirmService.open.mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)));
+    confirmService.open.mockImplementation(async (options) => {
+      const accepted = await new Promise<boolean>((resolve) => (answer = resolve));
+      return accepted ? acceptConfirmAction(options) : false;
+    });
     service.clearAll.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
     service.notifications.set([
       {
@@ -130,13 +134,13 @@ describe('Notifications', () => {
     try {
       fixture.detectChanges();
       expect(confirmService.open).toHaveBeenCalledTimes(1);
-      expect(button.disabled).toBe(true);
-      expect(button.querySelector('hlm-spinner')).not.toBeNull();
+      expect(button.disabled).toBe(false);
+      expect(button.querySelector('hlm-spinner')).toBeNull();
       answer(true);
       await Promise.resolve();
       await component.clearAllNotifications();
       expect(service.clearAll).toHaveBeenCalledTimes(1);
-      expect(button.disabled).toBe(true);
+      expect(button.disabled).toBe(false);
     } finally {
       answer(false);
       finish();
@@ -164,7 +168,7 @@ describe('Notifications', () => {
 
     await component.clearAllNotifications();
 
-    expect(errorToast).toHaveBeenCalled();
+    expect(errorToast).not.toHaveBeenCalled();
     expect(component.notificationOpen(), 'a failed delete must not look successful').toBe('open');
     await component.clearAllNotifications();
     expect(service.clearAll).toHaveBeenCalledTimes(2);
