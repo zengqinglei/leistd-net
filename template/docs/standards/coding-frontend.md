@@ -29,7 +29,7 @@ frontend/
 
 `frontend/eslint.config.mjs` 按解析出的真实文件检查依赖方向，规则以报错为准：`shared` 只依赖自身，`core` 只依赖 `core` 与 `shared`，`layout` 与各功能另可依赖自身，功能之间只有路由文件可经 `loadComponent`/`loadChildren` 懒加载；业务代码中只有应用装配点（`app.*.ts`）引入 `_mock`，各目录可读取 `environment`，测试文件可引用 `_mock`，不放开其他方向。导入路径写普通字符串字面量。
 
-- 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`；依赖 `core` 服务的组件不放 `shared`。功能内复用的组件放该页面的 `widgets/`。
+- 多个功能共用的服务或契约下沉：有状态或应用级的放 `core`，无状态的展示组件与契约放 `shared`。功能内复用的组件放该页面的 `widgets/`。
 - 业务代码判断请求是否走 Mock 时注入 `frontend/src/app/core/mock/mocked-url.ts` 的 `MOCKED_URL`（默认 `false`，Mock 构建由 `provideMock` 提供），不调用 `_mock` 中的函数。
 
 ## 3. 命名
@@ -72,7 +72,7 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 
 ## 5. 状态
 
-- 确认写用 `ConfirmService` 的 `action`：框内确认钮忙时转圈禁用、禁取消/Esc；成功关框，调用方提示/刷新；失败留框 toast 一次，可重试/取消；入口防重入、无行内转圈。
+- 确认写用 `ConfirmService` 的 `action`，只放一次写请求：可取消的前置验证开框前完成，需再认证重试、接弹窗或跳转的不用。成功关框，调用方提示/刷新；失败由框 toast 并留框；入口防重入、无行内转圈。
 - 媒体查询（断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia`。
 - 启动流程、拦截器判断当前路由用 `frontend/src/app/core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。
 

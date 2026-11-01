@@ -24,6 +24,8 @@ import { defer, firstValueFrom, Observable, takeUntil } from 'rxjs';
 
 import { applicationErrorMessage } from '../errors/application-http-error';
 
+const EMPTY_ACTION = Symbol('EMPTY_ACTION');
+
 /** confirm 对话框的上下文（由 ConfirmService 传入）。 */
 export interface ConfirmContext {
   action?: () => Observable<unknown>;
@@ -56,7 +58,7 @@ export interface ConfirmContext {
         data-dialog-body
         tabindex="-1"
         [attr.aria-busy]="busy()"
-        class="grid place-items-center gap-1.5 text-center"
+        class="grid place-items-center gap-1.5 text-center outline-none"
         [class]="
           ctx.variant === 'destructive'
             ? 'grid-rows-[auto_auto_1fr]'
@@ -140,16 +142,19 @@ export class ConfirmDialog {
       return;
     }
     // 原确认按钮即将禁用；主动移到正文，避免浏览器把焦点退到框外。
+    // 非交互落点按官方 dialog content 的写法去掉描边。
     this.body().nativeElement.focus();
     this.busy.set(true);
     try {
-      await firstValueFrom(
+      const value = await firstValueFrom(
         defer(this.ctx.action).pipe(
           takeUntil(this.dialogRef.closing$),
           takeUntilDestroyed(this.destroyRef),
         ),
+        { defaultValue: EMPTY_ACTION },
       );
-      if (!this.destroyRef.destroyed && this.dialogRef.open) this.dialogRef.close(true);
+      if (!this.destroyRef.destroyed && this.dialogRef.open)
+        this.dialogRef.close(value !== EMPTY_ACTION);
     } catch (error: unknown) {
       if (this.destroyRef.destroyed || !this.dialogRef.open) return;
       const description = applicationErrorMessage(error);
