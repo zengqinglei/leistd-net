@@ -11,7 +11,7 @@ Angular（Signals、zoneless、CLI、Signal Forms `@angular/forms/signals`）、
 
 ## 2. 目录与依赖方向
 
-目录按需创建。
+目录按职责划分，按需建子目录，不预建空层级。
 
 ```text
 frontend/
@@ -54,7 +54,7 @@ frontend/
 
 selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类型。
 
-- JSDoc 按需补服务边界、状态归属和协议契约，`@param`、`@returns` 只补单位、空值、失败等非显然信息，不重复 TypeScript 类型。
+- JSDoc 按需补服务边界、状态归属和协议契约，不逐成员翻译名称；`@param`、`@returns` 只补单位、空值、失败等非显然信息，不重复 TypeScript 类型。
 - 实现原因用独占行 `//`，保留订阅清理、竞态、安全与可访问性约束；模板/样式不写显然标签。
 - 上游 Skill 与 helm 原样内容遵循上游风格，不为注释精简制造定制差异；本地改动见[Spartan 维护约定](./frontend-spartan.md)。
 
@@ -64,7 +64,7 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 
 - `services/*-service.ts` 封装 HTTP，返回 DTO `Observable`，不持有页面状态。
 - **应用级服务**（认证、主题、语言、设置上下文、启动）放 `core/services`，可持有自身状态与行为。
-- 页面与父子状态用 Signals；复杂且有复用或生命周期收益时抽成组件级 `@Injectable()` 状态类，由组件 `providers` 提供。
+- 组件与简单父子状态用 Signals，页面状态优先放组件；复杂且有复用或生命周期收益时，才抽成组件级 `@Injectable()` 状态类，由组件 `providers` 提供。
 - **DTO 与模型**：API 契约放 `dtos/`，只有需要行为或派生字段时才在 `models/` 建前端模型并显式转换；不在 `models/` 放 DTO。
 - 路由守卫与按钮显隐只改善交互体验；服务端必须对每次请求校验权限。
 - **作用域选择**：跨页面共享或应用级单例用 `providedIn: 'root'`；随页面销毁的状态用组件 `providers`；需要跨子路由保留的用路由 `providers`（如 `provideTranslocoScope`）。
@@ -72,7 +72,7 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 
 ## 5. 状态
 
-- 确认写请求交给 `ConfirmService.action`：框内确认钮 spinner+禁用，忙时禁取消/Esc；成功关框后调用方提示、刷新，失败留框显示归一化错误、复位可重试/取消，不重复 toast。禁外点、无 ✕；强制关闭/销毁仍可退出。入口防重入、不变形。
+- 确认写用 `ConfirmService` 的 `action`：框内确认钮忙时转圈禁用、禁取消/Esc；成功关框，调用方提示/刷新；失败留框 toast 一次，可重试/取消；入口防重入、无行内转圈。
 - 媒体查询（断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia`。
 - 启动流程、拦截器判断当前路由用 `frontend/src/app/core/routing/entry-route-service.ts`，不读 `Router.url`（初始导航前恒为 `/`）。
 

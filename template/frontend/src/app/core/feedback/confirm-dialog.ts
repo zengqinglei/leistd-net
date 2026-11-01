@@ -10,9 +10,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideTriangleAlert } from '@ng-icons/lucide';
 import { BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogFooter } from '@spartan-ng/helm/dialog';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
@@ -42,9 +46,9 @@ export interface ConfirmContext {
   imports: [HlmButton, HlmDialogFooter, HlmSpinner, NgIcon],
   providers: [provideIcons({ lucideTriangleAlert })],
   host: { class: 'flex min-h-0 flex-col', '(keydown.escape)': 'onEscape($event)' },
-  // 动态内容位于 DialogContent 内，无 alert-dialog 的命名 group/data-size，且 Brain 根不同；
-  // 在此展开 Vega header/media/title 布局。上游没有列模板，短文案会拉伸隐式 auto 图标列；
-  // 显式 auto/1fr 把图标列收在内容宽度，保留 24px 间距及服务给出的 aria 关联。
+  // 按 variant 使用 Vega 官方默认示例（无图标）或 destructive 的 size=sm 示例。
+  // 动态内容位于 DialogContent 内，没有 alert-dialog 的命名 group/data-size，且 Brain 根不同；
+  // 因此在此等价展开 header/media/footer 布局，不混用依赖另一根的 HlmAlertDialog 部件。
   template: `
     <div class="flex min-h-0 flex-1 flex-col gap-(--dialog-padding)">
       <div
@@ -52,32 +56,35 @@ export interface ConfirmContext {
         data-dialog-body
         tabindex="-1"
         [attr.aria-busy]="busy()"
-        class="grid grid-rows-[auto_auto_1fr] place-items-center gap-1.5 gap-x-6 text-center sm:grid-cols-[auto_1fr] sm:grid-rows-[auto_1fr] sm:place-items-start sm:text-start"
+        class="grid place-items-center gap-1.5 text-center"
+        [class]="
+          ctx.variant === 'destructive'
+            ? 'grid-rows-[auto_auto_1fr]'
+            : 'grid-rows-[auto_1fr] sm:place-items-start sm:text-start'
+        "
       >
-        <div
-          class="bg-muted mb-2 inline-flex size-16 shrink-0 items-center justify-center rounded-md sm:row-span-2"
-          aria-hidden="true"
-        >
-          <ng-icon name="lucideTriangleAlert" class="text-destructive text-[length:--spacing(8)]" />
-        </div>
-        <h2 id="confirm-dialog-title" class="text-lg font-medium sm:col-start-2">
+        @if (ctx.variant === 'destructive') {
+          <div
+            class="bg-destructive/10 text-destructive dark:bg-destructive/20 mb-2 inline-flex size-16 shrink-0 items-center justify-center rounded-md"
+            aria-hidden="true"
+          >
+            <ng-icon name="lucideTriangleAlert" class="text-[length:--spacing(8)]" />
+          </div>
+        }
+        <h2 id="confirm-dialog-title" class="text-lg font-medium">
           {{ ctx.header }}
         </h2>
-        <div class="flex flex-col gap-2 sm:col-start-2">
-          <p
-            id="confirm-dialog-description"
-            class="text-muted-foreground text-sm text-balance md:text-pretty"
-          >
-            {{ ctx.message }}
-          </p>
-          @if (error(); as message) {
-            <p role="alert" class="text-destructive text-sm whitespace-pre-line">
-              {{ message }}
-            </p>
-          }
-        </div>
+        <p
+          id="confirm-dialog-description"
+          class="text-muted-foreground text-sm text-balance md:text-pretty"
+        >
+          {{ ctx.message }}
+        </p>
       </div>
-      <hlm-dialog-footer class="shrink-0">
+      <hlm-dialog-footer
+        class="shrink-0"
+        [class]="ctx.variant === 'destructive' ? 'grid grid-cols-2' : ''"
+      >
         <button hlmBtn variant="outline" [disabled]="busy()" (click)="close(false)">
           {{ ctx.cancelText }}
         </button>
@@ -102,12 +109,14 @@ export class ConfirmDialog {
   private readonly dialogRef = inject<BrnDialogRef<boolean>>(BrnDialogRef);
 
   protected readonly busy = signal(false);
-  protected readonly error = signal<string | null>(null);
   private readonly body = viewChild.required<ElementRef<HTMLElement>>('body');
   private readonly confirmButton =
     viewChild.required<ElementRef<HTMLButtonElement>>('confirmButton');
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   protected onEscape(event: Event): void {
     if (
@@ -133,7 +142,6 @@ export class ConfirmDialog {
     // 原确认按钮即将禁用；主动移到正文，避免浏览器把焦点退到框外。
     this.body().nativeElement.focus();
     this.busy.set(true);
-    this.error.set(null);
     try {
       await firstValueFrom(
         defer(this.ctx.action).pipe(
@@ -144,8 +152,13 @@ export class ConfirmDialog {
       if (!this.destroyRef.destroyed && this.dialogRef.open) this.dialogRef.close(true);
     } catch (error: unknown) {
       if (this.destroyRef.destroyed || !this.dialogRef.open) return;
-      this.error.set(applicationErrorMessage(error));
-      // 等 disabled 复位后再回焦，读屏同时由 role=alert 感知正文错误。
+      const description = applicationErrorMessage(error);
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('common.requestError'), { description });
+      //#else
+      toast.error('Request error', { description });
+      //#endif
+      // 与非字段表单错误一致，只 toast 一次；等 disabled 复位后回焦，留框供重试或取消。
       afterNextRender(
         () => {
           if (!this.destroyRef.destroyed && this.dialogRef.open)

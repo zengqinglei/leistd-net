@@ -53,7 +53,7 @@ export class ConfirmService {
     };
 
     // role=alertdialog + aria 关联标题/正文：确认/破坏性提示的 WAI-ARIA 正确语义。
-    // 无 ✕ 关闭钮（alert-dialog 语义：必须显式选择动作）；宽度按 Vega alert-dialog 默认 sm:max-w-lg（512px）。
+    // 无 ✕ 关闭钮（alert-dialog 语义：必须显式选择动作）。
     const dialogRef = this.dialog.open<boolean, ConfirmContext>(ConfirmDialog, {
       // Brain 的声明式根与服务有独立的默认 id 计数；应用命名空间避免叠层时碰撞。
       id: `app-confirm-${++ConfirmService.sequence}`,
@@ -62,7 +62,8 @@ export class ConfirmService {
       // 写请求框统一由组件处理 Esc；程序化关闭与父级销毁不经过用户退出闸门。
       disableClose: !!options.action,
       closeOnOutsidePointerEvents: false,
-      contentClass: 'sm:max-w-lg',
+      // 非断点 max-w-xs 不会覆盖 DialogContent 的 sm:max-w-md，紧凑样式须同时约束 sm。
+      contentClass: context.variant === 'destructive' ? 'max-w-xs sm:max-w-xs' : 'sm:max-w-lg',
       role: 'alertdialog',
       ariaLabelledBy: 'confirm-dialog-title',
       ariaDescribedBy: 'confirm-dialog-description',

@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BrnDialogService } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmDialogService } from '@spartan-ng/helm/dialog';
 import { of, Subject, throwError } from 'rxjs';
 
@@ -11,6 +12,8 @@ import { ApplicationHttpError, applicationErrorMessage } from '../errors/applica
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
+
+import type { Mock } from 'vitest';
 
 @Component({ template: '' })
 class ExistingDialog {}
@@ -31,8 +34,15 @@ class DirtyCloseHost {}
  */
 describe('ConfirmService', () => {
   let service: ConfirmService;
+  let errorToast: Mock;
+  //#if (IncludeLocalization)
+  const errorTitle = 'common.requestError';
+  //#else
+  const errorTitle = 'Request error';
+  //#endif
 
   beforeEach(() => {
+    errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
     TestBed.configureTestingModule({
       // prettier-ignore
       providers: [
@@ -111,10 +121,10 @@ describe('ConfirmService', () => {
     const body = content.querySelector<HTMLElement>('[data-dialog-body]')!;
     const footer = content.querySelector<HTMLElement>('[data-slot="dialog-footer"]')!;
     expect(getComputedStyle(content).maxWidth).toBe('512px');
-    expect(getComputedStyle(content.querySelector('ng-icon')!).fontSize).toBe('32px');
+    expect(content.querySelector('ng-icon')).toBeNull();
+    expect(body.querySelector('[aria-hidden]')).toBeNull();
     expect(body.contains(describedBy)).toBe(true);
-    expect(getComputedStyle(body).gridTemplateColumns.split(' ')[0]).toBe('64px');
-    expect(getComputedStyle(body).columnGap).toBe('24px');
+    expect(getComputedStyle(footer).display).toBe('flex');
     expect(body.contains(footer)).toBe(false);
     expect(getComputedStyle(footer).flexShrink).toBe('0');
     expect(getComputedStyle(footer).backgroundColor).toBe('rgba(0, 0, 0, 0)');
@@ -122,6 +132,38 @@ describe('ConfirmService', () => {
 
     button(dialog, 'Cancel').click();
     await result;
+  });
+
+  it('uses the official compact destructive layout with equal footer columns', async () => {
+    const result = service.open({
+      message: 'Delete alice?',
+      header: 'Delete user',
+      variant: 'destructive',
+      cancelText: 'Cancel',
+    });
+    const dialog = await openedDialog();
+    const content = dialog.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+    const body = content.querySelector<HTMLElement>('[data-dialog-body]')!;
+    const media = body.querySelector<HTMLElement>('[aria-hidden="true"]')!;
+    const icon = media.querySelector<HTMLElement>('ng-icon')!;
+    const footer = content.querySelector<HTMLElement>('[data-slot="dialog-footer"]')!;
+    expect(getComputedStyle(content).maxWidth).toBe('320px');
+    expect(getComputedStyle(body).textAlign).toBe('center');
+    expect(getComputedStyle(media).width).toBe('64px');
+    expect(getComputedStyle(icon).fontSize).toBe('32px');
+    expect(getComputedStyle(icon).color).toBe(getComputedStyle(media).color);
+    expect(media.classList.contains('bg-destructive/10')).toBe(true);
+    expect(media.classList.contains('dark:bg-destructive/20')).toBe(true);
+    expect(getComputedStyle(media).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(footer).display).toBe('grid');
+    const columns = getComputedStyle(footer).gridTemplateColumns.split(' ');
+    expect(columns).toHaveLength(2);
+    expect(columns[0]).toBe(columns[1]);
+    expect(getComputedStyle(footer).gap).toBe('8px');
+    const buttons = footer.querySelectorAll<HTMLButtonElement>('button');
+    expect(buttons[0].offsetWidth).toBe(buttons[1].offsetWidth);
+    button(dialog, 'Cancel').click();
+    await expect(result).resolves.toBe(false);
   });
 
   it('resolves true when confirmed and uses the given button texts', async () => {
@@ -199,7 +241,7 @@ describe('ConfirmService', () => {
     trigger.remove();
   });
 
-  it('keeps a normalized failure in the body, restores confirmation focus, and retries a fresh action', async () => {
+  it('toasts a normalized failure once, keeps the dialog open, restores focus, and retries', async () => {
     const action = vi
       .fn()
       .mockReturnValueOnce(throwError(() => new Error('Conflict. Refresh first.')))
@@ -208,23 +250,20 @@ describe('ConfirmService', () => {
     const dialog = await openedDialog();
     button(dialog, 'Write').click();
     await vi.waitFor(() =>
-      expect(dialog.querySelector('[role="alert"]')?.textContent).toContain(
-        'Conflict. Refresh first.',
-      ),
+      expect(errorToast).toHaveBeenCalledExactlyOnceWith(errorTitle, {
+        description: 'Conflict. Refresh first.',
+      }),
     );
-    expect(
-      dialog.querySelector('[data-dialog-body]')?.contains(dialog.querySelector('[role="alert"]')),
-    ).toBe(true);
+    expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
+    expect(dialog.querySelector('[role="alert"]')).toBeNull();
+    expect(dialog.textContent).not.toContain('Conflict. Refresh first.');
     await vi.waitFor(() => expect(document.activeElement).toBe(button(dialog, 'Write')));
-    const description = dialog.querySelector<HTMLElement>('#confirm-dialog-description')!;
-    const alert = dialog.querySelector<HTMLElement>('[role="alert"]')!;
-    expect(alert.parentElement).toBe(description.parentElement);
-    expect(getComputedStyle(description.parentElement!).gap).toBe('8px');
     expect(button(dialog, 'Write').disabled).toBe(false);
     expect(button(dialog, 'Write').querySelector('hlm-spinner')).toBeNull();
     button(dialog, 'Write').click();
     await expect(result).resolves.toBe(true);
     expect(action).toHaveBeenCalledTimes(2);
+    expect(errorToast).toHaveBeenCalledOnce();
   });
 
   it.each([0, 500])(
@@ -242,11 +281,13 @@ describe('ConfirmService', () => {
       const dialog = await openedDialog();
       button(dialog, 'Write').click();
       await vi.waitFor(() =>
-        expect(dialog.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-          applicationErrorMessage(error),
-        ),
+        expect(errorToast).toHaveBeenCalledExactlyOnceWith(errorTitle, {
+          description: applicationErrorMessage(error),
+        }),
       );
-      expect(dialog.textContent).not.toContain('Private server details');
+      expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
+      expect(dialog.querySelector('[role="alert"]')).toBeNull();
+      expect(applicationErrorMessage(error)).not.toContain('Private server details');
       expect(action).toHaveBeenCalledOnce();
       button(dialog, 'Cancel').click();
       await expect(result).resolves.toBe(false);
@@ -260,7 +301,12 @@ describe('ConfirmService', () => {
     const dialog = await openedDialog();
     button(dialog, 'Write').click();
     await vi.waitFor(() => expect(button(dialog, 'Write').disabled).toBe(false));
-    await vi.waitFor(() => expect(dialog.querySelector('[role="alert"]')).not.toBeNull());
+    await vi.waitFor(() =>
+      expect(errorToast).toHaveBeenCalledExactlyOnceWith(errorTitle, {
+        description: 'Cannot start',
+      }),
+    );
+    expect(dialog.querySelector('[role="alert"]')).toBeNull();
     button(dialog, 'Write').dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
     );
