@@ -28,6 +28,7 @@ import {
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -71,6 +72,7 @@ import { RoleOutputDto } from '../../../../dtos/role.dto';
 @Component({
   selector: 'app-role-table',
   imports: [
+    ...HlmEmptyImports,
     NgTemplateOutlet,
     ColumnValue,
     TableFit,

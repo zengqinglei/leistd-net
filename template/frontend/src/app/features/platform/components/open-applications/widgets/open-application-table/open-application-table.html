@@ -15,7 +15,7 @@
       [appTableFitContent]="applications()"
     >
       @defer {
-        <div hlmTableContainer class="w-full overflow-x-auto">
+        <div hlmTableContainer class="w-full overflow-x-auto" [attr.aria-busy]="loading()">
           <table hlmTable class="w-full">
             <thead hlmTHead class="bg-muted sticky top-0 z-10">
               @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
@@ -33,13 +33,17 @@
                         @default {
                           <!-- 表头与展开详情取同一份列标签；能排序的列由排序按钮承载标签 -->
                           @if (header.column.getCanSort()) {
+                            <!-- ghost sm 的起始 padding 为 2.5 spacing，另有 1px 透明边框；一并抵消，与单元格对齐。 -->
                             <button
+                              hlmBtn
+                              variant="ghost"
+                              size="sm"
                               type="button"
-                              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors pointer-coarse:min-h-11"
+                              class="-ms-[calc(--spacing(2.5)+1px)]"
                               (click)="toggleSort(header.column.id)"
                             >
                               {{ t(columnLabelKeys[header.column.id]) }}
-                              <ng-icon [name]="sortIcon(header.column.id)" class="text-sm" />
+                              <ng-icon [name]="sortIcon(header.column.id)" />
                             </button>
                           } @else {
                             <span class="whitespace-nowrap">{{
@@ -308,44 +312,49 @@
                       [attr.colspan]="table.getVisibleLeafColumns().length"
                       class="!p-0 !border-0"
                     >
-                      <div
-                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
-                      >
-                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
-                        @if (loadError(); as error) {
-                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
-                          <p class="text-base font-medium" role="alert">
-                            {{ t('common.loadFailed') }}
-                          </p>
-                          <p class="text-sm opacity-70">{{ error }}</p>
-                          <button
-                            hlmBtn
-                            variant="outline"
-                            data-testid="table-retry"
-                            (click)="retry.emit()"
-                          >
-                            {{ t('common.retry') }}
-                          </button>
-                        } @else {
-                          <ng-icon
-                            [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'"
-                            class="text-5xl opacity-30"
-                          />
-                          @if (filtered()) {
-                            <p class="text-base font-medium">
-                              {{ t('openApp.table.emptyFilteredTitle') }}
+                      <div hlmEmpty class="min-h-64">
+                        <div hlmEmptyHeader>
+                          <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                          @if (loadError(); as error) {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon name="lucideCircleAlert" />
+                            </div>
+                            <p hlmEmptyTitle role="alert">
+                              {{ t('common.loadFailed') }}
                             </p>
-                            <p class="text-sm opacity-70">
-                              {{ t('openApp.table.emptyFilteredHint') }}
-                            </p>
+                            <p hlmEmptyDescription>{{ error }}</p>
                           } @else {
-                            <p class="text-base font-medium">
-                              {{ t('openApp.table.emptyTitle') }}
-                            </p>
-                            <p class="text-sm opacity-70">
-                              {{ t('openApp.table.emptyHint') }}
-                            </p>
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'" />
+                            </div>
+                            @if (filtered()) {
+                              <p hlmEmptyTitle>
+                                {{ t('openApp.table.emptyFilteredTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('openApp.table.emptyFilteredHint') }}
+                              </p>
+                            } @else {
+                              <p hlmEmptyTitle>
+                                {{ t('openApp.table.emptyTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('openApp.table.emptyHint') }}
+                              </p>
+                            }
                           }
+                        </div>
+                        @if (loadError()) {
+                          <div hlmEmptyContent>
+                            <button
+                              hlmBtn
+                              variant="outline"
+                              data-testid="table-retry"
+                              (click)="retry.emit()"
+                            >
+                              {{ t('common.retry') }}
+                            </button>
+                          </div>
                         }
                       </div>
                     </td>
@@ -392,7 +401,9 @@
                   [emptyText]="t('openApp.popover.noMatches')"
                 >
                   <span
-                    class="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground whitespace-nowrap"
+                    hlmBadge
+                    variant="secondary"
+                    class="min-w-0 gap-1.5"
                     [class]="mode === 'detail' ? 'max-w-full' : 'max-w-[14rem]'"
                     data-testid="open-app-permissions-summary"
                   >
@@ -407,7 +418,9 @@
                 </app-readonly-list-popover>
               } @else {
                 <span
-                  class="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground whitespace-nowrap"
+                  hlmBadge
+                  variant="secondary"
+                  class="gap-1.5"
                   data-testid="open-app-permissions-summary"
                 >
                   <ng-icon name="lucideShield" class="shrink-0 text-xs" />

@@ -51,6 +51,7 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 //#if (LocalIdentity || IncludeNotifications)
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
@@ -127,6 +128,7 @@ const DEVICE_ICONS: Record<DeviceKind, string> = {
   standalone: true,
   // prettier-ignore
   imports: [
+    ...HlmEmptyImports,
     RouterLink,
     NgIcon,
     HlmBadge,

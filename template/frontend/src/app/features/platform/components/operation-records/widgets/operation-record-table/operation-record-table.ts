@@ -13,6 +13,7 @@ import {
 } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
@@ -47,6 +48,7 @@ import { operationRecordActor } from '../operation-record-detail/operation-recor
 @Component({
   selector: 'app-operation-record-table',
   imports: [
+    ...HlmEmptyImports,
     NgTemplateOutlet,
     ColumnValue,
     TableLoading,

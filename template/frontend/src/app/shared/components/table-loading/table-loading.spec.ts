@@ -17,21 +17,23 @@ import { TableLoading, TableLoadingBody } from './table-loading';
       [columns]="columns()"
       [rowHeight]="53"
     >
-      <table>
-        <tbody appTableLoadingBody>
-          @if (state.initialLoading()) {
-            <ng-container [ngTemplateOutlet]="state.skeleton() ?? null" />
-          } @else if (hasRows()) {
-            <tr>
-              <td><button>Existing row</button></td>
-            </tr>
-          } @else {
-            <tr>
-              <td>No results</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <div data-testid="region" [attr.aria-busy]="state.loading()">
+        <table>
+          <tbody appTableLoadingBody>
+            @if (state.initialLoading()) {
+              <ng-container [ngTemplateOutlet]="state.skeleton() ?? null" />
+            } @else if (hasRows()) {
+              <tr>
+                <td><button>Existing row</button></td>
+              </tr>
+            } @else {
+              <tr>
+                <td>No results</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     </app-table-loading>
     <button data-testid="outside">Outside</button>
   `,
@@ -70,10 +72,10 @@ describe('TableLoading', () => {
     fixture.componentInstance.loading.set(false);
     await fixture.whenStable();
     expect(host.querySelector('tbody')?.textContent).toContain('No results');
-    expect(host.querySelector('app-table-loading')?.getAttribute('aria-busy')).toBe('false');
+    expect(host.querySelector('[data-testid=region]')?.getAttribute('aria-busy')).toBe('false');
   });
 
-  it('preserves row identity and dimensions, blocks interaction and announces loading outside the inert region', async () => {
+  it('preserves row identity and dimensions, preserves focused actions and announces loading outside the busy region', async () => {
     const fixture = TestBed.createComponent(Host);
     fixture.componentInstance.loading.set(false);
     fixture.componentInstance.hasRows.set(true);
@@ -81,20 +83,23 @@ describe('TableLoading', () => {
     const host = fixture.nativeElement as HTMLElement;
     const row = host.querySelector('tbody tr')!;
     const before = row.getBoundingClientRect().toJSON();
+    const action = row.querySelector<HTMLButtonElement>('button')!;
+    action.focus();
+    expect(document.activeElement).toBe(action);
     fixture.componentInstance.loading.set(true);
     await fixture.whenStable();
     expect(host.querySelector('tbody tr')).toBe(row);
+    expect(document.activeElement).toBe(action);
     expect(row.getBoundingClientRect().toJSON()).toEqual(before);
-    expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(true);
+    expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(false);
     expect(host.querySelector('tbody')?.classList.contains('opacity-50')).toBe(true);
-    expect(host.querySelector('app-table-loading')?.getAttribute('aria-busy')).toBe('true');
+    expect(host.querySelector('[data-testid=region]')?.getAttribute('aria-busy')).toBe('true');
     const status = host.querySelector('[role="status"]')!;
-    expect(status.closest('[inert]')).toBeNull();
+    expect(status.closest('[aria-busy]')).toBeNull();
     const outside = host.querySelector<HTMLButtonElement>('[data-testid="outside"]')!;
-    const action = row.querySelector<HTMLButtonElement>('button')!;
     outside.focus();
     action.focus();
-    expect(document.activeElement).toBe(outside);
+    expect(document.activeElement).toBe(action);
     //#if (IncludeLocalization)
     expect(status.textContent?.trim()).toBe('app.startup.loading');
     //#else

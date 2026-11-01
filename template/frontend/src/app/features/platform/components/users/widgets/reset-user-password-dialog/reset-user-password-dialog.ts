@@ -14,8 +14,9 @@ import { form, maxLength, minLength, required, FormField } from '@angular/forms/
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideEye, lucideEyeOff } from '@ng-icons/lucide';
+import { lucideEye, lucideEyeOff, lucideTriangleAlert } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -44,6 +45,7 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
   selector: 'app-reset-user-password-dialog',
   imports: [
     ImeGuard,
+    ...HlmAlertImports,
     DialogClose,
     FormField,
     NgIcon,
@@ -59,7 +61,7 @@ import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto'
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideEye, lucideEyeOff })],
+  providers: [provideIcons({ lucideEye, lucideEyeOff, lucideTriangleAlert })],
   templateUrl: './reset-user-password-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

@@ -38,7 +38,7 @@ export interface ConfirmContext {
           class="bg-muted mb-2 inline-flex size-16 shrink-0 items-center justify-center rounded-md sm:row-span-2"
           aria-hidden="true"
         >
-          <ng-icon name="lucideTriangleAlert" class="text-destructive text-3xl" />
+          <ng-icon name="lucideTriangleAlert" class="text-destructive text-[length:--spacing(8)]" />
         </div>
         <h2 id="confirm-dialog-title" class="text-lg font-medium sm:col-start-2">
           {{ ctx.header }}

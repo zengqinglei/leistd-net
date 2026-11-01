@@ -18,6 +18,7 @@ import {
   lucideUserPlus,
 } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { filter, map } from 'rxjs';
 
 import { LayoutService } from '../../../../core/services/layout-service';
@@ -74,6 +75,7 @@ const GROUP_ICONS: Readonly<Record<string, string>> = {
   ],
   // prettier-ignore
   imports: [
+    ...HlmEmptyImports,
     HlmButton,
     SettingsShell,
     //#if (IncludeLocalization)

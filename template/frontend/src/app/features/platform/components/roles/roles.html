@@ -35,7 +35,6 @@
             variant="secondary"
             class="flex-1 sm:flex-none"
             (click)="reload()"
-            [disabled]="loading()"
             [hlmTooltip]="t('common.refresh')"
           >
             @if (loading()) {

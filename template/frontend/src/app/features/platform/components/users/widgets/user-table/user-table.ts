@@ -37,6 +37,7 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -93,6 +94,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 @Component({
   selector: 'app-user-table',
   imports: [
+    ...HlmEmptyImports,
     NgTemplateOutlet,
     ColumnValue,
     ReadonlyListPopover,

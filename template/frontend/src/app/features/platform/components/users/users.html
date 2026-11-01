@@ -67,7 +67,6 @@
             variant="secondary"
             class="flex-1 sm:flex-none"
             (click)="reloadList()"
-            [disabled]="loading()"
             [hlmTooltip]="t('common.refresh')"
           >
             @if (loading()) {

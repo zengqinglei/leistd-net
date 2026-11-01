@@ -42,8 +42,10 @@
           <span class="font-semibold">{{ t('layout.notifications.title') }}</span>
           @if (notificationCount() > 0) {
             <button
+              hlmBtn
+              variant="link"
+              size="sm"
               type="button"
-              class="text-xs text-primary hover:underline disabled:opacity-50"
               [disabled]="markingAllRead()"
               (click)="markAllNotificationsRead()"
             >
@@ -72,29 +74,41 @@
           </div>
         }
         @if (notifications().length === 0) {
-          <!-- 图标与文案各自成行、整体居中：用 flex 列布局，不依赖 ng-icon 的 display。 -->
-          <div
-            class="text-muted-foreground flex flex-col items-center justify-center gap-2 py-10 text-sm"
-            [attr.aria-busy]="notificationService.loading() || null"
-          >
-            @if (notificationService.loading()) {
-              <hlm-spinner />
-              <span>{{ t('layout.notifications.loading') }}</span>
-            } @else if (notificationService.loadFailed()) {
-              <ng-icon name="lucideCircleAlert" class="text-2xl opacity-60" />
-              <span>{{ t('layout.notifications.loadFailed') }}</span>
-              <button
-                hlmBtn
-                variant="outline"
-                size="sm"
-                data-testid="notifications-retry"
-                (click)="retryLoad()"
-              >
-                {{ t('common.retry') }}
-              </button>
-            } @else {
-              <ng-icon name="lucideInbox" class="text-2xl opacity-60" />
-              <span>{{ t('layout.notifications.empty') }}</span>
+          <div hlmEmpty class="py-10" [attr.aria-busy]="notificationService.loading() || null">
+            <div hlmEmptyHeader>
+              <div hlmEmptyMedia variant="icon">
+                @if (notificationService.loading()) {
+                  <hlm-spinner />
+                } @else {
+                  <ng-icon
+                    [name]="notificationService.loadFailed() ? 'lucideCircleAlert' : 'lucideInbox'"
+                  />
+                }
+              </div>
+              <p hlmEmptyTitle [attr.role]="notificationService.loadFailed() ? 'alert' : null">
+                {{
+                  t(
+                    notificationService.loading()
+                      ? 'layout.notifications.loading'
+                      : notificationService.loadFailed()
+                        ? 'layout.notifications.loadFailed'
+                        : 'layout.notifications.empty'
+                  )
+                }}
+              </p>
+            </div>
+            @if (!notificationService.loading() && notificationService.loadFailed()) {
+              <div hlmEmptyContent>
+                <button
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  data-testid="notifications-retry"
+                  (click)="retryLoad()"
+                >
+                  {{ t('common.retry') }}
+                </button>
+              </div>
             }
           </div>
         } @else {

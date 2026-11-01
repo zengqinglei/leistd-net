@@ -43,17 +43,23 @@
     } @empty {
       <!-- 首次加载失败与"没有可配置项"分开表达：说出原因并给重试。 -->
       @if (loadError(); as error) {
-        <div class="flex flex-col items-start gap-2" data-testid="settings-load-error">
-          <p class="text-sm font-medium" role="alert">{{ t('settings.loadFailed') }}</p>
-          <p class="text-muted-foreground text-sm">{{ error }}</p>
-          <button hlmBtn variant="outline" [disabled]="loading()" (click)="reload()">
-            {{ t('common.retry') }}
-          </button>
+        <div hlmEmpty data-testid="settings-load-error">
+          <div hlmEmptyHeader>
+            <p hlmEmptyTitle role="alert">{{ t('settings.loadFailed') }}</p>
+            <p hlmEmptyDescription>{{ error }}</p>
+          </div>
+          <div hlmEmptyContent>
+            <button hlmBtn variant="outline" [disabled]="loading()" (click)="reload()">
+              {{ t('common.retry') }}
+            </button>
+          </div>
         </div>
       } @else if (!loading()) {
-        <p class="text-muted-foreground text-sm" data-testid="settings-empty">
-          {{ t('settings.empty') }}
-        </p>
+        <div hlmEmpty data-testid="settings-empty">
+          <div hlmEmptyHeader>
+            <p hlmEmptyTitle>{{ t('settings.empty') }}</p>
+          </div>
+        </div>
       }
     }
     <!--#if (Email)-->

@@ -44,6 +44,7 @@ import { HLM_CHART_THEME, HlmChartImports, hlmChartTooltip } from '@spartan-ng/h
 import { HLM_CHART_THEME, HlmChartImports } from '@spartan-ng/helm/chart';
 //#endif
 import { HlmDatePickerTrigger, HlmDateRangePicker } from '@spartan-ng/helm/date-picker';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -211,6 +212,7 @@ const AVATAR_CLASSES = [
   standalone: true,
   // prettier-ignore
   imports: [
+    ...HlmEmptyImports,
     RouterLink,
     NgIcon,
     HlmBadge,

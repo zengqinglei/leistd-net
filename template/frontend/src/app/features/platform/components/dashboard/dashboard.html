@@ -320,11 +320,15 @@
                   }
                 </li>
               } @empty {
-                <li
-                  class="text-muted-foreground flex flex-col items-center justify-center gap-2 py-8 text-sm"
-                >
-                  <ng-icon name="lucideCircleCheck" class="text-success text-xl" />
-                  {{ t('platform.dashboard.attention.allClear') }}
+                <li hlmEmpty class="py-8">
+                  <div hlmEmptyHeader>
+                    <div hlmEmptyMedia variant="icon" class="text-success">
+                      <ng-icon name="lucideCircleCheck" />
+                    </div>
+                    <p hlmEmptyDescription>
+                      {{ t('platform.dashboard.attention.allClear') }}
+                    </p>
+                  </div>
                 </li>
               }
             </ul>
@@ -332,15 +336,15 @@
         </div>
         <!--#endif-->
       } @else if (loadFailed()) {
-        <div
-          class="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-sm"
-          role="alert"
-          data-testid="dashboard-load-failed"
-        >
-          <span class="text-muted-foreground">{{ t('platform.dashboard.loadFailed') }}</span>
-          <button hlmBtn variant="outline" size="sm" (click)="loadStatistics()">
-            {{ t('common.retry') }}
-          </button>
+        <div hlmEmpty class="border" role="alert" data-testid="dashboard-load-failed">
+          <div hlmEmptyHeader>
+            <p hlmEmptyTitle>{{ t('platform.dashboard.loadFailed') }}</p>
+          </div>
+          <div hlmEmptyContent>
+            <button hlmBtn variant="outline" size="sm" (click)="loadStatistics()">
+              {{ t('common.retry') }}
+            </button>
+          </div>
         </div>
       } @else {
         <!-- 首次加载：骨架与成稿同布局，数据到达时不跳动 -->
@@ -462,17 +466,25 @@
                   }
                 </li>
               } @empty {
-                <li class="text-muted-foreground py-8 text-center text-sm">
-                  {{ t('platform.dashboard.recent.empty') }}
+                <li hlmEmpty class="py-8">
+                  <div hlmEmptyHeader>
+                    <p hlmEmptyTitle>
+                      {{ t('platform.dashboard.recent.empty') }}
+                    </p>
+                  </div>
                 </li>
               }
             </ul>
           } @else if (recentRecordsFailed()) {
-            <div class="flex flex-col items-center gap-2 py-8 text-sm" role="alert">
-              <span class="text-muted-foreground">{{ t('common.loadFailed') }}</span>
-              <button hlmBtn variant="outline" size="sm" (click)="loadRecentRecords()">
-                {{ t('common.retry') }}
-              </button>
+            <div hlmEmpty class="py-8" role="alert">
+              <div hlmEmptyHeader>
+                <p hlmEmptyTitle>{{ t('common.loadFailed') }}</p>
+              </div>
+              <div hlmEmptyContent>
+                <button hlmBtn variant="outline" size="sm" (click)="loadRecentRecords()">
+                  {{ t('common.retry') }}
+                </button>
+              </div>
             </div>
           } @else {
             <div class="flex flex-col gap-3 p-4" aria-busy="true">
@@ -493,7 +505,10 @@
           <nav class="flex flex-col p-2" [attr.aria-label]="t('platform.dashboard.quick.title')">
             @for (link of quickLinks(); track link.route) {
               <a
-                class="hover:bg-muted flex h-10 items-center gap-3 rounded-md px-2 text-sm font-medium"
+                hlmBtn
+                variant="ghost"
+                size="lg"
+                class="justify-start gap-3"
                 [routerLink]="link.route"
               >
                 <span

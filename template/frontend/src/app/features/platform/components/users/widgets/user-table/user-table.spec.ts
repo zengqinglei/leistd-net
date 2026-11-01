@@ -87,7 +87,7 @@ describe('UserTable', () => {
     fixture.detectChanges();
   });
 
-  it('keeps the same data rows while reloading and marks them inert', async () => {
+  it('keeps the same data rows and interactive actions while reloading', async () => {
     const [table] = await fixture.getDeferBlocks();
     await table.render(DeferBlockState.Complete);
     fixture.detectChanges();
@@ -97,8 +97,8 @@ describe('UserTable', () => {
     fixture.componentRef.setInput('loading', true);
     fixture.detectChanges();
     expect(host.querySelector('tbody tr')).toBe(row);
-    expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(true);
-    expect(host.querySelector('app-table-loading')?.getAttribute('aria-busy')).toBe('true');
+    expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(false);
+    expect(host.querySelector('[hlmTableContainer]')?.getAttribute('aria-busy')).toBe('true');
     fixture.componentRef.setInput('loading', false);
     fixture.detectChanges();
     expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(false);

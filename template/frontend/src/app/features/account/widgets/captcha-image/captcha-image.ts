@@ -11,6 +11,7 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
@@ -32,6 +33,7 @@ import { AccountService } from '../../services/account-service';
   // prettier-ignore
   imports: [
     HlmButton,
+    HlmSkeleton,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
     TranslocoDirective,

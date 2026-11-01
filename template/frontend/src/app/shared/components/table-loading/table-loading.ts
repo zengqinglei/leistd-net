@@ -30,7 +30,7 @@ import { englishText } from '../../utils/english-text';
     TranslocoDirective,
     //#endif
   ],
-  host: { class: 'block', '[attr.aria-busy]': 'loading()' },
+  host: { class: 'block' },
   templateUrl: './table-loading.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -52,11 +52,10 @@ export class TableLoading {
   //#endif
 }
 
-/** inert 同时阻止键盘与指针；读屏状态在容器内、行区外，不随行区一起隐藏。 */
+/** 重新加载仅淡化原行；保留交互与焦点，switchMap 负责取消已过时的请求。 */
 @Directive({
   selector: 'tbody[appTableLoadingBody]',
   host: {
-    '[attr.inert]': 'state.reloading() ? "" : null',
     '[class.opacity-50]': 'state.reloading()',
   },
 })

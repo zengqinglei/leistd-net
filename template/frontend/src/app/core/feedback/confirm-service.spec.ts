@@ -106,6 +106,8 @@ describe('ConfirmService', () => {
     const content = dialog.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
     const body = content.querySelector<HTMLElement>('[data-dialog-body]')!;
     const footer = content.querySelector<HTMLElement>('[data-slot="dialog-footer"]')!;
+    expect(getComputedStyle(content).maxWidth).toBe('512px');
+    expect(getComputedStyle(content.querySelector('ng-icon')!).fontSize).toBe('32px');
     expect(body.contains(describedBy)).toBe(true);
     expect(body.contains(footer)).toBe(false);
     expect(getComputedStyle(footer).flexShrink).toBe('0');

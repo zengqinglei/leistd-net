@@ -14,7 +14,7 @@
       [compactRowHeight]="57"
     >
       @defer {
-        <div hlmTableContainer class="w-full overflow-x-auto">
+        <div hlmTableContainer class="w-full overflow-x-auto" [attr.aria-busy]="loading()">
           <table hlmTable class="w-full">
             <thead hlmTHead class="bg-muted sticky top-0 z-10">
               @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
@@ -118,44 +118,49 @@
                       [attr.colspan]="table.getVisibleLeafColumns().length"
                       class="!p-0 !border-0"
                     >
-                      <div
-                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
-                      >
-                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
-                        @if (loadError(); as error) {
-                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
-                          <p class="text-base font-medium" role="alert">
-                            {{ t('common.loadFailed') }}
-                          </p>
-                          <p class="text-sm opacity-70">{{ error }}</p>
-                          <button
-                            hlmBtn
-                            variant="outline"
-                            data-testid="table-retry"
-                            (click)="retry.emit()"
-                          >
-                            {{ t('common.retry') }}
-                          </button>
-                        } @else {
-                          <ng-icon
-                            [name]="filtered() ? 'lucideSearchX' : 'lucideDatabase'"
-                            class="text-5xl opacity-30"
-                          />
-                          @if (filtered()) {
-                            <p class="text-base font-medium">
-                              {{ t('operationRecords.table.emptyFilteredTitle') }}
+                      <div hlmEmpty class="min-h-64">
+                        <div hlmEmptyHeader>
+                          <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                          @if (loadError(); as error) {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon name="lucideCircleAlert" />
+                            </div>
+                            <p hlmEmptyTitle role="alert">
+                              {{ t('common.loadFailed') }}
                             </p>
-                            <p class="text-sm opacity-70">
-                              {{ t('operationRecords.table.emptyFilteredHint') }}
-                            </p>
+                            <p hlmEmptyDescription>{{ error }}</p>
                           } @else {
-                            <p class="text-base font-medium">
-                              {{ t('operationRecords.table.emptyTitle') }}
-                            </p>
-                            <p class="text-sm opacity-70">
-                              {{ t('operationRecords.table.emptyHint') }}
-                            </p>
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon [name]="filtered() ? 'lucideSearchX' : 'lucideDatabase'" />
+                            </div>
+                            @if (filtered()) {
+                              <p hlmEmptyTitle>
+                                {{ t('operationRecords.table.emptyFilteredTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('operationRecords.table.emptyFilteredHint') }}
+                              </p>
+                            } @else {
+                              <p hlmEmptyTitle>
+                                {{ t('operationRecords.table.emptyTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('operationRecords.table.emptyHint') }}
+                              </p>
+                            }
                           }
+                        </div>
+                        @if (loadError()) {
+                          <div hlmEmptyContent>
+                            <button
+                              hlmBtn
+                              variant="outline"
+                              data-testid="table-retry"
+                              (click)="retry.emit()"
+                            >
+                              {{ t('common.retry') }}
+                            </button>
+                          </div>
                         }
                       </div>
                     </td>
