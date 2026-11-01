@@ -121,7 +121,11 @@
             (click)="reloadList()"
             [hlmTooltip]="t('common.refresh')"
           >
-            <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+            @if (loading()) {
+              <hlm-spinner data-icon="inline-start" />
+            } @else {
+              <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+            }
             {{ t('common.refresh') }}
           </button>
         </div>

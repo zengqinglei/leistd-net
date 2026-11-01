@@ -13,12 +13,16 @@ import {
 } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
 import { injectOperationActionSentence } from './operation-action-sentence';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
+import {
+  TableLoading,
+  TableLoadingBody,
+} from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { ColumnValue } from '../../../../../../shared/directives/column-value';
 import { StatusDot } from '../../../../../../shared/directives/status-dot';
@@ -44,15 +48,17 @@ import { operationRecordActor } from '../operation-record-detail/operation-recor
 @Component({
   selector: 'app-operation-record-table',
   imports: [
+    ...HlmEmptyImports,
     NgTemplateOutlet,
     ColumnValue,
+    TableLoading,
+    TableLoadingBody,
     StatusDot,
     AppDate,
     AppNumber,
     NgIcon,
     HlmBadge,
     HlmButton,
-    HlmSpinner,
     OperationRecordDetail,
     TablePaginator,
     ...HlmTableImports,

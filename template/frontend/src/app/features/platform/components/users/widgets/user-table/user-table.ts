@@ -37,6 +37,7 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -53,6 +54,10 @@ import {
   type ReadonlyListItem,
   ReadonlyListPopover,
 } from '../../../../../../shared/components/readonly-list-popover/readonly-list-popover';
+import {
+  TableLoading,
+  TableLoadingBody,
+} from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { ColumnValue } from '../../../../../../shared/directives/column-value';
 import { StatusDot } from '../../../../../../shared/directives/status-dot';
@@ -89,11 +94,14 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 @Component({
   selector: 'app-user-table',
   imports: [
+    ...HlmEmptyImports,
     NgTemplateOutlet,
     ColumnValue,
     ReadonlyListPopover,
     StatusDot,
     TableFit,
+    TableLoading,
+    TableLoadingBody,
     AppDate,
     AppNumber,
     NgIcon,

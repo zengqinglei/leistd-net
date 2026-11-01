@@ -4,13 +4,18 @@
 <ng-container>
 <!--#endif-->
   <div class="flex flex-col gap-4">
-    <div
+    <app-table-loading
       class="@container rounded-xl border border-border overflow-hidden"
+      #loadingState="appTableLoading"
+      [loading]="loading()"
+      [hasRows]="tenants().length > 0"
+      [columns]="table.getVisibleLeafColumns().length"
+      [rowHeight]="49"
       [appTableFit]="tableViewport()"
       [appTableFitContent]="tenants()"
     >
       @defer {
-        <div hlmTableContainer class="w-full overflow-x-auto">
+        <div hlmTableContainer class="w-full overflow-x-auto" [attr.aria-busy]="loading()">
           <table hlmTable class="w-full">
             <thead hlmTHead class="bg-muted sticky top-0 z-10">
               @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
@@ -34,18 +39,9 @@
               }
             </thead>
 
-            <tbody hlmTBody>
-              @if (loading()) {
-                <tr hlmTr>
-                  <td
-                    hlmTd
-                    [attr.colspan]="table.getVisibleLeafColumns().length"
-                    class="h-32 text-center"
-                  >
-                    <hlm-spinner class="mx-auto" />
-                    <span class="sr-only">Loading</span>
-                  </td>
-                </tr>
+            <tbody hlmTBody appTableLoadingBody>
+              @if (loadingState.initialLoading()) {
+                <ng-container [ngTemplateOutlet]="loadingState.skeleton() ?? null" />
               } @else {
                 @for (row of table.getRowModel().rows; track row.original.id) {
                   <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
@@ -281,44 +277,49 @@
                       [attr.colspan]="table.getVisibleLeafColumns().length"
                       class="!p-0 !border-0"
                     >
-                      <div
-                        class="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground"
-                      >
-                        <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
-                        @if (loadError(); as error) {
-                          <ng-icon name="lucideCircleAlert" class="text-5xl opacity-30" />
-                          <p class="text-base font-medium" role="alert">
-                            {{ t('common.loadFailed') }}
-                          </p>
-                          <p class="text-sm opacity-70">{{ error }}</p>
-                          <button
-                            hlmBtn
-                            variant="outline"
-                            data-testid="table-retry"
-                            (click)="retry.emit()"
-                          >
-                            {{ t('common.retry') }}
-                          </button>
-                        } @else {
-                          <ng-icon
-                            [name]="filtered() ? 'lucideSearchX' : 'lucideBuilding2'"
-                            class="text-5xl opacity-30"
-                          />
-                          @if (filtered()) {
-                            <p class="text-base font-medium">
-                              {{ t('tenants.table.emptyFilteredTitle') }}
+                      <div hlmEmpty class="min-h-64">
+                        <div hlmEmptyHeader>
+                          <!-- 加载失败与"暂无数据"分开表达：说出原因并给重试，不让人误以为确实没有数据。 -->
+                          @if (loadError(); as error) {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon name="lucideCircleAlert" />
+                            </div>
+                            <p hlmEmptyTitle role="alert">
+                              {{ t('common.loadFailed') }}
                             </p>
-                            <p class="text-sm opacity-70">
-                              {{ t('tenants.table.emptyFilteredHint') }}
-                            </p>
+                            <p hlmEmptyDescription>{{ error }}</p>
                           } @else {
-                            <p class="text-base font-medium">
-                              {{ t('tenants.table.emptyTitle') }}
-                            </p>
-                            <p class="text-sm opacity-70">
-                              {{ t('tenants.table.emptyHint') }}
-                            </p>
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon [name]="filtered() ? 'lucideSearchX' : 'lucideBuilding2'" />
+                            </div>
+                            @if (filtered()) {
+                              <p hlmEmptyTitle>
+                                {{ t('tenants.table.emptyFilteredTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('tenants.table.emptyFilteredHint') }}
+                              </p>
+                            } @else {
+                              <p hlmEmptyTitle>
+                                {{ t('tenants.table.emptyTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('tenants.table.emptyHint') }}
+                              </p>
+                            }
                           }
+                        </div>
+                        @if (loadError()) {
+                          <div hlmEmptyContent>
+                            <button
+                              hlmBtn
+                              variant="outline"
+                              data-testid="table-retry"
+                              (click)="retry.emit()"
+                            >
+                              {{ t('common.retry') }}
+                            </button>
+                          </div>
                         }
                       </div>
                     </td>
@@ -380,7 +381,7 @@
           }
         </ng-template>
       }
-    </div>
+    </app-table-loading>
 
     <!-- 分页栏：独立于表格卡片，置于其下方。 -->
     @if (totalCount() > 0) {

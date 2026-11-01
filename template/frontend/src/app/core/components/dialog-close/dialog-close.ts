@@ -13,6 +13,8 @@ import { ConfirmService } from '../../feedback/confirm-service';
 @Component({
   selector: 'app-dialog-close',
   exportAs: 'appDialogClose',
+  // 宿主不生成布局盒：内部按钮仍以 DialogContent 定位，与 Helm 关闭按钮一致，也不额外产生 gap。
+  host: { class: 'contents' },
   imports: [HlmButton, NgIcon],
   providers: [provideIcons({ lucideX })],
   template: `

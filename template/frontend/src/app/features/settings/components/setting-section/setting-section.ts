@@ -17,6 +17,7 @@ import { lucideCircleCheck, lucideCircleX, lucideRotateCcw } from '@ng-icons/luc
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
@@ -141,6 +142,7 @@ export const SAVING_MIN_MS = 400;
   selector: 'app-setting-section',
   //#if (IncludeLocalization)
   imports: [
+    ...HlmEmptyImports,
     NgIcon,
     NgTemplateOutlet,
     HlmBadge,
@@ -164,6 +166,7 @@ export const SAVING_MIN_MS = 400;
   ],
   //#else
   imports: [
+    ...HlmEmptyImports,
     NgIcon,
     NgTemplateOutlet,
     HlmBadge,

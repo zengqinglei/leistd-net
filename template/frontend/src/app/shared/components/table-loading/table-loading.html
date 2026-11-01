@@ -1,0 +1,29 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <span class="sr-only" role="status" aria-live="polite">
+    @if (loading()) {
+      {{ t('app.startup.loading') }}
+    }
+  </span>
+</ng-container>
+<ng-content />
+<ng-template #skeleton>
+  @for (row of skeletonRows; track row) {
+    <tr
+      hlmTr
+      aria-hidden="true"
+      class="h-(--table-row-height) hover:bg-transparent max-sm:h-(--table-compact-row-height)"
+      [style.--table-row-height.px]="rowHeight()"
+      [style.--table-compact-row-height.px]="compactRowHeight() ?? rowHeight()"
+    >
+      @for (column of skeletonColumns(); track $index) {
+        <td hlmTd class="first:ps-4">
+          <div hlmSkeleton class="h-4 w-full min-w-4"></div>
+        </td>
+      }
+    </tr>
+  }
+</ng-template>

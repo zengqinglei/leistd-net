@@ -31,8 +31,10 @@
         data-testid="workbench-composer"
       >
         <button
+          hlmBtn
+          variant="ghost"
           type="button"
-          class="text-muted-foreground focus-visible:ring-ring/50 flex h-11 w-full cursor-text items-center gap-3 rounded-md px-2 text-base outline-none focus-visible:ring-[3px]"
+          class="text-muted-foreground h-11 w-full justify-start gap-3 text-base"
           data-testid="workbench-search"
           (click)="commandPalette.open()"
         >
@@ -165,16 +167,20 @@
                 }
               </ul>
             } @else if (notificationService.loadFailed()) {
-              <div class="flex flex-col items-center gap-2 py-6 text-sm" role="alert">
-                <span class="text-muted-foreground">{{ t('common.loadFailed') }}</span>
-                <button
-                  hlmBtn
-                  variant="outline"
-                  size="sm"
-                  (click)="notificationService.loadNotifications()"
-                >
-                  {{ t('common.retry') }}
-                </button>
+              <div hlmEmpty class="py-6" role="alert">
+                <div hlmEmptyHeader>
+                  <p hlmEmptyTitle>{{ t('common.loadFailed') }}</p>
+                </div>
+                <div hlmEmptyContent>
+                  <button
+                    hlmBtn
+                    variant="outline"
+                    size="sm"
+                    (click)="notificationService.loadNotifications()"
+                  >
+                    {{ t('common.retry') }}
+                  </button>
+                </div>
               </div>
             } @else if (notificationService.loading()) {
               <div class="flex flex-col gap-3" aria-busy="true">
@@ -183,9 +189,11 @@
                 }
               </div>
             } @else {
-              <p class="text-muted-foreground py-6 text-center text-sm">
-                {{ t('workspace.dashboard.notifications.empty') }}
-              </p>
+              <div hlmEmpty class="py-6">
+                <div hlmEmptyHeader>
+                  <p hlmEmptyTitle>{{ t('workspace.dashboard.notifications.empty') }}</p>
+                </div>
+              </div>
             }
           </div>
         </section>

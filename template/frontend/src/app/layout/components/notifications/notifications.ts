@@ -17,6 +17,7 @@ import { lucideBell, lucideCircleAlert, lucideInbox } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { interval } from 'rxjs';
@@ -45,6 +46,7 @@ import { resolveDisplayTimeZone } from '../../../shared/utils/zoned-time';
   host: { class: 'inline-flex' },
   // prettier-ignore
   imports: [
+    ...HlmEmptyImports,
     NgIcon,
     HlmButton,
     HlmBadge,

@@ -87,6 +87,23 @@ describe('UserTable', () => {
     fixture.detectChanges();
   });
 
+  it('keeps the same data rows and interactive actions while reloading', async () => {
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const row = host.querySelector('tbody tr');
+    expect(row?.textContent).toContain('alice');
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+    expect(host.querySelector('tbody tr')).toBe(row);
+    expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(false);
+    expect(host.querySelector('[hlmTableContainer]')?.getAttribute('aria-busy')).toBe('true');
+    fixture.componentRef.setInput('loading', false);
+    fixture.detectChanges();
+    expect(host.querySelector('tbody')?.hasAttribute('inert')).toBe(false);
+  });
+
   //#if (LocalIdentity)
   it('shows a locked badge only on locked-out users', async () => {
     fixture.componentRef.setInput('users', [

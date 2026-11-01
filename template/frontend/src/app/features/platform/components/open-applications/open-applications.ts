@@ -30,6 +30,7 @@ import {
   HlmInputGroupInput,
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
@@ -82,6 +83,7 @@ const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'creationTime', desc: t
   imports: [
     NgIcon,
     HlmButton,
+    HlmSpinner,
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupAddon,
