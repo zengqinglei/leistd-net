@@ -1,0 +1,516 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div class="flex flex-col gap-4">
+    <app-table-loading
+      class="@container rounded-xl border border-border overflow-hidden"
+      #loadingState="appTableLoading"
+      [loading]="loading()"
+      [hasRows]="subscriptions().length > 0"
+      [columns]="table.getVisibleLeafColumns().length"
+      [rowHeight]="57"
+      [appTableFit]="tableViewport()"
+      [appTableFitContent]="subscriptions()"
+    >
+      @defer {
+        <div hlmTableContainer class="w-full overflow-x-auto" [attr.aria-busy]="loading()">
+          <table hlmTable class="w-full">
+            <thead hlmTHead class="bg-muted sticky top-0 z-10">
+              @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
+                <tr hlmTr class="text-sm font-medium">
+                  @for (header of headerGroup.headers; track header.id) {
+                    <th hlmTh [class]="header.column.columnDef.meta?.headClass ?? 'first:ps-4'">
+                      @if (header.column.id === 'actions') {
+                        <span class="sr-only">{{ t('common.actions') }}</span>
+                      } @else {
+                        <span class="whitespace-nowrap">{{
+                          t(columnLabelKeys[header.column.id])
+                        }}</span>
+                      }
+                    </th>
+                  }
+                </tr>
+              }
+            </thead>
+
+            <tbody hlmTBody appTableLoadingBody>
+              @if (loadingState.initialLoading()) {
+                <ng-container [ngTemplateOutlet]="loadingState.skeleton() ?? null" />
+              } @else {
+                @for (row of table.getRowModel().rows; track row.original.id) {
+                  @let subscription = row.original;
+                  <tr
+                    hlmTr
+                    class="group text-sm hover:bg-muted/50 transition-colors"
+                    data-testid="webhook-subscription-row"
+                  >
+                    @for (cell of row.getVisibleCells(); track cell.id) {
+                      <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'first:ps-4'">
+                        @switch (cell.column.id) {
+                          @case ('name') {
+                            <div
+                              class="flex min-w-0 items-center gap-2 whitespace-nowrap"
+                              [class]="titleContentClass"
+                            >
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon-sm"
+                                class="-ml-2 shrink-0"
+                                [attr.aria-label]="t('common.details')"
+                                [attr.aria-expanded]="row.getIsExpanded()"
+                                (click)="row.toggleExpanded()"
+                              >
+                                <ng-icon
+                                  name="lucideChevronRight"
+                                  class="transition-transform duration-200"
+                                  [class.rotate-90]="row.getIsExpanded()"
+                                />
+                              </button>
+                              <div class="flex min-w-0 flex-col">
+                                <span class="text-foreground truncate font-medium">{{
+                                  subscription.name
+                                }}</span>
+                                <span
+                                  class="text-muted-foreground max-w-[22rem] truncate font-mono text-xs"
+                                  [title]="subscription.url"
+                                  >{{ subscription.url }}</span
+                                >
+                              </div>
+                            </div>
+                          }
+                          @case ('status') {
+                            <span
+                              hlmBadge
+                              appStatusDot
+                              class="whitespace-nowrap"
+                              [variant]="stateVariants[state(subscription)]"
+                              >{{ t(stateKeys[state(subscription)]) }}</span
+                            >
+                          }
+                          @case ('actions') {
+                            <div class="flex items-center justify-end gap-0.5">
+                              @if (canManage()) {
+                                <button
+                                  hlmBtn
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  class="hidden sm:inline-flex"
+                                  [disabled]="busyId() === subscription.id"
+                                  [hlmTooltip]="t('common.edit')"
+                                  [attr.aria-label]="t('common.edit')"
+                                  (click)="edit.emit(subscription.id)"
+                                >
+                                  <ng-icon name="lucidePencil" />
+                                </button>
+                                <!-- 禁用按钮收不到悬停：停用时的原因挂在外层 -->
+                                <span
+                                  class="hidden sm:inline-flex"
+                                  [hlmTooltip]="
+                                    subscription.isEnabled
+                                      ? t('webhooks.action.sendTest')
+                                      : t('webhooks.action.sendTestDisabled')
+                                  "
+                                >
+                                  <button
+                                    hlmBtn
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    data-testid="webhook-send-test"
+                                    [disabled]="
+                                      !subscription.isEnabled || busyId() === subscription.id
+                                    "
+                                    [attr.aria-label]="t('webhooks.action.sendTest')"
+                                    (click)="sendTest.emit(subscription.id)"
+                                  >
+                                    @if (busyId() === subscription.id) {
+                                      <hlm-spinner class="text-base" />
+                                    } @else {
+                                      <ng-icon name="lucideSend" />
+                                    }
+                                  </button>
+                                </span>
+                                <button
+                                  hlmBtn
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  align="end"
+                                  [disabled]="busyId() === subscription.id"
+                                  [attr.aria-label]="t('common.actions')"
+                                  [hlmDropdownMenuTrigger]="rowMenu"
+                                >
+                                  <ng-icon name="lucideEllipsis" />
+                                </button>
+                              } @else {
+                                <button
+                                  hlmBtn
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  [hlmTooltip]="t('webhooks.action.viewDeliveries')"
+                                  [attr.aria-label]="t('webhooks.action.viewDeliveries')"
+                                  (click)="viewDeliveries.emit(subscription.id)"
+                                >
+                                  <ng-icon name="lucideList" />
+                                </button>
+                              }
+                              <ng-template #rowMenu>
+                                <hlm-dropdown-menu>
+                                  <hlm-dropdown-menu-group>
+                                    <!-- 窄屏行内按钮收起，常用项也进菜单 -->
+                                    <button
+                                      hlmDropdownMenuItem
+                                      class="sm:hidden"
+                                      (click)="edit.emit(subscription.id)"
+                                    >
+                                      <ng-icon name="lucidePencil" />
+                                      {{ t('common.edit') }}
+                                    </button>
+                                    <button
+                                      hlmDropdownMenuItem
+                                      class="sm:hidden"
+                                      [disabled]="!subscription.isEnabled"
+                                      (click)="sendTest.emit(subscription.id)"
+                                    >
+                                      <ng-icon name="lucideSend" />
+                                      {{ t('webhooks.action.sendTest') }}
+                                    </button>
+                                    <button
+                                      hlmDropdownMenuItem
+                                      (click)="viewDeliveries.emit(subscription.id)"
+                                    >
+                                      <ng-icon name="lucideList" />
+                                      {{ t('webhooks.action.viewDeliveries') }}
+                                    </button>
+                                    <button
+                                      hlmDropdownMenuItem
+                                      (click)="rotateSecret.emit(subscription.id)"
+                                    >
+                                      <ng-icon name="lucideKeyRound" />
+                                      {{ t('webhooks.action.rotateSecret') }}
+                                    </button>
+                                    @if (subscription.isEnabled) {
+                                      <button
+                                        hlmDropdownMenuItem
+                                        (click)="disable.emit(subscription.id)"
+                                      >
+                                        <ng-icon name="lucidePowerOff" />
+                                        {{ t('webhooks.action.disable') }}
+                                      </button>
+                                    } @else {
+                                      <button
+                                        hlmDropdownMenuItem
+                                        (click)="enable.emit(subscription)"
+                                      >
+                                        <ng-icon name="lucidePower" />
+                                        {{ t('webhooks.action.enable') }}
+                                      </button>
+                                    }
+                                  </hlm-dropdown-menu-group>
+                                  <hlm-dropdown-menu-separator />
+                                  <button
+                                    hlmDropdownMenuItem
+                                    variant="destructive"
+                                    (click)="delete.emit(subscription)"
+                                  >
+                                    <ng-icon name="lucideTrash2" />
+                                    {{ t('common.delete') }}
+                                  </button>
+                                </hlm-dropdown-menu>
+                              </ng-template>
+                            </div>
+                          }
+                          @default {
+                            <ng-container
+                              [ngTemplateOutlet]="columnValue"
+                              [ngTemplateOutletContext]="{
+                                $implicit: subscription,
+                                id: cell.column.id,
+                                mode: 'cell',
+                              }"
+                            />
+                          }
+                        }
+                      </td>
+                    }
+                  </tr>
+                  @if (row.getIsExpanded()) {
+                    <tr hlmTr class="bg-muted/30 hover:bg-muted/30">
+                      <td
+                        hlmTd
+                        [attr.colspan]="table.getVisibleLeafColumns().length"
+                        class="px-4 pb-3 pt-2"
+                      >
+                        <dl
+                          class="grid grid-cols-[minmax(5rem,auto)_1fr] items-baseline gap-x-4 gap-y-2 text-sm whitespace-normal"
+                          data-testid="webhook-subscription-detail"
+                        >
+                          @for (column of detailColumns(); track column.id) {
+                            <dt class="text-muted-foreground">
+                              {{ t(columnLabelKeys[column.id]) }}
+                            </dt>
+                            <dd class="min-w-0" [attr.data-detail-column]="column.id">
+                              <ng-container
+                                [ngTemplateOutlet]="columnValue"
+                                [ngTemplateOutletContext]="{
+                                  $implicit: subscription,
+                                  id: column.id,
+                                  mode: 'detail',
+                                }"
+                              />
+                            </dd>
+                          }
+                          @if (foldLevel() === 'mobile') {
+                            <dt class="text-muted-foreground">
+                              {{ t('webhooks.subscriptions.colName') }}
+                            </dt>
+                            <dd class="min-w-0">
+                              <span class="block font-medium wrap-anywhere">{{
+                                subscription.name
+                              }}</span>
+                              <span
+                                class="text-muted-foreground block font-mono text-xs break-all"
+                                >{{ subscription.url }}</span
+                              >
+                            </dd>
+                          }
+                          @if (subscription.disabledReason; as reason) {
+                            <dt class="text-muted-foreground">
+                              {{ t('webhooks.subscriptions.disabledReason') }}
+                            </dt>
+                            <dd class="min-w-0" data-testid="webhook-disabled-reason">
+                              {{
+                                t(disabledReasonKeys[reason], {
+                                  time:
+                                    (reason === 'consecutiveFailures'
+                                      ? subscription.firstFailureAt
+                                      : subscription.disabledAt
+                                    ) | appDate: 'full' : displayTimeZone() : displayLocale(),
+                                })
+                              }}
+                            </dd>
+                          }
+                          <dt class="text-muted-foreground">
+                            {{ t('webhooks.subscriptions.secret') }}
+                          </dt>
+                          <dd class="min-w-0">
+                            <code class="font-mono text-xs"
+                              >{{ subscription.secretPrefix }}••••••••</code
+                            >
+                            @if (subscription.previousSecretExpiresAt; as expiresAt) {
+                              <span class="text-muted-foreground block text-xs">{{
+                                t('webhooks.subscriptions.previousSecret', {
+                                  time:
+                                    expiresAt
+                                    | appDate: 'full' : displayTimeZone() : displayLocale(),
+                                })
+                              }}</span>
+                            }
+                          </dd>
+                          <dt class="text-muted-foreground">
+                            {{ t('webhooks.subscriptions.headers') }}
+                          </dt>
+                          <dd class="min-w-0 font-mono text-xs break-all">
+                            @for (header of headerEntries(subscription); track header[0]) {
+                              <span class="block">{{ header[0] }}: {{ header[1] }}</span>
+                            } @empty {
+                              <span class="text-muted-foreground font-sans">-</span>
+                            }
+                          </dd>
+                          <dt class="text-muted-foreground">
+                            {{ t('webhooks.subscriptions.description') }}
+                          </dt>
+                          <dd class="min-w-0 wrap-anywhere">
+                            {{ subscription.description || '-' }}
+                          </dd>
+                        </dl>
+                      </td>
+                    </tr>
+                  }
+                } @empty {
+                  <tr hlmTr class="hover:bg-transparent">
+                    <td
+                      hlmTd
+                      [attr.colspan]="table.getVisibleLeafColumns().length"
+                      class="!p-0 !border-0"
+                    >
+                      <div hlmEmpty class="min-h-64">
+                        <div hlmEmptyHeader>
+                          @if (loadError(); as error) {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon name="lucideCircleAlert" />
+                            </div>
+                            <p hlmEmptyTitle role="alert">{{ t('common.loadFailed') }}</p>
+                            <p hlmEmptyDescription>{{ error }}</p>
+                          } @else {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'" />
+                            </div>
+                            @if (filtered()) {
+                              <p hlmEmptyTitle>
+                                {{ t('webhooks.subscriptions.emptyFilteredTitle') }}
+                              </p>
+                              <p hlmEmptyDescription>
+                                {{ t('webhooks.subscriptions.emptyFilteredHint') }}
+                              </p>
+                            } @else {
+                              <p hlmEmptyTitle>{{ t('webhooks.subscriptions.emptyTitle') }}</p>
+                              <p hlmEmptyDescription>{{ t('webhooks.subscriptions.emptyHint') }}</p>
+                            }
+                          }
+                        </div>
+                        @if (loadError()) {
+                          <div hlmEmptyContent>
+                            <button
+                              hlmBtn
+                              variant="outline"
+                              data-testid="table-retry"
+                              (click)="retry.emit()"
+                            >
+                              {{ t('common.retry') }}
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <ng-template
+          #columnValue
+          [appColumnValue]="subscriptions()"
+          let-subscription
+          let-id="id"
+          let-mode="mode"
+        >
+          @switch (id) {
+            @case ('eventTypes') {
+              <div
+                class="flex items-center gap-1"
+                [class]="mode === 'detail' ? 'flex-wrap' : 'whitespace-nowrap'"
+              >
+                @if (allEvents(subscription.eventTypes)) {
+                  <span hlmBadge variant="secondary">{{ t('webhooks.event.all') }}</span>
+                } @else if (mode === 'detail') {
+                  @for (type of subscription.eventTypes; track type) {
+                    <span hlmBadge variant="secondary" class="font-mono">{{ type }}</span>
+                  }
+                } @else {
+                  <span hlmBadge variant="secondary" class="font-mono">{{
+                    subscription.eventTypes[0]
+                  }}</span>
+                  @if (subscription.eventTypes.length > 1) {
+                    <span hlmBadge variant="outline" class="tabular-nums"
+                      >+{{
+                        subscription.eventTypes.length - 1 | appNumber: 'integer' : displayLocale()
+                      }}</span
+                    >
+                  }
+                }
+              </div>
+            }
+            @case ('successRate') {
+              @let rate = subscription.successRateLast7Days ?? null;
+              @if (rate !== null) {
+                <div class="flex items-center gap-2 whitespace-nowrap">
+                  <div class="bg-muted h-1.5 w-16 overflow-hidden rounded-full" aria-hidden="true">
+                    <div
+                      class="h-full rounded-full"
+                      [class]="rate >= 0.95 ? 'bg-success' : 'bg-warning'"
+                      [style.width.%]="rate * 100"
+                    ></div>
+                  </div>
+                  <span class="tabular-nums">{{
+                    rate | appNumber: 'percent' : displayLocale()
+                  }}</span>
+                </div>
+              } @else {
+                <span class="text-muted-foreground">-</span>
+              }
+            }
+            @case ('lastDelivery') {
+              @if (subscription.lastDelivery; as last) {
+                <div class="flex items-center gap-2 whitespace-nowrap">
+                  <!-- 徽章是入口：跳到投递日志并按本订阅筛选 -->
+                  <button
+                    type="button"
+                    class="focus-visible:ring-ring/50 rounded-full outline-none focus-visible:ring-[3px]"
+                    data-testid="webhook-last-delivery"
+                    [attr.aria-label]="
+                      t('webhooks.action.viewDeliveriesOf', { name: subscription.name })
+                    "
+                    (click)="viewDeliveries.emit(subscription.id)"
+                  >
+                    <span hlmBadge appStatusDot [variant]="deliveryStatusVariants[last.status]">{{
+                      t(deliveryStatusKeys[last.status])
+                    }}</span>
+                  </button>
+                  <app-relative-time-label
+                    class="text-muted-foreground text-xs"
+                    [instant]="last.creationTime"
+                    [now]="now()"
+                    [timeZone]="resolvedTimeZone()"
+                    [locale]="displayLocale()"
+                  />
+                </div>
+              } @else {
+                <span class="text-muted-foreground">-</span>
+              }
+            }
+            @case ('creationTime') {
+              @if (mode === 'detail') {
+                <span class="text-muted-foreground">{{
+                  subscription.creationTime | appDate: 'full' : displayTimeZone() : displayLocale()
+                }}</span>
+              } @else {
+                <span
+                  tabindex="0"
+                  class="text-xs text-muted-foreground whitespace-nowrap rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  [hlmTooltip]="
+                    subscription.creationTime
+                      | appDate: 'full' : displayTimeZone() : displayLocale()
+                  "
+                  >{{
+                    subscription.creationTime
+                      | appDate: 'short' : displayTimeZone() : displayLocale()
+                  }}</span
+                >
+              }
+            }
+          }
+        </ng-template>
+      }
+    </app-table-loading>
+
+    @if (totalCount() > 0) {
+      <app-table-paginator
+        [labels]="{
+          currentPageReport: t('webhooks.table.currentPageReport', {
+            total: (totalCount() | appNumber: 'integer' : displayLocale()),
+          }),
+          rowsPerPage: t('common.rowsPerPage'),
+          page: t('common.pageOf', {
+            page: (currentPage() | appNumber: 'integer' : displayLocale()),
+            total: (totalPages() | appNumber: 'integer' : displayLocale()),
+          }),
+          first: t('common.pagination.first'),
+          previous: t('common.pagination.previous'),
+          next: t('common.pagination.next'),
+          last: t('common.pagination.last'),
+        }"
+        [rows]="pagination().pageSize"
+        [canPrev]="table.getCanPreviousPage()"
+        [canNext]="table.getCanNextPage()"
+        (firstPage)="table.firstPage()"
+        (prevPage)="table.previousPage()"
+        (nextPage)="table.nextPage()"
+        (lastPage)="table.lastPage()"
+        (rowsChange)="changePageSize($event)"
+      />
+    }
+  </div>
+</ng-container>

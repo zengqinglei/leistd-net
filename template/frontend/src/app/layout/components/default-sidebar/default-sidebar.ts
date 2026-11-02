@@ -19,6 +19,9 @@ import {
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
+  //#if (IncludeWebhooks)
+  lucideWebhook,
+  //#endif
 } from '@ng-icons/lucide';
 //#if (IncludeRealTime)
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -67,6 +70,9 @@ import { UserMenu } from '../user-menu/user-menu';
     lucideBuilding2, lucideCheck, lucideChevronsUpDown, lucideCog, lucideHouse,
     lucideGauge, lucideUsers, lucideIdCard, lucideLayers, lucideShieldCheck, lucideSettings,
     lucideDatabase, lucideSearch,
+    //#if (IncludeWebhooks)
+    lucideWebhook,
+    //#endif
   })],
   // 侧栏用 inset 变体：主内容区（hlmSidebarInset）按兄弟元素的 peer 状态浮成圆角面板，而 hlm-sidebar
   // 包在本组件里、不是它的兄弟，所以把 peer 与桌面端的状态属性转到组件宿主上。手机端侧栏是抽屉，不转。

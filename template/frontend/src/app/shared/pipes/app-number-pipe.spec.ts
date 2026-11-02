@@ -20,6 +20,12 @@ describe('AppNumber', () => {
   });
 
   // 输入是比例：格式化处是唯一乘以 100 的地方，调用方不先算成百分数
+  it('writes a share ratio as an unsigned percentage with at most one decimal', () => {
+    expect(pipe.transform(0.992, 'percent', 'en-US')).toBe('99.2%');
+    expect(pipe.transform(1, 'percent', 'en-US')).toBe('100%');
+    expect(pipe.transform(0, 'percent', 'en-US')).toBe('0%');
+  });
+
   it('writes a change ratio as a signed percentage', () => {
     const change = (previous: number, current: number) => (current - previous) / previous;
 

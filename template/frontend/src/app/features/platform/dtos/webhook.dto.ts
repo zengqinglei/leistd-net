@@ -1,5 +1,5 @@
-import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
 import { StatisticsQuery, StatisticsRangeDto, StatisticValueDto } from './platform-statistics.dto';
+import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
 
 /** 投递状态；`pending` 在界面上显示为“重试中”。 */
 export type WebhookDeliveryStatus = 'pending' | 'succeeded' | 'failed';

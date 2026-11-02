@@ -109,11 +109,12 @@ export const PERMISSION_DEFINITIONS = [
       //#endif
     ],
   },
-  //#if (OpenIddictServer)
+  //#if (OpenIddictServer || IncludeWebhooks)
   {
     name: 'Developer',
     displayName: 'Developer',
     permissions: [
+      //#if (OpenIddictServer)
       {
         name: PERMISSIONS.openApplications.default,
         displayName: 'Open applications',
@@ -129,6 +130,15 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
+      //#endif
+      //#if (IncludeWebhooks)
+      {
+        name: PERMISSIONS.webhooks.default,
+        displayName: 'Webhooks',
+        parentName: undefined,
+        children: [leaf(PERMISSIONS.webhooks.manage, 'Manage', PERMISSIONS.webhooks.default)],
+      },
+      //#endif
     ],
   },
   //#endif

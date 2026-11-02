@@ -1,0 +1,256 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div class="flex flex-col gap-4">
+    <app-table-loading
+      class="@container rounded-xl border border-border overflow-hidden"
+      #loadingState="appTableLoading"
+      [loading]="loading()"
+      [hasRows]="deliveries().length > 0"
+      [columns]="table.getVisibleLeafColumns().length"
+      [rowHeight]="57"
+      [appTableFit]="tableViewport()"
+      [appTableFitContent]="deliveries()"
+    >
+      @defer {
+        <div hlmTableContainer class="w-full overflow-x-auto" [attr.aria-busy]="loading()">
+          <table hlmTable class="w-full">
+            <thead hlmTHead class="bg-muted sticky top-0 z-10">
+              @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
+                <tr hlmTr class="text-sm font-medium">
+                  @for (header of headerGroup.headers; track header.id) {
+                    <th hlmTh [class]="header.column.columnDef.meta?.headClass ?? 'first:ps-4'">
+                      @if (header.column.id === 'actions') {
+                        <span class="sr-only">{{ t('common.actions') }}</span>
+                      } @else {
+                        <span class="whitespace-nowrap">{{
+                          t(columnLabelKeys[header.column.id])
+                        }}</span>
+                      }
+                    </th>
+                  }
+                </tr>
+              }
+            </thead>
+
+            <tbody hlmTBody appTableLoadingBody>
+              @if (loadingState.initialLoading()) {
+                <ng-container [ngTemplateOutlet]="loadingState.skeleton() ?? null" />
+              } @else {
+                @for (row of table.getRowModel().rows; track row.original.id) {
+                  @let delivery = row.original;
+                  <!-- 整行可点：键盘经行内"详情"按钮进入，行本身不另设停靠点 -->
+                  <tr
+                    hlmTr
+                    class="group cursor-pointer text-sm hover:bg-muted/50 transition-colors"
+                    [class.bg-muted/50]="selectedId() === delivery.id"
+                    [attr.aria-selected]="selectedId() === delivery.id"
+                    data-testid="webhook-delivery-row"
+                    (click)="onRowClick($event, delivery.id)"
+                  >
+                    @for (cell of row.getVisibleCells(); track cell.id) {
+                      <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'first:ps-4'">
+                        @switch (cell.column.id) {
+                          @case ('event') {
+                            <div class="flex min-w-0 flex-col" [class]="titleContentClass">
+                              <span class="text-foreground truncate font-mono font-medium">{{
+                                delivery.eventType
+                              }}</span>
+                              <span
+                                class="text-muted-foreground max-w-[12rem] truncate font-mono text-xs"
+                                [title]="delivery.eventId"
+                                >{{ delivery.eventId }}</span
+                              >
+                            </div>
+                          }
+                          @case ('subscription') {
+                            <span
+                              class="block max-w-[16rem] truncate"
+                              [title]="delivery.subscriptionUrl"
+                              >{{ delivery.subscriptionName }}</span
+                            >
+                          }
+                          @case ('status') {
+                            <span
+                              hlmBadge
+                              appStatusDot
+                              class="whitespace-nowrap"
+                              [variant]="statusVariants[delivery.status]"
+                              >{{ t(statusKeys[delivery.status]) }}</span
+                            >
+                          }
+                          @case ('attempts') {
+                            <span class="tabular-nums">{{
+                              delivery.attemptCount | appNumber: 'integer' : displayLocale()
+                            }}</span>
+                          }
+                          @case ('lastStatusCode') {
+                            @if ((delivery.lastStatusCode ?? null) !== null) {
+                              <span class="font-mono tabular-nums">{{
+                                delivery.lastStatusCode
+                              }}</span>
+                            } @else if (delivery.lastError) {
+                              <span class="text-muted-foreground">{{
+                                t('webhooks.deliveries.noResponse')
+                              }}</span>
+                            } @else {
+                              <span class="text-muted-foreground">-</span>
+                            }
+                          }
+                          @case ('nextAttemptAt') {
+                            @if (delivery.nextAttemptAt; as next) {
+                              <span class="text-xs whitespace-nowrap text-muted-foreground">{{
+                                next | appDate: 'short' : displayTimeZone() : displayLocale()
+                              }}</span>
+                            } @else {
+                              <span class="text-muted-foreground">-</span>
+                            }
+                          }
+                          @case ('creationTime') {
+                            <span
+                              tabindex="0"
+                              class="text-xs text-muted-foreground whitespace-nowrap rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                              [hlmTooltip]="
+                                delivery.creationTime
+                                  | appDate: 'full' : displayTimeZone() : displayLocale()
+                              "
+                              >{{
+                                delivery.creationTime
+                                  | appDate: 'short' : displayTimeZone() : displayLocale()
+                              }}</span
+                            >
+                          }
+                          @case ('actions') {
+                            <div class="flex items-center justify-end gap-0.5">
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon-sm"
+                                data-testid="webhook-delivery-details"
+                                [hlmTooltip]="t('common.details')"
+                                [attr.aria-label]="t('common.details')"
+                                (click)="open.emit(delivery.id)"
+                              >
+                                <ng-icon name="lucidePanelRight" />
+                              </button>
+                              @if (canManage()) {
+                                <!-- 重试中不可重发：原因与下次时刻挂在外层（禁用按钮收不到悬停） -->
+                                <span
+                                  class="inline-flex"
+                                  [hlmTooltip]="
+                                    delivery.status === 'pending'
+                                      ? t('webhooks.action.retryPending', {
+                                          time:
+                                            delivery.nextAttemptAt
+                                            | appDate: 'full' : displayTimeZone() : displayLocale(),
+                                        })
+                                      : t('webhooks.action.retry')
+                                  "
+                                >
+                                  <button
+                                    hlmBtn
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    [disabled]="
+                                      delivery.status === 'pending' || retryingId() !== null
+                                    "
+                                    [attr.aria-label]="t('webhooks.action.retry')"
+                                    (click)="retry.emit(delivery)"
+                                  >
+                                    @if (retryingId() === delivery.id) {
+                                      <hlm-spinner class="text-base" />
+                                    } @else {
+                                      <ng-icon name="lucideRotateCw" />
+                                    }
+                                  </button>
+                                </span>
+                              }
+                            </div>
+                          }
+                        }
+                      </td>
+                    }
+                  </tr>
+                } @empty {
+                  <tr hlmTr class="hover:bg-transparent">
+                    <td
+                      hlmTd
+                      [attr.colspan]="table.getVisibleLeafColumns().length"
+                      class="!p-0 !border-0"
+                    >
+                      <div hlmEmpty class="min-h-64">
+                        <div hlmEmptyHeader>
+                          @if (loadError(); as error) {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon name="lucideCircleAlert" />
+                            </div>
+                            <p hlmEmptyTitle role="alert">{{ t('common.loadFailed') }}</p>
+                            <p hlmEmptyDescription>{{ error }}</p>
+                          } @else {
+                            <div hlmEmptyMedia variant="icon">
+                              <ng-icon [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'" />
+                            </div>
+                            @if (filtered()) {
+                              <p hlmEmptyTitle>{{ t('webhooks.deliveries.emptyFilteredTitle') }}</p>
+                              <p hlmEmptyDescription>
+                                {{ t('webhooks.deliveries.emptyFilteredHint') }}
+                              </p>
+                            } @else {
+                              <p hlmEmptyTitle>{{ t('webhooks.deliveries.emptyTitle') }}</p>
+                              <p hlmEmptyDescription>{{ t('webhooks.deliveries.emptyHint') }}</p>
+                            }
+                          }
+                        </div>
+                        @if (loadError()) {
+                          <div hlmEmptyContent>
+                            <button
+                              hlmBtn
+                              variant="outline"
+                              data-testid="table-retry"
+                              (click)="reload.emit()"
+                            >
+                              {{ t('common.retry') }}
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </app-table-loading>
+
+    @if (totalCount() > 0) {
+      <app-table-paginator
+        [labels]="{
+          currentPageReport: t('webhooks.table.currentPageReport', {
+            total: (totalCount() | appNumber: 'integer' : displayLocale()),
+          }),
+          rowsPerPage: t('common.rowsPerPage'),
+          page: t('common.pageOf', {
+            page: (currentPage() | appNumber: 'integer' : displayLocale()),
+            total: (totalPages() | appNumber: 'integer' : displayLocale()),
+          }),
+          first: t('common.pagination.first'),
+          previous: t('common.pagination.previous'),
+          next: t('common.pagination.next'),
+          last: t('common.pagination.last'),
+        }"
+        [rows]="pagination().pageSize"
+        [canPrev]="table.getCanPreviousPage()"
+        [canNext]="table.getCanNextPage()"
+        (firstPage)="table.firstPage()"
+        (prevPage)="table.previousPage()"
+        (nextPage)="table.nextPage()"
+        (lastPage)="table.lastPage()"
+        (rowsChange)="changePageSize($event)"
+      />
+    }
+  </div>
+</ng-container>

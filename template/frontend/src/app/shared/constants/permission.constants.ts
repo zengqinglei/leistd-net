@@ -73,6 +73,13 @@ export const PERMISSIONS = {
     export: 'App.OperationRecords.Export',
   },
 //#endif
+  //#if (IncludeWebhooks)
+  // 出站 Webhook：父权限只读（订阅、投递日志与统计），Manage 是全部写操作
+  webhooks: {
+    default: 'App.Webhooks',
+    manage: 'App.Webhooks.Manage',
+  },
+  //#endif
 } as const;
 
 /**
@@ -90,6 +97,9 @@ export const PLATFORM_ENTRY_PERMISSIONS = [
   //#endif
   //#if (OpenIddictServer)
   PERMISSIONS.openApplications.default,
+  //#endif
+  //#if (IncludeWebhooks)
+  PERMISSIONS.webhooks.default,
   //#endif
   // 只持有审计查看权限的岗位（安全、合规）也要进得来：漏了这一项，
   // 那个角色的账号菜单里看不到入口、登录后还会被重定向走。

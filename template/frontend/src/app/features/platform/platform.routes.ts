@@ -112,4 +112,17 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.openApplications.default },
   },
   //#endif
+  //#if (IncludeWebhooks)
+  {
+    // 出站 Webhook：订阅与投递日志同一页，视图、筛选与打开的投递详情都在查询参数里
+    path: 'webhooks',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('webhooks')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
+    loadComponent: () => import('./components/webhooks/webhooks').then((m) => m.Webhooks),
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.webhooks.default },
+  },
+  //#endif
 ];

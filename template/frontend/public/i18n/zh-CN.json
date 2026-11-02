@@ -140,6 +140,7 @@
       "tenants": "租户管理",
       "groupDeveloper": "开发者",
       "openApplications": "开放应用",
+      "webhooks": "Webhook",
       "systemSettings": "系统设置",
       "operationRecords": "操作记录",
       "groupIdentity": "身份与访问",

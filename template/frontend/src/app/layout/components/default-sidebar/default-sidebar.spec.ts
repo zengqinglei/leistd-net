@@ -42,7 +42,7 @@ import { expectTouchTarget, setCoarsePointer } from '../../../shared/utils/coars
 const WORK = 'layout.sidebar.groupWork';
 const BUSINESS = 'layout.sidebar.groupBusiness';
 const IDENTITY = 'layout.sidebar.groupIdentity';
-//#if (OpenIddictServer)
+//#if (OpenIddictServer || IncludeWebhooks)
 const DEVELOPER = 'layout.sidebar.groupDeveloper';
 //#endif
 //#if (IncludeOperationRecords)
@@ -53,7 +53,7 @@ const SYSTEM = 'layout.sidebar.groupSystem';
 const WORK = 'Work';
 const BUSINESS = 'Business';
 const IDENTITY = 'Identity & access';
-//#if (OpenIddictServer)
+//#if (OpenIddictServer || IncludeWebhooks)
 const DEVELOPER = 'Developer';
 //#endif
 //#if (IncludeOperationRecords)
@@ -132,9 +132,12 @@ describe('DefaultSidebar menu groups', () => {
       //#if (OpenIddictServer)
       PERMISSIONS.openApplications.default,
       //#endif
+      //#if (IncludeWebhooks)
+      PERMISSIONS.webhooks.default,
+      //#endif
     ];
     const expected = [WORK, IDENTITY];
-    //#if (OpenIddictServer)
+    //#if (OpenIddictServer || IncludeWebhooks)
     expected.push(DEVELOPER);
     //#endif
     //#if (IncludeOperationRecords)
