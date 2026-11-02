@@ -15,6 +15,16 @@ internal sealed class WebhookRetentionOptionsValidator(string configSectionPath)
             failures.Add($"{ConfigSectionPath}:Days must be between 1 and 3650.");
         }
 
+        if (options.DailyRunHourUtc is < 0 or > 23)
+        {
+            failures.Add($"{ConfigSectionPath}:DailyRunHourUtc must be between 0 and 23.");
+        }
+
+        if (options.BatchSize is < 100 or > 10000)
+        {
+            failures.Add($"{ConfigSectionPath}:BatchSize must be between 100 and 10000.");
+        }
+
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 }

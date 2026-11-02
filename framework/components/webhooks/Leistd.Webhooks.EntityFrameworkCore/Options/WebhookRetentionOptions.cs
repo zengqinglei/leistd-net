@@ -12,4 +12,10 @@ public sealed class WebhookRetentionOptions
 
     /// <summary>保留天数（1–3650），按投递创建时间计，默认 62：覆盖 30 天视图及其上一区间（含时区边界）。</summary>
     public int Days { get; set; } = 62;
+
+    /// <summary>每天执行的 UTC 小时（0–23），默认 19。</summary>
+    public int DailyRunHourUtc { get; set; } = 19;
+
+    /// <summary>单批删除的投递数（100–10000），默认 500；每批连同其尝试记录一个事务。</summary>
+    public int BatchSize { get; set; } = 500;
 }

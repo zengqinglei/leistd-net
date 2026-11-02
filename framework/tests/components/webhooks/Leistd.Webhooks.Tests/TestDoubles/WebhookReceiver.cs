@@ -18,6 +18,9 @@ public sealed class WebhookReceiver : IAsyncLifetime
     /// <summary>按路径记录收到的请求。</summary>
     public ConcurrentDictionary<string, ReceivedWebhook> Received { get; } = new();
 
+    /// <summary>按路径记录 <c>/flaky/{key}</c> 收到的全部请求，按到达顺序。</summary>
+    public ConcurrentDictionary<string, ConcurrentQueue<ReceivedWebhook>> History { get; } = new();
+
     /// <summary>接收端根地址（<c>http://127.0.0.1:端口</c>）。</summary>
     public Uri BaseAddress { get; private set; } = null!;
 
@@ -40,6 +43,17 @@ public sealed class WebhookReceiver : IAsyncLifetime
                 request.Headers.ToDictionary(header => header.Key, header => header.Value.ToString(), StringComparer.OrdinalIgnoreCase),
                 body);
             return Results.Text(new string('x', 4096));
+        });
+        // 第一次回 500、之后回 200：验证按退避重试时两次尝试是同一个 webhook-id
+        _app.MapPost("/flaky/{key}", async (string key, HttpRequest request) =>
+        {
+            using var reader = new StreamReader(request.Body);
+            var body = await reader.ReadToEndAsync();
+            var history = History.GetOrAdd(key, _ => new ConcurrentQueue<ReceivedWebhook>());
+            history.Enqueue(new ReceivedWebhook(
+                request.Headers.ToDictionary(header => header.Key, header => header.Value.ToString(), StringComparer.OrdinalIgnoreCase),
+                body));
+            return history.Count == 1 ? Results.StatusCode(StatusCodes.Status500InternalServerError) : Results.Ok();
         });
         _app.MapPost("/redirect/{key}", (string key) => Results.Redirect($"/ok/{key}"));
         _app.MapPost("/slow", async (CancellationToken cancellationToken) =>

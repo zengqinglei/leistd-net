@@ -9,6 +9,9 @@ public sealed class WebhookDefinition
     /// <summary>内置测试事件所在的分组。</summary>
     public const string TestEventGroup = "webhooks";
 
+    /// <summary>订阅里代表"全部事件"的通配值，含以后新登记的类型；只能单独出现，不与具体类型混用。</summary>
+    public const string AllEventTypes = "*";
+
     /// <summary>创建事件类型定义。</summary>
     /// <param name="name">类型名。</param>
     /// <param name="group">分组。</param>

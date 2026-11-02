@@ -8,10 +8,21 @@
   <ItemGroup>
     <!-- 签名用 Standard Webhooks 官方库独立验签，不拿组件自己的算法验自己 -->
     <PackageReference Include="StandardWebhooks.StandardWebhooks" />
+    <!--
+      使用关系型 Provider 而非 InMemory：实体配置、索引、租户过滤器与 Contains/分桶的翻译只有真正建库时才成立，
+      InMemory 全内存求值会让它们静默通过。
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- 退避、宽限期、连续失败与轮换过渡期都按时间判定，用官方 FakeTimeProvider 驱动 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.Core\Leistd.Webhooks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.EntityFrameworkCore\Leistd.Webhooks.EntityFrameworkCore.csproj" />
+    <!-- 入口测试走真实的进程内队列与调度器，单副本由内存锁兜底分布式锁 -->
+    <ProjectReference Include="..\..\..\..\components\background-jobs\Leistd.BackgroundJobs.InProcess\Leistd.BackgroundJobs.InProcess.csproj" />
+    <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Memory\Leistd.Lock.Memory.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 

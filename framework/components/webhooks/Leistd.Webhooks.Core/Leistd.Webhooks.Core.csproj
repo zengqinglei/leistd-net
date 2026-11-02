@@ -31,6 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- EF 包的投递处理调用签名器与结果分类器 -->
+    <InternalsVisibleTo Include="Leistd.Webhooks.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Leistd.Webhooks.Tests" />
   </ItemGroup>
 
