@@ -360,8 +360,12 @@ public sealed class ResourceBrowserSessionTests
 
         // 退出表单由本服务接管输出，仍须带上官方格式的受保护 state，退出回调据此取回最终落点
         var oidc = host.Services.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AuthenticationSchemeNames.OpenIdConnect);
-        Assert.Equal("/", oidc.StateDataFormat.Unprotect(form["state"])?.RedirectUri);
+        Assert.Equal("https://localhost/api/v1/auth/login", oidc.StateDataFormat.Unprotect(form["state"])?.RedirectUri);
         Assert.True(response.Headers.CacheControl?.NoStore);
+
+        using var callback = await browser.GetAsync("/api/v1/auth/signout?state=" + Uri.EscapeDataString(form["state"]));
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+        Assert.Equal("https://localhost/api/v1/auth/login", callback.Headers.Location?.AbsoluteUri);
     }
 
     /// <summary>
@@ -392,7 +396,7 @@ public sealed class ResourceBrowserSessionTests
         var oidc = host.Services.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AuthenticationSchemeNames.OpenIdConnect);
         var properties = oidc.StateDataFormat.Unprotect(form["state"]);
         Assert.Equal("caller-state", properties?.Items[OpenIdConnectDefaults.UserstatePropertiesKey]);
-        Assert.Equal("/", properties?.RedirectUri);
+        Assert.Equal("https://localhost/api/v1/auth/login", properties?.RedirectUri);
     }
 
     [Theory]
