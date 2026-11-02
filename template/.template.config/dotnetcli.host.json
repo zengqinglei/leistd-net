@@ -7,6 +7,9 @@
     "IncludeNotifications": {
       "longName": "include-notifications"
     },
+    "IncludeWebhooks": {
+      "longName": "include-webhooks"
+    },
     "IncludeExternalLogin": {
       "longName": "include-external-login"
     },

@@ -105,7 +105,7 @@ def all_combinations(config: dict) -> list[dict[str, object]]:
 
 EFFECTIVE_DIMENSIONS = (
     "ServiceRole", "SpaFrontend", "IncludeMultiTenancy", "IncludeRealTime", "Email",
-    "IncludeOperationRecords", "IncludeNotifications", "ExternalLogin", "IncludeLocalization",
+    "IncludeOperationRecords", "IncludeNotifications", "IncludeWebhooks", "ExternalLogin", "IncludeLocalization",
 )
 
 

@@ -1240,15 +1240,15 @@ def generation_shards(plan, repo):
         return hashlib.sha256(str(index).encode()).hexdigest()
     keys = [dict(Script=hashlib.sha256(f'verify-{k}'.encode()).hexdigest(), Steps=['static', f'build-{k}', 'test']) for k in range(2)]
     common = dict(Version=1, Result='pass', CandidateSha=plan['CandidateSha'], TemplateSourceDigests=sources,
-                  ShapeShards=3, EffectiveShapes=320)
+                  ShapeShards=3, EffectiveShapes=640)
     shards = {str(k): dict(common, Shard=str(k), Shapes=[dict(Index=i, Effective=shape(i), Files=10, Digest=digest(i),
-                                                             VerifyKey=keys[i % 2]) for i in range(320) if i % 3 == k])
+                                                             VerifyKey=keys[i % 2]) for i in range(640) if i % 3 == k])
               for k in range(3)}
     representatives = [0, 1, 106, 319]
-    shards['control'] = dict(common, Shard='control', RawInputs=768,
-        InputMapping=[dict(input=['--input', str(i)], effective=shape(i % 320)) for i in range(768)],
+    shards['control'] = dict(common, Shard='control', RawInputs=1536,
+        InputMapping=[dict(input=['--input', str(i)], effective=shape(i % 640)) for i in range(1536)],
         Representatives=[dict(Index=i, Effective=shape(i), Digest=digest(i)) for i in representatives],
-        EquivalenceComparisons=[dict(variant=320 + n, representative=representatives[n % 4], role=roles[n % 3],
+        EquivalenceComparisons=[dict(variant=640 + n, representative=representatives[n % 4], role=roles[n % 3],
                                      Digest=digest(representatives[n % 4])) for n in range(6)],
         CiVariants=[dict(variant=326 + n, representative=representatives[n // 2], ci=['gitlab', 'none'][n % 2], changed=[]) for n in range(4)],
         VerifySignatures=2,

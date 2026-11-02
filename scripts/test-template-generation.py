@@ -11,8 +11,8 @@ CI 交付参数 `Ci` 不是能力：全部形态按默认值生成，有无前�
 CI 薄壳与描述它的文档；每种 `scripts/verify.ps1` 产物核对步骤清单与失败即停（命令换成记录调用的替身）。
 
 证明拆成互不引用产物的四片（`--shard`）：
-- `0`/`1`/`2`：320 个有效形态按序号取模分片，逐个生成并校验，记录每个形态的摘要与 verify.ps1 键；
-- `control`：768 组原始输入映射、角色等价比较、Ci 变体与全部 verify.ps1 变体的步骤与失败传播，
+- `0`/`1`/`2`：640 个有效形态按序号取模分片，逐个生成并校验，记录每个形态的摘要与 verify.ps1 键；
+- `control`：1536 组原始输入映射、角色等价比较、Ci 变体与全部 verify.ps1 变体的步骤与失败传播，
   所需的代表形态由本片自行重新生成。
 汇总（check-quality-proof.ps1 -Kind generation）核对四片同一候选与源码摘要、形态无缺号无重复、
 对照片各项证明齐全，并交叉核对代表形态摘要与每个形态的 verify.ps1 键都被对照片覆盖。
@@ -891,7 +891,7 @@ def main():
     groups = {}
     for values in combinations:
         groups.setdefault(model.effective_shape(values), []).append(values)
-    assert len(combinations) == 768 and len(groups) == 320, 'Public parameter model changed; update its verification contract.'
+    assert len(combinations) == 1536 and len(groups) == 640, 'Public parameter model changed; update its verification contract.'
     root = args.output or Path(tempfile.mkdtemp(prefix='generation-', dir=ROOT / '.tmp'))
     root = root.resolve()
     assert root.is_relative_to((ROOT / '.tmp').resolve())
