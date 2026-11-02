@@ -11,6 +11,8 @@ namespace Leistd.Webhooks.Management;
 /// <para>订阅或投递不存在时抛带 <see cref="Errors.WebhookErrorCodes.SubscriptionNotFound"/> 或
 /// <see cref="Errors.WebhookErrorCodes.DeliveryNotFound"/> 的业务异常。</para>
 /// <para>写操作自带工作单元；投递类写操作（测试事件、手动重发、带 <c>retryFailed</c> 的启用）在提交后立即入队发送。</para>
+/// <para>创建、删除、轮换密钥、启用与停用成功后经可选的 <c>ILocalEventBus</c> 发布
+/// <see cref="Events.WebhookSubscriptionChangedEvent"/>，提交后分发；状态未变（再启用、再停用）与更新不发布。</para>
 /// </remarks>
 public interface IWebhookManagementService
 {
@@ -65,7 +67,7 @@ public interface IWebhookManagementService
         CancellationToken cancellationToken = default);
 
     /// <summary>手动停用订阅：同一事务里把它待投递的记录改为失败；已停用时不变。</summary>
-    /// <remarks>停用提交后发布 <see cref="Events.WebhookSubscriptionDisabledEvent"/>。已发出的请求不取消。</remarks>
+    /// <remarks>停用提交后分发 <see cref="Events.WebhookSubscriptionChangedEvent"/>（<see cref="Events.WebhookSubscriptionChangeKind.Disabled"/>，原因 <see cref="WebhookDisabledReason.Manual"/>）。已发出的请求不取消。</remarks>
     /// <param name="id">订阅标识。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     Task<WebhookSubscriptionOutputDto> DisableSubscriptionAsync(Guid id, CancellationToken cancellationToken = default);

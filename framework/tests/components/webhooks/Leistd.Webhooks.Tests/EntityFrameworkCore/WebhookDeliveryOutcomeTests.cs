@@ -78,9 +78,10 @@ public sealed class WebhookDeliveryOutcomeTests : IAsyncLifetime
         Assert.Equal(WebhookSubscriptionDeactivator<WebhookTestDbContext>.DescribeDisabled(WebhookDisabledReason.EndpointGone), deliveries[1].LastError);
         Assert.Empty(await _host.AttemptsAsync(deliveries[1].Id));
 
-        var disabled = Assert.IsType<WebhookSubscriptionDisabledEvent>(Assert.Single(_host.Events.Published));
+        var disabled = Assert.IsType<WebhookSubscriptionChangedEvent>(Assert.Single(_host.Events.Published));
         Assert.Equal(subscription.Id, disabled.SubscriptionId);
-        Assert.Equal(WebhookDisabledReason.EndpointGone, disabled.Reason);
+        Assert.Equal(WebhookSubscriptionChangeKind.Disabled, disabled.Change);
+        Assert.Equal(WebhookDisabledReason.EndpointGone, disabled.DisabledReason);
     }
 
     /// <summary>A4b：发送入口遇到已停用的订阅不发请求，按停用原因终结投递；订阅被删除时同样终结。</summary>
@@ -136,7 +137,7 @@ public sealed class WebhookDeliveryOutcomeTests : IAsyncLifetime
         var deliveries = (await _host.DeliveriesAsync()).ToDictionary(x => x.SubscriptionId);
         Assert.Equal(WebhookDeliveryStatus.Failed, deliveries[target.Id].Status);
         Assert.Equal(WebhookDeliveryStatus.Succeeded, deliveries[other.Id].Status);
-        Assert.Equal(WebhookDisabledReason.Manual, Assert.IsType<WebhookSubscriptionDisabledEvent>(Assert.Single(_host.Events.Published)).Reason);
+        Assert.Equal(WebhookDisabledReason.Manual, Assert.IsType<WebhookSubscriptionChangedEvent>(Assert.Single(_host.Events.Published)).DisabledReason);
     }
 
     /// <summary>A5：从首次失败起超过 AutoDisableAfter（5 天）仍失败时自动停用；未超过时只排重试。</summary>

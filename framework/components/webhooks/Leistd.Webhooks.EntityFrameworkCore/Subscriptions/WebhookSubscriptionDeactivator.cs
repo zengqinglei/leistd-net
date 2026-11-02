@@ -43,7 +43,8 @@ internal sealed class WebhookSubscriptionDeactivator<TDbContext>(
         if (localEventBus is not null)
         {
             await localEventBus.PublishAsync(
-                new WebhookSubscriptionDisabledEvent(subscription.Id, subscription.Name, reason), cancellationToken);
+                new WebhookSubscriptionChangedEvent(subscription.Id, subscription.Name, WebhookSubscriptionChangeKind.Disabled, reason),
+                cancellationToken);
         }
     }
 

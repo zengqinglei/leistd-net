@@ -17,6 +17,45 @@ public static class WebhookEndpoints
     /// <summary>端点名前缀，宿主按名字给个别端点追加约定时使用。</summary>
     public const string NamePrefix = "Leistd.Webhooks.";
 
+    /// <summary>读取可订阅事件类型的端点名。</summary>
+    public const string GetEventTypesName = NamePrefix + "GetEventTypes";
+
+    /// <summary>订阅列表的端点名。</summary>
+    public const string GetSubscriptionsName = NamePrefix + "GetSubscriptions";
+
+    /// <summary>订阅详情的端点名。</summary>
+    public const string GetSubscriptionName = NamePrefix + "GetSubscription";
+
+    /// <summary>创建订阅的端点名。</summary>
+    public const string CreateSubscriptionName = NamePrefix + "CreateSubscription";
+
+    /// <summary>更新订阅的端点名。</summary>
+    public const string UpdateSubscriptionName = NamePrefix + "UpdateSubscription";
+
+    /// <summary>删除订阅的端点名。</summary>
+    public const string DeleteSubscriptionName = NamePrefix + "DeleteSubscription";
+
+    /// <summary>启用订阅的端点名。</summary>
+    public const string EnableSubscriptionName = NamePrefix + "EnableSubscription";
+
+    /// <summary>停用订阅的端点名。</summary>
+    public const string DisableSubscriptionName = NamePrefix + "DisableSubscription";
+
+    /// <summary>轮换订阅密钥的端点名。</summary>
+    public const string RotateSecretName = NamePrefix + "RotateSecret";
+
+    /// <summary>发送测试事件的端点名。</summary>
+    public const string SendTestEventName = NamePrefix + "SendTestEvent";
+
+    /// <summary>投递列表的端点名。</summary>
+    public const string GetDeliveriesName = NamePrefix + "GetDeliveries";
+
+    /// <summary>投递详情的端点名。</summary>
+    public const string GetDeliveryName = NamePrefix + "GetDelivery";
+
+    /// <summary>手动重发投递的端点名。</summary>
+    public const string RetryDeliveryName = NamePrefix + "RetryDelivery";
+
     /// <summary>
     /// 映射 webhook 管理端点：<c>GET /event-types</c>；<c>GET /subscriptions</c>、<c>GET /subscriptions/{id}</c>、
     /// <c>POST /subscriptions</c>、<c>PUT /subscriptions/{id}</c>、<c>DELETE /subscriptions/{id}</c>、
@@ -69,7 +108,7 @@ public static class WebhookEndpoints
 
         group.MapGet("event-types", (IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.GetEventTypesAsync(cancellationToken))
-            .WithName(NamePrefix + "GetEventTypes")
+            .WithName(GetEventTypesName)
             .RequireAuthorization(options.ReadPolicy);
 
         MapSubscriptions(group, options);
@@ -97,12 +136,12 @@ public static class WebhookEndpoints
                         EventType = eventType
                     },
                     cancellationToken))
-            .WithName(NamePrefix + "GetSubscriptions")
+            .WithName(GetSubscriptionsName)
             .RequireAuthorization(options.ReadPolicy);
 
         group.MapGet("subscriptions/{id:guid}", (Guid id, IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.GetSubscriptionAsync(id, cancellationToken))
-            .WithName(NamePrefix + "GetSubscription")
+            .WithName(GetSubscriptionName)
             .RequireAuthorization(options.ReadPolicy);
 
         group.MapPost("subscriptions", (
@@ -110,7 +149,7 @@ public static class WebhookEndpoints
                 IWebhookManagementService service,
                 CancellationToken cancellationToken)
                 => service.CreateSubscriptionAsync(input, cancellationToken))
-            .WithName(NamePrefix + "CreateSubscription")
+            .WithName(CreateSubscriptionName)
             .RequireAuthorization(options.ManagePolicy);
 
         group.MapPut("subscriptions/{id:guid}", (
@@ -119,7 +158,7 @@ public static class WebhookEndpoints
                 IWebhookManagementService service,
                 CancellationToken cancellationToken)
                 => service.UpdateSubscriptionAsync(id, input, cancellationToken))
-            .WithName(NamePrefix + "UpdateSubscription")
+            .WithName(UpdateSubscriptionName)
             .RequireAuthorization(options.ManagePolicy);
 
         group.MapDelete("subscriptions/{id:guid}", async (Guid id, IWebhookManagementService service, CancellationToken cancellationToken) =>
@@ -127,7 +166,7 @@ public static class WebhookEndpoints
                 await service.DeleteSubscriptionAsync(id, cancellationToken);
                 return TypedResults.NoContent();
             })
-            .WithName(NamePrefix + "DeleteSubscription")
+            .WithName(DeleteSubscriptionName)
             .RequireAuthorization(options.ManagePolicy);
 
         group.MapPost("subscriptions/{id:guid}/enable", (
@@ -136,22 +175,22 @@ public static class WebhookEndpoints
                 CancellationToken cancellationToken,
                 bool retryFailed = false)
                 => service.EnableSubscriptionAsync(id, retryFailed, cancellationToken))
-            .WithName(NamePrefix + "EnableSubscription")
+            .WithName(EnableSubscriptionName)
             .RequireAuthorization(options.ManagePolicy);
 
         group.MapPost("subscriptions/{id:guid}/disable", (Guid id, IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.DisableSubscriptionAsync(id, cancellationToken))
-            .WithName(NamePrefix + "DisableSubscription")
+            .WithName(DisableSubscriptionName)
             .RequireAuthorization(options.ManagePolicy);
 
         group.MapPost("subscriptions/{id:guid}/rotate-secret", (Guid id, IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.RotateSecretAsync(id, cancellationToken))
-            .WithName(NamePrefix + "RotateSecret")
+            .WithName(RotateSecretName)
             .RequireAuthorization(options.ManagePolicy);
 
         group.MapPost("subscriptions/{id:guid}/test", (Guid id, IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.SendTestEventAsync(id, cancellationToken))
-            .WithName(NamePrefix + "SendTestEvent")
+            .WithName(SendTestEventName)
             .RequireAuthorization(options.ManagePolicy);
     }
 
@@ -177,17 +216,17 @@ public static class WebhookEndpoints
                         EventType = eventType
                     },
                     cancellationToken))
-            .WithName(NamePrefix + "GetDeliveries")
+            .WithName(GetDeliveriesName)
             .RequireAuthorization(options.ReadPolicy);
 
         group.MapGet("deliveries/{id:guid}", (Guid id, IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.GetDeliveryAsync(id, cancellationToken))
-            .WithName(NamePrefix + "GetDelivery")
+            .WithName(GetDeliveryName)
             .RequireAuthorization(options.ReadPolicy);
 
         group.MapPost("deliveries/{id:guid}/retry", (Guid id, IWebhookManagementService service, CancellationToken cancellationToken)
                 => service.RetryDeliveryAsync(id, cancellationToken))
-            .WithName(NamePrefix + "RetryDelivery")
+            .WithName(RetryDeliveryName)
             .RequireAuthorization(options.ManagePolicy);
     }
 

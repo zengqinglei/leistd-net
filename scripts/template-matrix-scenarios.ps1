@@ -99,10 +99,12 @@ $scenarioMap = [ordered]@{
     }
     "identity-notifications" = @{
         Slices = @{ full = "full-02" }
-        Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
+        # 带 Webhook：通知与 Webhook 同开的条件行由这里生成（场景覆盖闸门 full 档）
+        Arguments = @("--include-notifications", "--include-webhooks"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
-            "frontend/src/app/core/services/notification-service.ts"
+            "frontend/src/app/core/services/notification-service.ts",
+            "backend/src/{name}.Application/Webhooks"
         )
         Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
         ReadmeContains = @()
@@ -211,9 +213,9 @@ $scenarioMap = [ordered]@{
     }
     "resource-capabilities-04" = @{
         Slices = @{ full = "full-03" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true")
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true", "--include-webhooks", "true")
         Frontend = $false; Lint = $true
-        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs")
+        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs", "backend/src/{name}.Application/Webhooks")
         Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
@@ -260,9 +262,9 @@ $scenarioMap = [ordered]@{
     }
     "resource-capabilities-09" = @{
         Slices = @{ full = "full-05" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Arguments = @("--service-role", "Resource", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--include-webhooks", "true")
         Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs")
+        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs", "frontend/src/app/features/platform/components/webhooks")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }

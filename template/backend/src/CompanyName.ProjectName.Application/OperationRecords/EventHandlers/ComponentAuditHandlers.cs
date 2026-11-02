@@ -11,6 +11,10 @@ using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Events;
+#if (IncludeWebhooks)
+using Leistd.Webhooks.Events;
+using Leistd.Webhooks.Management;
+#endif
 
 namespace CompanyName.ProjectName.Application.OperationRecords.EventHandlers;
 
@@ -107,6 +111,45 @@ internal sealed class TenantConnectionChangedAuditHandler(IOperationRecorder rec
         TenantConnectionChangeKind.Removed => OperationRecordActions.TenantConnectionRemoved,
         _ => throw new ArgumentOutOfRangeException(
             nameof(change), change, "This connection change kind has no operation action code yet.")
+    };
+}
+#endif
+#if (IncludeWebhooks)
+
+/// <summary>Webhook 订阅的创建、轮换密钥、启停与删除留痕：它们决定业务数据推往哪个外部地址、凭哪把密钥验签。</summary>
+/// <remarks>
+/// <para>只记管理员的操作：投递链路的自动停用（端点已注销、连续失败）没有操作者，也不是谁凭权限做的决定，不记。</para>
+/// <para>更新名称、地址等配置时组件不发事件，不记；测试事件与手动重发不改变"谁能收到、凭什么验签"，也不记。</para>
+/// <para>目标是订阅标识与名称快照，与端点上补记被拒尝试的标识（路由里的 <c>id</c>）一致。</para>
+/// </remarks>
+internal sealed class WebhookSubscriptionChangedAuditHandler(IOperationRecorder recorder)
+    : IEventHandler<WebhookSubscriptionChangedEvent>
+{
+    /// <inheritdoc />
+    public Task HandleAsync(WebhookSubscriptionChangedEvent @event, CancellationToken cancellationToken = default)
+    {
+        if (@event.Change == WebhookSubscriptionChangeKind.Disabled && @event.DisabledReason != WebhookDisabledReason.Manual)
+        {
+            return Task.CompletedTask;
+        }
+
+        return recorder.RecordSucceededAsync(
+            ActionFor(@event.Change),
+            OperationTarget.For(@event.SubscriptionId, @event.SubscriptionName),
+            PermissionConstant.Webhooks.Manage,
+            cancellationToken);
+    }
+
+    // 不用 _ 兜底成某个已有动作码：组件将来加变更类别时宁可在这里炸，逼人补一个动作码
+    private static string ActionFor(WebhookSubscriptionChangeKind change) => change switch
+    {
+        WebhookSubscriptionChangeKind.Created => OperationRecordActions.WebhookSubscriptionCreated,
+        WebhookSubscriptionChangeKind.SecretRotated => OperationRecordActions.WebhookSubscriptionSecretRotated,
+        WebhookSubscriptionChangeKind.Enabled => OperationRecordActions.WebhookSubscriptionEnabled,
+        WebhookSubscriptionChangeKind.Disabled => OperationRecordActions.WebhookSubscriptionDisabled,
+        WebhookSubscriptionChangeKind.Deleted => OperationRecordActions.WebhookSubscriptionDeleted,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(change), change, "This webhook subscription change kind has no operation action code yet.")
     };
 }
 #endif

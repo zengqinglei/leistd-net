@@ -20,11 +20,7 @@ using Leistd.OperationRecords.AspNetCore.Endpoints;
 #endif
 using Leistd.Settings.AspNetCore.Endpoints;
 #if (IncludeWebhooks)
-using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Recording;
-using Leistd.UnitOfWork;
 using Leistd.Webhooks.AspNetCore.Endpoints;
-using Leistd.Webhooks.Dtos;
 #endif
 
 namespace CompanyName.ProjectName.Api.Hosting;
@@ -89,25 +85,24 @@ public static class ComponentEndpoints
 #endif
 #if (IncludeWebhooks)
 
-        // 订阅的写操作留痕：被拒与业务拒绝由端点上的动作码补记失败，成功记录由过滤器与写入在同一事务里提交。
-        // 测试事件与手动重发不改变"谁能收到、凭什么验签"，不记
+        // 订阅的写操作留痕：成功记录由订阅变更事件的处理器在提交后写（见 WebhookSubscriptionChangedAuditHandler），
+        // 被拒与业务拒绝由端点上的动作码补记失败。测试事件与手动重发不改变"谁能收到、凭什么验签"，不记
         api.MapGroup("webhooks")
             .MapWebhooks(options =>
             {
                 options.ReadPolicy = PermissionConstant.Webhooks.Default;
                 options.ManagePolicy = PermissionConstant.Webhooks.Manage;
             })
-            .WithMetadataOn(WebhookEndpoints.NamePrefix + "CreateSubscription",
+            .WithMetadataOn(WebhookEndpoints.CreateSubscriptionName,
                 new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionCreated))
-            .WithMetadataOn(WebhookEndpoints.NamePrefix + "DeleteSubscription",
+            .WithMetadataOn(WebhookEndpoints.DeleteSubscriptionName,
                 new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionDeleted, "id"))
-            .WithMetadataOn(WebhookEndpoints.NamePrefix + "RotateSecret",
+            .WithMetadataOn(WebhookEndpoints.RotateSecretName,
                 new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionSecretRotated, "id"))
-            .WithMetadataOn(WebhookEndpoints.NamePrefix + "EnableSubscription",
+            .WithMetadataOn(WebhookEndpoints.EnableSubscriptionName,
                 new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionEnabled, "id"))
-            .WithMetadataOn(WebhookEndpoints.NamePrefix + "DisableSubscription",
-                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionDisabled, "id"))
-            .AddEndpointFilter(RecordWebhookSubscriptionChangeAsync);
+            .WithMetadataOn(WebhookEndpoints.DisableSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionDisabled, "id"));
 #endif
 #if (IncludeNotifications)
 
@@ -138,36 +133,6 @@ public static class ComponentEndpoints
         return app;
     }
 
-#if (IncludeWebhooks)
-    // 组件的管理用例不发布订阅变更事件，成功记录在这里补：端点声明了动作码才记。写入并入这里开的工作单元，
-    // 用例被拒或失败时连同记录一起回滚；目标名取用例返回的订阅，删除没有返回值，只记标识
-    private static async ValueTask<object?> RecordWebhookSubscriptionChangeAsync(
-        EndpointFilterInvocationContext context,
-        EndpointFilterDelegate next)
-    {
-        var httpContext = context.HttpContext;
-        if (httpContext.GetEndpoint()?.Metadata.GetMetadata<OperationRecordActionAttribute>() is not { } declared)
-        {
-            return await next(context);
-        }
-
-        var services = httpContext.RequestServices;
-        using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin();
-        var result = await next(context);
-        var target = result switch
-        {
-            WebhookSubscriptionSecretOutputDto created => OperationTarget.For(created.Subscription.Id, created.Subscription.Name),
-            WebhookSubscriptionOutputDto subscription => OperationTarget.For(subscription.Id, subscription.Name),
-            // 路由带 guid 约束；按 Guid 归一，与被拒路径记下的标识写法一致
-            _ => OperationTarget.For(Guid.Parse(httpContext.Request.RouteValues["id"]!.ToString()!))
-        };
-        await services.GetRequiredService<IOperationRecorder>().RecordSucceededAsync(
-            declared.Action, target, PermissionConstant.Webhooks.Manage, httpContext.RequestAborted);
-        await unitOfWork.CompleteAsync(httpContext.RequestAborted);
-        return result;
-    }
-
-#endif
     // 按组件公开的端点名给个别端点追加元数据；Finally 在端点自己的约定之后执行，端点名此时已经在元数据里
     private static TBuilder WithMetadataOn<TBuilder>(this TBuilder builder, string endpointName, params object[] metadata)
         where TBuilder : IEndpointConventionBuilder

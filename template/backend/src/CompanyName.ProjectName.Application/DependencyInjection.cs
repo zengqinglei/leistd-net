@@ -69,6 +69,7 @@ using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 #if (IncludeWebhooks)
 using CompanyName.ProjectName.Application.Webhooks.AppServices;
+using Leistd.Webhooks.Events;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Webhooks.Provider;
 using Leistd.Webhooks.Definitions;
@@ -165,6 +166,8 @@ public static class DependencyInjection
         services.TryAddTransient<IPlatformStatisticsAppService, PlatformStatisticsAppService>();
 #if (IncludeWebhooks)
         services.TryAddTransient<IWebhookStatisticsAppService, WebhookStatisticsAppService>();
+        // 订阅的创建、轮换、启停与删除转成操作记录（提交后分发，回滚的写入不留痕）
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<WebhookSubscriptionChangedEvent>, WebhookSubscriptionChangedAuditHandler>());
 #if (LocalIdentity)
         // 对外发布的事件类型；发布未登记的类型会抛出，订阅也只能选登记过的类型
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWebhookDefinitionProvider, WebhookDefinitionProvider>());

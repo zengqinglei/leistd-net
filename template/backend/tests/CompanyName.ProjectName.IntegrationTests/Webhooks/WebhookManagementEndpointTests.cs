@@ -8,54 +8,12 @@ using Leistd.Authorization.Constants;
 
 namespace CompanyName.ProjectName.IntegrationTests.Webhooks;
 
-/// <summary>组件映射的 Webhook 管理端点在本项目里的接法：读写两级权限，订阅的五种写操作留痕。</summary>
+/// <summary>组件映射的 Webhook 管理端点在本项目里的接法：读写两级权限，写端点被拒时按管理权限留痕。</summary>
+/// <remarks>成功写入的留痕见 <see cref="WebhookSubscriptionAuditTests"/>。</remarks>
 public sealed class WebhookManagementEndpointTests(ProjectWebApplicationFactory factory)
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
     private const string Subscriptions = "/api/v1/webhooks/subscriptions";
-
-    /// <summary>新建、轮换、停用、启用、删除各留一条成功记录，目标是该订阅；删除返回 204。</summary>
-    [Fact]
-    public async Task Subscription_writes_leave_one_success_record_each()
-    {
-        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-
-        var created = await admin.Client.PostAsJsonAsync(Subscriptions, new
-        {
-            Name = "Audited hook",
-            Url = "https://receiver.invalid/hooks",
-            EventTypes = new[] { "*" }
-        });
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
-        var id = body.RootElement.GetProperty("subscription").GetProperty("id").GetString()!;
-        Assert.StartsWith("whsec_", body.RootElement.GetProperty("secret").GetString());
-
-        Assert.Equal(HttpStatusCode.OK, (await admin.Client.PostAsync($"{Subscriptions}/{id}/rotate-secret", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await admin.Client.PostAsync($"{Subscriptions}/{id}/disable", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await admin.Client.PostAsync($"{Subscriptions}/{id}/enable?retryFailed=true", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.Client.DeleteAsync($"{Subscriptions}/{id}")).StatusCode);
-
-        foreach (var action in new[]
-                 {
-                     OperationRecordActions.WebhookSubscriptionCreated,
-                     OperationRecordActions.WebhookSubscriptionSecretRotated,
-                     OperationRecordActions.WebhookSubscriptionDisabled,
-                     OperationRecordActions.WebhookSubscriptionEnabled,
-                     OperationRecordActions.WebhookSubscriptionDeleted
-                 })
-        {
-            Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(
-                Factory, admin.Client, action, id, authorizationBasis: PermissionConstant.Webhooks.Manage));
-        }
-
-        // 业务拒绝（订阅已删除）回滚写入、不记成功，由失败路径按动作码补记
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.Client.PostAsync($"{Subscriptions}/{id}/disable", null)).StatusCode);
-        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(
-            Factory, admin.Client, OperationRecordActions.WebhookSubscriptionDisabled, id));
-        Assert.NotEmpty(await OperationRecordQueries.GetFailuresAsync(
-            Factory, admin.Client, OperationRecordActions.WebhookSubscriptionDisabled, id));
-    }
 
     /// <summary>只有查看权限：订阅、投递与统计可读，写端点一律 403 并按管理权限记被拒。</summary>
     [Fact]

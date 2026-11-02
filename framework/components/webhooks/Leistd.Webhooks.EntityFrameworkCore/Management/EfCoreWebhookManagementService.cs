@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Leistd.Data.Paging;
+using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Context;
 using Leistd.UnitOfWork;
@@ -12,6 +13,7 @@ using Leistd.Webhooks.EntityFrameworkCore.Entities;
 using Leistd.Webhooks.EntityFrameworkCore.Publishing;
 using Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
 using Leistd.Webhooks.Errors;
+using Leistd.Webhooks.Events;
 using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Options;
 using Leistd.Webhooks.Signing;
@@ -22,6 +24,7 @@ namespace Leistd.Webhooks.EntityFrameworkCore.Management;
 
 // 规格"管理端点"的用例。租户隔离由 IMultiTenant 的全局查询过滤器承担：找不到即 404，不区分"别的租户的"。
 // 写操作在工作单元里完成，宿主已有工作单元时并入；停用、排期与密钥沿用投递链路的内部服务，不另写一份。
+// 订阅变更事件在写入保存后、工作单元完成前发布，由事件总线推迟到提交后分发；停用的事件由停用服务发布。
 internal sealed class EfCoreWebhookManagementService<TDbContext>(
     IDbContextProvider<TDbContext> dbContextProvider,
     IUnitOfWorkManager unitOfWorkManager,
@@ -31,7 +34,8 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
     WebhookSubscriptionDeactivator<TDbContext> deactivator,
     WebhookDeliveryQueue<TDbContext> deliveryQueue,
     IOptionsMonitor<WebhookOptions> options,
-    TimeProvider timeProvider) : IWebhookManagementService
+    TimeProvider timeProvider,
+    ILocalEventBus? localEventBus = null) : IWebhookManagementService
     where TDbContext : DbContext
 {
     // 近 7 天成功率的窗口：最近 7×24 小时，不按日历对齐
@@ -128,6 +132,7 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
         };
         dbContext.Set<WebhookSubscription>().Add(subscription);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await PublishAsync(subscription, WebhookSubscriptionChangeKind.Created, cancellationToken);
 
         var output = await ToOutputAsync(subscription, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
@@ -152,7 +157,7 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
             subscription.Url = url;
             subscription.EventTypes = eventTypes;
             subscription.Headers = headers;
-            return Task.CompletedTask;
+            return Task.FromResult<WebhookSubscriptionChangeKind?>(null);
         }, cancellationToken);
     }
 
@@ -170,6 +175,7 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
         dbContext.Set<WebhookAttempt>().RemoveRange(attempts);
         dbContext.Set<WebhookDelivery>().RemoveRange(deliveries);
         dbContext.Set<WebhookSubscription>().Remove(subscription);
+        await PublishAsync(subscription, WebhookSubscriptionChangeKind.Deleted, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
     }
 
@@ -179,17 +185,19 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
         CancellationToken cancellationToken = default)
         => WriteSubscriptionAsync(id, async subscription =>
         {
+            WebhookSubscriptionChangeKind? change = null;
             if (!subscription.IsEnabled)
             {
                 subscription.IsEnabled = true;
                 subscription.DisabledReason = null;
                 subscription.DisabledAt = null;
                 subscription.FirstFailureAt = null;
+                change = WebhookSubscriptionChangeKind.Enabled;
             }
 
             if (!retryFailed)
             {
-                return;
+                return change;
             }
 
             // 现存的全部失败投递，不论何时创建、是否发出过请求：停用时被终结的与停用前就已失败的同样重发
@@ -201,12 +209,18 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
             {
                 deliveryQueue.ScheduleManualRetry(delivery);
             }
+
+            return change;
         }, cancellationToken);
 
     public Task<WebhookSubscriptionOutputDto> DisableSubscriptionAsync(Guid id, CancellationToken cancellationToken = default)
         => WriteSubscriptionAsync(
             id,
-            subscription => deactivator.DisableAsync(subscription, WebhookDisabledReason.Manual, cancellationToken),
+            async subscription =>
+            {
+                await deactivator.DisableAsync(subscription, WebhookDisabledReason.Manual, cancellationToken);
+                return null;
+            },
             cancellationToken);
 
     public async Task<WebhookSubscriptionSecretOutputDto> RotateSecretAsync(Guid id, CancellationToken cancellationToken = default)
@@ -230,7 +244,7 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
             }
 
             subscription.Secret = protectedSecret;
-            return Task.CompletedTask;
+            return Task.FromResult<WebhookSubscriptionChangeKind?>(WebhookSubscriptionChangeKind.SecretRotated);
         }, cancellationToken);
         return new WebhookSubscriptionSecretOutputDto { Subscription = output, Secret = secret };
     }
@@ -383,20 +397,34 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
     }
 
     // 在工作单元里加载订阅、交给 change 修改并保存，返回改后的输出（含最近投递与成功率）。
+    // change 返回要发布的变更类别；不需要发布（或已由停用服务发布）时返回 null。
     private async Task<WebhookSubscriptionOutputDto> WriteSubscriptionAsync(
         Guid id,
-        Func<WebhookSubscription, Task> change,
+        Func<WebhookSubscription, Task<WebhookSubscriptionChangeKind?>> change,
         CancellationToken cancellationToken)
     {
         using var unitOfWork = unitOfWorkManager.Begin();
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var subscription = await FindSubscriptionAsync(dbContext, id, cancellationToken);
-        await change(subscription);
+        var changed = await change(subscription);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (changed is { } kind)
+        {
+            await PublishAsync(subscription, kind, cancellationToken);
+        }
 
         var output = await ToOutputAsync(subscription, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
         return output;
+    }
+
+    private async Task PublishAsync(WebhookSubscription subscription, WebhookSubscriptionChangeKind change, CancellationToken cancellationToken)
+    {
+        if (localEventBus is not null)
+        {
+            await localEventBus.PublishAsync(
+                new WebhookSubscriptionChangedEvent(subscription.Id, subscription.Name, change), cancellationToken);
+        }
     }
 
     private static async Task<WebhookSubscription> FindSubscriptionAsync(
