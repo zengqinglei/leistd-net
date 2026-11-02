@@ -12,6 +12,7 @@ import { englishText } from '../../../shared/utils/english-text';
 //#endif
 import { AuthService } from '../../services/auth-service';
 
+/** 手动入口与 Mock 退出落点；真实守卫、401、退出直接挑战签发方，自动跳转会让 Mock 退出后立刻重新登录。 */
 @Component({
   selector: 'app-resource-login',
   //#if (IncludeLocalization)

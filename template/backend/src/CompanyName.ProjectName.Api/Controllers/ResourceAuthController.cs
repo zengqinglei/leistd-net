@@ -38,7 +38,7 @@ public sealed class ResourceAuthController(IUserAppService userAppService) : Bas
     {
         // 本地会话单独退出且不带回跳地址：Cookie 处理器见到回跳地址就写 302，会盖过随后输出的退出表单（表单不改状态码）
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
-        return SignOut(new AuthenticationProperties { RedirectUri = "/" }, AuthenticationSchemeNames.OpenIdConnect);
+        return SignOut(AuthenticationSchemeNames.OpenIdConnect);
     }
 #endif
 }

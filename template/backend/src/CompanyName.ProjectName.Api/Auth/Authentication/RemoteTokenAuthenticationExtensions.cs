@@ -127,6 +127,8 @@ internal static class RemoteTokenAuthenticationExtensions
             // 防护靠一次性授权码、机密客户端、PKCE 与官方的 state/correlation/nonce 校验
             options.ResponseMode = OpenIdConnectResponseMode.Query;
             options.SignedOutCallbackPath = "/api/v1/auth/signout";
+            // 与本地身份一致回登录表单，默认入口取登录端点的默认 returnUrl；Identity 已结束会话才回调（sid 匹配直退，否则先确认），随后挑战不会静默登回。
+            options.SignedOutRedirectUri = "/api/v1/auth/login";
             options.Events.OnRemoteFailure = context =>
             {
                 context.HandleResponse();
