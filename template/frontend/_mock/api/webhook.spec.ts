@@ -7,7 +7,7 @@ import {
   WebhookSubscriptionSecretOutputDto,
 } from '../../src/app/features/platform/dtos/webhook.dto';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
-import { MockException, MockRequest } from '../core/models';
+import { MockException, MockRequest, MockResponse } from '../core/models';
 import { WEBHOOK_DELIVERIES, WEBHOOK_SUBSCRIPTIONS } from '../data/webhooks';
 import { setMockSessionUserId } from '../utils/current-user';
 
@@ -178,14 +178,16 @@ describe('webhook mock', () => {
   });
 
   it('delivers a test event and lists it first in the delivery log', () => {
-    const delivery = call<WebhookDeliveryOutputDto>(
-      'POST /api/v1/webhooks/subscriptions/:id/test',
-      { params: { id: erp.id } },
-    );
+    // 投递 DTO 带字符串 status，必须显式包成 200 响应，否则拦截器把它当 MockResponse、正文为 null
+    const response = call<MockResponse>('POST /api/v1/webhooks/subscriptions/:id/test', {
+      params: { id: erp.id },
+    });
+    const delivery = response.body as WebhookDeliveryOutputDto;
     const page = call<PagedResultDto<WebhookDeliveryOutputDto>>('GET /api/v1/webhooks/deliveries', {
       queryParams: { subscriptionId: erp.id, limit: 1 },
     });
 
+    expect(response.status).toBe(200);
     expect(delivery.eventType).toBe('webhook.test');
     expect(delivery.status).toBe('succeeded');
     expect(page.items[0].id).toBe(delivery.id);

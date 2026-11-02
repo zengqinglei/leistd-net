@@ -47,7 +47,10 @@ test(
       const dialog = page.getByRole('dialog');
       await dialog.getByLabel('Name', { exact: true }).fill(name);
       await dialog.getByLabel('Endpoint URL').fill(receiver.url);
-      await dialog.getByLabel('All events').check();
+      // 不用 check()：它在点击后立即核对状态，而 aria-checked 要等下一轮变更检测才写回
+      const allEvents = dialog.getByLabel('All events');
+      await allEvents.click();
+      await expect(allEvents).toBeChecked();
       await dialog.getByRole('button', { name: 'Create' }).click();
 
       // 一次性密钥对话框：只出现这一次，关闭后回到列表
