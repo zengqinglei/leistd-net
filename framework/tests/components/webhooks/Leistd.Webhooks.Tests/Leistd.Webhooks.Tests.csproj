@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 发送器在真实 Kestrel 接收端上验证：重定向、超时与连接拦截只在真实套接字上成立 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 签名用 Standard Webhooks 官方库独立验签，不拿组件自己的算法验自己 -->
+    <PackageReference Include="StandardWebhooks.StandardWebhooks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.Core\Leistd.Webhooks.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
+  </ItemGroup>
+
+</Project>

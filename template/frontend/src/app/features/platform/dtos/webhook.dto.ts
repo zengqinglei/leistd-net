@@ -25,6 +25,7 @@ export interface WebhookSubscriptionLastDeliveryDto {
 export interface WebhookSubscriptionOutputDto {
   id: string;
   name: string;
+  description?: string | null;
   url: string;
   eventTypes: string[];
   headers: Record<string, string>;
@@ -44,6 +45,7 @@ export interface WebhookSubscriptionOutputDto {
 
 export interface CreateWebhookSubscriptionInputDto {
   name: string;
+  description?: string | null;
   url: string;
   eventTypes: string[];
   headers?: Record<string, string> | null;
@@ -51,6 +53,7 @@ export interface CreateWebhookSubscriptionInputDto {
 
 export interface UpdateWebhookSubscriptionInputDto {
   name: string;
+  description?: string | null;
   url: string;
   eventTypes: string[];
   /** 为空即清空。 */

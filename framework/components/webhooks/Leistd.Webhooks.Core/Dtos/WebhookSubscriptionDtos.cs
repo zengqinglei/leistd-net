@@ -30,6 +30,9 @@ public sealed record WebhookSubscriptionOutputDto
     /// <summary>名称。</summary>
     public required string Name { get; init; }
 
+    /// <summary>说明（如对接方与用途）；没有时为 <see langword="null"/>。</summary>
+    public string? Description { get; init; }
+
     /// <summary>目标地址。</summary>
     public required string Url { get; init; }
 
@@ -89,6 +92,9 @@ public record CreateWebhookSubscriptionInputDto
     /// <summary>名称的最大长度。</summary>
     public const int MaxNameLength = 128;
 
+    /// <summary>说明的最大长度。</summary>
+    public const int MaxDescriptionLength = 512;
+
     /// <summary>地址的最大长度。</summary>
     public const int MaxUrlLength = 2048;
 
@@ -105,6 +111,10 @@ public record CreateWebhookSubscriptionInputDto
     [Required]
     [MaxLength(MaxNameLength)]
     public string Name { get; init; } = null!;
+
+    /// <summary>说明（如对接方与用途）；可不填。</summary>
+    [MaxLength(MaxDescriptionLength)]
+    public string? Description { get; init; }
 
     /// <summary>目标地址，须是绝对 http(s) URL；内网地址在连接时按 <c>Leistd:Webhooks:AllowedNetworks</c> 拦截，此处不解析。</summary>
     [Required]
@@ -129,6 +139,10 @@ public record UpdateWebhookSubscriptionInputDto
     [Required]
     [MaxLength(CreateWebhookSubscriptionInputDto.MaxNameLength)]
     public string Name { get; init; } = null!;
+
+    /// <summary>说明；为空即清空。</summary>
+    [MaxLength(CreateWebhookSubscriptionInputDto.MaxDescriptionLength)]
+    public string? Description { get; init; }
 
     /// <summary>目标地址，须是绝对 http(s) URL。</summary>
     [Required]

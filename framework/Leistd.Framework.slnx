@@ -212,6 +212,9 @@
   <Folder Name="/tests/components/unit-of-work/">
     <Project Path="tests/components/unit-of-work/Leistd.UnitOfWork.Tests/Leistd.UnitOfWork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/components/webhooks/">
+    <Project Path="tests/components/webhooks/Leistd.Webhooks.Tests/Leistd.Webhooks.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/ddd-struct/">
     <Project Path="tests/ddd-struct/Leistd.Ddd.Application.Tests/Leistd.Ddd.Application.Tests.csproj" />
     <Project Path="tests/ddd-struct/Leistd.Ddd.Domain.Tests/Leistd.Ddd.Domain.Tests.csproj" />
