@@ -17,9 +17,10 @@ import { AppNumber, formatAppNumber } from '../../../../../../shared/pipes/app-n
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
+import { changeOf, sparklineOf } from '../../../../../../shared/utils/stat-trend';
 import { WebhookStatisticsOutputDto } from '../../../../dtos/webhook.dto';
 import { RangePreset } from '../../../dashboard/dashboard-calendar';
-import { changeOf, rateChangeOf, sparklineOf } from '../../webhook-display';
+import { rateChangeOf } from '../../webhook-display';
 
 type KpiId = 'successRate' | 'deliveries' | 'failed' | 'disabledSubscriptions';
 

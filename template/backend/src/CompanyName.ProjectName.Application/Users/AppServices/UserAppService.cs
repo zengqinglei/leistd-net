@@ -44,6 +44,10 @@ using Leistd.Timing;
 #if (LocalIdentity && IncludeNotifications)
 using Leistd.Notifications.Stores;
 #endif
+#if (LocalIdentity && IncludeWebhooks)
+using CompanyName.ProjectName.Application.Webhooks.Provider;
+using Leistd.Webhooks.Publishing;
+#endif
 #if (IncludeLocalization)
 using Microsoft.Extensions.Localization;
 #endif
@@ -73,6 +77,9 @@ internal sealed class UserAppService(
     ICurrentUser currentUser,
 #if (LocalIdentity && IncludeNotifications)
     INotificationStore notificationStore,
+#endif
+#if (LocalIdentity && IncludeWebhooks)
+    IWebhookPublisher webhookPublisher,
 #endif
     ILogger<UserAppService> logger,
 #if (IncludeLocalization)
@@ -264,6 +271,11 @@ internal sealed class UserAppService(
         await userRepository.UpdateAsync(user, cancellationToken);
 
         logger.LogInformation("User created (ID: {Id})", user.Id);
+#if (IncludeWebhooks)
+
+        // 同一工作单元：建用户回滚则事件与投递一并回滚，提交之后才发出请求。载荷只带 id，接收方凭它回查
+        await webhookPublisher.PublishAsync(WebhookDefinitionProvider.UserCreated, new { userId = user.Id }, cancellationToken);
+#endif
 
         // 跟随本方法的 [UnitOfWork] 边界：建用户回滚，这条记录一并回滚，不留"记了但没发生"的假账
         await operationRecorder.RecordSucceededAsync(

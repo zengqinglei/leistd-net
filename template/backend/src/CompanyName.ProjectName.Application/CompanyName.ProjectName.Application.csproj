@@ -49,6 +49,10 @@
     <PackageReference Include="Leistd.Notifications.Email" />
 <!--#endif-->
 <!--#endif-->
+<!--#if (IncludeWebhooks)-->
+    <!-- 事件类型定义、发布器与投递统计的读取契约 -->
+    <PackageReference Include="Leistd.Webhooks.Core" />
+<!--#endif-->
     <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />

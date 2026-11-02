@@ -62,6 +62,11 @@
     <PackageVersion Include="Leistd.OperationRecords.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.Logging" Version="$(LeistdFrameworkVersion)" />
+    <!--#if (IncludeWebhooks)-->
+    <PackageVersion Include="Leistd.Webhooks.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Webhooks.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Webhooks.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <!--#endif-->
     <PackageVersion Include="Leistd.RealTime.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />

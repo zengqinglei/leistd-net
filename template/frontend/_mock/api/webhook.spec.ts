@@ -97,6 +97,40 @@ describe('webhook mock', () => {
     expect(error.error.errors[0].field).toBe('headers');
   });
 
+  it('rejects the test event, "*" mixed with other types, and malformed or duplicate headers', () => {
+    const fieldOf = (body: Record<string, unknown>) =>
+      rejectionOf(() =>
+        call('POST /api/v1/webhooks/subscriptions', {
+          body: { name: 'Spec', url: 'https://spec.example.test/hook', eventTypes: ['*'], ...body },
+        }),
+      ).error.errors[0].field;
+
+    expect(fieldOf({ eventTypes: ['webhook.test'] })).toBe('eventTypes');
+    expect(fieldOf({ eventTypes: ['*', 'webhook.test'] })).toBe('eventTypes');
+    expect(fieldOf({ headers: { 'User-Agent': 'forged' } })).toBe('headers');
+    expect(fieldOf({ headers: { 'X Tenant': 'a' } })).toBe('headers');
+    expect(fieldOf({ headers: { 'X-Tenant': 'a\nb' } })).toBe('headers');
+    expect(fieldOf({ headers: { 'X-Tenant': 'a', 'x-tenant': 'b' } })).toBe('headers');
+  });
+
+  it('does not list the built-in test event among the subscribable event types', () => {
+    const types = call<{ name: string }[]>('GET /api/v1/webhooks/event-types');
+
+    expect(types.map((type) => type.name)).not.toContain('webhook.test');
+  });
+
+  it('matches an event id only in full and event types case-insensitively', () => {
+    const sample = WEBHOOK_DELIVERIES[0];
+    const search = (keyword: string) =>
+      call<PagedResultDto<WebhookDeliveryOutputDto>>('GET /api/v1/webhooks/deliveries', {
+        queryParams: { keyword, limit: 1000 },
+      }).items.map((item) => item.id);
+
+    expect(search(sample.eventId.toUpperCase())).toEqual([sample.id]);
+    expect(search(sample.eventId.slice(0, 8))).not.toContain(sample.id);
+    expect(search(sample.eventType.toUpperCase())).toContain(sample.id);
+  });
+
   it('returns the plain secret only in the create response', () => {
     const created = call<WebhookSubscriptionSecretOutputDto>(
       'POST /api/v1/webhooks/subscriptions',

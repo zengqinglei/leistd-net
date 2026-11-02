@@ -46,6 +46,9 @@ using CompanyName.ProjectName.Infrastructure.TenantConnections.Provider;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 #endif
+#if (IncludeWebhooks)
+using Leistd.Webhooks.EntityFrameworkCore;
+#endif
 
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
@@ -107,6 +110,13 @@ public static class DependencyInjection
         services.AddNotificationsEfCore<MyProjectDbContext>();
         // 旧通知的保留期清理（默认开启：已读 90 天、未读 365 天，配置节 Leistd:Notifications:Retention）
         services.AddNotificationRetention<MyProjectDbContext>();
+#endif
+#if (IncludeWebhooks)
+        // 出站 Webhook：发布器与订阅存储、提交后立即投递与兜底扫描（集群任务 webhooks.dispatch）、投递统计。
+        // 签名密钥用 Data Protection 加密落库，各副本须共享密钥环
+        services.AddWebhooksEfCore<MyProjectDbContext>();
+        // 事件、投递与尝试记录的保留期清理（默认开启、保留 62 天，配置节 Leistd:Webhooks:Retention）
+        services.AddWebhookRetention<MyProjectDbContext>();
 #endif
         services.AddPermissionAuthorizationEfCore<MyProjectDbContext>();
         services.AddSettingsEfCore<MyProjectDbContext>();

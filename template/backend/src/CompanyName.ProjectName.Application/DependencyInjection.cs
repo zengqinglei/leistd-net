@@ -67,6 +67,13 @@ using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Management.Events;
 using Leistd.MultiTenancy.Management.Provisioning;
 #endif
+#if (IncludeWebhooks)
+using CompanyName.ProjectName.Application.Webhooks.AppServices;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Webhooks.Provider;
+using Leistd.Webhooks.Definitions;
+#endif
+#endif
 using Leistd.EventBus.EventHandlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -156,6 +163,13 @@ public static class DependencyInjection
         services.TryAddTransient<IRoleAppService, RoleAppService>();
 
         services.TryAddTransient<IPlatformStatisticsAppService, PlatformStatisticsAppService>();
+#if (IncludeWebhooks)
+        services.TryAddTransient<IWebhookStatisticsAppService, WebhookStatisticsAppService>();
+#if (LocalIdentity)
+        // 对外发布的事件类型；发布未登记的类型会抛出，订阅也只能选登记过的类型
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWebhookDefinitionProvider, WebhookDefinitionProvider>());
+#endif
+#endif
 
         services.AddApplicationDefinitions();
 #if (!RemoteTokenAuth)

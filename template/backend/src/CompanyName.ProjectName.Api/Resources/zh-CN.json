@@ -136,6 +136,10 @@
     "Permission:App.OpenApplications.Update": "编辑",
     "Permission:App.OpenApplications.Delete": "删除",
     "Permission:App.OpenApplications.ResetSecret": "重置客户端密钥",
+//#if (IncludeWebhooks)
+    "Permission:App.Webhooks": "Webhook",
+    "Permission:App.Webhooks.Manage": "管理",
+//#endif
     "Permission:App.OperationRecords": "操作记录",
     "Permission:App.OperationRecords.Export": "导出",
     "Permission:App.Settings": "系统设置",

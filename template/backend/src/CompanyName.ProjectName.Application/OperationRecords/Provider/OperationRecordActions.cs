@@ -114,6 +114,23 @@ public static class OperationRecordActions
     public const string OpenApplicationSecretReset = "open-application.secret-reset";
 
 #endif
+#if (IncludeWebhooks)
+    /// <summary>新建 Webhook 订阅：外部地址从此开始收到所订阅的事件。</summary>
+    public const string WebhookSubscriptionCreated = "webhook-subscription.created";
+
+    /// <summary>删除 Webhook 订阅，连同它的投递记录。</summary>
+    public const string WebhookSubscriptionDeleted = "webhook-subscription.deleted";
+
+    /// <summary>轮换 Webhook 订阅的签名密钥：旧密钥在过渡期后失效。</summary>
+    public const string WebhookSubscriptionSecretRotated = "webhook-subscription.secret-rotated";
+
+    /// <summary>启用 Webhook 订阅。</summary>
+    public const string WebhookSubscriptionEnabled = "webhook-subscription.enabled";
+
+    /// <summary>手动停用 Webhook 订阅：待投递的记录随之失败，停用期间的事件不补发。</summary>
+    public const string WebhookSubscriptionDisabled = "webhook-subscription.disabled";
+
+#endif
     /// <summary>导出操作记录。<b>导出审计日志这件事本身要被审计</b>——谁把历史带走了是安全事件。</summary>
     public const string OperationRecordsExported = "operation-records.exported";
 

@@ -195,13 +195,12 @@ export class WebhookSubscriptionDialog {
     this.subscriptionForm.eventTypes().markAsTouched();
   }
 
+  /** 逐项勾选只在未选"全部事件"时可用；`"*"` 只能单独出现，服务端拒绝与具体类型混选。 */
   toggleEvent(name: string, checked: boolean): void {
-    this.updateModel((model) => ({
-      ...model,
-      eventTypes: checked
-        ? [...model.eventTypes.filter((type) => type !== name), name]
-        : model.eventTypes.filter((type) => type !== name),
-    }));
+    this.updateModel((model) => {
+      const types = model.eventTypes.filter((type) => type !== name && type !== WEBHOOK_ALL_EVENTS);
+      return { ...model, eventTypes: checked ? [...types, name] : types };
+    });
     this.subscriptionForm.eventTypes().markAsTouched();
   }
 

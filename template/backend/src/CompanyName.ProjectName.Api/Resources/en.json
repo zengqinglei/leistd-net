@@ -136,6 +136,10 @@
     "Permission:App.OpenApplications.Update": "Edit",
     "Permission:App.OpenApplications.Delete": "Delete",
     "Permission:App.OpenApplications.ResetSecret": "Reset client secret",
+//#if (IncludeWebhooks)
+    "Permission:App.Webhooks": "Webhooks",
+    "Permission:App.Webhooks.Manage": "Manage",
+//#endif
     "Permission:App.OperationRecords": "Operation records",
     "Permission:App.OperationRecords.Export": "Export",
     "Permission:App.Settings": "System settings",

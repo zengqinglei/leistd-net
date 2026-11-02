@@ -1,7 +1,3 @@
-import { HLM_CHART_THEME } from '@spartan-ng/helm/chart';
-import { areaY, defineChart, lineY } from '@tanstack/charts';
-import { scaleLinear } from '@tanstack/charts/scales/linear';
-
 import {
   WebhookAttemptTrigger,
   WebhookDeliveryStatus,
@@ -84,17 +80,7 @@ export function prettyJson(text: string): string {
 }
 
 /**
- * 与上一区间相比的变化率（比例），按整数百分比取整，与仪表盘指标卡同一口径：上一区间没有值或为 0 时不比较。
- */
-export function changeOf(value: number, previous: number | null | undefined): number | null {
-  if (previous == null || previous === 0) {
-    return null;
-  }
-  return Math.round(((value - previous) / previous) * 100) / 100;
-}
-
-/**
- * 成功率的变化写百分点差（0.006 表示 +0.6 个百分点），同样按整数百分比取整；比例本身已是百分数，
+ * 成功率的变化写百分点差（0.006 表示 +0.6 个百分点），同样按整数百分比取整（计数指标的变化率见 `shared/utils/stat-trend`）；比例本身已是百分数，
  * 再求变化率会把 50%→100% 写成 +100%。上一区间为空（无终态投递或超出保留期）时不比较。
  */
 export function rateChangeOf(
@@ -105,39 +91,4 @@ export function rateChangeOf(
     return null;
   }
   return Math.round((value - previous) * 100) / 100;
-}
-
-/**
- * 指标卡里的迷你趋势，与仪表盘同一画法：去掉坐标轴与网格，只留面积与线；空桶（成功率分母为 0）不画点，
- * 不到两个点画不出趋势。
- */
-export function sparklineOf(series: readonly (number | null)[] | null | undefined, color: string) {
-  const rows = (series ?? []).flatMap((value, index) => (value === null ? [] : [{ index, value }]));
-  if (rows.length < 2) {
-    return null;
-  }
-  const values = rows.map((row) => row.value);
-  // 纵轴取序列自身的最小、最大值；不变的序列上下各留一格画在中线上，只画线
-  const flat = Math.min(...values) === Math.max(...values);
-  const low = Math.min(...values) - (flat ? 1 : 0);
-  const high = Math.max(...values) + (flat ? 1 : 0);
-  return {
-    definition: defineChart({
-      guides: false,
-      margin: 2,
-      marks: [
-        ...(flat
-          ? []
-          : [areaY(rows, { x: 'index', y: 'value', y1: low, fill: color, fillOpacity: 0.12 })]),
-        lineY(rows, { x: 'index', y: 'value', stroke: color, strokeWidth: 1.75 }),
-      ],
-      scales: {
-        x: { scale: scaleLinear },
-        y: { scale: scaleLinear().domain([low, high]) },
-      },
-      theme: HLM_CHART_THEME,
-    }),
-    ariaLabel: '',
-    height: 34,
-  };
 }

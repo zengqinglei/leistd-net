@@ -89,7 +89,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #endif
 
     private string? connectionString;
-#if (SpaFrontend)
+#if (SpaFrontend || IncludeWebhooks)
 
     // 每个宿主一份密钥目录：开发环境以外 Data Protection 要求显式的持久位置，测试给临时目录
     private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
@@ -108,7 +108,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         connectionString ??= PostgreSqlTestDatabase.CreateDatabase();
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("ConnectionStrings:Redis", "");
-#if (SpaFrontend)
+#if (SpaFrontend || IncludeWebhooks)
         builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
 #endif
 #if (OpenIddictServer)
@@ -244,7 +244,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             PostgreSqlTestDatabase.DropDatabase(connectionString);
         }
 
-#if (SpaFrontend)
+#if (SpaFrontend || IncludeWebhooks)
         if (Directory.Exists(dataProtectionKeysPath))
         {
             Directory.Delete(dataProtectionKeysPath, recursive: true);

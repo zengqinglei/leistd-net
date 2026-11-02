@@ -26,9 +26,9 @@ public static class PermissionConstant
 
         /// <summary>谁能进来：用户、角色与租户。</summary>
         public const string Identity = "Identity";
-#if (OpenIddictServer)
+#if (OpenIddictServer || IncludeWebhooks)
 
-        /// <summary>代表第三方接入的开放应用。</summary>
+        /// <summary>第三方接入：对外签发凭据与向外推送事件的入口。</summary>
         public const string Developer = "Developer";
 #endif
 
@@ -92,6 +92,22 @@ public static class PermissionConstant
 
         /// <summary>重置客户端密钥。等价于换发凭据，与普通编辑分开授权。</summary>
         public const string ResetSecret = Default + ".ResetSecret";
+    }
+
+#endif
+#if (IncludeWebhooks)
+    /// <summary>出站 Webhook 权限。</summary>
+    /// <remarks>
+    /// 侧别为 <c>Both</c>：订阅与投递带 <c>TenantId</c> 且受全局查询过滤器分区，宿主管宿主的、租户管自己的。
+    /// 查看与管理分两级：管理能改投递地址、拿到签名密钥，影响面与只读查看日志不是一个量级。
+    /// </remarks>
+    public static class Webhooks
+    {
+        /// <summary>查看订阅、投递日志与统计。</summary>
+        public const string Default = Prefix + ".Webhooks";
+
+        /// <summary>新建、编辑、删除与启停订阅，轮换密钥，发送测试事件与手动重发。</summary>
+        public const string Manage = Default + ".Manage";
     }
 
 #endif

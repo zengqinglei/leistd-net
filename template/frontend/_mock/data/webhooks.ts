@@ -12,13 +12,17 @@ import {
  */
 export const WEBHOOK_TEST_EVENT = 'webhook.test';
 
-/** 与后端登记一致：组件内置测试事件，本地身份另登记示例事件 `user.created`。 */
+/**
+ * 与后端 `GET /event-types` 一致：只列业务登记的类型（本地身份的示例事件 `user.created`，未登记说明），
+ * 不含内置测试事件——它只经"发送测试事件"发出，也不能被订阅。
+ */
+//#if (LocalIdentity)
 export const WEBHOOK_EVENT_TYPES: WebhookEventTypeOutputDto[] = [
-  { name: WEBHOOK_TEST_EVENT, group: 'webhooks', description: 'Webhook:EventType:webhook.test' },
-  //#if (LocalIdentity)
-  { name: 'user.created', group: 'users', description: 'Webhook:EventType:user.created' },
-  //#endif
+  { name: 'user.created', group: 'users' },
 ];
+//#else
+export const WEBHOOK_EVENT_TYPES: WebhookEventTypeOutputDto[] = [];
+//#endif
 
 /** 样本投递用的业务事件；没有本地身份时只有测试事件可发。 */
 //#if (LocalIdentity)

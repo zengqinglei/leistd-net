@@ -419,6 +419,7 @@
         {
           "condition": "!LocalIdentity",
           "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Webhooks/Provider/WebhookDefinitionProvider.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AccountPreferencesTests.cs",
             "docs/operations/runbooks/two-factor-reset.md",
             "frontend/src/app/features/settings/components/setting-section/widgets/email-test/**",
@@ -588,9 +589,16 @@
           ]
         },
         {
+          "condition": "!(SpaFrontend || IncludeWebhooks)",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Infrastructure/DataProtectionExtensions.cs"
+          ]
+        },
+        {
           "condition": "!IncludeWebhooks",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Webhooks/**",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/WebhookStatisticsController.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Identity/*_AddWebhooks*.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Resource/*_AddWebhooks*.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/**",
@@ -773,7 +781,6 @@
             "docs/standards/frontend-data.md",
             "backend/src/CompanyName.ProjectName.Api/Hosting/SpaExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Options/SessionCookieOptions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/DataProtectionExtensions.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/BrowserOriginTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SpaStaticFileCachingTests.cs",
             ".gitattributes",

@@ -156,6 +156,27 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationVisibility.Tenant);
 #endif
 
+#if (IncludeWebhooks)
+        // Webhook 订阅：决定业务数据推往哪个外部地址、用哪把密钥签名，归"配置"类。订阅带 TenantId，
+        // 可见性取租户级；宿主的订阅由写入时的租户上下文（null）落到宿主侧。
+        // 新建、删除与轮换密钥改变"谁能收到、凭什么验签"，与启停一样要能单独筛出来
+        foreach (var webhookAction in new[]
+                 {
+                     OperationRecordActions.WebhookSubscriptionCreated,
+                     OperationRecordActions.WebhookSubscriptionDeleted,
+                     OperationRecordActions.WebhookSubscriptionSecretRotated,
+                     OperationRecordActions.WebhookSubscriptionEnabled,
+                     OperationRecordActions.WebhookSubscriptionDisabled
+                 })
+        {
+            context.Add(
+                webhookAction,
+                OperationRecordCategories.Configuration,
+                OperationVisibility.Tenant,
+                OperationSeverity.Notice);
+        }
+
+#endif
         // 导出审计日志本身是安全事件：谁把历史带走了必须留痕。
         // 可见性取租户级——导出的是该租户自己的记录，租户管理员有权知道谁导走了。
         context.Add(

@@ -33,8 +33,12 @@ const MAX_NAME_LENGTH = 128;
 const MAX_DESCRIPTION_LENGTH = 512;
 const MAX_URL_LENGTH = 2048;
 const MAX_HEADER_COUNT = 20;
-/** 由组件写入、不能被自定义头覆盖的头。 */
+/** 由组件写入、不能被自定义头覆盖的头（与后端同一集合，大小写不敏感）。 */
 const RESERVED_HEADERS = /^(webhook-.*|content-type|content-length|host|user-agent)$/i;
+/** 头名须是 HTTP 令牌（RFC 9110 §5.6.2）。 */
+const HEADER_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+/** 完整 Guid：投递关键字只在这种形态下按事件 id 精确匹配。 */
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** 轮换后旧密钥继续签名的时长（`Leistd:Webhooks:SecretRotationOverlap` 默认值）。 */
 const ROTATION_OVERLAP_MS = 24 * 3_600_000;
 const SEVEN_DAYS_MS = 7 * 24 * 3_600_000;
@@ -121,6 +125,11 @@ function page<T>(items: T[], req: MockRequest): PagedResultDto<T> {
   return { totalCount: items.length, items: items.slice(offset, offset + limit) };
 }
 
+function isControlChar(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code < 0x20 || (code >= 0x7f && code <= 0x9f);
+}
+
 function isAbsoluteHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -154,19 +163,32 @@ function validateInput(
   if (!input.eventTypes?.length) {
     errors.push({ field: 'eventTypes', detail: 'Select at least one event type.' });
   } else if (input.eventTypes.some((type) => type !== ALL_EVENTS && !declared.includes(type))) {
+    // 内置测试事件不在登记列表里：与后端一样不能订阅
     errors.push({ field: 'eventTypes', detail: 'The event type is not registered.' });
+  } else if (input.eventTypes.includes(ALL_EVENTS) && new Set(input.eventTypes).size > 1) {
+    errors.push({
+      field: 'eventTypes',
+      detail: "'*' subscribes to all event types and cannot be combined with other event types.",
+    });
   }
-  const headers = Object.keys(input.headers ?? {});
+  const headers = Object.entries(input.headers ?? {});
+  const names = headers.map(([name]) => name.toLowerCase());
   if (headers.length > MAX_HEADER_COUNT) {
     errors.push({
       field: 'headers',
       detail: `No more than ${MAX_HEADER_COUNT} custom headers are allowed.`,
     });
-  } else if (headers.some((header) => RESERVED_HEADERS.test(header))) {
+  } else if (headers.some(([name]) => !HEADER_TOKEN.test(name))) {
+    errors.push({ field: 'headers', detail: 'The header name is not a valid HTTP token.' });
+  } else if (headers.some(([name]) => RESERVED_HEADERS.test(name))) {
     errors.push({
       field: 'headers',
       detail: 'Custom headers cannot override webhook-* or Content-Type headers.',
     });
+  } else if (headers.some(([, value]) => [...(value ?? '')].some(isControlChar))) {
+    errors.push({ field: 'headers', detail: 'Header values cannot contain control characters.' });
+  } else if (new Set(names).size !== names.length) {
+    errors.push({ field: 'headers', detail: 'A header is specified more than once.' });
   }
   if (errors.length > 0) {
     throw new MockException(400, { errors });
@@ -368,14 +390,15 @@ function sendTestEvent(req: MockRequest) {
 
 function getDeliveries(req: MockRequest) {
   requirePermission(PERMISSIONS.webhooks.default);
-  const keyword = query(req, 'keyword')?.toLowerCase();
+  const keyword = query(req, 'keyword')?.trim().toLowerCase();
   const subscriptionId = query(req, 'subscriptionId');
   const status = query(req, 'status');
   const eventType = query(req, 'eventType');
+  // 与后端一致：完整 Guid 才按事件 id 精确匹配，类型名不区分大小写包含匹配
   const items = WEBHOOK_DELIVERIES.filter(
     (item) =>
       !keyword ||
-      item.eventId.toLowerCase().includes(keyword) ||
+      (GUID.test(keyword) && item.eventId.toLowerCase() === keyword) ||
       item.eventType.toLowerCase().includes(keyword),
   )
     .filter((item) => !subscriptionId || item.subscriptionId === subscriptionId)

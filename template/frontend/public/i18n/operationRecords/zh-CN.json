@@ -83,6 +83,11 @@
     "tenant.connection-removed": "删除了租户 {{target}} 的数据库连接登记",
     "resource.admin-granted": "将 {{target}} 加入管理员角色",
     "resource.admin-restored": "恢复了 {{target}} 的管理员访问",
+    "webhook-subscription.created": "创建了 Webhook 订阅 {{target}}",
+    "webhook-subscription.deleted": "删除了 Webhook 订阅 {{target}}",
+    "webhook-subscription.secret-rotated": "轮换了 Webhook 订阅 {{target}} 的密钥",
+    "webhook-subscription.enabled": "启用了 Webhook 订阅 {{target}}",
+    "webhook-subscription.disabled": "停用了 Webhook 订阅 {{target}}",
     "tenant.admin-restored": "恢复了租户管理员 {{target}}"
   },
   "actionsNoTarget": {
@@ -90,6 +95,7 @@
     "setting.test-email-sent": "发送了测试邮件",
     "user.created": "创建用户",
     "role.created": "创建角色",
+    "webhook-subscription.created": "创建 Webhook 订阅",
     "open-application.created": "创建开放应用"
   },
   "table": {
