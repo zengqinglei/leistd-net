@@ -102,6 +102,7 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   //#endif
   //#if (IncludeWebhooks)
   'webhook-subscription.created': (t) => `Created webhook subscription ${t}`,
+  'webhook-subscription.updated': (t) => `Updated webhook subscription ${t}`,
   'webhook-subscription.deleted': (t) => `Deleted webhook subscription ${t}`,
   'webhook-subscription.secret-rotated': (t) => `Rotated the secret of webhook subscription ${t}`,
   'webhook-subscription.enabled': (t) => `Enabled webhook subscription ${t}`,

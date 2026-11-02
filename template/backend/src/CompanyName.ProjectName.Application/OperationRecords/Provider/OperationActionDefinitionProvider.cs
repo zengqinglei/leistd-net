@@ -159,10 +159,11 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
 #if (IncludeWebhooks)
         // Webhook 订阅：决定业务数据推往哪个外部地址、用哪把密钥签名，归"配置"类。订阅带 TenantId，
         // 可见性取租户级；宿主的订阅由写入时的租户上下文（null）落到宿主侧。
-        // 新建、删除与轮换密钥改变"谁能收到、凭什么验签"，与启停一样要能单独筛出来
+        // 新建、修改、删除与轮换密钥改变"谁能收到、凭什么验签"，与启停一样要能单独筛出来
         foreach (var webhookAction in new[]
                  {
                      OperationRecordActions.WebhookSubscriptionCreated,
+                     OperationRecordActions.WebhookSubscriptionUpdated,
                      OperationRecordActions.WebhookSubscriptionDeleted,
                      OperationRecordActions.WebhookSubscriptionSecretRotated,
                      OperationRecordActions.WebhookSubscriptionEnabled,

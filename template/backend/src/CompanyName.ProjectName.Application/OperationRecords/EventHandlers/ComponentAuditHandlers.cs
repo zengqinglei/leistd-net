@@ -119,7 +119,7 @@ internal sealed class TenantConnectionChangedAuditHandler(IOperationRecorder rec
 /// <summary>Webhook 订阅的创建、轮换密钥、启停与删除留痕：它们决定业务数据推往哪个外部地址、凭哪把密钥验签。</summary>
 /// <remarks>
 /// <para>只记管理员的操作：投递链路的自动停用（端点已注销、连续失败）没有操作者，也不是谁凭权限做的决定，不记。</para>
-/// <para>更新名称、地址等配置时组件不发事件，不记；测试事件与手动重发不改变"谁能收到、凭什么验签"，也不记。</para>
+/// <para>测试事件与手动重发不改变"谁能收到、凭什么验签"，不记。</para>
 /// <para>目标是订阅标识与名称快照，与端点上补记被拒尝试的标识（路由里的 <c>id</c>）一致。</para>
 /// </remarks>
 internal sealed class WebhookSubscriptionChangedAuditHandler(IOperationRecorder recorder)
@@ -144,6 +144,7 @@ internal sealed class WebhookSubscriptionChangedAuditHandler(IOperationRecorder 
     private static string ActionFor(WebhookSubscriptionChangeKind change) => change switch
     {
         WebhookSubscriptionChangeKind.Created => OperationRecordActions.WebhookSubscriptionCreated,
+        WebhookSubscriptionChangeKind.Updated => OperationRecordActions.WebhookSubscriptionUpdated,
         WebhookSubscriptionChangeKind.SecretRotated => OperationRecordActions.WebhookSubscriptionSecretRotated,
         WebhookSubscriptionChangeKind.Enabled => OperationRecordActions.WebhookSubscriptionEnabled,
         WebhookSubscriptionChangeKind.Disabled => OperationRecordActions.WebhookSubscriptionDisabled,

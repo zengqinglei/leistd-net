@@ -22,13 +22,14 @@ namespace Leistd.Webhooks.Tests.EntityFrameworkCore;
 /// </summary>
 public sealed class WebhookSubscriptionChangedEventTests
 {
-    /// <summary>创建、轮换、停用、启用、删除各发一条对应类别的事件，带订阅标识与名称快照；停用带手动原因。</summary>
+    /// <summary>创建、修改、轮换、停用、启用、删除各发一条对应类别的事件，带订阅标识与名称快照；停用带手动原因。</summary>
     [Fact]
     public async Task Each_lifecycle_write_publishes_its_change_kind()
     {
         await using var host = await WebhookTestHost.CreateAsync();
 
         var id = (await CreateAsync(host)).Subscription.Id;
+        await host.ManageAsync(null, service => service.UpdateSubscriptionAsync(id, Moved()));
         await host.ManageAsync(null, service => service.RotateSecretAsync(id));
         await host.ManageAsync(null, service => service.DisableSubscriptionAsync(id));
         await host.ManageAsync(null, service => service.EnableSubscriptionAsync(id));
@@ -38,6 +39,7 @@ public sealed class WebhookSubscriptionChangedEventTests
         Assert.Equal(
             [
                 WebhookSubscriptionChangeKind.Created,
+                WebhookSubscriptionChangeKind.Updated,
                 WebhookSubscriptionChangeKind.SecretRotated,
                 WebhookSubscriptionChangeKind.Disabled,
                 WebhookSubscriptionChangeKind.Enabled,
@@ -46,11 +48,11 @@ public sealed class WebhookSubscriptionChangedEventTests
             published.Select(x => x.Change));
         Assert.All(published, x => Assert.Equal((id, "Audited hook"), (x.SubscriptionId, x.SubscriptionName)));
         Assert.Equal(
-            [null, null, WebhookDisabledReason.Manual, null, null],
+            [null, null, null, WebhookDisabledReason.Manual, null, null],
             published.Select(x => x.DisabledReason));
     }
 
-    /// <summary>状态没变（再启用、再停用）与只改配置的更新不发布：审计里不该出现没发生过的启停。</summary>
+    /// <summary>状态没变的再启用、再停用不发布：审计里不该出现没发生过的启停。</summary>
     [Fact]
     public async Task Writes_that_change_no_lifecycle_state_publish_nothing()
     {
@@ -59,12 +61,8 @@ public sealed class WebhookSubscriptionChangedEventTests
         host.Events.Published.Clear();
 
         await host.ManageAsync(null, service => service.EnableSubscriptionAsync(id, retryFailed: true));
-        await host.ManageAsync(null, service => service.UpdateSubscriptionAsync(id, new UpdateWebhookSubscriptionInputDto
-        {
-            Name = "Renamed",
-            Url = "https://receiver.example/renamed",
-            EventTypes = [WebhookTestHost.OrderShipped]
-        }));
+        Assert.Empty(host.Events.Published);
+
         await host.ManageAsync(null, service => service.DisableSubscriptionAsync(id));
         host.Events.Published.Clear();
         await host.ManageAsync(null, service => service.DisableSubscriptionAsync(id));
@@ -72,19 +70,25 @@ public sealed class WebhookSubscriptionChangedEventTests
         Assert.Empty(host.Events.Published);
     }
 
-    /// <summary>事件在提交之后才分发，处理器此时从另一个连接已经读得到这次写入。</summary>
+    /// <summary>事件在提交之后才分发，处理器此时从另一个连接已经读得到这次写入（修改读得到新地址）。</summary>
     [Fact]
     public async Task The_event_is_dispatched_after_the_write_is_committed()
     {
         var probe = new Probe();
         await using var host = await CreateWithRealBusAsync(probe);
-        probe.Exists = id => host.ReadAsync(db => db.Set<WebhookSubscription>().IgnoreQueryFilters().AnyAsync(x => x.Id == id));
+        probe.Exists = e => host.ReadAsync(db => db.Set<WebhookSubscription>().IgnoreQueryFilters().AnyAsync(x =>
+            x.Id == e.SubscriptionId && (e.Change != WebhookSubscriptionChangeKind.Updated || x.Url == MovedUrl)));
 
         var id = (await CreateAsync(host)).Subscription.Id;
+        await host.ManageAsync(null, service => service.UpdateSubscriptionAsync(id, Moved()));
         await host.ManageAsync(null, service => service.DeleteSubscriptionAsync(id));
 
         Assert.Equal(
-            [(WebhookSubscriptionChangeKind.Created, true), (WebhookSubscriptionChangeKind.Deleted, false)],
+            [
+                (WebhookSubscriptionChangeKind.Created, true),
+                (WebhookSubscriptionChangeKind.Updated, true),
+                (WebhookSubscriptionChangeKind.Deleted, false)
+            ],
             probe.AfterCommit);
     }
 
@@ -116,6 +120,7 @@ public sealed class WebhookSubscriptionChangedEventTests
 
         foreach (var write in new Func<IWebhookManagementService, Task>[]
                  {
+                     service => service.UpdateSubscriptionAsync(missing, Moved()),
                      service => service.RotateSecretAsync(missing),
                      service => service.EnableSubscriptionAsync(missing),
                      service => service.DisableSubscriptionAsync(missing),
@@ -147,9 +152,19 @@ public sealed class WebhookSubscriptionChangedEventTests
         EventTypes = [WebhookTestHost.OrderPaid]
     };
 
+    private const string MovedUrl = "https://receiver.example/moved";
+
+    // 只改推送地址与事件类型，名称不变，名称快照的断言照样成立
+    private static UpdateWebhookSubscriptionInputDto Moved() => new()
+    {
+        Name = "Audited hook",
+        Url = MovedUrl,
+        EventTypes = [WebhookTestHost.OrderShipped]
+    };
+
     private sealed class Probe
     {
-        public Func<Guid, Task<bool>> Exists { get; set; } = _ => Task.FromResult(false);
+        public Func<WebhookSubscriptionChangedEvent, Task<bool>> Exists { get; set; } = _ => Task.FromResult(false);
 
         public List<(UnitOfWorkPhase? Phase, WebhookSubscriptionChangeKind Change)> Calls { get; } = [];
 
@@ -166,7 +181,7 @@ public sealed class WebhookSubscriptionChangedEventTests
             probe.Calls.Add((phase, @event.Change));
             if (phase == UnitOfWorkPhase.AfterCommit)
             {
-                probe.AfterCommit.Add((@event.Change, await probe.Exists(@event.SubscriptionId)));
+                probe.AfterCommit.Add((@event.Change, await probe.Exists(@event)));
             }
         }
     }

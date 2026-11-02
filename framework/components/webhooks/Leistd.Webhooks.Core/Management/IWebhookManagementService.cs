@@ -11,8 +11,8 @@ namespace Leistd.Webhooks.Management;
 /// <para>订阅或投递不存在时抛带 <see cref="Errors.WebhookErrorCodes.SubscriptionNotFound"/> 或
 /// <see cref="Errors.WebhookErrorCodes.DeliveryNotFound"/> 的业务异常。</para>
 /// <para>写操作自带工作单元；投递类写操作（测试事件、手动重发、带 <c>retryFailed</c> 的启用）在提交后立即入队发送。</para>
-/// <para>创建、删除、轮换密钥、启用与停用成功后经可选的 <c>ILocalEventBus</c> 发布
-/// <see cref="Events.WebhookSubscriptionChangedEvent"/>，提交后分发；状态未变（再启用、再停用）与更新不发布。</para>
+/// <para>创建、修改、删除、轮换密钥、启用与停用成功后经可选的 <c>ILocalEventBus</c> 发布
+/// <see cref="Events.WebhookSubscriptionChangedEvent"/>，提交后分发；状态未变的再启用、再停用不发布。</para>
 /// </remarks>
 public interface IWebhookManagementService
 {

@@ -333,7 +333,7 @@
         <div class="step"><div class="n">⑤ 发送</div><div class="h">签名 + POST</div><div class="d">Standard Webhooks 三个头；超时 15 秒；不跟随重定向；连接时检查 IP</div></div>
         <div class="step ext"><div class="n">⑥ 第三方</div><div class="h">接收方</div><div class="d">验签 → 按 id 去重 → 15 秒内回 2xx → 异步处理</div></div>
       </div>
-      <div class="lane"><b>结果处理（按序）：</b>2xx 成功并清零失败起点 · 410 停用订阅 · 手动尝试失败即终态 · 自动尝试按退避表 <code>5s 5m 30m 2h 5h 10h 10h</code>（带 Retry-After 取较大值），预算用完即失败 · 连续失败 5 天自动停用并发 <code>WebhookSubscriptionDisabledEvent</code></div>
+      <div class="lane"><b>结果处理（按序）：</b>2xx 成功并清零失败起点 · 410 停用订阅 · 手动尝试失败即终态 · 自动尝试按退避表 <code>5s 5m 30m 2h 5h 10h 10h</code>（带 Retry-After 取较大值），预算用完即失败 · 连续失败 5 天自动停用并发 <code>WebhookSubscriptionChangedEvent</code>（类别 Disabled）</div>
 
       <h3 id="s-arch">3.2 包与分层</h3>
       <div class="grid3">
@@ -875,7 +875,7 @@ X-Tenant-Code: acme</div></div>
           <tr><td>A1</td><td>启用订阅订阅了 <code>order.paid</code></td><td>工作单元内发布并提交</td><td>接收方数秒内收到 POST，三个头齐全，官方库验签通过</td><td>入口测试</td></tr>
           <tr><td>A2</td><td>同上</td><td>工作单元回滚；或无工作单元时调用</td><td>没有事件和投递记录；无工作单元时抛异常</td><td>入口测试</td></tr>
           <tr><td>A3</td><td>接收方先 500 后 200</td><td>到下一次重试时刻</td><td>第二次成功，两次尝试都有记录，<code>webhook-id</code> 相同</td><td>入口测试</td></tr>
-          <tr><td>A4</td><td>接收方回 410</td><td>投递</td><td>订阅停用（端点已注销），发出 <code>WebhookSubscriptionDisabledEvent</code></td><td>框架单测</td></tr>
+          <tr><td>A4</td><td>接收方回 410</td><td>投递</td><td>订阅停用（端点已注销），发出 <code>WebhookSubscriptionChangedEvent</code>（类别 Disabled）</td><td>框架单测</td></tr>
           <tr><td>A4b</td><td>订阅有待投递记录</td><td>手动停用 / 410 / 自动停用</td><td>待投递改为失败并写原因，队列与扫描不再发请求；重新启用带 retryFailed 时现存全部失败投递各发一次手动尝试</td><td>框架单测</td></tr>
           <tr><td>A5</td><td>连续失败超过 <code>AutoDisableAfter</code></td><td>又一次失败</td><td>自动停用；任何一次成功清零失败起点</td><td>框架单测</td></tr>
           <tr><td>A6</td><td>地址解析到私网且不在白名单</td><td>投递</td><td>不建立连接，尝试记为失败并写明原因</td><td>框架单测</td></tr>

@@ -118,6 +118,9 @@ public static class OperationRecordActions
     /// <summary>新建 Webhook 订阅：外部地址从此开始收到所订阅的事件。</summary>
     public const string WebhookSubscriptionCreated = "webhook-subscription.created";
 
+    /// <summary>修改 Webhook 订阅（名称、推送地址、事件类型、请求头）：改地址即改变数据发往哪里。</summary>
+    public const string WebhookSubscriptionUpdated = "webhook-subscription.updated";
+
     /// <summary>删除 Webhook 订阅，连同它的投递记录。</summary>
     public const string WebhookSubscriptionDeleted = "webhook-subscription.deleted";
 

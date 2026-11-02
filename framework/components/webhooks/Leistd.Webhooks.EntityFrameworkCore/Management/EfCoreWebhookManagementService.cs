@@ -157,7 +157,7 @@ internal sealed class EfCoreWebhookManagementService<TDbContext>(
             subscription.Url = url;
             subscription.EventTypes = eventTypes;
             subscription.Headers = headers;
-            return Task.FromResult<WebhookSubscriptionChangeKind?>(null);
+            return Task.FromResult<WebhookSubscriptionChangeKind?>(WebhookSubscriptionChangeKind.Updated);
         }, cancellationToken);
     }
 

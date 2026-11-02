@@ -84,6 +84,7 @@
     "resource.admin-granted": "将 {{target}} 加入管理员角色",
     "resource.admin-restored": "恢复了 {{target}} 的管理员访问",
     "webhook-subscription.created": "创建了 Webhook 订阅 {{target}}",
+    "webhook-subscription.updated": "修改了 Webhook 订阅 {{target}}",
     "webhook-subscription.deleted": "删除了 Webhook 订阅 {{target}}",
     "webhook-subscription.secret-rotated": "轮换了 Webhook 订阅 {{target}} 的密钥",
     "webhook-subscription.enabled": "启用了 Webhook 订阅 {{target}}",

@@ -95,6 +95,8 @@ public static class ComponentEndpoints
             })
             .WithMetadataOn(WebhookEndpoints.CreateSubscriptionName,
                 new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionCreated))
+            .WithMetadataOn(WebhookEndpoints.UpdateSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionUpdated, "id"))
             .WithMetadataOn(WebhookEndpoints.DeleteSubscriptionName,
                 new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionDeleted, "id"))
             .WithMetadataOn(WebhookEndpoints.RotateSecretName,

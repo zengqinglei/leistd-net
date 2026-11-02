@@ -12,7 +12,7 @@
 | 仪表盘要按区间统计投递数与成功率 | `IWebhookDeliveryReader.CountByBucketsAsync`，桶边界按业务时区由调用方算好 |
 | 投递记录要定期清理 | `AddWebhookRetention<TDbContext>()`，默认开启、保留 62 天 |
 | 订阅被停用时要告知管理员 | 处理 `WebhookSubscriptionChangedEvent` 中 `Change` 为 `Disabled` 的事件，按 `DisabledReason` 决定是否通知 |
-| 订阅的增删、启停与轮换要记入审计 | 处理 `WebhookSubscriptionChangedEvent`，提交后分发，回滚的写入不分发 |
+| 订阅的增删改、启停与轮换要记入审计 | 处理 `WebhookSubscriptionChangedEvent`，提交后分发，回滚的写入不分发 |
 | 改用托管投递服务或自定义发送方式 | 替换 `IWebhookSender`，重试、停用与记录仍由组件处理 |
 | 接收方要求保证顺序或恰好一次 | 本组件不提供，见[注意事项](#注意事项) |
 
@@ -157,7 +157,7 @@ public class OrderCancelledWebhookHandler(IWebhookPublisher webhookPublisher) : 
 | `IWebhookSender.SendAsync(request, ct)` | 发一次请求并如实报告 `WebhookSendResult`；网络失败、超时与被拦截的地址不抛异常，只有取消才抛出；实现不自行重试 |
 | `IWebhookManagementService` | 管理用例：事件类型、订阅增删改与启停、密钥轮换、测试事件、投递日志与手动重发；只作用于当前租户，不做权限检查 |
 | `IWebhookDeliveryReader` | 统计读取：`CountByBucketsAsync(edges, subscriptionId?, ct)` 按 UTC 半开桶返回 `WebhookDeliveryCounts`；`GetSnapshotAsync` 返回 `WebhookDeliverySnapshot`（重试中投递数、已停用订阅数）；`GetRetainedSince()` 见[实现行为](#实现行为) |
-| `WebhookSubscriptionChangedEvent` | 订阅创建、轮换密钥、启用、停用、删除后经可选的 `ILocalEventBus` 发布，在工作单元内推迟到提交后分发，失败或回滚不分发；处于订阅所属租户的上下文。带 `SubscriptionId`、`SubscriptionName`（删除时为删除前的名称）、`Change`（`WebhookSubscriptionChangeKind`：`Created`、`SecretRotated`、`Enabled`、`Disabled`、`Deleted`）、`DisabledReason`（仅停用时有值，`WebhookDisabledReason`：`Manual`、`EndpointGone`、`ConsecutiveFailures`）。状态未变的再启用、再停用与更新不发布；410 与连续失败的自动停用同样发布 |
+| `WebhookSubscriptionChangedEvent` | 订阅创建、修改、轮换密钥、启用、停用、删除后经可选的 `ILocalEventBus` 发布，在工作单元内推迟到提交后分发，失败或回滚不分发；处于订阅所属租户的上下文。带 `SubscriptionId`、`SubscriptionName`（删除时为删除前的名称）、`Change`（`WebhookSubscriptionChangeKind`：`Created`、`SecretRotated`、`Enabled`、`Disabled`、`Deleted`、`Updated`）、`DisabledReason`（仅停用时有值，`WebhookDisabledReason`：`Manual`、`EndpointGone`、`ConsecutiveFailures`）。修改成功即发布 `Updated`，不比较前后值；状态未变的再启用、再停用不发布；410 与连续失败的自动停用同样发布 |
 | `WebhookDeliveryStatus` / `WebhookAttemptTrigger` | 投递状态 `Pending`（重试中）、`Succeeded`、`Failed`；尝试来源 `Automatic`、`Manual` |
 | 默认 HTTP 状态 | `WebhookErrorCodes.SubscriptionNotFound`、`DeliveryNotFound` → 404；`SubscriptionDisabled`、`DeliveryNotRetryable` → 409。地址、事件类型等输入不合法走验证错误（400）。由 `AddWebhooks()` 自动登记；宿主 `MapCode` 可覆盖 |
 

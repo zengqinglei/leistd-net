@@ -84,6 +84,7 @@
     "resource.admin-granted": "Added {{target}} to the administrator role",
     "resource.admin-restored": "Restored administrator access for {{target}}",
     "webhook-subscription.created": "Created webhook subscription {{target}}",
+    "webhook-subscription.updated": "Updated webhook subscription {{target}}",
     "webhook-subscription.deleted": "Deleted webhook subscription {{target}}",
     "webhook-subscription.secret-rotated": "Rotated the secret of webhook subscription {{target}}",
     "webhook-subscription.enabled": "Enabled webhook subscription {{target}}",
