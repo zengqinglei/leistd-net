@@ -26,11 +26,22 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
-import { combineLatest, defer, EMPTY, firstValueFrom, interval, of, Subject, tap } from 'rxjs';
+import {
+  combineLatest,
+  defer,
+  EMPTY,
+  firstValueFrom,
+  interval,
+  merge,
+  of,
+  Subject,
+  tap,
+} from 'rxjs';
 import {
   catchError,
   debounceTime,
   distinctUntilChanged,
+  filter,
   finalize,
   map,
   startWith,
@@ -144,6 +155,8 @@ export class Webhooks {
   private readonly searchSubject = new Subject<string>();
   private readonly listRefresh = new Subject<void>();
   private readonly detailRefresh = new Subject<void>();
+  /** 编辑详情请求：打开编辑发 id，打开新建或关闭弹窗发 `null`，新值取消旧请求。 */
+  private readonly editDetailRequests = new Subject<string | null>();
   private readonly statisticsRequests = new Subject<WebhookStatisticsQuery>();
 
   /** 写操作只读 `App.Webhooks.Manage`；前端隐藏只影响体验，后端逐个请求校验。 */
@@ -408,6 +421,37 @@ export class Webhooks {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((delivery) => this.delivery.set(delivery));
+
+    // 编辑详情：切换目标、打开新建或关闭弹窗都取消旧请求，迟到响应不会填进另一订阅或新建表单
+    merge(
+      this.editDetailRequests,
+      toObservable(this.editDialogVisible).pipe(
+        filter((visible) => !visible),
+        map(() => null),
+      ),
+    )
+      .pipe(
+        switchMap((id) => {
+          if (!id) {
+            this.editDialogLoading.set(false);
+            this.editDialogError.set(null);
+            return EMPTY;
+          }
+          return defer(() => {
+            this.editDialogLoading.set(true);
+            this.editDialogError.set(null);
+            return this.service.getSubscription(id).pipe(
+              catchError((error: unknown) => {
+                this.editDialogError.set(applicationErrorMessage(error));
+                return EMPTY;
+              }),
+              finalize(() => this.editDialogLoading.set(false)),
+            );
+          });
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((subscription) => this.selectedSubscription.set(subscription));
   }
 
   // ---- 视图、区间与筛选 ----
@@ -492,32 +536,21 @@ export class Webhooks {
   // ---- 订阅写操作 ----
   openCreateDialog(): void {
     this.editingSubscriptionId.set(null);
-    this.editDialogError.set(null);
     this.selectedSubscription.set(null);
+    this.editDetailRequests.next(null);
     this.editDialogVisible.set(true);
   }
 
   openEditDialog(id: string): void {
     this.editingSubscriptionId.set(id);
-    this.editDialogError.set(null);
     this.selectedSubscription.set(null);
+    this.editDetailRequests.next(id);
     this.editDialogVisible.set(true);
-    this.editDialogLoading.set(true);
-    this.service
-      .getSubscription(id)
-      .pipe(
-        finalize(() => this.editDialogLoading.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (subscription) => this.selectedSubscription.set(subscription),
-        error: (error) => this.editDialogError.set(applicationErrorMessage(error)),
-      });
   }
 
   retrySubscriptionDetail(): void {
     const id = this.editingSubscriptionId();
-    if (id) this.openEditDialog(id);
+    if (id) this.editDetailRequests.next(id);
   }
 
   readonly handleSave = (input: CreateWebhookSubscriptionInputDto) => {

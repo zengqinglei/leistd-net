@@ -4,10 +4,11 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 
 import { Webhooks } from './webhooks';
 import { WebhookStatistics } from './widgets/webhook-statistics/webhook-statistics';
+import { WebhookSubscriptionDialog } from './widgets/webhook-subscription-dialog/webhook-subscription-dialog';
 import { WebhookSubscriptionTable } from './widgets/webhook-subscription-table/webhook-subscription-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -16,7 +17,7 @@ import { AccountPreferencesService } from '../../../../core/services/account-pre
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
-import { WebhookStatisticsOutputDto } from '../../dtos/webhook.dto';
+import { WebhookStatisticsOutputDto, WebhookSubscriptionOutputDto } from '../../dtos/webhook.dto';
 import { WebhookService } from '../../services/webhook-service';
 
 import type { MockedObject } from 'vitest';
@@ -41,6 +42,19 @@ const STATISTICS: WebhookStatisticsOutputDto = {
   disabledSubscriptions: { value: 0 },
 };
 
+function subscription(id: string): WebhookSubscriptionOutputDto {
+  return {
+    id,
+    name: `Name ${id}`,
+    url: `https://example.com/${id}`,
+    eventTypes: ['*'],
+    headers: {},
+    secretPrefix: 'whsec_ab',
+    isEnabled: true,
+    creationTime: '2026-11-01T00:00:00.000Z',
+  };
+}
+
 /** Webhook 页面的 URL 状态闭环：视图、筛选、区间与打开的投递详情都以查询参数为唯一来源。 */
 describe('Webhooks page', () => {
   let fixture: ComponentFixture<Webhooks>;
@@ -56,6 +70,8 @@ describe('Webhooks page', () => {
       getDelivery: vi.fn().mockReturnValue(of(null)),
       getStatistics: vi.fn().mockReturnValue(of(STATISTICS)),
       retryDelivery: vi.fn().mockReturnValue(of({})),
+      getSubscription: vi.fn(),
+      updateSubscription: vi.fn().mockReturnValue(of({})),
     } as unknown as MockedObject<WebhookService>;
 
     await TestBed.configureTestingModule({
@@ -174,6 +190,87 @@ describe('Webhooks page', () => {
     await component.retryDelivery({ id: 'delivery-1', status: 'pending' });
 
     expect(service.retryDelivery).not.toHaveBeenCalled();
+  });
+
+  /** 每个订阅详情一个可控响应：测试决定谁先返回。 */
+  function deferSubscriptionDetails(): Map<string, Subject<WebhookSubscriptionOutputDto>> {
+    const responses = new Map<string, Subject<WebhookSubscriptionOutputDto>>();
+    vi.mocked(service.getSubscription).mockImplementation((id: string) => {
+      const response = new Subject<WebhookSubscriptionOutputDto>();
+      responses.set(id, response);
+      return response;
+    });
+    return responses;
+  }
+
+  /** 像 HttpClient 一样发一次值就完成。 */
+  function respond(
+    responses: Map<string, Subject<WebhookSubscriptionOutputDto>>,
+    id: string,
+  ): void {
+    const response = responses.get(id)!;
+    response.next(subscription(id));
+    response.complete();
+  }
+
+  async function settle(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function dialog(): WebhookSubscriptionDialog {
+    return fixture.debugElement.query(By.directive(WebhookSubscriptionDialog))
+      .componentInstance as WebhookSubscriptionDialog;
+  }
+
+  it('ignores a late detail of the previous subscription after editing another one', async () => {
+    await setup(manage);
+    const responses = deferSubscriptionDetails();
+
+    component.openEditDialog('subscription-A');
+    await settle();
+    component.editDialogVisible.set(false);
+    await settle();
+    component.openEditDialog('subscription-B');
+    await settle();
+
+    respond(responses, 'subscription-B');
+    await settle();
+    respond(responses, 'subscription-A');
+    await settle();
+
+    expect(component.selectedSubscription()?.id).toBe('subscription-B');
+    expect(component.editDialogLoading()).toBe(false);
+    expect(dialog().subscriptionForm.name().value()).toBe('Name subscription-B');
+    expect(dialog().subscriptionForm.url().value()).toBe('https://example.com/subscription-B');
+
+    const input = { name: 'Renamed', url: 'https://example.com/new', eventTypes: ['*'] };
+    const save: Observable<unknown> = component.handleSave(input);
+    save.subscribe();
+    expect(service.updateSubscription).toHaveBeenCalledWith('subscription-B', input);
+  });
+
+  it('does not fill the create form with a late detail of a closed edit', async () => {
+    await setup(manage);
+    const responses = deferSubscriptionDetails();
+
+    component.openEditDialog('subscription-A');
+    await settle();
+    component.editDialogVisible.set(false);
+    await settle();
+    component.openCreateDialog();
+    await settle();
+
+    expect(component.editDialogLoading()).toBe(false);
+    respond(responses, 'subscription-A');
+    await settle();
+
+    expect(component.editingSubscriptionId()).toBeNull();
+    expect(component.selectedSubscription()).toBeNull();
+    expect(dialog().isEditMode()).toBe(false);
+    expect(dialog().subscriptionForm.name().value()).toBe('');
+    expect(dialog().subscriptionForm.url().value()).toBe('');
   });
 
   it('renders no write entry points with the read permission only', async () => {

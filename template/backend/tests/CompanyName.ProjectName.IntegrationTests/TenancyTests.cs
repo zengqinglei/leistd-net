@@ -33,6 +33,9 @@ using Leistd.MultiTenancy.Management.Provisioning;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore.Entities;
 #endif
+#if (IncludeWebhooks)
+using Leistd.Webhooks.EntityFrameworkCore.Entities;
+#endif
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Context;
@@ -1064,7 +1067,12 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 nameof(User),
                 nameof(UserPasskey),
                 nameof(UserRole),
-                nameof(UserSession)
+                nameof(UserSession),
+#if (IncludeWebhooks)
+                nameof(WebhookDelivery),
+                nameof(WebhookEvent),
+                nameof(WebhookSubscription),
+#endif
             },
             multiTenantEntities);
 

@@ -140,7 +140,9 @@
       "tenants": "Tenant management",
       "groupDeveloper": "Developer",
       "openApplications": "Open applications",
+      //#if (IncludeWebhooks)
       "webhooks": "Webhooks",
+      //#endif
       "systemSettings": "System settings",
       "operationRecords": "Operation records",
       "groupIdentity": "Identity & access",

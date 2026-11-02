@@ -431,6 +431,25 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
+    # ForbiddenFileTokens：指定文件不得含指定片段，是 RequiredTokens 的反向。ForbiddenTokens 只扫源码目录的 .cs/.ts，
+    # 词条 JSON 这类文件按路径点名；文件必须存在，否则"没找到片段"什么也证明不了
+    if ($Definition.ForbiddenFileTokens) {
+        foreach ($entry in $Definition.ForbiddenFileTokens.GetEnumerator()) {
+            $relativePath = $entry.Key.Replace("{name}", $ProjectName)
+            $filePath = Join-Path $ProjectRoot $relativePath
+            if (-not (Test-Path -LiteralPath $filePath)) {
+                throw "Scenario '$($Definition.Name)' is missing file for forbidden-token check: $relativePath"
+            }
+
+            $content = Get-Content -LiteralPath $filePath -Raw -Encoding UTF8
+            foreach ($token in @($entry.Value | ForEach-Object { $_.Replace("{name}", $ProjectName) })) {
+                if ($content -and $content.Contains($token)) {
+                    throw "Scenario '$($Definition.Name)' file $relativePath leaks trimmed token '$token'"
+                }
+            }
+        }
+    }
+
     if ($Definition.ForbiddenTokens) {
         $sourceRoots = @("backend/src", "frontend/src", "frontend/_mock") |
             ForEach-Object { Join-Path $ProjectRoot $_ } |

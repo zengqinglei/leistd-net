@@ -123,7 +123,7 @@ export const next = 1;
 
 Standalone 场景专门检验条件独立性：`identity` 与 `resource` 里 `LocalIdentity` 和 `OpenIddictServer` 恰好同真同假，只有 Standalone 形态把两者分开（`core` 档由 `standalone-external-login` 承担）。新增能力时不得只验证 `identity` 和 `resource`。
 
-场景断言分两类，缺一不可：`Present`/`Absent` 与 `RequiredTokens` 证明"留下的是对的那一份"，`ForbiddenTokens` 证明"不该留的没留下"。只查缺失会漏掉"两份都在"的情形。
+场景断言分两类，缺一不可：`Present`/`Absent` 与 `RequiredTokens` 证明"留下的是对的那一份"，`ForbiddenTokens` 证明"不该留的没留下"。只查缺失会漏掉"两份都在"的情形。`ForbiddenTokens` 只扫 `backend/src`、`frontend/src`、`frontend/_mock` 的 `.cs`/`.ts`；词条 JSON 等其他文件的残留用 `ForbiddenFileTokens` 按路径点名（文件必须存在，否则检查无从证明）。
 
 `ForbiddenTokens` **不得为了让场景通过而放宽**——它抓到的每一次都是真残留。若某个词在注释里合法出现，改注释措辞，不改断言。
 

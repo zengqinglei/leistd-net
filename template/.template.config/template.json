@@ -420,6 +420,9 @@
           "condition": "!LocalIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Webhooks/Provider/WebhookDefinitionProvider.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/UserCreatedWebhookTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/WebhookManagementEndpointTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/WebhookSubscriptionAuditTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AccountPreferencesTests.cs",
             "docs/operations/runbooks/two-factor-reset.md",
             "frontend/src/app/features/settings/components/setting-section/widgets/email-test/**",

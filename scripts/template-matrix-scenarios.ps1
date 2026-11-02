@@ -174,6 +174,13 @@ $scenarioMap = [ordered]@{
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # Webhook 关闭 + 本地化开启：菜单与操作记录词条随 IncludeWebhooks 裁掉（webhooks 场景断言其存在）
+        ForbiddenFileTokens = @{
+            "frontend/public/i18n/en.json" = @("Webhook", "webhook")
+            "frontend/public/i18n/zh-CN.json" = @("Webhook", "webhook")
+            "frontend/public/i18n/operationRecords/en.json" = @("Webhook", "webhook")
+            "frontend/public/i18n/operationRecords/zh-CN.json" = @("Webhook", "webhook")
+        }
     }
     "resource-localization" = @{
         Slices = @{ full = "full-03" }
@@ -306,6 +313,21 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.Webhooks.EntityFrameworkCore")
             "backend/src/{name}.Api/{name}.Api.csproj" = @("Leistd.Webhooks.AspNetCore")
             "docs/README.md" = @("standards/webhooks.md")
+            # 菜单与操作记录词条随 IncludeWebhooks 保留（identity-all-features 断言关闭时裁掉）
+            "frontend/public/i18n/en.json" = @('"webhooks": "Webhooks"')
+            "frontend/public/i18n/zh-CN.json" = @('"webhooks": "Webhook"')
+            "frontend/public/i18n/operationRecords/en.json" = @(
+                '"webhook-subscription.created": "Created webhook subscription {{target}}"',
+                '"webhook-subscription.updated"', '"webhook-subscription.deleted"', '"webhook-subscription.secret-rotated"',
+                '"webhook-subscription.enabled"', '"webhook-subscription.disabled"',
+                '"webhook-subscription.created": "Created a webhook subscription"'
+            )
+            "frontend/public/i18n/operationRecords/zh-CN.json" = @(
+                '"webhook-subscription.created": "创建了 Webhook 订阅 {{target}}"',
+                '"webhook-subscription.updated"', '"webhook-subscription.deleted"', '"webhook-subscription.secret-rotated"',
+                '"webhook-subscription.enabled"', '"webhook-subscription.disabled"',
+                '"webhook-subscription.created": "创建 Webhook 订阅"'
+            )
         }
     }
     # 纯 API Resource：本地用户是投影，不声明示例事件，只有内置 webhook.test；迁移在 Resource 一侧。

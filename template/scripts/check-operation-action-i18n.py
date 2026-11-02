@@ -12,8 +12,11 @@
   2. 每个动作码在 `en.json` 与 `zh-CN.json` 的 `operationRecords/{lang}.json` 的 `actions` 下都必须有非空词条。
 
 **刻意只做单向校验，不报"多余词条"。** 词条文件里允许存在本项目暂时用不到的键：
-前端词条是 JSON，没有条件编译，某个功能没启用时它对应的组件不在了、键却还留着。
+多数句子不随功能裁剪，某个功能没启用时它对应的组件不在了、键却还留着。
 反向校验会把这些既有键一并判红，而它们并不是缺陷。
+
+词条源码可用模板条件指令包住可选键（与 `check-i18n.py` 同一规则）：模板源码里去掉指令行后
+两个分支的键同时存在，生成项目里已是严格 JSON；普通 JSON 注释与非法内容仍然失败。
 
 自测：`python3 scripts/check-operation-action-i18n.py --self-test`
 """
@@ -91,9 +94,13 @@ def extract_action_codes(text):
     return [m.group('value') for m in CONST_RE.finditer(match.group('body'))]
 
 
+# 只认独占一行的模板条件指令；写成正则而不是字面记号，免得本文件随模板经过生成引擎时被当成真指令。
+TEMPLATE_DIRECTIVE_RE = re.compile(r'(?m)^[ \t]*//[ \t]*#(?:if|elif|else|endif)\b[^\n]*(?:\n|$)')
+
+
 def read_action_entries(path):
     with open(path, encoding='utf-8') as handle:
-        data = json.load(handle)
+        data = json.loads(TEMPLATE_DIRECTIVE_RE.sub('', handle.read()))
     node = data.get('actions', {})
     return node if isinstance(node, dict) else {}
 
@@ -237,6 +244,29 @@ def self_test():
         if len(check(source, i18n, ('en',))) != 1:
             failures.append('空白词条应被判为缺失')
 
+        # 模板源码里的条件指令行：去掉后照常解析；普通注释仍是非法 JSON。
+        # 记号拼出来，免得本文件经过生成引擎时被当成真指令。
+        directive_if, directive_endif = ('//' + '#' + word for word in ('if', 'endif'))
+
+        def write_raw(locale, text):
+            with open(os.path.join(i18n, 'operationRecords', f'{locale}.json'), 'w', encoding='utf-8') as handle:
+                handle.write(text)
+
+        write_raw('en', '{\n  "actions": {\n'
+                        f'    {directive_if} (Feature)\n'
+                        '    "role.deleted": "Deleted role {{target}}",\n'
+                        f'    {directive_endif}\n'
+                        '    "user.created": "Created user {{target}}"\n  }\n}\n')
+        if check(source, i18n, ('en',)):
+            failures.append('条件指令行包住的词条应能解析并计入')
+
+        write_raw('en', '{\n  "actions": {\n'
+                        '    // not a template directive\n'
+                        '    "role.deleted": "Deleted role {{target}}",\n'
+                        '    "user.created": "Created user {{target}}"\n  }\n}\n')
+        if not any('不是合法 JSON' in problem for problem in check(source, i18n, ('en',))):
+            failures.append('普通 JSON 注释必须仍判为非法 JSON')
+
         write('en', {
             'user.created': 'Created user {{target}}',
             'role.deleted': 'Deleted role {{target}}',
@@ -292,7 +322,7 @@ def self_test():
             print(f'  - {failure}')
         return 1
 
-    print('✅ 规则自检通过（10 例）。')
+    print('✅ 规则自检通过（12 例）。')
     return 0
 
 
