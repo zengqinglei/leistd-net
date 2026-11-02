@@ -90,6 +90,7 @@
     <PackageReference Include="Leistd.ServiceClient.OAuth" />
     <PackageReference Include="Leistd.ServiceClient.Refit" />
 <!--#endif-->
+<PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
   </ItemGroup>
 
 </Project>

@@ -53,6 +53,7 @@
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
     <PackageReference Include="Leistd.UnitOfWork.Core" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>
