@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、69 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **27 个能力分组、72 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
@@ -32,10 +32,11 @@
 | 身份与会话安全 | 主体访问、请求信息、Cookie 票据、浏览器来源防护、一次码和可选 OpenIddict 集成。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore`、`Leistd.Security.OneTimeCodes`、`Leistd.Security.OpenIddict.Validation`、`Leistd.Security.OpenIddict.Server` | [`security`](./security.md) |
 | 关联标识 | 业务关联标识：默认等于 `Activity` 的 TraceId，可由调用方或入口显式指定；写入日志作用域，在 ASP.NET Core 入站、HttpClient 出站与后台任务之间传递。 | `Leistd.Tracing.Core`、`Leistd.Tracing.AspNetCore`、`Leistd.Tracing.HttpClient` | [`tracing`](./tracing.md) |
 | 工作单元与事务 | 用 [UnitOfWork] 特性与 AOP 拦截器声明式管理数据库事务边界，并按提交阶段编排领域事件发布。 | `Leistd.UnitOfWork.Core`、`Leistd.UnitOfWork.EntityFrameworkCore` | [`unit-of-work`](./unit-of-work.md) |
+| 出站 Webhook | 把业务事件推送到外部系统登记的地址：随业务事务写库、提交后签名发送、失败持久重试；自带订阅与投递日志管理端点、投递统计与保留期 | `Leistd.Webhooks.Core`、`Leistd.Webhooks.EntityFrameworkCore`、`Leistd.Webhooks.AspNetCore` | [`webhooks`](./webhooks.md) |
 
 ## 定制组件行为
 
-带端点的组件（设置、权限、多租户、操作记录、通知）按"契约与用例 / 存储 / `Map*` 端点"分包。需要偏离默认行为时，从上往下选第一个够用的层级：
+带端点的组件（设置、权限、多租户、操作记录、通知、出站 Webhook）按"契约与用例 / 存储 / `Map*` 端点"分包。需要偏离默认行为时，从上往下选第一个够用的层级：
 
 | 层级 | 做法 | 适用 |
 | --- | --- | --- |
@@ -55,6 +56,6 @@
 | --- | --- | --- |
 | 基础原语 | `aop`、`core`、`data`、`event-bus`、`exception-handling`、`localization`、`lock`、`object-mapping` | 不引用其他分组 |
 | 运行时基座 | `dependency-injection`、`security`、`tracing`、`email`、`response`、`unit-of-work`、`service-client`、`aspnetcore-signalr`、`auditing`、`realtime`、`background-jobs` | 只引用基础原语和本层分组 |
-| 带存储与端点的组件 | `multi-tenancy`、`authorization`、`authorization-resource`、`authorization-data-scope`、`settings`、`operation-records`、`notifications` | 可引用以上各层和本层分组 |
+| 带存储与端点的组件 | `multi-tenancy`、`authorization`、`authorization-resource`、`authorization-data-scope`、`settings`、`operation-records`、`notifications`、`webhooks` | 可引用以上各层和本层分组 |
 
 具体某个包引用了哪些分组，查看该包的 csproj 或 NuGet 依赖。组件不依赖 `ddd-struct`，方向是 `Leistd.Ddd.*` 引用组件包。
