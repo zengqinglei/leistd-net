@@ -9,6 +9,7 @@ using Leistd.Webhooks.AspNetCore.Endpoints;
 using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.Errors;
 using Leistd.Webhooks.Management;
+using Leistd.Webhooks.Stores;
 using Leistd.Webhooks.Tests.TestDoubles;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -50,6 +51,8 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
                     // 每个请求一个后端作用域，管理用例取自装好 EF 存储的测试宿主
                     services.AddScoped(_ => new BackendScope(_backend.Services.CreateAsyncScope()));
                     services.AddScoped(sp => sp.GetRequiredService<BackendScope>().Scope.ServiceProvider.GetRequiredService<IWebhookManagementService>());
+                    // 存储也取自后端：映射时据此确认存储已注册
+                    services.AddScoped(sp => sp.GetRequiredService<BackendScope>().Scope.ServiceProvider.GetRequiredService<IWebhookManagementStore>());
                     services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, PermissionHandler>("Test", _ => { });
                     services.AddAuthorizationBuilder()
                         .AddPolicy(ReadPolicy, policy => policy.RequireClaim("permission", "read", "manage"))
@@ -104,6 +107,24 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
     {
         await using var app = WebApplication.CreateBuilder().Build();
 
+        var error = Assert.Throws<InvalidOperationException>(() => app.MapWebhooks(options =>
+        {
+            options.ReadPolicy = ReadPolicy;
+            options.ManagePolicy = ManagePolicy;
+        }));
+
+        Assert.Contains("AddWebhooksEfCore", error.Message);
+    }
+
+    /// <summary>管理用例随 Core 注册，但读写要经存储：只调了 AddWebhooks 时用例已在容器里，映射仍因缺存储而抛出。</summary>
+    [Fact]
+    public async Task Mapping_with_only_the_core_registration_fails()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddWebhooks();
+        await using var app = builder.Build();
+
+        Assert.True(app.Services.GetRequiredService<IServiceProviderIsService>().IsService(typeof(IWebhookManagementService)));
         var error = Assert.Throws<InvalidOperationException>(() => app.MapWebhooks(options =>
         {
             options.ReadPolicy = ReadPolicy;

@@ -1,3 +1,4 @@
+using Leistd.EventBus.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
@@ -5,8 +6,10 @@ using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.EntityFrameworkCore.Entities;
 using Leistd.Webhooks.EntityFrameworkCore.EntityConfigurations;
 using Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
+using Leistd.Webhooks.Events;
 using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Options;
+using Leistd.Webhooks.Signing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,6 +18,7 @@ namespace Leistd.Webhooks.EntityFrameworkCore.Dispatching;
 
 // 规格"投递链路"第 4、5 步，立即投递与兜底扫描共用：在投递所属租户的上下文里处理一条投递。
 // 读取与写回各用一个独立工作单元，HTTP 请求夹在两者之间发出，不在请求期间占着事务与连接。
+// 自动停用的事件经可选的事件总线发布，在写回的工作单元内推迟到提交后分发。
 internal sealed class WebhookDeliveryProcessor<TDbContext>(
     ICurrentTenant currentTenant,
     IUnitOfWorkManager unitOfWorkManager,
@@ -25,7 +29,8 @@ internal sealed class WebhookDeliveryProcessor<TDbContext>(
     WebhookSubscriptionDeactivator<TDbContext> deactivator,
     IOptionsMonitor<WebhookOptions> options,
     TimeProvider timeProvider,
-    ILogger<WebhookDeliveryProcessor<TDbContext>> logger)
+    ILogger<WebhookDeliveryProcessor<TDbContext>> logger,
+    ILocalEventBus? localEventBus = null)
     where TDbContext : DbContext
 {
     // expectedAttemptCount：队列项入队时的尝试次数，与当前不符说明扫描已经处理过，跳过；扫描传 null。
@@ -89,7 +94,12 @@ internal sealed class WebhookDeliveryProcessor<TDbContext>(
         IReadOnlyList<string> secrets;
         try
         {
-            secrets = secretProtector.GetSigningSecrets(subscription, timeProvider.GetUtcNow().UtcDateTime);
+            secrets = secretProtector.GetSigningSecrets(
+                subscription.Id,
+                subscription.Secret,
+                subscription.PreviousSecret,
+                subscription.PreviousSecretExpiresAt,
+                timeProvider.GetUtcNow().UtcDateTime);
         }
         catch (InvalidOperationException exception)
         {
@@ -191,13 +201,18 @@ internal sealed class WebhookDeliveryProcessor<TDbContext>(
         }
 
         subscription.FirstFailureAt ??= now;
-        if (outcome.DisablesSubscription)
+        WebhookDisabledReason? reason = outcome.DisablesSubscription
+            ? WebhookDisabledReason.EndpointGone
+            : now - subscription.FirstFailureAt.Value > options.CurrentValue.AutoDisableAfter
+                ? WebhookDisabledReason.ConsecutiveFailures
+                : null;
+        if (reason is { } disabledReason
+            && await deactivator.DisableAsync(subscription, disabledReason, cancellationToken)
+            && localEventBus is not null)
         {
-            await deactivator.DisableAsync(subscription, WebhookDisabledReason.EndpointGone, cancellationToken);
-        }
-        else if (now - subscription.FirstFailureAt.Value > options.CurrentValue.AutoDisableAfter)
-        {
-            await deactivator.DisableAsync(subscription, WebhookDisabledReason.ConsecutiveFailures, cancellationToken);
+            await localEventBus.PublishAsync(
+                new WebhookSubscriptionChangedEvent(subscription.Id, subscription.Name, WebhookSubscriptionChangeKind.Disabled, disabledReason),
+                cancellationToken);
         }
     }
 

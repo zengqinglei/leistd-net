@@ -1,28 +1,25 @@
-using Leistd.EventBus.Abstractions;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.EntityFrameworkCore.Entities;
-using Leistd.Webhooks.Events;
 using Leistd.Webhooks.Management;
-using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
 
-// 规格"停用的作用"：停用与终结待投递在调用方的同一工作单元里保存；停用事件经可选的事件总线发布，
-// 在工作单元内由事件总线推迟到提交后分发。已发出的请求不取消。
+// 规格"停用的作用"的存储部分：停用与终结待投递在调用方的同一工作单元里保存。已发出的请求不取消。
+// 停用事件由调用方发布（管理用例、投递处理），本类只改数据。
 internal sealed class WebhookSubscriptionDeactivator<TDbContext>(
     IDbContextProvider<TDbContext> dbContextProvider,
-    TimeProvider timeProvider,
-    ILocalEventBus? localEventBus = null)
+    TimeProvider timeProvider)
     where TDbContext : DbContext
 {
-    // subscription 须由当前工作单元的上下文跟踪；已停用时不重复停用、不重发事件。
-    public async Task DisableAsync(WebhookSubscription subscription, WebhookDisabledReason reason, CancellationToken cancellationToken)
+    // subscription 须由当前工作单元的上下文跟踪；已停用时不重复停用，返回 false。
+    public async Task<bool> DisableAsync(WebhookSubscription subscription, WebhookDisabledReason reason, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(subscription);
         if (!subscription.IsEnabled)
         {
-            return;
+            return false;
         }
 
         subscription.IsEnabled = false;
@@ -40,12 +37,7 @@ internal sealed class WebhookSubscriptionDeactivator<TDbContext>(
             Terminate(delivery, DescribeDisabled(reason));
         }
 
-        if (localEventBus is not null)
-        {
-            await localEventBus.PublishAsync(
-                new WebhookSubscriptionChangedEvent(subscription.Id, subscription.Name, WebhookSubscriptionChangeKind.Disabled, reason),
-                cancellationToken);
-        }
+        return true;
     }
 
     // 把一条待投递记录终结为失败：清空排期，写明原因。

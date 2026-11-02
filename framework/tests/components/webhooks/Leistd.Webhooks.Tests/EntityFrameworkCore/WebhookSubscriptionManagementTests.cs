@@ -5,8 +5,8 @@ using Leistd.Webhooks.Definitions;
 using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.Dtos;
 using Leistd.Webhooks.EntityFrameworkCore.Entities;
-using Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
 using Leistd.Webhooks.Errors;
+using Leistd.Webhooks.Signing;
 using Leistd.Webhooks.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,7 +51,8 @@ public sealed class WebhookSubscriptionManagementTests : IAsyncLifetime
         var stored = await _host.SubscriptionAsync(id);
         Assert.Equal(
             [rotated.Secret, created.Secret],
-            _host.Services.GetRequiredService<WebhookSecretProtector>().GetSigningSecrets(stored, _host.Now));
+            _host.Services.GetRequiredService<WebhookSecretProtector>().GetSigningSecrets(
+                stored.Id, stored.Secret, stored.PreviousSecret, stored.PreviousSecretExpiresAt, _host.Now));
     }
 
     /// <summary>不合法的入参在任何写入之前以字段校验失败拒绝。</summary>

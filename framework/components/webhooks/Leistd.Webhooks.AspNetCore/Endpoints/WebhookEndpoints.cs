@@ -4,6 +4,7 @@ using Leistd.Data.Paging;
 using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.Dtos;
 using Leistd.Webhooks.Management;
+using Leistd.Webhooks.Stores;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -70,7 +71,8 @@ public static class WebhookEndpoints
     /// <c>pending</c>、<c>succeeded</c>、<c>failed</c>，其他值是字段 <c>status</c> 的验证错误。
     /// 启用可带 <c>retryFailed=true</c>，重发该订阅现存的全部失败投递。</para>
     /// <para>删除返回 204，其余写端点返回改后的订阅或投递；创建与轮换的结果含一次性明文密钥。</para>
-    /// <para>要求已注册 <see cref="IWebhookManagementService"/>（由存储适配注册），否则映射时抛出。</para>
+    /// <para>管理用例由 <c>AddWebhooks()</c> 注册，读写经存储适配（如 <c>AddWebhooksEfCore&lt;TDbContext&gt;()</c>）；
+    /// 未注册存储时映射即抛出。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -95,9 +97,9 @@ public static class WebhookEndpoints
         configure(options);
         options.Validate();
 
-        // 管理用例由存储适配注册；映射时报出，而不是等第一次请求才 500。
+        // 管理用例在 Core，读写经存储适配；没有存储时映射即报出，而不是等第一次请求才 500。
         var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
-        if (probe is not null && !probe.IsService(typeof(IWebhookManagementService)))
+        if (probe is not null && !probe.IsService(typeof(IWebhookManagementStore)))
         {
             throw new InvalidOperationException(
                 "MapWebhooks requires a webhook store. Register one (e.g. AddWebhooksEfCore<TDbContext>()) before mapping the endpoints.");

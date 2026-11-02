@@ -1,7 +1,9 @@
 using Leistd.TestBase.Assertions;
 using Leistd.Webhooks.Delivery;
+using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Options;
 using Leistd.Webhooks.Signing;
+using Leistd.Webhooks.Stores;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -9,7 +11,7 @@ using Xunit;
 
 namespace Leistd.Webhooks.Tests;
 
-/// <summary><c>AddWebhooks</c> 的注册面：发送器、签名、结果分类与命名客户端。</summary>
+/// <summary><c>AddWebhooks</c> 的注册面：发送器、签名、结果分类、管理用例与命名客户端。</summary>
 public sealed class WebhookRegistrationTests
 {
     [Fact]
@@ -22,6 +24,18 @@ public sealed class WebhookRegistrationTests
         services.AssertSingle<WebhookSigner>(ServiceLifetime.Singleton);
         services.AssertSingle<WebhookAttemptClassifier>(ServiceLifetime.Singleton);
         services.AssertSingle<WebhookNetworkGuard>(ServiceLifetime.Singleton);
+    }
+
+    /// <summary>管理用例与密钥保护属于 Core：不装存储也已注册，存储由适配包另行提供。</summary>
+    [Fact]
+    public void AddWebhooks_registers_the_management_use_cases()
+    {
+        var services = new ServiceCollection().AddWebhooks();
+
+        services.AssertSingle<IWebhookManagementService>(ServiceLifetime.Transient);
+        services.AssertImplementedBy<IWebhookManagementService, WebhookManagementService>();
+        services.AssertSingle<WebhookSecretProtector>(ServiceLifetime.Singleton);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWebhookManagementStore));
     }
 
     [Fact]

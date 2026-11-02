@@ -4,6 +4,7 @@ using Leistd.Webhooks.EntityFrameworkCore.Entities;
 using Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
 using Leistd.Webhooks.Events;
 using Leistd.Webhooks.Management;
+using Leistd.Webhooks.Signing;
 using Leistd.Webhooks.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,7 +108,7 @@ public sealed class WebhookDeliveryOutcomeTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A4b：经停用服务手动停用时，同一事务把该订阅的待投递全部终结并发停用事件；别的订阅的待投递不受影响。
+    /// A4b：经管理用例手动停用时，同一事务把该订阅的待投递全部终结并发停用事件；别的订阅的待投递不受影响。
     /// 这类从未发出请求的投递保持失败、可被之后的重新启用选中重发。
     /// </summary>
     [Fact]
@@ -117,12 +118,7 @@ public sealed class WebhookDeliveryOutcomeTests : IAsyncLifetime
         var (other, _) = await _host.AddSubscriptionAsync(null);
         await _host.PublishAsync(null);
 
-        await _host.InTenantAsync(null, async (provider, db) =>
-        {
-            var tracked = await db.Set<WebhookSubscription>().SingleAsync(x => x.Id == target.Id);
-            await provider.GetRequiredService<WebhookSubscriptionDeactivator<WebhookTestDbContext>>()
-                .DisableAsync(tracked, WebhookDisabledReason.Manual, CancellationToken.None);
-        });
+        await _host.ManageAsync(null, service => service.DisableSubscriptionAsync(target.Id));
 
         // 停用的同一事务里已终结，不靠之后的发送入口兜底
         var terminated = (await _host.DeliveriesAsync()).Single(x => x.SubscriptionId == target.Id);

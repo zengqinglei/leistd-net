@@ -1,9 +1,7 @@
 using System.Security.Cryptography;
-using Leistd.Webhooks.EntityFrameworkCore.Entities;
-using Leistd.Webhooks.Signing;
 using Microsoft.AspNetCore.DataProtection;
 
-namespace Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
+namespace Leistd.Webhooks.Signing;
 
 // 签名密钥以宿主 Data Protection 加密存储；本组件不管理密钥环。
 // 用途字符串固定：改动会让所有已存密文不可解密。
@@ -26,7 +24,7 @@ internal sealed class WebhookSecretProtector(IDataProtectionProvider provider, W
         return _protector.Protect(secret);
     }
 
-    public string Unprotect(WebhookSubscription subscription, string protectedSecret)
+    public string Unprotect(Guid subscriptionId, string protectedSecret)
     {
         try
         {
@@ -36,7 +34,7 @@ internal sealed class WebhookSecretProtector(IDataProtectionProvider provider, W
         {
             // 密钥环丢失、未在副本间共享或密文被篡改；拒绝而不是发出签不对的请求。消息不带密文
             throw new InvalidOperationException(
-                $"The signing secret of webhook subscription '{subscription.Id}' could not be decrypted with the current "
+                $"The signing secret of webhook subscription '{subscriptionId}' could not be decrypted with the current "
                 + "Data Protection key ring. Check that this process shares the key ring and application name "
                 + "of the process that wrote it.",
                 exception);
@@ -44,11 +42,16 @@ internal sealed class WebhookSecretProtector(IDataProtectionProvider provider, W
     }
 
     // 本次签名用的明文密钥：当前密钥在前；轮换过渡期内（截止时刻之前）带上旧密钥。
-    public IReadOnlyList<string> GetSigningSecrets(WebhookSubscription subscription, DateTime now)
+    public IReadOnlyList<string> GetSigningSecrets(
+        Guid subscriptionId,
+        string protectedSecret,
+        string? protectedPreviousSecret,
+        DateTime? previousSecretExpiresAt,
+        DateTime now)
     {
-        var current = Unprotect(subscription, subscription.Secret);
-        return subscription is { PreviousSecret: { } previous, PreviousSecretExpiresAt: { } expiresAt } && now < expiresAt
-            ? [current, Unprotect(subscription, previous)]
+        var current = Unprotect(subscriptionId, protectedSecret);
+        return protectedPreviousSecret is { } previous && previousSecretExpiresAt is { } expiresAt && now < expiresAt
+            ? [current, Unprotect(subscriptionId, previous)]
             : [current];
     }
 }

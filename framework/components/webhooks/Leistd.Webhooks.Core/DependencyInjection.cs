@@ -4,6 +4,7 @@ using Leistd.Webhooks.Definitions;
 using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.Errors;
 using Leistd.Webhooks.ExceptionMappings;
+using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Options;
 using Leistd.Webhooks.Signing;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,10 +17,11 @@ namespace Leistd.Webhooks;
 public static class DependencyInjection
 {
     /// <summary>注册 webhook 核心能力：绑定并在启动期校验 <see cref="WebhookOptions"/>，登记事件类型定义、默认 HTTP 发送器
-    /// （<see cref="IWebhookSender"/>）、错误码的默认译文与默认 HTTP 状态。</summary>
+    /// （<see cref="IWebhookSender"/>）、管理用例（<see cref="IWebhookManagementService"/>）、错误码的默认译文与默认 HTTP 状态。</summary>
     /// <remarks>
-    /// <para>还需要存储（<c>AddWebhooksEfCore&lt;TDbContext&gt;()</c>，内部已调用本方法），以及宿主的
-    /// <c>AddUnitOfWork()</c>；事件类型经 <c>AddSingleton&lt;IWebhookDefinitionProvider, XxxProvider&gt;()</c> 登记。</para>
+    /// <para>还需要存储（<c>AddWebhooksEfCore&lt;TDbContext&gt;()</c>，内部已调用本方法；管理用例经它读写，<c>MapWebhooks</c> 映射时检查），
+    /// 以及宿主的 <c>AddUnitOfWork()</c> 与 <c>AddDataProtection()</c>（签名密钥加密存储）；事件类型经
+    /// <c>AddSingleton&lt;IWebhookDefinitionProvider, XxxProvider&gt;()</c> 登记。</para>
     /// <para>校验消息以实际配置节的键开头。可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
     /// 重复调用换用另一配置节时抛出 <see cref="InvalidOperationException"/>。</para>
     /// <para>默认发送器经命名客户端 <c>Leistd.Webhooks</c> 发出请求，以 TryAdd 登记，宿主先注册或之后 Replace 自己的
@@ -68,6 +70,8 @@ public static class DependencyInjection
         services.TryAddSingleton(provider => new WebhookNetworkGuard(
             provider.GetRequiredService<IOptionsMonitor<WebhookOptions>>(), configSectionPath));
         services.TryAddTransient<IWebhookSender, WebhookHttpSender>();
+        services.TryAddSingleton<WebhookSecretProtector>();
+        services.TryAddTransient<IWebhookManagementService, WebhookManagementService>();
 
         // 命名客户端的配置是追加式的，只在首次调用时登记一遍
         if (registered is null)

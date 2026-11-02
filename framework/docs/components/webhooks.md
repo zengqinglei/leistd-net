@@ -146,16 +146,16 @@ public class OrderCancelledWebhookHandler(IWebhookPublisher webhookPublisher) : 
 
 | 类型 / 成员 | 说明 |
 | --- | --- |
-| `AddWebhooks(configure?, configSectionPath?)` | Core：绑定并在启动期校验 `WebhookOptions`，登记事件类型索引、默认发送器、错误码译文与默认 HTTP 状态；可重复调用，换用另一配置节时抛出 |
-| `AddWebhooksEfCore<TDbContext>()` | EF：注册发布器、立即投递、统计读取，登记集群周期任务 `webhooks.dispatch`；宿主未调用 `AddWebhooks()` 时代为调用 |
+| `AddWebhooks(configure?, configSectionPath?)` | Core：绑定并在启动期校验 `WebhookOptions`，登记事件类型索引、默认发送器、管理用例（`IWebhookManagementService`）、错误码译文与默认 HTTP 状态；可重复调用，换用另一配置节时抛出 |
+| `AddWebhooksEfCore<TDbContext>()` | EF：注册发布器、立即投递、统计读取与管理用例读写的存储，登记集群周期任务 `webhooks.dispatch`；宿主未调用 `AddWebhooks()` 时代为调用 |
 | `AddWebhookRetention<TDbContext>(configure?, configSectionPath?)` | EF：启用保留期，登记集群周期任务 `webhooks.retention`；绑定 `Leistd:Webhooks:Retention` |
 | `ModelBuilder.ConfigureWebhooks()` | 映射四张表，表名沿用 EF Core 默认约定 |
-| `MapWebhooks(configure)` | AspNetCore：映射管理端点（下表），返回路由组；`WebhookEndpointOptions.ReadPolicy`、`ManagePolicy` 必填；端点名常量见 `WebhookEndpoints`（如 `CreateSubscriptionName`、`RotateSecretName`），宿主按名字给个别端点追加元数据，均以 `NamePrefix` 开头 |
+| `MapWebhooks(configure)` | AspNetCore：映射管理端点（下表），返回路由组；`WebhookEndpointOptions.ReadPolicy`、`ManagePolicy` 必填，未注册存储（`AddWebhooksEfCore`）时映射即抛出；端点名常量见 `WebhookEndpoints`（如 `CreateSubscriptionName`、`RotateSecretName`），宿主按名字给个别端点追加元数据，均以 `NamePrefix` 开头 |
 | `IWebhookDefinitionProvider.Define(context)` | 经 `IWebhookDefinitionContext.Add(name, group, description?)` 登记事件类型；类型名全局唯一，重复登记在启动期抛出 |
 | `IWebhookDefinitionManager` | 已登记类型的只读索引（`GetOrNull`、`GetAll`），含内置测试类型 |
 | `IWebhookPublisher.PublishAsync(eventType, data, ct)` | 业务发布事件的唯一入口；类型未登记抛 `ArgumentException`，没有活动工作单元抛 `InvalidOperationException` |
 | `IWebhookSender.SendAsync(request, ct)` | 发一次请求并如实报告 `WebhookSendResult`；网络失败、超时与被拦截的地址不抛异常，只有取消才抛出；实现不自行重试 |
-| `IWebhookManagementService` | 管理用例：事件类型、订阅增删改与启停、密钥轮换、测试事件、投递日志与手动重发；只作用于当前租户，不做权限检查 |
+| `IWebhookManagementService` | 管理用例：事件类型、订阅增删改与启停、密钥轮换、测试事件、投递日志与手动重发；只作用于当前租户，不做权限检查。由 Core 注册，读写经存储包，未注册存储时解析即失败 |
 | `IWebhookDeliveryReader` | 统计读取：`CountByBucketsAsync(edges, subscriptionId?, ct)` 按 UTC 半开桶返回 `WebhookDeliveryCounts`；`GetSnapshotAsync` 返回 `WebhookDeliverySnapshot`（重试中投递数、已停用订阅数）；`GetRetainedSince()` 见[实现行为](#实现行为) |
 | `WebhookSubscriptionChangedEvent` | 订阅创建、修改、轮换密钥、启用、停用、删除后经可选的 `ILocalEventBus` 发布，在工作单元内推迟到提交后分发，失败或回滚不分发；处于订阅所属租户的上下文。带 `SubscriptionId`、`SubscriptionName`（删除时为删除前的名称）、`Change`（`WebhookSubscriptionChangeKind`：`Created`、`SecretRotated`、`Enabled`、`Disabled`、`Deleted`、`Updated`）、`DisabledReason`（仅停用时有值，`WebhookDisabledReason`：`Manual`、`EndpointGone`、`ConsecutiveFailures`）。修改成功即发布 `Updated`，不比较前后值；状态未变的再启用、再停用不发布；410 与连续失败的自动停用同样发布 |
 | `WebhookDeliveryStatus` / `WebhookAttemptTrigger` | 投递状态 `Pending`（重试中）、`Succeeded`、`Failed`；尝试来源 `Automatic`、`Manual` |

@@ -21,8 +21,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <!-- 签名密钥以宿主 Data Protection 加密存储：只引用抽象，密钥环由宿主的 AddDataProtection 提供 -->
-    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
