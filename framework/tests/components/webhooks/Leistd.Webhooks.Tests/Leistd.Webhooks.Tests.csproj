@@ -15,11 +15,16 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <!-- 退避、宽限期、连续失败与轮换过渡期都按时间判定，用官方 FakeTimeProvider 驱动 -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <!-- 管理端点在最小宿主上验证授权、状态映射与输入校验 -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.Core\Leistd.Webhooks.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.EntityFrameworkCore\Leistd.Webhooks.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.AspNetCore\Leistd.Webhooks.AspNetCore.csproj" />
+    <!-- 端点用例经真实的全局异常处理器，断言组件登记的 404 / 409 与校验 400 -->
+    <ProjectReference Include="..\..\..\..\components\exception-handling\Leistd.ExceptionHandling.AspNetCore\Leistd.ExceptionHandling.AspNetCore.csproj" />
     <!-- 入口测试走真实的进程内队列与调度器，单副本由内存锁兜底分布式锁 -->
     <ProjectReference Include="..\..\..\..\components\background-jobs\Leistd.BackgroundJobs.InProcess\Leistd.BackgroundJobs.InProcess.csproj" />
     <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Memory\Leistd.Lock.Memory.csproj" />

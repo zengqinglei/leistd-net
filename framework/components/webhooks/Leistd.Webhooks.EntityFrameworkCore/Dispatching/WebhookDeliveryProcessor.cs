@@ -8,6 +8,7 @@ using Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
 using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.Webhooks.EntityFrameworkCore.Dispatching;
@@ -23,7 +24,8 @@ internal sealed class WebhookDeliveryProcessor<TDbContext>(
     WebhookSecretProtector secretProtector,
     WebhookSubscriptionDeactivator<TDbContext> deactivator,
     IOptionsMonitor<WebhookOptions> options,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<WebhookDeliveryProcessor<TDbContext>> logger)
     where TDbContext : DbContext
 {
     // expectedAttemptCount：队列项入队时的尝试次数，与当前不符说明扫描已经处理过，跳过；扫描传 null。
@@ -32,20 +34,29 @@ internal sealed class WebhookDeliveryProcessor<TDbContext>(
         // 同层时不切：切换会丢掉当前上下文里的租户名
         using (tenantId == currentTenant.Id ? null : currentTenant.Change(tenantId))
         {
-            var request = await PrepareAsync(deliveryId, expectedAttemptCount, cancellationToken);
-            if (request is null)
+            var prepared = await PrepareAsync(deliveryId, expectedAttemptCount, cancellationToken);
+            if (prepared is null)
             {
                 return;
             }
 
             var startedAt = timeProvider.GetUtcNow();
-            var result = await sender.SendAsync(request.Value.Request with { Timestamp = startedAt }, cancellationToken);
-            await RecordAsync(deliveryId, request.Value.Trigger, startedAt.UtcDateTime, result, cancellationToken);
+            // 密钥解密不了时不发请求，记一次没有响应的失败尝试，交给分类器按普通失败处理：
+            // 否则投递永远停在待投递，每轮扫描都重报同一个错误
+            var result = prepared.Value.Request is { } request
+                ? await sender.SendAsync(request with { Timestamp = startedAt }, cancellationToken)
+                : new WebhookSendResult { Duration = TimeSpan.Zero, RequestHeaders = new Dictionary<string, string>(), Error = SecretUnavailableError };
+            await RecordAsync(deliveryId, prepared.Value.Trigger, startedAt.UtcDateTime, result, cancellationToken);
         }
     }
 
+    // 解密失败时写进尝试与投递的原因；不带密文与异常细节，异常本身记日志。
+    internal const string SecretUnavailableError =
+        "The signing secret could not be decrypted; check that the Data Protection key ring is shared by all instances.";
+
     // 重读投递与订阅：订阅已停用或已删除时按"停用的作用"终结这条投递，不发请求。
-    private async Task<(WebhookSendRequest Request, WebhookAttemptTrigger Trigger)?> PrepareAsync(
+    // 签名密钥解密失败时返回空请求，由调用方记一次失败尝试。
+    private async Task<(WebhookSendRequest? Request, WebhookAttemptTrigger Trigger)?> PrepareAsync(
         Guid deliveryId,
         int? expectedAttemptCount,
         CancellationToken cancellationToken)
@@ -75,7 +86,19 @@ internal sealed class WebhookDeliveryProcessor<TDbContext>(
 
         var webhookEvent = await dbContext.Set<WebhookEvent>().AsNoTracking()
             .FirstAsync(x => x.Id == delivery.EventId, cancellationToken);
-        var secrets = secretProtector.GetSigningSecrets(subscription, timeProvider.GetUtcNow().UtcDateTime);
+        IReadOnlyList<string> secrets;
+        try
+        {
+            secrets = secretProtector.GetSigningSecrets(subscription, timeProvider.GetUtcNow().UtcDateTime);
+        }
+        catch (InvalidOperationException exception)
+        {
+            logger.LogError(exception, "Webhook delivery {DeliveryId} was not sent: the signing secret of subscription {SubscriptionId} could not be decrypted.",
+                delivery.Id, subscription.Id);
+            await unitOfWork.CompleteAsync(cancellationToken);
+            return (null, delivery.NextTrigger);
+        }
+
         await unitOfWork.CompleteAsync(cancellationToken);
 
         var request = new WebhookSendRequest

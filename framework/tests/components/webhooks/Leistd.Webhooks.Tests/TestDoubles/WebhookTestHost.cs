@@ -16,6 +16,7 @@ using Leistd.Webhooks.Delivery;
 using Leistd.Webhooks.EntityFrameworkCore;
 using Leistd.Webhooks.EntityFrameworkCore.Entities;
 using Leistd.Webhooks.EntityFrameworkCore.Subscriptions;
+using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Publishing;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
@@ -157,6 +158,25 @@ public sealed class WebhookTestHost : IAsyncDisposable
         => InTenantAsync<bool>(tenantId, async (provider, db) =>
         {
             await action(provider, db);
+            return true;
+        });
+
+    /// <summary>在某个租户上下文里调用管理用例，不套外层工作单元：用例自带的工作单元决定提交。</summary>
+    public async Task<T> ManageAsync<T>(Guid? tenantId, Func<IWebhookManagementService, Task<T>> action)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var provider = scope.ServiceProvider;
+        using (provider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        {
+            return await action(provider.GetRequiredService<IWebhookManagementService>());
+        }
+    }
+
+    /// <summary>在某个租户上下文里调用没有返回值的管理用例。</summary>
+    public Task ManageAsync(Guid? tenantId, Func<IWebhookManagementService, Task> action)
+        => ManageAsync<bool>(tenantId, async service =>
+        {
+            await action(service);
             return true;
         });
 

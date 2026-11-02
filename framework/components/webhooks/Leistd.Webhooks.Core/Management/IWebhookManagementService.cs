@@ -14,7 +14,7 @@ namespace Leistd.Webhooks.Management;
 /// </remarks>
 public interface IWebhookManagementService
 {
-    /// <summary>获取已登记的事件类型，按登记顺序，含内置的测试事件。</summary>
+    /// <summary>获取业务登记的事件类型，按登记顺序；不含内置的测试事件 <see cref="Definitions.WebhookDefinition.TestEventType"/>，它只经 <see cref="SendTestEventAsync"/> 发送。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     Task<IReadOnlyList<WebhookEventTypeOutputDto>> GetEventTypesAsync(CancellationToken cancellationToken = default);
 
@@ -31,7 +31,7 @@ public interface IWebhookManagementService
     Task<WebhookSubscriptionOutputDto> GetSubscriptionAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>创建启用的订阅并生成密钥。</summary>
-    /// <param name="input">创建入参；地址须是绝对 http(s) URL，事件类型须已登记。</param>
+    /// <param name="input">创建入参；地址须是绝对 http(s) URL，事件类型须是业务登记的类型（不含测试事件），或单独的 <see cref="Definitions.WebhookDefinition.AllEventTypes"/>。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>订阅与一次性明文密钥。</returns>
     Task<WebhookSubscriptionSecretOutputDto> CreateSubscriptionAsync(
