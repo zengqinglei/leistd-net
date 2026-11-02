@@ -63,7 +63,7 @@
             size="icon-sm"
             type="button"
             class="text-muted-foreground -my-2 -mr-2"
-            [attr.aria-label]="t('webhooks.stats.infoLabel', { metric: t(titleKeys[kpi.id]) })"
+            [attr.aria-label]="t('webhooks.stats.infoLabel', { metric: t(nameKeys[kpi.id]) })"
             [hlmTooltip]="t(infoKeys[kpi.id])"
           >
             <ng-icon name="lucideInfo" class="text-sm" />
@@ -75,6 +75,7 @@
               class="hover:bg-muted/50 focus-visible:ring-ring/50 block w-full rounded-lg text-start outline-none focus-visible:ring-[3px]"
               data-testid="kpi-failed-link"
               [attr.aria-label]="t('webhooks.stats.showFailed')"
+              [hlmTooltip]="t(kpi.note.basis, kpi.note.params)"
               (click)="showFailed.emit()"
             >
               <ng-container
@@ -117,56 +118,51 @@
           />
         }
       </div>
-      <div class="flex min-w-0 items-center gap-2 text-xs">
+      <!-- 卡片上是短说法，完整口径放进可聚焦元素的提示（同仪表盘）；失败卡整体是按钮，提示挂在按钮上。
+           窄卡放不下时副文案整体换到徽章下一行，文字本身不折行 -->
+      <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         @if (kpi.id === 'disabledSubscriptions') {
           @if (statistics()!.disabledSubscriptions.value > 0) {
             <span hlmBadge variant="warning" class="shrink-0">{{
               t('webhooks.stats.attention')
             }}</span>
           }
-          <span class="text-muted-foreground min-w-0 truncate">{{
-            t('webhooks.stats.currentCount')
-          }}</span>
+        } @else if (kpi.change !== null) {
+          <span
+            hlmBadge
+            class="shrink-0"
+            data-testid="kpi-change"
+            [variant]="
+              kpi.change === 0
+                ? 'secondary'
+                : kpi.change > 0 !== kpi.higherIsWorse
+                  ? 'success'
+                  : 'destructive'
+            "
+          >
+            @if (kpi.change !== 0) {
+              <ng-icon
+                [name]="kpi.change > 0 ? 'lucideArrowUpRight' : 'lucideArrowDownRight'"
+                data-icon="inline-start"
+              />
+            }
+            {{ kpi.change | appNumber: 'change' : displayLocale() }}
+          </span>
+        }
+        @if (link) {
+          <span
+            class="text-muted-foreground min-w-0 truncate"
+            [attr.data-testid]="kpi.note.testId ?? null"
+            >{{ t(kpi.note.caption, kpi.note.params) }}</span
+          >
         } @else {
-          @if (kpi.change !== null) {
-            <span
-              hlmBadge
-              class="shrink-0"
-              data-testid="kpi-change"
-              [variant]="
-                kpi.change === 0
-                  ? 'secondary'
-                  : kpi.change > 0 !== kpi.higherIsWorse
-                    ? 'success'
-                    : 'destructive'
-              "
-            >
-              @if (kpi.change !== 0) {
-                <ng-icon
-                  [name]="kpi.change > 0 ? 'lucideArrowUpRight' : 'lucideArrowDownRight'"
-                  data-icon="inline-start"
-                />
-              }
-              {{ kpi.change | appNumber: 'change' : displayLocale() }}
-            </span>
-          }
-          @if (kpi.id === 'failed' && retrying() > 0) {
-            <span class="text-muted-foreground min-w-0 truncate" data-testid="kpi-retrying">{{
-              t('webhooks.stats.retrying', {
-                count: (retrying() | appNumber: 'integer' : displayLocale()),
-              })
-            }}</span>
-          } @else if (kpi.change === null) {
-            <span class="text-muted-foreground min-w-0 truncate" data-testid="kpi-no-comparison">{{
-              t('webhooks.stats.noComparison')
-            }}</span>
-          } @else {
-            <span class="text-muted-foreground min-w-0 truncate">{{
-              days() === 1
-                ? t('webhooks.stats.vsYesterday')
-                : t('webhooks.stats.vsPrevious', { days: days() })
-            }}</span>
-          }
+          <span
+            tabindex="0"
+            class="text-muted-foreground focus-visible:ring-ring/50 min-w-0 truncate rounded-sm outline-none focus-visible:ring-[3px]"
+            [attr.data-testid]="kpi.note.testId ?? 'kpi-note'"
+            [hlmTooltip]="t(kpi.note.basis, kpi.note.params)"
+            >{{ t(kpi.note.caption, kpi.note.params) }}</span
+          >
         }
       </div>
     </div>

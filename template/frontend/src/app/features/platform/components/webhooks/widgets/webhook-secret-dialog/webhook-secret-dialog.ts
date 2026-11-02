@@ -59,6 +59,11 @@ export class WebhookSecretDialog {
   readonly kind = input<WebhookSecretKind>('created');
   readonly subscriptionName = input('');
 
+  /** 接收方去重用的请求头名，在提示里整体不断行。 */
+  protected readonly dedupHeader = 'webhook-id';
+  /** 词条里头名的占位值，拆分文案用；不会出现在正常文案里。 */
+  protected readonly headerSlot = '\u0000';
+
   onStateChange(state: BrnDialogState): void {
     this.visible.set(state === 'open');
   }
@@ -88,7 +93,7 @@ const ENGLISH: Record<string, string> = {
   'webhooks.secret.copy': 'Copy secret',
   'webhooks.secret.createdHeader': 'Signing secret',
   'webhooks.secret.createdHint':
-    'Receivers verify requests with a Standard Webhooks library and deduplicate by webhook-id.',
+    'Receivers verify requests with a Standard Webhooks library and deduplicate by {{header}}.',
   'webhooks.secret.onlyOnce':
     'It cannot be viewed again after closing. Hand it to the receiver now.',
   'webhooks.secret.rotatedHeader': 'New signing secret',

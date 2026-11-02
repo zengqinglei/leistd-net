@@ -25,6 +25,7 @@
     "deliveries": "投递数",
     "failed": "失败",
     "disabledSubscriptions": "已停用订阅",
+    "disabledShort": "已停用订阅",
     "info": {
       "successRate": "区间内创建的投递中，成功 ÷（成功 + 失败）；重试中的不计入。",
       "deliveries": "区间内创建的投递数；一个事件发给 N 个订阅计 N 次。",
@@ -36,10 +37,15 @@
     "showFailed": "查看失败的投递",
     "attention": "需要关注",
     "currentCount": "当前存量",
-    "retrying": "另有 {{count}} 条重试中",
+    "currentCountBasis": "当前处于停用状态的订阅数，不随区间变化。",
+    "retrying": "{{count}} 条重试中",
+    "retryingBasis": "另有 {{count}} 条投递仍在重试，不计入失败。",
     "noComparison": "无可比数据",
+    "noComparisonBasis": "上一区间早于投递日志的保留期，没有可对比的数据。",
     "vsYesterday": "较昨天",
-    "vsPrevious": "较前 {{days}} 天"
+    "vsYesterdayBasis": "较昨天同一时段",
+    "vsPrevious": "较前 {{days}} 天",
+    "vsPreviousBasis": "较前 {{days}} 天同一进度"
   },
   "filter": {
     "searchSubscriptions": "搜索名称或地址...",
@@ -163,7 +169,7 @@
     "createdHeader": "签名密钥",
     "rotatedHeader": "新的签名密钥",
     "onlyOnce": "关闭后无法再次查看，请立即交给接收方。",
-    "createdHint": "接收方用 Standard Webhooks 库验签，并按 webhook-id 去重。",
+    "createdHint": "接收方用 Standard Webhooks 库验签，并按 {{header}} 去重。",
     "rotatedHint": "旧密钥会在过渡期内继续一并签名，请在过渡期结束前更新接收方。",
     "copy": "复制密钥",
     "saved": "我已保存"

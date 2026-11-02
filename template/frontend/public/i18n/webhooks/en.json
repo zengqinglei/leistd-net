@@ -25,6 +25,7 @@
     "deliveries": "Deliveries",
     "failed": "Failed",
     "disabledSubscriptions": "Disabled subscriptions",
+    "disabledShort": "Disabled",
     "info": {
       "successRate": "Succeeded ÷ (succeeded + failed) for deliveries created in the range. Deliveries still retrying are not counted.",
       "deliveries": "Deliveries created in the range. An event sent to N subscriptions counts N times.",
@@ -36,10 +37,15 @@
     "showFailed": "Show failed deliveries",
     "attention": "Needs attention",
     "currentCount": "Current count",
-    "retrying": "{{count}} more retrying",
+    "currentCountBasis": "Subscriptions disabled right now. Not affected by the range.",
+    "retrying": "{{count}} retrying",
+    "retryingBasis": "{{count}} more deliveries are still retrying and are not counted as failed.",
     "noComparison": "No earlier data",
+    "noComparisonBasis": "The previous range is older than the delivery log retention, so there is nothing to compare with.",
     "vsYesterday": "vs yesterday",
-    "vsPrevious": "vs previous {{days}} days"
+    "vsYesterdayBasis": "vs the same time yesterday",
+    "vsPrevious": "vs prior {{days}} days",
+    "vsPreviousBasis": "vs the same point of the previous {{days}} days"
   },
   "filter": {
     "searchSubscriptions": "Search by name or URL...",
@@ -163,7 +169,7 @@
     "createdHeader": "Signing secret",
     "rotatedHeader": "New signing secret",
     "onlyOnce": "It cannot be viewed again after closing. Hand it to the receiver now.",
-    "createdHint": "Receivers verify requests with a Standard Webhooks library and deduplicate by webhook-id.",
+    "createdHint": "Receivers verify requests with a Standard Webhooks library and deduplicate by {{header}}.",
     "rotatedHint": "The previous secret keeps signing alongside this one for a transition period. Update the receiver before it ends.",
     "copy": "Copy secret",
     "saved": "I've saved it"

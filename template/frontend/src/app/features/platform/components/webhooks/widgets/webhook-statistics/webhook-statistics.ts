@@ -36,6 +36,15 @@ interface KpiView {
   change: number | null | undefined;
   higherIsWorse: boolean;
   sparkline: ReturnType<typeof sparklineOf>;
+  /** 卡片底行的副文案：卡片上是短说法，完整口径放进提示。 */
+  note: KpiNote;
+}
+
+interface KpiNote {
+  caption: string;
+  basis: string;
+  params?: Record<string, unknown>;
+  testId?: string;
 }
 
 /**
@@ -90,6 +99,13 @@ export class WebhookStatistics {
     successRate: 'webhooks.stats.successRate',
     deliveries: 'webhooks.stats.deliveries',
     failed: 'webhooks.stats.failed',
+    disabledSubscriptions: 'webhooks.stats.disabledShort',
+  };
+  /** 口径说明按钮的无障碍名称用完整指标名；卡片标题是短说法。 */
+  protected readonly nameKeys: Record<KpiId, string> = {
+    successRate: 'webhooks.stats.successRate',
+    deliveries: 'webhooks.stats.deliveries',
+    failed: 'webhooks.stats.failed',
     disabledSubscriptions: 'webhooks.stats.disabledSubscriptions',
   };
   protected readonly infoKeys: Record<KpiId, string> = {
@@ -109,8 +125,41 @@ export class WebhookStatistics {
       valueText: formatAppNumber(value, value >= COMPACT_FROM ? 'compact' : 'integer', locale),
       valueFull: value >= COMPACT_FROM ? formatAppNumber(value, 'integer', locale) : null,
     });
+    const days = this.days();
+    const retrying = statistics.retrying.value;
+    const note = (id: KpiId, change: number | null | undefined): KpiNote => {
+      if (id === 'disabledSubscriptions') {
+        return {
+          caption: 'webhooks.stats.currentCount',
+          basis: 'webhooks.stats.currentCountBasis',
+        };
+      }
+      if (id === 'failed' && retrying > 0) {
+        return {
+          caption: 'webhooks.stats.retrying',
+          basis: 'webhooks.stats.retryingBasis',
+          params: { count: formatAppNumber(retrying, 'integer', locale) },
+          testId: 'kpi-retrying',
+        };
+      }
+      if (change === null) {
+        return {
+          caption: 'webhooks.stats.noComparison',
+          basis: 'webhooks.stats.noComparisonBasis',
+          testId: 'kpi-no-comparison',
+        };
+      }
+      // 区间都含今天，上一区间比较相同的本地进度（同仪表盘）
+      return days === 1
+        ? { caption: 'webhooks.stats.vsYesterday', basis: 'webhooks.stats.vsYesterdayBasis' }
+        : {
+            caption: 'webhooks.stats.vsPrevious',
+            basis: 'webhooks.stats.vsPreviousBasis',
+            params: { days },
+          };
+    };
     const rate = statistics.successRate;
-    return [
+    const kpis: Omit<KpiView, 'note'>[] = [
       {
         id: 'successRate',
         valueText: rate.value == null ? '-' : formatAppNumber(rate.value, 'percent', locale),
@@ -141,6 +190,7 @@ export class WebhookStatistics {
         sparkline: null,
       },
     ];
+    return kpis.map((kpi) => ({ ...kpi, note: note(kpi.id, kpi.change) }));
   });
 
   /** 摘要行的数据：投递数与需要关注的订阅数（已停用存量），由模板翻译。 */
@@ -153,8 +203,6 @@ export class WebhookStatistics {
         }
       : null;
   });
-
-  readonly retrying = computed(() => this.statistics()?.retrying.value ?? 0);
 
   /** 分段控件不可取消选中（`nullable` 为假），单选时只会给出另一档的值。 */
   onPresetChange(value: RangePreset | readonly RangePreset[] | null | undefined): void {
@@ -176,7 +224,9 @@ const ENGLISH: Record<string, string> = {
   'webhooks.range.today': 'Today',
   'webhooks.stats.attention': 'Needs attention',
   'webhooks.stats.currentCount': 'Current count',
+  'webhooks.stats.currentCountBasis': 'Subscriptions disabled right now. Not affected by the range.',
   'webhooks.stats.deliveries': 'Deliveries',
+  'webhooks.stats.disabledShort': 'Disabled',
   'webhooks.stats.disabledSubscriptions': 'Disabled subscriptions',
   'webhooks.stats.failed': 'Failed',
   'webhooks.stats.info.deliveries':
@@ -190,12 +240,18 @@ const ENGLISH: Record<string, string> = {
   'webhooks.stats.infoLabel': 'How {{metric}} is calculated',
   'webhooks.stats.label': 'Delivery statistics',
   'webhooks.stats.noComparison': 'No earlier data',
+  'webhooks.stats.noComparisonBasis':
+    'The previous range is older than the delivery log retention, so there is nothing to compare with.',
   'webhooks.stats.refreshFailed': "Couldn't refresh the statistics. Showing the last loaded data.",
-  'webhooks.stats.retrying': '{{count}} more retrying',
+  'webhooks.stats.retrying': '{{count}} retrying',
+  'webhooks.stats.retryingBasis':
+    '{{count}} more deliveries are still retrying and are not counted as failed.',
   'webhooks.stats.showFailed': 'Show failed deliveries',
   'webhooks.stats.successRate': 'Success rate',
-  'webhooks.stats.vsPrevious': 'vs previous {{days}} days',
+  'webhooks.stats.vsPrevious': 'vs prior {{days}} days',
+  'webhooks.stats.vsPreviousBasis': 'vs the same point of the previous {{days}} days',
   'webhooks.stats.vsYesterday': 'vs yesterday',
+  'webhooks.stats.vsYesterdayBasis': 'vs the same time yesterday',
   'webhooks.summary.attention': '{{count}} subscriptions need attention',
   'webhooks.summary.deliveries': '{{count}} deliveries',
   'webhooks.summary.subscription': 'Subscription: {{name}}',
