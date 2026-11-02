@@ -1,6 +1,6 @@
 # 资源服务退出后回到登录
 
-状态：已完成 · 风险档：高（认证退出链）
+状态：已修订 · 风险档：高（认证退出链）
 
 ## 1. 需求
 
@@ -42,3 +42,15 @@ resource-notifications 实际生成结果通过定向后端、前端与 lint 验
 常驻文档已同步 `template/docs/standards/auth.md` 与 `docs/template/browser-authentication.md`。既有认证专题索引覆盖本次内容，无新增专题。
 
 为遵守不出框架 beta 的边界，未修改会被当前发布规则归入未建模输入的 OIDC e2e 脚本。该脚本可读取退出表单 state 字段，但尚未跟随资源退出回调；本轮由集成测试携带原表单 state 验证生产处理器的 302 落点，未新增跨进程端到端证据。前端运行逻辑、Mock 与回调登记保持原契约。
+
+## 5. 修订：2026-11-02 回到官方默认落点
+
+用户决定模板采用官方默认退出策略：回到应用根 `/`。模板根为可匿名展示的公开首页，本身没有受保护首页的登录中转缺陷；退出直接回登录属于项目诉求，留给项目选择。此决定替代 §1–§4 中直接回登录的默认策略。
+
+部分回退 PR #219：删除 `SignedOutRedirectUri` 及其注释；控制器保持仅指定 OIDC scheme，由官方默认决定落点；state 与回调 Location 断言改为绝对地址 `https://localhost/`，保留跟随原保护 state 验证 302 的回归用例。
+
+ResourceLogin 的说明改为手动入口与 Mock 退出落点，真实守卫与 401 直接挑战签发方；首帧不自动跳转，以免 Mock 退出后立即登回。两份认证常驻文档同步匿名根前提及受保护根的项目适配选择。前端运行逻辑、回调登记与退出协议保持原契约。
+
+验收：Given 模板默认 Resource 浏览器会话，When 退出并处理原表单 state 的 signout 回调，Then state 和 302 Location 均为同源应用根；When 临时加回直接登录选项，Then 精确落点断言失败，还原后重新构建通过。覆盖仍由 ResourceBrowserSessionTests、ControllerAuthorizationConventionTests、resource-login.spec.ts 及静态、lint、读取成本闸门承担。
+
+修订验证已通过：实际生成的资源浏览器会话与控制器授权定向测试、前端定向测试和 lint、静态及读取成本闸门全部通过；加回登录选项的变异被精确落点断言拒绝，还原后重新构建通过。本轮仅模板与仓库文档，不改 scripts/，不触发框架 beta。
