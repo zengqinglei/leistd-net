@@ -285,13 +285,13 @@
       <p class="lead">业务项目要把自己的业务事件推给第三方系统（例如"订单已付款时通知客户的 ERP"）。业界的出站 webhook 做法已经高度一致，适合由框架提前提供，交给业务项目使用后再按反馈改进（2026-11-03 立项）。</p>
       <div class="grid4">
         <div class="card"><h4>签名有事实标准</h4><p class="k">Standard Webhooks：<code>webhook-id</code>、<code>webhook-timestamp</code>、<code>webhook-signature</code>；HMAC-SHA256；OpenAI、Anthropic、Twilio 兼容。</p></div>
-        <div class="card"><h4>管线各家一致</h4><p class="k">发件箱 → 每个"事件 × 端点"一条投递记录 → 工作者发送 → 记录尝试 → 退避重试 → 自动停用。（Svix、Stripe、Abp.Webhooks）</p></div>
+        <div class="card"><h4>管线各家一致</h4><p class="k">发件箱 → 每个"事件 × 端点"一条投递记录 → 工作者发送 → 记录尝试 → 退避重试 → 自动停用。（Svix、Stripe、Boilerplate webhooks）</p></div>
         <div class="card"><h4>运维能力是标配</h4><p class="k">投递日志、手动重发、测试事件、密钥轮换期双签。（Stripe、GitHub、Svix、Gitea）</p></div>
         <div class="card"><h4>入站接收不做通用组件</h4><p class="k">微软 ASP.NET WebHooks 按服务商逐家做接收器，先归档、2023 年又被删除；各服务商都有官方 SDK。</p></div>
       </div>
       <h3>主流做法对照</h3>
       <table class="t">
-        <thead><tr><th>维度</th><th>Stripe</th><th>GitHub</th><th>Svix（开源）</th><th>Abp.Webhooks</th><th>本方案</th></tr></thead>
+        <thead><tr><th>维度</th><th>Stripe</th><th>GitHub</th><th>Svix（开源）</th><th>Boilerplate webhooks</th><th>本方案</th></tr></thead>
         <tbody>
           <tr><td>签名</td><td><code>Stripe-Signature</code> 含时间戳</td><td><code>X-Hub-Signature-256</code></td><td>Standard Webhooks</td><td>只签请求体，不含时间戳</td><td>Standard Webhooks v1</td></tr>
           <tr><td>重试</td><td>3 天指数退避</td><td>不自动重试，可手动重投</td><td>7 次，约 27 小时</td><td>后台作业，最多 5 次</td><td>7 次，约 27 小时（同 Svix）</td></tr>
@@ -579,13 +579,13 @@ content-type: application/json
                     <thead><tr><th style="width:24px"></th><th>名称 / 地址</th><th>订阅事件</th><th>状态</th><th>近 7 天成功率</th><th>最近投递</th><th>创建时间</th><th style="text-align:right">操作</th></tr></thead>
                     <tbody>
                       <tr><td>›</td><td><div class="t2"><span class="a">ERP 订单同步</span><span class="b">https://erp.example.com/hooks/leistd</span></div></td><td><span class="badge secondary">order.paid</span> <span class="xs">+2</span></td><td><span class="badge success dot">启用</span></td><td><span class="bar" style="--w:99%"><b></b>99.4%</span></td><td><span class="badge success dot">成功</span> <span class="xs">2 分钟前</span></td><td class="xs">2026-11-01 10:24</td><td><div class="act"><span class="ibtn" title="编辑">✎</span><span class="ibtn" title="发送测试事件">➤</span><span class="ibtn">⋯</span></div></td></tr>
-                      <tr class="exp"><td>⌄</td><td><div class="t2"><span class="a">CRM 用户开通</span><span class="b">https://crm.example.com/api/webhooks/users</span></div></td><td><span class="badge secondary">user.created</span></td><td><span class="badge warning dot">自动停用</span></td><td><span class="bar bad" style="--w:100%"><b></b>0%</span></td><td><span class="badge destructive dot">失败</span> <span class="xs">5 天前</span></td><td class="xs">2026-10-12 09:03</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">➤</span><span class="ibtn">⋯</span></div></td></tr>
+                      <tr class="exp"><td>⌄</td><td><div class="t2"><span class="a">客户门户用户开通</span><span class="b">https://portal.example.com/api/webhooks/users</span></div></td><td><span class="badge secondary">user.created</span></td><td><span class="badge warning dot">自动停用</span></td><td><span class="bar bad" style="--w:100%"><b></b>0%</span></td><td><span class="badge destructive dot">失败</span> <span class="xs">5 天前</span></td><td class="xs">2026-10-12 09:03</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">➤</span><span class="ibtn">⋯</span></div></td></tr>
                       <tr class="exp"><td></td><td colspan="7" style="padding:12px 16px 16px 40px">
                         <dl class="kv">
                           <dt>停用原因</dt><dd><span style="color:var(--warning)">连续失败超过 5 天（自 2026-10-28 08:12 起）</span></dd>
                           <dt>密钥</dt><dd class="mono">whsec_8KfD••••••••</dd>
                           <dt>请求头</dt><dd class="mono">X-Tenant-Code: acme</dd>
-                          <dt>说明</dt><dd>用户开通后同步到 CRM，客户方运维负责人：张三</dd>
+                          <dt>说明</dt><dd>用户开通后同步到客户门户，客户方运维负责人：张三</dd>
                         </dl>
                       </td></tr>
                       <tr><td>›</td><td><div class="t2"><span class="a">数据仓库</span><span class="b">https://dw.example.com/ingest/events</span></div></td><td><span class="badge secondary">全部事件</span></td><td><span class="badge secondary dot">已停用</span></td><td class="xs">—</td><td class="xs">—</td><td class="xs">2026-09-30 17:40</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">➤</span><span class="ibtn">⋯</span></div></td></tr>
@@ -612,7 +612,7 @@ content-type: application/json
                 <table>
                   <thead><tr><th>事件</th><th>订阅</th><th>状态</th><th>尝试</th><th>发生时间</th><th style="text-align:right">操作</th></tr></thead>
                   <tbody>
-                    <tr class="sel"><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">user.created</span><span class="b">01JC6Q8V9X4T…</span></div></td><td>CRM 用户开通</td><td><span class="badge destructive dot">失败</span></td><td class="mono">8</td><td class="xs">11-02 14:05</td><td><div class="act"><span class="ibtn" title="详情">☰</span><span class="ibtn" title="重发">↻</span></div></td></tr>
+                    <tr class="sel"><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">user.created</span><span class="b">01JC6Q8V9X4T…</span></div></td><td>客户门户用户开通</td><td><span class="badge destructive dot">失败</span></td><td class="mono">8</td><td class="xs">11-02 14:05</td><td><div class="act"><span class="ibtn" title="详情">☰</span><span class="ibtn" title="重发">↻</span></div></td></tr>
                     <tr><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">order.paid</span><span class="b">01JC6PZ2M8QK…</span></div></td><td>ERP 订单同步</td><td><span class="badge warning dot">重试中</span></td><td class="mono">2</td><td class="xs">11-03 09:58</td><td><div class="act"><span class="ibtn">☰</span><span class="ibtn" style="opacity:.35" title="重试中，4 分钟后自动重试">↻</span></div></td></tr>
                     <tr><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">webhook.test</span><span class="b">01JC6PX7B1CE…</span></div></td><td>ERP 订单同步</td><td><span class="badge success dot">成功</span></td><td class="mono">1</td><td class="xs">11-03 09:41</td><td><div class="act"><span class="ibtn">☰</span><span class="ibtn">↻</span></div></td></tr>
                   </tbody>
@@ -631,7 +631,7 @@ content-type: application/json
               </div>
               <div class="sep" style="justify-content:flex-start">概要</div>
               <dl class="kv">
-                <dt>订阅</dt><dd>CRM 用户开通<br><span class="mono" style="color:var(--muted-foreground)">https://crm.example.com/api/webhooks/users</span></dd>
+                <dt>订阅</dt><dd>客户门户用户开通<br><span class="mono" style="color:var(--muted-foreground)">https://portal.example.com/api/webhooks/users</span></dd>
                 <dt>发生时间</dt><dd>2026-11-02 14:05:01</dd>
                 <dt>尝试次数</dt><dd>8（自动 8 · 手动 0）</dd>
                 <dt>下次重试</dt><dd>—（订阅已自动停用）</dd>
@@ -763,7 +763,7 @@ X-Tenant-Code: acme</div></div>
                   <thead><tr><th>名称 / 地址</th><th>状态</th><th>最近投递</th></tr></thead>
                   <tbody>
                     <tr class="sel"><td><div class="t2"><span class="a">ERP 订单同步</span><span class="b">https://erp.example.com/hooks/leistd</span></div></td><td><span class="badge success dot">启用</span></td><td><span class="badge success dot">成功</span></td></tr>
-                    <tr><td><div class="t2"><span class="a">CRM 用户开通</span><span class="b">https://crm.example.com/api/webhooks/users</span></div></td><td><span class="badge warning dot">自动停用</span></td><td><span class="badge destructive dot">失败</span></td></tr>
+                    <tr><td><div class="t2"><span class="a">客户门户用户开通</span><span class="b">https://portal.example.com/api/webhooks/users</span></div></td><td><span class="badge warning dot">自动停用</span></td><td><span class="badge destructive dot">失败</span></td></tr>
                     <tr><td><div class="t2"><span class="a">数据仓库</span><span class="b">https://dw.example.com/ingest/events</span></div></td><td><span class="badge secondary dot">已停用</span></td><td class="xs">—</td></tr>
                   </tbody>
                 </table>

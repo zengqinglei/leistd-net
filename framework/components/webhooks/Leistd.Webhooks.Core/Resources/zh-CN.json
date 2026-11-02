@@ -1,0 +1,9 @@
+{
+  "culture": "zh-CN",
+  "texts": {
+    "Webhook:SubscriptionNotFound": "Webhook 订阅不存在。",
+    "Webhook:DeliveryNotFound": "投递记录不存在。",
+    "Webhook:SubscriptionDisabled": "该 Webhook 订阅已停用。",
+    "Webhook:DeliveryNotRetryable": "该投递仍在重试中，不能手动重发。"
+  }
+}
