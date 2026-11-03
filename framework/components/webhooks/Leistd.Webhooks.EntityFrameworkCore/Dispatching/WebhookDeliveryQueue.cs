@@ -1,3 +1,4 @@
+using Leistd.AmbientContext;
 using Leistd.BackgroundJobs.Queues;
 using Leistd.UnitOfWork;
 using Leistd.Webhooks.Delivery;
@@ -66,15 +67,24 @@ internal sealed class WebhookDeliveryQueue<TDbContext>(
     {
         foreach (var item in items)
         {
-            if (!queue.TryQueue((services, cancellationToken) => new ValueTask(
-                    services.GetRequiredService<WebhookDeliveryProcessor<TDbContext>>()
-                        .ProcessAsync(item.TenantId, item.DeliveryId, item.ExpectedAttemptCount, cancellationToken))))
+            if (!queue.TryQueue((services, cancellationToken) => ProcessAsSystemAsync(services, item, cancellationToken)))
             {
                 logger.LogWarning(
                     "The background queue is full; webhook delivery {DeliveryId} will be sent by the dispatch scan instead.",
                     item.DeliveryId);
             }
         }
+    }
+
+    // 投递在系统身份下执行，不继承入队请求的用户。后台队列在执行时还原入队时的主体、租户与链路标识；
+    // 投递处理是系统行为，与兜底扫描一致，只保留租户与链路标识，主体还原为匿名，自动停用等写操作因此不记到发起请求的用户名下。
+    // 未注册 IAmbientContext 时照原样执行：没有环境上下文机制，也就没有可继承的主体。
+    private static async ValueTask ProcessAsSystemAsync(IServiceProvider services, QueuedDelivery item, CancellationToken cancellationToken)
+    {
+        var ambientContext = services.GetService<IAmbientContext>();
+        using var systemIdentity = ambientContext?.Restore(ambientContext.Capture() with { Principal = null });
+        await services.GetRequiredService<WebhookDeliveryProcessor<TDbContext>>()
+            .ProcessAsync(item.TenantId, item.DeliveryId, item.ExpectedAttemptCount, cancellationToken);
     }
 
     private readonly record struct QueuedDelivery(Guid? TenantId, Guid DeliveryId, int ExpectedAttemptCount);
