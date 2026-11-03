@@ -25,7 +25,6 @@
     "deliveries": "Deliveries",
     "failed": "Failed",
     "disabledSubscriptions": "Disabled subscriptions",
-    "disabledShort": "Disabled",
     "info": {
       "successRate": "Succeeded ÷ (succeeded + failed) for deliveries created in the range. Deliveries still retrying are not counted.",
       "deliveries": "Deliveries created in the range. An event sent to N subscriptions counts N times.",

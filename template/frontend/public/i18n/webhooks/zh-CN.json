@@ -25,7 +25,6 @@
     "deliveries": "投递数",
     "failed": "失败",
     "disabledSubscriptions": "已停用订阅",
-    "disabledShort": "已停用订阅",
     "info": {
       "successRate": "区间内创建的投递中，成功 ÷（成功 + 失败）；重试中的不计入。",
       "deliveries": "区间内创建的投递数；一个事件发给 N 个订阅计 N 次。",
