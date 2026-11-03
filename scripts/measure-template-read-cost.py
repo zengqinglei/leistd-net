@@ -9,7 +9,9 @@
 读取集合：常驻部分（项目 Skill 的 SKILL.md 与 docs/README.md，每个任务都先读）单独一行读数与
 上限，任务读数不再重复计它们。任务按 docs/README.md 的按任务读取表与项目 Skill 的意图路由列出
 应读文件，连同这些文件要求先读的伴随文件（如 Spartan Skill 的 rules）与按任务内容必读的专题，
-去重后累加字符数（Python len）。读取表另须一行一条路由（见 route_problems），保持常驻索引轻量。
+去重后累加字符数（Python len）。读取表随形态切换必读文件时（如新增界面文案在本地化开/关时
+分别读多语言专题/界面规范），登记为 (文件, 条件)，只在条件成立的组合里计入；同一组合内求总量，
+再对全部组合取最大，互斥的必读文件不相加。读取表另须一行一条路由（见 route_problems），保持常驻索引轻量。
 
 上限 = 登记目标值 + MARGIN 余量（向上取整到百位）。超出即失败：先去重、删冗长示例，再按独立
 任务主题拆分；确需更多内容时，在对应规格里写明理由后上调 TARGETS 的登记值。读数下降时不必
@@ -65,8 +67,25 @@ TASK_REQUIRED: dict[str, list[str]] = {
 }
 
 
-# 任务 → (样例请求, 应读文件；不含常驻部分)
-TASKS: dict[str, tuple[str, list[str]]] = {
+# 读取集合的一项：文件路径，或 (文件路径, 条件)——条件按模板条件语法求值，只在成立的组合里计入
+Entry = 'str | tuple[str, str]'
+
+
+def entry_path(entry) -> str:
+    return entry if isinstance(entry, str) else entry[0]
+
+
+def entry_applies(entry, values: dict[str, object]) -> bool:
+    return isinstance(entry, str) or model.evaluate(entry[1], values)
+
+
+def paths_of(files) -> list[str]:
+    return [entry_path(entry) for entry in files]
+
+
+# 任务 → (样例请求, 应读文件；不含常驻部分)。随形态切换的必读文件与 docs/README.md 读取表的
+# 条件分支一一对应
+TASKS: dict[str, tuple[str, list]] = {
     'backend-crud': ('新增一个带分页查询的资源（后端）',
                      IMPLEMENT + standards('coding-common.md', 'coding-backend.md', 'api.md', 'testing.md')),
     'fullstack-crud': ('新增上述资源并加列表页',
@@ -80,7 +99,9 @@ TASKS: dict[str, tuple[str, list[str]]] = {
                   + [SPARTAN] + spartan_rules('styling.md', 'composition.md', 'forms.md')),
     'new-text': ('新增界面文案',
                  [SKILL + 'references/development.md']
-                 + standards('coding-common.md', 'coding-frontend.md', 'frontend-i18n.md')),
+                 + standards('coding-common.md', 'coding-frontend.md')
+                 + [(STANDARDS + 'frontend-i18n.md', '(IncludeLocalization)'),
+                    (STANDARDS + 'frontend-ui.md', '(!IncludeLocalization)')]),
     'review-only': ('只审查一个全栈改动',
                     [SKILL + 'references/quality.md']
                     + standards('coding-common.md', 'coding-backend.md', 'coding-frontend.md', 'api.md', 'testing.md')),
@@ -94,7 +115,7 @@ MARGIN = 0.10
 # 登记目标值：2026-11-03 改为按生成内容计量时的读数（docs/specs/2026-11-03-read-cost-gate.md）。
 # 上调须在对应规格里写理由；读数下降不必下调。
 TARGETS = {RESIDENT_NAME: 4230, 'backend-crud': 31519, 'fullstack-crud': 64182, 'ui-change': 47059,
-           'new-text': 14348, 'review-only': 35419}
+           'new-text': 14673, 'review-only': 35419}
 
 
 def limit_of(target: int) -> int:
@@ -121,16 +142,18 @@ def size_model(config: dict, path: str, text: str):
     return size
 
 
-def readings(config: dict, texts: dict[str, str], tasks: dict[str, list[str]], combinations: list[dict]):
-    """每个任务 → (全部组合中的最大读数, 取到最大值的组合, [(文件, 该组合下字符数)])。"""
-    models = {path: size_model(config, path, texts[path]) for files in tasks.values() for path in files}
+def readings(config: dict, texts: dict[str, str], tasks: dict[str, list], combinations: list[dict]):
+    """每个任务 → (全部组合中的最大读数, 取到最大值的组合, [(文件, 该组合下字符数)])。
+
+    同一组合内先选出该形态的读取集合（条件项只在条件成立时计入）并去重求总量，再对组合取最大。"""
+    models = {path: size_model(config, path, texts[path]) for files in tasks.values() for path in paths_of(files)}
     table = {path: [size(values) for values in combinations] for path, size in models.items()}
     result = {}
     for task, files in tasks.items():
-        files = list(dict.fromkeys(files))
-        totals = [sum(table[path][i] for path in files) for i in range(len(combinations))]
+        selected = [list(dict.fromkeys(entry_path(e) for e in files if entry_applies(e, values))) for values in combinations]
+        totals = [sum(table[path][i] for path in selected[i]) for i in range(len(combinations))]
         best = max(range(len(combinations)), key=totals.__getitem__)
-        result[task] = (totals[best], combinations[best], [(path, table[path][best]) for path in files])
+        result[task] = (totals[best], combinations[best], [(path, table[path][best]) for path in selected[best]])
     return result
 
 
@@ -138,9 +161,9 @@ def over_limit(values: dict[str, int], limits: dict[str, int]) -> list[str]:
     return [task for task, total in values.items() if total > limits[task]]
 
 
-def resident_overlap(tasks: dict[str, tuple[str, list[str]]], resident: list[str]) -> list[str]:
+def resident_overlap(tasks: dict[str, tuple[str, list]], resident: list[str]) -> list[str]:
     return [f'{task}：常驻部分 {path} 已单独计量，不再计入任务读数'
-            for task, (_, files) in tasks.items() for path in files if path in resident]
+            for task, (_, files) in tasks.items() for path in paths_of(files) if path in resident]
 
 
 # ---------- 读取表一行一条路由 ----------
@@ -196,15 +219,16 @@ def route_problems(config: dict, path: str, text: str, combinations: list[dict])
 
 # ---------- 自检 ----------
 
-def missing_companions(tasks: dict[str, tuple[str, list[str]]]) -> list[str]:
+def missing_companions(tasks: dict[str, tuple[str, list]]) -> list[str]:
     errors = []
-    for task, (_, files) in tasks.items():
+    for task, (_, entries) in tasks.items():
+        files = paths_of(entries)
         for path, companions in REQUIRED_COMPANIONS.items():
             if path in files:
                 errors += [f'{task}：含 {path} 但缺伴随文件 {c}' for c in companions if c not in files]
     for required_task, required in TASK_REQUIRED.items():
         if required_task in tasks:
-            files = tasks[required_task][1]
+            files = paths_of(tasks[required_task][1])
             errors += [f'{required_task}：缺按任务必读的 {r}' for r in required if r not in files]
     return errors
 
@@ -256,6 +280,28 @@ def self_test() -> list[str]:
         failures.append('自检：任务读数里重复列出常驻部分必须报出')
     if RESIDENT_NAME not in TARGETS:
         failures.append('自检：常驻部分须有单独的登记上限')
+    # 随形态切换的必读文件：X 开读 i18n、X 关读 ui，互斥不相加；ui 增长后该任务在 X 关的形态超限
+    variant = {'v': ['template/b/d.md', ('template/i18n.md', '(X)'), ('template/ui.md', '(!X)')]}
+    vtexts = {'template/b/d.md': 'd' * 89 + '\n', 'template/i18n.md': 'i' * 389 + '\n', 'template/ui.md': 'u' * 189 + '\n'}
+    got = readings(config, vtexts, variant, combinations)['v']
+    if got[0] != 480 or not got[1]['X']:
+        failures.append(f'自检：互斥必读文件按形态选择、不相加，期望 480（X 开 Y 开），实际 {got[0]}')
+    grown = dict(vtexts, **{'template/ui.md': 'u' * 589 + '\n'})
+    got = readings(config, grown, variant, combinations)['v']
+    if got[0] != 680 or got[1]['X'] or not over_limit({'v': got[0]}, {'v': limit_of(480)}):
+        failures.append(f'自检：替代文档增长后该任务须在其形态超限，期望 680（X 关），实际 {got[0]}')
+    # 入口：同一条 run_gate 路径，超限返回 1 且有诊断，合法输入返回 0
+    gate_index = 'template/docs/README.md'
+    gate_texts = {gate_index: '## 按任务读取\n\n| 任务 | 必读 | 按需 |\n| --- | --- | --- |\n| 后端 | a | |\n',
+                  **vtexts}
+    gate_tasks = {'v': ('样例', variant['v'])}
+    for name, texts_in, expected in (('合法输入退出 0', gate_texts, 0),
+                                     ('超限输入非零退出并报超限', dict(gate_texts, **grown), 1)):
+        lines: list[str] = []
+        code = run_gate(config, texts_in, gate_tasks, [gate_index], {RESIDENT_NAME: 100, 'v': 480}, True,
+                        out=lines.append, err=lines.append)
+        if code != expected or (expected and not any('超过上限：v' in line for line in lines)):
+            failures.append(f'自检：入口{name}，期望退出 {expected}，实际 {code}：{lines}')
     # 读取表：一行一条路由；同一形态任务名不重复，互斥分支同名不算重复
     head = '## 按任务读取\n\n说明\n\n| 任务 | 必读 | 按需 |\n| --- | --- | --- |\n'
     good = head + '| 后端 | a | |\n<!--#if (X)-->\n| 文案 | b | |\n<!--#else-->\n| 文案 | c | |\n<!--#endif-->\n\n## 其他\n'
@@ -273,6 +319,38 @@ def self_test() -> list[str]:
     return failures
 
 
+def run_gate(config: dict, texts: dict[str, str], tasks: dict[str, tuple[str, list]], resident: list[str],
+             targets: dict[str, int], check: bool, show_files: bool = False,
+             out=print, err=lambda line: print(line, file=sys.stderr)) -> int:
+    """结构检查、计量与上限比对；--check 时任一不过返回 1。main 与自检的入口反例共用这一条路径。"""
+    combinations = model.all_combinations(config)
+    index = next((path for path in resident if path.endswith('docs/README.md')), None)
+    errors = missing_companions(tasks) + resident_overlap(tasks, resident)
+    if index:
+        errors += route_problems(config, index, texts[index], combinations)
+    if errors:
+        for line in errors:
+            err(line)
+        return 1
+    measured = readings(config, texts, {RESIDENT_NAME: resident} | {t: files for t, (_, files) in tasks.items()},
+                        combinations)
+    samples = {RESIDENT_NAME: '常驻：项目 Skill 入口与文档索引'} | {t: sample for t, (sample, _) in tasks.items()}
+    limits = {task: limit_of(targets[task]) for task in measured}
+    for task, (total, values, sizes) in measured.items():
+        status = 'OK' if total <= limits[task] else 'OVER'
+        out(f'{task:15} {total:7} 上限 {limits[task]:7} 目标 {targets[task]:7} {status}  # {samples[task]}')
+        if show_files:
+            shape = ', '.join(f'{k}={values[k]}' for k in model.EFFECTIVE_DIMENSIONS if k in values)
+            out(f'    形态：{shape}')
+            for path, size in sizes:
+                out(f'    {size:7}  {path}')
+    over = over_limit({task: total for task, (total, _, _) in measured.items()}, limits)
+    if check and over:
+        err(f'超过上限：{", ".join(over)}；先去重压缩，确需更多内容时在规格里写理由后上调 TARGETS')
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--check', action='store_true', help='任一读数超过上限或结构检查不过时以非 0 退出')
@@ -285,34 +363,9 @@ def main() -> int:
         print('\n'.join(errors) if errors else '✅ 读取成本闸门自检通过', file=sys.stderr if errors else sys.stdout)
         return 1 if errors else 0
     config = json.loads(model.CONFIG_PATH.read_text(encoding='utf-8'))
-    combinations = model.all_combinations(config)
     texts = {path: (ROOT / path).read_text(encoding='utf-8')
-             for files in [RESIDENT] + [files for _, files in TASKS.values()] for path in files}
-    errors += missing_companions(TASKS) + resident_overlap(TASKS, RESIDENT)
-    errors += route_problems(config, INDEX, texts[INDEX], combinations)
-    if errors:
-        print('\n'.join(errors), file=sys.stderr)
-        return 1
-
-    measured = readings(config, texts, {RESIDENT_NAME: RESIDENT} | {t: files for t, (_, files) in TASKS.items()},
-                        combinations)
-    samples = {RESIDENT_NAME: '常驻：项目 Skill 入口与文档索引'} | {t: sample for t, (sample, _) in TASKS.items()}
-    limits = {task: limit_of(TARGETS[task]) for task in measured}
-    for task, (total, values, sizes) in measured.items():
-        status = 'OK' if total <= limits[task] else 'OVER'
-        print(f'{task:15} {total:7} 上限 {limits[task]:7} 目标 {TARGETS[task]:7} {status}  # {samples[task]}')
-        if args.files:
-            shape = ', '.join(f'{k}={values[k]}' for k in model.EFFECTIVE_DIMENSIONS)
-            print(f'    形态：{shape}')
-            for path, size in sizes:
-                print(f'    {size:7}  {path}')
-
-    over = over_limit({task: total for task, (total, _, _) in measured.items()}, limits)
-    if args.check and over:
-        print(f'超过上限：{", ".join(over)}；先去重压缩，确需更多内容时在规格里写理由后上调 TARGETS', file=sys.stderr)
-        return 1
-    return 0
-
+             for files in [RESIDENT] + [files for _, files in TASKS.values()] for path in paths_of(files)}
+    return run_gate(config, texts, TASKS, RESIDENT, TARGETS, args.check, args.files)
 
 if __name__ == '__main__':
     sys.exit(main())

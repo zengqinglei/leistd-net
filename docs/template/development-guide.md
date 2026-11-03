@@ -145,7 +145,7 @@ Identity 形态用 `MapTenantConnections` 映射端点，Resource 形态用 `Lei
 
 - Skill、生成项目规范与入口文件的分工以 [三层交付与 AI 协作](../architecture/collaboration-scenarios.md#2-skill-边界) 为准。
 - `template/docs/README.md` 是生成项目唯一文档索引，含按任务读取表，一行一条路由；改动 `template/docs/` 时同步该表，核心规范以约 10,000 字符为精简提示值，超出先删重复与冗长示例，再按独立任务主题拆分。关键规则放在文件前部。
-- `scripts/check-all.ps1` 运行 `python3 scripts/measure-template-read-cost.py --check`（夹具自检用 `--self-test`）：按生成后的内容计量，对全部参数组合裁剪条件块（两个分支不相加），每类典型任务取最重组合的去重读取字符数（含项目 Skill 所需 reference、Spartan 必读 rules）；项目 Skill 的 `SKILL.md` 与 `template/docs/README.md` 作为常驻部分单独一行读数与上限，不重复计入任务。上限是登记目标值加 10% 余量，超出即失败：先压缩去重；确需更多内容时在对应规格里写理由后上调脚本里的登记目标值。拆出专题文件时同步读取表、脚本里的任务模型，以及 `scripts/generated-project-checks.ps1` 的规范文件登记（前端专题另加进 `template.json` 的 `!SpaFrontend` 排除项）；不靠少登记必读文件达标。
+- `scripts/check-all.ps1` 运行 `python3 scripts/measure-template-read-cost.py --check`（夹具自检用 `--self-test`）：按生成后的内容计量，对全部参数组合裁剪条件块（两个分支不相加），每类典型任务在同一组合内按该形态的读取集合（读取表随形态切换的必读文件只计当前形态那一份）求去重字符数，再取最重组合（含项目 Skill 所需 reference、Spartan 必读 rules）；项目 Skill 的 `SKILL.md` 与 `template/docs/README.md` 作为常驻部分单独一行读数与上限，不重复计入任务。上限是登记目标值加 10% 余量，超出即失败：先压缩去重；确需更多内容时在对应规格里写理由后上调脚本里的登记目标值。拆出专题文件时同步读取表、脚本里的任务模型，以及 `scripts/generated-project-checks.ps1` 的规范文件登记（前端专题另加进 `template.json` 的 `!SpaFrontend` 排除项）；不靠少登记必读文件达标。
 - 压缩或改写规范与 Skill 时，以 [Skill 验收](../architecture/collaboration-scenarios.md#6-skill-验收) 的真实请求回归，确认关键规则仍被读到并遵循；字数不是唯一判据。
 - `template/docs/standards/` 只保存工程事实，不重复 Skill 流程；不携带固定需求、规范或报告模板，不预建按需目录。它是生成项目的规范基线，随模板版本整体更新；项目自己的规则写入生成项目的 docs/project/（按需创建，不预建），冲突时以项目规则为准，优先级写在 `template/docs/README.md`。
 - 修改任何 Skill 时使用官方 `skill-creator` 并运行 `scripts/validate-skills.ps1`。
