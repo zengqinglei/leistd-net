@@ -155,6 +155,18 @@ body {
 }
 
 @theme inline {
+  --animate-indeterminate: indeterminate 4s ease-in-out infinite;
+
+  @keyframes indeterminate {
+    0% {
+      transform: translateX(-100%) scaleX(0.5);
+    }
+
+    100% {
+      transform: translateX(100%) scaleX(0.5);
+    }
+  }
+
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);

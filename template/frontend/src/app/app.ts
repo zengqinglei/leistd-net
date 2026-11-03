@@ -17,6 +17,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { catchError, defaultIfEmpty, map, Observable, of, switchMap } from 'rxjs';
 //#endif
 
+import { NavigationProgress } from './core/components/navigation-progress/navigation-progress';
 import {
   ApplicationHttpError,
   applicationErrorMessage,
@@ -34,9 +35,19 @@ const APP_NAME = 'Template Project';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, HlmToaster, HlmSpinner, HlmButton, NgIcon, ...HlmCardImports],
+  imports: [
+    RouterOutlet,
+    HlmToaster,
+    HlmSpinner,
+    HlmButton,
+    NgIcon,
+    ...HlmCardImports,
+    NavigationProgress,
+  ],
   providers: [provideIcons({ lucideRefreshCw })],
   template: `
+    <app-navigation-progress />
+
     <!-- 全局 toast 宿主。标题与说明保留换行：多个字段的校验错误、批量操作的失败项各占一行。
          按类型只给图标上色（底色保持中性）：颜色用语义令牌，暗色自动跟随；
          不用 sonner 的 richColors——那会连底色一起换成它自带的调色板，且暗色一档只在

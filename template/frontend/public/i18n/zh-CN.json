@@ -197,6 +197,9 @@
   },
   "app": {
     "name": "模板项目",
+    "navigation": {
+      "loading": "正在加载..."
+    },
     "startup": {
       "loading": "正在加载...",
       "failed": "应用加载失败",
