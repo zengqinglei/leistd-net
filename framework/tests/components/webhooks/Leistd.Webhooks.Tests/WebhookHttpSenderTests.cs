@@ -86,7 +86,8 @@ public sealed class WebhookHttpSenderTests(WebhookReceiver receiver) : IClassFix
 
         Assert.Null(result.StatusCode);
         Assert.Contains("timed out", result.Error, StringComparison.Ordinal);
-        Assert.InRange(result.Duration, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        // 证明确实等到了超时（不是立刻失败）且没有挂住；超时计时器与 Stopwatch 精度不同，触发时实测耗时可能略短于 1 秒
+        Assert.InRange(result.Duration, TimeSpan.FromMilliseconds(900), TimeSpan.FromSeconds(10));
     }
 
     /// <summary>调用方取消不是一次失败的尝试，必须照常抛出，否则停机时会把投递错记为失败。</summary>
