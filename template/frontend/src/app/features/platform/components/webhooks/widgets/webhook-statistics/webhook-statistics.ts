@@ -99,13 +99,6 @@ export class WebhookStatistics {
     successRate: 'webhooks.stats.successRate',
     deliveries: 'webhooks.stats.deliveries',
     failed: 'webhooks.stats.failed',
-    disabledSubscriptions: 'webhooks.stats.disabledShort',
-  };
-  /** 口径说明按钮的无障碍名称用完整指标名；卡片标题是短说法。 */
-  protected readonly nameKeys: Record<KpiId, string> = {
-    successRate: 'webhooks.stats.successRate',
-    deliveries: 'webhooks.stats.deliveries',
-    failed: 'webhooks.stats.failed',
     disabledSubscriptions: 'webhooks.stats.disabledSubscriptions',
   };
   protected readonly infoKeys: Record<KpiId, string> = {
@@ -227,7 +220,6 @@ const ENGLISH: Record<string, string> = {
   'webhooks.stats.currentCountBasis':
     'Subscriptions disabled right now. Not affected by the range.',
   'webhooks.stats.deliveries': 'Deliveries',
-  'webhooks.stats.disabledShort': 'Disabled',
   'webhooks.stats.disabledSubscriptions': 'Disabled subscriptions',
   'webhooks.stats.failed': 'Failed',
   'webhooks.stats.info.deliveries':
