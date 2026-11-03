@@ -97,6 +97,9 @@ function Assert-GeneratedDocumentation([string]$ProjectRoot) {
             "frontend-navigation.md", "frontend-routing.md", "frontend-data.md", "frontend-spartan.md")
     }
     if ($hasFrontendI18n) { $expectedStandards += "frontend-i18n.md" }
+    # webhooks.md 随 IncludeWebhooks 裁剪（!IncludeWebhooks 排除项）；按来源标记记录的参数判定，不靠其他产物推断。
+    $marker = Get-Content -LiteralPath (Join-Path $ProjectRoot ".leistd/template.json") -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
+    if ($marker.parameters.IncludeWebhooks -eq $true) { $expectedStandards += "webhooks.md" }
     $requiredFiles += @($expectedStandards | ForEach-Object { "docs/standards/$_" })
     if (-not $hasFrontend) {
         $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(".agents/skills/spartan/SKILL.md", "frontend/components.json") })

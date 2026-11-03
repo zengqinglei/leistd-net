@@ -602,6 +602,215 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.ToTable("SettingRecord", "companyname-projectname");
                 });
 
+#if (IncludeWebhooks)
+            modelBuilder.Entity("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AttemptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("RequestHeaders")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Response")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryId");
+
+                    b.ToTable("WebhookAttempt", "companyname-projectname");
+                });
+
+            modelBuilder.Entity("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AutoAttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<int?>("LastStatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NextTrigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreationTime");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("SubscriptionId", "CreationTime");
+
+                    b.ToTable("WebhookDelivery", "companyname-projectname");
+                });
+
+            modelBuilder.Entity("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.ToTable("WebhookEvent", "companyname-projectname");
+                });
+
+            modelBuilder.Entity("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatorId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("DisabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisabledReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.PrimitiveCollection<List<string>>("EventTypes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTime?>("FirstFailureAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Headers")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifierId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("PreviousSecret")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("PreviousSecretExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Secret")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "IsEnabled");
+
+                    b.ToTable("WebhookSubscription", "companyname-projectname");
+                });
+#endif
+
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.UserRole", b =>
                 {
                     b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.Role", null)
@@ -619,6 +828,32 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 {
                     b.Navigation("Roles");
                 });
+#if (IncludeWebhooks)
+
+            modelBuilder.Entity("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookAttempt", b =>
+                {
+                    b.HasOne("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookDelivery", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookDelivery", b =>
+                {
+                    b.HasOne("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Leistd.Webhooks.EntityFrameworkCore.Entities.WebhookSubscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+#endif
 #pragma warning restore 612, 618
         }
     }

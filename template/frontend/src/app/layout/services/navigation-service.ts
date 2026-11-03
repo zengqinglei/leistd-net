@@ -82,16 +82,26 @@ export class NavigationService {
         //#endif
       ],
     },
-    //#if (OpenIddictServer)
+    //#if (OpenIddictServer || IncludeWebhooks)
     {
       label: 'layout.sidebar.groupDeveloper',
       items: [
+        //#if (OpenIddictServer)
         {
           label: 'layout.sidebar.openApplications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
           permissions: [PERMISSIONS.openApplications.default],
         },
+        //#endif
+        //#if (IncludeWebhooks)
+        {
+          label: 'layout.sidebar.webhooks',
+          icon: 'lucideWebhook',
+          route: '/platform/webhooks',
+          permissions: [PERMISSIONS.webhooks.default],
+        },
+        //#endif
       ],
     },
     //#endif
@@ -176,16 +186,26 @@ export class NavigationService {
         //#endif
       ],
     },
-    //#if (OpenIddictServer)
+    //#if (OpenIddictServer || IncludeWebhooks)
     {
       label: 'Developer',
       items: [
+        //#if (OpenIddictServer)
         {
           label: 'Open applications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
           permissions: [PERMISSIONS.openApplications.default],
         },
+        //#endif
+        //#if (IncludeWebhooks)
+        {
+          label: 'Webhooks',
+          icon: 'lucideWebhook',
+          route: '/platform/webhooks',
+          permissions: [PERMISSIONS.webhooks.default],
+        },
+        //#endif
       ],
     },
     //#endif

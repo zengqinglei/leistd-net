@@ -1,0 +1,269 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <hlm-dialog
+    [autoFocus]="loading() ? 'first-heading' : 'first-tabbable'"
+    disableClose
+    [closeOnOutsidePointerEvents]="false"
+    [state]="visible() ? 'open' : 'closed'"
+    (stateChanged)="onDialogStateChange($event)"
+  >
+    <hlm-dialog-content
+      appImeGuard
+      *hlmDialogPortal
+      [appDialogFocus]="loading()"
+      [showCloseButton]="false"
+      (keydown.escape)="closeGuard.requestClose($event)"
+      class="min-w-[min(42rem,calc(100vw_-_2rem))] sm:max-w-2xl"
+    >
+      <hlm-dialog-header>
+        <h2 hlmDialogTitle tabindex="-1">
+          {{ isEditMode() ? t('webhooks.dialog.editHeader') : t('webhooks.dialog.createHeader') }}
+        </h2>
+        <p hlmDialogDescription>{{ t('webhooks.dialog.description') }}</p>
+      </hlm-dialog-header>
+
+      @if (loading()) {
+        <app-dialog-loading [text]="t('webhooks.dialog.loading')" />
+      } @else if (loadError(); as error) {
+        <div role="alert" data-dialog-body>
+          <p>{{ error }}</p>
+          <button hlmBtn variant="outline" type="button" (click)="retry.emit()">
+            {{ t('common.retry') }}
+          </button>
+        </div>
+      } @else {
+        <form (submit)="$event.preventDefault(); save()" #subscriptionFormRoot novalidate>
+          <div data-dialog-body class="flex flex-col gap-4 py-1">
+            <div hlmField>
+              <label hlmFieldLabel for="webhook-name">{{ t('webhooks.field.name') }}</label>
+              <input
+                hlmInput
+                id="webhook-name"
+                autocomplete="off"
+                class="w-full"
+                [formField]="subscriptionForm.name"
+                [placeholder]="t('webhooks.field.namePlaceholder')"
+              />
+              @for (error of subscriptionForm.name().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
+            </div>
+            <div hlmField>
+              <label hlmFieldLabel for="webhook-url">{{ t('webhooks.field.url') }}</label>
+              <input
+                hlmInput
+                id="webhook-url"
+                type="url"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                class="w-full font-mono"
+                [formField]="subscriptionForm.url"
+                placeholder="https://example.com/webhooks"
+              />
+              @if (subscriptionForm.url().errors().length === 0) {
+                <p hlmFieldDescription>{{ t('webhooks.field.urlHint') }}</p>
+              }
+              @for (error of subscriptionForm.url().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
+            </div>
+            <div hlmField>
+              <label hlmFieldLabel for="webhook-description">{{
+                t('webhooks.field.description')
+              }}</label>
+              <textarea
+                hlmTextarea
+                id="webhook-description"
+                rows="2"
+                autocomplete="off"
+                class="w-full"
+                [formField]="subscriptionForm.description"
+                [placeholder]="t('webhooks.field.descriptionPlaceholder')"
+              ></textarea>
+              @for (error of subscriptionForm.description().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{
+                  error.message ?? t('validation.' + error.kind, error)
+                }}</hlm-field-error>
+              }
+            </div>
+
+            <div class="flex items-center gap-3">
+              <hlm-separator class="flex-1" />
+              <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">{{
+                t('webhooks.dialog.sectionEvents')
+              }}</span>
+              <hlm-separator class="flex-1" />
+            </div>
+
+            <fieldset class="flex flex-col gap-3" data-testid="webhook-event-types">
+              <legend class="sr-only">{{ t('webhooks.dialog.sectionEvents') }}</legend>
+              <div class="flex items-start gap-3">
+                <hlm-checkbox
+                  inputId="webhook-all-events"
+                  [checked]="allEvents()"
+                  (checkedChange)="setAllEvents($event)"
+                />
+                <label for="webhook-all-events" class="flex flex-col gap-0.5 text-sm">
+                  <span class="font-medium">{{ t('webhooks.event.all') }}</span>
+                  <span class="text-muted-foreground text-xs">{{
+                    t('webhooks.event.allHint')
+                  }}</span>
+                </label>
+              </div>
+              @if (eventTypesLoading()) {
+                <hlm-spinner [aria-label]="t('app.startup.loading')" />
+              } @else if (eventTypesError(); as error) {
+                <p role="alert" class="text-sm">
+                  {{ error }}
+                  <button
+                    hlmBtn
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    (click)="reloadEventTypes.emit()"
+                  >
+                    {{ t('common.retry') }}
+                  </button>
+                </p>
+              } @else {
+                @for (group of eventGroups(); track group.group) {
+                  <div class="flex flex-col gap-2 ps-7">
+                    <span class="text-muted-foreground text-xs font-medium">{{ group.group }}</span>
+                    @for (type of group.types; track type.name) {
+                      <div class="flex items-center gap-3">
+                        <hlm-checkbox
+                          [inputId]="'webhook-event-' + type.name"
+                          [checked]="isEventSelected(type.name)"
+                          [disabled]="allEvents()"
+                          (checkedChange)="toggleEvent(type.name, $event)"
+                        />
+                        <label
+                          class="font-mono text-sm"
+                          [attr.for]="'webhook-event-' + type.name"
+                          >{{ type.name }}</label
+                        >
+                      </div>
+                    }
+                  </div>
+                }
+              }
+              @if (subscriptionForm.eventTypes().touched()) {
+                @for (error of subscriptionForm.eventTypes().errors(); track error.kind) {
+                  <p
+                    class="text-destructive text-sm"
+                    role="alert"
+                    data-testid="webhook-events-error"
+                  >
+                    {{ error.message ?? t('webhooks.dialog.eventsRequired') }}
+                  </p>
+                }
+              }
+            </fieldset>
+
+            <div class="flex items-center gap-3">
+              <hlm-separator class="flex-1" />
+              <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">{{
+                t('webhooks.dialog.sectionHeaders')
+              }}</span>
+              <hlm-separator class="flex-1" />
+            </div>
+
+            <div class="flex flex-col gap-2" data-testid="webhook-headers">
+              @for (row of formModel().headers; track row.key; let index = $index) {
+                <div class="flex items-center gap-2">
+                  <input
+                    hlmInput
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    class="min-w-0 flex-1 font-mono"
+                    [attr.aria-label]="t('webhooks.field.headerName', { index: index + 1 })"
+                    [placeholder]="t('webhooks.field.headerNamePlaceholder')"
+                    [value]="row.name"
+                    (input)="setHeader(row.key, 'name', $any($event.target).value)"
+                  />
+                  <input
+                    hlmInput
+                    autocomplete="off"
+                    spellcheck="false"
+                    class="min-w-0 flex-1 font-mono"
+                    [attr.aria-label]="t('webhooks.field.headerValue', { index: index + 1 })"
+                    [placeholder]="t('webhooks.field.headerValuePlaceholder')"
+                    [value]="row.value"
+                    (input)="setHeader(row.key, 'value', $any($event.target).value)"
+                  />
+                  <button
+                    hlmBtn
+                    variant="ghost"
+                    size="icon-sm"
+                    type="button"
+                    class="shrink-0"
+                    [attr.aria-label]="t('common.remove')"
+                    (click)="removeHeader(row.key)"
+                  >
+                    <ng-icon name="lucideX" />
+                  </button>
+                </div>
+              } @empty {
+                <p class="text-muted-foreground text-sm">{{ t('webhooks.dialog.noHeaders') }}</p>
+              }
+              @for (error of subscriptionForm.headers().errors(); track error.kind) {
+                <p class="text-destructive text-sm" role="alert">
+                  {{ error.message ?? t('webhooks.dialog.headerIncomplete') }}
+                </p>
+              }
+              <button
+                hlmBtn
+                variant="outline"
+                size="sm"
+                type="button"
+                class="self-start"
+                [disabled]="formModel().headers.length >= maxHeaderCount"
+                (click)="addHeader()"
+              >
+                <ng-icon name="lucidePlus" data-icon="inline-start" />
+                {{ t('webhooks.dialog.addHeader') }}
+              </button>
+              <p class="text-muted-foreground text-xs">{{ t('webhooks.dialog.headersHint') }}</p>
+            </div>
+          </div>
+          <hlm-dialog-footer>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              [disabled]="saving()"
+              (click)="closeGuard.requestClose()"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button hlmBtn type="submit" [disabled]="saving() || eventTypesLoading()">
+              @if (saving()) {
+                <hlm-spinner
+                  [aria-label]="t('app.startup.loading')"
+                  class="text-base"
+                  data-icon="inline-start"
+                />
+              }
+              {{ isEditMode() ? t('common.save') : t('common.create') }}
+            </button>
+          </hlm-dialog-footer>
+        </form>
+      }
+      <app-dialog-close
+        #closeGuard="appDialogClose"
+        [dirty]="subscriptionForm().dirty()"
+        [busy]="saving()"
+        (dismissed)="visible.set(false)"
+      />
+    </hlm-dialog-content>
+  </hlm-dialog>
+</ng-container>

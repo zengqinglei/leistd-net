@@ -100,6 +100,16 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   //#if (OpenIddictServer)
   'auth.token.issued': () => 'Issued an access token',
   //#endif
+  //#if (IncludeWebhooks)
+  'webhook-subscription.created': (t) => `Created webhook subscription ${t}`,
+  'webhook-subscription.updated': (t) => `Updated webhook subscription ${t}`,
+  'webhook-subscription.deleted': (t) => `Deleted webhook subscription ${t}`,
+  'webhook-subscription.secret-rotated': (t) => `Rotated the secret of webhook subscription ${t}`,
+  'webhook-subscription.enabled': (t) => `Enabled webhook subscription ${t}`,
+  'webhook-subscription.disabled': (t) => `Disabled webhook subscription ${t}`,
+  'webhook-subscription.auto-disabled': (t) =>
+    `Webhook subscription ${t} was disabled automatically after failed deliveries`,
+  //#endif
 };
 
 /** 无目标时的变体（目标记为 `-`）：创建类端点在授权阶段被拒，以及本来就不带目标的动作。 */
@@ -111,6 +121,9 @@ const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
   //#endif
   //#if (LocalIdentity && Email)
   'setting.test-email-sent': 'Sent a test email',
+  //#endif
+  //#if (IncludeWebhooks)
+  'webhook-subscription.created': 'Created a webhook subscription',
   //#endif
 };
 //#endif

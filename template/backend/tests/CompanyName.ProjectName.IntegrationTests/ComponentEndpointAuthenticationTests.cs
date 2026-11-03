@@ -69,6 +69,12 @@ public sealed class ComponentEndpointAuthenticationTests(ProjectWebApplicationFa
             "/api/v1/tenants?offset=0&limit=10",
             $"/api/v1/tenant-connections/{await CreateTenantAsync()}",
 #endif
+#if (IncludeWebhooks)
+            "/api/v1/webhooks/event-types",
+            "/api/v1/webhooks/subscriptions?offset=0&limit=10",
+            "/api/v1/webhooks/deliveries?offset=0&limit=10",
+            $"/api/v1/webhooks/statistics?startDate={DateTime.UtcNow:yyyy-MM-dd}&endDate={DateTime.UtcNow:yyyy-MM-dd}&timeZone=UTC",
+#endif
         };
         var member = await CreateUserAsync(admin.Client);
         using var memberSession = await Factory.LoginAsync(member.Username, TestPassword);
@@ -92,6 +98,9 @@ public sealed class ComponentEndpointAuthenticationTests(ProjectWebApplicationFa
 #if (IncludeMultiTenancy)
             PermissionConstant.Tenants.Default,
             PermissionConstant.Tenants.Update,
+#endif
+#if (IncludeWebhooks)
+            PermissionConstant.Webhooks.Default,
 #endif
         ];
         await GrantAsync(PermissionGrantProviderNames.User, member.Id, permissions);
@@ -238,6 +247,12 @@ public sealed class ComponentEndpointAuthenticationTests
             "/api/v1/operation-records?offset=0&limit=10",
             "/api/v1/operation-records/filter-options",
 #endif
+#if (IncludeWebhooks)
+            "/api/v1/webhooks/event-types",
+            "/api/v1/webhooks/subscriptions?offset=0&limit=10",
+            "/api/v1/webhooks/deliveries?offset=0&limit=10",
+            $"/api/v1/webhooks/statistics?startDate={DateTime.UtcNow:yyyy-MM-dd}&endDate={DateTime.UtcNow:yyyy-MM-dd}&timeZone=UTC",
+#endif
         ];
         var subjectId = Guid.CreateVersion7();
         var tenantId = ProjectWebApplicationFactory.NewTenantId();
@@ -267,6 +282,9 @@ public sealed class ComponentEndpointAuthenticationTests
             await grants.GrantAsync(PermissionConstant.Roles.ManagePermissions, PermissionGrantProviderNames.User, subjectId.ToString());
 #if (IncludeOperationRecords)
             await grants.GrantAsync(PermissionConstant.OperationRecords.Default, PermissionGrantProviderNames.User, subjectId.ToString());
+#endif
+#if (IncludeWebhooks)
+            await grants.GrantAsync(PermissionConstant.Webhooks.Default, PermissionGrantProviderNames.User, subjectId.ToString());
 #endif
         }
 

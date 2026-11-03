@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Leistd.Webhooks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <!-- 默认 HTTP 发送器用 IHttpClientFactory；HttpClient 与 SocketsHttpHandler 属于 BCL -->
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <!-- 签名密钥以宿主 Data Protection 加密存储：只引用抽象，密钥环由宿主的 AddDataProtection 提供 -->
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 管理用例的分页契约 -->
+    <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
+    <!-- 管理用例的写操作在工作单元里完成，宿主已有工作单元时并入 -->
+    <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.Core\Leistd.UnitOfWork.Core.csproj" />
+    <!-- 订阅变更经可选 ILocalEventBus 发本地事件 -->
+    <ProjectReference Include="..\..\event-bus\Leistd.EventBus.Core\Leistd.EventBus.Core.csproj" />
+    <!-- 错误码的默认译文随包分发 -->
+    <ProjectReference Include="..\..\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
+    <!-- 错误码的状态语义默认值在本包登记（WebhookExceptionMappings） -->
+    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 组件错误码的默认中英文案，经 AddJsonLocalizationResources 登记，宿主资源可覆盖 -->
+    <EmbeddedResource Include="Resources\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- EF 包实现管理存储契约，投递处理调用签名器、密钥保护与结果分类器 -->
+    <InternalsVisibleTo Include="Leistd.Webhooks.EntityFrameworkCore" />
+    <!-- 端点映射时检查管理存储已注册 -->
+    <InternalsVisibleTo Include="Leistd.Webhooks.AspNetCore" />
+    <InternalsVisibleTo Include="Leistd.Webhooks.Tests" />
+  </ItemGroup>
+
+</Project>

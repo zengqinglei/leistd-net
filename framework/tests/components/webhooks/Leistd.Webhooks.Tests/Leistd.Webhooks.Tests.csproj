@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 发送器在真实 Kestrel 接收端上验证：重定向、超时与连接拦截只在真实套接字上成立 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 签名用 Standard Webhooks 官方库独立验签，不拿组件自己的算法验自己 -->
+    <PackageReference Include="StandardWebhooks.StandardWebhooks" />
+    <!--
+      使用关系型 Provider 而非 InMemory：实体配置、索引、租户过滤器与 Contains/分桶的翻译只有真正建库时才成立，
+      InMemory 全内存求值会让它们静默通过。
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- 退避、宽限期、连续失败与轮换过渡期都按时间判定，用官方 FakeTimeProvider 驱动 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <!-- 管理端点在最小宿主上验证授权、状态映射与输入校验 -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.Core\Leistd.Webhooks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.EntityFrameworkCore\Leistd.Webhooks.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\webhooks\Leistd.Webhooks.AspNetCore\Leistd.Webhooks.AspNetCore.csproj" />
+    <!-- 端点用例经真实的全局异常处理器，断言组件登记的 404 / 409 与校验 400 -->
+    <ProjectReference Include="..\..\..\..\components\exception-handling\Leistd.ExceptionHandling.AspNetCore\Leistd.ExceptionHandling.AspNetCore.csproj" />
+    <!-- 入口测试走真实的进程内队列与调度器，单副本由内存锁兜底分布式锁 -->
+    <ProjectReference Include="..\..\..\..\components\background-jobs\Leistd.BackgroundJobs.InProcess\Leistd.BackgroundJobs.InProcess.csproj" />
+    <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Memory\Leistd.Lock.Memory.csproj" />
+    <!-- 订阅变更事件的"提交后分发、回滚不分发"要经真实事件总线与工作单元的推迟机制验证 -->
+    <ProjectReference Include="..\..\..\..\components\event-bus\Leistd.EventBus.Local\Leistd.EventBus.Local.csproj" />
+    <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
+  </ItemGroup>
+
+</Project>

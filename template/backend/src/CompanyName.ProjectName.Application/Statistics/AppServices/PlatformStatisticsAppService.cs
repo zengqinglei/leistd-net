@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
 using CompanyName.ProjectName.Application.Settings.Timing;
 using CompanyName.ProjectName.Application.Statistics.Dtos;
@@ -30,8 +29,7 @@ namespace CompanyName.ProjectName.Application.Statistics.AppServices;
 /// <summary>平台统计应用服务。</summary>
 /// <remarks>
 /// <para>只读汇总，各项各查一次，不开工作单元：数字之间不要求同一快照。</para>
-/// <para>区间按请求的时区解释：起止日换算成 UTC，统计桶也按同一时区切，夏令时当天的日桶是 23 或 25 小时；
-/// 时钟只读一次，区间含今天时截到此刻。上一区间按日历前移同样的天数，比较相同的本地进度。</para>
+/// <para>区间按请求的时区解释（<see cref="StatisticsPeriod"/>）：时钟只读一次，区间含今天时截到此刻，上一区间按日历前移同样的天数。</para>
 /// <para>数据归哪个组件就经哪个组件的契约取：登录记录（含已归档的）经操作记录的读取契约，租户状态经租户管理用例。</para>
 /// </remarks>
 public class PlatformStatisticsAppService(
@@ -57,7 +55,7 @@ public class PlatformStatisticsAppService(
         CancellationToken cancellationToken = default)
     {
         var now = clock.Now;
-        var period = ResolvePeriod(input, now);
+        var period = StatisticsPeriod.Resolve(input, userTimeZoneProvider, now);
 
 #if (LocalIdentity)
         var users = await userRepository.GetQueryableAsync(cancellationToken);
@@ -121,18 +119,8 @@ public class PlatformStatisticsAppService(
 
         return new PlatformStatisticsOutputDto
         {
-            Range = new StatisticsRangeOutputDto
-            {
-                StartDate = period.StartDate,
-                EndDate = period.EndDate,
-                TimeZone = period.TimeZone.Id,
-                Granularity = period.Granularity,
-                Start = period.Start,
-                End = period.End,
-                PreviousStart = period.PreviousStart,
-                PreviousEnd = period.PreviousEnd
-            },
-            Buckets = period.Edges.Length == 0 ? [] : period.Edges[..^1],
+            Range = period.ToRange(),
+            Buckets = period.Buckets,
             TotalUsers = totalUsers,
             NewUsers = newUsers,
 #if (LocalIdentity)
@@ -150,90 +138,6 @@ public class PlatformStatisticsAppService(
 #endif
         };
     }
-
-    // 时区可用与结束日不晚于今天要用时区与时钟判断，DTO 自身校验不了；与其他字段错误同一通道（400）
-    private StatisticsPeriod ResolvePeriod(GetPlatformStatisticsInputDto input, DateTime now)
-    {
-        if (!userTimeZoneProvider.TryResolve(input.TimeZone, out var timeZone))
-        {
-            throw InvalidField("The time zone is not a valid IANA time zone.", nameof(GetPlatformStatisticsInputDto.TimeZone));
-        }
-
-        var startDate = input.StartDate!.Value;
-        var endDate = input.EndDate!.Value;
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, timeZone));
-        if (endDate > today)
-        {
-            throw InvalidField("The end date cannot be later than today.", nameof(GetPlatformStatisticsInputDto.EndDate));
-        }
-
-        var days = endDate.DayNumber - startDate.DayNumber + 1;
-        var start = DayStart(startDate, timeZone);
-        var fullEnd = DayStart(endDate.AddDays(1), timeZone);
-        var end = fullEnd < now ? fullEnd : now;
-
-        // 上一区间比较相同的本地进度：区间含今天时，终点是此刻的本地钟点前移同样的天数，而不是减 N×24 小时
-        var previousStart = DayStart(startDate.AddDays(-days), timeZone);
-        var previousEnd = end == fullEnd
-            ? DayStart(endDate.AddDays(1 - days), timeZone)
-            : ToUtc(TimeZoneInfo.ConvertTimeFromUtc(now, timeZone).AddDays(-days), timeZone);
-
-        var granularity = days == 1 ? StatisticsGranularity.Hour : StatisticsGranularity.Day;
-        var edges = new List<DateTime>();
-        if (end > start)
-        {
-            if (granularity == StatisticsGranularity.Hour)
-            {
-                // 小时桶按真实经过的时间步进：回拨日有 25 个、两个本地 01 点各成一桶，半小时时区的桶起点落在本地 :30
-                for (var edge = start; edge < end; edge = edge.AddHours(1))
-                {
-                    edges.Add(edge);
-                }
-            }
-            else
-            {
-                for (var date = startDate; DayStart(date, timeZone) is var edge && edge < end; date = date.AddDays(1))
-                {
-                    edges.Add(edge);
-                }
-            }
-
-            edges.Add(end);
-        }
-
-        return new StatisticsPeriod(
-            startDate, endDate, timeZone, granularity, start, end, previousStart, previousEnd, [.. edges]);
-    }
-
-    // 某个本地日的第一个时刻
-    private static DateTime DayStart(DateOnly date, TimeZoneInfo timeZone)
-        => ToUtc(date.ToDateTime(TimeOnly.MinValue), timeZone);
-
-    // 本地时刻换算 UTC：落在跳时缺口里的取缺口之后的第一个时刻，回拨重复的取较早的那一个
-    private static DateTime ToUtc(DateTime local, TimeZoneInfo timeZone)
-    {
-        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
-        if (timeZone.IsInvalidTime(local))
-        {
-            // 跳时都发生在整分钟上，从所在的那一分钟往后找到第一个存在的本地时刻
-            local = new DateTime(local.Year, local.Month, local.Day, local.Hour, local.Minute, 0, DateTimeKind.Unspecified);
-            while (timeZone.IsInvalidTime(local))
-            {
-                local = local.AddMinutes(1);
-            }
-        }
-
-        if (timeZone.IsAmbiguousTime(local))
-        {
-            var earlierOffset = timeZone.GetAmbiguousTimeOffsets(local).Max();
-            return DateTime.SpecifyKind(local - earlierOffset, DateTimeKind.Utc);
-        }
-
-        return TimeZoneInfo.ConvertTimeToUtc(local, timeZone);
-    }
-
-    private static ValidationException InvalidField(string message, string member)
-        => new(new ValidationResult(message, [member]), validatingAttribute: null, value: null);
 
     // 某一时刻存在的用户：创建于其前、且当时尚未删除（之后才删除的照样计入）
     private Task<int> CountExistingAsync(IQueryable<User> everCreated, DateTime moment, CancellationToken cancellationToken)
@@ -330,16 +234,4 @@ public class PlatformStatisticsAppService(
         };
     }
 #endif
-
-    // 一次统计的区间：请求的日历日期与时区、换算出的 UTC 范围与上一区间，以及本期的桶边界（零长度区间为空）
-    private sealed record StatisticsPeriod(
-        DateOnly StartDate,
-        DateOnly EndDate,
-        TimeZoneInfo TimeZone,
-        StatisticsGranularity Granularity,
-        DateTime Start,
-        DateTime End,
-        DateTime PreviousStart,
-        DateTime PreviousEnd,
-        DateTime[] Edges);
 }

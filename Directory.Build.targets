@@ -1,7 +1,7 @@
 <Project>
 
   <!--
-    仓库内直接构建模板源码时，按 Identity 全功能场景（ServiceRole=Identity、三个可选能力全开）
+    仓库内直接构建模板源码时，按 Identity 全功能场景（ServiceRole=Identity、可选能力全开）
     定义代码里实际引用的条件符号；RemoteTokenAuth 在该场景为假，故不定义。
     dotnet new 生成的项目不会包含此文件，仍由模板参数裁剪功能。
     scripts/check-template-symbols.ps1 只拦截这里的未定义符号，不校验组合是否与 template.json 的计算一致。
@@ -10,7 +10,7 @@
     在这里未经裁剪、不是合法 JSON，集成测试以生成项目为准（scripts/test-template-matrix.ps1）。
   -->
   <PropertyGroup Condition="$(MSBuildProjectName.StartsWith('CompanyName.ProjectName')) and Exists('$(MSBuildThisFileDirectory)template\.template.config\template.json')">
-    <DefineConstants>$(DefineConstants);LocalIdentity;OpenIddictServer;ExternalLogin;IncludeNotifications;IncludeLocalization</DefineConstants>
+    <DefineConstants>$(DefineConstants);LocalIdentity;OpenIddictServer;ExternalLogin;IncludeNotifications;IncludeLocalization;IncludeWebhooks</DefineConstants>
   </PropertyGroup>
 
   <!--

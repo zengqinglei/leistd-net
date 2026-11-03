@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出站 Webhook 组件 · 详细设计方案</title>
+<style>
+  /* 令牌取自 template/frontend/src/styles.css（亮色），设计稿与实现同源 */
+  :root {
+    --radius: 0.625rem;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.18 0.01 255);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.52 0.16 250);
+    --primary-foreground: oklch(0.99 0.002 250);
+    --secondary: oklch(0.966 0.004 250);
+    --secondary-foreground: oklch(0.24 0.02 255);
+    --muted: oklch(0.966 0.004 250);
+    --muted-foreground: oklch(0.505 0.015 255);
+    --accent: oklch(0.955 0.005 250);
+    --destructive: oklch(0.457 0.245 27.325);
+    --warning: oklch(0.47 0.12 70);
+    --success: oklch(0.51 0.13 155);
+    --info: oklch(0.52 0.12 230);
+    --border: oklch(0.925 0.005 250);
+    --input: oklch(0.86 0.02 250);
+    --ring: oklch(0.52 0.16 250);
+    --sidebar: oklch(0.966 0.004 250);
+    --doc-bg: oklch(0.985 0.003 250);
+    --anno: oklch(0.6 0.2 330);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--doc-bg); color: var(--foreground);
+    font: 14px/1.6 "Geist", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  code, .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  code { background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- 文档骨架 ---------- */
+  .doc { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1680px; margin: 0 auto; }
+  .toc { position: sticky; top: 0; height: 100vh; padding: 32px 20px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .toc .brand { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .toc .meta { font-size: 12px; color: var(--muted-foreground); margin-bottom: 24px; }
+  .toc a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; font-size: 14px; }
+  .toc a:hover { background: var(--accent); color: var(--foreground); }
+  .toc a.sub { padding-left: 24px; font-size: 13px; }
+  main { padding: 40px 56px 96px; min-width: 0; }
+  header.hero { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  header.hero h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  header.hero p { margin: 0; color: var(--muted-foreground); max-width: 960px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--secondary); color: var(--secondary-foreground); border: 1px solid var(--border); }
+  section.s { padding-top: 40px; }
+  section.s > h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px; }
+  section.s > h2 .no { color: var(--primary); font-variant-numeric: tabular-nums; }
+  section.s > .lead { color: var(--muted-foreground); margin: 0 0 20px; max-width: 1080px; }
+  h3 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
+  h4 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 10px; padding-left: 20px; }
+  li { margin: 2px 0; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card h4 { margin-top: 0; }
+  .card .k { font-size: 12px; color: var(--muted-foreground); }
+  .callout { border-left: 3px solid var(--primary); background: var(--card); border-radius: 0 12px 12px 0; padding: 14px 18px; margin: 12px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .callout.warn { border-left-color: var(--warning); }
+
+  table.t { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin: 8px 0 12px; }
+  table.t th { background: var(--muted); text-align: left; font-weight: 500; font-size: 13px; color: var(--muted-foreground); padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.t td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t td:first-child, table.t th:first-child { padding-left: 16px; }
+  .yes { color: var(--success); font-weight: 500; }
+  .no-c { color: var(--destructive); font-weight: 500; }
+  .mid { color: var(--warning); font-weight: 500; }
+
+  /* ---------- 链路图 ---------- */
+  .flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; align-items: stretch; margin: 12px 0 8px; }
+  .flow .step { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px; margin-right: 22px; }
+  .flow .step:last-child { margin-right: 0; }
+  .flow .step::after { content: "→"; position: absolute; right: -19px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); font-size: 16px; }
+  .flow .step:last-child::after { content: none; }
+  .flow .step .n { font-size: 12px; color: var(--primary); font-weight: 600; }
+  .flow .step .h { font-weight: 600; margin: 2px 0 4px; }
+  .flow .step .d { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; }
+  .flow .step.ext { background: var(--muted); }
+  .lane { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted-foreground); margin: 6px 0 0; }
+  .lane b { color: var(--foreground); font-weight: 500; }
+
+  /* ---------- 令牌标注 ---------- */
+  .swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+  .sw .c { height: 44px; }
+  .sw .l { padding: 8px 10px; font-size: 12px; }
+  .sw .l b { display: block; font-weight: 500; font-size: 13px; }
+  .anno { display: inline-block; font: 500 11px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--anno); border: 1px dashed var(--anno); border-radius: 4px; padding: 0 4px; background: oklch(0.98 0.02 330); white-space: nowrap; }
+  .anno-wrap { position: relative; }
+  .anno-abs { position: absolute; z-index: 2; }
+
+  /* ---------- 模拟应用外壳（Spartan 观感） ---------- */
+  .frame { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--background); box-shadow: 0 1px 2px oklch(0 0 0 / 4%), 0 8px 24px oklch(0 0 0 / 5%); margin: 12px 0; }
+  .frame-cap { font-size: 12px; color: var(--muted-foreground); margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+  .app { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 520px; }
+  .side { background: var(--sidebar); border-right: 1px solid var(--border); padding: 14px 10px; font-size: 14px; }
+  .side .logo { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 4px 8px 14px; }
+  .side .logo i { width: 22px; height: 22px; border-radius: 6px; background: var(--primary); display: inline-block; }
+  .side .g { font-size: 12px; color: var(--muted-foreground); padding: 10px 8px 4px; }
+  .side .it { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--foreground); }
+  .side .it .ic { width: 16px; height: 16px; background: currentColor; border-radius: 5px; opacity: .18; }
+  .side .it.on { background: oklch(1 0 0); box-shadow: 0 0 0 1px var(--border); font-weight: 500; }
+  .topbar { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 24px; font-size: 14px; color: var(--muted-foreground); }
+  .topbar b { color: var(--foreground); font-weight: 500; }
+  .content { padding: 24px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+
+  .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 16px; }
+  .toolbar .left, .toolbar .right { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .inp { height: 36px; border: 1px solid var(--input); border-radius: 8px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); background: var(--background); min-width: 240px; font-size: 14px; }
+  .inp.full { width: 100%; min-width: 0; color: var(--foreground); }
+  .inp.mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+  .inp .ph { color: var(--muted-foreground); }
+  .facet { height: 36px; border: 1px dashed var(--input); border-radius: 8px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .facet::before { content: "⊕"; color: var(--muted-foreground); }
+  .btn { height: 36px; border-radius: 8px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; border: 1px solid transparent; white-space: nowrap; }
+  .btn.pri { background: var(--primary); color: var(--primary-foreground); }
+  .btn.sec { background: var(--secondary); color: var(--secondary-foreground); }
+  .btn.out { background: var(--background); border-color: var(--input); }
+  .btn.ghost { background: transparent; }
+  .btn.des { background: var(--destructive); color: white; }
+  .btn.sm { height: 32px; padding: 0 10px; font-size: 13px; }
+  .ibtn { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted-foreground); font-size: 14px; }
+  .ibtn:hover { background: var(--accent); }
+
+  .seg { display: inline-flex; background: var(--muted); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg span { padding: 4px 14px; border-radius: 6px; font-size: 14px; color: var(--muted-foreground); }
+  .seg span.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 8%); font-weight: 500; }
+
+  .tbl { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .tbl table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tbl th { background: var(--muted); font-weight: 500; color: var(--muted-foreground); text-align: left; padding: 8px; height: 40px; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  .tbl td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .tbl th:first-child, .tbl td:first-child { padding-left: 16px; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl tr.exp td { background: oklch(0.985 0.003 250); }
+  .tbl tr.sel td { background: var(--accent); }
+  .tbl .t2 { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .tbl .t2 .a { font-weight: 500; }
+  .tbl .t2 .b { font: 12px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+  .tbl .xs { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+  .tbl .act { display: flex; gap: 2px; justify-content: flex-end; }
+  .pager { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+  .badge.dot::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+  .badge.secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .badge.success { background: oklch(0.51 0.13 155 / 12%); color: var(--success); }
+  .badge.warning { background: oklch(0.47 0.12 70 / 12%); color: var(--warning); }
+  .badge.destructive { background: oklch(0.457 0.245 27.325 / 10%); color: var(--destructive); }
+  .badge.outline { border-color: var(--border); color: var(--foreground); }
+
+  dl.kv { display: grid; grid-template-columns: minmax(6rem, auto) 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+  dl.kv dt { color: var(--muted-foreground); }
+  dl.kv dd { margin: 0; min-width: 0; }
+
+  .codebox { background: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font: 12px/1.6 "Geist Mono", ui-monospace, monospace; white-space: pre; overflow-x: auto; }
+
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .timeline .row { display: grid; grid-template-columns: 16px 140px 70px 70px 1fr; gap: 12px; align-items: center; font-size: 13px; }
+  .timeline .row i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; margin-left: 4px; }
+
+  /* 对话框与抽屉 */
+  .overlay { position: relative; background: oklch(0.18 0.01 255 / 35%); padding: 32px; display: flex; justify-content: center; align-items: flex-start; border-radius: 0 0 12px 12px; }
+  .dialog { background: var(--background); border: 1px solid var(--border); border-radius: 12px; width: min(680px, 100%); box-shadow: 0 16px 48px oklch(0 0 0 / 18%); display: flex; flex-direction: column; }
+  .dialog.narrow { width: min(440px, 100%); }
+  .dialog .hd { padding: 24px 24px 0; }
+  .dialog .hd h5 { margin: 0; font-size: 16px; font-weight: 500; }
+  .dialog .hd p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 14px; }
+  .dialog .bd { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .dialog .ft { padding: 0 24px 24px; display: flex; justify-content: flex-end; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14px; font-weight: 500; }
+  .field .desc { font-size: 12px; color: var(--muted-foreground); }
+  .sep { display: flex; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; }
+  .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .checks .grp { grid-column: 1 / -1; font-size: 12px; color: var(--muted-foreground); padding-top: 4px; }
+  .cb { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .cb::before { content: ""; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--input); flex-shrink: 0; }
+  .cb.on::before { content: "✓"; background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-size: 11px; line-height: 14px; text-align: center; font-weight: 600; }
+  .cb .v { margin-left: auto; font: 12px "Geist Mono", ui-monospace, monospace; color: var(--muted-foreground); }
+  .kvrow { display: grid; grid-template-columns: 1fr 1.6fr 32px; gap: 8px; }
+  .alert { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; gap: 10px; font-size: 14px; background: var(--card); }
+  .alert.warn { border-color: oklch(0.47 0.12 70 / 35%); background: oklch(0.47 0.12 70 / 6%); color: var(--warning); }
+  .alert .tx { color: var(--foreground); }
+
+  .sheet-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 560px; }
+  .sheet-wrap .dim { opacity: .45; filter: saturate(.6); }
+  .sheet { border-left: 1px solid var(--border); background: var(--background); box-shadow: -12px 0 32px oklch(0 0 0 / 10%); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .stat { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--card); }
+  .stat .k { font-size: 12px; color: var(--muted-foreground); }
+  .stat .v { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .sp { background: var(--muted); border-radius: 12px; padding: 4px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .sp .sph { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 12px; }
+  .sp .sph span { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .sp .sph i { margin-left: auto; font-style: normal; color: var(--muted-foreground); font-size: 12px; }
+  .sp .spb { background: var(--card); border-radius: 8px; box-shadow: 0 0 0 1px oklch(0.18 0.01 255 / 10%), 0 1px 2px oklch(0 0 0 / 5%); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .sp .row1 { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .sp .num { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .sp .row2 { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
+  .rangebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rangebar .sum { color: var(--muted-foreground); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .seg.sm span { padding: 2px 10px; font-size: 13px; }
+  .bar { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .bar b { display: inline-block; width: 48px; height: 6px; border-radius: 999px; background: var(--muted); position: relative; overflow: hidden; }
+  .bar b::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--success); border-radius: 999px; }
+  .bar.bad b::after { background: var(--destructive); }
+  .variant { border: 1px solid var(--border); border-radius: 16px; background: var(--card); padding: 24px 28px; margin: 24px 0; }
+  .variant > .vh { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .variant > .vh h3 { margin: 0; font-size: 20px; }
+  .variant > .vd { color: var(--muted-foreground); margin-bottom: 8px; }
+  .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .pc .card h4 { display: flex; gap: 6px; align-items: center; }
+  .rec { background: var(--primary); color: var(--primary-foreground); font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 500; }
+
+  @media (max-width: 1280px) {
+    .doc { grid-template-columns: 1fr; }
+    .toc { display: none; }
+    main { padding: 32px 24px 80px; }
+    .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 16px; }
+    .grid4, .swatches { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sheet-wrap { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+  <nav class="toc">
+    <div class="brand">出站 Webhook 组件</div>
+    <div class="meta">详细设计方案 · 2026-11-03<br>规格：docs/specs/2026-11-03-webhooks.md</div>
+    <a href="#bg">1 · 背景</a>
+    <a href="#problem">2 · 现状问题</a>
+    <a href="#strategy">3 · 核心策略</a>
+    <a class="sub" href="#s-flow">投递链路</a>
+    <a class="sub" href="#s-arch">包与分层</a>
+    <a class="sub" href="#s-reliab">可靠性与幂等</a>
+    <a class="sub" href="#s-config">配置与后台边界</a>
+    <a class="sub" href="#s-template">模板条件裁剪</a>
+    <a class="sub" href="#s-e2e">端到端接入</a>
+    <a href="#ui">4 · UI 设计</a>
+    <a class="sub" href="#ui-tokens">设计令牌</a>
+    <a class="sub" href="#ui-flow">用户任务流</a>
+    <a class="sub" href="#ui-a">方案 A+ · 选定</a>
+    <a class="sub" href="#ui-b">方案 B · 订阅详情页</a>
+    <a class="sub" href="#ui-c">方案 C · 列表 + 抽屉</a>
+    <a class="sub" href="#ui-cmp">对比与推荐</a>
+    <a href="#plan">5 · 实施计划</a>
+    <a href="#accept">6 · 验收标准</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <h1>出站 Webhook 组件 · 详细设计方案</h1>
+      <p>业务在工作单元内发布事件，框架负责可靠投递、签名、重试、停用与投递记录；模板用 <code>IncludeWebhooks</code> 整体裁剪后台管理页、权限、迁移与文档。</p>
+      <div class="chips">
+        <span class="chip">风险档：高</span>
+        <span class="chip">Framework：Leistd.Webhooks.Core / .EntityFrameworkCore / .AspNetCore</span>
+        <span class="chip">Template：IncludeWebhooks（默认 false）</span>
+        <span class="chip">签名：Standard Webhooks v1</span>
+        <span class="chip">语义：至少一次，不保证顺序</span>
+        <span class="chip">UI：方案 A+</span>
+      </div>
+    </header>
+
+    <!-- ================= 1 背景 ================= -->
+    <section class="s" id="bg">
+      <h2><span class="no">1</span>背景</h2>
+      <p class="lead">业务项目要把自己的业务事件推给第三方系统（例如"订单已付款时通知客户的 ERP"）。业界的出站 webhook 做法已经高度一致，适合由框架提前提供，交给业务项目使用后再按反馈改进（2026-11-03 立项）。</p>
+      <div class="grid4">
+        <div class="card"><h4>签名有事实标准</h4><p class="k">Standard Webhooks：<code>webhook-id</code>、<code>webhook-timestamp</code>、<code>webhook-signature</code>；HMAC-SHA256；OpenAI、Anthropic、Twilio 兼容。</p></div>
+        <div class="card"><h4>管线各家一致</h4><p class="k">发件箱 → 每个"事件 × 端点"一条投递记录 → 工作者发送 → 记录尝试 → 退避重试 → 自动停用。（Svix、Stripe、Boilerplate webhooks）</p></div>
+        <div class="card"><h4>运维能力是标配</h4><p class="k">投递日志、手动重发、测试事件、密钥轮换期双签。（Stripe、GitHub、Svix、Gitea）</p></div>
+        <div class="card"><h4>入站接收不做通用组件</h4><p class="k">微软 ASP.NET WebHooks 按服务商逐家做接收器，先归档、2023 年又被删除；各服务商都有官方 SDK。</p></div>
+      </div>
+      <h3>主流做法对照</h3>
+      <table class="t">
+        <thead><tr><th>维度</th><th>Stripe</th><th>GitHub</th><th>Svix（开源）</th><th>Boilerplate webhooks</th><th>本方案</th></tr></thead>
+        <tbody>
+          <tr><td>签名</td><td><code>Stripe-Signature</code> 含时间戳</td><td><code>X-Hub-Signature-256</code></td><td>Standard Webhooks</td><td>只签请求体，不含时间戳</td><td>Standard Webhooks v1</td></tr>
+          <tr><td>重试</td><td>3 天指数退避</td><td>不自动重试，可手动重投</td><td>7 次，约 27 小时</td><td>后台作业，最多 5 次</td><td>7 次，约 27 小时（同 Svix）</td></tr>
+          <tr><td>自动停用</td><td>有</td><td>—</td><td>连续失败 120 小时</td><td>默认关闭</td><td>连续失败 5 天，默认开启</td></tr>
+          <tr><td>内网拦截</td><td>托管服务自带</td><td>托管服务自带</td><td>默认屏蔽私网</td><td>无</td><td>连接时检查 IP，可放行白名单</td></tr>
+          <tr><td>投递日志 / 重发</td><td>控制台 15 天</td><td>3 天内可重投</td><td>有</td><td>有记录，无界面</td><td>后台页面，保留 62 天</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ================= 2 现状问题 ================= -->
+    <section class="s" id="problem">
+      <h2><span class="no">2</span>现状问题</h2>
+      <p class="lead">框架没有出站 webhook 能力，业务项目只能各写一套：签名格式各不相同，重试不持久，失败不可见，也不拦截内网地址。</p>
+      <table class="t">
+        <thead><tr><th style="width:22%">现状</th><th>事实</th><th style="width:30%">对 webhook 的影响</th></tr></thead>
+        <tbody>
+          <tr><td>事件总线</td><td>只做进程内同步分发，不持久（<code>framework/docs/components/event-bus.md</code>）</td><td>进程重启就丢事件</td></tr>
+          <tr><td>后台作业队列</td><td>不持久；文档写明"必须完成、失败要重试的作业不用本组件的队列"</td><td>不能直接拿来做跨天重试</td></tr>
+          <tr><td>Outbox</td><td>工作单元多处让跨系统副作用"走 Outbox"，但框架里没有</td><td>事件与业务不能原子提交</td></tr>
+          <tr><td>出站 HTTP</td><td><code>service-client</code> 面向内部服务调用：机器身份、令牌交换、错误还原</td><td>没有签名、投递记录与内网拦截</td></tr>
+          <tr><td>后台管理</td><td>没有订阅登记、密钥管理和投递日志的界面与权限</td><td>失败只能查日志，不能重发</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">可以复用的基础已经齐了：集群周期任务（分布式锁保证单副本运行）、带租户上下文的进程内队列、提交后分发的本地事件、Data Protection、按租户库执行的 <code>ITenantDatabaseRunner</code>、持久化组件的纵向切片约定。<b>不需要先造通用 Outbox。</b></div>
+    </section>
+
+    <!-- ================= 3 核心策略 ================= -->
+    <section class="s" id="strategy">
+      <h2><span class="no">3</span>核心策略</h2>
+      <p class="lead">事件表本身就是发件箱；提交后立即投递保证及时，集群扫描兜底保证不丢；接收方按 <code>webhook-id</code> 去重，框架不为极少数重复发送加抢占机制。</p>
+
+      <h3 id="s-flow">3.1 投递链路</h3>
+      <div class="flow">
+        <div class="step"><div class="n">① 发布</div><div class="h">业务事务内</div><div class="d">用例或 BeforeCommit 处理器调 <code>IWebhookPublisher</code>；载荷冻结为 JSON；为匹配的订阅写投递记录（NextAttemptAt = 现在 + 1 分钟宽限）</div></div>
+        <div class="step"><div class="n">② 提交</div><div class="h">同一事务</div><div class="d">业务回滚则事件一起回滚；提交即持久</div></div>
+        <div class="step"><div class="n">③ 立即投递</div><div class="h">进程内队列</div><div class="d">提交后入队，带租户上下文；毫秒级首发；丢了交给 ④</div></div>
+        <div class="step"><div class="n">④ 兜底扫描</div><div class="h">集群任务 · 10 秒</div><div class="d">逐个物理库放开租户过滤取到期记录，按记录切租户处理；负责重试与崩溃恢复</div></div>
+        <div class="step"><div class="n">⑤ 发送</div><div class="h">签名 + POST</div><div class="d">Standard Webhooks 三个头；超时 15 秒；不跟随重定向；连接时检查 IP</div></div>
+        <div class="step ext"><div class="n">⑥ 第三方</div><div class="h">接收方</div><div class="d">验签 → 按 id 去重 → 15 秒内回 2xx → 异步处理</div></div>
+      </div>
+      <div class="lane"><b>结果处理（按序）：</b>2xx 成功并清零失败起点 · 410 停用订阅 · 手动尝试失败即终态 · 自动尝试按退避表 <code>5s 5m 30m 2h 5h 10h 10h</code>（带 Retry-After 取较大值），预算用完即失败 · 连续失败 5 天自动停用并发 <code>WebhookSubscriptionChangedEvent</code>（类别 Disabled）</div>
+
+      <h3 id="s-arch">3.2 包与分层</h3>
+      <div class="grid3">
+        <div class="card">
+          <h4>Leistd.Webhooks.Core</h4>
+          <ul class="k">
+            <li><code>Definitions/</code> 事件类型声明</li>
+            <li><code>Publishing/</code> 发布入口与信封</li>
+            <li><code>Delivery/</code> 发送器（唯一替换点）、内网拦截、退避与结果分类</li>
+            <li><code>Signing/</code> Standard Webhooks v1，轮换期双签</li>
+            <li><code>Management/</code> 管理用例与 DTO</li>
+            <li><code>Events/</code> 自动停用事件</li>
+            <li><code>Options/ Errors/ Resources/</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Leistd.Webhooks.EntityFrameworkCore</h4>
+          <ul class="k">
+            <li>四张表：订阅、事件、投递、尝试</li>
+            <li>提交后立即投递</li>
+            <li>集群任务 <code>webhooks.dispatch</code></li>
+            <li>保留期任务 <code>webhooks.retention</code>（默认 62 天）</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Leistd.Webhooks.AspNetCore</h4>
+          <ul class="k">
+            <li><code>MapWebhooks(options)</code>：<code>ReadPolicy</code> / <code>ManagePolicy</code> 必填</li>
+            <li>订阅增删改、启停、轮换密钥、测试事件</li>
+            <li>投递日志分页、详情、重发</li>
+          </ul>
+        </div>
+      </div>
+      <p class="k" style="color:var(--muted-foreground);margin-top:10px">不另建签名包、入站接收包，也不建防内网访问的 HTTP 包：这几块各只有一个调用点。HTTP 发送用 BCL 与 <code>IHttpClientFactory</code>，Core 仍只依赖抽象；不挂 Polly 重试，因为重试是持久的、按计划执行的。</p>
+
+      <h3 id="s-reliab">3.3 可靠性、及时性与幂等</h3>
+      <table class="t">
+        <thead><tr><th style="width:16%">关注点</th><th>做法</th><th style="width:30%">刻意不做</th></tr></thead>
+        <tbody>
+          <tr><td>不丢</td><td>事件与投递记录写进业务 DbContext，与业务同一事务提交</td><td>通用 Outbox、消息中间件</td></tr>
+          <tr><td>及时</td><td>提交后立即入进程内队列发送；兜底最迟延迟 = 1 分钟宽限 + 10 秒扫描间隔</td><td>—</td></tr>
+          <tr><td>重试</td><td>持久的退避表，±10% 抖动；尊重 <code>Retry-After</code>；退避表用完标记失败，可手动重发</td><td>HTTP 层 Polly 重试</td></tr>
+          <tr><td>并发</td><td>扫描是集群任务，同时只有一个副本在跑；立即投递与扫描之间靠 1 分钟宽限期错开</td><td>行级租约、乐观并发抢占</td></tr>
+          <tr><td>多租户</td><td>按物理库进入后放开租户过滤取到期记录，每条在所属租户上下文与独立工作单元里处理；某库失败则本轮记失败</td><td>—</td></tr>
+          <tr><td>停用</td><td>停用时把该订阅待投递记录同事务改为失败；两个发送入口发请求前都检查订阅状态；重新启用可一并重发该订阅现存的全部失败投递</td><td>补发停用期间的事件</td></tr>
+          <tr><td>手动重发</td><td>只对终态开放；触发来源 <code>NextTrigger</code> 与排期同事务持久化，扫描恢复也记为手动；只发一次，失败（含带 Retry-After 的 429/503）即终态，不重开自动退避</td><td>—</td></tr>
+          <tr><td>发布入口</td><td>必须在活动工作单元内调用，否则抛异常；在事件处理器里发布须声明 <code>BeforeCommit</code></td><td>自开事务</td></tr>
+          <tr><td>幂等</td><td><code>webhook-id</code> = 事件 id，重试与手动重发都不变；接收方按它去重</td><td>发布侧幂等键</td></tr>
+          <tr><td>顺序</td><td>不保证；载荷带 <code>timestamp</code>，接收方按时间或回查 API 处理</td><td>按订阅串行投递</td></tr>
+          <tr><td>安全</td><td>签名带时间戳；密钥用 Data Protection 加密、只显示一次；连接时检查一次目标 IP</td><td>DNS 重绑定防护、出站代理、ed25519</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="s-config">3.4 配置项与后台边界</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>部署配置 · <code>Leistd:Webhooks</code>（不进设置页）</h4>
+          <table class="t" style="margin:0">
+            <thead><tr><th>键</th><th>默认</th></tr></thead>
+            <tbody>
+              <tr><td><code>RetrySchedule</code></td><td>5s, 5m, 30m, 2h, 5h, 10h, 10h</td></tr>
+              <tr><td><code>RequestTimeout</code></td><td>15 秒</td></tr>
+              <tr><td><code>DispatchInterval</code></td><td>10 秒</td></tr>
+              <tr><td><code>AutoDisableAfter</code></td><td>5 天</td></tr>
+              <tr><td><code>AllowedNetworks</code></td><td>空（模板开发环境放行回环）</td></tr>
+              <tr><td><code>SecretRotationOverlap</code></td><td>1 天</td></tr>
+              <tr><td><code>Retention:Enabled / Days</code></td><td>true / 62（覆盖 30 天环比）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h4>运行期业务数据（后台页面管理）</h4>
+          <ul>
+            <li><b>订阅</b>：名称、地址、事件类型、自定义请求头、启停</li>
+            <li><b>密钥</b>：创建与轮换时一次性显示；之后只显示前缀</li>
+            <li><b>投递日志</b>：按订阅、事件类型、状态、时间筛选；展开看每次尝试与载荷</li>
+            <li><b>运维动作</b>：发送测试事件、重发、重新启用时一并重发失败投递</li>
+          </ul>
+          <div class="callout warn" style="margin-top:12px">退避、超时、内网白名单是协议参数与信任边界，按设置组件的划界归部署配置。保留期以后要放进后台调整，模板可以照操作记录保留期的先例，在 <code>HostSettingBindings</code> 加一行映射；首版不做。</div>
+        </div>
+      </div>
+
+      <h3 id="s-template">3.5 模板条件裁剪：<code>IncludeWebhooks</code></h3>
+      <p>webhook 是可以独立取舍的产品边界，按模板开发规范定为布尔参数，<b>默认 <code>false</code></b>，适用于全部 <code>ServiceRole</code>；Resource 无前端时只生成后端。</p>
+      <table class="t">
+        <thead><tr><th style="width:14%">层</th><th>为 true 时生成</th><th style="width:28%">为 false 时须无残留</th></tr></thead>
+        <tbody>
+          <tr><td>Application</td><td>本地身份：<code>WebhookDefinitionProvider</code> 声明 <code>user.created</code>，在用户创建用例的同一工作单元内发布；Resource 不声明示例事件。统计用例与抽出的共享区间换算</td><td>目录、发布调用</td></tr>
+          <tr><td>Api</td><td><code>AddWebhooks</code>；<code>ComponentEndpoints</code> 映射 <code>webhooks</code>；权限 <code>App.Webhooks</code> / <code>.Manage</code>（开发者组）；写操作记录；开发环境放行回环</td><td>包引用、权限、端点、配置节</td></tr>
+          <tr><td>Infrastructure</td><td><code>ConfigureWebhooks()</code>；EF 存储与保留期；Identity / Resource 增量迁移 <code>AddWebhooks</code>（整文件守卫，并在生成排除中登记）</td><td>表、迁移、快照块</td></tr>
+          <tr><td>前端</td><td><code>platform/webhooks</code> 页面、开发者组菜单（组条件改为 <code>OpenIddictServer || IncludeWebhooks</code>）、权限常量、DTO、服务、词条、Mock、spec</td><td>路由、菜单、词条键</td></tr>
+          <tr><td>文档与 Skill</td><td>生成项目 <code>docs/standards/webhooks.md</code>（发布方写法 + 接收方接入指南）；读取清单与项目 Skill 加入口</td><td>文档与链接</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn"><b>代价：</b>有效形态从 320 组翻倍到 640 组，生成检查四个分片的耗时随之增加；矩阵新增 <code>webhooks</code>（core 档）与 <code>resource-api-webhooks</code>（full 档）两个场景。不和其他参数交叉组合（不桥接通知），所以不新增有效能力表达式。</div>
+
+      <h3 id="s-e2e">3.6 端到端：从框架到第三方</h3>
+      <table class="t">
+        <thead><tr><th style="width:14%">角色</th><th>要做的事</th></tr></thead>
+        <tbody>
+          <tr><td>框架</td><td>提供发布入口、投递管线、管理端点与组件文档；默认值可直接上线</td></tr>
+          <tr><td>业务项目引用</td><td>引用三个包 → <code>AddWebhooks()</code> + <code>AddWebhooksEfCore&lt;TDbContext&gt;()</code> + <code>AddWebhookRetention&lt;TDbContext&gt;()</code> → <code>modelBuilder.ConfigureWebhooks()</code> → 生成迁移 → <code>MapWebhooks(o =&gt; { o.ReadPolicy = …; o.ManagePolicy = …; })</code>。用模板生成时勾选 <code>IncludeWebhooks</code> 即可</td></tr>
+          <tr><td>业务集成</td><td>① 在 <code>IWebhookDefinitionProvider</code> 声明事件类型（对外契约，破坏性改动新开类型名）；② 在用例的工作单元内直接调 <code>PublishAsync</code>，或由声明 <code>BeforeCommit</code> 的领域事件处理器转换后调用；③ 敏感数据用 thin 载荷，让接收方回查 API</td></tr>
+          <tr><td>管理员</td><td>后台新建订阅 → 复制一次性密钥交给第三方 → 发送测试事件 → 在投递日志里确认成功</td></tr>
+          <tr><td>第三方接收方</td><td>用 Standard Webhooks 现成库验签 → 按 <code>webhook-id</code> 去重 → 15 秒内回 2xx，业务改为异步处理 → 不依赖顺序 → 不想再收就回 410</td></tr>
+        </tbody>
+      </table>
+<div class="codebox">POST https://erp.example.com/hooks/leistd
+webhook-id: 01JC6Q8V9X4T6M2R7K3N5P8W1Z
+webhook-timestamp: 1762156800
+webhook-signature: v1,K5oZfzN95Z9UVu1EsfQmfVNQhnkZ2pj9o9NDN/H/pI4=
+content-type: application/json
+
+{"type":"user.created","timestamp":"2026-11-03T08:00:00Z","data":{"userId":"3f2a9c1e"}}</div>
+    </section>
+
+    <!-- ================= 4 UI 设计 ================= -->
+    <section class="s" id="ui">
+      <h2><span class="no">4</span>UI 设计</h2>
+      <p class="lead">选定方案 A+（A 为基础，吸收 B、C 的优点）；B、C 作为备选保留。三版共用同一套令牌、同一个工具栏与表格写法；差别在"订阅"与"投递日志"两类信息如何组织。所有颜色都是语义令牌，字号只用规范里的四档。</p>
+
+      <h3 id="ui-tokens">4.1 设计令牌（与 <code>template/frontend/src/styles.css</code>、前端界面规范同源）</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>字号与字重（只用这四档）</h4>
+          <table class="t" style="margin:0">
+            <thead><tr><th>档位</th><th>用途</th><th>写法</th></tr></thead>
+            <tbody>
+              <tr><td style="font-size:16px;font-weight:500">16px</td><td>对话框、抽屉、卡片标题</td><td><code>text-base font-medium</code></td></tr>
+              <tr><td style="font-weight:600">14px</td><td>分区标题（对话框内分隔线）</td><td><code>text-sm font-semibold</code></td></tr>
+              <tr><td>14px</td><td>正文、表格、按钮、输入</td><td><code>text-sm</code></td></tr>
+              <tr><td style="font-size:12px">12px</td><td>辅助说明、时间、徽章、URL 第二行</td><td><code>text-xs</code></td></tr>
+            </tbody>
+          </table>
+          <p class="k" style="margin-top:8px;color:var(--muted-foreground)">列表页不设页面标题，直接从工具栏开始（与开放应用、操作记录一致）。字重只用 400 / 500 / 600。</p>
+        </div>
+        <div class="card">
+          <h4>间距与圆角</h4>
+          <table class="t" style="margin:0">
+            <thead><tr><th>位置</th><th>值</th></tr></thead>
+            <tbody>
+              <tr><td>页面外框</td><td><code>p-4 sm:p-6</code>（16 / 24px）</td></tr>
+              <tr><td>工具栏与表格之间</td><td><code>gap-6</code>（24px）</td></tr>
+              <tr><td>工具栏内控件</td><td><code>gap-3</code>（12px）；左右两组 <code>gap-x-4 gap-y-3</code></td></tr>
+              <tr><td>对话框字段之间</td><td><code>gap-4</code>（16px）</td></tr>
+              <tr><td>表格单元格</td><td>表头 <code>px-2</code>、单元格 <code>p-2</code>、首列 <code>first:ps-4</code></td></tr>
+              <tr><td>圆角</td><td>表格外框 / 对话框 <code>rounded-xl</code> · 控件、代码框 <code>rounded-md</code> · 徽章 <code>rounded-full</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <h4 style="margin-top:20px">语义色（亮色；暗色由 <code>.dark</code> 令牌自动切换，页面不写 <code>dark:</code>）</h4>
+      <div class="swatches">
+        <div class="sw"><div class="c" style="background:var(--primary)"></div><div class="l"><b>primary</b>主操作"新建订阅"、链接、焦点环</div></div>
+        <div class="sw"><div class="c" style="background:var(--success)"></div><div class="l"><b>success</b>徽章：启用、投递成功</div></div>
+        <div class="sw"><div class="c" style="background:var(--warning)"></div><div class="l"><b>warning</b>徽章：重试中；自动停用提示</div></div>
+        <div class="sw"><div class="c" style="background:var(--destructive)"></div><div class="l"><b>destructive</b>徽章：失败；删除操作</div></div>
+        <div class="sw"><div class="c" style="background:var(--secondary);border-bottom:1px solid var(--border)"></div><div class="l"><b>secondary</b>分类标签：事件类型、已停用</div></div>
+        <div class="sw"><div class="c" style="background:var(--muted);border-bottom:1px solid var(--border)"></div><div class="l"><b>muted</b>表头底色、代码框、分段控件轨道</div></div>
+      </div>
+      <h4 style="margin-top:20px">状态徽章（状态带圆点，分类不带）</h4>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span class="badge success dot">启用</span>
+        <span class="badge secondary dot">已停用</span>
+        <span class="badge warning dot">自动停用</span>
+        <span class="badge success dot">成功</span>
+        <span class="badge warning dot">重试中</span>
+        <span class="badge destructive dot">失败</span>
+        <span style="width:24px"></span>
+        <span class="badge secondary">user.created</span>
+        <span class="badge secondary">order.paid</span>
+        <span class="badge outline">手动</span>
+      </div>
+
+      <h3 id="ui-flow">4.2 用户任务流（三版共用）</h3>
+      <table class="t">
+        <thead><tr><th style="width:4%">#</th><th style="width:18%">任务</th><th>交互</th><th style="width:30%">对齐的现有页面</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>新建订阅</td><td>工具栏右侧"新建订阅" → 对话框（基本信息 / 订阅事件 / 请求头）→ 保存 → 一次性密钥对话框（复制后关闭）</td><td>开放应用：编辑对话框 + <code>secret-reveal-dialog</code></td></tr>
+          <tr><td>2</td><td>验证联通</td><td>行内"发送测试事件" → toast 提示已排队 → 投递日志出现 <code>webhook.test</code></td><td>系统设置：测试发信</td></tr>
+          <tr><td>3</td><td>看订阅状态</td><td>表格列：名称 + 地址、事件摘要、状态徽章、最近投递；被裁的列由行展开补偿</td><td>列表规范：列优先级 + 行展开</td></tr>
+          <tr><td>4</td><td>排查失败</td><td>投递日志按状态"失败"筛选 → 展开看尝试时间线、状态码、响应、载荷 → 重发</td><td>操作记录：分面筛选 + 展开详情 <code>dl</code></td></tr>
+          <tr><td>5</td><td>维护</td><td><code>…</code> 菜单：轮换密钥、停用 / 启用（启用时可勾选"一并重发失败投递"）、删除（分隔线后，破坏性）</td><td>操作列规范：常用优先、破坏性置后</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ===== 方案 A ===== -->
+      <div class="variant" id="ui-a">
+        <div class="vh"><h3>方案 A+ · 单页双视图 + 统计卡</h3><span class="rec">已选定</span></div>
+        <p class="vd">以方案 A 为基础，投递详情改用方案 C 的抽屉：一个菜单入口，分段控件在"订阅"与"投递日志"间切换，视图与筛选记在 URL query。顶部加一行仪表盘同款统计卡（吸收方案 B），订阅表加"近 7 天成功率"列，并提供一步跳转到带筛选的投递日志（吸收方案 C）。</p>
+        <table class="t">
+          <thead><tr><th style="width:18%">吸收的优点</th><th>在 A+ 里的做法</th><th style="width:30%">依据 / 代价</th></tr></thead>
+          <tbody>
+            <tr><td>B · 聚合统计</td><td>四张 <code>app-stat-panel</code>：成功率、投递数、失败（附重试中条数）、已停用订阅；前三张带环比徽章与迷你趋势；区间 今天 / 7 天 / 30 天</td><td>仪表盘 KPI 卡同一组件与写法；组件只按 UTC 桶计数，日历区间由模板统计端点换算（同平台统计）</td></tr>
+            <tr><td>B · 单订阅健康度</td><td>订阅表"近 7 天成功率"列（进度条 + 百分比）；投递日志按订阅筛选时，统计卡只统计该订阅</td><td>不新增详情路由；列表查询多一次按订阅分组计数</td></tr>
+            <tr><td>C · 一步跳转</td><td>点"最近投递"徽章或 <code>…</code> 菜单"查看投递"→ 投递日志带订阅筛选；点"失败"卡 → 投递日志筛选失败</td><td>只改 URL query，复用同一页面状态</td></tr>
+            <tr><td>C · 抽屉（投递详情）</td><td>投递日志不做行展开，右侧抽屉从上到下：概要 → 请求（头 + 体）→ 调用记录；每次尝试保存实际发出的头部快照（不含签名）</td><td>详情长、需纵向铺排；Stripe、Svix 同样用侧边面板。订阅表详情短，仍用行展开</td></tr>
+            <tr><td>仪表盘 · 需要关注</td><td>已停用订阅卡带"需要关注"徽章；区间摘要写"N 个订阅需要关注"</td><td>与仪表盘摘要行同一写法</td></tr>
+          </tbody>
+        </table>
+
+        <p class="frame-cap"><span class="anno">A-1</span>订阅视图（1440 宽）：统计卡 → 工具栏 → 表格，块间 <code>gap-6</code></p>
+        <div class="frame">
+          <div class="app">
+            <aside class="side">
+              <div class="logo"><i></i>MyProject</div>
+              <div class="g">工作</div><div class="it"><span class="ic"></span>仪表盘</div>
+              <div class="g">身份与访问</div><div class="it"><span class="ic"></span>用户</div><div class="it"><span class="ic"></span>角色</div>
+              <div class="g">开发者</div><div class="it"><span class="ic"></span>开放应用</div><div class="it on"><span class="ic"></span>Webhooks</div>
+              <div class="g">审计</div><div class="it"><span class="ic"></span>操作记录</div>
+              <div class="g">系统</div><div class="it"><span class="ic"></span>系统设置</div>
+            </aside>
+            <div>
+              <div class="topbar">平台管理 / 开发者 / <b>Webhooks</b></div>
+              <div class="content anno-wrap">
+                <span class="anno anno-abs" style="top:4px;right:8px">p-6 · gap-6</span>
+<div class="rangebar">
+                  <span class="sum">近 7 天 · 1,284 次投递 · 1 个订阅需要关注</span>
+                  <div class="seg sm"><span>今天</span><span class="on">7 天</span><span>30 天</span></div>
+                </div>
+                <div class="kpis anno-wrap">
+                  <span class="anno anno-abs" style="top:-18px;left:0">app-stat-panel · grid-cols-2 @[54rem]:grid-cols-4 · gap-4</span>
+                  <div class="sp"><div class="sph"><span>成功率</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num">99.2%</span><svg width="88" height="32" viewBox="0 0 88 32" aria-hidden="true"><polyline fill="none" stroke="var(--chart-1, oklch(0.52 0.16 250))" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="2,20 16,18 30,22 44,12 58,14 72,8 86,10"/></svg></div><div class="row2"><span class="badge success">↗ +0.6%</span><span>较前 7 天</span></div></div></div>
+                  <div class="sp"><div class="sph"><span>投递数</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num">1,284</span><svg width="88" height="32" viewBox="0 0 88 32" aria-hidden="true"><polyline fill="none" stroke="oklch(0.52 0.16 250)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="2,24 16,20 30,22 44,14 58,16 72,10 86,6"/></svg></div><div class="row2"><span class="badge success">↗ +12%</span><span>较前 7 天</span></div></div></div>
+                  <div class="sp"><div class="sph"><span>失败</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num">11</span><svg width="88" height="32" viewBox="0 0 88 32" aria-hidden="true"><polyline fill="none" stroke="oklch(0.457 0.245 27.325)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="2,10 16,14 30,8 44,18 58,20 72,22 86,24"/></svg></div><div class="row2"><span class="badge success">↘ −35%</span><span>另有 3 条重试中</span></div></div></div>
+                  <div class="sp"><div class="sph"><span>已停用订阅</span><span class="badge warning" style="margin-left:auto">需要关注</span></div><div class="spb"><div class="row1"><span class="num">1</span></div><div class="row2"><span>共 3 个订阅 · 存量，不随区间变化</span></div></div></div>
+                </div>
+                <div class="toolbar">
+                  <div class="left">
+                    <div class="seg"><span class="on">订阅</span><span>投递日志</span></div>
+                    <div class="inp">⌕ <span class="ph">搜索名称或地址</span></div>
+                    <span class="facet">状态</span>
+                    <span class="facet">事件类型</span>
+                    <span class="anno">gap-3</span>
+                  </div>
+                  <div class="right">
+                    <span class="btn sec">↻ 刷新</span>
+                    <span class="btn pri">＋ 新建订阅</span>
+                  </div>
+                </div>
+                <div class="tbl">
+                  <table>
+                    <thead><tr><th style="width:24px"></th><th>名称 / 地址</th><th>订阅事件</th><th>状态</th><th>近 7 天成功率</th><th>最近投递</th><th>创建时间</th><th style="text-align:right">操作</th></tr></thead>
+                    <tbody>
+                      <tr><td>›</td><td><div class="t2"><span class="a">ERP 订单同步</span><span class="b">https://erp.example.com/hooks/leistd</span></div></td><td><span class="badge secondary">order.paid</span> <span class="xs">+2</span></td><td><span class="badge success dot">启用</span></td><td><span class="bar" style="--w:99%"><b></b>99.4%</span></td><td><span class="badge success dot">成功</span> <span class="xs">2 分钟前</span></td><td class="xs">2026-11-01 10:24</td><td><div class="act"><span class="ibtn" title="编辑">✎</span><span class="ibtn" title="发送测试事件">➤</span><span class="ibtn">⋯</span></div></td></tr>
+                      <tr class="exp"><td>⌄</td><td><div class="t2"><span class="a">客户门户用户开通</span><span class="b">https://portal.example.com/api/webhooks/users</span></div></td><td><span class="badge secondary">user.created</span></td><td><span class="badge warning dot">自动停用</span></td><td><span class="bar bad" style="--w:100%"><b></b>0%</span></td><td><span class="badge destructive dot">失败</span> <span class="xs">5 天前</span></td><td class="xs">2026-10-12 09:03</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">➤</span><span class="ibtn">⋯</span></div></td></tr>
+                      <tr class="exp"><td></td><td colspan="7" style="padding:12px 16px 16px 40px">
+                        <dl class="kv">
+                          <dt>停用原因</dt><dd><span style="color:var(--warning)">连续失败超过 5 天（自 2026-10-28 08:12 起）</span></dd>
+                          <dt>密钥</dt><dd class="mono">whsec_8KfD••••••••</dd>
+                          <dt>请求头</dt><dd class="mono">X-Tenant-Code: acme</dd>
+                          <dt>说明</dt><dd>用户开通后同步到客户门户，客户方运维负责人：张三</dd>
+                        </dl>
+                      </td></tr>
+                      <tr><td>›</td><td><div class="t2"><span class="a">数据仓库</span><span class="b">https://dw.example.com/ingest/events</span></div></td><td><span class="badge secondary">全部事件</span></td><td><span class="badge secondary dot">已停用</span></td><td class="xs">—</td><td class="xs">—</td><td class="xs">2026-09-30 17:40</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">➤</span><span class="ibtn">⋯</span></div></td></tr>
+                    </tbody>
+                  </table>
+                  <div class="pager"><span>共 3 条</span><span>每页 20 · ‹ 1 ›</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="frame-cap"><span class="anno">A-2</span>投递日志视图：不做行展开，点整行或"详情"打开右侧抽屉（URL 带 <code>?view=deliveries&amp;delivery=&lt;id&gt;</code>）</p>
+        <div class="frame">
+          <div class="sheet-wrap" style="grid-template-columns:minmax(0,1fr) 640px">
+            <div class="content dim" style="padding:24px">
+              <div class="toolbar">
+                <div class="left">
+                  <div class="seg"><span>订阅</span><span class="on">投递日志</span></div>
+                  <span class="facet">订阅</span><span class="facet">状态 · 失败</span>
+                </div>
+              </div>
+              <div class="tbl">
+                <table>
+                  <thead><tr><th>事件</th><th>订阅</th><th>状态</th><th>尝试</th><th>发生时间</th><th style="text-align:right">操作</th></tr></thead>
+                  <tbody>
+                    <tr class="sel"><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">user.created</span><span class="b">01JC6Q8V9X4T…</span></div></td><td>客户门户用户开通</td><td><span class="badge destructive dot">失败</span></td><td class="mono">8</td><td class="xs">11-02 14:05</td><td><div class="act"><span class="ibtn" title="详情">☰</span><span class="ibtn" title="重发">↻</span></div></td></tr>
+                    <tr><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">order.paid</span><span class="b">01JC6PZ2M8QK…</span></div></td><td>ERP 订单同步</td><td><span class="badge warning dot">重试中</span></td><td class="mono">2</td><td class="xs">11-03 09:58</td><td><div class="act"><span class="ibtn">☰</span><span class="ibtn" style="opacity:.35" title="重试中，4 分钟后自动重试">↻</span></div></td></tr>
+                    <tr><td><div class="t2"><span class="badge secondary" style="align-self:flex-start">webhook.test</span><span class="b">01JC6PX7B1CE…</span></div></td><td>ERP 订单同步</td><td><span class="badge success dot">成功</span></td><td class="mono">1</td><td class="xs">11-03 09:41</td><td><div class="act"><span class="ibtn">☰</span><span class="ibtn">↻</span></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="sheet anno-wrap">
+              <span class="anno anno-abs" style="top:6px;right:48px">hlm-sheet · side=right · sm:max-w-2xl · 窄屏占满</span>
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-top:8px">
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <div style="display:flex;gap:8px;align-items:center"><span class="badge secondary">user.created</span><span class="badge destructive dot">失败</span></div>
+                  <div style="font-size:16px;font-weight:500">投递详情</div>
+                  <div class="mono" style="color:var(--muted-foreground)">01JC6Q8V9X4T6M2R7K3N5P8W1Z <span class="ibtn" style="width:24px;height:24px">⧉</span></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center"><span class="btn out sm">↻ 重发</span><span class="ibtn">✕</span></div>
+              </div>
+              <div class="sep" style="justify-content:flex-start">概要</div>
+              <dl class="kv">
+                <dt>订阅</dt><dd>客户门户用户开通<br><span class="mono" style="color:var(--muted-foreground)">https://portal.example.com/api/webhooks/users</span></dd>
+                <dt>发生时间</dt><dd>2026-11-02 14:05:01</dd>
+                <dt>尝试次数</dt><dd>8（自动 8 · 手动 0）</dd>
+                <dt>下次重试</dt><dd>—（订阅已自动停用）</dd>
+                <dt>最近结果</dt><dd style="color:var(--destructive)">503 Service Unavailable</dd>
+              </dl>
+              <div class="sep" style="justify-content:flex-start">请求</div>
+              <div class="field"><label style="font-size:12px;color:var(--muted-foreground);font-weight:400">请求头 · 最近一次尝试（11-03 00:12:40）</label>
+<div class="codebox">content-type: application/json
+webhook-id: 01JC6Q8V9X4T6M2R7K3N5P8W1Z
+webhook-timestamp: 1762128760
+X-Tenant-Code: acme</div></div>
+              <div class="field"><label style="font-size:12px;color:var(--muted-foreground);font-weight:400;display:flex;justify-content:space-between">请求体<span style="color:var(--primary)">⧉ 复制</span></label>
+<div class="codebox" style="max-height:120px">{
+  "type": "user.created",
+  "timestamp": "2026-11-02T14:05:01Z",
+  "data": { "userId": "3f2a9c1e" }
+}</div></div>
+              <div class="sep" style="justify-content:flex-start">调用记录</div>
+              <div class="tbl">
+                <table>
+                  <thead><tr><th></th><th>时间</th><th>来源</th><th>状态码</th><th>耗时</th></tr></thead>
+                  <tbody>
+                    <tr class="exp"><td>⌄</td><td class="mono">11-03 00:12:40</td><td><span class="badge outline">自动</span></td><td class="mono" style="color:var(--destructive)">503</td><td class="mono">1.2s</td></tr>
+                    <tr class="exp"><td></td><td colspan="4" style="padding:8px 16px 12px 32px"><dl class="kv" style="font-size:13px"><dt>请求头</dt><dd class="mono" style="font-size:12px">webhook-timestamp: 1762128760 · X-Tenant-Code: acme</dd><dt>响应</dt><dd class="mono" style="font-size:12px">Service Unavailable</dd></dl></td></tr>
+                    <tr><td>›</td><td class="mono">11-02 14:12:31</td><td><span class="badge outline">自动</span></td><td class="mono">—</td><td class="mono" style="color:var(--destructive)">超时</td></tr>
+                    <tr><td>›</td><td class="mono">11-02 14:05:06</td><td><span class="badge outline">自动</span></td><td class="mono" style="color:var(--destructive)">503</td><td class="mono">0.8s</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="frame-cap"><span class="anno">A-3</span>新建 / 编辑对话框（sm:max-w-2xl，分隔线分区与开放应用一致）　<span class="anno">A-4</span>一次性密钥对话框</p>
+        <div class="frame">
+          <div class="overlay" style="gap:24px;align-items:flex-start;flex-wrap:wrap">
+            <div class="dialog">
+              <div class="hd"><h5>新建订阅</h5><p>选择要推送的事件，保存后会生成签名密钥，只显示一次。</p></div>
+              <div class="bd">
+                <div class="grid2" style="gap:16px">
+                  <div class="field"><label>名称</label><div class="inp full">ERP 订单同步</div></div>
+                  <div class="field"><label>端点地址</label><div class="inp full mono">https://erp.example.com/hooks/leistd</div><span class="desc">需为绝对 http(s) 地址；内网地址在发送时会被拦截</span></div>
+                </div>
+                <div class="field"><label>说明 <span class="desc">（可选）</span></label><div class="inp full"><span class="ph">用途、对接负责人</span></div></div>
+                <div class="sep">订阅事件</div>
+                <div class="checks">
+                  <span class="cb" style="grid-column:1/-1">全部事件（包括以后新增的；勾选后下方逐项置灰）</span>
+                  <span class="grp">订单</span>
+                  <span class="cb on">订单已付款 <span class="v">order.paid</span></span>
+                  <span class="cb on">订单已取消 <span class="v">order.cancelled</span></span>
+                  <span class="grp">用户</span>
+                  <span class="cb">用户已创建 <span class="v">user.created</span></span>
+                  <span class="cb">用户已停用 <span class="v">user.disabled</span></span>
+                </div>
+                <div class="sep">自定义请求头</div>
+                <div class="kvrow"><div class="inp full mono">X-Tenant-Code</div><div class="inp full mono">acme</div><span class="ibtn">✕</span></div>
+                <span class="btn ghost sm" style="align-self:flex-start;color:var(--primary)">＋ 添加请求头</span>
+              </div>
+              <div class="ft"><span class="btn out">取消</span><span class="btn pri">创建</span></div>
+            </div>
+            <div class="dialog narrow">
+              <div class="hd"><h5>签名密钥</h5><p>ERP 订单同步 · 关闭后无法再次查看，请立即交给接收方。</p></div>
+              <div class="bd">
+                <div class="codebox" style="white-space:normal;word-break:break-all">whsec_8KfDq2Lr6ZxT0bW4nV9yE3sH7jM1pA5c</div>
+                <div class="alert warn"><span>⚠</span><span class="tx">接收方用 Standard Webhooks 库验签，并按 <code>webhook-id</code> 去重。轮换后旧密钥继续签名 24 小时。</span></div>
+              </div>
+              <div class="ft"><span class="btn out">⧉ 复制</span><span class="btn pri">我已保存</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>同时具备单页排查效率与订阅健康度，统计卡与仪表盘一致</li><li>交互与开放应用、操作记录完全一致：工具栏、表格、行展开、宽对话框、一次性密钥对话框都能复用。</li><li>不引入新组件（ToggleGroup、Dialog、Sheet、Table 已在 <code>libs/ui</code>），不新增路由形态。</li><li>投递日志可以跨订阅筛选，排查"今天所有失败"最快。</li></ul></div>
+          <div class="card"><h4><span class="mid">代价</span></h4><ul><li>多一个模板统计端点；平台统计里私有的区间换算要抽成共享类型（第二个使用方）。</li><li>页面信息密度比纯列表高；统计卡在 768 以下两两一行。</li><li>同一页里订阅用行展开、投递用抽屉，规则写进列表规范：详情短用展开，长用抽屉。</li></ul></div>
+        </div>
+      </div>
+
+      <!-- ===== 方案 B ===== -->
+      <div class="variant" id="ui-b">
+        <div class="vh"><h3>方案 B · 订阅详情页</h3></div>
+        <p class="vd">与 Stripe、Svix 控制台相同：列表只放订阅，点击进入 <code>/platform/webhooks/:id</code>，详情页上方是概要和指标，下方用分段控件切换"投递记录 / 配置"。</p>
+        <p class="frame-cap"><span class="anno">B-1</span>订阅详情页（页面标题 24px；指标数字借用仪表盘的 30px 档 <code>text-3xl tabular-nums</code>）</p>
+        <div class="frame">
+          <div class="topbar">平台管理 / Webhooks / <b>ERP 订单同步</b></div>
+          <div class="content">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;gap:10px;align-items:center"><span style="font-size:24px;font-weight:600;letter-spacing:-0.01em">ERP 订单同步</span><span class="badge success dot">启用</span></div>
+                <span class="mono" style="color:var(--muted-foreground)">https://erp.example.com/hooks/leistd</span>
+                <div style="display:flex;gap:6px"><span class="badge secondary">order.paid</span><span class="badge secondary">order.cancelled</span></div>
+              </div>
+              <div style="display:flex;gap:8px"><span class="btn sec">➤ 发送测试事件</span><span class="btn out">✎ 编辑</span><span class="btn out">⋯</span></div>
+            </div>
+            <div class="grid4">
+              <div class="stat"><div class="k">24 小时成功率</div><div class="v">99.2%</div></div>
+              <div class="stat"><div class="k">24 小时投递</div><div class="v">1,284</div></div>
+              <div class="stat"><div class="k">待重试</div><div class="v">3</div></div>
+              <div class="stat"><div class="k">平均耗时</div><div class="v">182ms</div></div>
+            </div>
+            <div class="toolbar"><div class="left"><div class="seg"><span class="on">投递记录</span><span>配置</span></div><span class="facet">事件类型</span><span class="facet">状态</span></div><div class="right"><span class="btn sec">↻ 刷新</span></div></div>
+            <div class="tbl">
+              <table>
+                <thead><tr><th>事件</th><th>状态</th><th>尝试</th><th>最近状态码</th><th>发生时间</th><th style="text-align:right">操作</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="badge secondary">order.paid</span></td><td><span class="badge warning dot">重试中</span></td><td class="mono">2 / 8</td><td class="mono">500</td><td class="xs">2026-11-03 09:58</td><td><div class="act"><span class="btn out sm">↻ 重发</span></div></td></tr>
+                  <tr><td><span class="badge secondary">order.paid</span></td><td><span class="badge success dot">成功</span></td><td class="mono">1 / 8</td><td class="mono">200</td><td class="xs">2026-11-03 09:52</td><td><div class="act"><span class="btn out sm">↻ 重发</span></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>每个订阅的健康度一目了然，适合订阅多、投递量大的项目。</li><li>和第三方 SaaS 控制台的心智一致。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>模板里还没有"列表 → 详情路由"这种形态，要新增路由、面包屑、返回逻辑，与现有页面不一致。</li><li>指标卡需要后端聚合查询，多一个端点与索引。</li><li>跨订阅排查失败要逐个点进去。</li></ul></div>
+        </div>
+      </div>
+
+      <!-- ===== 方案 C ===== -->
+      <div class="variant" id="ui-c">
+        <div class="vh"><h3>方案 C · 列表 + 右侧抽屉</h3></div>
+        <p class="vd">列表只放订阅；点击行打开右侧 Sheet，抽屉里是配置概要和最近 20 条投递，可以直接重发。全量日志不单独成页。</p>
+        <p class="frame-cap"><span class="anno">C-1</span>订阅列表 + 抽屉（Sheet，宽 560px）</p>
+        <div class="frame">
+          <div class="sheet-wrap">
+            <div class="content dim">
+              <div class="toolbar"><div class="left"><div class="inp">⌕ <span class="ph">搜索名称或地址</span></div><span class="facet">状态</span></div><div class="right"><span class="btn pri">＋ 新建订阅</span></div></div>
+              <div class="tbl">
+                <table>
+                  <thead><tr><th>名称 / 地址</th><th>状态</th><th>最近投递</th></tr></thead>
+                  <tbody>
+                    <tr class="sel"><td><div class="t2"><span class="a">ERP 订单同步</span><span class="b">https://erp.example.com/hooks/leistd</span></div></td><td><span class="badge success dot">启用</span></td><td><span class="badge success dot">成功</span></td></tr>
+                    <tr><td><div class="t2"><span class="a">客户门户用户开通</span><span class="b">https://portal.example.com/api/webhooks/users</span></div></td><td><span class="badge warning dot">自动停用</span></td><td><span class="badge destructive dot">失败</span></td></tr>
+                    <tr><td><div class="t2"><span class="a">数据仓库</span><span class="b">https://dw.example.com/ingest/events</span></div></td><td><span class="badge secondary dot">已停用</span></td><td class="xs">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="sheet">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                <div><div style="font-size:16px;font-weight:500">ERP 订单同步</div><div class="mono" style="color:var(--muted-foreground)">https://erp.example.com/hooks/leistd</div></div>
+                <span class="ibtn">✕</span>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="btn sec sm">➤ 测试</span><span class="btn out sm">✎ 编辑</span><span class="btn out sm">⟳ 轮换密钥</span><span class="btn out sm">⋯</span></div>
+              <dl class="kv"><dt>状态</dt><dd><span class="badge success dot">启用</span></dd><dt>事件</dt><dd><span class="badge secondary">order.paid</span> <span class="badge secondary">order.cancelled</span></dd><dt>密钥</dt><dd class="mono">whsec_8KfD••••••••</dd></dl>
+              <div class="sep" style="justify-content:flex-start">最近投递</div>
+              <div class="tbl">
+                <table>
+                  <tbody>
+                    <tr><td><span class="badge secondary">order.paid</span></td><td><span class="badge warning dot">重试中</span></td><td class="xs">09:58</td><td><span class="btn out sm">重发</span></td></tr>
+                    <tr><td><span class="badge secondary">order.paid</span></td><td><span class="badge success dot">成功</span></td><td class="xs">09:52</td><td><span class="btn out sm">重发</span></td></tr>
+                    <tr><td><span class="badge secondary">webhook.test</span></td><td><span class="badge success dot">成功</span></td><td class="xs">09:41</td><td><span class="btn out sm">重发</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>不离开列表就能看健康度并重发，操作路径最短。</li><li>Sheet 已在 <code>libs/ui</code>，不加依赖。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>模板的后台页里还没有"详情抽屉"的先例（Sheet 只用于窄屏导航），与行展开的写法并存会出现两种看详情的方式。</li><li>抽屉里放不下尝试时间线和载荷，排查深度不够；没有跨订阅的全量日志。</li><li>窄屏下抽屉占满整屏，和对话框叠加时层级复杂。</li></ul></div>
+        </div>
+      </div>
+
+      <h3 id="ui-cmp">4.3 对比与推荐</h3>
+      <table class="t">
+        <thead><tr><th>维度</th><th>A+ · 选定</th><th>B · 订阅详情页</th><th>C · 列表 + 抽屉</th></tr></thead>
+        <tbody>
+          <tr><td>与现有页面一致</td><td class="yes">一致；投递抽屉按新增列表规范条款</td><td class="no-c">新增详情路由形态</td><td class="mid">新增详情抽屉形态</td></tr>
+          <tr><td>跨订阅排查失败</td><td class="yes">一次筛选</td><td class="no-c">逐个进入</td><td class="no-c">不支持</td></tr>
+          <tr><td>单个订阅健康度</td><td class="yes">成功率列 + 按订阅统计</td><td class="yes">指标卡</td><td class="yes">抽屉概要</td></tr>
+          <tr><td>排查深度（尝试 + 载荷）</td><td class="yes">投递详情抽屉（纵向铺排）</td><td class="yes">行展开</td><td class="no-c">放不下</td></tr>
+          <tr><td>新增后端成本</td><td class="mid">模板统计端点</td><td class="no-c">聚合统计端点</td><td class="yes">无</td></tr>
+          <tr><td>窄屏（390）</td><td class="yes">列裁剪；订阅展开、投递抽屉占满</td><td class="mid">指标卡两列折行</td><td class="mid">抽屉占满</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><b>选定方案 A+（2026-11-03）。</b>以 A 为基础：订阅详情用行展开（与开放应用一致），投递详情用 C 的右侧抽屉（内容长、需纵向铺排）；补上 B 的统计卡与单订阅健康度、C 的一步跳转。不新增详情路由。B、C 保留在本页作为备选记录。</div>
+    </section>
+
+    <!-- ================= 5 实施计划 ================= -->
+    <section class="s" id="plan">
+      <h2><span class="no">5</span>实施计划</h2>
+      <p class="lead">框架与模板放在<b>同一个 PR</b>（本地与 CI 都从同树候选包验证模板，不等 beta）；契约先行后三路并行；每层验证只在一个时点跑，审查、CI、端到端验收各一轮。安全只做连接时的一次 IP 检查；不为极少数竞态加抢占机制。</p>
+      <div class="flow" style="grid-template-columns:repeat(7,minmax(0,1fr))">
+        <div class="step"><div class="n">W1</div><div class="h">契约冻结</div><div class="d">接口、DTO、路由、前端 TS 类型</div></div>
+        <div class="step"><div class="n">W2</div><div class="h">三路并行</div><div class="d">A 框架实现 · B 前端接 Mock · C 文档与参数</div></div>
+        <div class="step"><div class="n">W3</div><div class="h">模板后端</div><div class="d">本地候选包 + webhooks 工作区，前端接真实后端</div></div>
+        <div class="step"><div class="n">W4</div><div class="h">汇总验证一次</div><div class="d">L1 测试、打包消费、选择器生成、e2e spec、四宽截图</div></div>
+        <div class="step"><div class="n">W5</div><div class="h">审查 ‖ CI</div><div class="d">Codex 整 PR 一轮审查与 PR CI 并行</div></div>
+        <div class="step ext"><div class="n">W6</div><div class="h">端到端验收</div><div class="d">Codex 在最终 head 实测一次</div></div>
+        <div class="step"><div class="n">W7</div><div class="h">合入收尾</div><div class="d">须用户授权；规格 §4</div></div>
+      </div>
+      <table class="t">
+        <thead><tr><th style="width:18%">验证层</th><th>只在何时跑</th><th style="width:34%">不重复的地方</th></tr></thead>
+        <tbody>
+          <tr><td>目标单测（L0）</td><td>子 agent 实施时只跑自己的测试类</td><td>不跑整个测试项目</td></tr>
+          <tr><td>受影响测试项目、打包、隔离消费（L1）</td><td>W4 一次</td><td>子 agent 不各自跑全项目</td></tr>
+          <tr><td>投递链路系统测试</td><td>任务 2 写成后一次，W4 随测试项目再跑</td><td>不另起手工联调</td></tr>
+          <tr><td>模板场景</td><td>W4 本地只跑选择器场景生成与一个工作区；core 交给 PR CI，full 交给合入后</td><td>本地不跑矩阵</td></tr>
+          <tr><td>浏览器</td><td>B 路只用 spec；W4 Mock 站点截图一次；W6 Codex 真实后端验收一次</td><td>中间不做手工浏览器回归</td></tr>
+          <tr><td>审查</td><td>W5 一轮整 PR，与 CI 并行</td><td>不按波次逐个送审</td></tr>
+        </tbody>
+      </table>
+      <table class="t">
+        <thead><tr><th style="width:4%">#</th><th style="width:14%">任务</th><th>产物</th><th style="width:34%">验证</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Core</td><td>定义、发布契约、信封、签名、发送器（含内网拦截）、退避与结果分类、Options 与校验器、错误码与译文、管理服务契约</td><td>单测：与官方 StandardWebhooks C# 库交叉验签；结果分类；校验消息报配置键</td></tr>
+          <tr><td>2</td><td>EntityFrameworkCore</td><td>四张表、存储、发布实现、提交后立即投递、<code>webhooks.dispatch</code>（逐库放开租户过滤）、停用终结、手动重发、保留期任务</td><td><b>入口测试</b>：真实工作单元 + 本地 Kestrel 接收端，覆盖发布、提交、回滚、重试（A1–A3）；停用、轮换、租户隔离等用单测</td></tr>
+          <tr><td>3</td><td>AspNetCore</td><td><code>MapWebhooks</code> 端点（列表带近 7 天成功率）；按桶计数读取</td><td>最小宿主：策略必填、只读策略调写端点 403、密钥只在创建与轮换时返回</td></tr>
+          <tr><td>4</td><td>框架文档与包</td><td><code>framework/docs/components/webhooks.md</code> 与索引</td><td>打包到 <code>.tmp/local-feed</code>；<code>test-package-consumption.ps1</code> 编译示例</td></tr>
+          <tr><td>5</td><td>模板后端</td><td><code>IncludeWebhooks</code>、组合、权限、端点、示例事件、统计端点与共享区间换算、增量迁移、开发环境配置</td><td>选择器算出场景 <code>-GenerateOnly</code>；<code>webhooks</code> 场景构建与后端测试</td></tr>
+          <tr><td>6</td><td>模板前端</td><td>方案 A+ 页面（统计卡、双视图、对话框、跳转）、路由、菜单、词条、Mock、spec</td><td>前端 spec；在 390 / 768 / 1024 / 1440 四种宽度复核</td></tr>
+          <tr><td>7</td><td>文档、Skill 与矩阵</td><td>生成项目 webhook 规范、读取清单、两个矩阵场景、<code>ForbiddenTokens</code></td><td>生成检查四个分片</td></tr>
+          <tr><td>8</td><td>端到端验收</td><td>生成 <code>IncludeWebhooks=true</code> 的项目，跑通新建 → 测试 → 失败重试 → 重发 → 停用 → 统计</td><td>Codex 验收报告</td></tr>
+          <tr><td>9</td><td>收尾</td><td>规格 §4；仍然成立的规则上收到常驻文档</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <h3>协作分工与节奏</h3>
+      <table class="t">
+        <thead><tr><th style="width:16%">角色</th><th>负责</th></tr></thead>
+        <tbody>
+          <tr><td>Claude（协调）</td><td>方案与规格；拆任务、派子 agent、核对产物；处理评审意见（先验证前提）；提交、推送、开 PR、盯 CI；进度汇报</td></tr>
+          <tr><td>子 agent</td><td>每个任务一个新上下文，W2 三路可并行：读任务书 → 实施 → 运行指定验证 → 交回简报（改动文件、新建类型与依据条款、验证结果）；不提交</td></tr>
+          <tr><td>Codex</td><td>方案评审（已通过）→ 整 PR 一轮代码审查 → 最终端到端验收；结论明确写"通过 / 不通过"</td></tr>
+        </tbody>
+      </table>
+      <h3>不做的事</h3>
+      <div class="grid3">
+        <div class="card"><h4>能力范围</h4><ul class="k"><li>入站接收组件</li><li>第三方自助订阅 API（留作后续）</li><li>载荷变换、按内容路由、客户门户</li></ul></div>
+        <div class="card"><h4>投递语义</h4><ul class="k"><li>恰好一次、按顺序投递</li><li>行级租约、乐观并发抢占</li><li>每端点限流</li></ul></div>
+        <div class="card"><h4>安全与配置</h4><ul class="k"><li>DNS 重绑定防护、出站代理、ed25519、CloudEvents 握手</li><li>设置页暴露退避与超时</li><li>自动停用桥接站内通知</li></ul></div>
+      </div>
+    </section>
+
+    <!-- ================= 6 验收标准 ================= -->
+    <section class="s" id="accept">
+      <h2><span class="no">6</span>验收标准</h2>
+      <p class="lead">每条写明由哪个测试覆盖；"人工验收"只出现一次，即端到端联通。</p>
+      <table class="t">
+        <thead><tr><th style="width:5%">#</th><th style="width:22%">Given</th><th style="width:22%">When</th><th>Then</th><th style="width:16%">覆盖</th></tr></thead>
+        <tbody>
+          <tr><td>A1</td><td>启用订阅订阅了 <code>order.paid</code></td><td>工作单元内发布并提交</td><td>接收方数秒内收到 POST，三个头齐全，官方库验签通过</td><td>入口测试</td></tr>
+          <tr><td>A2</td><td>同上</td><td>工作单元回滚；或无工作单元时调用</td><td>没有事件和投递记录；无工作单元时抛异常</td><td>入口测试</td></tr>
+          <tr><td>A3</td><td>接收方先 500 后 200</td><td>到下一次重试时刻</td><td>第二次成功，两次尝试都有记录，<code>webhook-id</code> 相同</td><td>入口测试</td></tr>
+          <tr><td>A4</td><td>接收方回 410</td><td>投递</td><td>订阅停用（端点已注销），发出 <code>WebhookSubscriptionChangedEvent</code>（类别 Disabled）</td><td>框架单测</td></tr>
+          <tr><td>A4b</td><td>订阅有待投递记录</td><td>手动停用 / 410 / 自动停用</td><td>待投递改为失败并写原因，队列与扫描不再发请求；重新启用带 retryFailed 时现存全部失败投递各发一次手动尝试</td><td>框架单测</td></tr>
+          <tr><td>A5</td><td>连续失败超过 <code>AutoDisableAfter</code></td><td>又一次失败</td><td>自动停用；任何一次成功清零失败起点</td><td>框架单测</td></tr>
+          <tr><td>A6</td><td>地址解析到私网且不在白名单</td><td>投递</td><td>不建立连接，尝试记为失败并写明原因</td><td>框架单测</td></tr>
+          <tr><td>A7</td><td>共享库里宿主、A、B 与一个专属库租户都有到期记录</td><td>队列全丢、兜底扫描运行</td><td>四方都被发出，各在自己的租户上下文处理；某库失败则任务记失败</td><td>关系型数据库测试</td></tr>
+          <tr><td>A8</td><td>刚轮换过密钥</td><td>在过渡期内与过渡期后投递</td><td>过渡期内带新旧两个签名，之后只带新签名</td><td>框架单测</td></tr>
+          <tr><td>A9</td><td><code>IncludeWebhooks=true</code></td><td>新建订阅</td><td>密钥只在创建结果里显示一次，列表与展开只显示前缀</td><td>前端 spec</td></tr>
+          <tr><td>A10</td><td>本机起了测试接收端</td><td>点"发送测试事件"</td><td>投递日志出现成功的 <code>webhook.test</code>，抽屉里能看到请求头、请求体与调用记录</td><td>e2e · 人工验收一次</td></tr>
+          <tr><td>A10b</td><td>本地身份形态</td><td>经用户创建接口建用户，分别回滚与提交</td><td>回滚不落 webhook 记录；提交产生一条 <code>user.created</code> 投递</td><td>模板后端集成测试</td></tr>
+          <tr><td>A11</td><td>失败投递（含自动次数已用完）</td><td>点"重发"后丢弃队列项</td><td>扫描发出一次手动尝试，id 不变；失败（含带 Retry-After 的 429/503）后不再自动重试；重试中的不能手动重发</td><td>前端 spec + 框架单测</td></tr>
+          <tr><td>A12</td><td>租户 A、B 各有订阅</td><td>A 发布事件</td><td>只投给 A；A 的管理员看不到 B 的订阅与日志</td><td>框架单测</td></tr>
+          <tr><td>A13</td><td><code>IncludeWebhooks=false</code></td><td>生成项目</td><td>没有任何 webhook 包、表、迁移、权限、路由、菜单、词条与文档</td><td>生成检查</td></tr>
+          <tr><td>A14</td><td>只有 <code>App.Webhooks</code> 只读权限</td><td>打开页面并直接调写端点</td><td>看不到写入口；写端点返回 403</td><td>前端 spec + 集成测试</td></tr>
+          <tr><td>A15</td><td>有成功、失败、重试中的投递，其中一条跨区间被重发成功</td><td>切换今天 / 7 天 / 30 天</td><td>按统计口径计数（按创建时刻分桶、按当前状态计）；上一区间超出保留期显示"无可比数据"；按订阅筛选只统计该订阅</td><td>框架单测 + 模板统计测试 + 前端 spec</td></tr>
+          <tr><td>A16b</td><td>两次尝试之间改了自定义请求头</td><td>打开抽屉</td><td>每次尝试显示当时实际发出的头部，签名不显示</td><td>框架单测 + 前端 spec</td></tr>
+          <tr><td>A16</td><td>订阅列表</td><td>查看；点最近投递或失败卡</td><td>每行有近 7 天成功率；跳到投递日志并带上对应筛选</td><td>前端 spec</td></tr>
+        </tbody>
+      </table>
+      <h3>已确认（2026-11-03）</h3>
+      <table class="t">
+        <thead><tr><th style="width:20%">事项</th><th>结论（Codex 方案评审可提出调整）</th></tr></thead>
+        <tbody>
+          <tr><td>UI 方案</td><td>方案 A+（A 为基础，吸收 B 的统计与健康度、C 的跳转）</td></tr>
+          <tr><td>模板参数</td><td><code>IncludeWebhooks</code>，默认 <code>false</code>，适用于全部 <code>ServiceRole</code></td></tr>
+          <tr><td>谁来订阅</td><td>首版只做管理员在后台登记；第三方自助订阅留作后续</td></tr>
+          <tr><td>订阅作用域</td><td>按租户隔离；宿主行只接收宿主上下文发布的事件</td></tr>
+          <tr><td>默认值</td><td>退避 <code>5s 5m 30m 2h 5h 10h 10h</code>；超时 15 秒；连续失败 5 天停用；保留 62 天</td></tr>
+          <tr><td>投递详情</td><td>右侧抽屉，从上到下：概要 → 请求 → 调用记录</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>
+</body>
+</html>

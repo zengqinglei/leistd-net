@@ -17,6 +17,9 @@ using Leistd.Settings.Errors;
 #if (IncludeNotifications)
 using Leistd.Notifications.Errors;
 #endif
+#if (IncludeWebhooks)
+using Leistd.Webhooks.Errors;
+#endif
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -128,6 +131,9 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
             typeof(PermissionErrorCodes), typeof(MultiTenancyErrorCodes), typeof(SettingErrorCodes), typeof(OperationFailureCodes),
 #if (IncludeNotifications)
             typeof(NotificationErrorCodes),
+#endif
+#if (IncludeWebhooks)
+            typeof(WebhookErrorCodes),
 #endif
         };
         var codes = codeTypes

@@ -11,6 +11,11 @@ using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Events;
+#if (IncludeWebhooks)
+using CompanyName.ProjectName.Application.Webhooks.Errors;
+using Leistd.Webhooks.Events;
+using Leistd.Webhooks.Management;
+#endif
 
 namespace CompanyName.ProjectName.Application.OperationRecords.EventHandlers;
 
@@ -107,6 +112,62 @@ internal sealed class TenantConnectionChangedAuditHandler(IOperationRecorder rec
         TenantConnectionChangeKind.Removed => OperationRecordActions.TenantConnectionRemoved,
         _ => throw new ArgumentOutOfRangeException(
             nameof(change), change, "This connection change kind has no operation action code yet.")
+    };
+}
+#endif
+#if (IncludeWebhooks)
+
+/// <summary>Webhook 订阅的创建、修改、轮换密钥、启停与删除留痕：它们决定业务数据推往哪个外部地址、凭哪把密钥验签。</summary>
+/// <remarks>
+/// <para>管理员的操作按权限记成功。投递链路的自动停用（端点已注销、连续失败）同样改变了订阅状态，照账号锁定的写法记：
+/// 单独的动作码、失败结果、原因码写进失败原因；没有主体，操作人为空，授权依据是投递策略。</para>
+/// <para>自动停用的事件在投递链路的工作单元提交后分发，此时处于订阅所属租户的上下文；失败记录走独立事务，不受投递事务影响。</para>
+/// <para>测试事件与手动重发不改变"谁能收到、凭什么验签"，不记。</para>
+/// <para>目标是订阅标识与名称快照，与端点上补记被拒尝试的标识（路由里的 <c>id</c>）一致。</para>
+/// </remarks>
+internal sealed class WebhookSubscriptionChangedAuditHandler(IOperationRecorder recorder)
+    : IEventHandler<WebhookSubscriptionChangedEvent>
+{
+    /// <inheritdoc />
+    public Task HandleAsync(WebhookSubscriptionChangedEvent @event, CancellationToken cancellationToken = default)
+    {
+        var target = OperationTarget.For(@event.SubscriptionId, @event.SubscriptionName);
+        if (@event.Change == WebhookSubscriptionChangeKind.Disabled && @event.DisabledReason != WebhookDisabledReason.Manual)
+        {
+            return recorder.RecordFailedAsync(
+                OperationRecordActions.WebhookSubscriptionAutoDisabled,
+                target,
+                OperationRecordAuthorizations.WebhookDeliveryPolicy,
+                OperationFailure.FromCode(AutoDisabledReasonCode(@event.DisabledReason)));
+        }
+
+        return recorder.RecordSucceededAsync(
+            ActionFor(@event.Change),
+            target,
+            PermissionConstant.Webhooks.Manage,
+            cancellationToken);
+    }
+
+    // 同样不兜底：组件加了停用原因时要补一个原因码，而不是把它记成别的原因
+    private static string AutoDisabledReasonCode(WebhookDisabledReason? reason) => reason switch
+    {
+        WebhookDisabledReason.EndpointGone => AppWebhookErrorCodes.EndpointGone,
+        WebhookDisabledReason.ConsecutiveFailures => AppWebhookErrorCodes.ConsecutiveFailures,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(reason), reason, "This automatic disable reason has no operation record reason code yet.")
+    };
+
+    // 不用 _ 兜底成某个已有动作码：组件将来加变更类别时宁可在这里炸，逼人补一个动作码
+    private static string ActionFor(WebhookSubscriptionChangeKind change) => change switch
+    {
+        WebhookSubscriptionChangeKind.Created => OperationRecordActions.WebhookSubscriptionCreated,
+        WebhookSubscriptionChangeKind.Updated => OperationRecordActions.WebhookSubscriptionUpdated,
+        WebhookSubscriptionChangeKind.SecretRotated => OperationRecordActions.WebhookSubscriptionSecretRotated,
+        WebhookSubscriptionChangeKind.Enabled => OperationRecordActions.WebhookSubscriptionEnabled,
+        WebhookSubscriptionChangeKind.Disabled => OperationRecordActions.WebhookSubscriptionDisabled,
+        WebhookSubscriptionChangeKind.Deleted => OperationRecordActions.WebhookSubscriptionDeleted,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(change), change, "This webhook subscription change kind has no operation action code yet.")
     };
 }
 #endif

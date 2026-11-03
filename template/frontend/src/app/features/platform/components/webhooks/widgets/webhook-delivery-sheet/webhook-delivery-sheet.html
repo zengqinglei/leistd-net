@@ -1,0 +1,248 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <hlm-sheet
+    side="right"
+    [state]="open() ? 'open' : 'closed'"
+    (stateChanged)="onStateChange($event)"
+  >
+    <!-- 默认宽度是 3/4、sm 起 max-w-sm：投递详情要纵向铺排，窄屏占满、sm 起放宽到 2xl -->
+    <hlm-sheet-content
+      *hlmSheetPortal
+      class="data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+      data-testid="webhook-delivery-sheet"
+      [closeLabel]="t('common.close')"
+    >
+      <div hlmSheetHeader class="gap-2 border-b pe-12">
+        @if (delivery(); as delivery) {
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 hlmSheetTitle class="font-mono">{{ delivery.eventType }}</h2>
+            <span
+              hlmBadge
+              appStatusDot
+              data-testid="webhook-delivery-sheet-status"
+              [variant]="statusVariants[delivery.status]"
+              >{{ t(statusKeys[delivery.status]) }}</span
+            >
+          </div>
+          <p hlmSheetDescription class="sr-only">{{ t('webhooks.sheet.description') }}</p>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex min-w-0 items-center gap-1">
+              <code class="text-muted-foreground min-w-0 font-mono text-xs break-all">{{
+                delivery.eventId
+              }}</code>
+              <button
+                hlmBtn
+                variant="ghost"
+                size="icon-sm"
+                type="button"
+                class="shrink-0"
+                [attr.aria-label]="t('webhooks.sheet.copyEventId')"
+                [hlmTooltip]="t('webhooks.sheet.copyEventId')"
+                (click)="copyEventId()"
+              >
+                <ng-icon [name]="eventIdClipboard.copied() ? 'lucideCheck' : 'lucideCopy'" />
+              </button>
+            </div>
+            @if (canManage()) {
+              <span
+                class="inline-flex"
+                [hlmTooltip]="
+                  delivery.status === 'pending'
+                    ? t('webhooks.action.retryPending', {
+                        time:
+                          delivery.nextAttemptAt
+                          | appDate: 'full' : displayTimeZone() : displayLocale(),
+                      })
+                    : null
+                "
+              >
+                <button
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  data-testid="webhook-delivery-sheet-retry"
+                  [disabled]="delivery.status === 'pending' || retrying()"
+                  (click)="retry.emit(delivery)"
+                >
+                  @if (retrying()) {
+                    <hlm-spinner data-icon="inline-start" />
+                  } @else {
+                    <ng-icon name="lucideRotateCw" data-icon="inline-start" />
+                  }
+                  {{ t('webhooks.action.retry') }}
+                </button>
+              </span>
+            }
+          </div>
+        } @else {
+          <h2 hlmSheetTitle>{{ t('webhooks.sheet.title') }}</h2>
+          <p hlmSheetDescription class="sr-only">{{ t('webhooks.sheet.description') }}</p>
+        }
+      </div>
+
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+        @if (loading() && !delivery()) {
+          <div class="flex flex-col gap-3" aria-busy="true">
+            <hlm-skeleton class="h-5 w-2/3" />
+            <hlm-skeleton class="h-5 w-1/2" />
+            <hlm-skeleton class="h-32 w-full" />
+          </div>
+        } @else if (loadError(); as error) {
+          <div role="alert" class="flex flex-col items-start gap-3 text-sm">
+            <p>{{ error }}</p>
+            <button hlmBtn variant="outline" type="button" (click)="reload.emit()">
+              {{ t('common.retry') }}
+            </button>
+          </div>
+        } @else if (delivery(); as delivery) {
+          <section class="flex flex-col gap-3">
+            <h3 class="text-sm font-semibold">{{ t('webhooks.sheet.overview') }}</h3>
+            <dl
+              class="grid grid-cols-[minmax(6rem,auto)_1fr] items-baseline gap-x-4 gap-y-2 text-sm"
+              data-testid="webhook-delivery-overview"
+            >
+              <dt class="text-muted-foreground">{{ t('webhooks.deliveries.colSubscription') }}</dt>
+              <dd class="min-w-0">
+                <span class="block font-medium wrap-anywhere">{{ delivery.subscriptionName }}</span>
+                <span class="text-muted-foreground block font-mono text-xs break-all">{{
+                  delivery.subscriptionUrl
+                }}</span>
+              </dd>
+              <dt class="text-muted-foreground">{{ t('webhooks.deliveries.colOccurredAt') }}</dt>
+              <dd class="min-w-0 tabular-nums">
+                {{ delivery.creationTime | appDate: 'full' : displayTimeZone() : displayLocale() }}
+              </dd>
+              <dt class="text-muted-foreground">{{ t('webhooks.deliveries.colAttempts') }}</dt>
+              <dd class="min-w-0 tabular-nums">
+                {{
+                  t('webhooks.sheet.attemptCount', {
+                    count: (delivery.attemptCount | appNumber: 'integer' : displayLocale()),
+                    automatic: (triggerCounts().automatic | appNumber: 'integer' : displayLocale()),
+                    manual: (triggerCounts().manual | appNumber: 'integer' : displayLocale()),
+                  })
+                }}
+              </dd>
+              <dt class="text-muted-foreground">{{ t('webhooks.deliveries.colNextAttempt') }}</dt>
+              <dd class="min-w-0 tabular-nums">
+                @if (delivery.nextAttemptAt; as next) {
+                  {{ next | appDate: 'full' : displayTimeZone() : displayLocale() }}
+                  ·
+                  {{ t(triggerKeys[delivery.nextTrigger ?? 'automatic']) }}
+                } @else {
+                  -
+                }
+              </dd>
+              <dt class="text-muted-foreground">{{ t('webhooks.sheet.lastResult') }}</dt>
+              <dd class="min-w-0 wrap-anywhere">
+                @if ((delivery.lastStatusCode ?? null) !== null) {
+                  <span class="font-mono">{{ delivery.lastStatusCode }}</span>
+                } @else if (delivery.lastError) {
+                  {{ delivery.lastError }}
+                } @else {
+                  -
+                }
+              </dd>
+            </dl>
+          </section>
+
+          <section class="flex flex-col gap-3">
+            <h3 class="text-sm font-semibold">{{ t('webhooks.sheet.request') }}</h3>
+            @if (latestAttempt(); as attempt) {
+              <div class="flex flex-col gap-1.5">
+                <p class="text-muted-foreground text-xs">
+                  {{
+                    t('webhooks.sheet.latestHeaders', {
+                      time:
+                        attempt.attemptedAt | appDate: 'full' : displayTimeZone() : displayLocale(),
+                    })
+                  }}
+                </p>
+                <pre
+                  class="bg-muted max-h-48 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-all"
+                  data-testid="webhook-delivery-headers"
+                  >{{ headerLines(attempt.requestHeaders) }}</pre>
+              </div>
+            }
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-muted-foreground text-xs">{{ t('webhooks.sheet.body') }}</p>
+                <button hlmBtn variant="ghost" size="sm" type="button" (click)="copyPayload()">
+                  <ng-icon
+                    [name]="payloadClipboard.copied() ? 'lucideCheck' : 'lucideCopy'"
+                    data-icon="inline-start"
+                  />
+                  {{ t('common.copy') }}
+                </button>
+              </div>
+              <pre
+                class="bg-muted max-h-72 overflow-auto rounded-md p-3 font-mono text-xs"
+                data-testid="webhook-delivery-payload"
+                >{{ payload() }}</pre>
+            </div>
+          </section>
+
+          <section class="flex flex-col gap-3">
+            <h3 class="text-sm font-semibold">{{ t('webhooks.sheet.attempts') }}</h3>
+            <ul class="flex flex-col divide-y rounded-md border" data-testid="webhook-attempts">
+              @for (attempt of delivery.attempts; track attempt.id) {
+                <li class="text-sm">
+                  <button
+                    type="button"
+                    class="hover:bg-muted/50 focus-visible:ring-ring/50 grid w-full grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 px-3 py-2 text-start outline-none focus-visible:ring-[3px]"
+                    [attr.aria-expanded]="isExpanded(attempt.id)"
+                    (click)="toggleAttempt(attempt.id)"
+                  >
+                    <ng-icon
+                      name="lucideChevronRight"
+                      class="text-muted-foreground transition-transform duration-200"
+                      [class.rotate-90]="isExpanded(attempt.id)"
+                    />
+                    <span class="tabular-nums">{{
+                      attempt.attemptedAt | appDate: 'full' : displayTimeZone() : displayLocale()
+                    }}</span>
+                    <span hlmBadge variant="secondary">{{ t(triggerKeys[attempt.trigger]) }}</span>
+                    <span
+                      class="font-mono tabular-nums"
+                      [class.text-success]="(attempt.statusCode ?? 999) < 300"
+                      [class.text-destructive]="(attempt.statusCode ?? 999) >= 300"
+                      >{{ attempt.statusCode ?? t('webhooks.deliveries.noResponse') }}</span
+                    >
+                    <span class="text-muted-foreground text-xs tabular-nums">{{
+                      t('webhooks.sheet.duration', {
+                        ms: (attempt.durationMs | appNumber: 'integer' : displayLocale()),
+                      })
+                    }}</span>
+                  </button>
+                  @if (isExpanded(attempt.id)) {
+                    <div class="flex flex-col gap-2 px-3 pb-3" data-testid="webhook-attempt-detail">
+                      <p class="text-muted-foreground text-xs">{{ t('webhooks.sheet.headers') }}</p>
+                      <pre
+                        class="bg-muted max-h-40 overflow-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap break-all"
+                        >{{ headerLines(attempt.requestHeaders) }}</pre>
+                      <p class="text-muted-foreground text-xs">
+                        {{
+                          attempt.error ? t('webhooks.sheet.error') : t('webhooks.sheet.response')
+                        }}
+                      </p>
+                      <pre
+                        class="bg-muted max-h-40 overflow-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap break-all"
+                        >{{ attempt.error || attempt.response || '-' }}</pre>
+                    </div>
+                  }
+                </li>
+              } @empty {
+                <li class="text-muted-foreground px-3 py-2 text-sm">
+                  {{ t('webhooks.sheet.noAttempts') }}
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </div>
+    </hlm-sheet-content>
+  </hlm-sheet>
+</ng-container>

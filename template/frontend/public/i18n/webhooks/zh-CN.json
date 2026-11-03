@@ -1,0 +1,202 @@
+{
+  "page": {
+    "title": "Webhook"
+  },
+  "view": {
+    "label": "视图",
+    "subscriptions": "订阅",
+    "deliveries": "投递日志"
+  },
+  "range": {
+    "label": "统计区间",
+    "today": "今天",
+    "days7": "7 天",
+    "days30": "30 天",
+    "lastDays": "近 {{days}} 天"
+  },
+  "summary": {
+    "deliveries": "{{count}} 次投递",
+    "attention": "{{count}} 个订阅需要关注",
+    "subscription": "订阅：{{name}}"
+  },
+  "stats": {
+    "label": "投递统计",
+    "successRate": "成功率",
+    "deliveries": "投递数",
+    "failed": "失败",
+    "disabledSubscriptions": "已停用订阅",
+    "disabledShort": "已停用订阅",
+    "info": {
+      "successRate": "区间内创建的投递中，成功 ÷（成功 + 失败）；重试中的不计入。",
+      "deliveries": "区间内创建的投递数；一个事件发给 N 个订阅计 N 次。",
+      "failed": "区间内创建、当前状态为失败的投递数；手动重发后随之变化。",
+      "disabledSubscriptions": "当前处于停用状态的订阅（手动或自动停用），不随区间变化。"
+    },
+    "infoLabel": "{{metric}}的计算方式",
+    "refreshFailed": "统计刷新失败，显示的是上次加载的数据。",
+    "showFailed": "查看失败的投递",
+    "attention": "需要关注",
+    "currentCount": "当前存量",
+    "currentCountBasis": "当前处于停用状态的订阅数，不随区间变化。",
+    "retrying": "{{count}} 条重试中",
+    "retryingBasis": "另有 {{count}} 条投递仍在重试，不计入失败。",
+    "noComparison": "无可比数据",
+    "noComparisonBasis": "上一区间早于投递日志的保留期，没有可对比的数据。",
+    "vsYesterday": "较昨天",
+    "vsYesterdayBasis": "较昨天同一时段",
+    "vsPrevious": "较前 {{days}} 天",
+    "vsPreviousBasis": "较前 {{days}} 天同一进度"
+  },
+  "filter": {
+    "searchSubscriptions": "搜索名称或地址...",
+    "searchDeliveries": "搜索事件 ID 或类型...",
+    "status": "状态",
+    "eventType": "事件类型",
+    "subscription": "订阅"
+  },
+  "action": {
+    "create": "新建订阅",
+    "sendTest": "发送测试事件",
+    "sendTestDisabled": "启用订阅后才能发送测试事件",
+    "viewDeliveries": "查看投递",
+    "viewDeliveriesOf": "查看 {{name}} 的投递",
+    "rotateSecret": "轮换密钥",
+    "disable": "停用",
+    "enable": "启用",
+    "retry": "重发",
+    "retryPending": "仍在重试中，下次尝试时间 {{time}}"
+  },
+  "subscriptionStatus": {
+    "enabled": "启用",
+    "disabled": "已停用",
+    "autoDisabled": "自动停用"
+  },
+  "deliveryStatus": {
+    "succeeded": "成功",
+    "pending": "重试中",
+    "failed": "失败"
+  },
+  "trigger": {
+    "automatic": "自动",
+    "manual": "手动"
+  },
+  "disabledReason": {
+    "manual": "于 {{time}} 手动停用",
+    "endpointGone": "端点于 {{time}} 返回 410 Gone",
+    "consecutiveFailures": "自 {{time}} 起持续失败，已自动停用"
+  },
+  "event": {
+    "all": "全部事件",
+    "allHint": "包括以后新增的事件类型。"
+  },
+  "subscriptions": {
+    "colName": "名称 / 地址",
+    "colEvents": "订阅事件",
+    "colStatus": "状态",
+    "colSuccessRate": "近 7 天成功率",
+    "colLastDelivery": "最近投递",
+    "colCreatedAt": "创建时间",
+    "disabledReason": "停用原因",
+    "secret": "密钥",
+    "previousSecret": "旧密钥继续签名至 {{time}}",
+    "headers": "请求头",
+    "description": "说明",
+    "emptyTitle": "暂无订阅",
+    "emptyHint": "新建订阅，把事件推送给其他系统",
+    "emptyFilteredTitle": "没有匹配的订阅",
+    "emptyFilteredHint": "调整搜索或筛选条件"
+  },
+  "deliveries": {
+    "colEvent": "事件",
+    "colSubscription": "订阅",
+    "colStatus": "状态",
+    "colAttempts": "尝试次数",
+    "colLastStatusCode": "最近状态码",
+    "colNextAttempt": "下次重试",
+    "colOccurredAt": "发生时间",
+    "noResponse": "无响应",
+    "emptyTitle": "暂无投递",
+    "emptyHint": "发布事件后，投递会出现在这里",
+    "emptyFilteredTitle": "没有匹配的投递",
+    "emptyFilteredHint": "调整搜索或筛选条件"
+  },
+  "table": {
+    "currentPageReport": "共 {{total}} 条"
+  },
+  "sheet": {
+    "title": "投递详情",
+    "description": "这次事件发出的请求与每一次投递尝试。",
+    "copyEventId": "复制事件 ID",
+    "overview": "概要",
+    "attemptCount": "{{count}}（自动 {{automatic}} · 手动 {{manual}}）",
+    "lastResult": "最近结果",
+    "request": "请求",
+    "latestHeaders": "请求头 · 最近一次尝试（{{time}}）",
+    "body": "请求体",
+    "attempts": "调用记录",
+    "duration": "{{ms}} 毫秒",
+    "headers": "请求头",
+    "response": "响应",
+    "error": "错误",
+    "noAttempts": "尚未尝试"
+  },
+  "dialog": {
+    "createHeader": "新建订阅",
+    "editHeader": "编辑订阅",
+    "description": "选择要推送的事件，保存后会生成签名密钥，只显示一次。",
+    "loading": "正在加载订阅...",
+    "sectionEvents": "订阅事件",
+    "sectionHeaders": "自定义请求头",
+    "eventsRequired": "至少选择一个事件。",
+    "headerIncomplete": "每个请求头都需要填写名称和值。",
+    "noHeaders": "没有自定义请求头",
+    "addHeader": "添加请求头",
+    "headersHint": "每次请求都会带上。webhook-* 与 Content-Type 由系统写入。"
+  },
+  "field": {
+    "name": "名称",
+    "namePlaceholder": "例如：ERP 订单同步",
+    "url": "端点地址",
+    "urlHint": "需为绝对 http(s) 地址；内网地址在发送时会被拦截。",
+    "description": "说明（可选）",
+    "descriptionPlaceholder": "用途、对接方或负责人",
+    "headerName": "请求头 {{index}} 名称",
+    "headerNamePlaceholder": "名称",
+    "headerValue": "请求头 {{index}} 值",
+    "headerValuePlaceholder": "值"
+  },
+  "secret": {
+    "createdHeader": "签名密钥",
+    "rotatedHeader": "新的签名密钥",
+    "onlyOnce": "关闭后无法再次查看，请立即交给接收方。",
+    "createdHint": "接收方用 Standard Webhooks 库验签，并按 {{header}} 去重。",
+    "rotatedHint": "旧密钥会在过渡期内继续一并签名，请在过渡期结束前更新接收方。",
+    "copy": "复制密钥",
+    "saved": "我已保存"
+  },
+  "enable": {
+    "header": "启用订阅？",
+    "message": "“{{name}}”将开始接收新事件；停用期间发生的事件不会补发。",
+    "retryFailed": "一并重发失败投递",
+    "retryFailedHint": "日志中现存的每条失败投递各重发一次。"
+  },
+  "confirm": {
+    "rotateHeader": "轮换签名密钥？",
+    "rotateMessage": "将立即生成新密钥。旧密钥在过渡期内继续一并签名，接收方可以平滑切换。",
+    "disableHeader": "停用订阅？",
+    "disableMessage": "等待重试的投递会记为失败，停用期间发生的事件之后也不会补发。",
+    "deleteHeader": "删除订阅？",
+    "deleteMessage": "确定删除“{{name}}”？它的投递日志会一并删除，不再计入统计。"
+  },
+  "toast": {
+    "created": "订阅已创建",
+    "updated": "订阅已更新",
+    "deleted": "订阅已删除",
+    "enabled": "订阅已启用",
+    "disabled": "订阅已停用",
+    "testSent": "测试事件已排队",
+    "retried": "投递已排队重发",
+    "copied": "已复制",
+    "secretCopied": "签名密钥已复制"
+  }
+}

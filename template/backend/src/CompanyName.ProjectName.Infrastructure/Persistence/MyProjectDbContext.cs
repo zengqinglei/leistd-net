@@ -14,6 +14,9 @@ using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 #endif
+#if (IncludeWebhooks)
+using Leistd.Webhooks.EntityFrameworkCore;
+#endif
 using Microsoft.EntityFrameworkCore;
 using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 using Leistd.BackgroundJobs.EntityFrameworkCore;
@@ -85,6 +88,10 @@ public class MyProjectDbContext(
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();
+#endif
+#if (IncludeWebhooks)
+        // 出站 Webhook 的订阅、事件、投递与尝试
+        modelBuilder.ConfigureWebhooks();
 #endif
     }
 }

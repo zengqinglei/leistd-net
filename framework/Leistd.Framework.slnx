@@ -121,6 +121,11 @@
     <Project Path="components/unit-of-work/Leistd.UnitOfWork.Core/Leistd.UnitOfWork.Core.csproj" />
     <Project Path="components/unit-of-work/Leistd.UnitOfWork.EntityFrameworkCore/Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/components/webhooks/">
+    <Project Path="components/webhooks/Leistd.Webhooks.AspNetCore/Leistd.Webhooks.AspNetCore.csproj" />
+    <Project Path="components/webhooks/Leistd.Webhooks.Core/Leistd.Webhooks.Core.csproj" />
+    <Project Path="components/webhooks/Leistd.Webhooks.EntityFrameworkCore/Leistd.Webhooks.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/ddd-struct/">
     <Project Path="ddd-struct/Leistd.Ddd.Application.Contracts/Leistd.Ddd.Application.Contracts.csproj" />
     <Project Path="ddd-struct/Leistd.Ddd.Application/Leistd.Ddd.Application.csproj" />
@@ -206,6 +211,9 @@
   </Folder>
   <Folder Name="/tests/components/unit-of-work/">
     <Project Path="tests/components/unit-of-work/Leistd.UnitOfWork.Tests/Leistd.UnitOfWork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/components/webhooks/">
+    <Project Path="tests/components/webhooks/Leistd.Webhooks.Tests/Leistd.Webhooks.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/ddd-struct/">
     <Project Path="tests/ddd-struct/Leistd.Ddd.Application.Tests/Leistd.Ddd.Application.Tests.csproj" />

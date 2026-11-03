@@ -41,7 +41,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 //#if (IncludeOperationRecords && LocalIdentity)
 import { HLM_CHART_THEME, HlmChartImports, hlmChartTooltip } from '@spartan-ng/helm/chart';
 //#else
-import { HLM_CHART_THEME, HlmChartImports } from '@spartan-ng/helm/chart';
+import { HlmChartImports } from '@spartan-ng/helm/chart';
 //#endif
 import { HlmDatePickerTrigger, HlmDateRangePicker } from '@spartan-ng/helm/date-picker';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
@@ -52,9 +52,6 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { areaY, defineChart, lineY } from '@tanstack/charts';
 import { scaleLinear } from '@tanstack/charts/scales/linear';
 import { scalePoint } from '@tanstack/charts/scales/point';
-//#else
-import { areaY, defineChart, lineY } from '@tanstack/charts';
-import { scaleLinear } from '@tanstack/charts/scales/linear';
 //#endif
 import { Subject, catchError, interval, of, switchMap } from 'rxjs';
 
@@ -101,6 +98,7 @@ import { englishText } from '../../../../shared/utils/english-text';
 //#if (IncludeOperationRecords && LocalIdentity)
 import { firstDayOfWeek } from '../../../../shared/utils/locale-week';
 //#endif
+import { changeOf, sparklineOf } from '../../../../shared/utils/stat-trend';
 import { resolveDisplayTimeZone, zonedCalendarDate } from '../../../../shared/utils/zoned-time';
 //#if (IncludeOperationRecords)
 import { OperationRecordOutputDto } from '../../dtos/operation-record.dto';
@@ -405,7 +403,7 @@ export class Dashboard {
                 metric.value >= COMPACT_FROM
                   ? formatAppNumber(metric.value, 'integer', locale)
                   : null,
-              change: changeOf(metric),
+              change: changeOf(metric.value, metric.previous),
               higherIsWorse,
               sparkline: sparklineOf(
                 metric.series,
@@ -670,7 +668,7 @@ export class Dashboard {
   /** 趋势头部的环比，与指标卡同一规则：取整，上一区间为 0 时不比较。 */
   readonly trendChange = computed(() => {
     const succeeded = this.statistics()?.succeededLogins;
-    return succeeded ? changeOf(succeeded) : null;
+    return succeeded ? changeOf(succeeded.value, succeeded.previous) : null;
   });
 
   /** 有登录趋势时「需要关注」占右侧一栏，没有时占满整行。 */
@@ -946,50 +944,6 @@ export class Dashboard {
       queryParamsHandling: 'merge',
     });
   }
-}
-
-/**
- * 与上一区间相比的变化率（比例，0.29 表示 +29%），按整数百分比取整：显示与徽章配色用同一个值，
- * 不会出现"0%"却标成上升。上一区间没有值或为 0 时不比较。
- */
-function changeOf(metric: StatisticValueDto): number | null {
-  if (metric.previous == null || metric.previous === 0) {
-    return null;
-  }
-  return Math.round(((metric.value - metric.previous) / metric.previous) * 100) / 100;
-}
-
-/** 指标卡里的迷你趋势：去掉坐标轴与网格，只留面积与线；不到两个点画不出趋势。 */
-function sparklineOf(series: number[] | null | undefined, color: string) {
-  if (!series || series.length < 2) {
-    return null;
-  }
-  const rows = series.map((value, index) => ({ index, value }));
-  // 纵轴取序列自身的最小、最大值，不从 0 起：存量这类大数的小起伏才看得出。不变的序列上下各留一格，
-  // 画在中线上——贴底的线会被读成"降到了 0"。有起伏时面积的底边取纵轴下限，否则默认从 0 填到绘图区外
-  const flat = Math.min(...series) === Math.max(...series);
-  const low = Math.min(...series) - (flat ? 1 : 0);
-  const high = Math.max(...series) + (flat ? 1 : 0);
-  return {
-    definition: defineChart({
-      guides: false,
-      margin: 2,
-      // 不变的序列只画线：面积会在中线下铺出一条色带，像是一块数值
-      marks: [
-        ...(flat
-          ? []
-          : [areaY(rows, { x: 'index', y: 'value', y1: low, fill: color, fillOpacity: 0.12 })]),
-        lineY(rows, { x: 'index', y: 'value', stroke: color, strokeWidth: 1.75 }),
-      ],
-      scales: {
-        x: { scale: scaleLinear },
-        y: { scale: scaleLinear().domain([low, high]) },
-      },
-      theme: HLM_CHART_THEME,
-    }),
-    ariaLabel: '',
-    height: 34,
-  };
 }
 //#if (IncludeOperationRecords)
 

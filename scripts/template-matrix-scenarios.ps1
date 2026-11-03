@@ -20,7 +20,10 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
             "backend/src/{name}.Api/Notifications",
-            "backend/tests/{name}.UnitTests/Api/ResourceReadinessGateTests.cs"
+            "backend/tests/{name}.UnitTests/Api/ResourceReadinessGateTests.cs",
+            "backend/src/{name}.Application/Webhooks",
+            "frontend/src/app/features/platform/components/webhooks",
+            "docs/standards/webhooks.md"
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
@@ -30,7 +33,8 @@ $scenarioMap = [ordered]@{
         }
         # 外部登录关闭：Mock 路由、客户端方法与 DTO 都不得留下。
         # 这类残留编译、lint、单测全都放得过——Mock 会对一个后端返回 404 的端点回成功。
-        ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
+        # Webhook 关闭（IncludeWebhooks 默认 false）：类型、命名空间、路由、权限与词条 scope 都不得留下。
+        ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto", "Webhook", "webhook")
     }
     "resource" = @{
         Slices = @{ full = "full-04" }
@@ -60,7 +64,8 @@ $scenarioMap = [ordered]@{
         }
         # Resource 固定使用普通路径路由，后端完成认证后返回站内路径。
         # 产物不携带哈希路由配置或本地口令登录契约。
-        ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
+        # 同 identity：Webhook 关闭时不留任何残留。
+        ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail", "Webhook", "webhook")
     }
     "standalone" = @{
         Slices = @{ full = "full-03" }
@@ -87,15 +92,19 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @(
             "connect/token", "connect/authorize", "OpenIddict", "App.OpenApplications",
             # 外部登录同样关闭（见 identity 场景的同组断言）
-            "external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto"
+            "external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto",
+            # Webhook 同样关闭（见 identity 场景的同组断言）
+            "Webhook", "webhook"
         )
     }
     "identity-notifications" = @{
         Slices = @{ full = "full-02" }
-        Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
+        # 带 Webhook：通知与 Webhook 同开的条件行由这里生成（场景覆盖闸门 full 档）
+        Arguments = @("--include-notifications", "--include-webhooks"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
-            "frontend/src/app/core/services/notification-service.ts"
+            "frontend/src/app/core/services/notification-service.ts",
+            "backend/src/{name}.Application/Webhooks"
         )
         Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
         ReadmeContains = @()
@@ -165,6 +174,13 @@ $scenarioMap = [ordered]@{
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # Webhook 关闭 + 本地化开启：菜单与操作记录词条随 IncludeWebhooks 裁掉（webhooks 场景断言其存在）
+        ForbiddenFileTokens = @{
+            "frontend/public/i18n/en.json" = @("Webhook", "webhook")
+            "frontend/public/i18n/zh-CN.json" = @("Webhook", "webhook")
+            "frontend/public/i18n/operationRecords/en.json" = @("Webhook", "webhook")
+            "frontend/public/i18n/operationRecords/zh-CN.json" = @("Webhook", "webhook")
+        }
     }
     "resource-localization" = @{
         Slices = @{ full = "full-03" }
@@ -197,14 +213,16 @@ $scenarioMap = [ordered]@{
         Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $false; Lint = $true
         Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs")
-        Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
+        Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs", "backend/src/{name}.Application/Webhooks", "docs/standards/webhooks.md")
         ReadmeContains = @(); ReadmeExcludes = @()
+        # 纯 API 的 Webhook 关闭形态（resource-api-webhooks 的对照）
+        ForbiddenTokens = @("Webhook", "webhook")
     }
     "resource-capabilities-04" = @{
         Slices = @{ full = "full-03" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true")
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true", "--include-webhooks", "true")
         Frontend = $false; Lint = $true
-        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs")
+        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs", "backend/src/{name}.Application/Webhooks")
         Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
@@ -235,9 +253,9 @@ $scenarioMap = [ordered]@{
     }
     "standalone-capabilities-07" = @{
         Slices = @{ full = "full-02" }
-        Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "true", "--include-localization", "true")
+        Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "true", "--include-localization", "true", "--include-webhooks", "true")
         Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/platform/components/webhooks")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
@@ -251,9 +269,9 @@ $scenarioMap = [ordered]@{
     }
     "resource-capabilities-09" = @{
         Slices = @{ full = "full-05" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Arguments = @("--service-role", "Resource", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--include-webhooks", "true")
         Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs")
+        Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs", "frontend/src/app/features/platform/components/webhooks")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
@@ -273,6 +291,58 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Application/RealTime", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
     }
+    # 出站 Webhook：本地身份带示例事件 user.created 与后台页面；词条走 webhooks scope。
+    "webhooks" = @{
+        Slices = @{ full = "full-01"; core = "webhooks" }
+        Arguments = @("--include-webhooks", "--include-multi-tenancy", "true", "--include-localization"); Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Application/Webhooks",
+            "frontend/src/app/features/platform/components/webhooks",
+            "frontend/src/app/features/platform/services/webhook-service.ts",
+            "frontend/src/app/features/platform/dtos/webhook.dto.ts",
+            "frontend/_mock/api/webhook.ts",
+            "frontend/_mock/data/webhooks.ts",
+            "frontend/public/i18n/webhooks",
+            "frontend/e2e/webhooks.e2e.ts",
+            "docs/standards/webhooks.md"
+        )
+        Absent = @("backend/src/{name}.Infrastructure/Persistence/Migrations/Resource")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapWebhooks(")
+            "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.Webhooks.EntityFrameworkCore")
+            "backend/src/{name}.Api/{name}.Api.csproj" = @("Leistd.Webhooks.AspNetCore")
+            "docs/README.md" = @("standards/webhooks.md")
+            # 菜单与操作记录词条随 IncludeWebhooks 保留（identity-all-features 断言关闭时裁掉）
+            "frontend/public/i18n/en.json" = @('"webhooks": "Webhooks"')
+            "frontend/public/i18n/zh-CN.json" = @('"webhooks": "Webhook"')
+            "frontend/public/i18n/operationRecords/en.json" = @(
+                '"webhook-subscription.created": "Created webhook subscription {{target}}"',
+                '"webhook-subscription.updated"', '"webhook-subscription.deleted"', '"webhook-subscription.secret-rotated"',
+                '"webhook-subscription.enabled"', '"webhook-subscription.disabled"',
+                '"webhook-subscription.created": "Created a webhook subscription"'
+            )
+            "frontend/public/i18n/operationRecords/zh-CN.json" = @(
+                '"webhook-subscription.created": "创建了 Webhook 订阅 {{target}}"',
+                '"webhook-subscription.updated"', '"webhook-subscription.deleted"', '"webhook-subscription.secret-rotated"',
+                '"webhook-subscription.enabled"', '"webhook-subscription.disabled"',
+                '"webhook-subscription.created": "创建 Webhook 订阅"'
+            )
+        }
+    }
+    # 纯 API Resource：本地用户是投影，不声明示例事件，只有内置 webhook.test；迁移在 Resource 一侧。
+    "resource-api-webhooks" = @{
+        Slices = @{ full = "full-03" }
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-webhooks"); Frontend = $false; Lint = $true
+        Present = @("backend/src/{name}.Application/Webhooks", "docs/standards/webhooks.md")
+        Absent = @("frontend", "backend/src/{name}.Infrastructure/Persistence/Migrations/Identity")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapWebhooks(")
+            "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.Webhooks.EntityFrameworkCore")
+            "backend/src/{name}.Api/{name}.Api.csproj" = @("Leistd.Webhooks.AspNetCore")
+        }
+    }
 }
 
 # 全量清单显式排序：定义用哈希表（无序），执行顺序要稳定才便于比对历史日志
@@ -284,7 +354,8 @@ $AllScenarios = @(
     "identity-all-features",
     "identity-capabilities-01", "standalone-capabilities-02", "resource-capabilities-03", "resource-capabilities-04", "identity-capabilities-05", "standalone-capabilities-06", "standalone-capabilities-07", "identity-capabilities-08", "resource-capabilities-09",
     "resource-host-api-realtime", "resource-host-browser-notifications",
-    "identity-tenant-management-without-history"
+    "identity-tenant-management-without-history",
+    "webhooks", "resource-api-webhooks"
 )
 
 # 定义与全量清单必须一一对应。只加定义不加清单，新场景会静默不跑——
@@ -308,11 +379,12 @@ $MatrixSlices = [ordered]@{
         "standalone-external-login" = "Standalone 含前端（含容器）"
         "identity-all-features"     = "Identity 可选特性全开（Verify）"
         "resource-capabilities-03"  = "Resource 纯 API（含容器）"
+        "webhooks"                  = "Identity 出站 Webhook"
     }
     full = [ordered]@{
-        "full-01" = "Identity 默认、租户通知与 Resource 浏览器通知"
+        "full-01" = "Identity 默认、租户通知、Resource 浏览器通知与出站 Webhook"
         "full-02" = "Standalone 外部登录（含容器）与 Identity 通知、GitLab"
-        "full-03" = "Standalone 默认、Resource 纯 API（含容器）与本地化"
+        "full-03" = "Standalone 默认、Resource 纯 API（含容器与 Webhook）与本地化"
         "full-04" = "Resource 默认、通知与实时、Identity 本地化"
         "full-05" = "Identity 全开（Verify）、租户无历史与 Standalone 全量"
     }

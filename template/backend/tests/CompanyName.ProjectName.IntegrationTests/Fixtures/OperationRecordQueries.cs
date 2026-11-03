@@ -36,6 +36,29 @@ internal static class OperationRecordQueries
 #endif
     }
 
+    /// <summary>失败记录的操作人标识；系统触发、没有主体的记录为 <see langword="null"/>。</summary>
+    public static async Task<List<string?>> GetFailureActorsAsync(
+        WebApplicationFactory<Program> host, HttpClient client, string action, string targetId, Guid? tenantId = null)
+    {
+#if (IncludeOperationRecords)
+        using var body = JsonDocument.Parse(await client.GetStringAsync(
+            $"/api/v1/operation-records?offset=0&limit=50&actions={action}&outcome=failed"));
+        return body.RootElement.GetProperty("items").EnumerateArray()
+            .Where(item => item.GetProperty("targetId").GetString() == targetId)
+            .Select(item => item.TryGetProperty("actorId", out var actor) ? actor.GetString() : null)
+            .ToList();
+#else
+        await Task.CompletedTask;
+        return host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
+            .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), action)
+                && Equals(OperationRecordLogCapture.Field(entry, "OperationTargetId"), targetId)
+                && Equals(OperationRecordLogCapture.Field(entry, "OperationTenantId"), tenantId)
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Failed")
+            .Select(entry => OperationRecordLogCapture.Field(entry, "OperationActorId")?.ToString())
+            .ToList();
+#endif
+    }
+
     public static async Task<int> CountSucceededAsync(
         WebApplicationFactory<Program> host, HttpClient client, string action, string targetId, Guid? tenantId = null,
         string? authorizationBasis = null)

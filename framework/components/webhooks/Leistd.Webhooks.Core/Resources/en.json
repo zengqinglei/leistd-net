@@ -1,0 +1,9 @@
+{
+  "culture": "en",
+  "texts": {
+    "Webhook:SubscriptionNotFound": "The webhook subscription does not exist.",
+    "Webhook:DeliveryNotFound": "The webhook delivery does not exist.",
+    "Webhook:SubscriptionDisabled": "The webhook subscription is disabled.",
+    "Webhook:DeliveryNotRetryable": "The delivery is still being retried and cannot be resent manually."
+  }
+}

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Leistd.Webhooks.Core\Leistd.Webhooks.Core.csproj" />
+    <ProjectReference Include="..\..\auditing\Leistd.Auditing.Core\Leistd.Auditing.Core.csproj" />
+    <!-- IMultiTenant、ICurrentTenant 与逐库遍历：订阅与投递按租户隔离，兜底扫描与保留期按物理库进入 -->
+    <ProjectReference Include="..\..\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
+    <!-- 取 DbContext 经 IDbContextProvider，理由同 Leistd.Notifications.EntityFrameworkCore -->
+    <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />
+    <!-- 提交后立即投递走进程内队列；兜底扫描与保留期是组件自带的集群周期任务 -->
+    <ProjectReference Include="..\..\background-jobs\Leistd.BackgroundJobs.Core\Leistd.BackgroundJobs.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Leistd.Webhooks.Tests" />
+  </ItemGroup>
+
+</Project>

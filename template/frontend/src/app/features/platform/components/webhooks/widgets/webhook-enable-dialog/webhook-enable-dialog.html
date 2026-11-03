@@ -1,0 +1,42 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <hlm-dialog
+    role="alertdialog"
+    [closeOnOutsidePointerEvents]="false"
+    [state]="visible() ? 'open' : 'closed'"
+    (stateChanged)="onStateChange($event)"
+  >
+    <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" class="sm:max-w-md">
+      <hlm-dialog-header>
+        <h2 hlmDialogTitle>{{ t('webhooks.enable.header') }}</h2>
+        <p hlmDialogDescription>
+          {{ t('webhooks.enable.message', { name: subscriptionName() }) }}
+        </p>
+      </hlm-dialog-header>
+      <div data-dialog-body class="flex items-start gap-3 py-1">
+        <hlm-checkbox
+          inputId="webhook-enable-retry-failed"
+          [checked]="retryFailed()"
+          (checkedChange)="retryFailed.set($event)"
+        />
+        <label for="webhook-enable-retry-failed" class="flex flex-col gap-0.5 text-sm">
+          <span class="font-medium">{{ t('webhooks.enable.retryFailed') }}</span>
+          <span class="text-muted-foreground text-xs">{{
+            t('webhooks.enable.retryFailedHint')
+          }}</span>
+        </label>
+      </div>
+      <hlm-dialog-footer>
+        <button hlmBtn type="button" variant="outline" (click)="visible.set(false)">
+          {{ t('common.cancel') }}
+        </button>
+        <button hlmBtn type="button" data-testid="webhook-enable-confirm" (click)="confirm()">
+          {{ t('webhooks.action.enable') }}
+        </button>
+      </hlm-dialog-footer>
+    </hlm-dialog-content>
+  </hlm-dialog>
+</ng-container>

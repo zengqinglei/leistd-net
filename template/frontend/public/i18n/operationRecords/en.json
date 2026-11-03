@@ -83,6 +83,15 @@
     "tenant.connection-removed": "Removed the database connection of tenant {{target}}",
     "resource.admin-granted": "Added {{target}} to the administrator role",
     "resource.admin-restored": "Restored administrator access for {{target}}",
+    //#if (IncludeWebhooks)
+    "webhook-subscription.created": "Created webhook subscription {{target}}",
+    "webhook-subscription.updated": "Updated webhook subscription {{target}}",
+    "webhook-subscription.deleted": "Deleted webhook subscription {{target}}",
+    "webhook-subscription.secret-rotated": "Rotated the secret of webhook subscription {{target}}",
+    "webhook-subscription.enabled": "Enabled webhook subscription {{target}}",
+    "webhook-subscription.disabled": "Disabled webhook subscription {{target}}",
+    "webhook-subscription.auto-disabled": "Webhook subscription {{target}} was disabled automatically after failed deliveries",
+    //#endif
     "tenant.admin-restored": "Restored tenant administrator {{target}}"
   },
   "actionsNoTarget": {
@@ -90,6 +99,9 @@
     "setting.test-email-sent": "Sent a test email",
     "user.created": "Created a user",
     "role.created": "Created a role",
+    //#if (IncludeWebhooks)
+    "webhook-subscription.created": "Created a webhook subscription",
+    //#endif
     "open-application.created": "Created an open application"
   },
   "table": {

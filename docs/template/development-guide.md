@@ -43,6 +43,7 @@
 | `IncludeEmail` | true | 本地口令身份 |
 | `IncludeOperationRecords` | true | 全部角色，控制内置历史产品；关闭后保留安全行为日志 |
 | `IncludeNotifications` | false | 全部角色，独立于业务实时能力 |
+| `IncludeWebhooks` | false | 全部角色，出站 Webhook；本地身份另带示例事件，不与其他参数交叉 |
 | `IncludeExternalLogin` | false | 本地口令身份 |
 | `IncludeLocalization` | false | 全部角色，前端载荷还要求有效前端存在 |
 
@@ -116,13 +117,13 @@ export const next = 1;
 
 登记 `Verify` 的场景（有/无前端、开/关本地化、三种 `Ci`）在完整阶段直接运行生成项目的 `verify.ps1` 完成构建与测试，矩阵补运行时冒烟、spec 发现范围与产物断言；其余场景与按前后端拆分的阶段由矩阵逐步执行。`verify -Fast` 是生成项目的本地快速检查（静态脚本、构建、单元测试与 lint），矩阵只用默认模式。每个场景都核对 `verify -List` 的两种模式：默认模式与矩阵阶段一致，`-Fast` 恰好是其中静态检查、还原、构建与风格检查、单元测试项目和前端 lint 组成的子序列，两处步骤不会漂移。`verify` 在构建之后含 `backend-format`（`dotnet format style --verify-no-changes --no-restore --diagnostics IDE0001 IDE0002`，补上构建期不执行的两条风格规则，`-Fast` 同样执行），但不含生产依赖审计：生成项目的 CI 在锁文件变化、定时和手动时单独运行（`npm audit --omit=dev --audit-level=high --package-lock-only`，有限重试），矩阵不审计依赖，由"前端依赖审计"作业（`scripts/audit-frontend-dependencies.ps1`）按计划字段 `DependencyAudit` 执行，规则见 [CI 与发布闸门](../framework/ci-release-gates.md)；测试诊断闸门在每个场景的生成检查中执行，不论是否走 `verify`。
 
-能力参数原始输入共 768 组，有效形态共 320 组。`test-template-generation.py` 分四片运行（`--shard 0|1|2|control`）：三片按序号取模以默认 `Ci` 实际生成全部有效形态，对照片以有无前端两类形态核对 `Ci` 三种取值只改变 CI 文件集合及描述它们的文档，并在每种 `verify.ps1` 产物上核对步骤清单与失败即停；检查资产、JSON、项目结构、迁移与依赖不变量，并以实际生成结果验证角色无效参数的代表性内容等价。随机 UserSecretsId 是唯一排除的非确定性字段。轻量生成不能替代矩阵编译、数据库运行或浏览器验证。
+能力参数原始输入共 1536 组，有效形态共 640 组。`test-template-generation.py` 分四片运行（`--shard 0|1|2|control`）：三片按序号取模以默认 `Ci` 实际生成全部有效形态，对照片以有无前端两类形态核对 `Ci` 三种取值只改变 CI 文件集合及描述它们的文档，并在每种 `verify.ps1` 产物上核对步骤清单与失败即停；检查资产、JSON、项目结构、迁移与依赖不变量，并以实际生成结果验证角色无效参数的代表性内容等价。随机 UserSecretsId 是唯一排除的非确定性字段。轻量生成不能替代矩阵编译、数据库运行或浏览器验证。
 
 生成检查还验证 TypeScript 相对模块与组件模板/样式资产闭包，防止文件已裁掉但调用方仍引用。词条源码可用模板条件指令包住可选键；源码检查只识别这些指令并校验完整词条集合，不接受普通 JSON 注释或非法内容。全部有效形态的实际词条产物必须是严格 JSON，en/zh 键和占位符逐形态一致；条件结构与符号由独立源码闸门验证。
 
 Standalone 场景专门检验条件独立性：`identity` 与 `resource` 里 `LocalIdentity` 和 `OpenIddictServer` 恰好同真同假，只有 Standalone 形态把两者分开（`core` 档由 `standalone-external-login` 承担）。新增能力时不得只验证 `identity` 和 `resource`。
 
-场景断言分两类，缺一不可：`Present`/`Absent` 与 `RequiredTokens` 证明"留下的是对的那一份"，`ForbiddenTokens` 证明"不该留的没留下"。只查缺失会漏掉"两份都在"的情形。
+场景断言分两类，缺一不可：`Present`/`Absent` 与 `RequiredTokens` 证明"留下的是对的那一份"，`ForbiddenTokens` 证明"不该留的没留下"。只查缺失会漏掉"两份都在"的情形。`ForbiddenTokens` 只扫 `backend/src`、`frontend/src`、`frontend/_mock` 的 `.cs`/`.ts`；词条 JSON 等其他文件的残留用 `ForbiddenFileTokens` 按路径点名（文件必须存在，否则检查无从证明）。
 
 `ForbiddenTokens` **不得为了让场景通过而放宽**——它抓到的每一次都是真残留。若某个词在注释里合法出现，改注释措辞，不改断言。
 

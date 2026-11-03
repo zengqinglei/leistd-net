@@ -114,6 +114,30 @@ public static class OperationRecordActions
     public const string OpenApplicationSecretReset = "open-application.secret-reset";
 
 #endif
+#if (IncludeWebhooks)
+    /// <summary>新建 Webhook 订阅：外部地址从此开始收到所订阅的事件。</summary>
+    public const string WebhookSubscriptionCreated = "webhook-subscription.created";
+
+    /// <summary>修改 Webhook 订阅（名称、推送地址、事件类型、请求头）：改地址即改变数据发往哪里。</summary>
+    public const string WebhookSubscriptionUpdated = "webhook-subscription.updated";
+
+    /// <summary>删除 Webhook 订阅，连同它的投递记录。</summary>
+    public const string WebhookSubscriptionDeleted = "webhook-subscription.deleted";
+
+    /// <summary>轮换 Webhook 订阅的签名密钥：旧密钥在过渡期后失效。</summary>
+    public const string WebhookSubscriptionSecretRotated = "webhook-subscription.secret-rotated";
+
+    /// <summary>启用 Webhook 订阅。</summary>
+    public const string WebhookSubscriptionEnabled = "webhook-subscription.enabled";
+
+    /// <summary>手动停用 Webhook 订阅：待投递的记录随之失败，停用期间的事件不补发。</summary>
+    public const string WebhookSubscriptionDisabled = "webhook-subscription.disabled";
+
+    /// <summary>投递链路自动停用了 Webhook 订阅（端点回 410 已注销，或连续失败超过时限），没有人工操作者。</summary>
+    /// <remarks>与 <see cref="AuthLockedOut"/> 同一写法：系统因失败改变了对象状态，按失败结果记，原因写在失败原因里。</remarks>
+    public const string WebhookSubscriptionAutoDisabled = "webhook-subscription.auto-disabled";
+
+#endif
     /// <summary>导出操作记录。<b>导出审计日志这件事本身要被审计</b>——谁把历史带走了是安全事件。</summary>
     public const string OperationRecordsExported = "operation-records.exported";
 
@@ -281,5 +305,11 @@ public static class OperationRecordAuthorizations
     /// <summary>出示了发到账号已验证邮箱的验证码（忘记口令），此刻同样还没有主体。</summary>
     public const string EmailCodePresented = "EmailCodePresented";
 #endif
+#endif
+#if (IncludeWebhooks)
+
+    /// <summary>投递策略：端点回 410 即停用、连续失败超过 <c>Leistd:Webhooks:AutoDisableAfter</c> 即停用。</summary>
+    /// <remarks>自动停用由投递链路触发，没有主体，凭的是这条策略而不是哪个权限。</remarks>
+    public const string WebhookDeliveryPolicy = "WebhookDeliveryPolicy";
 #endif
 }

@@ -178,7 +178,7 @@ Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/b
 | full 全部登记场景 | 所有场景 Backend（含后端单元与集成测试）与 Runtime 为 pass；有前端的场景 Lint/Frontend/Test（Test 为前端测试）为 pass，且真实 Chromium 执行的用例数 > 0；无前端场景这三项为 not-applicable；登记 Verify 的本地身份场景另执行 Playwright 端到端且用例数 > 0；两步验证与确认身份的浏览器主路径在这批用例里，仓库不另设浏览器闭环 | `check-template-matrix-results.ps1`：回执 `BrowserTests` 取自 Vitest 汇总行，Test 为 pass 时须 > 0，否则须为 0；`E2ETests` 取自 Playwright 汇总行，是最终通过的用例数（passed 加重试后通过的 flaky，每个用例计一次），本地身份场景 Verify 为 pass 时须 > 0，否则须为 0 |
 | 两个容器场景 | `$ContainerScenarios`（`standalone-external-login`、`resource-capabilities-03`）都执行容器阶段且为 pass | 同上，`Container=pass`，缺少场景结果同样拒绝 |
 | PG 端到端、OIDC HTTP 端到端 | 作业为 success，且执行的断言数 > 0 | 作业状态；`check-quality-proof.ps1 -Kind postgresql/oidc` 核对 `e2e-proof.json` 的 `Assertions` |
-| 生成证明 | 320 个形态、768 组互不相同的原始输入映射到这 320 个形态、三种角色的等价比对、4 个 Ci 变体、全部 `verify.ps1` 变体的步骤与失败传播 | `check-quality-proof.ps1 -Kind generation` 核对四片 `generation-results.json`：同一候选与源码摘要（与检出的模板源码逐文件比对）、形态无缺号无重复、对照片各项齐全，每个形态的 `verify.ps1` 键都被对照片核对过 |
+| 生成证明 | 640 个形态、1536 组互不相同的原始输入映射到这 640 个形态、三种角色的等价比对、4 个 Ci 变体、全部 `verify.ps1` 变体的步骤与失败传播 | `check-quality-proof.ps1 -Kind generation` 核对四片 `generation-results.json`：同一候选与源码摘要（与检出的模板源码逐文件比对）、形态无缺号无重复、对照片各项齐全，每个形态的 `verify.ps1` 键都被对照片核对过 |
 | 框架 | 全部测试项目都有回执；包内容检查与隔离消费检查通过 | 全集清单等于候选登记的全部测试项目并逐项有回执；`-Kind package` 要求全部包与全部消费者 |
 
 反例夹具在 `scripts/test-quality-validation-plan.py`（放行计划、回执与证明）和 `scripts/test-workflow-change-scope.py`（汇总作业状态与证明步骤接线）。

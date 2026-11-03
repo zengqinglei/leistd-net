@@ -75,14 +75,19 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 
 开发环境以外，下列只在单机上成立的回落缺配即启动失败：
 
-<!--#if (SpaFrontend)-->
+<!--#if (SpaFrontend || IncludeWebhooks)-->
 - Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+<!--#endif-->
+<!--#if (IncludeWebhooks)-->
+- Webhook 订阅的签名密钥用 Data Protection 加密落库：密钥环丢失或各副本不共享时解不开密钥，投递记为失败；只能由管理员轮换密钥并把新密钥交给订阅方。
 <!--#endif-->
 <!--#if (LocalIdentity && IncludeMultiTenancy)-->
 - 控制库用 Data Protection 加密租户连接串，API 与 `DbMigrator` 必须使用同一个密钥环与应用名。
 <!--#endif-->
 <!--#if (SpaFrontend)-->
 - 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，启动日志各有一条 Warning；多副本必须配置 Redis，并共享 Data Protection 密钥。
+<!--#elseif (IncludeWebhooks)-->
+- 未配置 `ConnectionStrings:Redis` 不阻止单实例启动（此时须配 `DataProtection:KeysPath`），分布式锁回落到进程内并输出 Warning；纯 API 只为 Webhook 签名密钥注册 Data Protection，不注册浏览器会话。多副本必须配置 Redis。
 <!--#else-->
 - 未配置 `ConnectionStrings:Redis` 不阻止单实例启动，分布式锁回落到进程内并输出 Warning；纯 API 不注册浏览器会话、Data Protection 或其 `KeysPath` 配置。多副本必须配置 Redis。
 <!--#endif-->

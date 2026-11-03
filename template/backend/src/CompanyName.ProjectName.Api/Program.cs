@@ -55,6 +55,9 @@ using Leistd.Settings.Hosting;
 using Leistd.Settings.Options;
 #endif
 using Leistd.Tracing.AspNetCore;
+#if (IncludeWebhooks)
+using Leistd.Webhooks;
+#endif
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -88,6 +91,10 @@ try
     builder.AddMyProjectLogging();
 
     builder.Services.AddDomainServices();
+#if (IncludeWebhooks)
+    // 出站 Webhook 的选项（Leistd:Webhooks，启动期校验）与错误码映射；存储、投递与保留期由 AddInfrastructureServices 注册
+    builder.Services.AddWebhooks();
+#endif
     builder.Services.AddInfrastructureServices(builder.Configuration);
     builder.Services.AddApplicationServices();
 #if (!IncludeOperationRecords)
@@ -148,6 +155,11 @@ try
 #endif
 
     builder.AddMyProjectAuthentication();
+#if (IncludeWebhooks && !SpaFrontend)
+    // Webhook 签名密钥经 Data Protection 加密落库：密钥环必须持久且各副本共享，否则重启后密钥解不开、投递发不出去
+    // （有前端的形态由浏览器会话一并注册）
+    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
+#endif
     builder.Services.AddApiAuthorization();
     // 将权限定义作为 ASP.NET Core 授权策略解析。
     builder.Services.AddPermissionAuthorization();

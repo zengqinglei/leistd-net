@@ -19,6 +19,9 @@ using Leistd.OperationRecords.AspNetCore.Attributes;
 using Leistd.OperationRecords.AspNetCore.Endpoints;
 #endif
 using Leistd.Settings.AspNetCore.Endpoints;
+#if (IncludeWebhooks)
+using Leistd.Webhooks.AspNetCore.Endpoints;
+#endif
 
 namespace CompanyName.ProjectName.Api.Hosting;
 
@@ -79,6 +82,29 @@ public static class ComponentEndpoints
             options.ExportPolicy = PermissionConstant.OperationRecords.Export;
             options.ExportAction = OperationRecordActions.OperationRecordsExported;
         });
+#endif
+#if (IncludeWebhooks)
+
+        // 订阅的写操作留痕：成功记录由订阅变更事件的处理器在提交后写（见 WebhookSubscriptionChangedAuditHandler），
+        // 被拒与业务拒绝由端点上的动作码补记失败。测试事件与手动重发不改变"谁能收到、凭什么验签"，不记
+        api.MapGroup("webhooks")
+            .MapWebhooks(options =>
+            {
+                options.ReadPolicy = PermissionConstant.Webhooks.Default;
+                options.ManagePolicy = PermissionConstant.Webhooks.Manage;
+            })
+            .WithMetadataOn(WebhookEndpoints.CreateSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionCreated))
+            .WithMetadataOn(WebhookEndpoints.UpdateSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionUpdated, "id"))
+            .WithMetadataOn(WebhookEndpoints.DeleteSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionDeleted, "id"))
+            .WithMetadataOn(WebhookEndpoints.RotateSecretName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionSecretRotated, "id"))
+            .WithMetadataOn(WebhookEndpoints.EnableSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionEnabled, "id"))
+            .WithMetadataOn(WebhookEndpoints.DisableSubscriptionName,
+                new OperationRecordActionAttribute(OperationRecordActions.WebhookSubscriptionDisabled, "id"));
 #endif
 #if (IncludeNotifications)
 

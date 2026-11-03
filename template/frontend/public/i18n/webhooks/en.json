@@ -1,0 +1,202 @@
+{
+  "page": {
+    "title": "Webhooks"
+  },
+  "view": {
+    "label": "View",
+    "subscriptions": "Subscriptions",
+    "deliveries": "Delivery log"
+  },
+  "range": {
+    "label": "Statistics range",
+    "today": "Today",
+    "days7": "7 days",
+    "days30": "30 days",
+    "lastDays": "Last {{days}} days"
+  },
+  "summary": {
+    "deliveries": "{{count}} deliveries",
+    "attention": "{{count}} subscriptions need attention",
+    "subscription": "Subscription: {{name}}"
+  },
+  "stats": {
+    "label": "Delivery statistics",
+    "successRate": "Success rate",
+    "deliveries": "Deliveries",
+    "failed": "Failed",
+    "disabledSubscriptions": "Disabled subscriptions",
+    "disabledShort": "Disabled",
+    "info": {
+      "successRate": "Succeeded ÷ (succeeded + failed) for deliveries created in the range. Deliveries still retrying are not counted.",
+      "deliveries": "Deliveries created in the range. An event sent to N subscriptions counts N times.",
+      "failed": "Deliveries created in the range whose current status is failed. Resending a delivery updates the count.",
+      "disabledSubscriptions": "Subscriptions disabled right now, manually or automatically. Not affected by the range."
+    },
+    "infoLabel": "How {{metric}} is calculated",
+    "refreshFailed": "Couldn't refresh the statistics. Showing the last loaded data.",
+    "showFailed": "Show failed deliveries",
+    "attention": "Needs attention",
+    "currentCount": "Current count",
+    "currentCountBasis": "Subscriptions disabled right now. Not affected by the range.",
+    "retrying": "{{count}} retrying",
+    "retryingBasis": "{{count}} more deliveries are still retrying and are not counted as failed.",
+    "noComparison": "No earlier data",
+    "noComparisonBasis": "The previous range is older than the delivery log retention, so there is nothing to compare with.",
+    "vsYesterday": "vs yesterday",
+    "vsYesterdayBasis": "vs the same time yesterday",
+    "vsPrevious": "vs prior {{days}} days",
+    "vsPreviousBasis": "vs the same point of the previous {{days}} days"
+  },
+  "filter": {
+    "searchSubscriptions": "Search by name or URL...",
+    "searchDeliveries": "Search by event ID or type...",
+    "status": "Status",
+    "eventType": "Event type",
+    "subscription": "Subscription"
+  },
+  "action": {
+    "create": "New subscription",
+    "sendTest": "Send test event",
+    "sendTestDisabled": "Enable the subscription to send a test event",
+    "viewDeliveries": "View deliveries",
+    "viewDeliveriesOf": "View deliveries of {{name}}",
+    "rotateSecret": "Rotate secret",
+    "disable": "Disable",
+    "enable": "Enable",
+    "retry": "Resend",
+    "retryPending": "Still retrying; next attempt at {{time}}"
+  },
+  "subscriptionStatus": {
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "autoDisabled": "Auto-disabled"
+  },
+  "deliveryStatus": {
+    "succeeded": "Succeeded",
+    "pending": "Retrying",
+    "failed": "Failed"
+  },
+  "trigger": {
+    "automatic": "Automatic",
+    "manual": "Manual"
+  },
+  "disabledReason": {
+    "manual": "Disabled manually at {{time}}",
+    "endpointGone": "The endpoint returned 410 Gone at {{time}}",
+    "consecutiveFailures": "Disabled automatically after failing continuously since {{time}}"
+  },
+  "event": {
+    "all": "All events",
+    "allHint": "Includes event types added later."
+  },
+  "subscriptions": {
+    "colName": "Name / URL",
+    "colEvents": "Events",
+    "colStatus": "Status",
+    "colSuccessRate": "Success (7 days)",
+    "colLastDelivery": "Last delivery",
+    "colCreatedAt": "Created at",
+    "disabledReason": "Disabled reason",
+    "secret": "Secret",
+    "previousSecret": "The previous secret also signs until {{time}}",
+    "headers": "Headers",
+    "description": "Description",
+    "emptyTitle": "No subscriptions yet",
+    "emptyHint": "Create a subscription to push events to another system",
+    "emptyFilteredTitle": "No matching subscriptions",
+    "emptyFilteredHint": "Adjust the search or filters"
+  },
+  "deliveries": {
+    "colEvent": "Event",
+    "colSubscription": "Subscription",
+    "colStatus": "Status",
+    "colAttempts": "Attempts",
+    "colLastStatusCode": "Last status",
+    "colNextAttempt": "Next retry",
+    "colOccurredAt": "Occurred at",
+    "noResponse": "No response",
+    "emptyTitle": "No deliveries yet",
+    "emptyHint": "Deliveries appear here once events are published",
+    "emptyFilteredTitle": "No matching deliveries",
+    "emptyFilteredHint": "Adjust the search or filters"
+  },
+  "table": {
+    "currentPageReport": "{{total}} total"
+  },
+  "sheet": {
+    "title": "Delivery details",
+    "description": "The request sent for this event and every attempt to deliver it.",
+    "copyEventId": "Copy event ID",
+    "overview": "Overview",
+    "attemptCount": "{{count}} (automatic {{automatic}} · manual {{manual}})",
+    "lastResult": "Last result",
+    "request": "Request",
+    "latestHeaders": "Headers · latest attempt ({{time}})",
+    "body": "Body",
+    "attempts": "Attempts",
+    "duration": "{{ms}} ms",
+    "headers": "Request headers",
+    "response": "Response",
+    "error": "Error",
+    "noAttempts": "Not attempted yet"
+  },
+  "dialog": {
+    "createHeader": "New subscription",
+    "editHeader": "Edit subscription",
+    "description": "Choose the events to push. A signing secret is generated on save and shown only once.",
+    "loading": "Loading subscription...",
+    "sectionEvents": "Events",
+    "sectionHeaders": "Custom headers",
+    "eventsRequired": "Select at least one event.",
+    "headerIncomplete": "Each header needs both a name and a value.",
+    "noHeaders": "No custom headers",
+    "addHeader": "Add header",
+    "headersHint": "Sent with every request. webhook-* and Content-Type are set by the system."
+  },
+  "field": {
+    "name": "Name",
+    "namePlaceholder": "e.g. ERP order sync",
+    "url": "Endpoint URL",
+    "urlHint": "An absolute http(s) URL. Private network addresses are blocked when sending.",
+    "description": "Description (optional)",
+    "descriptionPlaceholder": "Purpose, receiving team or contact",
+    "headerName": "Header {{index}} name",
+    "headerNamePlaceholder": "Name",
+    "headerValue": "Header {{index}} value",
+    "headerValuePlaceholder": "Value"
+  },
+  "secret": {
+    "createdHeader": "Signing secret",
+    "rotatedHeader": "New signing secret",
+    "onlyOnce": "It cannot be viewed again after closing. Hand it to the receiver now.",
+    "createdHint": "Receivers verify requests with a Standard Webhooks library and deduplicate by {{header}}.",
+    "rotatedHint": "The previous secret keeps signing alongside this one for a transition period. Update the receiver before it ends.",
+    "copy": "Copy secret",
+    "saved": "I've saved it"
+  },
+  "enable": {
+    "header": "Enable subscription?",
+    "message": "\"{{name}}\" starts receiving new events. Events that occurred while it was disabled are not sent.",
+    "retryFailed": "Also resend failed deliveries",
+    "retryFailedHint": "Each failed delivery still in the log is resent once."
+  },
+  "confirm": {
+    "rotateHeader": "Rotate signing secret?",
+    "rotateMessage": "A new secret is generated now. The previous secret keeps signing alongside it for a transition period, so receivers can switch without dropping requests.",
+    "disableHeader": "Disable subscription?",
+    "disableMessage": "Deliveries waiting to be retried are marked as failed, and events that occur while it is disabled are not sent later.",
+    "deleteHeader": "Delete subscription?",
+    "deleteMessage": "Delete \"{{name}}\"? Its delivery log is deleted with it and no longer counts in statistics."
+  },
+  "toast": {
+    "created": "Subscription created",
+    "updated": "Subscription updated",
+    "deleted": "Subscription deleted",
+    "enabled": "Subscription enabled",
+    "disabled": "Subscription disabled",
+    "testSent": "Test event queued",
+    "retried": "Delivery queued for resending",
+    "copied": "Copied",
+    "secretCopied": "Signing secret copied"
+  }
+}

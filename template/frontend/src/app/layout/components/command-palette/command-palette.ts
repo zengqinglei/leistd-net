@@ -16,6 +16,9 @@ import {
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
+  //#if (IncludeWebhooks)
+  lucideWebhook,
+  //#endif
 } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
 import { HlmCommandImports } from '@spartan-ng/helm/command';
@@ -46,6 +49,9 @@ import { NavigationService } from '../../services/navigation-service';
   providers: [provideIcons({
     lucideBuilding2, lucideCog, lucideDatabase, lucideGauge, lucideHouse, lucideIdCard,
     lucideLayers, lucideSettings, lucideShieldCheck, lucideUsers,
+    //#if (IncludeWebhooks)
+    lucideWebhook,
+    //#endif
   })],
   host: { '(document:keydown)': 'onKeydown($event)' },
   templateUrl: './command-palette.html',

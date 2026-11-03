@@ -361,7 +361,7 @@ jobs:
           path: .tmp/package-consumer/package-results.json
           if-no-files-found: error
 
-  # 证明拆成互不引用产物的四片：三片按序号取模生成 320 个形态，对照片承担 768 组输入映射、
+  # 证明拆成互不引用产物的四片：三片按序号取模生成 640 个形态，对照片承担 1536 组输入映射、
   # 角色等价、Ci 变体与 verify 检查；汇总核对四片同一候选与源码、形态无缺号无重复、对照片证明齐全。
   template-generation:
     name: 模板有效形态生成 · ${{ matrix.shard }}
