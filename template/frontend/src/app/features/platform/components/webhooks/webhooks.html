@@ -17,22 +17,17 @@
       />
 
       <div class="flex flex-col gap-4">
-        <hlm-toggle-group
-          type="single"
-          size="sm"
-          variant="outline"
-          class="self-start"
-          [nullable]="false"
-          [value]="view()"
-          [attr.aria-label]="t('webhooks.view.label')"
-          data-testid="webhook-view"
-          (valueChange)="setView($event)"
-        >
-          <button hlmToggleGroupItem value="subscriptions">
-            {{ t('webhooks.view.subscriptions') }}
-          </button>
-          <button hlmToggleGroupItem value="deliveries">{{ t('webhooks.view.deliveries') }}</button>
-        </hlm-toggle-group>
+        <!-- 只用标签列表做视图导航（同官方 line 示例），内容仍按 view() 渲染；分隔线由外层下边框给出 -->
+        <hlm-tabs class="border-b" [tab]="view()" (tabActivated)="setView($event)">
+          <hlm-tabs-list
+            variant="line"
+            [attr.aria-label]="t('webhooks.view.label')"
+            data-testid="webhook-view"
+          >
+            <button hlmTabsTrigger="subscriptions">{{ t('webhooks.view.subscriptions') }}</button>
+            <button hlmTabsTrigger="deliveries">{{ t('webhooks.view.deliveries') }}</button>
+          </hlm-tabs-list>
+        </hlm-tabs>
 
         <!-- 工具栏写法同开放应用：左组 flex-auto，窄屏按钮 flex-1 平分一行 -->
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">

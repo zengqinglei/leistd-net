@@ -23,7 +23,7 @@ import {
   HlmInputGroupInput,
 } from '@spartan-ng/helm/input-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
+import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
 import {
@@ -103,7 +103,7 @@ const LIST_PARAMS = [
 ] as const;
 
 /**
- * 出站 Webhook 后台页（方案 A+）：顶部投递统计，分段控件在"订阅"与"投递日志"两个视图间切换，
+ * 出站 Webhook 后台页（方案 A+）：顶部投递统计，标签页在"订阅"与"投递日志"两个视图间切换，
  * 视图、筛选、分页、统计区间与打开的投递详情都以 URL 查询参数为唯一来源。
  * 读需要 `App.Webhooks`；写入口（新建、编辑、测试、轮换、启停、删除、重发）只在有 `App.Webhooks.Manage` 时出现。
  */
@@ -116,7 +116,7 @@ const LIST_PARAMS = [
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupAddon,
-    ...HlmToggleGroupImports,
+    ...HlmTabsImports,
     ...HlmTooltipImports,
     FacetedFilter,
     //#if (IncludeLocalization)
@@ -455,9 +455,8 @@ export class Webhooks {
   }
 
   // ---- 视图、区间与筛选 ----
-  setView(value: WebhookView | readonly WebhookView[] | null | undefined): void {
-    const view = Array.isArray(value) ? value[0] : value;
-    if (view == null || view === this.view()) {
+  setView(view: string): void {
+    if (view === this.view()) {
       return;
     }
     // 两个视图的筛选各自独立：切换时只保留区间
