@@ -134,7 +134,7 @@ public static class OperationRecordActions
     public const string WebhookSubscriptionDisabled = "webhook-subscription.disabled";
 
     /// <summary>投递链路自动停用了 Webhook 订阅（端点回 410 已注销，或连续失败超过时限），没有人工操作者。</summary>
-    /// <remarks>与 <see cref="AuthLockedOut"/> 同一写法：系统因失败改变了对象状态，按失败结果记，原因写在失败原因里。</remarks>
+    /// <remarks>与账号锁定（<c>auth.locked-out</c>）同一写法：系统因失败改变了对象状态，按失败结果记，原因写在失败原因里。</remarks>
     public const string WebhookSubscriptionAutoDisabled = "webhook-subscription.auto-disabled";
 
 #endif

@@ -40,6 +40,7 @@ describe('WebhookSubscriptionTable', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [WebhookSubscriptionTable],
+      // prettier-ignore
       providers: [
         provideRouter([]),
         provideHttpClient(),

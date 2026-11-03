@@ -224,7 +224,8 @@ const ENGLISH: Record<string, string> = {
   'webhooks.range.today': 'Today',
   'webhooks.stats.attention': 'Needs attention',
   'webhooks.stats.currentCount': 'Current count',
-  'webhooks.stats.currentCountBasis': 'Subscriptions disabled right now. Not affected by the range.',
+  'webhooks.stats.currentCountBasis':
+    'Subscriptions disabled right now. Not affected by the range.',
   'webhooks.stats.deliveries': 'Deliveries',
   'webhooks.stats.disabledShort': 'Disabled',
   'webhooks.stats.disabledSubscriptions': 'Disabled subscriptions',
