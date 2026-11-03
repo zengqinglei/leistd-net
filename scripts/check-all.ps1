@@ -231,7 +231,7 @@ $gates = @(
     # 源码模式只查路径与链接；命令对照的是条件裁剪后的配置，由矩阵在生成产物上以 --root 执行
     @{ Name = "文档引用规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-doc-references.py", "--self-test") }
     @{ Name = "文档引用存在性";            Cmd = $pythonCmd; Args = @("scripts/check-doc-references.py") }
-    # --check 先跑脚本自带的反例自检（删掉伴随或按任务必读文件必须报出），再比对五类任务的上限
+    # --check 先跑脚本自带的夹具自检，再按生成后的内容（全部参数组合取最重）比对常驻部分与五类任务的上限
     @{ Name = "模板规范读取成本不超上限";  Cmd = $pythonCmd; Args = @("scripts/measure-template-read-cost.py", "--check") }
 )
 

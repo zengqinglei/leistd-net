@@ -59,6 +59,7 @@ L1 按改动选择配方。仓库维护的配方只在这里维护，仓库 Skil
   | 预检接替 | `python scripts/test-template-source-preflight.py` |
   | 候选包源、一次性 NuGet 配置或版本覆盖 | `pwsh framework/build/test-candidate-feed.ps1`（真实 restore 的正反例，不访问网络） |
   | 模板开发工作区 | `pwsh scripts/test-template-dev-workspace.ps1` |
+  | 模板规范读取成本 | `python3 scripts/measure-template-read-cost.py --self-test` |
   | 生成项目 `verify.ps1` 的步骤或模式 | 用一个场景的 `-GenerateOnly` 核对 `verify -List` |
 
 ### 本地不做
