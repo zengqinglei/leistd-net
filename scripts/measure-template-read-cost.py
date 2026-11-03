@@ -362,6 +362,9 @@ def main() -> int:
     if args.self_test:
         print('\n'.join(errors) if errors else '✅ 读取成本闸门自检通过', file=sys.stderr if errors else sys.stdout)
         return 1 if errors else 0
+    if errors:
+        print('读取成本闸门自检失败：\n' + '\n'.join(errors), file=sys.stderr)
+        return 1
     config = json.loads(model.CONFIG_PATH.read_text(encoding='utf-8'))
     texts = {path: (ROOT / path).read_text(encoding='utf-8')
              for files in [RESIDENT] + [files for _, files in TASKS.values()] for path in paths_of(files)}
