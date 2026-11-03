@@ -69,13 +69,25 @@
                                   [class.rotate-90]="row.getIsExpanded()"
                                 />
                               </button>
+                              <!-- 名称与地址截断时才提示全文并成为 Tab 停靠点 -->
                               <div class="flex min-w-0 flex-col">
-                                <span class="text-foreground truncate font-medium">{{
-                                  subscription.name
-                                }}</span>
                                 <span
-                                  class="text-muted-foreground max-w-[22rem] truncate font-mono text-xs"
-                                  [title]="subscription.url"
+                                  #nameText
+                                  #nameTip="appTruncatedTooltip"
+                                  class="text-foreground focus-visible:ring-ring/50 truncate rounded-sm font-medium outline-none focus-visible:ring-[3px]"
+                                  data-testid="webhook-subscription-name"
+                                  [hlmTooltip]="subscription.name"
+                                  [appTruncatedTooltip]="nameText"
+                                  [attr.tabindex]="nameTip.truncated() ? 0 : null"
+                                  >{{ subscription.name }}</span
+                                >
+                                <span
+                                  #urlText
+                                  #urlTip="appTruncatedTooltip"
+                                  class="text-muted-foreground focus-visible:ring-ring/50 max-w-[22rem] truncate rounded-sm font-mono text-xs outline-none focus-visible:ring-[3px]"
+                                  [hlmTooltip]="subscription.url"
+                                  [appTruncatedTooltip]="urlText"
+                                  [attr.tabindex]="urlTip.truncated() ? 0 : null"
                                   >{{ subscription.url }}</span
                                 >
                               </div>

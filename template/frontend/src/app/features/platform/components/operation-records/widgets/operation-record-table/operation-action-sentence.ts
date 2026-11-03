@@ -107,6 +107,8 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'webhook-subscription.secret-rotated': (t) => `Rotated the secret of webhook subscription ${t}`,
   'webhook-subscription.enabled': (t) => `Enabled webhook subscription ${t}`,
   'webhook-subscription.disabled': (t) => `Disabled webhook subscription ${t}`,
+  'webhook-subscription.auto-disabled': (t) =>
+    `Webhook subscription ${t} was disabled automatically after failed deliveries`,
   //#endif
 };
 

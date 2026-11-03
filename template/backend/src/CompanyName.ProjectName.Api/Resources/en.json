@@ -267,6 +267,10 @@
     "AppSetting:NotificationRetentionOrder": "Unread notifications must be kept at least as long as read ones ({Unread} < {Read} days).",
     "AppSetting:TestEmailFailed": "The test email could not be sent. Check the email settings and server logs.",
     "AppSetting:TimeZoneInvalid": "'{Value}' is not a valid IANA time zone id.",
+//#if (IncludeWebhooks)
+    "AppWebhook:EndpointGone": "The endpoint returned 410 Gone and was treated as unregistered",
+    "AppWebhook:ConsecutiveFailures": "Deliveries kept failing past the automatic disable period",
+//#endif
     "SettingGroup:Display": "Display",
     "SettingGroup:Email": "Email",
     "SettingGroup:ExternalLogin": "External sign-in",

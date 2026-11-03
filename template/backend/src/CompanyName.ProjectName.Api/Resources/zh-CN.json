@@ -267,6 +267,10 @@
     "AppSetting:NotificationRetentionOrder": "未读通知的保留天数不能短于已读通知（{Unread} 天 < {Read} 天）。",
     "AppSetting:TestEmailFailed": "测试邮件发送失败，请检查邮件设置和服务端日志。",
     "AppSetting:TimeZoneInvalid": "「{Value}」不是合法的 IANA 时区标识。",
+//#if (IncludeWebhooks)
+    "AppWebhook:EndpointGone": "端点返回 410，视为已注销",
+    "AppWebhook:ConsecutiveFailures": "投递连续失败，超过自动停用时限",
+//#endif
     "SettingGroup:Display": "显示",
     "SettingGroup:Email": "邮件发送",
     "SettingGroup:ExternalLogin": "外部登录",

@@ -35,6 +35,7 @@ import {
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { StatusDot } from '../../../../../../shared/directives/status-dot';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
+import { TruncatedTooltip } from '../../../../../../shared/directives/truncated-tooltip';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { AppNumber } from '../../../../../../shared/pipes/app-number-pipe';
 //#if (!IncludeLocalization)
@@ -77,6 +78,7 @@ import { DELIVERY_STATUS_KEYS, DELIVERY_STATUS_VARIANTS } from '../../webhook-di
     TablePaginator,
     ...HlmTableImports,
     ...HlmTooltipImports,
+    TruncatedTooltip,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif

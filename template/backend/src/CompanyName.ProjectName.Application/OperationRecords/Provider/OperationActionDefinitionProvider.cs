@@ -177,6 +177,14 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
                 OperationSeverity.Notice);
         }
 
+        // 自动停用：与账号锁定同一口径，系统因连续失败改变了对象状态。租户管理员要看得到"哪个订阅被停了、为什么"，
+        // 才知道该去修端点再启用
+        context.Add(
+            OperationRecordActions.WebhookSubscriptionAutoDisabled,
+            OperationRecordCategories.Configuration,
+            OperationVisibility.Tenant,
+            OperationSeverity.Notice);
+
 #endif
         // 导出审计日志本身是安全事件：谁把历史带走了必须留痕。
         // 可见性取租户级——导出的是该租户自己的记录，租户管理员有权知道谁导走了。

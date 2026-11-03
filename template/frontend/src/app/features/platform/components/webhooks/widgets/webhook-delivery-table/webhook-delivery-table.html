@@ -54,21 +54,36 @@
                       <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'first:ps-4'">
                         @switch (cell.column.id) {
                           @case ('event') {
+                            <!-- 事件类型、事件 ID 与订阅名截断时才提示全文并成为 Tab 停靠点 -->
                             <div class="flex min-w-0 flex-col" [class]="titleContentClass">
-                              <span class="text-foreground truncate font-mono font-medium">{{
-                                delivery.eventType
-                              }}</span>
                               <span
-                                class="text-muted-foreground max-w-[12rem] truncate font-mono text-xs"
-                                [title]="delivery.eventId"
+                                #eventTypeText
+                                #eventTypeTip="appTruncatedTooltip"
+                                class="text-foreground focus-visible:ring-ring/50 truncate rounded-sm font-mono font-medium outline-none focus-visible:ring-[3px]"
+                                [hlmTooltip]="delivery.eventType"
+                                [appTruncatedTooltip]="eventTypeText"
+                                [attr.tabindex]="eventTypeTip.truncated() ? 0 : null"
+                                >{{ delivery.eventType }}</span
+                              >
+                              <span
+                                #eventIdText
+                                #eventIdTip="appTruncatedTooltip"
+                                class="text-muted-foreground focus-visible:ring-ring/50 max-w-[12rem] truncate rounded-sm font-mono text-xs outline-none focus-visible:ring-[3px]"
+                                [hlmTooltip]="delivery.eventId"
+                                [appTruncatedTooltip]="eventIdText"
+                                [attr.tabindex]="eventIdTip.truncated() ? 0 : null"
                                 >{{ delivery.eventId }}</span
                               >
                             </div>
                           }
                           @case ('subscription') {
                             <span
-                              class="block max-w-[16rem] truncate"
-                              [title]="delivery.subscriptionUrl"
+                              #subscriptionText
+                              #subscriptionTip="appTruncatedTooltip"
+                              class="focus-visible:ring-ring/50 block max-w-[16rem] truncate rounded-sm outline-none focus-visible:ring-[3px]"
+                              [hlmTooltip]="delivery.subscriptionName"
+                              [appTruncatedTooltip]="subscriptionText"
+                              [attr.tabindex]="subscriptionTip.truncated() ? 0 : null"
                               >{{ delivery.subscriptionName }}</span
                             >
                           }

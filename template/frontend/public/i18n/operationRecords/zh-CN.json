@@ -90,6 +90,7 @@
     "webhook-subscription.secret-rotated": "轮换了 Webhook 订阅 {{target}} 的密钥",
     "webhook-subscription.enabled": "启用了 Webhook 订阅 {{target}}",
     "webhook-subscription.disabled": "停用了 Webhook 订阅 {{target}}",
+    "webhook-subscription.auto-disabled": "Webhook 订阅 {{target}} 因投递失败被自动停用",
     //#endif
     "tenant.admin-restored": "恢复了租户管理员 {{target}}"
   },

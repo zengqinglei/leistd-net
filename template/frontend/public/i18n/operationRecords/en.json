@@ -90,6 +90,7 @@
     "webhook-subscription.secret-rotated": "Rotated the secret of webhook subscription {{target}}",
     "webhook-subscription.enabled": "Enabled webhook subscription {{target}}",
     "webhook-subscription.disabled": "Disabled webhook subscription {{target}}",
+    "webhook-subscription.auto-disabled": "Webhook subscription {{target}} was disabled automatically after failed deliveries",
     //#endif
     "tenant.admin-restored": "Restored tenant administrator {{target}}"
   },
