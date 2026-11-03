@@ -30,8 +30,18 @@ import {
   TranslocoLoader,
   TranslocoService,
 } from '@jsverse/transloco';
-import { defer, of, Subject, throwError } from 'rxjs';
 //#endif
+// prettier-ignore
+import {
+  //#if (IncludeLocalization)
+  defer,
+  of,
+  //#endif
+  Subject,
+  //#if (IncludeLocalization)
+  throwError,
+  //#endif
+} from 'rxjs';
 
 import { App } from './app';
 import { ApplicationHttpError } from './core/errors/application-http-error';
@@ -525,3 +535,63 @@ describe('App translation scope recovery', () => {
   });
 });
 //#endif
+
+/** 根宿主不随布局替换：导航等待时旧布局仍在，切换结束也不重建进度服务。 */
+describe('App navigation progress', () => {
+  it('keeps the global host during a pending cross-layout navigation', async () => {
+    const gate = new Subject<boolean>();
+    let resolved!: () => void;
+    const enteredResolver = new Promise<void>((resolve) => {
+      resolved = resolve;
+    });
+    @Component({ selector: 'app-progress-first-layout', template: 'First layout' })
+    class FirstLayout {}
+    @Component({ selector: 'app-progress-second-layout', template: 'Second layout' })
+    class SecondLayout {}
+    TestBed.configureTestingModule({
+      // prettier-ignore
+      providers: [
+        provideRouter([
+          { path: 'first-layout', component: FirstLayout },
+          { path: 'second-layout', component: SecondLayout, resolve: { ready: () => { resolved(); return gate; } } },
+        ]),
+        { provide: StartupService, useValue: { status: signal('success'), error: signal(null) } },
+        { provide: ThemeService, useValue: {} },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+      ],
+    });
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/first-layout');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const progressHost = host.querySelector('app-navigation-progress');
+    expect(progressHost).not.toBeNull();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const navigated = router.navigateByUrl('/second-layout');
+      // 先让导航进入 resolver，再推进服务延迟；不把异步导航自身的调度当作 300ms 的一部分。
+      await enteredResolver;
+      vi.advanceTimersByTime(300);
+      vi.useRealTimers();
+      fixture.detectChanges();
+      expect(host.querySelector('app-navigation-progress')).toBe(progressHost);
+      expect(progressHost!.querySelector('[role="progressbar"]')).not.toBeNull();
+      expect(host.querySelector('app-progress-first-layout')).not.toBeNull();
+      gate.next(true);
+      gate.complete();
+      expect(await navigated).toBe(true);
+      fixture.detectChanges();
+      expect(host.querySelector('app-navigation-progress')).toBe(progressHost);
+      expect(host.querySelector('app-progress-second-layout')).not.toBeNull();
+      expect(progressHost!.querySelector('[role="progressbar"]')).toBeNull();
+    } finally {
+      gate.complete();
+      vi.useRealTimers();
+    }
+  });
+});

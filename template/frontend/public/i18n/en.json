@@ -197,6 +197,9 @@
   },
   "app": {
     "name": "Template Project",
+    "navigation": {
+      "loading": "Loading..."
+    },
     "startup": {
       "loading": "Loading...",
       "failed": "Application failed to load",

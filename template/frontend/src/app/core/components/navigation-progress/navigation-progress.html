@@ -1,0 +1,15 @@
+@if (progress.visible()) {
+<!--#if (IncludeLocalization)-->
+  <ng-container *transloco="let t">
+<!--#else-->
+  <ng-container>
+<!--#endif-->
+    <hlm-progress
+      class="pointer-events-none fixed inset-x-0 top-0 z-50 h-0.5 rounded-none"
+      [value]="null"
+      [attr.aria-label]="t('app.navigation.loading')"
+    >
+      <hlm-progress-indicator class="motion-reduce:animate-none motion-reduce:transition-none" />
+    </hlm-progress>
+  </ng-container>
+}
