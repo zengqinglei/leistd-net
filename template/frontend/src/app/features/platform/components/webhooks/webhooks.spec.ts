@@ -156,6 +156,36 @@ describe('Webhooks page', () => {
     });
   });
 
+  it('links the selected tab and the view panel in both directions', async () => {
+    await setup(manage);
+    const root = fixture.nativeElement as HTMLElement;
+
+    for (const [view, table] of [
+      ['subscriptions', 'app-webhook-subscription-table'],
+      ['deliveries', 'app-webhook-delivery-table'],
+    ] as const) {
+      await router.navigate(['/platform/webhooks'], {
+        queryParams: { view: view === 'deliveries' ? view : null },
+      });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const selected = root.querySelector<HTMLElement>(
+        '[data-testid="webhook-view"] [role="tab"][aria-selected="true"]',
+      )!;
+      const controls = selected.getAttribute('aria-controls')!;
+      const panel = root.querySelector<HTMLElement>(`#${CSS.escape(controls)}`);
+
+      expect(panel, `${view}: aria-controls="${controls}" resolves`).not.toBeNull();
+      expect(panel!.getAttribute('role')).toBe('tabpanel');
+      expect(selected.id).toBeTruthy();
+      expect(panel!.getAttribute('aria-labelledby')).toBe(selected.id);
+      // 面板包住工具栏与当前视图的列表
+      expect(panel!.querySelector('input')).not.toBeNull();
+      expect(panel!.querySelector(table)).not.toBeNull();
+    }
+  });
+
   it('jumps to the delivery log of one subscription and scopes the statistics to it', async () => {
     await setup(manage);
     const table = fixture.debugElement.query(By.directive(WebhookSubscriptionTable))

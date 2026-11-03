@@ -17,7 +17,7 @@
       />
 
       <div class="flex flex-col gap-4">
-        <!-- 只用标签列表做视图导航（同官方 line 示例），内容仍按 view() 渲染；分隔线由外层下边框给出 -->
+        <!-- 标签列表做视图导航（同官方 line 示例），分隔线由外层下边框给出；面板见下方 -->
         <hlm-tabs class="border-b" [tab]="view()" (tabActivated)="setView($event)">
           <hlm-tabs-list
             variant="line"
@@ -29,143 +29,152 @@
           </hlm-tabs-list>
         </hlm-tabs>
 
-        <!-- 工具栏写法同开放应用：左组 flex-auto，窄屏按钮 flex-1 平分一行 -->
-        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
-            <hlm-input-group class="w-full sm:w-auto sm:max-w-xs sm:min-w-56 sm:flex-1">
-              <hlm-input-group-addon>
-                <ng-icon name="lucideSearch" />
-              </hlm-input-group-addon>
-              <input
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-                hlmInputGroupInput
-                type="text"
-                [attr.aria-label]="
-                  view() === 'deliveries'
-                    ? t('webhooks.filter.searchDeliveries')
-                    : t('webhooks.filter.searchSubscriptions')
-                "
-                [placeholder]="
-                  view() === 'deliveries'
-                    ? t('webhooks.filter.searchDeliveries')
-                    : t('webhooks.filter.searchSubscriptions')
-                "
-                [value]="searchQuery()"
-                (input)="onSearchQueryChange($any($event.target).value)"
-              />
-            </hlm-input-group>
+        <!-- 视图面板：显隐仍由 view() 决定；id 与 aria-labelledby 对上 Brain 给当前标签生成的 aria-controls 与 id -->
+        <div
+          role="tabpanel"
+          class="flex flex-col gap-6"
+          [id]="viewPanelId()"
+          [attr.aria-labelledby]="viewTabId()"
+          data-testid="webhook-view-panel"
+        >
+          <!-- 工具栏写法同开放应用：左组 flex-auto，窄屏按钮 flex-1 平分一行 -->
+          <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
+              <hlm-input-group class="w-full sm:w-auto sm:max-w-xs sm:min-w-56 sm:flex-1">
+                <hlm-input-group-addon>
+                  <ng-icon name="lucideSearch" />
+                </hlm-input-group-addon>
+                <input
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  hlmInputGroupInput
+                  type="text"
+                  [attr.aria-label]="
+                    view() === 'deliveries'
+                      ? t('webhooks.filter.searchDeliveries')
+                      : t('webhooks.filter.searchSubscriptions')
+                  "
+                  [placeholder]="
+                    view() === 'deliveries'
+                      ? t('webhooks.filter.searchDeliveries')
+                      : t('webhooks.filter.searchSubscriptions')
+                  "
+                  [value]="searchQuery()"
+                  (input)="onSearchQueryChange($any($event.target).value)"
+                />
+              </hlm-input-group>
 
-            @if (view() === 'deliveries') {
-              <app-faceted-filter
-                [label]="t('webhooks.filter.subscription')"
-                [options]="subscriptionOptions()"
-                [value]="selectedSubscriptionId()"
-                [searchPlaceholder]="t('webhooks.filter.subscription')"
-                [clearLabel]="t('common.clearFilter')"
-                [emptyLabel]="t('common.noResults')"
-                (valueChange)="onFilterChange('subscriptionId', $event)"
-              />
-              <app-faceted-filter
-                [label]="t('webhooks.filter.status')"
-                [options]="deliveryStatusOptions()"
-                [value]="selectedDeliveryStatus()"
-                [searchPlaceholder]="t('webhooks.filter.status')"
-                [clearLabel]="t('common.clearFilter')"
-                [emptyLabel]="t('common.noResults')"
-                (valueChange)="onFilterChange('status', $event)"
-              />
-            } @else {
-              <app-faceted-filter
-                [label]="t('webhooks.filter.status')"
-                [options]="subscriptionStatusOptions()"
-                [value]="selectedSubscriptionStatus()"
-                [searchPlaceholder]="t('webhooks.filter.status')"
-                [clearLabel]="t('common.clearFilter')"
-                [emptyLabel]="t('common.noResults')"
-                (valueChange)="onFilterChange('status', $event)"
-              />
-            }
-            <app-faceted-filter
-              [label]="t('webhooks.filter.eventType')"
-              [options]="eventTypeOptions()"
-              [value]="selectedEventType()"
-              [searchPlaceholder]="t('webhooks.filter.eventType')"
-              [clearLabel]="t('common.clearFilter')"
-              [emptyLabel]="t('common.noResults')"
-              (valueChange)="onFilterChange('eventType', $event)"
-            />
-          </div>
-
-          <div class="ml-auto flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
-            <button
-              hlmBtn
-              variant="secondary"
-              class="flex-1 sm:flex-none"
-              (click)="reload()"
-              [hlmTooltip]="t('common.refresh')"
-            >
-              @if (loading()) {
-                <hlm-spinner data-icon="inline-start" />
+              @if (view() === 'deliveries') {
+                <app-faceted-filter
+                  [label]="t('webhooks.filter.subscription')"
+                  [options]="subscriptionOptions()"
+                  [value]="selectedSubscriptionId()"
+                  [searchPlaceholder]="t('webhooks.filter.subscription')"
+                  [clearLabel]="t('common.clearFilter')"
+                  [emptyLabel]="t('common.noResults')"
+                  (valueChange)="onFilterChange('subscriptionId', $event)"
+                />
+                <app-faceted-filter
+                  [label]="t('webhooks.filter.status')"
+                  [options]="deliveryStatusOptions()"
+                  [value]="selectedDeliveryStatus()"
+                  [searchPlaceholder]="t('webhooks.filter.status')"
+                  [clearLabel]="t('common.clearFilter')"
+                  [emptyLabel]="t('common.noResults')"
+                  (valueChange)="onFilterChange('status', $event)"
+                />
               } @else {
-                <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+                <app-faceted-filter
+                  [label]="t('webhooks.filter.status')"
+                  [options]="subscriptionStatusOptions()"
+                  [value]="selectedSubscriptionStatus()"
+                  [searchPlaceholder]="t('webhooks.filter.status')"
+                  [clearLabel]="t('common.clearFilter')"
+                  [emptyLabel]="t('common.noResults')"
+                  (valueChange)="onFilterChange('status', $event)"
+                />
               }
-              {{ t('common.refresh') }}
-            </button>
-            @if (canManage() && view() === 'subscriptions') {
+              <app-faceted-filter
+                [label]="t('webhooks.filter.eventType')"
+                [options]="eventTypeOptions()"
+                [value]="selectedEventType()"
+                [searchPlaceholder]="t('webhooks.filter.eventType')"
+                [clearLabel]="t('common.clearFilter')"
+                [emptyLabel]="t('common.noResults')"
+                (valueChange)="onFilterChange('eventType', $event)"
+              />
+            </div>
+
+            <div class="ml-auto flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
               <button
                 hlmBtn
-                variant="default"
+                variant="secondary"
                 class="flex-1 sm:flex-none"
-                (click)="openCreateDialog()"
+                (click)="reload()"
+                [hlmTooltip]="t('common.refresh')"
               >
-                <ng-icon name="lucidePlus" data-icon="inline-start" />
-                {{ t('webhooks.action.create') }}
+                @if (loading()) {
+                  <hlm-spinner data-icon="inline-start" />
+                } @else {
+                  <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+                }
+                {{ t('common.refresh') }}
               </button>
-            }
+              @if (canManage() && view() === 'subscriptions') {
+                <button
+                  hlmBtn
+                  variant="default"
+                  class="flex-1 sm:flex-none"
+                  (click)="openCreateDialog()"
+                >
+                  <ng-icon name="lucidePlus" data-icon="inline-start" />
+                  {{ t('webhooks.action.create') }}
+                </button>
+              }
+            </div>
           </div>
+
+          @if (view() === 'deliveries') {
+            <app-webhook-delivery-table
+              [deliveries]="deliveries()"
+              [totalCount]="totalRecords()"
+              [pagination]="pagination()"
+              [loading]="loading()"
+              [filtered]="hasActiveFilters()"
+              [loadError]="loadError()"
+              [canManage]="canManage()"
+              [selectedId]="deliveryId()"
+              [retryingId]="retryingDeliveryId()"
+              (reload)="reload()"
+              (paginationChange)="onPaginationChange($event)"
+              (open)="openDelivery($event)"
+              (retry)="retryDelivery($event)"
+            />
+          } @else {
+            <app-webhook-subscription-table
+              [subscriptions]="subscriptions()"
+              [totalCount]="totalRecords()"
+              [pagination]="pagination()"
+              [loading]="loading()"
+              [filtered]="hasActiveFilters()"
+              [loadError]="loadError()"
+              [canManage]="canManage()"
+              [now]="now()"
+              [busyId]="busySubscriptionId()"
+              (retry)="reload()"
+              (paginationChange)="onPaginationChange($event)"
+              (edit)="openEditDialog($event)"
+              (sendTest)="sendTestEvent($event)"
+              (viewDeliveries)="viewDeliveries($event)"
+              (rotateSecret)="rotateSecret($event)"
+              (enable)="openEnableDialog($event)"
+              (disable)="disableSubscription($event)"
+              (delete)="deleteSubscription($event)"
+            />
+          }
         </div>
       </div>
-
-      @if (view() === 'deliveries') {
-        <app-webhook-delivery-table
-          [deliveries]="deliveries()"
-          [totalCount]="totalRecords()"
-          [pagination]="pagination()"
-          [loading]="loading()"
-          [filtered]="hasActiveFilters()"
-          [loadError]="loadError()"
-          [canManage]="canManage()"
-          [selectedId]="deliveryId()"
-          [retryingId]="retryingDeliveryId()"
-          (reload)="reload()"
-          (paginationChange)="onPaginationChange($event)"
-          (open)="openDelivery($event)"
-          (retry)="retryDelivery($event)"
-        />
-      } @else {
-        <app-webhook-subscription-table
-          [subscriptions]="subscriptions()"
-          [totalCount]="totalRecords()"
-          [pagination]="pagination()"
-          [loading]="loading()"
-          [filtered]="hasActiveFilters()"
-          [loadError]="loadError()"
-          [canManage]="canManage()"
-          [now]="now()"
-          [busyId]="busySubscriptionId()"
-          (retry)="reload()"
-          (paginationChange)="onPaginationChange($event)"
-          (edit)="openEditDialog($event)"
-          (sendTest)="sendTestEvent($event)"
-          (viewDeliveries)="viewDeliveries($event)"
-          (rotateSecret)="rotateSecret($event)"
-          (enable)="openEnableDialog($event)"
-          (disable)="disableSubscription($event)"
-          (delete)="deleteSubscription($event)"
-        />
-      }
     </div>
   </div>
 

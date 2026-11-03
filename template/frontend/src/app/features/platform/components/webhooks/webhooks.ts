@@ -166,6 +166,12 @@ export class Webhooks {
   readonly view = computed<WebhookView>(() =>
     this.queryParams().get('view') === 'deliveries' ? 'deliveries' : 'subscriptions',
   );
+  /**
+   * 视图面板与当前标签互相关联：Brain 1.9.0 的标签 id 与 aria-controls 固定为下面的形态，没有覆盖入口；
+   * 面板不用 hlmTabsContent，免得在 URL 更新前按 Brain 内部状态先隐藏。形态变了由 spec 的关联断言暴露。
+   */
+  protected readonly viewPanelId = computed(() => `brn-tabs-content-${this.view()}`);
+  protected readonly viewTabId = computed(() => `brn-tabs-label-${this.view()}`);
   readonly preset = computed<RangePreset>(() => {
     const value = this.queryParams().get('range') as RangePreset | null;
     return value && RANGE_PRESETS.includes(value) ? value : '7d';
