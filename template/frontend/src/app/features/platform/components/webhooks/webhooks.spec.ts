@@ -17,6 +17,10 @@ import { AccountPreferencesService } from '../../../../core/services/account-pre
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import {
+  expectTouchTarget,
+  setCoarsePointer,
+} from '../../../../shared/utils/coarse-pointer.testing';
 import { WebhookStatisticsOutputDto, WebhookSubscriptionOutputDto } from '../../dtos/webhook.dto';
 import { WebhookService } from '../../services/webhook-service';
 
@@ -103,7 +107,24 @@ describe('Webhooks page', () => {
     await fixture.whenStable();
   }
 
+  afterEach(async () => {
+    fixture?.destroy();
+    await setCoarsePointer(false);
+  });
+
   const manage = [PERMISSIONS.webhooks.default, PERMISSIONS.webhooks.manage];
+
+  // 标签列表上游定高、项比按钮矮，触屏下项补足 44px，列表随之撑高
+  it('gives both view tabs a 44px target on touch screens', async () => {
+    await setCoarsePointer(true);
+    await setup(manage);
+    const tabs = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+      '[data-testid="webhook-view"] [role="tab"]',
+    );
+
+    expect(tabs.length).toBe(2);
+    tabs.forEach(expectTouchTarget);
+  });
 
   it('drops the filters of the other view but keeps the range when switching views', async () => {
     await setup(manage);
@@ -112,16 +133,57 @@ describe('Webhooks page', () => {
     });
     await fixture.whenStable();
 
-    component.setView('deliveries');
+    // 标签顺序固定：订阅、投递日志
+    const [subscriptionsTab, deliveriesTab] = (
+      fixture.nativeElement as HTMLElement
+    ).querySelectorAll<HTMLButtonElement>('[data-testid="webhook-view"] [role="tab"]');
+    const tab = (key: 'subscriptions' | 'deliveries') =>
+      key === 'subscriptions' ? subscriptionsTab : deliveriesTab;
+    expect(tab('subscriptions').getAttribute('aria-selected')).toBe('true');
+
+    tab('deliveries').click();
     await fixture.whenStable();
+    fixture.detectChanges();
 
     const url = router.parseUrl(router.url).queryParams;
     expect(url).toEqual({ view: 'deliveries', range: '30d' });
+    expect(tab('deliveries').getAttribute('aria-selected')).toBe('true');
+    expect(tab('subscriptions').getAttribute('aria-selected')).toBe('false');
     expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]).toMatchObject({
       offset: 0,
       status: undefined,
       keyword: undefined,
     });
+  });
+
+  it('links the selected tab and the view panel in both directions', async () => {
+    await setup(manage);
+    const root = fixture.nativeElement as HTMLElement;
+
+    for (const [view, table] of [
+      ['subscriptions', 'app-webhook-subscription-table'],
+      ['deliveries', 'app-webhook-delivery-table'],
+    ] as const) {
+      await router.navigate(['/platform/webhooks'], {
+        queryParams: { view: view === 'deliveries' ? view : null },
+      });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const selected = root.querySelector<HTMLElement>(
+        '[data-testid="webhook-view"] [role="tab"][aria-selected="true"]',
+      )!;
+      const controls = selected.getAttribute('aria-controls')!;
+      const panel = root.querySelector<HTMLElement>(`#${CSS.escape(controls)}`);
+
+      expect(panel, `${view}: aria-controls="${controls}" resolves`).not.toBeNull();
+      expect(panel!.getAttribute('role')).toBe('tabpanel');
+      expect(selected.id).toBeTruthy();
+      expect(panel!.getAttribute('aria-labelledby')).toBe(selected.id);
+      // 面板包住工具栏与当前视图的列表
+      expect(panel!.querySelector('input')).not.toBeNull();
+      expect(panel!.querySelector(table)).not.toBeNull();
+    }
   });
 
   it('jumps to the delivery log of one subscription and scopes the statistics to it', async () => {
