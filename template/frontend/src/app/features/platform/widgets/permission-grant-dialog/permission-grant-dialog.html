@@ -113,7 +113,8 @@
                       </hlm-accordion-trigger>
                     </div>
 
-                    <hlm-accordion-content>
+                    <!-- 官方内容区内层 div 固定 pb-4（面向段落文字，无输入可覆盖）；列表行自带内边距，这里清掉。 -->
+                    <hlm-accordion-content class="[&>div]:pb-0">
                       <!-- 缩进表达前置关系：depth 0 是资源，更深的是其上的动作。
                      触屏下复选框的命中区每侧伸出 14px：起始缩进不小于 14px；行高 48px，扣掉上边框后
                      相邻两行的 44px 命中区之间仍留有余量，不会因取整互相覆盖。 -->
