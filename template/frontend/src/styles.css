@@ -167,6 +167,19 @@ body {
     }
   }
 
+  /* 导航等待条：官方 indeterminate 从视口外起步、4s 一程，短于 1s 的等待看不到滑块；这里从左缘半露起步、1.5s 一程 */
+  --animate-navigation-progress: navigation-progress 1.5s cubic-bezier(0.65, 0.05, 0.36, 1) infinite;
+
+  @keyframes navigation-progress {
+    0% {
+      transform: translateX(-50%) scaleX(0.5);
+    }
+
+    100% {
+      transform: translateX(75%) scaleX(0.5);
+    }
+  }
+
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
