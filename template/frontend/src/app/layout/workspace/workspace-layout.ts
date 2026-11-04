@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { NavigationProgress } from '../../core/components/navigation-progress/navigation-progress';
 import { CommandPalette } from '../components/command-palette/command-palette';
 import { DefaultHeader } from '../components/default-header/default-header';
 
@@ -10,7 +11,7 @@ import { DefaultHeader } from '../components/default-header/default-header';
  */
 @Component({
   selector: 'app-workspace-layout',
-  imports: [RouterOutlet, CommandPalette, DefaultHeader],
+  imports: [RouterOutlet, CommandPalette, DefaultHeader, NavigationProgress],
   templateUrl: './workspace-layout.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

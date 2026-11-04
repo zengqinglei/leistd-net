@@ -5,6 +5,7 @@
   <!-- 主内容区：Header + 内容。inset 所需的 peer 与状态属性由 app-default-sidebar 的宿主转出。 -->
   <main hlmSidebarInset class="overflow-hidden">
     <app-default-header />
+    <app-navigation-progress placement="content" />
 
     <div class="flex-1 overflow-auto motion-safe:scroll-smooth">
       <router-outlet></router-outlet>

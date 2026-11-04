@@ -7,7 +7,7 @@ import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
 import { NavigationProgressService } from '../../services/navigation-progress-service';
 
-/** 在真实浏览器 DOM 验证无障碍与固定定位，假时钟只推进进度延迟，不替换渲染调度。 */
+/** 在真实浏览器 DOM 验证无障碍与两种挂载位置，假时钟只推进进度延迟，不替换渲染调度。 */
 describe('NavigationProgress', () => {
   let fixture: ComponentFixture<NavigationProgress>;
   let service: NavigationProgressService;
@@ -59,13 +59,34 @@ describe('NavigationProgress', () => {
     expect(progressbar()!.getAttribute('aria-label')).toBe('Loading...');
     //#endif
     expect(progressbar()!.hasAttribute('aria-valuenow')).toBe(false);
+    const host = getComputedStyle(fixture.nativeElement as HTMLElement);
+    expect(host.position).toBe('fixed');
+    expect(host.top).toBe('0px');
+    expect(Number(host.zIndex)).toBeGreaterThan(30);
     const style = getComputedStyle(progressbar()!);
-    expect(style.position).toBe('fixed');
+    expect(style.position).toBe('absolute');
     expect(style.height).toBe('2px');
     expect(style.pointerEvents).toBe('none');
-    expect(Number(style.zIndex)).toBeGreaterThan(30);
     release();
     fixture.detectChanges();
     expect(progressbar()).toBeNull();
+  });
+
+  it('yields the viewport bar to a content-area host and takes over again once it is gone', async () => {
+    const content = TestBed.createComponent(NavigationProgress);
+    content.componentRef.setInput('placement', 'content');
+    content.detectChanges();
+    const release = await show();
+    content.detectChanges();
+    expect(progressbar()).toBeNull();
+    const contentBar = (content.nativeElement as HTMLElement).querySelector('[role="progressbar"]');
+    expect(contentBar).not.toBeNull();
+    const host = getComputedStyle(content.nativeElement as HTMLElement);
+    expect(host.position).toBe('relative');
+    expect(host.height).toBe('0px');
+    content.destroy();
+    fixture.detectChanges();
+    expect(progressbar()).not.toBeNull();
+    release();
   });
 });

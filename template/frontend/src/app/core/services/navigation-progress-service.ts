@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   NavigationCancel,
@@ -17,6 +17,9 @@ export class NavigationProgressService {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly _visible = signal(false);
   readonly visible = this._visible.asReadonly();
+  private readonly contentHosts = signal(0);
+  /** 当前布局已在内容区顶部挂载进度条；没有布局的页面由根组件在视口顶部兜底。 */
+  readonly hasContentHost = computed(() => this.contentHosts() > 0);
   private releaseRoute: (() => void) | undefined;
 
   constructor() {
@@ -64,5 +67,11 @@ export class NavigationProgressService {
         this._visible.set(false);
       }
     };
+  }
+
+  /** 登记一处内容区宿主，返回注销函数。 */
+  attachContentHost(): () => void {
+    this.contentHosts.update((count) => count + 1);
+    return () => this.contentHosts.update((count) => count - 1);
   }
 }
