@@ -21,6 +21,8 @@
 
 沿用 `frontend/libs/ui` 的 Spartan 组件。新增或核对 API 依次读项目 `spartan` Skill、本地源码与锁定版本、[匹配版本文档](https://spartan.ng/)。现有组件无法满足时才自建，不在 `shared` 重建组件库。手写前查 `spartan` Skill 的组件替换清单，缺的组件用 CLI 加。
 
+比触发器宽的浮层（日历、日期区间、宽弹层）在使用处写 `align="start"` 或 `"end"`（触发器贴右用 `end`），不用默认 `center`：brain 只为这两种配了对边回退，`center` 贴边时浮层被压窄、内容伸出视口。
+
 ### 2.2 样式方案
 
 - 布局与微调**必须**优先用 Tailwind CSS v4 原子类；自定义样式必须沿用 Spartan 主题的 CSS 变量与 `.dark` class。
@@ -86,7 +88,7 @@
 
 ### 2.7 弹窗生命周期
 
-业务弹窗打开前静态 `disableClose`、禁外点并隐藏内置关闭钮。`app-dialog-close` 的 `requestClose()` 统一处理 Esc、关闭与取消；dirty/集合变化时确认放弃，busy 时拒绝用户退出。成功、父级强制关闭和销毁直接关闭；凭据不确认，关闭即清空。
+本节对弹窗与抽屉（Sheet）同样适用；抽屉用官方 `hlmSheetHeader`/`hlmSheetFooter`。业务弹窗打开前静态 `disableClose`、禁外点并隐藏内置关闭钮。`app-dialog-close` 的 `requestClose()` 统一处理 Esc、关闭与取消；dirty/集合变化时确认放弃，busy 时拒绝用户退出。成功、父级强制关闭和销毁直接关闭；凭据不确认，关闭即清空。浏览器后退/前进视为离开页面：弹窗与抽屉随导航关闭（CDK 默认 `closeOnNavigation`，与 Material 一致），不经 `requestClose()` 确认，进行中的写请求照常完成；模板不提供路由级未保存守卫。需要刷新或分享后还原打开状态的抽屉，把打开状态放在查询参数里。
 
 同步内容聚焦主输入；异步先聚焦标题，`appDialogFocus` 仅在焦点仍留在标题时迁入输入。关闭后回焦业务入口，验证菜单项销毁及弹窗接力场景。正文标 `data-dialog-body`，限高、单层滚动；页脚在正文外且不收缩，服务动态打开的公共弹窗同样适用。自定义关闭按钮不占布局位置。正文横纵均用等量负外边距与内边距留焦点环，视觉间距与 Vega 同源。
 

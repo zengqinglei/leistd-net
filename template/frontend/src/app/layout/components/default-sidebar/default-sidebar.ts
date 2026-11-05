@@ -23,21 +23,12 @@ import {
   lucideWebhook,
   //#endif
 } from '@ng-icons/lucide';
-//#if (IncludeRealTime)
-import { HlmBadge } from '@spartan-ng/helm/badge';
-//#endif
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
-//#if (IncludeRealTime)
-import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-//#endif
 
 import { CommandPaletteService } from '../../../core/services/command-palette-service';
 import { LayoutService } from '../../../core/services/layout-service';
-//#if (IncludeRealTime)
-import { SignalRService } from '../../../core/services/signalr-service';
-//#endif
 import { Logo } from '../../../shared/components/logo/logo';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
@@ -56,10 +47,6 @@ import { UserMenu } from '../user-menu/user-menu';
     ...HlmDropdownMenuImports,
     ...HlmKbdImports,
     ...HlmSidebarImports,
-    //#if (IncludeRealTime)
-    HlmBadge,
-    ...HlmTooltipImports,
-    //#endif
     UserMenu,
     //#if (IncludeLocalization)
     TranslocoDirective,
@@ -92,9 +79,6 @@ export class DefaultSidebar {
   protected readonly commandPalette = inject(CommandPaletteService);
   private readonly navigation = inject(NavigationService);
   protected readonly sidebarService = inject(HlmSidebarService);
-  //#if (IncludeRealTime)
-  protected readonly realtimeStatus = inject(SignalRService).connectionStatus;
-  //#endif
 
   /** 区域切换菜单的弹出方向，同官方 nav-user：桌面向右，手机（侧栏是抽屉）向下。 */
   readonly areaMenuSide = computed(() => (this.sidebarService.isMobile() ? 'bottom' : 'right'));
@@ -120,14 +104,5 @@ const ENGLISH: Record<string, string> = {
   'layout.sidebar.switchArea': 'Switch area',
   'layout.sidebar.appTitle': 'Template Project',
   'layout.commandPalette.search': 'Search',
-  //#if (IncludeRealTime)
-  'layout.realtime.label': 'Real-time',
-  'layout.realtime.connected': 'Live updates connected',
-  'layout.realtime.reconnecting': 'Connection lost, reconnecting…',
-  'layout.realtime.disconnected': 'Live updates offline. Refresh to retry.',
-  'layout.realtime.connectedShort': 'Connected',
-  'layout.realtime.reconnectingShort': 'Reconnecting…',
-  'layout.realtime.disconnectedShort': 'Offline',
-  //#endif
 };
 //#endif

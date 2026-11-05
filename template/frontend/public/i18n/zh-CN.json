@@ -157,13 +157,9 @@
       "empty": "没有匹配的页面。"
     },
     "realtime": {
-      "label": "实时",
-      "connected": "实时更新已连接",
-      "reconnecting": "连接中断，正在重连…",
-      "disconnected": "实时更新已断开，刷新页面重试。",
-      "connectedShort": "已连接",
-      "reconnectingShort": "正在重连…",
-      "disconnectedShort": "已断开"
+      "reconnecting": "实时连接中断，正在重连…",
+      "disconnected": "实时连接已断开，页面数据可能不是最新。",
+      "reconnect": "重新连接"
     },
     "topbar": {
       "openNavigation": "打开导航",

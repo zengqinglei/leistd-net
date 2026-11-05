@@ -64,9 +64,11 @@
               {{ t('platform.dashboard.range.days30') }}
             </button>
           </hlm-toggle-group>
-          <!-- 自定义区间：官方日期区间选择器，结束日不晚于展示时区的今天；清空回到近 7 天 -->
+          <!-- 自定义区间：官方日期区间选择器，结束日不晚于展示时区的今天；清空回到近 7 天。
+           贴右的触发器用 end：只有 start/end 有对边回退，center 贴边时日历被挤出视口 -->
           <hlm-date-range-picker
             data-testid="dashboard-range-picker"
+            align="end"
             [date]="pickerRange()"
             [maxDate]="maxPickerDate()"
             [formatDates]="formatPickerRange()"

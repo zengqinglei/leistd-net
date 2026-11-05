@@ -6,6 +6,9 @@
   <main hlmSidebarInset class="overflow-hidden">
     <app-default-header />
     <app-navigation-progress placement="content" />
+    <!--#if (IncludeRealTime)-->
+    <app-realtime-status />
+    <!--#endif-->
 
     <div class="flex-1 overflow-auto motion-safe:scroll-smooth">
       <router-outlet></router-outlet>
