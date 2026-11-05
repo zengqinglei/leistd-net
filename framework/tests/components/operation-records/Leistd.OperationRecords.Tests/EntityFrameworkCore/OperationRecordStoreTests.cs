@@ -262,6 +262,22 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Equal(expected, page.TotalCount);
     }
 
+    /// <summary>关键字对动作码、目标标识、目标名与操作人名都做不区分大小写的包含匹配。</summary>
+    [Theory]
+    [InlineData("USER.CREATED")]
+    [InlineData("U-42")]
+    [InlineData("lovelace")]
+    [InlineData("GRACE")]
+    public async Task The_keyword_ignores_case_on_every_matched_column(string keyword)
+    {
+        await _store.InsertAsync(Info(action: "user.created", targetId: "u-42", targetName: "Ada Lovelace", actorName: "Grace"));
+        await _store.InsertAsync(Info(action: "role.deleted", targetId: "r-1", targetName: "Auditors", actorName: "Linus"));
+
+        var page = await QueryAsync(keyword: keyword, scope: OperationRecordVisibilityScope.Unrestricted);
+
+        Assert.Equal("user.created", Assert.Single(page.Items).Action);
+    }
+
     /// <summary>关键字与时间区间是"与"关系，不是"或"。</summary>
     [Fact]
     public async Task The_keyword_and_the_time_range_are_combined_with_and()
