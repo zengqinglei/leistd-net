@@ -13,7 +13,7 @@ public sealed record OperationRecordCriteria
     /// <summary>可见范围，由调用方算好；必填，不过滤须显式传 <see cref="OperationRecordVisibilityScope.Unrestricted"/>。</summary>
     public required OperationRecordVisibilityScope Scope { get; init; }
 
-    /// <summary>在动作码、目标标识与操作人名上做包含匹配；为空不过滤。</summary>
+    /// <summary>对动作码、目标标识、目标名与操作人名做不区分大小写的包含匹配；为空不过滤。</summary>
     public string? Keyword { get; init; }
 
     /// <summary>起始时刻（含），UTC；为空不设下界。</summary>

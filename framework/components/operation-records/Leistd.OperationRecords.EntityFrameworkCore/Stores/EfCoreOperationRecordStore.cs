@@ -115,12 +115,13 @@ public class EfCoreOperationRecordStore<TDbContext>(
 
         if (!string.IsNullOrWhiteSpace(criteria.Keyword))
         {
-            var trimmed = criteria.Keyword.Trim();
+            // 不区分大小写：两边都转小写，各 Provider 都能翻译（PostgreSQL 为 lower()）
+            var keyword = criteria.Keyword.Trim().ToLowerInvariant();
             query = query.Where(x =>
-                x.Action.Contains(trimmed)
-                || x.TargetId.Contains(trimmed)
-                || (x.TargetName != null && x.TargetName.Contains(trimmed))
-                || (x.ActorName != null && x.ActorName.Contains(trimmed)));
+                x.Action.ToLower().Contains(keyword)
+                || x.TargetId.ToLower().Contains(keyword)
+                || (x.TargetName != null && x.TargetName.ToLower().Contains(keyword))
+                || (x.ActorName != null && x.ActorName.ToLower().Contains(keyword)));
         }
 
         // 两端闭区间：按天选择时调用方把上界取到当天 23:59:59.999

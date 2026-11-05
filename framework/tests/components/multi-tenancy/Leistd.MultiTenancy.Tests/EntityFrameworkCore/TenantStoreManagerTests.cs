@@ -534,6 +534,10 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal(1, filtered.TotalCount);
         Assert.Equal("Acme", filtered.Items.Single().Name);
 
+        // 显示名同样不区分大小写
+        var byDisplayName = await _manager.GetPagedAsync("inc.", null, new PageRequest { Offset = 0, Limit = 10 });
+        Assert.Equal("Acme", byDisplayName.Items.Single().Name);
+
         var paged = await _manager.GetPagedAsync(null, null, new PageRequest { Offset = 1, Limit = 1 });
         Assert.Equal(2, paged.TotalCount);
         Assert.Single(paged.Items);

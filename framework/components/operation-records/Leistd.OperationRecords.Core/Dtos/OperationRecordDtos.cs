@@ -105,7 +105,7 @@ public sealed record OperationActionOptionDto
 /// </remarks>
 public record GetOperationRecordPagedInputDto : PageRequest, IValidatableObject
 {
-    /// <summary>在动作码、目标标识与操作人名上做包含匹配。</summary>
+    /// <summary>对动作码、目标标识、目标名与操作人名做不区分大小写的包含匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
@@ -146,7 +146,7 @@ public sealed record ExportOperationRecordsInputDto : IValidatableObject
     /// <summary>单次导出的最大条数。</summary>
     public const int MaximumExportCount = 10000;
 
-    /// <summary>在动作码、目标标识与操作人名上做包含匹配。</summary>
+    /// <summary>对动作码、目标标识、目标名与操作人名做不区分大小写的包含匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
