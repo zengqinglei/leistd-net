@@ -88,7 +88,7 @@
 
 ## 4. 结果
 
-交付：框架 PR #231（D 框架部分）；模板 PR（A–D 模板部分，本分支 `zengqinglei/full-page-leave-and-test-stability`）。
+交付：框架 PR #231（D 框架部分，合并提交 `6930fff6`，发布 `v2.0.0-beta.178`）；模板 PR（A–D 模板部分，本分支 `zengqinglei/full-page-leave-and-test-stability`）。
 
 与计划的偏差：
 - A：资源服务退出的地址改为 `AuthService.logoutUrl` 常量传给 `post`。Mock 覆盖闸门只把赋给表单 `action` 的字面量算作 POST，字面量直接传给 `post(...)` 会被当成 GET 而误报；常量在调用处不单独计数，端点本身已有 Mock。
@@ -102,6 +102,6 @@
 - 改后：上述页面恢复后整页重载（导航类型 `reload`），按钮可用；授权续跑后历史长度不变、后退不回到发起页；本地退出后两次后退都不显示已登录内容。
 - 关键字：新增集成测试修复前失败、修复后通过。
 
-遗留：Resource 真实链路（Resource 后端 + Identity 登记 OIDC 客户端、Mock 关闭）的浏览器验收未执行，Resource 只有 Mock 的辅助证据；模拟登录进出未做浏览器验收（服务 spec 覆盖）。
+遗留：Resource 真实链路（Resource 后端 + Identity 登记 OIDC 客户端、Mock 关闭）的浏览器验收未执行，Resource 只有 Mock 的辅助证据；模拟登录进出未做浏览器验收（服务 spec 覆盖）；Mock 覆盖闸门把直接传给 `post(...)` 的字面量判为 GET，需另立一项修正闸门。
 
 已上收：`template/docs/standards/frontend-routing.md`（整页离开）、`testing.md`（浮层与提示）、`frontend-spartan.md`（变体前缀）、`api.md` 与 `coding-backend.md`（关键字）。
