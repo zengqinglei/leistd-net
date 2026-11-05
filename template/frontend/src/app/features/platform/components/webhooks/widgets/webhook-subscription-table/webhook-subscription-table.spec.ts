@@ -1,13 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
-import { userEvent } from 'vitest/browser';
 
 import { WebhookSubscriptionTable } from './webhook-subscription-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import { TruncatedTooltip } from '../../../../../../shared/directives/truncated-tooltip';
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { WebhookSubscriptionOutputDto } from '../../../../dtos/webhook.dto';
 
@@ -84,15 +85,11 @@ describe('WebhookSubscriptionTable', () => {
     expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth);
     expect(name.hasAttribute('tabindex')).toBe(false);
 
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    try {
-      await userEvent.hover(name);
-      // 推过提示的显示延时，"没出现"即禁用
-      await vi.advanceTimersByTimeAsync(2000);
-      expect(tooltip()).toBeNull();
-    } finally {
-      vi.useRealTimers();
-      await parkPointer();
-    }
+    // 断言提示指令的判定（未启用），不靠等一段时间没看到提示
+    const directive = fixture.debugElement
+      .queryAll(By.directive(TruncatedTooltip))
+      .find((element) => element.nativeElement === name)!
+      .injector.get(TruncatedTooltip);
+    expect(directive.truncated()).toBe(false);
   });
 });

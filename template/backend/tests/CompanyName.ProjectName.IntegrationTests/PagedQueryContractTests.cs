@@ -125,6 +125,42 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         Assert.Equal(ascending.AsEnumerable().Reverse(), descending);
     }
 
+    /// <summary>用户与角色的关键字是不区分大小写的包含匹配；每个关键字只能经一列命中，且大小写与存储值不同。</summary>
+    [Fact]
+    public async Task Keyword_matches_users_and_roles_regardless_of_case()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var createdUser = await superAdmin.Client.PostAsJsonAsync("/api/v1/users", new
+        {
+            Username = $"kwuser_{suffix}",
+            Email = $"Kw.Mail.{suffix}@Example.test",
+            DisplayName = $"Keyword Person {suffix}",
+            Password = TestPassword,
+            IsActive = true
+        });
+        Assert.Equal(HttpStatusCode.OK, createdUser.StatusCode);
+        var createdRole = await superAdmin.Client.PostAsJsonAsync("/api/v1/roles", new
+        {
+            name = $"kwrole_{suffix}",
+            displayName = $"Keyword Duty {suffix}",
+            sort = 4243,
+            isDefault = false
+        });
+        Assert.Equal(HttpStatusCode.OK, createdRole.StatusCode);
+
+        string[] userKeywords = [$"KWUSER_{suffix.ToUpperInvariant()}", $"KW.MAIL.{suffix.ToUpperInvariant()}@EXAMPLE", $"keyword PERSON {suffix}"];
+        foreach (var keyword in userKeywords)
+        {
+            Assert.Equal([$"kwuser_{suffix}"], await ReadNamesAsync(superAdmin.Client, "/api/v1/users", keyword, "username"));
+        }
+
+        foreach (var keyword in new[] { $"KWROLE_{suffix.ToUpperInvariant()}", $"keyword DUTY {suffix}" })
+        {
+            Assert.Equal([$"kwrole_{suffix}"], await ReadNamesAsync(superAdmin.Client, "/api/v1/roles", keyword, "name"));
+        }
+    }
+
     /// <summary>省略排序与显式默认排序的并列记录次序一致。</summary>
     [Fact]
     public async Task Omitted_sorting_matches_the_explicit_default()
@@ -332,6 +368,17 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return body.RootElement.GetProperty("items").EnumerateArray()
             .Select(item => item.GetProperty("username").GetString()!)
+            .ToList();
+    }
+
+    private static async Task<List<string>> ReadNamesAsync(HttpClient client, string path, string keyword, string property)
+    {
+        var response = await client.GetAsync($"{path}?offset=0&limit=50&keyword={Uri.EscapeDataString(keyword)}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty(property).GetString()!)
             .ToList();
     }
 

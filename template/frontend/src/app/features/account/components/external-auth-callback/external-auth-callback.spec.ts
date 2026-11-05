@@ -16,7 +16,7 @@ import { ApplicationHttpError } from '../../../../core/errors/application-http-e
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 //#if (OpenIddictServer)
-import { ReturnUrlService } from '../../../../core/routing/return-url-service';
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
@@ -193,13 +193,13 @@ describe('ExternalAuthCallback', () => {
   it('continues an authorization request with a full page load', async () => {
     const target = '/connect/authorize?client_id=resource&request_uri=urn%3Aabc';
     accountService.externalLoginCallback.mockReturnValue(of({ returnUrl: target }));
-    const loadPage = vi
-      .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
       .mockImplementation(() => undefined);
     fixture.detectChanges();
     await new Promise((resolve) => setTimeout(resolve));
 
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
+    expect(leave).toHaveBeenCalledExactlyOnceWith(target);
     expect(authService.loadUser).not.toHaveBeenCalled();
     expect(calls).not.toContain('establish');
   });

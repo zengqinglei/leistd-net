@@ -58,8 +58,9 @@ public class RoleAppService(
 
         if (!string.IsNullOrWhiteSpace(input.Keyword))
         {
-            var keyword = input.Keyword.Trim();
-            query = query.Where(r => r.Name.Contains(keyword) || r.DisplayName.Contains(keyword));
+            // 不区分大小写的包含匹配：列转小写可译成 SQL lower()，InMemory 同样可执行
+            var keyword = input.Keyword.Trim().ToLowerInvariant();
+            query = query.Where(r => r.Name.ToLower().Contains(keyword) || r.DisplayName.ToLower().Contains(keyword));
         }
 
         var ordered = query.OrderBySorting(input.Sorting).ThenBy(role => role.Name).ThenBy(role => role.Id);

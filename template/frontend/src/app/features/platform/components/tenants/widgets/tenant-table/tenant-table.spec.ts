@@ -5,6 +5,7 @@ import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testin
 import { provideRouter } from '@angular/router';
 import { PaginationState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
+import { userEvent } from 'vitest/browser';
 
 import { TenantTable } from './tenant-table';
 //#if (IncludeLocalization)
@@ -160,8 +161,9 @@ describe('TenantTable', () => {
     const triggers = host.querySelectorAll<HTMLElement>('tbody ng-icon[name="lucideEllipsis"]');
 
     async function impersonateItem(index: number): Promise<HTMLButtonElement> {
-      triggers[index].closest('button')!.click();
-      fixture.detectChanges();
+      const trigger = triggers[index].closest('button')!;
+      await userEvent.click(trigger);
+      await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
       await fixture.whenStable();
       // 菜单挂在 document 上的浮层里，不在组件宿主内
       return document
@@ -189,9 +191,9 @@ describe('TenantTable', () => {
     await tableBlock.render(DeferBlockState.Complete);
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
-    const trigger = host.querySelector<HTMLElement>('tbody ng-icon[name="lucideEllipsis"]');
-    trigger!.closest('button')!.click();
-    fixture.detectChanges();
+    const trigger = host.querySelector('tbody ng-icon[name="lucideEllipsis"]')!.closest('button')!;
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
     await fixture.whenStable();
     const menu = document.querySelector('[data-slot="dropdown-menu"]');
     expect(menu?.querySelector('ng-icon[name="lucideLogIn"]')).toBeNull();

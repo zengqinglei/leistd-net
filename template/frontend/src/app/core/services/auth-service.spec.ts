@@ -14,6 +14,7 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 //#if (RemoteTokenAuth)
 import { MOCKED_URL } from '../mock/mocked-url';
 //#endif
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -111,7 +112,9 @@ describe('AuthService', () => {
       //#if (IncludeNotifications || IncludeRealTime)
       const expectRealtimeReset = spyRealtimeReset();
       //#endif
-      const loadPage = vi.spyOn(service, 'loadPage').mockImplementation(() => undefined);
+      const leave = vi
+        .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+        .mockImplementation(() => undefined);
 
       service.logout();
 
@@ -125,19 +128,21 @@ describe('AuthService', () => {
       } else {
         request.flush(null, { status: 500, statusText: 'Server Error' });
       }
-      expect(loadPage).toHaveBeenCalledExactlyOnceWith('/auth/login');
+      expect(leave).toHaveBeenCalledExactlyOnceWith('/auth/login');
     });
   }
 
   it('keeps the user on screen while signing out to sign in again', () => {
     signIn();
-    const loadPage = vi.spyOn(service, 'loadPage').mockImplementation(() => undefined);
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+      .mockImplementation(() => undefined);
 
     service.signInAgain('/workspace/settings/security');
 
     expect(service.currentUser()).not.toBeNull();
     httpTesting.expectOne('/api/v1/auth/logout').flush({});
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(
+    expect(leave).toHaveBeenCalledExactlyOnceWith(
       '/auth/login?returnUrl=%2Fworkspace%2Fsettings%2Fsecurity',
     );
   });
@@ -150,8 +155,8 @@ describe('AuthService', () => {
     //#if (IncludeNotifications || IncludeRealTime)
     const expectRealtimeReset = spyRealtimeReset();
     //#endif
-    const submit = vi
-      .spyOn(HTMLFormElement.prototype, 'submit')
+    const post = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'post')
       .mockImplementation(() => undefined);
 
     service.logout();
@@ -160,24 +165,22 @@ describe('AuthService', () => {
     //#if (IncludeNotifications || IncludeRealTime)
     expectRealtimeReset();
     //#endif
-    expect(submit).toHaveBeenCalledOnce();
-    const posted = submit.mock.contexts[0] as HTMLFormElement;
-    expect(posted.method).toBe('post');
-    expect(posted.getAttribute('action')).toBe('/api/v1/auth/logout');
-    posted.remove();
+    expect(post).toHaveBeenCalledExactlyOnceWith('/api/v1/auth/logout');
   });
 
   // Mock 退出不经 OIDC：接口应答后跳一次，主体照旧先清空
   it('clears the user before the mocked sign-out request and then leaves', () => {
     mockedSignOut = true;
     signIn();
-    const loadPage = vi.spyOn(service, 'loadPage').mockImplementation(() => undefined);
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+      .mockImplementation(() => undefined);
 
     service.logout();
 
     expect(service.currentUser()).toBeNull();
     httpTesting.expectOne('/api/v1/auth/logout').flush({});
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith('/auth/login');
+    expect(leave).toHaveBeenCalledExactlyOnceWith('/auth/login');
   });
   //#endif
 });

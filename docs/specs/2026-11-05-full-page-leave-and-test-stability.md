@@ -88,4 +88,20 @@
 
 ## 4. 结果
 
-（实施后填写）
+交付：框架 PR #231（D 框架部分，合并提交 `6930fff6`，发布 `v2.0.0-beta.178`）；模板 PR（A–D 模板部分，本分支 `zengqinglei/full-page-leave-and-test-stability`）。
+
+与计划的偏差：
+- A：资源服务退出的地址改为 `AuthService.logoutUrl` 常量传给 `post`。Mock 覆盖闸门只把赋给表单 `action` 的字面量算作 POST，字面量直接传给 `post(...)` 会被当成 GET 而误报；常量在调用处不单独计数，端点本身已有 Mock。
+- A：本地退出用 `replace` 后，Chrome 对同一浏览实例内的替换不放入往返缓存（`BrowsingInstanceNotSwapped`），后退是新加载、经守卫回到登录页；与"靠 `pageshow` 兜底"的预期不同，结论一致（看不到旧内容）。
+- A：Identity 登录页启用了通行密钥条件式请求（WebAuthn），浏览器不把它放入往返缓存，登录页本身不会冻结；冻结复现在退出确认页与个人设置的外部账号绑定上。
+- B：在触屏实例下各 60 次未复现"合成点击打开的菜单被关掉"与"假计时器漏读提示"，按"先断言已打开"整改，依据是断言可证伪。
+- C：官方示例 `w-[400px] sm:w-[540px] sm:max-w-none` 在当前 helm 下实测 384px（视口 1280）与 375px（视口 500），带 `data-[side=right]:` 前缀后为 540px 与 400px。
+
+验收记录：
+- 基线 `3c74a8fb`：往返缓存可用（`pageshow` 的 `persisted === true`）；Identity 退出确认 POST 后后退两按钮禁用转圈、绑定 GitHub 后后退"绑定"按钮停在忙碌；Resource（Mock）守卫发起登录后后退回到空白发起页、退出后后退显示退出前内容。
+- 改后：上述页面恢复后整页重载（导航类型 `reload`），按钮可用；授权续跑后历史长度不变、后退不回到发起页；本地退出后两次后退都不显示已登录内容。
+- 关键字：新增集成测试修复前失败、修复后通过。
+
+遗留：Resource 真实链路（Resource 后端 + Identity 登记 OIDC 客户端、Mock 关闭）的浏览器验收未执行，Resource 只有 Mock 的辅助证据；模拟登录进出未做浏览器验收（服务 spec 覆盖）；Mock 覆盖闸门把直接传给 `post(...)` 的字面量判为 GET，需另立一项修正闸门。
+
+已上收：`template/docs/standards/frontend-routing.md`（整页离开）、`testing.md`（浮层与提示）、`frontend-spartan.md`（变体前缀）、`api.md` 与 `coding-backend.md`（关键字）。

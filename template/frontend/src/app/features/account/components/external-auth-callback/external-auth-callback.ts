@@ -17,6 +17,9 @@ import {
   ApplicationHttpError,
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
+//#if (OpenIddictServer)
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
+//#endif
 import { ReturnUrlService } from '../../../../core/routing/return-url-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -54,6 +57,9 @@ export class ExternalAuthCallback implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private readonly returnUrls = inject(ReturnUrlService);
+  //#if (OpenIddictServer)
+  private readonly fullPage = inject(FullPageNavigationService);
+  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
@@ -139,7 +145,7 @@ export class ExternalAuthCallback implements OnInit {
       // 回到授权端点是整页离开：完成端点刚下发会话，服务端会重新校验会话与首绑要求，
       // 不必先读当前用户、在即将离开的页面上建立会话上下文
       if (this.returnUrls.isServerPage(result?.returnUrl)) {
-        this.returnUrls.loadPage(result.returnUrl);
+        this.fullPage.replace(result.returnUrl);
         left = true;
         return;
       }

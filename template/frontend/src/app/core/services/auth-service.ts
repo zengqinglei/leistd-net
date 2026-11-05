@@ -22,6 +22,7 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 //#if (RemoteTokenAuth)
 import { MOCKED_URL } from '../mock/mocked-url';
 //#endif
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -29,7 +30,13 @@ export class AuthService {
   static readonly loginUrl = '/api/v1/auth/session-login';
 
   //#endif
+  //#if (RemoteTokenAuth)
+  /** 退出端点：Mock 下以 XHR 应答，部署时整页表单 POST。 */
+  static readonly logoutUrl = '/api/v1/auth/logout';
+
+  //#endif
   private readonly http = inject(HttpClient);
+  private readonly fullPage = inject(FullPageNavigationService);
   // 按需取偏好服务：它依赖语言服务，构造期注入会经 HTTP 拦截器成环
   private readonly injector = inject(Injector);
   //#if (RemoteTokenAuth)
@@ -143,9 +150,11 @@ export class AuthService {
   logout(): void {
     //#if (RemoteTokenAuth)
     // Mock 退出不经 OIDC 重定向链：XHR 应答后只跳一次，照旧先清空
-    if (this.isMockedUrl('/api/v1/auth/logout')) {
+    if (this.isMockedUrl(AuthService.logoutUrl)) {
       this.clearAuthData();
-      this.http.post('/api/v1/auth/logout', {}).subscribe(() => this.loadPage('/auth/login'));
+      this.http
+        .post(AuthService.logoutUrl, {})
+        .subscribe(() => this.fullPage.replace('/auth/login'));
       return;
     }
     //#if (IncludeNotifications || IncludeRealTime)
@@ -153,11 +162,7 @@ export class AuthService {
     void this.signalR.reset();
     //#endif
     // 整页 POST 让官方 OIDC 退出重定向由浏览器完成，不通过 XHR 跨站跟随。
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/v1/auth/logout';
-    document.body.appendChild(form);
-    form.submit();
+    this.fullPage.post(AuthService.logoutUrl);
     //#else
     this.endSessionAndGo('/auth/login');
     //#endif
@@ -192,8 +197,8 @@ export class AuthService {
     void this.signalR.reset();
     //#endif
     this.http.post('/api/v1/auth/logout', {}).subscribe({
-      next: () => this.loadPage(target),
-      error: () => this.loadPage(target),
+      next: () => this.fullPage.replace(target),
+      error: () => this.fullPage.replace(target),
     });
   }
   //#endif
@@ -201,15 +206,10 @@ export class AuthService {
 
   startLogin(returnUrl = '/workspace'): void {
     if (this.isMockedUrl('/api/v1/auth/login')) {
-      this.http.post('/api/v1/auth/login', {}).subscribe(() => this.loadPage(returnUrl));
+      this.http.post('/api/v1/auth/login', {}).subscribe(() => this.fullPage.replace(returnUrl));
       return;
     }
-    this.loadPage(`/api/v1/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    this.fullPage.replace(`/api/v1/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
   }
   //#endif
-
-  /** 整页导航。单独成方法，测试据此观察跳转而不真的离开页面。 */
-  loadPage(url: string): void {
-    window.location.href = url;
-  }
 }

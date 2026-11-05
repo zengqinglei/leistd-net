@@ -16,6 +16,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 //#if (IncludeLocalization)
 import { translateSignal, TranslocoService } from '@jsverse/transloco';
 //#endif
+import { page, userEvent } from 'vitest/browser';
 
 import { DefaultHeader } from './default-header';
 //#if (IncludeLocalization)
@@ -237,6 +238,9 @@ describe('Layout page heading', () => {
   //#endif
 
   it('leaves sheet and dialog names to their own titles', async () => {
+    // 导航抽屉的触发器只在窄屏显示
+    await page.viewport(390, 844);
+    onTestFinished(() => page.viewport(1280, 800));
     const harness = await setUp();
     await visit(harness, '/workspace/users');
     const host = harness.fixture.nativeElement as HTMLElement;
@@ -246,7 +250,9 @@ describe('Layout page heading', () => {
       body.ownerDocument.getElementById(overlay.getAttribute('aria-labelledby')!)?.textContent;
 
     // 窄屏导航抽屉
-    host.querySelector<HTMLButtonElement>('[data-testid="workspace-nav-trigger"]')!.click();
+    await userEvent.click(
+      host.querySelector<HTMLButtonElement>('[data-testid="workspace-nav-trigger"]')!,
+    );
     await vi.waitFor(() => expect(body.querySelector('[role="dialog"]')).not.toBeNull());
     const sheet = body.querySelector('[role="dialog"]')!;
     expect(nameOf(sheet)?.trim()).toBe(sheet.querySelector('h2')!.textContent!.trim());

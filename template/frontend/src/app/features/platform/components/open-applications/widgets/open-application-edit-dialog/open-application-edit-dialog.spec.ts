@@ -2,6 +2,7 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { throwError, Observable, of } from 'rxjs';
+import { userEvent } from 'vitest/browser';
 
 import { OpenApplicationEditDialog } from './open-application-edit-dialog';
 //#if (IncludeLocalization)
@@ -94,7 +95,8 @@ describe('OpenApplicationEditDialog', () => {
     const trigger = document.getElementById(triggerId);
     expect(trigger, `${triggerId} should be rendered`).not.toBeNull();
 
-    trigger!.click();
+    await userEvent.click(trigger!);
+    await expect.poll(() => trigger!.getAttribute('aria-expanded')).toBe('true');
     await fixture.whenStable();
 
     const options = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));

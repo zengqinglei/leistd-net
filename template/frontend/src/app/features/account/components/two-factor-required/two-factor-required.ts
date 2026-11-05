@@ -22,6 +22,9 @@ import { lastValueFrom } from 'rxjs';
 
 import { ReauthenticateDialog } from '../../../../core/components/reauthenticate-dialog/reauthenticate-dialog';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+//#if (OpenIddictServer)
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
+//#endif
 import { ReturnUrlService } from '../../../../core/routing/return-url-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -71,6 +74,9 @@ export class TwoFactorRequired {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly returnUrls = inject(ReturnUrlService);
+  //#if (OpenIddictServer)
+  private readonly fullPage = inject(FullPageNavigationService);
+  //#endif
   private readonly securityConfig = inject(SecurityConfigService);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
@@ -138,7 +144,7 @@ export class TwoFactorRequired {
     //#if (OpenIddictServer)
     // 回到授权端点是整页离开：服务端会重新校验会话是否仍受限，离开前不必刷新当前用户与会话上下文
     if (this.returnUrls.isServerPage(returnUrl)) {
-      this.returnUrls.loadPage(returnUrl);
+      this.fullPage.replace(returnUrl);
       return;
     }
     //#endif

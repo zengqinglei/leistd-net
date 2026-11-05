@@ -13,7 +13,7 @@ import { Observable, of, throwError } from 'rxjs';
 import { twoFactorSetupGuard } from './two-factor-setup-guard';
 import { authGuard } from '../../../core/guards/auth-guard';
 //#if (OpenIddictServer)
-import { ReturnUrlService } from '../../../core/routing/return-url-service';
+import { FullPageNavigationService } from '../../../core/routing/full-page-navigation-service';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
@@ -132,14 +132,14 @@ describe('twoFactorSetupGuard', () => {
   // 离开前不建立会话上下文（不应用账户偏好），授权端点自会重新校验会话
   it('returns to an authorization request with a full page load', async () => {
     serverSays(false);
-    const loadPage = vi
-      .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
       .mockImplementation(() => undefined);
     const target =
       '/connect/authorize?client_id=resource&request_uri=urn%3Aietf%3Aparams%3Aoauth%3Arequest_uri%3Aabc';
 
     expect(await activate(target)).toBe(false);
-    expect(loadPage).toHaveBeenCalledWith(target);
+    expect(leave).toHaveBeenCalledWith(target);
     expect(loadUser).toHaveBeenCalledTimes(1);
     expect(establish).not.toHaveBeenCalled();
   });
@@ -147,12 +147,14 @@ describe('twoFactorSetupGuard', () => {
   // 受限与否仍要重新读：一看到授权端点就离开，会在授权端点与设置页之间来回跳
   it('keeps a restricted session on the page even when an authorization request awaits', async () => {
     serverSays(true);
-    const loadPage = vi.spyOn(TestBed.inject(ReturnUrlService), 'loadPage');
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+      .mockImplementation(() => undefined);
 
     expect(await activate('/connect/authorize?client_id=resource&request_uri=urn%3Aabc')).toBe(
       true,
     );
-    expect(loadPage).not.toHaveBeenCalled();
+    expect(leave).not.toHaveBeenCalled();
   });
   //#endif
 
