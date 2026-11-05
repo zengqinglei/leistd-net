@@ -21,6 +21,8 @@
 
 沿用 `frontend/libs/ui` 的 Spartan 组件。新增或核对 API 依次读项目 `spartan` Skill、本地源码与锁定版本、[匹配版本文档](https://spartan.ng/)。现有组件无法满足时才自建，不在 `shared` 重建组件库。手写前查 `spartan` Skill 的组件替换清单，缺的组件用 CLI 加。
 
+比触发器宽的浮层（日历、日期区间、宽弹层）在使用处写 `align="start"` 或 `"end"`（触发器贴右用 `end`），不用默认 `center`：brain 只为这两种配了对边回退，`center` 贴边时浮层被压窄、内容伸出视口。
+
 ### 2.2 样式方案
 
 - 布局与微调**必须**优先用 Tailwind CSS v4 原子类；自定义样式必须沿用 Spartan 主题的 CSS 变量与 `.dark` class。

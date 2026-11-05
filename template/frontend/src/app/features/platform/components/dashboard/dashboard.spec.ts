@@ -4,9 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
-//#if (IncludeOperationRecords && LocalIdentity)
-import { page } from 'vitest/browser';
-//#endif
+import { page, userEvent } from 'vitest/browser';
 
 import { Dashboard } from './dashboard';
 //#if (IncludeLocalization)
@@ -249,6 +247,29 @@ describe('Dashboard', () => {
     dashboard.onRangePicked(null);
     await fixture.whenStable();
     expect(lastQuery()).toMatchObject({ startDate: '2026-10-07', endDate: '2026-10-13' });
+  });
+
+  // 触发器比日历窄且贴近视口一侧（此宽度下区间选择器换行到行首）：默认 center 只有上下两个候选、没有对边回退，
+  // CDK 会把浮层压到剩余宽度，日历伸出浮层；指定 start/end 时放不下会换到对边
+  it('opens the range calendar at full width inside the viewport next to an edge', async () => {
+    await page.viewport(768, 900);
+    onTestFinished(() => page.viewport(1280, 800));
+    await setup([PERMISSIONS.dashboard.default]);
+    onTestFinished(() => document.querySelector('.cdk-overlay-container')?.remove());
+    const trigger = query('dashboard-range-picker')!.querySelector('button')!;
+
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    await Promise.allSettled(document.getAnimations().map((animation) => animation.finished));
+
+    const pane = document.querySelector<HTMLElement>('.cdk-overlay-pane')!.getBoundingClientRect();
+    const calendar = document
+      .querySelector<HTMLElement>('.cdk-overlay-pane hlm-calendar-range')!
+      .getBoundingClientRect();
+    expect(calendar.width).toBeGreaterThan(0);
+    expect(pane.width).toBeGreaterThanOrEqual(calendar.width);
+    expect(calendar.left).toBeGreaterThanOrEqual(0);
+    expect(calendar.right).toBeLessThanOrEqual(window.innerWidth);
   });
   //#if (IncludeOperationRecords)
 
