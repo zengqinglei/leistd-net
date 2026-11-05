@@ -6,6 +6,7 @@ import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
+import { userEvent } from 'vitest/browser';
 
 import { SettingSection } from './setting-section';
 //#if (IncludeLocalization)
@@ -1083,7 +1084,9 @@ describe('SettingSection long values', () => {
   // 触发器上放不下的时区名，展开后在候选列表里能看到全名：城市名换行而不截断
   it('shows every candidate city in full when the list opens', async () => {
     const host = await render([timeZone({})]);
-    host.querySelector<HTMLElement>('button#Display\\.TimeZone')!.click();
+    const trigger = host.querySelector<HTMLElement>('button#Display\\.TimeZone')!;
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
     await TestBed.inject(ApplicationRef).whenStable();
 
     const cities = Array.from(
@@ -1118,9 +1121,11 @@ describe('SettingSection time zone list position', () => {
       .flush([row({ name: 'Display.TimeZone', group: 'Display', defaultValue: null, ...setting })]);
     await fixture.whenStable();
     fixture.detectChanges();
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLElement>('button#Display\\.TimeZone')!
-      .click();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      'button#Display\\.TimeZone',
+    )!;
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
     await TestBed.inject(ApplicationRef).whenStable();
     // 定位在展开后的下一帧完成
     await new Promise((resolve) => requestAnimationFrame(resolve));

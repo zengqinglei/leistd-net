@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { userEvent } from 'vitest/browser';
 
 @Component({
   imports: [...HlmDropdownMenuImports],
@@ -47,8 +48,8 @@ describe('dropdown trigger side change after opening', () => {
 
     async function openMenu(): Promise<DOMRect> {
       // 按用户的方式点开：程序化 open() 在测试里会被 CDK 随即关掉
-      buttonElement.click();
-      fixture.detectChanges();
+      await userEvent.click(buttonElement);
+      await expect.poll(() => buttonElement.getAttribute('aria-expanded')).toBe('true');
       await fixture.whenStable();
       // 浮层挂在 document 上，不在组件宿主里；等进场动画（缩放、平移）结束再量
       const menu = document.querySelector<HTMLElement>('[data-slot="dropdown-menu"]')!;

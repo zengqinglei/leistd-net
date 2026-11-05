@@ -52,34 +52,28 @@ describe('TruncatedTooltip', () => {
     await fixture.whenStable();
   }
 
-  /** 聚焦后有没有出现提示；失焦后提示收起。延时由假时钟推进到期，"没出现"即禁用。 */
-  async function focusTooltip(): Promise<string | null> {
+  const directive = () =>
+    fixture.debugElement.query(By.directive(TruncatedTooltip)).injector.get(TruncatedTooltip);
+
+  /** 聚焦后提示给出全文、失焦后收起；真实计时器，等它出现与消失。 */
+  async function expectFocusTooltip(text: string): Promise<void> {
     const button = (fixture.nativeElement as HTMLElement).querySelector('button')!;
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    let text: string | null;
-    try {
-      button.focus();
-      await vi.advanceTimersByTimeAsync(0);
-      await fixture.whenStable();
-      text = tooltip()?.textContent?.trim() ?? null;
-      button.blur();
-      await vi.advanceTimersByTimeAsync(0);
-    } finally {
-      vi.useRealTimers();
-    }
+    button.focus();
+    await expect.poll(() => tooltip()?.textContent?.trim()).toBe(text);
+    button.blur();
     await expect.poll(() => tooltip()).toBeNull();
-    return text;
   }
 
+  // "不出现"断言指令的判定（提示被禁用）：等一段时间看提示没来，在它本来就会迟到时也会通过（testing.md §4 因果屏障）
   it('shows the full label on focus when it is cut', async () => {
-    expect(await focusTooltip()).toBe('Account & security settings');
+    await expectFocusTooltip('Account & security settings');
   });
 
   it('stays silent when the label fits', async () => {
     fixture.componentInstance.width.set(400);
     await settle();
 
-    expect(await focusTooltip()).toBeNull();
+    expect(directive().truncated()).toBe(false);
   });
 
   it('clears a retained pointer before testing focus on a replacement host', async () => {
@@ -87,37 +81,36 @@ describe('TruncatedTooltip', () => {
     await userEvent.hover(button);
     await expect.poll(() => tooltip()?.textContent?.trim()).toBe('Account & security settings');
 
-    // 销毁宿主不会移动物理指针，新宿主在相同位置出现时仍可能被悬停。
+    // 销毁宿主不会移动物理指针，新宿主在相同位置出现时仍可能被悬停；createHost 停放指针后提示已收起
     fixture.destroy();
     await createHost();
     fixture.componentInstance.width.set(400);
     await settle();
 
-    expect(await focusTooltip()).toBeNull();
+    expect(directive().truncated()).toBe(false);
+    expect(tooltip()).toBeNull();
   });
 
   it('measures again when the text changes', async () => {
     fixture.componentInstance.width.set(200);
     fixture.componentInstance.label.set('Short');
     await settle();
-    expect(await focusTooltip()).toBeNull();
+    expect(directive().truncated()).toBe(false);
 
     fixture.componentInstance.label.set('A much longer label that no longer fits the button');
     await settle();
 
-    expect(await focusTooltip()).toBe('A much longer label that no longer fits the button');
+    expect(directive().truncated()).toBe(true);
+    await expectFocusTooltip('A much longer label that no longer fits the button');
   });
 
   // 不可聚焦的宿主按它决定 tabindex：只有截断时才是 Tab 停靠点
   it('reports whether the text is cut for hosts that add tabindex only then', async () => {
-    const directive = fixture.debugElement
-      .query(By.directive(TruncatedTooltip))
-      .injector.get(TruncatedTooltip);
-    expect(directive.truncated()).toBe(true);
+    expect(directive().truncated()).toBe(true);
 
     fixture.componentInstance.width.set(400);
     await settle();
 
-    expect(directive.truncated()).toBe(false);
+    expect(directive().truncated()).toBe(false);
   });
 });

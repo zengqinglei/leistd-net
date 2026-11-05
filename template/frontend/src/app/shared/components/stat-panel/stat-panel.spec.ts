@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 
 import { StatPanel } from './stat-panel';
+import { TruncatedTooltip } from '../../directives/truncated-tooltip';
 import { parkPointer } from '../../utils/pointer.testing';
 
 @Component({
@@ -43,24 +45,12 @@ describe('StatPanel', () => {
     fixture.detectChanges();
   }
 
-  /** 聚焦标题后有没有出现提示；失焦后提示收起。延时由假时钟推进到期，"没出现"即禁用。 */
-  async function focusTooltip(): Promise<string | null> {
-    const title = heading();
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    let text: string | null;
-    try {
-      title.focus();
-      await vi.advanceTimersByTimeAsync(0);
-      await fixture.whenStable();
-      text = tooltip()?.textContent?.trim() ?? null;
-      title.blur();
-      await vi.advanceTimersByTimeAsync(0);
-    } finally {
-      vi.useRealTimers();
-    }
-    await expect.poll(() => tooltip()).toBeNull();
-    return text;
-  }
+  /** 标题上提示指令的判定：被截断才启用。"不出现"断言它，不靠等一段时间没看到提示。 */
+  const tooltipEnabled = () =>
+    fixture.debugElement
+      .query(By.directive(TruncatedTooltip))
+      .injector.get(TruncatedTooltip)
+      .truncated();
 
   it('shows the full title and becomes a tab stop when the title is cut', async () => {
     const title = heading();
@@ -68,7 +58,10 @@ describe('StatPanel', () => {
     expect(title.scrollWidth).toBeGreaterThan(title.clientWidth);
     expect(title.getAttribute('tabindex')).toBe('0');
 
-    expect(await focusTooltip()).toBe('Disabled subscriptions');
+    title.focus();
+    await expect.poll(() => tooltip()?.textContent?.trim()).toBe('Disabled subscriptions');
+    title.blur();
+    await expect.poll(() => tooltip()).toBeNull();
   });
 
   it('stays silent and leaves the tab order alone when the title fits', async () => {
@@ -76,6 +69,6 @@ describe('StatPanel', () => {
     await settle();
 
     expect(heading().hasAttribute('tabindex')).toBe(false);
-    expect(await focusTooltip()).toBeNull();
+    expect(tooltipEnabled()).toBe(false);
   });
 });

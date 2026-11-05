@@ -2,6 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+//#if (IncludeLocalization)
+import { By } from '@angular/platform-browser';
+//#endif
 // prettier-ignore
 import {
   provideRouter,
@@ -39,6 +42,9 @@ import { SignalRService } from '../../../../core/services/signalr-service';
 //#endif
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+//#if (IncludeLocalization)
+import { TruncatedTooltip } from '../../../../shared/directives/truncated-tooltip';
+//#endif
 //#if (LocalIdentity)
 import {
   TwoFactorStatusOutputDto,
@@ -341,23 +347,24 @@ describe('WorkspaceDashboard', () => {
   });
   //#if (IncludeLocalization)
 
-  /** 聚焦一张卡片后有没有出现提示；失焦后收起。延时由假时钟推进到期，"没出现"即未启用。 */
-  async function focusTooltip(card: HTMLElement): Promise<string | null> {
-    const tooltip = () => document.querySelector<HTMLElement>('[role="tooltip"]');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    let text: string | null;
-    try {
-      card.focus();
-      await vi.advanceTimersByTimeAsync(0);
-      await fixture.whenStable();
-      text = tooltip()?.textContent?.trim() ?? null;
-      card.blur();
-      await vi.advanceTimersByTimeAsync(0);
-    } finally {
-      vi.useRealTimers();
+  /**
+   * 截断的卡片标签聚焦时给出全文、失焦收起（真实计时器）；放得下的断言提示指令判定为未启用，
+   * 不靠等一段时间没看到提示。
+   */
+  async function expectCardTooltip(card: HTMLElement, text: string, truncated: boolean) {
+    const directive = fixture.debugElement
+      .queryAll(By.directive(TruncatedTooltip))
+      .find((element) => element.nativeElement === card)!
+      .injector.get(TruncatedTooltip);
+    expect(directive.truncated(), text).toBe(truncated);
+    if (!truncated) {
+      return;
     }
+    const tooltip = () => document.querySelector<HTMLElement>('[role="tooltip"]');
+    card.focus();
+    await expect.poll(() => tooltip()?.textContent?.trim()).toBe(text);
+    card.blur();
     await expect.poll(() => tooltip()).toBeNull();
-    return text;
   }
 
   // 伪语言按标签容量放宽文案（frontend-i18n.md §5）：卡片收到最小宽度 13rem 时标签仍单行、不撑出卡片，
@@ -391,7 +398,7 @@ describe('WorkspaceDashboard', () => {
       expect(label.getBoundingClientRect().height, text).toBeLessThan(lineHeight * 1.5);
       expect(card.scrollWidth, text).toBeLessThanOrEqual(card.clientWidth);
       const truncated = label.scrollWidth > label.clientWidth;
-      expect(await focusTooltip(card), text).toBe(truncated ? text : null);
+      await expectCardTooltip(card, text, truncated);
     }
     //#if (LocalIdentity)
     // 受压确实发生：最长的英文标签（Account & security）按容量放宽后，在最小宽度的卡片里放不下

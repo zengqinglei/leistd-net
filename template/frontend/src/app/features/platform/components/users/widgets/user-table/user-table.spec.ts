@@ -944,8 +944,9 @@ describe('UserTable', () => {
 
   /** 菜单经 CDK 浮层挂在 document 上，不在组件宿主里。 */
   async function openRowMenu(): Promise<HTMLElement> {
-    rowMenuTrigger()!.click();
-    fixture.detectChanges();
+    const trigger = rowMenuTrigger()!;
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
     await fixture.whenStable();
     return document.querySelector<HTMLElement>('[data-slot="dropdown-menu"]')!;
   }

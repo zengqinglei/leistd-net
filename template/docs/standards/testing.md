@@ -129,7 +129,7 @@ npm run build
 
 Linux 关闭触屏仿真不恢复 fine/hover，须分实例；见 `frontend/src/app/shared/utils/coarse-pointer.testing.ts`。
 
-保存状态最短时长与搜索防抖使用 Vitest 假计时器验证边界，不睡真实业务时长。先完成宿主／路由初始化，再伪造 Date、timeout 与 interval（RxJS 防抖使用 interval），保留原生 rAF、performance 和微任务；用 `vi.advanceTimersByTimeAsync` 推进，配合 fixture 稳定与 DOM 断言。边界期望独立于生产常量，teardown 清理业务计时器并恢复真实计时器；HTTP 验证与真实 Chromium 隔离保留。物理指针不会自动重置：需排除非本次操作的悬停时（提示由焦点打开、悬停后关闭、断言无提示），渲染或假计时器前调 `frontend/src/app/shared/utils/pointer.testing.ts` 的 `parkPointer()`；合成事件不能代替。
+保存状态最短时长与搜索防抖使用 Vitest 假计时器验证边界，不睡真实业务时长。先完成宿主／路由初始化，再伪造 Date、timeout 与 interval（RxJS 防抖使用 interval），保留原生 rAF、performance 和微任务；用 `vi.advanceTimersByTimeAsync` 推进，配合 fixture 稳定与 DOM 断言。边界期望独立于生产常量，teardown 清理业务计时器并恢复真实计时器；HTTP 验证与真实 Chromium 隔离保留。菜单、弹层、选择框与抽屉用 `vitest/browser` 的 `userEvent` 打开，先断言已打开（`aria-expanded="true"` 或浮层出现）再往下断言；合成 `click()` 只点不经指针模态的普通按钮。提示用真实计时器，出现与消失用 `expect.poll` 等待；"不出现"断言被测指令的判定（如提示被禁用），同一 spec 留一条真实交互的出现用例，不拿另一个提示出现当屏障（同组提示跳过延时，失焦会取消未触发的显示），依据见 §4 因果屏障。物理指针不会自动重置：需排除非本次操作的悬停时，渲染前调 `frontend/src/app/shared/utils/pointer.testing.ts` 的 `parkPointer()`；合成事件不能代替。
 
 - `describe` 写被测对象；`it` 用英文句子，小写开头，写出行为与期望（如 `keeps the dialog open when saving fails`）；中文只出现在注释与测试数据里。名字装不下的前因后果写进上方注释。
 - service、pipe、复杂状态和共享组件覆盖输入、输出、空态与错误态。

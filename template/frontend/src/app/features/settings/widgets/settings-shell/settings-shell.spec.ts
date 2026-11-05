@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 
 import { SettingsPanelLink, SettingsShell } from './settings-shell';
 
@@ -73,10 +73,14 @@ describe('SettingsShell', () => {
   });
 
   it('names the narrow-screen panel sheet by the settings title', async () => {
+    await page.viewport(390, 844);
+    onTestFinished(() => page.viewport(1280, 800));
     const host = await render();
     const body = host.ownerDocument.body;
 
-    host.querySelector<HTMLButtonElement>('[data-testid="settings-nav-trigger"]')!.click();
+    await userEvent.click(
+      host.querySelector<HTMLButtonElement>('[data-testid="settings-nav-trigger"]')!,
+    );
     await vi.waitFor(() => expect(body.querySelector('[role="dialog"]')).not.toBeNull());
 
     const sheet = body.querySelector('[role="dialog"]')!;
@@ -105,8 +109,7 @@ describe('SettingsShell', () => {
     const body = host.ownerDocument.body;
     const trigger = host.querySelector<HTMLButtonElement>('[data-testid="settings-nav-trigger"]')!;
 
-    trigger.focus();
-    trigger.click();
+    await userEvent.click(trigger);
     await vi.waitFor(() =>
       expect(
         body.querySelector('[role="dialog"]')?.contains(host.ownerDocument.activeElement),
@@ -133,7 +136,7 @@ describe('SettingsShell', () => {
     const body = host.ownerDocument.body;
     const trigger = host.querySelector<HTMLButtonElement>('[data-testid="settings-nav-trigger"]')!;
 
-    trigger.click();
+    await userEvent.click(trigger);
     await vi.waitFor(() => expect(body.querySelector('[role="dialog"]')).not.toBeNull());
     const audit = [...body.querySelectorAll<HTMLAnchorElement>('[role="dialog"] nav a')].find(
       (link) => link.textContent?.trim() === 'Audit',

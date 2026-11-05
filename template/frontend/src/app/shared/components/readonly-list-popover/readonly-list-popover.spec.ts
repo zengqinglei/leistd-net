@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, getDebugNode, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { BrnTooltip } from '@spartan-ng/brain/tooltip';
 import { page, userEvent } from 'vitest/browser';
 
 import { ReadonlyListItem, ReadonlyListPopover } from './readonly-list-popover';
@@ -56,10 +57,9 @@ describe('ReadonlyListPopover', () => {
     return (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button')!;
   }
 
-  /** 规则用例经 DOM 点击进入处理器，并保留关闭时的焦点归还目标。 */
+  /** 按用户的方式点开（触发器随之获得焦点，关闭时归还给它），浮层出现后再往下断言。 */
   async function open(trigger: HTMLButtonElement): Promise<HTMLElement> {
-    trigger.focus();
-    trigger.click();
+    await userEvent.click(trigger);
     await expect.poll(() => panel()).not.toBeNull();
     await settle();
     return panel()!;
@@ -213,26 +213,24 @@ describe('ReadonlyListPopover', () => {
 
   const tooltip = () => document.querySelector<HTMLElement>('[role="tooltip"]');
 
+  /** 行上提示的判定：被截断才启用。"不出现"断言它，不靠等一段时间没看到提示（testing.md §4 因果屏障）。 */
+  async function expectNoTooltip(element: HTMLElement): Promise<void> {
+    await settle();
+    await expect
+      .poll(() => getDebugNode(element)!.injector.get(BrnTooltip).mutableTooltipDisabled())
+      .toBe(true);
+  }
+
   /**
    * 规则矩阵用 DOM 指针事件进入提示处理器，保留真实布局与全文断言；窄屏用例另验真实指针。
-   * 提示的显示与隐藏延时（默认 0）由假时钟推进，渲染帧与布局仍是真实的。
+   * 真实计时器：等提示出现，移开后等它收起。
    */
-  async function hoverTooltip(element: HTMLElement): Promise<string | null> {
+  async function expectHoverTooltip(element: HTMLElement, text: string): Promise<void> {
     await settle();
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    let text: string | null;
-    try {
-      element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
-      await vi.advanceTimersByTimeAsync(0);
-      await fixture.whenStable();
-      text = tooltip()?.textContent?.trim() ?? null;
-      element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
-      await vi.advanceTimersByTimeAsync(0);
-    } finally {
-      vi.useRealTimers();
-    }
+    element.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await expect.poll(() => tooltip()?.textContent?.trim()).toBe(text);
+    element.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
     await expect.poll(() => tooltip()).toBeNull();
-    return text;
   }
 
   it('keeps the header and each item on one vertically centred line', async () => {
@@ -300,11 +298,11 @@ describe('ReadonlyListPopover', () => {
     expect(cell('both', 'detail')!.textContent).toBe(longDetail);
     expect(cell('same', 'detail')).toBeNull();
 
-    expect(await hoverTooltip(row('both'))).toBe(`${longLabel} · ${longDetail}`);
-    expect(await hoverTooltip(row('name'))).toBe(longLabel);
-    expect(await hoverTooltip(row('detail'))).toBe(`Ops · ${longDetail}`);
-    expect(await hoverTooltip(row('short'))).toBeNull();
-    expect(await hoverTooltip(row('same'))).toBeNull();
+    await expectHoverTooltip(row('both'), `${longLabel} · ${longDetail}`);
+    await expectHoverTooltip(row('name'), longLabel);
+    await expectHoverTooltip(row('detail'), `Ops · ${longDetail}`);
+    await expectNoTooltip(row('short'));
+    await expectNoTooltip(row('same'));
   });
 
   // 面板打开期间视口变窄（分屏、旋转）：原本放得下的行被截断后要能看到全文，放宽后不再多余地弹提示
@@ -313,16 +311,16 @@ describe('ReadonlyListPopover', () => {
     const trigger = await render([{ id: 'edge', label: 'Settlement operations reviewer' }]);
     await open(trigger);
     expect(isTruncated(cell('edge', 'label')!)).toBe(false);
-    expect(await hoverTooltip(row('edge'))).toBeNull();
+    await expectNoTooltip(row('edge'));
 
     // 面板随视口收到 188px，文字区约 164px，放不下这个名称；宽屏时文字区约 288px，放得下
     await page.viewport(220, 800);
     await expect.poll(() => isTruncated(cell('edge', 'label')!)).toBe(true);
-    expect(await hoverTooltip(row('edge'))).toBe('Settlement operations reviewer');
+    await expectHoverTooltip(row('edge'), 'Settlement operations reviewer');
 
     await page.viewport(1280, 800);
     await expect.poll(() => isTruncated(cell('edge', 'label')!)).toBe(false);
-    expect(await hoverTooltip(row('edge'))).toBeNull();
+    await expectNoTooltip(row('edge'));
   });
 
   /** 悬停后提示整个落在视口内、文字没有被横向裁掉，全文可见。 */

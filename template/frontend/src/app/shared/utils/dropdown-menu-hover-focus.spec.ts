@@ -55,9 +55,11 @@ describe('dropdown menu hover focus', () => {
   async function open() {
     const fixture = TestBed.createComponent(TestHost);
     await fixture.whenStable();
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLElement>('[data-testid="trigger"]')!
-      .click();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '[data-testid="trigger"]',
+    )!;
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
     await settle(fixture);
     return fixture;
   }
