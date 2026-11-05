@@ -140,7 +140,7 @@ HTTP 200：Controller 返回 `Task<TOutputDto>`，无 I/O 时可同步返回 DTO
 | --- | --- | --- | --- | --- |
 | offset | number | 否 | 0 | 起始偏移量，从 0 开始；**小于 0 返回 400** |
 | limit | number | 否 | 10 | 每页数量；**取值范围 1 ~ 1000，越界返回 400** |
-| keyword | string | 否 | 空 | 搜索关键字 |
+| keyword | string | 否 | 空 | 搜索关键字，不区分大小写的包含匹配 |
 | sorting | string | 否 | 空 | Dynamic LINQ 排序表达式，如 `name asc`、`creationTime desc, id asc`；空白使用接口默认排序 |
 
 后端用 `System.Linq.Dynamic.Core` 的 `OrderBy(string)` 解析，不自写解析器或通用字段白名单，不放宽库的默认限制；属性名忽略大小写，支持嵌套路径（如 `lastLogin.Time`）与多字段，方向省略时升序。前端把显示字段转换为查询属性路径。限制敏感属性等业务排序规则由所属模块 `Validators/` 的验证器在查询执行前判定并返回业务错误（显式注册，遍历整个排序选择器，含嵌套成员、条件和方法参数；如用户验证器拒绝按凭据字段排序，返回 400），前端配置不能替代。

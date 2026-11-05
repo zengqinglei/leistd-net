@@ -107,8 +107,12 @@ internal sealed class UserAppService(
 
         if (!string.IsNullOrWhiteSpace(input.Keyword))
         {
-            var keyword = input.Keyword.Trim();
-            userQuery = userQuery.Where(u => u.Username.Contains(keyword) || u.Email.Contains(keyword) || (u.DisplayName != null && u.DisplayName.Contains(keyword)));
+            // 不区分大小写的包含匹配：列转小写可译成 SQL lower()，InMemory 同样可执行
+            var keyword = input.Keyword.Trim().ToLowerInvariant();
+            userQuery = userQuery.Where(u =>
+                u.Username.ToLower().Contains(keyword)
+                || u.Email.ToLower().Contains(keyword)
+                || (u.DisplayName != null && u.DisplayName.ToLower().Contains(keyword)));
         }
 
         if (input.IsActive.HasValue)

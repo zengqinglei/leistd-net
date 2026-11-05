@@ -79,7 +79,10 @@ return await userRepository.InsertAsync(new User(username), cancellationToken);
 // UserAppService.GetPagedListAsync(GetUserPagedInputDto input, CancellationToken cancellationToken)
 var query = await userRepository.GetQueryableAsync(cancellationToken);
 if (!string.IsNullOrWhiteSpace(input.Keyword))
-    query = query.Where(u => u.Username.Contains(input.Keyword));
+{
+    var keyword = input.Keyword.Trim().ToLowerInvariant();   // 列转小写：PostgreSQL 译为 lower()，InMemory 同样可执行
+    query = query.Where(u => u.Username.ToLower().Contains(keyword));
+}
 var totalCount = await asyncExecuter.CountAsync(query, cancellationToken);
 var users = await asyncExecuter.ToListAsync(
     query.OrderBySorting(input.Sorting).ThenBy(u => u.Id).Skip(input.Offset).Take(input.Limit), cancellationToken);
