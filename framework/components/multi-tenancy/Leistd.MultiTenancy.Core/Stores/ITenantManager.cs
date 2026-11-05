@@ -56,7 +56,7 @@ public interface ITenantManager
     Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>按名称关键字与启用状态分页查询未删除的租户，并按创建时间倒序、同刻按 Id 倒序返回。</summary>
-    /// <param name="keyword">名称或显示名关键字；为空不过滤。</param>
+    /// <param name="keyword">名称或显示名关键字，不区分大小写的包含匹配；为空不过滤。</param>
     /// <param name="isActive">只取启用（<see langword="true"/>）或停用（<see langword="false"/>）的租户；<see langword="null"/> 不过滤。</param>
     /// <param name="page">分页；排序固定，<see cref="PageRequest.Sorting"/> 不生效。</param>
     /// <param name="cancellationToken">取消令牌。</param>

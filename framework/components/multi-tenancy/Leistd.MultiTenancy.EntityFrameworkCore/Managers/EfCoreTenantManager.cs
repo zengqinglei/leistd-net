@@ -137,10 +137,12 @@ public class EfCoreTenantManager<TDbContext>(
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
+            // 名称按归一化列匹配；显示名两边转小写，同样不区分大小写
             var normalizedKeyword = normalizer.NormalizeName(keyword)!;
+            var loweredKeyword = keyword.Trim().ToLowerInvariant();
             query = query.Where(t =>
                 t.NormalizedName.Contains(normalizedKeyword) ||
-                (t.DisplayName != null && t.DisplayName.Contains(keyword)));
+                (t.DisplayName != null && t.DisplayName.ToLower().Contains(loweredKeyword)));
         }
 
         if (isActive is { } active)

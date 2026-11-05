@@ -230,7 +230,7 @@ app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDt
 删除幂等：租户不存在或已删除（含并发删除先完成）时 `DELETE /{id}` 返回 204，不发事件；并发冲突（`TenantConcurrencyConflictException`）、存储故障照常失败。
 幂等只在用例层，`ITenantManager.DeleteAsync` 仍对不存在的租户抛 `TenantNotFoundException`。
 
-`GET /` 接收 `offset`、`limit`、`keyword` 与 `isActive`（`true` / `false` 按启用状态筛选，省略不过滤，无法解析的值回 400），按创建时间倒序、同刻按 Id 倒序分页，不提供排序参数；`GetTenantPagedInputDto` 继承的 `PageRequest.Sorting` 不生效。只要数量时取结果的 `TotalCount`，它按同一组筛选计算，与分页无关。
+`GET /` 接收 `offset`、`limit`、`keyword`（名称或显示名，不区分大小写的包含匹配）与 `isActive`（`true` / `false` 按启用状态筛选，省略不过滤，无法解析的值回 400），按创建时间倒序、同刻按 Id 倒序分页，不提供排序参数；`GetTenantPagedInputDto` 继承的 `PageRequest.Sorting` 不生效。只要数量时取结果的 `TotalCount`，它按同一组筛选计算，与分页无关。
 
 租户名须是单个 DNS 标签：匹配 `TenantConfiguration.NamePattern`（`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`），最长 `TenantConfiguration.MaxNameLength`（63）个字符；
 未配置 `DomainFormat` 也照样校验。`ITenantManager` 在创建与改名时校验（名称逐字不变时不校验，更新入参按存储容量 `MaxStoredNameLength`（64）接受原名），
