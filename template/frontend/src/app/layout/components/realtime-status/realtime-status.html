@@ -1,0 +1,44 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <!-- 外边距与页面外框（p-4 sm:p-6）同一档，提示条与页面内容左右对齐；hlm-alert 自带的 role="alert" 去掉，
+       由常驻的宿主播报 -->
+  @switch (notice()) {
+    @case ('reconnecting') {
+      <div class="px-4 pt-4 sm:px-6 sm:pt-6">
+        <div hlmAlert [attr.role]="null" data-testid="realtime-status-notice">
+          <ng-icon name="lucideRefreshCw" />
+          <p hlmAlertTitle>{{ t('layout.realtime.reconnecting') }}</p>
+        </div>
+      </div>
+    }
+    @case ('disconnected') {
+      <div class="px-4 pt-4 sm:px-6 sm:pt-6">
+        <!-- 按钮放官方 action 槽位；垂直居中并让出右侧空间，触屏按钮加高时提示条随之加高 -->
+        <div
+          hlmAlert
+          variant="destructive"
+          class="has-data-[slot=alert-action]:pr-28 pointer-coarse:min-h-14"
+          [attr.role]="null"
+          data-testid="realtime-status-notice"
+        >
+          <ng-icon name="lucideWifiOff" />
+          <p hlmAlertTitle>{{ t('layout.realtime.disconnected') }}</p>
+          <div hlmAlertAction class="top-1/2 -translate-y-1/2">
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              data-testid="realtime-reconnect"
+              (click)="reconnect()"
+            >
+              {{ t('layout.realtime.reconnect') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  }
+</ng-container>
