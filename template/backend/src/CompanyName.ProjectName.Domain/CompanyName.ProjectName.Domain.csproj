@@ -30,6 +30,7 @@
     <PackageReference Include="Leistd.Security.Core" />
     <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Ddd.Domain" />
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
   </ItemGroup>
 
 </Project>
