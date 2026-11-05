@@ -1,8 +1,9 @@
-//#if (OpenIddictServer)
-import { DOCUMENT } from '@angular/common';
-//#endif
 import { Injectable, inject } from '@angular/core';
 import { Router, UrlTree } from '@angular/router';
+//#if (OpenIddictServer)
+
+import { FullPageNavigationService } from './full-page-navigation-service';
+//#endif
 
 /** 强制两步验证设置页：组织要求两步验证而本人尚未启用时，受限会话只能停在这里。 */
 export const TWO_FACTOR_SETUP_URL = '/auth/two-factor-setup';
@@ -23,7 +24,7 @@ export type ReturnNavigation = 'left' | 'routed' | 'fallback' | 'cancelled';
 export class ReturnUrlService {
   private readonly router = inject(Router);
   //#if (OpenIddictServer)
-  private readonly document = inject(DOCUMENT);
+  private readonly fullPage = inject(FullPageNavigationService);
   //#endif
 
   /**
@@ -65,7 +66,7 @@ export class ReturnUrlService {
   ): Promise<ReturnNavigation> {
     //#if (OpenIddictServer)
     if (this.isServerPage(returnUrl)) {
-      this.loadPage(returnUrl);
+      this.fullPage.replace(returnUrl);
       return 'left';
     }
     //#endif
@@ -83,11 +84,6 @@ export class ReturnUrlService {
    */
   isServerPage(returnUrl: string | null | undefined): returnUrl is string {
     return this.resolve(returnUrl)?.startsWith('/connect/') === true;
-  }
-
-  /** 整页导航到服务端地址。单独成方法，测试据此观察跳转而不真的离开页面。 */
-  loadPage(url: string): void {
-    this.document.location.assign(url);
   }
   //#endif
 }

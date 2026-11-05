@@ -17,6 +17,7 @@ import {
 import { injectReauthentication } from '../../../../core/components/reauthenticate-dialog/reauthentication';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
@@ -53,6 +54,7 @@ const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', google: 'Goo
 })
 export class ExternalLogins {
   private readonly accountService = inject(AccountService);
+  private readonly fullPage = inject(FullPageNavigationService);
   private readonly confirmService = inject(ConfirmService);
   private readonly accountPreferences = inject(AccountPreferencesService);
   //#if (IncludeLocalization)
@@ -114,7 +116,7 @@ export class ExternalLogins {
   protected link(provider: string): void {
     this.busy.set(provider);
     try {
-      window.location.href = this.accountService.getExternalLinkUrl(provider);
+      this.fullPage.assign(this.accountService.getExternalLinkUrl(provider));
     } catch (error) {
       this.busy.set(null);
       this.showError(error);

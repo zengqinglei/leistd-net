@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
+//#if (OpenIddictServer)
+import { FullPageNavigationService } from './full-page-navigation-service';
+//#endif
 import { ReturnUrlService } from './return-url-service';
 
 /** 认证流程之后回到原目标的共同判定：只接站内地址，设置页自身不算目标，授权端点整页回到服务端。 */
@@ -73,13 +76,15 @@ describe('ReturnUrlService', () => {
   // 授权端点不是前端路由：整页回到服务端，原样带回缓存请求的引用与重新认证证明
   it('loads an authorization endpoint target as a full page, keeping its parameters', async () => {
     const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
-    const loadPage = vi.spyOn(service, 'loadPage').mockImplementation(() => undefined);
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
+      .mockImplementation(() => undefined);
     const target =
       '/connect/authorize?client_id=resource&request_uri=urn%3Aabc&reauthentication=proof';
 
     // 调用方据此保持加载态：页面已经在离开，不该先复位再消失
     expect(await service.navigate(target, vi.fn())).toBe('left');
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
+    expect(leave).toHaveBeenCalledExactlyOnceWith(target);
     expect(navigateByUrl).not.toHaveBeenCalled();
   });
 
@@ -94,7 +99,7 @@ describe('ReturnUrlService', () => {
 
   // 没能发起整页导航就不算离开：异常交给调用方，由它恢复界面
   it('does not report leaving when the full page load cannot start', async () => {
-    vi.spyOn(service, 'loadPage').mockImplementation(() => {
+    vi.spyOn(TestBed.inject(FullPageNavigationService), 'replace').mockImplementation(() => {
       throw new Error('navigation blocked');
     });
 

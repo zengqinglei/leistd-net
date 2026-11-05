@@ -22,7 +22,7 @@ import { permissionGuard } from '../../../../core/guards/permission-guard';
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 //#if (OpenIddictServer)
-import { ReturnUrlService } from '../../../../core/routing/return-url-service';
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -621,14 +621,14 @@ describe('Login', () => {
   it('returns to an authorization request with a full page load after signing in', async () => {
     queryParams = { returnUrl: AUTHORIZE };
     await setUp();
-    const loadPage = vi
-      .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
       .mockImplementation(() => undefined);
     fillValidCredentials();
 
     await component.onSubmit();
 
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+    expect(leave).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
@@ -637,7 +637,9 @@ describe('Login', () => {
   it('leaves for an authorization request without changing the page it is leaving', async () => {
     queryParams = { returnUrl: AUTHORIZE };
     await setUp();
-    vi.spyOn(TestBed.inject(ReturnUrlService), 'loadPage').mockImplementation(() => undefined);
+    vi.spyOn(TestBed.inject(FullPageNavigationService), 'replace').mockImplementation(
+      () => undefined,
+    );
     const success = vi.spyOn(toast, 'success').mockImplementation(() => '');
     fillValidCredentials();
 
@@ -655,7 +657,7 @@ describe('Login', () => {
   it('restores the form when the full page load cannot start', async () => {
     queryParams = { returnUrl: AUTHORIZE };
     await setUp();
-    vi.spyOn(TestBed.inject(ReturnUrlService), 'loadPage').mockImplementation(() => {
+    vi.spyOn(TestBed.inject(FullPageNavigationService), 'replace').mockImplementation(() => {
       throw new Error('navigation blocked');
     });
     const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
@@ -670,8 +672,8 @@ describe('Login', () => {
   it('keeps the second step busy until it leaves for an authorization request', async () => {
     navigationState = { twoFactorPrompt: PROMPT, returnUrl: AUTHORIZE };
     await setUp();
-    const loadPage = vi
-      .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
       .mockImplementation(() => undefined);
 
     await (
@@ -679,7 +681,7 @@ describe('Login', () => {
     ).onTwoFactorCompleted();
     fixture.detectChanges();
 
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+    expect(leave).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
     expect(authService.loadUser).not.toHaveBeenCalled();
     expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
     expect(
@@ -1292,13 +1294,13 @@ describe('Login', () => {
       queryParams = { returnUrl: AUTHORIZE };
       vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
       await setUpPasskeys();
-      const loadPage = vi
-        .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+      const leave = vi
+        .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
         .mockImplementation(() => undefined);
 
       await clickPasskey();
 
-      expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+      expect(leave).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
       expect(authService.loadUser).not.toHaveBeenCalled();
       expect(busy(passkeyButton())).toBe(true);
     });
@@ -1311,8 +1313,8 @@ describe('Login', () => {
         () => new Promise((resolve) => (pick = resolve)),
       );
       await setUpPasskeys();
-      const loadPage = vi
-        .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+      const leave = vi
+        .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
         .mockImplementation(() => undefined);
       await fixture.whenStable();
 
@@ -1321,7 +1323,7 @@ describe('Login', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(loadPage).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
+      expect(leave).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
       expect(busy(passkeyButton())).toBe(true);
     });
     //#endif

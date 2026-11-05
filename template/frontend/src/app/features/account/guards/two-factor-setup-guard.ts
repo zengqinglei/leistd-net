@@ -2,6 +2,9 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { lastValueFrom } from 'rxjs';
 
+//#if (OpenIddictServer)
+import { FullPageNavigationService } from '../../../core/routing/full-page-navigation-service';
+//#endif
 import { ReturnUrlService } from '../../../core/routing/return-url-service';
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
@@ -20,6 +23,9 @@ export const twoFactorSetupGuard: CanActivateFn = async (route) => {
   const authorizationService = inject(AuthorizationService);
   const sessionContext = inject(SessionContextService);
   const returnUrls = inject(ReturnUrlService);
+  //#if (OpenIddictServer)
+  const fullPage = inject(FullPageNavigationService);
+  //#endif
   const router = inject(Router);
   const target = returnUrls.resolve(route.queryParamMap.get('returnUrl'));
 
@@ -37,7 +43,7 @@ export const twoFactorSetupGuard: CanActivateFn = async (route) => {
   //#if (OpenIddictServer)
   // 授权端点不是前端路由：整页回到服务端，它会重新校验会话；离开前不在这一页应用账户偏好
   if (returnUrls.isServerPage(target)) {
-    returnUrls.loadPage(target);
+    fullPage.replace(target);
     return false;
   }
   //#endif

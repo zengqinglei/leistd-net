@@ -7,9 +7,12 @@ import { LogoutConfirm } from './logout-confirm';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import { LogoutConfirmationOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
+
+import type { MockInstance } from 'vitest';
 
 /**
  * 依赖方发起退出的确认页。
@@ -20,8 +23,7 @@ import { AccountService } from '../../services/account-service';
 describe('LogoutConfirm', () => {
   let fixture: ComponentFixture<LogoutConfirm>;
   let getLogoutConfirmation: ReturnType<typeof vi.fn>;
-
-  let submitted: HTMLFormElement[];
+  let post: MockInstance<FullPageNavigationService['post']>;
 
   async function render(
     query: Record<string, string>,
@@ -45,6 +47,9 @@ describe('LogoutConfirm', () => {
         },
       ],
     });
+    post = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'post')
+      .mockImplementation(() => undefined);
     fixture = TestBed.createComponent(LogoutConfirm);
     await fixture.whenStable();
   }
@@ -52,20 +57,7 @@ describe('LogoutConfirm', () => {
   const element = (testId: string) =>
     (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${testId}"]`);
 
-  beforeEach(() => {
-    submitted = [];
-    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(function (
-      this: HTMLFormElement,
-    ) {
-      submitted.push(this);
-    });
-  });
-
-  afterEach(() => {
-    fixture?.destroy();
-    document.querySelectorAll('form[action="/connect/logout"]').forEach((form) => form.remove());
-    vi.restoreAllMocks();
-  });
+  afterEach(() => fixture?.destroy());
 
   it('posts the confirmation with its antiforgery token back to the end session endpoint', async () => {
     await render(
@@ -82,11 +74,7 @@ describe('LogoutConfirm', () => {
 
     (element('logout-confirm-submit') as HTMLButtonElement).click();
 
-    expect(submitted).toHaveLength(1);
-    const form = submitted[0];
-    expect(form.method).toBe('post');
-    expect(form.getAttribute('action')).toBe('/connect/logout');
-    expect(Object.fromEntries(new FormData(form))).toEqual({
+    expect(post).toHaveBeenCalledExactlyOnceWith('/connect/logout', {
       request_uri: 'urn:request',
       confirmation: 'protected',
       __RequestVerificationToken: 'csrf-token',
@@ -134,7 +122,7 @@ describe('LogoutConfirm', () => {
     (element('logout-confirm-cancel') as HTMLButtonElement).click();
 
     expect(navigate).toHaveBeenCalledWith('/');
-    expect(submitted).toHaveLength(0);
+    expect(post).not.toHaveBeenCalled();
   });
 });
 //#endif

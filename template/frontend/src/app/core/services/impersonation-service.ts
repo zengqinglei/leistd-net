@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, afterNextRender, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
+
 /** 会话的模拟状态，由服务端按会话声明判定。 */
 export interface ImpersonationStatus {
   isImpersonating: boolean;
@@ -25,6 +27,7 @@ const EXITED_NOTICE_KEY = 'impersonation.exitedNotice';
 @Injectable({ providedIn: 'root' })
 export class ImpersonationService {
   private readonly http = inject(HttpClient);
+  private readonly fullPage = inject(FullPageNavigationService);
 
   private readonly _status = signal<ImpersonationStatus>({ isImpersonating: false });
 
@@ -45,7 +48,7 @@ export class ImpersonationService {
   /** 以指定租户管理员身份登录，随后整页进入该租户的工作区。 */
   async start(tenantId: string): Promise<void> {
     await firstValueFrom(this.http.post<void>(`/api/v1/tenants/${tenantId}/impersonate`, {}));
-    window.location.href = '/workspace';
+    this.fullPage.replace('/workspace');
   }
 
   /** 结束模拟，整页回到宿主的管理平台。失败时抛出，由调用方提示并留在原处。 */
@@ -56,7 +59,7 @@ export class ImpersonationService {
     } catch {
       // 存储不可用（隐私模式、被禁用）时只是少一条提示，不能因此拦住跳转。
     }
-    window.location.href = '/platform';
+    this.fullPage.replace('/platform');
   }
 
   /**

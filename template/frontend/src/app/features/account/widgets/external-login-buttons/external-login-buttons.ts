@@ -10,6 +10,7 @@ import {
   ApplicationHttpError,
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -44,6 +45,7 @@ const githubIcon =
 })
 export class ExternalLoginButtons {
   private readonly accountService = inject(AccountService);
+  private readonly fullPage = inject(FullPageNavigationService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
@@ -101,7 +103,7 @@ export class ExternalLoginButtons {
 
     this.redirecting.set(true);
     try {
-      window.location.href = this.accountService.getExternalLoginUrl(provider, this.returnUrl());
+      this.fullPage.assign(this.accountService.getExternalLoginUrl(provider, this.returnUrl()));
     } catch (error) {
       console.error(`${label} login failed`, error);
       //#if (IncludeLocalization)

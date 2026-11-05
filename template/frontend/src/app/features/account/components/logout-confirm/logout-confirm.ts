@@ -11,6 +11,7 @@ import { lastValueFrom } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { MOCKED_URL } from '../../../../core/mock/mocked-url';
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
@@ -44,6 +45,7 @@ import { AuthShell } from '../auth-shell/auth-shell';
 export class LogoutConfirm implements OnInit {
   private readonly accountService = inject(AccountService);
   private readonly authService = inject(AuthService);
+  private readonly fullPage = inject(FullPageNavigationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly isMockedUrl = inject(MOCKED_URL);
@@ -92,22 +94,11 @@ export class LogoutConfirm implements OnInit {
       return;
     }
     // 整页 POST：退出完成后的跳转（回到发起退出的应用）由浏览器跟随，不经 XHR
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/connect/logout';
-    for (const [name, value] of [
-      ['request_uri', query.get('request_uri') ?? ''],
-      ['confirmation', query.get('confirmation') ?? ''],
-      [info.antiforgeryFieldName, info.antiforgeryToken],
-    ]) {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = name;
-      input.value = value;
-      form.appendChild(input);
-    }
-    document.body.appendChild(form);
-    form.submit();
+    this.fullPage.post('/connect/logout', {
+      request_uri: query.get('request_uri') ?? '',
+      confirmation: query.get('confirmation') ?? '',
+      [info.antiforgeryFieldName]: info.antiforgeryToken,
+    });
   }
 
   /** 取消：不退出，回到本应用首页。发起退出的应用已清掉的本地会话不会因此恢复。 */

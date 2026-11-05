@@ -16,7 +16,7 @@ import { ApplicationHttpError } from '../../../../core/errors/application-http-e
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 //#if (OpenIddictServer)
-import { ReturnUrlService } from '../../../../core/routing/return-url-service';
+import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -210,14 +210,14 @@ describe('TwoFactorRequired', () => {
   it('continues an authorization request with a full page load', async () => {
     const target = '/connect/authorize?client_id=resource&request_uri=urn%3Aabc';
     queryParams = { returnUrl: target };
-    const loadPage = vi
-      .spyOn(TestBed.inject(ReturnUrlService), 'loadPage')
+    const leave = vi
+      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
       .mockImplementation(() => undefined);
     await enable();
 
     await confirmCodesSaved();
 
-    expect(loadPage).toHaveBeenCalledExactlyOnceWith(target);
+    expect(leave).toHaveBeenCalledExactlyOnceWith(target);
     expect(navigateByUrl).not.toHaveBeenCalled();
     expect(auth.loadUser).not.toHaveBeenCalled();
     expect(establish).not.toHaveBeenCalled();
