@@ -430,8 +430,10 @@ def collect_frontend(src_dir: Path, root: Path) -> FrontendUsage:
             if token.start in declared:
                 continue
             line = masked.count("\n", 0, token.start) + 1
-            # 不经 HttpClient 的地址按浏览器行为定方法：赋给表单 action 的是提交（POST），其余是导航或资源加载（GET）
-            method = "POST" if re.search(r"\.action\s*=\s*$", masked[max(0, token.start - 40) : token.start]) else "GET"
+            # 不经 HttpClient 的地址按浏览器行为定方法：赋给表单 action 或作为 `.post(` 首个实参（整页表单提交，
+            # 如 FullPageNavigationService.post）的是提交（POST），其余是导航或资源加载（GET）
+            before = masked[max(0, token.start - 40) : token.start]
+            method = "POST" if re.search(r"(?:\.action\s*=|\.\s*post\s*\()\s*$", before) else "GET"
             usage.references.append(Endpoint(method, path, f"{rel}:{line}"))
     return usage
 
@@ -826,6 +828,15 @@ def _edit(rel: str, old: str, new: str) -> dict[str, str]:
 def self_test() -> int:
     cases: list[tuple[str, dict[str, str | None], str | None]] = [
         ("合法：三方一致、参数段写法各异、清单内的跳转与只在 Mock 中的端点", {}, None),
+        (
+            "合法：整页提交服务 post() 的地址字面量按 POST 核对，不误记为 GET",
+            _edit(
+                "frontend/src/app/services/auth-service.ts",
+                "    form.action = '/api/v1/auth/logout';",
+                "    this.fullPage.post('/api/v1/auth/logout', { returnUrl: '/' });",
+            ),
+            None,
+        ),
         (
             "缺 Mock：前端调用了组件端点而 Mock 没有键",
             _edit("frontend/_mock/api/record.ts", "  'GET /api/v1/records/export': () => '',\n", ""),
