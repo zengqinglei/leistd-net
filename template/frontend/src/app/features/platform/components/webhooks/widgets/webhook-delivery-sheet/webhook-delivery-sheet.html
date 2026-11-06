@@ -3,11 +3,7 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <hlm-sheet
-    side="right"
-    [state]="open() ? 'open' : 'closed'"
-    (stateChanged)="onStateChange($event)"
-  >
+  <hlm-sheet side="right" [state]="open() ? 'open' : 'closed'" (closed)="closed.emit()">
     <!-- 默认宽度是 3/4、sm 起 max-w-sm：投递详情要纵向铺排，窄屏占满、sm 起放宽到 2xl -->
     <hlm-sheet-content
       *hlmSheetPortal

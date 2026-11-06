@@ -1,7 +1,9 @@
+import { Location, PlatformLocation } from '@angular/common';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { MockPlatformLocation } from '@angular/common/testing';
 import { signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { Observable, of, Subject } from 'rxjs';
@@ -21,7 +23,11 @@ import {
   expectTouchTarget,
   setCoarsePointer,
 } from '../../../../shared/utils/coarse-pointer.testing';
-import { WebhookStatisticsOutputDto, WebhookSubscriptionOutputDto } from '../../dtos/webhook.dto';
+import {
+  WebhookDeliveryOutputDto,
+  WebhookStatisticsOutputDto,
+  WebhookSubscriptionOutputDto,
+} from '../../dtos/webhook.dto';
 import { WebhookService } from '../../services/webhook-service';
 
 import type { MockedObject } from 'vitest';
@@ -59,6 +65,21 @@ function subscription(id: string): WebhookSubscriptionOutputDto {
   };
 }
 
+function delivery(id: string): WebhookDeliveryOutputDto {
+  return {
+    id,
+    eventId: `evt_${id}`,
+    eventType: 'user.created',
+    subscriptionId: 'sub-1',
+    subscriptionName: 'Name sub-1',
+    subscriptionUrl: 'https://example.com/sub-1',
+    status: 'succeeded',
+    attemptCount: 1,
+    lastStatusCode: 200,
+    creationTime: '2026-11-01T00:00:00.000Z',
+  };
+}
+
 /** Webhook 页面的 URL 状态闭环：视图、筛选、区间与打开的投递详情都以查询参数为唯一来源。 */
 describe('Webhooks page', () => {
   let fixture: ComponentFixture<Webhooks>;
@@ -82,6 +103,8 @@ describe('Webhooks page', () => {
       imports: [Webhooks],
       providers: [
         provideRouter([{ path: 'platform/webhooks', children: [] }]),
+        // 历史放在内存里：后退、前进同步可控，也不动测试页自己的浏览器历史
+        { provide: PlatformLocation, useClass: MockPlatformLocation },
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
@@ -230,6 +253,151 @@ describe('Webhooks page', () => {
     expect(router.parseUrl(router.url).queryParams['delivery']).toBe('delivery-1');
     expect(service.getDelivery).toHaveBeenCalledWith('delivery-1');
     expect(vi.mocked(service.getDeliveries).mock.calls.length).toBe(listCalls);
+  });
+
+  /**
+   * 投递详情抽屉与浏览器历史（frontend-ui §2.7）：打开新增一条历史、后退即关闭；从列表打开的条目（含页面重建后还原）
+   * 关闭时退回打开前那条，外部深链移除参数并替换当前条目；关闭后回焦打开它的行入口。
+   */
+  describe('delivery sheet history', () => {
+    let location: Location;
+    let platform: PlatformLocation;
+
+    const deliveryParam = () => router.parseUrl(router.url).queryParams['delivery'] ?? null;
+    const sheet = () =>
+      document.querySelector<HTMLElement>('[data-testid="webhook-delivery-sheet"]');
+    const detailsButton = (id: string) =>
+      fixture.nativeElement.querySelector(
+        `[data-delivery-id="${id}"] [data-testid="webhook-delivery-details"]`,
+      ) as HTMLElement | null;
+
+    /** 停在投递日志（可带参数），渲染列表的 @defer 块。 */
+    async function openDeliveryLog(queryParams: Record<string, string> = {}): Promise<void> {
+      vi.mocked(service.getDeliveries).mockReturnValue(
+        of({ items: [delivery('delivery-1'), delivery('delivery-2')], totalCount: 2 }),
+      );
+      await router.navigate(['/platform/webhooks'], {
+        queryParams: { view: 'deliveries', ...queryParams },
+      });
+      await settle();
+      const [table] = await fixture.getDeferBlocks();
+      await table.render(DeferBlockState.Complete);
+      await settle();
+      location = TestBed.inject(Location);
+      platform = TestBed.inject(PlatformLocation);
+    }
+
+    async function closeSheet(): Promise<void> {
+      sheet()!.querySelector<HTMLElement>('[hlmsheetclose]')!.click();
+      await vi.waitFor(() => expect(sheet()).toBeNull());
+      await settle();
+    }
+
+    beforeEach(async () => {
+      await setup(manage);
+      // 应用启动时由初始导航挂上；测试只调 navigate，后退、前进要自己挂
+      router.setUpLocationChangeListener();
+    });
+
+    it('goes back to the entry before it when closing a sheet opened on the page', async () => {
+      await openDeliveryLog();
+      detailsButton('delivery-2')!.click();
+      await settle();
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+      expect(deliveryParam()).toBe('delivery-2');
+
+      const push = vi.spyOn(platform, 'pushState');
+      const back = vi.spyOn(location, 'back');
+      await closeSheet();
+
+      await vi.waitFor(() => expect(deliveryParam()).toBeNull());
+      expect(back).toHaveBeenCalledTimes(1);
+      expect(push).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(detailsButton('delivery-2'));
+
+      // 关闭没有新增条目：前进回到打开的那条，抽屉重开
+      location.forward();
+      await settle();
+      await vi.waitFor(() => expect(deliveryParam()).toBe('delivery-2'));
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+    });
+
+    it('still goes back when the page is rebuilt on an entry opened from the list', async () => {
+      await openDeliveryLog();
+      component.openDelivery('delivery-1');
+      await settle();
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+      // 刷新或离开再前进回来：页面重建，条目上的标记还在
+      fixture.destroy();
+      await vi.waitFor(() => expect(sheet()).toBeNull());
+      fixture = TestBed.createComponent(Webhooks);
+      component = fixture.componentInstance;
+      await settle();
+      const [table] = await fixture.getDeferBlocks();
+      await table.render(DeferBlockState.Complete);
+      await settle();
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+      const push = vi.spyOn(platform, 'pushState');
+      const back = vi.spyOn(location, 'back');
+      await closeSheet();
+
+      await vi.waitFor(() => expect(deliveryParam()).toBeNull());
+      expect(back).toHaveBeenCalledTimes(1);
+      expect(push).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(detailsButton('delivery-1'));
+    });
+
+    it('closes with the navigation on back without moving the history again', async () => {
+      await openDeliveryLog();
+      component.openDelivery('delivery-1');
+      await settle();
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+      const push = vi.spyOn(platform, 'pushState');
+      const back = vi.spyOn(location, 'back');
+      location.back();
+      await vi.waitFor(() => expect(sheet()).toBeNull());
+      await vi.waitFor(() => expect(deliveryParam()).toBeNull());
+      await settle();
+
+      // 只有测试自己的那一次后退：关闭时没有再退一步，也没有新增条目
+      expect(back).toHaveBeenCalledTimes(1);
+      expect(push).not.toHaveBeenCalled();
+      expect(location.path()).toBe('/platform/webhooks?view=deliveries');
+      expect(document.activeElement).toBe(detailsButton('delivery-1'));
+    });
+
+    it('removes the parameter in place when closing a deep-linked sheet', async () => {
+      await openDeliveryLog({ delivery: 'delivery-1', status: 'succeeded' });
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+      const push = vi.spyOn(platform, 'pushState');
+      const replace = vi.spyOn(platform, 'replaceState');
+      const back = vi.spyOn(location, 'back');
+      await closeSheet();
+
+      await vi.waitFor(() => expect(deliveryParam()).toBeNull());
+      expect(replace.mock.calls.at(-1)?.[2]).toBe(
+        '/platform/webhooks?view=deliveries&status=succeeded',
+      );
+      expect(back).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      // 其他查询参数保留
+      expect(router.parseUrl(router.url).queryParams['status']).toBe('succeeded');
+      expect(document.activeElement).toBe(detailsButton('delivery-1'));
+    });
+
+    it('returns focus to the delivery log tab when the deep-linked delivery is not listed', async () => {
+      await openDeliveryLog({ delivery: 'delivery-9' });
+      await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+      await closeSheet();
+
+      await vi.waitFor(() => expect(deliveryParam()).toBeNull());
+      expect(document.activeElement?.id).toBe('brn-tabs-label-deliveries');
+    });
   });
 
   it('refetches the statistics for a new range without refetching the list', async () => {

@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
   output,
@@ -96,6 +97,7 @@ import { DELIVERY_STATUS_KEYS, DELIVERY_STATUS_VARIANTS } from '../../webhook-di
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WebhookDeliveryTable {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly accountPreferences = inject(AccountPreferencesService);
   protected readonly displayTimeZone = this.accountPreferences.timeZone;
   protected readonly displayLocale = this.accountPreferences.displayLocale;
@@ -202,6 +204,16 @@ export class WebhookDeliveryTable {
 
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
+  }
+
+  /** 聚焦该投递行的"详情"按钮（关闭详情抽屉后回焦）；行不在当前页时返回 `false`。 */
+  focusDetails(id: string): boolean {
+    const row = Array.from(
+      this.host.nativeElement.querySelectorAll<HTMLElement>('[data-testid="webhook-delivery-row"]'),
+    ).find((element) => element.dataset['deliveryId'] === id);
+    const button = row?.querySelector<HTMLElement>('[data-testid="webhook-delivery-details"]');
+    button?.focus();
+    return !!button;
   }
 
   /** 点整行打开详情；点在行内按钮上时由按钮自己处理。 */

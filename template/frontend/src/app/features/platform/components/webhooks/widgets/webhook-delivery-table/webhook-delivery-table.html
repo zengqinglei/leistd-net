@@ -48,6 +48,7 @@
                     [class.bg-muted/50]="selectedId() === delivery.id"
                     [attr.aria-selected]="selectedId() === delivery.id"
                     data-testid="webhook-delivery-row"
+                    [attr.data-delivery-id]="delivery.id"
                     (click)="onRowClick($event, delivery.id)"
                   >
                     @for (cell of row.getVisibleCells(); track cell.id) {
