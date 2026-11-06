@@ -9,5 +9,6 @@
 - 原地显示 404 页的通配路由（模板中为根通配）不用 `browserUrl`：地址栏就是用户输入的地址，刷新时重新匹配。
 - 新增带 `browserUrl` 或 `skipLocationChange` 的跳转，要写明刷新与前进/后退时的预期，并补测试。
 - 整页离开（去登录、回授权端点、退出、模拟登录进出等）一律经 `frontend/src/app/core/routing/full-page-navigation-service.ts`，不直接写 `location`、不手建表单：当前页只是中转就替换历史条目，后退不回到它。离开中的页面从往返缓存（bfcache）恢复时守卫不重跑，由该服务整页重载；组件不各自监听 `pageshow`。
+- Router 保持默认 `canceledNavigationResolution: 'replace'`：模板没有会取消后退/前进的守卫，启动失败扣下目标时 `EntryRouteService` 也依赖它在取消后还原地址。新增 `canDeactivate` 等会拒绝后退/前进的守卫时改用 `'computed'`，否则被拒的后退会覆盖上一条历史、再后退跳过本页；`'computed'` 下首次导航被取消会按错误的页码 `history.go`，首次导航的守卫与启动失败处理要改为挂起而不是取消，并补"拒绝后退 → 再后退"与"刷新后首次导航被拒"的测试。
 - 判断"这次导航从哪来"只用公开的导航信息（`Router.currentNavigation()` 的 `extras`，含只属于本次导航的 `info`），不读写 Angular 的私有状态键（`ɵ` 前缀，如 `history.state` 里的 `ɵrouterUrl`）：它们随版本变化，没有兼容承诺。
 - 权限守卫的测试覆盖放行、拒绝，"拒绝 → 授权 → 刷新后进入目标"与仍被拒的刷新，以及在两条相邻 403 历史之间前进/后退（见 `frontend/src/app/core/guards/permission-guard.spec.ts`）。
