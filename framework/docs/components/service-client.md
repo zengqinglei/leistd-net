@@ -12,7 +12,7 @@
 | 单跳用户委托 | `AddTokenExchange` | `Leistd.ServiceClient.OAuth` |
 | 当前请求的用户访问令牌 | `AddUserAccessTokenAccessor` 或 `AddAuthenticatedUserAccessTokenAccessor` | `Leistd.ServiceClient.AspNetCore` |
 
-Core 的 `IUserAccessTokenAccessor` 只定义证明来源，不依赖 ASP.NET Core 或 OpenIddict。OAuth 复用官方 OpenIddict.Client 7.7 的发现文档与客户端认证，不推导令牌端点；机器回源与用户交换使用同一工作负载注册。
+Core 的 `IUserAccessTokenAccessor` 只定义证明来源，不依赖 ASP.NET Core 或 OpenIddict。OAuth 复用官方 OpenIddict.Client 7.8 的发现文档与客户端认证，不推导令牌端点；机器回源与用户交换使用同一工作负载注册。
 
 ## 安装
 
@@ -130,7 +130,7 @@ ASP.NET Core 宿主按上面的注册契约选择证明来源；仅有 Cookie �
 令牌端点的真实失败响应使用 `RemoteServiceException`（`RemoteFailure`，默认 502），保留真实状态、OAuth 错误码及 `IsOAuthError` 来源。传输失败归 `Unavailable` / `Timeout`（503 / 504），无效响应归 `InvalidResponse`（502）。
 `ServiceClientFailureClassifier.IsUnavailable` 统一判断依赖暂不可达：传输不可达或超时、HTTP 408/429/5xx；真实 OAuth 错误优先，只有 `server_error` / `temporarily_unavailable` 属暂时故障。业务接口错误码不按 OAuth 解释。明确拒绝立即丢弃旧令牌；主动取消照常传播。
 
-官方客户端 7.x 会在响应解析失败、非成功状态码且没有 OAuth error、成功状态码却取不出响应时把远端响应原文（含访问令牌）写进 Error 日志。
+官方客户端在响应解析失败、非成功状态码且没有 OAuth error、成功状态码却取不出响应时一律拒绝为 `server_error`，7.x 还会把调用方取消当成 JSON 不合法；7.8 起官方默认也不再记录响应原文。
 组件在发现文档、JWKS 和令牌响应上排在官方处理器之前接手这几步：取消照常传播，其余失败转换为组件异常并保留实际 HTTP 状态与 OAuth 错误来源，日志只记录状态码、Content-Type 与长度。
 官方客户端 7.x 发送请求时还会把调用方主动取消记成网络故障（Error 日志）并拒绝为 `server_error`。组件替换这几类请求的官方发送处理器：
 调用方令牌已取消时取消照常传播，不记 Error；调用方令牌有效时的连接失败与超时仍记事件 6182 Error，并传播原始传输异常，由组件统一分类。
