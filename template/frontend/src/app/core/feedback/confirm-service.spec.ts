@@ -5,6 +5,7 @@ import { BrnDialogService } from '@spartan-ng/brain/dialog';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmDialogService } from '@spartan-ng/helm/dialog';
 import { EMPTY, of, Subject, throwError } from 'rxjs';
+import { userEvent } from 'vitest/browser';
 
 import { ConfirmService } from './confirm-service';
 import { DialogClose } from '../components/dialog-close/dialog-close';
@@ -104,6 +105,28 @@ describe('ConfirmService', () => {
     await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
     fixture.destroy();
   });
+
+  // 确认类对话框只能经按钮或 Esc 作答：点遮罩既不关闭也不作答，有无框内写请求都一样。
+  it.each([{ action: undefined }, { action: () => of(undefined) }])(
+    'ignores backdrop clicks (action: $action)',
+    async ({ action }) => {
+      let settled = false;
+      const result = service
+        .open({ message: 'Delete alice?', cancelText: 'Cancel', action })
+        .finally(() => (settled = true));
+      const dialog = await openedDialog();
+      const backdrops = document.querySelectorAll<HTMLElement>('.cdk-overlay-backdrop');
+      await userEvent.click(backdrops[backdrops.length - 1], { position: { x: 4, y: 4 } });
+      for (let frame = 0; frame < 30; frame++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+
+      expect(settled).toBe(false);
+      expect(dialog.isConnected).toBe(true);
+      button(dialog, 'Cancel').click();
+      await expect(result).resolves.toBe(false);
+    },
+  );
 
   it('opens an alert dialog named by its header and described by its message', async () => {
     const result = service.open({

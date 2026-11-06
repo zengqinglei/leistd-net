@@ -88,7 +88,7 @@
 
 ### 2.7 弹窗生命周期
 
-本节对弹窗与抽屉（Sheet）同样适用；抽屉用官方 `hlmSheetHeader`/`hlmSheetFooter`。业务弹窗打开前静态 `disableClose`、禁外点并隐藏内置关闭钮。`app-dialog-close` 的 `requestClose()` 统一处理 Esc、关闭与取消；dirty/集合变化时确认放弃，busy 时拒绝用户退出。成功、父级强制关闭和销毁直接关闭；凭据不确认，关闭即清空。浏览器后退/前进视为离开页面：弹窗与抽屉随导航关闭（CDK 默认 `closeOnNavigation`，与 Material 一致），不经 `requestClose()` 确认，进行中的写请求照常完成；模板不提供路由级未保存守卫。需要刷新或分享后还原打开状态的抽屉，把打开状态放在查询参数里。
+本节对弹窗与抽屉（Sheet）同样适用；抽屉用官方 `hlmSheetHeader`/`hlmSheetFooter`。业务弹窗静态 `disableClose`、禁外点并隐藏内置关闭钮，由 `app-dialog-close` 的 `requestClose()` 统一处理遮罩点击、Esc、关闭与取消：无修改直接关，dirty/集合变化时确认放弃，busy 时拒绝用户退出。确认类对话框（`ConfirmService`、确认身份）要求明确作答，点遮罩不关；自写的确认类对话框给 `app-dialog-close` 设 `[closeOnBackdrop]="false"`。成功、父级强制关闭和销毁直接关闭；凭据不确认，关闭即清空。浏览器后退/前进视为离开页面：弹窗与抽屉随导航关闭（CDK 默认 `closeOnNavigation`，与 Material 一致），不经 `requestClose()` 确认，进行中的写请求照常完成；模板不提供路由级未保存守卫。需要刷新或分享后还原打开状态的抽屉，把打开状态放在查询参数里。
 
 同步内容聚焦主输入；异步先聚焦标题，`appDialogFocus` 仅在焦点仍留在标题时迁入输入。关闭后回焦业务入口，验证菜单项销毁及弹窗接力场景。正文标 `data-dialog-body`，限高、单层滚动；页脚在正文外且不收缩，服务动态打开的公共弹窗同样适用。自定义关闭按钮不占布局位置。正文横纵均用等量负外边距与内边距留焦点环，视觉间距与 Vega 同源。
 
