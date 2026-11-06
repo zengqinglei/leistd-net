@@ -1,4 +1,6 @@
+import { DialogRef } from '@angular/cdk/dialog';
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -9,7 +11,10 @@ import { injectHlmA11yLabels } from '@spartan-ng/helm/utils';
 
 import { ConfirmService } from '../../feedback/confirm-service';
 
-/** 业务弹窗的退出入口；根须静态 disableClose 并隐藏 Helm 内置关闭按钮。 */
+/**
+ * 业务弹窗与抽屉的退出入口；根须静态 disableClose、禁外点并隐藏 Helm 内置关闭按钮。
+ * Brain 在 disableClose 时丢弃遮罩点击，这里经 CDK `DialogRef.backdropClick` 把它转给 `requestClose()`。
+ */
 @Component({
   selector: 'app-dialog-close',
   exportAs: 'appDialogClose',
@@ -36,6 +41,8 @@ import { ConfirmService } from '../../feedback/confirm-service';
 export class DialogClose {
   readonly dirty = input(false);
   readonly busy = input(false);
+  /** 要求明确作答的对话框（如确认身份）设为 false，遮罩点击不作为退出。 */
+  readonly closeOnBackdrop = input(true);
   readonly dismissed = output<void>();
   protected readonly a11y = injectHlmA11yLabels();
   private readonly confirm = inject(ConfirmService);
@@ -43,6 +50,16 @@ export class DialogClose {
   private readonly transloco = inject(TranslocoService);
   //#endif
   private confirming = false;
+
+  constructor() {
+    // CDK 在弹窗内容的注入器里提供 DialogRef；放在弹窗外（如单测宿主）时没有遮罩可订阅。
+    // 有遮罩时点击只落在最上层遮罩上，嵌套弹窗只有最上层收到 backdropClick。
+    inject(DialogRef, { optional: true })
+      ?.backdropClick.pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        if (this.closeOnBackdrop()) void this.requestClose();
+      });
+  }
 
   async requestClose(
     event?: Event,

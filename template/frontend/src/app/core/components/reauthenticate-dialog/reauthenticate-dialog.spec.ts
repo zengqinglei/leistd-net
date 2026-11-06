@@ -1,5 +1,6 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { userEvent } from 'vitest/browser';
 
 import { ReauthenticateDialog, ReauthenticationProof } from './reauthenticate-dialog';
 import {
@@ -339,6 +340,18 @@ describe('ReauthenticateDialog', () => {
     );
     await confirmWithCode(fixture, '123456');
     expect(host.confirmed).toEqual([{ twoFactorCode: '123456' }]);
+  });
+
+  // 确认身份要求明确作答：业务弹窗的遮罩可关，它的遮罩不作为退出（取消、✕、Esc 照常）。
+  it('stays open when its backdrop is clicked', async () => {
+    await render({ hasPassword: true, twoFactorEnabled: false });
+    expect(reauthenticateForm()).not.toBeNull();
+    const backdrops = document.querySelectorAll<HTMLElement>('.cdk-overlay-backdrop');
+    await userEvent.click(backdrops[backdrops.length - 1], { position: { x: 4, y: 4 } });
+    for (let frame = 0; frame < 30; frame++) await settle();
+
+    expect(host.visible()).toBe(true);
+    expect(reauthenticateForm()).not.toBeNull();
   });
 
   it('clears the input and the reason when closed', async () => {
