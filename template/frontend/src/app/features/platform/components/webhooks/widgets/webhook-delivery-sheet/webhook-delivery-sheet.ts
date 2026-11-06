@@ -12,7 +12,6 @@ import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideChevronRight, lucideCopy, lucideRotateCw } from '@ng-icons/lucide';
-import { BrnDialogState } from '@spartan-ng/brain/dialog';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -41,7 +40,8 @@ import {
 /**
  * 投递详情抽屉（右侧 Sheet，窄屏占满）：标题区（事件类型、可复制的事件 id、状态、重发）→ 概要（列全表格各列）
  * → 请求（最近一次尝试的头部快照与格式化的请求体）→ 调用记录（倒序，逐次展开看头部与响应或错误）。
- * 打开与关闭由父页面按查询参数 `delivery` 驱动，关闭时经 `closed` 通知父页面清掉参数。
+ * 打开与关闭由父页面按查询参数 `delivery` 驱动。`closed` 在退场动画结束、焦点已按 CDK 还原之后发出
+ * （关闭按钮、Esc 与随导航关闭都会发），父页面据此收掉参数并回焦入口。
  */
 @Component({
   selector: 'app-webhook-delivery-sheet',
@@ -126,12 +126,6 @@ export class WebhookDeliverySheet {
       }
       return { deliveryId, ids };
     });
-  }
-
-  onStateChange(state: BrnDialogState): void {
-    if (state === 'closed' && this.open()) {
-      this.closed.emit();
-    }
   }
 
   copyEventId(): void {

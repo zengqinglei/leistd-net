@@ -102,6 +102,6 @@
 - 改后：上述页面恢复后整页重载（导航类型 `reload`），按钮可用；授权续跑后历史长度不变、后退不回到发起页；本地退出后两次后退都不显示已登录内容。
 - 关键字：新增集成测试修复前失败、修复后通过。
 
-遗留：Resource 真实链路（Resource 后端 + Identity 登记 OIDC 客户端、Mock 关闭）的浏览器验收未执行，Resource 只有 Mock 的辅助证据；模拟登录进出未做浏览器验收（服务 spec 覆盖）；Mock 覆盖闸门把直接传给 `post(...)` 的字面量判为 GET，需另立一项修正闸门。
+遗留：Resource 真实链路（Resource 后端 + Identity 登记 OIDC 客户端、Mock 关闭）的浏览器验收未执行，Resource 只有 Mock 的辅助证据；模拟登录进出未做浏览器验收（服务 spec 覆盖）；Mock 覆盖闸门把直接传给 `post(...)` 的字面量判为 GET，需另立一项修正闸门（已在后续 PR 修正）。
 
 已上收：`template/docs/standards/frontend-routing.md`（整页离开）、`testing.md`（浮层与提示）、`frontend-spartan.md`（变体前缀）、`api.md` 与 `coding-backend.md`（关键字）。

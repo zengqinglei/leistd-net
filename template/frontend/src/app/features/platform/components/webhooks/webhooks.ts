@@ -1,3 +1,4 @@
+import { DOCUMENT, Location } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -5,8 +6,10 @@ import {
   DestroyRef,
   effect,
   inject,
+  linkedSignal,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
@@ -90,6 +93,8 @@ const RANGE_PRESETS: readonly RangePreset[] = ['today', '7d', '30d'];
 const DELIVERY_STATUSES: readonly WebhookDeliveryStatus[] = ['pending', 'succeeded', 'failed'];
 /** 投递日志的订阅筛选项一次取够；订阅数通常很少，超出时仍可经"查看投递"按订阅跳转。 */
 const SUBSCRIPTION_OPTION_LIMIT = 100;
+/** 从列表打开投递详情时写进新历史条目的标记：有它说明前一条就是打开前的列表条目，刷新后仍随条目保留。 */
+const DELIVERY_OPENED_STATE = 'webhookDeliveryOpened';
 
 /** 只取列表相关的参数：打开投递详情（`delivery`）与切换区间（`range`）不重查列表。 */
 const LIST_PARAMS = [
@@ -140,6 +145,8 @@ export class Webhooks {
   private readonly confirmService = inject(ConfirmService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
+  private readonly document = inject(DOCUMENT);
   private readonly layoutService = inject(LayoutService);
   private readonly authorizationService = inject(AuthorizationService);
   private readonly accountPreferences = inject(AccountPreferencesService);
@@ -196,6 +203,11 @@ export class Webhooks {
   readonly deliveryId = computed(() =>
     this.view() === 'deliveries' ? this.queryParams().get('delivery') : null,
   );
+  /** 最近打开的投递：经后退关闭时参数已先清掉，回焦仍要知道是哪一行。 */
+  private readonly lastDeliveryId = linkedSignal<string | null, string | null>({
+    source: this.deliveryId,
+    computation: (id, previous) => id ?? previous?.value ?? null,
+  });
   readonly hasActiveFilters = computed(
     () =>
       this.searchQuery().trim().length > 0 ||
@@ -281,6 +293,7 @@ export class Webhooks {
   readonly delivery = signal<WebhookDeliveryDetailOutputDto | null>(null);
   readonly deliveryLoading = signal(false);
   readonly deliveryError = signal<string | null>(null);
+  private readonly deliveryTable = viewChild(WebhookDeliveryTable);
 
   // ---- 行操作与对话框 ----
   /** 正在执行行操作的订阅（测试、轮换、启停）：防重入，并让该行显示进行中。 */
@@ -510,12 +523,33 @@ export class Webhooks {
     });
   }
 
+  /** 打开详情新增一条历史：浏览器后退即关闭抽屉（frontend-ui §2.7）。 */
   openDelivery(id: string): void {
-    this.updateQuery({ delivery: id });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { delivery: id },
+      queryParamsHandling: 'merge',
+      state: { [DELIVERY_OPENED_STATE]: true },
+    });
   }
 
+  /**
+   * 抽屉关闭完毕（关闭按钮、Esc 或随导航关闭）。地址里还有 `delivery` 时由本方法收掉：从列表打开的条目（含刷新、
+   * 离开再前进回来）退回打开前那条历史，不新增条目，后退不会重开、前进仍可重开；外部深链没有标记，移除参数并替换当前条目。
+   * 随后回焦打开它的行入口。
+   */
   closeDelivery(): void {
-    this.updateQuery({ delivery: null });
+    const id = this.lastDeliveryId();
+    // 读地址栏而不是路由状态：随后退关闭时路由还没处理完 popstate，地址栏已是目标条目
+    if (this.router.parseUrl(this.location.path()).queryParamMap.has('delivery')) {
+      const state = this.location.getState() as Record<string, unknown> | null;
+      if (state?.[DELIVERY_OPENED_STATE] === true) {
+        this.location.back();
+      } else {
+        this.updateQuery({ delivery: null }, true);
+      }
+    }
+    this.focusDeliveryEntry(id);
   }
 
   reloadDelivery(): void {
@@ -773,6 +807,14 @@ export class Webhooks {
       status: status && DELIVERY_STATUSES.includes(status) ? status : undefined,
       eventType: params.get('eventType') || undefined,
     };
+  }
+
+  /** 回焦该投递所在行的"详情"按钮；行不在当前页（深链到别页的投递）时回到"投递日志"标签。 */
+  private focusDeliveryEntry(id: string | null): void {
+    if (id && this.deliveryTable()?.focusDetails(id)) {
+      return;
+    }
+    this.document.getElementById(this.viewTabId())?.focus();
   }
 
   private rangeParam(): RangePreset | null {
