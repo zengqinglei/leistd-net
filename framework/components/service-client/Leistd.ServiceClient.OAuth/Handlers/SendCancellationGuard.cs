@@ -57,7 +57,7 @@ internal static class SendCancellationGuard
             {
                 throw;
             }
-            catch (Exception exception) when (ResponsePayloadLoggingGuard.IsRecoverable(exception))
+            catch (Exception exception) when (ResponseFailureGuard.IsRecoverable(exception))
             {
                 // 事件号与日志文本保持官方原值（ID6182），按 6182 排查网络故障的诊断不受影响；
                 // 传输异常只含地址与底层原因，不含响应正文

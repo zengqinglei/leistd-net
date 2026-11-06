@@ -10,10 +10,11 @@ using static OpenIddict.Client.SystemNetHttp.OpenIddictClientSystemNetHttpHandle
 
 namespace Leistd.ServiceClient.OAuth.Handlers;
 
-// OpenIddict 7.x 在事件 6183/6184/6185 处把远端响应原文（令牌响应含 access_token）写进 Error 日志。
-// 这里在官方处理器之前接手同一职责：保留真实远端状态与错误来源，取消照常抛出，日志只记状态、类型与长度。
-// 升级 OpenIddict 时一并复核日志保护与真实失败来源的契约。
-internal static class ResponsePayloadLoggingGuard
+// 在官方处理器之前接手响应解析与状态校验：官方把读取失败、非成功且无 OAuth 错误、内容类型不支持一律拒绝为
+// server_error，这里保留真实远端状态与错误来源（RemoteServiceException / ServiceClientException），供令牌缓存分类；
+// 调用方取消照常抛出（7.x 官方会把它当成 JSON 不合法）。日志只记状态、类型与长度，不记正文。
+// 升级 OpenIddict 时一并复核取消传播与真实失败来源的契约。
+internal static class ResponseFailureGuard
 {
     // 框架注册的 Client 实际经过的响应：发现文档、JWKS、令牌请求（机器令牌与 Token Exchange）。
     internal static IEnumerable<OpenIddictClientHandlerDescriptor> Descriptors { get; } =
@@ -26,7 +27,7 @@ internal static class ResponsePayloadLoggingGuard
         ValidateStatus<ExtractTokenResponseContext>.Descriptor
     ];
 
-    // 与官方 OpenIddictHelpers.IsFatal（7.7.2）同一判据，取反：致命异常照常向外抛，不能被转写成一次普通的协议失败。
+    // 与官方 OpenIddictHelpers.IsFatal（7.8.0）同一判据，取反：致命异常照常向外抛，不能被转写成一次普通的协议失败。
     // 内层异常与聚合异常逐个检查，包在 HttpRequestException 里的内存耗尽同样算致命。
     internal static bool IsRecoverable(Exception exception) => !IsFatal(exception);
 

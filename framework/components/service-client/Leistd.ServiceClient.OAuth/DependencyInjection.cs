@@ -43,8 +43,8 @@ public static class DependencyInjection
         {
             client.AllowClientCredentialsFlow().AllowTokenExchangeFlow().DisableTokenStorage();
             client.UseSystemNetHttp();
-            // 官方处理器会把远端响应原文（含令牌）写进日志，前置接手解析与状态校验。
-            foreach (var descriptor in ResponsePayloadLoggingGuard.Descriptors) client.AddEventHandler(descriptor);
+            // 官方处理器把读取失败与非成功响应一律拒绝为 server_error、7.x 还把取消当成 JSON 不合法：前置接手解析与状态校验，保留真实状态与来源。
+            foreach (var descriptor in ResponseFailureGuard.Descriptors) client.AddEventHandler(descriptor);
             // 官方发送处理器把调用方取消记成网络故障（6182 Error），换成取消照常抛出的同序处理器。
             foreach (var descriptor in SendCancellationGuard.Replaced) client.RemoveEventHandler(descriptor);
             foreach (var descriptor in SendCancellationGuard.Descriptors) client.AddEventHandler(descriptor);

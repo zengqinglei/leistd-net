@@ -21,7 +21,7 @@ namespace Leistd.ServiceClient.Tests.OAuth;
 
 // 远端响应原文（令牌端点即含 access_token）不得进入任何日志：结构化属性、渲染消息、异常文本都检查哨兵。
 // 走真实 OpenIddict Client 管道与 TestServer 协议端点，只替换传输。
-public sealed class ResponsePayloadLoggingTests : IAsyncLifetime
+public sealed class ResponseFailureTests : IAsyncLifetime
 {
     private const string Sentinel = "SENTINEL-ACCESS-TOKEN-eyJhbGciOi.eyJzdWIiOiJ4In0.c2ln";
     private WebApplication host = null!;
