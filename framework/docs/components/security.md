@@ -332,7 +332,7 @@ identity.AddClaim(new Claim("sub", ClientSubject.Format(request.ClientId!)));
 if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受信的服务调用 */ }
 ```
 
-> 多个认证方案合并主体时仍遵守该契约；用户访问令牌的跨服务使用见[服务间调用客户端](./service-client.md)。
+> 多个认证方案合并主体时仍遵守该契约；用户访问令牌的跨服务使用见[出站 HTTP 客户端](./service-client.md)。
 
 ### `Leistd.Security.Claims.ClaimsPrincipalExtensions`（是否匿名）
 

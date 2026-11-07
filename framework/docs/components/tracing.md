@@ -42,7 +42,7 @@ services.AddCorrelationIdCore();
 
 ### HttpClient 出口转发
 
-宿主自己配置的第三方客户端按需挂上；调用本系统内部服务走 ServiceClient，注册了关联标识时自动转发。
+出站调用（内部服务与第三方）优先走 ServiceClient：注册了关联标识时自动转发，某个客户端不想转发时设它的 `ForwardCorrelationId` 为 `false`。不经 ServiceClient 的 `HttpClient` 按需挂上：
 
 ```csharp
 builder.Services.AddHttpClient<ThirdPartyClient>()
@@ -101,7 +101,7 @@ using (ambientContext.Begin(principal, correlationId: message.CorrelationId))
 
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
-| `Enabled` | `true` | 是否经 HTTP 传播（入站读取、响应回写、出站转发），全局生效。用于面向公网、不采信外部请求头的边缘服务：关闭后调用方不能往本服务的日志与操作记录里写入自选标识，进程内关联照常取 TraceId。只是不想向某个第三方转发时，那个客户端不挂 `AddCorrelationIdForwarding()` 即可（宿主自己配置的 HttpClient；ServiceClient 管道在注册了关联标识时自动转发，面向本系统的内部服务） |
+| `Enabled` | `true` | 是否经 HTTP 传播（入站读取、响应回写、出站转发），全局生效。用于面向公网、不采信外部请求头的边缘服务：关闭后调用方不能往本服务的日志与操作记录里写入自选标识，进程内关联照常取 TraceId。只是不想向某个第三方转发时，ServiceClient 客户端设 `ForwardCorrelationId` 为 `false`，不经 ServiceClient 的 HttpClient 不挂 `AddCorrelationIdForwarding()` |
 | `HeaderName` | `X-Correlation-Id` | 读取、回写与转发的请求头名；空白时启动失败 |
 | `SetResponseHeader` | `true` | 是否把关联标识写入响应头（响应里已有同名头时不覆盖） |
 

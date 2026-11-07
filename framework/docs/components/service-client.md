@@ -1,6 +1,6 @@
-# 服务间调用客户端
+# 出站 HTTP 客户端
 
-服务调用统一处理链路标识、OAuth 机器认证、用户令牌交换与远程错误还原。Refit 是默认的业务客户端编写方式；身份由签发方令牌证明。
+本系统内部服务与第三方的出站 HTTP 共用一套管道：传输故障分类、关联标识、远端错误还原与配置绑定；调用内部服务另有 OAuth 机器认证与用户令牌交换。Refit 是默认的业务客户端编写方式。
 
 ## 何时使用
 
@@ -11,6 +11,7 @@
 | 工作负载身份与机器令牌 | `AddServiceAuthentication`、`AddClientCredentials` | `Leistd.ServiceClient.OAuth` |
 | 单跳用户委托 | `AddTokenExchange` | `Leistd.ServiceClient.OAuth` |
 | 当前请求的用户访问令牌 | `AddUserAccessTokenAccessor` 或 `AddAuthenticatedUserAccessTokenAccessor` | `Leistd.ServiceClient.AspNetCore` |
+| 第三方 HTTP 接口（自带认证、非 Leistd 错误格式） | `AddServiceClient` 加自写认证处理器，见[第三方接入](#第三方接入) | `Leistd.ServiceClient.Core` |
 
 Core 的 `IUserAccessTokenAccessor` 只定义证明来源，不依赖 ASP.NET Core 或 OpenIddict。OAuth 复用官方 OpenIddict.Client 7.8 的发现文档与客户端认证，不推导令牌端点；机器回源与用户交换使用同一工作负载注册。
 
@@ -98,7 +99,9 @@ var order = await response.ReadContentAsync<OrderDto>();
 不要将远程状态直接当作本地业务结果；需要转换时捕获 `RemoteServiceException`，按 `RemoteStatusCode`、`ErrorCode` 和 `RemoteTraceId` 显式决策。
 要把上游的业务拒绝原样交还本服务调用方（如代表用户转交写入）时，调用 `ToBusinessException(fallbackMessage)`：
 只有带业务码的 4xx 才返回 `RemoteBusinessException`，它沿用上游的错误码、状态与公开说明 `Detail`（ProblemDetails 的 `detail`，只在带业务码时还原）；
-其余情况返回 `null`，按依赖故障处理。异常 `Message` 含请求地址与远端 traceId，只用于诊断，不作为公开文案。
+其余情况返回 `null`，按依赖故障处理。
+异常 `Message` 只含 HTTP 方法、不含查询串的请求地址、远端状态码、错误码与远端 traceId，只用于诊断，不作为公开文案；
+它不含响应原文与远端说明，原文只留在 `ResponseBody` 属性（默认日志提供程序不输出异常属性）；读取或反序列化失败时不复制内层异常的消息，内层异常照常作为 `InnerException` 保留。
 API 边界的默认响应：未处理的远端拒绝及无效或提前中断的响应返回 502（不透传上游状态或消息），本地配置及未分类故障返回 500，连接不可达返回 503，等待超时返回 504。
 宿主知道某个上游的稳定契约时，可用 `MapException<RemoteServiceException>` 显式分类。
 
@@ -111,7 +114,9 @@ API 边界的默认响应：未处理的远端拒绝及无效或提前中断的�
 业务代码 → 传输故障分类 → 关联标识 → 机器认证或用户交换 → 网络
 ```
 
-关联标识经追踪组件透传，未注册时直通。Core 不转发用户或租户请求头；下游从已验证 JWT 的主体读取用户与租户。
+关联标识经追踪组件透传，未注册时直通；`ForwardCorrelationId` 为 `false` 的客户端也直通。
+W3C `traceparent` 由 .NET 运行时传播，不受该项影响，需要关闭时用官方 `DistributedContextPropagator`。
+Core 不转发用户或租户请求头；下游从已验证 JWT 的主体读取用户与租户。
 
 机器模式只代表 client credentials 的工作负载，不恢复自然人身份。用户模式通过 `IUserAccessTokenAccessor` 获取当前请求的访问令牌作为 subject；
 ASP.NET Core 宿主按上面的注册契约选择证明来源；仅有 Cookie 或后台用户身份不能提供访问令牌证明。
@@ -136,6 +141,31 @@ ASP.NET Core 宿主按上面的注册契约选择证明来源；仅有 Cookie �
 调用方令牌已取消时取消照常传播，不记 Error；调用方令牌有效时的连接失败与超时仍记事件 6182 Error，并传播原始传输异常，由组件统一分类。
 保护作用于同一宿主内经 OpenIddict.Client 发出的发现、JWKS 与令牌请求，不含用户信息、内省、撤销等端点。
 
+## 第三方接入
+
+第三方接口同样经 `AddServiceClient` 注册，认证、重试与日志在返回的构建器上按对方契约组合：
+
+```csharp
+builder.Services
+    .AddServiceClient<IIdentityCheckApi, IdentityCheckApiClient, IdentityCheckOptions>(
+        "IdentityCheck", options => options.ForwardCorrelationId = false)
+    // 先挂、在外层：总超时包住取凭据，每次重试都重新经过认证处理器
+    .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods())
+    .AddHttpMessageHandler<IdentityCheckAuthHandler>();
+builder.Services.AddTransient<IdentityCheckAuthHandler>();
+```
+
+| 话题 | 做法 |
+| --- | --- |
+| 认证 | Basic、API Key、先换令牌等由宿主自写 `DelegatingHandler`，注册为 Transient 后追加到构建器；同一客户端不再叠加 `AddClientCredentials` / `AddTokenExchange` |
+| 按租户凭据 | 处理器在发送时按 `ICurrentTenant` 取当前租户的凭据，没有当前租户时直接失败，不回退宿主凭据；凭据缓存按租户分键并随轮换失效。不按租户建命名客户端：注册是静态的，跟不上运行期新增的租户 |
+| 重试与超时 | 一个客户端只挂一个弹性管道，先于认证处理器挂载：在外层时总超时才包住取凭据，每次重试也重新签名；非幂等写请求关闭不安全方法的重试（如上例）。超时后写入结果不确定，靠对方的查询接口或回调确认，不重放写请求 |
+| 异常 | 适配器捕获 `RemoteServiceException`，按 `RemoteStatusCode` 和必要时解析的 `ResponseBody` 转成项目自己的异常或结果，不让它作为未处理异常冒出；`ResponseBody` 可能含个人信息，记录前先脱敏 |
+| 成功状态下的业务失败 | `ReadContentAsync<T>()` 之后由适配器按对方语义判断；`MapException` 只作用于异常 |
+| 请求地址与日志 | .NET 9 起 `IHttpClientFactory` 默认日志已脱敏查询串，不要开启 AppContext 开关 `System.Net.Http.DisableUriRedaction`；路径段含个人信息时，用 Microsoft.Extensions.Http.Diagnostics 的 `AddExtendedHttpClientLogging` 配合路径脱敏，或对该客户端 `RemoveAllLoggers()` 后由适配器记录脱敏字段；不为第三方开启请求或响应正文日志 |
+| 关联标识 | 对方不接收本系统的关联标识时设 `ForwardCorrelationId = false` |
+| 指标 | 组件不另出指标。.NET 内置的 System.Net.Http 指标（如 `http.client.request.duration`，维度含 `server.address`、`http.response.status_code`、`error.type`）按 `server.address` 区分对方，弹性管道另出重试、超时与熔断指标；余额不足、认证失败等业务类别由适配器用 `IMeterFactory` 自建计数器 |
+
 ## 接口参考
 
 | 入口或契约 | 作用 |
@@ -156,6 +186,7 @@ ASP.NET Core 宿主按上面的注册契约选择证明来源；仅有 Cookie �
 | --- | --- | --- |
 | Leistd:ServiceAuth | Authority、ClientId、ClientSecret | 绝对签发者 URI、工作负载 ID、密钥，启动必填 |
 | Leistd:ServiceClients:{Name} | BaseAddress | 可由宿主通过 HttpClient 构建器设置；没有地址时调用失败 |
+| Leistd:ServiceClients:{Name} | ForwardCorrelationId | 是否向该服务转发关联标识，默认 `true`；首次读取后固定（`IOptions`），配置重载不生效 |
 | Leistd:ServiceClients:{Name} | Scope | 机器范围（空格分隔） |
 | Leistd:ServiceClients:{Name}:TokenExchange | Audience、Scope | 用户委托目标，两者必填 |
 
