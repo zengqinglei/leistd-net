@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分布式事件组件 · 详细设计方案</title>
+<style>
+  /* 令牌取自 template/frontend/src/styles.css（亮色），设计稿与实现同源 */
+  :root {
+    --radius: 0.625rem;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.18 0.01 255);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.52 0.16 250);
+    --primary-foreground: oklch(0.99 0.002 250);
+    --secondary: oklch(0.966 0.004 250);
+    --secondary-foreground: oklch(0.24 0.02 255);
+    --muted: oklch(0.966 0.004 250);
+    --muted-foreground: oklch(0.505 0.015 255);
+    --accent: oklch(0.955 0.005 250);
+    --destructive: oklch(0.457 0.245 27.325);
+    --warning: oklch(0.47 0.12 70);
+    --success: oklch(0.51 0.13 155);
+    --info: oklch(0.52 0.12 230);
+    --border: oklch(0.925 0.005 250);
+    --input: oklch(0.86 0.02 250);
+    --ring: oklch(0.52 0.16 250);
+    --sidebar: oklch(0.966 0.004 250);
+    --doc-bg: oklch(0.985 0.003 250);
+    --anno: oklch(0.6 0.2 330);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--doc-bg); color: var(--foreground);
+    font: 14px/1.6 "Geist", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  code, .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  code { background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- 文档骨架 ---------- */
+  .doc { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1680px; margin: 0 auto; }
+  .toc { position: sticky; top: 0; height: 100vh; padding: 32px 20px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .toc .brand { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .toc .meta { font-size: 12px; color: var(--muted-foreground); margin-bottom: 24px; }
+  .toc a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; font-size: 14px; }
+  .toc a:hover { background: var(--accent); color: var(--foreground); }
+  .toc a.sub { padding-left: 24px; font-size: 13px; }
+  main { padding: 40px 56px 96px; min-width: 0; }
+  header.hero { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  header.hero h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  header.hero p { margin: 0; color: var(--muted-foreground); max-width: 960px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--secondary); color: var(--secondary-foreground); border: 1px solid var(--border); }
+  section.s { padding-top: 40px; }
+  section.s > h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px; }
+  section.s > h2 .no { color: var(--primary); font-variant-numeric: tabular-nums; }
+  section.s > .lead { color: var(--muted-foreground); margin: 0 0 20px; max-width: 1080px; }
+  h3 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
+  h4 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 10px; padding-left: 20px; }
+  li { margin: 2px 0; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card h4 { margin-top: 0; }
+  .card .k { font-size: 12px; color: var(--muted-foreground); }
+  .callout { border-left: 3px solid var(--primary); background: var(--card); border-radius: 0 12px 12px 0; padding: 14px 18px; margin: 12px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .callout.warn { border-left-color: var(--warning); }
+
+  table.t { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin: 8px 0 12px; }
+  table.t th { background: var(--muted); text-align: left; font-weight: 500; font-size: 13px; color: var(--muted-foreground); padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.t td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t td:first-child, table.t th:first-child { padding-left: 16px; }
+  .yes { color: var(--success); font-weight: 500; }
+  .no-c { color: var(--destructive); font-weight: 500; }
+  .mid { color: var(--warning); font-weight: 500; }
+
+  /* ---------- 链路图 ---------- */
+  .flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; align-items: stretch; margin: 12px 0 8px; }
+  .flow .step { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px; margin-right: 22px; }
+  .flow .step:last-child { margin-right: 0; }
+  .flow .step::after { content: "→"; position: absolute; right: -19px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); font-size: 16px; }
+  .flow .step:last-child::after { content: none; }
+  .flow .step .n { font-size: 12px; color: var(--primary); font-weight: 600; }
+  .flow .step .h { font-weight: 600; margin: 2px 0 4px; }
+  .flow .step .d { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; }
+  .flow .step.ext { background: var(--muted); }
+  .lane { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted-foreground); margin: 6px 0 0; }
+  .lane b { color: var(--foreground); font-weight: 500; }
+
+  /* ---------- 令牌标注 ---------- */
+  .swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+  .sw .c { height: 44px; }
+  .sw .l { padding: 8px 10px; font-size: 12px; }
+  .sw .l b { display: block; font-weight: 500; font-size: 13px; }
+  .anno { display: inline-block; font: 500 11px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--anno); border: 1px dashed var(--anno); border-radius: 4px; padding: 0 4px; background: oklch(0.98 0.02 330); white-space: nowrap; }
+  .anno-wrap { position: relative; }
+  .anno-abs { position: absolute; z-index: 2; }
+
+  /* ---------- 模拟应用外壳（Spartan 观感） ---------- */
+  .frame { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--background); box-shadow: 0 1px 2px oklch(0 0 0 / 4%), 0 8px 24px oklch(0 0 0 / 5%); margin: 12px 0; }
+  .frame-cap { font-size: 12px; color: var(--muted-foreground); margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+  .app { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 520px; }
+  .side { background: var(--sidebar); border-right: 1px solid var(--border); padding: 14px 10px; font-size: 14px; }
+  .side .logo { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 4px 8px 14px; }
+  .side .logo i { width: 22px; height: 22px; border-radius: 6px; background: var(--primary); display: inline-block; }
+  .side .g { font-size: 12px; color: var(--muted-foreground); padding: 10px 8px 4px; }
+  .side .it { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--foreground); }
+  .side .it .ic { width: 16px; height: 16px; background: currentColor; border-radius: 5px; opacity: .18; }
+  .side .it.on { background: oklch(1 0 0); box-shadow: 0 0 0 1px var(--border); font-weight: 500; }
+  .topbar { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 24px; font-size: 14px; color: var(--muted-foreground); }
+  .topbar b { color: var(--foreground); font-weight: 500; }
+  .content { padding: 24px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+
+  .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 16px; }
+  .toolbar .left, .toolbar .right { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .inp { height: 36px; border: 1px solid var(--input); border-radius: 8px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); background: var(--background); min-width: 240px; font-size: 14px; }
+  .inp.full { width: 100%; min-width: 0; color: var(--foreground); }
+  .inp.mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+  .inp .ph { color: var(--muted-foreground); }
+  .facet { height: 36px; border: 1px dashed var(--input); border-radius: 8px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .facet::before { content: "⊕"; color: var(--muted-foreground); }
+  .btn { height: 36px; border-radius: 8px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; border: 1px solid transparent; white-space: nowrap; }
+  .btn.pri { background: var(--primary); color: var(--primary-foreground); }
+  .btn.sec { background: var(--secondary); color: var(--secondary-foreground); }
+  .btn.out { background: var(--background); border-color: var(--input); }
+  .btn.ghost { background: transparent; }
+  .btn.des { background: var(--destructive); color: white; }
+  .btn.sm { height: 32px; padding: 0 10px; font-size: 13px; }
+  .ibtn { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted-foreground); font-size: 14px; }
+  .ibtn:hover { background: var(--accent); }
+
+  .seg { display: inline-flex; background: var(--muted); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg span { padding: 4px 14px; border-radius: 6px; font-size: 14px; color: var(--muted-foreground); }
+  .seg span.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 8%); font-weight: 500; }
+
+  .tbl { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .tbl table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tbl th { background: var(--muted); font-weight: 500; color: var(--muted-foreground); text-align: left; padding: 8px; height: 40px; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  .tbl td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .tbl th:first-child, .tbl td:first-child { padding-left: 16px; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl tr.exp td { background: oklch(0.985 0.003 250); }
+  .tbl tr.sel td { background: var(--accent); }
+  .tbl .t2 { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .tbl .t2 .a { font-weight: 500; }
+  .tbl .t2 .b { font: 12px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+  .tbl .xs { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+  .tbl .act { display: flex; gap: 2px; justify-content: flex-end; }
+  .pager { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+  .badge.dot::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+  .badge.secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .badge.success { background: oklch(0.51 0.13 155 / 12%); color: var(--success); }
+  .badge.warning { background: oklch(0.47 0.12 70 / 12%); color: var(--warning); }
+  .badge.destructive { background: oklch(0.457 0.245 27.325 / 10%); color: var(--destructive); }
+  .badge.outline { border-color: var(--border); color: var(--foreground); }
+
+  dl.kv { display: grid; grid-template-columns: minmax(6rem, auto) 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+  dl.kv dt { color: var(--muted-foreground); }
+  dl.kv dd { margin: 0; min-width: 0; }
+
+  .codebox { background: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font: 12px/1.6 "Geist Mono", ui-monospace, monospace; white-space: pre; overflow-x: auto; }
+
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .timeline .row { display: grid; grid-template-columns: 16px 140px 70px 70px 1fr; gap: 12px; align-items: center; font-size: 13px; }
+  .timeline .row i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; margin-left: 4px; }
+
+  /* 对话框与抽屉 */
+  .overlay { position: relative; background: oklch(0.18 0.01 255 / 35%); padding: 32px; display: flex; justify-content: center; align-items: flex-start; border-radius: 0 0 12px 12px; }
+  .dialog { background: var(--background); border: 1px solid var(--border); border-radius: 12px; width: min(680px, 100%); box-shadow: 0 16px 48px oklch(0 0 0 / 18%); display: flex; flex-direction: column; }
+  .dialog.narrow { width: min(440px, 100%); }
+  .dialog .hd { padding: 24px 24px 0; }
+  .dialog .hd h5 { margin: 0; font-size: 16px; font-weight: 500; }
+  .dialog .hd p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 14px; }
+  .dialog .bd { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .dialog .ft { padding: 0 24px 24px; display: flex; justify-content: flex-end; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14px; font-weight: 500; }
+  .field .desc { font-size: 12px; color: var(--muted-foreground); }
+  .sep { display: flex; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; }
+  .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .checks .grp { grid-column: 1 / -1; font-size: 12px; color: var(--muted-foreground); padding-top: 4px; }
+  .cb { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .cb::before { content: ""; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--input); flex-shrink: 0; }
+  .cb.on::before { content: "✓"; background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-size: 11px; line-height: 14px; text-align: center; font-weight: 600; }
+  .cb .v { margin-left: auto; font: 12px "Geist Mono", ui-monospace, monospace; color: var(--muted-foreground); }
+  .kvrow { display: grid; grid-template-columns: 1fr 1.6fr 32px; gap: 8px; }
+  .alert { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; gap: 10px; font-size: 14px; background: var(--card); }
+  .alert.warn { border-color: oklch(0.47 0.12 70 / 35%); background: oklch(0.47 0.12 70 / 6%); color: var(--warning); }
+  .alert .tx { color: var(--foreground); }
+
+  .sheet-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 560px; }
+  .sheet-wrap .dim { opacity: .45; filter: saturate(.6); }
+  .sheet { border-left: 1px solid var(--border); background: var(--background); box-shadow: -12px 0 32px oklch(0 0 0 / 10%); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .stat { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--card); }
+  .stat .k { font-size: 12px; color: var(--muted-foreground); }
+  .stat .v { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .sp { background: var(--muted); border-radius: 12px; padding: 4px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .sp .sph { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 12px; }
+  .sp .sph span { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .sp .sph i { margin-left: auto; font-style: normal; color: var(--muted-foreground); font-size: 12px; }
+  .sp .spb { background: var(--card); border-radius: 8px; box-shadow: 0 0 0 1px oklch(0.18 0.01 255 / 10%), 0 1px 2px oklch(0 0 0 / 5%); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .sp .row1 { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .sp .num { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .sp .row2 { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
+  .rangebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rangebar .sum { color: var(--muted-foreground); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .seg.sm span { padding: 2px 10px; font-size: 13px; }
+  .bar { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .bar b { display: inline-block; width: 48px; height: 6px; border-radius: 999px; background: var(--muted); position: relative; overflow: hidden; }
+  .bar b::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--success); border-radius: 999px; }
+  .bar.bad b::after { background: var(--destructive); }
+  .variant { border: 1px solid var(--border); border-radius: 16px; background: var(--card); padding: 24px 28px; margin: 24px 0; }
+  .variant > .vh { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .variant > .vh h3 { margin: 0; font-size: 20px; }
+  .variant > .vd { color: var(--muted-foreground); margin-bottom: 8px; }
+  .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .pc .card h4 { display: flex; gap: 6px; align-items: center; }
+  .rec { background: var(--primary); color: var(--primary-foreground); font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 500; }
+
+  @media (max-width: 1280px) {
+    .doc { grid-template-columns: 1fr; }
+    .toc { display: none; }
+    main { padding: 32px 24px 80px; }
+    .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 16px; }
+    .grid4, .swatches { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sheet-wrap { grid-template-columns: 1fr; }
+  }
+</style>
+
+</head>
+<body>
+<style>
+  /* 本稿追加：line 标签、表格勾选、泳道 */
+  .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .tabs span { padding: 8px 2px; color: var(--muted-foreground); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+  .tabs span.on { color: var(--foreground); border-bottom-color: var(--foreground); font-weight: 500; }
+  .tabs .cnt { font-size: 11px; padding: 0 6px; border-radius: 999px; background: oklch(0.457 0.245 27.325 / 10%); color: var(--destructive); font-weight: 500; }
+  .ck { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--input); display: inline-block; vertical-align: middle; }
+  .ck.on { background: var(--primary); border-color: var(--primary); position: relative; }
+  .ck.on::after { content: "✓"; color: var(--primary-foreground); font-size: 11px; position: absolute; left: 3px; top: -1px; font-weight: 600; }
+  .lanes { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px 16px; align-items: stretch; }
+  .lanes .ln { font-size: 13px; font-weight: 600; color: var(--muted-foreground); display: flex; align-items: center; }
+  .lanes .flow { margin: 0; }
+  .flow.f5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .flow.f4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pill { display: inline-block; font-size: 12px; padding: 0 8px; border-radius: 999px; background: var(--secondary); border: 1px solid var(--border); }
+  .num-big { font-size: 22px; font-weight: 600; }
+  .sp.click .spb { outline: 1px dashed transparent; }
+  .health { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-foreground); }
+  .health .dotg { width: 8px; height: 8px; border-radius: 999px; background: var(--success); }
+  .selbar { display: flex; align-items: center; gap: 12px; font-size: 13px; background: var(--muted); border-radius: 8px; padding: 6px 8px 6px 14px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+  .switch i { width: 32px; height: 18px; border-radius: 999px; background: var(--primary); position: relative; display: inline-block; }
+  .switch i::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 999px; background: white; }
+  .expand { padding: 16px 16px 16px 40px !important; }
+  .tl { display: flex; gap: 0; align-items: flex-start; margin-top: 8px; }
+  .tl .n { flex: 1; font-size: 12px; color: var(--muted-foreground); border-top: 2px solid var(--border); padding-top: 6px; margin-right: 8px; }
+  .tl .n b { display: block; color: var(--foreground); font-weight: 500; font-size: 13px; }
+  .tl .n.ok { border-top-color: var(--success); }
+  .tl .n.bad { border-top-color: var(--destructive); }
+  .strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+  .strip > div { padding: 12px 16px; border-right: 1px solid var(--border); }
+  .strip > div:last-child { border-right: 0; }
+  .strip .k { font-size: 12px; color: var(--muted-foreground); }
+  .qa { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); margin: 8px 0 16px; }
+  .qa > div { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .qa > div:nth-last-child(-n+2) { border-bottom: 0; }
+  .qa .q { background: var(--muted); font-weight: 500; }
+</style>
+
+<div class="doc">
+  <nav class="toc">
+    <div class="brand">分布式事件组件</div>
+    <div class="meta">详细设计方案 · 2026-11-06 · 方案待评审</div>
+    <a href="#s-bg">1 背景</a>
+    <a href="#s-problem">2 现状问题</a>
+    <a href="#s-strategy">3 核心策略</a>
+    <a class="sub" href="#s-answers">3.0 六个问题的结论</a>
+    <a class="sub" href="#s-flow">3.1 端到端链路</a>
+    <a class="sub" href="#s-arch">3.2 包与目录</a>
+    <a class="sub" href="#s-reliab">3.3 可靠性、及时性与幂等</a>
+    <a class="sub" href="#s-transport">3.4 传输：RabbitMQ 与 Kafka</a>
+    <a class="sub" href="#s-config">3.5 配置项与后台边界</a>
+    <a class="sub" href="#s-observe">3.6 可观测性与模板裁剪</a>
+    <a class="sub" href="#s-e2e">3.7 业务项目如何引用与使用</a>
+    <a class="sub" href="#s-manage">3.8 后台管理能力</a>
+    <a class="sub" href="#s-hub">3.9 接入私有事件中枢</a>
+    <a href="#s-ui">4 UI 设计</a>
+    <a class="sub" href="#ui-tokens">4.1 设计令牌</a>
+    <a class="sub" href="#ui-flow">4.2 用户任务流</a>
+    <a class="sub" href="#ui-a">方案 A · 同构 Webhook 页</a>
+    <a class="sub" href="#ui-b">方案 B · 统一事件流</a>
+    <a class="sub" href="#ui-c">方案 C · 按事件总览</a>
+    <a class="sub" href="#ui-cmp">4.3 对比与推荐</a>
+    <a href="#s-plan">5 实施计划</a>
+    <a href="#s-accept">6 验收标准</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <h1>分布式事件组件 · 详细设计方案</h1>
+      <p>为框架补齐跨服务事件的可靠投递：事件随业务事务写入发件箱，提交后立即发送，失败时持久重试，集群任务逐库兜底；消费侧用收件箱去重，处理器的写入与"已处理"标记同事务提交；传输可替换，首批附带回环、RabbitMQ 与 Kafka，私有事件中枢由业务按同一契约接入；模板以条件参数接入后台页面。</p>
+      <div class="chips">
+        <span class="chip">风险档：高</span>
+        <span class="chip">基线 develop 67bf27e3</span>
+        <span class="chip">一个 PR：框架 + 模板，验证各跑一次</span>
+        <span class="chip">2026-11-07：七项缺口按终局补齐；传输、模板、节奏按终局决策；UI 选 A</span>
+        <span class="chip">规格：docs/specs/2026-11-06-distributed-events.md</span>
+      </div>
+    </header>
+
+    <!-- 1 背景 -->
+    <section class="s" id="s-bg">
+      <h2><span class="no">1</span>背景</h2>
+      <p class="lead">框架现在只有进程内事件总线。跨服务的可靠投递是通用能力，换一个业务项目也会遇到，所以先立项设计，交给业务项目使用后再按反馈改进。</p>
+      <div class="grid3">
+        <div class="card"><h4>现有能力</h4><p><code>Leistd.EventBus.Local</code> 在进程内同步分发，按工作单元阶段推迟到提交前或提交后。文档写着跨服务"当前分组未提供，需另选分布式总线"。</p></div>
+        <div class="card"><h4>业务诉求</h4><p>一个下游项目自建了发件箱、收件箱、按 key 保序和事件页，不含测试约 1,700 行。它的反馈希望框架提供一套与传输无关的组件，业务只实现私有传输。</p></div>
+        <div class="card"><h4>可复用的底座</h4><p>Webhook 组件刚走通同一套组合：工作单元内入库、提交后立即处理、集群任务逐库兜底、两级管理策略、统计卡加详情抽屉的后台页。本组件照这套组合做。</p></div>
+      </div>
+      <h3>业界做法对照</h3>
+      <table class="t">
+        <tr><th>方面</th><th>ASP.NET Boilerplate 后继框架（开源，源码 2026-11-06）</th><th>CAP</th><th>MassTransit</th><th>下游自建</th><th>本方案</th></tr>
+        <tr><td>发布</td><td>完成工作单元前写发件箱</td><td>同事务写表，提交后立即发送</td><td>同事务写表，提交后通知投递服务</td><td>同事务写表</td><td class="yes">同事务写表，提交后立即发送</td></tr>
+        <tr><td>兜底</td><td>每 2 秒轮询</td><td>约 60 秒扫描一次重试</td><td>轮询</td><td>每 2 秒轮询</td><td class="yes">集群任务每 5 秒，逐物理库扫描</td></tr>
+        <tr><td>失败</td><td class="no-c">无退避、无死信，毒消息卡住整个发件箱</td><td>50 次后标 Failed</td><td>重试后进 <code>_error</code> 队列</td><td>退避 8 次（约 4 分钟）后进死信</td><td class="yes">永久失败直接进死信；瞬态失败指数退避，一天后进死信</td></tr>
+        <tr><td>保序</td><td>尽力而为</td><td>不保证</td><td>不保证</td><td class="mid">单轮内按 key，跨轮会乱序</td><td class="yes">按 key 跨轮阻塞，发送与处理两侧都执行</td></tr>
+        <tr><td>收件箱</td><td class="mid">先查后插，去重窗口 2 小时</td><td>主要靠业务自己幂等</td><td>按 (消息, 消费者) 去重</td><td>唯一索引，收到即同步处理，不重试</td><td class="yes">唯一索引，异步处理，有限重试；处理与标记同事务</td></tr>
+        <tr><td>坏消息</td><td>无</td><td>无</td><td>反序列化失败进 <code>_skipped</code> / <code>_error</code></td><td>无</td><td class="yes">拒收表 + 重新解码；传输层失败走 <code>RejectAsync</code></td></tr>
+        <tr><td>外部格式</td><td>provider 各自反序列化</td><td>—</td><td>raw JSON 反序列化器</td><td>—</td><td class="yes">传输在 <code>DecodeAsync</code> 里映射</td></tr>
+        <tr><td>按进程分工</td><td><code>IsSendingEnabled</code> / <code>IsProcessingEnabled</code></td><td>—</td><td>按端点配置</td><td>写入方与 Worker 分开注册</td><td class="yes">发送、接收、处理三个显式开关</td></tr>
+        <tr><td>多租户</td><td>最新版用 <code>X-Tenant-Id</code> 头，不支持分库扫描</td><td>不支持分库</td><td>不支持分库</td><td>消息头传租户，逐库扫描</td><td class="yes">消息头传租户，逐库扫描，收件箱写入所属租户库</td></tr>
+        <tr><td style="white-space:nowrap">管理界面</td><td>无</td><td>Dashboard，可批量重新入队</td><td>无</td><td>自建事件页</td><td class="yes">管理端点 + 模板后台页；按条件批量恢复；宿主按库查看</td></tr>
+      </table>
+    </section>
+
+    <!-- 2 现状问题 -->
+    <section class="s" id="s-problem">
+      <h2><span class="no">2</span>现状问题</h2>
+      <p class="lead">业务项目自建时反复踩到的问题，以及现有开源方案没有解决、框架必须补上的部分。</p>
+      <div class="grid2">
+        <div class="card">
+          <h4>业务项目自建的代价</h4>
+          <ul>
+            <li>每个项目各写一套发件箱、收件箱、扫描与运维查询，模式和 Webhook 组件高度重复。</li>
+            <li>保序做在单轮扫描里：队首失败退避后，同 key 后一条在下一轮先发出。</li>
+            <li>入站在收到时同步执行处理器，失败只能人工重放，处理时长还会拖慢传输确认。</li>
+            <li>收件箱不存载荷，重放只能依赖发布方的发件箱，跨服务时取不到。</li>
+            <li>没有拒收存储：解不开的消息要么被丢弃，要么让传输无限重投。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>现有方案缺的部分</h4>
+          <ul>
+            <li>每租户一个物理库的逐库扫描：三家主流开源方案都不支持。</li>
+            <li>永久失败与瞬态失败分开处理：多数实现一律重试。</li>
+            <li>按 key 跨轮保序：都只做到尽力而为。</li>
+            <li>消息确认语义：调研到的 Kafka 实现处理失败也提交位点，消息会丢；RabbitMQ 实现无限重新入队，毒消息会死循环。</li>
+            <li>两级权限的管理端点：开源方案几乎都没有。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warn"><b>.NET 官方没有分布式事件总线。</b>MassTransit 9 起商业许可；CAP 自带事务入口与存储，和框架的工作单元平行；Wolverine 要替换整套消息运行时。所以自建，只在主链路上对齐业界共识。</div>
+    </section>
+
+    <!-- 3 核心策略 -->
+    <section class="s" id="s-strategy">
+      <h2><span class="no">3</span>核心策略</h2>
+      <p class="lead">主链路对齐业界共识：同事务写发件箱 → 提交后发送 → 失败重试 → 收件箱去重 → 处理与标记同事务。在此之上补齐保序、永久失败、拒收、逐库与管理面。</p>
+
+      <h3 id="s-answers">3.0 六个问题的结论</h3>
+      <div class="qa">
+        <div class="q">新组件的目录结构</div><div>放进现有 <code>event-bus</code> 家族。<code>Core</code> 增加五个分布式契约类型，BaseEvent 元数据增加 init 以还原传输标识；新增 <code>Distributed</code>（纵向切片的 Core 角色）、<code>EntityFrameworkCore</code>、<code>AspNetCore</code>、<code>RabbitMQ</code>、<code>Kafka</code> 五个包。见 3.2。</div>
+        <div class="q">模板要不要可观测性，要不要裁剪</div><div>要。模板加后台页，提供操作层的可观测性，并在 readiness 健康检查里挂上传输；框架提供链路续接和稳定日志事件。页面带表、迁移和 compose 服务，属于可独立取舍的产品边界，所以新增布尔参数 <code>IncludeDistributedEvents</code>，默认关闭。代价是有效形态翻倍。见 3.6。</div>
+        <div class="q">首批是否支持 Kafka、RabbitMQ</div><div>首批同时交付 RabbitMQ 与 Kafka。RabbitMQ 代表"逐条确认"模型，Kafka 代表"提交位点"模型，两种主流确认模型都由真实实现检验契约，避免被单一模型塑形；Kafka 语义也正是私有中枢的语义。模板默认用 RabbitMQ，改用 Kafka 只需换一行注册加一个 compose 服务。见 3.4。</div>
+        <div class="q">配置项与后台可配</div><div>有配置项，默认值即可直接上线。退避、死信窗口、扫描间隔、保留期属于协议参数与部署配置，不进设置页，与 Webhook、通知、后台作业的划界一致。保留期以后如需在后台调整，照操作记录的先例加一行 <code>HostSettingBindings</code> 映射。见 3.5。</div>
+        <div class="q">可靠性、及时性、下游接入与幂等</div><div>提交后立即发送，集群任务兜底；至少一次送达；收件箱去重，处理与标记同事务，处理器对数据库的写入只生效一次。外部副作用由处理器按 <code>EventId</code> 自己幂等。下游接入只需实现 <code>IEventHandler&lt;T&gt;</code> 并登记。见 3.3 与 3.7。</div>
+        <div class="q">业务集成与后台管理</div><div>业务经 <code>IDistributedEventBus</code> 发布、经 <code>IEventHandler&lt;T&gt;</code> 消费。后台需要管理：状态快照、事件目录（静默检测）、积压、死信、处理失败和拒收；宿主可选物理库查看全部租户；单条或按条件批量重投、重放、重新解码、丢弃；发测试事件。只读与操作两级权限，操作写操作记录。见 3.8 与第 4 章。</div>
+        <div class="q">私有事件中枢接入</div><div>能很好支撑。契约按私有中枢的特点补齐七项，并都做成终局形态：异步解码与外部格式映射、传输层拒收入口、进程分工开关、按条件批量恢复与错误分类指南、事件目录、宿主按库查看、测试事件开关。每项在主流框架里都有对应做法，不是为某一个中枢定制。见 3.9。</div>
+      </div>
+
+      <h3 id="s-flow">3.1 端到端链路</h3>
+      <div class="lanes">
+        <div class="ln">发布服务</div>
+        <div class="flow f5">
+          <div class="step"><div class="n">1 发布</div><div class="h">工作单元内 PublishAsync</div><div class="d">写一行发件箱 Pending；回滚则一起消失</div></div>
+          <div class="step"><div class="n">2 立即发送</div><div class="h">提交后进入进程内队列</div><div class="d">按 key 检查前序；调传输 SendAsync</div></div>
+          <div class="step"><div class="n">3 结果</div><div class="h">成功 / 瞬态 / 永久</div><div class="d">Sent；退避重试；直接进死信</div></div>
+          <div class="step"><div class="n">4 兜底</div><div class="h">event-bus.outbox</div><div class="d">集群单副本，逐物理库，每 5 秒</div></div>
+          <div class="step ext"><div class="n">传输</div><div class="h">RabbitMQ / 私有中枢</div><div class="d">交换机 + 路由键 = 事件名</div></div>
+        </div>
+        <div class="ln">消费服务</div>
+        <div class="flow f5">
+          <div class="step ext"><div class="n">5 接收</div><div class="h">传输调用 ReceiveAsync</div><div class="d">写库成功才返回，传输再确认</div></div>
+          <div class="step"><div class="n">6 落库</div><div class="h">按租户写收件箱</div><div class="d">每个消费者一行；重复只计数；解不开写拒收表</div></div>
+          <div class="step"><div class="n">7 立即处理</div><div class="h">提交后进入进程内队列</div><div class="d">系统身份、续接链路、按 key 检查前序</div></div>
+          <div class="step"><div class="n">8 处理</div><div class="h">处理器 + 标记同事务</div><div class="d">失败回滚并退避，5 次后标 Failed</div></div>
+          <div class="step"><div class="n">9 兜底</div><div class="h">event-bus.inbox</div><div class="d">同发件箱写法</div></div>
+        </div>
+      </div>
+      <p class="lane">信封：EventId、EventName、OccurredAt、OrderingKey、TenantId、Payload · 消息头：<b>traceparent</b> 链路 · <b>leistd-correlation-id</b> 关联标识 · 线上格式归传输（没有消息头的中枢放进载荷公共头）</p>
+      <p class="lane">进程分工：<b>Outbox:DispatchEnabled</b> 控制第 2、4 步 · <b>Inbox:ReceiveEnabled</b> 控制第 5 步 · <b>Inbox:ProcessingEnabled</b> 控制第 7、9 步 · 写入进程三项全关，Worker 全开</p>
+
+      <h3 id="s-arch">3.2 包与目录</h3>
+      <div class="grid2">
+        <div class="codebox">framework/components/event-bus/
+├─ Leistd.EventBus.Core            扩充：业务代码只引用这个包
+│  ├─ Abstractions/  + IDistributedEventBus : IEventBus
+│  └─ Events/        + IDistributedEvent、DistributedEvent
+│                    + EventNameAttribute、IOrderedDistributedEvent
+├─ Leistd.EventBus.Local           不变
+├─ Leistd.EventBus.Distributed     新增：纵向切片的 Core 角色
+│  ├─ Publishing/  Consumers/  Transport/  Loopback/
+│  ├─ Management/  Dtos/  Stores/  Events/
+│  └─ Options/  Errors/  ExceptionMappings/  Resources/  Diagnostics/
+├─ Leistd.EventBus.EntityFrameworkCore   新增
+│  ├─ Entities/  EntityConfigurations/  Stores/
+│  ├─ Outbox/      发布、立即发送、event-bus.outbox
+│  ├─ Inbox/       接收与拒收入口、立即处理、event-bus.inbox、重新解码
+│  ├─ Databases/   宿主按物理库查看的作用域
+│  └─ Retention/   event-bus.retention
+├─ Leistd.EventBus.AspNetCore      新增：MapDistributedEvents
+├─ Leistd.EventBus.RabbitMQ        新增：传输、消费循环、健康检查
+└─ Leistd.EventBus.Kafka           新增：传输、消费循环、健康检查</div>
+        <div>
+          <table class="t">
+            <tr><th>判断</th><th>依据</th></tr>
+            <tr><td>Core 只加契约</td><td>领域层引用 Core 是为了本地事件，管理面、选项、DTO 不能顺着传递引用进入领域层</td></tr>
+            <tr><td>Distributed 与 Local 并列</td><td>命名同 <code>Leistd.&lt;领域&gt;.&lt;实现&gt;</code>；依赖只限 <code>Microsoft.Extensions.*</code> 与 <code>*.Abstractions</code>，按 Core 约束执行</td></tr>
+            <tr><td>内容目录，不用 Abstractions/Services</td><td>同时出现发布、消费、传输、管理等并列子话题（框架规范 §1）</td></tr>
+            <tr><td>回环不单独建包</td><td>只有一个调用点（设计原则 §5 第 3 条）</td></tr>
+            <tr><td>RabbitMQ、Kafka 各自成包</td><td>消息中间件是可替换技术（框架规范 §5）；依赖官方 <code>RabbitMQ.Client</code> 7.x 与 <code>Confluent.Kafka</code></td></tr>
+            <tr><td>周期任务放内容目录</td><td><code>Outbox/</code>、<code>Inbox/</code>、<code>Retention/</code>，不设 <code>Jobs/</code></td></tr>
+          </table>
+        </div>
+      </div>
+      <h4>注册入口</h4>
+      <table class="t">
+        <tr><th>入口</th><th>包</th><th>说明</th></tr>
+        <tr><td><code>AddDistributedEventBus(configure?, "Leistd:EventBus:Distributed")</code></td><td>Distributed</td><td>选项绑定加启动期校验；登记错误码与内置测试事件 <code>event-bus.test</code></td></tr>
+        <tr><td><code>AddDistributedEventHandler&lt;THandler&gt;(consumerName?)</code></td><td>Distributed</td><td>登记处理器并声明订阅；消费者名默认取类型全名</td></tr>
+        <tr><td><code>AddLoopbackEventTransport()</code> / <code>AddRabbitMqEventTransport()</code> / <code>AddKafkaEventTransport()</code></td><td>Distributed / RabbitMQ / Kafka</td><td>三选一；业务也可以自己实现 <code>IDistributedEventTransport</code></td></tr>
+        <tr><td><code>AddDistributedEventBusEfCore&lt;TDbContext&gt;()</code>、<code>ConfigureDistributedEventBus()</code></td><td>EF</td><td>三张表、发布实现、接收入口、两个兜底任务</td></tr>
+        <tr><td><code>AddDistributedEventRetention&lt;TDbContext&gt;()</code></td><td>EF</td><td>保留期任务，默认开启，14 天</td></tr>
+        <tr><td><code>MapDistributedEvents(o =&gt; { ReadPolicy; ManagePolicy; })</code></td><td>AspNetCore</td><td>两个策略必填，漏配在映射时抛出</td></tr>
+      </table>
+
+      <h3 id="s-reliab">3.3 可靠性、及时性与幂等</h3>
+      <div class="grid3">
+        <div class="card"><h4>及时性</h4><ul><li>发件箱和收件箱都在提交后立即进入进程内队列。</li><li>兜底任务每 5 秒扫描一次，新记录留 1 分钟宽限期，避免和立即发送重叠。</li><li>最坏延迟：一个扫描间隔加宽限期。</li></ul></div>
+        <div class="card"><h4>可靠性</h4><ul><li>发件箱与业务同事务。</li><li>永久失败直接进死信；瞬态失败指数退避（2 秒起，封顶 5 分钟），一天后进死信。</li><li>传输在写库成功后才确认；解不开的消息进拒收表，不让传输无限重投。</li></ul></div>
+        <div class="card"><h4>幂等</h4><ul><li>收件箱 <code>(TenantId, EventId, Consumer)</code> 唯一，重复只计数；信封 EventId 与 OccurredAt 在反序列化时恢复到事件实例。</li><li>处理器写入与"已处理"标记同事务，并以 <code>AttemptCount</code> 作并发令牌，每次成功或失败都递增；并发冲突整笔回滚且不覆盖胜方。重放清零本轮次数，重新获得五次预算。</li><li>结果：对数据库的副作用只生效一次。外部副作用为至少一次，处理器按 <code>EventId</code> 幂等。</li></ul></div>
+      </div>
+      <h4>发送结果按序判断</h4>
+      <table class="t">
+        <tr><th>顺序</th><th>条件</th><th>处理</th></tr>
+        <tr><td>1</td><td>成功</td><td><span class="badge success dot">已发送</span> 记 SentAt</td></tr>
+        <tr><td>2</td><td>永久失败（带稳定错误码）</td><td><span class="badge destructive dot">死信</span> Error 日志 <code>DistributedEventDeadLettered</code></td></tr>
+        <tr><td>3</td><td>瞬态失败，距首次失败已超过 <code>DeadLetterAfter</code></td><td><span class="badge destructive dot">死信</span> 错误码 <code>retry-window-exceeded</code></td></tr>
+        <tr><td>4</td><td>瞬态失败，未超窗口</td><td><span class="badge warning dot">重试中</span> <code>2s × 2^(n-1)</code>，封顶 5 分钟，±10% 抖动</td></tr>
+      </table>
+      <h4>保序的语义</h4>
+      <div class="callout">同租户、同一事件名、同排序键下存在更早的 Pending 记录时，后一条不发送（处理侧按"同消费者"同样执行）。进死信或标 Failed 都算终态，不再阻塞后续，所以消费方要能容忍版本跳号。发送按提交后可见的发件箱 Id 排队，处理按接收入库的 Id 排队；RabbitMQ 单活串行入库，Kafka 同键同分区。故障重投不承诺重新排序；同一键上的并发事务按提交后可见的顺序排队，不另加锁：业务对同一聚合的并发写本来就由并发令牌串行化。这条规则修正了下游实现的跨轮乱序。</div>
+
+      <h3 id="s-transport">3.4 传输：RabbitMQ 与 Kafka</h3>
+      <div class="grid2">
+        <div class="card">
+          <h4>传输契约（替换点）</h4>
+          <div class="codebox">public interface IDistributedEventTransport
+{
+    string Name { get; }
+
+    // 成功 / 瞬态失败 / 永久失败(code)；抛出异常按瞬态处理，取消除外
+    Task&lt;DistributedEventSendResult&gt; SendAsync(
+        OutgoingDistributedEvent message, CancellationToken ct);
+
+    // 原始消息 → 框架信封；外部格式在这里映射（可异步查注册中心）
+    // 无法解码时抛 DistributedEventDecodeException(reasonCode, message)
+    ValueTask&lt;IncomingDistributedEvent&gt; DecodeAsync(
+        RawDistributedEvent raw, CancellationToken ct);
+}
+
+public interface IDistributedEventReceiver
+{
+    // 解码 → 写收件箱或拒收表 → 返回；暂时性依赖故障、存储故障与取消向上传播
+    Task ReceiveAsync(RawDistributedEvent raw, CancellationToken ct);
+
+    // 传输自己已判定无法处理（位点可能已提交）：直接写拒收表
+    Task RejectAsync(RawDistributedEvent raw, string reasonCode,
+        string error, CancellationToken ct);
+}</div>
+          <p class="k" style="margin-top:8px">不可恢复的单条格式错误才入拒收；注册中心不可用等暂时性依赖故障向上传播，取消不记失败。三表保存最后变更时刻，保留期只删除到期终态。重新解码会用保存下来的原始消息再走一遍 DecodeAsync 与校验，所以修好传输、补登事件类型之后都能恢复。RawDistributedEvent 带不透明的 Coordinates（topic/partition/offset、中枢事件 ID 等），框架只存不解释。</p>
+        </div>
+        <div>
+          <table class="t">
+            <tr><th>约定</th><th>RabbitMQ</th><th>Kafka</th><th>私有中枢（业务）</th></tr>
+            <tr><td>成功</td><td>publisher confirm</td><td>Persisted</td><td>SDK 发布返回</td></tr>
+            <tr><td>永久失败</td><td>消息过大、协议错误</td><td>消息过大、授权失败</td><td>schema 不符、通道不属于本应用</td></tr>
+            <tr><td>路由</td><td>topic 交换机，路由键 = 事件名</td><td>主题 = 事件名，键 = OrderingKey ?? EventId</td><td>订阅表 → 通道映射，键写入分区键字段</td></tr>
+            <tr><td>确认</td><td>返回后 Ack；故障不越过未持久化消息</td><td>禁用自动存储与提交；持久化后提交 offset+1，失败不得越过该分区位点</td><td>handler 返回即提交</td></tr>
+            <tr><td>传输层坏消息</td><td>RejectAsync 后 Ack</td><td>RejectAsync</td><td>SDK 失败回调 → RejectAsync</td></tr>
+            <tr><td>多副本</td><td>每服务一个持久单活队列（Single Active Consumer），串行持久化，副本故障转移</td><td>消费组</td><td>消费组</td></tr>
+            <tr><td>坐标</td><td>exchange / routingKey / deliveryTag</td><td>topic / partition / offset</td><td>同 Kafka + 中枢事件 ID</td></tr>
+            <tr><td>连接状态</td><td colspan="3">各自登记带 <code>event-bus</code> 标签的健康检查，宿主挂到 readiness，管理页读取</td></tr>
+          </table>
+        </div>
+      </div>
+      <table class="t">
+        <tr><th>首批范围</th><th>结论</th><th>理由</th></tr>
+        <tr><td>回环</td><td class="yes">提供</td><td>框架测试与单进程开发；不依赖 broker</td></tr>
+        <tr><td>RabbitMQ</td><td class="yes">提供</td><td>.NET 业务项目最常见；单容器、开发 compose 成本低；推送加确认模型和接收契约一一对应；用真实 broker 检验契约</td></tr>
+        <tr><td>Kafka</td><td class="yes">提供</td><td>"提交位点"模型的代表，与私有中枢同语义；与 RabbitMQ 共用一套契约测试，broker 专属逻辑约 100–200 行</td></tr>
+        <tr><td>私有中枢</td><td>业务实现</td><td>下游的私有中枢由业务实现传输契约，不进框架</td></tr>
+      </table>
+
+      <h3 id="s-config">3.5 配置项与后台边界</h3>
+      <div class="grid2">
+        <table class="t">
+          <tr><th><code>Leistd:EventBus:Distributed</code></th><th>默认</th></tr>
+          <tr><td><code>RetryBaseDelay</code> / <code>RetryMaxDelay</code></td><td>2 秒 / 5 分钟</td></tr>
+          <tr><td><code>DeadLetterAfter</code>（发件箱瞬态失败窗口）</td><td>1 天</td></tr>
+          <tr><td><code>MaxAttempts</code>（收件箱处理次数）</td><td>5</td></tr>
+          <tr><td><code>DispatchInterval</code>（两个兜底任务）</td><td>5 秒</td></tr>
+          <tr><td><code>BacklogWarningAfter</code></td><td>5 分钟</td></tr>
+          <tr><td><code>Outbox:DispatchEnabled</code> · <code>Inbox:ReceiveEnabled</code> · <code>Inbox:ProcessingEnabled</code></td><td>true（进程分工）</td></tr>
+          <tr><td><code>TestEvent:Enabled</code></td><td>true</td></tr>
+          <tr><td><code>Retention:Enabled</code> / <code>Days</code></td><td>true / 14</td></tr>
+          <tr><th><code>Leistd:EventBus:RabbitMQ</code></th><th>默认</th></tr>
+          <tr><td><code>ConnectionStringName</code></td><td>RabbitMQ</td></tr>
+          <tr><td><code>Exchange</code> / <code>QueueName</code></td><td>leistd.events / 应用名</td></tr>
+          <tr><td><code>PrefetchCount</code></td><td>32</td></tr>
+        </table>
+        <div>
+          <table class="t">
+            <tr><th>现有组件</th><th>可调项归属</th></tr>
+            <tr><td>Webhook</td><td>退避、超时、内网白名单、保留期：部署配置；不进设置页</td></tr>
+            <tr><td>通知</td><td>保留期：部署配置</td></tr>
+            <tr><td>操作记录</td><td>保留期：部署配置，模板在 <code>HostSettingBindings</code> 加一行映射到后台</td></tr>
+            <tr><td>后台作业</td><td>开关与间隔：部署配置</td></tr>
+          </table>
+          <div class="callout"><b>结论：不做后台配置页。</b>退避和死信窗口是协议参数，broker 地址与账号是部署事实，都归配置源（设置组件的划界）。页面只做操作，不做配置。保留期如需后台调整，照操作记录的先例加一行映射；首批不做。</div>
+        </div>
+      </div>
+
+      <h3 id="s-observe">3.6 可观测性与模板裁剪</h3>
+      <div class="grid2">
+        <table class="t">
+          <tr><th>层</th><th>首批提供</th><th>不提供</th></tr>
+          <tr><td>框架</td><td><code>ActivitySource "Leistd.EventBus"</code> 续接链路；稳定日志事件：死信、积压、处理失败、拒收；传输健康检查</td><td>Meter 指标、观察点回调（暂无调用方）</td></tr>
+          <tr><td>模板</td><td>后台页（快照、四视图、详情、操作）；readiness 挂传输健康检查；操作记录</td><td>OTel 管线、仪表盘的"需关注"卡片</td></tr>
+        </table>
+        <table class="t">
+          <tr><th><code>IncludeDistributedEvents=true</code> 生成</th></tr>
+          <tr><td>Api：组合、健康检查、端点组、权限 <code>App.DistributedEvents(.Manage)</code>、操作记录</td></tr>
+          <tr><td>Infrastructure：<code>ConfigureDistributedEventBus()</code>、两套增量迁移（整文件守卫）</td></tr>
+          <tr><td>部署：开发与生产 compose 加 RabbitMQ，账号走 <code>.env</code></td></tr>
+          <tr><td>前端：页面、路由、侧栏开发者组入口、词条、Mock、spec</td></tr>
+          <tr><td>文档：生成项目 <code>docs/standards/distributed-events.md</code> 与读取表</td></tr>
+        </table>
+      </div>
+      <div class="callout warn"><b>裁剪代价：</b>有效形态从 640 组翻倍到 1,280 组；矩阵新增 <code>distributed-events</code>（core 档）与 <code>resource-api-distributed-events</code>（full 档）；compose 多一个约 100 MB 内存的容器。业务示例不随模板生成，内置的测试事件已经能验证整条链路。</div>
+
+      <h3 id="s-e2e">3.7 业务项目如何引用与使用</h3>
+      <div class="grid3">
+        <div class="card"><h4>① 定义契约（共享契约包）</h4><div class="codebox">[EventName("customer.activated")]
+public sealed class CustomerActivatedEvent
+    : DistributedEvent, IOrderedDistributedEvent
+{
+    public Guid CustomerId { get; init; }
+    public int Version { get; init; }
+    public string OrderingKey =&gt; CustomerId.ToString();
+}</div><p class="k">只引用 <code>Leistd.EventBus.Core</code>。</p></div>
+        <div class="card"><h4>② 发布（发布服务）</h4><div class="codebox">[UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)]
+public class CustomerActivatedForwarder(
+    IDistributedEventBus bus)
+    : IEventHandler&lt;CustomerActivatedDomainEvent&gt;
+{
+    public Task HandleAsync(
+        CustomerActivatedDomainEvent e,
+        CancellationToken ct = default)
+        =&gt; bus.PublishAsync(new CustomerActivatedEvent
+           { CustomerId = e.Id, Version = e.Version }, ct);
+}</div><p class="k">也可以在 <code>[UnitOfWork]</code> 方法里直接发布。</p></div>
+        <div class="card"><h4>③ 消费（消费服务）</h4><div class="codebox">public class CustomerProjectionHandler(AppDbContext db)
+    : IEventHandler&lt;CustomerActivatedEvent&gt;
+{
+    public async Task HandleAsync(
+        CustomerActivatedEvent e, CancellationToken ct = default)
+    {
+        var row = await db.Customers.FindAsync([e.CustomerId], ct);
+        if (row is null || row.Version &gt;= e.Version) return;
+        row.Activate(e.Version);   // 与收件箱标记同事务
+    }
+}
+// Program.cs
+services.AddDistributedEventHandler&lt;CustomerProjectionHandler&gt;();</div></div>
+      </div>
+      <table class="t">
+        <tr><th>场景</th><th>用法</th></tr>
+        <tr><td>领域事件要通知其他服务</td><td><code>BeforeCommit</code> 本地处理器转成分布式事件</td></tr>
+        <tr><td>消费方维护本地投影</td><td>处理器直接写库，框架保证只生效一次；按版本号覆盖，容忍跳号</td></tr>
+        <tr><td>消费方调用外部系统</td><td>处理器按 <code>EventId</code> 幂等，外部支持幂等键时直接传入</td></tr>
+        <tr><td>对接私有事件中枢</td><td>实现传输契约与消费循环，在信封与对方格式之间映射，登记健康检查</td></tr>
+        <tr><td>同步查询与命令</td><td>继续用 ServiceClient</td></tr>
+        <tr><td>进程内解耦</td><td>继续用本地事件总线</td></tr>
+      </table>
+
+      <h3 id="s-manage">3.8 后台管理能力</h3>
+      <table class="t">
+        <tr><th>对象</th><th>只读（App.DistributedEvents）</th><th>操作（App.DistributedEvents.Manage）</th></tr>
+        <tr><td>状态快照</td><td>待发数与最旧时长、死信、待处理、处理失败、待处理拒收、近 24 小时发出与处理数、传输名与状态、测试事件是否可用</td><td>发送测试事件（<code>TestEvent:Enabled</code> 关闭时不可用）</td></tr>
+        <tr><td>事件目录</td><td>每个事件名的方向、消费者、最近发出 / 接收 / 处理时刻、待处理、异常数、最近错误码（静默检测）</td><td>—</td></tr>
+        <tr><td>物理库（仅宿主）</td><td>宿主库与登记的其他物理库（代表租户 Id、租户 Id 清单与数量）；发件箱与收件箱显示所选库全部租户</td><td>动作在行所属租户的上下文里执行</td></tr>
+        <tr><td>发件箱</td><td>列表、详情概要（不含载荷）</td><td>读载荷；重投死信：勾选（≤100）或按当前筛选</td></tr>
+        <tr><td>收件箱</td><td>列表、详情概要、传输坐标</td><td>读载荷；重放终态记录：勾选或按当前筛选</td></tr>
+        <tr><td>拒收</td><td>列表、详情概要（传输、原因、错误）</td><td>读原始消息；重新解码、丢弃：勾选或按当前筛选</td></tr>
+      </table>
+      <p>列表按 <code>Id</code> 倒序做偏移分页，并按首次加载时刻设上限，避免翻页时新数据插队。按条件的批量动作同样带这个时间上限，服务端每 500 条一个事务分批改回待处理，由兜底任务发送，不灌进进程内队列。操作成功后发布 <code>DistributedEventManagedEvent</code>（动作、条数、筛选条件或 id），模板据此写操作记录 <code>distributed-event.redelivered / replayed / redecoded / discarded</code>。租户上下文只看自己的发件箱与收件箱，传 <code>database</code> 返回 403。拒收无法可靠识别租户，集中在宿主库，仅宿主可读写；宿主切库时拒收仍属宿主集中范围，租户隐藏拒收卡与视图。测试事件只写当前上下文，宿主选择其他库时隐藏测试按钮。</p>
+
+      <h3 id="s-hub">3.9 接入私有事件中枢</h3>
+      <p>私有中枢常见的特点：Kafka 内核、Avro 外壳、信封里没有租户与事件类型、事件 ID 由 SDK 生成、外壳解码失败时 SDK 照常提交位点、鉴权失败后降级且不再重连。下表是这些特点在契约里各自的着落，每一项都是通用写法，不为某一个中枢定制。</p>
+      <table class="t">
+        <tr><th>#</th><th>中枢特点</th><th>契约里的着落</th><th>主流框架的对应</th></tr>
+        <tr><td>1</td><td>外壳要查注册中心；外部系统的载荷不是本框架格式</td><td><code>DecodeAsync</code> 异步，外部格式由传输映射：业务 ID、租户从载荷公共头取，取不到时退回中枢事件 ID</td><td>MassTransit raw JSON 反序列化器</td></tr>
+        <tr><td>2</td><td>外壳解码失败时位点已被 SDK 提交</td><td><code>RejectAsync(raw, reasonCode, error)</code> 直接入拒收表；写库失败记 <code>DistributedEventRejectPersistFailed</code> 告警</td><td>MassTransit <code>_skipped</code> / <code>_error</code></td></tr>
+        <tr><td>3</td><td>写入进程不连中枢，发送与消费在 Worker</td><td>三个显式分工开关；发送或接收开启却没有传输时启动期报错；兜底任务的开关登记给调度器，关闭的进程不抢锁</td><td>ASP.NET Boilerplate 后继框架的 <code>IsSendingEnabled</code> / <code>IsProcessingEnabled</code></td></tr>
+        <tr><td>4</td><td>鉴权失败后降级，期间事件大量失败</td><td>错误分类指南：整条通道故障判瞬态（只积压），单条消息问题判永久；按条件批量重投、重放、重新解码</td><td>CAP 批量重新入队；MassTransit 整体移回 <code>_error</code></td></tr>
+        <tr><td>5</td><td>需要按通道判断静默与"未发布 / 不属于本应用"</td><td>事件目录：每个事件名的最近活动、异常数与最近错误码</td><td>CAP Dashboard 的按消息视图</td></tr>
+        <tr><td>6</td><td>宿主要逐库运维</td><td><code>GET /databases</code> + 各端点 <code>database</code> 参数，宿主看所选库的全部租户</td><td>（多租户分库是本框架的一等能力）</td></tr>
+        <tr><td>7</td><td>不一定允许同一应用自发自收</td><td><code>TestEvent:Enabled</code>：关闭时不订阅测试事件，界面隐藏按钮</td><td>带 ACL 的 broker 普遍如此</td></tr>
+      </table>
+      <div class="grid2">
+        <table class="t">
+          <tr><th>错误类别</th><th>判定</th><th>结果</th></tr>
+          <tr><td><span class="badge warning">瞬态</span></td><td><b>整条通道</b>暂时不可用：断连、超时、限流、鉴权失败、SDK 降级</td><td>退避重试，最长 1 天；积压告警</td></tr>
+          <tr><td><span class="badge destructive">永久</span></td><td><b>这一条消息</b>原样重发永远失败：过大、schema 不符、通道不属于本应用</td><td>直接死信；修复后按条件批量重投</td></tr>
+          <tr><td><span class="badge secondary">结果未知</span></td><td>已发出但没有确认</td><td>按瞬态重发；消费端按 EventId 去重</td></tr>
+        </table>
+        <div class="card"><h4>业务侧仍然负责</h4><ul><li>传输实现：SDK 发布与订阅、错误码映射、外壳与载荷公共头、健康检查加 <code>event-bus</code> 标签。</li><li>中枢专有能力：resync、tombstone、Sandbox / Production 环境、通道登记，直接调用 SDK。</li><li>契约类与版本水位；页面上的数据范围过滤。</li></ul></div>
+      </div>
+    </section>
+
+    <!-- 4 UI 设计 -->
+    <section class="s" id="s-ui">
+      <h2><span class="no">4</span>UI 设计</h2>
+      <p class="lead">三版方案共用同一套令牌和交互约定，全部取自现有模板：<code>styles.css</code> 令牌、Spartan 组件（Tabs line、ToggleGroup、Sheet、Badge、Tooltip、Checkbox）、<code>app-stat-panel</code>、<code>app-faceted-filter</code>、TanStack 表格。后台管理页的通用要求：先给出状态，再给出可以处理的条目，操作离数据最近，危险操作二次确认。</p>
+
+      <h3 id="ui-tokens">4.1 设计令牌（与 template/frontend/src/styles.css 同源）</h3>
+      <div class="swatches">
+        <div class="sw"><div class="c" style="background:var(--primary)"></div><div class="l"><b>primary</b>主操作、选中</div></div>
+        <div class="sw"><div class="c" style="background:var(--success)"></div><div class="l"><b>success</b>已发送、已处理、已连接</div></div>
+        <div class="sw"><div class="c" style="background:var(--warning)"></div><div class="l"><b>warning</b>重试中、积压超阈值、待处理拒收</div></div>
+        <div class="sw"><div class="c" style="background:var(--destructive)"></div><div class="l"><b>destructive</b>死信、处理失败、断开</div></div>
+        <div class="sw"><div class="c" style="background:var(--secondary)"></div><div class="l"><b>secondary</b>待发送、待处理</div></div>
+        <div class="sw"><div class="c" style="background:var(--muted-foreground)"></div><div class="l"><b>muted-fg</b>说明、次要信息</div></div>
+      </div>
+      <table class="t" style="margin-top:16px">
+        <tr><th>类别</th><th>取值</th><th>用在</th></tr>
+        <tr><td>字号</td><td><code>text-sm</code> 14px / <code>text-xs</code> 12px / 统计数值 30px·600 / 抽屉标题 16px·500</td><td>正文与表格 14；次要信息、时间、标识 12（等宽）；统计卡数值与仪表盘一致</td></tr>
+        <tr><td>间距</td><td>内容区 <code>p-4 sm:p-6</code>；区块 <code>gap-6</code> 24px；工具栏 <code>gap-3</code> 12px；卡片之间 <code>gap-4</code> 16px；表格单元 8px</td><td>与 Webhook 页一致</td></tr>
+        <tr><td>圆角</td><td><code>--radius</code> 10px；卡片 12px；徽章全圆</td><td>—</td></tr>
+        <tr><td>状态徽章</td><td>
+          <span class="badge secondary dot">待发送</span>
+          <span class="badge warning dot">重试中</span>
+          <span class="badge success dot">已发送</span>
+          <span class="badge destructive dot">死信</span>
+          <span class="badge success dot">已处理</span>
+          <span class="badge destructive dot">处理失败</span>
+          <span class="badge warning dot">待处理</span>
+          <span class="badge outline">已重新解码</span>
+          <span class="badge outline">已丢弃</span></td><td>"重试中"是 Pending 且尝试次数大于 0 的展示态</td></tr>
+        <tr><td>标识</td><td>事件 ID、排序键、traceparent 用 Geist Mono 12px，可复制，超长省略并带 tooltip</td><td>—</td></tr>
+      </table>
+
+      <h3 id="ui-flow">4.2 用户任务流（三版共用）</h3>
+      <div class="flow f5">
+        <div class="step"><div class="n">看</div><div class="h">状态快照</div><div class="d">积压、死信、处理失败、拒收与传输状态</div></div>
+        <div class="step"><div class="n">找</div><div class="h">点卡片或筛选</div><div class="d">分面筛选状态、事件名、消费者，写进 URL</div></div>
+        <div class="step"><div class="n">查</div><div class="h">打开详情</div><div class="d">右侧抽屉：概要 → 错误 → 消息头 → 坐标 → 载荷</div></div>
+        <div class="step"><div class="n">处理</div><div class="h">重投 / 重放 / 解码</div><div class="d">单条或勾选批量；二次确认后提示并刷新</div></div>
+        <div class="step"><div class="n">验证</div><div class="h">发送测试事件</div><div class="d">发件箱 Sent，收件箱 Processed</div></div>
+      </div>
+      <p class="k" style="color:var(--muted-foreground);font-size:13px">与现有页面一致的约定：列表状态以 URL 为唯一来源；点整行或"详情"打开抽屉（同 Webhook 投递日志）；写操作用 ConfirmService 二次确认后 toast 并刷新（同用户与租户页）；只读用户看不到操作入口；空状态区分"暂无数据"、"无匹配"和"读取失败"。三版共用：宿主的库选择（Select，放范围行）、"按当前筛选"批量动作（确认框写明范围与时间上限）、测试事件不可用时隐藏按钮。</p>
+
+      <!-- 方案 A -->
+      <div class="variant" id="ui-a">
+        <div class="vh"><h3>方案 A · 同构 Webhook 页：快照卡 + 四视图 + 详情抽屉</h3><span class="rec">推荐</span></div>
+        <div class="vd">顶部一行四张快照卡，下面用 line 标签切换"发件箱 / 收件箱 / 拒收 / 事件目录"，工具栏与表格写法同 Webhook 页，点行打开右侧抽屉。宿主在范围行选物理库；批量恢复支持勾选与"按当前筛选"两种。与 Webhook 页的心智模型完全一致。</div>
+        <p class="frame-cap">平台 › 开发者 › 分布式事件 · 1440 宽 · 宿主视角、共享库 · 发件箱视图，已勾选两行死信</p>
+        <div class="frame"><div class="app">
+          <div class="side">
+            <div class="logo"><i></i>ProjectName</div>
+            <div class="g">工作</div><div class="it"><span class="ic"></span>仪表盘</div>
+            <div class="g">身份与访问</div><div class="it"><span class="ic"></span>用户</div><div class="it"><span class="ic"></span>角色</div><div class="it"><span class="ic"></span>租户</div>
+            <div class="g">开发者</div><div class="it"><span class="ic"></span>开放应用</div><div class="it"><span class="ic"></span>Webhook</div><div class="it on"><span class="ic"></span>分布式事件</div>
+            <div class="g">审计</div><div class="it"><span class="ic"></span>操作记录</div>
+          </div>
+          <div>
+            <div class="topbar">开发者 / <b>分布式事件</b></div>
+            <div class="content">
+              <div class="rangebar">
+                <span style="display:flex;gap:12px;align-items:center"><span class="inp" style="min-width:200px;height:32px;font-size:13px;color:var(--foreground)">库：共享库 shared-01 · 18 个租户 ▾</span><span class="sum">近 24 小时 · 发出 1,284 · 处理 1,190 · 需关注 7</span></span>
+                <span style="display:flex;gap:12px;align-items:center"><span class="health"><span class="dotg"></span>RabbitMQ · 已连接</span><span class="btn out sm">发送测试事件</span></span>
+              </div>
+              <div class="kpis">
+                <div class="sp"><div class="sph"><span>待发送</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num">12</span><span class="badge warning">超过积压阈值</span></div><div class="row2">最旧 6 分钟 · 待处理 3</div></div></div>
+                <div class="sp"><div class="sph"><span>死信</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num" style="color:var(--destructive)">4</span></div><div class="row2">永久失败 3 · 超出重试窗口 1</div></div></div>
+                <div class="sp"><div class="sph"><span>处理失败</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num" style="color:var(--destructive)">2</span></div><div class="row2">2 个消费者</div></div></div>
+                <div class="sp"><div class="sph"><span>拒收待处理</span><i>ⓘ</i></div><div class="spb"><div class="row1"><span class="num">1</span></div><div class="row2">载荷无效 1</div></div></div>
+              </div>
+              <div class="tabs"><span class="on">发件箱 <span class="cnt">4</span></span><span>收件箱 <span class="cnt">2</span></span><span>拒收 <span class="cnt">1</span></span><span>事件目录</span></div>
+              <div class="toolbar">
+                <div class="left"><span class="inp">⌕ <span class="ph">事件 ID / 排序键</span></span><span class="facet">状态 · 死信</span><span class="facet">事件名</span><span class="facet">错误码</span></div>
+                <div class="right"><span class="selbar">已选 2 条 <span class="btn pri sm">重投所选</span></span><span class="btn out">按当前筛选重投（4）</span><span class="btn sec">↻ 刷新</span></div>
+              </div>
+              <div class="tbl"><table>
+                <tr><th><span class="ck"></span></th><th>事件</th><th>租户</th><th>排序键</th><th>状态</th><th>尝试</th><th>最近错误</th><th>下次 / 发送时间</th><th style="text-align:right">操作</th></tr>
+                <tr class="sel"><td><span class="ck on"></span></td><td><div class="t2"><span class="a">order.paid</span><span class="b">0193a5c2-7f1e-…</span></div></td><td class="xs">门户-华东</td><td class="xs mono">order:10086</td><td><span class="badge destructive dot">死信</span></td><td>1</td><td class="xs">message-too-large</td><td class="xs">—</td><td><div class="act"><span class="ibtn">⤴</span><span class="ibtn">⋯</span></div></td></tr>
+                <tr class="sel"><td><span class="ck on"></span></td><td><div class="t2"><span class="a">customer.activated</span><span class="b">0193a5c1-11aa-…</span></div></td><td class="xs">门户-华南</td><td class="xs mono">customer:7f3c…</td><td><span class="badge destructive dot">死信</span></td><td>38</td><td class="xs">retry-window-exceeded</td><td class="xs">—</td><td><div class="act"><span class="ibtn">⤴</span><span class="ibtn">⋯</span></div></td></tr>
+                <tr><td><span class="ck"></span></td><td><div class="t2"><span class="a">invoice.issued</span><span class="b">0193a5c0-5b3d-…</span></div></td><td class="xs">宿主</td><td class="xs">—</td><td><span class="badge warning dot">重试中</span></td><td>3</td><td class="xs">connection-reset</td><td class="xs">09:48:30 重试</td><td><div class="act"><span class="ibtn">⋯</span></div></td></tr>
+                <tr><td><span class="ck"></span></td><td><div class="t2"><span class="a">order.paid</span><span class="b">0193a5bf-0c41-…</span></div></td><td class="xs">门户-华东</td><td class="xs mono">order:10085</td><td><span class="badge success dot">已发送</span></td><td>1</td><td class="xs">—</td><td class="xs">09:47:02</td><td><div class="act"><span class="ibtn">⋯</span></div></td></tr>
+              </table><div class="pager"><span>共 4 条</span><span>每页 20 · 1 / 1</span></div></div>
+            </div>
+          </div>
+        </div></div>
+
+        <p class="frame-cap">事件目录视图 · 静默与通道问题一眼可见（点"异常"数字跳到对应视图并带上事件名筛选）</p>
+        <div class="frame"><div class="content">
+          <div class="toolbar"><div class="left"><span class="inp">⌕ <span class="ph">事件名</span></span><span class="facet">方向</span><span class="switch"><i></i>只看有异常</span></div><div class="right"><span class="btn sec">↻ 刷新</span></div></div>
+          <div class="tbl"><table>
+            <tr><th>事件名</th><th>方向</th><th>消费者</th><th>最近发出</th><th>最近接收 / 处理</th><th>待处理</th><th>异常</th><th>最近错误</th></tr>
+            <tr><td>order.paid</td><td><span class="pill">发出</span></td><td class="xs">—</td><td class="xs">刚刚</td><td class="xs">—</td><td>3</td><td><span class="badge destructive">死信 1</span></td><td class="xs mono">message-too-large</td></tr>
+            <tr><td>customer.activated</td><td><span class="pill">发出</span> <span class="pill">接收</span></td><td class="xs">Portal.CustomerProjectionHandler</td><td class="xs">1 分钟前</td><td class="xs">1 分钟前 / 1 分钟前</td><td>9</td><td><span class="badge destructive">死信 3 · 失败 2</span></td><td class="xs mono">handler-exception</td></tr>
+            <tr><td>erp.invoice.synced</td><td><span class="pill">接收</span></td><td class="xs">Billing.InvoiceSyncHandler</td><td class="xs">—</td><td class="xs"><span class="badge warning">6 小时前</span> / 6 小时前</td><td>0</td><td>—</td><td class="xs">—</td></tr>
+            <tr><td>event-bus.test</td><td><span class="pill">发出</span> <span class="pill">接收</span></td><td class="xs">内置</td><td class="xs">昨天</td><td class="xs">昨天 / 昨天</td><td>0</td><td>—</td><td class="xs">—</td></tr>
+          </table></div>
+          <p class="xs" style="color:var(--muted-foreground);font-size:12px;margin:0">"最近活动"用相对时间，悬停显示绝对时刻；静默阈值不做成配置，由使用者自己判断，告警交给观测平台。</p>
+        </div></div>
+
+        <p class="frame-cap">点行打开右侧抽屉（Spartan Sheet，<code>sm:max-w-2xl</code>，窄屏占满）· 收件箱记录</p>
+        <div class="frame"><div class="sheet-wrap">
+          <div class="dim" style="padding:24px"><div class="tbl"><table><tr><th>事件</th><th>消费者</th><th>状态</th></tr><tr class="sel"><td>customer.activated</td><td class="xs">Portal.CustomerProjectionHandler</td><td><span class="badge destructive dot">处理失败</span></td></tr><tr><td>order.paid</td><td class="xs">Erp.OrderSyncHandler</td><td><span class="badge success dot">已处理</span></td></tr></table></div></div>
+          <div class="sheet">
+            <div><div style="display:flex;justify-content:space-between;align-items:center"><h4 style="margin:0;font-size:16px">customer.activated</h4><span class="btn pri sm">重放</span></div>
+              <div class="xs mono" style="color:var(--muted-foreground);margin-top:4px">0193a5c1-11aa-7c02-a3f0-8e1d2b44c901 ⧉ · <span class="badge destructive dot">处理失败</span></div></div>
+            <dl class="kv">
+              <dt>消费者</dt><dd class="mono">Portal.CustomerProjectionHandler</dd>
+              <dt>排序键</dt><dd class="mono">customer:7f3c2a91</dd>
+              <dt>尝试</dt><dd>5 / 5 · 重复投递 1 · 重放 0</dd>
+              <dt>接收 / 处理</dt><dd>11-06 09:40:05 / —</dd>
+              <dt>最近错误</dt><dd><span class="mono">handler-exception</span> · DbUpdateException: duplicate key "IX_Customers_Code"</dd>
+            </dl>
+            <div><h4>消息头</h4><div class="codebox">traceparent           00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+leistd-tenant-id      3a0e8c1b-…
+leistd-correlation-id 4bf92f3577b34da6a3ce929d0e0e4736</div></div>
+            <div><h4>传输坐标</h4><dl class="kv"><dt>exchange</dt><dd class="mono">leistd.events</dd><dt>routingKey</dt><dd class="mono">customer.activated</dd><dt>redelivered</dt><dd class="mono">false</dd></dl></div>
+            <div><h4>载荷</h4><span class="btn out sm">显示载荷</span> <span class="xs" style="color:var(--muted-foreground)">需要操作权限；按需加载，不随列表返回</span></div>
+          </div>
+        </div></div>
+
+        <p class="frame-cap">重投确认（ConfirmService，同用户页的批量操作确认）· 左：勾选；右：按当前筛选</p>
+        <div class="frame"><div class="overlay" style="gap:24px">
+          <div class="dialog narrow">
+            <div class="hd"><h5>重投 2 条死信？</h5><p>事件 ID 不变，消费方按 ID 去重。请先确认失败原因已处理，例如传输上限已调整，否则会再次进入死信。</p></div>
+            <div class="ft"><span class="btn out">取消</span><span class="btn pri">重投</span></div>
+          </div>
+          <div class="dialog narrow">
+            <div class="hd"><h5>按当前筛选重投 4 条死信？</h5><p>范围：共享库 shared-01 · 状态 = 死信 · 错误码 = 全部 · 截至 09:50:12 加载时。之后新产生的死信不受影响。记录会分批回到待发送，由兜底任务在几秒内发出。</p></div>
+            <div class="ft"><span class="btn out">取消</span><span class="btn pri">重投 4 条</span></div>
+          </div>
+        </div></div>
+
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>与 Webhook 页同构：统计卡 → 标签 → 工具栏 → 表格 → 抽屉，管理员不需要重新学习。</li><li>三类对象各有专属列和专属操作，列不会因为方向不同而出现大量空单元格。</li><li>点统计卡一步跳到对应视图和筛选；勾选与"按当前筛选"两种批量恢复覆盖通道中断后的集中恢复。</li><li>事件目录作为第四个标签，静默检测不必离开页面；宿主库选择放在范围行，对所有视图生效。</li><li>能复用 Webhook 页的组件：统计区、筛选器、抽屉骨架。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>看一条事件"发出去又被谁收到"要在两个标签之间切换；不过同一服务里两个方向通常是不同事件。</li><li>多四个视图的空状态与 spec。</li></ul></div>
+        </div>
+      </div>
+
+      <!-- 方案 B -->
+      <div class="variant" id="ui-b">
+        <div class="vh"><h3>方案 B · 统一事件流 + 行展开</h3></div>
+        <div class="vd">一张表混排发出和接收，用"方向"列区分，加"只看问题"开关；行展开显示时间线与标识。拒收用表格上方的提示条链接到抽屉列表。</div>
+        <div class="frame"><div class="content">
+          <div class="kpis">
+            <div class="sp"><div class="sph"><span>今日发出</span></div><div class="spb"><span class="num">1,284</span></div></div>
+            <div class="sp"><div class="sph"><span>今日接收</span></div><div class="spb"><span class="num">1,190</span></div></div>
+            <div class="sp"><div class="sph"><span>待发送</span></div><div class="spb"><div class="row1"><span class="num">12</span><span class="badge warning">超过积压阈值</span></div><div class="row2">最旧 6 分钟</div></div></div>
+            <div class="sp"><div class="sph"><span>异常</span></div><div class="spb"><span class="num" style="color:var(--destructive)">7</span><div class="row2">死信 4 · 处理失败 2 · 拒收 1</div></div></div>
+          </div>
+          <div class="alert warn">⚠ <span class="tx">1 条消息被拒收（载荷无效）。<u>查看拒收消息</u></span></div>
+          <div class="toolbar">
+            <div class="left"><span class="inp">⌕ <span class="ph">事件 ID / traceId</span></span><span class="facet">方向</span><span class="facet">事件名</span><span class="facet">状态</span><span class="switch"><i></i>只看问题</span></div>
+            <div class="right"><span class="btn sec">↻ 刷新</span></div>
+          </div>
+          <div class="tbl"><table>
+            <tr><th></th><th>时间</th><th>方向</th><th>事件</th><th>状态</th><th>尝试</th><th style="text-align:right">操作</th></tr>
+            <tr class="exp"><td>▾</td><td class="xs">09:42:10</td><td>发出 →</td><td>order.paid</td><td><span class="badge destructive dot">死信</span></td><td>1</td><td><div class="act"><span class="ibtn">⤴</span></div></td></tr>
+            <tr><td colspan="7" class="expand">
+              <dl class="kv"><dt>事件 ID</dt><dd class="mono">0193a5c2-7f1e-… ⧉</dd><dt>最近错误</dt><dd>message-too-large</dd></dl>
+              <div class="tl"><div class="n ok"><b>发生</b>09:42:10</div><div class="n ok"><b>入库</b>09:42:10</div><div class="n bad"><b>发送</b>09:42:11 永久失败</div><div class="n"><b>下次重试</b>—</div></div>
+            </td></tr>
+            <tr><td>▸</td><td class="xs">09:40:05</td><td>接收 ←</td><td>customer.activated · <span class="xs">Portal.CustomerProjectionHandler</span></td><td><span class="badge destructive dot">处理失败</span></td><td>5</td><td><div class="act"><span class="ibtn">↺</span></div></td></tr>
+            <tr><td>▸</td><td class="xs">09:47:02</td><td>发出 →</td><td>order.paid</td><td><span class="badge success dot">已发送</span></td><td>1</td><td></td></tr>
+          </table></div>
+        </div></div>
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>一张表看全部事件，"只看问题"一键收敛。</li><li>时间线直观，适合按时间顺序排查。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>两个方向的列和操作不同：消费者、坐标、重投与重放只能塞进展开区或条件渲染，表格稀疏。</li><li>后端要把两张表合并分页（UNION 加回表），框架端点会更复杂。</li><li>行展开放不下载荷与消息头，与 Webhook 页"长详情用抽屉"的约定不一致。</li><li>批量操作难做：一次勾选可能跨两种操作。</li></ul></div>
+        </div>
+      </div>
+
+      <!-- 方案 C -->
+      <div class="variant" id="ui-c">
+        <div class="vh"><h3>方案 C · 按事件总览 + 宽抽屉明细</h3></div>
+        <div class="vd">首屏是一条健康横条和一张"按事件名汇总"的表：每个事件一行，列出方向、24 小时量、待处理与异常。点一行打开宽抽屉，内含该事件的发件箱或收件箱明细。</div>
+        <div class="frame"><div class="content">
+          <div class="strip">
+            <div><div class="k">传输</div><div class="health"><span class="dotg"></span>RabbitMQ 已连接</div></div>
+            <div><div class="k">待发送</div><div class="num-big">12 <span class="badge warning">6 分钟</span></div></div>
+            <div><div class="k">死信</div><div class="num-big" style="color:var(--destructive)">4</div></div>
+            <div><div class="k">处理失败</div><div class="num-big" style="color:var(--destructive)">2</div></div>
+            <div><div class="k">拒收待处理</div><div class="num-big">1</div></div>
+          </div>
+          <div class="toolbar"><div class="left"><span class="inp">⌕ <span class="ph">事件名</span></span><span class="facet">方向</span><span class="switch"><i></i>只看有异常的事件</span></div><div class="right"><span class="btn out">发送测试事件</span><span class="btn sec">↻ 刷新</span></div></div>
+          <div class="tbl"><table>
+            <tr><th>事件名</th><th>方向</th><th>消费者</th><th>24 小时</th><th>待处理</th><th>异常</th><th>最近活动</th></tr>
+            <tr class="sel"><td>order.paid</td><td>发出</td><td class="xs">—</td><td>842</td><td>3</td><td><span class="badge destructive">死信 1</span></td><td class="xs">09:47:02</td></tr>
+            <tr><td>customer.activated</td><td>发出 · 接收</td><td class="xs">2</td><td>301 / 296</td><td>9</td><td><span class="badge destructive">死信 3 · 失败 2</span></td><td class="xs">09:46:40</td></tr>
+            <tr><td>invoice.issued</td><td>发出</td><td class="xs">—</td><td>141</td><td>0</td><td>—</td><td class="xs">09:47:51</td></tr>
+          </table></div>
+        </div></div>
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>先看哪类事件出问题，适合事件种类多的服务。</li><li>首屏信息密度高，像运维总览。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>最常见的任务"找到失败的那条并重投"要多点一层，明细挤在抽屉里，抽屉内还要再放表格和筛选。</li><li>需要额外的按事件名聚合端点；跨发件箱与收件箱聚合时口径复杂。</li><li>和现有任何页面都不同构，要新建一套交互。</li></ul></div>
+        </div>
+      </div>
+
+      <h3 id="ui-cmp">4.3 对比与推荐</h3>
+      <table class="t">
+        <tr><th>维度</th><th>方案 A</th><th>方案 B</th><th>方案 C</th></tr>
+        <tr><td>与现有页面一致</td><td class="yes">同构 Webhook 页</td><td class="mid">接近，但用行展开</td><td class="no-c">新交互</td></tr>
+        <tr><td>"找失败并处理"的步数</td><td class="yes">点卡 → 勾选 → 重投</td><td class="yes">只看问题 → 展开 → 重投</td><td class="mid">点事件 → 抽屉内筛选 → 重投</td></tr>
+        <tr><td>批量恢复</td><td class="yes">勾选 + 按当前筛选</td><td class="no-c">跨方向难做</td><td class="mid">抽屉内支持</td></tr>
+        <tr><td>事件目录（静默检测）</td><td class="yes">第四个标签</td><td class="no-c">没有位置</td><td class="yes">首屏</td></tr>
+        <tr><td>详情承载（消息头、坐标、载荷）</td><td class="yes">抽屉</td><td class="no-c">展开区放不下</td><td class="mid">抽屉内二级</td></tr>
+        <tr><td>框架端点复杂度</td><td class="yes">三张表各自分页</td><td class="no-c">跨表合并分页</td><td class="mid">另需聚合端点</td></tr>
+        <tr><td>前端工作量</td><td class="yes">中（复用 Webhook 骨架）</td><td>中</td><td class="no-c">高</td></tr>
+      </table>
+      <div class="callout"><b>推荐方案 A。</b>它与 Webhook 页同构，复用最多；三类对象的列和操作各自清楚；框架端点最简单。方案 C 的长处"按事件总览"已作为第四个标签"事件目录"吸收进 A。</div>
+    </section>
+
+    <!-- 5 实施计划 -->
+    <section class="s" id="s-plan">
+      <h2><span class="no">5</span>实施计划</h2>
+      <p class="lead">一个 PR 交付框架与模板：模板经本地候选包消费同树框架，审查、CI 与端到端各只走一轮。取舍口径：终局但不过度设计；不过度考虑安全；不为极少数竞态加复杂度；端到端只做一次入口验证，其余分层覆盖。</p>
+      <table class="t">
+        <tr><th>波次</th><th>内容</th><th>负责</th><th>门禁</th></tr>
+        <tr><td>W0 方案评审</td><td>评审规格与本设计稿</td><td>Codex</td><td>"通过"</td></tr>
+        <tr><td>W1 契约冻结</td><td>接口、信封、DTO、选项、错误码、端点路由；前端 TS DTO 与 Mock 数据</td><td>Codex 实施 · Claude 审契约</td><td>契约审查"通过"</td></tr>
+        <tr><td>W2 三路并行</td><td>A 框架实现与测试 · B 模板前端接 Mock · C 模板文档、参数与矩阵登记</td><td>Codex</td><td>B 完成后 Claude 按原型核对 UI（Mock 四种宽度）</td></tr>
+        <tr><td>W3 模板后端</td><td>本地候选包、场景工作区、组合、迁移、compose；前端接真实后端</td><td>Codex</td><td>—</td></tr>
+        <tr><td>W4 汇总验证</td><td>受影响测试项目（含 SQLite、两种 broker 契约测试，本机起一次容器）、打包与隔离消费、选择器场景生成、工作区 verify 与 e2e spec</td><td>Codex</td><td>L1 全过后推送、开 PR</td></tr>
+        <tr><td>W5 审查 ∥ CI</td><td>Claude 全量代码审查与 PR CI 并行；只修失败点、只重跑受影响部分</td><td>Claude · Codex</td><td>CI 全绿 + 审查"通过"</td></tr>
+        <tr><td>W6 端到端</td><td>最终 head 生成项目，compose 起 RabbitMQ，浏览器走完 D20–D22；Claude 用真实后端截图第二次核对 UI</td><td>Codex · Claude</td><td>验收"通过" + UI 核对"通过"</td></tr>
+        <tr><td>W7 合入</td><td>合入 develop 自动发 beta；规格 §4、常驻文档、下游通知</td><td>Codex</td><td>—</td></tr>
+      </table>
+      <div class="grid2">
+        <div class="card"><h4>省时的关键</h4><ul><li>契约先冻结先审，三路互不等待，后期不因契约返工而重跑。</li><li>UI 在接后端之前按原型核对，界面偏差不拖到端到端阶段。</li><li>实施期只跑目标测试类；整套测试、打包、模板生成、浏览器各只在 W4、W6 跑一次。</li><li>两种 broker 共用一套契约测试，本机只起一次容器。</li><li>审查与 CI 并行；返工只重跑受影响部分。</li></ul></div>
+        <div class="card"><h4>不做的事</h4><ul><li>观察点回调；Meter 指标与模板 OTel；模板按参数切换传输。</li><li>恰好一次投递、跨服务全局有序。</li><li>后台配置页；跨物理库合并成一张列表；保留期后只清载荷。</li><li>中枢专有能力（resync、tombstone、环境、通道登记）。</li><li>把 Webhook 组件改成基于本组件。</li></ul></div>
+      </div>
+    </section>
+
+    <section class="s" id="s-accept">
+      <h2><span class="no">6</span>验收标准</h2>
+      <table class="t">
+        <tr><th>#</th><th>Given / When / Then</th><th>覆盖</th></tr>
+        <tr><td>D1</td><td><b>Given</b> 服务 A 发布 <code>order.paid</code>，服务 B 登记了处理器，两者走回环；<b>When</b> A 在工作单元内发布并提交；<b>Then</b> B 的处理器数秒内执行一次，收件箱有一行 Processed，处理器收到的 EventId、OccurredOn 与发布值一致，TraceId 与 A 的请求相同</td><td>框架入口测试（唯一一条端到端用例）</td></tr>
+        <tr><td>D2</td><td><b>Given</b> 同上；<b>When</b> 工作单元回滚；<b>Then</b> 发件箱没有记录，B 收不到事件。没有活动工作单元时发布，抛 <code>InvalidOperationException</code></td><td>框架单测</td></tr>
+        <tr><td>D3</td><td><b>Given</b> 同一排序键依次提交 e1、e2，e1 首次发送瞬态失败；<b>When</b> e1 在退避期内、兜底扫描运行多轮；<b>Then</b> e2 一直不发，e1 成功后才发；e1 进死信后 e2 照常发出</td><td>框架单测（跨轮）</td></tr>
+        <tr><td>D4</td><td><b>Given</b> 传输返回永久失败；<b>When</b> 发送；<b>Then</b> 直接进死信，记录错误码，不消耗重试；记 <code>DistributedEventDeadLettered</code></td><td>框架单测</td></tr>
+        <tr><td>D5</td><td><b>Given</b> 瞬态失败持续；<b>When</b> 距首次失败超过 <code>DeadLetterAfter</code>；<b>Then</b> 进死信。此前按指数退避，封顶 <code>RetryMaxDelay</code></td><td>框架单测</td></tr>
+        <tr><td>D6</td><td><b>Given</b> 同一事件被投递两次；<b>When</b> 接收；<b>Then</b> 每个消费者只有一行，<code>DuplicateCount = 1</code>，处理器只执行一次</td><td>框架单测</td></tr>
+        <tr><td>D7</td><td><b>Given</b> 处理器抛出；<b>When</b> 处理；<b>Then</b> 写入回滚，退避重试，<code>MaxAttempts</code> 次后标 Failed；重放成功后标 Processed</td><td>框架单测</td></tr>
+        <tr><td>D8</td><td><b>Given</b> 立即处理与兜底扫描同时处理同一行；<b>When</b> 两边都提交；<b>Then</b> 只有一边成功，处理器的数据库写入只生效一次</td><td>框架关系型数据库测试（SQLite）</td></tr>
+        <tr><td>D9</td><td><b>Given</b> 解码失败、租户不存在或载荷无法反序列化；<b>When</b> 接收；<b>Then</b> 写入宿主库拒收表，传输照常确认。修复后重新解码，成功则写入对应租户库的收件箱，拒收记录标 Redecoded</td><td>框架单测</td></tr>
+        <tr><td>D10</td><td><b>Given</b> 共享库里有宿主和两个租户、另有一个专属库，都有待发与待处理记录；<b>When</b> 立即路径全部丢失，兜底扫描运行；<b>Then</b> 四方的记录都被发送和处理，各在自己的租户上下文里；某个库失败时任务记为失败</td><td>框架关系型数据库测试</td></tr>
+        <tr><td>D11</td><td><b>Given</b> 本机 RabbitMQ 或 Kafka；<b>When</b> 发布 → 接收；<b>Then</b> 写库成功后才确认（Ack / 提交位点）；写库失败时重新投递；传输层坏消息走拒收后确认；断开时健康检查报 Unhealthy</td><td>两个传输共用一套契约测试（无 broker 时跳过，CI 提供两个服务）</td></tr>
+        <tr><td>D12</td><td><b>Given</b> 只有读策略；<b>When</b> 调用各端点；<b>Then</b> 列表不含载荷；读载荷与所有写端点返回 403；租户上下文传 <code>database</code> 返回 403；映射时漏配策略即抛出</td><td>框架最小宿主测试</td></tr>
+        <tr><td>D13</td><td><b>Given</b> 测试传输以外部格式投递：载荷里自带业务 ID 与租户，没有框架消息头；<b>When</b> 接收；<b>Then</b> 传输在 <code>DecodeAsync</code> 里异步映射成框架信封，正常写入收件箱</td><td>框架单测（测试替身传输）</td></tr>
+        <tr><td>D14</td><td><b>Given</b> 传输自己已判定一条消息无法解码；<b>When</b> 调用 <code>RejectAsync</code>；<b>Then</b> 写入拒收表，原因码取传输给出的值；修复传输后重新解码，经 <code>DecodeAsync</code> 转为收件箱记录。写库失败时记 <code>DistributedEventRejectPersistFailed</code> 再抛出</td><td>框架单测</td></tr>
+        <tr><td>D15</td><td><b>Given</b> 写入进程配置 <code>Outbox:DispatchEnabled=false</code>、<code>Inbox:ReceiveEnabled=false</code>、<code>Inbox:ProcessingEnabled=false</code>，且未注册传输；Worker 进程全部开启；<b>When</b> 写入进程发布并提交；<b>Then</b> 写入进程不发送也不抢扫描锁，由 Worker 的兜底任务发出。若开启了发送或接收却没有注册传输，启动时报错并指明配置键</td><td>框架单测</td></tr>
+        <tr><td>D16</td><td><b>Given</b> 某错误码下有 1,200 条死信；<b>When</b> 按"状态 = 死信、错误码 = X"批量重投；<b>Then</b> 1,200 条全部回到待发送，分批提交，返回条数；之后由兜底扫描发出。收件箱的按条件重放、拒收的按条件重新解码同样成立</td><td>框架单测</td></tr>
+        <tr><td>D17</td><td><b>Given</b> 本服务订阅了 <code>order.paid</code>，发件箱里有 <code>invoice.issued</code>；<b>When</b> 读取事件目录；<b>Then</b> 两个事件名都列出，各自给出方向、消费者、最近发出、接收与处理时刻、待处理数、异常数和最近错误码</td><td>框架单测</td></tr>
+        <tr><td>D18</td><td><b>Given</b> 宿主上下文，共享库里有宿主和两个租户的记录；<b>When</b> 选择该库查看并重投其中一个租户的死信；<b>Then</b> 列表含三方记录并带租户列，重投在该行所属租户的上下文里执行；<code>GET /databases</code> 列出全部物理库</td><td>框架关系型数据库测试</td></tr>
+        <tr><td>D19</td><td><b>Given</b> <code>TestEvent:Enabled=false</code>；<b>When</b> 读取状态并调用发测试事件；<b>Then</b> 状态里 <code>testEventEnabled=false</code>，本服务不订阅 <code>event-bus.test</code>，调用返回业务错误 <code>DistributedEvents:TestEventDisabled</code></td><td>框架单测</td></tr>
+        <tr><td>D20</td><td><b>Given</b> 模板 <code>IncludeDistributedEvents=true</code> 并启动 compose；<b>When</b> 管理员点"发送测试事件"；<b>Then</b> 发件箱出现一条 Sent，收件箱随后出现对应的 Processed，详情抽屉显示消息头与链路</td><td>模板 e2e（人工验收一次）</td></tr>
+        <tr><td>D21</td><td><b>Given</b> 发件箱有死信；<b>When</b> 点"死信"卡，再点"按当前筛选重投"并确认；<b>Then</b> 记录回到待发送并很快变为已发送，写入操作记录 <code>distributed-event.redelivered</code>（带条数与筛选条件）</td><td>模板前端 spec + 后端集成测试</td></tr>
+        <tr><td>D22</td><td><b>Given</b> 只有 <code>App.DistributedEvents</code>；<b>When</b> 打开页面；<b>Then</b> 能看快照、事件目录、列表与详情概要，看不到任何操作入口和"显示载荷"；租户用户看不到库选择、拒收卡与拒收视图</td><td>模板前端 spec</td></tr>
+        <tr><td>D23</td><td><b>Given</b> 模板 <code>IncludeDistributedEvents=false</code>；<b>When</b> 生成项目；<b>Then</b> 不留下任何包引用、表、迁移、权限、路由、菜单、词条、compose 服务与文档</td><td>模板生成检查（<code>ForbiddenTokens</code>）</td></tr>
+      </table>
+      <h3>决策记录</h3>
+      <table class="t">
+        <tr><th>事项</th><th>建议</th></tr>
+        <tr><td>私有中枢七项缺口</td><td>已确认（2026-11-07）：全部按终局纳入首批</td></tr>
+        <tr><td>首批传输</td><td>已决策：回环 + RabbitMQ + Kafka 同批交付</td></tr>
+        <tr><td>模板接入</td><td>已决策：新增 <code>IncludeDistributedEvents</code>，默认 false，带后台页与 compose 里的 RabbitMQ</td></tr>
+        <tr><td>UI 方案</td><td>已确认：方案 A</td></tr>
+        <tr><td>交付节奏</td><td>已决策：一个 PR，契约先行，每层验证只跑一次</td></tr>
+      </table>
+    </section>
+  </main>
+</div>
+
+</body>
+</html>

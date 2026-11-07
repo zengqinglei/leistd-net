@@ -1,0 +1,9 @@
+{
+  "culture": "zh-CN",
+  "texts": {
+    "DistributedEvents:RecordNotFound": "事件记录不存在。",
+    "DistributedEvents:DatabaseNotFound": "所选物理库不存在。",
+    "DistributedEvents:HostOnly": "此操作仅限宿主使用。",
+    "DistributedEvents:TestEventDisabled": "测试事件已禁用。"
+  }
+}
