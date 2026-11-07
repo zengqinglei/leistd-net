@@ -14,7 +14,7 @@ public static class HttpResponseMessageExtensions
 {
     private static readonly JsonSerializerOptions DefaultJsonOptions = new(JsonSerializerDefaults.Web);
 
-    // 异常消息与 RemoteServiceException.ResponseBody 中原始响应体的最大保留长度。
+    // RemoteServiceException.ResponseBody 中原始响应体的最大保留长度。
     private const int MaxBodySnippetLength = 4096;
 
     /// <summary>
@@ -85,7 +85,11 @@ public static class HttpResponseMessageExtensions
         throw await CreateRemoteErrorAsync(response, cancellationToken);
     }
 
-    /// <summary>从非 2xx 响应创建 <see cref="RemoteServiceException"/>；无法解析时保留截断后的原始响应体。</summary>
+    /// <summary>从非 2xx 响应创建 <see cref="RemoteServiceException"/>；原始响应体截断后保留在 <see cref="RemoteServiceException.ResponseBody"/>。</summary>
+    /// <remarks>
+    /// 异常 <see cref="Exception.Message"/> 只含 HTTP 方法、不含查询串的请求地址、远端状态码、错误码与远端 traceId，
+    /// 不含响应原文与远端说明：它们可能含个人信息，而消息会随异常对象进日志。
+    /// </remarks>
     public static async Task<RemoteServiceException> CreateRemoteErrorAsync(
         this HttpResponseMessage response,
         CancellationToken cancellationToken = default)
@@ -98,14 +102,13 @@ public static class HttpResponseMessageExtensions
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new RemoteServiceException(
-                $"{Describe(response)} the remote returned an error and the response body could not be read: {ex.Message}",
+                $"{Describe(response)}; the response body could not be read.",
                 (int)response.StatusCode,
                 innerException: ex);
         }
 
         var snippet = Truncate(body);
         string? errorCode = null;
-        string? message = null;
         string? traceId = null;
         string? detail = null;
         List<ErrorItem>? errors = null;
@@ -119,7 +122,6 @@ public static class HttpResponseMessageExtensions
                 if (root.ValueKind == JsonValueKind.Object)
                 {
                     errorCode = TryGetErrorCode(root);
-                    message = TryGetString(root, "message") ?? TryGetString(root, "detail") ?? TryGetString(root, "title");
                     traceId = TryGetString(root, "traceId");
                     errors = TryGetErrors(root);
                     // 只有业务错误的说明是公开文案；协议层失败的 detail 不作为转交说明
@@ -128,13 +130,14 @@ public static class HttpResponseMessageExtensions
             }
             catch (JsonException)
             {
-                // 网关可能返回 HTML，异常仍需保留可诊断的原始片段。
+                // 网关可能返回 HTML，原始片段仍保留在 ResponseBody 供排查。
             }
         }
 
         return new RemoteServiceException(
-            $"{Describe(response)} the remote returned an error: {message ?? snippet}" +
-            (traceId is null ? string.Empty : $" (remote traceId: {traceId})"),
+            $"{Describe(response)}" +
+            (errorCode is null ? string.Empty : $"; error code: {errorCode}") +
+            (traceId is null ? string.Empty : $"; remote traceId: {traceId}") + ".",
             (int)response.StatusCode,
             errorCode,
             traceId,
@@ -155,12 +158,13 @@ public static class HttpResponseMessageExtensions
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            throw new ServiceClientException($"{Describe(response)} response body could not be read: {ex.Message}", ex,
+            // 内层消息可能带出载荷片段（如解码失败的字节），只作为 InnerException 保留。
+            throw new ServiceClientException($"{Describe(response)}; the response body could not be read.", ex,
                 ServiceClientFailureClassifier.Classify(ex));
         }
         if (string.IsNullOrWhiteSpace(body))
         {
-            throw new ServiceClientException($"{Describe(response)} response body is empty",
+            throw new ServiceClientException($"{Describe(response)}; the response body is empty.",
                 failureKind: ServiceClientFailureKind.InvalidResponse);
         }
 
@@ -171,11 +175,12 @@ public static class HttpResponseMessageExtensions
         }
         catch (JsonException ex)
         {
-            throw new ServiceClientException($"{Describe(response)} response deserialization failed: {ex.Message}", ex,
+            // JsonException 的消息含出错位置的载荷字符，只作为 InnerException 保留。
+            throw new ServiceClientException($"{Describe(response)}; response deserialization failed.", ex,
                 ServiceClientFailureKind.InvalidResponse);
         }
 
-        return value ?? throw new ServiceClientException($"{Describe(response)} response body is empty",
+        return value ?? throw new ServiceClientException($"{Describe(response)}; the response body is empty.",
             failureKind: ServiceClientFailureKind.InvalidResponse);
     }
 
@@ -187,7 +192,7 @@ public static class HttpResponseMessageExtensions
         }
 
         throw new RemoteServiceException(
-            $"{Describe(response)} remote business failure: code={envelope.Code} {envelope.Message}",
+            $"{Describe(response)}; remote business failure, code: {envelope.Code.ToString(CultureInfo.InvariantCulture)}.",
             (int)response.StatusCode,
             envelope.Code.ToString(CultureInfo.InvariantCulture),
             errors: envelope.Errors,
@@ -207,11 +212,8 @@ public static class HttpResponseMessageExtensions
         public List<ErrorItem>? Errors { get; init; }
     }
 
-    private static string Describe(HttpResponseMessage response)
-    {
-        var request = response.RequestMessage;
-        return $"{request?.Method} {(int)response.StatusCode} {request?.RequestUri}";
-    }
+    private static string Describe(HttpResponseMessage response) =>
+        $"{RequestDescription.Of(response.RequestMessage)} returned HTTP {(int)response.StatusCode}";
 
     private static string Truncate(string value) =>
         value.Length <= MaxBodySnippetLength ? value : value[..MaxBodySnippetLength];

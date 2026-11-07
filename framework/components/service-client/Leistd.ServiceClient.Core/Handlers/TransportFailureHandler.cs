@@ -1,4 +1,5 @@
 using Leistd.ServiceClient.Exceptions;
+using Leistd.ServiceClient.Http;
 
 namespace Leistd.ServiceClient.Handlers;
 
@@ -18,7 +19,7 @@ internal sealed class TransportFailureHandler : DelegatingHandler
             !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
         {
             throw new ServiceClientException(
-                $"{request.Method} {request.RequestUri} invocation failed: {ex.Message}", ex,
+                $"{RequestDescription.Of(request)} invocation failed: {ex.Message}", ex,
                 ServiceClientFailureClassifier.Classify(ex));
         }
     }
