@@ -21,10 +21,11 @@ public class RemoteServiceException : ServiceClientException
     public IReadOnlyList<ErrorItem> Errors { get; }
 
     /// <summary>远端原始响应体（截断到 4096 个字符），供无法结构化解析时排查。</summary>
+    /// <remarks>原文可能含个人信息，不拼入 <see cref="Exception.Message"/>；需要记录时由调用方按数据性质脱敏。</remarks>
     public string? ResponseBody { get; }
 
     /// <summary>远端业务错误的公开说明（ProblemDetails 的 <c>detail</c> 或信封的 <c>message</c>）；只在带业务码时还原，否则为 <see langword="null"/>。</summary>
-    /// <remarks>远端已按调用时的语言本地化，可作为转交给调用方的说明；异常 <see cref="Exception.Message"/> 含地址与远端 traceId，只供诊断。</remarks>
+    /// <remarks>远端已按调用时的语言本地化，可作为转交给调用方的说明；异常 <see cref="Exception.Message"/> 只含请求要素、状态码、错误码与远端 traceId，不含本说明，只供诊断。</remarks>
     public string? Detail { get; }
 
     /// <summary>创建远端服务异常。</summary>

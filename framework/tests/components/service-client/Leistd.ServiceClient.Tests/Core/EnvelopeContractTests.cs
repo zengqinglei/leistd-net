@@ -27,7 +27,7 @@ public class EnvelopeContractTests
     }
 
     [Fact]
-    public async Task ReadResultAsync_carries_the_message_of_a_failed_Result()
+    public async Task ReadResultAsync_carries_the_message_of_a_failed_Result_as_its_detail()
     {
         var response = Json(Result<Payload>.Fail(40001, "参数不合法"));
 
@@ -35,7 +35,9 @@ public class EnvelopeContractTests
             () => response.ReadResultAsync<Payload>());
 
         Assert.Contains("40001", error.Message);
-        Assert.Contains("参数不合法", error.Message);
+        // 信封说明是远端文本，只还原到 Detail，不进诊断消息
+        Assert.Equal("参数不合法", error.Detail);
+        Assert.DoesNotContain("参数不合法", error.Message);
     }
 
     [Fact]

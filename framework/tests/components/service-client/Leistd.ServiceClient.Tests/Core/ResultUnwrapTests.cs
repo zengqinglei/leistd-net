@@ -55,7 +55,7 @@ public class ResultUnwrapTests
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
         Assert.Equal("50001", exception.ErrorCode);   // 2xx 信封的非零 code 是业务码，按不变文化转字符串
-        Assert.Contains("库存不足", exception.Message);
+        Assert.Equal("库存不足", exception.Detail);
     }
 
     [Fact]
@@ -109,7 +109,8 @@ public class ResultUnwrapTests
 
         Assert.Null(exception.ErrorCode);
         Assert.Equal("t-2", exception.RemoteTraceId);
-        Assert.Contains("不存在", exception.Message);
+        Assert.Null(exception.Detail);   // 协议层失败的说明不作为公开说明还原
+        Assert.Contains("不存在", exception.ResponseBody);
     }
 
     [Fact]

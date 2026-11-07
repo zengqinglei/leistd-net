@@ -11,7 +11,7 @@ public class ServiceClientException : Exception
     public ServiceClientFailureKind FailureKind { get; }
 
     /// <summary>创建服务调用异常。</summary>
-    /// <param name="message">异常消息，含 HTTP 方法、URL 等请求要素。</param>
+    /// <param name="message">异常消息，含 HTTP 方法与请求地址等要素；不放查询串与远端响应文本，消息会随异常对象进日志。</param>
     /// <param name="innerException">原始异常。</param>
     /// <param name="failureKind">失败来源。</param>
     public ServiceClientException(string message, Exception? innerException = null,

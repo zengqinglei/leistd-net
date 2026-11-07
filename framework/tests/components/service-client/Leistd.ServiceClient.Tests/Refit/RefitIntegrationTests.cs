@@ -195,7 +195,7 @@ public sealed class RefitIntegrationTests(RefitIntegrationTests.HostFixture fixt
         Assert.Equal(404, exception.RemoteStatusCode);
         Assert.Equal("Item:NotFound", exception.ErrorCode);
         Assert.Equal("rt-error", exception.RemoteTraceId);
-        Assert.Contains("条目不存在", exception.Message);
+        Assert.Equal("条目不存在", exception.Detail);
         Assert.IsNotAssignableFrom<ApiException>(exception); // 错误契约与手写路径统一
     }
 
