@@ -1,6 +1,6 @@
 # 遮罩点击经关闭闸门
 
-状态：进行中 · 风险档：中
+状态：已完成 · 风险档：中 · 关联：https://github.com/zengqinglei/leistd-net/pull/239
 
 ## 1. 需求
 
@@ -25,7 +25,7 @@
 
 ## 4. 结果
 
-本地分支 `zengqinglei/backdrop-click-through-close-gate`，尚未推送。
+交付：PR #239（合并提交 `5f4169a1`），只改模板，随下一次 develop→main 发布。
 
 - **前提实测**：`inject(DialogRef)` 在 brain 渲染的弹窗与抽屉内容里都拿得到（新用例经真实遮罩点击关闭，把注入改成 `null` 后这两条变红）。
 - **修复前失败**：只加输入、不订阅时，`dialog-close.spec.ts` 有 3 条失败：无修改即关、有修改弹确认（期望关闭实际仍开、期望确认框实际为空），以及嵌套用例（前置状态达不到）。
