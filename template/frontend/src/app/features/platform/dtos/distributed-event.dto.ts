@@ -4,6 +4,18 @@ import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
 export type DistributedEventInboxStatus = 'pending' | 'processed' | 'failed';
 export type DistributedEventOutboxStatus = 'pending' | 'sent' | 'deadLettered';
 export type DistributedEventRejectionStatus = 'pending' | 'redecoded' | 'discarded';
+export type DistributedEventRecoverySkipReason = 'not-found' | 'invalid-state' | 'redecode-failed';
+export type DistributedEventTransportStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+
+/** 框架自己产生的发件箱失败码；传输可以定义其他稳定失败码。 */
+export const DISTRIBUTED_EVENT_OUTBOX_FAILURE_CODES = {
+  retryWindowExceeded: 'retry-window-exceeded',
+} as const;
+
+export const DISTRIBUTED_EVENT_TEST = {
+  name: 'event-bus.test',
+  consumerName: 'Leistd.EventBus.Test',
+} as const;
 
 /** 事件目录：订阅与保留期内发件箱、收件箱事件名的并集。 */
 export interface DistributedEventCatalogOutputDto {
@@ -115,7 +127,7 @@ export interface DistributedEventOutboxOutputDto {
   orderingKey?: string | null;
   /** 原始业务发生时刻（UTC）。 */
   occurredAt: string;
-  /** 当前一轮的尝试次数；收件箱重放后从零计数。 */
+  /** 累计发送尝试次数，手动重投不清零。 */
   attemptCount: number;
   /** Pending 时的下一次尝试时刻（UTC）。 */
   nextAttemptAt?: string | null;
@@ -136,12 +148,15 @@ export interface DistributedEventOutboxOutputDto {
   sentAt?: string | null;
 }
 
-/** 仅 Manage 策略可读取的 JSON 载荷或原始字节。 */
+/** 仅 Manage 策略可读取的发件箱或收件箱 JSON 载荷。 */
 export interface DistributedEventPayloadOutputDto {
-  /** 发件箱与收件箱的冻结 JSON。 */
-  payload?: string | null;
-  /** 拒收的原始字节，JSON 为 Base64 字符串。 */
-  rawBody?: string | null;
+  payload: string;
+}
+
+/** 仅宿主 Manage 策略可读取的拒收原始消息。 */
+export interface DistributedEventRawMessageOutputDto {
+  /** 原始字节的 Base64 字符串；允许空消息。 */
+  rawBody: string;
 }
 
 /** 恢复结果；按条件分批提交后返回累计条数。 */
@@ -156,7 +171,7 @@ export interface DistributedEventRecoverySkipDto {
   /** 记录标识，JSON 为十进制字符串。 */
   id: string;
   /** 稳定原因：not-found、invalid-state 或 redecode-failed。 */
-  reasonCode: string;
+  reasonCode: DistributedEventRecoverySkipReason;
 }
 
 /** 详情概要；没有管理权限也可读取，载荷不随之返回。 */
@@ -171,7 +186,7 @@ export interface DistributedEventRejectionFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。 */
   keyword?: string | null;
   /** 拒收原因码精确匹配；只恢复 Pending。 */
   reason?: string | null;
@@ -213,7 +228,7 @@ export interface DistributedEventStatusOutputDto {
   /** 当前传输名；只写进程没有注册传输时为 null。 */
   transportName?: string | null;
   /** event-bus 标签健康检查聚合：healthy、degraded、unhealthy、unknown。 */
-  transportStatus: string;
+  transportStatus: DistributedEventTransportStatus;
   testEventEnabled: boolean;
 }
 
@@ -256,7 +271,7 @@ export interface GetDistributedEventRejectionsInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;

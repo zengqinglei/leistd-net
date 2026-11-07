@@ -162,14 +162,16 @@ framework/components/event-bus/
 │  └─ Events/         + IDistributedEvent、DistributedEvent、EventNameAttribute、IOrderedDistributedEvent
 ├─ Leistd.EventBus.Local                 （不变）
 ├─ Leistd.EventBus.Distributed           （新增，相当于纵向切片的 Core）
-│  ├─ Publishing/     信封与消息头约定
-│  ├─ Consumers/      AddDistributedEventHandler、订阅表（事件名 → 事件类型 → 消费者）
-│  ├─ Transport/      IDistributedEventTransport、IDistributedEventReceiver、原始消息、结果分类
+│  ├─ Subscriptions/  订阅表（事件名 → 事件类型 → 消费者）
+│  ├─ Transport/      信封、消息头、原始消息、传输与接收契约、结果分类
 │  ├─ Loopback/       进程内回环传输
 │  ├─ Management/     IDistributedEventManagementService 与内部实现
-│  ├─ Dtos/  Stores/  Events/  Options/  Errors/  ExceptionMappings/  Resources/  Diagnostics/
+│  ├─ Dtos/           按发件箱、收件箱、拒收、恢复、状态五个主题合并
+│  ├─ Stores/         管理存储契约与三类记录状态
+│  ├─ DependencyInjection.cs  AddDistributedEventBus、AddDistributedEventHandler
+│  └─ Events/  Options/  Errors/  ExceptionMappings/  Resources/  Diagnostics/
 ├─ Leistd.EventBus.EntityFrameworkCore   （新增）
-│  ├─ Entities/  EntityConfigurations/  Stores/
+│  ├─ Entities/  EntityConfigurations/  Stores/  Options/（独立保留期选项）
 │  ├─ Outbox/         发布实现、提交后立即发送、兜底任务 event-bus.outbox
 │  ├─ Inbox/          接收与拒收入口、提交后立即处理、兜底任务 event-bus.inbox、重新解码
 │  ├─ Databases/      宿主按物理库查看的作用域
@@ -408,7 +410,12 @@ public interface IDistributedEventReceiver
 | `BacklogWarningAfter` | `00:05:00` | 积压告警阈值 |
 | `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` | `true` | 进程分工，见上文 |
 | `TestEvent:Enabled` | `true` | 内置测试事件。中枢不允许服务自发自收时关闭：本服务不订阅 `event-bus.test`，快照里报 `testEventEnabled=false`，界面隐藏按钮 |
-| `Retention:Enabled` / `Retention:Days` | `true` / `14` | 删除最后变更早于期限的终态记录 |
+
+`Leistd:EventBus:Distributed:Retention`（EF 包的 `DistributedEventRetentionOptions`，由 `AddDistributedEventRetention` 独立绑定；不嵌入 `DistributedEventOptions`，自定义配置节时仍只有这一个值源）：
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `Enabled` / `Days` | `true` / `14` | 删除最后变更早于期限的终态记录 |
 
 `Leistd:EventBus:RabbitMQ`：
 
@@ -455,7 +462,7 @@ RabbitMQ 的单活队列与串行接收保证首次交付的入库次序；Kafka
 | `GET /catalog` | Read | 事件目录 |
 | `GET /outbox`、`GET /outbox/{id}` | Read | 偏移分页，按 `Id` 倒序，按首次加载时刻设上限；可按状态、事件名、错误码、关键字（事件 ID 或排序键，精确匹配）筛选。不含载荷 |
 | `GET /inbox`、`GET /inbox/{id}` | Read | 同上，另可按消费者筛选 |
-| `GET /rejections`、`GET /rejections/{id}` | Read | 同上，另可按原因筛选 |
+| `GET /rejections`、`GET /rejections/{id}` | Read（仅宿主） | 同样分页、按事件名和原因筛选；关键字只精确匹配事件 ID，不匹配排序键 |
 | `GET /{outbox\|inbox\|rejections}/{id}/payload` | Manage | 载荷与原始消息 |
 | `POST /outbox/redeliver` | Manage | 请求体为 `ids`（最多 100）或筛选条件，二选一；返回受影响条数，以及被跳过的 id 与原因 |
 | `POST /inbox/replay` | Manage | 同上 |
@@ -467,9 +474,11 @@ RabbitMQ 的单活队列与串行接收保证首次交付的入库次序；Kafka
 ### HTTP 与管理 DTO 约定
 
 - 三张表的自增 Id 在 JSON 中输出十进制字符串；路径参数仍为十进制 long，前端不转为 number。勾选请求的 ids 接受十进制字符串。
-- 列表返回 `PagedResult<T>`；详情概要为 `record`（列表同形）加 `headers`，收件箱与拒收另有 `coordinates`。载荷只从独立 Manage 端点返回：发件箱、收件箱为 `payload`（JSON 文本），拒收为 `rawBody`（Base64）。
-- 查询的 `before` 为 UTC 时刻，按创建/接收时间含上限；筛选恢复必须提供，不能因翻页改为当前时刻。按当前筛选包含关键字的精确匹配，避免恢复超出页面可见筛选范围的记录。
+- 列表返回 `PagedResult<T>`；详情概要为 `record`（列表同形）加 `headers`，收件箱与拒收另有 `coordinates`。载荷只从独立 Manage 端点返回：发件箱、收件箱返回 `DistributedEventPayloadOutputDto`，其 `payload`（JSON 文本）必填；拒收返回 `DistributedEventRawMessageOutputDto`，其 `rawBody`（Base64）必填。
+- 查询的 `before` 为 UTC 时刻，按创建/接收时间含上限；筛选恢复必须提供，不能因翻页改为当前时刻。按当前筛选包含关键字的精确匹配（拒收只匹配事件 ID）；事件名、关键字、错误码、消费者与拒收原因均最多 256 个字符，列表与恢复筛选一致。
 - 业务错误：`DistributedEvents:RecordNotFound`、`DistributedEvents:DatabaseNotFound` 默认 404，`DistributedEvents:HostOnly` 默认 403，`DistributedEvents:TestEventDisabled` 默认 400。单项跳过原因用 `not-found`、`invalid-state`、`redecode-failed`，不把部分跳过变成整批异常。
+- 列表用例为 `GetOutboxListAsync`、`GetInboxListAsync`、`GetRejectionsAsync`，详情用例为 `GetOutboxAsync`、`GetInboxAsync`、`GetRejectionAsync`；映射端点时检查管理用例与内部管理存储均已登记，避免缺存储的宿主运行到请求阶段才报错。
+- 跳过原因常量归 `DistributedEventRecoverySkipReasons`；框架重试窗口失败码归 `DistributedEventOutboxFailureCodes`，与允许传输自定义的失败码并存。测试事件名与消费者名归 `DistributedEventTestEvent`，不散落字符串。前端跳过原因与传输健康状态用同值的联合类型。
 - 每个成功提交的恢复批次发布一条 `DistributedEventManagedEvent`，带本批实际改动条数和原筛选（含时间上限）或实际改动的 ids；部分批次失败时已经提交的动作仍有准确留痕。
 
 ### 可观测性
@@ -576,6 +585,10 @@ RabbitMQ 的单活队列与串行接收保证首次交付的入库次序；Kafka
 | 7 | 模板前端 | 方案 A 页面、路由、菜单、词条、Mock、spec、一个 e2e spec（发送测试事件 → 发件箱 Sent → 收件箱 Processed） | 目标 spec 与 lint（D21、D22）；Mock 站点四种宽度截图 |
 | 8 | 模板文档与矩阵 | `template.json` 参数、生成项目规范（含改用 Kafka 的说明）、读取表、两个矩阵场景、`ForbiddenTokens` | 选择器场景 `-GenerateOnly`（D23）；W6 人工验收 D20 |
 | 9 | 收尾 | 本规格 §4；仍然成立的规则上收到常驻文档；给下游写通知（附传输实现指南要点与迁移清单） | — |
+
+### 测试组织
+
+`framework/tests/components/event-bus/Leistd.EventBus.Tests/` 按被测包组织：`Local/`、`Core/`、`Distributed/`、`EntityFrameworkCore/`、`AspNetCore/`、`RabbitMQ/`、`Kafka/`。两种 broker 共用套件归 `Contracts/`，专用替身归 `TestDoubles/`。元数据用例归 `Core/`；只为已有用例创建目录，不预建空目录。
 
 ### 协作分工
 

@@ -33,6 +33,4 @@ public sealed class DistributedEventOptions
     /// <summary>内置测试事件。</summary>
     public DistributedEventTestOptions TestEvent { get; set; } = new();
 
-    /// <summary>终态记录保留期。</summary>
-    public DistributedEventRetentionOptions Retention { get; set; } = new();
 }

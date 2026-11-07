@@ -423,11 +423,11 @@
 │                    + EventNameAttribute、IOrderedDistributedEvent
 ├─ Leistd.EventBus.Local           不变
 ├─ Leistd.EventBus.Distributed     新增：纵向切片的 Core 角色
-│  ├─ Publishing/  Consumers/  Transport/  Loopback/
-│  ├─ Management/  Dtos/  Stores/  Events/
+│  ├─ Subscriptions/  Transport/（信封与消息头在此）  Loopback/
+│  ├─ Management/  Dtos/（五个主题文件）  Stores/（契约与状态）  Events/
 │  └─ Options/  Errors/  ExceptionMappings/  Resources/  Diagnostics/
 ├─ Leistd.EventBus.EntityFrameworkCore   新增
-│  ├─ Entities/  EntityConfigurations/  Stores/
+│  ├─ Entities/  EntityConfigurations/  Stores/  Options/（保留期）
 │  ├─ Outbox/      发布、立即发送、event-bus.outbox
 │  ├─ Inbox/       接收与拒收入口、立即处理、event-bus.inbox、重新解码
 │  ├─ Databases/   宿主按物理库查看的作用域
@@ -453,7 +453,7 @@
         <tr><td><code>AddDistributedEventBus(configure?, "Leistd:EventBus:Distributed")</code></td><td>Distributed</td><td>选项绑定加启动期校验；登记错误码与内置测试事件 <code>event-bus.test</code></td></tr>
         <tr><td><code>AddDistributedEventHandler&lt;THandler&gt;(consumerName?)</code></td><td>Distributed</td><td>登记处理器并声明订阅；消费者名默认取类型全名</td></tr>
         <tr><td><code>AddLoopbackEventTransport()</code> / <code>AddRabbitMqEventTransport()</code> / <code>AddKafkaEventTransport()</code></td><td>Distributed / RabbitMQ / Kafka</td><td>三选一；业务也可以自己实现 <code>IDistributedEventTransport</code></td></tr>
-        <tr><td><code>AddDistributedEventBusEfCore&lt;TDbContext&gt;()</code>、<code>ConfigureDistributedEventBus()</code></td><td>EF</td><td>三张表、发布实现、接收入口、两个兜底任务</td></tr>
+        <tr><td><code>AddDistributedEventBusEfCore&lt;TDbContext&gt;()</code>、<code>ConfigureDistributedEventBus()</code></td><td>EF</td><td>三张表、发布实现、接收入口、两个兜底任务；保留期由 EF 独立选项绑定</td></tr>
         <tr><td><code>AddDistributedEventRetention&lt;TDbContext&gt;()</code></td><td>EF</td><td>保留期任务，默认开启，14 天</td></tr>
         <tr><td><code>MapDistributedEvents(o =&gt; { ReadPolicy; ManagePolicy; })</code></td><td>AspNetCore</td><td>两个策略必填，漏配在映射时抛出</td></tr>
       </table>
@@ -537,7 +537,8 @@ public interface IDistributedEventReceiver
           <tr><td><code>BacklogWarningAfter</code></td><td>5 分钟</td></tr>
           <tr><td><code>Outbox:DispatchEnabled</code> · <code>Inbox:ReceiveEnabled</code> · <code>Inbox:ProcessingEnabled</code></td><td>true（进程分工）</td></tr>
           <tr><td><code>TestEvent:Enabled</code></td><td>true</td></tr>
-          <tr><td><code>Retention:Enabled</code> / <code>Days</code></td><td>true / 14</td></tr>
+          <tr><th><code>Leistd:EventBus:Distributed:Retention</code>（EF 独立选项）</th><th>默认</th></tr>
+          <tr><td><code>Enabled</code> / <code>Days</code></td><td>true / 14</td></tr>
           <tr><th><code>Leistd:EventBus:RabbitMQ</code></th><th>默认</th></tr>
           <tr><td><code>ConnectionStringName</code></td><td>RabbitMQ</td></tr>
           <tr><td><code>Exchange</code> / <code>QueueName</code></td><td>leistd.events / 应用名</td></tr>

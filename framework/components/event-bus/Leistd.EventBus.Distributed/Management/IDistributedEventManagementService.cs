@@ -15,7 +15,7 @@ public interface IDistributedEventManagementService
     Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetCatalogAsync(string? database = null, CancellationToken cancellationToken = default);
 
     /// <summary>按 Id 倒序分页读取概要，不含载荷。</summary>
-    Task<PagedResult<DistributedEventOutboxOutputDto>> GetOutboxAsync(GetDistributedEventOutboxInputDto input, CancellationToken cancellationToken = default);
+    Task<PagedResult<DistributedEventOutboxOutputDto>> GetOutboxListAsync(GetDistributedEventOutboxInputDto input, CancellationToken cancellationToken = default);
 
     /// <summary>读取详情概要；不存在时抛 RecordNotFound。</summary>
     Task<DistributedEventOutboxDetailOutputDto> GetOutboxAsync(long id, string? database = null, CancellationToken cancellationToken = default);
@@ -24,7 +24,7 @@ public interface IDistributedEventManagementService
     Task<DistributedEventPayloadOutputDto> GetOutboxPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default);
 
     /// <summary>按 Id 倒序分页读取概要，不含载荷。</summary>
-    Task<PagedResult<DistributedEventInboxOutputDto>> GetInboxAsync(GetDistributedEventInboxInputDto input, CancellationToken cancellationToken = default);
+    Task<PagedResult<DistributedEventInboxOutputDto>> GetInboxListAsync(GetDistributedEventInboxInputDto input, CancellationToken cancellationToken = default);
 
     /// <summary>读取详情概要；不存在时抛 RecordNotFound。</summary>
     Task<DistributedEventInboxDetailOutputDto> GetInboxAsync(long id, string? database = null, CancellationToken cancellationToken = default);
@@ -39,7 +39,7 @@ public interface IDistributedEventManagementService
     Task<DistributedEventRejectionDetailOutputDto> GetRejectionAsync(long id, string? database = null, CancellationToken cancellationToken = default);
 
     /// <summary>读取冻结载荷，须由 Manage 策略授权。</summary>
-    Task<DistributedEventPayloadOutputDto> GetRejectionPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default);
+    Task<DistributedEventRawMessageOutputDto> GetRejectionPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default);
 
     /// <summary>重投死信，重置发送失败窗口；筛选动作分批提交。</summary>
     Task<DistributedEventRecoveryOutputDto> RedeliverAsync(RecoverDistributedEventOutboxInputDto input, string? database = null, CancellationToken cancellationToken = default);

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Leistd.Data.Paging;
 using Leistd.EventBus.Distributed.Dtos;
 using Leistd.EventBus.Distributed.Management;
+using Leistd.EventBus.Distributed.Stores;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,7 +67,7 @@ public static class DistributedEventEndpoints
     public const string SendTestEventName = NamePrefix + "SendTestEvent";
 
     /// <summary>将管理端点映射到宿主给定的路由组，读载荷与所有写操作使用 Manage 策略。</summary>
-    /// <remarks>策略缺失或管理用例未注册时映射即失败；不叠加宿主默认策略。租户与宿主库边界由管理用例校验。</remarks>
+    /// <remarks>策略缺失、管理用例或管理存储未注册时映射即失败；不叠加宿主默认策略。租户与宿主库边界由管理用例校验。</remarks>
     /// <example>
     /// <code>
     /// app.MapGroup("/api/v1/distributed-events").MapDistributedEvents(options =&gt;
@@ -85,9 +86,10 @@ public static class DistributedEventEndpoints
         configure(options);
         options.Validate();
         var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
-        if (probe is not null && !probe.IsService(typeof(IDistributedEventManagementService)))
+        if (probe is not null && (!probe.IsService(typeof(IDistributedEventManagementService))
+            || !probe.IsService(typeof(IDistributedEventManagementStore))))
         {
-            throw new InvalidOperationException("MapDistributedEvents requires AddDistributedEventBus and a management store.");
+            throw new InvalidOperationException("MapDistributedEvents requires AddDistributedEventBus and a management store (e.g. AddDistributedEventBusEfCore<TDbContext>()).");
         }
 
         var group = endpoints.MapGroup(string.Empty);
@@ -110,7 +112,7 @@ public static class DistributedEventEndpoints
                 int offset = 0, int limit = PageRequest.DefaultLimit,
                 string? database = null, string? status = null,
                 string? eventName = null, string? keyword = null, DateTime? before = null, string? errorCode = null)
-                => service.GetOutboxAsync(new GetDistributedEventOutboxInputDto
+                => service.GetOutboxListAsync(new GetDistributedEventOutboxInputDto
                     {
                         Offset = offset, Limit = limit, Database = database,
                         Status = ParseStatus<DistributedEventOutboxStatus>(status),
@@ -134,7 +136,7 @@ public static class DistributedEventEndpoints
                 int offset = 0, int limit = PageRequest.DefaultLimit,
                 string? database = null, string? status = null,
                 string? eventName = null, string? keyword = null, DateTime? before = null, string? errorCode = null, string? consumer = null)
-                => service.GetInboxAsync(new GetDistributedEventInboxInputDto
+                => service.GetInboxListAsync(new GetDistributedEventInboxInputDto
                     {
                         Offset = offset, Limit = limit, Database = database,
                         Status = ParseStatus<DistributedEventInboxStatus>(status),

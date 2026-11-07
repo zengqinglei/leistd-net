@@ -1,4 +1,3 @@
-using Leistd.EventBus.Distributed.Publishing;
 namespace Leistd.EventBus.Distributed.Transport;
 
 /// <summary>每个服务选择一个传输；实现必须线程安全，不捕获接收工作单元的作用域。</summary>
