@@ -23,7 +23,8 @@ public static class DependencyInjection
     /// <para>按 <paramref name="serviceName"/> 区分客户端，不同服务名可多次登记。同一服务名以相同的客户端接口、实现、
     /// 选项类型与配置节重复调用时不重复登记客户端与处理器，只追加 <paramref name="configure"/>，并返回该命名客户端的构建器；
     /// 同一服务名换用其他客户端接口、实现、选项类型或配置节，或同一选项类型用于另一服务名时抛出 <see cref="InvalidOperationException"/>。</para>
-    /// <para>宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传 TraceId，本方法不代为注册。</para>
+    /// <para>宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传关联标识，本方法不代为注册；
+    /// 单个客户端不转发时设 <see cref="ServiceClientOptions.ForwardCorrelationId"/> 为 <see langword="false"/>。</para>
     /// </remarks>
     /// <typeparam name="TClient">客户端接口。</typeparam>
     /// <typeparam name="TImplementation">客户端实现。</typeparam>
@@ -126,7 +127,7 @@ public static class DependencyInjection
 
     /// <summary>在现有客户端构建器上装配服务客户端标准管道。</summary>
     /// <remarks>
-    /// <para>依次应用传输异常与链路标识处理器。</para>
+    /// <para>依次应用传输异常与关联标识处理器；<see cref="ServiceClientOptions.ForwardCorrelationId"/> 为 <see langword="false"/> 时后者直通。</para>
     /// <para>按命名客户端登记：同一客户端以相同 <typeparamref name="TOptions"/> 重复调用（包括已由
     /// <c>AddServiceClient</c> 装配过的客户端）不重复挂处理器；同一客户端换用另一选项类型时抛出
     /// <see cref="InvalidOperationException"/>。</para>
@@ -182,8 +183,10 @@ public static class DependencyInjection
         // 传输异常统一放在最外层，才能覆盖取令牌与下游请求的完整调用。
         builder.AddHttpMessageHandler(() => new TransportFailureHandler());
 
-        // 可选组件未注册时使用直通处理器，保持宿主显式组合。
+        // 可选组件未注册或该客户端关闭转发时使用直通处理器，保持宿主显式组合与管道结构稳定。
+        // 与基址一样读 IOptions：同一命名客户端在进程内行为一致。
         builder.AddHttpMessageHandler(provider =>
+            provider.GetRequiredService<IOptions<TOptions>>().Value.ForwardCorrelationId &&
             provider.GetService<ICorrelationIdProvider>() is { } correlationIdProvider
                 ? new CorrelationIdDelegatingHandler(
                     correlationIdProvider,

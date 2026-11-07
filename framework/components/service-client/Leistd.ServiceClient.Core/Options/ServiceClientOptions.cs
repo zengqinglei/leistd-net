@@ -9,4 +9,12 @@ public class ServiceClientOptions
     /// </remarks>
     public string? BaseAddress { get; set; }
 
+    /// <summary>是否向该服务转发关联标识请求头；默认 <see langword="true"/>。</summary>
+    /// <remarks>
+    /// <para>调用不接收本系统内部关联标识的第三方时设为 <see langword="false"/>，该客户端不挂关联标识处理器，其他客户端不受影响。
+    /// 经 <c>IOptions</c> 在进程内首次构建处理器链时读取一次，之后固定，配置重载不生效。</para>
+    /// <para>只控制 Leistd.Tracing 的关联标识头；W3C <c>traceparent</c> 由 .NET 运行时传播，需要关闭时用官方
+    /// <c>DistributedContextPropagator</c>。宿主未注册关联标识时本项不起作用。</para>
+    /// </remarks>
+    public bool ForwardCorrelationId { get; set; } = true;
 }
