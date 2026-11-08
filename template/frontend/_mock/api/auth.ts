@@ -483,6 +483,9 @@ interface TwoFactorChallenge {
 const pendingSignInStorage = new StoredMap('mock_pending_sign_in');
 const PENDING_TOKEN = 'token';
 const PENDING_CHALLENGE = 'challenge';
+//#if (Email)
+const PENDING_EMAIL = 'email';
+//#endif
 
 /** 待完成登录的绝对期限：开启邮箱能力时是邮箱码有效期的两倍，否则 5 分钟；不滑动。 */
 //#if (Email)
@@ -496,11 +499,51 @@ function endPendingSignIn(): void {
   pendingSignInStorage.clear();
 }
 
-/** 挑战改了（次数、最近一次发码或通行密钥选项）之后写回存储。 */
+/**
+ * 挑战改了（次数、最近一次发码或通行密钥选项）之后写回存储。最近发出的那封邮件挑战（码、剩余次数、到期）
+ * 与它占着的发送间隔一并写回：刷新之后原来收到的码照样能用，间隔内也照样沿用它。
+ */
 function rememberPending(token: string, challenge: TwoFactorChallenge): void {
   pendingSignInStorage.set(PENDING_TOKEN, token);
   pendingSignInStorage.set(PENDING_CHALLENGE, JSON.stringify(challenge));
+  //#if (Email)
+  const email = challenge.emailChallengeId
+    ? emailChallengeStore.get(challenge.emailChallengeId)
+    : undefined;
+  if (email) {
+    const rateKey = signInRateKey(email.scope, email.email);
+    pendingSignInStorage.set(
+      PENDING_EMAIL,
+      JSON.stringify({ email, retryUntil: emailRateLimitStore.get(rateKey) ?? 0 }),
+    );
+  } else {
+    pendingSignInStorage.delete(PENDING_EMAIL);
+  }
+  //#endif
 }
+//#if (Email)
+
+/** 页面重新载入后内存里的邮件挑战已经没了：按存储恢复这次待完成登录最近发出的那一封与它的发送间隔。 */
+function restorePendingEmail(challenge: TwoFactorChallenge): void {
+  const stored = pendingSignInStorage.get(PENDING_EMAIL);
+  const id = challenge.emailChallengeId;
+  if (!stored || !id || emailChallengeStore.has(id)) {
+    return;
+  }
+  const { email, retryUntil } = JSON.parse(stored) as {
+    email: EmailVerificationChallenge;
+    retryUntil: number;
+  };
+  emailChallengeStore.set(id, email);
+  const rateKey = signInRateKey(email.scope, email.email);
+  emailRateLimitStore.set(rateKey, retryUntil);
+  signInEmailChallenges.set(rateKey, id);
+}
+
+function signInRateKey(scope: string, email: string): string {
+  return `${scope}:sign-in:${email}`;
+}
+//#endif
 
 /** 凭临时 Cookie 取待完成的登录；不存在、已到期、属于别的租户或用户已不在时按到期拒绝并删掉 Cookie。 */
 function pendingChallenge(req: MockRequest): {
@@ -522,6 +565,9 @@ function pendingChallenge(req: MockRequest): {
     endPendingSignIn();
     throw twoFactorChallengeExpired();
   }
+  //#if (Email)
+  restorePendingEmail(challenge);
+  //#endif
   return { token, challenge, user };
 }
 
@@ -666,18 +712,10 @@ function sendTwoFactorEmailCode(req: MockRequest): TwoFactorEmailCodeOutputDto {
   ) {
     throw twoFactorMethodUnavailable();
   }
-  // 与后端一致：剩余不足一个码的有效期时不新发（不计数、不结束登录），已发的码与其他方式照常可用
-  if (challenge.expiresAt - Date.now() < EMAIL_CODE_EXPIRY_SECONDS * 1000) {
-    throw new MockException(400, {
-      code: 'Auth:EmailCodeResendTooLate',
-      message:
-        'Not enough time is left to send a new code. Use the code you already received, try another way, or sign in again.',
-    });
-  }
 
   // 与后端一致：登录第二步单独一把限频键（找回口令不挡它）；间隔内再发沿用上一封，回报剩余间隔
   const email = normalizeEmail(user.email);
-  const rateKey = `${challenge.tenantKey}:sign-in:${email}`;
+  const rateKey = signInRateKey(challenge.tenantKey, email);
   const retryUntil = emailRateLimitStore.get(rateKey) ?? 0;
   const previous = signInEmailChallenges.get(rateKey);
   const previousChallenge = previous ? emailChallengeStore.get(previous) : undefined;
@@ -693,6 +731,15 @@ function sendTwoFactorEmailCode(req: MockRequest): TwoFactorEmailCodeOutputDto {
     throw new MockException(429, {
       code: 'Auth:EmailCodeSendTooFrequent',
       message: 'Verification codes are being sent too frequently. Please try again later.',
+    });
+  }
+  // 与后端一致：只在真正新发时看外层剩余期限；不足一个码的有效期就不新发（不计数、不结束登录），
+  // 已发的码与其他方式照常可用。上面间隔内沿用旧码不受它限制
+  if (challenge.expiresAt - Date.now() < EMAIL_CODE_EXPIRY_SECONDS * 1000) {
+    throw new MockException(400, {
+      code: 'Auth:EmailCodeResendTooLate',
+      message:
+        'Not enough time is left to send a new code. Use the code you already received, try another way, or sign in again.',
     });
   }
   emailRateLimitStore.set(rateKey, Date.now() + EMAIL_CODE_RETRY_SECONDS * 1000);

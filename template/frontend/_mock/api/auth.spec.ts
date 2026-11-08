@@ -451,6 +451,70 @@ describe('mock email two-factor', () => {
     }
   });
 
+  // 外层剩余不足一个码的有效期时，只拒绝真正新发：t=5 首发、t=5.5 仍在发送间隔内，沿用原码、回报真实剩余，期限不变
+  it('reuses the code within the send interval even when too little time is left for a new one', () => {
+    const start = Date.now() - 7_200_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      demo.preferredTwoFactorMethod = 'email';
+      firstStep();
+      clock.mockReturnValue(start + 300_000);
+      expect(
+        (sendEmailCode({ headers, body: {} }) as { expiresInSeconds: number }).expiresInSeconds,
+      ).toBe(300);
+
+      clock.mockReturnValue(start + 330_000);
+      const reused = sendEmailCode({ headers, body: {} }) as {
+        expiresInSeconds: number;
+        retryAfterSeconds: number;
+      };
+      expect(reused.expiresInSeconds).toBe(270);
+      expect(reused.retryAfterSeconds).toBe(30);
+
+      clock.mockReturnValue(start + 594_000);
+      completeTwoFactor({ headers, body: { emailCode: '123456' } });
+      expect(getMockSessionUserId()).toBe(demo.id);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  // 刷新页面（Mock 模块重新初始化、内存里的邮件挑战都没了）之后：t=4 发出的码照样能完成，t=6 不再新发
+  it('keeps the sent code usable after the page reloads late in the sign-in', async () => {
+    const start = Date.now() - 7_200_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      demo.preferredTwoFactorMethod = 'email';
+      firstStep();
+      clock.mockReturnValue(start + 240_000);
+      sendEmailCode({ headers, body: {} });
+
+      clock.mockReturnValue(start + 360_000);
+      vi.resetModules();
+      const reloaded = await import('./auth');
+      const reloadedUsers = (await import('../data/user')).USERS;
+      // 用户与设置在真实页面里由 provideMock 从 sessionStorage 恢复；这里按同样的结果摆好
+      Object.assign(
+        reloadedUsers.find((u) => u.username === 'demo')!,
+        demo,
+      );
+      (await import('../data/settings')).TENANT_SETTING_VALUES.set(
+        'host:Security.AllowEmailTwoFactor',
+        'true',
+      );
+      const send = reloaded.AUTH_API['POST /api/v1/auth/two-factor/email-code'] as Handler;
+      const complete = reloaded.AUTH_API['POST /api/v1/auth/two-factor'] as Handler;
+
+      expect(rejectionOf(() => send({ headers, body: {} })).error.code).toBe(
+        'Auth:EmailCodeResendTooLate',
+      );
+      complete({ headers, body: { emailCode: '123456' } });
+      expect(getMockSessionUserId()).toBe(demo.id);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   // 换邮箱：邮箱验证码随之关闭，指向它的首选清除
   it('turns email codes off when the email address changes', () => {
     const profile = AUTH_API['PUT /api/v1/auth/me'] as Handler;
