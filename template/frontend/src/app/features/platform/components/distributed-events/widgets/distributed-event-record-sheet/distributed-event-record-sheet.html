@@ -154,10 +154,14 @@
                       field[1]
                     }}</code>
                   } @else if (field[0] === 'tenantId' && field[1]) {
-                    <span>{{ tenantNames()[$any(field[1])] || field[1] }}</span
-                    ><code class="text-muted-foreground block font-mono text-xs">{{
-                      field[1]
-                    }}</code>
+                    <span [class.font-mono]="!tenantNames()[$any(field[1])]">{{
+                      tenantNames()[$any(field[1])] || field[1]
+                    }}</span>
+                    @if (tenantNames()[$any(field[1])]) {
+                      <code class="text-muted-foreground block font-mono text-xs">{{
+                        field[1]
+                      }}</code>
+                    }
                   } @else {
                     <span [class.font-mono]="!isDate(field[0])">{{
                       isDate(field[0]) && field[1]
