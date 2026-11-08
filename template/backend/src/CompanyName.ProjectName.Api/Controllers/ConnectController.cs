@@ -164,9 +164,12 @@ public sealed class ConnectController(
                 + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
         var session = await HttpContext.AuthenticateAsync(AuthenticationSchemeNames.SessionCookie);
-        // 没有可结束的会话：按协议直接回到依赖方登记的退出回调
+        // 没有可结束的会话：退出就此完成，同一浏览器上的待完成登录一并结束，按协议直接回到依赖方登记的退出回调
         if (!session.Succeeded || session.Principal is null)
+        {
+            await pendingSignIn.EndAsync(HttpContext, cancellationToken);
             return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
 
         var sessionId = session.Principal.GetClaim(CustomClaimTypes.SessionId);
         var hint = (await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
@@ -196,11 +199,13 @@ public sealed class ConnectController(
         }));
     }
 
+    // 退出真正完成时的收尾；还在等确认或确认被拒时不走这里，待完成登录也就不提前结束
     private async Task<IActionResult> EndSessionAsync(CancellationToken cancellationToken)
     {
-        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效
+        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效。待完成登录一并结束
         await sessionAppService.EndCurrentSessionAsync(cancellationToken);
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
+        await pendingSignIn.EndAsync(HttpContext, cancellationToken);
         return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 

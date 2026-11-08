@@ -102,7 +102,8 @@ internal sealed class TwoFactorChallengeStore(
     public Task RemoveAsync(string token, CancellationToken cancellationToken) =>
         cache.RemoveAsync(Key(token), cancellationToken);
 
-    // 邮件写明"N 分钟内有效"（N 为邮箱验证码有效期）：取 2N，首封码与在它有效期内任一时刻的重发都有完整窗口。
+    // 邮件写明"N 分钟内有效"（N 为邮箱验证码有效期）：取 2N，留出首封码与一次重发的余地；
+    // 每封新码都要有完整的 N 分钟，剩余不足 N 时不再新发（见 EmailChallengeStore.IssueTwoFactorSignInAsync）。
     // 按创建时的策略算定，之后调整策略不影响已有挑战。不发邮箱码的形态保持固定时长
 #if (Email)
     private async Task<TimeSpan> LifetimeAsync(CancellationToken cancellationToken) =>

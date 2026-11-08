@@ -152,9 +152,12 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-    /// <summary>剩余恰好等于一个码的有效期（N=5，t=5 首发）：照常新发，有效 300 秒。</summary>
+    /// <summary>
+    /// 剩余恰好等于一个码的有效期（N=5，t=5 首发）：照常新发，有效 300 秒。t=5.5 再请求时剩余 4.5 &lt; 5，
+    /// 但还在发送间隔内：沿用这一封、回报真实剩余（约 270 秒）、不另发信，原期限不变，t=9.9 照样用它完成登录。
+    /// </summary>
     [Fact]
-    public async Task A_first_send_with_exactly_one_code_lifetime_left_is_issued()
+    public async Task A_first_send_with_exactly_one_code_lifetime_left_is_issued_and_then_reused()
     {
         var (host, clock) = await CreateHostAsync();
         using var ownedHost = host;
@@ -164,6 +167,16 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         var prompt = await PasswordStepAsync(host, user);
         clock.Advance(TimeSpan.FromMinutes(5));
         Assert.Equal(300, await SendAndReadExpiryAsync(host, prompt.Token));
+        var code = await Mailbox(host).NextCodeAsync(user.Email);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        var sentBefore = SentCount(host, user.Email);
+        Assert.InRange(await SendAndReadExpiryAsync(host, prompt.Token), 269, 270);
+        Assert.Equal(sentBefore, SentCount(host, user.Email));
+
+        clock.Advance(TimeSpan.FromMinutes(4.4));
+        using var signedIn = await SecondStepAsync(host, prompt.Token, new { EmailCode = code });
+        Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
     /// <summary>期限按创建时的 N 算：N=3（期限 6 分钟），t=2 首发有效 180 秒；t=3.5 重发时剩余 2.5 &lt; 3，不新发。</summary>

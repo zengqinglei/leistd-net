@@ -349,19 +349,10 @@ internal sealed class AuthAppService(
             throw TwoFactorMethodUnavailable();
         }
 
-        // 邮件写明"N 分钟内有效"：待完成的登录剩余不足 N 时不再新发，免得发出刚到手就用不了的码。
-        // 不结束这次登录、不计数：已发出的码与其他方式照常可用到原期限。
-        // 挑战期限取 2N（见 TwoFactorChallengeStore），首封码有效期内的任一次重发因此都有完整窗口
-        var codeLifetime = TimeSpan.FromMinutes((await registrationPolicy.GetAsync(cancellationToken)).EmailCodeExpiryMinutes);
-        if (challenge.ExpiresAt - now < codeLifetime)
-        {
-            throw new BusinessException(
-                AuthErrorCodes.EmailCodeResendTooLate,
-                "Not enough time is left to send a new code. Use the code you already received, try another way, or sign in again.");
-        }
-
+        // 邮件写明"N 分钟内有效"：只有待完成的登录还剩至少 N 时才真正新发——发码存储在发送间隔锁内先判复用，
+        // 真要新发才看这一条；不足时以 Auth:EmailCodeResendTooLate 拒绝，不计数、不结束这次登录，已发的码与其他方式照常可用
         var issued = await emailChallengeStore.IssueTwoFactorSignInAsync(
-            new EmailCodeRecipient(user.Id, user.Email, user.SecurityStamp), cancellationToken);
+            new EmailCodeRecipient(user.Id, user.Email, user.SecurityStamp), challenge.ExpiresAt, cancellationToken);
         await twoFactorChallengeStore.AttachEmailChallengeAsync(token, challenge, issued.ChallengeId, cancellationToken);
         return new TwoFactorEmailCodeOutputDto
         {

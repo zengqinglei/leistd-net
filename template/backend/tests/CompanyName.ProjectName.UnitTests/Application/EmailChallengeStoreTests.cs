@@ -37,6 +37,9 @@ namespace CompanyName.ProjectName.UnitTests.Application;
 /// </remarks>
 public sealed partial class EmailChallengeStoreTests
 {
+    // 这里只测码本身的签发与复用；待完成登录的期限限制由登录第二步的集成测试覆盖
+    private static readonly DateTime NoSignInDeadline = DateTime.MaxValue;
+
     private static readonly TimeSpan FailSafe = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan SendInterval = TimeSpan.FromSeconds(60);
 
@@ -351,7 +354,7 @@ public sealed partial class EmailChallengeStoreTests
     public async Task A_sign_in_code_is_sent_in_the_background_and_proves_the_user_and_stamp()
     {
         var recipient = new EmailCodeRecipient(Guid.NewGuid(), "signin@example.test", "stamp-1");
-        var issued = await _store.IssueTwoFactorSignInAsync(recipient);
+        var issued = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
         Assert.Empty(_sender.Calls);
 
         await _queue.RunAllAsync(_sender, _time);
@@ -367,18 +370,41 @@ public sealed partial class EmailChallengeStoreTests
     public async Task A_sign_in_send_within_the_interval_reuses_the_previous_code()
     {
         var recipient = new EmailCodeRecipient(Guid.NewGuid(), "reuse@example.test", "stamp-1");
-        var first = await _store.IssueTwoFactorSignInAsync(recipient);
+        var first = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
         _time.Advance(TimeSpan.FromSeconds(20));
 
-        var again = await _store.IssueTwoFactorSignInAsync(recipient);
+        var again = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
 
         Assert.Equal(first.ChallengeId, again.ChallengeId);
         Assert.Equal((int)(SendInterval - TimeSpan.FromSeconds(20)).TotalSeconds, again.RetryAfterSeconds);
         Assert.Single(_queue.Items);
 
         var exception = await Assert.ThrowsAsync<BusinessException>(
-            () => _store.IssueTwoFactorSignInAsync(recipient with { SecurityStamp = "stamp-2" }));
+            () => _store.IssueTwoFactorSignInAsync(recipient with { SecurityStamp = "stamp-2" }, NoSignInDeadline));
         Assert.Equal(AuthErrorCodes.EmailCodeSendTooFrequent, exception.Code);
+    }
+
+    /// <summary>
+    /// 待完成登录的剩余期限只管真正新发：剩余不足一个有效期时，发送间隔内沿用上一封照常成功、回报它的真实剩余有效期；
+    /// 间隔过后要新发就拒绝（<c>Auth:EmailCodeResendTooLate</c>），不另发信。
+    /// </summary>
+    [Fact]
+    public async Task Reuse_near_the_sign_in_deadline_succeeds_but_a_new_code_is_refused()
+    {
+        var recipient = new EmailCodeRecipient(Guid.NewGuid(), "deadline@example.test", "stamp-1");
+        var lifetime = TimeSpan.FromMinutes(FixedRegistrationPolicy.Policy.EmailCodeExpiryMinutes);
+        var deadline = _time.GetUtcNow().UtcDateTime + lifetime;
+        var first = await _store.IssueTwoFactorSignInAsync(recipient, deadline);
+
+        _time.Advance(TimeSpan.FromSeconds(30));
+        var reused = await _store.IssueTwoFactorSignInAsync(recipient, deadline);
+        Assert.Equal(first.ChallengeId, reused.ChallengeId);
+        Assert.Equal((int)(lifetime - TimeSpan.FromSeconds(30)).TotalSeconds, reused.ExpiresInSeconds);
+
+        _time.Advance(SendInterval);
+        var refused = await Assert.ThrowsAsync<BusinessException>(() => _store.IssueTwoFactorSignInAsync(recipient, deadline));
+        Assert.Equal(AuthErrorCodes.EmailCodeResendTooLate, refused.Code);
+        Assert.Single(_queue.Items);
     }
 
     /// <summary>登录第二步的发送间隔单独一把键：找回口令往同一地址发码不挡它，它也不挡找回口令。</summary>
@@ -387,10 +413,10 @@ public sealed partial class EmailChallengeStoreTests
     {
         var recipient = new EmailCodeRecipient(Guid.NewGuid(), "separate@example.test", "stamp-1");
         await _store.IssuePasswordResetAsync(recipient.Email, target: null, FixedRegistrationPolicy.Policy);
-        await _store.IssueTwoFactorSignInAsync(recipient);
+        await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
 
         var other = recipient with { Email = "separate-2@example.test" };
-        await _store.IssueTwoFactorSignInAsync(other);
+        await _store.IssueTwoFactorSignInAsync(other, NoSignInDeadline);
         await _store.IssuePasswordResetAsync(other.Email, target: null, FixedRegistrationPolicy.Policy);
     }
 
@@ -401,7 +427,7 @@ public sealed partial class EmailChallengeStoreTests
         var recipient = new EmailCodeRecipient(Guid.NewGuid(), "outcome@example.test", "stamp-1");
         Assert.Equal(EmailCodeOutcome.Expired, (await ValidateSignInAsync(recipient.Email, Guid.NewGuid(), "000000")).Outcome);
 
-        var issued = await _store.IssueTwoFactorSignInAsync(recipient);
+        var issued = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
         for (var attempt = 0; attempt < FixedRegistrationPolicy.Policy.EmailCodeMaxAttempts; attempt++)
         {
             Assert.Equal(EmailCodeOutcome.Wrong, (await ValidateSignInAsync(recipient.Email, issued.ChallengeId, "000000")).Outcome);
@@ -427,13 +453,13 @@ public sealed partial class EmailChallengeStoreTests
     public async Task A_used_sign_in_code_frees_the_send_interval()
     {
         var recipient = new EmailCodeRecipient(Guid.NewGuid(), "used@example.test", "stamp-1");
-        var first = await _store.IssueTwoFactorSignInAsync(recipient);
+        var first = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
         await _queue.RunAllAsync(_sender, _time);
 
         Assert.Equal(EmailCodeOutcome.Valid,
             (await ValidateSignInAsync(recipient.Email, first.ChallengeId, _sender.Calls.Last().Code)).Outcome);
 
-        var next = await _store.IssueTwoFactorSignInAsync(recipient);
+        var next = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
         Assert.NotEqual(first.ChallengeId, next.ChallengeId);
         Assert.Single(_queue.Items);
     }
@@ -442,7 +468,7 @@ public sealed partial class EmailChallengeStoreTests
     public async Task An_exhausted_sign_in_code_keeps_the_send_interval()
     {
         var recipient = new EmailCodeRecipient(Guid.NewGuid(), "exhausted@example.test", "stamp-1");
-        var first = await _store.IssueTwoFactorSignInAsync(recipient);
+        var first = await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline);
         await _queue.RunAllAsync(_sender, _time);
         var wrong = _sender.Calls.Last().Code == "000000" ? "111111" : "000000";
         for (var i = 0; i < FixedRegistrationPolicy.Policy.EmailCodeMaxAttempts; i++)
@@ -451,10 +477,10 @@ public sealed partial class EmailChallengeStoreTests
                 (await ValidateSignInAsync(recipient.Email, first.ChallengeId, wrong)).Outcome);
         }
 
-        var error = await Assert.ThrowsAsync<BusinessException>(() => _store.IssueTwoFactorSignInAsync(recipient));
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline));
         Assert.Equal(AuthErrorCodes.EmailCodeSendTooFrequent, error.Code);
         _time.Advance(SendInterval);
-        Assert.NotEqual(first.ChallengeId, (await _store.IssueTwoFactorSignInAsync(recipient)).ChallengeId);
+        Assert.NotEqual(first.ChallengeId, (await _store.IssueTwoFactorSignInAsync(recipient, NoSignInDeadline)).ChallengeId);
     }
 
     private Task<EmailCodeCheck> ValidateSignInAsync(string email, Guid challengeId, string code)

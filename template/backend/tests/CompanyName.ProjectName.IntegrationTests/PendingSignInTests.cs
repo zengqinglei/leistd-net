@@ -543,6 +543,110 @@ public sealed class PendingSignInTests(ProjectWebApplicationFactory factory) : I
         Assert.True(PendingSignIn.Deletes(host, interactive));
     }
 
+    /// <summary>
+    /// 只有临时身份时完成协议退出：待完成登录随之结束，临时 Cookie 删掉，旧挑战接不回第二步；票据已过期的同样删掉。
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Protocol_logout_ends_a_pending_sign_in_without_a_session(bool expired)
+    {
+        var (host, clock) = CreateHost();
+        using var ownedHost = host;
+        var user = await CreateTwoFactorUserAsync(host, clock, "pending_logout");
+        var clientId = await CreateLogoutClientAsync(host);
+        var pending = await PasswordStepAsync(host, user);
+        if (expired)
+            clock.Advance(ChallengeLifetime + TimeSpan.FromMinutes(1));
+        using var browser = Browser(host, pending);
+
+        using var signedOut = await browser.GetCachedAsync(
+            $"/connect/logout?client_id={clientId}&post_logout_redirect_uri={Uri.EscapeDataString(SignedOut)}&state=bye");
+
+        Assert.Equal(HttpStatusCode.Found, signedOut.StatusCode);
+        Assert.StartsWith(SignedOut, signedOut.Headers.Location!.AbsoluteUri);
+        Assert.True(PendingSignIn.Deletes(host, signedOut));
+        using var stale = await PendingSignIn.Client(host, pending).GetAsync(ContextUrl);
+        Assert.Equal("Auth:TwoFactorChallengeExpired", await ErrorCodeAsync(stale));
+    }
+
+    /// <summary>正式会话旁还有一个待完成登录：协议退出结束会话时一并结束它，旧挑战接不回第二步。</summary>
+    [Fact]
+    public async Task Protocol_logout_of_a_session_also_ends_the_pending_sign_in_beside_it()
+    {
+        var (host, clock) = CreateHost();
+        using var ownedHost = host;
+        var user = await CreateTwoFactorUserAsync(host, clock, "pending_logout_both");
+        var clientId = await CreateLogoutClientAsync(host);
+        Step(clock);
+        string session;
+        using (var signedIn = await PendingSignIn.Client(host, await PasswordStepAsync(host, user))
+            .PostAsJsonAsync(ContextUrl, new { Code = Code(user.Secret, clock) }))
+        {
+            session = SessionCookieOf(signedIn);
+        }
+
+        var idToken = await IdentityTokenAsync(host, clientId, session);
+        var pending = await PasswordStepAsync(host, user);
+
+        // hint 指向当前会话：直接退出（依赖方的跨站 POST 不带 Cookie，缓存后的顶层 GET 重入才带上）
+        using var anonymous = Browser(host, string.Empty);
+        using var cached = await anonymous.PostAsync("/connect/logout", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["id_token_hint"] = idToken, ["post_logout_redirect_uri"] = SignedOut, ["state"] = "bye"
+        }));
+        var reentry = OidcRequestCaching.CachedLocation(anonymous, cached, "/connect/logout");
+        using var browser = Browser(host, Cookies(session, pending));
+        using var signedOut = await browser.GetAsync(reentry);
+
+        Assert.StartsWith(SignedOut, signedOut.Headers.Location!.AbsoluteUri);
+        Assert.True(PendingSignIn.Deletes(host, signedOut));
+        using var me = ProjectWebApplicationFactory.CreateProjectClient(host);
+        me.DefaultRequestHeaders.Add("Cookie", session);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await me.GetAsync("/api/v1/auth/me")).StatusCode);
+        using var stale = await PendingSignIn.Client(host, pending).GetAsync(ContextUrl);
+        Assert.Equal("Auth:TwoFactorChallengeExpired", await ErrorCodeAsync(stale));
+    }
+
+    private const string SignedOut = "https://localhost/oidc-signed-out";
+
+    // 会话绑定的客户端：id_token 带会话标识，退出时 hint 才对得上当前会话
+    private static async Task<string> CreateLogoutClientAsync(WebApplicationFactory<Program> host)
+    {
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var id = $"pending-out-{Guid.NewGuid():N}";
+        using var response = await admin.Client.PostAsJsonAsync("/api/v1/open-applications", new
+        {
+            sessionBound = true,
+            clientId = id,
+            applicationType = "web",
+            clientType = "public",
+            redirectUris = new[] { Callback },
+            postLogoutRedirectUris = new[] { SignedOut },
+            permissions = new[] { "ept:authorization", "ept:token", "ept:end_session", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthResourceOptions().Resource}" },
+            requirements = new[] { "ft:pkce" }
+        });
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        return id;
+    }
+
+    // 用会话走一遍授权码流程，换出 id_token（PKCE 校验码与 AuthorizationUrl 的挑战对应）
+    private static async Task<string> IdentityTokenAsync(WebApplicationFactory<Program> host, string clientId, string session)
+    {
+        using var browser = Browser(host, session);
+        using var authorized = await browser.GetCachedAsync(AuthorizationUrl(clientId, "&state=token"));
+        Assert.StartsWith(Callback, authorized.Headers.Location!.AbsoluteUri);
+        using var exchange = Browser(host, string.Empty);
+        using var token = await exchange.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code", ["client_id"] = clientId, ["redirect_uri"] = Callback,
+            ["code"] = QueryHelpers.ParseQuery(authorized.Headers.Location.Query)["code"].ToString(),
+            ["code_verifier"] = new string('x', 64)
+        }));
+        Assert.True(token.IsSuccessStatusCode, await token.Content.ReadAsStringAsync());
+        return (await token.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id_token").GetString()!;
+    }
+
     private const string Callback = "https://localhost/oidc-test";
 
     private static async Task<(string First, string Second)> CreatePublicClientsAsync(WebApplicationFactory<Program> host)
