@@ -1,4 +1,5 @@
 import { PasskeyOutputDto, WebAuthnJson } from '../../../shared/dtos/account-security.dto';
+import { TwoFactorMethod } from '../../../shared/dtos/auth.dto';
 
 export interface RegisterInputDto {
   username: string;
@@ -12,9 +13,18 @@ export interface RegisterInputDto {
   displayName?: string;
 }
 
-/** 登录第二步：提交其中一种方式的码。 */
+/** 待完成的登录（第一步已通过、尚待第二步）：第二步页凭临时 Cookie 读取，刷新后据此继续。 */
+export interface TwoFactorLoginOutputDto {
+  /** 能用的方式，按系统顺序，恢复码在最后。 */
+  twoFactorMethods: TwoFactorMethod[];
+  /** 直接给出的方式（本人首选，否则按系统顺序）。 */
+  defaultTwoFactorMethod: TwoFactorMethod;
+  /** 邮箱验证码能用时，收码地址的打码形式。 */
+  maskedEmail?: string | null;
+}
+
+/** 登录第二步：提交其中一种方式的码；待完成的登录由临时 Cookie 表明，不在请求体里。 */
 export interface TwoFactorLoginInputDto {
-  token: string;
   /** 身份验证器上的验证码。 */
   code?: string;
   //#if (Email)

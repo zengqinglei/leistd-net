@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject, throwError } from 'rxjs';
 
-import { TwoFactorChallenge, TwoFactorPrompt } from './two-factor-challenge';
+import { TwoFactorChallenge, TwoFactorExit, TwoFactorPrompt } from './two-factor-challenge';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -29,7 +29,6 @@ function rejection(code: string, detail = code, status = 401): ApplicationHttpEr
 
 /** 只开了身份验证器：默认它，唯一的备选是恢复码。 */
 const AUTHENTICATOR_ONLY: TwoFactorPrompt = {
-  token: 'challenge-token',
   methods: ['authenticator', 'recoveryCode'],
   defaultMethod: 'authenticator',
   maskedEmail: null,
@@ -48,6 +47,7 @@ describe('TwoFactorChallenge', () => {
   >;
   let completed: number;
   let cancelled: number;
+  let lastExit: TwoFactorExit | null;
 
   function type(value: string): void {
     const input = (fixture.nativeElement as HTMLElement).querySelector('input') as HTMLInputElement;
@@ -97,8 +97,12 @@ describe('TwoFactorChallenge', () => {
     fixture.componentRef.setInput('prompt', prompt);
     completed = 0;
     cancelled = 0;
+    lastExit = null;
     fixture.componentInstance.completed.subscribe(() => completed++);
-    fixture.componentInstance.cancelled.subscribe(() => cancelled++);
+    fixture.componentInstance.cancelled.subscribe((exit) => {
+      cancelled++;
+      lastExit = exit;
+    });
     fixture.detectChanges();
   }
 
@@ -117,7 +121,6 @@ describe('TwoFactorChallenge', () => {
     expect(account.completeTwoFactorLogin).toHaveBeenCalledTimes(1);
 
     expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
-      token: 'challenge-token',
       code: '123456',
     });
     expect(completed).toBe(1);
@@ -137,13 +140,13 @@ describe('TwoFactorChallenge', () => {
     expect(account.completeTwoFactorLogin).toHaveBeenCalledTimes(1);
 
     expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
-      token: 'challenge-token',
       code: '123456',
     });
     expect(completed).toBe(1);
   });
 
-  it('stays on a wrong code and returns to the password step on expired credentials', async () => {
+  // 到期交给宿主页：它先确认是否已在另一个标签页登录，再决定去哪里、提示什么
+  it('stays on a wrong code and hands an expired sign-in back to the page with its reason', async () => {
     account.completeTwoFactorLogin.mockReturnValue(
       throwError(() => rejection('Auth:TwoFactorCodeInvalid')),
     );
@@ -157,6 +160,7 @@ describe('TwoFactorChallenge', () => {
     type('000000');
     await submit();
     expect(cancelled).toBe(1);
+    expect(lastExit).toEqual(expect.objectContaining({ reason: 'expired' }));
   });
 
   // 网络错误与服务端故障不作废这次第二步：就地说明，同一个码可以原样再交一次
@@ -176,7 +180,6 @@ describe('TwoFactorChallenge', () => {
 
     expect(account.completeTwoFactorLogin).toHaveBeenCalledTimes(failedCalls + 1);
     expect(account.completeTwoFactorLogin).toHaveBeenLastCalledWith({
-      token: 'challenge-token',
       code: '123456',
     });
     expect(completed).toBe(1);
@@ -349,6 +352,12 @@ describe('TwoFactorChallenge', () => {
     expect(back.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('tells the page that the user chose to go back', () => {
+    byTestId('two-factor-back')!.click();
+
+    expect(lastExit).toEqual({ reason: 'back' });
+  });
+
   // 返回的文字左缘与主按钮可见左缘对齐：前置图标自带留白会让整行看起来缩进。
   it('aligns going back with the left edge of the submit button', () => {
     const back = byTestId('two-factor-back')!;
@@ -368,7 +377,6 @@ describe('TwoFactorChallenge', () => {
 
   describe('with email verification codes', () => {
     const BOTH: TwoFactorPrompt = {
-      token: 'challenge-token',
       methods: ['authenticator', 'email', 'recoveryCode'],
       defaultMethod: 'authenticator',
       maskedEmail: 'ali***@example.com',
@@ -394,7 +402,7 @@ describe('TwoFactorChallenge', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(account.sendTwoFactorEmailCode).toHaveBeenCalledExactlyOnceWith('challenge-token');
+      expect(account.sendTwoFactorEmailCode).toHaveBeenCalledExactlyOnceWith();
       expect(byTestId('two-factor-challenge')?.dataset['method']).toBe('email');
       expect(byTestId('two-factor-methods')).toBeNull();
     });
@@ -434,7 +442,7 @@ describe('TwoFactorChallenge', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(account.sendTwoFactorEmailCode).toHaveBeenCalledExactlyOnceWith('challenge-token');
+      expect(account.sendTwoFactorEmailCode).toHaveBeenCalledExactlyOnceWith();
       //#if (IncludeLocalization)
       const hint = 'account.twoFactorLogin.emailHint';
       //#else
@@ -447,7 +455,6 @@ describe('TwoFactorChallenge', () => {
       await submit();
 
       expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
-        token: 'challenge-token',
         emailCode: '654321',
       });
       expect(completed).toBe(1);
@@ -510,8 +517,37 @@ describe('TwoFactorChallenge', () => {
       await submit();
 
       expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
-        token: 'challenge-token',
         code: '123456',
+      });
+      expect(completed).toBe(1);
+    });
+
+    // 刷新时剩余不够再发新码：就地说明、不回密码那一步，之前收到的码照样能完成
+    it('keeps the step when a late resend is refused and accepts the code already received', async () => {
+      account.sendTwoFactorEmailCode.mockReturnValue(
+        throwError(() =>
+          rejection(
+            'Auth:EmailCodeResendTooLate',
+            'Not enough time is left to send a new code.',
+            400,
+          ),
+        ),
+      );
+      account.completeTwoFactorLogin.mockReturnValue(of(undefined));
+      render({ ...BOTH, defaultMethod: 'email' });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(cancelled).toBe(0);
+      expect(byTestId('two-factor-error')?.textContent).toContain(
+        'Not enough time is left to send a new code.',
+      );
+
+      type('123456');
+      await submit();
+
+      expect(account.completeTwoFactorLogin).toHaveBeenCalledExactlyOnceWith({
+        emailCode: '123456',
       });
       expect(completed).toBe(1);
     });
@@ -550,7 +586,6 @@ describe('TwoFactorChallenge', () => {
   describe('passkey', () => {
     /** 有通行密钥：默认它，备选是身份验证器与恢复码。 */
     const PASSKEY_DEFAULT: TwoFactorPrompt = {
-      token: 'challenge-token',
       methods: ['passkey', 'authenticator', 'recoveryCode'],
       defaultMethod: 'passkey',
       maskedEmail: null,
@@ -577,10 +612,9 @@ describe('TwoFactorChallenge', () => {
 
       await clickPasskey();
 
-      expect(account.beginTwoFactorPasskey).toHaveBeenCalledExactlyOnceWith('challenge-token');
+      expect(account.beginTwoFactorPasskey).toHaveBeenCalledExactlyOnceWith();
       expect(get).toHaveBeenCalledTimes(1);
       expect(account.completeTwoFactorLogin).toHaveBeenCalledExactlyOnceWith({
-        token: 'challenge-token',
         passkey: expect.objectContaining({ id: 'cred-1', type: 'public-key' }),
       });
       expect(completed).toBe(1);
@@ -659,7 +693,6 @@ describe('TwoFactorChallenge', () => {
 
     it('offers the passkey as the only alternative with its own wording', () => {
       render({
-        token: 'challenge-token',
         methods: ['passkey', 'authenticator'],
         defaultMethod: 'authenticator',
         maskedEmail: null,

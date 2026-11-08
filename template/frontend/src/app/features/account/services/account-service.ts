@@ -57,6 +57,7 @@ import {
   PasskeySignInInputDto,
   RegenerateRecoveryCodesInputDto,
   TwoFactorLoginInputDto,
+  TwoFactorLoginOutputDto,
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   //#if (OpenIddictServer)
@@ -161,16 +162,27 @@ export class AccountService {
   }
   //#endif
 
+  /**
+   * 登录第二步的上下文（可用方式、默认方式、打码邮箱），凭待完成登录的临时 Cookie 读取；
+   * 没有待完成的登录时以 `Auth:TwoFactorChallengeExpired` 拒绝。
+   */
+  getTwoFactorLogin(): Observable<TwoFactorLoginOutputDto> {
+    return this.http.get<TwoFactorLoginOutputDto>('/api/v1/auth/two-factor');
+  }
+
   /** 登录第二步：提交其中一种方式的码，通过后下发会话。 */
   completeTwoFactorLogin(data: TwoFactorLoginInputDto): Observable<void> {
     return this.http.post('/api/v1/auth/two-factor', data).pipe(map(() => undefined));
   }
 
+  /** 放弃待完成的登录（返回登录页、换账号）：服务端作废挑战并删临时 Cookie。幂等。 */
+  cancelTwoFactorLogin(): Observable<void> {
+    return this.http.post('/api/v1/auth/two-factor/cancel', {}).pipe(map(() => undefined));
+  }
+
   /** 登录第二步：取用通行密钥验证的断言选项；每取一次换一份，之前给的随之不再被认。 */
-  beginTwoFactorPasskey(token: string): Observable<PasskeyOptionsOutputDto> {
-    return this.http.post<PasskeyOptionsOutputDto>('/api/v1/auth/two-factor/passkey-options', {
-      token,
-    });
+  beginTwoFactorPasskey(): Observable<PasskeyOptionsOutputDto> {
+    return this.http.post<PasskeyOptionsOutputDto>('/api/v1/auth/two-factor/passkey-options', {});
   }
 
   /** 免口令登录：取断言选项与仪式凭据；部署没配通行密钥时以 `Auth:PasskeyUnavailable` 拒绝。 */
@@ -185,10 +197,8 @@ export class AccountService {
 
   //#if (Email)
   /** 登录第二步：把验证码发到本人的邮箱。 */
-  sendTwoFactorEmailCode(token: string): Observable<TwoFactorEmailCodeOutputDto> {
-    return this.http.post<TwoFactorEmailCodeOutputDto>('/api/v1/auth/two-factor/email-code', {
-      token,
-    });
+  sendTwoFactorEmailCode(): Observable<TwoFactorEmailCodeOutputDto> {
+    return this.http.post<TwoFactorEmailCodeOutputDto>('/api/v1/auth/two-factor/email-code', {});
   }
 
   //#endif
@@ -349,7 +359,7 @@ export class AccountService {
     return `/api/v1/external-auth/${provider}/challenge${query.size ? `?${query}` : ''}`;
   }
 
-  /** 外部登录回调；已启用两步验证时不下发会话，返回第二步凭据。 */
+  /** 外部登录回调；还要第二步时不下发会话，只写待完成登录的临时 Cookie 并返回可用方式。 */
   externalLoginCallback(provider: string): Observable<SessionLoginOutputDto> {
     return this.http.post<SessionLoginOutputDto>(`/api/v1/external-auth/${provider}/complete`, {});
   }

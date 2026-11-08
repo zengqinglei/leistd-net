@@ -44,4 +44,10 @@ export async function signIn(context: APIRequestContext, account: Account): Prom
       `Sign-in as ${account.username} failed: ${response.status()} ${await response.text()}`,
     );
   }
+  // 还要第二步时服务端只写了待完成登录的临时 Cookie，没有会话：接口登录只给单步账号用
+  if (((await response.json()) as { requiresTwoFactor?: boolean }).requiresTwoFactor) {
+    throw new Error(
+      `Sign-in as ${account.username} needs a second step; use an account without one.`,
+    );
+  }
 }

@@ -67,7 +67,7 @@ export class AuthService {
   }
   //#if (LocalIdentity)
 
-  /** 账号密码登录；已启用两步验证时不下发会话，返回第二步凭据。 */
+  /** 账号密码登录；还要第二步时不下发会话，只写待完成登录的临时 Cookie 并返回可用方式。 */
   login(credentials: LoginInputDto): Observable<SessionLoginOutputDto> {
     return this.http.post<SessionLoginOutputDto>(AuthService.loginUrl, credentials);
   }

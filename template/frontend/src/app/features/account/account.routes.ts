@@ -9,6 +9,12 @@ export const AUTH_ROUTES: Routes = [
     loadComponent: () => import('./components/login/login').then((m) => m.Login),
   },
   {
+    // 登录第二步：口令或外部登录已通过，凭服务端的临时 Cookie 继续（刷新、授权端点接回都到这里）
+    path: 'two-factor',
+    loadComponent: () =>
+      import('./components/two-factor-login/two-factor-login').then((m) => m.TwoFactorLogin),
+  },
+  {
     // 组织要求两步验证而本人尚未启用：受限会话只能到这里
     path: 'two-factor-setup',
     canActivate: [twoFactorSetupGuard],

@@ -107,29 +107,27 @@ describe('ExternalAuthCallback', () => {
     expect(calls.indexOf('establish')).toBeLessThan(calls.indexOf('navigate'));
   });
 
-  it('preserves the protected return address when a second step is required', async () => {
+  // 还要第二步：服务端只写了临时 Cookie，去第二步页（它凭 Cookie 读可用方式），受保护的原目标随之带过去
+  it('goes to the second step page with the protected return address', async () => {
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
     accountService.externalLoginCallback.mockReturnValue(
       of({
         requiresTwoFactor: true,
-        twoFactorToken: 'challenge',
         twoFactorMethods: ['authenticator', 'recoveryCode'],
         defaultTwoFactorMethod: 'authenticator',
-        returnUrl: '/connect/authorize?state=original',
+        returnUrl: '/workspace/settings/security',
       }),
     );
     fixture.detectChanges();
     await new Promise((resolve) => setTimeout(resolve));
-    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/auth/login'], {
-      state: {
-        twoFactorPrompt: {
-          token: 'challenge',
-          methods: ['authenticator', 'recoveryCode'],
-          defaultMethod: 'authenticator',
-          maskedEmail: null,
-        },
-        returnUrl: '/connect/authorize?state=original',
-      },
-    });
+
+    expect(navigate).toHaveBeenCalledOnce();
+    const [target, extras] = navigate.mock.calls[0]!;
+    expect(typeof target === 'string' ? target : router.serializeUrl(target)).toBe(
+      '/auth/two-factor?returnUrl=%2Fworkspace%2Fsettings%2Fsecurity',
+    );
+    expect(extras).toEqual({ replaceUrl: true });
     expect(calls).not.toContain('establish');
   });
 

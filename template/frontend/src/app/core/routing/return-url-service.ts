@@ -8,6 +8,9 @@ import { FullPageNavigationService } from './full-page-navigation-service';
 /** 强制两步验证设置页：组织要求两步验证而本人尚未启用时，受限会话只能停在这里。 */
 export const TWO_FACTOR_SETUP_URL = '/auth/two-factor-setup';
 
+/** 登录第二步页：口令或外部登录已通过、尚待第二步时去这里，凭服务端的临时 Cookie 读取待完成的登录。 */
+export const TWO_FACTOR_LOGIN_URL = '/auth/two-factor';
+
 /**
  * {@link ReturnUrlService.navigate} 的去向：`left` 已发起整页导航（旧页面稍后才卸载，调用方不该再复位界面）；
  * `routed` 已在应用内跳转到原目标；`fallback` 已进入默认去向；`cancelled` 应用内导航未成功。
@@ -29,7 +32,7 @@ export class ReturnUrlService {
 
   /**
    * 可接续的目标：站内绝对路径才算数；空、外站、协议相对（`//`）、含反斜杠的地址，
-   * 以及指向设置页自身的地址（会原地打转）一律返回 `null`，由调用方回到默认页。
+   * 以及指向设置页或第二步页自身的地址（会原地打转）一律返回 `null`，由调用方回到默认页。
    */
   resolve(returnUrl: string | null | undefined): string | null {
     if (
@@ -42,13 +45,22 @@ export class ReturnUrlService {
       return null;
     }
 
-    return returnUrl.split(/[?#]/)[0] === TWO_FACTOR_SETUP_URL ? null : returnUrl;
+    const path = returnUrl.split(/[?#]/)[0];
+    return path === TWO_FACTOR_SETUP_URL || path === TWO_FACTOR_LOGIN_URL ? null : returnUrl;
   }
 
   /** 去强制设置页的地址，带上可接续的原目标（不可接续时不带）。 */
   twoFactorSetup(returnUrl: string | null | undefined): UrlTree {
     const target = this.resolve(returnUrl);
     return this.router.createUrlTree([TWO_FACTOR_SETUP_URL], {
+      queryParams: target ? { returnUrl: target } : {},
+    });
+  }
+
+  /** 去登录第二步页的地址，带上可接续的原目标（不可接续时不带）。 */
+  twoFactorLogin(returnUrl: string | null | undefined): UrlTree {
+    const target = this.resolve(returnUrl);
+    return this.router.createUrlTree([TWO_FACTOR_LOGIN_URL], {
       queryParams: target ? { returnUrl: target } : {},
     });
   }

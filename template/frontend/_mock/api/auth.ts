@@ -42,6 +42,7 @@ import {
   PasskeySignInInputDto,
   RenamePasskeyInputDto,
   TwoFactorLoginInputDto,
+  TwoFactorLoginOutputDto,
   TwoFactorRecoveryCodesOutputDto,
   TwoFactorSetupOutputDto,
   //#if (OpenIddictServer)
@@ -107,6 +108,7 @@ import {
   takeMockPasskeyCeremony,
   verifyMockPasskeyAssertion,
 } from '../utils/current-user';
+import { StoredMap } from '../utils/stored-map';
 
 const CAPTCHA_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const CAPTCHA_DIGITS = '23456789';
@@ -181,7 +183,7 @@ function sessionLogin(
   const user = USERS.find((u) => u.username === usernameOrEmail || u.email === usernameOrEmail);
 
   if (user && user.password === password) {
-    // 与后端一致：有能用的第二步方式时密码对了也不下发会话，只给第二步凭据与可用方式；
+    // 与后端一致：有能用的第二步方式时密码对了也不下发会话，只写待完成登录（临时 Cookie）并给出可用方式；
     // 口令经邮件找回时第二步只认独立因子
     const firstFactorViaEmail = user.passwordSetByEmailRecovery === true;
     const options = twoFactorOptions(user, tenantKey, firstFactorViaEmail);
@@ -196,6 +198,7 @@ function sessionLogin(
     if (options.defaultMethod) {
       return beginTwoFactorChallenge(user, tenantKey, firstFactorViaEmail);
     }
+    endPendingSignIn();
     setMockSessionUserId(user.id);
     // 租户在登录这一刻定案，之后由会话（真实环境是 cookie 里的租户声明）说话；
     // 认证后的接口不再看租户提示头，与后端的解析链一致。
@@ -459,6 +462,8 @@ const TWO_FACTOR_CHALLENGE_MAX_ATTEMPTS = 5;
 interface TwoFactorChallenge {
   userId: string;
   tenantKey: string;
+  /** 绝对到期时刻（毫秒）：输错与重发都不延长。 */
+  expiresAt: number;
   remainingAttempts: number;
   /** 第一步经邮箱通道得来（口令经邮件找回）：第二步只认独立因子。 */
   firstFactorViaEmail: boolean;
@@ -470,7 +475,70 @@ interface TwoFactorChallenge {
   //#endif
 }
 
-const twoFactorChallengeStore = new Map<string, TwoFactorChallenge>();
+/**
+ * 浏览器手里那份待完成登录的临时 Cookie（HttpOnly，页面脚本拿不到）与它指向的挑战。真实环境里挑战在服务端缓存、
+ * Cookie 随浏览器刷新保留；Mock 按会话的约定存 sessionStorage，刷新第二步页照样能接着做（不模拟 HttpOnly）。
+ * 与后端一样，新的待完成登录先结束旧的，完成、放弃、退出与单步登录时一并清掉。
+ */
+const pendingSignInStorage = new StoredMap('mock_pending_sign_in');
+const PENDING_TOKEN = 'token';
+const PENDING_CHALLENGE = 'challenge';
+
+/** 待完成登录的绝对期限：开启邮箱能力时是邮箱码有效期的两倍，否则 5 分钟；不滑动。 */
+//#if (Email)
+const TWO_FACTOR_CHALLENGE_LIFETIME_MS = 2 * EMAIL_CODE_EXPIRY_SECONDS * 1000;
+//#else
+const TWO_FACTOR_CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
+//#endif
+
+/** 结束当前的待完成登录：作废挑战并"删掉临时 Cookie"。 */
+function endPendingSignIn(): void {
+  pendingSignInStorage.clear();
+}
+
+/** 挑战改了（次数、最近一次发码或通行密钥选项）之后写回存储。 */
+function rememberPending(token: string, challenge: TwoFactorChallenge): void {
+  pendingSignInStorage.set(PENDING_TOKEN, token);
+  pendingSignInStorage.set(PENDING_CHALLENGE, JSON.stringify(challenge));
+}
+
+/** 凭临时 Cookie 取待完成的登录；不存在、已到期、属于别的租户或用户已不在时按到期拒绝并删掉 Cookie。 */
+function pendingChallenge(req: MockRequest): {
+  token: string;
+  challenge: TwoFactorChallenge;
+  user: MockUser;
+} {
+  const token = pendingSignInStorage.get(PENDING_TOKEN);
+  const stored = pendingSignInStorage.get(PENDING_CHALLENGE);
+  const challenge = stored ? (JSON.parse(stored) as TwoFactorChallenge) : undefined;
+  const user = challenge ? USERS.find((u) => u.id === challenge.userId) : undefined;
+  if (
+    !token ||
+    !challenge ||
+    !user ||
+    challenge.expiresAt <= Date.now() ||
+    challenge.tenantKey !== getRequestScope(req)
+  ) {
+    endPendingSignIn();
+    throw twoFactorChallengeExpired();
+  }
+  return { token, challenge, user };
+}
+
+/** 第二步页的上下文：本人此刻能用的方式、默认方式与打码邮箱。 */
+function getTwoFactorLogin(req: MockRequest): TwoFactorLoginOutputDto {
+  const { challenge, user } = pendingChallenge(req);
+  const options = twoFactorOptions(user, challenge.tenantKey, challenge.firstFactorViaEmail);
+  if (!options.defaultMethod) {
+    endPendingSignIn();
+    throw twoFactorChallengeExpired();
+  }
+  return {
+    twoFactorMethods: options.methods,
+    defaultTwoFactorMethod: options.defaultMethod,
+    maskedEmail: options.maskedEmail,
+  };
+}
 //#if (Email)
 /** 登录第二步限频键 → 占着发送间隔的那封邮件挑战：间隔内再发时沿用它。 */
 const signInEmailChallenges = new Map<string, string>();
@@ -570,17 +638,17 @@ function beginTwoFactorChallenge(
   tenantKey: string,
   firstFactorViaEmail = false,
 ): SessionLoginOutputDto {
-  const twoFactorToken = crypto.randomUUID();
-  twoFactorChallengeStore.set(twoFactorToken, {
+  endPendingSignIn();
+  rememberPending(crypto.randomUUID(), {
     userId: user.id,
     tenantKey,
+    expiresAt: Date.now() + TWO_FACTOR_CHALLENGE_LIFETIME_MS,
     remainingAttempts: TWO_FACTOR_CHALLENGE_MAX_ATTEMPTS,
     firstFactorViaEmail,
   });
   const options = twoFactorOptions(user, tenantKey, firstFactorViaEmail);
   return {
     requiresTwoFactor: true,
-    twoFactorToken,
     twoFactorMethods: options.methods,
     defaultTwoFactorMethod: options.defaultMethod,
     maskedEmail: options.maskedEmail,
@@ -590,18 +658,21 @@ function beginTwoFactorChallenge(
 
 /** 登录第二步发邮箱验证码：Mock 下码固定为 EMAIL_CODE，按收件地址限制发送间隔。 */
 function sendTwoFactorEmailCode(req: MockRequest): TwoFactorEmailCodeOutputDto {
-  const token = (req.body as { token?: string } | undefined)?.token ?? '';
-  const challenge = twoFactorChallengeStore.get(token);
-  const user = challenge ? USERS.find((u) => u.id === challenge.userId) : undefined;
-  if (!challenge || !user || challenge.tenantKey !== getRequestScope(req)) {
-    throw twoFactorChallengeExpired();
-  }
+  const { token, challenge, user } = pendingChallenge(req);
   if (
     !twoFactorOptions(user, challenge.tenantKey, challenge.firstFactorViaEmail).methods.includes(
       'email',
     )
   ) {
     throw twoFactorMethodUnavailable();
+  }
+  // 与后端一致：剩余不足一个码的有效期时不新发（不计数、不结束登录），已发的码与其他方式照常可用
+  if (challenge.expiresAt - Date.now() < EMAIL_CODE_EXPIRY_SECONDS * 1000) {
+    throw new MockException(400, {
+      code: 'Auth:EmailCodeResendTooLate',
+      message:
+        'Not enough time is left to send a new code. Use the code you already received, try another way, or sign in again.',
+    });
   }
 
   // 与后端一致：登录第二步单独一把限频键（找回口令不挡它）；间隔内再发沿用上一封，回报剩余间隔
@@ -613,6 +684,7 @@ function sendTwoFactorEmailCode(req: MockRequest): TwoFactorEmailCodeOutputDto {
   if (retryUntil > Date.now()) {
     if (previousChallenge?.userId === user.id && previousChallenge.expiresAt > Date.now()) {
       challenge.emailChallengeId = previous;
+      rememberPending(token, challenge);
       return {
         expiresInSeconds: Math.ceil((previousChallenge.expiresAt - Date.now()) / 1000),
         retryAfterSeconds: Math.max(1, Math.ceil((retryUntil - Date.now()) / 1000)),
@@ -637,6 +709,7 @@ function sendTwoFactorEmailCode(req: MockRequest): TwoFactorEmailCodeOutputDto {
   });
   signInEmailChallenges.set(rateKey, emailChallengeId);
   challenge.emailChallengeId = emailChallengeId;
+  rememberPending(token, challenge);
   return {
     expiresInSeconds: EMAIL_CODE_EXPIRY_SECONDS,
     retryAfterSeconds: EMAIL_CODE_RETRY_SECONDS,
@@ -646,12 +719,7 @@ function sendTwoFactorEmailCode(req: MockRequest): TwoFactorEmailCodeOutputDto {
 
 /** 第二步：取用通行密钥验证的断言选项；每取一次换一个挑战，之前的随之不再被认。 */
 function beginTwoFactorPasskey(req: MockRequest): PasskeyOptionsOutputDto {
-  const token = (req.body as { token?: string } | undefined)?.token ?? '';
-  const challenge = twoFactorChallengeStore.get(token);
-  const user = challenge ? USERS.find((u) => u.id === challenge.userId) : undefined;
-  if (!challenge || !user || challenge.tenantKey !== getRequestScope(req)) {
-    throw twoFactorChallengeExpired();
-  }
+  const { token, challenge, user } = pendingChallenge(req);
   if (
     !twoFactorOptions(user, challenge.tenantKey, challenge.firstFactorViaEmail).methods.includes(
       'passkey',
@@ -660,6 +728,7 @@ function beginTwoFactorPasskey(req: MockRequest): PasskeyOptionsOutputDto {
     throw twoFactorMethodUnavailable();
   }
   challenge.passkeyChallenge = beginMockPasskeyCeremony(`two-factor:${token}`);
+  rememberPending(token, challenge);
   return { options: mockPasskeyRequestOptions(challenge.passkeyChallenge, user.passkeys ?? []) };
 }
 
@@ -677,9 +746,6 @@ function twoFactorChallengeExpired(): MockException {
 function completeTwoFactorLogin(req: MockRequest): 'ok' {
   const body = (req.body ?? {}) as TwoFactorLoginInputDto;
   const errors = [];
-  if (!body.token?.trim()) {
-    errors.push({ field: 'token', detail: 'Two-factor token is required.' });
-  }
   const passkey = typeof body.passkey === 'object' && body.passkey !== null ? body.passkey : null;
   //#if (Email)
   const presented =
@@ -699,11 +765,7 @@ function completeTwoFactorLogin(req: MockRequest): 'ok' {
     throw new MockException(400, { errors });
   }
 
-  const challenge = twoFactorChallengeStore.get(body.token);
-  const user = challenge ? USERS.find((u) => u.id === challenge.userId) : undefined;
-  if (!challenge || !user || challenge.tenantKey !== getRequestScope(req)) {
-    throw twoFactorChallengeExpired();
-  }
+  const { token, challenge, user } = pendingChallenge(req);
 
   // 入参已保证恰好一种；恢复码用一次即作废
   const recoveryCode = body.recoveryCode?.trim();
@@ -725,9 +787,10 @@ function completeTwoFactorLogin(req: MockRequest): 'ok' {
   if (!verified) {
     challenge.remainingAttempts--;
     if (challenge.remainingAttempts <= 0) {
-      twoFactorChallengeStore.delete(body.token);
+      endPendingSignIn();
       throw twoFactorChallengeExpired();
     }
+    rememberPending(token, challenge);
     if (passkey) {
       throw passkeyVerificationFailed();
     }
@@ -746,7 +809,8 @@ function completeTwoFactorLogin(req: MockRequest): 'ok' {
     user.passwordSetByEmailRecovery = false;
   }
   //#endif
-  twoFactorChallengeStore.delete(body.token);
+  // 与后端一致：先删临时 Cookie 再下发会话
+  endPendingSignIn();
   setMockSessionUserId(user.id);
   setMockSessionTenantKey(challenge.tenantKey);
   return 'ok';
@@ -1150,6 +1214,7 @@ function completePasskeySignIn(req: MockRequest): 'ok' {
   ensureMockUserCanSignIn(match.user);
   match.user.passwordSetByEmailRecovery = false;
   match.user.lastLoginTime = new Date().toISOString();
+  endPendingSignIn();
   setMockSessionUserId(match.user.id);
   setMockSessionTenantKey(tenantKey);
   return 'ok';
@@ -1413,6 +1478,7 @@ function revokeOtherSessions(): number {
 
 function logout(): 'ok' {
   setMockSessionUserId(null);
+  endPendingSignIn();
   return 'ok';
 }
 //#if (Impersonation)
@@ -1818,6 +1884,7 @@ function externalLoginCallback(req: MockRequest): SessionLoginOutputDto {
   if (twoFactorOptions(user, getRequestScope(req)).defaultMethod) {
     return beginTwoFactorChallenge(user, getRequestScope(req));
   }
+  endPendingSignIn();
   setMockSessionUserId(user.id);
   setMockSessionTenantKey(getRequestScope(req));
   return {};
@@ -1912,7 +1979,12 @@ export const AUTH_API = {
     // 登录是匿名阶段，此时租户提示头决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
     return sessionLogin(req.body.usernameOrEmail, req.body.password, getRequestScope(req));
   },
+  'GET /api/v1/auth/two-factor': (req: MockRequest) => getTwoFactorLogin(req),
   'POST /api/v1/auth/two-factor': (req: MockRequest) => completeTwoFactorLogin(req),
+  'POST /api/v1/auth/two-factor/cancel': () => {
+    endPendingSignIn();
+    return 'ok';
+  },
   'POST /api/v1/auth/two-factor/passkey-options': (req: MockRequest) => beginTwoFactorPasskey(req),
   'POST /api/v1/auth/passkey-login/options': (req: MockRequest) => beginPasskeySignIn(req),
   'POST /api/v1/auth/passkey-login': (req: MockRequest) => completePasskeySignIn(req),
