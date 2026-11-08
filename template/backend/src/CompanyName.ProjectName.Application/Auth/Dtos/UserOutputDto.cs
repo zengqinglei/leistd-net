@@ -5,6 +5,8 @@ namespace CompanyName.ProjectName.Application.Auth.Dtos;
 public record UserOutputDto
 {
     public required Guid Id { get; init; }
+    /// <summary>用户所属租户；宿主用户为空。该值来自用户记录，不是客户端的租户提示。</summary>
+    public Guid? TenantId { get; init; }
     public required string Username { get; init; }
     public required string Email { get; init; }
     public string? DisplayName { get; init; }

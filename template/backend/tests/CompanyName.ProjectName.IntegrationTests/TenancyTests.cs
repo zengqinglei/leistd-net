@@ -119,6 +119,32 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     private Task<HttpClient> LoginTenantAdminAsync(Guid tenantId, string password = "Tenant@123456")
         => LoginTenantAdminAsync(_factory, tenantId, password);
 
+    [Fact]
+    public async Task Current_user_exposes_the_authenticated_tenant_without_trusting_the_login_hint()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, $"current-user-{Guid.NewGuid():N}");
+        var client = await LoginTenantAdminAsync(tenantId);
+        client.DefaultRequestHeaders.Remove(MultiTenancyOptions.DefaultHeaderName);
+
+        using (var current = JsonDocument.Parse(await client.GetStringAsync("/api/v1/auth/me")))
+        {
+            Assert.True(current.RootElement.TryGetProperty("tenantId", out var actual),
+                "Current user JSON must include the authenticated tenant.");
+            Assert.Equal(tenantId, actual.GetGuid());
+        }
+
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, Guid.NewGuid().ToString());
+        using (var current = JsonDocument.Parse(await client.GetStringAsync("/api/v1/auth/me")))
+        {
+            Assert.Equal(tenantId, current.RootElement.GetProperty("tenantId").GetGuid());
+        }
+
+        using var host = JsonDocument.Parse(await hostAdmin.Client.GetStringAsync("/api/v1/auth/me"));
+        Assert.True(!host.RootElement.TryGetProperty("tenantId", out var hostTenant)
+            || hostTenant.ValueKind == JsonValueKind.Null);
+    }
+
     /// <summary>在指定宿主上做租户管理员登录（<c>WithWebHostBuilder</c> 派生的宿主用这个重载）。</summary>
     private async Task<HttpClient> LoginTenantAdminAsync(
         WebApplicationFactory<Program> host, Guid tenantId, string password = "Tenant@123456")
