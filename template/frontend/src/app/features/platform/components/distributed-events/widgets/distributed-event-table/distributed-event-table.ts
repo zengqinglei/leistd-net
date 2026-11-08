@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Directive, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#if (IncludeLocalization)
@@ -15,6 +16,10 @@ import { interval } from 'rxjs';
 
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
 import { RelativeTimeLabel } from '../../../../../../shared/components/relative-time-label/relative-time-label';
+import {
+  TableLoading,
+  TableLoadingBody,
+} from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
 import { TruncatedTooltip } from '../../../../../../shared/directives/truncated-tooltip';
@@ -46,6 +51,9 @@ import {
 } from '../../distributed-event-display';
 
 export const EVENT_TABLE_IMPORTS = [
+  NgTemplateOutlet,
+  TableLoading,
+  TableLoadingBody,
   NgIcon,
   HlmBadge,
   HlmButton,
@@ -77,6 +85,7 @@ export abstract class DistributedEventTable {
   readonly selected = input<string[]>([]);
   readonly recordId = input<string | null>(null);
   readonly busy = input(false);
+  readonly loading = input(false);
   readonly tenantNames = input<Record<string, string>>({});
   readonly open = output<string>();
   readonly recover = output<EventRecord>();
@@ -94,7 +103,8 @@ export abstract class DistributedEventTable {
   protected readonly t = englishText(ENGLISH);
   //#endif
   protected readonly now = signal(Date.now());
-  protected readonly titleClass = `${TITLE_CONTENT_CLASS} max-w-60`;
+  protected readonly rowHeight = computed(() => (this.view() === 'catalog' ? 85 : 53));
+  protected readonly titleClass = `${TITLE_CONTENT_CLASS} max-w-52`;
   protected readonly tableViewport = tableViewportSignal();
   protected readonly relativeTimeZone = computed(() =>
     resolveDisplayTimeZone(this.displayTimeZone()),

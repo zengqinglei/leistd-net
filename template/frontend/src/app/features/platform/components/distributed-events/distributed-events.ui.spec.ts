@@ -6,7 +6,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { DistributedEvents } from './distributed-events';
 import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
@@ -300,5 +300,40 @@ describe('DistributedEvents UI R1', () => {
     const dialog = document.querySelector('[role=alertdialog]');
     expect(dialog?.textContent).toContain('Redeliver 2 dead letters matching the current filter?');
     expect(dialog?.textContent).toContain('Redeliver 2 records');
+  });
+
+  it('keeps the existing table visible while refreshing the same view', async () => {
+    await setup();
+    const result = new Subject<{
+      items: Dto.DistributedEventOutboxOutputDto[];
+      totalCount: number;
+    }>();
+    vi.spyOn(TestBed.inject(DistributedEventService), 'getOutboxList').mockReturnValueOnce(result);
+    const row = fixture.nativeElement.querySelector('[data-record-id="1"]');
+    component.reload();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-record-id="1"]')).toBe(row);
+    expect(fixture.nativeElement.querySelector('[aria-busy=true]')).not.toBeNull();
+    result.next({ items: [OUTBOX], totalCount: 1 });
+    result.complete();
+    await fixture.whenStable();
+  });
+
+  it('uses loading rows instead of records from the previous view when switching tabs', async () => {
+    await setup();
+    const result = new Subject<{
+      items: Dto.DistributedEventInboxOutputDto[];
+      totalCount: number;
+    }>();
+    vi.spyOn(TestBed.inject(DistributedEventService), 'getInboxList').mockReturnValueOnce(result);
+    await TestBed.inject(Router).navigate(['/platform/distributed-events'], {
+      queryParams: { view: 'inbox' },
+    });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-record-id="1"]')).toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr[aria-hidden=true]')).toHaveLength(5);
+    result.next({ items: [INBOX], totalCount: 1 });
+    result.complete();
+    await fixture.whenStable();
   });
 });
