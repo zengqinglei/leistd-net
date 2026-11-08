@@ -90,7 +90,11 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
         services.AddDistributedEventHandler<PaidHandler>("orders.projection");
         services.AddDistributedEventBusEfCore<EventTestDbContext>();
         services.AddDistributedEventRetention<EventTestDbContext>();
-        if (loopback) services.AddLoopbackEventTransport();
+        if (loopback)
+        {
+            services.AddLoopbackEventTransport();
+            services.AddHealthChecks().AddLoopbackEventTransport();
+        }
         else if (withTransport) services.AddSingleton<IDistributedEventTransport>(host.Transport);
         configureServices?.Invoke(services);
         host.Services = services.BuildServiceProvider();

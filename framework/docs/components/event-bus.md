@@ -77,7 +77,7 @@ app.MapGroup("/api/v1/distributed-events").MapDistributedEvents(options =>
 });
 ```
 
-将 RabbitMQ 换为 Kafka 时引用 `Leistd.EventBus.Kafka`，在服务注册与健康检查注册两处用 `AddKafkaEventTransport` 替代 `AddRabbitMqEventTransport`；每个服务只能选择一个传输。测试或单进程开发可改用 `AddLoopbackEventTransport`。
+将 RabbitMQ 换为 Kafka 时引用 `Leistd.EventBus.Kafka`，在服务注册与健康检查注册两处用 `AddKafkaEventTransport` 替代 `AddRabbitMqEventTransport`；每个服务只能选择一个传输。测试或单进程开发可改用 `AddLoopbackEventTransport`，并显式用 `AddHealthChecks().AddLoopbackEventTransport(tags)` 登记其始终 Healthy 的检查。
 
 ## 使用
 

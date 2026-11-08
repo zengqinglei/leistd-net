@@ -19,6 +19,8 @@ using Leistd.Webhooks.Management;
 
 #if (IncludeDistributedEvents)
 using Leistd.EventBus.Distributed.Events;
+using Leistd.EventBus.Distributed.Stores;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 #endif
 
@@ -197,8 +199,32 @@ internal sealed class DistributedEventManagedAuditHandler(
         logger.LogInformation("Distributed event management {Action}: {AffectedCount} records in {Database}; selector {Selection}; batch {BatchId}",
             action, @event.AffectedCount, @event.Database, selection, @event.EventId);
         return recorder.RecordSucceededAsync(action,
-            OperationTarget.For(@event.EventId, $"{@event.AffectedCount}: {selection}"),
+            OperationTarget.For(@event.EventId, Summarize(@event)),
             PermissionConstant.DistributedEvents.Manage, cancellationToken);
+    }
+
+    private static string Summarize(DistributedEventManagedEvent @event)
+    {
+        var state = @event.Action switch
+        {
+            DistributedEventManagementAction.Redelivered => "deadLettered",
+            DistributedEventManagementAction.Replayed => "failed/processed",
+            _ => "pending"
+        };
+        var fields = new List<string> { $"count={@event.AffectedCount}", $"status={state}" };
+        if (@event.FilterJson is { } json)
+        {
+            using var document = JsonDocument.Parse(json);
+            var filter = document.RootElement;
+            if (@event.Action == DistributedEventManagementAction.Replayed
+                && filter.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Number)
+                fields[1] = "status=" + (status.GetInt32() == (int)DistributedEventInboxStatus.Failed ? "failed" : "processed");
+            foreach (var key in new[] { "errorCode", "eventName", "reason", "before" })
+                if (filter.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String)
+                    fields.Add($"{key}={value.GetString()}");
+        }
+        else fields.Add($"selected={@event.Ids?.Count ?? 0}");
+        return string.Join("; ", fields);
     }
 }
 #endif

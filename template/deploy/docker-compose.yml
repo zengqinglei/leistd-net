@@ -32,25 +32,7 @@ services:
       db:
         condition: service_healthy
 #if (LocalIdentity && IncludeMultiTenancy)
-    #if (IncludeDistributedEvents)
-  rabbitmq:
-    image: rabbitmq:4-management-alpine
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    restart: unless-stopped
-    networks:
-      - companyname-projectname-network
-#endif
-
-  redis:
+      redis:
         condition: service_healthy
 #endif
     restart: "no"
@@ -199,6 +181,24 @@ services:
 
     networks:
       - companyname-projectname-network
+
+#if (IncludeDistributedEvents)
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - companyname-projectname-network
+#endif
 
   db:
     image: postgres:18-alpine

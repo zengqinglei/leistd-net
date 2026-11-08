@@ -892,6 +892,10 @@ try {
         Invoke-External "dotnet" $newArguments
         Assert-GeneratedProject $projectRoot
         Assert-ScenarioShape $projectRoot $projectName $definition
+        Invoke-External (Get-Python3Command '校验生成 Compose 结构') @(
+            (Join-Path $repoRoot 'scripts/test-template-generation.py'),
+            '--compose-file', (Join-Path $projectRoot 'deploy/docker-compose.yml'),
+            '--compose-file', (Join-Path $projectRoot 'deploy/docker-compose.dev.yml'))
         # 从模板源码目录安装：标记记录占位的包版本与源提交
         Assert-ScenarioMarker $projectRoot $scenario $projectName '0.0.0-source' ('0' * 40) $generationSdk
         Assert-VerifySteps $projectRoot

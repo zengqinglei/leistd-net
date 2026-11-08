@@ -126,6 +126,46 @@ def compose_lines(text):
     return [re.sub(r'\s+#.*$', '', line) for line in text.split('\n') if not line.lstrip().startswith('#')]
 
 
+def check_compose_structure(text):
+    """解析实际 YAML，拒绝重复键、错误依赖层级与未定义的服务依赖。"""
+    import yaml
+
+    class UniqueLoader(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            mapping = {}
+            for key_node, value_node in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if key in mapping:
+                    raise ValueError(f'duplicate key: {key}')
+                mapping[key] = self.construct_object(value_node, deep=deep)
+            return mapping
+
+    try:
+        document = yaml.load(text, Loader=UniqueLoader)
+    except (yaml.YAMLError, ValueError) as error:
+        return [f'invalid compose YAML: {error}']
+    if not isinstance(document, dict) or not isinstance(document.get('services'), dict):
+        return ['compose services must be a mapping']
+    services = document['services']
+    problems = []
+    for name, service in services.items():
+        if not isinstance(service, dict):
+            problems.append(f'service {name} must be a mapping')
+            continue
+        dependencies = service.get('depends_on', {})
+        if not isinstance(dependencies, (dict, list)):
+            problems.append(f'service {name} depends_on must be a mapping or list')
+            continue
+        for dependency in dependencies:
+            if dependency not in services:
+                problems.append(f'service {name} depends_on references missing service {dependency}')
+            if isinstance(dependencies, dict):
+                options = dependencies[dependency]
+                if not isinstance(options, dict) or set(options) - {'condition', 'restart', 'required'}:
+                    problems.append(f'service {name} dependency {dependency} has invalid options')
+    return problems
+
+
 def check_compose_variables(compose, env_example):
     used = set(COMPOSE_VARIABLE.findall('\n'.join(compose_lines(compose))))
     listed = set(ENV_EXAMPLE_ENTRY.findall(env_example))
@@ -299,7 +339,9 @@ def check_deployment(output):
     keys = [m[1] for line in compose_lines(compose) for m in [COMPOSE_LIST_ENV.match(line) or COMPOSE_MAP_ENV.match(line)] if m]
     namespaces = {m for text in project_sources for m in NAMESPACE_DECL.findall(text)}
     packages = re.findall(r'<PackageVersion\s+Include="([^"]+)"', (output / 'backend/Directory.Packages.props').read_text(encoding='utf-8'))
-    return (check_compose_variables(compose, (output / 'deploy/.env.example').read_text(encoding='utf-8'))
+    return (check_compose_structure(compose)
+            + check_compose_structure((output / 'deploy/docker-compose.dev.yml').read_text(encoding='utf-8'))
+            + check_compose_variables(compose, (output / 'deploy/.env.example').read_text(encoding='utf-8'))
             + [problem for key in keys if '__' in key and not key.lower().startswith('serilog__')
                for problem in [check_configuration_key(key, catalog, settings_keys)] if problem]
             + check_logging_categories(keys, namespaces, packages)
@@ -472,12 +514,23 @@ public sealed class EndpointOptions { public string? Path { get; init; } }
         actual = check_logging_categories(keys, {'Generation.Probe.Api'}, ['Leistd.OperationRecords.Core']) if keys else next(a for n2, a, _ in root_cases if n2 == name)
         if len(actual) != len(expected) or not all(word in problem for word, problem in zip(expected, actual)):
             failures.append(f'{name}: expected {expected}, got {actual}')
+    valid_compose = 'services:\n  db:\n    image: postgres\n  api:\n    depends_on:\n      db:\n        condition: service_healthy\n'
+    structural_cases = [
+        ('valid compose', valid_compose, None),
+        ('duplicate service', valid_compose + '  db:\n    image: postgres\n', 'duplicate key'),
+        ('missing dependency', valid_compose.replace('      db:', '      rabbitmq:'), 'missing service'),
+        ('service nested in dependency', valid_compose.replace('condition: service_healthy', 'image: rabbitmq'), 'invalid options'),
+    ]
+    for name, text, expected in structural_cases:
+        actual = check_compose_structure(text)
+        if (expected is None and actual) or (expected is not None and not any(expected in issue for issue in actual)):
+            failures.append(f'{name}: expected {expected}, got {actual}')
     if failures:
         print('FAIL: deployment asset self-test')
         for failure in failures:
             print(f'  - {failure}')
         return 1
-    total = len(cases) + len(variable_cases) + len(logging_cases) + len(root_cases)
+    total = len(cases) + len(variable_cases) + len(logging_cases) + len(root_cases) + len(structural_cases)
     print(f'PASS: deployment asset self-test ({total} cases)')
     return 0
 
@@ -871,7 +924,16 @@ def main():
     parser.add_argument('--shard', choices=[*map(str, range(SHAPE_SHARDS)), 'control'],
                         help='0..2：按序号取模的形态片；control：输入映射、角色等价、Ci 变体与 verify 检查')
     parser.add_argument('--self-test', action='store_true', help='只运行部署资产判据的夹具自检')
+    parser.add_argument('--compose-file', action='append', type=Path, default=[], help='只校验指定生成 compose 的结构，可重复传入')
     args = parser.parse_args()
+    if args.compose_file:
+        problems = [f'{path.name}: {problem}' for path in args.compose_file
+                    for problem in check_compose_structure(path.read_text(encoding='utf-8'))]
+        if problems:
+            print('FAIL: ' + '\n'.join(problems))
+            raise SystemExit(1)
+        print(f'PASS: compose structure ({len(args.compose_file)} files)')
+        return
     if args.self_test:
         raise SystemExit(self_test())
     if args.shard is None:

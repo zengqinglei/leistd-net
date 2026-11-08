@@ -201,7 +201,7 @@ framework/components/event-bus/
 | `IEventHandler<TEvent>` | Core（现有） | 消费方沿用本地处理器接口 |
 | `AddDistributedEventBus(configure?, configSectionPath = "Leistd:EventBus:Distributed")` | Distributed | 选项绑定 + `ValidateOnStart`；登记错误码、内置测试事件及其消费者 |
 | `AddDistributedEventHandler<THandler>(consumerName?)` | Distributed | 登记处理器并声明订阅。消费者名默认取处理器类型全名；处理器改名时显式指定，否则幂等记录失效 |
-| `AddLoopbackEventTransport()` | Distributed | 进程内回环，用于测试和单进程开发 |
+| `AddLoopbackEventTransport()`、`IHealthChecksBuilder.AddLoopbackEventTransport(tags)` | Distributed | 进程内回环，用于测试和单进程开发；健康检查由宿主显式登记，始终 Healthy |
 | `IDistributedEventTransport` | Distributed | 替换点，见下文"传输契约" |
 | `IDistributedEventReceiver` | Distributed | 传输调用的入站入口：`ReceiveAsync` 与 `RejectAsync` |
 | `IDistributedEventSubscriptions` | Distributed | 本服务的订阅表：事件名、事件类型、消费者。传输据此绑定自己的路由，如队列绑定或主题订阅 |

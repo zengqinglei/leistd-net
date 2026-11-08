@@ -20,9 +20,6 @@ using Leistd.EventBus.Distributed;
 using Leistd.EventBus.Distributed.Transport;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 #endif
-#if (IncludeDistributedEvents && LocalIdentity)
-using Microsoft.Extensions.DependencyInjection.Extensions;
-#endif
 #if (!LocalIdentity)
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -103,6 +100,29 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
 #endif
 
+#if (IncludeDistributedEvents)
+    private static void UseLoopbackEventTransport(IServiceCollection services)
+    {
+        var rabbit = new ServiceCollection();
+        Leistd.EventBus.RabbitMQ.DependencyInjection.AddRabbitMqEventTransport(rabbit);
+        foreach (var registration in rabbit.Where(descriptor => descriptor.ServiceType == typeof(IHostedService)
+                     || typeof(IDistributedEventTransport).IsAssignableFrom(descriptor.ServiceType)))
+        {
+            foreach (var current in services.Where(descriptor => descriptor.ServiceType == registration.ServiceType
+                         && (descriptor.ServiceType != typeof(IHostedService)
+                             || descriptor.ImplementationType == registration.ImplementationType)).ToArray())
+                services.Remove(current);
+        }
+        services.Configure<HealthCheckServiceOptions>(options =>
+        {
+            foreach (var check in options.Registrations.Where(check => check.Name == "event-bus-rabbitmq").ToArray())
+                options.Registrations.Remove(check);
+        });
+        services.AddLoopbackEventTransport();
+        services.AddHealthChecks().AddLoopbackEventTransport(tags: ["ready"]);
+    }
+#endif
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // 专用环境而不是 Development：开发环境会自动加载开发者本机的 user-secrets 与 appsettings.Development.json，
@@ -172,20 +192,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         builder.ConfigureServices(services =>
         {
 #if (IncludeDistributedEvents)
-            var rabbitAssembly = typeof(Leistd.EventBus.RabbitMQ.DependencyInjection).Assembly;
-            foreach (var descriptor in services.Where(descriptor =>
-                         descriptor.ServiceType.Assembly == rabbitAssembly ||
-                         (descriptor.ServiceType == typeof(IHostedService) &&
-                          descriptor.ImplementationType?.Assembly == rabbitAssembly)).ToArray())
-                services.Remove(descriptor);
-            services.RemoveAll<IDistributedEventTransport>();
-            services.PostConfigure<HealthCheckServiceOptions>(options =>
-            {
-                foreach (var check in options.Registrations.Where(check => check.Name == "event-bus-rabbitmq").ToArray())
-                    options.Registrations.Remove(check);
-                options.Registrations.Single(check => check.Name == "event-bus-loopback").Tags.Add("ready");
-            });
-            services.AddLoopbackEventTransport();
+            UseLoopbackEventTransport(services);
 #endif
 #if (!IncludeOperationRecords)
             services.AddSingleton<OperationRecordLogCapture>();

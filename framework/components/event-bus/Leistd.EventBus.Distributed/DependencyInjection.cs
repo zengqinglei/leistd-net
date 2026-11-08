@@ -100,16 +100,26 @@ public static class DependencyInjection
     {
         services.EnsureSingleAuthoritative<IDistributedEventTransport, LoopbackEventTransport>(ServiceLifetime.Singleton,
             "Only one distributed event transport can be registered.");
-        var registered = services.Any(x => x.ServiceType == typeof(LoopbackRegistration));
         services.TryAddSingleton<IDistributedEventTransport, LoopbackEventTransport>();
-        if (!registered)
-        {
-            services.AddSingleton<LoopbackRegistration>();
-            services.AddHealthChecks().AddCheck("event-bus-loopback", () => HealthCheckResult.Healthy(), tags: ["event-bus"]);
-        }
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
+    /// <summary>显式登记始终健康的回环检查，附加宿主标签并固定带 event-bus；重复调用合并标签。</summary>
+    /// <param name="builder">健康检查构建器。</param>
+    /// <param name="tags">宿主标签，例如 ready。</param>
+    public static IHealthChecksBuilder AddLoopbackEventTransport(this IHealthChecksBuilder builder, IEnumerable<string>? tags = null)
+    {
+        if (!builder.Services.Any(x => x.ServiceType == typeof(LoopbackRegistration)))
+        {
+            builder.Services.AddSingleton<LoopbackRegistration>();
+            builder.AddCheck("event-bus-loopback", () => HealthCheckResult.Healthy(), tags: ["event-bus"]);
+        }
+        var additions = tags?.ToArray() ?? [];
+        builder.Services.Configure<HealthCheckServiceOptions>(options =>
+            options.Registrations.Single(check => check.Name == "event-bus-loopback").Tags.UnionWith(additions));
+        return builder;
+    }
+
     private sealed class LoopbackRegistration;
 }
 

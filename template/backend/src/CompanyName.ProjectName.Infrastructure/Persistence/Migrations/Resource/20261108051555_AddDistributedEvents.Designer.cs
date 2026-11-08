@@ -858,7 +858,6 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .IsRequired();
                 });
 #endif
-#if (IncludeDistributedEvents)
             modelBuilder.Entity("Leistd.EventBus.EntityFrameworkCore.Entities.DistributedEventInbox", b =>
                 {
                     b.Property<long>("Id")
@@ -1112,7 +1111,6 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.ToTable("DistributedEventRejection", "companyname-projectname");
                 });
-#endif
 #pragma warning restore 612, 618
         }
     }

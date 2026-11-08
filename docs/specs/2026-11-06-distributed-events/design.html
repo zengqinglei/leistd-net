@@ -452,7 +452,7 @@
         <tr><th>入口</th><th>包</th><th>说明</th></tr>
         <tr><td><code>AddDistributedEventBus(configure?, "Leistd:EventBus:Distributed")</code></td><td>Distributed</td><td>选项绑定加启动期校验；登记错误码与内置测试事件 <code>event-bus.test</code></td></tr>
         <tr><td><code>AddDistributedEventHandler&lt;THandler&gt;(consumerName?)</code></td><td>Distributed</td><td>登记处理器并声明订阅；消费者名默认取类型全名</td></tr>
-        <tr><td><code>AddLoopbackEventTransport()</code> / <code>AddRabbitMqEventTransport()</code> / <code>AddKafkaEventTransport()</code></td><td>Distributed / RabbitMQ / Kafka</td><td>三选一；业务也可以自己实现 <code>IDistributedEventTransport</code></td></tr>
+        <tr><td><code>AddLoopbackEventTransport()</code> / <code>AddRabbitMqEventTransport()</code> / <code>AddKafkaEventTransport()</code></td><td>Distributed / RabbitMQ / Kafka</td><td>三选一；健康检查通过同名的 <code>IHealthChecksBuilder</code> 扩展显式登记并传入宿主标签；业务也可以自己实现 <code>IDistributedEventTransport</code></td></tr>
         <tr><td><code>AddDistributedEventBusEfCore&lt;TDbContext&gt;()</code>、<code>ConfigureDistributedEventBus()</code></td><td>EF</td><td>三张表、发布实现、接收入口、两个兜底任务；保留期由 EF 独立选项绑定</td></tr>
         <tr><td><code>AddDistributedEventRetention&lt;TDbContext&gt;()</code></td><td>EF</td><td>保留期任务，默认开启，14 天</td></tr>
         <tr><td><code>MapDistributedEvents(o =&gt; { ReadPolicy; ManagePolicy; })</code></td><td>AspNetCore</td><td>两个策略必填，漏配在映射时抛出</td></tr>
@@ -514,7 +514,7 @@ public interface IDistributedEventReceiver
             <tr><td>传输层坏消息</td><td>RejectAsync 后 Ack</td><td>RejectAsync</td><td>SDK 失败回调 → RejectAsync</td></tr>
             <tr><td>多副本</td><td>每服务一个持久单活队列（Single Active Consumer），串行持久化，副本故障转移</td><td>消费组</td><td>消费组</td></tr>
             <tr><td>坐标</td><td>exchange / routingKey / deliveryTag</td><td>topic / partition / offset</td><td>同 Kafka + 中枢事件 ID</td></tr>
-            <tr><td>连接状态</td><td colspan="3">各自登记带 <code>event-bus</code> 标签的健康检查，宿主挂到 readiness，管理页读取</td></tr>
+            <tr><td>连接状态</td><td colspan="3">宿主显式登记带 <code>event-bus</code> 标签的健康检查，宿主挂到 readiness，管理页读取</td></tr>
           </table>
         </div>
       </div>

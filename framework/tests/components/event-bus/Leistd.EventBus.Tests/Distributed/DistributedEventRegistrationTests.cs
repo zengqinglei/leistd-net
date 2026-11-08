@@ -21,10 +21,14 @@ public sealed class DistributedEventRegistrationTests
         services.AddLogging();
         services.AddLoopbackEventTransport();
         services.AddLoopbackEventTransport();
+        services.AddHealthChecks().AddLoopbackEventTransport(["ready"]).AddLoopbackEventTransport(["custom"]);
         using var provider = services.BuildServiceProvider();
         var report = await provider.GetRequiredService<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService>()
             .CheckHealthAsync(check => check.Tags.Contains("event-bus"));
-        Assert.Single(report.Entries);
+        var check = Assert.Single(report.Entries);
+        Assert.Contains("event-bus", check.Value.Tags);
+        Assert.Contains("ready", check.Value.Tags);
+        Assert.Contains("custom", check.Value.Tags);
         Assert.Equal(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy, report.Status);
     }
 

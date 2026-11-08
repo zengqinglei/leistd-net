@@ -68,7 +68,7 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
             await unit.CompleteAsync();
         }
         using var response = await admin.Client.PostAsJsonAsync($"{Root}/outbox/redeliver", new
-        { Filter = new { Before = before, ErrorCode = "message-too-large" } });
+        { Filter = new { Before = before, ErrorCode = "message-too-large", EventName = "invoice.issued" } });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(1, result.RootElement.GetProperty("affectedCount").GetInt64());
@@ -80,18 +80,20 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
         using var audit = JsonDocument.Parse(await admin.Client.GetStringAsync(
             $"/api/v1/operation-records?actions={OperationRecordActions.DistributedEventRedelivered}&outcome=succeeded"));
         var entry = Assert.Single(audit.RootElement.GetProperty("items").EnumerateArray());
-        Assert.StartsWith("1: ", entry.GetProperty("targetName").GetString());
+        Assert.StartsWith("count=1; status=deadLettered; ", entry.GetProperty("targetName").GetString());
         Assert.Contains("message-too-large", entry.GetProperty("targetName").GetString());
-        Assert.Contains("before", entry.GetProperty("targetName").GetString());
+        Assert.Contains("eventName=invoice.issued", entry.GetProperty("targetName").GetString());
+        Assert.DoesNotContain("{", entry.GetProperty("targetName").GetString());
         Assert.Equal(PermissionConstant.DistributedEvents.Manage, entry.GetProperty("authorizationBasis").GetString());
 #else
         var entry = Assert.Single(Factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
             .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.DistributedEventRedelivered)
                 && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded"));
         var name = OperationRecordLogCapture.Field(entry, "OperationTargetName") as string;
-        Assert.StartsWith("1: ", name);
+        Assert.StartsWith("count=1; status=deadLettered; ", name);
         Assert.Contains("message-too-large", name);
-        Assert.Contains("before", name);
+        Assert.Contains("eventName=invoice.issued", name);
+        Assert.DoesNotContain("{", name);
 #endif
     }
 
