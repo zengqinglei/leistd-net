@@ -1,6 +1,6 @@
 # 分布式事件组件接入缺口（beta.230 反馈）
 
-状态：进行中（本地验收完成，待追加审查、CI 与 beta 验证） · 风险档：高 · 基线：develop `48e9e62b`（组件自 `v2.0.0-beta.230` 起未改）· 前序：`2026-11-06-distributed-events.md`
+状态：已完成 · 风险档：高 · 基线：develop `48e9e62b`（组件自 `v2.0.0-beta.230` 起未改）· 前序：`2026-11-06-distributed-events.md`
 
 ## 1. 需求
 
@@ -134,7 +134,7 @@
 
 ## 4. 结果
 
-交付：[PR #249](https://github.com/zengqinglei/leistd-net/pull/249)。框架、模板、测试及常驻文档同批交付。
+交付：[PR #249](https://github.com/zengqinglei/leistd-net/pull/249)（合并提交 `2c9f2b76`），已合入 develop 并发布 [2.0.0-beta.256](https://github.com/zengqinglei/leistd-net/releases/tag/v2.0.0-beta.256)。框架、模板、测试及常驻文档同批交付。
 
 - 框架已实现 G1、G6、G7、G8、G9、G3，G2 补齐共同版本水位的适用条件。按用户调整，G7 前置并同时存储 TraceId 与独立 CorrelationId；三处关联标识索引列按 IsWellFormed 校验，原始消息头保留。G4 按撤回范围移出。追加 G10–G13 已实现：立即发送／扫描重试恢复发布父上下文与关联标识；无传输且三项职责关闭的宿主可严格构建、启动和管理；拒收可转交同名 Worker 重新解码；恢复审计独立归属调用方，带 TargetTenantId。收件失败只持久异常类型，4106／4103 完整留痕；待办逐行隔离故障、可丢弃且筛选不越界。
 - Identity／Resource 两套 AddDistributedEvents 通过 EF 10.0.14 从前一模型重新生成，原位更新迁移与条件快照；界面显示两种状态时间、按载荷开放标记隐藏正文入口，Mock、精确 E2E 定位文案、载荷关闭指引同步。
@@ -147,4 +147,6 @@
 
 CI 同时暴露了既有 Webhook 身份测试过早读取提交前状态的竞态；用受控提交顺序在 develop 原测试稳定复现，等待持久状态后在相同顺序与未插桩目标类均通过，仅调整该测试的 I/O 等待。
 
-公共契约已上收到 `framework/docs/components/event-bus.md`；模板发布幂等、顺序水位、载荷关闭入口已上收到 `template/docs/standards/distributed-events.md`，索引同步 `template/docs/README.md`。完整模板阶段与真实 PostgreSQL／Broker／Redis 验证以同候选 CI 为准；合入 develop 后以 Release 全量和实际 beta 核验发布结果。
+公共契约已上收到 `framework/docs/components/event-bus.md`；模板发布幂等、顺序水位、载荷关闭入口已上收到 `template/docs/standards/distributed-events.md`，索引同步 `template/docs/README.md`。
+
+合入后的 [Release 全量验证](https://github.com/zengqinglei/leistd-net/actions/runs/42523117134)通过：26 个完整模板场景及真实 PostgreSQL／OIDC／Broker／Redis 验证通过，32 个框架测试项目共 2,825 例通过且零跳过。81 个 beta 精确版本包均已从 nuget.org 下载并核对与发布产物内容一致；本轮未发布正式版。
