@@ -38,6 +38,7 @@ internal sealed class DistributedEventOptionsValidator(
         {
             Require(!options.Outbox.DispatchEnabled, "Outbox:DispatchEnabled", "requires an IDistributedEventTransport registration.");
             Require(!options.Inbox.ReceiveEnabled, "Inbox:ReceiveEnabled", "requires an IDistributedEventTransport registration.");
+            Require(!options.Inbox.ProcessingEnabled, "Inbox:ProcessingEnabled", "requires an IDistributedEventTransport registration.");
         }
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }

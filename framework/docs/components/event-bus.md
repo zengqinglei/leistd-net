@@ -220,11 +220,25 @@ public sealed class OrderPaymentPublisher(IDistributedEventBus events, IUnitOfWo
 
 ### 分工与配置
 
-`Leistd:EventBus:Distributed` 的 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` 默认均为 true。写入进程可显式全关并不注册传输；Worker 全开并注册传输。关闭的扫描任务在调度器取锁前跳过，选项不按可选依赖是否存在推断。发送或接收开启却漏传输时启动报出配置键。
+`Leistd:EventBus:Distributed` 的 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` 默认均为 true。写入进程可显式全关并不注册传输；Worker 全开并注册传输。关闭的扫描任务在调度器取锁前跳过，选项不按可选依赖是否存在推断。三项任一开启却漏传输时，启动报出对应配置键。仅发布进程可通过 `ValidateOnBuild` 与 `ValidateScopes` 验证，发布和管理不要求连接 SDK。
+
+```csharp
+// Api：沿用宿主已有的工作单元、租户、后台任务队列与数据库接线。
+services.AddDistributedEventBus(options =>
+{
+    options.Outbox.DispatchEnabled = false;
+    options.Inbox.ReceiveEnabled = false;
+    options.Inbox.ProcessingEnabled = false;
+});
+services.AddDistributedEventBusEfCore<AppDbContext>();
+app.MapDistributedEvents();
+```
+
+Worker 共用数据库，注册所选传输并开启上述三项；仅发布 Api 不注册传输或该传输的健康检查。
 
 默认发件箱每五秒兜底扫描；瞬态发送失败指数退避，从两秒起、最多五分钟并有抖动。首次失败满一天仍未恢复则进死信。收件箱每轮最多处理五次。立即队列满或进程退出不会丢失持久记录，新记录留一分钟宽限后由扫描接手。
 
-`TestEvent:Enabled` 默认 true，登记 `event-bus.test` 测试消费者；不允许本服务自发自收的传输可关闭，状态和界面随之隐藏测试入口。EF 保留期由 `AddDistributedEventRetention` 独立绑定 `Leistd:EventBus:Distributed:Retention`，默认 `Enabled=true`、`Days=14`，每天 UTC 02:00 清理最后变更已过期的终态；Pending 永不删除。
+`TestEvent:Enabled` 默认 true，登记 `event-bus.test` 测试消费者；不允许本服务自发自收的传输可关闭，状态和界面随之隐藏测试入口。EF 保留期由 `AddDistributedEventRetention` 独立绑定 `Leistd:EventBus:Distributed:Retention`，默认 `Enabled=true`、`Days=14`，每天 UTC 02:00 清理最后变更已过期的终态；Pending 与拒收的 RedecodePending 永不删除。
 
 | 传输 | 必需连接 | 默认部署选项 |
 | --- | --- | --- |
@@ -249,14 +263,16 @@ Read 只读快照、目录、列表与详情概要，载荷经独立 Manage 端�
 | --- | --- | --- |
 | 发件箱重投 | DeadLettered | EventId 不变，清空失败窗口，累计尝试次数保留，RedeliverCount 增加。 |
 | 收件箱重放 | Failed、Processed | 清零本轮尝试、错误与完成时间，ReplayCount 增加；Processed 会再次执行处理器及其外部副作用。 |
-| 拒收重新解码 | Pending | 原始字节重新经过当前 DecodeAsync 和接收校验；先写有去重保护的收件箱，再标 Redecoded，不追求跨库原子。失败更新原拒收。 |
+| 拒收重新解码 | Pending | 本地有同名传输时同步调用 DecodeAsync 与接收校验；否则转为 RedecodePending，由同名接收 Worker 处理。成功先写有去重保护的收件箱，再标 Redecoded；解码失败回 Pending 并更新脱敏原因。 |
 | 拒收丢弃 | Pending | 标 Discarded。 |
 
-ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个成功批次发布一条 `DistributedEventManagedEvent`，带实际条数与原筛选或实际 ids；部分批次失败不会把未完成批次记为成功。
+ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个实际改动且提交的租户分组批次发布一条 `DistributedEventManagedEvent`，带目标 TargetTenantId、Database、实际条数与原筛选或实际 ids。目标作用域退出后，在调用方租户与用户上下文中独立完成审计单元；调用方已有单元之后提交或回滚均不影响该审计。跨库更新与本地审计不是分布式原子事务：审计失败向上传播，已提交批次不撤回。部分批次失败不把未完成批次记为成功。
+
+转交结果的 DeferredCount 是 AffectedCount 的子集，表示请求已登记而非已解码；该请求用 RedecodeRequested 动作审计。Worker 只领取宿主表中 Transport 与自身 Name 相同的 RedecodePending，沿用 Inbox:ReceiveEnabled 与 DispatchInterval，每批 100 行；写库失败保持待办并让任务失败供下轮重试。处理原始字节、头与入站坐标，不重新向 Broker 发布；进程中断后重入由 Inbox 唯一约束去重。Worker 完成不再以请求用户发管理审计，未解决拒收计数包含 RedecodePending。
 
 积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小等不可恢复的单条消息错误后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
 
-活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。三类记录分别存储从有效 W3C traceparent 提取的小写 TraceId，以及符合 CorrelationIdConstants.IsWellFormed 的 leistd-correlation-id 头原始 CorrelationId（最长 64 字符；不合规时该列为空，原始头仍保留）；两者都可在列表关键字中精确检索。32 位十六进制关键字对 TraceId 转小写匹配，关联标识不归一化，匹配的大小写语义取决于数据库排序规则（例如 SQL Server 默认通常不区分大小写）。缺失或非法 traceparent 时 TraceId 为空；显式关联标识可与 TraceId 不同，无 Activity 的入口也可只携带关联标识。
+活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id；发送恢复持久父上下文与关联标识，围绕 SendAsync 创建 Producer 类型的 event.send，立即发送与扫描重试共用此路径。消息头不改写，event.send 与 event.process 均以 event.publish 为父 span，三段同属一个 TraceId。处理时另恢复所属租户与系统身份。三类记录分别存储从有效 W3C traceparent 提取的小写 TraceId，以及符合 CorrelationIdConstants.IsWellFormed 的 leistd-correlation-id 头原始 CorrelationId（最长 64 字符；不合规时该列为空，原始头仍保留）；两者都可在列表关键字中精确检索。32 位十六进制关键字对 TraceId 转小写匹配，关联标识不归一化，匹配的大小写语义取决于数据库排序规则（例如 SQL Server 默认通常不区分大小写）。缺失或非法 traceparent 时 TraceId 为空；显式关联标识可与 TraceId 不同，无 Activity 的入口也可只携带关联标识。
 
 稳定告警键如下，事件编号与名称一起使用：
 
@@ -268,7 +284,7 @@ ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。
 | 4104 | DistributedEventRejected | Transport、Reason、EventName、EventId、Coordinates |
 | 4105 | DistributedEventRejectPersistFailed | 同 4104，附完整持久化异常 |
 
-拒收前无法解码时 EventName、EventId 可能为空。Coordinates 是入站坐标，按键排序为 `k=v;k=v`，最长 256 字符。发送传输未处理的异常只将异常类型全名写入 LastError，LastErrorCode 为 transport-exception；完整异常保留在日志。
+拒收前无法解码时 EventName、EventId 可能为空。Coordinates 是入站坐标，按键排序为 `k=v;k=v`，最长 256 字符。发送传输未处理的异常只将异常类型全名写入 LastError，LastErrorCode 为 transport-exception；完整异常保留在日志。收件处理器失败同样只持久异常类型全名，耗尽的 4103 保留完整异常，LastErrorCode 仍为 handler-exception。
 
 ### 自定义传输
 

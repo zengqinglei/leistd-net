@@ -47,7 +47,7 @@ public interface IDistributedEventManagementService
     /// <summary>重放 Processed 或 Failed，清零本轮次数；Processed 会再次执行处理器。</summary>
     Task<DistributedEventRecoveryOutputDto> ReplayAsync(RecoverDistributedEventInboxInputDto input, string? database = null, CancellationToken cancellationToken = default);
 
-    /// <summary>使用当前传输重新解码宿主拒收；失败保留 Pending 并更新原因。</summary>
+    /// <summary>重新解码宿主拒收；没有同名本地传输时转交 Worker，DeferredCount 标识待办数量。</summary>
     Task<DistributedEventRecoveryOutputDto> RedecodeAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default);
 
     /// <summary>将宿主 Pending 拒收标记为 Discarded。</summary>

@@ -8,5 +8,7 @@ public enum DistributedEventRejectionStatus
     /// <summary>重新解码成功。</summary>
     Redecoded,
     /// <summary>已主动丢弃。</summary>
-    Discarded
+    Discarded,
+    /// <summary>已转交给匹配传输的接收宿主，等待重新解码。</summary>
+    RedecodePending
 }

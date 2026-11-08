@@ -26,7 +26,7 @@ namespace Leistd.EventBus.EntityFrameworkCore;
 public static class DependencyInjection
 {
     /// <summary>登记发件箱发布、持久接收与提交后处理；表只能属于同一个上下文。</summary>
-    /// <remarks>宿主须提供工作单元、租户上下文、后台队列与一个传输；只写进程可显式关闭发送和接收。</remarks>
+    /// <remarks>宿主须提供工作单元、租户上下文与后台队列；仅发布进程关闭三项执行开关后可不注册传输。</remarks>
     /// <typeparam name="TDbContext">映射分布式事件表的业务上下文。</typeparam>
     /// <param name="services">服务集合。</param>
     /// <example><code>services.AddDistributedEventBusEfCore&lt;AppDbContext&gt;();</code></example>
@@ -57,6 +57,9 @@ public static class DependencyInjection
         services.AddRecurringJob<DistributedEventInboxJob<TDbContext>>(DistributedEventInboxJob<TDbContext>.Name,
             sp => RecurringJobSchedule.Every(sp.GetRequiredService<IOptions<DistributedEventOptions>>().Value.DispatchInterval),
             RecurringJobScope.Cluster, isEnabled: sp => sp.GetRequiredService<IOptionsSnapshot<DistributedEventOptions>>().Value.Inbox.ProcessingEnabled);
+        services.AddRecurringJob<DistributedEventRedecodeJob<TDbContext>>(DistributedEventRedecodeJob<TDbContext>.Name,
+            sp => RecurringJobSchedule.Every(sp.GetRequiredService<IOptions<DistributedEventOptions>>().Value.DispatchInterval),
+            RecurringJobScope.Cluster, isEnabled: sp => sp.GetRequiredService<IOptionsSnapshot<DistributedEventOptions>>().Value.Inbox.ReceiveEnabled);
         return services;
     }
 

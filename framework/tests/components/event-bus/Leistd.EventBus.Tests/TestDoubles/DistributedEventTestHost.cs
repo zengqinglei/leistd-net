@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Leistd.Security.Claims;
 using Leistd.BackgroundJobs.Queues;
 using Leistd.Data.Connections;
 using Leistd.Data.Filters;
@@ -70,18 +71,20 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
     public List<DistributedEventManagedEvent> ManagedEvents { get; } = [];
     /// <summary>动作提交时所属租户。</summary>
     public List<Guid?> ManagedEventTenants { get; } = [];
+    /// <summary>审计处理器观察到的调用方身份。</summary>
+    public List<string?> ManagedEventUsers { get; } = [];
     /// <summary>可控传输。</summary>
     public ScriptedEventTransport Transport { get; } = new();
 
     /// <summary>创建并建表。</summary>
-    public static async Task<DistributedEventTestHost> CreateAsync(bool loopback = false, Action<DistributedEventOptions>? configure = null, bool withTransport = true, Action<IServiceCollection>? configureServices = null, DistributedEventTestHost? shareDatabaseWith = null)
+    public static async Task<DistributedEventTestHost> CreateAsync(bool loopback = false, Action<DistributedEventOptions>? configure = null, bool withTransport = true, Action<IServiceCollection>? configureServices = null, DistributedEventTestHost? shareDatabaseWith = null, bool validateServices = false)
     {
         var host = new DistributedEventTestHost(shareDatabaseWith);
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddFakeLogging());
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddLocalEventBus();
-        services.AddSingleton<IEventHandler<DistributedEventManagedEvent>>(sp => new ManagedEventRecorder(host, sp.GetRequiredService<ICurrentTenant>()));
+        services.AddSingleton<IEventHandler<DistributedEventManagedEvent>>(sp => new ManagedEventRecorder(host, sp.GetRequiredService<ICurrentTenant>(), sp.GetService<ICurrentPrincipalAccessor>()));
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddMultiTenancyCore();
@@ -105,7 +108,7 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
         }
         else if (withTransport) services.AddSingleton<IDistributedEventTransport>(host.Transport);
         configureServices?.Invoke(services);
-        host.Services = services.BuildServiceProvider();
+        host.Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = validateServices, ValidateScopes = validateServices });
         await using var scope = host.Services.CreateAsyncScope();
         foreach (var dedicated in new[] { false, true })
         {
@@ -254,9 +257,12 @@ public sealed class ScriptedEventTransport : IDistributedEventTransport
     public System.Collections.Concurrent.ConcurrentQueue<DistributedEventSendResult> Results { get; } = new();
     /// <summary>模拟传输未处理的异常。</summary>
     public Exception? SendFailure { get; set; }
+    /// <summary>发送边界的同步观测。</summary>
+    public Action? Sending { get; set; }
     /// <inheritdoc />
     public Task<DistributedEventSendResult> SendAsync(OutgoingDistributedEvent message, CancellationToken cancellationToken)
     {
+        Sending?.Invoke();
         Sent.Enqueue(message);
         if (SendFailure is not null) return Task.FromException<DistributedEventSendResult>(SendFailure);
         return Task.FromResult(Results.TryDequeue(out var result) ? result : new DistributedEventSendResult { Status = DistributedEventSendStatus.Succeeded });
@@ -295,12 +301,12 @@ public sealed class EventTaskQueue : IBackgroundTaskQueue
     public void Drop() => _items.Clear();
 }
 
-internal sealed class ManagedEventRecorder(DistributedEventTestHost host, ICurrentTenant tenant) : IEventHandler<DistributedEventManagedEvent>
+internal sealed class ManagedEventRecorder(DistributedEventTestHost host, ICurrentTenant tenant, ICurrentPrincipalAccessor? principal) : IEventHandler<DistributedEventManagedEvent>
 {
     public Task HandleAsync(DistributedEventManagedEvent @event, CancellationToken cancellationToken = default)
     {
         if (Leistd.UnitOfWork.Events.UnitOfWorkContext.CurrentPhase == Leistd.UnitOfWork.Events.UnitOfWorkPhase.AfterCommit)
-        { host.ManagedEvents.Add(@event); host.ManagedEventTenants.Add(tenant.Id); }
+        { host.ManagedEvents.Add(@event); host.ManagedEventTenants.Add(tenant.Id); host.ManagedEventUsers.Add(principal?.Principal?.Identity?.Name); }
         return Task.CompletedTask;
     }
 }

@@ -36,7 +36,7 @@ internal sealed class DistributedEventRetentionJob<TDbContext>(
             if (database.TenantId is null)
             {
                 await DeleteAsync(db => db.Set<DistributedEventRejection>()
-                    .Where(x => x.Status != DistributedEventRejectionStatus.Pending && x.LastModificationTime < cutoff).OrderBy(x => x.Id), ct);
+                    .Where(x => (x.Status == DistributedEventRejectionStatus.Redecoded || x.Status == DistributedEventRejectionStatus.Discarded) && x.LastModificationTime < cutoff).OrderBy(x => x.Id), ct);
                 await DeleteAsync(db => db.Set<DistributedEventTransportState>()
                     .Where(x => x.ReportedAt < cutoff).OrderBy(x => x.Instance), ct);
             }

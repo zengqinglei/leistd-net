@@ -179,7 +179,8 @@ public sealed class DistributedEventManagementTests
         var record = Assert.Single(page.Items);
         Assert.Equal(DistributedEventTestHost.DedicatedTenant, record.TenantId);
         Assert.Equal(1, (await service.RedeliverAsync(new() { Ids = [record.Id] }, database)).AffectedCount);
-        Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.ManagedEventTenants));
+        Assert.Null(Assert.Single(host.ManagedEventTenants));
+        Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.ManagedEvents).TargetTenantId);
         await host.Queue.RunAllAsync(host.Services);
         Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.Transport.Sent).TenantId);
         Assert.Equal(1, (await service.GetStatusAsync()).DeadLettered);

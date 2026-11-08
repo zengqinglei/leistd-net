@@ -43,7 +43,7 @@ internal sealed class DistributedEventCatalog<TDbContext>(
         }, ct);
         if (isHost)
             result = result with { PendingRejections = await scope.RunAsync(new(null, true),
-                (db, token) => db.Set<DistributedEventRejection>().LongCountAsync(x => x.Status == DistributedEventRejectionStatus.Pending, token), ct) };
+                (db, token) => db.Set<DistributedEventRejection>().LongCountAsync(x => x.Status == DistributedEventRejectionStatus.Pending || x.Status == DistributedEventRejectionStatus.RedecodePending, token), ct) };
         var freshAfter = now - options.CurrentValue.TransportStatus.StaleAfter;
         var states = await scope.RunAsync(new(null, true),
             (db, token) => db.Set<DistributedEventTransportState>().AsNoTracking()

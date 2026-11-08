@@ -91,7 +91,7 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
         if (current is not { Status: DistributedEventInboxStatus.Pending } || current.AttemptCount != attempt) return;
         current.AttemptCount++;
         current.LastErrorCode = DistributedEventInboxFailureCodes.HandlerException;
-        current.LastError = DistributedEventRetry.Truncate(failure.Message);
+        current.LastError = DistributedEventRetry.Truncate(failure.GetType().FullName ?? failure.GetType().Name);
         current.LastModificationTime = clock.GetUtcNow().UtcDateTime;
         if (current.AttemptCount >= options.CurrentValue.MaxAttempts)
         {
