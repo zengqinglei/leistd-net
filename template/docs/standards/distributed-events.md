@@ -33,3 +33,13 @@
 只读权限 `App.DistributedEvents` 可看状态、目录与概要；管理权限 `App.DistributedEvents.Manage` 才能读取载荷、恢复、丢弃或发送测试事件。宿主按物理库查看，租户只看自己的发件箱与收件箱。按筛选恢复带首次加载时间上限，后续新记录不卷入；操作记录逐个成功批次记录条数和筛选。
 
 发送内置测试事件应看到同一 EventId 的 Sent 发件箱与 Processed 收件箱。外部传输不允许自发自收时关闭 `TestEvent:Enabled`，页面随之隐藏测试入口。链路使用 traceparent 与 leistd-correlation-id，可在详情消息头中核对。
+
+## 连接与部署
+
+默认组合 RabbitMQ，生产连接来自 `ConnectionStrings:RabbitMQ`（compose 的 `RABBITMQ_CONNECTION_STRING`），主机名为 `rabbitmq`；broker 初始账号来自 `RABBITMQ_USER`、`RABBITMQ_PASSWORD`，URI 账号与之保持一致，特殊字符须进行 URI 编码。已存在的数据卷不会因修改初始账号变量而更改 broker 账号。生产不使用 guest 账号；本机开发档的公开默认值只用于环回地址。
+
+开发依赖清单同时启动 RabbitMQ，管理页为 `http://localhost:15672`。持久队列使用 RabbitMQ 数据卷，重建容器不应删除该卷；消费方必须先启动以声明队列，此前发布且没有目标队列的消息不会保留。readiness 与运维快照共用传输健康检查，broker 不可达会使就绪检查失败。迁移作业只创建三表，不连接 broker。
+
+改用 Kafka 时，在 Api 的服务与健康检查两处将 `AddRabbitMqEventTransport` 换为 `AddKafkaEventTransport`，替换包引用与连接配置，并独立准备 broker；不要同时注册两个传输。`Leistd:EventBus:Distributed` 与 `Leistd:EventBus:Distributed:Retention` 的调优项沿用组件默认值，确有部署需要时再覆盖。
+
+恢复操作逐个已提交批次留痕，目标名称显示条数与选择条件摘要；超过操作记录名称长度的完整筛选或实际 ID 列表通过相同关联标识的结构化日志回查。失败尝试由端点动作元数据补记。

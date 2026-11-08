@@ -41,6 +41,9 @@ public sealed record DistributedEventRejectionOutputDto
     /// <summary>保存原始消息的传输名。</summary>
     public required string Transport { get; init; }
 
+    /// <summary>不透明的来源坐标，用于概要中定位无法解码的消息；不含消息头或原始字节。</summary>
+    public IReadOnlyDictionary<string, string> Coordinates { get; init; } = new Dictionary<string, string>();
+
     /// <summary>稳定拒收原因码。</summary>
     public required string Reason { get; init; }
 

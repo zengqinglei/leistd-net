@@ -49,13 +49,9 @@ internal sealed class RabbitMqEventTransport(
                 Headers = message.Headers.ToDictionary(x => x.Key, x => (object?)Encoding.UTF8.GetBytes(x.Value))
             };
             // SDK 的确认追踪开启，返回仅表示 broker 已确认，不以写入 socket 代替确认。
-            await _publisher!.BasicPublishAsync(options.Value.Exchange, message.EventName, mandatory: true,
+            await _publisher!.BasicPublishAsync(options.Value.Exchange, message.EventName, mandatory: false,
                 basicProperties: properties, body: DistributedEventCodec.Encode(message), cancellationToken: cancellationToken);
             return new() { Status = DistributedEventSendStatus.Succeeded };
-        }
-        catch (PublishException exception) when (exception.IsReturn && !cancellationToken.IsCancellationRequested)
-        {
-            return new() { Status = DistributedEventSendStatus.PermanentFailure, ErrorCode = "rabbitmq-unroutable", Error = "The message could not be routed to a queue." };
         }
         catch (OperationInterruptedException exception) when (exception.ShutdownReason?.ReplyCode == 311 && !cancellationToken.IsCancellationRequested)
         {

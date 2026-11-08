@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Reflection;
 using Leistd.AmbientContext;
 using Leistd.EventBus.Distributed.Diagnostics;
+using Leistd.EventBus.Distributed.Errors;
+using Leistd.UnitOfWork.Options;
 using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Stores;
 using Leistd.EventBus.Distributed.Subscriptions;
@@ -38,7 +40,7 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
         using var change = tenant.Change(tenantId);
         var attempt = -1;
         Exception failure;
-        using (var unit = units.Begin(requiresNew: true))
+        using (var unit = units.Begin(new UnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
         {
             var db = await contexts.GetDbContextAsync(ct);
             var row = await db.Set<DistributedEventInbox>().SingleOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
@@ -71,7 +73,8 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
                 await unit.CompleteAsync(ct);
                 return;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException exception) when (exception.Entries.Count > 0
+                && exception.Entries.All(entry => entry.Entity is DistributedEventInbox))
             {
                 await unit.RollbackAsync(CancellationToken.None);
                 return;
@@ -87,7 +90,7 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
         var current = await context.Set<DistributedEventInbox>().SingleOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
         if (current is not { Status: DistributedEventInboxStatus.Pending } || current.AttemptCount != attempt) return;
         current.AttemptCount++;
-        current.LastErrorCode = "handler-exception";
+        current.LastErrorCode = DistributedEventInboxFailureCodes.HandlerException;
         current.LastError = DistributedEventRetry.Truncate(failure.Message);
         current.LastModificationTime = clock.GetUtcNow().UtcDateTime;
         if (current.AttemptCount >= options.CurrentValue.MaxAttempts)

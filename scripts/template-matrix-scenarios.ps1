@@ -352,6 +352,9 @@ $scenarioMap = [ordered]@{
         RequiredTokens = @{
             "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapDistributedEvents(")
             "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.EventBus.EntityFrameworkCore")
+            "backend/src/{name}.Api/Program.cs" = @("AddDistributedEventBus()", "AddRabbitMqEventTransport(tags:")
+            "backend/src/{name}.Application/Permissions/Provider/PermissionConstant.cs" = @(".DistributedEvents", ".Manage")
+            "deploy/docker-compose.yml" = @("RABBITMQ_CONNECTION_STRING", "rabbitmq-data", "rabbitmq:4-management-alpine")
             "docs/README.md" = @("standards/distributed-events.md")
         }
     }
@@ -364,6 +367,9 @@ $scenarioMap = [ordered]@{
         RequiredTokens = @{
             "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapDistributedEvents(")
             "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.EventBus.EntityFrameworkCore")
+            "backend/src/{name}.Api/Program.cs" = @("AddDistributedEventBus()", "AddRabbitMqEventTransport(tags:")
+            "backend/src/{name}.Application/Permissions/Provider/PermissionConstant.cs" = @(".DistributedEvents", ".Manage")
+            "deploy/docker-compose.yml" = @("RABBITMQ_CONNECTION_STRING", "rabbitmq-data", "rabbitmq:4-management-alpine")
         }
     }
 
@@ -404,7 +410,7 @@ $MatrixSlices = [ordered]@{
         "identity-all-features"     = "Identity 可选特性全开（Verify）"
         "resource-capabilities-03"  = "Resource 纯 API（含容器）"
         "webhooks"                  = "Identity 出站 Webhook"
-        "distributed-events"        = "Identity 分布式事件与 Mock 前端"
+        "distributed-events"        = "Identity 分布式事件与前端"
     }
     full = [ordered]@{
         "full-01" = "Identity 默认、租户通知、Resource 浏览器通知与出站 Webhook"

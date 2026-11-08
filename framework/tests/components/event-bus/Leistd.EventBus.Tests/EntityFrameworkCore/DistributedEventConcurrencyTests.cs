@@ -1,4 +1,6 @@
 using Leistd.EventBus.Distributed.Stores;
+using Leistd.EventBus.Distributed.Errors;
+using Leistd.UnitOfWork.Options;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
@@ -45,8 +47,19 @@ public sealed class DistributedEventConcurrencyTests
         await using var secondScope = host.Services.CreateAsyncScope();
         var first = firstScope.ServiceProvider.GetRequiredService<EventTestDbContext>();
         var second = secondScope.ServiceProvider.GetRequiredService<EventTestDbContext>();
-        var winner = await first.Set<DistributedEventInbox>().SingleAsync();
-        var stale = await second.Set<DistributedEventInbox>().SingleAsync();
+        var bothRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readers = 0;
+        async Task<DistributedEventInbox> ReadPendingAsync(EventTestDbContext db)
+        {
+            var row = await db.Set<DistributedEventInbox>().SingleAsync();
+            Assert.Equal(DistributedEventInboxStatus.Pending, row.Status);
+            if (Interlocked.Increment(ref readers) == 2) bothRead.SetResult();
+            await bothRead.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            return row;
+        }
+        var snapshots = await Task.WhenAll(ReadPendingAsync(first), ReadPendingAsync(second));
+        var winner = snapshots[0];
+        var stale = snapshots[1];
         winner.AttemptCount++; winner.Status = DistributedEventInboxStatus.Processed;
         first.Add(new EventProjection { EventId = winner.EventId, Count = 1 });
         await first.SaveChangesAsync();
@@ -57,5 +70,25 @@ public sealed class DistributedEventConcurrencyTests
         await transaction.RollbackAsync();
         Assert.Equal(1, await host.ReadAsync(db => db.Set<EventProjection>().CountAsync()));
         Assert.Equal(1, (await host.ReadAsync(db => db.Set<DistributedEventInbox>().SingleAsync())).AttemptCount);
+    }
+
+    /// <summary>宿主关闭默认事务时，处理器仍强制将业务写入与状态置位置于同一事务。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Business_failures_roll_back_and_consume_an_attempt_even_when_default_transactions_are_disabled(bool concurrency)
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync(configureServices: services =>
+            services.Configure<UnitOfWorkOptions>(options => options.IsTransactional = false));
+        await using (var scope = host.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<IDistributedEventReceiver>().ReceiveAsync(host.Raw(), default);
+        host.Behavior.Throw = !concurrency;
+        host.Behavior.ConcurrencyFailure = concurrency;
+        await host.Queue.RunAllAsync(host.Services);
+        Assert.Equal(0, await host.ReadAsync(db => db.Set<EventProjection>().CountAsync()));
+        var row = await host.ReadAsync(db => db.Set<DistributedEventInbox>().SingleAsync());
+        Assert.Equal(1, row.AttemptCount);
+        Assert.Equal(DistributedEventInboxStatus.Pending, row.Status);
+        Assert.Equal(DistributedEventInboxFailureCodes.HandlerException, row.LastErrorCode);
     }
 }

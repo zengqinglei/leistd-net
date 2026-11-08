@@ -1,3 +1,8 @@
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.Distributed;
+using Leistd.EventBus.RabbitMQ;
+#endif
+
 using CompanyName.ProjectName.Api;
 using CompanyName.ProjectName.Api.Auth;
 #if (OpenIddictServer)
@@ -91,6 +96,11 @@ try
     builder.AddMyProjectLogging();
 
     builder.Services.AddDomainServices();
+#if (IncludeDistributedEvents)
+    builder.Services.AddDistributedEventBus();
+    builder.Services.AddRabbitMqEventTransport();
+    builder.Services.AddHealthChecks().AddRabbitMqEventTransport(tags: ["ready"]);
+#endif
 #if (IncludeWebhooks)
     // 出站 Webhook 的选项（Leistd:Webhooks，启动期校验）与错误码映射；存储、投递与保留期由 AddInfrastructureServices 注册
     builder.Services.AddWebhooks();

@@ -23,6 +23,10 @@ using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.BackgroundJobs.EntityFrameworkCore.Entities;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.EntityFrameworkCore;
+#endif
+
 namespace CompanyName.ProjectName.Infrastructure.Persistence;
 
 public class MyProjectDbContext(
@@ -88,6 +92,9 @@ public class MyProjectDbContext(
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();
+#endif
+#if (IncludeDistributedEvents)
+        modelBuilder.ConfigureDistributedEventBus();
 #endif
 #if (IncludeWebhooks)
         // 出站 Webhook 的订阅、事件、投递与尝试

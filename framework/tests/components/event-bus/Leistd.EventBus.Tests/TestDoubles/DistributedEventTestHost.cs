@@ -66,7 +66,7 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
     public ScriptedEventTransport Transport { get; } = new();
 
     /// <summary>创建并建表。</summary>
-    public static async Task<DistributedEventTestHost> CreateAsync(bool loopback = false, Action<DistributedEventOptions>? configure = null, bool withTransport = true)
+    public static async Task<DistributedEventTestHost> CreateAsync(bool loopback = false, Action<DistributedEventOptions>? configure = null, bool withTransport = true, Action<IServiceCollection>? configureServices = null)
     {
         var host = new DistributedEventTestHost();
         var services = new ServiceCollection();
@@ -92,6 +92,7 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
         services.AddDistributedEventRetention<EventTestDbContext>();
         if (loopback) services.AddLoopbackEventTransport();
         else if (withTransport) services.AddSingleton<IDistributedEventTransport>(host.Transport);
+        configureServices?.Invoke(services);
         host.Services = services.BuildServiceProvider();
         await using var scope = host.Services.CreateAsyncScope();
         foreach (var dedicated in new[] { false, true })
@@ -185,6 +186,8 @@ public sealed class EventHandlerBehavior
 {
     /// <summary>提交前模拟处理失败。</summary>
     public bool Throw { get; set; }
+    /// <summary>模拟业务实体自身的并发失败。</summary>
+    public bool ConcurrencyFailure { get; set; }
     /// <summary>处理时观测到的事件。</summary>
     public PaidEvent? Event { get; set; }
     /// <summary>处理时观测到的租户。</summary>
@@ -209,6 +212,7 @@ public sealed class PaidHandler(IDbContextProvider<EventTestDbContext> contexts,
         if (projection is null) db.Add(new EventProjection { EventId = @event.EventId, Count = 1 });
         else projection.Count++;
         await db.SaveChangesAsync(cancellationToken);
+        if (behavior.ConcurrencyFailure) throw new DbUpdateConcurrencyException("The business projection conflicted.");
         if (behavior.Throw) throw new InvalidOperationException("The projection could not be processed.");
     }
 }

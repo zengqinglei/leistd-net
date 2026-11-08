@@ -98,4 +98,9 @@
 <!--#endif-->
   </ItemGroup>
 
+<!--#if (IncludeDistributedEvents)-->
+  <ItemGroup>
+    <PackageReference Include="Leistd.EventBus.EntityFrameworkCore" />
+  </ItemGroup>
+<!--#endif-->
 </Project>

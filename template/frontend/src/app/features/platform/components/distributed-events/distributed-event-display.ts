@@ -28,8 +28,19 @@ export interface EventRow {
 export function eventRow(record: EventRecord): EventRow {
   return {
     id: record.id,
-    eventName: record.eventName ?? '—',
-    eventId: record.eventId ?? '—',
+    eventName:
+      record.eventName ??
+      ('coordinates' in record
+        ? record.coordinates['queue'] ||
+          record.coordinates['topic'] ||
+          record.coordinates['routingKey'] ||
+          record.transport
+        : '—'),
+    eventId:
+      record.eventId ??
+      ('coordinates' in record
+        ? record.coordinates['messageId'] || record.coordinates['offset'] || record.id
+        : '—'),
     status: record.status,
     tenant: 'tenantId' in record ? (record.tenantId ?? 'host') : 'host',
     orderingKey: 'orderingKey' in record ? (record.orderingKey ?? '—') : '—',
@@ -155,7 +166,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.health.unhealthy': 'Unhealthy',
   'distributedEvents.health.unknown': 'Unknown',
   'distributedEvents.action.redeliver': 'Redeliver',
-  'distributedEvents.action.replay': 'Replay handler',
+  'distributedEvents.action.replay': 'Replay',
   'distributedEvents.action.redecode': 'Re-decode',
   'distributedEvents.action.discard': 'Discard',
   'distributedEvents.column.event': 'Event',

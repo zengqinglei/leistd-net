@@ -197,6 +197,8 @@ export interface DistributedEventRejectionOutputDto {
   /** 记录标识，JSON 为十进制字符串。 */
   id: string;
   transport: string;
+  /** 不透明的来源坐标，用于定位无法解码的消息；不含消息头或原始字节。 */
+  coordinates: Record<string, string>;
   reason: string;
   /** 拒收诊断文本，最多 512 个字符。 */
   error: string;

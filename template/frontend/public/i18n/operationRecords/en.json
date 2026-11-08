@@ -24,6 +24,12 @@
     "failed": "Rejected"
   },
   "actions": {
+    //#if (IncludeDistributedEvents)
+    "distributed-event.redelivered": "Redelivered distributed events {{target}}",
+    "distributed-event.replayed": "Replayed distributed events {{target}}",
+    "distributed-event.redecoded": "Re-decoded rejected events {{target}}",
+    "distributed-event.discarded": "Discarded rejected events {{target}}",
+    //#endif
     "user.created": "Created user {{target}}",
     "user.updated": "Updated user {{target}}",
     "user.deleted": "Deleted user {{target}}",
@@ -95,6 +101,12 @@
     "tenant.admin-restored": "Restored tenant administrator {{target}}"
   },
   "actionsNoTarget": {
+    //#if (IncludeDistributedEvents)
+    "distributed-event.redelivered": "Redelivered distributed events",
+    "distributed-event.replayed": "Replayed distributed events",
+    "distributed-event.redecoded": "Re-decoded rejected events",
+    "distributed-event.discarded": "Discarded rejected events",
+    //#endif
     "operation-records.exported": "Exported operation records",
     "setting.test-email-sent": "Sent a test email",
     "user.created": "Created a user",

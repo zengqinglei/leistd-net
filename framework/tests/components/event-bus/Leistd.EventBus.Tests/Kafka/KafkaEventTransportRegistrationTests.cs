@@ -18,9 +18,13 @@ public sealed class KafkaEventTransportRegistrationTests
     public void Repeated_registration_keeps_one_transport_and_one_health_check()
     {
         using var host = EventTransportTestHost.Create(services =>
-        { services.AddKafkaEventTransport(); services.AddKafkaEventTransport(); });
+        { services.AddKafkaEventTransport(); services.AddKafkaEventTransport();
+            services.AddHealthChecks().AddKafkaEventTransport(["ready"]).AddKafkaEventTransport(["custom"]); });
         Assert.Same(host.Services.GetRequiredService<IDistributedEventTransport>(), host.Services.GetRequiredService<KafkaEventTransport>());
-        Assert.Single(host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations, x => x.Name == "event-bus-kafka");
+        var check = Assert.Single(host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations, x => x.Name == "event-bus-kafka");
+        Assert.Contains("event-bus", check.Tags);
+        Assert.Contains("ready", check.Tags);
+        Assert.Contains("custom", check.Tags);
     }
 
     /// <summary>两个不同 broker 不能按后登记顺序静默覆盖。</summary>

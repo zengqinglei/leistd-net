@@ -163,7 +163,12 @@ export const DISTRIBUTED_EVENT_INBOX: DistributedEventInboxDetailOutputDto[] = [
       lastModificationTime: ago(600),
     },
     headers,
-    coordinates: { exchange: 'leistd.events', routingKey: 'customer.activated' },
+    coordinates: {
+      exchange: 'leistd.events',
+      routingKey: 'customer.activated',
+      queue: 'customer-events',
+      messageId: 'external-104',
+    },
   },
   {
     record: {
@@ -210,6 +215,7 @@ export const DISTRIBUTED_EVENT_REJECTIONS: DistributedEventRejectionDetailOutput
     record: {
       id: '1',
       transport: 'RabbitMQ',
+      coordinates: { queue: 'customer-events', messageId: 'external-104' },
       reason: 'invalid-payload',
       error: 'The payload is not valid JSON.',
       status: 'pending',
@@ -218,12 +224,18 @@ export const DISTRIBUTED_EVENT_REJECTIONS: DistributedEventRejectionDetailOutput
       lastModificationTime: ago(300),
     },
     headers: {},
-    coordinates: { exchange: 'leistd.events', routingKey: 'customer.activated' },
+    coordinates: {
+      exchange: 'leistd.events',
+      routingKey: 'customer.activated',
+      queue: 'customer-events',
+      messageId: 'external-104',
+    },
   },
   {
     record: {
       id: '2',
       transport: 'RabbitMQ',
+      coordinates: {},
       reason: 'invalid-envelope',
       error: 'The event name was missing.',
       status: 'discarded',

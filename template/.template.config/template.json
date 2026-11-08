@@ -432,6 +432,7 @@
           "condition": "!LocalIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Webhooks/Provider/WebhookDefinitionProvider.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/DistributedEvents/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/UserCreatedWebhookTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/WebhookManagementEndpointTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/WebhookSubscriptionAuditTests.cs",

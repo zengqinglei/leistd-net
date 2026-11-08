@@ -83,7 +83,8 @@ public abstract class DistributedEventTransportContract
         Assert.Empty(fixture.State.Attempts);
     }
 
-    private async Task<BrokerContractFixture> CreateAsync(bool receiveEnabled = true)
+    /// <summary>创建当前传输的独立真实 broker 夹具。</summary>
+    private protected async Task<BrokerContractFixture> CreateAsync(bool receiveEnabled = true)
     {
         var key = TransportKind == "rabbitmq" ? "LEISTD_TEST_RABBITMQ" : "LEISTD_TEST_KAFKA";
         var connection = Environment.GetEnvironmentVariable(key);

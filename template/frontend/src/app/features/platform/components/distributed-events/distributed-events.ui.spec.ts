@@ -4,10 +4,12 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MockPlatformLocation } from '@angular/common/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 
 import { DistributedEvents } from './distributed-events';
+import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
 import { DistributedEventRecoveryConfirmService } from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -55,6 +57,7 @@ const REJECTION: Dto.DistributedEventRejectionOutputDto = {
   eventId: OUTBOX.eventId,
   status: 'pending',
   transport: 'RabbitMQ',
+  coordinates: {},
   reason: 'invalid-payload',
   error: 'Invalid payload.',
   redecodeCount: 0,
@@ -100,7 +103,7 @@ describe('DistributedEvents UI R1', () => {
       state: { deadLettered: 'Dead letter', processed: 'Processed', pending: 'Pending' },
       action: {
         redeliver: 'Redeliver',
-        replay: 'Replay handler',
+        replay: 'Replay',
         redecode: 'Re-decode',
         discard: 'Discard',
       },
@@ -213,7 +216,7 @@ describe('DistributedEvents UI R1', () => {
   });
   it('places the record-specific primary action in the sheet header', async () => {
     await setup({ view: 'inbox', record: '2' });
-    expect(document.querySelector('[hlmSheetHeader]')?.textContent).toContain('Replay handler');
+    expect(document.querySelector('[hlmSheetHeader]')?.textContent).toContain('Replay');
   });
   //#if (LocalIdentity && IncludeMultiTenancy)
   it('resolves a permitted tenant display name instead of showing its ID in the table', async () => {
@@ -221,6 +224,37 @@ describe('DistributedEvents UI R1', () => {
     expect(fixture.nativeElement.querySelector('tbody')?.textContent).toContain('Portal East');
   });
   //#endif
+  it('renders zero catalog counts as plain text and hides the inapplicable direction', async () => {
+    await setup({ view: 'catalog' });
+    const table = fixture.debugElement.query(By.directive(DistributedCatalogTable))
+      .componentInstance as DistributedCatalogTable;
+    table.table.setOptions((options) => ({
+      ...options,
+      state: { ...options.state, columnVisibility: {} },
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
+    const invoice = rows.find((row) => row.textContent?.includes('invoice.issued'))!;
+    expect(invoice.textContent).toContain('Outbox 0');
+    expect(invoice.textContent).not.toContain('Inbox 0');
+    expect(invoice.querySelectorAll('button[variant=link]')).toHaveLength(0);
+  });
+  it('uses source coordinates to locate an undecodable rejection', async () => {
+    await setup({ view: 'rejections' });
+    const row = component.rows()[0];
+    const { eventRow } = await import('./distributed-event-display');
+    const fallback = eventRow({
+      ...REJECTION,
+      eventName: null,
+      eventId: null,
+      coordinates: { queue: 'customer-events', messageId: 'external-104' },
+    });
+    expect(row).toBeDefined();
+    expect(fallback.eventName).toBe('customer-events');
+    expect(fallback.eventId).toBe('external-104');
+  });
   it('applies the catalog direction filter restored from the URL', async () => {
     await setup({ view: 'catalog', direction: 'incoming' });
     expect(component.totalCount()).toBe(1);

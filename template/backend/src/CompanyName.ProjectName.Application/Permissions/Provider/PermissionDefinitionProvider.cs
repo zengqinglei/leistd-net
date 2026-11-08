@@ -79,7 +79,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
 #endif
 
 #endif
-#if (OpenIddictServer || IncludeWebhooks)
+#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
         var developerGroup = context.GetOrAddGroup(PermissionConstant.Groups.Developer, displayName: "Developer");
 #endif
 #if (OpenIddictServer)
@@ -97,6 +97,11 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.Delete, displayName: DeleteText);
         openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.ResetSecret, displayName: "Reset client secret");
 
+#endif
+#if (IncludeDistributedEvents)
+        var eventsPermission = developerGroup.AddPermission(
+            PermissionConstant.DistributedEvents.Default, MultiTenancySides.Both, displayName: "Distributed events");
+        eventsPermission.AddChild(PermissionConstant.DistributedEvents.Manage, displayName: "Manage");
 #endif
 #if (IncludeWebhooks)
         // 订阅与投递带 TenantId 并受全局查询过滤器分区，宿主与租户各管各的，因此侧别是 Both

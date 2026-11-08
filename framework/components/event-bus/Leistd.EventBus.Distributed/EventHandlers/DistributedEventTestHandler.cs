@@ -1,6 +1,8 @@
 using Leistd.EventBus.EventHandlers;
 
-namespace Leistd.EventBus.Distributed.Events;
+using Leistd.EventBus.Distributed.Events;
+
+namespace Leistd.EventBus.Distributed.EventHandlers;
 
 internal sealed class DistributedEventTestHandler : IEventHandler<DistributedEventTestEvent>
 {

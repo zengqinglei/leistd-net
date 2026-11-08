@@ -51,6 +51,7 @@ builder.Services.AddDistributedEventBus();
 builder.Services.AddDistributedEventBusEfCore<AppDbContext>();
 builder.Services.AddDistributedEventRetention<AppDbContext>();
 builder.Services.AddRabbitMqEventTransport();
+builder.Services.AddHealthChecks().AddRabbitMqEventTransport(tags: ["ready"]);
 builder.Services.AddDistributedEventHandler<OrderPaidHandler>("orders.projection");
 ```
 
@@ -76,7 +77,7 @@ app.MapGroup("/api/v1/distributed-events").MapDistributedEvents(options =>
 });
 ```
 
-将 RabbitMQ 换为 Kafka 时引用 `Leistd.EventBus.Kafka`，用 `AddKafkaEventTransport` 替代 `AddRabbitMqEventTransport`；每个服务只能选择一个传输。测试或单进程开发可改用 `AddLoopbackEventTransport`。
+将 RabbitMQ 换为 Kafka 时引用 `Leistd.EventBus.Kafka`，在服务注册与健康检查注册两处用 `AddKafkaEventTransport` 替代 `AddRabbitMqEventTransport`；每个服务只能选择一个传输。测试或单进程开发可改用 `AddLoopbackEventTransport`。
 
 ## 使用
 
@@ -226,7 +227,7 @@ public sealed class OrderPaymentPublisher(IDistributedEventBus events, IUnitOfWo
 | RabbitMQ | `ConnectionStrings:RabbitMQ`，amqp/amqps URI | `Leistd:EventBus:RabbitMQ`：持久 topic 交换机 `leistd.events`，队列取宿主应用名，预取 32，单活且入库串行。服务之间用不同队列名，副本共用队列。 |
 | Kafka | `ConnectionStrings:Kafka`，bootstrap servers | `Leistd:EventBus:Kafka`：主题前缀空、组名取宿主应用名，`AutoCreateTopics=true` 创建缺失的单分区主题；关闭后由运维预建。服务之间用不同组名，副本共用组。 |
 
-两个传输都登记 `event-bus` 标签健康检查；没有相关健康检查时快照报告 Unknown。RabbitMQ 发布等待确认，持久接收或拒收成功才 Ack；Kafka 发送要求 Persisted，禁用自动位点存储和提交，只在持久接收成功后提交当前分区的 offset+1。接收持久失败时保留当前消息重试，不越过它确认后续。
+宿主通过 `AddHealthChecks().AddRabbitMqEventTransport(tags)` 或 `AddKafkaEventTransport(tags)` 显式登记健康检查，附加标签合并且固定带 `event-bus`；没有相关健康检查时快照报告 Unknown。RabbitMQ 发布等待确认，按标准发布／订阅语义允许没有订阅队列。消费方须先启动以声明队列，此前发布的消息不会保留；需要离线接收时先完成队列部署。持久接收或拒收成功才 Ack；Kafka 发送要求 Persisted，禁用自动位点存储和提交，只在持久接收成功后提交当前分区的 offset+1。接收持久失败时保留当前消息重试，不越过它确认后续。
 
 ### 管理与排障
 
@@ -243,7 +244,7 @@ Read 只读快照、目录、列表与详情概要，载荷经独立 Manage 端�
 
 ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个成功批次发布一条 `DistributedEventManagedEvent`，带实际条数与原筛选或实际 ids；部分批次失败不会把未完成批次记为成功。
 
-积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小或路由后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
+积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小等不可恢复的单条消息错误后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
 
 活动源为 `Leistd.EventBus`。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。稳定日志事件包括 DistributedEventDeadLettered、DistributedEventOutboxBacklog、DistributedEventConsumeFailed、DistributedEventRejected、DistributedEventRejectPersistFailed。
 

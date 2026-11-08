@@ -62,6 +62,12 @@
     <PackageVersion Include="Leistd.OperationRecords.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.Logging" Version="$(LeistdFrameworkVersion)" />
+    <!--#if (IncludeDistributedEvents)-->
+    <PackageVersion Include="Leistd.EventBus.Distributed" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.EventBus.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.EventBus.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.EventBus.RabbitMQ" Version="$(LeistdFrameworkVersion)" />
+    <!--#endif-->
     <!--#if (IncludeWebhooks)-->
     <PackageVersion Include="Leistd.Webhooks.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Webhooks.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />

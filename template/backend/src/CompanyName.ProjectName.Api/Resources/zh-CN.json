@@ -1,6 +1,9 @@
 {
   "culture": "zh-CN",
   "texts": {
+//#if (IncludeDistributedEvents)
+    "Distributed events": "分布式事件",
+//#endif
     "Actions": "动作",
     "Active status": "是否启用",
     "Admin email": "管理员邮箱",

@@ -37,9 +37,7 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
         IncomingDistributedEvent message;
         try
         {
-            message = await transport.DecodeAsync(raw, cancellationToken);
-            if (message.EventId == Guid.Empty || message.OccurredAt.Kind != DateTimeKind.Utc || string.IsNullOrWhiteSpace(message.EventName))
-                throw new DistributedEventDecodeException(DistributedEventRejectionReasons.InvalidEnvelope, "The decoded event metadata is invalid.");
+            message = await DecodeAsync(raw, cancellationToken);
         }
         catch (DistributedEventDecodeException exception)
         {
@@ -47,6 +45,14 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
             return;
         }
         await AcceptAsync(raw, message, cancellationToken);
+    }
+
+    internal async ValueTask<IncomingDistributedEvent> DecodeAsync(RawDistributedEvent raw, CancellationToken ct)
+    {
+        var message = await transport.DecodeAsync(raw, ct);
+        if (message.EventId == Guid.Empty || message.OccurredAt.Kind != DateTimeKind.Utc || string.IsNullOrWhiteSpace(message.EventName))
+            throw new DistributedEventDecodeException(DistributedEventRejectionReasons.InvalidEnvelope, "The decoded event metadata is invalid.");
+        return message;
     }
 
     // 管理重新解码也走同一接收边界，但须知道是否真正接收，避免新增另一条拒收记录。

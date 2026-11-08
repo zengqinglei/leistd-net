@@ -17,10 +17,14 @@ public sealed class RabbitMqEventTransportRegistrationTests
     public async Task Repeated_registration_shares_the_singleton_and_registers_one_health_check()
     {
         using var host = EventTransportTestHost.Create(services =>
-        { services.AddRabbitMqEventTransport(); services.AddRabbitMqEventTransport(); });
+        { services.AddRabbitMqEventTransport(); services.AddRabbitMqEventTransport();
+            services.AddHealthChecks().AddRabbitMqEventTransport(["ready"]).AddRabbitMqEventTransport(["custom"]); });
         Assert.Same(host.Services.GetRequiredService<IDistributedEventTransport>(), host.Services.GetRequiredService<RabbitMqEventTransport>());
         var checks = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
-        Assert.Single(checks, x => x.Name == "event-bus-rabbitmq");
+        var check = Assert.Single(checks, x => x.Name == "event-bus-rabbitmq");
+        Assert.Contains("event-bus", check.Tags);
+        Assert.Contains("ready", check.Tags);
+        Assert.Contains("custom", check.Tags);
         var report = await host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync();
         Assert.Equal(HealthStatus.Unhealthy, report.Status);
     }

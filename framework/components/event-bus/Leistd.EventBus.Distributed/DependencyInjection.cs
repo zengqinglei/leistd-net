@@ -1,6 +1,7 @@
 using Leistd.DependencyInjection.Extensions;
 using Leistd.EventBus.Distributed.Errors;
 using Leistd.EventBus.Distributed.Events;
+using Leistd.EventBus.Distributed.EventHandlers;
 using Leistd.EventBus.Distributed.ExceptionMappings;
 using Leistd.EventBus.Distributed.Loopback;
 using Leistd.EventBus.Distributed.Management;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Leistd.EventBus.Distributed;
 
@@ -98,10 +100,17 @@ public static class DependencyInjection
     {
         services.EnsureSingleAuthoritative<IDistributedEventTransport, LoopbackEventTransport>(ServiceLifetime.Singleton,
             "Only one distributed event transport can be registered.");
+        var registered = services.Any(x => x.ServiceType == typeof(LoopbackRegistration));
         services.TryAddSingleton<IDistributedEventTransport, LoopbackEventTransport>();
+        if (!registered)
+        {
+            services.AddSingleton<LoopbackRegistration>();
+            services.AddHealthChecks().AddCheck("event-bus-loopback", () => HealthCheckResult.Healthy(), tags: ["event-bus"]);
+        }
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
+    private sealed class LoopbackRegistration;
 }
 
 internal sealed class DistributedEventStartup(IOptions<DistributedEventOptions> options, IDistributedEventSubscriptions subscriptions) : IHostedService

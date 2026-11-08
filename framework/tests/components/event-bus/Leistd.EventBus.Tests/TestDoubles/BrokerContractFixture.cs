@@ -47,8 +47,16 @@ internal sealed class BrokerContractFixture(string kind, string connection, bool
                 services.AddDistributedEventHandler<BrokerContractHandler>("contract");
                 services.AddSingleton(State);
                 services.AddSingleton<IDistributedEventReceiver, BrokerContractReceiver>();
-                if (kind == "rabbitmq") services.AddRabbitMqEventTransport(o => { o.Exchange = _name; o.QueueName = _name; });
-                else services.AddKafkaEventTransport(o => { o.GroupId = _name; o.TopicPrefix = _name + "-"; });
+                if (kind == "rabbitmq")
+                {
+                    services.AddRabbitMqEventTransport(o => { o.Exchange = _name; o.QueueName = _name; });
+                    services.AddHealthChecks().AddRabbitMqEventTransport();
+                }
+                else
+                {
+                    services.AddKafkaEventTransport(o => { o.GroupId = _name; o.TopicPrefix = _name + "-"; });
+                    services.AddHealthChecks().AddKafkaEventTransport();
+                }
             }).Build();
         await _host.StartAsync();
         await WaitAsync(async () => await HealthAsync() == HealthStatus.Healthy);

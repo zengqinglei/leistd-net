@@ -49,7 +49,7 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            result = new() { Status = DistributedEventSendStatus.TransientFailure, ErrorCode = "transport-exception", Error = exception.Message };
+            result = new() { Status = DistributedEventSendStatus.TransientFailure, ErrorCode = DistributedEventOutboxFailureCodes.TransportException, Error = exception.Message };
             logger.LogWarning(exception, "Distributed event {EventId} transport failed before confirmation.", row.EventId);
         }
         using var write = units.Begin(requiresNew: true);

@@ -77,7 +77,7 @@
   },
   "action": {
     "redeliver": "Redeliver",
-    "replay": "Replay handler",
+    "replay": "Replay",
     "redecode": "Re-decode",
     "discard": "Discard"
   },

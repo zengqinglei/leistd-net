@@ -186,6 +186,41 @@ public sealed class DistributedEventManagementTests
         Assert.Equal(0, (await service.GetStatusAsync(database)).DeadLettered);
     }
 
+    /// <summary>重新解码仍须拒绝空事件标识，不能将无效信封写进收件箱。</summary>
+    [Fact]
+    public async Task Redecoding_an_empty_event_id_keeps_the_rejection_pending_without_creating_an_inbox_record()
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync();
+        await using var scope = host.Services.CreateAsyncScope();
+        var raw = host.Raw();
+        await scope.ServiceProvider.GetRequiredService<IDistributedEventReceiver>().RejectAsync(raw, "invalid-envelope", "Bad metadata.", default);
+        var row = await host.ReadAsync(db => db.Set<DistributedEventRejection>().SingleAsync());
+        host.Transport.Decoder = (_, _) => ValueTask.FromResult(DistributedEventCodec.Decode(raw) with { EventId = Guid.Empty });
+        var result = await scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>().RedecodeAsync(new() { Ids = [row.Id] });
+        Assert.Equal(0, result.AffectedCount);
+        Assert.Equal(DistributedEventRecoverySkipReasons.RedecodeFailed, Assert.Single(result.Skipped).ReasonCode);
+        Assert.Equal(0, await host.ReadAsync(db => db.Set<DistributedEventInbox>().CountAsync()));
+        var rejection = await host.ReadAsync(db => db.Set<DistributedEventRejection>().SingleAsync());
+        Assert.Equal(DistributedEventRejectionStatus.Pending, rejection.Status);
+        Assert.Equal(1, rejection.RedecodeCount);
+        Assert.Equal(1, await host.ReadAsync(db => db.Set<DistributedEventRejection>().CountAsync()));
+    }
+
+    /// <summary>D15：关闭的周期任务在调度器取锁之前即判为不启用。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Recurring_dispatch_and_processing_predicates_follow_the_explicit_process_switches(bool enabled)
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync(configure: options =>
+        { options.Outbox.DispatchEnabled = enabled; options.Inbox.ProcessingEnabled = enabled; });
+        await using var scope = host.Services.CreateAsyncScope();
+        var jobs = scope.ServiceProvider.GetServices<Leistd.BackgroundJobs.Recurring.RecurringJobDefinition>()
+            .Where(job => job.Name is "event-bus.outbox" or "event-bus.inbox").ToArray();
+        Assert.Equal(2, jobs.Length);
+        Assert.All(jobs, job => Assert.Equal(enabled, job.IsEnabled!(scope.ServiceProvider)));
+    }
+
     private static DistributedEventOutbox DeadLetter(DateTime time) => new()
     {
         EventId = Guid.NewGuid(), EventName = "order.paid", Payload = "{}", OccurredAt = time,

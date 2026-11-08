@@ -17,6 +17,11 @@ using Leistd.Webhooks.Events;
 using Leistd.Webhooks.Management;
 #endif
 
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.Distributed.Events;
+using Microsoft.Extensions.Logging;
+#endif
+
 namespace CompanyName.ProjectName.Application.OperationRecords.EventHandlers;
 
 /// <summary>设置变更留痕：租户层与宿主层的写入记一条，个人偏好不记。</summary>
@@ -169,5 +174,31 @@ internal sealed class WebhookSubscriptionChangedAuditHandler(IOperationRecorder 
         _ => throw new ArgumentOutOfRangeException(
             nameof(change), change, "This webhook subscription change kind has no operation action code yet.")
     };
+}
+#endif
+
+#if (IncludeDistributedEvents)
+/// <summary>逐个已提交批次记录实际恢复数量；完整选择条件通过关联日志保留。</summary>
+internal sealed class DistributedEventManagedAuditHandler(
+    IOperationRecorder recorder, ILogger<DistributedEventManagedAuditHandler> logger)
+    : IEventHandler<DistributedEventManagedEvent>
+{
+    public Task HandleAsync(DistributedEventManagedEvent @event, CancellationToken cancellationToken = default)
+    {
+        var action = @event.Action switch
+        {
+            DistributedEventManagementAction.Redelivered => OperationRecordActions.DistributedEventRedelivered,
+            DistributedEventManagementAction.Replayed => OperationRecordActions.DistributedEventReplayed,
+            DistributedEventManagementAction.Redecoded => OperationRecordActions.DistributedEventRedecoded,
+            DistributedEventManagementAction.Discarded => OperationRecordActions.DistributedEventDiscarded,
+            _ => throw new ArgumentOutOfRangeException(nameof(@event), @event.Action, "Unknown event management action.")
+        };
+        var selection = @event.FilterJson ?? System.Text.Json.JsonSerializer.Serialize(@event.Ids);
+        logger.LogInformation("Distributed event management {Action}: {AffectedCount} records in {Database}; selector {Selection}; batch {BatchId}",
+            action, @event.AffectedCount, @event.Database, selection, @event.EventId);
+        return recorder.RecordSucceededAsync(action,
+            OperationTarget.For(@event.EventId, $"{@event.AffectedCount}: {selection}"),
+            PermissionConstant.DistributedEvents.Manage, cancellationToken);
+    }
 }
 #endif

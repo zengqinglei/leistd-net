@@ -6,13 +6,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Leistd.EventBus.RabbitMQ;
 
 /// <summary>RabbitMQ 分布式事件传输注册。</summary>
 public static class DependencyInjection
 {
-    /// <summary>选择 RabbitMQ 传输，登记持久单活队列消费与 event-bus 标签健康检查。</summary>
+    /// <summary>选择 RabbitMQ 传输，登记持久单活队列消费。</summary>
     /// <remarks>连接 URI 从 ConnectionStrings 读取；队列名默认为宿主应用名。只在持久接收成功后确认消息，取消与失败不越过未确认消息。</remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">绑定配置后应用的选项。</param>
@@ -39,7 +40,27 @@ public static class DependencyInjection
         services.TryAddSingleton<IDistributedEventTransport, RabbitMqEventTransport>();
         services.TryAddSingleton(sp => (RabbitMqEventTransport)sp.GetRequiredService<IDistributedEventTransport>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, RabbitMqEventTransportWorker>());
-        if (previous is null) services.AddHealthChecks().AddCheck<RabbitMqEventTransportHealthCheck>("event-bus-rabbitmq", tags: ["event-bus"]);
         return services;
     }
+
+    /// <summary>登记传输健康检查，附加宿主标签并始终保留 event-bus 标签；重复调用合并标签。</summary>
+    /// <param name="builder">健康检查构建器。</param>
+    /// <param name="tags">宿主标签，例如 ready。</param>
+    public static IHealthChecksBuilder AddRabbitMqEventTransport(this IHealthChecksBuilder builder, IEnumerable<string>? tags = null)
+    {
+        if (!builder.Services.Any(x => x.ServiceType == typeof(HealthRegistration)))
+        {
+            builder.Services.AddSingleton<HealthRegistration>();
+            builder.AddCheck<RabbitMqEventTransportHealthCheck>("event-bus-rabbitmq", tags: ["event-bus"]);
+        }
+        var additions = tags?.ToArray() ?? [];
+        builder.Services.Configure<HealthCheckServiceOptions>(options =>
+        {
+            var check = options.Registrations.Single(x => x.Name == "event-bus-rabbitmq");
+            check.Tags.UnionWith(additions);
+        });
+        return builder;
+    }
+
+    private sealed class HealthRegistration;
 }

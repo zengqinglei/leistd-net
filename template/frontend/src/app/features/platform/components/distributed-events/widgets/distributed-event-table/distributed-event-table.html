@@ -228,23 +228,40 @@
                   }
                   @case ('pending') {
                     <div class="flex flex-col items-start gap-1">
-                      <button
-                        hlmBtn
-                        variant="link"
-                        size="sm"
-                        (click)="jump('outbox', 'pending', row.original.eventName)"
-                      >
-                        {{ t('distributedEvents.view.outbox') }}
-                        {{ row.original.catalog?.pendingOutbox }}</button
-                      ><button
-                        hlmBtn
-                        variant="link"
-                        size="sm"
-                        (click)="jump('inbox', 'pending', row.original.eventName)"
-                      >
-                        {{ t('distributedEvents.view.inbox') }}
-                        {{ row.original.catalog?.pendingInbox }}
-                      </button>
+                      @if (row.original.catalog?.outgoing) {
+                        @if (row.original.catalog?.pendingOutbox) {
+                          <button
+                            hlmBtn
+                            variant="link"
+                            size="sm"
+                            (click)="jump('outbox', 'pending', row.original.eventName)"
+                          >
+                            {{ t('distributedEvents.view.outbox') }}
+                            {{ row.original.catalog?.pendingOutbox }}
+                          </button>
+                        } @else {
+                          <span class="text-muted-foreground text-sm"
+                            >{{ t('distributedEvents.view.outbox') }} 0</span
+                          >
+                        }
+                      }
+                      @if (row.original.catalog?.incoming) {
+                        @if (row.original.catalog?.pendingInbox) {
+                          <button
+                            hlmBtn
+                            variant="link"
+                            size="sm"
+                            (click)="jump('inbox', 'pending', row.original.eventName)"
+                          >
+                            {{ t('distributedEvents.view.inbox') }}
+                            {{ row.original.catalog?.pendingInbox }}
+                          </button>
+                        } @else {
+                          <span class="text-muted-foreground text-sm"
+                            >{{ t('distributedEvents.view.inbox') }} 0</span
+                          >
+                        }
+                      }
                     </div>
                   }
                   @case ('anomalies') {

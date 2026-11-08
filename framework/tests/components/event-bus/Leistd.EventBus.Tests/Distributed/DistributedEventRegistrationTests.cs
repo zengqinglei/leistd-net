@@ -13,6 +13,21 @@ namespace Leistd.EventBus.Tests.Distributed;
 
 public sealed class DistributedEventRegistrationTests
 {
+    /// <summary>回环重复登记只产生一项健康检查，聚合状态始终健康。</summary>
+    [Fact]
+    public async Task Repeated_loopback_registration_exposes_one_healthy_event_bus_check()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddLoopbackEventTransport();
+        services.AddLoopbackEventTransport();
+        using var provider = services.BuildServiceProvider();
+        var report = await provider.GetRequiredService<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService>()
+            .CheckHealthAsync(check => check.Tags.Contains("event-bus"));
+        Assert.Single(report.Entries);
+        Assert.Equal(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy, report.Status);
+    }
+
     /// <summary>业务写入进程显式关闭发送与接收后不需要传输。</summary>
     [Fact]
     public void Writer_only_process_does_not_require_a_transport()

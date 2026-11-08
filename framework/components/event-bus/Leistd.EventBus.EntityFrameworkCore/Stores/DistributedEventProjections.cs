@@ -51,6 +51,7 @@ internal static class DistributedEventProjections
     {
         Id = row.Id,
         Transport = row.Transport,
+        Coordinates = row.Coordinates,
         Reason = row.Reason,
         Error = row.Error,
         EventId = row.EventId,

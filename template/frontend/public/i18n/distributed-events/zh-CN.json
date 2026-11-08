@@ -77,7 +77,7 @@
   },
   "action": {
     "redeliver": "重投",
-    "replay": "重放处理器",
+    "replay": "重放",
     "redecode": "重新解码",
     "discard": "丢弃"
   },

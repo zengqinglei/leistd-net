@@ -113,7 +113,7 @@
 | D18 | **Given** 宿主上下文，共享库里有宿主和两个租户的记录；**When** 选择该库查看并重投其中一个租户的死信；**Then** 列表含三方记录并带租户列，重投在该行所属租户的上下文里执行；`GET /databases` 列出全部物理库 | 框架关系型数据库测试 |
 | D19 | **Given** `TestEvent:Enabled=false`；**When** 读取状态并调用发测试事件；**Then** 状态里 `testEventEnabled=false`，本服务不订阅 `event-bus.test`，调用返回业务错误 `DistributedEvents:TestEventDisabled` | 框架单测 |
 | D20 | **Given** 模板 `IncludeDistributedEvents=true` 并启动 compose；**When** 管理员点"发送测试事件"；**Then** 发件箱出现一条 Sent，收件箱随后出现对应的 Processed，详情抽屉显示消息头与链路 | 模板 e2e（人工验收一次） |
-| D21 | **Given** 发件箱有死信；**When** 点"死信"卡，再点"按当前筛选重投"并确认；**Then** 记录回到待发送并很快变为已发送，写入操作记录 `distributed-event.redelivered`（带条数与筛选条件） | 模板前端 spec + 后端集成测试 |
+| D21 | **Given** 发件箱有死信；**When** 点"死信"卡，再点"按当前筛选重投"并确认；**Then** 记录回到待发送并很快变为已发送，写入操作记录 `distributed-event.redelivered`（带条数与筛选摘要，完整选择条件经关联日志回查） | 模板前端 spec + 后端集成测试 |
 | D22 | **Given** 只有 `App.DistributedEvents`；**When** 打开页面；**Then** 能看快照、事件目录、列表与详情概要，看不到任何操作入口和"显示载荷"；租户用户看不到库选择、拒收卡与拒收视图 | 模板前端 spec |
 | D23 | **Given** 模板 `IncludeDistributedEvents=false`；**When** 生成项目；**Then** 不留下任何包引用、表、迁移、权限、路由、菜单、词条、compose 服务与文档 | 模板生成检查（`ForbiddenTokens`） |
 
@@ -169,19 +169,20 @@ framework/components/event-bus/
 │  ├─ Dtos/           按发件箱、收件箱、拒收、恢复、状态五个主题合并
 │  ├─ Stores/         管理存储契约与三类记录状态
 │  ├─ DependencyInjection.cs  AddDistributedEventBus、AddDistributedEventHandler
-│  └─ Events/  Options/  Errors/  ExceptionMappings/  Resources/  Diagnostics/
+│  └─ Events/  EventHandlers/  Options/  Errors/  ExceptionMappings/  Resources/  Diagnostics/
 ├─ Leistd.EventBus.EntityFrameworkCore   （新增）
-│  ├─ Entities/  EntityConfigurations/  Stores/  Options/（独立保留期选项）
-│  ├─ Outbox/         发布实现、提交后立即发送、兜底任务 event-bus.outbox
-│  ├─ Inbox/          接收与拒收入口、提交后立即处理、兜底任务 event-bus.inbox、重新解码
-│  ├─ Databases/      宿主按物理库查看的作用域
+│  ├─ Entities/  EntityConfigurations/  Options/（独立保留期选项）
+│  ├─ Publishing/     事务发件箱发布实现
+│  ├─ Receiving/      持久接收、拒收与元数据校验
+│  ├─ Dispatching/    立即队列、处理器、扫描与周期任务
+│  ├─ Stores/         按库管理、目录、恢复与作用域
 │  └─ Retention/      保留期任务 event-bus.retention
 ├─ Leistd.EventBus.AspNetCore            （新增）
 │  └─ Endpoints/      MapDistributedEvents、DistributedEventEndpoints.*Name
 ├─ Leistd.EventBus.RabbitMQ              （新增）
-│  ├─ Transport/  Options/  HealthChecks/
+│  └─ 包根传输、消费循环与健康检查；Options/
 └─ Leistd.EventBus.Kafka                 （新增）
-   ├─ Transport/  Options/  HealthChecks/
+   └─ 包根传输、消费循环与健康检查；Options/
 ```
 
 - `Leistd.EventBus.Core` 只加契约。领域层引用它是为了本地事件，不能让管理面、选项与 DTO 顺着传递引用进入领域层。
@@ -476,11 +477,13 @@ RabbitMQ 的单活队列与串行接收保证首次交付的入库次序；Kafka
 ### HTTP 与管理 DTO 约定
 
 - 三张表的自增 Id 在 JSON 中输出十进制字符串；路径参数仍为十进制 long，前端不转为 number。勾选请求的 ids 接受十进制字符串。
+- 拒收列表含诊断用 `coordinates`，解码失败无事件名／标识时，界面回退队列或主题及消息标识；不携带消息头或原始字节。
 - 列表返回 `PagedResult<T>`；详情概要为 `record`（列表同形）加 `headers`，收件箱与拒收另有 `coordinates`。载荷只从独立 Manage 端点返回：发件箱、收件箱返回 `DistributedEventPayloadOutputDto`，其 `payload`（JSON 文本）必填；拒收返回 `DistributedEventRawMessageOutputDto`，其 `rawBody`（Base64）必填。
 - 查询的 `before` 为 UTC 时刻，按创建/接收时间含上限；筛选恢复必须提供，不能因翻页改为当前时刻。按当前筛选包含关键字的精确匹配（拒收只匹配事件 ID）；事件名、关键字、错误码、消费者与拒收原因均最多 256 个字符，列表与恢复筛选一致。
 - 业务错误：`DistributedEvents:RecordNotFound`、`DistributedEvents:DatabaseNotFound` 默认 404，`DistributedEvents:HostOnly` 默认 403，`DistributedEvents:TestEventDisabled` 默认 400。单项跳过原因用 `not-found`、`invalid-state`、`redecode-failed`，不把部分跳过变成整批异常。
 - 列表用例为 `GetOutboxListAsync`、`GetInboxListAsync`、`GetRejectionsAsync`，详情用例为 `GetOutboxAsync`、`GetInboxAsync`、`GetRejectionAsync`；映射端点时检查管理用例与内部管理存储均已登记，避免缺存储的宿主运行到请求阶段才报错。
 - 跳过原因常量归 `DistributedEventRecoverySkipReasons`；框架重试窗口失败码归 `DistributedEventOutboxFailureCodes`，与允许传输自定义的失败码并存。测试事件名与消费者名归 `DistributedEventTestEvent`，不散落字符串。前端跳过原因与传输健康状态用同值的联合类型。
+- 模板操作记录目标名称保存条数与选择摘要，完整筛选或实际 ID 列表写入同关联标识的结构化日志，沿用通用操作记录的长度边界。
 - 每个成功提交的恢复批次发布一条 `DistributedEventManagedEvent`，带本批实际改动条数和原筛选（含时间上限）或实际改动的 ids；部分批次失败时已经提交的动作仍有准确留痕。
 
 ### 可观测性

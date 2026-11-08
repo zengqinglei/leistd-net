@@ -1,6 +1,9 @@
 {
   "culture": "en",
   "texts": {
+//#if (IncludeDistributedEvents)
+    "Distributed events": "Distributed events",
+//#endif
     "Actions": "Actions",
     "Active status": "Active status",
     "Admin email": "Admin email",

@@ -6,13 +6,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Leistd.EventBus.Kafka;
 
 /// <summary>Kafka 分布式事件传输注册。</summary>
 public static class DependencyInjection
 {
-    /// <summary>选择 Kafka 传输，登记按事件名订阅的消费者与 event-bus 标签健康检查。</summary>
+    /// <summary>选择 Kafka 传输，登记按事件名订阅的消费者。</summary>
     /// <remarks>消费禁用自动位点存储和提交，持久接收成功后才提交该分区的下一位点；失败保留当前消息重试。默认组名取宿主应用名。</remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">绑定配置后应用的选项。</param>
@@ -39,7 +40,27 @@ public static class DependencyInjection
         services.TryAddSingleton<IDistributedEventTransport, KafkaEventTransport>();
         services.TryAddSingleton(sp => (KafkaEventTransport)sp.GetRequiredService<IDistributedEventTransport>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KafkaEventTransportWorker>());
-        if (previous is null) services.AddHealthChecks().AddCheck<KafkaEventTransportHealthCheck>("event-bus-kafka", tags: ["event-bus"]);
         return services;
     }
+
+    /// <summary>登记传输健康检查，附加宿主标签并始终保留 event-bus 标签；重复调用合并标签。</summary>
+    /// <param name="builder">健康检查构建器。</param>
+    /// <param name="tags">宿主标签，例如 ready。</param>
+    public static IHealthChecksBuilder AddKafkaEventTransport(this IHealthChecksBuilder builder, IEnumerable<string>? tags = null)
+    {
+        if (!builder.Services.Any(x => x.ServiceType == typeof(HealthRegistration)))
+        {
+            builder.Services.AddSingleton<HealthRegistration>();
+            builder.AddCheck<KafkaEventTransportHealthCheck>("event-bus-kafka", tags: ["event-bus"]);
+        }
+        var additions = tags?.ToArray() ?? [];
+        builder.Services.Configure<HealthCheckServiceOptions>(options =>
+        {
+            var check = options.Registrations.Single(x => x.Name == "event-bus-kafka");
+            check.Tags.UnionWith(additions);
+        });
+        return builder;
+    }
+
+    private sealed class HealthRegistration;
 }

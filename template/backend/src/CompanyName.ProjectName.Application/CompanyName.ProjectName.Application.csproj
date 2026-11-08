@@ -73,4 +73,9 @@
     <ProjectReference Include="..\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
   </ItemGroup>
 
+<!--#if (IncludeDistributedEvents)-->
+  <ItemGroup>
+    <PackageReference Include="Leistd.EventBus.Distributed" />
+  </ItemGroup>
+<!--#endif-->
 </Project>

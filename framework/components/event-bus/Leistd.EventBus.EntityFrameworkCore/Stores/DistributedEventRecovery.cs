@@ -167,8 +167,9 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 var raw = new RawDistributedEvent { Body = row.RawBody, Headers = row.Headers, Coordinates = row.Coordinates, ReceivedAt = row.ReceivedAt };
                 try
                 {
-                    var message = await services.GetRequiredService<IDistributedEventTransport>().DecodeAsync(raw, ct);
-                    var accepted = await ((EfCoreDistributedEventReceiver<TDbContext>)services.GetRequiredService<IDistributedEventReceiver>()).AcceptAsync(raw, message, ct, persistRejection: false, enqueue: requested is not null);
+                    var receiver = (EfCoreDistributedEventReceiver<TDbContext>)services.GetRequiredService<IDistributedEventReceiver>();
+                    var message = await receiver.DecodeAsync(raw, ct);
+                    var accepted = await receiver.AcceptAsync(raw, message, ct, persistRejection: false, enqueue: requested is not null);
                     outcomes[row.Id] = accepted ? null : "The message could not be accepted after decoding.";
                 }
                 catch (DistributedEventDecodeException exception) { outcomes[row.Id] = DistributedEventRetry.Truncate(exception.Message); }
