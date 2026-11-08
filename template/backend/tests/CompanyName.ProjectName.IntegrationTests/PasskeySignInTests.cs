@@ -16,6 +16,8 @@ using CompanyName.ProjectName.Application.Settings.Provider;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -42,6 +44,31 @@ public sealed class PasskeySignInTests(ProjectWebApplicationFactory factory)
         AddCookies(client, signedIn);
         var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
         Assert.Equal(username, me.GetProperty("username").GetString());
+    }
+
+    /// <summary>免口令登录结束同一浏览器上待完成的登录：票据已过期的临时 Cookie 一并删掉（官方处理器只认失败、不删）。</summary>
+    [Fact]
+    public async Task A_passwordless_sign_in_deletes_an_expired_pending_sign_in_cookie()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+        }));
+        var (username, passkey) = await CreateUserWithPasskeyAsync("pks_pending", host);
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using (var first = await client.PostAsJsonAsync("/api/v1/auth/session-login", new { UsernameOrEmail = username, Password }))
+        {
+            client.DefaultRequestHeaders.Add("Cookie", PendingSignIn.Read(host, first));
+        }
+
+        clock.Advance(TimeSpan.FromMinutes(11));
+        var (ceremony, options) = await BeginSignInAsync(client);
+        using var signedIn = await CompleteSignInAsync(client, ceremony, passkey.Sign(options));
+
+        Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
+        Assert.True(PendingSignIn.Deletes(host, signedIn));
     }
 
     [Fact]
@@ -158,19 +185,19 @@ public sealed class PasskeySignInTests(ProjectWebApplicationFactory factory)
         Assert.True(prompt.GetProperty("requiresTwoFactor").GetBoolean());
         Assert.Equal("passkey", prompt.GetProperty("defaultTwoFactorMethod").GetString());
         Assert.Equal(["passkey", "recoveryCode"], prompt.GetProperty("twoFactorMethods").EnumerateArray().Select(m => m.GetString()));
-        var token = prompt.GetProperty("twoFactorToken").GetString()!;
+        client.DefaultRequestHeaders.Add("Cookie", PendingSignIn.Read(factory, first));
 
         // 没取过选项就交来的断言不认，也不计数
-        using (var early = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { token, passkey = new JsonObject { ["id"] = "x" } }))
+        using (var early = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { passkey = new JsonObject { ["id"] = "x" } }))
         {
             Assert.Equal("Auth:PasskeyCeremonyExpired", await ErrorCodeAsync(early));
         }
 
-        using var optionsResponse = await client.PostAsJsonAsync("/api/v1/auth/two-factor/passkey-options", new { token });
+        using var optionsResponse = await client.PostAsync("/api/v1/auth/two-factor/passkey-options", null);
         var options = (await optionsResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("options");
         Assert.Equal(1, options.GetProperty("allowCredentials").GetArrayLength());
 
-        using var signedIn = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { token, passkey = passkey.Sign(options) });
+        using var signedIn = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { passkey = passkey.Sign(options) });
         Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
     }
 
@@ -225,18 +252,18 @@ public sealed class PasskeySignInTests(ProjectWebApplicationFactory factory)
         {
             using var client = ProjectWebApplicationFactory.CreateProjectClient(factory);
             using var first = await client.PostAsJsonAsync("/api/v1/auth/session-login", new { UsernameOrEmail = username, Password });
-            var token = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("twoFactorToken").GetString()!;
+            client.DefaultRequestHeaders.Add("Cookie", PendingSignIn.Read(factory, first));
             for (var i = 0; i < 2; i++)
             {
-                var options = await SecondStepOptionsAsync(client, token);
-                using var wrong = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { token, passkey = passkey.Sign(options, origin: "https://evil.com") });
+                var options = await SecondStepOptionsAsync(client);
+                using var wrong = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { passkey = passkey.Sign(options, origin: "https://evil.com") });
                 Assert.Equal("Auth:PasskeyVerificationFailed", await ErrorCodeAsync(wrong));
-                using var replay = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { token, passkey = passkey.Sign(options) });
+                using var replay = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { passkey = passkey.Sign(options) });
                 Assert.Equal("Auth:PasskeyCeremonyExpired", await ErrorCodeAsync(replay));
             }
 
-            var fresh = await SecondStepOptionsAsync(client, token);
-            using var ok = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { token, passkey = passkey.Sign(fresh) });
+            var fresh = await SecondStepOptionsAsync(client);
+            using var ok = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { passkey = passkey.Sign(fresh) });
             Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
             using var password = await client.PostAsJsonAsync("/api/v1/auth/session-login", new { UsernameOrEmail = username, Password });
             Assert.Equal(HttpStatusCode.OK, password.StatusCode);
@@ -256,11 +283,11 @@ public sealed class PasskeySignInTests(ProjectWebApplicationFactory factory)
         var (username, passkey) = await CreateUserWithPasskeyAsync("pks_step_cap");
         using var client = ProjectWebApplicationFactory.CreateProjectClient(factory);
         using var first = await client.PostAsJsonAsync("/api/v1/auth/session-login", new { UsernameOrEmail = username, Password });
-        var token = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("twoFactorToken").GetString()!;
+        client.DefaultRequestHeaders.Add("Cookie", PendingSignIn.Read(factory, first));
         for (var i = 1; i <= 5; i++)
         {
-            var options = await SecondStepOptionsAsync(client, token);
-            using var wrong = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { token, passkey = passkey.Sign(options, origin: "https://evil.com") });
+            var options = await SecondStepOptionsAsync(client);
+            using var wrong = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { passkey = passkey.Sign(options, origin: "https://evil.com") });
             Assert.Equal(i == 5 ? "Auth:TwoFactorChallengeExpired" : "Auth:PasskeyVerificationFailed", await ErrorCodeAsync(wrong));
         }
     }
@@ -354,9 +381,9 @@ public sealed class PasskeySignInTests(ProjectWebApplicationFactory factory)
     }
 #endif
 
-    private static async Task<JsonElement> SecondStepOptionsAsync(HttpClient client, string token)
+    private static async Task<JsonElement> SecondStepOptionsAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor/passkey-options", new { token });
+        using var response = await client.PostAsync("/api/v1/auth/two-factor/passkey-options", null);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("options");
     }

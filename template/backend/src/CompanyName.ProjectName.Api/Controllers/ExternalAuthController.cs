@@ -74,7 +74,7 @@ public sealed class ExternalAuthController(
         return Challenge(properties, scheme.Name);
     }
 
-    /// <summary>外部登录：返回最终会话结果或第二步凭据，附带受保护的站内回跳地址。</summary>
+    /// <summary>外部登录：签发会话，或（还要第二步时）只写待完成登录的临时 Cookie 并返回可用方式；附带受保护的站内回跳地址。</summary>
     [AllowAnonymous]
     [HttpPost("{provider}/complete")]
     public Task<SessionLoginOutputDto> CompleteAsync(string provider, CancellationToken cancellationToken) =>

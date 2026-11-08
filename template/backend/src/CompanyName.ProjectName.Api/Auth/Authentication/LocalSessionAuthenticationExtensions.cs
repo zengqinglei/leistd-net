@@ -15,6 +15,7 @@ using CompanyName.ProjectName.Application.Users.Options;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 #if (OpenIddictServer)
@@ -35,6 +36,7 @@ internal static class LocalSessionAuthenticationExtensions
             .Configure<IOptions<SessionCookieOptions>>((options, sessionCookie) => options.IdleTimeout = sessionCookie.Value.Lifetime);
         builder.Services.AddRequestClientInfo();
         builder.Services.TryAddTransient<SessionCookieIssuer>();
+        builder.Services.TryAddTransient<PendingSignInCookie>();
 
         builder.Services.AddAuthentication(options =>
         {
@@ -143,6 +145,23 @@ internal static class LocalSessionAuthenticationExtensions
                 context.Response.StatusCode = statusCode;
                 return Task.CompletedTask;
             }
+        })
+        // 待完成登录（口令或外部登录已过、尚待第二步）的临时 Cookie：官方两步登录方案，见 PendingSignInCookie。
+        // 不进默认方案与 Smart 选择器，它不是正式身份；名字与属性沿用会话 Cookie 的约定。
+        // SameSite 固定 Lax：依赖方跨站顶层导航到授权端点时要带上它，授权端点据此接回第二步
+        .AddTwoFactorUserIdCookie()
+        .Configure(options =>
+        {
+            var isDevelopmentEnvironment = builder.Environment.IsDevelopment();
+
+            options.Cookie.Name = isDevelopmentEnvironment ? "CompanyName.ProjectName.TwoFactor" : "__Host-Http-CompanyName.ProjectName.TwoFactor";
+            options.Cookie.Path = "/";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.IsEssential = true;
+            // 绝对期限等于挑战到期（签入时写入 ExpiresUtc），不滑动：口令已过的中间状态要有固定上界
+            options.SlidingExpiration = false;
         });
     }
 

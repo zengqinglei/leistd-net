@@ -10,6 +10,7 @@ public static class AuthErrorCodes
     public const string EmailCodeExpired = "Auth:EmailCodeExpired";
     public const string EmailCodeInvalid = "Auth:EmailCodeInvalid";
     public const string EmailCodeRequired = "Auth:EmailCodeRequired";
+    public const string EmailCodeResendTooLate = "Auth:EmailCodeResendTooLate";
     public const string EmailCodeSendTooFrequent = "Auth:EmailCodeSendTooFrequent";
     public const string EmailVerificationDisabled = "Auth:EmailVerificationDisabled";
     public const string EmailVerificationUnavailable = "Auth:EmailVerificationUnavailable";

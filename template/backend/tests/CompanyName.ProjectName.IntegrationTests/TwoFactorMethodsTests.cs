@@ -73,7 +73,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         Assert.Equal("email", prompt.DefaultMethod);
 
         var code = await SendEmailCodeAsync(host, prompt.Token, user.Email);
-        using var signedIn = await SecondStepAsync(host, new { prompt.Token, EmailCode = code });
+        using var signedIn = await SecondStepAsync(host, prompt.Token, new { EmailCode = code });
         Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
@@ -95,7 +95,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         var firstCode = await SendEmailCodeAsync(host, first.Token, user.Email);
 
         var second = await PasswordStepAsync(host, user);
-        Assert.Equal("Auth:EmailCodeExpired", await SecondStepErrorAsync(host, new { second.Token, EmailCode = firstCode }));
+        Assert.Equal("Auth:EmailCodeExpired", await SecondStepErrorAsync(host, second.Token, new { EmailCode = firstCode }));
 
         // 发送间隔之内重发：不另发信，回报剩余间隔
         var sentBefore = SentCount(host, user.Email);
@@ -105,16 +105,91 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
             Assert.Equal(HttpStatusCode.OK, tooSoon.StatusCode);
             var body = await tooSoon.Content.ReadFromJsonAsync<JsonElement>();
             Assert.InRange(body.GetProperty("retryAfterSeconds").GetInt32(), 1, 40);
+            // 沿用上一封：回报它的真实剩余有效期，不延长
+            Assert.InRange(body.GetProperty("expiresInSeconds").GetInt32(), 279, 280);
         }
 
         // 跨过之后重发，前一个码作废；间隔内的那次没有发信
         clock.Advance(TimeSpan.FromMinutes(1));
         var resent = await SendEmailCodeAsync(host, first.Token, user.Email);
         Assert.Equal(sentBefore + 1, SentCount(host, user.Email));
-        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { first.Token, EmailCode = firstCode }));
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, first.Token, new { EmailCode = firstCode }));
 
-        using var signedIn = await SecondStepAsync(host, new { first.Token, EmailCode = resent });
+        using var signedIn = await SecondStepAsync(host, first.Token, new { EmailCode = resent });
         Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
+    /// 待完成登录的期限是邮箱码有效期 N 的两倍（N=5）：t=0 发码、t=4 重发，新码是完整 5 分钟；
+    /// t=6 再请求时剩余 4 &lt; 5，不新发、不发信（<c>Auth:EmailCodeResendTooLate</c>），但登录不结束，
+    /// 临时 Cookie 照旧，t=8.9 用 t=4 的码完成登录。
+    /// </summary>
+    [Fact]
+    public async Task A_late_resend_is_refused_without_ending_the_sign_in()
+    {
+        var (host, clock) = await CreateHostAsync();
+        using var ownedHost = host;
+        var user = await CreateUserAsync(host, "tfm_window");
+        await EnableEmailAsync(host, user, clock);
+
+        var prompt = await PasswordStepAsync(host, user);
+        await SendEmailCodeAsync(host, prompt.Token, user.Email);
+        clock.Advance(TimeSpan.FromMinutes(4));
+        Assert.Equal(300, await SendAndReadExpiryAsync(host, prompt.Token));
+        var resent = await Mailbox(host).NextCodeAsync(user.Email);
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var sentBefore = SentCount(host, user.Email);
+        using (var late = await PostEmailCodeAsync(host, prompt.Token))
+        {
+            Assert.Equal("Auth:EmailCodeResendTooLate", await ErrorCodeAsync(late));
+            Assert.Empty(PendingSignIn.SetCookies(host, late));
+        }
+        Assert.Equal(sentBefore, SentCount(host, user.Email));
+
+        clock.Advance(TimeSpan.FromMinutes(2.9));
+        using var signedIn = await SecondStepAsync(host, prompt.Token, new { EmailCode = resent });
+        Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>剩余恰好等于一个码的有效期（N=5，t=5 首发）：照常新发，有效 300 秒。</summary>
+    [Fact]
+    public async Task A_first_send_with_exactly_one_code_lifetime_left_is_issued()
+    {
+        var (host, clock) = await CreateHostAsync();
+        using var ownedHost = host;
+        var user = await CreateUserAsync(host, "tfm_exact");
+        await EnableEmailAsync(host, user, clock);
+
+        var prompt = await PasswordStepAsync(host, user);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        Assert.Equal(300, await SendAndReadExpiryAsync(host, prompt.Token));
+    }
+
+    /// <summary>期限按创建时的 N 算：N=3（期限 6 分钟），t=2 首发有效 180 秒；t=3.5 重发时剩余 2.5 &lt; 3，不新发。</summary>
+    [Fact]
+    public async Task The_lifetime_follows_a_non_default_code_lifetime()
+    {
+        var (host, clock) = await CreateHostAsync();
+        using var ownedHost = host;
+        var user = await CreateUserAsync(host, "tfm_short");
+        await EnableEmailAsync(host, user, clock);
+        await ProjectWebApplicationFactory.SetTenantSettingAsync(host, SettingConstant.Registration.EmailCodeExpiryMinutes, "3");
+        try
+        {
+            var prompt = await PasswordStepAsync(host, user);
+            clock.Advance(TimeSpan.FromMinutes(2));
+            Assert.Equal(180, await SendAndReadExpiryAsync(host, prompt.Token));
+            await Mailbox(host).NextCodeAsync(user.Email);
+
+            clock.Advance(TimeSpan.FromMinutes(1.5));
+            using var late = await PostEmailCodeAsync(host, prompt.Token);
+            Assert.Equal("Auth:EmailCodeResendTooLate", await ErrorCodeAsync(late));
+        }
+        finally
+        {
+            await ProjectWebApplicationFactory.SetTenantSettingAsync(host, SettingConstant.Registration.EmailCodeExpiryMinutes, null);
+        }
     }
 
     /// <summary>
@@ -138,7 +213,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 Assert.Equal("Auth:TwoFactorMethodUnavailable",
-                    await SecondStepErrorAsync(host, new { unavailable.Token, EmailCode = "000000" }));
+                    await SecondStepErrorAsync(host, unavailable.Token, new { EmailCode = "000000" }));
             }
 
             await AllowEmailAsync(host, true);
@@ -147,7 +222,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 Assert.Equal("Auth:TwoFactorCodeInvalid",
-                    await SecondStepErrorAsync(host, new { first.Token, EmailCode = "000000" }));
+                    await SecondStepErrorAsync(host, first.Token, new { EmailCode = "000000" }));
             }
 
             // 换一次第二步，失败次数照样累计：第 3 次即锁定
@@ -155,10 +230,10 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
             var second = await PasswordStepAsync(host, user);
             var code = await SendEmailCodeAsync(host, second.Token, user.Email);
             Assert.Equal("Auth:UserTemporarilyLockedOut",
-                await SecondStepErrorAsync(host, new { second.Token, EmailCode = "000000" }));
+                await SecondStepErrorAsync(host, second.Token, new { EmailCode = "000000" }));
 
             Assert.Equal("Auth:TwoFactorChallengeExpired",
-                await SecondStepErrorAsync(host, new { second.Token, EmailCode = code }));
+                await SecondStepErrorAsync(host, second.Token, new { EmailCode = code }));
             using var locked = await PostEmailCodeAsync(host, first.Token);
             Assert.Equal("Auth:UserTemporarilyLockedOut", await ErrorCodeAsync(locked));
         }
@@ -186,7 +261,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 Assert.Equal("Auth:TwoFactorCodeInvalid",
-                    await SecondStepErrorAsync(host, new { prompt.Token, EmailCode = "000000" }));
+                    await SecondStepErrorAsync(host, prompt.Token, new { EmailCode = "000000" }));
             }
 
             clock.Advance(TimeSpan.FromMinutes(1));
@@ -194,14 +269,14 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 Assert.Equal("Auth:TwoFactorCodeInvalid",
-                    await SecondStepErrorAsync(host, new { prompt.Token, EmailCode = "000000" }));
+                    await SecondStepErrorAsync(host, prompt.Token, new { EmailCode = "000000" }));
             }
 
             // 第 5 次输错用完这次第二步；之后正确的码也不认
             Assert.Equal("Auth:TwoFactorChallengeExpired",
-                await SecondStepErrorAsync(host, new { prompt.Token, EmailCode = "000000" }));
+                await SecondStepErrorAsync(host, prompt.Token, new { EmailCode = "000000" }));
             Assert.Equal("Auth:TwoFactorChallengeExpired",
-                await SecondStepErrorAsync(host, new { prompt.Token, EmailCode = resent }));
+                await SecondStepErrorAsync(host, prompt.Token, new { EmailCode = resent }));
         }
         finally
         {
@@ -227,7 +302,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
 
         var code = await SendEmailCodeAsync(host, prompt.Token, user.Email);
         Assert.Equal(sentBefore + 1, SentCount(host, user.Email));
-        using var signedIn = await SecondStepAsync(host, new { prompt.Token, EmailCode = code });
+        using var signedIn = await SecondStepAsync(host, prompt.Token, new { EmailCode = code });
         Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
@@ -312,7 +387,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         {
             var prompt = await PasswordStepAsync(host, user);
             var code = await SendEmailCodeAsync(host, prompt.Token, user.Email);
-            using var client = await SecondStepAsync(host, new { prompt.Token, EmailCode = code });
+            using var client = await SecondStepAsync(host, prompt.Token, new { EmailCode = code });
             var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
             Assert.True(me.GetProperty("twoFactorSetupRequired").GetBoolean());
         }
@@ -473,7 +548,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
 
         Step(clock);
         var prompt = await PasswordStepAsync(host, user);
-        return await SecondStepAsync(host, new { prompt.Token, Code = Code(user.Secret, clock) });
+        return await SecondStepAsync(host, prompt.Token, new { Code = Code(user.Secret, clock) });
     }
 
     private static async Task<Guid> BeginEmailSetupAsync(HttpClient client)
@@ -492,7 +567,7 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("requiresTwoFactor").GetBoolean());
         return new Prompt(
-            body.GetProperty("twoFactorToken").GetString()!,
+            PendingSignIn.Read(host, response) ?? throw new InvalidOperationException("The first step wrote no pending sign-in cookie."),
             [.. body.GetProperty("twoFactorMethods").EnumerateArray().Select(method => method.GetString()!)],
             body.GetProperty("defaultTwoFactorMethod").GetString()!,
             body.TryGetProperty("maskedEmail", out var masked) ? masked.GetString() : null);
@@ -500,8 +575,16 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
 
     private static async Task<HttpResponseMessage> PostEmailCodeAsync(WebApplicationFactory<Program> host, string token)
     {
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        return await client.PostAsJsonAsync("/api/v1/auth/two-factor/email-code", new { token });
+        using var client = PendingSignIn.Client(host, token);
+        return await client.PostAsync("/api/v1/auth/two-factor/email-code", null);
+    }
+
+    // 发码并读出回报的有效期（秒）；信由调用方按需取
+    private static async Task<int> SendAndReadExpiryAsync(WebApplicationFactory<Program> host, string token)
+    {
+        using var response = await PostEmailCodeAsync(host, token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("expiresInSeconds").GetInt32();
     }
 
     private static async Task<string> SendEmailCodeAsync(WebApplicationFactory<Program> host, string token, string email)
@@ -513,19 +596,20 @@ public sealed class TwoFactorMethodsTests(ProjectWebApplicationFactory factory)
         return await Mailbox(host).NextCodeAsync(email);
     }
 
-    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        client.DefaultRequestHeaders.Remove("Cookie");
         client.DefaultRequestHeaders.Add("Cookie", string.Join("; ",
-            response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0])));
+            response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]).Where(pair => !pair.EndsWith('='))));
         return client;
     }
 
-    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.False(response.IsSuccessStatusCode);
         return await ErrorCodeAsync(response);

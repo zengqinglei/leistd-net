@@ -52,7 +52,7 @@ public sealed class TwoFactorReauthenticationTests(ProjectWebApplicationFactory 
         using (var replay = await ChangeEmailAsync(session.Client, username, "second", twoFactorCode: code))
             Assert.Equal("Auth:TwoFactorCodeInvalid", await ErrorCodeAsync(replay));
         var token = await PasswordStepAsync(host, username);
-        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, Code = code }));
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, token, new { Code = code }));
     }
 
     // 反方向：登录第二步刚用过的码，紧接着确认身份同样被拒，要等下一个码
@@ -66,7 +66,7 @@ public sealed class TwoFactorReauthenticationTests(ProjectWebApplicationFactory 
         Step(clock);
         var code = Code(secret, clock);
         var token = await PasswordStepAsync(host, username);
-        using var signedIn = await SecondStepAsync(host, new { Token = token, Code = code });
+        using var signedIn = await SecondStepAsync(host, token, new { Code = code });
 
         // 会话刚认证过，但显式出示的码只按码判定：同一步已被登录用掉
         using var replay = await ChangeEmailAsync(signedIn, username, "after", twoFactorCode: code);
@@ -231,9 +231,9 @@ public sealed class TwoFactorReauthenticationTests(ProjectWebApplicationFactory 
         var code = Code(secret, clock);
         var token = await PasswordStepAsync(host, username);
 
-        using var secondStepClient = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var secondStepClient = PendingSignIn.Client(host, token);
         var responses = await Task.WhenAll(
-            secondStepClient.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, Code = code }),
+            secondStepClient.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = code }),
             ChangeEmailAsync(session.Client, username, "race", twoFactorCode: code),
             session.Client.PostAsJsonAsync(SetupUrl, new { Code = code }));
         try
@@ -278,8 +278,8 @@ public sealed class TwoFactorReauthenticationTests(ProjectWebApplicationFactory 
             new { Password = "TfaReauth!Lock1", TwoFactorCode = WrongCode(code) });
         await gate.Entered;
         waits.Arm(UserCredentialLock.Key(adminId));
-        using var secondStepClient = ProjectWebApplicationFactory.CreateProjectClient(host);
-        var signingIn = secondStepClient.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, Code = code });
+        using var secondStepClient = PendingSignIn.Client(host, token);
+        var signingIn = secondStepClient.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = code });
         await waits.AssertWaitingAsync(signingIn);
         gate.Release();
 
@@ -386,22 +386,23 @@ public sealed class TwoFactorReauthenticationTests(ProjectWebApplicationFactory 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(body.RootElement.GetProperty("requiresTwoFactor").GetBoolean());
-        return body.RootElement.GetProperty("twoFactorToken").GetString()!;
+        return PendingSignIn.Read(host, response) ?? throw new InvalidOperationException("The first step wrote no pending sign-in cookie.");
     }
 
-    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        client.DefaultRequestHeaders.Remove("Cookie");
         client.DefaultRequestHeaders.Add("Cookie", string.Join("; ",
-            response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0])));
+            response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]).Where(pair => !pair.EndsWith('='))));
         return client;
     }
 
-    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.False(response.IsSuccessStatusCode);
         return await ErrorCodeAsync(response);

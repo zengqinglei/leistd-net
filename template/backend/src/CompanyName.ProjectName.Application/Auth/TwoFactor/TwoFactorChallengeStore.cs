@@ -6,22 +6,31 @@ using Leistd.Timing;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text;
 using CompanyName.ProjectName.Application.Auth.SignIn;
+#if (Email)
+using CompanyName.ProjectName.Application.Auth.Policies;
+#endif
 
 namespace CompanyName.ProjectName.Application.Auth.TwoFactor;
 
 /// <summary>登录第二步的挑战：密码（或外部登录）已通过、尚待验证码的那一段。</summary>
 /// <remarks>
-/// <para>凭据放在缓存里、只把随机令牌交给浏览器：这一段还不是会话，不能发 Cookie——
+/// <para>挑战记录是待完成登录唯一的事实来源（次数、安全版本、一次消费）；浏览器只持有它的随机引用，
+/// 装在 HttpOnly 的临时 Cookie 里（见 Api 的 <c>PendingSignInCookie</c>）。这一段还不是会话，不能发会话 Cookie——
 /// 发了就等于第一步即登录成功，第二步形同虚设。</para>
 /// <para>同一挑战最多试 <see cref="MaxAttempts"/> 次，用完须重新输入密码；
 /// 身份验证器、邮箱码和恢复码输错同时计入账号失败次数；通行密钥失败只占用挑战次数。</para>
-/// <para>有效期从签发那一刻算起，输错不会延长：到期时刻记在挑战里，重写只沿用剩余时长。
+/// <para>有效期从签发那一刻算起，绝对、不滑动，输错与重发都不延长：到期时刻记在挑战里，重写只沿用剩余时长。
 /// 到期以注入的时钟为准，缓存条目的过期只负责回收。</para>
 /// </remarks>
-internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock clock)
+internal sealed class TwoFactorChallengeStore(
+    IDistributedCache cache,
+#if (Email)
+    IUserRegistrationPolicyProvider registrationPolicy,
+#endif
+    IClock clock)
 {
-    /// <summary>挑战的有效期。</summary>
-    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
+    /// <summary>不发邮箱验证码时挑战的有效期。</summary>
+    public static readonly TimeSpan DefaultLifetime = TimeSpan.FromMinutes(5);
 
     /// <summary>单个挑战允许的错误次数。</summary>
     public const int MaxAttempts = 5;
@@ -33,7 +42,8 @@ internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock cl
     /// <param name="securityStamp">用户此刻的安全版本；第二步时不一致即作废。</param>
     /// <param name="firstStep">第一步是怎么通过的。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    public async Task<string> CreateAsync(
+    /// <returns>挑战引用与挑战记录。</returns>
+    public async Task<(string Token, TwoFactorChallenge Challenge)> CreateAsync(
         Guid userId,
         Guid? tenantId,
         string securityStamp,
@@ -41,12 +51,14 @@ internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock cl
         CancellationToken cancellationToken)
     {
         var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+        var now = clock.Now;
         var challenge = new TwoFactorChallenge(
-            userId, tenantId, securityStamp, clock.Now + Lifetime, 0,
+            userId, tenantId, securityStamp, now + await LifetimeAsync(cancellationToken), 0,
             FirstFactorViaEmail: firstStep.ViaEmail,
-            ExternalConnectionId: firstStep.ExternalConnectionId);
+            ExternalConnectionId: firstStep.ExternalConnectionId,
+            IssuedAt: now);
         await SaveAsync(token, challenge, cancellationToken);
-        return token;
+        return (token, challenge);
     }
 
     /// <summary>取未过期的挑战；已过期或不存在时返回 null。</summary>
@@ -86,8 +98,18 @@ internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock cl
     public Task AttachPasskeyStateAsync(string token, TwoFactorChallenge challenge, string state, CancellationToken cancellationToken) =>
         SaveAsync(token, challenge with { PasskeyState = state }, cancellationToken);
 
+    /// <summary>作废挑战；不存在时什么也不做。</summary>
     public Task RemoveAsync(string token, CancellationToken cancellationToken) =>
         cache.RemoveAsync(Key(token), cancellationToken);
+
+    // 邮件写明"N 分钟内有效"（N 为邮箱验证码有效期）：取 2N，首封码与在它有效期内任一时刻的重发都有完整窗口。
+    // 按创建时的策略算定，之后调整策略不影响已有挑战。不发邮箱码的形态保持固定时长
+#if (Email)
+    private async Task<TimeSpan> LifetimeAsync(CancellationToken cancellationToken) =>
+        2 * TimeSpan.FromMinutes((await registrationPolicy.GetAsync(cancellationToken)).EmailCodeExpiryMinutes);
+#else
+    private static Task<TimeSpan> LifetimeAsync(CancellationToken cancellationToken) => Task.FromResult(DefaultLifetime);
+#endif
 
     // 按剩余时长写入：输错重写不延长有效期（此前每次重写都算满，5 次尝试把 5 分钟的挑战拉长到约 25 分钟）。
     // 用相对时长而不是绝对时刻：缓存按自己的系统时钟判断过期，与注入的时钟不必一致
@@ -123,6 +145,7 @@ internal sealed class TwoFactorChallengeStore(IDistributedCache cache, IClock cl
 /// <param name="FirstFactorViaEmail">第一步经邮箱通道得来；为真时第二步只认独立因子（见 <see cref="SignInFirstStep"/>）。</param>
 /// <param name="ExternalConnectionId">第一步经外部登录时用到的连接；口令登录为 null。</param>
 /// <param name="PasskeyState">最近一次给出的通行密钥断言选项的仪式状态；没给过为 null。</param>
+/// <param name="IssuedAt">签发时刻（UTC，完整精度）；授权端点据此判断它是否晚于重新认证证明。</param>
 internal sealed record TwoFactorChallenge(
     Guid UserId,
     Guid? TenantId,
@@ -132,5 +155,6 @@ internal sealed record TwoFactorChallenge(
     Guid? EmailChallengeId = null,
     bool FirstFactorViaEmail = false,
     Guid? ExternalConnectionId = null,
-    string? PasskeyState = null);
+    string? PasskeyState = null,
+    DateTime IssuedAt = default);
 #endif

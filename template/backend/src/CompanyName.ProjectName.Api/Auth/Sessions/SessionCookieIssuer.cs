@@ -10,12 +10,12 @@ namespace CompanyName.ProjectName.Api.Auth.Sessions;
 
 /// <summary>下发本地会话 Cookie：账号密码登录、第二步验证与外部登录共用同一条签发路径。</summary>
 /// <remarks>
-/// 新登录先结束当前请求带来的旧会话再签发，避免同一浏览器上旧会话的 Cookie 继续有效；
-/// 第一步要求第二步验证时只返回凭据，不签发任何会话。
+/// 新登录先结束当前请求带来的旧会话与待完成登录再签发，避免同一浏览器上旧会话的 Cookie 继续有效；
+/// 第一步要求第二步验证时只写临时 Cookie（见 <see cref="PendingSignInCookie"/>），不签发任何会话。
 /// </remarks>
-public sealed class SessionCookieIssuer(IUserSessionAppService sessionAppService)
+public sealed class SessionCookieIssuer(IUserSessionAppService sessionAppService, PendingSignInCookie pendingSignIn)
 {
-    /// <summary>按第一步的结果下发最终会话，或返回第二步凭据。</summary>
+    /// <summary>按第一步的结果下发最终会话，或签入待完成登录并返回第二步的可用方式。</summary>
     public async Task<SessionLoginOutputDto> CompleteLoginAsync(
         HttpContext httpContext,
         SessionLoginResult result,
@@ -23,10 +23,10 @@ public sealed class SessionCookieIssuer(IUserSessionAppService sessionAppService
     {
         if (result.TwoFactor is { } prompt)
         {
+            await pendingSignIn.SignInAsync(httpContext, prompt, cancellationToken);
             return new SessionLoginOutputDto
             {
                 RequiresTwoFactor = true,
-                TwoFactorToken = prompt.Token,
                 TwoFactorMethods = prompt.Methods,
                 DefaultTwoFactorMethod = prompt.DefaultMethod,
                 MaskedEmail = prompt.MaskedEmail
@@ -37,13 +37,15 @@ public sealed class SessionCookieIssuer(IUserSessionAppService sessionAppService
         return new SessionLoginOutputDto();
     }
 
-    /// <summary>结束当前会话后以新主体签发会话（新的一次登录）。</summary>
+    /// <summary>结束当前会话与待完成登录后以新主体签发会话（新的一次登录）。</summary>
+    /// <remarks>先签出临时方案再签发会话，与官方 <c>SignInManager.DoTwoFactorSignInAsync</c> 的顺序相同。</remarks>
     public async Task SignInNewSessionAsync(
         HttpContext httpContext,
         ClaimsPrincipal principal,
         CancellationToken cancellationToken)
     {
         await sessionAppService.EndCurrentSessionAsync(cancellationToken);
+        await pendingSignIn.EndAsync(httpContext, cancellationToken);
         await ReissueAsync(httpContext, principal);
     }
 

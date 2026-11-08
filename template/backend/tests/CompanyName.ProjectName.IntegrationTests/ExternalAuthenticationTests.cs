@@ -328,11 +328,15 @@ public sealed class ExternalAuthenticationTests
         Assert.True(complete.IsSuccessStatusCode, await complete.Content.ReadAsStringAsync());
         using var result = JsonDocument.Parse(await complete.Content.ReadAsStringAsync());
         Assert.True(result.RootElement.GetProperty("requiresTwoFactor").GetBoolean());
-        Assert.False(string.IsNullOrEmpty(result.RootElement.GetProperty("twoFactorToken").GetString()));
+        // 第二步只凭临时 Cookie：响应体里没有能完成登录的凭据
+        Assert.False(result.RootElement.TryGetProperty("twoFactorToken", out _));
+        var pending = PendingSignIn.Read(host, complete);
+        Assert.NotNull(pending);
         Assert.Equal("/connect/authorize?client_id=resource", result.RootElement.GetProperty("returnUrl").GetString());
         var code = Totp.ComputeCode(Enumerable.Range(1, 20).Select(value => (byte)value).ToArray(), Totp.TimeStepAt(DateTimeOffset.UtcNow));
-        using var secondStep = await client.PostAsJsonAsync("/api/v1/auth/two-factor",
-            new { Token = result.RootElement.GetProperty("twoFactorToken").GetString(), Code = code });
+        client.DefaultRequestHeaders.Remove("Cookie");
+        client.DefaultRequestHeaders.Add("Cookie", pending);
+        using var secondStep = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = code });
         Assert.True(secondStep.IsSuccessStatusCode, await secondStep.Content.ReadAsStringAsync());
         Assert.Contains(secondStep.Headers.GetValues("Set-Cookie"), value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal));
         Assert.DoesNotContain(complete.Headers.GetValues("Set-Cookie"), value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal));
@@ -616,8 +620,9 @@ public sealed class ExternalAuthenticationTests
         {
             Assert.True(result.GetProperty("requiresTwoFactor").GetBoolean());
             var code = Totp.ComputeCode(secret, Totp.TimeStepAt(DateTimeOffset.UtcNow));
-            using var second = await browser.PostAsJsonAsync("/api/v1/auth/two-factor",
-                new { Token = result.GetProperty("twoFactorToken").GetString(), Code = code });
+            browser.DefaultRequestHeaders.Remove("Cookie");
+            browser.DefaultRequestHeaders.Add("Cookie", PendingSignIn.Read(host, completed));
+            using var second = await browser.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = code });
             Assert.True(second.IsSuccessStatusCode, await second.Content.ReadAsStringAsync());
             cookie = second.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")).Split(';')[0];
         }
