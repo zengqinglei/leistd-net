@@ -36,6 +36,8 @@
 
 只读权限 `App.DistributedEvents` 可看状态、目录与概要；管理权限 `App.DistributedEvents.Manage` 才能读取载荷、恢复、丢弃或发送测试事件。宿主按物理库查看，租户只看自己的发件箱与收件箱。按筛选恢复带首次加载时间上限，后续新记录不卷入；操作记录逐个成功批次记录条数和筛选。
 
+正文不出接口时，在 `backend/src/CompanyName.ProjectName.Api/Hosting/ComponentEndpoints.cs` 的 `MapDistributedEvents(options => …)` 中设 `options.EnablePayloadEndpoints = false`；三个 `/payload` 路由将不再映射，界面按 `/status` 的 `payloadEnabled` 隐藏载荷入口。
+
 发送内置测试事件应看到同一 EventId 的 Sent 发件箱与 Processed 收件箱。外部传输不允许自发自收时关闭 `TestEvent:Enabled`，页面随之隐藏测试入口。链路使用 traceparent 与 leistd-correlation-id，可在详情消息头中核对。
 
 ## 连接与部署

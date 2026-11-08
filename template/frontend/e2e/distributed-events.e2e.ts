@@ -26,7 +26,12 @@ test(
     await page.getByRole('tab', { name: /^Inbox/ }).click();
     // 视图导航提交后再更新筛选，避免后一次导航覆盖仍在进行的切换。
     await expect(page).toHaveURL(/[?&]view=inbox(?:&|$)/);
-    await page.getByRole('textbox', { name: 'Exact event ID / ordering key' }).fill(eventId);
+    await page
+      .getByRole('textbox', {
+        name: 'Exact event ID / ordering key / trace ID / correlation ID',
+        exact: true,
+      })
+      .fill(eventId);
     await expect(page).toHaveURL(new RegExp(`keyword=${eventId}`));
     await expect(async () => {
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
