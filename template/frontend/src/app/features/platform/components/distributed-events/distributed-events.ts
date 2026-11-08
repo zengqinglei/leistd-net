@@ -63,7 +63,7 @@ import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { PagedResultDto } from '../../../../shared/dtos/paged-result.dto';
-import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
+import { AppDate, formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import { AppNumber } from '../../../../shared/pipes/app-number-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
@@ -88,6 +88,7 @@ import { TenantService } from '../../services/tenant-service';
     ...HlmTooltipImports,
     FacetedFilter,
     AppNumber,
+    AppDate,
     DistributedEventStatistics,
     DistributedOutboxTable,
     DistributedInboxTable,

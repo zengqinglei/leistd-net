@@ -195,7 +195,7 @@
               </dl>
             </section>
           }
-          @if (canManage()) {
+          @if (canManage() && payloadEnabled()) {
             <section class="flex flex-col items-start gap-3" data-testid="event-payload">
               <h3 class="text-sm font-semibold">
                 {{

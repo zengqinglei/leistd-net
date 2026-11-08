@@ -18,8 +18,8 @@
   "failedHelp": "Handler retry attempts exhausted",
   "rejectionHelp": "Host inbox · Cannot decode or resolve tenant",
   "views": "Event views",
-  "search": "Exact event ID / ordering key",
-  "searchRejections": "Exact event ID",
+  "search": "Exact event ID / ordering key / traceId / correlation ID",
+  "searchRejections": "Exact event ID / traceId / correlation ID",
   "searchCatalog": "Search event name",
   "clear": "Clear filters",
   "noResults": "No matching events",
@@ -199,5 +199,7 @@
       "redecode": "Re-decoded {{count}} · Skipped {{skipped}}",
       "discard": "Discarded {{count}} · Skipped {{skipped}}"
     }
-  }
+  },
+  "transportChanged": "Status changed",
+  "transportReported": "Last reported"
 }

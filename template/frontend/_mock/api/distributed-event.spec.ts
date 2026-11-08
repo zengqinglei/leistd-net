@@ -74,6 +74,24 @@ describe('distributed event mock', () => {
     expect(processed[0].status).toBe('processed');
   });
 
+  it('reports payload availability and both transport timestamps', () => {
+    const status = call('GET /api/v1/distributed-events/status');
+    expect(status.payloadEnabled).toBe(true);
+    expect(Number.isFinite(Date.parse(status.transportStatusChangedAt!))).toBe(true);
+    expect(Number.isFinite(Date.parse(status.transportReportedAt!))).toBe(true);
+  });
+
+  it.each(['outbox', 'inbox', 'rejections'] as const)(
+    'finds %s by trace or distinct correlation ID without partial matching',
+    (kind) => {
+      const route = `GET /api/v1/distributed-events/${kind}` as const;
+      for (const keyword of ['4BF92F3577B34DA6A3CE929D0E0E4736', 'Caller_ABC-request-27'])
+        expect(call(route, { queryParams: { keyword } }).totalCount).toBeGreaterThan(0);
+      expect(call(route, { queryParams: { keyword: 'Caller_ABC-request' } }).totalCount).toBe(0);
+      expect(call(route, { queryParams: { keyword: 'caller_abc-request-27' } }).totalCount).toBe(0);
+    },
+  );
+
   it('restores more than one thousand matching dead letters without touching later records', () => {
     const template = DISTRIBUTED_EVENT_OUTBOX[0];
     for (let index = 0; index < 1200; index++)

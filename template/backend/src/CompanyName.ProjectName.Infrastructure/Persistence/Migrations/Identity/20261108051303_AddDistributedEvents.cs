@@ -27,6 +27,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     OccurredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     Payload = table.Column<string>(type: "text", nullable: false),
                     Headers = table.Column<string>(type: "text", nullable: false),
+                    TraceId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     Consumer = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     Coordinates = table.Column<string>(type: "text", nullable: false),
                     Status = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
@@ -59,6 +61,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     OccurredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     Payload = table.Column<string>(type: "text", nullable: false),
                     Headers = table.Column<string>(type: "text", nullable: false),
+                    TraceId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     Status = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     AttemptCount = table.Column<int>(type: "integer", nullable: false),
                     NextAttemptAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -89,6 +93,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     EventId = table.Column<Guid>(type: "uuid", nullable: true),
                     RawBody = table.Column<byte[]>(type: "bytea", nullable: false),
                     Headers = table.Column<string>(type: "text", nullable: false),
+                    TraceId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     Coordinates = table.Column<string>(type: "text", nullable: false),
                     Status = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     RedecodeCount = table.Column<int>(type: "integer", nullable: false),
@@ -100,6 +106,28 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 {
                     table.PrimaryKey("PK_DistributedEventRejection", x => x.Id);
                 });
+
+            migrationBuilder.CreateTable(
+                name: "DistributedEventTransportState",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Instance = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    TransportName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    StatusChangedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ReportedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DistributedEventTransportState", x => x.Instance);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventInbox_CorrelationId",
+                schema: "companyname-projectname",
+                table: "DistributedEventInbox",
+                column: "CorrelationId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DistributedEventInbox_EventId_Consumer",
@@ -142,6 +170,18 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 columns: new[] { "TenantId", "EventName", "OrderingKey", "Id" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventInbox_TraceId",
+                schema: "companyname-projectname",
+                table: "DistributedEventInbox",
+                column: "TraceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventOutbox_CorrelationId",
+                schema: "companyname-projectname",
+                table: "DistributedEventOutbox",
+                column: "CorrelationId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DistributedEventOutbox_EventId",
                 schema: "companyname-projectname",
                 table: "DistributedEventOutbox",
@@ -182,10 +222,34 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 columns: new[] { "TenantId", "EventName", "OrderingKey", "Id" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventOutbox_TraceId",
+                schema: "companyname-projectname",
+                table: "DistributedEventOutbox",
+                column: "TraceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventRejection_CorrelationId",
+                schema: "companyname-projectname",
+                table: "DistributedEventRejection",
+                column: "CorrelationId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DistributedEventRejection_Status_LastModificationTime",
                 schema: "companyname-projectname",
                 table: "DistributedEventRejection",
                 columns: new[] { "Status", "LastModificationTime" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventRejection_TraceId",
+                schema: "companyname-projectname",
+                table: "DistributedEventRejection",
+                column: "TraceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DistributedEventTransportState_ReportedAt",
+                schema: "companyname-projectname",
+                table: "DistributedEventTransportState",
+                column: "ReportedAt");
         }
 
         /// <inheritdoc />
@@ -201,6 +265,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
             migrationBuilder.DropTable(
                 name: "DistributedEventRejection",
+                schema: "companyname-projectname");
+
+            migrationBuilder.DropTable(
+                name: "DistributedEventTransportState",
                 schema: "companyname-projectname");
         }
     }

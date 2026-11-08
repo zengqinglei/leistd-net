@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { DistributedEventRecordSheet } from './distributed-event-record-sheet';
 //#if (IncludeLocalization)
@@ -64,4 +64,44 @@ describe('DistributedEventRecordSheet tenant identity', () => {
       else expect(value!.textContent.trim()).toBe(TENANT_ID);
     },
   );
+
+  it('does not request payload when closed and cancels an in-flight request when access closes', async () => {
+    const payload = new Subject<{ payload: string }>();
+    const getOutboxPayload = vi.fn(() => payload);
+    await TestBed.configureTestingModule({
+      imports: [DistributedEventRecordSheet],
+      providers: [
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+        {
+          provide: AccountPreferencesService,
+          useValue: { timeZone: signal('UTC'), displayLocale: signal('en') },
+        },
+        {
+          provide: DistributedEventService,
+          useValue: { getOutbox: () => of(DETAIL), getOutboxPayload },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(DistributedEventRecordSheet);
+    fixture.componentRef.setInput('recordId', DETAIL.record.id);
+    fixture.componentRef.setInput('canManage', true);
+    fixture.componentRef.setInput('payloadEnabled', false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentInstance.loadPayload();
+    expect(getOutboxPayload).not.toHaveBeenCalled();
+    fixture.componentRef.setInput('payloadEnabled', true);
+    fixture.detectChanges();
+    fixture.componentInstance.loadPayload();
+    expect(getOutboxPayload).toHaveBeenCalledOnce();
+    expect(payload.observed).toBe(true);
+    fixture.componentRef.setInput('payloadEnabled', false);
+    fixture.detectChanges();
+    expect(payload.observed).toBe(false);
+    payload.next({ payload: 'sensitive body' });
+    expect(fixture.componentInstance.payload()).toBeNull();
+    expect(fixture.componentInstance.payloadLoading()).toBe(false);
+  });
 });

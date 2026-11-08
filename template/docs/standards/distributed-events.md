@@ -8,11 +8,15 @@
 
 在业务工作单元里调用 `IDistributedEventBus.PublishAsync`；没有工作单元会抛异常。在本地领域事件处理器里转发时声明 `[UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)]`，否则本地事件默认提交后执行，已经离开业务事务。
 
+确定性 EventId 只代表同一事实；同一工作单元内相同 EventId、事件名和冻结载荷幂等，内容冲突立即报错，跨事务仍由唯一约束拒绝，因此只在产生新事实（新版本）时发布。
+
 消费者实现 `IEventHandler<T>`，经 `AddDistributedEventHandler<THandler>(consumerName)` 注册。消费者名参与去重；重命名处理器时显式保持原消费者名。处理器写本服务数据库与收件箱 Processed 标记同事务；调用外部系统的副作用仍须按 EventId 幂等。
 
 ## 顺序、重试与部署
 
 保序范围为同租户、同事件名、同排序键；发送与处理都检查尚未完成的前序。队首退避时后续不越过；死信和 Failed 是终态，后续可以继续，业务版本水位需容忍跳号。故障重投可能迟到，不承诺全局或跨主题顺序。
+
+跨事件名不保序；多个事件共享版本序列且新状态完整覆盖旧状态时，可按租户与聚合维护共同水位忽略旧版本，增量事实不能仅凭该水位丢弃。完整契约见随包事件总线文档的“分布式一致性与顺序”。
 
 默认单进程同时写入、发送、接收与处理。拆出 Worker 时，写入进程关闭 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled`，Worker 开启并注册传输；关闭的进程不抢兜底任务锁。不要通过是否注册传输推断进程角色。
 
@@ -38,7 +42,7 @@
 
 默认组合 RabbitMQ，生产连接来自 `ConnectionStrings:RabbitMQ`（compose 的 `RABBITMQ_CONNECTION_STRING`），主机名为 `rabbitmq`；broker 初始账号来自 `RABBITMQ_USER`、`RABBITMQ_PASSWORD`，URI 账号与之保持一致，特殊字符须进行 URI 编码。已存在的数据卷不会因修改初始账号变量而更改 broker 账号。生产不使用 guest 账号；本机开发档的公开默认值只用于环回地址。
 
-开发依赖清单同时启动 RabbitMQ，管理页为 `http://localhost:15672`。持久队列使用 RabbitMQ 数据卷，重建容器不应删除该卷；消费方必须先启动以声明队列，此前发布且没有目标队列的消息不会保留。readiness 与运维快照共用传输健康检查，broker 不可达会使就绪检查失败。迁移作业只创建三表，不连接 broker。
+开发依赖清单同时启动 RabbitMQ，管理页为 `http://localhost:15672`。持久队列使用 RabbitMQ 数据卷，重建容器不应删除该卷；消费方必须先启动以声明队列，此前发布且没有目标队列的消息不会保留。readiness 使用本进程传输健康检查，运维快照读取宿主库的新鲜健康上报，broker 不可达会使就绪检查失败。迁移作业只创建事件表，不连接 broker。
 
 改用 Kafka 时，在 Api 的服务与健康检查两处将 `AddRabbitMqEventTransport` 换为 `AddKafkaEventTransport`，替换包引用与连接配置，并独立准备 broker；不要同时注册两个传输。`Leistd:EventBus:Distributed` 与 `Leistd:EventBus:Distributed:Retention` 的调优项沿用组件默认值，确有部署需要时再覆盖。
 

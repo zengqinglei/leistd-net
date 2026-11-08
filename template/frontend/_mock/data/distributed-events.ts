@@ -32,7 +32,7 @@ const ago = (seconds: number) => new Date(seededAt - seconds * 1000).toISOString
 const eventId = (index: number) => `00000000-0000-4000-8000-${index.toString().padStart(12, '0')}`;
 const headers = {
   traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-  'leistd-correlation-id': '4bf92f3577b34da6a3ce929d0e0e4736',
+  'leistd-correlation-id': 'Caller_ABC-request-27',
 };
 
 export const DISTRIBUTED_EVENT_OUTBOX: DistributedEventOutboxDetailOutputDto[] = [
@@ -223,7 +223,7 @@ export const DISTRIBUTED_EVENT_REJECTIONS: DistributedEventRejectionDetailOutput
       receivedAt: ago(300),
       lastModificationTime: ago(300),
     },
-    headers: {},
+    headers,
     coordinates: {
       exchange: 'leistd.events',
       routingKey: 'customer.activated',
@@ -278,6 +278,9 @@ export const DISTRIBUTED_EVENT_STATUS: DistributedEventStatusOutputDto = {
   processedLast24Hours: 2,
   transportName: 'RabbitMQ',
   transportStatus: 'healthy',
+  transportStatusChangedAt: ago(3600),
+  transportReportedAt: ago(2),
+  payloadEnabled: true,
   testEventEnabled: true,
 };
 

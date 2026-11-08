@@ -68,7 +68,10 @@ function timestamp(row: Row) {
   return 'creationTime' in row ? row.creationTime : row.receivedAt;
 }
 
-function matches(row: Row, filter: Filter) {
+function matches(row: Row, filter: Filter, headers: Record<string, string> = {}) {
+  const keyword = String(filter['keyword'] || '');
+  const parent = headers['traceparent']?.match(/^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/);
+  const traceId = parent && !/^0+$/.test(parent[1]) && !/^0+$/.test(parent[2]) ? parent[1] : null;
   const get = (key: string) => filter[key] || undefined;
   return (
     (!get('before') || Date.parse(timestamp(row)) <= Date.parse(String(get('before')))) &&
@@ -76,7 +79,9 @@ function matches(row: Row, filter: Filter) {
     (!get('eventName') || row.eventName === get('eventName')) &&
     (!get('keyword') ||
       row.eventId === get('keyword') ||
-      ('orderingKey' in row && row.orderingKey === get('keyword'))) &&
+      ('orderingKey' in row && row.orderingKey === get('keyword')) ||
+      (!!traceId && /^[0-9a-f]{32}$/i.test(keyword) && traceId === keyword.toLowerCase()) ||
+      headers['leistd-correlation-id'] === keyword) &&
     (!get('errorCode') || ('lastErrorCode' in row && row.lastErrorCode === get('errorCode'))) &&
     (!get('consumer') || ('consumer' in row && row.consumer === get('consumer'))) &&
     (!get('reason') || ('reason' in row && row.reason === get('reason')))
@@ -94,9 +99,8 @@ function list(kind: Kind, req: MockRequest) {
   if (queryValues(req)['status'] && !statuses.includes(queryValues(req)['status']))
     throw new MockException(400);
   const items = records(kind)
+    .filter((item) => allowed(item.record) && matches(item.record, queryValues(req), item.headers))
     .map((item) => item.record)
-    .filter(allowed)
-    .filter((row) => matches(row, queryValues(req)))
     .sort((a, b) => (BigInt(a.id) > BigInt(b.id) ? -1 : 1));
   const offset = Math.max(0, Number(queryValues(req)['offset']) || 0);
   const limit = Math.min(1000, Math.max(1, Number(queryValues(req)['limit']) || 10));
@@ -148,6 +152,9 @@ function status(req: MockRequest): Dto.DistributedEventStatusOutputDto {
     processedLast24Hours: inbox.filter((item) => recent(item.processedAt)).length,
     transportName: 'RabbitMQ',
     transportStatus: 'healthy',
+    transportStatusChangedAt: new Date(Date.now() - 3600000).toISOString(),
+    transportReportedAt: new Date().toISOString(),
+    payloadEnabled: true,
     testEventEnabled: true,
   };
 }
@@ -214,11 +221,13 @@ function recover(
   const targets = ids
     ? [...new Set(ids)]
     : records(kind)
-        .map((item) => item.record)
-        .filter(allowed)
-        .filter(eligible)
-        .filter((row) => matches(row, filter!))
-        .map((row) => row.id);
+        .filter(
+          (item) =>
+            allowed(item.record) &&
+            eligible(item.record) &&
+            matches(item.record, filter!, item.headers),
+        )
+        .map((item) => item.record.id);
   const result: Dto.DistributedEventRecoveryOutputDto = { affectedCount: 0, skipped: [] };
   for (const id of targets) {
     const row = records(kind).find((item) => item.record.id === id && allowed(item.record))?.record;

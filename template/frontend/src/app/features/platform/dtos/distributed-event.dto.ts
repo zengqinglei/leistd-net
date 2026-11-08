@@ -58,7 +58,7 @@ export interface DistributedEventInboxFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   errorCode?: string | null;
   /** 必填，只能选 Failed 或 Processed。 */
@@ -110,7 +110,7 @@ export interface DistributedEventOutboxFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   errorCode?: string | null;
 }
@@ -186,7 +186,7 @@ export interface DistributedEventRejectionFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。 */
+  /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 拒收原因码精确匹配；只恢复 Pending。 */
   reason?: string | null;
@@ -227,10 +227,16 @@ export interface DistributedEventStatusOutputDto {
   pendingRejections?: number | null;
   sentLast24Hours: number;
   processedLast24Hours: number;
-  /** 当前传输名；只写进程没有注册传输时为 null。 */
+  /** 当前进程或宿主库新鲜报告中的传输名；均无时为 null。 */
   transportName?: string | null;
-  /** event-bus 标签健康检查聚合：healthy、degraded、unhealthy、unknown。 */
+  /** 宿主库新鲜上报的最差健康状态；无新鲜上报时 unknown。 */
   transportStatus: DistributedEventTransportStatus;
+  /** 最差状态实例中最近的状态变化时刻；unknown 时为空。 */
+  transportStatusChangedAt?: string | null;
+  /** 全部新鲜实例的最后上报时刻；unknown 时为空。 */
+  transportReportedAt?: string | null;
+  /** 端点是否开放载荷；直接管理服务返回 null。 */
+  payloadEnabled?: boolean | null;
   testEventEnabled: boolean;
 }
 
@@ -244,7 +250,7 @@ export interface GetDistributedEventInboxInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
@@ -259,7 +265,7 @@ export interface GetDistributedEventOutboxInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
@@ -273,7 +279,7 @@ export interface GetDistributedEventRejectionsInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。 */
+  /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;

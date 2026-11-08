@@ -44,6 +44,7 @@ const STATUS: Dto.DistributedEventStatusOutputDto = {
   sentLast24Hours: 0,
   processedLast24Hours: 0,
   transportStatus: 'healthy',
+  payloadEnabled: true,
   transportName: 'RabbitMQ',
   testEventEnabled: true,
 };

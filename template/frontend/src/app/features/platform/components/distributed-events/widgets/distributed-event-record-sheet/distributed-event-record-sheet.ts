@@ -68,6 +68,7 @@ export class DistributedEventRecordSheet {
   readonly view = input<EventView>('outbox');
   readonly database = input<string | null>(null);
   readonly canManage = input(false);
+  readonly payloadEnabled = input(true);
   readonly busy = input(false);
   readonly tenantNames = input<Record<string, string>>({});
   readonly refreshVersion = input(0);
@@ -147,9 +148,10 @@ export class DistributedEventRecordSheet {
       )
       .subscribe();
     effect(() => {
-      if (!this.canManage()) {
+      if (!this.canManage() || !this.payloadEnabled()) {
         this.payloadSubscription?.unsubscribe();
         this.payload.set(null);
+        this.payloadError.set(null);
       }
     });
     this.owner.onDestroy(() => this.payloadSubscription?.unsubscribe());
@@ -190,7 +192,8 @@ export class DistributedEventRecordSheet {
     return /At$|Time$/.test(key);
   }
   loadPayload(): void {
-    if (!this.canManage() || !this.recordId() || this.payloadLoading()) return;
+    if (!this.canManage() || !this.payloadEnabled() || !this.recordId() || this.payloadLoading())
+      return;
     this.payloadLoading.set(true);
     this.payloadError.set(null);
     const id = this.recordId()!;
