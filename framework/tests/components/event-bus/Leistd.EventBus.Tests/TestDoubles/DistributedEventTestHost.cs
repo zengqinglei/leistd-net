@@ -40,7 +40,15 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
     public static readonly Guid TenantB = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000002");
     /// <summary>专属库租户。</summary>
     public static readonly Guid DedicatedTenant = Guid.Parse("dddddddd-0000-0000-0000-000000000003");
-    private readonly string _file = Path.Combine(Path.GetTempPath(), "leistd-events-" + Guid.NewGuid().ToString("N") + ".db");
+    private readonly string _file;
+    private readonly bool _ownsFiles;
+
+    private DistributedEventTestHost(DistributedEventTestHost? shared)
+    {
+        _file = shared?._file ?? Path.Combine(Path.GetTempPath(), "leistd-events-" + Guid.NewGuid().ToString("N") + ".db");
+        _ownsFiles = shared is null;
+        Clock = shared?.Clock ?? new(new DateTimeOffset(2026, 11, 8, 0, 0, 0, TimeSpan.Zero));
+    }
 
     private string DedicatedFile => _file + ".dedicated";
     private string Connection(bool dedicated) => $"Data Source={(dedicated ? DedicatedFile : _file)};Pooling=False";
@@ -51,7 +59,7 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
     /// <summary>根容器。</summary>
     public ServiceProvider Services { get; private set; } = null!;
     /// <summary>可控时间。</summary>
-    public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2026, 11, 8, 0, 0, 0, TimeSpan.Zero));
+    public FakeTimeProvider Clock { get; }
     /// <summary>真实链路日志。</summary>
     public FakeLogCollector Logs => Services.GetRequiredService<FakeLogCollector>();
     /// <summary>记录的队列。</summary>
@@ -66,9 +74,9 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
     public ScriptedEventTransport Transport { get; } = new();
 
     /// <summary>创建并建表。</summary>
-    public static async Task<DistributedEventTestHost> CreateAsync(bool loopback = false, Action<DistributedEventOptions>? configure = null, bool withTransport = true, Action<IServiceCollection>? configureServices = null)
+    public static async Task<DistributedEventTestHost> CreateAsync(bool loopback = false, Action<DistributedEventOptions>? configure = null, bool withTransport = true, Action<IServiceCollection>? configureServices = null, DistributedEventTestHost? shareDatabaseWith = null)
     {
-        var host = new DistributedEventTestHost();
+        var host = new DistributedEventTestHost(shareDatabaseWith);
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddFakeLogging());
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
@@ -131,14 +139,14 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
         services.GetRequiredService<ICurrentTenant>(), services.GetRequiredService<IDataFilter>());
 
     /// <summary>构造接收消息；载荷可不携带框架元数据。</summary>
-    public RawDistributedEvent Raw(Guid? tenant = null, string payload = "{\"orderId\":7}", Guid? id = null) => new()
+    public RawDistributedEvent Raw(Guid? tenant = null, string payload = "{\"orderId\":7}", Guid? id = null, IReadOnlyDictionary<string, string>? headers = null) => new()
     {
         Body = DistributedEventCodec.Encode(new()
         {
             EventId = id ?? Guid.NewGuid(), EventName = "order.paid", TenantId = tenant,
-            OccurredAt = Clock.GetUtcNow().UtcDateTime, Payload = payload, Headers = new Dictionary<string, string>()
+            OccurredAt = Clock.GetUtcNow().UtcDateTime, Payload = payload, Headers = headers ?? new Dictionary<string, string>()
         }),
-        Headers = new Dictionary<string, string>(), Coordinates = new Dictionary<string, string> { ["topic"] = "order.paid" },
+        Headers = headers ?? new Dictionary<string, string>(), Coordinates = new Dictionary<string, string> { ["topic"] = "order.paid" },
         ReceivedAt = Clock.GetUtcNow().UtcDateTime
     };
 
@@ -146,8 +154,11 @@ public sealed class DistributedEventTestHost : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Services.DisposeAsync();
-        File.Delete(_file);
-        File.Delete(DedicatedFile);
+        if (_ownsFiles)
+        {
+            File.Delete(_file);
+            File.Delete(DedicatedFile);
+        }
     }
 }
 
@@ -241,10 +252,13 @@ public sealed class ScriptedEventTransport : IDistributedEventTransport
     public System.Collections.Concurrent.ConcurrentQueue<OutgoingDistributedEvent> Sent { get; } = new();
     /// <summary>发送结果脚本。</summary>
     public System.Collections.Concurrent.ConcurrentQueue<DistributedEventSendResult> Results { get; } = new();
+    /// <summary>模拟传输未处理的异常。</summary>
+    public Exception? SendFailure { get; set; }
     /// <inheritdoc />
     public Task<DistributedEventSendResult> SendAsync(OutgoingDistributedEvent message, CancellationToken cancellationToken)
     {
         Sent.Enqueue(message);
+        if (SendFailure is not null) return Task.FromException<DistributedEventSendResult>(SendFailure);
         return Task.FromResult(Results.TryDequeue(out var result) ? result : new DistributedEventSendResult { Status = DistributedEventSendStatus.Succeeded });
     }
     /// <summary>外部格式映射脚本。</summary>

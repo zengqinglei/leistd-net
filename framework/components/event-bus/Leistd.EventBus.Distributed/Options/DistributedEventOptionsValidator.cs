@@ -25,6 +25,15 @@ internal sealed class DistributedEventOptionsValidator(
         Require(options.Outbox is not null, nameof(options.Outbox), "must not be null.");
         Require(options.Inbox is not null, nameof(options.Inbox), "must not be null.");
         Require(options.TestEvent is not null, nameof(options.TestEvent), "must not be null.");
+        Require(options.TransportStatus is not null, nameof(options.TransportStatus), "must not be null.");
+        if (options.TransportStatus is { } status)
+        {
+            Require(status.ReportInterval > TimeSpan.Zero && status.ReportInterval.TotalMilliseconds <= uint.MaxValue - 1,
+                "TransportStatus:ReportInterval", "must be greater than zero and no more than 4294967294 milliseconds.");
+            Require(status.StaleAfter > status.ReportInterval, "TransportStatus:StaleAfter", "must be greater than ReportInterval.");
+            Require(string.IsNullOrEmpty(status.Instance) || (!string.IsNullOrWhiteSpace(status.Instance) && status.Instance.Length <= 512),
+                "TransportStatus:Instance", "must be empty or a non-blank identifier of at most 512 characters.");
+        }
         if (options.Outbox is not null && options.Inbox is not null && !services.IsService(typeof(IDistributedEventTransport)))
         {
             Require(!options.Outbox.DispatchEnabled, "Outbox:DispatchEnabled", "requires an IDistributedEventTransport registration.");

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Leistd.EventBus.Distributed.Dtos;
 using Leistd.EventBus.Distributed.Errors;
+using Leistd.EventBus.Distributed.Diagnostics;
 using Leistd.EventBus.Distributed.Events;
 using Leistd.EventBus.Distributed.Stores;
 using Leistd.EventBus.Distributed.Transport;
@@ -41,7 +42,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                     if (filter.EventName is not null) query = query.Where(x => x.EventName == filter.EventName);
                     if (filter.ErrorCode is not null) query = query.Where(x => x.LastErrorCode == filter.ErrorCode);
                     if (filter.Keyword is { } key)
-                    { var isId = Guid.TryParse(key, out var id); query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key); }
+                    { var isId = Guid.TryParse(key, out var id); var traceId = DistributedEventTrace.FromKeyword(key);
+                        query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key || (traceId != null && x.TraceId == traceId) || x.CorrelationId == key); }
                 }
                 return await query.OrderBy(x => x.Id).Take(500).Select(x => new Target(x.Id, x.TenantId)).ToListAsync(token);
             }, ct);
@@ -96,7 +98,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                     if (filter.Consumer is not null) query = query.Where(x => x.Consumer == filter.Consumer);
                     if (filter.ErrorCode is not null) query = query.Where(x => x.LastErrorCode == filter.ErrorCode);
                     if (filter.Keyword is { } key)
-                    { var isId = Guid.TryParse(key, out var id); query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key); }
+                    { var isId = Guid.TryParse(key, out var id); var traceId = DistributedEventTrace.FromKeyword(key);
+                        query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key || (traceId != null && x.TraceId == traceId) || x.CorrelationId == key); }
                 }
                 return await query.OrderBy(x => x.Id).Take(500).Select(x => new Target(x.Id, x.TenantId)).ToListAsync(token);
             }, ct);
@@ -152,7 +155,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                     if (filter.EventName is not null) query = query.Where(x => x.EventName == filter.EventName);
                     if (filter.Reason is not null) query = query.Where(x => x.Reason == filter.Reason);
                     if (filter.Keyword is { } key)
-                    { var isId = Guid.TryParse(key, out var id); query = query.Where(x => isId && x.EventId == id); }
+                    { var isId = Guid.TryParse(key, out var id); var traceId = DistributedEventTrace.FromKeyword(key);
+                        query = query.Where(x => (isId && x.EventId == id) || (traceId != null && x.TraceId == traceId) || x.CorrelationId == key); }
                 }
                 return await query.OrderBy(x => x.Id).Take(500).ToListAsync(token);
             }, ct);

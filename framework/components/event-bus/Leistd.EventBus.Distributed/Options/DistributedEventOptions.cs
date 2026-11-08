@@ -33,4 +33,7 @@ public sealed class DistributedEventOptions
     /// <summary>内置测试事件。</summary>
     public DistributedEventTestOptions TestEvent { get; set; } = new();
 
+    /// <summary>传输健康状态上报与跨进程快照。</summary>
+    public DistributedEventTransportStatusOptions TransportStatus { get; set; } = new();
+
 }

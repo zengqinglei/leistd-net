@@ -87,5 +87,42 @@ public sealed class DistributedEventDiagnosticsTests
         Assert.Contains("DistributedEventConsumeFailed", names);
         Assert.Contains("DistributedEventOutboxBacklog", names);
         Assert.Contains("DistributedEventRejected", names);
+        foreach (var (id, name) in new[] { (4101, "DistributedEventDeadLettered"), (4103, "DistributedEventConsumeFailed") })
+        {
+            var entry = Assert.Single(host.Logs.GetSnapshot(), x => x.Id.Id == id);
+            Assert.Equal(name, entry.Id.Name);
+            Assert.Equal("order.paid", entry.GetStructuredStateValue("EventName"));
+            Assert.True(Guid.TryParse(entry.GetStructuredStateValue("EventId"), out _));
+        }
+    }
+
+    /// <summary>拒收成功与写库失败均带完整入站上下文，坐标有序且最长 256 字符。</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Rejection_logs_include_structured_inbound_metadata_and_bounded_coordinates(bool failPersistence, bool longCoordinates)
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync();
+        if (failPersistence)
+            await host.InTenantAsync(null, (_, db) => db.Database.ExecuteSqlRawAsync("DROP TABLE DistributedEventRejection"));
+        var id = Guid.NewGuid();
+        var raw = host.Raw(payload: "not-json", id: id) with
+        {
+            Coordinates = new Dictionary<string, string> { ["z"] = "last", ["a"] = longCoordinates ? new string('x', 300) : "first" }
+        };
+        await using var scope = host.Services.CreateAsyncScope();
+        var receiver = scope.ServiceProvider.GetRequiredService<IDistributedEventReceiver>();
+        if (failPersistence) await Assert.ThrowsAsync<DbUpdateException>(() => receiver.ReceiveAsync(raw, default));
+        else await receiver.ReceiveAsync(raw, default);
+        var entry = Assert.Single(host.Logs.GetSnapshot(), x => x.Id.Id == (failPersistence ? 4105 : 4104));
+        Assert.Equal(failPersistence ? "DistributedEventRejectPersistFailed" : "DistributedEventRejected", entry.Id.Name);
+        Assert.Equal("scripted", entry.GetStructuredStateValue("Transport"));
+        Assert.Equal(DistributedEventRejectionReasons.InvalidPayload, entry.GetStructuredStateValue("Reason"));
+        Assert.Equal("order.paid", entry.GetStructuredStateValue("EventName"));
+        Assert.Equal(id.ToString(), entry.GetStructuredStateValue("EventId"));
+        Assert.Equal(longCoordinates ? "a=" + new string('x', 254) : "a=first;z=last", entry.GetStructuredStateValue("Coordinates"));
+        if (failPersistence) Assert.IsType<DbUpdateException>(entry.Exception);
     }
 }

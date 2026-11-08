@@ -1,6 +1,7 @@
 using Leistd.Data.Paging;
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.Distributed.Dtos;
+using Leistd.EventBus.Distributed.Diagnostics;
 using Leistd.EventBus.Distributed.Errors;
 using Leistd.EventBus.Distributed.Events;
 using Leistd.EventBus.Distributed.Options;
@@ -47,7 +48,11 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
             if (input.Status is { } status) query = query.Where(x => x.Status == status);
             if (input.Before is { } before) query = query.Where(x => x.CreationTime <= before);
             if (input.Keyword is { } key)
-            { var isId = Guid.TryParse(key, out var id); query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key); }
+            {
+                var isId = Guid.TryParse(key, out var id);
+                var traceId = DistributedEventTrace.FromKeyword(key);
+                query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key || (traceId != null && x.TraceId == traceId) || x.CorrelationId == key);
+            }
             return new PagedResult<DistributedEventOutboxOutputDto>(await query.LongCountAsync(ct),
                 await query.OrderByDescending(x => x.Id).Skip(input.Offset).Take(input.Limit).Select(DistributedEventProjections.Outbox).ToListAsync(ct));
         }, cancellationToken);
@@ -65,7 +70,11 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
             if (input.Status is { } status) query = query.Where(x => x.Status == status);
             if (input.Before is { } before) query = query.Where(x => x.ReceivedAt <= before);
             if (input.Keyword is { } key)
-            { var isId = Guid.TryParse(key, out var id); query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key); }
+            {
+                var isId = Guid.TryParse(key, out var id);
+                var traceId = DistributedEventTrace.FromKeyword(key);
+                query = query.Where(x => (isId && x.EventId == id) || x.OrderingKey == key || (traceId != null && x.TraceId == traceId) || x.CorrelationId == key);
+            }
             return new PagedResult<DistributedEventInboxOutputDto>(await query.LongCountAsync(ct),
                 await query.OrderByDescending(x => x.Id).Skip(input.Offset).Take(input.Limit).Select(DistributedEventProjections.Inbox).ToListAsync(ct));
         }, cancellationToken);
@@ -82,7 +91,11 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
             if (input.Status is { } status) query = query.Where(x => x.Status == status);
             if (input.Before is { } before) query = query.Where(x => x.ReceivedAt <= before);
             if (input.Keyword is { } key)
-            { var isId = Guid.TryParse(key, out var id); query = query.Where(x => isId && x.EventId == id); }
+            {
+                var isId = Guid.TryParse(key, out var id);
+                var traceId = DistributedEventTrace.FromKeyword(key);
+                query = query.Where(x => (isId && x.EventId == id) || (traceId != null && x.TraceId == traceId) || x.CorrelationId == key);
+            }
             return new PagedResult<DistributedEventRejectionOutputDto>(await query.LongCountAsync(ct),
                 await query.OrderByDescending(x => x.Id).Skip(input.Offset).Take(input.Limit).Select(DistributedEventProjections.Rejection).ToListAsync(ct));
         }, cancellationToken);

@@ -98,7 +98,7 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
             current.Status = DistributedEventInboxStatus.Failed;
             current.NextAttemptAt = null;
             logger.LogError(new EventId(4103, "DistributedEventConsumeFailed"), failure,
-                "Distributed event {EventId} exhausted attempts for {Consumer}.", current.EventId, current.Consumer);
+                "Distributed event {EventId} ({EventName}) exhausted attempts for {Consumer}.", current.EventId, current.EventName, current.Consumer);
         }
         else current.NextAttemptAt = current.LastModificationTime + DistributedEventRetry.Delay(current.AttemptCount, options.CurrentValue);
         try { await failed.CompleteAsync(ct); }

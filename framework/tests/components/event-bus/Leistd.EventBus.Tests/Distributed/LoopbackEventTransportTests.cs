@@ -37,6 +37,7 @@ public sealed class LoopbackEventTransportTests
         var result = await provider.GetRequiredService<IDistributedEventTransport>().SendAsync(Message(), default);
         Assert.Equal(DistributedEventSendStatus.TransientFailure, result.Status);
         Assert.Equal("loopback-delivery-failed", result.ErrorCode);
+        Assert.Equal(typeof(InvalidOperationException).FullName, result.Error);
     }
 
     /// <summary>坏消息使用稳定拒收原因；取消不被包装为坏消息。</summary>

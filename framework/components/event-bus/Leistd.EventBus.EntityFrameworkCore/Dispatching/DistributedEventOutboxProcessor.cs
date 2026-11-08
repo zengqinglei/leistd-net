@@ -49,7 +49,7 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            result = new() { Status = DistributedEventSendStatus.TransientFailure, ErrorCode = DistributedEventOutboxFailureCodes.TransportException, Error = exception.Message };
+            result = new() { Status = DistributedEventSendStatus.TransientFailure, ErrorCode = DistributedEventOutboxFailureCodes.TransportException, Error = exception.GetType().FullName };
             logger.LogWarning(exception, "Distributed event {EventId} transport failed before confirmation.", row.EventId);
         }
         using var write = units.Begin(requiresNew: true);
@@ -80,7 +80,7 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
                 if (result.Status != DistributedEventSendStatus.PermanentFailure)
                     current.LastErrorCode = DistributedEventOutboxFailureCodes.RetryWindowExceeded;
                 logger.LogError(new EventId(4101, "DistributedEventDeadLettered"),
-                    "Distributed event {EventId} became a dead letter: {ErrorCode}.", row.EventId, current.LastErrorCode);
+                    "Distributed event {EventId} ({EventName}) became a dead letter: {ErrorCode}.", row.EventId, row.EventName, current.LastErrorCode);
             }
             else current.NextAttemptAt = now + DistributedEventRetry.Delay(current.AttemptCount, config);
         }

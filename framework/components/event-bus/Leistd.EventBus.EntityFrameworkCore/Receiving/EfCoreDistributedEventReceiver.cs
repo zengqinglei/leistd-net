@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Leistd.Data.Connections;
 using Leistd.EventBus.Distributed.Errors;
+using Leistd.EventBus.Distributed.Diagnostics;
 using Leistd.EventBus.Distributed.Subscriptions;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
@@ -130,6 +131,8 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
                 EventId = message.EventId, EventName = message.EventName, TenantId = message.TenantId,
                 Consumer = consumer.Consumer, OrderingKey = message.OrderingKey, OccurredAt = message.OccurredAt,
                 Payload = payload, Headers = new(message.Headers), Coordinates = new(message.Coordinates),
+                TraceId = DistributedEventTrace.FromHeaders(message.Headers),
+                CorrelationId = message.Headers.GetValueOrDefault(DistributedEventHeaders.CorrelationId),
                 ReceivedAt = receivedAt, LastModificationTime = now, NextAttemptAt = now.AddMinutes(1)
             };
             db.Set<DistributedEventInbox>().Add(row);
@@ -144,6 +147,8 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
 
     private async Task RejectMessageAsync(RawDistributedEvent raw, IncomingDistributedEvent? message, string reason, string error, CancellationToken ct)
     {
+        var coordinates = string.Join(";", raw.Coordinates.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}"));
+        if (coordinates.Length > 256) coordinates = coordinates[..256];
         try
         {
             using var change = tenant.Change(null);
@@ -154,14 +159,18 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
                 Transport = transport.Name, Reason = reason, Error = error.Length > 512 ? error[..512] : error,
                 EventName = message?.EventName, EventId = message?.EventId, RawBody = raw.Body.ToArray(),
                 Headers = new(raw.Headers), Coordinates = new(raw.Coordinates), ReceivedAt = raw.ReceivedAt,
+                TraceId = DistributedEventTrace.FromHeaders(message?.Headers ?? raw.Headers),
+                CorrelationId = (message?.Headers ?? raw.Headers).GetValueOrDefault(DistributedEventHeaders.CorrelationId),
                 LastModificationTime = clock.GetUtcNow().UtcDateTime
             });
             await unit.CompleteAsync(ct);
-            logger.LogWarning(new EventId(4104, "DistributedEventRejected"), "Distributed event {EventId} rejected: {Reason}.", message?.EventId, reason);
+            logger.LogWarning(new EventId(4104, "DistributedEventRejected"), "Distributed event {EventId} ({EventName}) rejected by {Transport}: {Reason}. Coordinates: {Coordinates}.",
+                message?.EventId, message?.EventName, transport.Name, reason, coordinates);
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            logger.LogError(new EventId(4105, "DistributedEventRejectPersistFailed"), exception, "The rejected distributed event could not be persisted.");
+            logger.LogError(new EventId(4105, "DistributedEventRejectPersistFailed"), exception, "Rejected distributed event {EventId} ({EventName}) from {Transport} could not be persisted: {Reason}. Coordinates: {Coordinates}.",
+                message?.EventId, message?.EventName, transport.Name, reason, coordinates);
             throw;
         }
     }

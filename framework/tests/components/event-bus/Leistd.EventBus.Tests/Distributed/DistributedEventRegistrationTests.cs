@@ -139,6 +139,53 @@ public sealed class DistributedEventRegistrationTests
         Assert.Contains("RetryMaxDelay", error.Message);
     }
 
+    /// <summary>上报默认值不需要部署配置；时间范围与实例标识错误指向宿主绑定的完整键。</summary>
+    [Theory]
+    [InlineData("defaults")]
+    [InlineData("zero-interval")]
+    [InlineData("timer-overflow")]
+    [InlineData("stale-too-short")]
+    [InlineData("blank-instance")]
+    [InlineData("long-instance")]
+    [InlineData("null-options")]
+    public void Transport_status_options_validate_defaults_and_report_the_bound_configuration_keys(string scenario)
+    {
+        var services = Services();
+        services.AddLoopbackEventTransport();
+        services.AddDistributedEventBus(options =>
+        {
+            switch (scenario)
+            {
+                case "zero-interval": options.TransportStatus.ReportInterval = TimeSpan.Zero; break;
+                case "timer-overflow": options.TransportStatus.ReportInterval = TimeSpan.MaxValue; break;
+                case "stale-too-short": options.TransportStatus.StaleAfter = options.TransportStatus.ReportInterval; break;
+                case "blank-instance": options.TransportStatus.Instance = "  "; break;
+                case "long-instance": options.TransportStatus.Instance = new string('x', 513); break;
+                case "null-options": options.TransportStatus = null!; break;
+            }
+        }, "App:Events");
+        using var provider = services.BuildServiceProvider();
+        if (scenario == "defaults")
+        {
+            var options = provider.GetRequiredService<IOptions<DistributedEventOptions>>().Value.TransportStatus;
+            Assert.Equal(TimeSpan.FromSeconds(15), options.ReportInterval);
+            Assert.Equal(TimeSpan.FromMinutes(1), options.StaleAfter);
+            Assert.Null(options.Instance);
+        }
+        else
+        {
+            var error = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<DistributedEventOptions>>().Value);
+            var key = scenario switch
+            {
+                "zero-interval" or "timer-overflow" => ":ReportInterval",
+                "stale-too-short" => ":StaleAfter",
+                "blank-instance" or "long-instance" => ":Instance",
+                _ => ""
+            };
+            Assert.Contains("App:Events:TransportStatus" + key, error.Message);
+        }
+    }
+
     private static ServiceCollection Services()
     {
         var services = new ServiceCollection();

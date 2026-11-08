@@ -9,6 +9,6 @@ public sealed record DistributedEventSendResult
     /// <summary>失败错误码，成功时为空。</summary>
     public string? ErrorCode { get; init; }
 
-    /// <summary>失败原因；框架保存时截断到 512 个字符。</summary>
+    /// <summary>已脱敏的失败原因，不得含凭据、连接串或载荷；框架保存时截断到 512 个字符。</summary>
     public string? Error { get; init; }
 }

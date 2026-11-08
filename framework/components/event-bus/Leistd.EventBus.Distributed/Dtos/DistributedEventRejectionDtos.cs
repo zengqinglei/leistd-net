@@ -15,7 +15,7 @@ public record GetDistributedEventRejectionsInputDto : PageRequest
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }
 
-    /// <summary>事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。</summary>
+    /// <summary>事件标识、TraceId 或 CorrelationId 精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
@@ -96,7 +96,7 @@ public sealed record DistributedEventRejectionFilterDto
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }
 
-    /// <summary>事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。</summary>
+    /// <summary>事件标识、TraceId 或 CorrelationId 精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
