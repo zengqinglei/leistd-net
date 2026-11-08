@@ -1,6 +1,6 @@
 # 待完成登录改用官方两步临时 Cookie
 
-状态：进行中 · 风险档：高 · 关联：待开 PR
+状态：已完成 · 风险档：高 · 关联：https://github.com/zengqinglei/leistd-net/pull/246
 
 ## 1. 需求
 
@@ -81,7 +81,7 @@
 
 ## 4. 结果
 
-按 §2 实施，框架无改动。
+交付：PR #246（合并提交 `83fd719e`），只改模板，随下一次 develop→main 发布。按 §2 实施，框架无改动。
 
 - 后端：`LocalSessionAuthenticationExtensions` 调官方 `AddTwoFactorUserIdCookie` 并按会话 Cookie 约定配置（部署名 `__Host-Http-CompanyName.ProjectName.TwoFactor`）；新增 Api 层 `PendingSignInCookie`（签入、读取、结束、第二步操作包装），方案名取 `IdentityConstants.TwoFactorUserIdScheme`。应用层不引用 ASP.NET Core，方案名常量因此放在 `PendingSignInCookie.Scheme`，`AuthenticationSchemeNames` 注释指向它。挑战记录加完整精度签发时刻，授权端点据此与重新认证证明比较（Cookie 票据的签发时间只到秒）。
 - 端点：新增 `GET /api/v1/auth/two-factor`（上下文，出参 `TwoFactorLoginOutputDto`）与 `POST /api/v1/auth/two-factor/cancel`；删除 `TwoFactorEmailCodeInputDto`、`TwoFactorPasskeyOptionsInputDto`，`TwoFactorLoginInputDto.Token` 与 `SessionLoginOutputDto.TwoFactorToken` 去掉；新错误码 `Auth:EmailCodeResendTooLate`（400，不计数）。授权端点有效会话旁残留的临时 Cookie 一并结束；协议退出真正完成时（含没有正式会话的直接退出）也结束待完成登录，等待确认时不动它。"剩余不足 N 不新发"在发码存储的发送间隔锁内、复用判定之后才检查，间隔内沿用旧码不受它限制。
