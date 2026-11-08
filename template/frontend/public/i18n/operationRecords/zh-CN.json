@@ -28,6 +28,7 @@
     "distributed-event.redelivered": "重投分布式事件 {{target}}",
     "distributed-event.replayed": "重放分布式事件 {{target}}",
     "distributed-event.redecoded": "重新解码拒收事件 {{target}}",
+    "distributed-event.redecode-requested": "转交拒收事件重新解码 {{target}}",
     "distributed-event.discarded": "丢弃拒收事件 {{target}}",
     //#endif
     "user.created": "创建了用户 {{target}}",
@@ -105,6 +106,7 @@
     "distributed-event.redelivered": "重投分布式事件",
     "distributed-event.replayed": "重放分布式事件",
     "distributed-event.redecoded": "重新解码拒收事件",
+    "distributed-event.redecode-requested": "转交拒收事件重新解码",
     "distributed-event.discarded": "丢弃拒收事件",
     //#endif
     "operation-records.exported": "导出了操作记录",

@@ -67,7 +67,8 @@
     "deadLettered": "Dead letter",
     "retrying": "Retrying",
     "redecoded": "Re-decoded",
-    "discarded": "Discarded"
+    "discarded": "Discarded",
+    "redecodePending": "Awaiting re-decode"
   },
   "health": {
     "healthy": "Healthy",
@@ -190,13 +191,13 @@
     },
     "consequence": {
       "redeliver": "The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.",
-      "redecode": "Re-decode with the current transport. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.",
+      "redecode": "Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.",
       "discard": "These raw messages will stop processing and will not reach consumers. Later messages are excluded."
     },
     "result": {
       "redeliver": "Redelivered {{count}} · Skipped {{skipped}}",
       "replay": "Replayed {{count}} · Skipped {{skipped}}",
-      "redecode": "Re-decoded {{count}} · Skipped {{skipped}}",
+      "redecode": "Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}",
       "discard": "Discarded {{count}} · Skipped {{skipped}}"
     }
   },

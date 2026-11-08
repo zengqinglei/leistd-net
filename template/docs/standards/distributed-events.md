@@ -18,11 +18,11 @@
 
 跨事件名不保序；多个事件共享版本序列且新状态完整覆盖旧状态时，可按租户与聚合维护共同水位忽略旧版本，增量事实不能仅凭该水位丢弃。完整契约见随包事件总线文档的“分布式一致性与顺序”。
 
-默认单进程同时写入、发送、接收与处理。拆出 Worker 时，写入进程关闭 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled`，Worker 开启并注册传输；关闭的进程不抢兜底任务锁。不要通过是否注册传输推断进程角色。
+默认单进程同时写入、发送、接收与处理。拆出 Worker 时，写入进程关闭 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled`，写入进程不注册传输及其健康检查，严格容器验证应能通过；Worker 开启并注册传输；关闭的进程不抢兜底任务锁。不要通过是否注册传输推断进程角色。
 
 默认使用 RabbitMQ 的持久单活队列。改用 Kafka 时，将 `AddRabbitMqEventTransport` 换成 `AddKafkaEventTransport`，健康检查同步换成 Kafka 入口，配置 `ConnectionStrings:Kafka` 并在 compose 登记 Kafka 服务、移除不再使用的 RabbitMQ。每个服务一个消费组，主题按事件名，键为排序键或 EventId；持久接收成功后才提交位点。
 
-保留期由 EF 的 `AddDistributedEventRetention` 独立绑定，默认终态保留十四天，Pending 不删除。去重窗口等于保留期；超出窗口的外部重投应由业务约束兜底。多副本部署需使用共享分布式锁。
+保留期由 EF 的 `AddDistributedEventRetention` 独立绑定，默认终态保留十四天，Pending 与待重新解码不删除。去重窗口等于保留期；超出窗口的外部重投应由业务约束兜底。多副本部署需使用共享分布式锁。
 
 ## 排障与管理
 
@@ -31,14 +31,14 @@
 | 待发积压 | 查看最旧时长、传输健康与连接凭据。通道故障是瞬态，修复后自动重试；超过默认一天的窗口进入死信。 |
 | 死信 | 查看稳定错误码和载荷；修复消息大小、schema 或路由后单条、勾选或按当前筛选重投。EventId 不变。 |
 | 处理失败 | 修复消费者后重放。重放重新获得五次处理预算；重放 Processed 会再次执行处理器。 |
-| 拒收 | 仅宿主查看集中拒收，修复传输解码、租户或载荷后重新解码；不可恢复时丢弃。临时连接或注册中心故障应重投，不记成坏消息。 |
+| 拒收 | 仅宿主查看集中拒收，修复传输解码、租户或载荷后重新解码；Api 没有同名传输时转交，显示待重新解码，由匹配的 Worker 完成；不可恢复时丢弃。临时连接或注册中心故障应重投，不记成坏消息。 |
 | 事件静默 | 对照事件目录的最近发送、接收、处理时刻和订阅消费者；无活动本身不代表失败，阈值由业务判断。 |
 
-只读权限 `App.DistributedEvents` 可看状态、目录与概要；管理权限 `App.DistributedEvents.Manage` 才能读取载荷、恢复、丢弃或发送测试事件。宿主按物理库查看，租户只看自己的发件箱与收件箱。按筛选恢复带首次加载时间上限，后续新记录不卷入；操作记录逐个成功批次记录条数和筛选。
+只读权限 `App.DistributedEvents` 可看状态、目录与概要；管理权限 `App.DistributedEvents.Manage` 才能读取载荷、恢复、丢弃或发送测试事件。宿主按物理库查看，租户只看自己的发件箱与收件箱。按筛选恢复带首次加载时间上限，后续新记录不卷入；操作记录在调用方身份与租户下逐个已提交批次记录条数、目标租户和筛选，不被调用方外层事务回滚；跨库更新与本地审计不承诺原子性。重新解码的已转交计数表示请求已登记，未表示完成；转交与同步完成分别留痕。
 
 正文不出接口时，在 `backend/src/CompanyName.ProjectName.Api/Hosting/ComponentEndpoints.cs` 的 `MapDistributedEvents(options => …)` 中设 `options.EnablePayloadEndpoints = false`；三个 `/payload` 路由将不再映射，界面按 `/status` 的 `payloadEnabled` 隐藏载荷入口。
 
-发送内置测试事件应看到同一 EventId 的 Sent 发件箱与 Processed 收件箱。外部传输不允许自发自收时关闭 `TestEvent:Enabled`，页面随之隐藏测试入口。链路使用 traceparent 与 leistd-correlation-id，可在详情消息头中核对。
+发送内置测试事件应看到同一 EventId 的 Sent 发件箱与 Processed 收件箱。外部传输不允许自发自收时关闭 `TestEvent:Enabled`，页面随之隐藏测试入口。链路使用 traceparent 与 leistd-correlation-id，可在详情消息头中核对；event.publish、event.send 与 event.process 共用 TraceId，发送与处理恢复各自的关联标识。
 
 ## 连接与部署
 

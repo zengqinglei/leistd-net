@@ -67,7 +67,8 @@
     "deadLettered": "死信",
     "retrying": "重试中",
     "redecoded": "已重新解码",
-    "discarded": "已丢弃"
+    "discarded": "已丢弃",
+    "redecodePending": "待重新解码"
   },
   "health": {
     "healthy": "健康",
@@ -190,13 +191,13 @@
     },
     "consequence": {
       "redeliver": "事件 ID 保持不变，消费方按 ID 去重。请先处理失败原因；之后新产生的记录不受影响，记录将分批回到待发送并由调度任务发出。",
-      "redecode": "使用当前传输重新解码，成功后写入目标租户收件箱；无法解码的记录仍为待处理。之后新收到的消息不受影响。",
+      "redecode": "由匹配的接收端重新解码；Api 未注册对应传输时，转交 Worker。成功后进入目标租户收件箱，无法解码的消息仍待处理，不包含稍后收到的消息。",
       "discard": "这些原始消息将停止处理，不会投递给消费者。之后新收到的消息不受影响。"
     },
     "result": {
       "redeliver": "已重投 {{count}} 条 · 跳过 {{skipped}} 条",
       "replay": "已重放 {{count}} 条 · 跳过 {{skipped}} 条",
-      "redecode": "已重新解码 {{count}} 条 · 跳过 {{skipped}} 条",
+      "redecode": "已重新解码 {{count}} 条 · 已转交 {{deferred}} 条 · 跳过 {{skipped}} 条",
       "discard": "已丢弃 {{count}} 条 · 跳过 {{skipped}} 条"
     }
   },

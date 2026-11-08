@@ -183,7 +183,7 @@ export class DistributedEvents {
       ? ['pending', 'sent', 'deadLettered']
       : this.view() === 'inbox'
         ? ['pending', 'processed', 'failed']
-        : ['pending', 'redecoded', 'discarded'],
+        : ['pending', 'redecoded', 'discarded', 'redecodePending'],
   );
   readonly facetKeys = computed(() =>
     this.view() === 'catalog'
@@ -537,7 +537,8 @@ export class DistributedEvents {
             tap((result) => {
               toast.success(
                 this.t(`distributedEvents.confirmation.result.${action}`, {
-                  count: result.affectedCount,
+                  count: result.affectedCount - result.deferredCount,
+                  deferred: result.deferredCount,
                   skipped: result.skipped.length,
                 }),
               );

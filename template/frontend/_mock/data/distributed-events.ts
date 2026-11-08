@@ -247,6 +247,22 @@ export const DISTRIBUTED_EVENT_REJECTIONS: DistributedEventRejectionDetailOutput
     headers: {},
     coordinates: {},
   },
+  {
+    record: {
+      id: '3',
+      transport: 'RabbitMQ',
+      coordinates: { queue: 'customer-events' },
+      reason: 'invalid-envelope',
+      error: 'Awaiting the receiver decoder.',
+      status: 'redecodePending',
+      redecodeCount: 0,
+      receivedAt: ago(180),
+      resolvedAt: null,
+      lastModificationTime: ago(30),
+    },
+    headers: {},
+    coordinates: { queue: 'customer-events' },
+  },
 ];
 
 /** 单独保存，概要与详情 API 不会意外返回载荷。 */

@@ -3,7 +3,8 @@ import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
 /** 记录标识为十进制字符串，避免 long 超出 JavaScript 安全整数范围；时间均为 UTC ISO 字符串。 */
 export type DistributedEventInboxStatus = 'pending' | 'processed' | 'failed';
 export type DistributedEventOutboxStatus = 'pending' | 'sent' | 'deadLettered';
-export type DistributedEventRejectionStatus = 'pending' | 'redecoded' | 'discarded';
+export type DistributedEventRejectionStatus =
+  'pending' | 'redecoded' | 'discarded' | 'redecodePending';
 export type DistributedEventRecoverySkipReason = 'not-found' | 'invalid-state' | 'redecode-failed';
 export type DistributedEventTransportStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
@@ -162,6 +163,8 @@ export interface DistributedEventRawMessageOutputDto {
 /** 恢复结果；按条件分批提交后返回累计条数。 */
 export interface DistributedEventRecoveryOutputDto {
   affectedCount: number;
+  /** 已转交重新解码的数量，属于 affectedCount 的子集。 */
+  deferredCount: number;
   /** 未改动的标识和原因；按条件不返回不存在项。 */
   skipped: DistributedEventRecoverySkipDto[];
 }

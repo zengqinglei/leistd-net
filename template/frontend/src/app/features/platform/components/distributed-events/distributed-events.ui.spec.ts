@@ -163,7 +163,7 @@ describe('DistributedEvents UI R1', () => {
             getOutbox: () => of({ record: OUTBOX, headers: {} }),
             getInbox: () => of({ record: INBOX, headers: {}, coordinates: {} }),
             getRejection: () => of({ record: REJECTION, headers: {}, coordinates: {} }),
-            redeliver: () => of({ affectedCount: 2, skipped: [] }),
+            redeliver: () => of({ affectedCount: 2, deferredCount: 0, skipped: [] }),
           },
         },
         //#if (LocalIdentity && IncludeMultiTenancy)

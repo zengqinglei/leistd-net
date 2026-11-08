@@ -69,6 +69,7 @@ export const STATUS_VARIANTS = {
   failed: 'destructive',
   redecoded: 'success',
   discarded: 'secondary',
+  redecodePending: 'warning',
 } as const;
 
 /** 运维动作的显示名与记录类型保持一致。 */
@@ -163,6 +164,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.state.retrying': 'Retrying',
   'distributedEvents.state.redecoded': 'Re-decoded',
   'distributedEvents.state.discarded': 'Discarded',
+  'distributedEvents.state.redecodePending': 'Awaiting re-decode',
   'distributedEvents.health.healthy': 'Healthy',
   'distributedEvents.health.degraded': 'Degraded',
   'distributedEvents.health.unhealthy': 'Unhealthy',
@@ -268,12 +270,13 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.consequence.redeliver':
     'The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.',
   'distributedEvents.confirmation.consequence.redecode':
-    'Re-decode with the current transport. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.',
+    'Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.',
   'distributedEvents.confirmation.consequence.discard':
     'These raw messages will stop processing and will not reach consumers. Later messages are excluded.',
   'distributedEvents.confirmation.result.redeliver': 'Redelivered {{count}} · Skipped {{skipped}}',
   'distributedEvents.confirmation.result.replay': 'Replayed {{count}} · Skipped {{skipped}}',
-  'distributedEvents.confirmation.result.redecode': 'Re-decoded {{count}} · Skipped {{skipped}}',
+  'distributedEvents.confirmation.result.redecode':
+    'Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}',
   'distributedEvents.confirmation.result.discard': 'Discarded {{count}} · Skipped {{skipped}}',
 };
 //#endif

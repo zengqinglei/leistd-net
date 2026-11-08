@@ -6,6 +6,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
+import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject } from 'rxjs';
 
 import { DistributedEvents } from './distributed-events';
@@ -71,8 +72,10 @@ describe('DistributedEvents page', () => {
       getOutboxPayload: vi.fn().mockReturnValue(of({ payload: '{}' })),
       getInboxPayload: vi.fn().mockReturnValue(of({ payload: '{}' })),
       getRejectionPayload: vi.fn().mockReturnValue(of({ rawBody: '' })),
-      redeliver: vi.fn().mockReturnValue(of({ affectedCount: 1200, skipped: [] })),
-      replay: vi.fn().mockReturnValue(of({ affectedCount: 1, skipped: [] })),
+      redeliver: vi
+        .fn()
+        .mockReturnValue(of({ affectedCount: 1200, deferredCount: 0, skipped: [] })),
+      replay: vi.fn().mockReturnValue(of({ affectedCount: 1, deferredCount: 0, skipped: [] })),
       redecode: vi.fn(),
       discard: vi.fn(),
       sendTestEvent: vi.fn().mockReturnValue(of({ eventId: 'test-event' })),
@@ -97,7 +100,15 @@ describe('DistributedEvents page', () => {
         ...provideTranslocoTesting(['en'], {
           getTranslation: () =>
             of({
-              distributedEvents: { confirm: '{{scope}} | {{count}} | {{filter}} | {{before}}' },
+              distributedEvents: {
+                confirm: '{{scope}} | {{count}} | {{filter}} | {{before}}',
+                confirmation: {
+                  result: {
+                    redecode:
+                      'Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}',
+                  },
+                },
+              },
             }),
         }),
         //#endif
@@ -219,6 +230,32 @@ describe('DistributedEvents page', () => {
     expect(options.message).toContain('execute the handler again');
     //#endif
     expect(service.replay).not.toHaveBeenCalled();
+  });
+
+  it('reports handoff separately from completed re-decodes and exposes the queued status', async () => {
+    await setup(true, null, { view: 'rejections', status: 'pending' });
+    const notice = vi.spyOn(toast, 'success').mockReturnValue('handoff');
+    try {
+      const row: Dto.DistributedEventRejectionOutputDto = {
+        id: '7',
+        transport: 'RabbitMQ',
+        coordinates: {},
+        reason: 'invalid-envelope',
+        error: 'Safe reason.',
+        status: 'pending',
+        redecodeCount: 0,
+        receivedAt: '2026-11-09T00:00:00Z',
+        lastModificationTime: '2026-11-09T00:00:00Z',
+      };
+      service.redecode.mockReturnValue(of({ affectedCount: 3, deferredCount: 2, skipped: [] }));
+      await component.recover('single', row);
+      const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+      options.action!().subscribe();
+      expect(notice).toHaveBeenCalledWith('Re-decoded 1 · Handed off 2 · Skipped 0');
+      expect(component.states()).toContain('redecodePending');
+    } finally {
+      notice.mockRestore();
+    }
   });
 
   it('cancels a previous payload request when the opened record changes', async () => {

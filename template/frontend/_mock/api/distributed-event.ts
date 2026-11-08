@@ -95,7 +95,7 @@ function list(kind: Kind, req: MockRequest) {
       ? ['pending', 'sent', 'deadLettered']
       : kind === 'inbox'
         ? ['pending', 'processed', 'failed']
-        : ['pending', 'redecoded', 'discarded'];
+        : ['pending', 'redecoded', 'discarded', 'redecodePending'];
   if (queryValues(req)['status'] && !statuses.includes(queryValues(req)['status']))
     throw new MockException(400);
   const items = records(kind)
@@ -146,7 +146,9 @@ function status(req: MockRequest): Dto.DistributedEventStatusOutputDto {
     failedInbox: inbox.filter((item) => item.status === 'failed').length,
     pendingRejections:
       getMockSessionTenantKey() === 'host'
-        ? DISTRIBUTED_EVENT_REJECTIONS.filter((item) => item.record.status === 'pending').length
+        ? DISTRIBUTED_EVENT_REJECTIONS.filter(
+            (item) => item.record.status === 'pending' || item.record.status === 'redecodePending',
+          ).length
         : null,
     sentLast24Hours: outbox.filter((item) => recent(item.sentAt)).length,
     processedLast24Hours: inbox.filter((item) => recent(item.processedAt)).length,
@@ -228,7 +230,11 @@ function recover(
             matches(item.record, filter!, item.headers),
         )
         .map((item) => item.record.id);
-  const result: Dto.DistributedEventRecoveryOutputDto = { affectedCount: 0, skipped: [] };
+  const result: Dto.DistributedEventRecoveryOutputDto = {
+    affectedCount: 0,
+    deferredCount: 0,
+    skipped: [],
+  };
   for (const id of targets) {
     const row = records(kind).find((item) => item.record.id === id && allowed(item.record))?.record;
     if (!row || !eligible(row)) {

@@ -124,6 +124,9 @@ public static class OperationRecordActions
     /// <summary>重新解码拒收。</summary>
     public const string DistributedEventRedecoded = "distributed-event.redecoded";
 
+    /// <summary>转交拒收重新解码。</summary>
+    public const string DistributedEventRedecodeRequested = "distributed-event.redecode-requested";
+
     /// <summary>丢弃拒收。</summary>
     public const string DistributedEventDiscarded = "distributed-event.discarded";
 

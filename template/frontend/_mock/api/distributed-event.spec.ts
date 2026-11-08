@@ -169,6 +169,22 @@ describe('distributed event mock', () => {
     expect(row.status).toBe('discarded');
   });
 
+  it('lists queued re-decodes as unresolved and prevents a duplicate recovery request', () => {
+    const row = DISTRIBUTED_EVENT_REJECTIONS[0].record;
+    row.status = 'redecodePending';
+    const page = call('GET /api/v1/distributed-events/rejections', {
+      queryParams: { status: 'redecodePending' },
+    });
+    expect(page.items.map((item) => item.id)).toContain(row.id);
+    expect(call('GET /api/v1/distributed-events/status').pendingRejections).toBeGreaterThan(0);
+    const result = call('POST /api/v1/distributed-events/rejections/redecode', {
+      body: { ids: [row.id] },
+    });
+    expect(result.affectedCount).toBe(0);
+    expect(result.deferredCount).toBe(0);
+    expect(result.skipped).toEqual([{ id: row.id, reasonCode: 'invalid-state' }]);
+  });
+
   it('allows read-only metadata while denying payload and writes', () => {
     PERMISSION_GRANTS['Role/role_member'].permissionNames = [PERMISSIONS.distributedEvents.default];
     setMockSessionUserId('user_demo');

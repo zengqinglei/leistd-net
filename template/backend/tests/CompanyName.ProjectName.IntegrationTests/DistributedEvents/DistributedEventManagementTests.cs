@@ -7,6 +7,10 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Authorization.Constants;
 using Leistd.EventBus.Distributed.Events;
+using Leistd.EventBus.Distributed.Options;
+using Leistd.EventBus.Distributed.Transport;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.EventBus.Distributed.Stores;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.UnitOfWork;
@@ -94,6 +98,51 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
         Assert.Contains("message-too-large", name);
         Assert.Contains("eventName=invoice.issued", name);
         Assert.DoesNotContain("{", name);
+#endif
+    }
+
+    /// <summary>仅发布 Api 经真实端点接受转交，独立动作审计不误记为已解码。</summary>
+    [Fact]
+    public async Task A_writer_only_api_hands_off_redecode_and_records_the_request_action()
+    {
+        using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IDistributedEventTransport>();
+            services.PostConfigure<DistributedEventOptions>(options =>
+            { options.Outbox.DispatchEnabled = options.Inbox.ReceiveEnabled = options.Inbox.ProcessingEnabled = false; });
+        }));
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        long id;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            using var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var db = await scope.ServiceProvider.GetRequiredService<IDbContextProvider<MyProjectDbContext>>().GetDbContextAsync();
+            var row = new DistributedEventRejection
+            {
+                Transport = "ExternalWorker", Reason = "invalid-envelope", Error = "Safe decoder reason.",
+                RawBody = [1, 2], ReceivedAt = DateTime.UtcNow, LastModificationTime = DateTime.UtcNow
+            };
+            db.Add(row);
+            await unit.CompleteAsync();
+            id = row.Id;
+        }
+        using var response = await admin.Client.PostAsJsonAsync($"{Root}/rejections/redecode", new { Ids = new[] { id.ToString() } });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, result.RootElement.GetProperty("affectedCount").GetInt64());
+        Assert.Equal(1, result.RootElement.GetProperty("deferredCount").GetInt64());
+        using var detail = JsonDocument.Parse(await admin.Client.GetStringAsync($"{Root}/rejections/{id}"));
+        Assert.Equal("redecodePending", detail.RootElement.GetProperty("record").GetProperty("status").GetString());
+#if (IncludeOperationRecords)
+        using var audit = JsonDocument.Parse(await admin.Client.GetStringAsync(
+            $"/api/v1/operation-records?actions={OperationRecordActions.DistributedEventRedecodeRequested}&outcome=succeeded"));
+        var entry = Assert.Single(audit.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Contains("tenant=host", entry.GetProperty("targetName").GetString());
+#else
+        var entry = Assert.Single(host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot(),
+            entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.DistributedEventRedecodeRequested)
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded");
+        Assert.Contains("tenant=host", OperationRecordLogCapture.Field(entry, "OperationTargetName") as string);
 #endif
     }
 
