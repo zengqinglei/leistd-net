@@ -23,6 +23,7 @@ import {
   restricted,
   signIn,
 } from './support/accounts';
+import { applyRunnerContainerOwnership } from './support/container-ownership';
 import { json } from './support/http';
 
 // 名称随项目生成；拼路径而不是写成一个长字面量，换了项目名也不改变格式化结果
@@ -65,7 +66,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   try {
     // Testcontainers 只认 DOCKER_HOST 与默认套接字；未设置时沿用 docker CLI 当前上下文的端点（与后端集成测试一致）
     process.env['DOCKER_HOST'] ??= dockerContextHost();
-    database = await new PostgreSqlContainer('postgres:18-alpine').start();
+    database = await applyRunnerContainerOwnership(
+      new PostgreSqlContainer('postgres:18-alpine'),
+    ).start();
     const connection = [
       `Host=${database.getHost()}`,
       `Port=${database.getPort()}`,

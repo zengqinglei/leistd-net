@@ -15,6 +15,11 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.Distributed;
+using Leistd.EventBus.Distributed.Transport;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+#endif
 #if (!LocalIdentity)
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -95,6 +100,29 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
 #endif
 
+#if (IncludeDistributedEvents)
+    private static void UseLoopbackEventTransport(IServiceCollection services)
+    {
+        var rabbit = new ServiceCollection();
+        Leistd.EventBus.RabbitMQ.DependencyInjection.AddRabbitMqEventTransport(rabbit);
+        foreach (var registration in rabbit.Where(descriptor => descriptor.ServiceType == typeof(IHostedService)
+                     || typeof(IDistributedEventTransport).IsAssignableFrom(descriptor.ServiceType)))
+        {
+            foreach (var current in services.Where(descriptor => descriptor.ServiceType == registration.ServiceType
+                         && (descriptor.ServiceType != typeof(IHostedService)
+                             || descriptor.ImplementationType == registration.ImplementationType)).ToArray())
+                services.Remove(current);
+        }
+        services.Configure<HealthCheckServiceOptions>(options =>
+        {
+            foreach (var check in options.Registrations.Where(check => check.Name == "event-bus-rabbitmq").ToArray())
+                options.Registrations.Remove(check);
+        });
+        services.AddLoopbackEventTransport();
+        services.AddHealthChecks().AddLoopbackEventTransport(tags: ["ready"]);
+    }
+#endif
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // 专用环境而不是 Development：开发环境会自动加载开发者本机的 user-secrets 与 appsettings.Development.json，
@@ -141,6 +169,10 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 // 每个宿主都要播种管理员、每次登录都要校验口令；生产工作因子让这两步占去集成测试的大半 CPU。
                 // 哈希格式与默认值的契约由 PasswordHashingTests 按生产默认值验证
                 ["PasswordHash:IterationCount"] = "1000",
+#if (IncludeDistributedEvents)
+                // 保留生产选项校验；传输与托管消费循环由测试替换成回环。
+                ["ConnectionStrings:RabbitMQ"] = "amqp://localhost:5672",
+#endif
 #if (LocalIdentity)
                 // 通行密钥的依赖方：软件认证器按它造响应（SoftwareAuthenticator.Origin）
                 ["Passkeys:RelyingPartyId"] = "localhost",
@@ -159,6 +191,9 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         // 作用于工厂 → 覆盖所有测试类（Health / Localization / Notifications 等），而非逐类修补。
         builder.ConfigureServices(services =>
         {
+#if (IncludeDistributedEvents)
+            UseLoopbackEventTransport(services);
+#endif
 #if (!IncludeOperationRecords)
             services.AddSingleton<OperationRecordLogCapture>();
             services.AddSingleton<ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());

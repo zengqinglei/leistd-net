@@ -143,6 +143,9 @@
       //#if (IncludeWebhooks)
       "webhooks": "Webhook",
       //#endif
+      //#if (IncludeDistributedEvents)
+      "distributedEvents": "分布式事件",
+      //#endif
       "systemSettings": "系统设置",
       "operationRecords": "操作记录",
       "groupIdentity": "身份与访问",

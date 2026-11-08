@@ -19,6 +19,9 @@ import {
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
+  //#if (IncludeDistributedEvents)
+  lucideRadioTower,
+  //#endif
   //#if (IncludeWebhooks)
   lucideWebhook,
   //#endif
@@ -57,6 +60,9 @@ import { UserMenu } from '../user-menu/user-menu';
     lucideBuilding2, lucideCheck, lucideChevronsUpDown, lucideCog, lucideHouse,
     lucideGauge, lucideUsers, lucideIdCard, lucideLayers, lucideShieldCheck, lucideSettings,
     lucideDatabase, lucideSearch,
+    //#if (IncludeDistributedEvents)
+    lucideRadioTower,
+    //#endif
     //#if (IncludeWebhooks)
     lucideWebhook,
     //#endif

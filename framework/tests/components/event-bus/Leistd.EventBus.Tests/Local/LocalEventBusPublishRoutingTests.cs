@@ -5,7 +5,7 @@ using Leistd.EventBus.EventHandlers;
 using Leistd.EventBus.Events;
 using Leistd.EventBus.Abstractions;
 
-namespace Leistd.EventBus.Tests;
+namespace Leistd.EventBus.Tests.Local;
 
 /// <summary>本地事件按<b>运行时类型</b>路由到具体 handler。</summary>
 /// <remarks>

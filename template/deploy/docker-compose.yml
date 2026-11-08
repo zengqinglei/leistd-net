@@ -72,6 +72,11 @@ services:
       - Leistd__ServiceClients__Identity__TokenExchange__Scope=${IDENTITY_API_RESOURCE:?IDENTITY_API_RESOURCE is required for a Resource service}
 #endif
 
+#if (IncludeDistributedEvents)
+      # URI 使用下方服务的账号，主机名 rabbitmq；含特殊字符的账号或口令须进行 URI 编码。
+      - ConnectionStrings__RabbitMQ=${RABBITMQ_CONNECTION_STRING:?RABBITMQ_CONNECTION_STRING is required}
+#endif
+
       # Redis Configuration — matches the bundled redis service below (no password, no TLS).
       # Production password: set it on BOTH sides —
       #   value: redis:6379,password=YourRedisPassword,abortConnect=false
@@ -149,6 +154,10 @@ services:
         condition: service_healthy
       db-migrator:
         condition: service_completed_successfully
+#if (IncludeDistributedEvents)
+      rabbitmq:
+        condition: service_healthy
+#endif
       redis:
         condition: service_healthy
 
@@ -172,6 +181,24 @@ services:
 
     networks:
       - companyname-projectname-network
+
+#if (IncludeDistributedEvents)
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - companyname-projectname-network
+#endif
 
   db:
     image: postgres:18-alpine
@@ -227,6 +254,10 @@ volumes:
     driver: local
   redis-data:
     driver: local
+#if (IncludeDistributedEvents)
+  rabbitmq-data:
+    driver: local
+#endif
 
 networks:
   companyname-projectname-network:

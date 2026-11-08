@@ -24,6 +24,12 @@
     "failed": "被拒绝"
   },
   "actions": {
+    //#if (IncludeDistributedEvents)
+    "distributed-event.redelivered": "重投分布式事件 {{target}}",
+    "distributed-event.replayed": "重放分布式事件 {{target}}",
+    "distributed-event.redecoded": "重新解码拒收事件 {{target}}",
+    "distributed-event.discarded": "丢弃拒收事件 {{target}}",
+    //#endif
     "user.created": "创建了用户 {{target}}",
     "user.updated": "更新了用户 {{target}}",
     "user.deleted": "删除了用户 {{target}}",
@@ -95,6 +101,12 @@
     "tenant.admin-restored": "恢复了租户管理员 {{target}}"
   },
   "actionsNoTarget": {
+    //#if (IncludeDistributedEvents)
+    "distributed-event.redelivered": "重投分布式事件",
+    "distributed-event.replayed": "重放分布式事件",
+    "distributed-event.redecoded": "重新解码拒收事件",
+    "distributed-event.discarded": "丢弃拒收事件",
+    //#endif
     "operation-records.exported": "导出了操作记录",
     "setting.test-email-sent": "发送了测试邮件",
     "user.created": "创建用户",

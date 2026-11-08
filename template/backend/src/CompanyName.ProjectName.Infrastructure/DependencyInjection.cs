@@ -76,6 +76,10 @@ using Leistd.Auditing.EntityFrameworkCore.Interceptors;
 #endif
 using Leistd.Data.Connections;
 
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.EntityFrameworkCore;
+#endif
+
 namespace CompanyName.ProjectName.Infrastructure;
 
 /// <summary>提供基础设施层服务注册。</summary>
@@ -110,6 +114,10 @@ public static class DependencyInjection
         services.AddNotificationsEfCore<MyProjectDbContext>();
         // 旧通知的保留期清理（默认开启：已读 90 天、未读 365 天，配置节 Leistd:Notifications:Retention）
         services.AddNotificationRetention<MyProjectDbContext>();
+#endif
+#if (IncludeDistributedEvents)
+        services.AddDistributedEventBusEfCore<MyProjectDbContext>();
+        services.AddDistributedEventRetention<MyProjectDbContext>();
 #endif
 #if (IncludeWebhooks)
         // 出站 Webhook：发布器与订阅存储、提交后立即投递与兜底扫描（集群任务 webhooks.dispatch）、投递统计。

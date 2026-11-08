@@ -1,4 +1,4 @@
-import { formatRelativeTime } from './relative-time';
+import { formatElapsedTime, formatRelativeTime } from './relative-time';
 import { formatAppDate } from '../pipes/app-date-pipe';
 
 /** 相对时间：按展示时区判今天与昨天，午夜前后与时钟稍快都不出错。 */
@@ -66,4 +66,14 @@ describe('formatRelativeTime', () => {
     expect(lastYear.kind === 'text' && lastYear.text).toContain('2025');
     expect(lastYear.kind === 'text' && lastYear.text).not.toMatch(/\d{1,2}:\d{2}/);
   });
+});
+
+describe('formatElapsedTime', () => {
+  it('formats minutes and days using the locale rather than raw seconds', () => {
+    expect(formatElapsedTime(390, 'en')).toBe('6 minutes');
+    expect(formatElapsedTime(90116, 'en')).toBe('1 day');
+    expect(formatElapsedTime(390, 'zh-CN')).toBe('6分钟');
+  });
+  it('does not expose a negative elapsed time', () =>
+    expect(formatElapsedTime(-12, 'en')).toBe('0 seconds'));
 });

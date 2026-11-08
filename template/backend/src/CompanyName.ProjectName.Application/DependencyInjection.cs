@@ -81,6 +81,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Subjects;
 
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.Distributed.Events;
+#endif
+
 namespace CompanyName.ProjectName.Application;
 
 public static class DependencyInjection
@@ -172,6 +176,10 @@ public static class DependencyInjection
         // 对外发布的事件类型；发布未登记的类型会抛出，订阅也只能选登记过的类型
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWebhookDefinitionProvider, WebhookDefinitionProvider>());
 #endif
+#endif
+
+#if (IncludeDistributedEvents)
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<DistributedEventManagedEvent>, DistributedEventManagedAuditHandler>());
 #endif
 
         services.AddApplicationDefinitions();

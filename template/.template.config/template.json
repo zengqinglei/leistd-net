@@ -265,6 +265,12 @@
       "description": "是否包含出站 Webhook（订阅管理、Standard Webhooks 签名投递、持久重试与自动停用、投递日志与手动重发、投递统计与后台页面）。全部 ServiceRole 有效；本地身份另带示例事件 user.created",
       "defaultValue": "false"
     },
+    "IncludeDistributedEvents": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含分布式事件（事务发件箱、收件箱、拒收恢复、RabbitMQ 传输与后台管理页面）。全部 ServiceRole 有效",
+      "defaultValue": "false"
+    },
     "IncludeExternalLogin": {
       "type": "parameter",
       "datatype": "bool",
@@ -367,6 +373,12 @@
       "valueTransform": "lowerCaseInvariant",
       "replaces": "__LEISTD_TEMPLATE_PARAMETER_INCLUDE_WEBHOOKS__"
     },
+    "MarkerIncludeDistributedEvents": {
+      "type": "derived",
+      "valueSource": "IncludeDistributedEvents",
+      "valueTransform": "lowerCaseInvariant",
+      "replaces": "__LEISTD_TEMPLATE_PARAMETER_INCLUDE_DISTRIBUTED_EVENTS__"
+    },
     "MarkerIncludeExternalLogin": {
       "type": "derived",
       "valueSource": "IncludeExternalLogin",
@@ -420,6 +432,7 @@
           "condition": "!LocalIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Webhooks/Provider/WebhookDefinitionProvider.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/DistributedEvents/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/UserCreatedWebhookTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/WebhookManagementEndpointTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Webhooks/WebhookSubscriptionAuditTests.cs",
@@ -974,6 +987,25 @@
           "condition": "!(RemoteTokenAuth || (LocalIdentity && IncludeMultiTenancy))",
           "exclude": [
             "docs/operations/runbooks/admin-recovery.md"
+          ]
+        },
+        {
+          "condition": "!IncludeDistributedEvents",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/DistributedEvents/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Identity/*_AddDistributedEvents*.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Resource/*_AddDistributedEvents*.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/DistributedEvents/**",
+            "docs/standards/distributed-events.md",
+            "frontend/src/app/features/platform/components/distributed-events/**",
+            "frontend/src/app/features/platform/services/distributed-event-service.ts",
+            "frontend/src/app/features/platform/services/distributed-event-service.spec.ts",
+            "frontend/src/app/features/platform/dtos/distributed-event.dto.ts",
+            "frontend/_mock/api/distributed-event.ts",
+            "frontend/_mock/api/distributed-event.spec.ts",
+            "frontend/_mock/data/distributed-events.ts",
+            "frontend/public/i18n/distributed-events/**",
+            "frontend/e2e/distributed-events.e2e.ts"
           ]
         }
       ]

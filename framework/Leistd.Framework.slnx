@@ -45,6 +45,11 @@
   </Folder>
   <Folder Name="/components/event-bus/">
     <Project Path="components/event-bus/Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />
+    <Project Path="components/event-bus/Leistd.EventBus.Distributed/Leistd.EventBus.Distributed.csproj" />
+    <Project Path="components/event-bus/Leistd.EventBus.EntityFrameworkCore/Leistd.EventBus.EntityFrameworkCore.csproj" />
+    <Project Path="components/event-bus/Leistd.EventBus.AspNetCore/Leistd.EventBus.AspNetCore.csproj" />
+    <Project Path="components/event-bus/Leistd.EventBus.RabbitMQ/Leistd.EventBus.RabbitMQ.csproj" />
+    <Project Path="components/event-bus/Leistd.EventBus.Kafka/Leistd.EventBus.Kafka.csproj" />
     <Project Path="components/event-bus/Leistd.EventBus.Local/Leistd.EventBus.Local.csproj" />
   </Folder>
   <Folder Name="/components/exception-handling/">

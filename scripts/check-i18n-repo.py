@@ -7,6 +7,7 @@
      `Resources/en.json` 与 `zh-CN.json` 里都有该码的句子——宿主资源里的同名键不算，那是覆盖，不是随包译文。
      错误码文件不限于 `*ErrorCodes.cs`：`Errors/` 目录下的文件与任何 `*Codes.cs`（如 `OperationFailureCodes`）都算；
      完全没有资源目录的包同样要报，而不是因为"没有资源可比"被跳过。
+     已登记的持久消息原因清单中，小写协议值不属于业务错误码；同文件的 Owner:Name 仍检查。
   3. 宿主资源不复制组件译文：同名键会覆盖组件自带的句子，组件改文案时旧句子被静默钉死。
   4. 不启用多语言时组件内联的英文表（ENGLISH / ENGLISH_VALIDATION）与英文词条逐键相同，覆盖模板用到的键，
      校验提示表覆盖全部 `validation.*`。两个分支只在模板源码里同时存在，生成项目里无从比对。
@@ -38,6 +39,14 @@ HOST_OVERRIDE_ALLOWED = {
     'Tenant:DedicatedDatabaseUnreachable',
 }
 FRAMEWORK_CODE = re.compile(r'[A-Z][A-Za-z0-9]*:[A-Z][A-Za-z0-9]*')
+# 这四份清单记录持久消息的失败／恢复原因，值可由传输提供，不是 BusinessException 本地化键。
+# 只排除已知清单内的小写协议值；同文件新增 Owner:Name 业务码仍须提供随包译文。
+PROTOCOL_CATALOGS = {
+    f'event-bus/Leistd.EventBus.Distributed/Errors/{name}.cs'
+    for name in ('DistributedEventInboxFailureCodes', 'DistributedEventOutboxFailureCodes',
+                 'DistributedEventRecoverySkipReasons', 'DistributedEventRejectionReasons')
+}
+PROTOCOL_REASON = re.compile(r'[a-z]+(?:-[a-z]+)*')
 ENTRY = re.compile(r'''(?:['"])?([\w.]+)(?:['"])?:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")\s*,''')
 
 
@@ -46,7 +55,9 @@ def framework_error_codes(components):
     return [(path, m[1], m[2])
             for path in project.source_files(components, {'.cs'})
             if path.name.endswith('Codes.cs') or 'Errors' in path.relative_to(components).parts[:-1]
-            for m in project.CONSTANT.finditer(project.without_doc_comments(path.read_text(encoding='utf-8')))]
+            for m in project.CONSTANT.finditer(project.without_doc_comments(path.read_text(encoding='utf-8')))
+            if not (path.relative_to(components).as_posix() in PROTOCOL_CATALOGS
+                    and PROTOCOL_REASON.fullmatch(m[2]))]
 
 
 def owning_package(path, components):
@@ -179,6 +190,14 @@ def self_test():
     host_en = 'template/backend/src/Demo.Api/Resources/en.json'
     host_zh = 'template/backend/src/Demo.Api/Resources/zh-CN.json'
     component_zh = f'{component}/Resources/zh-CN.json'
+    protocol_package = 'framework/components/event-bus/Leistd.EventBus.Distributed'
+    protocol_file = f'{protocol_package}/Errors/DistributedEventRecoverySkipReasons.cs'
+
+    def protocol_catalog(value):
+        return lambda root: [
+            write(f'{protocol_package}/Leistd.EventBus.Distributed.csproj', '<Project />')(root),
+            write(protocol_file, f'public static class DistributedEventRecoverySkipReasons {{ public const string Reason = "{value}"; }}')(root),
+        ]
     def host_copies(key):
         def apply(root):
             edit(host_en, '"User:NotFound"', f'"{key}": "x",\n    "User:NotFound"')(root)
@@ -190,6 +209,7 @@ def self_test():
     valid = [
         ('fixture as written', lambda root: None),
         ('allow-listed host override', host_copies('Tenant:DedicatedDatabaseMissing')),
+        ('protocol reason is not a localized business code', protocol_catalog('invalid-state')),
     ]
     cases = [
         ('no component resources', lambda root: shutil.rmtree(root / f'{component}/Resources'), 'no component resource directory found'),
@@ -197,6 +217,8 @@ def self_test():
         ('framework placeholders', edit(component_zh, '{Name}', '{Key}'), 'placeholders differ for Setting:Undefined'),
         ('framework culture', edit(component_zh, '"culture": "zh-CN"', '"culture": "zh"'), 'does not match file name zh-CN'),
         ('framework code format', edit(f'{component}/Errors/SettingErrorCodes.cs', '"Setting:Undefined"', '"setting.undefined"'), 'must look like Owner:Name'),
+        ('business code in protocol catalog still needs resources', protocol_catalog('DistributedEvents:Missing'), 'error code DistributedEvents:Missing needs a sentence in its own package'),
+        ('invalid protocol value is not exempt', protocol_catalog('invalid.state'), 'must look like Owner:Name'),
         ('framework code collides with template', edit(f'{component}/Errors/SettingErrorCodes.cs', 'public const string Undefined', 'public const string NotFound = "User:NotFound";\n    public const string Undefined'), 'duplicate error code User:NotFound'),
         ('framework code without resource', edit(f'{component}/Errors/SettingErrorCodes.cs', 'public const string Undefined', 'public const string Locked = "Setting:Locked";\n    public const string Undefined'), 'error code Setting:Locked has no resource entry'),
         ('host copies component key', host_copies('Setting:Copied'), 'host resources copy Setting:Copied'),

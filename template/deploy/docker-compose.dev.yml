@@ -20,6 +20,21 @@ services:
       timeout: 5s
       retries: 10
 
+#if (IncludeDistributedEvents)
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - dev-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+#endif
+
   redis:
     image: redis:8-alpine
     ports:
@@ -36,3 +51,6 @@ services:
 
 volumes:
   dev-pgdata-18:
+#if (IncludeDistributedEvents)
+  dev-rabbitmq-data:
+#endif

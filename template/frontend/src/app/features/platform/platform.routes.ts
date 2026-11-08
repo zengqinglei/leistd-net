@@ -73,7 +73,7 @@ export const PLATFORM_ROUTES: Routes = [
       },
     ],
   },
-//#if (IncludeOperationRecords)
+  //#if (IncludeOperationRecords)
   {
     // 审计：谁在什么时候做了什么。只读，无写端点。
     path: 'operation-records',
@@ -86,7 +86,7 @@ export const PLATFORM_ROUTES: Routes = [
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.operationRecords.default },
   },
-//#endif
+  //#endif
   //#if (LocalIdentity && IncludeMultiTenancy)
   {
     path: 'tenants',
@@ -123,6 +123,19 @@ export const PLATFORM_ROUTES: Routes = [
     loadComponent: () => import('./components/webhooks/webhooks').then((m) => m.Webhooks),
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.webhooks.default },
+  },
+  //#endif
+  //#if (IncludeDistributedEvents)
+  {
+    path: 'distributed-events',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope({ scope: 'distributed-events', alias: 'distributedEvents' })],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
+    loadComponent: () =>
+      import('./components/distributed-events/distributed-events').then((m) => m.DistributedEvents),
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.distributedEvents.default },
   },
   //#endif
 ];

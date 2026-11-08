@@ -34,9 +34,9 @@ export const PERMISSIONS = {
     create: 'App.Tenants.Create',
     update: 'App.Tenants.Update',
     delete: 'App.Tenants.Delete',
-//#if (Impersonation)
+    //#if (Impersonation)
     impersonation: 'App.Tenants.Impersonation',
-//#endif
+    //#endif
   },
   //#endif
   //#if (OpenIddictServer)
@@ -67,17 +67,23 @@ export const PERMISSIONS = {
     retention: 'App.Settings.Retention',
     //#endif
   },
-//#if (IncludeOperationRecords)
+  //#if (IncludeOperationRecords)
   operationRecords: {
     default: 'App.OperationRecords',
     export: 'App.OperationRecords.Export',
   },
-//#endif
+  //#endif
   //#if (IncludeWebhooks)
   // 出站 Webhook：父权限只读（订阅、投递日志与统计），Manage 是全部写操作
   webhooks: {
     default: 'App.Webhooks',
     manage: 'App.Webhooks.Manage',
+  },
+  //#endif
+  //#if (IncludeDistributedEvents)
+  distributedEvents: {
+    default: 'App.DistributedEvents',
+    manage: 'App.DistributedEvents.Manage',
   },
   //#endif
 } as const;
@@ -103,8 +109,11 @@ export const PLATFORM_ENTRY_PERMISSIONS = [
   //#endif
   // 只持有审计查看权限的岗位（安全、合规）也要进得来：漏了这一项，
   // 那个角色的账号菜单里看不到入口、登录后还会被重定向走。
-//#if (IncludeOperationRecords)
+  //#if (IncludeOperationRecords)
   PERMISSIONS.operationRecords.default,
-//#endif
+  //#endif
+  //#if (IncludeDistributedEvents)
+  PERMISSIONS.distributedEvents.default,
+  //#endif
   PERMISSIONS.settings.default,
 ] as const;

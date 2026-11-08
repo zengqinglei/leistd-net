@@ -26,7 +26,7 @@ public static class PermissionConstant
 
         /// <summary>谁能进来：用户、角色与租户。</summary>
         public const string Identity = "Identity";
-#if (OpenIddictServer || IncludeWebhooks)
+#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
 
         /// <summary>第三方接入：对外签发凭据与向外推送事件的入口。</summary>
         public const string Developer = "Developer";
@@ -94,6 +94,17 @@ public static class PermissionConstant
         public const string ResetSecret = Default + ".ResetSecret";
     }
 
+#endif
+#if (IncludeDistributedEvents)
+    /// <summary>分布式事件运维权限。</summary>
+    public static class DistributedEvents
+    {
+        /// <summary>查看概要、目录与传输状态。</summary>
+        public const string Default = Prefix + ".DistributedEvents";
+
+        /// <summary>读取载荷、发送测试事件与恢复记录。</summary>
+        public const string Manage = Default + ".Manage";
+    }
 #endif
 #if (IncludeWebhooks)
     /// <summary>出站 Webhook 权限。</summary>

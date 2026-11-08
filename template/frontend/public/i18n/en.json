@@ -143,6 +143,9 @@
       //#if (IncludeWebhooks)
       "webhooks": "Webhooks",
       //#endif
+      //#if (IncludeDistributedEvents)
+      "distributedEvents": "Distributed events",
+      //#endif
       "systemSettings": "System settings",
       "operationRecords": "Operation records",
       "groupIdentity": "Identity & access",

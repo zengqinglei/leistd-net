@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.EventBus.Abstractions;
 
-namespace Leistd.EventBus.Tests;
+namespace Leistd.EventBus.Tests.Local;
 
 /// <summary>一个处理器失败不阻断其余处理器；失败被聚合后上抛。</summary>
 /// <remarks>

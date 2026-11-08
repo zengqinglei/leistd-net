@@ -5,10 +5,10 @@ namespace Leistd.EventBus.Events;
 public abstract class BaseEvent : IEvent
 {
     /// <inheritdoc />
-    public Guid EventId { get; }
+    public Guid EventId { get; init; }
 
     /// <inheritdoc />
-    public DateTime OccurredOn { get; }
+    public DateTime OccurredOn { get; init; }
 
     /// <summary>使用系统时间源创建事件。</summary>
     protected BaseEvent() : this(TimeProvider.System.GetUtcNow().UtcDateTime)

@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **27 个能力分组、72 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **27 个能力分组、77 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
@@ -17,7 +17,7 @@
 | 数据访问共享契约 | 连接解析、连接归属、分页、异步流过滤状态及 provider 中立的查询执行契约；EF 实现为可选包 | `Leistd.Data`、`Leistd.Data.EntityFrameworkCore` | [`data`](./data.md) |
 | 服务注册回调与拦截器织入 | DI 包提供服务注册回调；DynamicProxy 扩展包在此基础上按约定织入 AOP 拦截器。 | `Leistd.DependencyInjection`、`Leistd.DependencyInjection.DynamicProxy` | [`dependency-injection`](./dependency-injection.md) |
 | 邮件发送 | 统一的 IEmailSender 抽象与 SMTP 实现：发送失败抛异常，不需要投递的环境显式注册空发送器 | `Leistd.Email.Core`、`Leistd.Email.Smtp` | [`email`](./email.md) |
-| 事件总线 | 进程内发布/订阅事件总线，发布方与 IEventHandler 处理器解耦，由 DI 同步消费 | `Leistd.EventBus.Core`、`Leistd.EventBus.Local` | [`event-bus`](./event-bus.md) |
+| 事件总线 | 本地提交阶段事件；事务发件箱与持久收件箱支持跨服务投递、恢复和目录，传输可选回环、RabbitMQ、Kafka 或自定义 | `Leistd.EventBus.Core`、`Leistd.EventBus.Local`、`Leistd.EventBus.Distributed`、`Leistd.EventBus.EntityFrameworkCore`、`Leistd.EventBus.AspNetCore`、`Leistd.EventBus.RabbitMQ`、`Leistd.EventBus.Kafka` | [`event-bus`](./event-bus.md) |
 | 业务异常与全局异常处理 | 语义化业务异常体系 + ASP.NET Core 全局处理器，统一转换为 RFC 9457 ProblemDetails 响应 | `Leistd.ExceptionHandling.Core`、`Leistd.ExceptionHandling.AspNetCore` | [`exception-handling`](./exception-handling.md) |
 | 分布式锁与本地锁 | 统一的加锁抽象 ILock，可在内存（单机）与 Redis（分布式）实现间按 DI 注册切换。 | `Leistd.Lock.Core`、`Leistd.Lock.Memory`、`Leistd.Lock.Redis` | [`lock`](./lock.md) |
 | 多语言本地化 | 基于嵌入 JSON 资源的 IStringLocalizer 实现：文案随包分发、按 culture 查表，未命中时返回键本身 | `Leistd.Localization.Core`、`Leistd.Localization.AspNetCore` | [`localization`](./localization.md) |
@@ -36,7 +36,7 @@
 
 ## 定制组件行为
 
-带端点的组件（设置、权限、多租户、操作记录、通知、出站 Webhook）按"契约与用例 / 存储 / `Map*` 端点"分包。需要偏离默认行为时，从上往下选第一个够用的层级：
+带端点的组件（设置、权限、多租户、操作记录、通知、出站 Webhook、分布式事件）按"契约与用例 / 存储 / `Map*` 端点"分包。需要偏离默认行为时，从上往下选第一个够用的层级：
 
 | 层级 | 做法 | 适用 |
 | --- | --- | --- |
@@ -54,8 +54,8 @@
 
 | 层次 | 分组 | 说明 |
 | --- | --- | --- |
-| 基础原语 | `aop`、`core`、`data`、`event-bus`、`exception-handling`、`localization`、`lock`、`object-mapping` | 不引用其他分组 |
-| 运行时基座 | `dependency-injection`、`security`、`tracing`、`email`、`response`、`unit-of-work`、`service-client`、`aspnetcore-signalr`、`auditing`、`realtime`、`background-jobs` | 只引用基础原语和本层分组 |
-| 带存储与端点的组件 | `multi-tenancy`、`authorization`、`authorization-resource`、`authorization-data-scope`、`settings`、`operation-records`、`notifications`、`webhooks` | 可引用以上各层和本层分组 |
+| 基础原语 | `aop`、`core`、`data`、`event-bus`（Core/Local）、`exception-handling`、`localization`、`lock`、`object-mapping` | 不引用其他分组 |
+| 运行时基座 | `dependency-injection`、`security`、`tracing`、`email`、`response`、`unit-of-work`、`service-client`、`aspnetcore-signalr`、`auditing`、`realtime`、`background-jobs`、`event-bus`（Distributed/传输） | 只引用基础原语和本层分组 |
+| 带存储与端点的组件 | `multi-tenancy`、`authorization`、`authorization-resource`、`authorization-data-scope`、`settings`、`operation-records`、`notifications`、`webhooks`、`event-bus`（存储/端点） | 可引用以上各层和本层分组 |
 
 具体某个包引用了哪些分组，查看该包的 csproj 或 NuGet 依赖。组件不依赖 `ddd-struct`，方向是 `Leistd.Ddd.*` 引用组件包。

@@ -18,6 +18,12 @@ export interface ActionSentence {
  * 该场景不生成词条文件，不内联就只能显示裸动作码（`scripts/check-operation-action-i18n.py` 核对两者）。
  */
 const ACTION_SENTENCES: Record<string, (target: string) => string> = {
+  //#if (IncludeDistributedEvents)
+  'distributed-event.redelivered': (t) => `Redelivered distributed events ${t}`,
+  'distributed-event.replayed': (t) => `Replayed distributed events ${t}`,
+  'distributed-event.redecoded': (t) => `Re-decoded rejected events ${t}`,
+  'distributed-event.discarded': (t) => `Discarded rejected events ${t}`,
+  //#endif
   'user.created': (t) => `Created user ${t}`,
   'user.updated': (t) => `Updated user ${t}`,
   'user.deleted': (t) => `Deleted user ${t}`,
@@ -114,6 +120,12 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
 
 /** 无目标时的变体（目标记为 `-`）：创建类端点在授权阶段被拒，以及本来就不带目标的动作。 */
 const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
+  //#if (IncludeDistributedEvents)
+  'distributed-event.redelivered': 'Redelivered distributed events',
+  'distributed-event.replayed': 'Replayed distributed events',
+  'distributed-event.redecoded': 'Re-decoded rejected events',
+  'distributed-event.discarded': 'Discarded rejected events',
+  //#endif
   'user.created': 'Created a user',
   'role.created': 'Created a role',
   //#if (OpenIddictServer)

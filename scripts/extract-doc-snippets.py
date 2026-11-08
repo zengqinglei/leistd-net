@@ -72,6 +72,7 @@ using Microsoft.EntityFrameworkCore;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options);
 '''
 CONTEXTS = {
+    'event-bus': dict(stubs=EF_CONTEXT),
     'aspnetcore-signalr': dict(
         vars={'options': 'global::Microsoft.AspNetCore.Authorization.AuthorizationOptions'},
         stubs='''

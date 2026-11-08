@@ -16,6 +16,9 @@ import {
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
+  //#if (IncludeDistributedEvents)
+  lucideRadioTower,
+  //#endif
   //#if (IncludeWebhooks)
   lucideWebhook,
   //#endif
@@ -49,6 +52,9 @@ import { NavigationService } from '../../services/navigation-service';
   providers: [provideIcons({
     lucideBuilding2, lucideCog, lucideDatabase, lucideGauge, lucideHouse, lucideIdCard,
     lucideLayers, lucideSettings, lucideShieldCheck, lucideUsers,
+    //#if (IncludeDistributedEvents)
+    lucideRadioTower,
+    //#endif
     //#if (IncludeWebhooks)
     lucideWebhook,
     //#endif

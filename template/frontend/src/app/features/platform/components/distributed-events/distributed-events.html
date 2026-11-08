@@ -1,0 +1,378 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div class="flex h-full min-w-0 flex-col overflow-y-auto p-4 sm:p-6">
+    <div class="flex flex-col gap-6 *:shrink-0">
+      <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
+          @if (isHost()) {
+            <hlm-select
+              data-testid="event-database"
+              [value]="database()"
+              [itemToString]="databaseLabel"
+              (valueChange)="update({ database: $event })"
+            >
+              <hlm-select-trigger
+                class="max-w-full sm:w-64"
+                [aria-label]="t('distributedEvents.database')"
+              >
+                <hlm-select-value />
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal>
+                @for (item of databases(); track item.key) {
+                  <hlm-select-item [value]="item.key">{{
+                    item.isHost ? t('distributedEvents.hostDatabase') : item.key
+                  }}</hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+          } @else {
+            <span class="text-muted-foreground text-sm">{{
+              t('distributedEvents.tenantScope')
+            }}</span>
+          }
+          @if (status(); as status) {
+            <span
+              hlmBadge
+              [variant]="
+                status.transportStatus === 'healthy'
+                  ? 'success'
+                  : status.transportStatus === 'unknown'
+                    ? 'secondary'
+                    : 'warning'
+              "
+              data-testid="event-transport"
+            >
+              {{ status.transportName || t('distributedEvents.noTransport') }} ·
+              {{ t('distributedEvents.health.' + status.transportStatus) }}
+            </span>
+            <span class="text-muted-foreground text-xs">{{
+              t('distributedEvents.last24Hours', {
+                sent: status.sentLast24Hours,
+                processed: status.processedLast24Hours,
+              })
+            }}</span>
+          }
+        </div>
+        <div class="flex flex-auto gap-2 sm:flex-initial">
+          <button
+            hlmBtn
+            variant="outline"
+            class="flex-1 sm:flex-initial"
+            [disabled]="loading()"
+            (click)="reload()"
+          >
+            <ng-icon name="lucideRefreshCw" />{{ t('distributedEvents.refresh') }}
+          </button>
+          @if (canTest()) {
+            <button
+              hlmBtn
+              class="flex-1 sm:flex-initial"
+              [disabled]="busy()"
+              (click)="sendTest()"
+              data-testid="event-send-test"
+            >
+              <ng-icon name="lucideSend" />{{ t('distributedEvents.sendTest') }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <app-distributed-event-statistics
+        [status]="status()"
+        [isHost]="isHost()"
+        (navigate)="jump($event.view, $event.status)"
+      />
+
+      <hlm-tabs class="border-b" [tab]="view()" (tabActivated)="setView($event)">
+        <hlm-tabs-list
+          variant="line"
+          class="justify-start"
+          [attr.aria-label]="t('distributedEvents.views')"
+        >
+          <button class="px-2 text-xs sm:px-3 sm:text-sm" hlmTabsTrigger="outbox">
+            {{ t('distributedEvents.view.outbox') }}
+            @if (status(); as snapshot) {
+              <span
+                hlmBadge
+                variant="secondary"
+                [hlmTooltip]="t('distributedEvents.deadLettered')"
+                >{{ snapshot.deadLettered || 0 | appNumber: 'integer' : displayLocale() }}</span
+              >
+            }
+          </button>
+          <button class="px-2 text-xs sm:px-3 sm:text-sm" hlmTabsTrigger="inbox">
+            {{ t('distributedEvents.view.inbox') }}
+            @if (status(); as snapshot) {
+              <span
+                hlmBadge
+                variant="secondary"
+                [hlmTooltip]="t('distributedEvents.failedInbox')"
+                >{{ snapshot.failedInbox || 0 | appNumber: 'integer' : displayLocale() }}</span
+              >
+            }
+          </button>
+          @if (isHost()) {
+            <button class="px-2 text-xs sm:px-3 sm:text-sm" hlmTabsTrigger="rejections">
+              {{ t('distributedEvents.view.rejections') }}
+              @if (status(); as snapshot) {
+                <span
+                  hlmBadge
+                  variant="secondary"
+                  [hlmTooltip]="t('distributedEvents.pendingRejections')"
+                  >{{
+                    snapshot.pendingRejections || 0 | appNumber: 'integer' : displayLocale()
+                  }}</span
+                >
+              }
+            </button>
+          }
+          <button class="px-2 text-xs sm:px-3 sm:text-sm" hlmTabsTrigger="catalog">
+            {{ t('distributedEvents.view.catalog') }}
+          </button>
+        </hlm-tabs-list>
+      </hlm-tabs>
+      <div
+        role="tabpanel"
+        class="flex flex-col gap-6"
+        [id]="'brn-tabs-content-' + view()"
+        [attr.aria-labelledby]="'brn-tabs-label-' + view()"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
+            <hlm-input-group class="w-full sm:w-auto sm:max-w-xs sm:min-w-56 sm:flex-1">
+              <hlm-input-group-addon><ng-icon name="lucideSearch" /></hlm-input-group-addon>
+              <input
+                hlmInputGroupInput
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                [value]="query()['keyword'] || ''"
+                [attr.aria-label]="
+                  t(
+                    view() === 'catalog'
+                      ? 'distributedEvents.searchCatalog'
+                      : view() === 'rejections'
+                        ? 'distributedEvents.searchRejections'
+                        : 'distributedEvents.search'
+                  )
+                "
+                [placeholder]="
+                  t(
+                    view() === 'catalog'
+                      ? 'distributedEvents.searchCatalog'
+                      : view() === 'rejections'
+                        ? 'distributedEvents.searchRejections'
+                        : 'distributedEvents.search'
+                  )
+                "
+                (input)="update({ keyword: $any($event.target).value || null })"
+              />
+            </hlm-input-group>
+            @for (key of facetKeys(); track key) {
+              <app-faceted-filter
+                [label]="t('distributedEvents.field.' + key)"
+                [options]="options(key)"
+                [value]="query()[key] || null"
+                [searchPlaceholder]="t('distributedEvents.field.' + key)"
+                [clearLabel]="t('distributedEvents.clear')"
+                [emptyLabel]="t('distributedEvents.noResults')"
+                (valueChange)="setFilter(key, $event)"
+              />
+            }
+            @if (view() === 'catalog') {
+              <div class="flex items-center gap-2 text-sm">
+                <hlm-checkbox
+                  id="event-anomalies"
+                  [aria-label]="t('distributedEvents.onlyAnomalies')"
+                  [checked]="query()['anomalies'] === 'true'"
+                  (checkedChange)="update({ anomalies: $event ? 'true' : null })"
+                />
+                <label for="event-anomalies">{{ t('distributedEvents.onlyAnomalies') }}</label>
+              </div>
+            }
+            @if (
+              query()['status'] ||
+              query()['eventName'] ||
+              query()['keyword'] ||
+              query()['errorCode'] ||
+              query()['consumer'] ||
+              query()['reason'] ||
+              query()['anomalies'] ||
+              query()['direction']
+            ) {
+              <button hlmBtn variant="ghost" size="sm" (click)="setView(view())">
+                <ng-icon name="lucideX" />{{ t('distributedEvents.clear') }}
+              </button>
+            }
+          </div>
+          @if (canManage() && view() !== 'catalog') {
+            <div
+              class="flex flex-auto flex-wrap gap-2 sm:flex-initial"
+              data-testid="event-bulk-actions"
+            >
+              @if (selected().length) {
+                <button
+                  hlmBtn
+                  variant="outline"
+                  class="flex-1 sm:flex-initial"
+                  [disabled]="busy()"
+                  (click)="recover('selected')"
+                >
+                  {{
+                    t('distributedEvents.bulk.selected.' + action(), { count: selected().length })
+                  }}
+                </button>
+              }
+              <span
+                class="inline-flex flex-1 sm:flex-initial"
+                [hlmTooltip]="bulkAllowed() ? null : t('distributedEvents.chooseState')"
+              >
+                <button
+                  hlmBtn
+                  variant="outline"
+                  class="flex-1"
+                  [disabled]="busy() || !bulkAllowed() || !totalCount()"
+                  (click)="recover('filter')"
+                >
+                  {{ t('distributedEvents.bulk.filter.' + action()) }}
+                </button>
+              </span>
+              @if (view() === 'rejections') {
+                <button
+                  hlmBtn
+                  variant="outline"
+                  class="flex-1 sm:flex-initial"
+                  [disabled]="busy() || (!selected().length && !bulkAllowed())"
+                  (click)="recover(selected().length ? 'selected' : 'filter', undefined, true)"
+                >
+                  {{ t('distributedEvents.action.discard') }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        @if (loadError(); as error) {
+          <div role="alert" class="flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm">
+            <p>{{ error }}</p>
+            <button hlmBtn variant="outline" size="sm" (click)="reload()">
+              {{ t('distributedEvents.retry') }}
+            </button>
+          </div>
+        } @else if (loading()) {
+          <div class="flex justify-center p-10" role="status">
+            <hlm-spinner /><span class="sr-only">{{ t('distributedEvents.loading') }}</span>
+          </div>
+        } @else if (!rows().length) {
+          <div hlmEmpty class="border">
+            <div hlmEmptyHeader>
+              <div hlmEmptyMedia variant="icon"><ng-icon name="lucideInbox" /></div>
+              <h3 hlmEmptyTitle>{{ t('distributedEvents.noResults') }}</h3>
+              <p hlmEmptyDescription>{{ t('distributedEvents.emptyHelp') }}</p>
+            </div>
+          </div>
+        } @else {
+          @switch (view()) {
+            @case ('outbox') {
+              <app-distributed-outbox-table
+                [rows]="rows()"
+                [totalCount]="totalCount()"
+                [page]="page()"
+                [pageSize]="pageSize()"
+                [isHost]="isHost()"
+                [canManage]="canManage()"
+                [selected]="selected()"
+                [recordId]="recordId()"
+                [busy]="busy()"
+                [tenantNames]="tenantNames()"
+                (open)="openRecord($event)"
+                (recover)="recover('single', $event)"
+                (selectionChange)="selected.set($event)"
+                (pageChange)="changePage($event)"
+                (pageSizeChange)="update({ pageSize: $event })"
+                (jumpTo)="jump($event.view, $event.status, $event.eventName)"
+              />
+            }
+            @case ('inbox') {
+              <app-distributed-inbox-table
+                [rows]="rows()"
+                [totalCount]="totalCount()"
+                [page]="page()"
+                [pageSize]="pageSize()"
+                [isHost]="isHost()"
+                [canManage]="canManage()"
+                [selected]="selected()"
+                [recordId]="recordId()"
+                [busy]="busy()"
+                [tenantNames]="tenantNames()"
+                (open)="openRecord($event)"
+                (recover)="recover('single', $event)"
+                (selectionChange)="selected.set($event)"
+                (pageChange)="changePage($event)"
+                (pageSizeChange)="update({ pageSize: $event })"
+                (jumpTo)="jump($event.view, $event.status, $event.eventName)"
+              />
+            }
+            @case ('rejections') {
+              <app-distributed-rejection-table
+                [rows]="rows()"
+                [totalCount]="totalCount()"
+                [page]="page()"
+                [pageSize]="pageSize()"
+                [isHost]="isHost()"
+                [canManage]="canManage()"
+                [selected]="selected()"
+                [recordId]="recordId()"
+                [busy]="busy()"
+                [tenantNames]="tenantNames()"
+                (open)="openRecord($event)"
+                (recover)="recover('single', $event)"
+                (selectionChange)="selected.set($event)"
+                (pageChange)="changePage($event)"
+                (pageSizeChange)="update({ pageSize: $event })"
+                (jumpTo)="jump($event.view, $event.status, $event.eventName)"
+              />
+            }
+            @case ('catalog') {
+              <app-distributed-catalog-table
+                [rows]="rows()"
+                [totalCount]="totalCount()"
+                [page]="page()"
+                [pageSize]="pageSize()"
+                [isHost]="isHost()"
+                [canManage]="canManage()"
+                [selected]="selected()"
+                [recordId]="recordId()"
+                [busy]="busy()"
+                [tenantNames]="tenantNames()"
+                (open)="openRecord($event)"
+                (recover)="recover('single', $event)"
+                (selectionChange)="selected.set($event)"
+                (pageChange)="changePage($event)"
+                (pageSizeChange)="update({ pageSize: $event })"
+                (jumpTo)="jump($event.view, $event.status, $event.eventName)"
+              />
+            }
+          }
+        }
+      </div>
+    </div>
+  </div>
+
+  <app-distributed-event-record-sheet
+    [recordId]="recordId()"
+    [view]="view()"
+    [database]="database()"
+    [canManage]="canManage()"
+    [busy]="busy()"
+    [tenantNames]="tenantNames()"
+    [catalogDetail]="catalogDetail()"
+    [refreshVersion]="detailVersion()"
+    (closed)="closeDetail()"
+    (recover)="recover('single', $event.record, $event.discard)"
+    (navigate)="jump($event.view, $event.status, $event.eventName)"
+  />
+</ng-container>

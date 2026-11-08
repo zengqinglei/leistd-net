@@ -1,0 +1,9 @@
+{
+  "culture": "en",
+  "texts": {
+    "DistributedEvents:RecordNotFound": "The event record was not found.",
+    "DistributedEvents:DatabaseNotFound": "The selected database was not found.",
+    "DistributedEvents:HostOnly": "This operation is only available to the host.",
+    "DistributedEvents:TestEventDisabled": "Test events are disabled."
+  }
+}

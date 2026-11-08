@@ -173,3 +173,10 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
   - **用户的最近登录 IP**：是当前状态字段而非历史，随用户记录保留、不单设保留期。删除用户是软删除，**不会**清掉它；合规要求删除时须物理删除用户记录或显式清空该字段。
 <!--#endif-->
 - 模板不内置限流。匿名认证端点（`captcha`、`passkey-login/options`、`session-login` 等）由网关按来源 IP 限流；应用内的失败计数按账号聚合，轮换账号的撞库不会触发它。
+
+<!--#if (IncludeDistributedEvents)-->
+
+## 分布式事件
+
+`ConnectionStrings:RabbitMQ` 为连接 URI，compose 从 `RABBITMQ_CONNECTION_STRING` 注入；broker 初始账号为 `RABBITMQ_USER` 与 `RABBITMQ_PASSWORD`。三者必须一致，配置方式、持久卷和更换传输见 [分布式事件](../standards/distributed-events.md#连接与部署)。readiness 包含传输健康；其他调优项使用组件默认值。
+<!--#endif-->

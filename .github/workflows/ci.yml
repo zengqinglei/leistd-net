@@ -361,7 +361,7 @@ jobs:
           path: .tmp/package-consumer/package-results.json
           if-no-files-found: error
 
-  # 证明拆成互不引用产物的四片：三片按序号取模生成 640 个形态，对照片承担 1536 组输入映射、
+  # 证明拆成互不引用产物的四片：三片按序号取模生成 1280 个形态，对照片承担 3072 组输入映射、
   # 角色等价、Ci 变体与 verify 检查；汇总核对四片同一候选与源码、形态无缺号无重复、对照片证明齐全。
   template-generation:
     name: 模板有效形态生成 · ${{ matrix.shard }}
@@ -576,8 +576,10 @@ jobs:
     if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs.test && fromJSON(needs.quality-plan.outputs.validation_plan).QualityExecution != 'reuse'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # 分布式锁的 Redis 契约用例需要真实服务：没有服务时它们会跳过而不是失败
-    # （提交前自检必须在没装 Redis 的机器上也全绿），因此这里显式提供并在下面 ping 一次
+    # 外部依赖契约本地可显式跳过；CI 提供真实服务并先检查可用性，避免把跳过误当成覆盖。
+    env:
+      LEISTD_TEST_RABBITMQ: amqp://127.0.0.1:5672
+      LEISTD_TEST_KAFKA: 127.0.0.1:9092
     services:
       redis:
         image: redis:8-alpine
@@ -588,6 +590,36 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4-management-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      kafka:
+        image: apache/kafka:4.1.2
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -615,6 +647,10 @@ jobs:
         run: |
           docker run --rm --network host redis:8-alpine \
             redis-cli -h 127.0.0.1 -p 6379 ping | grep -q PONG
+      - name: 确认事件传输服务可用
+        run: |
+          docker exec '${{ job.services.rabbitmq.id }}' rabbitmq-diagnostics -q ping
+          docker exec '${{ job.services.kafka.id }}' /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
       # 清单来自同候选计划：受影响项目及其反向依赖闭包里的测试项目，无法证明时为全集。
       # 只有通过的项目写回执；汇总按清单逐项核对，漏跑或失败都缺回执。
       - name: 按清单测试

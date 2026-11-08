@@ -100,6 +100,7 @@ function Assert-GeneratedDocumentation([string]$ProjectRoot) {
     # webhooks.md 随 IncludeWebhooks 裁剪（!IncludeWebhooks 排除项）；按来源标记记录的参数判定，不靠其他产物推断。
     $marker = Get-Content -LiteralPath (Join-Path $ProjectRoot ".leistd/template.json") -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
     if ($marker.parameters.IncludeWebhooks -eq $true) { $expectedStandards += "webhooks.md" }
+    if ($marker.parameters.IncludeDistributedEvents -eq $true) { $expectedStandards += "distributed-events.md" }
     $requiredFiles += @($expectedStandards | ForEach-Object { "docs/standards/$_" })
     if (-not $hasFrontend) {
         $requiredFiles = @($requiredFiles | Where-Object { $_ -notin @(".agents/skills/spartan/SKILL.md", "frontend/components.json") })

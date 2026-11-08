@@ -114,6 +114,20 @@ public static class OperationRecordActions
     public const string OpenApplicationSecretReset = "open-application.secret-reset";
 
 #endif
+#if (IncludeDistributedEvents)
+    /// <summary>重投死信。</summary>
+    public const string DistributedEventRedelivered = "distributed-event.redelivered";
+
+    /// <summary>重放收件箱。</summary>
+    public const string DistributedEventReplayed = "distributed-event.replayed";
+
+    /// <summary>重新解码拒收。</summary>
+    public const string DistributedEventRedecoded = "distributed-event.redecoded";
+
+    /// <summary>丢弃拒收。</summary>
+    public const string DistributedEventDiscarded = "distributed-event.discarded";
+
+#endif
 #if (IncludeWebhooks)
     /// <summary>新建 Webhook 订阅：外部地址从此开始收到所订阅的事件。</summary>
     public const string WebhookSubscriptionCreated = "webhook-subscription.created";

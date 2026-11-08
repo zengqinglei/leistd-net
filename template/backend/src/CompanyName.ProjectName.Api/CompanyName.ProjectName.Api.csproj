@@ -119,4 +119,10 @@
 <!--#endif-->
   </ItemGroup>
 
+<!--#if (IncludeDistributedEvents)-->
+  <ItemGroup>
+    <PackageReference Include="Leistd.EventBus.AspNetCore" />
+    <PackageReference Include="Leistd.EventBus.RabbitMQ" />
+  </ItemGroup>
+<!--#endif-->
 </Project>

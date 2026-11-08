@@ -4,7 +4,7 @@ using Leistd.TestBase.Assertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Leistd.EventBus.Tests;
+namespace Leistd.EventBus.Tests.Local;
 
 /// <summary>
 /// 注册可重复：DDD 基座替宿主调用一次，宿主再调用时不得出现两个总线实例；宿主预先替换本地总线时，

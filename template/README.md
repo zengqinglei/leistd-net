@@ -68,6 +68,10 @@ CompanyName.ProjectName/
 - 必需的结构化安全记录；成功在工作单元提交后输出，失败立即输出。提交与日志输出之间进程退出可能丢记录。
 <!--#endif-->
 
+<!--#if (IncludeDistributedEvents)-->
+分布式事件默认使用 RabbitMQ；本机开发依赖清单包含 broker（5672）与管理页（15672）。前端默认调用真实 API；测试宿主替换为回环传输。部署连接、持久卷及恢复说明见 [分布式事件](docs/standards/distributed-events.md)。
+
+<!--#endif-->
 ## 本地运行
 
 ### 后端

@@ -23,6 +23,10 @@ using Leistd.Settings.AspNetCore.Endpoints;
 using Leistd.Webhooks.AspNetCore.Endpoints;
 #endif
 
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.AspNetCore.Endpoints;
+#endif
+
 namespace CompanyName.ProjectName.Api.Hosting;
 
 /// <summary>组件自带的 HTTP 端点：本项目只给前缀、授权策略与个别端点的附加元数据。</summary>
@@ -130,6 +134,23 @@ public static class ComponentEndpoints
             options.MigrationReadPolicy = TenantConnectionPolicies.MigrationRead;
 #endif
         });
+#endif
+
+#if (IncludeDistributedEvents)
+        api.MapGroup("distributed-events")
+            .MapDistributedEvents(options =>
+            {
+                options.ReadPolicy = PermissionConstant.DistributedEvents.Default;
+                options.ManagePolicy = PermissionConstant.DistributedEvents.Manage;
+            })
+            .WithMetadataOn(DistributedEventEndpoints.RedeliverName,
+                new OperationRecordActionAttribute(OperationRecordActions.DistributedEventRedelivered))
+            .WithMetadataOn(DistributedEventEndpoints.ReplayName,
+                new OperationRecordActionAttribute(OperationRecordActions.DistributedEventReplayed))
+            .WithMetadataOn(DistributedEventEndpoints.RedecodeName,
+                new OperationRecordActionAttribute(OperationRecordActions.DistributedEventRedecoded))
+            .WithMetadataOn(DistributedEventEndpoints.DiscardName,
+                new OperationRecordActionAttribute(OperationRecordActions.DistributedEventDiscarded));
 #endif
 
         return app;

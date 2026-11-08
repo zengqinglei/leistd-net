@@ -34,7 +34,7 @@ $scenarioMap = [ordered]@{
         # 外部登录关闭：Mock 路由、客户端方法与 DTO 都不得留下。
         # 这类残留编译、lint、单测全都放得过——Mock 会对一个后端返回 404 的端点回成功。
         # Webhook 关闭（IncludeWebhooks 默认 false）：类型、命名空间、路由、权限与词条 scope 都不得留下。
-        ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto", "Webhook", "webhook")
+        ForbiddenTokens = @("DistributedEvent", "distributed-event", "external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto", "Webhook", "webhook")
     }
     "resource" = @{
         Slices = @{ full = "full-04" }
@@ -65,7 +65,7 @@ $scenarioMap = [ordered]@{
         # Resource 固定使用普通路径路由，后端完成认证后返回站内路径。
         # 产物不携带哈希路由配置或本地口令登录契约。
         # 同 identity：Webhook 关闭时不留任何残留。
-        ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail", "Webhook", "webhook")
+        ForbiddenTokens = @("DistributedEvent", "distributed-event", "App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail", "Webhook", "webhook")
     }
     "standalone" = @{
         Slices = @{ full = "full-03" }
@@ -210,7 +210,7 @@ $scenarioMap = [ordered]@{
     }
     "resource-capabilities-03" = @{
         Slices = @{ full = "full-03"; core = "resource-capabilities-03" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "false", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $false; Lint = $true
         Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs")
         Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs", "backend/src/{name}.Application/Webhooks", "docs/standards/webhooks.md")
@@ -220,7 +220,7 @@ $scenarioMap = [ordered]@{
     }
     "resource-capabilities-04" = @{
         Slices = @{ full = "full-03" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true", "--include-webhooks", "true")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true", "--include-webhooks", "true")
         Frontend = $false; Lint = $true
         Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs", "backend/src/{name}.Application/Webhooks")
         Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
@@ -228,7 +228,7 @@ $scenarioMap = [ordered]@{
     }
     "identity-capabilities-05" = @{
         Slices = @{ full = "full-01" }
-        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "false")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "false", "--include-email", "false", "--include-operation-records", "false", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "false")
         Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
@@ -245,7 +245,7 @@ $scenarioMap = [ordered]@{
     }
     "standalone-capabilities-06" = @{
         Slices = @{ full = "full-05" }
-        Arguments = @("--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "true", "--include-localization", "false")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Standalone", "--include-frontend", "true", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "false", "--include-notifications", "false", "--include-external-login", "true", "--include-localization", "false")
         Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs", "frontend/src/app/features/platform/components/operation-records", "frontend/_mock/data/operation-record.ts")
@@ -261,7 +261,7 @@ $scenarioMap = [ordered]@{
     }
     "identity-capabilities-08" = @{
         Slices = @{ full = "full-02" }
-        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--ci", "gitlab")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--ci", "gitlab")
         Frontend = $true; Lint = $true; Verify = $true
         Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", ".gitlab-ci.yml")
         Absent = @(".github", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts")
@@ -343,6 +343,36 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Api/{name}.Api.csproj" = @("Leistd.Webhooks.AspNetCore")
         }
     }
+    "distributed-events" = @{
+        Slices = @{ full = "full-01"; core = "distributed-events" }
+        Arguments = @("--include-distributed-events", "--include-webhooks", "--include-multi-tenancy", "true", "--include-localization"); Frontend = $true; Lint = $true
+        Present = @("frontend/src/app/features/platform/components/distributed-events", "frontend/src/app/features/platform/services/distributed-event-service.ts", "frontend/src/app/features/platform/dtos/distributed-event.dto.ts", "frontend/_mock/api/distributed-event.ts", "frontend/public/i18n/distributed-events", "frontend/e2e/distributed-events.e2e.ts", "docs/standards/distributed-events.md")
+        Absent = @("backend/src/{name}.Infrastructure/Persistence/Migrations/Resource")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapDistributedEvents(")
+            "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.EventBus.EntityFrameworkCore")
+            "backend/src/{name}.Api/Program.cs" = @("AddDistributedEventBus()", "AddRabbitMqEventTransport(tags:")
+            "backend/src/{name}.Application/Permissions/Provider/PermissionConstant.cs" = @(".DistributedEvents", ".Manage")
+            "deploy/docker-compose.yml" = @("RABBITMQ_CONNECTION_STRING", "rabbitmq-data", "rabbitmq:4-management-alpine")
+            "docs/README.md" = @("standards/distributed-events.md")
+        }
+    }
+    "resource-api-distributed-events" = @{
+        Slices = @{ full = "full-03" }
+        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-distributed-events"); Frontend = $false; Lint = $true
+        Present = @("docs/standards/distributed-events.md")
+        Absent = @("frontend", "backend/src/{name}.Infrastructure/Persistence/Migrations/Identity")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapDistributedEvents(")
+            "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.EventBus.EntityFrameworkCore")
+            "backend/src/{name}.Api/Program.cs" = @("AddDistributedEventBus()", "AddRabbitMqEventTransport(tags:")
+            "backend/src/{name}.Application/Permissions/Provider/PermissionConstant.cs" = @(".DistributedEvents", ".Manage")
+            "deploy/docker-compose.yml" = @("RABBITMQ_CONNECTION_STRING", "rabbitmq-data", "rabbitmq:4-management-alpine")
+        }
+    }
+
 }
 
 # 全量清单显式排序：定义用哈希表（无序），执行顺序要稳定才便于比对历史日志
@@ -355,7 +385,7 @@ $AllScenarios = @(
     "identity-capabilities-01", "standalone-capabilities-02", "resource-capabilities-03", "resource-capabilities-04", "identity-capabilities-05", "standalone-capabilities-06", "standalone-capabilities-07", "identity-capabilities-08", "resource-capabilities-09",
     "resource-host-api-realtime", "resource-host-browser-notifications",
     "identity-tenant-management-without-history",
-    "webhooks", "resource-api-webhooks"
+    "webhooks", "resource-api-webhooks", "distributed-events", "resource-api-distributed-events"
 )
 
 # 定义与全量清单必须一一对应。只加定义不加清单，新场景会静默不跑——
@@ -380,6 +410,7 @@ $MatrixSlices = [ordered]@{
         "identity-all-features"     = "Identity 可选特性全开（Verify）"
         "resource-capabilities-03"  = "Resource 纯 API（含容器）"
         "webhooks"                  = "Identity 出站 Webhook"
+        "distributed-events"        = "Identity 分布式事件与前端"
     }
     full = [ordered]@{
         "full-01" = "Identity 默认、租户通知、Resource 浏览器通知与出站 Webhook"

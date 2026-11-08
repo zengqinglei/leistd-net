@@ -29,6 +29,9 @@ using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 #endif
 using Leistd.Settings.EntityFrameworkCore.Entities;
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.EntityFrameworkCore.Entities;
+#endif
 using Leistd.MultiTenancy.Management.Provisioning;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore.Entities;
@@ -115,6 +118,32 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// <summary>租户管理员登录：登录请求与后续请求都携带租户提示头。</summary>
     private Task<HttpClient> LoginTenantAdminAsync(Guid tenantId, string password = "Tenant@123456")
         => LoginTenantAdminAsync(_factory, tenantId, password);
+
+    [Fact]
+    public async Task Current_user_exposes_the_authenticated_tenant_without_trusting_the_login_hint()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, $"current-user-{Guid.NewGuid():N}");
+        var client = await LoginTenantAdminAsync(tenantId);
+        client.DefaultRequestHeaders.Remove(MultiTenancyOptions.DefaultHeaderName);
+
+        using (var current = JsonDocument.Parse(await client.GetStringAsync("/api/v1/auth/me")))
+        {
+            Assert.True(current.RootElement.TryGetProperty("tenantId", out var actual),
+                "Current user JSON must include the authenticated tenant.");
+            Assert.Equal(tenantId, actual.GetGuid());
+        }
+
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, Guid.NewGuid().ToString());
+        using (var current = JsonDocument.Parse(await client.GetStringAsync("/api/v1/auth/me")))
+        {
+            Assert.Equal(tenantId, current.RootElement.GetProperty("tenantId").GetGuid());
+        }
+
+        using var host = JsonDocument.Parse(await hostAdmin.Client.GetStringAsync("/api/v1/auth/me"));
+        Assert.True(!host.RootElement.TryGetProperty("tenantId", out var hostTenant)
+            || hostTenant.ValueKind == JsonValueKind.Null);
+    }
 
     /// <summary>在指定宿主上做租户管理员登录（<c>WithWebHostBuilder</c> 派生的宿主用这个重载）。</summary>
     private async Task<HttpClient> LoginTenantAdminAsync(
@@ -1052,6 +1081,10 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             new[]
             {
                 nameof(AuthorizationVersionRecord),
+#if (IncludeDistributedEvents)
+                nameof(DistributedEventInbox),
+                nameof(DistributedEventOutbox),
+#endif
 #if (ExternalLogin)
                 nameof(ExternalLoginConnection),
 #endif
@@ -1103,6 +1136,10 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<PermissionGrantRecord>().ToListAsync());
             Assert.Empty(await db.Set<AuthorizationVersionRecord>().ToListAsync());
             Assert.Empty(await db.Set<UserRole>().ToListAsync());
+#if (IncludeDistributedEvents)
+            Assert.Empty(await db.Set<DistributedEventInbox>().ToListAsync());
+            Assert.Empty(await db.Set<DistributedEventOutbox>().ToListAsync());
+#endif
             // 创建流程里埋了"用户已创建"的操作记录：补偿若漏清它，留下的是一条带租户归属的孤儿审计行——
             // 上面那份类型清单只证明它受过滤器管辖，证明不了补偿真的清干净了。
 #if (IncludeOperationRecords)
