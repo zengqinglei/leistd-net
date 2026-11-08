@@ -117,4 +117,6 @@
 - L1：选择器要求的 32 个框架项目共 2,771 例通过、0 失败，35 例因本机没有 Broker／Redis 而跳过；81 个框架包重新打包，四个受影响包完成隔离消费；10 个选中模板场景的生成、结构与文档检查通过。最新候选的 Identity／Resource 迁移快照 2／1 通过。
 - 定向验收：G1／G3 先验证修复前失败；审查 R1 的可编译生产基线 8 例中 4 例预期失败，修复后 24 例通过。Identity／Resource 无本地化前端组件目标 36／35、Mock 目标 14／13 通过，两形态生产 build、lint 通过；中英文四宽度有头浏览器核对无页面横向溢出。R2 的文档与文案增量通过引用和一致性检查，复用运行代码的 L1 证据。
 
+CI 同时暴露了既有 Webhook 身份测试过早读取提交前状态的竞态；用受控提交顺序在 develop 原测试稳定复现，等待持久状态后在相同顺序与未插桩目标类均通过，仅调整该测试的 I/O 等待。
+
 公共契约已上收到 `framework/docs/components/event-bus.md`；模板发布幂等、顺序水位、载荷关闭入口已上收到 `template/docs/standards/distributed-events.md`，索引同步 `template/docs/README.md`。完整模板阶段与真实 PostgreSQL／Broker／Redis 验证以同候选 CI 为准；合入 develop 后以 Release 全量和实际 beta 核验发布结果。
