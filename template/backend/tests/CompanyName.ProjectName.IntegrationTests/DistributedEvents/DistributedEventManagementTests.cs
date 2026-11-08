@@ -144,6 +144,12 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
                 && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded");
         Assert.Contains("tenant=host", OperationRecordLogCapture.Field(entry, "OperationTargetName") as string);
 #endif
+        using var discarded = await admin.Client.PostAsJsonAsync($"{Root}/rejections/discard", new { Ids = new[] { id.ToString() } });
+        Assert.Equal(HttpStatusCode.OK, discarded.StatusCode);
+        using var discardResult = JsonDocument.Parse(await discarded.Content.ReadAsStringAsync());
+        Assert.Equal(1, discardResult.RootElement.GetProperty("affectedCount").GetInt64());
+        using var discardedDetail = JsonDocument.Parse(await admin.Client.GetStringAsync($"{Root}/rejections/{id}"));
+        Assert.Equal("discarded", discardedDetail.RootElement.GetProperty("record").GetProperty("status").GetString());
     }
 
     /// <summary>只有查看权限时不能读取载荷或触发恢复，拒绝尝试按 Manage 权限留痕。</summary>

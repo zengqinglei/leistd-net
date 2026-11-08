@@ -40,6 +40,7 @@ import {
   EventView,
   STATUS_VARIANTS,
   canRecover,
+  canDiscard,
   recoveryAction,
   reasonKey,
 } from '../../distributed-event-display';
@@ -158,6 +159,9 @@ export class DistributedEventRecordSheet {
   }
   protected closeDetail(): void {
     this.closed.emit();
+  }
+  protected discardable(record: EventRecord): boolean {
+    return canDiscard(record);
   }
   protected recoverable(record: EventRecord): boolean {
     return canRecover(record);

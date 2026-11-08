@@ -209,7 +209,12 @@ function recover(
     (filter &&
       (!filter['before'] ||
         !Number.isFinite(Date.parse(String(filter['before']))) ||
-        (kind === 'inbox' && !['failed', 'processed'].includes(String(filter['status'])))))
+        (kind === 'inbox' && !['failed', 'processed'].includes(String(filter['status']))) ||
+        (kind === 'rejections' &&
+          filter['status'] &&
+          !(action === 'discard' ? ['pending', 'redecodePending'] : ['pending']).includes(
+            String(filter['status']),
+          ))))
   )
     throw new MockException(400, {
       message: 'Specify IDs (1–100) or a filter with a valid cutoff.',
@@ -219,7 +224,7 @@ function recover(
       ? row.status === 'deadLettered'
       : kind === 'inbox'
         ? ['failed', 'processed'].includes(row.status)
-        : row.status === 'pending';
+        : row.status === 'pending' || (action === 'discard' && row.status === 'redecodePending');
   const targets = ids
     ? [...new Set(ids)]
     : records(kind)

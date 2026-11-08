@@ -258,6 +258,21 @@ describe('DistributedEvents page', () => {
     }
   });
 
+  it('can discard queued re-decodes by the exact current status without allowing re-decode again', async () => {
+    await setup(true, null, { view: 'rejections', status: 'redecodePending' });
+    expect(component.bulkAllowed()).toBe(false);
+    expect(component.bulkDiscardAllowed()).toBe(true);
+    service.discard.mockReturnValue(of({ affectedCount: 1, deferredCount: 0, skipped: [] }));
+    await component.recover('filter', undefined, true);
+    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+    options.action!().subscribe();
+    expect(service.discard).toHaveBeenCalledWith(
+      { filter: expect.objectContaining({ status: 'redecodePending' }) },
+      'host',
+    );
+    expect(service.redecode).not.toHaveBeenCalled();
+  });
+
   it('cancels a previous payload request when the opened record changes', async () => {
     await setup(true, null, { record: OUTBOX.id });
     const delayed = new Subject<Dto.DistributedEventPayloadOutputDto>();

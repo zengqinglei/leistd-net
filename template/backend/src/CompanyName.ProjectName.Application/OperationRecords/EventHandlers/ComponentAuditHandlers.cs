@@ -210,6 +210,7 @@ internal sealed class DistributedEventManagedAuditHandler(
         {
             DistributedEventManagementAction.Redelivered => "deadLettered",
             DistributedEventManagementAction.Replayed => "failed/processed",
+            DistributedEventManagementAction.Discarded => "pending/redecodePending",
             _ => "pending"
         };
         var fields = new List<string> { $"count={@event.AffectedCount}", $"status={state}", $"tenant={@event.TargetTenantId?.ToString() ?? "host"}" };
@@ -220,6 +221,9 @@ internal sealed class DistributedEventManagedAuditHandler(
             if (@event.Action == DistributedEventManagementAction.Replayed
                 && filter.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Number)
                 fields[1] = "status=" + (status.GetInt32() == (int)DistributedEventInboxStatus.Failed ? "failed" : "processed");
+            if (@event.Action == DistributedEventManagementAction.Discarded
+                && filter.TryGetProperty("status", out var rejectionStatus) && rejectionStatus.ValueKind == JsonValueKind.Number)
+                fields[1] = "status=" + (rejectionStatus.GetInt32() == (int)DistributedEventRejectionStatus.Pending ? "pending" : "redecodePending");
             foreach (var key in new[] { "errorCode", "eventName", "reason", "before" })
                 if (filter.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String)
                     fields.Add($"{key}={value.GetString()}");

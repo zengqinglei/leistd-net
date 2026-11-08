@@ -4,6 +4,7 @@ using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.EventBus.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Leistd.EventBus.Tests.EntityFrameworkCore;
@@ -28,5 +29,8 @@ public sealed class DistributedEventInboxFailureTests
         if (maxAttempts == 1)
             Assert.Contains(host.Logs.GetSnapshot(), r => r.Id.Id == 4103 && r.Exception is InvalidOperationException
                 && r.Exception.Message == "The projection could not be processed.");
+        else
+            Assert.Contains(host.Logs.GetSnapshot(), r => r.Level == LogLevel.Warning && r.Id.Id == 4106
+                && r.Exception is InvalidOperationException && r.Exception.Message == "The projection could not be processed.");
     }
 }

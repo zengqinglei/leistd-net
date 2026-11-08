@@ -263,7 +263,7 @@
                   hlmBtn
                   variant="outline"
                   class="flex-1 sm:flex-initial"
-                  [disabled]="busy() || (!selected().length && !bulkAllowed())"
+                  [disabled]="busy() || (!selected().length && !bulkDiscardAllowed())"
                   (click)="recover(selected().length ? 'selected' : 'filter', undefined, true)"
                 >
                   {{ t('distributedEvents.action.discard') }}

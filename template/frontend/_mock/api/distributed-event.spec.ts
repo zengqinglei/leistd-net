@@ -185,6 +185,19 @@ describe('distributed event mock', () => {
     expect(result.skipped).toEqual([{ id: row.id, reasonCode: 'invalid-state' }]);
   });
 
+  it('discards queued re-decodes without crossing the selected pending state', () => {
+    const pending = DISTRIBUTED_EVENT_REJECTIONS[0].record;
+    const queued = DISTRIBUTED_EVENT_REJECTIONS.find(
+      (item) => item.record.status === 'redecodePending',
+    )!.record;
+    const result = call('POST /api/v1/distributed-events/rejections/discard', {
+      body: { filter: { before: new Date().toISOString(), status: 'redecodePending' } },
+    });
+    expect(result.affectedCount).toBe(1);
+    expect(queued.status).toBe('discarded');
+    expect(pending.status).toBe('pending');
+  });
+
   it('allows read-only metadata while denying payload and writes', () => {
     PERMISSION_GRANTS['Role/role_member'].permissionNames = [PERMISSIONS.distributedEvents.default];
     setMockSessionUserId('user_demo');

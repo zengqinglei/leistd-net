@@ -169,19 +169,19 @@
       "redeliver": "重投 {{count}} 条死信？",
       "replay": "重放 {{count}} 条收件箱记录？",
       "redecode": "重新解码 {{count}} 条待处理拒收？",
-      "discard": "丢弃 {{count}} 条待处理拒收？"
+      "discard": "丢弃 {{count}} 条未解决拒收？"
     },
     "selectedQuestion": {
       "redeliver": "重投已选 {{count}} 条死信？",
       "replay": "重放已选 {{count}} 条收件箱记录？",
       "redecode": "重新解码已选 {{count}} 条待处理拒收？",
-      "discard": "丢弃已选 {{count}} 条待处理拒收？"
+      "discard": "丢弃已选 {{count}} 条未解决拒收？"
     },
     "filterQuestion": {
       "redeliver": "按当前筛选重投 {{count}} 条死信？",
       "replay": "按当前筛选重放 {{count}} 条收件箱记录？",
       "redecode": "按当前筛选重新解码 {{count}} 条待处理拒收？",
-      "discard": "按当前筛选丢弃 {{count}} 条待处理拒收？"
+      "discard": "按当前筛选丢弃 {{count}} 条未解决拒收？"
     },
     "button": {
       "redeliver": "重投 {{count}} 条",

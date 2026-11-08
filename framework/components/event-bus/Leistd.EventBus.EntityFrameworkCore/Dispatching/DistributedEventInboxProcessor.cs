@@ -100,7 +100,13 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
             logger.LogError(new EventId(4103, "DistributedEventConsumeFailed"), failure,
                 "Distributed event {EventId} ({EventName}) exhausted attempts for {Consumer}.", current.EventId, current.EventName, current.Consumer);
         }
-        else current.NextAttemptAt = current.LastModificationTime + DistributedEventRetry.Delay(current.AttemptCount, options.CurrentValue);
+        else
+        {
+            current.NextAttemptAt = current.LastModificationTime + DistributedEventRetry.Delay(current.AttemptCount, options.CurrentValue);
+            logger.LogWarning(new EventId(4106, "DistributedEventConsumeRetry"), failure,
+                "Distributed event {EventId} ({EventName}) failed attempt {AttemptCount} for {Consumer}; processing will retry.",
+                current.EventId, current.EventName, current.AttemptCount, current.Consumer);
+        }
         try { await failed.CompleteAsync(ct); }
         catch (DbUpdateConcurrencyException) { await failed.RollbackAsync(CancellationToken.None); }
     }

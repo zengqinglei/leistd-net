@@ -169,19 +169,19 @@
       "redeliver": "Redeliver {{count}} dead letters?",
       "replay": "Replay {{count}} inbox records?",
       "redecode": "Re-decode {{count}} pending rejections?",
-      "discard": "Discard {{count}} pending rejections?"
+      "discard": "Discard {{count}} unresolved rejections?"
     },
     "selectedQuestion": {
       "redeliver": "Redeliver {{count}} selected dead letters?",
       "replay": "Replay {{count}} selected inbox records?",
       "redecode": "Re-decode {{count}} selected pending rejections?",
-      "discard": "Discard {{count}} selected pending rejections?"
+      "discard": "Discard {{count}} selected unresolved rejections?"
     },
     "filterQuestion": {
       "redeliver": "Redeliver {{count}} dead letters matching the current filter?",
       "replay": "Replay {{count}} inbox records matching the current filter?",
       "redecode": "Re-decode {{count}} pending rejections matching the current filter?",
-      "discard": "Discard {{count}} pending rejections matching the current filter?"
+      "discard": "Discard {{count}} unresolved rejections matching the current filter?"
     },
     "button": {
       "redeliver": "Redeliver {{count}} records",

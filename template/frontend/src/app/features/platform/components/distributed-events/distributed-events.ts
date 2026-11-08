@@ -173,6 +173,11 @@ export class DistributedEvents {
         ? ['failed', 'processed'].includes(this.query()['status'])
         : this.view() === 'rejections' && this.query()['status'] === 'pending',
   );
+  readonly bulkDiscardAllowed = computed(
+    () =>
+      this.view() === 'rejections' &&
+      ['pending', 'redecodePending'].includes(this.query()['status']),
+  );
   readonly catalogDetail = computed(() =>
     this.view() === 'catalog'
       ? (this.catalog().find((item) => item.eventName === this.recordId()) ?? null)
@@ -451,7 +456,11 @@ export class DistributedEvents {
     const view = this.view();
     if (view === 'catalog') return;
     const ids = row ? [row.id] : this.selected();
-    if ((mode !== 'filter' && !ids.length) || (mode === 'filter' && !this.bulkAllowed())) return;
+    if (
+      (mode !== 'filter' && !ids.length) ||
+      (mode === 'filter' && !(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()))
+    )
+      return;
     const action = discard
       ? 'discard'
       : view === 'outbox'
@@ -469,7 +478,14 @@ export class DistributedEvents {
     } = input;
     const body =
       mode === 'filter'
-        ? { filter: { ...filter, ...(view === 'inbox' ? { status: this.query()['status'] } : {}) } }
+        ? {
+            filter: {
+              ...filter,
+              ...(view === 'inbox' || view === 'rejections'
+                ? { status: this.query()['status'] }
+                : {}),
+            },
+          }
         : { ids };
     const count = mode === 'filter' ? this.totalCount() : ids.length;
     const database = this.database();

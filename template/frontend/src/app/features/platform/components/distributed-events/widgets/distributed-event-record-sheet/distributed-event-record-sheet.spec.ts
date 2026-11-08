@@ -7,7 +7,10 @@ import { DistributedEventRecordSheet } from './distributed-event-record-sheet';
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
-import { DistributedEventOutboxDetailOutputDto } from '../../../../dtos/distributed-event.dto';
+import {
+  DistributedEventRejectionDetailOutputDto,
+  DistributedEventOutboxDetailOutputDto,
+} from '../../../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../../../services/distributed-event-service';
 
 const TENANT_ID = '00000000-0000-4000-8000-000000000011';
@@ -103,5 +106,52 @@ describe('DistributedEventRecordSheet tenant identity', () => {
     payload.next({ payload: 'sensitive body' });
     expect(fixture.componentInstance.payload()).toBeNull();
     expect(fixture.componentInstance.payloadLoading()).toBe(false);
+  });
+  it('offers discard for a queued re-decode while hiding the duplicate re-decode action', async () => {
+    const detail: DistributedEventRejectionDetailOutputDto = {
+      record: {
+        id: '3',
+        transport: 'RabbitMQ',
+        coordinates: {},
+        reason: 'invalid-envelope',
+        error: 'Safe reason.',
+        status: 'redecodePending',
+        redecodeCount: 0,
+        receivedAt: '2026-11-09T00:00:00Z',
+        lastModificationTime: '2026-11-09T00:00:00Z',
+      },
+      headers: {},
+      coordinates: {},
+    };
+    await TestBed.configureTestingModule({
+      imports: [DistributedEventRecordSheet],
+      providers: [
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+        {
+          provide: AccountPreferencesService,
+          useValue: { timeZone: signal('UTC'), displayLocale: signal('en') },
+        },
+        { provide: DistributedEventService, useValue: { getRejection: () => of(detail) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(DistributedEventRecordSheet);
+    fixture.componentRef.setInput('view', 'rejections');
+    fixture.componentRef.setInput('canManage', true);
+    fixture.componentRef.setInput('recordId', '3');
+    const recover = vi.fn();
+    fixture.componentInstance.recover.subscribe(recover);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const discard = buttons.find((button) => /discard/i.test(button.textContent || ''));
+    expect(discard).toBeDefined();
+    expect(buttons.some((button) => /redecode|re-decode/i.test(button.textContent || ''))).toBe(
+      false,
+    );
+    discard!.click();
+    expect(recover).toHaveBeenCalledWith({ record: detail.record, discard: true });
   });
 });

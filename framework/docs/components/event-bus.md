@@ -220,7 +220,7 @@ public sealed class OrderPaymentPublisher(IDistributedEventBus events, IUnitOfWo
 
 ### 分工与配置
 
-`Leistd:EventBus:Distributed` 的 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` 默认均为 true。写入进程可显式全关并不注册传输；Worker 全开并注册传输。关闭的扫描任务在调度器取锁前跳过，选项不按可选依赖是否存在推断。三项任一开启却漏传输时，启动报出对应配置键。仅发布进程可通过 `ValidateOnBuild` 与 `ValidateScopes` 验证，发布和管理不要求连接 SDK。
+`Leistd:EventBus:Distributed` 的 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` 默认均为 true。写入进程可显式全关并不注册传输；Worker 全开并注册传输。关闭的扫描任务在调度器取锁前跳过，选项不按可选依赖是否存在推断。三项任一开启却漏传输时，启动报出对应配置键。仅发布进程可通过 ValidateOnBuild 与 ValidateScopes 验证，发布和管理不要求连接 SDK。
 
 ```csharp
 // Api：沿用宿主已有的工作单元、租户、后台任务队列与数据库接线。
@@ -264,11 +264,13 @@ Read 只读快照、目录、列表与详情概要，载荷经独立 Manage 端�
 | 发件箱重投 | DeadLettered | EventId 不变，清空失败窗口，累计尝试次数保留，RedeliverCount 增加。 |
 | 收件箱重放 | Failed、Processed | 清零本轮尝试、错误与完成时间，ReplayCount 增加；Processed 会再次执行处理器及其外部副作用。 |
 | 拒收重新解码 | Pending | 本地有同名传输时同步调用 DecodeAsync 与接收校验；否则转为 RedecodePending，由同名接收 Worker 处理。成功先写有去重保护的收件箱，再标 Redecoded；解码失败回 Pending 并更新脱敏原因。 |
-| 拒收丢弃 | Pending | 标 Discarded。 |
+| 拒收丢弃 | Pending、RedecodePending | 标 Discarded。 |
 
 ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个实际改动且提交的租户分组批次发布一条 `DistributedEventManagedEvent`，带目标 TargetTenantId、Database、实际条数与原筛选或实际 ids。目标作用域退出后，在调用方租户与用户上下文中独立完成审计单元；调用方已有单元之后提交或回滚均不影响该审计。跨库更新与本地审计不是分布式原子事务：审计失败向上传播，已提交批次不撤回。部分批次失败不把未完成批次记为成功。
 
-转交结果的 DeferredCount 是 AffectedCount 的子集，表示请求已登记而非已解码；该请求用 RedecodeRequested 动作审计。Worker 只领取宿主表中 Transport 与自身 Name 相同的 RedecodePending，沿用 Inbox:ReceiveEnabled 与 DispatchInterval，每批 100 行；写库失败保持待办并让任务失败供下轮重试。处理原始字节、头与入站坐标，不重新向 Broker 发布；进程中断后重入由 Inbox 唯一约束去重。Worker 完成不再以请求用户发管理审计，未解决拒收计数包含 RedecodePending。
+转交结果的 DeferredCount 是 AffectedCount 的子集，表示请求已登记而非已解码；该请求用 RedecodeRequested 动作审计。Worker 只领取宿主表中 Transport 与自身 Name 相同的 RedecodePending，沿用 Inbox:ReceiveEnabled 与 DispatchInterval，每批 100 行；单行执行失败记 4107 Warning，该行保留待办，继续后续行；整轮结束汇总失败并向调度器报错，下一轮重试。Pending 与 RedecodePending 都能丢弃；按筛选丢弃可用 Status 限定其中一种，省略时涵盖两种未解决状态。处理原始字节、头与入站坐标，不重新向 Broker 发布；进程中断后重入由 Inbox 唯一约束去重。Worker 完成不再以请求用户发管理审计，未解决拒收计数包含 RedecodePending。共库有多种传输接收宿主时，各自只领取同名行；集群任务按时段轮到谁由谁执行，因此可能有延迟。
+
+DistributedEventManagementAction.RedecodeRequested 与 DistributedEventRejectionStatus.RedecodePending 是新增枚举成员，宿主的穷举 switch 必须覆盖；前者表示已转交请求，后者表示尚未解码的非终态。
 
 积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小等不可恢复的单条消息错误后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
 
@@ -283,8 +285,10 @@ ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。
 | 4103 | DistributedEventConsumeFailed | EventId、EventName、Consumer |
 | 4104 | DistributedEventRejected | Transport、Reason、EventName、EventId、Coordinates |
 | 4105 | DistributedEventRejectPersistFailed | 同 4104，附完整持久化异常 |
+| 4106 | DistributedEventConsumeRetry | EventId、EventName、Consumer、AttemptCount，附完整处理异常 |
+| 4107 | DistributedEventRedecodeRetry | RecordId、Transport，附完整执行异常 |
 
-拒收前无法解码时 EventName、EventId 可能为空。Coordinates 是入站坐标，按键排序为 `k=v;k=v`，最长 256 字符。发送传输未处理的异常只将异常类型全名写入 LastError，LastErrorCode 为 transport-exception；完整异常保留在日志。收件处理器失败同样只持久异常类型全名，耗尽的 4103 保留完整异常，LastErrorCode 仍为 handler-exception。
+拒收前无法解码时 EventName、EventId 可能为空。Coordinates 是入站坐标，按键排序为 `k=v;k=v`，最长 256 字符。发送传输未处理的异常只将异常类型全名写入 LastError，LastErrorCode 为 transport-exception；完整异常保留在日志。收件处理器失败同样只持久异常类型全名，未耗尽的每次失败由 4106 Warning 保留完整异常，耗尽时由 4103 Error 保留；LastErrorCode 仍为 handler-exception。
 
 ### 自定义传输
 

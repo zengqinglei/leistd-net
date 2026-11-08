@@ -9,6 +9,7 @@ using Leistd.EventBus.EntityFrameworkCore.Retention;
 using Leistd.EventBus.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Leistd.EventBus.Tests.EntityFrameworkCore;
@@ -93,4 +94,86 @@ public sealed class DistributedEventRedecodeHandoffTests
             .ExecuteAsync(new("event-bus.redecode", worker.Clock.GetUtcNow()), default);
         Assert.Equal(0, (await worker.ReadAsync(db => db.Set<DistributedEventRejection>().SingleAsync())).RedecodeCount);
     }
+    /// <summary>传输已更名或接收宿主缺席时，勾选及按条件丢弃都是有效出口。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_queued_redecode_can_be_discarded_by_ids_or_filter(bool filter)
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync();
+        var before = host.Clock.GetUtcNow().UtcDateTime;
+        await host.InTenantAsync(null, (_, db) =>
+        {
+            db.Add(new DistributedEventRejection { Transport = "renamed-transport", Reason = "bad", Error = "Safe reason.",
+                RawBody = host.Raw().Body.ToArray(), Status = DistributedEventRejectionStatus.RedecodePending,
+                ReceivedAt = before, LastModificationTime = before });
+            return Task.CompletedTask;
+        });
+        var row = await host.ReadAsync(db => db.Set<DistributedEventRejection>().SingleAsync());
+        await using var scope = host.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>();
+        var result = await service.DiscardAsync(filter ? new() { Filter = new() { Before = before, Reason = "bad" } }
+            : new() { Ids = [row.Id] });
+        Assert.Equal(1, result.AffectedCount); Assert.Equal(0, result.DeferredCount); Assert.Empty(result.Skipped);
+        Assert.Equal(DistributedEventRejectionStatus.Discarded, (await host.ReadAsync(db => db.Set<DistributedEventRejection>().SingleAsync())).Status);
+        Assert.Equal(0, (await service.GetStatusAsync()).PendingRejections);
+        Assert.Equal(DistributedEventManagementAction.Discarded, Assert.Single(host.ManagedEvents).Action);
+    }
+
+    /// <summary>专属租户库故障只保留该行待办，同轮的后续健康行仍须完成。</summary>
+    [Fact]
+    public async Task A_failed_redecode_does_not_block_later_rows_and_keeps_its_pending_request()
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync();
+        var now = host.Clock.GetUtcNow().UtcDateTime;
+        await host.InTenantAsync(null, (_, db) =>
+        {
+            db.AddRange(new DistributedEventRejection { Transport = "scripted", Reason = "bad", Error = "Safe reason.",
+                RawBody = host.Raw(DistributedEventTestHost.DedicatedTenant).Body.ToArray(), Status = DistributedEventRejectionStatus.RedecodePending,
+                ReceivedAt = now, LastModificationTime = now },
+                new DistributedEventRejection { Transport = "scripted", Reason = "bad", Error = "Safe reason.",
+                RawBody = host.Raw().Body.ToArray(), Status = DistributedEventRejectionStatus.RedecodePending,
+                ReceivedAt = now, LastModificationTime = now });
+            return Task.CompletedTask;
+        });
+        host.BreakDedicatedDatabase();
+        await using var scope = host.Services.CreateAsyncScope();
+        var failure = await Record.ExceptionAsync(() => scope.ServiceProvider.GetRequiredService<DistributedEventRedecodeJob<EventTestDbContext>>()
+            .ExecuteAsync(new("event-bus.redecode", host.Clock.GetUtcNow()), default));
+        var rows = await host.ReadAsync(db => db.Set<DistributedEventRejection>().OrderBy(x => x.Id).ToListAsync());
+        Assert.Equal(DistributedEventRejectionStatus.Redecoded, rows[1].Status);
+        Assert.Equal(DistributedEventRejectionStatus.RedecodePending, rows[0].Status);
+        Assert.IsType<InvalidOperationException>(failure);
+        Assert.Equal(1, await host.ReadAsync(db => db.Set<DistributedEventInbox>().CountAsync()));
+        Assert.Contains(host.Logs.GetSnapshot(), r => r.Level == LogLevel.Warning && r.Id.Id == 4107 && r.Exception is not null);
+    }
+
+    /// <summary>按当前状态丢弃时，不卷入列表之外的另一类未解决记录。</summary>
+    [Theory]
+    [InlineData(DistributedEventRejectionStatus.Pending)]
+    [InlineData(DistributedEventRejectionStatus.RedecodePending)]
+    public async Task Discard_filters_preserve_unselected_unresolved_states(DistributedEventRejectionStatus selected)
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync();
+        var before = host.Clock.GetUtcNow().UtcDateTime;
+        await host.InTenantAsync(null, (_, db) =>
+        {
+            foreach (var state in new[] { DistributedEventRejectionStatus.Pending, DistributedEventRejectionStatus.RedecodePending })
+                db.Add(new DistributedEventRejection { Transport = "scripted", Reason = "bad", Error = "Safe reason.",
+                    Status = state, ReceivedAt = before, LastModificationTime = before });
+            return Task.CompletedTask;
+        });
+        await using var scope = host.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>();
+        var result = await service.DiscardAsync(new() { Filter = new() { Before = before, Status = selected } });
+        Assert.Equal(1, result.AffectedCount);
+        var rows = await host.ReadAsync(db => db.Set<DistributedEventRejection>().OrderBy(x => x.Id).ToListAsync());
+        Assert.Single(rows, row => row.Status == DistributedEventRejectionStatus.Discarded);
+        Assert.Single(rows, row => row.Status != DistributedEventRejectionStatus.Discarded && row.Status != selected);
+        await Assert.ThrowsAsync<System.ComponentModel.DataAnnotations.ValidationException>(() => service.RedecodeAsync(new()
+            { Filter = new() { Before = before, Status = DistributedEventRejectionStatus.RedecodePending } }));
+        await Assert.ThrowsAsync<System.ComponentModel.DataAnnotations.ValidationException>(() => service.DiscardAsync(new()
+            { Filter = new() { Before = before, Status = DistributedEventRejectionStatus.Redecoded } }));
+    }
+
 }

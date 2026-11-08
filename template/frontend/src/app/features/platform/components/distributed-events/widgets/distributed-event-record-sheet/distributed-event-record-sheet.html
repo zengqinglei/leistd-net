@@ -125,7 +125,7 @@
           </div>
         }
         @if (detail(); as detail) {
-          @if (canManage() && view() === 'rejections' && recoverable(detail.record)) {
+          @if (canManage() && view() === 'rejections' && discardable(detail.record)) {
             <button
               hlmBtn
               variant="outline"

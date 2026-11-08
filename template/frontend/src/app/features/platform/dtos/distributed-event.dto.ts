@@ -186,12 +186,14 @@ export interface DistributedEventRejectionDetailOutputDto {
 
 /** 按条件恢复筛选；发件箱只选死信，拒收只选 Pending。 */
 export interface DistributedEventRejectionFilterDto {
+  /** 重新解码只接受 pending；丢弃也接受 redecodePending，省略时取允许的未解决状态。 */
+  status?: 'pending' | 'redecodePending' | null;
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
   /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
-  /** 拒收原因码精确匹配；只恢复 Pending。 */
+  /** 拒收原因码精确匹配。 */
   reason?: string | null;
 }
 

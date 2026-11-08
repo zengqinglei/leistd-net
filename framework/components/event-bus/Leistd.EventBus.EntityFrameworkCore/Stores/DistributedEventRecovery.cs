@@ -11,6 +11,7 @@ using Leistd.EventBus.EntityFrameworkCore.Receiving;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Leistd.EventBus.EntityFrameworkCore.Stores;
 
@@ -22,6 +23,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
     IUnitOfWorkManager units,
     IServiceProvider services,
     TimeProvider clock,
+    ILogger<DistributedEventRecovery<TDbContext>> logger,
     IDistributedEventTransport? transport = null) where TDbContext : DbContext
 {
     public async Task<DistributedEventRecoveryOutputDto> OutboxAsync(RecoverDistributedEventOutboxInputDto input, string? database, CancellationToken ct)
@@ -154,7 +156,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 else
                 {
                     var filter = input.Filter!;
-                    query = query.Where(x => x.Status == DistributedEventRejectionStatus.Pending && x.ReceivedAt <= filter.Before);
+                    query = query.Where(x => (x.Status == DistributedEventRejectionStatus.Pending || (discard && x.Status == DistributedEventRejectionStatus.RedecodePending)) && x.ReceivedAt <= filter.Before);
+                    if (filter.Status is { } state) query = query.Where(x => x.Status == state);
                     if (filter.EventName is not null) query = query.Where(x => x.EventName == filter.EventName);
                     if (filter.Reason is not null) query = query.Where(x => x.Reason == filter.Reason);
                     if (filter.Keyword is { } key)
@@ -165,7 +168,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
             }, ct);
             if (requested is not null)
                 foreach (var id in requested.Except(batch.Select(x => x.Id))) Skip(skipped, id, DistributedEventRecoverySkipReasons.NotFound);
-            var eligible = batch.Where(row => row.Status == DistributedEventRejectionStatus.Pending).ToArray();
+            var eligible = batch.Where(row => row.Status == DistributedEventRejectionStatus.Pending || (discard && row.Status == DistributedEventRejectionStatus.RedecodePending)).ToArray();
             foreach (var row in batch.Except(eligible)) Skip(skipped, row.Id, DistributedEventRecoverySkipReasons.InvalidState);
             foreach (var group in eligible.GroupBy(row => !discard && (transport is null || row.Transport != transport.Name)))
             {
@@ -183,7 +186,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                     var changed = new List<long>();
                     foreach (var row in rows)
                     {
-                        if (row.Status != DistributedEventRejectionStatus.Pending) continue;
+                        if (row.Status != DistributedEventRejectionStatus.Pending && !(discard && row.Status == DistributedEventRejectionStatus.RedecodePending)) continue;
                         row.LastModificationTime = clock.GetUtcNow().UtcDateTime;
                         if (!discard && !deferred) row.RedecodeCount++;
                         if (outcomes[row.Id] is { } error) { row.Error = error; continue; }
@@ -211,6 +214,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
     {
         if (transport is null) return;
         long after = 0;
+        var failures = 0;
         var target = new DistributedEventDatabaseTarget(null, true);
         while (true)
         {
@@ -219,22 +223,32 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 .OrderBy(x => x.Id).Take(100).ToListAsync(token), ct);
             foreach (var row in batch)
             {
-                var error = await DecodeAsync(row, true, ct);
-                await scope.RunAsync(target, async (db, token) =>
+                try
                 {
-                    var current = await db.Set<DistributedEventRejection>().SingleAsync(x => x.Id == row.Id, token);
-                    if (current.Status != DistributedEventRejectionStatus.RedecodePending) return false;
-                    current.RedecodeCount++;
-                    current.LastModificationTime = clock.GetUtcNow().UtcDateTime;
-                    current.Status = error is null ? DistributedEventRejectionStatus.Redecoded : DistributedEventRejectionStatus.Pending;
-                    current.ResolvedAt = error is null ? current.LastModificationTime : null;
-                    if (error is not null) current.Error = error;
-                    return true;
-                }, ct);
+                    var error = await DecodeAsync(row, true, ct);
+                    await scope.RunAsync(target, async (db, token) =>
+                    {
+                        var current = await db.Set<DistributedEventRejection>().SingleAsync(x => x.Id == row.Id, token);
+                        if (current.Status != DistributedEventRejectionStatus.RedecodePending) return false;
+                        current.RedecodeCount++;
+                        current.LastModificationTime = clock.GetUtcNow().UtcDateTime;
+                        current.Status = error is null ? DistributedEventRejectionStatus.Redecoded : DistributedEventRejectionStatus.Pending;
+                        current.ResolvedAt = error is null ? current.LastModificationTime : null;
+                        if (error is not null) current.Error = error;
+                        return true;
+                    }, ct);
+                }
+                catch (Exception exception) when (!ct.IsCancellationRequested)
+                {
+                    failures++;
+                    logger.LogWarning(new EventId(4107, "DistributedEventRedecodeRetry"), exception,
+                        "Distributed event rejection {RecordId} from {Transport} could not be re-decoded; the pending request will retry.", row.Id, row.Transport);
+                }
             }
             if (batch.Count < 100) break;
             after = batch[^1].Id;
         }
+        if (failures > 0) throw new InvalidOperationException($"Distributed event re-decode failed for {failures} pending requests.");
     }
 
     private async Task<string?> DecodeAsync(DistributedEventRejection row, bool enqueue, CancellationToken ct)
