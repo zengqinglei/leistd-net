@@ -38,7 +38,7 @@
 | 要求 | 验收（Given / When / Then） | 覆盖 |
 | --- | --- | --- |
 | 第一步只写临时 Cookie | Given 已启用第二步的账号，When 口令或外部登录第一步通过，Then 响应只写临时 Cookie（HttpOnly、非持久、不滑动、绝对期限同挑战），不写会话 Cookie，响应体不含可用于完成登录的凭据 | 集成 |
-| 临时身份不是正式身份 | Given 只有临时 Cookie，When 调 `/auth/me` 与其他需登录接口、`/connect/userinfo`，Then 401 | 集成 |
+| 临时身份不是正式身份 | Given 只有临时 Cookie，When 调 `/auth/me` 与其他需登录接口，Then 401；调 `/connect/userinfo`，Then OpenIddict 按协议拒绝（无访问令牌为 `invalid_request`），不返回用户资料 | 集成 |
 | 刷新可续 | Given 第二步页，When 刷新，Then 凭临时 Cookie 取回方式与打码邮箱，继续第二步 | 集成（取上下文接口）；前端单测 |
 | 完成后清临时、签正式 | Given 第二步通过，Then 响应删除临时 Cookie 并签发会话 Cookie；挑战一次消费，重放失败 | 集成 |
 | 授权接回第二步 | Given 待完成登录，When 两个依赖方各自发起交互授权，Then 都回到第二步页且各带自己的 `request_uri`；完成一次后两者分别续跑拿到授权码 | 集成 |
@@ -84,8 +84,8 @@
 按 §2 实施，框架无改动。
 
 - 后端：`LocalSessionAuthenticationExtensions` 调官方 `AddTwoFactorUserIdCookie` 并按会话 Cookie 约定配置（部署名 `__Host-Http-CompanyName.ProjectName.TwoFactor`）；新增 Api 层 `PendingSignInCookie`（签入、读取、结束、第二步操作包装），方案名取 `IdentityConstants.TwoFactorUserIdScheme`。应用层不引用 ASP.NET Core，方案名常量因此放在 `PendingSignInCookie.Scheme`，`AuthenticationSchemeNames` 注释指向它。挑战记录加完整精度签发时刻，授权端点据此与重新认证证明比较（Cookie 票据的签发时间只到秒）。
-- 端点：新增 `GET /api/v1/auth/two-factor`（上下文，出参 `TwoFactorLoginOutputDto`）与 `POST /api/v1/auth/two-factor/cancel`；删除 `TwoFactorEmailCodeInputDto`、`TwoFactorPasskeyOptionsInputDto`，`TwoFactorLoginInputDto.Token` 与 `SessionLoginOutputDto.TwoFactorToken` 去掉；新错误码 `Auth:EmailCodeResendTooLate`（400，不计数）。授权端点有效会话旁残留的临时 Cookie 一并结束。
-- 实施中确认的事实：异常处理中间件写错误响应前会清空响应头，第二步端点在挑战到期时的删除 Cookie 登记在 `OnStarting`；`/connect/userinfo` 无令牌时 OpenIddict 按协议答 `invalid_request`（400）而不是 401，验收按"拿不到用户资料"断言。
-- 前端：独立路由 `/auth/two-factor`（`TwoFactorLogin`），登录收尾抽到 `features/account/utils/login-completion.ts` 供登录页与第二步页共用；`ReturnUrlService.twoFactorLogin` 生成去向，第二步页自身不作为可接续目标。Mock 的待完成登录按 sessionStorage 约定保存，刷新可续；Mock 已发的邮件码仍在页面内存里，刷新后需重发。
+- 端点：新增 `GET /api/v1/auth/two-factor`（上下文，出参 `TwoFactorLoginOutputDto`）与 `POST /api/v1/auth/two-factor/cancel`；删除 `TwoFactorEmailCodeInputDto`、`TwoFactorPasskeyOptionsInputDto`，`TwoFactorLoginInputDto.Token` 与 `SessionLoginOutputDto.TwoFactorToken` 去掉；新错误码 `Auth:EmailCodeResendTooLate`（400，不计数）。授权端点有效会话旁残留的临时 Cookie 一并结束；协议退出真正完成时（含没有正式会话的直接退出）也结束待完成登录，等待确认时不动它。"剩余不足 N 不新发"在发码存储的发送间隔锁内、复用判定之后才检查，间隔内沿用旧码不受它限制。
+- 实施中确认的事实：异常处理中间件写错误响应前会清空响应头，第二步端点在挑战到期时的删除 Cookie 登记在 `OnStarting`；`/connect/userinfo` 无令牌时 OpenIddict 按协议答 `invalid_request`（400），验收表已按此改写。
+- 前端：独立路由 `/auth/two-factor`（`TwoFactorLogin`），登录收尾抽到 `features/account/utils/login-completion.ts` 供登录页与第二步页共用；`ReturnUrlService.twoFactorLogin` 生成去向，第二步页自身不作为可接续目标。Mock 的待完成登录连同最近一封邮件挑战与它的发送间隔按 sessionStorage 约定保存，刷新后原码照样能用、间隔照样沿用。
 - 测试：新增 `PendingSignInTests`（Cookie 属性、非正式身份、刷新、完成与重放、覆盖、取消、过期与篡改、并发两种方式、两个依赖方、静默、三种重新认证与证明挪用、会话与旧 Cookie 并存）、`TwoFactorMethodsTests` 期限用例、`TwoFactorRequirementTests` 首绑走完、`PasskeySignInTests` 免口令删过期 Cookie；前端第二步页、挑战组件、登录页、外部回调与 Mock 单测；e2e `two-factor-login.e2e.ts`（刷新后完成）。
 - 验证：生成后 `scripts/verify.ps1` 全量通过 identity-all-features、identity、identity-tenant-management-without-history、Resource（全量）；standalone-capabilities-06 除 `distributed-events.e2e.ts` 一例事件状态超时（与本改动无关）外全部通过；standalone、identity-capabilities-08 生成后 lint、格式与类型检查通过。`scripts/check-all.ps1` 50 道闸门通过。
