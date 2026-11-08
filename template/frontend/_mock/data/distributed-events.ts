@@ -281,6 +281,7 @@ export const DISTRIBUTED_EVENT_PAYLOADS: Record<string, DistributedEventPayloadO
 export const DISTRIBUTED_EVENT_RAW_MESSAGES: Record<string, DistributedEventRawMessageOutputDto> = {
   'rejections:1': { rawBody: 'eyJicm9rZW4iOg==' },
   'rejections:2': { rawBody: 'e30=' },
+  'rejections:3': { rawBody: 'e30=' },
 };
 
 export const DISTRIBUTED_EVENT_STATUS: DistributedEventStatusOutputDto = {

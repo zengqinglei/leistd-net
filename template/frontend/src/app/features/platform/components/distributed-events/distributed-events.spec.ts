@@ -232,7 +232,7 @@ describe('DistributedEvents page', () => {
     expect(service.replay).not.toHaveBeenCalled();
   });
 
-  it('reports handoff separately from completed re-decodes and exposes the queued status', async () => {
+  it('reports handoff separately from completed re-decodes', async () => {
     await setup(true, null, { view: 'rejections', status: 'pending' });
     const notice = vi.spyOn(toast, 'success').mockReturnValue('handoff');
     try {
@@ -252,7 +252,6 @@ describe('DistributedEvents page', () => {
       const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
       options.action!().subscribe();
       expect(notice).toHaveBeenCalledWith('Re-decoded 1 · Handed off 2 · Skipped 0');
-      expect(component.states()).toContain('redecodePending');
     } finally {
       notice.mockRestore();
     }

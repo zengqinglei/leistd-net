@@ -28,7 +28,7 @@
     "distributed-event.redelivered": "Redelivered distributed events {{target}}",
     "distributed-event.replayed": "Replayed distributed events {{target}}",
     "distributed-event.redecoded": "Re-decoded rejected events {{target}}",
-    "distributed-event.redecode-requested": "Requested rejected events re-decode {{target}}",
+    "distributed-event.redecode-requested": "Requested re-decode of rejected events {{target}}",
     "distributed-event.discarded": "Discarded rejected events {{target}}",
     //#endif
     "user.created": "Created user {{target}}",
@@ -106,7 +106,7 @@
     "distributed-event.redelivered": "Redelivered distributed events",
     "distributed-event.replayed": "Replayed distributed events",
     "distributed-event.redecoded": "Re-decoded rejected events",
-    "distributed-event.redecode-requested": "Requested rejected events re-decode",
+    "distributed-event.redecode-requested": "Requested re-decode of rejected events",
     "distributed-event.discarded": "Discarded rejected events",
     //#endif
     "operation-records.exported": "Exported operation records",

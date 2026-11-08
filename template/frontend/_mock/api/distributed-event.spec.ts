@@ -155,6 +155,15 @@ describe('distributed event mock', () => {
     expect(row.lastErrorCode).toBeNull();
   });
 
+  it('provides original raw bytes for every rejection seed', () => {
+    for (const { record } of DISTRIBUTED_EVENT_REJECTIONS) {
+      const payload = call('GET /api/v1/distributed-events/rejections/:id/payload', {
+        params: { id: record.id },
+      });
+      expect(payload).toEqual({ rawBody: expect.any(String) });
+    }
+  });
+
   it('keeps undecodable raw messages pending until discarded', () => {
     const row = DISTRIBUTED_EVENT_REJECTIONS[0].record;
     expect(

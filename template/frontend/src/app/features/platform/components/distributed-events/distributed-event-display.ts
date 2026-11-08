@@ -250,14 +250,14 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.ids': 'Record IDs',
   'distributedEvents.confirmation.question.redeliver': 'Redeliver {{count}} dead letters?',
   'distributedEvents.confirmation.question.replay': 'Replay {{count}} inbox records?',
-  'distributedEvents.confirmation.question.redecode': 'Re-decode {{count}} unresolved rejections?',
+  'distributedEvents.confirmation.question.redecode': 'Re-decode {{count}} pending rejections?',
   'distributedEvents.confirmation.question.discard': 'Discard {{count}} unresolved rejections?',
   'distributedEvents.confirmation.selectedQuestion.redeliver':
     'Redeliver {{count}} selected dead letters?',
   'distributedEvents.confirmation.selectedQuestion.replay':
     'Replay {{count}} selected inbox records?',
   'distributedEvents.confirmation.selectedQuestion.redecode':
-    'Re-decode {{count}} selected unresolved rejections?',
+    'Re-decode {{count}} selected pending rejections?',
   'distributedEvents.confirmation.selectedQuestion.discard':
     'Discard {{count}} selected unresolved rejections?',
   'distributedEvents.confirmation.filterQuestion.redeliver':
@@ -265,7 +265,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.filterQuestion.replay':
     'Replay {{count}} inbox records matching the current filter?',
   'distributedEvents.confirmation.filterQuestion.redecode':
-    'Re-decode {{count}} unresolved rejections matching the current filter?',
+    'Re-decode {{count}} pending rejections matching the current filter?',
   'distributedEvents.confirmation.filterQuestion.discard':
     'Discard {{count}} unresolved rejections matching the current filter?',
   'distributedEvents.confirmation.button.redeliver': 'Redeliver {{count}} records',

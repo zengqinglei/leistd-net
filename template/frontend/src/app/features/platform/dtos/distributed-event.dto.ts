@@ -184,7 +184,7 @@ export interface DistributedEventRejectionDetailOutputDto {
   coordinates: Record<string, string>;
 }
 
-/** 按条件恢复筛选；发件箱只选死信，拒收只选 Pending。 */
+/** 拒收按条件恢复；重新解码只选 Pending，丢弃也接受 RedecodePending。 */
 export interface DistributedEventRejectionFilterDto {
   /** 重新解码只接受 pending；丢弃也接受 redecodePending，省略时取允许的未解决状态。 */
   status?: 'pending' | 'redecodePending' | null;
