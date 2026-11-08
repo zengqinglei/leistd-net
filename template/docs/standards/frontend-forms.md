@@ -8,7 +8,7 @@
 
 默认 `report` 用 `common.requestError` 作标题、剩余消息作描述。`mapFormErrors` 忽略大小写匹配已声明顶层字段；DTO 别名、嵌套/索引路径由 `aliases` 显式指向字段。剩余错误只反馈一次，自定义反馈也不能回显整条响应；登录凭据拒绝不定位。
 
-原生 form 写 novalidate，submit 事件与内部 submit 按钮共用入口。状态取 submitting() 以阻止重入，spinner 保留文字。invalid/pending 不预禁用，只按在途或可解释前提（权限、冷却、能力、批量零选择）禁用。搜索 Enter 不保存；URI 不嵌套 form，Enter 只添加。
+原生 form 写 novalidate，submit 事件与内部 submit 按钮共用入口。状态取 submitting() 以阻止重入。invalid/pending 不预禁用，只按在途或可解释前提（权限、冷却、能力、批量零选择）禁用。搜索 Enter 不保存；URI 不嵌套 form，Enter 只添加。
 
 ## 字段与校验
 
