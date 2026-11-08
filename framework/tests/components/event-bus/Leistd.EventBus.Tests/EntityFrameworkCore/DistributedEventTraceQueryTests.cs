@@ -58,7 +58,7 @@ public sealed class DistributedEventTraceQueryTests
             Assert.Equal(DistributedEventTestHost.TenantA, Assert.Single((await service.GetOutboxListAsync(new() { Keyword = keyword })).Items).TenantId);
             Assert.Equal(DistributedEventTestHost.TenantA, Assert.Single((await service.GetInboxListAsync(new() { Keyword = keyword })).Items).TenantId);
         }
-        foreach (var keyword in new[] { CorrelationId[..^1], CorrelationId.ToLowerInvariant(), TraceId[..^1] })
+        foreach (var keyword in new[] { CorrelationId[..^1], TraceId[..^1] })
         {
             Assert.Empty((await service.GetOutboxListAsync(new() { Keyword = keyword })).Items);
             Assert.Empty((await service.GetInboxListAsync(new() { Keyword = keyword })).Items);

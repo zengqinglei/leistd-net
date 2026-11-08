@@ -235,7 +235,7 @@ public sealed class OrderPaymentPublisher(IDistributedEventBus events, IUnitOfWo
 
 EF 后台服务只执行带 `event-bus` 标签的检查，并将每个传输进程的结果写入宿主库；没有注册传输或匹配检查时不写入，不修改宿主 `HealthCheckPublisherOptions.Predicate`。Api 即使不注册传输也能从同库读取 Worker 状态。上报失败只记警告，下轮重试，不影响收发。
 
-`Leistd:EventBus:Distributed:TransportStatus` 的 `ReportInterval` 默认十五秒、`StaleAfter` 默认一分钟且须大于上报间隔；`Instance` 默认 `{ApplicationName}@{MachineName}:{ProcessId}`，显式覆盖须保证各并发实例唯一。配置无需另设部署变量。保留期任务会删除上报时间早于保留期的实例行。
+`Leistd:EventBus:Distributed:TransportStatus` 的 `ReportInterval` 默认十五秒、`StaleAfter` 默认一分钟且须大于上报间隔；`Instance` 默认 `{ApplicationName}@{MachineName}:{ProcessId}`，显式覆盖须保证各并发实例唯一。配置无需另设部署变量。实际上报周期为间隔加检查与持久化耗时；StaleAfter 应大于间隔加最长检查耗时，并为实例间时钟偏差留余量，各实例应保持时钟同步。保留期任务会删除上报时间早于保留期的实例行。
 
 快照只读宿主库新鲜报告，不在 GET 中执行健康检查；租户与所选业务库不改变来源。聚合取最差 `HealthStatus`：healthy 表示已连接，degraded 表示降级，unhealthy 表示断开且正在自动恢复，unknown 表示没有新鲜报告。`TransportStatusChangedAt` 为最差状态实例中最近的变化时刻，`TransportReportedAt` 为全部新鲜实例中最近的上报时刻；unknown 时二者为空。传输名优先当前进程，否则按最差状态、变化时刻降序、上报时刻降序、实例名升序选取。
 
@@ -256,7 +256,7 @@ ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。
 
 积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小等不可恢复的单条消息错误后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
 
-活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。三类记录分别存储从有效 W3C traceparent 提取的小写 TraceId，以及 leistd-correlation-id 头的原始 CorrelationId（最长 64 字符）；两者都可在列表关键字中精确检索。32 位十六进制关键字对 TraceId 转小写匹配，关联标识按原值匹配。缺失或非法 traceparent 时 TraceId 为空；显式关联标识可与 TraceId 不同，无 Activity 的入口也可只携带关联标识。
+活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。三类记录分别存储从有效 W3C traceparent 提取的小写 TraceId，以及符合 CorrelationIdConstants.IsWellFormed 的 leistd-correlation-id 头原始 CorrelationId（最长 64 字符；不合规时该列为空，原始头仍保留）；两者都可在列表关键字中精确检索。32 位十六进制关键字对 TraceId 转小写匹配，关联标识不归一化，匹配的大小写语义取决于数据库排序规则（例如 SQL Server 默认通常不区分大小写）。缺失或非法 traceparent 时 TraceId 为空；显式关联标识可与 TraceId 不同，无 Activity 的入口也可只携带关联标识。
 
 稳定告警键如下，事件编号与名称一起使用：
 

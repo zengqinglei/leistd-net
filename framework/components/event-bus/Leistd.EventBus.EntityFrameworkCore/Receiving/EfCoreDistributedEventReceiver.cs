@@ -6,6 +6,7 @@ using Leistd.EventBus.Distributed.Diagnostics;
 using Leistd.EventBus.Distributed.Subscriptions;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
+using Leistd.EventBus.EntityFrameworkCore.Diagnostics;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
@@ -132,7 +133,7 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
                 Consumer = consumer.Consumer, OrderingKey = message.OrderingKey, OccurredAt = message.OccurredAt,
                 Payload = payload, Headers = new(message.Headers), Coordinates = new(message.Coordinates),
                 TraceId = DistributedEventTrace.FromHeaders(message.Headers),
-                CorrelationId = message.Headers.GetValueOrDefault(DistributedEventHeaders.CorrelationId),
+                CorrelationId = DistributedEventCorrelation.FromHeaders(message.Headers),
                 ReceivedAt = receivedAt, LastModificationTime = now, NextAttemptAt = now.AddMinutes(1)
             };
             db.Set<DistributedEventInbox>().Add(row);
@@ -160,7 +161,7 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
                 EventName = message?.EventName, EventId = message?.EventId, RawBody = raw.Body.ToArray(),
                 Headers = new(raw.Headers), Coordinates = new(raw.Coordinates), ReceivedAt = raw.ReceivedAt,
                 TraceId = DistributedEventTrace.FromHeaders(message?.Headers ?? raw.Headers),
-                CorrelationId = (message?.Headers ?? raw.Headers).GetValueOrDefault(DistributedEventHeaders.CorrelationId),
+                CorrelationId = DistributedEventCorrelation.FromHeaders(message?.Headers ?? raw.Headers),
                 LastModificationTime = clock.GetUtcNow().UtcDateTime
             });
             await unit.CompleteAsync(ct);

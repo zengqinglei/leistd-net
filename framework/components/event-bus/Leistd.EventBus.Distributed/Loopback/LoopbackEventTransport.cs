@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Leistd.EventBus.Distributed.Loopback;
 
 internal sealed class LoopbackEventTransport(IServiceScopeFactory scopeFactory, TimeProvider timeProvider,
-    IOptionsMonitor<DistributedEventOptions> options, ILogger<LoopbackEventTransport>? logger = null) : IDistributedEventTransport
+    IOptionsMonitor<DistributedEventOptions> options, ILogger<LoopbackEventTransport> logger) : IDistributedEventTransport
 {
     public string Name => "Loopback";
 
@@ -30,7 +30,7 @@ internal sealed class LoopbackEventTransport(IServiceScopeFactory scopeFactory, 
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            logger?.LogWarning(exception, "Loopback distributed event {EventId} delivery failed.", message.EventId);
+            logger.LogWarning(exception, "Loopback distributed event {EventId} delivery failed.", message.EventId);
             return new DistributedEventSendResult
             {
                 Status = DistributedEventSendStatus.TransientFailure,

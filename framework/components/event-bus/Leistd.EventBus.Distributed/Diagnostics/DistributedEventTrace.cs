@@ -7,7 +7,7 @@ internal static class DistributedEventTrace
 {
     public static string? FromHeaders(IReadOnlyDictionary<string, string> headers)
     {
-        var parent = headers.FirstOrDefault(pair => string.Equals(pair.Key, DistributedEventHeaders.TraceParent, StringComparison.OrdinalIgnoreCase)).Value;
+        var parent = headers.FirstOrDefault(pair => string.Equals(pair.Key, DistributedEventHeaders.TraceParent, StringComparison.Ordinal)).Value;
         return ActivityContext.TryParse(parent, null, out var context) ? context.TraceId.ToHexString() : null;
     }
 

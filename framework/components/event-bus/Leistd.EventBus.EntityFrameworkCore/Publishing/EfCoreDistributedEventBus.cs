@@ -5,6 +5,7 @@ using Leistd.EventBus.Distributed.Diagnostics;
 using Leistd.EventBus.Distributed.Subscriptions;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
+using Leistd.EventBus.EntityFrameworkCore.Diagnostics;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.EventBus.Events;
 using Leistd.MultiTenancy.Context;
@@ -50,7 +51,7 @@ internal sealed class EfCoreDistributedEventBus<TDbContext>(
             TenantId = tenant.Id, OrderingKey = (@event as IOrderedDistributedEvent)?.OrderingKey,
             OccurredAt = @event.OccurredOn, Payload = JsonSerializer.Serialize(@event, @event.GetType(), JsonSerializerOptions.Web),
             Headers = headers, TraceId = DistributedEventTrace.FromHeaders(headers),
-            CorrelationId = headers.GetValueOrDefault(DistributedEventHeaders.CorrelationId), CreationTime = now, LastModificationTime = now,
+            CorrelationId = DistributedEventCorrelation.FromHeaders(headers), CreationTime = now, LastModificationTime = now,
             NextAttemptAt = now.AddMinutes(1)
         };
         var db = await contexts.GetDbContextAsync(cancellationToken);

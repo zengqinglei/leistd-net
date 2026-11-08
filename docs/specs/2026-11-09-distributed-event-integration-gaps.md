@@ -83,7 +83,7 @@
 ### 2.6 按 traceId 检索（G7）
 
 - 发件箱、收件箱、拒收各增加 `TraceId` 列（长度 32，可空，建索引）。写入时从 `traceparent` 头按 W3C 格式解析，非法或缺失时留空，统一存小写。
-- 同时增加 `CorrelationId` 列（长度取 `CorrelationIdConstants.MaxLength`，可空，建索引），取自 `leistd-correlation-id` 头。发布时这个头来自关联标识组件的 `ICorrelationIdProvider`，消费时组件也按它恢复关联标识作用域，所以存的就是日志里的关联标识。关联标识默认等于 TraceId，但在以下两种情况下两者不同：调用方通过请求头指定了关联标识，或代码显式切换过；没有 `Activity` 的入口（后台作业、Worker）只有关联标识，没有 traceparent。只存 TraceId 时，从日志拿到关联标识就查不到事件。
+- 同时增加 `CorrelationId` 列（长度取 `CorrelationIdConstants.MaxLength`，可空，建索引），取自 `leistd-correlation-id` 头，只有符合 `CorrelationIdConstants.IsWellFormed` 时才写入该列，否则留空；原始消息头不改。发布时这个头来自关联标识组件的 `ICorrelationIdProvider`，消费时组件也按它恢复关联标识作用域，所以存的就是日志里的关联标识。关联标识默认等于 TraceId，但在以下两种情况下两者不同：调用方通过请求头指定了关联标识，或代码显式切换过；没有 `Activity` 的入口（后台作业、Worker）只有关联标识，没有 traceparent。只存 TraceId 时，从日志拿到关联标识就查不到事件。
 - 关键字精确匹配 `TraceId` 或 `CorrelationId`（是 32 位十六进制时先转成小写再匹配 `TraceId`），不做模糊匹配。
 - 模板界面在列表关键字的占位文案里补上 traceId。
 
