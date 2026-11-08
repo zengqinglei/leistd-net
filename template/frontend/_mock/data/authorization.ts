@@ -109,7 +109,7 @@ export const PERMISSION_DEFINITIONS = [
       //#endif
     ],
   },
-  //#if (OpenIddictServer || IncludeWebhooks)
+  //#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
   {
     name: 'Developer',
     displayName: 'Developer',
@@ -137,6 +137,20 @@ export const PERMISSION_DEFINITIONS = [
         displayName: 'Webhooks',
         parentName: undefined,
         children: [leaf(PERMISSIONS.webhooks.manage, 'Manage', PERMISSIONS.webhooks.default)],
+      },
+      //#endif
+      //#if (IncludeDistributedEvents)
+      {
+        name: PERMISSIONS.distributedEvents.default,
+        displayName: 'Distributed events',
+        parentName: undefined,
+        children: [
+          leaf(
+            PERMISSIONS.distributedEvents.manage,
+            'Manage',
+            PERMISSIONS.distributedEvents.default,
+          ),
+        ],
       },
       //#endif
     ],

@@ -82,7 +82,7 @@ export class NavigationService {
         //#endif
       ],
     },
-    //#if (OpenIddictServer || IncludeWebhooks)
+    //#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
     {
       label: 'layout.sidebar.groupDeveloper',
       items: [
@@ -100,6 +100,14 @@ export class NavigationService {
           icon: 'lucideWebhook',
           route: '/platform/webhooks',
           permissions: [PERMISSIONS.webhooks.default],
+        },
+        //#endif
+        //#if (IncludeDistributedEvents)
+        {
+          label: 'layout.sidebar.distributedEvents',
+          icon: 'lucideWebhook',
+          route: '/platform/distributed-events',
+          permissions: [PERMISSIONS.distributedEvents.default],
         },
         //#endif
       ],
@@ -186,7 +194,7 @@ export class NavigationService {
         //#endif
       ],
     },
-    //#if (OpenIddictServer || IncludeWebhooks)
+    //#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
     {
       label: 'Developer',
       items: [
@@ -204,6 +212,14 @@ export class NavigationService {
           icon: 'lucideWebhook',
           route: '/platform/webhooks',
           permissions: [PERMISSIONS.webhooks.default],
+        },
+        //#endif
+        //#if (IncludeDistributedEvents)
+        {
+          label: 'Distributed events',
+          icon: 'lucideWebhook',
+          route: '/platform/distributed-events',
+          permissions: [PERMISSIONS.distributedEvents.default],
         },
         //#endif
       ],

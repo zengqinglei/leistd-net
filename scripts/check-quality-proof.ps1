@@ -55,18 +55,18 @@ if ($Kind -ceq 'package') {
     }
     foreach ($item in $byShard.Values) {
         $declared = @($item.TemplateSourceDigests.PSObject.Properties)
-        if ($item.ShapeShards -ne 3 -or $item.EffectiveShapes -ne 640 -or $declared.Count -ne $sources.Count -or
+        if ($item.ShapeShards -ne 3 -or $item.EffectiveShapes -ne 1280 -or $declared.Count -ne $sources.Count -or
             @($declared | Where-Object { $sources[$_.Name] -cne $_.Value }).Count -gt 0) {
             throw 'Template generation shards describe different candidate sources.'
         }
     }
-    # 形态片：640 个形态按序号取模恰好各出现一次，形态互不相同
+    # 形态片：1280 个形态按序号取模恰好各出现一次，形态互不相同
     $shapes = @{}
     foreach ($shard in @('0', '1', '2')) {
         $entries = @($byShard[$shard].Shapes)
         if ($byShard[$shard].Shapes -isnot [array] -or $entries.Count -eq 0) { throw 'Template generation proof is incomplete.' }
         foreach ($entry in $entries) {
-            if (-not (Test-Integer $entry.Index) -or $entry.Index -lt 0 -or $entry.Index -ge 640 -or ($entry.Index % 3) -ne [int]$shard -or
+            if (-not (Test-Integer $entry.Index) -or $entry.Index -lt 0 -or $entry.Index -ge 1280 -or ($entry.Index % 3) -ne [int]$shard -or
                 $shapes.ContainsKey([int]$entry.Index) -or $entry.Effective -isnot [array] -or $entry.Digest -cnotmatch '^[0-9a-f]{64}$' -or
                 $entry.VerifyKey.Script -cnotmatch '^[0-9a-f]{64}$' -or $entry.VerifyKey.Steps -isnot [array]) {
                 throw 'Template generation shapes are missing, duplicated or misassigned.'
@@ -75,8 +75,8 @@ if ($Kind -ceq 'package') {
         }
     }
     $effective = @($shapes.Values | ForEach-Object { ConvertTo-Json -InputObject @($_.Effective) -Compress } | Sort-Object -Unique -CaseSensitive)
-    if ($shapes.Count -ne 640 -or $effective.Count -ne 640) { throw 'Template generation shapes are missing, duplicated or misassigned.' }
-    # 对照片：1536 组互不相同的原始输入映射到 640 个形态；角色等价、Ci 变体与 verify 检查
+    if ($shapes.Count -ne 1280 -or $effective.Count -ne 1280) { throw 'Template generation shapes are missing, duplicated or misassigned.' }
+    # 对照片：3072 组互不相同的原始输入映射到 1280 个形态；角色等价、Ci 变体与 verify 检查
     $control = $byShard['control']
     $mapping = @($control.InputMapping)
     $mappedShapes = @($mapping | ForEach-Object { ConvertTo-Json -InputObject @($_.effective) -Compress } | Sort-Object -Unique -CaseSensitive)
@@ -89,9 +89,9 @@ if ($Kind -ceq 'package') {
     $roles = @($comparisons | ForEach-Object { $_.role } | Sort-Object -Unique -CaseSensitive)
     $verify = @($control.VerifyChecks)
     $checkedKeys = @($verify | ForEach-Object { ConvertTo-Json -InputObject $_.Key -Compress -Depth 4 })
-    if ($control.RawInputs -ne 1536 -or $control.InputMapping -isnot [array] -or $mapping.Count -ne 1536 -or
-        @($mapping | ForEach-Object { ConvertTo-Json -InputObject @($_.input) -Compress } | Sort-Object -Unique -CaseSensitive).Count -ne 1536 -or
-        $mappedShapes.Count -ne 640 -or
+    if ($control.RawInputs -ne 3072 -or $control.InputMapping -isnot [array] -or $mapping.Count -ne 3072 -or
+        @($mapping | ForEach-Object { ConvertTo-Json -InputObject @($_.input) -Compress } | Sort-Object -Unique -CaseSensitive).Count -ne 3072 -or
+        $mappedShapes.Count -ne 1280 -or
         $control.EquivalenceComparisons -isnot [array] -or (Compare-Object @('Identity', 'Resource', 'Standalone') $roles -CaseSensitive) -or
         @($comparisons | Where-Object { -not $representatives.ContainsKey([int]$_.representative) -or
             $_.Digest -cne $representatives[[int]$_.representative].Digest }).Count -gt 0 -or
@@ -114,10 +114,10 @@ if ($Kind -ceq 'package') {
     if (-not $plan.GeneratedDocumentation) { throw 'Generated documentation space is incomplete.' }
     $byShard = Get-ShardProofs 'Generated documentation'
     $indexes = @(foreach ($shard in @('0', '1', '2')) { @($byShard[$shard].ShapeIndexes) })
-    if (@($indexes | Where-Object { -not (Test-Integer $_) -or $_ -lt 0 -or $_ -ge 640 }).Count -gt 0 -or
-        $indexes.Count -ne 640 -or @($indexes | Sort-Object -Unique).Count -ne 640 -or
+    if (@($indexes | Where-Object { -not (Test-Integer $_) -or $_ -lt 0 -or $_ -ge 1280 }).Count -gt 0 -or
+        $indexes.Count -ne 1280 -or @($indexes | Sort-Object -Unique).Count -ne 1280 -or
         @($byShard['control'].ShapeIndexes).Count -ne 0 -or $byShard['control'].CiVariants -ne 4 -or
-        @($shards | Where-Object { $byShard[$_].EffectiveShapes -ne 640 -or -not (Test-Integer $byShard[$_].Projects) -or $byShard[$_].Projects -le 0 }).Count -gt 0 -or
+        @($shards | Where-Object { $byShard[$_].EffectiveShapes -ne 1280 -or -not (Test-Integer $byShard[$_].Projects) -or $byShard[$_].Projects -le 0 }).Count -gt 0 -or
         @('0', '1', '2' | Where-Object { $byShard[$_].CiVariants -ne 0 }).Count -gt 0 -or
         (($shards | ForEach-Object { $byShard[$_].Projects } | Measure-Object -Sum).Sum -lt 324)) {
         throw 'Generated documentation space is incomplete.'

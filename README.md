@@ -110,6 +110,7 @@ dotnet new fullstack-app -n Acme.Shop
 | `--include-operation-records` | `true` | 全部角色；控制内置数据库历史、查询、导出、归档及界面。关闭后仍输出结构化安全记录 |
 | `--include-notifications` | `false` | 全部角色；通知发布、历史、未读数、通知中心、推送及个人偏好，独立于业务实时 |
 | `--include-webhooks` | `false` | 全部角色；出站 Webhook 的订阅管理、签名投递与持久重试、投递日志、手动重发与统计 |
+| `--include-distributed-events` | `false` | 全部角色；事务发件箱、收件箱、拒收恢复、RabbitMQ 与后台管理 |
 | `--include-external-login` | `false` | 仅 Identity/Standalone；GitHub/Google 等第三方身份提供商登录 |
 | `--include-localization` | `false` | 全部角色；后端按 culture 本地化，有前端时同时包含语言资源与运行时切换 |
 | `--ci` | `github` | 全部角色；CI 流水线薄壳：`github` 生成 `.github/workflows/ci.yml`，`gitlab` 生成 `.gitlab-ci.yml`，`none` 不生成。薄壳只准备环境并调用随项目生成的完整回归入口 `template/scripts/verify.ps1`（生成后位于 `scripts/`） |
