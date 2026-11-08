@@ -134,8 +134,11 @@ internal sealed class BrokerContractFixture(string kind, string connection, bool
         {
             using var client = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = connection }).Build();
             await client.DeleteTopicsAsync([Topic]);
-            try { await client.DeleteGroupsAsync([_name]); }
-            catch (DeleteGroupsException exception) when (exception.Results.All(x => x.Error.Code is ErrorCode.GroupIdNotFound or ErrorCode.NoError)) { }
+            if (receiveEnabled)
+            {
+                try { await client.DeleteGroupsAsync([_name]); }
+                catch (DeleteGroupsException exception) when (exception.Results.All(x => x.Error.Code is ErrorCode.GroupIdNotFound or ErrorCode.NoError)) { }
+            }
         }
     }
 }

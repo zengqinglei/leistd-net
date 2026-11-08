@@ -1,14 +1,20 @@
 using Leistd.EventBus.Distributed.Transport;
+using Leistd.EventBus.Distributed.Options;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.EventBus.Distributed.Loopback;
 
-internal sealed class LoopbackEventTransport(IServiceScopeFactory scopeFactory, TimeProvider timeProvider) : IDistributedEventTransport
+internal sealed class LoopbackEventTransport(IServiceScopeFactory scopeFactory, TimeProvider timeProvider,
+    IOptionsMonitor<DistributedEventOptions> options) : IDistributedEventTransport
 {
     public string Name => "Loopback";
 
     public async Task<DistributedEventSendResult> SendAsync(OutgoingDistributedEvent message, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!options.CurrentValue.Inbox.ReceiveEnabled)
+            return new DistributedEventSendResult { Status = DistributedEventSendStatus.Succeeded };
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();

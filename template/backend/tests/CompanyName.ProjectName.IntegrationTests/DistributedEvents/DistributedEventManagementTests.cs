@@ -86,9 +86,9 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
         Assert.DoesNotContain("{", entry.GetProperty("targetName").GetString());
         Assert.Equal(PermissionConstant.DistributedEvents.Manage, entry.GetProperty("authorizationBasis").GetString());
 #else
-        var entry = Assert.Single(Factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
-            .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.DistributedEventRedelivered)
-                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded"));
+        var entry = Assert.Single(Factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot(),
+            entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.DistributedEventRedelivered)
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded");
         var name = OperationRecordLogCapture.Field(entry, "OperationTargetName") as string;
         Assert.StartsWith("count=1; status=deadLettered; ", name);
         Assert.Contains("message-too-large", name);

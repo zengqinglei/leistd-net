@@ -1,5 +1,6 @@
 using System.Text;
 using Leistd.EventBus.Distributed.Errors;
+using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,9 +53,36 @@ public sealed class LoopbackEventTransportTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => transport.DecodeAsync(raw, cancellation.Token).AsTask());
     }
 
-    private static ServiceProvider Provider(Receiver receiver)
+    /// <summary>显式禁用接收时，回环同样不调用持久接收入口。</summary>
+    [Fact]
+    public async Task Receive_disabled_does_not_call_the_loopback_receiver()
+    {
+        var receiver = new Receiver();
+        using var provider = Provider(receiver, receiveEnabled: false);
+        var result = await provider.GetRequiredService<IDistributedEventTransport>().SendAsync(Message(), default);
+        Assert.Equal(DistributedEventSendStatus.Succeeded, result.Status);
+        Assert.Null(receiver.Raw);
+    }
+
+    /// <summary>回环发送在进入接收入口之前传播取消，包括禁用接收的进程。</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Canceled_send_never_invokes_the_receiver(bool enabled)
+    {
+        var receiver = new Receiver();
+        using var provider = Provider(receiver, enabled);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            provider.GetRequiredService<IDistributedEventTransport>().SendAsync(Message(), cancellation.Token));
+        Assert.Null(receiver.Raw);
+    }
+
+    private static ServiceProvider Provider(Receiver receiver, bool receiveEnabled = true)
     {
         var services = new ServiceCollection();
+        services.AddOptions<DistributedEventOptions>().Configure(options => options.Inbox.ReceiveEnabled = receiveEnabled);
         services.AddLoopbackEventTransport();
         services.AddScoped<IDistributedEventReceiver>(_ => receiver);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

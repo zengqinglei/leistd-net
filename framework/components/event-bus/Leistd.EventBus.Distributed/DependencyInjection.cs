@@ -101,6 +101,7 @@ public static class DependencyInjection
         services.EnsureSingleAuthoritative<IDistributedEventTransport, LoopbackEventTransport>(ServiceLifetime.Singleton,
             "Only one distributed event transport can be registered.");
         services.TryAddSingleton<IDistributedEventTransport, LoopbackEventTransport>();
+        services.AddOptions<DistributedEventOptions>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
