@@ -14,6 +14,9 @@ using Leistd.ExceptionHandling.Options;
 using Leistd.MultiTenancy.Errors;
 using Leistd.OperationRecords.Errors;
 using Leistd.Settings.Errors;
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.Distributed.Errors;
+#endif
 #if (IncludeNotifications)
 using Leistd.Notifications.Errors;
 #endif
@@ -82,6 +85,11 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
     [InlineData(NotificationErrorCodes.IdentityCannotOperate, StatusCodes.Status403Forbidden)]
 #endif
     [InlineData(PermissionErrorCodes.SubjectNotFound, StatusCodes.Status404NotFound)]
+#if (IncludeDistributedEvents)
+    [InlineData(DistributedEventErrorCodes.RecordNotFound, StatusCodes.Status404NotFound)]
+    [InlineData(DistributedEventErrorCodes.DatabaseNotFound, StatusCodes.Status404NotFound)]
+    [InlineData(DistributedEventErrorCodes.HostOnly, StatusCodes.Status403Forbidden)]
+#endif
 #if (IncludeMultiTenancy)
     [InlineData(MultiTenancyErrorCodes.NotFound, StatusCodes.Status404NotFound)]
 #endif
@@ -129,6 +137,9 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
             typeof(OpenAppErrorCodes),
 #endif
             typeof(PermissionErrorCodes), typeof(MultiTenancyErrorCodes), typeof(SettingErrorCodes), typeof(OperationFailureCodes),
+#if (IncludeDistributedEvents)
+            typeof(DistributedEventErrorCodes),
+#endif
 #if (IncludeNotifications)
             typeof(NotificationErrorCodes),
 #endif

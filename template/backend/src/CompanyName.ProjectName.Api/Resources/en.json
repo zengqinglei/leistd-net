@@ -1,9 +1,6 @@
 {
   "culture": "en",
   "texts": {
-//#if (IncludeDistributedEvents)
-    "Distributed events": "Distributed events",
-//#endif
     "Actions": "Actions",
     "Active status": "Active status",
     "Admin email": "Admin email",
@@ -139,6 +136,10 @@
     "Permission:App.OpenApplications.Update": "Edit",
     "Permission:App.OpenApplications.Delete": "Delete",
     "Permission:App.OpenApplications.ResetSecret": "Reset client secret",
+//#if (IncludeDistributedEvents)
+    "Permission:App.DistributedEvents": "Distributed events",
+    "Permission:App.DistributedEvents.Manage": "Manage",
+//#endif
 //#if (IncludeWebhooks)
     "Permission:App.Webhooks": "Webhooks",
     "Permission:App.Webhooks.Manage": "Manage",

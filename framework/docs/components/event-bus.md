@@ -246,7 +246,7 @@ ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。
 
 积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小等不可恢复的单条消息错误后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
 
-活动源为 `Leistd.EventBus`。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。稳定日志事件包括 DistributedEventDeadLettered、DistributedEventOutboxBacklog、DistributedEventConsumeFailed、DistributedEventRejected、DistributedEventRejectPersistFailed。
+活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。稳定日志事件包括 DistributedEventDeadLettered、DistributedEventOutboxBacklog、DistributedEventConsumeFailed、DistributedEventRejected、DistributedEventRejectPersistFailed。
 
 ### 自定义传输
 

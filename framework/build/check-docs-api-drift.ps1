@@ -228,6 +228,7 @@ $allow = @(
     'OperationCanceledException','TimeoutException','HttpRequestException','ValidationException','String','Boolean','Int32',
     'Assembly','Type','ClaimsPrincipal','ClaimTypes','IServiceProvider','IServiceCollection','IServiceScopeFactory',
     'AddValidation',   # ASP.NET Core Minimal API 内置校验：分页契约的文档要求宿主启用它
+    'AddHealthChecks',   # Microsoft.Extensions.DependencyInjection：宿主显式登记传输健康检查的标准入口
     'JsonHttpResult',   # ASP.NET Core 的结果类型：响应包装文档要说明它不被改写
     'LoggingOptions',   # Microsoft.Extensions.Http.Diagnostics：服务客户端文档给出官方正文日志的入口
     # 服务客户端文档「第三方接入」给出的官方入口：请求日志脱敏（Http.Diagnostics）、移除默认请求日志（Http）、业务指标（BCL Metrics）

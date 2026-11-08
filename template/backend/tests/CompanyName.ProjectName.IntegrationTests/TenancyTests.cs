@@ -29,6 +29,9 @@ using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 #endif
 using Leistd.Settings.EntityFrameworkCore.Entities;
+#if (IncludeDistributedEvents)
+using Leistd.EventBus.EntityFrameworkCore.Entities;
+#endif
 using Leistd.MultiTenancy.Management.Provisioning;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore.Entities;
@@ -1052,6 +1055,10 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             new[]
             {
                 nameof(AuthorizationVersionRecord),
+#if (IncludeDistributedEvents)
+                nameof(DistributedEventInbox),
+                nameof(DistributedEventOutbox),
+#endif
 #if (ExternalLogin)
                 nameof(ExternalLoginConnection),
 #endif
@@ -1103,6 +1110,10 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<PermissionGrantRecord>().ToListAsync());
             Assert.Empty(await db.Set<AuthorizationVersionRecord>().ToListAsync());
             Assert.Empty(await db.Set<UserRole>().ToListAsync());
+#if (IncludeDistributedEvents)
+            Assert.Empty(await db.Set<DistributedEventInbox>().ToListAsync());
+            Assert.Empty(await db.Set<DistributedEventOutbox>().ToListAsync());
+#endif
             // 创建流程里埋了"用户已创建"的操作记录：补偿若漏清它，留下的是一条带租户归属的孤儿审计行——
             // 上面那份类型清单只证明它受过滤器管辖，证明不了补偿真的清干净了。
 #if (IncludeOperationRecords)

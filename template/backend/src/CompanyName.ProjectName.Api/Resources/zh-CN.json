@@ -1,9 +1,6 @@
 {
   "culture": "zh-CN",
   "texts": {
-//#if (IncludeDistributedEvents)
-    "Distributed events": "分布式事件",
-//#endif
     "Actions": "动作",
     "Active status": "是否启用",
     "Admin email": "管理员邮箱",
@@ -139,6 +136,10 @@
     "Permission:App.OpenApplications.Update": "编辑",
     "Permission:App.OpenApplications.Delete": "删除",
     "Permission:App.OpenApplications.ResetSecret": "重置客户端密钥",
+//#if (IncludeDistributedEvents)
+    "Permission:App.DistributedEvents": "分布式事件",
+    "Permission:App.DistributedEvents.Manage": "管理",
+//#endif
 //#if (IncludeWebhooks)
     "Permission:App.Webhooks": "Webhook",
     "Permission:App.Webhooks.Manage": "管理",

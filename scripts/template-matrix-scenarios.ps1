@@ -220,7 +220,7 @@ $scenarioMap = [ordered]@{
     }
     "resource-capabilities-04" = @{
         Slices = @{ full = "full-03" }
-        Arguments = @("--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true", "--include-webhooks", "true")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Resource", "--include-frontend", "false", "--include-multi-tenancy", "true", "--include-real-time", "true", "--include-email", "false", "--include-operation-records", "true", "--include-notifications", "true", "--include-external-login", "false", "--include-localization", "true", "--include-webhooks", "true")
         Frontend = $false; Lint = $true
         Present = @("backend/src/{name}.DbMigrator/Runners/ResourceAdminBootstrapRunner.cs", "backend/src/{name}.Application/Webhooks")
         Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Api/Controllers/SettingController.cs", "backend/src/{name}.Application/Auth/AppServices/EmailVerificationAppService.cs")
@@ -261,7 +261,7 @@ $scenarioMap = [ordered]@{
     }
     "identity-capabilities-08" = @{
         Slices = @{ full = "full-02" }
-        Arguments = @("--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--ci", "gitlab")
+        Arguments = @("--include-distributed-events", "true", "--service-role", "Identity", "--include-frontend", "true", "--include-multi-tenancy", "false", "--include-real-time", "true", "--include-email", "true", "--include-operation-records", "true", "--include-notifications", "false", "--include-external-login", "false", "--include-localization", "false", "--ci", "gitlab")
         Frontend = $true; Lint = $true; Verify = $true
         Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", ".gitlab-ci.yml")
         Absent = @(".github", "backend/src/{name}.Api/Controllers/TenantController.cs", "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs", "backend/src/{name}.Infrastructure/Persistence/Migrations/Control", "frontend/src/app/core/services/tenant-context-service.ts")
