@@ -9,7 +9,7 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// <summary>外部身份验证服务接口。</summary>
 public interface IExternalAuthAppService : IAppService
 {
-    /// <summary>处理外部登录回调：直接得到会话主体，或（已启用两步验证时）得到第二步凭据。</summary>
+    /// <summary>处理外部登录回调：直接得到会话主体，或（已启用两步验证时）得到待完成的登录与可用方式。</summary>
     Task<SessionLoginResult> AuthenticateExternalUserAsync(
         string provider,
         ExternalUserInfo externalUserInfo,

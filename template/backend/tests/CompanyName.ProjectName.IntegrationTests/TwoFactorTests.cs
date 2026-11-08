@@ -25,6 +25,13 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
 {
     private const string Password = "TwoFactorTests!Passw0rd";
 
+    // 待完成登录的期限：开启邮箱能力时是邮箱验证码有效期（默认 5 分钟）的两倍，否则 5 分钟
+#if (Email)
+    private static readonly TimeSpan ChallengeLifetime = TimeSpan.FromMinutes(10);
+#else
+    private static readonly TimeSpan ChallengeLifetime = TimeSpan.FromMinutes(5);
+#endif
+
     [Fact]
     public async Task Enabling_requires_a_code_and_signs_out_other_devices()
     {
@@ -60,16 +67,17 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
 
         Step(clock);
         var (first, token) = await PasswordStepAsync(host, username);
-        Assert.False(first.Headers.Contains("Set-Cookie"));
+        // 第一步只写待完成登录的临时 Cookie，不写会话 Cookie
+        Assert.Equal(PendingSignIn.SetCookies(host, first).Count, first.Headers.GetValues("Set-Cookie").Count());
 
         var code = Code(secret, clock);
-        using var client = await SecondStepAsync(host, token, new { Token = token, Code = code });
+        using var client = await SecondStepAsync(host, token, new { Code = code });
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
 
         // 同一步的码重放：换一个新挑战也不认
         var (_, replayToken) = await PasswordStepAsync(host, username);
         Assert.Equal("Auth:TwoFactorCodeInvalid",
-            await SecondStepErrorAsync(host, new { Token = replayToken, Code = code }));
+            await SecondStepErrorAsync(host, replayToken, new { Code = code }));
     }
 
     /// <summary>第一步通过之后凭据变了，未完成的挑战随之作废。</summary>
@@ -95,7 +103,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.True(reset.IsSuccessStatusCode);
 
         Assert.Equal("Auth:TwoFactorChallengeExpired",
-            await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
+            await SecondStepErrorAsync(host, token, new { Code = Code(secret, clock) }));
     }
 
     /// <summary>验证码与恢复码都没给是入参校验失败：400 字段错误、不带业务码，也不消耗这次挑战。</summary>
@@ -110,8 +118,8 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
 
-        using (var client = ProjectWebApplicationFactory.CreateProjectClient(host))
-        using (var empty = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, RecoveryCode = "  " }))
+        using (var client = PendingSignIn.Client(host, token))
+        using (var empty = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { RecoveryCode = "  " }))
         {
             Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
             using var body = JsonDocument.Parse(await empty.Content.ReadAsStringAsync());
@@ -120,13 +128,14 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
                 error => error.GetProperty("field").GetString() == "code");
         }
 
-        using var signedIn = await SecondStepAsync(host, token, new { Token = token, Code = Code(secret, clock) });
+        using var signedIn = await SecondStepAsync(host, token, new { Code = Code(secret, clock) });
         Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
     /// <summary>输错不延长挑战的有效期。</summary>
     /// <remarks>
-    /// 第 4 分钟输错后，第 6 分钟的正确验证码仍按原到期时刻拒绝，避免重试延长挑战。
+    /// 到期前 1 分钟输错后，到期后 1 分钟的正确验证码仍按原到期时刻拒绝，避免重试延长挑战。
+    /// 临时 Cookie 的票据与挑战同时到期，拒绝时一并删掉它。
     /// </remarks>
     [Fact]
     public async Task A_wrong_code_does_not_extend_the_challenge()
@@ -139,14 +148,16 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
 
-        for (var i = 0; i < 8; i++) Step(clock);   // 4 分钟
+        clock.Advance(ChallengeLifetime - TimeSpan.FromMinutes(1));
         var valid = Code(secret, clock);
         var wrong = valid[..^1] + (valid[^1] == '0' ? '1' : '0');
-        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, Code = wrong }));
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, token, new { Code = wrong }));
 
-        for (var i = 0; i < 4; i++) Step(clock);   // 再过 2 分钟：签发后第 6 分钟
-        Assert.Equal("Auth:TwoFactorChallengeExpired",
-            await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
+        clock.Advance(TimeSpan.FromMinutes(2));   // 签发后过了到期时刻 1 分钟
+        using var client = PendingSignIn.Client(host, token);
+        using var expired = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = Code(secret, clock) });
+        Assert.Equal("Auth:TwoFactorChallengeExpired", await ErrorCodeAsync(expired));
+        Assert.True(PendingSignIn.Deletes(host, expired));
     }
 
     [Fact]
@@ -161,13 +172,13 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         var recovery = (await EnableAsync(session.Client, setup, clock))[0];
 
         var (_, token) = await PasswordStepAsync(host, username);
-        using var client = await SecondStepAsync(host, token, new { Token = token, RecoveryCode = recovery.ToUpperInvariant() });
+        using var client = await SecondStepAsync(host, token, new { RecoveryCode = recovery.ToUpperInvariant() });
         var status = await client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me/two-factor");
         Assert.Equal(RecoveryCodes.Count - 1, status.GetProperty("recoveryCodesLeft").GetInt32());
 
         var (_, again) = await PasswordStepAsync(host, username);
         Assert.Equal("Auth:TwoFactorCodeInvalid",
-            await SecondStepErrorAsync(host, new { Token = again, RecoveryCode = recovery }));
+            await SecondStepErrorAsync(host, again, new { RecoveryCode = recovery }));
     }
 
     [Fact]
@@ -183,7 +194,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         {
             // 每次都换一个新挑战：单个挑战的尝试上限挡不住这种试法，得靠账号级的失败计数
             var (_, token) = await PasswordStepAsync(host, username);
-            last = await SecondStepErrorAsync(host, new { Token = token, Code = "000000" });
+            last = await SecondStepErrorAsync(host, token, new { Code = "000000" });
         }
 
         Assert.Equal("Auth:UserTemporarilyLockedOut", last);
@@ -485,9 +496,9 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.Unauthorized, (await second.GetAsync("/api/v1/auth/me")).StatusCode);
         Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
-        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, Code = Code(original.Secret, clock) }));
-        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, RecoveryCode = oldCodes[0] }));
-        using var signedIn = await SecondStepAsync(host, token, new { Token = token, RecoveryCode = newCodes[0] });
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, token, new { Code = Code(original.Secret, clock) }));
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, token, new { RecoveryCode = oldCodes[0] }));
+        using var signedIn = await SecondStepAsync(host, token, new { RecoveryCode = newCodes[0] });
     }
 
     // 验证器丢了、组织又强制两步验证：用恢复码登录，再用另一个恢复码换绑，全程不经过"未启用"
@@ -502,7 +513,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         try
         {
             var (_, token) = await PasswordStepAsync(host, username);
-            using var recovered = await SecondStepAsync(host, token, new { Token = token, RecoveryCode = oldCodes[0] });
+            using var recovered = await SecondStepAsync(host, token, new { RecoveryCode = oldCodes[0] });
 
             // 恢复码只换得一次重新绑定，不能换出新的恢复码
             using (var regenerate = await recovered.PostAsJsonAsync(RecoveryCodesUrl, new { Code = oldCodes[1] }))
@@ -517,9 +528,9 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             Assert.True(status.GetProperty("enabled").GetBoolean());
             Assert.Equal(RecoveryCodes.Count, status.GetProperty("recoveryCodesLeft").GetInt32());
             var (_, next) = await PasswordStepAsync(host, username);
-            Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = next, RecoveryCode = oldCodes[2] }));
+            Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, next, new { RecoveryCode = oldCodes[2] }));
             Step(clock);
-            using var signedIn = await SecondStepAsync(host, next, new { Token = next, Code = Code(replacement.Secret, clock) });
+            using var signedIn = await SecondStepAsync(host, next, new { Code = Code(replacement.Secret, clock) });
             Assert.Equal(RecoveryCodes.Count, newCodes.Count);
         }
         finally
@@ -612,7 +623,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
         Assert.Equal("Auth:TwoFactorCodeInvalid", await ErrorCodeAsync(secondResponse));
         var (_, challenge) = await PasswordStepAsync(host, username);
-        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = challenge, RecoveryCode = old[0] }));
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, challenge, new { RecoveryCode = old[0] }));
     }
 
     // 重发停在提交之前、仍持着锁：登录第二步拿旧恢复码只能等它提交后再读，读到的已是新的一组
@@ -631,12 +642,12 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         var old = await EnableAsync(session.Client, setup, clock);
         Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
-        using var login = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var login = PendingSignIn.Client(host, token);
 
         var regenerate = session.Client.PostAsJsonAsync(RecoveryCodesUrl, new { Code = Code(secret, clock) });
         await gate.Entered;
         waits.Arm(UserCredentialLock.Key(userId));
-        var consume = login.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, RecoveryCode = old[0] });
+        var consume = login.PostAsJsonAsync("/api/v1/auth/two-factor", new { RecoveryCode = old[0] });
         await waits.AssertWaitingAsync(consume);
         gate.Release();
 
@@ -646,7 +657,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal("Auth:TwoFactorCodeInvalid", await ErrorCodeAsync(consumed));
         var newCode = (await RecoveryCodesOfAsync(regenerated))[0];
         var (_, fresh) = await PasswordStepAsync(host, username);
-        using var completed = await SecondStepAsync(host, fresh, new { Token = fresh, RecoveryCode = newCode });
+        using var completed = await SecondStepAsync(host, fresh, new { RecoveryCode = newCode });
         var status = await completed.GetFromJsonAsync<JsonElement>("/api/v1/auth/me/two-factor");
         Assert.Equal(RecoveryCodes.Count - 1, status.GetProperty("recoveryCodesLeft").GetInt32());
     }
@@ -725,10 +736,10 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         await EnableAsync(session.Client, setup, clock);
         Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
-        var login = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var login = PendingSignIn.Client(host, token);
 
         gate.Armed = true;
-        var secondStep = login.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, Code = Code(setup.Secret, clock) });
+        var secondStep = login.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = Code(setup.Secret, clock) });
         await gate.Entered;
         waits.Arm(UserCredentialLock.Key(userId));
         var change = session.Client.PostAsJsonAsync(
@@ -739,6 +750,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         using (var signedIn = await secondStep)
         {
             Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
+            login.DefaultRequestHeaders.Remove("Cookie");
             login.DefaultRequestHeaders.Add("Cookie", CookieOf(signedIn));
         }
         using (var changed = await change)
@@ -806,7 +818,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
 
         // 旧的一组还在：用其中一个完成登录第二步
         var (_, token) = await PasswordStepAsync(host, username);
-        using var signedInWithOldCode = await SecondStepAsync(host, token, new { Token = token, RecoveryCode = old[0] });
+        using var signedInWithOldCode = await SecondStepAsync(host, token, new { RecoveryCode = old[0] });
 
         gate.Fail = false;
         using var retried = await session.Client.PostAsJsonAsync(RecoveryCodesUrl, new { Code = Code(secret, clock) });
@@ -945,7 +957,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
     {
         Step(clock);
         var (_, token) = await PasswordStepAsync(host, username);
-        return await SecondStepAsync(host, token, new { Token = token, Code = Code(secret, clock) });
+        return await SecondStepAsync(host, token, new { Code = Code(secret, clock) });
     }
 
     private async Task<string> EnableForAsync(WebApplicationFactory<Program> host, string username, FakeTimeProvider clock)
@@ -985,21 +997,23 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(body.RootElement.GetProperty("requiresTwoFactor").GetBoolean());
-        return (response, body.RootElement.GetProperty("twoFactorToken").GetString()!);
+        return (response, PendingSignIn.Read(host, response) ?? throw new InvalidOperationException("The first step wrote no pending sign-in cookie."));
     }
 
-    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, string token, object input)
+    /// <summary>带着待完成登录的临时 Cookie 提交第二步；返回只带会话 Cookie 的客户端。</summary>
+    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        client.DefaultRequestHeaders.Remove("Cookie");
         client.DefaultRequestHeaders.Add("Cookie", CookieOf(response));
         return client;
     }
 
-    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.False(response.IsSuccessStatusCode);
         return await ErrorCodeAsync(response);
@@ -1011,8 +1025,9 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
         return body.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
+    // 只取写入值的 Cookie：第二步通过的响应同时删掉临时 Cookie
     private static string CookieOf(HttpResponseMessage response) =>
-        string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]));
+        string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]).Where(pair => !pair.EndsWith('=')));
 
     private static string Code(string secret, FakeTimeProvider clock) =>
         Totp.ComputeCode(Totp.ParseSecret(secret)!, Totp.TimeStepAt(clock.GetUtcNow()));

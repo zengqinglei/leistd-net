@@ -7,6 +7,7 @@ using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Api.Auth.OpenIddict;
+using CompanyName.ProjectName.Api.Auth.Sessions;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Application.OpenApplications;
@@ -45,6 +46,7 @@ public sealed class ConnectController(
     IOptions<ClaimTypeOptions> claimTypes,
     IOpenIddictApplicationManager applications,
     ConnectInteractionProtector interactions,
+    PendingSignInCookie pendingSignIn,
     IAntiforgery antiforgery,
     IClock clock) : Controller
 {
@@ -79,6 +81,23 @@ public sealed class ConnectController(
         var reauthenticate = loginPrompted && !proven || maxAgeExceeded && !(proven && request.MaxAge == 0);
         if (!session.IsValid || result.Principal == null || reauthenticate)
         {
+            // 待完成的登录（口令已过、尚待第二步）接回第二步页，回跳仍是同一个缓存请求，各依赖方各带自己的。
+            // 它不是正式身份：不构造依赖方主体、不签授权码，静默请求照样是 login_required。
+            // 要求重新认证时只认在本请求的重新认证证明之后才开始的待完成登录；更早的那个不能抵消重新认证，作废后回登录页。
+            // 带了临时 Cookie 却失效（过期、篡改、挑战已不在）时已在读取时删掉，按原逻辑回登录页，不会循环
+            if (await pendingSignIn.FindAsync(HttpContext, cancellationToken) is { } pending)
+            {
+                if (!demanded || interactions.IsReauthenticated(proof, request.RequestUri, pending.IssuedAt))
+                {
+                    if (request.HasPromptValue(PromptValues.None))
+                        return ProtocolError(Errors.LoginRequired);
+                    var pendingReturnUrl = AuthorizationReturnUrl(request, string.IsNullOrEmpty(proof) ? null : proof);
+                    return Redirect($"/auth/two-factor?returnUrl={Uri.EscapeDataString(pendingReturnUrl)}");
+                }
+
+                await pendingSignIn.EndAsync(HttpContext, cancellationToken);
+            }
+
             if (request.HasPromptValue(PromptValues.None))
                 return ProtocolError(Errors.LoginRequired);
             // 回到同一个缓存请求，需要时附上证明
@@ -88,6 +107,9 @@ public sealed class ConnectController(
             return Redirect($"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}" +
                 (reauthenticate ? "&reauthenticate=true" : string.Empty));
         }
+
+        // 正式会话说了算：同一浏览器上残留的待完成登录（例如另一次没走完的第二步）就此结束，不再接回
+        await pendingSignIn.EndAsync(HttpContext, cancellationToken);
 
         // 受限会话（组织要求两步验证而本人尚未启用）不签发授权码：静默请求按协议要求交互，
         // 交互请求先去设置页，完成后整页回到同一个缓存请求继续授权（本请求已带的重新认证证明原样保留）
@@ -142,9 +164,12 @@ public sealed class ConnectController(
                 + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
         var session = await HttpContext.AuthenticateAsync(AuthenticationSchemeNames.SessionCookie);
-        // 没有可结束的会话：按协议直接回到依赖方登记的退出回调
+        // 没有可结束的会话：退出就此完成，同一浏览器上的待完成登录一并结束，按协议直接回到依赖方登记的退出回调
         if (!session.Succeeded || session.Principal is null)
+        {
+            await pendingSignIn.EndAsync(HttpContext, cancellationToken);
             return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
 
         var sessionId = session.Principal.GetClaim(CustomClaimTypes.SessionId);
         var hint = (await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
@@ -174,11 +199,13 @@ public sealed class ConnectController(
         }));
     }
 
+    // 退出真正完成时的收尾；还在等确认或确认被拒时不走这里，待完成登录也就不提前结束
     private async Task<IActionResult> EndSessionAsync(CancellationToken cancellationToken)
     {
-        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效
+        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效。待完成登录一并结束
         await sessionAppService.EndCurrentSessionAsync(cancellationToken);
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
+        await pendingSignIn.EndAsync(HttpContext, cancellationToken);
         return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 

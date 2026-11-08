@@ -18,9 +18,8 @@ export type TwoFactorMethod = 'passkey' | 'authenticator' | 'email' | 'recoveryC
 
 /** 登录第一步（密码或外部登录）的结果。 */
 export interface SessionLoginOutputDto {
-  /** 还需要第二步：凭 twoFactorToken 以其中一种方式通过后才下发会话。 */
+  /** 还需要第二步：服务端只写了待完成登录的 HttpOnly 临时 Cookie，以其中一种方式通过后才下发会话。 */
   requiresTwoFactor?: boolean;
-  twoFactorToken?: string | null;
   /** 第二步能用的方式，按系统顺序，恢复码在最后。 */
   twoFactorMethods?: TwoFactorMethod[] | null;
   /** 第二步直接给出的方式（本人首选，否则按系统顺序）。 */

@@ -137,8 +137,8 @@ public sealed class PasswordlessAccountTests
             Assert.Equal(HttpStatusCode.OK, set.StatusCode);
 
         context.Step();
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(context.Host);
-        using var second = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, Code = context.Code(secret) });
+        using var client = PendingSignIn.Client(context.Host, token);
+        using var second = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = context.Code(secret) });
         Assert.Equal("Auth:TwoFactorChallengeExpired", await ErrorCodeAsync(second));
     }
 
@@ -181,7 +181,7 @@ public sealed class PasswordlessAccountTests
         Assert.Equal(recoveryCodes.Count, (await context.ReadUserAsync(userId)).RecoveryCodesLeft);
 
         var token = await context.FirstStepExternallyAsync();
-        using var recovered = await context.SecondStepAsync(new { Token = token, RecoveryCode = recoveryCodes[0] });
+        using var recovered = await context.SecondStepAsync(token, new { RecoveryCode = recoveryCodes[0] });
         Assert.Equal(recoveryCodes.Count - 1, (await context.ReadUserAsync(userId)).RecoveryCodesLeft);
 
         using var begin = await recovered.PostAsJsonAsync(SetupUrl, new { RecoveryCode = recoveryCodes[1] });
@@ -209,7 +209,7 @@ public sealed class PasswordlessAccountTests
         context.Clock.Advance(StaleSessionAge);
 
         var token = await context.FirstStepExternallyAsync();
-        using var recovered = await context.SecondStepAsync(new { Token = token, RecoveryCode = last });
+        using var recovered = await context.SecondStepAsync(token, new { RecoveryCode = last });
 
         using (var reused = await recovered.PostAsJsonAsync(SetupUrl, new { RecoveryCode = last }))
             Assert.Equal("Auth:TwoFactorCodeInvalid", await ErrorCodeAsync(reused));
@@ -299,21 +299,22 @@ public sealed class PasswordlessAccountTests
             return client;
         }
 
-        /// <summary>走一遍外部登录的第一步，返回第二步凭据（账号已开两步验证时）。</summary>
+        /// <summary>走一遍外部登录的第一步，返回待完成登录的临时 Cookie（账号已开两步验证时）。</summary>
         public async Task<string> FirstStepExternallyAsync()
         {
             using var complete = await CompleteExternallyAsync();
             Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
             using var body = JsonDocument.Parse(await complete.Content.ReadAsStringAsync());
             Assert.True(body.RootElement.GetProperty("requiresTwoFactor").GetBoolean());
-            return body.RootElement.GetProperty("twoFactorToken").GetString()!;
+            return PendingSignIn.Read(Host, complete) ?? throw new InvalidOperationException("The external sign-in wrote no pending sign-in cookie.");
         }
 
-        public async Task<HttpClient> SecondStepAsync(object input)
+        public async Task<HttpClient> SecondStepAsync(string pending, object input)
         {
-            var client = ProjectWebApplicationFactory.CreateProjectClient(Host);
+            var client = PendingSignIn.Client(Host, pending);
             using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
             Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            client.DefaultRequestHeaders.Remove("Cookie");
             client.DefaultRequestHeaders.Add("Cookie", CookieOf(response));
             return client;
         }
@@ -374,6 +375,7 @@ public sealed class PasswordlessAccountTests
         private static string CookieOf(HttpResponseMessage response) =>
             string.Join("; ", response.Headers.GetValues("Set-Cookie")
                 .Where(value => !value.StartsWith($"{StateCookieName}=", StringComparison.Ordinal))
+                .Where(value => !value.Split(';', 2)[0].EndsWith('='))
                 .Select(value => value.Split(';', 2)[0]));
     }
 

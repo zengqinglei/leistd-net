@@ -260,6 +260,50 @@ public sealed class TwoFactorRequirementTests(ProjectWebApplicationFactory facto
         Assert.True(QueryHelpers.ParseQuery(resumed.Headers.Location.Query).ContainsKey("code"));
     }
 
+    /// <summary>首绑真的走完：要求一直开着，受限会话里登记身份验证器之后，同一个缓存请求签发授权码。</summary>
+    /// <remarks>上一条用例靠关闭要求解除限制；这里不改策略，限制只能由本人完成设置解除，会话与 Cookie 不变。</remarks>
+    [Fact]
+    public async Task Enrolling_an_authenticator_in_the_restricted_session_lets_authorization_complete()
+    {
+        var (host, clock) = CreateHost();
+        using var _host = host;
+        var username = await CreateUserAsync(host, "req_enroll");
+        string clientId;
+        using (var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword))
+        {
+            clientId = await CreatePublicClientAsync(admin.Client);
+        }
+
+        await RequireTwoFactorAsync(host, true);
+        try
+        {
+            using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+            using var browser = Browser(host, session.Cookie);
+            using var interactive = await browser.GetCachedAsync(AuthorizationUrl(clientId, "&state=enroll"));
+            var location = new Uri(browser.BaseAddress!, interactive.Headers.Location!);
+            Assert.Equal("/auth/two-factor-setup", location.AbsolutePath);
+            var returnUrl = QueryHelpers.ParseQuery(location.Query)["returnUrl"].ToString();
+
+            var (setupId, secret) = await BeginSetupAsync(session.Client);
+            using (var enable = await session.Client.PostAsJsonAsync(
+                "/api/v1/auth/me/two-factor/enable", new { setupId, Code = Code(secret, clock) }))
+            {
+                Assert.Equal(HttpStatusCode.OK, enable.StatusCode);
+            }
+
+            using var resumed = await browser.GetAsync(returnUrl);
+            Assert.Equal(HttpStatusCode.Found, resumed.StatusCode);
+            Assert.StartsWith(Callback, resumed.Headers.Location!.AbsoluteUri);
+            var query = QueryHelpers.ParseQuery(resumed.Headers.Location.Query);
+            Assert.True(query.ContainsKey("code"));
+            Assert.Equal("enroll", query["state"].ToString());
+        }
+        finally
+        {
+            await RequireTwoFactorAsync(host, false);
+        }
+    }
+
     private const string Callback = "https://localhost/oidc-test";
 
     private static async Task<string> CreatePublicClientAsync(HttpClient admin)

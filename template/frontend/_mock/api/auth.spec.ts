@@ -241,83 +241,99 @@ describe('mock two-factor sign-in', () => {
     demo.recoveryCodes = [];
   });
 
-  function firstStep(): string {
+  // 待完成的登录由临时 Cookie 表明：Mock 存在 sessionStorage 里，不在响应体里
+  function firstStep(): void {
     const result = sessionLogin({
       headers,
       body: { usernameOrEmail: 'demo', password: demo.password },
     }) as { requiresTwoFactor?: boolean; twoFactorToken?: string };
     expect(result.requiresTwoFactor).toBe(true);
+    expect(result.twoFactorToken).toBeUndefined();
     expect(getMockSessionUserId()).toBeNull();
-    return result.twoFactorToken!;
   }
 
-  it('answers the password step with a challenge instead of a session', () => {
-    expect(firstStep()).toBeTruthy();
+  it('answers the password step with a pending sign-in instead of a session', () => {
+    firstStep();
+
+    const context = (AUTH_API['GET /api/v1/auth/two-factor'] as Handler)({ headers }) as {
+      twoFactorMethods: string[];
+      defaultTwoFactorMethod: string;
+    };
+    expect(context.twoFactorMethods).toEqual(['authenticator', 'recoveryCode']);
+    expect(context.defaultTwoFactorMethod).toBe('authenticator');
   });
 
-  it('rejects a missing token and code with 400 field errors and no business code', () => {
+  // 放弃（换账号、返回登录页）作废待完成的登录，重复调用照样成功
+  it('cancels the pending sign-in idempotently', () => {
+    const cancel = AUTH_API['POST /api/v1/auth/two-factor/cancel'] as Handler;
+    firstStep();
+
+    cancel({ headers });
+    cancel({ headers });
+
+    expect(
+      rejectionOf(() => completeTwoFactor({ headers, body: { code: '123456' } })).error.code,
+    ).toBe('Auth:TwoFactorChallengeExpired');
+  });
+
+  it('rejects a missing code with 400 field errors and no business code', () => {
     const error = rejectionOf(() => completeTwoFactor({ headers, body: {} }));
 
     expect(error.status).toBe(400);
     expect(error.error.code).toBeUndefined();
-    expect(error.error.errors.map((item: { field: string }) => item.field)).toEqual([
-      'token',
-      'code',
-    ]);
+    expect(error.error.errors.map((item: { field: string }) => item.field)).toEqual(['code']);
     expect(getMockSessionUserId()).toBeNull();
   });
 
-  it('rejects an unknown challenge with 401', () => {
-    const error = rejectionOf(() =>
-      completeTwoFactor({ headers, body: { token: 'unknown', code: '123456' } }),
-    );
+  it('rejects a second step without a pending sign-in with 401', () => {
+    const error = rejectionOf(() => completeTwoFactor({ headers, body: { code: '123456' } }));
 
     expect(error.status).toBe(401);
     expect(error.error.code).toBe('Auth:TwoFactorChallengeExpired');
   });
 
   it('rejects a wrong code with 400 and voids the challenge once the attempts run out', () => {
-    const token = firstStep();
+    firstStep();
 
     for (let attempt = 1; attempt < 5; attempt++) {
-      const error = rejectionOf(() =>
-        completeTwoFactor({ headers, body: { token, code: '000000' } }),
-      );
+      const error = rejectionOf(() => completeTwoFactor({ headers, body: { code: '000000' } }));
       expect(error.status).toBe(400);
       expect(error.error.code).toBe('Auth:TwoFactorCodeInvalid');
     }
 
-    expect(
-      rejectionOf(() => completeTwoFactor({ headers, body: { token, code: '000000' } })).status,
-    ).toBe(401);
+    expect(rejectionOf(() => completeTwoFactor({ headers, body: { code: '000000' } })).status).toBe(
+      401,
+    );
     // 用尽之后正确的码也不再被接受：只能回到第一步
-    expect(
-      rejectionOf(() => completeTwoFactor({ headers, body: { token, code: '123456' } })).status,
-    ).toBe(401);
+    expect(rejectionOf(() => completeTwoFactor({ headers, body: { code: '123456' } })).status).toBe(
+      401,
+    );
     expect(getMockSessionUserId()).toBeNull();
   });
 
   it('signs in with the code and accepts each challenge only once', () => {
-    const token = firstStep();
+    firstStep();
 
-    completeTwoFactor({ headers, body: { token, code: '123 456' } });
+    completeTwoFactor({ headers, body: { code: '123 456' } });
 
     expect(getMockSessionUserId()).toBe(demo.id);
     expect(getMockSessionTenantKey()).toBe('host');
-    expect(
-      rejectionOf(() => completeTwoFactor({ headers, body: { token, code: '123456' } })).status,
-    ).toBe(401);
+    expect(rejectionOf(() => completeTwoFactor({ headers, body: { code: '123456' } })).status).toBe(
+      401,
+    );
   });
 
   it('consumes a recovery code so it cannot be used twice', () => {
-    completeTwoFactor({ headers, body: { token: firstStep(), recoveryCode: 'mock-recovery-1' } });
+    firstStep();
+    completeTwoFactor({ headers, body: { recoveryCode: 'mock-recovery-1' } });
 
     expect(getMockSessionUserId()).toBe(demo.id);
     expect(demo.recoveryCodes).toEqual([]);
 
     setMockSessionUserId(null);
+    firstStep();
     const error = rejectionOf(() =>
-      completeTwoFactor({ headers, body: { token: firstStep(), recoveryCode: 'mock-recovery-1' } }),
+      completeTwoFactor({ headers, body: { recoveryCode: 'mock-recovery-1' } }),
     );
     expect(error.status).toBe(400);
     expect(getMockSessionUserId()).toBeNull();
@@ -354,7 +370,6 @@ describe('mock email two-factor', () => {
   });
 
   function firstStep(): {
-    twoFactorToken?: string;
     twoFactorMethods?: string[];
     defaultTwoFactorMethod?: string;
     maskedEmail?: string;
@@ -370,12 +385,11 @@ describe('mock email two-factor', () => {
     demo.passwordSetByEmailRecovery = true;
     const prompt = firstStep();
     expect(prompt.twoFactorMethods).toEqual(['authenticator', 'recoveryCode']);
-    expect(
-      rejectionOf(() => sendEmailCode({ headers, body: { token: prompt.twoFactorToken } })).error
-        .code,
-    ).toBe('Auth:TwoFactorMethodUnavailable');
+    expect(rejectionOf(() => sendEmailCode({ headers, body: {} })).error.code).toBe(
+      'Auth:TwoFactorMethodUnavailable',
+    );
 
-    completeTwoFactor({ headers, body: { token: prompt.twoFactorToken, code: '123456' } });
+    completeTwoFactor({ headers, body: { code: '123456' } });
     expect(demo.passwordSetByEmailRecovery).toBe(false);
     expect(firstStep().twoFactorMethods).toContain('email');
   });
@@ -403,11 +417,11 @@ describe('mock email two-factor', () => {
 
   // 恰好一种：多给一种是校验错误，不按优先级挑
   it('rejects a second step that presents more than one kind of code', () => {
-    const token = firstStep().twoFactorToken!;
+    firstStep();
     const rejected = rejectionOf(() =>
       completeTwoFactor({
         headers,
-        body: { token, code: '123456', recoveryCode: 'mock-recovery-1' },
+        body: { code: '123456', recoveryCode: 'mock-recovery-1' },
       }),
     );
 
@@ -421,16 +435,95 @@ describe('mock email two-factor', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() - 3_600_000);
     try {
       demo.preferredTwoFactorMethod = 'email';
-      const first = firstStep().twoFactorToken!;
-      sendEmailCode({ headers, body: { token: first } });
+      firstStep();
+      sendEmailCode({ headers, body: {} });
 
-      const again = firstStep().twoFactorToken!;
-      const reused = sendEmailCode({ headers, body: { token: again } }) as {
+      firstStep();
+      const reused = sendEmailCode({ headers, body: {} }) as {
         retryAfterSeconds: number;
       };
       expect(reused.retryAfterSeconds).toBeGreaterThan(0);
 
-      completeTwoFactor({ headers, body: { token: again, emailCode: '123456' } });
+      completeTwoFactor({ headers, body: { emailCode: '123456' } });
+      expect(getMockSessionUserId()).toBe(demo.id);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  // 与后端一致：成功用掉即释放发送间隔，间隔内新的一次登录可以立即发码
+  it('releases the send interval once the sign-in code is used', () => {
+    demo.preferredTwoFactorMethod = 'email';
+    firstStep();
+    sendEmailCode({ headers, body: {} });
+    completeTwoFactor({ headers, body: { emailCode: '123456' } });
+    setMockSessionUserId(null);
+
+    firstStep();
+    const next = sendEmailCode({ headers, body: {} }) as { retryAfterSeconds: number };
+    expect(next.retryAfterSeconds).toBe(60);
+    // 用掉它：发送间隔记在模块级状态里，不留给后面的用例
+    completeTwoFactor({ headers, body: { emailCode: '123456' } });
+  });
+
+  // 外层剩余不足一个码的有效期时，只拒绝真正新发：t=5 首发、t=5.5 仍在发送间隔内，沿用原码、回报真实剩余，期限不变
+  it('reuses the code within the send interval even when too little time is left for a new one', () => {
+    const start = Date.now() - 7_200_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      demo.preferredTwoFactorMethod = 'email';
+      firstStep();
+      clock.mockReturnValue(start + 300_000);
+      expect(
+        (sendEmailCode({ headers, body: {} }) as { expiresInSeconds: number }).expiresInSeconds,
+      ).toBe(300);
+
+      clock.mockReturnValue(start + 330_000);
+      const reused = sendEmailCode({ headers, body: {} }) as {
+        expiresInSeconds: number;
+        retryAfterSeconds: number;
+      };
+      expect(reused.expiresInSeconds).toBe(270);
+      expect(reused.retryAfterSeconds).toBe(30);
+
+      clock.mockReturnValue(start + 594_000);
+      completeTwoFactor({ headers, body: { emailCode: '123456' } });
+      expect(getMockSessionUserId()).toBe(demo.id);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  // 刷新页面（Mock 模块重新初始化、内存里的邮件挑战都没了）之后：t=4 发出的码照样能完成，t=6 不再新发
+  it('keeps the sent code usable after the page reloads late in the sign-in', async () => {
+    const start = Date.now() - 7_200_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      demo.preferredTwoFactorMethod = 'email';
+      firstStep();
+      clock.mockReturnValue(start + 240_000);
+      sendEmailCode({ headers, body: {} });
+
+      clock.mockReturnValue(start + 360_000);
+      vi.resetModules();
+      const reloaded = await import('./auth');
+      const reloadedUsers = (await import('../data/user')).USERS;
+      // 用户与设置在真实页面里由 provideMock 从 sessionStorage 恢复；这里按同样的结果摆好
+      Object.assign(
+        reloadedUsers.find((u) => u.username === 'demo')!,
+        demo,
+      );
+      (await import('../data/settings')).TENANT_SETTING_VALUES.set(
+        'host:Security.AllowEmailTwoFactor',
+        'true',
+      );
+      const send = reloaded.AUTH_API['POST /api/v1/auth/two-factor/email-code'] as Handler;
+      const complete = reloaded.AUTH_API['POST /api/v1/auth/two-factor'] as Handler;
+
+      expect(rejectionOf(() => send({ headers, body: {} })).error.code).toBe(
+        'Auth:EmailCodeResendTooLate',
+      );
+      complete({ headers, body: { emailCode: '123456' } });
       expect(getMockSessionUserId()).toBe(demo.id);
     } finally {
       clock.mockRestore();
@@ -471,17 +564,16 @@ describe('mock email two-factor', () => {
 
   it('defaults to email when preferred and signs in with the sent code', () => {
     demo.preferredTwoFactorMethod = 'email';
-    const token = firstStep().twoFactorToken!;
+    firstStep();
     expect(firstStep().defaultTwoFactorMethod).toBe('email');
 
     // 没发过码时邮箱验证码不算数：按"已失效"拒绝，不算输错
     expect(
-      rejectionOf(() => completeTwoFactor({ headers, body: { token, emailCode: '123456' } })).error
-        .code,
+      rejectionOf(() => completeTwoFactor({ headers, body: { emailCode: '123456' } })).error.code,
     ).toBe('Auth:EmailCodeExpired');
 
-    sendEmailCode({ headers, body: { token } });
-    completeTwoFactor({ headers, body: { token, emailCode: '123456' } });
+    sendEmailCode({ headers, body: {} });
+    completeTwoFactor({ headers, body: { emailCode: '123456' } });
     expect(getMockSessionUserId()).toBe(demo.id);
   });
 
@@ -493,9 +585,7 @@ describe('mock email two-factor', () => {
     expect(prompt.twoFactorMethods).toEqual(['email']);
 
     expect(
-      rejectionOf(() =>
-        completeTwoFactor({ headers, body: { token: prompt.twoFactorToken, code: '123456' } }),
-      ).error.code,
+      rejectionOf(() => completeTwoFactor({ headers, body: { code: '123456' } })).error.code,
     ).toBe('Auth:TwoFactorCodeInvalid');
     expect(getMockSessionUserId()).toBeNull();
   });
@@ -529,10 +619,9 @@ describe('mock email two-factor', () => {
     const prompt = firstStep();
 
     expect(prompt.twoFactorMethods).toEqual(['authenticator', 'recoveryCode']);
-    expect(
-      rejectionOf(() => sendEmailCode({ headers, body: { token: prompt.twoFactorToken } })).error
-        .code,
-    ).toBe('Auth:TwoFactorMethodUnavailable');
+    expect(rejectionOf(() => sendEmailCode({ headers, body: {} })).error.code).toBe(
+      'Auth:TwoFactorMethodUnavailable',
+    );
   });
 });
 
@@ -1259,44 +1348,39 @@ describe('mock passkeys', () => {
     const first = sessionLogin({
       headers,
       body: { usernameOrEmail: 'zihang', password: zihang.password },
-    }) as { twoFactorToken: string; twoFactorMethods: string[]; defaultTwoFactorMethod: string };
+    }) as { twoFactorMethods: string[]; defaultTwoFactorMethod: string };
     expect(first.twoFactorMethods).toEqual(['passkey', 'authenticator', 'recoveryCode']);
     expect(first.defaultTwoFactorMethod).toBe('passkey');
-    const token = first.twoFactorToken;
 
     // 还没取过选项：不算猜错
     expect(
-      rejectionOf(() =>
-        completeTwoFactor({ headers, body: { token, passkey: assertion('cred-a', 'x') } }),
-      ).error.code,
+      rejectionOf(() => completeTwoFactor({ headers, body: { passkey: assertion('cred-a', 'x') } }))
+        .error.code,
     ).toBe('Auth:PasskeyCeremonyExpired');
 
-    const challenge = challengeOf(twoFactorOptions({ headers, body: { token } }));
+    const challenge = challengeOf(twoFactorOptions({ headers, body: {} }));
     expect(
       rejectionOf(() =>
         completeTwoFactor({
           headers,
-          body: { token, passkey: assertion('cred-jiayi', challenge) },
+          body: { passkey: assertion('cred-jiayi', challenge) },
         }),
       ).error.code,
     ).toBe('Auth:PasskeyVerificationFailed');
 
-    completeTwoFactor({ headers, body: { token, passkey: assertion('cred-a', challenge) } });
+    completeTwoFactor({ headers, body: { passkey: assertion('cred-a', challenge) } });
     expect(getMockSessionUserId()).toBe(zihang.id);
   });
 
   it('rejects a second step that presents a passkey together with a code', () => {
     register('cred-a');
     setMockSessionUserId(null);
-    const { twoFactorToken: token } = sessionLogin({
-      headers,
-      body: { usernameOrEmail: 'zihang', password: zihang.password },
-    }) as { twoFactorToken: string };
+    sessionLogin({ headers, body: { usernameOrEmail: 'zihang', password: zihang.password } });
 
     const error = rejectionOf(() =>
       completeTwoFactor({
         headers,
-        body: { token, code: '123456', passkey: assertion('cred-a', 'x') },
+        body: { code: '123456', passkey: assertion('cred-a', 'x') },
       }),
     );
     expect(error.status).toBe(400);

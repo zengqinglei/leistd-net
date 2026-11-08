@@ -57,8 +57,8 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         }
 
         Assert.Equal("Auth:TwoFactorMethodUnavailable",
-            await SecondStepErrorAsync(host, new { prompt.Token, EmailCode = "000000" }));
-        using (await SecondStepAsync(host, new { prompt.Token, Code = Code(user.Secret!, clock) }))
+            await SecondStepErrorAsync(host, prompt.Token, new { EmailCode = "000000" }));
+        using (await SecondStepAsync(host, prompt.Token, new { Code = Code(user.Secret!, clock) }))
         {
         }
 
@@ -249,7 +249,7 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 Assert.Equal("Auth:EmailCodeExpired",
-                    await SecondStepErrorAsync(host, new { first.Token, EmailCode = "000000" }));
+                    await SecondStepErrorAsync(host, first.Token, new { EmailCode = "000000" }));
             }
 
             using (var send = await PostEmailCodeAsync(host, first.Token))
@@ -266,7 +266,7 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
                 Assert.Equal(HttpStatusCode.OK, reuse.StatusCode);
             }
 
-            using var signedIn = await SecondStepAsync(host, new { again.Token, EmailCode = code });
+            using var signedIn = await SecondStepAsync(host, again.Token, new { EmailCode = code });
             Assert.Equal(HttpStatusCode.OK, (await signedIn.GetAsync("/api/v1/auth/me")).StatusCode);
         }
         finally
@@ -307,10 +307,9 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
 
         Step(clock);
         var prompt = await PasswordStepAsync(host, user);
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var client = PendingSignIn.Client(host, prompt.Token);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new
         {
-            prompt.Token,
             Code = Code(user.Secret!, clock),
             RecoveryCode = "aaaa-bbbb"
         });
@@ -349,16 +348,15 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         var both = await NewUserForExternalAsync("ef_ext_both", authenticator: true);
         using (both.Host)
         {
-            var prompt = await ExternalStepAsync(both.Host, both.Backchannel);
+            var (prompt, token) = await ExternalStepAsync(both.Host, both.Backchannel);
             Assert.Equal(["authenticator", "recoveryCode"], prompt.GetProperty("twoFactorMethods").EnumerateArray().Select(m => m.GetString()));
-            var token = prompt.GetProperty("twoFactorToken").GetString()!;
             Step(both.Clock);
-            using (await SecondStepAsync(both.Host, new { token, Code = Code(both.User.Secret!, both.Clock) }))
+            using (await SecondStepAsync(both.Host, token, new { Code = Code(both.User.Secret!, both.Clock) }))
             {
             }
 
             Step(both.Clock);
-            var next = await ExternalStepAsync(both.Host, both.Backchannel);
+            var (next, _) = await ExternalStepAsync(both.Host, both.Backchannel);
             Assert.Contains("email", next.GetProperty("twoFactorMethods").EnumerateArray().Select(m => m.GetString()));
         }
 
@@ -396,7 +394,8 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         return (host, clock, user, backchannel);
     }
 
-    private static async Task<JsonElement> ExternalStepAsync(WebApplicationFactory<Program> host, ExternalOAuthBackchannel backchannel)
+    private static async Task<(JsonElement Prompt, string Pending)> ExternalStepAsync(
+        WebApplicationFactory<Program> host, ExternalOAuthBackchannel backchannel)
     {
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         var flow = await ExternalOAuthBackchannel.StartAsync(client);
@@ -405,7 +404,7 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         Assert.True(complete.IsSuccessStatusCode, await complete.Content.ReadAsStringAsync());
         var body = await complete.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("requiresTwoFactor").GetBoolean());
-        return body;
+        return (body, PendingSignIn.Read(host, complete) ?? throw new InvalidOperationException("The external sign-in wrote no pending sign-in cookie."));
     }
 #endif
 
@@ -523,7 +522,7 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         {
             Step(clock);
             var prompt = await PasswordStepAsync(host, user);
-            return await SecondStepAsync(host, new { prompt.Token, Code = Code(user.Secret, clock) });
+            return await SecondStepAsync(host, prompt.Token, new { Code = Code(user.Secret, clock) });
         }
 
         if (user.EmailEnabled)
@@ -544,7 +543,7 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         }
 
         var code = await Mailbox(host).NextCodeAsync(user.Email);
-        return await SecondStepAsync(host, new { prompt.Token, EmailCode = code });
+        return await SecondStepAsync(host, prompt.Token, new { EmailCode = code });
     }
 
     private static async Task<Prompt> PasswordStepAsync(WebApplicationFactory<Program> host, TestUser user)
@@ -556,30 +555,31 @@ public sealed class TwoFactorEmailFactorTests(ProjectWebApplicationFactory facto
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("requiresTwoFactor").GetBoolean());
         return new Prompt(
-            body.GetProperty("twoFactorToken").GetString()!,
+            PendingSignIn.Read(host, response) ?? throw new InvalidOperationException("The first step wrote no pending sign-in cookie."),
             [.. body.GetProperty("twoFactorMethods").EnumerateArray().Select(method => method.GetString()!)],
             body.GetProperty("defaultTwoFactorMethod").GetString()!);
     }
 
     private static async Task<HttpResponseMessage> PostEmailCodeAsync(WebApplicationFactory<Program> host, string token)
     {
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        return await client.PostAsJsonAsync("/api/v1/auth/two-factor/email-code", new { token });
+        using var client = PendingSignIn.Client(host, token);
+        return await client.PostAsync("/api/v1/auth/two-factor/email-code", null);
     }
 
-    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<HttpClient> SecondStepAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        client.DefaultRequestHeaders.Remove("Cookie");
         client.DefaultRequestHeaders.Add("Cookie", string.Join("; ",
-            response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0])));
+            response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';', 2)[0]).Where(pair => !pair.EndsWith('='))));
         return client;
     }
 
-    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, object input)
+    private static async Task<string?> SecondStepErrorAsync(WebApplicationFactory<Program> host, string pending, object input)
     {
-        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var client = PendingSignIn.Client(host, pending);
         using var response = await client.PostAsJsonAsync("/api/v1/auth/two-factor", input);
         return await ErrorCodeAsync(response);
     }

@@ -1,0 +1,40 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <app-auth-shell>
+    @if (prompt(); as prompt) {
+      <app-two-factor-challenge
+        [prompt]="prompt"
+        [finishing]="finishing()"
+        (completed)="onCompleted()"
+        (cancelled)="onCancelled($event)"
+      />
+    } @else if (loadError(); as message) {
+      <!-- 连不上或服务端故障：待完成的登录可能还在，就地说明并可重试，不回口令一步 -->
+      <div class="flex flex-col gap-4" data-testid="two-factor-login-error">
+        <div hlmAlert variant="destructive">
+          <ng-icon name="lucideCircleAlert" />
+          <p hlmAlertDescription>{{ message }}</p>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          data-testid="two-factor-login-retry"
+          (click)="load()"
+        >
+          {{ t('common.retry') }}
+        </button>
+      </div>
+    } @else {
+      <!-- 读取待完成的登录：占住标题、说明与输入框的位置，读到后原地换成第二步 -->
+      <div class="flex flex-col gap-6" aria-busy="true" data-testid="two-factor-login-loading">
+        <hlm-skeleton class="h-8 w-2/3" />
+        <hlm-skeleton class="h-4 w-full" />
+        <hlm-skeleton class="h-10 w-full" />
+      </div>
+    }
+  </app-auth-shell>
+</ng-container>

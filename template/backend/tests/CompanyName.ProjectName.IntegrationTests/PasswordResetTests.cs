@@ -260,7 +260,8 @@ public sealed partial class PasswordResetTests(ProjectWebApplicationFactory fact
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         using var body = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
         Assert.True(body.RootElement.GetProperty("requiresTwoFactor").GetBoolean());
-        Assert.False(login.Headers.Contains("Set-Cookie"));
+        // 只写待完成登录的临时 Cookie，不写会话 Cookie
+        Assert.Equal(PendingSignIn.SetCookies(host, login).Count, login.Headers.GetValues("Set-Cookie").Count());
     }
 
     /// <summary>注册与找回各用一种用途：注册时发到这个地址的码，不能拿来找回同一地址上账号的口令。</summary>

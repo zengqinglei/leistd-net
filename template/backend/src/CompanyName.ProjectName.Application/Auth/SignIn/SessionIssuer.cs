@@ -65,12 +65,12 @@ internal sealed class SessionIssuer(
     /// <summary>登录第一步（密码或外部登录）通过之后决定去向。</summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item>有能用的第二步方式（见 <see cref="TwoFactorMethodResolver.ResolveForSignInAsync"/>）：不签发会话，只发第二步凭据与可用方式。</item>
+    /// <item>有能用的第二步方式（见 <see cref="TwoFactorMethodResolver.ResolveForSignInAsync"/>）：不签发会话，只发第二步挑战与可用方式。</item>
     /// <item>本人开着第二步、按这次的来路一种都用不了：拒绝登录，不退回单步。</item>
     /// <item>否则直接签发会话。组织要求两步验证而本人未启用时会话是否受限不在这里决定、也不写进会话，
     /// 由每个请求的会话校验按当时的策略判定（见 <see cref="Sessions.IUserSessionValidator"/>）。</item>
     /// </list>
-    /// 账号是否可登录（停用、锁定）在发第二步凭据之前就判：否则停用的账号也能走到输验证码那一步。
+    /// 账号是否可登录（停用、锁定）在发第二步挑战之前就判：否则停用的账号也能走到输验证码那一步。
     /// </remarks>
     /// <param name="user">第一步已认出的用户。</param>
     /// <param name="firstStep">第一步是怎么通过的，记进第二步挑战。</param>
@@ -109,10 +109,11 @@ internal sealed class SessionIssuer(
 
         if (methods.DefaultMethod is { } defaultMethod)
         {
-            var token = await twoFactorChallengeStore.CreateAsync(
+            var (token, challenge) = await twoFactorChallengeStore.CreateAsync(
                 user.Id, user.TenantId, user.SecurityStamp, firstStep, cancellationToken);
-            return SessionLoginResult.TwoFactorRequired(
-                new TwoFactorPrompt(token, methods.Methods, defaultMethod, methods.MaskedEmail));
+            return SessionLoginResult.TwoFactorRequired(new TwoFactorPrompt(
+                token, methods.Methods, defaultMethod, methods.MaskedEmail,
+                challenge.TenantId, challenge.IssuedAt, challenge.ExpiresAt));
         }
 
         return SessionLoginResult.SignedIn(

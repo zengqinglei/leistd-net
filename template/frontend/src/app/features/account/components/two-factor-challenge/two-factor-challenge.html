@@ -244,7 +244,7 @@
         class="text-muted-foreground px-0"
         type="button"
         data-testid="two-factor-back"
-        (click)="cancelled.emit()"
+        (click)="cancelled.emit({ reason: 'back' })"
       >
         {{ t('account.twoFactorLogin.back') }}
       </button>

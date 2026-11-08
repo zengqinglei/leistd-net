@@ -822,16 +822,15 @@ public sealed class ExternalLoginLinkTests
         var code = CodeAt(secret, clock);
         using var passwordStep = ProjectWebApplicationFactory.CreateProjectClient(host);
         using var first = await passwordStep.PostAsJsonAsync("/api/v1/auth/session-login", new { UsernameOrEmail = username, Password });
-        using var firstBody = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
-        var token = firstBody.RootElement.GetProperty("twoFactorToken").GetString()!;
+        var token = PendingSignIn.Read(host, first) ?? throw new InvalidOperationException("The first step wrote no pending sign-in cookie.");
         provider.User = External("gh-link-code");
         var (_, stateCookie) = await StartAsync(session.Client, "link");
         const string url = "/api/v1/external-auth/github/link/complete";
 
-        using var secondStep = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using var secondStep = PendingSignIn.Client(host, token);
         var responses = await Task.WhenAll(
             PostWithCookiesAsync(host, $"{session.Cookie}; {stateCookie}", url, new { TwoFactorCode = code }),
-            secondStep.PostAsJsonAsync("/api/v1/auth/two-factor", new { Token = token, Code = code }));
+            secondStep.PostAsJsonAsync("/api/v1/auth/two-factor", new { Code = code }));
         try
         {
             Assert.Equal(1, responses.Count(response => response.IsSuccessStatusCode));

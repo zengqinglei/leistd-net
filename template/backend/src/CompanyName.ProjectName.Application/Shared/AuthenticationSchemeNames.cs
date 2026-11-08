@@ -8,6 +8,8 @@ namespace CompanyName.ProjectName.Application.Shared;
 /// "登录成功但后续请求全是匿名"，没有任何编译期信号。</para>
 /// <para>常量放在应用层而不是 Api 层：应用层构造主体时需要它，而应用层不能引用 Api。
 /// 与 <c>TenantConnectionScopes</c> 同型。</para>
+/// <para>登录第二步完成前的临时 Cookie 用官方方案名 <c>IdentityConstants.TwoFactorUserIdScheme</c>，不在这里另起：
+/// 它只在 Api 里签入与认证（<c>PendingSignInCookie.Scheme</c>），应用层不构造它的主体，也不引用 ASP.NET Core。</para>
 /// <para>刻意不叫 <c>AuthenticationSchemes</c>：那个名字与 <c>System.Net.AuthenticationSchemes</c>
 /// 冲突，而 Api 的宿主组装有 <c>using System.Net;</c>——撞名只在生成产物里才报错。</para>
 /// </remarks>

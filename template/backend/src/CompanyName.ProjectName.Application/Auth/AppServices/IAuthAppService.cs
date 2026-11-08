@@ -8,19 +8,38 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// <summary>认证服务接口。</summary>
 public interface IAuthAppService : IAppService
 {
-    /// <summary>验证本地账号：直接得到会话主体，或（有能用的第二步方式时）得到第二步凭据与可用方式。</summary>
+    /// <summary>验证本地账号：直接得到会话主体，或（有能用的第二步方式时）得到待完成的登录与可用方式。</summary>
     Task<SessionLoginResult> AuthenticateSessionAsync(
         LoginInputDto input,
         CancellationToken cancellationToken = default);
 
-    /// <summary>登录第二步：校验其中一种方式的码（身份验证器、邮箱或恢复码）并创建会话主体。</summary>
+    /// <summary>登录第二步：校验其中一种方式的凭证（通行密钥、身份验证器、邮箱或恢复码）并创建会话主体。</summary>
+    /// <param name="challengeToken">临时 Cookie 里的挑战引用；没有时按已过期拒绝（<c>Auth:TwoFactorChallengeExpired</c>），下同。</param>
+    /// <param name="input">这一步出示的凭证。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     Task<ClaimsPrincipal> CompleteTwoFactorLoginAsync(
+        string? challengeToken,
         TwoFactorLoginInputDto input,
         CancellationToken cancellationToken = default);
 
     /// <summary>登录第二步：给出用通行密钥验证的断言选项；这种方式此刻不能用时以 <c>Auth:TwoFactorMethodUnavailable</c> 拒绝。</summary>
     Task<PasskeyOptionsOutputDto> BeginTwoFactorPasskeyAsync(
-        TwoFactorPasskeyOptionsInputDto input,
+        string? challengeToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>读出待完成的登录，在挑战自己的租户里核对；已过期、不存在或已失效时返回 null 并作废挑战。</summary>
+    Task<TwoFactorPrompt?> FindTwoFactorLoginAsync(
+        string? challengeToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>登录第二步的上下文（可用方式、默认方式、打码邮箱），供第二步页刷新后继续。</summary>
+    Task<TwoFactorLoginOutputDto> GetTwoFactorLoginAsync(
+        string? challengeToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>放弃待完成的登录：作废挑战。幂等。</summary>
+    Task CancelTwoFactorLoginAsync(
+        string? challengeToken,
         CancellationToken cancellationToken = default);
 
     /// <summary>免口令登录：给出断言选项与仪式凭据。</summary>
@@ -32,9 +51,10 @@ public interface IAuthAppService : IAppService
         CancellationToken cancellationToken = default);
 #if (Email)
 
-    /// <summary>登录第二步：把验证码发到本人的已验证邮箱；邮箱方式此刻不能用时以 <c>Auth:TwoFactorMethodUnavailable</c> 拒绝。</summary>
+    /// <summary>登录第二步：把验证码发到本人的已验证邮箱；邮箱方式此刻不能用时以 <c>Auth:TwoFactorMethodUnavailable</c> 拒绝，
+    /// 待完成的登录剩余不足一个码的有效期时不新发（<c>Auth:EmailCodeResendTooLate</c>），登录照常可以用已发的码或其他方式完成。</summary>
     Task<TwoFactorEmailCodeOutputDto> SendTwoFactorEmailCodeAsync(
-        TwoFactorEmailCodeInputDto input,
+        string? challengeToken,
         CancellationToken cancellationToken = default);
 #endif
 

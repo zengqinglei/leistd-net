@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { maxLength, FormField, form, required, pattern } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -25,7 +25,6 @@ import {
   lucideShieldCheck,
   lucideSmartphone,
 } from '@ng-icons/lucide';
-import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
@@ -45,19 +44,21 @@ import {
   WebAuthnFailure,
 } from '../../../../core/webauthn/webauthn-error';
 import { OtpCodeInput } from '../../../../shared/components/otp-code-input/otp-code-input';
-import { SessionLoginOutputDto, TwoFactorMethod } from '../../../../shared/dtos/auth.dto';
+import { TwoFactorMethod } from '../../../../shared/dtos/auth.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { TwoFactorLoginInputDto } from '../../dtos/account.dto';
+import { TwoFactorLoginInputDto, TwoFactorLoginOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
 //#if (Email)
 import { resendCountdown } from '../../utils/resend-countdown';
 //#endif
 
-/** 登录第二步：第一步交来的凭据、本人此刻能用的方式与默认方式。 */
+/**
+ * 登录第二步：本人此刻能用的方式与默认方式。待完成的登录本身由服务端的 HttpOnly 临时 Cookie 表明，
+ * 页面脚本拿不到、也不需要它。
+ */
 export interface TwoFactorPrompt {
-  token: string;
   /** 能用的方式，按系统顺序，恢复码在最后。 */
   methods: TwoFactorMethod[];
   /** 直接给出的方式。 */
@@ -66,24 +67,23 @@ export interface TwoFactorPrompt {
   maskedEmail: string | null;
 }
 
-/** 从第一步（密码或外部登录）的结果里取出第二步；不需要第二步时为 null。 */
-export function twoFactorPromptOf(
-  result: SessionLoginOutputDto | null | undefined,
-): TwoFactorPrompt | null {
-  if (!result?.requiresTwoFactor || !result.twoFactorToken) {
-    return null;
-  }
-
-  const methods: TwoFactorMethod[] = result.twoFactorMethods?.length
-    ? result.twoFactorMethods
+/** 从待完成登录的上下文取出第二步。 */
+export function twoFactorPromptOf(context: TwoFactorLoginOutputDto): TwoFactorPrompt {
+  const methods: TwoFactorMethod[] = context.twoFactorMethods.length
+    ? context.twoFactorMethods
     : ['authenticator'];
   return {
-    token: result.twoFactorToken,
     methods,
-    defaultMethod: result.defaultTwoFactorMethod ?? methods[0],
-    maskedEmail: result.maskedEmail ?? null,
+    defaultMethod: context.defaultTwoFactorMethod ?? methods[0],
+    maskedEmail: context.maskedEmail ?? null,
   };
 }
+
+/**
+ * 离开第二步：本人选择返回（`back`）；待完成的登录已到期（`expired`，可能是另一个标签页已经完成了它）；
+ * 账号此刻不能登录（`ended`，锁定或停用）。后两种带上服务端给出的原因（已本地化）。
+ */
+export type TwoFactorExit = { reason: 'back' } | { reason: 'expired' | 'ended'; message: string };
 
 const INPUT_IDS: Record<TwoFactorMethod, string> = {
   passkey: 'two-factor-passkey',
@@ -112,7 +112,7 @@ const METHOD_ICONS: Record<TwoFactorMethod, string> = {
 
 /**
  * 登录第二步：直接给出默认方式（本人首选，否则按 通行密钥 → 身份验证器 → 邮箱验证码 的顺序），不先让本人选；
- * 通过后由登录页建立会话上下文，凭据过期或次数用完时回到密码那一步。
+ * 通过后由宿主页（第二步页）建立会话上下文；待完成的登录到期或次数用完时交给宿主页处理。
  *
  * 换方式的入口在下方：只有一种备选时直接写明（如"改用恢复码"），两种以上时折叠成"换一种验证方式"，
  * 展开后列出其余方式，恢复码在最后。邮箱验证码在用到时才发：默认就是它，或本人切换过来。
@@ -156,23 +156,21 @@ export class TwoFactorChallenge {
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
   private readonly codeInput = viewChild(OtpCodeInput);
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  //#else
+  //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  /** 第一步交来的第二步。 */
+  /** 待完成登录的可用方式。 */
   readonly prompt = input.required<TwoFactorPrompt>();
   /**
-   * 登录页正在收尾（读当前用户、建立会话上下文或整页离开）。`completed` 不等收尾完成：
+   * 宿主页正在收尾（读当前用户、建立会话上下文或整页离开）。`completed` 不等收尾完成：
    * 本组件的验证请求一回来就复位，没有这一项的话，按钮会在页面跳走前恢复可点。
    */
   readonly finishing = input(false);
   /** 第二步通过，会话已下发。 */
   readonly completed = output<void>();
-  /** 回到密码那一步（用户选择返回，或凭据已失效）。 */
-  readonly cancelled = output<void>();
+  /** 离开第二步（本人选择返回，或这次第二步已经无法继续），带上原因。 */
+  readonly cancelled = output<TwoFactorExit>();
 
   /** 当前用的方式；换了一次第二步时回到它的默认方式。 */
   protected readonly method = linkedSignal(() => this.prompt().defaultMethod);
@@ -291,9 +289,7 @@ export class TwoFactorChallenge {
     this.sendingEmail.set(true);
     this.error.set(null);
     try {
-      const result = await lastValueFrom(
-        this.accountService.sendTwoFactorEmailCode(this.prompt().token),
-      );
+      const result = await lastValueFrom(this.accountService.sendTwoFactorEmailCode());
       this.emailSent.set(true);
       this.resend.start(result.retryAfterSeconds);
     } catch (error) {
@@ -368,11 +364,10 @@ export class TwoFactorChallenge {
     this.submitting.set(true);
     this.error.set(null);
     this.passkeyFailure.set(null);
-    const token = this.prompt().token;
     try {
-      const { options } = await lastValueFrom(this.accountService.beginTwoFactorPasskey(token));
+      const { options } = await lastValueFrom(this.accountService.beginTwoFactorPasskey());
       const passkey = await getPasskey(options);
-      await lastValueFrom(this.accountService.completeTwoFactorLogin({ token, passkey }));
+      await lastValueFrom(this.accountService.completeTwoFactorLogin({ passkey }));
       this.completed.emit();
     } catch (error) {
       const code = error instanceof ApplicationHttpError ? error.code : undefined;
@@ -393,32 +388,29 @@ export class TwoFactorChallenge {
   }
 
   private loginInput(): TwoFactorLoginInputDto {
-    const token = this.prompt().token;
     const value = this.value();
     switch (this.method()) {
       case 'recoveryCode':
-        return { token, recoveryCode: value };
+        return { recoveryCode: value };
       //#if (Email)
       case 'email':
-        return { token, emailCode: value.replace(/\s/g, '') };
+        return { emailCode: value.replace(/\s/g, '') };
       //#endif
       default:
-        return { token, code: value.replace(/\s/g, '') };
+        return { code: value.replace(/\s/g, '') };
     }
   }
 
-  // 凭据过期、次数用完或账号被锁：这一步已经无法继续，回到密码那一步，原因随 toast 带过去
+  // 待完成的登录已到期（含次数用完）或账号被锁：这一步已经无法继续，交给宿主页决定去哪里并提示原因。
+  // 到期可能是另一个标签页已经完成了这次登录，宿主页先确认是否已登录
   private leave(error: unknown): void {
-    //#if (IncludeLocalization)
-    toast.error(this.transloco.translate('account.login.loginFailed'), {
-      description: applicationErrorMessage(error),
+    const expired =
+      error instanceof ApplicationHttpError &&
+      error.code === API_ERROR_CODES.twoFactorChallengeExpired;
+    this.cancelled.emit({
+      reason: expired ? 'expired' : 'ended',
+      message: applicationErrorMessage(error),
     });
-    //#else
-    toast.error(this.t('account.login.loginFailed'), {
-      description: applicationErrorMessage(error),
-    });
-    //#endif
-    this.cancelled.emit();
   }
 
   private setValue(value: string): void {
@@ -442,7 +434,6 @@ export class TwoFactorChallenge {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'account.login.loginFailed': 'Sign-in failed',
   'account.twoFactorLogin.title': 'Two-factor authentication',
   'account.twoFactorLogin.codeHint': 'Enter the 6-digit code from your authenticator app.',
   'account.twoFactorLogin.recoveryHint': 'Enter one of the recovery codes you saved.',

@@ -194,16 +194,20 @@ public class EmailChallengeStore(
     /// <para>发送间隔内再次请求（重发，或重新进入第二步）不另发信：上一封仍有效、属于这个账号的这一版凭据时，
     /// 返回它的挑战与剩余间隔，原来那封里的码照样能用；否则按发送太频繁拒绝。</para>
     /// <para>邮件在后台发送（<see cref="AccountCodeMailer"/>）：调用方持着本人的凭据锁，不等 SMTP。</para>
+    /// <para>只在真正新发时看待完成登录的剩余期限：剩下的不够一个完整有效期就不新发（<see cref="AuthErrorCodes.EmailCodeResendTooLate"/>），
+    /// 免得发出刚到手就用不了的码；间隔内沿用上一封不受它限制，回报那封的真实剩余有效期。</para>
     /// </remarks>
     /// <param name="recipient">收码的账号。</param>
+    /// <param name="signInExpiresAt">这次待完成登录的到期时刻（UTC）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     public async Task<EmailVerificationChallengeOutputDto> IssueTwoFactorSignInAsync(
         EmailCodeRecipient recipient,
+        DateTime signInExpiresAt,
         CancellationToken cancellationToken = default)
     {
         var policy = await registrationPolicy.GetAsync(cancellationToken);
         return await IssueAccountCodeAsync(
-            recipient, TwoFactorSignInPurpose, AccountCodeMail.TwoFactorSignIn, policy, cancellationToken);
+            recipient, TwoFactorSignInPurpose, AccountCodeMail.TwoFactorSignIn, policy, signInExpiresAt, cancellationToken);
     }
 
     /// <summary>校验登录第二步的验证码；通过即作废。码失效（挑战已过期、次数用完或不存在）与码不对分开报。</summary>
@@ -238,7 +242,7 @@ public class EmailChallengeStore(
     {
         var policy = await registrationPolicy.GetAsync(cancellationToken);
         return await IssueAccountCodeAsync(
-            recipient, TwoFactorEmailSetupPurpose, AccountCodeMail.TwoFactorSetup, policy, cancellationToken);
+            recipient, TwoFactorEmailSetupPurpose, AccountCodeMail.TwoFactorSetup, policy, issueBefore: null, cancellationToken);
     }
 
     /// <summary>校验开启邮箱验证码的确认码；通过即作废，返回挑战绑定的账号与安全版本。</summary>
@@ -254,6 +258,7 @@ public class EmailChallengeStore(
         string purpose,
         AccountCodeMail kind,
         UserRegistrationPolicy policy,
+        DateTime? issueBefore,
         CancellationToken cancellationToken)
     {
         EnsureKeyUsable();
@@ -274,9 +279,16 @@ public class EmailChallengeStore(
 
         await EnsureSendIntervalElapsedAsync(scope, rateKey, operationToken);
 
+        var expiresIn = TimeSpan.FromMinutes(policy.EmailCodeExpiryMinutes);
+        if (issueBefore is { } deadline && deadline - now < expiresIn)
+        {
+            throw new BusinessException(
+                AuthErrorCodes.EmailCodeResendTooLate,
+                "Not enough time is left to send a new code. Use the code you already received, try another way, or sign in again.");
+        }
+
         var challengeId = Guid.NewGuid();
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
-        var expiresIn = TimeSpan.FromMinutes(policy.EmailCodeExpiryMinutes);
         var expiresAt = now.Add(expiresIn);
         var challenge = new EmailVerificationChallengeState
         {

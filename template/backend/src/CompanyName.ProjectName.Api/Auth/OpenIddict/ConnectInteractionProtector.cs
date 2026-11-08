@@ -35,19 +35,20 @@ public sealed class ConnectInteractionProtector(IDataProtectionProvider provider
     public string CreateReauthentication(string requestUri, DateTime issuedAt) =>
         _reauthentication.Protect(JsonSerializer.Serialize(new ReauthenticationProof(requestUri, issuedAt)));
 
-    /// <summary>证明属于本授权请求，且当前会话是在证明签发之后才开始的（即此后发生过一次新的登录）。</summary>
+    /// <summary>证明属于本授权请求，且当前会话（或待完成的登录）是在证明签发之后才开始的（即此后发生过一次新的认证）。</summary>
     /// <remarks>
-    /// 每次登录都新建会话，会话开始时间是完整精度；auth_time 只到秒，同一秒里已经存在的会话凭它分辨不出来。
-    /// 证明签发前就存在的任何会话（包括签发时的那个）都兑现不了。前提是各副本的时钟一致（见部署文档）。
+    /// 每次登录都新建会话、每次第一步都新建挑战，两者的开始时间都是完整精度；auth_time 与 Cookie 票据的签发时间只到秒，
+    /// 同一秒里已经存在的会话凭它们分辨不出来。证明签发前就存在的任何会话或待完成登录（包括签发时的那个）都兑现不了。
+    /// 前提是各副本的时钟一致（见部署文档）。
     /// </remarks>
-    public bool IsReauthenticated(string? proof, string? requestUri, DateTime? sessionStartedAt)
+    public bool IsReauthenticated(string? proof, string? requestUri, DateTime? startedAt)
     {
-        if (string.IsNullOrEmpty(proof) || string.IsNullOrEmpty(requestUri) || sessionStartedAt is not { } startedAt) return false;
+        if (string.IsNullOrEmpty(proof) || string.IsNullOrEmpty(requestUri) || startedAt is not { } started) return false;
         try
         {
             return JsonSerializer.Deserialize<ReauthenticationProof>(_reauthentication.Unprotect(proof)) is { } value &&
                 string.Equals(value.RequestUri, requestUri, StringComparison.Ordinal) &&
-                startedAt > value.IssuedAt;
+                started > value.IssuedAt;
         }
         catch (Exception exception) when (exception is CryptographicException or JsonException)
         {

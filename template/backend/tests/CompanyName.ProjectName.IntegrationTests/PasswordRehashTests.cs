@@ -63,14 +63,12 @@ public sealed class PasswordRehashTests(ProjectWebApplicationFactory factory) : 
 
         if (state == "two-factor")
         {
-            Assert.False(response.Headers.Contains("Set-Cookie"));
+            // 还要第二步：只写待完成登录的临时 Cookie，不写会话 Cookie
+            Assert.Equal(PendingSignIn.SetCookies(factory, response).Count, response.Headers.GetValues("Set-Cookie").Count());
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(body.GetProperty("requiresTwoFactor").GetBoolean());
-            using var completion = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new
-            {
-                Token = body.GetProperty("twoFactorToken").GetString(),
-                RecoveryCode
-            });
+            client.DefaultRequestHeaders.Add("Cookie", PendingSignIn.Read(factory, response));
+            using var completion = await client.PostAsJsonAsync("/api/v1/auth/two-factor", new { RecoveryCode });
             Assert.Equal(HttpStatusCode.OK, completion.StatusCode);
         }
     }

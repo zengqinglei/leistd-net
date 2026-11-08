@@ -45,9 +45,8 @@ import {
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { MOCKED_URL } from '../../../../core/mock/mocked-url';
-import { ReturnNavigation, ReturnUrlService } from '../../../../core/routing/return-url-service';
+import { ReturnUrlService } from '../../../../core/routing/return-url-service';
 import { AuthService } from '../../../../core/services/auth-service';
-import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SecurityConfigService } from '../../../../core/services/security-config-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 //#if (IncludeMultiTenancy)
@@ -74,15 +73,11 @@ import { AccountService } from '../../services/account-service';
 //#if (IncludeMultiTenancy)
 import { hostTenantProbe } from '../../utils/host-tenant-probe';
 //#endif
+import { injectLoginCompletion } from '../../utils/login-completion';
 //#if (ExternalLogin)
 import { ExternalLoginButtons } from '../../widgets/external-login-buttons/external-login-buttons';
 //#endif
 import { AuthShell } from '../auth-shell/auth-shell';
-import {
-  TwoFactorChallenge,
-  TwoFactorPrompt,
-  twoFactorPromptOf,
-} from '../two-factor-challenge/two-factor-challenge';
 
 @Component({
   selector: 'app-login',
@@ -105,7 +100,6 @@ import {
     TranslocoDirective,
     //#endif
     AuthShell,
-    TwoFactorChallenge,
     //#if (ExternalLogin)
     ExternalLoginButtons,
     //#endif
@@ -128,8 +122,8 @@ export class Login implements OnInit {
   private readonly loginFormRoot = viewChild.required<ElementRef<HTMLElement>>('loginFormRoot');
   private readonly submitForm = injectFormSubmission();
   private authService = inject(AuthService);
-  private readonly authorizationService = inject(AuthorizationService);
   private readonly sessionContext = inject(SessionContextService);
+  private readonly completeLogin = injectLoginCompletion();
   /** 租户关闭自助注册时不给注册入口。 */
   private readonly securityConfig = inject(SecurityConfigService);
   protected readonly registrationOpen = this.securityConfig.registrationOpen;
@@ -187,22 +181,6 @@ export class Login implements OnInit {
     return value.includes('@') ? { email: value } : {};
   });
 
-  /**
-   * 第二步：密码已通过，尚待其中一种方式通过。有值时登录页换成第二步。
-   *
-   * 外部登录回调遇到需要第二步的账号时，经导航状态把它带过来（不放进地址栏）。
-   */
-  private readonly callbackReturnUrl = (
-    this.router.currentNavigation()?.extras.state as { returnUrl?: string } | undefined
-  )?.returnUrl;
-
-  protected readonly twoFactorPrompt = signal<TwoFactorPrompt | null>(
-    (
-      this.router.currentNavigation()?.extras.state as
-        { twoFactorPrompt?: TwoFactorPrompt } | undefined
-    )?.twoFactorPrompt ?? null,
-  );
-
   private readonly accountService = inject(AccountService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -230,7 +208,7 @@ export class Login implements OnInit {
   /** 通行密钥在浏览器这一侧没成：按归类就地说明，不显示浏览器原文；改动输入或再试时清掉。 */
   protected readonly passkeyFailure = signal<WebAuthnFailure | null>(null);
   private conditionalRenewal: ReturnType<typeof setTimeout> | undefined;
-  /** 进行中的条件式请求；换成按钮发起、进入第二步或离开页面时中止。 */
+  /** 进行中的条件式请求；换成按钮发起或离开页面时中止。 */
   private conditionalRequest: AbortController | null = null;
 
   constructor() {
@@ -240,8 +218,7 @@ export class Login implements OnInit {
     // 条件式界面：用户名框在场、入口可用、没有别的通行密钥请求在途时挂一个请求，等本人在自动填充里选中。
     // 仪式在取选项时绑定租户，换了租户就重新挂
     effect(() => {
-      const ready =
-        this.showPasskey() && !this.twoFactorPrompt() && !this.authBlocked() && !this.passkeyBusy();
+      const ready = this.showPasskey() && !this.authBlocked() && !this.passkeyBusy();
       //#if (IncludeMultiTenancy)
       this.tenantContext.current();
       //#endif
@@ -284,13 +261,13 @@ export class Login implements OnInit {
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
         const result = await lastValueFrom(this.authService.login(loginInput));
-        const prompt = twoFactorPromptOf(result);
-        if (prompt) {
-          this.twoFactorPrompt.set(prompt);
+        if (result?.requiresTwoFactor) {
+          // 还要第二步：服务端只写了待完成登录的临时 Cookie，第二步在独立页面完成，刷新也能接着做
+          await this.router.navigateByUrl(this.returnUrls.twoFactorLogin(returnUrl));
           return;
         }
 
-        left = (await this.finishLogin(returnUrl)) === 'left';
+        left = (await this.completeLogin(returnUrl)) === 'left';
       } catch (error) {
         if (isRejection(error)) {
           this.loginError.set(applicationErrorMessage(error));
@@ -312,16 +289,15 @@ export class Login implements OnInit {
   }
 
   /**
-   * 第二步通过、会话已下发：接着收尾。加载态同时交给第二步显示，验证请求回来到页面跳走之间按钮一直忙碌。
+   * 免口令登录通过、会话已下发：接着收尾。
    * @returns 是否已发起整页离开（离开时加载态不复位，原因见 {@link onSubmit}）。
    */
-  protected async onTwoFactorCompleted(): Promise<boolean> {
+  private async onSignedIn(): Promise<boolean> {
     this._isLoading.set(true);
     let left = false;
     try {
-      const returnUrl =
-        this.route.snapshot.queryParamMap.get('returnUrl') ?? this.callbackReturnUrl ?? null;
-      left = (await this.finishLogin(returnUrl)) === 'left';
+      left =
+        (await this.completeLogin(this.route.snapshot.queryParamMap.get('returnUrl'))) === 'left';
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {
@@ -336,48 +312,6 @@ export class Login implements OnInit {
       }
     }
     return left;
-  }
-
-  /** 会话已下发之后的共同收尾：回授权端点时直接整页离开；否则取当前用户、建立会话上下文、提示并跳转。 */
-  private async finishLogin(returnUrl: string | null): Promise<ReturnNavigation> {
-    //#if (OpenIddictServer)
-    // 回到授权端点是整页离开：服务端会重新校验会话、重新认证证明与首绑要求（受限会话由它送去设置页），
-    // 资源应用启动时自建上下文。在这里读用户、应用账户偏好、弹成功提示，只会让即将离开的页面先变一下
-    if (this.returnUrls.isServerPage(returnUrl)) {
-      this.sessionContext.clear();
-      return this.returnUrls.navigate(returnUrl, () => this.enterLandingPage());
-    }
-    //#endif
-    this.sessionContext.clear();
-    await lastValueFrom(this.authService.loadUser());
-    // 受限会话先完成首绑，不应用账户偏好。
-    if (this.authService.currentUser()?.twoFactorSetupRequired) {
-      return (await this.router.navigateByUrl(this.returnUrls.twoFactorSetup(returnUrl)))
-        ? 'routed'
-        : 'cancelled';
-    }
-    const result = await this.sessionContext.enter(() =>
-      this.returnUrls.navigate(returnUrl, () => this.enterLandingPage()),
-    );
-    if (result !== 'cancelled') {
-      // 导航成功且偏好已提交，提示使用目标页的语言。
-      //#if (IncludeLocalization)
-      toast.success(this.transloco.translate('account.login.loginSuccess'), {
-        description: this.transloco.translate('account.login.welcomeBack'),
-        duration: 3000,
-      });
-      //#else
-      toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
-      //#endif
-    }
-    return result;
-  }
-
-  /** 按权限进入默认页：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。 */
-  private enterLandingPage(): Promise<boolean> {
-    return this.router.navigate([
-      this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
-    ]);
   }
 
   /** 改动任一输入：上一次被拒的原因不再对应当前填写的内容。 */
@@ -474,7 +408,7 @@ export class Login implements OnInit {
   }
 
   /**
-   * 交回断言；通过即下发会话，之后与第二步通过后同一条收尾（不再要求第二步）。
+   * 交回断言；通过即下发会话，之后与口令登录同一条收尾（不再要求第二步）。
    * @returns 是否已发起整页离开。
    */
   private async completePasskeySignIn(
@@ -482,7 +416,7 @@ export class Login implements OnInit {
     credential: WebAuthnJson,
   ): Promise<boolean> {
     await lastValueFrom(this.accountService.completePasskeySignIn({ ceremony, credential }));
-    return this.onTwoFactorCompleted();
+    return this.onSignedIn();
   }
 
   private showPasskeyError(error: unknown): void {

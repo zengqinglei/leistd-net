@@ -9,7 +9,7 @@ import { provideTranslocoScope, TranslocoService } from '@jsverse/transloco';
 import { toast } from '@spartan-ng/brain/sonner';
 // prettier-ignore
 import {
-  of, Subject, throwError,
+  of, throwError,
   //#if (IncludeMultiTenancy || ExternalLogin)
   Observable,
   //#endif
@@ -49,7 +49,6 @@ import { ExternalLoginProvidersOutputDto } from '../../dtos/account.dto';
 import { TenantByHostOutputDto } from '../../dtos/tenant-by-host.dto';
 //#endif
 import { AccountService } from '../../services/account-service';
-import { TwoFactorPrompt } from '../two-factor-challenge/two-factor-challenge';
 
 import type { Mock, MockedObject } from 'vitest';
 
@@ -57,19 +56,11 @@ import type { Mock, MockedObject } from 'vitest';
  * 登录提交路径。returnUrl 来自查询串，只接受本地绝对路径（`//host` 与含 `://` 的一律丢弃），
  * 防止登录后被送往外站。
  */
-/** 外部登录回调经导航状态带来的第二步。 */
-const PROMPT: TwoFactorPrompt = {
-  token: 'challenge',
-  methods: ['authenticator', 'recoveryCode'],
-  defaultMethod: 'authenticator',
-  maskedEmail: null,
-};
 //#if (OpenIddictServer)
 
 /** 授权端点送来的原目标：缓存请求的引用与重新认证证明原样带回。 */
 const AUTHORIZE =
   '/connect/authorize?client_id=resource&request_uri=urn%3Aabc&reauthentication=proof';
-//#endif
 
 /** 按钮处于忙碌态：禁用并显示加载。 */
 function busy(button: Element | null): boolean {
@@ -80,6 +71,7 @@ function busy(button: Element | null): boolean {
 function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve));
 }
+//#endif
 
 describe('Login', () => {
   let fixture: ComponentFixture<Login>;
@@ -94,7 +86,6 @@ describe('Login', () => {
   } | null>;
   let authorization: AuthorizationService;
   let queryParams: Record<string, string>;
-  let navigationState: { twoFactorPrompt: TwoFactorPrompt; returnUrl: string } | undefined;
   //#if (IncludeMultiTenancy)
   // 主机名探测的返回值。默认"域名不表态"，与本机开发一致；租户相关用例逐个覆盖它。
   let byHost: Observable<TenantByHostOutputDto>;
@@ -166,11 +157,6 @@ describe('Login', () => {
     await TestBed.inject(LanguageService).initialized;
     await TestBed.inject(LanguageService).loadScopes(['account']);
     //#endif
-    if (navigationState) {
-      vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue({
-        extras: { state: navigationState },
-      } as never);
-    }
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
@@ -195,7 +181,6 @@ describe('Login', () => {
 
   beforeEach(() => {
     queryParams = {};
-    navigationState = undefined;
     //#if (IncludeMultiTenancy)
     byHost = of({ decision: 'undecided' as const });
     localStorage.clear();
@@ -493,50 +478,20 @@ describe('Login', () => {
     expect(component.isLoading()).toBe(false);
   });
 
-  it('continues the external return address after completing the second step', async () => {
-    navigationState = { twoFactorPrompt: PROMPT, returnUrl: '/workspace/settings/security' };
+  // 还要第二步：服务端只写了临时 Cookie，第二步在独立页面完成；原目标随之带过去，不读当前用户
+  it('goes to the second step page with the return address when two-factor is required', async () => {
+    queryParams = { returnUrl: '/platform/users?offset=20' };
     await setUp();
-    await (
-      component as unknown as { onTwoFactorCompleted(): Promise<void> }
-    ).onTwoFactorCompleted();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace/settings/security');
-    expect(TestBed.inject(SessionContextService).establish).toHaveBeenCalled();
-  });
-
-  it('switches to the verification code step when two-factor is enabled, without loading the current user or navigating', async () => {
-    await setUp();
-    authService.login.mockReturnValue(
-      of({ requiresTwoFactor: true, twoFactorToken: 'challenge-token' }) as never,
-    );
+    authService.login.mockReturnValue(of({ requiresTwoFactor: true }) as never);
     fillValidCredentials();
 
     await component.onSubmit();
-    fixture.detectChanges();
 
+    expect(navigatedUrls()).toEqual([
+      '/auth/two-factor?returnUrl=%2Fplatform%2Fusers%3Foffset%3D20',
+    ]);
     expect(authService.loadUser).not.toHaveBeenCalled();
-    expect(router.navigate).not.toHaveBeenCalled();
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="two-factor-challenge"]'),
-    ).not.toBeNull();
-  });
-
-  // 开发环境的测试账号只用于填账号口令：第二步不再显示
-  it('shows the development test account only on the credentials step', async () => {
-    await setUp();
-    component.isMockEnabled.set(true);
-    fixture.detectChanges();
-    const hint = () =>
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="login-test-account"]');
-    expect(hint()).not.toBeNull();
-
-    authService.login.mockReturnValue(
-      of({ requiresTwoFactor: true, twoFactorToken: 'challenge-token' }) as never,
-    );
-    fillValidCredentials();
-    await component.onSubmit();
-    fixture.detectChanges();
-
-    expect(hint()).toBeNull();
+    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
   });
 
   it('sends a restricted session (organization requires two-factor) straight to the setup page without establishing session context', async () => {
@@ -555,64 +510,6 @@ describe('Login', () => {
       '/auth/two-factor-setup?returnUrl=%2Fplatform%2Fusers%3Foffset%3D20',
     ]);
     expect(router.navigate).not.toHaveBeenCalled();
-    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
-  });
-
-  // 第二步完成后才知道受限：外部登录带来的原目标同样随之带去设置页
-  it('carries the return address from the second step to the setup page of a restricted session', async () => {
-    navigationState = { twoFactorPrompt: PROMPT, returnUrl: '/workspace/settings/security' };
-    await setUp();
-    authService.loadUser.mockImplementation(() => {
-      currentUser.set({ twoFactorSetupRequired: true });
-      return of(undefined) as never;
-    });
-
-    await (
-      component as unknown as { onTwoFactorCompleted(): Promise<void> }
-    ).onTwoFactorCompleted();
-
-    expect(navigatedUrls()).toEqual([
-      '/auth/two-factor-setup?returnUrl=%2Fworkspace%2Fsettings%2Fsecurity',
-    ]);
-  });
-
-  // 第二步的忙碌分两段：验证请求在途由第二步自己持有，通过后的收尾（读当前用户、建立会话上下文）
-  // 由登录页持有。两段之间不能出现能再点一次的空档；收尾失败后恢复可操作
-  it('keeps the second step busy from verification through finishing and frees it on failure', async () => {
-    navigationState = { twoFactorPrompt: PROMPT, returnUrl: '/workspace/settings/security' };
-    await setUp();
-    const verification = new Subject<void>();
-    vi.spyOn(TestBed.inject(AccountService), 'completeTwoFactorLogin').mockReturnValue(
-      verification,
-    );
-    const user = new Subject<never>();
-    authService.loadUser.mockReturnValue(user as never);
-    vi.spyOn(toast, 'error').mockImplementation(() => '');
-    const host = fixture.nativeElement as HTMLElement;
-    const submit = () => host.querySelector('[data-testid="two-factor-submit"]');
-    const input = host.querySelector<HTMLInputElement>(
-      '[data-testid="two-factor-code-input"] input',
-    )!;
-
-    input.value = '123456';
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    host.querySelector('form')!.dispatchEvent(new Event('submit'));
-    await settle();
-    fixture.detectChanges();
-    expect(busy(submit())).toBe(true);
-
-    verification.next();
-    verification.complete();
-    await settle();
-    fixture.detectChanges();
-    expect(authService.loadUser).toHaveBeenCalledOnce();
-    expect(busy(submit())).toBe(true);
-
-    user.error(new Error('me unavailable'));
-    await settle();
-    fixture.detectChanges();
-    expect(busy(submit())).toBe(false);
     expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
   });
   //#if (OpenIddictServer)
@@ -667,28 +564,6 @@ describe('Login', () => {
 
     expect(error).toHaveBeenCalledOnce();
     expect(component.isLoading()).toBe(false);
-  });
-
-  it('keeps the second step busy until it leaves for an authorization request', async () => {
-    navigationState = { twoFactorPrompt: PROMPT, returnUrl: AUTHORIZE };
-    await setUp();
-    const leave = vi
-      .spyOn(TestBed.inject(FullPageNavigationService), 'replace')
-      .mockImplementation(() => undefined);
-
-    await (
-      component as unknown as { onTwoFactorCompleted(): Promise<void> }
-    ).onTwoFactorCompleted();
-    fixture.detectChanges();
-
-    expect(leave).toHaveBeenCalledExactlyOnceWith(AUTHORIZE);
-    expect(authService.loadUser).not.toHaveBeenCalled();
-    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
-    expect(
-      busy(
-        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="two-factor-submit"]'),
-      ),
-    ).toBe(true);
   });
   //#endif
 

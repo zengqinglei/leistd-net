@@ -20,8 +20,9 @@ public class ControllerAuthorizationConventionTests
     [
         new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/session-login", "登录本身，调用时还没有主体"),
         new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/two-factor", "登录第二步，主体尚未签发"),
-        new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/two-factor/email-code", "登录第二步发邮箱验证码，凭第一步的凭据"),
-        new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/two-factor/passkey-options", "登录第二步取通行密钥选项，凭第一步的凭据"),
+        new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/two-factor/email-code", "登录第二步发邮箱验证码，凭待完成登录的临时 Cookie"),
+        new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/two-factor/passkey-options", "登录第二步取通行密钥选项，凭待完成登录的临时 Cookie"),
+        new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/two-factor/cancel", "放弃待完成的登录，对没有的请求同样成功"),
         new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/passkey-login/options", "免口令登录取选项，调用时还没有主体"),
         new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/passkey-login", "免口令登录本身，调用时还没有主体"),
         new(ExemptionKind.AnonymousProtocol, "POST api/v1/auth/logout", "注销对无会话的请求同样成功"),

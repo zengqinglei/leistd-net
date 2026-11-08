@@ -104,16 +104,25 @@
 <!--#if (LocalIdentity)-->
 ### 本地账号
 
-账号密码与第二步验证走 `/api/v1/auth/session-login` 等现有会话接口。`GET /api/v1/auth/me` 读取已验证用户，退出撤销服务端会话。第二步完成前不签发最终会话，第二步凭据由 JSON 与前端导航状态传递。
+账号密码与第二步验证走 `/api/v1/auth/session-login` 等现有会话接口。`GET /api/v1/auth/me` 读取已验证用户，退出撤销服务端会话。第二步完成前不签发最终会话。
 
-**登录第二步的方式**：第一步（口令或外部登录）通过后，`session-login` 与外部登录完成端点返回第二步凭据、本人此刻能用的方式（`twoFactorMethods`，按系统顺序，恢复码在最后）与默认方式（`defaultTwoFactorMethod`）。默认方式取本人在个人设置里指定的首选（仍能用时），否则按系统顺序（通行密钥、身份验证器、邮箱验证码）取第一个；恢复码只在别无可用方式时作默认。界面直接给出默认方式、不先让本人选；只有一种备选时写明"改用…"，两种以上时收成"换一种验证方式"列表。判定集中在 `TwoFactorMethodResolver`，登录、发码、校验与个人设置同读这一处。
+**待完成登录**：第一步（口令或外部登录）通过、还要第二步时，服务端只写官方两步登录方案（`IdentityConstants.TwoFactorUserIdScheme`）的临时 Cookie，不写会话 Cookie，响应体里没有能完成登录的凭据。临时 Cookie 部署环境名为 `__Host-Http-CompanyName.ProjectName.TwoFactor`，HttpOnly、Secure、`Path=/`、SameSite=Lax，不持久、不滑动，绝对期限等于挑战到期；票据只放挑战引用，次数、安全版本与一次消费在服务端挑战记录里（`backend/src/CompanyName.ProjectName.Api/Auth/Sessions/PendingSignInCookie.cs`）。它不是正式身份：不进默认方案，需要登录的接口与 userinfo 都不认它。第二步页是独立路由 `/auth/two-factor?returnUrl=<原目标>`，经 `GET /api/v1/auth/two-factor` 取可用方式与打码邮箱，刷新照样接着做；提交（`POST /api/v1/auth/two-factor`）、发码与取通行密钥选项都凭这个 Cookie，入参不带令牌。通过时先删临时 Cookie 再签发会话；返回登录（换账号）调 `POST /api/v1/auth/two-factor/cancel`，幂等。新的一次第一步、单步或免口令登录、退出都先结束同一浏览器上的待完成登录；官方处理器对过期或篡改的票据只返回失败、不删 Cookie，各入口读到失败时显式删掉。取上下文明确答 `Auth:TwoFactorChallengeExpired` 时前端回登录页并保留 `returnUrl`，连不上或服务端故障就地说明、可重试；另一个标签页已完成时提交得到同一个码，前端先刷新当前用户，已登录就直接回到原目标。
+<!--#if (Email)-->
+
+待完成登录的期限是邮箱验证码有效期 N（`Registration.EmailCodeExpiryMinutes`）的两倍，创建时按当时的策略算定；输错与重发都不延长。
+<!--#else-->
+
+待完成登录的期限是 5 分钟，自第一步通过起算；输错不延长。
+<!--#endif-->
+
+**登录第二步的方式**：第一步（口令或外部登录）通过后，`session-login` 与外部登录完成端点（以及第二步页读的上下文接口）返回本人此刻能用的方式（`twoFactorMethods`，按系统顺序，恢复码在最后）与默认方式（`defaultTwoFactorMethod`）。默认方式取本人在个人设置里指定的首选（仍能用时），否则按系统顺序（通行密钥、身份验证器、邮箱验证码）取第一个；恢复码只在别无可用方式时作默认。界面直接给出默认方式、不先让本人选；只有一种备选时写明"改用…"，两种以上时收成"换一种验证方式"列表。判定集中在 `TwoFactorMethodResolver`，登录、发码、校验与个人设置同读这一处。
 
 **通行密钥（WebAuthn）**：服务端协议校验用 Fido2NetLib，经领域端口 `IPasskeyProtocol` 接入，依赖方取 `Passkeys` 配置（见部署配置）；没配依赖方时功能不可用（`security-config` 与两步验证状态的 `passkeysAvailable` 为假，各入口返回 `Auth:PasskeyUnavailable`），照常启动。注册与断言都要求用户验证（生物识别或 PIN），一次断言即具备"持有 + 本人"，因此它既是免口令登录（`passkey-login/options` → `passkey-login`，不再走第二步），也是登录第二步与确认身份的一种方式，并满足"要求两步验证"。仪式状态只存服务端分布式缓存、5 分钟有效、只认一次：登记与确认身份按本人 + 会话 + 安全版本，免口令登录按随机令牌 + 租户，第二步挂在挑战上。免口令登录、第二步、确认身份的通行密钥校验失败均不计入账号失败与锁定，保留失败记录与日志；第二步挑战仍最多 5 次。增删通行密钥都换安全版本、让本人其他会话退出，留操作记录并发安全提醒；组织要求两步验证时不能删掉最后一个独立因子（`Auth:TwoFactorRequiredByPolicy`）。凭据 ID 在租户内唯一，登记过的通行密钥绑定 RP ID。撤掉 `Passkeys` 配置后，仅有通行密钥这一个独立因子且恢复码用尽的账号，须由管理员重置两步验证。
 
 **恢复码是账号级的**：第一个独立因子（身份验证器或通行密钥）出现时发一组，最后一个独立因子去掉时随之清除；换绑身份验证器发新的一组。恢复码只能在登录第二步与换绑时用掉，不能确认身份。
 <!--#if (Email)-->
 
-邮箱验证码是可选的补充方式：本人在个人设置里开启（先确认是本人，再输入发到当前邮箱的确认码），要求邮箱已验证、所在组织打开 `Security.AllowEmailTwoFactor`（默认关闭）且部署能发码，任一项不满足时它就不是可用方式，只开了它的人回到单步登录、设置页写明原因。它不满足"要求两步验证"，只有独立因子（通行密钥、身份验证器）满足。第一步不发信：默认方式是邮箱或本人切换过来时，前端调 `POST /api/v1/auth/two-factor/email-code` 才发；码绑定这一次第二步与账号的安全版本，只认最近发出的一个，输错与身份验证器同样计入挑战次数与账号锁定，方式此刻不能用时返回 `Auth:TwoFactorMethodUnavailable`、不计数；没有仍有效的邮件挑战（没发过、已过期、次数用完）时返回 `Auth:EmailCodeExpired`、不计数。登录第二步的发送间隔单独计（找回口令、注册往同一地址发码不占用它）；间隔内再请求沿用仍有效的上一封与剩余间隔；成功用掉即释放间隔，次数用完或邮件过期则间隔内重新进入第二步仍会被拒为太频繁。邮件在后台投递，凭据锁内只签发挑战。
+邮箱验证码是可选的补充方式：本人在个人设置里开启（先确认是本人，再输入发到当前邮箱的确认码），要求邮箱已验证、所在组织打开 `Security.AllowEmailTwoFactor`（默认关闭）且部署能发码，任一项不满足时它就不是可用方式，只开了它的人回到单步登录、设置页写明原因。它不满足"要求两步验证"，只有独立因子（通行密钥、身份验证器）满足。第一步不发信：默认方式是邮箱或本人切换过来时，前端调 `POST /api/v1/auth/two-factor/email-code` 才发；码绑定这一次第二步与账号的安全版本，只认最近发出的一个，输错与身份验证器同样计入挑战次数与账号锁定，方式此刻不能用时返回 `Auth:TwoFactorMethodUnavailable`、不计数；没有仍有效的邮件挑战（没发过、已过期、次数用完）时返回 `Auth:EmailCodeExpired`、不计数。登录第二步的发送间隔单独计（找回口令、注册往同一地址发码不占用它）；间隔内再请求沿用仍有效的上一封，回报它的真实剩余有效期与剩余间隔，不延长任何期限；只有待完成登录还剩至少 N 分钟时才新发，每封新码都有完整的 N 分钟，不足时返回 `Auth:EmailCodeResendTooLate`、不计数，也不结束这次登录：已发出的码与其他方式照常可用到原期限，界面就地说明；成功用掉即释放间隔，次数用完或邮件过期则间隔内重新进入第二步仍会被拒为太频繁。邮件在后台投递，凭据锁内只签发挑战。
 
 **邮箱不是独立因子**：找回口令走的也是这个邮箱，能进邮箱的人同时拿到口令与邮箱码。每种方式声明是不是独立因子（`TwoFactorMethods.IsIndependent`：通行密钥、身份验证器、恢复码是，邮箱验证码不是），新增登录因子时一并声明。以下场景第二步只认独立因子，判定同样集中在 `TwoFactorMethodResolver`：
 
@@ -146,7 +155,7 @@
 
 受限会话（组织要求两步验证而本人未设置）是端点限制，与认证时间无关：它调不到资料与绑定接口，服务端以 `Auth:TwoFactorSetupRequired` 拒绝；它自己的首次设置照常按自己的认证时间判定。受限与否不写进会话，由每个请求的会话 Cookie 校验得出：按会话所属租户（或宿主）读“要求两步验证”这一个开关，开着时再按主键读本人是否已启用，两者都不进会话有效性缓存。所以打开或关闭要求、本人完成设置，提交之后的下一个请求即生效，不必重新登录、不换发 Cookie，没有共享缓存的多实例同样成立；打开要求的管理员自己没启用的话也立即受限。`GET /api/v1/auth/me` 的 `twoFactorSetupRequired` 与服务端拦截是同一个判定。模拟登录的会话不受限。限制只作用于会话 Cookie（含实时连接 `/hubs/**` 的新握手；已建立的连接不中途断开），Bearer 请求不受此约束。
 
-界面把受限会话带去 `/auth/two-factor-setup?returnUrl=<原目标>`：应用路由守卫、登录、第二步与外部登录完成都带上原目标；会话中途变成受限时，HTTP 拦截器收到 `Auth:TwoFactorSetupRequired` 先刷新当前用户再去设置页。设置页守卫每次进入都重新读当前用户，不受限就回到原目标或默认页；完成设置后先刷新用户、权限与设置再回去。原目标只接受站内地址，空、外站或指向设置页自身的回到默认页，`/connect/*` 整页回到服务端。地址里只有导航目标，口令、验证码与待提交的修改不进 URL 或持久存储。
+界面把受限会话带去 `/auth/two-factor-setup?returnUrl=<原目标>`：应用路由守卫、登录、第二步与外部登录完成都带上原目标；会话中途变成受限时，HTTP 拦截器收到 `Auth:TwoFactorSetupRequired` 先刷新当前用户再去设置页。设置页守卫每次进入都重新读当前用户，不受限就回到原目标或默认页；完成设置后先刷新用户、权限与设置再回去。原目标只接受站内地址，空、外站或指向设置页、第二步页自身的回到默认页，`/connect/*` 整页回到服务端。地址里只有导航目标，口令、验证码与待提交的修改不进 URL 或持久存储。
 
 #### 凭据并发
 
@@ -188,7 +197,9 @@
 
 已登录但受限（见“本地账号”）的会话在授权端点拿不到授权码：带 `prompt=none` 的请求按协议返回 `interaction_required`；交互请求转到设置页 `/auth/two-factor-setup`，`returnUrl` 是同一个缓存请求（只带 `client_id`、`request_uri` 与已有的重新认证证明），设置完成后整页回到这里继续授权。`/connect/logout` 照常可用。这条限制只管本地 Cookie 会话发起的新授权：已签发的令牌，以及在受限生效前签发的授权码的兑换，走既有令牌与授权链路，不受本地 Cookie 的设置要求约束，会话撤销与到期规则照旧；令牌交换可以代表用户、结果可能带委托方（`act`），也按既有链路处理；client_credentials 这类机器凭据不会被设置要求挡住。不新增跨协议的全量撤销。
 
-请求要求重新认证（`prompt=login`，或 `max_age` 已超过）时，跳转登录页的回跳地址带一份受保护的证明：绑定这一个 `request_uri`，只有证明签发之后才开始的会话（即一次新的登录）能兑现它，签发前就已存在的会话都不行。证明只抵消 `prompt=login` 与 `max_age=0` 的"每次都要认证"；正数 `max_age` 在回跳时仍按当前认证年龄判断。登录、第二步验证与外部登录都回到同一地址；没有新认证就回跳会再次要求登录，证明挪给别的请求无效。
+没有有效会话（或要求重新认证）而浏览器带着有效的待完成登录时，交互请求转到第二步页 `/auth/two-factor`，`returnUrl` 是同一个缓存请求（只带 `client_id`、`request_uri` 与已有的重新认证证明），各依赖方各带自己的；静默请求按协议返回 `login_required`。临时身份不构造依赖方主体、不签授权码。临时 Cookie 失效（过期、篡改、挑战记录已不在）时先删掉它，再按原逻辑回登录页，不会循环；有效会话旁残留的临时 Cookie 在授权时一并删掉。
+
+请求要求重新认证（`prompt=login`，或 `max_age` 已超过）时，跳转登录页的回跳地址带一份受保护的证明：绑定这一个 `request_uri`，只有证明签发之后才开始的会话或待完成登录（即一次新的口令或外部登录）能兑现它，签发前就已存在的都不行，更早的待完成登录连同临时 Cookie 作废。判据是会话开始时间与挑战签发时间（完整精度），不是只到秒的 `auth_time` 或 Cookie 签发时间。证明只抵消 `prompt=login` 与 `max_age=0` 的"每次都要认证"；正数 `max_age` 在回跳时仍按当前认证年龄判断。登录、第二步验证与外部登录都回到同一地址；没有新认证就回跳会再次要求登录，证明挪给别的请求无效。
 
 退出时，`id_token_hint` 中的会话标识（`sid`）与当前 Identity 会话一致才直接退出并回到登记的退出回调；没有 hint、hint 属于别的会话时转到确认页 `/auth/logout-confirm`（RP-Initiated Logout 1.0 §2）。确认页的地址只有 `request_uri` 与受保护的确认凭据，后者绑定该退出请求与当前会话的用户、租户、会话标识，有效 10 分钟。页面经 `GET /api/v1/auth/logout-confirmation` 核对凭据并取得官方 antiforgery 令牌，用户确认时整页 POST 回 `/connect/logout`；防伪令牌或凭据不符时再次显示确认页，会话保持。重新登录后，旧确认页不能结束新会话；取消不退出，发起退出的应用已清掉的本地会话不会因此恢复。当前没有会话时直接回到退出回调。
 
@@ -220,7 +231,7 @@ Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-cont
 0. 登录页匿名读取 `GET /api/v1/external-auth/providers`，只为可用的提供商显示入口；列表为空时登录页、注册页不显示入口与分隔文案，账户与安全不显示外部账号区块；读取失败时单独提示并可重试（5xx 附追踪 ID），不当作"未配置"。登录页只内置 GitHub、Google 两个入口，新增提供商时要同时补前端入口和 `getExternalLoginUrl` 的提供商类型。
 1. 浏览器导航至 `GET /api/v1/external-auth/{provider}/challenge`，可带站内 `returnUrl`（外站地址返回 400）。绑定使用 `GET /api/v1/external-auth/{provider}/link/challenge`，要求通过自然人策略的非受限会话。
 2. 提供商回调至 `/api/v1/external-auth/{provider}/signin`，官方处理器完成 code/state/correlation/PKCE 与 UserInfo，签发五分钟外部票据引用，然后重定向前端 `/auth/external-callback/{provider}?intent=...`。用户在提供商处取消或协议校验失败（state、correlation 等）时，不签发外部票据，重定向前端 `/auth/external-callback/{provider}?intent=...&error=cancelled|failed`：登录意图显示原因并提供返回登录入口（会话仍有效时直接回到应用，例如后退键重放旧回调），绑定意图回到安全设置页并提示。业务提示中的提供商名使用官方 scheme 的显示名（`ExternalUserInfo.ProviderDisplayName`）。
-3. 前端 `POST /api/v1/external-auth/{provider}/complete` 或受保护的 `POST /api/v1/external-auth/{provider}/link/complete`。登录的请求体为空对象；绑定在会话不够新时带上本人的当前口令或验证码（`{ "password": ... }` 或 `{ "twoFactorCode": ... }`），见“敏感变更的近期认证”。后端匹配受保护的提供商、意图、绑定发起者与租户，先一次消费外部票据，再执行账号政策；登录返回最终会话结果或第二步凭据及受保护的 `returnUrl`，前端在登录或第二步成功后接续该地址；绑定成功为空响应（HTTP 200），结果以绑定列表为准。登录与第二步的会话 Cookie 统一由 `backend/src/CompanyName.ProjectName.Api/Auth/Sessions/SessionCookieIssuer.cs` 签发：先结束当前会话再签发，要求第二步时只返回凭据、不签发最终会话。
+3. 前端 `POST /api/v1/external-auth/{provider}/complete` 或受保护的 `POST /api/v1/external-auth/{provider}/link/complete`。登录的请求体为空对象；绑定在会话不够新时带上本人的当前口令或验证码（`{ "password": ... }` 或 `{ "twoFactorCode": ... }`），见“敏感变更的近期认证”。后端匹配受保护的提供商、意图、绑定发起者与租户，先一次消费外部票据，再执行账号政策；登录签发会话，或（还要第二步时）只写待完成登录的临时 Cookie 并返回可用方式，都附受保护的 `returnUrl`：前端前者直接接续该地址，后者带它去第二步页；绑定成功为空响应（HTTP 200），结果以绑定列表为准。登录与第二步的会话 Cookie 统一由 `backend/src/CompanyName.ProjectName.Api/Auth/Sessions/SessionCookieIssuer.cs` 签发：先结束当前会话与待完成登录再签发，要求第二步时只写临时 Cookie、不签发最终会话。
 
 完成端点失败也不能重用票据，须重新 challenge；唯一的例外是绑定要求确认身份（`Auth:ReauthenticationRequired`、`Security:CurrentPasswordIncorrect`、`Auth:TwoFactorCodeInvalid`、`Auth:ReauthenticationMethodUnavailable`）：确认只在消费票据之前进行一次，带上凭证重试同一个请求即可；票据消费之后不再因认证时间拒绝。查询参数不能改变保护过的登录/绑定意图。提供商后台需分别登记上述完整 HTTPS signin 地址。Google v3 使用 `sub/email_verified`。邮箱接口失败或未验证邮箱不允许按邮箱关联账号。
 

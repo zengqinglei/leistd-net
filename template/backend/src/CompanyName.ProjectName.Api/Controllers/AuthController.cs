@@ -38,9 +38,10 @@ public sealed class AuthController(
     IUserSessionAppService sessionAppService,
     ITwoFactorAppService twoFactorAppService,
     IPasskeyAppService passkeyAppService,
-    SessionCookieIssuer sessionCookieIssuer) : BaseController
+    SessionCookieIssuer sessionCookieIssuer,
+    PendingSignInCookie pendingSignIn) : BaseController
 {
-    /// <summary>账号密码登录。已启用两步验证时不下发会话，返回第二步凭据。</summary>
+    /// <summary>账号密码登录。还要第二步时不下发会话，只写待完成登录的临时 Cookie 并返回可用方式。</summary>
     [AllowAnonymous]
     [HttpPost("session-login")]
     [IgnoreAntiforgeryToken]
@@ -67,34 +68,46 @@ public sealed class AuthController(
         await sessionCookieIssuer.SignInNewSessionAsync(HttpContext, principal, cancellationToken);
     }
 
+    /// <summary>登录第二步的上下文（可用方式、默认方式、打码邮箱），凭待完成登录的临时 Cookie 读取。</summary>
+    /// <remarks>第二步页刷新、或从授权端点接回时据此继续；没有有效的待完成登录时以 <c>Auth:TwoFactorChallengeExpired</c> 拒绝并删掉临时 Cookie。</remarks>
+    [AllowAnonymous]
+    [HttpGet("two-factor")]
+    public Task<TwoFactorLoginOutputDto> GetTwoFactorLoginAsync(CancellationToken cancellationToken)
+        => pendingSignIn.RunAsync(HttpContext, token => authService.GetTwoFactorLoginAsync(token, cancellationToken));
+
     /// <summary>登录第二步：取用通行密钥验证的断言选项（本人用通行密钥这种方式时）。</summary>
     [AllowAnonymous]
     [HttpPost("two-factor/passkey-options")]
     [IgnoreAntiforgeryToken]
-    public Task<PasskeyOptionsOutputDto> BeginTwoFactorPasskeyAsync(
-        [FromBody] TwoFactorPasskeyOptionsInputDto input,
-        CancellationToken cancellationToken)
-        => authService.BeginTwoFactorPasskeyAsync(input, cancellationToken);
+    public Task<PasskeyOptionsOutputDto> BeginTwoFactorPasskeyAsync(CancellationToken cancellationToken)
+        => pendingSignIn.RunAsync(HttpContext, token => authService.BeginTwoFactorPasskeyAsync(token, cancellationToken));
 
     /// <summary>登录第二步：提交其中一种方式的凭证（通行密钥、身份验证器、邮箱或恢复码）。</summary>
+    /// <remarks>通过后先删临时 Cookie 再签发会话。</remarks>
     [AllowAnonymous]
     [HttpPost("two-factor")]
     [IgnoreAntiforgeryToken]
     public async Task TwoFactorLoginAsync([FromBody] TwoFactorLoginInputDto input, CancellationToken cancellationToken)
     {
-        var principal = await authService.CompleteTwoFactorLoginAsync(input, cancellationToken);
+        var principal = await pendingSignIn.RunAsync(
+            HttpContext, token => authService.CompleteTwoFactorLoginAsync(token, input, cancellationToken));
         await sessionCookieIssuer.SignInNewSessionAsync(HttpContext, principal, cancellationToken);
     }
+
+    /// <summary>放弃待完成的登录（换账号、返回登录页）：作废挑战并删临时 Cookie。幂等。</summary>
+    [AllowAnonymous]
+    [HttpPost("two-factor/cancel")]
+    [IgnoreAntiforgeryToken]
+    public Task CancelTwoFactorLoginAsync(CancellationToken cancellationToken)
+        => pendingSignIn.EndAsync(HttpContext, cancellationToken);
 #if (Email)
 
     /// <summary>登录第二步：把验证码发到本人的邮箱（本人用邮箱验证码这种方式时）。</summary>
     [AllowAnonymous]
     [HttpPost("two-factor/email-code")]
     [IgnoreAntiforgeryToken]
-    public Task<TwoFactorEmailCodeOutputDto> SendTwoFactorEmailCodeAsync(
-        [FromBody] TwoFactorEmailCodeInputDto input,
-        CancellationToken cancellationToken)
-        => authService.SendTwoFactorEmailCodeAsync(input, cancellationToken);
+    public Task<TwoFactorEmailCodeOutputDto> SendTwoFactorEmailCodeAsync(CancellationToken cancellationToken)
+        => pendingSignIn.RunAsync(HttpContext, token => authService.SendTwoFactorEmailCodeAsync(token, cancellationToken));
 #endif
 
     /// <remarks>
@@ -107,9 +120,10 @@ public sealed class AuthController(
     [HttpPost("logout")]
     public async Task LogoutAsync(CancellationToken cancellationToken)
     {
-        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效
+        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效。待完成的登录一并结束
         await sessionAppService.EndCurrentSessionAsync(cancellationToken);
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
+        await pendingSignIn.EndAsync(HttpContext, cancellationToken);
     }
 
 #if (OpenIddictServer)

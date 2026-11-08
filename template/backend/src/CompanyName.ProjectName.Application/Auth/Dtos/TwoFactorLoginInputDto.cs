@@ -5,15 +5,9 @@ using CompanyName.ProjectName.Application.Auth.Passkeys;
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
 /// <summary>登录第二步：恰好提交一种方式的凭证（通行密钥断言、身份验证器验证码、邮箱验证码或恢复码）。</summary>
-/// <remarks>多给一种是校验错误：按优先级挑一个会悄悄用掉本人没打算用的恢复码，也让判定依赖字段顺序。</remarks>
+/// <remarks>待完成的登录取自临时 Cookie，不在请求体里。多给一种是校验错误：按优先级挑一个会悄悄用掉本人没打算用的恢复码，也让判定依赖字段顺序。</remarks>
 public sealed record TwoFactorLoginInputDto : IValidatableObject
 {
-    /// <summary>第一步返回的凭据。</summary>
-    [Display(Name = "Two-factor token")]
-    [Required(ErrorMessage = "{0} is required.")]
-    [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
-    public string Token { get; init; } = null!;
-
     /// <summary>身份验证器应用上的 6 位验证码。</summary>
     [Display(Name = "Verification code")]
     [RegularExpression(@"^\s*\d{3}\s?\d{3}\s*$", ErrorMessage = "The verification code must contain exactly 6 digits.")]

@@ -186,10 +186,12 @@ internal sealed class AuthAppService(
     /// 知道密码的人可以反复走第一步领新挑战。</para>
     /// </remarks>
     public async Task<ClaimsPrincipal> CompleteTwoFactorLoginAsync(
+        string? challengeToken,
         TwoFactorLoginInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        var token = challengeToken ?? throw TwoFactorChallengeExpired();
+        var challenge = await twoFactorChallengeStore.GetAsync(token, cancellationToken);
         if (challenge is null || challenge.TenantId != currentTenant.Id)
         {
             throw TwoFactorChallengeExpired();
@@ -203,7 +205,7 @@ internal sealed class AuthAppService(
             UserCredentialLock.Key(challenge.UserId), cancellationToken);
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, userLock.LockLost);
         cancellationToken = lockScope.Token;
-        challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        challenge = await twoFactorChallengeStore.GetAsync(token, cancellationToken);
         var user = challenge is not null
             ? await userRepository.GetByIdAsync(challenge.UserId, cancellationToken)
             : null;
@@ -216,7 +218,7 @@ internal sealed class AuthAppService(
         // 这个挑战凭的是旧凭据，作废。撤销会话挡不住它——挑战不是会话
         if (!user.HasSecurityStamp(challenge.SecurityStamp))
         {
-            await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+            await twoFactorChallengeStore.RemoveAsync(token, cancellationToken);
             throw TwoFactorChallengeExpired();
         }
 
@@ -227,7 +229,7 @@ internal sealed class AuthAppService(
         }
         catch
         {
-            await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+            await twoFactorChallengeStore.RemoveAsync(token, cancellationToken);
             throw;
         }
 
@@ -269,13 +271,13 @@ internal sealed class AuthAppService(
                 var counted = await accessFailureCounter.CountAsync(user.Id, cancellationToken);
                 if (counted is { LockoutTriggered: true, User: { } lockedUser })
                 {
-                    await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+                    await twoFactorChallengeStore.RemoveAsync(token, cancellationToken);
                     await RecordLockedOutAsync(lockedUser, cancellationToken);
                     throw SessionIssuer.LockedOut(lockedUser, now);
                 }
             }
 
-            if (!await twoFactorChallengeStore.RecordFailureAsync(input.Token, challenge, cancellationToken))
+            if (!await twoFactorChallengeStore.RecordFailureAsync(token, challenge, cancellationToken))
             {
                 throw TwoFactorChallengeExpired();
             }
@@ -285,7 +287,7 @@ internal sealed class AuthAppService(
                 : new BusinessException(AuthErrorCodes.TwoFactorCodeInvalid, "The verification code is incorrect.");
         }
 
-        await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+        await twoFactorChallengeStore.RemoveAsync(token, cancellationToken);
 #if (Email)
         if (usedMethod.IsIndependent())
         {
@@ -317,10 +319,11 @@ internal sealed class AuthAppService(
     /// 锁定中的账号、凭据已变的挑战都不发；这种方式此刻不能用时以 <see cref="AuthErrorCodes.TwoFactorMethodUnavailable"/> 拒绝。</para>
     /// </remarks>
     public async Task<TwoFactorEmailCodeOutputDto> SendTwoFactorEmailCodeAsync(
-        TwoFactorEmailCodeInputDto input,
+        string? challengeToken,
         CancellationToken cancellationToken = default)
     {
-        var challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        var token = challengeToken ?? throw TwoFactorChallengeExpired();
+        var challenge = await twoFactorChallengeStore.GetAsync(token, cancellationToken);
         if (challenge is null || challenge.TenantId != currentTenant.Id)
         {
             throw TwoFactorChallengeExpired();
@@ -330,7 +333,7 @@ internal sealed class AuthAppService(
             UserCredentialLock.Key(challenge.UserId), cancellationToken);
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, userLock.LockLost);
         cancellationToken = lockScope.Token;
-        challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        challenge = await twoFactorChallengeStore.GetAsync(token, cancellationToken);
         var user = challenge is not null
             ? await userRepository.GetByIdAsync(challenge.UserId, cancellationToken)
             : null;
@@ -346,15 +349,14 @@ internal sealed class AuthAppService(
             throw TwoFactorMethodUnavailable();
         }
 
+        // 邮件写明"N 分钟内有效"：只有待完成的登录还剩至少 N 时才真正新发——发码存储在发送间隔锁内先判复用，
+        // 真要新发才看这一条；不足时以 Auth:EmailCodeResendTooLate 拒绝，不计数、不结束这次登录，已发的码与其他方式照常可用
         var issued = await emailChallengeStore.IssueTwoFactorSignInAsync(
-            new EmailCodeRecipient(user.Id, user.Email, user.SecurityStamp), cancellationToken);
-        await twoFactorChallengeStore.AttachEmailChallengeAsync(input.Token, challenge, issued.ChallengeId, cancellationToken);
-
-        // 码比这次第二步活得久时，以第二步的剩余时间为准：第二步过期后码也用不上
-        var remaining = (int)Math.Max(0, (challenge.ExpiresAt - now).TotalSeconds);
+            new EmailCodeRecipient(user.Id, user.Email, user.SecurityStamp), challenge.ExpiresAt, cancellationToken);
+        await twoFactorChallengeStore.AttachEmailChallengeAsync(token, challenge, issued.ChallengeId, cancellationToken);
         return new TwoFactorEmailCodeOutputDto
         {
-            ExpiresInSeconds = Math.Min(issued.ExpiresInSeconds, remaining),
+            ExpiresInSeconds = issued.ExpiresInSeconds,
             RetryAfterSeconds = issued.RetryAfterSeconds
         };
     }
@@ -415,10 +417,11 @@ internal sealed class AuthAppService(
     /// 再取一次即换一份选项，之前给的随之不再被认；这种方式此刻不能用时以 <see cref="AuthErrorCodes.TwoFactorMethodUnavailable"/> 拒绝。
     /// </remarks>
     public async Task<PasskeyOptionsOutputDto> BeginTwoFactorPasskeyAsync(
-        TwoFactorPasskeyOptionsInputDto input,
+        string? challengeToken,
         CancellationToken cancellationToken = default)
     {
-        var challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        var token = challengeToken ?? throw TwoFactorChallengeExpired();
+        var challenge = await twoFactorChallengeStore.GetAsync(token, cancellationToken);
         if (challenge is null || challenge.TenantId != currentTenant.Id)
         {
             throw TwoFactorChallengeExpired();
@@ -428,7 +431,7 @@ internal sealed class AuthAppService(
             UserCredentialLock.Key(challenge.UserId), cancellationToken);
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, userLock.LockLost);
         cancellationToken = lockScope.Token;
-        challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        challenge = await twoFactorChallengeStore.GetAsync(token, cancellationToken);
         var user = challenge is not null
             ? await userRepository.GetByIdAsync(challenge.UserId, cancellationToken)
             : null;
@@ -444,8 +447,68 @@ internal sealed class AuthAppService(
         }
 
         var ceremony = passkeyVerifier.Begin(await passkeyDomainService.GetListAsync(user.Id, cancellationToken));
-        await twoFactorChallengeStore.AttachPasskeyStateAsync(input.Token, challenge, ceremony.State, cancellationToken);
+        await twoFactorChallengeStore.AttachPasskeyStateAsync(token, challenge, ceremony.State, cancellationToken);
         return PasskeyAppService.OptionsOutput(ceremony.Options);
+    }
+
+    /// <summary>读出一次待完成的登录，在它自己的租户里核对；挑战已过期、不存在或已失效时返回 null。</summary>
+    /// <remarks>
+    /// 失效指凭据已变（安全版本不同）、账号已删除或此刻一种第二步方式都用不了，此时一并作废挑战。
+    /// 授权端点的整页导航不带前端的租户上下文，所以按挑战记录的租户读用户，而不是按请求解析出的租户。
+    /// </remarks>
+    public async Task<TwoFactorPrompt?> FindTwoFactorLoginAsync(
+        string? challengeToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (challengeToken is null ||
+            await twoFactorChallengeStore.GetAsync(challengeToken, cancellationToken) is not { } challenge)
+        {
+            return null;
+        }
+
+        using var tenantScope = currentTenant.Change(challenge.TenantId);
+        var user = await userRepository.GetByIdAsync(challenge.UserId, cancellationToken);
+        var methods = user is not null && user.HasSecurityStamp(challenge.SecurityStamp)
+            ? await twoFactorMethods.ResolveForSignInAsync(user, challenge.FirstFactorViaEmail, cancellationToken)
+            : null;
+        if (methods?.DefaultMethod is not { } defaultMethod)
+        {
+            await twoFactorChallengeStore.RemoveAsync(challengeToken, cancellationToken);
+            return null;
+        }
+
+        return new TwoFactorPrompt(
+            challengeToken, methods.Methods, defaultMethod, methods.MaskedEmail,
+            challenge.TenantId, challenge.IssuedAt, challenge.ExpiresAt);
+    }
+
+    /// <summary>登录第二步的上下文：本人此刻能用的方式与打码邮箱；没有当前租户下有效的待完成登录时以 <c>Auth:TwoFactorChallengeExpired</c> 拒绝。</summary>
+    public async Task<TwoFactorLoginOutputDto> GetTwoFactorLoginAsync(
+        string? challengeToken,
+        CancellationToken cancellationToken = default)
+    {
+        // 与提交第二步同一租户判定：别的租户下的待完成登录在这里完成不了
+        if (await FindTwoFactorLoginAsync(challengeToken, cancellationToken) is not { } prompt ||
+            prompt.TenantId != currentTenant.Id)
+        {
+            throw TwoFactorChallengeExpired();
+        }
+
+        return new TwoFactorLoginOutputDto
+        {
+            TwoFactorMethods = prompt.Methods,
+            DefaultTwoFactorMethod = prompt.DefaultMethod,
+            MaskedEmail = prompt.MaskedEmail
+        };
+    }
+
+    /// <summary>放弃待完成的登录（换账号、返回登录页）：作废挑战。幂等。</summary>
+    public async Task CancelTwoFactorLoginAsync(string? challengeToken, CancellationToken cancellationToken = default)
+    {
+        if (challengeToken is not null)
+        {
+            await twoFactorChallengeStore.RemoveAsync(challengeToken, cancellationToken);
+        }
     }
 
     /// <summary>免口令登录：给出让浏览器列出本站可发现凭据的断言选项，与一个仪式凭据。</summary>
