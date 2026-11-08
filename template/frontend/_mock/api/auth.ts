@@ -898,6 +898,12 @@ function verifyTwoFactorEmailCode(
     return false;
   }
   emailChallengeStore.delete(challenge.emailChallengeId!);
+  // 与后端一致：成功用掉即释放登录第二步的发送间隔，下一次登录不必等间隔过去
+  const rateKey = signInRateKey(emailChallenge.scope, emailChallenge.email);
+  if (signInEmailChallenges.get(rateKey) === challenge.emailChallengeId) {
+    signInEmailChallenges.delete(rateKey);
+    emailRateLimitStore.delete(rateKey);
+  }
   return true;
 }
 

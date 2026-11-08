@@ -451,6 +451,21 @@ describe('mock email two-factor', () => {
     }
   });
 
+  // 与后端一致：成功用掉即释放发送间隔，间隔内新的一次登录可以立即发码
+  it('releases the send interval once the sign-in code is used', () => {
+    demo.preferredTwoFactorMethod = 'email';
+    firstStep();
+    sendEmailCode({ headers, body: {} });
+    completeTwoFactor({ headers, body: { emailCode: '123456' } });
+    setMockSessionUserId(null);
+
+    firstStep();
+    const next = sendEmailCode({ headers, body: {} }) as { retryAfterSeconds: number };
+    expect(next.retryAfterSeconds).toBe(60);
+    // 用掉它：发送间隔记在模块级状态里，不留给后面的用例
+    completeTwoFactor({ headers, body: { emailCode: '123456' } });
+  });
+
   // 外层剩余不足一个码的有效期时，只拒绝真正新发：t=5 首发、t=5.5 仍在发送间隔内，沿用原码、回报真实剩余，期限不变
   it('reuses the code within the send interval even when too little time is left for a new one', () => {
     const start = Date.now() - 7_200_000;
