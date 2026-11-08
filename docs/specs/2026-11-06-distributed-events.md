@@ -295,7 +295,7 @@ public interface IDistributedEventReceiver
    - 逐个物理库进入，库内放开租户过滤，取到期的待发记录；
    - 每条在所属租户的上下文与独立作用域里处理，有界并发；
    - 某个库失败时汇总抛出。
-4. **保序取数**：带排序键的记录，只有同租户同键下不存在更早的 Pending 记录时才发。两个入口在发送前都检查这一条。
+4. **保序取数**：带排序键的记录，只有同租户同事件名同键下不存在更早的 Pending 记录时才发。两个入口在发送前都检查这一条。
 5. **结果**（按序判断）：
 
    | 顺序 | 条件 | 处理 |
@@ -324,7 +324,7 @@ public interface IDistributedEventReceiver
    - 载荷无法反序列化。
 
    传输自己判定失败的消息走 `RejectAsync`，原因码由传输给出。拒收不阻塞传输，毒消息不会被无限重投。
-3. **立即处理**（`ProcessingEnabled`）：接收提交后把收件箱 Id 送进进程内队列；兜底任务 `event-bus.inbox` 的写法同发件箱。收件箱也按排序键保序：同租户、同消费者、同键下没有更早的 Pending 记录才处理。
+3. **立即处理**（`ProcessingEnabled`）：接收提交后把收件箱 Id 送进进程内队列；兜底任务 `event-bus.inbox` 的写法同发件箱。收件箱也按排序键保序：同租户、同事件名、同消费者、同键下没有更早的 Pending 记录才处理。
 4. **处理**：每行在以下上下文里执行：所属租户、系统身份、消息头还原出的关联标识、续接的 Activity。处理器的写入与"标记 Processed"在同一个事务工作单元里提交；收件箱以 `AttemptCount` 作并发令牌，每次成功或失败都递增；成功递增与业务写入、Processed 标记同事务。并发冲突整笔回滚后退出，不另写一次失败覆盖胜方（D8）。
 5. **失败**：回滚后，在独立工作单元里记失败并按退避排期；`MaxAttempts` 次后标 Failed，记 Error 日志 `DistributedEventConsumeFailed`。
 6. **重放**：对终态（Processed、Failed）开放。`Status = Pending`、`AttemptCount = 0`、`NextAttemptAt = 现在`、清空错误与 `ProcessedAt`、`ReplayCount + 1`。每轮重放重新获得 `MaxAttempts` 次预算。重放 Processed 会让处理器再执行一次，界面确认框里写明这一点。
@@ -396,7 +396,7 @@ public interface IDistributedEventReceiver
 
 - 发件箱、收件箱实现 `IMultiTenant`；拒收表不分租户。三表都有 `LastModificationTime`，每次状态变更或恢复时更新，保留期只删除该时刻早于期限的终态行。Pending 永不清理。
 - 唯一约束：发件箱 `(TenantId, EventId)`，收件箱 `(TenantId, EventId, Consumer)`。宿主行与租户行各一条带 `HasFilter` 的唯一索引。
-- 查询索引：发件箱与收件箱各有 `(Status, NextAttemptAt, Id)`、`(OrderingKey, Id)`、`(EventName, Status)`。
+- 查询索引：发件箱与收件箱各有 `(Status, NextAttemptAt, Id)`、`(TenantId, EventName, OrderingKey, Id)`、`(EventName, Status)`。
 - 表名沿用 EF Core 默认约定。保留期删除用"加载 + RemoveRange"，不用 `ExecuteDelete`。
 
 ### 配置项

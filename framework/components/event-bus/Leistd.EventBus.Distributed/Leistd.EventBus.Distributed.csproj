@@ -8,12 +8,15 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />
+    <ProjectReference Include="../../dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
     <ProjectReference Include="../../data/Leistd.Data/Leistd.Data.csproj" />
     <ProjectReference Include="../../localization/Leistd.Localization.Core/Leistd.Localization.Core.csproj" />
     <ProjectReference Include="../../exception-handling/Leistd.ExceptionHandling.Core/Leistd.ExceptionHandling.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources/*.json" />
+    <InternalsVisibleTo Include="Leistd.EventBus.RabbitMQ" />
+    <InternalsVisibleTo Include="Leistd.EventBus.Kafka" />
     <InternalsVisibleTo Include="Leistd.EventBus.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Leistd.EventBus.AspNetCore" />
     <InternalsVisibleTo Include="Leistd.EventBus.Tests" />

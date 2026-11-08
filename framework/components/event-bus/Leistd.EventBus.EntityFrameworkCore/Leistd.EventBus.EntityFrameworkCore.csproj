@@ -5,7 +5,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../tracing/Leistd.Tracing.Core/Leistd.Tracing.Core.csproj" />
     <ProjectReference Include="../Leistd.EventBus.Distributed/Leistd.EventBus.Distributed.csproj" />
+    <ProjectReference Include="../../multi-tenancy/Leistd.MultiTenancy.Core/Leistd.MultiTenancy.Core.csproj" />
+    <ProjectReference Include="../../unit-of-work/Leistd.UnitOfWork.EntityFrameworkCore/Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
+    <ProjectReference Include="../../background-jobs/Leistd.BackgroundJobs.Core/Leistd.BackgroundJobs.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Leistd.EventBus.Tests" />
   </ItemGroup>
 
 </Project>
