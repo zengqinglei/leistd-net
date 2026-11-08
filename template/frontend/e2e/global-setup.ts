@@ -15,6 +15,9 @@ import { promisify } from 'node:util';
 
 import { request } from '@playwright/test';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+//#if (IncludeDistributedEvents)
+import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
+//#endif
 
 import {
   RESTRICTED_PERMISSIONS,
@@ -53,12 +56,18 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   const workDir = mkdtempSync(join(tmpdir(), 'e2e-'));
   let database: StartedPostgreSqlContainer | undefined;
+  //#if (IncludeDistributedEvents)
+  let broker: StartedTestContainer | undefined;
+  //#endif
   let api: ChildProcess | undefined;
   let log: WriteStream | undefined;
   const teardown = async () => {
     // 先等 API 退出、日志关闭，再停库删目录：进程仍占着文件时 Windows 删除会报 EBUSY
     await stopProcess(api);
     await new Promise<void>((done) => (log ? log.end(done) : done()));
+    //#if (IncludeDistributedEvents)
+    await broker?.stop();
+    //#endif
     await database?.stop();
     rmSync(workDir, { recursive: true, force: true });
   };
@@ -69,6 +78,20 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     database = await applyRunnerContainerOwnership(
       new PostgreSqlContainer('postgres:18-alpine'),
     ).start();
+    //#if (IncludeDistributedEvents)
+    const brokerPassword = randomBytes(32).toString('hex');
+    broker = await applyRunnerContainerOwnership(
+      new GenericContainer('rabbitmq:4-management-alpine')
+        .withEnvironment({ RABBITMQ_DEFAULT_USER: 'e2e', RABBITMQ_DEFAULT_PASS: brokerPassword })
+        .withExposedPorts(5672)
+        .withWaitStrategy(
+          Wait.forAll([Wait.forListeningPorts(), Wait.forLogMessage(/Server startup complete/)]),
+        )
+        .withStartupTimeout(120_000),
+      'rabbitmq',
+    ).start();
+    const brokerConnection = `amqp://e2e:${brokerPassword}@${broker.getHost()}:${broker.getMappedPort(5672)}`;
+    //#endif
     const connection = [
       `Host=${database.getHost()}`,
       `Port=${database.getPort()}`,
@@ -103,6 +126,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         ASPNETCORE_WEBROOT: webRoot,
         ConnectionStrings__Default: connection,
         ConnectionStrings__Redis: '',
+        //#if (IncludeDistributedEvents)
+        ConnectionStrings__RabbitMQ: brokerConnection,
+        //#endif
         DataProtection__KeysPath: keysPath,
         DefaultAdmin__Password: admin().password,
         Leistd__Security__VerificationCodes__Key: randomBytes(32).toString('base64'),
@@ -113,7 +139,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     });
     api.stdout?.pipe(log, { end: false });
     api.stderr?.pipe(log, { end: false });
-    await waitUntilLive(api, `${baseURL}/api/health/live`);
+    await waitUntilHealthy(api, `${baseURL}/api/health/live`);
+    //#if (IncludeDistributedEvents)
+    // 发送前以 readiness 确认消费者队列已建立。
+    await waitUntilHealthy(api, `${baseURL}/api/health/ready`);
+    //#endif
 
     process.env['E2E_BASE_URL'] = baseURL;
     await seedRestrictedAccount(baseURL);
@@ -189,7 +219,7 @@ function freePort(): Promise<number> {
   });
 }
 
-async function waitUntilLive(api: ChildProcess, url: string): Promise<void> {
+async function waitUntilHealthy(api: ChildProcess, url: string): Promise<void> {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     if (api.exitCode !== null) {
@@ -202,7 +232,7 @@ async function waitUntilLive(api: ChildProcess, url: string): Promise<void> {
     }
     await new Promise((wait) => setTimeout(wait, 500));
   }
-  throw new Error(`API did not become live within 120 s; see test-results/api.log.`);
+  throw new Error(`API did not become healthy at ${url} within 120 s; see test-results/api.log.`);
 }
 
 function dockerContextHost(): string | undefined {
