@@ -105,7 +105,7 @@ export class NavigationService {
         //#if (IncludeDistributedEvents)
         {
           label: 'layout.sidebar.distributedEvents',
-          icon: 'lucideWebhook',
+          icon: 'lucideRadioTower',
           route: '/platform/distributed-events',
           permissions: [PERMISSIONS.distributedEvents.default],
         },
@@ -217,7 +217,7 @@ export class NavigationService {
         //#if (IncludeDistributedEvents)
         {
           label: 'Distributed events',
-          icon: 'lucideWebhook',
+          icon: 'lucideRadioTower',
           route: '/platform/distributed-events',
           permissions: [PERMISSIONS.distributedEvents.default],
         },

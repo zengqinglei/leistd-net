@@ -4,11 +4,16 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MockPlatformLocation } from '@angular/common/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { of, Subject } from 'rxjs';
 
 import { DistributedEvents } from './distributed-events';
-import { ConfirmService, ConfirmOptions } from '../../../../core/feedback/confirm-service';
+import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
+import {
+  DistributedEventRecoveryConfirmService,
+  DistributedEventRecoveryOptions,
+} from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -96,7 +101,7 @@ describe('DistributedEvents page', () => {
         }),
         //#endif
         { provide: DistributedEventService, useValue: service },
-        { provide: ConfirmService, useValue: confirm },
+        { provide: DistributedEventRecoveryConfirmService, useValue: confirm },
         { provide: AuthService, useValue: { currentUser: signal({ tenantId }) } },
         {
           provide: AccountPreferencesService,
@@ -132,7 +137,9 @@ describe('DistributedEvents page', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="event-send-test"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('[data-testid="event-bulk-actions"]')).toBeNull();
     expect(document.querySelector('[data-testid="event-payload"]')).toBeNull();
-    component.loadPayload();
+    const sheet = fixture.debugElement.query(By.directive(DistributedEventRecordSheet))
+      .componentInstance as DistributedEventRecordSheet;
+    sheet.loadPayload();
     expect(service.getOutboxPayload).not.toHaveBeenCalled();
     expect(service.getOutbox).toHaveBeenCalledWith(OUTBOX.id, 'host');
   });
@@ -177,11 +184,11 @@ describe('DistributedEvents page', () => {
     await setup(true, null, { status: 'deadLettered', eventName: 'order.paid' });
     const before = component.cutoff();
     await component.recover('filter');
-    const options = confirm.open.mock.calls[0][0] as ConfirmOptions;
+    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
     //#if (IncludeLocalization)
-    expect(options.message).toContain('distributedEvents.state.deadLettered');
+    expect(options.criteria).toContain('distributedEvents.state.deadLettered');
     //#else
-    expect(options.message).toContain('Dead letter');
+    expect(options.criteria).toContain('Dead letter');
     //#endif
     options.action!().subscribe();
     expect(service.redeliver).toHaveBeenCalledWith(
@@ -204,7 +211,7 @@ describe('DistributedEvents page', () => {
   it('requires explicit confirmation before re-executing an already processed handler', async () => {
     await setup(true, null, { view: 'inbox', status: 'processed' });
     await component.recover('filter');
-    const options = confirm.open.mock.calls[0][0] as ConfirmOptions;
+    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
     //#if (IncludeLocalization)
     expect(options.message).toContain('distributedEvents.replayWarning');
     //#else
@@ -217,13 +224,15 @@ describe('DistributedEvents page', () => {
     await setup(true, null, { record: OUTBOX.id });
     const delayed = new Subject<Dto.DistributedEventPayloadOutputDto>();
     service.getOutboxPayload.mockReturnValueOnce(delayed);
-    component.loadPayload();
+    const sheet = fixture.debugElement.query(By.directive(DistributedEventRecordSheet))
+      .componentInstance as DistributedEventRecordSheet;
+    sheet.loadPayload();
     component.openRecord('2');
     await settle();
     delayed.next({ payload: 'stale secret' });
     delayed.complete();
-    expect(component.payload()).toBeNull();
-    expect(component.payloadLoading()).toBe(false);
+    expect(sheet.payload()).toBeNull();
+    expect(sheet.payloadLoading()).toBe(false);
   });
 
   it('hides test publication when inspecting a tenant database from host scope', async () => {

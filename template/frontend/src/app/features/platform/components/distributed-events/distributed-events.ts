@@ -6,7 +6,6 @@ import {
   effect,
   inject,
   signal,
-  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Params, Router } from '@angular/router';
@@ -14,18 +13,7 @@ import { ActivatedRoute, Params, Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import {
-  lucideSearch,
-  lucideRefreshCw,
-  lucideSend,
-  lucidePanelRight,
-  lucideRotateCw,
-  lucideCopy,
-  lucideCheck,
-  lucideInfo,
-  lucideX,
-  lucideInbox,
-} from '@ng-icons/lucide';
+import { lucideSearch, lucideRefreshCw, lucideSend, lucideX, lucideInbox } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -33,12 +21,9 @@ import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmInputGroupImports } from '@spartan-ng/helm/input-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
-import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import { ColumnDef } from '@tanstack/angular-table';
 import {
   Observable,
   Subject,
@@ -46,6 +31,7 @@ import {
   combineLatest,
   finalize,
   forkJoin,
+  map,
   of,
   startWith,
   switchMap,
@@ -53,46 +39,41 @@ import {
 } from 'rxjs';
 
 import {
+  EventRecord,
+  EventView,
+  EventRow,
+  eventRow,
+  recoveryAction,
+  reasonKey,
   //#if (!IncludeLocalization)
   ENGLISH,
   //#endif
-  EventDetail,
-  EventRecord,
-  EventRow,
-  EventView,
-  STATUS_VARIANTS,
-  canRecover,
-  eventRow,
 } from './distributed-event-display';
+import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
+import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
+import { DistributedEventRecoveryConfirmService } from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
+import { DistributedEventStatistics } from './widgets/distributed-event-statistics/distributed-event-statistics';
+import { DistributedInboxTable } from './widgets/distributed-inbox-table/distributed-inbox-table';
+import { DistributedOutboxTable } from './widgets/distributed-outbox-table/distributed-outbox-table';
+import { DistributedRejectionTable } from './widgets/distributed-rejection-table/distributed-rejection-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
-import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { StatPanel } from '../../../../shared/components/stat-panel/stat-panel';
-import { TablePaginator } from '../../../../shared/components/table-paginator/table-paginator';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
-import { TableFit } from '../../../../shared/directives/table-fit';
-import { TruncatedTooltip } from '../../../../shared/directives/truncated-tooltip';
 import { PagedResultDto } from '../../../../shared/dtos/paged-result.dto';
-import { AppDate, formatAppDate } from '../../../../shared/pipes/app-date-pipe';
+import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import { AppNumber } from '../../../../shared/pipes/app-number-pipe';
-import { injectCopyToClipboard } from '../../../../shared/utils/clipboard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import {
-  ACTIONS_COLUMN_META,
-  TITLE_COLUMN_META,
-  TITLE_CONTENT_CLASS,
-  tableColumnVisibility,
-} from '../../../../shared/utils/table-column-meta';
-import { AppTableFeatures, injectAppTable } from '../../../../shared/utils/table-features';
-import { tableViewportSignal } from '../../../../shared/utils/table-viewport';
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
+//#if (LocalIdentity && IncludeMultiTenancy)
+import { TenantService } from '../../services/tenant-service';
+//#endif
 
 @Component({
   selector: 'app-distributed-events',
@@ -104,36 +85,22 @@ import { DistributedEventService } from '../../services/distributed-event-servic
     ...HlmEmptyImports,
     ...HlmInputGroupImports,
     ...HlmSelectImports,
-    ...HlmSheetImports,
     HlmSpinner,
-    ...HlmTableImports,
     ...HlmTabsImports,
     ...HlmTooltipImports,
     FacetedFilter,
-    StatPanel,
-    TablePaginator,
-    TableFit,
-    TruncatedTooltip,
-    AppDate,
     AppNumber,
+    DistributedEventStatistics,
+    DistributedOutboxTable,
+    DistributedInboxTable,
+    DistributedRejectionTable,
+    DistributedCatalogTable,
+    DistributedEventRecordSheet,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif
   ],
-  providers: [
-    provideIcons({
-      lucideSearch,
-      lucideRefreshCw,
-      lucideSend,
-      lucidePanelRight,
-      lucideRotateCw,
-      lucideCopy,
-      lucideCheck,
-      lucideInfo,
-      lucideX,
-      lucideInbox,
-    }),
-  ],
+  providers: [provideIcons({ lucideSearch, lucideRefreshCw, lucideSend, lucideX, lucideInbox })],
   templateUrl: './distributed-events.html',
   host: { class: 'block h-full min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -145,9 +112,14 @@ export class DistributedEvents {
   private readonly owner = inject(DestroyRef);
   private readonly authorization = inject(AuthorizationService);
   private readonly auth = inject(AuthService);
-  private readonly confirm = inject(ConfirmService);
+  private readonly confirm = inject(DistributedEventRecoveryConfirmService);
   private readonly preferences = inject(AccountPreferencesService);
   private readonly layout = inject(LayoutService);
+  //#if (LocalIdentity && IncludeMultiTenancy)
+  private readonly tenants = inject(TenantService);
+  private readonly tenantNameCache = new Map<string, string>();
+  //#endif
+  readonly tenantNames = signal<Record<string, string>>({});
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   private readonly title = translateSignal('distributedEvents.title');
@@ -183,24 +155,12 @@ export class DistributedEvents {
   readonly catalog = signal<Dto.DistributedEventCatalogOutputDto[]>([]);
   readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
-  readonly detail = signal<EventDetail | null>(null);
-  readonly detailError = signal<string | null>(null);
-  readonly detailLoading = signal(false);
-  readonly payload = signal<string | null>(null);
-  readonly payloadError = signal<string | null>(null);
-  readonly payloadLoading = signal(false);
   readonly selected = signal<string[]>([]);
   readonly busy = signal(false);
   readonly displayTimeZone = this.preferences.timeZone;
   readonly displayLocale = this.preferences.displayLocale;
-  readonly clipboard = injectCopyToClipboard();
-  readonly variants = STATUS_VARIANTS;
-  readonly titleClass = `${TITLE_CONTENT_CLASS} max-w-60`;
-  readonly tableViewport = tableViewportSignal();
-  private readonly tableFit = viewChild(TableFit);
   private readonly refresh = new Subject<void>();
-  private readonly detailRefresh = new Subject<void>();
-  private payloadSubscription?: { unsubscribe(): void };
+  readonly detailVersion = signal(0);
   readonly canTest = computed(
     () =>
       this.canManage() &&
@@ -214,91 +174,11 @@ export class DistributedEvents {
         ? ['failed', 'processed'].includes(this.query()['status'])
         : this.view() === 'rejections' && this.query()['status'] === 'pending',
   );
-  readonly allChecked = computed(() => {
-    const eligible = this.rows().filter((row) => row.record && canRecover(row.record));
-    return eligible.length > 0 && eligible.every((row) => this.selected().includes(row.id));
-  });
-  readonly columns = computed<ColumnDef<AppTableFeatures, EventRow>[]>(() => {
-    const column = (
-      id: string,
-      priority: 'primary' | 'secondary' | 'tertiary' = 'tertiary',
-    ): ColumnDef<AppTableFeatures, EventRow> => ({ id, enableSorting: false, meta: { priority } });
-    const result: ColumnDef<AppTableFeatures, EventRow>[] = [
-      ...(this.canManage() && this.view() !== 'catalog'
-        ? [
-            {
-              id: 'select',
-              meta: { priority: 'primary' as const, locked: true },
-              enableSorting: false,
-            },
-          ]
-        : []),
-      { id: 'event', meta: TITLE_COLUMN_META, enableSorting: false },
-    ];
-    if (this.view() === 'catalog')
-      return [
-        ...result,
-        column('direction', 'secondary'),
-        column('consumer', 'secondary'),
-        column('lastSent'),
-        column('lastReceived'),
-        column('lastProcessed'),
-        column('pending', 'secondary'),
-        column('anomalies', 'primary'),
-        column('error'),
-        { id: 'actions', enableSorting: false, enableHiding: false, meta: ACTIONS_COLUMN_META },
-      ];
-    if (this.isHost() && this.view() !== 'rejections') result.push(column('tenant', 'secondary'));
-    if (this.view() === 'inbox') result.push(column('consumer', 'secondary'));
-    if (this.view() !== 'rejections') result.push(column('orderingKey', 'secondary'));
-    result.push(
-      {
-        ...column('status', 'primary'),
-        enableHiding: false,
-        meta: { priority: 'primary', locked: true },
-      },
-      column('attempts', 'secondary'),
-      column('error', 'secondary'),
-    );
-    if (this.view() !== 'rejections') result.push(column('next'));
-    result.push(column('time'), {
-      id: 'actions',
-      enableSorting: false,
-      enableHiding: false,
-      meta: ACTIONS_COLUMN_META,
-    });
-    return result;
-  });
-  readonly table = injectAppTable(() => ({
-    data: this.rows(),
-    columns: this.columns(),
-    getRowId: (row) => row.id,
-    manualPagination: true,
-    rowCount: this.totalCount(),
-    state: {
-      pagination: { pageIndex: this.page(), pageSize: this.pageSize() },
-      columnVisibility: tableColumnVisibility(
-        this.columns(),
-        this.tableFit()?.level() ?? this.tableViewport(),
-      ),
-    },
-  }));
   readonly catalogDetail = computed(() =>
     this.view() === 'catalog'
       ? (this.catalog().find((item) => item.eventName === this.recordId()) ?? null)
       : null,
   );
-  readonly catalogFields = computed(() =>
-    this.catalogDetail() ? Object.entries(this.catalogDetail()!) : [],
-  );
-  readonly detailFields = computed(() =>
-    this.detail() ? Object.entries(this.detail()!.record) : [],
-  );
-  readonly detailHeaders = computed(() => Object.entries(this.detail()?.headers ?? {}));
-  readonly detailCoordinates = computed(() => {
-    const detail = this.detail();
-    return detail && 'coordinates' in detail ? Object.entries(detail.coordinates) : [];
-  });
   readonly states = computed(() =>
     this.view() === 'outbox'
       ? ['pending', 'sent', 'deadLettered']
@@ -308,7 +188,7 @@ export class DistributedEvents {
   );
   readonly facetKeys = computed(() =>
     this.view() === 'catalog'
-      ? []
+      ? ['direction']
       : [
           'status',
           'eventName',
@@ -350,12 +230,23 @@ export class DistributedEvents {
             databases: this.isHost() ? this.service.getDatabases() : of([]),
             list: list$,
           }).pipe(
+            switchMap((result) =>
+              this.resolveTenantNames(result.list.items).pipe(
+                map((names) => ({ ...result, names })),
+              ),
+            ),
             tap((result) => {
+              this.tenantNames.set(result.names);
               this.status.set(result.status);
               this.catalog.set(result.catalog);
               this.databases.set(result.databases);
               if (this.view() === 'catalog') {
                 const catalog = result.catalog
+                  .filter(
+                    (item) =>
+                      !query['direction'] ||
+                      (query['direction'] === 'outgoing' ? item.outgoing : item.incoming),
+                  )
                   .filter((item) => !query['keyword'] || item.eventName.includes(query['keyword']))
                   .filter(
                     (item) =>
@@ -397,45 +288,9 @@ export class DistributedEvents {
         takeUntilDestroyed(this.owner),
       )
       .subscribe();
-    combineLatest([query$, this.detailRefresh.pipe(startWith(undefined))])
-      .pipe(
-        switchMap(() => {
-          this.payloadSubscription?.unsubscribe();
-          this.payload.set(null);
-          this.payloadError.set(null);
-          this.payloadLoading.set(false);
-          this.detail.set(null);
-          this.detailError.set(null);
-          const id = this.recordId();
-          const database = this.database();
-          if (!id || this.view() === 'catalog') return of(null);
-          this.detailLoading.set(true);
-          const request$: Observable<EventDetail> =
-            this.view() === 'outbox'
-              ? this.service.getOutbox(id, database)
-              : this.view() === 'inbox'
-                ? this.service.getInbox(id, database)
-                : this.service.getRejection(id, database);
-          return request$.pipe(
-            tap((detail) => this.detail.set(detail)),
-            catchError((error: unknown) => {
-              this.detailError.set(applicationErrorMessage(error));
-              return of(null);
-            }),
-            finalize(() => this.detailLoading.set(false)),
-          );
-        }),
-        takeUntilDestroyed(this.owner),
-      )
-      .subscribe();
     effect(() => {
-      if (!this.canManage()) {
-        this.payloadSubscription?.unsubscribe();
-        this.payload.set(null);
-        this.selected.set([]);
-      }
+      if (!this.canManage()) this.selected.set([]);
     });
-    this.owner.onDestroy(() => this.payloadSubscription?.unsubscribe());
   }
 
   listInput(query: Params = this.query()): Record<string, unknown> {
@@ -475,6 +330,7 @@ export class DistributedEvents {
       consumer: null,
       keyword: null,
       anomalies: null,
+      direction: null,
     });
   }
 
@@ -488,13 +344,14 @@ export class DistributedEvents {
       reason: null,
       consumer: null,
       anomalies: null,
+      direction: null,
     });
   }
 
   reload(): void {
     this.cutoff.set(new Date().toISOString());
     this.refresh.next();
-    this.detailRefresh.next();
+    this.detailVersion.update((version) => version + 1);
   }
   openRecord(id: string): void {
     this.update({ record: id }, false);
@@ -505,60 +362,62 @@ export class DistributedEvents {
   changePage(page: number): void {
     this.update({ page, record: null }, false);
   }
-  lastPage(): number {
-    return Math.max(0, Math.ceil(this.totalCount() / this.pageSize()) - 1);
-  }
-  recoverable(record: EventRecord): boolean {
-    return canRecover(record);
-  }
-  badge(status: string): 'warning' | 'success' | 'destructive' | 'secondary' {
-    return STATUS_VARIANTS[status as keyof typeof STATUS_VARIANTS] ?? 'secondary';
-  }
-  statusLabel(row: EventRow): string {
-    return row.status === 'pending' && row.attempts > 0 && this.view() !== 'rejections'
-      ? 'retrying'
-      : row.status;
-  }
-  toggle(id: string, checked: boolean): void {
-    this.selected.update((ids) =>
-      checked ? [...new Set([...ids, id])].slice(0, 100) : ids.filter((value) => value !== id),
-    );
-  }
-  toggleAll(checked: boolean): void {
-    this.selected.set(
-      checked
-        ? this.rows()
-            .filter((row) => row.record && canRecover(row.record))
-            .map((row) => row.id)
-            .slice(0, 100)
-        : [],
-    );
-  }
-  onRowClick(event: MouseEvent, row: EventRow): void {
-    if (!(event.target as HTMLElement).closest('button,a,hlm-checkbox')) {
-      this.openRecord(row.id);
-    }
-  }
-
   readonly databaseLabel = (value: unknown): string =>
     String(value) === 'host' ? this.t('distributedEvents.hostDatabase') : String(value ?? '');
 
+  action(): string {
+    return recoveryAction(this.view());
+  }
+  protected reasonLabel(reason: string): string {
+    const key = reasonKey(reason);
+    return key ? this.t(key) : reason;
+  }
+  private resolveTenantNames(_records: EventRecord[]): Observable<Record<string, string>> {
+    //#if (LocalIdentity && IncludeMultiTenancy)
+    if (this.isHost() && this.authorization.has(PERMISSIONS.tenants.default)) {
+      const ids = [
+        ...new Set(
+          _records.flatMap((row) => ('tenantId' in row && row.tenantId ? [row.tenantId] : [])),
+        ),
+      ];
+      if (ids.length)
+        return forkJoin(
+          ids.map((id) =>
+            this.tenantNameCache.has(id)
+              ? of([id, this.tenantNameCache.get(id)!])
+              : this.tenants.getTenant(id).pipe(
+                  map((tenant) => {
+                    const name = tenant.displayName || tenant.name;
+                    this.tenantNameCache.set(id, name);
+                    return [id, name];
+                  }),
+                  catchError(() => of([id, id])),
+                ),
+          ),
+        ).pipe(map((entries) => Object.fromEntries(entries)));
+    }
+    //#endif
+    return of({});
+  }
+
   options(key: string) {
     const values =
-      key === 'status'
-        ? this.states()
-        : key === 'eventName'
-          ? this.catalog().map((item) => item.eventName)
-          : key === 'consumer'
-            ? this.catalog().flatMap((item) => item.consumers)
-            : key === 'reason'
-              ? ['invalid-envelope', 'unknown-tenant', 'invalid-payload']
-              : [
-                  ...this.rows().map((row) => row.error),
-                  'message-too-large',
-                  'retry-window-exceeded',
-                  'handler-exception',
-                ];
+      key === 'direction'
+        ? ['outgoing', 'incoming']
+        : key === 'status'
+          ? this.states()
+          : key === 'eventName'
+            ? this.catalog().map((item) => item.eventName)
+            : key === 'consumer'
+              ? this.catalog().flatMap((item) => item.consumers)
+              : key === 'reason'
+                ? ['invalid-envelope', 'unknown-tenant', 'invalid-payload']
+                : [
+                    ...this.rows().map((row) => row.error),
+                    'message-too-large',
+                    'retry-window-exceeded',
+                    'handler-exception',
+                  ];
     return [
       ...new Set(
         values
@@ -567,7 +426,14 @@ export class DistributedEvents {
       ),
     ].map((value) => ({
       value,
-      label: key === 'status' ? this.t(`distributedEvents.state.${value}`) : value,
+      label:
+        key === 'direction'
+          ? this.t(`distributedEvents.${value}`)
+          : key === 'status'
+            ? this.t(`distributedEvents.state.${value}`)
+            : key === 'reason'
+              ? this.reasonLabel(value)
+              : value,
     }));
   }
 
@@ -601,14 +467,9 @@ export class DistributedEvents {
         ? { filter: { ...filter, ...(view === 'inbox' ? { status: this.query()['status'] } : {}) } }
         : { ids };
     const count = mode === 'filter' ? this.totalCount() : ids.length;
-    const isProcessed = row
-      ? row.status === 'processed'
-      : view === 'inbox' &&
-        (this.query()['status'] === 'processed' ||
-          this.rows().some((item) => ids.includes(item.id) && item.status === 'processed'));
     const database = this.database();
     const scope = this.isHost()
-      ? this.databaseLabel(database)
+      ? this.databaseLabel(view === 'rejections' ? 'host' : database)
       : this.t('distributedEvents.tenantScope');
     const criteria = ['status', 'eventName', 'keyword', 'errorCode', 'consumer', 'reason']
       .filter((key) => this.query()[key])
@@ -620,7 +481,9 @@ export class DistributedEvents {
         const value =
           key === 'status'
             ? this.t(`distributedEvents.state.${this.query()[key]}`)
-            : String(this.query()[key]);
+            : key === 'reason'
+              ? this.reasonLabel(this.query()[key])
+              : String(this.query()[key]);
         return `${label}: ${value}`;
       })
       .join(' · ');
@@ -628,11 +491,28 @@ export class DistributedEvents {
     try {
       await this.confirm.open({
         owner: this.owner,
-        header: this.t(`distributedEvents.action.${action}`),
-        confirmText: this.t(`distributedEvents.action.${action}`),
+        header: this.t(
+          `distributedEvents.confirmation.${mode === 'filter' ? 'filterQuestion' : mode === 'selected' ? 'selectedQuestion' : 'question'}.${action}`,
+          { count },
+        ),
+        confirmText: this.t(`distributedEvents.confirmation.button.${action}`, { count }),
+        cancelText: this.t('distributedEvents.cancel'),
+        scope,
+        cutoff: formatAppDate(this.cutoff(), 'full', this.displayTimeZone(), this.displayLocale()),
+        criteria: mode === 'filter' ? criteria : ids.join(', '),
+        scopeLabel: this.t('distributedEvents.confirmation.scope'),
+        cutoffLabel: this.t('distributedEvents.confirmation.cutoff'),
+        criteriaLabel: this.t(
+          mode === 'filter'
+            ? 'distributedEvents.confirmation.criteria'
+            : 'distributedEvents.confirmation.ids',
+        ),
         variant: discard ? 'destructive' : 'default',
-        message: `${this.t('distributedEvents.confirm', { count, scope, before: formatAppDate(this.cutoff(), 'full', this.displayTimeZone(), this.displayLocale()), filter: mode === 'filter' ? criteria : ids.join(', ') })}
-${this.t(isProcessed ? 'distributedEvents.replayWarning' : 'distributedEvents.recoveryWarning')}`,
+        message: this.t(
+          view === 'inbox'
+            ? 'distributedEvents.replayWarning'
+            : `distributedEvents.confirmation.consequence.${action}`,
+        ),
         action: () => {
           const request =
             view === 'outbox'
@@ -651,13 +531,13 @@ ${this.t(isProcessed ? 'distributedEvents.replayWarning' : 'distributedEvents.re
           return request.pipe(
             tap((result) => {
               toast.success(
-                this.t('distributedEvents.recovered', {
+                this.t(`distributedEvents.confirmation.result.${action}`, {
                   count: result.affectedCount,
                   skipped: result.skipped.length,
                 }),
               );
               this.refresh.next();
-              this.detailRefresh.next();
+              this.detailVersion.update((version) => version + 1);
             }),
           );
         },
@@ -692,41 +572,5 @@ ${this.t(isProcessed ? 'distributedEvents.replayWarning' : 'distributedEvents.re
         },
         error: (error: unknown) => toast.error(applicationErrorMessage(error)),
       });
-  }
-
-  loadPayload(): void {
-    if (!this.canManage() || !this.recordId() || this.payloadLoading()) return;
-    this.payloadLoading.set(true);
-    this.payloadError.set(null);
-    const id = this.recordId()!;
-    const database = this.database();
-    const request: Observable<
-      Dto.DistributedEventPayloadOutputDto | Dto.DistributedEventRawMessageOutputDto
-    > =
-      this.view() === 'outbox'
-        ? this.service.getOutboxPayload(id, database)
-        : this.view() === 'inbox'
-          ? this.service.getInboxPayload(id, database)
-          : this.service.getRejectionPayload(id, database);
-    this.payloadSubscription = request
-      .pipe(
-        takeUntilDestroyed(this.owner),
-        finalize(() => this.payloadLoading.set(false)),
-      )
-      .subscribe({
-        next: (result) => this.payload.set('payload' in result ? result.payload : result.rawBody),
-        error: (error: unknown) => this.payloadError.set(applicationErrorMessage(error)),
-      });
-  }
-
-  fieldValue(_key: string, value: unknown): string {
-    return value === null || value === undefined
-      ? '—'
-      : typeof value === 'object'
-        ? JSON.stringify(value)
-        : String(value);
-  }
-  isDate(key: string): boolean {
-    return /At$|Time$/.test(key);
   }
 }

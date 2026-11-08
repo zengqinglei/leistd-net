@@ -1,3 +1,6 @@
+//#if (IncludeDistributedEvents)
+import { DISTRIBUTED_EVENT_TENANTS } from './distributed-events';
+//#endif
 import { TenantConnectionDto } from '../../src/app/features/platform/dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../src/app/features/platform/dtos/tenant.dto';
 
@@ -21,6 +24,24 @@ export interface MockTenant {
 // 一启用一停用：覆盖登录页「租户已停用」与登录 403 的演示路径。
 // 连接也一空一多：空数组是"不分库"那一档，globex 的两条覆盖"同一租户在多个服务各登记一条"。
 export const TENANTS: MockTenant[] = [
+  //#if (IncludeDistributedEvents)
+  {
+    id: DISTRIBUTED_EVENT_TENANTS[0],
+    name: 'portal-east',
+    displayName: '门户-华东',
+    isActive: true,
+    creationTime: '2025-05-01T00:00:00Z',
+    connections: [],
+  },
+  {
+    id: DISTRIBUTED_EVENT_TENANTS[1],
+    name: 'portal-south',
+    displayName: '门户-华南',
+    isActive: true,
+    creationTime: '2025-05-02T00:00:00Z',
+    connections: [{ name: 'default', version: 1 }],
+  },
+  //#endif
   {
     id: 'tenant_acme',
     name: 'acme',

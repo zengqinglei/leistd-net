@@ -1,0 +1,107 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  @if (status(); as status) {
+    <div
+      class="grid grid-cols-2 gap-4"
+      [class.xl:grid-cols-4]="isHost()"
+      [class.xl:grid-cols-3]="!isHost()"
+    >
+      <app-stat-panel [panelTitle]="t('distributedEvents.pendingOutbox')">
+        <button
+          statPanelAction
+          hlmBtn
+          variant="ghost"
+          size="icon-sm"
+          [hlmTooltip]="t('distributedEvents.pendingHelp')"
+          [attr.aria-label]="t('distributedEvents.pendingHelp')"
+        >
+          <ng-icon name="lucideInfo" />
+        </button>
+        <button
+          class="flex w-full flex-col items-start gap-2 p-4 text-start"
+          (click)="jump('outbox', 'pending')"
+        >
+          <span class="text-3xl font-semibold tabular-nums">{{
+            status.pendingOutbox | appNumber: 'integer' : displayLocale()
+          }}</span>
+          <span class="text-muted-foreground text-xs">{{
+            t('distributedEvents.oldest', {
+              age: oldestAge(),
+              count: status.pendingInbox,
+            })
+          }}</span>
+        </button>
+      </app-stat-panel>
+      <app-stat-panel [panelTitle]="t('distributedEvents.deadLettered')">
+        <button
+          statPanelAction
+          hlmBtn
+          variant="ghost"
+          size="icon-sm"
+          [hlmTooltip]="t('distributedEvents.deadHelp')"
+          [attr.aria-label]="t('distributedEvents.deadHelp')"
+        >
+          <ng-icon name="lucideInfo" />
+        </button>
+        <button
+          class="flex w-full flex-col items-start gap-2 p-4 text-start"
+          (click)="jump('outbox', 'deadLettered')"
+        >
+          <span class="text-destructive text-3xl font-semibold tabular-nums">{{
+            status.deadLettered | appNumber: 'integer' : displayLocale()
+          }}</span>
+          <span class="text-muted-foreground text-xs">{{ t('distributedEvents.deadHelp') }}</span>
+        </button>
+      </app-stat-panel>
+      <app-stat-panel [panelTitle]="t('distributedEvents.failedInbox')">
+        <button
+          statPanelAction
+          hlmBtn
+          variant="ghost"
+          size="icon-sm"
+          [hlmTooltip]="t('distributedEvents.failedHelp')"
+          [attr.aria-label]="t('distributedEvents.failedHelp')"
+        >
+          <ng-icon name="lucideInfo" />
+        </button>
+        <button
+          class="flex w-full flex-col items-start gap-2 p-4 text-start"
+          (click)="jump('inbox', 'failed')"
+        >
+          <span class="text-destructive text-3xl font-semibold tabular-nums">{{
+            status.failedInbox | appNumber: 'integer' : displayLocale()
+          }}</span>
+          <span class="text-muted-foreground text-xs">{{ t('distributedEvents.failedHelp') }}</span>
+        </button>
+      </app-stat-panel>
+      @if (isHost()) {
+        <app-stat-panel [panelTitle]="t('distributedEvents.pendingRejections')">
+          <button
+            statPanelAction
+            hlmBtn
+            variant="ghost"
+            size="icon-sm"
+            [hlmTooltip]="t('distributedEvents.rejectionHelp')"
+            [attr.aria-label]="t('distributedEvents.rejectionHelp')"
+          >
+            <ng-icon name="lucideInfo" />
+          </button>
+          <button
+            class="flex w-full flex-col items-start gap-2 p-4 text-start"
+            (click)="jump('rejections', 'pending')"
+          >
+            <span class="text-destructive text-3xl font-semibold tabular-nums">{{
+              status.pendingRejections || 0 | appNumber: 'integer' : displayLocale()
+            }}</span>
+            <span class="text-muted-foreground text-xs">{{
+              t('distributedEvents.rejectionHelp')
+            }}</span>
+          </button>
+        </app-stat-panel>
+      }
+    </div>
+  }
+</ng-container>

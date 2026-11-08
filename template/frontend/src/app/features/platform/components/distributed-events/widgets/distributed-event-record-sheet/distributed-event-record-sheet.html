@@ -1,0 +1,232 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <hlm-sheet side="right" [state]="recordId() ? 'open' : 'closed'" (closed)="closeDetail()">
+    <hlm-sheet-content
+      *hlmSheetPortal
+      class="data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+      [closeLabel]="t('distributedEvents.close')"
+      data-testid="event-detail"
+    >
+      <div hlmSheetHeader class="gap-3 border-b pe-12">
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <h2 hlmSheetTitle class="min-w-0 wrap-anywhere font-mono">
+            {{
+              detail()?.record?.eventName ||
+                catalogDetail()?.eventName ||
+                t('distributedEvents.details')
+            }}
+          </h2>
+          @if (detail(); as current) {
+            @if (canManage() && recoverable(current.record)) {
+              <button
+                hlmBtn
+                size="sm"
+                [disabled]="busy()"
+                (click)="recover.emit({ record: current.record, discard: false })"
+              >
+                {{ t('distributedEvents.action.' + action()) }}
+              </button>
+            }
+          }
+        </div>
+        <p hlmSheetDescription class="sr-only">{{ t('distributedEvents.detailHelp') }}</p>
+        @if (detail(); as current) {
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <code class="text-muted-foreground min-w-0 font-mono text-xs break-all">{{
+              current.record.eventId || '—'
+            }}</code>
+            @if (current.record.eventId) {
+              <button
+                hlmBtn
+                variant="ghost"
+                size="icon-sm"
+                [attr.aria-label]="t('distributedEvents.copyId')"
+                [hlmTooltip]="t('distributedEvents.copyId')"
+                (click)="clipboard.copy(current.record.eventId!)"
+              >
+                <ng-icon [name]="clipboard.copied() ? 'lucideCheck' : 'lucideCopy'" />
+              </button>
+            }
+            <span
+              hlmBadge
+              [variant]="badge(current.record.status)"
+              data-testid="event-detail-status"
+              >{{ t('distributedEvents.state.' + stateLabel(current.record)) }}</span
+            >
+          </div>
+        }
+        @if (catalogDetail(); as catalog) {
+          <div class="flex flex-wrap gap-2">
+            @if (catalog.outgoing) {
+              <span hlmBadge variant="outline">{{ t('distributedEvents.outgoing') }}</span>
+            }
+            @if (catalog.incoming) {
+              <span hlmBadge variant="secondary">{{ t('distributedEvents.incoming') }}</span>
+            }
+          </div>
+        }
+      </div>
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+        @if (detailLoading()) {
+          <hlm-spinner />
+        }
+        @if (detailError(); as error) {
+          <p role="alert" class="text-sm">{{ error }}</p>
+        }
+        @if (catalogDetail(); as item) {
+          <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 text-sm">
+            @for (field of catalogFields(); track field[0]) {
+              <dt class="text-muted-foreground">{{ t('distributedEvents.field.' + field[0]) }}</dt>
+              <dd class="min-w-0 wrap-anywhere">
+                {{
+                  isDate(field[0]) && field[1]
+                    ? ($any(field[1]) | appDate: 'full' : displayTimeZone() : displayLocale())
+                    : fieldValue(field[1])
+                }}
+              </dd>
+            }
+          </dl>
+          <div class="flex flex-wrap gap-2">
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              (click)="jump('outbox', 'pending', item.eventName)"
+            >
+              {{ t('distributedEvents.view.outbox') }} · {{ item.pendingOutbox }}
+            </button>
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              (click)="jump('inbox', 'pending', item.eventName)"
+            >
+              {{ t('distributedEvents.view.inbox') }} · {{ item.pendingInbox }}
+            </button>
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              (click)="jump('outbox', 'deadLettered', item.eventName)"
+            >
+              {{ t('distributedEvents.deadLettered') }} · {{ item.deadLettered }}
+            </button>
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              (click)="jump('inbox', 'failed', item.eventName)"
+            >
+              {{ t('distributedEvents.failedInbox') }} · {{ item.failedInbox }}
+            </button>
+          </div>
+        }
+        @if (detail(); as detail) {
+          @if (canManage() && view() === 'rejections' && recoverable(detail.record)) {
+            <button
+              hlmBtn
+              variant="outline"
+              size="sm"
+              [disabled]="busy()"
+              (click)="recover.emit({ record: detail.record, discard: true })"
+            >
+              {{ t('distributedEvents.action.discard') }}
+            </button>
+          }
+          <section class="flex flex-col gap-3">
+            <h3 class="text-sm font-semibold">{{ t('distributedEvents.overview') }}</h3>
+            <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 text-sm">
+              @for (field of detailFields(); track field[0]) {
+                <dt class="text-muted-foreground">
+                  {{ t('distributedEvents.field.' + field[0]) }}
+                </dt>
+                <dd class="min-w-0 wrap-anywhere">
+                  @if (field[0] === 'status') {
+                    <span hlmBadge [variant]="badge($any(field[1]))">{{
+                      t('distributedEvents.state.' + stateLabel(detail.record))
+                    }}</span>
+                  } @else if (field[0] === 'reason') {
+                    <span>{{ reasonLabel($any(field[1])) }}</span
+                    ><code class="text-muted-foreground block font-mono text-xs">{{
+                      field[1]
+                    }}</code>
+                  } @else if (field[0] === 'tenantId' && field[1]) {
+                    <span>{{ tenantNames()[$any(field[1])] || field[1] }}</span
+                    ><code class="text-muted-foreground block font-mono text-xs">{{
+                      field[1]
+                    }}</code>
+                  } @else {
+                    <span [class.font-mono]="!isDate(field[0])">{{
+                      isDate(field[0]) && field[1]
+                        ? ($any(field[1]) | appDate: 'full' : displayTimeZone() : displayLocale())
+                        : fieldValue(field[1])
+                    }}</span>
+                  }
+                </dd>
+              }
+            </dl>
+          </section>
+          <section class="flex flex-col gap-3">
+            <h3 class="text-sm font-semibold">{{ t('distributedEvents.headers') }}</h3>
+            <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 font-mono text-xs">
+              @for (header of detailHeaders(); track header[0]) {
+                <dt class="wrap-anywhere text-muted-foreground">{{ header[0] }}</dt>
+                <dd class="min-w-0 wrap-anywhere">{{ header[1] }}</dd>
+              } @empty {
+                <dd>—</dd>
+              }
+            </dl>
+          </section>
+          @if (detailCoordinates().length) {
+            <section class="flex flex-col gap-3">
+              <h3 class="text-sm font-semibold">{{ t('distributedEvents.coordinates') }}</h3>
+              <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 font-mono text-xs">
+                @for (item of detailCoordinates(); track item[0]) {
+                  <dt class="text-muted-foreground wrap-anywhere">{{ item[0] }}</dt>
+                  <dd class="min-w-0 wrap-anywhere">{{ item[1] }}</dd>
+                }
+              </dl>
+            </section>
+          }
+          @if (canManage()) {
+            <section class="flex flex-col items-start gap-3" data-testid="event-payload">
+              <h3 class="text-sm font-semibold">
+                {{
+                  t(
+                    view() === 'rejections'
+                      ? 'distributedEvents.rawBody'
+                      : 'distributedEvents.payload'
+                  )
+                }}
+              </h3>
+              @if (payload() === null) {
+                <button
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  [disabled]="payloadLoading()"
+                  (click)="loadPayload()"
+                >
+                  {{ t('distributedEvents.showPayload') }}
+                </button>
+              } @else {
+                <button hlmBtn variant="outline" size="sm" (click)="clipboard.copy(payload()!)">
+                  <ng-icon name="lucideCopy" />{{ t('distributedEvents.copyPayload') }}
+                </button>
+                <pre
+                  class="bg-muted w-full overflow-x-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-all"
+                  >{{ payload() }}</pre>
+              }
+              @if (payloadError(); as error) {
+                <p role="alert" class="text-sm">{{ error }}</p>
+              }
+            </section>
+          }
+        }
+      </div>
+    </hlm-sheet-content>
+  </hlm-sheet>
+</ng-container>

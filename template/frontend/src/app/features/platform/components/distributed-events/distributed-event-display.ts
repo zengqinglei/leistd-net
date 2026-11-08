@@ -60,7 +60,24 @@ export const STATUS_VARIANTS = {
   discarded: 'secondary',
 } as const;
 
-/** 不启用本地化时的界面文案；与 distributed-events/en.json 同步。 */
+/** 运维动作的显示名与记录类型保持一致。 */
+export function recoveryAction(view: EventView): 'redeliver' | 'replay' | 'redecode' {
+  return view === 'outbox' ? 'redeliver' : view === 'inbox' ? 'replay' : 'redecode';
+}
+/** 框架已知拒收原因有译文，第三方传输自定义码保留原值。 */
+export function reasonKey(reason: string): string | null {
+  return (
+    (
+      {
+        'invalid-envelope': 'distributedEvents.reason.invalidEnvelope',
+        'unknown-tenant': 'distributedEvents.reason.unknownTenant',
+        'invalid-payload': 'distributedEvents.reason.invalidPayload',
+      } as Record<string, string>
+    )[reason] ?? null
+  );
+}
+
+/** 不含本地化时的界面文案，与 en.json 同步。 */
 //#if (!IncludeLocalization)
 export const ENGLISH: Record<string, string> = {
   'distributedEvents.title': 'Distributed events',
@@ -77,7 +94,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.failedInbox': 'Processing failed',
   'distributedEvents.pendingRejections': 'Pending rejections',
   'distributedEvents.pendingHelp': 'Waiting for transport delivery. Retries remain pending.',
-  'distributedEvents.oldest': 'Oldest {{seconds}}s · Pending processing {{count}}',
+  'distributedEvents.oldest': 'Oldest {{age}} · Pending processing {{count}}',
   'distributedEvents.deadHelp': 'Permanent failure or retry window elapsed',
   'distributedEvents.failedHelp': 'Handler retry attempts exhausted',
   'distributedEvents.rejectionHelp': 'Host inbox · Cannot decode or resolve tenant',
@@ -88,8 +105,6 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.clear': 'Clear filters',
   'distributedEvents.noResults': 'No matching events',
   'distributedEvents.onlyAnomalies': 'Only anomalies',
-  'distributedEvents.restoreSelected': 'Recover selected ({{count}})',
-  'distributedEvents.restoreFilter': 'Recover current filter',
   'distributedEvents.chooseState':
     'Choose dead letters, failed/processed inbox or pending rejections first.',
   'distributedEvents.retry': 'Retry',
@@ -99,7 +114,6 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.selectPage': 'Select recoverable records on this page',
   'distributedEvents.selectRecord': 'Select record {{id}}',
   'distributedEvents.actions': 'Actions',
-  'distributedEvents.restore': 'Recover',
   'distributedEvents.details': 'View details',
   'distributedEvents.outgoing': 'Outgoing',
   'distributedEvents.incoming': 'Incoming',
@@ -121,13 +135,8 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.payload': 'Event payload',
   'distributedEvents.showPayload': 'Show payload',
   'distributedEvents.copyPayload': 'Copy payload',
-  'distributedEvents.confirm':
-    'Recover {{count}} records? Scope: {{scope}}. Filter / IDs: {{filter}}. Loaded through {{before}}. Later records are excluded.',
   'distributedEvents.replayWarning':
     'This will execute the handler again, including any external effects. Confirm that repeating the business operation is appropriate.',
-  'distributedEvents.recoveryWarning':
-    'The original event ID is preserved. Fix the cause before retrying. Filter recovery runs in batches; the dispatcher resumes processing.',
-  'distributedEvents.recovered': 'Recovered {{count}} · Skipped {{skipped}}',
   'distributedEvents.testSent': 'Test event sent: {{id}}',
   'distributedEvents.view.outbox': 'Outbox',
   'distributedEvents.view.inbox': 'Inbox',
@@ -164,6 +173,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.column.lastProcessed': 'Last processed',
   'distributedEvents.column.pending': 'Pending',
   'distributedEvents.column.anomalies': 'Anomalies',
+  'distributedEvents.column.lastReceivedProcessed': 'Last received / processed',
   'distributedEvents.field.id': 'Record ID',
   'distributedEvents.field.eventId': 'Event ID',
   'distributedEvents.field.eventName': 'Event name',
@@ -201,5 +211,56 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.field.pendingInbox': 'Pending processing',
   'distributedEvents.field.deadLettered': 'Dead letters',
   'distributedEvents.field.failedInbox': 'Processing failed',
+  'distributedEvents.field.direction': 'Direction',
+  'distributedEvents.cancel': 'Cancel',
+  'distributedEvents.reason.invalidEnvelope': 'Invalid envelope',
+  'distributedEvents.reason.unknownTenant': 'Unknown tenant',
+  'distributedEvents.reason.invalidPayload': 'Invalid payload',
+  'distributedEvents.bulk.selected.redeliver': 'Redeliver selected ({{count}})',
+  'distributedEvents.bulk.selected.replay': 'Replay selected ({{count}})',
+  'distributedEvents.bulk.selected.redecode': 'Re-decode selected ({{count}})',
+  'distributedEvents.bulk.selected.discard': 'Discard selected ({{count}})',
+  'distributedEvents.bulk.filter.redeliver': 'Redeliver current filter',
+  'distributedEvents.bulk.filter.replay': 'Replay current filter',
+  'distributedEvents.bulk.filter.redecode': 'Re-decode current filter',
+  'distributedEvents.bulk.filter.discard': 'Discard current filter',
+  'distributedEvents.confirmation.scope': 'Scope',
+  'distributedEvents.confirmation.cutoff': 'Loaded through',
+  'distributedEvents.confirmation.criteria': 'Filters',
+  'distributedEvents.confirmation.ids': 'Record IDs',
+  'distributedEvents.confirmation.question.redeliver': 'Redeliver {{count}} dead letters?',
+  'distributedEvents.confirmation.question.replay': 'Replay {{count}} inbox records?',
+  'distributedEvents.confirmation.question.redecode': 'Re-decode {{count}} pending rejections?',
+  'distributedEvents.confirmation.question.discard': 'Discard {{count}} pending rejections?',
+  'distributedEvents.confirmation.selectedQuestion.redeliver':
+    'Redeliver {{count}} selected dead letters?',
+  'distributedEvents.confirmation.selectedQuestion.replay':
+    'Replay {{count}} selected inbox records?',
+  'distributedEvents.confirmation.selectedQuestion.redecode':
+    'Re-decode {{count}} selected pending rejections?',
+  'distributedEvents.confirmation.selectedQuestion.discard':
+    'Discard {{count}} selected pending rejections?',
+  'distributedEvents.confirmation.filterQuestion.redeliver':
+    'Redeliver {{count}} dead letters matching the current filter?',
+  'distributedEvents.confirmation.filterQuestion.replay':
+    'Replay {{count}} inbox records matching the current filter?',
+  'distributedEvents.confirmation.filterQuestion.redecode':
+    'Re-decode {{count}} pending rejections matching the current filter?',
+  'distributedEvents.confirmation.filterQuestion.discard':
+    'Discard {{count}} pending rejections matching the current filter?',
+  'distributedEvents.confirmation.button.redeliver': 'Redeliver {{count}} records',
+  'distributedEvents.confirmation.button.replay': 'Replay {{count}} records',
+  'distributedEvents.confirmation.button.redecode': 'Re-decode {{count}} records',
+  'distributedEvents.confirmation.button.discard': 'Discard {{count}} records',
+  'distributedEvents.confirmation.consequence.redeliver':
+    'The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.',
+  'distributedEvents.confirmation.consequence.redecode':
+    'Re-decode with the current transport. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.',
+  'distributedEvents.confirmation.consequence.discard':
+    'These raw messages will stop processing and will not reach consumers. Later messages are excluded.',
+  'distributedEvents.confirmation.result.redeliver': 'Redelivered {{count}} · Skipped {{skipped}}',
+  'distributedEvents.confirmation.result.replay': 'Replayed {{count}} · Skipped {{skipped}}',
+  'distributedEvents.confirmation.result.redecode': 'Re-decoded {{count}} · Skipped {{skipped}}',
+  'distributedEvents.confirmation.result.discard': 'Discarded {{count}} · Skipped {{skipped}}',
 };
 //#endif

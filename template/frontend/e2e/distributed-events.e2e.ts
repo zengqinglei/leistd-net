@@ -23,7 +23,7 @@ test(
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await expect(row.getByText('Sent', { exact: true })).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 20000 });
-    await page.getByRole('tab', { name: 'Inbox', exact: true }).click();
+    await page.getByRole('tab', { name: /^Inbox/ }).click();
     await page.getByRole('textbox', { name: 'Exact event ID / ordering key' }).fill(eventId);
     await expect(async () => {
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();

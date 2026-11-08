@@ -54,3 +54,22 @@ export function formatRelativeTime(
     text: formatAppDate(instant, sameYear ? 'monthDay' : 'date', timeZone, locale),
   };
 }
+
+/** 最长单位的可读等待时长；使用界面语言的单位格式，不拼接秒数或词条。 */
+export function formatElapsedTime(seconds: number, locale = 'en'): string {
+  const elapsed = Math.max(0, seconds);
+  const [scale, unit] =
+    elapsed >= 86_400
+      ? [86_400, 'day']
+      : elapsed >= 3600
+        ? [3600, 'hour']
+        : elapsed >= 60
+          ? [60, 'minute']
+          : [1, 'second'];
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit,
+    unitDisplay: 'long',
+    maximumFractionDigits: 0,
+  }).format(Math.floor(elapsed / scale));
+}

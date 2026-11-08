@@ -13,7 +13,7 @@
   "failedInbox": "处理失败",
   "pendingRejections": "待处理拒收",
   "pendingHelp": "等待传输发送；退避中的消息仍为待发送。",
-  "oldest": "最旧 {{seconds}} 秒 · 待处理 {{count}}",
+  "oldest": "最旧 {{age}} · 待处理 {{count}}",
   "deadHelp": "永久失败或超过重试窗口",
   "failedHelp": "处理器重试次数已用尽",
   "rejectionHelp": "宿主集中库 · 解码或租户解析失败",
@@ -24,8 +24,6 @@
   "clear": "清除筛选",
   "noResults": "没有匹配的事件",
   "onlyAnomalies": "只看异常",
-  "restoreSelected": "恢复已选（{{count}}）",
-  "restoreFilter": "按当前筛选恢复",
   "chooseState": "请先筛选死信、失败／已处理收件箱或待处理拒收。",
   "retry": "重试",
   "loading": "正在加载事件",
@@ -33,7 +31,6 @@
   "selectPage": "选中本页可恢复记录",
   "selectRecord": "选中记录 {{id}}",
   "actions": "操作",
-  "restore": "恢复",
   "details": "查看详情",
   "outgoing": "发出",
   "incoming": "接收",
@@ -54,10 +51,7 @@
   "payload": "事件载荷",
   "showPayload": "显示载荷",
   "copyPayload": "复制载荷",
-  "confirm": "恢复 {{count}} 条记录？范围：{{scope}}。筛选／ID：{{filter}}。截至 {{before}} 加载时，之后新记录不受影响。",
   "replayWarning": "这将再次执行处理器，包括外部副作用。请确认业务操作适合再次执行。",
-  "recoveryWarning": "事件 ID 保持不变。请先处理失败原因；按条件恢复将分批执行，由调度任务继续处理。",
-  "recovered": "已恢复 {{count}} 条 · 跳过 {{skipped}} 条",
   "testSent": "测试事件已发送：{{id}}",
   "view": {
     "outbox": "发件箱",
@@ -102,7 +96,8 @@
     "lastReceived": "最近接收",
     "lastProcessed": "最近处理",
     "pending": "待处理",
-    "anomalies": "异常"
+    "anomalies": "异常",
+    "lastReceivedProcessed": "最近接收／处理"
   },
   "field": {
     "id": "记录 ID",
@@ -141,6 +136,68 @@
     "pendingOutbox": "待发送",
     "pendingInbox": "待处理",
     "deadLettered": "死信",
-    "failedInbox": "处理失败"
+    "failedInbox": "处理失败",
+    "direction": "方向"
+  },
+  "cancel": "取消",
+  "reason": {
+    "invalidEnvelope": "信封无效",
+    "unknownTenant": "租户不存在",
+    "invalidPayload": "载荷无效"
+  },
+  "bulk": {
+    "selected": {
+      "redeliver": "重投已选（{{count}}）",
+      "replay": "重放已选（{{count}}）",
+      "redecode": "重新解码已选（{{count}}）",
+      "discard": "丢弃已选（{{count}}）"
+    },
+    "filter": {
+      "redeliver": "按当前筛选重投",
+      "replay": "按当前筛选重放",
+      "redecode": "按当前筛选重新解码",
+      "discard": "按当前筛选丢弃"
+    }
+  },
+  "confirmation": {
+    "scope": "范围",
+    "cutoff": "加载截止",
+    "criteria": "筛选",
+    "ids": "记录 ID",
+    "question": {
+      "redeliver": "重投 {{count}} 条死信？",
+      "replay": "重放 {{count}} 条收件箱记录？",
+      "redecode": "重新解码 {{count}} 条待处理拒收？",
+      "discard": "丢弃 {{count}} 条待处理拒收？"
+    },
+    "selectedQuestion": {
+      "redeliver": "重投已选 {{count}} 条死信？",
+      "replay": "重放已选 {{count}} 条收件箱记录？",
+      "redecode": "重新解码已选 {{count}} 条待处理拒收？",
+      "discard": "丢弃已选 {{count}} 条待处理拒收？"
+    },
+    "filterQuestion": {
+      "redeliver": "按当前筛选重投 {{count}} 条死信？",
+      "replay": "按当前筛选重放 {{count}} 条收件箱记录？",
+      "redecode": "按当前筛选重新解码 {{count}} 条待处理拒收？",
+      "discard": "按当前筛选丢弃 {{count}} 条待处理拒收？"
+    },
+    "button": {
+      "redeliver": "重投 {{count}} 条",
+      "replay": "重放 {{count}} 条",
+      "redecode": "重新解码 {{count}} 条",
+      "discard": "丢弃 {{count}} 条"
+    },
+    "consequence": {
+      "redeliver": "事件 ID 保持不变，消费方按 ID 去重。请先处理失败原因；之后新产生的记录不受影响，记录将分批回到待发送并由调度任务发出。",
+      "redecode": "使用当前传输重新解码，成功后写入目标租户收件箱；无法解码的记录仍为待处理。之后新收到的消息不受影响。",
+      "discard": "这些原始消息将停止处理，不会投递给消费者。之后新收到的消息不受影响。"
+    },
+    "result": {
+      "redeliver": "已重投 {{count}} 条 · 跳过 {{skipped}} 条",
+      "replay": "已重放 {{count}} 条 · 跳过 {{skipped}} 条",
+      "redecode": "已重新解码 {{count}} 条 · 跳过 {{skipped}} 条",
+      "discard": "已丢弃 {{count}} 条 · 跳过 {{skipped}} 条"
+    }
   }
 }
