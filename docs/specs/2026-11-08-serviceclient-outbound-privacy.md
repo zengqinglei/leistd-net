@@ -1,6 +1,6 @@
 # ServiceClient 面向全部出站 HTTP：异常消息隐私与关联标识按客户端关闭
 
-状态：进行中 · 风险档：高 · 关联：待开 PR
+状态：已完成 · 风险档：高 · 关联：https://github.com/zengqinglei/leistd-net/pull/241
 
 ## 1. 需求
 
@@ -69,7 +69,7 @@
 
 ## 4. 结果
 
-本地分支 `zengqinglei/serviceclient-outbound-privacy`，三个实施提交：`fix(service-client)` 异常消息隐私、`feat(service-client)` `ForwardCorrelationId`、`docs(service-client)` 文档。尚未推送与开 PR。
+交付：PR #241（合并提交 `fe1a9624`），框架 beta `2.0.0-beta.211` 已发布；三个实施提交：`fix(service-client)` 异常消息隐私、`feat(service-client)` `ForwardCorrelationId`、`docs(service-client)` 文档。
 
 - 回归用例在修复前 11 条全部失败（消息中可见哨兵值），修复后通过；`ForwardCorrelationId` 的两条关闭用例在接线前失败。
 - 与计划的偏差：传输失败消息同样去掉查询串（同一泄露路径，判据一致）；用户信息一并从地址中去掉。
