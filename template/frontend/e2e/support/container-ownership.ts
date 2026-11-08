@@ -6,7 +6,10 @@ interface NamedContainer<T> {
 }
 
 /** 可选执行器归属协议；与后端测试相同，未提供协议时沿用 Testcontainers 默认行为。 */
-export function applyRunnerContainerOwnership<T extends NamedContainer<T>>(builder: T): T {
+export function applyRunnerContainerOwnership<T extends NamedContainer<T>>(
+  builder: T,
+  component: 'postgres' | 'rabbitmq' = 'postgres',
+): T {
   const raw = process.env['RPR_DOCKER_LABELS'];
   const prefix = process.env['RPR_DOCKER_NAME_PREFIX'];
   if (raw === undefined && prefix === undefined) return builder;
@@ -32,6 +35,6 @@ export function applyRunnerContainerOwnership<T extends NamedContainer<T>>(build
   )
     throw new Error(error);
   return builder
-    .withName(`${prefix}-e2e-postgres-${randomUUID()}`)
+    .withName(`${prefix}-e2e-${component}-${randomUUID()}`)
     .withLabels(labels as Record<string, string>);
 }

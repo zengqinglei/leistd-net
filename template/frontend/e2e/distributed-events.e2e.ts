@@ -24,7 +24,10 @@ test(
       await expect(row.getByText('Sent', { exact: true })).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 20000 });
     await page.getByRole('tab', { name: /^Inbox/ }).click();
+    // 视图导航提交后再更新筛选，避免后一次导航覆盖仍在进行的切换。
+    await expect(page).toHaveURL(/[?&]view=inbox(?:&|$)/);
     await page.getByRole('textbox', { name: 'Exact event ID / ordering key' }).fill(eventId);
+    await expect(page).toHaveURL(new RegExp(`keyword=${eventId}`));
     await expect(async () => {
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await expect(row.getByText('Processed', { exact: true })).toBeVisible({ timeout: 1000 });
