@@ -11,7 +11,11 @@ import {
   DISTRIBUTED_EVENT_PAYLOADS,
   DISTRIBUTED_EVENT_TENANTS,
 } from '../data/distributed-events';
+//#if (IncludeMultiTenancy)
 import { setMockSessionUserId, setMockSessionTenantKey } from '../utils/current-user';
+//#else
+import { setMockSessionUserId } from '../utils/current-user';
+//#endif
 
 type Api = typeof DISTRIBUTED_EVENT_API;
 function call<K extends keyof Api>(
@@ -159,6 +163,7 @@ describe('distributed event mock', () => {
     expect(() => call('POST /api/v1/distributed-events/test')).toThrow(MockException);
   });
 
+  //#if (IncludeMultiTenancy)
   it('restricts tenant data and denies all host-only entry points', () => {
     setMockSessionTenantKey(DISTRIBUTED_EVENT_TENANTS[0]);
     const rows = call('GET /api/v1/distributed-events/outbox').items;
@@ -174,6 +179,7 @@ describe('distributed event mock', () => {
     ).toThrow(MockException);
   });
 
+  //#endif
   it('accepts the query arrays emitted by the real Mock interceptor', () => {
     const result = call('GET /api/v1/distributed-events/outbox', {
       queryParams: { database: ['host'], status: ['deadLettered'], limit: ['1'], offset: ['0'] },

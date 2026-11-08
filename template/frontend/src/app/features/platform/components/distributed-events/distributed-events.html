@@ -262,11 +262,7 @@
               {{ t('distributedEvents.retry') }}
             </button>
           </div>
-        } @else if (loading()) {
-          <div class="flex justify-center p-10" role="status">
-            <hlm-spinner /><span class="sr-only">{{ t('distributedEvents.loading') }}</span>
-          </div>
-        } @else if (!rows().length) {
+        } @else if (!loading() && !rows().length) {
           <div hlmEmpty class="border">
             <div hlmEmptyHeader>
               <div hlmEmptyMedia variant="icon"><ng-icon name="lucideInbox" /></div>
@@ -279,6 +275,7 @@
             @case ('outbox') {
               <app-distributed-outbox-table
                 [rows]="rows()"
+                [loading]="loading()"
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
@@ -299,6 +296,7 @@
             @case ('inbox') {
               <app-distributed-inbox-table
                 [rows]="rows()"
+                [loading]="loading()"
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
@@ -319,6 +317,7 @@
             @case ('rejections') {
               <app-distributed-rejection-table
                 [rows]="rows()"
+                [loading]="loading()"
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
@@ -339,6 +338,7 @@
             @case ('catalog') {
               <app-distributed-catalog-table
                 [rows]="rows()"
+                [loading]="loading()"
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"

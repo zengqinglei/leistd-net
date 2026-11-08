@@ -21,7 +21,6 @@ import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmInputGroupImports } from '@spartan-ng/helm/input-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import {
@@ -85,7 +84,6 @@ import { TenantService } from '../../services/tenant-service';
     ...HlmEmptyImports,
     ...HlmInputGroupImports,
     ...HlmSelectImports,
-    HlmSpinner,
     ...HlmTabsImports,
     ...HlmTooltipImports,
     FacetedFilter,
@@ -205,6 +203,8 @@ export class DistributedEvents {
       this.layout.title.set(this.t('distributedEvents.title'));
       //#endif
     });
+    let renderedView = this.view();
+    let renderedDatabase = this.database();
     const query$ = this.route.queryParams;
     combineLatest([query$, this.refresh.pipe(startWith(undefined))])
       .pipe(
@@ -213,6 +213,10 @@ export class DistributedEvents {
           this.loadError.set(null);
           this.selected.set([]);
           const database = this.database();
+          const view = this.view();
+          if (view !== renderedView || database !== renderedDatabase) this.rows.set([]);
+          renderedView = view;
+          renderedDatabase = database;
           const input = this.listInput(query);
           const list$: Observable<PagedResultDto<EventRecord>> =
             this.view() === 'catalog'
