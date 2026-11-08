@@ -32,7 +32,7 @@ const ago = (seconds: number) => new Date(seededAt - seconds * 1000).toISOString
 const eventId = (index: number) => `00000000-0000-4000-8000-${index.toString().padStart(12, '0')}`;
 const headers = {
   traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-  'leistd-correlation-id': '4bf92f3577b34da6a3ce929d0e0e4736',
+  'leistd-correlation-id': 'Caller_ABC-request-27',
 };
 
 export const DISTRIBUTED_EVENT_OUTBOX: DistributedEventOutboxDetailOutputDto[] = [
@@ -223,7 +223,7 @@ export const DISTRIBUTED_EVENT_REJECTIONS: DistributedEventRejectionDetailOutput
       receivedAt: ago(300),
       lastModificationTime: ago(300),
     },
-    headers: {},
+    headers,
     coordinates: {
       exchange: 'leistd.events',
       routingKey: 'customer.activated',
@@ -247,6 +247,22 @@ export const DISTRIBUTED_EVENT_REJECTIONS: DistributedEventRejectionDetailOutput
     headers: {},
     coordinates: {},
   },
+  {
+    record: {
+      id: '3',
+      transport: 'RabbitMQ',
+      coordinates: { queue: 'customer-events' },
+      reason: 'invalid-envelope',
+      error: 'Awaiting the receiver decoder.',
+      status: 'redecodePending',
+      redecodeCount: 0,
+      receivedAt: ago(180),
+      resolvedAt: null,
+      lastModificationTime: ago(30),
+    },
+    headers: {},
+    coordinates: { queue: 'customer-events' },
+  },
 ];
 
 /** 单独保存，概要与详情 API 不会意外返回载荷。 */
@@ -265,6 +281,7 @@ export const DISTRIBUTED_EVENT_PAYLOADS: Record<string, DistributedEventPayloadO
 export const DISTRIBUTED_EVENT_RAW_MESSAGES: Record<string, DistributedEventRawMessageOutputDto> = {
   'rejections:1': { rawBody: 'eyJicm9rZW4iOg==' },
   'rejections:2': { rawBody: 'e30=' },
+  'rejections:3': { rawBody: 'e30=' },
 };
 
 export const DISTRIBUTED_EVENT_STATUS: DistributedEventStatusOutputDto = {
@@ -278,6 +295,9 @@ export const DISTRIBUTED_EVENT_STATUS: DistributedEventStatusOutputDto = {
   processedLast24Hours: 2,
   transportName: 'RabbitMQ',
   transportStatus: 'healthy',
+  transportStatusChangedAt: ago(3600),
+  transportReportedAt: ago(2),
+  payloadEnabled: true,
   testEventEnabled: true,
 };
 

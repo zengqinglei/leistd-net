@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using Leistd.EventBus.Distributed.Diagnostics;
+using Leistd.Tracing.Abstractions;
 using Leistd.EventBus.Distributed.Errors;
 using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Stores;
@@ -16,10 +19,11 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
     ICurrentTenant tenant,
     IUnitOfWorkManager units,
     IDbContextProvider<TDbContext> contexts,
-    IDistributedEventTransport transport,
     IOptionsMonitor<DistributedEventOptions> options,
     TimeProvider clock,
-    ILogger<DistributedEventOutboxProcessor<TDbContext>> logger) where TDbContext : DbContext
+    ILogger<DistributedEventOutboxProcessor<TDbContext>> logger,
+    ICorrelationIdProvider? correlation = null,
+    IDistributedEventTransport? transport = null) where TDbContext : DbContext
 {
     public async Task ProcessAsync(Guid? tenantId, long id, int? expectedAttempts, CancellationToken ct)
     {
@@ -38,10 +42,16 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
                 && x.Id < row.Id && x.Status == DistributedEventOutboxStatus.Pending, ct)) return;
             await read.CompleteAsync(ct);
         }
+        row.Headers.TryGetValue(DistributedEventHeaders.TraceParent, out var parent);
+        row.Headers.TryGetValue(DistributedEventHeaders.TraceState, out var state);
+        ActivityContext.TryParse(parent, state, isRemote: true, out var parentContext);
         DistributedEventSendResult result;
         try
         {
-            result = await transport.SendAsync(new()
+            using var activity = DistributedEventDiagnostics.ActivitySource.StartActivity("event.send", ActivityKind.Producer, parentContext);
+            using var linkedCorrelation = row.Headers.TryGetValue(DistributedEventHeaders.CorrelationId, out var correlationId)
+                ? correlation?.Change(correlationId) : null;
+            result = await (transport ?? throw new InvalidOperationException("Sending requires an IDistributedEventTransport registration.")).SendAsync(new()
             {
                 EventId = row.EventId, EventName = row.EventName, TenantId = row.TenantId, OrderingKey = row.OrderingKey,
                 OccurredAt = row.OccurredAt, Payload = row.Payload, Headers = row.Headers
@@ -49,7 +59,7 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            result = new() { Status = DistributedEventSendStatus.TransientFailure, ErrorCode = DistributedEventOutboxFailureCodes.TransportException, Error = exception.Message };
+            result = new() { Status = DistributedEventSendStatus.TransientFailure, ErrorCode = DistributedEventOutboxFailureCodes.TransportException, Error = exception.GetType().FullName };
             logger.LogWarning(exception, "Distributed event {EventId} transport failed before confirmation.", row.EventId);
         }
         using var write = units.Begin(requiresNew: true);
@@ -80,7 +90,7 @@ internal sealed class DistributedEventOutboxProcessor<TDbContext>(
                 if (result.Status != DistributedEventSendStatus.PermanentFailure)
                     current.LastErrorCode = DistributedEventOutboxFailureCodes.RetryWindowExceeded;
                 logger.LogError(new EventId(4101, "DistributedEventDeadLettered"),
-                    "Distributed event {EventId} became a dead letter: {ErrorCode}.", row.EventId, current.LastErrorCode);
+                    "Distributed event {EventId} ({EventName}) became a dead letter: {ErrorCode}.", row.EventId, row.EventName, current.LastErrorCode);
             }
             else current.NextAttemptAt = now + DistributedEventRetry.Delay(current.AttemptCount, config);
         }

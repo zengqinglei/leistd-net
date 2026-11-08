@@ -3,7 +3,8 @@ import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
 /** 记录标识为十进制字符串，避免 long 超出 JavaScript 安全整数范围；时间均为 UTC ISO 字符串。 */
 export type DistributedEventInboxStatus = 'pending' | 'processed' | 'failed';
 export type DistributedEventOutboxStatus = 'pending' | 'sent' | 'deadLettered';
-export type DistributedEventRejectionStatus = 'pending' | 'redecoded' | 'discarded';
+export type DistributedEventRejectionStatus =
+  'pending' | 'redecoded' | 'discarded' | 'redecodePending';
 export type DistributedEventRecoverySkipReason = 'not-found' | 'invalid-state' | 'redecode-failed';
 export type DistributedEventTransportStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
@@ -58,7 +59,7 @@ export interface DistributedEventInboxFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   errorCode?: string | null;
   /** 必填，只能选 Failed 或 Processed。 */
@@ -110,7 +111,7 @@ export interface DistributedEventOutboxFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   errorCode?: string | null;
 }
@@ -162,6 +163,8 @@ export interface DistributedEventRawMessageOutputDto {
 /** 恢复结果；按条件分批提交后返回累计条数。 */
 export interface DistributedEventRecoveryOutputDto {
   affectedCount: number;
+  /** 已转交重新解码的数量，属于 affectedCount 的子集。 */
+  deferredCount: number;
   /** 未改动的标识和原因；按条件不返回不存在项。 */
   skipped: DistributedEventRecoverySkipDto[];
 }
@@ -181,14 +184,16 @@ export interface DistributedEventRejectionDetailOutputDto {
   coordinates: Record<string, string>;
 }
 
-/** 按条件恢复筛选；发件箱只选死信，拒收只选 Pending。 */
+/** 拒收按条件恢复；重新解码只选 Pending，丢弃也接受 RedecodePending。 */
 export interface DistributedEventRejectionFilterDto {
+  /** 重新解码只接受 pending；丢弃也接受 redecodePending，省略时取允许的未解决状态。 */
+  status?: 'pending' | 'redecodePending' | null;
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
   eventName?: string | null;
-  /** 事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。 */
+  /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
-  /** 拒收原因码精确匹配；只恢复 Pending。 */
+  /** 拒收原因码精确匹配。 */
   reason?: string | null;
 }
 
@@ -227,10 +232,16 @@ export interface DistributedEventStatusOutputDto {
   pendingRejections?: number | null;
   sentLast24Hours: number;
   processedLast24Hours: number;
-  /** 当前传输名；只写进程没有注册传输时为 null。 */
+  /** 当前进程或宿主库新鲜报告中的传输名；均无时为 null。 */
   transportName?: string | null;
-  /** event-bus 标签健康检查聚合：healthy、degraded、unhealthy、unknown。 */
+  /** 宿主库新鲜上报的最差健康状态；无新鲜上报时 unknown。 */
   transportStatus: DistributedEventTransportStatus;
+  /** 最差状态实例中最近的状态变化时刻；unknown 时为空。 */
+  transportStatusChangedAt?: string | null;
+  /** 全部新鲜实例的最后上报时刻；unknown 时为空。 */
+  transportReportedAt?: string | null;
+  /** 端点是否开放载荷；直接管理服务返回 null。 */
+  payloadEnabled?: boolean | null;
   testEventEnabled: boolean;
 }
 
@@ -244,7 +255,7 @@ export interface GetDistributedEventInboxInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
@@ -259,7 +270,7 @@ export interface GetDistributedEventOutboxInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识或排序键精确匹配。 */
+  /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
@@ -273,7 +284,7 @@ export interface GetDistributedEventRejectionsInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
   database?: string | null;
   eventName?: string | null;
-  /** 事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。 */
+  /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;

@@ -22,6 +22,7 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'distributed-event.redelivered': (t) => `Redelivered distributed events ${t}`,
   'distributed-event.replayed': (t) => `Replayed distributed events ${t}`,
   'distributed-event.redecoded': (t) => `Re-decoded rejected events ${t}`,
+  'distributed-event.redecode-requested': (t) => `Requested re-decode of rejected events ${t}`,
   'distributed-event.discarded': (t) => `Discarded rejected events ${t}`,
   //#endif
   'user.created': (t) => `Created user ${t}`,
@@ -124,6 +125,7 @@ const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
   'distributed-event.redelivered': 'Redelivered distributed events',
   'distributed-event.replayed': 'Replayed distributed events',
   'distributed-event.redecoded': 'Re-decoded rejected events',
+  'distributed-event.redecode-requested': 'Requested re-decode of rejected events',
   'distributed-event.discarded': 'Discarded rejected events',
   //#endif
   'user.created': 'Created a user',

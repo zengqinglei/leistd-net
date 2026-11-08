@@ -91,16 +91,22 @@ internal sealed class DistributedEventInboxProcessor<TDbContext>(
         if (current is not { Status: DistributedEventInboxStatus.Pending } || current.AttemptCount != attempt) return;
         current.AttemptCount++;
         current.LastErrorCode = DistributedEventInboxFailureCodes.HandlerException;
-        current.LastError = DistributedEventRetry.Truncate(failure.Message);
+        current.LastError = DistributedEventRetry.Truncate(failure.GetType().FullName ?? failure.GetType().Name);
         current.LastModificationTime = clock.GetUtcNow().UtcDateTime;
         if (current.AttemptCount >= options.CurrentValue.MaxAttempts)
         {
             current.Status = DistributedEventInboxStatus.Failed;
             current.NextAttemptAt = null;
             logger.LogError(new EventId(4103, "DistributedEventConsumeFailed"), failure,
-                "Distributed event {EventId} exhausted attempts for {Consumer}.", current.EventId, current.Consumer);
+                "Distributed event {EventId} ({EventName}) exhausted attempts for {Consumer}.", current.EventId, current.EventName, current.Consumer);
         }
-        else current.NextAttemptAt = current.LastModificationTime + DistributedEventRetry.Delay(current.AttemptCount, options.CurrentValue);
+        else
+        {
+            current.NextAttemptAt = current.LastModificationTime + DistributedEventRetry.Delay(current.AttemptCount, options.CurrentValue);
+            logger.LogWarning(new EventId(4106, "DistributedEventConsumeRetry"), failure,
+                "Distributed event {EventId} ({EventName}) failed attempt {AttemptCount} for {Consumer}; processing will retry.",
+                current.EventId, current.EventName, current.AttemptCount, current.Consumer);
+        }
         try { await failed.CompleteAsync(ct); }
         catch (DbUpdateConcurrencyException) { await failed.RollbackAsync(CancellationToken.None); }
     }

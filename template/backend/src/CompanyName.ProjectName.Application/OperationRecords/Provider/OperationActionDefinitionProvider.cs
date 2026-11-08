@@ -162,6 +162,7 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordActions.DistributedEventRedelivered,
             OperationRecordActions.DistributedEventReplayed,
             OperationRecordActions.DistributedEventRedecoded,
+            OperationRecordActions.DistributedEventRedecodeRequested,
             OperationRecordActions.DistributedEventDiscarded,
         })
             context.Add(action, OperationRecordCategories.Data, OperationVisibility.Tenant, OperationSeverity.Notice);

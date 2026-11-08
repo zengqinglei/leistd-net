@@ -1,4 +1,5 @@
 using Leistd.EventBus.EntityFrameworkCore.Entities;
+using Leistd.Tracing.Constants;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,10 @@ public sealed class DistributedEventRejectionConfiguration : IEntityTypeConfigur
         builder.Property(x => x.Id).ValueGeneratedOnAdd();
         builder.Property(x => x.EventName).HasMaxLength(256);
         builder.Property(x => x.Headers).HasMessageDictionaryConversion();
+        builder.Property(x => x.TraceId).HasMaxLength(32);
+        builder.HasIndex(x => x.TraceId);
+        builder.Property(x => x.CorrelationId).HasMaxLength(CorrelationIdConstants.MaxLength);
+        builder.HasIndex(x => x.CorrelationId);
         builder.Property(x => x.Transport).HasMaxLength(256).IsRequired();
         builder.Property(x => x.Reason).HasMaxLength(256).IsRequired();
         builder.Property(x => x.Error).HasMaxLength(512).IsRequired();

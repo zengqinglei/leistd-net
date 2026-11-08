@@ -29,14 +29,23 @@ public sealed record DistributedEventStatusOutputDto
     /// <summary>近二十四小时成功处理数。</summary>
     public required long ProcessedLast24Hours { get; init; }
 
-    /// <summary>当前传输名；只写进程没有注册传输时为 null。</summary>
+    /// <summary>当前传输名，或最差新鲜上报实例的传输名；两者都缺失时为 null。</summary>
     public string? TransportName { get; init; }
 
-    /// <summary>event-bus 标签健康检查聚合：healthy、degraded、unhealthy、unknown。</summary>
+    /// <summary>宿主库中新鲜传输上报的最差状态：healthy、degraded、unhealthy、unknown。</summary>
     public required string TransportStatus { get; init; }
+
+    /// <summary>最差新鲜状态实例中最近的变化时刻（UTC），没有新鲜上报时为空。</summary>
+    public DateTime? TransportStatusChangedAt { get; init; }
+
+    /// <summary>所有新鲜实例中最近的上报时刻（UTC），没有新鲜上报时为空。</summary>
+    public DateTime? TransportReportedAt { get; init; }
 
     /// <summary>宿主是否启用测试事件。</summary>
     public required bool TestEventEnabled { get; init; }
+
+    /// <summary>宿主是否开放载荷读取入口；直接调用管理服务时未声明，为 null。</summary>
+    public bool? PayloadEnabled { get; init; }
 }
 
 /// <summary>事件目录：订阅与保留期内发件箱、收件箱事件名的并集。</summary>

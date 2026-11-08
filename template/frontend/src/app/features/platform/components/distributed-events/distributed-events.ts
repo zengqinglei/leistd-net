@@ -63,7 +63,7 @@ import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { PagedResultDto } from '../../../../shared/dtos/paged-result.dto';
-import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
+import { AppDate, formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import { AppNumber } from '../../../../shared/pipes/app-number-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
@@ -88,6 +88,7 @@ import { TenantService } from '../../services/tenant-service';
     ...HlmTooltipImports,
     FacetedFilter,
     AppNumber,
+    AppDate,
     DistributedEventStatistics,
     DistributedOutboxTable,
     DistributedInboxTable,
@@ -172,6 +173,11 @@ export class DistributedEvents {
         ? ['failed', 'processed'].includes(this.query()['status'])
         : this.view() === 'rejections' && this.query()['status'] === 'pending',
   );
+  readonly bulkDiscardAllowed = computed(
+    () =>
+      this.view() === 'rejections' &&
+      ['pending', 'redecodePending'].includes(this.query()['status']),
+  );
   readonly catalogDetail = computed(() =>
     this.view() === 'catalog'
       ? (this.catalog().find((item) => item.eventName === this.recordId()) ?? null)
@@ -182,7 +188,7 @@ export class DistributedEvents {
       ? ['pending', 'sent', 'deadLettered']
       : this.view() === 'inbox'
         ? ['pending', 'processed', 'failed']
-        : ['pending', 'redecoded', 'discarded'],
+        : ['pending', 'redecoded', 'discarded', 'redecodePending'],
   );
   readonly facetKeys = computed(() =>
     this.view() === 'catalog'
@@ -450,7 +456,11 @@ export class DistributedEvents {
     const view = this.view();
     if (view === 'catalog') return;
     const ids = row ? [row.id] : this.selected();
-    if ((mode !== 'filter' && !ids.length) || (mode === 'filter' && !this.bulkAllowed())) return;
+    if (
+      (mode !== 'filter' && !ids.length) ||
+      (mode === 'filter' && !(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()))
+    )
+      return;
     const action = discard
       ? 'discard'
       : view === 'outbox'
@@ -468,7 +478,14 @@ export class DistributedEvents {
     } = input;
     const body =
       mode === 'filter'
-        ? { filter: { ...filter, ...(view === 'inbox' ? { status: this.query()['status'] } : {}) } }
+        ? {
+            filter: {
+              ...filter,
+              ...(view === 'inbox' || view === 'rejections'
+                ? { status: this.query()['status'] }
+                : {}),
+            },
+          }
         : { ids };
     const count = mode === 'filter' ? this.totalCount() : ids.length;
     const database = this.database();
@@ -536,7 +553,8 @@ export class DistributedEvents {
             tap((result) => {
               toast.success(
                 this.t(`distributedEvents.confirmation.result.${action}`, {
-                  count: result.affectedCount,
+                  count: result.affectedCount - result.deferredCount,
+                  deferred: result.deferredCount,
                   skipped: result.skipped.length,
                 }),
               );

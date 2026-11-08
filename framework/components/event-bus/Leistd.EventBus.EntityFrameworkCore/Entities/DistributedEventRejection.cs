@@ -29,6 +29,12 @@ public class DistributedEventRejection
     /// <summary>原始消息头。</summary>
     public Dictionary<string, string> Headers { get; set; } = new();
 
+    /// <summary>从有效 traceparent 提取的小写 W3C 链路标识，缺失或非法时为空。</summary>
+    public string? TraceId { get; set; }
+
+    /// <summary>消息头中的关联标识，与处理日志使用相同值。</summary>
+    public string? CorrelationId { get; set; }
+
     /// <summary>原始传输坐标。</summary>
     public Dictionary<string, string> Coordinates { get; set; } = new();
 

@@ -192,12 +192,13 @@ internal sealed class DistributedEventManagedAuditHandler(
             DistributedEventManagementAction.Redelivered => OperationRecordActions.DistributedEventRedelivered,
             DistributedEventManagementAction.Replayed => OperationRecordActions.DistributedEventReplayed,
             DistributedEventManagementAction.Redecoded => OperationRecordActions.DistributedEventRedecoded,
+            DistributedEventManagementAction.RedecodeRequested => OperationRecordActions.DistributedEventRedecodeRequested,
             DistributedEventManagementAction.Discarded => OperationRecordActions.DistributedEventDiscarded,
             _ => throw new ArgumentOutOfRangeException(nameof(@event), @event.Action, "Unknown event management action.")
         };
         var selection = @event.FilterJson ?? JsonSerializer.Serialize(@event.Ids);
-        logger.LogInformation("Distributed event management {Action}: {AffectedCount} records in {Database}; selector {Selection}; batch {BatchId}",
-            action, @event.AffectedCount, @event.Database, selection, @event.EventId);
+        logger.LogInformation("Distributed event management {Action}: {AffectedCount} records in {Database} for tenant {TargetTenantId}; selector {Selection}; batch {BatchId}",
+            action, @event.AffectedCount, @event.Database, @event.TargetTenantId, selection, @event.EventId);
         return recorder.RecordSucceededAsync(action,
             OperationTarget.For(@event.EventId, Summarize(@event)),
             PermissionConstant.DistributedEvents.Manage, cancellationToken);
@@ -209,9 +210,10 @@ internal sealed class DistributedEventManagedAuditHandler(
         {
             DistributedEventManagementAction.Redelivered => "deadLettered",
             DistributedEventManagementAction.Replayed => "failed/processed",
+            DistributedEventManagementAction.Discarded => "pending/redecodePending",
             _ => "pending"
         };
-        var fields = new List<string> { $"count={@event.AffectedCount}", $"status={state}" };
+        var fields = new List<string> { $"count={@event.AffectedCount}", $"status={state}", $"tenant={@event.TargetTenantId?.ToString() ?? "host"}" };
         if (@event.FilterJson is { } json)
         {
             using var document = JsonDocument.Parse(json);
@@ -219,6 +221,9 @@ internal sealed class DistributedEventManagedAuditHandler(
             if (@event.Action == DistributedEventManagementAction.Replayed
                 && filter.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Number)
                 fields[1] = "status=" + (status.GetInt32() == (int)DistributedEventInboxStatus.Failed ? "failed" : "processed");
+            if (@event.Action == DistributedEventManagementAction.Discarded
+                && filter.TryGetProperty("status", out var rejectionStatus) && rejectionStatus.ValueKind == JsonValueKind.Number)
+                fields[1] = "status=" + (rejectionStatus.GetInt32() == (int)DistributedEventRejectionStatus.Pending ? "pending" : "redecodePending");
             foreach (var key in new[] { "errorCode", "eventName", "reason", "before" })
                 if (filter.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String)
                     fields.Add($"{key}={value.GetString()}");

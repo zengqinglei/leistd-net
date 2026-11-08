@@ -85,6 +85,7 @@ public static class DistributedEventEndpoints
         var options = new DistributedEventEndpointOptions();
         configure(options);
         options.Validate();
+        var payloadEnabled = options.EnablePayloadEndpoints;
         var probe = endpoints.ServiceProvider.GetService<IServiceProviderIsService>();
         if (probe is not null && (!probe.IsService(typeof(IDistributedEventManagementService))
             || !probe.IsService(typeof(IDistributedEventManagementStore))))
@@ -93,8 +94,8 @@ public static class DistributedEventEndpoints
         }
 
         var group = endpoints.MapGroup(string.Empty);
-        group.MapGet("status", (IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
-                => service.GetStatusAsync(database, cancellationToken))
+        group.MapGet("status", async (IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
+                => (await service.GetStatusAsync(database, cancellationToken)) with { PayloadEnabled = payloadEnabled })
             .WithName(GetStatusName)
             .RequireAuthorization(options.ReadPolicy);
 
@@ -127,10 +128,13 @@ public static class DistributedEventEndpoints
             .WithName(GetOutboxName)
             .RequireAuthorization(options.ReadPolicy);
 
-        group.MapGet("outbox/{id:long}/payload", (long id, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
+        if (payloadEnabled)
+        {
+            group.MapGet("outbox/{id:long}/payload", (long id, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
                 => service.GetOutboxPayloadAsync(id, database, cancellationToken))
-            .WithName(GetOutboxPayloadName)
-            .RequireAuthorization(options.ManagePolicy);
+                .WithName(GetOutboxPayloadName)
+                .RequireAuthorization(options.ManagePolicy);
+        }
 
         group.MapGet("inbox", (IDistributedEventManagementService service, CancellationToken cancellationToken,
                 int offset = 0, int limit = PageRequest.DefaultLimit,
@@ -151,10 +155,13 @@ public static class DistributedEventEndpoints
             .WithName(GetInboxName)
             .RequireAuthorization(options.ReadPolicy);
 
-        group.MapGet("inbox/{id:long}/payload", (long id, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
+        if (payloadEnabled)
+        {
+            group.MapGet("inbox/{id:long}/payload", (long id, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
                 => service.GetInboxPayloadAsync(id, database, cancellationToken))
-            .WithName(GetInboxPayloadName)
-            .RequireAuthorization(options.ManagePolicy);
+                .WithName(GetInboxPayloadName)
+                .RequireAuthorization(options.ManagePolicy);
+        }
 
         group.MapGet("rejections", (IDistributedEventManagementService service, CancellationToken cancellationToken,
                 int offset = 0, int limit = PageRequest.DefaultLimit,
@@ -175,10 +182,13 @@ public static class DistributedEventEndpoints
             .WithName(GetRejectionName)
             .RequireAuthorization(options.ReadPolicy);
 
-        group.MapGet("rejections/{id:long}/payload", (long id, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
+        if (payloadEnabled)
+        {
+            group.MapGet("rejections/{id:long}/payload", (long id, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
                 => service.GetRejectionPayloadAsync(id, database, cancellationToken))
-            .WithName(GetRejectionPayloadName)
-            .RequireAuthorization(options.ManagePolicy);
+                .WithName(GetRejectionPayloadName)
+                .RequireAuthorization(options.ManagePolicy);
+        }
 
         group.MapPost("outbox/redeliver", (RecoverDistributedEventOutboxInputDto input, IDistributedEventManagementService service, CancellationToken cancellationToken, string? database = null)
                 => service.RedeliverAsync(input, database, cancellationToken))

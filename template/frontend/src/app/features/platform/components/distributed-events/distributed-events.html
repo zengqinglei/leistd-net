@@ -48,6 +48,24 @@
               {{ status.transportName || t('distributedEvents.noTransport') }} ·
               {{ t('distributedEvents.health.' + status.transportStatus) }}
             </span>
+            <span class="text-muted-foreground text-xs" data-testid="event-transport-changed">
+              {{ t('distributedEvents.transportChanged') }} ·
+              {{
+                status.transportStatusChangedAt
+                  ? (status.transportStatusChangedAt
+                    | appDate: 'full' : displayTimeZone() : displayLocale())
+                  : '—'
+              }}
+            </span>
+            <span class="text-muted-foreground text-xs" data-testid="event-transport-reported">
+              {{ t('distributedEvents.transportReported') }} ·
+              {{
+                status.transportReportedAt
+                  ? (status.transportReportedAt
+                    | appDate: 'full' : displayTimeZone() : displayLocale())
+                  : '—'
+              }}
+            </span>
             <span class="text-muted-foreground text-xs">{{
               t('distributedEvents.last24Hours', {
                 sent: status.sentLast24Hours,
@@ -245,7 +263,7 @@
                   hlmBtn
                   variant="outline"
                   class="flex-1 sm:flex-initial"
-                  [disabled]="busy() || (!selected().length && !bulkAllowed())"
+                  [disabled]="busy() || (!selected().length && !bulkDiscardAllowed())"
                   (click)="recover(selected().length ? 'selected' : 'filter', undefined, true)"
                 >
                   {{ t('distributedEvents.action.discard') }}
@@ -367,6 +385,7 @@
     [view]="view()"
     [database]="database()"
     [canManage]="canManage()"
+    [payloadEnabled]="status()?.payloadEnabled === true"
     [busy]="busy()"
     [tenantNames]="tenantNames()"
     [catalogDetail]="catalogDetail()"

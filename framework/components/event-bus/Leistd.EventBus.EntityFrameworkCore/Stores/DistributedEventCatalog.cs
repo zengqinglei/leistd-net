@@ -6,7 +6,6 @@ using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.Context;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.EventBus.EntityFrameworkCore.Stores;
@@ -17,8 +16,7 @@ internal sealed class DistributedEventCatalog<TDbContext>(
     IOptionsMonitor<DistributedEventOptions> options,
     ICurrentTenant tenant,
     TimeProvider clock,
-    IDistributedEventTransport? transport = null,
-    HealthCheckService? health = null) where TDbContext : DbContext
+    IDistributedEventTransport? transport = null) where TDbContext : DbContext
 {
     public async Task<DistributedEventStatusOutputDto> StatusAsync(string? database, CancellationToken ct)
     {
@@ -45,11 +43,22 @@ internal sealed class DistributedEventCatalog<TDbContext>(
         }, ct);
         if (isHost)
             result = result with { PendingRejections = await scope.RunAsync(new(null, true),
-                (db, token) => db.Set<DistributedEventRejection>().LongCountAsync(x => x.Status == DistributedEventRejectionStatus.Pending, token), ct) };
-        if (health is not null)
+                (db, token) => db.Set<DistributedEventRejection>().LongCountAsync(x => x.Status == DistributedEventRejectionStatus.Pending || x.Status == DistributedEventRejectionStatus.RedecodePending, token), ct) };
+        var freshAfter = now - options.CurrentValue.TransportStatus.StaleAfter;
+        var states = await scope.RunAsync(new(null, true),
+            (db, token) => db.Set<DistributedEventTransportState>().AsNoTracking()
+                .Where(x => x.ReportedAt >= freshAfter).ToListAsync(token), ct);
+        if (states.Count > 0)
         {
-            var report = await health.CheckHealthAsync(registration => registration.Tags.Contains("event-bus"), ct);
-            if (report.Entries.Count > 0) result = result with { TransportStatus = report.Status.ToString().ToLowerInvariant() };
+            var worst = states.OrderBy(x => x.Status).ThenByDescending(x => x.StatusChangedAt)
+                .ThenByDescending(x => x.ReportedAt).ThenBy(x => x.Instance, StringComparer.Ordinal).First();
+            result = result with
+            {
+                TransportName = transport?.Name ?? worst.TransportName,
+                TransportStatus = worst.Status.ToString().ToLowerInvariant(),
+                TransportStatusChangedAt = worst.StatusChangedAt,
+                TransportReportedAt = states.Max(x => x.ReportedAt)
+            };
         }
         return result;
     }

@@ -15,7 +15,7 @@ public record GetDistributedEventRejectionsInputDto : PageRequest
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }
 
-    /// <summary>事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。</summary>
+    /// <summary>事件标识、TraceId 或 CorrelationId 精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
@@ -85,9 +85,13 @@ public sealed record DistributedEventRejectionDetailOutputDto
     public required IReadOnlyDictionary<string, string> Coordinates { get; init; }
 }
 
-/// <summary>按条件恢复筛选；发件箱只选死信，拒收只选 Pending。</summary>
+/// <summary>拒收按条件恢复筛选；重新解码只选 Pending，丢弃也接受 RedecodePending。</summary>
 public sealed record DistributedEventRejectionFilterDto
 {
+    /// <summary>可选的状态限定；重新解码只接受 Pending，丢弃也接受 RedecodePending。</summary>
+    [EnumDataType(typeof(DistributedEventRejectionStatus), ErrorMessage = "{0} is invalid.")]
+    public DistributedEventRejectionStatus? Status { get; init; }
+
     /// <summary>本次恢复的时间上限（UTC），必填，防止卷入后续新记录。</summary>
     [Required(ErrorMessage = "{0} is required.")]
     public DateTime? Before { get; init; }
@@ -96,11 +100,11 @@ public sealed record DistributedEventRejectionFilterDto
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }
 
-    /// <summary>事件标识精确匹配；无法解析标识的拒收记录不匹配关键字。</summary>
+    /// <summary>事件标识、TraceId 或 CorrelationId 精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
-    /// <summary>拒收原因码精确匹配；只恢复 Pending。</summary>
+    /// <summary>拒收原因码精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Reason { get; init; }
 }

@@ -22,7 +22,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("companyname-projectname")
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -879,6 +879,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("DuplicateCount")
                         .HasColumnType("integer");
 
@@ -936,7 +940,15 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("TraceId");
 
                     b.HasIndex("EventId", "Consumer")
                         .IsUnique()
@@ -967,6 +979,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone");
@@ -1025,11 +1041,19 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
 
                     b.HasIndex("EventId")
                         .IsUnique()
                         .HasFilter("\"TenantId\" IS NULL");
+
+                    b.HasIndex("TraceId");
 
                     b.HasIndex("EventName", "Status");
 
@@ -1057,6 +1081,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.Property<string>("Coordinates")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Error")
                         .IsRequired()
@@ -1100,6 +1128,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Transport")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -1107,9 +1139,42 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("TraceId");
+
                     b.HasIndex("Status", "LastModificationTime");
 
                     b.ToTable("DistributedEventRejection", "companyname-projectname");
+                });
+
+            modelBuilder.Entity("Leistd.EventBus.EntityFrameworkCore.Entities.DistributedEventTransportState", b =>
+                {
+                    b.Property<string>("Instance")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("StatusChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TransportName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Instance");
+
+                    b.HasIndex("ReportedAt");
+
+                    b.ToTable("DistributedEventTransportState", "companyname-projectname");
                 });
 #pragma warning restore 612, 618
         }

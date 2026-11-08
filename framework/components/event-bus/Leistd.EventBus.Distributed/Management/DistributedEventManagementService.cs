@@ -92,18 +92,27 @@ internal sealed class DistributedEventManagementService(IDistributedEventManagem
     public Task<DistributedEventRecoveryOutputDto> RedecodeAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default)
     {
         Validate(input);
+        ValidateRejectionState(input.Filter?.Status, false);
         return store.RedecodeAsync(input, database, cancellationToken);
     }
 
     public Task<DistributedEventRecoveryOutputDto> DiscardAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default)
     {
         Validate(input);
+        ValidateRejectionState(input.Filter?.Status, true);
         return store.DiscardAsync(input, database, cancellationToken);
     }
 
     public Task<DistributedEventTestOutputDto> SendTestEventAsync(string? database = null, CancellationToken cancellationToken = default)
     {
         return store.SendTestEventAsync(database, cancellationToken);
+    }
+
+    private static void ValidateRejectionState(DistributedEventRejectionStatus? status, bool discard)
+    {
+        if (status is not null && status != DistributedEventRejectionStatus.Pending
+            && !(discard && status == DistributedEventRejectionStatus.RedecodePending))
+            throw new ValidationException(new ValidationResult("The rejection state is not valid for this action.", ["Status"]), null, status);
     }
 
     private static void Validate(object input)

@@ -75,6 +75,7 @@ const STATUS: Dto.DistributedEventStatusOutputDto = {
   processedLast24Hours: 2,
   transportStatus: 'healthy',
   testEventEnabled: true,
+  payloadEnabled: true,
 };
 const catalogEntry = (
   eventName: string,
@@ -162,7 +163,7 @@ describe('DistributedEvents UI R1', () => {
             getOutbox: () => of({ record: OUTBOX, headers: {} }),
             getInbox: () => of({ record: INBOX, headers: {}, coordinates: {} }),
             getRejection: () => of({ record: REJECTION, headers: {}, coordinates: {} }),
-            redeliver: () => of({ affectedCount: 2, skipped: [] }),
+            redeliver: () => of({ affectedCount: 2, deferredCount: 0, skipped: [] }),
           },
         },
         //#if (LocalIdentity && IncludeMultiTenancy)
@@ -200,6 +201,44 @@ describe('DistributedEvents UI R1', () => {
     await setup();
     expect(fixture.nativeElement.textContent).toContain('1 day');
     expect(fixture.nativeElement.textContent).not.toContain('90,116');
+  });
+  it('renders reported status timestamps and clears them for unknown transport', async () => {
+    await setup();
+    component.status.set({
+      ...STATUS,
+      transportStatusChangedAt: '2026-01-01T10:20:30Z',
+      transportReportedAt: '2026-01-01T11:22:33Z',
+    });
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid=event-transport-changed]').textContent,
+    ).toContain('10:20:30');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid=event-transport-reported]').textContent,
+    ).toContain('11:22:33');
+    component.status.set({
+      ...STATUS,
+      transportStatus: 'unknown',
+      transportStatusChangedAt: null,
+      transportReportedAt: null,
+    });
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid=event-transport-changed]').textContent,
+    ).toContain('—');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid=event-transport-reported]').textContent,
+    ).toContain('—');
+  });
+  it('hides the payload section when the endpoint reports it disabled while keeping recovery available', async () => {
+    await setup({ view: 'outbox', record: '1' });
+    expect(document.querySelector('[data-testid=event-payload]')).not.toBeNull();
+    component.status.set({ ...STATUS, payloadEnabled: false });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.querySelector('[data-testid=event-payload]')).toBeNull();
+    expect(document.querySelector('[hlmSheetHeader]')?.textContent).toContain('Redeliver');
   });
   it('shows attention counts on the three record tabs', async () => {
     await setup();

@@ -18,8 +18,8 @@
   "failedHelp": "Handler retry attempts exhausted",
   "rejectionHelp": "Host inbox · Cannot decode or resolve tenant",
   "views": "Event views",
-  "search": "Exact event ID / ordering key",
-  "searchRejections": "Exact event ID",
+  "search": "Exact event ID / ordering key / trace ID / correlation ID",
+  "searchRejections": "Exact event ID / trace ID / correlation ID",
   "searchCatalog": "Search event name",
   "clear": "Clear filters",
   "noResults": "No matching events",
@@ -67,7 +67,8 @@
     "deadLettered": "Dead letter",
     "retrying": "Retrying",
     "redecoded": "Re-decoded",
-    "discarded": "Discarded"
+    "discarded": "Discarded",
+    "redecodePending": "Awaiting re-decode"
   },
   "health": {
     "healthy": "Healthy",
@@ -168,19 +169,19 @@
       "redeliver": "Redeliver {{count}} dead letters?",
       "replay": "Replay {{count}} inbox records?",
       "redecode": "Re-decode {{count}} pending rejections?",
-      "discard": "Discard {{count}} pending rejections?"
+      "discard": "Discard {{count}} unresolved rejections?"
     },
     "selectedQuestion": {
       "redeliver": "Redeliver {{count}} selected dead letters?",
       "replay": "Replay {{count}} selected inbox records?",
       "redecode": "Re-decode {{count}} selected pending rejections?",
-      "discard": "Discard {{count}} selected pending rejections?"
+      "discard": "Discard {{count}} selected unresolved rejections?"
     },
     "filterQuestion": {
       "redeliver": "Redeliver {{count}} dead letters matching the current filter?",
       "replay": "Replay {{count}} inbox records matching the current filter?",
       "redecode": "Re-decode {{count}} pending rejections matching the current filter?",
-      "discard": "Discard {{count}} pending rejections matching the current filter?"
+      "discard": "Discard {{count}} unresolved rejections matching the current filter?"
     },
     "button": {
       "redeliver": "Redeliver {{count}} records",
@@ -190,14 +191,16 @@
     },
     "consequence": {
       "redeliver": "The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.",
-      "redecode": "Re-decode with the current transport. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.",
+      "redecode": "Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.",
       "discard": "These raw messages will stop processing and will not reach consumers. Later messages are excluded."
     },
     "result": {
       "redeliver": "Redelivered {{count}} · Skipped {{skipped}}",
       "replay": "Replayed {{count}} · Skipped {{skipped}}",
-      "redecode": "Re-decoded {{count}} · Skipped {{skipped}}",
+      "redecode": "Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}",
       "discard": "Discarded {{count}} · Skipped {{skipped}}"
     }
-  }
+  },
+  "transportChanged": "Status changed",
+  "transportReported": "Last reported"
 }

@@ -2,9 +2,11 @@ using System.Reflection;
 using System.Text.Json;
 using Leistd.Data.Connections;
 using Leistd.EventBus.Distributed.Errors;
+using Leistd.EventBus.Distributed.Diagnostics;
 using Leistd.EventBus.Distributed.Subscriptions;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.EntityFrameworkCore.Dispatching;
+using Leistd.EventBus.EntityFrameworkCore.Diagnostics;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
@@ -18,7 +20,6 @@ using Microsoft.Extensions.Logging;
 namespace Leistd.EventBus.EntityFrameworkCore.Receiving;
 
 internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
-    IDistributedEventTransport transport,
     IDistributedEventSubscriptions subscriptions,
     ICurrentTenant tenant,
     IUnitOfWorkManager units,
@@ -26,7 +27,8 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
     DistributedEventQueue<TDbContext> queue,
     IServiceScopeFactory scopes,
     TimeProvider clock,
-    ILogger<EfCoreDistributedEventReceiver<TDbContext>> logger) : IDistributedEventReceiver
+    ILogger<EfCoreDistributedEventReceiver<TDbContext>> logger,
+    IDistributedEventTransport? transport = null) : IDistributedEventReceiver
     where TDbContext : DbContext
 {
     private static readonly string ConnectionName = typeof(TDbContext).GetCustomAttribute<ConnectionStringNameAttribute>()?.Name
@@ -49,7 +51,7 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
 
     internal async ValueTask<IncomingDistributedEvent> DecodeAsync(RawDistributedEvent raw, CancellationToken ct)
     {
-        var message = await transport.DecodeAsync(raw, ct);
+        var message = await (transport ?? throw new InvalidOperationException("Decoding requires an IDistributedEventTransport registration.")).DecodeAsync(raw, ct);
         if (message.EventId == Guid.Empty || message.OccurredAt.Kind != DateTimeKind.Utc || string.IsNullOrWhiteSpace(message.EventName))
             throw new DistributedEventDecodeException(DistributedEventRejectionReasons.InvalidEnvelope, "The decoded event metadata is invalid.");
         return message;
@@ -130,6 +132,8 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
                 EventId = message.EventId, EventName = message.EventName, TenantId = message.TenantId,
                 Consumer = consumer.Consumer, OrderingKey = message.OrderingKey, OccurredAt = message.OccurredAt,
                 Payload = payload, Headers = new(message.Headers), Coordinates = new(message.Coordinates),
+                TraceId = DistributedEventTrace.FromHeaders(message.Headers),
+                CorrelationId = DistributedEventCorrelation.FromHeaders(message.Headers),
                 ReceivedAt = receivedAt, LastModificationTime = now, NextAttemptAt = now.AddMinutes(1)
             };
             db.Set<DistributedEventInbox>().Add(row);
@@ -144,6 +148,9 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
 
     private async Task RejectMessageAsync(RawDistributedEvent raw, IncomingDistributedEvent? message, string reason, string error, CancellationToken ct)
     {
+        var transportName = transport?.Name ?? throw new InvalidOperationException("Rejecting requires an IDistributedEventTransport registration.");
+        var coordinates = string.Join(";", raw.Coordinates.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}"));
+        if (coordinates.Length > 256) coordinates = coordinates[..256];
         try
         {
             using var change = tenant.Change(null);
@@ -151,17 +158,21 @@ internal sealed class EfCoreDistributedEventReceiver<TDbContext>(
             var db = await contexts.GetDbContextAsync(ct);
             db.Set<DistributedEventRejection>().Add(new()
             {
-                Transport = transport.Name, Reason = reason, Error = error.Length > 512 ? error[..512] : error,
+                Transport = transportName, Reason = reason, Error = error.Length > 512 ? error[..512] : error,
                 EventName = message?.EventName, EventId = message?.EventId, RawBody = raw.Body.ToArray(),
                 Headers = new(raw.Headers), Coordinates = new(raw.Coordinates), ReceivedAt = raw.ReceivedAt,
+                TraceId = DistributedEventTrace.FromHeaders(message?.Headers ?? raw.Headers),
+                CorrelationId = DistributedEventCorrelation.FromHeaders(message?.Headers ?? raw.Headers),
                 LastModificationTime = clock.GetUtcNow().UtcDateTime
             });
             await unit.CompleteAsync(ct);
-            logger.LogWarning(new EventId(4104, "DistributedEventRejected"), "Distributed event {EventId} rejected: {Reason}.", message?.EventId, reason);
+            logger.LogWarning(new EventId(4104, "DistributedEventRejected"), "Distributed event {EventId} ({EventName}) rejected by {Transport}: {Reason}. Coordinates: {Coordinates}.",
+                message?.EventId, message?.EventName, transportName, reason, coordinates);
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            logger.LogError(new EventId(4105, "DistributedEventRejectPersistFailed"), exception, "The rejected distributed event could not be persisted.");
+            logger.LogError(new EventId(4105, "DistributedEventRejectPersistFailed"), exception, "Rejected distributed event {EventId} ({EventName}) from {Transport} could not be persisted: {Reason}. Coordinates: {Coordinates}.",
+                message?.EventId, message?.EventName, transportName, reason, coordinates);
             throw;
         }
     }

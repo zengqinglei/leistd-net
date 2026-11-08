@@ -74,6 +74,24 @@ describe('distributed event mock', () => {
     expect(processed[0].status).toBe('processed');
   });
 
+  it('reports payload availability and both transport timestamps', () => {
+    const status = call('GET /api/v1/distributed-events/status');
+    expect(status.payloadEnabled).toBe(true);
+    expect(Number.isFinite(Date.parse(status.transportStatusChangedAt!))).toBe(true);
+    expect(Number.isFinite(Date.parse(status.transportReportedAt!))).toBe(true);
+  });
+
+  it.each(['outbox', 'inbox', 'rejections'] as const)(
+    'finds %s by trace or distinct correlation ID without partial matching',
+    (kind) => {
+      const route = `GET /api/v1/distributed-events/${kind}` as const;
+      for (const keyword of ['4BF92F3577B34DA6A3CE929D0E0E4736', 'Caller_ABC-request-27'])
+        expect(call(route, { queryParams: { keyword } }).totalCount).toBeGreaterThan(0);
+      expect(call(route, { queryParams: { keyword: 'Caller_ABC-request' } }).totalCount).toBe(0);
+      expect(call(route, { queryParams: { keyword: 'caller_abc-request-27' } }).totalCount).toBe(0);
+    },
+  );
+
   it('restores more than one thousand matching dead letters without touching later records', () => {
     const template = DISTRIBUTED_EVENT_OUTBOX[0];
     for (let index = 0; index < 1200; index++)
@@ -137,6 +155,15 @@ describe('distributed event mock', () => {
     expect(row.lastErrorCode).toBeNull();
   });
 
+  it('provides original raw bytes for every rejection seed', () => {
+    for (const { record } of DISTRIBUTED_EVENT_REJECTIONS) {
+      const payload = call('GET /api/v1/distributed-events/rejections/:id/payload', {
+        params: { id: record.id },
+      });
+      expect(payload).toEqual({ rawBody: expect.any(String) });
+    }
+  });
+
   it('keeps undecodable raw messages pending until discarded', () => {
     const row = DISTRIBUTED_EVENT_REJECTIONS[0].record;
     expect(
@@ -149,6 +176,35 @@ describe('distributed event mock', () => {
         .affectedCount,
     ).toBe(1);
     expect(row.status).toBe('discarded');
+  });
+
+  it('lists queued re-decodes as unresolved and prevents a duplicate recovery request', () => {
+    const row = DISTRIBUTED_EVENT_REJECTIONS[0].record;
+    row.status = 'redecodePending';
+    const page = call('GET /api/v1/distributed-events/rejections', {
+      queryParams: { status: 'redecodePending' },
+    });
+    expect(page.items.map((item) => item.id)).toContain(row.id);
+    expect(call('GET /api/v1/distributed-events/status').pendingRejections).toBeGreaterThan(0);
+    const result = call('POST /api/v1/distributed-events/rejections/redecode', {
+      body: { ids: [row.id] },
+    });
+    expect(result.affectedCount).toBe(0);
+    expect(result.deferredCount).toBe(0);
+    expect(result.skipped).toEqual([{ id: row.id, reasonCode: 'invalid-state' }]);
+  });
+
+  it('discards queued re-decodes without crossing the selected pending state', () => {
+    const pending = DISTRIBUTED_EVENT_REJECTIONS[0].record;
+    const queued = DISTRIBUTED_EVENT_REJECTIONS.find(
+      (item) => item.record.status === 'redecodePending',
+    )!.record;
+    const result = call('POST /api/v1/distributed-events/rejections/discard', {
+      body: { filter: { before: new Date().toISOString(), status: 'redecodePending' } },
+    });
+    expect(result.affectedCount).toBe(1);
+    expect(queued.status).toBe('discarded');
+    expect(pending.status).toBe('pending');
   });
 
   it('allows read-only metadata while denying payload and writes', () => {

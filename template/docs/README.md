@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 后端功能或修复 | [通用约定](standards/coding-common.md)、[后端](standards/coding-backend.md)、[测试](standards/testing.md) | 改接口、分页排序或输入验证读 [API](standards/api.md)，批量或统计接口另读 [批量与统计](standards/api-batch-statistics.md)；设置项读 [设置](standards/settings.md)，后台或周期任务读 [后台任务](standards/background-jobs.md)；认证、权限或租户读 [认证与授权](standards/auth.md)；调用其他服务读 [服务间调用](standards/service-invocation.md)；远端测试读 [容器](standards/testing-containers.md) |
 <!--#if (IncludeDistributedEvents)-->
-| 发布、消费或排查分布式事件 | [分布式事件](standards/distributed-events.md) | 部署连接另读 [配置参考](deploy/configuration.md) |
+| 分布式事件发布幂等、消费、顺序水位、载荷开关、分工、重新解码与排障 | [分布式事件](standards/distributed-events.md) | 部署连接另读 [配置参考](deploy/configuration.md) |
 <!--#endif-->
 <!--#if (IncludeWebhooks)-->
 | 发布 webhook 事件 | [Webhook](standards/webhooks.md) | |

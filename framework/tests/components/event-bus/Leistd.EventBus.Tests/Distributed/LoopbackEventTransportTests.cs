@@ -4,6 +4,8 @@ using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Transport;
 using Leistd.EventBus.Distributed;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Leistd.EventBus.Tests.Distributed;
@@ -37,6 +39,18 @@ public sealed class LoopbackEventTransportTests
         var result = await provider.GetRequiredService<IDistributedEventTransport>().SendAsync(Message(), default);
         Assert.Equal(DistributedEventSendStatus.TransientFailure, result.Status);
         Assert.Equal("loopback-delivery-failed", result.ErrorCode);
+        Assert.Equal(typeof(InvalidOperationException).FullName, result.Error);
+    }
+
+    /// <summary>回环将完整异常交给宿主日志，同时发送结果不包含敏感消息。</summary>
+    [Fact]
+    public async Task Delivery_failure_is_logged_with_the_full_exception_and_a_safe_result()
+    {
+        var failure = new InvalidOperationException("Sensitive transport detail.");
+        using var provider = Provider(new Receiver { Failure = failure }, configure: services => services.AddLogging(builder => builder.AddFakeLogging()));
+        var result = await provider.GetRequiredService<IDistributedEventTransport>().SendAsync(Message(), default);
+        Assert.Equal(typeof(InvalidOperationException).FullName, result.Error);
+        Assert.Contains(provider.GetRequiredService<FakeLogCollector>().GetSnapshot(), entry => ReferenceEquals(entry.Exception, failure));
     }
 
     /// <summary>坏消息使用稳定拒收原因；取消不被包装为坏消息。</summary>
@@ -79,9 +93,11 @@ public sealed class LoopbackEventTransportTests
         Assert.Null(receiver.Raw);
     }
 
-    private static ServiceProvider Provider(Receiver receiver, bool receiveEnabled = true)
+    private static ServiceProvider Provider(Receiver receiver, bool receiveEnabled = true, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
+        configure?.Invoke(services);
         services.AddOptions<DistributedEventOptions>().Configure(options => options.Inbox.ReceiveEnabled = receiveEnabled);
         services.AddLoopbackEventTransport();
         services.AddScoped<IDistributedEventReceiver>(_ => receiver);

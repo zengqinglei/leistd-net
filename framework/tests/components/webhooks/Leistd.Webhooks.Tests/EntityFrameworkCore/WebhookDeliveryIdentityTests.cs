@@ -87,21 +87,26 @@ public sealed class WebhookDeliveryIdentityTests : IAsyncLifetime
             }
         }
 
-        var handled = await WaitAsync(() => _probe.Handled.IsEmpty ? null : _probe.Handled.ToArray());
+        var handled = await WaitAsync(() => Task.FromResult(_probe.Handled.IsEmpty ? null : _probe.Handled.ToArray()));
         var sent = Assert.Single(_probe.Sent);
         Assert.Equal(new ObservedIdentity(false, null, WebhookTestHost.TenantA), sent);
         Assert.All(handled, x => Assert.Equal(new ObservedIdentity(false, null, WebhookTestHost.TenantA), x));
 
-        var stored = await _host.SubscriptionAsync(subscription.Id);
+        // 回调可能先于事务提交被观测；以持久状态完成作为断言入口，避免读取旧快照。
+        var stored = await WaitAsync(async () =>
+        {
+            var current = await _host.SubscriptionAsync(subscription.Id);
+            return current.DisabledReason == WebhookDisabledReason.EndpointGone ? current : null;
+        });
         Assert.Equal(WebhookDisabledReason.EndpointGone, stored.DisabledReason);
     }
 
-    private static async Task<T> WaitAsync<T>(Func<T?> probe) where T : class
+    private static async Task<T> WaitAsync<T>(Func<Task<T?>> probe) where T : class
     {
         using var timeout = new CancellationTokenSource(WaitTimeout);
         while (true)
         {
-            if (probe() is { } value)
+            if (await probe() is { } value)
             {
                 return value;
             }

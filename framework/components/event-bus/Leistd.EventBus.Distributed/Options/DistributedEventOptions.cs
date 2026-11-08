@@ -18,7 +18,7 @@ public sealed class DistributedEventOptions
     /// <summary>每轮收件箱处理次数，默认五次；重放重新计数。</summary>
     public int MaxAttempts { get; set; } = 5;
 
-    /// <summary>发件箱与收件箱扫描间隔，默认五秒。</summary>
+    /// <summary>发件箱、收件箱与拒收重新解码的扫描间隔，默认五秒。</summary>
     public TimeSpan DispatchInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>最旧待发记录的告警阈值，默认五分钟。</summary>
@@ -32,5 +32,8 @@ public sealed class DistributedEventOptions
 
     /// <summary>内置测试事件。</summary>
     public DistributedEventTestOptions TestEvent { get; set; } = new();
+
+    /// <summary>传输健康状态上报与跨进程快照。</summary>
+    public DistributedEventTransportStatusOptions TransportStatus { get; set; } = new();
 
 }

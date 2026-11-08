@@ -125,7 +125,7 @@
           </div>
         }
         @if (detail(); as detail) {
-          @if (canManage() && view() === 'rejections' && recoverable(detail.record)) {
+          @if (canManage() && view() === 'rejections' && discardable(detail.record)) {
             <button
               hlmBtn
               variant="outline"
@@ -195,7 +195,7 @@
               </dl>
             </section>
           }
-          @if (canManage()) {
+          @if (canManage() && payloadEnabled()) {
             <section class="flex flex-col items-start gap-3" data-testid="event-payload">
               <h3 class="text-sm font-semibold">
                 {{

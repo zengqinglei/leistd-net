@@ -13,6 +13,7 @@ using Leistd.MultiTenancy.Context;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -33,7 +34,11 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _backend = await DistributedEventTestHost.CreateAsync();
-        _host = await new HostBuilder().ConfigureWebHost(web => web.UseTestServer()
+        _host = await CreateHostAsync(true);
+        _client = _host.GetTestClient();
+    }
+
+    private Task<IHost> CreateHostAsync(bool payloadEnabled) => new HostBuilder().ConfigureWebHost(web => web.UseTestServer()
             .ConfigureServices(services =>
             {
                 services.AddRouting();
@@ -59,10 +64,8 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
                     await next();
                 });
                 app.UseEndpoints(endpoints => endpoints.MapGroup("/api/v1/distributed-events").MapDistributedEvents(o =>
-                { o.ReadPolicy = "events.read"; o.ManagePolicy = "events.manage"; }));
+                { o.ReadPolicy = "events.read"; o.ManagePolicy = "events.manage"; o.EnablePayloadEndpoints = payloadEnabled; }));
             })).StartAsync();
-        _client = _host.GetTestClient();
-    }
 
     /// <inheritdoc />
     public async Task DisposeAsync()
@@ -118,6 +121,43 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
         var detail = await SendAsync("GET", "outbox/" + id.GetString(), "read");
         Assert.DoesNotContain("payload", await detail.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync("GET", "status", null)).StatusCode);
+    }
+
+    /// <summary>关闭载荷能力是移除路由，持有 Manage 的调用方同样只能得到 404。</summary>
+    [Theory]
+    [InlineData("outbox/1/payload", DistributedEventEndpoints.GetOutboxPayloadName)]
+    [InlineData("inbox/1/payload", DistributedEventEndpoints.GetInboxPayloadName)]
+    [InlineData("rejections/1/payload", DistributedEventEndpoints.GetRejectionPayloadName)]
+    public async Task Disabled_payload_routes_are_not_mapped_even_for_managers(string route, string endpointName)
+    {
+        using var host = await CreateHostAsync(false);
+        using var client = host.GetTestClient();
+        Assert.DoesNotContain(host.Services.GetRequiredService<EndpointDataSource>().Endpoints,
+            endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == endpointName);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/distributed-events/" + route);
+        request.Headers.Add("X-Permission", "manage");
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(request)).StatusCode);
+        await host.StopAsync();
+    }
+
+    /// <summary>端点快照报告实际映射的载荷能力，管理服务本身不决定 HTTP 能力。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Status_reports_the_mapping_capability_without_coupling_the_management_service(bool enabled)
+    {
+        using var host = await CreateHostAsync(enabled);
+        using var client = host.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/distributed-events/status");
+        request.Headers.Add("X-Permission", "read");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(enabled, json.RootElement.GetProperty("payloadEnabled").GetBoolean());
+        await using var scope = _backend.Services.CreateAsyncScope();
+        var direct = await scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>().GetStatusAsync();
+        Assert.Null(direct.PayloadEnabled);
+        await host.StopAsync();
     }
 
     private Task<HttpResponseMessage> SendAsync(string method, string route, string? permission, Guid? tenant = null)

@@ -15,7 +15,7 @@ public record GetDistributedEventInboxInputDto : PageRequest
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }
 
-    /// <summary>事件标识或排序键精确匹配。</summary>
+    /// <summary>事件标识、排序键、TraceId 或 CorrelationId 精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
@@ -115,7 +115,7 @@ public sealed record DistributedEventInboxFilterDto
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }
 
-    /// <summary>事件标识或排序键精确匹配。</summary>
+    /// <summary>事件标识、排序键、TraceId 或 CorrelationId 精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 

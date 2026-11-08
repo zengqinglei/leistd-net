@@ -1,7 +1,7 @@
 using Leistd.EventBus.Events;
 namespace Leistd.EventBus.Distributed.Events;
 
-/// <summary>持久管理动作成功后提交分发；每个成功批次发布，审计不把未完成批次计入。</summary>
+/// <summary>持久管理动作按批提交后，在调用方上下文独立分发的审计事件。</summary>
 public sealed class DistributedEventManagedEvent : LocalEvent
 {
     /// <summary>成功执行的动作。</summary>
@@ -12,6 +12,9 @@ public sealed class DistributedEventManagedEvent : LocalEvent
 
     /// <summary>宿主物理库选择键；租户为 null。</summary>
     public string? Database { get; init; }
+
+    /// <summary>本批数据所属的目标租户；null 表示宿主记录。</summary>
+    public Guid? TargetTenantId { get; init; }
 
     /// <summary>勾选动作本批实际改动的记录标识；筛选动作可为空。</summary>
     public IReadOnlyList<long>? Ids { get; init; }
@@ -30,5 +33,7 @@ public enum DistributedEventManagementAction
     /// <summary>重新解码拒收。</summary>
     Redecoded,
     /// <summary>丢弃拒收。</summary>
-    Discarded
+    Discarded,
+    /// <summary>已转交重新解码请求，尚未完成解码。</summary>
+    RedecodeRequested
 }

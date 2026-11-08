@@ -55,7 +55,7 @@ builder.Services.AddHealthChecks().AddRabbitMqEventTransport(tags: ["ready"]);
 builder.Services.AddDistributedEventHandler<OrderPaidHandler>("orders.projection");
 ```
 
-三表在同一个业务 DbContext 中映射，发布才能与业务写入共同提交；重复登记不同上下文会在注册时失败。
+发件箱、收件箱、拒收与传输状态在同一个业务 DbContext 中映射，发布才能与业务写入共同提交；重复登记不同上下文会在注册时失败。
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -67,7 +67,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 }
 ```
 
-管理组必须给出宿主已登记的 Read 与 Manage 策略；漏存储或策略时映射即报错。列表和详情概要属于 Read，所有载荷与写操作属于 Manage。
+管理组必须给出宿主已登记的 Read 与 Manage 策略；漏存储或策略时映射即报错。列表和详情概要属于 Read，所有载荷与写操作属于 Manage。`EnablePayloadEndpoints` 默认 true；设为 false 时三个 `/payload` 路由均不映射（404），`/status` 的 `PayloadEnabled` 为 false，界面应隐藏载荷入口。直接调用管理服务时该字段为空。
 
 ```csharp
 app.MapGroup("/api/v1/distributed-events").MapDistributedEvents(options =>
@@ -150,6 +150,8 @@ public sealed class OrderPaymentPublisher(IDistributedEventBus events, IUnitOfWo
 }
 ```
 
+同一工作单元内，同租户、同 EventId、事件名与冻结载荷相同的再次发布直接跳过，包括中途 SaveChanges 和参与父事务的嵌套单元；内容不同立即抛 InvalidOperationException，消息包含 EventId 与事件名。传播该异常会回滚业务事务。独立新工作单元的重复仍由数据库唯一约束拒绝，不在发布时查库去重。确定性 EventId 只代表同一事实，调用方应在产生新事实（新版本）时才发布。
+
 本地领域事件转成分布式事件时，转发处理器声明 `UnitOfWorkEventHandler(UnitOfWorkPhase.BeforeCommit)`，确保写发件箱仍在原业务事务内。分布式消费者经 `AddDistributedEventHandler` 显式登记，不扫描程序集，也不登记给本地总线；消费者名参与去重，更名处理器时应保留原消费者名。
 
 ## 接口参考
@@ -212,22 +214,44 @@ public sealed class OrderPaymentPublisher(IDistributedEventBus events, IUnitOfWo
 | 单键有序 | 同租户、同事件名、同键的前序 Pending 阻塞后续；消费者再按消费者名分开。死信和 Failed 不阻塞后续，业务应容忍版本跳号。 |
 | 去重窗口等于保留期 | 默认十四天；删除终态后的迟到重投须由业务约束兜底。 |
 
+跨事件名不保序。多个事件名共享版本序列且新状态完整覆盖旧状态时，消费方可按租户与聚合维护共同版本水位，忽略较旧版本；增量事实不能仅凭共同水位丢弃，所需顺序或补偿由业务保证。
+
 同键并发事务的先后以提交后可见的自增 Id 为准，不保证业务版本顺序。RabbitMQ 首次交付用单活队列串行入库；Kafka 同键在一个主题的同分区。故障重投可能迟到，不承诺跨故障重排或跨主题顺序。
 
 ### 分工与配置
 
-`Leistd:EventBus:Distributed` 的 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` 默认均为 true。写入进程可显式全关并不注册传输；Worker 全开并注册传输。关闭的扫描任务在调度器取锁前跳过，选项不按可选依赖是否存在推断。发送或接收开启却漏传输时启动报出配置键。
+`Leistd:EventBus:Distributed` 的 `Outbox:DispatchEnabled`、`Inbox:ReceiveEnabled`、`Inbox:ProcessingEnabled` 默认均为 true。写入进程可显式全关并不注册传输；Worker 全开并注册传输。关闭的扫描任务在调度器取锁前跳过，选项不按可选依赖是否存在推断。三项任一开启却漏传输时，启动报出对应配置键。仅发布进程可通过 ValidateOnBuild 与 ValidateScopes 验证，发布和管理不要求连接 SDK。
+
+```csharp
+// Api：沿用宿主已有的工作单元、租户、后台任务队列与数据库接线。
+services.AddDistributedEventBus(options =>
+{
+    options.Outbox.DispatchEnabled = false;
+    options.Inbox.ReceiveEnabled = false;
+    options.Inbox.ProcessingEnabled = false;
+});
+services.AddDistributedEventBusEfCore<AppDbContext>();
+app.MapDistributedEvents();
+```
+
+Worker 共用数据库，注册所选传输并开启上述三项；仅发布 Api 不注册传输或该传输的健康检查。
 
 默认发件箱每五秒兜底扫描；瞬态发送失败指数退避，从两秒起、最多五分钟并有抖动。首次失败满一天仍未恢复则进死信。收件箱每轮最多处理五次。立即队列满或进程退出不会丢失持久记录，新记录留一分钟宽限后由扫描接手。
 
-`TestEvent:Enabled` 默认 true，登记 `event-bus.test` 测试消费者；不允许本服务自发自收的传输可关闭，状态和界面随之隐藏测试入口。EF 保留期由 `AddDistributedEventRetention` 独立绑定 `Leistd:EventBus:Distributed:Retention`，默认 `Enabled=true`、`Days=14`，每天 UTC 02:00 清理最后变更已过期的终态；Pending 永不删除。
+`TestEvent:Enabled` 默认 true，登记 `event-bus.test` 测试消费者；不允许本服务自发自收的传输可关闭，状态和界面随之隐藏测试入口。EF 保留期由 `AddDistributedEventRetention` 独立绑定 `Leistd:EventBus:Distributed:Retention`，默认 `Enabled=true`、`Days=14`，每天 UTC 02:00 清理最后变更已过期的终态；Pending 与拒收的 RedecodePending 永不删除。
 
 | 传输 | 必需连接 | 默认部署选项 |
 | --- | --- | --- |
 | RabbitMQ | `ConnectionStrings:RabbitMQ`，amqp/amqps URI | `Leistd:EventBus:RabbitMQ`：持久 topic 交换机 `leistd.events`，队列取宿主应用名，预取 32，单活且入库串行。服务之间用不同队列名，副本共用队列。 |
 | Kafka | `ConnectionStrings:Kafka`，bootstrap servers | `Leistd:EventBus:Kafka`：主题前缀空、组名取宿主应用名，`AutoCreateTopics=true` 创建缺失的单分区主题；关闭后由运维预建。服务之间用不同组名，副本共用组。 |
 
-宿主通过 `AddHealthChecks().AddRabbitMqEventTransport(tags)` 或 `AddKafkaEventTransport(tags)` 显式登记健康检查，附加标签合并且固定带 `event-bus`；没有相关健康检查时快照报告 Unknown。RabbitMQ 发布等待确认，按标准发布／订阅语义允许没有订阅队列。消费方须先启动以声明队列，此前发布的消息不会保留；需要离线接收时先完成队列部署。持久接收或拒收成功才 Ack；Kafka 发送要求 Persisted，禁用自动位点存储和提交，只在持久接收成功后提交当前分区的 offset+1。接收持久失败时保留当前消息重试，不越过它确认后续。
+宿主通过 `AddHealthChecks().AddRabbitMqEventTransport(tags)` 或 `AddKafkaEventTransport(tags)` 显式登记健康检查，附加标签合并且固定带 `event-bus`；没有新鲜上报时快照报告 unknown。RabbitMQ 发布等待确认，按标准发布／订阅语义允许没有订阅队列。消费方须先启动以声明队列，此前发布的消息不会保留；需要离线接收时先完成队列部署。持久接收或拒收成功才 Ack；Kafka 发送要求 Persisted，禁用自动位点存储和提交，只在持久接收成功后提交当前分区的 offset+1。接收持久失败时保留当前消息重试，不越过它确认后续。
+
+EF 后台服务只执行带 `event-bus` 标签的检查，并将每个传输进程的结果写入宿主库；没有注册传输或匹配检查时不写入，不修改宿主 `HealthCheckPublisherOptions.Predicate`。Api 即使不注册传输也能从同库读取 Worker 状态。上报失败只记警告，下轮重试，不影响收发。
+
+`Leistd:EventBus:Distributed:TransportStatus` 的 `ReportInterval` 默认十五秒、`StaleAfter` 默认一分钟且须大于上报间隔；`Instance` 默认 `{ApplicationName}@{MachineName}:{ProcessId}`，显式覆盖须保证各并发实例唯一。配置无需另设部署变量。实际上报周期为间隔加检查与持久化耗时；StaleAfter 应大于间隔加最长检查耗时，并为实例间时钟偏差留余量，各实例应保持时钟同步。保留期任务会删除上报时间早于保留期的实例行。
+
+快照只读宿主库新鲜报告，不在 GET 中执行健康检查；租户与所选业务库不改变来源。聚合取最差 `HealthStatus`：healthy 表示已连接，degraded 表示降级，unhealthy 表示断开且正在自动恢复，unknown 表示没有新鲜报告。`TransportStatusChangedAt` 为最差状态实例中最近的变化时刻，`TransportReportedAt` 为全部新鲜实例中最近的上报时刻；unknown 时二者为空。传输名优先当前进程，否则按最差状态、变化时刻降序、上报时刻降序、实例名升序选取。
 
 ### 管理与排障
 
@@ -239,20 +263,38 @@ Read 只读快照、目录、列表与详情概要，载荷经独立 Manage 端�
 | --- | --- | --- |
 | 发件箱重投 | DeadLettered | EventId 不变，清空失败窗口，累计尝试次数保留，RedeliverCount 增加。 |
 | 收件箱重放 | Failed、Processed | 清零本轮尝试、错误与完成时间，ReplayCount 增加；Processed 会再次执行处理器及其外部副作用。 |
-| 拒收重新解码 | Pending | 原始字节重新经过当前 DecodeAsync 和接收校验；先写有去重保护的收件箱，再标 Redecoded，不追求跨库原子。失败更新原拒收。 |
-| 拒收丢弃 | Pending | 标 Discarded。 |
+| 拒收重新解码 | Pending | 本地有同名传输时同步调用 DecodeAsync 与接收校验；否则转为 RedecodePending，由同名接收 Worker 处理。成功先写有去重保护的收件箱，再标 Redecoded；解码失败回 Pending 并更新脱敏原因。 |
+| 拒收丢弃 | Pending、RedecodePending | 标 Discarded。 |
 
-ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个成功批次发布一条 `DistributedEventManagedEvent`，带实际条数与原筛选或实际 ids；部分批次失败不会把未完成批次记为成功。
+ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个实际改动且提交的租户分组批次发布一条 `DistributedEventManagedEvent`，带目标 TargetTenantId、Database、实际条数与原筛选或实际 ids。目标作用域退出后，在调用方租户与用户上下文中独立完成审计单元；调用方已有单元之后提交或回滚均不影响该审计。跨库更新与本地审计不是分布式原子事务：审计失败向上传播，已提交批次不撤回。部分批次失败不把未完成批次记为成功。
+
+转交结果的 DeferredCount 是 AffectedCount 的子集，表示请求已登记而非已解码；该请求用 RedecodeRequested 动作审计。Worker 只领取宿主表中 Transport 与自身 Name 相同的 RedecodePending，沿用 Inbox:ReceiveEnabled 与 DispatchInterval，每批 100 行；单行执行失败记 4107 Warning，该行保留待办，继续后续行；整轮结束汇总失败并向调度器报错，下一轮重试。Pending 与 RedecodePending 都能丢弃；按筛选丢弃可用 Status 限定其中一种，省略时涵盖两种未解决状态。处理原始字节、头与入站坐标，不重新向 Broker 发布；进程中断后重入由 Inbox 唯一约束去重。Worker 完成不再以请求用户发管理审计，未解决拒收计数包含 RedecodePending。共库有多种传输接收宿主时，各自只领取同名行；集群任务按时段轮到谁由谁执行，因此可能有延迟。
+
+DistributedEventManagementAction.RedecodeRequested 与 DistributedEventRejectionStatus.RedecodePending 是新增枚举成员，宿主的穷举 switch 必须覆盖；前者表示已转交请求，后者表示尚未解码的非终态。
 
 积压先查传输健康、连接和最旧时长。永久失败直接死信；连接中断、超时、凭据过期等通道故障是瞬态，修复后自动重试。死信修复消息大小等不可恢复的单条消息错误后重投；消费者故障修复后重放；拒收修复映射、租户或载荷后重新解码。事件目录合并订阅与保留期历史，用最近发送／接收／处理时间判断某类事件是否静默，不把无活动本身判成故障。
 
-活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id，处理时恢复链路、关联标识、所属租户与系统身份。稳定日志事件包括 DistributedEventDeadLettered、DistributedEventOutboxBacklog、DistributedEventConsumeFailed、DistributedEventRejected、DistributedEventRejectPersistFailed。
+活动源名为 "Leistd.EventBus"。发布写入 W3C traceparent、tracestate 和 leistd-correlation-id；发送恢复持久父上下文与关联标识，围绕 SendAsync 创建 Producer 类型的 event.send，立即发送与扫描重试共用此路径。消息头不改写，event.send 与 event.process 均以 event.publish 为父 span，三段同属一个 TraceId。处理时另恢复所属租户与系统身份。三类记录分别存储从有效 W3C traceparent 提取的小写 TraceId，以及符合 CorrelationIdConstants.IsWellFormed 的 leistd-correlation-id 头原始 CorrelationId（最长 64 字符；不合规时该列为空，原始头仍保留）；两者都可在列表关键字中精确检索。32 位十六进制关键字对 TraceId 转小写匹配，关联标识不归一化，匹配的大小写语义取决于数据库排序规则（例如 SQL Server 默认通常不区分大小写）。缺失或非法 traceparent 时 TraceId 为空；显式关联标识可与 TraceId 不同，无 Activity 的入口也可只携带关联标识。
+
+稳定告警键如下，事件编号与名称一起使用：
+
+| 编号 | 事件名 | 结构化上下文 |
+| --- | --- | --- |
+| 4101 | DistributedEventDeadLettered | EventId、EventName、ErrorCode |
+| 4102 | DistributedEventOutboxBacklog | Database、Count、OldestAge |
+| 4103 | DistributedEventConsumeFailed | EventId、EventName、Consumer |
+| 4104 | DistributedEventRejected | Transport、Reason、EventName、EventId、Coordinates |
+| 4105 | DistributedEventRejectPersistFailed | 同 4104，附完整持久化异常 |
+| 4106 | DistributedEventConsumeRetry | EventId、EventName、Consumer、AttemptCount，附完整处理异常 |
+| 4107 | DistributedEventRedecodeRetry | RecordId、Transport，附完整执行异常 |
+
+拒收前无法解码时 EventName、EventId 可能为空。Coordinates 是入站坐标，按键排序为 `k=v;k=v`，最长 256 字符。发送传输未处理的异常只将异常类型全名写入 LastError，LastErrorCode 为 transport-exception；完整异常保留在日志。收件处理器失败同样只持久异常类型全名，未耗尽的每次失败由 4106 Warning 保留完整异常，耗尽时由 4103 Error 保留；LastErrorCode 仍为 handler-exception。
 
 ### 自定义传输
 
 实现 `IDistributedEventTransport` 的发送与异步 DecodeAsync，并编写消费循环，在消息作用域内调用 `IDistributedEventReceiver`。传输只映射信封与线上格式，不负责业务处理器事务：
 
-1. 成功须等待中枢确认；结果未知、连接或鉴权故障返回瞬态；只有该条消息原样重发永远失败才返回永久失败及稳定码。取消向上传播。
+1. 发送结果 Error 必须先脱敏，不含凭据、连接串或载荷内容；将 SDK 异常转成稳定错误码及固定格式说明。组件不再次清洗该文本，只截断到 512 字符；未处理的发送异常及回环接收异常只持久化异常类型全名，完整异常写日志。成功须等待中枢确认；结果未知、连接或鉴权故障返回瞬态；只有该条消息原样重发永远失败才返回永久失败及稳定码。取消向上传播。
 2. DecodeAsync 可从外部载荷提取业务 ID、租户与发生时间，也可异步访问 schema；不可恢复格式错误抛 `DistributedEventDecodeException`，临时依赖故障照常抛出，不能误写拒收。
 3. 传输层已判坏的消息调用 RejectAsync。ReceiveAsync／RejectAsync 成功返回后才确认；失败时保留当前消息或重新投递，不提交该分区后续位点。遵守 Inbox:ReceiveEnabled，保留传输支持范围内的接收次序。
 4. RawDistributedEvent 的短生命周期 SDK 缓冲区先复制；消息头承载链路，坐标只作诊断。登记带 event-bus 标签的健康检查。中枢专有的重同步、删除标记等能力由业务直接用 SDK，不扩充通用信封。

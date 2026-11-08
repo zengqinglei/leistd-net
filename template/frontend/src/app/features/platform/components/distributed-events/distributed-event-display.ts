@@ -61,6 +61,11 @@ export function canRecover(record: EventRecord): boolean {
       : record.status === 'pending';
 }
 
+/** 待重新解码仍属未解决拒收，可由管理员主动丢弃。 */
+export function canDiscard(record: EventRecord): boolean {
+  return 'redecodeCount' in record && ['pending', 'redecodePending'].includes(record.status);
+}
+
 export const STATUS_VARIANTS = {
   pending: 'warning',
   sent: 'success',
@@ -69,6 +74,7 @@ export const STATUS_VARIANTS = {
   failed: 'destructive',
   redecoded: 'success',
   discarded: 'secondary',
+  redecodePending: 'warning',
 } as const;
 
 /** 运维动作的显示名与记录类型保持一致。 */
@@ -97,6 +103,8 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.tenantScope': 'Current tenant',
   'distributedEvents.host': 'Host',
   'distributedEvents.noTransport': 'No transport',
+  'distributedEvents.transportChanged': 'Status changed',
+  'distributedEvents.transportReported': 'Last reported',
   'distributedEvents.last24Hours': 'Last 24h: {{sent}} sent · {{processed}} processed',
   'distributedEvents.refresh': 'Refresh',
   'distributedEvents.sendTest': 'Send test event',
@@ -110,8 +118,8 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.failedHelp': 'Handler retry attempts exhausted',
   'distributedEvents.rejectionHelp': 'Host inbox · Cannot decode or resolve tenant',
   'distributedEvents.views': 'Event views',
-  'distributedEvents.search': 'Exact event ID / ordering key',
-  'distributedEvents.searchRejections': 'Exact event ID',
+  'distributedEvents.search': 'Exact event ID / ordering key / trace ID / correlation ID',
+  'distributedEvents.searchRejections': 'Exact event ID / trace ID / correlation ID',
   'distributedEvents.searchCatalog': 'Search event name',
   'distributedEvents.clear': 'Clear filters',
   'distributedEvents.noResults': 'No matching events',
@@ -161,6 +169,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.state.retrying': 'Retrying',
   'distributedEvents.state.redecoded': 'Re-decoded',
   'distributedEvents.state.discarded': 'Discarded',
+  'distributedEvents.state.redecodePending': 'Awaiting re-decode',
   'distributedEvents.health.healthy': 'Healthy',
   'distributedEvents.health.degraded': 'Degraded',
   'distributedEvents.health.unhealthy': 'Unhealthy',
@@ -242,7 +251,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.question.redeliver': 'Redeliver {{count}} dead letters?',
   'distributedEvents.confirmation.question.replay': 'Replay {{count}} inbox records?',
   'distributedEvents.confirmation.question.redecode': 'Re-decode {{count}} pending rejections?',
-  'distributedEvents.confirmation.question.discard': 'Discard {{count}} pending rejections?',
+  'distributedEvents.confirmation.question.discard': 'Discard {{count}} unresolved rejections?',
   'distributedEvents.confirmation.selectedQuestion.redeliver':
     'Redeliver {{count}} selected dead letters?',
   'distributedEvents.confirmation.selectedQuestion.replay':
@@ -250,7 +259,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.selectedQuestion.redecode':
     'Re-decode {{count}} selected pending rejections?',
   'distributedEvents.confirmation.selectedQuestion.discard':
-    'Discard {{count}} selected pending rejections?',
+    'Discard {{count}} selected unresolved rejections?',
   'distributedEvents.confirmation.filterQuestion.redeliver':
     'Redeliver {{count}} dead letters matching the current filter?',
   'distributedEvents.confirmation.filterQuestion.replay':
@@ -258,7 +267,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.filterQuestion.redecode':
     'Re-decode {{count}} pending rejections matching the current filter?',
   'distributedEvents.confirmation.filterQuestion.discard':
-    'Discard {{count}} pending rejections matching the current filter?',
+    'Discard {{count}} unresolved rejections matching the current filter?',
   'distributedEvents.confirmation.button.redeliver': 'Redeliver {{count}} records',
   'distributedEvents.confirmation.button.replay': 'Replay {{count}} records',
   'distributedEvents.confirmation.button.redecode': 'Re-decode {{count}} records',
@@ -266,12 +275,13 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.consequence.redeliver':
     'The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.',
   'distributedEvents.confirmation.consequence.redecode':
-    'Re-decode with the current transport. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.',
+    'Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.',
   'distributedEvents.confirmation.consequence.discard':
     'These raw messages will stop processing and will not reach consumers. Later messages are excluded.',
   'distributedEvents.confirmation.result.redeliver': 'Redelivered {{count}} · Skipped {{skipped}}',
   'distributedEvents.confirmation.result.replay': 'Replayed {{count}} · Skipped {{skipped}}',
-  'distributedEvents.confirmation.result.redecode': 'Re-decoded {{count}} · Skipped {{skipped}}',
+  'distributedEvents.confirmation.result.redecode':
+    'Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}',
   'distributedEvents.confirmation.result.discard': 'Discarded {{count}} · Skipped {{skipped}}',
 };
 //#endif

@@ -18,8 +18,8 @@
   "failedHelp": "处理器重试次数已用尽",
   "rejectionHelp": "宿主集中库 · 解码或租户解析失败",
   "views": "事件视图",
-  "search": "事件 ID／排序键精确匹配",
-  "searchRejections": "事件 ID 精确匹配",
+  "search": "精确事件 ID / 排序键 / trace ID / 关联标识",
+  "searchRejections": "精确事件 ID / trace ID / 关联标识",
   "searchCatalog": "搜索事件名",
   "clear": "清除筛选",
   "noResults": "没有匹配的事件",
@@ -67,7 +67,8 @@
     "deadLettered": "死信",
     "retrying": "重试中",
     "redecoded": "已重新解码",
-    "discarded": "已丢弃"
+    "discarded": "已丢弃",
+    "redecodePending": "待重新解码"
   },
   "health": {
     "healthy": "健康",
@@ -168,19 +169,19 @@
       "redeliver": "重投 {{count}} 条死信？",
       "replay": "重放 {{count}} 条收件箱记录？",
       "redecode": "重新解码 {{count}} 条待处理拒收？",
-      "discard": "丢弃 {{count}} 条待处理拒收？"
+      "discard": "丢弃 {{count}} 条未解决拒收？"
     },
     "selectedQuestion": {
       "redeliver": "重投已选 {{count}} 条死信？",
       "replay": "重放已选 {{count}} 条收件箱记录？",
       "redecode": "重新解码已选 {{count}} 条待处理拒收？",
-      "discard": "丢弃已选 {{count}} 条待处理拒收？"
+      "discard": "丢弃已选 {{count}} 条未解决拒收？"
     },
     "filterQuestion": {
       "redeliver": "按当前筛选重投 {{count}} 条死信？",
       "replay": "按当前筛选重放 {{count}} 条收件箱记录？",
       "redecode": "按当前筛选重新解码 {{count}} 条待处理拒收？",
-      "discard": "按当前筛选丢弃 {{count}} 条待处理拒收？"
+      "discard": "按当前筛选丢弃 {{count}} 条未解决拒收？"
     },
     "button": {
       "redeliver": "重投 {{count}} 条",
@@ -190,14 +191,16 @@
     },
     "consequence": {
       "redeliver": "事件 ID 保持不变，消费方按 ID 去重。请先处理失败原因；之后新产生的记录不受影响，记录将分批回到待发送并由调度任务发出。",
-      "redecode": "使用当前传输重新解码，成功后写入目标租户收件箱；无法解码的记录仍为待处理。之后新收到的消息不受影响。",
+      "redecode": "由匹配的接收端重新解码；Api 未注册对应传输时，转交 Worker。成功后进入目标租户收件箱，无法解码的消息仍待处理，不包含稍后收到的消息。",
       "discard": "这些原始消息将停止处理，不会投递给消费者。之后新收到的消息不受影响。"
     },
     "result": {
       "redeliver": "已重投 {{count}} 条 · 跳过 {{skipped}} 条",
       "replay": "已重放 {{count}} 条 · 跳过 {{skipped}} 条",
-      "redecode": "已重新解码 {{count}} 条 · 跳过 {{skipped}} 条",
+      "redecode": "已重新解码 {{count}} 条 · 已转交 {{deferred}} 条 · 跳过 {{skipped}} 条",
       "discard": "已丢弃 {{count}} 条 · 跳过 {{skipped}} 条"
     }
-  }
+  },
+  "transportChanged": "状态变化",
+  "transportReported": "最后上报"
 }

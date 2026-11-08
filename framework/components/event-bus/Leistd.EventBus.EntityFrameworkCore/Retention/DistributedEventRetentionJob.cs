@@ -34,8 +34,12 @@ internal sealed class DistributedEventRetentionJob<TDbContext>(
             await DeleteAsync(db => db.Set<DistributedEventInbox>().IgnoreQueryFilters()
                 .Where(x => x.Status != DistributedEventInboxStatus.Pending && x.LastModificationTime < cutoff).OrderBy(x => x.Id), ct);
             if (database.TenantId is null)
+            {
                 await DeleteAsync(db => db.Set<DistributedEventRejection>()
-                    .Where(x => x.Status != DistributedEventRejectionStatus.Pending && x.LastModificationTime < cutoff).OrderBy(x => x.Id), ct);
+                    .Where(x => (x.Status == DistributedEventRejectionStatus.Redecoded || x.Status == DistributedEventRejectionStatus.Discarded) && x.LastModificationTime < cutoff).OrderBy(x => x.Id), ct);
+                await DeleteAsync(db => db.Set<DistributedEventTransportState>()
+                    .Where(x => x.ReportedAt < cutoff).OrderBy(x => x.Instance), ct);
+            }
         }, cancellationToken);
         if (result.FailedDatabases.Count > 0 || result.UnresolvedTenants.Count > 0)
             throw new InvalidOperationException($"Distributed event retention failed in {result.FailedDatabases.Count} databases; {result.UnresolvedTenants.Count} tenants unresolved.");
