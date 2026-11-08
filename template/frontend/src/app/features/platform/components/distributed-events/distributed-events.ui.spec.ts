@@ -208,6 +208,26 @@ describe('DistributedEvents UI R1', () => {
     expect(tabs[1].textContent).toMatch(/1/);
     expect(tabs[2].textContent).toMatch(/1/);
   });
+  it.each([0, 2])('highlights abnormal snapshot counts only when positive (%i)', async (count) => {
+    await setup();
+    component.status.set({
+      ...STATUS,
+      deadLettered: count,
+      failedInbox: count,
+      pendingRejections: count,
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const values = Array.from(
+      fixture.nativeElement.querySelectorAll('app-distributed-event-statistics .tabular-nums'),
+    ) as HTMLElement[];
+    expect(values).toHaveLength(4);
+    expect(values[0].classList.contains('text-destructive')).toBe(false);
+    for (const value of values.slice(1)) {
+      expect(value.classList.contains('text-destructive')).toBe(count > 0);
+    }
+  });
   it('localizes the detail state as a badge', async () => {
     await setup({ view: 'inbox', record: '2' });
     const badge = document.querySelector('[data-testid=event-detail-status]');

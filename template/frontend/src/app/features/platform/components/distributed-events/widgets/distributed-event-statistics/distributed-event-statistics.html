@@ -50,9 +50,11 @@
           class="flex w-full flex-col items-start gap-2 p-4 text-start"
           (click)="jump('outbox', 'deadLettered')"
         >
-          <span class="text-destructive text-3xl font-semibold tabular-nums">{{
-            status.deadLettered | appNumber: 'integer' : displayLocale()
-          }}</span>
+          <span
+            class="text-3xl font-semibold tabular-nums"
+            [class.text-destructive]="status.deadLettered > 0"
+            >{{ status.deadLettered | appNumber: 'integer' : displayLocale() }}</span
+          >
           <span class="text-muted-foreground text-xs">{{ t('distributedEvents.deadHelp') }}</span>
         </button>
       </app-stat-panel>
@@ -71,9 +73,11 @@
           class="flex w-full flex-col items-start gap-2 p-4 text-start"
           (click)="jump('inbox', 'failed')"
         >
-          <span class="text-destructive text-3xl font-semibold tabular-nums">{{
-            status.failedInbox | appNumber: 'integer' : displayLocale()
-          }}</span>
+          <span
+            class="text-3xl font-semibold tabular-nums"
+            [class.text-destructive]="status.failedInbox > 0"
+            >{{ status.failedInbox | appNumber: 'integer' : displayLocale() }}</span
+          >
           <span class="text-muted-foreground text-xs">{{ t('distributedEvents.failedHelp') }}</span>
         </button>
       </app-stat-panel>
@@ -93,9 +97,11 @@
             class="flex w-full flex-col items-start gap-2 p-4 text-start"
             (click)="jump('rejections', 'pending')"
           >
-            <span class="text-destructive text-3xl font-semibold tabular-nums">{{
-              status.pendingRejections || 0 | appNumber: 'integer' : displayLocale()
-            }}</span>
+            <span
+              class="text-3xl font-semibold tabular-nums"
+              [class.text-destructive]="(status.pendingRejections ?? 0) > 0"
+              >{{ status.pendingRejections || 0 | appNumber: 'integer' : displayLocale() }}</span
+            >
             <span class="text-muted-foreground text-xs">{{
               t('distributedEvents.rejectionHelp')
             }}</span>
