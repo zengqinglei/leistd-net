@@ -1,6 +1,6 @@
 # 分布式事件组件接入缺口（beta.230 反馈）
 
-状态：进行中 · 风险档：高 · 基线：develop `48e9e62b`（组件自 `v2.0.0-beta.230` 起未改）· 前序：`2026-11-06-distributed-events.md`
+状态：已完成 · 风险档：高 · 基线：develop `48e9e62b`（组件自 `v2.0.0-beta.230` 起未改）· 前序：`2026-11-06-distributed-events.md`
 
 ## 1. 需求
 
@@ -110,4 +110,11 @@
 
 ## 4. 结果
 
-（实施后填写）
+交付：[PR #249](https://github.com/zengqinglei/leistd-net/pull/249)。框架、模板、测试及常驻文档同批交付。
+
+- 框架已实现 G1、G6、G7、G8、G9、G3，G2 补齐共同版本水位的适用条件。按用户调整，G7 前置并同时存储 TraceId 与独立 CorrelationId；三处关联标识索引列按 IsWellFormed 校验，原始消息头保留。G4 按撤回范围移出。
+- Identity／Resource 两套 AddDistributedEvents 通过 EF 10.0.14 从前一模型重新生成，原位更新迁移与条件快照；界面显示两种状态时间、按载荷开放标记隐藏正文入口，Mock、精确 E2E 定位文案、载荷关闭指引同步。
+- L1：选择器要求的 32 个框架项目共 2,771 例通过、0 失败，35 例因本机没有 Broker／Redis 而跳过；81 个框架包重新打包，四个受影响包完成隔离消费；10 个选中模板场景的生成、结构与文档检查通过。最新候选的 Identity／Resource 迁移快照 2／1 通过。
+- 定向验收：G1／G3 先验证修复前失败；审查 R1 的可编译生产基线 8 例中 4 例预期失败，修复后 24 例通过。Identity／Resource 无本地化前端组件目标 36／35、Mock 目标 14／13 通过，两形态生产 build、lint 通过；中英文四宽度有头浏览器核对无页面横向溢出。R2 的文档与文案增量通过引用和一致性检查，复用运行代码的 L1 证据。
+
+公共契约已上收到 `framework/docs/components/event-bus.md`；模板发布幂等、顺序水位、载荷关闭入口已上收到 `template/docs/standards/distributed-events.md`，索引同步 `template/docs/README.md`。完整模板阶段与真实 PostgreSQL／Broker／Redis 验证以同候选 CI 为准；合入 develop 后以 Release 全量和实际 beta 核验发布结果。
