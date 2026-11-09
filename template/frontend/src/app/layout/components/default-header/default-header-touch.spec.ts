@@ -93,7 +93,7 @@ describe('DefaultHeader on touch phones', () => {
 
     // 前提：窄屏仍显示的操作区控件都已渲染并占位，否则下面的断言测不到挤压
     // prettier-ignore
-    const shown = [
+    const shown: string[] = [
       //#if (IncludeNotifications)
       'app-notifications button',
       //#endif
