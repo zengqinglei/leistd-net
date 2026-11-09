@@ -1,6 +1,6 @@
 # 跨服务共享设置
 
-状态：实施中 · 风险档：中 · 基线：develop `b21cf8b1`
+状态：已完成 · 风险档：中 · 基线：develop `b21cf8b1` · 关联：[#257](https://github.com/zengqinglei/leistd-net/pull/257)，`2.0.0-beta.272`
 
 ## 1. 需求
 

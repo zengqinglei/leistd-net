@@ -1,6 +1,6 @@
 # 模板默认接入 OpenTelemetry 指标与追踪
 
-状态：实施完成，待审查 · 风险档：中 · 基线：develop（含 PR #257 合并提交 `325735c7`） · 实施：Codex · 审查与跟进：Claude
+状态：已完成（Claude 代码审查通过） · 风险档：中 · 基线：develop（含 PR #257 合并提交 `325735c7`） · 实施：Codex · 审查与跟进：Claude
 
 ## 1. 需求
 
