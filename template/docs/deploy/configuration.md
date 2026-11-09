@@ -46,6 +46,34 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 | `OAuth:ClientCredentialsAccessTokenLifetime` | 机器客户端访问令牌寿命，默认 2 小时；用户访问令牌另由 `OAuth:AccessTokenLifetime` 控制 |
 <!--#endif-->
 
+## 遥测导出
+
+Api 默认采集 ASP.NET Core、HttpClient 与 .NET 运行时指标和追踪；仅当 `OTEL_EXPORTER_OTLP_ENDPOINT` 非空白时，才同时启用指标与追踪的 OTLP 推送。未配置时不登记导出器；日志继续走 Serilog，不导出到 OTLP。DbMigrator 不接遥测。
+
+| 环境变量 | 用途 |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector 基地址；也是两种信号唯一的启用开关 |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | 默认 `grpc`，通常配 `http://collector:4317`；`http/protobuf` 通常配 `http://collector:4318`，通用 endpoint 不加 `/v1/metrics` 或 `/v1/traces` |
+| `OTEL_SERVICE_NAME` | 指标与追踪共同的服务名称；各服务分别设置 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Collector 认证头，按官方格式配置，由部署环境注入 |
+
+本项目使用逐信号 `AddOtlpExporter()`；当前版本不读取 `OTEL_EXPORTER_OTLP_METRICS_*`、`OTEL_EXPORTER_OTLP_TRACES_*` 的端点、协议、认证头覆盖，详见 [OTLP 导出器支持表](https://github.com/open-telemetry/opentelemetry-dotnet/blob/core-1.20.1/src/OpenTelemetry.Exporter.OpenTelemetryProtocol/README.md#environment-variables)。不要改用会同时启用日志的 `UseOtlpExporter()`。
+
+Compose 只转发 `backend.environment` 显式列出的变量；启用时将上表变量加入该清单，按需要同步 `.env.example`。仅写入 `.env` 不会传入容器。例如在 `backend.environment` 添加：
+
+```yaml
+OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-grpc}
+OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-CompanyName.ProjectName}
+OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+```
+
+排障先确认容器实际收到变量，再检查协议、地址、Collector 接收管道与服务名称；采集器不可达不会阻止应用启动。
+
+自建 Collector 建议仅集群内可达；托管端点按服务商要求配置认证与网络。进入 Prometheus 可经 Collector 转换或使用其 [OTLP 接收能力](https://prometheus.io/docs/guides/opentelemetry/)。本项目不暴露 `/metrics`；确需拉取时自行采用 [Prometheus ASP.NET Core 导出器](https://github.com/open-telemetry/opentelemetry-dotnet/blob/core-1.20.1/src/OpenTelemetry.Exporter.Prometheus.AspNetCore/README.md)，端点放单独内部端口，网关不转发，预发布包的维护由项目承担；Worker 不使用仅面向开发内循环的 HttpListener 导出器。
+
+健康端点 `/api/health/live`、`/api/health/ready` 不导出服务端 span，也不计入 `http.server.request.duration`；活动请求数与 Kestrel 连接指标不在排除范围内。业务采集命名与 Worker 接入见 [后端规范 §7](../standards/coding-backend.md#7-异常与日志)。
+
 ## 配置与机密的分层
 
 <!--#if (SpaFrontend)-->

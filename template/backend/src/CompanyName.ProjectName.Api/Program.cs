@@ -94,6 +94,7 @@ try
 
     // 请求体沿用 Kestrel 默认上限（约 30 MB）：需要更大上传的端点用 [RequestSizeLimit] / [RequestFormLimits] 单独放宽
     builder.AddMyProjectLogging();
+    builder.AddMyProjectTelemetry();
 
     builder.Services.AddDomainServices();
 #if (IncludeDistributedEvents)
@@ -236,11 +237,11 @@ try
     app.MapHealthChecks("/api/health/live", new HealthCheckOptions
     {
         Predicate = registration => registration.Tags.Contains("live")
-    }).AllowAnonymous();
+    }).AllowAnonymous().DisableHttpMetrics();
     app.MapHealthChecks("/api/health/ready", new HealthCheckOptions
     {
         Predicate = registration => registration.Tags.Contains("ready")
-    }).AllowAnonymous();
+    }).AllowAnonymous().DisableHttpMetrics();
 
     app.UseRouting();
     app.UseCors();
