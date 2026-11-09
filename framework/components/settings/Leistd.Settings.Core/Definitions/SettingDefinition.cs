@@ -32,6 +32,8 @@ internal sealed class SettingDefinition : ISettingDefinition
     public string? Group { get; set; }
     public bool IsVisibleToClients { get; set; }
 
+    public bool IsShared { get; set; }
+
     public bool IsEncrypted { get; set; }
 
     public SettingValueType ValueType { get; set; }

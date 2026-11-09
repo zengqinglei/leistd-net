@@ -25,6 +25,14 @@ public interface ISettingDefinition
     /// <summary>是否允许下发到客户端，默认 <see langword="false"/>。</summary>
     bool IsVisibleToClients { get; set; }
 
+    /// <summary>是否共享给其他服务只读，默认 <see langword="false"/>。</summary>
+    /// <remarks>
+    /// <para>共享设置经 <c>MapSharedSettings</c> 映射的端点按租户下发生效值（租户层的值，没有时为代码默认值），
+    /// 不含个人覆盖；其他服务用 <c>Leistd.Settings.ServiceClient</c> 的读取器读取。</para>
+    /// <para>只有允许租户层、非机密、非进程级的设置可以共享，否则首次访问定义时抛出 <see cref="InvalidOperationException"/>。</para>
+    /// </remarks>
+    bool IsShared { get; set; }
+
     /// <summary>是否为机密设置：值落库前加密，读取时解密。</summary>
     /// <remarks>
     /// <para>用于口令、令牌一类的值。加解密默认用宿主的 Data Protection（<c>IDataProtectionProvider</c>），

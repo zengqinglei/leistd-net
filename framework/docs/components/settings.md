@@ -12,6 +12,7 @@
 | 需要持久化设置值 | 引用 `Leistd.Settings.EntityFrameworkCore` |
 | 设置页：分层读写、值域校验、机密只写 | `Leistd.Settings.AspNetCore` 的 `MapSettings()` |
 | 管理员在运行期改部署配置（日志级别、发信参数、第三方登录的客户端凭据），消费方照常读 `IOptionsMonitor<T>` | `Leistd.Settings.Hosting` 的 `AddHostSettings()` |
+| 一个服务管理、其他服务只读的租户设置（安全策略开关、组织启用的语言） | 提供方定义上 `IsShared = true` 并 `MapSharedSettings()`；使用方 `Leistd.Settings.ServiceClient` 的 `AddSharedSettingsClient` 与 `ISharedSettingReader` |
 
 连接与签名凭据、信任边界、协议参数和事务隔离级别属于部署配置，不应进入运行期设置。唯一的例外是管理员在运行期维护的第三方集成客户端凭据，见[注意事项](#注意事项)。
 
@@ -29,6 +30,9 @@ dotnet add package Leistd.Settings.AspNetCore
 
 # 宿主级设置 → 配置源 → IOptionsMonitor
 dotnet add package Leistd.Settings.Hosting
+
+# 读取其他服务共享的设置
+dotnet add package Leistd.Settings.ServiceClient
 ```
 
 ## 注册
@@ -191,6 +195,51 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 }
 ```
 
+### 跨服务共享设置
+
+提供方在定义上标记共享，映射一个只认机器主体的端点：
+
+```csharp
+public class StepUpSettingDefinitionProvider : ISettingDefinitionProvider
+{
+    public void Define(ISettingDefinitionContext context)
+    {
+        context.Add("Security.StepUp.Enabled", "true").AsBoolean().IsShared = true;
+        context.Add("Security.StepUp.WindowMinutes", "15").AsInteger(1, 60).IsShared = true;
+    }
+}
+```
+
+```csharp
+app.MapGroup("/api/v1/internal/shared-settings")
+    .MapSharedSettings(options => options.Policy = "App.SharedSettings.Read");
+```
+
+使用方登记提供方，逐项声明读不到时的兜底值，并在返回的构建器上先挂弹性管道、再按[服务客户端](./service-client.md#注册)挂机器认证（弹性管道在外层，总时限才包住取令牌）：
+
+<!-- no-compile: 弹性管道来自 Microsoft.Extensions.Http.Resilience，不在本家族闭包内 -->
+```csharp
+public sealed class IdentitySharedSettingsOptions : SharedSettingsClientOptions;
+
+var identity = builder.Services.AddSharedSettingsClient<IdentitySharedSettingsOptions>(
+    "IdentitySharedSettings",
+    shared => shared
+        .Add("Security.StepUp.Enabled", fallback: "true")
+        .Add("Security.StepUp.WindowMinutes", fallback: "15"),
+    configSectionPath: "Leistd:ServiceClients:Identity");
+identity.AddStandardResilienceHandler();
+// 随后挂机器认证，配置节同上
+```
+
+按当前租户读取；需要知道值是否可信时看来源：
+
+<!-- no-compile: reader 为注入的 ISharedSettingReader -->
+```csharp
+var enabled = await reader.GetAsync<bool>("IdentitySharedSettings", "Security.StepUp.Enabled", ct);
+var window = await reader.GetAsync("IdentitySharedSettings", "Security.StepUp.WindowMinutes", ct);
+if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜底值 */ }
+```
+
 ## 接口参考
 
 | 成员 | 说明 |
@@ -219,6 +268,12 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 | `AddSettingsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddSettingsCore()` |
 | `ConfigureSettings(modelBuilder)` | 映射 `SettingRecord` 实体 |
 | `MapSettings(configure)` | AspNetCore 包：`GET /`、`PUT /current-user`、`PUT /current-tenant`；`AccessPolicy` 与 `TenantWritePolicy` 均必填（组件不套宿主默认策略），`GroupPolicies` 可选（分组 → 策略名），端点名前缀 `SettingEndpoints.NamePrefix` |
+| `ISettingDefinition.IsShared` | 共享给其他服务只读；只允许非机密、允许租户层、非进程级的设置，否则首次访问定义时抛 `InvalidOperationException` |
+| `MapSharedSettings(configure)` | AspNetCore 包：`GET /{tenant}`（`host` 或租户 Id）返回 `SharedSettingsDto` 与强 ETag；`Policy` 必填，端点名 `SharedSettingEndpoints.GetName` |
+| `SharedSettingsDto` | 共享端点的响应：`Values`（设置名 → 生效值）；两端按 `JsonSerializerDefaults.Web` 序列化 |
+| `AddSharedSettingsClient<TOptions>(provider, declare, configure?, configSectionPath?)` | ServiceClient 包：登记提供方与每项兜底值，返回该提供方的 `IHttpClientBuilder`；同一提供方只能登记一次 |
+| `ISharedSettingReader.GetAsync(provider, name, ct)` / `GetAsync<T>` | Scoped，按调用方作用域的当前租户读取（缓存进程内共享），返回 `SharedSettingValue(Value, Source)`；`Source` 为 `Current`、`Stale` 或 `Fallback`。未登记的提供方或未声明的设置名抛 `InvalidOperationException` |
+| `SharedSettingsClientOptions` | `Path`、`FreshFor`、`MaxStaleness`，另有服务客户端的 `BaseAddress` 等；每个提供方派生一个具体类型 |
 | `AddHostSettings(bind, configSectionPath?)` / `UseHostSettings()` | Hosting 包：声明绑定并注册应用与刷新，刷新周期绑定 `configSectionPath`（默认 `Leistd:Settings:Hosting`），重复调用时不同设置的绑定累加、完全相同的绑定不重复生效，同一设置名绑定不同（含只换兜底值或键的顺序）或换用另一配置节时在该次调用抛出；构建后挂配置源 |
 | `HostSettingBindingBuilder.Bind(name, keys, fallback?)` / `BindOption<TOptions>(name, section, property)` | 设置 → 配置键；后者兜底值取选项类型上的属性默认值，并参与整组校验 |
 
@@ -227,6 +282,17 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 | 键 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `RefreshInterval` | `TimeSpan` | `00:00:30` | 其它实例上改的宿主级设置多久在本实例生效；不小于 1 秒 |
+
+## 配置项（Leistd:ServiceClients:{提供方}）
+
+`AddSharedSettingsClient` 绑定的配置节，默认 `Leistd:ServiceClients:{provider}`，可用 `configSectionPath` 指向已有的服务配置节。启动时校验，消息按实际路径报键。
+
+| 键 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `BaseAddress` | `string` | — | 提供方基址，同服务客户端 |
+| `Path` | `string` | `api/v1/internal/shared-settings` | 提供方 `MapSharedSettings` 路由组的相对路径 |
+| `FreshFor` | `TimeSpan` | `00:01:00` | 新鲜期，期内不回源；须大于 0 |
+| `MaxStaleness` | `TimeSpan` | `01:00:00` | 新鲜期结束后、提供方暂不可达时还能用旧值的时长；0 表示不用旧值 |
 
 ## 实现行为
 
@@ -282,6 +348,13 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
   指定了存储位置后默认的密钥静态加密不再自动生效，要显式配置（如上例的证书）。共用密钥存储的宿主都能解这批机密，存储的访问权限就是边界。
   切换到专用实例后，宿主密钥环加密的旧值解不开，要重新写入。
   `Leistd.Settings.Core` 因此引用 `Microsoft.AspNetCore.DataProtection.Abstractions`，这是纯抽象包，非 Web 宿主同样可用；架构门禁可按 `*.Abstractions` 放行。
+- 共享端点按路径里的租户读取：注册了 `ITenantStore` 时租户须存在且启用，没有注册多租户时只接受 `host`，其余一律 404。
+  切到该租户后开新工作单元读存储，值为租户层的值、没有时为代码默认值；共享设置不会有个人覆盖、进程级或密文，所以不经 `ISettingProvider`，也不受调用方主体的影响。
+  ETag 取按名称排序后响应体的 SHA-256，`If-None-Match` 命中回 304。
+- 共享读取器按（提供方，租户）在进程内缓存整份值（HybridCache 一级，同键并发回源合并为一次），新鲜期过后带上一次的 ETag 重验证。
+  提供方暂不可达（传输失败、超时、408/429/5xx）时：有保留期内的旧值就用它，单次回源最多等 1 秒，超时先交旧值、原回源继续并写回，同键节流 30 秒，每个节流周期一条 Warning；
+  没有旧值时返回兜底值、不缓存失败，下一次照常回源。明确失败（取令牌被拒、401、403、响应无效）清掉旧值并记 Error，404（租户不存在）记 Warning，都返回兜底值，
+  之后再遇暂时故障也不恢复旧值。提供方没有共享某项已声明的设置时该项返回兜底值，每次回源记一条 Warning。除取消与调用错误外读取器不抛异常。
 - 匿名调用只回落到租户级，不查用户级。
 - `ISettingProvider` 为 Scoped，一次请求内每个租户、每个用户的每个层级只查一次库并复用结果：缓存按 `ICurrentTenant`（未注册多租户时按宿主一份）与当前用户分键，
   同一作用域里 `CurrentTenant.Change` 后读到目标租户的值。它只选对快照；持久化连到哪个租户的库仍由工作单元决定（一个工作单元不能改变连接归属）。
@@ -331,6 +404,8 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 - 框架认识的值域（类型、区间、候选）写进定义，其余规则（时区、邮箱地址、开启前提）实现 `ISettingValueValidator`，不要只在界面上限制。
 - 宿主级设置刷新需要调度器：宿主未注册 `AddInProcessBackgroundJobs()` 之类的调度器时，其它实例上的修改只在重启后生效。
 - 在租户请求里读进程级配置时，注入经 Hosting 包绑定的 `IOptionsMonitor<T>`，不要读设置存储。
+- 共享设置只用于租户级、只读的策略与组织配置。用户级的值、使用方要写回的值仍走提供方的专用端点（如账户偏好）；共享名单只扩大可读范围，不改变谁能写。
+- 兜底值按设置语义选：安全策略取更严格的一侧，显示类取部署基线。生效延迟最长为 `FreshFor`，提供方故障期间最长为 `FreshFor + MaxStaleness`；不做变更推送。
 
 ## 相关
 

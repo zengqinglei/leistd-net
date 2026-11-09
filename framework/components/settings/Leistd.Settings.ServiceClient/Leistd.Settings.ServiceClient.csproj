@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 响应形状 SharedSettingsDto 与租户上下文 -->
+    <ProjectReference Include="..\Leistd.Settings.Core\Leistd.Settings.Core.csproj" />
+    <!-- 回源走服务客户端管道：传输故障分类、关联标识；机器认证由宿主在返回的构建器上组合 -->
+    <ProjectReference Include="..\..\service-client\Leistd.ServiceClient.Core\Leistd.ServiceClient.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 进程内一级缓存与同键单飞，与多租户路由缓存同一官方实现 -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Leistd.Settings.Tests" />
+  </ItemGroup>
+
+</Project>
