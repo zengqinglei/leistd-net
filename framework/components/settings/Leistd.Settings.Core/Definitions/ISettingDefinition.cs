@@ -27,8 +27,8 @@ public interface ISettingDefinition
 
     /// <summary>是否为机密设置：值落库前加密，读取时解密。</summary>
     /// <remarks>
-    /// <para>用于口令、令牌一类的值。加解密用宿主的 Data Protection（<c>IDataProtectionProvider</c>）；
-    /// 宿主没注册时，读写机密设置会失败，不会存成明文。</para>
+    /// <para>用于口令、令牌一类的值。加解密默认用宿主的 Data Protection（<c>IDataProtectionProvider</c>），
+    /// 可经 <see cref="Options.SettingEncryptionOptions"/> 换成专用实例；都没有时，读写机密设置会失败，不会存成明文。</para>
     /// <para>机密设置永不下发客户端：即使标记了 <see cref="IsVisibleToClients"/>，
     /// <see cref="ISettingProvider.GetAllAsync"/> 按“仅客户端可见”读取时也不包含它；该标记只表示界面上可写。</para>
     /// <para>代码默认值不加密：机密设置的默认值应当为空，由宿主在未设置时自行回落（例如回落到配置文件）。</para>

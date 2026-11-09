@@ -40,12 +40,13 @@ namespace Leistd.Settings.Management;
 /// <param name="distributedLock">按租户串行化写入；多副本部署须为跨进程实现（如 Redis）。</param>
 /// <param name="unitOfWorkManager">为每次写入开独立的事务型工作单元。</param>
 /// <param name="eventBus">发布变更事件；未注册本地事件总线时不发布。</param>
-/// <param name="dataProtectionProvider">机密设置的加解密用宿主的 Data Protection；为 <see langword="null"/> 时写入机密设置、
-/// 以及清除用户覆盖而需要解密租户层回落值时会失败。</param>
+/// <param name="dataProtectionProvider">宿主的 Data Protection，<paramref name="encryptionOptions"/> 未指定专用实例时用它加解密机密设置；
+/// 两者都没有时写入机密设置、以及清除用户覆盖而需要解密租户层回落值时会失败。</param>
 /// <param name="localizerFactory">校验失败时按请求语言取设置显示名；未启用本地化时用定义上的显示名。</param>
 /// <param name="managementOptions">提供显示名词条所在的资源类型。</param>
 /// <param name="currentTenant">锁键按它取租户；未注册多租户时全部写入共用宿主那把锁。</param>
 /// <param name="unitOfWorkOptions">宿主的工作单元默认选项，提供隔离级别与超时；事务开关固定为开启。</param>
+/// <param name="encryptionOptions">可指定机密设置专用的 Data Protection，见 <see cref="SettingEncryptionOptions.DataProtectionProvider"/>。</param>
 public sealed class DefaultSettingManager(
     ISettingDefinitionManager definitionManager,
     ISettingStore store,
@@ -58,11 +59,12 @@ public sealed class DefaultSettingManager(
     IStringLocalizerFactory? localizerFactory = null,
     IOptions<SettingManagementOptions>? managementOptions = null,
     ICurrentTenant? currentTenant = null,
-    IOptions<UnitOfWorkOptions>? unitOfWorkOptions = null) : ISettingManager
+    IOptions<UnitOfWorkOptions>? unitOfWorkOptions = null,
+    IOptions<SettingEncryptionOptions>? encryptionOptions = null) : ISettingManager
 {
-    // 与读取器同一用途，写入的密文它才解得开
+    // 与读取器同一判定、同一用途，写入的密文它才解得开
     private readonly IDataProtector? _protector =
-        dataProtectionProvider?.CreateProtector(DefaultSettingProvider.ProtectionPurpose);
+        DefaultSettingProvider.CreateProtector(encryptionOptions, dataProtectionProvider);
 
     /// <inheritdoc />
     public async Task SetAsync(

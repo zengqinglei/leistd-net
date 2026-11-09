@@ -23,9 +23,9 @@ public static class DependencyInjection
     /// <see cref="ISettingProvider"/> 为 Scoped，按当前租户与当前用户缓存，同一作用域里每个租户、每个用户只查一次库。</para>
     /// <para>还需要一个 <see cref="ISettingStore"/> 实现（如 <c>AddSettingsEfCore&lt;TDbContext&gt;()</c>），
     /// 缺失时解析 <see cref="ISettingProvider"/> 失败。</para>
-    /// <para>机密设置（<see cref="ISettingDefinition.IsEncrypted"/>）用宿主的 Data Protection 加解密：
-    /// 宿主须 <c>AddDataProtection()</c> 并配置持久化、可共享的密钥环；没注册时只有读写机密设置会失败，
-    /// 不定义机密设置的宿主不受影响。</para>
+    /// <para>机密设置（<see cref="ISettingDefinition.IsEncrypted"/>）的加解密二选一：设了 <see cref="SettingEncryptionOptions.DataProtectionProvider"/>
+    /// 就用这个专用实例（应用名不同的多个宿主共用机密设置时用它），否则用宿主 <c>AddDataProtection()</c> 注册的实例；
+    /// 都要配置持久化、可共享的密钥环。两者都没有时只有读写机密设置会失败，不定义机密设置的宿主不受影响。</para>
     /// <para>默认写入入口 <see cref="DefaultSettingManager"/> 按租户取 <c>IDistributedLock</c>、每次写入在独立的事务型工作单元里提交，
     /// 宿主因此须注册锁（单副本 <c>AddMemoryLocalLock()</c>，多副本 <c>AddRedisDistributedLock(...)</c>，否则副本之间不互斥）
     /// 与工作单元（<c>AddUnitOfWork()</c>）。只读设置的宿主同样如此：本方法总会登记默认写入入口。
@@ -52,6 +52,7 @@ public static class DependencyInjection
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, SettingManagerDependencyCheck>(
             sp => new SettingManagerDependencyCheck(sp.GetRequiredService<IServiceScopeFactory>(), services)));
         services.AddOptions<SettingManagementOptions>();
+        services.AddOptions<SettingEncryptionOptions>();
         if (configure is not null)
         {
             services.Configure(configure);

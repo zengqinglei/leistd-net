@@ -7,7 +7,9 @@ using Leistd.Settings.Definitions;
 using Leistd.Settings.Management;
 using Leistd.Settings.Stores;
 using Leistd.Settings.Exceptions;
+using Leistd.Settings.Options;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Resolution;
 
@@ -21,20 +23,23 @@ namespace Leistd.Settings.Resolution;
 /// <param name="definitionManager">设置定义。</param>
 /// <param name="store">设置值存储。</param>
 /// <param name="currentUser">当前用户；匿名时只回落到租户级。</param>
-/// <param name="dataProtectionProvider">机密设置的解密用宿主的 Data Protection；为 <see langword="null"/> 时只有读取落过库的机密设置会失败。</param>
+/// <param name="dataProtectionProvider">宿主的 Data Protection，<paramref name="encryptionOptions"/> 未指定专用实例时用它解密机密设置；
+/// 两者都没有时只有读取落过库的机密设置会失败。</param>
 /// <param name="currentTenant">缓存按它分键；未注册多租户时为 <see langword="null"/>，全部读取共用宿主一份。</param>
+/// <param name="encryptionOptions">可指定机密设置专用的 Data Protection，见 <see cref="SettingEncryptionOptions.DataProtectionProvider"/>。</param>
 public sealed class DefaultSettingProvider(
     ISettingDefinitionManager definitionManager,
     ISettingStore store,
     ICurrentUser currentUser,
     IDataProtectionProvider? dataProtectionProvider = null,
-    ICurrentTenant? currentTenant = null) : ISettingProvider
+    ICurrentTenant? currentTenant = null,
+    IOptions<SettingEncryptionOptions>? encryptionOptions = null) : ISettingProvider
 {
     // 机密设置的用途字符串，固定不变（改动会让已存密文不可解）；每个设置再以设置名作子用途，密文不能挪到别的设置名下。
     internal const string ProtectionPurpose = "Leistd.Settings.EncryptedValue.v1";
 
     // 按官方用法在构造时创建一次、之后复用（IDataProtector 线程安全）
-    private readonly IDataProtector? _protector = dataProtectionProvider?.CreateProtector(ProtectionPurpose);
+    private readonly IDataProtector? _protector = CreateProtector(encryptionOptions, dataProtectionProvider);
 
     // 存储按调用时的租户隐式读取，缓存键因此必须带租户；用户层再按用户分开
     private readonly Dictionary<(Guid? TenantId, string? UserId), Snapshot> _snapshots = [];
@@ -104,6 +109,12 @@ public sealed class DefaultSettingProvider(
         return Decrypt(_protector, definition.Name, value);
     }
 
+    // 专用实例优先于宿主的：读写两端经同一判定取保护器，写入的密文读取端才解得开
+    internal static IDataProtector? CreateProtector(
+        IOptions<SettingEncryptionOptions>? options,
+        IDataProtectionProvider? hostProvider)
+        => (options?.Value.DataProtectionProvider ?? hostProvider)?.CreateProtector(ProtectionPurpose);
+
     // 解密一条落过库的机密值；写入入口算清除后的回落值时也用它
     internal static string Decrypt(IDataProtector? protector, string name, string value)
     {
@@ -118,7 +129,8 @@ public sealed class DefaultSettingProvider(
             // 密钥丢失、密钥环未共享或密文被篡改；拒绝而不是回退到默认值。消息只带设置名，不回显密文
             throw new InvalidOperationException(
                 $"Setting '{name}' could not be decrypted with the current Data Protection key ring. " +
-                "Check that this process shares the key ring and application name of the process that wrote it.",
+                "Check that this process uses the key ring and application name of the process that wrote it " +
+                $"(the host's Data Protection, or {nameof(SettingEncryptionOptions)}.{nameof(SettingEncryptionOptions.DataProtectionProvider)} when set).",
                 exception);
         }
     }
@@ -126,7 +138,9 @@ public sealed class DefaultSettingProvider(
     // 只有真正读写机密设置时才要求 Data Protection：不定义机密设置的宿主不必配置它
     internal static InvalidOperationException MissingDataProtection(string name) =>
         new($"Setting '{name}' is encrypted, but no {nameof(IDataProtectionProvider)} is registered. " +
-            "Call AddDataProtection() with a persistent key ring shared by every process that reads or writes settings.");
+            "Call AddDataProtection(), or set " +
+            $"{nameof(SettingEncryptionOptions)}.{nameof(SettingEncryptionOptions.DataProtectionProvider)}, " +
+            "with a persistent key ring shared by every process that reads or writes settings.");
 
     // 作废本作用域的记忆化结果，下次读取重新查存储；由写入入口在写入后调用
     internal void Invalidate() => _snapshots.Clear();
