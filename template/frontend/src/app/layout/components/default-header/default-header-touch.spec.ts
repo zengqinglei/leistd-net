@@ -128,7 +128,13 @@ describe('DefaultHeader on touch phones', () => {
     // 导航区 overflow-hidden：链接伸出右缘的部分会被裁掉
     const nav = host.querySelector('app-page-breadcrumb nav')!;
     expect(right).toBeLessThanOrEqual(nav.getBoundingClientRect().right + 0.5);
-    expect(host.querySelector('[data-slot="breadcrumb-page"]')!.textContent!.trim()).toBe(TITLE);
+    const title = host.querySelector<HTMLElement>('[data-slot="breadcrumb-page"]')!;
+    expect(title.textContent!.trim()).toBe(TITLE);
+    // 末级被截断但仍占位、在导航区内：只查文字时，缩到零宽或被裁掉也会通过
+    const titleBox = title.getBoundingClientRect();
+    expect(titleBox.width).toBeGreaterThan(0);
+    expect(titleBox.left).toBeGreaterThanOrEqual(right);
+    expect(titleBox.right).toBeLessThanOrEqual(nav.getBoundingClientRect().right + 0.5);
 
     const container = host.querySelector<HTMLElement>('header > div')!;
     expect(container.clientWidth).toBeLessThanOrEqual(390);
