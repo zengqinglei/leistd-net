@@ -38,7 +38,11 @@
       }
       @if (parent(); as parent) {
         <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
-        <li hlmBreadcrumbItem class="min-w-0 shrink" data-testid="breadcrumb-parent">
+        <li
+          hlmBreadcrumbItem
+          class="min-w-0 shrink pointer-coarse:min-w-11"
+          data-testid="breadcrumb-parent"
+        >
           <a
             hlmBreadcrumbLink
             class="inline-flex min-w-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"

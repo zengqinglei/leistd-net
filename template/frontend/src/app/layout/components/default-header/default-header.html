@@ -121,12 +121,15 @@
           }
         }
         <!--#endif-->
-        <app-theme-mode-toggle />
+        <!-- 窄屏页头只留通知与模拟状态，主题与语言在个人设置的偏好里改，给面包屑上级留出触屏目标 -->
+        <div class="hidden items-center gap-3 sm:flex">
+          <app-theme-mode-toggle />
+          <!--#if (IncludeLocalization)-->
+          <app-language-switcher />
+          <!--#endif-->
+        </div>
         <!--#if (IncludeNotifications)-->
         <app-notifications />
-        <!--#endif-->
-        <!--#if (IncludeLocalization)-->
-        <app-language-switcher />
         <!--#endif-->
         @if (layout() === 'topbar') {
           <!-- 侧栏布局里头像在侧栏底部；顶栏布局没有侧栏，放在最右 -->
