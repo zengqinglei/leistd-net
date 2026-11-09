@@ -21,7 +21,6 @@
         } @else {
           <button
             hlmSidebarTrigger
-            size="icon"
             position="bottom"
             [attr.aria-label]="t('common.toggleSidebar')"
             [hlmTooltip]="sidebarTip"
@@ -54,7 +53,7 @@
         }
       </div>
 
-      <div class="flex items-center gap-2 md:gap-4">
+      <div class="flex items-center gap-3">
         @if (layout() === 'topbar') {
           <!-- 搜索入口：打开命令面板（⌘K / Ctrl+K）。窄屏收成图标按钮；页面自带搜索入口时不重复显示。 -->
           @if (!layoutService.pageHasSearch()) {
@@ -62,6 +61,7 @@
               type="button"
               hlmBtn
               variant="outline"
+              size="sm"
               class="text-muted-foreground hidden w-56 justify-start font-normal md:inline-flex"
               data-testid="topbar-search"
               (click)="commandPalette.open()"
@@ -74,7 +74,7 @@
               type="button"
               hlmBtn
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               class="md:hidden"
               [attr.aria-label]="t('layout.commandPalette.search')"
               (click)="commandPalette.open()"

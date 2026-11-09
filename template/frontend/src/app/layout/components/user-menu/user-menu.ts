@@ -67,7 +67,7 @@ interface UserMenuItem {
         <button
           hlmBtn
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           class="rounded-full"
           data-testid="user-menu-trigger"
           [hlmDropdownMenuTrigger]="userMenu"

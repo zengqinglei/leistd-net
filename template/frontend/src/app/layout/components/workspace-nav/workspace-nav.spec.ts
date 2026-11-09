@@ -222,6 +222,69 @@ describe('WorkspaceNav overflow', () => {
     });
   });
 });
+/** 页头右侧簇：与主题等控件同排，相邻控件间距由簇的 gap 决定。 */
+@Component({
+  selector: 'app-test-end-host',
+  imports: [WorkspaceNav],
+  template: `<div class="flex items-center gap-3">
+    <span data-testid="before" class="size-8"></span><app-workspace-nav placement="end" /><span
+      data-testid="after"
+      class="size-8"
+    ></span>
+  </div>`,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class EndHost {}
+
+describe('WorkspaceNav end placement', () => {
+  function render(groups: MenuGroup[]) {
+    TestBed.configureTestingModule({
+      // prettier-ignore
+      providers: [
+        provideRouter([]),
+        { provide: NavigationService, useValue: { menuGroups: signal(groups), isItemActive: () => false } },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+      ],
+    });
+    const fixture = TestBed.createComponent(EndHost);
+    fixture.detectChanges();
+    const root: HTMLElement = fixture.nativeElement;
+    const gap = () =>
+      root.querySelector('[data-testid="after"]')!.getBoundingClientRect().left -
+      root.querySelector('[data-testid="before"]')!.getBoundingClientRect().right;
+    return { root, gap };
+  }
+
+  it('takes no slot in the header cluster when there are no end items', () => {
+    const { root, gap } = render([
+      { label: 'Workspace', items: [{ label: 'Home', icon: 'lucideGauge', route: '/workspace' }] },
+    ]);
+
+    expect(getComputedStyle(root.querySelector('app-workspace-nav')!).display).toBe('none');
+    expect(gap()).toBe(12);
+  });
+
+  it('shows 32px icon buttons spaced like the rest of the cluster', () => {
+    const { root } = render([
+      {
+        label: 'Settings',
+        placement: 'end',
+        items: [
+          { label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' },
+          { label: 'Layers', icon: 'lucideLayers', route: '/workspace/layers' },
+        ],
+      },
+    ]);
+
+    const [first, second] = Array.from(root.querySelectorAll('app-workspace-nav a[hlmBtn]')).map(
+      (link) => link.getBoundingClientRect(),
+    );
+    expect(first.height).toBe(32);
+    expect(second.left - first.right).toBe(12);
+  });
+});
 //#if (IncludeLocalization)
 
 /**

@@ -11,7 +11,7 @@
         hlmSheetTrigger
         hlmBtn
         variant="ghost"
-        size="icon"
+        size="icon-sm"
         class="md:hidden"
         data-testid="workspace-nav-trigger"
         [attr.aria-label]="t('layout.topbar.openNavigation')"
@@ -139,12 +139,12 @@
   } @else if (items().length) {
     <!-- 与主题、通知、语言同一排，用同尺寸的 ghost 图标按钮，名称放进提示与可访问名。没有
          placement:'end' 的分组时整个 nav 不渲染，空的导航地标对读屏用户是噪音。 -->
-    <nav class="hidden items-center gap-2 md:flex" [attr.aria-label]="endNavLabel()">
+    <nav class="flex items-center gap-3" [attr.aria-label]="endNavLabel()">
       @for (item of items(); track item.route) {
         <a
           hlmBtn
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           class="aria-[current=page]:bg-muted"
           [routerLink]="item.route"
           [attr.aria-current]="isItemActive(item) ? 'page' : null"
