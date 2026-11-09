@@ -213,6 +213,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 | `ISettingManagementService` | 设置页用例：`GetAsync`、`SetForCurrentUserAsync`、`SetForCurrentTenantAsync` |
 | `SettingOutputDto` / `SetSettingInputDto` | 设置页的读写形状 |
 | `SettingErrorCodes` | 组件抛出的错误码，默认中英译文随包分发 |
+| `SettingEncryptionOptions.DataProtectionProvider` | 机密设置专用的 Data Protection；不设时用宿主的 |
 | 默认 HTTP 状态 | 组件默认状态：宿主限定与身份拒绝 → 403，不可见设置 → 404。由 `AddSettingsCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `AddSettingsCore(services, configure?)` | 注册定义管理器、解析器、写入入口、设置页用例与写入依赖的启动检查；`SettingManagementOptions` 给翻译资源与默认分组 |
 | `AddSettingsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddSettingsCore()` |
@@ -264,8 +265,22 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 - 被绑定设置的代码默认值是部署基线：在 `PostDefine` 阶段逐个配置提供程序查绑定的键（跳过宿主设置配置源本身，后加入的源优先），
   按定义的值元数据归一，认不出时用兜底值；机密设置没有默认值。被绑定的设置必须已定义且是进程级，否则首次访问定义时抛出。
 - `DisplayName` 与 `Group` 原样返回、不翻译（定义只加载一次，拿不到请求 culture）；`Group` 只承载分组标识，未分组返回 `null`。
-- 机密设置（`IsEncrypted`）：`ISettingManager` 写入前加密，`ISettingProvider` 读出落库值时解密，用宿主的 Data Protection；宿主须配置持久化、可共享的密钥环并纳入备份。
+- 机密设置（`IsEncrypted`）：`ISettingManager` 写入前加密，`ISettingProvider` 读出落库值时解密，默认用宿主的 Data Protection；宿主须配置持久化、可共享的密钥环并纳入备份。
   未注册 Data Protection 或密文无法解密时抛 `InvalidOperationException`（API 边界为 500），不回落默认值。
+- 应用名不同的多个宿主读写同一批机密设置（如后台写、门户读）时，不要为此合并宿主的应用名：那会让各宿主的 Cookie、防伪令牌互相解得开。
+  给每个宿主设同一个专用实例，即同一密钥存储、同一应用名，写法同官方 `CookieAuthenticationOptions.DataProtectionProvider`：
+
+  ```csharp
+  builder.Services.Configure<SettingEncryptionOptions>(options =>
+      options.DataProtectionProvider = DataProtectionProvider.Create(
+          new DirectoryInfo("/var/lib/myproject/setting-keys"),
+          dataProtection => dataProtection.SetApplicationName("MyProject.Settings"),
+          keyEncryptionCertificate));
+  ```
+
+  这个密钥环里的密钥要用来解长期保存的密文：密钥存储要持久（Redis 默认重启不保留）、纳入备份、不删除过期密钥；
+  指定了存储位置后默认的密钥静态加密不再自动生效，要显式配置（如上例的证书）。共用密钥存储的宿主都能解这批机密，存储的访问权限就是边界。
+  切换到专用实例后，宿主密钥环加密的旧值解不开，要重新写入。
   `Leistd.Settings.Core` 因此引用 `Microsoft.AspNetCore.DataProtection.Abstractions`，这是纯抽象包，非 Web 宿主同样可用；架构门禁可按 `*.Abstractions` 放行。
 - 匿名调用只回落到租户级，不查用户级。
 - `ISettingProvider` 为 Scoped，一次请求内每个租户、每个用户的每个层级只查一次库并复用结果：缓存按 `ICurrentTenant`（未注册多租户时按宿主一份）与当前用户分键，
@@ -302,7 +317,8 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 - 设置值一律是字符串；`GetAsync<T>` 用不变文化转换，复杂结构自行序列化。
 - 跨请求的变更下一请求可见，请求内不可见；不使用分布式缓存。
 - `ISettingStore` 只能有一个实现，为第二个 DbContext 注册时在注册期拒绝。
-- 管理员在运行期维护的第三方集成客户端凭据（发信账号与口令、外部登录的 Client ID 与 Client Secret）可以做成宿主级设置，其中的口令与密钥定义为机密设置；连接串、签名与摘要密钥留在配置提供程序与密钥管理服务。机密设置的界面应只写不回显。
+- 管理员在运行期维护的第三方集成客户端凭据可以做成设置，口令与密钥定义为机密设置：整个部署共用的（发信账号与口令、外部登录的 Client ID 与 Client Secret）用宿主级，
+  各租户各自开通的（如每个租户自己的人机验证密钥）用租户级；连接串、签名与摘要密钥留在配置提供程序与密钥管理服务。机密设置的界面应只写不回显。
 - 业务写入经 `ISettingManager`；直接操作存储或实体会绕过定义校验，也不受按租户串行的保护。
 - 串行保证的范围：同一锁域内、相关写入都经默认写入入口、读取器与存储按当前工作单元新鲜读取时，候选值校验到提交之间不会插入另一次写入。
   直接写 `ISettingStore`、外部 SQL、宿主换成自带缓存的读取器都不在其内；它也不维护"其他用户的生效组合"这类规则（例如租户改了默认值，

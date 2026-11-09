@@ -1,14 +1,19 @@
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Management;
+using Leistd.Security.Users;
+using Leistd.Settings.Options;
 using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 using Leistd.TestBase.Doubles;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Leistd.Settings.Tests.TestDoubles;
 
 namespace Leistd.Settings.Tests.Core;
 
-// 机密设置：经宿主的 Data Protection 加密落库、读出解密，永不经"客户端可见"下发。
+// 机密设置：经宿主（或选项指定的专用）Data Protection 加密落库、读出解密，永不经"客户端可见"下发。
 public class SettingEncryptionTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
@@ -89,6 +94,52 @@ public class SettingEncryptionTests
         Assert.Equal("s3cret", all["Email.Password"]);
     }
 
+    // 两个宿主应用名不同、各自的密钥环互不相通：都设同一个专用实例后，一方写入的机密另一方读得出；
+    // 没设专用实例的宿主仍用自己的密钥环，解不开
+    [Fact]
+    public async Task Hosts_with_separate_key_rings_share_secrets_through_a_dedicated_data_protection()
+    {
+        var keys = Directory.CreateTempSubdirectory("leistd-settings-keys-");
+        try
+        {
+            var store = new FakeSettingStore();
+            await Manager(store, new EphemeralDataProtectionProvider(), Encryption(Dedicated(keys)))
+                .SetAsync("Api.Token", "s3cret", SettingScopes.Tenant);
+            store.Tenant["Api.Token"] = Assert.Single(store.Writes).Value!;
+
+            var readerHostRing = new EphemeralDataProtectionProvider();
+            Assert.Equal("s3cret", await Provider(store, readerHostRing, Encryption(Dedicated(keys))).GetOrNullAsync("Api.Token"));
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => Provider(store, readerHostRing).GetOrNullAsync("Api.Token"));
+        }
+        finally
+        {
+            keys.Delete(recursive: true);
+        }
+    }
+
+    // 专用实例经 AddSettingsCore 登记的选项生效，不需要宿主注册别的服务
+    [Fact]
+    public async Task The_dedicated_data_protection_is_picked_up_from_the_container()
+    {
+        var store = new FakeSettingStore();
+        var dedicated = new EphemeralDataProtectionProvider();
+        await Manager(store, new EphemeralDataProtectionProvider(), Encryption(dedicated))
+            .SetAsync("Api.Token", "s3cret", SettingScopes.Tenant);
+        store.Tenant["Api.Token"] = Assert.Single(store.Writes).Value!;
+
+        var services = new ServiceCollection().AddSettingsCore();
+        services.AddSingleton<ISettingStore>(store);
+        services.AddSingleton<ICurrentUser>(new FakeCurrentUser(UserId));
+        services.AddSingleton<ISettingDefinitionProvider, EncryptionTestDefinitionProvider>();
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+        services.Configure<SettingEncryptionOptions>(options => options.DataProtectionProvider = dedicated);
+        await using var container = services.BuildServiceProvider();
+        await using var scope = container.CreateAsyncScope();
+
+        Assert.Equal("s3cret", await scope.ServiceProvider.GetRequiredService<ISettingProvider>().GetOrNullAsync("Api.Token"));
+    }
+
     // 同一作用域先写后读：写入入口作废读取器的记忆化结果，读到的不是写入前的快照
     [Fact]
     public async Task A_write_invalidates_the_same_scope_reader()
@@ -107,11 +158,24 @@ public class SettingEncryptionTests
         Assert.Equal(2, store.HostReads);
     }
 
-    private static ISettingManager Manager(FakeSettingStore store, IDataProtectionProvider? dataProtection)
-        => new DefaultSettingManager(Definitions(), store, Provider(store, dataProtection), [], WriteDependencies.Lock(), new RecordingUnitOfWorkManager(), dataProtectionProvider: dataProtection);
+    private static ISettingManager Manager(
+        FakeSettingStore store,
+        IDataProtectionProvider? dataProtection,
+        IOptions<SettingEncryptionOptions>? encryption = null)
+        => new DefaultSettingManager(Definitions(), store, Provider(store, dataProtection, encryption), [], WriteDependencies.Lock(), new RecordingUnitOfWorkManager(), dataProtectionProvider: dataProtection, encryptionOptions: encryption);
 
-    private static DefaultSettingProvider Provider(FakeSettingStore store, IDataProtectionProvider? dataProtection)
-        => new(Definitions(), store, new FakeCurrentUser(UserId), dataProtection);
+    private static DefaultSettingProvider Provider(
+        FakeSettingStore store,
+        IDataProtectionProvider? dataProtection,
+        IOptions<SettingEncryptionOptions>? encryption = null)
+        => new(Definitions(), store, new FakeCurrentUser(UserId), dataProtection, encryptionOptions: encryption);
+
+    // 文档里的写法：同一密钥目录、同一应用名的两个实例即两个宿主共用的专用密钥环
+    private static IDataProtectionProvider Dedicated(DirectoryInfo keys)
+        => DataProtectionProvider.Create(keys, dataProtection => dataProtection.SetApplicationName("Tests.Settings"));
+
+    private static IOptions<SettingEncryptionOptions> Encryption(IDataProtectionProvider dedicated)
+        => Microsoft.Extensions.Options.Options.Create(new SettingEncryptionOptions { DataProtectionProvider = dedicated });
 
     private static SettingDefinitionManager Definitions() => new([new EncryptionTestDefinitionProvider()]);
 
