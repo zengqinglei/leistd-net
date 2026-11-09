@@ -215,9 +215,9 @@ app.MapGroup("/api/v1/internal/shared-settings")
     .MapSharedSettings(options => options.Policy = "App.SharedSettings.Read");
 ```
 
-使用方登记提供方，逐项声明读不到时的兜底值，并在返回的构建器上组合弹性管道与机器认证（弹性管道先挂、在外层）：
+使用方登记提供方，逐项声明读不到时的兜底值，并在返回的构建器上先挂弹性管道、再按[服务客户端](./service-client.md#注册)挂机器认证（弹性管道在外层，总时限才包住取令牌）：
 
-<!-- no-compile: IdentitySharedSettingsOptions 是宿主派生的选项类型，AddClientCredentials 来自 Leistd.ServiceClient.OAuth -->
+<!-- no-compile: 弹性管道来自 Microsoft.Extensions.Http.Resilience，不在本家族闭包内 -->
 ```csharp
 public sealed class IdentitySharedSettingsOptions : SharedSettingsClientOptions;
 
@@ -228,7 +228,7 @@ var identity = builder.Services.AddSharedSettingsClient<IdentitySharedSettingsOp
         .Add("Security.StepUp.WindowMinutes", fallback: "15"),
     configSectionPath: "Leistd:ServiceClients:Identity");
 identity.AddStandardResilienceHandler();
-identity.AddClientCredentials(configSectionPath: "Leistd:ServiceClients:Identity");
+// 随后挂机器认证，配置节同上
 ```
 
 按当前租户读取；需要知道值是否可信时看来源：
