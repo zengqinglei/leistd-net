@@ -63,7 +63,12 @@ import { MenuItem, NavigationService } from '../../services/navigation-service';
     provideIcons({ lucideChevronDown, lucideGauge, lucideLayers, lucideMenu, lucideSettings }),
   ],
   templateUrl: './workspace-nav.html',
-  host: { class: 'flex min-w-0 items-center gap-3', '[class.flex-1]': "placement() === 'start'" },
+  // 右侧图标组窄屏隐藏、没有条目时也隐藏：宿主连同内容一起不显示，否则空宿主在页头里多占一份 gap
+  host: {
+    class: 'min-w-0 items-center gap-3',
+    '[class]':
+      "placement() === 'start' ? 'flex flex-1' : items().length ? 'hidden md:flex' : 'hidden'",
+  },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WorkspaceNav {
