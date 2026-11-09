@@ -46,3 +46,15 @@ public record SettingOutputDto(
 /// <param name="Name">设置名称。</param>
 /// <param name="Value">设置值；<see langword="null"/> 表示清除该层级的值，回落到下一层。</param>
 public record SetSettingInputDto(string Name, string? Value);
+
+/// <summary>一个租户的共享设置生效值，由 <c>MapSharedSettings</c> 映射的端点返回。</summary>
+/// <remarks>
+/// 只含标记了 <see cref="Definitions.ISettingDefinition.IsShared"/> 的设置；值为租户层的值，没有时为代码默认值，可以是 <see langword="null"/>。
+/// 两端都按 <c>JsonSerializerDefaults.Web</c> 序列化，不随宿主的 JSON 配置变化。
+/// </remarks>
+/// <param name="Values">设置名 → 生效值。</param>
+public record SharedSettingsDto(IReadOnlyDictionary<string, string?> Values)
+{
+    /// <summary>端点路径里租户段的宿主取值；其他取值为租户 Id。</summary>
+    public const string HostSegment = "host";
+}

@@ -19,8 +19,28 @@ public sealed class SettingDefinitionManager(IEnumerable<ISettingDefinitionProvi
             provider.PostDefine(context);
         }
 
+        ValidateShared(context.GetAll());
         return context;
     }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    // 共享端点按租户下发明文生效值：机密值不能离开本服务，进程级设置没有租户维度，只有用户层的设置没有租户值
+    private static void ValidateShared(IReadOnlyList<ISettingDefinition> definitions)
+    {
+        var invalid = definitions
+            .Where(definition => definition.IsShared)
+            .Select(definition => definition.IsEncrypted ? $"'{definition.Name}' is encrypted"
+                : definition.Scopes.HasFlag(SettingScopes.Host) ? $"'{definition.Name}' is a host-scope setting"
+                : !definition.Scopes.HasFlag(SettingScopes.Tenant) ? $"'{definition.Name}' does not allow the tenant scope"
+                : null)
+            .OfType<string>()
+            .ToList();
+        if (invalid.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Only non-encrypted settings that allow the tenant scope can be shared with other services: "
+                + string.Join("; ", invalid) + ".");
+        }
+    }
 
     /// <inheritdoc />
     public ISettingDefinition? GetOrNull(string name) => _context.Value.GetOrNull(name);

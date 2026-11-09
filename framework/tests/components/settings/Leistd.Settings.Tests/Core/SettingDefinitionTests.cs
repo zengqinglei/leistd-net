@@ -50,6 +50,45 @@ public class SettingDefinitionTests
         Assert.Contains("host scope is exclusive", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>共享端点下发明文的租户值：机密、进程级与只有用户层的设置不能共享，首次访问定义时列出全部违规项。</summary>
+    /// <remarks>标记可能在 <c>PostDefine</c> 里才加上，所以在全部定义完成之后才校验。</remarks>
+    [Fact]
+    public void Only_plain_tenant_settings_can_be_shared()
+    {
+        var manager = Build(
+            new DelegateProvider(c =>
+            {
+                c.Add("Security.StepUp.Enabled", "true").IsShared = true;
+                c.Add("Display.Language", scopes: SettingScopes.All).IsShared = true;
+                c.Add("Captcha.Secret").IsEncrypted = true;
+                c.Add("Logging.MinimumLevel", "Information", SettingScopes.Host).IsShared = true;
+                c.Add("Display.Theme", scopes: SettingScopes.User).IsShared = true;
+            }),
+            new PostProvider(c => c.GetOrNull("Captcha.Secret")!.IsShared = true));
+
+        var error = Assert.Throws<InvalidOperationException>(() => manager.GetAll());
+
+        Assert.Contains("'Captcha.Secret' is encrypted", error.Message, StringComparison.Ordinal);
+        Assert.Contains("'Logging.MinimumLevel' is a host-scope setting", error.Message, StringComparison.Ordinal);
+        Assert.Contains("'Display.Theme' does not allow the tenant scope", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Security.StepUp.Enabled", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Display.Language", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Tenant_settings_can_be_shared()
+    {
+        var manager = Build(new DelegateProvider(c =>
+        {
+            c.Add("Security.StepUp.Enabled", "true").IsShared = true;
+            c.Add("Display.Language", scopes: SettingScopes.All).IsShared = true;
+            c.Add("Export.MaxRowsPerFile");
+        }));
+
+        Assert.Equal(["Display.Language", "Security.StepUp.Enabled"],
+            manager.GetAll().Where(d => d.IsShared).Select(d => d.Name).Order());
+    }
+
     // 重名会让后注册的那份定义静默失效，读取时表现为"默认值不对"，所以就地失败。
     // 定义是惰性汇总的，容器不会主动实例化管理器，因此这个失败发生在第一次访问定义时，
     // 而不是宿主启动时——测试也只能这样触发它。
