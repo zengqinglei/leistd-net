@@ -82,6 +82,7 @@
 嵌套块用 `md`，避免内外同圆角失去层次；菜单项、清除按钮跟随组件。
 
 - **当前项用中性色，不用品牌色**：侧栏菜单沿用 Spartan 的 `data-active` 样式（`sidebar-accent` 底），细描边由 `styles.css` 统一补；顶栏导航沿用 navigation-menu 的默认当前态；抽屉与设置面板里的 ghost 按钮挂 `aria-[current=page]:bg-muted`。品牌色留给主操作、焦点环与链接。
+- **页头一行同高32px**：照 shadcn 官方站点页头，页头及着陆页、认证页工具条的按钮用 `sm` / `icon-sm`，与默认头像、Logo、侧栏触发器同高，头像触发器按钮与头像同大；项间 `gap-3`，比官方 `gap-2` 略宽，是本模板的有意取舍。默认36px档留给表单与内容区，触屏44px由组件补足。
 - **间距**：兄弟元素之间用 `flex` / `grid` + `gap-*`，不用 `space-y-*` 与逐个元素的外边距。页面外框统一 `p-4 sm:p-6`。
 - **暗色**：表面分五层逐级提亮（`sidebar` < `background` < `card` < `popover` < `muted`），不用纯黑；层级都在 `styles.css` 里定好，页面不写 `dark:` 颜色覆盖。
 - **空态与首次加载失败用 Spartan Empty**：按 header、media、title、description、content 组合，重试按钮放 content；表格放在 colspan 单元格内，保留错误语义。

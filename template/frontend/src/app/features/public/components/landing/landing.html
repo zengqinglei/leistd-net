@@ -14,7 +14,7 @@
           <a hlmBtn variant="ghost" size="sm" href="#features">{{ t('landing.nav.features') }}</a>
           <a hlmBtn variant="ghost" size="sm" href="#stack">{{ t('landing.nav.stack') }}</a>
         </nav>
-        <div class="ms-auto flex items-center gap-2 md:gap-4">
+        <div class="ms-auto flex items-center gap-3">
           <!--#if (IncludeLocalization)-->
           <app-language-switcher />
           <!--#endif-->
@@ -22,16 +22,22 @@
           <!--#if (LocalIdentity)-->
           <!-- 租户关闭自助注册时不给注册入口，登录升为主按钮 -->
           @if (registrationOpen()) {
-            <a hlmBtn variant="ghost" class="hidden sm:inline-flex" routerLink="/auth/login">
+            <a
+              hlmBtn
+              variant="ghost"
+              size="sm"
+              class="hidden sm:inline-flex"
+              routerLink="/auth/login"
+            >
               {{ t('landing.hero.signIn') }}
             </a>
-            <a hlmBtn routerLink="/auth/register">{{ t('landing.hero.getStarted') }}</a>
+            <a hlmBtn size="sm" routerLink="/auth/register">{{ t('landing.hero.getStarted') }}</a>
           } @else {
-            <a hlmBtn routerLink="/auth/login">{{ t('landing.hero.signIn') }}</a>
+            <a hlmBtn size="sm" routerLink="/auth/login">{{ t('landing.hero.signIn') }}</a>
           }
           <!--#else-->
           <!-- 登录在签发令牌的身份服务上：进入工作台时由守卫发起 OIDC 登录 -->
-          <a hlmBtn routerLink="/workspace">{{ t('landing.hero.signIn') }}</a>
+          <a hlmBtn size="sm" routerLink="/workspace">{{ t('landing.hero.signIn') }}</a>
           <!--#endif-->
         </div>
       </div>
