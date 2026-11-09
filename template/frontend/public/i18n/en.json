@@ -138,7 +138,7 @@
       "users": "User management",
       "roles": "Role management",
       "tenants": "Tenant management",
-      "groupDeveloper": "Developer",
+      "groupIntegrations": "Integrations",
       "openApplications": "Open applications",
       //#if (IncludeWebhooks)
       "webhooks": "Webhooks",

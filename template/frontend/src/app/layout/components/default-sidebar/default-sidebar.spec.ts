@@ -32,7 +32,7 @@ const WORK = 'layout.sidebar.groupWork';
 const BUSINESS = 'layout.sidebar.groupBusiness';
 const IDENTITY = 'layout.sidebar.groupIdentity';
 //#if (OpenIddictServer || IncludeWebhooks)
-const DEVELOPER = 'layout.sidebar.groupDeveloper';
+const INTEGRATIONS = 'layout.sidebar.groupIntegrations';
 //#endif
 //#if (IncludeOperationRecords)
 const AUDIT = 'layout.sidebar.groupAudit';
@@ -43,7 +43,7 @@ const WORK = 'Work';
 const BUSINESS = 'Business';
 const IDENTITY = 'Identity & access';
 //#if (OpenIddictServer || IncludeWebhooks)
-const DEVELOPER = 'Developer';
+const INTEGRATIONS = 'Integrations';
 //#endif
 //#if (IncludeOperationRecords)
 const AUDIT = 'Audit';
@@ -127,7 +127,7 @@ describe('DefaultSidebar menu groups', () => {
     ];
     const expected = [WORK, IDENTITY];
     //#if (OpenIddictServer || IncludeWebhooks)
-    expected.push(DEVELOPER);
+    expected.push(INTEGRATIONS);
     //#endif
     //#if (IncludeOperationRecords)
     expected.push(AUDIT);

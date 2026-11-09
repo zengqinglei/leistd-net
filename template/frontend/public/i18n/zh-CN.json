@@ -138,7 +138,7 @@
       "users": "用户管理",
       "roles": "角色管理",
       "tenants": "租户管理",
-      "groupDeveloper": "开发者",
+      "groupIntegrations": "集成",
       "openApplications": "开放应用",
       //#if (IncludeWebhooks)
       "webhooks": "Webhook",

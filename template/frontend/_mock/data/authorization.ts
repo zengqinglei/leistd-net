@@ -111,8 +111,8 @@ export const PERMISSION_DEFINITIONS = [
   },
   //#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
   {
-    name: 'Developer',
-    displayName: 'Developer',
+    name: 'Integrations',
+    displayName: 'Integrations',
     permissions: [
       //#if (OpenIddictServer)
       {

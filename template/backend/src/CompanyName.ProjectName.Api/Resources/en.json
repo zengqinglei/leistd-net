@@ -109,7 +109,7 @@
     "Permission name": "Permission name",
     "PermissionGroup:Work": "Work",
     "PermissionGroup:Identity": "Identity & access",
-    "PermissionGroup:Developer": "Developer",
+    "PermissionGroup:Integrations": "Integrations",
     "PermissionGroup:Audit": "Audit",
     "PermissionGroup:System": "System",
     "Permission:App.Dashboard": "Dashboard",
