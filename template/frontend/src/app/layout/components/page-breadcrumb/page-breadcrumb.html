@@ -1,0 +1,76 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <nav hlmBreadcrumb class="min-w-0 overflow-hidden" [aria-label]="t('layout.breadcrumb.label')">
+    <!-- 单行：页头定高，折到第二行会被裁掉；放不下时上级与末级截断，截断时悬停或聚焦给全文。
+         触屏下链接与省略号补足44px（页头高56px，放得下） -->
+    <ol hlmBreadcrumbList class="flex-nowrap">
+      <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+        <a
+          hlmBreadcrumbLink
+          class="inline-flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+          [link]="layoutService.homeRoute()"
+          >{{ layoutService.isPlatform() ? t('menu.platform') : t('menu.workspace') }}</a
+        >
+      </li>
+      @if (collapsed().length) {
+        <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
+        <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+          <button
+            type="button"
+            class="hover:text-foreground focus-visible:ring-ring/50 inline-flex items-center justify-center rounded-sm outline-none focus-visible:ring-3 pointer-coarse:size-11"
+            data-testid="breadcrumb-more"
+            align="start"
+            [hlmDropdownMenuTrigger]="collapsedMenu"
+          >
+            <hlm-breadcrumb-ellipsis [srOnlyText]="t('layout.breadcrumb.more')" />
+          </button>
+          <ng-template #collapsedMenu>
+            <hlm-dropdown-menu>
+              @for (crumb of collapsed(); track $index) {
+                <a hlmDropdownMenuItem [routerLink]="crumb.link">{{ crumb.label }}</a>
+              }
+            </hlm-dropdown-menu>
+          </ng-template>
+        </li>
+      }
+      @if (parent(); as parent) {
+        <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
+        <li hlmBreadcrumbItem class="min-w-0 shrink" data-testid="breadcrumb-parent">
+          <a
+            hlmBreadcrumbLink
+            class="inline-flex min-w-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+            [link]="parent.link"
+            [hlmTooltip]="parent.label"
+            [appTruncatedTooltip]="parentText"
+          >
+            <span #parentText class="truncate">{{ parent.label }}</span>
+          </a>
+        </li>
+      }
+      <!-- 标题未设置时整个末级不渲染：只留分隔符会是一条断裂的面包屑 -->
+      @if (layoutService.title(); as pageTitle) {
+        <!-- 有上级时窄屏也显示这一个分隔符：「上级 > 当前页」 -->
+        @if (parent()) {
+          <li hlmBreadcrumbSeparator></li>
+        } @else {
+          <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
+        }
+        <li hlmBreadcrumbItem class="min-w-0">
+          <span
+            #pageText
+            #pageTip="appTruncatedTooltip"
+            hlmBreadcrumbPage
+            class="truncate"
+            [hlmTooltip]="pageTitle"
+            [appTruncatedTooltip]="pageText"
+            [attr.tabindex]="pageTip.truncated() ? 0 : null"
+            >{{ pageTitle }}</span
+          >
+        </li>
+      }
+    </ol>
+  </nav>
+</ng-container>

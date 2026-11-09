@@ -164,6 +164,10 @@
       "disconnected": "Live updates disconnected. This page may be out of date.",
       "reconnect": "Reconnect"
     },
+    "breadcrumb": {
+      "label": "Breadcrumb",
+      "more": "More parent pages"
+    },
     "topbar": {
       "openNavigation": "Open navigation",
       "navigationDescription": "Choose a page to open",

@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   createEnvironmentInjector,
+  DestroyRef,
   //#if (IncludeLocalization)
   effect,
   //#endif
@@ -68,11 +69,13 @@ describe('DefaultHeader page title', () => {
     scope.runInContext(() => new DefaultHeader());
 
     layout.title.set('Users');
+    layout.trail.set([{ label: 'Tenants', link: '/platform/tenants' }]);
     expect(layout.title()).toBe('Users');
 
     scope.destroy();
 
     expect(layout.title()).toBe('');
+    expect(layout.trail()).toEqual([]);
   });
 });
 
@@ -102,6 +105,21 @@ class UsersPage {
 class RolesPage {
   constructor() {
     inject(LayoutService).title.set('Roles');
+  }
+}
+
+/** 嵌套页：与真实页面同一写法设置上级，离开时清空。 */
+@Component({
+  selector: 'app-test-user-detail-page',
+  template: '<h2>Content</h2>',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class UserDetailPage {
+  constructor() {
+    const layout = inject(LayoutService);
+    layout.trail.set([{ label: 'Users', link: '/workspace/users' }]);
+    layout.title.set('User detail');
+    inject(DestroyRef).onDestroy(() => layout.trail.set([]));
   }
 }
 
@@ -156,6 +174,7 @@ describe('Layout page heading', () => {
             component: WorkspaceLayout,
             children: [
               { path: 'users', component: UsersPage },
+              { path: 'users/detail', component: UserDetailPage },
               { path: 'untitled', component: UntitledPage },
             ],
           },
@@ -223,6 +242,28 @@ describe('Layout page heading', () => {
     // 换布局时页头随旧布局销毁并清空标题，上一页的标题不会带过来
     await visit(harness, '/workspace/untitled');
     expect(headings(harness)).toEqual(['h2 Content']);
+  });
+
+  it('shows the breadcrumb above the topbar content only for nested pages', async () => {
+    const harness = await setUp();
+    const host = harness.fixture.nativeElement as HTMLElement;
+    // 顶栏页头里没有面包屑，正文上方的面包屑只在设了上级时出现
+    await visit(harness, '/workspace/users');
+    expect(host.querySelector('app-page-breadcrumb')).toBeNull();
+
+    await visit(harness, '/workspace/users/detail');
+    const crumb = host.querySelector('app-page-breadcrumb')!;
+    expect(crumb.closest('header')).toBeNull();
+    expect(crumb.querySelector('[data-testid="breadcrumb-parent"] a')!.getAttribute('href')).toBe(
+      '/workspace/users',
+    );
+    expect(crumb.querySelector('[data-slot="breadcrumb-page"]')!.textContent!.trim()).toBe(
+      'User detail',
+    );
+
+    // 嵌套页离开时清空上级，回到一级页面不留旧上级
+    await visit(harness, '/workspace/users');
+    expect(host.querySelector('app-page-breadcrumb')).toBeNull();
   });
   //#if (IncludeLocalization)
 

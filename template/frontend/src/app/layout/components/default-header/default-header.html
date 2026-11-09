@@ -34,22 +34,7 @@
 
           <hlm-separator orientation="vertical" class="me-2 !h-6 !self-center" />
 
-          <nav hlmBreadcrumb class="overflow-hidden">
-            <ol hlmBreadcrumbList>
-              <li hlmBreadcrumbItem class="hidden sm:inline-flex">
-                <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{
-                  layoutService.isPlatform() ? t('menu.platform') : t('menu.workspace')
-                }}</a>
-              </li>
-              <!-- 标题未设置时整个末级不渲染：只留分隔符会是一条断裂的面包屑 -->
-              @if (layoutService.title(); as pageTitle) {
-                <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
-                <li hlmBreadcrumbItem class="min-w-0">
-                  <span hlmBreadcrumbPage class="truncate">{{ pageTitle }}</span>
-                </li>
-              }
-            </ol>
-          </nav>
+          <app-page-breadcrumb />
         }
       </div>
 

@@ -3,6 +3,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map, startWith } from 'rxjs/operators';
 
+/** 面包屑的一级上级页面：文案与绝对链接。 */
+export interface LayoutCrumb {
+  readonly label: string;
+  readonly link: string | readonly string[];
+}
+
 /** 布局服务：页面标题与当前区段（平台/工作区）派生状态；侧栏状态由 Spartan 的 `HlmSidebarService` 管理。 */
 @Injectable({
   providedIn: 'root',
@@ -17,6 +23,12 @@ export class LayoutService {
   // 初值为空，不给字面量：占位文案在任何语言下都不正确，多语言变体下会先闪一下英文。
   // 空标题时 default-header 整个末级（含分隔符）不渲染，因此不会留下断裂的面包屑。
   title = signal<string>('');
+
+  /**
+   * 面包屑上级：首页与当前页之间的页面，离首页近的在前。嵌套在列表或工作台下的页面与标题一起设置，
+   * 离开时（`DestroyRef`）清空；一级页面不设。离开带 DefaultHeader 的布局时页头也会清空。
+   */
+  readonly trail = signal<readonly LayoutCrumb[]>([]);
 
   /** 当前页面自带搜索入口（打开同一个命令面板）时为 true，顶栏不再重复显示；由页面进入时设置、离开时复位。 */
   readonly pageHasSearch = signal(false);

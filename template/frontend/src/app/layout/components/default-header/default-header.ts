@@ -13,7 +13,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 //#else
 import { lucideSearch } from '@ng-icons/lucide';
 //#endif
-import { HlmBreadcrumbImports } from '@spartan-ng/helm/breadcrumb';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 //#if (Impersonation)
@@ -44,6 +43,7 @@ import { englishText } from '../../../shared/utils/english-text';
 //#if (IncludeNotifications)
 import { Notifications } from '../notifications/notifications';
 //#endif
+import { PageBreadcrumb } from '../page-breadcrumb/page-breadcrumb';
 import { UserMenu } from '../user-menu/user-menu';
 import { WorkspaceNav } from '../workspace-nav/workspace-nav';
 
@@ -56,7 +56,7 @@ import { WorkspaceNav } from '../workspace-nav/workspace-nav';
     NgIcon,
     ThemeModeToggle,
     HlmSidebarTrigger,
-    ...HlmBreadcrumbImports,
+    PageBreadcrumb,
     ...HlmKbdImports,
     ...HlmSeparatorImports,
     ...HlmTooltipImports,
@@ -102,8 +102,11 @@ export class DefaultHeader {
   //#endif
 
   constructor() {
-    // 离开布局时清掉页面标题：页头随布局销毁、早于下一页设置标题，不清的话认证页会挂着上一页的标题。
-    inject(DestroyRef).onDestroy(() => this.layoutService.title.set(''));
+    // 离开布局时清掉页面标题与面包屑上级：页头随布局销毁、早于下一页设置标题，不清的话认证页会挂着上一页的标题。
+    inject(DestroyRef).onDestroy(() => {
+      this.layoutService.title.set('');
+      this.layoutService.trail.set([]);
+    });
     //#if (Impersonation)
 
     // 退出模拟是整页跳转，提示只能在新页面上补（见 ImpersonationService 的一次性标记）。
@@ -142,8 +145,6 @@ export class DefaultHeader {
 const ENGLISH: Record<string, string> = {
   'common.toggleSidebar': 'Toggle sidebar',
   'layout.commandPalette.search': 'Search',
-  'menu.platform': 'Admin platform',
-  'menu.workspace': 'Workspace',
   'impersonation.banner': 'Acting as tenant {{tenant}} · started by {{impersonator}}',
   'impersonation.badge': 'Impersonating · {{tenant}}',
   'impersonation.title': 'Impersonating a tenant',
