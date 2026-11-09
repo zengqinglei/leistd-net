@@ -27,6 +27,7 @@
 <!--#endif-->
 | 只审查代码 | 改动所属任务行的必读文档（全栈改动按全栈功能行） | 改动触及的专题 |
 | 部署、迁移或回滚 | [部署](deploy/README.md) | [配置查找与覆盖](deploy/configuration.md#配置键的查找与覆盖)、[配置差异](standards/settings.md#部署配置只写差异)、[技术栈](standards/tech-stack.md) |
+| 遥测配置与排障 | [遥测导出](deploy/configuration.md#遥测导出) | 业务指标与 Worker 接入读 [后端 §7](standards/coding-backend.md#7-异常与日志) |
 | 证书轮换、数据库升级等运维操作 | [运维手册](operations/runbooks/)中对应的一份 | |
 | 线上查询、客户问题排查、数据修正、事件复盘 | 项目 Skill 的运维操作流程 | [部署](deploy/README.md) |
 

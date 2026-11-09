@@ -22,6 +22,7 @@
 | 数据表格 | TanStack Table | 9+ | `@tanstack/angular-table` headless 引擎；服务端 `manualPagination`/`manualSorting`，列表分页/排序/筛选状态以 URL query params 为唯一来源 |
 <!--#endif-->
 | 后端框架 | .NET / ASP.NET Core | 10+ | API 与业务服务 |
+| 指标与追踪 | OpenTelemetry | 中央包版本 | OTLP 推送，配置见 [遥测导出](../deploy/configuration.md#遥测导出)；日志使用 Serilog |
 | ORM | EF Core | 10+ | 数据访问 |
 | 动态查询 | System.Linq.Dynamic.Core | 中央包版本 | 应用层动态排序；规则见 [API 规范 §5](./api.md#5-分页规范) |
 <!--#if (LocalIdentity)-->
