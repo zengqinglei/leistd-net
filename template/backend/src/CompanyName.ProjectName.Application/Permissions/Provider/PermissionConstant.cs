@@ -28,8 +28,8 @@ public static class PermissionConstant
         public const string Identity = "Identity";
 #if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
 
-        /// <summary>第三方接入：对外签发凭据与向外推送事件的入口。</summary>
-        public const string Developer = "Developer";
+        /// <summary>集成：本系统与外部系统、服务之间的连接——第三方接入的凭据、向外推送的事件与服务间消息。</summary>
+        public const string Integrations = "Integrations";
 #endif
 
         /// <summary>审计：操作记录。</summary>

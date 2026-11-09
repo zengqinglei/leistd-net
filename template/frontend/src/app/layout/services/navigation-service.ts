@@ -84,7 +84,7 @@ export class NavigationService {
     },
     //#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
     {
-      label: 'layout.sidebar.groupDeveloper',
+      label: 'layout.sidebar.groupIntegrations',
       items: [
         //#if (OpenIddictServer)
         {
@@ -196,7 +196,7 @@ export class NavigationService {
     },
     //#if (OpenIddictServer || IncludeWebhooks || IncludeDistributedEvents)
     {
-      label: 'Developer',
+      label: 'Integrations',
       items: [
         //#if (OpenIddictServer)
         {

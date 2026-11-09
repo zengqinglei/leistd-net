@@ -109,7 +109,7 @@
     "Permission name": "权限名称",
     "PermissionGroup:Work": "工作",
     "PermissionGroup:Identity": "身份与访问",
-    "PermissionGroup:Developer": "开发者",
+    "PermissionGroup:Integrations": "集成",
     "PermissionGroup:Audit": "审计",
     "PermissionGroup:System": "系统",
     "Permission:App.Dashboard": "仪表盘",
