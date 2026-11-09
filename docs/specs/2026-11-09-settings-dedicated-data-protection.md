@@ -1,6 +1,6 @@
 # 机密设置的专用 Data Protection
 
-状态：进行中 · 风险档：中 · 基线：develop `c2be339f`
+状态：已完成 · 风险档：中 · 基线：develop `c2be339f` · 关联：[#253](https://github.com/zengqinglei/leistd-net/pull/253)
 
 ## 1. 需求
 
@@ -54,4 +54,13 @@
 
 ## 4. 结果
 
-待合并后补。
+- 交付：PR #253，合并提交 `9b19c508`，发布 `v2.0.0-beta.265`。
+- 与计划的偏差：Codex 第 1 轮审查指出，公开构造函数追加参数会改变 CLR 签名。因此提交改为 `feat(settings)!:`，并加 `BREAKING CHANGE:` 脚注；同时修正了注册入口注释与跨租户复制的论证。第 2 轮审查通过。
+- 验收：
+  - 设置测试项目 178/178 通过；两个新用例经变异核对，忽略选项时会失败。
+  - 仓库静态检查通过；打包后的 XML 与随包文档都含新选项。
+  - PR CI 全绿。
+- 遗留项：
+  - 真实多进程部署与已有机密的切换迁移未做端到端验证，由下游接入时验证。
+  - 把多租户连接串、Webhook 密钥统一改走长期密文实例，仍是候选，未立项。
+- 上收到的常驻文档：`framework/docs/components/settings.md`（接口参考、注意事项）、`template/docs/standards/settings.md` §1。
