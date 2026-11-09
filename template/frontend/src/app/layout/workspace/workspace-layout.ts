@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 import { NavigationProgress } from '../../core/components/navigation-progress/navigation-progress';
+import { LayoutService } from '../../core/services/layout-service';
 import { CommandPalette } from '../components/command-palette/command-palette';
 import { DefaultHeader } from '../components/default-header/default-header';
+import { PageBreadcrumb } from '../components/page-breadcrumb/page-breadcrumb';
 //#if (IncludeRealTime)
 import { RealtimeStatus } from '../components/realtime-status/realtime-status';
 //#endif
@@ -20,6 +22,7 @@ import { RealtimeStatus } from '../components/realtime-status/realtime-status';
     CommandPalette,
     DefaultHeader,
     NavigationProgress,
+    PageBreadcrumb,
     //#if (IncludeRealTime)
     RealtimeStatus,
     //#endif
@@ -27,4 +30,6 @@ import { RealtimeStatus } from '../components/realtime-status/realtime-status';
   templateUrl: './workspace-layout.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class WorkspaceLayout {}
+export class WorkspaceLayout {
+  protected readonly layoutService = inject(LayoutService);
+}

@@ -164,6 +164,10 @@
       "disconnected": "实时连接已断开，页面数据可能不是最新。",
       "reconnect": "重新连接"
     },
+    "breadcrumb": {
+      "label": "面包屑",
+      "more": "更多上级页面"
+    },
     "topbar": {
       "openNavigation": "打开导航",
       "navigationDescription": "选择要前往的页面",
