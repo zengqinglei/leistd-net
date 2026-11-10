@@ -15,4 +15,9 @@
     <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 关联标识日志作用域的状态类型由 HTTP 中间件与环境上下文贡献者共用，不进入公共 API -->
+    <InternalsVisibleTo Include="Leistd.Tracing.AspNetCore" />
+  </ItemGroup>
+
 </Project>

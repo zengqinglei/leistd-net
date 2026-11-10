@@ -1,9 +1,14 @@
 using System.Diagnostics;
 using Leistd.AmbientContext;
 using Leistd.Security;
+using Leistd.TestBase.Doubles;
 using Leistd.Tracing.Abstractions;
+using Leistd.Tracing.Constants;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Leistd.Tracing.Tests.Core;
@@ -116,6 +121,27 @@ public class NonHttpEntryPointTests
         {
             Assert.Equal(activity.TraceId.ToHexString(), correlation.Get());
         }
+    }
+
+    // 非 HTTP 入口与中间件写同一种作用域：只有关联标识一个键，Simple 控制台格式打印为 键:值
+    [Fact]
+    public void The_ambient_scope_is_one_pair_that_prints_as_key_and_value()
+    {
+        using var simpleConsole = new ConsoleFormatterCapture(ConsoleFormatterNames.Simple);
+        using var provider = Build(services => services.AddFakeLogging().AddLogging(logging => logging.AddProvider(simpleConsole)));
+        var logger = provider.GetRequiredService<ILogger<NonHttpEntryPointTests>>();
+
+        using (provider.GetRequiredService<IAmbientContext>().Begin(
+                   new System.Security.Claims.ClaimsPrincipal(), correlationId: "order-7d1c"))
+        {
+            logger.LogInformation("inside");
+        }
+
+        var scope = Assert.Single(provider.GetFakeLogCollector().LatestRecord.Scopes);
+        var pair = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<KeyValuePair<string, object?>>>(scope));
+        Assert.Equal(new KeyValuePair<string, object?>(CorrelationIdConstants.LogKey, "order-7d1c"), pair);
+        Assert.Equal("leistd.correlationId:order-7d1c", scope!.ToString());
+        Assert.Contains($"=> leistd.correlationId:order-7d1c{Environment.NewLine}", simpleConsole.Output, StringComparison.Ordinal);
     }
 
     private static ActivityListener ListenToEverything()

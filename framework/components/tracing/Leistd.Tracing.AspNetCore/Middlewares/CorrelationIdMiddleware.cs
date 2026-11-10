@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Leistd.Tracing.Abstractions;
 using Leistd.Tracing.Constants;
 using Leistd.Tracing.Options;
+using Leistd.Tracing.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -43,7 +44,7 @@ public class CorrelationIdMiddleware(
         }
 
         using (correlationIdProvider.Change(correlationId))
-        using (logger.BeginScope(new Dictionary<string, object> { [CorrelationIdConstants.LogKey] = correlationId }))
+        using (logger.BeginScope(new CorrelationIdLogScope(correlationId)))
         {
             await next(context);
         }

@@ -8,7 +8,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Xunit;
+using Leistd.TestBase.Doubles;
 using Leistd.Tracing.Abstractions;
 
 namespace Leistd.Tracing.Tests.AspNetCore;
@@ -159,24 +161,54 @@ public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixtu
         Assert.Equal(correlation, _scopes.Find(CorrelationIdConstants.LogKey));
     }
 
+    // 结构化提供程序只枚举到关联标识一个键；Simple 控制台格式只调用 ToString()，作用域行要是可读的 键:值
+    [Fact]
+    public async Task The_correlation_scope_is_one_pair_that_prints_as_key_and_value()
+    {
+        _scopes.Clear();
+
+        var (correlation, _, _) = await CallAsync("request-Scope_1");
+
+        var scope = _scopes.StateWith(CorrelationIdConstants.LogKey);
+        var pair = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<KeyValuePair<string, object?>>>(scope));
+        Assert.Equal(new KeyValuePair<string, object?>(CorrelationIdConstants.LogKey, correlation), pair);
+        Assert.Equal($"leistd.correlationId:{correlation}", scope.ToString());
+        Assert.Contains(
+            $"=> leistd.correlationId:{correlation}{Environment.NewLine}", fixture.SimpleConsole.Output, StringComparison.Ordinal);
+        Assert.Contains(
+            $"\"leistd.correlationId\":\"{correlation}\"", fixture.JsonConsole.Output, StringComparison.Ordinal);
+    }
+
+    // 保留原始状态对象：控制台格式化器拿到的就是它，渲染断言要用同一个实例
     internal sealed class CapturedScopes
     {
-        private readonly List<IReadOnlyDictionary<string, object>> _states = [];
+        private readonly List<object> _states = [];
 
         public void Clear() { lock (_states) { _states.Clear(); } }
 
-        public void Add(IReadOnlyDictionary<string, object> state)
+        public void Add(object state)
         {
             lock (_states) { _states.Add(state); }
+        }
+
+        public object StateWith(string key)
+        {
+            lock (_states)
+            {
+                return _states.First(s => Pairs(s).Any(pair => pair.Key == key));
+            }
         }
 
         public object? Find(string key)
         {
             lock (_states)
             {
-                return _states.FirstOrDefault(s => s.ContainsKey(key))?[key];
+                return _states.SelectMany(Pairs).FirstOrDefault(pair => pair.Key == key).Value;
             }
         }
+
+        private static IEnumerable<KeyValuePair<string, object?>> Pairs(object state)
+            => state as IEnumerable<KeyValuePair<string, object?>> ?? [];
     }
 
     private sealed class ScopeCapturingLoggerProvider(CapturedScopes scopes) : ILoggerProvider
@@ -189,10 +221,7 @@ public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixtu
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull
             {
-                if (state is IEnumerable<KeyValuePair<string, object>> pairs)
-                {
-                    scopes.Add(pairs.ToDictionary(x => x.Key, x => x.Value));
-                }
+                scopes.Add(state);
 
                 return NullScope.Instance;
             }
@@ -227,6 +256,11 @@ public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixtu
 
         internal CapturedScopes Scopes { get; } = new();
 
+        // 端点在关联标识作用域内写一条日志，经内置 Simple 与 JSON 控制台格式渲染
+        internal ConsoleFormatterCapture SimpleConsole { get; } = new(ConsoleFormatterNames.Simple);
+
+        internal ConsoleFormatterCapture JsonConsole { get; } = new(ConsoleFormatterNames.Json);
+
         public async Task InitializeAsync()
         {
             Host = await new HostBuilder()
@@ -237,6 +271,10 @@ public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixtu
                         services.AddCorrelationId();
                         services.AddSingleton(Scopes);
                         services.AddSingleton<ILoggerProvider>(new ScopeCapturingLoggerProvider(Scopes));
+                        services.AddSingleton<ILoggerProvider>(SimpleConsole);
+                        services.AddSingleton<ILoggerProvider>(JsonConsole);
+                        // 与上面的探针同理：Hosting 类别对任一提供程序启用都会让每个请求建 Activity
+                        services.AddLogging(logging => logging.AddFilter<ConsoleFormatterCapture>("Microsoft", LogLevel.None));
                     })
                     .Configure(app =>
                     {
@@ -244,6 +282,7 @@ public class CorrelationIdMiddlewareTests(CorrelationIdMiddlewareTests.HostFixtu
                         app.Run(async context =>
                         {
                             var provider = context.RequestServices.GetRequiredService<ICorrelationIdProvider>();
+                            context.RequestServices.GetRequiredService<ILogger<HostFixture>>().LogInformation("Handled");
                             // 同时回显三处，用于断言它们一致
                             var activityTraceId = Activity.Current?.TraceId.ToHexString() ?? "";
                             await context.Response.WriteAsync(
