@@ -7,7 +7,8 @@
 判据：
   1. `SettingGroupPermissions` 的每个分组键（`[SettingConstant.Groups.X]`，经 `SettingConstant.Groups` 解析出字符串值）
      都在 `system-settings.ts` 的 `GROUP_ICONS` 里登记了图标。
-  2. `GROUP_ICONS` 里的每个图标都在同一文件的 `provideIcons({ … })` 里提供。
+  2. `GROUP_ICONS` 里的每个图标都在同一文件的 `provideIcons({ … })` 里提供：Ng Icons 按对象的属性名登记与查找，
+     只认简写（`lucideGlobe`）与键值（`globe: lucideGlobe` 登记的是 `globe`）两种条目，其他写法（展开等）报出无法判定。
   3. 兜底图标（`GROUP_ICONS[…] ?? '…'`）同样在 `provideIcons` 里提供。
 
 注释里的条目不算。生成项目里的源码已经按参数裁剪，脚本不处理条件块。
@@ -31,6 +32,7 @@ CONSTANT = re.compile(r'\bconst\s+string\s+(\w+)\s*=\s*"([^"]*)"')
 GROUP_KEY = re.compile(r'\[\s*SettingConstant\s*\.\s*Groups\s*\.\s*(\w+)\s*\]')
 ICON_TABLE = re.compile(r'\bGROUP_ICONS\b[^=]*=\s*\{(.*?)\}', re.S)
 ICON_ENTRY = re.compile(r'''(\w+)\s*:\s*['"](\w+)['"]''')
+PROVIDED_ENTRY = re.compile(r'''^(?:(\w+)|(?:(\w+)|['"](\w+)['"])\s*:\s*[\w.]+)$''')
 PROVIDED = re.compile(r'\bprovideIcons\s*\(\s*\{(.*?)\}\s*\)', re.S)
 FALLBACK = re.compile(r'''\bGROUP_ICONS\s*\[[^\]]+\]\s*\?\?\s*['"](\w+)['"]''')
 
@@ -78,7 +80,14 @@ def check_project(root):
     if not provided:
         return errors + [f'{FRONTEND}: provideIcons({{ ... }}) not found']
     icons = dict(ICON_ENTRY.findall(table.group(1)))
-    available = set(re.findall(r'\b(\w+)\b', provided.group(1)))
+    available = set()
+    for entry in (part.strip() for part in provided.group(1).split(',')):
+        match = PROVIDED_ENTRY.match(entry)
+        if match:
+            available.add(next(name for name in match.groups() if name))
+        elif entry:
+            errors.append(f'{FRONTEND}: unsupported provideIcons entry `{entry}`; '
+                          'write a shorthand `name` or `name: icon` entry')
 
     for group in groups:
         if group not in icons:
@@ -145,6 +154,13 @@ def edit(relative, old, new):
     return apply
 
 
+def chain(*steps):
+    def apply(root):
+        for step in steps:
+            step(root)
+    return apply
+
+
 def self_test():
     permissions = 'backend/src/Demo.Application/Settings/Provider/SettingGroupPermissions.cs'
     constants = 'backend/src/Demo.Application/Settings/Provider/SettingConstant.cs'
@@ -152,6 +168,9 @@ def self_test():
         ('fixture as written', lambda root: None),
         ('icon table with a trailing generic entry', edit(FRONTEND, "  Operations: 'lucideActivity',",
                                                           "  Operations: 'lucideActivity',\n  Other: 'lucideSettings',")),
+        ('icon registered under an alias key', chain(
+            edit(FRONTEND, "Operations: 'lucideActivity'", "Operations: 'operations'"),
+            edit(FRONTEND, 'provideIcons({ lucideActivity,', 'provideIcons({ operations: lucideActivity,'))),
     ]
     cases = [
         ('group without an icon', edit(FRONTEND, "  Display: 'lucideGlobe',\n", ''),
@@ -162,6 +181,12 @@ def self_test():
          'icon lucideGlobe in GROUP_ICONS is not provided'),
         ('fallback not provided', edit(FRONTEND, ', lucideSettings })', ' })'),
          'fallback icon lucideSettings is not provided'),
+        ('icon only on the value side', edit(FRONTEND, 'provideIcons({ lucideActivity,', 'provideIcons({ other: lucideActivity,'),
+         'icon lucideActivity in GROUP_ICONS is not provided'),
+        ('fallback only on the value side', edit(FRONTEND, ', lucideSettings })', ', gear: lucideSettings })'),
+         'fallback icon lucideSettings is not provided'),
+        ('unsupported provideIcons entry', edit(FRONTEND, 'provideIcons({ lucideActivity,', 'provideIcons({ ...ICONS, lucideActivity,'),
+         'unsupported provideIcons entry `...ICONS`'),
         ('fallback not found', edit(FRONTEND, " ?? 'lucideSettings'", ''), 'fallback icon (GROUP_ICONS[...]'),
         ('group constant not declared', edit(permissions, 'Groups.Operations]', 'Groups.Billing]'),
          'SettingConstant.Groups.Billing is used by SettingGroupPermissions but not declared'),

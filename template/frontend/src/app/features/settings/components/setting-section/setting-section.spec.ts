@@ -7,9 +7,9 @@ import { provideRouter } from '@angular/router';
 import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 //#endif
 //#if (IncludeLocalization)
-import { firstValueFrom, of, throwError } from 'rxjs';
+import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 //#else
-import { throwError } from 'rxjs';
+import { Subject, throwError } from 'rxjs';
 //#endif
 import { userEvent } from 'vitest/browser';
 
@@ -2326,6 +2326,53 @@ describe('SettingSection row validation', () => {
     await fixture.whenStable();
     expect(document.getElementById('Display.FreeTextProbe-error')).toBeNull();
     expect(field.hasAttribute('aria-invalid')).toBe(false);
+  });
+
+  /** 提交一次文本框的值，再输入一个新值但不提交（不触发 change）。 */
+  function submitThenRetype(field: HTMLInputElement, submitted: string, retyped: string): void {
+    field.value = submitted;
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    field.value = retyped;
+    field.dispatchEvent(new Event('input'));
+  }
+
+  function expectNoStaleRejection(field: HTMLInputElement, retyped: string): void {
+    expect(field.value).toBe(retyped);
+    expect(document.getElementById('Display.FreeTextProbe-error')).toBeNull();
+    expect(field.hasAttribute('aria-invalid')).toBe(false);
+  }
+
+  // 拒绝已经回来、还在补足"保存中"的最短时长时用户改了输入：旧的拒绝说的不是新值
+  it('does not attach a rejection to input typed while the failed save is still showing', async () => {
+    const host = await render(row());
+    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+      throwError(() => rejectedField('value', 'Not accepted')),
+    );
+    const field = host.querySelector<HTMLInputElement>('input')!;
+
+    submitThenRetype(field, 'draft', 'draft 2');
+    await fixture.whenStable();
+    await vi.advanceTimersByTimeAsync(400);
+    fixture.detectChanges();
+
+    expectNoStaleRejection(field, 'draft 2');
+  });
+
+  // 新输入在前、拒绝在后：响应晚到同样不能把新值标成无效
+  it('does not attach a rejection that arrives after newer input', async () => {
+    const host = await render(row());
+    const response = new Subject<void>();
+    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(response);
+    const field = host.querySelector<HTMLInputElement>('input')!;
+
+    submitThenRetype(field, 'draft', 'draft 2');
+    await fixture.whenStable();
+    response.error(rejectedField('value', 'Not accepted'));
+    await vi.advanceTimersByTimeAsync(400);
+    fixture.detectChanges();
+
+    expectNoStaleRejection(field, 'draft 2');
   });
 
   // 业务错误码没有字段：原因照常报在行内，不挂到控件下方

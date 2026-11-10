@@ -189,7 +189,7 @@
         }
         @if (isBoolean(setting)) {
           <!-- 开关没有宽度：字段错误接在说明下面 -->
-          <ng-container *ngTemplateOutlet="fieldError; context: { $implicit: setting }" />
+          <ng-container *ngTemplateOutlet="fieldError" />
         }
       </div>
       <!-- 标签折成多行（或下方有说明）时，控件在左侧内容块的高度内垂直居中；纵排时不居中。
@@ -204,7 +204,7 @@
               [forceInvalid]="isInvalid(setting, scope())"
               [inputId]="setting.name"
               [checked]="isChecked(setting, scope())"
-              [aria-describedby]="descriptionIdOf(setting)"
+              [aria-describedby]="switchDescribedByOf(setting, scope())"
               [attr.data-testid]="'setting-switch-' + setting.name"
               (checkedChange)="onToggle(setting, scope(), $event)"
             />
@@ -341,22 +341,21 @@
           </button>
         </div>
         @if (!isBoolean(setting)) {
-          <ng-container *ngTemplateOutlet="fieldError; context: { $implicit: setting }" />
+          <ng-container *ngTemplateOutlet="fieldError" />
         }
       </div>
+      <!-- 服务端按字段拒绝的原因。模板声明在 Field 之内：错误登记到本行 Field，输入框与下拉触发器的
+         aria-describedby 自动带上它。w-0 + min-w-full：随所在列的宽度折行，不把列撑宽。 -->
+      <ng-template #fieldError>
+        @if (fieldErrorOf(setting, scope()); as message) {
+          <hlm-field-error
+            forceShow
+            class="w-0 min-w-full text-xs whitespace-pre-line"
+            [id]="setting.name + '-error'"
+            >{{ message }}</hlm-field-error
+          >
+        }
+      </ng-template>
     </hlm-field>
-  </ng-template>
-
-  <!-- 服务端按字段拒绝的原因，经 aria-describedby 关联到控件。w-0 + min-w-full：随所在列的宽度折行，不把列撑宽。 -->
-  <ng-template #fieldError let-setting>
-    @if (fieldErrorOf(setting, scope()); as message) {
-      <hlm-field-error
-        forceShow
-        class="w-0 min-w-full text-xs whitespace-pre-line"
-        data-setting-field-error
-        [id]="setting.name + '-error'"
-        >{{ message }}</hlm-field-error
-      >
-    }
   </ng-template>
 </ng-container>

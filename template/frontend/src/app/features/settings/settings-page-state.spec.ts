@@ -326,14 +326,20 @@ describe('buildSettingTree', () => {
     expect(shownChildren(fallback, 'false')).toEqual([]);
   });
 
+  // 同前缀的开关在页面上也不改挂：声明了显式依赖就只认声明的上级
   it('keeps a setting at the top level when its explicit parent is not on the page', () => {
     expect(
       shape(
-        buildSettingTree([setting('Reports.Archive.Days'), setting('Reports.Owner')], {
-          'Reports.Archive.Days': { parent: 'Reports.Mode', shownWhen: notOff },
-        }),
+        buildSettingTree(
+          [
+            setting('Reports.Enabled', true),
+            setting('Reports.Archive.Days'),
+            setting('Reports.Owner'),
+          ],
+          { 'Reports.Archive.Days': { parent: 'Reports.Mode', shownWhen: notOff } },
+        ),
       ),
-    ).toEqual(['Reports.Archive.Days', 'Reports.Owner']);
+    ).toEqual([{ 'Reports.Enabled': ['Reports.Owner'] }, 'Reports.Archive.Days']);
   });
 
   it('lets an explicit dependency win over the naming convention', () => {

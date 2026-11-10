@@ -101,9 +101,10 @@ interface RowState {
 const PREFERENCES_GROUP = 'Display';
 
 /** 账户偏好对应的设置名（与后端设置定义同名，控件与占位规则按名字复用）→ 偏好字段。 */
-const PREFERENCE_FIELDS: Readonly<Record<string, AccountPreferenceField>> = Object.fromEntries(
-  ACCOUNT_PREFERENCE_SETTINGS.map((preference) => [preference.name, preference.field]),
-);
+const PREFERENCE_FIELDS: Readonly<Partial<Record<string, AccountPreferenceField>>> =
+  Object.fromEntries(
+    ACCOUNT_PREFERENCE_SETTINGS.map((preference) => [preference.name, preference.field]),
+  );
 
 /** 一个分组的渲染内容：分组本身加上按专属布局拆走之后剩下的普通行。 */
 interface GroupView extends SettingGroup {
@@ -247,29 +248,20 @@ export class SettingSection {
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   constructor() {
+    // aria-describedby 与输入框、下拉触发器的 aria-invalid 由 Helm 的字段关联或显式绑定给出；`hlm-switch` 与
+    // `hlm-combobox-trigger` 不把 forceInvalid 落到它们模板里的可操作元素上，只给这两种补 aria-invalid
     afterRenderEffect(() => {
+      this.groupViews();
       this.rowState();
       this.serverErrors();
-      this.settings();
-      // 上级的取值决定子项出不出现：新出现的子项同样要关联本行反馈
-      this.values();
-      this.scope();
-      this.group();
-      // switch/combobox 的可操作元素在 Helm 模板内；渲染后关联行反馈，不另建一套控件包装。
       for (const row of this.host.nativeElement.querySelectorAll<HTMLElement>(
         '[data-setting-name]',
       )) {
-        const control = row.querySelector<HTMLElement>('input, [role="switch"], [role="combobox"]');
-        if (!control) continue;
-        if (row.dataset['settingInvalid'] === 'true') control.setAttribute('aria-invalid', 'true');
-        else control.removeAttribute('aria-invalid');
-        const name = row.dataset['settingName'];
-        // 控件下方的字段错误（服务端按字段拒绝时）与本行描述一起关联
-        const error = row.querySelector<HTMLElement>('[data-setting-field-error]');
-        control.setAttribute(
-          'aria-describedby',
-          error ? `${name}-description ${error.id}` : `${name}-description`,
+        const control = row.querySelector<HTMLElement>(
+          '[role="switch"], [data-slot="combobox-trigger"]',
         );
+        if (row.dataset['settingInvalid'] === 'true') control?.setAttribute('aria-invalid', 'true');
+        else control?.removeAttribute('aria-invalid');
       }
     });
   }
@@ -328,32 +320,30 @@ export class SettingSection {
 
   /** 模板按它渲染：每个分组要走通用网格的行、是否统一说明生效范围，以及专属布局拆走的部分。 */
   protected readonly groupViews = computed<GroupView[]>(() =>
-    this.groups().map((group) => {
-      const view: GroupView = {
+    this.groups().map((group): GroupView => {
+      //#if (ExternalLogin)
+      // 外部登录按提供方分卡片，开关打开了没生效时管理员要在同一张卡片上看到缺什么；不符合命名约定的
+      // 设置留在通用网格里，不能静默消失。依赖只在分流后剩下的普通行上挂：提供方的开关与凭据由卡片自己排列
+      const { providers, others } =
+        this.scope() === 'system' && group.key === EXTERNAL_LOGIN_GROUP
+          ? partitionExternalLoginSettings(group.settings)
+          : { providers: [], others: group.settings };
+      //#else
+      const others = group.settings;
+      //#endif
+
+      return {
         ...group,
-        rows: buildSettingTree(group.settings, SETTING_DEPENDENCIES),
+        rows: buildSettingTree(others, SETTING_DEPENDENCIES),
         preferencesUnavailable:
           this.scope() === 'account' &&
           group.key === PREFERENCES_GROUP &&
           !this.preferences.known(),
         hostScopeOnce: isHostScopeOnly(group.settings),
         //#if (ExternalLogin)
-        externalLoginProviders: [],
+        externalLoginProviders: providers,
         //#endif
       };
-      //#if (ExternalLogin)
-
-      // 外部登录按提供方分卡片，开关打开了没生效时管理员要在同一张卡片上看到缺什么；
-      // 不符合命名约定的设置留在通用网格里，不能静默消失
-      if (this.scope() === 'system' && group.key === EXTERNAL_LOGIN_GROUP) {
-        const { providers, others } = partitionExternalLoginSettings(group.settings);
-        // 依赖只在分流后剩下的普通行上挂：提供方的开关与凭据由卡片自己排列
-        view.rows = buildSettingTree(others, SETTING_DEPENDENCIES);
-        view.externalLoginProviders = providers;
-      }
-      //#endif
-
-      return view;
     }),
   );
 
@@ -421,12 +411,10 @@ export class SettingSection {
     return this.values()[draftKey(setting, scope)] ?? storedValueOf(setting, scope);
   }
 
-  /** 该行在表单里的字段。 */
   protected fieldOf(setting: SettingOutputDto, scope: SettingScope): FieldTree<string> {
     return this.settingForm[draftKey(setting, scope)];
   }
 
-  /** 服务端对该行字段的拒绝原因，显示在控件下方；没有时为空串。 */
   protected fieldErrorOf(setting: SettingOutputDto, scope: SettingScope): string {
     return this.fieldOf(setting, scope)()
       .errors()
@@ -434,14 +422,12 @@ export class SettingSection {
       .join('\n');
   }
 
-  /** 该行是否标为无效：写入失败，或服务端拒绝了该行字段。 */
   protected isInvalid(setting: SettingOutputDto, scope: SettingScope): boolean {
     return (
       this.stateOf(setting, scope)?.status === 'error' || this.fieldOf(setting, scope)().invalid()
     );
   }
 
-  /** 专用控件的种类（见 {@link SETTING_CONTROLS}）；没有登记时按通用规则渲染。 */
   private controlOf(setting: SettingOutputDto): SettingControl | undefined {
     return SETTING_CONTROLS[setting.name];
   }
@@ -483,7 +469,6 @@ export class SettingSection {
     return { name, offset: timeZoneOffsetLabel(name) };
   }
 
-  /** 这一项当前的写入状态；没有即常态。 */
   protected stateOf(setting: SettingOutputDto, scope: SettingScope): RowState | undefined {
     return this.rowState()[draftKey(setting, scope)];
   }
@@ -493,9 +478,17 @@ export class SettingSection {
     return setting.allowedValues?.length ? setting.allowedValues : undefined;
   }
 
-  /** 行下方描述的 id：开关不会自动关联所在字段的描述，要显式传给它的 aria-describedby。 */
   protected descriptionIdOf(setting: SettingOutputDto): string {
     return `${setting.name}-description`;
+  }
+
+  /**
+   * 开关的 aria-describedby：`hlm-switch` 不会自动关联所在字段的描述与错误（输入框与下拉的触发器经
+   * Helm 的字段关联自动带上），要显式传入本行描述，有字段错误时再加上它。
+   */
+  protected switchDescribedByOf(setting: SettingOutputDto, scope: SettingScope): string {
+    const description = this.descriptionIdOf(setting);
+    return this.fieldErrorOf(setting, scope) ? `${description} ${setting.name}-error` : description;
   }
 
   /** 布尔设置由服务端标注并渲染为开关；前端不另列清单，免得漏登记的项渲染成文本框。 */
@@ -866,7 +859,7 @@ export class SettingSection {
           generation,
           startedAt,
           message === null ? null : { status: 'error', message },
-          errors,
+          { errors, value: value ?? '' },
         );
       }
     });
@@ -941,14 +934,15 @@ export class SettingSection {
    * 补足"保存中"的最短时长之后再判一次：等待期间又排进来的写入正在保存，旧结果不能盖住它。
    *
    * @param state 行状态；`null` 表示回到常态（失败原因全部挂到了字段上）。
-   * @param fieldErrors 服务端按字段拒绝的错误，挂到该行字段上。
+   * @param rejected 服务端按字段拒绝的错误及被拒绝的值。只在表单里仍是这个值时挂到该行字段上：
+   *   等待期间用户已经改了输入（尚未提交），旧的拒绝说的不是新值。
    */
   private async publishRowState(
     key: string,
     generation: number,
     startedAt: number,
     state: RowState | null,
-    fieldErrors: ValidationError.WithFieldTree[] = [],
+    rejected?: { errors: ValidationError.WithFieldTree[]; value: string },
   ): Promise<void> {
     if (this.writeGenerations.get(key) !== generation) {
       return;
@@ -959,8 +953,8 @@ export class SettingSection {
       return;
     }
 
-    if (fieldErrors.length > 0) {
-      this.serverErrors.update((current) => ({ ...current, [key]: fieldErrors }));
+    if (rejected?.errors.length && this.values()[key] === rejected.value) {
+      this.serverErrors.update((current) => ({ ...current, [key]: rejected.errors }));
     }
     if (state === null) {
       this.clearRowState(key);

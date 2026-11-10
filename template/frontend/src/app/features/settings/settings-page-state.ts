@@ -65,7 +65,7 @@ const SWITCH_SUFFIX = '.Enabled';
 const switchedOn = (value: string): boolean => value === 'true';
 
 /**
- * 按依赖把行组成树：先按显式依赖（`dependencies`，子设置名 → 上级）挂接，没有显式依赖的再按命名约定挂接——
+ * 按依赖把行组成树：声明了显式依赖（`dependencies`，子设置名 → 上级）的只挂到声明的上级下，没有声明的按命名约定挂接——
  * 名为 `{前缀}.Enabled` 的布尔设置管着名字以 `{前缀}.` 开头的其他设置，挂到前缀最长的那个开关下。
  * 约定是设置名这一跨前后端的字符串契约，不需要后端下发界面元数据。
  *
@@ -74,7 +74,7 @@ const switchedOn = (value: string): boolean => value === 'true';
  */
 export function buildSettingTree(
   rows: readonly SettingOutputDto[],
-  dependencies: Readonly<Record<string, SettingDependency>>,
+  dependencies: Readonly<Partial<Record<string, SettingDependency>>>,
 ): SettingRowNode[] {
   const nodes = new Map(
     rows.map((setting): [string, SettingRowNode] => [setting.name, { setting, children: [] }]),
@@ -89,15 +89,15 @@ export function buildSettingTree(
 
   const roots: SettingRowNode[] = [];
   for (const node of nodes.values()) {
+    // 声明了显式依赖就只认它：上级缺席时留在顶层，不再按命名约定挂到别的开关下
     const dependency = dependencies[node.setting.name];
-    const explicit = dependency ? nodes.get(dependency.parent) : undefined;
-    const parent = explicit && explicit !== node ? explicit : switchOf(node, switches);
-    if (!parent) {
+    const parent = dependency ? nodes.get(dependency.parent) : switchOf(node, switches);
+    if (!parent || parent === node) {
       roots.push(node);
       continue;
     }
 
-    node.shownWhen = parent === explicit ? dependency!.shownWhen : switchedOn;
+    node.shownWhen = dependency ? dependency.shownWhen : switchedOn;
     parent.children.push(node);
   }
 

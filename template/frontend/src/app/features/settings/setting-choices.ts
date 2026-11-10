@@ -18,7 +18,7 @@ export type SettingValueLabel = string | ((value: string) => string);
  * 候选项的文案。候选值只认后端下发的 `allowedValues`，这里不再列一份值域；没有登记的设置直接显示原值
  * （日志级别不翻译：翻译后对不上配置与日志里实际出现的词）。
  */
-export const SETTING_VALUE_LABELS: Readonly<Record<string, SettingValueLabel>> = {
+export const SETTING_VALUE_LABELS: Readonly<Partial<Record<string, SettingValueLabel>>> = {
   //#if (IncludeLocalization)
   // 各语种用自己的本地名，不随界面语言变化，与页头的语言切换同一份清单
   [SETTINGS.display.language]: (value) =>
@@ -29,7 +29,7 @@ export const SETTING_VALUE_LABELS: Readonly<Record<string, SettingValueLabel>> =
 };
 
 /** 按当前取值显示的说明（词条前缀，取 `<前缀>.<值>`）：本层的值或继承来的值都适用。级别名说不出会多打多少日志。 */
-export const SETTING_VALUE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+export const SETTING_VALUE_DESCRIPTIONS: Readonly<Partial<Record<string, string>>> = {
   [SETTINGS.logging.minimumLevel]: 'settings.logLevelHints',
 };
 
@@ -37,7 +37,7 @@ export const SETTING_VALUE_DESCRIPTIONS: Readonly<Record<string, string>> = {
  * 显示名说不清写法或效果的设置，在标签下方给一句固定说明（词条键）。后端设置定义不承载界面说明，
  * 没有登记的设置没有说明。
  */
-export const SETTING_DESCRIPTIONS: Readonly<Record<string, string>> = {
+export const SETTING_DESCRIPTIONS: Readonly<Partial<Record<string, string>>> = {
   [SETTINGS.telemetry.exportEnabled]: 'settings.settingHints.telemetryExportEnabled',
   [SETTINGS.telemetry.exportEndpoint]: 'settings.settingHints.telemetryExportEndpoint',
   [SETTINGS.telemetry.exportHeaders]: 'settings.settingHints.telemetryExportHeaders',
@@ -54,7 +54,7 @@ export const SETTING_DESCRIPTIONS: Readonly<Record<string, string>> = {
 export type SettingControl = 'timeZone' | 'language' | 'theme';
 
 /** 用专用控件渲染的设置；没有登记的按通用规则渲染。 */
-export const SETTING_CONTROLS: Readonly<Record<string, SettingControl>> = {
+export const SETTING_CONTROLS: Readonly<Partial<Record<string, SettingControl>>> = {
   //#if (IncludeLocalization)
   [SETTINGS.display.language]: 'language',
   //#endif
@@ -78,7 +78,7 @@ export interface SettingDependency {
  * 上级不在当前页面上（被分组或权限过滤掉）时子设置照常显示在顶层；收起只是不显示，值不清空。
  * 依赖不能成环：组件不做环检测，成环的设置不会出现。
  */
-export const SETTING_DEPENDENCIES: Readonly<Record<string, SettingDependency>> = {};
+export const SETTING_DEPENDENCIES: Readonly<Partial<Record<string, SettingDependency>>> = {};
 
 /** 个人页的一行账户偏好：偏好字段、同名设置，以及候选值（偏好不取设置快照，候选值在这里给出）。 */
 export interface AccountPreferenceSetting {
