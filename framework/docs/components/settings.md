@@ -78,7 +78,7 @@ app.MapGroup("/api/v1/settings").MapSettings(options =>
 
 ```csharp
 builder.Services.AddHostSettings(bindings => bindings
-    .Bind("Logging.MinimumLevel", ["Serilog:MinimumLevel", "Serilog:MinimumLevel:Default"], fallback: "Information")
+    .Bind("Logging.MinimumLevel", ["Logging:LogLevel:Default"], fallback: "Information")
     .BindOption<ExportOptions>("Export.Endpoint", ExportOptions.SectionName, nameof(ExportOptions.Endpoint)));
 
 var app = builder.Build();
