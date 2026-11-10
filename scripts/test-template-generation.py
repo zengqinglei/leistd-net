@@ -387,6 +387,7 @@ verify:
       variables:
         CACHE_POLICY: pull-push
   before_script:
+    - sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources
     - apt-get update
   script:
     - pwsh -NoProfile -File scripts/verify.ps1
@@ -584,6 +585,9 @@ def check_gitlab_ci(text, spa_frontend):
     variables = job['variables']
     assert variables.get('DOCKER_HOST') == 'tcp://docker:2375' and variables.get('DOCKER_TLS_CERTDIR') == '', 'Testcontainers DinD variables'
     assert isinstance(job.get('before_script'), list) and job['before_script'], 'GitLab CI before_script'
+    # apt 源先切到 HTTPS 再更新索引：部分 Runner 的 IPv6 出口到 Ubuntu 源的 80 端口不通
+    assert job['before_script'][:2] == ["sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources", 'apt-get update'], \
+        f'GitLab CI apt sources must switch to HTTPS before apt-get update: {job["before_script"][:2]}'
     assert job['script'] == ['pwsh -NoProfile -File scripts/verify.ps1'], f'GitLab CI script: {job["script"]}'
     # 缓存：NuGet 必有，npm 随前端；key 取依赖文件，只缓存下载内容；合并请求只读、默认分支读写
     caches = {entry['key']['prefix']: entry for entry in job['cache']}
