@@ -9,8 +9,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -135,11 +133,6 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(race));
-            // 宿主用 Serilog 接管了日志工厂，不换回标准工厂，"没有记下警告"就恒成立、证伪不了
-            services.RemoveAll<ILoggerFactory>();
-            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
-                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
-                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
         }));
         using var first = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
         using var second = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
@@ -169,10 +162,6 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(failing));
-            services.RemoveAll<ILoggerFactory>();
-            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
-                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
-                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
         }));
         using var session = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, ProjectWebApplicationFactory.NewTenantId());
 

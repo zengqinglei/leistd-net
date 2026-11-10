@@ -27,12 +27,17 @@
   "saved": "已保存",
   "saving": "保存中…",
   "logLevelHints": {
-    "Verbose": "记录一切，含逐条 SQL 与请求细节。仅短时排障用，长期开会迅速吃满磁盘。",
+    "Trace": "记录本应用代码的全部细节；部署配置里单独设了级别的类别（如数据库、Web 服务器）仍按各自级别。仅短时排障用，长期开着日志量增长很快。",
     "Debug": "记录调试细节。排查问题时开，日常不建议。",
     "Information": "记录正常业务流程。默认级别。",
-    "Warning": "只记录警告与错误，正常流程不落盘。",
+    "Warning": "只记录警告与错误，正常流程不记录。",
     "Error": "只记录错误。会漏掉\"没报错但不对\"的线索。",
-    "Fatal": "只记录导致进程终止的故障。几乎等于关掉日志。"
+    "Critical": "只记录导致服务无法继续工作的故障。几乎等于关掉日志。"
+  },
+  "settingHints": {
+    "telemetryExportEnabled": "经 OTLP 把日志、指标与追踪发送到 Collector 或观测平台。",
+    "telemetryExportEndpoint": "OTLP 基地址，如 https://otel.example.com:4318；日志、指标、追踪分别发到其下的 /v1/logs、/v1/metrics、/v1/traces，只支持 http/protobuf。",
+    "telemetryExportHeaders": "Collector 或观测平台的认证头，写法 key1=value1,key2=value2。只写不回显。"
   },
   "personal": {
     "title": "个人设置",
@@ -83,7 +88,7 @@
     //#if (IncludeOperationRecords || IncludeNotifications)
     "Retention": "过期数据保留多久、何时清理",
     //#endif
-    "Operations": "日志记录的详细程度"
+    "Operations": "日志详细程度、请求日志与遥测导出"
   },
   "secretSet": "已设置（输入新值即替换）",
   "secretUnset": "未设置",

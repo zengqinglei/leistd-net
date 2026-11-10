@@ -4,7 +4,7 @@
 部署资产在每个形态的生成产物上核对（判据自检：`--self-test`）：
 - compose 引用的 `${VAR}` 与 `deploy/.env.example` 登记的变量双向一致；
 - compose 里的 `Section__Key` 能对上 appsettings 的键或 Options 类型的属性链；
-- Serilog 的 Override 类别是本项目命名空间、所引用包或 Microsoft/System 的前缀；
+- `Logging:LogLevel` 的类别键（`Default` 除外）是本项目命名空间、所引用包或 Microsoft/System 的前缀；
 - 生成项目根目录与 `docs/standards/project-structure.md` §1 的清单一致。
 
 CI 交付参数 `Ci` 不是能力：全部形态按默认值生成，有无前端两类形态另生成其余取值，核对差异只落在
@@ -117,8 +117,10 @@ PROPERTY_DECL = re.compile(r'\bpublic\s+(?:(?:required|virtual|override|new|stat
 SECTION_CONST = re.compile(r'\bconst\s+string\s+(\w+)\s*=\s*(\$?)"([^"]+)"')
 NAMESPACE_DECL = re.compile(r'^\s*namespace\s+([\w.]+)', re.M)
 # 由宿主自身解析、不经 Options 绑定的根节
-FREE_CONFIGURATION_ROOTS = {'connectionstrings', 'serilog'}
+FREE_CONFIGURATION_ROOTS = {'connectionstrings', 'logging'}
 LOGGING_CATEGORY_ROOTS = ('Microsoft', 'System')
+# Logging:LogLevel 下不是类别的特殊键
+LOGGING_SPECIAL_KEYS = {'default'}
 
 
 def compose_lines(text):
@@ -285,13 +287,14 @@ def check_logging_categories(keys, namespaces, packages):
     errors = []
     roots = set(namespaces) | set(packages)
     for key in keys:
-        if not key.lower().startswith('serilog__minimumlevel__override__'):
+        if not key.lower().startswith('logging__loglevel__'):
             continue
-        category = key.split('__', 3)[3]
-        legal = (category.split('.')[0] in LOGGING_CATEGORY_ROOTS
+        category = key.split('__', 2)[2]
+        legal = (category.lower() in LOGGING_SPECIAL_KEYS
+                 or category.split('.')[0] in LOGGING_CATEGORY_ROOTS
                  or any(root == category or root.startswith(category + '.') or category.startswith(root + '.') for root in roots))
         if not legal:
-            errors.append(f'{key}: Serilog override category {category} matches no project namespace or referenced package')
+            errors.append(f'{key}: log level category {category} matches no project namespace or referenced package')
     return errors
 
 
@@ -342,7 +345,7 @@ def check_deployment(output):
     return (check_compose_structure(compose)
             + check_compose_structure((output / 'deploy/docker-compose.dev.yml').read_text(encoding='utf-8'))
             + check_compose_variables(compose, (output / 'deploy/.env.example').read_text(encoding='utf-8'))
-            + [problem for key in keys if '__' in key and not key.lower().startswith('serilog__')
+            + [problem for key in keys if '__' in key and not key.lower().startswith('logging__')
                for problem in [check_configuration_key(key, catalog, settings_keys)] if problem]
             + check_logging_categories(keys, namespaces, packages)
             + check_root_entries([p.name for p in output.iterdir()],
@@ -497,10 +500,12 @@ public sealed class EndpointOptions { public string? Path { get; init; } }
         ('extra variable', check_compose_variables(compose, 'SMTP_HOST=\n# IMAGE=api\nUNUSED=\n'), ['.env.example variable not used by compose: UNUSED']),
     ]
     logging_cases = [
-        ('framework category', ['Serilog__MinimumLevel__Override__Microsoft.AspNetCore'], []),
-        ('project namespace prefix', ['Serilog__MinimumLevel__Override__Generation.Probe'], []),
-        ('package category', ['Serilog__MinimumLevel__Override__Leistd.OperationRecords'], []),
-        ('invalid category', ['Serilog__MinimumLevel__Override__MyProject'], ['MyProject']),
+        ('default level', ['Logging__LogLevel__Default'], []),
+        ('framework category', ['Logging__LogLevel__Microsoft.AspNetCore.HttpLogging'], []),
+        ('project namespace prefix', ['Logging__LogLevel__Generation.Probe'], []),
+        ('package category', ['Logging__LogLevel__Leistd.OperationRecords'], []),
+        ('invalid category', ['Logging__LogLevel__MyProject'], ['MyProject']),
+        ('special key is not a category prefix', ['Logging__LogLevel__DefaultProject'], ['DefaultProject']),
     ]
     structure = '# 项目目录\n\n## 1. 项目根\n\n```text\n{project-root}/\n├── .agents/skills/  # x\n├── backend/\n└── README.md\n```\n'
     root_cases = [

@@ -48,6 +48,55 @@ export function groupSettings(settings: readonly SettingOutputDto[]): SettingGro
   return [...byKey.values()];
 }
 
+/** 一行设置及挂在它下面的子项（见 {@link nestUnderSwitches}）。 */
+export interface SettingRowNode {
+  setting: SettingOutputDto;
+  /** 本行是 `{前缀}.Enabled` 开关时，同前缀的其他设置；开关有效值为真时缩进显示。 */
+  children: SettingRowNode[];
+}
+
+/** 开关设置名的后缀：`{前缀}.Enabled` 管着同前缀的其他设置。 */
+const SWITCH_SUFFIX = '.Enabled';
+
+/**
+ * 按命名约定把行挂到开关下面：名为 `{前缀}.Enabled` 的布尔设置，与名字以 `{前缀}.` 开头的其他设置组成一组。
+ * 约定是设置名这一跨前后端的字符串契约，不需要后端下发界面元数据。子项挂到前缀最长的那个开关下
+ * （子项里还有开关时逐级嵌套），排在开关之后、保持下发顺序；没有开关可挂的行原样留在顶层，不会消失。
+ */
+export function nestUnderSwitches(rows: readonly SettingOutputDto[]): SettingRowNode[] {
+  const nodes = rows.map((setting): SettingRowNode => ({ setting, children: [] }));
+  const switches = new Map<string, SettingRowNode>();
+  for (const node of nodes) {
+    const { name, isBoolean } = node.setting;
+    if (isBoolean === true && name.endsWith(SWITCH_SUFFIX) && name.length > SWITCH_SUFFIX.length) {
+      switches.set(name.slice(0, -SWITCH_SUFFIX.length), node);
+    }
+  }
+
+  const roots: SettingRowNode[] = [];
+  for (const node of nodes) {
+    (switchOf(node, switches)?.children ?? roots).push(node);
+  }
+
+  return roots;
+}
+
+/** 该行所属的开关：从最长的前缀往短找，跳过它自己（开关的前缀就是它本身管的那组）。 */
+function switchOf(
+  node: SettingRowNode,
+  switches: ReadonlyMap<string, SettingRowNode>,
+): SettingRowNode | undefined {
+  const name = node.setting.name;
+  for (let end = name.lastIndexOf('.'); end > 0; end = name.lastIndexOf('.', end - 1)) {
+    const candidate = switches.get(name.slice(0, end));
+    if (candidate && candidate !== node) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 /** 分组标识在 URL 里的写法：`RegistrationSecurity` → `registration-security`。 */
 export function groupPath(key: string): string {
   return key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();

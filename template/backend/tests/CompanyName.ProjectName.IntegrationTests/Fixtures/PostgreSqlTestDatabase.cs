@@ -29,6 +29,22 @@ internal static class PostgreSqlTestDatabase
         return new NpgsqlConnectionStringBuilder(admin) { Database = name }.ConnectionString;
     }
 
+    /// <summary>建一个没有任何迁移的空库，供迁移本身的升级、降级用例使用；用完同样经 <see cref="DropDatabase"/> 删除。</summary>
+    public static string CreateEmptyDatabase()
+    {
+        var admin = Task.Run(() => AdminConnectionString.Value).GetAwaiter().GetResult();
+        var name = $"test_{Guid.NewGuid():N}";
+        Execute(admin, $"CREATE DATABASE \"{name}\"");
+        return new NpgsqlConnectionStringBuilder(admin) { Database = name }.ConnectionString;
+    }
+
+    /// <summary>与 DbMigrator 相同历史表与 schema 的业务库上下文，不经宿主容器。</summary>
+    public static MyProjectDbContext CreateBusinessContext(string connectionString)
+        => new(new DbContextOptionsBuilder<MyProjectDbContext>()
+            .UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsHistoryTable(DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name))
+            .Options, serviceProvider: null);
+
     /// <summary>删除 <see cref="CreateDatabase"/> 建出的库，释放容器里的连接与内存。</summary>
     public static void DropDatabase(string connectionString)
     {
@@ -76,11 +92,7 @@ internal static class PostgreSqlTestDatabase
             await openIddict.Database.MigrateAsync();
         }
 #endif
-        var businessOptions = new DbContextOptionsBuilder<MyProjectDbContext>()
-            .UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable(DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name))
-            .Options;
-        await using var business = new MyProjectDbContext(businessOptions, serviceProvider: null);
+        await using var business = CreateBusinessContext(connectionString);
         await business.Database.MigrateAsync();
     }
 

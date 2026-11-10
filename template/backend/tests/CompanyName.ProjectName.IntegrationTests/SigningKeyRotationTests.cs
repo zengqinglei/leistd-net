@@ -20,7 +20,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
@@ -200,7 +199,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
     public async Task Forged_key_identifiers_do_not_multiply_log_entries()
     {
         using var issuer = new RotatingIssuer();
-        using var host = Host(baseline.Factory, issuer, logs: true);
+        using var host = Host(baseline.Factory, issuer);
         using var client = Client(host);
         Assert.Equal(HttpStatusCode.OK, await MeAsync(client, issuer.AccessToken(issuer.Current)));
         using var forgedRsa = RSA.Create(2048);
@@ -393,7 +392,7 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
         return response.StatusCode;
     }
 
-    private static WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, RotatingIssuer issuer, bool logs = false,
+    private static WebApplicationFactory<Program> Host(ProjectWebApplicationFactory factory, RotatingIssuer issuer,
         TimeSpan? fetchTimeout = null, Action<HttpClient>? observeClient = null) =>
         factory.WithWebHostBuilder(builder => builder.UseSetting("Authentication:Audience", "resource-api").ConfigureTestServices(services =>
         {
@@ -409,12 +408,6 @@ public sealed class SigningKeyRotationTests(SigningKeyRotationTests.Baseline bas
                     if (fetchTimeout is { } timeout) client.Timeout = timeout;
                     observeClient?.Invoke(client);
                 }));
-            if (logs)
-            {
-                // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
-                services.RemoveAll<ILoggerFactory>();
-                services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Information));
-            }
         }));
 
     private static HttpClient Client(WebApplicationFactory<Program> host, string? cookie = null)

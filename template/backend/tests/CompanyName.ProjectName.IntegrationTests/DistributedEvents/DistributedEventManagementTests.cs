@@ -91,9 +91,9 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
         Assert.Equal(PermissionConstant.DistributedEvents.Manage, entry.GetProperty("authorizationBasis").GetString());
 #else
         var entry = Assert.Single(Factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot(),
-            entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.DistributedEventRedelivered)
-                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded");
-        var name = OperationRecordLogCapture.Field(entry, "OperationTargetName") as string;
+            entry => OperationRecordLogCapture.Field(entry, "OperationAction") == OperationRecordActions.DistributedEventRedelivered
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome") == "Succeeded");
+        var name = OperationRecordLogCapture.Field(entry, "OperationTargetName");
         Assert.StartsWith("count=1; status=deadLettered; ", name);
         Assert.Contains("message-too-large", name);
         Assert.Contains("eventName=invoice.issued", name);
@@ -140,9 +140,9 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
         Assert.Contains("tenant=host", entry.GetProperty("targetName").GetString());
 #else
         var entry = Assert.Single(host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot(),
-            entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.DistributedEventRedecodeRequested)
-                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded");
-        Assert.Contains("tenant=host", OperationRecordLogCapture.Field(entry, "OperationTargetName") as string);
+            entry => OperationRecordLogCapture.Field(entry, "OperationAction") == OperationRecordActions.DistributedEventRedecodeRequested
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome") == "Succeeded");
+        Assert.Contains("tenant=host", OperationRecordLogCapture.Field(entry, "OperationTargetName"));
 #endif
         using var discarded = await admin.Client.PostAsJsonAsync($"{Root}/rejections/discard", new { Ids = new[] { id.ToString() } });
         Assert.Equal(HttpStatusCode.OK, discarded.StatusCode);

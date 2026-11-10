@@ -608,12 +608,6 @@
           ]
         },
         {
-          "condition": "!(SpaFrontend || IncludeWebhooks)",
-          "exclude": [
-            "backend/src/CompanyName.ProjectName.Infrastructure/DataProtectionExtensions.cs"
-          ]
-        },
-        {
           "condition": "!IncludeWebhooks",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Webhooks/**",

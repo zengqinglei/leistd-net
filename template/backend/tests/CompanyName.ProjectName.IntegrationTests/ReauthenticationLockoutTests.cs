@@ -99,8 +99,8 @@ public sealed class ReauthenticationLockoutTests(ProjectWebApplicationFactory fa
             .ToList();
 #else
         var failureCodes = factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
-            .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), "auth.password.changed"))
-            .Select(entry => OperationRecordLogCapture.Field(entry, "OperationFailureCode") as string);
+            .Where(entry => OperationRecordLogCapture.Field(entry, "OperationAction") == "auth.password.changed")
+            .Select(entry => OperationRecordLogCapture.Field(entry, "OperationFailureCode"));
 #endif
         Assert.Contains("Security:CurrentPasswordIncorrect", failureCodes);
     }

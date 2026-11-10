@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 #if (IncludeDistributedEvents)
 using Leistd.EventBus.Distributed;
 using Leistd.EventBus.Distributed.Transport;
@@ -30,11 +31,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using CompanyName.ProjectName.Domain.Users.Abstractions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-#endif
-#if (!IncludeOperationRecords)
-using Serilog.Core;
 #endif
 
 namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
@@ -94,11 +91,9 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #endif
 
     private string? connectionString;
-#if (SpaFrontend || IncludeWebhooks)
 
     // 每个宿主一份密钥目录：开发环境以外 Data Protection 要求显式的持久位置，测试给临时目录
     private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
-#endif
 
 #if (IncludeDistributedEvents)
     private static void UseLoopbackEventTransport(IServiceCollection services)
@@ -136,9 +131,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         connectionString ??= PostgreSqlTestDatabase.CreateDatabase();
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("ConnectionStrings:Redis", "");
-#if (SpaFrontend || IncludeWebhooks)
         builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
-#endif
 #if (OpenIddictServer)
         builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
 #endif
@@ -194,9 +187,11 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #if (IncludeDistributedEvents)
             UseLoopbackEventTransport(services);
 #endif
+            // 宿主日志管道上加一个收集提供程序：级别与类别过滤仍取宿主的 Logging 配置，
+            // 断言看到的就是生产配置下会输出的记录（GetFakeLogCollector() 读取）
+            services.AddLogging(logging => logging.AddFakeLogging());
 #if (!IncludeOperationRecords)
             services.AddSingleton<OperationRecordLogCapture>();
-            services.AddSingleton<ILogEventSink>(sp => sp.GetRequiredService<OperationRecordLogCapture>());
 #endif
 #if (RemoteTokenAuth)
             // 测试宿主里没有真实 Identity，启动探针永远探不通。这里直接把门禁置为已开：
@@ -279,12 +274,10 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             PostgreSqlTestDatabase.DropDatabase(connectionString);
         }
 
-#if (SpaFrontend || IncludeWebhooks)
         if (Directory.Exists(dataProtectionKeysPath))
         {
             Directory.Delete(dataProtectionKeysPath, recursive: true);
         }
-#endif
     }
 
     public HttpClient CreateProjectClient() => CreateProjectClient(this);

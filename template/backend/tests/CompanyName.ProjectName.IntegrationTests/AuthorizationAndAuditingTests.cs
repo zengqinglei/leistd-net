@@ -319,7 +319,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         }
 
         // 操作记录的"凭什么"是该分组的子权限，不是入口权限
-        var target = $"{SettingScopes.Host}/{SettingConstant.Logging.RequestLevel}";
+        var target = $"{SettingScopes.Host}/{SettingConstant.Logging.RequestLogging}";
         Task<int> RecordedAsync() => OperationRecordQueries.CountSucceededAsync(
             Factory, superAdmin.Client, OperationRecordActions.SettingChanged, target,
             authorizationBasis: PermissionConstant.Settings.Operations);
@@ -327,14 +327,14 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         using (var accepted = await operations.Client.PutAsJsonAsync(
                    "/api/v1/settings/current-tenant",
-                   new { Name = SettingConstant.Logging.RequestLevel, Value = "Warning" }))
+                   new { Name = SettingConstant.Logging.RequestLogging, Value = "false" }))
         {
             Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
         }
 
         using var cleared = await operations.Client.PutAsJsonAsync(
             "/api/v1/settings/current-tenant",
-            new { Name = SettingConstant.Logging.RequestLevel, Value = (string?)null });
+            new { Name = SettingConstant.Logging.RequestLogging, Value = (string?)null });
         Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
         Assert.Equal(recordedBefore + 2, await RecordedAsync());
     }

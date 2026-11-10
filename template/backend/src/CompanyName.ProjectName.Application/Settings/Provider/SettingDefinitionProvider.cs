@@ -239,10 +239,10 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
         AddEmail(context, SettingConstant.Email.DefaultFromName, "Sender name");
 #endif
 #endif
-        // 日志是**进程级**的：一个进程只有一个 logger，按租户各存一份无从生效，
+        // 日志是**进程级**的：一个进程只有一套日志管道，按租户各存一份无从生效，
         // 因此用 Host 层——租户上下文的写入会被就地拒绝，而不是写进去不起作用。
         //
-        // 默认值取部署基线（Serilog 配置节），与注册策略取 appsettings 是同一个口径：
+        // 默认值取部署基线（Logging 配置节），与注册策略取 appsettings 是同一个口径：
         // 配置给基线、设置表给运行期覆盖。写死成 Information 的话，部署把级别配成
         // Warning 也会被顶掉，而清除覆盖值同样回不到部署基线。
         context.Add(
@@ -253,15 +253,38 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             .WithAllowedValues(SettingConstant.Logging.Levels)
             .IsVisibleToClients = true;
 
-        // 正常完成的请求记成哪一级。调到 Verbose 就等于关掉请求日志——
-        // 全局最小级别通常是 Information，Verbose 的记录不会落盘。
+        // 是否记录正常完成的请求；失败请求（5xx）不受它影响。默认值取请求日志选项的属性默认值
         context.Add(
-            SettingConstant.Logging.RequestLevel,
+            SettingConstant.Logging.RequestLogging,
             scopes: SettingScopes.Host,
-            displayName: "Request log level",
+            displayName: "Log each completed request",
             group: SettingConstant.Groups.Operations)
-            .WithAllowedValues(SettingConstant.Logging.Levels)
+            .AsBoolean()
             .IsVisibleToClients = true;
+
+        // 遥测导出同样是进程级。开关与地址的默认值取部署基线；认证头是机密设置，没有默认值，未设置时用部署配置里的
+        context.Add(
+            SettingConstant.Telemetry.ExportEnabled,
+            scopes: SettingScopes.Host,
+            displayName: "Export telemetry over OTLP",
+            group: SettingConstant.Groups.Operations)
+            .AsBoolean()
+            .IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Telemetry.ExportEndpoint,
+            scopes: SettingScopes.Host,
+            displayName: "OTLP endpoint",
+            group: SettingConstant.Groups.Operations)
+            .IsVisibleToClients = true;
+
+        var exportHeaders = context.Add(
+            SettingConstant.Telemetry.ExportHeaders,
+            scopes: SettingScopes.Host,
+            displayName: "OTLP headers",
+            group: SettingConstant.Groups.Operations);
+        exportHeaders.IsEncrypted = true;
+        exportHeaders.IsVisibleToClients = true;
 
 #if (IncludeOperationRecords)
         // 操作记录保留期同样是进程级：归档任务跨租户统一执行。默认值取部署基线，

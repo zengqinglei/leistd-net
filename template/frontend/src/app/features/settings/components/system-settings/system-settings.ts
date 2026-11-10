@@ -227,7 +227,7 @@ const GROUP_DESCRIPTIONS: Readonly<Record<string, string>> = {
   //#if (IncludeOperationRecords || IncludeNotifications)
   Retention: 'How long expired data is kept before it is cleaned up',
   //#endif
-  Operations: 'How much detail the logs record',
+  Operations: 'Log detail, request logging and telemetry export',
 };
 
 /** 不含本地化时进程级设置的说明，与 `en.json` 的 `hostScope` 同步。 */

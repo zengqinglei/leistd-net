@@ -42,7 +42,7 @@ class Panel {}
 
 /** 面板来自可管理的分组：说明按分组标识取，后端新增而前端没登记的分组照常出现、只是没有说明。 */
 describe('SystemSettings panels', () => {
-  const description = 'How much detail the logs record';
+  const description = 'Log detail, request logging and telemetry export';
   let harness: RouterTestingHarness;
 
   async function render(

@@ -12,12 +12,9 @@ using Leistd.Email.Smtp.Options;
 using Leistd.MultiTenancy.AspNetCore.Options;
 #endif
 using Leistd.OperationRecords.Errors;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 
@@ -204,14 +201,8 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
     public async Task Sender_address_must_be_a_bare_mailbox()
     {
         const string address = "Acme <noreply@acme.test>";
-        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            // 宿主用 Serilog 接管了日志工厂，不换回标准工厂，"日志里没有"就恒成立、证伪不了
-            services.RemoveAll<ILoggerFactory>();
-            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
-                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
-                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
-        }));
+        // 独立宿主：收集器里只有本用例的日志
+        using var host = factory.WithWebHostBuilder(_ => { });
         using var admin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 

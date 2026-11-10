@@ -284,13 +284,46 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsHostScope: true,
   },
   {
-    name: 'Logging.RequestLevel',
-    displayName: 'Request log level',
+    // 默认值即部署基线 RequestLogging:Enabled（代码默认开）
+    name: 'Logging.RequestLogging',
+    displayName: 'Log each completed request',
     group: 'Operations',
-    defaultValue: 'Information',
+    defaultValue: 'true',
     allowsTenantScope: false,
     allowsUserScope: false,
     allowsHostScope: true,
+    isBoolean: true,
+  },
+  {
+    // 兜底值是"部署配置了 OTLP 地址"：Mock 的演示部署没有配，默认关闭，地址也没有继承值
+    name: 'Telemetry.Export.Enabled',
+    displayName: 'Export telemetry over OTLP',
+    group: 'Operations',
+    defaultValue: 'false',
+    allowsTenantScope: false,
+    allowsUserScope: false,
+    allowsHostScope: true,
+    isBoolean: true,
+  },
+  {
+    name: 'Telemetry.Export.Endpoint',
+    displayName: 'OTLP endpoint',
+    group: 'Operations',
+    defaultValue: null,
+    allowsTenantScope: false,
+    allowsUserScope: false,
+    allowsHostScope: true,
+  },
+  {
+    // 机密设置：与 SMTP 口令一样只写不回显，只报告是否设过
+    name: 'Telemetry.Export.Headers',
+    displayName: 'OTLP headers',
+    group: 'Operations',
+    defaultValue: null,
+    allowsTenantScope: false,
+    allowsUserScope: false,
+    allowsHostScope: true,
+    isSecret: true,
   },
   //#if (IncludeOperationRecords)
   {
@@ -424,7 +457,10 @@ export const SETTING_TEXTS_ZH_CN: Readonly<Record<string, string>> = {
   'Setting:Display.TimeZone': '时区',
   'Setting:Display.Theme': '外观',
   'Setting:Logging.MinimumLevel': '最小日志级别',
-  'Setting:Logging.RequestLevel': '请求日志级别',
+  'Setting:Logging.RequestLogging': '记录请求完成日志',
+  'Setting:Telemetry.Export.Enabled': '经 OTLP 导出遥测数据',
+  'Setting:Telemetry.Export.Endpoint': 'OTLP 导出地址',
+  'Setting:Telemetry.Export.Headers': 'OTLP 认证头',
   //#if (IncludeOperationRecords)
   'Setting:Audit.RetentionEnabled': '到期操作记录搬入归档',
   //#endif

@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
-/// <summary>按实际输出适配读取证据：数据库经受保护端点，日志经真实 Serilog sink。</summary>
+/// <summary>按实际输出适配读取证据：数据库经受保护端点，日志经宿主日志管道的收集提供程序。</summary>
 internal static class OperationRecordQueries
 {
     public static async Task<List<(string? FailureCode, string? AuthorizationBasis)>> GetFailuresAsync(
@@ -26,13 +26,13 @@ internal static class OperationRecordQueries
 #else
         await Task.CompletedTask;
         return host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
-            .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), action)
-                && Equals(OperationRecordLogCapture.Field(entry, "OperationTargetId"), targetId)
-                && Equals(OperationRecordLogCapture.Field(entry, "OperationTenantId"), tenantId)
-                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Failed")
+            .Where(entry => OperationRecordLogCapture.Field(entry, "OperationAction") == action
+                && OperationRecordLogCapture.Field(entry, "OperationTargetId") == targetId
+                && OperationRecordLogCapture.Field(entry, "OperationTenantId") == tenantId?.ToString()
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome") == "Failed")
             .OrderByDescending(entry => entry.Timestamp)
-            .Select(entry => (OperationRecordLogCapture.Field(entry, "OperationFailureCode") as string,
-                OperationRecordLogCapture.Field(entry, "OperationAuthorizationBasis") as string)).ToList();
+            .Select(entry => (OperationRecordLogCapture.Field(entry, "OperationFailureCode"),
+                OperationRecordLogCapture.Field(entry, "OperationAuthorizationBasis"))).ToList();
 #endif
     }
 
@@ -50,11 +50,11 @@ internal static class OperationRecordQueries
 #else
         await Task.CompletedTask;
         return host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
-            .Where(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), action)
-                && Equals(OperationRecordLogCapture.Field(entry, "OperationTargetId"), targetId)
-                && Equals(OperationRecordLogCapture.Field(entry, "OperationTenantId"), tenantId)
-                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Failed")
-            .Select(entry => OperationRecordLogCapture.Field(entry, "OperationActorId")?.ToString())
+            .Where(entry => OperationRecordLogCapture.Field(entry, "OperationAction") == action
+                && OperationRecordLogCapture.Field(entry, "OperationTargetId") == targetId
+                && OperationRecordLogCapture.Field(entry, "OperationTenantId") == tenantId?.ToString()
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome") == "Failed")
+            .Select(entry => OperationRecordLogCapture.Field(entry, "OperationActorId"))
             .ToList();
 #endif
     }
@@ -72,12 +72,12 @@ internal static class OperationRecordQueries
 #else
         await Task.CompletedTask;
         return host.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot()
-            .Count(entry => Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), action)
-                && Equals(OperationRecordLogCapture.Field(entry, "OperationTargetId"), targetId)
-                && Equals(OperationRecordLogCapture.Field(entry, "OperationTenantId"), tenantId)
-                && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded"
+            .Count(entry => OperationRecordLogCapture.Field(entry, "OperationAction") == action
+                && OperationRecordLogCapture.Field(entry, "OperationTargetId") == targetId
+                && OperationRecordLogCapture.Field(entry, "OperationTenantId") == tenantId?.ToString()
+                && OperationRecordLogCapture.Field(entry, "OperationOutcome") == "Succeeded"
                 && (authorizationBasis is null
-                    || Equals(OperationRecordLogCapture.Field(entry, "OperationAuthorizationBasis"), authorizationBasis)));
+                    || OperationRecordLogCapture.Field(entry, "OperationAuthorizationBasis") == authorizationBasis));
 #endif
     }
 }

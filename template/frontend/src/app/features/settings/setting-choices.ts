@@ -14,26 +14,36 @@ export interface SettingChoice {
 }
 
 /**
- * 日志级别候选项，与后端 `SettingConstant.Logging.Levels`（Serilog `LogEventLevel`）逐字一致。
- * 不本地化：翻译后对不上日志里实际出现的词。
+ * 日志级别候选项，与后端 `SettingConstant.Logging.Levels`（.NET `LogLevel` 名称，不含 `None`）逐字一致。
+ * 不本地化：翻译后对不上配置与日志里实际出现的词。
  */
 const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
-  { value: 'Verbose', label: 'Verbose' },
+  { value: 'Trace', label: 'Trace' },
   { value: 'Debug', label: 'Debug' },
   { value: 'Information', label: 'Information' },
   { value: 'Warning', label: 'Warning' },
   { value: 'Error', label: 'Error' },
-  { value: 'Fatal', label: 'Fatal' },
+  { value: 'Critical', label: 'Critical' },
 ];
 
 /** 日志级别说明的词条键，选中后显示：级别名说不出会多打多少日志。级别名不翻译，说明要翻译。 */
 export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  Verbose: 'settings.logLevelHints.Verbose',
+  Trace: 'settings.logLevelHints.Trace',
   Debug: 'settings.logLevelHints.Debug',
   Information: 'settings.logLevelHints.Information',
   Warning: 'settings.logLevelHints.Warning',
   Error: 'settings.logLevelHints.Error',
-  Fatal: 'settings.logLevelHints.Fatal',
+  Critical: 'settings.logLevelHints.Critical',
+};
+
+/**
+ * 显示名说不清写法或效果的设置，在标签下方给一句固定说明（词条键）。后端设置定义不承载界面说明，
+ * 与候选项一样留在前端；没有登记的设置没有说明。
+ */
+export const SETTING_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  [SETTINGS.telemetry.exportEnabled]: 'settings.settingHints.telemetryExportEnabled',
+  [SETTINGS.telemetry.exportEndpoint]: 'settings.settingHints.telemetryExportEndpoint',
+  [SETTINGS.telemetry.exportHeaders]: 'settings.settingHints.telemetryExportHeaders',
 };
 
 /**
@@ -53,7 +63,6 @@ export const SETTING_CHOICES: Readonly<Record<string, readonly SettingChoice[]>>
     labelKey: `theme.mode.${mode}`,
   })),
   [SETTINGS.logging.minimumLevel]: LOG_LEVEL_CHOICES,
-  [SETTINGS.logging.requestLevel]: LOG_LEVEL_CHOICES,
 };
 
 /** 时区选项：一个分组里的一行。 */

@@ -131,6 +131,39 @@ describe('settings mock', () => {
     expect(row?.tenantValue).toBe('America/New_York');
   });
 
+  // 请求日志与遥测导出开关是布尔；认证头是机密设置，写入后只报告"已设置"，值不下发
+  it('serves request logging and telemetry export as host settings with write-only headers', () => {
+    signIn('user_admin');
+    expect(
+      statusOf(() =>
+        api[putTenant](request({ name: 'Telemetry.Export.Headers', value: 'x-api-key=secret-a' })),
+      ),
+    ).toBe(200);
+
+    const rows = api[get](request()) as (SettingRow & {
+      isBoolean: boolean;
+      isSecret: boolean;
+      hasSecretValue: boolean;
+      defaultValue: string | null;
+    })[];
+    const find = (name: string) => rows.find((s) => s.name === name);
+    expect(rows.some((s) => s.name === 'Logging.RequestLevel')).toBe(false);
+    for (const name of ['Logging.RequestLogging', 'Telemetry.Export.Enabled']) {
+      expect(find(name)).toMatchObject({
+        group: 'Operations',
+        isBoolean: true,
+        allowsHostScope: true,
+      });
+    }
+    expect(find('Telemetry.Export.Endpoint')).toMatchObject({ isBoolean: false, isSecret: false });
+    expect(find('Telemetry.Export.Headers')).toMatchObject({
+      isSecret: true,
+      hasSecretValue: true,
+      tenantValue: null,
+    });
+    expect(JSON.stringify(rows)).not.toContain('secret-a');
+  });
+
   //#if (IncludeMultiTenancy)
   // 用户级覆盖按 `{tenant}:u:{userId}` 隔离；租户随登录一起定案，之后请求头改不动它。
   it('keeps overrides separate per tenant', () => {

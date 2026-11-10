@@ -104,9 +104,9 @@ public sealed class ResourceMemberAccessTests(ProjectWebApplicationFactory facto
                 && record.Outcome == OperationRecordOutcome.Succeeded));
 #else
         Assert.DoesNotContain(factory.Services.GetRequiredService<OperationRecordLogCapture>().Snapshot(), entry =>
-            Equals(OperationRecordLogCapture.Field(entry, "OperationAction"), OperationRecordActions.UserDisabled)
-            && Equals(OperationRecordLogCapture.Field(entry, "OperationTargetId"), subjectId.ToString())
-            && OperationRecordLogCapture.Field(entry, "OperationOutcome")?.ToString() == "Succeeded");
+            OperationRecordLogCapture.Field(entry, "OperationAction") == OperationRecordActions.UserDisabled
+            && OperationRecordLogCapture.Field(entry, "OperationTargetId") == subjectId.ToString()
+            && OperationRecordLogCapture.Field(entry, "OperationOutcome") == "Succeeded");
 #endif
     }
 
