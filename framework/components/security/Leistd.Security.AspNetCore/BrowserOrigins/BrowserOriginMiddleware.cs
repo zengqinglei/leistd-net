@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -33,8 +34,9 @@ public sealed class BrowserOriginMiddleware(RequestDelegate next, IOptions<Brows
             : hasSite && (site.Count != 1 || site[0] is not ("same-origin" or "none"));
         if (rejected)
         {
-            logger.LogWarning("Browser request rejected: {Method} {Path}, Origin {Origin}, Sec-Fetch-Site {FetchSite}, request origin {RequestOrigin}.",
-                request.Method, request.Path.Value, origin.ToString(), site.ToString(), sameOrigin);
+            // 记路由模板而不是原始路径（路径段可能是机密），未匹配端点时为 null
+            logger.LogWarning("Browser request rejected: {Method} {Route}, Origin {Origin}, Sec-Fetch-Site {FetchSite}, request origin {RequestOrigin}.",
+                request.Method, (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText, origin.ToString(), site.ToString(), sameOrigin);
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
