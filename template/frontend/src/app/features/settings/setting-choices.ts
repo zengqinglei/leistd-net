@@ -1,69 +1,103 @@
 //#if (IncludeLocalization)
-import { LANG_OPTIONS } from '../../core/services/language-service';
+import { LANG_OPTIONS, SUPPORTED_LANGS } from '../../core/services/language-service';
 //#endif
 import { THEME_MODES } from '../../core/services/theme-service';
 import { SETTINGS } from '../../core/settings/setting.constants';
+import { AccountPreferenceField } from '../../shared/dtos/account-preferences.dto';
 
-/** 一个可选值及其展示文案。 */
-export interface SettingChoice {
-  value: string;
-  /** 不随界面语言变化的文案；给了 {@link labelKey} 时不用。 */
-  label: string;
-  /** 随界面语言变化的文案取这个词条。 */
-  labelKey?: string;
-}
+/*
+ * 设置页的声明表：项目在设置页上的差异只写在这个文件里，通用的设置分区组件不出现任何设置名。
+ * 值域、层级与显示名来自后端设置定义；这里只补后端定义不承载的界面信息。没有登记的设置按通用规则渲染：
+ * 布尔为开关，带区间为数字框，带候选值（`allowedValues`）为下拉，其余为文本框。
+ */
+
+/** 候选项文案：词条前缀（取 `<前缀>.<值>`，缺词条时显示原值），或直接给出文案的函数。 */
+export type SettingValueLabel = string | ((value: string) => string);
 
 /**
- * 日志级别候选项，与后端 `SettingConstant.Logging.Levels`（.NET `LogLevel` 名称，不含 `None`）逐字一致。
- * 不本地化：翻译后对不上配置与日志里实际出现的词。
+ * 候选项的文案。候选值只认后端下发的 `allowedValues`，这里不再列一份值域；没有登记的设置直接显示原值
+ * （日志级别不翻译：翻译后对不上配置与日志里实际出现的词）。
  */
-const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
-  { value: 'Trace', label: 'Trace' },
-  { value: 'Debug', label: 'Debug' },
-  { value: 'Information', label: 'Information' },
-  { value: 'Warning', label: 'Warning' },
-  { value: 'Error', label: 'Error' },
-  { value: 'Critical', label: 'Critical' },
-];
+export const SETTING_VALUE_LABELS: Readonly<Partial<Record<string, SettingValueLabel>>> = {
+  //#if (IncludeLocalization)
+  // 各语种用自己的本地名，不随界面语言变化，与页头的语言切换同一份清单
+  [SETTINGS.display.language]: (value) =>
+    LANG_OPTIONS.find((option) => option.id === value)?.label ?? value,
+  //#endif
+  // 与页头的主题切换同一组词条，两处写法一致
+  [SETTINGS.display.theme]: 'theme.mode',
+};
 
-/** 日志级别说明的词条键，选中后显示：级别名说不出会多打多少日志。级别名不翻译，说明要翻译。 */
-export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  Trace: 'settings.logLevelHints.Trace',
-  Debug: 'settings.logLevelHints.Debug',
-  Information: 'settings.logLevelHints.Information',
-  Warning: 'settings.logLevelHints.Warning',
-  Error: 'settings.logLevelHints.Error',
-  Critical: 'settings.logLevelHints.Critical',
+/** 按当前取值显示的说明（词条前缀，取 `<前缀>.<值>`）：本层的值或继承来的值都适用。级别名说不出会多打多少日志。 */
+export const SETTING_VALUE_DESCRIPTIONS: Readonly<Partial<Record<string, string>>> = {
+  [SETTINGS.logging.minimumLevel]: 'settings.logLevelHints',
 };
 
 /**
  * 显示名说不清写法或效果的设置，在标签下方给一句固定说明（词条键）。后端设置定义不承载界面说明，
- * 与候选项一样留在前端；没有登记的设置没有说明。
+ * 没有登记的设置没有说明。
  */
-export const SETTING_DESCRIPTIONS: Readonly<Record<string, string>> = {
+export const SETTING_DESCRIPTIONS: Readonly<Partial<Record<string, string>>> = {
   [SETTINGS.telemetry.exportEnabled]: 'settings.settingHints.telemetryExportEnabled',
   [SETTINGS.telemetry.exportEndpoint]: 'settings.settingHints.telemetryExportEndpoint',
   [SETTINGS.telemetry.exportHeaders]: 'settings.settingHints.telemetryExportHeaders',
 };
 
 /**
- * 取值封闭且选项不多的设置的候选项。候选项留在前端：后端设置定义不承载控件元数据，否则每加一种
- * 控件都要改后端契约。时区见 {@link timeZoneGroups}；其余设置渲染成文本框。
+ * 专用控件：
+ * - `timeZone`：可搜索的分组下拉，候选为全量时区（见 {@link timeZoneGroups}）；
+ * - `language`：界面语言下拉，只支持一种语言时不出这一行；
+ * - `theme`：外观下拉，个人页未设置时显示设备当前的外观。
+ *
+ * `language` 与 `timeZone` 由设备兜底：本层未覆盖时说明值从哪层来（跟随组织、部署默认、跟随系统）。
  */
-export const SETTING_CHOICES: Readonly<Record<string, readonly SettingChoice[]>> = {
+export type SettingControl = 'timeZone' | 'language' | 'theme';
+
+/** 用专用控件渲染的设置；没有登记的按通用规则渲染。 */
+export const SETTING_CONTROLS: Readonly<Partial<Record<string, SettingControl>>> = {
   //#if (IncludeLocalization)
-  // 直接取语言服务的清单：候选值就是应用真正支持的语言，另抄一份必然漂移。
-  // 文案用语言自身的本地名，因此不随界面语言变化，也不需要词条。
-  [SETTINGS.display.language]: LANG_OPTIONS.map((o) => ({ value: o.id, label: o.label })),
+  [SETTINGS.display.language]: 'language',
   //#endif
-  // 与页头的主题切换同一组词条，两处写法一致
-  [SETTINGS.display.theme]: THEME_MODES.map((mode) => ({
-    value: mode,
-    label: mode,
-    labelKey: `theme.mode.${mode}`,
-  })),
-  [SETTINGS.logging.minimumLevel]: LOG_LEVEL_CHOICES,
+  [SETTINGS.display.timeZone]: 'timeZone',
+  [SETTINGS.display.theme]: 'theme',
 };
+
+/** 显式依赖：上级的取值满足 `shownWhen` 时，子设置缩进显示在上级之下。 */
+export interface SettingDependency {
+  /** 上级设置名。 */
+  parent: string;
+  /** 按上级的取值（本层的值，没有时为继承值）判断子设置是否显示。 */
+  shownWhen: (parentValue: string) => boolean;
+}
+
+/**
+ * 设置之间的显式依赖（子设置名 → 依赖），补充命名约定表达不了的情形，例如某个枚举取值不为 `off` 时才显示：
+ * `'Reports.Archive.Days': { parent: 'Reports.Mode', shownWhen: (mode) => mode !== 'off' }`。
+ *
+ * 命名约定不用登记：`{前缀}.Enabled` 开关下自动挂同前缀的其他设置，开关为真时显示。同一子设置两种都命中时以这里为准。
+ * 上级不在当前页面上（被分组或权限过滤掉）时子设置照常显示在顶层；收起只是不显示，值不清空。
+ * 依赖不能成环：组件不做环检测，成环的设置不会出现。
+ */
+export const SETTING_DEPENDENCIES: Readonly<Partial<Record<string, SettingDependency>>> = {};
+
+/** 个人页的一行账户偏好：偏好字段、同名设置，以及候选值（偏好不取设置快照，候选值在这里给出）。 */
+export interface AccountPreferenceSetting {
+  field: AccountPreferenceField;
+  name: string;
+  allowedValues?: readonly string[];
+}
+
+/**
+ * 个人页的账户偏好行，按显示顺序：先影响能否读懂的语言，再影响数据解读的时区，最后外观。
+ * 候选值与后端定义的 `allowedValues` 相同，取自前端自己的语言与主题清单（i18n 闸门核对语言清单两端一致）。
+ */
+export const ACCOUNT_PREFERENCE_SETTINGS: readonly AccountPreferenceSetting[] = [
+  //#if (IncludeLocalization)
+  { field: 'language', name: SETTINGS.display.language, allowedValues: SUPPORTED_LANGS },
+  //#endif
+  { field: 'timeZone', name: SETTINGS.display.timeZone },
+  { field: 'theme', name: SETTINGS.display.theme, allowedValues: THEME_MODES },
+];
 
 /** 时区选项：一个分组里的一行。 */
 export interface TimeZoneOption {

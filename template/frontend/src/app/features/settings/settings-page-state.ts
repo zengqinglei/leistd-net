@@ -5,6 +5,7 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 
+import { SettingDependency } from './setting-choices';
 import { applicationErrorMessage } from '../../core/errors/application-http-error';
 import { SessionContextService } from '../../core/services/session-context-service';
 import { SettingContextService } from '../../core/settings/setting-context-service';
@@ -48,25 +49,38 @@ export function groupSettings(settings: readonly SettingOutputDto[]): SettingGro
   return [...byKey.values()];
 }
 
-/** 一行设置及挂在它下面的子项（见 {@link nestUnderSwitches}）。 */
+/** 一行设置及挂在它下面的子项（见 {@link buildSettingTree}）。 */
 export interface SettingRowNode {
   setting: SettingOutputDto;
-  /** 本行是 `{前缀}.Enabled` 开关时，同前缀的其他设置；开关有效值为真时缩进显示。 */
+  /** 按上级取值判断本行是否显示；顶层行没有上级，始终显示。 */
+  shownWhen?: (parentValue: string) => boolean;
+  /** 依赖本行的设置：本行的取值满足各自的条件时缩进显示在本行之下，可以再往下挂。 */
   children: SettingRowNode[];
 }
 
 /** 开关设置名的后缀：`{前缀}.Enabled` 管着同前缀的其他设置。 */
 const SWITCH_SUFFIX = '.Enabled';
 
+/** 命名约定的显示条件：开关的取值为真。 */
+const switchedOn = (value: string): boolean => value === 'true';
+
 /**
- * 按命名约定把行挂到开关下面：名为 `{前缀}.Enabled` 的布尔设置，与名字以 `{前缀}.` 开头的其他设置组成一组。
- * 约定是设置名这一跨前后端的字符串契约，不需要后端下发界面元数据。子项挂到前缀最长的那个开关下
- * （子项里还有开关时逐级嵌套），排在开关之后、保持下发顺序；没有开关可挂的行原样留在顶层，不会消失。
+ * 按依赖把行组成树：声明了显式依赖（`dependencies`，子设置名 → 上级）的只挂到声明的上级下，没有声明的按命名约定挂接——
+ * 名为 `{前缀}.Enabled` 的布尔设置管着名字以 `{前缀}.` 开头的其他设置，挂到前缀最长的那个开关下。
+ * 约定是设置名这一跨前后端的字符串契约，不需要后端下发界面元数据。
+ *
+ * 子项排在上级之后、保持下发顺序，子项还可以有子项。上级不在 `rows` 里（被分组或权限过滤掉）时子项留在顶层，
+ * 不会消失。不做环检测：依赖表由开发者维护，成环的设置互为上级、不会出现在树上。
  */
-export function nestUnderSwitches(rows: readonly SettingOutputDto[]): SettingRowNode[] {
-  const nodes = rows.map((setting): SettingRowNode => ({ setting, children: [] }));
+export function buildSettingTree(
+  rows: readonly SettingOutputDto[],
+  dependencies: Readonly<Partial<Record<string, SettingDependency>>>,
+): SettingRowNode[] {
+  const nodes = new Map(
+    rows.map((setting): [string, SettingRowNode] => [setting.name, { setting, children: [] }]),
+  );
   const switches = new Map<string, SettingRowNode>();
-  for (const node of nodes) {
+  for (const node of nodes.values()) {
     const { name, isBoolean } = node.setting;
     if (isBoolean === true && name.endsWith(SWITCH_SUFFIX) && name.length > SWITCH_SUFFIX.length) {
       switches.set(name.slice(0, -SWITCH_SUFFIX.length), node);
@@ -74,8 +88,17 @@ export function nestUnderSwitches(rows: readonly SettingOutputDto[]): SettingRow
   }
 
   const roots: SettingRowNode[] = [];
-  for (const node of nodes) {
-    (switchOf(node, switches)?.children ?? roots).push(node);
+  for (const node of nodes.values()) {
+    // 声明了显式依赖就只认它：上级缺席时留在顶层，不再按命名约定挂到别的开关下
+    const dependency = dependencies[node.setting.name];
+    const parent = dependency ? nodes.get(dependency.parent) : switchOf(node, switches);
+    if (!parent || parent === node) {
+      roots.push(node);
+      continue;
+    }
+
+    node.shownWhen = dependency ? dependency.shownWhen : switchedOn;
+    parent.children.push(node);
   }
 
   return roots;
@@ -95,6 +118,16 @@ function switchOf(
   }
 
   return undefined;
+}
+
+/**
+ * 当前应显示的子项：按上级此刻的取值逐个判断。树按层渲染，上级没显示时它的子项也不渲染，
+ * 因此沿祖先链的每一级都要满足条件。
+ *
+ * @param parentValue 上级此刻的取值：未保存的输入优先，没有时为继承值。
+ */
+export function shownChildren(node: SettingRowNode, parentValue: string): SettingRowNode[] {
+  return node.children.filter((child) => child.shownWhen?.(parentValue) ?? true);
 }
 
 /** 分组标识在 URL 里的写法：`RegistrationSecurity` → `registration-security`。 */

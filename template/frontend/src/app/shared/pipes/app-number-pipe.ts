@@ -7,12 +7,14 @@ import { Pipe, PipeTransform } from '@angular/core';
  * - `compact`：紧凑写法（`1.2k`、`1.2万`），指标卡大数与坐标轴刻度；完整整数由调用方放进提示。
  * - `change`：变化率，输入是**比例**（0.29 表示 +29%），带正负号，0 写作 `0%`。
  * - `percent`：占比（成功率等），输入是**比例**（0.992 表示 99.2%），最多一位小数、不带正负号。
+ * - `share`：需按原精度展示的份额（持股比例等），输入是**比例**（0.2499 表示 24.99%），最多两位小数。
  */
 const SLOTS = {
   integer: { maximumFractionDigits: 0 },
   compact: { notation: 'compact', maximumFractionDigits: 1 },
   change: { style: 'percent', signDisplay: 'exceptZero', maximumFractionDigits: 0 },
   percent: { style: 'percent', maximumFractionDigits: 1 },
+  share: { style: 'percent', maximumFractionDigits: 2 },
 } as const satisfies Record<string, Intl.NumberFormatOptions>;
 
 export type AppNumberFormat = keyof typeof SLOTS;

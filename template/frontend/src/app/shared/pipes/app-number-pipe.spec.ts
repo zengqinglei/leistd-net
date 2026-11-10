@@ -26,6 +26,12 @@ describe('AppNumber', () => {
     expect(pipe.transform(0, 'percent', 'en-US')).toBe('0%');
   });
 
+  it('keeps two decimals for ownership shares', () => {
+    expect(pipe.transform(0.2499, 'share', 'en-US')).toBe('24.99%');
+    expect(pipe.transform(0.3333, 'share', 'zh-CN')).toBe('33.33%');
+    expect(pipe.transform(1, 'share', 'en-US')).toBe('100%');
+  });
+
   it('writes a change ratio as a signed percentage', () => {
     const change = (previous: number, current: number) => (current - previous) / previous;
 

@@ -1,8 +1,4 @@
 import { hasPermission, requirePermission } from './authorization';
-//#if (IncludeLocalization)
-import { SUPPORTED_LANGS } from '../../src/app/core/services/language-service';
-//#endif
-import { THEME_MODES, ThemeMode } from '../../src/app/core/services/theme-service';
 //#if (ExternalLogin)
 import { ExternalLoginStatusOutputDto } from '../../src/app/core/settings/setting.dto';
 //#endif
@@ -187,19 +183,11 @@ function assertValidValue(definition: MockSettingDefinition, value: string | nul
     });
   }
 
-  //#if (IncludeLocalization)
-  if (name === 'Display.Language' && !(SUPPORTED_LANGS as readonly string[]).includes(value)) {
+  // 与设置组件一致：带候选值的设置只认候选值（语言、外观、日志级别）
+  if (definition.allowedValues && !definition.allowedValues.includes(value)) {
     throw new MockException(400, {
       code: 'Setting:ValueNotAllowed',
-      message: `'${value}' is not a supported language.`,
-    });
-  }
-
-  //#endif
-  if (name === 'Display.Theme' && !THEME_MODES.includes(value as ThemeMode)) {
-    throw new MockException(400, {
-      code: 'Setting:ValueNotAllowed',
-      message: `'${value}' is not a supported appearance.`,
+      message: `'${value}' is not an allowed value. Allowed: ${definition.allowedValues.join(', ')}.`,
     });
   }
 
@@ -366,6 +354,9 @@ export const SETTING_API = {
         // 与真实后端一致：值为 null 的属性不下发，没有区间的设置不带这两个字段
         ...(definition.minimum === undefined ? {} : { minimum: definition.minimum }),
         ...(definition.maximum === undefined ? {} : { maximum: definition.maximum }),
+        ...(definition.allowedValues === undefined
+          ? {}
+          : { allowedValues: definition.allowedValues }),
         isBoolean: definition.isBoolean ?? false,
         isSecret: definition.isSecret ?? false,
         hasSecretValue:

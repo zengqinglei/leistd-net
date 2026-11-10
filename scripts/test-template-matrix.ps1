@@ -264,6 +264,20 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     Assert-I18nGate $ProjectRoot
     Assert-ErrorCodeGate $ProjectRoot
     Assert-TestDiagnosticsGate $ProjectRoot
+    Assert-SettingGroupIconGate $ProjectRoot
+}
+
+# 设置分组图标闸门随前端下发（template.json 的 !SpaFrontend 排除项），在裁剪后的产物上跑通：
+# 每个形态的后端分组与前端图标登记都按参数裁剪，模板源码上通过不代表各形态都通过。
+function Assert-SettingGroupIconGate([string]$ProjectRoot) {
+    $gate = Join-Path $ProjectRoot "scripts/check-setting-group-icons.py"
+    $hasFrontend = Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend")
+    if ((Test-Path -LiteralPath $gate) -ne $hasFrontend) {
+        throw "scripts/check-setting-group-icons.py must ship exactly when the SPA frontend is generated (frontend: $hasFrontend)"
+    }
+    if ($hasFrontend) {
+        Invoke-External (Get-Python3Command '运行生成项目的设置分组图标闸门') @($gate) $ProjectRoot
+    }
 }
 
 # 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
@@ -359,6 +373,7 @@ function Assert-VerifySteps([string]$ProjectRoot) {
         if (Test-Path -LiteralPath (Join-Path $ProjectRoot "scripts/$gate.py")) { $expected.Add($gate) }
     }
     $expected.Add('check-test-diagnostics')
+    if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'scripts/check-setting-group-icons.py')) { $expected.Add('check-setting-group-icons') }
     $expected.Add('backend-restore')
     $expected.Add('backend-build')
     $expected.Add('backend-format')

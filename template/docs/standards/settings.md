@@ -56,6 +56,9 @@
 - 设置行是单列 Spartan Field 列表，行间只留白、不画线（也不用虚线，本项目的虚线表示添加）：标签在左，控件与恢复按钮在右；开关 `orientation="horizontal"`，输入类 `responsive`（列表宽时固定 `w-64` 右对齐，窄时落到标签下方）；标签行至少与控件同高并垂直居中，标签折行时控件按内容块居中；进程级生效范围用 `app-info-hint`：整组都是进程级时只在面板标题旁放一次，混合分组放在该行标签旁；写入状态接在标签后面（进程级的行保存成功时说明多久全部生效），长错误在列内折行；即改即存的控件写入期间不禁用（禁用会把焦点弹到页面上），再次操作排队写入、以最后一次为准，行状态由最后一次写入给出。开关经 `aria-describedby` 指向本行描述（`hlm-switch` 不会自动关联所在字段的描述）。
 - "填完再保存"的表单（个人资料、修改密码）用同一种行：标签在左（说明接在标签下），输入在右（宽时 `basis-64` 右对齐，错误接在输入下），提交按钮在末尾。
 - 语言与时区的占位只写正在生效的值（时区只写 IANA 名，偏移在候选列表里），值从哪层来写在标签后面、与写入状态共用一处（有状态时显示状态）：个人页继承到组织值或部署基线时写"跟随组织"，系统页有部署基线时写"部署默认"，用设备探测值时写"跟随系统"；都没有时占位就是"跟随系统"，不再重复来源。系统页不显示管理员自己这台设备的探测值，它不是组织的值。两者拼进一个占位时，固定宽度放不下，被省略的正是值。
+- 设置页的项目差异只写在 `frontend/src/app/features/settings/setting-choices.ts` 的声明表里，通用的 `setting-section` 不写设置名：候选项文案 `SETTING_VALUE_LABELS`（词条前缀取 `<前缀>.<值>`，缺词条显示原值；或给函数）、按取值的说明 `SETTING_VALUE_DESCRIPTIONS`、固定说明 `SETTING_DESCRIPTIONS`、专用控件 `SETTING_CONTROLS`（时区、语言、外观）、显式依赖 `SETTING_DEPENDENCIES` 与个人页偏好行 `ACCOUNT_PREFERENCE_SETTINGS`。候选值只认后端 `WithAllowedValues` 下发的 `allowedValues`，前端不另列值域；没登记的设置按布尔、区间、候选值、文本的通用规则渲染。
+- 依赖：`{前缀}.Enabled` 开关自动管同前缀的设置；约定表达不了的（如枚举不为 `off` 时才显示）写 `{ parent, shownWhen }`，两者都命中时以显式为准。上级不在页面上时子项留在顶层，收起不清值，依赖不能成环。服务端按字段（写入的 `value`）拒绝时，原因显示在该行控件下方。
+- 新建系统设置分组时在 `system-settings.ts` 的 `GROUP_ICONS` 与 `provideIcons` 登记图标，`scripts/check-setting-group-icons.py`（`verify` 的一步）核对。
 - 系统设置的面板说明按分组标识取（本地化形态是 `settings` 作用域的 `groupDescriptions` 词条，否则是 `system-settings.ts` 的 `GROUP_DESCRIPTIONS`），未登记的分组没有说明。
 
 ## 4. 账户偏好

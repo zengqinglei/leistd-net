@@ -409,6 +409,29 @@ describe('settings mock', () => {
     return row;
   }
 
+  // 候选值与后端一致地下发并校验：界面的下拉只认它，不在其中的值写不进去；不限取值的设置不带这个字段
+  it('delivers and enforces the allowed values of a setting', () => {
+    signIn('user_admin');
+    const rows = api[get](request()) as (SettingRow & { allowedValues?: string[] })[];
+    const find = (name: string) => rows.find((row) => row.name === name);
+
+    expect(find('Logging.MinimumLevel')?.allowedValues).toEqual([
+      'Trace',
+      'Debug',
+      'Information',
+      'Warning',
+      'Error',
+      'Critical',
+    ]);
+    expect(find('Display.TimeZone')).not.toHaveProperty('allowedValues');
+    expect(
+      statusOf(() => api[putTenant](request({ name: 'Logging.MinimumLevel', value: 'Verbose' }))),
+    ).toBe(400);
+    expect(
+      statusOf(() => api[putTenant](request({ name: 'Logging.MinimumLevel', value: 'Warning' }))),
+    ).toBe(200);
+  });
+
   it('returns English display names from the backend resources', () => {
     const row = minimumLevel({ 'Accept-Language': 'en' });
 

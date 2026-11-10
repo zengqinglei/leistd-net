@@ -4,7 +4,13 @@ import { TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { Subject } from 'rxjs';
 
-import { nestUnderSwitches, SettingRowNode, SettingsPageState } from './settings-page-state';
+// prettier-ignore
+import {
+  buildSettingTree,
+  SettingRowNode,
+  SettingsPageState,
+  shownChildren,
+} from './settings-page-state';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 //#endif
@@ -187,8 +193,11 @@ describe('SettingsPageState', () => {
   });
 });
 
-/** 开关下挂子项只看设置名约定：`{前缀}.Enabled` 的布尔设置管着名字以 `{前缀}.` 开头的其他设置。 */
-describe('nestUnderSwitches', () => {
+/**
+ * 依赖树：显式依赖（声明表）与命名约定（`{前缀}.Enabled` 的布尔设置管着名字以 `{前缀}.` 开头的其他设置）
+ * 合成同一棵树。
+ */
+describe('buildSettingTree', () => {
   const setting = (name: string, isBoolean = false): SettingOutputDto =>
     ({ name, isBoolean }) as SettingOutputDto;
   const shape = (nodes: SettingRowNode[]): unknown[] =>
@@ -199,12 +208,15 @@ describe('nestUnderSwitches', () => {
   it('puts settings with the same prefix under the switch, in delivered order', () => {
     expect(
       shape(
-        nestUnderSwitches([
-          setting('Registration.CaptchaExpiryMinutes'),
-          setting('Registration.Enabled', true),
-          setting('Registration.EnableEmailVerification', true),
-          setting('Security.RequireTwoFactor', true),
-        ]),
+        buildSettingTree(
+          [
+            setting('Registration.CaptchaExpiryMinutes'),
+            setting('Registration.Enabled', true),
+            setting('Registration.EnableEmailVerification', true),
+            setting('Security.RequireTwoFactor', true),
+          ],
+          {},
+        ),
       ),
     ).toEqual([
       {
@@ -220,12 +232,15 @@ describe('nestUnderSwitches', () => {
   it('nests under the longest matching switch', () => {
     expect(
       shape(
-        nestUnderSwitches([
-          setting('Telemetry.Enabled', true),
-          setting('Telemetry.Export.Enabled', true),
-          setting('Telemetry.Export.Endpoint'),
-          setting('Telemetry.SamplingRatio'),
-        ]),
+        buildSettingTree(
+          [
+            setting('Telemetry.Enabled', true),
+            setting('Telemetry.Export.Enabled', true),
+            setting('Telemetry.Export.Endpoint'),
+            setting('Telemetry.SamplingRatio'),
+          ],
+          {},
+        ),
       ),
     ).toEqual([
       {
@@ -240,16 +255,19 @@ describe('nestUnderSwitches', () => {
   it('leaves rows without a matching boolean switch at the top level', () => {
     expect(
       shape(
-        nestUnderSwitches([
-          // 不是布尔：不算开关
-          setting('Audit.Enabled'),
-          setting('Audit.RetentionDays'),
-          // 后缀不是整段 `.Enabled`
-          setting('Audit.RetentionEnabled', true),
-          // 前缀按整段匹配，RegistrationPolicy 不属于 Registration
-          setting('Registration.Enabled', true),
-          setting('RegistrationPolicy.Mode'),
-        ]),
+        buildSettingTree(
+          [
+            // 不是布尔：不算开关
+            setting('Audit.Enabled'),
+            setting('Audit.RetentionDays'),
+            // 后缀不是整段 `.Enabled`
+            setting('Audit.RetentionEnabled', true),
+            // 前缀按整段匹配，RegistrationPolicy 不属于 Registration
+            setting('Registration.Enabled', true),
+            setting('RegistrationPolicy.Mode'),
+          ],
+          {},
+        ),
       ),
     ).toEqual([
       'Audit.Enabled',
@@ -258,5 +276,80 @@ describe('nestUnderSwitches', () => {
       'Registration.Enabled',
       'RegistrationPolicy.Mode',
     ]);
+  });
+
+  const notOff = (value: string) => value.length > 0 && value !== 'off';
+
+  it('puts a setting under its explicit parent with that condition, wherever it is delivered', () => {
+    const tree = buildSettingTree(
+      [setting('Reports.Archive.Days'), setting('Reports.Mode'), setting('Reports.Owner')],
+      { 'Reports.Archive.Days': { parent: 'Reports.Mode', shownWhen: notOff } },
+    );
+
+    expect(shape(tree)).toEqual([{ 'Reports.Mode': ['Reports.Archive.Days'] }, 'Reports.Owner']);
+    expect(shownChildren(tree[0], 'monthly').map((node) => node.setting.name)).toEqual([
+      'Reports.Archive.Days',
+    ]);
+    expect(shownChildren(tree[0], 'off')).toEqual([]);
+  });
+
+  it('combines explicit and convention dependencies over several levels', () => {
+    const tree = buildSettingTree(
+      [
+        setting('Guard.Enabled', true),
+        setting('Guard.Mode'),
+        setting('Guard.Limits.PerHour'),
+        setting('Guard.Fallback.Enabled', true),
+        setting('Guard.Fallback.Total'),
+      ],
+      {
+        'Guard.Limits.PerHour': { parent: 'Guard.Mode', shownWhen: notOff },
+        'Guard.Fallback.Enabled': { parent: 'Guard.Mode', shownWhen: notOff },
+      },
+    );
+
+    expect(shape(tree)).toEqual([
+      {
+        'Guard.Enabled': [
+          {
+            'Guard.Mode': [
+              'Guard.Limits.PerHour',
+              { 'Guard.Fallback.Enabled': ['Guard.Fallback.Total'] },
+            ],
+          },
+        ],
+      },
+    ]);
+    // 约定挂接的条件是上级为真
+    const fallback = tree[0].children[0].children[1];
+    expect(shownChildren(fallback, 'true')).toHaveLength(1);
+    expect(shownChildren(fallback, 'false')).toEqual([]);
+  });
+
+  // 同前缀的开关在页面上也不改挂：声明了显式依赖就只认声明的上级
+  it('keeps a setting at the top level when its explicit parent is not on the page', () => {
+    expect(
+      shape(
+        buildSettingTree(
+          [
+            setting('Reports.Enabled', true),
+            setting('Reports.Archive.Days'),
+            setting('Reports.Owner'),
+          ],
+          { 'Reports.Archive.Days': { parent: 'Reports.Mode', shownWhen: notOff } },
+        ),
+      ),
+    ).toEqual([{ 'Reports.Enabled': ['Reports.Owner'] }, 'Reports.Archive.Days']);
+  });
+
+  it('lets an explicit dependency win over the naming convention', () => {
+    const tree = buildSettingTree(
+      [setting('Guard.Enabled', true), setting('Guard.Mode'), setting('Guard.Window')],
+      { 'Guard.Window': { parent: 'Guard.Mode', shownWhen: notOff } },
+    );
+
+    expect(shape(tree)).toEqual([{ 'Guard.Enabled': [{ 'Guard.Mode': ['Guard.Window'] }] }]);
+    expect(shownChildren(tree[0].children[0], 'strict')).toHaveLength(1);
+    expect(shownChildren(tree[0].children[0], 'off')).toEqual([]);
   });
 });
