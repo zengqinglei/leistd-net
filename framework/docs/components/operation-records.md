@@ -121,7 +121,7 @@ builder.Services.AddOperationRecordsLogging();     // 记录器的四样前置�
 | 成功，无环境工作单元 | 立即写出——调用方在变更落库之后才记录，与数据库存储"即时生效"同一调用约定 |
 | 失败 | 立即写出，不等待、不跟随调用方的事务 |
 
-- 常量命名空间为 `Leistd.OperationRecords.Logging.Constants`。日志类别 `OperationRecordLogging.CategoryName`（`Leistd.OperationRecords`）；成功为 `Information`（事件 7100），失败为 `Warning`（事件 7101）。字段与数据库存储逐一对应：`OperationRecordId`、`OperationAction`、`OperationOutcome`、`OperationTargetId`/`Name`、`OperationActorId`/`Name`、`OperationActorTenantId`、`OperationTenantId`、`OperationAuthorizationBasis`、`OperationVisibility`、`OperationImpersonatorId`/`Name`、`OperationFailureCode`/`Detail`、`OperationTime`（UTC）、`OperationCorrelationId`。失败参数例外：只记参数名 `OperationFailureDataKeys`，不记值——它是词条占位的原值，可能含提交者的邮箱等联系方式，按开发规范不进日志；需要参数原值的审计用数据库存储。
+- 常量命名空间为 `Leistd.OperationRecords.Logging.Constants`。日志类别 `OperationRecordLogging.CategoryName`（`Leistd.OperationRecords`）；成功为 `Information`（事件 7100），失败为 `Warning`（事件 7101）。字段与数据库存储逐一对应：`OperationRecordId`、`OperationAction`、`OperationOutcome`、`OperationTargetId`/`Name`、`OperationActorId`/`Name`、`OperationActorTenantId`、`OperationTenantId`、`OperationAuthorizationBasis`、`OperationVisibility`、`OperationImpersonatorId`/`Name`、`OperationFailureCode`/`Detail`、`OperationTime`（UTC）、`OperationCorrelationId`。失败参数例外：只记参数名 `OperationFailureDataKeys`（逗号连接的可读字符串，如 `Email,Phone`，不作列表解析；没有参数时为空串），不记值——它是词条占位的原值，可能含提交者的邮箱等联系方式，按开发规范不进日志；需要参数原值的审计用数据库存储。
 - 记录在调用时冻结：标识、时间、操作人与租户都在记录器里定案，提交后写出时不再读取任何上下文。
 - 启动期校验：该类别对 `Information` 未开启，或缺少工作单元与本地事件总线时，宿主启动失败。
 - 持久化保证弱于数据库存储：事务已提交、日志尚未写出时进程退出，这条成功记录会丢失；日志的保留期与防篡改由采集链路负责。

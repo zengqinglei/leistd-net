@@ -1,13 +1,8 @@
 #if (LocalIdentity)
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Leistd.Data.Paging;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Serilog.Core;
-using Serilog.Events;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -208,9 +203,9 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
     [Fact]
     public async Task Unparseable_sorting_leaves_neither_the_expression_nor_an_exception_in_logs()
     {
-        var capture = new LogCapture();
-        using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-            services.AddSingleton<ILogEventSink>(capture)));
+        // 宿主日志管道的全部记录（各类别、生产配置的级别）
+        using var host = Factory.WithWebHostBuilder(_ => { });
+        var capture = host.Services.GetFakeLogCollector();
         using var admin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var cases = new List<(string Path, string Sorting)>
@@ -231,14 +226,14 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
             await AssertSortingFieldErrorAsync(response, sorting);
         }
 
-        var events = capture.Events;
+        var events = capture.GetSnapshot();
         // 处理器的预期失败日志确实被收到，"日志里没有"才证伪得了
-        Assert.Equal(cases.Count, events.Count(e =>
-            e.Properties.TryGetValue("ExceptionType", out var type) && type is ScalarValue { Value: "ValidationException" }));
+        Assert.Equal(cases.Count, events.Count(e => e.GetStructuredStateValue("ExceptionType") == "ValidationException"));
         Assert.All(events, e =>
         {
             Assert.Null(e.Exception);
-            var rendered = e.RenderMessage() + string.Join("|", e.Properties.Values);
+            var rendered = e.Message + "|" + string.Join("|", (e.StructuredState ?? []).Select(pair => pair.Value))
+                + "|" + string.Join("|", e.Scopes);
             foreach (var (_, sorting) in cases)
                 Assert.DoesNotContain(sorting, rendered, StringComparison.Ordinal);
             Assert.DoesNotContain("No property or field", rendered, StringComparison.Ordinal);
@@ -380,18 +375,6 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         return body.RootElement.GetProperty("items").EnumerateArray()
             .Select(item => item.GetProperty(property).GetString()!)
             .ToList();
-    }
-
-    // 收集宿主 Serilog 管道的全部事件（各类别、生产配置的级别），不替换日志工厂
-    private sealed class LogCapture : ILogEventSink
-    {
-        private readonly ConcurrentQueue<LogEvent> events = new();
-
-        public IReadOnlyCollection<LogEvent> Events => events.ToArray();
-
-        public void Emit(LogEvent logEvent) => events.Enqueue(logEvent);
-
-        public void Clear() => events.Clear();
     }
 }
 #endif

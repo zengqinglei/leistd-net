@@ -82,25 +82,43 @@ public static class SettingConstant
 
     /// <summary>日志开关。</summary>
     /// <remarks>
-    /// 都是<b>进程级</b>（<c>SettingScopes.Host</c>）：一个进程只有一个 logger，
+    /// 都是<b>进程级</b>（<c>SettingScopes.Host</c>）：一个进程只有一套日志管道，
     /// 按租户各存一份根本无从生效。改完立即对本进程生效，其它实例在下一次刷新周期跟上
     /// （设置组件的宿主级设置刷新，见 <c>Leistd:Settings:Hosting:RefreshInterval</c>）。
     /// </remarks>
     public static class Logging
     {
-        /// <summary>全局最小日志级别。</summary>
+        /// <summary>全局最小日志级别（<c>Logging:LogLevel:Default</c>）；按类别配置的覆盖不受它影响。</summary>
         public const string MinimumLevel = "Logging.MinimumLevel";
 
-        /// <summary>正常完成的请求记成哪一级；调高即等于关掉请求日志。</summary>
-        public const string RequestLevel = "Logging.RequestLevel";
+        /// <summary>是否记录正常完成的请求；关闭后 5xx 仍记录。</summary>
+        public const string RequestLogging = "Logging.RequestLogging";
 
-        /// <summary>合法的日志级别取值，与 Serilog 的 <c>LogEventLevel</c> 一致。</summary>
+        /// <summary>合法的日志级别取值，与 <c>Microsoft.Extensions.Logging.LogLevel</c> 的名称一致（不含 <c>None</c>）。</summary>
         /// <remarks>
-        /// 定义的默认值、写入校验与界面候选项都读这一份：分开写几份时，
+        /// 写入校验与界面候选项都读这一份：分开写几份时，
         /// 加一档只改了一处，就会变成"选得出却写不进"或者反过来。
         /// </remarks>
         public static readonly IReadOnlyList<string> Levels =
-            ["Verbose", "Debug", "Information", "Warning", "Error", "Fatal"];
+            ["Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+    }
+
+    /// <summary>遥测导出（OTLP）：开关、基地址与认证头。</summary>
+    /// <remarks>
+    /// <b>进程级</b>，归入运维分组。三项都即时生效：导出器常驻，发送层每次按当前值决定发不发、发到哪、带什么头。
+    /// 地址与认证头的部署兜底是 <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>、<c>OTEL_EXPORTER_OTLP_HEADERS</c>；
+    /// 开关的部署兜底是部署地址是否配置。
+    /// </remarks>
+    public static class Telemetry
+    {
+        /// <summary>是否导出日志、指标与追踪。</summary>
+        public const string ExportEnabled = "Telemetry.Export.Enabled";
+
+        /// <summary>OTLP/HTTP 基地址（绝对 http/https 地址），各信号追加 <c>/v1/{signal}</c>。</summary>
+        public const string ExportEndpoint = "Telemetry.Export.Endpoint";
+
+        /// <summary>导出认证头，格式同 <c>OTEL_EXPORTER_OTLP_HEADERS</c>（<c>key1=value1,key2=value2</c>）。机密设置：加密落库、只写不读。</summary>
+        public const string ExportHeaders = "Telemetry.Export.Headers";
     }
 
 #if (IncludeOperationRecords)

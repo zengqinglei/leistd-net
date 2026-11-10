@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Leistd.AmbientContext;
 using Leistd.Tracing.Abstractions;
-using Leistd.Tracing.Constants;
+using Leistd.Tracing.Services;
 using Microsoft.Extensions.Logging;
 
 namespace Leistd.Tracing.AmbientContext;
@@ -40,7 +40,7 @@ internal sealed class CorrelationIdAmbientContextContributor(
         }
 
         var changed = change ? correlationIdProvider.Change(correlationId) : null;
-        var logScope = _logger?.BeginScope(new Dictionary<string, object> { [CorrelationIdConstants.LogKey] = correlationId });
+        var logScope = _logger?.BeginScope(new CorrelationIdLogScope(correlationId));
         return changed is null && logScope is null ? null : new Both(logScope, changed);
     }
 

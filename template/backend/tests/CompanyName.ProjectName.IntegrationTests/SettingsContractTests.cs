@@ -8,8 +8,8 @@ using Leistd.Settings.Definitions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Serilog.Events;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -51,19 +51,27 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         return host;
     }
 
-    /// <summary>宿主此刻真正生效的全局最小级别。</summary>
+    // 没有类别覆盖的业务类别：只受 Logging:LogLevel:Default 支配
+    private const string ProbeCategory = "CompanyName.ProjectName.SettingsContractProbe";
+
+    /// <summary>宿主此刻对某个类别真正生效的最小级别。</summary>
     /// <remarks>
-    /// 读取宿主容器的 Serilog logger，验证设置覆盖与清除真正改变日志级别；
+    /// 经宿主容器的日志工厂判定，设置覆盖与清除是否真正改变了内置日志过滤；
     /// 接口的 <c>defaultValue</c> 只能证明展示值，不能证明运行时生效。
-    /// <para>
-    /// 刻意不走静态的 <c>Log.Logger</c> 或 <c>ILoggerFactory</c>：别的测试类的宿主释放时会把静态 logger 关掉，
-    /// 那种断言在单独跑这一个类时是绿的、全量跑就红。容器里的实例是本宿主自己的，级别判定不受此影响。
-    /// </para>
     /// </remarks>
-    private static LogEventLevel EffectiveMinimumLevel(WebApplicationFactory<Program> host)
+    private static LogLevel EffectiveLevel(WebApplicationFactory<Program> host, string category = ProbeCategory)
     {
-        var logger = host.Services.GetRequiredService<Serilog.ILogger>();
-        return Enum.GetValues<LogEventLevel>().First(logger.IsEnabled);
+        var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger(category);
+        return Enum.GetValues<LogLevel>().First(level => level == LogLevel.None || logger.IsEnabled(level));
+    }
+
+    /// <summary>以 Information 写一条探针日志，返回收集提供程序是否收到。</summary>
+    private static bool InformationReachesProviders(WebApplicationFactory<Program> host)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        host.Services.GetRequiredService<ILoggerFactory>().CreateLogger(ProbeCategory).LogInformation("Probe {Marker}", marker);
+        return host.Services.GetFakeLogCollector().GetSnapshot()
+            .Any(record => record.Category == ProbeCategory && record.GetStructuredStateValue("Marker") == marker);
     }
 
     private static async Task<JsonElement> ReadSettingAsync(HttpClient client, string name)
@@ -89,7 +97,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     /// <summary>日志级别的默认值来自部署基线，清除覆盖值即回落到它。</summary>
     /// <remarks>
     /// 分工是"部署配置给基线、设置表给运行期覆盖"。若把默认值写死成 Information，
-    /// 部署把 <c>Serilog:MinimumLevel:Default</c> 配成 Warning 也会被顶掉，
+    /// 部署把 <c>Logging:LogLevel:Default</c> 配成 Warning 也会被顶掉，
     /// 而清除覆盖值同样回不到部署基线——两者都表现为"配置文件不起作用"。
     /// </remarks>
     [Fact]
@@ -97,7 +105,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     {
         var host = HostWith(new Dictionary<string, string?>
         {
-            ["Serilog:MinimumLevel:Default"] = "Warning"
+            ["Logging:LogLevel:Default"] = "Warning"
         });
         using var admin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -111,15 +119,15 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         Assert.Equal("Warning", baseline.GetProperty("defaultValue").GetString());
         Assert.Null(OverrideOrNull(baseline, "tenantValue"));
 
-        Assert.Equal(LogEventLevel.Warning, EffectiveMinimumLevel(host));
+        Assert.Equal(LogLevel.Warning, EffectiveLevel(host));
 
         Assert.Equal(
             HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, "Debug")).StatusCode);
         var overridden = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
         Assert.Equal("Debug", OverrideOrNull(overridden, "tenantValue"));
-        // 写入即生效：设置经配置源覆盖 Serilog:MinimumLevel，Serilog 订阅了它的重载
-        Assert.Equal(LogEventLevel.Debug, EffectiveMinimumLevel(host));
+        // 写入即生效：设置经配置源覆盖 Logging:LogLevel:Default，内置日志过滤随配置重载
+        Assert.Equal(LogLevel.Debug, EffectiveLevel(host));
 
         Assert.Equal(
             HttpStatusCode.NoContent,
@@ -127,14 +135,14 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         var cleared = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
         Assert.Null(OverrideOrNull(cleared, "tenantValue"));
         Assert.Equal("Warning", cleared.GetProperty("defaultValue").GetString());
-        Assert.Equal(LogEventLevel.Warning, EffectiveMinimumLevel(host));
+        Assert.Equal(LogLevel.Warning, EffectiveLevel(host));
     }
 
-    /// <summary>基础档保留最小级别订阅键，运行期覆盖与清除才能改变真实日志级别。</summary>
+    /// <summary>模板配置下，最小级别写入即过滤、清除回到部署配置；按类别列出的覆盖不受它影响。</summary>
     [Fact]
-    public async Task Template_log_level_follows_the_setting_and_clearing_restores_the_baseline()
+    public async Task Template_log_level_follows_the_setting_without_touching_category_overrides()
     {
-        // 不注入最小级别键：本用例保护 appsettings.json 提供的订阅锚点。
+        // 不注入级别键：本用例保护 appsettings.json 提供的基线与类别覆盖
         var host = HostWith();
         using var admin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -144,16 +152,30 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
         try
         {
-            Assert.Equal(LogEventLevel.Information, EffectiveMinimumLevel(host));
+            Assert.Equal(LogLevel.Information, EffectiveLevel(host));
+            Assert.True(InformationReachesProviders(host));
+            Assert.Equal(LogLevel.Warning, EffectiveLevel(host, "Microsoft.EntityFrameworkCore.Database.Command"));
+            Assert.Equal(LogLevel.Information, EffectiveLevel(host, "Microsoft.AspNetCore.HttpLogging.HttpLoggingMiddleware"));
+
             Assert.Equal(
                 HttpStatusCode.NoContent,
-                (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, "Debug")).StatusCode);
-            Assert.Equal(LogEventLevel.Debug, EffectiveMinimumLevel(host));
+                (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, "Warning")).StatusCode);
+            Assert.Equal(LogLevel.Warning, EffectiveLevel(host));
+            Assert.False(InformationReachesProviders(host));
+            // 显式类别覆盖不随全局级别变化：请求完成日志仍是 Information
+            Assert.Equal(LogLevel.Information, EffectiveLevel(host, "Microsoft.AspNetCore.HttpLogging.HttpLoggingMiddleware"));
+
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, "Trace")).StatusCode);
+            Assert.Equal(LogLevel.Trace, EffectiveLevel(host));
+            Assert.Equal(LogLevel.Warning, EffectiveLevel(host, "Microsoft.EntityFrameworkCore.Database.Command"));
 
             Assert.Equal(
                 HttpStatusCode.NoContent,
                 (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
-            Assert.Equal(LogEventLevel.Information, EffectiveMinimumLevel(host));
+            Assert.Equal(LogLevel.Information, EffectiveLevel(host));
+            Assert.True(InformationReachesProviders(host));
         }
         finally
         {
@@ -161,95 +183,42 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         }
     }
 
-    // 请求日志级别同样经配置源进 Options：写入即生效，清除回到类型默认值
+    /// <summary>候选值是 <c>LogLevel</c> 的名称；旧取值域与 <c>None</c> 写不进去。</summary>
+    [Theory]
+    [InlineData("Verbose")]
+    [InlineData("Fatal")]
+    [InlineData("None")]
+    public async Task Minimum_level_rejects_values_outside_the_log_level_names(string value)
+    {
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, value)).StatusCode);
+    }
+
+    // 请求日志开关经配置源进 Options：写入即生效，清除回到类型默认值（开启）
     [Fact]
-    public async Task Request_log_level_follows_the_setting_and_resets_to_default()
+    public async Task Request_logging_follows_the_setting_and_resets_to_enabled()
     {
         using var admin = await ProjectWebApplicationFactory.LoginAsync(
             factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var monitor = factory.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
 
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, "Verbose")).StatusCode);
-        Assert.Equal(LogEventLevel.Verbose, monitor.CurrentValue.Level);
+        var baseline = await ReadSettingAsync(admin.Client, SettingConstant.Logging.RequestLogging);
+        Assert.Equal("true", baseline.GetProperty("defaultValue").GetString());
+        Assert.True(baseline.GetProperty("isBoolean").GetBoolean());
 
         Assert.Equal(
             HttpStatusCode.NoContent,
-            (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, null)).StatusCode);
-        Assert.Equal(LogEventLevel.Information, monitor.CurrentValue.Level);
-    }
+            (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLogging, "false")).StatusCode);
+        Assert.False(monitor.CurrentValue.Enabled);
 
-    // Serilog 的最小级别有两种合法写法，标量那种也要认出来——
-    // 只读 MinimumLevel:Default 的话，写成 "MinimumLevel": "Error" 的部署会被当成没配。
-    [Fact]
-    public async Task Deployment_baseline_accepts_the_scalar_minimum_level()
-    {
-        var host = HostWith(new Dictionary<string, string?>
-        {
-            ["Serilog:MinimumLevel"] = "Error",
-            // 置空模板 appsettings 里的对象写法，只留标量这一种
-            ["Serilog:MinimumLevel:Default"] = null
-        });
-        using var admin = await ProjectWebApplicationFactory.LoginAsync(
-            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-
-        var level = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
-
-        Assert.Equal("Error", level.GetProperty("defaultValue").GetString());
-    }
-
-    /// <summary>两种写法并存时按<b>配置源优先级</b>裁决，而不是固定优先某一种。</summary>
-    /// <remarks>
-    /// 这是最常见的真实形态：模板 <c>appsettings.json</c> 里已有对象写法，部署再用环境变量
-    /// 给出标量写法。固定优先对象写法，就会让文件里的级别顶掉环境变量里的——而 Serilog 自己
-    /// 用的是环境变量那个，界面显示的基线就和实际生效的对不上，
-    /// 清除覆盖值也回不到真正的部署基线。所以这里连真实 logger 一起断言。
-    /// </remarks>
-    [Fact]
-    public async Task Higher_priority_minimum_level_wins_over_the_other_form()
-    {
-        // appsettings.json 提供 Serilog:MinimumLevel:Default = Information（低优先级）
-        var host = HostWith(new Dictionary<string, string?>
-        {
-            ["Serilog:MinimumLevel"] = "Error"
-        });
-        using var admin = await ProjectWebApplicationFactory.LoginAsync(
-            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-
-        // 本类其它用例会在这套共用库里写下覆盖值；先清掉，让开关回到基线，
-        // 否则这条断言的结果取决于用例执行顺序。清除本身就会触发本宿主的应用器。
         Assert.Equal(
             HttpStatusCode.NoContent,
-            (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
-
-        var level = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
-
-        Assert.Equal("Error", level.GetProperty("defaultValue").GetString());
-        Assert.Equal(LogEventLevel.Error, EffectiveMinimumLevel(host));
-    }
-
-    // 反方向同样不能顶掉：更高优先级的源用对象写法时，它才是基线。
-    // 只把 ?? 两边换个位置就会在这条上错。
-    [Fact]
-    public async Task Higher_priority_object_form_wins_when_reversed()
-    {
-        var host = HostWith(
-            new Dictionary<string, string?> { ["Serilog:MinimumLevel"] = "Error" },
-            new Dictionary<string, string?> { ["Serilog:MinimumLevel:Default"] = "Warning" });
-        using var admin = await ProjectWebApplicationFactory.LoginAsync(
-            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-
-        // 本类其它用例会在这套共用库里写下覆盖值；先清掉，让开关回到基线，
-        // 否则这条断言的结果取决于用例执行顺序。清除本身就会触发本宿主的应用器。
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
-
-        var level = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
-
-        Assert.Equal("Warning", level.GetProperty("defaultValue").GetString());
-        Assert.Equal(LogEventLevel.Warning, EffectiveMinimumLevel(host));
+            (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLogging, null)).StatusCode);
+        Assert.True(monitor.CurrentValue.Enabled);
     }
 
 #if (Email)

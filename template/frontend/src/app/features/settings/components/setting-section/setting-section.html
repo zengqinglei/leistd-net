@@ -74,10 +74,28 @@
      单列左右排让每行的标签列与控件列各自对齐（Spartan Field 的设置行写法）。 -->
   <ng-template #rowList let-rows>
     <div hlmFieldGroup class="gap-5">
-      @for (setting of rows; track setting.name) {
-        <ng-container *ngTemplateOutlet="settingRow; context: { $implicit: setting }" />
-      }
+      <ng-container *ngTemplateOutlet="rowNodes; context: { $implicit: rows }" />
     </div>
+  </ng-template>
+
+  <!-- `{前缀}.Enabled` 开关下的子项：开关的生效值为真时缩进一级显示，否则不渲染（隐藏的控件不进 Tab 顺序）。
+     子项是嵌套的 Field 组（Spartan 的嵌套写法），以开关的标签作组名。 -->
+  <ng-template #rowNodes let-nodes>
+    @for (node of nodes; track node.setting.name) {
+      <ng-container *ngTemplateOutlet="settingRow; context: { $implicit: node.setting }" />
+      @if (node.children.length > 0 && isChecked(node.setting, scope())) {
+        <div
+          hlmFieldGroup
+          class="ps-4"
+          role="group"
+          data-testid="setting-children"
+          [attr.data-parent]="node.setting.name"
+          [attr.aria-labelledby]="node.setting.name + '-label'"
+        >
+          <ng-container *ngTemplateOutlet="rowNodes; context: { $implicit: node.children }" />
+        </div>
+      }
+    }
   </ng-template>
 
   <!-- 一行设置的渲染：普通分组与外部登录的提供方卡片共用，控件、校验与即改即存只有这一份。
@@ -112,7 +130,9 @@
               : '@md/field-group:min-h-9 @md/field-group:pointer-coarse:min-h-11'
           "
         >
-          <label hlmFieldLabel [for]="setting.name">{{ setting.displayName }}</label>
+          <label hlmFieldLabel [id]="setting.name + '-label'" [for]="setting.name">{{
+            setting.displayName
+          }}</label>
           @if (showsRowHostScope(setting)) {
             <!-- 混有其他层级的分组里，进程级的那几项在标签旁说明生效范围与延迟 -->
             <app-info-hint
@@ -163,8 +183,8 @@
             </hlm-field-description>
           }
         </div>
-        @if (levelHintKeyOf(setting, scope()); as levelHint) {
-          <p class="text-muted-foreground text-xs">{{ t(levelHint) }}</p>
+        @if (hintKeyOf(setting, scope()); as hint) {
+          <p class="text-muted-foreground text-xs">{{ t(hint) }}</p>
         }
       </div>
       <!-- 标签折成多行（或下方有说明）时，控件在左侧内容块的高度内垂直居中；纵排时不居中 -->

@@ -9,6 +9,10 @@ export const SETTINGS = {
   },
   logging: {
     minimumLevel: 'Logging.MinimumLevel',
-    requestLevel: 'Logging.RequestLevel',
+  },
+  telemetry: {
+    exportEnabled: 'Telemetry.Export.Enabled',
+    exportEndpoint: 'Telemetry.Export.Endpoint',
+    exportHeaders: 'Telemetry.Export.Headers',
   },
 } as const;

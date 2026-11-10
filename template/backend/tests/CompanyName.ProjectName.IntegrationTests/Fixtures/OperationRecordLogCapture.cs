@@ -1,25 +1,15 @@
 #if (!IncludeOperationRecords)
-using System.Collections.Concurrent;
-using Serilog.Core;
-using Serilog.Events;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests.Fixtures;
 
-// 观察真实 Serilog 输出，不替换记录器或写入适配。
-internal sealed class OperationRecordLogCapture : ILogEventSink
+// 观察宿主日志管道的真实输出（经收集提供程序），不替换记录器或写入适配。
+internal sealed class OperationRecordLogCapture(FakeLogCollector collector)
 {
-    private readonly ConcurrentQueue<LogEvent> entries = new();
+    private const string Category = "Leistd.OperationRecords";
 
-    public void Emit(LogEvent logEvent)
-    {
-        if (logEvent.Properties.TryGetValue("SourceContext", out var category)
-            && category is ScalarValue { Value: "Leistd.OperationRecords" })
-            entries.Enqueue(logEvent);
-    }
+    public FakeLogRecord[] Snapshot() => collector.GetSnapshot().Where(record => record.Category == Category).ToArray();
 
-    public LogEvent[] Snapshot() => entries.ToArray();
-
-    public static object? Field(LogEvent entry, string name) =>
-        entry.Properties.TryGetValue(name, out var value) && value is ScalarValue scalar ? scalar.Value : null;
+    public static string? Field(FakeLogRecord entry, string name) => LogRecordFields.State(entry, name);
 }
 #endif

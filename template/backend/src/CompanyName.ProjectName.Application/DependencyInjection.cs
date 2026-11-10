@@ -1,8 +1,6 @@
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Events;
-#if (!RemoteTokenAuth || IncludeNotifications)
 using Leistd.Settings.Validation;
-#endif
 using Leistd.OperationRecords.Definitions;
 using CompanyName.ProjectName.Application.OperationRecords.EventHandlers;
 #if (!RemoteTokenAuth)
@@ -200,6 +198,7 @@ public static class DependencyInjection
 #if (!RemoteTokenAuth)
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISettingValueValidator, TimeZoneSettingValidator>());
 #endif
+        services.TryAddEnumerable(ServiceDescriptor.Transient<ISettingValueValidator, TelemetryExportSettingValidator>());
 #if (IncludeNotifications)
         services.TryAddEnumerable(ServiceDescriptor.Transient<ISettingValueValidator, NotificationRetentionSettingValidator>());
 #endif

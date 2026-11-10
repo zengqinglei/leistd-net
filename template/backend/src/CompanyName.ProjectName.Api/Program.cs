@@ -14,7 +14,6 @@ using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Api.Localization;
 #endif
 using CompanyName.ProjectName.Api.Middlewares;
-using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application;
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Shared;
@@ -64,260 +63,226 @@ using Leistd.Tracing.AspNetCore;
 using Leistd.Webhooks;
 #endif
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
-using Serilog;
-using Serilog.Events;
 
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .CreateLogger();
+// 启动失败照常非零退出：宿主构建前的异常由运行时输出到标准错误，构建后由宿主日志记录
+var builder = WebApplication.CreateBuilder(args);
 
-try
-{
-    Log.Information("Starting web application ...");
-    var builder = WebApplication.CreateBuilder(args);
+// 生产以外都校验作用域与构建期依赖：开发、集成测试宿主（Testing）、预发在启动时就暴露注册错误，
+// 只有生产为启动耗时省掉这一步
+var validateServiceProvider = !builder.Environment.IsProduction();
+builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory(
+    new ServiceProviderOptions
+    {
+        ValidateScopes = validateServiceProvider,
+        ValidateOnBuild = validateServiceProvider
+    }));
 
-    // 生产以外都校验作用域与构建期依赖：开发、集成测试宿主（Testing）、预发在启动时就暴露注册错误，
-    // 只有生产为启动耗时省掉这一步
-    var validateServiceProvider = !builder.Environment.IsProduction();
-    builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory(
-        new ServiceProviderOptions
-        {
-            ValidateScopes = validateServiceProvider,
-            ValidateOnBuild = validateServiceProvider
-        }));
+// 宿主级设置作为优先级最高的配置源（日志级别、发信参数、操作记录保留期，见 HostSettingBindings）：
+// 设置里有值的项覆盖部署配置，消费方照常注入 IOptionsMonitor<T>。写入后本进程立即应用，
+// 其它实例由周期任务跟上（Leistd:Settings:Hosting:RefreshInterval）。配置源在 Build 之后挂上（UseHostSettings）
+builder.Services.AddMyProjectHostSettings(builder.Configuration);
 
-    // 宿主级设置作为优先级最高的配置源（日志级别、发信参数、操作记录保留期，见 HostSettingBindings）：
-    // 设置里有值的项覆盖部署配置，消费方照常注入 IOptionsMonitor<T>。写入后本进程立即应用，
-    // 其它实例由周期任务跟上（Leistd:Settings:Hosting:RefreshInterval）。配置源在 Build 之后挂上（UseHostSettings）
-    builder.Services.AddMyProjectHostSettings();
+// 请求体沿用 Kestrel 默认上限（约 30 MB）：需要更大上传的端点用 [RequestSizeLimit] / [RequestFormLimits] 单独放宽
+builder.AddMyProjectLogging();
+builder.AddMyProjectTelemetry();
 
-    // 请求体沿用 Kestrel 默认上限（约 30 MB）：需要更大上传的端点用 [RequestSizeLimit] / [RequestFormLimits] 单独放宽
-    builder.AddMyProjectLogging();
-    builder.AddMyProjectTelemetry();
-
-    builder.Services.AddDomainServices();
+builder.Services.AddDomainServices();
 #if (IncludeDistributedEvents)
-    builder.Services.AddDistributedEventBus();
-    builder.Services.AddRabbitMqEventTransport();
-    builder.Services.AddHealthChecks().AddRabbitMqEventTransport(tags: ["ready"]);
+builder.Services.AddDistributedEventBus();
+builder.Services.AddRabbitMqEventTransport();
+builder.Services.AddHealthChecks().AddRabbitMqEventTransport(tags: ["ready"]);
 #endif
 #if (IncludeWebhooks)
-    // 出站 Webhook 的选项（Leistd:Webhooks，启动期校验）与错误码映射；存储、投递与保留期由 AddInfrastructureServices 注册
-    builder.Services.AddWebhooks();
+// 出站 Webhook 的选项（Leistd:Webhooks，启动期校验）与错误码映射；存储、投递与保留期由 AddInfrastructureServices 注册
+builder.Services.AddWebhooks();
 #endif
-    builder.Services.AddInfrastructureServices(builder.Configuration);
-    builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.AddApplicationServices();
 #if (!IncludeOperationRecords)
-    builder.Services.AddOperationRecordsLogging();
+builder.Services.AddOperationRecordsLogging();
 #endif
 
 #if (OpenIddictServer)
-    builder.AddMyProjectOpenIddictServer();
+builder.AddMyProjectOpenIddictServer();
 #endif
-    builder.Services.AddMyProjectWebHost();
+builder.Services.AddMyProjectWebHost();
 
-    // 周期任务调度与进程内队列：组件登记的维护任务（操作记录归档、通知保留期、宿主级设置刷新）由它执行。
-    // 集群任务经分布式锁 + 完成水位保证多副本同一时段只跑一次（多副本部署须配置 Redis）
-    builder.Services.AddInProcessBackgroundJobs();
+// 周期任务调度与进程内队列：组件登记的维护任务（操作记录归档、通知保留期、宿主级设置刷新）由它执行。
+// 集群任务经分布式锁 + 完成水位保证多副本同一时段只跑一次（多副本部署须配置 Redis）
+builder.Services.AddInProcessBackgroundJobs();
 
-    builder.Services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure);
+builder.Services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure);
 #if (IncludeLocalization)
-    builder.Services.AddJsonLocalization(options =>
-    {
-        options.SupportedCultures = [.. SettingConstant.Display.SupportedLanguages];
-        options.ResourceAssemblies.Add(typeof(Program).Assembly);
-        // 只有显式登记的强类型资源才路由到 JSON。
-        options.JsonResourceTypes.Add(typeof(ApiResource));
-    });
-    // 设置页与权限树的显示名按 Setting:{名称}、SettingGroup:{分组} 与权限定义的显示名键查 ApiResource
-    builder.Services.Configure<SettingManagementOptions>(options => options.LocalizationResource = typeof(ApiResource));
-    builder.Services.Configure<PermissionManagementOptions>(options => options.LocalizationResource = typeof(ApiResource));
+builder.Services.AddJsonLocalization(options =>
+{
+    options.SupportedCultures = [.. SettingConstant.Display.SupportedLanguages];
+    options.ResourceAssemblies.Add(typeof(Program).Assembly);
+    // 只有显式登记的强类型资源才路由到 JSON。
+    options.JsonResourceTypes.Add(typeof(ApiResource));
+});
+// 设置页与权限树的显示名按 Setting:{名称}、SettingGroup:{分组} 与权限定义的显示名键查 ApiResource
+builder.Services.Configure<SettingManagementOptions>(options => options.LocalizationResource = typeof(ApiResource));
+builder.Services.Configure<PermissionManagementOptions>(options => options.LocalizationResource = typeof(ApiResource));
 #endif
-    builder.Services.AddSecurity();
+builder.Services.AddSecurity();
 
 #if (IncludeMultiTenancy)
 #if (LocalIdentity)
-    // Identity 持有租户注册表，因此校验解析结果。
-    builder.Services.AddMultiTenancy();
+// Identity 持有租户注册表，因此校验解析结果。
+builder.Services.AddMultiTenancy();
 #else
-    // Resource 不持有注册表，只信已验证令牌的 tenant_id claim。
-    builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
+// Resource 不持有注册表，只信已验证令牌的 tenant_id claim。
+builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
 #endif
 #else
-    builder.Services.AddMultiTenancyCore();
+builder.Services.AddMultiTenancyCore();
 #endif
 
 #if (IncludeNotifications || IncludeRealTime)
-    // 心跳、超时、详细错误是 SignalR 自身的选项，由宿主直接配置。
-    // 配了 Redis 时接上跨副本背板，多副本与 Worker 的推送经它路由
-    builder.Services.AddSignalR(options =>
-    {
-        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    }).AddMyProjectBackplane(builder.Configuration);
+// 心跳、超时、详细错误是 SignalR 自身的选项，由宿主直接配置。
+// 配了 Redis 时接上跨副本背板，多副本与 Worker 的推送经它路由
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+}).AddMyProjectBackplane(builder.Configuration);
 #endif
 #if (IncludeRealTime)
 
-    // 业务实时：资源事件推给订阅者，订阅授权由 AddApplicationServices 登记
-    builder.Services.AddRealTimeSignalR();
+// 业务实时：资源事件推给订阅者，订阅授权由 AddApplicationServices 登记
+builder.Services.AddRealTimeSignalR();
 #endif
 #if (IncludeNotifications)
-    builder.Services.AddMyProjectNotifications();
+builder.Services.AddMyProjectNotifications();
 #endif
 
-    builder.AddMyProjectAuthentication();
-#if (IncludeWebhooks && !SpaFrontend)
-    // Webhook 签名密钥经 Data Protection 加密落库：密钥环必须持久且各副本共享，否则重启后密钥解不开、投递发不出去
-    // （有前端的形态由浏览器会话一并注册）
-    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
+builder.AddMyProjectAuthentication();
+#if (!SpaFrontend)
+// 机密设置（如 OTLP 认证头）经 Data Protection 加密落库：密钥环必须持久且各副本共享，否则重启后解不开。
+#if (IncludeWebhooks)
+// Webhook 签名密钥同样如此，解不开时投递发不出去。
 #endif
-    builder.Services.AddApiAuthorization();
-    // 将权限定义作为 ASP.NET Core 授权策略解析。
-    builder.Services.AddPermissionAuthorization();
+// 有前端的形态由浏览器会话一并注册
+builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
+#endif
+builder.Services.AddApiAuthorization();
+// 将权限定义作为 ASP.NET Core 授权策略解析。
+builder.Services.AddPermissionAuthorization();
 
-    var app = builder.Build();
-    // 宿主级设置配置源要在构建之后挂上：构建期间追加的配置源（如测试宿主的覆盖）不能排在它后面
-    app.UseHostSettings();
+var app = builder.Build();
+// 宿主级设置配置源要在构建之后挂上：构建期间追加的配置源（如测试宿主的覆盖）不能排在它后面
+app.UseHostSettings();
 
 #if (SpaFrontend)
-    // 缺 Redis 不阻止启动：单实例配 DataProtection:KeysPath 是合法部署，副本数又无从推断。
-    // 但分布式缓存随之回落到进程内存，多副本时各副本各一份、彼此看不见，只能靠这条告警在启动日志里发现。
-    // 分布式锁的回落由锁组件自己告警，这里不重复。
-    if (!app.Environment.IsDevelopment() && string.IsNullOrEmpty(app.Configuration.GetConnectionString("Redis")))
-    {
+// 缺 Redis 不阻止启动：单实例配 DataProtection:KeysPath 是合法部署，副本数又无从推断。
+// 但分布式缓存随之回落到进程内存，多副本时各副本各一份、彼此看不见，只能靠这条告警在启动日志里发现。
+// 分布式锁的回落由锁组件自己告警，这里不重复。
+if (!app.Environment.IsDevelopment() && string.IsNullOrEmpty(app.Configuration.GetConnectionString("Redis")))
+{
 #if (Email)
-        const string cacheBackedState = "server-side session tickets, session revocation checks, two-factor challenges, captchas and email verification codes";
+    const string cacheBackedState = "server-side session tickets, session revocation checks, two-factor challenges, captchas and email verification codes";
 #elif (LocalIdentity)
-        const string cacheBackedState = "server-side session tickets, session revocation checks, two-factor challenges and captchas";
+    const string cacheBackedState = "server-side session tickets, session revocation checks, two-factor challenges and captchas";
 #else
-        const string cacheBackedState = "server-side session tickets";
+    const string cacheBackedState = "server-side session tickets";
 #endif
-        app.Logger.LogWarning(
-            "ConnectionStrings:Redis is not configured, so the distributed cache falls back to process memory: {CacheBackedState} " +
-            "are kept per process. This is only valid for a single instance; configure ConnectionStrings:Redis before running more replicas.",
-            cacheBackedState);
-    }
+    app.Logger.LogWarning(
+        "ConnectionStrings:Redis is not configured, so the distributed cache falls back to process memory: {CacheBackedState} " +
+        "are kept per process. This is only valid for a single instance; configure ConnectionStrings:Redis before running more replicas.",
+        cacheBackedState);
+}
 #endif
 
-    app.UseForwardedHeaders();
+app.UseForwardedHeaders();
 #if (IncludeLocalization)
-    // 在所有读取当前区域性的中间件之前解析请求区域性。
-    app.UseJsonRequestLocalization();
+// 在所有读取当前区域性的中间件之前解析请求区域性。
+app.UseJsonRequestLocalization();
 #endif
 #if (SpaFrontend)
-    app.UseDefaultFiles();
-    app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
+app.UseDefaultFiles();
+app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
 #endif
 
-    var requestLogging = app.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
-    app.UseCorrelationId();
-    app.UseSerilogRequestLogging(options =>
-    {
-        // 宿主 logger 独立持有（preserveStaticLogger）：不指定时中间件写进启动期的静态 logger，
-        // 请求完成事件就丢掉配置里的输出格式、sink 与 enrich
-        // 与 Microsoft.Extensions.Logging.ILogger 同名，这里保留全限定名
-        options.Logger = app.Services.GetRequiredService<Serilog.ILogger>();
-        options.GetLevel = (httpContext, elapsed, ex) =>
-        {
-            if (ex != null || httpContext.Response.StatusCode >= 500)
-                return LogEventLevel.Error;
+app.UseCorrelationId();
+// 请求完成日志在关联标识的作用域之内、异常转换之外：记下的是最终状态码（开关与租户字段见 RequestLoggingInterceptor）
+app.UseHttpLogging();
+app.UseGlobalExceptionHandler();
+// 框架只写状态码、不写响应体的失败（生产环境的请求体解析失败、415、未匹配路由、认证质询、限流）
+// 经问题详情管道补上标准响应体与 traceId。只作用于 API：SPA 页面与静态资源的 404 不改写成 JSON。
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/api"),
+    api => api.UseStatusCodePages());
+app.MapHealthChecks("/api/health/live", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live")
+}).AllowAnonymous().DisableHttpMetrics();
+app.MapHealthChecks("/api/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready")
+}).AllowAnonymous().DisableHttpMetrics();
 
-            // 正常完成的请求记成哪一级由设置决定：调到 Verbose 就等于关掉请求日志
-            // （全局最小级别通常是 Information，Verbose 不会落盘）。
-            // 失败与 5xx 不受它影响——那是排障必需的，不该被一个运维开关关掉。
-            return requestLogging.CurrentValue.Level;
-        };
-    });
-    app.UseGlobalExceptionHandler();
-    // 框架只写状态码、不写响应体的失败（生产环境的请求体解析失败、415、未匹配路由、认证质询、限流）
-    // 经问题详情管道补上标准响应体与 traceId。只作用于 API：SPA 页面与静态资源的 404 不改写成 JSON。
-    app.UseWhen(
-        context => context.Request.Path.StartsWithSegments("/api"),
-        api => api.UseStatusCodePages());
-    app.MapHealthChecks("/api/health/live", new HealthCheckOptions
-    {
-        Predicate = registration => registration.Tags.Contains("live")
-    }).AllowAnonymous().DisableHttpMetrics();
-    app.MapHealthChecks("/api/health/ready", new HealthCheckOptions
-    {
-        Predicate = registration => registration.Tags.Contains("ready")
-    }).AllowAnonymous().DisableHttpMetrics();
-
-    app.UseRouting();
-    app.UseCors();
+app.UseRouting();
+app.UseCors();
 
 #if (!SpaFrontend && (IncludeNotifications || IncludeRealTime))
-    // 浏览器连 Hub 只能把 Bearer 放在查询串：只在 Hub 端点上转成 Authorization 头，普通 API 仍只认请求头
-    app.UseHubAccessToken();
+// 浏览器连 Hub 只能把 Bearer 放在查询串：只在 Hub 端点上转成 Authorization 头，普通 API 仍只认请求头
+app.UseHubAccessToken();
 #endif
-    app.UseAuthentication();
+app.UseAuthentication();
 #if (SpaFrontend)
-    // 浏览器会话靠 Cookie：跨源写请求与 Hub 握手只接受本源与登记的前端源
-    app.UseBrowserOriginProtection();
+// 浏览器会话靠 Cookie：跨源写请求与 Hub 握手只接受本源与登记的前端源
+app.UseBrowserOriginProtection();
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
-    // 租户失效时注销 Cookie，避免会话困在不可用租户中。
-    app.UseTenantSessionRecovery(options => options.SignOutScheme = AuthenticationSchemeNames.SessionCookie);
+// 租户失效时注销 Cookie，避免会话困在不可用租户中。
+app.UseTenantSessionRecovery(options => options.SignOutScheme = AuthenticationSchemeNames.SessionCookie);
 #endif
-    // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
+// 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
 #if (IncludeMultiTenancy)
-    app.UseMultiTenancy();
+app.UseMultiTenancy();
 #else
-    app.UseMiddleware<HostPrincipalMiddleware>();
+app.UseMiddleware<HostPrincipalMiddleware>();
 #endif
-    // 请求完成日志在租户作用域之外写出：经 Serilog 诊断上下文补上租户，键与 ICurrentTenant.Change 打开的日志作用域一致
-    app.Use((context, next) =>
-    {
-        context.RequestServices.GetRequiredService<IDiagnosticContext>()
-            .Set(TenantLogKeys.TenantId, context.RequestServices.GetRequiredService<ICurrentTenant>().Id);
-        return next(context);
-    });
+// 请求完成日志在租户作用域之外写出：这里记下本请求解析出的租户，由拦截器补进完成日志
+app.Use((context, next) =>
+{
+    RequestLoggingInterceptor.CaptureTenant(context, context.RequestServices.GetRequiredService<ICurrentTenant>().Id);
+    return next(context);
+});
 #if (!LocalIdentity)
-    // 必须在 UseMultiTenancy() 之后：用户行是 IMultiTenant，租户没解析出来会落成宿主行。
-    app.UseMiddleware<ResourceUserProvisioningMiddleware>();
+// 必须在 UseMultiTenancy() 之后：用户行是 IMultiTenant，租户没解析出来会落成宿主行。
+app.UseMiddleware<ResourceUserProvisioningMiddleware>();
 #endif
 #if (LocalIdentity)
-    // 受限会话（租户要求两步验证而本人未启用）只放行完成设置所需的接口；受限与否由会话 Cookie 校验逐请求判定
-    app.UseMiddleware<TwoFactorSetupEnforcementMiddleware>();
+// 受限会话（租户要求两步验证而本人未启用）只放行完成设置所需的接口；受限与否由会话 Cookie 校验逐请求判定
+app.UseMiddleware<TwoFactorSetupEnforcementMiddleware>();
 #endif
-    app.UseAuthorization();
-    app.UseOperationFailureRecording();
+app.UseAuthorization();
+app.UseOperationFailureRecording();
 
-    app.MapControllers();
-    // 组件自带的端点（设置、权限、操作记录、通知、租户与租户连接），路由与原控制器一致
-    app.MapComponentEndpoints();
-    if (app.Environment.IsDevelopment())
-    {
-        // 本机查看接口：/openapi/v1.json。其他环境不暴露接口清单
-        app.MapOpenApi().AllowAnonymous();
-    }
+app.MapControllers();
+// 组件自带的端点（设置、权限、操作记录、通知、租户与租户连接），路由与原控制器一致
+app.MapComponentEndpoints();
+if (app.Environment.IsDevelopment())
+{
+    // 本机查看接口：/openapi/v1.json。其他环境不暴露接口清单
+    app.MapOpenApi().AllowAnonymous();
+}
 
 #if (IncludeRealTime)
-    // 业务事件与（启用时的）通知都经实时 Hub 推送，只映射这一个
-    app.MapRealTimeHub();
+// 业务事件与（启用时的）通知都经实时 Hub 推送，只映射这一个
+app.MapRealTimeHub();
 #elif (IncludeNotifications)
-    app.MapNotificationHub();
+app.MapNotificationHub();
 #endif
 
 #if (SpaFrontend)
-    app.MapMyProjectSpaFallback();
+app.MapMyProjectSpaFallback();
 #endif
 
-    // API 只验证 schema；所有 DDL 由 DbMigrator 施加。
-    await app.VerifyDatabaseSchemaAsync();
+// API 只验证 schema；所有 DDL 由 DbMigrator 施加。
+await app.VerifyDatabaseSchemaAsync();
 
-    app.Run();
-}
-catch (Exception ex) when (ex is not HostAbortedException)
-{
-    // 重抛以便宿主和测试观察到非零退出。
-    Log.Fatal(ex, "Application terminated unexpectedly");
-    throw;
-}
-finally
-{
-    Log.CloseAndFlush();
-}
+app.Run();
 
 // 向 WebApplicationFactory 集成测试公开顶层语句生成的入口类型。
 public partial class Program

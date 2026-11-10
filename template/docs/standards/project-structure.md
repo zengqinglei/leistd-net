@@ -54,7 +54,7 @@ Api 文件按关注点归入少数顶层目录：
 | --- | --- |
 | `Controllers/` | 业务 Controller 与 `BaseController` |
 | `Auth/` | 认证与授权集成，按下表分类 |
-| `Hosting/` | 宿主组装扩展（`*Extensions`）、组件端点映射、`ExceptionMappings/` |
+| `Hosting/` | 宿主组装扩展（`*Extensions`）、组件端点映射、`ExceptionMappings/`，以及宿主日志与遥测的适配（请求日志拦截器、OTLP 发送层） |
 | `Localization/` | 本地化资源标记类型（`ApiResource`） |
 | `Notifications/` | 只放依赖宿主资源的通知扩展点实现 |
 | `Configuration/` | 宿主级设置绑定 |

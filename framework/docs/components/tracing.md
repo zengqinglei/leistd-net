@@ -118,7 +118,7 @@ using (ambientContext.Begin(principal, correlationId: message.CorrelationId))
 - `Get()` 在没有显式值也没有 Activity 时返回 `null`，读取后需判空。
 - `Change()` 返回的 `IDisposable` 必须释放，否则上下文不会恢复，会污染同一异步流的后续逻辑。
 - 显式指定的值超过 64 个字符时，操作记录落库会截断；请求头传入的值超长会被丢弃。
-- 日志键 `leistd.correlationId` 是跨服务约定键；要在日志里看到它，日志库（如 Serilog）需启用作用域富化。TraceId 由日志库按 `Activity` 另行记录。
+- 日志键 `leistd.correlationId` 是跨服务约定键，以日志作用域写入：日志提供程序打开 `IncludeScopes` 后按键值采集（JSON 控制台、OpenTelemetry 为结构化属性）；内置 Simple 控制台格式把它打印为 `leistd.correlationId:值`。TraceId 由日志提供程序按 `Activity` 另行记录。
 
 ## 相关
 

@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { Subject } from 'rxjs';
 
-import { SettingsPageState } from './settings-page-state';
+import { nestUnderSwitches, SettingRowNode, SettingsPageState } from './settings-page-state';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 //#endif
@@ -184,5 +184,79 @@ describe('SettingsPageState', () => {
     responses[0].next([setting('en')]);
     await settle();
     expect(state.loading()).toBe(false);
+  });
+});
+
+/** 开关下挂子项只看设置名约定：`{前缀}.Enabled` 的布尔设置管着名字以 `{前缀}.` 开头的其他设置。 */
+describe('nestUnderSwitches', () => {
+  const setting = (name: string, isBoolean = false): SettingOutputDto =>
+    ({ name, isBoolean }) as SettingOutputDto;
+  const shape = (nodes: SettingRowNode[]): unknown[] =>
+    nodes.map((node) =>
+      node.children.length > 0 ? { [node.setting.name]: shape(node.children) } : node.setting.name,
+    );
+
+  it('puts settings with the same prefix under the switch, in delivered order', () => {
+    expect(
+      shape(
+        nestUnderSwitches([
+          setting('Registration.CaptchaExpiryMinutes'),
+          setting('Registration.Enabled', true),
+          setting('Registration.EnableEmailVerification', true),
+          setting('Security.RequireTwoFactor', true),
+        ]),
+      ),
+    ).toEqual([
+      {
+        'Registration.Enabled': [
+          'Registration.CaptchaExpiryMinutes',
+          'Registration.EnableEmailVerification',
+        ],
+      },
+      'Security.RequireTwoFactor',
+    ]);
+  });
+
+  it('nests under the longest matching switch', () => {
+    expect(
+      shape(
+        nestUnderSwitches([
+          setting('Telemetry.Enabled', true),
+          setting('Telemetry.Export.Enabled', true),
+          setting('Telemetry.Export.Endpoint'),
+          setting('Telemetry.SamplingRatio'),
+        ]),
+      ),
+    ).toEqual([
+      {
+        'Telemetry.Enabled': [
+          { 'Telemetry.Export.Enabled': ['Telemetry.Export.Endpoint'] },
+          'Telemetry.SamplingRatio',
+        ],
+      },
+    ]);
+  });
+
+  it('leaves rows without a matching boolean switch at the top level', () => {
+    expect(
+      shape(
+        nestUnderSwitches([
+          // 不是布尔：不算开关
+          setting('Audit.Enabled'),
+          setting('Audit.RetentionDays'),
+          // 后缀不是整段 `.Enabled`
+          setting('Audit.RetentionEnabled', true),
+          // 前缀按整段匹配，RegistrationPolicy 不属于 Registration
+          setting('Registration.Enabled', true),
+          setting('RegistrationPolicy.Mode'),
+        ]),
+      ),
+    ).toEqual([
+      'Audit.Enabled',
+      'Audit.RetentionDays',
+      'Audit.RetentionEnabled',
+      'Registration.Enabled',
+      'RegistrationPolicy.Mode',
+    ]);
   });
 });

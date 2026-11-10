@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.MultiTenancy.Context;
+using Leistd.TestBase.Doubles;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
@@ -40,6 +42,71 @@ public class CurrentTenantTests
         => record.Scopes.OfType<IEnumerable<KeyValuePair<string, object?>>>()
             .SelectMany(scope => scope)
             .Last(pair => pair.Key == TenantLogKeys.TenantId).Value;
+
+    // 切换时交给日志的作用域：结构化提供程序（JSON、OpenTelemetry）只枚举到租户这一个键
+    [Theory]
+    [InlineData("11111111-1111-1111-1111-111111111111")]
+    [InlineData(null)]
+    public void The_tenant_scope_carries_only_the_tenant_key(string? tenant)
+    {
+        var tenantId = tenant is null ? (Guid?)null : Guid.Parse(tenant);
+
+        var scope = Assert.Single(ScopesWhileChangedTo(tenantId));
+
+        var pair = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<KeyValuePair<string, object?>>>(scope));
+        Assert.Equal(TenantLogKeys.TenantId, pair.Key);
+        Assert.Equal(tenantId, pair.Value);
+        Assert.Equal($"leistd.tenantId:{tenant}", scope!.ToString());
+    }
+
+    // Simple 控制台格式只调用 ToString()：作用域行要是可读的 键:值，切回宿主时值为空
+    [Theory]
+    [InlineData("11111111-1111-1111-1111-111111111111")]
+    [InlineData(null)]
+    public void Simple_console_prints_the_tenant_scope_as_key_and_value(string? tenant)
+    {
+        var output = RenderWhileChangedTo(ConsoleFormatterNames.Simple, tenant is null ? null : Guid.Parse(tenant));
+
+        Assert.Contains($"=> leistd.tenantId:{tenant}{Environment.NewLine}", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Json_console_writes_the_tenant_scope_as_a_property()
+    {
+        var tenantId = Guid.NewGuid();
+
+        var output = RenderWhileChangedTo(ConsoleFormatterNames.Json, tenantId);
+
+        Assert.Contains($"\"leistd.tenantId\":\"{tenantId}\"", output, StringComparison.Ordinal);
+    }
+
+    private static string RenderWhileChangedTo(string formatterName, Guid? tenantId)
+    {
+        using var capture = new ConsoleFormatterCapture(formatterName);
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(capture));
+        var logger = loggerFactory.CreateLogger<CurrentTenant>();
+        var currentTenant = new CurrentTenant(AsyncLocalCurrentTenantAccessor.Instance, logger);
+
+        using (currentTenant.Change(tenantId))
+        {
+            logger.LogInformation("inside");
+        }
+
+        return capture.Output;
+    }
+
+    private static IReadOnlyList<object?> ScopesWhileChangedTo(Guid? tenantId)
+    {
+        var logger = new FakeLogger<CurrentTenant>();
+        var currentTenant = new CurrentTenant(AsyncLocalCurrentTenantAccessor.Instance, logger);
+
+        using (currentTenant.Change(tenantId))
+        {
+            logger.LogInformation("inside");
+        }
+
+        return logger.Collector.LatestRecord.Scopes;
+    }
 
     [Fact]
     public void Change_nests_and_restores_parent_on_dispose()

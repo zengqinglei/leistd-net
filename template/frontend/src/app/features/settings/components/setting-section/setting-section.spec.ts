@@ -1294,6 +1294,363 @@ describe('SettingSection switches', () => {
     });
   });
 });
+/**
+ * `{前缀}.Enabled` 开关下的同前缀设置缩进显示，开关的生效值为假时不渲染。生效值含继承值、清除后的回落
+ * 与未保存的草稿；`'false'` 字符串是假。
+ */
+describe('SettingSection switch children', () => {
+  const registration = (overrides: Partial<SettingOutputDto> = {}) =>
+    row({
+      name: 'Registration.Enabled',
+      group: 'Registration',
+      isBoolean: true,
+      defaultValue: 'true',
+      allowsUserScope: false,
+      ...overrides,
+    });
+  const registrationRows = (overrides: Partial<SettingOutputDto> = {}) => [
+    registration(overrides),
+    row({
+      name: 'Registration.EnableEmailVerification',
+      group: 'Registration',
+      isBoolean: true,
+      defaultValue: 'false',
+      allowsUserScope: false,
+    }),
+    row({
+      name: 'Registration.CaptchaExpiryMinutes',
+      group: 'Registration',
+      defaultValue: '5',
+      minimum: 1,
+      maximum: 60,
+      allowsUserScope: false,
+    }),
+  ];
+  const children = ['Registration.EnableEmailVerification', 'Registration.CaptchaExpiryMinutes'];
+
+  let fixture: ComponentFixture<SettingSection>;
+  let http: HttpTestingController;
+
+  async function render(
+    settings: SettingOutputDto[],
+    scope = 'system',
+    width?: string,
+  ): Promise<HTMLElement> {
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    fixture = TestBed.createComponent(SettingSection);
+    http = TestBed.inject(HttpTestingController);
+    fixture.componentRef.setInput('scope', scope);
+    const host = fixture.nativeElement as HTMLElement;
+    if (width) {
+      host.style.display = 'block';
+      host.style.width = width;
+    }
+    fixture.detectChanges();
+    http.expectOne('/api/v1/settings').flush(settings);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return host;
+  }
+
+  /** 渲染出来的设置行，按文档顺序。 */
+  function renderedRows(host: HTMLElement): string[] {
+    return [...host.querySelectorAll<HTMLElement>('[data-setting-name]')].map(
+      (field) => field.dataset['settingName']!,
+    );
+  }
+
+  function field(host: HTMLElement, name: string): HTMLElement {
+    return host.querySelector<HTMLElement>(`[data-setting-name="${name}"]`)!;
+  }
+
+  function switchOf(host: HTMLElement, name: string): HTMLElement {
+    return host.querySelector<HTMLElement>(
+      `[data-testid="setting-switch-${name}"] [role="switch"]`,
+    )!;
+  }
+
+  afterEach(() => {
+    try {
+      http.verify();
+    } finally {
+      try {
+        fixture.destroy();
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
+    }
+  });
+
+  it('indents the settings of an enabled switch one level under it, in a group named by its label', async () => {
+    const host = await render(registrationRows());
+
+    expect(renderedRows(host)).toEqual(['Registration.Enabled', ...children]);
+    const group = host.querySelector<HTMLElement>('[data-testid="setting-children"]')!;
+    expect(group.dataset['parent']).toBe('Registration.Enabled');
+    expect(group.getAttribute('role')).toBe('group');
+    const label = document.getElementById(group.getAttribute('aria-labelledby')!)!;
+    expect(label.tagName).toBe('LABEL');
+    expect(label.textContent?.trim()).toBe(registration().displayName);
+
+    const parentLeft = field(host, 'Registration.Enabled').getBoundingClientRect().left;
+    for (const name of children) {
+      expect(field(host, name).closest('[data-testid="setting-children"]')).toBe(group);
+      expect(field(host, name).getBoundingClientRect().left).toBeGreaterThan(parentLeft + 8);
+    }
+  });
+
+  // 有效值含继承值：本层未覆盖时看部署基线（代码默认），租户页的覆盖为 'false' 也是关
+  it.each([
+    { case: 'inherited default off', overrides: { defaultValue: 'false' }, scope: 'system' },
+    { case: 'own value off', overrides: { tenantValue: 'false' }, scope: 'system' },
+    {
+      case: 'organization value off on the account page',
+      overrides: { allowsUserScope: true, tenantValue: 'false' },
+      scope: 'account',
+    },
+  ])(
+    'does not render the settings of a switch whose effective value is false ($case)',
+    async ({ overrides, scope }) => {
+      const settings = registrationRows(overrides).map((setting) => ({
+        ...setting,
+        allowsUserScope: scope === 'account',
+      }));
+      const host = await render(settings, scope);
+
+      expect(renderedRows(host)).toEqual(['Registration.Enabled']);
+      expect(switchOf(host, 'Registration.Enabled').getAttribute('aria-checked')).toBe('false');
+      expect(host.querySelector('[data-testid="setting-children"]')).toBeNull();
+      // 隐藏的子项不在页面上，键盘也就到不了
+      for (const name of children) {
+        expect(document.getElementById(name)).toBeNull();
+      }
+    },
+  );
+
+  it('shows the settings as soon as the switch is turned on and hides them again when it is cleared', async () => {
+    const host = await render(registrationRows({ defaultValue: 'false' }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+
+    switchOf(host, 'Registration.Enabled').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    // 写入还在途：子项跟着草稿出现，不等保存完成
+    expect(renderedRows(host)).toEqual(['Registration.Enabled', ...children]);
+    const put = http.expectOne('/api/v1/settings/current-tenant');
+    expect(put.request.body).toEqual({ name: 'Registration.Enabled', value: 'true' });
+    put.flush(null);
+    await fixture.whenStable();
+    http
+      .expectOne('/api/v1/settings')
+      .flush(registrationRows({ defaultValue: 'false', tenantValue: 'true' }));
+    await vi.advanceTimersByTimeAsync(400);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(renderedRows(host)).toEqual(['Registration.Enabled', ...children]);
+    // 新出现的子项同样关联本行反馈
+    expect(document.getElementById(children[1])!.getAttribute('aria-describedby')).toBe(
+      `${children[1]}-description`,
+    );
+
+    // 清除本层：回落到继承的 'false'，子项随即收起
+    host
+      .querySelector<HTMLButtonElement>('[data-testid="setting-reset-Registration.Enabled"]')!
+      .click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(renderedRows(host)).toEqual(['Registration.Enabled']);
+    const clear = http.expectOne('/api/v1/settings/current-tenant');
+    expect(clear.request.body).toEqual({ name: 'Registration.Enabled', value: null });
+    clear.flush(null);
+    await fixture.whenStable();
+    http.expectOne('/api/v1/settings').flush(registrationRows({ defaultValue: 'false' }));
+    await vi.advanceTimersByTimeAsync(400);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(renderedRows(host)).toEqual(['Registration.Enabled']);
+  });
+
+  it('nests the export address and headers under the telemetry export switch only', async () => {
+    const host = (enabled: string) =>
+      render([
+        row({ name: 'Logging.MinimumLevel', group: 'Operations', defaultValue: 'Information' }),
+        row({
+          name: 'Logging.RequestLogging',
+          group: 'Operations',
+          isBoolean: true,
+          defaultValue: 'true',
+        }),
+        row({
+          name: 'Telemetry.Export.Enabled',
+          group: 'Operations',
+          isBoolean: true,
+          defaultValue: enabled,
+        }),
+        row({ name: 'Telemetry.Export.Endpoint', group: 'Operations', defaultValue: null }),
+        row({
+          name: 'Telemetry.Export.Headers',
+          group: 'Operations',
+          defaultValue: null,
+          isSecret: true,
+        }),
+      ]);
+
+    const off = await host('false');
+    expect(renderedRows(off)).toEqual([
+      'Logging.MinimumLevel',
+      'Logging.RequestLogging',
+      'Telemetry.Export.Enabled',
+    ]);
+    fixture.destroy();
+    TestBed.resetTestingModule();
+
+    const on = await host('true');
+    expect(renderedRows(on)).toEqual([
+      'Logging.MinimumLevel',
+      'Logging.RequestLogging',
+      'Telemetry.Export.Enabled',
+      'Telemetry.Export.Endpoint',
+      'Telemetry.Export.Headers',
+    ]);
+    const group = on.querySelector<HTMLElement>('[data-testid="setting-children"]')!;
+    expect(group.dataset['parent']).toBe('Telemetry.Export.Enabled');
+    expect(
+      field(on, 'Logging.RequestLogging').closest('[data-testid="setting-children"]'),
+    ).toBeNull();
+    // 认证头只写：口令框，没有回显
+    const headers = on.querySelector<HTMLInputElement>(
+      '[data-testid="setting-input-Telemetry.Export.Headers"]',
+    )!;
+    expect(headers.type).toBe('password');
+    expect(headers.value).toBe('');
+  });
+
+  // 390 宽的手机上面板约 358px：缩进后的子项（输入框落到标签下方）不撑出横向滚动
+  it('keeps indented settings inside a narrow panel', async () => {
+    const host = await render(
+      registrationRows().map((setting) => ({
+        ...setting,
+        displayName: `${setting.displayName} with a much longer label that has to wrap`,
+      })),
+      'system',
+      '358px',
+    );
+
+    const right = host.getBoundingClientRect().right;
+    for (const name of children) {
+      for (const element of field(host, name).querySelectorAll('input, button, [role="switch"]')) {
+        expect(element.getBoundingClientRect().right).toBeLessThanOrEqual(right + 0.5);
+      }
+    }
+    expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth);
+  });
+});
+
+/** 请求日志是开关，日志级别只剩最小级别一项，候选值是 .NET 的 `LogLevel` 名称。 */
+describe('SettingSection logging', () => {
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  async function render(settings: SettingOutputDto[]): Promise<HTMLElement> {
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    const fixture = TestBed.createComponent(SettingSection);
+    fixture.componentRef.setInput('scope', 'system');
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/settings').flush(settings);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /** 标签下方的说明（日志级别说明或登记的固定说明）。 */
+  function hintOf(host: HTMLElement, name: string): string | undefined {
+    return host
+      .querySelector(`[data-setting-name="${name}"] [data-slot="field-content"] > p`)
+      ?.textContent?.trim();
+  }
+
+  function expectHint(host: HTMLElement, name: string, key: string): void {
+    //#if (IncludeLocalization)
+    // 单测装配不加载词条，取到的就是键
+    expect(hintOf(host, name)).toBe(key);
+    //#else
+    expect(hintOf(host, name)).toBeTruthy();
+    expect(hintOf(host, name)).not.toBe(key);
+    //#endif
+  }
+
+  it('renders request logging as a plain switch without a level hint', async () => {
+    const host = await render([
+      row({
+        name: 'Logging.RequestLogging',
+        group: 'Operations',
+        isBoolean: true,
+        defaultValue: 'true',
+      }),
+    ]);
+
+    expect(
+      host
+        .querySelector('[data-testid="setting-switch-Logging.RequestLogging"] [role="switch"]')
+        ?.getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(host.querySelector('[data-testid="setting-select-Logging.RequestLogging"]')).toBeNull();
+    expect(hintOf(host, 'Logging.RequestLogging')).toBeUndefined();
+  });
+
+  it('describes the selected minimum level by its LogLevel name', async () => {
+    const host = await render([
+      row({
+        name: 'Logging.MinimumLevel',
+        group: 'Operations',
+        defaultValue: 'Information',
+        tenantValue: 'Critical',
+      }),
+    ]);
+
+    expectHint(host, 'Logging.MinimumLevel', 'settings.logLevelHints.Critical');
+  });
+
+  it('offers the LogLevel names from Trace to Critical, without None', async () => {
+    const host = await render([
+      row({ name: 'Logging.MinimumLevel', group: 'Operations', defaultValue: 'Information' }),
+    ]);
+    const trigger = host.querySelector<HTMLElement>(
+      '[data-testid="setting-select-Logging.MinimumLevel"] button',
+    )!;
+
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+
+    const options = [...document.querySelectorAll('hlm-select-item')].map((item) =>
+      item.textContent?.trim(),
+    );
+    expect(options).toEqual(['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical']);
+    await userEvent.keyboard('{Escape}');
+  });
+
+  it('describes the telemetry export settings below their labels', async () => {
+    const host = await render([
+      row({
+        name: 'Telemetry.Export.Enabled',
+        group: 'Operations',
+        isBoolean: true,
+        defaultValue: 'true',
+      }),
+      row({ name: 'Telemetry.Export.Endpoint', group: 'Operations', defaultValue: null }),
+      row({
+        name: 'Telemetry.Export.Headers',
+        group: 'Operations',
+        defaultValue: null,
+        isSecret: true,
+      }),
+    ]);
+
+    expectHint(host, 'Telemetry.Export.Enabled', 'settings.settingHints.telemetryExportEnabled');
+    expectHint(host, 'Telemetry.Export.Endpoint', 'settings.settingHints.telemetryExportEndpoint');
+    expectHint(host, 'Telemetry.Export.Headers', 'settings.settingHints.telemetryExportHeaders');
+  });
+});
 //#if (ExternalLogin)
 
 /**
@@ -1401,6 +1758,25 @@ describe('SettingSection external login', () => {
         ?.closest('[data-testid="external-login-provider"]')
         ?.getAttribute('data-provider'),
     ).toBe('github');
+  });
+
+  // 开关下缩进子项的约定作用在分流之后的普通行上：卡片里的凭据不因开关关闭而消失，也不缩进
+  it('keeps provider credentials in their card while the provider switch is off', async () => {
+    const host = await render('system');
+    http.expectOne(statusUrl).flush({ providers: [] });
+
+    expect(
+      host
+        .querySelector(
+          '[data-testid="setting-switch-ExternalLogin.Github.Enabled"] [role="switch"]',
+        )
+        ?.getAttribute('aria-checked'),
+    ).toBe('false');
+    expect(cardRows(host, 'github')).toEqual([
+      'ExternalLogin.Github.Enabled',
+      'ExternalLogin.Github.ClientId',
+    ]);
+    expect(host.querySelector('[data-testid="setting-children"]')).toBeNull();
   });
 
   it('shows the saving state on a row inside a card', async () => {

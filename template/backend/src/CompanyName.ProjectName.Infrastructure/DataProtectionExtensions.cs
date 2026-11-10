@@ -11,8 +11,11 @@ public static class DataProtectionExtensions
 {
     /// <summary>注册持久化的 Data Protection 密钥环：配置了 Redis 时存 Redis，否则存文件系统。</summary>
     /// <remarks>
-    /// <para>除认证 Cookie 与防伪令牌外，启用本地身份时还有三类落库数据用这套密钥环加密：
-    /// 控制库里租户独立库的连接串、设置表里的机密设置（如发信口令）、用户的两步验证密钥。
+    /// <para>用这套密钥环加密的数据：所有形态都有设置表里的机密设置（如 OTLP 认证头）；有浏览器会话时还有认证 Cookie 与防伪令牌；
+    /// 启用本地身份时还有控制库里租户独立库的连接串、发信口令与外部登录密钥等机密设置、用户的两步验证密钥；
+#if (IncludeWebhooks)
+    /// 启用 Webhook 时还有订阅的签名密钥。
+#endif
     /// 读写同一个库的进程（API、DbMigrator）必须共享同一密钥环与应用名，否则一方写入的
     /// 密文另一方解不开：租户连接串解不开时该租户的请求与迁移都会被拒绝。</para>
     /// <para>显式指定存储位置后，框架不再自动对密钥做静态加密；存储位置本身须只允许本服务访问。
@@ -48,8 +51,7 @@ public static class DataProtectionExtensions
                 throw new InvalidOperationException(
                     "Data Protection keys must be persisted to a shared, backed-up location outside Development: " +
                     "set ConnectionStrings:Redis, or DataProtection:KeysPath to a persistent directory shared by the API " +
-                    "and DbMigrator. Losing the keys makes sign-in cookies, tenant connection strings, secret settings " +
-                    "and two-factor keys unreadable.");
+                    "and DbMigrator. Losing the keys makes secret settings and every other value protected with them unreadable.");
             }
 
             var keysPath = string.IsNullOrWhiteSpace(configuredPath)

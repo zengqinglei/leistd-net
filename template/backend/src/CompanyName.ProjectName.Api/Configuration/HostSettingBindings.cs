@@ -14,7 +14,6 @@ using Leistd.Notifications.EntityFrameworkCore.Options;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Leistd.Settings.Hosting.Options;
 #endif
-using Serilog.Events;
 
 namespace CompanyName.ProjectName.Api.Configuration;
 
@@ -27,23 +26,26 @@ namespace CompanyName.ProjectName.Api.Configuration;
 /// </remarks>
 public static class HostSettingBindings
 {
-    /// <summary>Serilog 最小级别的配置节。</summary>
-    public const string SerilogMinimumLevel = "Serilog:MinimumLevel";
+    /// <summary>全局最小日志级别的配置键：只覆盖 <c>Default</c>，按类别列出的覆盖不受影响。</summary>
+    public const string LogLevelDefault = "Logging:LogLevel:Default";
 
     /// <summary>注册本项目的宿主级设置绑定。</summary>
     /// <param name="services">服务集合。</param>
-    public static IServiceCollection AddMyProjectHostSettings(this IServiceCollection services)
+    /// <param name="deploymentConfiguration">部署配置：遥测导出开关的兜底值由它算出（见 <see cref="TelemetryExportOptions.IsEnabledByDeployment"/>）。</param>
+    public static IServiceCollection AddMyProjectHostSettings(this IServiceCollection services, IConfiguration deploymentConfiguration)
         => services.AddHostSettings(bindings =>
         {
-            // Serilog 的最小级别有标量与对象两种写法，它在启动时按配置源优先级选定一种并订阅其重载。
-            // 两个键都写：无论它订阅的是哪一种，拿到的都是设置里的值；清除设置即回到部署配置。
-            // 前提是部署配置里至少有一种写法（模板的 appsettings.json 自带），否则 Serilog 没有可订阅的键。
-            bindings.Bind(
-                SettingConstant.Logging.MinimumLevel,
-                [SerilogMinimumLevel, $"{SerilogMinimumLevel}:Default"],
-                fallback: nameof(LogEventLevel.Information));
+            // 内置日志过滤随配置重载即时生效：覆盖这个键即改变全局级别，清除即回到部署配置
+            bindings.Bind(SettingConstant.Logging.MinimumLevel, [LogLevelDefault], fallback: nameof(LogLevel.Information));
             bindings.BindOption<RequestLoggingOptions>(
-                SettingConstant.Logging.RequestLevel, RequestLoggingOptions.SectionName, nameof(RequestLoggingOptions.Level));
+                SettingConstant.Logging.RequestLogging, RequestLoggingOptions.SectionName, nameof(RequestLoggingOptions.Enabled));
+            // 地址与认证头直接覆盖 OpenTelemetry 原本读的键，部署值即兜底；开关没有部署键时按部署地址是否配置推导
+            bindings.Bind(
+                SettingConstant.Telemetry.ExportEnabled,
+                [TelemetryExportOptions.EnabledKey],
+                fallback: TelemetryExportOptions.IsEnabledByDeployment(deploymentConfiguration) ? "true" : "false");
+            bindings.Bind(SettingConstant.Telemetry.ExportEndpoint, [TelemetryExportOptions.EndpointKey]);
+            bindings.Bind(SettingConstant.Telemetry.ExportHeaders, [TelemetryExportOptions.HeadersKey]);
 #if (Email)
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpHost, SmtpOptions.SectionName, nameof(SmtpOptions.Host));
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpPort, SmtpOptions.SectionName, nameof(SmtpOptions.Port));

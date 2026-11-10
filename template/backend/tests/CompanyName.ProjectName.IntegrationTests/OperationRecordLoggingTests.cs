@@ -13,11 +13,11 @@ using Leistd.OperationRecords.Stores;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Serilog.Events;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>真实 PostgreSQL 事务与真实 Serilog 输出，验证关闭历史后的持久化边界。</summary>
+/// <summary>真实 PostgreSQL 事务与宿主日志管道的真实输出，验证关闭历史后的持久化边界。</summary>
 public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {
     [Fact]
@@ -92,12 +92,12 @@ public sealed class OperationRecordLoggingTests(ProjectWebApplicationFactory fac
         Assert.Equal(subject.ToString(), OperationRecordLogCapture.Field(record, "OperationTargetId"));
         Assert.Equal(changed, OperationRecordLogCapture.Field(record, "OperationTargetName"));
         Assert.Equal(PermissionConstant.Users.Update, OperationRecordLogCapture.Field(record, "OperationAuthorizationBasis"));
-        Assert.NotEqual(Guid.Empty, Assert.IsType<Guid>(OperationRecordLogCapture.Field(record, "OperationRecordId")));
-        Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(OperationRecordLogCapture.Field(record, "OperationTime")).Kind);
+        Assert.NotEqual(Guid.Empty, Guid.Parse(OperationRecordLogCapture.Field(record, "OperationRecordId")!));
+        Assert.True(DateTimeOffset.TryParse(OperationRecordLogCapture.Field(record, "OperationTime"), out _));
         foreach (var field in new[] { "OperationActorTenantId", "OperationTenantId", "OperationImpersonatorId", "OperationImpersonatorName", "OperationOutcome", "OperationFailureCode", "OperationFailureDataKeys", "OperationFailureDetail", "OperationVisibility" })
-            Assert.True(record.Properties.ContainsKey(field), field);
-        LogEvent[] Records() => capture.Snapshot().Where(e =>
-            Equals(OperationRecordLogCapture.Field(e, "OperationCorrelationId"), correlation)).ToArray();
+            Assert.True(LogRecordFields.HasState(record, field), field);
+        FakeLogRecord[] Records() => capture.Snapshot().Where(e =>
+            OperationRecordLogCapture.Field(e, "OperationCorrelationId") == correlation).ToArray();
     }
 }
 #endif

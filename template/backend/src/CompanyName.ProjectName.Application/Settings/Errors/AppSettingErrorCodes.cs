@@ -11,5 +11,7 @@ public static class AppSettingErrorCodes
 #if (IncludeNotifications)
     public const string NotificationRetentionOrder = "AppSetting:NotificationRetentionOrder";
 #endif
+    public const string TelemetryEndpointInvalid = "AppSetting:TelemetryEndpointInvalid";
+    public const string TelemetryHeadersInvalid = "AppSetting:TelemetryHeadersInvalid";
     public const string TimeZoneInvalid = "AppSetting:TimeZoneInvalid";
 }

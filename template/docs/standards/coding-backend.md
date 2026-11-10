@@ -4,7 +4,7 @@
 
 ## 1. 技术栈
 
-.NET 10、EF Core 10、PostgreSQL、Redis（多实例部署）、Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）、Serilog。精确版本以项目文件为准。
+.NET 10、EF Core 10、PostgreSQL、Redis（多实例部署）、Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）、`ILogger` 内置提供程序与 OpenTelemetry。精确版本以项目文件为准。
 
 ## 2. 分层与目录
 
@@ -187,7 +187,7 @@ XML 按需补契约。短摘要写 `/// <summary>说明。</summary>`；正文�
 | 启动期与组合期（`Program.cs`、`Add*Services`、`IValidateOptions`）、DbMigrator 等一次性作业；参数与编程契约 | BCL 异常（`InvalidOperationException`、`ArgumentException` 等） |
 
 - 部署配置错误在启动期失败：`AddOptions<T>().Validate(...).ValidateOnStart()`；连接串缺失时由创建 DbContext 直接抛出并指明键名。组合期只为**选择注册哪种实现**（是否接 Redis、加载哪些证书）读配置，在读取处校验并报出键名，集成测试用 `UseSetting` 覆盖这类键。
-- 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`；不可记录的内容见[通用约定 §1](./coding-common.md#1-语言与敏感信息)。
+- 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`；不可记录的内容见[通用约定 §1](./coding-common.md#1-语言与敏感信息)。关联标识与租户由框架放进日志作用域（`leistd.correlationId`、`leistd.tenantId`），不要再拼进消息；请求完成日志由宿主统一记录，见 [日志](../deploy/configuration.md#日志)。
 
 - 业务指标经 `IMeterFactory` 创建 Meter；Meter 与 `ActivitySource` 均用 `CompanyName.ProjectName.*` 项目前缀命名，宿主已按此前缀采集。标签必须有界，不带租户 Id、用户或地址；确有可变维度时限定数量，超出归入 `other`，不建通用截断组件。
 - 新增独立 Worker 时，将 `TelemetryExtensions` 源码与包引用迁到宿主共用位置，调用同一入口；Worker 不反向引用 Api，没有入站 HTTP，也不需要指标端点。导出配置与排障见 [遥测导出](../deploy/configuration.md#遥测导出)。

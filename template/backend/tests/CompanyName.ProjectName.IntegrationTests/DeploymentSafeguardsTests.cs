@@ -1,21 +1,19 @@
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Hosting;
 #if (SpaFrontend)
-using Microsoft.AspNetCore.TestHost;
 using CompanyName.ProjectName.Application.Shared;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 #endif
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.Options;
 #endif
-#if (SpaFrontend || RemoteTokenAuth)
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-#endif
 #if (OpenIddictServer)
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -56,8 +54,7 @@ public sealed class DeploymentSafeguardsTests
     }
 
 #endif
-#if (SpaFrontend)
-    // 本地密钥目录随容器重建而消失、多副本之间不共享：登录 Cookie、租户连接串、机密设置随之无法解密
+    // 所有形态都有机密设置（如 OTLP 认证头）：本地密钥目录随容器重建而消失、多副本之间不共享，密文随之无法解密
     [Fact]
     public void Data_protection_keys_must_be_persisted_outside_development()
     {
@@ -67,6 +64,34 @@ public sealed class DeploymentSafeguardsTests
 
         Assert.Contains("DataProtection:KeysPath", exception.ToString(), StringComparison.Ordinal);
     }
+
+    // 配置的目录就是宿主实际使用的密钥环：机密设置写入后，密钥落在该目录
+    [Fact]
+    public void Data_protection_keys_are_persisted_to_the_configured_directory()
+    {
+        var keysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-probe-{Guid.NewGuid():N}");
+        try
+        {
+            using var factory = new ProjectWebApplicationFactory();
+            using var host = factory.WithWebHostBuilder(builder => builder.UseSetting("DataProtection:KeysPath", keysPath));
+
+            var repository = host.Services.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository;
+            var protector = host.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("ProjectTests.KeyRingProbe");
+            Assert.Equal("probe", protector.Unprotect(protector.Protect("probe")));
+
+            Assert.Equal(
+                Path.GetFullPath(keysPath),
+                Path.GetFullPath(Assert.IsType<FileSystemXmlRepository>(repository).Directory.FullName));
+            Assert.NotEmpty(new DirectoryInfo(keysPath).GetFiles("key-*.xml"));
+        }
+        finally
+        {
+            var keys = new DirectoryInfo(keysPath);
+            if (keys.Exists)
+                keys.Delete(recursive: true);
+        }
+    }
+#if (SpaFrontend)
 
     // 会话时长不足 1 天时 Cookie 一签发即过期、服务端会话一建即判空闲：启动期校验拒绝，并指明键名
     [Fact]
@@ -183,15 +208,7 @@ public sealed class DeploymentSafeguardsTests
         using var factory = new ProjectWebApplicationFactory();
         using var host = factory.WithWebHostBuilder(builder => builder
             .UseEnvironment(environment)
-            .UseSetting("ConnectionStrings:Redis", "")
-            .ConfigureTestServices(services =>
-            {
-                // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
-                services.RemoveAll<ILoggerFactory>();
-                services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
-                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
-                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
-            }));
+            .UseSetting("ConnectionStrings:Redis", ""));
 
         using var client = host.CreateClient();
 

@@ -15,7 +15,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Leistd.Notifications.Publishing;
@@ -93,14 +92,8 @@ public sealed class NotificationTests(ProjectWebApplicationFactory factory)
     public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
         // 发布器隔离渠道故障、只记日志，推送没到时失败信息里要带上服务端日志，否则无从判断是没发还是没收到
-        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            // 宿主用 Serilog 接管了日志工厂，换回标准工厂才收得到（只影响这个派生宿主）
-            services.RemoveAll<ILoggerFactory>();
-            services.AddLogging(logging => logging.AddFakeLogging().SetMinimumLevel(LogLevel.Warning)
-                // 操作记录写日志时，启动期检查要求该类别在 Information 可用
-                .AddFilter("Leistd.OperationRecords", LogLevel.Information));
-        }));
+        // 独立宿主：收集器里只有本用例的日志
+        using var host = factory.WithWebHostBuilder(_ => { });
 #if (LocalIdentity)
         using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var userId = await GetSuperAdminIdAsync(host);

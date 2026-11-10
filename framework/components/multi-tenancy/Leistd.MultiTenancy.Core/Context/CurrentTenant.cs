@@ -26,7 +26,7 @@ public class CurrentTenant(ICurrentTenantAccessor accessor, ILogger<CurrentTenan
     {
         var parent = accessor.Current;
         accessor.Current = new BasicTenantInfo(id, name);
-        var logScope = logger?.BeginScope(new Dictionary<string, object?> { [TenantLogKeys.TenantId] = id });
+        var logScope = logger?.BeginScope(new TenantLogScope(id));
 
         return new DisposeAction(() =>
         {

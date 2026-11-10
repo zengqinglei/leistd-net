@@ -15,63 +15,129 @@ namespace CompanyName.ProjectName.UnitTests.Registration;
 
 public class TelemetryRegistrationTests
 {
+    private const string ProjectAssemblyName = "CompanyName.ProjectName.Api";
+
+    /// <summary>三路导出器与日志提供程序常驻：启用与否只在发送层判断，各只有一个。</summary>
     [Theory]
-    [InlineData(null, false)]
-    [InlineData("", false)]
-    [InlineData(" \t", false)]
-    [InlineData("http://localhost:4317", true)]
-    public void Endpoint_controls_both_exporters_without_registering_a_log_provider(string? endpoint, bool enabled)
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t")]
+    [InlineData("http://localhost:4318")]
+    public void Every_signal_has_one_exporter_whether_or_not_export_is_enabled(string? endpoint)
     {
-        // 只组合服务集合，不构建或启动宿主。Options 每创建一次对应一个实际导出器。
-        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
-        builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] = endpoint;
+        var builder = Builder(new() { ["OTEL_EXPORTER_OTLP_ENDPOINT"] = endpoint });
         builder.AddMyProjectTelemetry();
-        var exporterCount = 0;
-        builder.Services.Configure<OtlpExporterOptions>(options =>
-        {
-            exporterCount++;
-            options.Protocol = OtlpExportProtocol.HttpProtobuf;
-            options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler());
-        });
+        var exporters = CountExporters(builder.Services);
         using var services = builder.Services.BuildServiceProvider();
 
         services.GetRequiredService<MeterProvider>();
-        Assert.Equal(enabled ? 1 : 0, exporterCount);
         services.GetRequiredService<TracerProvider>();
-        Assert.Equal(enabled ? 2 : 0, exporterCount);
-        Assert.DoesNotContain(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider);
+        services.GetRequiredService<LoggerProvider>();
+        Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider);
+        // 选项每创建一次对应一个实际导出器：三路各一个
+        Assert.Equal(3, exporters.Count);
     }
 
     [Fact]
     public void Repeated_registration_keeps_one_exporter_per_signal()
     {
-        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
-        builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317";
+        var builder = Builder(new() { ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318" });
         Assert.Same(builder, builder.AddMyProjectTelemetry());
         var registrationCount = builder.Services.Count;
         builder.AddMyProjectTelemetry();
         Assert.Equal(registrationCount, builder.Services.Count);
-        var exporterCount = 0;
-        builder.Services.Configure<OtlpExporterOptions>(options =>
-        {
-            exporterCount++;
-            options.Protocol = OtlpExportProtocol.HttpProtobuf;
-            options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler());
-        });
+        var exporters = CountExporters(builder.Services);
         using var services = builder.Services.BuildServiceProvider();
 
         services.GetRequiredService<MeterProvider>();
-        Assert.Equal(1, exporterCount);
         services.GetRequiredService<TracerProvider>();
-        Assert.Equal(2, exporterCount);
+        services.GetRequiredService<LoggerProvider>();
+        Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider);
+        Assert.Equal(3, exporters.Count);
+    }
+
+    /// <summary>协议恒为 http/protobuf，SDK 侧不带认证头：部署的协议与认证头环境变量都不改变它。</summary>
+    [Fact]
+    public void Exporters_use_http_protobuf_without_sdk_headers()
+    {
+        var builder = Builder(new()
+        {
+            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317",
+            ["OTEL_EXPORTER_OTLP_PROTOCOL"] = "grpc",
+            ["OTEL_EXPORTER_OTLP_HEADERS"] = "x-api-key=deployment"
+        });
+        builder.AddMyProjectTelemetry();
+        var exporters = CountExporters(builder.Services);
+        using var services = builder.Services.BuildServiceProvider();
+
+        services.GetRequiredService<MeterProvider>();
+        services.GetRequiredService<TracerProvider>();
+        services.GetRequiredService<LoggerProvider>();
+
+        Assert.Equal(3, exporters.Count);
+        Assert.All(exporters, options =>
+        {
+            Assert.Equal(OtlpExportProtocol.HttpProtobuf, options.Protocol);
+            Assert.True(string.IsNullOrEmpty(options.Headers));
+        });
+    }
+
+    /// <summary>导出器的客户端经发送层：宿主未启动时请求就地丢弃，不发网络。</summary>
+    [Fact]
+    public async Task Exporter_client_goes_through_the_send_gate()
+    {
+        var builder = Builder(new() { ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:9" });
+        builder.AddMyProjectTelemetry();
+        Func<HttpClient>? clientFactory = null;
+        builder.Services.Configure<OtlpExporterOptions>(options => clientFactory ??= options.HttpClientFactory);
+        using var services = builder.Services.BuildServiceProvider();
+        services.GetRequiredService<TracerProvider>();
+
+        using var client = Assert.IsType<Func<HttpClient>>(clientFactory)();
+        using var response = await client.PostAsync("http://127.0.0.1:9/v1/traces", new ByteArrayContent([1]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    /// <summary>服务名依次取 OTEL_SERVICE_NAME、工作负载身份、程序集名；OTEL_RESOURCE_ATTRIBUTES 里的同名属性不能反过来覆盖。</summary>
+    [Theory]
+    [InlineData("svc-from-otel", "svc-from-client-id", "svc-from-otel")]
+    [InlineData(null, "svc-from-client-id", "svc-from-client-id")]
+    [InlineData(" ", " ", ProjectAssemblyName)]
+    public void Service_name_is_the_first_configured_source_on_every_signal(string? otelServiceName, string? clientId, string expected)
+    {
+        var builder = Builder(new()
+        {
+            ["OTEL_SERVICE_NAME"] = otelServiceName,
+            ["Leistd:ServiceAuth:ClientId"] = clientId,
+            ["OTEL_RESOURCE_ATTRIBUTES"] = "service.name=from-resource-attributes,deployment.environment=test"
+        });
+        builder.AddMyProjectTelemetry();
+        NoNetwork(builder.Services);
+        using var services = builder.Services.BuildServiceProvider();
+
+        BaseProvider[] providers =
+        [
+            services.GetRequiredService<MeterProvider>(),
+            services.GetRequiredService<TracerProvider>(),
+            services.GetRequiredService<LoggerProvider>()
+        ];
+        Assert.All(providers, provider =>
+        {
+            var attributes = provider.GetResource().Attributes.ToDictionary(pair => pair.Key, pair => pair.Value);
+            Assert.Equal(expected, attributes["service.name"]);
+            // 其余资源属性照常读取：只是 service.name 由入口决定
+            Assert.Equal("test", attributes["deployment.environment"]);
+        });
     }
 
     [Fact]
     public void Project_prefix_selects_meters_and_activity_sources()
     {
-        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
-        builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] = null;
+        var builder = Builder(new() { ["OTEL_EXPORTER_OTLP_ENDPOINT"] = null });
         builder.AddMyProjectTelemetry();
+        NoNetwork(builder.Services);
         var metrics = new List<string>();
         var activities = new List<string>();
         builder.Services.AddOpenTelemetry()
@@ -100,11 +166,38 @@ public class TelemetryRegistrationTests
         Assert.Equal(["registration.project"], activities);
     }
 
-    // SDK 在释放时也可能冲刷运行时指标，传输留在内存中以保持单测不发网络请求。
+    // 只组合服务集合，不构建或启动宿主
+    private static HostApplicationBuilder Builder(Dictionary<string, string?> configuration)
+    {
+        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
+        foreach (var (key, value) in configuration)
+            builder.Configuration[key] = value;
+        return builder;
+    }
+
+    // 排在入口的选项配置之后：每创建一个导出器就记下它最终的选项，传输换成内存，单测不发网络
+    private static List<OtlpExporterOptions> CountExporters(IServiceCollection services)
+    {
+        var exporters = new List<OtlpExporterOptions>();
+        services.Configure<OtlpExporterOptions>(options =>
+        {
+            exporters.Add(options);
+            options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler());
+        });
+        return exporters;
+    }
+
+    private static void NoNetwork(IServiceCollection services)
+        => services.Configure<OtlpExporterOptions>(options => options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler()));
+
+    // SDK 在释放时也可能冲刷，传输留在内存中以保持单测不发网络请求。
     private sealed class NoNetworkHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([]) });
+            => Task.FromResult(Send(request, cancellationToken));
+
+        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+            => new(HttpStatusCode.OK) { Content = new ByteArrayContent([]) };
     }
 
     private sealed class MetricNameExporter(List<string> names) : BaseExporter<Metric>

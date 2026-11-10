@@ -14,7 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
-using Serilog.Events;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -151,13 +150,13 @@ public sealed class ExternalLoginSettingsTests
         using var factory = new ProjectWebApplicationFactory();
         using var admin = await ProjectWebApplicationFactory.LoginAsync(factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var requestLogging = factory.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
-        Assert.NotEqual(LogEventLevel.Warning, requestLogging.CurrentValue.Level);
+        Assert.True(requestLogging.CurrentValue.Enabled);
 
         await WriteAsync(admin.Client, SettingConstant.ExternalLogin.GithubEnabled, "true");
-        await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, nameof(LogEventLevel.Warning));
+        await WriteAsync(admin.Client, SettingConstant.Logging.RequestLogging, "false");
 
         // 外部登录不参与整组校验：同批应用的其他设置照常被消费方读到
-        Assert.Equal(LogEventLevel.Warning, requestLogging.CurrentValue.Level);
+        Assert.False(requestLogging.CurrentValue.Enabled);
         Assert.Empty(await ProvidersAsync(admin.Client));
     }
 

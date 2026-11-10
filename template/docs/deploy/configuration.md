@@ -15,7 +15,7 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 
 | 配置节与键 | 用途与默认值 |
 | --- | --- |
-| `RequestLogging:Level` | 正常请求的日志级别，默认 `Information`；可在系统设置的「运维」面板覆盖 |
+| `RequestLogging:Enabled` | 是否记录正常完成的请求，默认 `true`；关闭后 5xx 仍记录，可在系统设置的「运维」面板覆盖（见[日志](#日志)） |
 <!--#if (SpaFrontend)-->
 | `SessionCookie:SameSite`、`ExpireDays` | 浏览器会话策略默认 `Lax`，滑动过期默认 7 天；安全边界见 [浏览器认证](../standards/auth.md#浏览器认证) |
 <!--#endif-->
@@ -46,29 +46,46 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 | `OAuth:ClientCredentialsAccessTokenLifetime` | 机器客户端访问令牌寿命，默认 2 小时；用户访问令牌另由 `OAuth:AccessTokenLifetime` 控制 |
 <!--#endif-->
 
+## 日志
+
+代码写 `ILogger`，宿主用 .NET 内置提供程序：控制台输出，启用导出时经 OpenTelemetry 一并推送（见[遥测导出](#遥测导出)）。级别与格式都在 `appsettings.json` 的 `Logging` 节：
+
+- `Logging:LogLevel:Default` 是全局最小级别，系统设置「运维」面板的"最小日志级别"覆盖的就是它，写入即生效，清除回到部署配置；按类别列出的键（如 `Microsoft.EntityFrameworkCore`）不受该设置影响，要单独调整就覆盖对应的 `Logging__LogLevel__<类别>`。
+- 控制台默认 `Logging:Console:FormatterName=simple`，作用域按 `键:值` 输出（关联标识 `leistd.correlationId`、租户 `leistd.tenantId`）。日志平台需要结构化输出时只覆盖为 `json`，两种格式共用 `Logging:Console:FormatterOptions`；`simple` 不能删成空值，否则旧的 `IncludeScopes=false` 兼容逻辑会关掉作用域。
+
+请求完成日志用内置 HTTP 日志：每个请求一条 Information 级记录，只含方法、路径（不含查询串）、状态码与耗时，带关联标识与本请求的租户，不记录请求头与正文。边界：
+
+- 开关 `RequestLogging:Enabled` 关闭后，状态码低于 500 的请求不记，5xx 仍记。
+- 模板为 `Microsoft.AspNetCore.HttpLogging` 单列了 `Information`，全局级别调到 `Warning` 不影响请求完成日志；要少记普通请求用上面的开关。
+- 把 `Microsoft.AspNetCore.HttpLogging` 类别调到 `Warning` 或 `None` 会关掉全部请求完成日志，包括 5xx。
+
 ## 遥测导出
 
-Api 默认采集 ASP.NET Core、HttpClient 与 .NET 运行时指标和追踪；仅当 `OTEL_EXPORTER_OTLP_ENDPOINT` 非空白时，才同时启用指标与追踪的 OTLP 推送。未配置时不登记导出器；日志继续走 Serilog，不导出到 OTLP。DbMigrator 不接遥测。
+Api 采集 ASP.NET Core、HttpClient 与 .NET 运行时的指标和追踪，以及全部 `ILogger` 日志；三路信号经 OTLP（协议固定 `http/protobuf`）推送到同一个基地址，各信号追加 `/v1/logs`、`/v1/metrics`、`/v1/traces`。日志记录带当前追踪的 TraceId/SpanId，可在观测平台里与追踪互跳。DbMigrator 不接遥测。
 
-| 环境变量 | 用途 |
+导出开关、基地址与认证头可在系统设置「运维」面板运行期修改，不需要重启或重新部署，适合定期轮换平台 Key；认证头加密保存、只写不回显。部署配置是兜底：
+
+| 部署配置 | 用途 |
 | --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector 基地址；也是两种信号唯一的启用开关 |
-| `OTEL_EXPORTER_OTLP_PROTOCOL` | 默认 `grpc`，通常配 `http://collector:4317`；`http/protobuf` 通常配 `http://collector:4318`，通用 endpoint 不加 `/v1/metrics` 或 `/v1/traces` |
-| `OTEL_SERVICE_NAME` | 指标与追踪共同的服务名称；各服务分别设置 |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Collector 认证头，按官方格式配置，由部署环境注入 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP 基地址（如 `http://collector:4318`）；系统未覆盖开关时，配置了它即启用导出 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | 认证头，官方格式 `key1=value1,key2=value2`；系统设置里填写后整组替换它 |
+| `Telemetry:Export:Enabled` | 导出开关的部署值，通常不配，由上面的地址推导 |
+| `OTEL_SERVICE_NAME` | 服务名；不配时取工作负载身份 `Leistd:ServiceAuth:ClientId`，再不配取 Api 程序集名，三路一致 |
 
-本项目使用逐信号 `AddOtlpExporter()`；当前版本不读取 `OTEL_EXPORTER_OTLP_METRICS_*`、`OTEL_EXPORTER_OTLP_TRACES_*` 的端点、协议、认证头覆盖，详见 [OTLP 导出器支持表](https://github.com/open-telemetry/opentelemetry-dotnet/blob/core-1.20.1/src/OpenTelemetry.Exporter.OpenTelemetryProtocol/README.md#environment-variables)。不要改用会同时启用日志的 `UseOtlpExporter()`。
+- 只支持"一个基地址、按信号追加路径"；各信号地址完全不同的平台经 Collector 接入。`OTEL_EXPORTER_OTLP_PROTOCOL` 与 `OTEL_EXPORTER_OTLP_{LOGS,METRICS,TRACES}_*` 不生效。
+- 未启用时照常采集与序列化，只在发送前丢弃，有少量 CPU 开销；宿主启动完成之前的发送尝试就地丢弃（那时系统设置还没加载），启动前进入批队列、启动后才发送的数据照常按发送时的配置处理；控制台日志不受影响。
+- 改设置后本实例的下一次导出即用新值，其他副本按宿主设置的刷新周期跟上。
+- 有 Collector 的部署推荐把平台 Key 配在 Collector，应用只连集群内的 Collector。
 
-Compose 只转发 `backend.environment` 显式列出的变量；启用时将上表变量加入该清单，按需要同步 `.env.example`。仅写入 `.env` 不会传入容器。例如在 `backend.environment` 添加：
+Compose 只转发 `backend.environment` 显式列出的变量；需要部署兜底时将上表变量加入该清单，按需要同步 `.env.example`。仅写入 `.env` 不会传入容器。例如在 `backend.environment` 添加：
 
 ```yaml
 OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
-OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-grpc}
 OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-CompanyName.ProjectName}
 OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 ```
 
-排障先确认容器实际收到变量，再检查协议、地址、Collector 接收管道与服务名称；采集器不可达不会阻止应用启动。
+排障先看系统设置里三项的当前值，再确认容器实际收到部署变量，然后检查地址、Collector 的 HTTP 接收端（默认 4318）、接收管道与服务名称；采集器不可达不会阻止应用启动。
 
 自建 Collector 建议仅集群内可达；托管端点按服务商要求配置认证与网络。进入 Prometheus 可经 Collector 转换或使用其 [OTLP 接收能力](https://prometheus.io/docs/guides/opentelemetry/)。本项目不暴露 `/metrics`；确需拉取时自行采用 [Prometheus ASP.NET Core 导出器](https://github.com/open-telemetry/opentelemetry-dotnet/blob/core-1.20.1/src/OpenTelemetry.Exporter.Prometheus.AspNetCore/README.md)，端点放单独内部端口，网关不转发，预发布包的维护由项目承担；Worker 不使用仅面向开发内循环的 HttpListener 导出器。
 
@@ -103,9 +120,7 @@ OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 
 开发环境以外，下列只在单机上成立的回落缺配即启动失败：
 
-<!--#if (SpaFrontend || IncludeWebhooks)-->
-- Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
-<!--#endif-->
+- Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。`KeysPath` 只替代密钥的存储位置，不替代 Redis 承载的分布式缓存与锁。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。机密设置（如 OTLP 认证头）在所有形态下都用它加密。
 <!--#if (IncludeWebhooks)-->
 - Webhook 订阅的签名密钥用 Data Protection 加密落库：密钥环丢失或各副本不共享时解不开密钥，投递记为失败；只能由管理员轮换密钥并把新密钥交给订阅方。
 <!--#endif-->
@@ -115,9 +130,9 @@ OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 <!--#if (SpaFrontend)-->
 - 未配置 `ConnectionStrings:Redis` 不阻止启动：单实例配 `KeysPath` 是合法部署。此时分布式缓存与分布式锁回落到进程内存，启动日志各有一条 Warning；多副本必须配置 Redis，并共享 Data Protection 密钥。
 <!--#elseif (IncludeWebhooks)-->
-- 未配置 `ConnectionStrings:Redis` 不阻止单实例启动（此时须配 `DataProtection:KeysPath`），分布式锁回落到进程内并输出 Warning；纯 API 只为 Webhook 签名密钥注册 Data Protection，不注册浏览器会话。多副本必须配置 Redis。
+- 未配置 `ConnectionStrings:Redis` 不阻止单实例启动（此时须配 `DataProtection:KeysPath`），分布式锁回落到进程内并输出 Warning；纯 API 为机密设置与 Webhook 签名密钥注册 Data Protection，不注册浏览器会话。多副本必须配置 Redis。
 <!--#else-->
-- 未配置 `ConnectionStrings:Redis` 不阻止单实例启动，分布式锁回落到进程内并输出 Warning；纯 API 不注册浏览器会话、Data Protection 或其 `KeysPath` 配置。多副本必须配置 Redis。
+- 未配置 `ConnectionStrings:Redis` 不阻止单实例启动（此时须配 `DataProtection:KeysPath`），分布式锁回落到进程内并输出 Warning；纯 API 为机密设置注册 Data Protection，不注册浏览器会话。多副本必须配置 Redis。
 <!--#endif-->
 - TLS 在网关或 ingress 终结时，所有形态（含 Standalone）都须配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 还原原始协议与主机。
 <!--#if (SpaFrontend)-->

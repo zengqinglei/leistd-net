@@ -63,6 +63,7 @@ import {
   browserTimeZone,
   LOG_LEVEL_DESCRIPTIONS,
   SETTING_CHOICES,
+  SETTING_DESCRIPTIONS,
   SettingChoice,
   timeZoneGroups,
   timeZoneMatches,
@@ -71,7 +72,9 @@ import {
 import {
   groupPath,
   groupSettings,
+  nestUnderSwitches,
   SettingGroup,
+  SettingRowNode,
   SettingScope,
   settingsInScope,
   SettingsPageState,
@@ -103,8 +106,11 @@ const PREFERENCE_FIELDS: Readonly<Record<string, AccountPreferenceField>> = {
 
 /** 一个分组的渲染内容：分组本身加上按专属布局拆走之后剩下的普通行。 */
 interface GroupView extends SettingGroup {
-  /** 按通用网格渲染的行。 */
-  rows: SettingOutputDto[];
+  /**
+   * 按通用网格渲染的行，`{前缀}.Enabled` 开关的子项已挂到开关下面（见 {@link nestUnderSwitches}）。
+   * 在专属布局分流之后挂：外部登录的开关与凭据已经分到提供方卡片里，不参与。
+   */
+  rows: SettingRowNode[];
   /** 账户偏好暂时读不到：分组里不出行，只说明原因（不能显示成"没有覆盖"）。 */
   preferencesUnavailable: boolean;
   /** 整组都是进程级设置：生效范围在分组顶部说一次，不在每行重复。 */
@@ -239,6 +245,8 @@ export class SettingSection {
     afterRenderEffect(() => {
       this.rowState();
       this.settings();
+      // 开关的草稿决定子项出不出现：新出现的子项同样要关联本行反馈
+      this.drafts();
       this.scope();
       this.group();
       // switch/combobox 的可操作元素在 Helm 模板内；渲染后关联行反馈，不另建一套控件包装。
@@ -312,7 +320,7 @@ export class SettingSection {
     this.groups().map((group) => {
       const view: GroupView = {
         ...group,
-        rows: group.settings,
+        rows: nestUnderSwitches(group.settings),
         preferencesUnavailable:
           this.scope() === 'account' &&
           group.key === PREFERENCES_GROUP &&
@@ -328,7 +336,8 @@ export class SettingSection {
       // 不符合命名约定的设置留在通用网格里，不能静默消失
       if (this.scope() === 'system' && group.key === EXTERNAL_LOGIN_GROUP) {
         const { providers, others } = partitionExternalLoginSettings(group.settings);
-        view.rows = others;
+        // 开关下挂子项只在分流后剩下的普通行上做：提供方的开关与凭据由卡片自己排列
+        view.rows = nestUnderSwitches(others);
         view.externalLoginProviders = providers;
       }
       //#endif
@@ -429,7 +438,10 @@ export class SettingSection {
     return typeof setting.minimum === 'number' && typeof setting.maximum === 'number';
   }
 
-  /** 开关显示生效值（本层未覆盖时取继承值）：开关无法用占位符表达"跟随上层"。 */
+  /**
+   * 开关显示生效值（本层未覆盖时取继承值）：开关无法用占位符表达"跟随上层"。开关下的子项也按它决定
+   * 显示与否，因此继承来的值、清除后的回落与未保存的草稿都算在内；只有 `'true'` 为真。
+   */
   protected isChecked(setting: SettingOutputDto, scope: SettingScope): boolean {
     return (this.draftOf(setting, scope) || this.inheritedOf(setting, scope)) === 'true';
   }
@@ -651,13 +663,12 @@ export class SettingSection {
     void this.write(setting, checked ? 'true' : 'false', scope);
   }
 
-  /** 选中的日志级别的说明文案键；不是日志级别或认不出的取值返回空串。 */
-  protected levelHintKeyOf(setting: SettingOutputDto, scope: SettingScope): string {
-    if (
-      setting.name !== SETTINGS.logging.minimumLevel &&
-      setting.name !== SETTINGS.logging.requestLevel
-    ) {
-      return '';
+  /**
+   * 标签下方说明的词条键：日志级别按选中的级别说明，登记了固定说明的设置取那一句；都没有返回空串。
+   */
+  protected hintKeyOf(setting: SettingOutputDto, scope: SettingScope): string {
+    if (setting.name !== SETTINGS.logging.minimumLevel) {
+      return SETTING_DESCRIPTIONS[setting.name] ?? '';
     }
 
     const effective = this.draftOf(setting, scope) || this.systemOrInheritedValue(setting, scope);
@@ -902,8 +913,8 @@ const ENGLISH: Record<string, string> = {
   'theme.mode.system': 'System',
   'theme.mode.dark': 'Dark',
   'common.retry': 'Retry',
-  'settings.logLevelHints.Verbose':
-    'Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.',
+  'settings.logLevelHints.Trace':
+    "Logs the most detail from the app's own code. Categories given their own level in the deployment configuration, such as database and web server, keep that level. For short troubleshooting only; left on, log volume grows quickly.",
   'settings.logLevelHints.Debug':
     'Logs debugging details. Turn it on while investigating; not recommended day to day.',
   'settings.logLevelHints.Information': 'Logs the normal business flow. The default level.',
@@ -911,7 +922,13 @@ const ENGLISH: Record<string, string> = {
     'Logs only warnings and errors; the normal flow is not written.',
   'settings.logLevelHints.Error':
     'Logs only errors. You may miss clues that are wrong without raising an error.',
-  'settings.logLevelHints.Fatal':
-    'Logs only failures that stop the process. Almost the same as turning logging off.',
+  'settings.logLevelHints.Critical':
+    'Logs only failures that stop the service from working. Almost the same as turning logging off.',
+  'settings.settingHints.telemetryExportEnabled':
+    'Sends logs, metrics and traces over OTLP to a collector or observability platform.',
+  'settings.settingHints.telemetryExportEndpoint':
+    'OTLP base address, such as https://otel.example.com:4318. Logs, metrics and traces go to /v1/logs, /v1/metrics and /v1/traces under it, over http/protobuf only.',
+  'settings.settingHints.telemetryExportHeaders':
+    'Authentication headers for the collector or platform, written as key1=value1,key2=value2. Write-only: the saved value is never shown.',
 };
 //#endif

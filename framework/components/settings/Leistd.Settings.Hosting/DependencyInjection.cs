@@ -31,7 +31,7 @@ public static class DependencyInjection
     /// <example>
     /// <code>
     /// builder.Services.AddHostSettings(bindings => bindings
-    ///     .Bind("Logging.MinimumLevel", ["Serilog:MinimumLevel", "Serilog:MinimumLevel:Default"], fallback: "Information")
+    ///     .Bind("Logging.MinimumLevel", ["Logging:LogLevel:Default"], fallback: "Information")
     ///     .BindOption&lt;SmtpOptions&gt;("Email.SmtpHost", SmtpOptions.SectionName, nameof(SmtpOptions.Host)));
     ///
     /// var app = builder.Build();
