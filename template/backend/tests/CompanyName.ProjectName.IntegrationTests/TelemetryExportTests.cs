@@ -266,8 +266,11 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     }
 
     /// <summary>三路各产生一条数据并冲刷，返回本次冲刷期间接收端收到的请求。</summary>
+    // 先冲刷一次收尾在途的导出：指标的周期导出可能在改设置之前就已按旧值发出、在计数之后才收到，
+    // 不先收尾会被算进这一批。冲刷要等导出完成，接收端在应答之前已记下请求，所以收尾后再计数。
     private static List<OtlpRequest> Flush(WebApplicationFactory<Program> host, OtlpReceiver receiver)
     {
+        FlushAll(host.Services);
         var before = receiver.Requests.Count;
         FlushAll(host.Services);
         return receiver.Requests.Skip(before).ToList();
