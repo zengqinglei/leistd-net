@@ -16,6 +16,8 @@
     <PackageReference Include="Leistd.ServiceClient.Refit" />
     <PackageReference Include="Leistd.ServiceClient.OAuth" />
     <!-- 声明 Refit 接口的程序集需直接引用 Refit 以激活源生成器 -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Refit" />
   </ItemGroup>
 
