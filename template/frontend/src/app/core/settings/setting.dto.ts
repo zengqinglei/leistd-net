@@ -34,6 +34,11 @@ export interface SettingOutputDto {
   /** 机密设置在可写的那一层是否已经设过值。 */
   hasSecretValue?: boolean;
   /**
+   * 候选值（后端定义的 `WithAllowedValues`），设置页据此渲染下拉；不限取值的设置不带这个字段
+   * （服务端省掉值为 null 的属性）。文案见设置页的声明表。
+   */
+  allowedValues?: readonly string[] | null;
+  /**
    * 当前用户能否管理（写入）这一项的租户级或进程级值，由服务端按分组权限算出。
    * 不能管理、又不允许用户覆盖的设置服务端不下发。
    */

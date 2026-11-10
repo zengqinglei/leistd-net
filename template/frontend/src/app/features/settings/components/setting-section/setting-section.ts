@@ -7,8 +7,10 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   signal,
 } from '@angular/core';
+import { FieldTree, form, FormField, validateTree, ValidationError } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoDirective, TranslocoService, translateObjectSignal } from '@jsverse/transloco';
 //#endif
@@ -37,7 +39,7 @@ import {
   partitionExternalLoginSettings,
 } from './widgets/external-login-providers/external-login-providers';
 //#endif
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import { mapFormErrors } from '../../../../core/errors/form-errors';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
@@ -51,7 +53,6 @@ import { LanguageService } from '../../../../core/services/language-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { ThemeService } from '../../../../core/services/theme-service';
 import { SettingService } from '../../../../core/settings/setting-service';
-import { SETTINGS } from '../../../../core/settings/setting.constants';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
 import { InfoHint } from '../../../../shared/components/info-hint/info-hint';
 import { ComboboxRevealSelected } from '../../../../shared/directives/combobox-reveal-selected';
@@ -60,24 +61,28 @@ import { AccountPreferenceField } from '../../../../shared/dtos/account-preferen
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import {
+  ACCOUNT_PREFERENCE_SETTINGS,
   browserTimeZone,
-  LOG_LEVEL_DESCRIPTIONS,
-  SETTING_CHOICES,
+  SETTING_CONTROLS,
+  SETTING_DEPENDENCIES,
   SETTING_DESCRIPTIONS,
-  SettingChoice,
+  SETTING_VALUE_DESCRIPTIONS,
+  SETTING_VALUE_LABELS,
+  SettingControl,
   timeZoneGroups,
   timeZoneMatches,
   timeZoneOffsetLabel,
 } from '../../setting-choices';
 import {
+  buildSettingTree,
   groupPath,
   groupSettings,
-  nestUnderSwitches,
   SettingGroup,
   SettingRowNode,
   SettingScope,
   settingsInScope,
   SettingsPageState,
+  shownChildren,
 } from '../../settings-page-state';
 
 /**
@@ -95,19 +100,15 @@ interface RowState {
 /** 个人页的账户偏好分组：行由会话偏好（`/me`）提供，不取设置快照，三种部署形态一致。 */
 const PREFERENCES_GROUP = 'Display';
 
-/** 账户偏好对应的设置名（与后端设置定义同名，候选项、时区控件与占位规则按名字复用）→ 偏好字段。 */
-const PREFERENCE_FIELDS: Readonly<Record<string, AccountPreferenceField>> = {
-  //#if (IncludeLocalization)
-  [SETTINGS.display.language]: 'language',
-  //#endif
-  [SETTINGS.display.timeZone]: 'timeZone',
-  [SETTINGS.display.theme]: 'theme',
-};
+/** 账户偏好对应的设置名（与后端设置定义同名，控件与占位规则按名字复用）→ 偏好字段。 */
+const PREFERENCE_FIELDS: Readonly<Record<string, AccountPreferenceField>> = Object.fromEntries(
+  ACCOUNT_PREFERENCE_SETTINGS.map((preference) => [preference.name, preference.field]),
+);
 
 /** 一个分组的渲染内容：分组本身加上按专属布局拆走之后剩下的普通行。 */
 interface GroupView extends SettingGroup {
   /**
-   * 按通用网格渲染的行，`{前缀}.Enabled` 开关的子项已挂到开关下面（见 {@link nestUnderSwitches}）。
+   * 按通用网格渲染的行，依赖上级的子项已挂到上级下面（见 {@link buildSettingTree}）。
    * 在专属布局分流之后挂：外部登录的开关与凭据已经分到提供方卡片里，不参与。
    */
   rows: SettingRowNode[];
@@ -143,12 +144,15 @@ export const SAVING_MIN_MS = 400;
  * 账户作用域写当前用户偏好，系统作用域写当前上下文的默认值（需要 App.Settings）。
  * 快照由外壳的 {@link SettingsPageState} 提供，本组件不取数。值为空表示未覆盖，
  * 继承值只作占位符展示，否则"恢复默认"看起来没有效果。
+ *
+ * 组件里没有具体的设置名：专用控件、候选项文案、说明与依赖都按 `setting-choices.ts` 的声明表分派。
  */
 @Component({
   selector: 'app-setting-section',
   //#if (IncludeLocalization)
   imports: [
     ...HlmEmptyImports,
+    FormField,
     NgIcon,
     NgTemplateOutlet,
     HlmBadge,
@@ -173,6 +177,7 @@ export const SAVING_MIN_MS = 400;
   //#else
   imports: [
     ...HlmEmptyImports,
+    FormField,
     NgIcon,
     NgTemplateOutlet,
     HlmBadge,
@@ -244,9 +249,10 @@ export class SettingSection {
   constructor() {
     afterRenderEffect(() => {
       this.rowState();
+      this.serverErrors();
       this.settings();
-      // 开关的草稿决定子项出不出现：新出现的子项同样要关联本行反馈
-      this.drafts();
+      // 上级的取值决定子项出不出现：新出现的子项同样要关联本行反馈
+      this.values();
       this.scope();
       this.group();
       // switch/combobox 的可操作元素在 Helm 模板内；渲染后关联行反馈，不另建一套控件包装。
@@ -257,7 +263,13 @@ export class SettingSection {
         if (!control) continue;
         if (row.dataset['settingInvalid'] === 'true') control.setAttribute('aria-invalid', 'true');
         else control.removeAttribute('aria-invalid');
-        control.setAttribute('aria-describedby', `${row.dataset['settingName']}-description`);
+        const name = row.dataset['settingName'];
+        // 控件下方的字段错误（服务端按字段拒绝时）与本行描述一起关联
+        const error = row.querySelector<HTMLElement>('[data-setting-field-error]');
+        control.setAttribute(
+          'aria-describedby',
+          error ? `${name}-description ${error.id}` : `${name}-description`,
+        );
       }
     });
   }
@@ -267,7 +279,6 @@ export class SettingSection {
   /** 每行最近一次写入的序号：同一行连续写入时，只有最后一次给出这一行的状态。 */
   private readonly writeGenerations = new Map<string, number>();
   protected readonly settings = this.pageState.settings;
-  protected readonly drafts = signal<Record<string, string>>({});
   private readonly labelFns = new Map<string, (value: unknown) => string>();
 
   /** 发信参数的面板底部给"发送测试邮件"：改完参数最想确认的就是能否收到。 */
@@ -294,7 +305,7 @@ export class SettingSection {
     // 只支持一种语言时界面语言无从选择，不出这一行
     settings = settings.filter(
       (setting) =>
-        setting.name !== SETTINGS.display.language || this.languageService.options.length > 1,
+        this.controlOf(setting) !== 'language' || this.languageService.options.length > 1,
     );
     //#endif
     const groups = groupSettings(settings);
@@ -320,7 +331,7 @@ export class SettingSection {
     this.groups().map((group) => {
       const view: GroupView = {
         ...group,
-        rows: nestUnderSwitches(group.settings),
+        rows: buildSettingTree(group.settings, SETTING_DEPENDENCIES),
         preferencesUnavailable:
           this.scope() === 'account' &&
           group.key === PREFERENCES_GROUP &&
@@ -336,8 +347,8 @@ export class SettingSection {
       // 不符合命名约定的设置留在通用网格里，不能静默消失
       if (this.scope() === 'system' && group.key === EXTERNAL_LOGIN_GROUP) {
         const { providers, others } = partitionExternalLoginSettings(group.settings);
-        // 开关下挂子项只在分流后剩下的普通行上做：提供方的开关与凭据由卡片自己排列
-        view.rows = nestUnderSwitches(others);
+        // 依赖只在分流后剩下的普通行上挂：提供方的开关与凭据由卡片自己排列
+        view.rows = buildSettingTree(others, SETTING_DEPENDENCIES);
         view.externalLoginProviders = providers;
       }
       //#endif
@@ -351,20 +362,88 @@ export class SettingSection {
     () => new Set(this.groupViews().flatMap((view) => (view.hostScopeOnce ? [view.key] : []))),
   );
 
+  /**
+   * 正在编辑或等待写入落定的行（键见 {@link draftKey}）：它们在表单里的值是用户的意图，快照刷新不覆盖；
+   * 其余行的值跟随快照。写入落定（快照已刷新）后移出。
+   */
+  private readonly pending = signal<ReadonlySet<string>>(new Set());
+
+  /**
+   * 表单模型：本页每一行在本层的值（未覆盖为空串），键见 {@link draftKey}。由快照派生，正在编辑的行保留输入。
+   * 控件显示本层的值而非生效值，否则租户页会显示个人偏好，保存即写成租户默认值。
+   */
+  private readonly values = linkedSignal<
+    { settings: SettingOutputDto[]; scope: SettingScope; pending: ReadonlySet<string> },
+    Record<string, string>
+  >({
+    source: () => ({
+      settings: this.groups().flatMap((group) => group.settings),
+      scope: this.scope(),
+      pending: this.pending(),
+    }),
+    computation: ({ settings, scope, pending }, previous) => {
+      const values: Record<string, string> = {};
+      for (const setting of settings) {
+        const key = draftKey(setting, scope);
+        const kept = pending.has(key) ? previous?.value[key] : undefined;
+        values[key] = kept ?? storedValueOf(setting, scope);
+      }
+      return values;
+    },
+  });
+
+  /** 服务端按字段拒绝的错误，按行记录（键见 {@link draftKey}）；该行再次编辑或写入时清掉。 */
+  private readonly serverErrors = signal<Readonly<Record<string, ValidationError.WithFieldTree[]>>>(
+    {},
+  );
+
+  /**
+   * 设置分区的表单：每行一个字段。输入框经 `[formField]` 绑定；下拉与开关是即改即存的 Helm 控件，
+   * 经各自的值事件写回同一个模型（与对话框表单的写法一致）。客户端只有浏览器按服务端区间做的数值校验，
+   * 值域以服务端为准，拒绝的字段错误经 `validateTree` 挂到该行字段上。
+   */
+  protected readonly settingForm = form(this.values, (path) => {
+    validateTree(path, () => {
+      const values = this.values();
+      return Object.entries(this.serverErrors()).flatMap(([key, errors]) =>
+        key in values ? errors : [],
+      );
+    });
+  });
+
   /** 该行是否单独挂"全实例生效"徽章：进程级设置，且所在分组没有在顶部统一说明。 */
   protected showsRowHostScope(setting: SettingOutputDto): boolean {
     return setting.allowsHostScope && !this.hostScopeOnceGroups().has(setting.group);
   }
 
-  /** 输入框显示本层覆盖值而非生效值，否则租户页会显示个人偏好，保存即写成租户默认值。 */
+  /** 控件上本层的值：正在编辑的输入，否则为快照里本层的覆盖值（未覆盖为空串）。 */
   protected draftOf(setting: SettingOutputDto, scope: SettingScope): string {
-    const draft = this.drafts()[this.draftKey(setting, scope)];
-    if (draft !== undefined) {
-      return draft;
-    }
+    return this.values()[draftKey(setting, scope)] ?? storedValueOf(setting, scope);
+  }
 
-    // 进程级设置存在宿主的租户层那一行上，因此这里同样读 tenantValue
-    return (scope === 'account' ? setting.userValue : setting.tenantValue) ?? '';
+  /** 该行在表单里的字段。 */
+  protected fieldOf(setting: SettingOutputDto, scope: SettingScope): FieldTree<string> {
+    return this.settingForm[draftKey(setting, scope)];
+  }
+
+  /** 服务端对该行字段的拒绝原因，显示在控件下方；没有时为空串。 */
+  protected fieldErrorOf(setting: SettingOutputDto, scope: SettingScope): string {
+    return this.fieldOf(setting, scope)()
+      .errors()
+      .map((error) => error.message)
+      .join('\n');
+  }
+
+  /** 该行是否标为无效：写入失败，或服务端拒绝了该行字段。 */
+  protected isInvalid(setting: SettingOutputDto, scope: SettingScope): boolean {
+    return (
+      this.stateOf(setting, scope)?.status === 'error' || this.fieldOf(setting, scope)().invalid()
+    );
+  }
+
+  /** 专用控件的种类（见 {@link SETTING_CONTROLS}）；没有登记时按通用规则渲染。 */
+  private controlOf(setting: SettingOutputDto): SettingControl | undefined {
+    return SETTING_CONTROLS[setting.name];
   }
 
   /**
@@ -379,7 +458,7 @@ export class SettingSection {
 
   /** 时区用可搜索的分组下拉：四百多项无搜索难以选择，手挑短清单又会漏掉部署地。 */
   protected isTimeZone(setting: SettingOutputDto): boolean {
-    return setting.name === SETTINGS.display.timeZone;
+    return this.controlOf(setting) === 'timeZone';
   }
 
   /** combobox 的过滤器拿到的是选项的 value（IANA 名），按它取回选项再做匹配。 */
@@ -406,12 +485,12 @@ export class SettingSection {
 
   /** 这一项当前的写入状态；没有即常态。 */
   protected stateOf(setting: SettingOutputDto, scope: SettingScope): RowState | undefined {
-    return this.rowState()[this.draftKey(setting, scope)];
+    return this.rowState()[draftKey(setting, scope)];
   }
 
-  /** 取值封闭的设置渲染下拉，其余渲染文本框；返回 undefined 表示没有候选项。 */
-  protected choicesOf(setting: SettingOutputDto): readonly SettingChoice[] | undefined {
-    return SETTING_CHOICES[setting.name];
+  /** 后端给了候选值（`allowedValues`）的设置渲染下拉，其余渲染文本框；返回 undefined 表示没有候选项。 */
+  protected choicesOf(setting: SettingOutputDto): readonly string[] | undefined {
+    return setting.allowedValues?.length ? setting.allowedValues : undefined;
   }
 
   /** 行下方描述的 id：开关不会自动关联所在字段的描述，要显式传给它的 aria-describedby。 */
@@ -456,31 +535,36 @@ export class SettingSection {
       return '';
     }
 
-    if (setting.name === SETTINGS.display.timeZone) {
-      return browserTimeZone() ?? '';
+    switch (this.controlOf(setting)) {
+      case 'timeZone':
+        return browserTimeZone() ?? '';
+      case 'theme':
+        return this.themeService.mode();
+      //#if (IncludeLocalization)
+      case 'language':
+        return this.languageService.activeLang();
+      //#endif
+      default:
+        return '';
     }
-    if (setting.name === SETTINGS.display.theme) {
-      return this.themeService.mode();
-    }
-
-    //#if (IncludeLocalization)
-    if (setting.name === SETTINGS.display.language) {
-      return this.languageService.activeLang();
-    }
-
-    //#endif
-    return '';
   }
 
-  /** 候选项的展示文案；没有匹配项时退回原始值。 */
+  /**
+   * 一个取值的展示文案，按声明表 {@link SETTING_VALUE_LABELS}：函数直接给出文案；词条前缀取 `<前缀>.<值>`，
+   * 缺这条词条时显示原值；没有登记的设置显示原值。
+   */
   protected labelOf(setting: SettingOutputDto, value: string): string {
-    const choice = this.choicesOf(setting)?.find((c) => c.value === value);
-    return choice ? this.choiceLabelOf(choice) : value;
-  }
+    const label = SETTING_VALUE_LABELS[setting.name];
+    if (typeof label === 'function') {
+      return label(value);
+    }
+    if (label === undefined || value.length === 0) {
+      return value;
+    }
 
-  /** 一个候选项的文案：带词条的按当前语言翻译。 */
-  protected choiceLabelOf(choice: SettingChoice): string {
-    return choice.labelKey ? this.text(choice.labelKey) : choice.label;
+    const key = `${label}.${value}`;
+    const text = this.text(key);
+    return text === key ? value : text;
   }
 
   private preferenceText(key: 'group' | AccountPreferenceField): string {
@@ -513,32 +597,21 @@ export class SettingSection {
     }
 
     const groupLabel = this.preferenceText('group');
-    const row = (
-      name: string,
-      field: AccountPreferenceField,
-      defaultValue: string | null,
-    ): SettingOutputDto => ({
+    // 行序与候选值见声明表；偏好没有代码默认值，未设置时按设备探测值
+    return ACCOUNT_PREFERENCE_SETTINGS.map(({ name, field, allowedValues }): SettingOutputDto => ({
       name,
       displayName: this.preferenceText(field),
       group: PREFERENCES_GROUP,
       groupDisplayName: groupLabel,
       userValue: overrides[field],
       tenantValue: overrides[field] === null ? preferences[field] : null,
-      defaultValue,
+      defaultValue: null,
       allowsTenantScope: false,
       allowsUserScope: true,
       allowsHostScope: false,
+      allowedValues,
       canManage: false,
-    });
-
-    // 顺序：先影响能否读懂的语言，再影响数据解读的时区，最后外观
-    return [
-      //#if (IncludeLocalization)
-      row(SETTINGS.display.language, 'language', null),
-      //#endif
-      row(SETTINGS.display.timeZone, 'timeZone', null),
-      row(SETTINGS.display.theme, 'theme', null),
-    ];
+    }));
   }
 
   /**
@@ -637,9 +710,11 @@ export class SettingSection {
       : this.inheritedLabelOf(setting, scope, labels);
   }
 
-  protected onInput(setting: SettingOutputDto, scope: SettingScope, event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.drafts.update((drafts) => ({ ...drafts, [this.draftKey(setting, scope)]: value }));
+  /** 输入框的值由 `[formField]` 写进表单；这里记下"正在编辑"，快照刷新不覆盖，上次的字段错误随之失效。 */
+  protected onInput(setting: SettingOutputDto, scope: SettingScope): void {
+    const key = draftKey(setting, scope);
+    this.markPending(key);
+    this.clearServerErrors(key);
   }
 
   /** 输入类控件在原生 `change`（失焦或回车）时提交，不按键即写：输入 60 会途经同样合法的 6。 */
@@ -648,8 +723,8 @@ export class SettingSection {
     const raw = control.value;
     const value = setting.isSecret ? raw : raw.trim();
     if (!control.validity.valid) {
-      const key = this.draftKey(setting, scope);
-      this.drafts.update((drafts) => ({ ...drafts, [key]: value }));
+      const key = draftKey(setting, scope);
+      this.setDraft(key, value);
       this.setRowState(key, { status: 'error', message: control.validationMessage });
       return;
     }
@@ -664,26 +739,33 @@ export class SettingSection {
   }
 
   /**
-   * 标签下方说明的词条键：日志级别按选中的级别说明，登记了固定说明的设置取那一句；都没有返回空串。
+   * 标签下方说明的词条键：登记了按值说明（{@link SETTING_VALUE_DESCRIPTIONS}）的按当前取值（本层的值，
+   * 没有时为继承值）取 `<前缀>.<值>`，登记了固定说明的取那一句；都没有返回空串。
    */
   protected hintKeyOf(setting: SettingOutputDto, scope: SettingScope): string {
-    if (setting.name !== SETTINGS.logging.minimumLevel) {
+    const prefix = SETTING_VALUE_DESCRIPTIONS[setting.name];
+    if (prefix === undefined) {
       return SETTING_DESCRIPTIONS[setting.name] ?? '';
     }
 
     const effective = this.draftOf(setting, scope) || this.systemOrInheritedValue(setting, scope);
-    return LOG_LEVEL_DESCRIPTIONS[effective] ?? '';
+    return effective ? `${prefix}.${effective}` : '';
+  }
+
+  /**
+   * 当前显示的子项：上级此刻的取值（未保存的输入优先，没有时为继承值）满足各自的条件。
+   * 收起只是不渲染（隐藏的控件不进 Tab 顺序），值不清空。
+   */
+  protected childrenOf(node: SettingRowNode, scope: SettingScope): SettingRowNode[] {
+    return shownChildren(
+      node,
+      this.draftOf(node.setting, scope) || this.inheritedOf(node.setting, scope),
+    );
   }
 
   /** 本层没设值时实际生效的那个值（继承来的，或跟随系统探测到的）。 */
   protected systemOrInheritedValue(setting: SettingOutputDto, scope: SettingScope): string {
     return this.inheritedOf(setting, scope) || this.systemDefaultOf(setting, scope);
-  }
-
-  // 同一项设置在两个作用域里各有独立草稿：同名共用一份会让个人偏好的未保存输入
-  // 出现在系统默认值的输入框里。
-  private draftKey(setting: SettingOutputDto, scope: SettingScope): string {
-    return `${scope}:${setting.name}`;
   }
 
   /** 清除本层级的值，读取回落到下一层。 */
@@ -693,10 +775,11 @@ export class SettingSection {
 
   /** 写入一项：经 {@link enqueue} 串行执行 PUT → 重取快照 → 全局发布。 */
   private write(setting: SettingOutputDto, value: string | null, scope: SettingScope): void {
-    const key = this.draftKey(setting, scope);
+    const key = draftKey(setting, scope);
     // 控件在写入期间照常可用，焦点留在原处：禁用会把焦点弹到页面上，键盘与读屏用户得从头找回来。
-    // 再次操作就再排一次写入，以最后一次为准。草稿即最新意图：前一次写入刷新的快照不会把控件拨回旧值。
-    this.drafts.update((drafts) => ({ ...drafts, [key]: value ?? '' }));
+    // 再次操作就再排一次写入，以最后一次为准。表单里的值即最新意图：前一次写入刷新的快照不会把控件拨回旧值。
+    this.setDraft(key, value ?? '');
+    this.clearServerErrors(key);
     const generation = (this.writeGenerations.get(key) ?? 0) + 1;
     this.writeGenerations.set(key, generation);
     const isLatest = () => this.writeGenerations.get(key) === generation;
@@ -766,31 +849,64 @@ export class SettingSection {
         await this.publishRowState(key, generation, startedAt, { status: 'saved' });
       } catch (error: unknown) {
         // 失败就地报在该行且不自动消失（toast 会离开该行且易被顶掉）；上一份快照仍有效。
-        await this.publishRowState(key, generation, startedAt, {
-          status: 'error',
-          message: applicationErrorMessage(error),
-        });
+        // 按字段（写入请求的 `value`）拒绝的挂到该行字段上、显示在控件下方，其余原因报在行内
+        //#if (IncludeLocalization)
+        const fallback = this.transloco.translate('common.requestFailed');
+        //#else
+        const fallback = 'The request could not be completed.';
+        //#endif
+        const { errors, message } = mapFormErrors(
+          error,
+          this.settingForm,
+          { value: this.fieldOf(setting, scope) },
+          fallback,
+        );
+        await this.publishRowState(
+          key,
+          generation,
+          startedAt,
+          message === null ? null : { status: 'error', message },
+          errors,
+        );
       }
     });
   }
 
+  /** 把一行的值写进表单并记为正在编辑：直到写入落定，快照刷新都不覆盖它。 */
+  private setDraft(key: string, value: string): void {
+    this.markPending(key);
+    this.values.update((values) => ({ ...values, [key]: value }));
+  }
+
+  private markPending(key: string): void {
+    if (!this.pending().has(key)) {
+      this.pending.update((pending) => new Set(pending).add(key));
+    }
+  }
+
+  private clearServerErrors(key: string): void {
+    if (key in this.serverErrors()) {
+      this.serverErrors.update((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
+  }
+
   /**
-   * 写入落定后丢掉草稿，让控件显示快照或偏好里的值。只丢最后一次写入、且仍等于本次写入值的草稿：
-   * 之后又排了写入时草稿属于那一次（A→B→A 里两个 A 不是同一份意图）；回车提交后用户可以接着改，
+   * 写入落定后该行回到跟随快照（或偏好）。只在最后一次写入、且表单里仍是本次写入的值时回去：
+   * 之后又排了写入时值属于那一次（A→B→A 里两个 A 不是同一份意图）；回车提交后用户可以接着改，
    * 尚未提交的新输入也不能被抹掉。
    */
   private dropDraft(key: string, value: string | null, isLatest: () => boolean): void {
-    if (!isLatest()) {
+    if (!isLatest() || this.values()[key] !== (value ?? '')) {
       return;
     }
 
-    this.drafts.update((drafts) => {
-      if (drafts[key] !== (value ?? '')) {
-        return drafts;
-      }
-
-      const next = { ...drafts };
-      delete next[key];
+    this.pending.update((pending) => {
+      const next = new Set(pending);
+      next.delete(key);
       return next;
     });
   }
@@ -823,12 +939,16 @@ export class SettingSection {
   /**
    * 发布一次写入的结果：这一行之后又有写入时，本次结果不再代表这一行，状态由最后一次写入给出。
    * 补足"保存中"的最短时长之后再判一次：等待期间又排进来的写入正在保存，旧结果不能盖住它。
+   *
+   * @param state 行状态；`null` 表示回到常态（失败原因全部挂到了字段上）。
+   * @param fieldErrors 服务端按字段拒绝的错误，挂到该行字段上。
    */
   private async publishRowState(
     key: string,
     generation: number,
     startedAt: number,
-    state: RowState,
+    state: RowState | null,
+    fieldErrors: ValidationError.WithFieldTree[] = [],
   ): Promise<void> {
     if (this.writeGenerations.get(key) !== generation) {
       return;
@@ -839,7 +959,12 @@ export class SettingSection {
       return;
     }
 
-    if (state.status === 'saved') {
+    if (fieldErrors.length > 0) {
+      this.serverErrors.update((current) => ({ ...current, [key]: fieldErrors }));
+    }
+    if (state === null) {
+      this.clearRowState(key);
+    } else if (state.status === 'saved') {
       this.markSaved(key, generation);
     } else {
       this.setRowState(key, state);
@@ -869,13 +994,21 @@ export class SettingSection {
 
 /** 组织与部署都没设时由设备决定的设置（语言与时区）：占位文案要说清值从哪层来。 */
 function isDeviceDefaulted(setting: SettingOutputDto): boolean {
-  //#if (IncludeLocalization)
-  if (setting.name === SETTINGS.display.language) {
-    return true;
-  }
+  const control = SETTING_CONTROLS[setting.name];
+  return control === 'language' || control === 'timeZone';
+}
 
-  //#endif
-  return setting.name === SETTINGS.display.timeZone;
+/**
+ * 表单与行状态的键。同一项设置在两个作用域里各有独立的值：同名共用一份会让个人偏好的未保存输入
+ * 出现在系统默认值的输入框里。
+ */
+function draftKey(setting: SettingOutputDto, scope: SettingScope): string {
+  return `${scope}:${setting.name}`;
+}
+
+/** 快照里本层的覆盖值，未覆盖为空串。进程级设置存在宿主的租户层那一行上，因此系统页同样读 tenantValue。 */
+function storedValueOf(setting: SettingOutputDto, scope: SettingScope): string {
+  return (scope === 'account' ? setting.userValue : setting.tenantValue) ?? '';
 }
 
 /** 整组都是进程级设置（与每行"全实例生效"徽章同一判据）；空组不算，没有行可说明。 */

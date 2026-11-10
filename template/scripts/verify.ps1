@@ -41,6 +41,9 @@ $steps.Add((Step 'check-i18n' '.' $python @('scripts/check-i18n.py') -Fast))
 $steps.Add((Step 'check-operation-action-i18n' '.' $python @('scripts/check-operation-action-i18n.py') -Fast))
 #endif
 $steps.Add((Step 'check-test-diagnostics' '.' $python @('scripts/check-test-diagnostics.py') -Fast))
+#if (SpaFrontend)
+$steps.Add((Step 'check-setting-group-icons' '.' $python @('scripts/check-setting-group-icons.py') -Fast))
+#endif
 $steps.Add((Step 'backend-restore' 'backend' 'dotnet' @('restore', 'CompanyName.ProjectName.sln') -Fast))
 $steps.Add((Step 'backend-build' 'backend' 'dotnet' @('build', 'CompanyName.ProjectName.sln', '-c', 'Release', '--no-restore', '-p:TreatWarningsAsErrors=true') -Fast))
 # IDE0001/IDE0002（可简化的全名）构建期不执行，只在这里用官方 dotnet format 核对

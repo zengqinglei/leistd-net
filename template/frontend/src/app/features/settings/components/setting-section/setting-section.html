@@ -78,12 +78,13 @@
     </div>
   </ng-template>
 
-  <!-- `{前缀}.Enabled` 开关下的子项：开关的生效值为真时缩进一级显示，否则不渲染（隐藏的控件不进 Tab 顺序）。
-     子项是嵌套的 Field 组（Spartan 的嵌套写法），以开关的标签作组名。 -->
+  <!-- 依赖上级的子项（`{前缀}.Enabled` 开关下的同前缀设置，或声明表里的显式依赖）：上级的取值满足条件时缩进一级显示，
+     否则不渲染（隐藏的控件不进 Tab 顺序），子项还可以再挂子项。子项是嵌套的 Field 组（Spartan 的嵌套写法），以上级的标签作组名。 -->
   <ng-template #rowNodes let-nodes>
     @for (node of nodes; track node.setting.name) {
       <ng-container *ngTemplateOutlet="settingRow; context: { $implicit: node.setting }" />
-      @if (node.children.length > 0 && isChecked(node.setting, scope())) {
+      @let children = childrenOf(node, scope());
+      @if (children.length > 0) {
         <div
           hlmFieldGroup
           class="ps-4"
@@ -92,7 +93,7 @@
           [attr.data-parent]="node.setting.name"
           [attr.aria-labelledby]="node.setting.name + '-label'"
         >
-          <ng-container *ngTemplateOutlet="rowNodes; context: { $implicit: node.children }" />
+          <ng-container *ngTemplateOutlet="rowNodes; context: { $implicit: children }" />
         </div>
       }
     }
@@ -111,8 +112,8 @@
       };
     <hlm-field
       [attr.data-setting-name]="setting.name"
-      [attr.data-setting-invalid]="stateOf(setting, scope())?.status === 'error'"
-      [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
+      [attr.data-setting-invalid]="isInvalid(setting, scope())"
+      [forceInvalid]="isInvalid(setting, scope())"
       [orientation]="isBoolean(setting) ? 'horizontal' : 'responsive'"
     >
       <!-- min-w-0 + wrap-anywhere：内容列可收缩，长标签与长错误（设置标识、地址这类连续文本）在列内折行，
@@ -186,150 +187,176 @@
         @if (hintKeyOf(setting, scope()); as hint) {
           <p class="text-muted-foreground text-xs">{{ t(hint) }}</p>
         }
+        @if (isBoolean(setting)) {
+          <!-- 开关没有宽度：字段错误接在说明下面 -->
+          <ng-container *ngTemplateOutlet="fieldError; context: { $implicit: setting }" />
+        }
       </div>
-      <!-- 标签折成多行（或下方有说明）时，控件在左侧内容块的高度内垂直居中；纵排时不居中 -->
+      <!-- 标签折成多行（或下方有说明）时，控件在左侧内容块的高度内垂直居中；纵排时不居中。
+         输入类控件的字段错误接在控件下方 -->
       <div
-        class="flex items-center gap-2"
+        class="flex flex-col gap-1"
         [class]="isBoolean(setting) ? 'self-center' : '@md/field-group:self-center'"
       >
-        @if (isBoolean(setting)) {
-          <hlm-switch
-            [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
-            [inputId]="setting.name"
-            [checked]="isChecked(setting, scope())"
-            [aria-describedby]="descriptionIdOf(setting)"
-            [attr.data-testid]="'setting-switch-' + setting.name"
-            (checkedChange)="onToggle(setting, scope(), $event)"
-          />
-        } @else if (isTimeZone(setting)) {
-          <hlm-combobox
-            class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
-            [value]="draftOf(setting, scope())"
-            [filter]="timeZoneFilter"
-            [itemToString]="timeZoneToString"
-            [attr.data-testid]="'setting-combobox-' + setting.name"
-            (valueChange)="onSelect(setting, scope(), $event)"
-          >
-            <!-- justify-between + font-normal 是官方用法：触发器是 hlmBtn，默认居中且加粗。 -->
-            <!-- 时区名与偏移分两段：放不下时只省略时区名，偏移始终可见，悬停提示给出全文。不用
-               hlm-combobox-value：它只写一段纯文本，选中值与占位也走两条路。占位的淡色由触发器的
-               data-placeholder 给出。 -->
-            @let zoneText = timeZoneTextOf(setting, scope(), sourceLabels);
-            <hlm-combobox-trigger
-              [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
-              [buttonId]="setting.name"
-              class="w-full justify-between font-normal"
-              [attr.title]="
-                (zoneText.offset ? zoneText.name + ' · ' + zoneText.offset : zoneText.name) || null
-              "
+        <div class="flex items-center gap-2">
+          @if (isBoolean(setting)) {
+            <hlm-switch
+              [forceInvalid]="isInvalid(setting, scope())"
+              [inputId]="setting.name"
+              [checked]="isChecked(setting, scope())"
+              [aria-describedby]="descriptionIdOf(setting)"
+              [attr.data-testid]="'setting-switch-' + setting.name"
+              (checkedChange)="onToggle(setting, scope(), $event)"
+            />
+          } @else if (isTimeZone(setting)) {
+            <hlm-combobox
+              class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
+              [value]="draftOf(setting, scope())"
+              [filter]="timeZoneFilter"
+              [itemToString]="timeZoneToString"
+              [attr.data-testid]="'setting-combobox-' + setting.name"
+              (valueChange)="onSelect(setting, scope(), $event)"
             >
-              <!-- 间隔写成文字里的不换行空格，不用 gap：读屏读到的名称里也要有分隔 -->
-              <span class="flex min-w-0 items-center" data-testid="time-zone-value">
-                <span class="truncate">{{ zoneText.name }}</span>
-                @if (zoneText.offset) {
-                  <span class="shrink-0">&nbsp;· {{ zoneText.offset }}</span>
-                }
-              </span>
-            </hlm-combobox-trigger>
-            <hlm-combobox-content *hlmComboboxPortal>
-              <hlm-combobox-input
-                [placeholder]="t('settings.timeZoneSearch')"
-                [triggerAriaLabel]="t('settings.timeZoneToggle')"
-              />
-              <!-- 展开即定位到当前值；没有本层值时定位到继承来的生效值 -->
-              <div
-                hlmComboboxList
-                [appComboboxRevealSelected]="inheritedLabelOf(setting, scope(), sourceLabels)"
+              <!-- justify-between + font-normal 是官方用法：触发器是 hlmBtn，默认居中且加粗。 -->
+              <!-- 时区名与偏移分两段：放不下时只省略时区名，偏移始终可见，悬停提示给出全文。不用
+                 hlm-combobox-value：它只写一段纯文本，选中值与占位也走两条路。占位的淡色由触发器的
+                 data-placeholder 给出。 -->
+              @let zoneText = timeZoneTextOf(setting, scope(), sourceLabels);
+              <hlm-combobox-trigger
+                [forceInvalid]="isInvalid(setting, scope())"
+                [buttonId]="setting.name"
+                class="w-full justify-between font-normal"
+                [attr.title]="
+                  (zoneText.offset ? zoneText.name + ' · ' + zoneText.offset : zoneText.name) ||
+                  null
+                "
               >
-                <hlm-combobox-empty>{{ t('settings.timeZoneEmpty') }}</hlm-combobox-empty>
-                @for (group of timeZones; track group.region) {
-                  <div hlmComboboxGroup>
-                    <div hlmComboboxLabel>{{ group.region }}</div>
-                    @for (zone of group.zones; track zone.value) {
-                      <hlm-combobox-item [value]="zone.value">
-                        <!-- 城市名不截断：触发器上放不下的时区名，展开后在这里能看到全名。放不下时按词折行，
-                           不收窄到比单词还窄（徽章文案较长时也不会把城市名挤没） -->
-                        <span class="break-words">{{ zone.city }}</span>
-                        @if (zone.isBrowser) {
-                          <span hlmBadge variant="secondary">
-                            {{ t('settings.browserTimeZone') }}
+                <!-- 间隔写成文字里的不换行空格，不用 gap：读屏读到的名称里也要有分隔 -->
+                <span class="flex min-w-0 items-center" data-testid="time-zone-value">
+                  <span class="truncate">{{ zoneText.name }}</span>
+                  @if (zoneText.offset) {
+                    <span class="shrink-0">&nbsp;· {{ zoneText.offset }}</span>
+                  }
+                </span>
+              </hlm-combobox-trigger>
+              <hlm-combobox-content *hlmComboboxPortal>
+                <hlm-combobox-input
+                  [placeholder]="t('settings.timeZoneSearch')"
+                  [triggerAriaLabel]="t('settings.timeZoneToggle')"
+                />
+                <!-- 展开即定位到当前值；没有本层值时定位到继承来的生效值 -->
+                <div
+                  hlmComboboxList
+                  [appComboboxRevealSelected]="inheritedLabelOf(setting, scope(), sourceLabels)"
+                >
+                  <hlm-combobox-empty>{{ t('settings.timeZoneEmpty') }}</hlm-combobox-empty>
+                  @for (group of timeZones; track group.region) {
+                    <div hlmComboboxGroup>
+                      <div hlmComboboxLabel>{{ group.region }}</div>
+                      @for (zone of group.zones; track zone.value) {
+                        <hlm-combobox-item [value]="zone.value">
+                          <!-- 城市名不截断：触发器上放不下的时区名，展开后在这里能看到全名。放不下时按词折行，
+                             不收窄到比单词还窄（徽章文案较长时也不会把城市名挤没） -->
+                          <span class="break-words">{{ zone.city }}</span>
+                          @if (zone.isBrowser) {
+                            <span hlmBadge variant="secondary">
+                              {{ t('settings.browserTimeZone') }}
+                            </span>
+                          }
+                          <span class="text-muted-foreground ms-auto shrink-0 ps-2 text-xs">
+                            {{ zone.offsetLabel }}
                           </span>
-                        }
-                        <span class="text-muted-foreground ms-auto shrink-0 ps-2 text-xs">
-                          {{ zone.offsetLabel }}
-                        </span>
-                      </hlm-combobox-item>
-                    }
-                  </div>
-                }
-              </div>
-            </hlm-combobox-content>
-          </hlm-combobox>
-        } @else if (choicesOf(setting); as choices) {
-          <hlm-select
-            class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
-            [value]="draftOf(setting, scope())"
-            [itemToString]="labelFnOf(setting)"
-            [attr.data-testid]="'setting-select-' + setting.name"
-            (valueChange)="onSelect(setting, scope(), $event)"
-          >
-            <hlm-select-trigger
-              [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
-              [aria-invalid]="stateOf(setting, scope())?.status === 'error'"
-              [buttonId]="setting.name"
-              class="w-full"
-              [attr.title]="displayTextOf(setting, scope(), sourceLabels) || null"
+                        </hlm-combobox-item>
+                      }
+                    </div>
+                  }
+                </div>
+              </hlm-combobox-content>
+            </hlm-combobox>
+          } @else if (choicesOf(setting); as choices) {
+            <hlm-select
+              class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
+              [value]="draftOf(setting, scope())"
+              [itemToString]="labelFnOf(setting)"
+              [attr.data-testid]="'setting-select-' + setting.name"
+              (valueChange)="onSelect(setting, scope(), $event)"
             >
-              <hlm-select-value [placeholder]="inheritedLabelOf(setting, scope(), sourceLabels)" />
-            </hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal>
-              @for (choice of choices; track choice.value) {
-                <hlm-select-item [value]="choice.value">
-                  {{ choiceLabelOf(choice) }}
-                </hlm-select-item>
-              }
-            </hlm-select-content>
-          </hlm-select>
-        } @else {
-          <!-- 数值型把上下界交给浏览器（值域以服务端为准）。用 change 提交；与本行其他控件一样
-           不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。 -->
-          <input
-            [forceInvalid]="stateOf(setting, scope())?.status === 'error'"
-            [attr.aria-invalid]="stateOf(setting, scope())?.status === 'error' ? 'true' : null"
-            hlmInput
-            class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
-            [id]="setting.name"
-            [type]="inputTypeOf(setting)"
-            [attr.min]="setting.minimum"
-            [attr.max]="setting.maximum"
-            [attr.inputmode]="isNumeric(setting) ? 'numeric' : null"
-            [attr.autocomplete]="setting.isSecret ? 'new-password' : 'off'"
-            [attr.data-testid]="'setting-input-' + setting.name"
-            [value]="draftOf(setting, scope())"
-            [placeholder]="
-              setting.isSecret
-                ? setting.hasSecretValue
-                  ? t('settings.secretSet')
-                  : t('settings.secretUnset')
-                : systemOrInheritedValue(setting, scope())
-            "
-            (input)="onInput(setting, scope(), $event)"
-            (change)="onCommit(setting, scope(), $event)"
-          />
+              <hlm-select-trigger
+                [forceInvalid]="isInvalid(setting, scope())"
+                [aria-invalid]="isInvalid(setting, scope())"
+                [buttonId]="setting.name"
+                class="w-full"
+                [attr.title]="displayTextOf(setting, scope(), sourceLabels) || null"
+              >
+                <hlm-select-value
+                  [placeholder]="inheritedLabelOf(setting, scope(), sourceLabels)"
+                />
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal>
+                @for (choice of choices; track choice) {
+                  <hlm-select-item [value]="choice">
+                    {{ labelOf(setting, choice) }}
+                  </hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+          } @else {
+            <!-- 值经 [formField] 绑定到表单。数值型把上下界交给浏览器（值域以服务端为准）。用 change 提交；
+             与本行其他控件一样不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。 -->
+            <input
+              [forceInvalid]="isInvalid(setting, scope())"
+              [attr.aria-invalid]="isInvalid(setting, scope()) ? 'true' : null"
+              hlmInput
+              class="flex-1 @md/field-group:w-64 @md/field-group:flex-none"
+              [id]="setting.name"
+              [type]="inputTypeOf(setting)"
+              [attr.min]="setting.minimum"
+              [attr.max]="setting.maximum"
+              [attr.inputmode]="isNumeric(setting) ? 'numeric' : null"
+              [attr.autocomplete]="setting.isSecret ? 'new-password' : 'off'"
+              [attr.data-testid]="'setting-input-' + setting.name"
+              [formField]="fieldOf(setting, scope())"
+              [placeholder]="
+                setting.isSecret
+                  ? setting.hasSecretValue
+                    ? t('settings.secretSet')
+                    : t('settings.secretUnset')
+                  : systemOrInheritedValue(setting, scope())
+              "
+              (input)="onInput(setting, scope())"
+              (change)="onCommit(setting, scope(), $event)"
+            />
+          }
+          <button
+            type="button"
+            hlmBtn
+            size="icon-sm"
+            variant="ghost"
+            [attr.data-testid]="'setting-reset-' + setting.name"
+            [attr.aria-label]="t('settings.reset')"
+            [hlmTooltip]="t('settings.reset')"
+            (click)="reset(setting, scope())"
+          >
+            <ng-icon name="lucideRotateCcw" size="16" />
+          </button>
+        </div>
+        @if (!isBoolean(setting)) {
+          <ng-container *ngTemplateOutlet="fieldError; context: { $implicit: setting }" />
         }
-        <button
-          type="button"
-          hlmBtn
-          size="icon-sm"
-          variant="ghost"
-          [attr.data-testid]="'setting-reset-' + setting.name"
-          [attr.aria-label]="t('settings.reset')"
-          [hlmTooltip]="t('settings.reset')"
-          (click)="reset(setting, scope())"
-        >
-          <ng-icon name="lucideRotateCcw" size="16" />
-        </button>
       </div>
     </hlm-field>
+  </ng-template>
+
+  <!-- 服务端按字段拒绝的原因，经 aria-describedby 关联到控件。w-0 + min-w-full：随所在列的宽度折行，不把列撑宽。 -->
+  <ng-template #fieldError let-setting>
+    @if (fieldErrorOf(setting, scope()); as message) {
+      <hlm-field-error
+        forceShow
+        class="w-0 min-w-full text-xs whitespace-pre-line"
+        data-setting-field-error
+        [id]="setting.name + '-error'"
+        >{{ message }}</hlm-field-error
+      >
+    }
   </ng-template>
 </ng-container>

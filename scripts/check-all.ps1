@@ -194,6 +194,8 @@ $gates = @(
     # 错误码闸门随模板分发且不随本地化裁剪；本仓直接跑模板里那一份（脚本根即 template/）
     @{ Name = "错误码规则自检";            Cmd = $pythonCmd; Args = @("template/scripts/check-error-codes.py", "--self-test") }
     @{ Name = "错误码形态、归属与引用";    Cmd = $pythonCmd; Args = @("template/scripts/check-error-codes.py") }
+    @{ Name = "设置分组图标规则自检";      Cmd = $pythonCmd; Args = @("template/scripts/check-setting-group-icons.py", "--self-test") }
+    @{ Name = "设置分组都有导航图标";      Cmd = $pythonCmd; Args = @("template/scripts/check-setting-group-icons.py") }
     # 生成产物上的部署资产核对随 CI 的全部形态生成作业执行；这里只验判据本身
     @{ Name = "部署资产判据自检";          Cmd = $pythonCmd; Args = @("scripts/test-template-generation.py", "--self-test") }
     # 后端路由、前端调用与 Mock 键三方求差；源码上按条件分支取并集

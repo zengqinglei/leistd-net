@@ -1,3 +1,7 @@
+//#if (IncludeLocalization)
+import { SUPPORTED_LANGS } from '../../src/app/core/services/language-service';
+//#endif
+import { THEME_MODES } from '../../src/app/core/services/theme-service';
 import { StoredMap } from '../utils/stored-map';
 
 /** 设置的 Mock 数据。覆盖值按主体键控，键形状对齐真实 Store 的 `ScopeKey`，用户级也带租户。 */
@@ -19,7 +23,12 @@ export interface MockSettingDefinition {
   isBoolean?: boolean;
   /** 机密设置：值不下发，只报告是否设过。 */
   isSecret?: boolean;
+  /** 候选值（与后端定义的 `WithAllowedValues` 一致）：界面据此渲染下拉，写入不在其中的值被拒绝。 */
+  allowedValues?: readonly string[];
 }
+
+/** 日志级别，与后端 `SettingConstant.Logging.Levels` 一致（.NET `LogLevel` 名称，不含 `None`）。 */
+const LOG_LEVELS = ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical'] as const;
 
 //#if (ExternalLogin)
 /** 外部登录提供方标识与设置名中段的对应，按标识排序（与真实后端状态端点的顺序一致）。 */
@@ -72,6 +81,7 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     defaultValue: null,
     allowsTenantScope: true,
     allowsUserScope: true,
+    allowedValues: SUPPORTED_LANGS,
   },
   //#endif
   {
@@ -90,6 +100,7 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     defaultValue: null,
     allowsTenantScope: false,
     allowsUserScope: true,
+    allowedValues: THEME_MODES,
   },
   // 进程级：两个层级标记都是 false，只有 allowsHostScope。与真实后端一样，租户上下文下
   // 不下发这类设置，写入也被拒绝（见 api/setting.ts）。
@@ -282,6 +293,7 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
     allowsTenantScope: false,
     allowsUserScope: false,
     allowsHostScope: true,
+    allowedValues: LOG_LEVELS,
   },
   {
     // 默认值即部署基线 RequestLogging:Enabled（代码默认开）

@@ -783,6 +783,7 @@
           "condition": "!SpaFrontend",
           "exclude": [
             "frontend/**",
+            "scripts/check-setting-group-icons.py",
             "docs/standards/coding-frontend.md",
             "docs/standards/frontend-ui.md",
             "docs/standards/frontend-spartan.md",

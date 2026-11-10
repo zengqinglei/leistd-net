@@ -169,6 +169,9 @@ python3 scripts/check-i18n.py                             # 词条、引用与�
 <!--#if (SpaFrontend && IncludeOperationRecords)-->
 python3 scripts/check-operation-action-i18n.py            # 每个动作码都有句子模板
 <!--#endif-->
+<!--#if (SpaFrontend)-->
+python3 scripts/check-setting-group-icons.py              # 每个系统设置分组都有能画出来的导航图标
+<!--#endif-->
 ```
 <!--#if (SpaFrontend && IncludeOperationRecords)-->
 每个动作码都须有 `operationRecords.actions.<码>` 词条（单向，多余词条不报）；漏配时界面只把那一行显示成裸码（`role.deleted`）。新增动作码时同一提交补中英句子。

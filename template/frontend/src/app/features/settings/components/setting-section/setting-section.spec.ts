@@ -4,7 +4,12 @@ import { ApplicationRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
+//#endif
+//#if (IncludeLocalization)
+import { firstValueFrom, of, throwError } from 'rxjs';
+//#else
+import { throwError } from 'rxjs';
 //#endif
 import { userEvent } from 'vitest/browser';
 
@@ -18,7 +23,9 @@ import { AuthService } from '../../../../core/services/auth-service';
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
 import { ThemeService } from '../../../../core/services/theme-service';
+import { SettingService } from '../../../../core/settings/setting-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
+import { rejectedField } from '../../../../core/validation/form-submission.testing';
 import { AccountThemeMode } from '../../../../shared/dtos/account-preferences.dto';
 import {
   expectTouchTarget,
@@ -27,9 +34,12 @@ import {
 } from '../../../../shared/utils/coarse-pointer.testing';
 import { SettingsPageState } from '../../settings-page-state';
 
+/** 日志级别的候选值，与后端定义的 `allowedValues` 一致：下拉的候选项只认后端下发的这一份。 */
+const LOG_LEVELS = ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical'];
+
 /**
- * 验取值开放的设置链路（文本框）：刻意用不在 `SETTING_CHOICES` 里的设置名，
- * 免得它日后登记候选项（渲染成下拉）时整批变红。
+ * 验取值开放的设置链路（文本框）：刻意用不在声明表里的设置名、不带候选值，
+ * 免得它日后登记专用控件时整批变红。
  */
 function row(overrides: Partial<SettingOutputDto> = {}): SettingOutputDto {
   return {
@@ -50,8 +60,15 @@ function row(overrides: Partial<SettingOutputDto> = {}): SettingOutputDto {
   };
 }
 
-/** 用例的公共提供者。{@link SettingsPageState} 一构造就取一次设置，每个用例开头先应答那次 GET。 */
+/**
+ * 用例的公共提供者。{@link SettingsPageState} 一构造就取一次设置，每个用例开头先应答那次 GET。
+ * 断言译文的用例传自己的词条加载器，其余用例词条为空、文案回落成键名。
+ */
+//#if (IncludeLocalization)
+function pageProviders(loader?: TranslocoLoader): unknown[] {
+//#else
 function pageProviders(): unknown[] {
+//#endif
   return [
     provideHttpClient(),
     provideHttpClientTesting(),
@@ -61,7 +78,7 @@ function pageProviders(): unknown[] {
     // （无本地身份的形态下是整个 OIDC 客户端），本组用例只关心页面的行为。
     { provide: AuthService, useValue: { clearAuthData: () => undefined } },
     //#if (IncludeLocalization)
-    ...provideTranslocoTesting(['en']),
+    ...provideTranslocoTesting(['en'], loader),
     //#endif
   ];
 }
@@ -995,7 +1012,13 @@ describe('SettingSection long values', () => {
   const timeZone = (overrides: Partial<SettingOutputDto>) =>
     row({ name: 'Display.TimeZone', group: 'Display', defaultValue: null, ...overrides });
   const logLevel = (overrides: Partial<SettingOutputDto>) =>
-    row({ name: 'Logging.MinimumLevel', group: 'Logging', defaultValue: null, ...overrides });
+    row({
+      name: 'Logging.MinimumLevel',
+      group: 'Logging',
+      defaultValue: null,
+      allowedValues: LOG_LEVELS,
+      ...overrides,
+    });
 
   /** 值区单行省略、确实溢出，且右缘不压箭头，箭头在控件内。 */
   function expectTruncatedInside(button: HTMLElement, slot: string) {
@@ -1605,15 +1628,43 @@ describe('SettingSection logging', () => {
         group: 'Operations',
         defaultValue: 'Information',
         tenantValue: 'Critical',
+        allowedValues: LOG_LEVELS,
       }),
     ]);
 
     expectHint(host, 'Logging.MinimumLevel', 'settings.logLevelHints.Critical');
   });
 
+  // 按值说明对继承来的值同样适用；没有登记按值说明的候选项设置没有说明
+  it('describes the inherited minimum level and leaves unregistered choices without a hint', async () => {
+    const host = await render([
+      row({
+        name: 'Logging.MinimumLevel',
+        group: 'Operations',
+        defaultValue: 'Warning',
+        allowedValues: LOG_LEVELS,
+      }),
+      row({
+        name: 'Probe.Mode',
+        group: 'Operations',
+        defaultValue: 'fast',
+        allowedValues: ['fast', 'slow'],
+      }),
+    ]);
+
+    expectHint(host, 'Logging.MinimumLevel', 'settings.logLevelHints.Warning');
+    expect(hintOf(host, 'Probe.Mode')).toBeUndefined();
+  });
+
+  // 候选项只认后端下发的 allowedValues：不另抄一份值域，次序也照后端
   it('offers the LogLevel names from Trace to Critical, without None', async () => {
     const host = await render([
-      row({ name: 'Logging.MinimumLevel', group: 'Operations', defaultValue: 'Information' }),
+      row({
+        name: 'Logging.MinimumLevel',
+        group: 'Operations',
+        defaultValue: 'Information',
+        allowedValues: LOG_LEVELS,
+      }),
     ]);
     const trigger = host.querySelector<HTMLElement>(
       '[data-testid="setting-select-Logging.MinimumLevel"] button',
@@ -1898,7 +1949,8 @@ describe('SettingSection appearance', () => {
       '[data-testid="setting-select-Display.Theme"]',
     );
     //#if (IncludeLocalization)
-    expect(trigger?.textContent?.trim()).toBe('theme.mode.dark');
+    // 单测词条为空：缺词条时显示原值
+    expect(trigger?.textContent?.trim()).toBe('dark');
     //#else
     expect(trigger?.textContent?.trim()).toBe('Dark');
     //#endif
@@ -1925,9 +1977,9 @@ describe('SettingSection appearance', () => {
     const host = fixture.nativeElement as HTMLElement;
 
     const trigger = host.querySelector<HTMLElement>('[data-testid="setting-select-Display.Theme"]');
-    // 单测词条为空、文案回落成键名：断言到键，即证明走的是主题词条而不是原始取值
+    // 单测词条为空、缺词条时显示原值；取主题词条见 SettingSection value labels
     //#if (IncludeLocalization)
-    expect(trigger?.textContent?.trim()).toBe('theme.mode.system');
+    expect(trigger?.textContent?.trim()).toBe('system');
     //#else
     expect(trigger?.textContent?.trim()).toBe('System');
     //#endif
@@ -1935,6 +1987,84 @@ describe('SettingSection appearance', () => {
     fixture.componentRef.setInput('scope', 'system');
     fixture.detectChanges();
     expect(hasRow(host, 'Display.Theme')).toBe(false);
+    http.verify();
+  });
+});
+/** 候选项来自后端的 allowedValues，文案按声明表的词条前缀取，缺词条显示原值。 */
+describe('SettingSection value labels', () => {
+  it('labels backend candidates by the registered prefix and shows a value without an entry as is', async () => {
+    //#if (IncludeLocalization)
+    const loader: TranslocoLoader = {
+      getTranslation: () => of({ theme: { mode: { light: 'Light' } } }),
+    };
+    TestBed.configureTestingModule({
+      imports: [SettingSection],
+      providers: [...pageProviders(loader)],
+    });
+    await firstValueFrom(TestBed.inject(TranslocoService).load('en'));
+    //#else
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    //#endif
+    const fixture = TestBed.createComponent(SettingSection);
+    fixture.componentRef.setInput('scope', 'system');
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/settings').flush([
+      row({
+        name: 'Display.Theme',
+        group: 'Display',
+        defaultValue: null,
+        tenantValue: 'light',
+        allowedValues: ['light', 'sepia'],
+      }),
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLElement>(
+      '[data-testid="setting-select-Display.Theme"] button',
+    )!;
+
+    expect(trigger.textContent?.trim()).toBe('Light');
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    const options = [...document.querySelectorAll('hlm-select-item')].map((item) =>
+      item.textContent?.trim(),
+    );
+    expect(options).toEqual(['Light', 'sepia']);
+    await userEvent.keyboard('{Escape}');
+    http.verify();
+  });
+});
+
+/** 控件由声明表与后端元数据分派：登记了专用控件的按种类渲染，其余按候选值、区间、布尔的通用规则。 */
+describe('SettingSection control dispatch', () => {
+  it('renders candidates as a select, a registered time zone as a searchable list and the rest as text', async () => {
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    const fixture = TestBed.createComponent(SettingSection);
+    fixture.componentRef.setInput('scope', 'system');
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/settings')
+      .flush([
+        row({ name: 'Probe.Mode', allowedValues: ['fast', 'slow'] }),
+        row({ name: 'Probe.Unbounded', allowedValues: [] }),
+        row({ name: 'Display.TimeZone', defaultValue: null }),
+        row({ name: 'Probe.Free' }),
+      ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const kindOf = (name: string) =>
+      ['select', 'combobox', 'input'].find(
+        (kind) => host.querySelector(`[data-testid="setting-${kind}-${name}"]`) !== null,
+      );
+
+    expect(kindOf('Probe.Mode')).toBe('select');
+    expect(kindOf('Probe.Unbounded')).toBe('input');
+    expect(kindOf('Display.TimeZone')).toBe('combobox');
+    expect(kindOf('Probe.Free')).toBe('input');
     http.verify();
   });
 });
@@ -2123,13 +2253,22 @@ describe('SettingSection row validation', () => {
   it.each([
     { name: 'Display.FreeTextProbe', kind: 'text' },
     { name: 'Probe.Boolean', kind: 'switch', isBoolean: true, defaultValue: 'true' },
-    { name: 'Logging.MinimumLevel', kind: 'select', defaultValue: 'Information' },
+    {
+      name: 'Logging.MinimumLevel',
+      kind: 'select',
+      defaultValue: 'Information',
+      allowedValues: LOG_LEVELS,
+    },
     { name: 'Display.TimeZone', kind: 'combobox', defaultValue: 'UTC' },
   ])(
-    'review R1 associates a server field rejection with the actual $kind control',
+    'shows a server field rejection below the $kind control and marks it invalid',
     async ({ kind, ...values }) => {
       const setting = row(values);
       const host = await render(setting);
+      // 与 HTTP 拦截器相同的字段拒绝：写入请求体的 `value` 字段
+      vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+        throwError(() => rejectedField('Value', 'Server rejected the setting value')),
+      );
       const panel = fixture.componentInstance;
       if (kind === 'switch') panel['onToggle'](setting, 'system', false);
       else if (kind !== 'text')
@@ -2141,27 +2280,71 @@ describe('SettingSection row validation', () => {
         field.dispatchEvent(new Event('change'));
       }
       await fixture.whenStable();
-      http
-        .expectOne({ method: 'PUT', url: '/api/v1/settings/current-tenant' })
-        .flush(
-          { errors: [{ field: 'Value', detail: 'Server rejected the setting value' }] },
-          { status: 400, statusText: 'Bad Request' },
-        );
       await vi.advanceTimersByTimeAsync(400);
       await fixture.whenStable();
       fixture.detectChanges();
       const control = document.getElementById(setting.name)!;
       expect(control.matches('input,button,[role="switch"],[role="combobox"]')).toBe(true);
       expect(control.getAttribute('aria-invalid')).toBe('true');
-      expect(control.getAttribute('aria-describedby')?.split(' ')).toContain(
+      expect(control.getAttribute('aria-describedby')?.split(' ')).toEqual([
         `${setting.name}-description`,
-      );
-      const error = document.getElementById(`${setting.name}-description`)!;
+        `${setting.name}-error`,
+      ]);
+      const error = document.getElementById(`${setting.name}-error`)!;
       expect(error.tagName).toBe('HLM-FIELD-ERROR');
       expect(error.hasAttribute('hidden')).toBe(false);
-      expect(error.textContent?.trim()).toBeTruthy();
+      expect(error.textContent?.trim()).toBe('Server rejected the setting value');
+      expect(error.closest('hlm-field')).toBe(control.closest('hlm-field'));
+      // 原因已挂在字段上：标签旁不再重复报一次
+      expect(document.getElementById(`${setting.name}-description`)!.tagName).toBe(
+        'HLM-FIELD-DESCRIPTION',
+      );
     },
   );
+
+  // 输入类控件的错误接在控件下方；再次编辑时上次的字段错误失效
+  it('puts the field rejection under the text box and clears it on the next edit', async () => {
+    const host = await render(row());
+    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+      throwError(() => rejectedField('value', 'Not accepted')),
+    );
+    const field = host.querySelector<HTMLInputElement>('input')!;
+    field.value = 'draft';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    await vi.advanceTimersByTimeAsync(400);
+    fixture.detectChanges();
+
+    const error = document.getElementById('Display.FreeTextProbe-error')!;
+    expect(field.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(field.value).toBe('draft');
+
+    field.value = 'draft 2';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.getElementById('Display.FreeTextProbe-error')).toBeNull();
+    expect(field.hasAttribute('aria-invalid')).toBe(false);
+  });
+
+  // 业务错误码没有字段：原因照常报在行内，不挂到控件下方
+  it('keeps a rejection without a field inline on the row', async () => {
+    await render(row({ name: 'Logging.MinimumLevel', allowedValues: LOG_LEVELS }));
+    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+      throwError(() => rejectedField('', 'Not allowed here')),
+    );
+    const setting = row({ name: 'Logging.MinimumLevel', allowedValues: LOG_LEVELS });
+    fixture.componentInstance['onSelect'](setting, 'system', 'Warning');
+    await fixture.whenStable();
+    await vi.advanceTimersByTimeAsync(400);
+    fixture.detectChanges();
+
+    expect(document.getElementById('Logging.MinimumLevel-error')).toBeNull();
+    const inline = document.getElementById('Logging.MinimumLevel-description')!;
+    expect(inline.tagName).toBe('HLM-FIELD-ERROR');
+    expect(inline.textContent).toContain('Not allowed here');
+  });
 
   it('review R1 displays native numeric validation and keeps the draft without an HTTP request', async () => {
     const host = await render(row({ name: 'Numeric.Probe', minimum: 1, maximum: 10 }));

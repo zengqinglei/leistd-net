@@ -552,7 +552,9 @@ def expected_verify_steps(values):
     steps = ['check-error-codes']
     steps += ['check-i18n'] if values['IncludeLocalization'] else []
     steps += ['check-operation-action-i18n'] if values['SpaFrontend'] and values['IncludeOperationRecords'] else []
-    steps += ['check-test-diagnostics', 'backend-restore', 'backend-build', 'backend-format', 'backend-test:Generation.Probe.UnitTests', 'backend-test:Generation.Probe.IntegrationTests']
+    steps += ['check-test-diagnostics']
+    steps += ['check-setting-group-icons'] if values['SpaFrontend'] else []
+    steps += ['backend-restore', 'backend-build', 'backend-format', 'backend-test:Generation.Probe.UnitTests', 'backend-test:Generation.Probe.IntegrationTests']
     steps += ['frontend-install', 'frontend-lint', 'frontend-test', 'frontend-build'] if values['SpaFrontend'] else []
     steps += ['frontend-e2e'] if values['LocalIdentity'] else []
     return steps
@@ -839,6 +841,11 @@ def validate(output, values, config, verify=True, sdk=None):
     assert not deployment_problems, 'Deployment assets: ' + '; '.join(deployment_problems)
     error_codes = subprocess.run([sys.executable, str(output / 'scripts/check-error-codes.py')], capture_output=True, text=True, encoding='utf-8', errors='replace')
     assert error_codes.returncode == 0, f'Error code checker: {error_codes.stdout}{error_codes.stderr}'
+    icon_check = output / 'scripts/check-setting-group-icons.py'
+    assert icon_check.exists() == values['SpaFrontend'], 'Setting group icon checker applicability'
+    if values['SpaFrontend']:
+        icons = subprocess.run([sys.executable, str(icon_check)], capture_output=True, text=True, encoding='utf-8', errors='replace')
+        assert icons.returncode == 0, f'Setting group icon checker: {icons.stdout}{icons.stderr}'
     assert not (api / 'Localization').exists() or values['IncludeLocalization'], 'Localization marker type without localization'
     migrations = '\n'.join(p.read_text(encoding='utf-8') for p in (infra / 'Persistence/Migrations').rglob('*.cs'))
     assert ('name: "OperationRecords"' in migrations) == values['IncludeOperationRecords'], 'Operation record tables'
