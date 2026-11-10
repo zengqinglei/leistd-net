@@ -1,8 +1,5 @@
-using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
 using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Settings.Errors;
@@ -269,7 +266,7 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     }
 
     /// <summary>三路各产生一条数据并冲刷，返回本次冲刷期间接收端收到的请求。</summary>
-    private static List<ReceivedRequest> Flush(WebApplicationFactory<Program> host, OtlpReceiver receiver)
+    private static List<OtlpRequest> Flush(WebApplicationFactory<Program> host, OtlpReceiver receiver)
     {
         var before = receiver.Requests.Count;
         FlushAll(host.Services);
@@ -287,7 +284,7 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     }
 
     // 三路都到达，路径为 /v1/{signal}；给了头名时每个请求里该头恰好一份且等于期望值
-    private static void AssertAllSignals(List<ReceivedRequest> requests, string? header = null, string? value = null)
+    private static void AssertAllSignals(List<OtlpRequest> requests, string? header = null, string? value = null)
     {
         Assert.Equal(["/v1/logs", "/v1/metrics", "/v1/traces"], requests.Select(request => request.Path).Distinct().Order());
         if (header is not null)
@@ -335,72 +332,6 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
             HostStartedAtFlush = services!.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested;
             FlushAll(services!);
             ReceivedDuringStartup = receiver.Requests.Count;
-        }
-    }
-
-    private sealed record ReceivedRequest(string Path, string? ContentType, IReadOnlyDictionary<string, string[]> Headers)
-    {
-        public string[] Header(string name) => Headers.TryGetValue(name, out var values) ? values : [];
-    }
-
-    /// <summary>本机 OTLP/HTTP 接收端：记录路径与请求头，回空的 200。</summary>
-    private sealed class OtlpReceiver : IDisposable
-    {
-        private readonly HttpListener listener = new();
-        private readonly ConcurrentQueue<ReceivedRequest> requests = new();
-        private readonly bool redirectSignals;
-
-        // redirectSignals：信号路径一律回 302 到 /login，模拟 Collector 前的登录网关
-        public OtlpReceiver(bool redirectSignals = false)
-        {
-            this.redirectSignals = redirectSignals;
-            var probe = new TcpListener(IPAddress.Loopback, 0);
-            probe.Start();
-            var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-            probe.Stop();
-            BaseAddress = $"http://127.0.0.1:{port}";
-            listener.Prefixes.Add(BaseAddress + "/");
-            listener.Start();
-            _ = Task.Run(AcceptAsync);
-        }
-
-        public string BaseAddress { get; }
-
-        public IReadOnlyList<ReceivedRequest> Requests => requests.ToArray();
-
-        public void Dispose() => listener.Close();
-
-        private async Task AcceptAsync()
-        {
-            while (listener.IsListening)
-            {
-                HttpListenerContext context;
-                try
-                {
-                    context = await listener.GetContextAsync();
-                }
-                catch (Exception error) when (error is HttpListenerException or ObjectDisposedException or InvalidOperationException)
-                {
-                    return;
-                }
-
-                var request = context.Request;
-                await request.InputStream.CopyToAsync(Stream.Null);
-                var headers = request.Headers.AllKeys.Where(key => key is not null).ToDictionary(
-                    key => key!, key => request.Headers.GetValues(key) ?? [], StringComparer.OrdinalIgnoreCase);
-                requests.Enqueue(new ReceivedRequest(request.Url!.AbsolutePath, request.ContentType, headers));
-                if (redirectSignals && request.Url!.AbsolutePath.StartsWith("/v1/", StringComparison.Ordinal))
-                {
-                    context.Response.StatusCode = 302;
-                    context.Response.RedirectLocation = "/login";
-                }
-                else
-                {
-                    context.Response.StatusCode = 200;
-                }
-
-                context.Response.Close();
-            }
         }
     }
 }

@@ -12,6 +12,7 @@ namespace CompanyName.ProjectName.Api.Hosting;
 public static class TelemetryExtensions
 {
     private const string ProjectSourcePattern = "CompanyName.ProjectName.*";
+    private const string UrlPathTag = "url.path";
 
     /// <summary>注册三路信号的采集与 OTLP 导出；是否发送、发到哪由 <see cref="TelemetryExportOptions"/> 在发送时决定。</summary>
     /// <remarks>
@@ -67,7 +68,15 @@ public static class TelemetryExtensions
                 .AddOtlpExporter())
             .WithTracing(tracing => tracing.AddSource(ProjectSourcePattern)
                 .AddAspNetCoreInstrumentation(options =>
-                    options.Filter = context => !context.Request.Path.StartsWithSegments("/api/health"))
+                {
+                    options.Filter = context => !context.Request.Path.StartsWithSegments("/api/health");
+                    // 响应阶段端点已确定，且在检测写完 url.path 之后执行：路径含机密的端点只记路由模板
+                    options.EnrichWithHttpResponse = (activity, response) =>
+                    {
+                        if (SensitiveRouteMetadata.SensitiveRouteTemplate(response.HttpContext) is { } route)
+                            activity.SetTag(UrlPathTag, response.HttpContext.Request.PathBase.Value + route);
+                    };
+                })
                 .AddHttpClientInstrumentation()
                 .AddOtlpExporter());
 

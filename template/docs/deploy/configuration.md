@@ -59,6 +59,12 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 - 模板为 `Microsoft.AspNetCore.HttpLogging` 单列了 `Information`，全局级别调到 `Warning` 不影响请求完成日志；要少记普通请求用上面的开关。
 - 把 `Microsoft.AspNetCore.HttpLogging` 类别调到 `Warning` 或 `None` 会关掉全部请求完成日志，包括 5xx。
 
+路径机密：端点声明 `WithSensitiveRoute()` 后，请求完成日志与追踪的 `url.path` 只记路由模板（见[后端规范 §7](../standards/coding-backend.md#7-异常与日志)）。另需部署侧保证：
+
+- `Microsoft.AspNetCore.Hosting.Diagnostics` 保持 `None`：它的请求作用域会把原始路径带进每条日志；代价是启动异常不经 ILogger 输出，只写 stderr。
+- 生产不开 `Microsoft.AspNetCore.Routing`、`Microsoft.AspNetCore.Mvc` 的 Debug，它们记录原始路径与路由值。
+- 网关、ingress 的访问日志由部署侧对这些路径另行脱敏。
+
 ## 遥测导出
 
 Api 采集 ASP.NET Core、HttpClient 与 .NET 运行时的指标和追踪，以及全部 `ILogger` 日志；三路信号经 OTLP（协议固定 `http/protobuf`）推送到同一个基地址，各信号追加 `/v1/logs`、`/v1/metrics`、`/v1/traces`。日志记录带当前追踪的 TraceId/SpanId，可在观测平台里与追踪互跳。DbMigrator 不接遥测。
