@@ -16,7 +16,7 @@
 
 - 槽位（`full`、`short`、`date`、`time`、`monthDayTime`、`monthDay`）由调用点按用途定；locale 取当前界面语言，不由时区推导。精度与格式串不做成设置项，语种写法差异加在管道的 `WRITING_OVERRIDES`。图表坐标轴、区间按钮等非模板调用方用同一个 `formatAppDate`，不另写日期格式。
 - 时刻落在展示时区的哪一天用 `zonedCalendarDate`，日历日加减用 `addCalendarDays`；"刚刚 / N 分钟前 / 昨天 / N 天前"这类相对时间用 `shared/utils/relative-time` 的 `formatRelativeTime`（需要词条的种类交给模板翻译）。
-- 业务数字用 `appNumber` 管道（非模板调用方用同一个 `formatAppNumber`）：`integer` 带千分位，`compact` 写大数（完整整数放进提示），`change` 写变化率，输入是比例（0.29 → `+29%`），乘 100 只在格式化处发生。locale 同样取界面语言；不在组件里直接 new `Intl.NumberFormat`。词条里的数字先格式化再作为参数传入。
+- 业务数字用 `appNumber` 管道（非模板调用方用同一个 `formatAppNumber`）：`integer` 带千分位，`compact` 写大数（完整整数放进提示），`change` 写变化率，`percent` 写占比（最多一位小数），`share` 写需保留原精度的份额（持股比例等，最多两位小数）；三者输入都是比例（0.29 → `+29%`），乘 100 只在格式化处发生。locale 同样取界面语言；不在组件里直接 new `Intl.NumberFormat`。词条里的数字先格式化再作为参数传入。
 - 时区候选项按"能否真的渲染"判定，不用 `Intl.supportedValuesOf('timeZone')` 过滤（它只列规范名，`UTC`、`Asia/Kolkata` 等可用值不在其中）。
 - **相对时间**（「刚刚」「N 分钟前」「N 小时前」「昨天 HH:mm」「N 天前」）只用在扫一眼即可的近期列表，按展示时区的日历日分档，一周以前只写日期（今年省略年份）；完整时刻放进 Tooltip，元素可键盘聚焦。审计、详情等需要对时的位置写绝对时间。
 
