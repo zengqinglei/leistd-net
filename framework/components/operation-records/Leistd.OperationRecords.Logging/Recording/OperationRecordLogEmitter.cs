@@ -48,24 +48,25 @@ internal sealed class OperationRecordLogEmitter(ILoggerFactory loggerFactory)
             record.Id);
     }
 
-    // 失败参数是 OperationFailure 写出的扁平 JSON 对象；解析不了时不记，也不回落到原文
-    private static string[] DataKeys(string? failureData)
+    // 失败参数是 OperationFailure 写出的扁平 JSON 对象；没有参数或解析不了时为空串，也不回落到原文。
+    // 写成逗号连接的字符串而不是数组：JSON 控制台格式对非标量只调用 ToString()，数组会变成类型名。
+    private static string DataKeys(string? failureData)
     {
         if (string.IsNullOrEmpty(failureData))
         {
-            return [];
+            return string.Empty;
         }
 
         try
         {
             using var document = JsonDocument.Parse(failureData);
             return document.RootElement.ValueKind == JsonValueKind.Object
-                ? [.. document.RootElement.EnumerateObject().Select(property => property.Name)]
-                : [];
+                ? string.Join(',', document.RootElement.EnumerateObject().Select(property => property.Name))
+                : string.Empty;
         }
         catch (JsonException)
         {
-            return [];
+            return string.Empty;
         }
     }
 

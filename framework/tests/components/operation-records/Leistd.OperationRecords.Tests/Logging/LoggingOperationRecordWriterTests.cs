@@ -17,6 +17,7 @@ using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.Security;
 using Leistd.TestBase.Assertions;
+using Leistd.TestBase.Doubles;
 using Leistd.Timing;
 using Leistd.Tracing;
 using Leistd.UnitOfWork;
@@ -25,6 +26,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
@@ -219,6 +221,7 @@ public sealed class LoggingOperationRecordWriterTests
             Assert.Equal(LogLevel.Warning, record.Level);
             Assert.Equal(OperationRecordLogging.FailedEventId, record.Id.Id);
             Assert.Equal("User:NameTaken", Field(record, "OperationFailureCode"));
+            Assert.Equal("", Field(record, "OperationFailureDataKeys"));
 
             await uow.RollbackAsync();
         }
@@ -226,12 +229,17 @@ public sealed class LoggingOperationRecordWriterTests
         Assert.Single(Records(logs));
     }
 
-    /// <summary>失败参数只记参数名：它是词条占位的原值，可能含提交者的邮箱，联系方式不进日志。</summary>
+    /// <summary>
+    /// 失败参数只记参数名：它是词条占位的原值，可能含提交者的邮箱，联系方式不进日志。
+    /// 参数名逗号连接成字符串，JSON 控制台格式对数组只输出类型名。
+    /// </summary>
     [Fact]
     public async Task A_failed_record_logs_parameter_names_but_not_their_values()
     {
         const string email = "zhang.san@example.com";
-        await using var provider = Build();
+        const string phone = "13800000000";
+        using var jsonConsole = new ConsoleFormatterCapture(ConsoleFormatterNames.Json);
+        await using var provider = Build(logging => logging.AddProvider(jsonConsole));
         var logs = provider.GetFakeLogCollector();
 
         using var scope = provider.CreateScope();
@@ -239,12 +247,15 @@ public sealed class LoggingOperationRecordWriterTests
             "user.created",
             OperationTarget.For("u-1", "Ada"),
             "App.Users.Create",
-            OperationFailure.FromCode("User:EmailTaken", new Dictionary<string, object?> { ["Email"] = email }));
+            OperationFailure.FromCode("User:EmailTaken", new Dictionary<string, object?> { ["Email"] = email, ["Phone"] = phone }));
 
         var record = Assert.Single(Records(logs));
-        Assert.Equal("""["Email"]""", Field(record, "OperationFailureDataKeys"));
+        Assert.Equal("Email,Phone", Field(record, "OperationFailureDataKeys"));
+        Assert.Contains("\"OperationFailureDataKeys\":\"Email,Phone\"", jsonConsole.Output, StringComparison.Ordinal);
         Assert.DoesNotContain(email, record.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(phone, record.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(record.StructuredState!, pair => pair.Value?.Contains(email, StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(record.StructuredState!, pair => pair.Value?.Contains(phone, StringComparison.Ordinal) == true);
     }
 
     /// <summary>记录在调用时冻结：提交之前上下文变了（切回宿主、换了链路），写出的仍是记录当时的事实。</summary>
