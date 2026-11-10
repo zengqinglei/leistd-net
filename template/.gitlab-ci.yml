@@ -57,6 +57,9 @@ verify:
       variables:
         CACHE_POLICY: pull-push
   before_script:
+    # Ubuntu 源改走 HTTPS：部分 Runner 的 IPv6 出口到 archive.ubuntu.com:80 不通，HTTPS 不受影响；包本身仍按签名校验。
+    # 之后的 apt 调用（NodeSource、Playwright --with-deps）都读这份源
+    - sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources
     - apt-get update
     - apt-get install -y --no-install-recommends python3
 #if (SpaFrontend)

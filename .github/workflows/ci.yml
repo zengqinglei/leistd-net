@@ -368,7 +368,8 @@ jobs:
     needs: quality-plan
     if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['template-generation'] && fromJSON(needs.quality-plan.outputs.validation_plan).QualityExecution != 'reuse'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 第 0 片近期稳定在 19.5–20 分钟（427 个形态），20 分钟上限会在上传证明产物时取消作业
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
