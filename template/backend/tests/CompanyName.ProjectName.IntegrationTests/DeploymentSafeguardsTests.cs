@@ -82,12 +82,13 @@ public sealed class DeploymentSafeguardsTests
             Assert.Equal(
                 Path.GetFullPath(keysPath),
                 Path.GetFullPath(Assert.IsType<FileSystemXmlRepository>(repository).Directory.FullName));
-            Assert.NotEmpty(Directory.GetFiles(keysPath, "key-*.xml"));
+            Assert.NotEmpty(new DirectoryInfo(keysPath).GetFiles("key-*.xml"));
         }
         finally
         {
-            if (Directory.Exists(keysPath))
-                Directory.Delete(keysPath, recursive: true);
+            var keys = new DirectoryInfo(keysPath);
+            if (keys.Exists)
+                keys.Delete(recursive: true);
         }
     }
 #if (SpaFrontend)

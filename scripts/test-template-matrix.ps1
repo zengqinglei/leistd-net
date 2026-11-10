@@ -565,6 +565,8 @@ function Invoke-PureApiContainerSmoke([string]$Scenario, [string]$ApiImage, [str
         $apiArguments = @('run', '-d', '--name', $apiContainer, '--network', $network,
             '-p', "127.0.0.1:${port}:8080", '-e', 'ASPNETCORE_ENVIRONMENT=Development',
             '-e', "ConnectionStrings__Default=$connection", '-e', 'ConnectionStrings__Redis=',
+            # 不配 Redis 时密钥环要有可写目录：镜像以非 root 运行，内容根下的开发回落目录建不出来
+            '-e', 'DataProtection__KeysPath=/tmp/data-protection-keys',
             '-e', 'Authentication__Issuer=https://identity.matrix.test/')
         if ($scenarioMap[$Scenario].Arguments -contains 'Resource') {
             # Resource 回源 Identity 的机器身份与代表本人写偏好的交换目标在启动期校验；冒烟只探存活，不换令牌
