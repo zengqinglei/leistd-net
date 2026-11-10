@@ -24,7 +24,7 @@ public static class SensitiveRouteMetadata
     /// <summary>本请求命中的端点带标记时返回其路由模板（以 <c>/</c> 开头），否则为 <see langword="null"/>。</summary>
     /// <remarks>
     /// 模板取自追踪 <c>http.route</c> 的同一来源 <see cref="IRouteDiagnosticsMetadata"/>，只补齐开头的 <c>/</c>。
-    /// 全局异常处理在重新执行前清掉了端点，这时从 <see cref="IExceptionHandlerFeature"/> 取原端点，5xx 同样只记模板。
+    /// 全局异常处理在重新执行前清掉了端点，这时从 <see cref="IExceptionHandlerFeature"/> 取原端点，4xx 与 5xx 同样只记模板。
     /// </remarks>
     internal static string? SensitiveRouteTemplate(HttpContext context)
     {

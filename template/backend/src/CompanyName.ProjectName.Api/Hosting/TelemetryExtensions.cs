@@ -70,7 +70,7 @@ public static class TelemetryExtensions
                 .AddAspNetCoreInstrumentation(options =>
                 {
                     options.Filter = context => !context.Request.Path.StartsWithSegments("/api/health");
-                    // 响应阶段端点已确定，且在检测写完 url.path 之后执行：路径含机密的端点只记路由模板
+                    // 响应阶段端点已确定，且在检测写完 url.path 之后执行：路径含机密的端点只记路由模板。
                     options.EnrichWithHttpResponse = (activity, response) =>
                     {
                         if (SensitiveRouteMetadata.SensitiveRouteTemplate(response.HttpContext) is { } route)

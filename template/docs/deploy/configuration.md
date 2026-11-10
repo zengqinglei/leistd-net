@@ -61,7 +61,8 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 
 路径机密：端点声明 `WithSensitiveRoute()` 后，请求完成日志与追踪的 `url.path` 只记路由模板（见[后端规范 §7](../standards/coding-backend.md#7-异常与日志)）。另需部署侧保证：
 
-- `Microsoft.AspNetCore.Hosting.Diagnostics` 保持 `None`：它的请求作用域会把原始路径带进每条日志；代价是启动异常不经 ILogger 输出，只写 stderr。
+- `Microsoft.AspNetCore.Hosting.Diagnostics` 保持 `None`：它的请求作用域会把原始路径带进每条日志。代价是该类别的日志全部关闭，包括 Web 宿主自己的启动异常日志；通用宿主仍以 Error 记录启动失败，异常照常抛出并由运行时输出，启动完成前 OTLP 不发送。
+- 保护只在请求选中带声明的端点时生效：方法不符（如对只收 POST 的地址发 GET）时路由可能选中框架的 405 拒绝端点，它不带声明，原始路径照常记录。网关对这类路径限制请求方法。
 - 生产不开 `Microsoft.AspNetCore.Routing`、`Microsoft.AspNetCore.Mvc` 的 Debug，它们记录原始路径与路由值。
 - 网关、ingress 的访问日志由部署侧对这些路径另行脱敏。
 
