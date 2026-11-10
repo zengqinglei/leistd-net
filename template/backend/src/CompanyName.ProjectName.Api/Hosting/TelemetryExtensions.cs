@@ -38,9 +38,10 @@ public static class TelemetryExtensions
                 options.Protocol = OtlpExportProtocol.HttpProtobuf;
                 options.Headers = null;
                 var timeout = TimeSpan.FromMilliseconds(options.TimeoutMilliseconds);
+                // 与 SDK 默认客户端一致不跟随重定向：跟随会把 POST 改成 GET，落到登录页的 200 被当成导出成功
                 options.HttpClientFactory = () => new HttpClient(new TelemetryExportHandler(export, gate)
                 {
-                    InnerHandler = new SocketsHttpHandler()
+                    InnerHandler = new SocketsHttpHandler { AllowAutoRedirect = false }
                 })
                 {
                     Timeout = timeout

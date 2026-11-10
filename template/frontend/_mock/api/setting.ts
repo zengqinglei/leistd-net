@@ -214,6 +214,43 @@ function assertValidValue(definition: MockSettingDefinition, value: string | nul
       });
     }
   }
+
+  // 与后端的遥测导出校验一致：基地址是绝对 http/https 地址、不带查询串与片段（发送层在其后追加 /v1/{signal}）
+  if (name === 'Telemetry.Export.Endpoint' && !isHttpBaseAddress(value)) {
+    throw new MockException(400, {
+      code: 'AppSetting:TelemetryEndpointInvalid',
+      message: `'${value}' is not an absolute http or https address.`,
+    });
+  }
+
+  // 认证头按 OTEL_EXPORTER_OTLP_HEADERS 的格式：逗号分隔的 name=value，字段名是 HTTP token；机密值不回显
+  if (name === 'Telemetry.Export.Headers' && !isHeaderList(value)) {
+    throw new MockException(400, {
+      code: 'AppSetting:TelemetryHeadersInvalid',
+      message: 'The headers must be comma-separated name=value pairs.',
+    });
+  }
+}
+
+function isHttpBaseAddress(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+function isHeaderList(value: string): boolean {
+  return (
+    value.trim().length > 0 &&
+    value.split(',').every((pair) => {
+      const separator = pair.indexOf('=');
+      return (
+        separator > 0 && /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/.test(pair.slice(0, separator).trim())
+      );
+    })
+  );
 }
 
 //#if (IncludeNotifications)

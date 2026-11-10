@@ -73,7 +73,7 @@ Api 采集 ASP.NET Core、HttpClient 与 .NET 运行时的指标和追踪，以�
 | `OTEL_SERVICE_NAME` | 服务名；不配时取工作负载身份 `Leistd:ServiceAuth:ClientId`，再不配取 Api 程序集名，三路一致 |
 
 - 只支持"一个基地址、按信号追加路径"；各信号地址完全不同的平台经 Collector 接入。`OTEL_EXPORTER_OTLP_PROTOCOL` 与 `OTEL_EXPORTER_OTLP_{LOGS,METRICS,TRACES}_*` 不生效。
-- 未启用时照常采集与序列化，只在发送前丢弃，有少量 CPU 开销；宿主启动完成之前产生的遥测同样丢弃（那时系统设置还没加载），控制台日志不受影响。
+- 未启用时照常采集与序列化，只在发送前丢弃，有少量 CPU 开销；宿主启动完成之前的发送尝试就地丢弃（那时系统设置还没加载），启动前进入批队列、启动后才发送的数据照常按发送时的配置处理；控制台日志不受影响。
 - 改设置后本实例的下一次导出即用新值，其他副本按宿主设置的刷新周期跟上。
 - 有 Collector 的部署推荐把平台 Key 配在 Collector，应用只连集群内的 Collector。
 

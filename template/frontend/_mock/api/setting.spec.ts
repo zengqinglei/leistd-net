@@ -164,6 +164,49 @@ describe('settings mock', () => {
     expect(JSON.stringify(rows)).not.toContain('secret-a');
   });
 
+  // 与后端的遥测导出校验同一组正反例：拒绝时不落库，认证头的值不出现在错误里
+  it.each([
+    ['Telemetry.Export.Endpoint', 'collector:4318', 'AppSetting:TelemetryEndpointInvalid'],
+    ['Telemetry.Export.Endpoint', 'ftp://collector', 'AppSetting:TelemetryEndpointInvalid'],
+    [
+      'Telemetry.Export.Endpoint',
+      'http://collector:4318/?key=secret',
+      'AppSetting:TelemetryEndpointInvalid',
+    ],
+    ['Telemetry.Export.Headers', 'x-api-key', 'AppSetting:TelemetryHeadersInvalid'],
+    ['Telemetry.Export.Headers', '=secret', 'AppSetting:TelemetryHeadersInvalid'],
+    ['Telemetry.Export.Headers', 'bad name=secret', 'AppSetting:TelemetryHeadersInvalid'],
+    ['Telemetry.Export.Headers', 'x-a=1,,x-b=2', 'AppSetting:TelemetryHeadersInvalid'],
+  ])('rejects %s = %s', (name, value, code) => {
+    signIn('user_admin');
+    let rejection: MockException | undefined;
+    try {
+      api[putTenant](request({ name, value }));
+    } catch (error: unknown) {
+      if (!(error instanceof MockException)) throw error;
+      rejection = error;
+    }
+
+    expect(rejection?.status).toBe(400);
+    expect(rejection?.error.code).toBe(code);
+    if (name === 'Telemetry.Export.Headers') {
+      expect(JSON.stringify(rejection?.error)).not.toContain(value);
+    }
+    expect(TENANT_SETTING_VALUES.size).toBe(0);
+  });
+
+  it.each([
+    ['Telemetry.Export.Endpoint', 'http://collector:4318'],
+    ['Telemetry.Export.Endpoint', 'https://otlp.example.com/tenant-a/otlp/'],
+    ['Telemetry.Export.Headers', 'x-api-key=A, x-tenant=one%20two'],
+    ['Telemetry.Export.Endpoint', null],
+    ['Telemetry.Export.Headers', null],
+  ])('accepts %s = %s', (name, value) => {
+    signIn('user_admin');
+
+    expect(statusOf(() => api[putTenant](request({ name, value })))).toBe(200);
+  });
+
   //#if (IncludeMultiTenancy)
   // 用户级覆盖按 `{tenant}:u:{userId}` 隔离；租户随登录一起定案，之后请求头改不动它。
   it('keeps overrides separate per tenant', () => {

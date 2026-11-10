@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -192,6 +194,54 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     }
 
     // 部署值经 UseSetting 注入：导出开关的部署基线在注册阶段求值
+    /// <summary>
+    /// 与 SDK 默认客户端一致不跟随重定向：跟随会把 POST 改成 GET，落到登录页的 200 被当成导出成功，
+    /// 数据实际没到 Collector。
+    /// </summary>
+    [Fact]
+    public async Task Redirects_from_the_endpoint_are_not_followed()
+    {
+        using var receiver = new OtlpReceiver(redirectSignals: true);
+        using var host = Host(new() { [TelemetryExportOptions.EndpointKey] = receiver.BaseAddress });
+        await ClearAsync(host);
+
+        host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("CompanyName.ProjectName.TelemetryExportTests")
+            .LogWarning("Telemetry redirect probe");
+        host.Services.GetRequiredService<LoggerProvider>().ForceFlush();
+
+        Assert.Contains("/v1/logs", receiver.Requests.Select(request => request.Path));
+        Assert.DoesNotContain("/login", receiver.Requests.Select(request => request.Path));
+    }
+
+    /// <summary>
+    /// 构建导出管道不得解析宿主生命周期：日志工厂构建期间解析会经日志依赖重入，得到第二个实例，
+    /// 停机信号停掉的不是 <c>app.Run()</c> 等待的那个，进程收到 SIGTERM 后不退出。
+    /// 用带默认日志与控制台生命周期的真实宿主核对：容器里的生命周期就是宿主通知启动的那个，发送门槛随之打开。
+    /// </summary>
+    [Fact]
+    public async Task The_host_lifetime_is_a_single_instance_and_opens_the_export_gate()
+    {
+        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Configuration = new ConfigurationManager()
+        });
+        builder.AddMyProjectTelemetry();
+        using var app = builder.Build();
+        var gate = app.Services.GetRequiredService<TelemetryExportGate>();
+        Assert.False(gate.IsOpen);
+
+        await app.StartAsync(CancellationToken.None);
+        try
+        {
+            Assert.True(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested);
+            Assert.True(gate.IsOpen);
+        }
+        finally
+        {
+            await app.StopAsync(CancellationToken.None);
+        }
+    }
+
     private WebApplicationFactory<Program> Host(Dictionary<string, string?> deployment, StartupFlushProbe? probe = null)
         => factory.WithWebHostBuilder(builder =>
         {
@@ -298,9 +348,12 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     {
         private readonly HttpListener listener = new();
         private readonly ConcurrentQueue<ReceivedRequest> requests = new();
+        private readonly bool redirectSignals;
 
-        public OtlpReceiver()
+        // redirectSignals：信号路径一律回 302 到 /login，模拟 Collector 前的登录网关
+        public OtlpReceiver(bool redirectSignals = false)
         {
+            this.redirectSignals = redirectSignals;
             var probe = new TcpListener(IPAddress.Loopback, 0);
             probe.Start();
             var port = ((IPEndPoint)probe.LocalEndpoint).Port;
@@ -336,7 +389,16 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
                 var headers = request.Headers.AllKeys.Where(key => key is not null).ToDictionary(
                     key => key!, key => request.Headers.GetValues(key) ?? [], StringComparer.OrdinalIgnoreCase);
                 requests.Enqueue(new ReceivedRequest(request.Url!.AbsolutePath, request.ContentType, headers));
-                context.Response.StatusCode = 200;
+                if (redirectSignals && request.Url!.AbsolutePath.StartsWith("/v1/", StringComparison.Ordinal))
+                {
+                    context.Response.StatusCode = 302;
+                    context.Response.RedirectLocation = "/login";
+                }
+                else
+                {
+                    context.Response.StatusCode = 200;
+                }
+
                 context.Response.Close();
             }
         }

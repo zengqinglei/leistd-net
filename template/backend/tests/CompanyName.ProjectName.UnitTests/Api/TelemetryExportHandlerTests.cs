@@ -93,7 +93,7 @@ public sealed class TelemetryExportHandlerTests
 
     /// <summary>请求里已有同名头时由当前值替换，不叠加。</summary>
     [Fact]
-    public async Task An_existing_header_with_the_same_name_is_replaced()
+    public void An_existing_header_with_the_same_name_is_replaced()
     {
         var (invoker, inner, _, _) = Create(new() { Enabled = true, Endpoint = "http://collector:4318", Headers = "x-api-key=current" });
         using var request = Request("traces");
