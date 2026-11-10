@@ -146,7 +146,7 @@ var cacheKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
 | 匿名请求提示 | `MultiTenancyOptions.HeaderName`（默认 `X-Tenant`）、`QueryStringParameterName`（默认 `tenant`） | 不可信，只对匿名请求生效，启用校验时须指向存在且启用的租户 |
 | Token Exchange | Token Exchange JWT 的租户 claim | 身份服务确认用户所属租户，资源端从同一主体解析 |
 
-`ICurrentTenant.Change` 在切换租户的同时打开日志作用域，键为 `TenantLogKeys.TenantId`（`leistd.tenantId`），切回宿主时值为 `null`：HTTP 解析、Hub 与后台任务的环境上下文、逐库作业等所有切换入口的日志都能按同一个键过滤。
+`ICurrentTenant.Change` 在切换租户的同时打开日志作用域，键为 `TenantLogKeys.TenantId`（`leistd.tenantId`），切回宿主时值为 `null`：HTTP 解析、Hub 与后台任务的环境上下文、逐库作业等所有切换入口的日志都能按同一个键过滤。日志提供程序打开 `IncludeScopes` 后按键值采集（JSON 控制台、OpenTelemetry 为结构化属性）；内置 Simple 控制台格式打印为 `leistd.tenantId:租户 Id`，宿主为 `leistd.tenantId:`。
 
 未解析出租户表示宿主上下文。启用校验时的响应按请求是否已认证分两档：
 
