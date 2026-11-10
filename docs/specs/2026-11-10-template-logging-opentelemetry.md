@@ -235,4 +235,26 @@ PR #258 让指标与追踪走 OpenTelemetry，日志仍是 Serilog，两套管�
 
 ## 4. 结果
 
-（实施后填写。）
+实施与验证（2026-11-10，Codex 代码审查前）：
+
+- **框架**：MultiTenancy 438、Tracing 44、OperationRecords 257、Settings 209 项单测通过；候选包 `1.2.3-local.20261110042021` 隔离消费通过。
+- **模板**：三个代表场景 Release 构建（警告即错误）与单测、真实 PostgreSQL 集成测试全部通过；最后一轮修改后重跑了其中两个场景：
+
+  | 场景 | 单测 | 集成测试 |
+  | --- | --- | --- |
+  | `identity-capabilities-05` | 263 | 627 |
+  | `resource-capabilities-03` | 154 | 159 |
+  | `identity-all-features` | 304 | 808 |
+
+  `identity-all-features` 是改 Data Protection 条件之前的结果，之后只重新构建。
+- **前端**：本地化开 377 项、关 290 项 spec 通过，lint、构建与 i18n 检查通过。
+- **静态检查**：`check-all.ps1` 50 道闸门通过；PR 选择器选出 6 个代表场景，`-GenerateOnly` 通过；模板包测试通过。
+- **端到端**：真实 Kestrel、PostgreSQL、Collector，Collector 前加一个记录路径与认证头的抓包代理。§1 逐条通过，另含 §3 的正常退出完成屏障：SIGTERM 后 0.1 秒退出，屏障前没有 `/v1/logs` 请求（反例），退出时冲刷出标记日志并被 Collector 接收。
+
+实施中偏离方案或补充的三处：
+
+- **Data Protection 改为所有形态注册**：机密的 OTLP 认证头在每种形态都存在，纯 API 且不含 Webhook 的 Resource 形态原先不注册持久密钥环，容器重建后密文解不开。
+- **发送门槛不依赖宿主生命周期**：导出器配置回调原先解析 `IHostApplicationLifetime`，而导出器在构建日志工厂时就创建，依赖注入重入后生成了第二个 `ApplicationLifetime`，进程收到 SIGTERM 后不退出（develop 基线正常）。改为无依赖的门闩单例，由托管服务在宿主启动时挂到 `ApplicationStarted` 上打开。集成测试替换了生命周期、端到端此前用强制结束，所以都没发现，是退出屏障验收暴露的。
+- **服务名的兜底**取 Api 程序集名，与 service-info 一致。
+
+证据见 `.tmp/logging-otel/e2e/evidence/`，不随仓库提交。
