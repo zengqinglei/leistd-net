@@ -32,6 +32,7 @@ import {
   setCoarsePointer,
   tapAt,
 } from '../../../../shared/utils/coarse-pointer.testing';
+import { SETTING_DEPENDENCIES, SettingDependency } from '../../setting-choices';
 import { SettingsPageState } from '../../settings-page-state';
 
 /** 日志级别的候选值，与后端定义的 `allowedValues` 一致：下拉的候选项只认后端下发的这一份。 */
@@ -1990,6 +1991,74 @@ describe('SettingSection appearance', () => {
     http.verify();
   });
 });
+/**
+ * 依赖子项按上级的未保存输入显隐：收起再展开时子项重新创建，它的字段错误与无效标记要跟着回来。
+ * 依赖表在用例里临时登记一条显式依赖。
+ */
+describe('SettingSection dependent row feedback', () => {
+  const dependencies = SETTING_DEPENDENCIES as Record<string, SettingDependency | undefined>;
+  let fixture: ComponentFixture<SettingSection>;
+
+  afterEach(() => {
+    for (const name of Object.keys(dependencies)) delete dependencies[name];
+    fixture.destroy();
+    vi.useRealTimers();
+  });
+
+  it.each([
+    { name: 'Probe.ChildFlag', kind: 'switch', isBoolean: true, defaultValue: 'true' },
+    { name: 'Display.TimeZone', kind: 'combobox', defaultValue: 'UTC' },
+  ])(
+    'keeps a rejected $kind child invalid after its text parent hides and shows it again',
+    async ({ kind, ...child }) => {
+      dependencies[child.name] = { parent: 'Probe.Mode', shownWhen: (mode) => mode === 'on' };
+      TestBed.configureTestingModule({
+        imports: [SettingSection],
+        providers: [...pageProviders()],
+      });
+      fixture = TestBed.createComponent(SettingSection);
+      fixture.componentRef.setInput('scope', 'system');
+      fixture.detectChanges();
+      const childRow = row(child);
+      TestBed.inject(HttpTestingController)
+        .expectOne('/api/v1/settings')
+        .flush([row({ name: 'Probe.Mode', defaultValue: null, tenantValue: 'on' }), childRow]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+        throwError(() => rejectedField('value', 'Rejected')),
+      );
+      const panel = fixture.componentInstance;
+      if (kind === 'switch') panel['onToggle'](childRow, 'system', false);
+      else panel['onSelect'](childRow, 'system', 'Asia/Tokyo');
+      await fixture.whenStable();
+      await vi.advanceTimersByTimeAsync(400);
+      fixture.detectChanges();
+      expect(document.getElementById(child.name)?.getAttribute('aria-invalid')).toBe('true');
+
+      const parent = document.getElementById('Probe.Mode') as HTMLInputElement;
+      parent.value = 'off';
+      parent.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(document.getElementById(child.name)).toBeNull();
+      parent.value = 'on';
+      parent.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const control = document.getElementById(child.name)!;
+      expect(control.getAttribute('aria-invalid')).toBe('true');
+      expect(control.getAttribute('aria-describedby')?.split(' ')).toEqual([
+        `${child.name}-description`,
+        `${child.name}-error`,
+      ]);
+      expect(document.getElementById(`${child.name}-error`)?.textContent?.trim()).toBe('Rejected');
+    },
+  );
+});
+
 /** 候选项来自后端的 allowedValues，文案按声明表的词条前缀取，缺词条显示原值。 */
 describe('SettingSection value labels', () => {
   it('labels backend candidates by the registered prefix and shows a value without an entry as is', async () => {
@@ -2328,12 +2397,16 @@ describe('SettingSection row validation', () => {
     expect(field.hasAttribute('aria-invalid')).toBe(false);
   });
 
-  /** 提交一次文本框的值，再输入一个新值但不提交（不触发 change）。 */
-  function submitThenRetype(field: HTMLInputElement, submitted: string, retyped: string): void {
-    field.value = submitted;
+  /** 提交一次文本框的值（input 后 change）。 */
+  function submit(field: HTMLInputElement, value: string): void {
+    field.value = value;
     field.dispatchEvent(new Event('input'));
     field.dispatchEvent(new Event('change'));
-    field.value = retyped;
+  }
+
+  /** 输入一个新值但不提交（不触发 change）。 */
+  function retype(field: HTMLInputElement, value: string): void {
+    field.value = value;
     field.dispatchEvent(new Event('input'));
   }
 
@@ -2346,14 +2419,21 @@ describe('SettingSection row validation', () => {
   // 拒绝已经回来、还在补足"保存中"的最短时长时用户改了输入：旧的拒绝说的不是新值
   it('does not attach a rejection to input typed while the failed save is still showing', async () => {
     const host = await render(row());
-    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
-      throwError(() => rejectedField('value', 'Not accepted')),
-    );
+    const put = vi
+      .spyOn(TestBed.inject(SettingService), 'setForCurrentTenant')
+      .mockReturnValue(throwError(() => rejectedField('value', 'Not accepted')));
     const field = host.querySelector<HTMLInputElement>('input')!;
 
-    submitThenRetype(field, 'draft', 'draft 2');
+    submit(field, 'draft');
     await fixture.whenStable();
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(100);
+    fixture.detectChanges();
+    // 拒绝已经回来，行上仍在显示"保存中"（补足最短时长）
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('hlm-spinner')).not.toBeNull();
+
+    retype(field, 'draft 2');
+    await vi.advanceTimersByTimeAsync(300);
     fixture.detectChanges();
 
     expectNoStaleRejection(field, 'draft 2');
@@ -2366,7 +2446,8 @@ describe('SettingSection row validation', () => {
     vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(response);
     const field = host.querySelector<HTMLInputElement>('input')!;
 
-    submitThenRetype(field, 'draft', 'draft 2');
+    submit(field, 'draft');
+    retype(field, 'draft 2');
     await fixture.whenStable();
     response.error(rejectedField('value', 'Not accepted'));
     await vi.advanceTimersByTimeAsync(400);
