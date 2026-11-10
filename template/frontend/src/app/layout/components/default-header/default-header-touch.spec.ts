@@ -1,6 +1,9 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+//#if (IncludeLocalization)
+import { of } from 'rxjs';
+//#endif
 import { page } from 'vitest/browser';
 
 import { DefaultHeader } from './default-header';
@@ -22,74 +25,23 @@ import { NotificationService } from '../../../core/services/notification-service
 import { ThemeService } from '../../../core/services/theme-service';
 import { expectTouchTarget, setCoarsePointer } from '../../../shared/utils/coarse-pointer.testing';
 
+const TITLE = 'Detail of an account with a very long registered company name';
+
 /**
- * 侧栏布局的页头在手机上的预算：右侧操作区的真实控件全开（通知 99+、模拟中、本地化）时，
- * 嵌套页面包屑的最近上级仍是一个完整的触屏目标；主题与语言在窄屏收起。
- * 切换工作空间这类上下文控件放在侧栏头部（default-sidebar），不放进页头右侧，否则 390px 下会把面包屑挤没。
+ * 侧栏布局的页头宽度预算：右侧操作区的真实控件全开（通知 99+、模拟中、本地化）时，
+ * 手机上嵌套页面包屑的最近上级仍是一个完整的触屏目标，主题与语言收起；
+ * 侧栏展开的中等视口里页头比视口窄，控件按页头宽度切换，面包屑首项不收缩、上级与当前页都留得住。
+ * 切换工作空间这类上下文控件放在侧栏头部（default-sidebar），不放进页头右侧，否则窄页头会把面包屑挤没。
  */
 describe('DefaultHeader on touch phones', () => {
-  const TITLE = 'Detail of an account with a very long registered company name';
-
   afterEach(() => setCoarsePointer(false));
 
   it('keeps the nearest breadcrumb parent a full touch target beside every header control', async () => {
     await setCoarsePointer(true);
     await page.viewport(390, 844);
     onTestFinished(() => page.viewport(1280, 800));
-    TestBed.configureTestingModule({
-      // prettier-ignore
-      providers: [
-        provideRouter([{ path: 'platform', children: [] }]),
-        // 操作区控件各自依赖会话与后端，只给渲染所需的定值替身；控件本身是真实组件
-        { provide: AuthService, useValue: { isAuthenticated: () => true, currentUser: signal({ id: 'u-1' }) } },
-        {
-          provide: AccountPreferencesService,
-          useValue: { timeZone: signal(null), displayLocale: signal('en') },
-        },
-        {
-          provide: ThemeService,
-          useValue: { mode: signal('system'), modeIcon: signal('lucideMonitor') },
-        },
-        //#if (IncludeNotifications)
-        // 未读数取最宽的「99+」角标
-        {
-          provide: NotificationService,
-          useValue: {
-            init: () => Promise.resolve(),
-            notifications: signal([]),
-            unreadCount: signal(120),
-            loading: signal(false),
-            loadFailed: signal(false),
-          },
-        },
-        //#endif
-        //#if (Impersonation)
-        {
-          provide: ImpersonationService,
-          useValue: {
-            status: signal({ isImpersonating: true, tenantName: 'Acme', impersonatorName: 'Admin' }),
-            notifyAfterRenderIfJustExited: () => undefined,
-          },
-        },
-        //#endif
-        //#if (IncludeLocalization)
-        {
-          provide: LanguageService,
-          useValue: { options: LANG_OPTIONS, currentMeta: signal(LANG_OPTIONS[0]), activeLang: signal('en') },
-        },
-        ...provideTranslocoTesting(),
-        //#endif
-      ],
-    });
-    await TestBed.inject(Router).navigateByUrl('/platform');
-    const layout = TestBed.inject(LayoutService);
-    layout.trail.set([{ label: 'Customer accounts', link: '/platform/parties' }]);
     // 当前页标题很长：上级与标题一起收缩时，上级也不能缩到触屏目标以下
-    layout.title.set(TITLE);
-    const fixture = TestBed.createComponent(DefaultHeader);
-    fixture.componentRef.setInput('layout', 'sidebar');
-    await fixture.whenStable();
-    const host = fixture.nativeElement as HTMLElement;
+    const host = (await renderHeader()).nativeElement as HTMLElement;
 
     // 前提：窄屏仍显示的操作区控件都已渲染并占位，否则下面的断言测不到挤压
     // prettier-ignore
@@ -140,4 +92,120 @@ describe('DefaultHeader on touch phones', () => {
     expect(container.clientWidth).toBeLessThanOrEqual(390);
     expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
   });
+
+  it('switches controls by header width so the breadcrumb stays readable beside an expanded sidebar', async () => {
+    await setCoarsePointer(true);
+    // 900 宽视口减去展开的侧栏（16rem）：视口断点全部成立，页头只有 636px
+    await page.viewport(900, 800);
+    onTestFinished(() => page.viewport(1280, 800));
+    // 上级很长、当前页较短：上级按内容宽度占大头，不设下限时当前页先被挤到一两个字
+    const fixture = await renderHeader(636, {
+      parent: 'Northwind Trading Company Limited Asia Pacific Holdings',
+      title: 'Contacts and addresses',
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    // 页头内容盒够宽时主题照常显示：断点按页头宽度，不是收进窄屏形态了事
+    const theme = host.querySelector('app-theme-mode-toggle button')!;
+    expect(theme.getBoundingClientRect().width).toBeGreaterThan(0);
+
+    // 首项不参与收缩、单行：参与收缩时被压到最小内容宽度，中文一字一行、英文一词一行
+    const home = host.querySelector<HTMLElement>('[data-slot="breadcrumb-item"]:first-child')!;
+    expect(getComputedStyle(home).flexShrink).toBe('0');
+    const homeLines = document.createRange();
+    homeLines.selectNodeContents(home.querySelector('a')!);
+    expect(new Set([...homeLines.getClientRects()].map((r) => Math.round(r.top))).size).toBe(1);
+
+    // 上级与当前页都在导航区内占位；上级先截断，当前页至少留约四个字
+    const nav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
+    const parent = host
+      .querySelector('[data-testid="breadcrumb-parent"] a')!
+      .getBoundingClientRect();
+    const title = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
+    expect(parent.width).toBeGreaterThan(0);
+    expect(title.width).toBeGreaterThanOrEqual(56);
+    expect(title.left).toBeGreaterThanOrEqual(parent.right);
+    expect(title.right).toBeLessThanOrEqual(nav.right + 0.5);
+
+    // 两级上级时首项后多一个省略号：各项下限之和逼近导航区，当前页仍不能被推出导航区裁掉
+    TestBed.inject(LayoutService).trail.update((trail) => [
+      { label: 'Customer accounts', link: '/platform/parties' },
+      ...trail,
+    ]);
+    await fixture.whenStable();
+    expect(host.querySelector('[data-testid="breadcrumb-more"]')).not.toBeNull();
+    const deepNav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
+    const deepTitle = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
+    expect(deepTitle.width).toBeGreaterThan(0);
+    expect(deepTitle.right).toBeLessThanOrEqual(deepNav.right + 0.5);
+
+    const container = host.querySelector<HTMLElement>('header > div')!;
+    expect(container.clientWidth).toBeLessThanOrEqual(636);
+    expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
+  });
 });
+
+/**
+ * 渲染侧栏布局的页头：真实操作区控件全开、嵌套页带一级上级；默认上级短、标题长。
+ * `width` 给页头宽度（侧栏展开后小于视口），不给时随视口。
+ */
+async function renderHeader(
+  width?: number,
+  crumbs = { parent: 'Customer accounts', title: TITLE },
+): Promise<ComponentFixture<DefaultHeader>> {
+  TestBed.configureTestingModule({
+    // prettier-ignore
+    providers: [
+      provideRouter([{ path: 'platform', children: [] }]),
+      // 操作区控件各自依赖会话与后端，只给渲染所需的定值替身；控件本身是真实组件
+      { provide: AuthService, useValue: { isAuthenticated: () => true, currentUser: signal({ id: 'u-1' }) } },
+      {
+        provide: AccountPreferencesService,
+        useValue: { timeZone: signal(null), displayLocale: signal('en') },
+      },
+      {
+        provide: ThemeService,
+        useValue: { mode: signal('system'), modeIcon: signal('lucideMonitor') },
+      },
+      //#if (IncludeNotifications)
+      // 未读数取最宽的「99+」角标
+      {
+        provide: NotificationService,
+        useValue: {
+          init: () => Promise.resolve(),
+          notifications: signal([]),
+          unreadCount: signal(120),
+          loading: signal(false),
+          loadFailed: signal(false),
+        },
+      },
+      //#endif
+      //#if (Impersonation)
+      {
+        provide: ImpersonationService,
+        useValue: {
+          status: signal({ isImpersonating: true, tenantName: 'Acme', impersonatorName: 'Admin' }),
+          notifyAfterRenderIfJustExited: () => undefined,
+        },
+      },
+      //#endif
+      //#if (IncludeLocalization)
+      {
+        provide: LanguageService,
+        useValue: { options: LANG_OPTIONS, currentMeta: signal(LANG_OPTIONS[0]), activeLang: signal('en') },
+      },
+      // 首项给可逐字断行的中文文案：键名回落是一个不可断的词，首项被压也不折行，测不出来
+      ...provideTranslocoTesting(['en'], { getTranslation: () => of({ 'menu.platform': '内部管理平台' }) }),
+      //#endif
+    ],
+  });
+  await TestBed.inject(Router).navigateByUrl('/platform');
+  const layout = TestBed.inject(LayoutService);
+  layout.trail.set([{ label: crumbs.parent, link: '/platform/parties' }]);
+  layout.title.set(crumbs.title);
+  const fixture = TestBed.createComponent(DefaultHeader);
+  fixture.componentRef.setInput('layout', 'sidebar');
+  if (width) fixture.nativeElement.style.cssText = `display:block;width:${width}px`;
+  await fixture.whenStable();
+  return fixture;
+}

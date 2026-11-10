@@ -10,9 +10,10 @@
     @if (layoutService.title(); as pageTitle) {
       <h1 class="sr-only" data-testid="page-heading">{{ pageTitle }}</h1>
     }
-    <!-- 顶栏布局的内容与正文同宽（max-w-7xl、同样的左右内边距），左右边缘与页面内容对齐 -->
+    <!-- 顶栏布局的内容与正文同宽（max-w-7xl、同样的左右内边距），左右边缘与页面内容对齐。
+         页头内容层是尺寸容器：侧栏展开时页头比视口窄，右侧控件按 @…/header 断点（页头内容宽度）切换，不按视口 -->
     <div
-      class="mx-auto flex h-full w-full items-center justify-between gap-2"
+      class="@container/header mx-auto flex h-full w-full items-center justify-between gap-2"
       [class]="layout() === 'topbar' ? 'max-w-7xl px-4 sm:px-6' : 'px-4 md:px-6'"
     >
       <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -40,14 +41,14 @@
 
       <div class="flex items-center gap-3">
         @if (layout() === 'topbar') {
-          <!-- 搜索入口：打开命令面板（⌘K / Ctrl+K）。窄屏收成图标按钮；页面自带搜索入口时不重复显示。 -->
+          <!-- 搜索入口：打开命令面板（⌘K / Ctrl+K）。页头窄时收成图标按钮；页面自带搜索入口时不重复显示。 -->
           @if (!layoutService.pageHasSearch()) {
             <button
               type="button"
               hlmBtn
               variant="outline"
               size="sm"
-              class="text-muted-foreground hidden w-56 justify-start font-normal md:inline-flex"
+              class="text-muted-foreground hidden w-56 justify-start font-normal @3xl/header:inline-flex"
               data-testid="topbar-search"
               (click)="commandPalette.open()"
             >
@@ -60,7 +61,7 @@
               hlmBtn
               variant="ghost"
               size="icon-sm"
-              class="md:hidden"
+              class="@3xl/header:hidden"
               [attr.aria-label]="t('layout.commandPalette.search')"
               (click)="commandPalette.open()"
             >
@@ -72,7 +73,7 @@
         <!--#if (Impersonation)-->
         <!-- 模拟登录状态常驻在顶栏：此刻的每次操作都记在租户账号上，必须一直可见，不用 toast 或 tooltip
              （tooltip 里不能放可点击的退出按钮）。配色用语义色 warning；用 secondary 变体，警示色前缀即可
-             覆盖亮暗两套底色。窄屏只留图标，完整说明与退出按钮在浮层里。 -->
+             覆盖亮暗两套底色。页头窄时只留图标，完整说明与退出按钮在浮层里。 -->
         @if (impersonation.status(); as impersonationStatus) {
           @if (impersonationStatus.isImpersonating) {
             <hlm-popover align="end" sideOffset="10">
@@ -92,7 +93,7 @@
                 "
               >
                 <ng-icon name="lucideVenetianMask" />
-                <span class="hidden truncate sm:inline">{{
+                <span class="hidden truncate @3xl/header:inline">{{
                   t('impersonation.badge', { tenant: impersonationStatus.tenantName })
                 }}</span>
               </button>
@@ -121,8 +122,8 @@
           }
         }
         <!--#endif-->
-        <!-- 窄屏页头只留通知与模拟状态，主题与语言在个人设置的偏好里改，给面包屑上级留出触屏目标 -->
-        <div class="hidden items-center gap-3 sm:flex">
+        <!-- 窄页头只留通知与模拟状态，主题与语言在个人设置的偏好里改，给面包屑上级留出触屏目标 -->
+        <div class="hidden items-center gap-3 @lg/header:flex">
           <app-theme-mode-toggle />
           <!--#if (IncludeLocalization)-->
           <app-language-switcher />

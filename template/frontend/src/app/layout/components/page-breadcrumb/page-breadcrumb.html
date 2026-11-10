@@ -5,9 +5,11 @@
 <!--#endif-->
   <nav hlmBreadcrumb class="min-w-0 overflow-hidden" [aria-label]="t('layout.breadcrumb.label')">
     <!-- 单行：页头定高，折到第二行会被裁掉；放不下时上级与末级截断，截断时悬停或聚焦给全文。
+         首项与省略号不收缩（参与收缩会被压到最小内容宽度，中文一字一行）；上级收缩权重大，先截上级、末级留下其余宽度。
+         末级不设硬下限：省略号分支下各项下限之和会超过导航区，下限会把末级推出导航区被裁掉。
          触屏下链接与省略号补足44px（页头高56px，放得下） -->
     <ol hlmBreadcrumbList class="flex-nowrap">
-      <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+      <li hlmBreadcrumbItem class="hidden shrink-0 sm:inline-flex">
         <a
           hlmBreadcrumbLink
           class="inline-flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
@@ -17,7 +19,7 @@
       </li>
       @if (collapsed().length) {
         <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
-        <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+        <li hlmBreadcrumbItem class="hidden shrink-0 sm:inline-flex">
           <button
             type="button"
             class="hover:text-foreground focus-visible:ring-ring/50 inline-flex items-center justify-center rounded-sm outline-none focus-visible:ring-3 pointer-coarse:size-11"
@@ -40,7 +42,7 @@
         <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
         <li
           hlmBreadcrumbItem
-          class="min-w-0 shrink pointer-coarse:min-w-11"
+          class="min-w-0 shrink-4 pointer-coarse:min-w-11"
           data-testid="breadcrumb-parent"
         >
           <a
