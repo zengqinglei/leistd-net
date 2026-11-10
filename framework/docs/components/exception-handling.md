@@ -105,8 +105,8 @@ if (order.Status == OrderStatus.Shipped)
 
 响应字段 `traceId` 是当前 `Activity.Id`（W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，取第二段检索；没有 Activity 时为 `HttpContext.TraceIdentifier`），不被关联标识覆盖；
 异常日志记下同一个值。业务层面的关联标识见[关联标识](./tracing.md)，它在响应头 `X-Correlation-Id` 与日志作用域里。
-预期的 4xx 记 Warning，只有 `TraceId`、`StatusCode`、`Code`、异常类型与路径；不记 `detail`、默认文案与参数，也不附带异常对象。
-`detail` 面向提交请求的人，可能回显其输入。`traceId` 把日志与响应、请求链路对上；端点有操作记录时，按日志作用域与响应头里的关联标识（见[关联标识](./tracing.md)）对上审计内容。5xx 记 Error 并保留异常链与堆栈。
+预期的 4xx 记 Warning，只有 `TraceId`、`StatusCode`、`Code`、异常类型与 `Route`（匹配到的端点路由模板，未匹配时为空；不记原始路径，路径段可能是机密）；不记 `detail`、默认文案与参数，也不附带异常对象。
+`detail` 面向提交请求的人，可能回显其输入。`traceId` 把日志与响应、请求链路对上；端点有操作记录时，按日志作用域与响应头里的关联标识（见[关联标识](./tracing.md)）对上审计内容。5xx 记 Error，同样带 `Route`，并保留异常链与堆栈。
 
 ## 诊断与遥测
 

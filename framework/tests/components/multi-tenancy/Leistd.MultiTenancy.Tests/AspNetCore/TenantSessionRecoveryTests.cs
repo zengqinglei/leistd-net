@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
@@ -81,16 +82,37 @@ public sealed class TenantSessionRecoveryTests
         await Assert.ThrowsAsync<TenantNotFoundException>(() => host.GetTestClient().GetAsync("/api/data"));
     }
 
+    /// <summary>恢复日志记路由模板而不是原始路径（路径段可能是机密）；未匹配端点时为空。</summary>
+    [Theory]
+    [InlineData("/api/hooks/{routeKey}", "/api/hooks/rk7f3c2a9e", "/api/hooks/{routeKey}")]
+    [InlineData(null, "/api/hooks/rk7f3c2a9e", null)]
+    public async Task The_recovery_log_records_the_route_template_not_the_raw_path(string? route, string path, string? expected)
+    {
+        using var host = await StartAsync(tenantClaim: true, failure: new TenantNotActiveException("acme"), route: route);
+
+        var response = await host.GetTestClient().GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var record = Assert.Single(host.Services.GetFakeLogCollector().GetSnapshot(),
+            log => log.Message.StartsWith("Recovered a session", StringComparison.Ordinal));
+        Assert.Contains(record.StructuredState!, pair => pair.Key == "Route");
+        Assert.Equal(expected, record.GetStructuredStateValue("Route"));
+        Assert.DoesNotContain("rk7f3c2a9e", record.Message, StringComparison.Ordinal);
+    }
+
     private static async Task<IHost> StartAsync(
         bool tenantClaim,
         Exception failure,
         string tenantClaimType = CustomClaimTypes.TenantId,
         string? tenantClaimValue = null,
-        bool anonymousFirst = false)
+        bool anonymousFirst = false,
+        string? route = null)
         => await new HostBuilder()
             .ConfigureWebHost(web => web
                 .UseTestServer()
                 .ConfigureServices(services => services
+                    .AddFakeLogging()
+                    .AddRouting()
                     .Configure<ClaimTypeOptions>(options => options.TenantId = tenantClaimType)
                     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                     .AddCookie(options => options.Cookie.Name = "session"))
@@ -111,8 +133,17 @@ public sealed class TenantSessionRecoveryTests
                             : new ClaimsPrincipal(authenticated);
                         return next(context);
                     });
+                    // 宿主管道里路由在恢复中间件之前：匹配到的端点此时已确定
+                    if (route is not null)
+                        app.UseRouting();
                     app.UseTenantSessionRecovery(options => options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme);
-                    app.Run(_ => throw failure);
+                    if (route is null)
+                    {
+                        app.Run(_ => throw failure);
+                        return;
+                    }
+
+                    app.UseEndpoints(endpoints => endpoints.MapGet(route, () => { throw failure; }));
                 }))
             .StartAsync();
 }

@@ -6,6 +6,7 @@ using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -146,18 +147,21 @@ public sealed class BusinessExceptionHandler(
     {
         // 与问题详情里官方写出的 traceId 同值（W3C 格式，第二段是链路 TraceId），按响应里的值就能搜到这条日志
         var traceId = Activity.Current?.Id ?? httpContext.TraceIdentifier;
+        // 记路由模板而不是原始路径：路径段可能是机密（回调地址里的路由键）。重新执行前端点已被清除，从异常特性取原端点；未匹配为 null。
+        var route = ((httpContext.GetEndpoint() ?? httpContext.Features.Get<IExceptionHandlerFeature>()?.Endpoint) as RouteEndpoint)
+            ?.RoutePattern.RawText;
         if (descriptor.LogLevel >= LogLevel.Error)
         {
             logger.Log(
                 descriptor.LogLevel,
                 exception,
                 "Unhandled exception: TraceId={TraceId}, StatusCode={StatusCode}, Code={Code}, " +
-                "ExceptionType={ExceptionType}, Path={Path}",
+                "ExceptionType={ExceptionType}, Route={Route}",
                 traceId,
                 descriptor.StatusCode,
                 descriptor.Code,
                 exception.GetType().Name,
-                httpContext.Request.Path);
+                route);
             return;
         }
 
@@ -166,11 +170,11 @@ public sealed class BusinessExceptionHandler(
         logger.Log(
             descriptor.LogLevel,
             "Expected exception: TraceId={TraceId}, StatusCode={StatusCode}, Code={Code}, " +
-            "ExceptionType={ExceptionType}, Path={Path}",
+            "ExceptionType={ExceptionType}, Route={Route}",
             traceId,
             descriptor.StatusCode,
             descriptor.Code,
             exception.GetType().Name,
-            httpContext.Request.Path);
+            route);
     }
 }

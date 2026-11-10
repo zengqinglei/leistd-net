@@ -4,6 +4,7 @@ using Leistd.MultiTenancy.Exceptions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -37,11 +38,12 @@ internal sealed class TenantSessionRecoveryMiddleware(
                 await context.SignOutAsync(scheme);
             }
 
-            // 注销的成因是"租户没了"而不是"会话过期"，日志里必须能分开
+            // 注销的成因是"租户没了"而不是"会话过期"，日志里必须能分开。
+            // 记路由模板而不是原始路径（路径段可能是机密），未匹配端点时为 null。
             logger.LogInformation(
-                "Recovered a session whose tenant is no longer available ({Reason}) on {Path}",
+                "Recovered a session whose tenant is no longer available ({Reason}) on {Route}",
                 exception.GetType().Name,
-                context.Request.Path);
+                (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText);
 
             context.Response.Headers[options.TenantInvalidHeader] = "1";
 

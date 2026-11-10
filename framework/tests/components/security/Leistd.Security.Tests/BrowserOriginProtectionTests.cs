@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -145,11 +146,28 @@ public sealed class BrowserOriginProtectionTests
         Assert.Contains("AddBrowserOriginProtection", error.Message);
     }
 
+    /// <summary>拒绝日志记匹配到的路由模板而不是原始路径（路径段可能是机密路由键）。</summary>
+    [Fact]
+    public async Task The_rejection_log_records_the_route_template_not_the_raw_path()
+    {
+        const string secret = "rk7f3c2a9e";
+        await using var app = await StartAsync();
+        using var response = await SendAsync(app, HttpMethod.Post, $"/api/hooks/{secret}", "Origin", "https://untrusted.test");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var record = Assert.Single(app.Services.GetFakeLogCollector().GetSnapshot(),
+            log => log.Message.StartsWith("Browser request rejected", StringComparison.Ordinal));
+        Assert.Equal("/api/hooks/{routeKey}", record.GetStructuredStateValue("Route"));
+        Assert.DoesNotContain(secret, record.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(record.StructuredState ?? [], pair => pair.Value?.Contains(secret, StringComparison.Ordinal) == true);
+    }
+
     private static async Task<WebApplication> StartAsync(Action<BrowserOriginProtectionOptions>? configure = null,
         Action<CorsPolicyBuilder>? cors = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
         builder.WebHost.UseTestServer();
+        builder.Services.AddFakeLogging();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Origins:WritePaths:0"] = "/api" });
         builder.Services.AddCors(options =>
         {
@@ -173,6 +191,7 @@ public sealed class BrowserOriginProtectionTests
         Assert.Same(app, app.UseBrowserOriginProtection());
         Assert.Same(app, app.UseBrowserOriginProtection());
         app.MapPost("/api/endpoint", () => Results.Ok()).RequireCors("endpoint");
+        app.MapPost("/api/hooks/{routeKey}", () => Results.Ok());
         app.MapPost("/api/disabled", () => Results.Ok()).WithMetadata(new Microsoft.AspNetCore.Cors.DisableCorsAttribute());
         app.MapPost("/api/inline", () => Results.Ok()).RequireCors(policy => policy.WithOrigins("https://inline.test").AllowCredentials());
         app.MapFallback(context => { context.Response.StatusCode = 200; return Task.CompletedTask; });

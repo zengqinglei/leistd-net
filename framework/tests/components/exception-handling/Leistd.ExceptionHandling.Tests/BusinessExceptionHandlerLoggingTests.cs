@@ -77,6 +77,27 @@ public sealed class BusinessExceptionHandlerLoggingTests
         Assert.DoesNotContain(Email, record.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>匹配到端点时记路由模板，原始路径（可能含机密路由键）不进日志：预期失败与 5xx 都一样。</summary>
+    [Theory]
+    [InlineData(false, LogLevel.Warning)]
+    [InlineData(true, LogLevel.Error)]
+    public async Task A_routed_failure_logs_the_route_template_not_the_raw_path(bool unhandled, LogLevel level)
+    {
+        const string secret = "rk7f3c2a9e";
+        using var host = await StartAsync(
+            unhandled ? () => new InvalidOperationException("Probe failure.") : () => new BusinessException(Code, SafeMessage),
+            route: "/hooks/{provider}/{routeKey}");
+
+        using var response = await host.GetTestClient().GetAsync($"/hooks/sendgrid/{secret}");
+
+        Assert.Equal(unhandled ? 500 : 400, (int)response.StatusCode);
+        var record = Assert.Single(HandlerRecords(host));
+        Assert.Equal(level, record.Level);
+        Assert.Equal("/hooks/{provider}/{routeKey}", record.GetStructuredStateValue("Route"));
+        Assert.DoesNotContain(secret, record.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(record.StructuredState ?? [], pair => pair.Value?.Contains(secret, StringComparison.Ordinal) == true);
+    }
+
     private static FakeLogRecord AssertExpectedLogIsDiagnosticOnly(IHost host)
     {
         var record = Assert.Single(HandlerRecords(host));
@@ -87,6 +108,9 @@ public sealed class BusinessExceptionHandlerLoggingTests
         Assert.Equal(nameof(BusinessException), record.GetStructuredStateValue("ExceptionType"));
         Assert.Null(record.GetStructuredStateValue("Message"));
         Assert.False(string.IsNullOrEmpty(record.GetStructuredStateValue("TraceId")));
+        // 未匹配端点：路由为空，不退回原始路径
+        Assert.Contains(record.StructuredState!, pair => pair.Key == "Route");
+        Assert.Null(record.GetStructuredStateValue("Route"));
 
         foreach (var logged in host.Services.GetFakeLogCollector().GetSnapshot())
         {
@@ -113,12 +137,15 @@ public sealed class BusinessExceptionHandlerLoggingTests
     private static async Task<IHost> StartAsync(
         Func<Exception> throwing,
         IStringLocalizer? localizer = null,
-        int? statusCode = null)
+        int? statusCode = null,
+        string? route = null)
         => await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
                 .ConfigureServices(services =>
                 {
                     services.AddFakeLogging();
+                    if (route is not null)
+                        services.AddRouting();
                     if (localizer is not null)
                         services.AddSingleton(localizer);
                     services.AddGlobalExceptionHandler(options =>
@@ -130,7 +157,14 @@ public sealed class BusinessExceptionHandlerLoggingTests
                 .Configure(app =>
                 {
                     app.UseGlobalExceptionHandler();
-                    app.Run(_ => throw throwing());
+                    if (route is null)
+                    {
+                        app.Run(_ => throw throwing());
+                        return;
+                    }
+
+                    app.UseRouting();
+                    app.UseEndpoints(endpoints => endpoints.MapGet(route, () => { throw throwing(); }));
                 }))
             .StartAsync();
 
