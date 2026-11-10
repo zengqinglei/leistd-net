@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using CompanyName.ProjectName.Api.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -51,6 +52,7 @@ public class TelemetryRegistrationTests
 
         services.GetRequiredService<MeterProvider>();
         services.GetRequiredService<TracerProvider>();
+        services.GetRequiredService<LoggerProvider>();
         Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider);
         Assert.Equal(3, exporters.Count);
     }
@@ -71,7 +73,7 @@ public class TelemetryRegistrationTests
 
         services.GetRequiredService<MeterProvider>();
         services.GetRequiredService<TracerProvider>();
-        services.GetServices<ILoggerProvider>().ToList();
+        services.GetRequiredService<LoggerProvider>();
 
         Assert.Equal(3, exporters.Count);
         Assert.All(exporters, options =>
@@ -166,6 +168,36 @@ public class TelemetryRegistrationTests
     }
 
     // 只组合服务集合，不构建或启动宿主
+    /// <summary>
+    /// 构建导出管道不得解析宿主生命周期：日志工厂构建期间解析会经日志依赖重入，得到第二个实例，
+    /// 停机信号停掉的不是 <c>app.Run()</c> 等待的那个，进程收到 SIGTERM 后不退出。
+    /// 用带默认日志与控制台生命周期的宿主核对：容器里的生命周期就是宿主通知启动的那个，发送门槛随之打开。
+    /// </summary>
+    [Fact]
+    public async Task The_host_lifetime_is_a_single_instance_and_opens_the_export_gate()
+    {
+        var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Configuration = new ConfigurationManager()
+        });
+        builder.AddMyProjectTelemetry();
+        NoNetwork(builder.Services);
+        using var host = builder.Build();
+        var gate = host.Services.GetRequiredService<TelemetryExportGate>();
+        Assert.False(gate.IsOpen);
+
+        await host.StartAsync(CancellationToken.None);
+        try
+        {
+            Assert.True(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested);
+            Assert.True(gate.IsOpen);
+        }
+        finally
+        {
+            await host.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static HostApplicationBuilder Builder(Dictionary<string, string?> configuration)
     {
         var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });

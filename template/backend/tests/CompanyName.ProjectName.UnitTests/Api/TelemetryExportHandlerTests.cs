@@ -1,7 +1,6 @@
 using System.Net;
 using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Api.Options;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
@@ -17,10 +16,10 @@ public sealed class TelemetryExportHandlerTests
     [InlineData(false)]
     public async Task Requests_before_the_host_has_started_are_dropped(bool sync)
     {
-        var (invoker, inner, _, lifetime) = Create(new() { Enabled = true, Endpoint = "http://collector:4318" }, started: false);
+        var (invoker, inner, _, gate) = Create(new() { Enabled = true, Endpoint = "http://collector:4318" }, started: false);
 
         using var dropped = await SendAsync(invoker, "traces", sync);
-        lifetime.Start();
+        gate.Open();
         using var sent = await SendAsync(invoker, "traces", sync);
 
         Assert.Equal(HttpStatusCode.OK, dropped.StatusCode);
@@ -105,16 +104,16 @@ public sealed class TelemetryExportHandlerTests
         Assert.Equal(["current"], Assert.Single(inner.Requests).Header("x-api-key"));
     }
 
-    private static (HttpMessageInvoker Invoker, RecordingHandler Inner, MutableMonitor Options, StartableLifetime Lifetime) Create(
+    private static (HttpMessageInvoker Invoker, RecordingHandler Inner, MutableMonitor Options, TelemetryExportGate Gate) Create(
         ExportValue value, bool started = true)
     {
         var options = new MutableMonitor(value);
-        var lifetime = new StartableLifetime();
+        var gate = new TelemetryExportGate();
         if (started)
-            lifetime.Start();
+            gate.Open();
         var inner = new RecordingHandler();
-        var handler = new TelemetryExportHandler(options, lifetime) { InnerHandler = inner };
-        return (new HttpMessageInvoker(handler), inner, options, lifetime);
+        var handler = new TelemetryExportHandler(options, gate) { InnerHandler = inner };
+        return (new HttpMessageInvoker(handler), inner, options, gate);
     }
 
     private static HttpRequestMessage Request(string signal)
@@ -147,19 +146,6 @@ public sealed class TelemetryExportHandlerTests
         public TelemetryExportOptions Get(string? name) => ((IOptionsMonitor<TelemetryExportOptions>)this).CurrentValue;
 
         public IDisposable? OnChange(Action<TelemetryExportOptions, string?> listener) => null;
-    }
-
-    private sealed class StartableLifetime : IHostApplicationLifetime
-    {
-        private readonly CancellationTokenSource started = new();
-
-        public CancellationToken ApplicationStarted => started.Token;
-        public CancellationToken ApplicationStopping => CancellationToken.None;
-        public CancellationToken ApplicationStopped => CancellationToken.None;
-
-        public void Start() => started.Cancel();
-
-        public void StopApplication() { }
     }
 
     private sealed record RecordedRequest(string Uri, IReadOnlyDictionary<string, string[]> Headers)

@@ -8,13 +8,13 @@ namespace CompanyName.ProjectName.Api.Hosting;
 /// <remarks>
 /// <para>OpenTelemetry .NET 不支持运行期重配导出器，三路导出器因此常驻，经 <c>HttpClientFactory</c> 共用本处理器。
 /// 每次请求读 <see cref="IOptionsMonitor{TOptions}"/> 的当前值，系统设置提交后的下一次导出即用新值。</para>
-/// <para>宿主启动完成（<see cref="IHostApplicationLifetime.ApplicationStarted"/>）之前一律不发：数据库里的宿主级设置
+/// <para>宿主启动完成（<see cref="TelemetryExportGate"/> 打开）之前一律不发：数据库里的宿主级设置
 /// 在宿主启动阶段才加载，此前发出的请求可能违背已保存的关闭。按发送时刻判断，启动前的遥测就地丢弃。</para>
 /// <para>SDK 在 .NET 上走同步 <see cref="HttpClient.Send(HttpRequestMessage)"/>，同步与异步两条路径都要拦。</para>
 /// </remarks>
 internal sealed class TelemetryExportHandler(
     IOptionsMonitor<TelemetryExportOptions> options,
-    IHostApplicationLifetime lifetime) : DelegatingHandler
+    TelemetryExportGate gate) : DelegatingHandler
 {
     /// <inheritdoc />
     protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -28,7 +28,7 @@ internal sealed class TelemetryExportHandler(
     private bool Prepare(HttpRequestMessage request)
     {
         var current = options.CurrentValue;
-        if (!lifetime.ApplicationStarted.IsCancellationRequested || !current.Enabled
+        if (!gate.IsOpen || !current.Enabled
             || string.IsNullOrWhiteSpace(current.Endpoint) || request.RequestUri is null)
         {
             return false;

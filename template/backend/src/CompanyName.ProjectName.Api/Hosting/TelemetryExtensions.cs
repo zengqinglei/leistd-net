@@ -28,15 +28,17 @@ public static class TelemetryExtensions
         }
 
         builder.Services.AddSingleton<TelemetryRegistrationMarker>();
+        builder.Services.AddSingleton<TelemetryExportGate>();
+        builder.Services.AddHostedService<TelemetryExportGateOpener>();
         AddExportOptions(builder.Services, TelemetryExportOptions.IsEnabledByDeployment(builder.Configuration));
         // 逐信号的导出器都用默认名的选项：这里的配置排在 SDK 读取环境变量之后，协议不会被 OTEL_EXPORTER_OTLP_PROTOCOL 改回
         builder.Services.AddOptions<OtlpExporterOptions>()
-            .Configure<IOptionsMonitor<TelemetryExportOptions>, IHostApplicationLifetime>((options, export, lifetime) =>
+            .Configure<IOptionsMonitor<TelemetryExportOptions>, TelemetryExportGate>((options, export, gate) =>
             {
                 options.Protocol = OtlpExportProtocol.HttpProtobuf;
                 options.Headers = null;
                 var timeout = TimeSpan.FromMilliseconds(options.TimeoutMilliseconds);
-                options.HttpClientFactory = () => new HttpClient(new TelemetryExportHandler(export, lifetime)
+                options.HttpClientFactory = () => new HttpClient(new TelemetryExportHandler(export, gate)
                 {
                     InnerHandler = new SocketsHttpHandler()
                 })
@@ -92,4 +94,16 @@ public static class TelemetryExtensions
     }
 
     private sealed class TelemetryRegistrationMarker;
+
+    // 宿主启动时才解析生命周期，此时依赖注入已就绪，取到的是 app.Run() 等待的同一个实例
+    private sealed class TelemetryExportGateOpener(IHostApplicationLifetime lifetime, TelemetryExportGate gate) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            lifetime.ApplicationStarted.Register(gate.Open);
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
 }
