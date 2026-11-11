@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { SettingScope } from './setting-groups';
 // prettier-ignore
 import {
   //#if (ExternalLogin)
@@ -29,6 +30,19 @@ export class SettingService {
   /** 写入当前租户的默认值；与用户偏好分成两个端点，因为两者授权要求不同。 */
   setForCurrentTenant(data: SetSettingInputDto): Observable<void> {
     return this.http.put<void>(`${this.baseUrl}/current-tenant`, data);
+  }
+
+  /**
+   * 设置页写入一行：按作用域选端点，设置分区不自己选。系统作用域里进程级设置（`allowsTenantScope` 为假）
+   * 同样走当前租户端点：宿主上下文下"当前租户"就是宿主那一行。另设宿主写入端点的项目在这里按设置层级分流。
+   */
+  saveSetting(
+    setting: SettingOutputDto,
+    scope: SettingScope,
+    value: string | null,
+  ): Observable<void> {
+    const data = { name: setting.name, value };
+    return scope === 'account' ? this.setForCurrentUser(data) : this.setForCurrentTenant(data);
   }
   //#if (LocalIdentity)
 

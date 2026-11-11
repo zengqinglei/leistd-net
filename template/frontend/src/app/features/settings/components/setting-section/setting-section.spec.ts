@@ -1,15 +1,22 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpRequest, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ApplicationRef } from '@angular/core';
+import {
+  ApplicationRef,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 //#endif
 //#if (IncludeLocalization)
-import { firstValueFrom, of, Subject, throwError } from 'rxjs';
+import { EMPTY, firstValueFrom, of, Subject, throwError } from 'rxjs';
 //#else
-import { Subject, throwError } from 'rxjs';
+import { EMPTY, Subject, throwError } from 'rxjs';
 //#endif
 import { userEvent } from 'vitest/browser';
 
@@ -17,7 +24,6 @@ import { SettingSection } from './setting-section';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
-import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
@@ -25,15 +31,30 @@ import { LanguageService } from '../../../../core/services/language-service';
 import { ThemeService } from '../../../../core/services/theme-service';
 import { SettingService } from '../../../../core/settings/setting-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
+import { SETTINGS_SECTION_HEADING_LEVEL } from '../../../../core/settings/settings-section-heading-level';
 import { rejectedField } from '../../../../core/validation/form-submission.testing';
-import { AccountThemeMode } from '../../../../shared/dtos/account-preferences.dto';
 import {
   expectTouchTarget,
   setCoarsePointer,
   tapAt,
 } from '../../../../shared/utils/coarse-pointer.testing';
-import { SETTING_DEPENDENCIES, SettingDependency } from '../../setting-choices';
-import { SettingsPageState } from '../../settings-page-state';
+// prettier-ignore
+import {
+  ACCOUNT_PREFERENCE_SETTINGS,
+  ACCOUNT_PREFERENCE_SOURCE,
+  AccountPreferenceSetting,
+  AccountPreferenceSource,
+  SETTING_CONTROLS,
+  SETTING_DEPENDENCIES,
+  SETTING_DESCRIPTIONS,
+  SETTING_VALUE_DESCRIPTIONS,
+  SETTING_VALUE_LABELS,
+  SettingControl,
+  SettingControlContext,
+  SettingDependency,
+  SettingValueLabel,
+} from '../../setting-choices';
+import { SETTING_WRITE_GUARD, SettingsPageState } from '../../settings-page-state';
 
 /** 日志级别的候选值，与后端定义的 `allowedValues` 一致：下拉的候选项只认后端下发的这一份。 */
 const LOG_LEVELS = ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical'];
@@ -78,47 +99,135 @@ function pageProviders(): unknown[] {
     // 页面经会话上下文刷新设置，那条链会碰到 AuthService；真实实现会拉起认证栈
     // （无本地身份的形态下是整个 OIDC 客户端），本组用例只关心页面的行为。
     { provide: AuthService, useValue: { clearAuthData: () => undefined } },
+    { provide: ACCOUNT_PREFERENCE_SOURCE, useClass: PreferenceSourceStub },
     //#if (IncludeLocalization)
     ...provideTranslocoTesting(['en'], loader),
     //#endif
   ];
 }
 
+type PreferenceField = AccountPreferenceSetting['field'];
+type PreferenceValues = Readonly<Record<PreferenceField, string | null>>;
+
 /**
- * 个人页的账户偏好不取设置快照，而取会话偏好（`/me`）：把用例写成快照行的语言、时区、外观折算成
- * `/me` 读到的偏好喂进去。生效值按 个人 → 组织 → 代码默认 回落，与持有方一致。
+ * 偏好行的读写来源（{@link ACCOUNT_PREFERENCE_SOURCE}）的桩：共享 spec 不绑定项目的偏好服务。写入默认成功，
+ * 按写入值更新覆盖，清除时生效值回落到组织值；用例可以改写 `write` 的结果。
  */
-async function seedPreferences(settings: readonly SettingOutputDto[]): Promise<void> {
-  const service = TestBed.inject(AccountPreferencesService);
-  const field = (name: string) => {
-    const setting = settings.find((candidate) => candidate.name === name);
-    return {
-      own: setting?.userValue ?? null,
-      effective: setting
-        ? (setting.userValue ?? setting.tenantValue ?? setting.defaultValue)
-        : null,
-    };
-  };
-  const language = field('Display.Language');
-  const timeZone = field('Display.TimeZone');
-  const theme = field('Display.Theme');
-  await service.applyRead(
-    service.beginRead(),
-    {
-      preferences: {
-        language: language.effective,
-        timeZone: timeZone.effective,
-        theme: theme.effective as AccountThemeMode | null,
-      },
-      preferenceOverrides: {
-        language: language.own,
-        timeZone: timeZone.own,
-        theme: theme.own as AccountThemeMode | null,
-      },
+class PreferenceSourceStub implements AccountPreferenceSource {
+  readonly preferences = signal<PreferenceValues | null>(null);
+  readonly overrides = signal<PreferenceValues | null>(null);
+  readonly known = computed(() => this.preferences() !== null);
+  /** 本人没有覆盖时的生效值（组织值或代码默认），清除覆盖后回落到它。 */
+  organization: Partial<Record<PreferenceField, string | null>> = {};
+  readonly write = vi.fn(
+    async (
+      field: PreferenceField,
+      value: string | null,
+    ): ReturnType<AccountPreferenceSource['write']> => {
+      this.overrides.update((current) => current && { ...current, [field]: value });
+      this.preferences.update(
+        (current) => current && { ...current, [field]: value ?? this.organization[field] ?? null },
+      );
+      return { status: 'saved' };
     },
-    'establish',
   );
 }
+
+const preferenceSource = () => TestBed.inject(ACCOUNT_PREFERENCE_SOURCE) as PreferenceSourceStub;
+
+/**
+ * 个人页的账户偏好不取设置快照，而取偏好来源：把用例写成快照行的语言、时区、外观折算成来源里的偏好。
+ * 生效值按 个人 → 组织 → 代码默认 回落，与持有方一致。
+ */
+function seedPreferences(settings: readonly SettingOutputDto[]): void {
+  const source = preferenceSource();
+  const preferences: Record<string, string | null> = {};
+  const overrides: Record<string, string | null> = {};
+  for (const { field, name } of STUB_PREFERENCE_ROWS) {
+    const setting = settings.find((candidate) => candidate.name === name);
+    const organization = setting ? (setting.tenantValue ?? setting.defaultValue) : null;
+    source.organization[field] = organization;
+    overrides[field] = setting?.userValue ?? null;
+    preferences[field] = setting?.userValue ?? organization;
+  }
+  source.overrides.set(overrides as PreferenceValues);
+  source.preferences.set(preferences as PreferenceValues);
+}
+
+/*
+ * 用例自带的声明表：共享 spec 不依赖项目 `setting-choices.ts` 的内容。每个用例前换成下面这一份、用例后换回；
+ * 设置名沿用模板的示例，只是测试数据。
+ */
+const STUB_VALUE_LABELS: Record<string, SettingValueLabel> = {
+  'Display.Theme': 'theme.mode',
+};
+const STUB_VALUE_DESCRIPTIONS: Record<string, string> = {
+  'Logging.MinimumLevel': 'settings.logLevelHints',
+};
+const STUB_DESCRIPTIONS: Record<string, string> = {
+  'Telemetry.Export.Enabled': 'settings.settingHints.telemetryExportEnabled',
+  'Telemetry.Export.Endpoint': 'settings.settingHints.telemetryExportEndpoint',
+  'Telemetry.Export.Headers': 'settings.settingHints.telemetryExportHeaders',
+};
+const STUB_CONTROLS: Record<string, SettingControl> = {
+  //#if (IncludeLocalization)
+  'Display.Language': 'language',
+  //#endif
+  'Display.TimeZone': 'timeZone',
+  'Display.Theme': 'theme',
+};
+const STUB_PREFERENCE_ROWS = [
+  //#if (IncludeLocalization)
+  { field: 'language', name: 'Display.Language', allowedValues: ['en', 'zh-CN'] },
+  //#endif
+  { field: 'timeZone', name: 'Display.TimeZone' },
+  { field: 'theme', name: 'Display.Theme', allowedValues: ['light', 'system', 'dark'] },
+] as readonly AccountPreferenceSetting[];
+
+/** 换掉一张声明表的全部条目，返回换回去的函数。 */
+function swapTable(table: object, entries: object): () => void {
+  const target = table as Record<string, unknown>;
+  const saved = { ...target };
+  const fill = (source: object) => {
+    for (const key of Object.keys(target)) delete target[key];
+    Object.assign(target, source);
+  };
+  fill(entries);
+  return () => fill(saved);
+}
+
+/** 换掉偏好行，返回换回去的函数。 */
+function swapPreferenceRows(rows: readonly AccountPreferenceSetting[]): () => void {
+  const target = ACCOUNT_PREFERENCE_SETTINGS as AccountPreferenceSetting[];
+  const saved = [...target];
+  target.splice(0, target.length, ...rows);
+  return () => void target.splice(0, target.length, ...saved);
+}
+
+let restoreDeclarations: (() => void)[] = [];
+
+beforeEach(() => {
+  restoreDeclarations = [
+    swapTable(SETTING_VALUE_LABELS, STUB_VALUE_LABELS),
+    swapTable(SETTING_VALUE_DESCRIPTIONS, STUB_VALUE_DESCRIPTIONS),
+    swapTable(SETTING_DESCRIPTIONS, STUB_DESCRIPTIONS),
+    swapTable(SETTING_CONTROLS, STUB_CONTROLS),
+    swapTable(SETTING_DEPENDENCIES, {}),
+    swapPreferenceRows(STUB_PREFERENCE_ROWS),
+  ];
+});
+
+// 后进先出：用例里再换的一层先换回，最后换回项目原表
+afterEach(() =>
+  restoreDeclarations
+    .splice(0)
+    .reverse()
+    .forEach((restore) => restore()),
+);
+
+/** 设置分区的写入：端点由 `SettingService.saveSetting` 按作用域与层级选，见它自己的 spec。 */
+const settingWrite = (request: HttpRequest<unknown>): boolean =>
+  request.method === 'PUT' && request.url.startsWith('/api/v1/settings/');
 
 /** 该设置在当前面板上渲染出来了：按每行常驻的重置按钮判定，设置名在界面上刻意不显示。 */
 function hasRow(host: HTMLElement, name: string): boolean {
@@ -186,7 +295,7 @@ describe('SettingSection', () => {
 
   /** 完成写入后的 PUT，并把控制权交回微任务队列，让随后的 GET 真正发出。 */
   async function flushSave(): Promise<void> {
-    http.expectOne('/api/v1/settings/current-user').flush(null);
+    http.expectOne(settingWrite).flush(null);
     await fixture.whenStable();
   }
 
@@ -252,7 +361,7 @@ describe('SettingSection', () => {
     await typeAndSave('UTC');
     await typeAndSave('Asia/Tokyo');
 
-    const first = http.expectOne('/api/v1/settings/current-user');
+    const first = http.expectOne(settingWrite);
     expect(first.request.body).toEqual({ name: 'Display.FreeTextProbe', value: 'UTC' });
     first.flush(null);
     await fixture.whenStable();
@@ -265,7 +374,7 @@ describe('SettingSection', () => {
     expect(host.querySelector('ng-icon[name="lucideCircleCheck"]')).toBeNull();
     expect(host.querySelector('hlm-spinner')).toBeTruthy();
 
-    const second = http.expectOne('/api/v1/settings/current-user');
+    const second = http.expectOne(settingWrite);
     expect(second.request.body).toEqual({ name: 'Display.FreeTextProbe', value: 'Asia/Tokyo' });
     second.flush(null);
     await fixture.whenStable();
@@ -290,7 +399,7 @@ describe('SettingSection', () => {
 
     expect(host.querySelector('hlm-spinner')).toBeTruthy();
     expect(host.querySelector('ng-icon[name="lucideCircleCheck"]')).toBeNull();
-    const second = http.expectOne('/api/v1/settings/current-user');
+    const second = http.expectOne(settingWrite);
     expect(second.request.body).toEqual({ name: 'Display.FreeTextProbe', value: 'Asia/Tokyo' });
     second.flush(null);
     await fixture.whenStable();
@@ -302,9 +411,7 @@ describe('SettingSection', () => {
   it('does not report an earlier failure while a later write of the row is pending', async () => {
     const host = fixture.nativeElement as HTMLElement;
     await typeAndSave('UTC');
-    http
-      .expectOne('/api/v1/settings/current-user')
-      .flush('boom', { status: 500, statusText: 'Server Error' });
+    http.expectOne(settingWrite).flush('boom', { status: 500, statusText: 'Server Error' });
     await vi.advanceTimersByTimeAsync(100);
 
     await typeAndSave('Asia/Tokyo');
@@ -328,7 +435,7 @@ describe('SettingSection', () => {
 
     const writes: string[] = [];
     for (const snapshot of ['UTC', 'Asia/Tokyo']) {
-      const put = http.expectOne('/api/v1/settings/current-user');
+      const put = http.expectOne(settingWrite);
       writes.push(put.request.body.value);
       put.flush(null);
       await fixture.whenStable();
@@ -339,7 +446,7 @@ describe('SettingSection', () => {
       expect(input().value).toBe('UTC');
     }
 
-    const last = http.expectOne('/api/v1/settings/current-user');
+    const last = http.expectOne(settingWrite);
     writes.push(last.request.body.value);
     last.flush(null);
     await fixture.whenStable();
@@ -398,7 +505,7 @@ describe('SettingSection', () => {
   it('clears the draft only after the refreshed snapshot arrives', async () => {
     await typeAndSave('  UTC  ');
 
-    const put = http.expectOne('/api/v1/settings/current-user');
+    const put = http.expectOne(settingWrite);
     expect(put.request.body).toEqual({ name: 'Display.FreeTextProbe', value: 'UTC' });
     put.flush(null);
     await fixture.whenStable();
@@ -415,9 +522,7 @@ describe('SettingSection', () => {
   // 失败就地报在那一行上，不弹 toast：反馈要落在用户刚碰的那个控件下面。
   it('reports a failed save inline on the row', async () => {
     await typeAndSave('UTC');
-    http
-      .expectOne('/api/v1/settings/current-user')
-      .flush('boom', { status: 500, statusText: 'Server Error' });
+    http.expectOne(settingWrite).flush('boom', { status: 500, statusText: 'Server Error' });
     await fixture.whenStable();
     await settleSave();
 
@@ -645,7 +750,7 @@ describe('SettingSection groups', () => {
       imports: [SettingSection],
       providers: [...pageProviders()],
     });
-    await seedPreferences(grouped);
+    seedPreferences(grouped);
     const fixture = TestBed.createComponent(SettingSection);
     for (const [name, value] of Object.entries(inputs)) {
       fixture.componentRef.setInput(name, value);
@@ -776,7 +881,7 @@ describe('SettingSection host scope hint', () => {
       const field = reset.closest('hlm-field')!;
       reset.click();
       await fixture.whenStable();
-      http.expectOne('/api/v1/settings/current-tenant').flush(null);
+      http.expectOne(settingWrite).flush(null);
       await fixture.whenStable();
       http.expectOne('/api/v1/settings').flush(settings);
       await vi.waitFor(
@@ -823,7 +928,7 @@ describe('SettingSection display placeholders', () => {
       imports: [SettingSection],
       providers: [...pageProviders()],
     });
-    await seedPreferences([setting]);
+    seedPreferences([setting]);
     const fixture = TestBed.createComponent(SettingSection);
     fixture.componentRef.setInput('scope', scope);
     fixture.detectChanges();
@@ -939,7 +1044,7 @@ describe('SettingSection inherited source and save state', () => {
       imports: [SettingSection],
       providers: [...pageProviders()],
     });
-    await seedPreferences([timeZone('Europe/Paris')]);
+    seedPreferences([timeZone('Europe/Paris')]);
     const fixture = TestBed.createComponent(SettingSection);
     const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
@@ -964,14 +1069,8 @@ describe('SettingSection inherited source and save state', () => {
     expect(host.querySelector('hlm-spinner')).toBeTruthy();
     expect(source()).toBeNull();
 
-    // 账户偏好写 /me/preferences，响应带回清除后的完整偏好（回落到组织值），不再重取设置快照
-    const patch = await vi.waitFor(() => http.expectOne('/api/v1/auth/me/preferences'));
-    expect(patch.request.body).toEqual({ timeZone: null });
-    const none = { language: null, timeZone: null, theme: null };
-    patch.flush({
-      preferences: { ...none, timeZone: 'Asia/Tokyo' },
-      preferenceOverrides: none,
-    });
+    // 账户偏好交给偏好来源，清除后生效值回落到组织值，不再重取设置快照
+    expect(preferenceSource().write).toHaveBeenCalledWith('timeZone', null);
     await fixture.whenStable();
     await vi.advanceTimersByTimeAsync(400);
     fixture.detectChanges();
@@ -1000,7 +1099,7 @@ describe('SettingSection long values', () => {
       imports: [SettingSection],
       providers: [...pageProviders()],
     });
-    await seedPreferences(settings);
+    seedPreferences(settings);
     const fixture = TestBed.createComponent(SettingSection);
     fixture.componentRef.setInput('scope', 'account');
     fixture.detectChanges();
@@ -1134,7 +1233,7 @@ describe('SettingSection time zone list position', () => {
       imports: [SettingSection],
       providers: [...pageProviders()],
     });
-    await seedPreferences([
+    seedPreferences([
       row({ name: 'Display.TimeZone', group: 'Display', defaultValue: null, ...setting }),
     ]);
     const fixture = TestBed.createComponent(SettingSection);
@@ -1270,7 +1369,7 @@ describe('SettingSection switches', () => {
 
     // 点在开关视觉边界之外、扩出的命中区之内：切换的是开关，不是旁边的恢复按钮
     await tapAt(control, 20, 0);
-    const write = TestBed.inject(HttpTestingController).expectOne('/api/v1/settings/current-user');
+    const write = TestBed.inject(HttpTestingController).expectOne(settingWrite);
     expect(write.request.method).toBe('PUT');
     expect(write.request.body).toEqual({ name, value: 'false' });
   });
@@ -1290,7 +1389,7 @@ describe('SettingSection switches', () => {
     control().click();
     await TestBed.inject(ApplicationRef).whenStable();
 
-    const first = http.expectOne('/api/v1/settings/current-user');
+    const first = http.expectOne(settingWrite);
     expect(first.request.body).toEqual({ name, value: 'false' });
     first.flush(null);
     await TestBed.inject(ApplicationRef).whenStable();
@@ -1300,7 +1399,7 @@ describe('SettingSection switches', () => {
     expect(control().getAttribute('aria-checked')).toBe('true');
 
     // 第二次写入排在第一条链之后，链收尾要过几轮微任务才发出
-    const second = await vi.waitFor(() => http.expectOne('/api/v1/settings/current-user'));
+    const second = await vi.waitFor(() => http.expectOne(settingWrite));
     expect(second.request.body).toEqual({ name, value: 'true' });
     second.flush(null);
     await TestBed.inject(ApplicationRef).whenStable();
@@ -1461,7 +1560,7 @@ describe('SettingSection switch children', () => {
     fixture.detectChanges();
     // 写入还在途：子项跟着草稿出现，不等保存完成
     expect(renderedRows(host)).toEqual(['Registration.Enabled', ...children]);
-    const put = http.expectOne('/api/v1/settings/current-tenant');
+    const put = http.expectOne(settingWrite);
     expect(put.request.body).toEqual({ name: 'Registration.Enabled', value: 'true' });
     put.flush(null);
     await fixture.whenStable();
@@ -1484,7 +1583,7 @@ describe('SettingSection switch children', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(renderedRows(host)).toEqual(['Registration.Enabled']);
-    const clear = http.expectOne('/api/v1/settings/current-tenant');
+    const clear = http.expectOne(settingWrite);
     expect(clear.request.body).toEqual({ name: 'Registration.Enabled', value: null });
     clear.flush(null);
     await fixture.whenStable();
@@ -1763,7 +1862,7 @@ describe('SettingSection external login', () => {
   async function reset(host: HTMLElement, name: string): Promise<void> {
     host.querySelector<HTMLButtonElement>(`[data-testid="setting-reset-${name}"]`)!.click();
     await fixture.whenStable();
-    http.expectOne('/api/v1/settings/current-tenant').flush(null);
+    http.expectOne(settingWrite).flush(null);
     await fixture.whenStable();
     fixture.detectChanges();
     http.expectOne('/api/v1/settings').flush(settings());
@@ -1848,7 +1947,7 @@ describe('SettingSection external login', () => {
     // 行状态由设置区块持有，模板插在卡片里照样跟着刷新
     expect(card.querySelector('hlm-field-description hlm-spinner')).not.toBeNull();
 
-    http.expectOne('/api/v1/settings/current-tenant').flush(null);
+    http.expectOne(settingWrite).flush(null);
     await fixture.whenStable();
     http.expectOne('/api/v1/settings').flush(settings());
     await vi.advanceTimersByTimeAsync(400);
@@ -1939,7 +2038,7 @@ describe('SettingSection appearance', () => {
       defaultValue: null,
       allowsTenantScope: false,
     });
-    await seedPreferences([theme]);
+    seedPreferences([theme]);
     TestBed.inject(ThemeService).setMode('dark');
     const fixture = TestBed.createComponent(SettingSection);
     fixture.detectChanges();
@@ -1968,7 +2067,7 @@ describe('SettingSection appearance', () => {
       defaultValue: 'system',
       allowsTenantScope: false,
     });
-    await seedPreferences([theme]);
+    seedPreferences([theme]);
     const fixture = TestBed.createComponent(SettingSection);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -2026,7 +2125,7 @@ describe('SettingSection dependent row feedback', () => {
       await fixture.whenStable();
       fixture.detectChanges();
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-      vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+      vi.spyOn(TestBed.inject(SettingService), 'saveSetting').mockReturnValue(
         throwError(() => rejectedField('value', 'Rejected')),
       );
       const panel = fixture.componentInstance;
@@ -2149,7 +2248,7 @@ describe('SettingSection single language', () => {
       row({ name: 'Display.Language', group: 'Display', groupDisplayName: '显示' }),
       row({ name: 'Display.TimeZone', group: 'Display', groupDisplayName: '显示' }),
     ];
-    await seedPreferences(display);
+    seedPreferences(display);
     const fixture = TestBed.createComponent(SettingSection);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -2189,7 +2288,7 @@ describe('SettingSection account preferences', () => {
   ): Promise<ComponentFixture<SettingSection>> {
     TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
     if (preferences !== 'unavailable') {
-      await seedPreferences(preferences);
+      seedPreferences(preferences);
     }
     const fixture = TestBed.createComponent(SettingSection);
     fixture.detectChanges();
@@ -2233,12 +2332,13 @@ describe('SettingSection account preferences', () => {
   it('reports an unconfirmed preference save on its row', async () => {
     const fixture = await render([timeZone({ userValue: 'UTC' })], []);
     const host = fixture.nativeElement as HTMLElement;
-    const http = TestBed.inject(HttpTestingController);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    preferenceSource().write.mockResolvedValueOnce({
+      status: 'unconfirmed',
+      error: new Error('Service Unavailable'),
+    });
 
     (host.querySelector('[data-testid="setting-reset-Display.TimeZone"]') as HTMLElement).click();
-    const patch = await vi.waitFor(() => http.expectOne('/api/v1/auth/me/preferences'));
-    patch.flush(null, { status: 503, statusText: 'Service Unavailable' });
     await vi.advanceTimersByTimeAsync(400);
     fixture.detectChanges();
 
@@ -2247,8 +2347,9 @@ describe('SettingSection account preferences', () => {
     );
   });
 
-  // 排着队的偏好写入在操作当下就记下主体：组件销毁、主体离开后，排在后面的一项不能以下一个人的会话发出
-  it('does not send a queued preference write after the subject left', async () => {
+  // 偏好写入在操作当下就交给来源（它在这一刻记下主体并自带队列），不等本组件的队列轮到：
+  // 否则期间主体离开时，排在后面的一项会以下一个人的会话发出
+  it('hands each preference write to the source when it is made, not when its turn comes', async () => {
     const fixture = await render(
       [
         timeZone({ userValue: 'UTC' }),
@@ -2257,17 +2358,17 @@ describe('SettingSection account preferences', () => {
       [],
     );
     const host = fixture.nativeElement as HTMLElement;
-    const http = TestBed.inject(HttpTestingController);
+    const write = preferenceSource().write;
+    // 第一项一直不落定：第二项照样在点击时交出
+    write.mockReturnValueOnce(new Promise(() => undefined));
 
     (host.querySelector('[data-testid="setting-reset-Display.TimeZone"]') as HTMLElement).click();
     (host.querySelector('[data-testid="setting-reset-Display.Theme"]') as HTMLElement).click();
-    const first = await vi.waitFor(() => http.expectOne('/api/v1/auth/me/preferences'));
-    fixture.destroy();
-    void TestBed.inject(AccountPreferencesService).clear();
-    first.flush(null, { status: 503, statusText: 'Service Unavailable' });
-    await new Promise((resolve) => setTimeout(resolve));
 
-    http.expectNone('/api/v1/auth/me/preferences');
+    expect(write.mock.calls).toEqual([
+      ['timeZone', null],
+      ['theme', null],
+    ]);
   });
 
   // 写入回来时主体已经离开（discarded）：不是"已保存"，也不报错，保存中退回常态
@@ -2276,9 +2377,7 @@ describe('SettingSection account preferences', () => {
     const host = fixture.nativeElement as HTMLElement;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
 
-    vi.spyOn(TestBed.inject(AccountPreferencesService), 'write').mockResolvedValue({
-      status: 'discarded',
-    });
+    preferenceSource().write.mockResolvedValue({ status: 'discarded' });
     const reset = host.querySelector<HTMLElement>(
       '[data-testid="setting-reset-Display.TimeZone"]',
     )!;
@@ -2335,7 +2434,7 @@ describe('SettingSection row validation', () => {
       const setting = row(values);
       const host = await render(setting);
       // 与 HTTP 拦截器相同的字段拒绝：写入请求体的 `value` 字段
-      vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+      vi.spyOn(TestBed.inject(SettingService), 'saveSetting').mockReturnValue(
         throwError(() => rejectedField('Value', 'Server rejected the setting value')),
       );
       const panel = fixture.componentInstance;
@@ -2374,7 +2473,7 @@ describe('SettingSection row validation', () => {
   // 输入类控件的错误接在控件下方；再次编辑时上次的字段错误失效
   it('puts the field rejection under the text box and clears it on the next edit', async () => {
     const host = await render(row());
-    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+    vi.spyOn(TestBed.inject(SettingService), 'saveSetting').mockReturnValue(
       throwError(() => rejectedField('value', 'Not accepted')),
     );
     const field = host.querySelector<HTMLInputElement>('input')!;
@@ -2420,7 +2519,7 @@ describe('SettingSection row validation', () => {
   it('does not attach a rejection to input typed while the failed save is still showing', async () => {
     const host = await render(row());
     const put = vi
-      .spyOn(TestBed.inject(SettingService), 'setForCurrentTenant')
+      .spyOn(TestBed.inject(SettingService), 'saveSetting')
       .mockReturnValue(throwError(() => rejectedField('value', 'Not accepted')));
     const field = host.querySelector<HTMLInputElement>('input')!;
 
@@ -2443,7 +2542,7 @@ describe('SettingSection row validation', () => {
   it('does not attach a rejection that arrives after newer input', async () => {
     const host = await render(row());
     const response = new Subject<void>();
-    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(response);
+    vi.spyOn(TestBed.inject(SettingService), 'saveSetting').mockReturnValue(response);
     const field = host.querySelector<HTMLInputElement>('input')!;
 
     submit(field, 'draft');
@@ -2459,7 +2558,7 @@ describe('SettingSection row validation', () => {
   // 业务错误码没有字段：原因照常报在行内，不挂到控件下方
   it('keeps a rejection without a field inline on the row', async () => {
     await render(row({ name: 'Logging.MinimumLevel', allowedValues: LOG_LEVELS }));
-    vi.spyOn(TestBed.inject(SettingService), 'setForCurrentTenant').mockReturnValue(
+    vi.spyOn(TestBed.inject(SettingService), 'saveSetting').mockReturnValue(
       throwError(() => rejectedField('', 'Not allowed here')),
     );
     const setting = row({ name: 'Logging.MinimumLevel', allowedValues: LOG_LEVELS });
@@ -2486,5 +2585,219 @@ describe('SettingSection row validation', () => {
     expect(field.value).toBe('11');
     expect(field.getAttribute('aria-invalid')).toBe('true');
     expect(document.getElementById('Numeric.Probe-description')!.tagName).toBe('HLM-FIELD-ERROR');
+  });
+});
+
+/** 自定义控件的探针：显示本层的值与继承值，点一下提交一个 JSON 数组。 */
+@Component({
+  selector: 'app-probe-control',
+  template: `<button
+    type="button"
+    data-testid="probe-control"
+    [id]="context().controlId"
+    [attr.aria-invalid]="context().invalid() || null"
+    [attr.aria-describedby]="context().describedBy()"
+    [attr.data-inherited]="context().inherited()"
+    (click)="commit()"
+  >
+    {{ context().value() }}
+  </button>`,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class ProbeControl {
+  readonly context = input.required<SettingControlContext>();
+
+  protected commit(): void {
+    this.context().commit(JSON.stringify(['a', 'b']));
+  }
+}
+
+/** 第二轮扩展点：项目的偏好、写入包装、自定义控件与标题级别都从外面接入，分区本身不改。 */
+describe('SettingSection extension points', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  async function render(
+    settings: SettingOutputDto[],
+    options: { scope?: 'account' | 'system'; providers?: unknown[] } = {},
+  ): Promise<ComponentFixture<SettingSection>> {
+    TestBed.configureTestingModule({
+      imports: [SettingSection],
+      providers: [...pageProviders(), ...(options.providers ?? [])],
+    });
+    const fixture = TestBed.createComponent(SettingSection);
+    fixture.componentRef.setInput('scope', options.scope ?? 'system');
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/settings').flush(settings);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  // 偏好由别的服务持有、用共享偏好面板的项目：账户页不出偏好分组，读不到偏好也不说"暂不可用"，来源不被取用
+  it('leaves out the preference group and its source when no preference rows are declared', async () => {
+    restoreDeclarations.push(swapPreferenceRows([]));
+    const fixture = await render([row()], {
+      scope: 'account',
+      providers: [
+        {
+          provide: ACCOUNT_PREFERENCE_SOURCE,
+          useFactory: () => {
+            throw new Error('the preference source must not be read');
+          },
+        },
+      ],
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="preferences-unavailable"]')).toBeNull();
+    expect(
+      [...host.querySelectorAll<HTMLElement>('[data-testid="settings-group-section"]')].map(
+        (section) => section.dataset['group'],
+      ),
+    ).toEqual(['Other']);
+    expect(hasRow(host, 'Display.FreeTextProbe')).toBe(true);
+  });
+
+  // 外壳包了一层（如确认身份）而本人取消：不是失败，行回到常态，输入留在框里
+  it('keeps the draft without an error when the write guard completes without sending', async () => {
+    const fixture = await render([row()], {
+      providers: [{ provide: SETTING_WRITE_GUARD, useValue: () => EMPTY }],
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const field = host.querySelector<HTMLInputElement>(
+      '[data-testid="setting-input-Display.FreeTextProbe"]',
+    )!;
+
+    field.value = 'kept';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    await vi.advanceTimersByTimeAsync(400);
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController).expectNone(settingWrite);
+    expect(field.value).toBe('kept');
+    expect(host.querySelector('hlm-spinner')).toBeNull();
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.querySelector('ng-icon[name="lucideCircleCheck"]')).toBeNull();
+  });
+
+  // 包装拿到的是发出写入的函数：确认身份后重放，写入照常落定
+  it('saves through the write guard once it sends', async () => {
+    const guard = vi.fn((send: () => ReturnType<SettingService['saveSetting']>) => send());
+    const fixture = await render([row()], {
+      providers: [{ provide: SETTING_WRITE_GUARD, useValue: guard }],
+    });
+    const field = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[data-testid="setting-input-Display.FreeTextProbe"]',
+    )!;
+    const http = TestBed.inject(HttpTestingController);
+
+    field.value = 'sent';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    const put = await vi.waitFor(() => http.expectOne(settingWrite));
+    put.flush(null);
+    await vi.waitFor(() =>
+      http.expectOne('/api/v1/settings').flush([row({ tenantValue: 'sent' })]),
+    );
+
+    expect(guard).toHaveBeenCalledOnce();
+    expect(put.request.body).toEqual({ name: 'Display.FreeTextProbe', value: 'sent' });
+  });
+
+  // 声明表登记了组件类：分区渲染项目的控件，标签、恢复按钮与写入链照旧
+  it('renders a registered control component and saves what it commits', async () => {
+    restoreDeclarations.push(swapTable(SETTING_CONTROLS, { 'Probe.Multi': ProbeControl }));
+    const fixture = await render([
+      row({ name: 'Probe.Multi', defaultValue: '["a"]', tenantValue: null }),
+    ]);
+    const host = fixture.nativeElement as HTMLElement;
+    const control = host.querySelector<HTMLElement>('[data-testid="probe-control"]')!;
+    const http = TestBed.inject(HttpTestingController);
+
+    expect(control.id).toBe('Probe.Multi');
+    expect(host.querySelector('label[for="Probe.Multi"]')).not.toBeNull();
+    expect(control.dataset['inherited']).toBe('["a"]');
+    expect(control.getAttribute('aria-describedby')).toBe('Probe.Multi-description');
+    expect(hasRow(host, 'Probe.Multi')).toBe(true);
+
+    control.click();
+    const put = await vi.waitFor(() => http.expectOne(settingWrite));
+    expect(put.request.body).toEqual({ name: 'Probe.Multi', value: '["a","b"]' });
+    put.flush(null);
+    await vi.waitFor(() =>
+      http
+        .expectOne('/api/v1/settings')
+        .flush([row({ name: 'Probe.Multi', tenantValue: '["a","b"]' })]),
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="probe-control"]')?.textContent?.trim()).toBe(
+      '["a","b"]',
+    );
+  });
+
+  // 第一次提交在确认身份时被取消，输入还留着：再次提交同一个值是重试，照常写入
+  it('retries the same committed value after the write guard cancelled it', async () => {
+    restoreDeclarations.push(swapTable(SETTING_CONTROLS, { 'Probe.Multi': ProbeControl }));
+    const guard = vi
+      .fn((send: () => ReturnType<SettingService['saveSetting']>) => send())
+      .mockReturnValueOnce(EMPTY);
+    const fixture = await render([row({ name: 'Probe.Multi', defaultValue: null })], {
+      providers: [{ provide: SETTING_WRITE_GUARD, useValue: guard }],
+    });
+    const control = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="probe-control"]',
+      )!;
+    const http = TestBed.inject(HttpTestingController);
+
+    control().click();
+    await vi.waitFor(() => expect(guard).toHaveBeenCalledOnce());
+    await fixture.whenStable();
+    http.expectNone(settingWrite);
+
+    control().click();
+    const put = await vi.waitFor(() => http.expectOne(settingWrite));
+    expect(put.request.body).toEqual({ name: 'Probe.Multi', value: '["a","b"]' });
+    put.flush(null);
+    await vi.waitFor(() =>
+      http
+        .expectOne('/api/v1/settings')
+        .flush([row({ name: 'Probe.Multi', tenantValue: '["a","b"]' })]),
+    );
+  });
+
+  // 外壳的页面标题是 h1 时面板是 h2、分区是 h3：分区输出真实的标题级别
+  it('uses the heading level given by the shell for group headings', async () => {
+    const groups = [
+      row({ name: 'Probe.One', group: 'One', groupDisplayName: 'One' }),
+      row({ name: 'Probe.Two', group: 'Two', groupDisplayName: 'Two' }),
+    ];
+    const host = (
+      await render(groups, {
+        providers: [{ provide: SETTINGS_SECTION_HEADING_LEVEL, useValue: signal(3) }],
+      })
+    ).nativeElement as HTMLElement;
+
+    expect([...host.querySelectorAll('h3')].map((h) => h.textContent?.trim())).toEqual([
+      'One',
+      'Two',
+    ]);
+    expect(host.querySelector('h4')).toBeNull();
+  });
+
+  // 文本设置多是主机名、密钥、标识：关掉拼写检查与自动大写
+  it('turns off spell checking and auto capitalization on text inputs', async () => {
+    const host = (await render([row()])).nativeElement as HTMLElement;
+    const field = host.querySelector('[data-testid="setting-input-Display.FreeTextProbe"]')!;
+
+    expect(field.getAttribute('spellcheck')).toBe('false');
+    expect(field.getAttribute('autocapitalize')).toBe('off');
   });
 });

@@ -22,16 +22,15 @@ import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { filter, map } from 'rxjs';
 
 import { LayoutService } from '../../../../core/services/layout-service';
-//#if (!IncludeLocalization)
-import { englishText } from '../../../../shared/utils/english-text';
-//#endif
-// prettier-ignore
 import {
   groupPath,
   groupSettings,
   settingsInScope,
-  SettingsPageState,
-} from '../../settings-page-state';
+} from '../../../../core/settings/setting-groups';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
+import { SettingsPageState } from '../../settings-page-state';
 import { SettingsPanelLink, SettingsShell } from '../../widgets/settings-shell/settings-shell';
 
 /**

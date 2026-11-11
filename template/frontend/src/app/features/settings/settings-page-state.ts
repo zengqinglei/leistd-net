@@ -1,53 +1,23 @@
-import { computed, DestroyRef, inject, Injectable, PendingTasks, signal } from '@angular/core';
+import {
+  computed,
+  DestroyRef,
+  inject,
+  Injectable,
+  InjectionToken,
+  PendingTasks,
+  signal,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
+import { Observable } from 'rxjs';
 
 import { SettingDependency } from './setting-choices';
 import { applicationErrorMessage } from '../../core/errors/application-http-error';
 import { SessionContextService } from '../../core/services/session-context-service';
-import { SettingContextService } from '../../core/settings/setting-context-service';
 import { SettingOutputDto } from '../../core/settings/setting.dto';
-
-/** 设置作用域：`account` 写当前用户偏好；`system` 写当前租户（或宿主）下所有人的默认值，写入授权不同。 */
-export type SettingScope = 'account' | 'system';
-
-/** 一个分组及归到它下面的设置项；分组标识、顺序与显示名都来自后端。 */
-export interface SettingGroup {
-  key: string;
-  label: string;
-  settings: SettingOutputDto[];
-}
-
-/** 本作用域下能看到的设置。 */
-export function settingsInScope(
-  settings: readonly SettingOutputDto[],
-  scope: SettingScope,
-): SettingOutputDto[] {
-  // 系统页：允许租户级或进程级（后者两个层级标记都是 false，只看 allowsTenantScope 会漏掉），
-  // 且当前用户有该分组的管理权限；正确性以服务端算出的 canManage 为准
-  return scope === 'account'
-    ? settings.filter((s) => s.allowsUserScope)
-    : settings.filter((s) => (s.allowsTenantScope || s.allowsHostScope) && s.canManage);
-}
-
-/** 按分组切分，分组标识与顺序来自后端（未分组的已归入 `Other`），前端不另列清单。 */
-export function groupSettings(settings: readonly SettingOutputDto[]): SettingGroup[] {
-  const byKey = new Map<string, SettingGroup>();
-  for (const setting of settings) {
-    const group = byKey.get(setting.group) ?? {
-      key: setting.group,
-      label: setting.groupDisplayName || setting.group,
-      settings: [],
-    };
-    group.settings.push(setting);
-    byKey.set(setting.group, group);
-  }
-
-  return [...byKey.values()];
-}
 
 /** 一行设置及挂在它下面的子项（见 {@link buildSettingTree}）。 */
 export interface SettingRowNode {
@@ -130,22 +100,42 @@ export function shownChildren(node: SettingRowNode, parentValue: string): Settin
   return node.children.filter((child) => child.shownWhen?.(parentValue) ?? true);
 }
 
-/** 分组标识在 URL 里的写法：`RegistrationSecurity` → `registration-security`。 */
-export function groupPath(key: string): string {
-  return key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+/**
+ * 页面是否读取设置。外壳在当前用户看不到任何设置时提供 `false`（例如设置页还承载别的面板、入口不要求设置权限）：
+ * 不发请求，页面按已载入的空快照处理。
+ */
+export const SETTINGS_LOAD_ENABLED = new InjectionToken<boolean>('SETTINGS_LOAD_ENABLED', {
+  factory: () => true,
+});
+
+/**
+ * 设置写入的包装，由外壳提供，例如写入前确认身份：收到发出写入的函数，返回包装后的写入。包装后的写入不发值就完成
+ * 表示本人取消（与 `Reauthentication.execute` 的约定一致），该行回到常态、保留输入、不报错。默认原样发出。
+ */
+export type SettingWriteGuard = (send: () => Observable<void>) => Observable<void>;
+
+export const SETTING_WRITE_GUARD = new InjectionToken<SettingWriteGuard>('SETTING_WRITE_GUARD', {
+  factory: () => (send) => send(),
+});
+
+/** 一次 {@link SettingsPageState.refresh} 的调用方。 */
+interface RefreshWaiter {
+  resolve: () => void;
+  reject: (error: unknown) => void;
 }
 
 /**
  * 一个设置页（个人或系统设置）共用的设置快照：外壳据此决定面板，面板据此渲染与写入，
  * 避免重复请求以及导航与内容不一致。
  *
- * 快照就是会话的设置快照（{@link SettingContextService}），页面不另存一份；读取走会话刷新入口
- * （{@link SessionContextService.refreshSettings}），与切换器、保存后的刷新共用同一套新旧判断：晚到的旧响应
- * 不会覆盖新值，也不会把派生的界面语言改回旧值。页外的写入刷新了会话快照，本页随之更新。
+ * 快照取会话刷新入口（{@link SessionContextService.refreshSettings}）的返回值：语言等派生状态随会话快照一起更新，
+ * 而本页显示的是返回给本页的那一份——项目的会话快照与设置页的读取范围可以不同（如按工作区读的快照与平台设置页），
+ * 由刷新入口决定返回哪一份。初次读取、重试与写入后的重取共用一个序号，只认最后发起的那次：较早的读取晚到不覆盖，
+ * 被取代的读取跟随最新一次落定。
  */
 @Injectable()
 export class SettingsPageState {
-  private readonly context = inject(SettingContextService);
+  private readonly loadEnabled = inject(SETTINGS_LOAD_ENABLED);
   private readonly sessionContext = inject(SessionContextService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly pendingTasks = inject(PendingTasks);
@@ -153,19 +143,22 @@ export class SettingsPageState {
   private readonly transloco = inject(TranslocoService);
   //#endif
 
-  readonly settings = computed<SettingOutputDto[]>(() => [...this.context.snapshot()]);
-  /** 本页发起的读取还有未返回的。 */
-  readonly loading = computed(() => this.inflight() > 0);
+  private readonly snapshot = signal<readonly SettingOutputDto[]>([]);
+  readonly settings = computed<SettingOutputDto[]>(() => [...this.snapshot()]);
+  /** 本页最近一次读取还没落定；被取代的较早读取不再左右加载态。 */
+  readonly loading = computed(() => this.reading());
   /** 至少成功取到过一次。外壳据此决定何时把空地址导向第一个面板。 */
   readonly loaded = signal(false);
   /** 还没有快照可保留时的加载失败原因：有值时页面显示错误态与重试，不显示"暂无可配置项"。 */
   readonly loadError = signal<string | null>(null);
 
-  private readonly inflight = signal(0);
-  private destroyed = false;
+  private readonly reading = signal(false);
+  /** 本页最近一次读取的序号：只有它的结果落到页面上。 */
+  private sequence = 0;
+  /** 还没落定的 {@link refresh} 调用方，由最近一次读取一并落定。 */
+  private readonly waiters: RefreshWaiter[] = [];
 
   constructor() {
-    this.destroyRef.onDestroy(() => (this.destroyed = true));
     this.load();
     //#if (IncludeLocalization)
 
@@ -183,33 +176,71 @@ export class SettingsPageState {
     //#endif
   }
 
+  /** 读取并更新页面状态；失败按有无快照分别显示错误态或提示。 */
   load(): void {
-    this.inflight.update((count) => count + 1);
+    if (!this.loadEnabled) {
+      this.loaded.set(true);
+      return;
+    }
+
     // 登记为待完成任务：应用稳定（测试的 whenStable、服务端渲染）要等到结果落到页面状态上
     this.pendingTasks.run(() =>
-      this.sessionContext
-        .refreshSettings()
-        .then(() => {
-          if (this.destroyed) {
-            return;
-          }
+      this.refresh().catch((error: unknown) => {
+        if (this.destroyRef.destroyed) {
+          return;
+        }
 
+        // 已有快照时刷新失败（切换语言、写入后重取）：保留原内容，只做提示
+        if (this.loaded()) {
+          toast.error(applicationErrorMessage(error));
+        } else {
+          this.loadError.set(applicationErrorMessage(error));
+        }
+      }),
+    );
+  }
+
+  /**
+   * 重取快照，落定后返回；失败时抛出并保留上一份快照。写入成功后经它重取：快照到手才算写入落定。
+   * 期间又发起了读取时，结果以最新那次为准。
+   */
+  refresh(): Promise<void> {
+    if (!this.loadEnabled) {
+      return Promise.resolve();
+    }
+
+    const sequence = ++this.sequence;
+    this.reading.set(true);
+    // 等待者挂在页面上而不是这一次请求上：新读取一发起，较早的调用方就跟着最新一次落定，
+    // 不必等自己那次请求返回（它可能一直挂着，写入队列会被卡住）
+    const settled = new Promise<void>((resolve, reject) => this.waiters.push({ resolve, reject }));
+    this.sessionContext.refreshSettings().then(
+      (settings) => {
+        if (sequence !== this.sequence) {
+          return;
+        }
+
+        if (!this.destroyRef.destroyed) {
+          this.snapshot.set(settings);
           this.loadError.set(null);
           this.loaded.set(true);
-        })
-        .catch((error: unknown) => {
-          if (this.destroyed) {
-            return;
-          }
+          this.reading.set(false);
+        }
+        this.settle((waiter) => waiter.resolve());
+      },
+      (error: unknown) => {
+        if (sequence !== this.sequence) {
+          return;
+        }
 
-          // 已有快照时刷新失败（切换语言、写入后重取）：保留原内容，只做提示
-          if (this.loaded()) {
-            toast.error(applicationErrorMessage(error));
-          } else {
-            this.loadError.set(applicationErrorMessage(error));
-          }
-        })
-        .finally(() => this.inflight.update((count) => count - 1)),
+        this.reading.set(false);
+        this.settle((waiter) => waiter.reject(error));
+      },
     );
+    return settled;
+  }
+
+  private settle(action: (waiter: RefreshWaiter) => void): void {
+    this.waiters.splice(0).forEach(action);
   }
 }

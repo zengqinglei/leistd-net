@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import {
   afterRenderEffect,
   ElementRef,
@@ -9,6 +9,7 @@ import {
   input,
   linkedSignal,
   signal,
+  Type,
 } from '@angular/core';
 import { FieldTree, form, FormField, validateTree, ValidationError } from '@angular/forms/signals';
 //#if (IncludeLocalization)
@@ -26,10 +27,10 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 
 //#if (Email)
-import { EmailTest } from './widgets/email-test/email-test';
+import { EMAIL_GROUP, EmailTest } from './widgets/email-test/email-test';
 //#endif
 //#if (ExternalLogin)
 import {
@@ -43,25 +44,30 @@ import { mapFormErrors } from '../../../../core/errors/form-errors';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
-import {
-  AccountPreferences,
-  AccountPreferencesService,
-} from '../../../../core/services/account-preferences-service';
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
-import { SessionContextService } from '../../../../core/services/session-context-service';
 import { ThemeService } from '../../../../core/services/theme-service';
+import {
+  groupPath,
+  groupSettings,
+  SettingGroup,
+  SettingScope,
+  settingsInScope,
+} from '../../../../core/settings/setting-groups';
 import { SettingService } from '../../../../core/settings/setting-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
+import { SETTINGS_SECTION_HEADING_LEVEL } from '../../../../core/settings/settings-section-heading-level';
 import { InfoHint } from '../../../../shared/components/info-hint/info-hint';
 import { ComboboxRevealSelected } from '../../../../shared/directives/combobox-reveal-selected';
-import { AccountPreferenceField } from '../../../../shared/dtos/account-preferences.dto';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import {
+  ACCOUNT_PREFERENCE_GROUP,
   ACCOUNT_PREFERENCE_SETTINGS,
+  ACCOUNT_PREFERENCE_SOURCE,
+  AccountPreferenceSetting,
   browserTimeZone,
   SETTING_CONTROLS,
   SETTING_DEPENDENCIES,
@@ -69,18 +75,16 @@ import {
   SETTING_VALUE_DESCRIPTIONS,
   SETTING_VALUE_LABELS,
   SettingControl,
+  SettingControlContext,
+  SettingCustomControl,
   timeZoneGroups,
   timeZoneMatches,
   timeZoneOffsetLabel,
 } from '../../setting-choices';
 import {
   buildSettingTree,
-  groupPath,
-  groupSettings,
-  SettingGroup,
+  SETTING_WRITE_GUARD,
   SettingRowNode,
-  SettingScope,
-  settingsInScope,
   SettingsPageState,
   shownChildren,
 } from '../../settings-page-state';
@@ -97,14 +101,8 @@ interface RowState {
   messageKey?: string;
 }
 
-/** 个人页的账户偏好分组：行由会话偏好（`/me`）提供，不取设置快照，三种部署形态一致。 */
-const PREFERENCES_GROUP = 'Display';
-
-/** 账户偏好对应的设置名（与后端设置定义同名，控件与占位规则按名字复用）→ 偏好字段。 */
-const PREFERENCE_FIELDS: Readonly<Partial<Record<string, AccountPreferenceField>>> =
-  Object.fromEntries(
-    ACCOUNT_PREFERENCE_SETTINGS.map((preference) => [preference.name, preference.field]),
-  );
+/** 偏好字段，取自声明表的偏好行。 */
+type PreferenceField = AccountPreferenceSetting['field'];
 
 /** 一个分组的渲染内容：分组本身加上按专属布局拆走之后剩下的普通行。 */
 interface GroupView extends SettingGroup {
@@ -154,6 +152,7 @@ export const SAVING_MIN_MS = 400;
   imports: [
     ...HlmEmptyImports,
     FormField,
+    NgComponentOutlet,
     NgIcon,
     NgTemplateOutlet,
     HlmBadge,
@@ -179,6 +178,7 @@ export const SAVING_MIN_MS = 400;
   imports: [
     ...HlmEmptyImports,
     FormField,
+    NgComponentOutlet,
     NgIcon,
     NgTemplateOutlet,
     HlmBadge,
@@ -206,9 +206,18 @@ export const SAVING_MIN_MS = 400;
 })
 export class SettingSection {
   private readonly settingService = inject(SettingService);
-  private readonly sessionContext = inject(SessionContextService);
   private readonly pageState = inject(SettingsPageState);
-  private readonly preferences = inject(AccountPreferencesService);
+  private readonly writeGuard = inject(SETTING_WRITE_GUARD);
+  /** 账户偏好行的来源；声明表里没有偏好行时不取用，也不出偏好分组。 */
+  private readonly preferences =
+    ACCOUNT_PREFERENCE_SETTINGS.length > 0 ? inject(ACCOUNT_PREFERENCE_SOURCE) : null;
+  /** 账户偏好对应的设置名（与后端设置定义同名，控件与占位规则按名字复用）→ 偏好字段。 */
+  private readonly preferenceFields: Readonly<Partial<Record<string, PreferenceField>>> =
+    Object.fromEntries(
+      ACCOUNT_PREFERENCE_SETTINGS.map((preference) => [preference.name, preference.field]),
+    );
+  /** 多分组时的分区标题级别，由外壳按自己的标题层级给出。 */
+  protected readonly headingLevel = inject(SETTINGS_SECTION_HEADING_LEVEL);
   private readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
@@ -275,11 +284,13 @@ export class SettingSection {
   private readonly writeGenerations = new Map<string, number>();
   protected readonly settings = this.pageState.settings;
   private readonly labelFns = new Map<string, (value: unknown) => string>();
+  //#if (Email)
 
   /** 发信参数的面板底部给"发送测试邮件"：改完参数最想确认的就是能否收到。 */
   protected readonly showEmailTest = computed(
-    () => this.scope() === 'system' && this.groups().some((group) => group.key === 'Email'),
+    () => this.scope() === 'system' && this.groups().some((group) => group.key === EMAIL_GROUP),
   );
+  //#endif
   //#if (ExternalLogin)
 
   /** 外部登录分组的写入成功次数：提供方卡片据此在保存或恢复默认后重取生效状态。 */
@@ -289,11 +300,11 @@ export class SettingSection {
   /** 分组由后端下发的分组标识驱动，前端不另列清单，否则漏登记的新设置会从界面上静默消失。 */
   protected readonly groups = computed<SettingGroup[]>(() => {
     let settings = settingsInScope(this.settings(), this.scope());
-    if (this.scope() === 'account') {
+    if (this.scope() === 'account' && this.preferences) {
       // 个人页的账户偏好取会话偏好，不取设置快照：资源服务没有这几项设置，持有方的快照也不是偏好的来源
       settings = [
         ...this.preferenceRows(),
-        ...settings.filter((setting) => !(setting.name in PREFERENCE_FIELDS)),
+        ...settings.filter((setting) => !(setting.name in this.preferenceFields)),
       ];
     }
     //#if (IncludeLocalization)
@@ -305,9 +316,9 @@ export class SettingSection {
     //#endif
     const groups = groupSettings(settings);
     // 偏好读不到时分组照常出现，由视图说明原因；设置也没载入成功时让位给载入失败的说明与重试
-    if (this.scope() === 'account' && !this.preferences.known() && !this.loadError()) {
+    if (this.scope() === 'account' && this.preferences?.known() === false && !this.loadError()) {
       groups.unshift({
-        key: PREFERENCES_GROUP,
+        key: ACCOUNT_PREFERENCE_GROUP,
         label: this.preferenceText('group'),
         settings: [],
       });
@@ -340,8 +351,8 @@ export class SettingSection {
         rows: buildSettingTree(others, SETTING_DEPENDENCIES),
         preferencesUnavailable:
           this.scope() === 'account' &&
-          group.key === PREFERENCES_GROUP &&
-          !this.preferences.known(),
+          group.key === ACCOUNT_PREFERENCE_GROUP &&
+          this.preferences?.known() === false,
         hostScopeOnce: isHostScopeOnly(group.settings),
         //#if (ExternalLogin)
         externalLoginProviders: providers,
@@ -444,6 +455,50 @@ export class SettingSection {
   private readonly timeZoneIndex = new Map(
     this.timeZones.flatMap((group) => group.zones.map((zone) => [zone.value, zone] as const)),
   );
+
+  /** 登记了组件类的设置渲染项目自己的控件（见 {@link SettingCustomControl}）。 */
+  protected customControlOf(setting: SettingOutputDto): Type<SettingCustomControl> | undefined {
+    const control = this.controlOf(setting);
+    return typeof control === 'function' ? control : undefined;
+  }
+
+  /** 自定义控件的上下文按行缓存：每轮新建对象会让控件的输入反复变化。快照刷新换了设置对象时重建。 */
+  private readonly controlContexts = new Map<
+    string,
+    { setting: SettingOutputDto; context: SettingControlContext }
+  >();
+
+  protected controlContextOf(
+    setting: SettingOutputDto,
+    scope: SettingScope,
+  ): SettingControlContext {
+    const key = draftKey(setting, scope);
+    const cached = this.controlContexts.get(key);
+    if (cached?.setting === setting) {
+      return cached.context;
+    }
+
+    const context: SettingControlContext = {
+      setting,
+      value: computed(() => this.draftOf(setting, scope)),
+      inherited: computed(() => this.systemOrInheritedValue(setting, scope)),
+      invalid: computed(() => this.isInvalid(setting, scope)),
+      controlId: setting.name,
+      describedBy: computed(() => this.switchDescribedByOf(setting, scope)),
+      commit: (value) => {
+        // 同值不重复写：正在保存的，或已落定跟随快照的。取消或失败后留在控件里的输入没有保存，
+        // 再次提交同一个值是重试，照常写入
+        const unchanged = (value ?? '') === this.draftOf(setting, scope);
+        const unsaved =
+          this.pending().has(key) && this.stateOf(setting, scope)?.status !== 'saving';
+        if (!unchanged || unsaved) {
+          this.write(setting, value, scope);
+        }
+      },
+    };
+    this.controlContexts.set(key, { setting, context });
+    return context;
+  }
 
   /** 时区用可搜索的分组下拉：四百多项无搜索难以选择，手挑短清单又会漏掉部署地。 */
   protected isTimeZone(setting: SettingOutputDto): boolean {
@@ -563,7 +618,7 @@ export class SettingSection {
     return text === key ? value : text;
   }
 
-  private preferenceText(key: 'group' | AccountPreferenceField): string {
+  private preferenceText(key: 'group' | PreferenceField): string {
     //#if (IncludeLocalization)
     // 词条未到时与模板 t 一致回落成完整键，不出空标题
     return textAt(this.preferenceTexts(), key) ?? `settings.preferences.${key}`;
@@ -586,8 +641,8 @@ export class SettingSection {
    * 偏好未知时为空，分组由 {@link groups} 补上并说明原因。
    */
   private preferenceRows(): SettingOutputDto[] {
-    const preferences = this.preferences.preferences();
-    const overrides = this.preferences.overrides();
+    const preferences = this.preferences?.preferences();
+    const overrides = this.preferences?.overrides();
     if (!preferences || !overrides) {
       return [];
     }
@@ -597,7 +652,7 @@ export class SettingSection {
     return ACCOUNT_PREFERENCE_SETTINGS.map(({ name, field, allowedValues }): SettingOutputDto => ({
       name,
       displayName: this.preferenceText(field),
-      group: PREFERENCES_GROUP,
+      group: ACCOUNT_PREFERENCE_GROUP,
       groupDisplayName: groupLabel,
       userValue: overrides[field],
       tenantValue: overrides[field] === null ? preferences[field] : null,
@@ -783,12 +838,13 @@ export class SettingSection {
 
     // 串行：两条链并发时 GET 响应可能乱序，旧快照会覆盖新快照。
     const startedAt = Date.now();
-    const preferenceField = scope === 'account' ? PREFERENCE_FIELDS[setting.name] : undefined;
-    // 账户偏好在操作当下就交给偏好服务：它在这一刻记下主体，并自带串行队列。等本组件的队列轮到再交，
+    const preferenceField = scope === 'account' ? this.preferenceFields[setting.name] : undefined;
+    // 账户偏好在操作当下就交给偏好来源：它在这一刻记下主体，并自带串行队列。等本组件的队列轮到再交，
     // 期间主体离开（换人）时，上一个人的意图会以下一个人的会话发出。这里的队列只按序发布结果
-    const preferenceWrite = preferenceField
-      ? this.preferences.write(preferenceField, value as AccountPreferences[typeof preferenceField])
-      : undefined;
+    const preferenceWrite =
+      preferenceField && this.preferences
+        ? this.preferences.write(preferenceField, value)
+        : undefined;
     // 结果在轮到时才读：先挂一个处理，免得排队期间的失败被当成未处理
     preferenceWrite?.catch(() => undefined);
     this.enqueue(async () => {
@@ -822,12 +878,20 @@ export class SettingSection {
           return;
         }
 
-        const request =
-          scope === 'account'
-            ? this.settingService.setForCurrentUser({ name: setting.name, value })
-            : this.settingService.setForCurrentTenant({ name: setting.name, value });
-
-        await firstValueFrom(request);
+        // 端点由服务按作用域与设置层级选；外壳可以给写入加一层（如确认身份），不发值就完成表示本人取消
+        const sent = await firstValueFrom(
+          this.writeGuard(() => this.settingService.saveSetting(setting, scope, value)).pipe(
+            map(() => true),
+          ),
+          { defaultValue: false },
+        );
+        if (!sent) {
+          // 取消不是失败：行回到常态，输入留在控件里，可以再提交
+          if (isLatest()) {
+            this.clearRowState(key);
+          }
+          return;
+        }
         //#if (ExternalLogin)
         // 写入已生效就重取状态，不等快照：快照刷新失败不影响本实例的方案目录已经变了
         if (setting.group === EXTERNAL_LOGIN_GROUP) {
@@ -835,9 +899,8 @@ export class SettingSection {
         }
         //#endif
 
-        // 走会话上下文而非 load()：语言由设置派生，只刷新数据不会重新应用；
-        // 本页的快照就是会话快照，刷新完即已更新。
-        await this.sessionContext.refreshSettings();
+        // 经页面状态重取：它走会话刷新入口（语言等派生状态随之更新），并与页面的其他读取共用序号
+        await this.pageState.refresh();
 
         // 快照到手后才丢草稿，否则 PUT 成功而 GET 失败时界面会退回旧值
         this.dropDraft(key, value, isLatest);
