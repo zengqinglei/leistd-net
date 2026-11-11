@@ -1,10 +1,11 @@
-import { HttpRequest, provideHttpClient } from '@angular/common/http';
+import { HttpClient, HttpRequest, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import {
   ApplicationRef,
   ChangeDetectionStrategy,
   Component,
   computed,
+  inject,
   input,
   signal,
 } from '@angular/core';
@@ -16,7 +17,7 @@ import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 //#if (IncludeLocalization)
 import { EMPTY, firstValueFrom, of, Subject, throwError } from 'rxjs';
 //#else
-import { EMPTY, Subject, throwError } from 'rxjs';
+import { EMPTY, firstValueFrom, Subject, throwError } from 'rxjs';
 //#endif
 import { userEvent } from 'vitest/browser';
 
@@ -24,10 +25,10 @@ import { SettingSection } from './setting-section';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
-import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
+import { SessionContextService } from '../../../../core/services/session-context-service';
 import { ThemeService } from '../../../../core/services/theme-service';
 import { SettingService } from '../../../../core/settings/setting-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
@@ -96,9 +97,16 @@ function pageProviders(): unknown[] {
     provideHttpClientTesting(),
     provideRouter([]),
     SettingsPageState,
-    // 页面经会话上下文刷新设置，那条链会碰到 AuthService；真实实现会拉起认证栈
-    // （无本地身份的形态下是整个 OIDC 客户端），本组用例只关心页面的行为。
-    { provide: AuthService, useValue: { clearAuthData: () => undefined } },
+    // 会话服务各项目不同，共享 spec 不构造它：刷新入口的桩直接取设置，用例照常应答那次 GET
+    {
+      provide: SessionContextService,
+      useFactory: () => {
+        const http = inject(HttpClient);
+        return {
+          refreshSettings: () => firstValueFrom(http.get<SettingOutputDto[]>('/api/v1/settings')),
+        };
+      },
+    },
     { provide: ACCOUNT_PREFERENCE_SOURCE, useClass: PreferenceSourceStub },
     //#if (IncludeLocalization)
     ...provideTranslocoTesting(['en'], loader),

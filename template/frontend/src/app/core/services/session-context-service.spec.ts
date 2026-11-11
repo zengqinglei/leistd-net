@@ -204,6 +204,19 @@ describe('SessionContextService', () => {
   });
 
   // 偏好取自建立会话前那次 /me：断言界面状态真的换了，而不只是偏好状态里有值
+  // 设置页取刷新入口的返回值：较早的刷新晚到时交给它的调用方的是较新的快照，旧值不会落到设置页上
+  it('returns the newer snapshot to a settings refresh that answers late', async () => {
+    const earlier = service.refreshSettings();
+    const later = service.refreshSettings();
+    const [first, second] = http.match('/api/v1/settings');
+    second.flush([{ name: 'Display.Language', userValue: 'en' } as SettingOutputDto]);
+    await later;
+    first.flush([{ name: 'Display.Language', userValue: null } as SettingOutputDto]);
+
+    expect((await earlier)[0].userValue).toBe('en');
+    expect(settingContext.snapshot()[0].userValue).toBe('en');
+  });
+
   it('applies the account preferences read with the current user', async () => {
     //#if (IncludeLocalization)
     await establishWith(readOf({ language: 'zh-CN', timeZone: 'Asia/Tokyo', theme: 'dark' }));

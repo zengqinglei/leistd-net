@@ -11,10 +11,12 @@
      只认简写（`lucideGlobe`）与键值（`globe: lucideGlobe` 登记的是 `globe`）两种条目，其他写法（展开等）报出无法判定。
   3. 兜底图标（`GROUP_ICONS[…] ?? '…'`）同样在 `provideIcons` 里提供。
 
-注释里的条目不算。生成项目里的源码已经按参数裁剪，脚本不处理条件块。
+注释里的条目不算。生成项目里的源码已经按参数裁剪，脚本不处理条件块。前端文件按 `frontend/**/src/app/...` 查找
+（单应用在 `frontend/src/app`，多应用在 `frontend/apps/<应用>/src/app`），跳过依赖与构建产物目录，恰好一份才检查。
 
 用法：`python3 scripts/check-setting-group-icons.py`；判据自检：`python3 scripts/check-setting-group-icons.py --self-test`。
 """
+import os
 from pathlib import Path
 import re
 import sys
@@ -25,7 +27,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 PERMISSIONS = 'backend/src/*.Application/Settings/Provider/SettingGroupPermissions.cs'
 CONSTANTS = 'backend/src/*.Application/Settings/Provider/SettingConstant.cs'
+# 单应用前端的位置（自检夹具用它）；查找按 FRONTEND_PATTERN，多应用前端在 frontend/apps/<应用>/ 下
 FRONTEND = 'frontend/src/app/features/settings/components/system-settings/system-settings.ts'
+FRONTEND_SUFFIX = 'src/app/features/settings/components/system-settings/system-settings.ts'
+FRONTEND_PATTERN = f'frontend/**/{FRONTEND_SUFFIX}'
+SKIPPED_DIRS = {'node_modules', 'dist', '.angular', '.cache', 'coverage'}
 
 GROUPS_CLASS = re.compile(r'\bclass\s+Groups\s*\{(.*?)\n\s*\}', re.S)
 CONSTANT = re.compile(r'\bconst\s+string\s+(\w+)\s*=\s*"([^"]*)"')
@@ -50,11 +56,29 @@ def read_one(root, pattern):
     return code_only(found[0].read_text(encoding='utf-8')), None
 
 
+def find_frontend(root):
+    """按后缀找系统设置组件，不进依赖与产物目录（node_modules 里的同名文件不算，也免得遍历上万个文件）。"""
+    found = []
+    for directory, subdirectories, files in os.walk(root / 'frontend'):
+        subdirectories[:] = [name for name in subdirectories if name not in SKIPPED_DIRS]
+        path = Path(directory) / 'system-settings.ts'
+        if 'system-settings.ts' in files and path.as_posix().endswith('/' + FRONTEND_SUFFIX):
+            found.append(path)
+    return sorted(found)
+
+
+def read_frontend(root):
+    found = find_frontend(root)
+    if len(found) != 1:
+        return None, f'{FRONTEND_PATTERN}: expected exactly one file, found {len(found)}'
+    return code_only(found[0].read_text(encoding='utf-8')), None
+
+
 def check_project(root):
     errors = []
     permissions, error = read_one(root, PERMISSIONS)
     constants, error2 = read_one(root, CONSTANTS)
-    frontend, error3 = read_one(root, FRONTEND)
+    frontend, error3 = read_frontend(root)
     errors += [e for e in (error, error2, error3) if e]
     if errors:
         return errors
@@ -76,9 +100,9 @@ def check_project(root):
     provided = PROVIDED.search(frontend)
     fallback = FALLBACK.search(frontend)
     if not table:
-        return errors + [f'{FRONTEND}: GROUP_ICONS not found']
+        return errors + [f'{FRONTEND_PATTERN}: GROUP_ICONS not found']
     if not provided:
-        return errors + [f'{FRONTEND}: provideIcons({{ ... }}) not found']
+        return errors + [f'{FRONTEND_PATTERN}: provideIcons({{ ... }}) not found']
     icons = dict(ICON_ENTRY.findall(table.group(1)))
     available = set()
     for entry in (part.strip() for part in provided.group(1).split(',')):
@@ -86,7 +110,7 @@ def check_project(root):
         if match:
             available.add(next(name for name in match.groups() if name))
         elif entry:
-            errors.append(f'{FRONTEND}: unsupported provideIcons entry `{entry}`; '
+            errors.append(f'{FRONTEND_PATTERN}: unsupported provideIcons entry `{entry}`; '
                           'write a shorthand `name` or `name: icon` entry')
 
     for group in groups:
@@ -95,7 +119,7 @@ def check_project(root):
     for icon in sorted(set(icons.values()) - available):
         errors.append(f'icon {icon} in GROUP_ICONS is not provided by provideIcons, so it cannot render')
     if not fallback:
-        errors.append(f'{FRONTEND}: fallback icon (GROUP_ICONS[...] ?? \'...\') not found')
+        errors.append(f'{FRONTEND_PATTERN}: fallback icon (GROUP_ICONS[...] ?? \'...\') not found')
     elif fallback.group(1) not in available:
         errors.append(f'fallback icon {fallback.group(1)} is not provided by provideIcons, so it cannot render')
     return errors
@@ -154,6 +178,22 @@ def edit(relative, old, new):
     return apply
 
 
+def copy_frontend(target):
+    """把系统设置组件复制到另一处（相对根的路径）。"""
+    def apply(root):
+        path = root / target
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text((root / FRONTEND).read_text(encoding='utf-8'), encoding='utf-8')
+    return apply
+
+
+def move_frontend(target):
+    def apply(root):
+        copy_frontend(target)(root)
+        (root / FRONTEND).unlink()
+    return apply
+
+
 def chain(*steps):
     def apply(root):
         for step in steps:
@@ -171,8 +211,14 @@ def self_test():
         ('icon registered under an alias key', chain(
             edit(FRONTEND, "Operations: 'lucideActivity'", "Operations: 'operations'"),
             edit(FRONTEND, 'provideIcons({ lucideActivity,', 'provideIcons({ operations: lucideActivity,'))),
+        ('multi-app frontend', move_frontend(f'frontend/apps/platform/{FRONTEND_SUFFIX}')),
+        ('same file inside node_modules is ignored', copy_frontend(f'frontend/node_modules/pkg/{FRONTEND_SUFFIX}')),
     ]
     cases = [
+        ('two frontend apps', copy_frontend(f'frontend/apps/portal/{FRONTEND_SUFFIX}'),
+         'expected exactly one file, found 2'),
+        ('frontend file missing', move_frontend('frontend/src/app/features/settings/system-settings.ts'),
+         'expected exactly one file, found 0'),
         ('group without an icon', edit(FRONTEND, "  Display: 'lucideGlobe',\n", ''),
          'setting group Display has no icon in GROUP_ICONS'),
         ('commented-out icon does not count', edit(FRONTEND, "  Display: 'lucideGlobe',", "  // Display: 'lucideGlobe',"),
