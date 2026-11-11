@@ -46,6 +46,7 @@ describe('Roles page query round trip', () => {
     connect: vi.fn(() => Promise.resolve()),
     watchResource: vi.fn<(resourceKey: string, destroyRef?: DestroyRef) => void>(),
     resourceSubscribed$: new Subject<string>(),
+    isConnected: signal(false),
   };
   //#endif
 
@@ -65,6 +66,9 @@ describe('Roles page query round trip', () => {
   }
 
   beforeEach(async () => {
+    //#if (IncludeRealTime)
+    realtime.isConnected.set(false);
+    //#endif
     service = {
       getRoles: vi.fn().mockName('RoleService.getRoles'),
       deleteRole: vi.fn().mockReturnValue(of(undefined)),
@@ -198,6 +202,76 @@ describe('Roles page query round trip', () => {
     realtime.resourceSubscribed$.next('host:users');
     await fixture.whenStable();
     expect(vi.mocked(service.getRoles).mock.calls.length).toBe(before + 1);
+  });
+
+  /** 按当前的推送桩状态重建页面，返回之后发出的列表请求次数。 */
+  async function reopen(): Promise<() => number> {
+    fixture.destroy();
+    service.getRoles.mockClear();
+    fixture = TestBed.createComponent(Roles);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return () => vi.mocked(service.getRoles).mock.calls.length;
+  }
+
+  // 站内导航时连接通常已建立：先订阅、确认后才查，首次打开只发一次请求，那次确认不再补查
+  it('loads once after its subscription is confirmed when the connection is already up', async () => {
+    realtime.isConnected.set(true);
+    const calls = await reopen();
+    expect(calls()).toBe(0);
+    // 等确认就是首屏加载：处于加载态，不显示成"暂无角色"
+    expect(component.loading()).toBe(true);
+
+    realtime.resourceSubscribed$.next('host:roles');
+    await fixture.whenStable();
+    expect(calls()).toBe(1);
+    expect(component.loading()).toBe(false);
+
+    // 之后的确认（自动重连、重建连接）照常补查
+    realtime.resourceSubscribed$.next('host:roles');
+    await fixture.whenStable();
+    expect(calls()).toBe(2);
+  });
+
+  // 订阅被拒不会有确认：等到上限就先查，之后真来了确认仍补查一次
+  it('stops waiting for a confirmation that does not come', async () => {
+    realtime.isConnected.set(true);
+    // RxJS 的 timer 走 setInterval
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    try {
+      const calls = await reopen();
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(calls()).toBe(0);
+      expect(component.loading()).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(calls()).toBe(1);
+      expect(component.loading()).toBe(false);
+
+      realtime.resourceSubscribed$.next('host:roles');
+      await fixture.whenStable();
+      expect(calls()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 服务保留着最近一次推送：进页面前收到过"角色已变更"，新页面不能把这条旧事件当成新的再查一次
+  it('ignores the change event that arrived before the page opened', async () => {
+    realtime.lastResourceEvent.set({ eventName: 'Roles.Changed', payload: {} });
+    const calls = await reopen();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(calls()).toBe(1);
+
+    // 之后到达的同名事件照常刷新
+    realtime.lastResourceEvent.set({ eventName: 'Roles.Changed', payload: {} });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(calls()).toBe(2);
   });
 
   it('holds the subscription for exactly the lifetime of the page', async () => {

@@ -24,7 +24,25 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { Observable, tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
+// prettier-ignore
+import {
+  Observable,
+  tap,
+  combineLatest,
+  defer,
+  EMPTY,
+  //#if (IncludeRealTime)
+  merge,
+  //#endif
+  of,
+  //#if (IncludeRealTime)
+  ReplaySubject,
+  //#endif
+  Subject,
+  //#if (IncludeRealTime)
+  timer,
+  //#endif
+} from 'rxjs';
 // prettier-ignore
 import {
   catchError,
@@ -36,6 +54,10 @@ import {
   finalize,
   startWith,
   switchMap,
+  //#if (IncludeRealTime)
+  map,
+  take,
+  //#endif
 } from 'rxjs/operators';
 
 import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
@@ -76,6 +98,10 @@ const DEFAULT_ROLE_SORTING: SortingState = [{ id: 'sort', desc: false }];
 /** 实时资源与事件名：与后端 AppRealTimeResources 一致。 */
 const ROLE_LIST_RESOURCE = 'roles';
 const ROLES_CHANGED_EVENT = 'Roles.Changed';
+/**
+ * 连接已建立时首次查询等订阅确认的上限：通常一个往返就到；订阅被拒（不会有确认）或服务端迟迟不答时不让列表一直空着。
+ */
+const SUBSCRIPTION_WAIT_MS = 2000;
 //#endif
 
 /** 角色管理页。列表状态（分页、排序、关键字）落在 URL 查询参数上。 */
@@ -165,9 +191,22 @@ export class Roles {
     // 搜索框即时值随 URL 回填（前进后退 / 分享链接场景）。
     effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
 
+    //#if (IncludeRealTime)
+    // 先登记订阅再查：连接已建立时首次查询等订阅确认，只查一次（见 followRoleListChanges）
+    const firstLoad = this.followRoleListChanges();
+    //#else
+    const firstLoad = of(undefined);
+    //#endif
+
     // URL 变化或显式刷新时重新拉取列表。
-    combineLatest([this.route.queryParamMap, this.refreshRequests.pipe(startWith(undefined))])
+    firstLoad
       .pipe(
+        switchMap(() =>
+          combineLatest([
+            this.route.queryParamMap,
+            this.refreshRequests.pipe(startWith(undefined)),
+          ]),
+        ),
         // 开始状态放进当前请求的订阅里：switchMap 先取消旧请求（其 finalize 置 false）再订阅新请求，
         // 写在 switchMap 外的话，旧请求的 finalize 会在新请求还没返回时把 loading 关掉。
         switchMap(([params]) =>
@@ -195,10 +234,6 @@ export class Roles {
         this.totalCount.set(result.totalCount);
       });
 
-    //#if (IncludeRealTime)
-    this.followRoleListChanges();
-
-    //#endif
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
     const title = translateSignal('roles.title', {}, { scope: 'roles' });
@@ -213,29 +248,58 @@ export class Roles {
   }
   //#if (IncludeRealTime)
 
-  /** 角色列表在别处被改时自动刷新：推送只是刷新提示，内容仍经受权限保护的查询接口获取。 */
-  private followRoleListChanges(): void {
+  /**
+   * 角色列表在别处被改时自动刷新：推送只是刷新提示，内容仍经受权限保护的查询接口获取。返回首次查询的时机。
+   *
+   * 推送不持久化，查询早于订阅生效时，两者之间的变更会漏掉，所以要先订阅、确认后再查：
+   * - 连接已建立（站内导航的常见情形）：首次查询等本页订阅的确认，只查一次；超过 {@link SUBSCRIPTION_WAIT_MS} 不再等；
+   * - 还没连上：不让首屏等建连，先查，订阅确认后补查一次；
+   * - 之后每次确认（自动重连、重建连接）都补查一次。
+   */
+  private followRoleListChanges(): Observable<void> {
     const resourceKey = realtimeResourceKey(
       ROLE_LIST_RESOURCE,
       this.authService.currentUser()?.tenantId,
     );
     this.signalR.registerResourceEvent(ROLES_CHANGED_EVENT);
-    // 订阅确认之后补查一次：推送不持久化，首次加入前、断线期间的变更只能靠这次查询拿到
-    this.signalR.resourceSubscribed$
-      .pipe(
-        filter((key) => key === resourceKey),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe(() => this.reload());
+    const confirmed = this.signalR.resourceSubscribed$.pipe(
+      filter((key) => key === resourceKey),
+      takeUntilDestroyed(this.destroyRef),
+    );
+    // 同一个确认只走一条路：首次查询还在等它时放行首次查询，否则补查。超时放行后，之后的确认照常补查
+    let awaitingConfirmation = this.signalR.isConnected();
+    const confirmedFirst = new ReplaySubject<void>(1);
+    confirmed.subscribe(() => {
+      if (awaitingConfirmation) {
+        awaitingConfirmation = false;
+        confirmedFirst.next();
+      } else {
+        this.reload();
+      }
+    });
+    // 等确认期间就是首屏加载：显示加载态，不能让空列表先显示成"暂无角色"；首次查询开始后由查询管线接管
+    if (awaitingConfirmation) {
+      this.loading.set(true);
+    }
+    const firstLoad: Observable<void> = awaitingConfirmation
+      ? merge(confirmedFirst, timer(SUBSCRIPTION_WAIT_MS).pipe(map(() => undefined))).pipe(
+          take(1),
+          tap(() => (awaitingConfirmation = false)),
+        )
+      : of(undefined);
     // 订阅随本页销毁撤销，与连接何时建立无关：页面在连上之前离开，连上后也不会订阅
     this.signalR.watchResource(resourceKey, this.destroyRef);
     void this.signalR.connect();
 
+    // 只认本页之后到达的事件：服务保留着最近一次推送，进页面时那条是旧的，已由首次查询覆盖
+    const eventAtStart = this.signalR.lastResourceEvent();
     effect(() => {
-      if (this.signalR.lastResourceEvent()?.eventName === ROLES_CHANGED_EVENT) {
+      const event = this.signalR.lastResourceEvent();
+      if (event !== eventAtStart && event?.eventName === ROLES_CHANGED_EVENT) {
         this.reload();
       }
     });
+    return firstLoad;
   }
   //#endif
 
