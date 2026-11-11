@@ -37,6 +37,7 @@
 
 - 数据库、缓存、消息队列、UI 组件库、部署平台与外部服务可以按项目实际覆盖；覆盖时在需求或架构决策中写明原因、对开发测试部署的影响，以及迁移与回滚方案。
 - 引入新依赖说明收益、成本、风险和替代方案；版本升级验证构建、测试与部署兼容性。
+- 后端 NuGet 公告（`scripts/audit-backend-dependencies.ps1`，构建里只告警，由 CI 定时与包变化时把关 high/critical）：与运行时同号的 .NET 服务包（`Microsoft.AspNetCore.*`、`Microsoft.Extensions.*`、`Microsoft.EntityFrameworkCore.*`、`System.*`）整列升到同一个修复补丁版，不只升报警的那个，传递引入的同列包（如 EF Core 本体）也登记，否则降级冲突（NU1605）或程序集版本不一致（CS1705）；传递依赖报警时在 `backend/Directory.Packages.props` 登记修复版（已开传递钉版），注释写来源公告与删除条件。镜像用浮动 `10.0` 标签，重建即取修复运行时。
 <!--#if (SpaFrontend)-->
 - 前端依赖门槛是生产依赖无 high/critical 公告（CI 审计作业，命令见 testing.md §1.1）。开发工具链的公告逐条记下引入工具、可达性、暂时接受的理由与复查时机；不用 `npm audit fix --force` 降级或未经验证的 `overrides` 清零，优先配套升级。
 <!--#endif-->

@@ -394,6 +394,18 @@ verify:
     - apt-get update
   script:
     - pwsh -NoProfile -File scripts/verify.ps1
+backend-audit:
+  stage: verify
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - backend/Directory.Packages.props
+        - backend/Directory.Build.props
+        - backend/**/*.csproj
+  script:
+    - pwsh -NoProfile -File scripts/audit-backend-dependencies.ps1
 publish-images:
   stage: publish
   rules:
@@ -418,7 +430,9 @@ publish-images:
                         ('合并请求也发布', valid.replace('$CI_PIPELINE_SOURCE == "push" && ', '')),
                         ('缺 DOCKER_HOST', valid.replace('    DOCKER_HOST: "tcp://docker:2375"\n', '')),
                         ('合并请求缓存可写', valid.replace('CACHE_POLICY: pull\n', 'CACHE_POLICY: pull-push\n')),
-                        ('缓存在项目目录外', valid.replace('"$CI_PROJECT_DIR/.nuget/packages"', '"/root/.nuget/packages"'))]:
+                        ('缓存在项目目录外', valid.replace('"$CI_PROJECT_DIR/.nuget/packages"', '"/root/.nuget/packages"')),
+                        ('后端审计不跟框架版本文件', valid.replace('        - backend/Directory.Build.props\n', '')),
+                        ('缺后端审计', valid[:valid.index('backend-audit:')] + valid[valid.index('publish-images:'):])]:
         try:
             check_gitlab_ci(text, False)
             failures.append(f'GitLab 薄壳判据未拒绝：{label}')
@@ -573,7 +587,7 @@ def check_gitlab_ci(text, spa_frontend):
     except ImportError as error:
         raise SystemExit('需要 PyYAML 解析生成的 .gitlab-ci.yml（python -m pip install PyYAML==6.0.3）') from error
     document = yaml.safe_load(text)
-    audit_expected = ['frontend-audit'] if spa_frontend else []
+    audit_expected = (['frontend-audit'] if spa_frontend else []) + ['backend-audit']
     assert isinstance(document, dict) and list(document) == ['stages', 'verify'] + audit_expected + ['publish-images'], f'GitLab CI top-level keys: {document and list(document)}'
     assert document['stages'] == ['verify', 'publish'], f'GitLab CI stages: {document["stages"]}'
     # 镜像发布：靠阶段屏障等 verify 阶段全部作业（含审计），不用 needs 绕过；只在默认分支的 push 上运行
@@ -614,6 +628,12 @@ def check_gitlab_ci(text, spa_frontend):
         changes = [rule for rule in audit['rules'] if 'changes' in rule]
         assert len(changes) == 1 and changes[0]['changes'] == ['frontend/package-lock.json'], 'GitLab CI audit must follow the lock file'
         assert any('"schedule"' in rule['if'] and '"web"' in rule['if'] for rule in audit['rules']), 'GitLab CI audit schedule and manual runs'
+    # 后端依赖审计所有形态都有：构建里 NuGet 公告只告警，由它按 high/critical 把关
+    backend_audit = document['backend-audit']
+    assert backend_audit['stage'] == 'verify' and 'scripts/audit-backend-dependencies.ps1' in '\n'.join(backend_audit['script']), 'GitLab CI backend audit job'
+    changes = [rule for rule in backend_audit['rules'] if 'changes' in rule]
+    assert len(changes) == 1 and changes[0]['changes'] == ['backend/Directory.Packages.props', 'backend/Directory.Build.props', 'backend/**/*.csproj'], f'GitLab CI backend audit must follow package files: {changes}'
+    assert any('"schedule"' in rule['if'] and '"web"' in rule['if'] for rule in backend_audit['rules']), 'GitLab CI backend audit schedule and manual runs'
 
 
 def check_github_publish(text):
@@ -797,7 +817,9 @@ def validate(output, values, config, verify=True, sdk=None):
     if values['Ci'] == 'github':
         assert 'merge_group:' in github_ci, 'GitHub CI must report the required check for merge queue'
         assert ('npm audit --omit=dev --audit-level=high --package-lock-only' in github_ci) == values['SpaFrontend'], 'GitHub audit step applicability'
-        assert ('schedule:' in github_ci) == values['SpaFrontend'], 'GitHub audit schedule applicability'
+        # 后端依赖审计所有形态都有，定时触发随之常在
+        assert 'schedule:' in github_ci and 'scripts/audit-backend-dependencies.ps1' in github_ci, 'GitHub backend audit and schedule'
+        assert "-- backend/Directory.Packages.props backend/Directory.Build.props 'backend/**/*.csproj'" in github_ci, 'GitHub backend audit must follow package files'
         if values['SpaFrontend']:
             assert 'frontend/package-lock.json' in github_ci and 'workflow_dispatch' in github_ci and '未改依赖，跳过审计' in github_ci, 'GitHub audit conditions'
     assert not (output / '.github/workflows/audit.yml').exists(), 'GitHub audit must not be a separate workflow'
