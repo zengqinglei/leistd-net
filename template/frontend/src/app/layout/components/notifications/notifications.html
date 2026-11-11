@@ -113,7 +113,7 @@
           </div>
         } @else {
           <!-- 条目之间只留间距：本项目的虚线表示添加 -->
-          <div class="flex max-h-[420px] flex-col gap-0.5 overflow-y-auto p-1">
+          <div class="relative flex max-h-[420px] flex-col gap-0.5 overflow-y-auto p-1">
             @for (n of notifications(); track n.id) {
               <app-notification-item
                 [notification]="n"
