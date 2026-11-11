@@ -394,6 +394,18 @@ verify:
     - apt-get update
   script:
     - pwsh -NoProfile -File scripts/verify.ps1
+backend-audit:
+  stage: verify
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - backend/Directory.Packages.props
+        - backend/Directory.Build.props
+        - backend/**/*.csproj
+  script:
+    - pwsh -NoProfile -File scripts/audit-backend-dependencies.ps1
 publish-images:
   stage: publish
   rules:
@@ -418,7 +430,9 @@ publish-images:
                         ('合并请求也发布', valid.replace('$CI_PIPELINE_SOURCE == "push" && ', '')),
                         ('缺 DOCKER_HOST', valid.replace('    DOCKER_HOST: "tcp://docker:2375"\n', '')),
                         ('合并请求缓存可写', valid.replace('CACHE_POLICY: pull\n', 'CACHE_POLICY: pull-push\n')),
-                        ('缓存在项目目录外', valid.replace('"$CI_PROJECT_DIR/.nuget/packages"', '"/root/.nuget/packages"'))]:
+                        ('缓存在项目目录外', valid.replace('"$CI_PROJECT_DIR/.nuget/packages"', '"/root/.nuget/packages"')),
+                        ('后端审计不跟框架版本文件', valid.replace('        - backend/Directory.Build.props\n', '')),
+                        ('缺后端审计', valid[:valid.index('backend-audit:')] + valid[valid.index('publish-images:'):])]:
         try:
             check_gitlab_ci(text, False)
             failures.append(f'GitLab 薄壳判据未拒绝：{label}')
