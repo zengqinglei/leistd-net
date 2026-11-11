@@ -16,7 +16,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$solution = @(Get-ChildItem (Join-Path $root 'backend') -Filter '*.sln')[0]
+$solution = @(Get-ChildItem (Join-Path $root 'backend') -File | Where-Object { $_.Extension -in '.sln', '.slnx' })[0]
 if (-not $solution) { throw 'backend 下没有解决方案文件' }
 
 & dotnet restore $solution.FullName
@@ -25,9 +25,15 @@ if ($LASTEXITCODE -ne 0) { throw "还原失败（退出码 $LASTEXITCODE）" }
 $json = & dotnet list $solution.FullName package --vulnerable --include-transitive --format json 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "dotnet list package 失败（退出码 $LASTEXITCODE）：`n$json" }
 
+$report = $json | ConvertFrom-Json
+# 审计源没有漏洞数据（NU1905）或取不到时命令照样返回 0、漏洞列表为空：空列表证明不了没有公告，有诊断就失败
+$problems = @($report.problems | Where-Object { $_ })
+if ($problems.Count -gt 0) {
+    throw "漏洞数据不完整，不能判定为无公告：`n$(($problems | ForEach-Object { "[$($_.level)] $($_.text)" }) -join "`n")"
+}
 $blocking = [System.Collections.Generic.List[string]]::new()
 $seen = @{}
-foreach ($project in @(($json | ConvertFrom-Json).projects)) {
+foreach ($project in @($report.projects)) {
     foreach ($framework in @($project.frameworks)) {
         foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
             foreach ($vulnerability in @($package.vulnerabilities)) {

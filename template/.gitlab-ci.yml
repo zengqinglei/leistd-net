@@ -106,7 +106,7 @@ frontend-audit:
 #endif
 
 # 后端 NuGet 依赖审计：构建里公告只告警（backend/Directory.Build.props），这里按 high/critical 把关。
-# 定时（需在项目里建 Schedule）、手动，以及包版本或项目文件变化时运行。
+# 定时（需在项目里建 Schedule）、手动，以及包版本、框架版本（Directory.Build.props）或项目文件变化时运行。
 backend-audit:
   stage: verify
   image: mcr.microsoft.com/dotnet/sdk:10.0
@@ -116,6 +116,7 @@ backend-audit:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         - backend/Directory.Packages.props
+        - backend/Directory.Build.props
         - backend/**/*.csproj
   script:
     - pwsh -NoProfile -File scripts/audit-backend-dependencies.ps1

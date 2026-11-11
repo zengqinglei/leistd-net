@@ -87,7 +87,7 @@ jobs:
           done
 #endif
       # 后端 NuGet 依赖审计：构建里公告只告警（backend/Directory.Build.props），这里按 high/critical 把关。
-      # 定时、手动，或包版本与项目文件在本次事件的基线与头之间变化时运行，否则跳过。
+      # 定时、手动，或包版本、框架版本（Directory.Build.props）与项目文件在本次事件的基线与头之间变化时运行，否则跳过。
       - name: Audit backend dependencies
         shell: bash
         env:
@@ -101,7 +101,7 @@ jobs:
             *)
               if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then run_audit=true
               elif git fetch --no-tags --depth=1 origin "$BASE" "$HEAD" 2>/dev/null; then
-                git diff --quiet "$BASE" "$HEAD" -- backend/Directory.Packages.props 'backend/**/*.csproj' || run_audit=true
+                git diff --quiet "$BASE" "$HEAD" -- backend/Directory.Packages.props backend/Directory.Build.props 'backend/**/*.csproj' || run_audit=true
               else run_audit=true
               fi ;;
           esac
