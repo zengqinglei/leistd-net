@@ -17,8 +17,13 @@
         <!-- 分区不套卡片。一页里有多个分组时才出分组标题（标题下一条实线）：单组面板的标题已经由外壳给出，再写一遍是重复。
            整组都是进程级设置时，生效范围与延迟由外壳在面板标题旁说明；混有其他层级的分组在行内标注。 -->
         @if (groups().length > 1) {
+          <!-- 标题级别由外壳给出（默认 h4，比面板标题低一级），样式不随级别变 -->
           <div class="border-b pb-3">
-            <h4 class="text-sm leading-none font-semibold">{{ group.label }}</h4>
+            @if (headingLevel() === 3) {
+              <h3 class="text-sm leading-none font-semibold">{{ group.label }}</h3>
+            } @else {
+              <h4 class="text-sm leading-none font-semibold">{{ group.label }}</h4>
+            }
           </div>
         }
         <!--#if (ExternalLogin)-->
@@ -199,7 +204,17 @@
         [class]="isBoolean(setting) ? 'self-center' : '@md/field-group:self-center'"
       >
         <div class="flex items-center gap-2">
-          @if (isBoolean(setting)) {
+          @if (customControlOf(setting); as control) {
+            <!-- 项目自己的控件：只渲染控件本身，宽度与输入类控件一致 -->
+            <div class="min-w-0 flex-1 @md/field-group:w-64 @md/field-group:flex-none">
+              <ng-container
+                *ngComponentOutlet="
+                  control;
+                  inputs: { context: controlContextOf(setting, scope()) }
+                "
+              />
+            </div>
+          } @else if (isBoolean(setting)) {
             <hlm-switch
               [forceInvalid]="isInvalid(setting, scope())"
               [inputId]="setting.name"
@@ -302,7 +317,8 @@
             </hlm-select>
           } @else {
             <!-- 值经 [formField] 绑定到表单。数值型把上下界交给浏览器（值域以服务端为准）。用 change 提交；
-             与本行其他控件一样不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。 -->
+             与本行其他控件一样不随写入禁用（见 write）：提交时光标常在框里，禁用会弹走焦点。值多为主机名、密钥、标识，
+             关闭拼写检查与自动大写。 -->
             <input
               [forceInvalid]="isInvalid(setting, scope())"
               [attr.aria-invalid]="isInvalid(setting, scope()) ? 'true' : null"
@@ -314,6 +330,8 @@
               [attr.max]="setting.maximum"
               [attr.inputmode]="isNumeric(setting) ? 'numeric' : null"
               [attr.autocomplete]="setting.isSecret ? 'new-password' : 'off'"
+              spellcheck="false"
+              autocapitalize="off"
               [attr.data-testid]="'setting-input-' + setting.name"
               [formField]="fieldOf(setting, scope())"
               [placeholder]="

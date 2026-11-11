@@ -7,6 +7,7 @@ import { Subject } from 'rxjs';
 // prettier-ignore
 import {
   buildSettingTree,
+  SETTINGS_LOAD_ENABLED,
   SettingRowNode,
   SettingsPageState,
   shownChildren,
@@ -19,12 +20,13 @@ import { AuthService } from '../../core/services/auth-service';
 import { LanguageService } from '../../core/services/language-service';
 //#endif
 import { SessionContextService } from '../../core/services/session-context-service';
+import { SettingContextService } from '../../core/settings/setting-context-service';
 import { SettingService } from '../../core/settings/setting-service';
 import { SettingOutputDto } from '../../core/settings/setting.dto';
 
 /**
- * 设置页的快照就是会话快照：页面读取与会话刷新经同一个带代次保护的入口，
- * 晚到的旧响应不能覆盖较新的值，页外的写入（页头切换语言）刷新后本页随之更新。
+ * 设置页的快照取会话刷新入口返回给本页的那一份：页面读取与会话刷新经同一个带代次保护的入口，
+ * 本页的读取只认最后发起的那次，晚到的旧响应不能覆盖较新的值。
  */
 describe('SettingsPageState', () => {
   const setting = (userValue: string | null): SettingOutputDto =>
@@ -33,7 +35,7 @@ describe('SettingsPageState', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve));
 
   /** 每次读取都返回一个由用例应答的响应。 */
-  function stateWithManualResponses(): {
+  function stateWithManualResponses(loadEnabled = true): {
     state: SettingsPageState;
     responses: Subject<SettingOutputDto[]>[];
   } {
@@ -41,6 +43,7 @@ describe('SettingsPageState', () => {
     TestBed.configureTestingModule({
       providers: [
         SettingsPageState,
+        { provide: SETTINGS_LOAD_ENABLED, useValue: loadEnabled },
         // 页面读取走会话刷新入口；真实 AuthService 会拉起认证栈，这里只需要清理入口
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -75,17 +78,81 @@ describe('SettingsPageState', () => {
     expect(state.settings()[0].userValue).toBe('zh-CN');
   });
 
-  // 页外的写入（如页头切换语言）刷新了会话快照：本页跟上，即使活动语言没变、不会触发重取
-  it('follows a session refresh once the page has loaded', async () => {
+  // 会话快照与设置页的读取范围可以不同（项目按工作区读会话快照、平台设置页读本人的）：
+  // 刷新入口返回给本页的那一份才是本页的快照，不能显示会话快照
+  it('shows what the session refresh returns for this page, not the session snapshot', async () => {
+    const { state, responses } = stateWithManualResponses();
+    responses[0].next([setting('en')]);
+    await settle();
+
+    vi.spyOn(TestBed.inject(SessionContextService), 'refreshSettings').mockResolvedValue([
+      setting('zh-CN'),
+    ]);
+    await state.refresh();
+
+    expect(TestBed.inject(SettingContextService).snapshot()[0].userValue).toBe('en');
+    expect(state.settings()[0].userValue).toBe('zh-CN');
+  });
+
+  // 写入后的重取被页面的新读取取代：它要等最新那次落定才返回，写入方此时丢草稿不会露出旧值
+  it('settles a superseded refresh only once the latest read has landed', async () => {
     const { state, responses } = stateWithManualResponses();
     responses[0].next([setting(null)]);
     await settle();
 
-    const refresh = TestBed.inject(SessionContextService).refreshSettings();
+    let refreshed = false;
+    void state.refresh().then(() => (refreshed = true));
+    state.load();
     responses[1].next([setting('en')]);
-    await refresh;
+    await settle();
+    expect(refreshed).toBe(false);
 
-    expect(state.settings()[0].userValue).toBe('en');
+    responses[2].next([setting('zh-CN')]);
+    await vi.waitFor(() => expect(refreshed).toBe(true));
+    expect(state.settings()[0].userValue).toBe('zh-CN');
+  });
+
+  // 较早的读取一直不返回、较新的已落定：较早的调用方也随之落定，写入队列不会被它卡住
+  it('settles a superseded refresh with the latest read even if its own request never answers', async () => {
+    const { state, responses } = stateWithManualResponses();
+    responses[0].next([setting(null)]);
+    await settle();
+
+    let refreshed = false;
+    void state.refresh().then(() => (refreshed = true));
+    state.load();
+    responses[2].next([setting('zh-CN')]);
+
+    await vi.waitFor(() => expect(refreshed).toBe(true));
+    expect(state.settings()[0].userValue).toBe('zh-CN');
+    expect(state.loading()).toBe(false);
+  });
+
+  // 最近一次读取失败：被它取代的调用方同样拿到失败，写入方据此在行上报错
+  it('rejects a superseded refresh when the latest read fails', async () => {
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const { state, responses } = stateWithManualResponses();
+    responses[0].next([setting(null)]);
+    await settle();
+
+    const refreshed = state.refresh();
+    state.load();
+    responses[2].error(new Error('boom'));
+
+    await expect(refreshed).rejects.toThrow('boom');
+  });
+
+  // 外壳判定当前用户看不到任何设置：不发请求，页面按已载入的空快照处理
+  it('does not read when the shell disables loading', async () => {
+    const { state, responses } = stateWithManualResponses(false);
+
+    state.load();
+    await state.refresh();
+
+    expect(responses).toHaveLength(0);
+    expect(state.loaded()).toBe(true);
+    expect(state.loading()).toBe(false);
+    expect(state.settings()).toEqual([]);
   });
 
   // 本页还有一次读取在途时会话刷新先回来：那次读取晚到也不能把旧值写回
@@ -178,14 +245,15 @@ describe('SettingsPageState', () => {
     expect(notify).toHaveBeenCalledOnce();
   });
 
-  it('reports loading only while one of its loads is pending', async () => {
+  // 只看最后发起的那次：被取代的较早读取还挂着时最新一次已落定，重试按钮不能一直禁用
+  it('reports loading only while its latest load is pending', async () => {
     const { state, responses } = stateWithManualResponses();
     state.load();
     expect(state.loading()).toBe(true);
 
     responses[1].next([setting('en')]);
     await settle();
-    expect(state.loading()).toBe(true);
+    expect(state.loading()).toBe(false);
 
     responses[0].next([setting('en')]);
     await settle();

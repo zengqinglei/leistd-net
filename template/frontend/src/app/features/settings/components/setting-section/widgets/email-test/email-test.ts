@@ -27,6 +27,9 @@ import { injectFormSubmission } from '../../../../../../core/validation/form-sub
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
 
+/** 发信参数的分组标识，与后端 `SettingConstant.Groups.Email` 一致。 */
+export const EMAIL_GROUP = 'Email';
+
 /** 「邮件发送」面板底部：用当前生效的参数发一封测试邮件，失败时原样显示服务端给出的原因。 */
 @Component({
   selector: 'app-email-test',

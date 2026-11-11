@@ -1,8 +1,15 @@
+import { inject, InjectionToken, InputSignal, Signal, Type } from '@angular/core';
+
+import {
+  AccountPreferencesService,
+  PreferenceWriteOutcome,
+} from '../../core/services/account-preferences-service';
 //#if (IncludeLocalization)
 import { LANG_OPTIONS, SUPPORTED_LANGS } from '../../core/services/language-service';
 //#endif
 import { THEME_MODES } from '../../core/services/theme-service';
 import { SETTINGS } from '../../core/settings/setting.constants';
+import { SettingOutputDto } from '../../core/settings/setting.dto';
 import { AccountPreferenceField } from '../../shared/dtos/account-preferences.dto';
 
 /*
@@ -47,11 +54,36 @@ export const SETTING_DESCRIPTIONS: Readonly<Partial<Record<string, string>>> = {
  * 专用控件：
  * - `timeZone`：可搜索的分组下拉，候选为全量时区（见 {@link timeZoneGroups}）；
  * - `language`：界面语言下拉，只支持一种语言时不出这一行；
- * - `theme`：外观下拉，个人页未设置时显示设备当前的外观。
+ * - `theme`：外观下拉，个人页未设置时显示设备当前的外观；
+ * - 组件类：项目自己的控件（如值为 JSON 数组的多选），见 {@link SettingCustomControl}。
  *
  * `language` 与 `timeZone` 由设备兜底：本层未覆盖时说明值从哪层来（跟随组织、部署默认、跟随系统）。
  */
-export type SettingControl = 'timeZone' | 'language' | 'theme';
+export type SettingControl = 'timeZone' | 'language' | 'theme' | Type<SettingCustomControl>;
+
+/** 设置分区交给自定义控件的一行：值、占位与无效态随分区状态更新。 */
+export interface SettingControlContext {
+  readonly setting: SettingOutputDto;
+  /** 本层的值：正在编辑或等待写入落定时为输入，否则为快照里本层的覆盖值，未覆盖为空串。 */
+  readonly value: Signal<string>;
+  /** 本层未覆盖时生效的继承值（原值，未登记文案），控件自己决定怎么显示；没有时为空串。 */
+  readonly inherited: Signal<string>;
+  readonly invalid: Signal<boolean>;
+  /** 控件可聚焦元素的 id：本行标签的 `for` 指向它。 */
+  readonly controlId: string;
+  /** 本行描述与错误的 id，控件放进 `aria-describedby`。 */
+  readonly describedBy: Signal<string>;
+  /** 提交本层的值，`null` 清除覆盖；与内置控件一样即改即存、排队写入。 */
+  commit(value: string | null): void;
+}
+
+/**
+ * 自定义控件：只渲染控件本身，标签、说明、写入状态、字段错误与恢复按钮仍由设置分区渲染。值的形状与校验
+ * 由项目约定（框架的 `allowedValues` 是整值候选，按元素多选不能登记它），候选项由控件自己给出。
+ */
+export interface SettingCustomControl {
+  readonly context: InputSignal<SettingControlContext>;
+}
 
 /** 用专用控件渲染的设置；没有登记的按通用规则渲染。 */
 export const SETTING_CONTROLS: Readonly<Partial<Record<string, SettingControl>>> = {
@@ -80,6 +112,9 @@ export interface SettingDependency {
  */
 export const SETTING_DEPENDENCIES: Readonly<Partial<Record<string, SettingDependency>>> = {};
 
+/** 个人页账户偏好行所在的分组标识（与后端设置定义的分组相同），偏好暂时读不到时这一组照常出现并说明原因。 */
+export const ACCOUNT_PREFERENCE_GROUP = 'Display';
+
 /** 个人页的一行账户偏好：偏好字段、同名设置，以及候选值（偏好不取设置快照，候选值在这里给出）。 */
 export interface AccountPreferenceSetting {
   field: AccountPreferenceField;
@@ -98,6 +133,23 @@ export const ACCOUNT_PREFERENCE_SETTINGS: readonly AccountPreferenceSetting[] = 
   { field: 'timeZone', name: SETTINGS.display.timeZone },
   { field: 'theme', name: SETTINGS.display.theme, allowedValues: THEME_MODES },
 ];
+
+/** 偏好行的读写来源：生效值、个人覆盖、是否已读到，以及单字段写入（结果见 `PreferenceWriteOutcome`）。 */
+export interface AccountPreferenceSource {
+  readonly preferences: Signal<Readonly<Record<AccountPreferenceField, string | null>> | null>;
+  readonly overrides: Signal<Readonly<Record<AccountPreferenceField, string | null>> | null>;
+  readonly known: Signal<boolean>;
+  write(field: AccountPreferenceField, value: string | null): Promise<PreferenceWriteOutcome>;
+}
+
+/**
+ * 偏好行的读写来源。{@link ACCOUNT_PREFERENCE_SETTINGS} 为空时设置分区不取用它，也不出偏好分组；
+ * 偏好由别的服务持有、接口不同的项目在这里接适配器。
+ */
+export const ACCOUNT_PREFERENCE_SOURCE = new InjectionToken<AccountPreferenceSource>(
+  'ACCOUNT_PREFERENCE_SOURCE',
+  { providedIn: 'root', factory: () => inject(AccountPreferencesService) },
+);
 
 /** 时区选项：一个分组里的一行。 */
 export interface TimeZoneOption {
