@@ -51,6 +51,9 @@ Kubernetes：非机密放 ConfigMap，机密放 Secret，以 `Section__Key` 环�
 代码写 `ILogger`，宿主用 .NET 内置提供程序：控制台输出，启用导出时经 OpenTelemetry 一并推送（见[遥测导出](#遥测导出)）。级别与格式都在 `appsettings.json` 的 `Logging` 节：
 
 - `Logging:LogLevel:Default` 是全局最小级别，系统设置「运维」面板的"最小日志级别"覆盖的就是它，写入即生效，清除回到部署配置；按类别列出的键（如 `Microsoft.EntityFrameworkCore`）不受该设置影响，要单独调整就覆盖对应的 `Logging__LogLevel__<类别>`。
+<!--#if (OpenIddictServer || RemoteTokenAuth)-->
+- `OpenIddict` 类别默认 `Warning`：它的 Information 事件逐个记录协议请求（如令牌请求已发送），只适合排障。临时调回 `Information` 时，参数值已由 OpenIddict 替换为 `[redacted]`，但渲染后的消息带参数名（如 `client_secret`），按"敏感词带值"扫描日志的平台应把 `[redacted]` 视为已掩码。
+<!--#endif-->
 - 控制台默认 `Logging:Console:FormatterName=simple`，作用域按 `键:值` 输出（关联标识 `leistd.correlationId`、租户 `leistd.tenantId`）。日志平台需要结构化输出时只覆盖为 `json`，两种格式共用 `Logging:Console:FormatterOptions`；`simple` 不能删成空值，否则旧的 `IncludeScopes=false` 兼容逻辑会关掉作用域。
 
 请求完成日志用内置 HTTP 日志：每个请求一条 Information 级记录，只含方法、路径（不含查询串）、状态码与耗时，带关联标识与本请求的租户，不记录请求头与正文。边界：
