@@ -105,6 +105,21 @@ frontend-audit:
       exit 1
 #endif
 
+# 后端 NuGet 依赖审计：构建里公告只告警（backend/Directory.Build.props），这里按 high/critical 把关。
+# 定时（需在项目里建 Schedule）、手动，以及包版本或项目文件变化时运行。
+backend-audit:
+  stage: verify
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  timeout: 15m
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - backend/Directory.Packages.props
+        - backend/**/*.csproj
+  script:
+    - pwsh -NoProfile -File scripts/audit-backend-dependencies.ps1
+
 # 镜像发布：只在默认分支的 push 流水线上运行，阶段屏障保证同一提交的 verify 与依赖审计都已成功；
 # 合并请求、定时与手动运行不发布。前提是项目已启用 Container Registry，Runner 要求同 verify（privileged）。
 # 标签为提交 SHA，部署按日志与 dotenv 报告里的 digest 晋级。

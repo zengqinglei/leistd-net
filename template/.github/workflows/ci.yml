@@ -11,11 +11,9 @@ on:
   # merge queue 要求必过检查对队列分支也报告状态
   merge_group:
   workflow_dispatch:
-#if (SpaFrontend)
-  # 每周一次前端生产依赖审计（只跑审计，不跑 verify）
+  # 每周一次依赖审计（只跑审计，不跑 verify）
   schedule:
     - cron: '17 3 * * 1'
-#endif
 
 permissions:
   contents: read
@@ -88,6 +86,27 @@ jobs:
             sleep $((5 * attempt))
           done
 #endif
+      # 后端 NuGet 依赖审计：构建里公告只告警（backend/Directory.Build.props），这里按 high/critical 把关。
+      # 定时、手动，或包版本与项目文件在本次事件的基线与头之间变化时运行，否则跳过。
+      - name: Audit backend dependencies
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: |
+          run_audit=false
+          case "$EVENT" in
+            schedule|workflow_dispatch) run_audit=true ;;
+            *)
+              if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then run_audit=true
+              elif git fetch --no-tags --depth=1 origin "$BASE" "$HEAD" 2>/dev/null; then
+                git diff --quiet "$BASE" "$HEAD" -- backend/Directory.Packages.props 'backend/**/*.csproj' || run_audit=true
+              else run_audit=true
+              fi ;;
+          esac
+          if [ "$run_audit" != true ]; then echo "未改后端依赖，跳过审计"; exit 0; fi
+          pwsh -NoProfile -File scripts/audit-backend-dependencies.ps1
       - name: Verify
         # 定时运行只做审计
         if: ${{ github.event_name != 'schedule' }}
