@@ -29,7 +29,7 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// 接收端是本机一个真实的 HTTP 监听器，三路信号经 SDK 的真实导出器与发送层到达；
 /// 每次核对前主动冲刷三个提供程序，不等批处理周期。
 /// </remarks>
-public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
+public sealed class TelemetryExportTests(TelemetryExportTests.TelemetryHost telemetry) : IClassFixture<TelemetryExportTests.TelemetryHost>
 {
     private static readonly ActivitySource Source = new("CompanyName.ProjectName.TelemetryExportTests");
 
@@ -71,7 +71,7 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     public async Task A_saved_disabled_setting_is_honoured_from_process_start()
     {
         using var receiver = new OtlpReceiver();
-        await SetAsync(factory, SettingConstant.Telemetry.ExportEnabled, "false");
+        await SetAsync(telemetry.Host, SettingConstant.Telemetry.ExportEnabled, "false");
         try
         {
             var probe = new StartupFlushProbe(receiver);
@@ -91,7 +91,7 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
         }
         finally
         {
-            await SetAsync(factory, SettingConstant.Telemetry.ExportEnabled, null);
+            await SetAsync(telemetry.Host, SettingConstant.Telemetry.ExportEnabled, null);
         }
     }
 
@@ -168,17 +168,19 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     [InlineData(SettingConstant.Telemetry.ExportEndpoint, "collector:4318", AppSettingErrorCodes.TelemetryEndpointInvalid)]
     [InlineData(SettingConstant.Telemetry.ExportEndpoint, "ftp://collector", AppSettingErrorCodes.TelemetryEndpointInvalid)]
     [InlineData(SettingConstant.Telemetry.ExportEndpoint, "http://collector:4318/?key=secret", AppSettingErrorCodes.TelemetryEndpointInvalid)]
+    [InlineData(SettingConstant.Telemetry.ExportEndpoint, "http://user:secret@collector:4318", AppSettingErrorCodes.TelemetryEndpointInvalid)]
     [InlineData(SettingConstant.Telemetry.ExportHeaders, "x-api-key", AppSettingErrorCodes.TelemetryHeadersInvalid)]
     [InlineData(SettingConstant.Telemetry.ExportHeaders, "=secret", AppSettingErrorCodes.TelemetryHeadersInvalid)]
     [InlineData(SettingConstant.Telemetry.ExportHeaders, "bad name=secret", AppSettingErrorCodes.TelemetryHeadersInvalid)]
     [InlineData(SettingConstant.Telemetry.ExportHeaders, "x-a=1,,x-b=2", AppSettingErrorCodes.TelemetryHeadersInvalid)]
     public async Task Malformed_values_are_rejected_at_write(string name, string value, string code)
     {
-        var error = await Assert.ThrowsAsync<BusinessException>(() => SetAsync(factory, name, value));
+        var error = await Assert.ThrowsAsync<BusinessException>(() => SetAsync(telemetry.Host, name, value));
 
         Assert.Equal(code, error.Code);
-        if (name == SettingConstant.Telemetry.ExportHeaders)
-            Assert.DoesNotContain("secret", error.Message, StringComparison.Ordinal);
+        // 被拒的值可能夹带凭据（认证头、userinfo、查询串里的密钥）：消息与附带数据都不回显
+        Assert.DoesNotContain("secret", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(error.Data.Values.Cast<object?>(), item => item?.ToString()?.Contains("secret", StringComparison.Ordinal) == true);
     }
 
     [Theory]
@@ -186,8 +188,8 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     [InlineData(SettingConstant.Telemetry.ExportHeaders, "x-api-key=a%3Db, Authorization=Bearer token")]
     public async Task Well_formed_values_are_accepted(string name, string value)
     {
-        await SetAsync(factory, name, value);
-        await SetAsync(factory, name, null);
+        await SetAsync(telemetry.Host, name, value);
+        await SetAsync(telemetry.Host, name, null);
     }
 
     // 部署值经 UseSetting 注入：导出开关的部署基线在注册阶段求值
@@ -240,7 +242,7 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
     }
 
     private WebApplicationFactory<Program> Host(Dictionary<string, string?> deployment, StartupFlushProbe? probe = null)
-        => factory.WithWebHostBuilder(builder =>
+        => telemetry.Host.WithWebHostBuilder(builder =>
         {
             foreach (var (key, value) in deployment)
                 builder.UseSetting(key, value);
@@ -335,6 +337,51 @@ public sealed class TelemetryExportTests(ProjectWebApplicationFactory factory) :
             HostStartedAtFlush = services!.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested;
             FlushAll(services!);
             ReceivedDuringStartup = receiver.Requests.Count;
+        }
+    }
+
+    /// <summary>
+    /// 共享测试工厂的默认（<c>OTEL_SDK_DISABLED=true</c>）：OpenTelemetry 的日志提供程序与三路管道都不注册，
+    /// 其他日志提供程序照常收到日志；系统设置里没有导出项。
+    /// </summary>
+    [Fact]
+    public void A_disabled_sdk_leaves_other_log_providers_and_hides_the_export_settings()
+    {
+        var services = telemetry.Factory.Services;
+        var definitions = services.GetRequiredService<ISettingDefinitionManager>();
+
+        Assert.Null(services.GetService<TracerProvider>());
+        Assert.Null(services.GetService<MeterProvider>());
+        Assert.DoesNotContain(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider or TelemetryExportLoggerProvider);
+        Assert.Null(definitions.GetOrNull(SettingConstant.Telemetry.ExportEnabled));
+        Assert.Null(definitions.GetOrNull(SettingConstant.Telemetry.ExportEndpoint));
+        Assert.Null(definitions.GetOrNull(SettingConstant.Telemetry.ExportHeaders));
+
+        services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("CompanyName.ProjectName.TelemetryExportTests")
+            .LogWarning("still logged without the OpenTelemetry SDK");
+        Assert.Contains(services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Message == "still logged without the OpenTelemetry SDK");
+    }
+
+    /// <summary>
+    /// 打开 OpenTelemetry 的宿主：共享测试工厂默认关闭 SDK（<c>OTEL_SDK_DISABLED=true</c>），遥测用例在它的派生宿主上跑。
+    /// </summary>
+    public sealed class TelemetryHost : IDisposable
+    {
+        public TelemetryHost()
+            => Host = Factory.WithWebHostBuilder(builder => builder.UseSetting(TelemetryExportOptions.SdkDisabledKey, "false"));
+
+        /// <summary>共享工厂本身：SDK 关闭。</summary>
+        public ProjectWebApplicationFactory Factory { get; } = new();
+
+        /// <summary>SDK 打开的派生宿主。</summary>
+        public WebApplicationFactory<Program> Host { get; }
+
+        public void Dispose()
+        {
+            Host.Dispose();
+            Factory.Dispose();
         }
     }
 }

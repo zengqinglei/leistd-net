@@ -274,7 +274,7 @@
     "Setting:Security.SessionIdleTimeoutDays": "Sign out after this many idle days",
     "AppSetting:NotificationRetentionOrder": "Unread notifications must be kept at least as long as read ones ({Unread} < {Read} days).",
     "AppSetting:TestEmailFailed": "The test email could not be sent. Check the email settings and server logs.",
-    "AppSetting:TelemetryEndpointInvalid": "'{Value}' is not an absolute http or https address.",
+    "AppSetting:TelemetryEndpointInvalid": "The endpoint must be an absolute http or https address without credentials, query or fragment.",
     "AppSetting:TelemetryHeadersInvalid": "The headers must be comma-separated name=value pairs.",
     "AppSetting:TimeZoneInvalid": "'{Value}' is not a valid IANA time zone id.",
 //#if (IncludeWebhooks)

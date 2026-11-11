@@ -77,10 +77,13 @@ Api 采集 ASP.NET Core、HttpClient 与 .NET 运行时的指标和追踪，以�
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP 基地址（如 `http://collector:4318`）；系统未覆盖开关时，配置了它即启用导出 |
 | `OTEL_EXPORTER_OTLP_HEADERS` | 认证头，官方格式 `key1=value1,key2=value2`；系统设置里填写后整组替换它 |
 | `Telemetry:Export:Enabled` | 导出开关的部署值，通常不配，由上面的地址推导 |
+| `OTEL_SDK_DISABLED` | OpenTelemetry 官方开关，`true` 时整体不注册采集与导出（零开销），系统设置里也没有导出项；只在启动时读取，改了要重启 |
 | `OTEL_SERVICE_NAME` | 服务名；不配时取工作负载身份 `Leistd:ServiceAuth:ClientId`，再不配取 Api 程序集名，三路一致 |
 
 - 只支持"一个基地址、按信号追加路径"；各信号地址完全不同的平台经 Collector 接入。`OTEL_EXPORTER_OTLP_PROTOCOL` 与 `OTEL_EXPORTER_OTLP_{LOGS,METRICS,TRACES}_*` 不生效。
-- 未启用时照常采集与序列化，只在发送前丢弃，有少量 CPU 开销；宿主启动完成之前的发送尝试就地丢弃（那时系统设置还没加载），启动前进入批队列、启动后才发送的数据照常按发送时的配置处理；控制台日志不受影响。
+- 确定不导出的部署设 `OTEL_SDK_DISABLED=true`。保留运行期开关时，未启用导出也尽早丢弃：追踪由采样器丢弃（不记录，传播用的上下文照常，日志里仍有 TraceId），日志不交给 OpenTelemetry 的日志提供程序（不排队、不序列化），指标只在内存里聚合、发送前丢弃；控制台日志不受影响。OpenTelemetry 日志提供程序外面包了一层门控，按别名 `Logging:OpenTelemetry:LogLevel` 写的过滤规则照常生效，按其完整类型名写的规则不匹配。宿主启动完成之前的发送尝试就地丢弃（那时系统设置还没加载）。
+- 地址只写基地址，不带凭据（`user:pass@`）、查询串与片段，凭据放认证头；写入不合规时报错不回显原值。
+- 导出被拒（非 2xx）或发不出去时，每路信号记一条 Warning（不含认证头），持续失败不重复记，恢复时记一条 Information。
 - 改设置后本实例的下一次导出即用新值，其他副本按宿主设置的刷新周期跟上。
 - 有 Collector 的部署推荐把平台 Key 配在 Collector，应用只连集群内的 Collector。
 

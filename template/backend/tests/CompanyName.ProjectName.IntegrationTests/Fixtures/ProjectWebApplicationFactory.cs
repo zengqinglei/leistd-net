@@ -10,6 +10,7 @@ using Leistd.UnitOfWork;
 using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 #endif
+using CompanyName.ProjectName.Api.Options;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -132,6 +133,9 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("ConnectionStrings:Redis", "");
         builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
+        // OpenTelemetry 官方开关：测试宿主默认不注册采集与导出管道（每个宿主各带后台线程与缓冲，宿主一多就放大内存与耗时）。
+        // 只在 Provider 构建前读取，所以也经 UseSetting；遥测自己的用例在派生宿主上设回 false
+        builder.UseSetting(TelemetryExportOptions.SdkDisabledKey, "true");
 #if (OpenIddictServer)
         builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
 #endif

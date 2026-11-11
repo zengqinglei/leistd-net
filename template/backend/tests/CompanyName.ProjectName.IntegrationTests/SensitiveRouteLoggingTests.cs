@@ -176,7 +176,9 @@ public sealed class SensitiveRouteLoggingTests(SensitiveRouteLoggingTests.ProbeH
     {
         public ProbeHost()
         {
+            // 共享工厂默认关闭 OpenTelemetry SDK：这组用例要核对追踪里的路径，打开它
             Host = Factory.WithWebHostBuilder(builder => builder
+                .UseSetting(TelemetryExportOptions.SdkDisabledKey, "false")
                 .UseSetting(TelemetryExportOptions.EndpointKey, Receiver.BaseAddress)
                 .ConfigureServices(services => services.AddControllers()
                     .AddApplicationPart(typeof(SensitiveRouteProbeController).Assembly)));

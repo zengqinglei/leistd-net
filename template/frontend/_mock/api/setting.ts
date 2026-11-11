@@ -203,11 +203,13 @@ function assertValidValue(definition: MockSettingDefinition, value: string | nul
     }
   }
 
-  // 与后端的遥测导出校验一致：基地址是绝对 http/https 地址、不带查询串与片段（发送层在其后追加 /v1/{signal}）
+  // 与后端的遥测导出校验一致：基地址是绝对 http/https 地址，不带凭据、查询串与片段（发送层在其后追加 /v1/{signal}）；
+  // 被拒的地址可能夹带凭据，不回显
   if (name === 'Telemetry.Export.Endpoint' && !isHttpBaseAddress(value)) {
     throw new MockException(400, {
       code: 'AppSetting:TelemetryEndpointInvalid',
-      message: `'${value}' is not an absolute http or https address.`,
+      message:
+        'The endpoint must be an absolute http or https address without credentials, query or fragment.',
     });
   }
 
@@ -223,7 +225,13 @@ function assertValidValue(definition: MockSettingDefinition, value: string | nul
 function isHttpBaseAddress(value: string): boolean {
   try {
     const url = new URL(value);
-    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.search && !url.hash;
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
   } catch {
     return false;
   }

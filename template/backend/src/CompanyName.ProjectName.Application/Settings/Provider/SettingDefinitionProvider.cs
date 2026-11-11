@@ -1,10 +1,6 @@
-#if (!RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Settings.Options;
-#endif
 using Leistd.Settings.Definitions;
-#if (!RemoteTokenAuth)
 using Microsoft.Extensions.Options;
-#endif
 #if (LocalIdentity)
 using System.Globalization;
 using CompanyName.ProjectName.Application.Users.Options;
@@ -41,16 +37,22 @@ namespace CompanyName.ProjectName.Application.Settings.Provider;
 /// 部署期唯一的真相，设置表只承载租户级覆盖。
 /// </param>
 /// <param name="sessionOptions">会话空闲时限的部署基线（组合根按会话 Cookie 的有效期配置）。</param>
+#endif
+/// <param name="telemetrySettings">是否登记遥测导出设置：部署关闭了 OpenTelemetry SDK 时不登记。</param>
+#if (LocalIdentity)
 public class SettingDefinitionProvider(
     IOptions<DisplayDefaultsOptions> displayDefaults,
     IOptions<UserRegistrationOptions> registrationOptions,
-    IOptions<UserSessionOptions> sessionOptions) : ISettingDefinitionProvider
+    IOptions<UserSessionOptions> sessionOptions,
+    IOptions<TelemetrySettingsOptions> telemetrySettings) : ISettingDefinitionProvider
 {
 #elif (!RemoteTokenAuth)
-public class SettingDefinitionProvider(IOptions<DisplayDefaultsOptions> displayDefaults) : ISettingDefinitionProvider
+public class SettingDefinitionProvider(
+    IOptions<DisplayDefaultsOptions> displayDefaults,
+    IOptions<TelemetrySettingsOptions> telemetrySettings) : ISettingDefinitionProvider
 {
 #else
-public class SettingDefinitionProvider : ISettingDefinitionProvider
+public class SettingDefinitionProvider(IOptions<TelemetrySettingsOptions> telemetrySettings) : ISettingDefinitionProvider
 {
 #endif
     /// <inheritdoc />
@@ -262,29 +264,10 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
             .AsBoolean()
             .IsVisibleToClients = true;
 
-        // 遥测导出同样是进程级。开关与地址的默认值取部署基线；认证头是机密设置，没有默认值，未设置时用部署配置里的
-        context.Add(
-            SettingConstant.Telemetry.ExportEnabled,
-            scopes: SettingScopes.Host,
-            displayName: "Export telemetry over OTLP",
-            group: SettingConstant.Groups.Operations)
-            .AsBoolean()
-            .IsVisibleToClients = true;
-
-        context.Add(
-            SettingConstant.Telemetry.ExportEndpoint,
-            scopes: SettingScopes.Host,
-            displayName: "OTLP endpoint",
-            group: SettingConstant.Groups.Operations)
-            .IsVisibleToClients = true;
-
-        var exportHeaders = context.Add(
-            SettingConstant.Telemetry.ExportHeaders,
-            scopes: SettingScopes.Host,
-            displayName: "OTLP headers",
-            group: SettingConstant.Groups.Operations);
-        exportHeaders.IsEncrypted = true;
-        exportHeaders.IsVisibleToClients = true;
+        if (telemetrySettings.Value.ExportConfigurable)
+        {
+            DefineTelemetryExport(context);
+        }
 
 #if (IncludeOperationRecords)
         // 操作记录保留期同样是进程级：归档任务跨租户统一执行。默认值取部署基线，
@@ -395,4 +378,31 @@ public class SettingDefinitionProvider : ISettingDefinitionProvider
         return definition;
     }
 #endif
+
+    // 遥测导出同样是进程级。开关与地址的默认值取部署基线；认证头是机密设置，没有默认值，未设置时用部署配置里的
+    private static void DefineTelemetryExport(ISettingDefinitionContext context)
+    {
+        context.Add(
+            SettingConstant.Telemetry.ExportEnabled,
+            scopes: SettingScopes.Host,
+            displayName: "Export telemetry over OTLP",
+            group: SettingConstant.Groups.Operations)
+            .AsBoolean()
+            .IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Telemetry.ExportEndpoint,
+            scopes: SettingScopes.Host,
+            displayName: "OTLP endpoint",
+            group: SettingConstant.Groups.Operations)
+            .IsVisibleToClients = true;
+
+        var exportHeaders = context.Add(
+            SettingConstant.Telemetry.ExportHeaders,
+            scopes: SettingScopes.Host,
+            displayName: "OTLP headers",
+            group: SettingConstant.Groups.Operations);
+        exportHeaders.IsEncrypted = true;
+        exportHeaders.IsVisibleToClients = true;
+    }
 }

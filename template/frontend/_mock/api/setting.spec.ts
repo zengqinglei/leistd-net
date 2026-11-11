@@ -164,13 +164,18 @@ describe('settings mock', () => {
     expect(JSON.stringify(rows)).not.toContain('secret-a');
   });
 
-  // 与后端的遥测导出校验同一组正反例：拒绝时不落库，认证头的值不出现在错误里
+  // 与后端的遥测导出校验同一组正反例：拒绝时不落库，被拒的值（可能夹带凭据）不出现在错误里
   it.each([
     ['Telemetry.Export.Endpoint', 'collector:4318', 'AppSetting:TelemetryEndpointInvalid'],
     ['Telemetry.Export.Endpoint', 'ftp://collector', 'AppSetting:TelemetryEndpointInvalid'],
     [
       'Telemetry.Export.Endpoint',
       'http://collector:4318/?key=secret',
+      'AppSetting:TelemetryEndpointInvalid',
+    ],
+    [
+      'Telemetry.Export.Endpoint',
+      'http://user:secret@collector:4318',
       'AppSetting:TelemetryEndpointInvalid',
     ],
     ['Telemetry.Export.Headers', 'x-api-key', 'AppSetting:TelemetryHeadersInvalid'],
@@ -189,9 +194,7 @@ describe('settings mock', () => {
 
     expect(rejection?.status).toBe(400);
     expect(rejection?.error.code).toBe(code);
-    if (name === 'Telemetry.Export.Headers') {
-      expect(JSON.stringify(rejection?.error)).not.toContain(value);
-    }
+    expect(JSON.stringify(rejection?.error)).not.toContain('secret');
     expect(TENANT_SETTING_VALUES.size).toBe(0);
   });
 
