@@ -1,6 +1,8 @@
 using System.Net;
 using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Api.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
@@ -104,7 +106,65 @@ public sealed class TelemetryExportHandlerTests
         Assert.Equal(["current"], Assert.Single(inner.Requests).Header("x-api-key"));
     }
 
-    private static (HttpMessageInvoker Invoker, RecordingHandler Inner, MutableMonitor Options, TelemetryExportGate Gate) Create(
+    // 收集器拒绝（如认证头错误）时 SDK 只经 EventSource 报错：发送层要在进程日志里留一条，持续失败不刷屏，恢复时说一声
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_rejected_export_logs_one_warning_until_it_recovers(bool sync)
+    {
+        var (invoker, inner, _, _) = Create(new() { Enabled = true, Endpoint = "http://collector:4318", Headers = "Authorization=Bearer secret-token" });
+        inner.Status = HttpStatusCode.Unauthorized;
+
+        (await SendAsync(invoker, "logs", sync)).Dispose();
+        (await SendAsync(invoker, "logs", sync)).Dispose();
+        inner.Status = HttpStatusCode.OK;
+        (await SendAsync(invoker, "logs", sync)).Dispose();
+        inner.Status = HttpStatusCode.Unauthorized;
+        (await SendAsync(invoker, "logs", sync)).Dispose();
+
+        Assert.Equal(
+            [
+                (LogLevel.Warning, "OTLP export of logs was rejected with HTTP 401; check the endpoint and headers. Repeated failures are not logged until it recovers."),
+                (LogLevel.Information, "OTLP export of logs recovered."),
+                (LogLevel.Warning, "OTLP export of logs was rejected with HTTP 401; check the endpoint and headers. Repeated failures are not logged until it recovers."),
+            ],
+            Logs.Entries.Select(entry => (entry.Level, entry.Message)));
+        Assert.DoesNotContain(Logs.Entries, entry => entry.Message.Contains("secret-token", StringComparison.Ordinal));
+    }
+
+    // 各路信号分开记：日志被拒不能盖住追踪的状态
+    [Fact]
+    public async Task Failures_are_tracked_per_signal()
+    {
+        var (invoker, inner, _, _) = Create(new() { Enabled = true, Endpoint = "http://collector:4318" });
+        inner.Status = HttpStatusCode.Forbidden;
+
+        (await SendAsync(invoker, "logs", sync: true)).Dispose();
+        (await SendAsync(invoker, "traces", sync: true)).Dispose();
+
+        Assert.Equal(2, Logs.Entries.Count(entry => entry.Level == LogLevel.Warning));
+    }
+
+    // 连不上（地址错、收集器没起）同样要留痕；异常照原样交回 SDK，由它按自己的规则处理
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_unreachable_endpoint_logs_a_warning_and_rethrows(bool sync)
+    {
+        var (invoker, inner, _, _) = Create(new() { Enabled = true, Endpoint = "http://collector:4318" });
+        inner.Failure = new HttpRequestException("Connection refused");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => SendAsync(invoker, "metrics", sync));
+
+        var entry = Assert.Single(Logs.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Equal("OTLP export of metrics could not be sent. Repeated failures are not logged until it recovers.", entry.Message);
+        Assert.IsType<HttpRequestException>(entry.Exception);
+    }
+
+    private RecordingLoggerProvider Logs { get; } = new();
+
+    private (HttpMessageInvoker Invoker, RecordingHandler Inner, MutableMonitor Options, TelemetryExportGate Gate) Create(
         ExportValue value, bool started = true)
     {
         var options = new MutableMonitor(value);
@@ -112,7 +172,8 @@ public sealed class TelemetryExportHandlerTests
         if (started)
             gate.Open();
         var inner = new RecordingHandler();
-        var handler = new TelemetryExportHandler(options, gate) { InnerHandler = inner };
+        var services = new ServiceCollection().AddLogging(logging => logging.AddProvider(Logs)).BuildServiceProvider();
+        var handler = new TelemetryExportHandler(options, gate, new TelemetryExportFailureReporter(services)) { InnerHandler = inner };
         return (new HttpMessageInvoker(handler), inner, options, gate);
     }
 
@@ -157,15 +218,44 @@ public sealed class TelemetryExportHandlerTests
     {
         public List<RecordedRequest> Requests { get; } = [];
 
+        public HttpStatusCode Status { get; set; } = HttpStatusCode.Accepted;
+
+        public Exception? Failure { get; set; }
+
         protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(new RecordedRequest(
                 request.RequestUri!.ToString(),
                 request.Headers.ToDictionary(header => header.Key, header => header.Value.ToArray(), StringComparer.OrdinalIgnoreCase)));
-            return new HttpResponseMessage(HttpStatusCode.Accepted);
+            if (Failure is not null)
+                throw Failure;
+            return new HttpResponseMessage(Status);
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(Send(request, cancellationToken));
+    }
+
+    private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
+
+    private sealed class RecordingLoggerProvider : ILoggerProvider, ILogger
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            lock (Entries)
+                Entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }

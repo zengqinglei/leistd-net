@@ -274,7 +274,7 @@
     "Setting:Security.SessionIdleTimeoutDays": "会话空闲多少天后退出",
     "AppSetting:NotificationRetentionOrder": "未读通知的保留天数不能短于已读通知（{Unread} 天 < {Read} 天）。",
     "AppSetting:TestEmailFailed": "测试邮件发送失败，请检查邮件设置和服务端日志。",
-    "AppSetting:TelemetryEndpointInvalid": "「{Value}」不是绝对的 http 或 https 地址。",
+    "AppSetting:TelemetryEndpointInvalid": "地址必须是绝对的 http 或 https 地址，不能带凭据、查询串或片段。",
     "AppSetting:TelemetryHeadersInvalid": "认证头须为逗号分隔的 name=value 对。",
     "AppSetting:TimeZoneInvalid": "「{Value}」不是合法的 IANA 时区标识。",
 //#if (IncludeWebhooks)

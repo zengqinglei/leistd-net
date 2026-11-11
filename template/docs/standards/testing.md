@@ -95,6 +95,7 @@ backend/tests/
 - 集成测试每类一个 `IClassFixture<ProjectWebApplicationFactory>`，**不逐用例建宿主**。
 - 改配置的用例用 `WithWebHostBuilder` 派生宿主，**同类配置变体归组复用**；断言精确用户名、全表计数或修改租户级设置等依赖空库的用例例外，保留独立宿主。
 - 注册阶段读取的键（连接串、锁与缓存选择、密钥路径）用 `UseSetting` 注入；`ConfigureAppConfiguration` 在 `Program` 注册服务时尚不可见，会被静默忽略。
+- `ProjectWebApplicationFactory` 默认 `OTEL_SDK_DISABLED=true`（OpenTelemetry 官方开关）：不注册三路采集与导出管道，也不注册 OpenTelemetry 的日志提供程序，其他日志提供程序（含 `GetFakeLogCollector()`）照常收到日志。核对遥测的用例在派生宿主上 `UseSetting("OTEL_SDK_DISABLED", "false")`；不要另设开关或摘除注册。
 <!--#if (LocalIdentity)-->
 - 与被测行为无关的宿主固定成本要压低：`ProjectWebApplicationFactory` 把 `PasswordHash:IterationCount` 调到 1000，生产值由 `PasswordHashingTests` 验证。
 <!--#endif-->

@@ -39,13 +39,17 @@ public static class HostSettingBindings
             bindings.Bind(SettingConstant.Logging.MinimumLevel, [LogLevelDefault], fallback: nameof(LogLevel.Information));
             bindings.BindOption<RequestLoggingOptions>(
                 SettingConstant.Logging.RequestLogging, RequestLoggingOptions.SectionName, nameof(RequestLoggingOptions.Enabled));
-            // 地址与认证头直接覆盖 OpenTelemetry 原本读的键，部署值即兜底；开关没有部署键时按部署地址是否配置推导
-            bindings.Bind(
-                SettingConstant.Telemetry.ExportEnabled,
-                [TelemetryExportOptions.EnabledKey],
-                fallback: TelemetryExportOptions.IsEnabledByDeployment(deploymentConfiguration) ? "true" : "false");
-            bindings.Bind(SettingConstant.Telemetry.ExportEndpoint, [TelemetryExportOptions.EndpointKey]);
-            bindings.Bind(SettingConstant.Telemetry.ExportHeaders, [TelemetryExportOptions.HeadersKey]);
+            // 地址与认证头直接覆盖 OpenTelemetry 原本读的键，部署值即兜底；开关没有部署键时按部署地址是否配置推导。
+            // 部署关闭了 OpenTelemetry SDK 时这三项没有定义（见 TelemetrySettingsOptions），也不绑定
+            if (!TelemetryExportOptions.IsSdkDisabled(deploymentConfiguration))
+            {
+                bindings.Bind(
+                    SettingConstant.Telemetry.ExportEnabled,
+                    [TelemetryExportOptions.EnabledKey],
+                    fallback: TelemetryExportOptions.IsEnabledByDeployment(deploymentConfiguration) ? "true" : "false");
+                bindings.Bind(SettingConstant.Telemetry.ExportEndpoint, [TelemetryExportOptions.EndpointKey]);
+                bindings.Bind(SettingConstant.Telemetry.ExportHeaders, [TelemetryExportOptions.HeadersKey]);
+            }
 #if (Email)
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpHost, SmtpOptions.SectionName, nameof(SmtpOptions.Host));
             bindings.BindOption<SmtpOptions>(SettingConstant.Email.SmtpPort, SmtpOptions.SectionName, nameof(SmtpOptions.Port));

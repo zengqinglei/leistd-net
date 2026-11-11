@@ -2,9 +2,12 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using CompanyName.ProjectName.Api.Hosting;
+using CompanyName.ProjectName.Api.Options;
+using CompanyName.ProjectName.Application.Settings.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -33,7 +36,7 @@ public class TelemetryRegistrationTests
         services.GetRequiredService<MeterProvider>();
         services.GetRequiredService<TracerProvider>();
         services.GetRequiredService<LoggerProvider>();
-        Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider);
+        Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is TelemetryExportLoggerProvider { Inner: OpenTelemetryLoggerProvider });
         // 选项每创建一次对应一个实际导出器：三路各一个
         Assert.Equal(3, exporters.Count);
     }
@@ -52,7 +55,7 @@ public class TelemetryRegistrationTests
         services.GetRequiredService<MeterProvider>();
         services.GetRequiredService<TracerProvider>();
         services.GetRequiredService<LoggerProvider>();
-        Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider);
+        Assert.Single(services.GetServices<ILoggerProvider>(), provider => provider is TelemetryExportLoggerProvider { Inner: OpenTelemetryLoggerProvider });
         Assert.Equal(3, exporters.Count);
     }
 
@@ -132,10 +135,11 @@ public class TelemetryRegistrationTests
         });
     }
 
+    // 导出活动时才采样：配上地址（传输换成内存），追踪按项目前缀选源
     [Fact]
     public void Project_prefix_selects_meters_and_activity_sources()
     {
-        var builder = Builder(new() { ["OTEL_EXPORTER_OTLP_ENDPOINT"] = null });
+        var builder = Builder(new() { ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318" });
         builder.AddMyProjectTelemetry();
         NoNetwork(builder.Services);
         var metrics = new List<string>();
@@ -166,6 +170,147 @@ public class TelemetryRegistrationTests
         Assert.Equal(["registration.project"], activities);
     }
 
+    // 导出不活动时追踪由采样器丢弃：span 不记录（不填属性、不进批处理），传播用的上下文照常
+    [Theory]
+    [InlineData(null)]
+    [InlineData("http://localhost:4318")]
+    public void Spans_are_not_recorded_while_export_is_inactive(string? endpoint)
+    {
+        var builder = Builder(new()
+        {
+            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = endpoint,
+            // 有地址但系统设置关了导出，同样不活动
+            [TelemetryExportOptions.EnabledKey] = "false",
+        });
+        builder.AddMyProjectTelemetry();
+        NoNetwork(builder.Services);
+        var activities = new List<string>();
+        builder.Services.AddOpenTelemetry()
+            .WithTracing(provider => provider.AddProcessor(new SimpleActivityExportProcessor(new ActivityNameExporter(activities))));
+        using var services = builder.Services.BuildServiceProvider();
+        services.GetRequiredService<TracerProvider>();
+        using var source = new ActivitySource("CompanyName.ProjectName.Registration");
+
+        using (var activity = source.StartActivity("registration.inactive"))
+        {
+            Assert.NotNull(activity);
+            Assert.False(activity.Recorded);
+            Assert.False(activity.IsAllDataRequested);
+        }
+
+        Assert.Empty(activities);
+    }
+
+    // 导出不活动时日志不交给 SDK 的提供程序（不排队、不序列化）；活动时照常转交，作用域经外部作用域提供器转给它
+    [Fact]
+    public void Logs_reach_the_sdk_provider_only_while_export_is_active()
+    {
+        var export = new TelemetryExportOptions { Enabled = false, Endpoint = "http://collector:4318" };
+        var inner = new RecordingProvider();
+        using var factory = LoggerFactory.Create(logging => logging
+            .Configure(options => options.ActivityTrackingOptions = ActivityTrackingOptions.None)
+            .AddProvider(new TelemetryExportLoggerProvider(inner, new FixedMonitor(export))));
+        var logger = factory.CreateLogger("Registration");
+
+        logger.LogWarning("while inactive");
+        Assert.False(logger.IsEnabled(LogLevel.Warning));
+        export.Enabled = true;
+        using (logger.BeginScope("registration-scope"))
+        {
+            logger.LogWarning("while active");
+        }
+
+        Assert.True(logger.IsEnabled(LogLevel.Warning));
+        Assert.Equal([("while active", "registration-scope")], inner.Entries);
+    }
+
+    // 日志仍走官方 AddOtlpExporter：宿主配置源里的属性限额同样生效（自建导出器只读环境变量，会丢掉它）
+    [Fact]
+    public void Log_attribute_limits_from_host_configuration_still_apply()
+    {
+        var builder = Builder(new()
+        {
+            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318",
+            ["OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT"] = "4",
+        });
+        builder.AddMyProjectTelemetry();
+        var bodies = new List<string>();
+        builder.Services.Configure<OtlpExporterOptions>(options =>
+            options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler(bodies: bodies)));
+        using var services = builder.Services.BuildServiceProvider();
+
+        // 正文不带属性值（入口打开了 IncludeFormattedMessage，正文不受属性限额约束），只核对属性
+        KeyValuePair<string, object?>[] state = [new("Payload", "long_attribute_value"), new("{OriginalFormat}", "attribute limit")];
+        services.GetRequiredService<ILoggerFactory>().CreateLogger("Registration")
+            .Log(LogLevel.Warning, default, state, null, (_, _) => "attribute limit");
+        Assert.True(services.GetRequiredService<LoggerProvider>().ForceFlush());
+
+        var body = Assert.Single(bodies);
+        Assert.Contains("long", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("long_attribute_value", body, StringComparison.Ordinal);
+    }
+
+    // 批处理参数取标准配置（OTEL_BLRP_*）：部署调小批次、队列照样生效
+    [Fact]
+    public void Log_batching_follows_the_standard_processor_settings()
+    {
+        var builder = Builder(new()
+        {
+            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318",
+            ["OTEL_BLRP_MAX_EXPORT_BATCH_SIZE"] = "1",
+            ["OTEL_BLRP_SCHEDULE_DELAY"] = "60000",
+        });
+        builder.AddMyProjectTelemetry();
+        var requests = new List<string>();
+        builder.Services.Configure<OtlpExporterOptions>(options =>
+            options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler(requests)));
+        using var services = builder.Services.BuildServiceProvider();
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Registration");
+
+        logger.LogWarning("first");
+        logger.LogWarning("second");
+        logger.LogWarning("third");
+        Assert.True(services.GetRequiredService<LoggerProvider>().ForceFlush());
+
+        Assert.Equal(3, requests.Count(uri => uri.EndsWith("/v1/logs", StringComparison.Ordinal)));
+    }
+
+    // 部署设 OTEL_SDK_DISABLED=true：什么都不注册（不建采集与导出管道），系统设置不登记导出项
+    [Theory]
+    [InlineData("true")]
+    [InlineData("True")]
+    public void A_disabled_sdk_registers_nothing_and_hides_the_export_settings(string disabled)
+    {
+        var builder = Builder(new()
+        {
+            [TelemetryExportOptions.SdkDisabledKey] = disabled,
+            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318",
+        });
+        builder.AddMyProjectTelemetry();
+        using var services = builder.Services.BuildServiceProvider();
+
+        Assert.Null(services.GetService<TracerProvider>());
+        Assert.Null(services.GetService<MeterProvider>());
+        Assert.DoesNotContain(services.GetServices<ILoggerProvider>(), provider => provider is OpenTelemetryLoggerProvider or TelemetryExportLoggerProvider);
+        Assert.False(services.GetRequiredService<IOptions<TelemetrySettingsOptions>>().Value.ExportConfigurable);
+    }
+
+    // 其他取值与 SDK 一样不算关闭：照常注册，导出项照常登记
+    [Theory]
+    [InlineData("false")]
+    [InlineData("1")]
+    [InlineData("")]
+    public void Other_values_keep_the_sdk_enabled(string value)
+    {
+        var builder = Builder(new() { [TelemetryExportOptions.SdkDisabledKey] = value });
+        builder.AddMyProjectTelemetry();
+        NoNetwork(builder.Services);
+        using var services = builder.Services.BuildServiceProvider();
+
+        Assert.NotNull(services.GetService<TracerProvider>());
+        Assert.True(services.GetRequiredService<IOptions<TelemetrySettingsOptions>>().Value.ExportConfigurable);
+    }
+
     // 只组合服务集合，不构建或启动宿主
     private static HostApplicationBuilder Builder(Dictionary<string, string?> configuration)
     {
@@ -190,14 +335,28 @@ public class TelemetryRegistrationTests
     private static void NoNetwork(IServiceCollection services)
         => services.Configure<OtlpExporterOptions>(options => options.HttpClientFactory = () => new HttpClient(new NoNetworkHandler()));
 
-    // SDK 在释放时也可能冲刷，传输留在内存中以保持单测不发网络请求。
-    private sealed class NoNetworkHandler : HttpMessageHandler
+    // SDK 在释放时也可能冲刷，传输留在内存中以保持单测不发网络请求；传入列表时记下请求地址。
+    private sealed class NoNetworkHandler(List<string>? requests = null, List<string>? bodies = null) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(Send(request, cancellationToken));
 
         protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
-            => new(HttpStatusCode.OK) { Content = new ByteArrayContent([]) };
+        {
+            if (requests is not null)
+            {
+                lock (requests)
+                    requests.Add(request.RequestUri!.ToString());
+            }
+
+            if (bodies is not null && request.RequestUri!.AbsolutePath.EndsWith("/v1/logs", StringComparison.Ordinal))
+            {
+                lock (bodies)
+                    bodies.Add(System.Text.Encoding.Latin1.GetString(request.Content!.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult()));
+            }
+
+            return new(HttpStatusCode.OK) { Content = new ByteArrayContent([]) };
+        }
     }
 
     private sealed class MetricNameExporter(List<string> names) : BaseExporter<Metric>
@@ -216,5 +375,40 @@ public class TelemetryRegistrationTests
             foreach (var activity in batch) { names.Add(activity.OperationName); }
             return ExportResult.Success;
         }
+    }
+
+    private sealed class RecordingProvider : ILoggerProvider, ISupportExternalScope, ILogger
+    {
+        private IExternalScopeProvider? scopes;
+
+        public List<(string Message, string? Scope)> Entries { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public void SetScopeProvider(IExternalScopeProvider scopeProvider) => scopes = scopeProvider;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            string? scope = null;
+            scopes?.ForEachScope((value, _) => scope = value?.ToString(), (object?)null);
+            Entries.Add((formatter(state, exception), scope));
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class FixedMonitor(TelemetryExportOptions value) : IOptionsMonitor<TelemetryExportOptions>
+    {
+        public TelemetryExportOptions CurrentValue => value;
+
+        public TelemetryExportOptions Get(string? name) => value;
+
+        public IDisposable? OnChange(Action<TelemetryExportOptions, string?> listener) => null;
     }
 }
