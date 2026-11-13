@@ -16,7 +16,7 @@
 两个交付面清晰分离：
 
 - **`framework/`** —— 按能力分组的 `Leistd.*` 组件 + DDD 四层基础类型：AOP、DI、核心原语、连接解析、事件总线、异常、本地化、分布式锁、多租户、对象映射、统一响应、安全、服务间调用、链路追踪、工作单元、审计、通知、实时、授权（含资源实例授权与数据范围）。完整清单见[组件总览](framework/docs/components/README.md)。统一版本、中央包管理（CPM）、Source Link 源码调试，以 NuGet 发布，**每个包内置随版本文档**。
-- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 22 前端，DDD 四层），支持 `Identity` / `Standalone` / `Resource` 三种服务形态，可独立选择多租户、通知、业务实时、邮件、操作历史、外部登录与本地化；Resource 还可生成无前端的纯 API。生成的项目通过 NuGet 引用 framework，并自带项目 Skill 与工程规范。
+- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 22 前端，DDD 四层），支持 `Identity` / `Standalone` / `Resource` 三种服务形态，可独立选择多租户、通知、业务实时、邮件、操作历史、出站 Webhook、分布式事件、外部登录与本地化；Resource 还可生成无前端的纯 API。生成的项目通过 NuGet 引用 framework，并自带项目 Skill 与工程规范。
 
 ---
 

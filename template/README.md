@@ -47,6 +47,18 @@ CompanyName.ProjectName/
 - 后端 OIDC 机密依赖方与服务端 Cookie 票据。
 <!--#endif-->
 <!--#endif-->
+<!--#if (Email)-->
+- SMTP 邮件发送、邮箱验证与邮件设置；开启通知时包含通知邮件渠道。
+<!--#endif-->
+<!--#if (IncludeWebhooks)-->
+- 出站 Webhook 的订阅管理、签名投递、持久重试、投递日志、手动重发与统计，见 [Webhook 规范](docs/standards/webhooks.md)。
+<!--#endif-->
+<!--#if (IncludeLocalization)-->
+- 后端按 culture 本地化。
+<!--#if (SpaFrontend)-->
+- 前端多语言资源与运行时语言切换。
+<!--#endif-->
+<!--#endif-->
 <!--#if (IncludeNotifications)-->
 - 通知持久化、未读状态与站内推送。
 <!--#if (LocalIdentity)-->
