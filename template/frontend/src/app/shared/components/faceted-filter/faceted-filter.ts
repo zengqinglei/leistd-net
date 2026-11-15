@@ -255,7 +255,8 @@ export class FacetedFilter {
   });
   readonly selectedOptions = computed(() =>
     this.values().map(
-      (value) => this.options().find((option) => option.value === value) ?? { value, label: value },
+      (value) =>
+        this.options().find((option) => String(option.value) === value) ?? { value, label: value },
     ),
   );
   readonly hasSelection = computed(() =>

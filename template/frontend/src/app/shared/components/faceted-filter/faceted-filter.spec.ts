@@ -69,6 +69,14 @@ describe('FacetedFilter', () => {
     expect(cleared).toHaveBeenCalledWith([]);
   });
 
+  it('preserves option labels for stringified non-string multiple values', () => {
+    const option: FacetedFilterOption = { value: false, label: 'Disabled' };
+    const fixture = createFilter({ multiple: true, values: ['false'], options: [option] });
+    expect(fixture.componentInstance.selectedOptions()).toEqual([option]);
+    expect(fixture.nativeElement.textContent).toContain('Disabled');
+    expect(optionBy('Disabled')?.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('gives the clear command a visible keyboard focus outside the listbox', async () => {
     createFilter({ value: 'admin' });
     const clear = page.getByRole('button', { name: 'Clear filter', exact: true });

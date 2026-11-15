@@ -97,7 +97,7 @@ import { presetRange, RangePreset } from '../dashboard/dashboard-calendar';
 
 const RANGE_PRESETS: readonly RangePreset[] = ['today', '7d', '30d'];
 const DELIVERY_STATUSES: readonly WebhookDeliveryStatus[] = ['pending', 'succeeded', 'failed'];
-/** 投递日志的订阅筛选项一次取够；订阅数通常很少，超出时仍可经"查看投递"按订阅跳转。 */
+/** 订阅选项每次搜索最多取 20 条，超出时提示用关键词缩小范围。 */
 const SUBSCRIPTION_OPTION_LIMIT = 20;
 /** 从列表打开投递详情时写进新历史条目的标记：有它说明前一条就是打开前的列表条目，刷新后仍随条目保留。 */
 const DELIVERY_OPENED_STATE = 'webhookDeliveryOpened';
