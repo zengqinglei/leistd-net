@@ -37,6 +37,7 @@ import {
   tap,
 } from 'rxjs';
 
+// prettier-ignore
 import {
   EventRecord,
   EventView,
@@ -57,9 +58,14 @@ import { DistributedOutboxTable } from './widgets/distributed-outbox-table/distr
 import { DistributedRejectionTable } from './widgets/distributed-rejection-table/distributed-rejection-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
+//#if (!(TenantWorkspace))
 import { AuthService } from '../../../../core/services/auth-service';
+//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../core/services/layout-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../../core/services/workspace-context-service';
+//#endif
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { PagedResultDto } from '../../../../shared/dtos/paged-result.dto';
@@ -110,7 +116,11 @@ export class DistributedEvents {
   private readonly router = inject(Router);
   private readonly owner = inject(DestroyRef);
   private readonly authorization = inject(AuthorizationService);
+  //#if (TenantWorkspace)
+  private readonly workspace = inject(WorkspaceContextService);
+  //#else
   private readonly auth = inject(AuthService);
+  //#endif
   private readonly confirm = inject(DistributedEventRecoveryConfirmService);
   private readonly preferences = inject(AccountPreferencesService);
   private readonly layout = inject(LayoutService);
@@ -127,7 +137,11 @@ export class DistributedEvents {
   //#else
   protected readonly t = englishText(ENGLISH);
   //#endif
+  //#if (TenantWorkspace)
+  readonly isHost = computed(() => !this.workspace.tenantId());
+  //#else
   readonly isHost = computed(() => !this.auth.currentUser()?.tenantId);
+  //#endif
   readonly canManage = computed(() => this.authorization.has(PERMISSIONS.distributedEvents.manage));
   readonly query = toSignal(this.route.queryParams, {
     initialValue: this.route.snapshot.queryParams,

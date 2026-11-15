@@ -12,6 +12,7 @@ import {
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
+// prettier-ignore
 import {
   lucideArrowUpDown,
   lucideBan,
@@ -49,7 +50,12 @@ import {
 } from '@tanstack/angular-table';
 
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
+//#if (!TenantWorkspace)
 import { AuthService } from '../../../../../../core/services/auth-service';
+//#endif
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../../../../core/services/workspace-context-service';
+//#endif
 import {
   type ReadonlyListItem,
   ReadonlyListPopover,
@@ -144,7 +150,20 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserTable {
+  isPlatformAccount(user: UserManagementOutputDto): boolean {
+    //#if (TenantWorkspace)
+    return !!user.homeUserId;
+    //#else
+    return false;
+    //#endif
+  }
+
+  //#if (TenantWorkspace)
+  private readonly workspaceContext = inject(WorkspaceContextService);
+  //#endif
+  //#if (!TenantWorkspace)
   private readonly authService = inject(AuthService);
+  //#endif
   // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(AccountPreferencesService).timeZone;
   protected readonly displayLocale = inject(AccountPreferencesService).displayLocale;
@@ -344,11 +363,19 @@ export class UserTable {
 
   /** 当前登录者本人：不能停用或删除自己（服务端同样拒绝）。 */
   isSelf(user: UserManagementOutputDto): boolean {
+    //#if (TenantWorkspace)
+    return user.id === this.workspaceContext.actorId();
+    //#else
     return user.id === this.authService.currentUser()?.id;
+    //#endif
   }
 
   isOtherSuperAdmin(user: UserManagementOutputDto): boolean {
+    //#if (TenantWorkspace)
+    return user.isSuperAdmin && user.id !== this.workspaceContext.actorId();
+    //#else
     return user.isSuperAdmin && user.id !== this.authService.currentUser()?.id;
+    //#endif
   }
 
   /** 他人查看内置超管行时，菜单内原因说明的元素 id，供被禁用的菜单项 aria-describedby 引用；其他行为 null。 */
@@ -398,6 +425,11 @@ const ENGLISH: Record<string, string> = {
   'users.tooltip.selfNoDisable': "You can't disable your own account",
   'users.tooltip.selfNoResetTwoFactor': 'Manage your own in Personal settings',
   'users.tooltip.selfNoDelete': "You can't delete your own account",
+  //#if (TenantWorkspace)
+  'users.platformBadge': 'Platform',
+  'users.platformReason':
+    'Credentials are managed by the home account. Remove access from tenant management in the platform console.',
+  //#endif
   'users.tooltip.superAdminNoManage':
     'Only the built-in super administrator can do this to their own account',
   'common.delete': 'Delete',

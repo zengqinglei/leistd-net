@@ -55,7 +55,7 @@ describe('top-level routes', () => {
   it('maps PROTECTED_ROUTE_PREFIXES one-to-one to top-level authGuard routes', () => {
     const authGuarded = (routes as Routes)
       .filter((r) => r.canActivate?.includes(authGuard))
-      .map((r) => `/${r.path}`)
+      .map((r) => `/${r.path?.replace(/:[^/]+/g, '')}`)
       .sort();
 
     expect(

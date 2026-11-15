@@ -16,6 +16,8 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 export class AuthorizationService {
   private readonly http = inject(HttpClient);
 
+  private revision = 0;
+
   private readonly _permissions = signal<ReadonlySet<string>>(new Set<string>());
   private readonly _isSuperAdmin = signal(false);
   private readonly _versionToken = signal('');
@@ -38,11 +40,16 @@ export class AuthorizationService {
   load(): Observable<CurrentPermissionsOutputDto> {
     // 与 /me 一样标记静默认证：未登录时的 401 由 Guard 与启动流各自处理，
     // 不触发拦截器的全局跳转，避免覆盖 returnUrl。
+    const revision = this.revision;
     return this.http
       .get<CurrentPermissionsOutputDto>('/api/v1/permissions/current', {
         context: new HttpContext().set(SILENT_AUTH, true),
       })
-      .pipe(tap((result) => this.setPermissions(result)));
+      .pipe(
+        tap((result) => {
+          if (revision === this.revision) this.setPermissions(result);
+        }),
+      );
   }
 
   /** 授权变更后刷新。失败时保持原有权限，由调用方提示重试。 */
@@ -57,6 +64,7 @@ export class AuthorizationService {
   }
 
   clear(): void {
+    this.revision++;
     this._permissions.set(new Set<string>());
     this._isSuperAdmin.set(false);
     this._versionToken.set('');

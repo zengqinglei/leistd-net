@@ -310,7 +310,7 @@
                       hlmBtn
                       variant="outline"
                       size="sm"
-                      [routerLink]="item.route"
+                      [routerLink]="layoutService.scopePath(item.route)"
                       [queryParams]="item.queryParams"
                     >
                       @if (item.action === 'handle') {
@@ -375,7 +375,7 @@
             hlmBtn
             variant="ghost"
             size="sm"
-            routerLink="/platform/operation-records"
+            [routerLink]="layoutService.scopePath('/platform/operation-records')"
           >
             {{ t('platform.dashboard.recent.viewAll') }}
             <ng-icon name="lucideChevronRight" data-icon="inline-end" />
@@ -511,7 +511,7 @@
                 variant="ghost"
                 size="lg"
                 class="justify-start gap-3"
-                [routerLink]="link.route"
+                [routerLink]="layoutService.scopePath(link.route)"
               >
                 <span
                   class="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-md"

@@ -1,4 +1,8 @@
 {
+  //#if (TenantWorkspace)
+  "platformBadge": "Platform",
+  "platformReason": "Credentials are managed by the home account. Remove access from tenant management in the platform console.",
+  //#endif
   "page": {
     "title": "User management"
   },

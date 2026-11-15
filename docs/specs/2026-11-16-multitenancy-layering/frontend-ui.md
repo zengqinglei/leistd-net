@@ -16,7 +16,7 @@
 | 时间 | `appDate` 的 `short`，完整时刻放可聚焦元素的 Tooltip | `frontend-lists.md` §2 |
 | 图标 | `<ng-icon name="lucideXxx">` + 组件级 `provideIcons`；行内图标按钮 `hlmBtn variant="ghost" size="icon-sm"` + `hlmTooltip` + `aria-label` | `frontend-ui.md` §2.5 |
 | 空、错、载 | 区分"暂无数据""无匹配""读取失败（可重试）"，用 `hlmEmpty` 系列 | `frontend-ui.md` §1；`dashboard.html` 的 `hlmEmpty` |
-| 词条 | 中英文同时加；英文句首大写；键按区命名：`workspace.*`（切换器、零权限）、`tenants.staff.*`（抽屉、弹窗）、`users.platformBadge` 等 | `frontend-i18n.md` |
+| 词条 | 中英文同时加；英文句首大写；键按区命名：`tenantWorkspace.*`（切换器、零权限；不用 `workspace.*`，它是懒加载的业务 scope）、`tenants.staff.*`（抽屉、弹窗）、`users.platformBadge` 等 | `frontend-i18n.md` |
 | 响应式 | 复核 390、768、1024、1440 宽与长译文 | `frontend-ui.md` §1 |
 
 ## 2. 各界面的组件对照

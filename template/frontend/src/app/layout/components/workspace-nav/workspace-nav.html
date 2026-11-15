@@ -30,6 +30,19 @@
           </p>
         </div>
         <nav class="flex flex-col gap-4 p-4" [attr.aria-label]="t('layout.sidebar.navigation')">
+          <!--#if (TenantWorkspace)-->
+          <button
+            hlmBtn
+            variant="outline"
+            size="sm"
+            [hlmDropdownMenuTrigger]="scopeMenu"
+            align="start"
+            data-testid="topbar-workspace-switcher"
+          >
+            {{ workspace.current() ?? t('tenantWorkspace.console')
+            }}<ng-icon name="lucideChevronDown" />
+          </button>
+          <!--#endif-->
           @for (group of groups(); track group.label) {
             <div class="flex flex-col gap-1">
               <span class="text-muted-foreground px-2.5 text-xs font-medium">{{
@@ -55,6 +68,21 @@
       </hlm-sheet-content>
     </hlm-sheet>
 
+    <!--#if (TenantWorkspace)-->
+    <div class="hidden md:block">
+      <button
+        hlmBtn
+        variant="outline"
+        size="sm"
+        [hlmDropdownMenuTrigger]="scopeMenu"
+        align="start"
+        data-testid="topbar-workspace-switcher"
+      >
+        {{ workspace.current() ?? t('tenantWorkspace.console')
+        }}<ng-icon name="lucideChevronDown" />
+      </button>
+    </div>
+    <!--#endif-->
     <a
       class="flex shrink-0 items-center gap-2 text-sm font-semibold"
       [routerLink]="layoutService.homeRoute()"
@@ -157,4 +185,45 @@
       }
     </nav>
   }
+  <!--#if (TenantWorkspace)-->
+  <ng-template #scopeMenu>
+    <hlm-dropdown-menu class="min-w-56">
+      <hlm-dropdown-menu-label>{{ t('tenantWorkspace.title') }}</hlm-dropdown-menu-label>
+      <hlm-dropdown-menu-group>
+        @if (!workspace.auth.currentUser()?.tenantId) {
+          <button hlmDropdownMenuItem class="gap-2 p-2" (click)="workspace.switchTo(null)">
+            {{ t('tenantWorkspace.console') }}
+          </button>
+        }
+        @if (workspace.workspaces().length > 7) {
+          <input
+            hlmInput
+            class="h-8"
+            [placeholder]="t('tenantWorkspace.search')"
+            [value]="workspace.filter()"
+            (input)="workspace.filter.set($any($event.target).value)"
+            (keydown)="$event.stopPropagation()"
+          />
+        }
+        <div class="max-h-64 overflow-y-auto">
+          @if (workspace.workspaces().length === 1) {
+            <div class="p-2 text-sm">{{ workspace.workspaces()[0].name }}</div>
+          } @else {
+            @for (item of filteredWorkspaces(); track item.tenantId) {
+              <button hlmDropdownMenuItem class="gap-2 p-2" (click)="workspace.switchTo(item.name)">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-md border">{{
+                  item.name.slice(0, 1).toUpperCase()
+                }}</span>
+                {{ item.name }}
+                @if (workspace.current() === item.name) {
+                  <span class="ml-auto">✓</span>
+                }
+              </button>
+            }
+          }
+        </div>
+      </hlm-dropdown-menu-group>
+    </hlm-dropdown-menu>
+  </ng-template>
+  <!--#endif-->
 </ng-container>

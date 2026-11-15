@@ -65,6 +65,25 @@ public sealed class TenantStaffAppService(
             return (await roleRepository.GetListAsync(cancellationToken: cancellationToken)).Select(RoleOutput).OrderBy(r => r.Name).ToList();
     }
 
+    public async Task<IReadOnlyList<TenantStaffCandidateOutputDto>> GetCandidatesAsync(Guid tenantId, string? keyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        await GetTenantAsync(tenantId, cancellationToken);
+        using (currentTenant.Change(null))
+        using (unitOfWorkManager.Begin(requiresNew: true))
+        {
+            var query = (await userRepository.GetQueryableAsync(cancellationToken)).Where(user => user.HomeUserId == null);
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var term = keyword.Trim().ToLowerInvariant();
+                query = query.Where(user => user.Username.ToLower().Contains(term) ||
+                    (user.DisplayName != null && user.DisplayName.ToLower().Contains(term)));
+            }
+            return await asyncExecuter.ToListAsync(query.OrderByDescending(user => user.CreationTime).ThenBy(user => user.Id)
+                .Take(200).Select(user => new TenantStaffCandidateOutputDto(user.Id, user.Username, user.DisplayName)), cancellationToken);
+        }
+    }
+
     public async Task GrantAsync(Guid tenantId, GrantTenantStaffInputDto input, CancellationToken cancellationToken = default)
     {
         var tenant = await GetTenantAsync(tenantId, cancellationToken);
@@ -80,7 +99,7 @@ public sealed class TenantStaffAppService(
             var roleIds = input.RoleIds.Distinct().ToList();
             var roles = await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken);
             if (roles.Count() != roleIds.Count)
-                throw new BusinessException(UserErrorCodes.RolesNotFound, "One or more roles were not found.");
+                throw new BusinessException(UserErrorCodes.RolesNotFound, "One or more roles were not found.").WithData("Roles", string.Join(", ", roleIds.Except(roles.Select(role => role.Id))));
             User? member;
             using (dataFilter.Disable<ISoftDelete>())
                 member = await asyncExecuter.FirstOrDefaultAsync((await userRepository.GetQueryableWithRolesAsync(cancellationToken))
@@ -88,6 +107,7 @@ public sealed class TenantStaffAppService(
             if (member is null)
             {
                 var username = "platform." + home.Username;
+                using (dataFilter.Disable<ISoftDelete>())
                 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
                     throw new BusinessException(UserErrorCodes.UsernameTaken, "The linked username is already in use.").WithData("Username", username);
                 member = User.CreatePlatformAccount(home.Id, home.Username, home.DisplayName);
@@ -126,6 +146,6 @@ public sealed class TenantStaffAppService(
         await tenantStore.FindAsync(id, cancellationToken)
         ?? throw new BusinessException(MultiTenancyErrorCodes.NotFound, "The tenant was not found.");
 
-    private static RoleBriefOutputDto RoleOutput(Role role) => new() { Id = role.Id, Name = role.Name, DisplayName = role.DisplayName };
+    private static RoleBriefOutputDto RoleOutput(Role role) => new() { Id = role.Id, Name = role.Name, DisplayName = role.DisplayName, IsStatic = role.IsStatic };
 }
 #endif

@@ -1,6 +1,5 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 
-import { environment } from '../environments/environment';
 //#if (IncludeLocalization)
 import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
 //#endif
@@ -9,7 +8,11 @@ import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor
 import { tenantInterceptor } from './core/interceptors/tenant-interceptor';
 //#endif
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
+//#if (TenantWorkspace)
+import { workspaceInterceptor } from './core/interceptors/workspace-interceptor';
+//#endif
 import { mockInterceptors } from '../../_mock/core/providers';
+import { environment } from '../environments/environment';
 
 /** 应用的 HTTP 拦截器链，按顺序执行；单独导出供启动用例走同一条链。 */
 export const appInterceptors: HttpInterceptorFn[] = [
@@ -19,6 +22,9 @@ export const appInterceptors: HttpInterceptorFn[] = [
   //#endif
   //#if (LocalIdentity && IncludeMultiTenancy)
   tenantInterceptor,
+  //#endif
+  //#if (TenantWorkspace)
+  workspaceInterceptor,
   //#endif
   urlFormatInterceptor,
   httpErrorInterceptor,

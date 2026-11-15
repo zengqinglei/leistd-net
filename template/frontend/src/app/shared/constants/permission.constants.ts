@@ -30,6 +30,9 @@ export const PERMISSIONS = {
   },
   //#if (LocalIdentity && IncludeMultiTenancy)
   tenants: {
+    //#if (TenantWorkspace)
+    staffAccess: 'App.Tenants.StaffAccess',
+    //#endif
     default: 'App.Tenants',
     create: 'App.Tenants.Create',
     update: 'App.Tenants.Update',

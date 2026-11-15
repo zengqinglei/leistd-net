@@ -77,6 +77,38 @@ export class SignalRService {
 
   private readonly isMockedUrl = inject(MOCKED_URL);
   private connection: HubConnection | null = null;
+  //#if (TenantWorkspace)
+  private homeConnection: HubConnection | null = null;
+  private workspaceName: string | null = null;
+  //#if (IncludeNotifications)
+  private readonly homeNotifications = signal<NotificationOutputDto[]>([]);
+  //#endif
+
+  async setWorkspace(name: string | null, platformStaff: boolean): Promise<void> {
+    if (this.workspaceName === name) return;
+    if (!this.workspaceName && name && platformStaff) {
+      await this.connect();
+      this.homeConnection = this.connection;
+      this.connection = null;
+      //#if (IncludeNotifications)
+      this.homeNotifications.set(this.notifications());
+      //#endif
+    }
+    await this.resetCurrent();
+    this.workspaceName = name;
+    if (!name && this.homeConnection) {
+      this.connection = this.homeConnection;
+      this.homeConnection = null;
+      //#if (IncludeNotifications)
+      this.notifications.set(this.homeNotifications());
+      //#endif
+      this.status.set(
+        this.connection.state === HubConnectionState.Connected ? 'connected' : 'disconnected',
+      );
+    }
+    await this.connect();
+  }
+  //#endif
   //#if (IncludeNotifications)
 
   readonly notifications = signal<NotificationOutputDto[]>([]);
@@ -221,6 +253,18 @@ export class SignalRService {
 //#endif
    */
   async reset(): Promise<void> {
+    //#if (TenantWorkspace)
+    const home = this.homeConnection;
+    this.homeConnection = null;
+    this.workspaceName = null;
+    const resetting = this.resetCurrent();
+    await Promise.all([resetting, home?.stop()]);
+    //#else
+    await this.resetCurrent();
+    //#endif
+  }
+
+  private async resetCurrent(): Promise<void> {
     this.generation++;
     //#if (IncludeRealTime)
     this.resourceHolders.clear();
@@ -391,9 +435,15 @@ export class SignalRService {
 
   private async startConnection(): Promise<void> {
     const connection = new HubConnectionBuilder()
-      .withUrl(this.resolveHubUrl(SignalRService.hubPath), {
-        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-      })
+      .withUrl(
+        this.resolveHubUrl(SignalRService.hubPath) +
+          //#if (TenantWorkspace)
+          (this.workspaceName ? `?workspace=${encodeURIComponent(this.workspaceName)}` : ''),
+        //#endif
+        {
+          transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+        },
+      )
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       // 普通连接日志保持安静；连接与重试错误仍可排查。
       .configureLogging(LogLevel.Warning)
@@ -405,6 +455,15 @@ export class SignalRService {
     //#if (IncludeNotifications)
 
     connection.on(SignalRService.notificationReceived, (notification: NotificationOutputDto) => {
+      //#if (TenantWorkspace)
+      if (this.homeConnection === connection) {
+        this.homeNotifications.update((items) => [
+          notification,
+          ...items.filter((item) => item.id !== notification.id),
+        ]);
+        return;
+      }
+      //#endif
       if (!isCurrent()) {
         return;
       }

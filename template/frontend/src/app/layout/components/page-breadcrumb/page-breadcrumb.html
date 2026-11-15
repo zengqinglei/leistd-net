@@ -32,7 +32,7 @@
           <ng-template #collapsedMenu>
             <hlm-dropdown-menu>
               @for (crumb of collapsed(); track $index) {
-                <a hlmDropdownMenuItem [routerLink]="crumb.link">{{ crumb.label }}</a>
+                <a hlmDropdownMenuItem [routerLink]="scopeLink(crumb.link)">{{ crumb.label }}</a>
               }
             </hlm-dropdown-menu>
           </ng-template>
@@ -48,7 +48,7 @@
           <a
             hlmBreadcrumbLink
             class="inline-flex min-w-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
-            [link]="parent.link"
+            [link]="scopeLink(parent.link)"
             [hlmTooltip]="parent.label"
             [appTruncatedTooltip]="parentText"
           >

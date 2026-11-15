@@ -4,6 +4,9 @@ import { map } from 'rxjs/operators';
 
 import { AuthorizationService } from '../services/authorization-service';
 import { StartupService } from '../services/startup-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../services/workspace-context-service';
+//#endif
 
 /** 标记"这次导航是 {@link permissionGuard} 刚拒绝的"。放在导航的 `info` 里：它只属于这一次导航，不进历史记录。 */
 const PERMISSION_DENIED = Symbol('permission-denied');
@@ -20,6 +23,9 @@ const FORBIDDEN_TARGET = 'target';
 export const permissionGuard: CanActivateFn = (route, state) => {
   const authorizationService = inject(AuthorizationService);
   const router = inject(Router);
+  //#if (TenantWorkspace)
+  const workspace = inject(WorkspaceContextService);
+  //#endif
 
   return inject(StartupService)
     .settled(state.url)
@@ -29,6 +35,9 @@ export const permissionGuard: CanActivateFn = (route, state) => {
           return false;
         }
 
+        //#if (TenantWorkspace)
+        if (workspace.requestScope() && !authorizationService.canAccessPlatform()) return true;
+        //#endif
         const ownData = route.routeConfig?.data ?? {};
         const required: string[] = ownData['permissions'] ?? [];
         const single: string | undefined = ownData['permission'];

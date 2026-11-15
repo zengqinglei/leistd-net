@@ -1,6 +1,9 @@
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
+//#if (TenantWorkspace)
+import { requestWorkspace } from '../core/request-workspace';
+//#endif
 import { MockSortFields, sortMockRows } from '../core/sorting';
 import {
   ALL_PERMISSIONS,
@@ -30,7 +33,15 @@ function requireUser() {
 
 /** 计算当前用户的有效权限：超管全量，否则取其角色授予的并集。 */
 function effectivePermissionsOf(username: string): { permissions: string[]; versionToken: string } {
+  //#if (TenantWorkspace)
+  const actor = getCurrentUser();
+  const user =
+    actor?.username === username
+      ? actor
+      : USERS.find((candidate) => candidate.username === username);
+  //#else
   const user = USERS.find((candidate) => candidate.username === username);
+  //#endif
   if (!user) {
     return { permissions: [], versionToken: 'anonymous' };
   }
@@ -56,7 +67,20 @@ function effectivePermissionsOf(username: string): { permissions: string[]; vers
   }
 
   return {
-    permissions: [...granted].sort(),
+    permissions: [...granted]
+      //#if (TenantWorkspace)
+      .filter(
+        (permission) =>
+          !requestWorkspace ||
+          ![
+            'App.Tenants',
+            'App.OpenApplications',
+            'App.DatabaseConnections',
+            'App.DistributedEvents',
+          ].some((hostOnly) => permission === hostOnly || permission.startsWith(`${hostOnly}.`)),
+      )
+      //#endif
+      .sort(),
     versionToken: `r${parts.sort().join(',')}`,
   };
 }

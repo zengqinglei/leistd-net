@@ -132,6 +132,8 @@
     "Permission:App.Tenants.Create": "新建",
     "Permission:App.Tenants.Update": "编辑",
 //#if (TenantWorkspace)
+    "Platform staff": "平台人员",
+    "{0} must contain at least {1} item(s).": "{0} 至少需要 {1} 项。",
     "Permission:App.Tenants.StaffAccess": "平台人员",
 //#endif
     "Permission:App.Tenants.Delete": "删除",

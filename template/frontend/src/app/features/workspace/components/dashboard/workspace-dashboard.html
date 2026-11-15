@@ -45,7 +45,12 @@
         @if (quickActions().length) {
           <div class="flex flex-wrap gap-2 px-1">
             @for (action of quickActions(); track action.label) {
-              <a hlmBtn variant="outline" size="sm" [routerLink]="action.route">
+              <a
+                hlmBtn
+                variant="outline"
+                size="sm"
+                [routerLink]="layoutService.scopePath(action.route)"
+              >
                 <ng-icon [name]="action.icon" data-icon="inline-start" />
                 {{ t(action.label) }}
               </a>
@@ -75,7 +80,7 @@
               <a
                 hlmCard
                 size="sm"
-                routerLink="/workspace/placeholder"
+                [routerLink]="layoutService.scopePath('/workspace/placeholder')"
                 class="hover:ring-foreground/20 flex-row items-center gap-0 py-0 transition-shadow sm:flex-col sm:items-stretch"
               >
                 <span
@@ -112,7 +117,7 @@
                 hlmCard
                 size="sm"
                 class="hover:ring-foreground/20 transition-shadow"
-                [routerLink]="link.route"
+                [routerLink]="layoutService.scopePath(link.route)"
                 [hlmTooltip]="t(link.label)"
                 [appTruncatedTooltip]="label"
               >
@@ -267,7 +272,12 @@
                     <span class="min-w-0 flex-1 truncate">{{
                       t('workspace.dashboard.security.emailUnverified')
                     }}</span>
-                    <a hlmBtn variant="outline" size="sm" routerLink="/workspace/settings/profile">
+                    <a
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      [routerLink]="layoutService.scopePath('/workspace/settings/profile')"
+                    >
                       {{ t('workspace.dashboard.security.fix') }}
                     </a>
                   }
@@ -282,7 +292,11 @@
                     <span class="min-w-0 flex-1 truncate">{{
                       t('workspace.dashboard.security.twoFactorOff')
                     }}</span>
-                    <a hlmBtn size="sm" routerLink="/workspace/settings/security">
+                    <a
+                      hlmBtn
+                      size="sm"
+                      [routerLink]="layoutService.scopePath('/workspace/settings/security')"
+                    >
                       {{ t('workspace.dashboard.security.fix') }}
                     </a>
                   }
@@ -313,7 +327,7 @@
                 variant="ghost"
                 size="sm"
                 class="text-muted-foreground -my-1 text-xs"
-                routerLink="/workspace/settings/security"
+                [routerLink]="layoutService.scopePath('/workspace/settings/security')"
               >
                 {{ t('workspace.dashboard.devices.manage') }}
               </a>

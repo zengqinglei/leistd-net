@@ -5,6 +5,9 @@ import { catchError, delay, mergeMap, tap } from 'rxjs/operators';
 
 import { getUrlPath, isMockedUrl } from './matching';
 import { MockConfig, MockException, MockRequest, MockResponse } from './models';
+//#if (TenantWorkspace)
+import { withinWorkspace } from './request-workspace';
+//#endif
 import { environment } from '../../src/environments/environment';
 
 type MockApiHandler = (request: MockRequest) => unknown;
@@ -57,7 +60,15 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     logMock('Mock intercepted', method, url, mockRequest);
   }
 
-  return from(Promise.resolve().then(() => matchingRule.handler(mockRequest))).pipe(
+  return from(
+    Promise.resolve().then(() => {
+      //#if (TenantWorkspace)
+      return withinWorkspace(mockRequest, () => matchingRule.handler(mockRequest));
+      //#else
+      return matchingRule.handler(mockRequest);
+      //#endif
+    }),
+  ).pipe(
     mergeMap((result) => {
       const mockResponse = result as MockResponse | undefined;
       const response =

@@ -5,6 +5,9 @@ import { provideTranslocoScope } from '@jsverse/transloco';
 
 import { authGuard } from './core/guards/auth-guard';
 import { forbiddenGuard, permissionGuard } from './core/guards/permission-guard';
+//#if (TenantWorkspace)
+import { workspaceGuard } from './core/guards/workspace-guard';
+//#endif
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from './core/i18n/translation-scopes';
 //#endif
@@ -12,10 +15,13 @@ import { DefaultLayout } from './layout/default/default-layout';
 //#if (LocalIdentity)
 import { EmptyLayout } from './layout/empty/empty-layout';
 //#endif
+//#if (TenantWorkspace)
+import { TenantLayout } from './layout/tenant/tenant-layout';
+//#endif
 import { WorkspaceLayout } from './layout/workspace/workspace-layout';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
-export const routes: Routes = [
+const baseRoutes: Routes = [
   //#if (LocalIdentity)
   {
     path: 'auth',
@@ -38,7 +44,11 @@ export const routes: Routes = [
   {
     path: 'workspace',
     component: WorkspaceLayout,
+    //#if (TenantWorkspace)
+    canActivate: [authGuard, workspaceGuard],
+    //#else
     canActivate: [authGuard],
+    //#endif
     loadChildren: () =>
       import('./features/workspace/workspace.routes').then((r) => r.WORKSPACE_ROUTES),
   },
@@ -61,7 +71,11 @@ export const routes: Routes = [
     path: 'platform',
     component: DefaultLayout,
     // 按权限放行，不按角色名。各子路由再声明各自所需的权限。
+    //#if (TenantWorkspace)
+    canActivate: [authGuard, workspaceGuard, permissionGuard],
+    //#else
     canActivate: [authGuard, permissionGuard],
+    //#endif
     data: {
       // 引用单一来源，不要在这里手写清单；缘由见 PLATFORM_ENTRY_PERMISSIONS 的注释
       permissions: [...PLATFORM_ENTRY_PERMISSIONS],
@@ -87,3 +101,24 @@ export const routes: Routes = [
       import('./features/public/components/not-found/not-found').then((m) => m.NotFound),
   },
 ];
+
+//#if (TenantWorkspace)
+export const routes: Routes = [
+  {
+    path: 'w/:workspace',
+    component: TenantLayout,
+    canActivate: [authGuard, workspaceGuard],
+    runGuardsAndResolvers: 'paramsChange',
+    children: [
+      ...baseRoutes
+        .filter((route) => route.path === 'platform' || route.path === 'workspace')
+        .map((route) => ({ ...route, canActivate: [authGuard], data: {} })),
+      { path: '**', redirectTo: 'platform' },
+    ],
+  },
+  ...baseRoutes,
+];
+//#else
+
+export const routes: Routes = baseRoutes;
+//#endif

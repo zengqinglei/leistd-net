@@ -44,8 +44,21 @@ export class LayoutService {
   );
 
   /** 是否处于平台（后台管理）区段。 */
-  readonly isPlatform = computed(() => this.currentUrl().startsWith('/platform'));
+  readonly isPlatform = computed(() =>
+    this.currentUrl()
+      .replace(/^\/w\/[^/]+/, '')
+      .startsWith('/platform'),
+  );
+
+  /** 业务链接跟随当前工作区；本人认证端点仍由 HTTP 范围规则处理。 */
+  scopePath(route: string): string {
+    const prefix = /^\/w\/[^/]+/.exec(this.currentUrl())?.[0] ?? '';
+    return /^\/(?:platform|workspace)(?:\/|$)/.test(route) ? prefix + route : route;
+  }
 
   /** 当前区段首页路由（供品牌头 / 面包屑首级指向本区段，避免跨区段跳转）。 */
-  readonly homeRoute = computed(() => (this.isPlatform() ? '/platform' : '/workspace/dashboard'));
+  readonly homeRoute = computed(() => {
+    const prefix = /^\/w\/[^/]+/.exec(this.currentUrl())?.[0] ?? '';
+    return prefix + (this.isPlatform() ? '/platform' : '/workspace/dashboard');
+  });
 }

@@ -74,6 +74,10 @@
         <!--#if (Impersonation)-->
         (impersonate)="onImpersonate($event)"
         <!--#endif-->
+        <!--#if (TenantWorkspace)-->
+        [canStaffAccess]="canStaffAccess()"
+        (staff)="openStaff($event)"
+        <!--#endif-->
         (delete)="onDelete($event)"
       />
     </div>
@@ -91,4 +95,7 @@
     [tenant]="editingTenant()"
     [saveAction]="onSave"
   />
+  <!--#if (TenantWorkspace)-->
+  <app-tenant-staff-sheet />
+  <!--#endif-->
 </ng-container>

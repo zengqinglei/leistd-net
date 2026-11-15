@@ -55,7 +55,11 @@ export const TENANTS: MockTenant[] = [
     id: 'tenant_globex',
     name: 'globex',
     displayName: 'Globex Inc',
+    //#if (TenantWorkspace)
+    isActive: true,
+    //#else
     isActive: false,
+    //#endif
     creationTime: '2025-04-15T00:00:00Z',
     connections: [
       { name: 'default', version: 3 },

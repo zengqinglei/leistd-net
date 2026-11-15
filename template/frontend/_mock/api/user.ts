@@ -25,7 +25,8 @@ import {
   getCurrentUser,
   MockReauthenticationProof,
 } from '../utils/current-user';
-//#else
+//#endif
+//#if (!(LocalIdentity))
 import { getCurrentUser } from '../utils/current-user';
 //#endif
 
@@ -52,6 +53,16 @@ function sortUsers(users: typeof USERS, sorting?: string) {
 
 export function getUsers(params: any): PagedResultDto<any> {
   let users = [...USERS];
+  //#if (TenantWorkspace)
+  const actor = getCurrentUser();
+  users = users
+    .filter((user) => !user.workspaceAccessRemoved)
+    .filter((user) =>
+      actor?.workspaceTenantId
+        ? user.workspaceTenantId === actor.workspaceTenantId
+        : !user.homeUserId,
+    );
+  //#endif
   const offset = +(getQueryValue(params.offset) ?? 0);
   const limit = +(getQueryValue(params.limit) ?? 10);
   const keyword = getQueryValue(params.keyword)?.toLowerCase();

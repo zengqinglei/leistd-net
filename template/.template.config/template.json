@@ -1040,6 +1040,22 @@
             "frontend/public/i18n/distributed-events/**",
             "frontend/e2e/distributed-events.e2e.ts"
           ]
+        },
+        {
+          "condition": "!TenantWorkspace",
+          "exclude": [
+            "frontend/src/app/layout/tenant/**",
+            "frontend/src/app/core/dtos/workspace.dto.ts",
+            "frontend/src/app/core/guards/workspace-guard.ts",
+            "frontend/src/app/core/interceptors/workspace-interceptor*",
+            "frontend/src/app/core/services/workspace-context-service*",
+            "frontend/src/app/features/platform/components/tenants/widgets/tenant-staff-sheet/**",
+            "frontend/src/app/features/platform/dtos/tenant-staff.dto.ts",
+            "frontend/_mock/api/workspace*",
+            "frontend/_mock/core/request-workspace.ts",
+            "frontend/_mock/data/workspace.ts",
+            "frontend/e2e/workspaces.e2e.ts"
+          ]
         }
       ]
     },

@@ -1,10 +1,4 @@
-// prettier-ignore
-import {
-  Injectable,
-  Injector,
-  inject,
-  signal,
-} from '@angular/core';
+import { Injectable, Injector, inject, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -24,7 +18,14 @@ export type StartupStatus = 'loading' | 'success' | 'failed';
  * 需要完成认证与会话初始化的顶层路由前缀。
  * 与 app.routes.ts 中使用 authGuard 的路由保持一致，由 app.routes.spec.ts 校验。
  */
-export const PROTECTED_ROUTE_PREFIXES = ['/workspace', '/platform'] as const;
+// prettier-ignore
+export const PROTECTED_ROUTE_PREFIXES = [
+  '/workspace',
+  '/platform',
+  //#if (TenantWorkspace)
+  '/w/',
+  //#endif
+] as const;
 
 @Injectable({ providedIn: 'root' })
 export class StartupService {

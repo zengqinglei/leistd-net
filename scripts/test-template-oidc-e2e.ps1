@@ -20,6 +20,7 @@ param(
     [string]$LocalFeedPath,
     [string]$DockerContext,
     [switch]$IncludeExpiryWait,
+    [switch]$Workspace,
     [string]$CandidateSha
 )
 
@@ -411,6 +412,7 @@ function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public, 
         else { @("ept:token", "gt:client_credentials") }
     if ($BrowserService) { $permissions = @("ept:token", "gt:authorization_code", "gt:refresh_token", "ept:authorization", "ept:end_session", "rst:code") }
     if ($Exchange) { $permissions += @("gt:urn:ietf:params:oauth:grant-type:token-exchange", "aud:billing-api", "aud:e2e-idp-api") }
+    if ($Workspace -and $Exchange) { $permissions += "aud:orders-api" }
     $permissions += @($Scopes | ForEach-Object { "scp:$_" })
     # 只有服务端会话（BFF）跟随 Identity 登录会话收敛；SPA 公共客户端与机器客户端不绑定
     $body = @{ clientId = $ClientId; applicationType = $(if ($Public -or $BrowserService) { "web" } else { "service" })
@@ -507,7 +509,7 @@ public sealed class E2EProbeController : ControllerBase
         var authentication = await HttpContext.AuthenticateAsync();
         var expiresAt = DateTimeOffset.TryParse(authentication.Properties?.GetTokenValue("expires_at"), out var expires)
             ? expires.ToUnixTimeSeconds() : (long?)null;
-        return new { userId = user.Id, tenantId = tenant.Id, clientId = client.ClientId, expiresAt __SESSION_SETTINGS__ };
+        return new { userId = user.Id, tenantId = tenant.Id, clientId = client.ClientId, homeUserId = User.FindFirst("home_sub")?.Value, actor = User.FindFirst("act")?.Value, tokenId = User.FindFirst("jti")?.Value, expiresAt __SESSION_SETTINGS__ };
     }
 __MACHINE_PROBE__
 }
@@ -537,7 +539,7 @@ public interface IBillingProbe
     [Get("/api/e2e/natural")]
     Task<BillingIdentity> NaturalAsync();
 }
-public sealed record BillingIdentity(Guid? UserId, Guid? TenantId, string? ClientId);
+public sealed record BillingIdentity(Guid? UserId, Guid? TenantId, string? ClientId, string? HomeUserId, string? Actor);
 public interface IBillingMachineProbe
 {
     [Get("/api/e2e/machine")]
@@ -661,6 +663,7 @@ function Initialize-Environment {
             default { "resource" }
         }
         $arguments = @("new", "--debug:custom-hive", $hive, "fullstack-app", "-n", "E2E.$title", "-o", $generated, "--force") + $scenarioMap[$scenario].Arguments
+        if ($Workspace) { $arguments += @("--tenant-staff-access", "Workspace") }
         if ($name -eq 'billing') {
             $arguments += @('--include-frontend', 'false', '--include-real-time', 'true')
         }
@@ -742,7 +745,7 @@ function Initialize-Environment {
     New-Application "orders-web" @("openid", "profile", "email", "roles", "orders-api") -Public | Out-Null
     New-Application "billing-web" @("openid", "profile", "email", "roles", "billing-api") -Public | Out-Null
     New-Application "idp-web" @("openid", "profile", "email", "roles", "e2e-idp-api") -Public | Out-Null
-    $script:exchangeClient = New-Application "orders-api" @("billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read") -Exchange
+    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read") -Exchange
     $script:machine = New-Application "orders-machine" @("orders-api", "billing-api", "tenant-routing.read")
     $script:plainClient = New-Application "orders-only" @("orders-api")
     $script:noDelegateClient = New-Application "no-delegate" @("orders-api", "billing-api")
@@ -842,6 +845,43 @@ function Test-BrowserSession {
     Assert-Value "logout-hint-in-form-body" $true (-not [string]::IsNullOrEmpty($logoutParameters["id_token_hint"]))
     Assert-Value "logout-hint-session" $true ((Read-TokenClaims $logoutParameters["id_token_hint"]).ContainsKey("sid"))
     Assert-Http "browser-logout-invalidates-copied-cookie" 401 ($urls.orders + "/api/v1/auth/me") -Headers @{ Cookie = $cookie } | Out-Null
+}
+
+function Test-Workspace {
+    $workspaceHome = (Assert-Http "workspace-home" 200 ($urls.idp + "/api/v1/auth/me") -Session $admin).Data
+    $tenant = $sharedTenant
+    $roles = (Assert-Http "workspace-roles" 200 ($urls.idp + "/api/v1/tenants/" + $tenant.id + "/staff/roles") -Session $admin).Data
+    $role = @($roles | Where-Object { $_.name -eq "Admin" })[0]
+    Assert-Http "workspace-grant" 200 ($urls.idp + "/api/v1/tenants/" + $tenant.id + "/staff") -Method POST -Body @{ homeUserId = $workspaceHome.id; roleIds = @($role.id) } -Session $admin | Out-Null
+    $script:sharedSession = $admin
+    $cookie = New-ResourceBrowserCookie
+    $headers = @{ Cookie = $cookie; "X-Workspace" = $tenant.name }
+    $list = (Assert-Http "workspace-resource-list-home" 200 ($urls.orders + "/api/v1/auth/me/workspaces") -Headers $headers).Data
+    $member = @($list | Where-Object { $_.tenantId -eq $tenant.id })[0]
+    Assert-Value "workspace-linked-subject-differs" $true ($member.userId -ne $workspaceHome.id)
+    $before = (Assert-Http "workspace-home-before" 200 ($urls.orders + "/api/e2e/natural") -Headers @{ Cookie = $cookie }).Data
+    $entered = (Assert-Http "workspace-enter-resource" 200 ($urls.orders + "/api/e2e/natural") -Headers $headers).Data
+    Assert-Value "workspace-resource-subject" $member.userId $entered.userId
+    Assert-Value "workspace-resource-tenant" $tenant.id $entered.tenantId
+    Assert-Value "workspace-home-sub" $workspaceHome.id $entered.homeUserId
+    $projectionQuery = 'SELECT count(*) FROM "e2e-orders"."Users" WHERE "Id"=''{0}'' AND "TenantId"=''{1}'' AND "HomeUserId"=''{2}'';' -f $member.userId, $tenant.id, $workspaceHome.id
+    Assert-Value "workspace-resource-jit-member" "1" (Invoke-Sql "oidc_shared" $projectionQuery)
+    Assert-Value "workspace-no-actor-on-entry" $false $entered.ContainsKey("actor")
+    $again = (Assert-Http "workspace-cached-entry" 200 ($urls.orders + "/api/e2e/natural") -Headers $headers).Data
+    Assert-Value "workspace-cache-same-ticket" $entered.tokenId $again.tokenId
+    Assert-Value "workspace-input-expiry-cap" $true ($entered.expiresAt -le $before.expiresAt)
+    Assert-Value "workspace-token-cap" $true ($entered.expiresAt -le [DateTimeOffset]::UtcNow.AddMinutes(5).ToUnixTimeSeconds())
+    $downstream = (Assert-Http "workspace-real-downstream" 200 ($urls.orders + "/api/e2e/billing") -Headers $headers).Data
+    Assert-Value "workspace-downstream-subject" $member.userId $downstream.userId
+    Assert-Value "workspace-downstream-tenant" $tenant.id $downstream.tenantId
+    Assert-Value "workspace-downstream-home" $workspaceHome.id $downstream.homeUserId
+    Assert-Value "workspace-downstream-actor" $true (-not [string]::IsNullOrEmpty($downstream.actor))
+    $otherCookie = New-ResourceBrowserCookie
+    $other = (Assert-Http "workspace-other-ticket" 200 ($urls.orders + "/api/e2e/natural") -Headers @{ Cookie = $otherCookie; "X-Workspace" = $tenant.name }).Data
+    Assert-Value "workspace-cache-ticket-isolation" $true ($other.tokenId -ne $entered.tokenId)
+    $after = (Assert-Http "workspace-home-after" 200 ($urls.orders + "/api/e2e/natural") -Headers @{ Cookie = $cookie }).Data
+    Assert-Value "workspace-keeps-home-ticket" $before.tokenId $after.tokenId
+    Assert-Http "workspace-rejects-missing" 403 ($urls.orders + "/api/e2e/natural") -Headers @{ Cookie = $cookie; "X-Workspace" = "missing" } | Out-Null
 }
 
 function Test-S2 {
@@ -1227,6 +1267,9 @@ $tenantPassword = New-RandomValue "Tnt!1"
 $http = New-HttpSession
 try {
     Initialize-Environment
+    if ($Workspace) {
+        Invoke-Scenario "workspace" { Test-Workspace }
+    } else {
     Invoke-Scenario "S2" { Test-S2 }
     Invoke-Scenario 'pure-api-realtime' { Test-PureApiRealtime }
     Invoke-Scenario "S3" { Test-S3 }
@@ -1247,6 +1290,7 @@ try {
         }
     } else { Write-Skipped "exchange-expiry" "默认不等待令牌真实到期；使用 -IncludeExpiryWait 验证交换令牌到期。" }
     Invoke-Scenario "S7" { Test-S7 }
+    }
 }
 catch {
     $results.Add(@{ scenario = "setup"; status = "fail"; error = $_.Exception.Message; stack = $_.ScriptStackTrace })

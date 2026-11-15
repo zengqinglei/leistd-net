@@ -15,6 +15,9 @@ import { firstValueFrom } from 'rxjs';
 import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from './workspace-context-service';
+//#endif
 import { SettingContextService } from '../settings/setting-context-service';
 import { SettingOutputDto } from '../settings/setting.dto';
 
@@ -31,6 +34,9 @@ import { SettingOutputDto } from '../settings/setting.dto';
 @Injectable({ providedIn: 'root' })
 export class SessionContextService {
   private readonly authService = inject(AuthService);
+  //#if (TenantWorkspace)
+  private readonly workspace = inject(WorkspaceContextService);
+  //#endif
   private readonly authorizationService = inject(AuthorizationService);
   private readonly settingContext = inject(SettingContextService);
   private readonly preferences = inject(AccountPreferencesService);
@@ -173,6 +179,9 @@ export class SessionContextService {
 
   /** 主体离开：认证数据、权限、设置一起清掉。`logout()` 例外：之后整页跳转，内存状态随页面重建。 */
   clear(): void {
+    //#if (TenantWorkspace)
+    this.workspace.clear();
+    //#endif
     // 在途合并只在同一主体内：上一个人的重查迟到不应用，下一个人的可见事件要另起一次
     this.revalidating = undefined;
     this.authService.clearAuthData();

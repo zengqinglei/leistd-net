@@ -6,4 +6,7 @@ public record RoleBriefOutputDto
     public required Guid Id { get; init; }
     public required string Name { get; init; }
     public required string DisplayName { get; init; }
+#if (TenantWorkspace)
+    public bool IsStatic { get; init; }
+#endif
 }

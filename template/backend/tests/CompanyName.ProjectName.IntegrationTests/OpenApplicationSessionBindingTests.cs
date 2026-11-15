@@ -52,10 +52,11 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
             };
             descriptor.RedirectUris.Add(new Uri(Callback));
             foreach (var permission in new[] { Permissions.Endpoints.Authorization, Permissions.Endpoints.Token,
-                Permissions.GrantTypes.AuthorizationCode, Permissions.GrantTypes.RefreshToken,
+                Permissions.GrantTypes.AuthorizationCode, Permissions.GrantTypes.RefreshToken, Permissions.GrantTypes.ClientCredentials,
                 Permissions.Prefixes.GrantType + GrantTypes.TokenExchange, Permissions.ResponseTypes.Code,
                 Permissions.Prefixes.Scope + Scopes.OpenId, Permissions.Prefixes.Scope + Scopes.OfflineAccess,
                 Permissions.Prefixes.Scope + resource, Permissions.Prefixes.Scope + Scopes.Profile,
+                Permissions.Prefixes.Scope + "tenant-routing.read",
                 Permissions.Prefixes.Audience + resource, Permissions.Prefixes.Audience + "another-api" }) descriptor.Permissions.Add(permission);
             descriptor.Settings[OpenApplicationSettings.SessionBound] = bound ? "true" : "false";
             var existing = await manager.FindByClientIdAsync(resource);
@@ -114,6 +115,18 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         var refreshed = await TokenAsync(new() { ["grant_type"] = GrantTypes.RefreshToken,
             ["client_id"] = resource, ["client_secret"] = secret, ["refresh_token"] = tokens.RefreshToken });
         Assert.Equal(bound ? HttpStatusCode.BadRequest : HttpStatusCode.OK, refreshed.Status);
+        var machineToken = await TokenAsync(new() { ["grant_type"] = GrantTypes.ClientCredentials,
+            ["client_id"] = resource, ["client_secret"] = secret, ["scope"] = "tenant-routing.read" });
+        Assert.Equal(HttpStatusCode.OK, machineToken.Status);
+        using var machine = Browser();
+        machine.DefaultRequestHeaders.Authorization = new("Bearer", machineToken.AccessToken);
+        foreach (var lookupName in new[] { tenantName, tenantName.ToUpperInvariant() })
+        {
+            using var lookup = await machine.GetAsync($"/api/v1/workspace-tenants/by-name/{lookupName}");
+            lookup.EnsureSuccessStatusCode();
+            using var tenantBody = JsonDocument.Parse(await lookup.Content.ReadAsStringAsync());
+            Assert.Equal(tenantId, tenantBody.RootElement.GetProperty("id").GetGuid());
+        }
         (await mine.Client.GetAsync("/api/v1/auth/me")).EnsureSuccessStatusCode();
     }
 #endif

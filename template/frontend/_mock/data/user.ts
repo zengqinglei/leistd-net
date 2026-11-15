@@ -17,6 +17,11 @@ export interface MockPasskey {
 
 //#endif
 export interface MockUser {
+  //#if (TenantWorkspace)
+  homeUserId?: string;
+  workspaceTenantId?: string;
+  workspaceAccessRemoved?: boolean;
+  //#endif
   id: string;
   username: string;
   email: string;
@@ -275,6 +280,9 @@ export function toUserOutput(user: MockUser): UserOutputDto {
 export function toUserManagementOutput(user: MockUser): UserManagementOutputDto {
   return {
     id: user.id,
+    //#if (TenantWorkspace)
+    homeUserId: user.homeUserId,
+    //#endif
     username: user.username,
     email: user.email,
     displayName: user.displayName,

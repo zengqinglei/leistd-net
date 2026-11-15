@@ -10,9 +10,9 @@ public interface IWorkspaceTenantLookupAppService : IAppService
     Task<TenantConfiguration?> FindByNameAsync(string name, CancellationToken cancellationToken = default);
 }
 
-public sealed class WorkspaceTenantLookupAppService(ITenantStore tenantStore) : IWorkspaceTenantLookupAppService
+public sealed class WorkspaceTenantLookupAppService(ITenantStore tenantStore, ITenantNormalizer normalizer) : IWorkspaceTenantLookupAppService
 {
     public Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default) => tenantStore.FindAsync(id, cancellationToken);
-    public Task<TenantConfiguration?> FindByNameAsync(string name, CancellationToken cancellationToken = default) => tenantStore.FindByNameAsync(name, cancellationToken);
+    public Task<TenantConfiguration?> FindByNameAsync(string name, CancellationToken cancellationToken = default) => tenantStore.FindByNameAsync(normalizer.NormalizeName(name)!, cancellationToken);
 }
 #endif

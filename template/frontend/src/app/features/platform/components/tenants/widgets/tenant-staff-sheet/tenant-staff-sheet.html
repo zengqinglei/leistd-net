@@ -1,0 +1,382 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <hlm-sheet side="right" [state]="tenantId() ? 'open' : 'closed'" (closed)="close()">
+    <hlm-sheet-content
+      *hlmSheetPortal
+      class="data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+      [closeLabel]="t('common.close')"
+    >
+      <div hlmSheetHeader>
+        <h2 hlmSheetTitle>{{ t('tenants.staff.title', { name: tenant()?.name ?? '' }) }}</h2>
+        <p hlmSheetDescription>
+          {{ tenant()?.displayName }} · {{ t('tenants.staff.description') }}
+        </p>
+      </div>
+      <div class="flex flex-col gap-4 p-4 sm:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
+            <hlm-input-group class="w-full sm:w-auto sm:max-w-xs sm:min-w-56 sm:flex-1">
+              <hlm-input-group-addon><ng-icon name="lucideSearch" /></hlm-input-group-addon>
+              <input
+                hlmInputGroupInput
+                type="text"
+                [attr.aria-label]="t('tenants.staff.search')"
+                [placeholder]="t('tenants.staff.search')"
+                [value]="search()"
+                (input)="search.set($any($event.target).value)"
+              />
+            </hlm-input-group>
+          </div>
+          <div class="ml-auto flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+            <button hlmBtn class="flex-1 sm:flex-none" (click)="openGrant()">
+              <ng-icon name="lucidePlus" />{{ t('tenants.staff.grant') }}
+            </button>
+          </div>
+        </div>
+        @if (error(); as message) {
+          <div hlmEmpty>
+            <p hlmEmptyDescription role="alert">{{ message }}</p>
+            <button hlmBtn variant="outline" (click)="load()">{{ t('common.retry') }}</button>
+          </div>
+        } @else {
+          <app-table-loading
+            [loading]="loading()"
+            [hasRows]="filtered().length > 0"
+            [columns]="table.getVisibleLeafColumns().length"
+            [rowHeight]="53"
+            [appTableFit]="viewport()"
+            [appTableFitContent]="filtered()"
+            class="rounded-xl border border-border overflow-hidden"
+          >
+            <div hlmTableContainer>
+              <table hlmTable class="w-full">
+                <thead hlmTHead class="bg-muted">
+                  <tr hlmTr>
+                    @for (column of table.getVisibleLeafColumns(); track column.id) {
+                      <th hlmTh class="first:ps-4" [class]="column.columnDef.meta?.headClass">
+                        @if (column.id === 'actions') {
+                          <span class="sr-only">{{ t('tenants.staff.actions') }}</span>
+                        } @else {
+                          {{ t('tenants.staff.' + column.id) }}
+                        }
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody hlmTBody appTableLoadingBody>
+                  @for (row of table.getRowModel().rows; track row.id) {
+                    <tr hlmTr class="text-sm hover:bg-muted/50">
+                      @for (cell of row.getVisibleCells(); track cell.id) {
+                        <td hlmTd class="first:ps-4">
+                          @switch (cell.column.id) {
+                            @case ('person') {
+                              <div class="flex min-w-0 items-center gap-2">
+                                @if (hasCollapsedColumns()) {
+                                  <button
+                                    hlmBtn
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    [attr.aria-label]="row.original.username"
+                                    (click)="row.toggleExpanded()"
+                                  >
+                                    <ng-icon
+                                      name="lucideChevronRight"
+                                      [class.rotate-90]="row.getIsExpanded()"
+                                    />
+                                  </button>
+                                }
+                                <div class="min-w-0">
+                                  <div class="truncate text-sm font-medium">
+                                    {{ row.original.displayName || row.original.username }}
+                                  </div>
+                                  <div class="text-xs text-muted-foreground">
+                                    {{ row.original.username }}
+                                  </div>
+                                </div>
+                              </div>
+                            }
+                            @case ('roles') {
+                              <app-readonly-list-popover
+                                [items]="roleItems(row.original)"
+                                [triggerLabel]="
+                                  t('tenants.staff.roles') + ': ' + row.original.username
+                                "
+                                [title]="t('tenants.staff.roles')"
+                                [subtitle]="row.original.displayName || row.original.username"
+                                [filterLabel]="t('tenants.staff.filterRoles')"
+                                [emptyText]="t('tenants.staff.noMatchingRoles')"
+                              >
+                                @for (role of row.original.roles.slice(0, 2); track role.id) {
+                                  <span
+                                    hlmBadge
+                                    variant="outline"
+                                    class="max-w-[9rem] min-w-0 shrink"
+                                    ><span class="truncate">{{ role.displayName }}</span></span
+                                  >
+                                }
+                                @if (row.original.roles.length > 2) {
+                                  <span hlmBadge variant="outline" class="shrink-0 tabular-nums"
+                                    >+{{ row.original.roles.length - 2 }}</span
+                                  >
+                                }
+                              </app-readonly-list-popover>
+                            }
+                            @case ('status') {
+                              <span
+                                hlmBadge
+                                appStatusDot
+                                [variant]="row.original.isActive ? 'success' : 'secondary'"
+                                >{{
+                                  t(
+                                    row.original.isActive
+                                      ? 'tenants.staff.active'
+                                      : 'tenants.staff.inactive'
+                                  )
+                                }}</span
+                              >
+                            }
+                            @case ('creationTime') {
+                              <span
+                                tabindex="0"
+                                [hlmTooltip]="row.original.creationTime | appDate: 'full'"
+                                >{{ row.original.creationTime | appDate: 'short' }}</span
+                              >
+                            }
+                            @case ('actions') {
+                              <div class="flex items-center justify-end gap-1">
+                                <button
+                                  hlmBtn
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  class="hidden sm:inline-flex"
+                                  [hlmTooltip]="t('tenants.staff.edit')"
+                                  [attr.aria-label]="t('tenants.staff.edit')"
+                                  (click)="openGrant(row.original)"
+                                >
+                                  <ng-icon name="lucidePencil" />
+                                </button>
+                                <button
+                                  hlmBtn
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  [hlmDropdownMenuTrigger]="rowMenu"
+                                  [attr.aria-label]="t('tenants.staff.actions')"
+                                >
+                                  <ng-icon name="lucideEllipsis" />
+                                </button>
+                                <ng-template #rowMenu
+                                  ><hlm-dropdown-menu
+                                    ><hlm-dropdown-menu-group
+                                      ><button
+                                        hlmDropdownMenuItem
+                                        class="sm:hidden"
+                                        (click)="openGrant(row.original)"
+                                      >
+                                        {{ t('tenants.staff.edit') }}
+                                      </button></hlm-dropdown-menu-group
+                                    ><hlm-dropdown-menu-separator /><hlm-dropdown-menu-group
+                                      ><button
+                                        hlmDropdownMenuItem
+                                        variant="destructive"
+                                        (click)="remove(row.original)"
+                                      >
+                                        {{ t('tenants.staff.remove') }}
+                                      </button></hlm-dropdown-menu-group
+                                    ></hlm-dropdown-menu
+                                  ></ng-template
+                                >
+                              </div>
+                            }
+                          }
+                        </td>
+                      }
+                    </tr>
+                    @if (hasCollapsedColumns() && row.getIsExpanded()) {
+                      <tr hlmTr>
+                        <td hlmTd [attr.colspan]="row.getVisibleCells().length">
+                          <dl class="grid gap-2 text-sm">
+                            @if (!table.getColumn('roles')?.getIsVisible()) {
+                              <dt>{{ t('tenants.staff.roles') }}</dt>
+                              <dd>
+                                <app-readonly-list-popover
+                                  [items]="roleItems(row.original)"
+                                  [triggerLabel]="
+                                    t('tenants.staff.roles') + ': ' + row.original.username
+                                  "
+                                  [title]="t('tenants.staff.roles')"
+                                  [subtitle]="row.original.displayName || row.original.username"
+                                  [filterLabel]="t('tenants.staff.filterRoles')"
+                                  [emptyText]="t('tenants.staff.noMatchingRoles')"
+                                >
+                                  @for (role of row.original.roles.slice(0, 2); track role.id) {
+                                    <span
+                                      hlmBadge
+                                      variant="outline"
+                                      class="max-w-[9rem] min-w-0 shrink"
+                                      ><span class="truncate">{{ role.displayName }}</span></span
+                                    >
+                                  }
+                                  @if (row.original.roles.length > 2) {
+                                    <span hlmBadge variant="outline" class="shrink-0 tabular-nums"
+                                      >+{{ row.original.roles.length - 2 }}</span
+                                    >
+                                  }
+                                </app-readonly-list-popover>
+                              </dd>
+                            }
+                            @if (!table.getColumn('status')?.getIsVisible()) {
+                              <dt>{{ t('tenants.staff.status') }}</dt>
+                              <dd>
+                                <span
+                                  hlmBadge
+                                  appStatusDot
+                                  [variant]="row.original.isActive ? 'success' : 'secondary'"
+                                  >{{
+                                    t(
+                                      row.original.isActive
+                                        ? 'tenants.staff.active'
+                                        : 'tenants.staff.inactive'
+                                    )
+                                  }}</span
+                                >
+                              </dd>
+                            }
+                            @if (!table.getColumn('creationTime')?.getIsVisible()) {
+                              <dt>{{ t('tenants.staff.creationTime') }}</dt>
+                              <dd>{{ row.original.creationTime | appDate: 'full' }}</dd>
+                            }
+                          </dl>
+                        </td>
+                      </tr>
+                    }
+                  } @empty {
+                    <tr hlmTr>
+                      <td hlmTd [attr.colspan]="table.getVisibleLeafColumns().length">
+                        <div hlmEmpty>
+                          <p hlmEmptyDescription>
+                            {{ t(search() ? 'tenants.staff.noMatch' : 'tenants.staff.empty') }}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </app-table-loading>
+        }
+      </div>
+    </hlm-sheet-content>
+  </hlm-sheet>
+  <hlm-dialog
+    [state]="dialogOpen() ? 'open' : 'closed'"
+    [disableClose]="saving()"
+    (stateChanged)="dialogOpen.set($event === 'open')"
+  >
+    <hlm-dialog-content *hlmDialogPortal class="sm:max-w-md">
+      <hlm-dialog-header
+        ><h2 hlmDialogTitle>
+          {{
+            t(editing() ? 'tenants.staff.editTitle' : 'tenants.staff.grantTitle', {
+              name: tenant()?.name ?? '',
+            })
+          }}
+        </h2>
+        <p hlmDialogDescription>
+          {{ t('tenants.staff.grantDescription', { name: tenant()?.name ?? '' }) }}
+        </p></hlm-dialog-header
+      >
+      <div data-dialog-body class="flex flex-col gap-4">
+        @if (!editing()) {
+          <div hlmField>
+            <span hlmFieldLabel>{{ t('tenants.staff.personLabel') }}</span>
+            <hlm-command
+              ><hlm-command-input
+                [placeholder]="t('tenants.staff.search')"
+                (input)="peopleSearch.next($any($event.target).value)"
+              /><hlm-command-list
+                ><div *hlmCommandEmptyState hlmCommandEmpty>{{ t('tenants.staff.noMatch') }}</div>
+                <hlm-command-group>
+                  @for (user of users(); track user.id) {
+                    <button
+                      hlm-command-item
+                      [value]="user.username"
+                      [disabled]="isGranted(user.id)"
+                      (selected)="selectedUserId.set(user.id)"
+                    >
+                      <hlm-avatar class="size-6"
+                        ><span hlmAvatarFallback>{{
+                          user.username.slice(0, 1).toUpperCase()
+                        }}</span></hlm-avatar
+                      >
+                      {{ user.displayName || user.username }}
+                      <span class="text-xs text-muted-foreground font-mono">{{
+                        user.username
+                      }}</span>
+                      @if (isGranted(user.id)) {
+                        <span class="ml-auto text-xs text-muted-foreground">{{
+                          t('tenants.staff.granted')
+                        }}</span>
+                      }
+                      @if (selectedUserId() === user.id) {
+                        <span class="ml-auto">✓</span>
+                      }
+                    </button>
+                  }
+                </hlm-command-group></hlm-command-list
+              ></hlm-command
+            >
+            <p hlmFieldDescription>{{ t('tenants.staff.linkedName') }}</p>
+            @if (saveErrorField() === 'person' && saveError(); as message) {
+              <hlm-field-error [forceShow]="true">{{ message }}</hlm-field-error>
+            }
+          </div>
+        }
+        <div hlmField>
+          <span hlmFieldLabel>{{
+            t('tenants.staff.rolesLabel', { name: tenant()?.name ?? '' })
+          }}</span>
+          <div class="flex flex-col gap-1 py-2">
+            @for (role of roles(); track role.id) {
+              <div
+                class="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/50 pointer-coarse:ps-3.5"
+              >
+                <hlm-checkbox
+                  [inputId]="'staff-role-' + role.id"
+                  [checked]="selectedRoles().includes(role.id)"
+                  (checkedChange)="toggleRole(role.id)"
+                />
+                <label [attr.for]="'staff-role-' + role.id">{{ role.displayName }}</label>
+                @if (role.isStatic) {
+                  <span class="ml-auto text-xs text-muted-foreground">{{
+                    t('tenants.staff.builtIn')
+                  }}</span>
+                }
+              </div>
+            }
+          </div>
+        </div>
+        @if (saveErrorField() === 'roles' && saveError(); as message) {
+          <hlm-field-error [forceShow]="true">{{ message }}</hlm-field-error>
+        }
+      </div>
+      <hlm-dialog-footer
+        ><button hlmBtn variant="outline" [disabled]="saving()" (click)="dialogOpen.set(false)">
+          {{ t('common.cancel') }}</button
+        ><button
+          hlmBtn
+          [disabled]="saving() || !selectedUserId() || !selectedRoles().length"
+          (click)="save()"
+        >
+          @if (saving()) {
+            <hlm-spinner />
+          }
+          {{ t('common.save') }}
+        </button></hlm-dialog-footer
+      >
+    </hlm-dialog-content>
+  </hlm-dialog>
+</ng-container>

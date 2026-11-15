@@ -6,6 +6,9 @@ import { translateObjectSignal, translateSignal } from '@jsverse/transloco';
 
 import { AuthorizationService } from '../../core/services/authorization-service';
 import { LayoutService } from '../../core/services/layout-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../core/services/workspace-context-service';
+//#endif
 import { PERMISSIONS } from '../../shared/constants/permission.constants';
 
 //#if (IncludeLocalization)
@@ -42,6 +45,9 @@ export class NavigationService {
   private readonly layoutService = inject(LayoutService);
   private readonly authorizationService = inject(AuthorizationService);
   private readonly router = inject(Router);
+  //#if (TenantWorkspace)
+  private readonly workspace = inject(WorkspaceContextService);
+  //#endif
   //#if (IncludeLocalization)
   private readonly workspaceLabel = translateSignal('menu.workspace');
   private readonly platformLabel = translateSignal('menu.platform');
@@ -284,7 +290,12 @@ export class NavigationService {
     ];
 
     // 进平台要权限；回工作空间无条件——与头像菜单同一口径。
-    if (this.authorizationService.canAccessPlatform()) {
+    // prettier-ignore
+    if (this.authorizationService.canAccessPlatform()
+      //#if (TenantWorkspace)
+      || (isPlatform && !!this.workspace.current())
+      //#endif
+    ) {
       areas.push({
         route: '/platform',
         icon: 'lucideCog',
@@ -305,7 +316,11 @@ export class NavigationService {
   );
 
   goToArea(route: string): void {
+    //#if (TenantWorkspace)
+    void this.router.navigateByUrl(this.workspace.path(route));
+    //#else
     void this.router.navigate([route]);
+    //#endif
   }
 
   readonly menuGroups = computed(() => {
@@ -324,9 +339,19 @@ export class NavigationService {
         label: label(group.label),
         items: group.items
           .filter((item) => this.isItemVisible(item))
-          .map((item) => ({ ...item, label: label(item.label) })),
+          .map((item) => ({
+            ...item,
+            label: label(item.label),
+            //#if (TenantWorkspace)
+            route: this.workspace.path(item.route),
+            //#endif
+          })),
         //#else
-        items: group.items.filter((item) => this.isItemVisible(item)),
+        items: group.items
+          .filter((item) => this.isItemVisible(item))
+          //#if (TenantWorkspace)
+          .map((item) => ({ ...item, route: this.workspace.path(item.route) })),
+        //#endif
         //#endif
       }))
       .filter((group) => group.items.length > 0);

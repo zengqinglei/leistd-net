@@ -27,11 +27,17 @@ import {
   //#endif
 } from '@ng-icons/lucide';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+//#if (TenantWorkspace)
+import { HlmInput } from '@spartan-ng/helm/input';
+//#endif
 import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
 import { CommandPaletteService } from '../../../core/services/command-palette-service';
 import { LayoutService } from '../../../core/services/layout-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
+//#endif
 import { Logo } from '../../../shared/components/logo/logo';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
@@ -45,6 +51,9 @@ import { UserMenu } from '../user-menu/user-menu';
   // prettier-ignore
   imports: [
     RouterLink,
+    //#if (TenantWorkspace)
+    HlmInput,
+    //#endif
     NgIcon,
     Logo,
     ...HlmDropdownMenuImports,
@@ -78,6 +87,18 @@ import { UserMenu } from '../user-menu/user-menu';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DefaultSidebar {
+  //#if (TenantWorkspace)
+  readonly workspace = inject(WorkspaceContextService);
+  readonly filteredWorkspaces = computed(() =>
+    this.workspace
+      .workspaces()
+      .filter((w) =>
+        `${w.name} ${w.displayName ?? ''}`
+          .toLowerCase()
+          .includes(this.workspace.filter().toLowerCase()),
+      ),
+  );
+  //#endif
   readonly layoutService = inject(LayoutService);
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
@@ -90,6 +111,13 @@ export class DefaultSidebar {
   readonly areaMenuSide = computed(() => (this.sidebarService.isMobile() ? 'bottom' : 'right'));
 
   readonly areaOptions = this.navigation.areaOptions;
+  readonly hasAreaSwitcher = computed(() => {
+    //#if (TenantWorkspace)
+    return true;
+    //#else
+    return this.areaOptions().length > 1;
+    //#endif
+  });
   readonly currentAreaLabel = this.navigation.currentAreaLabel;
   readonly menuGroups = this.navigation.menuGroups;
 
@@ -105,6 +133,11 @@ export class DefaultSidebar {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  //#if (TenantWorkspace)
+  'tenantWorkspace.title': 'Workspaces',
+  'tenantWorkspace.console': 'Platform console',
+  'tenantWorkspace.search': 'Search workspaces',
+  //#endif
   'layout.sidebar.navigation': 'Navigation',
   'layout.sidebar.navigationDescription': 'Browse the sections of this area.',
   'layout.sidebar.switchArea': 'Switch area',

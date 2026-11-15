@@ -1,4 +1,8 @@
 {
+  //#if (TenantWorkspace)
+  "platformBadge": "平台",
+  "platformReason": "平台人员的口令与登录方式由本人账号管理；移除访问在宿主的租户管理中操作。",
+  //#endif
   "page": {
     "title": "用户管理"
   },

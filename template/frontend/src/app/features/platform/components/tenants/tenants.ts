@@ -29,6 +29,9 @@ import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/o
 
 import { TenantDetailDialog } from './widgets/tenant-detail-dialog/tenant-detail-dialog';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
+//#if (TenantWorkspace)
+import { TenantStaffSheet } from './widgets/tenant-staff-sheet/tenant-staff-sheet';
+//#endif
 import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
@@ -66,6 +69,9 @@ import { TenantService } from '../../services/tenant-service';
     HlmInputGroupInput,
     ...HlmTooltipImports,
     TenantTable,
+    //#if (TenantWorkspace)
+    TenantStaffSheet,
+    //#endif
     TenantDetailDialog,
     TenantEditDialog,
     //#if (IncludeLocalization)
@@ -77,6 +83,19 @@ import { TenantService } from '../../services/tenant-service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Tenants {
+  //#if (TenantWorkspace)
+  readonly canStaffAccess = computed(() =>
+    this.authorizationService.has(PERMISSIONS.tenants.staffAccess),
+  );
+  openStaff(tenant: TenantOutputDto): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { staff: tenant.id },
+      queryParamsHandling: 'merge',
+    });
+  }
+  //#endif
+
   readonly activationId = signal<string | null>(null);
   readonly impersonatingId = signal<string | null>(null);
   // 仅防确认流程重入，不驱动行内禁用或 spinner。

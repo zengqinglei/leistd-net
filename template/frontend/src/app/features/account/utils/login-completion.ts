@@ -10,6 +10,9 @@ import { ReturnNavigation, ReturnUrlService } from '../../../core/routing/return
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
 import { SessionContextService } from '../../../core/services/session-context-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
+//#endif
 
 /**
  * 会话已下发之后的共同收尾（口令单步、免口令、第二步通过）：回授权端点时直接整页离开；
@@ -22,13 +25,24 @@ export function injectLoginCompletion(): (returnUrl: string | null) => Promise<R
   const sessionContext = inject(SessionContextService);
   const returnUrls = inject(ReturnUrlService);
   const router = inject(Router);
+  //#if (TenantWorkspace)
+  const workspace = inject(WorkspaceContextService);
+  //#endif
   //#if (IncludeLocalization)
   const transloco = inject(TranslocoService);
   //#endif
 
   // 按权限进入默认页：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断
-  const enterLandingPage = () =>
-    router.navigate([authorizationService.canAccessPlatform() ? '/platform' : '/workspace']);
+  const enterLandingPage = async () => {
+    //#if (TenantWorkspace)
+    await workspace.refresh();
+    const last = localStorage.getItem('last-workspace');
+    const selected =
+      workspace.workspaces().find((item) => item.name === last) ?? workspace.workspaces()[0];
+    if (selected) return router.navigateByUrl(`/w/${encodeURIComponent(selected.name)}/platform`);
+    //#endif
+    return router.navigate([authorizationService.canAccessPlatform() ? '/platform' : '/workspace']);
+  };
 
   return async (returnUrl) => {
     //#if (OpenIddictServer)

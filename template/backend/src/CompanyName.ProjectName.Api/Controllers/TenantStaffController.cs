@@ -20,6 +20,10 @@ public sealed class TenantStaffController(ITenantStaffAppService staffAppService
     public Task<IReadOnlyList<RoleBriefOutputDto>> GetRolesAsync(Guid tenantId, CancellationToken cancellationToken) =>
         staffAppService.GetRolesAsync(tenantId, cancellationToken);
 
+    [HttpGet("candidates")]
+    public Task<IReadOnlyList<TenantStaffCandidateOutputDto>> GetCandidatesAsync(Guid tenantId, [FromQuery] string? keyword, CancellationToken cancellationToken) =>
+        staffAppService.GetCandidatesAsync(tenantId, keyword, cancellationToken);
+
     [HttpPost]
     public Task GrantAsync(Guid tenantId, GrantTenantStaffInputDto input, CancellationToken cancellationToken) =>
         staffAppService.GrantAsync(tenantId, input, cancellationToken);

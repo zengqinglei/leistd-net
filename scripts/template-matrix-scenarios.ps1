@@ -99,10 +99,10 @@ $scenarioMap = [ordered]@{
     }
     "standalone-workspace-minimal" = @{
         Slices = @{ full = "full-03" }
-        Arguments = @("--service-role", "Standalone", "--tenant-staff-access", "Workspace", "--include-frontend", "false", "--include-email", "false", "--include-operation-records", "false")
-        Frontend = $false; Lint = $false
+        Arguments = @("--service-role", "Standalone", "--tenant-staff-access", "Workspace", "--include-email", "false", "--include-operation-records", "false")
+        Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/DependencyInjection.cs")
-        Absent = @("frontend", "backend/src/{name}.Api/Controllers/TenantController.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
         ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation")
     }
@@ -117,7 +117,7 @@ $scenarioMap = [ordered]@{
     }
     "identity-workspace" = @{
         Slices = @{ full = "full-02" }
-        Arguments = @("--service-role", "Identity", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login")
+        Arguments = @("--service-role", "Identity", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login", "--include-webhooks", "--include-distributed-events")
         Frontend = $true; Lint = $true
         Present = @("frontend/src/app/layout/components/default-sidebar/default-sidebar.ts")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
@@ -126,7 +126,7 @@ $scenarioMap = [ordered]@{
     }
     "resource-workspace" = @{
         Slices = @{ full = "full-04" }
-        Arguments = @("--service-role", "Resource", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login")
+        Arguments = @("--service-role", "Resource", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login", "--include-webhooks", "--include-distributed-events")
         Frontend = $true; Lint = $true
         Present = @("frontend/src/app/layout/components/default-sidebar/default-sidebar.ts")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
