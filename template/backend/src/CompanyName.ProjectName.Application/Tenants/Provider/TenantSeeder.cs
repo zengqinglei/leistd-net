@@ -50,10 +50,16 @@ public class TenantSeeder(
     /// <inheritdoc />
     public async Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
     {
+#if (TenantWorkspace)
+        // 默认租户使用基础入参，只播种角色；人工开通仍可指定普通租户管理员。
+        var input = context.Input as CreateTenantWithAdminInputDto;
+#else
         // 端点按 CreateTenantWithAdminInputDto 绑定请求体；拿到基类说明宿主把端点映射错了类型
         var input = context.Input as CreateTenantWithAdminInputDto
             ?? throw new InvalidOperationException(
                 $"Tenant provisioning needs a {nameof(CreateTenantWithAdminInputDto)}; map the tenant endpoints with that request type.");
+
+#endif
 
         if (currentTenant.Id is not { } tenantId)
         {
@@ -69,8 +75,13 @@ public class TenantSeeder(
 
         var adminRole = await EnsureRolesAsync(cancellationToken);
         await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
-        var adminUser = await EnsureTenantAdminAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
-        await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
+#if (TenantWorkspace)
+        if (input is not null)
+#endif
+        {
+            var adminUser = await EnsureTenantAdminAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
+            await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
+        }
 
         logger.LogInformation("Tenant {TenantId} initialized", tenantId);
     }

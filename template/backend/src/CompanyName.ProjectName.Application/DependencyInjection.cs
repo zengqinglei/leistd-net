@@ -246,6 +246,9 @@ public static class DependencyInjection
 #if (TenantWorkspace && !OpenIddictServer)
         services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
 #endif
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IOptionsChangeTokenSource<CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions>)))
+            services.AddOptions<CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions>()
+                .BindConfiguration(CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions.SectionName);
         services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
 #if (TenantWorkspace && OpenIddictServer)
         services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceTenantLookupAppService,
