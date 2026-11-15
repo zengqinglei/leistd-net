@@ -92,6 +92,10 @@ public static class DependencyInjection
 
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
+#if (TenantWorkspace && RemoteTokenAuth)
+        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceAppService,
+            CompanyName.ProjectName.Application.Tenants.AppServices.RemoteWorkspaceAppService>();
+#endif
         services.AddMapsterObjectMapper(options =>
         {
             // 各模块 Mappings/ 下实现 IRegister 的映射配置，登记到组件自己的 TypeAdapterConfig；
@@ -243,6 +247,10 @@ public static class DependencyInjection
         services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
 #endif
         services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
+#if (TenantWorkspace && OpenIddictServer)
+        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceTenantLookupAppService,
+            CompanyName.ProjectName.Application.Tenants.AppServices.WorkspaceTenantLookupAppService>();
+#endif
 #if (TenantWorkspace)
         services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceAppService,
             CompanyName.ProjectName.Application.Tenants.AppServices.WorkspaceAppService>();

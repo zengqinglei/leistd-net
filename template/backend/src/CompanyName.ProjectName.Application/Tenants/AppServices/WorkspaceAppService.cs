@@ -21,7 +21,7 @@ public sealed class WorkspaceAppService(IRepository<UserTenantAccess, Guid> acce
         if (currentUser.TenantId is { } ownId)
         {
             var own = await tenantStore.FindAsync(ownId, cancellationToken);
-            return own is { IsActive: true } ? [new() { TenantId = own.Id, Name = own.Name, DisplayName = own.DisplayName }] : [];
+            return own is { IsActive: true } ? [new() { UserId = homeId, TenantId = own.Id, Name = own.Name, DisplayName = own.DisplayName }] : [];
         }
         var accesses = await accessRepository.GetListAsync(a => a.HomeUserId == homeId, cancellationToken);
         var result = new List<WorkspaceOutputDto>();
@@ -32,8 +32,8 @@ public sealed class WorkspaceAppService(IRepository<UserTenantAccess, Guid> acce
             using (currentTenant.Change(tenant.Id, tenant.Name))
             using (unitOfWorkManager.Begin(requiresNew: true))
             {
-                if (await userRepository.AnyAsync(u => u.HomeUserId == homeId && u.IsActive, cancellationToken))
-                    result.Add(new() { TenantId = tenant.Id, Name = tenant.Name, DisplayName = tenant.DisplayName });
+                if (await userRepository.GetOneAsync(u => u.HomeUserId == homeId && u.IsActive, cancellationToken) is { } member)
+                    result.Add(new() { UserId = member.Id, TenantId = tenant.Id, Name = tenant.Name, DisplayName = tenant.DisplayName });
             }
         }
         return result.OrderBy(w => w.Name).ToList();

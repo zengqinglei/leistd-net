@@ -395,6 +395,23 @@ public static class DependencyInjection
         }
 
         read.AddStandardResilienceHandler();
+#if (TenantWorkspace)
+        services.TryAddTransient<CompanyName.ProjectName.Domain.Tenants.Abstractions.IIdentityWorkspaceDirectory,
+            CompanyName.ProjectName.Infrastructure.Workspaces.IdentityWorkspaceDirectory>();
+        services.TryAddTransient<Leistd.MultiTenancy.Stores.ITenantStore,
+            CompanyName.ProjectName.Infrastructure.Workspaces.IdentityWorkspaceDirectory>();
+        var workspace = services.AddRefitServiceClient<CompanyName.ProjectName.Infrastructure.Workspaces.IIdentityWorkspacesApi,
+            CompanyName.ProjectName.Infrastructure.Workspaces.IdentityWorkspacesClientOptions>("IdentityWorkspaces", configSectionPath: identitySection);
+        var tenant = services.AddRefitServiceClient<CompanyName.ProjectName.Infrastructure.Workspaces.IWorkspaceTenantApi,
+            CompanyName.ProjectName.Infrastructure.Workspaces.WorkspaceTenantsClientOptions>("WorkspaceTenants", configSectionPath: identitySection);
+        if (HasServiceAuthentication(configuration))
+        {
+            workspace.AddTokenExchange(configSectionPath: $"{identitySection}:TokenExchange");
+            tenant.AddClientCredentials(configSectionPath: identitySection);
+        }
+        workspace.AddStandardResilienceHandler();
+        tenant.AddStandardResilienceHandler();
+#endif
     }
 #endif
 }

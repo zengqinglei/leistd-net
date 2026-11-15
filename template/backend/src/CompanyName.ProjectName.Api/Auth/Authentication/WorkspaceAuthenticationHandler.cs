@@ -38,8 +38,7 @@ internal sealed class WorkspaceAuthenticationHandler(
         if (!home.Succeeded || home.Principal is null) return home;
         var path = Request.Path;
         // 先处理本人端点，失效工作区也不能挡住本人管理会话与认证。
-        if (path.StartsWithSegments("/api/v1/auth") || path.StartsWithSegments("/api/v1/external-auth") ||
-            path.StartsWithSegments("/connect")) return home;
+        if (IsHomeRequest(path)) return home;
         var workspace = Request.Headers["X-Workspace"].ToString();
         if (string.IsNullOrEmpty(workspace) && path.StartsWithSegments("/hubs"))
             workspace = Request.Query["workspace"].ToString();
@@ -61,6 +60,9 @@ internal sealed class WorkspaceAuthenticationHandler(
             ?? Deny("Workspace:Unavailable");
 #endif
     }
+
+    internal static bool IsHomeRequest(PathString path) => path.StartsWithSegments("/api/v1/auth") ||
+        path.StartsWithSegments("/api/v1/external-auth") || path.StartsWithSegments("/connect");
 
     private AuthenticateResult Deny(string code)
     {

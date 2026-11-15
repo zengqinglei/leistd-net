@@ -252,6 +252,29 @@ public sealed class ConnectController(
             var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             var subject = result.Principal;
             var app = await applications.FindByClientIdAsync(request.ClientId!, cancellationToken);
+#if (TenantWorkspace)
+            if ((string?)request["workspace"] is { Length: > 0 } workspace)
+            {
+                if (subject is null || app is null || subject.HasClaim(claim => claim.Type is "act" or "home_sub") ||
+                    claimTypes.Value.ReadTenant(subject).TenantId is not null ||
+                    !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken) ||
+                    subject.GetExpirationDate() is not { } workspaceExpiry ||
+                    !request.GetAudiences().ToHashSet(StringComparer.Ordinal).SetEquals(subject.GetAudiences()) ||
+                    !request.GetScopes().ToHashSet(StringComparer.Ordinal).IsSubsetOf(subject.GetScopes()))
+                    return ProtocolError(Errors.InvalidTarget);
+                var tenant = await HttpContext.RequestServices.GetRequiredService<Leistd.MultiTenancy.Stores.ITenantStore>()
+                    .FindByNameAsync(HttpContext.RequestServices.GetRequiredService<Leistd.MultiTenancy.Stores.ITenantNormalizer>()
+                        .NormalizeName(workspace)!, cancellationToken);
+                var linked = tenant is null ? null : await principalFactory.CreateWorkspaceAsync(subject, tenant.Id,
+                    request.GetScopes(), cancellationToken);
+                if (linked is null) return ProtocolError(Errors.InvalidTarget);
+                linked.SetResources(subject.GetAudiences());
+                linked.SetDestinations(_ => [Destinations.AccessToken]);
+                linked.SetAccessTokenLifetime(TimeSpan.FromMinutes(5));
+                linked.SetExpirationDate(workspaceExpiry);
+                return SignIn(linked, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            }
+#endif
             // 官方验证管线完成归属验证后，仍保留控制器的严格单跳约束。
             if (subject is null || app is null ||
                 !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken) ||

@@ -233,7 +233,11 @@ internal sealed class UserAppService(
             currentUser.Username,
             currentUser.Email,
             currentUser.Name,
-            cancellationToken);
+            cancellationToken
+#if (TenantWorkspace)
+            , Guid.TryParse(currentUser.FindClaim(CompanyName.ProjectName.Application.Shared.WorkspaceClaimTypes.HomeUserId)?.Value, out var homeId) ? homeId : null
+#endif
+            );
         await unitOfWork.CompleteAsync(cancellationToken);
         return user.GetAccessStatus(clock.Now);
     }
@@ -596,6 +600,9 @@ internal sealed class UserAppService(
 
     private static void EnsureTwoFactorResettable(User user, Guid actorId)
     {
+#if (TenantWorkspace)
+        user.EnsureOrdinaryAccount();
+#endif
         if (!user.CanBeManagedBy(actorId))
         {
             throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.");
