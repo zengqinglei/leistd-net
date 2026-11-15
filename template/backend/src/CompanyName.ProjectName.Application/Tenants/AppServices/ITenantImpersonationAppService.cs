@@ -18,7 +18,7 @@ namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 /// </remarks>
 public interface ITenantImpersonationAppService : IAppService
 {
-    /// <summary>以目标租户的管理员身份构造会话主体。</summary>
+    /// <summary>以目标租户最早创建的已启用内置 Admin 角色成员构造会话主体；同刻按 Id 排序。</summary>
     Task<ClaimsPrincipal> ImpersonateAsync(Guid tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>结束模拟，构造回发起人的会话主体。</summary>

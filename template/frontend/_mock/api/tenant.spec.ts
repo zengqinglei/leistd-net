@@ -10,8 +10,12 @@ import {
   updateTenant,
 } from './tenant';
 import { MockException } from '../core/models';
+//#if (Impersonation)
+import { MockRole, ROLES } from '../data/authorization';
+//#endif
 import { MockTenant, TENANTS } from '../data/tenant';
 //#if (Impersonation)
+import { MockUser, USERS } from '../data/user';
 import {
   getMockImpersonator,
   getMockSessionTenantKey,
@@ -271,7 +275,19 @@ describe('tenant impersonation mock', () => {
     params: { id: string };
   }) => unknown;
 
-  afterEach(() => setMockSessionUserId(null));
+  let users: MockUser[];
+  let roles: MockRole[];
+
+  beforeEach(() => {
+    users = USERS.map((user) => ({ ...user, roles: [...user.roles] }));
+    roles = ROLES.map((role) => ({ ...role }));
+  });
+
+  afterEach(() => {
+    setMockSessionUserId(null);
+    USERS.splice(0, USERS.length, ...users);
+    ROLES.splice(0, ROLES.length, ...roles);
+  });
 
   function errorOf(action: () => unknown): MockException {
     try {
@@ -335,5 +351,70 @@ describe('tenant impersonation mock', () => {
     expect(nested.status).toBe(409);
     expect(nested.error.code).toBe('Tenant:AlreadyImpersonating');
   });
+
+  it('finds a renamed administrator by its built-in Admin role', () => {
+    signIn('user_admin');
+    USERS.find((user) => user.id === 'user_admin')!.username = 'renamed_admin';
+
+    impersonate({ params: { id: 'tenant_acme' } });
+
+    expect(getMockSessionUserId()).toBe('user_admin');
+    expect(getMockSessionTenantKey()).toBe('tenant_acme');
+  });
+
+  it('selects the earliest active Admin member and skips the same-name nonmember', () => {
+    signIn('user_admin');
+    const caller = USERS.find((user) => user.id === 'user_admin')!;
+    caller.roles = [];
+    const candidates: MockUser[] = [
+      {
+        ...caller,
+        id: 'disabled',
+        username: 'disabled',
+        roles: ['Admin'],
+        isActive: false,
+        creationTime: '2020-01-01T00:00:00Z',
+      },
+      {
+        ...caller,
+        id: 'newer',
+        username: 'newer',
+        roles: ['Admin'],
+        creationTime: '2022-01-01T00:00:00Z',
+      },
+      {
+        ...caller,
+        id: 'earlier',
+        username: 'earlier',
+        roles: ['Admin'],
+        creationTime: '2021-01-01T00:00:00Z',
+      },
+    ];
+    USERS.push(...candidates);
+
+    impersonate({ params: { id: 'tenant_acme' } });
+
+    expect(getMockSessionUserId()).toBe('earlier');
+  });
+
+  it.each(['no-members', 'nonstatic-role'])(
+    'rejects %s and preserves the host session',
+    (reason) => {
+      signIn('user_admin');
+      if (reason === 'no-members') {
+        for (const user of USERS) user.roles = [];
+      } else {
+        ROLES.find((role) => role.name === 'Admin')!.isStatic = false;
+      }
+
+      const error = errorOf(() => impersonate({ params: { id: 'tenant_acme' } }));
+
+      expect(error.status).toBe(409);
+      expect(error.error.code).toBe('Tenant:AdministratorNotFound');
+      expect(getMockSessionUserId()).toBe('user_admin');
+      expect(getMockSessionTenantKey()).toBe('host');
+      expect(getMockImpersonator()).toBeNull();
+    },
+  );
 });
 //#endif

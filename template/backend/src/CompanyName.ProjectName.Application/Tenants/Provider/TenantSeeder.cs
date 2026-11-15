@@ -163,8 +163,8 @@ public class TenantSeeder(
     /// <c>UserDomainService.CreateSuperAdminAsync</c>。租户管理员的权限完全由角色承载：本租户 Admin 角色
     /// 在上一步拿到全部 Tenant 侧权限（含权限管理本身），之后在租户自己的角色页里可查看、可编辑、可撤销，
     /// 撤权即时生效；升级后新增的权限由租户管理员自己授给自己的角色。</para>
-    /// <para>代价是租户可以把自己锁死：管理员被停用、删除、移出 Admin，或 Admin 角色的权限被撤空后，
-    /// 租户内再没有人能把它改回来（宿主的模拟登录进的也是这个账号）。恢复走部署级命令
+    /// <para>代价是租户可以把自己锁死：最后一位管理员被停用、删除、移出 Admin，或 Admin 角色的权限被撤空后，
+    /// 租户内再没有人能把它改回来；模拟登录也不能补回成员关系或权限。恢复走部署级命令
     /// <c>DbMigrator --restore-tenant-admin &lt;tenant-id&gt;</c>，见后端 README。</para>
     /// </remarks>
     private async Task<User> EnsureTenantAdminAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken)
