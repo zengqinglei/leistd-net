@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Security.Claims;
+using Leistd.AmbientContext;
 using Leistd.BackgroundJobs.InProcess.Diagnostics;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Lock.Abstractions;
@@ -11,6 +13,8 @@ namespace Leistd.BackgroundJobs.InProcess.Recurring;
 // 一次执行：在本轮的作用域里先判任务自身的开关，再按范围决定是否抢锁、比对水位，最后在同一作用域里执行任务。
 // 开关与任务共用一个作用域：读 IOptionsSnapshot 的两边看到同一份配置，不会按“开启”放行、又拿到热更新后的“关闭”参数。
 // 失败报告给观察者并记日志、不写水位，本轮不重试：下一次触发（最迟是下一个调度时段）会重做，因此任务必须幂等并扫描历史积压。
+// 开关判断、跳过、观察者与任务都在本轮的环境上下文里（注册了时）：周期任务没有主体，以空主体进入，各维度据此建立——
+// 追踪维度打开关联标识日志作用域，取本次执行的 TraceId，与 HTTP 请求、后台队列用同一个键检索。
 internal sealed class RecurringJobRunner(
     IServiceScopeFactory scopeFactory,
     IServiceProvider rootProvider,
@@ -34,19 +38,43 @@ internal sealed class RecurringJobRunner(
         using var activity = BackgroundJobDiagnostics.StartActivity("Leistd.RecurringJob");
         activity.SetTag("leistd.job.name", definition.Name);
         activity.SetTag("leistd.job.slot", slot.ToString("O"));
-        var lockLost = CancellationToken.None;
-
         try
         {
             await using var jobScope = scopeFactory.CreateAsyncScope();
-            if (!IsSwitchedOn(definition, jobScope.ServiceProvider))
+            // 从本轮作用域取：贡献者可以是 Scoped。声明在作用域之后，先于它释放
+            using var ambient = EnterAmbientContext(jobScope.ServiceProvider, definition.Name);
+            return await RunInContextAsync(definition, jobScope.ServiceProvider, slot, activity, stoppingToken);
+        }
+        catch (Exception exception)
+        {
+            // 作用域或环境上下文没能建立：同样隔离，不能冒出 BackgroundService 停掉宿主。
+            var outcome = ClassifyFailure(exception, stoppingToken, CancellationToken.None);
+            LogOutcome(definition.Name, slot, outcome, exception, activity);
+            return ToRunnerResult(outcome);
+        }
+        finally
+        {
+            activity.Stop();
+            Activity.Current = previous;
+        }
+    }
+
+    // 环境上下文已建立后的全部步骤：开始之前的故障也在这里分类与记日志，日志仍带本轮的关联标识
+    private async Task<RecurringJobRunnerResult> RunInContextAsync(
+        RecurringJobDefinition definition, IServiceProvider jobScope, DateTimeOffset slot, Activity activity,
+        CancellationToken stoppingToken)
+    {
+        var lockLost = CancellationToken.None;
+        try
+        {
+            if (!IsSwitchedOn(definition, jobScope))
             {
                 return RecurringJobRunnerResult.SkippedDisabled;
             }
 
             if (definition.Scope == RecurringJobScope.EveryInstance)
             {
-                return await RunObservedAsync(definition, jobScope.ServiceProvider, slot, stoppingToken, lockLost, stoppingToken, null, activity);
+                return await RunObservedAsync(definition, jobScope, slot, stoppingToken, lockLost, stoppingToken, null, activity);
             }
 
             var distributedLock = rootProvider.GetRequiredService<IDistributedLock>();
@@ -70,19 +98,14 @@ internal sealed class RecurringJobRunner(
                 return RecurringJobRunnerResult.SkippedCompleted;
             }
 
-            return await RunObservedAsync(definition, jobScope.ServiceProvider, slot, stoppingToken, lockLost, run.Token, stateStore, activity);
+            return await RunObservedAsync(definition, jobScope, slot, stoppingToken, lockLost, run.Token, stateStore, activity);
         }
         catch (Exception exception)
         {
-            // 开始之前的故障仍须隔离，不能冒出 BackgroundService 停掉宿主。
+            // 开始之前的故障（开关求值、抢锁、读水位）须隔离，不能冒出 BackgroundService 停掉宿主。
             var outcome = ClassifyFailure(exception, stoppingToken, lockLost);
             LogOutcome(definition.Name, slot, outcome, exception, activity);
             return ToRunnerResult(outcome);
-        }
-        finally
-        {
-            activity.Stop();
-            Activity.Current = previous;
         }
     }
 
@@ -140,6 +163,26 @@ internal sealed class RecurringJobRunner(
         }
 
         return ToRunnerResult(outcome);
+    }
+
+    // 周期任务没有主体：以空主体进入，不继承调度线程上的主体。未注册环境上下文时不进入
+    private AmbientScope EnterAmbientContext(IServiceProvider scope, string jobName)
+        => new(scope.GetService<IAmbientContext>()?.Begin(new ClaimsPrincipal(new ClaimsIdentity())), logger, jobName);
+
+    // 退出环境上下文时某个维度抛错只记警告：本轮的终态（含已写入的水位）已经确定，不能因此冒出执行器、停掉这个任务的调度循环
+    private readonly struct AmbientScope(IDisposable? inner, ILogger logger, string jobName) : IDisposable
+    {
+        public void Dispose()
+        {
+            try
+            {
+                inner?.Dispose();
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Recurring job {Job} failed to leave its ambient context.", jobName);
+            }
+        }
     }
 
     private IRecurringJobRunObserver[] ResolveObservers(IServiceProvider scope, string jobName)
