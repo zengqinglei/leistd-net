@@ -191,7 +191,9 @@ try {
         # 5. 重建确定性与反例
         $marker = Read-TemplateMarker $output
         $rebuild = Join-Path $work 'rebuild' $scenario
-        New-TemplateRebuild $marker $hive $rebuild
+        # 与生成同在仓库外执行：仓库根 global.json 会让 dotnet 选另一个 SDK，标记里的 sdkVersion 随之不同
+        Push-Location $work
+        try { New-TemplateRebuild $marker $hive $rebuild } finally { Pop-Location }
         $differences = Compare-TemplateTree $output $rebuild
         if ($differences.Count -ne 0) { throw "$scenario 同版本同输入重建后存在差异：$($differences -join ', ')" }
         $raw = Join-Path $work 'raw' $scenario
