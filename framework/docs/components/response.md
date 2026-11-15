@@ -119,7 +119,7 @@ public class OrderController(IOrderService service) : ControllerBase
 ### Leistd.Response.AspNetCore（自动包装过滤器）
 
 - `ResultWrapperFilter` 仅包装满足以下全部条件的结果：结果为 `ObjectResult`、其 `Value` 不是 `Result`、HTTP 状态码为 `null` 或落在 200–299 区间。
-- 命中包装时，原值被包成 `Result<object?>.Ok(value)`，状态码保留原值（无则取 200）；包装时输出一条 `Debug` 级日志。
+- 命中包装时，在原结果对象上将值改为 `Result<object?>.Ok(value)` 并更新声明类型；状态码、内容类型、格式化器与 `Created*` / `Accepted*` 的 `Location` 行为保留。包装时输出一条 `Debug` 级日志。
 - 标注了 `[NoWrap]`（通过 `EndpointMetadata` 检测）的接口直接放行，不做包装。
 - 全局异常与 DataAnnotations 自动校验失败输出 `Result`。`code` 保持数字契约（默认为 HTTP 状态码），`errorCode` 保留可供客户端分支的稳定业务码。
 

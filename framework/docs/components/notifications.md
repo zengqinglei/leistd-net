@@ -74,6 +74,8 @@ app.MapNotificationHub();
 
 ```csharp
 builder.Services.AddRealTimeSignalR();
+builder.Services.AddPrefixRealTimeSubscriptions("public:"); // 公共资源；私有资源须登记业务授权器
+builder.Services.AddNotificationsSignalR<RealTimeHub>();
 
 // 共用连接时只映射此 Hub。
 app.MapRealTimeHub();

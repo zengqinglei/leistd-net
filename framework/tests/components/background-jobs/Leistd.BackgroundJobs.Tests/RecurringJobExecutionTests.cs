@@ -1,6 +1,7 @@
 using Leistd.BackgroundJobs.InProcess;
 using Leistd.BackgroundJobs.InProcess.Recurring;
 using Leistd.BackgroundJobs.Recurring;
+using Leistd.BackgroundJobs.Options;
 using Leistd.BackgroundJobs.Tests.TestDoubles;
 using Leistd.Lock.Abstractions;
 using Leistd.Lock.Memory;
@@ -121,6 +122,47 @@ public sealed class RecurringJobExecutionTests : IDisposable
             .AddInProcessBackgroundJobs()
             .AddRecurringJob<FailingJob>("test.failing", RecurringJobSchedule.Every(TimeSpan.FromMinutes(5)), RecurringJobScope.Cluster)
             .BuildServiceProvider();
+        var scheduler = provider.GetServices<IHostedService>().OfType<RecurringJobScheduler>().Single();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => scheduler.StartAsync(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Disabled_cluster_jobs_do_not_require_a_lock(bool schedulerEnabled)
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddInProcessBackgroundJobs()
+            .AddRecurringJob<FailingJob>("test.cluster", RecurringJobSchedule.Every(TimeSpan.FromHours(1)), RecurringJobScope.Cluster)
+            .AddRecurringJob<FailingJob>("test.instance", RecurringJobSchedule.Every(TimeSpan.FromHours(1)), RecurringJobScope.EveryInstance);
+        services.Configure<BackgroundJobOptions>(options =>
+        {
+            options.Enabled = schedulerEnabled;
+            if (schedulerEnabled)
+                options.DisabledJobs.Add("test.cluster");
+        });
+        await using var provider = services.BuildServiceProvider();
+        var scheduler = provider.GetServices<IHostedService>().OfType<RecurringJobScheduler>().Single();
+
+        await scheduler.StartAsync(CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StopAsync(timeout.Token);
+    }
+
+    [Fact]
+    public async Task Disabling_one_cluster_job_does_not_exempt_another_enabled_cluster_job()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddInProcessBackgroundJobs()
+            .AddRecurringJob<FailingJob>("test.disabled", RecurringJobSchedule.Every(TimeSpan.FromHours(1)), RecurringJobScope.Cluster)
+            .AddRecurringJob<FailingJob>("test.enabled", RecurringJobSchedule.Every(TimeSpan.FromHours(1)), RecurringJobScope.Cluster);
+        services.Configure<BackgroundJobOptions>(options => options.DisabledJobs.Add("test.disabled"));
+        await using var provider = services.BuildServiceProvider();
         var scheduler = provider.GetServices<IHostedService>().OfType<RecurringJobScheduler>().Single();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => scheduler.StartAsync(CancellationToken.None));

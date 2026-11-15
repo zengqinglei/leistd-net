@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Ddd.Infrastructure.Persistence;
@@ -5,6 +6,7 @@ using Leistd.UnitOfWork;
 using Leistd.EventBus.Local;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -225,7 +227,51 @@ public class LocalEventInterceptorTests
         }
     }
 
-    private static (TestDbContext db, ServiceProvider sp) BuildOn(SqliteConnection connection)
+    [Fact]
+    public async Task Canceled_save_discards_collected_events_before_the_context_is_reused()
+    {
+        using var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
+        using var cancellation = new CancellationTokenSource();
+        var cancelCommand = new CancelCommandInterceptor(cancellation);
+        var (db, sp) = BuildOn(connection, cancelCommand);
+        using (db)
+        using (sp)
+        {
+            db.Add(new TestEntity("canceled"));
+            cancelCommand.CancelNextCommand = true;
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => db.SaveChangesAsync(cancellation.Token));
+            Assert.Equal(0, TestHandler.Invoked);
+
+            db.ChangeTracker.Clear();
+            db.Add(new TestEntity("committed"));
+            await db.SaveChangesAsync();
+
+            Assert.Equal(1, TestHandler.Invoked);
+            Assert.Equal("committed", TestHandler.LastName);
+            Assert.Equal(1, await db.Items.CountAsync());
+        }
+    }
+
+    private sealed class CancelCommandInterceptor(CancellationTokenSource cancellation) : DbCommandInterceptor
+    {
+        public bool CancelNextCommand { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (CancelNextCommand)
+            {
+                CancelNextCommand = false;
+                cancellation.Cancel();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private static (TestDbContext db, ServiceProvider sp) BuildOn(SqliteConnection connection, params IInterceptor[] additionalInterceptors)
     {
         TestHandler.Invoked = 0;
         TestHandler.LastName = null;
@@ -247,6 +293,7 @@ public class LocalEventInterceptorTests
         var db = new TestDbContext(new DbContextOptionsBuilder()
             .UseSqlite(connection)
             .AddInterceptors(interceptor)
+            .AddInterceptors(additionalInterceptors)
             .Options);
         db.Database.EnsureCreated();
         return (db, sp);

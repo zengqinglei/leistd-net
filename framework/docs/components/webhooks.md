@@ -51,6 +51,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 }
 ```
 
+同库多租户使用普通 `DbContext` 时，宿主须实现租户查询过滤与必要的写入落值；`ConfigureWebhooks()` 仅映射模型，不安装过滤器。继承 `BaseDbContext` 的组合已具备租户过滤，要求见[隔离业务实体](./multi-tenancy.md#隔离业务实体)。
+
 webhook 表只映射在一个上下文里：以另一个 DbContext 再调用 `AddWebhooksEfCore` 时在注册期抛出 `InvalidOperationException`。
 
 **前置**（组件不代为注册）：
@@ -225,7 +227,7 @@ public class OrderCancelledWebhookHandler(IWebhookPublisher webhookPublisher) : 
 - 停用期间发生的事件**不会补发**，重新启用后的 `retryFailed` 只重发已有的失败投递。
 - 多副本部署须共享周期任务的完成水位与分布式锁，否则兜底扫描与保留期会在每个副本各跑一遍；Data Protection 密钥环也须共享，否则其他副本解不开签名密钥，投递发不出去。
 - `AllowedNetworks` 是信任边界：放行内网地址等于允许订阅者让服务端访问该网段，只放行确需接收 webhook 的网段。替换 `IWebhookSender` 后内网拦截由替换方负责。
-- 发布方负责租户上下文：只投给当前租户（宿主上下文下为宿主）的启用订阅。后台作业里发布前先切到目标租户。
+- 发布方负责租户上下文：宿主已按上述前提安装租户过滤时，只投给当前租户（宿主上下文下为宿主）的启用订阅。后台作业里发布前先切到目标租户。
 - 事件类型名与 `data` 的形状是对外契约：改名等于换类型，删字段会让接收方出错。
 - **接收方接入要点**：用订阅密钥按 Standard Webhooks v1 验签（官方各语言库可直接使用），拒绝 `webhook-timestamp` 偏离当前时刻过远的请求以防重放；先持久化或入队再尽快回 2xx，耗时处理放到后台，避免超时引发重发；按 `webhook-id` 去重；不再接收时回 410，订阅会被停用；需要限流时回 429 或 503 并带 `Retry-After`。
 

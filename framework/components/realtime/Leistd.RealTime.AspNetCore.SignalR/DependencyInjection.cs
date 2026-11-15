@@ -25,6 +25,7 @@ public static class DependencyInjection
     /// <example>
     /// <code>
     /// builder.Services.AddRealTimeSignalR();
+    /// builder.Services.AddPrefixRealTimeSubscriptions("public:"); // 仅用于允许所有已认证用户订阅的公共资源
     ///
     /// app.MapRealTimeHub();   // 默认 /hubs/realtime
     /// </code>
@@ -51,6 +52,7 @@ public static class DependencyInjection
     /// <example>
     /// <code>
     /// builder.Services.AddRealTimeSignalR();
+    /// builder.Services.AddPrefixRealTimeSubscriptions("public:"); // 私有资源改为业务授权器
     /// builder.Services.Configure&lt;HubIdentityOptions&gt;(options =&gt; options.PolicyName = "Realtime");
     ///
     /// app.MapRealTimeHub();
