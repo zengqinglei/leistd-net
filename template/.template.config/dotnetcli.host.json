@@ -36,6 +36,9 @@
     },
     "IncludeDistributedEvents": {
       "longName": "include-distributed-events"
+    },
+    "TenantStaffAccess": {
+      "longName": "tenant-staff-access"
     }
   }
 }

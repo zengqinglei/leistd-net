@@ -221,7 +221,7 @@
     },
     "Impersonation": {
       "type": "computed",
-      "value": "(LocalIdentity && IncludeMultiTenancy && IncludeOperationRecords)"
+      "value": "(LocalIdentity && IncludeMultiTenancy && IncludeOperationRecords && TenantStaffAccess == \"Impersonation\")"
     },
     "IncludeFrontend": {
       "type": "parameter",
@@ -396,6 +396,32 @@
       "valueSource": "Ci",
       "valueTransform": "identity",
       "replaces": "__LEISTD_TEMPLATE_PARAMETER_CI__"
+    },
+    "TenantStaffAccess": {
+      "type": "parameter",
+      "datatype": "choice",
+      "description": "平台人员进入租户的方式；仅开启多租户时有效。同一系统的 Identity 与 Resource 必须一致",
+      "defaultValue": "Impersonation",
+      "choices": [
+        {
+          "choice": "Impersonation",
+          "description": "模拟登录租户管理员（需要操作记录）"
+        },
+        {
+          "choice": "Workspace",
+          "description": "本人登录，经授予按请求进入租户工作区"
+        }
+      ]
+    },
+    "TenantWorkspace": {
+      "type": "computed",
+      "value": "(IncludeMultiTenancy && TenantStaffAccess == \"Workspace\" && (LocalIdentity || ResourceBrowserSession))"
+    },
+    "MarkerTenantStaffAccess": {
+      "type": "derived",
+      "valueSource": "TenantStaffAccess",
+      "valueTransform": "identity",
+      "replaces": "__LEISTD_TEMPLATE_PARAMETER_TENANT_STAFF_ACCESS__"
     }
   },
   "sources": [

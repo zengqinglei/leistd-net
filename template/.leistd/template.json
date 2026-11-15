@@ -9,6 +9,7 @@
   "name": "CompanyName.ProjectName",
   "parameters": {
     "ServiceRole": "__LEISTD_TEMPLATE_PARAMETER_SERVICE_ROLE__",
+    "TenantStaffAccess": "__LEISTD_TEMPLATE_PARAMETER_TENANT_STAFF_ACCESS__",
     "IncludeFrontend": __LEISTD_TEMPLATE_PARAMETER_INCLUDE_FRONTEND__,
     "IncludeMultiTenancy": __LEISTD_TEMPLATE_PARAMETER_INCLUDE_MULTI_TENANCY__,
     "IncludeRealTime": __LEISTD_TEMPLATE_PARAMETER_INCLUDE_REAL_TIME__,
