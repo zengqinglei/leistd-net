@@ -272,7 +272,16 @@ public class TelemetryRegistrationTests
         logger.LogWarning("third");
         Assert.True(services.GetRequiredService<LoggerProvider>().ForceFlush());
 
-        Assert.Equal(3, requests.Count(uri => uri.EndsWith("/v1/logs", StringComparison.Ordinal)));
+        // 批次上限为 1 时 SDK 每入队一条就唤醒导出线程，与冲刷并发：冲刷返回时最后一批可能还在发送，等发送数稳定再断言。
+        // 不按标准配置分批时三条只发一次，等多久都到不了 3
+        int LogRequests()
+        {
+            lock (requests)
+                return requests.Count(uri => uri.EndsWith("/v1/logs", StringComparison.Ordinal));
+        }
+
+        SpinWait.SpinUntil(() => LogRequests() >= 3, TimeSpan.FromSeconds(5));
+        Assert.Equal(3, LogRequests());
     }
 
     // 部署设 OTEL_SDK_DISABLED=true：什么都不注册（不建采集与导出管道），系统设置不登记导出项
