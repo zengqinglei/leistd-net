@@ -1,7 +1,10 @@
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
 
 import { OPEN_APPLICATION_API } from './open-application';
-import { CreateOpenApplicationInputDto, OpenApplicationOutputDto } from '../../src/app/features/platform/dtos/open-application.dto';
+import {
+  CreateOpenApplicationInputDto,
+  OpenApplicationOutputDto,
+} from '../../src/app/features/platform/dtos/open-application.dto';
 import { MockException } from '../core/models';
 import { OPEN_APPLICATIONS } from '../data/open-applications';
 import { setMockSessionUserId } from '../utils/current-user';
@@ -59,15 +62,26 @@ describe('open application mock', () => {
     const publicInput = { ...valid, clientType: 'public', requirements: ['ft:pkce'] };
     const created = create({ body: publicInput }) as OpenApplicationOutputDto;
     const confidentialInput = { ...valid };
-    const converted = update({ params: { id: created.id }, body: confidentialInput }) as OpenApplicationOutputDto;
+    const converted = update({
+      params: { id: created.id },
+      body: confidentialInput,
+    }) as OpenApplicationOutputDto;
     expect(converted.clientSecret).toBeTruthy();
     expect(converted.hasClientSecret).toBe(true);
     const storedSecret = OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret;
     expect(storedSecret).toBe(converted.clientSecret);
-    const unchanged = update({ params: { id: created.id }, body: confidentialInput }) as OpenApplicationOutputDto;
+    const unchanged = update({
+      params: { id: created.id },
+      body: confidentialInput,
+    }) as OpenApplicationOutputDto;
     expect(unchanged.clientSecret).toBeUndefined();
-    expect(OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret).toBe(storedSecret);
-    const madePublic = update({ params: { id: created.id }, body: publicInput }) as OpenApplicationOutputDto;
+    expect(OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret).toBe(
+      storedSecret,
+    );
+    const madePublic = update({
+      params: { id: created.id },
+      body: publicInput,
+    }) as OpenApplicationOutputDto;
     expect(madePublic.hasClientSecret).toBe(false);
     expect(madePublic.clientSecret).toBeUndefined();
     expect(OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret).toBeUndefined();

@@ -166,11 +166,11 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         });
         Assert.True(madePublic.IsSuccessStatusCode, await madePublic.Content.ReadAsStringAsync());
         Assert.False((await madePublic.Content.ReadFromJsonAsync<OpenApplicationOutputDto>())!.HasClientSecret);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await TokenAsync()).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await TokenAsync()).StatusCode);
     }
 
     [Fact]
-    public async Task Updating_with_an_OpenIddict_invalid_web_callback_returns_a_business_error()
+    public async Task Updating_with_an_OpenIddict_invalid_callback_returns_a_business_error()
     {
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var clientId = await CreatePublicClientAsync(admin.Client);
@@ -179,7 +179,8 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var response = await admin.Client.PutAsJsonAsync($"/api/v1/open-applications/{id}", new UpdateOpenApplicationInputDto
         {
             ApplicationType = "web", ClientType = "public", SessionBound = false,
-            RedirectUris = ["custom-app:/callback"], Requirements = ["ft:pkce"],
+            // DTO 接受普通 query；iss 参数由 OpenIddict 管理器拒绝，验证其异常转换。
+            RedirectUris = ["https://app.example.test/callback?iss=unexpected"], Requirements = ["ft:pkce"],
             Permissions = ["ept:authorization", "ept:token", "gt:authorization_code", "rst:code"]
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

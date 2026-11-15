@@ -253,9 +253,10 @@ function updateOpenApplication(req: MockRequest) {
 
   validateBusinessRules(body, id);
 
-  const generatedSecret = applications[index].clientType === 'public' && body.clientType === 'confidential'
-    ? `mock-secret-${crypto.randomUUID()}`
-    : undefined;
+  const generatedSecret =
+    applications[index].clientType === 'public' && body.clientType === 'confidential'
+      ? `mock-secret-${crypto.randomUUID()}`
+      : undefined;
 
   applications[index] = {
     ...applications[index],
@@ -266,12 +267,20 @@ function updateOpenApplication(req: MockRequest) {
     postLogoutRedirectUris: body.postLogoutRedirectUris || [],
     permissions: body.permissions || [],
     requirements: body.requirements || [],
-    hasClientSecret: body.clientType === 'confidential' && (!!generatedSecret || applications[index].hasClientSecret),
+    hasClientSecret:
+      body.clientType === 'confidential' &&
+      (!!generatedSecret || applications[index].hasClientSecret),
     sessionBound: body.sessionBound,
-    clientSecret: body.clientType === 'confidential' ? generatedSecret ?? applications[index].clientSecret : undefined,
+    clientSecret:
+      body.clientType === 'confidential'
+        ? (generatedSecret ?? applications[index].clientSecret)
+        : undefined,
   };
 
-  return { ...toOutput(applications[index]), ...(generatedSecret ? { clientSecret: generatedSecret } : {}) };
+  return {
+    ...toOutput(applications[index]),
+    ...(generatedSecret ? { clientSecret: generatedSecret } : {}),
+  };
 }
 
 function deleteOpenApplication(req: MockRequest) {

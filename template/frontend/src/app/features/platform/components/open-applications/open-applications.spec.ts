@@ -31,7 +31,11 @@ describe('OpenApplications page query round trip', () => {
   let router: Router;
   let service: Pick<
     MockedObject<OpenApplicationService>,
-    'getOpenApplications' | 'getScopes' | 'resetSecret' | 'deleteOpenApplication' | 'updateOpenApplication'
+    | 'getOpenApplications'
+    | 'getScopes'
+    | 'resetSecret'
+    | 'deleteOpenApplication'
+    | 'updateOpenApplication'
   >;
 
   function lastQuery(): GetOpenApplicationsInputDto {
@@ -159,7 +163,9 @@ describe('OpenApplications page query round trip', () => {
 
     expect(component.secretDialogVisible()).toBe(true);
     expect(component.secretValue()).toBe('conversion-secret');
-    expect(component.secretApplication()).toEqual(expect.objectContaining({ clientId: loadedRow.clientId }));
+    expect(component.secretApplication()).toEqual(
+      expect.objectContaining({ clientId: loadedRow.clientId }),
+    );
   });
 
   it('shows the reset secret together with the application it belongs to', async () => {
