@@ -166,13 +166,13 @@ describe('Webhooks page', () => {
 
   it('debounces remote subscription searches and retains names outside the result page', async () => {
     await setup(manage);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     service.getSubscription.mockReturnValue(of({ id: 'beyond-page', name: 'Outside the first page' }) as never);
     service.getSubscriptions.mockReturnValue(of({ items: [subscription('visible')], totalCount: 121 }));
     await router.navigate(['/platform/webhooks'], { queryParams: { view: 'deliveries', subscriptionId: 'beyond-page' } });
     await fixture.whenStable();
     expect(component.selectedSubscriptionName()).toBe('Outside the first page');
     expect(service.getSubscription).toHaveBeenCalledWith('beyond-page');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const requests = service.getSubscriptions.mock.calls.length;
     component.onSubscriptionSearch(' Integration 120 ');
     await vi.advanceTimersByTimeAsync(299);
@@ -188,11 +188,11 @@ describe('Webhooks page', () => {
 
   it('reports failed remote searches, supports retry and keeps unknown IDs clearable', async () => {
     await setup(manage);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     service.getSubscription.mockReturnValue(throwError(() => new Error('missing')));
     await router.navigate(['/platform/webhooks'], { queryParams: { view: 'deliveries', subscriptionId: 'missing-id' } });
     await fixture.whenStable();
     expect(component.selectedSubscriptionName()).toBe('missing-id');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     service.getSubscriptions.mockReturnValue(throwError(() => new Error('offline')));
     component.onSubscriptionSearch('unknown');
     await vi.advanceTimersByTimeAsync(300);
