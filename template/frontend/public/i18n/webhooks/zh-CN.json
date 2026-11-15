@@ -47,13 +47,14 @@
     "vsPreviousBasis": "较前 {{days}} 天同一进度"
   },
   "filter": {
-    "searchSubscriptions": "搜索订阅",
+    "searchSubscriptions": "搜索名称或地址...",
     "searchDeliveries": "搜索事件 ID 或类型...",
     "status": "状态",
     "eventType": "事件类型",
     "subscription": "订阅",
     "narrowSubscriptions": "请输入关键词缩小结果范围。",
-    "loadingSubscriptions": "正在加载订阅…"
+    "loadingSubscriptions": "正在加载订阅…",
+    "searchSubscriptionOptions": "搜索订阅"
   },
   "action": {
     "create": "新建订阅",

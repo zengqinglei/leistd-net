@@ -47,13 +47,14 @@
     "vsPreviousBasis": "vs the same point of the previous {{days}} days"
   },
   "filter": {
-    "searchSubscriptions": "Search subscriptions",
+    "searchSubscriptions": "Search by name or URL...",
     "searchDeliveries": "Search by event ID or type...",
     "status": "Status",
     "eventType": "Event type",
     "subscription": "Subscription",
     "narrowSubscriptions": "Type a keyword to narrow the results.",
-    "loadingSubscriptions": "Loading subscriptions..."
+    "loadingSubscriptions": "Loading subscriptions...",
+    "searchSubscriptionOptions": "Search subscriptions"
   },
   "action": {
     "create": "New subscription",
