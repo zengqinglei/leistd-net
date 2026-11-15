@@ -256,6 +256,8 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 
 PR1 交付范围：三层职责、业务权限侧别与私有化形态选择指引；模拟登录按本租户内置 Admin 角色选择最早创建的已启用成员，支持管理员改名；同步 Mock、错误默认文案、注释与恢复指引。AC13 由 `ImpersonationTests.Host_can_impersonate_a_renamed_tenant_administrator` 回归覆盖，角色、启用状态与创建时间选择由同类目标测试覆盖。
 
-PR1 的构建、目标集成回归、Mock spec、前端 lint 与后端风格检查已通过；选择器生成检查待完成，尚待 Claude 审查。常驻事实同步到 `docs/architecture/isolation-and-authorization-scenarios.md`、`template/docs/standards/auth.md`、`template/docs/deploy/README.md` 与 `template/backend/README.md`；规格状态保持进行中，PR2 尚未实施。
+PR1 本地定向验证已通过：Standalone 生成项目的后端构建、目标集成回归、Mock spec、前端 lint 与后端风格检查通过；选择器给出的代表场景生成、条件裁剪与文档检查通过。未运行 core/full 全量构建测试，后续 PR CI 与合入由 Claude 负责。PR1 等待 Claude 审查。
+
+常驻事实同步到 `docs/architecture/isolation-and-authorization-scenarios.md`、`template/docs/standards/auth.md`、`template/docs/deploy/README.md` 与 `template/backend/README.md`；规格状态保持进行中，PR2 尚未实施。
 
 交付顺序按用户 2026-11-16 决定拆为 PR1 必做层与 PR2 工作区形态。进行中的参数与工作区文档保存在本地 WIP 分支；它们不属于 PR1。
