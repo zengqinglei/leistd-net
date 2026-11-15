@@ -193,12 +193,13 @@ export class LoginDevices {
   }
   private showError(error: unknown): void {
     //#if (IncludeLocalization)
-    toast.error(this.transloco.translate('common.requestError'), { description: applicationErrorMessage(error) });
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
     //#else
     toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
     //#endif
   }
-
 }
 //#if (!IncludeLocalization)
 

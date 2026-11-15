@@ -25,13 +25,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
 import { Observable, tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
-import {
-  catchError,
-  debounceTime,
-  finalize,
-  startWith,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
 import { TenantDetailDialog } from './widgets/tenant-detail-dialog/tenant-detail-dialog';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
@@ -47,7 +41,11 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { keywordMatchesQuery, paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
+import {
+  keywordMatchesQuery,
+  paginationFromQuery,
+  tableStateToQuery,
+} from '../../../../shared/utils/table-query-state';
 import {
   CreateTenantInputDto,
   GetTenantsInputDto,

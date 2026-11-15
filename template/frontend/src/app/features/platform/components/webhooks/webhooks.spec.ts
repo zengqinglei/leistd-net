@@ -152,24 +152,36 @@ describe('Webhooks page', () => {
 
   it('searches the same keyword after changing views clears the URL keyword', async () => {
     await setup(manage);
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
     component.onSearchQueryChange('erp');
     await vi.advanceTimersByTimeAsync(300);
     await fixture.whenStable();
-    component.onViewChange('deliveries');
+    component.setView('deliveries');
     await fixture.whenStable();
     component.onSearchQueryChange('erp');
     await vi.advanceTimersByTimeAsync(300);
     await fixture.whenStable();
-    expect(service.getDeliveries).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: 'erp' }));
+    expect(service.getDeliveries).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: 'erp' }),
+    );
   });
 
   it('debounces remote subscription searches and retains names outside the result page', async () => {
     await setup(manage);
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
-    service.getSubscription.mockReturnValue(of({ id: 'beyond-page', name: 'Outside the first page' }) as never);
-    service.getSubscriptions.mockReturnValue(of({ items: [subscription('visible')], totalCount: 121 }));
-    await router.navigate(['/platform/webhooks'], { queryParams: { view: 'deliveries', subscriptionId: 'beyond-page' } });
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    service.getSubscription.mockReturnValue(
+      of({ id: 'beyond-page', name: 'Outside the first page' }) as never,
+    );
+    service.getSubscriptions.mockReturnValue(
+      of({ items: [subscription('visible')], totalCount: 121 }),
+    );
+    await router.navigate(['/platform/webhooks'], {
+      queryParams: { view: 'deliveries', subscriptionId: 'beyond-page' },
+    });
     await fixture.whenStable();
     expect(component.selectedSubscriptionName()).toBe('Outside the first page');
     expect(service.getSubscription).toHaveBeenCalledWith('beyond-page');
@@ -178,7 +190,10 @@ describe('Webhooks page', () => {
     await vi.advanceTimersByTimeAsync(299);
     expect(service.getSubscriptions.mock.calls.length).toBe(requests);
     await vi.advanceTimersByTimeAsync(1);
-    expect(service.getSubscriptions).toHaveBeenLastCalledWith({ keyword: 'Integration 120', limit: 20 });
+    expect(service.getSubscriptions).toHaveBeenLastCalledWith({
+      keyword: 'Integration 120',
+      limit: 20,
+    });
     expect(component.subscriptionOptionsTotal()).toBe(121);
     expect(component.selectedSubscriptionName()).toBe('Outside the first page');
     component.onFilterChange('subscriptionId', null);
@@ -188,9 +203,13 @@ describe('Webhooks page', () => {
 
   it('reports failed remote searches, supports retry and keeps unknown IDs clearable', async () => {
     await setup(manage);
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
     service.getSubscription.mockReturnValue(throwError(() => new Error('missing')));
-    await router.navigate(['/platform/webhooks'], { queryParams: { view: 'deliveries', subscriptionId: 'missing-id' } });
+    await router.navigate(['/platform/webhooks'], {
+      queryParams: { view: 'deliveries', subscriptionId: 'missing-id' },
+    });
     await fixture.whenStable();
     expect(component.selectedSubscriptionName()).toBe('missing-id');
     service.getSubscriptions.mockReturnValue(throwError(() => new Error('offline')));

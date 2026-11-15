@@ -44,13 +44,7 @@ import { tap, of, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#else
 import { tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#endif
-import {
-  catchError,
-  debounceTime,
-  finalize,
-  startWith,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
 import { BatchRolesDialog } from './widgets/batch-roles-dialog/batch-roles-dialog';
 //#if (LocalIdentity)
@@ -79,7 +73,8 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { keywordMatchesQuery,
+import {
+  keywordMatchesQuery,
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,

@@ -179,7 +179,9 @@ describe('Tenants page query and write flow', () => {
 
   it('searches the same keyword again after the URL clears it on the same instance', async () => {
     const instance = fixture.componentInstance;
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
     component.onSearchQueryChange('acme');
     await vi.advanceTimersByTimeAsync(300);
     await fixture.whenStable();

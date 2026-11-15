@@ -59,7 +59,9 @@ describe('FacetedFilter', () => {
 
   it('keeps absent multiple values visible and clears them together', () => {
     const fixture = createFilter({ multiple: true, values: ['missing'] });
-    expect(fixture.componentInstance.selectedOptions()).toEqual([{ value: 'missing', label: 'missing' }]);
+    expect(fixture.componentInstance.selectedOptions()).toEqual([
+      { value: 'missing', label: 'missing' },
+    ]);
     expect(fixture.componentInstance.hasSelection()).toBe(true);
     const cleared = vi.fn();
     fixture.componentInstance.valuesChange.subscribe(cleared);

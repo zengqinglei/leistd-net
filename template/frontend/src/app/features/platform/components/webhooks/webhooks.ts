@@ -20,14 +20,14 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideListFilter, lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
-import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
-import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 import {
   HlmInputGroup,
   HlmInputGroupAddon,
   HlmInputGroupInput,
 } from '@spartan-ng/helm/input-group';
+import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -75,7 +75,10 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { keywordMatchesQuery, paginationFromQuery } from '../../../../shared/utils/table-query-state';
+import {
+  keywordMatchesQuery,
+  paginationFromQuery,
+} from '../../../../shared/utils/table-query-state';
 import { resolveDisplayTimeZone, zonedCalendarDate } from '../../../../shared/utils/zoned-time';
 import {
   CreateWebhookSubscriptionInputDto,
@@ -261,9 +264,9 @@ export class Webhooks {
   private readonly resolvedSubscription = signal<WebhookSubscriptionOutputDto | null>(null);
   readonly subscriptionFilter = () => true;
   readonly subscriptionToString = (id: string) =>
-    this.subscriptionOptionsSource().find((item) => item.id === id)?.name
-    ?? (this.resolvedSubscription()?.id === id ? this.resolvedSubscription()?.name : null)
-    ?? id;
+    this.subscriptionOptionsSource().find((item) => item.id === id)?.name ??
+    (this.resolvedSubscription()?.id === id ? this.resolvedSubscription()?.name : null) ??
+    id;
   readonly selectedSubscriptionName = computed(() => {
     const id = this.selectedSubscriptionId();
     return id ? this.subscriptionToString(id) : null;
@@ -403,34 +406,47 @@ export class Webhooks {
         this.totalRecords.set(apply());
       });
 
-    this.subscriptionSearchRequests.pipe(
-      debounceTime(300),
-      switchMap((keyword) => defer(() => {
-        this.subscriptionOptionsLoading.set(true);
-        this.subscriptionOptionsError.set(null);
-        return this.service.getSubscriptions({ keyword: keyword.trim() || undefined, limit: SUBSCRIPTION_OPTION_LIMIT }).pipe(
-          catchError((error) => {
-            this.subscriptionOptionsError.set(applicationErrorMessage(error));
-            return of(null);
+    this.subscriptionSearchRequests
+      .pipe(
+        debounceTime(300),
+        switchMap((keyword) =>
+          defer(() => {
+            this.subscriptionOptionsLoading.set(true);
+            this.subscriptionOptionsError.set(null);
+            return this.service
+              .getSubscriptions({
+                keyword: keyword.trim() || undefined,
+                limit: SUBSCRIPTION_OPTION_LIMIT,
+              })
+              .pipe(
+                catchError((error) => {
+                  this.subscriptionOptionsError.set(applicationErrorMessage(error));
+                  return of(null);
+                }),
+                finalize(() => this.subscriptionOptionsLoading.set(false)),
+              );
           }),
-          finalize(() => this.subscriptionOptionsLoading.set(false)),
-        );
-      })),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe((page) => {
-      if (page) {
-        this.subscriptionOptionsSource.set(page.items);
-        this.subscriptionOptionsTotal.set(page.totalCount);
-      }
-    });
-    toObservable(this.selectedSubscriptionId).pipe(
-      switchMap((id) => {
-        if (!id) return of(null);
-        const item = untracked(this.subscriptionOptionsSource).find((option) => option.id === id);
-        return item ? of(item) : this.service.getSubscription(id).pipe(catchError(() => of(null)));
-      }),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe((item) => this.resolvedSubscription.set(item));
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        if (page) {
+          this.subscriptionOptionsSource.set(page.items);
+          this.subscriptionOptionsTotal.set(page.totalCount);
+        }
+      });
+    toObservable(this.selectedSubscriptionId)
+      .pipe(
+        switchMap((id) => {
+          if (!id) return of(null);
+          const item = untracked(this.subscriptionOptionsSource).find((option) => option.id === id);
+          return item
+            ? of(item)
+            : this.service.getSubscription(id).pipe(catchError(() => of(null)));
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((item) => this.resolvedSubscription.set(item));
 
     // 视图切到投递日志时取一次订阅筛选项
     effect(() => {
@@ -821,7 +837,6 @@ export class Webhooks {
     this.subscriptionSearch.set(keyword);
     this.subscriptionSearchRequests.next(keyword);
   }
-
 
   private requestStatistics(query: WebhookStatisticsQuery): void {
     this.statisticsLoading.set(true);

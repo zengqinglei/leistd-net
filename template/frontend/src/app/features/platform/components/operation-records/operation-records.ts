@@ -41,13 +41,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
 import { combineLatest, defer, EMPTY, Subject } from 'rxjs';
-import {
-  catchError,
-  debounceTime,
-  finalize,
-  startWith,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
 import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -67,7 +61,11 @@ import { saveBlob } from '../../../../shared/utils/download-file';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { keywordMatchesQuery, paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
+import {
+  keywordMatchesQuery,
+  paginationFromQuery,
+  tableStateToQuery,
+} from '../../../../shared/utils/table-query-state';
 import {
   isoToZonedDate,
   zonedEndOfDayIso,

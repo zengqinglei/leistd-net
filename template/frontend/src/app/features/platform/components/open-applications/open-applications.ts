@@ -34,13 +34,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
-import {
-  catchError,
-  debounceTime,
-  finalize,
-  startWith,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
 import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
@@ -57,7 +51,8 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { keywordMatchesQuery,
+import {
+  keywordMatchesQuery,
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,

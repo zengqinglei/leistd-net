@@ -75,7 +75,8 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { keywordMatchesQuery,
+import {
+  keywordMatchesQuery,
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,

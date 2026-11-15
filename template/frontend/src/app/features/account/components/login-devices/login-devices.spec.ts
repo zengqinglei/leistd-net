@@ -36,7 +36,9 @@ describe('LoginDevices', () => {
   >;
   let confirmed: boolean;
 
-  async function render(sessions: UserSessionOutputDto[] | Observable<UserSessionOutputDto[]>): Promise<HTMLElement> {
+  async function render(
+    sessions: UserSessionOutputDto[] | Observable<UserSessionOutputDto[]>,
+  ): Promise<HTMLElement> {
     account.getSessions.mockReturnValue(Array.isArray(sessions) ? of(sessions) : sessions);
     fixture = TestBed.createComponent(LoginDevices);
     fixture.detectChanges();
@@ -86,16 +88,19 @@ describe('LoginDevices', () => {
     expect(host.querySelector('[data-testid="session-row"]')).not.toBeNull();
   });
 
-  it.each([{ sessions: [] }, { sessions: [session({})] }])('retains a loaded snapshot and toasts on refresh failure', async ({ sessions }) => {
-    const host = await render(sessions);
-    const before = host.textContent;
-    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
-    account.getSessions.mockReturnValue(throwError(() => new Error('offline')));
-    fixture.componentInstance.reload();
-    fixture.detectChanges();
-    expect(host.textContent).toBe(before);
-    expect(notify).toHaveBeenCalledOnce();
-  });
+  it.each([{ sessions: [] }, { sessions: [session({})] }])(
+    'retains a loaded snapshot and toasts on refresh failure',
+    async ({ sessions }) => {
+      const host = await render(sessions);
+      const before = host.textContent;
+      const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+      account.getSessions.mockReturnValue(throwError(() => new Error('offline')));
+      fixture.componentInstance.reload();
+      fixture.detectChanges();
+      expect(host.textContent).toBe(before);
+      expect(notify).toHaveBeenCalledOnce();
+    },
+  );
 
   it('marks the current device with no sign-out button; other devices can sign out', async () => {
     const host = await render([

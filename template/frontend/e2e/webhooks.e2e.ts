@@ -88,8 +88,11 @@ test(
       await filter.getByRole('combobox').click();
       const searchResponse = page.waitForResponse((response) => {
         const url = new URL(response.url());
-        return url.pathname.endsWith('/webhooks/subscriptions')
-          && url.searchParams.get('keyword') === name && url.searchParams.get('limit') === '20';
+        return (
+          url.pathname.endsWith('/webhooks/subscriptions') &&
+          url.searchParams.get('keyword') === name &&
+          url.searchParams.get('limit') === '20'
+        );
       });
       await page.getByPlaceholder('Search subscriptions').fill(name);
       expect((await searchResponse).ok()).toBe(true);

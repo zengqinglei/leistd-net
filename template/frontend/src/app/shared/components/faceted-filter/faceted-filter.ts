@@ -246,10 +246,17 @@ export class FacetedFilter {
 
   readonly selectedOption = computed(() => {
     const value = this.value();
-    return value === null ? null : this.options().find((option) => option.value === value) ?? { value, label: String(value) };
+    return value === null
+      ? null
+      : (this.options().find((option) => option.value === value) ?? {
+          value,
+          label: String(value),
+        });
   });
   readonly selectedOptions = computed(() =>
-    this.values().map((value) => this.options().find((option) => option.value === value) ?? { value, label: value }),
+    this.values().map(
+      (value) => this.options().find((option) => option.value === value) ?? { value, label: value },
+    ),
   );
   readonly hasSelection = computed(() =>
     this.multiple() ? this.values().length > 0 : this.value() !== null,
