@@ -52,7 +52,8 @@
     "status": "Status",
     "eventType": "Event type",
     "subscription": "Subscription",
-    "narrowSubscriptions": "Type a keyword to narrow the results."
+    "narrowSubscriptions": "Type a keyword to narrow the results.",
+    "loadingSubscriptions": "Loading subscriptions..."
   },
   "action": {
     "create": "New subscription",

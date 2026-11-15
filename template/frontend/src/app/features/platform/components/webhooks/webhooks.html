@@ -87,7 +87,7 @@
                   <hlm-combobox-content *hlmComboboxPortal class="w-72">
                     <hlm-combobox-input [placeholder]="t('webhooks.filter.searchSubscriptions')" [showTrigger]="false" />
                     @if (subscriptionOptionsLoading()) {
-                      <div role="status" class="text-muted-foreground p-4 text-sm">{{ t('common.loading') }}</div>
+                      <div role="status" class="text-muted-foreground p-4 text-sm">{{ t('webhooks.filter.loadingSubscriptions') }}</div>
                     } @else if (subscriptionOptionsError(); as error) {
                       <div class="flex flex-col gap-2 p-3 text-sm">
                         <p role="alert">{{ error }}</p>
