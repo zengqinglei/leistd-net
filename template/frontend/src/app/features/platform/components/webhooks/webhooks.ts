@@ -911,6 +911,7 @@ const ENGLISH: Record<string, string> = {
   'common.delete': 'Delete',
   'common.noResults': 'No results',
   'common.refresh': 'Refresh',
+  'common.retry': 'Retry',
   'common.requestError': 'Request error',
   'common.success': 'Success',
   'webhooks.action.create': 'New subscription',

@@ -16,7 +16,6 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmItemImports } from '@spartan-ng/helm/item';
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { tap } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -53,7 +52,6 @@ const OTHERS = 'others';
     NgIcon,
     HlmBadge,
     HlmButton,
-    HlmSpinner,
     HlmSkeleton,
     ...HlmItemImports,
     //#if (IncludeLocalization)
