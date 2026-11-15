@@ -9,6 +9,7 @@
 | ASP.NET Core Web 应用，需从请求头读取关联标识、写进日志并写回响应 | `UseCorrelationId()` 中间件 | `Leistd.Tracing.AspNetCore` |
 | 通过 `HttpClient` 调用下游服务，需把当前关联标识透传过去 | `AddCorrelationIdForwarding()` | `Leistd.Tracing.HttpClient` |
 | Hub 调用、后台作业、消息消费等无 HTTP 入口的场景 | `IAmbientContext.Begin(principal, correlationId)` | `Leistd.Core` + `Leistd.Tracing.Core` |
+| 周期任务（`IRecurringJob`）、进程内队列 | 任务里不必手工开作用域：注册了环境上下文与关联标识时，调度器与队列自动建立（周期任务取本次执行的 TraceId，队列沿用入队时的值）。需要 `AddAmbientContext()`（`Leistd.Security.Core`，Web 宿主的 `AddSecurity()` 已含）与 `AddCorrelationIdCore()`（Web 宿主为 `AddCorrelationId()`） | `Leistd.BackgroundJobs.InProcess` |
 | 业务代码只需读取/切换当前关联标识 | 注入 `ICorrelationIdProvider` | `Leistd.Tracing.Core` |
 
 ## 安装
