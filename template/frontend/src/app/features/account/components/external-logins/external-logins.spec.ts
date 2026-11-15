@@ -75,8 +75,8 @@ describe('ExternalLogins', () => {
     });
   });
 
-  it('retains loaded content and reports a failed refresh with a toast', async () => {
-    const host = await render({ hasPassword: true, providers: [github] });
+  it.each([{ providers: [] }, { providers: [github] }])('retains a loaded directory and toasts on refresh failure', async ({ providers }) => {
+    const host = await render({ hasPassword: true, providers });
     const before = host.textContent;
     const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
     account.getExternalLogins.mockReturnValue(throwError(() => new Error('offline')));

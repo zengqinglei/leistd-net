@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
-import { of, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { LoginDevices } from './login-devices';
 import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
@@ -36,8 +36,8 @@ describe('LoginDevices', () => {
   >;
   let confirmed: boolean;
 
-  async function render(sessions: UserSessionOutputDto[]): Promise<HTMLElement> {
-    account.getSessions.mockReturnValue(of(sessions));
+  async function render(sessions: UserSessionOutputDto[] | Observable<UserSessionOutputDto[]>): Promise<HTMLElement> {
+    account.getSessions.mockReturnValue(Array.isArray(sessions) ? of(sessions) : sessions);
     fixture = TestBed.createComponent(LoginDevices);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -75,8 +75,19 @@ describe('LoginDevices', () => {
     });
   });
 
-  it('retains loaded content and reports a failed refresh with a toast', async () => {
-    const host = await render([session({})]);
+  it('shows a skeleton until the first device snapshot arrives', async () => {
+    const response = new Subject<UserSessionOutputDto[]>();
+    const host = await render(response);
+    expect(host.querySelector('[data-testid="initial-loading"] hlm-skeleton')).not.toBeNull();
+    response.next([session({})]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="initial-loading"]')).toBeNull();
+    expect(host.querySelector('[data-testid="session-row"]')).not.toBeNull();
+  });
+
+  it.each([{ sessions: [] }, { sessions: [session({})] }])('retains a loaded snapshot and toasts on refresh failure', async ({ sessions }) => {
+    const host = await render(sessions);
     const before = host.textContent;
     const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
     account.getSessions.mockReturnValue(throwError(() => new Error('offline')));
