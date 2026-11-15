@@ -11,7 +11,7 @@ namespace Leistd.Ddd.Infrastructure.EventBus;
 
 /// <summary>在 EF Core 保存周期中收集并发布本地事件。</summary>
 /// <remarks>
-/// 收集在 <c>SavingChanges</c>（保存前）、发布在 <c>SavedChanges</c>（保存成功后）；保存失败时丢弃已收集的事件。
+/// 收集在 <c>SavingChanges</c>（保存前）、发布在 <c>SavedChanges</c>（保存成功后）；保存失败或取消时丢弃已收集的事件。
 /// 事件按 DbContext 实例暂存，发布后清理。
 /// </remarks>
 public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
@@ -74,6 +74,17 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
 
     /// <inheritdoc />
     public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        Discard(eventData.Context);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public override void SaveChangesCanceled(DbContextEventData eventData)
+        => Discard(eventData.Context);
+
+    /// <inheritdoc />
+    public override Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default)
     {
         Discard(eventData.Context);
         return Task.CompletedTask;

@@ -22,13 +22,14 @@ internal sealed class RecurringJobScheduler(
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        // 启动期就失败：集群任务没有分布式锁可用时静默退化成每副本执行，会把维护任务在每个副本上各跑一遍
+        // 集群任务缺锁会静默退化为每副本执行，必须启动即失败；只看本进程启用的任务，停用名单与总开关一样启动时读定。
         if (options.Value.Enabled
-            && _definitions.Any(d => d.Scope == RecurringJobScope.Cluster)
+            && _definitions.Any(d => d.Scope == RecurringJobScope.Cluster
+                && !options.Value.DisabledJobs.Contains(d.Name, StringComparer.Ordinal))
             && serviceProvider.GetService<IDistributedLock>() is null)
         {
             throw new InvalidOperationException(
-                "Cluster-scoped recurring jobs are registered but no IDistributedLock is available. " +
+                "Enabled cluster-scoped recurring jobs are registered but no IDistributedLock is available. " +
                 "Register a lock implementation (AddRedisDistributedLock for multiple replicas, AddMemoryLocalLock for one).");
         }
 

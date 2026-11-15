@@ -101,10 +101,9 @@ IQueryable<OrderDto> query = orders
 ### Leistd.ObjectMapping.Mapster
 
 - 以 Singleton 注册 `IMapper`（`new Mapper(config)`）：基础配置 `config.Default.PreserveReference(true)` 启用循环引用保护。
-- `MapsterOptions.Configurators` 中的每个委托接收 `TypeAdapterConfig`；`ValidateMappings = true` 时在启动阶段调用 `config.Compile()` 提前编译并校验。
+- `MapsterOptions.Configurators` 中的每个委托接收 `TypeAdapterConfig`；`ValidateMappings = true` 时在首次解析 `IMapper` 时调用 `config.Compile()`，提前编译并校验已登记映射。
 - 映射配置在组件自己的 `TypeAdapterConfig` 上，不修改 `TypeAdapterConfig.GlobalSettings`；程序集扫描只在宿主显式 `config.Scan(...)` 时发生。
 - 带上下文的 `Map(source, contextItems)` 通过 `MapContextScope` 将上下文写入 `MapContext.Current.Parameters`。
-- 额外提供 `MapsterObjectMapper.Map<TDestination>(object source)`（按运行时类型映射），不属于 `IObjectMapper` 接口，需引用具体类型才能调用。
 
 ## 配置项
 
@@ -113,9 +112,9 @@ IQueryable<OrderDto> query = orders
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
 | `Configurators` | 空列表 | `List<Action<TypeAdapterConfig>>`，注册映射配置委托 |
-| `ValidateMappings` | `false` | 启动时是否调用 `Compile()` 编译校验 |
+| `ValidateMappings` | `false` | 首次解析 `IMapper` 时是否调用 `Compile()` 编译已登记映射 |
 
 ## 注意事项
 
 - 业务代码应只依赖 `Leistd.ObjectMapping.Core` 的 `IObjectMapper`，不要直接引用 `Mapster.IMapper`。
-- `ValidateMappings` 默认关闭；建议在开发/测试环境开启，尽早暴露未配置的映射，避免运行时才发现缺字段。
+- `ValidateMappings` 默认关闭；开发/测试可开启以提前暴露已登记映射的编译错误。是否要求显式类型映射（`RequireExplicitMapping`）或目标成员完整性（`RequireDestinationMemberSource`），由宿主在 `Configurators` 中配置 Mapster 严格模式；`Compile()` 本身不启用这些要求。

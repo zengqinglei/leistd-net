@@ -145,12 +145,13 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 - 校验器先于回调执行；回调遍历服务集合快照。
 - 工厂委托注册也执行回调，但 `ImplementationType` 为 `null`。
 - DynamicProxy 织入保留原 `Lifetime`，拦截器按 `BaseAsyncInterceptor.Order` 升序执行。
-- 接口服务使用接口代理，其他服务使用类代理。
+- 接口服务使用接口代理；以实现类型注册的类服务使用类代理，由容器注入构造参数，构造只执行一次。
 
 ## 注意事项
 
 - 使用 `[UnitOfWork]` 等基于 AOP 的能力时，宿主必须使用 `DynamicProxyServiceRegistrationCallbackFactory`。
 - 拦截器类型必须能被容器解析，否则代理创建时会抛异常。
+- 工厂或实例方式注册的类服务不能附加拦截器，构建容器时会明确报错；改用实现类型注册，或通过接口注册服务。
 - `ValidateOnBuild` 覆盖被织入的服务：工厂在改写描述符前用未改写的副本额外校验一次依赖图。
 - 注册回调只允许往 `context` 记拦截器，不得往 `IServiceCollection` 追加服务，否则预校验会把尚未注册的依赖误报成缺失。
   需要按类型批量注册时用显式的扩展方法（如 `AddDddDbContext<TDbContext>()`）。

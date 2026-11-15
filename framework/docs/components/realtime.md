@@ -47,6 +47,20 @@ app.MapRealTimeHub();
 
 心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；解析 `UserIdentifier` 的 claim 顺序是 `ClaimTypeOptions.UserIds`（Security.Core），与框架其他组件读主体标识同一处配置。
 
+### 与通知共用一个 Hub
+
+安装通知的 SignalR 传输包后，可将通知与业务事件推送到同一个 Hub。订阅授权器按上面的选型登记，这里用业务授权器示范：
+
+```csharp
+builder.Services.AddRealTimeSignalR();
+builder.Services.AddSingleton<IRealTimeSubscriptionAuthorizer, MyResourceAuthorizer>();
+builder.Services.AddNotificationsSignalR<RealTimeHub>();
+
+app.MapRealTimeHub();
+```
+
+共用连接时只映射实时 Hub，不再调用 `MapNotificationHub()`；通知的用户寻址行为不变。
+
 ## 使用
 
 发布资源事件：

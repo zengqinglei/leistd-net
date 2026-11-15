@@ -39,6 +39,14 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
         if (interceptorTypes.Count == 0)
             return;
 
+        if (!descriptor.ServiceType.IsInterface
+            && (descriptor.IsKeyedService ? descriptor.KeyedImplementationType : descriptor.ImplementationType) is null)
+        {
+            throw new InvalidOperationException(
+                $"Class service '{descriptor.ServiceType.FullName}' with interceptors must be registered by " +
+                "implementation type. Use an implementation type registration or register the service through an interface.");
+        }
+
         services.TryAddSingleton<IProxyGenerator, ProxyGenerator>();
         ApplyInterceptors(services, descriptor, interceptorTypes);
     }
@@ -71,7 +79,6 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
         object? serviceKey,
         List<Type> interceptorTypes)
     {
-        var instance = CreateOriginalInstance(descriptor, sp, serviceKey);
         var proxyGenerator = sp.GetRequiredService<IProxyGenerator>();
         var interceptors = interceptorTypes
             .Select(sp.GetRequiredService)
@@ -83,16 +90,20 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
 
         if (descriptor.ServiceType.IsInterface)
         {
+            var instance = CreateOriginalInstance(descriptor, sp, serviceKey);
             return proxyGenerator.CreateInterfaceProxyWithTarget(
                 descriptor.ServiceType,
                 instance,
                 interceptors);
         }
 
-        return proxyGenerator.CreateClassProxyWithTarget(
-            descriptor.ServiceType,
-            instance,
-            interceptors);
+        var implementationType = descriptor.IsKeyedService
+            ? descriptor.KeyedImplementationType!
+            : descriptor.ImplementationType!;
+        var proxyType = proxyGenerator.ProxyBuilder.CreateClassProxyType(
+            implementationType, Type.EmptyTypes, ProxyGenerationOptions.Default);
+        // 拦截器数组是代理构造的一个参数，不能按 params 展开为多个参数。
+        return ActivatorUtilities.CreateInstance(sp, proxyType, (object)interceptors);
     }
 
     private static IInterceptor ToCastleInterceptor(object interceptor) => interceptor switch

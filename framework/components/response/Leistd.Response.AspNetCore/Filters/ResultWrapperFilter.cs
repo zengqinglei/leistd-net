@@ -36,10 +36,8 @@ public class ResultWrapperFilter(ILogger<ResultWrapperFilter> logger) : IAsyncRe
 
                 var wrappedResult = Result<object?>.Ok(objectResult.Value);
 
-                context.Result = new ObjectResult(wrappedResult)
-                {
-                    StatusCode = objectResult.StatusCode ?? 200
-                };
+                objectResult.Value = wrappedResult;
+                objectResult.DeclaredType = wrappedResult.GetType();
             }
         }
 

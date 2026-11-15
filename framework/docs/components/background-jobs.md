@@ -182,7 +182,7 @@ if (!queue.TryQueue((services, ct) => services.GetRequiredService<WelcomeMailer>
 - 抢锁失败、时段已完成、开关关闭以及开始前开关求值/读水位失败均不回调，基础设施故障仍记日志。观察者集合解析失败时记一条 Warning，本次无回调，任务继续；单个回调抛出时记带实现类型的 Warning，不影响任务、水位及其他回调。
 - 周期执行从开作用域至 Completed 结束拥有独立根 Activity，名称为 "Leistd.RecurringJob"，源为 `Leistd.BackgroundJobs`；带任务名、时段、终态标签，Failed/LockLost 标为 Error。结束后还原原 Activity；源返回 null（无监听者或采样拒绝）时手建 Activity，仅保证本地 TraceId 关联。跳过也有 Activity，但没有观察者回调。
 - 注册了环境上下文（`AddAmbientContext()`，Web 宿主由 `AddSecurity()` 提供）时，本轮的开关判断、跳过、观察者与任务都在 `IAmbientContext.Begin(空主体)` 里进行，环境上下文从本轮作用域解析（贡献者可以是 Scoped）：周期任务没有主体，不继承调度线程上的主体，租户保持进入前的状态；追踪维度打开日志作用域 `leistd.correlationId`，取值为本次执行的 TraceId（与 `IRecurringJobRunObserver` 记录的执行同一条链路）。日志键还需要追踪维度（`AddCorrelationIdCore()` / `AddCorrelationId()`）；两者都注册时任务不必自己再开关联标识作用域。需要按租户执行的任务仍在任务内 `ICurrentTenant.Change()`。退出环境上下文时某个维度抛错只记 Warning，不改变本轮终态。
-- 登记了集群任务却没有 `IDistributedLock` 时宿主启动失败。
+- 本进程启用了未列入 `DisabledJobs` 的集群任务却没有 `IDistributedLock` 时宿主启动失败；总开关关闭或集群任务全部停用时不要求锁。
 - 按间隔排期的任务启动后在不超过 30 秒（或一个间隔）的随机延迟内先执行一次；按每日时刻排期的只在排定时刻执行。
 - 队列入队时经 `IAmbientContext.Capture()` 捕获主体、租户与关联标识，执行时还原；工作单元与请求对象不随行。未注册环境上下文时工作项在空上下文里执行。
 - 工作项在自己的 Activity 里执行，父链路是入队时的那一条（没有则开新的根链路）。有监听者时经 `ActivitySource` `Leistd.BackgroundJobs` 创建，OpenTelemetry 订阅这个名字即可导出。

@@ -88,6 +88,7 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 - 必须重写两个 `InterceptAsync` 重载：有返回值的方法走泛型重载，无返回值的方法走非泛型重载，二者逻辑通常一致，需分别实现。
 - 不要忘记在两个重载里都调用 `proceed(invocation, proceedInfo)`；不调用则原方法不会执行。
 - 类代理要求被拦截方法为 `virtual`，接口代理无此限制。
+- 类服务需以实现类型注册，构造依赖由容器注入；工厂或实例式类注册附加拦截器时会在构建容器时被拒绝，可改用接口注册。
 
 ## 相关
 

@@ -70,14 +70,7 @@ app.MapNotificationHub();
 
 `AddNotificationsSignalR()` 会同时注册 Core 发布器与 SignalR 传输，但不注册持久化，也不映射业务实时 Hub。`MapNotificationHub()` 默认映射到 `/hubs/notifications` 并要求登录：握手按 `HubIdentityOptions.PolicyName`（未设置时为默认策略）授权，与调用期复评同一策略。
 
-同时使用[实时通信](./realtime.md)时，可以让通知与业务事件共用一个 Hub、一条客户端连接（ASP.NET Core 一个 Hub 对应一条连接）：把上面的 `AddNotificationsSignalR()` 换成以实时通信的 Hub 为类型参数的 `AddNotificationsSignalR<RealTimeHub>()`，并只映射实时通信的 Hub：
-
-```csharp
-builder.Services.AddRealTimeSignalR();
-
-// 共用连接时只映射此 Hub。
-app.MapRealTimeHub();
-```
+同时使用[实时通信](./realtime.md)时，可以让通知与业务事件共用一个 Hub、一条客户端连接（ASP.NET Core 一个 Hub 对应一条连接）：把上面的 `AddNotificationsSignalR()` 换成以实时通信的 Hub 为类型参数的 `AddNotificationsSignalR<RealTimeHub>()`，并只映射实时通信的 Hub，完整注册见[与通知共用一个 Hub](./realtime.md#与通知共用一个-hub)。
 
 此时通知的接收授权就是该 Hub 的授权要求。通知只经一个 Hub 推送：同一个 Hub 重复注册是幂等的，已选定一个 Hub 后再指定另一个（包括先调用无泛型版本）在注册时抛 `InvalidOperationException`。
 
