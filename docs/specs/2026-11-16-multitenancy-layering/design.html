@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多租户分层 · 详细设计方案</title>
+<style>
+  /* 令牌取自 template/frontend/src/styles.css（亮色），设计稿与实现同源 */
+  :root {
+    --radius: 0.625rem;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.18 0.01 255);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.52 0.16 250);
+    --primary-foreground: oklch(0.99 0.002 250);
+    --secondary: oklch(0.966 0.004 250);
+    --secondary-foreground: oklch(0.24 0.02 255);
+    --muted: oklch(0.966 0.004 250);
+    --muted-foreground: oklch(0.505 0.015 255);
+    --accent: oklch(0.955 0.005 250);
+    --destructive: oklch(0.457 0.245 27.325);
+    --warning: oklch(0.47 0.12 70);
+    --success: oklch(0.51 0.13 155);
+    --info: oklch(0.52 0.12 230);
+    --border: oklch(0.925 0.005 250);
+    --input: oklch(0.86 0.02 250);
+    --ring: oklch(0.52 0.16 250);
+    --sidebar: oklch(0.966 0.004 250);
+    --doc-bg: oklch(0.985 0.003 250);
+    --anno: oklch(0.6 0.2 330);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--doc-bg); color: var(--foreground);
+    font: 14px/1.6 "Geist", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  code, .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  code { background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- 文档骨架 ---------- */
+  .doc { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1680px; margin: 0 auto; }
+  .toc { position: sticky; top: 0; height: 100vh; padding: 32px 20px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .toc .brand { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .toc .meta { font-size: 12px; color: var(--muted-foreground); margin-bottom: 24px; }
+  .toc a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; font-size: 14px; }
+  .toc a:hover { background: var(--accent); color: var(--foreground); }
+  .toc a.sub { padding-left: 24px; font-size: 13px; }
+  main { padding: 40px 56px 96px; min-width: 0; }
+  header.hero { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  header.hero h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  header.hero p { margin: 0; color: var(--muted-foreground); max-width: 960px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--secondary); color: var(--secondary-foreground); border: 1px solid var(--border); }
+  section.s { padding-top: 40px; }
+  section.s > h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px; }
+  section.s > h2 .no { color: var(--primary); font-variant-numeric: tabular-nums; }
+  section.s > .lead { color: var(--muted-foreground); margin: 0 0 20px; max-width: 1080px; }
+  h3 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
+  h4 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 10px; padding-left: 20px; }
+  li { margin: 2px 0; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card h4 { margin-top: 0; }
+  .card .k { font-size: 12px; color: var(--muted-foreground); }
+  .callout { border-left: 3px solid var(--primary); background: var(--card); border-radius: 0 12px 12px 0; padding: 14px 18px; margin: 12px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .callout.warn { border-left-color: var(--warning); }
+
+  table.t { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin: 8px 0 12px; }
+  table.t th { background: var(--muted); text-align: left; font-weight: 500; font-size: 13px; color: var(--muted-foreground); padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.t td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t td:first-child, table.t th:first-child { padding-left: 16px; }
+  .yes { color: var(--success); font-weight: 500; }
+  .no-c { color: var(--destructive); font-weight: 500; }
+  .mid { color: var(--warning); font-weight: 500; }
+
+  /* ---------- 链路图 ---------- */
+  .flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; align-items: stretch; margin: 12px 0 8px; }
+  .flow .step { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px; margin-right: 22px; }
+  .flow .step:last-child { margin-right: 0; }
+  .flow .step::after { content: "→"; position: absolute; right: -19px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); font-size: 16px; }
+  .flow .step:last-child::after { content: none; }
+  .flow .step .n { font-size: 12px; color: var(--primary); font-weight: 600; }
+  .flow .step .h { font-weight: 600; margin: 2px 0 4px; }
+  .flow .step .d { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; }
+  .flow .step.ext { background: var(--muted); }
+  .lane { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted-foreground); margin: 6px 0 0; }
+  .lane b { color: var(--foreground); font-weight: 500; }
+
+  /* ---------- 令牌标注 ---------- */
+  .swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+  .sw .c { height: 44px; }
+  .sw .l { padding: 8px 10px; font-size: 12px; }
+  .sw .l b { display: block; font-weight: 500; font-size: 13px; }
+  .anno { display: inline-block; font: 500 11px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--anno); border: 1px dashed var(--anno); border-radius: 4px; padding: 0 4px; background: oklch(0.98 0.02 330); white-space: nowrap; }
+  .anno-wrap { position: relative; }
+  .anno-abs { position: absolute; z-index: 2; }
+
+  /* ---------- 模拟应用外壳（Spartan 观感） ---------- */
+  .frame { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--background); box-shadow: 0 1px 2px oklch(0 0 0 / 4%), 0 8px 24px oklch(0 0 0 / 5%); margin: 12px 0; }
+  .frame-cap { font-size: 12px; color: var(--muted-foreground); margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+  .app { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 520px; }
+  .side { background: var(--sidebar); border-right: 1px solid var(--border); padding: 14px 10px; font-size: 14px; }
+  .side .logo { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 4px 8px 14px; }
+  .side .logo i { width: 22px; height: 22px; border-radius: 6px; background: var(--primary); display: inline-block; }
+  .side .g { font-size: 12px; color: var(--muted-foreground); padding: 10px 8px 4px; }
+  .side .it { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--foreground); }
+  .side .it .ic { width: 16px; height: 16px; background: currentColor; border-radius: 5px; opacity: .18; }
+  .side .it.on { background: oklch(1 0 0); box-shadow: 0 0 0 1px var(--border); font-weight: 500; }
+  .topbar { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 24px; font-size: 14px; color: var(--muted-foreground); }
+  .topbar b { color: var(--foreground); font-weight: 500; }
+  .content { padding: 24px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+
+  .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 16px; }
+  .toolbar .left, .toolbar .right { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .inp { height: 36px; border: 1px solid var(--input); border-radius: 8px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); background: var(--background); min-width: 240px; font-size: 14px; }
+  .inp.full { width: 100%; min-width: 0; color: var(--foreground); }
+  .inp.mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+  .inp .ph { color: var(--muted-foreground); }
+  .facet { height: 36px; border: 1px dashed var(--input); border-radius: 8px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .facet::before { content: "⊕"; color: var(--muted-foreground); }
+  .btn { height: 36px; border-radius: 8px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; border: 1px solid transparent; white-space: nowrap; }
+  .btn.pri { background: var(--primary); color: var(--primary-foreground); }
+  .btn.sec { background: var(--secondary); color: var(--secondary-foreground); }
+  .btn.out { background: var(--background); border-color: var(--input); }
+  .btn.ghost { background: transparent; }
+  .btn.des { background: var(--destructive); color: white; }
+  .btn.sm { height: 32px; padding: 0 10px; font-size: 13px; }
+  .ibtn { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted-foreground); font-size: 14px; }
+  .ibtn:hover { background: var(--accent); }
+
+  .seg { display: inline-flex; background: var(--muted); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg span { padding: 4px 14px; border-radius: 6px; font-size: 14px; color: var(--muted-foreground); }
+  .seg span.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 8%); font-weight: 500; }
+
+  .tbl { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .tbl table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tbl th { background: var(--muted); font-weight: 500; color: var(--muted-foreground); text-align: left; padding: 8px; height: 40px; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  .tbl td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .tbl th:first-child, .tbl td:first-child { padding-left: 16px; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl tr.exp td { background: oklch(0.985 0.003 250); }
+  .tbl tr.sel td { background: var(--accent); }
+  .tbl .t2 { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .tbl .t2 .a { font-weight: 500; }
+  .tbl .t2 .b { font: 12px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
+  .tbl .xs { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+  .tbl .act { display: flex; gap: 2px; justify-content: flex-end; }
+  .pager { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+  .badge.dot::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+  .badge.secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .badge.success { background: oklch(0.51 0.13 155 / 12%); color: var(--success); }
+  .badge.warning { background: oklch(0.47 0.12 70 / 12%); color: var(--warning); }
+  .badge.destructive { background: oklch(0.457 0.245 27.325 / 10%); color: var(--destructive); }
+  .badge.outline { border-color: var(--border); color: var(--foreground); }
+
+  dl.kv { display: grid; grid-template-columns: minmax(6rem, auto) 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+  dl.kv dt { color: var(--muted-foreground); }
+  dl.kv dd { margin: 0; min-width: 0; }
+
+  .codebox { background: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font: 12px/1.6 "Geist Mono", ui-monospace, monospace; white-space: pre; overflow-x: auto; }
+
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .timeline .row { display: grid; grid-template-columns: 16px 140px 70px 70px 1fr; gap: 12px; align-items: center; font-size: 13px; }
+  .timeline .row i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; margin-left: 4px; }
+
+  /* 对话框与抽屉 */
+  .overlay { position: relative; background: oklch(0.18 0.01 255 / 35%); padding: 32px; display: flex; justify-content: center; align-items: flex-start; border-radius: 0 0 12px 12px; }
+  .dialog { background: var(--background); border: 1px solid var(--border); border-radius: 12px; width: min(680px, 100%); box-shadow: 0 16px 48px oklch(0 0 0 / 18%); display: flex; flex-direction: column; }
+  .dialog.narrow { width: min(440px, 100%); }
+  .dialog .hd { padding: 24px 24px 0; }
+  .dialog .hd h5 { margin: 0; font-size: 16px; font-weight: 500; }
+  .dialog .hd p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 14px; }
+  .dialog .bd { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .dialog .ft { padding: 0 24px 24px; display: flex; justify-content: flex-end; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14px; font-weight: 500; }
+  .field .desc { font-size: 12px; color: var(--muted-foreground); }
+  .sep { display: flex; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; }
+  .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .checks .grp { grid-column: 1 / -1; font-size: 12px; color: var(--muted-foreground); padding-top: 4px; }
+  .cb { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .cb::before { content: ""; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--input); flex-shrink: 0; }
+  .cb.on::before { content: "✓"; background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-size: 11px; line-height: 14px; text-align: center; font-weight: 600; }
+  .cb .v { margin-left: auto; font: 12px "Geist Mono", ui-monospace, monospace; color: var(--muted-foreground); }
+  .kvrow { display: grid; grid-template-columns: 1fr 1.6fr 32px; gap: 8px; }
+  .alert { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; gap: 10px; font-size: 14px; background: var(--card); }
+  .alert.warn { border-color: oklch(0.47 0.12 70 / 35%); background: oklch(0.47 0.12 70 / 6%); color: var(--warning); }
+  .alert .tx { color: var(--foreground); }
+
+  .sheet-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 560px; }
+  .sheet-wrap .dim { opacity: .45; filter: saturate(.6); }
+  .sheet { border-left: 1px solid var(--border); background: var(--background); box-shadow: -12px 0 32px oklch(0 0 0 / 10%); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .stat { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--card); }
+  .stat .k { font-size: 12px; color: var(--muted-foreground); }
+  .stat .v { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .sp { background: var(--muted); border-radius: 12px; padding: 4px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .sp .sph { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 12px; }
+  .sp .sph span { font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .sp .sph i { margin-left: auto; font-style: normal; color: var(--muted-foreground); font-size: 12px; }
+  .sp .spb { background: var(--card); border-radius: 8px; box-shadow: 0 0 0 1px oklch(0.18 0.01 255 / 10%), 0 1px 2px oklch(0 0 0 / 5%); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .sp .row1 { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .sp .num { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .sp .row2 { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
+  .rangebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rangebar .sum { color: var(--muted-foreground); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .seg.sm span { padding: 2px 10px; font-size: 13px; }
+  .bar { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .bar b { display: inline-block; width: 48px; height: 6px; border-radius: 999px; background: var(--muted); position: relative; overflow: hidden; }
+  .bar b::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--success); border-radius: 999px; }
+  .bar.bad b::after { background: var(--destructive); }
+  .variant { border: 1px solid var(--border); border-radius: 16px; background: var(--card); padding: 24px 28px; margin: 24px 0; }
+  .variant > .vh { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .variant > .vh h3 { margin: 0; font-size: 20px; }
+  .variant > .vd { color: var(--muted-foreground); margin-bottom: 8px; }
+  .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .pc .card h4 { display: flex; gap: 6px; align-items: center; }
+  .rec { background: var(--primary); color: var(--primary-foreground); font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 500; }
+
+  .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .tabs span { padding: 8px 2px; color: var(--muted-foreground); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+  .tabs span.on { color: var(--foreground); border-bottom-color: var(--foreground); font-weight: 500; }
+  .tabs .cnt { font-size: 11px; padding: 0 6px; border-radius: 999px; background: oklch(0.457 0.245 27.325 / 10%); color: var(--destructive); font-weight: 500; }
+  .ck { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--input); display: inline-block; vertical-align: middle; }
+  .ck.on { background: var(--primary); border-color: var(--primary); position: relative; }
+  .ck.on::after { content: "✓"; color: var(--primary-foreground); font-size: 11px; position: absolute; left: 3px; top: -1px; font-weight: 600; }
+  .pill { display: inline-block; font-size: 12px; padding: 0 8px; border-radius: 999px; background: var(--secondary); border: 1px solid var(--border); }
+  .selbar { display: flex; align-items: center; gap: 12px; font-size: 13px; background: var(--muted); border-radius: 8px; padding: 6px 8px 6px 14px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+  .switch i { width: 32px; height: 18px; border-radius: 999px; background: var(--primary); position: relative; display: inline-block; }
+  .switch i::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 999px; background: white; }
+  .lanes { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px 16px; align-items: stretch; }
+  .lanes .ln { font-size: 13px; font-weight: 600; color: var(--muted-foreground); display: flex; align-items: center; }
+  .lanes .flow { margin: 0; }
+  /* ---------- 本稿补充 ---------- */
+  .menu { background: var(--background); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px oklch(0 0 0 / 10%); padding: 4px; width: 264px; font-size: 14px; }
+  .menu .lb { font-size: 12px; color: var(--muted-foreground); padding: 6px 8px 4px; }
+  .menu .mi { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; }
+  .menu .mi.on { background: var(--accent); }
+  .menu .mi .sq { width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted-foreground); background: var(--background); flex-shrink: 0; }
+  .menu .mi .ok { margin-left: auto; color: var(--foreground); font-size: 12px; }
+  .menu .mi .xs2 { margin-left: auto; font-size: 12px; color: var(--muted-foreground); }
+  .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px -4px; }
+  .menu .search { margin: 4px 4px 6px; height: 32px; border: 1px solid var(--input); border-radius: 8px; display: flex; align-items: center; padding: 0 10px; color: var(--muted-foreground); font-size: 13px; }
+  .brandbtn { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; margin-bottom: 8px; }
+  .brandbtn.open { background: oklch(0.93 0.006 250); }
+  .brandbtn i { width: 32px; height: 32px; border-radius: 8px; background: var(--primary); display: inline-block; flex-shrink: 0; }
+  .brandbtn .tt { display: grid; line-height: 1.25; min-width: 0; }
+  .brandbtn .tt b { font-size: 14px; font-weight: 500; }
+  .brandbtn .tt span { font-size: 12px; color: var(--muted-foreground); }
+  .brandbtn .chev { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
+  .float { position: absolute; z-index: 3; }
+  .rel { position: relative; }
+  .hdr { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 16px 0 24px; font-size: 14px; color: var(--muted-foreground); }
+  .hdr .sp1 { flex: 1; }
+  .hdr b { color: var(--foreground); font-weight: 500; }
+  .scope { height: 32px; border: 1px solid var(--input); border-radius: 8px; padding: 0 10px; display: inline-flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 13px; background: var(--background); }
+  .scope .sq { width: 18px; height: 18px; border-radius: 5px; background: var(--secondary); border: 1px solid var(--border); font-size: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; color: var(--muted-foreground); }
+  .empty { border: 1px dashed var(--border); border-radius: 12px; padding: 40px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+  .empty .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--muted); display: inline-flex; align-items: center; justify-content: center; color: var(--muted-foreground); }
+  .empty h5 { margin: 4px 0 0; font-size: 16px; font-weight: 500; }
+  .empty p { margin: 0; color: var(--muted-foreground); font-size: 14px; max-width: 460px; }
+  .combo { border: 1px solid var(--input); border-radius: 8px; overflow: hidden; }
+  .combo .q { height: 36px; display: flex; align-items: center; padding: 0 12px; gap: 8px; border-bottom: 1px solid var(--border); color: var(--foreground); font-size: 14px; }
+  .combo .o { display: flex; align-items: center; gap: 10px; padding: 7px 12px; font-size: 14px; }
+  .combo .o.on { background: var(--accent); }
+  .combo .o .u { font-size: 12px; color: var(--muted-foreground); font-family: "Geist Mono", ui-monospace, monospace; }
+  .combo .o .r { margin-left: auto; font-size: 12px; color: var(--muted-foreground); }
+  .av { width: 24px; height: 24px; border-radius: 999px; background: var(--secondary); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted-foreground); flex-shrink: 0; }
+  .roles { border: 1px solid var(--border); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; }
+  .roles .cb { padding: 8px; border-radius: 6px; }
+  .note { font-size: 12px; color: var(--muted-foreground); }
+  .sectl { font-size: 12px; font-weight: 500; color: var(--muted-foreground); letter-spacing: .04em; text-transform: uppercase; }
+  .inline-list { border: 1px solid var(--border); border-radius: 8px; }
+  .inline-list .r { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 90px 64px; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .inline-list .r:last-child { border-bottom: 0; }
+  .inline-list .r.h { background: var(--muted); color: var(--muted-foreground); font-size: 13px; font-weight: 500; padding: 7px 12px; }
+  .wide-cmp td, .wide-cmp th { font-size: 13px; }
+  .req { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 1280px) {
+    .doc { grid-template-columns: 1fr; }
+    .toc { display: none; }
+    main { padding: 32px 24px 80px; }
+    .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 16px; }
+    .grid4, .swatches, .req { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sheet-wrap { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+  <nav class="toc">
+    <div class="brand">多租户分层</div>
+    <div class="meta">详细设计方案 · 2026-11-16<br>基线 develop 9b0dac26</div>
+    <a href="#s1">1 背景及目标</a>
+    <a href="#s2">2 核心策略</a>
+    <a class="sub" href="#s2-param">2.0 生成参数</a>
+    <a class="sub" href="#s2-layers">2.1 三层划分</a>
+    <a class="sub" href="#s2-identity">2.2 本人账号与关联账号</a>
+    <a class="sub" href="#s2-flow">2.3 按请求选定工作区</a>
+    <a class="sub" href="#s2-route">2.4 前端路由与切换</a>
+    <a class="sub" href="#s2-private">2.5 模拟登录与私有化</a>
+    <a class="sub" href="#s2-alt">2.6 备选与取舍</a>
+    <a href="#s3">3 UI 设计</a>
+    <a class="sub" href="#ui-tokens">3.1 设计令牌</a>
+    <a class="sub" href="#ui-flow">3.2 用户任务流</a>
+    <a class="sub" href="#ui-common">3.3 三版共用</a>
+    <a class="sub" href="#ui-a">方案 A（推荐）</a>
+    <a class="sub" href="#ui-b">方案 B</a>
+    <a class="sub" href="#ui-c">方案 C</a>
+    <a class="sub" href="#ui-cmp">3.4 对比与推荐</a>
+    <a href="#s4">4 实施计划</a>
+    <a class="sub" href="#s4-wp">4.1 工作包</a>
+    <a class="sub" href="#s4-verify">4.2 PR2 集中验证</a>
+    <a class="sub" href="#s4-collab">4.3 协同分工</a>
+    <a href="#s5">5 验收标准</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <h1>多租户分层 · 详细设计方案</h1>
+      <p>宿主只做控制面，租户承载业务。默认形态保留模拟登录并修复其缺陷；可选的工作区形态（<code>--TenantStaffAccess Workspace</code>）让平台人员以本人账号经授予进入多个租户，同一个会话按请求选定工作区，切换不重新登录、不整页刷新，覆盖单服务与 Identity + Resource 跨服务调用。开多租户的产品，私有化就是只有一个默认租户的 SaaS。</p>
+      <div class="chips"><span class="chip">风险档：高</span><span class="chip">交付面：模板（不改框架包）</span><span class="chip">生成参数 TenantStaffAccess</span><span class="chip">两个 PR、依次交付</span><span class="chip">规格：docs/specs/2026-11-16-multitenancy-layering.md</span></div>
+    </header>
+
+    <!-- 1 -->
+    <section class="s" id="s1">
+      <h2><span class="no">1</span>背景及目标</h2>
+      <p class="lead">"用户只属于一个租户、宿主人员用模拟登录排障"仍是多数通用项目的合理默认。本需求修两处所有项目都受影响的缺口，并新增一个可选形态，服务"平台运营团队常驻多个租户、SaaS 与私有化同一套代码"的产品。</p>
+      <div class="grid2">
+        <div class="card">
+          <h4>现状问题</h4>
+          <table class="t">
+            <tr><th>编号</th><th>问题</th><th>性质</th><th>影响面</th></tr>
+            <tr><td>Q1</td><td>没写明宿主只做控制面、业务权限侧别规则与私有化形态指引</td><td class="mid">文档缺口</td><td>全部多租户项目</td></tr>
+            <tr><td>Q2</td><td>模拟登录写死用户名 <code>admin</code>，改名或删除后失败</td><td class="no-c">设计缺陷</td><td>全部多租户项目</td></tr>
+            <tr><td>Q3</td><td>平台人员只能模拟成租户 admin（全权、非本人），一个会话一个租户，换租户整页跳转</td><td class="mid">场景缺口</td><td>有平台运营团队的产品</td></tr>
+            <tr><td>Q4</td><td>多租户产品私有化只能关闭多租户，与 SaaS 两套路径</td><td class="mid">场景缺口</td><td>SaaS + 私有化的产品</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h4>目标与非目标</h4>
+          <table class="t">
+            <tr><th>目标</th><th>说明</th></tr>
+            <tr><td>G1 分层与指引</td><td>三层划分、侧别规则、私有化形态选择（全部项目）</td></tr>
+            <tr><td>G2 修模拟登录</td><td>按内置 Admin 角色选目标，不依赖用户名（默认形态）</td></tr>
+            <tr><td>G3 工作区形态</td><td>本人登录、经授予按请求进入多个租户；含 Resource 与跨服务调用，一次做完</td></tr>
+            <tr><td>G4 默认租户</td><td>私有化配置一个默认租户，首次启动即可用</td></tr>
+          </table>
+          <p class="note" style="margin-top:8px">非目标：多服务授权编排（模板无服务目录）、客服代入、改框架包、改"关闭多租户"形态。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="s" id="s2">
+      <h2><span class="no">2</span>核心策略</h2>
+      <p class="lead">一条主线：<b>会话只认本人，租户按请求选定，只在工作区认证方案这一个入口校验</b>；入口之后的租户解析、连库、权限判定沿用现有链路。工作区是可选形态，由生成参数决定。</p>
+
+      <h3 id="s2-param">2.0 按场景选择生成参数</h3>
+      <table class="t">
+        <tr><th>应用场景</th><th>生成参数</th><th>宿主人员怎么进租户</th></tr>
+        <tr><td>单客户系统、内部系统</td><td><code>--IncludeMultiTenancy false</code></td><td>没有租户</td></tr>
+        <tr><td>多租户 SaaS，平台只管租户、偶尔排障</td><td>默认（<code>TenantStaffAccess=Impersonation</code>）</td><td>模拟登录（已修 Q2）</td></tr>
+        <tr><td>SaaS 与私有化同一套代码，平台团队常驻多个租户</td><td><code>--TenantStaffAccess Workspace</code></td><td>本人登录，按请求进入多个租户，多标签页互不影响</td></tr>
+        <tr><td>上述任一的私有化部署</td><td>不加参数，配置 <code>MultiTenancy:DefaultTenant</code></td><td>首次启动建默认租户</td></tr>
+      </table>
+      <p class="note">参数只在开多租户时有效；同一系统里的 Identity 与各 Resource 取同一个值。纯 API 的 Resource 不需要工作区方案：调用方直接持有对应租户的令牌。矩阵为工作区形态登记 Standalone、Identity、Resource 浏览器会话三个代表场景。</p>
+
+      <h3 id="s2-layers">2.1 三层划分</h3>
+      <table class="t">
+        <tr><th>层</th><th>承载</th><th>不承载</th><th>权限侧别</th><th>前端区（工作区形态）</th></tr>
+        <tr><td><b>宿主 · 控制面</b></td><td>租户开通与连接、平台人员与授予、开放应用、进程级设置、跨库运维</td><td>业务数据、业务菜单</td><td><code>Host</code>；<code>Both</code> 的宿主部分</td><td><code>/platform/**</code></td></tr>
+        <tr><td><b>租户 · 工作区</b></td><td>全部业务数据与功能；本租户成员、角色、设置、操作记录</td><td>其他租户的数据</td><td>业务 <code>Tenant</code>；成员、角色等 <code>Both</code></td><td><code>/w/:workspace/**</code>（租户用户与平台人员相同）</td></tr>
+        <tr><td><b>平台人员 · 桥梁</b></td><td>一个本人账号，经授予进入多个租户</td><td>不代入租户里的现有用户</td><td>—</td><td>工作区切换器</td></tr>
+      </table>
+      <div class="callout"><b>侧别规则</b>：开多租户时业务权限默认 <code>Tenant</code>；关闭多租户时只有宿主作用域，业务权限用 <code>Both</code>（框架无租户上下文即判为 Host，<code>DefaultPermissionChecker.cs:33</code>）。两侧都有的页面是同一组件，数据范围由请求作用的工作区决定。</div>
+
+      <h3 id="s2-identity">2.2 本人账号与关联账号</h3>
+      <div class="grid3">
+        <div class="card"><h4>本人账号</h4><p>宿主用户（<code>TenantId</code> 为空）。口令、两步验证、通行密钥、确认身份与会话策略都只在这里。</p></div>
+        <div class="card"><h4>关联账号</h4><p>租户内的普通 <code>User</code> 行，多一个 <code>HomeUserId</code>；用户名 <code>platform.&lt;本人用户名&gt;</code>，邮箱空串。<b>领域禁止它持有任何凭据</b>。角色与启停只看它。</p></div>
+        <div class="card"><h4>访问索引</h4><p><code>UserTenantAccess(HomeUserId, TenantId, CreationTime)</code>，放在控制库（与租户注册表同库、固定连接），不映射进租户上下文。</p></div>
+      </div>
+      <table class="t" style="margin-top:12px">
+        <tr><th>规则</th><th>做法</th><th>为什么这样够</th></tr>
+        <tr><td>关联账号不能直接登录</td><td><code>User</code> 聚合拒绝为关联账号设置口令、邮箱、外部登录、通行密钥</td><td>没有凭据，各登录入口与找回密码天然失败；<code>GetAccessStatus</code> 不改，主体工厂可直接复用</td></tr>
+        <tr><td>授予、移除、再次授予</td><td>授予先建或恢复关联账号与角色，后写索引；移除先删索引，后软删除；再次授予恢复同一 Id</td><td>中间失败只留孤儿行；入口同时要求索引、关联账号存在且启用</td></tr>
+        <tr><td>审计</td><td>操作人 = 关联账号（显示名同本人），记录落在租户</td><td>沿用操作记录组件的 <code>ActorTenantId</code> 语义，框架不改</td></tr>
+      </table>
+
+      <h3 id="s2-flow">2.3 按请求选定工作区</h3>
+      <div class="flow">
+        <div class="step"><div class="n">1 浏览器</div><div class="h">/w/acme/platform/users</div><div class="d">路由段给出工作区</div></div>
+        <div class="step"><div class="n">2 拦截器</div><div class="h">X-Workspace: acme</div><div class="d"><code>HttpContextToken</code> 区分本人与工作区；SignalR 用 <code>?workspace=</code></div></div>
+        <div class="step"><div class="n">3 认证入口</div><div class="h">Workspace 方案</div><div class="d">默认方案，并替换默认策略、<code>App.CurrentUser</code> 与 Hub 策略里的方案</div></div>
+        <div class="step"><div class="n">4 主体</div><div class="h">关联账号</div><div class="d">sub = 关联账号，tenant_id = acme，home_sub = 本人</div></div>
+        <div class="step ext"><div class="n">5 原链路</div><div class="h">租户解析 → 连库</div><div class="d">主体定案租户</div></div>
+        <div class="step ext"><div class="n">6 原链路</div><div class="h">权限判定</div><div class="d">按关联账号的角色</div></div>
+      </div>
+      <div class="callout"><b>为什么要替换策略里的方案</b>：默认策略与 <code>App.CurrentUser</code> 显式指定了方案，授权阶段会按它重新认证并覆盖主体（<code>DependencyInjection.cs:63-107</code>）。只改默认方案会让授权后的主体变回本人。<code>Workspace</code> 内部先认证原方案：Identity/Resource 为 <code>Smart</code>，Standalone 为 <code>SessionCookie</code>；机器策略与协议端点不变。</div>
+      <div class="grid2" style="margin-top:12px">
+        <table class="t">
+          <tr><th>请求</th><th>结果</th></tr>
+          <tr><td>不带头；或 <code>/api/v1/auth/**</code>、<code>/api/v1/external-auth/**</code>、<code>/connect/**</code></td><td>本人主体</td></tr>
+          <tr><td>租户用户带自己的租户名</td><td>本人主体</td></tr>
+          <tr><td>租户用户带别家租户名</td><td class="no-c">403 Workspace:Forbidden</td></tr>
+          <tr><td>宿主用户带头，索引在、租户启用、关联账号启用</td><td class="yes">换成关联账号</td></tr>
+          <tr><td>宿主用户带头，任一条件不满足</td><td class="no-c">403 Workspace:Unavailable（不回退本人；前端刷新列表并退到下一个工作区）</td></tr>
+        </table>
+        <table class="t">
+          <tr><th>形态</th><th>换主体的方式</th></tr>
+          <tr><td>Standalone、Identity</td><td>进程内：主体工厂"按本人进入工作区建主体"，在目标租户上下文与新工作单元内建关联主体</td></tr>
+          <tr><td>Resource 浏览器会话</td><td>调 Identity"进入工作区"交换；按（服务端票据键, 租户）节点内缓存，期限取 4 分钟与令牌剩余寿命的较小值；票据保存 <code>access_token</code> 与到期时间</td></tr>
+          <tr><td>Resource 纯 API</td><td>不读这个头</td></tr>
+        </table>
+      </div>
+
+      <h4>令牌交换：一处判定，三处复用</h4>
+      <table class="t">
+        <tr><th>用途</th><th>输入</th><th>输出与规则</th></tr>
+        <tr><td>进程内（Standalone/Identity）</td><td>本人 Cookie 主体 + 目标租户</td><td>本请求的关联主体</td></tr>
+        <tr><td>进入工作区（新分支，Resource 用）</td><td>本人访问令牌 + <code>workspace</code> 参数</td><td><code>sub</code> = 关联账号、<code>tenant_id</code>、<code>home_sub</code>；受众同输入；<b>不加 <code>act</code></b>（本人选择范围，不消耗单跳）；无刷新令牌；寿命 = min(5 分钟, 输入剩余寿命)；拒绝 <code>invalid_target</code></td></tr>
+        <tr><td>现有下游交换遇到工作区令牌</td><td>带 <code>home_sub</code> 的令牌</td><td>本人账号按 <code>home_sub</code> 在宿主校验、关联账号在租户校验后重建主体；照常加 <code>act</code>、单跳、受众与资源归属检查</td></tr>
+      </table>
+      <p class="note">会话语义沿用现有边界：进程内由内层 Cookie 校验本人的具体会话；交换路径只校验输入令牌、本人账号、索引、租户与关联账号，不按 <code>home_sub</code> 校验具体会话；会话结束阻止后续刷新，已签发的令牌用到其到期为止。</p>
+      <p class="note">工作区列表 <code>GET /api/v1/auth/me/workspaces</code> 只按本人返回：Identity/Standalone 读索引；Resource 经应用层端口 + ServiceClient 回源 Identity：沿用账户偏好客户端，用本人令牌做现有交换取得 Identity 受众令牌（不经 <code>Workspace</code> 方案，避免循环）。</p>
+      <div class="callout warn">刻意不做：同键并发交换去重、授予与移除的一致性补偿、撤销时清缓存事件。撤销时效：Standalone/Identity 下一个请求生效；Resource 最迟 5 分钟。</div>
+
+      <h3 id="s2-route">2.4 前端路由与切换</h3>
+      <table class="t">
+        <tr><th>主题</th><th>约定</th></tr>
+        <tr><td>路由</td><td>工作区形态下 <code>/platform/**</code> 只表示宿主控制面；所有租户内页面（含租户用户自己的）都在 <code>/w/:workspace/**</code>，复用现有子路由（<code>/w/acme/platform/users</code>）。租户用户打开 <code>/platform/**</code> 时转到自己的工作区；链接可在租户管理员与平台人员之间分享</td></tr>
+        <tr><td>请求范围</td><td>默认取当前路由的工作区；<code>/platform</code> 与本人账户请求标为本人</td></tr>
+        <tr><td>状态顺序</td><td>导航开始时确立目标工作区，守卫判定前加载其权限与设置；切换完成时提交，迟到响应丢弃（复用 <code>SessionContextService</code> 与 SignalR 的代次）</td></tr>
+        <tr><td>主体</td><td><code>AuthService.currentUser</code> 只表示本人；业务订阅、本人行判断、租户资源键取工作区主体</td></tr>
+        <tr><td>切换</td><td>只做路由跳转；父组件按工作区键重建子路由出口；不新增离页确认</td></tr>
+        <tr><td>落点</td><td>上次的工作区（<code>localStorage</code> 只存"上次"），失效取第一个，没有时 <code>/platform</code></td></tr>
+        <tr><td>实时连接</td><td>平台人员在工作区内两条：本人连接常驻（宿主通知不丢），工作区连接随切换重建；其他情况一条。通知中心按当前范围显示</td></tr>
+      </table>
+
+      <h3 id="s2-private">2.5 默认形态修复与私有化</h3>
+      <div class="grid2">
+        <div class="card"><h4>修模拟登录（默认形态）</h4><ul>
+          <li>目标改为"该租户持有内置 Admin 角色、已启用的用户，按创建时间取第一个"，不再按用户名查找。</li>
+          <li>工作区形态不生成模拟登录；历史动作码与词条保留，旧记录照常显示。</li></ul></div>
+        <div class="card"><h4>默认租户（两种形态都可用）</h4><ul>
+          <li>配置 <code>MultiTenancy:DefaultTenant</code>（<code>Name</code>、<code>DisplayName</code>）。</li>
+          <li>只在 Standalone/Identity 执行；API 启动时 <code>SystemInitializer</code> 在初始化锁内、默认管理员就绪后执行：无任何租户时建默认租户；工作区形态下再给默认宿主管理员建 Admin 关联账号与索引，不另建带口令的本地 admin。</li>
+          <li>登录页不预选默认租户：认证所在租户与登录后落入的工作区分开。</li></ul></div>
+      </div>
+
+      <h3 id="s2-alt">2.6 备选与取舍</h3>
+      <table class="t">
+        <tr><th>备选</th><th>不选的原因</th></tr>
+        <tr><td>工作区形态设为默认</td><td>多数通用项目不需要，会让每个多租户项目承担工作区与跨服务交换的复杂度</td></tr>
+        <tr><td>全局用户 + 成员关系</td><td>模板用户按租户隔离，独立库租户的用户在自己的库里，要重做隔离</td></tr>
+        <tr><td>会话里记"当前租户"，切换时换 Cookie</td><td>一个会话只能停在一个租户，多标签页互相影响</td></tr>
+        <tr><td>只有平台人员走 <code>/w</code>，租户用户沿用原路径</td><td>同一地址对宿主与租户含义不同、链接不能分享、要两套挂载；工作区形态是新形态，没有存量深链负担</td></tr>
+        <tr><td>工作区内只保持一条实时连接</td><td>进入工作区期间收不到宿主通知</td></tr>
+        <tr><td>访问令牌加 <code>sid</code>；进入工作区令牌固定 5 分钟</td><td>改变现有令牌契约；派生令牌不应比本人令牌活得久</td></tr>
+        <tr><td>各登录入口判定"关联账号不可登录"</td><td>入口多易漏，还与复用主体工厂冲突；领域禁止持有凭据，一处即可</td></tr>
+        <tr><td>默认租户放在 <code>DbMigrator</code></td><td><code>DbMigrator</code> 没有账号初始化链；<code>SystemInitializer</code> 已持锁且默认管理员已就绪</td></tr>
+        <tr><td>Resource 分两期</td><td>用户决定一次做完；跨服务与单服务共用一处主体判定，一起设计更一致</td></tr>
+      </table>
+    </section>
+
+    <!-- 3 -->
+    <section class="s" id="s3">
+      <h2><span class="no">3</span>UI 设计</h2>
+      <p class="lead">以下界面只出现在工作区形态，实现要点与组件对照见 <a href="./frontend-ui.md">frontend-ui.md</a>。三版共用同一套接口与组件规范，差别在"切换器放哪里"和"授予在哪里管理"。示意按 1440 宽绘制，组件取 Spartan（helm）现有写法，令牌与 <code>template/frontend/src/styles.css</code> 同源。</p>
+
+      <h3 id="ui-tokens">3.1 设计令牌（统一标注）</h3>
+      <div class="swatches">
+        <div class="sw"><div class="c" style="background:var(--primary)"></div><div class="l"><b>primary</b>主操作「授予访问」、选中</div></div>
+        <div class="sw"><div class="c" style="background:var(--secondary)"></div><div class="l"><b>secondary</b>刷新按钮、工作区方块底色</div></div>
+        <div class="sw"><div class="c" style="background:var(--muted)"></div><div class="l"><b>muted</b>表头、零权限图标底</div></div>
+        <div class="sw"><div class="c" style="background:var(--success)"></div><div class="l"><b>success</b>已启用</div></div>
+        <div class="sw"><div class="c" style="background:var(--destructive)"></div><div class="l"><b>destructive</b>移除访问（分隔线后）</div></div>
+        <div class="sw"><div class="c" style="background:var(--muted-foreground)"></div><div class="l"><b>muted-fg</b>说明、分组标签、用户名</div></div>
+      </div>
+      <table class="t" style="margin-top:16px">
+        <tr><th>类别</th><th>取值</th><th>用在</th></tr>
+        <tr><td>字号</td><td>正文与表格 <code>text-sm</code> 14px；次要信息 <code>text-xs</code> 12px；弹窗与抽屉标题 16px·500；分区小标题 12px·500 大写 <code>tracking-wide</code></td><td>同租户详情弹窗的分区标题</td></tr>
+        <tr><td>间距</td><td>内容区 <code>p-4 sm:p-6</code>；区块 <code>gap-6</code>；工具栏 <code>gap-3</code>、组间 <code>gap-x-4</code>；表格单元 <code>p-2</code>、首列 <code>first:ps-4</code>；弹窗内 <code>gap-4</code></td><td>同租户、用户列表页</td></tr>
+        <tr><td>尺寸</td><td>按钮与输入 36px；行内图标按钮 <code>size="icon-sm"</code> 32px；侧栏头部按钮 <code>size="lg"</code>；角色弹窗 <code>sm:max-w-md</code>；抽屉 <code>sm:max-w-2xl</code></td><td>同用户角色弹窗、Webhook 投递抽屉</td></tr>
+        <tr><td>标记</td><td><span class="badge secondary">平台</span> <code>hlmBadge variant="secondary"</code>（分类，不加状态圆点），接在显示名后、<code>shrink-0</code>；角色徽章沿用 <code>outline</code>；状态 <span class="badge success dot">已启用</span> <span class="badge secondary dot">已停用</span></td><td><code>frontend-ui.md</code> §2.3 有限语义色板</td></tr>
+        <tr><td>图标</td><td>工作区方块：租户名首字母 24px 带边框方块；宿主控制面 <code>lucideShieldCheck</code>；零权限 <code>lucideLock</code></td><td>同区域切换器的 team switcher</td></tr>
+      </table>
+
+      <h3 id="ui-flow">3.2 用户任务流（三版共用）</h3>
+      <div class="lanes">
+        <div class="ln">宿主管理员授予</div>
+        <div class="flow" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+          <div class="step"><div class="n">找</div><div class="h">租户管理</div><div class="d">列表里找到租户</div></div>
+          <div class="step"><div class="n">看</div><div class="h">平台人员列表</div><div class="d">谁能进来、什么角色</div></div>
+          <div class="step"><div class="n">加</div><div class="h">授予访问</div><div class="d">选人 + 勾角色，保存后 toast 并刷新</div></div>
+          <div class="step"><div class="n">改</div><div class="h">修改角色</div><div class="d">同用户的角色弹窗</div></div>
+          <div class="step"><div class="n">撤</div><div class="h">移除访问</div><div class="d">ConfirmService 二次确认</div></div>
+        </div>
+        <div class="ln">平台人员使用</div>
+        <div class="flow" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+          <div class="step"><div class="n">登录</div><div class="h">本人账号</div><div class="d">落到上次的工作区</div></div>
+          <div class="step"><div class="n">切换</div><div class="h">工作区切换器</div><div class="d">只换路由，不刷新</div></div>
+          <div class="step"><div class="n">操作</div><div class="h">以关联账号</div><div class="d">菜单按该租户的权限</div></div>
+          <div class="step"><div class="n">回控制面</div><div class="h">选「平台控制台」</div><div class="d">回到 /platform</div></div>
+          <div class="step"><div class="n">无权限</div><div class="h">零权限外壳</div><div class="d">说明原因与去处</div></div>
+        </div>
+        <div class="ln">租户管理员管理</div>
+        <div class="flow" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+          <div class="step"><div class="n">看</div><div class="h">用户列表</div><div class="d">关联账号带「平台」标记</div></div>
+          <div class="step"><div class="n">改</div><div class="h">修改角色</div><div class="d">同普通用户</div></div>
+          <div class="step"><div class="n">停</div><div class="h">停用</div><div class="d">下一个请求生效</div></div>
+          <div class="step ext"><div class="n">无</div><div class="h">重置口令 / 改邮箱 / 删除</div><div class="d">对关联账号不显示</div></div>
+          <div class="step ext"><div class="n">—</div><div class="h">移除访问</div><div class="d">由宿主侧操作</div></div>
+        </div>
+      </div>
+
+      <h3 id="ui-common">3.3 三版共用的界面</h3>
+      <p class="frame-cap">租户侧用户列表 · 平台人员 李雷 在 acme 内（地址 <code>/w/acme/platform/users</code>），关联账号带「平台」标记，溢出菜单只有可用的操作</p>
+      <div class="frame"><div class="content">
+        <div class="toolbar"><div class="left"><span class="inp">⌕ <span class="ph">搜索用户名或邮箱</span></span><span class="facet">状态</span><span class="facet">角色</span></div><div class="right"><span class="btn sec">↻ 刷新</span><span class="btn pri">＋ 新建用户</span></div></div>
+        <div class="tbl"><table>
+          <tr><th><span class="ck"></span></th><th>用户</th><th>邮箱</th><th>角色</th><th>状态</th><th>最近登录</th><th style="text-align:right"><span style="opacity:0">操作</span></th></tr>
+          <tr><td><span class="ck"></span></td><td><div class="t2"><span class="a">王芳</span><span class="b">wangfang</span></div></td><td class="xs">wangfang@acme.example</td><td><span class="pill">Admin</span></td><td><span class="badge success dot">已启用</span></td><td class="xs">今天 09:12</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+          <tr class="sel"><td><span class="ck"></span></td><td><div class="t2"><span class="a">李雷 <span class="badge secondary" style="margin-left:6px">平台</span></span><span class="b">platform.lilei</span></div></td><td class="xs">-</td><td><span class="pill">Admin</span></td><td><span class="badge success dot">已启用</span></td><td class="xs">-</td><td><div class="act"><span class="ibtn">⋯</span></div></td></tr>
+          <tr><td><span class="ck"></span></td><td><div class="t2"><span class="a">张伟</span><span class="b">zhangwei</span></div></td><td class="xs">zhangwei@acme.example</td><td><span class="pill">Member</span></td><td><span class="badge secondary dot">已停用</span></td><td class="xs">11-02 18:40</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+        </table><div class="pager"><span>共 3 条</span><span>每页 20 · 1 / 1</span></div></div>
+        <div class="grid2">
+          <div class="menu" style="width:100%"><div class="lb">李雷 的操作</div><div class="mi">修改角色</div><div class="mi">停用</div><hr><div class="note" style="padding:4px 8px 6px">平台人员的口令与登录方式由本人账号管理；移除访问在宿主的租户管理里操作。</div></div>
+          <p class="note">"最近登录"对关联账号显示「-」：登录发生在本人账号上。关联账号的"编辑"入口不显示（用户名、邮箱不可改；重置口令、设邮箱等由领域拒绝，界面同时隐藏），单元格只放「平台」标记，禁用原因写在溢出菜单下方（同 <code>frontend-lists.md</code> §2 的禁用原因规则）。</p>
+        </div>
+      </div></div>
+
+      <p class="frame-cap">零权限工作区 · 保留外壳与切换器，内容区说明原因并给去处（用于 Resource 首次进入、或租户管理员撤掉了全部角色）</p>
+      <div class="frame"><div class="content">
+        <div class="empty"><span class="ic">🔒</span><h5>你在 globex 还没有可用的功能</h5><p>平台已授予你进入 globex，但你的关联账号在本系统没有任何角色。请联系 globex 的管理员分配角色。</p><div style="display:flex;gap:8px;margin-top:8px"><span class="btn out">切换工作区</span><span class="btn sec">回到平台控制台</span></div></div>
+      </div></div>
+
+      <p class="frame-cap">授予访问弹窗（三版共用）· 选人用 Command 列表（同命令面板写法，已授予的人显示"已授予"并不可选），角色勾选写法同用户的角色弹窗</p>
+      <div class="frame"><div class="overlay">
+        <div class="dialog" style="width:min(480px,100%)">
+          <div class="hd"><h5>授予进入 acme</h5><p>被授予的人会在 acme 里得到一个关联账号，以所选角色操作。</p></div>
+          <div class="bd">
+            <div class="field"><label>平台人员</label>
+              <div class="combo"><div class="q">⌕ li</div>
+                <div class="o on"><span class="av">李</span><span>李雷 <span class="u">lilei</span></span><span class="r">✓</span></div>
+                <div class="o"><span class="av">黎</span><span>黎明 <span class="u">liming</span></span></div>
+                <div class="o" style="opacity:.5"><span class="av">刘</span><span>刘丽 <span class="u">liuli</span></span><span class="r">已授予</span></div>
+              </div>
+              <span class="desc">只列宿主用户；关联账号用户名为 platform.lilei</span></div>
+            <div class="field"><label>acme 的角色</label>
+              <div class="roles"><span class="cb on">Admin <span class="v">内置</span></span><span class="cb">Member</span><span class="cb">Auditor</span></div>
+              <span class="desc">至少选一个；之后可在平台人员列表或 acme 的用户管理里修改</span></div>
+          </div>
+          <div class="ft"><span class="btn out">取消</span><span class="btn pri">授予</span></div>
+        </div>
+      </div></div>
+
+      <!-- 方案 A -->
+      <div class="variant" id="ui-a">
+        <div class="vh"><h3>方案 A · 侧栏头部合一切换器 + 租户行「平台人员」抽屉</h3><span class="rec">已选定</span></div>
+        <div class="vd">把现有的区域切换器扩成"工作区 + 区域"合一菜单（shadcn team switcher 写法不变）。授予管理放在租户列表行的溢出菜单「平台人员」，打开右侧抽屉，抽屉里是标准列表：工具栏 + 表格 + 行操作。租户详情弹窗不动。</div>
+        <p class="frame-cap">平台人员 李雷 在 acme 的管理平台 · 侧栏头部切换器展开（工作区超过 7 个时顶部出现搜索框）</p>
+        <div class="frame"><div class="app rel">
+          <div class="side">
+            <div class="brandbtn open"><i></i><div class="tt"><b>ProjectName</b><span>acme · 管理平台</span></div><span class="chev">⇅</span></div>
+            <div class="g">工作</div><div class="it"><span class="ic"></span>仪表盘</div>
+            <div class="g">身份与访问</div><div class="it on"><span class="ic"></span>用户管理</div><div class="it"><span class="ic"></span>角色管理</div>
+            <div class="g">审计</div><div class="it"><span class="ic"></span>操作记录</div>
+            <div class="g">系统</div><div class="it"><span class="ic"></span>系统设置</div>
+          </div>
+          <div>
+            <div class="hdr"><span>身份与访问 /</span><b>用户管理</b><span class="sp1"></span><span class="ibtn">⌕</span><span class="ibtn">🔔</span><span class="av">李</span></div>
+            <div class="content"><div class="tbl"><table><tr><th>用户</th><th>角色</th><th>状态</th></tr><tr><td><div class="t2"><span class="a">王芳</span><span class="b">wangfang</span></div></td><td><span class="pill">Admin</span></td><td><span class="badge success dot">已启用</span></td></tr><tr><td><div class="t2"><span class="a">李雷 <span class="badge secondary" style="margin-left:6px">平台</span></span><span class="b">platform.lilei</span></div></td><td><span class="pill">Admin</span></td><td><span class="badge success dot">已启用</span></td></tr></table></div></div>
+          </div>
+          <div class="menu float" style="left:200px;top:12px">
+            <div class="lb">工作区</div>
+            <div class="mi"><span class="sq">⛨</span>平台控制台</div>
+            <div class="mi on"><span class="sq">A</span>acme<span class="ok">✓</span></div>
+            <div class="mi"><span class="sq">G</span>globex</div>
+            <div class="mi"><span class="sq">I</span>initech</div>
+            <hr>
+            <div class="lb">区域</div>
+            <div class="mi on"><span class="sq">▦</span>管理平台<span class="ok">✓</span></div>
+            <div class="mi"><span class="sq">▤</span>工作空间</div>
+          </div>
+        </div></div>
+
+        <p class="frame-cap">宿主 · 租户管理 · 行溢出菜单多一项「平台人员」，打开右侧抽屉（Spartan Sheet <code>sm:max-w-2xl</code>，打开的租户 id 写进 query <code>?staff=&lt;id&gt;</code>）</p>
+        <div class="frame"><div class="sheet-wrap">
+          <div class="dim" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+            <div class="toolbar"><div class="left"><span class="inp">⌕ <span class="ph">搜索租户</span></span></div><div class="right"><span class="btn sec">↻ 刷新</span><span class="btn pri">＋ 新建租户</span></div></div>
+            <div class="tbl"><table><tr><th>名称</th><th>显示名</th><th>状态</th><th></th></tr>
+              <tr class="sel"><td>acme</td><td>客户门户-华东</td><td><span class="badge success dot">启用</span></td><td><div class="act"><span class="ibtn">ⓘ</span><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+              <tr><td>globex</td><td>ERP-华南</td><td><span class="badge success dot">启用</span></td><td><div class="act"><span class="ibtn">ⓘ</span><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+            </table></div>
+            <div class="menu" style="align-self:flex-end"><div class="mi">详情</div><div class="mi">编辑</div><div class="mi on">平台人员</div><div class="mi">停用</div><hr><div class="mi" style="color:var(--destructive)">删除</div></div>
+          </div>
+          <div class="sheet">
+            <div><h4 style="margin:0;font-size:16px">acme 的平台人员</h4><div class="note" style="margin-top:4px">客户门户-华东 · 这些宿主用户可以进入 acme，以所列角色操作</div></div>
+            <div class="toolbar"><div class="left"><span class="inp" style="min-width:200px">⌕ <span class="ph">搜索人员</span></span></div><div class="right"><span class="btn pri">＋ 授予访问</span></div></div>
+            <div class="tbl"><table>
+              <tr><th>人员</th><th>角色</th><th>状态</th><th>授予时间</th><th></th></tr>
+              <tr><td><div class="t2"><span class="a">李雷</span><span class="b">lilei</span></div></td><td><span class="pill">Admin</span></td><td><span class="badge success dot">已启用</span></td><td class="xs">11-12 10:20</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+              <tr><td><div class="t2"><span class="a">刘丽</span><span class="b">liuli</span></div></td><td><span class="pill">Auditor</span></td><td><span class="badge secondary dot">已停用</span></td><td class="xs">11-03 16:05</td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+            </table></div>
+            <p class="note">「已停用」表示 acme 的管理员停用了这个关联账号；宿主侧只能修改角色或移除访问。✎ = 修改角色（同用户角色弹窗）；⋯ 里分隔线后是「移除访问」（destructive）。</p>
+          </div>
+        </div></div>
+
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>切换器沿用现有区域切换器的位置和写法，用户只多认一个分组。</li><li>平台人员列表是标准列表（工具栏、表格、行操作），与 Webhook 投递日志的抽屉同构。</li><li>租户详情弹窗不动，固定高度的弹窗不再加分区。</li><li>窄屏随侧栏收进抽屉，页头控件和触屏底线不受影响。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>工作区多时菜单变长：超过 7 个显示搜索框，列表限高滚动。</li><li>"以人为中心"看某人能进哪些租户，需要逐个租户看（模板场景下可接受）。</li></ul></div>
+        </div>
+      </div>
+
+      <!-- 方案 B -->
+      <div class="variant" id="ui-b">
+        <div class="vh"><h3>方案 B · 页头工作区选择器 + 租户详情弹窗分区</h3></div>
+        <div class="vd">工作区单独做成页头右侧的可搜索选择器（Popover + Command），侧栏头部仍只切区域。授予管理放进租户详情弹窗，作为"数据库连接"之后的第三个分区，就地增删（同连接编辑的 <code>editorMode</code> 写法）。</div>
+        <p class="frame-cap">页头右侧工作区选择器展开 · 页头窄时收成 44px 图标按钮（按 <code>frontend-navigation.md</code> §2 的上下文选择器规则）</p>
+        <div class="frame"><div class="app rel">
+          <div class="side">
+            <div class="brandbtn"><i></i><div class="tt"><b>ProjectName</b><span>管理平台</span></div><span class="chev">⇅</span></div>
+            <div class="g">工作</div><div class="it"><span class="ic"></span>仪表盘</div>
+            <div class="g">身份与访问</div><div class="it on"><span class="ic"></span>用户管理</div><div class="it"><span class="ic"></span>角色管理</div>
+            <div class="g">审计</div><div class="it"><span class="ic"></span>操作记录</div>
+          </div>
+          <div>
+            <div class="hdr"><span>身份与访问 /</span><b>用户管理</b><span class="sp1"></span><span class="scope"><span class="sq">A</span>acme ▾</span><span class="ibtn">⌕</span><span class="ibtn">🔔</span><span class="av">李</span></div>
+            <div class="content" style="min-height:300px"></div>
+          </div>
+          <div class="menu float" style="right:96px;top:48px;width:280px">
+            <div class="search">⌕ 搜索工作区</div>
+            <div class="lb">控制面</div>
+            <div class="mi"><span class="sq">⛨</span>平台控制台</div>
+            <div class="lb">租户</div>
+            <div class="mi on"><span class="sq">A</span>acme<span class="xs2">客户门户-华东</span></div>
+            <div class="mi"><span class="sq">G</span>globex<span class="xs2">ERP-华南</span></div>
+            <div class="mi"><span class="sq">I</span>initech<span class="xs2">ERP-西南</span></div>
+          </div>
+        </div></div>
+
+        <p class="frame-cap">租户详情弹窗（<code>h-160</code>、42rem）新增第三分区「平台人员」· 「授予」在分区内展开表单，不叠第二层弹窗</p>
+        <div class="frame"><div class="overlay">
+          <div class="dialog" style="width:min(672px,100%)">
+            <div class="hd"><h5>租户详情</h5></div>
+            <div class="bd">
+              <div class="sectl">基本信息</div>
+              <dl class="kv"><dt>名称</dt><dd><b>acme</b></dd><dt>显示名</dt><dd>客户门户-华东</dd><dt>状态</dt><dd>启用</dd></dl>
+              <hr style="border:0;border-top:1px solid var(--border);margin:0">
+              <div class="sectl">数据库连接</div><p class="note" style="margin:0">共享库</p>
+              <hr style="border:0;border-top:1px solid var(--border);margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span class="sectl">平台人员</span><span class="btn out sm">授予</span></div>
+              <div class="inline-list">
+                <div class="r h"><span>人员</span><span>角色</span><span>状态</span><span></span></div>
+                <div class="r"><span>李雷 <span class="note">lilei</span></span><span><span class="pill">Admin</span></span><span><span class="badge success dot">已启用</span></span><span class="act"><span class="ibtn">✎</span><span class="ibtn">✕</span></span></div>
+                <div class="r"><span>刘丽 <span class="note">liuli</span></span><span><span class="pill">Auditor</span></span><span><span class="badge secondary dot">已停用</span></span><span class="act"><span class="ibtn">✎</span><span class="ibtn">✕</span></span></div>
+              </div>
+            </div>
+            <div class="ft"><span class="btn out">关闭</span></div>
+          </div>
+        </div></div>
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>选择器可搜索，工作区多时更好用。</li><li>租户的全部信息集中在一个详情里。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>页头多一个控件，要重新满足 <code>default-header-touch.spec.ts</code> 两种宽度的底线。</li><li>切换范围分成两处（区域在侧栏、工作区在页头），心智负担大。</li><li>固定高度的详情弹窗里再加一个可编辑分区，与连接编辑的状态机交织；人数多时没有分页与搜索。</li></ul></div>
+        </div>
+      </div>
+
+      <!-- 方案 C -->
+      <div class="variant" id="ui-c">
+        <div class="vh"><h3>方案 C · 以人为中心：宿主用户页「租户访问」</h3></div>
+        <div class="vd">授予管理放在宿主的用户管理：多一列「租户访问」（只读浮层列出租户），行操作「租户访问」打开抽屉，按租户列出并逐行改角色。切换器同方案 A，另在命令面板（⌘K）加"切换到 &lt;租户&gt;"。</div>
+        <p class="frame-cap">宿主 · 用户管理 · 「租户访问」列与抽屉</p>
+        <div class="frame"><div class="sheet-wrap">
+          <div class="dim" style="padding:24px"><div class="tbl"><table>
+            <tr><th>用户</th><th>角色</th><th>租户访问</th><th>状态</th></tr>
+            <tr class="sel"><td><div class="t2"><span class="a">李雷</span><span class="b">lilei</span></div></td><td><span class="pill">Admin</span></td><td><span class="pill">acme</span> <span class="pill">globex</span> <span class="note">+1</span></td><td><span class="badge success dot">已启用</span></td></tr>
+            <tr><td><div class="t2"><span class="a">刘丽</span><span class="b">liuli</span></div></td><td><span class="pill">Support</span></td><td><span class="pill">acme</span></td><td><span class="badge success dot">已启用</span></td></tr>
+          </table></div></div>
+          <div class="sheet">
+            <div><h4 style="margin:0;font-size:16px">李雷 的租户访问</h4><div class="note" style="margin-top:4px">lilei · 可进入 3 个租户</div></div>
+            <div class="toolbar"><div class="left"><span class="inp" style="min-width:200px">⌕ <span class="ph">搜索租户</span></span></div><div class="right"><span class="btn pri">＋ 添加租户</span></div></div>
+            <div class="tbl"><table>
+              <tr><th>租户</th><th>角色</th><th>状态</th><th></th></tr>
+              <tr><td><div class="t2"><span class="a">acme</span><span class="b">客户门户-华东</span></div></td><td><span class="pill">Admin</span></td><td><span class="badge success dot">已启用</span></td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+              <tr><td><div class="t2"><span class="a">globex</span><span class="b">ERP-华南</span></div></td><td><span class="pill">Auditor</span></td><td><span class="badge success dot">已启用</span></td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+              <tr><td><div class="t2"><span class="a">initech</span><span class="b">ERP-西南</span></div></td><td><span class="pill">Member</span></td><td><span class="badge secondary dot">已停用</span></td><td><div class="act"><span class="ibtn">✎</span><span class="ibtn">⋯</span></div></td></tr>
+            </table></div>
+          </div>
+        </div></div>
+        <div class="pc">
+          <div class="card"><h4><span class="yes">优点</span></h4><ul><li>给一个人批量开多个租户最顺手；一眼看到某人的全部访问。</li></ul></div>
+          <div class="card"><h4><span class="no-c">代价</span></h4><ul><li>"谁能进 acme"要去宿主用户页逐人看，租户管理里没有入口，与"按租户开通"的管理习惯相反。</li><li>每行改角色要读目标租户的角色（独立库要逐库访问），列表列与抽屉的请求都更重。</li><li>用户列表多一列，挤占现有列的优先级裁剪。</li></ul></div>
+        </div>
+      </div>
+
+      <h3 id="ui-cmp">3.4 对比与推荐</h3>
+      <table class="t wide-cmp">
+        <tr><th>维度</th><th>A 侧栏合一 + 租户抽屉</th><th>B 页头选择器 + 详情分区</th><th>C 以人为中心</th></tr>
+        <tr><td>与现有页面一致</td><td class="yes">高：team switcher、Webhook 抽屉、角色弹窗都已有</td><td class="mid">中：页头控件与详情分区要新写法</td><td class="mid">中：用户列表加列</td></tr>
+        <tr><td>切换范围的入口</td><td class="yes">一处</td><td class="no-c">两处</td><td class="yes">一处 + 命令面板</td></tr>
+        <tr><td>"谁能进这个租户"</td><td class="yes">租户行一步打开</td><td class="yes">详情内</td><td class="no-c">逐人查</td></tr>
+        <tr><td>"这个人能进哪些租户"</td><td class="mid">切换器看自己的；看别人要逐租户</td><td class="mid">同 A</td><td class="yes">一处</td></tr>
+        <tr><td>工作区很多时</td><td class="mid">超过 7 个出现搜索</td><td class="yes">原生可搜索</td><td class="mid">同 A</td></tr>
+        <tr><td>实现与测试量</td><td class="yes">小：复用列表、抽屉、角色弹窗</td><td class="mid">中：页头触屏底线、弹窗状态机</td><td class="no-c">大：跨租户读角色</td></tr>
+      </table>
+      <div class="callout"><b>选定方案 A（用户 2026-11-16 确认）。</b>理由：沿用已有的三个组件写法，切换入口只有一处；授予按租户管理，符合"先开通租户、再给人"的顺序。方案 C 的"以人为中心"视角可以等出现真实需求后，作为同一接口上的第二个入口补上。</div>
+    </section>
+
+    <!-- 4 -->
+    <section class="s" id="s4">
+      <h2><span class="no">4</span>实施计划</h2>
+      <p class="lead">分两个 PR 依次交付，不改框架包。PR1 先交付分层与侧别规则、私有化形态指引和 WP2 模拟登录修复，按本地验证配方验证后合入 develop；PR2 从合入后的 develop 实施工作区参数与 WP3–WP7，再集中验证。每个 PR 内工作包按依赖顺序实施，审查修复后只重跑受影响项。</p>
+
+      <h3 id="s4-wp">4.1 工作包</h3>
+      <table class="t">
+        <tr><th>工作包</th><th>产物</th><th>L0 定向验证</th><th>验收</th></tr>
+        <tr><td><b>WP1</b> 规范与参数</td><td>分层、侧别、私有化指引、工作区一节；<code>template.json</code> 参数与计算符号；矩阵代表场景</td><td>文档闸门；选择器场景 <code>-GenerateOnly</code></td><td>AC16</td></tr>
+        <tr><td><b>WP2</b> 默认形态修复</td><td>模拟目标按内置 Admin 角色选择</td><td>目标集成测试</td><td>AC13</td></tr>
+        <tr><td><b>WP3</b> 身份模型与授予</td><td><code>HomeUserId</code>、领域凭据约束、控制库索引、迁移；授予服务、端点、<code>App.Tenants.StaffAccess</code>；租户侧限制</td><td>目标集成测试</td><td>AC1 AC6 AC7</td></tr>
+        <tr><td><b>WP4</b> 认证入口</td><td><code>Workspace</code> 方案与策略替换；主体判定；SignalR 参数；工作区列表</td><td>入口矩阵测试类</td><td>AC2–AC5 AC8 AC15</td></tr>
+        <tr><td><b>WP5</b> 令牌交换与 Resource</td><td>进入工作区交换；下游交换识别 <code>home_sub</code>；Resource 方案、缓存、访问器、列表回源</td><td>目标集成测试（缓存期限、拒绝规则、回源）</td><td>AC9</td></tr>
+        <tr><td><b>WP6</b> 前端</td><td><code>/w/:workspace</code>、请求范围、状态与守卫顺序、切换器、授予界面、「平台」标记、零权限外壳、SignalR 重连；Mock 覆盖</td><td>目标 spec + lint；Mock 站点走查</td><td>AC10 AC11 AC14 AC15</td></tr>
+        <tr><td><b>WP7</b> 默认租户</td><td><code>SystemInitializer</code> 默认租户与关联账号</td><td>目标集成测试</td><td>AC12</td></tr>
+      </table>
+
+      <h3 id="s4-verify">4.2 PR2 集中验证</h3>
+      <table class="t">
+        <tr><th>生成项目</th><th>跑什么</th><th>证明</th></tr>
+        <tr><td>Standalone + <code>Workspace</code></td><td>后端单元与集成测试项目全量、前端全量 spec、Playwright（切换与双标签页、授予、零权限、默认租户落点）</td><td>AC1–AC8、AC10–AC12、AC14、AC15</td></tr>
+        <tr><td>Identity + <code>Workspace</code></td><td>构建 + 目标集成测试（交换分支、工作区列表）</td><td>AC9 的 Identity 侧</td></tr>
+        <tr><td>Resource 浏览器会话 + <code>Workspace</code></td><td>构建 + 目标集成测试；与上一项组成 OIDC 端到端一个场景，含一次真实下游调用</td><td>AC9</td></tr>
+        <tr><td>默认形态（Standalone、Identity）</td><td>现有模拟登录测试 + AC13</td><td>AC13</td></tr>
+        <tr><td>关闭多租户及其他条件形态</td><td>选择器场景生成与构建；其余由 PR CI <code>core</code> 与合入后 <code>full</code> 承担</td><td>AC16</td></tr>
+      </table>
+      <div class="grid2">
+        <div class="card"><h4>为什么一轮够</h4><ol>
+          <li>PR1 先交付现有形态的必做层；PR2 的工作区形态一次实施、集中验证。</li>
+          <li>开发期只跑目标测试类与目标 spec，每个工作包一个提交。</li>
+          <li>越权集中在 <code>Workspace</code> 一个入口的矩阵测试类，不按端点逐个写。</li>
+          <li>修复只重跑失败点和直接受影响的检查（<code>quality-assurance.md</code>"证据复用"）。</li></ol></div>
+        <div class="card"><h4>刻意不做</h4><ul>
+          <li>不为并发交换、授予与移除中间态加锁或补偿；不做撤销即时失效事件。</li>
+          <li>不在端点或应用服务里再判断租户。</li>
+          <li>不做"以人为中心"的第二个管理入口、服务目录与授权编排。</li>
+          <li>本地不跑 <code>core</code> / <code>full</code> 档矩阵。</li></ul></div>
+      </div>
+
+      <h3 id="s4-collab">4.3 协同分工</h3>
+      <table class="t">
+        <tr><th>步骤</th><th>负责</th><th>产物</th><th>完成条件</th></tr>
+        <tr><td>1 方案与设计稿</td><td>Claude</td><td>规格、本设计稿、委托书</td><td>用户选定界面方案</td></tr>
+        <tr><td>2 方案评审</td><td>Codex</td><td><code>.tmp/multitenancy-layering/review-codex.md</code></td><td>明确写"通过"</td></tr>
+        <tr><td>3 实施 WP1–WP7</td><td>Codex（清空上下文后开始）</td><td>每个工作包一个提交；台账 <code>progress.md</code></td><td>L0 通过</td></tr>
+        <tr><td>4 集中验证</td><td>Codex</td><td>上表结果写进台账</td><td>全部通过</td></tr>
+        <tr><td>5 代码审查</td><td>Claude（按工作包派新上下文子 agent）</td><td><code>review-claude.md</code></td><td>明确写"通过"</td></tr>
+        <tr><td>6 修复与终验</td><td>Codex</td><td>只重跑受影响项；推送、开 PR</td><td>CI 全绿</td></tr>
+        <tr><td>7 合并与回执</td><td>Claude</td><td>合并、规格 §4、下游回执</td><td>回执目标由用户指定</td></tr>
+      </table>
+    </section>
+
+    <!-- 5 -->
+    <section class="s" id="s5">
+      <h2><span class="no">5</span>验收标准</h2>
+      <p class="lead">越权类集中在 <code>Workspace</code> 一个入口，用真实 HTTP 与真实授权策略；"一个入口"指一个测试类，类内参数化覆盖各条路径。</p>
+      <table class="t">
+        <tr><th>编号</th><th>Given</th><th>When</th><th>Then</th><th>覆盖</th></tr>
+        <tr><td>AC1</td><td>关联账号</td><td>口令、外部登录、通行密钥登录或找回；管理员为它设口令、邮箱、外部登录、通行密钥</td><td>登录全部失败（与无该凭据的普通账号同形）；设置被领域拒绝</td><td>集成，参数化 + 普通账号对照</td></tr>
+        <tr><td>AC2</td><td>宿主管理员获 acme 访问，角色 Admin</td><td>带头调普通权限端点、组件自用端点、<code>permissions/current</code></td><td>端点看到关联账号与 acme；共享库、独立库各一例</td><td>集成·入口矩阵</td></tr>
+        <tr><td>AC3</td><td>未授予、关联账号停用、租户停用、或租户用户带别家名</td><td>带 <code>X-Workspace</code></td><td>403：租户用户越界为 <code>Workspace:Forbidden</code>，宿主访问不可用为 <code>Workspace:Unavailable</code>；不回退本人</td><td>集成·入口矩阵</td></tr>
+        <tr><td>AC4</td><td>任意已登录用户</td><td>不带头</td><td>与现在一致</td><td>集成·入口矩阵</td></tr>
+        <tr><td>AC5</td><td>宿主管理员在工作区内</td><td>调本人账户、认证、协议端点</td><td>忽略头，作用于本人</td><td>集成·入口矩阵</td></tr>
+        <tr><td>AC6</td><td>租户管理员</td><td>看列表、改角色、停用关联账号</td><td>带「平台」标记；Standalone/Identity 下停用后下一个请求 403</td><td>集成 + 组件</td></tr>
+        <tr><td>AC7</td><td>有 <code>App.Tenants.StaffAccess</code></td><td>授予、改角色、移除、再次授予</td><td>关联账号与索引同步；移除后下一个请求 403（Resource 最迟 5 分钟）；再次授予恢复同一 Id</td><td>集成</td></tr>
+        <tr><td>AC8</td><td>平台人员在 acme 改角色</td><td>看 acme 操作记录</td><td>记录在 acme，操作人为关联账号，显示名同本人</td><td>集成</td></tr>
+        <tr><td>AC9</td><td>Identity + Resource 浏览器会话</td><td>登录、拉列表、进入 acme、触发一次现有下游调用</td><td>Resource JIT 建成员；下游收到关联账号与 acme</td><td>OIDC 端到端 + 集成（缓存期限、拒绝规则）</td></tr>
+        <tr><td>AC10</td><td>能进 acme 与 globex</td><td>双标签页切换；冷启动 <code>/w/acme/...</code>；前进后退</td><td>换段、重建、不刷新不重登；标签页互不影响；守卫前权限已属目标工作区</td><td>组件 + Playwright</td></tr>
+        <tr><td>AC11</td><td>关联账号无任何入口权限</td><td>进入或切到该工作区</td><td>保留外壳，说明原因并给去处</td><td>组件 + Playwright</td></tr>
+        <tr><td>AC12</td><td>空库且配置 <code>MultiTenancy:DefaultTenant</code></td><td>API 首次、再次启动</td><td>只建一次；工作区形态下宿主管理员得到 Admin 关联账号，登录后落到默认工作区；已有租户时跳过</td><td>集成 + Playwright 落点</td></tr>
+        <tr><td>AC13</td><td>默认形态，租户内置 admin 被改名</td><td>发起模拟登录</td><td>选中持有内置 Admin 角色的用户进入</td><td>集成</td></tr>
+        <tr><td>AC14</td><td>工作区形态</td><td>调原模拟登录端点；看历史记录</td><td>404；无模拟入口；历史记录照常显示</td><td>集成 + 组件</td></tr>
+        <tr><td>AC15</td><td>工作区形态且开实时或通知</td><td>工作区内建 SignalR 连接；切换工作区</td><td>本人连接常驻；工作区以关联账号握手，切换时旧工作区连接停止、新连接带新工作区，订阅不残留；租户用户只有一条连接</td><td>集成 + <code>signalr-service.spec.ts</code></td></tr>
+        <tr><td>AC16</td><td>默认形态或关闭多租户</td><td>生成项目</td><td>无工作区方案、<code>/w</code> 路由与平台人员页面，构建通过</td><td>生成检查 + 选择器场景构建</td></tr>
+      </table>
+    </section>
+  </main>
+</div>
+</body>
+</html>

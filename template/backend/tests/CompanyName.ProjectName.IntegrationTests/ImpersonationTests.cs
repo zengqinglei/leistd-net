@@ -4,8 +4,16 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Permissions.Provider;
+using CompanyName.ProjectName.Domain.Users.Constants;
+using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Repositories;
+using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Authorization.Grants;
 using Leistd.Authorization.Constants;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.MultiTenancy.Context;
+using Leistd.UnitOfWork;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -146,6 +154,109 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
         Assert.DoesNotContain("App.OpenApplications", payload, StringComparison.Ordinal);
     }
 #endif
+
+    /// <summary>租户管理员改名后，模拟登录仍按内置 Admin 角色找到原来的用户。</summary>
+    [Fact]
+    public async Task Host_can_impersonate_a_renamed_tenant_administrator()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        const string tenantName = "renamedadmin";
+        var tenantId = await CreateTenantAsync(hostAdmin, tenantName);
+        var tenantAdmin = await LoginTenantAdminAsync(tenantId);
+        var (adminId, _) = await ReadIdentityAsync(tenantAdmin);
+
+        using var rename = await tenantAdmin.PutAsJsonAsync("/api/v1/auth/me", new
+        {
+            Username = "renamed_admin",
+            Email = $"admin@{tenantName}.example.com"
+        });
+        Assert.Equal(HttpStatusCode.OK, rename.StatusCode);
+
+        using var enter = await hostAdmin.Client.PostAsync($"/api/v1/tenants/{tenantId}/impersonate", null);
+        Assert.Equal(HttpStatusCode.OK, enter.StatusCode);
+        using var impersonated = ProjectWebApplicationFactory.CreateProjectClient(factory);
+        impersonated.DefaultRequestHeaders.Add("Cookie", CookieOf(enter));
+
+        Assert.Equal("renamed_admin", await ReadUsernameAsync(impersonated));
+        Assert.Equal(adminId, (await ReadIdentityAsync(impersonated)).Id);
+        var identity = await impersonated.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(tenantId, identity.GetProperty("tenantId").GetGuid());
+    }
+
+    /// <summary>同租户只选择最早创建的已启用 Admin 成员，不把同名普通用户或停用管理员当作目标。</summary>
+    [Fact]
+    public async Task Impersonation_selects_the_earliest_active_admin_role_member()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "adminselection");
+        var tenantAdmin = await LoginTenantAdminAsync(tenantId);
+        var adminId = Guid.Parse((await ReadIdentityAsync(tenantAdmin)).Id);
+        Guid expectedId;
+        using (var scope = factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+        {
+            var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+            var seeded = (await users.GetWithRolesAsync(adminId))!;
+            seeded.RemoveAllRoles();
+            var role = (await scope.ServiceProvider.GetRequiredService<IRepository<Role, Guid>>()
+                .GetOneAsync(r => r.Name == AdminConstant.RoleName && r.IsStatic))!;
+
+            var disabled = new User("disabled_admin", "");
+            disabled.AssignRoles([role.Id]);
+            disabled.Disable();
+            await users.InsertAsync(disabled);
+            var newer = new User("newer_admin", "");
+            newer.AssignRoles([role.Id]);
+            await users.InsertAsync(newer);
+            var earlier = new User("earlier_admin", "");
+            earlier.AssignRoles([role.Id]);
+            await users.InsertAsync(earlier);
+            expectedId = earlier.Id;
+
+            // 创建顺序故意与时间顺序相反，避免按 Id 取首个也能碰巧通过。
+            var db = await scope.ServiceProvider.GetRequiredService<IDbContextProvider<MyProjectDbContext>>().GetDbContextAsync();
+            db.Entry(disabled).Property(u => u.CreationTime).CurrentValue = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            db.Entry(earlier).Property(u => u.CreationTime).CurrentValue = new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            db.Entry(newer).Property(u => u.CreationTime).CurrentValue = new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            await uow.CompleteAsync();
+        }
+
+        using var enter = await hostAdmin.Client.PostAsync($"/api/v1/tenants/{tenantId}/impersonate", null);
+        Assert.Equal(HttpStatusCode.OK, enter.StatusCode);
+        using var impersonated = ProjectWebApplicationFactory.CreateProjectClient(factory);
+        impersonated.DefaultRequestHeaders.Add("Cookie", CookieOf(enter));
+        Assert.Equal(expectedId.ToString(), (await ReadIdentityAsync(impersonated)).Id);
+        Assert.Equal("earlier_admin", await ReadUsernameAsync(impersonated));
+    }
+
+    /// <summary>没有可用 Admin 成员时明确拒绝，不以同名用户兜底，也不结束宿主原会话。</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Impersonation_without_an_active_admin_role_member_keeps_the_host_session(bool disable)
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, disable ? "disabledadmin" : "unassignedadmin");
+        var tenantAdmin = await LoginTenantAdminAsync(tenantId);
+        var adminId = Guid.Parse((await ReadIdentityAsync(tenantAdmin)).Id);
+        var hostId = (await ReadIdentityAsync(hostAdmin.Client)).Id;
+        using (var scope = factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+        {
+            var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+            var admin = (await users.GetWithRolesAsync(adminId))!;
+            if (disable) admin.Disable();
+            else admin.RemoveAllRoles();
+            await uow.CompleteAsync();
+        }
+
+        using var enter = await hostAdmin.Client.PostAsync($"/api/v1/tenants/{tenantId}/impersonate", null);
+        Assert.Equal(HttpStatusCode.Conflict, enter.StatusCode);
+        Assert.Equal("Tenant:AdministratorNotFound", await ErrorCodeAsync(enter));
+        Assert.Equal(hostId, (await ReadIdentityAsync(hostAdmin.Client)).Id);
+    }
 
     /// <summary>宿主经模拟登录进入租户，再退回自己。</summary>
     /// <remarks>

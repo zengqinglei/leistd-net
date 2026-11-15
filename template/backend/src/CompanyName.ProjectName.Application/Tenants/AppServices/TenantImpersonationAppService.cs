@@ -34,6 +34,7 @@ namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 internal sealed class TenantImpersonationAppService(
     ITenantStore tenantStore,
     IRepository<User, Guid> userRepository,
+    IRepository<Role, Guid> roleRepository,
     SessionIssuer sessionIssuer,
     IUserSessionAppService userSessionAppService,
     ICurrentUser currentUser,
@@ -72,21 +73,26 @@ internal sealed class TenantImpersonationAppService(
 
         ClaimsPrincipal principal;
 
-        // 进入目标租户上下文后，仓储查询自动按 TenantId 分区——按用户名找到的
-        // 必然是该租户的管理员，不会串到宿主或别的租户。
+        // 进入目标租户上下文后，用户、角色与成员关系都按 TenantId 分区。
+        // 只选择持有内置 Admin 角色的已启用用户，用户名变化不影响管理员资格。
         //
         // 整个块包进租户上下文内新开的工作单元：查管理员、SignInAsync 里的写入、以及下面那条审计记录，
         // 都必须落进这个租户自己的库并同生共死。只切 Change 不够——本方法没有环境工作单元，仓储取到的是
-        // 请求作用域里早已绑定宿主库的 DbContext；分库租户的管理员在它自己的库里，于是报"没有可模拟的 admin"。
+        // 请求作用域里早已绑定宿主库的 DbContext；分库租户的管理员在它自己的库里，于是报“没有可模拟的管理员”。
         using (currentTenant.Change(tenant.Id, tenant.Name))
         using (var tenantUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
-            var admin = await userRepository.GetFirstAsync(
-                u => u.Username == AdminConstant.TenantAdminUsername,
-                q => q.OrderBy(u => u.Id),
-                cancellationToken)
-                ?? throw new BusinessException(TenantErrorCodes.AdministratorNotFound,
-                    $"Tenant '{tenant.Name}' has no '{AdminConstant.TenantAdminUsername}' user to impersonate.");
+            var adminRole = await roleRepository.GetOneAsync(
+                r => r.IsStatic && r.Name == AdminConstant.RoleName, cancellationToken);
+            var admin = adminRole is null ? null : await userRepository.GetFirstAsync(
+                u => u.IsActive && u.Roles.Any(membership => membership.RoleId == adminRole.Id),
+                q => q.OrderBy(u => u.CreationTime).ThenBy(u => u.Id),
+                cancellationToken);
+            if (admin is null)
+            {
+                throw new BusinessException(TenantErrorCodes.AdministratorNotFound,
+                    $"Tenant '{tenant.Name}' has no active administrator available for impersonation.");
+            }
 
             var claims = new List<Claim>
             {

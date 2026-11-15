@@ -6,8 +6,7 @@ public static class AdminConstant
 
     /// <summary>租户初始化时创建的租户管理员用户名。</summary>
     /// <remarks>
-    /// 播种方（<c>TenantSeeder</c>）与按约定查找该用户的一方（模拟登录）必须用同一个值：
-    /// 各写一份字面量时，改了一处的表现是"模拟登录说找不到管理员"，而租户里明明有 admin。
+    /// 播种与部署级管理员恢复共用此初始用户名；模拟登录按内置 Admin 角色选择用户，不依赖用户名。
     /// </remarks>
     public const string TenantAdminUsername = "admin";
 }

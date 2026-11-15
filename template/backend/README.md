@@ -237,7 +237,11 @@ dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <su
 
 ## 租户管理员恢复
 
-宿主有内置超级管理员兜底，租户没有：租户的管理员能力全部来自本租户的 Admin 角色。管理员不能停用或删除自己，但移出角色、收窄 Admin 的权限属于正当的自我降级，界面不拦；租户把自己锁死后（最后一位管理员被停用、删除、移出 Admin，或 Admin 角色的权限被撤空，宿主的模拟登录进的也是这个账号），由部署方执行：
+宿主有内置超级管理员兜底，租户没有：租户的管理员能力全部来自本租户的 Admin 角色。管理员不能停用或删除自己，但移出角色、收窄 Admin 的权限属于正当的自我降级，界面不拦；租户把自己锁死后（最后一位管理员被停用、删除、移出 Admin，或 Admin 角色的权限被撤空），由部署方执行下方命令恢复。
+
+<!--#if (Impersonation)-->
+宿主模拟登录选择该租户持有内置 Admin 角色、已启用的用户，按创建时间升序、同刻按 Id 升序取首个，改名不影响选择。没有可用成员时拒绝模拟；Admin 权限被撤空时，模拟也不能恢复权限，仍须执行部署级恢复。
+<!--#endif-->
 
 ```bash
 dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --restore-tenant-admin <tenant-id>          # 预演
