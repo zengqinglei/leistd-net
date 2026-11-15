@@ -179,7 +179,7 @@ internal sealed class UserAppService(
             Username = currentUser.Username ?? "",
             Email = currentUser.Email ?? "",
             DisplayName = currentUser.Name,
-            IsEmailVerified = currentUser.FindClaim(EmailVerifiedClaimType)?.Value == "true",
+            IsEmailVerified = bool.TryParse(currentUser.FindClaim(EmailVerifiedClaimType)?.Value, out var emailVerified) && emailVerified,
             IsSuperAdmin = local?.IsSuperAdmin ?? false,
             Roles = local?.Roles.Select(role => role.Name).ToArray() ?? [],
             TenantId = currentTenant.Id,

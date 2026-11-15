@@ -14,6 +14,7 @@ using CompanyName.ProjectName.Domain.Auth.Passkeys;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.Ddd.Application.AppServices;
+using Leistd.ObjectMapping.Abstractions;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
@@ -40,6 +41,8 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// </remarks>
 internal sealed class PasskeyAppService(
     IRepository<User, Guid> userRepository,
+    IRepository<UserPasskey, Guid> passkeyRepository,
+    IObjectMapper objectMapper,
     PasskeyDomainService passkeyDomainService,
     IPasskeyProtocol passkeyProtocol,
     PasskeyCeremonyStore ceremonies,
@@ -59,7 +62,8 @@ internal sealed class PasskeyAppService(
 {
     /// <inheritdoc />
     public async Task<IReadOnlyList<PasskeyOutputDto>> GetListAsync(CancellationToken cancellationToken = default) =>
-        [.. (await passkeyDomainService.GetListAsync(currentUser.Id!.Value, cancellationToken)).Select(ToOutput)];
+        objectMapper.Map<List<UserPasskey>, List<PasskeyOutputDto>>(
+            [.. (await passkeyRepository.GetListAsync(p => p.UserId == currentUser.Id!.Value, cancellationToken)).OrderBy(p => p.CreationTime)]);
 
     /// <inheritdoc />
     /// <remarks>
@@ -82,7 +86,7 @@ internal sealed class PasskeyAppService(
             cancellationToken);
 
         var user = await GetCurrentUserAsync(cancellationToken);
-        var existing = await passkeyDomainService.GetListAsync(user.Id, cancellationToken);
+        var existing = await passkeyRepository.GetListAsync(p => p.UserId == user.Id, cancellationToken);
         var name = user.Username;
         var displayName = user.DisplayName ?? user.Username;
 #if (IncludeMultiTenancy)
@@ -149,7 +153,7 @@ internal sealed class PasskeyAppService(
             cancellationToken);
 
         await unit.CompleteAsync(cancellationToken);
-        return new PasskeyRegistrationOutputDto { Passkey = ToOutput(passkey), RecoveryCodes = codes };
+        return new PasskeyRegistrationOutputDto { Passkey = objectMapper.Map<UserPasskey, PasskeyOutputDto>(passkey), RecoveryCodes = codes };
     }
 
     /// <inheritdoc />
@@ -158,8 +162,8 @@ internal sealed class PasskeyAppService(
     {
         EnsureAvailable();
         var user = await GetCurrentUserAsync(cancellationToken);
-        var passkeys = await passkeyDomainService.GetListAsync(user.Id, cancellationToken);
-        if (passkeys.Count == 0)
+        var passkeys = await passkeyRepository.GetListAsync(p => p.UserId == user.Id, cancellationToken);
+        if (!passkeys.Any())
         {
             throw new BusinessException(
                 AuthErrorCodes.ReauthenticationMethodUnavailable,
@@ -190,7 +194,7 @@ internal sealed class PasskeyAppService(
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
         await unit.CompleteAsync(cancellationToken);
-        return ToOutput(passkey);
+        return objectMapper.Map<UserPasskey, PasskeyOutputDto>(passkey);
     }
 
     /// <inheritdoc />
@@ -271,14 +275,5 @@ internal sealed class PasskeyAppService(
     internal static BusinessException VerificationFailed() =>
         new(AuthErrorCodes.PasskeyVerificationFailed, "The passkey couldn't be verified. Try again.");
 
-    internal static PasskeyOutputDto ToOutput(UserPasskey passkey) => new()
-    {
-        Id = passkey.Id,
-        Name = passkey.Name,
-        CreationTime = passkey.CreationTime,
-        LastUsedTime = passkey.LastUsedTime,
-        IsBackupEligible = passkey.IsBackupEligible,
-        IsBackedUp = passkey.IsBackedUp
-    };
 }
 #endif

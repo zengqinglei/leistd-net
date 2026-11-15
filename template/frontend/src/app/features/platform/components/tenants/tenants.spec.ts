@@ -177,6 +177,46 @@ describe('Tenants page query and write flow', () => {
     expect(lastQuery().offset).toBe(0);
   });
 
+  it('searches the same keyword again after the URL clears it on the same instance', async () => {
+    const instance = fixture.componentInstance;
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    component.onSearchQueryChange('acme');
+    await vi.advanceTimersByTimeAsync(300);
+    await fixture.whenStable();
+    await router.navigate(['/platform/tenants'], { queryParams: {} });
+    await fixture.whenStable();
+    expect(lastQuery().keyword).toBeUndefined();
+    expect(fixture.componentInstance).toBe(instance);
+    component.onSearchQueryChange('acme');
+    await vi.advanceTimersByTimeAsync(300);
+    await fixture.whenStable();
+    expect(lastQuery().keyword).toBe('acme');
+    const requests = service.getTenants.mock.calls.length;
+    component.onSearchQueryChange('  acme  ');
+    await vi.advanceTimersByTimeAsync(300);
+    await fixture.whenStable();
+    expect(service.getTenants.mock.calls.length).toBe(requests);
+  });
+
+  it('preserves the current page when only search whitespace changes', async () => {
+    await router.navigate(['/platform/tenants'], {
+      queryParams: { page: 3, keyword: 'acme' },
+    });
+    await fixture.whenStable();
+    const requests = service.getTenants.mock.calls.length;
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    component.onSearchQueryChange('  acme  ');
+    await vi.advanceTimersByTimeAsync(300);
+    await fixture.whenStable();
+    expect(router.url).toContain('page=3');
+    expect(lastQuery().offset).toBe(40);
+    expect(service.getTenants.mock.calls.length).toBe(requests);
+  });
+
   it('toggles activation via the API after confirmation and refreshes the list', async () => {
     const before = vi.mocked(service.getTenants).mock.calls.length;
 

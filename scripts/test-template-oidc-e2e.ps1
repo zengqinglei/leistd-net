@@ -832,6 +832,8 @@ function Test-BrowserSession {
     $claims = Read-TokenClaims $sharedToken
     Assert-Value "browser-session-user" $claims.sub $me.id
     Assert-Value "browser-session-tenant" $sharedTenant.id $me.tenantId
+    # TenantSeeder 创建管理员后未确认邮箱，浏览器会话须保留这个状态。
+    Assert-Value "browser-session-email-verified" $false $me.isEmailVerified
     Assert-Http "browser-cookie-delegation" 200 ($urls.orders + "/api/e2e/billing") -Headers @{ Cookie = $cookie } | Out-Null
     Assert-Http "browser-no-bearer-fallback" 401 ($urls.orders + "/api/v1/auth/me") -Token "invalid" -Headers @{ Cookie = $cookie } | Out-Null
     $logout = Assert-Http "resource-browser-logout" 200 ($urls.orders + "/api/v1/auth/logout") -Method POST -Body @{} -Headers @{ Cookie = $cookie }
@@ -984,7 +986,9 @@ function Test-S7 {
     $user = (Assert-Http "create-revocation-user" 200 ($urls.idp + "/api/v1/users") -Method POST -Session $admin `
         -Body @{ username = "revocation_user"; email = "revocation@example.test"; password = $password; isActive = $true; isEmailVerified = $true }).Data
     $session = Login "revocation_user" -Password $password
-    $token = Get-CodeToken $session "openid profile e2e-idp-api orders-api billing-api"
+    $token = Get-CodeToken $session "openid profile email e2e-idp-api orders-api billing-api"
+    $resourceMe = (Assert-Http "verified-email-resource-me" 200 ($urls.orders + "/api/v1/auth/me") -Token $token).Data
+    Assert-Value "verified-email-reaches-resource" $true $resourceMe.isEmailVerified
     $idpToken = Get-CodeToken $session "openid profile e2e-idp-api" "idp-web"
     $tenantIdpSession = Login -Tenant $sharedTenant.name -Password $tenantPassword
     $tenantIdpToken = Get-CodeToken $tenantIdpSession "openid profile e2e-idp-api" "idp-web"

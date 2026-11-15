@@ -17,14 +17,17 @@ import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import { lucideListFilter, lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
+import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 import {
   HlmInputGroup,
   HlmInputGroupAddon,
   HlmInputGroupInput,
 } from '@spartan-ng/helm/input-group';
+import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -72,7 +75,10 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { paginationFromQuery } from '../../../../shared/utils/table-query-state';
+import {
+  keywordMatchesQuery,
+  paginationFromQuery,
+} from '../../../../shared/utils/table-query-state';
 import { resolveDisplayTimeZone, zonedCalendarDate } from '../../../../shared/utils/zoned-time';
 import {
   CreateWebhookSubscriptionInputDto,
@@ -91,8 +97,8 @@ import { presetRange, RangePreset } from '../dashboard/dashboard-calendar';
 
 const RANGE_PRESETS: readonly RangePreset[] = ['today', '7d', '30d'];
 const DELIVERY_STATUSES: readonly WebhookDeliveryStatus[] = ['pending', 'succeeded', 'failed'];
-/** 投递日志的订阅筛选项一次取够；订阅数通常很少，超出时仍可经"查看投递"按订阅跳转。 */
-const SUBSCRIPTION_OPTION_LIMIT = 100;
+/** 订阅选项每次搜索最多取 20 条，超出时提示用关键词缩小范围。 */
+const SUBSCRIPTION_OPTION_LIMIT = 20;
 /** 从列表打开投递详情时写进新历史条目的标记：有它说明前一条就是打开前的列表条目，刷新后仍随条目保留。 */
 const DELIVERY_OPENED_STATE = 'webhookDeliveryOpened';
 
@@ -117,6 +123,9 @@ const LIST_PARAMS = [
   imports: [
     NgIcon,
     HlmButton,
+    HlmBadge,
+    HlmSeparator,
+    ...HlmComboboxImports,
     HlmSpinner,
     HlmInputGroup,
     HlmInputGroupInput,
@@ -135,7 +144,7 @@ const LIST_PARAMS = [
     WebhookSecretDialog,
     WebhookEnableDialog,
   ],
-  providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
+  providers: [provideIcons({ lucideListFilter, lucidePlus, lucideRefreshCw, lucideSearch })],
   templateUrl: './webhooks.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -160,6 +169,7 @@ export class Webhooks {
     initialValue: this.route.snapshot.queryParamMap,
   });
   private readonly searchSubject = new Subject<string>();
+  private readonly subscriptionSearchRequests = new Subject<string>();
   private readonly listRefresh = new Subject<void>();
   private readonly detailRefresh = new Subject<void>();
   /** 编辑详情请求：打开编辑发 id，打开新建或关闭弹窗发 `null`，新值取消旧请求。 */
@@ -247,14 +257,19 @@ export class Webhooks {
   readonly eventTypesError = signal<string | null>(null);
   /** 投递日志的订阅筛选项。 */
   readonly subscriptionOptionsSource = signal<WebhookSubscriptionOutputDto[]>([]);
-  readonly subscriptionOptions = computed(() =>
-    this.subscriptionOptionsSource().map((item) => ({ label: item.name, value: item.id })),
-  );
+  readonly subscriptionSearch = signal('');
+  readonly subscriptionOptionsLoading = signal(false);
+  readonly subscriptionOptionsError = signal<string | null>(null);
+  readonly subscriptionOptionsTotal = signal(0);
+  private readonly resolvedSubscription = signal<WebhookSubscriptionOutputDto | null>(null);
+  readonly subscriptionFilter = () => true;
+  readonly subscriptionToString = (id: string) =>
+    this.subscriptionOptionsSource().find((item) => item.id === id)?.name ??
+    (this.resolvedSubscription()?.id === id ? this.resolvedSubscription()?.name : null) ??
+    id;
   readonly selectedSubscriptionName = computed(() => {
     const id = this.selectedSubscriptionId();
-    return id
-      ? (this.subscriptionOptionsSource().find((item) => item.id === id)?.name ?? null)
-      : null;
+    return id ? this.subscriptionToString(id) : null;
   });
   readonly eventTypeOptions = computed(() =>
     this.eventTypes().map((type) => ({ label: type.name, value: type.name })),
@@ -327,8 +342,12 @@ export class Webhooks {
       .subscribe(() => this.now.set(Date.now()));
 
     this.searchSubject
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe((keyword) => {
+        if (!keywordMatchesQuery(keyword, this.route.snapshot.queryParamMap)) {
+          this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true);
+        }
+      });
     effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
 
     this.loadEventTypes();
@@ -386,6 +405,48 @@ export class Webhooks {
         this.loadError.set(null);
         this.totalRecords.set(apply());
       });
+
+    this.subscriptionSearchRequests
+      .pipe(
+        debounceTime(300),
+        switchMap((keyword) =>
+          defer(() => {
+            this.subscriptionOptionsLoading.set(true);
+            this.subscriptionOptionsError.set(null);
+            return this.service
+              .getSubscriptions({
+                keyword: keyword.trim() || undefined,
+                limit: SUBSCRIPTION_OPTION_LIMIT,
+              })
+              .pipe(
+                catchError((error) => {
+                  this.subscriptionOptionsError.set(applicationErrorMessage(error));
+                  return of(null);
+                }),
+                finalize(() => this.subscriptionOptionsLoading.set(false)),
+              );
+          }),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        if (page) {
+          this.subscriptionOptionsSource.set(page.items);
+          this.subscriptionOptionsTotal.set(page.totalCount);
+        }
+      });
+    toObservable(this.selectedSubscriptionId)
+      .pipe(
+        switchMap((id) => {
+          if (!id) return of(null);
+          const item = untracked(this.subscriptionOptionsSource).find((option) => option.id === id);
+          return item
+            ? of(item)
+            : this.service.getSubscription(id).pipe(catchError(() => of(null)));
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((item) => this.resolvedSubscription.set(item));
 
     // 视图切到投递日志时取一次订阅筛选项
     effect(() => {
@@ -768,14 +829,13 @@ export class Webhooks {
     this.secretDialogVisible.set(true);
   }
 
-  private loadSubscriptionOptions(): void {
-    this.service
-      .getSubscriptions({ offset: 0, limit: SUBSCRIPTION_OPTION_LIMIT })
-      .pipe(
-        catchError(() => EMPTY),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((page) => this.subscriptionOptionsSource.set(page.items));
+  loadSubscriptionOptions(): void {
+    this.subscriptionSearchRequests.next(this.subscriptionSearch());
+  }
+
+  onSubscriptionSearch(keyword: string): void {
+    this.subscriptionSearch.set(keyword);
+    this.subscriptionSearchRequests.next(keyword);
   }
 
   private requestStatistics(query: WebhookStatisticsQuery): void {
@@ -866,6 +926,7 @@ const ENGLISH: Record<string, string> = {
   'common.delete': 'Delete',
   'common.noResults': 'No results',
   'common.refresh': 'Refresh',
+  'common.retry': 'Retry',
   'common.requestError': 'Request error',
   'common.success': 'Success',
   'webhooks.action.create': 'New subscription',
@@ -885,9 +946,12 @@ const ENGLISH: Record<string, string> = {
   'webhooks.deliveryStatus.succeeded': 'Succeeded',
   'webhooks.filter.eventType': 'Event type',
   'webhooks.filter.searchDeliveries': 'Search by event ID or type...',
+  'webhooks.filter.loadingSubscriptions': 'Loading subscriptions...',
   'webhooks.filter.searchSubscriptions': 'Search by name or URL...',
   'webhooks.filter.status': 'Status',
   'webhooks.filter.subscription': 'Subscription',
+  'webhooks.filter.searchSubscriptionOptions': 'Search subscriptions',
+  'webhooks.filter.narrowSubscriptions': 'Type a keyword to narrow the results.',
   'webhooks.page.title': 'Webhooks',
   'webhooks.subscriptionStatus.disabled': 'Disabled',
   'webhooks.subscriptionStatus.enabled': 'Enabled',

@@ -202,7 +202,9 @@ let nextFacetedFilterId = 0;
           <div class="p-1">
             <button
               type="button"
-              class="hover:bg-muted hover:text-foreground relative flex w-full cursor-default items-center justify-center rounded-sm px-2 py-1.5 text-sm outline-hidden select-none pointer-coarse:min-h-11"
+              hlmBtn
+              variant="ghost"
+              class="w-full justify-center"
               (click)="clear()"
             >
               {{ clearLabel() }}
@@ -242,14 +244,23 @@ export class FacetedFilter {
     return keyword ? options.filter((o) => o.label.toLowerCase().includes(keyword)) : options;
   });
 
-  readonly selectedOption = computed(
-    () => this.options().find((o) => o.value === this.value()) ?? null,
-  );
+  readonly selectedOption = computed(() => {
+    const value = this.value();
+    return value === null
+      ? null
+      : (this.options().find((option) => option.value === value) ?? {
+          value,
+          label: String(value),
+        });
+  });
   readonly selectedOptions = computed(() =>
-    this.options().filter((o) => this.values().includes(String(o.value))),
+    this.values().map(
+      (value) =>
+        this.options().find((option) => String(option.value) === value) ?? { value, label: value },
+    ),
   );
   readonly hasSelection = computed(() =>
-    this.multiple() ? this.selectedOptions().length > 0 : this.selectedOption() !== null,
+    this.multiple() ? this.values().length > 0 : this.value() !== null,
   );
 
   protected readonly activeOptionId = computed(() => {

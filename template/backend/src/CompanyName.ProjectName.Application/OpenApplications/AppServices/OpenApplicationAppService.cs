@@ -200,6 +200,14 @@ public class OpenApplicationAppService(
 
         descriptor.DisplayName = string.IsNullOrWhiteSpace(input.DisplayName) ? null : input.DisplayName.Trim();
         descriptor.ApplicationType = input.ApplicationType;
+        var generatedSecret = descriptor.ClientType == OpenIddictConstants.ClientTypes.Public
+            && input.ClientType == OpenIddictConstants.ClientTypes.Confidential
+                ? GenerateClientSecret()
+                : null;
+        if (generatedSecret is not null)
+        {
+            descriptor.ClientSecret = generatedSecret;
+        }
         descriptor.ClientType = input.ClientType;
         descriptor.ConsentType = OpenIddictConstants.ConsentTypes.Implicit;
         if (input.ClientType == OpenIddictConstants.ClientTypes.Public)
@@ -216,7 +224,15 @@ public class OpenApplicationAppService(
         // 只改模板自有的键，其余 Settings 原样保留
         descriptor.Settings[OpenApplicationSettings.SessionBound] = OpenApplicationSettings.Format(input.SessionBound!.Value);
 
-        await applicationManager.UpdateAsync(application, descriptor, cancellationToken);
+        try
+        {
+            await applicationManager.UpdateAsync(application, descriptor, cancellationToken);
+        }
+        catch (OpenIddictExceptions.ValidationException ex)
+        {
+            logger.LogWarning(ex, "OpenIddict validation failed (ID: {Id})", id);
+            throw new BusinessException(OpenAppErrorCodes.UpdateFailed, "The open application could not be updated.", ex);
+        }
         logger.LogInformation("Open application updated (ID: {Id})", id);
         // 管理器已把描述符写回手里的实例，用它构造输出，不再按 Id 回查
         var output = await MapToOutputAsync(application, cancellationToken);
@@ -225,7 +241,7 @@ public class OpenApplicationAppService(
             OperationTarget.For(id, output.DisplayName ?? output.ClientId),
             PermissionConstant.OpenApplications.Update,
             cancellationToken);
-        return output;
+        return generatedSecret is null ? output : output with { ClientSecret = generatedSecret };
     }
 
     /// <remarks>删除幂等：不存在时直接成功，不写操作记录——什么也没删。</remarks>

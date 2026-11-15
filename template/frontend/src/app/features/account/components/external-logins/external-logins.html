@@ -26,8 +26,16 @@
           </button>
         </div>
       } @else if (data() === null) {
-        <div class="flex justify-center py-6">
-          <hlm-spinner class="text-muted-foreground text-xl" />
+        <div
+          class="flex min-h-20 items-center gap-3"
+          data-testid="initial-loading"
+          aria-hidden="true"
+        >
+          <hlm-skeleton class="size-10 shrink-0 rounded-lg" />
+          <div class="flex flex-1 flex-col gap-2">
+            <hlm-skeleton class="h-4 w-40 max-w-full" />
+            <hlm-skeleton class="h-3 w-64 max-w-full" />
+          </div>
         </div>
       } @else {
         <div hlmItemGroup class="gap-2">

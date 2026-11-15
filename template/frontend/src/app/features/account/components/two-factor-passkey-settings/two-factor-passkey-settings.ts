@@ -24,6 +24,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmItemImports } from '@spartan-ng/helm/item';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
 
@@ -89,6 +90,7 @@ type PasskeyUnavailableReason = 'notConfigured' | 'unsupported' | 'insecureConte
     HlmInput,
     ...HlmItemImports,
     HlmSpinner,
+    HlmSkeleton,
     ReauthenticateDialog,
     RecoveryCodes,
     StatusDot,
@@ -189,7 +191,10 @@ export class TwoFactorPasskeySettings {
     this.loadFailed.set(false);
     this.accountService.getTwoFactorStatus().subscribe({
       next: (status) => this.status.set(status),
-      error: () => this.loadFailed.set(true),
+      error: (error) => {
+        if (this.status() === null) this.loadFailed.set(true);
+        else this.showError(error);
+      },
     });
   }
 

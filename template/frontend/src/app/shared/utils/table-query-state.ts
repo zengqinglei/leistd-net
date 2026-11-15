@@ -53,3 +53,8 @@ function readPositiveInteger(value: string | null, fallback: number): number {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
+
+/** 搜索是否与当前 URL 一致；空白与缺省值都表示不筛选。 */
+export function keywordMatchesQuery(keyword: string, params: ParamMap): boolean {
+  return (keyword.trim() || null) === (params.get('keyword')?.trim() || null);
+}

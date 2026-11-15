@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { ExternalLogins } from './external-logins';
@@ -74,6 +75,20 @@ describe('ExternalLogins', () => {
     });
   });
 
+  it.each([{ providers: [] }, { providers: [github] }])(
+    'retains a loaded directory and toasts on refresh failure',
+    async ({ providers }) => {
+      const host = await render({ hasPassword: true, providers });
+      const before = host.textContent;
+      const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+      account.getExternalLogins.mockReturnValue(throwError(() => new Error('offline')));
+      fixture.componentInstance.reload();
+      fixture.detectChanges();
+      expect(host.textContent).toBe(before);
+      expect(notify).toHaveBeenCalledOnce();
+    },
+  );
+
   it('offers link for unlinked providers and unlink for linked ones', async () => {
     const host = await render({
       hasPassword: true,
@@ -107,7 +122,7 @@ describe('ExternalLogins', () => {
     const host = await render(new Subject<ExternalLoginsOutputDto>());
 
     expect(host.querySelector('[data-testid="security-external-logins"]')).not.toBeNull();
-    expect(host.querySelector('hlm-spinner')).not.toBeNull();
+    expect(host.querySelector('[data-testid="initial-loading"] hlm-skeleton')).not.toBeNull();
   });
 
   // 失败不是"没有"：区块留着、说出失败并能重试，重试拿到目录后恢复正常显示

@@ -1,6 +1,6 @@
 # 三层代码审查问题整改
 
-状态：进行中 · 风险档：高（框架公共行为、DI 代理、OIDC 声明、跨框架/模板后端/模板前端） · 基线：develop `c4d0eeba`
+状态：已完成 · 风险档：高（框架公共行为、DI 代理、OIDC 声明、跨框架/模板后端/模板前端） · 基线：develop `c4d0eeba`
 
 ## 1. 需求
 
@@ -65,14 +65,47 @@
 
 ## 3. 计划
 
-按交付面分 3 个 PR，依次从最新 develop 建分支；等待 CI 时可开始下一个，后一个推送前 rebase develop。规格文档随 PR1 提交，§4 与状态随 PR3 提交。
+按交付面分为框架 1 个 PR、模板 1 个 PR，均合入 develop，不做 develop→main 发布。模板分支基于框架 PR 合并后的 develop，保留后端与前端分组提交；两部分分别审查通过，合并后的验证完成后统一推送一次。
 
 | PR | 内容 | 产物 | 验证 |
 | --- | --- | --- | --- |
-| PR1 框架 | F-RESP-01、F-DC-01、F-DC-02、BG-LOCK、F-E1、F-E2、F-DC-03 | 组件源码、测试、`response.md`、`dependency-injection.md`、`aop.md`（如需）、`background-jobs.md`、`webhooks.md`、`notifications.md`、`object-mapping.md`、XML 示例 | 受影响测试项目（选择器给出的反向依赖闭包）；打包并检查随包 XML 与文档；关键 XML 示例单独编译；`check-all -Only` 文档与注释闸门；PR CI 全绿 |
-| PR2 模板后端 | B01、B02、B03（含前端展示与 Mock）、B04；OIDC 端到端断言 | 模板后端源码与测试、前端 open-applications、Mock、`scripts/test-template-oidc-e2e.ps1` | 工作区 `-Sync` 加目标测试类与集成测试类；Identity、Resource、Standalone 生成场景构建；OIDC 端到端（worker-01）；Mock 与 i18n 闸门；PR CI 全绿 |
-| PR3 模板前端 | F01、F02、F03a、F03b、F04、F05 | 模板前端源码、spec、Mock、`webhooks.e2e.ts` | 目标 spec 与 lint；开、关本地化两种生成场景；Mock 站点浏览器验证与改前改后截图；生成项目连真实后端跑 `webhooks.e2e.ts`（worker-01）；PR CI 全绿 |
+| 框架 PR（#280） | F-RESP-01、F-DC-01、F-DC-02、BG-LOCK、F-E1、F-E2、F-DC-03 | 组件源码、回归测试、组件文档与 XML 示例、本规格 | 受影响测试反向依赖闭包；打包与隔离消费、文档代码块与 XML 示例编译；文档和注释闸门；PR CI |
+| 模板 PR（本 PR） | B01–B04、F01、F02、F03a、F03b、F04、F05 | 模板后端与前端、目标测试、Mock、OIDC 与 Webhook 端到端断言 | 对完整差异重算场景并集并生成；实际生成工作区的目标测试、前端 build 与 lint；开关本地化；合并后的开放应用页面与 Mock spec；真实 Webhook 端到端；Mock 对比截图；PR CI 的 OIDC 端到端 |
 
-每个 PR 推送前经 Claude 代码审查，结论为"通过"才推送；CI 全绿即合并。
+模板的后端部分按原 PR2 审查编号、前端部分按原 PR3 审查编号分别记录，均通过才推送。推送后的修复仍须增量审查；CI 失败先在本地复现对应场景，一次修完后再推。
 
-不做的事：见 §1 非目标；不修改 F-DC-C1；不新增"示例启动到端点映射"类重复测试；不为 F01 在其余四个同构页面逐页复制 spec。
+原定两个模板 PR 合并为一个，减少重复的 PR CI 与合入 develop 后全量验证；有效证据复用，只补组合后的必要验证。规格的 §4 与完成状态随模板 PR 收尾。
+
+不做的事：见 §1 非目标；不修改 F-DC-C1；不新增“示例启动到端点映射”类重复测试；不为 F01 在其余四个同构页面逐页复制 spec。
+
+## 4. 交付与验收记录
+
+### 实际交付
+
+- 框架：[PR #280](https://github.com/zengqinglei/leistd-net/pull/280)，已合入 develop，合并提交 `04279dbb70550c0979e67c25477685eadd22c16c`。框架七组条目全部交付；F-E2 同时完成 XML 注册示例与共用 Hub 文档组合。
+- 模板：本 PR（`zengqinglei/template-review-remediation-20261115`），交付 B01–B04、F01、F02、F03a、F03b、F04、F05。后端与前端分组审查，统一推送；合并后的开放应用页面与 Mock 测试已通过。OIDC 完整端到端由本 PR 的 CI 执行，通过后才合并。
+
+### 验收记录
+
+| 范围 | 结果 |
+| --- | --- |
+| 框架行为与反向依赖闭包 | 25 个测试项目，2723 通过、35 跳过、0 失败；新增行为用例恢复旧源码后确实断言失败 |
+| 框架包与文档 | 82 个包内容检查、8 个目标隔离消费者；165 个文档块，28 个示例项目通过、7 项豁免、6 个反例被拒绝；两段 SignalR XML 示例单独编译通过；相关文档闸门通过 |
+| 模板场景并集 | 对完整模板差异选择 identity、identity-notifications、standalone-external-login、identity-all-features、identity-capabilities-01、resource-capabilities-03、webhooks、distributed-events，8 个场景 GenerateOnly 通过 |
+| 模板后端 | 生成项目构建通过；目标单元 27 项通过；集成首次 117 项通过，修正两处测试预期后另两项通过；验证码、OIDC 和应用切换测试恢复旧实现后出现实际断言失败 |
+| 模板前端（本地化开启） | 实际生成项目的 11 个目标测试文件、141 项通过，含开放应用页面 14 项与 Mock 10 项；build、lint 通过 |
+| 模板前端（本地化关闭、外部登录开启） | 实际生成项目的 12 个目标测试文件、152 项通过；build、lint 通过 |
+| 搜索分页补充与可证伪性 | 新增空白搜索不重置第三页的用例后，tenants 文件 18 项通过；恢复旧前端行为并重新生成后，7 个文件中 15 项断言失败、77 项通过，无编译失败 |
+| Webhook 真实端到端 | 实际生成的 API、PostgreSQL 与前端完成 1 项端到端，覆盖远程订阅搜索、选择、清除与查看投递 |
+| 界面验收 | Mock 生成站点完成字重、远程订阅搜索及加载/失败重试/空结果/缺失 ID、清除按钮明暗主题焦点、五个账户面板加载与刷新失败的截图；真实验证码 SVG 在注册页 93×34 CSS px 下字符完整可辨 |
+| 静态闸门 | Mock 覆盖、i18n、条件结构、符号、using/import、错误码、XML 示例形状、英文诊断与测试命名等相关闸门通过；文档引用与旧符号检查在保留 Git 元数据的工作树执行 |
+
+界面故障截图采用 Mock 服务边界的受控故障注入；首次加载状态另由真实 Observable 测试验证。验证码轮廓只消除响应中的明文答案并提高直接提取成本，不承诺抵抗针对性 OCR。验证命令、逐文件计数、执行回执与截图保存在会话交付记录，不进入模板分发。
+
+### 偏差与遗留
+
+- 用户调整为框架 1 个 PR、模板 1 个 PR，合并原 PR2 与 PR3，减少重复 CI；没有缩减条目或验收标准。
+- worker-01 离线，按已确认的执行条件通过 remote-project-runner 自动回退本机串行执行目标验证；未在本机运行 core/full/all 全矩阵，全矩阵交给仓库流水线。
+- F-E2 按已确认的文档边界，把完整共享 Hub 组合放在 realtime 注册段，notifications 仅链接；组件文档不直接依赖兄弟类型。
+- B04 实际有五处调用（包含 Passkey 登录入口），均迁回应用层仓储查询；未新增查询抽象或映射配置。
+- 无实现遗留。F-DC-C1 为明确排除项；推送后的 PR CI（包括 OIDC 端到端）是合并门槛，develop 合入后的全量验证由既有流水线承担，不属于本次本地执行范围。

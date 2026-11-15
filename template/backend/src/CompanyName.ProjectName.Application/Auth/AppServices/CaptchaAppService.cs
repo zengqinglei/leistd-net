@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Application.Auth.Captcha;
@@ -26,11 +27,11 @@ public class CaptchaAppService(
 
         var bg = BgColors[RandomNumberGenerator.GetInt32(BgColors.Length)];
         var lineY = RandomNumberGenerator.GetInt32(5, 35);
-        var angle = RandomNumberGenerator.GetInt32(-15, 15);
+        var path = RenderGlyphs(code);
 
         // viewBox 不能省：没有它，宿主给 <img> 设高度只会裁剪画布而不是等比缩放，
         // 验证码字符会被切掉一截——而这在页面上看起来只是「图有点怪」，不报错。
-        var svg = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"130\" height=\"44\" viewBox=\"0 0 130 44\"><rect width=\"100%\" height=\"100%\" fill=\"{bg}\"/><line x1=\"0\" y1=\"{lineY}\" x2=\"130\" y2=\"{44 - lineY}\" stroke=\"#94a3b8\" stroke-width=\"2\" opacity=\"0.6\"/><text x=\"50%\" y=\"50%\" font-size=\"24\" font-family=\"monospace\" fill=\"#0f172a\" font-weight=\"bold\" font-style=\"italic\" textLength=\"88\" lengthAdjust=\"spacingAndGlyphs\" dominant-baseline=\"central\" text-anchor=\"middle\" transform=\"rotate({angle}, 65, 22)\">{code}</text></svg>";
+        var svg = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"130\" height=\"44\" viewBox=\"0 0 130 44\"><rect width=\"100%\" height=\"100%\" fill=\"{bg}\"/><line x1=\"0\" y1=\"{lineY}\" x2=\"130\" y2=\"{44 - lineY}\" stroke=\"#94a3b8\" stroke-width=\"2\" opacity=\"0.6\"/><path d=\"{path}\" fill=\"#0f172a\"/></svg>";
 
         var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
         var imageBase64 = $"data:image/svg+xml;base64,{base64}";
@@ -48,6 +49,36 @@ public class CaptchaAppService(
             CaptchaToken = token,
             CaptchaImageBase64 = imageBase64
         };
+    }
+
+    private static string RenderGlyphs(string code)
+    {
+        var path = new StringBuilder();
+        for (var i = 0; i < code.Length; i++)
+        {
+            var radians = RandomNumberGenerator.GetInt32(-12, 13) * Math.PI / 180;
+            var scale = RandomNumberGenerator.GetInt32(90, 111) / 100d;
+            var cosine = Math.Cos(radians) * scale;
+            var sine = Math.Sin(radians) * scale;
+            var originX = 17 + i * 25 + RandomNumberGenerator.GetInt32(-2, 3);
+            var originY = 32 + RandomNumberGenerator.GetInt32(-2, 3);
+            var tokens = CaptchaGlyphs.Paths[code[i]].Split(' ');
+            for (var j = 0; j < tokens.Length; j++)
+            {
+                if (tokens[j].Length == 1 && char.IsAsciiLetter(tokens[j][0]))
+                {
+                    path.Append(tokens[j]).Append(' ');
+                    continue;
+                }
+
+                var x = double.Parse(tokens[j], CultureInfo.InvariantCulture);
+                var y = double.Parse(tokens[++j], CultureInfo.InvariantCulture);
+                // 随机变换计入坐标，响应不再包含答案明文；只提高识别成本，不抵抗针对性的自动识别。
+                path.AppendFormat(CultureInfo.InvariantCulture, "{0:0.##} {1:0.##} ",
+                    originX + x * cosine - y * sine, originY + x * sine + y * cosine);
+            }
+        }
+        return path.ToString();
     }
 
     private static string GenerateCode(int length)

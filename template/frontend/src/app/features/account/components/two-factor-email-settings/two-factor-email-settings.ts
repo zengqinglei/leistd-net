@@ -18,6 +18,7 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { firstValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
@@ -58,6 +59,7 @@ const CODE_INPUT_ID = 'two-factor-email-code';
     HlmButton,
     ...HlmFieldImports,
     HlmSpinner,
+    HlmSkeleton,
     OtpCodeInput,
     ReauthenticateDialog,
     StatusDot,
@@ -115,7 +117,10 @@ export class TwoFactorEmailSettings {
     this.loadFailed.set(false);
     this.accountService.getTwoFactorStatus().subscribe({
       next: (status) => this.status.set(status),
-      error: () => this.loadFailed.set(true),
+      error: (error) => {
+        if (this.status() === null) this.loadFailed.set(true);
+        else this.showError(error);
+      },
     });
   }
 

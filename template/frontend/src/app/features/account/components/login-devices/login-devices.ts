@@ -15,9 +15,10 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmItemImports } from '@spartan-ng/helm/item';
-import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { tap } from 'rxjs';
 
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { StatusDot } from '../../../../shared/directives/status-dot';
@@ -51,7 +52,7 @@ const OTHERS = 'others';
     NgIcon,
     HlmBadge,
     HlmButton,
-    HlmSpinner,
+    HlmSkeleton,
     ...HlmItemImports,
     //#if (IncludeLocalization)
     TranslocoDirective,
@@ -114,7 +115,10 @@ export class LoginDevices {
     this.loadFailed.set(false);
     this.accountService.getSessions().subscribe({
       next: (sessions) => this.sessions.set(sessions),
-      error: () => this.loadFailed.set(true),
+      error: (error) => {
+        if (this.sessions() === null) this.loadFailed.set(true);
+        else this.showError(error);
+      },
     });
   }
 
@@ -186,6 +190,15 @@ export class LoginDevices {
     } finally {
       this.busy.set(null);
     }
+  }
+  private showError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
+    toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
+    //#endif
   }
 }
 //#if (!IncludeLocalization)

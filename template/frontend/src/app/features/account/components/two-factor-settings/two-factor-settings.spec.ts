@@ -67,6 +67,23 @@ describe('TwoFactorSettings', () => {
     });
   });
 
+  it('keeps an existing two-factor snapshot when refreshing fails', async () => {
+    const host = await render({
+      enabled: false,
+      passkeys: [],
+      passkeysAvailable: true,
+      recoveryCodesLeft: 0,
+      requiredByPolicy: false,
+    });
+    const before = host.textContent;
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    account.getTwoFactorStatus.mockReturnValue(throwError(() => new Error('offline')));
+    fixture.componentInstance.reload();
+    fixture.detectChanges();
+    expect(host.textContent).toBe(before);
+    expect(notify).toHaveBeenCalledOnce();
+  });
+
   it('offers enable but not disable when not enabled', async () => {
     const host = await render({
       enabled: false,

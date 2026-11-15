@@ -19,6 +19,21 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("True", true)]
+    [InlineData("false", false)]
+    [InlineData("invalid", false)]
+    [InlineData(null, false)]
+    public async Task Current_user_reads_boolean_email_verification_claims(string? claim, bool expected)
+    {
+        using var session = factory.CreateResourceSession(Guid.CreateVersion7(), tenantId: null);
+        if (claim is not null)
+            session.Client.DefaultRequestHeaders.Add(ResourceTestAuthenticationHandler.EmailVerifiedHeader, claim);
+        var me = await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(expected, me.GetProperty("isEmailVerified").GetBoolean());
+    }
+
     /// <summary>首次持令牌访问就建行，且主键等于令牌里的 sub。</summary>
     [Fact]
     public async Task A_first_authenticated_request_projects_the_subject_into_a_local_row()

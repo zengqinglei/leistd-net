@@ -14,10 +14,6 @@ namespace CompanyName.ProjectName.Domain.Auth.DomainServices;
 /// </remarks>
 public class PasskeyDomainService(IRepository<UserPasskey, Guid> passkeyRepository)
 {
-    /// <summary>本人的全部通行密钥，按登记先后。</summary>
-    public async Task<List<UserPasskey>> GetListAsync(Guid userId, CancellationToken cancellationToken = default) =>
-        [.. (await passkeyRepository.GetListAsync(p => p.UserId == userId, cancellationToken)).OrderBy(p => p.CreationTime)];
-
     /// <summary>按凭据 Id 找通行密钥（当前租户内）；没有时返回 null。</summary>
     public Task<UserPasskey?> FindByCredentialIdAsync(byte[] credentialId, CancellationToken cancellationToken = default) =>
         passkeyRepository.GetFirstAsync(p => p.CredentialId == credentialId, q => q.OrderBy(p => p.Id), cancellationToken);

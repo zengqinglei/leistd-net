@@ -44,14 +44,7 @@ import { tap, of, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#else
 import { tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#endif
-import {
-  catchError,
-  debounceTime,
-  distinctUntilChanged,
-  finalize,
-  startWith,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
 import { BatchRolesDialog } from './widgets/batch-roles-dialog/batch-roles-dialog';
 //#if (LocalIdentity)
@@ -81,6 +74,7 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import {
+  keywordMatchesQuery,
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,
@@ -352,8 +346,12 @@ export class Users {
     }
 
     this.searchSubject
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe((keyword) => {
+        if (!keywordMatchesQuery(keyword, this.route.snapshot.queryParamMap)) {
+          this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true);
+        }
+      });
 
     // 选择只在当前页内有效：翻页、筛选、排序（都写在 URL 上）时清空。
     this.route.queryParamMap

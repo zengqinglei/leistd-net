@@ -1,7 +1,10 @@
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
 
 import { OPEN_APPLICATION_API } from './open-application';
-import { CreateOpenApplicationInputDto } from '../../src/app/features/platform/dtos/open-application.dto';
+import {
+  CreateOpenApplicationInputDto,
+  OpenApplicationOutputDto,
+} from '../../src/app/features/platform/dtos/open-application.dto';
 import { MockException } from '../core/models';
 import { OPEN_APPLICATIONS } from '../data/open-applications';
 import { setMockSessionUserId } from '../utils/current-user';
@@ -54,6 +57,35 @@ describe('open application mock', () => {
   function fieldsOf(error: MockException): string[] {
     return error.error.errors.map((item: { field: string }) => item.field);
   }
+
+  it('returns a conversion secret once, preserves it on unchanged type, and clears it for public clients', () => {
+    const publicInput = { ...valid, clientType: 'public', requirements: ['ft:pkce'] };
+    const created = create({ body: publicInput }) as OpenApplicationOutputDto;
+    const confidentialInput = { ...valid };
+    const converted = update({
+      params: { id: created.id },
+      body: confidentialInput,
+    }) as OpenApplicationOutputDto;
+    expect(converted.clientSecret).toBeTruthy();
+    expect(converted.hasClientSecret).toBe(true);
+    const storedSecret = OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret;
+    expect(storedSecret).toBe(converted.clientSecret);
+    const unchanged = update({
+      params: { id: created.id },
+      body: confidentialInput,
+    }) as OpenApplicationOutputDto;
+    expect(unchanged.clientSecret).toBeUndefined();
+    expect(OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret).toBe(
+      storedSecret,
+    );
+    const madePublic = update({
+      params: { id: created.id },
+      body: publicInput,
+    }) as OpenApplicationOutputDto;
+    expect(madePublic.hasClientSecret).toBe(false);
+    expect(madePublic.clientSecret).toBeUndefined();
+    expect(OPEN_APPLICATIONS.find((item) => item.id === created.id)!.clientSecret).toBeUndefined();
+  });
 
   it('supports multiple sorting keys and rejects private metadata with an empty result', () => {
     const list = OPEN_APPLICATION_API['GET /api/v1/open-applications'];

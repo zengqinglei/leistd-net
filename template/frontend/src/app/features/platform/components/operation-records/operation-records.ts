@@ -41,14 +41,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
 import { combineLatest, defer, EMPTY, Subject } from 'rxjs';
-import {
-  catchError,
-  debounceTime,
-  distinctUntilChanged,
-  finalize,
-  startWith,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
 import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -68,7 +61,11 @@ import { saveBlob } from '../../../../shared/utils/download-file';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
+import {
+  keywordMatchesQuery,
+  paginationFromQuery,
+  tableStateToQuery,
+} from '../../../../shared/utils/table-query-state';
 import {
   isoToZonedDate,
   zonedEndOfDayIso,
@@ -295,8 +292,12 @@ export class OperationRecords {
 
   constructor() {
     this.searchSubject
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe((keyword) => {
+        if (!keywordMatchesQuery(keyword, this.route.snapshot.queryParamMap)) {
+          this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true);
+        }
+      });
 
     // 搜索框即时值随 URL 回填（前进后退、分享链接）。
     effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
