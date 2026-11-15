@@ -132,6 +132,7 @@ describe('Webhooks page', () => {
 
   afterEach(async () => {
     fixture?.destroy();
+    vi.useRealTimers();
     await setCoarsePointer(false);
   });
 

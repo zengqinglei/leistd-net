@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 
 import { FacetedFilter, FacetedFilterOption } from './faceted-filter';
 import { expectTouchTarget, setCoarsePointer } from '../../utils/coarse-pointer.testing';
@@ -71,7 +71,7 @@ describe('FacetedFilter', () => {
     createFilter({ value: 'admin' });
     const clear = page.getByRole('button', { name: 'Clear filter', exact: true });
     await page.getByRole('combobox').click();
-    await page.getByRole('combobox').press('Tab');
+    await userEvent.tab();
     await expect.element(clear).toHaveFocus();
     const element = clear.element() as HTMLElement;
     expect(listbox()!.contains(element)).toBe(false);
