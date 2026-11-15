@@ -986,7 +986,9 @@ function Test-S7 {
     $user = (Assert-Http "create-revocation-user" 200 ($urls.idp + "/api/v1/users") -Method POST -Session $admin `
         -Body @{ username = "revocation_user"; email = "revocation@example.test"; password = $password; isActive = $true; isEmailVerified = $true }).Data
     $session = Login "revocation_user" -Password $password
-    $token = Get-CodeToken $session "openid profile e2e-idp-api orders-api billing-api"
+    $token = Get-CodeToken $session "openid profile email e2e-idp-api orders-api billing-api"
+    $resourceMe = (Assert-Http "verified-email-resource-me" 200 ($urls.orders + "/api/v1/auth/me") -Token $token).Data
+    Assert-Value "verified-email-reaches-resource" $true $resourceMe.isEmailVerified
     $idpToken = Get-CodeToken $session "openid profile e2e-idp-api" "idp-web"
     $tenantIdpSession = Login -Tenant $sharedTenant.name -Password $tenantPassword
     $tenantIdpToken = Get-CodeToken $tenantIdpSession "openid profile e2e-idp-api" "idp-web"

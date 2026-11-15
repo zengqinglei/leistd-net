@@ -73,7 +73,7 @@ public class CaptchaAppService(
 
                 var x = double.Parse(tokens[j], CultureInfo.InvariantCulture);
                 var y = double.Parse(tokens[++j], CultureInfo.InvariantCulture);
-                // 把随机变换写进坐标，响应中不带答案、字形标识或可逆的 transform 属性。
+                // 随机变换计入坐标，响应不再包含答案明文；只提高识别成本，不抵抗针对性的自动识别。
                 path.AppendFormat(CultureInfo.InvariantCulture, "{0:0.##} {1:0.##} ",
                     originX + x * cosine - y * sine, originY + x * sine + y * cosine);
             }
