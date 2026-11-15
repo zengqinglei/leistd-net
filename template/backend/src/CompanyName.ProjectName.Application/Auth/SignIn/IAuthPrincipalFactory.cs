@@ -12,12 +12,18 @@ namespace CompanyName.ProjectName.Application.Auth.SignIn;
 /// </remarks>
 public interface IAuthPrincipalFactory
 {
+#if (TenantWorkspace)
+    /// <summary>按宿主本人进入租户，索引、本人、租户或关联账号不可用时返回空。</summary>
+    Task<ClaimsPrincipal?> CreateWorkspaceAsync(ClaimsPrincipal homePrincipal, Guid tenantId,
+        IEnumerable<string>? scopes = null, CancellationToken cancellationToken = default);
+#endif
     /// <summary>装配签发用的主体；用户不存在或此刻不允许访问时返回 <see langword="null"/>。</summary>
     Task<ClaimsPrincipal?> CreateAsync(
         Guid userId,
         IEnumerable<string>? scopes = null,
         CancellationToken cancellationToken = default);
 
+#if (OpenIddictServer)
     /// <summary>按授权码或刷新令牌的主体重新装配签发用的主体；主体、租户或用户无效时返回 <see langword="null"/>。</summary>
     /// <remarks>
     /// 令牌端点的请求不带用户身份，解析链只能得出宿主；用户与租户都取自令牌主体，在其租户内加载用户。
@@ -38,5 +44,6 @@ public interface IAuthPrincipalFactory
     Task<IDictionary<string, object>?> CreateUserInfoAsync(
         ClaimsPrincipal tokenPrincipal,
         CancellationToken cancellationToken = default);
+#endif
 }
 #endif

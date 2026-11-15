@@ -495,7 +495,9 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/RegistrationSwitchTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SessionIdleTimeoutTests.cs",
-            "backend/src/CompanyName.ProjectName.Application/Tenants/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/Provider/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/Errors/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/Dtos/CreateTenantWithAdminInputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/**",
             "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
@@ -759,6 +761,13 @@
           ]
         },
         {
+          "condition": "!(OpenIddictServer || (LocalIdentity && TenantWorkspace))",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/AuthPrincipalFactory.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs"
+          ]
+        },
+        {
           "condition": "!OpenIddictServer",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/InternalAccountPreferenceController.cs",
@@ -769,8 +778,6 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/OpenIddict/**",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/LogoutConfirmationOutputDto.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/AuthPrincipalFactory.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/SubjectClaims.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Application/Auth/Options/OAuthResourceOptions.cs",
@@ -913,7 +920,9 @@
             "frontend/e2e/two-factor-required.e2e.ts",
             "frontend/e2e/support/totp.ts",
             "frontend/e2e/two-factor-login.e2e.ts",
-            "backend/src/CompanyName.ProjectName.Application/Tenants/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/Provider/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/Errors/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/Dtos/CreateTenantWithAdminInputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/IdentityControlDbContext.cs",

@@ -62,7 +62,11 @@ public static class DependencyInjection
             // 资源服务按请求选择 Bearer 或 Cookie，默认策略要求自然人、且本服务没有停用这名成员；机器端点另设策略。
             // Hub 握手与每次方法调用也按这条策略判定（HubIdentityOptions.PolicyName 未设置即取默认策略）
             var currentUser = new AuthorizationPolicyBuilder(
+#if (TenantWorkspace)
+                    AuthenticationSchemeNames.Workspace)
+#else
                     AuthenticationSchemeNames.Smart)
+#endif
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
                 .AddRequirements(new LocalMemberAccessRequirement())
@@ -85,7 +89,9 @@ public static class DependencyInjection
             // 自然人主体可以来自两种方案：Bearer（签发形态）与会话 Cookie
             var humanSchemes = new[]
             {
-#if (OpenIddictServer)
+#if (TenantWorkspace)
+                AuthenticationSchemeNames.Workspace
+#elif (OpenIddictServer)
                 AuthenticationSchemeNames.Smart
 #else
                 AuthenticationSchemeNames.SessionCookie

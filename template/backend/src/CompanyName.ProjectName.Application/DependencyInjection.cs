@@ -239,7 +239,14 @@ public static class DependencyInjection
         // 租户管理的编排与补偿在多租户组件里（存储由 Infrastructure 的 AddMultiTenancyEfCore 提供）；
         // 本项目只负责开通内容与启用前置条件
         services.AddTenantManagement();
+#if (TenantWorkspace && !OpenIddictServer)
+        services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
+#endif
         services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
+#if (TenantWorkspace)
+        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceAppService,
+            CompanyName.ProjectName.Application.Tenants.AppServices.WorkspaceAppService>();
+#endif
 #if (TenantWorkspace)
         services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.ITenantStaffAppService,
             CompanyName.ProjectName.Application.Tenants.AppServices.TenantStaffAppService>();

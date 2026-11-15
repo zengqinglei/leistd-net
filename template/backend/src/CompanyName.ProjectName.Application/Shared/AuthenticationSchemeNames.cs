@@ -15,6 +15,9 @@ namespace CompanyName.ProjectName.Application.Shared;
 /// </remarks>
 public static class AuthenticationSchemeNames
 {
+#if (TenantWorkspace)
+    public const string Workspace = "Workspace";
+#endif
 #if (SpaFrontend)
     /// <summary>Cookie 会话方案</summary>
     public const string SessionCookie = "MyProjectCookie";

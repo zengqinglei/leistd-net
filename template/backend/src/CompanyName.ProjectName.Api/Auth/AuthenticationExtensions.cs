@@ -27,6 +27,19 @@ public static class AuthenticationExtensions
 #else
         builder.AddRemoteTokenAuthentication();
 #endif
+#if (TenantWorkspace)
+#if (ResourceBrowserSession)
+        builder.Services.AddMemoryCache();
+        builder.Services.AddTransient<CompanyName.ProjectName.Api.Auth.Sessions.ResourceWorkspaceTicketProvider>();
+#endif
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = AuthenticationSchemeNames.Workspace;
+            options.DefaultChallengeScheme = AuthenticationSchemeNames.Workspace;
+            options.DefaultForbidScheme = AuthenticationSchemeNames.Workspace;
+        }).AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, WorkspaceAuthenticationHandler>(
+            AuthenticationSchemeNames.Workspace, _ => { });
+#endif
         return builder;
     }
 #if (SpaFrontend)
