@@ -626,6 +626,9 @@ internal sealed class UserAppService(
         if (user is null)
             return;
 
+#if (TenantWorkspace)
+        user.EnsureOrdinaryAccount();
+#endif
         logger.LogInformation("Deleting user {Id}", id);
         if (!user.CanBeDeleted())
         {

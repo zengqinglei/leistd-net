@@ -339,7 +339,11 @@ public static class DependencyInjection
             .AddRepository<Role, EfCoreRoleRepository>());
 #if (LocalIdentity && IncludeMultiTenancy)
         // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
+#if (TenantWorkspace)
+        services.AddDddDbContext<IdentityControlDbContext>(options => options.AddDefaultRepositories());
+#else
         services.AddDddDbContext<IdentityControlDbContext>();
+#endif
 #endif
 #if (OpenIddictServer)
         // OpenIddict 自有实体不是 Leistd 实体，只登记。

@@ -17,12 +17,20 @@ internal static class BaseEntityConfiguration
     {
         builder.Entity<User>(b =>
         {
+#if (TenantWorkspace)
+            b.Property(e => e.Username).IsRequired().HasMaxLength(UsernameRules.MaxLength + "platform.".Length);
+#else
             b.Property(e => e.Username).IsRequired().HasMaxLength(UsernameRules.MaxLength);
+#endif
             b.Property(e => e.Email).IsRequired().HasMaxLength(256);
             // 头像可以是站内上传的 data URL，不设长度即各数据库的大文本类型
             b.Property(e => e.Avatar);
             b.Property(e => e.DisplayName).HasMaxLength(128);
             b.Property(e => e.IsSuperAdmin);
+#if (TenantWorkspace)
+            b.HasIndex(e => new { e.TenantId, e.HomeUserId }).IsUnique()
+                .HasFilter($"\"{nameof(User.HomeUserId)}\" IS NOT NULL");
+#endif
 
             // 宿主专属不变量：IsSuperAdmin 只能出现在宿主行（为什么见 CreateSuperAdminAsync）。
             // 领域服务已在创建时拒绝，这一道是最终完整性——数据修复脚本、批量导入、

@@ -131,6 +131,9 @@
     "Permission:App.Tenants": "租户管理",
     "Permission:App.Tenants.Create": "新建",
     "Permission:App.Tenants.Update": "编辑",
+//#if (TenantWorkspace)
+    "Permission:App.Tenants.StaffAccess": "平台人员",
+//#endif
     "Permission:App.Tenants.Delete": "删除",
     "Permission:App.Tenants.Impersonation": "以租户身份登录",
     "Permission:App.OpenApplications": "开放应用",
@@ -323,6 +326,9 @@
     "The verification code must contain exactly 6 digits.": "验证码必须是 6 位数字",
     "Time zone": "时区",
     "User:SortingCredentialsForbidden": "不允许按用户凭据排序。",
+//#if (TenantWorkspace)
+    "User:PlatformAccountImmutable": "平台关联账号的凭据与资料由本人账号管理。",
+//#endif
     "User:AvatarInvalid": "头像必须是 PNG、JPEG 或 WebP 图片。",
     "User:AvatarTooLarge": "头像图片不能超过 {MaxKilobytes} KB。",
     "User:EmailTaken": "邮箱 '{Email}' 已被使用。",

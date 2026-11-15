@@ -945,7 +945,7 @@
         {
           "condition": "!Impersonation",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Application/Tenants/AppServices/**",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/AppServices/*TenantImpersonationAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Tenants/Dtos/ImpersonationStatusOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Constants/ImpersonationClaimTypes.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ImpersonationTests.cs",

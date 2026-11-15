@@ -20,6 +20,37 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <summary>所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充。</summary>
     public Guid? TenantId { get; private set; }
 
+#if (TenantWorkspace)
+    /// <summary>关联账号所对应的宿主本人；为空时是普通账号。</summary>
+    public Guid? HomeUserId { get; private set; }
+
+    /// <summary>在租户内建立没有凭据的关联账号。</summary>
+    public static User CreatePlatformAccount(Guid homeUserId, string username, string? displayName)
+    {
+        return new User(
+#if (!LocalIdentity)
+            Guid.CreateVersion7(),
+#endif
+            "platform." + username, "", displayName: displayName) { HomeUserId = homeUserId };
+    }
+
+    /// <summary>关联账号的凭据与资料归本人管理，访问只能由宿主撤销。</summary>
+    public void EnsureOrdinaryAccount()
+    {
+        if (HomeUserId is not null)
+            throw new BusinessException(CompanyName.ProjectName.Domain.Users.Errors.UserErrorCodes.PlatformAccountImmutable,
+                "Platform account credentials and profile are managed by the home account.");
+    }
+
+    /// <summary>重新授予时恢复同一条关联账号，保留历史记录。</summary>
+    public void RestorePlatformAccount()
+    {
+        if (HomeUserId is null) throw new InvalidOperationException("Only platform accounts can be restored here.");
+        IsDeleted = false;
+        IsActive = true;
+    }
+#endif
+
     /// <summary>用户名（租户内唯一）。</summary>
     public string Username { get; private set; }
 
@@ -160,11 +191,21 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <b>刻意不碰 <see cref="IsActive"/> 与角色</b>：那是本服务自己的授权决定，
     /// 跟着刷新走会把管理员刚做的启停与授权冲掉，而且每个请求冲一次。
     /// </remarks>
-    public void ProjectFromIssuer(string username, string email, string? displayName)
+    public void ProjectFromIssuer(string username, string email, string? displayName
+#if (TenantWorkspace)
+        , Guid? homeUserId = null
+#endif
+        )
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         Username = username;
         Email = email;
         DisplayName = displayName;
+#if (TenantWorkspace)
+        HomeUserId = homeUserId;
+#endif
     }
 
 #endif
@@ -176,6 +217,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// </remarks>
     internal void UpdateManagement(string email, string? displayName, string? avatar, bool emailConfirmed)
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         AvatarPolicy.EnsureValid(avatar);
         ReleaseEmailFactorIfChanged(email);
         Email = email;
@@ -200,6 +244,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
         }
 
         ReleaseEmailFactorIfChanged(email);
+#endif
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
 #endif
         Username = username;
         Email = email;
@@ -340,6 +387,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 #if (LocalIdentity)
     public void UpdatePasswordHash(string passwordHash)
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         PasswordHash = passwordHash;
         PasswordSetByEmailRecovery = false;
         RotateSecurityStamp();
@@ -363,6 +413,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <summary>升级已验证口令的哈希参数，保留安全版本。</summary>
     public void RehashPassword(string passwordHash)
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         ArgumentException.ThrowIfNullOrEmpty(passwordHash);
         PasswordHash = passwordHash;
     }
@@ -499,6 +552,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <exception cref="BusinessException">两步验证已启用（<see cref="AuthErrorCodes.TwoFactorAlreadyEnabled"/>）：重新启用会静默换掉正在使用的密钥。</exception>
     public void EnableTwoFactor(string protectedSecret, IEnumerable<string>? recoveryCodeHashes, long usedStep)
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         EnsureTwoFactorDisabled();
         IssueRecoveryCodesForFirstFactor(recoveryCodeHashes);
         TwoFactor = TwoFactorCredential.Create(protectedSecret, usedStep);
@@ -510,6 +566,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// <param name="recoveryCodeHashes">恢复码摘要：同 <see cref="EnableTwoFactor"/>。</param>
     internal void RecordPasskeyRegistered(IEnumerable<string>? recoveryCodeHashes)
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         IssueRecoveryCodesForFirstFactor(recoveryCodeHashes);
         PasskeyCount++;
         ConfirmPasswordByIndependentFactor();
@@ -591,6 +650,9 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     internal void ResetSecondFactors()
     {
+#if (TenantWorkspace)
+        EnsureOrdinaryAccount();
+#endif
         TwoFactor = null;
         PasskeyCount = 0;
         RecoveryCodes = null;

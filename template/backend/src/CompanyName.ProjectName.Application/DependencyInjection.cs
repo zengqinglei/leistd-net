@@ -240,6 +240,10 @@ public static class DependencyInjection
         // 本项目只负责开通内容与启用前置条件
         services.AddTenantManagement();
         services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
+#if (TenantWorkspace)
+        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.ITenantStaffAppService,
+            CompanyName.ProjectName.Application.Tenants.AppServices.TenantStaffAppService>();
+#endif
         services.TryAddEnumerable(ServiceDescriptor.Transient<ITenantActivationGuard, TenantHasUsersActivationGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantConnectionChangedEvent>, TenantConnectionChangedAuditHandler>());

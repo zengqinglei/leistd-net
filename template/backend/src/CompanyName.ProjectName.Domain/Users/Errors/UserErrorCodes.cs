@@ -3,6 +3,9 @@ namespace CompanyName.ProjectName.Domain.Users.Errors;
 /// <summary>User 业务错误码。</summary>
 public static class UserErrorCodes
 {
+#if (TenantWorkspace)
+    public const string PlatformAccountImmutable = "User:PlatformAccountImmutable";
+#endif
     public const string AvatarInvalid = "User:AvatarInvalid";
     public const string AvatarTooLarge = "User:AvatarTooLarge";
     public const string EmailTaken = "User:EmailTaken";

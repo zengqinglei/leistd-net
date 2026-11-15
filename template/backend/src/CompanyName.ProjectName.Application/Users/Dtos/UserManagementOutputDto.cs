@@ -11,6 +11,9 @@ public record UserManagementOutputDto
     public string? DisplayName { get; init; }
     public string? Avatar { get; init; }
     public bool IsActive { get; init; }
+#if (TenantWorkspace)
+    public Guid? HomeUserId { get; init; }
+#endif
 #if (LocalIdentity)
     public bool IsEmailVerified { get; init; }
 #endif

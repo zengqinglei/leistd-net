@@ -39,6 +39,10 @@ public sealed class IdentityControlDbContext : DbContext
         ChangeTracker.EnableCreationAuditing(serviceProvider);
     }
 
+#if (TenantWorkspace)
+    public DbSet<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess> UserTenantAccesses => Set<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess>();
+#endif
+
     // 普通上下文只登记审计约定。
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -50,6 +54,10 @@ public sealed class IdentityControlDbContext : DbContext
         base.OnModelCreating(modelBuilder);
         modelBuilder.HasDefaultSchema(DatabaseSchema.Name);
         modelBuilder.ConfigureMultiTenancy();
+#if (TenantWorkspace)
+        modelBuilder.Entity<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess>()
+            .HasIndex(access => new { access.HomeUserId, access.TenantId }).IsUnique();
+#endif
     }
 }
 #endif

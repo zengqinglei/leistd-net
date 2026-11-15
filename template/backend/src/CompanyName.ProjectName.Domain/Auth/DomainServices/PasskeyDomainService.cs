@@ -33,6 +33,9 @@ public class PasskeyDomainService(IRepository<UserPasskey, Guid> passkeyReposito
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);
+#if (TenantWorkspace)
+        user.EnsureOrdinaryAccount();
+#endif
         // 浏览器已按排除列表挡住本人的重复登记；这里兜住别处已登记同一凭据的情况，唯一索引是最后一道
         if (await passkeyRepository.AnyAsync(p => p.CredentialId == credential.CredentialId, cancellationToken))
         {

@@ -74,6 +74,9 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         tenantsPermission.AddChild(PermissionConstant.Tenants.Create, displayName: CreateText);
         tenantsPermission.AddChild(PermissionConstant.Tenants.Update, displayName: EditText);
         tenantsPermission.AddChild(PermissionConstant.Tenants.Delete, displayName: DeleteText);
+#if (TenantWorkspace)
+        tenantsPermission.AddChild(PermissionConstant.Tenants.StaffAccess, displayName: "Platform staff");
+#endif
 #if (Impersonation)
         tenantsPermission.AddChild(PermissionConstant.Tenants.Impersonation, displayName: "Sign in as tenant");
 #endif

@@ -130,6 +130,9 @@ public static class PermissionConstant
     /// </remarks>
     public static class Tenants
     {
+#if (TenantWorkspace)
+        public const string StaffAccess = Default + ".StaffAccess";
+#endif
         public const string Default = Prefix + ".Tenants";
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";

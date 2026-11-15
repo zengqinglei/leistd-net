@@ -132,6 +132,30 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
+#if (TenantWorkspace)
+            modelBuilder.Entity("CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HomeUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HomeUserId", "TenantId")
+                        .IsUnique();
+
+                    b.ToTable("UserTenantAccesses", "companyname-projectname");
+                });
+#endif
 #pragma warning restore 612, 618
         }
     }
