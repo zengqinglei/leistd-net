@@ -28,7 +28,12 @@ import { LayoutService } from '../../../../core/services/layout-service';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import { SettingsPageState } from '../../settings-page-state';
+// prettier-ignore
+import { SettingsPageState,
+  //#if (TenantWorkspace)
+  SETTINGS_HOME_SCOPE,
+  //#endif
+} from '../../settings-page-state';
 import { SettingsPanelLink, SettingsShell } from '../../widgets/settings-shell/settings-shell';
 
 /**
@@ -40,6 +45,9 @@ import { SettingsPanelLink, SettingsShell } from '../../widgets/settings-shell/s
   // prettier-ignore
   providers: [
     SettingsPageState,
+    //#if (TenantWorkspace)
+    { provide: SETTINGS_HOME_SCOPE, useValue: true },
+    //#endif
     provideIcons({
       //#if (LocalIdentity)
       //#if (IncludeNotifications)

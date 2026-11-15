@@ -6,18 +6,12 @@ using Leistd.ServiceClient.Http;
 namespace CompanyName.ProjectName.Infrastructure.Workspaces;
 
 public sealed class IdentityWorkspaceDirectory(IIdentityWorkspacesApi workspaces, IWorkspaceTenantApi tenants)
-    : IIdentityWorkspaceDirectory, ITenantStore
+    : IIdentityWorkspaceDirectory
 {
     public async Task<IReadOnlyList<IdentityWorkspace>> GetListAsync(CancellationToken cancellationToken = default)
     {
         using var response = await workspaces.GetListAsync(cancellationToken);
         return (await response.ReadContentAsync<List<IdentityWorkspace>>(cancellationToken: cancellationToken))!;
-    }
-
-    public async Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        using var response = await tenants.FindAsync(id, cancellationToken);
-        return await ReadTenantAsync(response, cancellationToken);
     }
 
     public async Task<TenantConfiguration?> FindByNameAsync(string normalizedName, CancellationToken cancellationToken = default)

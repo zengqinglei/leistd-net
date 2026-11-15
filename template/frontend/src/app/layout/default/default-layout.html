@@ -12,7 +12,7 @@
 
     <div class="relative flex-1 overflow-auto motion-safe:scroll-smooth">
       <!--#if (TenantWorkspace)-->
-      @if (workspace.current() && !authorization.canAccessPlatform()) {
+      @if (workspace.current() && authorization.permissions().length === 0) {
         <app-empty-workspace />
       } @else {
         <router-outlet />

@@ -1,4 +1,10 @@
 using Leistd.Settings.Definitions;
+#if (LocalIdentity && IncludeMultiTenancy)
+using CompanyName.ProjectName.Application.Tenants.Options;
+#endif
+#if (Impersonation || TenantWorkspace)
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+#endif
 using Leistd.Settings.Events;
 using Leistd.Settings.Validation;
 using Leistd.OperationRecords.Definitions;
@@ -58,9 +64,6 @@ using Leistd.RealTime.Subscriptions;
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Provider;
-#if (Impersonation)
-using CompanyName.ProjectName.Application.Tenants.AppServices;
-#endif
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Management.Events;
 using Leistd.MultiTenancy.Management.Provisioning;
@@ -93,8 +96,8 @@ public static class DependencyInjection
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
 #if (TenantWorkspace && RemoteTokenAuth)
-        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceAppService,
-            CompanyName.ProjectName.Application.Tenants.AppServices.RemoteWorkspaceAppService>();
+        services.TryAddTransient<IWorkspaceAppService,
+            RemoteWorkspaceAppService>();
 #endif
         services.AddMapsterObjectMapper(options =>
         {
@@ -246,21 +249,21 @@ public static class DependencyInjection
 #if (TenantWorkspace && !OpenIddictServer)
         services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
 #endif
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IOptionsChangeTokenSource<CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions>)))
-            services.AddOptions<CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions>()
-                .BindConfiguration(CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions.SectionName);
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IOptionsChangeTokenSource<DefaultTenantOptions>)))
+            services.AddOptions<DefaultTenantOptions>()
+                .BindConfiguration(DefaultTenantOptions.SectionName);
         services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
 #if (TenantWorkspace && OpenIddictServer)
-        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceTenantLookupAppService,
-            CompanyName.ProjectName.Application.Tenants.AppServices.WorkspaceTenantLookupAppService>();
+        services.TryAddTransient<IWorkspaceTenantLookupAppService,
+            WorkspaceTenantLookupAppService>();
 #endif
 #if (TenantWorkspace)
-        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.IWorkspaceAppService,
-            CompanyName.ProjectName.Application.Tenants.AppServices.WorkspaceAppService>();
+        services.TryAddTransient<IWorkspaceAppService,
+            WorkspaceAppService>();
 #endif
 #if (TenantWorkspace)
-        services.TryAddTransient<CompanyName.ProjectName.Application.Tenants.AppServices.ITenantStaffAppService,
-            CompanyName.ProjectName.Application.Tenants.AppServices.TenantStaffAppService>();
+        services.TryAddTransient<ITenantStaffAppService,
+            TenantStaffAppService>();
 #endif
         services.TryAddEnumerable(ServiceDescriptor.Transient<ITenantActivationGuard, TenantHasUsersActivationGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>());

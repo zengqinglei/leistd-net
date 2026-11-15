@@ -1,3 +1,6 @@
+#if (TenantWorkspace && ResourceBrowserSession)
+using CompanyName.ProjectName.Api.Auth.Sessions;
+#endif
 using CompanyName.ProjectName.Api.Auth.Authentication;
 #if (SpaFrontend)
 using Leistd.Security.AspNetCore;
@@ -30,7 +33,7 @@ public static class AuthenticationExtensions
 #if (TenantWorkspace)
 #if (ResourceBrowserSession)
         builder.Services.AddMemoryCache();
-        builder.Services.AddTransient<CompanyName.ProjectName.Api.Auth.Sessions.ResourceWorkspaceTicketProvider>();
+        builder.Services.AddTransient<ResourceWorkspaceTicketProvider>();
 #endif
         builder.Services.AddAuthentication(options =>
         {

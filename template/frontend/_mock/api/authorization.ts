@@ -67,6 +67,7 @@ function effectivePermissionsOf(username: string): { permissions: string[]; vers
   }
 
   return {
+    // prettier-ignore
     permissions: [...granted]
       //#if (TenantWorkspace)
       .filter(

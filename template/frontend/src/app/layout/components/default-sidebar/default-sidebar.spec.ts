@@ -23,7 +23,7 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
 import { LayoutService } from '../../../core/services/layout-service';
-//#if (TenantWorkspace)
+//#if (TenantWorkspace && IncludeLocalization)
 import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
 //#endif
 import {
@@ -333,8 +333,8 @@ describe('DefaultSidebar touch targets', () => {
     expect(search.getAttribute('aria-label')).toBe(searchLabel);
   });
 });
-
 //#if (TenantWorkspace && IncludeLocalization)
+
 describe('DefaultSidebar workspace switcher', () => {
   it('keeps workspace destinations before the complete area sequence', async () => {
     TestBed.configureTestingModule({

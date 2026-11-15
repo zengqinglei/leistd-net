@@ -86,8 +86,8 @@ describe('UserTable', () => {
     fixture.componentRef.setInput('pagination', { pageIndex: 0, pageSize: 20 } as PaginationState);
     fixture.detectChanges();
   });
-
   //#if (TenantWorkspace)
+
   it('marks linked staff and hides credential and delete actions', async () => {
     fixture.componentRef.setInput('users', [
       { ...user('linked-1', 'platform.alice'), homeUserId: 'home-1', email: '' },
@@ -107,6 +107,9 @@ describe('UserTable', () => {
     expandButtons()[0].click();
     await fixture.whenStable();
     expect(host.querySelector('[data-detail-column="email"]')?.textContent?.trim()).toBe('-');
+    expect(
+      host.querySelector('[data-testid="user-detail-identity"] [hlmBadge]')?.textContent,
+    ).toMatch(/platformBadge|Platform/);
   });
   //#endif
 

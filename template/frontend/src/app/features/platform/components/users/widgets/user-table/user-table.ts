@@ -150,9 +150,9 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserTable {
-  isPlatformAccount(user: UserManagementOutputDto): boolean {
+  isPlatformAccount(_user: UserManagementOutputDto): boolean {
     //#if (TenantWorkspace)
-    return !!user.homeUserId;
+    return !!_user.homeUserId;
     //#else
     return false;
     //#endif

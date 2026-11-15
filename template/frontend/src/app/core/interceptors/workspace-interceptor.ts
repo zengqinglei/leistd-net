@@ -21,7 +21,7 @@ export const workspaceInterceptor: HttpInterceptorFn = (request, next) => {
   return next(scoped).pipe(
     catchError((error: unknown) => {
       if (error instanceof ApplicationHttpError && error.code === 'Workspace:Unavailable') {
-        void workspace.recoverUnavailable();
+        void workspace.recoverUnavailable().catch(() => undefined);
       }
       return throwError(() => error);
     }),

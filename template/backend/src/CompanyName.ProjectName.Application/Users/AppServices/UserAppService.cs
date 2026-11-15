@@ -1,3 +1,6 @@
+#if (TenantWorkspace && !LocalIdentity)
+using CompanyName.ProjectName.Application.Shared;
+#endif
 using Leistd.Data.Querying;
 using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Domain.Users.Errors;
@@ -235,7 +238,7 @@ internal sealed class UserAppService(
             currentUser.Name,
             cancellationToken
 #if (TenantWorkspace)
-            , Guid.TryParse(currentUser.FindClaim(CompanyName.ProjectName.Application.Shared.WorkspaceClaimTypes.HomeUserId)?.Value, out var homeId) ? homeId : null
+            , Guid.TryParse(currentUser.FindClaim(WorkspaceClaimTypes.HomeUserId)?.Value, out var homeId) ? homeId : null
 #endif
             );
         await unitOfWork.CompleteAsync(cancellationToken);

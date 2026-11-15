@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
 using Leistd.ExceptionHandling;
-#if (ExternalLogin)
+#if (ExternalLogin || TenantWorkspace)
 using CompanyName.ProjectName.Domain.Users.Errors;
 #endif
 using Leistd.Ddd.Domain.Entities;
@@ -38,7 +38,7 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
     public void EnsureOrdinaryAccount()
     {
         if (HomeUserId is not null)
-            throw new BusinessException(CompanyName.ProjectName.Domain.Users.Errors.UserErrorCodes.PlatformAccountImmutable,
+            throw new BusinessException(UserErrorCodes.PlatformAccountImmutable,
                 "Platform account credentials and profile are managed by the home account.");
     }
 
@@ -197,9 +197,6 @@ public class User : FullAuditedEntity<Guid>, IAggregateRoot<Guid>, IMultiTenant
 #endif
         )
     {
-#if (TenantWorkspace)
-        EnsureOrdinaryAccount();
-#endif
         Username = username;
         Email = email;
         DisplayName = displayName;

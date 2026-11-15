@@ -37,6 +37,8 @@ export function injectLoginCompletion(): (returnUrl: string | null) => Promise<R
     //#if (TenantWorkspace)
     await workspace.refresh();
     const last = localStorage.getItem('last-workspace');
+    if (last === '' && !authService.currentUser()?.tenantId)
+      return router.navigateByUrl('/platform');
     const selected =
       workspace.workspaces().find((item) => item.name === last) ?? workspace.workspaces()[0];
     if (selected) return router.navigateByUrl(`/w/${encodeURIComponent(selected.name)}/platform`);

@@ -46,6 +46,7 @@ export class WorkspaceContextService {
   readonly actorId = computed(() => this.actor()?.userId ?? this.auth.currentUser()?.id);
   readonly tenantId = computed(() => this.actor()?.tenantId ?? this.auth.currentUser()?.tenantId);
   private revision = 0;
+  private recovering: Promise<void> | undefined;
   //#if (IncludeRealTime || IncludeNotifications)
   private get signalR() {
     return this.injector.get(SignalRService);
@@ -61,6 +62,8 @@ export class WorkspaceContextService {
             ?.name ?? routeName;
         this.current.set(name);
         if (name) localStorage.setItem('last-workspace', name);
+        else if (/^\/(platform|workspace)(?:\/|$)/.test(event.urlAfterRedirects))
+          localStorage.setItem('last-workspace', '');
       }
     });
   }
@@ -99,7 +102,7 @@ export class WorkspaceContextService {
     this.target.set(name);
     this.authorization.clear();
     //#if (IncludeRealTime || IncludeNotifications)
-    await this.signalR.setWorkspace(name, !this.auth.currentUser()?.tenantId);
+    void this.signalR.setWorkspace(name, !this.auth.currentUser()?.tenantId);
     //#endif
     await this.session.establish();
     return revision === this.revision;
@@ -120,9 +123,15 @@ export class WorkspaceContextService {
     void this.router.navigateByUrl(destination);
   }
 
-  async recoverUnavailable(): Promise<void> {
-    await this.refresh();
-    this.switchTo(this.workspaces()[0]?.name ?? null);
+  recoverUnavailable(): Promise<void> {
+    if (!this.recovering) {
+      this.recovering = this.refresh()
+        .then(() => this.switchTo(this.workspaces()[0]?.name ?? null))
+        .finally(() => {
+          this.recovering = undefined;
+        });
+    }
+    return this.recovering;
   }
 }
 //#endif

@@ -80,14 +80,17 @@ export class SignalRService {
   //#if (TenantWorkspace)
   private homeConnection: HubConnection | null = null;
   private workspaceName: string | null = null;
+  private workspaceRevision = 0;
   //#if (IncludeNotifications)
   private readonly homeNotifications = signal<NotificationOutputDto[]>([]);
   //#endif
 
   async setWorkspace(name: string | null, platformStaff: boolean): Promise<void> {
+    const revision = ++this.workspaceRevision;
     if (this.workspaceName === name) return;
     if (!this.workspaceName && name && platformStaff) {
       await this.connect();
+      if (revision !== this.workspaceRevision) return;
       this.homeConnection = this.connection;
       this.connection = null;
       //#if (IncludeNotifications)
@@ -95,6 +98,7 @@ export class SignalRService {
       //#endif
     }
     await this.resetCurrent();
+    if (revision !== this.workspaceRevision) return;
     this.workspaceName = name;
     if (!name && this.homeConnection) {
       this.connection = this.homeConnection;
@@ -254,6 +258,7 @@ export class SignalRService {
    */
   async reset(): Promise<void> {
     //#if (TenantWorkspace)
+    this.workspaceRevision++;
     const home = this.homeConnection;
     this.homeConnection = null;
     this.workspaceName = null;

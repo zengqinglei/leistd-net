@@ -4,6 +4,9 @@ using Leistd.Data.Connections;
 using Leistd.Auditing.EntityFrameworkCore.Conventions;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Domain.Tenants.Entities;
+#endif
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence;
 
@@ -40,7 +43,7 @@ public sealed class IdentityControlDbContext : DbContext
     }
 
 #if (TenantWorkspace)
-    public DbSet<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess> UserTenantAccesses => Set<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess>();
+    public DbSet<UserTenantAccess> UserTenantAccesses => Set<UserTenantAccess>();
 #endif
 
     // 普通上下文只登记审计约定。
@@ -55,7 +58,7 @@ public sealed class IdentityControlDbContext : DbContext
         modelBuilder.HasDefaultSchema(DatabaseSchema.Name);
         modelBuilder.ConfigureMultiTenancy();
 #if (TenantWorkspace)
-        modelBuilder.Entity<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess>()
+        modelBuilder.Entity<UserTenantAccess>()
             .HasIndex(access => new { access.HomeUserId, access.TenantId }).IsUnique();
 #endif
     }

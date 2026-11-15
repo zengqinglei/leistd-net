@@ -1,18 +1,21 @@
 //#if (TenantWorkspace)
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-
-import { WorkspaceContextService } from '../../core/services/workspace-context-service';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-tenant-layout',
   imports: [RouterOutlet],
-  template: `@for (name of [workspace.target()]; track name) {
+  template: `@for (name of [name()]; track name) {
     <router-outlet />
   }`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantLayout {
-  readonly workspace = inject(WorkspaceContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly params = toSignal(this.route.paramMap, {
+    initialValue: this.route.snapshot.paramMap,
+  });
+  readonly name = computed(() => this.params().get('workspace'));
 }
 //#endif

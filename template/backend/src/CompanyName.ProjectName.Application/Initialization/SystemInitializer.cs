@@ -1,4 +1,15 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (LocalIdentity && IncludeMultiTenancy)
+using CompanyName.ProjectName.Application.Tenants.Options;
+using CompanyName.ProjectName.Application.Tenants.Dtos;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Management.Dtos;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.UnitOfWork;
+#endif
+#endif
 #if (LocalIdentity)
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
@@ -45,12 +56,12 @@ public class SystemInitializer(
     IOptions<DefaultAdminOptions> adminOptions,
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
-    IOptions<CompanyName.ProjectName.Application.Tenants.Options.DefaultTenantOptions> defaultTenantOptions,
-    Leistd.MultiTenancy.Management.ITenantManagementService tenantManagement,
+    IOptions<DefaultTenantOptions> defaultTenantOptions,
+    ITenantManagementService tenantManagement,
 #if (TenantWorkspace)
-    CompanyName.ProjectName.Application.Tenants.AppServices.ITenantStaffAppService tenantStaff,
-    Leistd.Ddd.Domain.Repositories.IRepository<Role, Guid> roleRepository,
-    Leistd.UnitOfWork.IUnitOfWorkManager unitOfWorkManager,
+    ITenantStaffAppService tenantStaff,
+    IRepository<Role, Guid> roleRepository,
+    IUnitOfWorkManager unitOfWorkManager,
 #endif
 #endif
     IDistributedLock distributedLock,
@@ -126,12 +137,12 @@ public class SystemInitializer(
     {
         var options = defaultTenantOptions.Value;
         if (string.IsNullOrWhiteSpace(options.Name) || (await tenantManagement.GetPagedAsync(
-                new Leistd.MultiTenancy.Management.Dtos.GetTenantPagedInputDto { Limit = 1 }, cancellationToken)).TotalCount > 0) return;
+                new GetTenantPagedInputDto { Limit = 1 }, cancellationToken)).TotalCount > 0) return;
         var tenant = await tenantManagement.CreateAsync(
 #if (TenantWorkspace)
-            new Leistd.MultiTenancy.Management.Dtos.CreateTenantInputDto
+            new CreateTenantInputDto
 #else
-            new CompanyName.ProjectName.Application.Tenants.Dtos.CreateTenantWithAdminInputDto
+            new CreateTenantWithAdminInputDto
 #endif
         {
             Name = options.Name, DisplayName = options.DisplayName,
@@ -145,7 +156,7 @@ public class SystemInitializer(
         using (currentTenant.Change(tenant.Id, tenant.Name))
         using (unitOfWorkManager.Begin(requiresNew: true))
             roleId = (await roleRepository.GetOneAsync(role => role.IsStatic && role.Name == AdminConstant.RoleName, cancellationToken))!.Id;
-        await tenantStaff.GrantAsync(tenant.Id, new CompanyName.ProjectName.Application.Tenants.Dtos.GrantTenantStaffInputDto
+        await tenantStaff.GrantAsync(tenant.Id, new GrantTenantStaffInputDto
         { HomeUserId = adminUser.Id, RoleIds = [roleId] }, cancellationToken);
 #endif
     }

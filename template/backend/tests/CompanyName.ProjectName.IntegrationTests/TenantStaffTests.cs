@@ -5,6 +5,7 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
@@ -41,7 +42,7 @@ public sealed class TenantStaffTests(ProjectWebApplicationFactory factory) : ICl
         Assert.Equal(UserErrorCodes.PlatformAccountImmutable, error.Code);
         Assert.Null(user.PasswordHash);
         Assert.Equal("", user.Email);
-        Assert.Equal(CompanyName.ProjectName.Domain.Users.ValueObjects.UserAccessStatus.Allowed,
+        Assert.Equal(UserAccessStatus.Allowed,
             user.GetAccessStatus(new DateTime(2026, 11, 16, 0, 0, 0, DateTimeKind.Utc)));
     }
 

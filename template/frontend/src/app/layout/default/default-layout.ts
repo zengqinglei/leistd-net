@@ -25,6 +25,7 @@ import { RealtimeStatus } from '../components/realtime-status/realtime-status';
 import { EmptyWorkspace } from '../tenant/empty-workspace';
 //#endif
 
+// prettier-ignore
 @Component({
   selector: 'app-default-layout',
   standalone: true,

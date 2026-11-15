@@ -1,3 +1,7 @@
+#if (TenantWorkspace && RemoteTokenAuth)
+using CompanyName.ProjectName.Domain.Tenants.Abstractions;
+using CompanyName.ProjectName.Infrastructure.Workspaces;
+#endif
 using Leistd.Authorization.EntityFrameworkCore;
 #if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -396,20 +400,18 @@ public static class DependencyInjection
 
         read.AddStandardResilienceHandler();
 #if (TenantWorkspace)
-        services.TryAddTransient<CompanyName.ProjectName.Domain.Tenants.Abstractions.IIdentityWorkspaceDirectory,
-            CompanyName.ProjectName.Infrastructure.Workspaces.IdentityWorkspaceDirectory>();
-        services.TryAddTransient<Leistd.MultiTenancy.Stores.ITenantStore,
-            CompanyName.ProjectName.Infrastructure.Workspaces.IdentityWorkspaceDirectory>();
-        var workspace = services.AddRefitServiceClient<CompanyName.ProjectName.Infrastructure.Workspaces.IIdentityWorkspacesApi,
-            CompanyName.ProjectName.Infrastructure.Workspaces.IdentityWorkspacesClientOptions>("IdentityWorkspaces", configSectionPath: identitySection);
-        var tenant = services.AddRefitServiceClient<CompanyName.ProjectName.Infrastructure.Workspaces.IWorkspaceTenantApi,
-            CompanyName.ProjectName.Infrastructure.Workspaces.WorkspaceTenantsClientOptions>("WorkspaceTenants", configSectionPath: identitySection);
+        services.TryAddTransient<IIdentityWorkspaceDirectory,
+            IdentityWorkspaceDirectory>();
+        var workspace = services.AddRefitServiceClient<IIdentityWorkspacesApi,
+            IdentityWorkspacesClientOptions>("IdentityWorkspaces", configSectionPath: identitySection);
+        var tenant = services.AddRefitServiceClient<IWorkspaceTenantApi,
+            WorkspaceTenantsClientOptions>("WorkspaceTenants", configSectionPath: identitySection);
+        workspace.AddStandardResilienceHandler();
         if (HasServiceAuthentication(configuration))
         {
             workspace.AddTokenExchange(configSectionPath: $"{identitySection}:TokenExchange");
             tenant.AddClientCredentials(configSectionPath: identitySection);
         }
-        workspace.AddStandardResilienceHandler();
         tenant.AddStandardResilienceHandler();
 #endif
     }

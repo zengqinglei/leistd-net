@@ -1,4 +1,9 @@
-import { HttpClient } from '@angular/common/http';
+// prettier-ignore
+import { HttpClient,
+  //#if (TenantWorkspace)
+  HttpContext,
+  //#endif
+} from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -11,6 +16,9 @@ import {
   SetSettingInputDto,
   SettingOutputDto,
 } from './setting.dto';
+//#if (TenantWorkspace)
+import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
+//#endif
 
 @Injectable({ providedIn: 'root' })
 export class SettingService {
@@ -21,10 +29,25 @@ export class SettingService {
   getSettings(): Observable<SettingOutputDto[]> {
     return this.http.get<SettingOutputDto[]>(this.baseUrl);
   }
+  //#if (TenantWorkspace)
+
+  /** 个人设置页读取本人范围，不覆盖工作区的会话设置快照。 */
+  getForCurrentUser(): Observable<SettingOutputDto[]> {
+    return this.http.get<SettingOutputDto[]>(this.baseUrl, {
+      context: new HttpContext().set(WORKSPACE_SCOPE, null),
+    });
+  }
+  //#endif
 
   /** 写入当前用户自己的偏好。 */
   setForCurrentUser(data: SetSettingInputDto): Observable<void> {
+    //#if (TenantWorkspace)
+    return this.http.put<void>(`${this.baseUrl}/current-user`, data, {
+      context: new HttpContext().set(WORKSPACE_SCOPE, null),
+    });
+    //#else
     return this.http.put<void>(`${this.baseUrl}/current-user`, data);
+    //#endif
   }
 
   /** 写入当前租户的默认值；与用户偏好分成两个端点，因为两者授权要求不同。 */

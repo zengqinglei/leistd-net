@@ -270,8 +270,9 @@ public sealed class ConnectController(
                 if (linked is null) return ProtocolError(Errors.InvalidTarget);
                 linked.SetResources(subject.GetAudiences());
                 linked.SetDestinations(_ => [Destinations.AccessToken]);
-                linked.SetAccessTokenLifetime(TimeSpan.FromMinutes(5));
-                linked.SetExpirationDate(workspaceExpiry);
+                var workspaceRemaining = workspaceExpiry - new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc));
+                if (workspaceRemaining <= TimeSpan.Zero) return ProtocolError(Errors.InvalidTarget);
+                linked.SetAccessTokenLifetime(workspaceRemaining < TimeSpan.FromMinutes(5) ? workspaceRemaining : TimeSpan.FromMinutes(5));
                 return SignIn(linked, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 #endif
@@ -295,8 +296,9 @@ public sealed class ConnectController(
             // 用户资料重新取自身份库，目标 scope 不含 profile/email 时仍保留投影所需的资料。
             principal.SetResources(request.GetAudiences());
             principal.SetDestinations(_ => [Destinations.AccessToken]);
-            principal.SetAccessTokenLifetime(TimeSpan.FromSeconds(120));
-            principal.SetExpirationDate(expiry);
+            var remaining = expiry - new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc));
+            if (remaining <= TimeSpan.Zero) return ProtocolError(Errors.InvalidGrant);
+            principal.SetAccessTokenLifetime(remaining < TimeSpan.FromSeconds(120) ? remaining : TimeSpan.FromSeconds(120));
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 

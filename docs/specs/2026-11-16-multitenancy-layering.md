@@ -148,7 +148,7 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 
 - 403 由方案自己的禁止响应给出 ProblemDetails，不走 401，也不回退为本人。
 - 关联主体的声明：`sub` = 关联账号，`tenant_id` = 目标租户，`home_sub` = 本人；沿用本人的 `auth_time`、`amr`。
-- 每个带头的请求，方案都先经 `ITenantStore` 把租户名解析成启用的租户 Id，未启用直接 403（Resource 也一样，不因令牌已缓存而跳过）。这样框架的租户会话自恢复（`UseTenantSessionRecovery`：主体所属租户失效时注销会话并下发 `X-Tenant-Invalid`）不会因工作区请求注销本人会话，框架不改。两步验证"受限会话"按本人账号判定。
+- 每个带头的请求，方案都先把租户名解析成启用的租户 Id（本地身份经 `ITenantStore`，Resource 经工作区专用的 Identity 查询端口），未启用直接 403（Resource 也一样，不因令牌已缓存而跳过）。这样框架的租户会话自恢复（`UseTenantSessionRecovery`：主体所属租户失效时注销会话并下发 `X-Tenant-Invalid`）不会因工作区请求注销本人会话，框架不改。两步验证"受限会话"按本人账号判定。
 - SignalR 浏览器连接带不了自定义头，协商与连接用查询参数 `workspace`，由同一方案读取。平台人员在工作区内有两条连接：本人连接常驻（不带参数，宿主通知与未读数照常），工作区连接随切换重建（工作区实时订阅与关联账号的通知）；租户用户与在控制面时只有一条。
 - 工作区列表 `GET /api/v1/auth/me/workspaces`：只按本人返回，忽略工作区。Identity/Standalone 读访问索引；Resource 经应用层端口与 ServiceClient 适配回源 Identity 的同一端点：沿用账户偏好客户端的接法，用本人令牌做现有令牌交换取得 Identity 受众的令牌再请求（不经 `Workspace` 方案，避免循环），保持本人范围。
 
@@ -235,7 +235,7 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 | WP2 默认形态修复 | 模拟目标按内置 Admin 角色选择 | 目标集成测试（AC13） |
 | WP3 身份模型与授予 | `HomeUserId`、领域凭据约束、控制库索引、迁移；授予管理服务、端点、权限；租户侧限制 | 目标集成测试（AC1、AC6、AC7） |
 | WP4 认证入口 | `Workspace` 方案与策略替换；主体判定；SignalR 参数；工作区列表 | 入口矩阵测试类（AC2–AC5、AC8、AC15 握手） |
-| WP5 令牌交换与 Resource | 进入工作区交换分支；下游交换识别 `home_sub`；Resource 方案、缓存、令牌访问器、列表回源；Resource 补 `ITenantStore` 回源适配与注册（现只有远端连接存储） | 目标集成测试（缓存期限、拒绝规则、列表回源；会话绑定与非绑定客户端各一次进入与下游交换，用同一用户两个会话的现有夹具核对会话语义） |
+| WP5 令牌交换与 Resource | 进入工作区交换分支；下游交换识别 `home_sub`；Resource 方案、缓存、令牌访问器、列表回源；Resource 增加工作区专用租户查询回源端口，沿用 Identity 客户端配置，不注册框架 `ITenantStore` | 目标集成测试（缓存期限、拒绝规则、列表回源；会话绑定与非绑定客户端各一次进入与下游交换，用同一用户两个会话的现有夹具核对会话语义） |
 | WP6 前端 | `/w/:workspace`（含租户用户）、请求范围、状态与守卫顺序、切换器、授予界面、「平台」标记、零权限外壳、本人与工作区两条实时连接；Mock 覆盖；按 [frontend-ui.md](./2026-11-16-multitenancy-layering/frontend-ui.md) 实施 | 目标 spec + lint；Mock 站点走查 |
 | WP7 默认租户 | `SystemInitializer` 默认租户与关联账号 | 目标集成测试（AC12） |
 | 集中验证 | 见下表 | 结果写进 §4 |
@@ -256,8 +256,24 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 
 PR1 交付范围：三层职责、业务权限侧别与私有化形态选择指引；模拟登录按本租户内置 Admin 角色选择最早创建的已启用成员，支持管理员改名；同步 Mock、错误默认文案、注释与恢复指引。AC13 由 `ImpersonationTests.Host_can_impersonate_a_renamed_tenant_administrator` 回归覆盖，角色、启用状态与创建时间选择由同类目标测试覆盖。
 
-PR1 本地定向验证已通过：Standalone 生成项目的后端构建、目标集成回归、Mock spec、前端 lint 与后端风格检查通过；选择器给出的代表场景生成、条件裁剪与文档检查通过。未运行 core/full 全量构建测试，后续 PR CI 与合入由 Claude 负责。PR1 等待 Claude 审查。
+PR1 定向验证与 Claude 审查通过，已通过 #282 合入 develop。Standalone 生成项目的后端构建、目标集成回归、Mock spec、前端 lint 与后端风格检查通过；选择器给出的代表场景生成、条件裁剪与文档检查通过。
 
-常驻事实同步到 `docs/architecture/isolation-and-authorization-scenarios.md`、`template/docs/standards/auth.md`、`template/docs/deploy/README.md` 与 `template/backend/README.md`；规格状态保持进行中，PR2 尚未实施。
+PR2 已实现 WP1、WP3–WP7：新增有效的工作区形态与场景；宿主本人身份、无凭据关联成员和控制面授予；统一 Workspace 认证入口；Identity 交换、Resource 浏览器会话与专用目录回源；方案 A 前端、Mock 和默认租户初始化。框架包未改动。Claude 第 1 轮 UI1–UI6、F1–F9、R1–R4、B1 及 R2 补充清单已修复，UI1–UI6 复核通过，其余等待代码复审。
 
-交付顺序按用户 2026-11-16 决定拆为 PR1 必做层与 PR2 工作区形态。进行中的参数与工作区文档保存在本地 WIP 分支；它们不属于 PR1。
+集中验证结果（生成项目均使用候选框架包，真实数据库为 PostgreSQL）：
+
+| 范围 | 结果 |
+| --- | --- |
+| Standalone 工作区后端 | 构建 0 警告；单测 297/297、全量集成 722/722。审查修改后只补受影响的 24 项集成与风格检查，全部通过 |
+| Standalone 工作区前端 | 全量执行 159 个 spec、1802 项用例；两组夹具问题修正后仅重跑受影响 2 个 spec，80/80 通过。审查目标 9 个 spec、161/161，生产构建与 lint 通过；Playwright 3/3，覆盖切换、双标签页、授予、零权限和默认租户落点 |
+| Identity 与 Resource 工作区 | 两种后端构建与风格检查通过；Identity 目标 15/15，Resource 44/44。真实 OIDC 场景通过，覆盖浏览器 Cookie、工作区列表与主体、JIT 成员写入、票据隔离、短输入令牌寿命上限及一次真实下游调用 |
+| 默认形态 | Standalone 10/10、Identity 12/12，含既有模拟登录、管理员改名和默认租户凭据；默认 Standalone 前端构建与 lint 通过 |
+| 条件形态 | 6 个场景 GenerateOnly 及完整源码预检通过（含空文件断言）；最小工作区的前后端构建与 lint、关闭多租户的 Resource 构建通过 |
+
+首次集中验证发现的失败均定向修复和复验，未重复已通过的全量项目。后端风格的冗余限定名、条件裁剪后的前端排版及测试夹具问题均已收尾。OpenIddict 的访问令牌寿命通过原生 AccessTokenLifetime 约束，已用 90 秒输入的集成测试与真实 OIDC 复验。
+
+最终快照的 Mock 覆盖、全仓 i18n 和模板包验证通过；模板包内容、隔离安装、来源标记及重建确定性均通过。30 个登记场景覆盖全部可达条件行和有效能力两两组合的静态检查通过，该检查未执行完整场景矩阵。部署结构自测 43 项通过。
+
+常驻事实同步到 `docs/architecture/isolation-and-authorization-scenarios.md`、`template/docs/standards/auth.md`、`template/docs/deploy/README.md` 与 `template/backend/README.md`。方案 A 的五组 1440/390 截图已就绪，F9 对应用户列表截图已更新。
+
+worker-01 不可达，按个人执行偏好回退到受管 local；未运行本地 core/full 档矩阵，后续 PR CI 与合入后矩阵由 Claude 负责。执行证据与逐项提交记录保存在实施台账。规格保持进行中，等待 PR2 审查与合入；未推送。

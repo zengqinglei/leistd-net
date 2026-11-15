@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 #else
 using CompanyName.ProjectName.Api.Auth.Sessions;
+using CompanyName.ProjectName.Domain.Tenants.Abstractions;
 #endif
 using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
@@ -17,7 +18,13 @@ namespace CompanyName.ProjectName.Api.Auth.Authentication;
 /// <summary>请求工作区唯一的认证入口；失败只拒绝当前请求，不更换本人会话。</summary>
 internal sealed class WorkspaceAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder,
-    IOptions<ClaimTypeOptions> claimTypes, ITenantStore tenantStore, Leistd.MultiTenancy.Stores.ITenantNormalizer tenantNormalizer,
+    IOptions<ClaimTypeOptions> claimTypes,
+#if (LocalIdentity)
+    ITenantStore tenantStore,
+#else
+    IIdentityWorkspaceDirectory workspaceDirectory,
+#endif
+    ITenantNormalizer tenantNormalizer,
 #if (LocalIdentity)
     IAuthPrincipalFactory principalFactory
 #else
@@ -44,7 +51,11 @@ internal sealed class WorkspaceAuthenticationHandler(
             workspace = Request.Query["workspace"].ToString();
         if (string.IsNullOrEmpty(workspace)) return home;
         var tenantClaim = claimTypes.Value.ReadTenant(home.Principal);
+#if (LocalIdentity)
         var tenant = await tenantStore.FindByNameAsync(tenantNormalizer.NormalizeName(workspace)!, Context.RequestAborted);
+#else
+        var tenant = await workspaceDirectory.FindByNameAsync(tenantNormalizer.NormalizeName(workspace)!, Context.RequestAborted);
+#endif
         if (tenantClaim.TenantId is { } ownTenantId)
         {
             if (tenant?.Id != ownTenantId) return Deny("Workspace:Forbidden");

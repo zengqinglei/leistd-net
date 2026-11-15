@@ -94,8 +94,8 @@ export class Tenants {
       queryParamsHandling: 'merge',
     });
   }
-  //#endif
 
+  //#endif
   readonly activationId = signal<string | null>(null);
   readonly impersonatingId = signal<string | null>(null);
   // 仅防确认流程重入，不驱动行内禁用或 spinner。

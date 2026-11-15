@@ -347,10 +347,12 @@ export class NavigationService {
             //#endif
           })),
         //#else
+        //#if (TenantWorkspace)
         items: group.items
           .filter((item) => this.isItemVisible(item))
-          //#if (TenantWorkspace)
           .map((item) => ({ ...item, route: this.workspace.path(item.route) })),
+        //#else
+        items: group.items.filter((item) => this.isItemVisible(item)),
         //#endif
         //#endif
       }))

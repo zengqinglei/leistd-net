@@ -116,9 +116,16 @@ export const routes: Routes = [
       { path: '**', redirectTo: 'platform' },
     ],
   },
-  ...baseRoutes,
+  ...baseRoutes.map((route) =>
+    route.path === 'platform'
+      ? {
+          path: '',
+          canActivate: [authGuard, workspaceGuard],
+          children: [{ ...route, canActivate: [permissionGuard] }],
+        }
+      : route,
+  ),
 ];
 //#else
-
 export const routes: Routes = baseRoutes;
 //#endif

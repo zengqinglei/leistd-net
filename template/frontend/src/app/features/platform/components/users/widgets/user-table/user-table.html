@@ -240,13 +240,6 @@
                                 </button>
                               }
                               <ng-template #rowMenu>
-                                <!--#if (TenantWorkspace)-->
-                                @if (row.original.homeUserId) {
-                                  <p class="px-1.5 pb-1 text-xs text-muted-foreground">
-                                    {{ t('users.platformReason') }}
-                                  </p>
-                                }
-                                <!--#endif-->
                                 <hlm-dropdown-menu>
                                   <!-- 内置超管行（他人查看）：各项置灰，原因在菜单首说一次，被禁用的项经 aria-describedby 指向它。 -->
                                   @if (isOtherSuperAdmin(row.original)) {
@@ -420,6 +413,13 @@
                                       </p>
                                     }
                                   }
+                                  <!--#if (TenantWorkspace)-->
+                                  @if (row.original.homeUserId) {
+                                    <p class="px-1.5 pb-1 text-xs text-muted-foreground">
+                                      {{ t('users.platformReason') }}
+                                    </p>
+                                  }
+                                  <!--#endif-->
                                 </hlm-dropdown-menu>
                               </ng-template>
                             </div>
@@ -470,9 +470,18 @@
                           @if (foldLevel() === 'mobile') {
                             <dt class="text-muted-foreground">{{ t('users.table.colUser') }}</dt>
                             <dd class="min-w-0" data-testid="user-detail-identity">
-                              <span class="block font-medium wrap-anywhere">{{
-                                row.original.displayName || row.original.username
-                              }}</span>
+                              <div class="flex min-w-0 items-center gap-1.5">
+                                <span class="font-medium wrap-anywhere">{{
+                                  row.original.displayName || row.original.username
+                                }}</span>
+                                <!--#if (TenantWorkspace)-->
+                                @if (row.original.homeUserId) {
+                                  <span hlmBadge variant="secondary" class="shrink-0">{{
+                                    t('users.platformBadge')
+                                  }}</span>
+                                }
+                                <!--#endif-->
+                              </div>
                               <span class="text-muted-foreground block text-xs wrap-anywhere">{{
                                 row.original.username
                               }}</span>

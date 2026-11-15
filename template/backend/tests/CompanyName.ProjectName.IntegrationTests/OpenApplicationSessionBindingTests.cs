@@ -6,6 +6,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Application.Roles.Dtos;
+#endif
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Application.Auth.Options;
@@ -32,9 +35,10 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
 
 #if (TenantWorkspace)
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Workspace_exchange_keeps_a_downstream_hop_and_uses_the_existing_session_binding_boundary(bool bound)
+    [InlineData(true, 90)]
+    [InlineData(false, 90)]
+    [InlineData(true, 600)]
+    public async Task Workspace_exchange_keeps_a_downstream_hop_and_uses_the_existing_session_binding_boundary(bool bound, int inputLifetimeSeconds)
     {
         const string secret = "WorkspaceClient!Passw0rd";
         using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -59,6 +63,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
                 Permissions.Prefixes.Scope + "tenant-routing.read",
                 Permissions.Prefixes.Audience + resource, Permissions.Prefixes.Audience + "another-api" }) descriptor.Permissions.Add(permission);
             descriptor.Settings[OpenApplicationSettings.SessionBound] = bound ? "true" : "false";
+            descriptor.Settings[Settings.TokenLifetimes.AccessToken] = TimeSpan.FromSeconds(inputLifetimeSeconds).ToString();
             var existing = await manager.FindByClientIdAsync(resource);
             if (existing is null) await manager.CreateAsync(descriptor);
             else await manager.UpdateAsync(existing, descriptor);
@@ -71,7 +76,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         var tenantId = tenantJson.RootElement.GetProperty("id").GetGuid();
         using var me = JsonDocument.Parse(await mine.Client.GetStringAsync("/api/v1/auth/me"));
         var homeId = me.RootElement.GetProperty("id").GetGuid();
-        var roles = (await admin.Client.GetFromJsonAsync<List<CompanyName.ProjectName.Application.Roles.Dtos.RoleBriefOutputDto>>(
+        var roles = (await admin.Client.GetFromJsonAsync<List<RoleBriefOutputDto>>(
             $"/api/v1/tenants/{tenantId}/staff/roles"))!;
         (await admin.Client.PostAsJsonAsync($"/api/v1/tenants/{tenantId}/staff", new
         { HomeUserId = homeId, RoleIds = new[] { roles.Single(role => role.Name == "Admin").Id } })).EnsureSuccessStatusCode();

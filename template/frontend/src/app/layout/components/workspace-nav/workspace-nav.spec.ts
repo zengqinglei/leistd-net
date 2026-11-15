@@ -4,12 +4,19 @@ import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
+//#if (IncludeLocalization)
+import { of } from 'rxjs';
+//#endif
 import { userEvent } from 'vitest/browser';
 
 import { fitCount, WorkspaceNav } from './workspace-nav';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
+//#endif
+//#if (IncludeLocalization)
 import { lineCount, pseudoCatalog } from '../../../core/i18n/pseudo-locale.testing';
+//#endif
+//#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { expectTouchTarget, setCoarsePointer } from '../../../shared/utils/coarse-pointer.testing';
@@ -69,7 +76,7 @@ describe('WorkspaceNav overflow', () => {
         provideRouter([]),
         { provide: NavigationService, useValue: { menuGroups: groups, isItemActive: () => false } },
         //#if (IncludeLocalization)
-        ...provideTranslocoTesting(),
+        ...provideTranslocoTesting(['en'], { getTranslation: () => of(enTexts) }),
         //#endif
       ],
     });

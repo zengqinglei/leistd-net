@@ -3,11 +3,17 @@ import { TestBed } from '@angular/core/testing';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
+//#if (TenantWorkspace)
+import { of } from 'rxjs';
+//#endif
 
 // prettier-ignore
 import {
   buildSettingTree,
   SETTINGS_LOAD_ENABLED,
+  //#if (TenantWorkspace)
+  SETTINGS_HOME_SCOPE,
+  //#endif
   SettingRowNode,
   SettingsPageState,
   shownChildren,
@@ -17,6 +23,9 @@ import { applicationErrorMessage } from '../../core/errors/application-http-erro
 import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 //#endif
 import { SessionContextService } from '../../core/services/session-context-service';
+//#if (TenantWorkspace)
+import { SettingService } from '../../core/settings/setting-service';
+//#endif
 import { SettingOutputDto } from '../../core/settings/setting.dto';
 
 /**
@@ -58,6 +67,27 @@ describe('SettingsPageState', () => {
     });
     return { state: TestBed.inject(SettingsPageState), reads };
   }
+  //#if (TenantWorkspace)
+
+  it('reads personal settings from home without overwriting the workspace session snapshot', async () => {
+    const refreshSettings = vi.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsPageState,
+        { provide: SETTINGS_HOME_SCOPE, useValue: true },
+        { provide: SessionContextService, useValue: { refreshSettings } },
+        { provide: SettingService, useValue: { getForCurrentUser: () => of([setting('en')]) } },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(['en']),
+        //#endif
+      ],
+    });
+    const state = TestBed.inject(SettingsPageState);
+    await settle();
+    expect(state.settings()[0].userValue).toBe('en');
+    expect(refreshSettings).not.toHaveBeenCalled();
+  });
+  //#endif
 
   it('shows the settings the session refresh returns for this page', async () => {
     const { state, reads } = stateWithManualReads();

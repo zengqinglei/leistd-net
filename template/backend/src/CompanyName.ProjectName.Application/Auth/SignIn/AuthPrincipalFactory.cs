@@ -1,5 +1,9 @@
 #if (LocalIdentity)
 using System.Security.Claims;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Application.Shared;
+using CompanyName.ProjectName.Domain.Tenants.Entities;
+#endif
 using CompanyName.ProjectName.Domain.Users.Repositories;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
@@ -47,7 +51,7 @@ public class AuthPrincipalFactory(
     , IAccountPreferenceStore preferenceStore
 #endif
 #if (TenantWorkspace)
-    , IRepository<CompanyName.ProjectName.Domain.Tenants.Entities.UserTenantAccess, Guid> accessRepository
+    , IRepository<UserTenantAccess, Guid> accessRepository
 #endif
     ) : IAuthPrincipalFactory
 {
@@ -76,7 +80,7 @@ public class AuthPrincipalFactory(
             var principal = await CreateAsync(member.Id, scopes, cancellationToken);
             if (principal is null) return null;
             var identity = (ClaimsIdentity)principal.Identity!;
-            identity.AddClaim(new Claim(CompanyName.ProjectName.Application.Shared.WorkspaceClaimTypes.HomeUserId, homeUserId.ToString()));
+            identity.AddClaim(new Claim(WorkspaceClaimTypes.HomeUserId, homeUserId.ToString()));
             foreach (var claim in homePrincipal.Claims.Where(c => c.Type is "auth_time" or "amr"))
                 identity.AddClaim(claim.Clone());
 #if (OpenIddictServer)
@@ -95,7 +99,7 @@ public class AuthPrincipalFactory(
         CancellationToken cancellationToken = default)
     {
 #if (TenantWorkspace)
-        if (tokenPrincipal.GetClaim(CompanyName.ProjectName.Application.Shared.WorkspaceClaimTypes.HomeUserId) is { } homeSubject)
+        if (tokenPrincipal.GetClaim(WorkspaceClaimTypes.HomeUserId) is { } homeSubject)
         {
             var tenantClaim = claimTypes.Value.ReadTenant(tokenPrincipal);
             if (!tenantClaim.IsValid || tenantClaim.TenantId is not { } workspaceTenantId) return null;
@@ -312,7 +316,7 @@ public class AuthPrincipalFactory(
                 Destinations.IdentityToken
             ],
 #if (TenantWorkspace)
-            CompanyName.ProjectName.Application.Shared.WorkspaceClaimTypes.HomeUserId => [Destinations.AccessToken],
+            WorkspaceClaimTypes.HomeUserId => [Destinations.AccessToken],
 #endif
             CustomClaimTypes.IsSuperAdmin =>
             [
@@ -330,7 +334,7 @@ public class AuthPrincipalFactory(
     {
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user is null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed) return null;
-        var identity = new ClaimsIdentity(CompanyName.ProjectName.Application.Shared.AuthenticationSchemeNames.Workspace, "name", "role");
+        var identity = new ClaimsIdentity(AuthenticationSchemeNames.Workspace, "name", "role");
         foreach (var type in claimTypes.Value.UserIds.Append("sub").Distinct()) identity.AddClaim(new Claim(type, user.Id.ToString()));
         identity.AddClaim(new Claim("name", user.DisplayName ?? user.Username));
         identity.AddClaim(new Claim("preferred_username", user.Username));

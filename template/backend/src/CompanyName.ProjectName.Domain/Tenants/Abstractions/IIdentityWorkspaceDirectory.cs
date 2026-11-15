@@ -1,8 +1,11 @@
 #if (TenantWorkspace && RemoteTokenAuth)
+using Leistd.MultiTenancy.Stores;
+
 namespace CompanyName.ProjectName.Domain.Tenants.Abstractions;
 
 public interface IIdentityWorkspaceDirectory
 {
+    Task<TenantConfiguration?> FindByNameAsync(string normalizedName, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<IdentityWorkspace>> GetListAsync(CancellationToken cancellationToken = default);
 }
 

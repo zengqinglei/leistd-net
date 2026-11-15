@@ -86,10 +86,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.User", b =>
                 {
-#if (TenantWorkspace)
                     b.Property<Guid?>("HomeUserId")
                         .HasColumnType("uuid");
-#endif
 
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -142,21 +140,14 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.Property<string>("Username")
                         .IsRequired()
-#if (TenantWorkspace)
                         .HasMaxLength(73)
                         .HasColumnType("character varying(73)");
-#else
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-#endif
 
                     b.HasKey("Id");
-#if (TenantWorkspace)
 
                     b.HasIndex("TenantId", "HomeUserId")
                         .IsUnique()
                         .HasFilter("\"HomeUserId\" IS NOT NULL");
-#endif
 
                     b.HasIndex("Email")
                         .IsUnique()

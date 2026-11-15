@@ -435,6 +435,10 @@ internal sealed class ResourceTestAuthenticationHandler(
 
         if (Request.Headers[EmailVerifiedHeader].SingleOrDefault() is { } verified)
             claims.Add(new Claim("email_verified", verified));
+#if (TenantWorkspace)
+        foreach (var (header, claim) in new[] { ("X-Project-Test-Home", "home_sub"), ("X-Project-Test-Username", "preferred_username"), ("X-Project-Test-DisplayName", "name") })
+            if (Request.Headers[header].SingleOrDefault() is { } value) claims.Add(new Claim(claim, value));
+#endif
         var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return Task.FromResult(AuthenticateResult.Success(ticket));
