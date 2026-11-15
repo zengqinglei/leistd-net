@@ -9,10 +9,8 @@ using CompanyName.ProjectName.Application.Auth.EmailVerification;
 using Leistd.Security.OneTimeCodes.VerificationCodes;
 using Microsoft.Extensions.Options;
 #endif
-#if (Email && ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using Leistd.Ddd.Domain.Repositories;
-#endif
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 using CompanyName.ProjectName.Application.Auth.Passkeys;
@@ -66,7 +64,7 @@ internal sealed class AuthAppService(
     TwoFactorMethodResolver twoFactorMethods,
     PasskeyAssertionVerifier passkeyVerifier,
     PasskeyCeremonyStore passkeyCeremonies,
-    PasskeyDomainService passkeyDomainService,
+    IRepository<UserPasskey, Guid> passkeyRepository,
     IPasskeyProtocol passkeyProtocol,
 #if (Email && ExternalLogin)
     IRepository<ExternalLoginConnection, Guid> externalLoginConnectionRepository,
@@ -446,7 +444,7 @@ internal sealed class AuthAppService(
             throw TwoFactorMethodUnavailable();
         }
 
-        var ceremony = passkeyVerifier.Begin(await passkeyDomainService.GetListAsync(user.Id, cancellationToken));
+        var ceremony = passkeyVerifier.Begin(await passkeyRepository.GetListAsync(p => p.UserId == user.Id, cancellationToken));
         await twoFactorChallengeStore.AttachPasskeyStateAsync(token, challenge, ceremony.State, cancellationToken);
         return PasskeyAppService.OptionsOutput(ceremony.Options);
     }

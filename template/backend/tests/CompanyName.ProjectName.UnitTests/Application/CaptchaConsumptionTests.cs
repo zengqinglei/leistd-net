@@ -3,6 +3,8 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Captcha;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Lock.Abstractions;
+using System.Text;
+using System.Xml.Linq;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,6 +34,29 @@ public class CaptchaConsumptionTests
     /// 已经抢到锁，探针于是把第一个调用的锁外删除误判为"在临界区内"。
     /// </remarks>
     private static readonly AsyncLocal<int> Invocation = new();
+
+    [Fact]
+    public async Task Captcha_image_draws_outlines_without_embedding_the_cached_answer()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedMemoryCache();
+        services.AddSingleton<IUserRegistrationPolicyProvider>(new FixedRegistrationPolicy());
+        using var provider = services.BuildServiceProvider();
+        var cache = provider.GetRequiredService<IDistributedCache>();
+        var service = new CaptchaAppService(cache, provider.GetRequiredService<IUserRegistrationPolicyProvider>());
+        var challenge = await service.GenerateCaptchaAsync();
+        var code = await cache.GetStringAsync($"MyProject:Captcha:{challenge.CaptchaToken}");
+        Assert.False(string.IsNullOrEmpty(code));
+        var svg = Encoding.UTF8.GetString(Convert.FromBase64String(challenge.CaptchaImageBase64.Split(',')[1]));
+        var document = XDocument.Parse(svg);
+        Assert.Equal("0 0 130 44", document.Root!.Attribute("viewBox")!.Value);
+        Assert.DoesNotContain(code!, svg, StringComparison.Ordinal);
+        Assert.DoesNotContain(document.Descendants(), element => element.Name.LocalName == "text");
+        Assert.DoesNotContain(document.Descendants().Attributes(), attribute => attribute.Name.LocalName is "transform" or "id");
+        Assert.All(document.Descendants().Where(element => element.Name.LocalName == "path"),
+            element => Assert.False(string.IsNullOrWhiteSpace(element.Attribute("d")!.Value)));
+        Assert.Contains(document.Descendants(), element => element.Name.LocalName == "path");
+    }
 
     [Fact]
     public async Task Concurrent_validation_of_one_token_succeeds_once_under_the_lock()

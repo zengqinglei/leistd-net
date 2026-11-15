@@ -406,8 +406,8 @@ export class OpenApplications {
         //#endif
         this.editDialogVisible.set(false);
 
-        // 创建 Confidential 客户端后显示自动生成的 Secret
-        if (!selected && result.clientSecret) {
+        // 创建或转为 Confidential 时，明文 Secret 只在本次响应中提供。
+        if (result.clientSecret) {
           this.secretValue.set(result.clientSecret);
           this.secretKind.set('created');
           this.secretApplication.set(result);

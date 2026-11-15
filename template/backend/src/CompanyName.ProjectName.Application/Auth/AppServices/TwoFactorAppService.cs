@@ -1,5 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Errors;
+using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Events;
@@ -19,6 +20,7 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Leistd.Security.OneTimeCodes;
 using Leistd.Ddd.Application.AppServices;
+using Leistd.ObjectMapping.Abstractions;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
@@ -45,6 +47,8 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// </remarks>
 internal sealed class TwoFactorAppService(
     IRepository<User, Guid> userRepository,
+    IRepository<UserPasskey, Guid> passkeyRepository,
+    IObjectMapper objectMapper,
     ICurrentUser currentUser,
     ICurrentTenant currentTenant,
     TwoFactorDomainService twoFactorDomainService,
@@ -54,7 +58,6 @@ internal sealed class TwoFactorAppService(
 #endif
     UserDomainService userDomainService,
     UserSessionDomainService userSessionDomainService,
-    PasskeyDomainService passkeyDomainService,
     IPasskeyProtocol passkeyProtocol,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
     IReauthenticationGuard reauthenticationGuard,
@@ -79,7 +82,8 @@ internal sealed class TwoFactorAppService(
         return new TwoFactorStatusOutputDto
         {
             Enabled = user.TwoFactorEnabled,
-            Passkeys = [.. (await passkeyDomainService.GetListAsync(user.Id, cancellationToken)).Select(PasskeyAppService.ToOutput)],
+            Passkeys = objectMapper.Map<List<UserPasskey>, List<PasskeyOutputDto>>(
+                [.. (await passkeyRepository.GetListAsync(p => p.UserId == user.Id, cancellationToken)).OrderBy(p => p.CreationTime)]),
             PasskeysAvailable = passkeyProtocol.IsAvailable,
             RecoveryCodesLeft = user.RecoveryCodesLeft,
             RequiredByPolicy = policy.RequireTwoFactor,

@@ -31,7 +31,7 @@ describe('OpenApplications page query round trip', () => {
   let router: Router;
   let service: Pick<
     MockedObject<OpenApplicationService>,
-    'getOpenApplications' | 'getScopes' | 'resetSecret' | 'deleteOpenApplication'
+    'getOpenApplications' | 'getScopes' | 'resetSecret' | 'deleteOpenApplication' | 'updateOpenApplication'
   >;
 
   function lastQuery(): GetOpenApplicationsInputDto {
@@ -55,6 +55,7 @@ describe('OpenApplications page query round trip', () => {
       getOpenApplications: vi.fn().mockName('OpenApplicationService.getOpenApplications'),
       getScopes: vi.fn().mockName('OpenApplicationService.getScopes'),
       deleteOpenApplication: vi.fn(),
+      updateOpenApplication: vi.fn(),
       resetSecret: vi.fn().mockName('OpenApplicationService.resetSecret'),
     };
     service.getOpenApplications.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
@@ -146,6 +147,19 @@ describe('OpenApplications page query round trip', () => {
 
     expect(component.secretDialogVisible()).toBe(true);
     expect(component.secretValue()).toBe('generated-secret');
+  });
+
+  it('shows a newly generated secret returned when editing a public client', async () => {
+    component.selectedApplication.set(loadedRow as never);
+    service.updateOpenApplication.mockReturnValue(
+      of({ ...loadedRow, clientType: 'confidential', clientSecret: 'conversion-secret' }) as never,
+    );
+    component.handleSave({ clientType: 'confidential' } as never).subscribe();
+    await fixture.whenStable();
+
+    expect(component.secretDialogVisible()).toBe(true);
+    expect(component.secretValue()).toBe('conversion-secret');
+    expect(component.secretApplication()).toEqual(expect.objectContaining({ clientId: loadedRow.clientId }));
   });
 
   it('shows the reset secret together with the application it belongs to', async () => {

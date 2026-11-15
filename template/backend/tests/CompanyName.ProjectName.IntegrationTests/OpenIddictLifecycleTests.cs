@@ -8,6 +8,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
@@ -37,7 +38,7 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         {
             sessionBound = false,
             clientId = id, applicationType = "web", clientType = "public", redirectUris = new[] { Callback },
-            permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{new OAuthResourceOptions().Resource}" },
+            permissions = new[] { "ept:authorization", "ept:token", "gt:authorization_code", "gt:refresh_token", "rst:code", "scp:openid", "scp:email", $"scp:{new OAuthResourceOptions().Resource}" },
             requirements = new[] { "ft:pkce" }
         });
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
@@ -61,6 +62,130 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     private static string AuthorizationUrl(string client, string parameters) =>
         $"/connect/authorize?client_id={client}&redirect_uri={Uri.EscapeDataString(Callback)}&response_type=code" +
         $"&scope=openid%20{new OAuthResourceOptions().Resource}&code_challenge={Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(new string('x', 64))))}&code_challenge_method=S256{parameters}";
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Email_verification_is_scoped_and_refresh_reads_the_current_database_value(bool emailScope)
+    {
+        using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var clientId = await CreatePublicClientAsync(session.Client);
+        bool original;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var user = await db.Users.SingleAsync(u => u.Username == "admin" && u.TenantId == null);
+            original = user.EmailConfirmed;
+            db.Entry(user).Property(u => u.EmailConfirmed).CurrentValue = false;
+            await db.SaveChangesAsync();
+        }
+        try
+        {
+            using var browser = Browser(session.Cookie);
+            var url = AuthorizationUrl(clientId, "").Replace("&scope=openid%20",
+                emailScope ? "&scope=openid%20offline_access%20email%20" : "&scope=openid%20offline_access%20");
+            var authorization = await browser.GetCachedAsync(url);
+            Assert.Equal(HttpStatusCode.Found, authorization.StatusCode);
+            var code = QueryHelpers.ParseQuery(authorization.Headers.Location!.Query)["code"].ToString();
+            using var exchange = Browser();
+            var issued = await exchange.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "authorization_code", ["client_id"] = clientId, ["code"] = code,
+                ["redirect_uri"] = Callback, ["code_verifier"] = new string('x', 64)
+            }));
+            Assert.True(issued.IsSuccessStatusCode, await issued.Content.ReadAsStringAsync());
+            var tokens = await issued.Content.ReadFromJsonAsync<JsonElement>();
+            AssertEmailVerified(tokens, emailScope, false);
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+                var user = await db.Users.SingleAsync(u => u.Username == "admin" && u.TenantId == null);
+                user.ConfirmEmail();
+                await db.SaveChangesAsync();
+            }
+            var refreshed = await exchange.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token", ["client_id"] = clientId,
+                ["refresh_token"] = tokens.GetProperty("refresh_token").GetString()!
+            }));
+            Assert.True(refreshed.IsSuccessStatusCode, await refreshed.Content.ReadAsStringAsync());
+            AssertEmailVerified(await refreshed.Content.ReadFromJsonAsync<JsonElement>(), emailScope, true);
+        }
+        finally
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var user = await db.Users.SingleAsync(u => u.Username == "admin" && u.TenantId == null);
+            db.Entry(user).Property(u => u.EmailConfirmed).CurrentValue = original;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private static void AssertEmailVerified(JsonElement tokens, bool included, bool expected)
+    {
+        foreach (var name in new[] { "access_token", "id_token" })
+        {
+            using var payload = JsonDocument.Parse(Base64Url.DecodeFromChars(tokens.GetProperty(name).GetString()!.Split('.')[1]));
+            Assert.Equal(included, payload.RootElement.TryGetProperty("email_verified", out var verified));
+            if (included) Assert.Equal(expected, verified.GetBoolean());
+        }
+    }
+
+    [Fact]
+    public async Task Client_type_conversion_returns_a_working_secret_once_and_clears_it_for_public_clients()
+    {
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var clientId = await CreatePublicClientAsync(admin.Client);
+        var list = await admin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/open-applications?keyword={clientId}");
+        var id = list.GetProperty("items")[0].GetProperty("id").GetString();
+        var input = new UpdateOpenApplicationInputDto
+        {
+            ApplicationType = "web", ClientType = "confidential", SessionBound = false,
+            Permissions = ["ept:token", "gt:client_credentials"]
+        };
+        var converted = await admin.Client.PutAsJsonAsync($"/api/v1/open-applications/{id}", input);
+        Assert.True(converted.IsSuccessStatusCode, await converted.Content.ReadAsStringAsync());
+        var output = (await converted.Content.ReadFromJsonAsync<OpenApplicationOutputDto>())!;
+        Assert.False(string.IsNullOrWhiteSpace(output.ClientSecret));
+        using var client = Browser();
+        async Task<HttpResponseMessage> TokenAsync() => await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials", ["client_id"] = clientId, ["client_secret"] = output.ClientSecret!
+        }));
+        Assert.True((await TokenAsync()).IsSuccessStatusCode);
+        var unchanged = await admin.Client.PutAsJsonAsync($"/api/v1/open-applications/{id}", input);
+        Assert.True(unchanged.IsSuccessStatusCode, await unchanged.Content.ReadAsStringAsync());
+        Assert.Null((await unchanged.Content.ReadFromJsonAsync<OpenApplicationOutputDto>())!.ClientSecret);
+        Assert.True((await TokenAsync()).IsSuccessStatusCode);
+        var detail = await admin.Client.GetFromJsonAsync<OpenApplicationOutputDto>($"/api/v1/open-applications/{id}");
+        Assert.Null(detail!.ClientSecret);
+        var madePublic = await admin.Client.PutAsJsonAsync($"/api/v1/open-applications/{id}", input with
+        {
+            ClientType = "public", Permissions = ["ept:authorization", "ept:token", "gt:authorization_code", "rst:code"],
+            Requirements = ["ft:pkce"], RedirectUris = [Callback]
+        });
+        Assert.True(madePublic.IsSuccessStatusCode, await madePublic.Content.ReadAsStringAsync());
+        Assert.False((await madePublic.Content.ReadFromJsonAsync<OpenApplicationOutputDto>())!.HasClientSecret);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await TokenAsync()).StatusCode);
+    }
+
+    [Fact]
+    public async Task Updating_with_an_OpenIddict_invalid_web_callback_returns_a_business_error()
+    {
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var clientId = await CreatePublicClientAsync(admin.Client);
+        var list = await admin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/open-applications?keyword={clientId}");
+        var id = list.GetProperty("items")[0].GetProperty("id").GetString();
+        var response = await admin.Client.PutAsJsonAsync($"/api/v1/open-applications/{id}", new UpdateOpenApplicationInputDto
+        {
+            ApplicationType = "web", ClientType = "public", SessionBound = false,
+            RedirectUris = ["custom-app:/callback"], Requirements = ["ft:pkce"],
+            Permissions = ["ept:authorization", "ept:token", "gt:authorization_code", "rst:code"]
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OpenApp:UpdateFailed", error.GetProperty("code").GetString());
+    }
 
     [Fact]
     public async Task Prompt_none_without_a_session_returns_login_required_to_the_protocol_callback()

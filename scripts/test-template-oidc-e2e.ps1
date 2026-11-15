@@ -832,6 +832,8 @@ function Test-BrowserSession {
     $claims = Read-TokenClaims $sharedToken
     Assert-Value "browser-session-user" $claims.sub $me.id
     Assert-Value "browser-session-tenant" $sharedTenant.id $me.tenantId
+    # TenantSeeder 创建管理员后未确认邮箱，浏览器会话须保留这个状态。
+    Assert-Value "browser-session-email-verified" $false $me.isEmailVerified
     Assert-Http "browser-cookie-delegation" 200 ($urls.orders + "/api/e2e/billing") -Headers @{ Cookie = $cookie } | Out-Null
     Assert-Http "browser-no-bearer-fallback" 401 ($urls.orders + "/api/v1/auth/me") -Token "invalid" -Headers @{ Cookie = $cookie } | Out-Null
     $logout = Assert-Http "resource-browser-logout" 200 ($urls.orders + "/api/v1/auth/logout") -Method POST -Body @{} -Headers @{ Cookie = $cookie }

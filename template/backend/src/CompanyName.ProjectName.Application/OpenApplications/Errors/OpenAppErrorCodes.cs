@@ -6,6 +6,7 @@ public static class OpenAppErrorCodes
     public const string ExchangeClientInvalid = "OpenApp:ExchangeClientInvalid";
     public const string AudienceUnsupported = "OpenApp:AudienceUnsupported";
     public const string ClientIdTaken = "OpenApp:ClientIdTaken";
+    public const string UpdateFailed = "OpenApp:UpdateFailed";
     public const string CreateFailed = "OpenApp:CreateFailed";
     public const string MachineScopeRejectsUserGrants = "OpenApp:MachineScopeRejectsUserGrants";
     public const string MachineScopeRequiresClientCredentials = "OpenApp:MachineScopeRequiresClientCredentials";

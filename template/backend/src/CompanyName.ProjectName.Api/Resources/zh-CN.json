@@ -91,6 +91,7 @@
     "OpenApp:ClientIdTaken": "Client ID 已存在：{ClientId}",
     "OpenApp:ExchangeClientInvalid": "Token Exchange 需要机密服务客户端、令牌端点权限且不能启用用户授权流。",
     "OpenApp:AudienceUnsupported": "不支持的受众：{Audience}",
+    "OpenApp:UpdateFailed": "开放应用更新失败。",
     "OpenApp:CreateFailed": "开放应用创建失败。",
     "OpenApp:MachineScopeRejectsUserGrants": "仅限机器的 scope（{Scopes}）不能与面向用户的授权类型（{Grants}）共存。",
     "OpenApp:MachineScopeRequiresClientCredentials": "仅限机器的 scope（{Scopes}）要求允许 client_credentials 授权类型。",

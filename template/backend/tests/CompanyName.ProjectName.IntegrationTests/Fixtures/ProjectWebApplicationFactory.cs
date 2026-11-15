@@ -418,6 +418,7 @@ internal sealed class ResourceTestAuthenticationHandler(
     UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "ProjectTests";
+    public const string EmailVerifiedHeader = "X-Project-Test-Email-Verified";
     public const string SubjectHeader = "X-Project-Test-Subject";
     public const string TenantHeader = "X-Project-Test-Tenant";
 
@@ -432,6 +433,8 @@ internal sealed class ResourceTestAuthenticationHandler(
         foreach (var tenant in Request.Headers[TenantHeader])
             claims.Add(new Claim(CustomClaimTypes.TenantId, tenant!));
 
+        if (Request.Headers[EmailVerifiedHeader].SingleOrDefault() is { } verified)
+            claims.Add(new Claim("email_verified", verified));
         var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return Task.FromResult(AuthenticateResult.Success(ticket));

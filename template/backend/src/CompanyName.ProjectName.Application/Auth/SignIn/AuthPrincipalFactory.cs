@@ -91,6 +91,7 @@ public class AuthPrincipalFactory(
         identity.SetClaim(Claims.Name, user.DisplayName ?? user.Username);
         identity.SetClaim(Claims.PreferredUsername, user.Username);
         identity.SetClaim(Claims.Email, user.Email);
+        identity.SetClaim(Claims.EmailVerified, user.EmailConfirmed);
 
         if (AvatarPolicy.IsExternalUrl(user.Avatar))
         {
@@ -240,7 +241,7 @@ public class AuthPrincipalFactory(
             [
                 Destinations.IdentityToken
             ],
-            Claims.Email when claim.Subject?.HasScope(Scopes.Email) == true =>
+            Claims.Email or Claims.EmailVerified when claim.Subject?.HasScope(Scopes.Email) == true =>
             [
                 Destinations.AccessToken,
                 Destinations.IdentityToken
