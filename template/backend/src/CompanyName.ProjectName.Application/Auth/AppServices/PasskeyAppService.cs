@@ -163,7 +163,7 @@ internal sealed class PasskeyAppService(
         EnsureAvailable();
         var user = await GetCurrentUserAsync(cancellationToken);
         var passkeys = await passkeyRepository.GetListAsync(p => p.UserId == user.Id, cancellationToken);
-        if (passkeys.Count == 0)
+        if (!passkeys.Any())
         {
             throw new BusinessException(
                 AuthErrorCodes.ReauthenticationMethodUnavailable,
