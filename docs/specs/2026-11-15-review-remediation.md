@@ -65,14 +65,15 @@
 
 ## 3. 计划
 
-按交付面分 3 个 PR，依次从最新 develop 建分支；等待 CI 时可开始下一个，后一个推送前 rebase develop。规格文档随 PR1 提交，§4 与状态随 PR3 提交。
+按交付面分为框架 1 个 PR、模板 1 个 PR，均合入 develop，不做 develop→main 发布。模板分支基于框架 PR 合并后的 develop，保留后端与前端分组提交；两部分分别审查通过，合并后的验证完成后统一推送一次。
 
 | PR | 内容 | 产物 | 验证 |
 | --- | --- | --- | --- |
-| PR1 框架 | F-RESP-01、F-DC-01、F-DC-02、BG-LOCK、F-E1、F-E2、F-DC-03 | 组件源码、测试、`response.md`、`dependency-injection.md`、`aop.md`（如需）、`background-jobs.md`、`webhooks.md`、`notifications.md`、`object-mapping.md`、XML 示例 | 受影响测试项目（选择器给出的反向依赖闭包）；打包并检查随包 XML 与文档；关键 XML 示例单独编译；`check-all -Only` 文档与注释闸门；PR CI 全绿 |
-| PR2 模板后端 | B01、B02、B03（含前端展示与 Mock）、B04；OIDC 端到端断言 | 模板后端源码与测试、前端 open-applications、Mock、`scripts/test-template-oidc-e2e.ps1` | 工作区 `-Sync` 加目标测试类与集成测试类；Identity、Resource、Standalone 生成场景构建；OIDC 端到端（worker-01）；Mock 与 i18n 闸门；PR CI 全绿 |
-| PR3 模板前端 | F01、F02、F03a、F03b、F04、F05 | 模板前端源码、spec、Mock、`webhooks.e2e.ts` | 目标 spec 与 lint；开、关本地化两种生成场景；Mock 站点浏览器验证与改前改后截图；生成项目连真实后端跑 `webhooks.e2e.ts`（worker-01）；PR CI 全绿 |
+| 框架 PR（#280） | F-RESP-01、F-DC-01、F-DC-02、BG-LOCK、F-E1、F-E2、F-DC-03 | 组件源码、回归测试、组件文档与 XML 示例、本规格 | 受影响测试反向依赖闭包；打包与隔离消费、文档代码块与 XML 示例编译；文档和注释闸门；PR CI |
+| 模板 PR（本 PR） | B01–B04、F01、F02、F03a、F03b、F04、F05 | 模板后端与前端、目标测试、Mock、OIDC 与 Webhook 端到端断言 | 对完整差异重算场景并集并生成；实际生成工作区的目标测试、前端 build 与 lint；开关本地化；合并后的开放应用页面与 Mock spec；真实 Webhook 端到端；Mock 对比截图；PR CI 的 OIDC 端到端 |
 
-每个 PR 推送前经 Claude 代码审查，结论为"通过"才推送；CI 全绿即合并。
+模板的后端部分按原 PR2 审查编号、前端部分按原 PR3 审查编号分别记录，均通过才推送。推送后的修复仍须增量审查；CI 失败先在本地复现对应场景，一次修完后再推。
 
-不做的事：见 §1 非目标；不修改 F-DC-C1；不新增"示例启动到端点映射"类重复测试；不为 F01 在其余四个同构页面逐页复制 spec。
+原定两个模板 PR 合并为一个，减少重复的 PR CI 与合入 develop 后全量验证；有效证据复用，只补组合后的必要验证。规格的 §4 与完成状态随模板 PR 收尾。
+
+不做的事：见 §1 非目标；不修改 F-DC-C1；不新增“示例启动到端点映射”类重复测试；不为 F01 在其余四个同构页面逐页复制 spec。
