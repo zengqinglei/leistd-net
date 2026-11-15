@@ -76,7 +76,7 @@
                   (searchChange)="onSubscriptionSearch($event)"
                   (valueChange)="onFilterChange('subscriptionId', $event)"
                 >
-                  <hlm-combobox-trigger class="min-w-0 max-w-full border-dashed">
+                  <hlm-combobox-trigger class="min-w-0 max-w-full border-dashed data-placeholder:text-foreground">
                     <ng-icon name="lucideListFilter" />
                     <span class="min-w-0 truncate">{{ t('webhooks.filter.subscription') }}</span>
                     @if (selectedSubscriptionName(); as name) {

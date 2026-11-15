@@ -81,11 +81,11 @@ test(
 
       const selectedId = new URL(page.url()).searchParams.get('subscriptionId');
       const filter = page.getByTestId('subscription-filter');
-      await filter.getByRole('button').click();
+      await filter.getByRole('combobox').click();
       await page.getByRole('button', { name: 'Clear filter', exact: true }).click();
       await expect(page).not.toHaveURL(/subscriptionId=/);
       await page.keyboard.press('Escape');
-      await filter.getByRole('button').click();
+      await filter.getByRole('combobox').click();
       const searchResponse = page.waitForResponse((response) => {
         const url = new URL(response.url());
         return url.pathname.endsWith('/webhooks/subscriptions')
