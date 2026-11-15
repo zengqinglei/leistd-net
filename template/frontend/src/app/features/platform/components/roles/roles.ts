@@ -47,7 +47,6 @@ import {
 import {
   catchError,
   debounceTime,
-  distinctUntilChanged,
   //#if (IncludeRealTime)
   filter,
   //#endif
@@ -76,7 +75,7 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import {
+import { keywordMatchesQuery,
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,
@@ -185,8 +184,12 @@ export class Roles {
 
   constructor() {
     this.searchSubject
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe((keyword) => {
+        if (!keywordMatchesQuery(keyword, this.route.snapshot.queryParamMap)) {
+          this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true);
+        }
+      });
 
     // 搜索框即时值随 URL 回填（前进后退 / 分享链接场景）。
     effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));

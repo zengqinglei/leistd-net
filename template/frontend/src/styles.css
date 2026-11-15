@@ -7,7 +7,9 @@
 @import '@spartan-ng/brain/hlm-tailwind-preset.css';
 
 /* 正文字体 Geist；业务项目可替换为品牌字体或系统字体栈。 */
-@import '@fontsource/geist';
+@import '@fontsource/geist/400.css';
+@import '@fontsource/geist/500.css';
+@import '@fontsource/geist/600.css';
 
 /*
  * 不要给 html/body 加 scrollbar-gutter: stable：常规滚动条（Windows 默认）下它让 CDK 浮层容器比

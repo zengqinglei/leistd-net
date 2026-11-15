@@ -47,7 +47,6 @@ import { tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
-  distinctUntilChanged,
   finalize,
   startWith,
   switchMap,
@@ -80,7 +79,7 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
-import {
+import { keywordMatchesQuery,
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,
@@ -352,8 +351,12 @@ export class Users {
     }
 
     this.searchSubject
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe((keyword) => {
+        if (!keywordMatchesQuery(keyword, this.route.snapshot.queryParamMap)) {
+          this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true);
+        }
+      });
 
     // 选择只在当前页内有效：翻页、筛选、排序（都写在 URL 上）时清空。
     this.route.queryParamMap

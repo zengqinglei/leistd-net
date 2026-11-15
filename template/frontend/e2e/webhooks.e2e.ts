@@ -79,6 +79,24 @@ test(
         await expect(deliveryRow.getByText('Succeeded')).toBeVisible({ timeout: 1_000 });
       }).toPass({ timeout: 15_000 });
 
+      const selectedId = new URL(page.url()).searchParams.get('subscriptionId');
+      const filter = page.getByTestId('subscription-filter');
+      await filter.getByRole('button').click();
+      await page.getByRole('button', { name: 'Clear filter', exact: true }).click();
+      await expect(page).not.toHaveURL(/subscriptionId=/);
+      await page.keyboard.press('Escape');
+      await filter.getByRole('button').click();
+      const searchResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname.endsWith('/webhooks/subscriptions')
+          && url.searchParams.get('keyword') === name && url.searchParams.get('limit') === '20';
+      });
+      await page.getByPlaceholder('Search subscriptions').fill(name);
+      expect((await searchResponse).ok()).toBe(true);
+      await page.getByRole('option', { name, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`subscriptionId=${selectedId}`));
+      await expect(filter).toContainText(name);
+
       await deliveryRow.getByRole('button', { name: 'View details' }).click();
       const sheet = page.getByTestId('webhook-delivery-sheet');
       await expect(sheet.getByTestId('webhook-delivery-sheet-status')).toHaveText('Succeeded');

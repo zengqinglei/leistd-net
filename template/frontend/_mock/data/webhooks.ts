@@ -112,6 +112,21 @@ export const WEBHOOK_SUBSCRIPTIONS: MockWebhookSubscription[] = [
     firstFailureAt: null,
     creationTime: iso(seededAt - 60 * DAY),
   },
+  ...Array.from({ length: 120 }, (_, index): MockWebhookSubscription => ({
+    id: `6b1f3c2a-0d4e-4f7a-9c1b-${String(index + 100).padStart(12, '0')}`,
+    name: `Integration ${String(index + 1).padStart(3, '0')}`,
+    description: 'Demo integration subscription.',
+    url: `https://integrations.example.com/hooks/${index + 1}`,
+    eventTypes: ['*'],
+    headers: {},
+    secret: `whsec_demo_${index + 1}`,
+    previousSecretExpiresAt: null,
+    isEnabled: true,
+    disabledReason: null,
+    disabledAt: null,
+    firstFailureAt: null,
+    creationTime: iso(seededAt - (index + 1) * DAY),
+  })),
 ];
 
 /** 一次尝试实际发出的头部快照：组件写入的头在前，自定义头在后；不含签名。 */

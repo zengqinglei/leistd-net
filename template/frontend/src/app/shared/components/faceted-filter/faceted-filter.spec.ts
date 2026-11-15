@@ -44,6 +44,40 @@ describe('FacetedFilter', () => {
     document.querySelectorAll('.cdk-overlay-container').forEach((el) => (el.innerHTML = ''));
   });
 
+  it.each([
+    { value: 'missing', label: 'missing' },
+    { value: false, label: 'false' },
+  ])('keeps an absent selected value visible and clearable: $label', async ({ value, label }) => {
+    const fixture = createFilter({ value });
+    expect(fixture.componentInstance.hasSelection()).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain(label);
+    const cleared = vi.fn();
+    fixture.componentInstance.valueChange.subscribe(cleared);
+    await page.getByRole('button', { name: 'Clear filter', exact: true }).click();
+    expect(cleared).toHaveBeenCalledWith(null);
+  });
+
+  it('keeps absent multiple values visible and clears them together', () => {
+    const fixture = createFilter({ multiple: true, values: ['missing'] });
+    expect(fixture.componentInstance.selectedOptions()).toEqual([{ value: 'missing', label: 'missing' }]);
+    expect(fixture.componentInstance.hasSelection()).toBe(true);
+    const cleared = vi.fn();
+    fixture.componentInstance.valuesChange.subscribe(cleared);
+    fixture.componentInstance.clear();
+    expect(cleared).toHaveBeenCalledWith([]);
+  });
+
+  it('gives the clear command a visible keyboard focus outside the listbox', async () => {
+    createFilter({ value: 'admin' });
+    const clear = page.getByRole('button', { name: 'Clear filter', exact: true });
+    await page.getByRole('combobox').click();
+    await page.getByRole('combobox').press('Tab');
+    await expect.element(clear).toHaveFocus();
+    const element = clear.element() as HTMLElement;
+    expect(listbox()!.contains(element)).toBe(false);
+    expect(getComputedStyle(element).boxShadow).not.toBe('none');
+  });
+
   it('declares a multi-selectable listbox owned by the search combobox', () => {
     const fixture = createFilter({ multiple: true, values: [] });
 

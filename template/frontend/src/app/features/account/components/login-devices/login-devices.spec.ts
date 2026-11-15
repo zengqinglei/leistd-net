@@ -75,6 +75,17 @@ describe('LoginDevices', () => {
     });
   });
 
+  it('retains loaded content and reports a failed refresh with a toast', async () => {
+    const host = await render([session({})]);
+    const before = host.textContent;
+    const notify = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    account.getSessions.mockReturnValue(throwError(() => new Error('offline')));
+    fixture.componentInstance.reload();
+    fixture.detectChanges();
+    expect(host.textContent).toBe(before);
+    expect(notify).toHaveBeenCalledOnce();
+  });
+
   it('marks the current device with no sign-out button; other devices can sign out', async () => {
     const host = await render([
       session({}),

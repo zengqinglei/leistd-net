@@ -7,6 +7,7 @@ import { lucideLink } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmItemImports } from '@spartan-ng/helm/item';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
@@ -40,6 +41,7 @@ const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', google: 'Goo
     NgIcon,
     HlmButton,
     HlmSpinner,
+    HlmSkeleton,
     ReauthenticateDialog,
     ...HlmItemImports,
     //#if (IncludeLocalization)
@@ -109,7 +111,10 @@ export class ExternalLogins {
     this.loadFailed.set(false);
     this.accountService.getExternalLogins().subscribe({
       next: (data) => this.data.set(data),
-      error: () => this.loadFailed.set(true),
+      error: (error) => {
+        if (this.data() === null) this.loadFailed.set(true);
+        else this.showError(error);
+      },
     });
   }
 
