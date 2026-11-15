@@ -22,7 +22,7 @@ internal sealed class RecurringJobScheduler(
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        // 只检查本进程启用的集群任务；停用名单与总开关一样在启动时读定。
+        // 集群任务缺锁会静默退化为每副本执行，必须启动即失败；只看本进程启用的任务，停用名单与总开关一样启动时读定。
         if (options.Value.Enabled
             && _definitions.Any(d => d.Scope == RecurringJobScope.Cluster
                 && !options.Value.DisabledJobs.Contains(d.Name, StringComparer.Ordinal))
