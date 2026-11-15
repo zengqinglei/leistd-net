@@ -26,7 +26,7 @@
 - **F-DC-02 取消保存丢弃已收集事件**（P3）：Given 实体登记本地事件后保存被取消；When 同一上下文之后成功保存其他变更；Then 被取消那次收集的事件不发布，新登记的事件正常发布。覆盖：`LocalEventInterceptorTests` 新增取消用例（异步路径）。
 - **BG-LOCK 锁检查只看已启用集群任务**（P3）：Given 登记的集群任务全部在 `DisabledJobs` 中且未注册 `IDistributedLock`；Then 宿主正常启动。Given 存在未停用的集群任务且无锁；Then 启动失败（现有行为）。Given `Enabled=false`；Then 跳过检查（现有行为）。覆盖：`RecurringJobExecutionTests` 或同家族开关测试。
 - **F-E1 Webhook 文档写明租户过滤前提**（P2）：`framework/docs/components/webhooks.md` 普通 DbContext 示例附近说明同库多租户须由宿主安装租户过滤（继承 `BaseDbContext` 即有），链接 `multi-tenancy.md#隔离业务实体`；"只投给当前租户"处加限定。过滤代码只在多租户文档维护。覆盖：文档闸门；租户隔离已由 `WebhookPublisherTests` A12 覆盖，不新增测试。
-- **F-E2 实时/通知示例可直接运行**（P3）：`Leistd.RealTime.AspNetCore.SignalR/DependencyInjection.cs` 两段 XML 示例与 `notifications.md` 共用 Hub 代码块包含订阅授权器注册（或 `AddAllowAllRealTimeSubscriptions()` 并注明适用范围）与 `AddNotificationsSignalR<RealTimeHub>()`。覆盖：关键 XML 示例在临时最小宿主单独编译一次（人工验收，不新增测试资产）。
+- **F-E2 实时/通知示例可直接运行**（P3）：`Leistd.RealTime.AspNetCore.SignalR/DependencyInjection.cs` 两段 XML 示例包含订阅授权器注册；共用 Hub 的完整组合放在 `realtime.md` 注册段，含授权器与 `AddNotificationsSignalR<RealTimeHub>()`，只映射实时 Hub；`notifications.md` 保留说明并链接该示例，避免使用兄弟类型突破组件文档闭包。覆盖：关键 XML 示例在临时最小宿主单独编译一次，共用 Hub 示例经受影响家族的包消费示例编译（人工验收，不新增测试资产）。
 - **F-DC-03 对象映射文档与实现一致**（P3）：删除不存在的 `Map<TDestination>(object)`；校验时机写为首次解析 `IMapper`；校验能力写为"编译已登记映射，显式映射与目标成员完整性由 Configurators 中的 Mapster 严格模式决定"。覆盖：文档闸门。
 
 模板后端：
