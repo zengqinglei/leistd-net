@@ -200,6 +200,23 @@ describe('Tenants page query and write flow', () => {
     expect(service.getTenants.mock.calls.length).toBe(requests);
   });
 
+  it('preserves the current page when only search whitespace changes', async () => {
+    await router.navigate(['/platform/tenants'], {
+      queryParams: { page: 3, keyword: 'acme' },
+    });
+    await fixture.whenStable();
+    const requests = service.getTenants.mock.calls.length;
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    component.onSearchQueryChange('  acme  ');
+    await vi.advanceTimersByTimeAsync(300);
+    await fixture.whenStable();
+    expect(router.url).toContain('page=3');
+    expect(lastQuery().offset).toBe(40);
+    expect(service.getTenants.mock.calls.length).toBe(requests);
+  });
+
   it('toggles activation via the API after confirmation and refreshes the list', async () => {
     const before = vi.mocked(service.getTenants).mock.calls.length;
 

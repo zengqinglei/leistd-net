@@ -76,22 +76,38 @@
                   (searchChange)="onSubscriptionSearch($event)"
                   (valueChange)="onFilterChange('subscriptionId', $event)"
                 >
-                  <hlm-combobox-trigger class="min-w-0 max-w-full border-dashed data-placeholder:text-foreground">
+                  <hlm-combobox-trigger
+                    class="min-w-0 max-w-full border-dashed data-placeholder:text-foreground"
+                  >
                     <ng-icon name="lucideListFilter" />
                     <span class="min-w-0 truncate">{{ t('webhooks.filter.subscription') }}</span>
                     @if (selectedSubscriptionName(); as name) {
                       <hlm-separator class="mx-2" orientation="vertical" />
-                      <span hlmBadge variant="secondary" class="min-w-0 shrink"><span class="truncate">{{ name }}</span></span>
+                      <span hlmBadge variant="secondary" class="min-w-0 shrink"
+                        ><span class="truncate">{{ name }}</span></span
+                      >
                     }
                   </hlm-combobox-trigger>
                   <hlm-combobox-content *hlmComboboxPortal class="w-72">
-                    <hlm-combobox-input [placeholder]="t('webhooks.filter.searchSubscriptionOptions')" [showTrigger]="false" />
+                    <hlm-combobox-input
+                      [placeholder]="t('webhooks.filter.searchSubscriptionOptions')"
+                      [showTrigger]="false"
+                    />
                     @if (subscriptionOptionsLoading()) {
-                      <div role="status" class="text-muted-foreground p-4 text-sm">{{ t('webhooks.filter.loadingSubscriptions') }}</div>
+                      <div role="status" class="text-muted-foreground p-4 text-sm">
+                        {{ t('webhooks.filter.loadingSubscriptions') }}
+                      </div>
                     } @else if (subscriptionOptionsError(); as error) {
                       <div class="flex flex-col gap-2 p-3 text-sm">
                         <p role="alert">{{ error }}</p>
-                        <button hlmBtn variant="outline" size="sm" (click)="loadSubscriptionOptions()">{{ t('common.retry') }}</button>
+                        <button
+                          hlmBtn
+                          variant="outline"
+                          size="sm"
+                          (click)="loadSubscriptionOptions()"
+                        >
+                          {{ t('common.retry') }}
+                        </button>
                       </div>
                     } @else {
                       <div hlmComboboxList>
@@ -100,15 +116,26 @@
                         }
                       </div>
                       @if (subscriptionOptionsSource().length === 0) {
-                        <p role="status" class="text-muted-foreground p-4 text-sm">{{ t('common.noResults') }}</p>
+                        <p role="status" class="text-muted-foreground p-4 text-sm">
+                          {{ t('common.noResults') }}
+                        </p>
                       } @else if (subscriptionOptionsTotal() > subscriptionOptionsSource().length) {
-                        <p class="text-muted-foreground px-3 pb-3 text-sm">{{ t('webhooks.filter.narrowSubscriptions') }}</p>
+                        <p class="text-muted-foreground px-3 pb-3 text-sm">
+                          {{ t('webhooks.filter.narrowSubscriptions') }}
+                        </p>
                       }
                     }
                     @if (selectedSubscriptionId()) {
                       <hlm-separator />
                       <div class="p-1">
-                        <button hlmBtn variant="ghost" class="w-full" (click)="onFilterChange('subscriptionId', null)">{{ t('common.clearFilter') }}</button>
+                        <button
+                          hlmBtn
+                          variant="ghost"
+                          class="w-full"
+                          (click)="onFilterChange('subscriptionId', null)"
+                        >
+                          {{ t('common.clearFilter') }}
+                        </button>
                       </div>
                     }
                   </hlm-combobox-content>
