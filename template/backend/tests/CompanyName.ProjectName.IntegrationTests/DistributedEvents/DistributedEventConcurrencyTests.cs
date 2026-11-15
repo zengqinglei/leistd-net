@@ -63,7 +63,7 @@ public sealed class DistributedEventConcurrencyTests(ProjectWebApplicationFactor
         }
         await Task.WhenAll(Task.Run(ScanAsync), Task.Run(ScanAsync)).WaitAsync(TimeSpan.FromSeconds(30));
         // 宿主里的周期调度器也按间隔扫收件箱，可能作为第三路一起读到 Pending；要证的是"至少两路进入、只有一路提交"
-        Assert.True(gate.Arrivals >= 2, $"进入处理器的路数应至少为 2，实际 {gate.Arrivals}");
+        Assert.True(gate.Arrivals >= 2, $"Expected at least 2 handler arrivals, got {gate.Arrivals}");
         await using var read = host.Services.CreateAsyncScope();
         var context = read.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         Assert.Equal(1, await context.Set<SettingRecord>().CountAsync(row => row.Name == "tests.concurrent." + id));
