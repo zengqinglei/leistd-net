@@ -261,6 +261,8 @@ $allow = @(
     'ContentResult','FileResult','StatusCodeResult','ObjectResult',
     # Redis / StackExchange 原语（lock 文档提到底层命令）
     'KeyDelete',
+    # Mapster 官方严格校验配置，不是 Leistd 包装层 API。
+    'RequireExplicitMapping', 'RequireDestinationMemberSource',
     # ASP.NET Core SignalR 连接选项（notifications 文档说明"令牌过期不会自动断连"时引用）
     'CloseOnAuthenticationExpiration',
     # Microsoft.IdentityModel 令牌校验（multi-tenancy 文档说明子域名部署的 issuer 校验链时引用）
