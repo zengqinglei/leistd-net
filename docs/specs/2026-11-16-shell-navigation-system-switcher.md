@@ -1,6 +1,6 @@
 # 外壳导航重组与系统切换
 
-状态：进行中 · 风险档：高 · 关联：方案对比页 [design.html](2026-11-16-shell-navigation-system-switcher/design.html)
+状态：已完成（实现与 PR 前验收；发布和演示验收待合并后执行） · 风险档：高 · 关联：方案对比页 [design.html](2026-11-16-shell-navigation-system-switcher/design.html)
 
 ## 1. 需求
 
@@ -169,3 +169,13 @@
 - 区域名称：下游的"平台管理"分组与模板一致；租户内管理区命名按模板"管理后台"对齐。
 
 **不做的事**：按租户开通系统、子域地址模板、在系统列表上预判权限、顶栏布局导航结构调整。
+
+
+## 4. 结果
+
+- 交付：[PR #287](https://github.com/zengqinglei/leistd-net/pull/287)，框架、Identity、Resource、前端外壳、页面、Mock 与规范在同一 PR 中完成 AC1–AC19；未增加部署形态开关。
+- 分布式事件管理契约删除选库参数、库目录及对应 DTO/错误码，宿主只看平台自身事件，租户按当前上下文定位自己的库与记录。下游须移除选库调用；破坏性变更已写入实现提交脚注。
+- 实际生成 Standalone（关闭多租户）、Identity × Impersonation、Identity × Workspace、Resource × Workspace、关闭本地化的 Workspace，前端 lint、生产构建和受影响测试通过，后端完整单测与受影响集成测试通过；另补验关闭本地化的 Identity。框架事件测试 175 通过，11 项需要外部 RabbitMQ/Kafka 的既有传输契约测试跳过。
+- 82 个候选包重新打包后经隔离 NuGet 路径消费。真实 OIDC workspace 联调通过，两个 Resource 均可取得目录；有头 e2e 8/8 通过，包含真实 RabbitMQ 回环。1440/390 四场景版式走查使用生成前端与 Mock，截图及实测对比页随本地交付；退役术语、i18n 和文档引用检查通过。
+- 现行规则已上收到[前端导航](../../template/docs/standards/frontend-navigation.md)、[服务间调用](../../template/docs/standards/service-invocation.md)、[分布式事件](../../template/docs/standards/distributed-events.md)和[框架组件文档](../../framework/docs/components/event-bus.md)，后端说明同步目录授权与首页登记。
+- 后续：按委托书不自行合并；develop Release、演示站升级及演示环境首页登记待合并后执行，未计作本次已完成的验收。
