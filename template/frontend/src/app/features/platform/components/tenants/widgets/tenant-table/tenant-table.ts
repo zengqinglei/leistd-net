@@ -27,6 +27,9 @@ import {
   lucidePencil,
   lucideSearchX,
   lucideTrash2,
+  //#if (TenantWorkspace)
+  lucideUsers,
+  //#endif
 } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -106,6 +109,9 @@ import { TenantOutputDto } from '../../../../dtos/tenant.dto';
       lucidePencil,
       lucideSearchX,
       lucideTrash2,
+      //#if (TenantWorkspace)
+      lucideUsers,
+      //#endif
     }),
   ],
   templateUrl: './tenant-table.html',
