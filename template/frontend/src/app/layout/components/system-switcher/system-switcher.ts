@@ -1,16 +1,12 @@
 //#if (OpenIddictServer || RemoteTokenAuth)
 import { CdkMenuTrigger } from '@angular/cdk/menu';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  ElementRef,
-  computed,
-  inject,
-  viewChild,
-} from '@angular/core';
-//#else
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 //#endif
+// prettier-ignore
+import { ChangeDetectionStrategy, Component, inject,
+  //#if (OpenIddictServer || RemoteTokenAuth)
+  ElementRef, computed, viewChild,
+  //#endif
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';

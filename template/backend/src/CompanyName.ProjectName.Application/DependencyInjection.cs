@@ -1,4 +1,4 @@
-#if (RemoteTokenAuth)
+#if (OpenIddictServer || RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Systems.AppServices;
 #endif
 using Leistd.Settings.Definitions;
@@ -47,7 +47,6 @@ using Leistd.BackgroundJobs.Recurring;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 using CompanyName.ProjectName.Application.OpenApplications.Validators;
-using CompanyName.ProjectName.Application.Systems.AppServices;
 using CompanyName.ProjectName.Application.Auth.Options;
 #endif
 #endif
