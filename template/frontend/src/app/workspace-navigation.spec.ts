@@ -30,10 +30,10 @@ describe('workspace navigation boundaries', () => {
     );
     const hasAny = vi.fn(() => true);
     const wrapper = routes.find(
-      (route) => route.path === '' && route.children?.some((child) => child.path === 'platform'),
+      (route) => route.path === 'platform' && route.children?.some((child) => child.path === ''),
     )!;
     expect(wrapper).toBeDefined();
-    const platform = wrapper.children!.find((route) => route.path === 'platform')!;
+    const platform = wrapper.children!.find((route) => route.path === '')!;
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
