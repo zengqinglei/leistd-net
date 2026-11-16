@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $tier = (Get-Content -LiteralPath $ValidationPlanPath -Raw | ConvertFrom-Json).Tier
 $plan = Read-QualityValidationPlan $ValidationPlanPath $tier
 $files = @(Get-ChildItem -LiteralPath $ResultsPath -Recurse -File -Filter '*.json')
-# 生成与生成文档按片产出：三个形态片加一个对照片，各一份证明；其余责任恰好一份
+# 生成与生成文档按片产出：模型配置的形态片加一个对照片，各一份证明；其余责任恰好一份
 $sharded = $Kind -cin @('generation', 'documentation')
 if ($sharded) {
     $python = Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
@@ -53,7 +53,7 @@ if ($Kind -ceq 'package') {
 } elseif ($Kind -ceq 'generation') {
     if (-not $plan.Jobs.'template-generation') { throw 'Template generation proof is incomplete.' }
     $byShard = Get-ShardProofs 'Template generation'
-    # 四片同一候选源码：逐文件摘要彼此相同，且等于本检出的模板源码
+    # 所有分片同一候选源码：逐文件摘要彼此相同，且等于本检出的模板源码
     $sources = @{}
     $templateRoot = Join-Path (git rev-parse --show-toplevel) 'template'
     foreach ($file in @(Get-ChildItem -LiteralPath $templateRoot -Recurse -File -Force)) {

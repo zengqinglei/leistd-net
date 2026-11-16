@@ -113,7 +113,11 @@ def effective_shape(values: dict[str, object]) -> tuple:
     return tuple(values[name] for name in EFFECTIVE_DIMENSIONS)
 
 
-SHAPE_SHARDS = 3
+SHAPE_SHARDS = 5
+
+
+def generation_shard_names() -> list[str]:
+    return [*map(str, range(SHAPE_SHARDS)), 'control']
 
 
 def generation_space(config: dict) -> tuple[list[dict], dict[tuple, list[dict]]]:

@@ -1231,7 +1231,7 @@ def template_source_digests(repo):
 
 
 def generation_shards(plan, repo):
-    """A consistent four-shard generation proof: three modulo shape shards and the control shard."""
+    """A consistent generation proof using the model's modulo shards and the control shard."""
     sources = template_source_digests(repo)
     spec = importlib.util.spec_from_file_location('shape_model', repo / 'scripts/check-template-scenario-coverage.py')
     model = importlib.util.module_from_spec(spec); spec.loader.exec_module(model)
@@ -1309,13 +1309,13 @@ def prove_release_proofs(repo, plan, out, run):
         ('verify-key-differs-from-steps', lambda p: p['VerifyChecks'][0]['Key'].update(Steps=['other']))]
     for case, apply in control_cases:
         check('generation', shards(control=apply), False, 'control-' + case)
-    for name in ('0', '1', '2', 'control'):
+    for name in generation:
         check('generation', shards(**{name: None}), False, f'missing-shard-{name}')
         for case, apply in [('result-failure', lambda p: p.update(Result='failure')), ('result-cancelled', lambda p: p.update(Result='cancelled')),
                             ('foreign-candidate', lambda p: p.update(CandidateSha='a' * 40)), ('version', lambda p: p.update(Version=2)),
                             ('foreign-source', lambda p: p['TemplateSourceDigests'].update({'template/README.md': '0' * 64})),
                             ('missing-source', lambda p: p['TemplateSourceDigests'].pop('template/README.md')),
-                            ('unknown-shard', lambda p: p.update(Shard='3'))]:
+                            ('unknown-shard', lambda p: p.update(Shard=str(generation['0']['ShapeShards'])))]:
             check('generation', shards(**{name: apply}), False, f'shard-{name}-{case}')
     duplicate = shards(); duplicate.append(json.loads(json.dumps(generation['0'])))
     check('generation', duplicate, False, 'duplicate-shard')

@@ -361,19 +361,19 @@ jobs:
           path: .tmp/package-consumer/package-results.json
           if-no-files-found: error
 
-  # 证明拆成互不引用产物的四片：三片按序号取模生成全部有效形态，对照片承担默认 Ci 的全部输入映射、
-  # 角色等价、Ci 变体与 verify 检查；汇总核对四片同一候选与源码、形态无缺号无重复、对照片证明齐全。
+  # 五个形态片按序号取模生成全部有效形态，对照片承担默认 Ci 的全部输入映射、角色等价、Ci 变体与 verify 检查。
+  # 汇总核对所有分片同一候选与源码、形态无缺号无重复、对照片证明齐全；matrix 与模型的一致性由自检断言。
   template-generation:
     name: 模板有效形态生成 · ${{ matrix.shard }}
     needs: quality-plan
     if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['template-generation'] && fromJSON(needs.quality-plan.outputs.validation_plan).QualityExecution != 'reuse'
     runs-on: ubuntu-latest
-    # 第 0 片近期稳定在 19.5–20 分钟（427 个形态），20 分钟上限会在上传证明产物时取消作业
+    # 按 427 个形态约 20 分钟估算，1856 个形态分五片后每片 371–372 个，约 17–18 分钟；保留 30 分钟上限。
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: ['0', '1', '2', 'control']
+        shard: ['0', '1', '2', '3', '4', 'control']
     steps:
       - uses: actions/checkout@v7
         with:
@@ -533,7 +533,7 @@ jobs:
         if: fromJSON(needs.quality-plan.outputs.validation_plan).GeneratedDocumentation && fromJSON(needs.quality-plan.outputs.validation_plan).QualityExecution != 'reuse'
         shell: pwsh
         run: pwsh scripts/check-quality-proof.ps1 -ValidationPlanPath .tmp/quality-plan.json -Kind documentation -ResultsPath .tmp/generated-documentation-proof
-      # 四片证明各自落在以 artifact 命名的子目录，不合并（同名文件会互相覆盖）
+      # 各片证明落在以 artifact 命名的子目录，不合并（同名文件会互相覆盖）
       - uses: actions/download-artifact@v8
         if: fromJSON(needs.quality-plan.outputs.validation_plan).Jobs['template-generation'] && fromJSON(needs.quality-plan.outputs.validation_plan).QualityExecution != 'reuse'
         with:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check documentation contracts on one generation shard's actual generated projects.
 
-The four shards (three shape shards and the control shard) together cover the complete
+The model-defined shape shards and the control shard together cover the complete
 generated input space; the summary checks that their receipts add up to it.
 """
 from __future__ import annotations

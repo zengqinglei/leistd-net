@@ -10,11 +10,11 @@
 CI 交付参数 `Ci` 不是能力：全部形态按默认值生成，有无前端两类形态另生成其余取值，核对差异只落在
 CI 薄壳与描述它的文档；每种 `scripts/verify.ps1` 产物核对步骤清单与失败即停（命令换成记录调用的替身）。
 
-证明拆成互不引用产物的四片（`--shard`）：
-- `0`/`1`/`2`：全部有效形态按序号取模分片，逐个生成并校验，记录每个形态的摘要与 verify.ps1 键；
+证明按模型配置拆成互不引用产物的分片（`--shard`）：
+- 数字编号的形态片：全部有效形态按序号取模分片，逐个生成并校验，记录每个形态的摘要与 verify.ps1 键；
 - `control`：默认 Ci 的全部原始输入映射、角色等价比较、Ci 变体与全部 verify.ps1 变体的步骤与失败传播，
   所需的代表形态由本片自行重新生成。
-汇总（check-quality-proof.ps1 -Kind generation）核对四片同一候选与源码摘要、形态无缺号无重复、
+汇总（check-quality-proof.ps1 -Kind generation）核对所有分片同一候选与源码摘要、形态无缺号无重复、
 对照片各项证明齐全，并交叉核对代表形态摘要与每个形态的 verify.ps1 键都被对照片覆盖。
 """
 from __future__ import annotations
@@ -960,7 +960,7 @@ def main():
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--shard', choices=[*map(str, range(SHAPE_SHARDS)), 'control'],
-                        help='0..2：按序号取模的形态片；control：输入映射、角色等价、Ci 变体与 verify 检查')
+                        help=f'0..{SHAPE_SHARDS - 1}：按序号取模的形态片；control：输入映射、角色等价、Ci 变体与 verify 检查')
     parser.add_argument('--self-test', action='store_true', help='只运行部署资产判据的夹具自检')
     parser.add_argument('--compose-file', action='append', type=Path, default=[], help='只校验指定生成 compose 的结构，可重复传入')
     args = parser.parse_args()
@@ -975,7 +975,7 @@ def main():
     if args.self_test:
         raise SystemExit(self_test())
     if args.shard is None:
-        parser.error('--shard is required (0, 1, 2 or control)')
+        parser.error('--shard is required (' + ', '.join(model.generation_shard_names()) + ')')
     assert 1 <= args.workers <= 8
     gitlab_failures = self_test_gitlab_ci()
     assert not gitlab_failures, f'GitLab 薄壳判据自检失败：{gitlab_failures}'

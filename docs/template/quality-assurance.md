@@ -96,7 +96,7 @@ PR 有意不承担全局覆盖，放行候选必须完整：这是责任迁移�
 
 ### 形态生成
 
-全部有效形态生成作业拆成四片：三片按序号取模生成模型中的全部有效形态，对照片承担默认 Ci 的全部原始输入映射、角色等价、Ci 变体与全部 `verify.ps1` 变体的检查，并自行重新生成所需的代表形态。生成器与证明汇总共用 `check-template-scenario-coverage.py` 的形态模型，可用 `python3 scripts/check-template-scenario-coverage.py --generation-space` 查看规模。生成检查同时解析生产与开发 Compose，拒绝重复键、非服务层级的服务和缺失的依赖目标；形态生成与矩阵共用 `test-template-generation.py` 的结构判据。四片都必须在同候选汇总中成功，汇总核对四片同一候选与源码、形态无缺号无重复、对照片证明齐全。只改框架时不跑形态生成；内部文档变更时按既有范围规则记为不适用。
+全部有效形态生成作业按模型配置分片：形态片按序号取模生成模型中的全部有效形态，对照片承担默认 Ci 的全部原始输入映射、角色等价、Ci 变体与全部 `verify.ps1` 变体的检查，并自行重新生成所需的代表形态。生成器与证明汇总共用 `check-template-scenario-coverage.py` 的形态模型，可用 `python3 scripts/check-template-scenario-coverage.py --generation-space` 查看规模。生成检查同时解析生产与开发 Compose，拒绝重复键、非服务层级的服务和缺失的依赖目标；形态生成与矩阵共用 `test-template-generation.py` 的结构判据。所有分片都必须在同候选汇总中成功，汇总核对分片同一候选与源码、形态无缺号无重复、对照片证明齐全。只改框架时不跑形态生成；内部文档变更时按既有范围规则记为不适用。
 
 ### 矩阵回执
 

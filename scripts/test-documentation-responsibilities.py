@@ -18,16 +18,19 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--generation-root', type=Path, required=True,
-                        help='Directory holding the four generation shard roots 0, 1, 2 and control')
+                        help='Directory holding the model-defined shape shard roots and control')
     parser.add_argument('--frontend-tools', type=Path, required=True)
     parser.add_argument('--feed', type=Path)
     args = parser.parse_args()
     output = ROOT / '.tmp/documentation-mutations'
     output.mkdir(parents=True, exist_ok=True)
     project = output / 'project'
-    shards = ['0', '1', '2', 'control']
+    spec = importlib.util.spec_from_file_location('shape_model', ROOT / 'scripts/check-template-scenario-coverage.py')
+    model = importlib.util.module_from_spec(spec); spec.loader.exec_module(model)
+    shards = model.generation_shard_names()
+    shape_shards = shards[:-1]
     roots = {shard: args.generation_root.resolve() / shard for shard in shards}
-    source = roots['0'] / 'generated/0'
+    source = roots[shape_shards[0]] / 'generated/0'
     projects_file = output / 'projects.json'
     projects_file.write_text(json.dumps([str(project)]), encoding='utf-8')
     def reset():
@@ -112,17 +115,22 @@ def main():
         return list(values.values())
     checker = ['pwsh', 'scripts/check-quality-proof.ps1', '-ValidationPlanPath', str(plan_file), '-Kind', 'documentation', '-ResultsPath', str(proofs)]
     write_proofs(receipts.values()); run('documentation-proof-valid', checker)
-    for shard, field, value in [('control', 'CandidateSha', 'a' * 40), ('0', 'Version', 2), ('1', 'Result', 'cancelled'), ('2', 'Result', 'failure'),
-                                ('control', 'EffectiveShapes', 0), ('control', 'CiVariants', 3), ('0', 'CiVariants', 1), ('1', 'Projects', 0),
-                                ('2', 'MarkdownFiles', 0), ('control', 'Skills', 0), ('0', 'FrontendMarkdownFiles', 0), ('1', 'FormattedContents', 0),
-                                ('2', 'ShapeIndexes', []), ('control', 'ShapeIndexes', [0]), ('0', 'Shard', '1'), ('1', 'Shard', None)]:
+    shape_cases = [('Version', 2), ('Result', 'cancelled'), ('Result', 'failure'), ('CiVariants', 1), ('Projects', 0),
+                   ('MarkdownFiles', 0), ('FrontendMarkdownFiles', 0), ('FormattedContents', 0), ('ShapeIndexes', []),
+                   ('Shard', None)]
+    mutations = [(shape_shards[index % len(shape_shards)], field, value) for index, (field, value) in enumerate(shape_cases)]
+    mutations += [('control', 'CandidateSha', 'a' * 40), ('control', 'EffectiveShapes', 0),
+                  ('control', 'CiVariants', receipts['control']['CiVariants'] + 1), ('control', 'Skills', 0),
+                  ('control', 'ShapeIndexes', [0]), (shape_shards[-1], 'Shard', shape_shards[0])]
+    for shard, field, value in mutations:
         write_proofs(mutated(shard, field, value))
         run(f'invalid-proof-{shard}-{field}-{value}', checker, False)
-    duplicated = json.loads(json.dumps(receipts)); duplicated['1']['ShapeIndexes'] = duplicated['1']['ShapeIndexes'][1:] + duplicated['0']['ShapeIndexes'][:1]
+    duplicated = json.loads(json.dumps(receipts))
+    duplicated[shape_shards[-1]]['ShapeIndexes'] = duplicated[shape_shards[-1]]['ShapeIndexes'][1:] + duplicated[shape_shards[0]]['ShapeIndexes'][:1]
     write_proofs(duplicated.values()); run('invalid-proof-duplicate-shape-index', checker, False)
     for shard in shards:
         write_proofs([value for name, value in receipts.items() if name != shard]); run(f'missing-proof-shard-{shard}', checker, False)
-    write_proofs([*receipts.values(), receipts['0']]); run('duplicate-proof', checker, False)
+    write_proofs([*receipts.values(), receipts[shape_shards[0]]]); run('duplicate-proof', checker, False)
     # The actual generation proofs of the same shards satisfy the release summary's generation check.
     generation_proofs = output / 'generation-proofs'
     if generation_proofs.exists(): shutil.rmtree(generation_proofs)
