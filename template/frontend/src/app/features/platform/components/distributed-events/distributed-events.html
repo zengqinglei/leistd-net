@@ -7,32 +7,6 @@
     <div class="flex flex-col gap-6 *:shrink-0">
       <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
-          @if (isHost()) {
-            <hlm-select
-              data-testid="event-database"
-              [value]="database()"
-              [itemToString]="databaseLabel"
-              (valueChange)="update({ database: $event })"
-            >
-              <hlm-select-trigger
-                class="max-w-full sm:w-64"
-                [aria-label]="t('distributedEvents.database')"
-              >
-                <hlm-select-value />
-              </hlm-select-trigger>
-              <hlm-select-content *hlmSelectPortal>
-                @for (item of databases(); track item.key) {
-                  <hlm-select-item [value]="item.key">{{
-                    item.isHost ? t('distributedEvents.hostDatabase') : item.key
-                  }}</hlm-select-item>
-                }
-              </hlm-select-content>
-            </hlm-select>
-          } @else {
-            <span class="text-muted-foreground text-sm">{{
-              t('distributedEvents.tenantScope')
-            }}</span>
-          }
           @if (status(); as status) {
             <span
               hlmBadge
@@ -297,12 +271,10 @@
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
-                [isHost]="isHost()"
                 [canManage]="canManage()"
                 [selected]="selected()"
                 [recordId]="recordId()"
                 [busy]="busy()"
-                [tenantNames]="tenantNames()"
                 (open)="openRecord($event)"
                 (recover)="recover('single', $event)"
                 (selectionChange)="selected.set($event)"
@@ -318,12 +290,10 @@
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
-                [isHost]="isHost()"
                 [canManage]="canManage()"
                 [selected]="selected()"
                 [recordId]="recordId()"
                 [busy]="busy()"
-                [tenantNames]="tenantNames()"
                 (open)="openRecord($event)"
                 (recover)="recover('single', $event)"
                 (selectionChange)="selected.set($event)"
@@ -339,12 +309,10 @@
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
-                [isHost]="isHost()"
                 [canManage]="canManage()"
                 [selected]="selected()"
                 [recordId]="recordId()"
                 [busy]="busy()"
-                [tenantNames]="tenantNames()"
                 (open)="openRecord($event)"
                 (recover)="recover('single', $event)"
                 (selectionChange)="selected.set($event)"
@@ -360,12 +328,10 @@
                 [totalCount]="totalCount()"
                 [page]="page()"
                 [pageSize]="pageSize()"
-                [isHost]="isHost()"
                 [canManage]="canManage()"
                 [selected]="selected()"
                 [recordId]="recordId()"
                 [busy]="busy()"
-                [tenantNames]="tenantNames()"
                 (open)="openRecord($event)"
                 (recover)="recover('single', $event)"
                 (selectionChange)="selected.set($event)"
@@ -383,11 +349,9 @@
   <app-distributed-event-record-sheet
     [recordId]="recordId()"
     [view]="view()"
-    [database]="database()"
     [canManage]="canManage()"
     [payloadEnabled]="status()?.payloadEnabled === true"
     [busy]="busy()"
-    [tenantNames]="tenantNames()"
     [catalogDetail]="catalogDetail()"
     [refreshVersion]="detailVersion()"
     (closed)="closeDetail()"

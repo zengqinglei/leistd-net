@@ -15,8 +15,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.EventBus.EntityFrameworkCore.Stores;
 
-// 先在查看范围读本批目标，结束读取事务后按行所属租户分组写入。
-// 不在一个工作单元内换租户或物理库；目标提交后才在调用方上下文独立提交审计。
+// 读取与恢复始终限定当前租户，目标提交后独立提交审计。
 internal sealed class DistributedEventRecovery<TDbContext>(
     DistributedEventDatabaseScope<TDbContext> scope,
     DistributedEventQueue<TDbContext> queue,
@@ -26,9 +25,9 @@ internal sealed class DistributedEventRecovery<TDbContext>(
     ILogger<DistributedEventRecovery<TDbContext>> logger,
     IDistributedEventTransport? transport = null) where TDbContext : DbContext
 {
-    public async Task<DistributedEventRecoveryOutputDto> OutboxAsync(RecoverDistributedEventOutboxInputDto input, string? database, CancellationToken ct)
+    public async Task<DistributedEventRecoveryOutputDto> OutboxAsync(RecoverDistributedEventOutboxInputDto input, CancellationToken ct)
     {
-        var target = await scope.ResolveAsync(database, false, ct);
+        var target = scope.Resolve(false);
         var requested = input.Ids?.Distinct().ToArray();
         var skipped = new List<DistributedEventRecoverySkipDto>();
         long affected = 0, after = 0;
@@ -51,12 +50,12 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 return await query.OrderBy(x => x.Id).Take(500).Select(x => new Target(x.Id, x.TenantId)).ToListAsync(token);
             }, ct);
             Missing(requested, batch, skipped);
-            foreach (var group in batch.GroupBy(x => x.TenantId))
+            if (batch.Count > 0)
             {
-                var ids = group.Select(x => x.Id).ToArray();
-                var changed = await scope.RunAsync(new(group.Key, false), async (db, token) =>
+                var ids = batch.Select(x => x.Id).ToArray();
+                var changed = await scope.RunAsync(target, async (db, token) =>
                 {
-                    var rows = await db.Set<DistributedEventOutbox>().IgnoreQueryFilters().Where(x => ids.Contains(x.Id) && x.TenantId == group.Key).ToListAsync(token);
+                    var rows = await db.Set<DistributedEventOutbox>().IgnoreQueryFilters().Where(x => ids.Contains(x.Id) && x.TenantId == target).ToListAsync(token);
                     var changed = new List<long>();
                     foreach (var id in ids)
                     {
@@ -74,7 +73,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                     return changed;
                 }, ct);
                 affected += changed.Count;
-                await AuditAsync(DistributedEventManagementAction.Redelivered, changed, input.Filter, database, group.Key, ct);
+                await AuditAsync(DistributedEventManagementAction.Redelivered, changed, input.Filter, target, ct);
             }
             if (batch.Count < 500 || requested is not null) break;
             after = batch[^1].Id;
@@ -82,9 +81,9 @@ internal sealed class DistributedEventRecovery<TDbContext>(
         return new() { AffectedCount = affected, Skipped = skipped };
     }
 
-    public async Task<DistributedEventRecoveryOutputDto> InboxAsync(RecoverDistributedEventInboxInputDto input, string? database, CancellationToken ct)
+    public async Task<DistributedEventRecoveryOutputDto> InboxAsync(RecoverDistributedEventInboxInputDto input, CancellationToken ct)
     {
-        var target = await scope.ResolveAsync(database, false, ct);
+        var target = scope.Resolve(false);
         var requested = input.Ids?.Distinct().ToArray();
         var skipped = new List<DistributedEventRecoverySkipDto>();
         long affected = 0, after = 0;
@@ -108,12 +107,12 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 return await query.OrderBy(x => x.Id).Take(500).Select(x => new Target(x.Id, x.TenantId)).ToListAsync(token);
             }, ct);
             Missing(requested, batch, skipped);
-            foreach (var group in batch.GroupBy(x => x.TenantId))
+            if (batch.Count > 0)
             {
-                var ids = group.Select(x => x.Id).ToArray();
-                var changed = await scope.RunAsync(new(group.Key, false), async (db, token) =>
+                var ids = batch.Select(x => x.Id).ToArray();
+                var changed = await scope.RunAsync(target, async (db, token) =>
                 {
-                    var rows = await db.Set<DistributedEventInbox>().IgnoreQueryFilters().Where(x => ids.Contains(x.Id) && x.TenantId == group.Key).ToListAsync(token);
+                    var rows = await db.Set<DistributedEventInbox>().IgnoreQueryFilters().Where(x => ids.Contains(x.Id) && x.TenantId == target).ToListAsync(token);
                     var changed = new List<long>();
                     foreach (var id in ids)
                     {
@@ -133,7 +132,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                     return changed;
                 }, ct);
                 affected += changed.Count;
-                await AuditAsync(DistributedEventManagementAction.Replayed, changed, input.Filter, database, group.Key, ct);
+                await AuditAsync(DistributedEventManagementAction.Replayed, changed, input.Filter, target, ct);
             }
             if (batch.Count < 500 || requested is not null) break;
             after = batch[^1].Id;
@@ -141,9 +140,9 @@ internal sealed class DistributedEventRecovery<TDbContext>(
         return new() { AffectedCount = affected, Skipped = skipped };
     }
 
-    public async Task<DistributedEventRecoveryOutputDto> RejectionsAsync(RecoverDistributedEventRejectionInputDto input, string? database, bool discard, CancellationToken ct)
+    public async Task<DistributedEventRecoveryOutputDto> RejectionsAsync(RecoverDistributedEventRejectionInputDto input, bool discard, CancellationToken ct)
     {
-        var target = await scope.ResolveAsync(database, true, ct);
+        var target = scope.Resolve(true);
         var requested = input.Ids?.Distinct().ToArray();
         var skipped = new List<DistributedEventRecoverySkipDto>();
         long affected = 0, deferredCount = 0, after = 0;
@@ -201,7 +200,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 if (deferred) deferredCount += changed.Count;
                 await AuditAsync(discard ? DistributedEventManagementAction.Discarded
                     : deferred ? DistributedEventManagementAction.RedecodeRequested : DistributedEventManagementAction.Redecoded,
-                    changed, input.Filter, database, null, ct);
+                    changed, input.Filter, null, ct);
             }
             if (batch.Count < 500 || requested is not null) break;
             after = batch[^1].Id;
@@ -215,7 +214,7 @@ internal sealed class DistributedEventRecovery<TDbContext>(
         if (transport is null) return;
         long after = 0;
         var failures = 0;
-        var target = new DistributedEventDatabaseTarget(null, true);
+        var target = (Guid?)null;
         while (true)
         {
             var batch = await scope.RunAsync(target, (db, token) => db.Set<DistributedEventRejection>().AsNoTracking()
@@ -264,14 +263,14 @@ internal sealed class DistributedEventRecovery<TDbContext>(
         catch (DistributedEventDecodeException exception) { return DistributedEventRetry.Truncate(exception.Message); }
     }
 
-    private async Task AuditAsync(DistributedEventManagementAction action, List<long> ids, object? filter, string? database, Guid? targetTenantId, CancellationToken ct)
+    private async Task AuditAsync(DistributedEventManagementAction action, List<long> ids, object? filter, Guid? targetTenantId, CancellationToken ct)
     {
         if (ids.Count == 0) return;
         // 目标批次已经提交，不能再受调用方外层事务的提交或回滚控制。
         using var audit = units.Begin(requiresNew: true);
         audit.AddPendingEvents([new DistributedEventManagedEvent
         {
-            Action = action, AffectedCount = ids.Count, Database = database, TargetTenantId = targetTenantId,
+            Action = action, AffectedCount = ids.Count, TargetTenantId = targetTenantId,
             Ids = filter is null ? ids.ToArray() : null,
             FilterJson = filter is null ? null : JsonSerializer.Serialize(filter, filter.GetType(), JsonSerializerOptions.Web)
         }]);

@@ -251,11 +251,11 @@ EF 后台服务只执行带 `event-bus` 标签的检查，并将每个传输进�
 
 `Leistd:EventBus:Distributed:TransportStatus` 的 `ReportInterval` 默认十五秒、`StaleAfter` 默认一分钟且须大于上报间隔；`Instance` 默认 `{ApplicationName}@{MachineName}:{ProcessId}`，显式覆盖须保证各并发实例唯一。配置无需另设部署变量。实际上报周期为间隔加检查与持久化耗时；StaleAfter 应大于间隔加最长检查耗时，并为实例间时钟偏差留余量，各实例应保持时钟同步。保留期任务会删除上报时间早于保留期的实例行。
 
-快照只读宿主库新鲜报告，不在 GET 中执行健康检查；租户与所选业务库不改变来源。聚合取最差 `HealthStatus`：healthy 表示已连接，degraded 表示降级，unhealthy 表示断开且正在自动恢复，unknown 表示没有新鲜报告。`TransportStatusChangedAt` 为最差状态实例中最近的变化时刻，`TransportReportedAt` 为全部新鲜实例中最近的上报时刻；unknown 时二者为空。传输名优先当前进程，否则按最差状态、变化时刻降序、上报时刻降序、实例名升序选取。
+快照只读宿主库新鲜报告，不在 GET 中执行健康检查；当前租户不改变来源。聚合取最差 `HealthStatus`：healthy 表示已连接，degraded 表示降级，unhealthy 表示断开且正在自动恢复，unknown 表示没有新鲜报告。`TransportStatusChangedAt` 为最差状态实例中最近的变化时刻，`TransportReportedAt` 为全部新鲜实例中最近的上报时刻；unknown 时二者为空。传输名优先当前进程，否则按最差状态、变化时刻降序、上报时刻降序、实例名升序选取。
 
 ### 管理与排障
 
-宿主按物理库查看发件箱与收件箱，默认宿主库；库目录只返回代表租户与租户清单，不暴露连接串。租户始终只见自己，传 database 参数返回 HostOnly。拒收集中宿主库且仅宿主可访问；切换物理库不改变拒收范围。宿主选择其他库时不能借测试事件冒充该租户。
+管理接口始终按当前租户定位数据库并过滤发件箱与收件箱。宿主只见 TenantId 为空的平台记录；租户只见本租户记录，包括共享库与独立库。接口不接受库或租户选择参数，也不提供库目录。拒收集中宿主库且仅宿主可访问。
 
 Read 只读快照、目录、列表与详情概要，载荷经独立 Manage 端点读取。自增 Id 输出为十进制字符串，前端不得转为 number。列表按 Id 倒序，创建／接收时间上限固定为首次加载时刻。
 
@@ -266,7 +266,7 @@ Read 只读快照、目录、列表与详情概要，载荷经独立 Manage 端�
 | 拒收重新解码 | Pending | 本地有同名传输时同步调用 DecodeAsync 与接收校验；否则转为 RedecodePending，由同名接收 Worker 处理。成功先写有去重保护的收件箱，再标 Redecoded；解码失败回 Pending 并更新脱敏原因。 |
 | 拒收丢弃 | Pending、RedecodePending | 标 Discarded。 |
 
-ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个实际改动且提交的租户分组批次发布一条 `DistributedEventManagedEvent`，带目标 TargetTenantId、Database、实际条数与原筛选或实际 ids。目标作用域退出后，在调用方租户与用户上下文中独立完成审计单元；调用方已有单元之后提交或回滚均不影响该审计。跨库更新与本地审计不是分布式原子事务：审计失败向上传播，已提交批次不撤回。部分批次失败不把未完成批次记为成功。
+ids 与 filter 二选一，ids 最多 100；filter 必须带 UTC 时间上限。按条件恢复每批最多 500 条，逐批事务提交，改回 Pending 后交给扫描，不灌进立即队列。每个实际改动且提交的批次发布一条 `DistributedEventManagedEvent`，带目标 TargetTenantId、实际条数与原筛选或实际 ids。目标作用域退出后，在调用方租户与用户上下文中独立完成审计单元；调用方已有单元之后提交或回滚均不影响该审计。事件记录更新与独立审计不是原子事务：审计失败向上传播，已提交批次不撤回。部分批次失败不把未完成批次记为成功。
 
 转交结果的 DeferredCount 是 AffectedCount 的子集，表示请求已登记而非已解码；该请求用 RedecodeRequested 动作审计。Worker 只领取宿主表中 Transport 与自身 Name 相同的 RedecodePending，沿用 Inbox:ReceiveEnabled 与 DispatchInterval，每批 100 行；单行执行失败记 4107 Warning，该行保留待办，继续后续行；整轮结束汇总失败并向调度器报错，下一轮重试。Pending 与 RedecodePending 都能丢弃；按筛选丢弃可用 Status 限定其中一种，省略时涵盖两种未解决状态。处理原始字节、头与入站坐标，不重新向 Broker 发布；进程中断后重入由 Inbox 唯一约束去重。Worker 完成不再以请求用户发管理审计，未解决拒收计数包含 RedecodePending。共库有多种传输接收宿主时，各自只领取同名行；集群任务按时段轮到谁由谁执行，因此可能有延迟。
 

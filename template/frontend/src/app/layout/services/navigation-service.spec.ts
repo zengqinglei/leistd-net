@@ -1,12 +1,83 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 
 import { NavigationService } from './navigation-service';
 //#if (IncludeLocalization)
+import en from '../../../../public/i18n/en.json';
 import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 //#endif
+import { AuthService } from '../../core/services/auth-service';
 import { AuthorizationService } from '../../core/services/authorization-service';
+
+const user = signal<{ tenantId: string | null }>({ tenantId: null });
+
+describe('NavigationService scope names', () => {
+  async function setup(tenantId: string | null) {
+    user.set({ tenantId });
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'platform', children: [] }]),
+        { provide: AuthService, useValue: { currentUser: user } },
+        {
+          provide: AuthorizationService,
+          useValue: { hasAny: () => true, canAccessPlatform: () => true },
+        },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+      ],
+    });
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation(en, 'en');
+    //#endif
+    await TestBed.inject(Router).navigateByUrl('/platform');
+    return TestBed.inject(NavigationService);
+  }
+  //#if (IncludeMultiTenancy)
+
+  it('names both-side host entries explicitly and preserves host-only names', async () => {
+    const navigation = await setup(null);
+    const items = navigation.menuGroups().flatMap((group) => group.items);
+    expect(items.find((item) => item.route === '/platform')?.label).toBe('Platform home');
+    expect(items.find((item) => item.route === '/platform/users')?.label).toBe('Platform accounts');
+    expect(
+      items
+        .filter((item) => item.side === 'both')
+        .every((item) => item.label.startsWith('Platform ')),
+    ).toBe(true);
+    expect(
+      items
+        .filter((item) => item.side === 'host')
+        .every((item) => !item.label.startsWith('Platform ')),
+    ).toBe(true);
+    expect(navigation.currentAreaLabel()).toBe('Platform management');
+  });
+
+  it('uses original names and administration inside a tenant, with no host-only menus', async () => {
+    const navigation = await setup('acme-id');
+    const items = navigation.menuGroups().flatMap((group) => group.items);
+    expect(items.find((item) => item.route === '/platform/users')?.label).toBe('User management');
+    expect(items.some((item) => item.side === 'host')).toBe(false);
+    expect(items.map((item) => item.label).join(' ')).not.toMatch(/platform|tenant/i);
+    expect(navigation.currentAreaLabel()).toBe('Administration');
+  });
+  //#else
+
+  it('uses original names without platform or tenant terminology when multitenancy is disabled', async () => {
+    const navigation = await setup(null);
+    const labels = navigation
+      .menuGroups()
+      .flatMap((group) => group.items.map((item) => item.label));
+    expect(labels).toContain('User management');
+    expect(labels.join(' ')).not.toMatch(/platform|tenant/i);
+    expect(navigation.currentAreaLabel()).toBe('Administration');
+  });
+  //#endif
+});
 
 @Component({ template: '' })
 class Page {}

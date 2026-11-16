@@ -38,6 +38,9 @@ public class OpenApplicationMappings : IRegister
             .Ignore(dest => dest.ClientSecret!)
             .Map(dest => dest.HasClientSecret, src => !string.IsNullOrEmpty(src.ClientSecret))
             .Map(dest => dest.CreationTime, src => ReadCreationTime(src.Properties))
+            .Map(dest => dest.HomeUrl, src => OpenApplicationSettings.ReadHomeUrl(src.Properties))
+            .Map(dest => dest.ShowInSwitcher, src => OpenApplicationSettings.ReadShowInSwitcher(src.Properties))
+            .Map(dest => dest.DisplayNames, src => src.DisplayNames.ToDictionary(pair => pair.Key.Name, pair => pair.Value))
             .Map(dest => dest.SessionBound, src => OpenApplicationSettings.ReadSessionBound(src.Settings));
     }
 

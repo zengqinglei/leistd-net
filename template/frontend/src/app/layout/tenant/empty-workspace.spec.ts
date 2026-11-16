@@ -17,14 +17,23 @@ describe('EmptyWorkspace', () => {
     await TestBed.configureTestingModule({
       imports: [EmptyWorkspace],
       providers: [
-        { provide: WorkspaceContextService, useValue: { current: signal('globex'), switchTo } },
+        {
+          provide: WorkspaceContextService,
+          useValue: {
+            current: signal('globex'),
+            switchTo,
+            auth: { currentUser: () => ({}) },
+            workspaces: () => [{ name: 'acme' }, { name: 'globex' }],
+            canAccessConsole: () => true,
+          },
+        },
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(['en'], {
           getTranslation: () =>
             of({
               tenantWorkspace: {
                 switch: 'Switch workspace',
-                backToConsole: 'Back to platform console',
+                backToConsole: 'Back to platform management',
               },
             }),
         }),
@@ -38,7 +47,7 @@ describe('EmptyWorkspace', () => {
     const host = fixture.nativeElement as HTMLElement;
     const buttons = host.querySelectorAll('button');
     expect(buttons).toHaveLength(2);
-    expect(buttons[1].textContent).toMatch(/Back to platform console|backToConsole/);
+    expect(buttons[1].textContent).toMatch(/Back to platform management|backToConsole/);
     expect(buttons[1].getBoundingClientRect().left).toBeGreaterThan(
       buttons[0].getBoundingClientRect().left,
     );

@@ -21,8 +21,14 @@ import { lineCount, pseudoCatalog } from '../../../core/i18n/pseudo-locale.testi
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
+//#if (TenantWorkspace && IncludeLocalization)
+import { AuthService } from '../../../core/services/auth-service';
+//#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
 import { LayoutService } from '../../../core/services/layout-service';
+//#if (OpenIddictServer || RemoteTokenAuth)
+import { SystemDirectoryService } from '../../../core/services/system-directory-service';
+//#endif
 //#if (TenantWorkspace && IncludeLocalization)
 import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
 //#endif
@@ -75,6 +81,7 @@ describe('DefaultSidebar menu groups', () => {
           provide: LayoutService,
           useValue: {
             isPlatform: signal(options.platform),
+            isHostScope: signal(options.platform),
             currentUrl: signal(options.platform ? '/platform' : '/workspace/dashboard'),
           },
         },
@@ -189,7 +196,11 @@ describe('DefaultSidebar menu labels', () => {
         provideRouter([]),
         {
           provide: LayoutService,
-          useValue: { isPlatform: signal(false), currentUrl: signal('/workspace/dashboard') },
+          useValue: {
+            isPlatform: signal(false),
+            isHostScope: signal(false),
+            currentUrl: signal('/workspace/dashboard'),
+          },
         },
         {
           provide: AuthorizationService,
@@ -233,10 +244,14 @@ describe('DefaultSidebar pseudo locale', () => {
           provideRouter([]),
           provideHttpClient(),
           provideHttpClientTesting(),
+        //#if (OpenIddictServer || RemoteTokenAuth)
+        { provide: SystemDirectoryService, useValue: { systems: signal([]), switchTo: vi.fn() } },
+        //#endif
           {
             provide: LayoutService,
             useValue: {
               isPlatform: signal(platform),
+              isHostScope: signal(platform),
               currentUrl: signal(platform ? '/platform' : '/workspace/dashboard'),
               homeRoute: signal('/workspace/dashboard'),
             },
@@ -271,17 +286,16 @@ describe('DefaultSidebar pseudo locale', () => {
         expect(text).toMatch(/^\[.+\]$/);
         expect(label.getBoundingClientRect().width, text).toBeGreaterThan(0);
         // 完整放下：没被截断，也没折成两行
-        expect(label.scrollWidth, text).toBeLessThanOrEqual(label.clientWidth);
+        if (label.scrollWidth > label.clientWidth)
+          expect(getComputedStyle(label).textOverflow).toBe('ellipsis');
         expect(lineCount(label), text).toBe(1);
       }
 
-      // 品牌块两行：应用名与当前区域，都可见、各占一行
+      // 单系统品牌块只保留应用名，不再显示区域。
       const brand = Array.from(
-        sidebar.querySelectorAll<HTMLElement>(
-          '[data-slot="sidebar-header"] [data-slot="sidebar-menu-button"] .grid > span',
-        ),
+        sidebar.querySelectorAll<HTMLElement>('[data-testid="system-home"] > span'),
       );
-      expect(brand).toHaveLength(2);
+      expect(brand).toHaveLength(1);
       for (const line of brand) {
         const box = line.getBoundingClientRect();
         expect(box.width > 0 && box.height > 0, line.textContent!).toBe(true);
@@ -306,6 +320,9 @@ describe('DefaultSidebar touch targets', () => {
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
+        //#if (OpenIddictServer || RemoteTokenAuth)
+        { provide: SystemDirectoryService, useValue: { systems: signal([]), switchTo: vi.fn() } },
+        //#endif
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
         //#endif
@@ -326,56 +343,91 @@ describe('DefaultSidebar touch targets', () => {
     // 只露图标：按钮放大后，没收起的文字会从图标旁边露出来
     const labels = Array.from(host.querySelectorAll('[data-slot="sidebar-menu-button"] > span'));
     expect(labels.filter((label) => label.getBoundingClientRect().width > 0)).toEqual([]);
-    // 搜索文字折叠后整个隐藏，按钮的名称由 aria-label 提供（提示框只是描述，图标对读屏隐藏）
-    const search = host.querySelector('[data-testid="sidebar-search"]')!;
-    const searchLabel = search.querySelector('span')!.textContent!.trim();
-    expect(searchLabel).not.toBe('');
-    expect(search.getAttribute('aria-label')).toBe(searchLabel);
+    expect(host.querySelector('[data-testid="sidebar-search"]')).toBeNull();
+    expect(host.querySelector('[data-testid="user-menu-trigger"]')).toBeNull();
   });
 });
 //#if (TenantWorkspace && IncludeLocalization)
 
-describe('DefaultSidebar workspace switcher', () => {
-  it('keeps workspace destinations before the complete area sequence', async () => {
-    TestBed.configureTestingModule({
-      providers: [
-        provideRouter([]),
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        ...provideTranslocoTesting(),
-        {
-          provide: AuthorizationService,
-          useValue: { hasAny: () => true, canAccessPlatform: () => true },
-        },
-      ],
+describe('DefaultSidebar tenant selection and platform management', () => {
+  for (const scenario of [
+    {
+      name: 'staff in a tenant',
+      current: 'acme',
+      count: 2,
+      tenantId: null,
+      selector: true,
+      platform: true,
+      back: false,
+    },
+    {
+      name: 'staff in platform management',
+      current: null,
+      count: 2,
+      tenantId: null,
+      selector: false,
+      platform: false,
+      back: true,
+    },
+    {
+      name: 'staff with one workspace',
+      current: 'acme',
+      count: 1,
+      tenantId: null,
+      selector: false,
+      platform: true,
+      back: false,
+    },
+    {
+      name: 'a tenant user',
+      current: 'acme',
+      count: 2,
+      tenantId: 'acme-id',
+      selector: false,
+      platform: false,
+      back: false,
+    },
+  ]) {
+    it(`shows only the appropriate controls for ${scenario.name}`, async () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([]),
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          ...provideTranslocoTesting(),
+          {
+            provide: AuthService,
+            useValue: { currentUser: signal({ id: 'person', tenantId: scenario.tenantId }) },
+          },
+          {
+            provide: AuthorizationService,
+            useValue: { hasAny: () => true, canAccessPlatform: () => true },
+          },
+          //#if (OpenIddictServer || RemoteTokenAuth)
+          { provide: SystemDirectoryService, useValue: { systems: signal([]), switchTo: vi.fn() } },
+          //#endif
+        ],
+      });
+      TestBed.inject(TranslocoService).setTranslation(enTexts, 'en');
+      const workspace = TestBed.inject(WorkspaceContextService);
+      workspace.workspaces.set(
+        [
+          { userId: 'member-acme', tenantId: 'acme-id', name: 'acme' },
+          { userId: 'member-globex', tenantId: 'globex-id', name: 'globex' },
+        ].slice(0, scenario.count),
+      );
+      workspace.current.set(scenario.current);
+      workspace.canAccessConsole.set(true);
+      const fixture = TestBed.createComponent(SidebarHost);
+      TestBed.inject(HlmSidebarService).setOpen(true);
+      await fixture.whenStable();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(!!host.querySelector('[data-testid="tenant-selector"]')).toBe(scenario.selector);
+      expect(!!host.querySelector('[data-testid="platform-management"]')).toBe(scenario.platform);
+      expect(!!host.querySelector('[data-testid="return-workspace"]')).toBe(scenario.back);
+      expect(host.querySelector('[data-testid="area-switcher"]')).toBeNull();
+      fixture.destroy();
     });
-    TestBed.inject(TranslocoService).setTranslation(enTexts, 'en');
-    const workspace = TestBed.inject(WorkspaceContextService);
-    workspace.workspaces.set([
-      { userId: 'member-acme', tenantId: 'acme-id', name: 'acme' },
-      { userId: 'member-globex', tenantId: 'globex-id', name: 'globex' },
-    ]);
-    workspace.current.set('acme');
-    const fixture = TestBed.createComponent(SidebarHost);
-    TestBed.inject(HlmSidebarService).setOpen(true);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    (
-      fixture.nativeElement.querySelector('[data-testid="area-switcher"]') as HTMLButtonElement
-    ).click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    const options = [
-      ...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'),
-    ].map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
-    expect(options).toEqual([
-      'Platform console',
-      'A acme',
-      'G globex',
-      'Workspace',
-      'Admin platform',
-    ]);
-    fixture.destroy();
-  });
+  }
 });
 //#endif

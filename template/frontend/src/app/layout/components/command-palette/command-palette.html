@@ -29,13 +29,32 @@
           <hlm-command-group>
             <hlm-command-group-label>{{ t('layout.sidebar.switchArea') }}</hlm-command-group-label>
             @for (area of otherAreas(); track area.route) {
-              <button hlm-command-item [value]="area.label" (selected)="go(area.route)">
+              <button hlm-command-item [value]="area.label" (selected)="goToArea(area.route)">
                 <ng-icon [name]="area.icon" />
                 {{ area.label }}
               </button>
             }
           </hlm-command-group>
         }
+        <!--#if (OpenIddictServer || RemoteTokenAuth)-->
+        @if (directory.systems().length > 1) {
+          <hlm-command-separator />
+          <hlm-command-group>
+            <hlm-command-group-label>{{
+              t('layout.systemSwitcher.title')
+            }}</hlm-command-group-label>
+            @for (system of directory.systems(); track system.key) {
+              <button
+                hlm-command-item
+                [value]="system.displayName"
+                (selected)="palette.close(); directory.switchTo(system)"
+              >
+                {{ system.displayName }}
+              </button>
+            }
+          </hlm-command-group>
+        }
+        <!--#endif-->
       </hlm-command-list>
     </hlm-command>
   </hlm-command-dialog>

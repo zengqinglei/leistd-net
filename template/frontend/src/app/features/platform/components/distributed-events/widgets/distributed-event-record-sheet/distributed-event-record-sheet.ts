@@ -67,11 +67,9 @@ import {
 export class DistributedEventRecordSheet {
   readonly recordId = input<string | null>(null);
   readonly view = input<EventView>('outbox');
-  readonly database = input<string | null>(null);
   readonly canManage = input(false);
   readonly payloadEnabled = input(true);
   readonly busy = input(false);
-  readonly tenantNames = input<Record<string, string>>({});
   readonly refreshVersion = input(0);
   readonly catalogDetail = input<Dto.DistributedEventCatalogOutputDto | null>(null);
   readonly closed = output<void>();
@@ -96,7 +94,9 @@ export class DistributedEventRecordSheet {
   readonly payloadLoading = signal(false);
   private payloadSubscription?: { unsubscribe(): void };
   protected readonly detailFields = computed(() =>
-    this.detail() ? Object.entries(this.detail()!.record) : [],
+    this.detail()
+      ? Object.entries(this.detail()!.record).filter(([key]) => key !== 'tenantId')
+      : [],
   );
   protected readonly detailHeaders = computed(() => Object.entries(this.detail()?.headers ?? {}));
   protected readonly detailCoordinates = computed(() => {
@@ -116,12 +116,11 @@ export class DistributedEventRecordSheet {
       computed(() => ({
         id: this.recordId(),
         view: this.view(),
-        database: this.database(),
         refresh: this.refreshVersion(),
       })),
     )
       .pipe(
-        switchMap(({ id, view, database }) => {
+        switchMap(({ id, view }) => {
           this.payloadSubscription?.unsubscribe();
           this.payload.set(null);
           this.payloadError.set(null);
@@ -132,10 +131,10 @@ export class DistributedEventRecordSheet {
           this.detailLoading.set(true);
           const request: Observable<EventDetail> =
             view === 'outbox'
-              ? this.service.getOutbox(id, database)
+              ? this.service.getOutbox(id)
               : view === 'inbox'
-                ? this.service.getInbox(id, database)
-                : this.service.getRejection(id, database);
+                ? this.service.getInbox(id)
+                : this.service.getRejection(id);
           return request.pipe(
             tap((detail) => this.detail.set(detail)),
             catchError((error: unknown) => {
@@ -201,15 +200,14 @@ export class DistributedEventRecordSheet {
     this.payloadLoading.set(true);
     this.payloadError.set(null);
     const id = this.recordId()!;
-    const database = this.database();
     const request: Observable<
       Dto.DistributedEventPayloadOutputDto | Dto.DistributedEventRawMessageOutputDto
     > =
       this.view() === 'outbox'
-        ? this.service.getOutboxPayload(id, database)
+        ? this.service.getOutboxPayload(id)
         : this.view() === 'inbox'
-          ? this.service.getInboxPayload(id, database)
-          : this.service.getRejectionPayload(id, database);
+          ? this.service.getInboxPayload(id)
+          : this.service.getRejectionPayload(id);
     this.payloadSubscription = request
       .pipe(
         takeUntilDestroyed(this.owner),

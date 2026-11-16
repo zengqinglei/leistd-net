@@ -17,6 +17,14 @@ public record CreateOpenApplicationInputDto : IValidatableObject
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 
+    /// <summary>系统首页地址；显示在系统切换中时必填。</summary>
+    [Display(Name = "Home URL")]
+    [MaxLength(2048, ErrorMessage = "{0} cannot exceed {1} characters.")]
+    public string? HomeUrl { get; init; }
+
+    /// <summary>是否显示在系统切换中，仅浏览器客户端可开启。</summary>
+    public bool ShowInSwitcher { get; init; }
+
     /// <summary>应用类型。</summary>
     [Display(Name = "Application type")]
     [Required(ErrorMessage = "{0} is required.")]

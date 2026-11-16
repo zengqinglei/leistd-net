@@ -8,9 +8,6 @@ namespace Leistd.EventBus.Distributed.Dtos;
 /// <summary>按 Id 倒序的偏移分页查询；Sorting 不生效。</summary>
 public record GetDistributedEventOutboxInputDto : PageRequest
 {
-    /// <summary>宿主物理库选择键：host 或代表租户 Id；租户不得传。</summary>
-    public string? Database { get; init; }
-
     /// <summary>事件名精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventName { get; init; }

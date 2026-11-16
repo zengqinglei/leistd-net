@@ -30,7 +30,6 @@ import {
   combineLatest,
   finalize,
   forkJoin,
-  map,
   of,
   startWith,
   switchMap,
@@ -76,9 +75,6 @@ import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
-//#if (LocalIdentity && IncludeMultiTenancy)
-import { TenantService } from '../../services/tenant-service';
-//#endif
 
 @Component({
   selector: 'app-distributed-events',
@@ -124,11 +120,6 @@ export class DistributedEvents {
   private readonly confirm = inject(DistributedEventRecoveryConfirmService);
   private readonly preferences = inject(AccountPreferencesService);
   private readonly layout = inject(LayoutService);
-  //#if (LocalIdentity && IncludeMultiTenancy)
-  private readonly tenants = inject(TenantService);
-  private readonly tenantNameCache = new Map<string, string>();
-  //#endif
-  readonly tenantNames = signal<Record<string, string>>({});
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   private readonly title = translateSignal('distributedEvents.title');
@@ -152,7 +143,6 @@ export class DistributedEvents {
       ? value
       : 'outbox';
   });
-  readonly database = computed(() => (this.isHost() ? this.query()['database'] || 'host' : null));
   readonly recordId = computed<string | null>(() => this.query()['record'] || null);
   readonly page = computed(() => Math.max(0, Number(this.query()['page']) || 0));
   readonly pageSize = computed(() =>
@@ -164,7 +154,6 @@ export class DistributedEvents {
   readonly rows = signal<EventRow[]>([]);
   readonly totalCount = signal(0);
   readonly status = signal<Dto.DistributedEventStatusOutputDto | null>(null);
-  readonly databases = signal<Dto.DistributedEventDatabaseOutputDto[]>([]);
   readonly catalog = signal<Dto.DistributedEventCatalogOutputDto[]>([]);
   readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
@@ -175,10 +164,7 @@ export class DistributedEvents {
   private readonly refresh = new Subject<void>();
   readonly detailVersion = signal(0);
   readonly canTest = computed(
-    () =>
-      this.canManage() &&
-      this.status()?.testEventEnabled &&
-      (!this.isHost() || this.database() === 'host'),
+    () => this.isHost() && this.canManage() && this.status()?.testEventEnabled,
   );
   readonly bulkAllowed = computed(() =>
     this.view() === 'outbox'
@@ -224,7 +210,6 @@ export class DistributedEvents {
       //#endif
     });
     let renderedView = this.view();
-    let renderedDatabase = this.database();
     const query$ = this.route.queryParams;
     combineLatest([query$, this.refresh.pipe(startWith(undefined))])
       .pipe(
@@ -232,11 +217,9 @@ export class DistributedEvents {
           this.loading.set(true);
           this.loadError.set(null);
           this.selected.set([]);
-          const database = this.database();
           const view = this.view();
-          if (view !== renderedView || database !== renderedDatabase) this.rows.set([]);
+          if (view !== renderedView) this.rows.set([]);
           renderedView = view;
-          renderedDatabase = database;
           const input = this.listInput(query);
           const list$: Observable<PagedResultDto<EventRecord>> =
             this.view() === 'catalog'
@@ -249,21 +232,13 @@ export class DistributedEvents {
                       input as Dto.GetDistributedEventRejectionsInputDto,
                     );
           return forkJoin({
-            status: this.service.getStatus(database),
-            catalog: this.service.getCatalog(database),
-            databases: this.isHost() ? this.service.getDatabases() : of([]),
+            status: this.service.getStatus(),
+            catalog: this.service.getCatalog(),
             list: list$,
           }).pipe(
-            switchMap((result) =>
-              this.resolveTenantNames(result.list.items).pipe(
-                map((names) => ({ ...result, names })),
-              ),
-            ),
             tap((result) => {
-              this.tenantNames.set(result.names);
               this.status.set(result.status);
               this.catalog.set(result.catalog);
-              this.databases.set(result.databases);
               if (this.view() === 'catalog') {
                 const catalog = result.catalog
                   .filter(
@@ -285,7 +260,6 @@ export class DistributedEvents {
                       eventName: item.eventName,
                       eventId: '',
                       status: '',
-                      tenant: '',
                       orderingKey: '',
                       consumer: item.consumers.join(', ') || '—',
                       attempts: 0,
@@ -319,7 +293,6 @@ export class DistributedEvents {
 
   listInput(query: Params = this.query()): Record<string, unknown> {
     return {
-      database: this.database(),
       status: query['status'],
       eventName: query['eventName'],
       keyword: query['keyword'],
@@ -386,9 +359,6 @@ export class DistributedEvents {
   changePage(page: number): void {
     this.update({ page, record: null }, false);
   }
-  readonly databaseLabel = (value: unknown): string =>
-    String(value) === 'host' ? this.t('distributedEvents.hostDatabase') : String(value ?? '');
-
   action(): string {
     return recoveryAction(this.view());
   }
@@ -396,34 +366,6 @@ export class DistributedEvents {
     const key = reasonKey(reason);
     return key ? this.t(key) : reason;
   }
-  private resolveTenantNames(_records: EventRecord[]): Observable<Record<string, string>> {
-    //#if (LocalIdentity && IncludeMultiTenancy)
-    if (this.isHost() && this.authorization.has(PERMISSIONS.tenants.default)) {
-      const ids = [
-        ...new Set(
-          _records.flatMap((row) => ('tenantId' in row && row.tenantId ? [row.tenantId] : [])),
-        ),
-      ];
-      if (ids.length)
-        return forkJoin(
-          ids.map((id) =>
-            this.tenantNameCache.has(id)
-              ? of([id, this.tenantNameCache.get(id)!])
-              : this.tenants.getTenant(id).pipe(
-                  map((tenant) => {
-                    const name = tenant.displayName || tenant.name;
-                    this.tenantNameCache.set(id, name);
-                    return [id, name];
-                  }),
-                  catchError(() => of([id, id])),
-                ),
-          ),
-        ).pipe(map((entries) => Object.fromEntries(entries)));
-    }
-    //#endif
-    return of({});
-  }
-
   options(key: string) {
     const values =
       key === 'direction'
@@ -483,13 +425,7 @@ export class DistributedEvents {
           ? 'replay'
           : 'redecode';
     const input = this.listInput();
-    const {
-      database: _database,
-      offset: _offset,
-      limit: _limit,
-      status: _status,
-      ...filter
-    } = input;
+    const { offset: _offset, limit: _limit, status: _status, ...filter } = input;
     const body =
       mode === 'filter'
         ? {
@@ -502,10 +438,6 @@ export class DistributedEvents {
           }
         : { ids };
     const count = mode === 'filter' ? this.totalCount() : ids.length;
-    const database = this.database();
-    const scope = this.isHost()
-      ? this.databaseLabel(view === 'rejections' ? 'host' : database)
-      : this.t('distributedEvents.tenantScope');
     const criteria = ['status', 'eventName', 'keyword', 'errorCode', 'consumer', 'reason']
       .filter((key) => this.query()[key])
       .map((key) => {
@@ -532,10 +464,8 @@ export class DistributedEvents {
         ),
         confirmText: this.t(`distributedEvents.confirmation.button.${action}`, { count }),
         cancelText: this.t('distributedEvents.cancel'),
-        scope,
         cutoff: formatAppDate(this.cutoff(), 'full', this.displayTimeZone(), this.displayLocale()),
         criteria: mode === 'filter' ? criteria : ids.join(', '),
-        scopeLabel: this.t('distributedEvents.confirmation.scope'),
         cutoffLabel: this.t('distributedEvents.confirmation.cutoff'),
         criteriaLabel: this.t(
           mode === 'filter'
@@ -551,18 +481,12 @@ export class DistributedEvents {
         action: () => {
           const request =
             view === 'outbox'
-              ? this.service.redeliver(body as Dto.RecoverDistributedEventOutboxInputDto, database)
+              ? this.service.redeliver(body as Dto.RecoverDistributedEventOutboxInputDto)
               : view === 'inbox'
-                ? this.service.replay(body as Dto.RecoverDistributedEventInboxInputDto, database)
+                ? this.service.replay(body as Dto.RecoverDistributedEventInboxInputDto)
                 : discard
-                  ? this.service.discard(
-                      body as Dto.RecoverDistributedEventRejectionInputDto,
-                      database,
-                    )
-                  : this.service.redecode(
-                      body as Dto.RecoverDistributedEventRejectionInputDto,
-                      database,
-                    );
+                  ? this.service.discard(body as Dto.RecoverDistributedEventRejectionInputDto)
+                  : this.service.redecode(body as Dto.RecoverDistributedEventRejectionInputDto);
           return request.pipe(
             tap((result) => {
               toast.success(
@@ -587,7 +511,7 @@ export class DistributedEvents {
     if (!this.canTest() || this.busy()) return;
     this.busy.set(true);
     this.service
-      .sendTestEvent(this.database())
+      .sendTestEvent()
       .pipe(
         takeUntilDestroyed(this.owner),
         finalize(() => this.busy.set(false)),

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>应用外壳导航重组</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE work：给项目负责人拍板的方案评审，结论先行
+   IDEA 产品评审里的"现状 / 方案"对照板，模型就是模板自己的外壳（Spartan/shadcn 中性色）
+   PICTURE 可切换的外壳实物模型：场景 × 现状/方案 × 桌面/手机
+   COLOUR 白底、中性墨色、模板主色蓝 #0a6ed1、警示琥珀只用于"差异"
+   TYPE Geist（模板同款）
+   LAYOUT 首屏：标题+结论，下接对照板；其后为判断表、可见性矩阵、两条附议与实施范围 */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#0b0b0c);--ink:light-dark(#0a0a0a,#f4f4f5);--mut:light-dark(#71717a,#a1a1aa);--line:light-dark(#e4e4e7,#27272a);--soft:light-dark(#f4f4f5,#18181b);--side:light-dark(#fafafa,#111113);--card:light-dark(#fff,#141416);--pri:#0a6ed1;--acc:light-dark(#b45309,#f59e0b);--accbg:light-dark(#fef3c7,#3a2a0a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 Geist,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,4vw,48px) max(4vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1{font-size:clamp(28px,3.6vw,42px);line-height:1.1;letter-spacing:-.02em;margin:0 0 12px;text-wrap:balance}
+h2{font-size:24px;line-height:1.2;letter-spacing:-.01em;margin:0 0 14px}
+h3{font-size:17px;margin:0 0 8px}
+p{margin:0 0 12px;max-width:72ch}
+.lead{font-size:18px;color:var(--ink)}
+.mut{color:var(--mut)}
+.small{font-size:14px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;padding:3px;background:var(--soft)}
+.seg button{font:inherit;font-size:14px;border:0;background:none;color:var(--mut);padding:8px 14px;border-radius:7px;cursor:pointer;min-height:40px}
+.seg button[aria-pressed=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px #0002;font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.stage{border:1px solid var(--line);border-radius:14px;background:var(--soft);padding:14px;overflow:hidden}
+.note{margin-top:12px;display:grid;gap:8px}
+.note div{font-size:14px;padding:10px 12px;border-radius:8px;background:var(--card);border:1px solid var(--line)}
+.note b{color:var(--acc)}
+.shot{width:100%;display:block;border-radius:8px;border:1px solid var(--line)}
+/* 外壳模型：按 1200×700 设计，缩放进容器 */
+.scaler{position:relative;width:100%}
+.app{position:absolute;left:0;top:0;width:1200px;height:700px;transform-origin:0 0;background:var(--side);border-radius:10px;display:flex;font-size:14px;color:var(--ink);overflow:hidden;border:1px solid var(--line)}
+.sb{width:248px;padding:12px 10px;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px}
+.brand.btn{background:var(--card);border:1px solid var(--line)}
+.logo{width:32px;height:32px;border-radius:8px;background:var(--pri);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+.bt{display:grid;line-height:1.25}.bt b{font-size:14px}.bt span{font-size:12px;color:var(--mut)}
+.chev{margin-left:auto;color:var(--mut);font-size:12px}
+.field{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 10px;color:var(--mut)}
+.field.sel{color:var(--ink)}
+.grp{font-size:12px;color:var(--mut);padding:8px 8px 2px}
+.it{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:7px}
+.it.on{background:var(--card);border:1px solid var(--line);font-weight:600}
+.ic{width:16px;height:16px;border:1.6px solid currentColor;border-radius:4px;opacity:.7;flex:none}
+.foot{margin-top:auto}
+.main{flex:1;margin:8px 8px 8px 0;background:var(--card);border-radius:10px;border:1px solid var(--line);display:flex;flex-direction:column}
+.hd{height:52px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px}
+.crumb{color:var(--mut)}.crumb b{color:var(--ink);font-weight:500}
+.hc{flex:1;display:flex;justify-content:center}
+.search{width:340px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--mut)}
+.kbd{margin-left:auto;font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.hr{display:flex;align-items:center;gap:8px;margin-left:auto}
+.ib{width:32px;height:32px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;color:var(--mut);font-size:13px}
+.av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#b45309);color:#fff;display:grid;place-items:center;font-weight:600}
+.body{padding:20px;display:grid;gap:14px;grid-template-columns:repeat(4,1fr)}
+.body h4{grid-column:1/-1;margin:0;font-size:22px}
+.kpi{height:92px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.big{grid-column:1/4;height:250px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.tall{height:250px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.menu{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px #0002;padding:6px;min-width:220px;z-index:3;font-size:14px}
+.menu .lb{font-size:12px;color:var(--mut);padding:6px 8px}
+.menu .mi{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px}
+.menu .mi.cur{background:var(--soft)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.sq{width:22px;height:22px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;font-size:11px;flex:none}
+.tag{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--accbg);color:var(--acc);margin-left:auto}
+.mark{outline:2px dashed var(--acc);outline-offset:2px}
+.top{width:100%;display:flex;flex-direction:column;background:var(--card)}
+.tb{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 24px}
+.nav{display:flex;gap:4px}.nav span{padding:6px 10px;border-radius:6px}.nav span.on{background:var(--soft)}
+.badge{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13px}
+/* 手机 */
+.phone{width:390px;height:760px}
+.pgrid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:start}
+.pcap{font-size:14px;color:var(--mut);margin-top:6px}
+/* 表格 */
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-size:13px;color:var(--mut);font-weight:500}
+td.ok{color:#15803d;white-space:nowrap}td.adj{color:var(--acc);white-space:nowrap}
+.cols{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.box{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--card)}
+.ver{display:inline-block;font-size:13px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--soft);margin-bottom:8px}
+ul{margin:0 0 12px;padding-left:20px}li{margin:4px 0}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:16px 0 18px;counter-reset:f}
+.fl{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--card);position:relative}
+.fl b{display:block;font-size:15px;margin-bottom:4px}.fl span{font-size:14px;color:var(--mut)}
+.fl em{font-style:normal;font-size:12px;color:var(--pri);font-weight:600}
+.steps{display:grid;gap:12px}
+.step{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr) minmax(0,1fr);gap:16px;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card)}
+.step h4{margin:0;font-size:16px}.step .who{font-size:13px;color:var(--mut)}
+.step ul{margin:0}
+.step .lbl{font-size:12px;color:var(--mut);margin-bottom:4px}
+@media(max-width:800px){.step{grid-template-columns:1fr}}
+code{font-size:13px;background:var(--soft);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+@media(max-width:600px){table{font-size:13px}th,td{padding:8px 6px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flex;justify-content:space-between;gap:12px;border:0;padding:3px 0}.stack td::before{content:attr(data-l);color:var(--mut);flex:none}}
+</style>
+</head>
+<body>
+<section class="band"><div class="wrap">
+<h1>外壳导航重组与系统切换：一个控件只管一件事</h1>
+<p class="lead">六条反馈全部采纳，系统切换这次一起做，菜单按权限侧别区分平台级和租户级。品牌块切换系统，系统列表直接取自 Identity 的开放应用登记，不另建系统目录。侧栏顶部是可搜索的租户选择，底部是平台管理入口，头像移到右上角。分布式事件页不出现租户，范围由上下文决定。工作空间面向客户，界面上不出现租户。</p>
+<p class="mut small">你的目的：品牌块上叠了三件事（工作区、平台控制台、工作空间/管理平台），用户要先读懂"区域"和"工作区"的区别才能用。拆开以后，层级从上到下就是 系统 → 租户 → 菜单，每个控件只回答一个问题。业务三仓的外壳已经验证过这套分工，模板跟进后，下游同步时也少一处分叉。</p>
+
+<div class="tabs" role="group" aria-label="场景">
+  <div class="seg" id="scn">
+    <button data-v="system" aria-pressed="false">系统切换</button>
+    <button data-v="tenant" aria-pressed="true">租户管理（平台人员）</button>
+    <button data-v="host" aria-pressed="false">平台管理</button>
+    <button data-v="ws" aria-pressed="false">工作空间（业务区）</button>
+    <button data-v="events" aria-pressed="false">分布式事件</button>
+  </div>
+  <div class="seg" id="mode">
+    <button data-v="before" aria-pressed="false">现状</button>
+    <button data-v="after" aria-pressed="true">方案</button>
+  </div>
+  <div class="seg" id="dev">
+    <button data-v="desk" aria-pressed="true">1440</button>
+    <button data-v="phone" aria-pressed="false">390</button>
+  </div>
+</div>
+<div class="stage"><div id="view"></div></div>
+<div class="note" id="notes"></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+<h2>逐条判断</h2>
+<div class="scroll"><table class="stack">
+<thead><tr><th>你的提议</th><th>判断</th><th>终局做法</th></tr></thead>
+<tbody id="verdicts"></tbody>
+</table></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+<h2>谁看到什么</h2>
+<p class="mut small">每个位置按形态和身份决定显示与否，没有内容就不占位，不出现只有一项的下拉。</p>
+<div class="scroll"><table class="stack">
+<thead><tr><th>位置</th><th>非多租户 / 模拟登录形态</th><th>工作区形态 · 平台人员</th><th>工作区形态 · 租户用户</th></tr></thead>
+<tbody id="matrix"></tbody>
+</table></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+<h2>菜单与命名：按权限侧别区分平台级和租户级</h2>
+<p>现状是平台和租户共用一份菜单，只按权限过滤：两边都叫"用户管理""系统设置"，两个范围又分别叫"平台控制台"和"管理平台"，名字里都有"平台"。业务项目按后端权限的侧别给每个菜单项定名，模板后端权限已经有同样的侧别（<code>MultiTenancySides</code>），所以直接套用这条规则：</p>
+<ul class="small">
+<li><b>只在宿主侧</b>（租户管理、开放应用）：只出现在平台管理里，保持原名</li>
+<li><b>双侧都有</b>（仪表盘、用户、角色、Webhook、分布式事件、操作记录、设置）：租户侧用原名；平台侧加"平台"前缀，两边各是一个菜单项，页面里不再切换范围</li>
+<li><b>业务功能</b>（工作台、示例模块）：只在工作空间</li>
+<li>租户侧的名称里不出现"租户"二字：租户管理员和客户都不需要这个概念</li>
+</ul>
+<h3 style="margin-top:18px">三个区域的名称</h3>
+<div class="scroll"><table class="stack">
+<thead><tr><th>区域</th><th>现名</th><th>新名</th><th>出现在哪里</th></tr></thead>
+<tbody id="areas"></tbody></table></div>
+<h3 style="margin-top:18px">菜单项</h3>
+<div class="scroll"><table class="stack">
+<thead><tr><th>功能</th><th>后端侧别</th><th>平台管理（宿主）</th><th>管理后台（租户）</th><th>业务项目</th></tr></thead>
+<tbody id="menus"></tbody></table></div>
+<p class="small mut">分组名（身份与访问、集成、审计、系统）两侧通用，不加前缀。路由路径（<code>/platform</code>）不改。</p>
+<h3 style="margin-top:18px">三种部署场景</h3>
+<p class="small">规则只看两件事：开没开多租户、当前在不在宿主范围。不加部署形态开关；私有化单租户自然按 SaaS 的规则走，只是只有一个租户，部分元素不出现。</p>
+<div class="scroll"><table class="stack">
+<thead><tr><th></th><th>关闭多租户</th><th>私有化单租户</th><th>SaaS 多租户</th></tr></thead>
+<tbody id="scen"></tbody></table></div>
+<p class="small mut">私有化单租户也分两个管理区：管理后台给客户的业务管理员日常使用；平台管理给部署方或客户 IT 偶尔使用，管邮件、外部登录、保留期、开放应用与系统接入。"租户管理"里只有一个默认租户，但保留：它还承担状态查看与平台人员授权，将来拆分也能直接新建租户。</p>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+<h2>系统切换：复用开放应用登记，不另建目录</h2>
+<p>业务 Identity 有一套独立的"系统入口"：代码登记系统键，部署时写入地址，按租户开通，再从地址派生第一方客户端的登录回调。它解决了业务仓的两个特有需求：每个租户可以有自己的子域地址，每个系统按租户开通。模板没有这两个需求，而"系统"本来就是在开放应用里登记过的浏览器客户端。所以终局是让开放应用登记直接成为系统目录，一处登记，同时得到登录接入和导航切换。</p>
+<div class="flow" id="flow"></div>
+<div class="scroll"><table class="stack">
+<thead><tr><th>方面</th><th>业务 Identity</th><th>模板终局</th><th>理由</th></tr></thead>
+<tbody id="sysrows"></tbody>
+</table></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap cols">
+<div class="box">
+<span class="ver">分布式事件</span>
+<h3>不出现租户，范围由上下文决定</h3>
+<p class="small">已核对框架实现：页面上的"宿主"指共享业务库，宿主在这里能看到共享库中所有租户的事件；其余选项是独立租户库。这个选择把部署细节和租户概念带进了平台页面。</p>
+<ul class="small">
+<li>平台管理：只看平台自身的事件，没有任何筛选</li>
+<li>租户范围（工作区或租户账号）：只看本租户的事件，后端自动定位它的库</li>
+<li>宿主要看某个租户的事件，就进入那个租户的范围：工作区形态进入工作区，模拟登录形态用模拟登录</li>
+<li>"发送测试事件""拒收记录"这些仅宿主可用的操作不变</li>
+</ul>
+<p class="small mut">框架组件的管理接口去掉库参数和库目录接口，范围只由当前租户决定。这是框架改动，会随 develop 发 beta。</p>
+</div>
+<div class="box">
+<span class="ver">工作空间（业务区）</span>
+<h3>面向客户，界面上不出现租户</h3>
+<p class="small">工作空间给最终用户使用。租户由访问域名、邮箱域名或登录页的选择确定，登录后由会话固定。平台人员从管理后台进入时，地址里已经带着 <code>/w/租户</code>，是明确的。所以工作空间里既没有租户切换，也没有租户标识，客户和平台人员看到的顶栏完全一样。平台人员需要知道自己代表哪个租户在操作，这一点放在头像菜单顶部，写成"staff-a · 代表 tenant-a"；换租户回管理后台去做。</p>
+</div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+<h2>实施流程</h2>
+<p class="mut small">一个规格、一个 PR，按依赖顺序分五步：Codex 实施和端到端验证，Claude 审查并调度。每一步验证通过再进入下一步，最后统一推送；CI 全绿后合并，更新演示站走查，再出一版实测对比页。</p>
+<div class="steps" id="steps"></div>
+<h3 style="margin-top:22px">下游对齐（只写进规格，同步时由三仓自行对齐）</h3>
+<ul class="small">
+<li>系统切换：业务仓的独立系统入口可收敛到开放应用登记；租户子域地址、按租户开通是业务特有能力，保留</li>
+<li>租户选择：业务仓在页头右侧，模板放侧栏顶部；平台入口模板加了"返回"按钮</li>
+<li>分布式事件：下游业务服务去掉库选择，宿主只看平台自身事件</li>
+</ul>
+<p class="small mut">现状截图取自 worker-01 演示站（develop a6a79814）；方案为按模板样式绘制的示意，不是实现截图。</p>
+</div></section>
+
+<script>
+{
+const IMG={tenant:"shots/tenant-current.jpg",ws:"shots/workspace-current.jpg",host:"shots/host-current.jpg"};
+const st={scn:'tenant',mode:'after',dev:'desk'};
+const V=[
+['品牌块点击用于切换系统，没有系统可切时点了不出内容','采纳','品牌块只做系统切换，列表来自开放应用登记；只有一个系统时是回首页的普通链接，不放空下拉'],
+['工作空间 / 管理平台的切换移到用户信息菜单','采纳','头像菜单第一组放"工作空间"或"管理后台"（只出现当前不在的那个），模板头像菜单里本来就有这一项，删掉品牌块里重复的一份'],
+['侧栏的搜索框换成租户选择，单租户或非多租户不显示；搜索移到页头居中','采纳，选择器做成可搜索下拉','租户可能很多，用带搜索的下拉（combobox），不用普通 Select；页头搜索居中，窄屏收成放大镜图标'],
+['侧栏底部的用户信息改放平台管理入口，进入平台后变成返回按钮、租户选择消失；用户信息移到右上角','采纳，返回按钮写明目标','底部按钮在平台管理里写成"返回 tenant-a"（上次的租户，没有则第一个）；头像放在页头最右，和业务三仓一致'],
+['分布式事件不要宿主/默认库的选择，由后端自动过滤','采纳','页面不出现租户：平台管理只看平台自身事件，租户范围只看本租户，后端按上下文定位库'],
+['工作空间不支持切换租户，租户由域名、邮箱域名等确定；对外不让客户感知租户','采纳','工作空间里没有租户切换，也没有租户标识；平台人员只在头像菜单顶部看到"代表 tenant-a"，切换只在管理后台']
+];
+document.getElementById('verdicts').innerHTML=V.map(r=>`<tr><td data-l="提议">${r[0]}</td><td data-l="判断" class="${r[1]==='采纳'?'ok':'adj'}">${r[1]}</td><td data-l="终局做法">${r[2]}</td></tr>`).join('');
+const M=[
+['品牌块','登记了两个以上系统时为系统切换，否则是回首页的链接','同左','同左'],
+['租户选择（侧栏顶部）','不显示','可进入的租户多于一个时显示；在平台管理隐藏','不显示'],
+['侧栏底部','不显示','"平台管理"；在控制台里为"返回 tenant-a"','不显示'],
+['头像菜单 · 区域','工作空间 / 管理后台（有权限才出现）','同左','同左'],
+['工作空间 · 租户','不显示','顶栏不显示；头像菜单顶部"代表 tenant-a"','不显示']
+];
+document.getElementById('matrix').innerHTML=M.map(r=>`<tr><td data-l="位置"><b>${r[0]}</b></td><td data-l="非多租户 / 模拟登录">${r[1]}</td><td data-l="平台人员">${r[2]}</td><td data-l="租户用户">${r[3]}</td></tr>`).join('');
+
+const item=(t,on)=>`<div class="it${on?' on':''}"><span class="ic"></span>${t}</div>`;
+const tenantMenu=['仪表盘','#身份与访问','用户管理','角色管理','#审计','操作记录','#系统','系统设置'];
+const hostMenu=['平台首页','#身份与访问','平台账号','平台角色','租户管理','#集成','开放应用','平台分布式事件','#审计','平台操作记录','#系统','平台设置'];
+const menu=(arr,cur)=>arr.map(x=>x[0]==='#'?`<div class="grp">${x.slice(1)}</div>`:item(x,x===cur)).join('');
+const header=(crumb,phone)=>`<div class="hd"><span class="ib">☰</span><span class="crumb">${crumb}</span>${phone?'<span class="hr"><span class="ib">⌕</span><span class="ib">🔔</span><span class="av">A</span></span>':`<div class="hc"><div class="search">⌕ 搜索页面、命令… <span class="kbd">⌘K</span></div></div><span class="hr" style="margin-left:0"><span class="ib">◐</span><span class="ib">中</span><span class="ib">🔔</span><span class="av mark">A</span></span>`}</div>`;
+const dash=`<div class="body"><h4>晚上好，staff-a</h4><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div><div class="big"></div><div class="tall"></div></div>`;
+function afterSidebar(host){
+  return `<aside class="sb">
+   <div class="brand${st.scn==='system'?' btn mark':''}"><span class="logo">T</span><span class="bt"><b>模板项目</b><span>身份中心</span></span><span class="chev">⇅</span></div>
+   ${host?'':`<div class="field sel mark">▦ tenant-a<span class="chev">⌄</span></div>`}
+   ${menu(host?hostMenu:tenantMenu,host?'平台首页':'仪表盘')}
+   <div class="foot">${host?`<div class="it mark" style="border:1px solid var(--line)">← 返回 tenant-a</div>`:`<div class="it mark">⚙ 平台管理</div>`}</div>
+  </aside>`;
+}
+function afterDesk(){
+  if(st.scn==='system') return `<div class="app">${afterSidebar(false)}<main class="main">${header('tenant-a › 管理后台 › <b>仪表盘</b>')}${dash}</main><div class="menu" style="left:258px;top:12px;width:260px"><div class="lb">系统</div><div class="mi cur"><span class="sq">身</span>身份中心<span style="margin-left:auto">✓</span></div><div class="mi"><span class="sq">基</span>基础资料</div><div class="mi"><span class="sq">客</span>客户管理</div><hr><div class="lb">链接带上当前工作区：/w/tenant-a/…</div></div></div>`;
+  if(st.scn==='ws') return `<div class="app"><div class="top"><div class="tb"><span class="logo">T</span><b>模板项目</b><div class="nav"><span class="on">工作台</span><span>示例模块</span></div><span class="hr"><span class="ib">⌕</span><span class="ib">🔔</span><span class="av">A</span></span></div><div style="padding:40px 24px"><h4 style="font-size:22px;margin:0 0 16px;text-align:center">晚上好，staff-a</h4><div class="body" style="padding:0"><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div></div></div></div>
+   <div class="menu" style="right:24px;top:58px"><div class="lb mark" style="border-radius:6px">staff-a · 代表 tenant-a</div><div class="mi">⚙ 管理后台</div><hr><div class="mi">个人设置</div><hr><div class="mi">退出登录</div></div></div>`;
+  if(st.scn==='events') return `<div class="app">${afterSidebar(true)}<main class="main">${header('平台管理 › <b>平台分布式事件</b>')}<div style="padding:20px"><h4 style="margin:0 0 6px;font-size:22px">平台分布式事件</h4><div style="display:flex;gap:8px;margin-bottom:14px"><span class="badge" style="background:var(--soft)">发件箱</span><span class="badge">收件箱</span><span class="badge">事件目录</span><span class="badge">拒收记录</span></div><div class="big" style="height:380px;grid-column:auto"></div></div></main></div>`;
+  const host=st.scn==='host';
+  return `<div class="app">${afterSidebar(host)}<main class="main">${header(host?'平台管理 › <b>平台首页</b>':'tenant-a › 管理后台 › <b>仪表盘</b>')}${dash}</main>
+   ${host?'':`<div class="menu" style="left:10px;top:96px;width:228px"><div class="field" style="margin-bottom:6px">⌕ 搜索租户</div><div class="mi cur"><span class="sq">T</span>tenant-a<span style="margin-left:auto">✓</span></div><div class="mi"><span class="sq">T</span>tenant-b</div></div>`}</div>`;
+}
+function afterPhone(){
+  const host=st.scn==='host';
+  if(st.scn==='ws') return `<div class="app phone"><div class="top"><div class="tb" style="padding:0 14px;gap:10px"><span class="logo">T</span><b>模板项目</b><span class="hr"><span class="ib">⌕</span><span class="av">A</span></span></div><div class="body" style="grid-template-columns:1fr 1fr"><div class="kpi"></div><div class="kpi"></div><div class="big" style="grid-column:1/-1"></div></div></div></div>`;
+  return `<div class="app phone" style="background:var(--card)"><div style="position:absolute;inset:0;background:#0006"></div><aside class="sb" style="position:absolute;left:0;top:0;bottom:0;width:300px;background:var(--side);z-index:2">
+   <div class="brand"><span class="logo">T</span><span class="bt"><b>模板项目</b><span>身份中心</span></span></div>
+   ${host?'':`<div class="field sel mark">▦ tenant-a<span class="chev">⌄</span></div>`}
+   ${menu(host?hostMenu:tenantMenu,host?'平台首页':'仪表盘')}
+   <div class="foot">${host?`<div class="it mark" style="border:1px solid var(--line)">← 返回 tenant-a</div>`:`<div class="it mark">⚙ 平台管理</div>`}</div></aside>
+   <div class="hd" style="position:absolute;top:0;left:0;right:0;justify-content:flex-end"><span class="ib">⌕</span><span class="ib">🔔</span><span class="av">A</span></div></div>`;
+}
+const beforeNote={
+ system:['现状没有系统切换：Identity 与各 Resource 服务之间只能手动改地址','品牌块的下拉切的是工作区和区域（见"租户管理"场景）'],
+ tenant:['品牌块一个下拉里放了三组：工作区列表、平台控制台、工作空间/管理平台','搜索占侧栏顶部，用户信息占侧栏底部','头像菜单里也有"工作空间"，和品牌块重复'],
+ host:['平台控制台和租户在同一个下拉里切换，回到租户要再打开品牌块找','侧栏底部仍是用户信息'],
+ ws:['工作空间顶栏左侧的下拉可以切换到平台控制台和其他租户（图中已展开）','最终用户区出现租户切换，和"租户由入口确定"相矛盾'],
+ events:['宿主看分布式事件时有"宿主 / 默认库"的选择，需要用户理解部署时的分库方式（示意，演示站此形态未开分布式事件）']
+};
+const afterNote={
+ system:['<b>品牌块</b>下拉列出开放应用里登记为显示的系统，当前系统打勾','切换时带上当前工作区，平台人员在 tenant-a 里切到客户管理，落在客户管理的 tenant-a','命令面板也有"切换系统"分组；只有一个系统时品牌块是回首页的链接'],
+ tenant:['<b>品牌块</b>只是品牌（之后接系统切换）','<b>侧栏顶部</b>是租户选择，可搜索','<b>侧栏底部</b>是平台管理入口','<b>头像</b>在页头右上角，菜单里有"工作空间"'],
+ host:['<b>租户选择隐藏</b>：控制台不属于任何租户','<b>底部按钮</b>变成"返回 tenant-a"，一步回到上次的租户'],
+ ws:['<b>顶栏不出现租户</b>：客户和平台人员看到的顶栏完全一样','<b>平台人员</b>在头像菜单顶部看到"代表 tenant-a"，"管理后台"回到该租户的管理后台，换租户在那里做'],
+ events:['<b>没有库或租户选择</b>：平台管理只看平台自身的事件','租户的事件在该租户的范围里看，后端按上下文定位库']
+};
+function beforeView(){
+  if(st.scn==='events') return `<div style="background:var(--card);border-radius:10px;border:1px solid var(--line);padding:20px"><h4 style="margin:0 0 12px;font-size:20px">分布式事件</h4><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><span class="field sel mark" style="width:180px">宿主<span class="chev">⌄</span></span><span class="mut small">选项：宿主 / 默认库 / 各独立库</span></div><div class="big" style="height:220px"></div></div>`;
+  const src={tenant:IMG.tenant,host:IMG.host,ws:IMG.ws,system:IMG.tenant}[st.scn];
+  const extra=st.scn==='tenant'?`<div class="note"><div>品牌块下拉的内容（代码 <code>default-sidebar.html</code>）：工作区 → 平台控制台、tenant-a、tenant-b ｜ 切换区域 → 工作空间、管理平台</div></div>`:'';
+  return `<img class="shot" alt="现状截图" src="${src}">${extra}`;
+}
+const AREAS=[
+['工作空间','工作空间','工作空间（不变）','业务功能，面向客户；顶栏布局'],
+['租户内的管理','管理平台','管理后台','租户管理员与平台人员管理某个租户；头像菜单入口'],
+['宿主','平台控制台','平台管理','只有平台人员；侧栏底部入口、页头路径首段']
+];
+document.getElementById('areas').innerHTML=AREAS.map(r=>`<tr><td data-l="区域"><b>${r[0]}</b></td><td data-l="现名" class="mut">${r[1]}</td><td data-l="新名">${r[2]}</td><td data-l="出现在哪里">${r[3]}</td></tr>`).join('');
+const MENUS=[
+['仪表盘','双侧','平台首页','仪表盘','平台首页 / 仪表盘'],
+['用户管理','双侧','平台账号','用户管理','平台账号 / 用户管理'],
+['角色管理','双侧','平台角色','角色管理','平台角色 / 角色管理'],
+['租户管理','宿主','租户管理','—','租户管理（宿主）'],
+['开放应用','宿主','开放应用','—','开放应用（宿主）'],
+['Webhook','双侧','平台 Webhook','Webhook','—'],
+['分布式事件','双侧','平台分布式事件','分布式事件','下游业务服务为双侧'],
+['操作记录','双侧','平台操作记录','操作记录','平台操作记录 / 操作记录'],
+['系统设置','双侧（部分子项仅宿主）','平台设置','系统设置','平台设置 / 系统设置']
+];
+document.getElementById('menus').innerHTML=MENUS.map(r=>`<tr><td data-l="功能"><b>${r[0]}</b></td><td data-l="侧别">${r[1]}</td><td data-l="平台管理">${r[2]}</td><td data-l="管理后台">${r[3]}</td><td data-l="业务项目" class="mut">${r[4]}</td></tr>`).join('');
+const SCEN=[
+['管理区','只有管理后台','管理后台（客户日常）+ 平台管理（部署级设置）','管理后台（各租户）+ 平台管理（运营方）'],
+['菜单命名','全部原名','宿主侧加"平台"前缀','同左'],
+['租户选择','无','无（只有一个工作区）','工作区形态下，平台人员可进入多个时显示'],
+['侧栏底部','无','工作区形态：平台管理 / 返回默认租户；模拟登录形态：无','工作区形态的平台人员有；模拟登录形态无'],
+['宿主管理员进租户','—','工作区形态登录后落到默认租户；模拟登录形态用模拟登录','同左']
+];
+document.getElementById('scen').innerHTML=SCEN.map(r=>`<tr><td data-l=""><b>${r[0]}</b></td><td data-l="关闭多租户">${r[1]}</td><td data-l="私有化单租户">${r[2]}</td><td data-l="SaaS 多租户">${r[3]}</td></tr>`).join('');
+const FLOW=[
+['登记','开放应用 · 浏览器客户端','填"首页地址"，勾选"显示在系统切换中"；显示名沿用多语言显示名'],
+['存储','OpenIddict 应用','首页地址与开关放进官方扩展属性 Properties，不另建表'],
+['提供','Identity 系统列表接口','返回已勾选的第一方系统，Identity 自己固定排第一；所有登录用户可读'],
+['转取','Resource 后端','经已有的 ServiceClients:Identity 以服务身份取回并短时缓存，前端只调本服务'],
+['展示','品牌块 · 命令面板','下拉列出系统，当前系统打勾；链接带上当前工作区；只有一个系统时是回首页的链接']
+];
+document.getElementById('flow').innerHTML=FLOW.map((f,i)=>`<div class="fl"><em>${i+1} · ${f[0]}</em><b>${f[1]}</b><span>${f[2]}</span></div>`).join('');
+const SYS=[
+['系统从哪来','独立的系统入口目录：代码登记系统键，部署时写入地址','开放应用里勾选"显示在系统切换中"的浏览器客户端','系统就是接入 Identity 的客户端，再建一份目录要两处维护'],
+['首页地址','平台地址，可写 {tenant} 子域模板，另有宿主地址和按租户覆盖','单一首页地址，存在应用的扩展属性里','模板用 /w/租户 路径区分租户，不需要子域模板'],
+['登录回调','由入口地址派生，保存后自动同步','仍在开放应用里显式登记；填首页地址时预填建议的回调地址','开放应用也服务第三方客户端，回调必须可显式控制；预填省掉手工拼地址'],
+['谁能看到','按租户开通的系统，平台人员按系统授权','登记为显示的第一方系统对所有登录用户可见；进入后由各系统自己判断权限','模板没有"按租户开通"，在列表上预判权限要跨服务查询，收益不大'],
+['显示名','部署播种，空时取语言包','沿用开放应用的多语言显示名','OpenIddict 自带多语言显示名'],
+['Identity 自身','单独返回 Identity 根地址','以签发方地址自动加入，排第一','Identity 不是自己的客户端，没有登记记录'],
+['切换时带上下文','工作区变化时重新加载系统列表','链接带上当前 /w/租户；其他情况进对方首页','平台人员在 tenant-a 里切到客户管理，落在客户管理的 tenant-a']
+];
+document.getElementById('sysrows').innerHTML=SYS.map(r=>`<tr><td data-l="方面"><b>${r[0]}</b></td><td data-l="业务 Identity">${r[1]}</td><td data-l="模板终局">${r[2]}</td><td data-l="理由" class="mut">${r[3]}</td></tr>`).join('');
+const STEPS=[
+['1 · 规格','Claude 写，你确认',['规格 §1 需求与验收（Given/When/Then），§2 方案（本页），§3 计划','明确三种形态 × 三种身份的显示规则（"谁看到什么"表）'],['你确认规格后才开始实施']],
+['2 · 后端','Codex',['Identity：开放应用加首页地址与显示开关（扩展属性），保存时校验地址；新增系统列表接口','Resource：经 Identity 服务客户端转取系统列表，短时缓存','框架分布式事件：管理接口去掉库参数，范围由当前租户决定'],['后端单元与集成测试；开放应用增改查、系统列表、Resource 转取、宿主只见平台自身事件、独立库租户在租户范围可见']],
+['3 · 前端外壳','Codex',['品牌块系统切换（含命令面板"切换系统"分组）','侧栏顶部租户选择（可搜索），底部"平台管理 / 返回 tenant-a"','页头居中搜索、右上角头像；头像菜单区域切换与"代表 tenant-a"','工作空间顶栏去掉租户；分布式事件页去掉库选择；开放应用表单新字段；Mock 同步'],['各组件 spec；中英文与关闭本地化的英文表；1440 与 390 两种宽度的版式检查']],
+['4 · 形态验证','Codex，worker-01',['实际生成：Identity / Resource / Standalone × 模拟登录 / 工作区 × 关闭本地化的代表形态，前端 lint、构建、受影响测试','浏览器端到端：系统切换跳转并保持工作区；租户选择；进入和返回控制台；刷新受保护页'],['不重跑无关全量；完整矩阵交给合并后的 Release']],
+['5 · 交付','Claude 审查，Codex 演示',['审查后推送，开 PR；CI 全绿后合并，确认 develop 的 Release 运行变绿','三服务演示站在开放应用里登记首页地址，实际切换走查；全功能站回归','按 1440 与 390 两种宽度出实测对比页给你验收'],['常驻文档同步：前端布局规范、服务对接文档（登记首页地址）']]
+];
+document.getElementById('steps').innerHTML=STEPS.map(x=>`<div class="step"><div><h4>${x[0]}</h4><div class="who">${x[1]}</div></div><div><div class="lbl">做什么</div><ul class="small">${x[2].map(i=>`<li>${i}</li>`).join('')}</ul></div><div><div class="lbl">怎么验证 / 门槛</div><ul class="small">${x[3].map(i=>`<li>${i}</li>`).join('')}</ul></div></div>`).join('');
+const view=document.getElementById('view');
+function fit(){
+  const sc=view.querySelector('.scaler');if(!sc)return;
+  const app=sc.firstElementChild;const w=app.offsetWidth,h=app.offsetHeight;
+  const k=Math.min(1,sc.clientWidth/w);app.style.transform=`scale(${k})`;sc.style.height=(h*k)+'px';
+  if(st.dev==='phone'){sc.style.maxWidth=w+'px';sc.style.margin='0 auto'}
+}
+function render(){
+  for(const id of ['scn','mode','dev'])document.querySelectorAll('#'+id+' button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st[id]));
+  document.querySelector('#dev').style.display=st.mode==='after'?'':'none';
+  if(st.mode==='before'){view.innerHTML=beforeView()}
+  else{view.innerHTML=`<div class="scaler">${st.dev==='desk'?afterDesk():afterPhone()}</div>`}
+  const n=(st.mode==='before'?beforeNote:afterNote)[st.scn];
+  document.getElementById('notes').innerHTML=n.map(x=>`<div>${x}</div>`).join('')+(st.mode==='after'?'<div class="mut">虚线框标出与现状不同的位置。</div>':'');
+  fit();
+}
+for(const id of ['scn','mode','dev'])document.getElementById(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;st[id]=b.dataset.v;render()});
+new ResizeObserver(fit).observe(view);
+render();
+}
+</script>
+</body>
+</html>

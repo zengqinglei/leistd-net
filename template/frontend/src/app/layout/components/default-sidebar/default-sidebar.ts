@@ -1,4 +1,8 @@
+//#if (TenantWorkspace)
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+//#else
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+//#endif
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -7,15 +11,12 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideBuilding2,
-  lucideCheck,
-  lucideChevronsUpDown,
   lucideCog,
   lucideDatabase,
   lucideGauge,
   lucideHouse,
   lucideIdCard,
   lucideLayers,
-  lucideSearch,
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
@@ -26,24 +27,20 @@ import {
   lucideWebhook,
   //#endif
 } from '@ng-icons/lucide';
-import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 //#if (TenantWorkspace)
-import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 //#endif
-import { HlmKbdImports } from '@spartan-ng/helm/kbd';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
-import { CommandPaletteService } from '../../../core/services/command-palette-service';
 import { LayoutService } from '../../../core/services/layout-service';
 //#if (TenantWorkspace)
 import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
 //#endif
-import { Logo } from '../../../shared/components/logo/logo';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
 import { MenuItem, NavigationService } from '../../services/navigation-service';
-import { UserMenu } from '../user-menu/user-menu';
+import { SystemSwitcher } from '../system-switcher/system-switcher';
 
 @Component({
   selector: 'app-default-sidebar',
@@ -52,23 +49,20 @@ import { UserMenu } from '../user-menu/user-menu';
   imports: [
     RouterLink,
     //#if (TenantWorkspace)
-    HlmInput,
+    ...HlmComboboxImports,
     //#endif
     NgIcon,
-    Logo,
-    ...HlmDropdownMenuImports,
-    ...HlmKbdImports,
     ...HlmSidebarImports,
-    UserMenu,
+    SystemSwitcher,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif
   ],
   // prettier-ignore
   providers: [provideIcons({
-    lucideBuilding2, lucideCheck, lucideChevronsUpDown, lucideCog, lucideHouse,
+    lucideBuilding2, lucideCog, lucideHouse,
     lucideGauge, lucideUsers, lucideIdCard, lucideLayers, lucideShieldCheck, lucideSettings,
-    lucideDatabase, lucideSearch,
+    lucideDatabase,
     //#if (IncludeDistributedEvents)
     lucideRadioTower,
     //#endif
@@ -89,41 +83,23 @@ import { UserMenu } from '../user-menu/user-menu';
 export class DefaultSidebar {
   //#if (TenantWorkspace)
   readonly workspace = inject(WorkspaceContextService);
-  readonly filteredWorkspaces = computed(() =>
-    this.workspace
-      .workspaces()
-      .filter((w) =>
-        `${w.name} ${w.displayName ?? ''}`
-          .toLowerCase()
-          .includes(this.workspace.filter().toLowerCase()),
-      ),
+  readonly showTenantSelector = computed(
+    () =>
+      !!this.workspace.current() &&
+      !this.workspace.auth.currentUser()?.tenantId &&
+      this.workspace.workspaces().length > 1,
   );
+  readonly workspaceLabel = (value: string) =>
+    this.workspace.workspaces().find((item) => item.name === value)?.displayName ?? value;
   //#endif
   readonly layoutService = inject(LayoutService);
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
-  protected readonly commandPalette = inject(CommandPaletteService);
   private readonly navigation = inject(NavigationService);
   protected readonly sidebarService = inject(HlmSidebarService);
 
-  /** 区域切换菜单的弹出方向，同官方 nav-user：桌面向右，手机（侧栏是抽屉）向下。 */
-  readonly areaMenuSide = computed(() => (this.sidebarService.isMobile() ? 'bottom' : 'right'));
-
-  readonly areaOptions = this.navigation.areaOptions;
-  readonly hasAreaSwitcher = computed(() => {
-    //#if (TenantWorkspace)
-    return true;
-    //#else
-    return this.areaOptions().length > 1;
-    //#endif
-  });
-  readonly currentAreaLabel = this.navigation.currentAreaLabel;
   readonly menuGroups = this.navigation.menuGroups;
-
-  goToArea(route: string): void {
-    this.navigation.goToArea(route);
-  }
 
   isItemActive(item: MenuItem): boolean {
     return this.navigation.isItemActive(item);
@@ -135,8 +111,10 @@ export class DefaultSidebar {
 const ENGLISH: Record<string, string> = {
   //#if (TenantWorkspace)
   'tenantWorkspace.title': 'Workspaces',
-  'tenantWorkspace.console': 'Platform console',
-  'tenantWorkspace.search': 'Search workspaces',
+  'tenantWorkspace.console': 'Platform management',
+  'tenantWorkspace.return': 'Return to {{tenant}}',
+  'tenantWorkspace.search': 'Search tenants',
+  'tenantWorkspace.empty': 'No matching tenants',
   //#endif
   'layout.sidebar.navigation': 'Navigation',
   'layout.sidebar.navigationDescription': 'Browse the sections of this area.',

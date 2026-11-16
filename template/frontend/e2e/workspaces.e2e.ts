@@ -17,7 +17,8 @@ test('signs in from the public root to the default workspace', async ({ page }) 
   await page.getByLabel('Password', { exact: true }).fill(admin().password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/w\/default-e2e\/platform/);
-  await expect(page.getByTestId('area-switcher')).toContainText('default-e2e');
+  await expect(page.locator('app-system-switcher')).toBeVisible();
+  await expect(page.getByTestId('tenant-selector')).not.toBeVisible();
   expect(documents).toEqual(['/']);
 });
 
@@ -30,7 +31,7 @@ test.describe('workspace requests and routes', () => {
       await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
       await page.reload();
       await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-      await expect(page.getByTestId('area-switcher')).toBeVisible();
+      await expect(page.locator('app-system-switcher')).toBeVisible();
       await expect(page).toHaveURL(path);
     });
   }
@@ -66,8 +67,8 @@ test.describe('workspace requests and routes', () => {
     await page.evaluate(() => {
       (window as unknown as { workspaceHeap: number }).workspaceHeap = 42;
     });
-    await page.getByTestId('area-switcher').click();
-    await page.getByRole('menuitem', { name: new RegExp(name) }).click();
+    await page.getByTestId('tenant-selector').getByRole('combobox').fill(name);
+    await page.getByRole('option', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${name}/platform/users`));
     await expect(page.getByRole('heading', { name: 'User management', exact: true })).toBeVisible();
     expect(
@@ -78,6 +79,12 @@ test.describe('workspace requests and routes', () => {
     await expect(page).toHaveURL(/\/w\/default-e2e\/platform\/users/);
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`/w/${name}/platform/users`));
+    await page.getByTestId('platform-management').click();
+    await expect(page).toHaveURL('/platform');
+    await expect(page.getByTestId('tenant-selector')).not.toBeVisible();
+    await expect(page.getByTestId('return-workspace')).toContainText(name);
+    await page.getByTestId('return-workspace').click();
+    await expect(page).toHaveURL(`/w/${name}/platform`);
     const headers = { 'X-Workspace': name };
     const emptyRole = await json<{ id: string }>(
       await page.request.post('/api/v1/roles', {
@@ -94,21 +101,64 @@ test.describe('workspace requests and routes', () => {
     await expect(
       page.getByText(`No features are available in ${name} yet`, { exact: true }),
     ).toBeVisible();
-    await expect(page.getByTestId('area-switcher')).toBeVisible();
+    await expect(page.locator('app-system-switcher')).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Back to platform console', exact: true }),
+      page.getByRole('button', { name: 'Back to platform management', exact: true }),
     ).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Switch workspace', exact: true }).click();
-    await expect(
-      page.getByRole('menuitem', { name: 'Platform console', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('option', { name, exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(page.getByTestId('platform-management')).toBeVisible();
     await expect(
       other.getByRole('heading', { name: 'User management', exact: true }),
     ).toBeVisible();
     await other.close();
   });
+  //#if (OpenIddictServer || RemoteTokenAuth)
+
+  for (const width of [1440, 390]) {
+    test(`changes systems with the staff workspace at ${width}px without closing the mobile drawer`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.route('**/api/v1/systems', (route) =>
+        route.fulfill({
+          json: [
+            {
+              key: 'identity',
+              displayName: 'Identity',
+              homeUrl: 'https://identity.example.test/',
+              isCurrent: true,
+            },
+            {
+              key: 'orders',
+              displayName: 'Orders',
+              homeUrl: 'https://orders.example.test/',
+              isCurrent: false,
+            },
+          ],
+        }),
+      );
+      await page.route('https://orders.example.test/**', (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<h1>Orders</h1>' }),
+      );
+      await page.goto('/w/default-e2e/platform');
+      if (width === 390)
+        await page.getByRole('button', { name: 'Toggle sidebar', exact: true }).click();
+      await page.getByTestId('system-switcher').click();
+      if (width === 390) {
+        await expect(page.getByTestId('platform-management')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('menu')).not.toBeVisible();
+        await expect(page.getByTestId('platform-management')).toBeVisible();
+        await page.getByTestId('system-switcher').click();
+      }
+      await page.getByRole('menuitem', { name: 'Orders', exact: true }).click();
+      await expect(page).toHaveURL('https://orders.example.test/w/default-e2e/platform');
+    });
+  }
+  //#endif
 
   test('grants a home account access through the query-driven staff sheet', async ({ page }) => {
     const tenants = await json<{ items: { id: string; name: string }[] }>(

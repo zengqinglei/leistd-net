@@ -8,6 +8,9 @@
 // 只在 Mock 中存在的端点：上面的整页跳转在 Mock 下的替身。
 // - `POST /api/v1/auth/login`：模拟登录，直接建立 Mock 会话。
 //#endif
+//#if (OpenIddictServer || RemoteTokenAuth)
+export * from './api/system';
+//#endif
 //#if (LocalIdentity)
 export * from './api/auth';
 //#endif

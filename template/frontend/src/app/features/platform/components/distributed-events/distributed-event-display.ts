@@ -14,7 +14,6 @@ export interface EventRow {
   eventName: string;
   eventId: string;
   status: string;
-  tenant: string;
   orderingKey: string;
   consumer: string;
   attempts: number;
@@ -42,7 +41,6 @@ export function eventRow(record: EventRecord): EventRow {
         ? record.coordinates['messageId'] || record.coordinates['offset'] || record.id
         : '—'),
     status: record.status,
-    tenant: 'tenantId' in record ? (record.tenantId ?? 'host') : 'host',
     orderingKey: 'orderingKey' in record ? (record.orderingKey ?? '—') : '—',
     consumer: 'consumer' in record ? record.consumer : '—',
     attempts: 'attemptCount' in record ? record.attemptCount : record.redecodeCount,
@@ -98,10 +96,6 @@ export function reasonKey(reason: string): string | null {
 //#if (!IncludeLocalization)
 export const ENGLISH: Record<string, string> = {
   'distributedEvents.title': 'Distributed events',
-  'distributedEvents.database': 'Physical database',
-  'distributedEvents.hostDatabase': 'Host / default database',
-  'distributedEvents.tenantScope': 'Current tenant',
-  'distributedEvents.host': 'Host',
   'distributedEvents.noTransport': 'No transport',
   'distributedEvents.transportChanged': 'Status changed',
   'distributedEvents.transportReported': 'Last reported',
@@ -116,7 +110,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.oldest': 'Oldest {{age}} · Pending processing {{count}}',
   'distributedEvents.deadHelp': 'Permanent failure or retry window elapsed',
   'distributedEvents.failedHelp': 'Handler retry attempts exhausted',
-  'distributedEvents.rejectionHelp': 'Host inbox · Cannot decode or resolve tenant',
+  'distributedEvents.rejectionHelp': 'Cannot decode or resolve recipient',
   'distributedEvents.views': 'Event views',
   'distributedEvents.search': 'Exact event ID / ordering key / trace ID / correlation ID',
   'distributedEvents.searchRejections': 'Exact event ID / trace ID / correlation ID',
@@ -179,7 +173,6 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.action.redecode': 'Re-decode',
   'distributedEvents.action.discard': 'Discard',
   'distributedEvents.column.event': 'Event',
-  'distributedEvents.column.tenant': 'Tenant',
   'distributedEvents.column.orderingKey': 'Ordering key',
   'distributedEvents.column.status': 'Status',
   'distributedEvents.column.consumer': 'Consumer',
@@ -197,7 +190,6 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.field.id': 'Record ID',
   'distributedEvents.field.eventId': 'Event ID',
   'distributedEvents.field.eventName': 'Event name',
-  'distributedEvents.field.tenantId': 'Tenant ID',
   'distributedEvents.field.orderingKey': 'Ordering key',
   'distributedEvents.field.occurredAt': 'Occurred at',
   'distributedEvents.field.status': 'Status',
@@ -234,7 +226,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.field.direction': 'Direction',
   'distributedEvents.cancel': 'Cancel',
   'distributedEvents.reason.invalidEnvelope': 'Invalid envelope',
-  'distributedEvents.reason.unknownTenant': 'Unknown tenant',
+  'distributedEvents.reason.unknownTenant': 'Unknown recipient',
   'distributedEvents.reason.invalidPayload': 'Invalid payload',
   'distributedEvents.bulk.selected.redeliver': 'Redeliver selected ({{count}})',
   'distributedEvents.bulk.selected.replay': 'Replay selected ({{count}})',
@@ -244,7 +236,6 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.bulk.filter.replay': 'Replay current filter',
   'distributedEvents.bulk.filter.redecode': 'Re-decode current filter',
   'distributedEvents.bulk.filter.discard': 'Discard current filter',
-  'distributedEvents.confirmation.scope': 'Scope',
   'distributedEvents.confirmation.cutoff': 'Loaded through',
   'distributedEvents.confirmation.criteria': 'Filters',
   'distributedEvents.confirmation.ids': 'Record IDs',
@@ -275,7 +266,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.consequence.redeliver':
     'The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.',
   'distributedEvents.confirmation.consequence.redecode':
-    'Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.',
+    'Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target inbox; undecodable messages stay pending. Later messages are excluded.',
   'distributedEvents.confirmation.consequence.discard':
     'These raw messages will stop processing and will not reach consumers. Later messages are excluded.',
   'distributedEvents.confirmation.result.redeliver': 'Redelivered {{count}} · Skipped {{skipped}}',

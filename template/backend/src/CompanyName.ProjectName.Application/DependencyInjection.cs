@@ -1,3 +1,6 @@
+#if (OpenIddictServer || RemoteTokenAuth)
+using CompanyName.ProjectName.Application.Systems.AppServices;
+#endif
 using Leistd.Settings.Definitions;
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Options;
@@ -43,6 +46,7 @@ using Leistd.BackgroundJobs;
 using Leistd.BackgroundJobs.Recurring;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
+using CompanyName.ProjectName.Application.OpenApplications.Validators;
 using CompanyName.ProjectName.Application.Auth.Options;
 #endif
 #endif
@@ -162,6 +166,8 @@ public static class DependencyInjection
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
         services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.TryAddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
+        services.TryAddTransient<OpenApplicationHomeUrlValidator>();
+        services.TryAddTransient<ISystemAppService, SystemAppService>();
 #endif
 #if (ExternalLogin)
         services.TryAddTransient<IExternalAuthAppService, ExternalAuthAppService>();
@@ -218,6 +224,7 @@ public static class DependencyInjection
         services.TryAddTransient<IAccountPreferenceStore, LocalAccountPreferenceStore>();
 #else
         services.TryAddTransient<IAccountPreferenceStore, RemoteAccountPreferenceStore>();
+        services.TryAddTransient<ISystemAppService, RemoteSystemAppService>();
 #endif
         services.TryAddTransient<AccountPreferenceValueValidator>();
         services.TryAddTransient<IAccountPreferenceAppService, AccountPreferenceAppService>();

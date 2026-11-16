@@ -11,6 +11,9 @@ import enTexts from '../../../../../public/i18n/en.json';
 import { lineCount, pseudoCatalog } from '../../../core/i18n/pseudo-locale.testing';
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
+//#if (IncludeMultiTenancy)
+import { AuthService } from '../../../core/services/auth-service';
+//#endif
 import { LayoutCrumb, LayoutService } from '../../../core/services/layout-service';
 import {
   expectTouchTarget,
@@ -36,6 +39,9 @@ describe('PageBreadcrumb', () => {
       // prettier-ignore
       providers: [
         // 首级链接按当前区段取首页，先停在平台区段
+        //#if (IncludeMultiTenancy)
+        { provide: AuthService, useValue: { currentUser: () => null } },
+        //#endif
         provideRouter([{ path: 'platform', children: [] }]),
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
@@ -72,9 +78,17 @@ describe('PageBreadcrumb', () => {
   }
 
   //#if (IncludeLocalization)
-  const HOME = 'menu.platform /platform';
+  //#if (IncludeMultiTenancy)
+  const HOME = 'menu.platformManagement /platform';
   //#else
-  const HOME = 'Admin platform /platform';
+  const HOME = 'menu.platform /platform';
+  //#endif
+  //#else
+  //#if (IncludeMultiTenancy)
+  const HOME = 'Platform management /platform';
+  //#else
+  const HOME = 'Administration /platform';
+  //#endif
   //#endif
 
   it('renders home and the page title for a top-level page', async () => {
@@ -189,7 +203,13 @@ describe('PageBreadcrumb', () => {
     const pseudo = pseudoCatalog(enTexts);
     const host = await render([CENTRE, BRAND], 'Messages', 480);
     TestBed.inject(TranslocoService).setTranslation(pseudo, 'en');
-    await vi.waitFor(() => expect(host.textContent).toContain(pseudo.menu.platform));
+    await vi.waitFor(() =>
+      expect(host.textContent).toContain(
+        pseudo.menu[
+          TestBed.inject(LayoutService).isHostScope() ? 'platformManagement' : 'platform'
+        ],
+      ),
+    );
 
     const nav = host.querySelector('nav')!;
     expect(nav.scrollWidth).toBeLessThanOrEqual(nav.clientWidth);

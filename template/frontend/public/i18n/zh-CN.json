@@ -1,15 +1,18 @@
 {
   //#if (TenantWorkspace)
   "tenantWorkspace": {
+    "return": "返回 {{tenant}}",
+    "representing": "代表 {{tenant}}",
+    "empty": "没有匹配的租户",
     "deniedTitle": "无法访问该工作区",
     "forbiddenDescription": "你的账号属于其他工作区，请前往自己的工作区继续操作。",
     "unavailableDescription": "该工作区已不可用，或你已没有访问权限。请前往可用的工作区继续操作。",
     "goToMine": "前往我的工作区",
 
-    "backToConsole": "回到平台控制台",
+    "backToConsole": "回到平台管理",
     "title": "工作区",
-    "console": "平台控制台",
-    "search": "搜索工作区",
+    "console": "平台管理",
+    "search": "搜索租户",
     "switch": "切换工作区",
     "emptyTitle": "你在 {{name}} 还没有可用的功能",
     "emptyDescription": "请联系该工作区管理员分配本系统角色。"
@@ -130,8 +133,9 @@
     "credentialRejected": "未通过验证，请检查后重试。"
   },
   "menu": {
+    "platformManagement": "平台管理",
     "workspace": "工作空间",
-    "platform": "管理平台",
+    "platform": "管理后台",
     "logout": "退出登录",
     "personalSettings": "个人设置"
   },
@@ -140,7 +144,21 @@
     "saveFailed": "语言未保存，已保持原样"
   },
   "layout": {
+    "systemSwitcher": { "title": "切换系统" },
     "sidebar": {
+      "platformHome": "平台首页",
+      "platformUsers": "平台账号",
+      "platformRoles": "平台角色",
+      //#if (IncludeWebhooks)
+      "platformWebhooks": "平台 Webhook",
+      //#endif
+      //#if (IncludeDistributedEvents)
+      "platformDistributedEvents": "平台分布式事件",
+      //#endif
+      //#if (IncludeOperationRecords)
+      "platformOperationRecords": "平台操作记录",
+      //#endif
+      "platformSettings": "平台设置",
       "navigation": "导航",
       "navigationDescription": "浏览本区域的各项功能。",
       "appTitle": "模板项目",

@@ -1,8 +1,16 @@
+//#if (IncludeMultiTenancy)
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
+//#else
 import { Injectable, computed, inject, signal } from '@angular/core';
+//#endif
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map, startWith } from 'rxjs/operators';
 
+//#if (IncludeMultiTenancy)
+import { AuthService } from './auth-service';
+
+//#endif
 /** 面包屑的一级上级页面：文案与绝对链接。 */
 export interface LayoutCrumb {
   readonly label: string;
@@ -15,6 +23,12 @@ export interface LayoutCrumb {
 })
 export class LayoutService {
   private readonly router = inject(Router);
+  //#if (IncludeMultiTenancy)
+  private readonly injector = inject(Injector);
+  private get auth() {
+    return this.injector.get(AuthService);
+  }
+  //#endif
 
   /**
    * 页面标题：面包屑末级与浏览器标签页标题的唯一来源，各页进入时设置。离开带 DefaultHeader 的布局时
@@ -48,6 +62,18 @@ export class LayoutService {
     this.currentUrl()
       .replace(/^\/w\/[^/]+/, '')
       .startsWith('/platform'),
+  );
+
+  /** 路由工作区或会话租户表示租户范围；登录页的租户提示不参与判定。 */
+  readonly isHostScope = computed(() => {
+    //#if (IncludeMultiTenancy)
+    return !this.currentUrl().startsWith('/w/') && !this.auth.currentUser()?.tenantId;
+    //#else
+    return false;
+    //#endif
+  });
+  readonly managementAreaKey = computed(() =>
+    this.isHostScope() ? 'menu.platformManagement' : 'menu.platform',
   );
 
   /** 业务链接跟随当前工作区；本人认证端点仍由 HTTP 范围规则处理。 */

@@ -133,6 +133,34 @@ function validateInput(input: CreateOpenApplicationInputDto | UpdateOpenApplicat
       errors.push({ field, detail: `${name} is not an allowed value.` });
     }
   }
+  if (input.showInSwitcher && input.applicationType !== 'web') {
+    errors.push({
+      field: 'showInSwitcher',
+      detail: 'Only web applications can appear in the system switcher.',
+    });
+  }
+  if (input.homeUrl || input.showInSwitcher) {
+    let valid = false;
+    try {
+      const url = new URL(input.homeUrl ?? '');
+      valid =
+        /^https?:\/\//i.test(input.homeUrl ?? '') &&
+        !/\s/.test(input.homeUrl ?? '') &&
+        (input.homeUrl?.length ?? 0) <= 2048 &&
+        (url.protocol === 'https:' ||
+          (url.protocol === 'http:' &&
+            (url.hostname === 'localhost' ||
+              url.hostname === '[::1]' ||
+              /^127(?:\.\d{1,3}){3}$/.test(url.hostname))));
+    } catch {
+      /* 非绝对 URL 统一返回字段错误。 */
+    }
+    if (!valid)
+      errors.push({
+        field: 'homeUrl',
+        detail: 'Enter an absolute HTTPS home URL (development allows HTTP loopback).',
+      });
+  }
   // 会话绑定必须显式给值，缺失或 null 都不行
   if (typeof input.sessionBound !== 'boolean') {
     errors.push({ field: 'sessionBound', detail: 'Session bound is required.' });
@@ -218,6 +246,8 @@ function createOpenApplication(req: MockRequest) {
     id: body.clientId,
     clientId: body.clientId,
     displayName: body.displayName,
+    homeUrl: body.homeUrl,
+    showInSwitcher: body.showInSwitcher ?? false,
     applicationType: body.applicationType,
     clientType: body.clientType,
     redirectUris: body.redirectUris || [],
@@ -225,7 +255,7 @@ function createOpenApplication(req: MockRequest) {
     permissions: body.permissions || [],
     requirements: body.requirements || [],
     settings: {},
-    properties: {},
+    properties: { home_uri: body.homeUrl ?? '', show_in_switcher: body.showInSwitcher ?? false },
     hasClientSecret: body.clientType === 'confidential',
     sessionBound: body.sessionBound,
     creationTime: new Date().toISOString(),
@@ -260,7 +290,14 @@ function updateOpenApplication(req: MockRequest) {
 
   applications[index] = {
     ...applications[index],
+    properties: {
+      ...applications[index].properties,
+      home_uri: body.homeUrl ?? '',
+      show_in_switcher: body.showInSwitcher ?? false,
+    },
     displayName: body.displayName,
+    homeUrl: body.homeUrl,
+    showInSwitcher: body.showInSwitcher ?? false,
     applicationType: body.applicationType,
     clientType: body.clientType,
     redirectUris: body.redirectUris || [],

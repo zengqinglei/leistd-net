@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Leistd.EventBus.Tests.EntityFrameworkCore;
 
-/// <summary>跨库管理审计属于调用方，目标批次与外层事务分别完成。</summary>
+/// <summary>管理审计属于当前调用方，目标批次与外层事务分别完成。</summary>
 public sealed class DistributedEventAuditContextTests
 {
     /// <summary>外层提交或回滚不改变已提交批次的审计数量、身份与目标。</summary>
@@ -38,18 +38,18 @@ public sealed class DistributedEventAuditContextTests
         var services = scope.ServiceProvider;
         using var identity = services.GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.Name, "host-operator")], "test")));
+        using var tenant = services.GetRequiredService<ICurrentTenant>().Change(DistributedEventTestHost.DedicatedTenant);
         var units = services.GetRequiredService<IUnitOfWorkManager>();
         using (var outer = units.Begin(requiresNew: true))
         {
-            var result = await services.GetRequiredService<IDistributedEventManagementService>().RedeliverAsync(new() { Ids = [row.Id] }, DistributedEventTestHost.DedicatedTenant.ToString());
+            var result = await services.GetRequiredService<IDistributedEventManagementService>().RedeliverAsync(new() { Ids = [row.Id] });
             Assert.Equal(1, result.AffectedCount);
             var audit = Assert.Single(host.ManagedEvents);
-            Assert.Null(Assert.Single(host.ManagedEventTenants));
+            Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.ManagedEventTenants));
             Assert.Equal("host-operator", Assert.Single(host.ManagedEventUsers));
             Assert.Equal(DistributedEventTestHost.DedicatedTenant, audit.TargetTenantId);
-            Assert.Equal(DistributedEventTestHost.DedicatedTenant.ToString(), audit.Database);
             Assert.Same(outer, units.Current);
-            Assert.Null(services.GetRequiredService<ICurrentTenant>().Id);
+            Assert.Equal(DistributedEventTestHost.DedicatedTenant, services.GetRequiredService<ICurrentTenant>().Id);
             if (commit) await outer.CompleteAsync();
             else await outer.RollbackAsync();
         }

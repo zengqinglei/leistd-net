@@ -197,8 +197,8 @@ internal sealed class DistributedEventManagedAuditHandler(
             _ => throw new ArgumentOutOfRangeException(nameof(@event), @event.Action, "Unknown event management action.")
         };
         var selection = @event.FilterJson ?? JsonSerializer.Serialize(@event.Ids);
-        logger.LogInformation("Distributed event management {Action}: {AffectedCount} records in {Database} for tenant {TargetTenantId}; selector {Selection}; batch {BatchId}",
-            action, @event.AffectedCount, @event.Database, @event.TargetTenantId, selection, @event.EventId);
+        logger.LogInformation("Distributed event management {Action}: {AffectedCount} records for tenant {TargetTenantId}; selector {Selection}; batch {BatchId}",
+            action, @event.AffectedCount, @event.TargetTenantId, selection, @event.EventId);
         return recorder.RecordSucceededAsync(action,
             OperationTarget.For(@event.EventId, Summarize(@event)),
             PermissionConstant.DistributedEvents.Manage, cancellationToken);

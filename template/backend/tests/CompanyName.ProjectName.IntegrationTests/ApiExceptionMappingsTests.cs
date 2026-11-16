@@ -87,7 +87,6 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
     [InlineData(PermissionErrorCodes.SubjectNotFound, StatusCodes.Status404NotFound)]
 #if (IncludeDistributedEvents)
     [InlineData(DistributedEventErrorCodes.RecordNotFound, StatusCodes.Status404NotFound)]
-    [InlineData(DistributedEventErrorCodes.DatabaseNotFound, StatusCodes.Status404NotFound)]
     [InlineData(DistributedEventErrorCodes.HostOnly, StatusCodes.Status403Forbidden)]
 #endif
 #if (IncludeMultiTenancy)

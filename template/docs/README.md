@@ -17,7 +17,7 @@
 <!--#endif-->
 | 调整后端目录 | [后端目录规则 §2](standards/coding-backend.md#2-分层与目录)、[项目目录](standards/project-structure.md) | 按影响面读取测试与相关专题 |
 <!--#if (SpaFrontend)-->
-| 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面读 [界面/确认框](standards/frontend-ui.md)，按内容读 [列表、表格与详情](standards/frontend-lists.md)、[表单](standards/frontend-forms.md)、[导航](standards/frontend-navigation.md)（新页、菜单）、[路由守卫](standards/frontend-routing.md)、[时间、图表与推送](standards/frontend-data.md)，设置偏好读 [设置](standards/settings.md)；加组件、升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md) |
+| 前端功能或修复 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[测试](standards/testing.md) | 改界面读 [界面/确认框](standards/frontend-ui.md)，按内容读 [列表、表格与详情](standards/frontend-lists.md)、[表单](standards/frontend-forms.md)、[导航](standards/frontend-navigation.md)（新页、菜单、外壳与系统切换）、[路由守卫](standards/frontend-routing.md)、[时间、图表与推送](standards/frontend-data.md)，设置偏好读 [设置](standards/settings.md)；加组件、升级 Spartan 读 [Spartan 维护](standards/frontend-spartan.md) |
 | 全栈功能 | 以上两行必读的并集与 [API](standards/api.md) | 同上两行 |
 <!--#if (IncludeLocalization)-->
 | 新增界面文案 | [通用约定](standards/coding-common.md)、[前端](standards/coding-frontend.md)、[前端多语言](standards/frontend-i18n.md)；只改文案由词条闸门验证，不读测试规范 | 校验提示读 [表单](standards/frontend-forms.md) |

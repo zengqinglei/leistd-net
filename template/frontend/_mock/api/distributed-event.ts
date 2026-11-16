@@ -3,7 +3,6 @@ import * as Dto from '../../src/app/features/platform/dtos/distributed-event.dto
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { MockException, MockRequest } from '../core/models';
 import {
-  DISTRIBUTED_EVENT_DATABASES,
   DISTRIBUTED_EVENT_OUTBOX,
   DISTRIBUTED_EVENT_INBOX,
   DISTRIBUTED_EVENT_REJECTIONS,
@@ -45,23 +44,15 @@ function records(kind: Kind): Detail[] {
       : DISTRIBUTED_EVENT_REJECTIONS;
 }
 
-/** 拒收始终集中在宿主；选库仅缩小查询范围，不模拟租户身份。 */
-function scope(req: MockRequest, kind?: Kind, manage = false) {
+/** 当前请求范围决定记录边界；拒收仅对宿主开放。 */
+function scope(_req: MockRequest, kind?: Kind, manage = false) {
   requirePermission(
     manage ? PERMISSIONS.distributedEvents.manage : PERMISSIONS.distributedEvents.default,
   );
   const tenant = getMockSessionTenantKey();
-  const database = queryValues(req)['database'];
-  if (tenant !== 'host' && (database || kind === 'rejections')) failure(403, 'HostOnly');
-  const selected = DISTRIBUTED_EVENT_DATABASES.find((item) => item.key === (database || 'host'));
-  if (!selected) failure(404, 'DatabaseNotFound');
-  return (row: Row) => {
-    if (kind === 'rejections') return true;
-    const tenantId = 'tenantId' in row ? row.tenantId : null;
-    return tenant !== 'host'
-      ? tenantId === tenant
-      : selected.isHost || selected.tenantIds.includes(tenantId ?? '');
-  };
+  if (tenant !== 'host' && kind === 'rejections') failure(403, 'HostOnly');
+  return (row: Row) =>
+    kind === 'rejections' || ('tenantId' in row ? (row.tenantId ?? 'host') : 'host') === tenant;
 }
 
 function timestamp(row: Row) {
@@ -285,8 +276,7 @@ function recover(
 function sendTest(req: MockRequest): Dto.DistributedEventTestOutputDto {
   scope(req, undefined, true);
   const tenant = getMockSessionTenantKey();
-  if (tenant === 'host' && queryValues(req)['database'] && queryValues(req)['database'] !== 'host')
-    failure(403, 'HostOnly');
+  if (tenant !== 'host') failure(403, 'HostOnly');
   const eventId = crypto.randomUUID();
   const now = new Date().toISOString();
   const nextId = (kind: Kind) =>
@@ -339,11 +329,6 @@ function sendTest(req: MockRequest): Dto.DistributedEventTestOutputDto {
 
 export const DISTRIBUTED_EVENT_API = {
   'GET /api/v1/distributed-events/status': status,
-  'GET /api/v1/distributed-events/databases': (req: MockRequest) => {
-    scope(req);
-    if (getMockSessionTenantKey() !== 'host') failure(403, 'HostOnly');
-    return DISTRIBUTED_EVENT_DATABASES;
-  },
   'GET /api/v1/distributed-events/catalog': catalog,
   'GET /api/v1/distributed-events/outbox': (req: MockRequest) => list('outbox', req),
   'GET /api/v1/distributed-events/inbox': (req: MockRequest) => list('inbox', req),

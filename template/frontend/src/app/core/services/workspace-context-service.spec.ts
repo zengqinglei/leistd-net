@@ -82,6 +82,10 @@ describe('WorkspaceContextService', () => {
     const second = service.recoverUnavailable();
     expect(second).toBe(first);
     TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/me/workspaces').flush([]);
+    await Promise.resolve();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/permissions/current')
+      .flush({ permissions: [], isSuperAdmin: false, versionToken: 'home' });
     await first;
     expect(navigate).toHaveBeenCalledTimes(1);
     TestBed.inject(HttpTestingController).verify();

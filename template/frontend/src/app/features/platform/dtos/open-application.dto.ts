@@ -7,6 +7,9 @@ export interface OpenApplicationOutputDto {
   id: string;
   clientId: string;
   displayName?: string;
+  displayNames?: Record<string, string>;
+  homeUrl?: string | null;
+  showInSwitcher?: boolean;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
   redirectUris: string[];
@@ -25,6 +28,8 @@ export interface OpenApplicationOutputDto {
 export interface CreateOpenApplicationInputDto {
   clientId: string;
   displayName?: string;
+  homeUrl?: string | null;
+  showInSwitcher?: boolean;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
   redirectUris: string[];
@@ -36,6 +41,8 @@ export interface CreateOpenApplicationInputDto {
 
 export interface UpdateOpenApplicationInputDto {
   displayName?: string;
+  homeUrl?: string | null;
+  showInSwitcher?: boolean;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
   redirectUris: string[];

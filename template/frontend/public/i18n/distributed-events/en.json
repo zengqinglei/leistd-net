@@ -1,9 +1,5 @@
 {
   "title": "Distributed events",
-  "database": "Physical database",
-  "hostDatabase": "Host / default database",
-  "tenantScope": "Current tenant",
-  "host": "Host",
   "noTransport": "No transport",
   "last24Hours": "Last 24h: {{sent}} sent · {{processed}} processed",
   "refresh": "Refresh",
@@ -16,7 +12,7 @@
   "oldest": "Oldest {{age}} · Pending processing {{count}}",
   "deadHelp": "Permanent failure or retry window elapsed",
   "failedHelp": "Handler retry attempts exhausted",
-  "rejectionHelp": "Host inbox · Cannot decode or resolve tenant",
+  "rejectionHelp": "Cannot decode or resolve recipient",
   "views": "Event views",
   "search": "Exact event ID / ordering key / trace ID / correlation ID",
   "searchRejections": "Exact event ID / trace ID / correlation ID",
@@ -84,7 +80,6 @@
   },
   "column": {
     "event": "Event",
-    "tenant": "Tenant",
     "orderingKey": "Ordering key",
     "status": "Status",
     "consumer": "Consumer",
@@ -104,7 +99,6 @@
     "id": "Record ID",
     "eventId": "Event ID",
     "eventName": "Event name",
-    "tenantId": "Tenant ID",
     "orderingKey": "Ordering key",
     "occurredAt": "Occurred at",
     "status": "Status",
@@ -143,7 +137,7 @@
   "cancel": "Cancel",
   "reason": {
     "invalidEnvelope": "Invalid envelope",
-    "unknownTenant": "Unknown tenant",
+    "unknownTenant": "Unknown recipient",
     "invalidPayload": "Invalid payload"
   },
   "bulk": {
@@ -161,7 +155,6 @@
     }
   },
   "confirmation": {
-    "scope": "Scope",
     "cutoff": "Loaded through",
     "criteria": "Filters",
     "ids": "Record IDs",
@@ -191,7 +184,7 @@
     },
     "consequence": {
       "redeliver": "The event ID is preserved and consumers deduplicate by ID. Fix the cause first. Later records are excluded. Records return to pending in batches and the dispatcher resumes delivery.",
-      "redecode": "Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target tenant inbox; undecodable messages stay pending. Later messages are excluded.",
+      "redecode": "Re-decode with a matching receiver. An API without that transport hands the request to a Worker. Successful messages enter the target inbox; undecodable messages stay pending. Later messages are excluded.",
       "discard": "These raw messages will stop processing and will not reach consumers. Later messages are excluded."
     },
     "result": {

@@ -1,0 +1,80 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <ul hlmSidebarMenu>
+    <li hlmSidebarMenuItem>
+      <!--#if (OpenIddictServer || RemoteTokenAuth)-->
+      @if (directory.systems().length > 1) {
+        <button
+          hlmSidebarMenuButton
+          size="lg"
+          [closeMobileSidebarOnClick]="false"
+          [hlmDropdownMenuTrigger]="systems"
+          [side]="side()"
+          align="start"
+          [attr.aria-label]="t('layout.systemSwitcher.title')"
+          data-testid="system-switcher"
+        >
+          <app-logo size="normal" />
+          <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+            <span class="truncate text-sm font-medium">{{ t('layout.sidebar.appTitle') }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ currentName() }}</span>
+          </div>
+          <ng-icon
+            name="lucideChevronsUpDown"
+            class="ml-auto group-data-[collapsible=icon]:hidden"
+          />
+        </button>
+        <ng-template #systems>
+          <hlm-dropdown-menu class="min-w-56 max-w-80" (keydown.escape)="$event.stopPropagation()">
+            <hlm-dropdown-menu-label>{{
+              t('layout.systemSwitcher.title')
+            }}</hlm-dropdown-menu-label>
+            <hlm-dropdown-menu-group (keydown.escape)="closeMenu($event)">
+              @for (system of directory.systems(); track system.key) {
+                <button
+                  hlmDropdownMenuItem
+                  (click)="directory.switchTo(system)"
+                  [attr.data-system]="system.key"
+                  class="gap-2"
+                >
+                  <span
+                    aria-hidden="true"
+                    class="flex size-6 shrink-0 items-center justify-center rounded-md border"
+                    >{{ system.displayName.slice(0, 1) }}</span
+                  >
+                  <span class="truncate">{{ system.displayName }}</span>
+                  @if (system.isCurrent) {
+                    <ng-icon name="lucideCheck" class="ml-auto" />
+                  }
+                </button>
+              }
+            </hlm-dropdown-menu-group>
+          </hlm-dropdown-menu>
+        </ng-template>
+      } @else {
+        <a
+          hlmSidebarMenuButton
+          size="lg"
+          [routerLink]="layout.homeRoute()"
+          data-testid="system-home"
+        >
+          <app-logo size="normal" />
+          <span class="truncate text-sm font-medium group-data-[collapsible=icon]:hidden">{{
+            t('layout.sidebar.appTitle')
+          }}</span>
+        </a>
+      }
+      <!--#else-->
+      <a hlmSidebarMenuButton size="lg" [routerLink]="layout.homeRoute()" data-testid="system-home">
+        <app-logo size="normal" />
+        <span class="truncate text-sm font-medium group-data-[collapsible=icon]:hidden">{{
+          t('layout.sidebar.appTitle')
+        }}</span>
+      </a>
+      <!--#endif-->
+    </li>
+  </ul>
+</ng-container>

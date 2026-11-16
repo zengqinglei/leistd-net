@@ -4,6 +4,7 @@ using CompanyName.ProjectName.Application.OpenApplications.Errors;
 #endif
 using Leistd.ExceptionHandling;
 using System.Security.Cryptography;
+using CompanyName.ProjectName.Application.OpenApplications.Validators;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
@@ -26,6 +27,7 @@ namespace CompanyName.ProjectName.Application.OpenApplications.AppServices;
 
 public class OpenApplicationAppService(
     IOpenIddictApplicationManager applicationManager,
+    OpenApplicationHomeUrlValidator homeUrlValidator,
     IOptions<OAuthResourceOptions> oauthOptions,
     IObjectMapper objectMapper,
     IOperationRecorder operationRecorder,
@@ -133,6 +135,7 @@ public class OpenApplicationAppService(
         }
 
         ValidateApplication(input.ApplicationType, input.ClientType, input.Requirements, input.Permissions);
+        homeUrlValidator.Validate(input.HomeUrl, input.ShowInSwitcher, input.ApplicationType);
 
         // Confidential 客户端：自动生成 Secret
         string? generatedSecret = null;
@@ -159,6 +162,8 @@ public class OpenApplicationAppService(
             input.Requirements);
         descriptor.Properties[OpenApplicationMappings.CreationTimePropertyName] = JsonSerializer.SerializeToElement(clock.Now);
         descriptor.Settings[OpenApplicationSettings.SessionBound] = OpenApplicationSettings.Format(input.SessionBound!.Value);
+        descriptor.Properties[OpenApplicationSettings.HomeUri] = JsonSerializer.SerializeToElement(input.HomeUrl);
+        descriptor.Properties[OpenApplicationSettings.ShowInSwitcher] = JsonSerializer.SerializeToElement(input.ShowInSwitcher);
 
         try
         {
@@ -193,6 +198,7 @@ public class OpenApplicationAppService(
         CancellationToken cancellationToken = default)
     {
         ValidateApplication(input.ApplicationType, input.ClientType, input.Requirements, input.Permissions);
+        homeUrlValidator.Validate(input.HomeUrl, input.ShowInSwitcher, input.ApplicationType);
 
         var application = await FindRequiredAsync(id, cancellationToken);
         var descriptor = new OpenIddictApplicationDescriptor();
@@ -223,6 +229,8 @@ public class OpenApplicationAppService(
             input.Requirements);
         // 只改模板自有的键，其余 Settings 原样保留
         descriptor.Settings[OpenApplicationSettings.SessionBound] = OpenApplicationSettings.Format(input.SessionBound!.Value);
+        descriptor.Properties[OpenApplicationSettings.HomeUri] = JsonSerializer.SerializeToElement(input.HomeUrl);
+        descriptor.Properties[OpenApplicationSettings.ShowInSwitcher] = JsonSerializer.SerializeToElement(input.ShowInSwitcher);
 
         try
         {

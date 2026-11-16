@@ -87,18 +87,6 @@
                           t('distributedEvents.state.' + statusLabel(row.original))
                         }}</span>
                       }
-                      @case ('tenant') {
-                        <span
-                          class="block max-w-28 truncate font-mono text-xs"
-                          [hlmTooltip]="row.original.tenant"
-                          tabindex="0"
-                          >{{
-                            row.original.tenant === 'host'
-                              ? t('distributedEvents.host')
-                              : tenantNames()[row.original.tenant] || row.original.tenant
-                          }}</span
-                        >
-                      }
                       @case ('orderingKey') {
                         <span
                           class="block max-w-32 truncate font-mono text-xs"

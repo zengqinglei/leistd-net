@@ -57,7 +57,8 @@ export class PageBreadcrumb {
 const ENGLISH: Record<string, string> = {
   'layout.breadcrumb.label': 'Breadcrumb',
   'layout.breadcrumb.more': 'More parent pages',
-  'menu.platform': 'Admin platform',
+  'menu.platform': 'Administration',
+  'menu.platformManagement': 'Platform management',
   'menu.workspace': 'Workspace',
 };
 //#endif

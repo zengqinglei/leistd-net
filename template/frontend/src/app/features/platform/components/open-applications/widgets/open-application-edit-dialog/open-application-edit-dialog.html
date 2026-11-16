@@ -152,6 +152,38 @@
                 </div>
               </section>
 
+              @if (formModel().applicationType === 'web') {
+                <div hlmField>
+                  <label hlmFieldLabel for="application-home-url">{{
+                    t('openApp.field.homeUrl')
+                  }}</label>
+                  <input
+                    hlmInput
+                    id="application-home-url"
+                    type="url"
+                    autocomplete="off"
+                    [formField]="applicationForm.homeUrl"
+                    (blur)="suggestCallbacks()"
+                  />
+                  <p hlmFieldDescription>{{ t('openApp.homeUrl.hint') }}</p>
+                  @for (error of applicationForm.homeUrl().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">{{
+                      error.message ?? t('openApp.homeUrl.invalid')
+                    }}</hlm-field-error>
+                  }
+                </div>
+                <div hlmField orientation="horizontal">
+                  <label hlmFieldLabel for="application-show-in-switcher">{{
+                    t('openApp.field.showInSwitcher')
+                  }}</label>
+                  <hlm-switch
+                    inputId="application-show-in-switcher"
+                    [checked]="formModel().showInSwitcher"
+                    (checkedChange)="setShowInSwitcher($event)"
+                  />
+                </div>
+              }
+
               @if (formModel().applicationType !== 'service') {
                 <div class="flex items-center gap-3">
                   <hlm-separator class="flex-1" />

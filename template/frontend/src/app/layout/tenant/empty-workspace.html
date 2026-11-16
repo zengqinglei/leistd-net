@@ -13,12 +13,16 @@
     </div>
     <div hlmEmptyContent>
       <div class="flex flex-wrap justify-center gap-2">
-        <button hlmBtn variant="outline" (click)="openSwitcher()">
-          {{ t('tenantWorkspace.switch') }}
-        </button>
-        <button hlmBtn variant="secondary" (click)="workspace.switchTo(null)">
-          {{ t('tenantWorkspace.backToConsole') }}
-        </button>
+        @if (!workspace.auth.currentUser()?.tenantId && workspace.workspaces().length > 1) {
+          <button hlmBtn variant="outline" (click)="openSwitcher()">
+            {{ t('tenantWorkspace.switch') }}
+          </button>
+        }
+        @if (workspace.canAccessConsole()) {
+          <button hlmBtn variant="secondary" (click)="workspace.switchTo(null)">
+            {{ t('tenantWorkspace.backToConsole') }}
+          </button>
+        }
       </div>
     </div>
   </div>

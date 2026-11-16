@@ -32,7 +32,7 @@ export class FullPageNavigationService {
     this.leaving = true;
     this.document.location.replace(url);
   }
-  //#if (ExternalLogin)
+  //#if (ExternalLogin || OpenIddictServer || RemoteTokenAuth)
 
   /** 保留当前历史条目：用户在有意义的页面上主动离开（外部登录与绑定），在提供方页面后退应回到这里。 */
   assign(url: string): void {

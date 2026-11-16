@@ -154,7 +154,6 @@ describe('DistributedEvents UI R1', () => {
           provide: DistributedEventService,
           useValue: {
             getStatus: () => of(STATUS),
-            getDatabases: () => of([{ key: 'host', isHost: true, tenantIds: [] }]),
             getCatalog: () =>
               of([catalogEntry('order.paid', true), catalogEntry('invoice.issued', false)]),
             getOutboxList: () => of({ items: [OUTBOX], totalCount: 2 }),
@@ -170,7 +169,9 @@ describe('DistributedEvents UI R1', () => {
         {
           provide: TenantService,
           useValue: {
-            getTenant: () => of({ id: TENANT_ID, name: 'portal-east', displayName: 'Portal East' }),
+            getTenant: vi.fn(() =>
+              of({ id: TENANT_ID, name: 'portal-east', displayName: 'Portal East' }),
+            ),
           },
         },
         //#endif
@@ -278,9 +279,11 @@ describe('DistributedEvents UI R1', () => {
     expect(document.querySelector('[hlmSheetHeader]')?.textContent).toContain('Replay');
   });
   //#if (LocalIdentity && IncludeMultiTenancy)
-  it('resolves a permitted tenant display name instead of showing its ID in the table', async () => {
+  it('does not resolve or display tenant identity even with tenant management permission', async () => {
     await setup({}, true);
-    expect(fixture.nativeElement.querySelector('tbody')?.textContent).toContain('Portal East');
+    expect(fixture.nativeElement.querySelector('tbody')?.textContent).not.toContain('Portal East');
+    expect(fixture.nativeElement.querySelector('tbody')?.textContent).not.toContain(TENANT_ID);
+    expect(TestBed.inject(TenantService).getTenant).not.toHaveBeenCalled();
   });
   //#endif
   it('renders zero catalog counts as plain text and hides the inapplicable direction', async () => {
@@ -323,12 +326,12 @@ describe('DistributedEvents UI R1', () => {
     expect(fixture.nativeElement.querySelector('tbody')?.textContent).toContain('Invalid payload');
   });
 
-  it('keeps rejection confirmation scoped to the host database when another database is selected', async () => {
+  it('omits tenant and database scope from recovery confirmation', async () => {
     await setup({ view: 'rejections', database: TENANT_ID });
     const confirm = TestBed.inject(DistributedEventRecoveryConfirmService);
     const open = vi.spyOn(confirm, 'open').mockResolvedValue(false);
     await component.recover('single', REJECTION);
-    expect(open.mock.calls[0][0].scope).toBe('Host / default database');
+    expect(open.mock.calls[0][0]).not.toHaveProperty('scope');
   });
 
   it('asks a count-specific filter question and confirms the same count', async () => {

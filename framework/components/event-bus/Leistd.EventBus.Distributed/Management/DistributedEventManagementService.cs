@@ -8,19 +8,14 @@ namespace Leistd.EventBus.Distributed.Management;
 // 非 HTTP 消费方经过同一输入校验；租户与物理库边界由持久化适配器在打开工作单元前建立。
 internal sealed class DistributedEventManagementService(IDistributedEventManagementStore store) : IDistributedEventManagementService
 {
-    public Task<DistributedEventStatusOutputDto> GetStatusAsync(string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventStatusOutputDto> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        return store.GetStatusAsync(database, cancellationToken);
+        return store.GetStatusAsync(cancellationToken);
     }
 
-    public Task<IReadOnlyList<DistributedEventDatabaseOutputDto>> GetDatabasesAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetCatalogAsync(CancellationToken cancellationToken = default)
     {
-        return store.GetDatabasesAsync(cancellationToken);
-    }
-
-    public Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetCatalogAsync(string? database = null, CancellationToken cancellationToken = default)
-    {
-        return store.GetCatalogAsync(database, cancellationToken);
+        return store.GetCatalogAsync(cancellationToken);
     }
 
     public Task<PagedResult<DistributedEventOutboxOutputDto>> GetOutboxListAsync(GetDistributedEventOutboxInputDto input, CancellationToken cancellationToken = default)
@@ -29,16 +24,16 @@ internal sealed class DistributedEventManagementService(IDistributedEventManagem
         return store.GetOutboxListAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventOutboxDetailOutputDto> GetOutboxAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventOutboxDetailOutputDto> GetOutboxAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0) throw new ValidationException(new ValidationResult("Id must be positive.", ["Id"]), null, id);
-        return store.GetOutboxAsync(id, database, cancellationToken);
+        return store.GetOutboxAsync(id, cancellationToken);
     }
 
-    public Task<DistributedEventPayloadOutputDto> GetOutboxPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventPayloadOutputDto> GetOutboxPayloadAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0) throw new ValidationException(new ValidationResult("Id must be positive.", ["Id"]), null, id);
-        return store.GetOutboxPayloadAsync(id, database, cancellationToken);
+        return store.GetOutboxPayloadAsync(id, cancellationToken);
     }
 
     public Task<PagedResult<DistributedEventInboxOutputDto>> GetInboxListAsync(GetDistributedEventInboxInputDto input, CancellationToken cancellationToken = default)
@@ -47,16 +42,16 @@ internal sealed class DistributedEventManagementService(IDistributedEventManagem
         return store.GetInboxListAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventInboxDetailOutputDto> GetInboxAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventInboxDetailOutputDto> GetInboxAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0) throw new ValidationException(new ValidationResult("Id must be positive.", ["Id"]), null, id);
-        return store.GetInboxAsync(id, database, cancellationToken);
+        return store.GetInboxAsync(id, cancellationToken);
     }
 
-    public Task<DistributedEventPayloadOutputDto> GetInboxPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventPayloadOutputDto> GetInboxPayloadAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0) throw new ValidationException(new ValidationResult("Id must be positive.", ["Id"]), null, id);
-        return store.GetInboxPayloadAsync(id, database, cancellationToken);
+        return store.GetInboxPayloadAsync(id, cancellationToken);
     }
 
     public Task<PagedResult<DistributedEventRejectionOutputDto>> GetRejectionsAsync(GetDistributedEventRejectionsInputDto input, CancellationToken cancellationToken = default)
@@ -65,47 +60,47 @@ internal sealed class DistributedEventManagementService(IDistributedEventManagem
         return store.GetRejectionsAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventRejectionDetailOutputDto> GetRejectionAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventRejectionDetailOutputDto> GetRejectionAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0) throw new ValidationException(new ValidationResult("Id must be positive.", ["Id"]), null, id);
-        return store.GetRejectionAsync(id, database, cancellationToken);
+        return store.GetRejectionAsync(id, cancellationToken);
     }
 
-    public Task<DistributedEventRawMessageOutputDto> GetRejectionPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventRawMessageOutputDto> GetRejectionPayloadAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0) throw new ValidationException(new ValidationResult("Id must be positive.", ["Id"]), null, id);
-        return store.GetRejectionPayloadAsync(id, database, cancellationToken);
+        return store.GetRejectionPayloadAsync(id, cancellationToken);
     }
 
-    public Task<DistributedEventRecoveryOutputDto> RedeliverAsync(RecoverDistributedEventOutboxInputDto input, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventRecoveryOutputDto> RedeliverAsync(RecoverDistributedEventOutboxInputDto input, CancellationToken cancellationToken = default)
     {
         Validate(input);
-        return store.RedeliverAsync(input, database, cancellationToken);
+        return store.RedeliverAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventRecoveryOutputDto> ReplayAsync(RecoverDistributedEventInboxInputDto input, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventRecoveryOutputDto> ReplayAsync(RecoverDistributedEventInboxInputDto input, CancellationToken cancellationToken = default)
     {
         Validate(input);
-        return store.ReplayAsync(input, database, cancellationToken);
+        return store.ReplayAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventRecoveryOutputDto> RedecodeAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventRecoveryOutputDto> RedecodeAsync(RecoverDistributedEventRejectionInputDto input, CancellationToken cancellationToken = default)
     {
         Validate(input);
         ValidateRejectionState(input.Filter?.Status, false);
-        return store.RedecodeAsync(input, database, cancellationToken);
+        return store.RedecodeAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventRecoveryOutputDto> DiscardAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventRecoveryOutputDto> DiscardAsync(RecoverDistributedEventRejectionInputDto input, CancellationToken cancellationToken = default)
     {
         Validate(input);
         ValidateRejectionState(input.Filter?.Status, true);
-        return store.DiscardAsync(input, database, cancellationToken);
+        return store.DiscardAsync(input, cancellationToken);
     }
 
-    public Task<DistributedEventTestOutputDto> SendTestEventAsync(string? database = null, CancellationToken cancellationToken = default)
+    public Task<DistributedEventTestOutputDto> SendTestEventAsync(CancellationToken cancellationToken = default)
     {
-        return store.SendTestEventAsync(database, cancellationToken);
+        return store.SendTestEventAsync(cancellationToken);
     }
 
     private static void ValidateRejectionState(DistributedEventRejectionStatus? status, bool discard)

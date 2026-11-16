@@ -39,7 +39,37 @@
         }
       </div>
 
-      <div class="flex items-center gap-3">
+      @if (layout() === 'sidebar') {
+        <div class="hidden flex-1 justify-center @4xl/header:flex">
+          <button
+            type="button"
+            hlmBtn
+            variant="outline"
+            size="sm"
+            class="w-56 justify-start text-muted-foreground"
+            data-testid="header-search"
+            (click)="commandPalette.open()"
+          >
+            <ng-icon name="lucideSearch" />{{ t('layout.commandPalette.search')
+            }}<kbd hlmKbd class="ms-auto">⌘K</kbd>
+          </button>
+        </div>
+      }
+      <div class="flex items-center gap-3 @4xl/header:flex-1 @4xl/header:justify-end">
+        @if (layout() === 'sidebar') {
+          <button
+            type="button"
+            hlmBtn
+            variant="ghost"
+            size="icon-sm"
+            class="@4xl/header:hidden"
+            [attr.aria-label]="t('layout.commandPalette.search')"
+            data-testid="header-search-icon"
+            (click)="commandPalette.open()"
+          >
+            <ng-icon name="lucideSearch" />
+          </button>
+        }
         @if (layout() === 'topbar') {
           <!-- 搜索入口：打开命令面板（⌘K / Ctrl+K）。页头窄时收成图标按钮；页面自带搜索入口时不重复显示。 -->
           @if (!layoutService.pageHasSearch()) {
@@ -123,7 +153,7 @@
         }
         <!--#endif-->
         <!-- 窄页头只留通知与模拟状态，主题与语言在个人设置的偏好里改，给面包屑上级留出触屏目标 -->
-        <div class="hidden items-center gap-3 @lg/header:flex">
+        <div class="hidden items-center gap-3 @3xl/header:flex">
           <app-theme-mode-toggle />
           <!--#if (IncludeLocalization)-->
           <app-language-switcher />
@@ -132,10 +162,7 @@
         <!--#if (IncludeNotifications)-->
         <app-notifications />
         <!--#endif-->
-        @if (layout() === 'topbar') {
-          <!-- 侧栏布局里头像在侧栏底部；顶栏布局没有侧栏，放在最右 -->
-          <app-user-menu variant="topbar" />
-        }
+        <app-user-menu variant="topbar" />
       </div>
     </div>
   </header>

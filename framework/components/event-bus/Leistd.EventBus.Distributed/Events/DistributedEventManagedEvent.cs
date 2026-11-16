@@ -10,9 +10,6 @@ public sealed class DistributedEventManagedEvent : LocalEvent
     /// <summary>当前已提交批次实际改动条数。</summary>
     public required long AffectedCount { get; init; }
 
-    /// <summary>宿主物理库选择键；租户为 null。</summary>
-    public string? Database { get; init; }
-
     /// <summary>本批数据所属的目标租户；null 表示宿主记录。</summary>
     public Guid? TargetTenantId { get; init; }
 

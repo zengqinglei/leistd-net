@@ -89,15 +89,10 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    /// <summary>租户不能选择物理库、访问拒收或数据库目录；稳定错误码实际映射为 403。</summary>
+    /// <summary>租户不能访问宿主集中拒收；稳定错误码实际映射为 403。</summary>
     [Theory]
-    [InlineData("status?database=host")]
-    [InlineData("outbox?database=host")]
-    [InlineData("inbox?database=host")]
-    [InlineData("catalog?database=host")]
     [InlineData("rejections")]
     [InlineData("rejections/1")]
-    [InlineData("databases")]
     public async Task Tenant_host_only_operations_return_403_with_the_component_code(string route)
     {
         var response = await SendAsync("GET", route, "read", DistributedEventTestHost.TenantA);
@@ -121,6 +116,12 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
         var detail = await SendAsync("GET", "outbox/" + id.GetString(), "read");
         Assert.DoesNotContain("payload", await detail.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync("GET", "status", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Database_directory_route_is_not_mapped()
+    {
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync("GET", "databases", "manage")).StatusCode);
     }
 
     /// <summary>关闭载荷能力是移除路由，持有 Manage 的调用方同样只能得到 404。</summary>

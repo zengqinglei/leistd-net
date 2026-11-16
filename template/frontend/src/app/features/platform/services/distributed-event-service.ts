@@ -5,7 +5,7 @@ import { Observable } from 'rxjs';
 import { PagedResultDto } from '../../../shared/dtos/paged-result.dto';
 import * as Dto from '../dtos/distributed-event.dto';
 
-/** 空值不进查询串；数据库选择不改变当前登录租户。 */
+/** 空值不进查询串；请求范围由当前会话与工作区决定。 */
 function toParams(input: object): HttpParams {
   let params = new HttpParams();
   for (const [key, value] of Object.entries(input)) {
@@ -22,20 +22,12 @@ export class DistributedEventService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/v1/distributed-events';
 
-  getStatus(database?: string | null): Observable<Dto.DistributedEventStatusOutputDto> {
-    return this.http.get<Dto.DistributedEventStatusOutputDto>(`${this.baseUrl}/status`, {
-      params: toParams({ database }),
-    });
+  getStatus(): Observable<Dto.DistributedEventStatusOutputDto> {
+    return this.http.get<Dto.DistributedEventStatusOutputDto>(`${this.baseUrl}/status`);
   }
 
-  getDatabases(): Observable<Dto.DistributedEventDatabaseOutputDto[]> {
-    return this.http.get<Dto.DistributedEventDatabaseOutputDto[]>(`${this.baseUrl}/databases`);
-  }
-
-  getCatalog(database?: string | null): Observable<Dto.DistributedEventCatalogOutputDto[]> {
-    return this.http.get<Dto.DistributedEventCatalogOutputDto[]>(`${this.baseUrl}/catalog`, {
-      params: toParams({ database }),
-    });
+  getCatalog(): Observable<Dto.DistributedEventCatalogOutputDto[]> {
+    return this.http.get<Dto.DistributedEventCatalogOutputDto[]>(`${this.baseUrl}/catalog`);
   }
 
   getOutboxList(
@@ -47,23 +39,13 @@ export class DistributedEventService {
     );
   }
 
-  getOutbox(
-    id: string,
-    database?: string | null,
-  ): Observable<Dto.DistributedEventOutboxDetailOutputDto> {
-    return this.http.get<Dto.DistributedEventOutboxDetailOutputDto>(
-      `${this.baseUrl}/outbox/${id}`,
-      { params: toParams({ database }) },
-    );
+  getOutbox(id: string): Observable<Dto.DistributedEventOutboxDetailOutputDto> {
+    return this.http.get<Dto.DistributedEventOutboxDetailOutputDto>(`${this.baseUrl}/outbox/${id}`);
   }
 
-  getOutboxPayload(
-    id: string,
-    database?: string | null,
-  ): Observable<Dto.DistributedEventPayloadOutputDto> {
+  getOutboxPayload(id: string): Observable<Dto.DistributedEventPayloadOutputDto> {
     return this.http.get<Dto.DistributedEventPayloadOutputDto>(
       `${this.baseUrl}/outbox/${id}/payload`,
-      { params: toParams({ database }) },
     );
   }
 
@@ -76,22 +58,13 @@ export class DistributedEventService {
     );
   }
 
-  getInbox(
-    id: string,
-    database?: string | null,
-  ): Observable<Dto.DistributedEventInboxDetailOutputDto> {
-    return this.http.get<Dto.DistributedEventInboxDetailOutputDto>(`${this.baseUrl}/inbox/${id}`, {
-      params: toParams({ database }),
-    });
+  getInbox(id: string): Observable<Dto.DistributedEventInboxDetailOutputDto> {
+    return this.http.get<Dto.DistributedEventInboxDetailOutputDto>(`${this.baseUrl}/inbox/${id}`);
   }
 
-  getInboxPayload(
-    id: string,
-    database?: string | null,
-  ): Observable<Dto.DistributedEventPayloadOutputDto> {
+  getInboxPayload(id: string): Observable<Dto.DistributedEventPayloadOutputDto> {
     return this.http.get<Dto.DistributedEventPayloadOutputDto>(
       `${this.baseUrl}/inbox/${id}/payload`,
-      { params: toParams({ database }) },
     );
   }
 
@@ -104,75 +77,55 @@ export class DistributedEventService {
     );
   }
 
-  getRejection(
-    id: string,
-    database?: string | null,
-  ): Observable<Dto.DistributedEventRejectionDetailOutputDto> {
+  getRejection(id: string): Observable<Dto.DistributedEventRejectionDetailOutputDto> {
     return this.http.get<Dto.DistributedEventRejectionDetailOutputDto>(
       `${this.baseUrl}/rejections/${id}`,
-      { params: toParams({ database }) },
     );
   }
 
-  getRejectionPayload(
-    id: string,
-    database?: string | null,
-  ): Observable<Dto.DistributedEventRawMessageOutputDto> {
+  getRejectionPayload(id: string): Observable<Dto.DistributedEventRawMessageOutputDto> {
     return this.http.get<Dto.DistributedEventRawMessageOutputDto>(
       `${this.baseUrl}/rejections/${id}/payload`,
-      { params: toParams({ database }) },
     );
   }
 
   redeliver(
     input: Dto.RecoverDistributedEventOutboxInputDto,
-    database?: string | null,
   ): Observable<Dto.DistributedEventRecoveryOutputDto> {
     return this.http.post<Dto.DistributedEventRecoveryOutputDto>(
       `${this.baseUrl}/outbox/redeliver`,
       input,
-      { params: toParams({ database }) },
     );
   }
 
   replay(
     input: Dto.RecoverDistributedEventInboxInputDto,
-    database?: string | null,
   ): Observable<Dto.DistributedEventRecoveryOutputDto> {
     return this.http.post<Dto.DistributedEventRecoveryOutputDto>(
       `${this.baseUrl}/inbox/replay`,
       input,
-      { params: toParams({ database }) },
     );
   }
 
   redecode(
     input: Dto.RecoverDistributedEventRejectionInputDto,
-    database?: string | null,
   ): Observable<Dto.DistributedEventRecoveryOutputDto> {
     return this.http.post<Dto.DistributedEventRecoveryOutputDto>(
       `${this.baseUrl}/rejections/redecode`,
       input,
-      { params: toParams({ database }) },
     );
   }
 
   discard(
     input: Dto.RecoverDistributedEventRejectionInputDto,
-    database?: string | null,
   ): Observable<Dto.DistributedEventRecoveryOutputDto> {
     return this.http.post<Dto.DistributedEventRecoveryOutputDto>(
       `${this.baseUrl}/rejections/discard`,
       input,
-      { params: toParams({ database }) },
     );
   }
 
-  sendTestEvent(database?: string | null): Observable<Dto.DistributedEventTestOutputDto> {
-    return this.http.post<Dto.DistributedEventTestOutputDto>(
-      `${this.baseUrl}/test`,
-      {},
-      { params: toParams({ database }) },
-    );
+  sendTestEvent(): Observable<Dto.DistributedEventTestOutputDto> {
+    return this.http.post<Dto.DistributedEventTestOutputDto>(`${this.baseUrl}/test`, {});
   }
 }

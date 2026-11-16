@@ -1,6 +1,9 @@
 {
   "culture": "en",
   "texts": {
+    "Home URL": "Home URL",
+    "Only browser applications can appear in the system switcher.": "Only browser applications can appear in the system switcher.",
+    "Home URL must be an absolute HTTPS URL. Development also allows HTTP loopback URLs.": "Home URL must be an absolute HTTPS URL. Development also allows HTTP loopback URLs.",
     "Actions": "Actions",
     "Active status": "Active status",
     "Admin email": "Admin email",

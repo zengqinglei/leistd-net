@@ -50,6 +50,8 @@ describe('distributed event mock', () => {
     rejections = structuredClone(DISTRIBUTED_EVENT_REJECTIONS);
     payloads = structuredClone(DISTRIBUTED_EVENT_PAYLOADS);
     grants = [...PERMISSION_GRANTS['Role/role_member'].permissionNames];
+    for (const detail of [...DISTRIBUTED_EVENT_OUTBOX, ...DISTRIBUTED_EVENT_INBOX])
+      detail.record.tenantId = null;
     setMockSessionUserId('user_admin');
   });
   afterEach(() => {
@@ -219,8 +221,19 @@ describe('distributed event mock', () => {
     expect(() => call('POST /api/v1/distributed-events/test')).toThrow(MockException);
   });
 
+  it('only lists platform-owned records in host scope', () => {
+    DISTRIBUTED_EVENT_OUTBOX[0].record.tenantId = DISTRIBUTED_EVENT_TENANTS[0];
+    const rows = call('GET /api/v1/distributed-events/outbox').items;
+    expect(rows.some((row) => row.id === DISTRIBUTED_EVENT_OUTBOX[0].record.id)).toBe(false);
+    expect(rows.every((row) => !('tenantId' in row) || !row.tenantId)).toBe(true);
+  });
+
   //#if (IncludeMultiTenancy)
   it('restricts tenant data and denies all host-only entry points', () => {
+    DISTRIBUTED_EVENT_OUTBOX[0].record.tenantId = DISTRIBUTED_EVENT_TENANTS[0];
+    const hostRows = call('GET /api/v1/distributed-events/outbox').items;
+    expect(hostRows.every((row) => !('tenantId' in row) || !row.tenantId)).toBe(true);
+    expect(hostRows.some((row) => row.id === DISTRIBUTED_EVENT_OUTBOX[0].record.id)).toBe(false);
     setMockSessionTenantKey(DISTRIBUTED_EVENT_TENANTS[0]);
     const rows = call('GET /api/v1/distributed-events/outbox').items;
     expect(rows.length).toBeGreaterThan(0);
@@ -228,28 +241,21 @@ describe('distributed event mock', () => {
       rows.every((row) => 'tenantId' in row && row.tenantId === DISTRIBUTED_EVENT_TENANTS[0]),
     ).toBe(true);
     expect(call('GET /api/v1/distributed-events/status').pendingRejections).toBeNull();
-    expect(() => call('GET /api/v1/distributed-events/databases')).toThrow(MockException);
     expect(() => call('GET /api/v1/distributed-events/rejections')).toThrow(MockException);
-    expect(() =>
-      call('GET /api/v1/distributed-events/outbox', { queryParams: { database: 'host' } }),
-    ).toThrow(MockException);
+    expect(() => call('POST /api/v1/distributed-events/test')).toThrow(MockException);
   });
 
   //#endif
   it('accepts the query arrays emitted by the real Mock interceptor', () => {
     const result = call('GET /api/v1/distributed-events/outbox', {
-      queryParams: { database: ['host'], status: ['deadLettered'], limit: ['1'], offset: ['0'] },
+      queryParams: { status: ['deadLettered'], limit: ['1'], offset: ['0'] },
     });
     expect(result.totalCount).toBe(2);
     expect(result.items).toHaveLength(1);
     expect(result.items[0].status).toBe('deadLettered');
   });
 
-  it('does not publish a host event into a selected tenant database', () => {
-    expect(() =>
-      call('POST /api/v1/distributed-events/test', {
-        queryParams: { database: DISTRIBUTED_EVENT_TENANTS[0] },
-      }),
-    ).toThrow(MockException);
+  it('has no database directory route', () => {
+    expect(DISTRIBUTED_EVENT_API).not.toHaveProperty('GET /api/v1/distributed-events/databases');
   });
 });

@@ -23,7 +23,6 @@ const ROW: EventRow = {
   eventName: 'order.paid',
   eventId: '00000000-0000-4000-8000-000000000101',
   status: 'sent',
-  tenant: 'host',
   orderingKey: 'order-1',
   consumer: 'Orders.Projection',
   attempts: 1,

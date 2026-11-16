@@ -1,6 +1,9 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+//#if (TenantWorkspace && IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 
 import { UserMenu } from './user-menu';
 //#if (IncludeLocalization)
@@ -9,6 +12,10 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
 import { LayoutService } from '../../../core/services/layout-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
+import { User } from '../../../shared/models/user.model';
+//#endif
 
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以按**键**断言：改一句中文不该让这组用例变红。
@@ -18,7 +25,7 @@ const PERSONAL_SETTINGS = 'menu.personalSettings';
 const LOGOUT = 'menu.logout';
 //#else
 const WORKSPACE = 'Workspace';
-const PLATFORM = 'Admin platform';
+const PLATFORM = 'Administration';
 const PERSONAL_SETTINGS = 'Personal settings';
 const LOGOUT = 'Sign out';
 //#endif
@@ -32,7 +39,11 @@ describe('UserMenu items', () => {
    * `platform`（当前所在区）与 `canAccessPlatform`（能否进管理侧）是独立输入：
    * "回管理平台"只在管理员待在工作空间时出现。
    */
-  function build(options: { platform: boolean; canAccessPlatform?: boolean }): UserMenu {
+  function build(options: {
+    platform: boolean;
+    canAccessPlatform?: boolean;
+    workspace?: string;
+  }): UserMenu {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -43,6 +54,7 @@ describe('UserMenu items', () => {
           useValue: {
             scopePath: (route: string) => route,
             isPlatform: signal(options.platform),
+            isHostScope: signal(false),
             currentUrl: signal(options.platform ? '/platform' : '/workspace/dashboard'),
           },
         },
@@ -50,6 +62,12 @@ describe('UserMenu items', () => {
           provide: AuthorizationService,
           useValue: { canAccessPlatform: () => options.canAccessPlatform ?? options.platform },
         },
+        //#if (TenantWorkspace)
+        {
+          provide: WorkspaceContextService,
+          useValue: { current: signal(options.workspace ?? null), path: (route: string) => route },
+        },
+        //#endif
         // currentUser / current 只被模板用到，这组用例只构造类；给出去是为了满足注入。
         { provide: AuthService, useValue: { currentUser: signal(null), logout: () => undefined } },
         //#if (IncludeLocalization)
@@ -81,13 +99,43 @@ describe('UserMenu items', () => {
   it('adds an entry to the admin platform for an admin in the workspace', () => {
     const menu = build({ platform: false, canAccessPlatform: true });
     const router = TestBed.inject(Router);
+    //#if (TenantWorkspace)
+    const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    //#else
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    //#endif
 
     expect(labelsOf(menu)).toEqual([PLATFORM, ...personalItems, LOGOUT]);
 
     menu.userMenuItems().find((item) => item.label === PLATFORM)!.action!();
+    //#if (TenantWorkspace)
+    expect(navigate).toHaveBeenCalledWith('/platform');
+    //#else
     expect(navigate).toHaveBeenCalledWith(['/platform']);
+    //#endif
   });
+  //#if (TenantWorkspace)
+
+  it('keeps the administration entry in the represented workspace', () => {
+    const menu = build({ platform: false, canAccessPlatform: true, workspace: 'acme' });
+    const workspace = TestBed.inject(WorkspaceContextService);
+    vi.spyOn(TestBed.inject(AuthService), 'currentUser').mockReturnValue(
+      new User({ username: 'staff-a', displayName: 'Staff A' }),
+    );
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation(
+      { tenantWorkspace: { representing: 'Representing {{tenant}}' } },
+      'en',
+    );
+    TestBed.tick();
+    //#endif
+    expect(menu.userLabel()).toBe('staff-a · Representing acme');
+    vi.spyOn(workspace, 'path').mockImplementation((route) => `/w/acme${route}`);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    menu.userMenuItems().find((item) => item.label === PLATFORM)!.action!();
+    expect(navigate).toHaveBeenCalledWith('/w/acme/platform');
+  });
+  //#endif
 
   it('points personal settings to the workspace settings page, even on the admin platform', () => {
     const menu = build({ platform: true });

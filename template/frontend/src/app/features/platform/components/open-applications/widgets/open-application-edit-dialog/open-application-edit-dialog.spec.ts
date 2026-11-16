@@ -156,6 +156,42 @@ describe('OpenApplicationEditDialog', () => {
     expect(document.getElementById(describedBy!)?.textContent?.trim()).toBe(description);
   });
 
+  it('suggests the actual BFF callbacks only when their lists are empty', async () => {
+    dialog().applicationForm.homeUrl().value.set('https://orders.test/base/');
+    dialog().suggestCallbacks();
+    expect(dialog().applicationForm.redirectUris().value()).toEqual([
+      'https://orders.test/base/api/v1/auth/signin',
+    ]);
+    expect(dialog().applicationForm.postLogoutRedirectUris().value()).toEqual([
+      'https://orders.test/base/api/v1/auth/signout',
+    ]);
+    dialog().applicationForm.homeUrl().value.set('https://other.test/');
+    dialog().suggestCallbacks();
+    expect(dialog().applicationForm.redirectUris().value()).toEqual([
+      'https://orders.test/base/api/v1/auth/signin',
+    ]);
+    expect(dialog().applicationForm.postLogoutRedirectUris().value()).toEqual([
+      'https://orders.test/base/api/v1/auth/signout',
+    ]);
+  });
+
+  it('requires a valid home URL only when the application is shown in the switcher', async () => {
+    expect(dialog().applicationForm.homeUrl().valid()).toBe(true);
+    dialog().setShowInSwitcher(true);
+    expect(dialog().applicationForm.homeUrl().invalid()).toBe(true);
+    for (const value of ['/relative', 'http://orders.test/', 'https://bad host.test/']) {
+      dialog().applicationForm.homeUrl().value.set(value);
+      expect(dialog().applicationForm.homeUrl().invalid()).toBe(true);
+    }
+    dialog().applicationForm.homeUrl().value.set('https://orders.test/');
+    expect(dialog().applicationForm.homeUrl().valid()).toBe(true);
+    await typeClientId('orders');
+    await dialog().save();
+    expect(fixture.componentInstance.saved).toContainEqual(
+      expect.objectContaining({ homeUrl: 'https://orders.test/', showInSwitcher: true }),
+    );
+  });
+
   it('binds new browser applications to the sign-in session by default', async () => {
     await typeClientId('spa');
     dialog().save();

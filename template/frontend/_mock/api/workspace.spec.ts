@@ -61,6 +61,9 @@ describe('workspace mock', () => {
     expect(acme.permissions.permissions).toContain('App.Users');
     expect(globex.permissions.permissions).toEqual([]);
     expect(acme.permissions.permissions).not.toContain('App.Tenants');
+    //#if (IncludeDistributedEvents)
+    expect(acme.permissions.permissions).toContain('App.DistributedEvents');
+    //#endif
     expect(getCurrentUser()?.id).toBe('user_admin');
     expect(withinWorkspace(request('missing', '/api/v1/auth/me'), () => getCurrentUser()?.id)).toBe(
       'user_admin',

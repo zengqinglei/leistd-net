@@ -14,7 +14,9 @@
           hlmBreadcrumbLink
           class="inline-flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           [link]="layoutService.homeRoute()"
-          >{{ layoutService.isPlatform() ? t('menu.platform') : t('menu.workspace') }}</a
+          >{{
+            layoutService.isPlatform() ? t(layoutService.managementAreaKey()) : t('menu.workspace')
+          }}</a
         >
       </li>
       @if (collapsed().length) {

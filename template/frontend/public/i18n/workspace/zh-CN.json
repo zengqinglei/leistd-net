@@ -27,8 +27,7 @@
       "profile": "个人资料",
       "security": "账户与安全",
       "preferences": "偏好设置",
-      "notifications": "通知",
-      "platform": "管理平台"
+      "notifications": "通知"
     },
     "notifications": {
       "title": "最近通知",

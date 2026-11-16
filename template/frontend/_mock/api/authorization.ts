@@ -77,7 +77,6 @@ function effectivePermissionsOf(username: string): { permissions: string[]; vers
             'App.Tenants',
             'App.OpenApplications',
             'App.DatabaseConnections',
-            'App.DistributedEvents',
           ].some((hostOnly) => permission === hostOnly || permission.startsWith(`${hostOnly}.`)),
       )
       //#endif
