@@ -131,6 +131,11 @@
     "Permission:App.Tenants": "Tenant management",
     "Permission:App.Tenants.Create": "Create",
     "Permission:App.Tenants.Update": "Edit",
+//#if (TenantWorkspace)
+    "Platform staff": "Platform staff",
+    "{0} must contain at least {1} item(s).": "{0} must contain at least {1} item(s).",
+    "Permission:App.Tenants.StaffAccess": "Platform staff",
+//#endif
     "Permission:App.Tenants.Delete": "Delete",
     "Permission:App.Tenants.Impersonation": "Sign in as tenant",
     "Permission:App.OpenApplications": "Open applications",
@@ -323,6 +328,9 @@
     "The verification code must contain exactly 6 digits.": "The verification code must contain exactly 6 digits.",
     "Time zone": "Time zone",
     "User:SortingCredentialsForbidden": "Sorting by user credentials is forbidden.",
+//#if (TenantWorkspace)
+    "User:PlatformAccountImmutable": "Platform account credentials and profile are managed by the home account.",
+//#endif
     "User:AvatarInvalid": "The avatar must be a PNG, JPEG or WebP image.",
     "User:AvatarTooLarge": "The avatar image cannot exceed {MaxKilobytes} KB.",
     "User:EmailTaken": "Email '{Email}' is already in use.",

@@ -34,11 +34,105 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using System.Text.RegularExpressions;
 
+#if (TenantWorkspace)
+using Leistd.MultiTenancy.Stores;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Time.Testing;
+using OpenIddict.Client;
+using OpenIddict.Client.SystemNetHttp;
+#endif
+
 namespace CompanyName.ProjectName.IntegrationTests;
 
 /// <summary>真实官方 OIDC/Cookie 处理器，只替换签发方的 HTTP 后端。</summary>
 public sealed class ResourceBrowserSessionTests
 {
+#if (TenantWorkspace)
+    [Theory]
+    [InlineData(120)]
+    [InlineData(600)]
+    public async Task Workspace_cache_expires_at_the_token_expiry_or_four_minutes_and_isolates_tickets(int lifetime)
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        using var issuer = new Issuer { WorkspaceLifetime = lifetime, WorkspaceClock = clock };
+        using var host = Host(factory, issuer).WithWebHostBuilder(builder => builder
+            .UseSetting("Authentication:Issuer", Issuer.Address)
+            .UseSetting("Leistd:ServiceAuth:Authority", Issuer.Address)
+            .UseSetting("Leistd:ServiceAuth:ClientId", "resource-owner")
+            .UseSetting("Leistd:ServiceAuth:ClientSecret", "ResourceOwner!Secret1")
+            .UseSetting("Leistd:ServiceClients:Identity:BaseAddress", Issuer.Address)
+            .UseSetting("Leistd:ServiceClients:Identity:Scope", "tenant-routing.read")
+            .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Audience", "identity-api")
+            .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Scope", "identity-api")
+            .ConfigureTestServices(services =>
+            {
+                services.AddSingleton<TimeProvider>(clock);
+                services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new WorkspaceTransport(issuer));
+                services.Configure<OpenIddictClientOptions>(options =>
+                {
+                    foreach (var registration in options.Registrations)
+                    {
+                        registration.Configuration = new OpenIddictConfiguration { Issuer = new Uri(Issuer.Address), TokenEndpoint = new Uri(Issuer.Address + "token") };
+                        registration.Configuration.GrantTypesSupported.Add("urn:ietf:params:oauth:grant-type:token-exchange");
+                        registration.Configuration.GrantTypesSupported.Add("client_credentials");
+                        registration.Configuration.TokenEndpointAuthMethodsSupported.Add("client_secret_post");
+                    }
+                });
+#pragma warning disable CS0618 // 官方 MemoryCache 的测试时钟接缝与业务 TimeProvider 同步推进。
+                services.Configure<MemoryCacheOptions>(options => options.Clock = new WorkspaceCacheClock(clock));
+#pragma warning restore CS0618
+            }));
+        var cookie = await LoginAsync(host, issuer);
+        async Task<string?> TokenAsync(string session, string workspace = "acme")
+        {
+            using var browser = Client(host, session);
+            browser.DefaultRequestHeaders.Add("X-Workspace", workspace);
+            using var response = await browser.GetAsync(AccessTokenProbe.Path);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadAsStringAsync();
+        }
+        var first = await TokenAsync(cookie);
+        Assert.Equal(first, await TokenAsync(cookie));
+        Assert.Equal(1, issuer.WorkspaceExchanges);
+        var otherCookie = await LoginAsync(host, issuer);
+        Assert.NotEqual(first, await TokenAsync(otherCookie));
+        Assert.Equal(2, issuer.WorkspaceExchanges);
+        clock.Advance(TimeSpan.FromSeconds(Math.Min(lifetime, 240) + 1));
+        Assert.NotEqual(first, await TokenAsync(cookie));
+        Assert.Equal(3, issuer.WorkspaceExchanges);
+        using var homeBrowser = Client(host, cookie);
+        homeBrowser.DefaultRequestHeaders.Add("X-Workspace", "unavailable");
+        using var list = await homeBrowser.GetAsync("/api/v1/auth/me/workspaces");
+        Assert.True(list.IsSuccessStatusCode, await list.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        Assert.Equal(issuer.WorkspaceMemberId, Assert.Single(document.RootElement.EnumerateArray()).GetProperty("userId").GetString());
+        Assert.Equal(3, issuer.WorkspaceExchanges);
+        using var rejected = await homeBrowser.GetAsync("/api/v1/users");
+        Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
+        using var me = await homeBrowser.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+    }
+
+#pragma warning disable CS0618
+    private sealed class WorkspaceCacheClock(TimeProvider clock) : Microsoft.Extensions.Internal.ISystemClock
+    {
+        public DateTimeOffset UtcNow => clock.GetUtcNow();
+    }
+#pragma warning restore CS0618
+
+    private sealed class WorkspaceTransport(HttpMessageHandler issuer) : IHttpMessageHandlerBuilderFilter
+    {
+        public Action<HttpMessageHandlerBuilder> Configure(Action<HttpMessageHandlerBuilder> next) => builder =>
+        {
+            next(builder);
+            if (builder.Name!.StartsWith(typeof(OpenIddictClientSystemNetHttpOptions).Assembly.GetName().Name!, StringComparison.Ordinal) ||
+                builder.Name is "IdentityWorkspaces" or "WorkspaceTenants")
+                builder.PrimaryHandler = issuer;
+        };
+    }
+#endif
+
 #if (!IncludeMultiTenancy)
     [Theory]
     [InlineData("tenant")]
@@ -696,9 +790,43 @@ public sealed class ResourceBrowserSessionTests
         public bool RejectCode { get; set; }
         public TaskCompletionSource<bool>? RefreshStarted { get; set; }
         public TaskCompletionSource<bool>? ContinueRefresh { get; set; }
+
+#if (TenantWorkspace)
+        public TimeProvider WorkspaceClock { get; set; } = TimeProvider.System;
+        public int WorkspaceLifetime { get; set; } = 300;
+        public int WorkspaceExchanges { get; private set; }
+        public string WorkspaceMemberId { get; } = Guid.NewGuid().ToString();
+        private readonly Guid workspaceTenantId = Guid.NewGuid();
+#endif
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+#if (TenantWorkspace)
+            if (request.Method == HttpMethod.Get)
+            {
+                if (request.RequestUri!.AbsolutePath == "/api/v1/auth/me/workspaces")
+                    return new(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { new { userId = WorkspaceMemberId, tenantId = workspaceTenantId, name = "acme", displayName = "Acme" } }) };
+                return request.RequestUri!.AbsolutePath.EndsWith("ACME", StringComparison.Ordinal)
+                    ? new(HttpStatusCode.OK) { Content = JsonContent.Create(new TenantConfiguration { Id = workspaceTenantId, Name = "acme", NormalizedName = "ACME", IsActive = true }) }
+                    : new(HttpStatusCode.NoContent);
+            }
+#endif
             var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
+#if (TenantWorkspace)
+            if (form["grant_type"].ToString() is "urn:ietf:params:oauth:grant-type:token-exchange" or "client_credentials")
+            {
+                var workspace = form.TryGetValue("workspace", out var requestedWorkspace) ? requestedWorkspace.ToString() : "";
+                if (!string.IsNullOrEmpty(workspace)) WorkspaceExchanges++;
+                var claims = new Dictionary<string, object> { ["sub"] = string.IsNullOrEmpty(workspace) ? Subject : WorkspaceMemberId, ["jti"] = Guid.NewGuid().ToString() };
+                if (!string.IsNullOrEmpty(workspace)) { claims["home_sub"] = Subject; claims["tenant_id"] = workspaceTenantId.ToString(); }
+                var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+                {
+                    Issuer = Address, Audience = form.TryGetValue("audience", out var requestedAudience) && requestedAudience.ToString() is { Length: > 0 } audience ? audience : "identity-api", Claims = claims, TokenType = "at+jwt",
+                    IssuedAt = DateTime.UtcNow, NotBefore = DateTime.UtcNow.AddSeconds(-5),
+                    Expires = WorkspaceClock.GetUtcNow().AddSeconds(WorkspaceLifetime).UtcDateTime, SigningCredentials = new(Key, SecurityAlgorithms.RsaSha256)
+                });
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { access_token = token, token_type = "Bearer", issued_token_type = "urn:ietf:params:oauth:token-type:access_token", expires_in = WorkspaceLifetime }) };
+            }
+#endif
             var refresh = form["grant_type"].ToString() == "refresh_token";
             if (refresh)
             {

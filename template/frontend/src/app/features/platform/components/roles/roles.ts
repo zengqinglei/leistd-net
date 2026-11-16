@@ -64,12 +64,17 @@ import { RoleTable } from './widgets/role-table/role-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeRealTime)
+//#if (!TenantWorkspace)
 import { AuthService } from '../../../../core/services/auth-service';
+//#endif
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../core/services/layout-service';
 //#if (IncludeRealTime)
 import { realtimeResourceKey, SignalRService } from '../../../../core/services/signalr-service';
+//#endif
+//#if (TenantWorkspace && IncludeRealTime)
+import { WorkspaceContextService } from '../../../../core/services/workspace-context-service';
 //#endif
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 //#if (!IncludeLocalization)
@@ -138,7 +143,12 @@ export class Roles {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   //#if (IncludeRealTime)
+  //#if (TenantWorkspace)
+  private readonly workspaceContext = inject(WorkspaceContextService);
+  //#endif
+  //#if (!TenantWorkspace)
   private readonly authService = inject(AuthService);
+  //#endif
   private readonly signalR = inject(SignalRService);
   //#endif
   //#if (IncludeLocalization)
@@ -261,9 +271,14 @@ export class Roles {
    * - 之后每次确认（自动重连、重建连接）都补查一次。
    */
   private followRoleListChanges(): Observable<void> {
+    // prettier-ignore
     const resourceKey = realtimeResourceKey(
       ROLE_LIST_RESOURCE,
+      //#if (TenantWorkspace)
+      this.workspaceContext.tenantId(),
+      //#else
       this.authService.currentUser()?.tenantId,
+      //#endif
     );
     this.signalR.registerResourceEvent(ROLES_CHANGED_EVENT);
     const confirmed = this.signalR.resourceSubscribed$.pipe(

@@ -1,4 +1,3 @@
-// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
@@ -27,7 +26,6 @@ import {
 } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-// prettier-ignore
 import {
   lucideActivity,
   lucideBell,
@@ -73,6 +71,9 @@ import {
   NotificationService,
 } from '../../../../core/services/notification-service';
 //#endif
+//#if (TenantWorkspace && IncludeNotifications)
+import { WorkspaceContextService } from '../../../../core/services/workspace-context-service';
+//#endif
 //#if (IncludeNotifications)
 import { NotificationItem } from '../../../../shared/components/notification-item/notification-item';
 //#endif
@@ -91,6 +92,8 @@ import {
 //#endif
 //#if (IncludeNotifications)
 import { NotificationOutputDto } from '../../../../shared/dtos/notification.dto';
+//#endif
+//#if (IncludeNotifications)
 import { AppNumber } from '../../../../shared/pipes/app-number-pipe';
 //#endif
 //#if (!IncludeLocalization)
@@ -165,8 +168,21 @@ const DEVICE_ICONS: Record<DeviceKind, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WorkspaceDashboard {
-  private readonly layoutService = inject(LayoutService);
+  readonly layoutService = inject(LayoutService);
   private readonly authService = inject(AuthService);
+  //#if (TenantWorkspace && IncludeNotifications)
+  private readonly workspace = inject(WorkspaceContextService);
+  //#endif
+  //#if (IncludeNotifications)
+  private actorId(): string | undefined {
+    //#if (TenantWorkspace)
+    return this.workspace.actorId();
+    //#else
+    return this.authService.currentUser()?.id;
+    //#endif
+  }
+  //#endif
+
   private readonly authorization = inject(AuthorizationService);
   private readonly accountPreferences = inject(AccountPreferencesService);
   protected readonly commandPalette = inject(CommandPaletteService);
@@ -300,13 +316,13 @@ export class WorkspaceDashboard {
    */
   private async markNotificationRead(notification: NotificationOutputDto): Promise<boolean> {
     if (notification.isRead) return true;
-    const userId = this.authService.currentUser()?.id;
+    const userId = this.actorId();
     try {
       await this.notificationService.markAsRead(notification.id);
     } catch (error: unknown) {
-      if (this.authService.currentUser()?.id === userId) this.showRequestError(error);
+      if (this.actorId() === userId) this.showRequestError(error);
     }
-    return this.authService.currentUser()?.id === userId;
+    return this.actorId() === userId;
   }
 
   /** 最近通知：与顶栏铃铛同一份共享状态，这里只取前四条。 */

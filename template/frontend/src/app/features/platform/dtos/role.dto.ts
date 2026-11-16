@@ -22,6 +22,9 @@ export interface RoleBriefDto {
   id: string;
   name: string;
   displayName: string;
+  //#if (TenantWorkspace)
+  isStatic?: boolean;
+  //#endif
 }
 
 export interface GetRolesInputDto extends PagedRequestDto {

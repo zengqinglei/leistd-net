@@ -14,6 +14,14 @@ import { NotFound } from './features/public/components/not-found/not-found';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
 describe('top-level routes', () => {
+  const concreteRoutes: Routes = routes.flatMap((route) =>
+    route.path === '' && route.children
+      ? route.children.map((child) => ({
+          ...child,
+          canActivate: [...(route.canActivate ?? []), ...(child.canActivate ?? [])],
+        }))
+      : [route],
+  );
   const isCatchAllPrefix = (r: Route) => r.path === '' && !!r.loadChildren;
   const isWildcard = (r: Route) => r.path === '**';
 
@@ -23,7 +31,7 @@ describe('top-level routes', () => {
   });
 
   it('places the empty-path + loadChildren public area after all concrete paths', () => {
-    const catchAllIndexes = (routes as Routes)
+    const catchAllIndexes = concreteRoutes
       .map((r, i) => (isCatchAllPrefix(r) ? i : -1))
       .filter((i) => i >= 0);
     expect(
@@ -32,7 +40,7 @@ describe('top-level routes', () => {
     ).toBe(1);
 
     const catchAllAt = catchAllIndexes[0];
-    const concreteAfter = (routes as Routes)
+    const concreteAfter = concreteRoutes
       .slice(catchAllAt + 1)
       .filter((r) => !isWildcard(r) && r.path !== '')
       .map((r) => r.path);
@@ -46,16 +54,16 @@ describe('top-level routes', () => {
   // 刷新与前进/后退还原出的 403 页靠它送回目标重新判定；两条相邻的 403 历史只差查询参数，
   // 要按查询参数变化重新执行守卫（行为见 permission-guard.spec，那里的路由声明与此一致）
   it('re-runs forbiddenGuard on the forbidden page whenever its target changes', () => {
-    const forbidden = (routes as Routes).find((r) => r.path === 'forbidden');
+    const forbidden = concreteRoutes.find((r) => r.path === 'forbidden');
 
     expect(forbidden?.canActivate).toContain(forbiddenGuard);
     expect(forbidden?.runGuardsAndResolvers).toBe('paramsOrQueryParamsChange');
   });
 
   it('maps PROTECTED_ROUTE_PREFIXES one-to-one to top-level authGuard routes', () => {
-    const authGuarded = (routes as Routes)
+    const authGuarded = concreteRoutes
       .filter((r) => r.canActivate?.includes(authGuard))
-      .map((r) => `/${r.path}`)
+      .map((r) => `/${r.path?.replace(/:[^/]+/g, '')}`)
       .sort();
 
     expect(
@@ -70,7 +78,7 @@ describe('top-level routes', () => {
   });
 
   it('ends with a wildcard that renders the not-found page in place instead of redirecting', () => {
-    const wildcards = (routes as Routes).filter(isWildcard);
+    const wildcards = concreteRoutes.filter(isWildcard);
 
     expect(wildcards).toHaveLength(1);
     expect(routes.at(-1)).toBe(wildcards[0]);
@@ -103,7 +111,7 @@ describe('top-level routes', () => {
 
   /** 路由守卫与菜单、重定向必须用同一份权限清单；断言同源，防止有人在路由里手写补项。 */
   it('shares the /platform route allowlist with canAccessPlatform', () => {
-    const platformRoute = routes.find((route) => route.path === 'platform');
+    const platformRoute = concreteRoutes.find((route) => route.path === 'platform');
 
     expect(platformRoute, 'The /platform route does not exist').toBeDefined();
     expect(platformRoute?.data?.['permissions']).toEqual([...PLATFORM_ENTRY_PERMISSIONS]);

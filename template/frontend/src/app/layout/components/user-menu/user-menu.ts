@@ -4,7 +4,6 @@ import { Router } from '@angular/router';
 import { translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-// prettier-ignore
 import {
   lucideChevronsUpDown,
   lucideCog,
@@ -197,7 +196,10 @@ export class UserMenu {
         action: () => this.router.navigate(['/workspace']),
       });
     } else if (
-      this.layoutService.currentUrl().startsWith('/workspace') &&
+      this.layoutService
+        .currentUrl()
+        .replace(/^\/w\/[^/]+/, '')
+        .startsWith('/workspace') &&
       this.authorizationService.canAccessPlatform()
     ) {
       items.push({
@@ -224,7 +226,7 @@ export class UserMenu {
         label: 'Personal settings',
         //#endif
         icon: 'lucideUserCog',
-        action: () => this.router.navigate(['/workspace/settings']),
+        action: () => this.router.navigate([this.layoutService.scopePath('/workspace/settings')]),
       },
       { separator: true },
       // 刻意没有「切换租户」：会话租户由 cookie claim 定案，换租户只能退出后在登录页重新选择。

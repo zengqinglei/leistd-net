@@ -19,6 +19,30 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
+#if (TenantWorkspace)
+    [Fact]
+    public async Task A_linked_member_accepts_updated_issuer_profile_on_the_next_authenticated_request()
+    {
+        var subject = Guid.CreateVersion7();
+        var home = Guid.CreateVersion7();
+        using var session = factory.CreateResourceSession(subject, ProjectWebApplicationFactory.NewTenantId());
+        session.Client.DefaultRequestHeaders.Add("X-Project-Test-Home", home.ToString());
+        session.Client.DefaultRequestHeaders.Add("X-Project-Test-Username", "platform.before");
+        session.Client.DefaultRequestHeaders.Add("X-Project-Test-DisplayName", "Before");
+        (await session.Client.GetAsync("/api/v1/auth/me")).EnsureSuccessStatusCode();
+        Assert.Equal(home, (await FindUserAsync(subject))!.HomeUserId);
+        session.Client.DefaultRequestHeaders.Remove("X-Project-Test-Username");
+        session.Client.DefaultRequestHeaders.Remove("X-Project-Test-DisplayName");
+        session.Client.DefaultRequestHeaders.Add("X-Project-Test-Username", "platform.after");
+        session.Client.DefaultRequestHeaders.Add("X-Project-Test-DisplayName", "After");
+        (await session.Client.GetAsync("/api/v1/auth/me")).EnsureSuccessStatusCode();
+        var projected = (await FindUserAsync(subject))!;
+        Assert.Equal(home, projected.HomeUserId);
+        Assert.Equal("platform.after", projected.Username);
+        Assert.Equal("After", projected.DisplayName);
+    }
+#endif
+
     [Theory]
     [InlineData("true", true)]
     [InlineData("True", true)]

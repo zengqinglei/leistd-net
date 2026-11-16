@@ -46,7 +46,7 @@ public sealed class InternalOrderController : ControllerBase
 ```
 
 <!--#endif-->
-Token Exchange 令牌保留用户、租户与身份库的用户名/邮箱/显示名，带 act 说明调用方；不继承来源角色和超管标记。下游使用本地授权主体和权限决定业务操作。非法租户 claim 失败关闭，不回退宿主。诊断入口 GET /api/v1/service-info/whoami 返回当前用户和 client 身份。
+下游委托的 Token Exchange 令牌保留用户、租户与身份库的用户名/邮箱/显示名，带 act 说明调用方；不继承来源角色和超管标记。下游使用本地授权主体和权限决定业务操作。非法租户 claim 失败关闭，不回退宿主。诊断入口 GET /api/v1/service-info/whoami 返回当前用户和 client 身份。
 
 ## Identity 与资源服务对接
 
@@ -66,6 +66,9 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 - 租户回源授予 tenant-routing.read；迁移身份单独授予 tenant-migration.read，并因补齐租户 Admin 时按正式路由进入租户而同时授予 tenant-routing.read。需要机器回源的交换客户端可同时启用 client credentials。
 <!--#endif-->
 - 资源服务的客户端还要按用户读账户偏好与代表本人写偏好：启用 client credentials 并授予 account-preferences.read，同时启用 Token Exchange、ept:token、aud 与 scp 取 Identity 自身 API 的标识（OAuth:Resource）。
+<!--#if (TenantWorkspace)-->
+- 工作区形态的 Resource 客户端还需登记自身资源的 `aud` 与 `scp`（例如 `aud:orders-api`、`scp:orders-api`）。进入工作区的交换携带 `workspace`，保持原受众并限制为原 scope 的子集，输出关联账号与 `home_sub`；该令牌可继续发起一次下游委托。
+<!--#endif-->
 
 配置示例（Secret 由 Leistd__ServiceAuth__ClientSecret 注入）：
 

@@ -1,4 +1,10 @@
 using Leistd.Settings.Definitions;
+#if (LocalIdentity && IncludeMultiTenancy)
+using CompanyName.ProjectName.Application.Tenants.Options;
+#endif
+#if (Impersonation || TenantWorkspace)
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+#endif
 using Leistd.Settings.Events;
 using Leistd.Settings.Validation;
 using Leistd.OperationRecords.Definitions;
@@ -58,9 +64,6 @@ using Leistd.RealTime.Subscriptions;
 #endif
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Provider;
-#if (Impersonation)
-using CompanyName.ProjectName.Application.Tenants.AppServices;
-#endif
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Management.Events;
 using Leistd.MultiTenancy.Management.Provisioning;
@@ -92,6 +95,10 @@ public static class DependencyInjection
 
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
+#if (TenantWorkspace && RemoteTokenAuth)
+        services.TryAddTransient<IWorkspaceAppService,
+            RemoteWorkspaceAppService>();
+#endif
         services.AddMapsterObjectMapper(options =>
         {
             // 各模块 Mappings/ 下实现 IRegister 的映射配置，登记到组件自己的 TypeAdapterConfig；
@@ -239,7 +246,25 @@ public static class DependencyInjection
         // 租户管理的编排与补偿在多租户组件里（存储由 Infrastructure 的 AddMultiTenancyEfCore 提供）；
         // 本项目只负责开通内容与启用前置条件
         services.AddTenantManagement();
+#if (TenantWorkspace && !OpenIddictServer)
+        services.TryAddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
+#endif
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IOptionsChangeTokenSource<DefaultTenantOptions>)))
+            services.AddOptions<DefaultTenantOptions>()
+                .BindConfiguration(DefaultTenantOptions.SectionName);
         services.TryAddTransient<ITenantProvisioner, TenantSeeder>();
+#if (TenantWorkspace && OpenIddictServer)
+        services.TryAddTransient<IWorkspaceTenantLookupAppService,
+            WorkspaceTenantLookupAppService>();
+#endif
+#if (TenantWorkspace)
+        services.TryAddTransient<IWorkspaceAppService,
+            WorkspaceAppService>();
+#endif
+#if (TenantWorkspace)
+        services.TryAddTransient<ITenantStaffAppService,
+            TenantStaffAppService>();
+#endif
         services.TryAddEnumerable(ServiceDescriptor.Transient<ITenantActivationGuard, TenantHasUsersActivationGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<TenantConnectionChangedEvent>, TenantConnectionChangedAuditHandler>());

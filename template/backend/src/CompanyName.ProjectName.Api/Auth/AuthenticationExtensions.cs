@@ -1,3 +1,6 @@
+#if (TenantWorkspace && ResourceBrowserSession)
+using CompanyName.ProjectName.Api.Auth.Sessions;
+#endif
 using CompanyName.ProjectName.Api.Auth.Authentication;
 #if (SpaFrontend)
 using Leistd.Security.AspNetCore;
@@ -26,6 +29,19 @@ public static class AuthenticationExtensions
         builder.AddLocalSessionAuthentication();
 #else
         builder.AddRemoteTokenAuthentication();
+#endif
+#if (TenantWorkspace)
+#if (ResourceBrowserSession)
+        builder.Services.AddMemoryCache();
+        builder.Services.AddTransient<ResourceWorkspaceTicketProvider>();
+#endif
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = AuthenticationSchemeNames.Workspace;
+            options.DefaultChallengeScheme = AuthenticationSchemeNames.Workspace;
+            options.DefaultForbidScheme = AuthenticationSchemeNames.Workspace;
+        }).AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, WorkspaceAuthenticationHandler>(
+            AuthenticationSchemeNames.Workspace, _ => { });
 #endif
         return builder;
     }

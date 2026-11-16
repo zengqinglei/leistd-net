@@ -77,7 +77,7 @@
                           }
                           @case ('actions') {
                             <!-- 操作列（5 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。
-                               规则见 docs/standards/frontend-lists.md §2。 -->
+                             规则见 docs/standards/frontend-lists.md §2。 -->
                             <div class="flex items-center justify-end gap-0.5">
                               <!-- 详情只读，不按修改权限裁剪：能看到这张列表就能看详情。 -->
                               <button
@@ -105,7 +105,7 @@
                                 </button>
                               }
                               <!-- 溢出菜单不按修改权限裁剪：它恒有"详情"这一项，
-                                 按 canUpdate||canDelete 藏起来时，只有查看权限的人在 <sm 就没有任何入口。 -->
+                               按 canUpdate||canDelete 藏起来时，只有查看权限的人在 <sm 就没有任何入口。 -->
                               <button
                                 [disabled]="impersonatingId() === row.original.id"
                                 hlmBtn
@@ -132,6 +132,17 @@
                                       <ng-icon name="lucideInfo" />
                                       {{ t('common.details') }}
                                     </button>
+                                    <!--#if (TenantWorkspace)-->
+                                    @if (canStaffAccess()) {
+                                      <button
+                                        hlmDropdownMenuItem
+                                        (click)="staff.emit(row.original)"
+                                      >
+                                        <ng-icon name="lucideUsers" />
+                                        {{ t('tenants.staff.manage') }}
+                                      </button>
+                                    }
+                                    <!--#endif-->
                                     @if (canUpdate()) {
                                       <button
                                         hlmDropdownMenuItem
@@ -164,7 +175,7 @@
                                     }
                                     <!--#if (Impersonation)-->
                                     <!-- 停用的租户后端拒绝模拟登录，这里禁用并给出原因，
-                                       而不是留一个必然 403 的入口（与角色的内置角色同一范式）。 -->
+                                     而不是留一个必然 403 的入口（与角色的内置角色同一范式）。 -->
                                     @if (canImpersonate()) {
                                       <button
                                         hlmDropdownMenuItem

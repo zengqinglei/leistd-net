@@ -13,6 +13,17 @@ export interface MockRole {
 }
 
 export const ROLES: MockRole[] = [
+  //#if (TenantWorkspace)
+  {
+    id: 'role_empty',
+    name: 'Observer',
+    displayName: 'Observer',
+    isStatic: false,
+    isDefault: false,
+    sort: 200,
+    creationTime: '2026-11-01T00:00:00Z',
+  },
+  //#endif
   {
     id: 'role_admin',
     name: 'Admin',

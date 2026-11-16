@@ -1,3 +1,5 @@
+import { request } from '@playwright/test';
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { type ChildProcess, execFile, execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
@@ -12,9 +14,6 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-
-import { request } from '@playwright/test';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 //#if (IncludeDistributedEvents)
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
 //#endif
@@ -131,6 +130,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         //#endif
         DataProtection__KeysPath: keysPath,
         DefaultAdmin__Password: admin().password,
+        //#if (TenantWorkspace)
+        MultiTenancy__DefaultTenant__Name: 'default-e2e',
+        //#endif
         Leistd__Security__VerificationCodes__Key: randomBytes(32).toString('base64'),
         Passkeys__RelyingPartyId: 'localhost',
         Passkeys__Origins__0: baseURL,

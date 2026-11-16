@@ -1231,8 +1231,14 @@ def template_source_digests(repo):
 
 
 def generation_shards(plan, repo):
-    """A consistent four-shard generation proof: three modulo shape shards and the control shard."""
+    """A consistent generation proof using the model's modulo shards and the control shard."""
     sources = template_source_digests(repo)
+    spec = importlib.util.spec_from_file_location('shape_model', repo / 'scripts/check-template-scenario-coverage.py')
+    model = importlib.util.module_from_spec(spec); spec.loader.exec_module(model)
+    config = json.loads((repo / 'template/.template.config/template.json').read_text(encoding='utf-8'))
+    space = model.generation_space_summary(config)
+    count, raw, partitions = space['EffectiveShapes'], space['RawInputs'], space['ShapeShards']
+    ci_choices = [c['choice'] for c in config['symbols']['Ci']['choices'] if c['choice'] != config['symbols']['Ci']['defaultValue']]
     roles = ['Identity', 'Standalone', 'Resource']
     def shape(index):
         return [index // 32, index % 32]
@@ -1240,17 +1246,17 @@ def generation_shards(plan, repo):
         return hashlib.sha256(str(index).encode()).hexdigest()
     keys = [dict(Script=hashlib.sha256(f'verify-{k}'.encode()).hexdigest(), Steps=['static', f'build-{k}', 'test']) for k in range(2)]
     common = dict(Version=1, Result='pass', CandidateSha=plan['CandidateSha'], TemplateSourceDigests=sources,
-                  ShapeShards=3, EffectiveShapes=1280)
+                  ShapeShards=partitions, EffectiveShapes=count)
     shards = {str(k): dict(common, Shard=str(k), Shapes=[dict(Index=i, Effective=shape(i), Files=10, Digest=digest(i),
-                                                             VerifyKey=keys[i % 2]) for i in range(1280) if i % 3 == k])
-              for k in range(3)}
-    representatives = [0, 1, 106, 319]
-    shards['control'] = dict(common, Shard='control', RawInputs=3072,
-        InputMapping=[dict(input=['--input', str(i)], effective=shape(i % 1280)) for i in range(3072)],
+                                                             VerifyKey=keys[i % 2]) for i in range(count) if i % partitions == k])
+              for k in range(partitions)}
+    representatives = [0, 1, count // 3, count - 1]
+    shards['control'] = dict(common, Shard='control', RawInputs=raw,
+        InputMapping=[dict(input=['--input', str(i)], effective=shape(i % count)) for i in range(raw)],
         Representatives=[dict(Index=i, Effective=shape(i), Digest=digest(i)) for i in representatives],
-        EquivalenceComparisons=[dict(variant=1280 + n, representative=representatives[n % 4], role=roles[n % 3],
+        EquivalenceComparisons=[dict(variant=count + n, representative=representatives[n % 4], role=roles[n % 3],
                                      Digest=digest(representatives[n % 4])) for n in range(6)],
-        CiVariants=[dict(variant=326 + n, representative=representatives[n // 2], ci=['gitlab', 'none'][n % 2], changed=[]) for n in range(4)],
+        CiVariants=[dict(variant=count + 6 + n, representative=representatives[n // len(ci_choices)], ci=ci_choices[n % len(ci_choices)], changed=[]) for n in range(space['CiVariants'])],
         VerifySignatures=2,
         VerifyChecks=[dict(Key=key, Steps=key['Steps'], FailingStep=key['Steps'][1], ExitCode=7, Calls=2) for key in keys])
     return shards
@@ -1266,7 +1272,7 @@ def prove_release_proofs(repo, plan, out, run):
     def check(kind, proof, success, case):
         if proofs.exists(): shutil.rmtree(proofs)
         proofs.mkdir()
-        if kind == 'generation':
+        if kind in ('generation', 'documentation'):
             # Each shard's artifact lands in its own directory, as download-artifact does by pattern.
             for index, item in enumerate(proof or []):
                 (proofs / f'template-generation-proof-{index}').mkdir()
@@ -1303,13 +1309,13 @@ def prove_release_proofs(repo, plan, out, run):
         ('verify-key-differs-from-steps', lambda p: p['VerifyChecks'][0]['Key'].update(Steps=['other']))]
     for case, apply in control_cases:
         check('generation', shards(control=apply), False, 'control-' + case)
-    for name in ('0', '1', '2', 'control'):
+    for name in generation:
         check('generation', shards(**{name: None}), False, f'missing-shard-{name}')
         for case, apply in [('result-failure', lambda p: p.update(Result='failure')), ('result-cancelled', lambda p: p.update(Result='cancelled')),
                             ('foreign-candidate', lambda p: p.update(CandidateSha='a' * 40)), ('version', lambda p: p.update(Version=2)),
                             ('foreign-source', lambda p: p['TemplateSourceDigests'].update({'template/README.md': '0' * 64})),
                             ('missing-source', lambda p: p['TemplateSourceDigests'].pop('template/README.md')),
-                            ('unknown-shard', lambda p: p.update(Shard='3'))]:
+                            ('unknown-shard', lambda p: p.update(Shard=str(generation['0']['ShapeShards'])))]:
             check('generation', shards(**{name: apply}), False, f'shard-{name}-{case}')
     duplicate = shards(); duplicate.append(json.loads(json.dumps(generation['0'])))
     check('generation', duplicate, False, 'duplicate-shard')
@@ -1321,6 +1327,55 @@ def prove_release_proofs(repo, plan, out, run):
                         ('empty-shard', lambda p: p.update(Shapes=[]))]:
         check('generation', shards(**{'0': apply}), False, case)
     check('generation', None, False, 'missing')
+    # Documentation and generation must use the current model, including future space changes.
+    def documentation_shards(generation):
+        count = generation['0']['EffectiveShapes']
+        variants = len(generation['control']['CiVariants'])
+        return {name: dict(Version=1, Result='pass', CandidateSha=plan['CandidateSha'], Shard=name,
+                          EffectiveShapes=count, CiVariants=variants if name == 'control' else 0,
+                          ShapeIndexes=[] if name == 'control' else [s['Index'] for s in item['Shapes']],
+                          Projects=variants + len(item['Representatives']) + len(item['EquivalenceComparisons'])
+                          if name == 'control' else len(item['Shapes']),
+                          MarkdownFiles=10, Skills=1, FrontendMarkdownFiles=1, FormattedContents=1)
+                for name, item in generation.items()}
+
+    documentation = documentation_shards(generation)
+    check('documentation', list(documentation.values()), True, 'valid')
+    for name in documentation:
+        values = json.loads(json.dumps(documentation)); values.pop(name)
+        check('documentation', list(values.values()), False, 'missing-shard-' + name)
+    for case, shard, apply in [
+        ('old-space-size', '0', lambda p: p.update(EffectiveShapes=1280)),
+        ('missing-index', '1', lambda p: p['ShapeIndexes'].pop()),
+        ('duplicate-index', '1', lambda p: p['ShapeIndexes'].__setitem__(0, documentation['0']['ShapeIndexes'][0])),
+        ('out-of-range-index', '2', lambda p: p['ShapeIndexes'].__setitem__(0, generation['0']['EffectiveShapes'])),
+        ('control-index', 'control', lambda p: p.update(ShapeIndexes=[0])),
+        ('missing-ci-variants', 'control', lambda p: p.update(CiVariants=0)),
+        ('empty-projects', '0', lambda p: p.update(Projects=0)),
+        ('empty-markdown', 'control', lambda p: p.update(MarkdownFiles=0)),
+        ('duplicate-shard', '1', lambda p: p.update(Shard='0')),
+    ]:
+        values = json.loads(json.dumps(documentation)); apply(values[shard])
+        check('documentation', list(values.values()), False, case)
+    values = json.loads(json.dumps(documentation))
+    for item in values.values(): item['Projects'] = 1
+    check('documentation', list(values.values()), False, 'too-few-projects')
+    # An added role changes both raw inputs and effective shapes without changing checker constants.
+    config_path = repo / 'template/.template.config/template.json'
+    original = config_path.read_text(encoding='utf-8')
+    try:
+        config = json.loads(original)
+        config['symbols']['ServiceRole']['choices'].append(dict(choice='ProofModelProbe'))
+        config_path.write_text(json.dumps(config), encoding='utf-8')
+        expanded = generation_shards(plan, repo)
+        assert expanded['control']['RawInputs'] != generation['control']['RawInputs']
+        assert expanded['0']['EffectiveShapes'] != generation['0']['EffectiveShapes']
+        check('generation', list(expanded.values()), True, 'expanded-model')
+        check('documentation', list(documentation_shards(expanded).values()), True, 'expanded-model')
+        check('generation', list(generation.values()), False, 'stale-model')
+        check('documentation', list(documentation.values()), False, 'stale-model')
+    finally:
+        config_path.write_text(original, encoding='utf-8')
     for kind in ('postgresql', 'oidc'):
         check(kind, e2e, True, 'valid')
         for case, apply in [('zero-assertions', lambda p: p.update(Assertions=0)), ('missing-assertions', lambda p: p.pop('Assertions')),

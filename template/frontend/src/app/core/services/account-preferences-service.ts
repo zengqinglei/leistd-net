@@ -1,4 +1,9 @@
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+// prettier-ignore
+import { HttpClient, HttpErrorResponse, HttpHeaders,
+  //#if (TenantWorkspace)
+  HttpContext,
+  //#endif
+} from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
@@ -13,6 +18,9 @@ import {
   AccountThemeMode,
 } from '../../shared/dtos/account-preferences.dto';
 import { ApplicationHttpError } from '../errors/application-http-error';
+//#if (TenantWorkspace)
+import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
+//#endif
 
 /** 解析后的一份偏好：每个字段都在，未设置为 null（线上缺省与 null 同义）。 */
 export interface AccountPreferences {
@@ -144,7 +152,12 @@ export class AccountPreferencesService {
           this.http.patch<AccountPreferencesOutputDto>(
             AccountPreferencesService.url,
             { [field]: value },
-            { headers: new HttpHeaders({ 'Content-Type': 'application/merge-patch+json' }) },
+            {
+              headers: new HttpHeaders({ 'Content-Type': 'application/merge-patch+json' }),
+              //#if (TenantWorkspace)
+              context: new HttpContext().set(WORKSPACE_SCOPE, null),
+              //#endif
+            },
           ),
         );
         const known = toKnown(result);

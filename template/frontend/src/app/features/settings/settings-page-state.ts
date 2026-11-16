@@ -1,22 +1,36 @@
+// prettier-ignore
 import {
   computed,
   DestroyRef,
   inject,
   Injectable,
+  //#if (TenantWorkspace)
+  Injector,
+  //#endif
   InjectionToken,
   PendingTasks,
   signal,
 } from '@angular/core';
 //#if (IncludeLocalization)
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+//#endif
+//#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
-import { Observable } from 'rxjs';
+// prettier-ignore
+import { Observable,
+  //#if (TenantWorkspace)
+  firstValueFrom,
+  //#endif
+} from 'rxjs';
 
 import { SettingDependency } from './setting-choices';
 import { applicationErrorMessage } from '../../core/errors/application-http-error';
 import { SessionContextService } from '../../core/services/session-context-service';
+//#if (TenantWorkspace)
+import { SettingService } from '../../core/settings/setting-service';
+//#endif
 import { SettingOutputDto } from '../../core/settings/setting.dto';
 
 /** 一行设置及挂在它下面的子项（见 {@link buildSettingTree}）。 */
@@ -107,6 +121,13 @@ export function shownChildren(node: SettingRowNode, parentValue: string): Settin
 export const SETTINGS_LOAD_ENABLED = new InjectionToken<boolean>('SETTINGS_LOAD_ENABLED', {
   factory: () => true,
 });
+//#if (TenantWorkspace)
+
+/** 个人设置外壳的读取范围；系统设置继续复用当前工作区快照。 */
+export const SETTINGS_HOME_SCOPE = new InjectionToken<boolean>('SETTINGS_HOME_SCOPE', {
+  factory: () => false,
+});
+//#endif
 
 /**
  * 设置写入的包装，由外壳提供，例如写入前确认身份：收到发出写入的函数，返回包装后的写入。包装后的写入不发值就完成
@@ -137,6 +158,13 @@ interface RefreshWaiter {
 export class SettingsPageState {
   private readonly loadEnabled = inject(SETTINGS_LOAD_ENABLED);
   private readonly sessionContext = inject(SessionContextService);
+  //#if (TenantWorkspace)
+  private readonly homeScope = inject(SETTINGS_HOME_SCOPE);
+  private readonly injector = inject(Injector);
+  private get settingService() {
+    return this.injector.get(SettingService);
+  }
+  //#endif
   private readonly destroyRef = inject(DestroyRef);
   private readonly pendingTasks = inject(PendingTasks);
   //#if (IncludeLocalization)
@@ -214,7 +242,13 @@ export class SettingsPageState {
     // 等待者挂在页面上而不是这一次请求上：新读取一发起，较早的调用方就跟着最新一次落定，
     // 不必等自己那次请求返回（它可能一直挂着，写入队列会被卡住）
     const settled = new Promise<void>((resolve, reject) => this.waiters.push({ resolve, reject }));
-    this.sessionContext.refreshSettings().then(
+    // prettier-ignore
+    const read =
+      //#if (TenantWorkspace)
+      this.homeScope ? firstValueFrom(this.settingService.getForCurrentUser()) :
+      //#endif
+      this.sessionContext.refreshSettings();
+    read.then(
       (settings) => {
         if (sequence !== this.sequence) {
           return;

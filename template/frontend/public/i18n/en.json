@@ -1,4 +1,15 @@
 {
+  //#if (TenantWorkspace)
+  "tenantWorkspace": {
+    "backToConsole": "Back to platform console",
+    "title": "Workspaces",
+    "console": "Platform console",
+    "search": "Search workspaces",
+    "switch": "Switch workspace",
+    "emptyTitle": "No features are available in {{name}} yet",
+    "emptyDescription": "Ask the workspace administrator to assign roles in this system."
+  },
+  //#endif
   "common": {
     "unsavedChanges": "Discard your unsaved changes?",
     "discardChanges": "Discard changes",

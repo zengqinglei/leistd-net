@@ -1,8 +1,17 @@
 //#if (LocalIdentity)
 import { fromBase64Url, toBase64Url } from '../../src/app/core/webauthn/webauthn';
 //#endif
-//#if (LocalIdentity || !IncludeMultiTenancy)
+//#if (LocalIdentity || !IncludeMultiTenancy || TenantWorkspace)
 import { MockException } from '../core/models';
+//#endif
+//#if (TenantWorkspace)
+import { requestWorkspace } from '../core/request-workspace';
+//#endif
+//#if (TenantWorkspace)
+import { ROLES } from '../data/authorization';
+//#endif
+//#if (TenantWorkspace)
+import { TENANTS } from '../data/tenant';
 //#endif
 //#if (LocalIdentity)
 import {
@@ -12,8 +21,12 @@ import {
   MockUser,
   USERS,
 } from '../data/user';
-//#else
+//#endif
+//#if (!(LocalIdentity))
 import { MockUser, USERS } from '../data/user';
+//#endif
+//#if (TenantWorkspace)
+import { STAFF_ACCESS } from '../data/workspace';
 //#endif
 
 // Mock 会话状态存在当前页面的 sessionStorage，刷新保持登录；用户数据同样存本页（见 data/user.ts），其余业务数据在页面内存里，重新加载即回到初始数据。
@@ -96,6 +109,10 @@ export function setMockSessionTenantKey(tenantKey: string | null) {
 
 /** 当前会话的租户键；宿主上下文为 `host`。 */
 export function getMockSessionTenantKey(): string {
+  //#if (TenantWorkspace)
+  if (requestWorkspace)
+    return TENANTS.find((tenant) => tenant.name === requestWorkspace)?.id ?? 'host';
+  //#endif
   const tenantKey = sessionStorage.getItem(MOCK_SESSION_TENANT_STORAGE_KEY) ?? 'host';
   //#if (!IncludeMultiTenancy)
   if (tenantKey !== 'host') {
@@ -118,8 +135,53 @@ export function getCurrentUser(): MockUser | null {
   // 以存储为准：本页登录、退出或切换账号后，这里读到的就是新会话
   const userId = getMockSessionUserId();
   if (userId) getMockSessionTenantKey();
-  return userId ? (USERS.find((item) => item.id === userId) ?? null) : null;
+  const home = userId ? (USERS.find((item) => item.id === userId) ?? null) : null;
+  //#if (TenantWorkspace)
+  if (home && requestWorkspace) {
+    const tenant = TENANTS.find((t) => t.name.toLowerCase() === requestWorkspace!.toLowerCase());
+    const sessionTenant = sessionStorage.getItem(MOCK_SESSION_TENANT_STORAGE_KEY);
+    if (sessionTenant && sessionTenant !== 'host') {
+      if (tenant?.id !== sessionTenant && tenant?.name !== sessionTenant)
+        throw new MockException(403, { code: 'Workspace:Forbidden' });
+      return home;
+    }
+    const access = STAFF_ACCESS.find((a) => a.homeUserId === home.id && a.tenantId === tenant?.id);
+    if (!tenant?.isActive || !access)
+      throw new MockException(403, { code: 'Workspace:Unavailable' });
+    const member = getWorkspaceMember(home, tenant.id);
+    if (!member.isActive) throw new MockException(403, { code: 'Workspace:Unavailable' });
+    return member;
+  }
+  //#endif
+  return home;
 }
+//#if (TenantWorkspace)
+/** 工作区成员与本人账号分开，移除后仍保留同一行供再次授予。 */
+export function getWorkspaceMember(home: MockUser, tenantId: string): MockUser {
+  let member = USERS.find(
+    (user) => user.homeUserId === home.id && user.workspaceTenantId === tenantId,
+  );
+  if (!member) {
+    member = {
+      ...home,
+      id: `platform-${tenantId}-${home.id}`,
+      username: `platform.${home.username}`,
+      email: '',
+      password: undefined,
+      isSuperAdmin: false,
+      homeUserId: home.id,
+      workspaceTenantId: tenantId,
+      roles: [],
+    };
+    USERS.push(member);
+  }
+  const access = STAFF_ACCESS.find(
+    (item) => item.homeUserId === home.id && item.tenantId === tenantId,
+  );
+  member.roles = ROLES.filter((role) => access?.roleIds.includes(role.id)).map((role) => role.name);
+  return member;
+}
+//#endif
 /** 为 Mock 会话记录主体与展示 persona，二者可以不同。 */
 export function setMockSessionIdentity(
   subjectId: string,

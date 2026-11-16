@@ -1,4 +1,3 @@
-// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
@@ -15,7 +14,6 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslocoDirective, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-// prettier-ignore
 import {
   lucideArrowDownRight,
   lucideArrowUpRight,
@@ -40,7 +38,8 @@ import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 //#if (IncludeOperationRecords && LocalIdentity)
 import { HLM_CHART_THEME, HlmChartImports, hlmChartTooltip } from '@spartan-ng/helm/chart';
-//#else
+//#endif
+//#if (!(IncludeOperationRecords && LocalIdentity))
 import { HlmChartImports } from '@spartan-ng/helm/chart';
 //#endif
 import { HlmDatePickerTrigger, HlmDateRangePicker } from '@spartan-ng/helm/date-picker';
@@ -50,7 +49,11 @@ import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 //#if (IncludeOperationRecords && LocalIdentity)
 import { areaY, defineChart, lineY } from '@tanstack/charts';
+//#endif
+//#if (IncludeOperationRecords && LocalIdentity)
 import { scaleLinear } from '@tanstack/charts/scales/linear';
+//#endif
+//#if (IncludeOperationRecords && LocalIdentity)
 import { scalePoint } from '@tanstack/charts/scales/point';
 //#endif
 import { Subject, catchError, interval, of, switchMap } from 'rxjs';
@@ -114,7 +117,11 @@ import { OperationRecordService } from '../../services/operation-record-service'
 import { PlatformStatisticsService } from '../../services/platform-statistics-service';
 //#if (IncludeOperationRecords)
 import { OperationRecordDetail } from '../operation-records/widgets/operation-record-detail/operation-record-detail';
+//#endif
+//#if (IncludeOperationRecords)
 import { operationRecordActor } from '../operation-records/widgets/operation-record-detail/operation-record-texts';
+//#endif
+//#if (IncludeOperationRecords)
 import { injectOperationActionSentence } from '../operation-records/widgets/operation-record-table/operation-action-sentence';
 //#endif
 
@@ -243,7 +250,7 @@ const AVATAR_CLASSES = [
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Dashboard {
-  private readonly layoutService = inject(LayoutService);
+  readonly layoutService = inject(LayoutService);
   private readonly authService = inject(AuthService);
   private readonly authorization = inject(AuthorizationService);
   private readonly statisticsService = inject(PlatformStatisticsService);

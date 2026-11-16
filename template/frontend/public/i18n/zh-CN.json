@@ -1,4 +1,15 @@
 {
+  //#if (TenantWorkspace)
+  "tenantWorkspace": {
+    "backToConsole": "回到平台控制台",
+    "title": "工作区",
+    "console": "平台控制台",
+    "search": "搜索工作区",
+    "switch": "切换工作区",
+    "emptyTitle": "你在 {{name}} 还没有可用的功能",
+    "emptyDescription": "请联系该工作区管理员分配本系统角色。"
+  },
+  //#endif
   "common": {
     "unsavedChanges": "放弃尚未保存的修改？",
     "discardChanges": "放弃修改",

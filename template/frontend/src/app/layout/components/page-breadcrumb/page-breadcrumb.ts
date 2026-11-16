@@ -46,6 +46,10 @@ export class PageBreadcrumb {
   protected readonly parent = computed(() => this.layoutService.trail().at(-1));
   /** 收进省略号下拉的更远上级。 */
   protected readonly collapsed = computed(() => this.layoutService.trail().slice(0, -1));
+  scopeLink(link: string | readonly string[]): string | readonly string[] {
+    if (typeof link === 'string') return this.layoutService.scopePath(link);
+    return link.length ? [this.layoutService.scopePath(link[0]), ...link.slice(1)] : link;
+  }
 }
 //#if (!IncludeLocalization)
 

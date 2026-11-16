@@ -14,11 +14,18 @@ import { Subject } from 'rxjs';
 import { DefaultSidebar } from './default-sidebar';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
+//#endif
+//#if (IncludeLocalization)
 import { lineCount, pseudoCatalog } from '../../../core/i18n/pseudo-locale.testing';
+//#endif
+//#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
 import { LayoutService } from '../../../core/services/layout-service';
+//#if (TenantWorkspace && IncludeLocalization)
+import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
+//#endif
 import {
   PERMISSIONS,
   PLATFORM_ENTRY_PERMISSIONS,
@@ -326,3 +333,49 @@ describe('DefaultSidebar touch targets', () => {
     expect(search.getAttribute('aria-label')).toBe(searchLabel);
   });
 });
+//#if (TenantWorkspace && IncludeLocalization)
+
+describe('DefaultSidebar workspace switcher', () => {
+  it('keeps workspace destinations before the complete area sequence', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        ...provideTranslocoTesting(),
+        {
+          provide: AuthorizationService,
+          useValue: { hasAny: () => true, canAccessPlatform: () => true },
+        },
+      ],
+    });
+    TestBed.inject(TranslocoService).setTranslation(enTexts, 'en');
+    const workspace = TestBed.inject(WorkspaceContextService);
+    workspace.workspaces.set([
+      { userId: 'member-acme', tenantId: 'acme-id', name: 'acme' },
+      { userId: 'member-globex', tenantId: 'globex-id', name: 'globex' },
+    ]);
+    workspace.current.set('acme');
+    const fixture = TestBed.createComponent(SidebarHost);
+    TestBed.inject(HlmSidebarService).setOpen(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    (
+      fixture.nativeElement.querySelector('[data-testid="area-switcher"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const options = [
+      ...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'),
+    ].map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
+    expect(options).toEqual([
+      'Platform console',
+      'A acme',
+      'G globex',
+      'Workspace',
+      'Admin platform',
+    ]);
+    fixture.destroy();
+  });
+});
+//#endif

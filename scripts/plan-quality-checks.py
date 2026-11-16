@@ -305,7 +305,7 @@ def quality_job_names(plan: dict) -> set[str]:
     names = {'计算候选验证责任', '文档与 Skill 同步闸门', '文档与 Skill 同步闸门（Windows）',
              '前端依赖闸门', '打包候选 Framework', '框架单元测试', 'NuGet 包内容与隔离消费',
              '模板 PostgreSQL 端到端', '模板 OIDC 跨服务端到端', '模板全场景矩阵'}
-    names.update('模板有效形态生成 · ' + shard for shard in ('0', '1', '2', 'control'))
+    names.update('模板有效形态生成 · ' + shard for shard in coverage.generation_shard_names())
     names.update('模板场景 · ' + group['title'] for group in plan['Slices'])
     return {'quality / ' + name for name in names}
 

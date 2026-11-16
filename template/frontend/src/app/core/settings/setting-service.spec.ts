@@ -4,6 +4,9 @@ import { TestBed } from '@angular/core/testing';
 
 import { SettingService } from './setting-service';
 import { SettingOutputDto } from './setting.dto';
+//#if (TenantWorkspace)
+import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
+//#endif
 
 /** 路由契约：用户偏好与系统默认值走两个端点，打错端点会被 403 或越权改全局默认值。 */
 describe('SettingService', () => {
@@ -27,12 +30,24 @@ describe('SettingService', () => {
     expect(req.request.method).toBe('GET');
     req.flush([]);
   });
+  //#if (TenantWorkspace)
+
+  it('reads personal settings in the explicit home context', () => {
+    service.getForCurrentUser().subscribe();
+    const request = http.expectOne({ method: 'GET', url: '/api/v1/settings' });
+    expect(request.request.context.get(WORKSPACE_SCOPE)).toBe(null);
+    request.flush([]);
+  });
+  //#endif
 
   it('writes a personal preference to current-user', () => {
     service.setForCurrentUser({ name: 'Display.TimeZone', value: 'UTC' }).subscribe();
 
     const req = http.expectOne({ method: 'PUT', url: '/api/v1/settings/current-user' });
     expect(req.request.body).toEqual({ name: 'Display.TimeZone', value: 'UTC' });
+    //#if (TenantWorkspace)
+    expect(req.request.context.get(WORKSPACE_SCOPE)).toBe(null);
+    //#endif
     req.flush(null);
   });
 

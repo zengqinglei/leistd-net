@@ -65,7 +65,16 @@ internal static class RemoteTokenAuthenticationExtensions
 
         // 下游 Token Exchange 取经过验证的请求令牌：会话取服务端票据里的，Bearer 取验证后的
 #if (ResourceBrowserSession)
+#if (TenantWorkspace)
+        // 本人目录回源直接取 Smart 票据，避免在工作区列表的 Token Exchange 取令牌时重入 Workspace。
+        const string requestTokenScheme = "RequestAccessToken";
+        builder.Services.AddAuthentication().AddPolicyScheme(requestTokenScheme, null, options =>
+            options.ForwardDefaultSelector = context => WorkspaceAuthenticationHandler.IsHomeRequest(context.Request.Path)
+                ? AuthenticationSchemeNames.Smart : AuthenticationSchemeNames.Workspace);
+        builder.Services.AddAuthenticatedUserAccessTokenAccessor(requestTokenScheme);
+#else
         builder.Services.AddAuthenticatedUserAccessTokenAccessor(AuthenticationSchemeNames.Smart);
+#endif
 #else
         builder.Services.AddUserAccessTokenAccessor(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
 #endif

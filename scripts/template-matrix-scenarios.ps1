@@ -97,6 +97,42 @@ $scenarioMap = [ordered]@{
             "Webhook", "webhook"
         )
     }
+    "standalone-workspace-minimal" = @{
+        Slices = @{ full = "full-03" }
+        Arguments = @("--service-role", "Standalone", "--tenant-staff-access", "Workspace", "--include-email", "false", "--include-operation-records", "false")
+        Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/DependencyInjection.cs")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation")
+    }
+    "standalone-workspace" = @{
+        Slices = @{ full = "full-03" }
+        Arguments = @("--service-role", "Standalone", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login")
+        Frontend = $true; Lint = $true
+        Present = @("frontend/src/app/layout/components/default-sidebar/default-sidebar.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation", "canImpersonate", "onImpersonate")
+    }
+    "identity-workspace" = @{
+        Slices = @{ full = "full-02" }
+        Arguments = @("--service-role", "Identity", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login", "--include-webhooks", "--include-distributed-events")
+        Frontend = $true; Lint = $true
+        Present = @("frontend/src/app/layout/components/default-sidebar/default-sidebar.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation", "canImpersonate", "onImpersonate")
+    }
+    "resource-workspace" = @{
+        Slices = @{ full = "full-04" }
+        Arguments = @("--service-role", "Resource", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login", "--include-webhooks", "--include-distributed-events")
+        Frontend = $true; Lint = $true
+        Present = @("frontend/src/app/layout/components/default-sidebar/default-sidebar.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        ForbiddenTokens = @("ImpersonationService", "App.Tenants.Impersonation", "canImpersonate", "onImpersonate")
+    }
     "identity-notifications" = @{
         Slices = @{ full = "full-02" }
         # 带 Webhook：通知与 Webhook 同开的条件行由这里生成（场景覆盖闸门 full 档）
@@ -378,6 +414,7 @@ $scenarioMap = [ordered]@{
 # 全量清单显式排序：定义用哈希表（无序），执行顺序要稳定才便于比对历史日志
 $AllScenarios = @(
     "identity", "resource", "standalone",
+    "standalone-workspace", "identity-workspace", "resource-workspace", "standalone-workspace-minimal",
     "identity-notifications", "resource-notifications",
     "identity-external-login", "standalone-external-login",
     "identity-localization", "resource-localization",

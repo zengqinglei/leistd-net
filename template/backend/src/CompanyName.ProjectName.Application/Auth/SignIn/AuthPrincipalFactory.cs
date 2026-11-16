@@ -1,50 +1,114 @@
 #if (LocalIdentity)
-using System.Collections.Immutable;
 using System.Security.Claims;
-using CompanyName.ProjectName.Application.Auth.OAuth;
-using CompanyName.ProjectName.Domain.Auth.Entities;
-using CompanyName.ProjectName.Application.Auth.Policies;
-using CompanyName.ProjectName.Application.Auth.Options;
-using CompanyName.ProjectName.Application.Settings.Preferences;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Application.Shared;
+using CompanyName.ProjectName.Domain.Tenants.Entities;
+#endif
 using CompanyName.ProjectName.Domain.Users.Repositories;
-using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Claims;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
+using Leistd.MultiTenancy.Context;
+using Microsoft.Extensions.Options;
 #if (IncludeMultiTenancy)
 using Leistd.MultiTenancy.Stores;
 #endif
-using Leistd.MultiTenancy.Context;
-using Microsoft.Extensions.Options;
+#if (OpenIddictServer)
+using System.Collections.Immutable;
+using CompanyName.ProjectName.Application.Auth.OAuth;
+using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Application.Auth.Options;
+using CompanyName.ProjectName.Application.Settings.Preferences;
+using CompanyName.ProjectName.Domain.Users.Policies;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 using System.Globalization;
+using static OpenIddict.Abstractions.OpenIddictConstants;
+#endif
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
 
 public class AuthPrincipalFactory(
     IUserRepository userRepository,
+#if (OpenIddictServer)
     IRepository<UserSession, Guid> userSessionRepository,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
+#endif
     IClock clock,
+#if (OpenIddictServer)
     IOptions<OAuthResourceOptions> oauthOptions,
+#endif
     IOptions<ClaimTypeOptions> claimTypes,
     ICurrentTenant currentTenant,
 #if (IncludeMultiTenancy)
     ITenantStore tenantStore,
 #endif
-    IUnitOfWorkManager unitOfWorkManager,
-    IAccountPreferenceStore preferenceStore) : IAuthPrincipalFactory
+    IUnitOfWorkManager unitOfWorkManager
+#if (OpenIddictServer)
+    , IAccountPreferenceStore preferenceStore
+#endif
+#if (TenantWorkspace)
+    , IRepository<UserTenantAccess, Guid> accessRepository
+#endif
+    ) : IAuthPrincipalFactory
 {
+#if (TenantWorkspace)
+    /// <inheritdoc />
+    public async Task<ClaimsPrincipal?> CreateWorkspaceAsync(ClaimsPrincipal homePrincipal, Guid tenantId,
+        IEnumerable<string>? scopes = null, CancellationToken cancellationToken = default)
+    {
+        if (claimTypes.Value.ReadTenant(homePrincipal).TenantId is not null ||
+            !Guid.TryParse(claimTypes.Value.FindUserId(homePrincipal), out var homeUserId)) return null;
+        var tenant = await tenantStore.FindAsync(tenantId, cancellationToken);
+        if (tenant is not { IsActive: true } || !await accessRepository.AnyAsync(
+                access => access.HomeUserId == homeUserId && access.TenantId == tenantId, cancellationToken)) return null;
+
+        using (currentTenant.Change(null))
+        using (unitOfWorkManager.Begin(requiresNew: true))
+        {
+            var home = await userRepository.GetByIdAsync(homeUserId, cancellationToken);
+            if (home is null || home.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed) return null;
+        }
+        using (currentTenant.Change(tenant.Id, tenant.Name))
+        using (unitOfWorkManager.Begin(requiresNew: true))
+        {
+            var member = await userRepository.GetOneAsync(user => user.HomeUserId == homeUserId, cancellationToken);
+            if (member is null) return null;
+            var principal = await CreateAsync(member.Id, scopes, cancellationToken);
+            if (principal is null) return null;
+            var identity = (ClaimsIdentity)principal.Identity!;
+            identity.AddClaim(new Claim(WorkspaceClaimTypes.HomeUserId, homeUserId.ToString()));
+            foreach (var claim in homePrincipal.Claims.Where(c => c.Type is "auth_time" or "amr"))
+                identity.AddClaim(claim.Clone());
+#if (OpenIddictServer)
+            principal.SetDestinations(GetDestinations);
+#endif
+            return principal;
+        }
+    }
+#endif
+
+#if (OpenIddictServer)
     /// <inheritdoc />
     public async Task<ClaimsPrincipal?> CreateFromTokenAsync(
         ClaimsPrincipal tokenPrincipal,
         IEnumerable<string>? scopes = null,
         CancellationToken cancellationToken = default)
     {
+#if (TenantWorkspace)
+        if (tokenPrincipal.GetClaim(WorkspaceClaimTypes.HomeUserId) is { } homeSubject)
+        {
+            var tenantClaim = claimTypes.Value.ReadTenant(tokenPrincipal);
+            if (!tenantClaim.IsValid || tenantClaim.TenantId is not { } workspaceTenantId) return null;
+            var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType);
+            SubjectClaims.Set(identity, claimTypes.Value, homeSubject);
+            var home = new ClaimsPrincipal(identity);
+            return await CreateWorkspaceAsync(home, workspaceTenantId, scopes, cancellationToken);
+        }
+#endif
         if (!Guid.TryParse(claimTypes.Value.FindUserId(tokenPrincipal), out var userId) ||
             await ResolveTokenTenantAsync(tokenPrincipal, cancellationToken) is not { } tenant)
             return null;
@@ -251,6 +315,9 @@ public class AuthPrincipalFactory(
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
+#if (TenantWorkspace)
+            WorkspaceClaimTypes.HomeUserId => [Destinations.AccessToken],
+#endif
             CustomClaimTypes.IsSuperAdmin =>
             [
                 Destinations.AccessToken
@@ -262,5 +329,22 @@ public class AuthPrincipalFactory(
             _ => []
         };
     }
+#else
+    public async Task<ClaimsPrincipal?> CreateAsync(Guid userId, IEnumerable<string>? scopes = null, CancellationToken cancellationToken = default)
+    {
+        var user = await userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed) return null;
+        var identity = new ClaimsIdentity(AuthenticationSchemeNames.Workspace, "name", "role");
+        foreach (var type in claimTypes.Value.UserIds.Append("sub").Distinct()) identity.AddClaim(new Claim(type, user.Id.ToString()));
+        identity.AddClaim(new Claim("name", user.DisplayName ?? user.Username));
+        identity.AddClaim(new Claim("preferred_username", user.Username));
+        identity.AddClaim(new Claim("email", user.Email));
+        identity.AddClaim(new Claim("email_verified", user.EmailConfirmed ? "true" : "false"));
+        if (user.TenantId is { } tenantId) identity.AddClaim(new Claim(claimTypes.Value.TenantId, tenantId.ToString()));
+        foreach (var role in await userRepository.GetRoleNamesAsync(user.Id, cancellationToken)) identity.AddClaim(new Claim("role", role));
+        return new ClaimsPrincipal(identity);
+    }
+#endif
+
 }
 #endif

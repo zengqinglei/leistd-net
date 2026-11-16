@@ -332,6 +332,8 @@ def check_template_package_responsibilities():
 
 
 def check_quality_aggregation():
+    spec = importlib.util.spec_from_file_location('shape_model', ROOT / 'scripts/check-template-scenario-coverage.py')
+    model = importlib.util.module_from_spec(spec); spec.loader.exec_module(model)
     workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))
     jobs = workflow['jobs']
     required = ['quality-plan', 'docs-sync', 'docs-sync-windows', 'frontend-gates', 'dependency-audit', 'framework-pack', 'test',
@@ -390,10 +392,11 @@ def check_quality_aggregation():
     for job, artifact in [('postgresql-e2e', 'postgresql-e2e-proof'), ('oidc-e2e', 'oidc-e2e-proof')]:
         upload = next(s for s in jobs[job]['steps'] if s.get('with', {}).get('name') == artifact)
         assert 'if' not in upload and upload['with']['if-no-files-found'] == 'error', upload
-    # Generation runs as three modulo shards plus the control shard; each shard uploads its own proofs and
+    # Generation runs as model-defined modulo shards plus the control shard; each uploads its own proofs and
     # the summary downloads them by pattern into separate directories (same file names must not merge).
     generation = jobs['template-generation']
-    assert generation['strategy']['matrix']['shard'] == ['0', '1', '2', 'control'] and not generation['strategy']['fail-fast']
+    assert generation['strategy']['matrix']['shard'] == model.generation_shard_names() and not generation['strategy']['fail-fast']
+    assert generation['timeout-minutes'] == 30
     assert "--shard '${{ matrix.shard }}'" in next(s for s in generation['steps'] if 'test-template-generation.py' in s.get('run', ''))['run']
     for artifact in ('template-generation-proof', 'generated-documentation-proof'):
         upload = next(s for s in generation['steps'] if s.get('with', {}).get('name', '').startswith(artifact))

@@ -130,9 +130,22 @@
                                 }}</span>
                               </hlm-avatar>
                               <div class="min-w-0 flex flex-col">
-                                <span class="text-foreground text-sm font-medium truncate">
-                                  {{ row.original.displayName || row.original.username }}
-                                </span>
+                                <!--#if (TenantWorkspace)-->
+                                <div class="flex min-w-0 items-center gap-1.5">
+                                  <span class="text-foreground text-sm font-medium truncate">{{
+                                    row.original.displayName || row.original.username
+                                  }}</span>
+                                  @if (row.original.homeUserId) {
+                                    <span hlmBadge variant="secondary" class="shrink-0">{{
+                                      t('users.platformBadge')
+                                    }}</span>
+                                  }
+                                </div>
+                                <!--#else-->
+                                <span class="text-foreground text-sm font-medium truncate">{{
+                                  row.original.displayName || row.original.username
+                                }}</span>
+                                <!--#endif-->
                                 <span class="text-xs text-muted-foreground truncate">{{
                                   row.original.username
                                 }}</span>
@@ -141,10 +154,10 @@
                           }
                           @case ('actions') {
                             <!-- 操作列（7 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。
-                               规则见 docs/standards/frontend-lists.md §2。 -->
+                             规则见 docs/standards/frontend-lists.md §2。 -->
                             <div class="flex items-center justify-end gap-0.5">
                               <!-- 内置超管行（他人查看）：行内按钮置灰。禁用按钮收不到悬停与焦点，
-                                 原因提示挂在外层（Spartan 官方做法），外层此时可聚焦供键盘查看；读屏经 aria-describedby 读到。 -->
+                               原因提示挂在外层（Spartan 官方做法），外层此时可聚焦供键盘查看；读屏经 aria-describedby 读到。 -->
                               @if (isOtherSuperAdmin(row.original)) {
                                 <span
                                   [id]="'user-super-admin-inline-' + row.original.id"
@@ -154,7 +167,7 @@
                                 >
                               }
                               <!--#if (LocalIdentity)-->
-                              @if (canUpdate()) {
+                              @if (canUpdate() && !isPlatformAccount(row.original)) {
                                 <span
                                   class="hidden sm:inline-flex"
                                   [hlmTooltip]="t('users.tooltip.superAdminNoManage')"
@@ -240,7 +253,7 @@
                                   }
                                   <hlm-dropdown-menu-group>
                                     <!--#if (LocalIdentity)-->
-                                    @if (canUpdate()) {
+                                    @if (canUpdate() && !isPlatformAccount(row.original)) {
                                       <button
                                         hlmDropdownMenuItem
                                         class="sm:hidden"
@@ -267,7 +280,7 @@
                                     }
                                     <!--#if (LocalIdentity)-->
                                     <!-- 重置密码走 Users.Update 策略，与编辑同权限裁剪，避免制造必然 403 的入口。 -->
-                                    @if (canUpdate()) {
+                                    @if (canUpdate() && !isPlatformAccount(row.original)) {
                                       <button
                                         hlmDropdownMenuItem
                                         [disabled]="isOtherSuperAdmin(row.original)"
@@ -278,7 +291,11 @@
                                         {{ t('users.tooltip.resetPassword') }}
                                       </button>
                                     }
-                                    @if (canUpdate() && row.original.isLockedOut) {
+                                    @if (
+                                      canUpdate() &&
+                                      !isPlatformAccount(row.original) &&
+                                      row.original.isLockedOut
+                                    ) {
                                       <button
                                         hlmDropdownMenuItem
                                         data-testid="user-unlock"
@@ -289,7 +306,11 @@
                                         {{ t('users.tooltip.unlock') }}
                                       </button>
                                     }
-                                    @if (canUpdate() && row.original.isTwoFactorEnabled) {
+                                    @if (
+                                      canUpdate() &&
+                                      !isPlatformAccount(row.original) &&
+                                      row.original.isTwoFactorEnabled
+                                    ) {
                                       <!-- 本人行：会绕过个人设置里停用要的口令与验证码和组织的强制策略，服务端同样拒绝；置灰并就地说明 -->
                                       <button
                                         hlmDropdownMenuItem
@@ -363,7 +384,7 @@
                                       }
                                     }
                                   </hlm-dropdown-menu-group>
-                                  @if (canDelete()) {
+                                  @if (canDelete() && !isPlatformAccount(row.original)) {
                                     <hlm-dropdown-menu-separator />
                                     <button
                                       hlmDropdownMenuItem
@@ -392,6 +413,13 @@
                                       </p>
                                     }
                                   }
+                                  <!--#if (TenantWorkspace)-->
+                                  @if (row.original.homeUserId) {
+                                    <p class="px-1.5 pb-1 text-xs text-muted-foreground">
+                                      {{ t('users.platformReason') }}
+                                    </p>
+                                  }
+                                  <!--#endif-->
                                 </hlm-dropdown-menu>
                               </ng-template>
                             </div>
@@ -442,9 +470,18 @@
                           @if (foldLevel() === 'mobile') {
                             <dt class="text-muted-foreground">{{ t('users.table.colUser') }}</dt>
                             <dd class="min-w-0" data-testid="user-detail-identity">
-                              <span class="block font-medium wrap-anywhere">{{
-                                row.original.displayName || row.original.username
-                              }}</span>
+                              <div class="flex min-w-0 items-center gap-1.5">
+                                <span class="font-medium wrap-anywhere">{{
+                                  row.original.displayName || row.original.username
+                                }}</span>
+                                <!--#if (TenantWorkspace)-->
+                                @if (row.original.homeUserId) {
+                                  <span hlmBadge variant="secondary" class="shrink-0">{{
+                                    t('users.platformBadge')
+                                  }}</span>
+                                }
+                                <!--#endif-->
+                              </div>
                               <span class="text-muted-foreground block text-xs wrap-anywhere">{{
                                 row.original.username
                               }}</span>
@@ -533,7 +570,7 @@
               <span
                 class="text-sm"
                 [class]="mode === 'detail' ? 'block wrap-anywhere' : 'whitespace-nowrap'"
-                >{{ user.email }}</span
+                >{{ user.email || '-' }}</span
               >
             }
             @case ('roles') {
@@ -634,7 +671,7 @@
             }
             <!--#if (LocalIdentity)-->
             @case ('lastLoginTime') {
-              @if (!user.lastLoginTime) {
+              @if (!user.lastLoginTime || isPlatformAccount(user)) {
                 <span class="text-xs text-muted-foreground">-</span>
               } @else if (mode === 'detail') {
                 <span class="text-muted-foreground">{{

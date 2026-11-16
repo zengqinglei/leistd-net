@@ -13,7 +13,15 @@
 
   <main class="relative flex-1 overflow-auto motion-safe:scroll-smooth">
     <div class="mx-auto h-full w-full max-w-7xl">
+      <!--#if (TenantWorkspace)-->
+      @if (workspace.current() && authorization.permissions().length === 0) {
+        <app-empty-workspace />
+      } @else {
+        <router-outlet />
+      }
+      <!--#else-->
       <router-outlet />
+      <!--#endif-->
     </div>
   </main>
 

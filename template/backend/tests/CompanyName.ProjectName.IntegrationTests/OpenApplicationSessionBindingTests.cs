@@ -6,6 +6,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Application.Roles.Dtos;
+#endif
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Application.Auth.Options;
@@ -29,6 +32,109 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
     private const string Callback = "https://localhost/session-bound";
     private const string Password = "SessionBound!Passw0rd";
     private static readonly string Verifier = new('v', 64);
+
+#if (TenantWorkspace)
+    [Theory]
+    [InlineData(true, 90)]
+    [InlineData(false, 90)]
+    [InlineData(true, 600)]
+    public async Task Workspace_exchange_keeps_a_downstream_hop_and_uses_the_existing_session_binding_boundary(bool bound, int inputLifetimeSeconds)
+    {
+        const string secret = "WorkspaceClient!Passw0rd";
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var username = await CreateUserAsync();
+        using var mine = await factory.LoginAsync(username, Password);
+        using var other = await factory.LoginAsync(username, Password);
+        var resource = factory.Services.GetRequiredService<IOptions<OAuthResourceOptions>>().Value.Resource;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            var descriptor = new OpenIddictApplicationDescriptor
+            {
+                ClientId = resource, ClientSecret = secret, ClientType = ClientTypes.Confidential,
+                ConsentType = ConsentTypes.Implicit, ApplicationType = ApplicationTypes.Web
+            };
+            descriptor.RedirectUris.Add(new Uri(Callback));
+            foreach (var permission in new[] { Permissions.Endpoints.Authorization, Permissions.Endpoints.Token,
+                Permissions.GrantTypes.AuthorizationCode, Permissions.GrantTypes.RefreshToken, Permissions.GrantTypes.ClientCredentials,
+                Permissions.Prefixes.GrantType + GrantTypes.TokenExchange, Permissions.ResponseTypes.Code,
+                Permissions.Prefixes.Scope + Scopes.OpenId, Permissions.Prefixes.Scope + Scopes.OfflineAccess,
+                Permissions.Prefixes.Scope + resource, Permissions.Prefixes.Scope + Scopes.Profile,
+                Permissions.Prefixes.Scope + "tenant-routing.read",
+                Permissions.Prefixes.Audience + resource, Permissions.Prefixes.Audience + "another-api" }) descriptor.Permissions.Add(permission);
+            descriptor.Settings[OpenApplicationSettings.SessionBound] = bound ? "true" : "false";
+            descriptor.Settings[Settings.TokenLifetimes.AccessToken] = TimeSpan.FromSeconds(inputLifetimeSeconds).ToString();
+            var existing = await manager.FindByClientIdAsync(resource);
+            if (existing is null) await manager.CreateAsync(descriptor);
+            else await manager.UpdateAsync(existing, descriptor);
+        }
+        var tenantName = "exchange-" + Guid.NewGuid().ToString("N")[..8];
+        var created = await admin.Client.PostAsJsonAsync("/api/v1/tenants", new
+        { Name = tenantName, AdminEmail = "admin@example.com", AdminPassword = "Tenant@123456" });
+        created.EnsureSuccessStatusCode();
+        using var tenantJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var tenantId = tenantJson.RootElement.GetProperty("id").GetGuid();
+        using var me = JsonDocument.Parse(await mine.Client.GetStringAsync("/api/v1/auth/me"));
+        var homeId = me.RootElement.GetProperty("id").GetGuid();
+        var roles = (await admin.Client.GetFromJsonAsync<List<RoleBriefOutputDto>>(
+            $"/api/v1/tenants/{tenantId}/staff/roles"))!;
+        (await admin.Client.PostAsJsonAsync($"/api/v1/tenants/{tenantId}/staff", new
+        { HomeUserId = homeId, RoleIds = new[] { roles.Single(role => role.Name == "Admin").Id } })).EnsureSuccessStatusCode();
+        var tokens = await AuthorizeAsync(resource, other.Cookie, secret);
+        Assert.Null(Claim(tokens.AccessToken, "sid"));
+        Dictionary<string, string> Exchange(string token, string? workspace) => new()
+        {
+            ["grant_type"] = GrantTypes.TokenExchange, ["client_id"] = resource, ["client_secret"] = secret,
+            ["subject_token"] = token, ["subject_token_type"] = TokenTypeIdentifiers.AccessToken,
+            ["requested_token_type"] = TokenTypeIdentifiers.AccessToken, ["audience"] = resource,
+            ["scope"] = resource, ["workspace"] = workspace ?? ""
+        };
+        var entered = await TokenAsync(Exchange(tokens.AccessToken, tenantName));
+        Assert.True(entered.Status == HttpStatusCode.OK, $"Workspace exchange failed: {entered.Error}: {entered.Description}");
+        Assert.Equal(homeId.ToString(), Claim(entered.AccessToken!, "home_sub"));
+        Assert.Equal(tenantId.ToString(), Claim(entered.AccessToken!, "tenant_id"));
+        Assert.Null(Claim(entered.AccessToken!, "act"));
+        Assert.Null(entered.RefreshToken);
+        Assert.Null(Claim(entered.AccessToken!, "sid"));
+        var workspaceExpiry = long.Parse(Claim(entered.AccessToken!, "exp")!, System.Globalization.CultureInfo.InvariantCulture);
+        var workspaceIssued = long.Parse(Claim(entered.AccessToken!, "iat")!, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(workspaceExpiry - workspaceIssued, 1, 300);
+        Assert.True(workspaceExpiry <= long.Parse(Claim(tokens.AccessToken, "exp")!, System.Globalization.CultureInfo.InvariantCulture));
+        var downstream = await TokenAsync(Exchange(entered.AccessToken!, null));
+        Assert.Equal(HttpStatusCode.OK, downstream.Status);
+        Assert.NotNull(Claim(downstream.AccessToken!, "act"));
+        var nestedWorkspace = await TokenAsync(Exchange(entered.AccessToken!, tenantName));
+        Assert.Equal(Errors.InvalidTarget, nestedWorkspace.Error);
+        var actedWorkspace = await TokenAsync(Exchange(downstream.AccessToken!, tenantName));
+        Assert.Equal(Errors.InvalidTarget, actedWorkspace.Error);
+        var widenedAudience = Exchange(tokens.AccessToken, tenantName);
+        widenedAudience["audience"] = "another-api";
+        Assert.Equal(Errors.InvalidTarget, (await TokenAsync(widenedAudience)).Error);
+        var widenedScope = Exchange(tokens.AccessToken, tenantName);
+        widenedScope["scope"] = Scopes.Profile;
+        Assert.Equal(Errors.InvalidTarget, (await TokenAsync(widenedScope)).Error);
+        var rejected = await TokenAsync(Exchange(tokens.AccessToken, "missing-workspace"));
+        Assert.Equal(Errors.InvalidTarget, rejected.Error);
+        (await other.Client.PostAsync("/api/v1/auth/logout", null)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.OK, (await TokenAsync(Exchange(tokens.AccessToken, tenantName))).Status);
+        var refreshed = await TokenAsync(new() { ["grant_type"] = GrantTypes.RefreshToken,
+            ["client_id"] = resource, ["client_secret"] = secret, ["refresh_token"] = tokens.RefreshToken });
+        Assert.Equal(bound ? HttpStatusCode.BadRequest : HttpStatusCode.OK, refreshed.Status);
+        var machineToken = await TokenAsync(new() { ["grant_type"] = GrantTypes.ClientCredentials,
+            ["client_id"] = resource, ["client_secret"] = secret, ["scope"] = "tenant-routing.read" });
+        Assert.Equal(HttpStatusCode.OK, machineToken.Status);
+        using var machine = Browser();
+        machine.DefaultRequestHeaders.Authorization = new("Bearer", machineToken.AccessToken);
+        foreach (var lookupName in new[] { tenantName, tenantName.ToUpperInvariant() })
+        {
+            using var lookup = await machine.GetAsync($"/api/v1/workspace-tenants/by-name/{lookupName}");
+            lookup.EnsureSuccessStatusCode();
+            using var tenantBody = JsonDocument.Parse(await lookup.Content.ReadAsStringAsync());
+            Assert.Equal(tenantId, tenantBody.RootElement.GetProperty("id").GetGuid());
+        }
+        (await mine.Client.GetAsync("/api/v1/auth/me")).EnsureSuccessStatusCode();
+    }
+#endif
 
     public enum SessionEnd { SignOut, Revoke, Idle }
 
@@ -271,7 +377,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         return client;
     }
 
-    private async Task<(string AccessToken, string IdentityToken, string RefreshToken)> AuthorizeAsync(string clientId, string cookie)
+    private async Task<(string AccessToken, string IdentityToken, string RefreshToken)> AuthorizeAsync(string clientId, string cookie, string? clientSecret = null)
     {
         using var browser = Browser(cookie);
         var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(Verifier)));
@@ -286,6 +392,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         var result = await TokenAsync(new Dictionary<string, string>
         {
             ["grant_type"] = GrantTypes.AuthorizationCode, ["client_id"] = clientId,
+            ["client_secret"] = clientSecret ?? "",
             ["code"] = Uri.UnescapeDataString(code), ["redirect_uri"] = Callback, ["code_verifier"] = Verifier
         });
         Assert.Equal(HttpStatusCode.OK, result.Status);
@@ -303,13 +410,13 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         using var response = await client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         string? Read(string name) => body.RootElement.TryGetProperty(name, out var value) ? value.GetString() : null;
-        return new TokenResult(response.StatusCode, Read("access_token"), Read("id_token"), Read("refresh_token"), Read("error"));
+        return new TokenResult(response.StatusCode, Read("access_token"), Read("id_token"), Read("refresh_token"), Read("error"), Read("error_description"));
     }
 
     private static string? Claim(string jwt, string name)
     {
         using var payload = JsonDocument.Parse(Base64Url.DecodeFromChars(jwt.Split('.')[1]));
-        return payload.RootElement.TryGetProperty(name, out var value) ? value.GetString() : null;
+        return payload.RootElement.TryGetProperty(name, out var value) ? (value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText()) : null;
     }
 
     private async Task<string> CreateUserAsync()
@@ -357,6 +464,6 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         return (await db.Set<UserSession>().IgnoreQueryFilters().SingleAsync(session => session.Id == sessionId)).LastSeenTime;
     }
 
-    private sealed record TokenResult(HttpStatusCode Status, string? AccessToken, string? IdentityToken, string? RefreshToken, string? Error);
+    private sealed record TokenResult(HttpStatusCode Status, string? AccessToken, string? IdentityToken, string? RefreshToken, string? Error, string? Description);
 }
 #endif

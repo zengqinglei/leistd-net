@@ -1,4 +1,15 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#if (LocalIdentity && IncludeMultiTenancy)
+using CompanyName.ProjectName.Application.Tenants.Options;
+using CompanyName.ProjectName.Application.Tenants.Dtos;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Management.Dtos;
+#if (TenantWorkspace)
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.UnitOfWork;
+#endif
+#endif
 #if (LocalIdentity)
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Auth.OAuth;
@@ -43,6 +54,15 @@ public class SystemInitializer(
 #endif
 #if (LocalIdentity)
     IOptions<DefaultAdminOptions> adminOptions,
+#endif
+#if (LocalIdentity && IncludeMultiTenancy)
+    IOptions<DefaultTenantOptions> defaultTenantOptions,
+    ITenantManagementService tenantManagement,
+#if (TenantWorkspace)
+    ITenantStaffAppService tenantStaff,
+    IRepository<Role, Guid> roleRepository,
+    IUnitOfWorkManager unitOfWorkManager,
+#endif
 #endif
     IDistributedLock distributedLock,
     ILogger<SystemInitializer> logger) : ISystemInitializer
@@ -92,6 +112,9 @@ public class SystemInitializer(
 
         var adminUser = await InitializeDefaultAdminAsync(cancellationToken);
         await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
+#if (IncludeMultiTenancy)
+        await InitializeDefaultTenantAsync(adminUser, cancellationToken);
+#endif
 
 #if (OpenIddictServer)
         await InitializeOpenIddictAsync(cancellationToken);
@@ -109,6 +132,36 @@ public class SystemInitializer(
         roleDomainService.EnsureBuiltInRolesAsync("System administrator with all permissions", cancellationToken);
 
 #if (LocalIdentity)
+#if (IncludeMultiTenancy)
+    private async Task InitializeDefaultTenantAsync(User adminUser, CancellationToken cancellationToken)
+    {
+        var options = defaultTenantOptions.Value;
+        if (string.IsNullOrWhiteSpace(options.Name) || (await tenantManagement.GetPagedAsync(
+                new GetTenantPagedInputDto { Limit = 1 }, cancellationToken)).TotalCount > 0) return;
+        var tenant = await tenantManagement.CreateAsync(
+#if (TenantWorkspace)
+            new CreateTenantInputDto
+#else
+            new CreateTenantWithAdminInputDto
+#endif
+        {
+            Name = options.Name, DisplayName = options.DisplayName,
+#if (!TenantWorkspace)
+            AdminEmail = adminOptions.Value.Email,
+            AdminPassword = adminOptions.Value.Password ?? throw new InvalidOperationException("DefaultAdmin:Password is required to seed the default tenant administrator.")
+#endif
+        }, cancellationToken);
+#if (TenantWorkspace)
+        Guid roleId;
+        using (currentTenant.Change(tenant.Id, tenant.Name))
+        using (unitOfWorkManager.Begin(requiresNew: true))
+            roleId = (await roleRepository.GetOneAsync(role => role.IsStatic && role.Name == AdminConstant.RoleName, cancellationToken))!.Id;
+        await tenantStaff.GrantAsync(tenant.Id, new GrantTenantStaffInputDto
+        { HomeUserId = adminUser.Id, RoleIds = [roleId] }, cancellationToken);
+#endif
+    }
+#endif
+
     private async Task<User> InitializeDefaultAdminAsync(CancellationToken cancellationToken)
     {
         var options = adminOptions.Value;

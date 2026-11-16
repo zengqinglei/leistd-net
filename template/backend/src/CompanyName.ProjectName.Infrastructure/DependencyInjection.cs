@@ -1,3 +1,7 @@
+#if (TenantWorkspace && RemoteTokenAuth)
+using CompanyName.ProjectName.Domain.Tenants.Abstractions;
+using CompanyName.ProjectName.Infrastructure.Workspaces;
+#endif
 using Leistd.Authorization.EntityFrameworkCore;
 #if (IncludeOperationRecords)
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -339,7 +343,11 @@ public static class DependencyInjection
             .AddRepository<Role, EfCoreRoleRepository>());
 #if (LocalIdentity && IncludeMultiTenancy)
         // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
+#if (TenantWorkspace)
+        services.AddDddDbContext<IdentityControlDbContext>(options => options.AddDefaultRepositories());
+#else
         services.AddDddDbContext<IdentityControlDbContext>();
+#endif
 #endif
 #if (OpenIddictServer)
         // OpenIddict 自有实体不是 Leistd 实体，只登记。
@@ -391,6 +399,21 @@ public static class DependencyInjection
         }
 
         read.AddStandardResilienceHandler();
+#if (TenantWorkspace)
+        services.TryAddTransient<IIdentityWorkspaceDirectory,
+            IdentityWorkspaceDirectory>();
+        var workspace = services.AddRefitServiceClient<IIdentityWorkspacesApi,
+            IdentityWorkspacesClientOptions>("IdentityWorkspaces", configSectionPath: identitySection);
+        var tenant = services.AddRefitServiceClient<IWorkspaceTenantApi,
+            WorkspaceTenantsClientOptions>("WorkspaceTenants", configSectionPath: identitySection);
+        workspace.AddStandardResilienceHandler();
+        if (HasServiceAuthentication(configuration))
+        {
+            workspace.AddTokenExchange(configSectionPath: $"{identitySection}:TokenExchange");
+            tenant.AddClientCredentials(configSectionPath: identitySection);
+        }
+        tenant.AddStandardResilienceHandler();
+#endif
     }
 #endif
 }

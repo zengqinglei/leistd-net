@@ -10,9 +10,17 @@ $ErrorActionPreference = 'Stop'
 $tier = (Get-Content -LiteralPath $ValidationPlanPath -Raw | ConvertFrom-Json).Tier
 $plan = Read-QualityValidationPlan $ValidationPlanPath $tier
 $files = @(Get-ChildItem -LiteralPath $ResultsPath -Recurse -File -Filter '*.json')
-# 生成与生成文档按片产出：三个形态片加一个对照片，各一份证明；其余责任恰好一份
+# 生成与生成文档按片产出：模型配置的形态片加一个对照片，各一份证明；其余责任恰好一份
 $sharded = $Kind -cin @('generation', 'documentation')
-$shards = @('0', '1', '2', 'control')
+if ($sharded) {
+    $python = Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+    if (-not $python) { throw 'Python is required to read the template generation space.' }
+    $spaceJson = & $python (Join-Path $PSScriptRoot 'check-template-scenario-coverage.py') --generation-space
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to read the template generation space.' }
+    $space = $spaceJson | ConvertFrom-Json
+    $shapeShards = @(0..($space.ShapeShards - 1) | ForEach-Object { [string]$_ })
+    $shards = $shapeShards + @('control')
+}
 if ($files.Count -ne $(if ($sharded) { $shards.Count } else { 1 })) { throw 'Expected exactly one responsibility proof per shard.' }
 $proofs = @($files | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json })
 foreach ($proof in $proofs) {
@@ -45,7 +53,7 @@ if ($Kind -ceq 'package') {
 } elseif ($Kind -ceq 'generation') {
     if (-not $plan.Jobs.'template-generation') { throw 'Template generation proof is incomplete.' }
     $byShard = Get-ShardProofs 'Template generation'
-    # 四片同一候选源码：逐文件摘要彼此相同，且等于本检出的模板源码
+    # 所有分片同一候选源码：逐文件摘要彼此相同，且等于本检出的模板源码
     $sources = @{}
     $templateRoot = Join-Path (git rev-parse --show-toplevel) 'template'
     foreach ($file in @(Get-ChildItem -LiteralPath $templateRoot -Recurse -File -Force)) {
@@ -55,18 +63,18 @@ if ($Kind -ceq 'package') {
     }
     foreach ($item in $byShard.Values) {
         $declared = @($item.TemplateSourceDigests.PSObject.Properties)
-        if ($item.ShapeShards -ne 3 -or $item.EffectiveShapes -ne 1280 -or $declared.Count -ne $sources.Count -or
+        if ($item.ShapeShards -ne $space.ShapeShards -or $item.EffectiveShapes -ne $space.EffectiveShapes -or $declared.Count -ne $sources.Count -or
             @($declared | Where-Object { $sources[$_.Name] -cne $_.Value }).Count -gt 0) {
             throw 'Template generation shards describe different candidate sources.'
         }
     }
-    # 形态片：1280 个形态按序号取模恰好各出现一次，形态互不相同
+    # 形态片：模型中的全部有效形态按序号取模恰好各出现一次，形态互不相同
     $shapes = @{}
-    foreach ($shard in @('0', '1', '2')) {
+    foreach ($shard in $shapeShards) {
         $entries = @($byShard[$shard].Shapes)
         if ($byShard[$shard].Shapes -isnot [array] -or $entries.Count -eq 0) { throw 'Template generation proof is incomplete.' }
         foreach ($entry in $entries) {
-            if (-not (Test-Integer $entry.Index) -or $entry.Index -lt 0 -or $entry.Index -ge 1280 -or ($entry.Index % 3) -ne [int]$shard -or
+            if (-not (Test-Integer $entry.Index) -or $entry.Index -lt 0 -or $entry.Index -ge $space.EffectiveShapes -or ($entry.Index % $space.ShapeShards) -ne [int]$shard -or
                 $shapes.ContainsKey([int]$entry.Index) -or $entry.Effective -isnot [array] -or $entry.Digest -cnotmatch '^[0-9a-f]{64}$' -or
                 $entry.VerifyKey.Script -cnotmatch '^[0-9a-f]{64}$' -or $entry.VerifyKey.Steps -isnot [array]) {
                 throw 'Template generation shapes are missing, duplicated or misassigned.'
@@ -75,8 +83,8 @@ if ($Kind -ceq 'package') {
         }
     }
     $effective = @($shapes.Values | ForEach-Object { ConvertTo-Json -InputObject @($_.Effective) -Compress } | Sort-Object -Unique -CaseSensitive)
-    if ($shapes.Count -ne 1280 -or $effective.Count -ne 1280) { throw 'Template generation shapes are missing, duplicated or misassigned.' }
-    # 对照片：3072 组互不相同的原始输入映射到 1280 个形态；角色等价、Ci 变体与 verify 检查
+    if ($shapes.Count -ne $space.EffectiveShapes -or $effective.Count -ne $space.EffectiveShapes) { throw 'Template generation shapes are missing, duplicated or misassigned.' }
+    # 对照片：模型中的全部原始输入映射到有效形态；角色等价、Ci 变体与 verify 检查
     $control = $byShard['control']
     $mapping = @($control.InputMapping)
     $mappedShapes = @($mapping | ForEach-Object { ConvertTo-Json -InputObject @($_.effective) -Compress } | Sort-Object -Unique -CaseSensitive)
@@ -89,13 +97,13 @@ if ($Kind -ceq 'package') {
     $roles = @($comparisons | ForEach-Object { $_.role } | Sort-Object -Unique -CaseSensitive)
     $verify = @($control.VerifyChecks)
     $checkedKeys = @($verify | ForEach-Object { ConvertTo-Json -InputObject $_.Key -Compress -Depth 4 })
-    if ($control.RawInputs -ne 3072 -or $control.InputMapping -isnot [array] -or $mapping.Count -ne 3072 -or
-        @($mapping | ForEach-Object { ConvertTo-Json -InputObject @($_.input) -Compress } | Sort-Object -Unique -CaseSensitive).Count -ne 3072 -or
-        $mappedShapes.Count -ne 1280 -or
+    if ($control.RawInputs -ne $space.RawInputs -or $control.InputMapping -isnot [array] -or $mapping.Count -ne $space.RawInputs -or
+        @($mapping | ForEach-Object { ConvertTo-Json -InputObject @($_.input) -Compress } | Sort-Object -Unique -CaseSensitive).Count -ne $space.RawInputs -or
+        $mappedShapes.Count -ne $space.EffectiveShapes -or
         $control.EquivalenceComparisons -isnot [array] -or (Compare-Object @('Identity', 'Resource', 'Standalone') $roles -CaseSensitive) -or
         @($comparisons | Where-Object { -not $representatives.ContainsKey([int]$_.representative) -or
             $_.Digest -cne $representatives[[int]$_.representative].Digest }).Count -gt 0 -or
-        $control.CiVariants -isnot [array] -or @($control.CiVariants).Count -ne 4 -or
+        $control.CiVariants -isnot [array] -or @($control.CiVariants).Count -ne $space.CiVariants -or
         @($control.CiVariants | Where-Object { -not $representatives.ContainsKey([int]$_.representative) }).Count -gt 0 -or
         $control.VerifyChecks -isnot [array] -or $verify.Count -eq 0 -or -not (Test-Integer $control.VerifySignatures) -or
         $verify.Count -ne $control.VerifySignatures -or
@@ -113,13 +121,13 @@ if ($Kind -ceq 'package') {
 } else {
     if (-not $plan.GeneratedDocumentation) { throw 'Generated documentation space is incomplete.' }
     $byShard = Get-ShardProofs 'Generated documentation'
-    $indexes = @(foreach ($shard in @('0', '1', '2')) { @($byShard[$shard].ShapeIndexes) })
-    if (@($indexes | Where-Object { -not (Test-Integer $_) -or $_ -lt 0 -or $_ -ge 1280 }).Count -gt 0 -or
-        $indexes.Count -ne 1280 -or @($indexes | Sort-Object -Unique).Count -ne 1280 -or
-        @($byShard['control'].ShapeIndexes).Count -ne 0 -or $byShard['control'].CiVariants -ne 4 -or
-        @($shards | Where-Object { $byShard[$_].EffectiveShapes -ne 1280 -or -not (Test-Integer $byShard[$_].Projects) -or $byShard[$_].Projects -le 0 }).Count -gt 0 -or
-        @('0', '1', '2' | Where-Object { $byShard[$_].CiVariants -ne 0 }).Count -gt 0 -or
-        (($shards | ForEach-Object { $byShard[$_].Projects } | Measure-Object -Sum).Sum -lt 324)) {
+    $indexes = @(foreach ($shard in $shapeShards) { @($byShard[$shard].ShapeIndexes) })
+    if (@($indexes | Where-Object { -not (Test-Integer $_) -or $_ -lt 0 -or $_ -ge $space.EffectiveShapes }).Count -gt 0 -or
+        $indexes.Count -ne $space.EffectiveShapes -or @($indexes | Sort-Object -Unique).Count -ne $space.EffectiveShapes -or
+        @($byShard['control'].ShapeIndexes).Count -ne 0 -or $byShard['control'].CiVariants -ne $space.CiVariants -or
+        @($shards | Where-Object { $byShard[$_].EffectiveShapes -ne $space.EffectiveShapes -or -not (Test-Integer $byShard[$_].Projects) -or $byShard[$_].Projects -le 0 }).Count -gt 0 -or
+        @($shapeShards | Where-Object { $byShard[$_].CiVariants -ne 0 }).Count -gt 0 -or
+        (($shards | ForEach-Object { $byShard[$_].Projects } | Measure-Object -Sum).Sum -lt ($space.EffectiveShapes + $space.CiVariants))) {
         throw 'Generated documentation space is incomplete.'
     }
     foreach ($item in $byShard.Values) {

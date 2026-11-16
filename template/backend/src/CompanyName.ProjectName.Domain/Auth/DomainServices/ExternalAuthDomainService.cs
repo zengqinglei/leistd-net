@@ -178,6 +178,9 @@ public class ExternalAuthDomainService(
         ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default)
     {
+#if (TenantWorkspace)
+        user.EnsureOrdinaryAccount();
+#endif
         var existing = await externalLoginConnectionRepository.GetFirstAsync(
             c => c.Provider == provider && c.ProviderUserId == externalUserInfo.ProviderId,
             q => q.OrderBy(c => c.Id),

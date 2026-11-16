@@ -41,6 +41,7 @@ describe('UserMenu items', () => {
         {
           provide: LayoutService,
           useValue: {
+            scopePath: (route: string) => route,
             isPlatform: signal(options.platform),
             currentUrl: signal(options.platform ? '/platform' : '/workspace/dashboard'),
           },

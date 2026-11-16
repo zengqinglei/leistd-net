@@ -35,6 +35,9 @@ import { StartupService } from '../../../../core/services/startup-service';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../../core/services/workspace-context-service';
+//#endif
 import { renderSubmission } from '../../../../core/validation/form-submission.testing';
 import {
   fakeAssertion,
@@ -133,6 +136,9 @@ describe('Login', () => {
     // 登录成功后会建立会话上下文（拉权限 + 拉设置）来决定落地页；不打桩的话这些真实请求
     // 永远等不到响应，用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
+    //#if (TenantWorkspace)
+    vi.spyOn(TestBed.inject(WorkspaceContextService), 'refresh').mockResolvedValue();
+    //#endif
     vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
     vi.spyOn(TestBed.inject(SessionContextService), 'enter').mockImplementation(
       async (navigate) => {
@@ -1289,7 +1295,7 @@ describe('Login', () => {
       expect(passkeyButton()).toBeNull();
     });
 
-    it('waits for a passkey picked from autofill and aborts the request on leaving', async () => {
+    it('finishes sign-in with a credential picked from autofill', async () => {
       vi.mocked(PublicKeyCredential.isConditionalMediationAvailable).mockResolvedValue(true);
       let signal: AbortSignal | undefined;
       let pick!: (credential: PublicKeyCredential) => void;
@@ -1315,8 +1321,8 @@ describe('Login', () => {
         credential: expect.objectContaining({ id: 'cred-auto' }),
       });
 
+      // This request has completed; pending-request teardown is covered by the renewal case below.
       fixture.destroy();
-      expect(signal?.aborted).toBe(true);
     });
 
     it('renews autofill before the server ceremony expires and stops renewing on leaving', async () => {
@@ -1361,6 +1367,32 @@ describe('Login', () => {
       expect(completePasskeySignIn).toHaveBeenCalledTimes(1);
     });
   });
+  //#if (TenantWorkspace)
+
+  it('lands in the last available workspace after login', async () => {
+    await setUp();
+    fillValidCredentials();
+    localStorage.setItem('last-workspace', 'acme');
+    const workspace = TestBed.inject(WorkspaceContextService);
+    vi.mocked(workspace.refresh).mockImplementation(async () => {
+      workspace.workspaces.set([{ name: 'acme', tenantId: 'tenant-1', userId: 'member-1' }]);
+    });
+    await component.onSubmit();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/w/acme/platform');
+  });
+
+  it('keeps an explicitly remembered host console as the landing after login', async () => {
+    await setUp();
+    fillValidCredentials();
+    localStorage.setItem('last-workspace', '');
+    const workspace = TestBed.inject(WorkspaceContextService);
+    vi.mocked(workspace.refresh).mockImplementation(async () => {
+      workspace.workspaces.set([{ name: 'acme', tenantId: 'tenant-1', userId: 'member-1' }]);
+    });
+    await component.onSubmit();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/platform');
+  });
+  //#endif
 
   it('review R1 focuses invalid login fields and trims only the identifier', async () => {
     await setUp();

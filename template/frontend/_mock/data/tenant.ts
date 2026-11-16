@@ -1,9 +1,16 @@
+//#if (LocalIdentity)
 //#if (IncludeDistributedEvents)
 import { DISTRIBUTED_EVENT_TENANTS } from './distributed-events';
 //#endif
 import { TenantConnectionDto } from '../../src/app/features/platform/dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../src/app/features/platform/dtos/tenant.dto';
 
+//#else
+//#if (IncludeDistributedEvents)
+import { DISTRIBUTED_EVENT_TENANTS } from './distributed-events';
+
+//#endif
+//#endif
 /** 一条连接登记；Mock 不保存连接串（真实后端加密存储、从不返回）。 */
 export interface MockTenantConnection {
   name: string;
@@ -55,7 +62,11 @@ export const TENANTS: MockTenant[] = [
     id: 'tenant_globex',
     name: 'globex',
     displayName: 'Globex Inc',
+    //#if (TenantWorkspace)
+    isActive: true,
+    //#else
     isActive: false,
+    //#endif
     creationTime: '2025-04-15T00:00:00Z',
     connections: [
       { name: 'default', version: 3 },
@@ -63,6 +74,7 @@ export const TENANTS: MockTenant[] = [
     ],
   },
 ];
+//#if (LocalIdentity)
 
 export function toTenantOutput(tenant: MockTenant): TenantOutputDto {
   return {
@@ -86,3 +98,4 @@ export function toTenantConnection(
     version: connection.version,
   };
 }
+//#endif

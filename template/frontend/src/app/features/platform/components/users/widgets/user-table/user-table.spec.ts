@@ -86,6 +86,32 @@ describe('UserTable', () => {
     fixture.componentRef.setInput('pagination', { pageIndex: 0, pageSize: 20 } as PaginationState);
     fixture.detectChanges();
   });
+  //#if (TenantWorkspace)
+
+  it('marks linked staff and hides credential and delete actions', async () => {
+    fixture.componentRef.setInput('users', [
+      { ...user('linked-1', 'platform.alice'), homeUserId: 'home-1', email: '' },
+    ]);
+    fixture.detectChanges();
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toMatch(/platformBadge|Platform/);
+    expect(component.isPlatformAccount(component.users()[0])).toBe(true);
+    expect(host.querySelector('tbody button[aria-label="Edit"]')).toBeNull();
+    expectAriaSortOnSortedHeaderOnly(host, null);
+    viewport.next(desktop(false));
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expandButtons()[0].click();
+    await fixture.whenStable();
+    expect(host.querySelector('[data-detail-column="email"]')?.textContent?.trim()).toBe('-');
+    expect(
+      host.querySelector('[data-testid="user-detail-identity"] [hlmBadge]')?.textContent,
+    ).toMatch(/platformBadge|Platform/);
+  });
+  //#endif
 
   it('keeps the same data rows and interactive actions while reloading', async () => {
     const [table] = await fixture.getDeferBlocks();

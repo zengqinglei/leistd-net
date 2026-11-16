@@ -11,6 +11,9 @@ export interface UserManagementOutputDto {
   displayName?: string;
   avatar?: string;
   isActive: boolean;
+  //#if (TenantWorkspace)
+  homeUserId?: string | null;
+  //#endif
   //#if (LocalIdentity)
   isEmailVerified: boolean;
   //#endif
@@ -45,6 +48,9 @@ export interface CreateUserInputDto {
   avatar?: string;
   password: string;
   isActive: boolean;
+  //#if (TenantWorkspace)
+  homeUserId?: string | null;
+  //#endif
   isEmailVerified: boolean;
   /**
    * 初始角色 Id 集合。非空时后端额外要求 App.Users.ManageRoles，

@@ -25,11 +25,16 @@ import { defer, interval } from 'rxjs';
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../core/services/account-preferences-service';
+//#if (!TenantWorkspace)
 import { AuthService } from '../../../core/services/auth-service';
+//#endif
 import {
   NOTIFICATION_ICONS,
   NotificationService,
 } from '../../../core/services/notification-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
+//#endif
 import { NotificationItem } from '../../../shared/components/notification-item/notification-item';
 import { RelativeTimeLabel } from '../../../shared/components/relative-time-label/relative-time-label';
 import { PopoverAria } from '../../../shared/directives/popover-aria';
@@ -75,7 +80,20 @@ export class Notifications implements OnInit {
   readonly clearingAll = signal<boolean>(false);
 
   private readonly router = inject(Router);
+  //#if (!TenantWorkspace)
   private readonly authService = inject(AuthService);
+  //#endif
+  //#if (TenantWorkspace)
+  private readonly workspace = inject(WorkspaceContextService);
+  //#endif
+  private actorId(): string | undefined {
+    //#if (TenantWorkspace)
+    return this.workspace.actorId();
+    //#else
+    return this.authService.currentUser()?.id;
+    //#endif
+  }
+
   // 统一按展示时区渲染，避免同一时刻在不同页面显示成不同时间；设置里的时区当前运行时用不了时回落到浏览器时区。
   private readonly displayTimeZoneSetting = inject(AccountPreferencesService).timeZone;
   protected readonly displayTimeZone = computed(() =>
@@ -146,13 +164,13 @@ export class Notifications implements OnInit {
     if (item.isRead) {
       return true;
     }
-    const userId = this.authService.currentUser()?.id;
+    const userId = this.actorId();
     try {
       await this.notificationService.markAsRead(item.id);
     } catch (error: unknown) {
-      if (this.authService.currentUser()?.id === userId) this.showRequestError(error);
+      if (this.actorId() === userId) this.showRequestError(error);
     }
-    return this.authService.currentUser()?.id === userId;
+    return this.actorId() === userId;
   }
 
   async markAllNotificationsRead(): Promise<void> {

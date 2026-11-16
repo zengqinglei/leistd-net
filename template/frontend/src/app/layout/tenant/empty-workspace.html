@@ -1,0 +1,25 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div hlmEmpty class="p-4 sm:p-6">
+    <div hlmEmptyHeader>
+      <div hlmEmptyMedia variant="icon"><ng-icon name="lucideLock" /></div>
+      <h2 hlmEmptyTitle>
+        {{ t('tenantWorkspace.emptyTitle', { name: workspace.current() ?? '' }) }}
+      </h2>
+      <p hlmEmptyDescription>{{ t('tenantWorkspace.emptyDescription') }}</p>
+    </div>
+    <div hlmEmptyContent>
+      <div class="flex flex-wrap justify-center gap-2">
+        <button hlmBtn variant="outline" (click)="openSwitcher()">
+          {{ t('tenantWorkspace.switch') }}
+        </button>
+        <button hlmBtn variant="secondary" (click)="workspace.switchTo(null)">
+          {{ t('tenantWorkspace.backToConsole') }}
+        </button>
+      </div>
+    </div>
+  </div>
+</ng-container>

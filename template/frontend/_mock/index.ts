@@ -11,6 +11,9 @@
 //#if (LocalIdentity)
 export * from './api/auth';
 //#endif
+//#if (TenantWorkspace)
+export * from './api/workspace';
+//#endif
 export * from './api/account-preferences';
 export * from './api/user';
 export * from './api/authorization';

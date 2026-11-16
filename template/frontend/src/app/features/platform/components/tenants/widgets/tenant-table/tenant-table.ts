@@ -12,6 +12,7 @@ import {
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
+// prettier-ignore
 import {
   lucideBan,
   lucideBuilding2,
@@ -26,6 +27,9 @@ import {
   lucidePencil,
   lucideSearchX,
   lucideTrash2,
+  //#if (TenantWorkspace)
+  lucideUsers,
+  //#endif
 } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -105,6 +109,9 @@ import { TenantOutputDto } from '../../../../dtos/tenant.dto';
       lucidePencil,
       lucideSearchX,
       lucideTrash2,
+      //#if (TenantWorkspace)
+      lucideUsers,
+      //#endif
     }),
   ],
   templateUrl: './tenant-table.html',
@@ -129,6 +136,10 @@ export class TenantTable {
 
   /** 行操作按权限裁剪；隐藏只影响体验，服务端仍对每个请求独立校验。 */
   readonly canUpdate = input(true);
+  //#if (TenantWorkspace)
+  readonly canStaffAccess = input(false);
+  readonly staff = output<TenantOutputDto>();
+  //#endif
   readonly canDelete = input(true);
   //#if (Impersonation)
 
@@ -239,6 +250,9 @@ export class TenantTable {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
+  //#if (TenantWorkspace)
+  'tenants.staff.manage': 'Platform staff',
+  //#endif
   'common.loadFailed': "Couldn't load the list",
   'common.retry': 'Retry',
   'tenants.colName': 'Name',

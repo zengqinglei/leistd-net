@@ -208,6 +208,34 @@ describe('SignalRService connection lifecycle', () => {
       .map((call) => call.method);
   }
   //#endif
+  //#if (TenantWorkspace)
+
+  it('keeps the home connection while replacing only the workspace connection', async () => {
+    await service.connect();
+    const home = built[0];
+    await service.setWorkspace('acme', true);
+    const acme = built[1];
+    expect(home.stopCount).toBe(0);
+    expect(acme.url).toContain('workspace=acme');
+    await service.setWorkspace('globex', true);
+    expect(home.stopCount).toBe(0);
+    expect(acme.stopCount).toBe(1);
+    expect(built[2].url).toContain('workspace=globex');
+    await service.setWorkspace(null, true);
+    expect(built).toHaveLength(3);
+    expect(built[2].stopCount).toBe(1);
+    expect(home.stopCount).toBe(0);
+    await service.reset();
+    expect(home.stopCount).toBe(1);
+  });
+
+  it('uses only one connection for a tenant user', async () => {
+    await service.setWorkspace('acme', false);
+    expect(built).toHaveLength(1);
+    await service.reset();
+    expect(built[0].stopCount).toBe(1);
+  });
+  //#endif
 
   it('stays idle until a connection is requested', () => {
     expect(service.connectionStatus()).toBe('idle');

@@ -63,7 +63,11 @@ public class UserDomainService(
         string? username,
         string? email,
         string? displayName,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+#if (TenantWorkspace)
+        , Guid? homeUserId = null
+#endif
+        )
     {
         var (name, mail) = ProjectedIdentity(subjectId, username, email);
         // 与新建时同一口径：签发方没给显示名就用用户名。比较与写入用同一个值，否则每个请求都会判成"变了"
@@ -73,12 +77,20 @@ public class UserDomainService(
         if (existing is not null)
         {
             // 没变就不写：这条路径在每个已认证请求上都会走到
-            if (existing.Username == name && existing.Email == mail && existing.DisplayName == display)
+            if (existing.Username == name && existing.Email == mail && existing.DisplayName == display
+#if (TenantWorkspace)
+                && existing.HomeUserId == homeUserId
+#endif
+                )
             {
                 return existing;
             }
 
-            existing.ProjectFromIssuer(name, mail, display);
+            existing.ProjectFromIssuer(name, mail, display
+#if (TenantWorkspace)
+                , homeUserId
+#endif
+                );
             await userRepository.UpdateAsync(existing, cancellationToken);
             return existing;
         }
@@ -87,6 +99,9 @@ public class UserDomainService(
         // 撞主键要到冲刷时才抛，catch 在这里是永不触发的死代码（见工作单元文档）。
         // 并发首访由调用方重试一次收口——它持有事务边界，也只有它能重开一个干净的工作单元。
         var user = new User(subjectId, name, mail, displayName: display);
+#if (TenantWorkspace)
+        user.ProjectFromIssuer(name, mail, display, homeUserId);
+#endif
         await userRepository.InsertAsync(user, cancellationToken);
 
         logger.LogInformation("Projected issuer subject {SubjectId} into a local user row.", subjectId);

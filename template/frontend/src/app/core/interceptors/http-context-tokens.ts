@@ -1,4 +1,9 @@
 import { HttpContextToken } from '@angular/common/http';
+//#if (TenantWorkspace)
+
+/** undefined 取当前路由；null 显式作用于本人。 */
+export const WORKSPACE_SCOPE = new HttpContextToken<string | null | undefined>(() => undefined);
+//#endif
 
 export const SILENT_AUTH = new HttpContextToken<boolean>(() => false);
 
