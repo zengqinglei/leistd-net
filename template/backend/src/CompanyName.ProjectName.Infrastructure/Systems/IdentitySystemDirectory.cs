@@ -12,16 +12,16 @@ namespace CompanyName.ProjectName.Infrastructure.Systems;
 public sealed class IdentitySystemDirectory(IIdentitySystemsApi api, HybridCache cache, ILogger<IdentitySystemDirectory> logger)
     : IIdentitySystemDirectory
 {
-    public async Task<IReadOnlyList<SystemDirectoryEntry>> GetListAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<IdentitySystem>> GetListAsync(CancellationToken cancellationToken = default)
     {
         var culture = CultureInfo.CurrentUICulture.Name;
         try
         {
-            return await cache.GetOrCreateAsync<IReadOnlyList<SystemDirectoryEntry>>(
+            return await cache.GetOrCreateAsync<IReadOnlyList<IdentitySystem>>(
                 "identity-system-directory:" + culture, async token =>
                 {
                     using var response = await api.GetListAsync(culture, token);
-                    return (await response.ReadContentAsync<List<SystemDirectoryEntry>>(cancellationToken: token))!;
+                    return (await response.ReadContentAsync<List<IdentitySystem>>(cancellationToken: token))!;
                 }, new HybridCacheEntryOptions
                 {
                     Expiration = TimeSpan.FromMinutes(1), LocalCacheExpiration = TimeSpan.FromMinutes(1),

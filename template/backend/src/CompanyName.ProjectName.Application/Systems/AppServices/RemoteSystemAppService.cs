@@ -9,6 +9,6 @@ namespace CompanyName.ProjectName.Application.Systems.AppServices;
 public sealed class RemoteSystemAppService(IIdentitySystemDirectory directory, IObjectMapper mapper) : BaseAppService, ISystemAppService
 {
     public async Task<IReadOnlyList<SystemOutputDto>> GetListAsync(CancellationToken cancellationToken = default) =>
-        (await directory.GetListAsync(cancellationToken)).Select(entry => mapper.Map<SystemDirectoryEntry, SystemOutputDto>(entry)).ToArray();
+        (await directory.GetListAsync(cancellationToken)).Select(entry => mapper.Map<IdentitySystem, SystemOutputDto>(entry)).ToArray();
 }
 #endif
