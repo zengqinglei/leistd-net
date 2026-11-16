@@ -110,7 +110,7 @@ code{font-size:13px;background:var(--soft);padding:1px 5px;border-radius:4px;ove
 <body>
 <section class="band"><div class="wrap">
 <h1>外壳导航重组与系统切换：一个控件只管一件事</h1>
-<p class="lead">六条反馈全部采纳，系统切换这次一起做。品牌块切换系统，系统列表直接取自 Identity 的开放应用登记，不另建系统目录。侧栏顶部是可搜索的租户选择，底部是平台控制台入口，头像移到右上角。分布式事件页把"选库"改成"选租户"。工作空间面向客户，界面上不出现租户。</p>
+<p class="lead">六条反馈全部采纳，系统切换这次一起做。品牌块切换系统，系统列表直接取自 Identity 的开放应用登记，不另建系统目录。侧栏顶部是可搜索的租户选择，底部是平台控制台入口，头像移到右上角。分布式事件页不出现租户，范围由上下文决定。工作空间面向客户，界面上不出现租户。</p>
 <p class="mut small">你的目的：品牌块上叠了三件事（工作区、平台控制台、工作空间/管理平台），用户要先读懂"区域"和"工作区"的区别才能用。拆开以后，层级从上到下就是 系统 → 租户 → 菜单，每个控件只回答一个问题。业务三仓的外壳已经验证过这套分工，模板跟进后，下游同步时也少一处分叉。</p>
 
 <div class="tabs" role="group" aria-label="场景">
@@ -164,14 +164,15 @@ code{font-size:13px;background:var(--soft);padding:1px 5px;border-radius:4px;ove
 <section class="band" style="padding-top:0"><div class="wrap cols">
 <div class="box">
 <span class="ver">分布式事件</span>
-<h3>选租户，不选库；租户范围里不用选</h3>
-<p class="small">已核对框架实现：页面上的"宿主"指共享业务库，宿主在这里能看到共享库中所有租户的事件；其余选项是独立租户库。用户真正要选的是"谁的事件"，不是"哪个物理库"。</p>
+<h3>不出现租户，范围由上下文决定</h3>
+<p class="small">已核对框架实现：页面上的"宿主"指共享业务库，宿主在这里能看到共享库中所有租户的事件；其余选项是独立租户库。这个选择把部署细节和租户概念带进了平台页面。</p>
 <ul class="small">
-<li>租户范围（工作区或租户账号）：没有筛选，后端按当前租户自动定位到它的库</li>
-<li>平台控制台：库选择换成可搜索的"租户"筛选，默认"全部"。选中某个租户时，后端自动找到它的库（共享库或独立库）并过滤；"全部"由后端按时间合并各库的结果，独立库一般很少</li>
+<li>平台控制台：只看平台自身的事件，没有任何筛选</li>
+<li>租户范围（工作区或租户账号）：只看本租户的事件，后端自动定位它的库</li>
+<li>宿主要看某个租户的事件，就进入那个租户的范围：工作区形态进入工作区，模拟登录形态用模拟登录</li>
 <li>"发送测试事件""拒收记录"这些仅宿主可用的操作不变</li>
 </ul>
-<p class="small mut">这要改框架组件的管理接口：参数从库键改为租户，属于框架改动，会随 develop 发 beta。</p>
+<p class="small mut">框架组件的管理接口去掉库参数和库目录接口，范围只由当前租户决定。这是框架改动，会随 develop 发 beta。</p>
 </div>
 <div class="box">
 <span class="ver">工作空间（业务区）</span>
@@ -188,7 +189,7 @@ code{font-size:13px;background:var(--soft);padding:1px 5px;border-radius:4px;ove
 <ul class="small">
 <li>系统切换：业务仓的独立系统入口可收敛到开放应用登记；租户子域地址、按租户开通是业务特有能力，保留</li>
 <li>租户选择：业务仓在页头右侧，模板放侧栏顶部；平台入口模板加了"返回"按钮</li>
-<li>分布式事件：下游业务服务的库选择改为租户筛选</li>
+<li>分布式事件：下游业务服务去掉库选择，宿主只看平台自身事件</li>
 </ul>
 <p class="small mut">现状截图取自 worker-01 演示站（develop a6a79814）；方案为按模板样式绘制的示意，不是实现截图。</p>
 </div></section>
@@ -202,7 +203,7 @@ const V=[
 ['工作空间 / 管理平台的切换移到用户信息菜单','采纳','头像菜单第一组放"工作空间"或"管理平台"（只出现当前不在的那个），模板头像菜单里本来就有这一项，删掉品牌块里重复的一份'],
 ['侧栏的搜索框换成租户选择，单租户或非多租户不显示；搜索移到页头居中','采纳，选择器做成可搜索下拉','租户可能很多，用带搜索的下拉（combobox），不用普通 Select；页头搜索居中，窄屏收成放大镜图标'],
 ['侧栏底部的用户信息改放平台管理入口，进入平台后变成返回按钮、租户选择消失；用户信息移到右上角','采纳，返回按钮写明目标','底部按钮在平台控制台里写成"返回 tenant-a"（上次的租户，没有则第一个）；头像放在页头最右，和业务三仓一致'],
-['分布式事件不要宿主/默认库的选择，由后端自动过滤','采纳','租户范围自动过滤；平台控制台把选库改为选租户，后端定位库'],
+['分布式事件不要宿主/默认库的选择，由后端自动过滤','采纳','页面不出现租户：平台控制台只看平台自身事件，租户范围只看本租户，后端按上下文定位库'],
 ['工作空间不支持切换租户，租户由域名、邮箱域名等确定；对外不让客户感知租户','采纳','工作空间里没有租户切换，也没有租户标识；平台人员只在头像菜单顶部看到"代表 tenant-a"，切换只在管理平台']
 ];
 document.getElementById('verdicts').innerHTML=V.map(r=>`<tr><td data-l="提议">${r[0]}</td><td data-l="判断" class="${r[1]==='采纳'?'ok':'adj'}">${r[1]}</td><td data-l="终局做法">${r[2]}</td></tr>`).join('');
@@ -233,7 +234,7 @@ function afterDesk(){
   if(st.scn==='system') return `<div class="app">${afterSidebar(false)}<main class="main">${header('tenant-a › 管理平台 › <b>仪表盘</b>')}${dash}</main><div class="menu" style="left:258px;top:12px;width:260px"><div class="lb">系统</div><div class="mi cur"><span class="sq">身</span>身份中心<span style="margin-left:auto">✓</span></div><div class="mi"><span class="sq">基</span>基础资料</div><div class="mi"><span class="sq">客</span>客户管理</div><hr><div class="lb">链接带上当前工作区：/w/tenant-a/…</div></div></div>`;
   if(st.scn==='ws') return `<div class="app"><div class="top"><div class="tb"><span class="logo">T</span><b>模板项目</b><div class="nav"><span class="on">工作台</span><span>示例模块</span></div><span class="hr"><span class="ib">⌕</span><span class="ib">🔔</span><span class="av">A</span></span></div><div style="padding:40px 24px"><h4 style="font-size:22px;margin:0 0 16px;text-align:center">晚上好，staff-a</h4><div class="body" style="padding:0"><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div><div class="kpi"></div></div></div></div>
    <div class="menu" style="right:24px;top:58px"><div class="lb mark" style="border-radius:6px">staff-a · 代表 tenant-a</div><div class="mi">⚙ 管理平台</div><hr><div class="mi">个人设置</div><hr><div class="mi">退出登录</div></div></div>`;
-  if(st.scn==='events') return `<div class="app">${afterSidebar(true)}<main class="main">${header('平台控制台 › <b>分布式事件</b>')}<div style="padding:20px"><h4 style="margin:0 0 6px;font-size:22px">分布式事件</h4><div style="display:flex;gap:8px;margin-bottom:14px;align-items:center"><span class="field sel mark" style="width:220px">▦ 租户：全部<span class="chev">⌄</span></span><span class="mut small">可搜索；选中租户后由后端定位它的库</span></div><div style="display:flex;gap:8px;margin-bottom:14px"><span class="badge" style="background:var(--soft)">发件箱</span><span class="badge">收件箱</span><span class="badge">事件目录</span><span class="badge">拒收记录</span></div><div class="big" style="height:380px;grid-column:auto"></div></div></main></div>`;
+  if(st.scn==='events') return `<div class="app">${afterSidebar(true)}<main class="main">${header('平台控制台 › <b>分布式事件</b>')}<div style="padding:20px"><h4 style="margin:0 0 6px;font-size:22px">分布式事件</h4><div style="display:flex;gap:8px;margin-bottom:14px"><span class="badge" style="background:var(--soft)">发件箱</span><span class="badge">收件箱</span><span class="badge">事件目录</span><span class="badge">拒收记录</span></div><div class="big" style="height:380px;grid-column:auto"></div></div></main></div>`;
   const host=st.scn==='host';
   return `<div class="app">${afterSidebar(host)}<main class="main">${header(host?'平台控制台 › <b>仪表盘</b>':'tenant-a › 管理平台 › <b>仪表盘</b>')}${dash}</main>
    ${host?'':`<div class="menu" style="left:10px;top:96px;width:228px"><div class="field" style="margin-bottom:6px">⌕ 搜索租户</div><div class="mi cur"><span class="sq">T</span>tenant-a<span style="margin-left:auto">✓</span></div><div class="mi"><span class="sq">T</span>tenant-b</div></div>`}</div>`;
@@ -260,7 +261,7 @@ const afterNote={
  tenant:['<b>品牌块</b>只是品牌（之后接系统切换）','<b>侧栏顶部</b>是租户选择，可搜索','<b>侧栏底部</b>是平台控制台入口','<b>头像</b>在页头右上角，菜单里有"工作空间"'],
  host:['<b>租户选择隐藏</b>：控制台不属于任何租户','<b>底部按钮</b>变成"返回 tenant-a"，一步回到上次的租户'],
  ws:['<b>顶栏不出现租户</b>：客户和平台人员看到的顶栏完全一样','<b>平台人员</b>在头像菜单顶部看到"代表 tenant-a"，"管理平台"回到该租户的管理平台，换租户在那里做'],
- events:['<b>没有库选择</b>：平台控制台用"租户"筛选（默认全部），后端自动定位库','租户工作区里没有筛选，只看该租户的事件']
+ events:['<b>没有库或租户选择</b>：平台控制台只看平台自身的事件','租户的事件在该租户的范围里看，后端按上下文定位库']
 };
 function beforeView(){
   if(st.scn==='events') return `<div style="background:var(--card);border-radius:10px;border:1px solid var(--line);padding:20px"><h4 style="margin:0 0 12px;font-size:20px">分布式事件</h4><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><span class="field sel mark" style="width:180px">宿主<span class="chev">⌄</span></span><span class="mut small">选项：宿主 / 默认库 / 各独立库</span></div><div class="big" style="height:220px"></div></div>`;
@@ -288,8 +289,8 @@ const SYS=[
 document.getElementById('sysrows').innerHTML=SYS.map(r=>`<tr><td data-l="方面"><b>${r[0]}</b></td><td data-l="业务 Identity">${r[1]}</td><td data-l="模板终局">${r[2]}</td><td data-l="理由" class="mut">${r[3]}</td></tr>`).join('');
 const STEPS=[
 ['1 · 规格','Claude 写，你确认',['规格 §1 需求与验收（Given/When/Then），§2 方案（本页），§3 计划','明确三种形态 × 三种身份的显示规则（"谁看到什么"表）'],['你确认规格后才开始实施']],
-['2 · 后端','Codex',['Identity：开放应用加首页地址与显示开关（扩展属性），保存时校验地址；新增系统列表接口','Resource：经 Identity 服务客户端转取系统列表，短时缓存','框架分布式事件：管理接口改为按租户筛选，后端定位库；"全部"合并各库'],['后端单元与集成测试；开放应用增改查、系统列表、Resource 转取、租户筛选（共享库与独立库各一）']],
-['3 · 前端外壳','Codex',['品牌块系统切换（含命令面板"切换系统"分组）','侧栏顶部租户选择（可搜索），底部"平台控制台 / 返回 tenant-a"','页头居中搜索、右上角头像；头像菜单区域切换与"代表 tenant-a"','工作空间顶栏去掉租户；分布式事件页租户筛选；开放应用表单新字段；Mock 同步'],['各组件 spec；中英文与关闭本地化的英文表；1440 与 390 两种宽度的版式检查']],
+['2 · 后端','Codex',['Identity：开放应用加首页地址与显示开关（扩展属性），保存时校验地址；新增系统列表接口','Resource：经 Identity 服务客户端转取系统列表，短时缓存','框架分布式事件：管理接口去掉库参数，范围由当前租户决定'],['后端单元与集成测试；开放应用增改查、系统列表、Resource 转取、宿主只见平台自身事件、独立库租户在租户范围可见']],
+['3 · 前端外壳','Codex',['品牌块系统切换（含命令面板"切换系统"分组）','侧栏顶部租户选择（可搜索），底部"平台控制台 / 返回 tenant-a"','页头居中搜索、右上角头像；头像菜单区域切换与"代表 tenant-a"','工作空间顶栏去掉租户；分布式事件页去掉库选择；开放应用表单新字段；Mock 同步'],['各组件 spec；中英文与关闭本地化的英文表；1440 与 390 两种宽度的版式检查']],
 ['4 · 形态验证','Codex，worker-01',['实际生成：Identity / Resource / Standalone × 模拟登录 / 工作区 × 关闭本地化的代表形态，前端 lint、构建、受影响测试','浏览器端到端：系统切换跳转并保持工作区；租户选择；进入和返回控制台；刷新受保护页'],['不重跑无关全量；完整矩阵交给合并后的 Release']],
 ['5 · 交付','Claude 审查，Codex 演示',['审查后推送，开 PR；CI 全绿后合并，确认 develop 的 Release 运行变绿','三服务演示站在开放应用里登记首页地址，实际切换走查；全功能站回归','按 1440 与 390 两种宽度出实测对比页给你验收'],['常驻文档同步：前端布局规范、服务对接文档（登记首页地址）']]
 ];
