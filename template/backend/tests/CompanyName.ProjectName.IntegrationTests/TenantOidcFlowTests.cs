@@ -15,7 +15,9 @@ using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
@@ -158,20 +160,25 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     }
 
     /// <summary>配置的访问令牌寿命落到实际签发的令牌上；交换令牌不长于源令牌，源令牌比 120 秒上限先到期时取源令牌的到期时刻。</summary>
-    [Fact]
-    public async Task Configured_access_token_lifetime_applies_and_bounds_exchanged_tokens()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task Configured_access_token_lifetime_applies_and_bounds_exchanged_tokens(int milliseconds)
     {
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()).AddMilliseconds(milliseconds));
+        var resource = $"lifetime-probe-api-{milliseconds}";
         using var host = Factory.WithWebHostBuilder(builder =>
         {
+            builder.ConfigureTestServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock)));
             builder.UseSetting("OAuth:AccessTokenLifetime", "00:01:30");
-            builder.UseSetting("OAuth:ApiResources:0:Name", "lifetime-probe-api");
+            builder.UseSetting("OAuth:ApiResources:0:Name", resource);
             builder.UseSetting("OAuth:ApiResources:0:Scope", "lifetime-probe.read");
             builder.UseSetting("OAuth:ApiResources:1:Name", "https://api.example.test/billing");
             builder.UseSetting("OAuth:ApiResources:1:Scope", "billing.read");
         });
         using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var presenter = await CreateClientAsync(admin.Client, "lifetime-probe.read");
-        var exchanger = await CreateExchangeClientAsync(admin.Client, "lifetime-probe-api");
+        var exchanger = await CreateExchangeClientAsync(admin.Client, resource);
         var source = await AuthorizeAndExchangeAsync(host, admin, presenter.ClientId, presenter.ClientSecret, "lifetime-probe.read");
         Assert.Equal(90, Lifetime(source.AccessToken));
 

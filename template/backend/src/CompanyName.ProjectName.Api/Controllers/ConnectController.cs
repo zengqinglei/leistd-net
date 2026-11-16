@@ -252,6 +252,7 @@ public sealed class ConnectController(
             var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             var subject = result.Principal;
             var app = await applications.FindByClientIdAsync(request.ClientId!, cancellationToken);
+            // 寿命上限由原生管道计算；保留源令牌的绝对到期时间，供 AddTokenExchangeExpirationLimit 在签发主体准备后精确截断。
 #if (TenantWorkspace)
             if ((string?)request["workspace"] is { Length: > 0 } workspace)
             {
@@ -270,9 +271,8 @@ public sealed class ConnectController(
                 if (linked is null) return ProtocolError(Errors.InvalidTarget);
                 linked.SetResources(subject.GetAudiences());
                 linked.SetDestinations(_ => [Destinations.AccessToken]);
-                var workspaceRemaining = workspaceExpiry - new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc));
-                if (workspaceRemaining <= TimeSpan.Zero) return ProtocolError(Errors.InvalidTarget);
-                linked.SetAccessTokenLifetime(workspaceRemaining < TimeSpan.FromMinutes(5) ? workspaceRemaining : TimeSpan.FromMinutes(5));
+                linked.SetAccessTokenLifetime(TimeSpan.FromMinutes(5));
+                linked.SetExpirationDate(workspaceExpiry);
                 return SignIn(linked, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 #endif
@@ -296,9 +296,8 @@ public sealed class ConnectController(
             // 用户资料重新取自身份库，目标 scope 不含 profile/email 时仍保留投影所需的资料。
             principal.SetResources(request.GetAudiences());
             principal.SetDestinations(_ => [Destinations.AccessToken]);
-            var remaining = expiry - new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc));
-            if (remaining <= TimeSpan.Zero) return ProtocolError(Errors.InvalidGrant);
-            principal.SetAccessTokenLifetime(remaining < TimeSpan.FromSeconds(120) ? remaining : TimeSpan.FromSeconds(120));
+            principal.SetAccessTokenLifetime(TimeSpan.FromSeconds(120));
+            principal.SetExpirationDate(expiry);
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 

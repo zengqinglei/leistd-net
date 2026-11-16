@@ -1,11 +1,20 @@
 //#if (TenantWorkspace)
-import { MockException, MockRequest } from '../core/models';
+// prettier-ignore
+import { MockException,
+  //#if (LocalIdentity)
+  MockRequest,
+  //#endif
+} from '../core/models';
+//#if (LocalIdentity)
 import { ROLES } from '../data/authorization';
+//#endif
 import { TENANTS } from '../data/tenant';
 //#if (OpenIddictServer)
 import { toTenantOutput } from '../data/tenant';
 //#endif
+//#if (LocalIdentity)
 import { USERS } from '../data/user';
+//#endif
 import { STAFF_ACCESS } from '../data/workspace';
 import { getCurrentUser, getWorkspaceMember, getMockSessionTenantKey } from '../utils/current-user';
 
@@ -14,6 +23,7 @@ function home() {
   if (!user) throw new MockException(401);
   return user;
 }
+//#if (LocalIdentity)
 function staff(tenantId: string) {
   return STAFF_ACCESS.filter((access) => access.tenantId === tenantId).map((access) => {
     const user = USERS.find((u) => u.id === access.homeUserId)!;
@@ -29,6 +39,7 @@ function staff(tenantId: string) {
     };
   });
 }
+//#endif
 export const WORKSPACE_API = {
   'GET /api/v1/auth/me/workspaces': () => {
     const user = home();
