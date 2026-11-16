@@ -67,6 +67,8 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 | AC16 | Given 默认形态或关闭多租户；When 生成项目；Then 不出现工作区方案、`/w` 路由与平台人员页面，构建通过 | 模板生成检查 + 选择器场景构建 |
 | AC17 | Given 工作区形态且目标工作区返回 `Workspace:Forbidden` 或 `Workspace:Unavailable`；When 冷启动或深链进入；Then 显示区分原因的「无法访问该工作区」说明页，地址保留原目标，按钮按上次 → 第一个 → `/platform` 前往可用工作区；应用内切换被拒仍恢复原处并提示，Unavailable 刷新目录后退出不可用工作区 | `workspace-guard.spec.ts`、`workspace-denied.spec.ts`、`startup-service.spec.ts`、`workspace-context-service.spec.ts`、Mock 拒绝回归 |
 | AC18 | Given Resource 同一浏览器已以 A 登录并缓存工作区令牌；When 以 B 重新完成 OIDC 登录，再请求同一工作区；Then 本人和工作区主体均属于 B，不复用 A 的工作区令牌 | `ResourceBrowserSessionTests.Oidc_login_as_another_user_does_not_reuse_the_previous_workspace_subject`；缺少 subject 或票据键时跳过缓存另有同类参数化回归 |
+| AC19 | Given Identity 工作区形态的已登录会话；When 直接打开或整页刷新 `/platform`、`/w/default-e2e/platform`；Then 仪表盘及区域切换器显示，导航完成并保留目标地址 | `workspaces.e2e.ts`；`identity-workspace` 登记 `Verify` 后纳入完整矩阵 |
+| AC20 | Given 匿名用户从根地址进入；When 在公共首页点击登录并完成认证；Then 进入默认工作区，整条链只有首次打开首页的一次 Document 请求；直接访问根地址不执行受保护路由守卫 | `workspaces.e2e.ts`、`app.routes.spec.ts` |
 
 ### 非功能要求
 
@@ -292,3 +294,9 @@ D6 下游对齐清单：业务三仓工作区令牌缓存键已包含 subject，
 本 PR 的验证结论：三种实际生成形态（Identity、Resource、关闭本地化的 Standalone 工作区）的前端 lint、生产构建与受影响 spec 通过；专用拒绝说明页的两种原因、原地址与返回落点经有头 Mock 浏览器验证，桌面与手机排版通过。Resource 后端构建、受影响浏览器会话回归与风格检查通过；去掉缓存键中的 subject 时换号回归失败，恢复后通过，缺少或空票据键/sub 时不缓存的参数化回归通过。测试签发器的 A/B 邮箱冲突修正后，只补验失败用例，没有重跑无关全量矩阵。
 
 票据键消费方排查：`ResourceSessionRefresher` 用键串行化并重读受 Cookie 引用版本校验的当前票据，重试缓存只保存时间；`ExternalAuthController` 用键锁定并一次消费外部票据，另校验意图、发起人和租户。两者都没有跨用户主体缓存，保持原实现。常驻事实同步到 `template/docs/standards/auth.md` 与 `template/docs/standards/frontend-routing.md`。
+
+追加修复：CI run `43827458347` 的五个失败场景均在 Prettier 检查处失败。`startup-service.spec.ts` 的工作区条件块裁掉后留下连续空行，调整空行在条件块内的位置，使两侧生成结果都符合格式要求。`identity-workspace` 登记 `Verify`，补上此前没有随矩阵执行的 Workspace E2E，以及宿主和工作区平台的冷启动、刷新覆盖。
+
+Chrome 157 在 nip.io 演示地址按「根地址 → 登录」复现白屏，窗口可见且 rAF 正常。平台的空路径父路由误匹配公共首页：首次进入被守卫送到 `returnUrl=/`，登录后返回根地址时落在没有组件的路由分支。该复现的导航已经结束，没有挂起的 Promise；直接打开受保护平台地址的对照正常。父路由改为消费 `platform`，子路由用空路径保留原布局、懒加载与权限守卫；公共首页不再被平台守卫截获。独立生成项目的根地址登录回归在修复前失败，修复后验证公共首页与默认工作区落点。
+
+nip.io 的主机解析为宿主，登录后本人接口正常，未观察到 Cookie 或签发方异常。代理日志显示先登录成功，随后根地址被刷新，接着同一秒出现四次登录页的 Document GET，全部为 200，没有服务端重定向循环。结合用户确认的反复刷新操作，按手动刷新处理：根地址的错误匹配会把刷新后的页面再次送到登录页。修复后的根地址登录链由 E2E 断言只出现首次首页 Document 请求；未复现应用自行连续整页重载，不另加生产跳转逻辑。

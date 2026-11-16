@@ -72,8 +72,8 @@ describe('StartupService', () => {
     expect(sessionContext.clear).toHaveBeenCalled();
     expect(service.status()).toBe('success');
   });
-
   //#if (TenantWorkspace)
+
   for (const code of ['Workspace:Forbidden', 'Workspace:Unavailable']) {
     it(`leaves ${code} on a deep link to the workspace guard instead of failing startup`, async () => {
       openAt('/w/other/platform');

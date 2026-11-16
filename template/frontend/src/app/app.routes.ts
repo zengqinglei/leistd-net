@@ -126,9 +126,10 @@ export const routes: Routes = [
   ...baseRoutes.map((route) =>
     route.path === 'platform'
       ? {
-          path: '',
+          // 父路由只匹配平台入口，避免空路径把公共首页也纳入认证与工作区守卫。
+          path: 'platform',
           canActivate: [authGuard, workspaceGuard],
-          children: [{ ...route, canActivate: [permissionGuard] }],
+          children: [{ ...route, path: '', canActivate: [permissionGuard] }],
         }
       : route,
   ),
