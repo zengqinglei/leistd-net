@@ -1,6 +1,6 @@
 # 多租户分层：宿主控制面、租户工作区与平台人员
 
-状态：已完成 · 风险档：高 · 关联：#282、#283（已合入 develop）；合并后修复见本 PR · 设计稿：[design.html](./2026-11-16-multitenancy-layering/design.html)
+状态：已完成 · 风险档：高 · 关联：#282、#283（已合入 develop）；合并后修复 [#285](https://github.com/zengqinglei/leistd-net/pull/285) · 设计稿：[design.html](./2026-11-16-multitenancy-layering/design.html)
 
 文中路径相对仓库根；`template/` 下的路径以模板源码为准，后端源码前缀 `template/backend/src/CompanyName.ProjectName.` 简写为 `<P>.`。
 
@@ -285,7 +285,7 @@ worker-01 不可达，按个人执行偏好回退到受管 local；未运行本�
 
 ### 合并后修复
 
-PR #283 已合入 develop `108341f7`。本次一个修复 PR 收口三项：Mock 条件成员合并导入；Resource 工作区令牌缓存按票据键、本人 subject 与租户隔离，防止同浏览器重新 OIDC 登录后命中前一用户的工作区令牌；工作区深链拒绝使用专用说明页。Identity 与 Resource 的签出尝试及相关夹具调整均已撤回，不改变现有会话键语义。规格与常驻认证、路由文档同步。
+PR #283 已合入 develop `108341f7`。[修复 PR #285](https://github.com/zengqinglei/leistd-net/pull/285) 收口三项：Mock 条件成员合并导入；Resource 工作区令牌缓存按票据键、本人 subject 与租户隔离，防止同浏览器重新 OIDC 登录后命中前一用户的工作区令牌；工作区深链拒绝使用专用说明页。Identity 与 Resource 的签出尝试及相关夹具调整均已撤回，不改变现有会话键语义。规格与常驻认证、路由文档同步。
 
 D6 下游对齐清单：业务三仓工作区令牌缓存键已包含 subject，与修复后的模板一致，无需对齐。不发送通知。
 
