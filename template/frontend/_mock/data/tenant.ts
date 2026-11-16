@@ -1,13 +1,15 @@
+//#if (LocalIdentity)
 //#if (IncludeDistributedEvents)
 import { DISTRIBUTED_EVENT_TENANTS } from './distributed-events';
-//#if (!LocalIdentity)
-
 //#endif
-//#endif
-//#if (LocalIdentity)
 import { TenantConnectionDto } from '../../src/app/features/platform/dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../src/app/features/platform/dtos/tenant.dto';
 
+//#else
+//#if (IncludeDistributedEvents)
+import { DISTRIBUTED_EVENT_TENANTS } from './distributed-events';
+
+//#endif
 //#endif
 /** 一条连接登记；Mock 不保存连接串（真实后端加密存储、从不返回）。 */
 export interface MockTenantConnection {

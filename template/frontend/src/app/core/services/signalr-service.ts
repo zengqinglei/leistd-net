@@ -440,15 +440,19 @@ export class SignalRService {
 
   private async startConnection(): Promise<void> {
     const connection = new HubConnectionBuilder()
+      //#if (TenantWorkspace)
       .withUrl(
         this.resolveHubUrl(SignalRService.hubPath) +
-          //#if (TenantWorkspace)
           (this.workspaceName ? `?workspace=${encodeURIComponent(this.workspaceName)}` : ''),
-        //#endif
         {
           transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
         },
       )
+      //#else
+      .withUrl(this.resolveHubUrl(SignalRService.hubPath), {
+        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+      })
+      //#endif
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       // 普通连接日志保持安静；连接与重试错误仍可排查。
       .configureLogging(LogLevel.Warning)

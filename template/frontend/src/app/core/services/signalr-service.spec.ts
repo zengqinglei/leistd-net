@@ -208,8 +208,8 @@ describe('SignalRService connection lifecycle', () => {
       .map((call) => call.method);
   }
   //#endif
-
   //#if (TenantWorkspace)
+
   it('keeps the home connection while replacing only the workspace connection', async () => {
     await service.connect();
     const home = built[0];
