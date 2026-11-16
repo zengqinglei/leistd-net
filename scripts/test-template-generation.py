@@ -11,8 +11,8 @@ CI 交付参数 `Ci` 不是能力：全部形态按默认值生成，有无前�
 CI 薄壳与描述它的文档；每种 `scripts/verify.ps1` 产物核对步骤清单与失败即停（命令换成记录调用的替身）。
 
 证明拆成互不引用产物的四片（`--shard`）：
-- `0`/`1`/`2`：1856 个有效形态按序号取模分片，逐个生成并校验，记录每个形态的摘要与 verify.ps1 键；
-- `control`：6144 组原始输入映射、角色等价比较、Ci 变体与全部 verify.ps1 变体的步骤与失败传播，
+- `0`/`1`/`2`：全部有效形态按序号取模分片，逐个生成并校验，记录每个形态的摘要与 verify.ps1 键；
+- `control`：默认 Ci 的全部原始输入映射、角色等价比较、Ci 变体与全部 verify.ps1 变体的步骤与失败传播，
   所需的代表形态由本片自行重新生成。
 汇总（check-quality-proof.ps1 -Kind generation）核对四片同一候选与源码摘要、形态无缺号无重复、
 对照片各项证明齐全，并交叉核对代表形态摘要与每个形态的 verify.ps1 键都被对照片覆盖。
@@ -557,7 +557,7 @@ public sealed class EndpointOptions { public string? Path { get; init; } }
 
 # 已核对的 verify.ps1 变体：键为脚本内容与步骤清单，值写入生成证明（步骤与失败传播）
 VERIFY_CHECKED = {}
-SHAPE_SHARDS = 3
+SHAPE_SHARDS = model.SHAPE_SHARDS
 VERIFY_LOCK = threading.Lock()
 SHIM_COMMANDS = ('dotnet', 'npm', 'python3', 'py')
 
@@ -987,11 +987,8 @@ def main():
     config = json.loads(model.CONFIG_PATH.read_text(encoding='utf-8'))
     # Ci 只选择 CI 薄壳，不是产品能力：能力形态按默认 Ci 生成，三种取值另行比对
     default_ci = config['symbols']['Ci']['defaultValue']
-    combinations = [values for values in model.all_combinations(config) if values['Ci'] == default_ci]
-    groups = {}
-    for values in combinations:
-        groups.setdefault(model.effective_shape(values), []).append(values)
-    assert len(combinations) == 6144 and len(groups) == 1856, 'Public parameter model changed; update its verification contract.'
+    combinations, groups = model.generation_space(config)
+    assert combinations and groups, 'Template generation space is empty.'
     root = args.output or Path(tempfile.mkdtemp(prefix='generation-', dir=ROOT / '.tmp'))
     root = root.resolve()
     assert root.is_relative_to((ROOT / '.tmp').resolve())
@@ -1054,7 +1051,7 @@ def main():
                     role_variants.append((len(representatives) + len(role_variants), variant, index, role))
         # Ci 取值只改变 CI 薄壳与描述它的文档；有无前端两类形态各比一次
         ci_items = []
-        for frontend in (True, False):
+        for frontend in dict.fromkeys(values['SpaFrontend'] for values in representatives):
             index = next(i for i, v in enumerate(representatives) if v['SpaFrontend'] == frontend)
             for choice in [c['choice'] for c in config['symbols']['Ci']['choices'] if c['choice'] != default_ci]:
                 ci_items.append((len(representatives) + len(role_variants) + len(ci_items), dict(representatives[index], Ci=choice), index, choice))

@@ -113,6 +113,27 @@ def effective_shape(values: dict[str, object]) -> tuple:
     return tuple(values[name] for name in EFFECTIVE_DIMENSIONS)
 
 
+SHAPE_SHARDS = 3
+
+
+def generation_space(config: dict) -> tuple[list[dict], dict[tuple, list[dict]]]:
+    """默认 Ci 的原始输入与有效形态，生成器和证明汇总共用。"""
+    combinations = [values for values in all_combinations(config)
+                    if values['Ci'] == config['symbols']['Ci']['defaultValue']]
+    groups = {}
+    for values in combinations:
+        groups.setdefault(effective_shape(values), []).append(values)
+    return combinations, groups
+
+
+def generation_space_summary(config: dict) -> dict[str, int]:
+    combinations, groups = generation_space(config)
+    ci_choices = config['symbols']['Ci']['choices']
+    variants = sum(choice['choice'] != config['symbols']['Ci']['defaultValue'] for choice in ci_choices)
+    return dict(RawInputs=len(combinations), EffectiveShapes=len(groups), ShapeShards=SHAPE_SHARDS,
+                CiVariants=variants * len({values['SpaFrontend'] for values in combinations}))
+
+
 def pairwise_problems(config: dict, scenarios: dict, dimensions=EFFECTIVE_DIMENSIONS, tier: str = "full") -> list[str]:
     combinations = all_combinations(config)
     selected = [symbol_values(config, parse_cli_arguments(config, info["Arguments"]))
@@ -401,6 +422,9 @@ def main() -> int:
         return self_test()
 
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    if "--generation-space" in sys.argv:
+        print(json.dumps(generation_space_summary(config)))
+        return 0
     listed = subprocess.run(
         ["git", "-C", str(REPO_ROOT), "-c", "core.quotepath=off", "ls-files", "--cached", "--others", "--exclude-standard", "--", "template"],
         check=True, capture_output=True, text=True, encoding="utf-8",

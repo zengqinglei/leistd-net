@@ -37,15 +37,14 @@ def main():
     generation = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generation)
     config = json.loads(generation.model.CONFIG_PATH.read_text(encoding='utf-8'))
-    combinations = [v for v in generation.model.all_combinations(config) if v['Ci'] == config['symbols']['Ci']['defaultValue']]
-    shapes = {generation.model.effective_shape(v) for v in combinations}
+    combinations, shapes = generation.model.generation_space(config)
     assert report['EffectiveShapes'] == len(shapes) and report['ShapeShards'] == generation.SHAPE_SHARDS
     if report['Shard'] == 'control':
         shape_indexes = []
         ids = {item['Index'] for item in report['Representatives']}
         ids.update(item['variant'] for item in report['EquivalenceComparisons'])
         ids.update(item['variant'] for item in report['CiVariants'])
-        assert len(report['CiVariants']) == 4 and report['RawInputs'] == len(combinations)
+        assert len(report['CiVariants']) == generation.model.generation_space_summary(config)['CiVariants'] and report['RawInputs'] == len(combinations)
     else:
         shape_indexes = [item['Index'] for item in report['Shapes']]
         assert all(index % generation.SHAPE_SHARDS == int(report['Shard']) for index in shape_indexes) and shape_indexes
