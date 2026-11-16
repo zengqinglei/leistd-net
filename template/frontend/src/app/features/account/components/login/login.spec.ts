@@ -436,6 +436,7 @@ describe('Login', () => {
     fillValidCredentials();
     vi.spyOn(toast, 'success').mockReturnValue('');
     vi.mocked(router.navigate).mockResolvedValue(false);
+    vi.mocked(router.navigateByUrl).mockResolvedValue(false);
     await component.onSubmit();
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
@@ -459,7 +460,10 @@ describe('Login', () => {
         });
       if (step === 'loadUser') authService.loadUser.mockReturnValue(throwError(() => error));
       if (step === 'establish') vi.mocked(session.establish).mockRejectedValue(error);
-      if (step === 'navigate') vi.mocked(router.navigate).mockRejectedValue(error);
+      if (step === 'navigate') {
+        vi.mocked(router.navigate).mockRejectedValue(error);
+        vi.mocked(router.navigateByUrl).mockRejectedValue(error);
+      }
       await component.onSubmit();
       fixture.detectChanges();
       expect((fixture.nativeElement as HTMLElement).querySelector('[inert]')).toBeNull();
@@ -594,8 +598,12 @@ describe('Login', () => {
       await component.onSubmit();
 
       // 登录成功后被送到外站，是钓鱼链接最省事的一种玩法。
+      //#if (TenantWorkspace)
+      expect(navigatedUrls()).toEqual(['/platform']);
+      //#else
       expect(router.navigateByUrl).not.toHaveBeenCalled();
       expect(router.navigate).toHaveBeenCalled();
+      //#endif
     });
   }
 
@@ -769,6 +777,7 @@ describe('Login', () => {
     expect(router.url).toBe('/protected');
   });
 
+  //#if (!TenantWorkspace)
   it('chooses the landing page by permissions rather than by role name or super-admin flag', async () => {
     await setUp();
     fillValidCredentials();
@@ -795,6 +804,7 @@ describe('Login', () => {
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/platform']);
   });
+  //#endif
   //#if (IncludeMultiTenancy)
   /** 主机名定案的三档结果；宿主定案与域名不表态必须分开，否则宿主域上残留上次记住的租户。 */
   describe('tenant resolution by host name', () => {
@@ -1232,7 +1242,11 @@ describe('Login', () => {
         credential: expect.objectContaining({ id: 'cred-1' }),
       });
       expect(authService.loadUser).toHaveBeenCalled();
+      //#if (TenantWorkspace)
+      expect(navigatedUrls()).toEqual(['/platform']);
+      //#else
       expect(router.navigate).toHaveBeenCalledWith(['/workspace']);
+      //#endif
     });
 
     it('shows a neutral note when the user cancels and keeps the form usable', async () => {

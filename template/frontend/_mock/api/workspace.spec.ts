@@ -7,7 +7,11 @@ import { MockRequest } from '../core/models';
 import { withinWorkspace } from '../core/request-workspace';
 import { USERS } from '../data/user';
 import { STAFF_ACCESS } from '../data/workspace';
-import { getCurrentUser, setMockSessionUserId } from '../utils/current-user';
+import {
+  getCurrentUser,
+  setMockSessionTenantKey,
+  setMockSessionUserId,
+} from '../utils/current-user';
 
 function request(workspace: string, url = '/api/v1/permissions/current'): MockRequest {
   const headers = new HttpHeaders({ 'X-Workspace': workspace });
@@ -29,6 +33,17 @@ describe('workspace mock', () => {
     USERS.splice(0, USERS.length, ...structuredClone(users));
     STAFF_ACCESS.splice(0, STAFF_ACCESS.length, ...structuredClone(access));
     setMockSessionUserId(null);
+  });
+
+  it('returns distinct forbidden and unavailable errors for rejected workspace requests', () => {
+    setMockSessionTenantKey('tenant_acme');
+    expect(() => withinWorkspace(request('globex'), () => getCurrentUser())).toThrowError(
+      expect.objectContaining({ status: 403, error: { code: 'Workspace:Forbidden' } }),
+    );
+    setMockSessionTenantKey('host');
+    expect(() => withinWorkspace(request('missing'), () => getCurrentUser())).toThrowError(
+      expect.objectContaining({ status: 403, error: { code: 'Workspace:Unavailable' } }),
+    );
   });
 
   it('isolates permissions for same-named linked accounts without changing the home session', () => {

@@ -13,7 +13,7 @@ using static OpenIddict.Client.OpenIddictClientModels;
 
 namespace CompanyName.ProjectName.Api.Auth.Sessions;
 
-/// <summary>工作区令牌按本人的服务端票据与租户缓存，不更换 Cookie。</summary>
+/// <summary>工作区令牌按本人的服务端票据、主体与租户缓存，不更换 Cookie。</summary>
 internal sealed class ResourceWorkspaceTicketProvider(IMemoryCache cache, IServiceProvider services,
     IOptions<RemoteIdentityOptions> remoteIdentity, TimeProvider clock)
 {
@@ -22,11 +22,13 @@ internal sealed class ResourceWorkspaceTicketProvider(IMemoryCache cache, IServi
     public async Task<AuthenticateResult?> GetAsync(HttpContext context, AuthenticateResult home,
         TenantConfiguration tenant, CancellationToken cancellationToken)
     {
-        var subject = home.Properties?.GetTokenValue("access_token");
-        if (string.IsNullOrEmpty(subject)) return null;
+        var subjectToken = home.Properties?.GetTokenValue("access_token");
+        if (string.IsNullOrEmpty(subjectToken)) return null;
+        var subject = home.Principal?.FindFirst("sub")?.Value;
         home.Properties!.Items.TryGetValue(DistributedTicketStore.TicketKeyProperty, out var ticketKey);
-        var key = (AuthenticationSchemeNames.Workspace, ticketKey, tenant.Id);
-        if (ticketKey is null || !cache.TryGetValue(key, out CachedToken? token) || token!.ExpiresAt <= clock.GetUtcNow())
+        var key = (AuthenticationSchemeNames.Workspace, ticketKey, subject, tenant.Id);
+        var canCache = !string.IsNullOrEmpty(ticketKey) && !string.IsNullOrEmpty(subject);
+        if (!canCache || !cache.TryGetValue(key, out CachedToken? token) || token!.ExpiresAt <= clock.GetUtcNow())
         {
             var target = remoteIdentity.Value;
             TokenExchangeAuthenticationResult result;
@@ -34,7 +36,7 @@ internal sealed class ResourceWorkspaceTicketProvider(IMemoryCache cache, IServi
             {
                 result = await services.GetRequiredService<OpenIddictClientService>().AuthenticateWithTokenExchangeAsync(new TokenExchangeAuthenticationRequest
                 {
-                    Issuer = target.IssuerUri, SubjectToken = subject, SubjectTokenType = TokenTypeIdentifiers.AccessToken,
+                    Issuer = target.IssuerUri, SubjectToken = subjectToken, SubjectTokenType = TokenTypeIdentifiers.AccessToken,
                     RequestedTokenType = TokenTypeIdentifiers.AccessToken, Audiences = [target.Audience!],
                     Scopes = [target.Scope ?? target.Audience!], DisableUserInfo = true, CancellationToken = cancellationToken,
                     AdditionalTokenRequestParameters = new() { ["workspace"] = tenant.Name }
@@ -46,7 +48,7 @@ internal sealed class ResourceWorkspaceTicketProvider(IMemoryCache cache, IServi
             }
             if (result.IssuedTokenExpirationDate is not { } expiry || expiry <= clock.GetUtcNow()) return null;
             token = new(result.IssuedToken, expiry);
-            if (ticketKey is not null)
+            if (canCache)
                 cache.Set(key, token, new MemoryCacheEntryOptions { AbsoluteExpiration =
                     expiry < clock.GetUtcNow().AddMinutes(4) ? expiry : clock.GetUtcNow().AddMinutes(4) });
         }

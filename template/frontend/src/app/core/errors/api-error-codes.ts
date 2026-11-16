@@ -3,6 +3,12 @@
  * `PermissionErrorCodes`）逐字一致；只用于展示的码不收。
  */
 export const API_ERROR_CODES = {
+  //#if (TenantWorkspace)
+  /** 租户用户不能访问其他租户的工作区。 */
+  workspaceForbidden: 'Workspace:Forbidden',
+  /** 工作区或访问资格不可用。 */
+  workspaceUnavailable: 'Workspace:Unavailable',
+  //#endif
   /** 保存权限授予时版本已过期（他人抢先保存）：重新加载，不静默覆盖。 */
   permissionConcurrencyConflict: 'Permission:ConcurrencyConflict',
   //#if (LocalIdentity)

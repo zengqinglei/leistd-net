@@ -1,10 +1,11 @@
 //#if (TenantWorkspace)
-import { HttpContext, HttpRequest, HttpResponse } from '@angular/common/http';
+import { HttpContext, HttpErrorResponse, HttpRequest, HttpResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 
 import { WORKSPACE_SCOPE } from './http-context-tokens';
 import { workspaceInterceptor } from './workspace-interceptor';
+import { ApplicationHttpError } from '../errors/application-http-error';
 import { WorkspaceContextService } from '../services/workspace-context-service';
 
 describe('workspaceInterceptor', () => {
@@ -13,11 +14,36 @@ describe('workspaceInterceptor', () => {
       providers: [
         {
           provide: WorkspaceContextService,
-          useValue: { requestScope: () => 'acme', recoverUnavailable: vi.fn() },
+          useValue: {
+            requestScope: () => 'acme',
+            current: () => null,
+            target: () => 'acme',
+            recoverUnavailable: vi.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }),
   );
+
+  it('keeps cold-start denials for the guard and only recovers a committed workspace', async () => {
+    const workspace = TestBed.inject(WorkspaceContextService);
+    const error = ApplicationHttpError.from(
+      new HttpErrorResponse({ status: 403, error: { code: 'Workspace:Unavailable' } }),
+    );
+    const send = () =>
+      TestBed.runInInjectionContext(() =>
+        firstValueFrom(
+          workspaceInterceptor(new HttpRequest('GET', '/api/v1/permissions/current'), () =>
+            throwError(() => error),
+          ),
+        ),
+      );
+    await expect(send()).rejects.toBe(error);
+    expect(workspace.recoverUnavailable).not.toHaveBeenCalled();
+    vi.spyOn(workspace, 'current').mockReturnValue('acme');
+    await expect(send()).rejects.toBe(error);
+    expect(workspace.recoverUnavailable).toHaveBeenCalledOnce();
+  });
 
   it('selects the route workspace for business requests while keeping home endpoints unscoped', () => {
     const observed: HttpRequest<unknown>[] = [];

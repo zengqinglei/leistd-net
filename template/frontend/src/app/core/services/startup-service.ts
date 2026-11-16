@@ -10,6 +10,9 @@ import { ImpersonationService } from './impersonation-service';
 //#endif
 import { SessionContextService } from './session-context-service';
 import { ApplicationHttpError } from '../errors/application-http-error';
+//#if (TenantWorkspace)
+import { workspaceDenial } from '../errors/workspace-access-error';
+//#endif
 import { EntryRouteService } from '../routing/entry-route-service';
 
 export type StartupStatus = 'loading' | 'success' | 'failed';
@@ -24,6 +27,7 @@ export const PROTECTED_ROUTE_PREFIXES = [
   '/platform',
   //#if (TenantWorkspace)
   '/w/',
+  '/workspace-denied',
   //#endif
 ] as const;
 
@@ -85,6 +89,13 @@ export class StartupService {
       //#endif
       this._status.set('success');
     } catch (err: unknown) {
+      //#if (TenantWorkspace)
+      // 工作区拒绝由入口守卫呈现终局说明页，不当作全局启动故障。
+      if (this.entryRoute.path().startsWith('/w/') && workspaceDenial(err)) {
+        this._status.set('success');
+        return;
+      }
+      //#endif
       if (err instanceof ApplicationHttpError && err.status === 401) {
         this.sessionContext.clear();
         this._status.set('success');

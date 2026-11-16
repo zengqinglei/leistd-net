@@ -1,6 +1,6 @@
 # 多租户分层：宿主控制面、租户工作区与平台人员
 
-状态：进行中 · 风险档：高 · 关联：待开 PR · 设计稿：[design.html](./2026-11-16-multitenancy-layering/design.html)
+状态：已完成 · 风险档：高 · 关联：#282、#283（已合入 develop）；合并后修复见本 PR · 设计稿：[design.html](./2026-11-16-multitenancy-layering/design.html)
 
 文中路径相对仓库根；`template/` 下的路径以模板源码为准，后端源码前缀 `template/backend/src/CompanyName.ProjectName.` 简写为 `<P>.`。
 
@@ -65,6 +65,8 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 | AC14 | Given 工作区形态；When 调用原模拟登录端点；Then 404，界面无模拟入口，历史模拟记录照常显示 | 集成 + 组件 |
 | AC15 | Given 工作区形态且开了实时或通知；When 平台人员进入工作区，再切换工作区；Then 本人连接常驻（不带 `workspace`，宿主通知照常到达）；工作区连接以关联账号握手，切换后旧连接停止、带新工作区重建，订阅状态不残留；租户用户只有一条连接 | 集成（握手）+ `signalr-service.spec.ts`（连接管理） |
 | AC16 | Given 默认形态或关闭多租户；When 生成项目；Then 不出现工作区方案、`/w` 路由与平台人员页面，构建通过 | 模板生成检查 + 选择器场景构建 |
+| AC17 | Given 工作区形态且目标工作区返回 `Workspace:Forbidden` 或 `Workspace:Unavailable`；When 冷启动或深链进入；Then 显示区分原因的「无法访问该工作区」说明页，地址保留原目标，按钮按上次 → 第一个 → `/platform` 前往可用工作区；应用内切换被拒仍恢复原处并提示，Unavailable 刷新目录后退出不可用工作区 | `workspace-guard.spec.ts`、`workspace-denied.spec.ts`、`startup-service.spec.ts`、`workspace-context-service.spec.ts`、Mock 拒绝回归 |
+| AC18 | Given Resource 同一浏览器已以 A 登录并缓存工作区令牌；When 以 B 重新完成 OIDC 登录，再请求同一工作区；Then 本人和工作区主体均属于 B，不复用 A 的工作区令牌 | `ResourceBrowserSessionTests.Oidc_login_as_another_user_does_not_reuse_the_previous_workspace_subject`；缺少 subject 或票据键时跳过缓存另有同类参数化回归 |
 
 ### 非功能要求
 
@@ -81,7 +83,7 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 | D3 | 平台人员进入租户做成生成参数 `TenantStaffAccess`：默认 `Impersonation`（保留模拟登录并修 Q2），可选 `Workspace`（替代模拟登录）；不做客服代入 | 用户，2026-11-16（取代当日早先"撤掉模拟登录"的决定） |
 | D4 | 工作区形态一次做完，含 Resource 与跨服务调用，一个 PR 交付 | 用户，2026-11-16 |
 | D5 | 界面采用设计稿方案 A：侧栏头部合一切换器 + 租户行「平台人员」抽屉 | 用户，2026-11-16 |
-| D6 | 与下游已有实现不一致处按终局做法实现：路由统一 `/w/:workspace`、平台人员两条实时连接、区分 `Forbidden` 与 `Unavailable` 取下游做法；缓存键用服务端票据键、进入工作区令牌寿命取较小值、访问令牌不加 `sid`、节点缓存用 `IMemoryCache` 取本方案。下游同步模板时自行对齐，确需保留的差异由下游列出并说明理由 | 用户，2026-11-16 |
+| D6 | 与下游已有实现不一致处按终局做法实现：路由统一 `/w/:workspace`、平台人员两条实时连接、区分 `Forbidden` 与 `Unavailable` 取下游做法；缓存键用服务端票据键与本人 subject（业务三仓已一致，无需对齐）、进入工作区令牌寿命取较小值、访问令牌不加 `sid`、节点缓存用 `IMemoryCache` 取本方案。下游同步模板时自行对齐，确需保留的差异由下游列出并说明理由 | 用户，2026-11-16 |
 
 ## 2. 方案
 
@@ -168,7 +170,9 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 
 ### 工作区形态：Resource 浏览器会话
 
-- `Workspace` 方案对宿主用户带头的请求，按（服务端票据键, 租户）在节点内缓存工作区令牌（`IMemoryCache`，到期时间按交换结果在条目内设置；同键并发偶尔重复交换可以接受）；缓存期限取 4 分钟与令牌实际剩余寿命的较小值，命中时不返回已过期令牌。缺失时调用进入工作区交换。
+ASP.NET Core 的 Cookie 处理器在已带有效 Cookie 的新登录中沿用服务端票据键；同请求签出再签入也不清空内部键，这是 [dotnet/aspnetcore#47503](https://github.com/dotnet/aspnetcore/issues/47503) 的已知行为。部署环境的会话 Cookie 使用 `__Host-Http-` 前缀，浏览器只接受同源 HTTPS 响应设置，第三方不能通过 Domain 或脚本植入该 Cookie，会话固定的利用前提不成立，因此不另做键轮换或处理器扩展；消费票据键的身份缓存必须自行区分主体。
+
+- `Workspace` 方案对宿主用户带头的请求，按（Workspace, 服务端票据键, 本人主体 sub, 租户）在节点内缓存工作区令牌（`IMemoryCache`，到期时间按交换结果在条目内设置；同键并发偶尔重复交换可以接受）；缓存期限取 4 分钟与令牌实际剩余寿命的较小值，命中时不返回已过期令牌。缺失时调用进入工作区交换；缺少票据键或 sub 时不读写缓存。
 - 验证工作区令牌复用本服务现有的访问令牌验证配置，结果票据保存 `access_token` 与到期时间，以便现有令牌访问器与 Hub 到期行为照常工作。
 - 跨服务调用的令牌访问器改为读 `Workspace` 方案：有工作区时是工作区令牌，否则是本人令牌。
 - 关联账号进入 Resource 即普通租户用户：首次访问 JIT 建成员；没有角色时进入零权限外壳。
@@ -181,6 +185,7 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 - 切换只做路由跳转；`/w/:workspace` 父组件按工作区键重建子路由出口，各页走首屏骨架。不新增离页确认。
 - 登录后落点：上次的工作区（`localStorage` 只存"上次"，不作为当前状态），失效取第一个，没有时 `/platform`。
 - 菜单按路由所在区选择，只按权限裁剪；零权限时保留外壳并说明原因。
+- 冷启动或深链的工作区 403 不进入全局启动失败卡片：以 `hlmEmpty` 显示「无法访问该工作区」，Forbidden 说明账号属于其他工作区，Unavailable 说明工作区或访问资格不可用；保留原目标地址，主按钮「前往我的工作区」共用登录后落点规则。应用内切换被拒恢复原范围并提示，Unavailable 刷新列表后退到下一个可用工作区。
 - 实时连接：平台人员在工作区内保持本人与工作区两条连接，通知中心按当前范围显示；其他情况一条。
 
 ### 工作区形态：授予管理
@@ -207,7 +212,7 @@ Q1、Q2 所有多租户项目都受影响；Q3、Q4 只出现在"平台方有运
 | 只有平台人员走 `/w/:workspace`、租户用户沿用原路径 | 同一地址 `/platform/users` 对宿主与租户含义不同，链接不能互相分享，还要两套挂载；工作区形态本就是新生成形态，统一走 `/w` 没有存量深链负担 |
 | 平台人员在工作区内只保持一条实时连接 | 进入工作区期间收不到宿主通知 |
 | 进入工作区令牌寿命固定 5 分钟 | 派生令牌会比本人令牌活得久；取两者较小值 |
-| 访问令牌加入 `sid` 以区分 Resource 会话 | 改变现有令牌契约；Resource 用自己的服务端票据键即可区分本地会话 |
+| 访问令牌加入 `sid` 以区分 Resource 会话 | 改变现有令牌契约；Resource 用自己的服务端票据键与本人 subject 区分本地会话和用户 |
 | 在各登录入口判定"关联账号不可登录" | 入口多、易漏，还会与复用主体工厂冲突；领域禁止关联账号持有凭据，一处即可 |
 | 默认租户放在 `DbMigrator` | `DbMigrator` 没有账号初始化链；放在已持有初始化锁、默认管理员已就绪的 `SystemInitializer` |
 | 分两期交付 Resource | 用户决定一次做完；跨服务语义与单服务共用一处主体判定，一起设计更一致 |
@@ -258,7 +263,7 @@ PR1 交付范围：三层职责、业务权限侧别与私有化形态选择指�
 
 PR1 定向验证与 Claude 审查通过，已通过 #282 合入 develop。Standalone 生成项目的后端构建、目标集成回归、Mock spec、前端 lint 与后端风格检查通过；选择器给出的代表场景生成、条件裁剪与文档检查通过。
 
-PR2 已实现 WP1、WP3–WP7：新增有效的工作区形态与场景；宿主本人身份、无凭据关联成员和控制面授予；统一 Workspace 认证入口；Identity 交换、Resource 浏览器会话与专用目录回源；方案 A 前端、Mock 和默认租户初始化。框架包未改动。Claude 第 1 轮 UI1–UI6、F1–F9、R1–R4、B1 及 R2 补充清单已修复，UI1–UI6 复核通过，其余等待代码复审。
+PR2 已实现 WP1、WP3–WP7：新增有效的工作区形态与场景；宿主本人身份、无凭据关联成员和控制面授予；统一 Workspace 认证入口；Identity 交换、Resource 浏览器会话与专用目录回源；方案 A 前端、Mock 和默认租户初始化。框架包未改动。Claude 第 1 轮 UI1–UI6、F1–F9、R1–R4、B1 及 R2 补充清单已修复，审查已随 #283 收口并合入 develop。
 
 集中验证结果（生成项目均使用候选框架包，真实数据库为 PostgreSQL）：
 
@@ -276,4 +281,14 @@ PR2 已实现 WP1、WP3–WP7：新增有效的工作区形态与场景；宿主
 
 常驻事实同步到 `docs/architecture/isolation-and-authorization-scenarios.md`、`template/docs/standards/auth.md`、`template/docs/deploy/README.md` 与 `template/backend/README.md`。方案 A 的五组 1440/390 截图已就绪，F9 对应用户列表截图已更新。
 
-worker-01 不可达，按个人执行偏好回退到受管 local；未运行本地 core/full 档矩阵，后续 PR CI 与合入后矩阵由 Claude 负责。执行证据与逐项提交记录保存在实施台账。规格保持进行中，等待 PR2 审查与合入；未推送。
+worker-01 不可达，按个人执行偏好回退到受管 local；未运行本地 core/full 档矩阵，后续 PR CI 与合入后矩阵由 Claude 负责。执行证据与逐项提交记录保存在实施台账。PR2 已通过 #283 合入 develop；合并后修复见下节。
+
+### 合并后修复
+
+PR #283 已合入 develop `108341f7`。本次一个修复 PR 收口三项：Mock 条件成员合并导入；Resource 工作区令牌缓存按票据键、本人 subject 与租户隔离，防止同浏览器重新 OIDC 登录后命中前一用户的工作区令牌；工作区深链拒绝使用专用说明页。Identity 与 Resource 的签出尝试及相关夹具调整均已撤回，不改变现有会话键语义。规格与常驻认证、路由文档同步。
+
+D6 下游对齐清单：业务三仓工作区令牌缓存键已包含 subject，与修复后的模板一致，无需对齐。不发送通知。
+
+本 PR 的验证结论：三种实际生成形态（Identity、Resource、关闭本地化的 Standalone 工作区）的前端 lint、生产构建与受影响 spec 通过；专用拒绝说明页的两种原因、原地址与返回落点经有头 Mock 浏览器验证，桌面与手机排版通过。Resource 后端构建、受影响浏览器会话回归与风格检查通过；去掉缓存键中的 subject 时换号回归失败，恢复后通过，缺少或空票据键/sub 时不缓存的参数化回归通过。测试签发器的 A/B 邮箱冲突修正后，只补验失败用例，没有重跑无关全量矩阵。
+
+票据键消费方排查：`ResourceSessionRefresher` 用键串行化并重读受 Cookie 引用版本校验的当前票据，重试缓存只保存时间；`ExternalAuthController` 用键锁定并一次消费外部票据，另校验意图、发起人和租户。两者都没有跨用户主体缓存，保持原实现。常驻事实同步到 `template/docs/standards/auth.md` 与 `template/docs/standards/frontend-routing.md`。

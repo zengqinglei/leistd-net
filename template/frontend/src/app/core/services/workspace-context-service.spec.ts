@@ -14,6 +14,32 @@ import { SignalRService } from './signalr-service';
 import { WorkspaceContextService } from './workspace-context-service';
 
 describe('WorkspaceContextService', () => {
+  it('uses the last available workspace, then the first, then the platform landing', () => {
+    const previous = localStorage.getItem('last-workspace');
+    onTestFinished(() =>
+      previous === null
+        ? localStorage.removeItem('last-workspace')
+        : localStorage.setItem('last-workspace', previous),
+    );
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: AuthService, useValue: { currentUser: () => ({}) } },
+      ],
+    });
+    const service = TestBed.inject(WorkspaceContextService);
+    service.workspaces.set([
+      { name: 'acme', tenantId: 'a', userId: 'member-a' },
+      { name: 'globex', tenantId: 'b', userId: 'member-b' },
+    ]);
+    localStorage.setItem('last-workspace', 'globex');
+    expect(service.landingUrl()).toBe('/w/globex/platform');
+    localStorage.setItem('last-workspace', 'removed');
+    expect(service.landingUrl()).toBe('/w/acme/platform');
+    service.workspaces.set([]);
+    expect(service.landingUrl()).toBe('/platform');
+  });
+
   it('discards a late context load after a newer workspace selection', async () => {
     const completions: (() => void)[] = [];
     TestBed.configureTestingModule({

@@ -113,6 +113,13 @@ export class WorkspaceContextService {
     return name ? `/w/${encodeURIComponent(name)}${route}` : route;
   }
 
+  landingUrl(): string {
+    const last = localStorage.getItem('last-workspace');
+    if (last === '' && !this.auth.currentUser()?.tenantId) return '/platform';
+    const selected = this.workspaces().find((item) => item.name === last) ?? this.workspaces()[0];
+    return selected ? `/w/${encodeURIComponent(selected.name)}/platform` : '/platform';
+  }
+
   switchTo(name: string | null): void {
     const suffix = this.router.url.replace(/^\/w\/[^/]+/, '').split(/[?#]/)[0];
     const destination = name

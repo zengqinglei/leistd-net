@@ -6,7 +6,7 @@ import { provideTranslocoScope } from '@jsverse/transloco';
 import { authGuard } from './core/guards/auth-guard';
 import { forbiddenGuard, permissionGuard } from './core/guards/permission-guard';
 //#if (TenantWorkspace)
-import { workspaceGuard } from './core/guards/workspace-guard';
+import { workspaceDeniedGuard, workspaceGuard } from './core/guards/workspace-guard';
 //#endif
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from './core/i18n/translation-scopes';
@@ -104,6 +104,13 @@ const baseRoutes: Routes = [
 
 //#if (TenantWorkspace)
 export const routes: Routes = [
+  {
+    path: 'workspace-denied',
+    canActivate: [authGuard, workspaceDeniedGuard],
+    runGuardsAndResolvers: 'paramsOrQueryParamsChange',
+    loadComponent: () =>
+      import('./core/components/workspace-denied/workspace-denied').then((m) => m.WorkspaceDenied),
+  },
   {
     path: 'w/:workspace',
     component: TenantLayout,

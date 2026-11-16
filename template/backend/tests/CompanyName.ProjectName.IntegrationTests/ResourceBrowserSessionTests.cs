@@ -56,33 +56,7 @@ public sealed class ResourceBrowserSessionTests
         using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         using var issuer = new Issuer { WorkspaceLifetime = lifetime, WorkspaceClock = clock };
-        using var host = Host(factory, issuer).WithWebHostBuilder(builder => builder
-            .UseSetting("Authentication:Issuer", Issuer.Address)
-            .UseSetting("Leistd:ServiceAuth:Authority", Issuer.Address)
-            .UseSetting("Leistd:ServiceAuth:ClientId", "resource-owner")
-            .UseSetting("Leistd:ServiceAuth:ClientSecret", "ResourceOwner!Secret1")
-            .UseSetting("Leistd:ServiceClients:Identity:BaseAddress", Issuer.Address)
-            .UseSetting("Leistd:ServiceClients:Identity:Scope", "tenant-routing.read")
-            .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Audience", "identity-api")
-            .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Scope", "identity-api")
-            .ConfigureTestServices(services =>
-            {
-                services.AddSingleton<TimeProvider>(clock);
-                services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new WorkspaceTransport(issuer));
-                services.Configure<OpenIddictClientOptions>(options =>
-                {
-                    foreach (var registration in options.Registrations)
-                    {
-                        registration.Configuration = new OpenIddictConfiguration { Issuer = new Uri(Issuer.Address), TokenEndpoint = new Uri(Issuer.Address + "token") };
-                        registration.Configuration.GrantTypesSupported.Add("urn:ietf:params:oauth:grant-type:token-exchange");
-                        registration.Configuration.GrantTypesSupported.Add("client_credentials");
-                        registration.Configuration.TokenEndpointAuthMethodsSupported.Add("client_secret_post");
-                    }
-                });
-#pragma warning disable CS0618 // 官方 MemoryCache 的测试时钟接缝与业务 TimeProvider 同步推进。
-                services.Configure<MemoryCacheOptions>(options => options.Clock = new WorkspaceCacheClock(clock));
-#pragma warning restore CS0618
-            }));
+        using var host = WorkspaceHost(factory, issuer, clock);
         var cookie = await LoginAsync(host, issuer);
         async Task<string?> TokenAsync(string session, string workspace = "acme")
         {
@@ -113,6 +87,124 @@ public sealed class ResourceBrowserSessionTests
         using var me = await homeBrowser.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
+
+    [Fact]
+    public async Task Oidc_login_as_another_user_does_not_reuse_the_previous_workspace_subject()
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = WorkspaceHost(factory, issuer, TimeProvider.System);
+        using var browser = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false, HandleCookies = true
+        });
+        async Task SignInAsync()
+        {
+            using var challenge = await browser.GetAsync("/api/v1/auth/login?returnUrl=/workspace");
+            var query = AuthorizationRequest(challenge);
+            issuer.Nonce = query["nonce"];
+            using var callback = await browser.GetAsync(SignInCallback(query["state"]));
+            Assert.Equal(HttpStatusCode.Found, callback.StatusCode);
+            ProjectWebApplicationFactory.AssertSessionCookieContract(callback);
+        }
+        async Task<JsonWebToken> WorkspaceTokenAsync()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, AccessTokenProbe.Path);
+            request.Headers.Add("X-Workspace", "acme");
+            using var response = await browser.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return new JsonWebToken(await response.Content.ReadAsStringAsync());
+        }
+        await SignInAsync();
+        var oldSubject = issuer.Subject;
+        var oldMember = issuer.WorkspaceMemberId;
+        var first = await WorkspaceTokenAsync();
+        Assert.Equal(oldMember, first.Subject);
+        Assert.Equal(oldSubject, first.GetClaim("home_sub").Value);
+        issuer.Subject = Guid.NewGuid().ToString();
+        issuer.Username = "oidc-user-b";
+        issuer.Email = "user-b@example.test";
+        issuer.WorkspaceMemberId = Guid.NewGuid().ToString();
+
+        await SignInAsync();
+        var second = await WorkspaceTokenAsync();
+
+        Assert.Equal(issuer.WorkspaceMemberId, second.Subject);
+        Assert.Equal(issuer.Subject, second.GetClaim("home_sub").Value);
+        Assert.NotEqual(oldMember, second.Subject);
+        Assert.Equal(2, issuer.WorkspaceExchanges);
+        using var me = JsonDocument.Parse(await browser.GetStringAsync("/api/v1/auth/me"));
+        Assert.Equal(issuer.Subject, me.RootElement.GetProperty("id").GetString());
+    }
+
+    [Theory]
+    [InlineData("subject", null)]
+    [InlineData("subject", "")]
+    [InlineData("ticket", null)]
+    [InlineData("ticket", "")]
+    public async Task Workspace_tokens_are_not_cached_without_a_subject_or_ticket_key(string missing, string? value)
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        using var host = WorkspaceHost(factory, issuer, TimeProvider.System).WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Configure<CookieAuthenticationOptions>(
+                AuthenticationSchemeNames.SessionCookie, options =>
+                {
+                    var validate = options.Events.OnValidatePrincipal;
+                    options.Events.OnValidatePrincipal = async context =>
+                    {
+                        await validate(context);
+                        if (missing == "ticket")
+                            context.Properties.Items[DistributedTicketStore.TicketKeyProperty] = value;
+                        else
+                        {
+                            var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                            foreach (var claim in identity.FindAll("sub").ToArray()) identity.RemoveClaim(claim);
+                            if (value is not null) identity.AddClaim(new Claim("sub", value));
+                        }
+                    };
+                })));
+        var cookie = await LoginAsync(host, issuer);
+        using var browser = Client(host, cookie);
+        browser.DefaultRequestHeaders.Add("X-Workspace", "acme");
+
+        using var first = await browser.GetAsync(AccessTokenProbe.Path);
+        using var second = await browser.GetAsync(AccessTokenProbe.Path);
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal(2, issuer.WorkspaceExchanges);
+        Assert.NotEqual(await first.Content.ReadAsStringAsync(), await second.Content.ReadAsStringAsync());
+    }
+
+    private static WebApplicationFactory<Program> WorkspaceHost(ProjectWebApplicationFactory factory, Issuer issuer, TimeProvider clock) =>
+        Host(factory, issuer).WithWebHostBuilder(builder => builder
+            .UseSetting("Authentication:Issuer", Issuer.Address)
+            .UseSetting("Leistd:ServiceAuth:Authority", Issuer.Address)
+            .UseSetting("Leistd:ServiceAuth:ClientId", "resource-owner")
+            .UseSetting("Leistd:ServiceAuth:ClientSecret", "ResourceOwner!Secret1")
+            .UseSetting("Leistd:ServiceClients:Identity:BaseAddress", Issuer.Address)
+            .UseSetting("Leistd:ServiceClients:Identity:Scope", "tenant-routing.read")
+            .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Audience", "identity-api")
+            .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Scope", "identity-api")
+            .ConfigureTestServices(services =>
+            {
+                services.AddSingleton(clock);
+                services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new WorkspaceTransport(issuer));
+                services.Configure<OpenIddictClientOptions>(options =>
+                {
+                    foreach (var registration in options.Registrations)
+                    {
+                        registration.Configuration = new OpenIddictConfiguration { Issuer = new Uri(Issuer.Address), TokenEndpoint = new Uri(Issuer.Address + "token") };
+                        registration.Configuration.GrantTypesSupported.Add("urn:ietf:params:oauth:grant-type:token-exchange");
+                        registration.Configuration.GrantTypesSupported.Add("client_credentials");
+                        registration.Configuration.TokenEndpointAuthMethodsSupported.Add("client_secret_post");
+                    }
+                });
+#pragma warning disable CS0618 // 官方 MemoryCache 的测试时钟接缝与业务 TimeProvider 同步推进。
+                services.Configure<MemoryCacheOptions>(options => options.Clock = new WorkspaceCacheClock(clock));
+#pragma warning restore CS0618
+            }));
 
 #pragma warning disable CS0618
     private sealed class WorkspaceCacheClock(TimeProvider clock) : Microsoft.Extensions.Internal.ISystemClock
@@ -780,7 +872,9 @@ public sealed class ResourceBrowserSessionTests
         public const string Address = "https://identity.test/";
         public const string AccessTokenAcr = "access-token-acr";
         public RsaSecurityKey Key { get; } = new(RSA.Create(2048)) { KeyId = "oidc-test" };
-        public string Subject { get; } = Guid.NewGuid().ToString();
+        public string Subject { get; set; } = Guid.NewGuid().ToString();
+        public string Username { get; set; } = "oidc-user";
+        public string Email { get; set; } = "user@example.test";
         public string Nonce { get; set; } = "";
         public int RefreshCount { get; private set; }
         public string? LastRefreshToken { get; private set; }
@@ -795,7 +889,7 @@ public sealed class ResourceBrowserSessionTests
         public TimeProvider WorkspaceClock { get; set; } = TimeProvider.System;
         public int WorkspaceLifetime { get; set; } = 300;
         public int WorkspaceExchanges { get; private set; }
-        public string WorkspaceMemberId { get; } = Guid.NewGuid().ToString();
+        public string WorkspaceMemberId { get; set; } = Guid.NewGuid().ToString();
         private readonly Guid workspaceTenantId = Guid.NewGuid();
 #endif
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -855,7 +949,7 @@ public sealed class ResourceBrowserSessionTests
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new
             {
                 access_token = Token("resource-api", "at+jwt", new()
-                { ["sub"] = Subject, ["preferred_username"] = "oidc-user", ["email"] = "user@example.test", ["role"] = "operator", ["acr"] = AccessTokenAcr, ["jti"] = Guid.NewGuid().ToString() }),
+                { ["sub"] = Subject, ["preferred_username"] = Username, ["email"] = Email, ["role"] = "operator", ["acr"] = AccessTokenAcr, ["jti"] = Guid.NewGuid().ToString() }),
                 // id_token 带一个与访问令牌不同的 acr 和一个专属声明：会话里出现它们，就说明主体混入了 id_token
                 id_token = Token("resource-test", "JWT", new() { ["sub"] = Subject, ["nonce"] = Nonce, ["acr"] = "id-token-acr", ["id_token_only"] = "x" }),
                 refresh_token = refresh ? "refresh-2" : "refresh-1", token_type = "Bearer", expires_in = 600
