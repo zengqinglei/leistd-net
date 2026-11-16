@@ -36,6 +36,8 @@ using Leistd.MultiTenancy.ServiceClient;
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Domain.Users.Abstractions;
 using CompanyName.ProjectName.Infrastructure.AccountPreferences;
+using CompanyName.ProjectName.Infrastructure.Systems;
+using CompanyName.ProjectName.Domain.Systems.Abstractions;
 using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.OAuth.Options;
 using Leistd.ServiceClient.Refit;
@@ -399,6 +401,11 @@ public static class DependencyInjection
         }
 
         read.AddStandardResilienceHandler();
+        services.TryAddTransient<IIdentitySystemDirectory, IdentitySystemDirectory>();
+        var systems = services.AddRefitServiceClient<IIdentitySystemsApi, IdentitySystemsClientOptions>(
+            "IdentitySystems", configSectionPath: identitySection);
+        if (HasServiceAuthentication(configuration)) systems.AddClientCredentials(configSectionPath: identitySection);
+        systems.AddStandardResilienceHandler();
 #if (TenantWorkspace)
         services.TryAddTransient<IIdentityWorkspaceDirectory,
             IdentityWorkspaceDirectory>();

@@ -37,16 +37,6 @@ export interface DistributedEventCatalogOutputDto {
   lastErrorCode?: string | null;
 }
 
-/** 宿主可选择的物理库；不暴露连接串或指纹。 */
-export interface DistributedEventDatabaseOutputDto {
-  /** host 或代表租户的 Guid 字符串。 */
-  key: string;
-  isHost: boolean;
-  representativeTenantId?: string | null;
-  /** 目录提供的租户清单；宿主项为空，不代表无租户。 */
-  tenantIds: string[];
-}
-
 /** 详情概要；没有管理权限也可读取，载荷不随之返回。 */
 export interface DistributedEventInboxDetailOutputDto {
   record: DistributedEventInboxOutputDto;
@@ -253,7 +243,6 @@ export interface DistributedEventTestOutputDto {
 /** 按 Id 倒序的偏移分页查询；Sorting 不生效。 */
 export interface GetDistributedEventInboxInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
-  database?: string | null;
   eventName?: string | null;
   /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
@@ -268,7 +257,6 @@ export interface GetDistributedEventInboxInputDto extends PagedRequestDto {
 /** 按 Id 倒序的偏移分页查询；Sorting 不生效。 */
 export interface GetDistributedEventOutboxInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
-  database?: string | null;
   eventName?: string | null;
   /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
@@ -282,7 +270,6 @@ export interface GetDistributedEventOutboxInputDto extends PagedRequestDto {
 /** 按 Id 倒序的偏移分页查询；Sorting 不生效。 */
 export interface GetDistributedEventRejectionsInputDto extends PagedRequestDto {
   /** 宿主物理库选择键：host 或代表租户 Id；租户不得传。 */
-  database?: string | null;
   eventName?: string | null;
   /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;

@@ -920,6 +920,14 @@ describe('mock registration switch tenancy', () => {
     setMockSessionUserId(null);
   });
 
+  it('reports the home session tenant so shell controls can distinguish tenant users from staff', () => {
+    const me = AUTH_API['GET /api/v1/auth/me'] as Handler;
+    setMockSessionUserId(USERS[0].id);
+    expect(me({})).toMatchObject({ tenantId: null });
+    setMockSessionTenantKey('tenant_acme');
+    expect(me({})).toMatchObject({ tenantId: 'tenant_acme' });
+  });
+
   it('follows the tenant hint for anonymous visitors', () => {
     TENANT_SETTING_VALUES.set('tenant_acme:Registration.Enabled', 'false');
 

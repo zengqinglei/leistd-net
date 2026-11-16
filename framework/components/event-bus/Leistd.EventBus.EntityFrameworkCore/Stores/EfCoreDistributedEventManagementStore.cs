@@ -8,7 +8,6 @@ using Leistd.EventBus.Distributed.Options;
 using Leistd.EventBus.Distributed.Stores;
 using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.Context;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -19,27 +18,18 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
     DistributedEventDatabaseScope<TDbContext> scope,
     DistributedEventRecovery<TDbContext> recovery,
     DistributedEventCatalog<TDbContext> catalog,
-    ICurrentTenant tenant,
     IUnitOfWorkManager units,
     IDistributedEventBus publisher,
     IOptionsMonitor<DistributedEventOptions> options) : IDistributedEventManagementStore where TDbContext : DbContext
 {
-    public Task<DistributedEventStatusOutputDto> GetStatusAsync(string? database = null, CancellationToken cancellationToken = default)
-        => catalog.StatusAsync(database, cancellationToken);
-    public Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetCatalogAsync(string? database = null, CancellationToken cancellationToken = default)
-        => catalog.GetAsync(database, cancellationToken);
-
-    public async Task<IReadOnlyList<DistributedEventDatabaseOutputDto>> GetDatabasesAsync(CancellationToken cancellationToken = default)
-    {
-        var list = await scope.ListAsync(cancellationToken);
-        if (list.FailedTenants.Count > 0) throw new InvalidOperationException("Some tenant databases could not be resolved.");
-        return list.Databases.Select(x => new DistributedEventDatabaseOutputDto
-        { Key = x.TenantId?.ToString() ?? "host", IsHost = x.TenantId is null, RepresentativeTenantId = x.TenantId, TenantIds = x.TenantIds }).ToArray();
-    }
+    public Task<DistributedEventStatusOutputDto> GetStatusAsync(CancellationToken cancellationToken = default)
+        => catalog.StatusAsync(cancellationToken);
+    public Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetCatalogAsync(CancellationToken cancellationToken = default)
+        => catalog.GetAsync(cancellationToken);
 
     public async Task<PagedResult<DistributedEventOutboxOutputDto>> GetOutboxListAsync(GetDistributedEventOutboxInputDto input, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(input.Database, false, cancellationToken);
+        var target = scope.Resolve(false);
         return await scope.RunAsync(target, async (db, ct) =>
         {
             var query = Outbox(db, target);
@@ -60,7 +50,7 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
 
     public async Task<PagedResult<DistributedEventInboxOutputDto>> GetInboxListAsync(GetDistributedEventInboxInputDto input, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(input.Database, false, cancellationToken);
+        var target = scope.Resolve(false);
         return await scope.RunAsync(target, async (db, ct) =>
         {
             var query = Inbox(db, target);
@@ -82,7 +72,7 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
 
     public async Task<PagedResult<DistributedEventRejectionOutputDto>> GetRejectionsAsync(GetDistributedEventRejectionsInputDto input, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(input.Database, true, cancellationToken);
+        var target = scope.Resolve(true);
         return await scope.RunAsync(target, async (db, ct) =>
         {
             var query = db.Set<DistributedEventRejection>().AsNoTracking();
@@ -101,9 +91,9 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
         }, cancellationToken);
     }
 
-    public async Task<DistributedEventOutboxDetailOutputDto> GetOutboxAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventOutboxDetailOutputDto> GetOutboxAsync(long id, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(database, false, cancellationToken);
+        var target = scope.Resolve(false);
         return await scope.RunAsync(target, async (db, ct) =>
         {
             var query = Outbox(db, target).Where(x => x.Id == id);
@@ -112,9 +102,9 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
         }, cancellationToken);
     }
 
-    public async Task<DistributedEventInboxDetailOutputDto> GetInboxAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventInboxDetailOutputDto> GetInboxAsync(long id, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(database, false, cancellationToken);
+        var target = scope.Resolve(false);
         return await scope.RunAsync(target, async (db, ct) =>
         {
             var query = Inbox(db, target).Where(x => x.Id == id);
@@ -124,9 +114,9 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
         }, cancellationToken);
     }
 
-    public async Task<DistributedEventRejectionDetailOutputDto> GetRejectionAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventRejectionDetailOutputDto> GetRejectionAsync(long id, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(database, true, cancellationToken);
+        var target = scope.Resolve(true);
         return await scope.RunAsync(target, async (db, ct) =>
         {
             var query = db.Set<DistributedEventRejection>().AsNoTracking().Where(x => x.Id == id);
@@ -136,41 +126,37 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
         }, cancellationToken);
     }
 
-    public async Task<DistributedEventPayloadOutputDto> GetOutboxPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventPayloadOutputDto> GetOutboxPayloadAsync(long id, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(database, false, cancellationToken);
+        var target = scope.Resolve(false);
         return await scope.RunAsync(target, async (db, ct) => new DistributedEventPayloadOutputDto
         { Payload = await Outbox(db, target).Where(x => x.Id == id).Select(x => x.Payload).SingleOrDefaultAsync(ct) ?? throw NotFound() }, cancellationToken);
     }
-    public async Task<DistributedEventPayloadOutputDto> GetInboxPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventPayloadOutputDto> GetInboxPayloadAsync(long id, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(database, false, cancellationToken);
+        var target = scope.Resolve(false);
         return await scope.RunAsync(target, async (db, ct) => new DistributedEventPayloadOutputDto
         { Payload = await Inbox(db, target).Where(x => x.Id == id).Select(x => x.Payload).SingleOrDefaultAsync(ct) ?? throw NotFound() }, cancellationToken);
     }
-    public async Task<DistributedEventRawMessageOutputDto> GetRejectionPayloadAsync(long id, string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventRawMessageOutputDto> GetRejectionPayloadAsync(long id, CancellationToken cancellationToken = default)
     {
-        var target = await scope.ResolveAsync(database, true, cancellationToken);
+        var target = scope.Resolve(true);
         return await scope.RunAsync(target, async (db, ct) => new DistributedEventRawMessageOutputDto
         { RawBody = await db.Set<DistributedEventRejection>().Where(x => x.Id == id).Select(x => x.RawBody).SingleOrDefaultAsync(ct) ?? throw NotFound() }, cancellationToken);
     }
 
-    public Task<DistributedEventRecoveryOutputDto> RedeliverAsync(RecoverDistributedEventOutboxInputDto input, string? database = null, CancellationToken cancellationToken = default)
-        => recovery.OutboxAsync(input, database, cancellationToken);
-    public Task<DistributedEventRecoveryOutputDto> ReplayAsync(RecoverDistributedEventInboxInputDto input, string? database = null, CancellationToken cancellationToken = default)
-        => recovery.InboxAsync(input, database, cancellationToken);
-    public Task<DistributedEventRecoveryOutputDto> RedecodeAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default)
-        => recovery.RejectionsAsync(input, database, false, cancellationToken);
-    public Task<DistributedEventRecoveryOutputDto> DiscardAsync(RecoverDistributedEventRejectionInputDto input, string? database = null, CancellationToken cancellationToken = default)
-        => recovery.RejectionsAsync(input, database, true, cancellationToken);
+    public Task<DistributedEventRecoveryOutputDto> RedeliverAsync(RecoverDistributedEventOutboxInputDto input, CancellationToken cancellationToken = default)
+        => recovery.OutboxAsync(input, cancellationToken);
+    public Task<DistributedEventRecoveryOutputDto> ReplayAsync(RecoverDistributedEventInboxInputDto input, CancellationToken cancellationToken = default)
+        => recovery.InboxAsync(input, cancellationToken);
+    public Task<DistributedEventRecoveryOutputDto> RedecodeAsync(RecoverDistributedEventRejectionInputDto input, CancellationToken cancellationToken = default)
+        => recovery.RejectionsAsync(input, false, cancellationToken);
+    public Task<DistributedEventRecoveryOutputDto> DiscardAsync(RecoverDistributedEventRejectionInputDto input, CancellationToken cancellationToken = default)
+        => recovery.RejectionsAsync(input, true, cancellationToken);
 
-    public async Task<DistributedEventTestOutputDto> SendTestEventAsync(string? database = null, CancellationToken cancellationToken = default)
+    public async Task<DistributedEventTestOutputDto> SendTestEventAsync(CancellationToken cancellationToken = default)
     {
-        if (tenant.Id is not null && database is not null)
-            throw new BusinessException(DistributedEventErrorCodes.HostOnly, "Only the host can select a database.");
-        if (database is not (null or "host"))
-            throw new System.ComponentModel.DataAnnotations.ValidationException(new System.ComponentModel.DataAnnotations.ValidationResult(
-                "Test events cannot be published into a selected tenant database.", ["Database"]), null, database);
+        scope.Resolve(true);
         if (!options.CurrentValue.TestEvent.Enabled)
             throw new BusinessException(DistributedEventErrorCodes.TestEventDisabled, "Test events are disabled.");
         using var unit = units.Begin();
@@ -180,9 +166,9 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
         return new() { EventId = message.EventId };
     }
 
-    internal static IQueryable<DistributedEventOutbox> Outbox(TDbContext db, DistributedEventDatabaseTarget target)
-        => target.AllTenants ? db.Set<DistributedEventOutbox>().IgnoreQueryFilters() : db.Set<DistributedEventOutbox>().IgnoreQueryFilters().Where(x => x.TenantId == target.TenantId);
-    internal static IQueryable<DistributedEventInbox> Inbox(TDbContext db, DistributedEventDatabaseTarget target)
-        => target.AllTenants ? db.Set<DistributedEventInbox>().IgnoreQueryFilters() : db.Set<DistributedEventInbox>().IgnoreQueryFilters().Where(x => x.TenantId == target.TenantId);
+    internal static IQueryable<DistributedEventOutbox> Outbox(TDbContext db, Guid? target)
+        => db.Set<DistributedEventOutbox>().IgnoreQueryFilters().Where(x => x.TenantId == target);
+    internal static IQueryable<DistributedEventInbox> Inbox(TDbContext db, Guid? target)
+        => db.Set<DistributedEventInbox>().IgnoreQueryFilters().Where(x => x.TenantId == target);
     internal static BusinessException NotFound() => new(DistributedEventErrorCodes.RecordNotFound, "The distributed event record does not exist.");
 }

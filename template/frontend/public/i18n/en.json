@@ -1,15 +1,18 @@
 {
   //#if (TenantWorkspace)
   "tenantWorkspace": {
+    "return": "Return to {{tenant}}",
+    "representing": "Representing {{tenant}}",
+    "empty": "No matching tenants",
     "deniedTitle": "You cannot access this workspace",
     "forbiddenDescription": "Your account belongs to another workspace. Go to your own workspace to continue.",
     "unavailableDescription": "This workspace is unavailable or you no longer have access. Go to an available workspace to continue.",
     "goToMine": "Go to my workspace",
 
-    "backToConsole": "Back to platform console",
+    "backToConsole": "Back to platform management",
     "title": "Workspaces",
-    "console": "Platform console",
-    "search": "Search workspaces",
+    "console": "Platform management",
+    "search": "Search tenants",
     "switch": "Switch workspace",
     "emptyTitle": "No features are available in {{name}} yet",
     "emptyDescription": "Ask the workspace administrator to assign roles in this system."
@@ -130,8 +133,9 @@
     "credentialRejected": "Not accepted. Check it and try again."
   },
   "menu": {
+    "platformManagement": "Platform management",
     "workspace": "Workspace",
-    "platform": "Admin platform",
+    "platform": "Administration",
     "logout": "Sign out",
     "personalSettings": "Personal settings"
   },
@@ -140,7 +144,21 @@
     "saveFailed": "Language wasn't saved; kept as before"
   },
   "layout": {
+    "systemSwitcher": { "title": "Switch system" },
     "sidebar": {
+      "platformHome": "Platform home",
+      "platformUsers": "Platform accounts",
+      "platformRoles": "Platform roles",
+      //#if (IncludeWebhooks)
+      "platformWebhooks": "Platform Webhook",
+      //#endif
+      //#if (IncludeDistributedEvents)
+      "platformDistributedEvents": "Platform distributed events",
+      //#endif
+      //#if (IncludeOperationRecords)
+      "platformOperationRecords": "Platform operation records",
+      //#endif
+      "platformSettings": "Platform settings",
       "navigation": "Navigation",
       "navigationDescription": "Browse the sections of this area.",
       "appTitle": "Template Project",

@@ -15,6 +15,15 @@ public record OpenApplicationOutputDto
     /// <summary>显示名称。</summary>
     public string? DisplayName { get; init; }
 
+    /// <summary>多语言显示名称，键为文化名称。</summary>
+    public Dictionary<string, string> DisplayNames { get; init; } = [];
+
+    /// <summary>系统首页地址；显示在系统切换中时必填。</summary>
+    public string? HomeUrl { get; init; }
+
+    /// <summary>是否显示在系统切换中，仅浏览器客户端可开启。</summary>
+    public bool ShowInSwitcher { get; init; }
+
     /// <summary>应用类型。</summary>
     public required string ApplicationType { get; init; }
 

@@ -30,43 +30,36 @@ const DETAIL: DistributedEventOutboxDetailOutputDto = {
   headers: {},
 };
 
-describe('DistributedEventRecordSheet tenant identity', () => {
+describe('DistributedEventRecordSheet', () => {
   let fixture: ComponentFixture<DistributedEventRecordSheet>;
 
   afterEach(() => fixture?.destroy());
 
-  it.each([undefined, '', 'Portal East'])(
-    'shows the tenant ID once while preserving an available name (%s)',
-    async (name) => {
-      await TestBed.configureTestingModule({
-        imports: [DistributedEventRecordSheet],
-        providers: [
-          //#if (IncludeLocalization)
-          ...provideTranslocoTesting(),
-          //#endif
-          {
-            provide: AccountPreferencesService,
-            useValue: { timeZone: signal('UTC'), displayLocale: signal('en') },
-          },
-          { provide: DistributedEventService, useValue: { getOutbox: () => of(DETAIL) } },
-        ],
-      }).compileComponents();
-      fixture = TestBed.createComponent(DistributedEventRecordSheet);
-      fixture.componentRef.setInput('tenantNames', name === undefined ? {} : { [TENANT_ID]: name });
-      fixture.componentRef.setInput('recordId', DETAIL.record.id);
-      fixture.detectChanges();
-      await fixture.whenStable();
-      fixture.detectChanges();
+  it('omits tenant identity from the detail overview', async () => {
+    await TestBed.configureTestingModule({
+      imports: [DistributedEventRecordSheet],
+      providers: [
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+        {
+          provide: AccountPreferencesService,
+          useValue: { timeZone: signal('UTC'), displayLocale: signal('en') },
+        },
+        { provide: DistributedEventService, useValue: { getOutbox: () => of(DETAIL) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(DistributedEventRecordSheet);
+    fixture.componentRef.setInput('recordId', DETAIL.record.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-      const value = Array.from(document.querySelectorAll('[data-testid=event-detail] dd')).find(
-        (element) => element.textContent.includes(TENANT_ID),
-      );
-      expect(value).toBeDefined();
-      expect(value!.textContent.split(TENANT_ID)).toHaveLength(2);
-      if (name) expect(value!.textContent).toContain(name);
-      else expect(value!.textContent.trim()).toBe(TENANT_ID);
-    },
-  );
+    const detail = document.querySelector('[data-testid=event-detail]');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).not.toContain(TENANT_ID);
+    expect(detail!.textContent).not.toContain('tenantId');
+  });
 
   it('does not request payload when closed and cancels an in-flight request when access closes', async () => {
     const payload = new Subject<{ payload: string }>();

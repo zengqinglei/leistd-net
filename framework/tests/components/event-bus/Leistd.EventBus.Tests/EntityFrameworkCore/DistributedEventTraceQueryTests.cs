@@ -51,8 +51,8 @@ public sealed class DistributedEventTraceQueryTests
         var service = scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>();
         foreach (var keyword in new[] { TraceId.ToUpperInvariant(), CorrelationId })
         {
-            Assert.Equal(2, (await service.GetOutboxListAsync(new() { Keyword = keyword })).TotalCount);
-            Assert.Equal(2, (await service.GetInboxListAsync(new() { Keyword = keyword })).TotalCount);
+            Assert.Empty((await service.GetOutboxListAsync(new() { Keyword = keyword })).Items);
+            Assert.Empty((await service.GetInboxListAsync(new() { Keyword = keyword })).Items);
             Assert.Single((await service.GetRejectionsAsync(new() { Keyword = keyword })).Items);
             using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(DistributedEventTestHost.TenantA);
             Assert.Equal(DistributedEventTestHost.TenantA, Assert.Single((await service.GetOutboxListAsync(new() { Keyword = keyword })).Items).TenantId);

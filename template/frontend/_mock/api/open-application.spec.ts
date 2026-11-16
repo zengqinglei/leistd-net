@@ -58,6 +58,32 @@ describe('open application mock', () => {
     return error.error.errors.map((item: { field: string }) => item.field);
   }
 
+  it('stores switcher properties and rejects invalid home URLs as field errors', () => {
+    const created = create({
+      body: { ...valid, homeUrl: 'https://orders.test/', showInSwitcher: true },
+    }) as OpenApplicationOutputDto;
+    expect(created.homeUrl).toBe('https://orders.test/');
+    expect(created.showInSwitcher).toBe(true);
+    expect(created.properties).toMatchObject({
+      home_uri: 'https://orders.test/',
+      show_in_switcher: true,
+    });
+    const hidden = update({
+      params: { id: created.id },
+      body: { ...valid, homeUrl: '', showInSwitcher: false },
+    }) as OpenApplicationOutputDto;
+    expect(hidden.showInSwitcher).toBe(false);
+    for (const homeUrl of ['', '/relative', 'http://orders.test/']) {
+      expect(
+        fieldsOf(
+          rejectionOf(() =>
+            create({ body: { ...valid, clientId: 'invalid', homeUrl, showInSwitcher: true } }),
+          ),
+        ),
+      ).toContain('homeUrl');
+    }
+  });
+
   it('returns a conversion secret once, preserves it on unchanged type, and clears it for public clients', () => {
     const publicInput = { ...valid, clientType: 'public', requirements: ['ft:pkce'] };
     const created = create({ body: publicInput }) as OpenApplicationOutputDto;

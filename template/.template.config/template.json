@@ -1160,6 +1160,47 @@
           "exclude": [
             "frontend/_mock/data/tenant.ts"
           ]
+        },
+        {
+          "condition": "!(OpenIddictServer || RemoteTokenAuth)",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Systems/**",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/SystemController.cs"
+          ]
+        },
+        {
+          "condition": "!OpenIddictServer",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Systems/AppServices/SystemAppService.cs",
+            "backend/src/CompanyName.ProjectName.Application/Systems/Constants/SystemDirectoryScopes.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/SystemDirectoryTests.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Application/OpenApplicationHomeUrlValidatorTests.cs"
+          ]
+        },
+        {
+          "condition": "!RemoteTokenAuth",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Domain/Systems/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Systems/**",
+            "backend/src/CompanyName.ProjectName.Application/Systems/AppServices/RemoteSystemAppService.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/IdentitySystemDirectoryTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceSystemDirectoryTests.cs"
+          ]
+        },
+        {
+          "condition": "!(OpenIddictServer || RemoteTokenAuth)",
+          "exclude": [
+            "frontend/src/app/core/services/system-directory-service*",
+            "frontend/src/app/shared/dtos/system.dto.ts",
+            "frontend/_mock/api/system*",
+            "frontend/_mock/data/systems.ts"
+          ]
+        },
+        {
+          "condition": "!RemoteTokenAuth",
+          "exclude": [
+            "frontend/_mock/data/systems.ts"
+          ]
         }
       ]
     },

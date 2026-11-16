@@ -9,161 +9,38 @@
     [srOnlySheetTitle]="t('layout.sidebar.navigation')"
     [srOnlySheetDescription]="t('layout.sidebar.navigationDescription')"
   >
-    <!-- 品牌头与搜索是两块：间距与搜索到第一个分组一致（16px），不贴在一起 -->
     <div hlmSidebarHeader class="gap-4">
-      <ul hlmSidebarMenu>
-        <li hlmSidebarMenuItem>
-          <!-- 品牌头用 menu-button 基元（size=lg），折叠为 icon 时收成方形图标。同时是区域切换器：
-             副标题显示当前区域，点开可切到另一区。 -->
-          @if (hasAreaSwitcher()) {
-            <!-- 弹出方向照官方 nav-user：桌面从侧栏右侧弹出、与顶部对齐；手机上侧栏是抽屉，改为向下。
-             按钮默认点击即关掉手机端抽屉，这里点开的是菜单，抽屉必须留着（同头像菜单）。 -->
-            <button
-              hlmSidebarMenuButton
-              size="lg"
-              class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-              [closeMobileSidebarOnClick]="false"
-              [hlmDropdownMenuTrigger]="areaMenu"
-              [side]="areaMenuSide()"
-              align="start"
-              [attr.aria-label]="t('layout.sidebar.switchArea')"
-              data-testid="area-switcher"
-            >
-              <app-logo size="normal" />
-              <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                <span class="truncate text-sm font-medium">{{ t('layout.sidebar.appTitle') }}</span>
-                <span class="truncate text-xs text-muted-foreground">
-                  <!--#if (TenantWorkspace)-->
-                  {{ workspace.current() ?? t('tenantWorkspace.console') }} ·
-                  <!--#endif-->
-                  {{ currentAreaLabel() }}</span
-                >
-              </div>
-              <ng-icon
-                name="lucideChevronsUpDown"
-                class="ml-auto text-base group-data-[collapsible=icon]:hidden"
-              />
-            </button>
-            <!-- 版式照 shadcn 侧栏的 team switcher：小标题 + 带边框的图标方块 + 名称。
-             不放快捷键（没有实现对应的键位），当前区域在快捷键的位置打勾。 -->
-            <ng-template #areaMenu>
-              <hlm-dropdown-menu class="min-w-56">
-                <!--#if (TenantWorkspace)-->
-                <hlm-dropdown-menu-label>{{ t('tenantWorkspace.title') }}</hlm-dropdown-menu-label>
-                <hlm-dropdown-menu-group>
-                  @if (!workspace.auth.currentUser()?.tenantId) {
-                    <button
-                      hlmDropdownMenuItem
-                      class="gap-2 p-2"
-                      (click)="workspace.switchTo(null)"
-                    >
-                      <span
-                        class="flex size-6 shrink-0 items-center justify-center rounded-md border"
-                        ><ng-icon name="lucideShieldCheck"
-                      /></span>
-                      {{ t('tenantWorkspace.console') }}
-                      @if (!workspace.current()) {
-                        <ng-icon name="lucideCheck" class="ml-auto" />
-                      }
-                    </button>
-                  }
-                  @if (workspace.workspaces().length > 7) {
-                    <input
-                      hlmInput
-                      class="h-8"
-                      [placeholder]="t('tenantWorkspace.search')"
-                      [value]="workspace.filter()"
-                      (input)="workspace.filter.set($any($event.target).value)"
-                      (keydown)="$event.stopPropagation()"
-                    />
-                  }
-                  <div class="max-h-64 overflow-y-auto">
-                    @if (workspace.workspaces().length === 1) {
-                      <div class="p-2 text-sm">{{ workspace.workspaces()[0].name }}</div>
-                    } @else {
-                      @for (item of filteredWorkspaces(); track item.tenantId) {
-                        <button
-                          hlmDropdownMenuItem
-                          class="gap-2 p-2"
-                          (click)="workspace.switchTo(item.name)"
-                          [disabled]="!!workspace.auth.currentUser()?.tenantId"
-                        >
-                          <span
-                            class="flex size-6 shrink-0 items-center justify-center rounded-md border"
-                            >{{ item.name.slice(0, 1).toUpperCase() }}</span
-                          >
-                          {{ item.name }}
-                          @if (workspace.current() === item.name) {
-                            <ng-icon name="lucideCheck" class="ml-auto" />
-                          }
-                        </button>
-                      }
-                    }
-                  </div>
-                </hlm-dropdown-menu-group>
-                <hlm-dropdown-menu-separator />
-                <!--#endif-->
-                <hlm-dropdown-menu-label class="text-muted-foreground text-xs">
-                  {{ t('layout.sidebar.switchArea') }}
-                </hlm-dropdown-menu-label>
-                <hlm-dropdown-menu-group>
-                  @for (area of areaOptions(); track area.route) {
-                    <button
-                      hlmDropdownMenuItem
-                      class="gap-2 p-2"
-                      [attr.data-testid]="'area-option-' + area.route"
-                      (click)="goToArea(area.route)"
-                    >
-                      <span
-                        class="flex size-6 shrink-0 items-center justify-center rounded-md border"
-                      >
-                        <ng-icon [name]="area.icon" class="text-[length:--spacing(3.5)]" />
-                      </span>
-                      {{ area.label }}
-                      @if (area.current) {
-                        <ng-icon name="lucideCheck" class="ml-auto" />
-                      }
-                    </button>
-                  }
-                </hlm-dropdown-menu-group>
-              </hlm-dropdown-menu>
-            </ng-template>
-          } @else {
-            <a hlmSidebarMenuButton size="lg" [routerLink]="layoutService.homeRoute()">
-              <app-logo size="normal" />
-              <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                <span class="truncate text-sm font-medium">{{ t('layout.sidebar.appTitle') }}</span>
-                <span class="truncate text-xs text-muted-foreground">
-                  <!--#if (TenantWorkspace)-->
-                  {{ workspace.current() ?? t('tenantWorkspace.console') }} ·
-                  <!--#endif-->
-                  {{ currentAreaLabel() }}</span
-                >
-              </div>
-            </a>
-          }
-        </li>
-      </ul>
-      <!-- 搜索入口：打开命令面板。折叠为图标轨时只留放大镜。 -->
-      <ul hlmSidebarMenu>
-        <li hlmSidebarMenuItem>
-          <button
-            hlmSidebarMenuButton
-            variant="outline"
-            class="text-muted-foreground"
-            [tooltip]="t('layout.commandPalette.search')"
-            [attr.aria-label]="t('layout.commandPalette.search')"
-            data-testid="sidebar-search"
-            (click)="commandPalette.open()"
-          >
-            <ng-icon name="lucideSearch" />
-            <span class="group-data-[collapsible=icon]:hidden">{{
-              t('layout.commandPalette.search')
-            }}</span>
-            <kbd hlmKbd class="ms-auto group-data-[collapsible=icon]:hidden">⌘K</kbd>
-          </button>
-        </li>
-      </ul>
+      <app-system-switcher />
+      <!--#if (TenantWorkspace)-->
+      @if (showTenantSelector()) {
+        <hlm-combobox
+          class="group-data-[collapsible=icon]:hidden"
+          [value]="workspace.current()"
+          [itemToString]="workspaceLabel"
+          (valueChange)="$event && workspace.switchTo($event)"
+        >
+          <label class="sr-only" for="sidebar-tenant-selector">{{
+            t('tenantWorkspace.search')
+          }}</label>
+          <hlm-combobox-input
+            inputId="sidebar-tenant-selector"
+            [placeholder]="t('tenantWorkspace.search')"
+            [triggerAriaLabel]="t('tenantWorkspace.search')"
+            data-testid="tenant-selector"
+          />
+          <hlm-combobox-content *hlmComboboxPortal>
+            <hlm-combobox-empty>{{ t('tenantWorkspace.empty') }}</hlm-combobox-empty>
+            <div hlmComboboxList>
+              @for (item of workspace.workspaces(); track item.tenantId) {
+                <hlm-combobox-item [value]="item.name">{{
+                  item.displayName || item.name
+                }}</hlm-combobox-item>
+              }
+            </div>
+          </hlm-combobox-content>
+        </hlm-combobox>
+      }
+      <!--#endif-->
     </div>
 
     <div hlmSidebarContent>
@@ -190,10 +67,43 @@
         </div>
       }
     </div>
+    <!--#if (TenantWorkspace)-->
 
-    <!-- Spartan canonical：侧栏底部（nav-user 模式）——用户菜单，折叠时收成图标。 -->
-    <div hlmSidebarFooter>
-      <app-user-menu />
-    </div>
+    @if (!workspace.auth.currentUser()?.tenantId && workspace.canAccessConsole()) {
+      <div hlmSidebarFooter>
+        <ul hlmSidebarMenu>
+          <li hlmSidebarMenuItem>
+            @if (workspace.current()) {
+              <button
+                hlmSidebarMenuButton
+                data-testid="platform-management"
+                [tooltip]="t('tenantWorkspace.console')"
+                (click)="workspace.switchTo(null)"
+              >
+                <ng-icon name="lucideCog" /><span>{{ t('tenantWorkspace.console') }}</span>
+              </button>
+            } @else if (workspace.returnWorkspace(); as destination) {
+              <button
+                hlmSidebarMenuButton
+                data-testid="return-workspace"
+                [tooltip]="
+                  t('tenantWorkspace.return', {
+                    tenant: destination.displayName || destination.name,
+                  })
+                "
+                (click)="workspace.switchTo(destination.name)"
+              >
+                <ng-icon name="lucideHouse" /><span class="truncate">{{
+                  t('tenantWorkspace.return', {
+                    tenant: destination.displayName || destination.name,
+                  })
+                }}</span>
+              </button>
+            }
+          </li>
+        </ul>
+      </div>
+    }
+    <!--#endif-->
   </hlm-sidebar>
 </ng-container>

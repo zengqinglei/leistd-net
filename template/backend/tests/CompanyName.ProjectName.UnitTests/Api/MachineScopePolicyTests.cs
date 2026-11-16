@@ -1,5 +1,8 @@
 #if (OpenIddictServer || RemoteTokenAuth)
 using CompanyName.ProjectName.Api;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Application.Systems.Constants;
+#endif
 using Leistd.Security.AspNetCore;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
@@ -96,6 +99,25 @@ public sealed class MachineScopePolicyTests : IDisposable
         Assert.True(restored);
         Assert.False(succeeded);
     }
+
+#if (OpenIddictServer)
+    [Theory]
+    [InlineData(Machine, "system-directory.read", true)]
+    [InlineData(Machine, "account-preferences.read", false)]
+    [InlineData(Machine, "", false)]
+    [InlineData(NaturalPerson, "", true)]
+    public async Task System_directory_admits_natural_people_and_only_explicitly_scoped_machines(string subject, string scope, bool expected)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSecurity();
+        services.AddApiAuthorization();
+        await using var provider = services.BuildServiceProvider();
+        var result = await provider.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(Principal(subject, scope, "verified"), null, SystemDirectoryPolicies.Read);
+        Assert.Equal(expected, result.Succeeded);
+    }
+#endif
 
     private ServiceProvider Services()
     {

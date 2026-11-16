@@ -14,6 +14,8 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     id: 'companyname-projectname-web',
     clientId: 'companyname-projectname-web',
     displayName: 'MyProject Web',
+    homeUrl: 'https://app.example.com/',
+    showInSwitcher: true,
     applicationType: 'web',
     clientType: 'public',
     redirectUris: ['http://localhost:4200/auth/callback'],
@@ -91,6 +93,7 @@ export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
   { name: 'profile', displayName: 'Profile', machineOnly: false },
   { name: 'email', displayName: 'Email', machineOnly: false },
   { name: 'roles', displayName: 'Roles', machineOnly: false },
+  { name: 'system-directory.read', displayName: 'Read system directory', machineOnly: true },
   { name: 'offline_access', displayName: 'Offline access', machineOnly: false },
   {
     name: 'companyname-projectname-api',

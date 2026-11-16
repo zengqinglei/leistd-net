@@ -1,3 +1,6 @@
+//#if (OpenIddictServer || RemoteTokenAuth)
+export * from './api/system';
+//#endif
 // 刻意不 Mock 的端点：浏览器整页跳转或经 <img> 加载、不走 HttpClient 的入口。每项写成 `方法 路径`：
 // - `GET /api/v1/users/{id}/avatar`：头像图片经 <img> 加载。
 //#if (ExternalLogin)

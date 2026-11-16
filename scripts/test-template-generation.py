@@ -770,6 +770,7 @@ def validate(output, values, config, verify=True, sdk=None):
     if identity_client is not None:
         scopes = identity_client.get('Scope', '').split()
         assert 'account-preferences.read' in scopes, 'Account preference machine scope'
+        assert 'system-directory.read' in scopes, 'System directory machine scope'
         assert ('tenant-routing.read' in scopes) == values['IncludeMultiTenancy'], 'Tenant routing scope applicability'
         assert 'TokenExchange' in identity_client, 'Account preference token exchange section'
     readme = (output / 'README.md').read_text(encoding='utf-8')

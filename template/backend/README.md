@@ -61,7 +61,7 @@ dotnet user-secrets list --project src/CompanyName.ProjectName.Api
 
 `appsettings.Development.json` 的 `Authentication:Issuer` 默认指向本机 Identity 的前端开发服务器 `http://localhost:4200/`，联调别处的 Identity 时用 user-secrets 覆盖；本服务 API 的受众与依赖方须先在 Identity 登记，见 [服务间调用](../docs/standards/service-invocation.md#identity-与资源服务对接)。访问令牌权限以本服务授权事实为准。
 <!--#if (ResourceBrowserSession)-->
-浏览器依赖方登记后配置 ClientId/ClientSecret，缺失会按键名启动失败；本机端口与回调地址见 [前端说明](../frontend/README.md#联调本机-identity-服务)：
+浏览器依赖方登记首页地址并勾选「显示在系统切换中」后，系统切换目录才会包含本服务。显式登记 `/api/v1/auth/signin` 与 `/api/v1/auth/signout` 回调，并配置 ClientId/ClientSecret，缺失会按键名启动失败；本机端口与回调地址见 [前端说明](../frontend/README.md#联调本机-identity-服务)：
 
 ```bash
 dotnet user-secrets set "Authentication:Issuer" "<Identity 服务的地址>/" --project src/CompanyName.ProjectName.Api
@@ -71,9 +71,9 @@ dotnet user-secrets set "Authentication:ClientSecret" "<机密客户端密钥>" 
 <!--#endif-->
 
 <!--#if (IncludeMultiTenancy)-->
-租户路由、迁移作业与账户偏好的读取以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）、`account-preferences.read`（按用户读偏好）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户；它补齐租户 Admin 时按正式路由进入租户，因此同时要 `tenant-routing.read`），把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有这些 scope，部署环境按 `../deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity。
+租户路由、迁移作业、账户偏好与系统目录的读取以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）、`account-preferences.read`（按用户读偏好）、`system-directory.read`（系统入口目录）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户；它补齐租户 Admin 时按正式路由进入租户，因此同时要 `tenant-routing.read`），把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有这些 scope，部署环境按 `../deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity。
 <!--#else-->
-账户偏好的读取以机器身份回源 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `account-preferences.read`，把凭据写进 user-secrets。
+账户偏好与系统目录的读取以机器身份回源 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `account-preferences.read` 与 `system-directory.read`，把凭据写进 user-secrets。
 <!--#endif-->
 本人改偏好时代表用户经 Token Exchange 转交 Identity：同一个客户端还要启用 Token Exchange，`aud`、`scp` 授予 Identity 自身 API 的标识（它的 `OAuth:Resource`），并把这个标识填进下面两项，缺失时启动按键名失败：
 

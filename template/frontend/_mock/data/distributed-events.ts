@@ -2,7 +2,6 @@ import {
   DISTRIBUTED_EVENT_OUTBOX_FAILURE_CODES,
   DISTRIBUTED_EVENT_TEST,
   DistributedEventCatalogOutputDto,
-  DistributedEventDatabaseOutputDto,
   DistributedEventInboxDetailOutputDto,
   DistributedEventOutboxDetailOutputDto,
   DistributedEventPayloadOutputDto,
@@ -15,16 +14,6 @@ import {
 export const DISTRIBUTED_EVENT_TENANTS = [
   '00000000-0000-4000-8000-000000000011',
   '00000000-0000-4000-8000-000000000012',
-];
-
-export const DISTRIBUTED_EVENT_DATABASES: DistributedEventDatabaseOutputDto[] = [
-  { key: 'host', isHost: true, tenantIds: [] },
-  {
-    key: DISTRIBUTED_EVENT_TENANTS[0],
-    isHost: false,
-    representativeTenantId: DISTRIBUTED_EVENT_TENANTS[0],
-    tenantIds: DISTRIBUTED_EVENT_TENANTS,
-  },
 ];
 
 const seededAt = Date.now();

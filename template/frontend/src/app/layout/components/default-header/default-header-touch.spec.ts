@@ -88,6 +88,9 @@ describe('DefaultHeader on touch phones', () => {
     expect(titleBox.left).toBeGreaterThanOrEqual(right);
     expect(titleBox.right).toBeLessThanOrEqual(nav.getBoundingClientRect().right + 0.5);
 
+    const avatar = host.querySelector<HTMLElement>('app-user-menu')!;
+    expect(avatar.parentElement!.lastElementChild).toBe(avatar);
+    expect(avatar.getBoundingClientRect().width).toBeGreaterThan(0);
     const container = host.querySelector<HTMLElement>('header > div')!;
     expect(container.clientWidth).toBeLessThanOrEqual(390);
     expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
@@ -105,9 +108,9 @@ describe('DefaultHeader on touch phones', () => {
     });
     const host = fixture.nativeElement as HTMLElement;
 
-    // 页头内容盒够宽时主题照常显示：断点按页头宽度，不是收进窄屏形态了事
+    // 新增搜索与头像后，636px 页头收起主题与语言，给面包屑留位；断点按页头宽度。
     const theme = host.querySelector('app-theme-mode-toggle button')!;
-    expect(theme.getBoundingClientRect().width).toBeGreaterThan(0);
+    expect(theme.getBoundingClientRect().width).toBe(0);
 
     // 首项不参与收缩、单行：参与收缩时被压到最小内容宽度，中文一字一行、英文一词一行
     const home = host.querySelector<HTMLElement>('[data-slot="breadcrumb-item"]:first-child')!;
@@ -139,6 +142,9 @@ describe('DefaultHeader on touch phones', () => {
     expect(deepTitle.width).toBeGreaterThan(0);
     expect(deepTitle.right).toBeLessThanOrEqual(deepNav.right + 0.5);
 
+    const avatar = host.querySelector<HTMLElement>('app-user-menu')!;
+    expect(avatar.parentElement!.lastElementChild).toBe(avatar);
+    expect(avatar.getBoundingClientRect().width).toBeGreaterThan(0);
     const container = host.querySelector<HTMLElement>('header > div')!;
     expect(container.clientWidth).toBeLessThanOrEqual(636);
     expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
@@ -158,7 +164,7 @@ async function renderHeader(
     providers: [
       provideRouter([{ path: 'platform', children: [] }]),
       // 操作区控件各自依赖会话与后端，只给渲染所需的定值替身；控件本身是真实组件
-      { provide: AuthService, useValue: { isAuthenticated: () => true, currentUser: signal({ id: 'u-1' }) } },
+      { provide: AuthService, useValue: { isAuthenticated: () => true, currentUser: signal({ id: 'u-1', username: 'admin' }) } },
       {
         provide: AccountPreferencesService,
         useValue: { timeZone: signal(null), displayLocale: signal('en') },
@@ -195,7 +201,7 @@ async function renderHeader(
         useValue: { options: LANG_OPTIONS, currentMeta: signal(LANG_OPTIONS[0]), activeLang: signal('en') },
       },
       // 首项给可逐字断行的中文文案：键名回落是一个不可断的词，首项被压也不折行，测不出来
-      ...provideTranslocoTesting(['en'], { getTranslation: () => of({ 'menu.platform': '内部管理平台' }) }),
+      ...provideTranslocoTesting(['en'], { getTranslation: () => of({ 'menu.platform': '内部管理后台', 'menu.platformManagement': '内部平台管理' }) }),
       //#endif
     ],
   });

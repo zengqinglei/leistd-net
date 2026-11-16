@@ -27,8 +27,7 @@
       "profile": "Profile",
       "security": "Account & security",
       "preferences": "Preferences",
-      "notifications": "Notifications",
-      "platform": "Admin platform"
+      "notifications": "Notifications"
     },
     "notifications": {
       "title": "Recent notifications",

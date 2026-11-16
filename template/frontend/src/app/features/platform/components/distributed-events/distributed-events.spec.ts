@@ -61,7 +61,6 @@ describe('DistributedEvents page', () => {
   function mockService() {
     return {
       getStatus: vi.fn().mockReturnValue(of(STATUS)),
-      getDatabases: vi.fn().mockReturnValue(of([{ key: 'host', isHost: true, tenantIds: [] }])),
       getCatalog: vi.fn().mockReturnValue(of([])),
       getOutboxList: vi.fn().mockReturnValue(of({ items: [OUTBOX], totalCount: 1200 })),
       getInboxList: vi.fn().mockReturnValue(of({ items: [], totalCount: 0 })),
@@ -153,19 +152,27 @@ describe('DistributedEvents page', () => {
       .componentInstance as DistributedEventRecordSheet;
     sheet.loadPayload();
     expect(service.getOutboxPayload).not.toHaveBeenCalled();
-    expect(service.getOutbox).toHaveBeenCalledWith(OUTBOX.id, 'host');
+    expect(service.getOutbox).toHaveBeenCalledWith(OUTBOX.id);
   });
 
   it('hides host-only views and never sends a database parameter from a tenant session', async () => {
     await setup(false, 'tenant-1', { view: 'rejections', database: 'host' });
     await settle();
     expect(component.view()).toBe('outbox');
-    expect(component.database()).toBeNull();
-    expect(service.getDatabases).not.toHaveBeenCalled();
     expect(service.getRejectionList).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('[data-testid="event-database"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toMatch(/Current tenant|Physical database/);
     expect(fixture.nativeElement.querySelector('[hlmTabsTrigger="rejections"]')).toBeNull();
-    expect(service.getOutboxList.mock.calls.at(-1)?.[0].database).toBeNull();
+    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).not.toHaveProperty('database');
+  });
+
+  it('shows no tenant or database selector in host scope and sends no scope parameters', async () => {
+    await setup(true);
+    await settle();
+    expect(fixture.nativeElement.querySelector('[data-testid="event-database"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toMatch(/Current tenant|Physical database/);
+    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).not.toHaveProperty('database');
+    expect(service.getStatus).toHaveBeenCalledWith();
   });
 
   it('restores URL filters, pagination and an exact long record ID', async () => {
@@ -203,19 +210,16 @@ describe('DistributedEvents page', () => {
     expect(options.criteria).toContain('Dead letter');
     //#endif
     options.action!().subscribe();
-    expect(service.redeliver).toHaveBeenCalledWith(
-      {
-        filter: {
-          before,
-          eventName: 'order.paid',
-          keyword: undefined,
-          errorCode: undefined,
-          consumer: undefined,
-          reason: undefined,
-        },
+    expect(service.redeliver).toHaveBeenCalledWith({
+      filter: {
+        before,
+        eventName: 'order.paid',
+        keyword: undefined,
+        errorCode: undefined,
+        consumer: undefined,
+        reason: undefined,
       },
-      'host',
-    );
+    });
     expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('offset');
     expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('limit');
   });
@@ -265,10 +269,9 @@ describe('DistributedEvents page', () => {
     await component.recover('filter', undefined, true);
     const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
     options.action!().subscribe();
-    expect(service.discard).toHaveBeenCalledWith(
-      { filter: expect.objectContaining({ status: 'redecodePending' }) },
-      'host',
-    );
+    expect(service.discard).toHaveBeenCalledWith({
+      filter: expect.objectContaining({ status: 'redecodePending' }),
+    });
     expect(service.redecode).not.toHaveBeenCalled();
   });
 
@@ -287,8 +290,8 @@ describe('DistributedEvents page', () => {
     expect(sheet.payloadLoading()).toBe(false);
   });
 
-  it('hides test publication when inspecting a tenant database from host scope', async () => {
-    await setup(true, null, { database: 'tenant-db' });
+  it('hides test publication in tenant scope', async () => {
+    await setup(true, 'tenant-1');
     expect(component.canTest()).toBe(false);
     component.sendTest();
     expect(service.sendTestEvent).not.toHaveBeenCalled();

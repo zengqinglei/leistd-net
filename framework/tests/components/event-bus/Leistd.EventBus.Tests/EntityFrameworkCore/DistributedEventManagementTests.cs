@@ -49,9 +49,9 @@ public sealed class DistributedEventManagementTests
         });
     }
 
-    /// <summary>D18 的共享库部分：宿主见全库、租户只见自己；单条重投在行所属租户下提交。</summary>
+    /// <summary>宿主只见平台记录，租户读取与恢复仅限本租户。</summary>
     [Fact]
-    public async Task Host_reads_all_shared_rows_but_tenant_queries_and_recovery_remain_tenant_scoped()
+    public async Task Host_and_tenant_queries_and_recovery_remain_scoped_to_the_current_context()
     {
         await using var host = await DistributedEventTestHost.CreateAsync();
         await host.InTenantAsync(null, (_, db) => { db.Add(DeadLetter(host.Clock.GetUtcNow().UtcDateTime)); return Task.CompletedTask; });
@@ -59,19 +59,77 @@ public sealed class DistributedEventManagementTests
         { var row = DeadLetter(host.Clock.GetUtcNow().UtcDateTime); row.TenantId = DistributedEventTestHost.TenantA; db.Add(row); return Task.CompletedTask; });
         await using var scope = host.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>();
-        Assert.Equal(2, (await service.GetOutboxListAsync(new())).TotalCount);
+        Assert.Equal(1, (await service.GetOutboxListAsync(new())).TotalCount);
         using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(DistributedEventTestHost.TenantA))
         {
             var page = await service.GetOutboxListAsync(new());
             Assert.Equal(DistributedEventTestHost.TenantA, Assert.Single(page.Items).TenantId);
             Assert.Equal(1, (await service.RedeliverAsync(new() { Ids = [page.Items.Single().Id] })).AffectedCount);
-            var ex = await Assert.ThrowsAsync<BusinessException>(() => service.GetStatusAsync("host"));
-            Assert.Equal(DistributedEventErrorCodes.HostOnly, ex.Code);
             Assert.Equal(DistributedEventErrorCodes.HostOnly, (await Assert.ThrowsAsync<BusinessException>(() => service.GetRejectionsAsync(new()))).Code);
+            Assert.Equal(DistributedEventErrorCodes.HostOnly, (await Assert.ThrowsAsync<BusinessException>(() => service.SendTestEventAsync())).Code);
             Assert.Null((await service.GetStatusAsync()).PendingRejections);
         }
         Assert.Equal(DistributedEventTestHost.TenantA, Assert.Single(host.ManagedEventTenants));
-        Assert.Contains(await service.GetDatabasesAsync(), x => x.Key == "host" && x.IsHost);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("aaaaaaaa-0000-0000-0000-000000000001")]
+    [InlineData("bbbbbbbb-0000-0000-0000-000000000002")]
+    [InlineData("dddddddd-0000-0000-0000-000000000003")]
+    public async Task Lists_details_payloads_statistics_catalog_and_recovery_only_access_the_current_tenant(string? tenantId)
+    {
+        await using var host = await DistributedEventTestHost.CreateAsync();
+        var tenants = new Guid?[] { null, DistributedEventTestHost.TenantA, DistributedEventTestHost.TenantB, DistributedEventTestHost.DedicatedTenant };
+        foreach (var id in tenants)
+            await host.InTenantAsync(id, (_, db) =>
+            {
+                var row = DeadLetter(host.Clock.GetUtcNow().UtcDateTime);
+                row.TenantId = id;
+                row.EventName = id?.ToString() ?? "platform";
+                db.Add(row);
+                db.Add(new DistributedEventInbox
+                {
+                    EventId = Guid.NewGuid(), EventName = row.EventName, TenantId = id, Payload = "{}",
+                    Consumer = "test", Status = DistributedEventInboxStatus.Failed,
+                    OccurredAt = row.CreationTime, ReceivedAt = row.CreationTime, LastModificationTime = row.CreationTime
+                });
+                return Task.CompletedTask;
+            });
+        await using var scope = host.Services.CreateAsyncScope();
+        var current = tenantId is null ? (Guid?)null : Guid.Parse(tenantId);
+        using var change = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(current);
+        var service = scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>();
+        var outgoing = Assert.Single((await service.GetOutboxListAsync(new())).Items);
+        var incoming = Assert.Single((await service.GetInboxListAsync(new())).Items);
+        Assert.Equal(current, outgoing.TenantId);
+        Assert.Equal(current, incoming.TenantId);
+        Assert.Equal(current, (await service.GetOutboxAsync(outgoing.Id)).Record.TenantId);
+        Assert.Equal(current, (await service.GetInboxAsync(incoming.Id)).Record.TenantId);
+        Assert.Equal("{}", (await service.GetOutboxPayloadAsync(outgoing.Id)).Payload);
+        Assert.Equal("{}", (await service.GetInboxPayloadAsync(incoming.Id)).Payload);
+        Assert.Equal(1, (await service.GetStatusAsync()).DeadLettered);
+        Assert.Equal(1, (await service.GetStatusAsync()).FailedInbox);
+        var catalog = await service.GetCatalogAsync();
+        Assert.Single(catalog, x => x.DeadLettered > 0);
+        Assert.Equal(current?.ToString() ?? "platform", catalog.Single(x => x.DeadLettered > 0).EventName);
+        if (current != DistributedEventTestHost.DedicatedTenant)
+        {
+            var other = await host.ReadAsync(db => db.Set<DistributedEventOutbox>().IgnoreQueryFilters().FirstAsync(x => x.TenantId != current));
+            Assert.Equal(DistributedEventErrorCodes.RecordNotFound,
+                (await Assert.ThrowsAsync<BusinessException>(() => service.GetOutboxAsync(other.Id))).Code);
+            Assert.Equal(DistributedEventErrorCodes.RecordNotFound,
+                (await Assert.ThrowsAsync<BusinessException>(() => service.GetOutboxPayloadAsync(other.Id))).Code);
+            Assert.Equal(0, (await service.RedeliverAsync(new() { Ids = [other.Id] })).AffectedCount);
+        }
+        Assert.Equal(1, (await service.RedeliverAsync(new() { Filter = new() { Before = host.Clock.GetUtcNow().UtcDateTime } })).AffectedCount);
+        Assert.Equal(1, (await service.ReplayAsync(new() { Ids = [incoming.Id] })).AffectedCount);
+        foreach (var other in tenants.Where(x => x != current))
+        {
+            using var otherScope = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(other);
+            Assert.Equal(1, (await service.GetStatusAsync()).DeadLettered);
+            Assert.Equal(1, (await service.GetStatusAsync()).FailedInbox);
+        }
     }
 
     /// <summary>D17：目录合并订阅与历史并聚合计数；读取列表与详情概要不包含载荷。</summary>
@@ -164,9 +222,9 @@ public sealed class DistributedEventManagementTests
         Assert.Equal(1, status.PendingOutbox); Assert.Equal(0, host.Queue.Count);
     }
 
-    /// <summary>D18：宿主显式选独立库，读取该库并在原租户上下文提交恢复及发送。</summary>
+    /// <summary>当前租户自动路由独立库，恢复与发送保持租户上下文。</summary>
     [Fact]
-    public async Task A_host_selected_dedicated_database_is_read_and_recovered_using_the_record_tenant()
+    public async Task A_dedicated_tenant_reads_and_recovers_only_its_own_database()
     {
         await using var host = await DistributedEventTestHost.CreateAsync();
         await host.InTenantAsync(null, (_, db) => { db.Add(DeadLetter(host.Clock.GetUtcNow().UtcDateTime)); return Task.CompletedTask; });
@@ -174,17 +232,18 @@ public sealed class DistributedEventManagementTests
         { var row = DeadLetter(host.Clock.GetUtcNow().UtcDateTime); row.TenantId = DistributedEventTestHost.DedicatedTenant; db.Add(row); return Task.CompletedTask; });
         await using var scope = host.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IDistributedEventManagementService>();
-        var database = DistributedEventTestHost.DedicatedTenant.ToString();
-        var page = await service.GetOutboxListAsync(new() { Database = database });
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(DistributedEventTestHost.DedicatedTenant);
+        var page = await service.GetOutboxListAsync(new());
         var record = Assert.Single(page.Items);
         Assert.Equal(DistributedEventTestHost.DedicatedTenant, record.TenantId);
-        Assert.Equal(1, (await service.RedeliverAsync(new() { Ids = [record.Id] }, database)).AffectedCount);
-        Assert.Null(Assert.Single(host.ManagedEventTenants));
+        Assert.Equal(1, (await service.RedeliverAsync(new() { Ids = [record.Id] })).AffectedCount);
+        Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.ManagedEventTenants));
         Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.ManagedEvents).TargetTenantId);
         await host.Queue.RunAllAsync(host.Services);
         Assert.Equal(DistributedEventTestHost.DedicatedTenant, Assert.Single(host.Transport.Sent).TenantId);
-        Assert.Equal(1, (await service.GetStatusAsync()).DeadLettered);
-        Assert.Equal(0, (await service.GetStatusAsync(database)).DeadLettered);
+        Assert.Equal(0, (await service.GetStatusAsync()).DeadLettered);
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(null))
+            Assert.Equal(1, (await service.GetStatusAsync()).DeadLettered);
     }
 
     /// <summary>重新解码仍须拒绝空事件标识，不能将无效信封写进收件箱。</summary>

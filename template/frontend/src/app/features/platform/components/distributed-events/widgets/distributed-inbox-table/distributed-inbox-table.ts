@@ -23,7 +23,6 @@ export class DistributedInboxTable extends DistributedEventTable {
     return [
       ...this.selectionColumns(),
       this.titleColumn(),
-      ...(this.isHost() ? [this.dataColumn('tenant', 'secondary')] : []),
       this.dataColumn('consumer'),
       this.dataColumn('orderingKey'),
       this.statusColumn(),

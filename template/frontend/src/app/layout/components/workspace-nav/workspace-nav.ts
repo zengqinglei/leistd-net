@@ -24,18 +24,12 @@ import {
 } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
-//#if (TenantWorkspace)
-import { HlmInput } from '@spartan-ng/helm/input';
-//#endif
 import { HlmNavigationMenuImports } from '@spartan-ng/helm/navigation-menu';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { injectHlmA11yLabels } from '@spartan-ng/helm/utils';
 
 import { LayoutService } from '../../../core/services/layout-service';
-//#if (TenantWorkspace)
-import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
-//#endif
 import { Logo } from '../../../shared/components/logo/logo';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
@@ -56,10 +50,7 @@ import { MenuItem, NavigationService } from '../../services/navigation-service';
     RouterLink,
     NgIcon,
     HlmButton,
-    //#if (TenantWorkspace)
-    HlmInput,
-    //#endif
-    ...HlmDropdownMenuImports,
+        ...HlmDropdownMenuImports,
     ...HlmNavigationMenuImports,
     ...HlmSheetImports,
     ...HlmTooltipImports,
@@ -85,18 +76,6 @@ export class WorkspaceNav {
   readonly placement = input<'start' | 'end'>('start');
 
   readonly layoutService = inject(LayoutService);
-  //#if (TenantWorkspace)
-  readonly workspace = inject(WorkspaceContextService);
-  readonly filteredWorkspaces = computed(() =>
-    this.workspace
-      .workspaces()
-      .filter((item) =>
-        `${item.name} ${item.displayName ?? ''}`
-          .toLowerCase()
-          .includes(this.workspace.filter().toLowerCase()),
-      ),
-  );
-  //#endif
   private readonly navigation = inject(NavigationService);
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
@@ -200,11 +179,6 @@ export function fitCount(available: number, ruler: RulerWidths, total: number): 
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  //#if (TenantWorkspace)
-  'tenantWorkspace.title': 'Workspaces',
-  'tenantWorkspace.console': 'Platform console',
-  'tenantWorkspace.search': 'Search workspaces',
-  //#endif
   'layout.topbar.openNavigation': 'Open navigation',
   'layout.sidebar.appTitle': 'Template Project',
   'layout.topbar.navigationDescription': 'Choose a page to open',

@@ -23,7 +23,6 @@ export class DistributedOutboxTable extends DistributedEventTable {
     return [
       ...this.selectionColumns(),
       this.titleColumn(),
-      ...(this.isHost() ? [this.dataColumn('tenant', 'secondary')] : []),
       this.dataColumn('orderingKey'),
       this.statusColumn(),
       this.dataColumn('attempts', 'secondary'),

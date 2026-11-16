@@ -1,9 +1,25 @@
 #if (LocalIdentity)
+using System.Text.Json;
+
 namespace CompanyName.ProjectName.Application.OpenApplications;
 
 /// <summary>模板自有的开放应用设置，存于 OpenIddict 应用的 Settings；管理登记与令牌签发共用这一处键名与读法。</summary>
 public static class OpenApplicationSettings
 {
+    /// <summary>系统首页地址的扩展属性键。</summary>
+    public const string HomeUri = "home_uri";
+
+    /// <summary>系统切换显示开关的扩展属性键。</summary>
+    public const string ShowInSwitcher = "show_in_switcher";
+
+    /// <summary>读取首页地址，未登记时为空。</summary>
+    public static string? ReadHomeUrl(IReadOnlyDictionary<string, JsonElement> properties) =>
+        properties.TryGetValue(HomeUri, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    /// <summary>读取系统切换开关，未登记时关闭。</summary>
+    public static bool ReadShowInSwitcher(IReadOnlyDictionary<string, JsonElement> properties) =>
+        properties.TryGetValue(ShowInSwitcher, out var value) && value.ValueKind == JsonValueKind.True;
+
     /// <summary>会话绑定：此客户端的授权码与刷新令牌依赖签发时的 Identity 会话，会话退出、撤销或空闲到期后不能再换取令牌。</summary>
     /// <remarks>
     /// 这是模板的授权收敛政策，不是 OIDC 后通道登出元数据 <c>backchannel_logout_session_required</c>

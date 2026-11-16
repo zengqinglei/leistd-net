@@ -430,9 +430,9 @@ export class WorkspaceDashboard {
     if (this.authorization.canAccessPlatform()) {
       links.push({
         //#if (IncludeLocalization)
-        label: 'workspace.dashboard.shortcuts.platform',
+        label: this.layoutService.managementAreaKey(),
         //#else
-        label: 'Admin platform',
+        label: this.layoutService.isHostScope() ? 'Platform management' : 'Administration',
         //#endif
         icon: 'lucideCog',
         route: '/platform',

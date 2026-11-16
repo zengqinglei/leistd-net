@@ -80,13 +80,11 @@ export abstract class DistributedEventTable {
   readonly totalCount = input(0);
   readonly page = input(0);
   readonly pageSize = input(10);
-  readonly isHost = input(true);
   readonly canManage = input(false);
   readonly selected = input<string[]>([]);
   readonly recordId = input<string | null>(null);
   readonly busy = input(false);
   readonly loading = input(false);
-  readonly tenantNames = input<Record<string, string>>({});
   readonly open = output<string>();
   readonly recover = output<EventRecord>();
   readonly selectionChange = output<string[]>();

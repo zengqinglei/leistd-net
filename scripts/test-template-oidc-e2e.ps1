@@ -421,6 +421,9 @@ function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public, 
         redirectUris = @(); postLogoutRedirectUris = @(); permissions = $permissions; requirements = @() }
     if ($Public) { $body.redirectUris = @($redirect); $body.requirements = @("ft:pkce") }
     if ($BrowserService) {
+        $body.homeUrl = $urls[$BrowserService]
+        $body.showInSwitcher = $true
+        $body.displayName = $BrowserService
         $body.redirectUris = @($urls[$BrowserService] + "/api/v1/auth/signin")
         $body.postLogoutRedirectUris = @($urls[$BrowserService] + "/api/v1/auth/signout")
         $body.requirements = @("ft:pkce")
@@ -698,7 +701,7 @@ function Initialize-Environment {
             $environment.Authentication__Audience = "$name-api"
             $environment.Leistd__ServiceClients__Identity__BaseAddress = $urls.idp
             # 机器身份回源租户路由与按用户读账户偏好；代表本人写偏好经 Token Exchange 换 Identity 自身 API 的令牌
-            $environment.Leistd__ServiceClients__Identity__Scope = "tenant-routing.read account-preferences.read"
+            $environment.Leistd__ServiceClients__Identity__Scope = "tenant-routing.read account-preferences.read system-directory.read"
             $environment.Leistd__ServiceClients__Identity__TokenExchange__Audience = "e2e-idp-api"
             $environment.Leistd__ServiceClients__Identity__TokenExchange__Scope = "e2e-idp-api"
             $environment.Leistd__ServiceAuth__Authority = $urls.idp
@@ -745,7 +748,7 @@ function Initialize-Environment {
     New-Application "orders-web" @("openid", "profile", "email", "roles", "orders-api") -Public | Out-Null
     New-Application "billing-web" @("openid", "profile", "email", "roles", "billing-api") -Public | Out-Null
     New-Application "idp-web" @("openid", "profile", "email", "roles", "e2e-idp-api") -Public | Out-Null
-    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read") -Exchange
+    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read", "system-directory.read") -Exchange
     $script:machine = New-Application "orders-machine" @("orders-api", "billing-api", "tenant-routing.read")
     $script:plainClient = New-Application "orders-only" @("orders-api")
     $script:noDelegateClient = New-Application "no-delegate" @("orders-api", "billing-api")
@@ -887,6 +890,19 @@ function Test-Workspace {
 function Test-S2 {
     $script:hostToken = Get-CodeToken $admin "openid profile email roles e2e-idp-api orders-api billing-api"
     $claims = Read-TokenClaims $hostToken
+    $identitySystems = (Assert-Http "identity-system-directory" 200 ($urls.idp + "/api/v1/systems") -Session $admin).Data
+    Assert-Value "identity-is-first-system" "identity" $identitySystems[0].key
+    $directoryToken = Get-MachineToken $exchangeClient "system-directory.read"
+    Assert-Http "system-directory-machine-scope" 200 ($urls.idp + "/api/v1/systems") -Token $directoryToken | Out-Null
+    foreach ($name in @("orders", "billing")) {
+        $systems = (Assert-Http "resource-system-directory-$name" 200 ($urls[$name] + "/api/v1/systems") -Token (Get-ServiceToken $hostToken $name)).Data
+        Assert-Value "resource-identity-first-$name" "identity" $systems[0].key
+        foreach ($target in @("orders", "billing")) {
+            $entry = @($systems | Where-Object key -eq "$target-browser")
+            Assert-Value "resource-system-entry-$name-$target" 1 $entry.Count
+            Assert-Value "resource-system-home-$name-$target" $urls[$target] $entry[0].homeUrl
+        }
+    }
     Assert-Value "scope-derived-audiences" @("orders-api") @($claims.aud | Sort-Object)
     $data = (Assert-Http "human-token-orders" 200 ($urls.orders + "/api/e2e/natural") -Token $hostToken).Data
     Assert-Value "human-sub-orders" $claims.sub $data.userId

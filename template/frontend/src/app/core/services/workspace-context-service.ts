@@ -11,6 +11,8 @@ import { SessionContextService } from './session-context-service';
 //#if (IncludeRealTime || IncludeNotifications)
 import { SignalRService } from './signalr-service';
 //#endif
+import { PLATFORM_ENTRY_PERMISSIONS } from '../../shared/constants/permission.constants';
+import { CurrentPermissionsOutputDto } from '../../shared/dtos/permission.dto';
 import { WorkspaceOutputDto } from '../dtos/workspace.dto';
 import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
 import { EntryRouteService } from '../routing/entry-route-service';
@@ -39,6 +41,11 @@ export class WorkspaceContextService {
   readonly target = signal<string | null | undefined>(undefined);
   readonly current = signal<string | null>(null);
   readonly filter = signal('');
+  readonly canAccessConsole = signal(false);
+  private readonly lastTenant = signal(localStorage.getItem('last-tenant-workspace'));
+  readonly returnWorkspace = computed(
+    () => this.workspaces().find((item) => item.name === this.lastTenant()) ?? this.workspaces()[0],
+  );
   readonly actor = computed(() => {
     const scope = this.requestScope();
     return scope ? this.workspaces().find((workspace) => workspace.name === scope) : null;
@@ -61,8 +68,11 @@ export class WorkspaceContextService {
           this.workspaces().find((item) => item.name.toLowerCase() === routeName?.toLowerCase())
             ?.name ?? routeName;
         this.current.set(name);
-        if (name) localStorage.setItem('last-workspace', name);
-        else if (/^\/(platform|workspace)(?:\/|$)/.test(event.urlAfterRedirects))
+        if (name) {
+          localStorage.setItem('last-workspace', name);
+          localStorage.setItem('last-tenant-workspace', name);
+          this.lastTenant.set(name);
+        } else if (/^\/(platform|workspace)(?:\/|$)/.test(event.urlAfterRedirects))
           localStorage.setItem('last-workspace', '');
       }
     });
@@ -74,6 +84,7 @@ export class WorkspaceContextService {
     this.target.set(null);
     this.current.set(null);
     this.filter.set('');
+    this.canAccessConsole.set(false);
   }
 
   nameFromUrl(url: string): string | null {
@@ -94,6 +105,19 @@ export class WorkspaceContextService {
       }),
     );
     this.workspaces.set(list);
+    if (this.auth.currentUser()?.tenantId) this.canAccessConsole.set(false);
+    else {
+      const permissions = await firstValueFrom(
+        this.http.get<CurrentPermissionsOutputDto>('/api/v1/permissions/current', {
+          context: new HttpContext().set(WORKSPACE_SCOPE, null),
+        }),
+      );
+      this.canAccessConsole.set(
+        permissions.permissions.some((permission) =>
+          PLATFORM_ENTRY_PERMISSIONS.some((entry) => entry === permission),
+        ),
+      );
+    }
   }
 
   async establish(name: string | null): Promise<boolean> {

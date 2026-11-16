@@ -59,7 +59,9 @@
     "redirectUris": "Redirect URIs",
     "postLogoutRedirectUris": "Post Logout Redirect URIs",
     "permissions": "Permissions",
-    "requirements": "Requirements"
+    "requirements": "Requirements",
+    "homeUrl": "Home URL",
+    "showInSwitcher": "Show in system switcher"
   },
   "template": {
     "web": "Web PKCE client",
@@ -145,5 +147,9 @@
     "filterPermissions": "Filter capabilities",
     "filterRedirectUris": "Filter redirect URIs",
     "noMatches": "No matching entries"
+  },
+  "homeUrl": {
+    "hint": "Absolute HTTPS URL. Development allows HTTP loopback addresses. Empty callback lists are prefilled as suggestions.",
+    "invalid": "Enter an absolute HTTPS URL (HTTP loopback is allowed in development)."
   }
 }

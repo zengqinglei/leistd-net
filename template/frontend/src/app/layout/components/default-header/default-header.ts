@@ -84,7 +84,7 @@ import { WorkspaceNav } from '../workspace-nav/workspace-nav';
 })
 export class DefaultHeader {
   /**
-   * `sidebar`：配合侧栏，左侧是折叠按钮与面包屑，头像在侧栏底部。
+   * `sidebar`：配合侧栏，左侧是折叠按钮与面包屑，搜索居中，头像在最右。
    * `topbar`：没有侧栏，左侧是品牌与导航，头像放在最右。
    */
   readonly layout = input<'sidebar' | 'topbar'>('sidebar');

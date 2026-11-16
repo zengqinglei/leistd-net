@@ -9,23 +9,19 @@ import { ConfirmContext, ConfirmDialog } from '../../../../../../core/feedback/c
 import { ConfirmOptions } from '../../../../../../core/feedback/confirm-service';
 
 export interface DistributedEventRecoveryOptions extends ConfirmOptions {
-  scope: string;
   cutoff: string;
   criteria: string;
-  scopeLabel: string;
   cutoffLabel: string;
   criteriaLabel: string;
 }
 interface RecoveryContext extends ConfirmContext {
-  scope: string;
   cutoff: string;
   criteria: string;
-  scopeLabel: string;
   cutoffLabel: string;
   criteriaLabel: string;
 }
 
-/** 恢复确认按范围、截止与条件分行展示，沿用通用确认框的单次请求、取消与失败重试行为。 */
+/** 恢复确认按截止与条件分行展示，沿用通用确认框的单次请求、取消与失败重试行为。 */
 @Component({
   selector: 'app-distributed-event-recovery-confirm',
   imports: [HlmButton, HlmDialogFooter, HlmSpinner],
@@ -35,8 +31,6 @@ interface RecoveryContext extends ConfirmContext {
         <h2 id="event-recovery-title" class="text-lg font-medium">{{ ctx.header }}</h2>
         <div id="event-recovery-description" class="flex flex-col gap-3 text-sm">
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
-            <dt class="text-muted-foreground">{{ ctx.scopeLabel }}</dt>
-            <dd class="min-w-0 wrap-anywhere">{{ ctx.scope }}</dd>
             <dt class="text-muted-foreground">{{ ctx.cutoffLabel }}</dt>
             <dd class="min-w-0 wrap-anywhere">{{ ctx.cutoff }}</dd>
             <dt class="text-muted-foreground">{{ ctx.criteriaLabel }}</dt>

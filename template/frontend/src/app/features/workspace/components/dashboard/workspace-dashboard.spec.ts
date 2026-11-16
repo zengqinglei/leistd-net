@@ -343,7 +343,21 @@ describe('WorkspaceDashboard', () => {
     fixture.destroy();
     TestBed.resetTestingModule();
     const withAccess = await setup([PERMISSIONS.users.default]);
-    expect(withAccess.shortcuts().map((link) => link.route)).toContain('/platform');
+    const administration = withAccess.shortcuts().find((link) => link.route === '/platform');
+    expect(administration).toBeDefined();
+    //#if (IncludeLocalization)
+    //#if (IncludeMultiTenancy)
+    expect(administration!.label).toBe('menu.platformManagement');
+    //#else
+    expect(administration!.label).toBe('menu.platform');
+    //#endif
+    //#else
+    //#if (IncludeMultiTenancy)
+    expect(administration!.label).toBe('Platform management');
+    //#else
+    expect(administration!.label).toBe('Administration');
+    //#endif
+    //#endif
   });
   //#if (IncludeLocalization)
 

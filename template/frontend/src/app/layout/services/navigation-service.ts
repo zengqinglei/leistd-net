@@ -18,6 +18,8 @@ const SIDEBAR_PREFIX = 'layout.sidebar.';
 //#endif
 export interface MenuItem {
   label: string;
+  side?: 'host' | 'tenant' | 'both';
+  hostLabel?: string;
   icon: string;
   route: string;
   /** 所需权限；拥有任意一个即可见。省略表示只要能进入本区就可见。 */
@@ -51,6 +53,7 @@ export class NavigationService {
   //#if (IncludeLocalization)
   private readonly workspaceLabel = translateSignal('menu.workspace');
   private readonly platformLabel = translateSignal('menu.platform');
+  private readonly hostPlatformLabel = translateSignal('menu.platformManagement');
   /** 菜单文案都在 `layout.sidebar` 下：整段取成对象，词条到达与语言切换时菜单随之重算。 */
   private readonly sidebarTexts = translateObjectSignal('layout.sidebar');
   //#endif
@@ -59,7 +62,15 @@ export class NavigationService {
   private readonly platformMenuGroups: MenuGroup[] = [
     {
       label: 'layout.sidebar.groupWork',
-      items: [{ label: 'layout.sidebar.dashboard', icon: 'lucideGauge', route: '/platform' }],
+      items: [
+        {
+          label: 'layout.sidebar.dashboard',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformHome',
+          icon: 'lucideGauge',
+          route: '/platform',
+        },
+      ],
     },
     // 管理侧的业务菜单加在这里（工作之后、身份与访问之前）：管理员先看业务，再管人和系统。
     {
@@ -67,12 +78,16 @@ export class NavigationService {
       items: [
         {
           label: 'layout.sidebar.users',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformUsers',
           icon: 'lucideUsers',
           route: '/platform/users',
           permissions: [PERMISSIONS.users.default],
         },
         {
           label: 'layout.sidebar.roles',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformRoles',
           icon: 'lucideShieldCheck',
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
@@ -81,6 +96,7 @@ export class NavigationService {
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'layout.sidebar.tenants',
+          side: 'host',
           icon: 'lucideBuilding2',
           route: '/platform/tenants',
           permissions: [PERMISSIONS.tenants.default],
@@ -95,6 +111,7 @@ export class NavigationService {
         //#if (OpenIddictServer)
         {
           label: 'layout.sidebar.openApplications',
+          side: 'host',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
           permissions: [PERMISSIONS.openApplications.default],
@@ -103,6 +120,8 @@ export class NavigationService {
         //#if (IncludeWebhooks)
         {
           label: 'layout.sidebar.webhooks',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformWebhooks',
           icon: 'lucideWebhook',
           route: '/platform/webhooks',
           permissions: [PERMISSIONS.webhooks.default],
@@ -111,6 +130,8 @@ export class NavigationService {
         //#if (IncludeDistributedEvents)
         {
           label: 'layout.sidebar.distributedEvents',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformDistributedEvents',
           icon: 'lucideRadioTower',
           route: '/platform/distributed-events',
           permissions: [PERMISSIONS.distributedEvents.default],
@@ -126,6 +147,8 @@ export class NavigationService {
       items: [
         {
           label: 'layout.sidebar.operationRecords',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformOperationRecords',
           icon: 'lucideDatabase',
           route: '/platform/operation-records',
           permissions: [PERMISSIONS.operationRecords.default],
@@ -139,6 +162,8 @@ export class NavigationService {
       items: [
         {
           label: 'layout.sidebar.systemSettings',
+          side: 'both',
+          hostLabel: 'layout.sidebar.platformSettings',
           icon: 'lucideSettings',
           route: '/platform/settings',
           permissions: [PERMISSIONS.settings.default],
@@ -151,7 +176,12 @@ export class NavigationService {
     {
       label: 'layout.sidebar.groupWork',
       items: [
-        { label: 'layout.sidebar.workbench', icon: 'lucideGauge', route: '/workspace/dashboard' },
+        {
+          label: 'layout.sidebar.workbench',
+          side: 'tenant',
+          icon: 'lucideGauge',
+          route: '/workspace/dashboard',
+        },
       ],
     },
     {
@@ -161,6 +191,7 @@ export class NavigationService {
       items: [
         {
           label: 'layout.sidebar.exampleModule',
+          side: 'tenant',
           icon: 'lucideLayers',
           route: '/workspace/placeholder',
         },
@@ -171,7 +202,15 @@ export class NavigationService {
   private readonly platformMenuGroups: MenuGroup[] = [
     {
       label: 'Work',
-      items: [{ label: 'Dashboard', icon: 'lucideGauge', route: '/platform' }],
+      items: [
+        {
+          label: 'Dashboard',
+          side: 'both',
+          hostLabel: 'Platform home',
+          icon: 'lucideGauge',
+          route: '/platform',
+        },
+      ],
     },
     // 管理侧的业务菜单加在这里（工作之后、身份与访问之前）：管理员先看业务，再管人和系统。
     {
@@ -179,12 +218,16 @@ export class NavigationService {
       items: [
         {
           label: 'User management',
+          side: 'both',
+          hostLabel: 'Platform accounts',
           icon: 'lucideUsers',
           route: '/platform/users',
           permissions: [PERMISSIONS.users.default],
         },
         {
           label: 'Role management',
+          side: 'both',
+          hostLabel: 'Platform roles',
           icon: 'lucideShieldCheck',
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
@@ -193,6 +236,7 @@ export class NavigationService {
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'Tenant management',
+          side: 'host',
           icon: 'lucideBuilding2',
           route: '/platform/tenants',
           permissions: [PERMISSIONS.tenants.default],
@@ -207,6 +251,7 @@ export class NavigationService {
         //#if (OpenIddictServer)
         {
           label: 'Open applications',
+          side: 'host',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
           permissions: [PERMISSIONS.openApplications.default],
@@ -215,6 +260,8 @@ export class NavigationService {
         //#if (IncludeWebhooks)
         {
           label: 'Webhooks',
+          side: 'both',
+          hostLabel: 'Platform Webhook',
           icon: 'lucideWebhook',
           route: '/platform/webhooks',
           permissions: [PERMISSIONS.webhooks.default],
@@ -223,6 +270,8 @@ export class NavigationService {
         //#if (IncludeDistributedEvents)
         {
           label: 'Distributed events',
+          side: 'both',
+          hostLabel: 'Platform distributed events',
           icon: 'lucideRadioTower',
           route: '/platform/distributed-events',
           permissions: [PERMISSIONS.distributedEvents.default],
@@ -238,6 +287,8 @@ export class NavigationService {
       items: [
         {
           label: 'Operation records',
+          side: 'both',
+          hostLabel: 'Platform operation records',
           icon: 'lucideDatabase',
           route: '/platform/operation-records',
           permissions: [PERMISSIONS.operationRecords.default],
@@ -251,6 +302,8 @@ export class NavigationService {
       items: [
         {
           label: 'System settings',
+          side: 'both',
+          hostLabel: 'Platform settings',
           icon: 'lucideSettings',
           route: '/platform/settings',
           permissions: [PERMISSIONS.settings.default],
@@ -262,13 +315,22 @@ export class NavigationService {
   private readonly workspaceMenuGroups: MenuGroup[] = [
     {
       label: 'Work',
-      items: [{ label: 'Workbench', icon: 'lucideGauge', route: '/workspace/dashboard' }],
+      items: [
+        { label: 'Workbench', side: 'tenant', icon: 'lucideGauge', route: '/workspace/dashboard' },
+      ],
     },
     {
       // 模板在这里只放一个示例模块：下游项目把它换成自己的业务入口，
       // 分组本身与判据留着，新入口就不必再重新想一遍该摆哪。
       label: 'Business',
-      items: [{ label: 'Example module', icon: 'lucideLayers', route: '/workspace/placeholder' }],
+      items: [
+        {
+          label: 'Example module',
+          side: 'tenant',
+          icon: 'lucideLayers',
+          route: '/workspace/placeholder',
+        },
+      ],
     },
   ];
   //#endif
@@ -300,9 +362,9 @@ export class NavigationService {
         route: '/platform',
         icon: 'lucideCog',
         //#if (IncludeLocalization)
-        label: this.platformLabel(),
+        label: this.layoutService.isHostScope() ? this.hostPlatformLabel() : this.platformLabel(),
         //#else
-        label: 'Admin platform',
+        label: this.layoutService.isHostScope() ? 'Platform management' : 'Administration',
         //#endif
         current: isPlatform,
       });
@@ -341,7 +403,11 @@ export class NavigationService {
           .filter((item) => this.isItemVisible(item))
           .map((item) => ({
             ...item,
-            label: label(item.label),
+            label: label(
+              this.layoutService.isHostScope() && item.side === 'both'
+                ? item.hostLabel!
+                : item.label,
+            ),
             //#if (TenantWorkspace)
             route: this.workspace.path(item.route),
             //#endif
@@ -350,9 +416,24 @@ export class NavigationService {
         //#if (TenantWorkspace)
         items: group.items
           .filter((item) => this.isItemVisible(item))
-          .map((item) => ({ ...item, route: this.workspace.path(item.route) })),
+          .map((item) => ({
+            ...item,
+            label:
+              this.layoutService.isHostScope() && item.side === 'both'
+                ? item.hostLabel!
+                : item.label,
+            route: this.workspace.path(item.route),
+          })),
         //#else
-        items: group.items.filter((item) => this.isItemVisible(item)),
+        items: group.items
+          .filter((item) => this.isItemVisible(item))
+          .map((item) => ({
+            ...item,
+            label:
+              this.layoutService.isHostScope() && item.side === 'both'
+                ? item.hostLabel!
+                : item.label,
+          })),
         //#endif
         //#endif
       }))
@@ -361,6 +442,9 @@ export class NavigationService {
 
   /** 菜单可见性只按权限判断；超级管理员旁路已体现在下发的权限集合中。 */
   private isItemVisible(item: MenuItem): boolean {
+    //#if (IncludeMultiTenancy)
+    if (item.side === 'host' && !this.layoutService.isHostScope()) return false;
+    //#endif
     return !item.permissions?.length || this.authorizationService.hasAny(...item.permissions);
   }
 

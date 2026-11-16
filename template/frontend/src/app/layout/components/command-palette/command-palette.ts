@@ -27,6 +27,9 @@ import { BrnDialogState } from '@spartan-ng/brain/dialog';
 import { HlmCommandImports } from '@spartan-ng/helm/command';
 
 import { CommandPaletteService } from '../../../core/services/command-palette-service';
+//#if (OpenIddictServer || RemoteTokenAuth)
+import { SystemDirectoryService } from '../../../core/services/system-directory-service';
+//#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../shared/utils/english-text';
 //#endif
@@ -67,6 +70,9 @@ export class CommandPalette {
   //#if (!IncludeLocalization)
   protected readonly t = englishText(ENGLISH);
   //#endif
+  //#if (OpenIddictServer || RemoteTokenAuth)
+  readonly directory = inject(SystemDirectoryService);
+  //#endif
   protected readonly palette = inject(CommandPaletteService);
   private readonly navigation = inject(NavigationService);
   private readonly router = inject(Router);
@@ -89,6 +95,11 @@ export class CommandPalette {
     }
   }
 
+  protected goToArea(route: string): void {
+    this.palette.close();
+    this.navigation.goToArea(route);
+  }
+
   protected go(route: string): void {
     this.palette.close();
     void this.router.navigateByUrl(route);
@@ -103,5 +114,6 @@ const ENGLISH: Record<string, string> = {
   'layout.commandPalette.placeholder': 'Search pages…',
   'layout.commandPalette.empty': 'No matching pages.',
   'layout.sidebar.switchArea': 'Switch area',
+  'layout.systemSwitcher.title': 'Switch system',
 };
 //#endif

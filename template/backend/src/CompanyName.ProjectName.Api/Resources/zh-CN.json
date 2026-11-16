@@ -1,6 +1,9 @@
 {
   "culture": "zh-CN",
   "texts": {
+    "Home URL": "首页地址",
+    "Only browser applications can appear in the system switcher.": "只有浏览器应用可显示在系统切换中。",
+    "Home URL must be an absolute HTTPS URL. Development also allows HTTP loopback URLs.": "首页地址必须是绝对 HTTPS 地址；开发环境也允许 HTTP 回环地址。",
     "Actions": "动作",
     "Active status": "是否启用",
     "Admin email": "管理员邮箱",

@@ -18,10 +18,10 @@ internal sealed class DistributedEventCatalog<TDbContext>(
     TimeProvider clock,
     IDistributedEventTransport? transport = null) where TDbContext : DbContext
 {
-    public async Task<DistributedEventStatusOutputDto> StatusAsync(string? database, CancellationToken ct)
+    public async Task<DistributedEventStatusOutputDto> StatusAsync(CancellationToken ct)
     {
         var isHost = tenant.Id is null;
-        var target = await scope.ResolveAsync(database, false, ct);
+        var target = scope.Resolve(false);
         var now = clock.GetUtcNow().UtcDateTime;
         var yesterday = now.AddHours(-24);
         var result = await scope.RunAsync(target, async (db, token) =>
@@ -42,10 +42,10 @@ internal sealed class DistributedEventCatalog<TDbContext>(
             };
         }, ct);
         if (isHost)
-            result = result with { PendingRejections = await scope.RunAsync(new(null, true),
+            result = result with { PendingRejections = await scope.RunAsync(null,
                 (db, token) => db.Set<DistributedEventRejection>().LongCountAsync(x => x.Status == DistributedEventRejectionStatus.Pending || x.Status == DistributedEventRejectionStatus.RedecodePending, token), ct) };
         var freshAfter = now - options.CurrentValue.TransportStatus.StaleAfter;
-        var states = await scope.RunAsync(new(null, true),
+        var states = await scope.RunAsync(null,
             (db, token) => db.Set<DistributedEventTransportState>().AsNoTracking()
                 .Where(x => x.ReportedAt >= freshAfter).ToListAsync(token), ct);
         if (states.Count > 0)
@@ -63,9 +63,9 @@ internal sealed class DistributedEventCatalog<TDbContext>(
         return result;
     }
 
-    public async Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetAsync(string? database, CancellationToken ct)
+    public async Task<IReadOnlyList<DistributedEventCatalogOutputDto>> GetAsync(CancellationToken ct)
     {
-        var target = await scope.ResolveAsync(database, false, ct);
+        var target = scope.Resolve(false);
         return await scope.RunAsync<IReadOnlyList<DistributedEventCatalogOutputDto>>(target, async (db, token) =>
         {
             var outgoing = EfCoreDistributedEventManagementStore<TDbContext>.Outbox(db, target);

@@ -47,14 +47,14 @@ export class EmptyWorkspace {
     'tenantWorkspace.emptyDescription':
       'Ask the workspace administrator to assign roles in this system.',
     'tenantWorkspace.switch': 'Switch workspace',
-    'tenantWorkspace.backToConsole': 'Back to platform console',
+    'tenantWorkspace.backToConsole': 'Back to platform management',
   });
   //#endif
   openSwitcher(): void {
     const trigger = () =>
       [
-        ...this.document.querySelectorAll<HTMLButtonElement>(
-          '[data-testid="area-switcher"], [data-testid="topbar-workspace-switcher"]',
+        ...this.document.querySelectorAll<HTMLElement>(
+          '[data-testid="tenant-selector"] input[role="combobox"]',
         ),
       ].find((button) => button.getClientRects().length > 0);
     const visible = trigger();
@@ -62,11 +62,7 @@ export class EmptyWorkspace {
       visible.click();
       return;
     }
-    if (this.document.querySelector('[data-layout="default"]')) this.sidebar.setOpenMobile(true);
-    else
-      this.document
-        .querySelector<HTMLButtonElement>('[data-testid="workspace-nav-trigger"]')
-        ?.click();
+    this.sidebar.setOpenMobile(true);
     afterNextRender(() => trigger()?.click(), { injector: this.injector });
   }
 }

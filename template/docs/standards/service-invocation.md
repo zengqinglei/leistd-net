@@ -59,13 +59,14 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 
 <!--#if (OpenIddictServer || ResourceBrowserSession)-->
 - 为带浏览器会话的资源服务登记依赖方：web/confidential、开启会话绑定、authorization code、refresh token、退出端点（ept:end_session）、PKCE；只授予 openid/profile/email/roles/offline_access 与自己的 API scope，登记本服务对外源下完整的 /api/v1/auth/signin、/api/v1/auth/signout 回调，不申请下游 scope。第三方 public client 仍可单独登记。
+- 要出现在系统切换中，浏览器应用还须登记绝对 HTTPS 首页地址并勾选「显示在系统切换中」（开发环境允许 HTTP 回环地址）。两项分别存入 OpenIddict `Properties` 的 `home_uri`、`show_in_switcher`，名称沿用 `DisplayNames` 的当前语言值。首页地址仅补空的建议回调，登记后的回调仍显式保存。Identity 的 `GET /api/v1/systems` 对本人会话与持有 `system-directory.read` 的机器令牌开放，Identity 自身按 `OAuth:Issuer` 排第一。
 <!--#endif-->
 - 调用方为 service/confidential，client ID 是来源资源的 OwnerClientId（默认资源名，例如 orders-api），启用 Token Exchange grant、ept:token、aud:billing-api、scp:billing-api。subject 令牌必须面向 orders-api，但无需带 billing-api scope；目标权限取调用方应用的登记值。只接受单跳访问令牌，不支持 actor_token 和请求覆盖身份。
 - 机器调用启用 client credentials 与目标 scope，工作负载不混用用户授权流。
 <!--#if (IncludeMultiTenancy)-->
 - 租户回源授予 tenant-routing.read；迁移身份单独授予 tenant-migration.read，并因补齐租户 Admin 时按正式路由进入租户而同时授予 tenant-routing.read。需要机器回源的交换客户端可同时启用 client credentials。
 <!--#endif-->
-- 资源服务的客户端还要按用户读账户偏好与代表本人写偏好：启用 client credentials 并授予 account-preferences.read，同时启用 Token Exchange、ept:token、aud 与 scp 取 Identity 自身 API 的标识（OAuth:Resource）。
+- 资源服务的客户端还要按用户读账户偏好与代表本人写偏好：启用 client credentials 并授予 account-preferences.read 与 system-directory.read，同时启用 Token Exchange、ept:token、aud 与 scp 取 Identity 自身 API 的标识（OAuth:Resource）。
 <!--#if (TenantWorkspace)-->
 - 工作区形态的 Resource 客户端还需登记自身资源的 `aud` 与 `scp`（例如 `aud:orders-api`、`scp:orders-api`）。进入工作区的交换携带 `workspace`，保持原受众并限制为原 scope 的子集，输出关联账号与 `home_sub`；该令牌可继续发起一次下游委托。
 <!--#endif-->
@@ -96,13 +97,13 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 <!--#if (RemoteTokenAuth && IncludeMultiTenancy)-->
       "Identity": {
         "BaseAddress": "https://login.example.com/",
-        "Scope": "tenant-routing.read account-preferences.read",
+        "Scope": "tenant-routing.read account-preferences.read system-directory.read",
         "TokenExchange": { "Audience": "identity-api", "Scope": "identity-api" }
       },
 <!--#elseif (RemoteTokenAuth)-->
       "Identity": {
         "BaseAddress": "https://login.example.com/",
-        "Scope": "account-preferences.read",
+        "Scope": "account-preferences.read system-directory.read",
         "TokenExchange": { "Audience": "identity-api", "Scope": "identity-api" }
       },
 <!--#endif-->
@@ -120,6 +121,7 @@ TokenExchange 的 Audience 与 Scope 都必须显式填写，Scope 填签发方�
 <!--#if (RemoteTokenAuth)-->
 Resource 已注册用户访问令牌适配器。
 账户偏好的 Identity 客户端按认证方式拆成两个，共用 `Leistd:ServiceClients:Identity` 地址节：读取经 AddClientCredentials，写入经 AddTokenExchange（示例中的 identity-api 换成 Identity 实际的 OAuth:Resource）。模板 Identity 以 OAuth:Resource 同名登记自身 API 的 scope，所以 Audience 与 Scope 相同；Identity 另起了 scope 名时，Audience 填资源标识、Scope 填该 scope。两个客户端都有弹性管道的超时，写入不重试。读取被拒（漏授 account-preferences.read、密钥轮换）时 `/me` 照常返回、偏好按暂时读不到并记 Error，给收件人产出文本的读取仍然失败。
+系统目录使用独立的 `IdentitySystems` Refit 客户端，共用同一地址节并经 AddClientCredentials 注册，机器 Scope 需含 `system-directory.read`。Resource 的同名系统列表接口按界面语言进程内缓存一分钟；上游拒绝或不可达时返回空列表并记 Error，品牌块退回首页链接。
 <!--#if (IncludeMultiTenancy)-->
 租户回源的 Identity 客户端经 AddClientCredentials 注册。
 <!--#endif-->

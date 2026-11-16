@@ -48,7 +48,7 @@ public sealed class DistributedEventTransportStateTests
         await reporter.ReportAsync();
         using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(null))
         {
-            var status = await management.GetStatusAsync(DistributedEventTestHost.DedicatedTenant.ToString());
+            var status = await management.GetStatusAsync();
             Assert.Equal("unhealthy", status.TransportStatus); Assert.Equal("scripted", status.TransportName);
             Assert.Equal(worker.Clock.GetUtcNow().UtcDateTime, status.TransportStatusChangedAt);
             Assert.Equal(status.TransportStatusChangedAt, status.TransportReportedAt);

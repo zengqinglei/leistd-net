@@ -6,6 +6,7 @@ import {
   Component,
   computed,
   effect,
+  isDevMode,
   //#if (IncludeLocalization)
   inject,
   //#endif
@@ -55,6 +56,8 @@ type OpenApplicationTemplate = 'web' | 'desktop' | 'service';
 interface OpenApplicationEditFormModel {
   clientId: string;
   displayName: string;
+  homeUrl: string;
+  showInSwitcher: boolean;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
   redirectUris: string[];
@@ -152,6 +155,12 @@ export class OpenApplicationEditDialog {
   readonly applicationForm = form(this.formModel, (path) => {
     required(path.clientId, { when: () => !this.isEditMode() });
     disabled(path.clientId, { when: () => this.isEditMode() });
+    validate(path.homeUrl, (ctx) => {
+      const value = ctx.value();
+      return (!value && !ctx.valueOf(path.showInSwitcher)) || this.validHomeUrl(value)
+        ? null
+        : { kind: 'uri' };
+    });
     // 跨字段：Native / Public 客户端必须启用 PKCE。
     validate(path.requirements, (ctx) => {
       const requirements = ctx.value();
@@ -392,6 +401,8 @@ export class OpenApplicationEditDialog {
         this.formModel.set({
           clientId: application.clientId,
           displayName: application.displayName ?? '',
+          homeUrl: application.homeUrl ?? '',
+          showInSwitcher: application.showInSwitcher ?? false,
           applicationType: application.applicationType,
           clientType: application.clientType,
           redirectUris: [...application.redirectUris],
@@ -412,6 +423,8 @@ export class OpenApplicationEditDialog {
     return {
       clientId: '',
       displayName: '',
+      homeUrl: '',
+      showInSwitcher: false,
       applicationType: 'web',
       clientType: 'public',
       redirectUris: [],
@@ -441,6 +454,7 @@ export class OpenApplicationEditDialog {
         displayName: model.displayName || 'My Desktop App',
         //#endif
         applicationType: 'native',
+        showInSwitcher: false,
         clientType: 'public',
         redirectUris: ['my-desktop-app://oauth/callback'],
         postLogoutRedirectUris: ['my-desktop-app://oauth/logout-callback'],
@@ -456,6 +470,7 @@ export class OpenApplicationEditDialog {
       this.formModel.update((model) => ({
         ...model,
         applicationType: 'service',
+        showInSwitcher: false,
         clientType: 'confidential',
         redirectUris: [],
         postLogoutRedirectUris: [],
@@ -476,6 +491,46 @@ export class OpenApplicationEditDialog {
     }));
   }
 
+  private validHomeUrl(value: string): boolean {
+    if (!/^https?:\/\//i.test(value) || value.length > 2048 || /\s/.test(value)) return false;
+    try {
+      const url = new URL(value);
+      return (
+        url.protocol === 'https:' ||
+        (isDevMode() &&
+          url.protocol === 'http:' &&
+          (url.hostname === 'localhost' ||
+            url.hostname === '[::1]' ||
+            /^127(?:\.\d{1,3}){3}$/.test(url.hostname)))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /** 建议值只补空列表；管理员登记或修改过的回调始终保留。 */
+  suggestCallbacks(): void {
+    const model = this.formModel();
+    if (model.applicationType !== 'web' || !this.validHomeUrl(model.homeUrl)) return;
+    const home = new URL(model.homeUrl);
+    home.search = '';
+    home.hash = '';
+    const base = home.href.replace(/\/$/, '');
+    this.formModel.update((value) => ({
+      ...value,
+      redirectUris: value.redirectUris.length ? value.redirectUris : [`${base}/api/v1/auth/signin`],
+      postLogoutRedirectUris: value.postLogoutRedirectUris.length
+        ? value.postLogoutRedirectUris
+        : [`${base}/api/v1/auth/signout`],
+    }));
+  }
+
+  setShowInSwitcher(checked: boolean): void {
+    this.applicationForm().markAsDirty();
+    this.formModel.update((value) => ({ ...value, showInSwitcher: checked }));
+    this.applicationForm.homeUrl().markAsTouched();
+  }
+
   // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；
   // 直接以 [checked]/(checkedChange) 回写模型信号。
   setSessionBound(checked: boolean): void {
@@ -489,7 +544,11 @@ export class OpenApplicationEditDialog {
     if (!value) {
       return;
     }
-    this.formModel.update((model) => ({ ...model, applicationType: value }));
+    this.formModel.update((model) => ({
+      ...model,
+      applicationType: value,
+      showInSwitcher: value === 'web' && model.showInSwitcher,
+    }));
   }
 
   onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
@@ -576,6 +635,8 @@ export class OpenApplicationEditDialog {
           await firstValueFrom(
             this.saveAction()({
               displayName: model.displayName,
+              homeUrl: model.homeUrl,
+              showInSwitcher: model.applicationType === 'web' && model.showInSwitcher,
               applicationType: model.applicationType,
               clientType: model.clientType,
               redirectUris: model.redirectUris,
@@ -593,6 +654,8 @@ export class OpenApplicationEditDialog {
           this.saveAction()({
             clientId: model.clientId.trim(),
             displayName: model.displayName,
+            homeUrl: model.homeUrl,
+            showInSwitcher: model.applicationType === 'web' && model.showInSwitcher,
             applicationType: model.applicationType,
             clientType: model.clientType,
             redirectUris: model.redirectUris,
@@ -623,6 +686,12 @@ const ENGLISH: Record<string, string> = {
   'openApp.dialog.loading': 'Loading open application...',
   'openApp.field.template': 'Application template',
   'openApp.field.templatePlaceholder': 'Select a template to quickly fill in',
+  'openApp.field.homeUrl': 'Home URL',
+  'openApp.homeUrl.hint':
+    'Absolute HTTPS URL. Development allows HTTP loopback addresses. Empty callback lists are prefilled as suggestions.',
+  'openApp.homeUrl.invalid':
+    'Enter an absolute HTTPS URL (HTTP loopback is allowed in development).',
+  'openApp.field.showInSwitcher': 'Show in system switcher',
   'openApp.field.displayName': 'Application name',
   'openApp.field.displayNamePlaceholder': 'e.g. My Desktop App',
   'openApp.field.clientId': 'Client ID',

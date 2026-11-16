@@ -59,7 +59,9 @@
     "redirectUris": "重定向 URI",
     "postLogoutRedirectUris": "注销后重定向 URI",
     "permissions": "权限",
-    "requirements": "安全要求"
+    "requirements": "安全要求",
+    "homeUrl": "首页地址",
+    "showInSwitcher": "显示在系统切换中"
   },
   "template": {
     "web": "Web PKCE 客户端",
@@ -145,5 +147,9 @@
     "filterPermissions": "筛选授权能力",
     "filterRedirectUris": "筛选回调地址",
     "noMatches": "没有匹配的条目"
+  },
+  "homeUrl": {
+    "hint": "使用绝对 HTTPS 地址，开发环境允许 HTTP 回环地址。仅为空的回调列表会预填建议值。",
+    "invalid": "请输入绝对 HTTPS 地址（开发环境允许 HTTP 回环地址）。"
   }
 }

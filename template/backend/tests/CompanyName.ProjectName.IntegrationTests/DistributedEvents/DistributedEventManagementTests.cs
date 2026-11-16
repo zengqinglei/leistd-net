@@ -160,7 +160,7 @@ public sealed class DistributedEventManagementTests(ProjectWebApplicationFactory
         var member = await CreateUserAsync(admin.Client);
         await GrantAsync(PermissionGrantProviderNames.User, member.Id, PermissionConstant.DistributedEvents.Default);
         using var reader = await Factory.LoginAsync(member.Username, TestPassword);
-        foreach (var path in new[] { "status", "catalog", "databases", "outbox", "inbox", "rejections" })
+        foreach (var path in new[] { "status", "catalog", "outbox", "inbox", "rejections" })
             Assert.Equal(HttpStatusCode.OK, (await reader.Client.GetAsync($"{Root}/{path}")).StatusCode);
         foreach (var path in new[] { "outbox/1/payload", "inbox/1/payload", "rejections/1/payload" })
             Assert.Equal(HttpStatusCode.Forbidden, (await reader.Client.GetAsync($"{Root}/{path}")).StatusCode);

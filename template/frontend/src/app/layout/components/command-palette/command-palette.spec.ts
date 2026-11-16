@@ -7,6 +7,9 @@ import { CommandPalette } from './command-palette';
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { CommandPaletteService } from '../../../core/services/command-palette-service';
+//#if (OpenIddictServer || RemoteTokenAuth)
+import { SystemDirectoryService } from '../../../core/services/system-directory-service';
+//#endif
 import { MenuGroup, NavigationService } from '../../services/navigation-service';
 
 /**
@@ -23,16 +26,19 @@ describe('CommandPalette', () => {
   ];
   const areas = [
     { route: '/workspace/dashboard', icon: 'lucideHouse', label: 'Workspace', current: false },
-    { route: '/platform', icon: 'lucideCog', label: 'Admin platform', current: true },
+    { route: '/platform', icon: 'lucideCog', label: 'Administration', current: true },
   ];
 
   function setup() {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
+        //#if (OpenIddictServer || RemoteTokenAuth)
+        { provide: SystemDirectoryService, useValue: { systems: signal([]), switchTo: vi.fn() } },
+        //#endif
         {
           provide: NavigationService,
-          useValue: { menuGroups: signal(groups), areaOptions: signal(areas) },
+          useValue: { menuGroups: signal(groups), areaOptions: signal(areas), goToArea: vi.fn() },
         },
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
@@ -77,6 +83,39 @@ describe('CommandPalette', () => {
 
     expect(optionTexts()).toEqual(['Dashboard', 'User management', 'Workspace']);
   });
+  //#if (OpenIddictServer || RemoteTokenAuth)
+
+  it('offers systems in their own group and delegates switching before closing', async () => {
+    const { fixture, palette } = setup();
+    const directory = TestBed.inject(SystemDirectoryService);
+    const systems = [
+      {
+        key: 'identity',
+        displayName: 'Identity',
+        homeUrl: 'https://identity.test/',
+        isCurrent: true,
+      },
+      { key: 'orders', displayName: 'Orders', homeUrl: 'https://orders.test/', isCurrent: false },
+    ];
+    vi.spyOn(directory, 'systems').mockReturnValue(systems);
+    palette.open();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(optionTexts()).toEqual([
+      'Dashboard',
+      'User management',
+      'Workspace',
+      'Identity',
+      'Orders',
+    ]);
+    const orders = [...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]')].find(
+      (item) => item.textContent?.trim() === 'Orders',
+    );
+    orders?.click();
+    expect(directory.switchTo).toHaveBeenCalledWith(systems[1]);
+    expect(palette.isOpen()).toBe(false);
+  });
+  //#endif
 
   it('navigates to the selected entry and closes', async () => {
     const { fixture, palette } = setup();

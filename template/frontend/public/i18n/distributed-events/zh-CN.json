@@ -1,9 +1,5 @@
 {
   "title": "分布式事件",
-  "database": "物理数据库",
-  "hostDatabase": "宿主／默认库",
-  "tenantScope": "当前租户",
-  "host": "宿主",
   "noTransport": "未注册传输",
   "last24Hours": "近 24 小时：已发出 {{sent}} · 已处理 {{processed}}",
   "refresh": "刷新",
@@ -16,7 +12,7 @@
   "oldest": "最旧 {{age}} · 待处理 {{count}}",
   "deadHelp": "永久失败或超过重试窗口",
   "failedHelp": "处理器重试次数已用尽",
-  "rejectionHelp": "宿主集中库 · 解码或租户解析失败",
+  "rejectionHelp": "无法解码或识别接收方",
   "views": "事件视图",
   "search": "精确事件 ID / 排序键 / trace ID / 关联标识",
   "searchRejections": "精确事件 ID / trace ID / 关联标识",
@@ -84,7 +80,6 @@
   },
   "column": {
     "event": "事件",
-    "tenant": "租户",
     "orderingKey": "排序键",
     "status": "状态",
     "consumer": "消费者",
@@ -104,7 +99,6 @@
     "id": "记录 ID",
     "eventId": "事件 ID",
     "eventName": "事件名",
-    "tenantId": "租户 ID",
     "orderingKey": "排序键",
     "occurredAt": "发生时间",
     "status": "状态",
@@ -143,7 +137,7 @@
   "cancel": "取消",
   "reason": {
     "invalidEnvelope": "信封无效",
-    "unknownTenant": "租户不存在",
+    "unknownTenant": "接收方未识别",
     "invalidPayload": "载荷无效"
   },
   "bulk": {
@@ -161,7 +155,6 @@
     }
   },
   "confirmation": {
-    "scope": "范围",
     "cutoff": "加载截止",
     "criteria": "筛选",
     "ids": "记录 ID",
@@ -191,7 +184,7 @@
     },
     "consequence": {
       "redeliver": "事件 ID 保持不变，消费方按 ID 去重。请先处理失败原因；之后新产生的记录不受影响，记录将分批回到待发送并由调度任务发出。",
-      "redecode": "由匹配的接收端重新解码；Api 未注册对应传输时，转交 Worker。成功后进入目标租户收件箱，无法解码的消息仍待处理，不包含稍后收到的消息。",
+      "redecode": "由匹配的接收端重新解码；Api 未注册对应传输时，转交 Worker。成功后进入目标收件箱，无法解码的消息仍待处理，不包含稍后收到的消息。",
       "discard": "这些原始消息将停止处理，不会投递给消费者。之后新收到的消息不受影响。"
     },
     "result": {

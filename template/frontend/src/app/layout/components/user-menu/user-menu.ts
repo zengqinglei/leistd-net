@@ -17,8 +17,11 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
-import { AuthorizationService } from '../../../core/services/authorization-service';
 import { LayoutService } from '../../../core/services/layout-service';
+//#if (TenantWorkspace)
+import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
+//#endif
+import { NavigationService } from '../../services/navigation-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
 interface UserMenuItem {
@@ -110,7 +113,7 @@ interface UserMenuItem {
                 }}</span>
               </hlm-avatar>
               <div class="grid flex-1 text-left text-sm leading-tight">
-                <span class="truncate font-medium">{{ user.displayName || user.username }}</span>
+                <span class="truncate font-medium">{{ userLabel() }}</span>
                 <span class="truncate text-xs text-muted-foreground">{{ user.email }}</span>
               </div>
               <ng-icon name="lucideChevronsUpDown" class="ml-auto text-base" />
@@ -137,7 +140,7 @@ interface UserMenuItem {
                 }}</span>
               </hlm-avatar>
               <div class="grid flex-1 text-left text-sm leading-tight">
-                <span class="truncate font-medium">{{ user.displayName || user.username }}</span>
+                <span class="truncate font-medium">{{ userLabel() }}</span>
                 <span class="truncate text-xs text-muted-foreground">{{ user.email }}</span>
               </div>
             </div>
@@ -163,16 +166,17 @@ interface UserMenuItem {
 })
 export class UserMenu {
   /** 放在哪种布局里：侧栏底部（带姓名与邮箱）或顶栏右侧（只有头像）。菜单内容两者相同。 */
-  readonly variant = input<'sidebar' | 'topbar'>('sidebar');
+  readonly variant = input<'sidebar' | 'topbar'>('topbar');
 
   readonly authService = inject(AuthService);
-  private readonly authorizationService = inject(AuthorizationService);
+  private readonly navigation = inject(NavigationService);
+  //#if (TenantWorkspace)
+  readonly workspace = inject(WorkspaceContextService);
+  //#endif
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
   private readonly texts = {
-    workspace: translateSignal('menu.workspace'),
-    platform: translateSignal('menu.platform'),
     personalSettings: translateSignal('menu.personalSettings'),
     logout: translateSignal('menu.logout'),
   };
@@ -181,35 +185,39 @@ export class UserMenu {
 
   /** 侧栏形态的弹出方向，同官方 nav-user；顶栏形态沿用默认（向下）。 */
   readonly sidebarMenuSide = computed(() => (this.sidebarService.isMobile() ? 'top' : 'right'));
+  //#if (TenantWorkspace)
+
+  //#if (IncludeLocalization)
+  private readonly represented = translateSignal(
+    'tenantWorkspace.representing',
+    computed(() => ({
+      tenant: this.workspace.current() ?? '',
+    })),
+  );
+  readonly representedLabel = this.represented;
+  //#else
+  readonly representedLabel = computed(() => `Representing ${this.workspace.current() ?? ''}`);
+  //#endif
+  //#endif
+
+  readonly userLabel = computed(() => {
+    const user = this.authService.currentUser();
+    if (!user) return '';
+    //#if (TenantWorkspace)
+    if (this.workspace.current() && !user.tenantId)
+      return `${user.username} · ${this.representedLabel()}`;
+    //#endif
+    return user.displayName || user.username;
+  });
 
   readonly userMenuItems = computed<UserMenuItem[]>(() => {
     const items: UserMenuItem[] = [];
 
-    if (this.layoutService.isPlatform()) {
+    for (const area of this.navigation.areaOptions().filter((option) => !option.current)) {
       items.push({
-        //#if (IncludeLocalization)
-        label: this.texts.workspace(),
-        //#else
-        label: 'Workspace',
-        //#endif
-        icon: 'lucideHouse',
-        action: () => this.router.navigate(['/workspace']),
-      });
-    } else if (
-      this.layoutService
-        .currentUrl()
-        .replace(/^\/w\/[^/]+/, '')
-        .startsWith('/workspace') &&
-      this.authorizationService.canAccessPlatform()
-    ) {
-      items.push({
-        //#if (IncludeLocalization)
-        label: this.texts.platform(),
-        //#else
-        label: 'Admin platform',
-        //#endif
-        icon: 'lucideCog',
-        action: () => this.router.navigate(['/platform']),
+        label: area.label,
+        icon: area.icon,
+        action: () => this.navigation.goToArea(area.route),
       });
     }
 
