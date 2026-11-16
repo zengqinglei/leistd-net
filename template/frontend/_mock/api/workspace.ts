@@ -8,10 +8,12 @@ import { MockException,
 //#if (LocalIdentity)
 import { ROLES } from '../data/authorization';
 //#endif
-import { TENANTS } from '../data/tenant';
-//#if (OpenIddictServer)
-import { toTenantOutput } from '../data/tenant';
-//#endif
+// prettier-ignore
+import { TENANTS,
+  //#if (OpenIddictServer)
+  toTenantOutput,
+  //#endif
+} from '../data/tenant';
 //#if (LocalIdentity)
 import { USERS } from '../data/user';
 //#endif

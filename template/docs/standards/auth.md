@@ -62,7 +62,7 @@
 - 本人账户、认证与协议端点（`/api/v1/auth/**`、`/api/v1/external-auth/**`、`/connect/**`）忽略工作区；不带工作区保持本人主体。
 - 租户用户只可选自己的租户，越界为 403 `Workspace:Forbidden`。宿主用户须有访问索引、启用的租户及关联账号，否则为 403 `Workspace:Unavailable`，本人会话保持有效。
 - 关联账号不持有口令、邮箱、外部登录或通行密钥；租户管理员可改角色与停用，宿主在租户管理中移除访问。再次授予恢复原关联账号及其历史。
-- Standalone/Identity 每次请求重建关联主体；Resource 浏览器会话用本人令牌交换工作区令牌，在节点按服务端票据键与租户缓存。撤销在前者下一个请求、后者最迟 5 分钟生效。
+- Standalone/Identity 每次请求重建关联主体；Resource 浏览器会话用本人令牌交换工作区令牌，在节点按服务端票据键、本人主体与租户缓存。撤销在前者下一个请求、后者最迟 5 分钟生效。
 - Resource 的工作负载客户端须获准交换自身资源的受众与 scope（例如 `aud:orders-api`、`scp:orders-api`），继续沿用 `Leistd:ServiceAuth` 的机密客户端身份。
 - 进入工作区交换不消耗下游委托的一跳，寿命不超过 5 分钟与输入令牌剩余寿命的较小值；访问令牌不含会话标识，结束本人会话阻止后续刷新，已签发令牌在到期前仍可交换。
 - `GET /api/v1/auth/me/workspaces` 始终返回本人可进入的工作区及其中的 `UserId`，供前端识别当前操作账号；Resource 以本人令牌回源 Identity。Resource 的令牌访问器经官方 `RequestAccessToken` PolicyScheme 将本人请求转给 `Smart`，业务请求转给 `Workspace`。

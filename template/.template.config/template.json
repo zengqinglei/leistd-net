@@ -1071,7 +1071,9 @@
           "exclude": [
             "frontend/src/app/layout/tenant/**",
             "frontend/src/app/core/dtos/workspace.dto.ts",
-            "frontend/src/app/core/guards/workspace-guard.ts",
+            "frontend/src/app/core/guards/workspace-guard*",
+            "frontend/src/app/core/errors/workspace-access-error.ts",
+            "frontend/src/app/core/components/workspace-denied/**",
             "frontend/src/app/core/interceptors/workspace-interceptor*",
             "frontend/src/app/core/services/workspace-context-service*",
             "frontend/src/app/features/platform/components/tenants/widgets/tenant-staff-sheet/**",

@@ -8,7 +8,9 @@ import { lastValueFrom } from 'rxjs';
 
 import { ReturnNavigation, ReturnUrlService } from '../../../core/routing/return-url-service';
 import { AuthService } from '../../../core/services/auth-service';
+//#if (!TenantWorkspace)
 import { AuthorizationService } from '../../../core/services/authorization-service';
+//#endif
 import { SessionContextService } from '../../../core/services/session-context-service';
 //#if (TenantWorkspace)
 import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
@@ -21,7 +23,9 @@ import { WorkspaceContextService } from '../../../core/services/workspace-contex
  */
 export function injectLoginCompletion(): (returnUrl: string | null) => Promise<ReturnNavigation> {
   const authService = inject(AuthService);
+  //#if (!TenantWorkspace)
   const authorizationService = inject(AuthorizationService);
+  //#endif
   const sessionContext = inject(SessionContextService);
   const returnUrls = inject(ReturnUrlService);
   const router = inject(Router);
@@ -36,14 +40,10 @@ export function injectLoginCompletion(): (returnUrl: string | null) => Promise<R
   const enterLandingPage = async () => {
     //#if (TenantWorkspace)
     await workspace.refresh();
-    const last = localStorage.getItem('last-workspace');
-    if (last === '' && !authService.currentUser()?.tenantId)
-      return router.navigateByUrl('/platform');
-    const selected =
-      workspace.workspaces().find((item) => item.name === last) ?? workspace.workspaces()[0];
-    if (selected) return router.navigateByUrl(`/w/${encodeURIComponent(selected.name)}/platform`);
-    //#endif
+    return router.navigateByUrl(workspace.landingUrl());
+    //#else
     return router.navigate([authorizationService.canAccessPlatform() ? '/platform' : '/workspace']);
+    //#endif
   };
 
   return async (returnUrl) => {

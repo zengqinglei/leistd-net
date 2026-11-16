@@ -4,6 +4,7 @@ import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 
 import { WORKSPACE_SCOPE } from './http-context-tokens';
+import { API_ERROR_CODES } from '../errors/api-error-codes';
 import { ApplicationHttpError } from '../errors/application-http-error';
 import { WorkspaceContextService } from '../services/workspace-context-service';
 
@@ -20,7 +21,12 @@ export const workspaceInterceptor: HttpInterceptorFn = (request, next) => {
       : request;
   return next(scoped).pipe(
     catchError((error: unknown) => {
-      if (error instanceof ApplicationHttpError && error.code === 'Workspace:Unavailable') {
+      if (
+        error instanceof ApplicationHttpError &&
+        error.code === API_ERROR_CODES.workspaceUnavailable &&
+        name === workspace.current() &&
+        name === workspace.target()
+      ) {
         void workspace.recoverUnavailable().catch(() => undefined);
       }
       return throwError(() => error);

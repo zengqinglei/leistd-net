@@ -1,4 +1,5 @@
 import { Location } from '@angular/common';
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Route, Router, Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -13,17 +14,45 @@ import { PROTECTED_ROUTE_PREFIXES } from './core/services/startup-service';
 import { NotFound } from './features/public/components/not-found/not-found';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/constants/permission.constants';
 
+@Component({ selector: 'app-public-root-stub', template: 'Public home' })
+class PublicRoot {}
+
 describe('top-level routes', () => {
   const concreteRoutes: Routes = routes.flatMap((route) =>
-    route.path === '' && route.children
+    route.children?.length === 1 && route.children[0].path === ''
       ? route.children.map((child) => ({
           ...child,
+          path: route.path,
           canActivate: [...(route.canActivate ?? []), ...(child.canActivate ?? [])],
         }))
       : [route],
   );
   const isCatchAllPrefix = (r: Route) => r.path === '' && !!r.loadChildren;
   const isWildcard = (r: Route) => r.path === '**';
+
+  it('reaches the public root without running protected-route guards', async () => {
+    const protectedGuard = vi.fn(() => false);
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(
+          routes.map((route) =>
+            isCatchAllPrefix(route)
+              ? { ...route, loadChildren: () => [{ path: '', component: PublicRoot }] }
+              : route.canActivate
+                ? { ...route, canActivate: [protectedGuard] }
+                : route,
+          ),
+        ),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/', PublicRoot);
+
+    expect(protectedGuard).not.toHaveBeenCalled();
+    expect(harness.routeNativeElement?.textContent).toBe('Public home');
+    expect(TestBed.inject(Router).url).toBe('/');
+  });
 
   // 扫到的路由数为零的话，下面两条都是空的。
   it('finds a non-zero number of routes', () => {

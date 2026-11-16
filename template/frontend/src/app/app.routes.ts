@@ -6,7 +6,7 @@ import { provideTranslocoScope } from '@jsverse/transloco';
 import { authGuard } from './core/guards/auth-guard';
 import { forbiddenGuard, permissionGuard } from './core/guards/permission-guard';
 //#if (TenantWorkspace)
-import { workspaceGuard } from './core/guards/workspace-guard';
+import { workspaceDeniedGuard, workspaceGuard } from './core/guards/workspace-guard';
 //#endif
 //#if (IncludeLocalization)
 import { resolveTranslationScopes } from './core/i18n/translation-scopes';
@@ -105,6 +105,13 @@ const baseRoutes: Routes = [
 //#if (TenantWorkspace)
 export const routes: Routes = [
   {
+    path: 'workspace-denied',
+    canActivate: [authGuard, workspaceDeniedGuard],
+    runGuardsAndResolvers: 'paramsOrQueryParamsChange',
+    loadComponent: () =>
+      import('./core/components/workspace-denied/workspace-denied').then((m) => m.WorkspaceDenied),
+  },
+  {
     path: 'w/:workspace',
     component: TenantLayout,
     canActivate: [authGuard, workspaceGuard],
@@ -119,9 +126,10 @@ export const routes: Routes = [
   ...baseRoutes.map((route) =>
     route.path === 'platform'
       ? {
-          path: '',
+          // 父路由只匹配平台入口，避免空路径把公共首页也纳入认证与工作区守卫。
+          path: 'platform',
           canActivate: [authGuard, workspaceGuard],
-          children: [{ ...route, canActivate: [permissionGuard] }],
+          children: [{ ...route, path: '', canActivate: [permissionGuard] }],
         }
       : route,
   ),

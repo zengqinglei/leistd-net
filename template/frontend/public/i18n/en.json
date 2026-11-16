@@ -1,6 +1,11 @@
 {
   //#if (TenantWorkspace)
   "tenantWorkspace": {
+    "deniedTitle": "You cannot access this workspace",
+    "forbiddenDescription": "Your account belongs to another workspace. Go to your own workspace to continue.",
+    "unavailableDescription": "This workspace is unavailable or you no longer have access. Go to an available workspace to continue.",
+    "goToMine": "Go to my workspace",
+
     "backToConsole": "Back to platform console",
     "title": "Workspaces",
     "console": "Platform console",

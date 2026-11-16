@@ -1,6 +1,11 @@
 {
   //#if (TenantWorkspace)
   "tenantWorkspace": {
+    "deniedTitle": "无法访问该工作区",
+    "forbiddenDescription": "你的账号属于其他工作区，请前往自己的工作区继续操作。",
+    "unavailableDescription": "该工作区已不可用，或你已没有访问权限。请前往可用的工作区继续操作。",
+    "goToMine": "前往我的工作区",
+
     "backToConsole": "回到平台控制台",
     "title": "工作区",
     "console": "平台控制台",

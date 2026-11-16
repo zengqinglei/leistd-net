@@ -4,17 +4,37 @@ import { expect, test } from '@playwright/test';
 import { admin, authStatePath } from './support/accounts';
 import { json } from './support/http';
 
-test('host login lands in the initialized default workspace', async ({ page }) => {
-  await page.goto('/auth/login');
+test('signs in from the public root to the default workspace', async ({ page }) => {
+  const documents: string[] = [];
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+      documents.push(new URL(request.url()).pathname);
+  });
+  await page.goto('/');
+  await expect(page).toHaveURL('/');
+  await page.getByRole('link', { name: 'Sign in', exact: true }).first().click();
   await page.getByLabel('Username or Email').fill(admin().username);
   await page.getByLabel('Password', { exact: true }).fill(admin().password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/w\/default-e2e\/platform/);
   await expect(page.getByTestId('area-switcher')).toContainText('default-e2e');
+  expect(documents).toEqual(['/']);
 });
 
 test.describe('workspace requests and routes', () => {
   test.use({ storageState: authStatePath(admin()) });
+
+  for (const path of ['/platform', '/w/default-e2e/platform']) {
+    test(`cold starts and reloads ${path}`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+      await expect(page.getByTestId('area-switcher')).toBeVisible();
+      await expect(page).toHaveURL(path);
+    });
+  }
+
   test('switches within a tab, preserves the other tab, and keeps an empty workspace shell', async ({
     page,
     context,

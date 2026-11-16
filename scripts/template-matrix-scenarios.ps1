@@ -118,7 +118,7 @@ $scenarioMap = [ordered]@{
     "identity-workspace" = @{
         Slices = @{ full = "full-02" }
         Arguments = @("--service-role", "Identity", "--tenant-staff-access", "Workspace", "--include-real-time", "--include-notifications", "--include-localization", "--include-external-login", "--include-webhooks", "--include-distributed-events")
-        Frontend = $true; Lint = $true
+        Frontend = $true; Lint = $true; Verify = $true
         Present = @("frontend/src/app/layout/components/default-sidebar/default-sidebar.ts")
         Absent = @("backend/src/{name}.Api/Controllers/TenantController.cs")
         ReadmeContains = @(); ReadmeExcludes = @()

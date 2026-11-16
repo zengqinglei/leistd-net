@@ -72,6 +72,22 @@ describe('StartupService', () => {
     expect(sessionContext.clear).toHaveBeenCalled();
     expect(service.status()).toBe('success');
   });
+  //#if (TenantWorkspace)
+
+  for (const code of ['Workspace:Forbidden', 'Workspace:Unavailable']) {
+    it(`leaves ${code} on a deep link to the workspace guard instead of failing startup`, async () => {
+      openAt('/w/other/platform');
+      sessionContext.establish.mockRejectedValue(
+        ApplicationHttpError.from(new HttpErrorResponse({ status: 403, error: { code } })),
+      );
+      await service.load();
+      expect(service.status()).toBe('success');
+      expect(service.error()).toBeNull();
+      expect(sessionContext.clear).not.toHaveBeenCalled();
+      await expect(firstValueFrom(service.settled('/w/other/platform'))).resolves.toBe(true);
+    });
+  }
+  //#endif
 
   it('marks startup as failed when the auth service is unavailable (503)', async () => {
     const error = httpError(503);

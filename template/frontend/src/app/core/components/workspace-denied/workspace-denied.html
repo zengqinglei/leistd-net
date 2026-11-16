@@ -1,0 +1,18 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <main class="flex min-h-svh items-center justify-center bg-background">
+    <div hlmEmpty class="p-4 sm:p-6">
+      <div hlmEmptyHeader>
+        <div hlmEmptyMedia variant="icon"><ng-icon name="lucideLock" /></div>
+        <h1 hlmEmptyTitle>{{ t('tenantWorkspace.deniedTitle') }}</h1>
+        <p hlmEmptyDescription>{{ t(description()) }}</p>
+      </div>
+      <div hlmEmptyContent>
+        <button hlmBtn (click)="goToWorkspace()">{{ t('tenantWorkspace.goToMine') }}</button>
+      </div>
+    </div>
+  </main>
+</ng-container>
