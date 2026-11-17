@@ -29,6 +29,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 
 import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { isSubmittedInvalid } from '../../../../../../core/validation/submit-error-state-matcher';
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { DialogFocus } from '../../../../../../shared/directives/dialog-focus';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
@@ -111,6 +112,7 @@ export class WebhookSubscriptionDialog {
   //#endif
   protected readonly maxHeaderCount = MAX_HEADER_COUNT;
 
+  readonly eventTypesInvalid = computed(() => isSubmittedInvalid(this.subscriptionForm.eventTypes));
   readonly visible = model(false);
   /** 编辑模式：打开时还在取详情，或已取到订阅。 */
   readonly editing = input(false);

@@ -1,7 +1,12 @@
-<div hlmField #editor class="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4">
+<div
+  hlmField
+  #editor
+  class="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4"
+  #uriField="hlmField"
+>
   <div class="flex items-center justify-between gap-3">
     <label hlmFieldLabel [for]="inputId()">{{ label() }}</label>
-    @if (!uriForm.uri().invalid() || !uriForm.uri().touched()) {
+    @if (!uriField.spartanInvalid()) {
       <span hlmFieldDescription>{{ hint() }}</span>
     }
   </div>
@@ -30,9 +35,7 @@
         {{ addLabel() }}
       </button>
     </div>
-    @if (uriForm.uri().invalid() && uriForm.uri().touched()) {
-      <hlm-field-error [forceShow]="true">{{ invalidText() }}</hlm-field-error>
-    }
+    <hlm-field-error>{{ invalidText() }}</hlm-field-error>
   </div>
   <div class="flex flex-wrap gap-2">
     @for (uri of uris(); track uri) {

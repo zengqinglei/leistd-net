@@ -1,6 +1,6 @@
 # 侧栏上下文识别与提交时校验
 
-状态：实施中 · 风险档：中 · 关联：方案对比页 [design.html](2026-11-17-sidebar-context-and-submit-validation/design.html)；前序规格 [2026-11-16-shell-navigation-system-switcher.md](2026-11-16-shell-navigation-system-switcher.md)
+状态：已完成 · 风险档：中 · 关联：方案对比页 [design.html](2026-11-17-sidebar-context-and-submit-validation/design.html)；前序规格 [2026-11-16-shell-navigation-system-switcher.md](2026-11-16-shell-navigation-system-switcher.md)
 
 ## 1. 需求
 
@@ -104,3 +104,23 @@
 4. 更新 `frontend-forms.md`（报错时机，以及"已有检查"的说明）和 `frontend-navigation.md`（上下文位与颜色规则），注意模板规范读取成本闸门。
 5. 验证：受影响形态（Identity×Workspace、Identity×Impersonation、Resource×Workspace、Standalone 关多租户、关本地化）的 lint、构建和受影响 spec；有头 e2e 覆盖登录页的报错时机；1440/390 截图对照 design.html。
 6. 开 PR，目标 develop。
+
+## 4. 结果
+
+- 侧栏按设计实现 32px 租户上下文、反色平台静态标识、40px 底部入口及 26px 图标块；折叠保留图标与 tooltip，租户图标展开并打开原组合框。主题沿用 primary / foreground / background。租户用户、单工作区人员及关闭多租户的显示条件保持原有规则。
+- 应用级注册 `provideErrorStateMatcher(SubmitErrorStateMatcher)`。统一提交入口按字段树记录尝试状态，以公开 interop 错误的 `fieldTree` 关联字段；`linkedSignal` 随 reset 清除状态，不访问 interop 私有成员。清理模板与再认证描述关联中的 touched 判断；URI 子表单接入统一入口。设置行以原有 change 自动保存为提交时点，原生数值错误改对即消除。
+- `HlmField.spartanInvalid()` 让说明文字和错误复用 Brain 匹配结果；无直接 FormField 绑定的组合控件复用统一状态。已有服务端字段回填与首错聚焦回归通过。提交按钮有效性禁用规则加入现有 ESLint 配置，8 个反例/正例沿用 Node 自检入口。
+
+| 实际生成形态 | lint / 生产构建 | 受影响组件测试 |
+| --- | --- | ---: |
+| Identity × Workspace（含 Webhook） | 通过 | 326 |
+| Identity × Impersonation | 通过 | 313 |
+| Resource × Workspace | 通过 | 107 |
+| Standalone，关闭多租户 | 通过 | 240 |
+| Identity × Workspace，关闭本地化 | 通过 | 314 |
+
+以上共 1,300 次组件用例执行。设置行最后调整后，五形态再次 lint、生产构建及定向复验 620 项；侧栏读屏名与盾牌实际尺寸修正后，三个 Workspace 形态再次 lint、生产构建及侧栏复验 45 项通过。均由 remote-project-runner `--target auto` 调度，最终验证任务 cleanupComplete=true。
+
+实际生成前端配合 Mock 的有头浏览器已验证登录、新建/编辑用户弹窗的失焦、提交、即时消错与重开清空，未提交有效写请求；侧栏验证 1440 / 390、浅色 / 暗色、折叠、展开选择框和平台/返回路径。实测上下文 32px、底部入口 40px、平台盾牌 16px，390 宽页面无整体横向溢出。截图与脱敏执行回执保存在本工作树 `.tmp/ctx-validation/`。
+
+升级后的表单首次失焦不再显示校验错误，首次提交后实时重验；新增页面应使用统一提交入口。前端行为变更不涉及框架公共 API 或后端存储。

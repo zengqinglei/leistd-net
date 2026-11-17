@@ -58,6 +58,11 @@ import {
 import { SettingService } from '../../../../core/settings/setting-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
 import { SETTINGS_SECTION_HEADING_LEVEL } from '../../../../core/settings/settings-section-heading-level';
+import { injectFormSubmission } from '../../../../core/validation/form-submission';
+import {
+  isSubmittedInvalid,
+  wasFormSubmitted,
+} from '../../../../core/validation/submit-error-state-matcher';
 import { InfoHint } from '../../../../shared/components/info-hint/info-hint';
 import { ComboboxRevealSelected } from '../../../../shared/directives/combobox-reveal-selected';
 //#if (!IncludeLocalization)
@@ -278,6 +283,7 @@ export class SettingSection {
     });
   }
 
+  private readonly submitForm = injectFormSubmission();
   /** 写入链的队尾。见 {@link write} 里为什么必须串行。 */
   private writeQueue: Promise<void> = Promise.resolve();
   /** 每行最近一次写入的序号：同一行连续写入时，只有最后一次给出这一行的状态。 */
@@ -438,7 +444,9 @@ export class SettingSection {
 
   protected isInvalid(setting: SettingOutputDto, scope: SettingScope): boolean {
     return (
-      this.stateOf(setting, scope)?.status === 'error' || this.fieldOf(setting, scope)().invalid()
+      this.stateOf(setting, scope)?.status === 'error' ||
+      !!this.serverErrors()[draftKey(setting, scope)]?.length ||
+      isSubmittedInvalid(this.fieldOf(setting, scope))
     );
   }
 
@@ -762,10 +770,18 @@ export class SettingSection {
   }
 
   /** 输入框的值由 `[formField]` 写进表单；这里记下"正在编辑"，快照刷新不覆盖，上次的字段错误随之失效。 */
-  protected onInput(setting: SettingOutputDto, scope: SettingScope): void {
+  protected onInput(setting: SettingOutputDto, scope: SettingScope, event: Event): void {
     const key = draftKey(setting, scope);
     this.markPending(key);
     this.clearServerErrors(key);
+    if (wasFormSubmitted(this.fieldOf(setting, scope))) {
+      const control = event.target as HTMLInputElement;
+      if (!control.validity.valid) {
+        this.setRowState(key, { status: 'error', message: control.validationMessage });
+      } else if (this.stateOf(setting, scope)?.status === 'error') {
+        this.clearRowState(key);
+      }
+    }
   }
 
   /** 输入类控件在原生 `change`（失焦或回车）时提交，不按键即写：输入 60 会途经同样合法的 6。 */
@@ -773,15 +789,16 @@ export class SettingSection {
     const control = event.target as HTMLInputElement;
     const raw = control.value;
     const value = setting.isSecret ? raw : raw.trim();
-    if (!control.validity.valid) {
+    const valid = control.validity.valid;
+    if (!valid) {
       const key = draftKey(setting, scope);
       this.setDraft(key, value);
       this.setRowState(key, { status: 'error', message: control.validationMessage });
-      return;
     }
-
-    // 写入裁剪后的值：草稿随之同步（见 write），界面显示的就是实际存入的值。
-    void this.write(setting, value.length === 0 ? null : value, scope);
+    void this.submitForm(this.fieldOf(setting, scope), control.closest('hlm-field')!, async () => {
+      if (!valid) return;
+      this.write(setting, value.length === 0 ? null : value, scope);
+    });
   }
 
   /** 开关：状态本身就是提交，没有中间态。 */

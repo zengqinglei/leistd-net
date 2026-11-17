@@ -2581,6 +2581,24 @@ describe('SettingSection row validation', () => {
     expect(inline.textContent).toContain('Not allowed here');
   });
 
+  it('validates numeric drafts only after committing and clears corrections while typing', async () => {
+    const host = await render(row({ name: 'Numeric.Probe', minimum: 1, maximum: 10 }));
+    const field = host.querySelector<HTMLInputElement>('input')!;
+    retype(field, '11');
+    await fixture.whenStable();
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+    field.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    retype(field, '5');
+    await fixture.whenStable();
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+    retype(field, '12');
+    await fixture.whenStable();
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    http.expectNone((request) => request.method === 'PUT');
+  });
+
   it('review R1 displays native numeric validation and keeps the draft without an HTTP request', async () => {
     const host = await render(row({ name: 'Numeric.Probe', minimum: 1, maximum: 10 }));
     const field = host.querySelector<HTMLInputElement>('input')!;

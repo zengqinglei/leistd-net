@@ -21,7 +21,7 @@ import { lineCount, pseudoCatalog } from '../../../core/i18n/pseudo-locale.testi
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
-//#if (TenantWorkspace && IncludeLocalization)
+//#if (TenantWorkspace)
 import { AuthService } from '../../../core/services/auth-service';
 //#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
@@ -29,7 +29,7 @@ import { LayoutService } from '../../../core/services/layout-service';
 //#if (OpenIddictServer || RemoteTokenAuth)
 import { SystemDirectoryService } from '../../../core/services/system-directory-service';
 //#endif
-//#if (TenantWorkspace && IncludeLocalization)
+//#if (TenantWorkspace)
 import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
 //#endif
 import {
@@ -347,9 +347,48 @@ describe('DefaultSidebar touch targets', () => {
     expect(host.querySelector('[data-testid="user-menu-trigger"]')).toBeNull();
   });
 });
-//#if (TenantWorkspace && IncludeLocalization)
+//#if (TenantWorkspace)
 
 describe('DefaultSidebar tenant selection and platform management', () => {
+  async function setup(current: string | null, count = 2, tenantId: string | null = null) {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
+        { provide: AuthService, useValue: { currentUser: signal({ id: 'person', tenantId }) } },
+        {
+          provide: AuthorizationService,
+          useValue: { hasAny: () => true, canAccessPlatform: () => true },
+        },
+        //#if (OpenIddictServer || RemoteTokenAuth)
+        { provide: SystemDirectoryService, useValue: { systems: signal([]), switchTo: vi.fn() } },
+        //#endif
+      ],
+    });
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation(enTexts, 'en');
+    //#endif
+    const workspace = TestBed.inject(WorkspaceContextService);
+    workspace.workspaces.set(
+      [
+        { userId: 'member-acme', tenantId: 'acme-id', name: 'acme' },
+        { userId: 'member-globex', tenantId: 'globex-id', name: 'globex' },
+      ].slice(0, count),
+    );
+    workspace.current.set(current);
+    workspace.canAccessConsole.set(true);
+    const fixture = TestBed.createComponent(SidebarHost);
+    const sidebar = TestBed.inject(HlmSidebarService);
+    sidebar.setOpen(true);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    return { fixture, host: fixture.nativeElement as HTMLElement, sidebar, workspace };
+  }
+
   for (const scenario of [
     {
       name: 'staff in a tenant',
@@ -389,45 +428,74 @@ describe('DefaultSidebar tenant selection and platform management', () => {
     },
   ]) {
     it(`shows only the appropriate controls for ${scenario.name}`, async () => {
-      TestBed.configureTestingModule({
-        providers: [
-          provideRouter([]),
-          provideHttpClient(),
-          provideHttpClientTesting(),
-          ...provideTranslocoTesting(),
-          {
-            provide: AuthService,
-            useValue: { currentUser: signal({ id: 'person', tenantId: scenario.tenantId }) },
-          },
-          {
-            provide: AuthorizationService,
-            useValue: { hasAny: () => true, canAccessPlatform: () => true },
-          },
-          //#if (OpenIddictServer || RemoteTokenAuth)
-          { provide: SystemDirectoryService, useValue: { systems: signal([]), switchTo: vi.fn() } },
-          //#endif
-        ],
-      });
-      TestBed.inject(TranslocoService).setTranslation(enTexts, 'en');
-      const workspace = TestBed.inject(WorkspaceContextService);
-      workspace.workspaces.set(
-        [
-          { userId: 'member-acme', tenantId: 'acme-id', name: 'acme' },
-          { userId: 'member-globex', tenantId: 'globex-id', name: 'globex' },
-        ].slice(0, scenario.count),
-      );
-      workspace.current.set(scenario.current);
-      workspace.canAccessConsole.set(true);
-      const fixture = TestBed.createComponent(SidebarHost);
-      TestBed.inject(HlmSidebarService).setOpen(true);
-      await fixture.whenStable();
-      const host = fixture.nativeElement as HTMLElement;
+      const { host } = await setup(scenario.current, scenario.count, scenario.tenantId);
       expect(!!host.querySelector('[data-testid="tenant-selector"]')).toBe(scenario.selector);
       expect(!!host.querySelector('[data-testid="platform-management"]')).toBe(scenario.platform);
       expect(!!host.querySelector('[data-testid="return-workspace"]')).toBe(scenario.back);
       expect(host.querySelector('[data-testid="area-switcher"]')).toBeNull();
-      fixture.destroy();
     });
   }
+
+  for (const dark of [false, true]) {
+    it(`renders the context size and semantic colors in ${dark ? 'dark' : 'light'} mode`, async () => {
+      document.documentElement.classList.toggle('dark', dark);
+      try {
+        const { fixture, host, workspace } = await setup('acme');
+        const picker = host.querySelector<HTMLElement>('[data-testid="tenant-selector"]')!;
+        expect(picker.getBoundingClientRect().height).toBe(32);
+        expect(picker.querySelector('ng-icon[name="lucideBuilding2"]')).not.toBeNull();
+        expect(picker.querySelector('ng-icon[name="lucideChevronsUpDown"]')).not.toBeNull();
+        const entry = host.querySelector<HTMLElement>('[data-testid="platform-management"]')!;
+        expect(entry.getBoundingClientRect().height).toBe(40);
+        expect(entry.querySelector('div')!.getBoundingClientRect().width).toBe(26);
+        expect(entry.querySelector('ng-icon[name="lucideShieldCheck"]')).not.toBeNull();
+        expect(entry.querySelector('ng-icon[name="lucideChevronRight"]')).not.toBeNull();
+        const entryBackground = getComputedStyle(entry.querySelector('div')!).backgroundColor;
+        workspace.current.set(null);
+        await fixture.whenStable();
+        const context = host.querySelector<HTMLElement>('[data-testid="platform-context"]')!;
+        expect(context.getBoundingClientRect().height).toBe(32);
+        expect(context.tabIndex).toBe(-1);
+        expect(context.querySelector('button, a, [tabindex]')).toBeNull();
+        const shield = context.querySelector('ng-icon[name="lucideShieldCheck"]')!;
+        expect(shield.getBoundingClientRect().width).toBe(16);
+        expect(shield.getBoundingClientRect().height).toBe(16);
+        expect(getComputedStyle(context).backgroundColor).toBe(entryBackground);
+        expect(
+          host.querySelector(
+            '[data-testid="return-workspace"] ng-icon[name="lucideCornerDownLeft"]',
+          ),
+        ).not.toBeNull();
+      } finally {
+        document.documentElement.classList.remove('dark');
+      }
+    });
+  }
+
+  it('expands from the tenant icon, opens the same picker and keeps switching behavior', async () => {
+    const { fixture, host, sidebar, workspace } = await setup('acme');
+    sidebar.setOpen(false);
+    await fixture.whenStable();
+    await Promise.all(document.getAnimations().map((animation) => animation.finished));
+    const icon = host.querySelector<HTMLButtonElement>('[data-testid="tenant-context-icon"]')!;
+    expect(icon.getBoundingClientRect().width).toBe(32);
+    expect(icon.getAttribute('aria-label')).toBe('acme');
+    expect(
+      host.querySelector('[data-testid=platform-management]')?.getAttribute('aria-label'),
+    ).toBeTruthy();
+    icon.click();
+    await fixture.whenStable();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await fixture.whenStable();
+    expect(sidebar.state()).toBe('expanded');
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    const switchTo = vi.spyOn(workspace, 'switchTo').mockImplementation(() => undefined);
+    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (item) => item.textContent?.includes('globex'),
+    )!;
+    option.click();
+    await fixture.whenStable();
+    expect(switchTo).toHaveBeenCalledWith('globex');
+  });
 });
 //#endif

@@ -35,6 +35,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 
 import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { isSubmittedInvalid } from '../../../../../../core/validation/submit-error-state-matcher';
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { DialogFocus } from '../../../../../../shared/directives/dialog-focus';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
@@ -113,6 +114,9 @@ export class OpenApplicationEditDialog {
   private readonly applicationFormRoot =
     viewChild.required<ElementRef<HTMLElement>>('applicationFormRoot');
   private readonly submitForm = injectFormSubmission();
+  readonly sessionBoundInvalid = computed(() =>
+    isSubmittedInvalid(this.applicationForm.sessionBound),
+  );
   readonly saving = computed(() => this.applicationForm().submitting());
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);

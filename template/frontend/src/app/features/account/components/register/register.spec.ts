@@ -3,6 +3,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { of, throwError } from 'rxjs';
 
 import { Register } from './register';
@@ -14,6 +15,7 @@ import {
   renderSubmission,
   rejectedField,
 } from '../../../../core/validation/form-submission.testing';
+import { SubmitErrorStateMatcher } from '../../../../core/validation/submit-error-state-matcher';
 import { AccountService } from '../../services/account-service';
 
 import type { MockedObject } from 'vitest';
@@ -66,7 +68,8 @@ describe('Register', () => {
     //#endif
     //#if (ExternalLogin)
     externalAuth = {
-      getExternalLoginProviders: vi.fn().mockReturnValue(of({ providers: ['github'] })),
+      getExternalLoginProviders: vi.fn().mockReturnValue(of({ providers: [
+        provideErrorStateMatcher(SubmitErrorStateMatcher),'github'] })),
       getExternalLoginUrl: vi.fn(),
     };
     //#endif
@@ -74,6 +77,7 @@ describe('Register', () => {
     await TestBed.configureTestingModule({
       imports: [Register],
       providers: [
+        provideErrorStateMatcher(SubmitErrorStateMatcher),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -125,6 +129,23 @@ describe('Register', () => {
     queryParams = {};
     captchaResponse = () =>
       of({ captchaToken: 'token-1', captchaImageBase64: 'data:image/png;base64,' });
+  });
+
+  it('keeps registration errors hidden on blur and reveals them on submission', async () => {
+    await setUp();
+    const host = fixture.nativeElement as HTMLElement;
+    const input = host.querySelector<HTMLInputElement>('input')!;
+    input.focus();
+    input.blur();
+    await fixture.whenStable();
+    const errors = () =>
+      Array.from(host.querySelectorAll<HTMLElement>('hlm-field-error')).filter(
+        (error) => !error.hidden,
+      );
+    expect(errors()).toHaveLength(0);
+    await renderSubmission(fixture, () => component.onSubmit());
+    expect(errors().length).toBeGreaterThan(0);
+    expect(accountService.register).not.toHaveBeenCalled();
   });
 
   it('does not submit the registration request when the form is invalid', async () => {

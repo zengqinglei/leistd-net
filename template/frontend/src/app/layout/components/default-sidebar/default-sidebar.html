@@ -14,6 +14,7 @@
       <!--#if (TenantWorkspace)-->
       @if (showTenantSelector()) {
         <hlm-combobox
+          #tenantPicker
           class="group-data-[collapsible=icon]:hidden"
           [value]="workspace.current()"
           [itemToString]="workspaceLabel"
@@ -23,11 +24,25 @@
             t('tenantWorkspace.search')
           }}</label>
           <hlm-combobox-input
+            #tenantInput
+            class="h-8 border-primary/30 bg-primary/10 text-foreground dark:bg-primary/10 [&_input]:font-semibold [&>hlm-input-group-addon]:hidden"
+            [showTrigger]="false"
             inputId="sidebar-tenant-selector"
             [placeholder]="t('tenantWorkspace.search')"
             [triggerAriaLabel]="t('tenantWorkspace.search')"
             data-testid="tenant-selector"
-          />
+          >
+            <span hlmInputGroupAddon align="inline-start" class="text-primary">
+              <ng-icon name="lucideBuilding2" />
+            </span>
+            <span
+              hlmInputGroupAddon
+              align="inline-end"
+              class="pointer-events-none text-muted-foreground"
+            >
+              <ng-icon name="lucideChevronsUpDown" />
+            </span>
+          </hlm-combobox-input>
           <hlm-combobox-content *hlmComboboxPortal>
             <hlm-combobox-empty>{{ t('tenantWorkspace.empty') }}</hlm-combobox-empty>
             <div hlmComboboxList>
@@ -39,6 +54,35 @@
             </div>
           </hlm-combobox-content>
         </hlm-combobox>
+        <button
+          type="button"
+          hlmSidebarMenuButton
+          class="hidden border border-primary/30 bg-primary/10 text-primary group-data-[collapsible=icon]:flex"
+          data-testid="tenant-context-icon"
+          [tooltip]="workspaceLabel(workspace.current()!)"
+          [attr.aria-label]="workspaceLabel(workspace.current()!)"
+          [closeMobileSidebarOnClick]="false"
+          (click)="openTenantPicker()"
+        >
+          <ng-icon name="lucideBuilding2" />
+        </button>
+      } @else if (
+        !workspace.current() &&
+        !workspace.auth.currentUser()?.tenantId &&
+        workspace.canAccessConsole()
+      ) {
+        <div
+          class="flex h-8 items-center gap-2 rounded-md bg-foreground px-2 text-sm font-semibold text-background group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2"
+          data-testid="platform-context"
+          [hlmTooltip]="t('tenantWorkspace.console')"
+          position="right"
+          [tooltipDisabled]="sidebarService.state() !== 'collapsed'"
+        >
+          <ng-icon name="lucideShieldCheck" size="16px" />
+          <span class="truncate group-data-[collapsible=icon]:hidden">{{
+            t('tenantWorkspace.console')
+          }}</span>
+        </div>
       }
       <!--#endif-->
     </div>
@@ -70,34 +114,50 @@
     <!--#if (TenantWorkspace)-->
 
     @if (!workspace.auth.currentUser()?.tenantId && workspace.canAccessConsole()) {
-      <div hlmSidebarFooter>
+      <div hlmSidebarFooter class="border-t border-sidebar-border">
         <ul hlmSidebarMenu>
           <li hlmSidebarMenuItem>
             @if (workspace.current()) {
               <button
                 hlmSidebarMenuButton
+                class="h-10 gap-2.5 font-semibold group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! pointer-coarse:group-data-[collapsible=icon]:p-0!"
                 data-testid="platform-management"
                 [tooltip]="t('tenantWorkspace.console')"
+                [attr.aria-label]="t('tenantWorkspace.console')"
                 (click)="workspace.switchTo(null)"
               >
-                <ng-icon name="lucideCog" /><span>{{ t('tenantWorkspace.console') }}</span>
+                <div
+                  class="flex size-[26px] shrink-0 items-center justify-center rounded-md bg-foreground text-background"
+                >
+                  <ng-icon name="lucideShieldCheck" />
+                </div>
+                <span class="flex-1 group-data-[collapsible=icon]:hidden">{{
+                  t('tenantWorkspace.console')
+                }}</span>
+                <ng-icon name="lucideChevronRight" class="group-data-[collapsible=icon]:hidden" />
               </button>
             } @else if (workspace.returnWorkspace(); as destination) {
+              @let returnLabel =
+                t('tenantWorkspace.return', {
+                  tenant: destination.displayName || destination.name,
+                });
               <button
                 hlmSidebarMenuButton
+                class="h-10 gap-2.5 font-semibold group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! pointer-coarse:group-data-[collapsible=icon]:p-0!"
                 data-testid="return-workspace"
-                [tooltip]="
-                  t('tenantWorkspace.return', {
-                    tenant: destination.displayName || destination.name,
-                  })
-                "
+                [tooltip]="returnLabel"
+                [attr.aria-label]="returnLabel"
                 (click)="workspace.switchTo(destination.name)"
               >
-                <ng-icon name="lucideHouse" /><span class="truncate">{{
-                  t('tenantWorkspace.return', {
-                    tenant: destination.displayName || destination.name,
-                  })
+                <div
+                  class="flex size-[26px] shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary"
+                >
+                  <ng-icon name="lucideBuilding2" />
+                </div>
+                <span class="min-w-0 flex-1 truncate group-data-[collapsible=icon]:hidden">{{
+                  returnLabel
                 }}</span>
+                <ng-icon name="lucideCornerDownLeft" class="group-data-[collapsible=icon]:hidden" />
               </button>
             }
           </li>

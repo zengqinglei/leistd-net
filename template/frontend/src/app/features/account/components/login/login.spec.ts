@@ -6,6 +6,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 //#if (IncludeLocalization)
 import { provideTranslocoScope, TranslocoService } from '@jsverse/transloco';
 //#endif
+import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { toast } from '@spartan-ng/brain/sonner';
 // prettier-ignore
 import {
@@ -39,6 +40,7 @@ import { TenantContextService } from '../../../../core/services/tenant-context-s
 import { WorkspaceContextService } from '../../../../core/services/workspace-context-service';
 //#endif
 import { renderSubmission } from '../../../../core/validation/form-submission.testing';
+import { SubmitErrorStateMatcher } from '../../../../core/validation/submit-error-state-matcher';
 import {
   fakeAssertion,
   REQUEST_OPTIONS,
@@ -116,6 +118,7 @@ describe('Login', () => {
     await TestBed.configureTestingModule({
       imports: [Login],
       providers: [
+        provideErrorStateMatcher(SubmitErrorStateMatcher),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -192,7 +195,9 @@ describe('Login', () => {
     localStorage.clear();
     //#endif
     //#if (ExternalLogin)
-    externalProviders = of({ providers: ['github', 'google'] });
+    externalProviders = of({
+      providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'github', 'google'],
+    });
     //#endif
   });
   //#if (IncludeMultiTenancy)
@@ -409,6 +414,24 @@ describe('Login', () => {
   });
 
   //#endif
+  it('waits until login is attempted before showing field errors and clears corrections immediately', async () => {
+    await setUp();
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '#usernameOrEmail',
+    )!;
+    input.focus();
+    input.blur();
+    await fixture.whenStable();
+    expect(shownErrors()).toEqual([]);
+    await renderSubmission(fixture, () => component.onSubmit());
+    expect(shownErrors().length).toBeGreaterThan(0);
+    input.value = 'valid_name';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(input.getAttribute('aria-invalid')).not.toBe('true');
+    expect(authService.login).not.toHaveBeenCalled();
+  });
+
   it('does not send a login request when the form is invalid', async () => {
     await setUp();
 
@@ -1025,7 +1048,9 @@ describe('Login', () => {
     });
 
     it('keeps the divider out when no built-in entry can be rendered', async () => {
-      externalProviders = of({ providers: ['custom'] });
+      externalProviders = of({
+        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'custom'],
+      });
       await setUp();
 
       expect(
@@ -1052,7 +1077,9 @@ describe('Login', () => {
         'An unexpected error occurred. Please refresh the page and try again. (Trace ID: 00-trace-01)',
       );
 
-      externalProviders = of({ providers: ['google'] });
+      externalProviders = of({
+        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'google'],
+      });
       (fixture.nativeElement as HTMLElement)
         .querySelector<HTMLButtonElement>('[data-testid="external-login-retry"]')!
         .click();
@@ -1068,7 +1095,9 @@ describe('Login', () => {
 
       expect(entries()).toEqual(['external-login-retry']);
 
-      externalProviders = of({ providers: ['github'] });
+      externalProviders = of({
+        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'github'],
+      });
       (fixture.nativeElement as HTMLElement)
         .querySelector<HTMLButtonElement>('[data-testid="external-login-retry"]')!
         .click();
