@@ -9,8 +9,8 @@ import {
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown } from '@ng-icons/lucide';
 import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
-import { BrnSelectTrigger } from '@spartan-ng/brain/select';
-import { hlm } from '@spartan-ng/helm/utils';
+import { BrnSelectTrigger, injectBrnSelectBase } from '@spartan-ng/brain/select';
+import { hlm, hlmAriaInvalid, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
 import type { ClassValue } from 'clsx';
 
 @Component({
@@ -27,6 +27,7 @@ import type { ClassValue } from 'clsx';
       [id]="buttonId()"
       [class]="_computedClass()"
       [aria-invalid]="ariaInvalidInput()"
+      [attr.aria-invalid]="_ariaInvalid()"
       [attr.aria-label]="ariaLabel()"
       [attr.aria-labelledby]="ariaLabelledBy()"
       [attr.data-size]="size()"
@@ -41,7 +42,18 @@ import type { ClassValue } from 'clsx';
   `,
 })
 export class HlmSelectTrigger {
+  constructor() {
+    syncHlmAriaInvalid('button[brnSelectTrigger]', () => this._ariaInvalid() === 'true');
+  }
+
   private static _id = 0;
+  private readonly _control = injectBrnSelectBase();
+  protected readonly _ariaInvalid = computed(() =>
+    hlmAriaInvalid(
+      this.ariaInvalidInput() ??
+        (this.forceInvalid() || this._control.controlState?.()?.spartanInvalid),
+    ),
+  );
 
   public readonly userClass = input<ClassValue>('', { alias: 'class' });
   protected readonly _computedClass = computed(() =>

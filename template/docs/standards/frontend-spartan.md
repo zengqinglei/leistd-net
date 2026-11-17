@@ -23,6 +23,8 @@
 | `dropdown-menu`（`hlm-dropdown-menu-focus-on-hover`） | 菜单项随指针移焦点的监听由 `mouseenter` 改为 `pointermove`，触屏拖动不移焦点，已是焦点项不重复设置 | 菜单弹在静止的光标下时浏览器也派发 `mouseenter`，焦点被抢到光标下那一项，键盘打开本应落在首项（Radix 同样跟随 `pointermove`）；上游至今仍是 `mouseenter` |
 | `dialog`（`hlm-dialog-content`）、`sidebar`（`hlm-sidebar-trigger`）、`utils`（新增 `hlm-a11y-labels.token.ts` 并从 `utils` 入口导出） | 弹窗内边距 `--dialog-padding` 同供滚动正文；关闭按钮与侧栏开关的读屏名改读 `injectHlmA11yLabels()`；`hlm-dialog-content` 的 `closeLabel`、`hlm-sidebar-trigger` 的 `srOnlyText` 未传时取令牌 | 上游缺省英文；共享令牌统一缺省译文，显式输入仍可覆盖。多语言项目用 `provideHlmA11yLabels` 接上随语言切换的词条，升级时保留 |
 | `command`（`hlm-command`、`hlm-command-input`） | 根捕获阶段忽略 isComposing/keyCode 229 的 Enter；内部 input 转发 ariaLabel，缺省使用 placeholder | Brain 根回车未判断组字；命令输入须有稳定可访问名 |
+| `input`（`hlm-input.ts`）、`textarea`（`hlm-textarea.ts`）、`select`（`hlm-select-trigger.ts`）、`combobox`（`hlm-combobox-input.ts`、`hlm-combobox-trigger.ts`、`hlm-combobox-chip-input.ts`）、`radio-group`（`hlm-radio-group.ts`、`hlm-radio.ts`）、`date-picker`（`hlm-date-picker-input.ts`、`hlm-date-multi-input.ts`、`hlm-date-range-input.ts`、`hlm-month-year-input.ts`、`hlm-date-picker-trigger.ts`）、`input-otp`（`hlm-input-otp.ts`） | `aria-invalid` 自动判断来源改为 `spartanInvalid`（含 `forceInvalid`）；保留官方手动覆盖语义；OTP 同时关联内部输入的 Field 描述 | 读屏与可见报错同源，提交前不标无效；`data-invalid` 保持上游语义 |
+| `checkbox`（`hlm-checkbox.ts`）、`switch`（`hlm-switch.ts`）、`utils`（`hlm-aria-invalid.ts`、`index.ts`） | utils 导出 `hlmAriaInvalid` 与 `syncHlmAriaInvalid`；渲染后同步内部控件并覆盖 Brain 后续原始无效态写入；checkbox/switch 转发 Field 错误描述 | Brain 私有模板无绑定入口，稳定为空的宿主绑定也不会重复覆盖原始态更新；Helm 统一处理 |
 
 登记有上游差异的组件及其全部改动；无差异不登记。升级、评审须逐项核对源码。
 

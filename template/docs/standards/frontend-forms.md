@@ -12,7 +12,7 @@
 
 ## 字段与校验
 
-字段用 `hlm-field` 容器关联 `hlmFieldLabel` 标签和 `hlm-field-error`，配合 `hlmInput` / `hlm-select`；校验态由 Brain `BrnField` 读取，应用级 `SubmitErrorStateMatcher` 决定报错时机：首次提交前失焦不报错，提交后实时重验、改对即消除；reset 清除提交状态。说明与错误切换读 `hlmField.spartanInvalid()`，不自行读 touched。无直接控件的组合字段用 `isSubmittedInvalid()`；服务端字段错误仍立即显示。OTP 用 FormValueControl，把值、touch、disabled、关联与 focus 接到真实 input。逐行自动保存以 change 为提交时点，保留草稿、本行错误及无效态，不重放未知结果；新编辑会话 reset 回填。
+字段用 `hlm-field` 容器关联 `hlmFieldLabel` 标签和 `hlm-field-error`，配合 `hlmInput` / `hlm-select`；校验态由 Brain `BrnField` 读取，应用级 `SubmitErrorStateMatcher` 决定报错时机：首次提交前失焦不报错，提交后实时重验、改对即消除；reset 清除提交状态。读屏状态与画面报错同源，由 Helm 统一处理，页面不要绑定原始 `invalid()`；说明与错误切换读 `hlmField.spartanInvalid()`。无直接控件的组合字段用 `isSubmittedInvalid()`；服务端字段错误仍立即显示。OTP 用 FormValueControl，把值、touch、disabled、关联与 focus 接到真实 input。逐行自动保存以 change 为提交时点，保留草稿、本行错误及无效态，不重放未知结果；新编辑会话 reset 回填。
 
 客户端验证器不带 message；模板用 `error.message ?? t('validation.' + error.kind, error)`，绑定 `[validator]="error.kind"`，错误对象整个作参数。内置错误的参数就是错误对象上的字段，占位符照它命名。服务端原文直接显示；字段特有规则用自定义类型：内置验证器通过 `error` 选项指定，如 `pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } })`；跨字段规则由 `validate()` 返回 `{ kind: 'passwordMismatch' }`。同字段同类只报一次，长度与字符校验共用句子时合成 pattern。
 

@@ -15,7 +15,7 @@ import {
   Renderer2,
 } from '@angular/core';
 import { BrnRadio, BrnRadioGroup, type BrnRadioChange } from '@spartan-ng/brain/radio-group';
-import { hlm } from '@spartan-ng/helm/utils';
+import { hlm, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
 import type { ClassValue } from 'clsx';
 
 @Component({
@@ -37,7 +37,7 @@ import type { ClassValue } from 'clsx';
       [value]="value()"
       [required]="required()"
       [disabled]="disabled()"
-      [attr.aria-invalid]="_ariaInvalid() ? 'true' : null"
+      [attr.aria-invalid]="_groupSpartanInvalid() ? 'true' : null"
       [attr.data-invalid]="_ariaInvalid() ? 'true' : null"
       [attr.data-dirty]="_dirty() ? 'true' : null"
       [attr.data-touched]="_touched() ? 'true' : null"
@@ -115,6 +115,7 @@ export class HlmRadio<T = unknown> {
   public readonly change = output<BrnRadioChange<T>>();
 
   constructor() {
+    syncHlmAriaInvalid('input[type="radio"]', () => this._groupSpartanInvalid());
     effect(() => {
       const isDisabled = this.disabled();
 
