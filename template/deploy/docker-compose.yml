@@ -191,7 +191,8 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # 按 RabbitMQ 官方建议只探测 AMQP 端口；rabbitmq-diagnostics 每次都要加入 Erlang 集群，频繁执行会持续占用 CPU。
+      test: ["CMD", "nc", "-z", "localhost", "5672"]
       interval: 10s
       timeout: 5s
       retries: 12
