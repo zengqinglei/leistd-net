@@ -23,3 +23,5 @@ Helm host 覆盖 Brain host 绑定，内部 Brn 元素在 Helm 模板绑定。ch
 ## 4. 结果
 
 [PR #290](https://github.com/zengqinglei/leistd-net/pull/290) 已开至 develop，待用户审查合并。Helm 自动态与画面报错同源，官方手动覆盖语义保留；批量角色 fieldset 已接统一规则。五形态 lint、生产构建和受影响 spec、相关静态闸门、Mock 登录页有头抽查通过。表单规范、读取索引与 Helm 定制表已同步，读取预算不变。
+
+上游已提 [spartan-ng/spartan#1881](https://github.com/spartan-ng/spartan/issues/1881)：Brain 改为按 `spartanInvalid` 绑定 `aria-invalid` 后，删除 `syncHlmAriaInvalid` 并撤销对应 Helm 定制。
