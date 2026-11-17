@@ -1,17 +1,10 @@
-//#if (TenantWorkspace)
+// prettier-ignore
 import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  afterNextRender,
-  ElementRef,
-  Injector,
-  viewChild,
+  ChangeDetectionStrategy, Component, inject,
+  //#if (TenantWorkspace)
+  afterNextRender, computed, ElementRef, Injector, viewChild,
+  //#endif
 } from '@angular/core';
-//#else
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-//#endif
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
