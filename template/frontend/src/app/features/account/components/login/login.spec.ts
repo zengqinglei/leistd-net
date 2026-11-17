@@ -195,9 +195,7 @@ describe('Login', () => {
     localStorage.clear();
     //#endif
     //#if (ExternalLogin)
-    externalProviders = of({
-      providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'github', 'google'],
-    });
+    externalProviders = of({ providers: ['github', 'google'] });
     //#endif
   });
   //#if (IncludeMultiTenancy)
@@ -1048,9 +1046,7 @@ describe('Login', () => {
     });
 
     it('keeps the divider out when no built-in entry can be rendered', async () => {
-      externalProviders = of({
-        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'custom'],
-      });
+      externalProviders = of({ providers: ['custom'] });
       await setUp();
 
       expect(
@@ -1077,9 +1073,7 @@ describe('Login', () => {
         'An unexpected error occurred. Please refresh the page and try again. (Trace ID: 00-trace-01)',
       );
 
-      externalProviders = of({
-        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'google'],
-      });
+      externalProviders = of({ providers: ['google'] });
       (fixture.nativeElement as HTMLElement)
         .querySelector<HTMLButtonElement>('[data-testid="external-login-retry"]')!
         .click();
@@ -1095,9 +1089,7 @@ describe('Login', () => {
 
       expect(entries()).toEqual(['external-login-retry']);
 
-      externalProviders = of({
-        providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), 'github'],
-      });
+      externalProviders = of({ providers: ['github'] });
       (fixture.nativeElement as HTMLElement)
         .querySelector<HTMLButtonElement>('[data-testid="external-login-retry"]')!
         .click();

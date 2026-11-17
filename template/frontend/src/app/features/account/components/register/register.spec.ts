@@ -68,8 +68,7 @@ describe('Register', () => {
     //#endif
     //#if (ExternalLogin)
     externalAuth = {
-      getExternalLoginProviders: vi.fn().mockReturnValue(of({ providers: [
-        provideErrorStateMatcher(SubmitErrorStateMatcher),'github'] })),
+      getExternalLoginProviders: vi.fn().mockReturnValue(of({ providers: ['github'] })),
       getExternalLoginUrl: vi.fn(),
     };
     //#endif
