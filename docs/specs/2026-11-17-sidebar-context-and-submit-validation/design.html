@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>侧栏上下文识别方案</title>
+<style>
+/* VOICE: 产品评审稿，克制、精确，像设计交付文档
+   IDEA: 侧栏顶部是"我在哪"的上下文位，底部是"去哪里"的切换入口；颜色编码区分租户与平台
+   PICTURE: 现状截图与方案实物并排，四种状态逐一对照
+   COLOUR and TYPE: 产品自身的设计语言——白底、侧栏浅灰、主色蓝、平台用反色墨块；系统无衬线字体
+   LAYOUT: 结论在前；两组对照（租户上下文、平台上下文）；再给收起与暗色；最后规格表 */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0c0d10);--ink:light-dark(#18181b,#ececee);--mut:light-dark(#71717a,#9a9aa3);--line:light-dark(#e4e4e7,#2a2b31);--pane:light-dark(#f6f6f7,#15161a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI","Noto Sans SC",sans-serif;overflow-x:clip}
+.band{padding:clamp(28px,4vw,56px) max(5vw,16px);max-width:1320px;margin:0 auto}
+h1{font-size:clamp(28px,3.4vw,40px);line-height:1.12;margin:0 0 12px;text-wrap:balance}
+h2{font-size:22px;margin:0 0 6px}
+p{margin:0 0 10px;max-width:72ch}
+.lead{color:var(--mut);font-size:17px}
+.key{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin-top:20px}
+.key div{border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.key b{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px;margin-top:18px}
+.cap{font-size:13px;color:var(--mut);margin:0 0 8px}
+.shot{width:256px;height:640px;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:#f3f4f6;position:relative}
+.shot img{position:absolute;left:0;top:0;width:1440px;height:1000px;max-width:none}
+.shot.bottom img{top:-360px}
+.notes{font-size:14px;color:var(--mut);margin-top:10px;max-width:300px}
+.notes li{margin-bottom:4px}
+/* ---- 侧栏实物（模仿模板 light 主题） ---- */
+.sb{--s-bg:#f4f4f5;--s-ink:#18181b;--s-mut:#71717a;--s-act:#ffffff;--s-bd:#e4e4e7;--pri:#0b6bcb;--amb:#b45309;--amb-bg:#fef3c7;--amb-bd:#fcd34d;
+ width:256px;height:640px;border-radius:12px;border:1px solid var(--line);background:var(--s-bg);color:var(--s-ink);display:flex;flex-direction:column;padding:12px 8px;font-size:14px}
+.sb.dark{--s-bg:#18181b;--s-ink:#f4f4f5;--s-mut:#a1a1aa;--s-act:#27272a;--s-bd:#3f3f46;--pri:#60a5fa;--amb:#fbbf24;--amb-bg:rgba(251,191,36,.12);--amb-bd:rgba(251,191,36,.35)}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px}
+.logo{width:32px;height:32px;border-radius:8px;background:#0b6bcb;color:#fff;display:grid;place-items:center;font-weight:700}
+.brand small{display:block;color:var(--s-mut);font-size:12px;line-height:1.2}
+.brand strong{display:block;font-size:14px;line-height:1.3}
+.ud{margin-left:auto;color:var(--s-mut)}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ctx{margin:10px 8px 6px;height:32px;border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:14px;font-weight:600}
+.ctx.ten{background:color-mix(in srgb,var(--pri) 9%,transparent);border:1px solid color-mix(in srgb,var(--pri) 30%,transparent);color:var(--s-ink);cursor:pointer}
+.ctx.ten .i{color:var(--pri)}
+.ctx.ten .i.r{margin-left:auto;color:var(--s-mut);width:14px;height:14px}
+.ctx.plat{background:var(--s-ink);border:1px solid var(--s-ink);color:var(--s-bg)}
+.grp{color:var(--s-mut);font-size:12px;padding:14px 10px 6px}
+.it{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px}
+.it.on{background:var(--s-act);font-weight:600}
+.foot{margin-top:auto;border-top:1px solid var(--s-bd);padding-top:8px}
+.go{display:flex;align-items:center;gap:10px;height:40px;padding:0 8px;border-radius:8px;font-weight:600;cursor:pointer}
+.go:hover{background:var(--s-act)}
+.tile{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none}
+.tile.a{background:var(--s-ink);color:var(--s-bg);border:1px solid var(--s-ink)}
+.tile.p{background:color-mix(in srgb,var(--pri) 12%,transparent);color:var(--pri);border:1px solid color-mix(in srgb,var(--pri) 30%,transparent)}
+.go .r{margin-left:auto;color:var(--s-mut)}
+.sb.icon{width:56px;align-items:center}
+.sb.icon .ctx{width:32px;padding:0;justify-content:center;margin:10px 0 6px}
+.sb.icon .it,.sb.icon .go{width:36px;padding:0;justify-content:center}
+.row{display:flex;gap:20px;flex-wrap:wrap;margin-top:18px;align-items:flex-start}
+table{border-collapse:collapse;width:100%;font-size:14px;margin-top:14px}
+th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:600}
+code{font-size:13px;background:var(--pane);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.scroll{overflow-x:auto}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:7em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6.5em;margin-inline-start:-7em;color:var(--mut)}.stack td:empty{display:none}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+ <symbol id="bld" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></symbol>
+ <symbol id="shd" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+ <symbol id="ud" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></symbol>
+ <symbol id="cr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+ <symbol id="back" viewBox="0 0 24 24"><path d="M9 10 4 15l5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></symbol>
+ <symbol id="gau" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+ <symbol id="usr" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+ <symbol id="rol" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+ <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0"/></symbol>
+ <symbol id="set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+</svg>
+
+<section class="band">
+ <h1>侧栏用两种颜色回答"我在哪"：租户是主色蓝，平台是墨色反色</h1>
+ <p class="lead">侧栏顶部的上下文位告诉用户现在在哪个范围，底部的入口负责切换范围。租户选择框和平台管理入口用同一套尺寸和颜色规则，让人一眼看出"现在在租户里"还是"现在在平台上"。</p>
+ <div class="key">
+  <div><b><span class="dot" style="background:#0b6bcb"></span>租户：主色，楼宇图标</b>顶部是可下拉的租户选择框；进入平台后，底部"返回 &lt;租户&gt;"也用同一套蓝色。</div>
+  <div><b><span class="dot" style="background:#18181b;outline:1px solid #888"></span>平台：墨色反色，盾牌图标</b>底部的"平台管理"入口用深色图标块；进入平台后，顶部换成同尺寸的深底白字"平台管理"标识（暗色主题下是浅底深字）。</div>
+  <div><b>尺寸与页头搜索框一致</b>高 32px，圆角 8px，字号 14px；宽度铺满侧栏。底部入口高 40px，图标块 26px。</div>
+ </div>
+</section>
+
+<section class="band" style="padding-top:0">
+ <h2>租户上下文（管理后台）</h2>
+ <p class="cap">左边是演示站实测截图，右边是方案实物。</p>
+ <div class="pair">
+  <div>
+   <p class="cap">现状</p>
+   <div class="shot"><img src="cur-tenant-admin.jpg" alt="现状：管理后台侧栏，白底输入框样式的租户选择与普通菜单样式的平台管理"></div>
+   <ul class="notes"><li>租户选择框是白底输入框的样式，和白底的菜单选中项混在一起。</li><li>底部"平台管理"和普通菜单一模一样。</li></ul>
+  </div>
+  <div>
+   <p class="cap">方案</p>
+   <div class="sb">
+    <div class="brand"><span class="logo">T</span><div><strong>模板项目</strong><small>Identity</small></div><svg class="i ud"><use href="#ud"/></svg></div>
+    <div class="ctx ten" title="切换租户"><svg class="i"><use href="#bld"/></svg>示例租户 A<svg class="i r"><use href="#ud"/></svg></div>
+    <div class="grp">工作</div>
+    <div class="it on"><svg class="i"><use href="#gau"/></svg>仪表盘</div>
+    <div class="grp">身份与访问</div>
+    <div class="it"><svg class="i"><use href="#usr"/></svg>用户管理</div>
+    <div class="it"><svg class="i"><use href="#rol"/></svg>角色管理</div>
+    <div class="grp">审计</div>
+    <div class="it"><svg class="i"><use href="#db"/></svg>操作记录</div>
+    <div class="grp">系统</div>
+    <div class="it"><svg class="i"><use href="#set"/></svg>系统设置</div>
+    <div class="foot"><div class="go"><span class="tile a"><svg class="i"><use href="#shd"/></svg></span>平台管理<svg class="i r"><use href="#cr"/></svg></div></div>
+   </div>
+   <ul class="notes"><li>租户框用主色浅底、主色细边，左边是楼宇图标，右边是上下箭头，表示可以下拉。</li><li>平台管理用深色图标块，右边的箭头表示"去另一个区域"。</li></ul>
+  </div>
+ </div>
+</section>
+
+<section class="band" style="padding-top:0">
+ <h2>平台上下文（平台管理）</h2>
+ <div class="pair">
+  <div>
+   <p class="cap">现状</p>
+   <div class="shot"><img src="cur-platform-management.jpg" alt="现状：平台管理侧栏，顶部没有上下文提示，底部是普通样式的返回按钮"></div>
+   <ul class="notes"><li>顶部的租户框消失了，没有东西告诉用户"现在在平台上"。</li><li>"返回 示例租户 A"也是普通菜单的样式。</li></ul>
+  </div>
+  <div>
+   <p class="cap">方案</p>
+   <div class="sb">
+    <div class="brand"><span class="logo">T</span><div><strong>模板项目</strong><small>Identity</small></div><svg class="i ud"><use href="#ud"/></svg></div>
+    <div class="ctx plat"><svg class="i"><use href="#shd"/></svg>平台管理</div>
+    <div class="grp">工作</div>
+    <div class="it on"><svg class="i"><use href="#gau"/></svg>平台首页</div>
+    <div class="grp">身份与访问</div>
+    <div class="it"><svg class="i"><use href="#usr"/></svg>平台账号</div>
+    <div class="it"><svg class="i"><use href="#rol"/></svg>平台角色</div>
+    <div class="it"><svg class="i"><use href="#bld"/></svg>租户管理</div>
+    <div class="grp">审计</div>
+    <div class="it"><svg class="i"><use href="#db"/></svg>平台操作记录</div>
+    <div class="grp">系统</div>
+    <div class="it"><svg class="i"><use href="#set"/></svg>平台设置</div>
+    <div class="foot"><div class="go"><span class="tile p"><svg class="i"><use href="#bld"/></svg></span>返回 示例租户 A<svg class="i r"><use href="#back"/></svg></div></div>
+   </div>
+   <ul class="notes"><li>顶部换成同尺寸的深底"平台管理"标识。它只是标识，不能点，所以没有箭头。</li><li>底部的返回入口用租户的蓝色楼宇图标，点了回到哪个租户一看就知道。</li></ul>
+  </div>
+ </div>
+</section>
+
+<section class="band" style="padding-top:0">
+ <h2>侧栏收起、暗色主题</h2>
+ <p class="cap">侧栏收起成图标时，上下文位只留图标块，悬停提示租户名或"平台管理"；点租户图标块会先展开侧栏再打开下拉。暗色主题沿用同一套颜色规则。</p>
+ <div class="row">
+  <div class="sb icon">
+   <span class="logo">T</span>
+   <div class="ctx ten" title="示例租户 A"><svg class="i"><use href="#bld"/></svg></div>
+   <div class="it on" style="margin-top:14px"><svg class="i"><use href="#gau"/></svg></div>
+   <div class="it"><svg class="i"><use href="#usr"/></svg></div>
+   <div class="it"><svg class="i"><use href="#rol"/></svg></div>
+   <div class="it"><svg class="i"><use href="#db"/></svg></div>
+   <div class="it"><svg class="i"><use href="#set"/></svg></div>
+   <div class="foot" style="width:100%;display:grid;place-items:center"><div class="go"><span class="tile a"><svg class="i"><use href="#shd"/></svg></span></div></div>
+  </div>
+  <div class="sb dark">
+   <div class="brand"><span class="logo">T</span><div><strong>模板项目</strong><small>Identity</small></div><svg class="i ud"><use href="#ud"/></svg></div>
+   <div class="ctx ten"><svg class="i"><use href="#bld"/></svg>示例租户 A<svg class="i r"><use href="#ud"/></svg></div>
+   <div class="grp">工作</div>
+   <div class="it on"><svg class="i"><use href="#gau"/></svg>仪表盘</div>
+   <div class="grp">身份与访问</div>
+   <div class="it"><svg class="i"><use href="#usr"/></svg>用户管理</div>
+   <div class="it"><svg class="i"><use href="#rol"/></svg>角色管理</div>
+   <div class="foot"><div class="go"><span class="tile a"><svg class="i"><use href="#shd"/></svg></span>平台管理<svg class="i r"><use href="#cr"/></svg></div></div>
+  </div>
+  <div class="sb dark">
+   <div class="brand"><span class="logo">T</span><div><strong>模板项目</strong><small>Identity</small></div><svg class="i ud"><use href="#ud"/></svg></div>
+   <div class="ctx plat"><svg class="i"><use href="#shd"/></svg>平台管理</div>
+   <div class="grp">工作</div>
+   <div class="it on"><svg class="i"><use href="#gau"/></svg>平台首页</div>
+   <div class="grp">身份与访问</div>
+   <div class="it"><svg class="i"><use href="#usr"/></svg>平台账号</div>
+   <div class="it"><svg class="i"><use href="#bld"/></svg>租户管理</div>
+   <div class="foot"><div class="go"><span class="tile p"><svg class="i"><use href="#bld"/></svg></span>返回 示例租户 A<svg class="i r"><use href="#back"/></svg></div></div>
+  </div>
+ </div>
+</section>
+
+<section class="band" style="padding-top:0">
+ <h2>规格与适用范围</h2>
+ <div class="scroll"><table class="stack">
+  <thead><tr><th>元素</th><th>何时出现</th><th>样式</th><th>图标</th></tr></thead>
+  <tbody>
+   <tr><td>租户选择框</td><td>平台人员有多个租户可进时，在租户上下文显示</td><td>高 32px；<code>bg-primary/10</code>、<code>border-primary/30</code>；文字加粗</td><td><code>lucideBuilding2</code>（主色），右侧 <code>lucideChevronsUpDown</code></td></tr>
+   <tr><td>平台标识</td><td>平台上下文</td><td>同尺寸；<code>bg-foreground</code>、<code>text-background</code>（反色）；不可点击</td><td><code>lucideShieldCheck</code></td></tr>
+   <tr><td>平台管理入口</td><td>有平台权限的人员在租户上下文</td><td>高 40px，26px 反色图标块，悬停时出现背景</td><td><code>lucideShieldCheck</code>，右侧 <code>lucideChevronRight</code></td></tr>
+   <tr><td>返回租户入口</td><td>平台上下文，且有可返回的租户</td><td>同上，图标块用主色</td><td><code>lucideBuilding2</code>，右侧 <code>lucideCornerDownLeft</code></td></tr>
+   <tr><td>租户用户、单租户人员</td><td>只能在自己的租户里</td><td>不显示选择框，也不显示平台入口（与现在一致）</td><td>—</td></tr>
+   <tr><td>关闭多租户</td><td>没有租户概念</td><td>上下文位和底部入口都不出现</td><td>—</td></tr>
+  </tbody>
+ </table></div>
+ <p class="cap" style="margin-top:12px">平台不用琥珀色：页头的"模拟登录中"提示已经用了琥珀警告色，再用会让人误以为平台管理是一种警告状态。反色只用主题自带的前景色和背景色，不新增颜色变量，暗色主题自动反过来。</p>
+</section>
+</body>
+</html>

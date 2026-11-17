@@ -36,6 +36,7 @@ import { englishText } from '../../../shared/utils/english-text';
 //#endif
 import { injectFormSubmission } from '../../validation/form-submission';
 import { PASSWORD_MAX_LENGTH } from '../../validation/password-rule';
+import { isSubmittedInvalid } from '../../validation/submit-error-state-matcher';
 import { WebAuthnFailure } from '../../webauthn/webauthn-error';
 import { DialogClose } from '../dialog-close/dialog-close';
 
@@ -200,9 +201,7 @@ export class ReauthenticateDialog {
   protected readonly showCodeReuseHint = computed(() => !!this.error() && this.codeRejected());
   protected readonly codeDescribedBy = computed(() => {
     if (!this.error()) {
-      return this.reauthForm.code().invalid() && this.reauthForm.code().touched()
-        ? null
-        : CODE_DESCRIPTION_ID;
+      return isSubmittedInvalid(this.reauthForm.code) ? null : CODE_DESCRIPTION_ID;
     }
     const ids = CODE_ERROR_ID;
     return this.showCodeReuseHint() ? `${ids} ${CODE_REUSE_HINT_ID}` : ids;

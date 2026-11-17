@@ -117,7 +117,7 @@
               }
             </hlm-field>
 
-            <hlm-field>
+            <hlm-field #connectionField="hlmField">
               <label hlmFieldLabel for="tenant-connection-string">
                 {{ t('tenants.fieldConnectionString') }}
               </label>
@@ -131,9 +131,7 @@
                 autocomplete="new-password"
                 [formField]="tenantForm.connectionString"
               />
-              @if (
-                !tenantForm.connectionString().invalid() || !tenantForm.connectionString().touched()
-              ) {
+              @if (!connectionField.spartanInvalid()) {
                 <p hlmFieldDescription>{{ t('tenants.createConnectionHint') }}</p>
               }
               @for (error of tenantForm.connectionString().errors(); track error.kind) {

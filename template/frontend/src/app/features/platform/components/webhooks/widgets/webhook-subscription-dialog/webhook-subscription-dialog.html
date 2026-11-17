@@ -155,7 +155,7 @@
                   </div>
                 }
               }
-              @if (subscriptionForm.eventTypes().touched()) {
+              @if (eventTypesInvalid()) {
                 @for (error of subscriptionForm.eventTypes().errors(); track error.kind) {
                   <p
                     class="text-destructive text-sm"

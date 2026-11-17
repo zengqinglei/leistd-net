@@ -1,7 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 
 import { UriListEditor } from './uri-list-editor';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 import { renderSubmission } from '../../../../../../core/validation/form-submission.testing';
+import { SubmitErrorStateMatcher } from '../../../../../../core/validation/submit-error-state-matcher';
 
 describe('UriListEditor', () => {
   function createEditor(uris: string[] = []): ComponentFixture<UriListEditor> {
@@ -23,7 +28,16 @@ describe('UriListEditor', () => {
     fixture.detectChanges();
   }
 
-  beforeEach(() => TestBed.configureTestingModule({ imports: [UriListEditor] }));
+  beforeEach(() =>
+    TestBed.configureTestingModule({
+      imports: [UriListEditor],
+      //#if (IncludeLocalization)
+      providers: [provideErrorStateMatcher(SubmitErrorStateMatcher), ...provideTranslocoTesting()],
+      //#else
+      providers: [provideErrorStateMatcher(SubmitErrorStateMatcher)],
+      //#endif
+    }),
+  );
 
   it('emits the exact URI when a valid value is added', () => {
     const fixture = createEditor();

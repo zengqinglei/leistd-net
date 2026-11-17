@@ -55,11 +55,11 @@
               </div>
             }
             @case ('code') {
-              <div hlmField>
+              <div hlmField #codeField="hlmField">
                 <label hlmFieldLabel [for]="codeInputId">{{
                   t('common.reauthenticate.codeLabel')
                 }}</label>
-                @if (!error() && !(reauthForm.code().invalid() && reauthForm.code().touched())) {
+                @if (!error() && !codeField.spartanInvalid()) {
                   <hlm-field-description [id]="codeDescriptionId">{{
                     t('common.reauthenticate.codeHint')
                   }}</hlm-field-description>

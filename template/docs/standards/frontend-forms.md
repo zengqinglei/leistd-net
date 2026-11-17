@@ -4,15 +4,15 @@
 
 ## 提交与焦点
 
-`injectFormSubmission()` 返回 `(fields, root, action, report?, aliases?)`。`root` 是提交时查找首个错误的表单根元素，由 `viewChild` 取得；子流程传自己的区域，不按 id 查找。入口负责校验、服务端字段回填，并在渲染后按可见 DOM 顺序聚焦首个可操作错误控件（含 OTP）。`action` 等待 HTTP；父级返回 Observable 并处理成功副作用，不自行订阅或吞错。
+`injectFormSubmission()` 返回 `(fields, root, action, report?, aliases?)`。`root` 是提交时查找首个错误的表单根元素，由 `viewChild` 取得；子流程传自己的区域，不按 id 查找。入口按字段树记录已尝试提交，负责校验、服务端字段回填，并在渲染后按可见 DOM 顺序聚焦首个可操作错误控件（含 OTP）。`action` 等待 HTTP；父级返回 Observable 并处理成功副作用，不自行订阅或吞错。
 
 默认 `report` 用 `common.requestError` 作标题、剩余消息作描述。`mapFormErrors` 忽略大小写匹配已声明顶层字段；DTO 别名、嵌套/索引路径由 `aliases` 显式指向字段。剩余错误只反馈一次，自定义反馈也不能回显整条响应；登录凭据拒绝不定位。
 
-原生 form 写 novalidate，submit 事件与内部 submit 按钮共用入口。状态取 submitting() 以阻止重入。invalid/pending 不预禁用，只按在途或可解释前提（权限、冷却、能力、批量零选择）禁用。搜索 Enter 不保存；URI 不嵌套 form，Enter 只添加。
+原生 form 写 novalidate，submit 事件与内部 submit 按钮共用入口。状态取 submitting() 以阻止重入。invalid/pending 不预禁用（ESLint 拦截按钮 `[disabled]` 引用 `invalid()` / `valid()`），只按在途或可解释前提（权限、冷却、能力、批量零选择）禁用。搜索 Enter 不保存；URI 不嵌套 form，Enter 只添加。
 
 ## 字段与校验
 
-字段用 `hlm-field` 容器关联 `hlmFieldLabel` 标签和 `hlm-field-error`，配合 `hlmInput` / `hlm-select`；校验态由 Brain `BrnField` 读取，与表单引擎解耦。OTP 用 FormValueControl，把值、touch、disabled、关联与 focus 接到真实 input。逐行自动保存保留草稿、本行错误及无效态，不重放未知结果；新编辑会话 reset 回填。
+字段用 `hlm-field` 容器关联 `hlmFieldLabel` 标签和 `hlm-field-error`，配合 `hlmInput` / `hlm-select`；校验态由 Brain `BrnField` 读取，应用级 `SubmitErrorStateMatcher` 决定报错时机：首次提交前失焦不报错，提交后实时重验、改对即消除；reset 清除提交状态。说明与错误切换读 `hlmField.spartanInvalid()`，不自行读 touched。无直接控件的组合字段用 `isSubmittedInvalid()`；服务端字段错误仍立即显示。OTP 用 FormValueControl，把值、touch、disabled、关联与 focus 接到真实 input。逐行自动保存以 change 为提交时点，保留草稿、本行错误及无效态，不重放未知结果；新编辑会话 reset 回填。
 
 客户端验证器不带 message；模板用 `error.message ?? t('validation.' + error.kind, error)`，绑定 `[validator]="error.kind"`，错误对象整个作参数。内置错误的参数就是错误对象上的字段，占位符照它命名。服务端原文直接显示；字段特有规则用自定义类型：内置验证器通过 `error` 选项指定，如 `pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } })`；跨字段规则由 `validate()` 返回 `{ kind: 'passwordMismatch' }`。同字段同类只报一次，长度与字符校验共用句子时合成 pattern。
 

@@ -1,6 +1,7 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { toast } from '@spartan-ng/brain/sonner';
 import { throwError, Observable, Subject, of } from 'rxjs';
 
@@ -13,6 +14,7 @@ import {
   rejectedField,
 } from '../../../../../../core/validation/form-submission.testing';
 import { PASSWORD_MIN_LENGTH } from '../../../../../../core/validation/password-rule';
+import { SubmitErrorStateMatcher } from '../../../../../../core/validation/submit-error-state-matcher';
 import {
   expectTouchTarget,
   setCoarsePointer,
@@ -148,6 +150,7 @@ describe('UserEditDialog', () => {
       imports: [HostComponent],
       // prettier-ignore
       providers: [
+        provideErrorStateMatcher(SubmitErrorStateMatcher),
         provideZonelessChangeDetection(),
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(['en']),
@@ -238,6 +241,28 @@ describe('UserEditDialog', () => {
     await fixture.whenStable();
 
     expect(active.getAttribute('aria-checked')).toBe(before === 'true' ? 'false' : 'true');
+  });
+
+  it('waits for save before showing errors and starts clean after reopening', async () => {
+    const input =
+      document.querySelector<HTMLInputElement>('#user-username') ??
+      document.querySelector<HTMLInputElement>('[role="dialog"] input');
+    expect(input).not.toBeNull();
+    input!.focus();
+    input!.blur();
+    await fixture.whenStable();
+    expect(shownErrorCount()).toBe(0);
+    submitButton().click();
+    await fixture.whenStable();
+    expect(shownErrorCount()).toBeGreaterThan(0);
+    dialog().userForm.username().value.set('valid_name');
+    await fixture.whenStable();
+    expect(input!.getAttribute('aria-invalid')).not.toBe('true');
+    host.visible.set(false);
+    await fixture.whenStable();
+    host.visible.set(true);
+    await fixture.whenStable();
+    expect(shownErrorCount()).toBe(0);
   });
 
   it('does not submit an empty create form and reveals the errors on submit', async () => {

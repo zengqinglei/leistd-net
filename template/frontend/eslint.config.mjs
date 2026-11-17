@@ -275,6 +275,37 @@ const templateClassSyntax = [
   },
 ];
 
+/** 提交按钮保持可点，字段错误由提交入口统一展示。 */
+const noInvalidDisabled = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      invalid: 'Do not disable submit buttons based on valid()/invalid(); validate on submission.',
+    },
+  },
+  create(context) {
+    return {
+      'Element, Element$1'(node) {
+        const submit =
+          node.name === 'button' ||
+          node.attributes?.some(
+            (attribute) => attribute.name === 'type' && attribute.value === 'submit',
+          );
+        if (!submit) return;
+        for (const input of node.inputs ?? []) {
+          if (
+            input.name === 'disabled' &&
+            /\b(?:invalid|valid)\s*\(\s*\)/.test(input.value?.source ?? '')
+          ) {
+            context.report({ node: input, messageId: 'invalid' });
+          }
+        }
+      },
+    };
+  },
+};
+
 const tests = ['**/*.spec.ts', '**/*.testing.ts'];
 
 export default defineConfig(
@@ -389,8 +420,10 @@ export default defineConfig(
   {
     files: ['**/*.html'],
     extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
+    plugins: { local: { rules: { 'no-invalid-disabled': noInvalidDisabled } } },
     rules: {
       'no-restricted-syntax': ['error', ...templateClassSyntax],
+      'local/no-invalid-disabled': 'error',
     },
   },
 );

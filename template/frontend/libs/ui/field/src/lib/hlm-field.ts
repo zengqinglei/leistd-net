@@ -1,4 +1,4 @@
-import { Directive, input } from '@angular/core';
+import { computed, Directive, inject, input } from '@angular/core';
 import { BrnField } from '@spartan-ng/brain/field';
 import { classes } from '@spartan-ng/helm/utils';
 import { cva, VariantProps } from 'class-variance-authority';
@@ -40,6 +40,13 @@ export type FieldVariants = VariantProps<typeof fieldVariants>;
   },
 })
 export class HlmField {
+  private readonly _field = inject(BrnField);
+
+  /** 与红框、错误文字共用匹配结果，供说明文字切换使用。 */
+  public readonly spartanInvalid = computed(
+    () => this._field.forceInvalid() || (this._field.controlState()?.spartanInvalid ?? false),
+  );
+
   public readonly orientation = input<FieldVariants['orientation']>('vertical');
 
   constructor() {

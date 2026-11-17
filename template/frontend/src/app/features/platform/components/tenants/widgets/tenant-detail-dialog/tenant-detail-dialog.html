@@ -159,7 +159,7 @@
                     }
 
                     <!-- 连接串只写：按密码框处理，不预填、不回显、不让浏览器记住 -->
-                    <hlm-field>
+                    <hlm-field #connectionField="hlmField">
                       <label hlmFieldLabel for="tenant-connection-string">
                         {{ t('tenants.fieldConnectionString') }}
                       </label>
@@ -182,10 +182,7 @@
                       }
                     </hlm-field>
 
-                    @if (
-                      !connectionForm.connectionString().invalid() ||
-                      !connectionForm.connectionString().touched()
-                    ) {
+                    @if (!connectionField.spartanInvalid()) {
                       <p class="text-muted-foreground text-xs">
                         {{ t('tenants.detailSecretHint') }}
                       </p>

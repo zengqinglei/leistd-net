@@ -5,6 +5,7 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 
+import { markFormSubmitted } from './submit-error-state-matcher';
 import { focusFirstInvalid } from '../../shared/utils/form-focus';
 import { mapFormErrors } from '../errors/form-errors';
 
@@ -27,6 +28,7 @@ export function injectFormSubmission() {
     },
     aliases: Readonly<Record<string, ValidationError.WithFieldTree['fieldTree']>> = {},
   ): Promise<boolean> => {
+    markFormSubmitted(fields);
     let localInvalid = false;
     let requestFailed = false;
     const focus = () => afterNextRender(() => focusFirstInvalid(root), { injector });

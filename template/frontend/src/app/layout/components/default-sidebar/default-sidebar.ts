@@ -1,8 +1,10 @@
-//#if (TenantWorkspace)
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-//#else
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-//#endif
+// prettier-ignore
+import {
+  ChangeDetectionStrategy, Component, inject,
+  //#if (TenantWorkspace)
+  afterNextRender, computed, ElementRef, Injector, viewChild,
+  //#endif
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -11,6 +13,11 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideBuilding2,
+  //#if (TenantWorkspace)
+  lucideChevronRight,
+  lucideChevronsUpDown,
+  lucideCornerDownLeft,
+  //#endif
   lucideCog,
   lucideDatabase,
   lucideGauge,
@@ -28,9 +35,14 @@ import {
   //#endif
 } from '@ng-icons/lucide';
 //#if (TenantWorkspace)
+import { BrnPopover } from '@spartan-ng/brain/popover';
 import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
+import { HlmInputGroupAddon } from '@spartan-ng/helm/input-group';
 //#endif
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
+//#if (TenantWorkspace)
+import { HlmTooltip } from '@spartan-ng/helm/tooltip';
+//#endif
 
 import { LayoutService } from '../../../core/services/layout-service';
 //#if (TenantWorkspace)
@@ -50,6 +62,8 @@ import { SystemSwitcher } from '../system-switcher/system-switcher';
     RouterLink,
     //#if (TenantWorkspace)
     ...HlmComboboxImports,
+    HlmInputGroupAddon,
+    HlmTooltip,
     //#endif
     NgIcon,
     ...HlmSidebarImports,
@@ -61,6 +75,9 @@ import { SystemSwitcher } from '../system-switcher/system-switcher';
   // prettier-ignore
   providers: [provideIcons({
     lucideBuilding2, lucideCog, lucideHouse,
+    //#if (TenantWorkspace)
+    lucideChevronRight, lucideChevronsUpDown, lucideCornerDownLeft,
+    //#endif
     lucideGauge, lucideUsers, lucideIdCard, lucideLayers, lucideShieldCheck, lucideSettings,
     lucideDatabase,
     //#if (IncludeDistributedEvents)
@@ -82,6 +99,21 @@ import { SystemSwitcher } from '../system-switcher/system-switcher';
 })
 export class DefaultSidebar {
   //#if (TenantWorkspace)
+  private readonly injector = inject(Injector);
+  private readonly tenantPicker = viewChild('tenantPicker', { read: BrnPopover });
+  private readonly tenantInput = viewChild('tenantInput', { read: ElementRef<HTMLElement> });
+
+  openTenantPicker(): void {
+    this.sidebarService.setOpen(true);
+    afterNextRender(
+      () => {
+        this.tenantPicker()?.open();
+        this.tenantInput()?.nativeElement.querySelector('input')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
   readonly workspace = inject(WorkspaceContextService);
   readonly showTenantSelector = computed(
     () =>

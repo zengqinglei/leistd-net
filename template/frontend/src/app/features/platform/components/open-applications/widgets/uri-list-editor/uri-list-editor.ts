@@ -1,16 +1,13 @@
 import {
-  afterNextRender,
-  Injector,
   ElementRef,
   viewChild,
   ChangeDetectionStrategy,
   Component,
-  inject,
   input,
   output,
   signal,
 } from '@angular/core';
-import { FormField, form, required, submit, validate } from '@angular/forms/signals';
+import { FormField, form, required, validate } from '@angular/forms/signals';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideX } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -18,8 +15,8 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 
+import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
-import { focusFirstInvalid } from '../../../../../../shared/utils/form-focus';
 
 /**
  * URI 列表编辑器：一个输入框 + 校验 + 添加，下方以 chip 展示已添加项并可删除。
@@ -49,7 +46,7 @@ export class UriListEditor {
   readonly add = output<string>();
   readonly remove = output<string>();
 
-  private readonly injector = inject(Injector);
+  private readonly submitForm = injectFormSubmission();
   private readonly model = signal({ uri: '' });
   readonly uriForm = form(this.model, (path) => {
     required(path.uri);
@@ -64,15 +61,9 @@ export class UriListEditor {
       event.preventDefault();
       event.stopPropagation();
     }
-    await submit(this.uriForm, {
-      onInvalid: () =>
-        afterNextRender(() => focusFirstInvalid(this.editor().nativeElement), {
-          injector: this.injector,
-        }),
-      action: async () => {
-        this.add.emit(this.model().uri);
-        this.uriForm().reset({ uri: '' });
-      },
+    await this.submitForm(this.uriForm, this.editor().nativeElement, async () => {
+      this.add.emit(this.model().uri);
+      this.uriForm().reset({ uri: '' });
     });
   }
 

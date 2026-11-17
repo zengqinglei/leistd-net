@@ -341,7 +341,7 @@
                     : t('settings.secretUnset')
                   : systemOrInheritedValue(setting, scope())
               "
-              (input)="onInput(setting, scope())"
+              (input)="onInput(setting, scope(), $event)"
               (change)="onCommit(setting, scope(), $event)"
             />
           }

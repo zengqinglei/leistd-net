@@ -20,6 +20,7 @@ import {
 //#if (IncludeLocalization)
 import { provideTransloco } from '@jsverse/transloco';
 //#endif
+import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 
@@ -39,6 +40,7 @@ import {
 //#endif
 import { StartupService } from './core/services/startup-service';
 import { provideAppCalendarLocale } from './core/settings/calendar-locale';
+import { SubmitErrorStateMatcher } from './core/validation/submit-error-state-matcher';
 import { provideMock } from '../../_mock/core/providers';
 
 const routerFeatures: RouterFeatures[] = [
@@ -55,6 +57,7 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     // Spartan：Angular 21+ 需注册，确保 CDK overlay 层级正确（避免盖过固定定位的 toaster）
     provideSpartanHlm(),
+    provideErrorStateMatcher(SubmitErrorStateMatcher),
     // 移动端点击侧栏菜单项（导航）后自动收起遮罩侧栏；非导航的下拉触发器单独关闭该行为。
     provideHlmSidebarConfig({ closeMobileSidebarOnMenuButtonClick: true }),
     provideBrowserGlobalErrorListeners(),
