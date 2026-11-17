@@ -29,7 +29,7 @@ import { injectHlmDatePickerMultiConfig } from './hlm-date-picker-multi.token';
       [placeholder]="placeholder()"
       [disabled]="_disabled()"
       [forceInvalid]="forceInvalid()"
-      [attr.aria-invalid]="_ariaInvalid()"
+      [attr.aria-invalid]="_spartanInvalid() ? 'true' : null"
       [attr.data-invalid]="_ariaInvalid()"
       [attr.data-touched]="_touched?.() ? 'true' : null"
       [attr.data-dirty]="_dirty?.() ? 'true' : null"

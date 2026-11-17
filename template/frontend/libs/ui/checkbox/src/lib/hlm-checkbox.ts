@@ -5,6 +5,7 @@ import {
   Component,
   computed,
   forwardRef,
+  inject,
   input,
   linkedSignal,
   model,
@@ -15,9 +16,9 @@ import { type ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck } from '@ng-icons/lucide';
 import { BrnCheckbox } from '@spartan-ng/brain/checkbox';
-import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
+import { BrnFieldA11yService, BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
 import type { ChangeFn, TouchFn } from '@spartan-ng/brain/forms';
-import { hlm } from '@spartan-ng/helm/utils';
+import { hlm, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
 import type { ClassValue } from 'clsx';
 
 export const HLM_CHECKBOX_VALUE_ACCESSOR = {
@@ -52,7 +53,7 @@ export const HLM_CHECKBOX_VALUE_ACCESSOR = {
       [required]="required()"
       [aria-label]="ariaLabel()"
       [aria-labelledby]="ariaLabelledby()"
-      [aria-describedby]="ariaDescribedby()"
+      [aria-describedby]="_describedBy()"
       [forceInvalid]="forceInvalid()"
       (checkedChange)="_handleChange($event)"
       (touched)="_onTouched?.()"
@@ -68,6 +69,17 @@ export const HLM_CHECKBOX_VALUE_ACCESSOR = {
   `,
 })
 export class HlmCheckbox implements ControlValueAccessor {
+  private readonly _fieldA11y = inject(BrnFieldA11yService, { optional: true });
+  protected readonly _describedBy = computed(
+    () =>
+      [
+        ...new Set(
+          [this.ariaDescribedby(), this._fieldA11y?.describedBy()]
+            .flatMap((ids) => (ids ?? '').split(/\s+/))
+            .filter(Boolean),
+        ),
+      ].join(' ') || null,
+  );
   public readonly userClass = input<ClassValue>('', { alias: 'class' });
 
   protected readonly _computedClass = computed(() =>
@@ -141,6 +153,10 @@ export class HlmCheckbox implements ControlValueAccessor {
     this.checked.set(value);
     this.checkedChange.emit(value);
     this._onChange?.(value);
+  }
+
+  constructor() {
+    syncHlmAriaInvalid('[role="checkbox"]', () => this._spartanInvalid());
   }
 
   /** CONTROL VALUE ACCESSOR */

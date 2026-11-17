@@ -36,7 +36,7 @@ import { ClassValue } from 'clsx';
       type="button"
       [class]="_computedClass()"
       [disabled]="_disabled()"
-      [attr.aria-invalid]="_ariaInvalid()"
+      [attr.aria-invalid]="_spartanInvalid() ? 'true' : null"
       [attr.data-invalid]="_ariaInvalid()"
       [attr.data-touched]="_touched?.() ? 'true' : null"
       [attr.data-dirty]="_dirty?.() ? 'true' : null"

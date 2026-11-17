@@ -23,6 +23,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 
 import { DialogClose } from '../../../../../../core/components/dialog-close/dialog-close';
 import { injectFormSubmission } from '../../../../../../core/validation/form-submission';
+import { isSubmittedInvalid } from '../../../../../../core/validation/submit-error-state-matcher';
 import { ImeGuard } from '../../../../../../shared/directives/ime-guard';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
@@ -60,6 +61,7 @@ export class BatchRolesDialog {
   readonly saveAction = input.required<(ids: string[]) => Observable<unknown>>();
   private readonly submitModel = signal({ roleIds: [] as string[] });
   readonly selectionForm = form(this.submitModel);
+  readonly selectionInvalid = computed(() => isSubmittedInvalid(this.selectionForm.roleIds));
   readonly saving = computed(() => this.selectionForm().submitting());
   private readonly submitForm = injectFormSubmission();
   async onSave(): Promise<void> {

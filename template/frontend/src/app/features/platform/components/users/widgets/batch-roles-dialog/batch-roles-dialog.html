@@ -24,9 +24,9 @@
         <div data-dialog-body>
           <fieldset
             hlmFieldSet
-            [attr.tabindex]="selectionForm.roleIds().invalid() ? 0 : null"
-            [attr.aria-invalid]="selectionForm.roleIds().invalid() ? 'true' : null"
-            [attr.aria-describedby]="selectionForm.roleIds().invalid() ? 'batch-role-errors' : null"
+            [attr.tabindex]="selectionInvalid() ? 0 : null"
+            [attr.aria-invalid]="selectionInvalid() ? 'true' : null"
+            [attr.aria-describedby]="selectionInvalid() ? 'batch-role-errors' : null"
           >
             <legend hlmFieldLegend class="sr-only">
               {{ t('users.batch.rolesTitle', { count: userCount() }) }}

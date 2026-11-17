@@ -5,14 +5,17 @@ import {
   Component,
   computed,
   forwardRef,
+  inject,
   input,
   linkedSignal,
   output,
+  viewChild,
 } from '@angular/core';
 import { type ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { BrnFieldA11yService } from '@spartan-ng/brain/field';
 import type { ChangeFn, TouchFn } from '@spartan-ng/brain/forms';
 import { BrnSwitch, type BrnSwitchSize } from '@spartan-ng/brain/switch';
-import { hlm } from '@spartan-ng/helm/utils';
+import { hlm, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
 import type { ClassValue } from 'clsx';
 import { HlmSwitchThumb } from './hlm-switch-thumb';
 
@@ -45,7 +48,7 @@ export const HLM_SWITCH_VALUE_ACCESSOR = {
       [forceInvalid]="forceInvalid()"
       [aria-label]="ariaLabel()"
       [aria-labelledby]="ariaLabelledby()"
-      [aria-describedby]="ariaDescribedby()"
+      [aria-describedby]="_describedBy()"
       (checkedChange)="handleChange($event)"
       (touched)="_onTouched?.()"
     >
@@ -54,6 +57,18 @@ export const HLM_SWITCH_VALUE_ACCESSOR = {
   `,
 })
 export class HlmSwitch implements ControlValueAccessor {
+  private readonly _fieldA11y = inject(BrnFieldA11yService, { optional: true });
+  protected readonly _describedBy = computed(
+    () =>
+      [
+        ...new Set(
+          [this.ariaDescribedby(), this._fieldA11y?.describedBy()]
+            .flatMap((ids) => (ids ?? '').split(/\s+/))
+            .filter(Boolean),
+        ),
+      ].join(' ') || null,
+  );
+  private readonly _brnSwitch = viewChild.required(BrnSwitch);
   public readonly userClass = input<ClassValue>('', { alias: 'class' });
   protected readonly _computedClass = computed(() =>
     hlm(
@@ -106,6 +121,13 @@ export class HlmSwitch implements ControlValueAccessor {
     this.checked.set(value);
     this._onChange?.(value);
     this.checkedChange.emit(value);
+  }
+
+  constructor() {
+    syncHlmAriaInvalid(
+      '[role="switch"]',
+      () => this.forceInvalid() || this._brnSwitch().controlState?.()?.spartanInvalid,
+    );
   }
 
   /** CONTROL VALUE ACCESSOR */

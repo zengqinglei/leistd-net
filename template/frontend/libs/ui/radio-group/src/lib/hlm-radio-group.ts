@@ -1,7 +1,7 @@
 import { computed, Directive, inject, input } from '@angular/core';
 import { BrnFieldControlDescribedBy } from '@spartan-ng/brain/field';
 import { BrnRadioGroup } from '@spartan-ng/brain/radio-group';
-import { classes } from '@spartan-ng/helm/utils';
+import { classes, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
 import type { ClassValue } from 'clsx';
 
 @Directive({
@@ -17,7 +17,7 @@ import type { ClassValue } from 'clsx';
   ],
   host: {
     'data-slot': 'radio-group',
-    '[attr.aria-invalid]': '_ariaInvalid() ? "true" : null',
+    '[attr.aria-invalid]': '_errorState() ? "true" : null',
     '[attr.data-invalid]': '_ariaInvalid() ? "true" : null',
     '[attr.data-dirty]': '_dirty() ? "true" : null',
     '[attr.data-touched]': '_touched() ? "true" : null',
@@ -36,6 +36,7 @@ export class HlmRadioGroup {
   );
 
   constructor() {
+    syncHlmAriaInvalid(null, () => this._errorState());
     classes(() => [
       'grid gap-3',
       this.userClass(),

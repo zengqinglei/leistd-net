@@ -1,14 +1,21 @@
 import { BooleanInput } from '@angular/cdk/coercion';
-import { booleanAttribute, ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {
+  booleanAttribute,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+} from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown, lucideX } from '@ng-icons/lucide';
 import {
   BrnComboboxAnchor,
+  injectBrnComboboxBase,
   BrnComboboxImports,
   BrnComboboxPopoverTrigger,
 } from '@spartan-ng/brain/combobox';
 import { HlmInputGroup, HlmInputGroupImports } from '@spartan-ng/helm/input-group';
-import { classes } from '@spartan-ng/helm/utils';
+import { classes, hlmAriaInvalid, syncHlmAriaInvalid } from '@spartan-ng/helm/utils';
 
 @Component({
   selector: 'hlm-combobox-input',
@@ -28,6 +35,7 @@ import { classes } from '@spartan-ng/helm/utils';
       [placeholder]="placeholder()"
       [forceInvalid]="forceInvalid()"
       [aria-invalid]="ariaInvalidInput()"
+      [attr.aria-invalid]="_ariaInvalid()"
     />
 
     <hlm-input-group-addon align="inline-end">
@@ -66,6 +74,13 @@ import { classes } from '@spartan-ng/helm/utils';
 })
 export class HlmComboboxInput {
   private static _id = 0;
+  private readonly _control = injectBrnComboboxBase();
+  protected readonly _ariaInvalid = computed(() =>
+    hlmAriaInvalid(
+      this.ariaInvalidInput() ??
+        (this.forceInvalid() || this._control.controlState?.()?.spartanInvalid),
+    ),
+  );
 
   public readonly inputId = input<string>(`hlm-combobox-input-${HlmComboboxInput._id++}`);
   public readonly placeholder = input<string>('');
@@ -89,6 +104,7 @@ export class HlmComboboxInput {
   });
 
   constructor() {
+    syncHlmAriaInvalid('input[brnComboboxInput]', () => this._ariaInvalid() === 'true');
     classes(() => 'w-auto');
   }
 }
