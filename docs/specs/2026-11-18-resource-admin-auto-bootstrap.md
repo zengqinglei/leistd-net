@@ -76,7 +76,7 @@ Identity 在迁移时建出宿主管理员，开通租户时建出租户管理�
   - userinfo 需要用户本人带 `openid`、`roles` 的令牌，返回的角色就取自令牌；
   - 下游三仓已经从访问令牌中去掉 `role`。
 - **可以参照的机器接口：**
-  - 端点 `api/v1/internal/account-preferences/{tenant}/{userId}`（`Api/Controllers/InternalAccountPreferenceController.cs`），scope 和策略分别在 `Application/Settings/Constants/AccountPreferenceScopes.cs`、`AccountPreferencePolicies.cs`；
+  - 端点 `api/v1/internal/account-preferences/{tenant}/{userId}`（`Api/Controllers/InternalAccountPreferenceController.cs`），由 Identity 的机器策略保护；
   - Resource 侧客户端为 `Infrastructure/AccountPreferences/IIdentityAccountPreferencesReadApi.cs`；
   - 机器 scope 在 `Application/Auth/OAuth/OAuthScopes.cs` 登记；
   - Resource 请求的 scope 默认值在 `Api/appsettings.json` 的 `Leistd:ServiceClients:Identity:Scope`。
@@ -87,7 +87,7 @@ Identity 在迁移时建出宿主管理员，开通租户时建出租户管理�
 
 - 端点 `GET api/v1/internal/administrators/{tenant}/{userId}`：
   - `tenant` 为 `host` 或租户 Id，返回 `{ "isAdministrator": bool }`；
-  - 策略只认机器主体和新 scope `administrators.read`（`MachineOnly`）。
+  - 策略要求机器主体和 Identity 服务级 scope。
 - 判定口径：
   - 用户须存在、未删除、访问状态为 `Allowed`；
   - 宿主侧：超管，或宿主内置 Admin 角色成员；
@@ -107,7 +107,6 @@ Identity 在迁移时建出宿主管理员，开通租户时建出租户管理�
   - 超时、5xx 等瞬态错误：抛出，不建成员，沿用投影现有的失败放行逻辑，下次请求重试；
   - 401、403：记 Error 并按现状建成员（不带角色），避免升级漏配 scope 时所有新用户被挡在门外。
 - 并发：投影只在数据库唯一约束冲突时重试一次。重试时读到已有成员行，不再调用 Identity，也不再引导。
-- 默认 scope 在 `Leistd:ServiceClients:Identity:Scope` 中追加 `administrators.read`，部署 compose 中 Resource API 的 scope 同步更新。DbMigrator 不需要这个 scope。
 - 条件：`RemoteTokenAuth`；多租户下作用域取当前租户。
 
 ### 备选与取舍
@@ -122,7 +121,6 @@ Identity 在迁移时建出宿主管理员，开通租户时建出租户管理�
 
 ### 兼容与升级
 
-- 部署顺序：先升级 Identity（新接口），并在 Identity 的开放应用中给 Resource 的机器客户端加上 `administrators.read` 权限，再升级 Resource。Resource 默认会请求这个 scope，Identity 没有授权时，OpenIddict 会拒绝整个机器令牌请求，部署文档要写明这个顺序。每个环境只做一次。
 - 已有成员行的人不受影响；`--grant-admin` 和 `--restore` 不变。
 - 回滚：回退 Resource 版本即恢复现状，Identity 的新接口和 scope 可以保留。
 
@@ -143,9 +141,9 @@ Identity 在迁移时建出宿主管理员，开通租户时建出租户管理�
 
 ## 4. 结果
 
-Identity 查询端点按机器主体与 `administrators.read` 授权。Resource 在首次投影时调用该端点，建成员、授予 Admin 与数据库操作记录在同一工作单元提交。授权依据为 `IdentityAdministrator`，记录器以请求主体作为操作者。DbMigrator 沿用命令的输出、操作人和 `DeploymentBootstrap` 依据。
+Identity 查询端点的当前授权规则见 [机器接口服务级 scope 规格](./2026-11-18-identity-machine-scope-consolidation.md)。Resource 在首次投影时调用该端点，建成员、授予 Admin 与数据库操作记录在同一工作单元提交。授权依据为 `IdentityAdministrator`，记录器以请求主体作为操作者。DbMigrator 沿用命令的输出、操作人和 `DeploymentBootstrap` 依据。
 
-部署配置同步了 Resource API 的 scope，升级顺序已写入部署配置文档。后端 README、服务间调用标准和多租户分层规格已同步。
+部署配置使用 Identity 的服务级 scope。后端 README、服务间调用标准和多租户分层规格已同步。
 
 worker-01 的验收覆盖 AC1–AC11。四个生成场景共通过 998 项单测和 85 项定向集成测试，包含迁移快照、控制器授权约定和原有 `ResourceAdminBootstrapTests`。PR 档生成与文档检查以及交叉形态的构建和 lint 均已通过。
 

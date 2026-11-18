@@ -8,7 +8,6 @@ using System.Security.Cryptography;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 #if (OpenIddictServer && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Auth.Options;
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using Leistd.Authorization.Constants;
 #if (RemoteTokenAuth)
@@ -149,7 +148,7 @@ public sealed class ComponentEndpointAuthenticationTests(ProjectWebApplicationFa
 #if (IncludeMultiTenancy)
 
     /// <summary>机器端点的策略自带 Bearer 方案：匿名得到标准 Bearer challenge，管理员会话、自然人令牌与错误 scope 都进不去。</summary>
-    /// <remarks>机器 scope 只发给 client_credentials 客户端，自然人令牌拿不到它；这里的自然人令牌带本服务 API scope，验签通过、主体不对。</remarks>
+    /// <remarks>自然人令牌带本服务 API scope，验签通过，主体仍不满足机器策略。</remarks>
     [Fact]
     public async Task Machine_endpoints_admit_only_a_bearer_with_the_matching_scope()
     {
@@ -157,8 +156,8 @@ public sealed class ComponentEndpointAuthenticationTests(ProjectWebApplicationFa
         const string migrationPath = "/api/v1/tenant-connections/migration?name=Default";
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         using var anonymous = Factory.CreateProjectClient();
-        using var routing = await CreateMachineClientAsync(Factory, admin.Client, TenantConnectionScopes.RuntimeRead);
-        using var migration = await CreateMachineClientAsync(Factory, admin.Client, TenantConnectionScopes.MigrationRead);
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
+        using var unscopedMachine = await CreateMachineClientAsync(Factory, admin.Client, "profile");
         using var person = await CreateNaturalPersonBearerClientAsync(admin.Client);
 
         foreach (var path in (string[])[runtimePath, migrationPath])
@@ -167,12 +166,9 @@ public sealed class ComponentEndpointAuthenticationTests(ProjectWebApplicationFa
             Assert.Contains(rejected.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
             (await AssertStatusAsync(admin.Client, path, HttpStatusCode.Unauthorized)).Dispose();
             (await AssertStatusAsync(person, path, HttpStatusCode.Forbidden)).Dispose();
+            (await AssertStatusAsync(unscopedMachine, path, HttpStatusCode.Unauthorized)).Dispose();
+            (await AssertStatusAsync(machine, path, HttpStatusCode.OK)).Dispose();
         }
-
-        (await AssertStatusAsync(routing, runtimePath, HttpStatusCode.OK)).Dispose();
-        (await AssertStatusAsync(migration, runtimePath, HttpStatusCode.Forbidden)).Dispose();
-        (await AssertStatusAsync(migration, migrationPath, HttpStatusCode.OK)).Dispose();
-        (await AssertStatusAsync(routing, migrationPath, HttpStatusCode.Forbidden)).Dispose();
     }
 
     // 普通成员经授权码流程拿到的有效访问令牌

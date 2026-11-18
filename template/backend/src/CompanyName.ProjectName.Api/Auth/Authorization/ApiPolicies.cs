@@ -10,4 +10,9 @@ public static class ApiPolicies
 {
     /// <summary>当前登录主体：与默认策略同一份要求，用于读设置、读自己的权限、通知中心这类自用端点。</summary>
     public const string CurrentUser = "App.CurrentUser";
+#if (OpenIddictServer)
+
+    /// <summary>持有 Identity 服务级 scope 的机器主体。</summary>
+    public const string IdentityMachine = "App.IdentityMachine";
+#endif
 }

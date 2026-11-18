@@ -8,12 +8,8 @@ using CompanyName.ProjectName.Application.Shared;
 #endif
 using Leistd.Security.Claims;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Application.Settings.Constants;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Application.Systems.Constants;
-using CompanyName.ProjectName.Application.Users.Constants;
-#endif
-#if (OpenIddictServer && IncludeMultiTenancy)
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -117,24 +113,19 @@ public static class DependencyInjection
         });
 #if (OpenIddictServer)
 
-        // 资源服务按用户读取账户偏好（给收件人产出文本时没有用户令牌）
-        services.AddMachineScopePolicy(AccountPreferencePolicies.Read, AccountPreferenceScopes.Read);
-        services.AddMachineScopePolicy(AdministratorPolicies.Read, AdministratorScopes.Read);
-        services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claims) =>
-        {
-            var human = options.DefaultPolicy;
-            options.AddPolicy(SystemDirectoryPolicies.Read, policy => policy
-                .AddAuthenticationSchemes(human.AuthenticationSchemes.ToArray())
-                .RequireAuthenticatedUser()
-                .RequireAssertion(context => IsNaturalPerson(context.User, claims.Value) ||
-                    (ClientSubject.IsMachine(claims.Value.FindUserId(context.User)) && HasScope(context.User, SystemDirectoryScopes.Read))));
-        });
-#endif
-#if (OpenIddictServer && IncludeMultiTenancy)
-
-        // 租户控制面的两个机器端点：Runtime 与 Migration scope 彼此独立
-        services.AddMachineScopePolicy(TenantConnectionPolicies.RuntimeRead, TenantConnectionScopes.RuntimeRead);
-        services.AddMachineScopePolicy(TenantConnectionPolicies.MigrationRead, TenantConnectionScopes.MigrationRead);
+        services.AddMachineScopePolicy(ApiPolicies.IdentityMachine,
+            provider => provider.GetRequiredService<IOptions<OAuthResourceOptions>>().Value.Resource);
+        services.AddOptions<AuthorizationOptions>()
+            .Configure<IOptions<ClaimTypeOptions>, IOptions<OAuthResourceOptions>>((options, claims, oauth) =>
+            {
+                var human = options.DefaultPolicy;
+                var resource = oauth.Value.Resource;
+                options.AddPolicy(SystemDirectoryPolicies.Read, policy => policy
+                    .AddAuthenticationSchemes(human.AuthenticationSchemes.ToArray())
+                    .RequireAuthenticatedUser()
+                    .RequireAssertion(context => IsNaturalPerson(context.User, claims.Value) ||
+                        (ClientSubject.IsMachine(claims.Value.FindUserId(context.User)) && HasScope(context.User, resource))));
+            });
 #endif
 
         return services;
@@ -155,20 +146,29 @@ public static class DependencyInjection
         string policyName,
         string requiredScope)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(policyName);
         ArgumentException.ThrowIfNullOrWhiteSpace(requiredScope);
+        return services.AddMachineScopePolicy(policyName, _ => requiredScope);
+    }
 
-        // 机器主体按宿主配置的主体标识 claim 判定，因此经 Options 管道取 ClaimTypeOptions
-        services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claimTypeOptions) =>
-        {
-            var claimTypes = claimTypeOptions.Value;
-            options.AddPolicy(policyName, policy => policy
-                .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
-                .RequireAuthenticatedUser()
-                .RequireAssertion(context =>
-                    ClientSubject.IsMachine(claimTypes.FindUserId(context.User)) &&
-                    HasScope(context.User, requiredScope)));
-        });
+    private static IServiceCollection AddMachineScopePolicy(
+        this IServiceCollection services,
+        string policyName,
+        Func<IServiceProvider, string> resolveScope)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(policyName);
+
+        services.AddOptions<AuthorizationOptions>()
+            .Configure<IOptions<ClaimTypeOptions>, IServiceProvider>((options, claimTypeOptions, provider) =>
+            {
+                var claimTypes = claimTypeOptions.Value;
+                var requiredScope = resolveScope(provider);
+                options.AddPolicy(policyName, policy => policy
+                    .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                    .RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        ClientSubject.IsMachine(claimTypes.FindUserId(context.User)) &&
+                        HasScope(context.User, requiredScope)));
+            });
 
         return services;
     }

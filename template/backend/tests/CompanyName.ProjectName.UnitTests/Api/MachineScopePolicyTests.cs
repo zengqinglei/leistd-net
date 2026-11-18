@@ -1,6 +1,8 @@
 #if (OpenIddictServer || RemoteTokenAuth)
 using CompanyName.ProjectName.Api;
 #if (OpenIddictServer)
+using CompanyName.ProjectName.Api.Auth.Authorization;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Application.Systems.Constants;
 #endif
 using Leistd.Security.AspNetCore;
@@ -31,7 +33,11 @@ namespace CompanyName.ProjectName.UnitTests.Api;
 /// </remarks>
 public sealed class MachineScopePolicyTests : IDisposable
 {
+#if (OpenIddictServer)
+    private const string PolicyName = ApiPolicies.IdentityMachine;
+#else
     private const string PolicyName = "test.orders-machine";
+#endif
     // 服务级 scope：内部服务间机器调用的默认粒度
     private const string ServiceScope = "orders-api";
     private const string Machine = "client:orders-worker";
@@ -102,17 +108,13 @@ public sealed class MachineScopePolicyTests : IDisposable
 
 #if (OpenIddictServer)
     [Theory]
-    [InlineData(Machine, "system-directory.read", true)]
-    [InlineData(Machine, "account-preferences.read", false)]
+    [InlineData(Machine, ServiceScope, true)]
+    [InlineData(Machine, "billing-api", false)]
     [InlineData(Machine, "", false)]
     [InlineData(NaturalPerson, "", true)]
     public async Task System_directory_admits_natural_people_and_only_explicitly_scoped_machines(string subject, string scope, bool expected)
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSecurity();
-        services.AddApiAuthorization();
-        await using var provider = services.BuildServiceProvider();
+        await using var provider = Services();
         var result = await provider.GetRequiredService<IAuthorizationService>()
             .AuthorizeAsync(Principal(subject, scope, "verified"), null, SystemDirectoryPolicies.Read);
         Assert.Equal(expected, result.Succeeded);
@@ -139,7 +141,12 @@ public sealed class MachineScopePolicyTests : IDisposable
             options.Configuration = new OpenIddictConfiguration { Issuer = new Uri(Issuer) };
             options.Configuration.SigningKeys.Add(_key);
         });
+#if (OpenIddictServer)
+        services.Configure<OAuthResourceOptions>(options => options.Resource = ServiceScope);
+        services.AddApiAuthorization();
+#else
         services.AddMachineScopePolicy(PolicyName, ServiceScope);
+#endif
         return services.BuildServiceProvider();
     }
 

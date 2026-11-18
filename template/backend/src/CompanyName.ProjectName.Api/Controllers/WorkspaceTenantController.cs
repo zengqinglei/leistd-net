@@ -1,13 +1,13 @@
 #if (TenantWorkspace && OpenIddictServer)
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
 using Leistd.MultiTenancy.Stores;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
-[Authorize(Policy = TenantConnectionPolicies.RuntimeRead)]
+[Authorize(Policy = ApiPolicies.IdentityMachine)]
 [Route("api/v1/workspace-tenants")]
 public sealed class WorkspaceTenantController(IWorkspaceTenantLookupAppService lookup) : BaseController
 {

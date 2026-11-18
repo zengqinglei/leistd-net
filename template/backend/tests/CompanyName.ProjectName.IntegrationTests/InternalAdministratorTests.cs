@@ -6,7 +6,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 #endif
 using CompanyName.ProjectName.Application.Auth.Options;
-using CompanyName.ProjectName.Application.Users.Constants;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -23,13 +22,13 @@ public sealed class InternalAdministratorTests(ProjectWebApplicationFactory fact
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
     [Fact]
-    public async Task The_endpoint_accepts_only_a_machine_token_with_the_administrator_scope()
+    public async Task The_endpoint_accepts_only_a_machine_token_with_the_identity_service_scope()
     {
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         using var anonymous = CreateHttpsClient(Factory);
         var resourceScope = new OAuthResourceOptions().Resource;
-        using var wrongScope = await CreateMachineClientAsync(Factory, admin.Client, resourceScope);
-        using var machine = await CreateMachineClientAsync(Factory, admin.Client, AdministratorScopes.Read);
+        using var wrongScope = await CreateMachineClientAsync(Factory, admin.Client, "profile");
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, resourceScope);
         var (clientId, secret) = await CreateClientAsync(admin.Client, resourceScope);
         var token = await AuthorizeAndExchangeAsync(Factory, admin, clientId, secret, resourceScope);
         using var user = CreateHttpsClient(Factory);
@@ -37,12 +36,14 @@ public sealed class InternalAdministratorTests(ProjectWebApplicationFactory fact
         var path = Path("host", Guid.CreateVersion7());
 
         using var unauthenticated = await anonymous.GetAsync(path);
+        using var session = await admin.Client.GetAsync(path);
         using var unscoped = await wrongScope.GetAsync(path);
         using var human = await user.GetAsync(path);
         using var permitted = await machine.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, unscoped.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, session.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unscoped.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, human.StatusCode);
         Assert.Equal(HttpStatusCode.OK, permitted.StatusCode);
     }
@@ -51,7 +52,7 @@ public sealed class InternalAdministratorTests(ProjectWebApplicationFactory fact
     public async Task Host_lookup_recognizes_only_available_super_admins_and_built_in_admin_members()
     {
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-        using var machine = await CreateMachineClientAsync(Factory, admin.Client, AdministratorScopes.Read);
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
 
         var super = await AddUserAsync(null, user => user.MarkAsSuperAdmin());
         var member = await AddUserAsync(null, assignAdmin: true);
@@ -72,7 +73,7 @@ public sealed class InternalAdministratorTests(ProjectWebApplicationFactory fact
     public async Task Tenant_lookup_uses_tenant_membership_and_returns_not_found_for_unavailable_tenants()
     {
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-        using var machine = await CreateMachineClientAsync(Factory, admin.Client, AdministratorScopes.Read);
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
 
         using var create = await admin.Client.PostAsJsonAsync("/api/v1/tenants", new
         {

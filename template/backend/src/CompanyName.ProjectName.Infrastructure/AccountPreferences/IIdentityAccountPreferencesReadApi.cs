@@ -3,7 +3,7 @@ using Refit;
 
 namespace CompanyName.ProjectName.Infrastructure.AccountPreferences;
 
-/// <summary>以本服务的机器身份向 Identity 读取账户偏好（机器 scope <c>account-preferences.read</c>）。</summary>
+/// <summary>以本服务的机器身份向 Identity 读取账户偏好。</summary>
 /// <remarks>返回原始响应：要按 ETag 处理 304，并区分上游故障与认证拒绝。</remarks>
 public interface IIdentityAccountPreferencesReadApi
 {

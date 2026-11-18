@@ -1,6 +1,6 @@
 #if (OpenIddictServer)
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using CompanyName.ProjectName.Application.Users.AppServices;
-using CompanyName.ProjectName.Application.Users.Constants;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,7 +15,7 @@ public sealed class InternalAdministratorController(IAdministratorAppService adm
     /// <param name="tenant"><c>host</c> 或租户 Id。</param>
     /// <param name="userId">用户 Id。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    [Authorize(Policy = AdministratorPolicies.Read)]
+    [Authorize(Policy = ApiPolicies.IdentityMachine)]
     [HttpGet("{tenant}/{userId:guid}")]
     public async Task<AdministratorStatusOutputDto> GetAsync(string tenant, Guid userId, CancellationToken cancellationToken)
     {

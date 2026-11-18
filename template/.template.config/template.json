@@ -808,11 +808,8 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/InternalAccountPreferenceController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/InternalAdministratorController.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/AppServices/*AdministratorAppService.cs",
-            "backend/src/CompanyName.ProjectName.Application/Users/Constants/Administrator*.cs",
             "backend/src/CompanyName.ProjectName.Application/Users/Dtos/AdministratorStatusOutputDto.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/InternalAdministratorTests.cs",
-            "backend/src/CompanyName.ProjectName.Application/Settings/Constants/AccountPreferencePolicies.cs",
-            "backend/src/CompanyName.ProjectName.Application/Settings/Constants/AccountPreferenceScopes.cs",
             "docs/operations/runbooks/token-certificate-rotation.md",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
@@ -839,8 +836,6 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/DesignTime/OpenIddictDbContextFactory.cs",
             "backend/src/CompanyName.ProjectName.Api/Hosting/ExceptionMappings/OpenApplicationExceptionMappings.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/OAuth/OAuthScopes.cs",
-            "backend/src/CompanyName.ProjectName.Application/TenantConnections/Constants/TenantConnectionPolicies.cs",
-            "backend/src/CompanyName.ProjectName.Application/TenantConnections/Constants/TenantConnectionScopes.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/Fixtures/OidcRequestCaching.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/OidcLogoutTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/OpenApplicationSessionBindingTests.cs",
@@ -1182,7 +1177,6 @@
           "condition": "!OpenIddictServer",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Systems/AppServices/SystemAppService.cs",
-            "backend/src/CompanyName.ProjectName.Application/Systems/Constants/SystemDirectoryScopes.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SystemDirectoryTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Application/OpenApplicationHomeUrlValidatorTests.cs"
           ]

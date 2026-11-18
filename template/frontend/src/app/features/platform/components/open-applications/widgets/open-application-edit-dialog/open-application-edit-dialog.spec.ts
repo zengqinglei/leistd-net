@@ -15,6 +15,7 @@ import {
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
+  OpenApplicationScopeOutputDto,
   UpdateOpenApplicationInputDto,
 } from '../../../../dtos/open-application.dto';
 
@@ -32,6 +33,7 @@ import {
       [editing]="editing()"
       [loadError]="loadError()"
       [scopesError]="scopesError()"
+      [scopes]="scopes()"
     />
   `,
 })
@@ -40,6 +42,14 @@ class HostComponent {
   readonly editing = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly scopesError = signal<string | null>(null);
+  readonly scopes = signal<OpenApplicationScopeOutputDto[]>([
+    {
+      name: 'identity-api',
+      displayName: 'Identity API',
+      audience: 'identity-api',
+      machineOnly: false,
+    },
+  ]);
   readonly application = signal<OpenApplicationOutputDto | null>(null);
   readonly saved: (CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto)[] = [];
   request: Observable<unknown> = of(undefined);
@@ -236,6 +246,69 @@ describe('OpenApplicationEditDialog', () => {
     expect(fixture.componentInstance.saved).toEqual([
       expect.objectContaining({ applicationType: 'native', sessionBound: false }),
       expect.objectContaining({ applicationType: 'service', sessionBound: false }),
+    ]);
+  });
+
+  async function openPermissionOptions(): Promise<void> {
+    const trigger = document.getElementById('application-permissions')!;
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    await fixture.whenStable();
+  }
+
+  function permissionOption(name: string): HTMLElement {
+    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (item) => item.querySelector('.text-muted-foreground')?.textContent?.trim() === name,
+    );
+    expect(option, `Permission option ${name}`).toBeDefined();
+    return option!;
+  }
+
+  it('grants the Identity service scope when creating a client from the service template', async () => {
+    const template = document.getElementById('application-template')!;
+    await userEvent.click(template);
+    await expect.poll(() => template.getAttribute('aria-expanded')).toBe('true');
+    const templates = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
+    const service = templates.find((option) => /service/i.test(option.textContent ?? ''));
+    expect(service).toBeDefined();
+    await userEvent.click(service!);
+    await typeClientId('orders-machine');
+
+    await openPermissionOptions();
+    expect(permissionOption('gt:client_credentials').getAttribute('aria-disabled')).toBe('true');
+    await userEvent.click(permissionOption('scp:identity-api'));
+    await dialog().save();
+
+    expect(fixture.componentInstance.saved).toEqual([
+      expect.objectContaining({
+        clientId: 'orders-machine',
+        applicationType: 'service',
+        clientType: 'confidential',
+        permissions: ['ept:token', 'gt:client_credentials', 'scp:identity-api'],
+      }),
+    ]);
+  });
+
+  it('lets an administrator remove a retired scope from a registered service client', async () => {
+    await edit({
+      ...registered(false),
+      applicationType: 'service',
+      permissions: [
+        'ept:token',
+        'gt:client_credentials',
+        'scp:tenant-routing.read',
+        'scp:identity-api',
+      ],
+    });
+
+    await openPermissionOptions();
+    await userEvent.click(permissionOption('scp:tenant-routing.read'));
+    await dialog().save();
+
+    expect(fixture.componentInstance.saved).toEqual([
+      expect.objectContaining({
+        permissions: ['ept:token', 'gt:client_credentials', 'scp:identity-api'],
+      }),
     ]);
   });
 

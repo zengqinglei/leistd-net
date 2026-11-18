@@ -1,7 +1,7 @@
 #if (OpenIddictServer)
+using CompanyName.ProjectName.Api.Auth.Authorization;
 using CompanyName.ProjectName.Api.Filters;
 using CompanyName.ProjectName.Application.Settings.AppServices;
-using CompanyName.ProjectName.Application.Settings.Constants;
 using CompanyName.ProjectName.Application.Settings.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +21,7 @@ public sealed class InternalAccountPreferenceController(IAccountPreferenceAppSer
     /// <param name="tenant"><c>host</c> 或租户 Id。</param>
     /// <param name="userId">用户 Id。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    [Authorize(Policy = AccountPreferencePolicies.Read)]
+    [Authorize(Policy = ApiPolicies.IdentityMachine)]
     [HttpGet("{tenant}/{userId:guid}")]
     [StrongETag]
     public async Task<AccountPreferencesOutputDto> GetAsync(string tenant, Guid userId, CancellationToken cancellationToken)

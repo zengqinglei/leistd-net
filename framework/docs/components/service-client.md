@@ -195,7 +195,7 @@ builder.Services.AddTransient<IdentityCheckAuthHandler>();
   "Leistd": {
     "ServiceAuth": { "Authority": "https://login.example.com/", "ClientId": "orders-api" },
     "ServiceClients": {
-      "Identity": { "BaseAddress": "https://login.example.com/", "Scope": "tenant-routing.read" },
+      "Identity": { "BaseAddress": "https://login.example.com/", "Scope": "identity-api" },
       "Billing": { "BaseAddress": "https://billing.example.com/", "TokenExchange": { "Audience": "billing-api", "Scope": "billing-api" } }
     }
   }
