@@ -1,6 +1,6 @@
 # 资源服务按 Identity 内置管理员自动引导 Admin
 
-状态：进行中 · 风险档：高 · 关联：—
+状态：已完成 · 风险档：高 · 关联：[PR #294](https://github.com/zengqinglei/leistd-net/pull/294)
 
 ## 1. 需求
 
