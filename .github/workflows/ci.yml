@@ -106,6 +106,8 @@ jobs:
           cache-dependency-path: |
             template/frontend/package-lock.json
             template/.template.config/localization/frontend/package-lock.json
+      - name: 检查两套前端依赖清单的 npm 排序
+        run: node scripts/check-frontend-dependency-order.mjs
       # 这些闸门借生成项目的 node_modules（模板源码的 package.json 带条件行，不能直接安装）。
       # 每次现生成、现安装，不依赖任何残留；缺依赖或版本不一致时脚本直接失败，不跳过。
       - name: 生成项目并安装前端依赖

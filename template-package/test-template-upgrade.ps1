@@ -7,7 +7,7 @@
 .DESCRIPTION
     从第二个模板版本起是模板发布的前置条件（release.yml 的 template 通道，存在上一个 template-v* tag 时执行）。
     每个代表场景（identity-all-features 含前端；resource-capabilities-03 纯 API）：
-    1. 在隔离模板目录安装 -PreviousVersion，在仓库之外生成项目，git 提交；
+    1. 在隔离模板目录安装 -PreviousVersion，用旧版支持的固定参数在仓库之外生成项目，git 提交；
     2. 提交项目定制：新增一个依赖（有前端时为 npm 依赖并更新锁文件，纯 API 为 NuGet 依赖）、一处源码修改、
        替换一个图片（生成产物没有图片的场景不适用，并核对它确实没有）。定制只落在上一版与候选之间没有变化的文件上；
     3. 三类验收分开执行：
@@ -53,6 +53,15 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:HUSKY = '0'
 $probeText = 'PROJECT-CUSTOMIZATION-PROBE'
 $conflictText = 'PROJECT-CONFLICT-PROBE'
+# 默认场景固定使用 1.2.2 已支持的参数，当前矩阵新增能力不改变旧包的生成命令。
+$upgradeArguments = @{
+    'identity-all-features' = @('--include-notifications', '--include-real-time', '--include-external-login', '--include-localization')
+    'resource-capabilities-03' = @(
+        '--service-role', 'Resource', '--include-frontend', 'false', '--include-multi-tenancy', 'false',
+        '--include-real-time', 'false', '--include-email', 'false', '--include-operation-records', 'false',
+        '--include-notifications', 'false', '--include-external-login', 'false', '--include-localization', 'false'
+    )
+}
 
 function Invoke-Checked([string]$Command, [string[]]$Arguments, [string]$WorkingDirectory) {
     Write-Host "> $Command $($Arguments -join ' ')" -ForegroundColor DarkGray
@@ -121,20 +130,22 @@ function Test-StableInsertion([string[]]$Lines, [int]$Index, [string[]]$TargetLi
     return $false
 }
 
-# npm 按名称排序插入新依赖：选一个排序后两侧相邻依赖在候选中未变的包
-function Select-NpmDependency([string]$Base, [string]$Target) {
-    $baseDependencies = (Get-Content -LiteralPath (Join-Path $Base 'frontend/package.json') -Raw | ConvertFrom-Json -AsHashtable).dependencies
-    $targetDependencies = (Get-Content -LiteralPath (Join-Path $Target 'frontend/package.json') -Raw | ConvertFrom-Json -AsHashtable).dependencies
+# 选一个按依赖名称排序插入、两侧文本在候选中仍原样相邻的位置
+function Select-NpmDependency([string[]]$BaseLines, [string[]]$TargetLines) {
+    $baseDependencies = (($BaseLines -join "`n") | ConvertFrom-Json -AsHashtable).dependencies
+    $targetDependencies = (($TargetLines -join "`n") | ConvertFrom-Json -AsHashtable).dependencies
     foreach ($candidate in 'is-number@7.0.0', 'base64-js@1.5.1', 'yocto-queue@1.1.1') {
         $name = $candidate.Substring(0, $candidate.LastIndexOf('@'))
         if ($baseDependencies.Contains($name) -or $targetDependencies.Contains($name)) { continue }
         $sorted = @(@($baseDependencies.Keys) + $name | Sort-Object -CaseSensitive)
         $position = [Array]::IndexOf($sorted, $name)
-        $neighbors = @($sorted[[Math]::Max(0, $position - 1)], $sorted[[Math]::Min($sorted.Count - 1, $position + 1)] | Where-Object { $_ -cne $name })
-        $targetSorted = @($targetDependencies.Keys | Sort-Object -CaseSensitive)
-        $stable = @($neighbors | Where-Object { $targetDependencies[$_] -ceq $baseDependencies[$_] }).Count -eq $neighbors.Count
-        if ($neighbors.Count -eq 2) { $stable = $stable -and ([Array]::IndexOf($targetSorted, $neighbors[1]) - [Array]::IndexOf($targetSorted, $neighbors[0])) -eq 1 }
-        if ($stable) { return $candidate }
+        if ($position -ge $sorted.Count - 1) { continue }
+        $anchor = '    "' + $sorted[$position + 1] + '": '
+        $index = 0..($BaseLines.Count - 1) | Where-Object { $BaseLines[$_].StartsWith($anchor, [StringComparison]::Ordinal) } |
+            Select-Object -First 1
+        if ($null -ne $index -and (Test-StableInsertion $BaseLines $index $TargetLines)) {
+            return @{ Package = $candidate; Index = $index }
+        }
     }
     throw '候选改动了新增 npm 依赖可插入位置两侧的全部依赖，无法构造不冲突的依赖定制'
 }
@@ -143,9 +154,17 @@ function Select-NpmDependency([string]$Base, [string]$Target) {
 function Add-Customizations([string]$Path, [string]$Target, [string[]]$Unchanged, [hashtable]$Definition) {
     $expected = @{}
     if ($Definition.Frontend) {
-        $package = Select-NpmDependency $Path $Target
+        $manifestPath = Join-Path $Path 'frontend/package.json'
+        $lines = Read-Lines $manifestPath
+        $insertion = Select-NpmDependency $lines (Read-Lines (Join-Path $Target 'frontend/package.json'))
+        $package = $insertion.Package
         $name = $package.Substring(0, $package.LastIndexOf('@')); $version = $package.Substring($package.LastIndexOf('@') + 1)
-        Invoke-Checked 'npm' @('install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact', $package) (Join-Path $Path 'frontend') | Out-Null
+        # 只插入定制的依赖。npm install <包> 会额外重排旧模板的其他依赖，与候选的版本更新冲突。
+        $index = $insertion.Index
+        $manifest = ($lines[0..($index - 1)] + ('    "{0}": "{1}",' -f $name, $version) + $lines[$index..($lines.Count - 1)]) -join "`n"
+        [IO.File]::WriteAllText($manifestPath, $manifest)
+        Invoke-Checked 'npm' @('install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund') (Join-Path $Path 'frontend') | Out-Null
+        if ([IO.File]::ReadAllText($manifestPath) -cne $manifest) { throw 'npm 更新锁文件时改写了定制后的依赖清单' }
         $script:DependencyCheck = {
             param($root)
             $manifest = Get-Content -LiteralPath (Join-Path $root 'frontend/package.json') -Raw | ConvertFrom-Json -AsHashtable
@@ -305,7 +324,8 @@ $feedEntry    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" /
         $root = Join-Path $WorkRoot $scenario
         New-Item -ItemType Directory -Path $root | Out-Null
         $origin = Join-Path $root 'origin'
-        Invoke-Checked 'dotnet' (@('new', 'fullstack-app', '-n', (Get-ScenarioProjectName $scenario), '-o', $origin, '--debug:custom-hive', $previousHive) + $definition.Arguments) $root | Out-Null
+        $arguments = $upgradeArguments[$scenario] ?? $definition.Arguments
+        Invoke-Checked 'dotnet' (@('new', 'fullstack-app', '-n', (Get-ScenarioProjectName $scenario), '-o', $origin, '--debug:custom-hive', $previousHive) + $arguments) $root | Out-Null
         Assert-Marker $origin $PreviousVersion
         $candidateTree = Join-Path $root 'candidate'
         Push-Location $root

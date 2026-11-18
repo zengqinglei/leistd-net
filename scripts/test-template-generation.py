@@ -624,7 +624,7 @@ def check_gitlab_ci(text, spa_frontend):
                         '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH': 'pull-push'}, f'GitLab CI cache policy by pipeline: {policies}'
     if spa_frontend:
         audit = document['frontend-audit']
-        assert audit['stage'] == 'verify' and 'npm audit --omit=dev --audit-level=high --package-lock-only' in '\n'.join(audit['script']), 'GitLab CI audit job'
+        assert audit['stage'] == 'verify' and audit['script'] == ['cd frontend', 'node scripts/audit-dependencies.mjs'], 'GitLab CI audit job'
         changes = [rule for rule in audit['rules'] if 'changes' in rule]
         assert len(changes) == 1 and changes[0]['changes'] == ['frontend/package-lock.json'], 'GitLab CI audit must follow the lock file'
         assert any('"schedule"' in rule['if'] and '"web"' in rule['if'] for rule in audit['rules']), 'GitLab CI audit schedule and manual runs'
@@ -825,7 +825,7 @@ def validate(output, values, config, verify=True, sdk=None):
     # 前端生产依赖审计不在 verify 里：GitHub 为 verify 作业内的一步（锁文件变化、定时、手动才执行），GitLab 为独立作业
     if values['Ci'] == 'github':
         assert 'merge_group:' in github_ci, 'GitHub CI must report the required check for merge queue'
-        assert ('npm audit --omit=dev --audit-level=high --package-lock-only' in github_ci) == values['SpaFrontend'], 'GitHub audit step applicability'
+        assert ('node scripts/audit-dependencies.mjs' in github_ci) == values['SpaFrontend'], 'GitHub audit step applicability'
         # 后端依赖审计所有形态都有，定时触发随之常在
         assert 'schedule:' in github_ci and 'scripts/audit-backend-dependencies.ps1' in github_ci, 'GitHub backend audit and schedule'
         assert "-- backend/Directory.Packages.props backend/Directory.Build.props 'backend/**/*.csproj'" in github_ci, 'GitHub backend audit must follow package files'
@@ -833,7 +833,7 @@ def validate(output, values, config, verify=True, sdk=None):
             assert 'frontend/package-lock.json' in github_ci and 'workflow_dispatch' in github_ci and '未改依赖，跳过审计' in github_ci, 'GitHub audit conditions'
     assert not (output / '.github/workflows/audit.yml').exists(), 'GitHub audit must not be a separate workflow'
     verify_text = (output / 'scripts/verify.ps1').read_text(encoding='utf-8')
-    assert 'npm audit' not in verify_text, 'verify.ps1 must not run the dependency audit'
+    assert 'npm audit' not in verify_text and 'audit-dependencies.mjs' not in verify_text, 'verify.ps1 must not run the dependency audit'
     assert not any(p.startswith('.github/') and p != ci_files['github'] for p in digests), 'Unexpected files under .github'
     # 浏览器端到端随本地身份形态下发（有登录界面与可预置账号）；测试规范的命令说明同进退
     assert ('frontend/playwright.config.ts' in digests) == values['LocalIdentity'], 'E2E project applicability'
@@ -882,6 +882,8 @@ def validate(output, values, config, verify=True, sdk=None):
     assert ('name: "OperationRecords"' in migrations) == values['IncludeOperationRecords'], 'Operation record tables'
     assert 'CreationTime' in migrations and 'TenantId' in migrations, 'Baseline entity audit/scope columns'
     if values['SpaFrontend']:
+        assert (frontend / 'scripts/audit-dependencies.mjs').is_file(), 'Frontend audit script'
+        assert (frontend / 'scripts/audit-dependencies.test.mjs').is_file(), 'Frontend audit tests'
         package = json.loads((frontend / 'package.json').read_text(encoding='utf-8'))
         lock = json.loads((frontend / 'package-lock.json').read_text(encoding='utf-8'))
         assert ('@microsoft/signalr' in package['dependencies']) == (values['IncludeNotifications'] or values['IncludeRealTime']), 'SignalR dependency'

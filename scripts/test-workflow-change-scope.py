@@ -339,6 +339,7 @@ def check_quality_aggregation():
     required = ['quality-plan', 'docs-sync', 'docs-sync-windows', 'frontend-gates', 'dependency-audit', 'framework-pack', 'test',
                 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
     assert set(jobs['template-matrix']['needs']) == set(required) and jobs['template-matrix']['if'] == 'always()'
+    assert any(step.get('run') == 'node scripts/check-frontend-dependency-order.mjs' for step in jobs['frontend-gates']['steps'])
     # The audit reaches the external advisory database: it runs only when the plan requires it, the summary holds it
     # to success or skipped by that field, and no scenario slice audits.
     audit = jobs['dependency-audit']
@@ -346,7 +347,10 @@ def check_quality_aggregation():
     assert audit['steps'][-1]['run'] == 'pwsh scripts/audit-frontend-dependencies.ps1', audit
     summary = next(s for s in jobs['template-matrix']['steps'] if s.get('id') == 'quality')['run']
     assert "$plan.DependencyAudit" in summary and "$jobs['dependency-audit'].result" in summary, summary
-    assert 'npm audit' not in (ROOT / 'scripts/test-template-matrix.ps1').read_text(encoding='utf-8')
+    audit_wrapper = (ROOT / 'scripts/audit-frontend-dependencies.ps1').read_text(encoding='utf-8')
+    assert "Invoke-Checked 'node' @('scripts/audit-dependencies.mjs')" in audit_wrapper and '& npm audit' not in audit_wrapper
+    matrix = (ROOT / 'scripts/test-template-matrix.ps1').read_text(encoding='utf-8')
+    assert all(command not in matrix for command in ('npm audit', 'audit-dependencies.mjs', 'audit-frontend-dependencies.ps1'))
     scheduled = yaml.safe_load((ROOT / '.github/workflows/scheduled-checks.yml').read_text(encoding='utf-8'))
     # PyYAML reads the "on" key as True.
     assert set(scheduled[True]) == {'schedule', 'workflow_dispatch'} and scheduled['permissions'] == {'contents': 'read'}, scheduled[True]

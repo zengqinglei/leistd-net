@@ -85,7 +85,7 @@ verify:
 #if (SpaFrontend)
 
 # 前端生产依赖审计：不在 scripts/verify.ps1 里，只在锁文件变化、定时（需在项目里建 Schedule）和手动时运行。
-# 门槛是生产依赖无 high/critical；审计查询走网络，失败时有限重试（退出码分不出网络错误与漏洞，真有漏洞时重试照样失败）。
+# 有修复版本的 high/critical 阻断，暂无修复版本的输出警告。
 frontend-audit:
   stage: verify
   image: node:24
@@ -97,12 +97,7 @@ frontend-audit:
         - frontend/package-lock.json
   script:
     - cd frontend
-    - |
-      for attempt in 1 2 3; do
-        npm audit --omit=dev --audit-level=high --package-lock-only && exit 0
-        if [ "$attempt" -lt 3 ]; then sleep $((5 * attempt)); fi
-      done
-      exit 1
+    - node scripts/audit-dependencies.mjs
 #endif
 
 # 后端 NuGet 依赖审计：构建里公告只告警（backend/Directory.Build.props），这里按 high/critical 把关。

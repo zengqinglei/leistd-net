@@ -2,14 +2,14 @@
 
 <#
 .SYNOPSIS
-审计模板前端的生产依赖：两套锁文件（默认与本地化）各生成一次依赖最全的形态，各跑一次 npm audit。
+审计模板前端的生产依赖：用两套锁文件（默认与本地化）各生成一次依赖最全的形态并运行审计。
 
 .DESCRIPTION
 模板锁文件带条件指令，不是合法锁文件，只能审计生成后的结果。条件块只增加依赖（没有 #else/#elif），
 所以打开全部条件就得到最大依赖闭包：生成后先核对它的 packages 键集合等于模板锁文件去掉条件指令后的集合，
 不等说明出现了这里没打开的新条件，直接失败，不放过未审计的依赖块。
 
-门槛与生成项目 CI 同口径：生产依赖 high/critical 为 0。只对网络类错误重试，审计查出漏洞不重试。
+调用生成项目的审计脚本。有修复版本的 high/critical 阻断，暂无修复版本的输出警告。
 由 CI 的"前端依赖审计"作业与定时检查调用，也可本地单独运行：pwsh scripts/audit-frontend-dependencies.ps1
 #>
 [CmdletBinding()]
@@ -25,8 +25,6 @@ $variants = @(
     @{ Name = 'default'; Lock = 'template/frontend/package-lock.json'; Arguments = @() }
     @{ Name = 'localization'; Lock = 'template/.template.config/localization/frontend/package-lock.json'; Arguments = @('--include-localization') }
 )
-$networkError = 'ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|FETCH_ERROR|ERR_SOCKET_TIMEOUT|network timeout|audit endpoint returned an error'
-
 function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) { throw "命令失败（退出码 $LASTEXITCODE）：$Command $($Arguments -join ' ')" }
@@ -55,21 +53,10 @@ try {
             throw "$($variant.Lock) 有依赖块没进入审计形态（缺 $($missing.Count) 个包，如 $($missing | Select-Object -First 3)）：锁文件出现了新条件，在本脚本的生成参数里打开它。"
         }
 
-        for ($attempt = 1; ; $attempt++) {
-            Push-Location $frontend
-            try {
-                $result = & npm audit --omit=dev --audit-level=high --package-lock-only --fetch-timeout=60000 --fetch-retries=0 2>&1 | Out-String
-                $exitCode = $LASTEXITCODE
-            }
-            finally { Pop-Location }
-            Write-Host $result
-            if ($exitCode -eq 0) { break }
-            if ($attempt -ge 3 -or $result -notmatch $networkError) {
-                throw "$($variant.Name) 前端生产依赖审计失败（退出码 $exitCode）。"
-            }
-            Start-Sleep -Seconds (5 * $attempt)
-        }
-        Write-Host "✅ $($variant.Name)：生产依赖无 high/critical 公告（$($actual.Count) 个包，覆盖 $($variant.Lock) 全部依赖块）。"
+        Write-Host "审计 $($variant.Name)（$($actual.Count) 个包，覆盖 $($variant.Lock) 全部依赖块）。"
+        Push-Location $frontend
+        try { Invoke-Checked 'node' @('scripts/audit-dependencies.mjs') }
+        finally { Pop-Location }
     }
 }
 finally {

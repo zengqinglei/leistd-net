@@ -28,7 +28,7 @@
 `pwsh scripts/verify.ps1 -Fast` 是本地快速检查：只跑随包静态检查、后端还原、构建与风格检查和单元测试，不跑集成测试，不需要 Docker；`-List` 列出两种模式的步骤。
 <!--#if (SpaFrontend)-->
 `-Fast` 的前端只跑 lint，不做依赖安装、单测、构建与端到端，须已安装依赖（缺失时先在 `frontend/` 执行 `npm ci`）。
-生产依赖审计不在 `verify` 内（CI 的 `verify` 作业在锁文件变化、定时、手动时另跑一步）；改前端依赖后在 `frontend/` 运行 `npm audit --omit=dev --audit-level=high --package-lock-only`。
+CI 在锁文件变化、定时和手动运行时单独审计前端生产依赖。改前端依赖后在 `frontend/` 运行 `node scripts/audit-dependencies.mjs`。有修复版本的 high/critical 公告会阻断，暂无修复版本的公告会输出警告。
 <!--#endif-->
 后端 NuGet 公告在构建里只告警，审计不在 `verify` 内：CI 在包版本或项目文件变化、定时、手动时运行 `pwsh scripts/audit-backend-dependencies.ps1`，门槛是 high/critical 为 0；改后端依赖后本地同样运行它。
 
