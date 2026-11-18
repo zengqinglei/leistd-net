@@ -130,7 +130,7 @@ Resource 已注册用户访问令牌适配器。
 浏览器会话要求前端与本服务 API 同源，见 [浏览器认证](auth.md#浏览器认证)。
 <!--#endif-->
 
-交换 JWT 有效期 120 秒且不超过 subject exp；进程内 HybridCache 按官方客户端返回的到期时间提前 10 秒失效，键含完整 subject 摘要，不把 Bearer 写入 Redis。没有真实用户令牌时拒绝委托，不回退为机器身份。401 清除缓存，重试由业务层按幂等性决定。
+交换 JWT 有效期 120 秒且不超过 subject exp；进程内 `IMemoryCache` 按官方客户端返回的到期时间提前 10 秒失效，键含完整 subject 摘要，不把 Bearer 写入 Redis。没有真实用户令牌时拒绝委托，不回退为机器身份。401 清除缓存，重试由业务层按幂等性决定。
 <!--#if (IncludeMultiTenancy)-->
 
 独立库先由各服务 DbMigrator 预迁移，再登记租户命名连接；只登记 default 时，各服务在租户库内使用自己的 schema。机器令牌和路由均有缓存，撤销权限不会主动清空热缓存；冷实例取被撤销范围时返回 502，异常保留真实 HTTP 状态与 OAuth 错误。

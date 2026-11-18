@@ -19,7 +19,7 @@ public static class DependencyInjection
     /// 解析、缓存与单飞另由 <c>AddRemoteTenantConnectionResolution()</c> 注册。</para>
     /// <para>同一客户端兼作 <see cref="ITenantDatabaseDirectory"/>：按连接名与 <c>activeOnly</c> 在进程内缓存
     /// <c>DatabaseDirectoryCacheLifetime</c>（默认 30 秒，大于 0、不超过 1 小时，越界启动失败），同键并发回源合并；不可达时按 <c>TenantRouteCacheOptions.MaxStaleness</c> 回落最后确认值并以 30 秒节流，明确拒绝作废旧值；
-    /// 为此注册 <c>HybridCache</c>（只用进程内一级）。</para>
+    /// 为此注册 <c>IMemoryCache</c>。</para>
     /// <para>先绑定 <paramref name="configSectionPath"/>（默认 <c>Leistd:ServiceClients:{serviceName}</c>），再应用
     /// <paramref name="configure"/>；<c>BaseAddress</c> 缺失或不是绝对地址时启动失败并报出实际键名。</para>
     /// <para>返回的构建器上由宿主决定鉴权方式（如 client credentials）与弹性策略；控制面按名字下发已解密的连接串，
@@ -84,8 +84,8 @@ public static class DependencyInjection
             new RemoteTenantConnectionClientOptionsValidator(registration.ConfigSectionPath));
 
         // 同一个客户端也服务逐库作业的库目录，不另建认证与 HTTP 管道；外面套一层短时缓存，秒级轮询不必每轮回源。
-        // 官方 HybridCache 以 TryAdd 注册，宿主自己的 AddHybridCache 配置照常生效
-        services.AddHybridCache();
+        services.AddMemoryCache();
+        services.TryAddSingleton<TenantRouteCache>();
         services.TryAddTransient<ITenantDatabaseDirectory, CachedTenantDatabaseDirectory>();
 
         return builder;

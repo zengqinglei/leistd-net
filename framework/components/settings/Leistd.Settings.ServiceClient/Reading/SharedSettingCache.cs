@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Leistd.Settings.ServiceClient.Reading;
 
-// 按（提供方，租户）缓存整份共享值。结构与多租户的 TenantRouteCache 相同：HybridCache 只用进程内一级、负责同键单飞；
+// 按（提供方，租户）缓存整份共享值。各节点用本地记录的 ETag 向提供方重验证，因此关闭 HybridCache 二级缓存。
 // 有旧值时单次回源最多等 1 秒，超时或暂不可达先用旧值并节流 30 秒，每个节流周期一条 Warning。
-// 与它不同的两点：回源带上一次的 ETag；没有可用旧值或明确失败时不抛出，交回 null，由读取器按每项兜底值返回。
+// 没有可用旧值或明确失败时交回 null，由读取器按每项兜底值返回。
 // 单例：回源用根容器解析客户端，可能在调用方的请求结束后继续，不能借用调用方作用域里的实例
 internal sealed class SharedSettingCache(HybridCache cache, TimeProvider clock, IServiceProvider services, ILogger<SharedSettingCache> logger)
 {

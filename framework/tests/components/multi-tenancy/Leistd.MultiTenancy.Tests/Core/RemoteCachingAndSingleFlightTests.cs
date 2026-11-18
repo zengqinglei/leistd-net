@@ -2,8 +2,8 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Exceptions;
 using Leistd.ServiceClient.Exceptions;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Internal;
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -104,9 +104,8 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
         Assert.Equal(1, _host.Source.RuntimeCalls);
     }
 
-    // 所有等待者都取消时回源随之取消（HybridCache 的语义），不留半截结果：下一次调用重新回源
     [Fact]
-    public async Task When_every_caller_cancels_the_next_call_resolves_again()
+    public async Task When_all_callers_cancel_the_next_caller_joins_the_same_resolution()
     {
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -117,9 +116,12 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
         await cts.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
 
-        _host.Source.Gate = null;
+        var next = _host.ResolveAsync();
+        Assert.False(next.IsCompleted);
+        _host.Source.Gate.SetResult();
+        Assert.Equal(RemoteHost.DefaultConnection, await next.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(RemoteHost.DefaultConnection, await _host.ResolveAsync());
-        Assert.Equal(2, _host.Source.RuntimeCalls);
+        Assert.Equal(1, _host.Source.RuntimeCalls);
     }
 
     // 回源失败不缓存：控制面短暂不可用恢复后，下一次调用就能拿到路由，而不是等缓存过期
@@ -145,21 +147,21 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
     {
         var distributed = new RecordingDistributedCache();
         using var host = new RemoteHost(configure: services =>
-            services.AddSingleton<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(distributed));
+            services.AddSingleton<IDistributedCache>(distributed));
         var tenantId = Guid.NewGuid();
         host.Tenant.Id = tenantId;
         host.Source.Lookup = (id, name) => ScriptedRemoteSource.Hit(id, name, "Host=tenant;Password=secret");
 
         Assert.Equal("Host=tenant;Password=secret", await host.ResolveAsync());
+        Assert.Equal(0, distributed.Writes);
         Assert.Equal("Host=tenant;Password=secret", await host.ResolveAsync());
 
         Assert.Equal(1, host.Source.RuntimeCalls);
-        Assert.Equal(0, distributed.Writes);
         Assert.Equal(0, distributed.Reads);
     }
 
     /// <summary>只记连接路由的键：HybridCache 构造时会读自己的标签失效标记，那不是本组件的读写。</summary>
-    private sealed class RecordingDistributedCache : Microsoft.Extensions.Caching.Distributed.IDistributedCache
+    private sealed class RecordingDistributedCache : IDistributedCache
     {
         public int Reads;
         public int Writes;
@@ -168,12 +170,36 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
 
         public byte[]? Get(string key) { if (IsRoute(key)) Interlocked.Increment(ref Reads); return null; }
         public Task<byte[]?> GetAsync(string key, CancellationToken token = default) { if (IsRoute(key)) Interlocked.Increment(ref Reads); return Task.FromResult<byte[]?>(null); }
-        public void Set(string key, byte[] value, Microsoft.Extensions.Caching.Distributed.DistributedCacheEntryOptions options) { if (IsRoute(key)) Interlocked.Increment(ref Writes); }
-        public Task SetAsync(string key, byte[] value, Microsoft.Extensions.Caching.Distributed.DistributedCacheEntryOptions options, CancellationToken token = default) { if (IsRoute(key)) Interlocked.Increment(ref Writes); return Task.CompletedTask; }
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) { if (IsRoute(key)) Interlocked.Increment(ref Writes); }
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default) { if (IsRoute(key)) Interlocked.Increment(ref Writes); return Task.CompletedTask; }
         public void Refresh(string key) { }
         public Task RefreshAsync(string key, CancellationToken token = default) => Task.CompletedTask;
         public void Remove(string key) { }
         public Task RemoveAsync(string key, CancellationToken token = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_route_expires_from_memory_at_its_hard_deadline()
+    {
+        var clock = new FakeTimeProvider();
+        using var host = new RemoteHost(cacheLifetime: "00:00:30", configure: services =>
+        {
+            services.AddSingleton<TimeProvider>(clock);
+            services.Configure<TenantRouteCacheOptions>(options => options.MaxStaleness = TimeSpan.FromSeconds(10));
+            services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
+        });
+        var tenantId = Guid.NewGuid();
+        host.Tenant.Id = tenantId;
+        await host.ResolveAsync();
+
+        var memory = host.Provider.GetRequiredService<IMemoryCache>();
+        var key = $"leistd:tenant-connection:{tenantId:N}:default";
+        clock.Advance(TimeSpan.FromSeconds(39));
+        Assert.True(memory.TryGetValue(key, out _));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.False(memory.TryGetValue(key, out _));
+        Assert.Equal(RemoteHost.DefaultConnection, await host.ResolveAsync());
+        Assert.Equal(2, host.Source.RuntimeCalls);
     }
 
     [Fact]
@@ -207,16 +233,16 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
         var clock = new BudgetClock();
         var services = new ServiceCollection().AddLogging();
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
-        services.AddHybridCache();
+        services.AddMemoryCache();
         await using var provider = services.BuildServiceProvider();
         var logger = new FakeLogger();
-        var cache = new TenantRouteCache(provider.GetRequiredService<HybridCache>(), clock, logger);
+        var cache = new TenantRouteCache(provider.GetRequiredService<IMemoryCache>(), clock);
         var calls = 0;
         var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         ValueTask<string> Fetch(CancellationToken ct) => ++calls == 1
             ? ValueTask.FromResult("old-route") : new(release.Task.WaitAsync(ct));
         ValueTask<string> Read() => cache.GetAsync("route", TimeSpan.FromSeconds(30), TimeSpan.FromHours(1),
-            Fetch, static _ => true, default);
+            Fetch, static _ => true, default, logger);
         Assert.Equal("old-route", await Read());
         clock.Advance(TimeSpan.FromSeconds(30));
         var readers = Enumerable.Range(0, 3).Select(_ => Read().AsTask()).ToArray();
@@ -231,13 +257,12 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
             Assert.Equal("old-route", await Read());
             Assert.Equal(2, calls);
             Assert.Single(logger.Collector.GetSnapshot(), record => record.Level == LogLevel.Warning);
-            var completion = provider.GetRequiredService<HybridCache>().GetOrCreateAsync<string>("route:fetch",
-                static _ => throw new InvalidOperationException("The original fetch must still be running."),
-                new HybridCacheEntryOptions { Flags = HybridCacheEntryFlags.DisableDistributedCache | HybridCacheEntryFlags.DisableLocalCacheWrite }).AsTask();
-            clock.Advance(TimeSpan.FromSeconds(10));
+            clock.Advance(TimeSpan.FromSeconds(30));
+            var completion = Read().AsTask();
             release.SetException(new HttpRequestException("unavailable"));
             Assert.Equal("old-route", await completion);
-            Assert.Single(logger.Collector.GetSnapshot(), record => record.Level == LogLevel.Warning);
+            Assert.Equal(2, calls);
+            Assert.Equal(2, logger.Collector.GetSnapshot().Count(record => record.Level == LogLevel.Warning));
             Assert.Equal("old-route", await Read());
         }
         finally
@@ -258,10 +283,10 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
         var clock = new BudgetClock();
         var services = new ServiceCollection().AddLogging();
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
-        services.AddHybridCache();
+        services.AddMemoryCache();
         await using var provider = services.BuildServiceProvider();
-        var hybrid = provider.GetRequiredService<HybridCache>();
-        var cache = new TenantRouteCache(hybrid, clock, new FakeLogger());
+        var cache = new TenantRouteCache(provider.GetRequiredService<IMemoryCache>(), clock);
+        var logger = new FakeLogger();
         var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
@@ -273,7 +298,7 @@ public sealed class RemoteCachingAndSingleFlightTests : IDisposable
         }
         using var cancellation = new CancellationTokenSource();
         Task<string> Read(CancellationToken ct = default) => cache.GetAsync("boundary", TimeSpan.FromSeconds(30),
-            TimeSpan.FromSeconds(1), Fetch, static ex => ex is HttpRequestException, ct).AsTask();
+            TimeSpan.FromSeconds(1), Fetch, static ex => ex is HttpRequestException, ct, logger).AsTask();
         if (scenario != "cold")
         {
             await Read();

@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <!-- 远端库目录的短时缓存 -->
-    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 
   <ItemGroup>

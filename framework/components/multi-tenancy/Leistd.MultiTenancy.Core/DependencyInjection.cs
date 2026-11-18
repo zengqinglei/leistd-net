@@ -58,7 +58,7 @@ public static class DependencyInjection
     /// <see cref="InvalidOperationException"/>。</para>
     /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 包）：控制面经已认证的内部接口下发
     /// 已解密的连接串，本服务不需要控制面的密钥环。
-    /// 同时注册多租户核心服务（<see cref="AddMultiTenancyCore"/>）、<see cref="ITenantMigrationTargetProvider"/> 与 <c>HybridCache</c>（只用进程内一级，连接串不进分布式缓存）。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
+    /// 同时注册多租户核心服务（<see cref="AddMultiTenancyCore"/>）、<see cref="ITenantMigrationTargetProvider"/> 与 <c>IMemoryCache</c>（连接串留在本进程）。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
     /// <para>宿主自己持有控制库时改用 EF 包的 <c>AddLocalTenantConnectionResolution</c>，两者二选一。</para>
     /// </remarks>
     /// <example>
@@ -84,8 +84,8 @@ public static class DependencyInjection
 
         // 解析器按当前租户取连接；只做迁移等不经 Web 集成的宿主也要能单独使用本入口
         services.AddMultiTenancyCore();
-        // 回源结果的进程内缓存与并发合并；官方实现以 TryAdd 注册，宿主自己的 AddHybridCache 配置照常生效
-        services.AddHybridCache();
+        services.AddMemoryCache();
+        services.TryAddSingleton<TenantRouteCache>();
         services.AddOptions<TenantRouteCacheOptions>()
             .BindConfiguration(configSectionPath)
             .ValidateOnStart();

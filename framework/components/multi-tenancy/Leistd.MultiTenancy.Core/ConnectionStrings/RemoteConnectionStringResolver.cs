@@ -4,24 +4,21 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Exceptions;
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
-// 远端解析：按连接名回源控制面，结果按 TTL 缓存在本进程，同租户同名字的并发回源由 HybridCache 合并。
-// 只用进程内一级缓存（DisableDistributedCache）：含口令的连接串不进分布式缓存。
+// 含口令的连接串按租户和连接名留在本进程。
 // 远端存储不从构造注入而在工厂里自开作用域：工厂为所有等待者服务，不能持有发起者请求作用域里的实例。
-// 取消沿用 HybridCache：全部等待者都取消时回源才取消；明确拒绝作废旧值。
+// 调用方各自取消等待，共享回源由客户端时限约束。
 internal sealed class RemoteConnectionStringResolver(
     ICurrentTenant currentTenant,
     IConfiguration configuration,
-    HybridCache cache,
+    TenantRouteCache cache,
     IServiceScopeFactory scopeFactory,
     IOptions<TenantRouteCacheOptions> routeCacheOptions,
-    TimeProvider? clock = null,
     ILogger<RemoteConnectionStringResolver>? logger = null) : IConnectionStringResolver
 {
     public async Task<string> ResolveAsync(string connectionStringName, CancellationToken cancellationToken = default)
@@ -41,10 +38,10 @@ internal sealed class RemoteConnectionStringResolver(
 
         try
         {
-            return await new TenantRouteCache(cache, clock ?? TimeProvider.System, logger ?? NullLogger<RemoteConnectionStringResolver>.Instance)
-                .GetAsync($"leistd:tenant-connection:{tenantId:N}:{name}", lifetime, routeCacheOptions.Value.MaxStaleness,
+            return await cache.GetAsync($"leistd:tenant-connection:{tenantId:N}:{name}", lifetime, routeCacheOptions.Value.MaxStaleness,
                     ct => ResolveRemoteAsync(tenantId, connectionStringName, name, ct),
-                    static ex => ex is TenantConnectionUnavailableException, cancellationToken);
+                    static ex => ex is TenantConnectionUnavailableException, cancellationToken,
+                    logger ?? NullLogger<RemoteConnectionStringResolver>.Instance);
         }
         catch (TenantConnectionUnavailableException exception)
         {

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Infrastructure.Systems;
 
-/// <summary>目录按显示语言在本进程缓存一分钟；拒绝或故障降级为空，不影响登录会话。</summary>
+/// <summary>目录按显示语言缓存一分钟，部署注册 Redis 时多节点共享；拒绝或故障降级为空，不影响登录会话。</summary>
 public sealed class IdentitySystemDirectory(IIdentitySystemsApi api, HybridCache cache, ILogger<IdentitySystemDirectory> logger)
     : IIdentitySystemDirectory
 {
@@ -24,8 +24,7 @@ public sealed class IdentitySystemDirectory(IIdentitySystemsApi api, HybridCache
                     return (await response.ReadContentAsync<List<IdentitySystem>>(cancellationToken: token))!;
                 }, new HybridCacheEntryOptions
                 {
-                    Expiration = TimeSpan.FromMinutes(1), LocalCacheExpiration = TimeSpan.FromMinutes(1),
-                    Flags = HybridCacheEntryFlags.DisableDistributedCache
+                    Expiration = TimeSpan.FromMinutes(1), LocalCacheExpiration = TimeSpan.FromMinutes(1)
                 }, cancellationToken: cancellationToken);
         }
         catch (Exception exception) when (exception is RemoteServiceException or ServiceClientException)

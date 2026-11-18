@@ -38,7 +38,7 @@ public static class DependencyInjection
         if (configure is not null) options.Configure(configure);
         services.AddSingleton<IValidateOptions<ServiceAuthenticationOptions>>(new ServiceAuthenticationOptionsValidator(configSectionPath));
         options.ValidateOnStart();
-        services.AddHybridCache();
+        services.AddMemoryCache();
         services.AddOpenIddict().AddClient(client =>
         {
             client.AllowClientCredentialsFlow().AllowTokenExchangeFlow().DisableTokenStorage();

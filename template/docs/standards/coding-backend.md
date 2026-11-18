@@ -128,6 +128,10 @@ return new PagedResult<UserOutputDto>(totalCount, objectMapper.Map<List<User>, L
 
 部署期定死的配置（连接与签名凭据、协议参数）用 `IOptions<T>`，不在服务里读 `IConfiguration["键"]`。租户级、用户级与运行期可改的宿主级设置、设置定义与分组见 [设置规范](./settings.md)。
 
+### 3.11 缓存
+
+按数据性质选接口：可重算的查询结果用 `HybridCache`，是否用 Redis 由部署注册决定，不加 `DisableDistributedCache`；凭据、令牌等必须留在本进程的用 `IMemoryCache`；会话票据、挑战、验证码等多节点共享的短期状态用 `IDistributedCache`（`HybridCache` 的本机层不跨节点失效）。
+
 ## 4. 依赖注入
 
 **注册归属**：每层项目根的 `DependencyInjection.cs`（`AddApplicationServices`、`AddInfrastructureServices` 等）注册本层类型，可调用本层所需的组件注册入口；跨宿主共用的专用入口也可留项目根（如 `DataProtectionExtensions`）。Api 自有类型按关注点注册在 `Api/Auth`、`Api/Hosting` 的扩展方法里；`Program.cs` 只组合各层、组件与这些入口并配置管道。部署基线 Options 在声明它的层或组合根绑定，宿主定向配置留在组合根。

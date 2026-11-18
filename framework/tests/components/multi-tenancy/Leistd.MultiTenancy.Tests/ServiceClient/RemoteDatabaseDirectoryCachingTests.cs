@@ -5,8 +5,6 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.ServiceClient;
 using Leistd.MultiTenancy.ServiceClient.Options;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Caching.Hybrid;
-using Leistd.MultiTenancy.ServiceClient.Stores;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Internal;
@@ -159,7 +157,7 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
     }
 
     [Fact]
-    public async Task When_every_caller_cancels_the_next_listing_calls_again()
+    public async Task When_all_callers_cancel_the_next_caller_joins_the_same_listing()
     {
         _controlPlane.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
@@ -169,9 +167,11 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
         await cts.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
 
-        _controlPlane.Gate = null;
-        await ListAsync();
-        Assert.Equal(2, _controlPlane.Calls);
+        var next = ListAsync();
+        Assert.False(next.IsCompleted);
+        _controlPlane.Gate.SetResult();
+        Assert.Same(await next.WaitAsync(TimeSpan.FromSeconds(5)), await ListAsync());
+        Assert.Equal(1, _controlPlane.Calls);
     }
 
     // 控制面短暂不可用恢复后，下一轮就能拿到清单，而不是等一个期限
@@ -225,7 +225,6 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
             .AddLogging()
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
         services.AddRemoteTenantConnectionStore("Identity").ConfigurePrimaryHttpMessageHandler(() => _controlPlane);
-        // HybridCache 的一级缓存按 MemoryCache 的时钟判过期
         services.Configure<MemoryCacheOptions>(options => options.Clock = new FakeSystemClock(_clock));
         return services.BuildServiceProvider();
     }
@@ -265,13 +264,13 @@ public sealed class RemoteDatabaseDirectoryCachingTests : IDisposable
             Assert.Same(initial, await reader.WaitAsync(TimeSpan.FromSeconds(2)));
             Assert.Same(initial, await ListAsync());
             Assert.Equal(2, _controlPlane.Calls);
-            var completion = _provider.GetRequiredService<HybridCache>().GetOrCreateAsync<CachedTenantDatabaseDirectory.CachedListing>(
-                "leistd:tenant-databases:billing:active:fetch",
-                static _ => throw new InvalidOperationException("The original listing must still be running."),
-                new HybridCacheEntryOptions { Flags = HybridCacheEntryFlags.DisableDistributedCache | HybridCacheEntryFlags.DisableLocalCacheWrite }).AsTask();
+            _clock.Advance(TimeSpan.FromSeconds(30));
+            var completion = ListAsync();
             gate.SetResult();
             var refreshed = await completion;
-            Assert.Same(refreshed.Result, await ListAsync());
+            Assert.NotSame(initial, refreshed);
+            Assert.Same(refreshed, await ListAsync());
+            Assert.Equal(2, _controlPlane.Calls);
         }
         finally
         {
