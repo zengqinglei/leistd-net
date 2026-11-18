@@ -45,7 +45,7 @@ public sealed class ResourceSystemDirectoryTests(ProjectWebApplicationFactory fa
         {
             Assert.Empty(systems);
             Assert.Contains(host.Services.GetFakeLogCollector().GetSnapshot(), log =>
-                log.Level == LogLevel.Error && log.Message.Contains("system-directory.read", StringComparison.Ordinal));
+                log.Level == LogLevel.Error && log.Message.Contains("Identity API scope grant", StringComparison.Ordinal));
         }
     }
 

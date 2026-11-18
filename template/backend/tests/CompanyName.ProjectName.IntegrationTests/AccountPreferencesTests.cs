@@ -7,7 +7,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Application.Settings.Constants;
+using CompanyName.ProjectName.Application.Auth.Options;
 #endif
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
@@ -120,14 +120,14 @@ public sealed class AccountPreferencesTests(ProjectWebApplicationFactory factory
     }
 #if (OpenIddictServer)
 
-    /// <summary>资源服务按用户读取：只认带 <c>account-preferences.read</c> 的机器令牌，带强 ETag，未变时 304。</summary>
+    /// <summary>资源服务按用户读取：只认带 Identity 服务级 scope 的机器令牌，带强 ETag，未变时 304。</summary>
     [Fact]
     public async Task The_machine_endpoint_serves_preferences_with_an_etag_to_the_scoped_machine_only()
     {
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var user = await CreateUserAsync(admin.Client);
         var path = $"/api/v1/internal/account-preferences/host/{user.Id}";
-        using var machine = await CreateMachineClientAsync(Factory, admin.Client, AccountPreferenceScopes.Read);
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
 
         using var first = await machine.GetAsync(path);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
@@ -161,7 +161,7 @@ public sealed class AccountPreferencesTests(ProjectWebApplicationFactory factory
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var user = await CreateUserAsync(admin.Client);
         var path = $"/api/v1/internal/account-preferences/host/{user.Id}";
-        using var machine = await CreateMachineClientAsync(Factory, admin.Client, AccountPreferenceScopes.Read);
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
         using var first = await machine.GetAsync(path);
         var etag = first.Headers.ETag!.Tag;
 
@@ -182,7 +182,7 @@ public sealed class AccountPreferencesTests(ProjectWebApplicationFactory factory
     {
         using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var user = await CreateUserAsync(admin.Client);
-        using var machine = await CreateMachineClientAsync(Factory, admin.Client, AccountPreferenceScopes.Read);
+        using var machine = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
 
         Assert.Equal(HttpStatusCode.NotFound, (await machine.GetAsync($"/api/v1/internal/account-preferences/not-a-tenant/{user.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await machine.GetAsync($"/api/v1/internal/account-preferences/{Guid.CreateVersion7()}/{user.Id}")).StatusCode);
@@ -196,12 +196,12 @@ public sealed class AccountPreferencesTests(ProjectWebApplicationFactory factory
         var user = await CreateUserAsync(admin.Client);
         var path = $"/api/v1/internal/account-preferences/host/{user.Id}";
         using var anonymous = Factory.CreateProjectClient();
-        using var otherMachine = await CreateMachineClientAsync(Factory, admin.Client, new Application.Auth.Options.OAuthResourceOptions().Resource);
+        using var otherMachine = await CreateMachineClientAsync(Factory, admin.Client, "profile");
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
         // 管理员的浏览器会话不是机器主体
         Assert.Equal(HttpStatusCode.Unauthorized, (await admin.Client.GetAsync(path)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await otherMachine.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await otherMachine.GetAsync(path)).StatusCode);
     }
 
     /// <summary>授予 profile 时 userinfo 按 OIDC 标准给出生效的 <c>locale</c> 与 <c>zoneinfo</c>，供第三方依赖方使用。</summary>

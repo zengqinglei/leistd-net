@@ -150,6 +150,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         // 租户连接以机器身份向 Identity 回源：组合与生产一致（含工作负载身份），
         // 测试宿主里没有 Identity，回源存储换成下面的共享库替身，不会真的换令牌
         builder.UseSetting("Leistd:ServiceClients:Identity:BaseAddress", "https://identity.test/");
+        builder.UseSetting("Leistd:ServiceClients:Identity:Scope", "identity-api");
         builder.UseSetting("Leistd:ServiceAuth:Authority", "https://identity.test/");
         builder.UseSetting("Leistd:ServiceAuth:ClientId", "resource-test-worker");
         builder.UseSetting("Leistd:ServiceAuth:ClientSecret", "resource-test-worker-secret");

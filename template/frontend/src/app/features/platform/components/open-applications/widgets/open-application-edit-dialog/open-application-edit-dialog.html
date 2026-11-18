@@ -234,7 +234,7 @@
                 <hlm-separator class="flex-1" />
               </div>
 
-              @if (isServiceType()) {
+              @if (isServiceTemplate()) {
                 <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-4">
                   <div class="flex items-center gap-2">
                     <ng-icon name="lucideCircleCheck" class="text-success" />
@@ -242,49 +242,48 @@
                       t('openApp.service.autoConfigured')
                     }}</span>
                   </div>
-                  <div class="flex flex-wrap gap-2">
-                    @for (p of formModel().permissions; track p) {
-                      <span hlmBadge variant="secondary">{{ permissionLabels()[p] ?? p }}</span>
-                    }
-                  </div>
                   <p class="text-xs text-muted-foreground">
                     {{ t('openApp.service.description') }}
                   </p>
                 </div>
-              } @else {
-                <div hlmField>
-                  <label hlmFieldLabel for="application-permissions">{{
-                    t('openApp.field.permissions')
-                  }}</label>
-                  <hlm-select-multiple class="w-full" [formField]="applicationForm.permissions">
-                    <hlm-select-trigger buttonId="application-permissions" class="w-full">
-                      <hlm-select-placeholder>{{
-                        t('openApp.permissions.placeholder')
-                      }}</hlm-select-placeholder>
-                      <ng-template hlmSelectValues let-values>
-                        <hlm-select-values-content>
-                          {{ permissionLabels()[values[0]] ?? values[0] }}
-                          @if (values.length > 1) {
-                            (+{{ values.length - 1 }})
-                          }
-                        </hlm-select-values-content>
-                      </ng-template>
-                    </hlm-select-trigger>
-                    <hlm-select-content *hlmSelectPortal>
-                      <hlm-select-group>
-                        @for (option of permissionOptions(); track option.value) {
-                          <hlm-select-item [value]="option.value">
-                            <div class="flex w-full items-center justify-between gap-3">
-                              <span>{{ option.label }}</span>
-                              <span class="text-xs text-muted-foreground">{{ option.value }}</span>
-                            </div>
-                          </hlm-select-item>
+              }
+              <div hlmField>
+                <label hlmFieldLabel for="application-permissions">{{
+                  t('openApp.field.permissions')
+                }}</label>
+                <hlm-select-multiple class="w-full" [formField]="applicationForm.permissions">
+                  <hlm-select-trigger buttonId="application-permissions" class="w-full">
+                    <hlm-select-placeholder>{{
+                      t('openApp.permissions.placeholder')
+                    }}</hlm-select-placeholder>
+                    <ng-template hlmSelectValues let-values>
+                      <hlm-select-values-content>
+                        {{ permissionLabels()[values[0]] ?? values[0] }}
+                        @if (values.length > 1) {
+                          (+{{ values.length - 1 }})
                         }
-                      </hlm-select-group>
-                    </hlm-select-content>
-                  </hlm-select-multiple>
-                </div>
+                      </hlm-select-values-content>
+                    </ng-template>
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    <hlm-select-group>
+                      @for (option of availablePermissions(); track option.value) {
+                        <hlm-select-item
+                          [value]="option.value"
+                          [disabled]="isServiceTemplate() && !option.value.startsWith('scp:')"
+                        >
+                          <div class="flex w-full items-center justify-between gap-3">
+                            <span>{{ option.label }}</span>
+                            <span class="text-xs text-muted-foreground">{{ option.value }}</span>
+                          </div>
+                        </hlm-select-item>
+                      }
+                    </hlm-select-group>
+                  </hlm-select-content>
+                </hlm-select-multiple>
+              </div>
 
+              @if (!isServiceType()) {
                 <div hlmField>
                   <label hlmFieldLabel for="application-requirements">{{
                     t('openApp.field.requirements')

@@ -16,7 +16,7 @@ internal sealed class IdentityAdministrator(
         using var response = await api.GetAsync(tenantId?.ToString() ?? "host", userId, cancellationToken);
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            logger.LogError("Identity refused the built-in administrator lookup with HTTP {StatusCode}. Check the administrators.read scope on the Resource machine client.",
+            logger.LogError("Identity refused the built-in administrator lookup with HTTP {StatusCode}. Check the Identity API scope grant on the Resource machine client.",
                 (int)response.StatusCode);
             return false;
         }

@@ -69,6 +69,8 @@ interface OpenApplicationEditFormModel {
   sessionBound: boolean | null;
 }
 
+const serviceTemplatePermissions = ['ept:token', 'gt:client_credentials'];
+
 const authorizationCodePermissions = [
   'ept:authorization',
   'ept:end_session',
@@ -155,6 +157,9 @@ export class OpenApplicationEditDialog {
   isTemplateLocked = computed(() => !!this.selectedTemplate() && !this.isEditMode());
   isConfidentialClient = computed(() => this.formModel().clientType === 'confidential');
   isServiceType = computed(() => this.formModel().applicationType === 'service');
+  readonly isServiceTemplate = computed(
+    () => this.isTemplateLocked() && this.selectedTemplate() === 'service',
+  );
 
   readonly applicationForm = form(this.formModel, (path) => {
     required(path.clientId, { when: () => !this.isEditMode() });
@@ -380,6 +385,30 @@ export class OpenApplicationEditDialog {
   }));
   //#endif
 
+  readonly availablePermissions = computed(() => {
+    const options = this.permissionOptions();
+    if (this.isServiceTemplate()) {
+      return options.filter(
+        (option) =>
+          option.value.startsWith('scp:') || serviceTemplatePermissions.includes(option.value),
+      );
+    }
+
+    // 目录已移除的 scope 仍可能出现在存量应用中。只有仍被选中的旧 scope 才能出现在编辑列表里。
+    const retiredScopes = this.formModel().permissions.filter(
+      (permission) =>
+        permission.startsWith('scp:') && !options.some((option) => option.value === permission),
+    );
+    return [
+      ...options,
+      ...retiredScopes.map((value) => ({
+        label: value.slice('scp:'.length),
+        value,
+        group: 'Scopes',
+      })),
+    ];
+  });
+
   /**
    * Select 触发器上的文本：不传 `itemToString` 会显示原始值（如 `native`）。写成箭头函数属性，
    * 传给 input 的引用须稳定。
@@ -478,7 +507,7 @@ export class OpenApplicationEditDialog {
         clientType: 'confidential',
         redirectUris: [],
         postLogoutRedirectUris: [],
-        permissions: ['ept:token', 'gt:client_credentials'],
+        permissions: [...serviceTemplatePermissions],
         requirements: [],
         sessionBound: false,
       }));

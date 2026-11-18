@@ -87,13 +87,12 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
   },
 ];
 
-/** 服务端 scope 目录：OIDC 标准 scope、本服务 API、仅限机器的内部 scope。 */
+/** 服务端 scope 目录：OIDC 标准 scope 与本服务的 API scope。 */
 export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
   { name: 'openid', displayName: 'OpenID', machineOnly: false },
   { name: 'profile', displayName: 'Profile', machineOnly: false },
   { name: 'email', displayName: 'Email', machineOnly: false },
   { name: 'roles', displayName: 'Roles', machineOnly: false },
-  { name: 'system-directory.read', displayName: 'Read system directory', machineOnly: true },
   { name: 'offline_access', displayName: 'Offline access', machineOnly: false },
   {
     name: 'companyname-projectname-api',
@@ -101,16 +100,4 @@ export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
     machineOnly: false,
     audience: 'companyname-projectname-api',
   },
-  //#if (IncludeMultiTenancy)
-  {
-    name: 'tenant-routing.read',
-    displayName: 'Read tenant connection routing metadata',
-    machineOnly: true,
-  },
-  {
-    name: 'tenant-migration.read',
-    displayName: 'Read tenant connection migration metadata',
-    machineOnly: true,
-  },
-  //#endif
 ];

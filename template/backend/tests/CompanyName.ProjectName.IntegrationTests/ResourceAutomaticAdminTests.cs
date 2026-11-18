@@ -180,7 +180,7 @@ public sealed class ResourceAutomaticAdminTests(ProjectWebApplicationFactory fac
         Assert.Equal(subject, me.GetProperty("id").GetGuid());
         Assert.Empty(me.GetProperty("roles").EnumerateArray());
         Assert.Contains(host.Services.GetFakeLogCollector().GetSnapshot(), entry =>
-            entry.Level == LogLevel.Error && entry.Message.Contains("administrators.read", StringComparison.Ordinal));
+            entry.Level == LogLevel.Error && entry.Message.Contains("Identity API scope grant", StringComparison.Ordinal));
     }
 
     [Fact]

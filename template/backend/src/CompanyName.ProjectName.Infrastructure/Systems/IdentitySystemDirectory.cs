@@ -29,7 +29,7 @@ public sealed class IdentitySystemDirectory(IIdentitySystemsApi api, HybridCache
         }
         catch (Exception exception) when (exception is RemoteServiceException or ServiceClientException)
         {
-            logger.LogError(exception, "Reading the system directory from Identity failed; verify the system-directory.read grant");
+            logger.LogError(exception, "Reading the system directory from Identity failed; verify the Identity API scope grant");
             return [];
         }
     }

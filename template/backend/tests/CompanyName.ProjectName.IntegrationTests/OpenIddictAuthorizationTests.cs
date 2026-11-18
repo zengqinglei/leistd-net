@@ -51,73 +51,13 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-
-    /// <summary>内部控制面 scope 的四条组合约束，创建与更新同一套判据</summary>
-    /// <remarks>
-    /// <para>钉的是<b>写入端</b>："哪些组合存得进去"。四条约束各给一个反例，外加两个必须通过的
-    /// 正例——只有反例时，一条过严的断言（比如顺手要求 <c>applicationType=service</c>）
-    /// 同样无人发现。</para>
-    /// <para>创建入口跑完整组合；更新入口只用一个非法组合确认它走的是同一个
-    /// <c>ValidateApplication</c>、没有绕过校验——两端复制整套矩阵只会多出一份要同步的清单。</para>
-    /// </remarks>
-#if (IncludeMultiTenancy)
-    [Theory]
-    [InlineData("public", new[] { "ept:token", "gt:client_credentials", "scp:tenant-routing.read" }, false)]
-    [InlineData("confidential", new[] { "ept:token", "scp:tenant-routing.read" }, false)]
-    [InlineData("confidential", new[] { "gt:client_credentials", "scp:tenant-routing.read" }, false)]
-    [InlineData("confidential", new[] { "ept:token", "gt:client_credentials", "gt:refresh_token", "scp:tenant-routing.read" }, false)]
-    [InlineData("confidential", new[] { "ept:token", "gt:client_credentials", "scp:tenant-migration.read" }, true)]
-    // 未申请机器专用 scope 的普通客户端不受这套约束：缺 client_credentials 也照样存得进去
-    [InlineData("confidential", new[] { "ept:token", "scp:openid" }, true)]
-    public async Task Machine_only_scopes_are_accepted_only_in_a_usable_combination(
-        string clientType, string[] permissions, bool expectedAccepted)
-    {
-        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-
-        var created = await superAdmin.Client.PostAsJsonAsync(
-            "/api/v1/open-applications",
-            NewApplicationPayload($"machine-{Guid.CreateVersion7():N}", clientType, permissions));
-
-        Assert.Equal(
-            expectedAccepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest,
-            created.StatusCode);
-
-        if (!expectedAccepted)
-        {
-            return;
-        }
-
-        // 同一判据必须同样挡住更新：先建一个合法的，再改成非法组合
-        var application = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
-        Assert.NotNull(application);
-
-        var updated = await superAdmin.Client.PutAsJsonAsync(
-            $"/api/v1/open-applications/{application.Id}",
-            new
-            {
-                sessionBound = false,
-                displayName = "Probe",
-                applicationType = "service",
-                clientType = "confidential",
-                // 缺 ept:token：与创建时同样必须被拒
-                permissions = new[] { "gt:client_credentials", "scp:tenant-routing.read" },
-                requirements = Array.Empty<string>(),
-                redirectUris = Array.Empty<string>(),
-                postLogoutRedirectUris = Array.Empty<string>()
-            });
-
-        Assert.Equal(HttpStatusCode.BadRequest, updated.StatusCode);
-    }
-
-    /// <summary>没登记路由 scope 的机器客户端申请不到路由令牌；Resource 因此取不到租户连接，按远端失败返回 502。</summary>
-    /// <remarks>远端失败映射成 502 见 <c>ApiExceptionMappingsTests</c>。</remarks>
     [Fact]
-    public async Task A_client_without_the_routing_scope_permission_gets_no_routing_token()
+    public async Task A_client_without_the_identity_service_scope_permission_cannot_request_it()
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var clientId = $"machine-{Guid.CreateVersion7():N}";
         using var created = await superAdmin.Client.PostAsJsonAsync("/api/v1/open-applications",
-            NewApplicationPayload(clientId, "confidential", ["ept:token", "gt:client_credentials", "scp:tenant-migration.read"]));
+            NewApplicationPayload(clientId, ["ept:token", "gt:client_credentials", "scp:profile"]));
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         var application = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
         using var reset = await superAdmin.Client.PostAsync($"/api/v1/open-applications/{application!.Id}/reset-secret", null);
@@ -129,26 +69,24 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             {
                 ["grant_type"] = "client_credentials", ["client_id"] = clientId, ["client_secret"] = secret, ["scope"] = scope
             }));
-        using var granted = await RequestAsync("tenant-migration.read");
+        using var granted = await RequestAsync("profile");
         Assert.True(granted.IsSuccessStatusCode, await granted.Content.ReadAsStringAsync());
         var token = await granted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.InRange(token.GetProperty("expires_in").GetInt32(), 7199, 7200);
-        using var denied = await RequestAsync("tenant-routing.read");
+        using var denied = await RequestAsync(ApiScope);
         Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
         // ID2051：客户端无权使用该 scope（Resource 日志里看到的就是这条）
         Assert.Contains("ID2051", await denied.Content.ReadAsStringAsync());
     }
-#endif
 
-
-    private static object NewApplicationPayload(string clientId, string clientType, string[] permissions) =>
+    private static object NewApplicationPayload(string clientId, string[] permissions) =>
         new
         {
             sessionBound = false,
             clientId,
             displayName = "Probe",
             applicationType = "service",
-            clientType,
+            clientType = "confidential",
             permissions,
             requirements = Array.Empty<string>(),
             redirectUris = Array.Empty<string>(),

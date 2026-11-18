@@ -6,8 +6,7 @@ namespace CompanyName.ProjectName.Application.Shared;
 /// <c>SignInAsync</c> / <c>SignOutAsync</c>、以及应用层构造会话主体时的
 /// <c>ClaimsIdentity</c> 认证类型。三处必须完全一致——改错一处的表现是
 /// "登录成功但后续请求全是匿名"，没有任何编译期信号。</para>
-/// <para>常量放在应用层而不是 Api 层：应用层构造主体时需要它，而应用层不能引用 Api。
-/// 与 <c>TenantConnectionScopes</c> 同型。</para>
+/// <para>常量放在应用层而不是 Api 层：应用层构造主体时需要它，而应用层不能引用 Api。</para>
 /// <para>登录第二步完成前的临时 Cookie 用官方方案名 <c>IdentityConstants.TwoFactorUserIdScheme</c>，不在这里另起：
 /// 它只在 Api 里签入与认证（<c>PendingSignInCookie.Scheme</c>），应用层不构造它的主体，也不引用 ASP.NET Core。</para>
 /// <para>刻意不叫 <c>AuthenticationSchemes</c>：那个名字与 <c>System.Net.AuthenticationSchemes</c>

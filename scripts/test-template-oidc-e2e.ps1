@@ -65,7 +65,7 @@ $hostToken = $null
 $sharedToken = $null
 $sharedSession = $null
 $admin = $null
-$machine = $null
+$identityMachine = $null
 $sharedTenant = $null
 $dedicatedTenant = $null
 $redirect = $null
@@ -700,8 +700,8 @@ function Initialize-Environment {
             $environment.Authentication__Issuer = $issuer
             $environment.Authentication__Audience = "$name-api"
             $environment.Leistd__ServiceClients__Identity__BaseAddress = $urls.idp
-            # 机器身份读取租户路由、内置管理员资格与账户偏好；代表本人写偏好经 Token Exchange 换取令牌
-            $environment.Leistd__ServiceClients__Identity__Scope = "tenant-routing.read account-preferences.read system-directory.read administrators.read"
+            # 机器回源与代表本人写偏好使用相同的 Identity 服务级 scope。
+            $environment.Leistd__ServiceClients__Identity__Scope = "e2e-idp-api"
             $environment.Leistd__ServiceClients__Identity__TokenExchange__Audience = "e2e-idp-api"
             $environment.Leistd__ServiceClients__Identity__TokenExchange__Scope = "e2e-idp-api"
             $environment.Leistd__ServiceAuth__Authority = $urls.idp
@@ -748,8 +748,8 @@ function Initialize-Environment {
     New-Application "orders-web" @("openid", "profile", "email", "roles", "orders-api") -Public | Out-Null
     New-Application "billing-web" @("openid", "profile", "email", "roles", "billing-api") -Public | Out-Null
     New-Application "idp-web" @("openid", "profile", "email", "roles", "e2e-idp-api") -Public | Out-Null
-    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read", "system-directory.read", "administrators.read") -Exchange
-    $script:machine = New-Application "orders-machine" @("orders-api", "billing-api", "tenant-routing.read")
+    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api") -Exchange
+    $script:identityMachine = New-Application "orders-machine" @("e2e-idp-api")
     $script:plainClient = New-Application "orders-only" @("orders-api")
     $script:noDelegateClient = New-Application "no-delegate" @("orders-api", "billing-api")
     foreach ($name in @("orders", "billing")) {
@@ -893,8 +893,22 @@ function Test-S2 {
     $claims = Read-TokenClaims $hostToken
     $identitySystems = (Assert-Http "identity-system-directory" 200 ($urls.idp + "/api/v1/systems") -Session $admin).Data
     Assert-Value "identity-is-first-system" "identity" $identitySystems[0].key
-    $directoryToken = Get-MachineToken $exchangeClient "system-directory.read"
-    Assert-Http "system-directory-machine-scope" 200 ($urls.idp + "/api/v1/systems") -Token $directoryToken | Out-Null
+    $identityScope = $services.orders.Environment.Leistd__ServiceClients__Identity__Scope
+    $machineToken = Get-MachineToken $identityMachine $identityScope
+    $machineClaims = Read-TokenClaims $machineToken
+    Assert-Value "identity-machine-only-service-scope" $identityScope $machineClaims.scope
+    $identityPaths = @{
+        "system-directory" = "/api/v1/systems"
+        "tenant-runtime" = "/api/v1/tenant-connections/databases?name=Default&activeOnly=true"
+        "tenant-migration" = "/api/v1/tenant-connections/migration?name=Default"
+        "account-preferences" = "/api/v1/internal/account-preferences/host/$($claims.sub)"
+        "administrator" = "/api/v1/internal/administrators/host/$($claims.sub)"
+    }
+    foreach ($entry in $identityPaths.GetEnumerator()) {
+        Assert-Http "identity-machine-$($entry.Key)" 200 ($urls.idp + $entry.Value) -Token $machineToken | Out-Null
+    }
+    $exchanged = Exchange-Token $hostToken @{ audience = $identityScope; scope = $identityScope }
+    Assert-Http "identity-machine-refuses-exchanged-user" 403 ($urls.idp + $identityPaths.administrator) -Token $exchanged | Out-Null
     foreach ($name in @("orders", "billing")) {
         $systems = (Assert-Http "resource-system-directory-$name" 200 ($urls[$name] + "/api/v1/systems") -Token (Get-ServiceToken $hostToken $name)).Data
         Assert-Value "resource-identity-first-$name" "identity" $systems[0].key
@@ -1161,14 +1175,12 @@ function Test-S12 {
             "orders-tenant-admin-$($tenant.name)" -Variables $services.orders.Environment | Out-Null
     }
     Assert-Http "delete-tenant-$($doomed.name)" 204 ($urls.idp + "/api/v1/tenants/$($doomed.id)") -Method DELETE -Session $admin | Out-Null
-    # scope 取自生成项目的部署配置，部署配置退回旧值时本场景随之失败；开发配置须与之一致
     $compose = Get-Content -LiteralPath (Join-Path $services.orders.Root "deploy/docker-compose.yml") -Raw
     $section = [regex]::Match($compose, '(?ms)^  db-migrator:.*?(?=^  \S)').Value
-    $scope = [regex]::Match($section, 'Leistd__ServiceClients__Identity__Scope=(.+)').Groups[1].Value.Trim()
-    $development = Get-Content -LiteralPath (Join-Path $services.orders.Root "backend/src/E2E.Orders.DbMigrator/appsettings.Development.json") -Raw
-    $developmentScope = [regex]::Match($development, '"Scope":\s*"([^"]+)"').Groups[1].Value
-    Assert-Value "migrator-scope-dev-matches-deploy" (@($scope.Split(" ") | Sort-Object) -join " ") (@($developmentScope.Split(" ") | Sort-Object) -join " ")
-    $migrator = New-Application "orders-migrator" $scope.Split(" ")
+    $composeScope = [regex]::Match($section, 'Leistd__ServiceClients__Identity__Scope=(.+)').Groups[1].Value.Trim()
+    Assert-Value "migrator-deploy-scope-variable" '${IDENTITY_API_RESOURCE:?IDENTITY_API_RESOURCE is required for a Resource service}' $composeScope
+    $scope = $services.orders.Environment.Leistd__ServiceClients__Identity__Scope
+    $migrator = New-Application "orders-migrator" @($scope)
     $environment = $services.orders.Environment.Clone()
     $environment.Leistd__ServiceAuth__ClientId = $migrator.clientId
     $environment.Leistd__ServiceAuth__ClientSecret = $migrator.clientSecret

@@ -70,16 +70,18 @@ dotnet user-secrets set "Authentication:ClientSecret" "<机密客户端密钥>" 
 ```
 <!--#endif-->
 
+在 Identity 用「服务端机密客户端」模板登记 Resource 的机器客户端，授予 Identity 服务级 scope（`OAuth:Resource` 的值），即可调用 Identity 的机器接口。开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 指向 `http://localhost:4200/`，联调其他 Identity 时一并覆盖。
 <!--#if (IncludeMultiTenancy)-->
-租户路由、迁移作业、账户偏好、内置管理员资格与系统目录的读取以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）、`account-preferences.read`（按用户读偏好）、`system-directory.read`（系统入口目录）、`administrators.read`（首次引导管理员）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户；它补齐租户 Admin 时按正式路由进入租户，因此同时要 `tenant-routing.read`），把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有这些 scope，部署环境按 `../deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity。
-<!--#else-->
-账户偏好、内置管理员资格与系统目录的读取以机器身份回源 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `account-preferences.read`、`system-directory.read` 与 `administrators.read`，把凭据写进 user-secrets。
+
+本机的 Api 与 DbMigrator 共用 user-secrets。先启动 Identity，再运行 DbMigrator，迁移作业会用同一个 scope 枚举独立库租户并按正式路由补齐租户 Admin。部署时可为 Api 与 DbMigrator 分别登记机器客户端。
 <!--#endif-->
-本人改偏好时代表用户经 Token Exchange 转交 Identity：同一个客户端还要启用 Token Exchange，`aud`、`scp` 授予 Identity 自身 API 的标识（它的 `OAuth:Resource`），并把这个标识填进下面两项，缺失时启动按键名失败：
+
+代表用户修改账户偏好时，同一个客户端还要启用 Token Exchange，并授予 Identity 的 `aud` 与 `scp`。机器调用的 `Scope` 与 `TokenExchange:Scope` 填同一个值。
 
 ```bash
 dotnet user-secrets set "Leistd:ServiceAuth:ClientId" "<机器客户端>" --project src/CompanyName.ProjectName.Api
 dotnet user-secrets set "Leistd:ServiceAuth:ClientSecret" "<机器客户端密钥>" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "Leistd:ServiceClients:Identity:Scope" "<Identity 的 OAuth:Resource>" --project src/CompanyName.ProjectName.Api
 dotnet user-secrets set "Leistd:ServiceClients:Identity:TokenExchange:Audience" "<Identity 的 OAuth:Resource>" --project src/CompanyName.ProjectName.Api
 dotnet user-secrets set "Leistd:ServiceClients:Identity:TokenExchange:Scope" "<Identity 的 OAuth:Resource>" --project src/CompanyName.ProjectName.Api
 ```

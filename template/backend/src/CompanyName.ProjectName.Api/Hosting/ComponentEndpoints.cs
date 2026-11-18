@@ -1,9 +1,6 @@
 using CompanyName.ProjectName.Api.Auth.Authorization;
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
-#if (OpenIddictServer)
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
-#endif
 using Leistd.MultiTenancy.AspNetCore.Endpoints;
 #endif
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
@@ -130,8 +127,8 @@ public static class ComponentEndpoints
             options.ManagePolicy = PermissionConstant.Tenants.Update;
 #if (OpenIddictServer)
             // 机器端点只在签发令牌的形态下映射：不签发令牌时不可能存在机器主体，永远无人可用的内部端点只是攻击面
-            options.RuntimeReadPolicy = TenantConnectionPolicies.RuntimeRead;
-            options.MigrationReadPolicy = TenantConnectionPolicies.MigrationRead;
+            options.RuntimeReadPolicy = ApiPolicies.IdentityMachine;
+            options.MigrationReadPolicy = ApiPolicies.IdentityMachine;
 #endif
         });
 #endif

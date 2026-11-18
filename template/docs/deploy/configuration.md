@@ -186,7 +186,7 @@ OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 <!--#if (RemoteTokenAuth)-->
 - Compose 只要求 `IDENTITY_ISSUER`；`IDENTITY_AUTHORITY`、`IDENTITY_BASE_ADDRESS` 留空时沿用它，仅内网地址不同时填写，API 与多租户 DbMigrator 一致。跨服务客户端、Audience 与机器身份配置见 [服务间调用](../standards/service-invocation.md#identity-与资源服务对接)。
 - 初始化新环境时，完成 Identity 与 Resource 的迁移后，Identity 内置管理员首次进入 Resource 即获得同一作用域的 Admin。自定义首位管理员及恢复命令见[后端说明](../../backend/README.md#资源管理员首次授予)。
-- 升级现有环境时，先升级 Identity，再在 Identity 的开放应用中给 Resource API 使用的机器客户端授予 `administrators.read`，最后升级 Resource。新的 Resource 默认会在机器令牌请求中带上这个 scope，漏授时 Identity 会拒绝整次令牌请求。DbMigrator 的机器客户端沿用现有权限。
+- `IDENTITY_API_RESOURCE` 填 Identity 的 `OAuth:Resource`。Compose 用它配置 Resource API 的机器 scope 和 Token Exchange 目标。启用多租户时，DbMigrator 的机器 scope 也使用该值。
 - readiness 是启动门禁：首次成功解析发现文档、精确比对 issuer 并取得非空 JWKS 后锁存成功。
   冷实例在 Identity 不可达时 `/api/health/ready` 返回 503，`/api/health/live` 仍为 200；
   日志指出发现文档或签名密钥依赖（探针请求时健康检查与请求日志各记一条），Identity 恢复后自动重试并进入就绪。

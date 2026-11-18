@@ -60,7 +60,6 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
                 Permissions.Prefixes.GrantType + GrantTypes.TokenExchange, Permissions.ResponseTypes.Code,
                 Permissions.Prefixes.Scope + Scopes.OpenId, Permissions.Prefixes.Scope + Scopes.OfflineAccess,
                 Permissions.Prefixes.Scope + resource, Permissions.Prefixes.Scope + Scopes.Profile,
-                Permissions.Prefixes.Scope + "tenant-routing.read",
                 Permissions.Prefixes.Audience + resource, Permissions.Prefixes.Audience + "another-api" }) descriptor.Permissions.Add(permission);
             descriptor.Settings[OpenApplicationSettings.SessionBound] = bound ? "true" : "false";
             descriptor.Settings[Settings.TokenLifetimes.AccessToken] = TimeSpan.FromSeconds(inputLifetimeSeconds).ToString();
@@ -103,6 +102,10 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
         var downstream = await TokenAsync(Exchange(entered.AccessToken!, null));
         Assert.Equal(HttpStatusCode.OK, downstream.Status);
         Assert.NotNull(Claim(downstream.AccessToken!, "act"));
+        using var delegated = Browser();
+        delegated.DefaultRequestHeaders.Authorization = new("Bearer", downstream.AccessToken);
+        using var rejectedMachineCall = await delegated.GetAsync($"/api/v1/internal/administrators/{tenantId}/{homeId}");
+        Assert.Equal(HttpStatusCode.Forbidden, rejectedMachineCall.StatusCode);
         var nestedWorkspace = await TokenAsync(Exchange(entered.AccessToken!, tenantName));
         Assert.Equal(Errors.InvalidTarget, nestedWorkspace.Error);
         var actedWorkspace = await TokenAsync(Exchange(downstream.AccessToken!, tenantName));
@@ -121,7 +124,7 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
             ["client_id"] = resource, ["client_secret"] = secret, ["refresh_token"] = tokens.RefreshToken });
         Assert.Equal(bound ? HttpStatusCode.BadRequest : HttpStatusCode.OK, refreshed.Status);
         var machineToken = await TokenAsync(new() { ["grant_type"] = GrantTypes.ClientCredentials,
-            ["client_id"] = resource, ["client_secret"] = secret, ["scope"] = "tenant-routing.read" });
+            ["client_id"] = resource, ["client_secret"] = secret, ["scope"] = resource });
         Assert.Equal(HttpStatusCode.OK, machineToken.Status);
         using var machine = Browser();
         machine.DefaultRequestHeaders.Authorization = new("Bearer", machineToken.AccessToken);

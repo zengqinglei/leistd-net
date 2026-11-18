@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Application.OpenApplications;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.Systems.Dtos;
@@ -11,12 +12,13 @@ using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-public sealed class SystemDirectoryTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
+public sealed class SystemDirectoryTests(ProjectWebApplicationFactory factory)
+    : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
     [Fact]
     public async Task Browser_registration_roundtrips_home_URL_and_visibility_in_properties_and_updates_the_directory()
     {
-        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var clientId = "directory-" + Guid.NewGuid().ToString("N");
         var input = new CreateOpenApplicationInputDto
         {
@@ -29,7 +31,7 @@ public sealed class SystemDirectoryTests(ProjectWebApplicationFactory factory) :
         Assert.Equal(input.HomeUrl, application.HomeUrl);
         Assert.True(application.ShowInSwitcher);
         Assert.Equal(input.HomeUrl, application.Properties[OpenApplicationSettings.HomeUri].GetString());
-        using (var scope = factory.Services.CreateScope())
+        using (var scope = Factory.Services.CreateScope())
         {
             var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
             var stored = (await manager.FindByClientIdAsync(clientId))!;
@@ -64,7 +66,7 @@ public sealed class SystemDirectoryTests(ProjectWebApplicationFactory factory) :
     [InlineData("")]
     public async Task Invalid_home_URLs_are_returned_as_field_errors(string homeUrl)
     {
-        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var response = await admin.Client.PostAsJsonAsync("/api/v1/open-applications", new
         { ClientId = "invalid-" + Guid.NewGuid().ToString("N"), ApplicationType = "web", ClientType = "confidential", SessionBound = true, HomeUrl = homeUrl, ShowInSwitcher = true });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -73,9 +75,22 @@ public sealed class SystemDirectoryTests(ProjectWebApplicationFactory factory) :
     }
 
     [Fact]
+    public async Task Machines_can_read_the_directory_if_they_have_the_identity_service_scope()
+    {
+        using var admin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var scoped = await CreateMachineClientAsync(Factory, admin.Client, new OAuthResourceOptions().Resource);
+        using var unscoped = await CreateMachineClientAsync(Factory, admin.Client, "profile");
+        using var allowed = await scoped.GetAsync("/api/v1/systems");
+        using var denied = await unscoped.GetAsync("/api/v1/systems");
+
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+    }
+
+    [Fact]
     public async Task Anonymous_callers_cannot_read_the_directory()
     {
-        using var client = factory.CreateClient();
+        using var client = Factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/systems")).StatusCode);
     }
 }

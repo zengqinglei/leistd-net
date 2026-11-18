@@ -209,7 +209,7 @@ public sealed class ResourceBrowserSessionTests
             .UseSetting("Leistd:ServiceAuth:ClientId", "resource-owner")
             .UseSetting("Leistd:ServiceAuth:ClientSecret", "ResourceOwner!Secret1")
             .UseSetting("Leistd:ServiceClients:Identity:BaseAddress", Issuer.Address)
-            .UseSetting("Leistd:ServiceClients:Identity:Scope", "tenant-routing.read")
+            .UseSetting("Leistd:ServiceClients:Identity:Scope", "identity-api")
             .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Audience", "identity-api")
             .UseSetting("Leistd:ServiceClients:Identity:TokenExchange:Scope", "identity-api")
             .ConfigureTestServices(services =>

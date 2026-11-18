@@ -766,21 +766,29 @@ def validate(output, values, config, verify=True, sdk=None):
     settings = json.loads(re.sub(r'^\s*//.*$', '', (api / 'appsettings.json').read_text(encoding='utf-8'), flags=re.M))
     assert (api / 'Controllers/InternalAdministratorController.cs').is_file() == values['OpenIddictServer'], 'Administrator lookup endpoint applicability'
     assert (infra / 'Users/IIdentityAdministratorsApi.cs').is_file() == values['RemoteTokenAuth'], 'Administrator lookup client applicability'
-    # 资源服务回源 Identity；租户路由的 scope 只在多租户时出现
     identity_client = settings.get('Leistd', {}).get('ServiceClients', {}).get('Identity')
     assert (identity_client is not None) == values['RemoteTokenAuth'], 'Identity client configuration applicability'
+    compose = (output / 'deploy/docker-compose.yml').read_text(encoding='utf-8')
+    compose_identity_scope = '${IDENTITY_API_RESOURCE:?IDENTITY_API_RESOURCE is required for a Resource service}'
+    for service, applicable in (
+        ('backend', values['RemoteTokenAuth']),
+        ('db-migrator', values['RemoteTokenAuth'] and values['IncludeMultiTenancy']),
+    ):
+        section = re.search(rf'(?ms)^  {service}:\s*\n(.*?)(?=^  \S|^\S|\Z)', compose)
+        assert section, f'Missing Compose service {service}'
+        scopes = re.findall(r'Leistd__ServiceClients__Identity__Scope=(.+)', section.group(1))
+        expected_scopes = [compose_identity_scope] if applicable else []
+        assert scopes == expected_scopes, f'{service} must use the Identity API resource as its machine scope'
     if identity_client is not None:
-        scopes = identity_client.get('Scope', '').split()
-        assert 'account-preferences.read' in scopes, 'Account preference machine scope'
-        assert 'system-directory.read' in scopes, 'System directory machine scope'
-        assert 'administrators.read' in scopes, 'Built-in administrator machine scope'
-        compose = (output / 'deploy/docker-compose.yml').read_text(encoding='utf-8')
-        api_compose = re.search(r'(?ms)^  backend:\s*\n(.*?)(?=^  \S|^\S|\Z)', compose)
-        assert api_compose, 'Resource API Compose service'
-        compose_scope = re.search(r'Leistd__ServiceClients__Identity__Scope=(.+)', api_compose.group(1))
-        assert compose_scope and compose_scope.group(1).split() == scopes, 'Resource API Compose machine scope matches appsettings'
-        assert ('tenant-routing.read' in scopes) == values['IncludeMultiTenancy'], 'Tenant routing scope applicability'
-        assert 'TokenExchange' in identity_client, 'Account preference token exchange section'
+        assert identity_client['Scope'] == '', 'Identity machine scope must be supplied by the environment'
+        assert identity_client['TokenExchange']['Scope'] == '', 'Identity exchange scope must be supplied by the environment'
+        for project in (api, output / 'backend/src/Generation.Probe.DbMigrator'):
+            development = json.loads(re.sub(r'^\s*//.*$', '', (project / 'appsettings.Development.json').read_text(encoding='utf-8'), flags=re.M))
+            development_client = development.get('Leistd', {}).get('ServiceClients', {}).get('Identity')
+            applicable = project == api or values['IncludeMultiTenancy']
+            assert (development_client is not None) == applicable, f'{project.name} development Identity client applicability'
+            if applicable:
+                assert development_client['Scope'] == '', f'{project.name} development machine scope must be configured'
     readme = (output / 'README.md').read_text(encoding='utf-8')
     testing = (output / 'docs/standards/testing.md').read_text(encoding='utf-8')
     deployment = (output / 'docs/deploy/README.md').read_text(encoding='utf-8')
@@ -842,7 +850,6 @@ def validate(output, values, config, verify=True, sdk=None):
         check_verify_script(output, values)
     assert ('单实例配 `KeysPath`' in configuration) == values['SpaFrontend'], 'Browser session deployment prerequisite applicability'
     assert ('/api/v1/auth/signin' in invocation) == (values['OpenIddictServer'] or values['ResourceBrowserSession']), 'Browser relying-party instructions applicability'
-    assert ('tenant-routing.read' in invocation) == values['IncludeMultiTenancy'], 'Tenant machine scope instructions applicability'
     examples = re.findall(r'```json\s*\n(.*?)\n```', invocation, re.S)
     assert examples, 'Missing service invocation configuration example'
     for example in examples:
@@ -854,8 +861,7 @@ def validate(output, values, config, verify=True, sdk=None):
         documented_identity = documented['Leistd']['ServiceClients'].get('Identity')
         assert (documented_identity is not None) == values['RemoteTokenAuth'], 'Identity client example applicability'
         if documented_identity is not None:
-            assert ('tenant-routing.read' in documented_identity['Scope'].split()) == values['IncludeMultiTenancy'], 'Tenant routing example scope applicability'
-            assert 'TokenExchange' in documented_identity, 'Account preference token exchange example'
+            assert documented_identity['Scope'] == documented_identity['TokenExchange']['Scope'] == 'identity-api', 'Identity machine and exchange scope example'
     backend_readme = (output / 'backend/README.md').read_text(encoding='utf-8')
     infrastructure_project = (infra / 'Generation.Probe.Infrastructure.csproj').read_text(encoding='utf-8')
     migrator_protection = values['LocalIdentity'] and values['IncludeMultiTenancy']
@@ -895,8 +901,8 @@ def validate(output, values, config, verify=True, sdk=None):
         assert ('POST /api/v1/settings/email/test' in (frontend / '_mock/api/setting.ts').read_text(encoding='utf-8')) == values['Email'], 'Email mock endpoint'
         if values['OpenIddictServer']:
             scopes = (frontend / '_mock/data/open-applications.ts').read_text(encoding='utf-8')
-            for scope in ('tenant-routing.read', 'tenant-migration.read'):
-                assert (scope in scopes) == values['IncludeMultiTenancy'], f'Mock machine scope: {scope}'
+            registered = re.findall(r"name: '([^']+)'", scopes.split('export const OPEN_APPLICATION_SCOPES', 1)[1])
+            assert registered == ['openid', 'profile', 'email', 'roles', 'offline_access', 'generation-probe-api'], 'Mock OIDC and service scopes'
         tenants = frontend / 'src/app/features/platform/components/tenants'
         if tenants.exists():
             assert ('onImpersonate' in (tenants / 'tenants.ts').read_text(encoding='utf-8')) == values['Impersonation'], 'Impersonation page action'

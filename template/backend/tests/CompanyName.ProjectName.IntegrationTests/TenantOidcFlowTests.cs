@@ -465,19 +465,18 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-        using var machine = await CreateMachineClientAsync(host, hostAdmin.Client, "tenant-routing.read");
+        using var machine = await CreateMachineClientAsync(host, hostAdmin.Client, ApiScope);
         var databases = await machine.GetAsync("/api/v1/tenant-connections/databases?name=Default");
         Assert.NotEqual(HttpStatusCode.Unauthorized, databases.StatusCode);
         Assert.NotEqual(HttpStatusCode.Forbidden, databases.StatusCode);
     }
 
-    /// <summary>迁移清单的线上形状：健康租户的连接与取不出连接的租户一起下发，只有迁移身份读得到。</summary>
+    /// <summary>迁移清单的线上形状：健康租户的连接与取不出连接的租户一起下发。</summary>
     /// <remarks>
-    /// 失败租户若在线上丢了，Resource 的迁移作业会以为一切正常，那个库就停在旧结构上；
-    /// 只持有读路由权限的常驻服务则绝不能拿到这份带全部明文连接串的清单。
+    /// 失败租户若在线上丢了，Resource 的迁移作业会以为一切正常，那个库就停在旧结构上。
     /// </remarks>
     [Fact]
-    public async Task The_migration_list_carries_failed_tenants_and_only_the_migration_identity_reads_it()
+    public async Task The_migration_list_carries_failed_tenants_and_the_scoped_machine_reads_it()
     {
         // 独立宿主：登记的连接会进入同库其他用例的逐库清单
         using var isolated = new ProjectWebApplicationFactory();
@@ -495,7 +494,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             isolated, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-        using var migration = await CreateMachineClientAsync(isolated, hostAdmin.Client, "tenant-migration.read");
+        using var migration = await CreateMachineClientAsync(isolated, hostAdmin.Client, ApiScope);
         using var response = await migration.GetAsync("/api/v1/tenant-connections/migration?name=Default");
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         var list = await response.Content.ReadFromJsonAsync<TenantMigrationConnectionListOutputDto>();
@@ -504,10 +503,6 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         var failure = Assert.Single(list.FailedTenants);
         Assert.Equal(broken, failure.TenantId);
         Assert.DoesNotContain("billing-secret", failure.Reason);
-
-        using var routing = await CreateMachineClientAsync(isolated, hostAdmin.Client, "tenant-routing.read");
-        using var denied = await routing.GetAsync("/api/v1/tenant-connections/migration?name=Default");
-        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
     }
 
     private async Task RunTenantFlowAsync(WebApplicationFactory<Program> host)

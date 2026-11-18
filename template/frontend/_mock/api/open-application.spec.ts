@@ -6,7 +6,7 @@ import {
   OpenApplicationOutputDto,
 } from '../../src/app/features/platform/dtos/open-application.dto';
 import { MockException } from '../core/models';
-import { OPEN_APPLICATIONS } from '../data/open-applications';
+import { OPEN_APPLICATIONS, OPEN_APPLICATION_SCOPES } from '../data/open-applications';
 import { setMockSessionUserId } from '../utils/current-user';
 
 type Handler = (req: { body?: unknown; params?: Record<string, string> }) => unknown;
@@ -57,6 +57,17 @@ describe('open application mock', () => {
   function fieldsOf(error: MockException): string[] {
     return error.error.errors.map((item: { field: string }) => item.field);
   }
+
+  it('offers the API scope and the standard OIDC scopes', () => {
+    expect(OPEN_APPLICATION_SCOPES.map((scope) => scope.name)).toEqual([
+      'openid',
+      'profile',
+      'email',
+      'roles',
+      'offline_access',
+      'companyname-projectname-api',
+    ]);
+  });
 
   it('stores switcher properties and rejects invalid home URLs as field errors', () => {
     const created = create({
