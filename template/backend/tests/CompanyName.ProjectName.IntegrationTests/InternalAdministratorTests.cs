@@ -2,7 +2,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+#if (IncludeMultiTenancy)
 using System.Text.Json;
+#endif
 using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Application.Users.Constants;
 using CompanyName.ProjectName.Application.Users.Dtos;
