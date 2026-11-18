@@ -1,6 +1,6 @@
 # Identity 机器接口改用服务级 scope
 
-状态：已完成 · 风险档：高 · 关联：—
+状态：已完成 · 风险档：高 · 关联：[#298](https://github.com/zengqinglei/leistd-net/pull/298)
 
 ## 1. 需求
 
