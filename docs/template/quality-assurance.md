@@ -161,18 +161,18 @@ PR 有意不承担全局覆盖，放行候选必须完整：这是责任迁移�
 
 ## 前端依赖维护
 
-默认与本地化载荷的 Angular 运行时、CDK、编译器和构建工具须按官方 peer 范围配套更新，并同时更新两套锁文件。先在隔离副本验证安装、原审计阈值、lint、构建与真实浏览器测试，再同步依赖文件；完整条件矩阵由 CI 执行，不能因依赖改动免除。不得用 `--force`、`--legacy-peer-deps` 或降低审计阈值绕过依赖冲突与安全门禁。
+默认与本地化载荷的 Angular 运行时、CDK、编译器和构建工具须按官方 peer 范围配套更新，并同时更新两套锁文件。先在隔离副本验证安装、生产依赖审计、lint、构建与真实浏览器测试，再同步依赖文件；完整条件矩阵由 CI 执行，不能因依赖改动免除。不得用 `--force`、`--legacy-peer-deps` 或降低审计阈值绕过依赖冲突与安全门禁。
 
-审计口径：门槛是生产依赖 high/critical 为 0（`npm audit --omit=dev --audit-level=high`），本仓的"前端依赖审计"作业、生成项目 CI 的审计作业（GitHub 在 `verify` 作业内的审计步骤、GitLab 的 `frontend-audit`）与 testing.md 提示的本地命令同口径，不是全部 severity 总数为 0。生成项目的 `verify` 不含审计，CI 只在前端锁文件变化、定时和手动时运行；本仓同理：模板发布放行（stable）必须审计，PR 与 develop 只在依赖闭包或审计输入有改动时审计，依赖未变时新出的公告由每个工作日的定时检查发现（触发规则与覆盖核对见 [CI 与发布闸门](../framework/ci-release-gates.md)）。生产审计通过不代表工具链或部署产物没有漏洞。
+本仓和生成项目的 GitHub CI、GitLab CI 与本地验证共用前端的 `node scripts/audit-dependencies.mjs`。脚本读取 `npm audit --json --omit=dev --package-lock-only` 的报告。生产依赖的 high/critical 公告在 `fixAvailable` 为 `true`，或建议版本大于等于建议包在锁文件中的版本时阻断。暂无修复版本或建议降级时输出公告编号、包名和受影响区间。GitHub 使用工作流警告，其他环境打印警告。查询或解析报告失败会阻断，只有查询遇到网络错误才有限重试。生成项目的 `verify` 不含审计，CI 只在前端锁文件变化、定时和手动时运行；本仓同理：模板发布放行（stable）必须审计，PR 与 develop 只在依赖闭包或审计输入有改动时审计，依赖未变时新出的公告由每个工作日的定时检查发现（触发规则与覆盖核对见 [CI 与发布闸门](../framework/ci-release-gates.md)）。生产审计通过不代表工具链或部署产物没有漏洞。
 
-开发工具链的公告不阻断门槛，但须逐条记下：哪个工具引入、用途、相关输入能否到达、为何暂时接受、何时复查。"没有可达路径"与"没有兼容修复"是两种理由，分开写；没有修复不能单独证明不可达，dev 标记也不等于安全。2026-10 的现状：
+开发工具链和生产依赖中暂无修复版本的公告须逐条记下：哪个工具引入、用途、相关输入能否到达、为何暂时接受、何时复查。"没有可达路径"与"没有兼容修复"是两种理由，分开写；没有修复不能单独证明不可达，dev 标记也不等于安全。2026-10 的现状：
 
 | 公告 | 引入路径 | 情况 | 复查时机 |
 | --- | --- | --- | --- |
 | `braces` 3.0.3（[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)） | Stylelint 与 Spartan CLI→`ts-morph` 经 `micromatch` 引入，只在本地 lint 与组件生成时匹配仓库内的 glob | 上游无补丁版本 | 上游发布修复或 Stylelint/Spartan CLI 换掉该依赖时 |
 | `undici` 7.29.0（如 [GHSA-rfgv-xxqx-mfg5](https://github.com/advisories/GHSA-rfgv-xxqx-mfg5)） | Nx 23.3.0 精确依赖，经 Spartan CLI 引入，属于本地开发与 CI 都会执行的开发工具链（Spartan CLI 的 info/healthcheck 与组件生成），不进入生产前端运行载荷。Nx 只在其 http-client 发起请求（Nx Cloud、`nx release` 的 GitHub 客户端等）且设置了 `HTTP(S)_PROXY`/`ALL_PROXY` 时才加载 undici，输入是远端服务的响应；本仓不配置 Nx Cloud 或 `nx release` | 7.29.1 已有修复，但被 Nx 精确钉住。没有证明所有 CLI 路径都不可达；考虑到维护成本暂时接受，不强行 override 父工具链钉住的版本 | Nx 放宽或升级该依赖时，与 Spartan CLI 配套升级 |
 | `vite` 8.3.0（如 [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm)，受影响 8.3.0–8.3.2） | `@angular/build` 22.2.3 精确依赖，只用于 `ng serve` 开发服务器；顶层 `vite` 8.3.4（Vitest 用）不受影响。high 一条是开发服务器打开编辑器的中间件在 Windows 上可绕过路径检查，与同批公告组合可执行命令，前提是能向开发服务器发请求；其余为 moderate/low 的开发服务器文件读取问题 | 修复在 8.3.3 起；`@angular/build` 22.3 预发布已改用 8.3.4，正式版尚未发布 | `@angular/build` 22.3 正式版发布后按 Angular 配套升级 |
-| `picomatch` 4.0.7（[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)） | Angular CLI 的 `@angular-devkit/core` 经 schematics 引入，用于开发工具的文件匹配 | 模板将 `@ng-icons/core` 与 `@ng-icons/lucide` 固定在 33.0.0，移除生产闭包中的 schematics peer。开发工具仍处理项目文件和构建输入，上游暂未发布修复 | picomatch 发布修复，或图标包解除 schematics peer 后，重新验证两套锁文件再升级图标包 |
+| `picomatch` 4.0.7（[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)） | Angular CLI 的 `@angular-devkit/core` 经 schematics 引入，用于开发工具的文件匹配 | picomatch 暂无修复版本，审计输出警告。它在构建时匹配项目自身的 glob，不进入浏览器包 | picomatch 发布修复或引入路径变化时，重新审计两套锁文件 |
 
 清零方式按本项目的维护取舍：不用 `npm audit fix --force` 降级 Angular/Spartan/Nx，不加未经验证的 `overrides` 强行替换父工具链钉住的版本，优先等上游后配套升级；确需 override 时按上一段的隔离验证执行并写明退出条件。这是控制维护成本的决定，不是 npm 的规定。
 

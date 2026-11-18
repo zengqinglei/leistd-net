@@ -59,7 +59,7 @@ jobs:
 #endif
 #if (SpaFrontend)
       # 前端生产依赖审计不在 scripts/verify.ps1 里：定时、手动，或前端锁文件在本次事件的基线与头之间变化时运行，
-      # 否则跳过；门槛是生产依赖无 high/critical。只有网络错误才有限重试，发现漏洞直接失败。
+      # 否则跳过。有修复版本的 high/critical 阻断，暂无修复版本的输出警告。
       - name: Audit production dependencies
         shell: bash
         env:
@@ -79,12 +79,7 @@ jobs:
           esac
           if [ "$run_audit" != true ]; then echo "未改依赖，跳过审计"; exit 0; fi
           cd frontend
-          for attempt in 1 2 3; do
-            if output=$(npm audit --omit=dev --audit-level=high --package-lock-only 2>&1); then echo "$output"; exit 0; fi
-            echo "$output"
-            if ! echo "$output" | grep -Eq 'ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|FETCH_ERROR|audit endpoint returned an error' || [ "$attempt" -eq 3 ]; then exit 1; fi
-            sleep $((5 * attempt))
-          done
+          node scripts/audit-dependencies.mjs
 #endif
       # 后端 NuGet 依赖审计：构建里公告只告警（backend/Directory.Build.props），这里按 high/critical 把关。
       # 定时、手动，或包版本、框架版本（Directory.Build.props）与项目文件在本次事件的基线与头之间变化时运行，否则跳过。

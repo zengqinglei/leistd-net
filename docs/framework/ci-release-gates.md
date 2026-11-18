@@ -121,7 +121,7 @@ PostgreSQL/OIDC 的登记路径在计划器里，PR 只在命中时运行，否�
 
 包内容的输入闭包不含模板源码，已证明仅改模板前端或后端时不重复核对基线已验证的包内容；候选 Framework 仍重新打包，供场景与端到端从同一候选 feed 消费。随包文档同改时取责任并集，保留包内容验证。
 
-前后端各自省略的阶段要求实际生成输入保持不变。前端生产依赖审计不在场景片里，由独立的"前端依赖审计"作业执行（`scripts/audit-frontend-dependencies.ps1`）：两套锁文件各生成一次条件全开的最大闭包，核对它覆盖模板锁文件的全部依赖块，门槛 high/critical 为 0，只对网络类错误重试。计划字段 `DependencyAudit` 决定是否运行：stable 与手动运行恒执行（计划校验强制 stable 为真）；其余候选只在依赖闭包或审计本身的输入有改动（前端根下非源码文件、`template.json`、计划器、计划契约、审计脚本、`ci.yml`/`release.yml`）或无法证明输入差异时执行。依赖未变但漏洞库新增的公告不由 PR 承担，由 `scheduled-checks.yml` 每个工作日对 develop 全量审计发现；同一 workflow 扫描 NuGet 依赖（构建时 NU1900–NU1904 只告警，不阻断）并以 verify Fast 运行模板升级闸门。
+前后端各自省略的阶段要求实际生成输入保持不变。前端生产依赖审计不在场景片里，由独立的"前端依赖审计"作业执行（`scripts/audit-frontend-dependencies.ps1`）：两套锁文件各生成一次条件全开的最大闭包，核对它覆盖模板锁文件的全部依赖块，调用模板前端的统一脚本阻断有修复版本的 high/critical，警告暂无修复版本的公告，只对网络类错误重试。计划字段 `DependencyAudit` 决定是否运行：stable 与手动运行恒执行（计划校验强制 stable 为真）；其余候选只在依赖闭包或审计本身的输入有改动（前端根下非源码文件、`template.json`、计划器、计划契约、审计脚本、`ci.yml`/`release.yml`）或无法证明输入差异时执行。依赖未变但漏洞库新增的公告不由 PR 承担，由 `scheduled-checks.yml` 每个工作日对 develop 全量审计发现；同一 workflow 扫描 NuGet 依赖（构建时 NU1900–NU1904 只告警，不阻断）并以 verify Fast 运行模板升级闸门。
 
 Framework 依赖闭包只裁剪各自含单一 PackageReference 的空 restore/build 消费项目；全包内容、源码包集、DLL/XML/文档、重复包、缺失候选依赖仍先核对。它不裁剪 Framework 用例、DI/反射/配置语义、模板或服务闭环；出现显式跨项目编译输入时回退全量。人工 `-PackageIds` 保持已有局部入口，CI 使用独立计划并仍要求完整候选 feed。
 

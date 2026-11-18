@@ -149,6 +149,6 @@ Identity 查询端点按机器主体与 `administrators.read` 授权。Resource 
 
 worker-01 的验收覆盖 AC1–AC11。四个生成场景共通过 998 项单测和 85 项定向集成测试，包含迁移快照、控制器授权约定和原有 `ResourceAdminBootstrapTests`。PR 档生成与文档检查以及交叉形态的构建和 lint 均已通过。
 
-PR 的依赖审计发现图标包间接将 schematics 纳入生产依赖闭包。经确认，本 PR 单独提交图标包版本调整，原生产审计阈值继续生效。详情见[前端依赖维护](../template/quality-assurance.md#前端依赖维护)。
+依赖审计发现图标包经 schematics 将 picomatch 纳入生产依赖闭包。图标包现使用 36.1.0。picomatch 公告暂无修复版本，由生产依赖审计输出警告。详情见[前端依赖维护](../template/quality-assurance.md#前端依赖维护)。
 
 AC12 留待本 PR 合并、develop 发布 beta 后的演示站人工验收。
