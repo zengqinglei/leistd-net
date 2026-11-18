@@ -151,4 +151,11 @@ worker-01 的验收覆盖 AC1–AC11。四个生成场景共通过 998 项单测
 
 依赖审计发现图标包经 schematics 将 picomatch 纳入生产依赖闭包。图标包现使用 36.1.0。picomatch 公告暂无修复版本，由生产依赖审计输出警告。详情见[前端依赖维护](../template/quality-assurance.md#前端依赖维护)。
 
-AC12 留待本 PR 合并、develop 发布 beta 后的演示站人工验收。
+合并后 develop 完整矩阵发现，Identity 关闭多租户的形态里，`InternalAdministratorTests` 的 `System.Text.Json` using 未被使用（IDE0005）。[PR #296](https://github.com/zengqinglei/leistd-net/pull/296) 按条件裁剪后，Release 发布 2.0.0-beta.426。
+
+AC12 原计划在 worker-01 演示站人工验收，因节点下线，改在本机用 develop `37a47810` 串行运行 `scripts/test-template-oidc-e2e.ps1`，Identity 和 Resource 都是真实进程，后端为 PostgreSQL 和 OpenIddict：
+
+- 默认模式（424 条断言通过）：共享库、独立库两个新开通租户的管理员首次访问 Resource 即持有 Admin（`project-*-admin-role`）。
+- 工作区模式（61 条断言通过）：获准进入租户的平台人员能访问 Resource 管理接口（`workspace-resource-admin-access`）。
+
+脚本中两处执行了 `--grant-admin`，都不影响判定：S12 对这些租户管理员执行，但在断言之后运行；pure-api-realtime 只作用于另一服务的宿主侧。宿主管理员由集成测试 AC1 覆盖。浏览器界面走查待 worker-01 恢复后在演示站补做。
