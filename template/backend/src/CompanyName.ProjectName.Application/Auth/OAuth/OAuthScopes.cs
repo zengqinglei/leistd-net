@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Application.TenantConnections.Constants;
 using CompanyName.ProjectName.Application.Auth.Options;
 using CompanyName.ProjectName.Application.Settings.Constants;
 using CompanyName.ProjectName.Application.Systems.Constants;
+using CompanyName.ProjectName.Application.Users.Constants;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Application.Auth.OAuth;
@@ -34,6 +35,7 @@ public static class OAuthScopes
         new(options.Resource, "API", [options.Resource], MachineOnly: false),
         new(SystemDirectoryScopes.Read, "Read system directory", [options.Resource], MachineOnly: true),
         new(AccountPreferenceScopes.Read, "Read account preferences", [options.Resource], MachineOnly: true),
+        new(AdministratorScopes.Read, "Read built-in administrator status", [options.Resource], MachineOnly: true),
 #if (IncludeMultiTenancy)
         new(TenantConnectionScopes.RuntimeRead, "Read tenant connection routing metadata", [options.Resource], MachineOnly: true),
         new(TenantConnectionScopes.MigrationRead, "Read tenant connection migration metadata", [options.Resource], MachineOnly: true),

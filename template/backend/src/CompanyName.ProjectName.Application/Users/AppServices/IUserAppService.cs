@@ -28,10 +28,10 @@ public interface IUserAppService : IAppService
 
     /// <summary>把当前已认证主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段；未认证或非用户主体时不做任何事。</summary>
     /// <remarks>
-    /// 在独立工作单元内提交，不随调用方的业务失败回滚。首次访问并发撞主键时重试一次，
-    /// 仍失败则抛出，由调用方决定是否放行（见 <c>ResourceUserProvisioningMiddleware</c>）。
+    /// 首次建成员时读取 Identity 内置管理员资格，成员与授予在独立工作单元内一并提交。
+    /// 投影异常交给 <c>ResourceUserProvisioningMiddleware</c>，唯一约束冲突时中间件重试一次。
     /// </remarks>
-    /// <returns>投影后本地用户行的访问状态（本服务的启停）；未认证或非用户主体时为 <see langword="null"/>。</returns>
+    /// <returns>投影后本地成员的访问状态；软删除、未认证或非用户主体时为 <see langword="null"/>。</returns>
     Task<UserAccessStatus?> EnsureCurrentUserProjectedAsync(CancellationToken cancellationToken = default);
 
     /// <summary>按主键读当前主体本地用户行的访问状态，只读、不投影。</summary>

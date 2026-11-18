@@ -1,8 +1,11 @@
 #if (!LocalIdentity)
 using CompanyName.ProjectName.Api.Auth.Authorization;
 using CompanyName.ProjectName.Application.Users.AppServices;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.MultiTenancy.Context;
 using Leistd.Security.Users;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CompanyName.ProjectName.Api.Middlewares;
 
@@ -24,12 +27,7 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// <para><b>状态快照。</b>投影读到的这一行的启停状态记进 <see cref="LocalMemberAccessSnapshot"/>，
 /// 授权阶段直接复用，正常请求不为判定成员状态再查一次库。</para>
 /// <para><b>代价与边界。</b>每个已认证请求多一次主键查询（命中即返回）。
-/// 投影本身（独立工作单元、首次访问并发时重试一次）在 <see cref="IUserAppService.EnsureCurrentUserProjectedAsync"/>。</para>
-/// <para><b>做不到的事要如实说：无法按人名预先授权。</b>那需要一条向签发方查人的契约，
-/// 本模板没有——用手填 GUID 假装有，才是前面那个缺陷的由来。</para>
-/// <para><b>拿到了对方的 <c>sub</c> 时，首位管理员走部署命令。</b>角色关联 <c>UserRole.UserId</c> 对
-/// <c>Users</c> 有外键，需要本地主体行；DbMigrator 的 <c>--grant-admin</c> 在首次访问前建一条只含
-/// <c>sub</c> 的最小行并加入 Admin 角色，这个人第一次带令牌来时由这里补齐资料，角色关联不变。</para>
+/// 首次建成员时，在同一个工作单元按 Identity 的内置管理员资格引导 Admin。</para>
 /// </remarks>
 public sealed class ResourceUserProvisioningMiddleware(
     RequestDelegate next,
@@ -44,10 +42,10 @@ public sealed class ResourceUserProvisioningMiddleware(
     {
         try
         {
-            if (await userAppService.EnsureCurrentUserProjectedAsync(context.RequestAborted) is { } status &&
-                currentUser.Id is { } userId)
+            var status = await ProjectWithRetryAsync();
+            if (status is { } accessStatus && currentUser.Id is { } userId)
             {
-                accessSnapshot.Record(currentTenant.Id, userId, status);
+                accessSnapshot.Record(currentTenant.Id, userId, accessStatus);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -59,6 +57,21 @@ public sealed class ResourceUserProvisioningMiddleware(
         }
 
         await next(context);
+
+        async Task<UserAccessStatus?> ProjectWithRetryAsync()
+        {
+            try
+            {
+                return await userAppService.EnsureCurrentUserProjectedAsync(context.RequestAborted);
+            }
+            catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+                { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                // 并发首访撞唯一约束后重开工作单元，此时可以读到另一请求提交的成员。
+                logger.LogDebug(exception, "Projecting issuer subject {SubjectId} hit a unique constraint; retrying.", currentUser.Id);
+                return await userAppService.EnsureCurrentUserProjectedAsync(context.RequestAborted);
+            }
+        }
     }
 }
 #endif

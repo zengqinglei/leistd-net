@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Initialization;
+using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -54,6 +55,7 @@ internal sealed class ResourceAdminBootstrapRunner(
     IPermissionGrantStore grants,
     IPermissionGrantSeeder seeder,
     ISystemInitializer initializer,
+    ResourceAdminBootstrapAppService bootstrap,
     IOperationRecorder recorder)
 {
     public async Task<string> RunAsync(Guid subject, Guid? tenant, bool apply, bool restore, CancellationToken cancellationToken = default)
@@ -124,13 +126,7 @@ internal sealed class ResourceAdminBootstrapRunner(
                 + "No data or audit record changed.";
         }
 
-        adminRole = await initializer.InitializeWithinLockAsync(cancellationToken);
-
-        var (subjectUser, created) = await userDomainService.EnsureSubjectAsync(subject, cancellationToken);
-        subjectUser.AssignRoles([adminRole.Id]);
-        await userRepository.UpdateAsync(subjectUser, cancellationToken);
-        await recorder.RecordSucceededAsync(OperationRecordActions.ResourceAdminGranted,
-            OperationTarget.For($"User/{key}", key), OperationRecordAuthorizations.DeploymentBootstrap, cancellationToken);
+        var created = await bootstrap.GrantAsync(subject, cancellationToken);
         await uow.CompleteAsync(cancellationToken);
 
         return $"Assigned the {AdminConstant.RoleName} role to {key}"

@@ -14,8 +14,11 @@ using Microsoft.Extensions.Options;
 using OpenIddict.Client.SystemNetHttp;
 #else
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using CompanyName.ProjectName.Client.Dtos;
+using CompanyName.ProjectName.Infrastructure.Users;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -110,6 +113,33 @@ public sealed class ServiceInvocationTests
     }
 
     [Fact]
+    public async Task A_role_free_exchanged_token_bootstraps_the_admin_on_first_contact()
+    {
+        using var rsa = RSA.Create(2048);
+        var key = new RsaSecurityKey(rsa) { KeyId = "exchanged-administrator-test" };
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        var subject = Guid.CreateVersion7();
+        using var host = SignedBy(factory, key).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IIdentityAdministratorsApi>(new StubIdentityAdministratorsApi((tenant, id, _) =>
+            {
+                Assert.Equal("host", tenant);
+                Assert.Equal(subject, id);
+                return Task.FromResult(StubIdentityAdministratorsApi.Status(true));
+            }))));
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var token = Token(key, subject.ToString(), "orders-worker", "delegated-admin", includeActor: true);
+        var claims = new JsonWebToken(token);
+        Assert.DoesNotContain(claims.Claims, claim => claim.Type == "role");
+        Assert.NotNull(claims.GetClaim("act"));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+
+        Assert.Equal(subject, me.GetProperty("id").GetGuid());
+        Assert.Equal("Admin", Assert.Single(me.GetProperty("roles").EnumerateArray()).GetString());
+    }
+
+    [Fact]
     public async Task Generated_client_whoami_rejects_a_machine_token_by_the_natural_user_policy()
     {
         using var rsa = RSA.Create(2048);
@@ -164,7 +194,7 @@ public sealed class ServiceInvocationTests
                 options.Configuration.SigningKeys.Add(key);
             })));
 
-    private static string Token(SecurityKey key, string subject, string clientId, string? username)
+    private static string Token(SecurityKey key, string subject, string clientId, string? username, bool includeActor = false)
     {
         var claims = new Dictionary<string, object>
         {
@@ -173,6 +203,7 @@ public sealed class ServiceInvocationTests
             ["jti"] = Guid.NewGuid().ToString()
         };
         if (username is not null) claims["preferred_username"] = username;
+        if (includeActor) claims["act"] = new Dictionary<string, string> { ["sub"] = ClientSubject.Format(clientId) };
         return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {
             Issuer = Issuer, Audience = Audience, Claims = claims, TokenType = "at+jwt",

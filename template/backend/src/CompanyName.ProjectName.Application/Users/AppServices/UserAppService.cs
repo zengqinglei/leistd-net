@@ -7,7 +7,11 @@ using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 #if (RemoteTokenAuth)
+using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Settings.Preferences;
+using CompanyName.ProjectName.Domain.Users.Abstractions;
+using Leistd.Auditing.Abstractions;
+using Leistd.Data.Filters;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.MultiTenancy.Context;
 #endif
@@ -19,8 +23,8 @@ using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using Leistd.EventBus.Abstractions;
-using Leistd.Lock.Abstractions;
 #endif
+using Leistd.Lock.Abstractions;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Avatars;
@@ -68,6 +72,10 @@ internal sealed class UserAppService(
 #if (RemoteTokenAuth)
     ICurrentTenant currentTenant,
     IAccountPreferenceStore preferenceStore,
+    IDataFilter dataFilter,
+    IIdentityAdministrator identityAdministrator,
+    IDistributedLock projectionLock,
+    ResourceAdminBootstrapAppService adminBootstrap,
 #endif
 #if (LocalIdentity)
     UserSortingValidator userSortingValidator,
@@ -199,18 +207,7 @@ internal sealed class UserAppService(
             return null;
         }
 
-        try
-        {
-            return await ProjectCurrentUserAsync(subjectId, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // 首次访问的并发：同一个 sub 的两个请求同时插入，输的那个在提交时撞主键。
-            // 前端登录后往往并行发好几个请求，第一次访问正好都在投影；重来一次就会读到赢家写下的行。
-            // 只重试一次，不做退避循环：第二次还失败就不是竞争，是真有问题，交给调用方
-            logger.LogDebug(exception, "Projecting issuer subject {SubjectId} failed once; retrying", subjectId);
-            return await ProjectCurrentUserAsync(subjectId, cancellationToken);
-        }
+        return await ProjectCurrentUserAsync(subjectId, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -228,11 +225,35 @@ internal sealed class UserAppService(
     // 独立工作单元：投影是请求的前置动作，不该被后续业务失败连带回滚——
     // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关。
     // 状态取自投影读到（或新建）的同一行，提交成功才返回：调用方据此免去再查一次
-    private async Task<UserAccessStatus> ProjectCurrentUserAsync(Guid subjectId, CancellationToken cancellationToken)
+    private async Task<UserAccessStatus?> ProjectCurrentUserAsync(Guid subjectId, CancellationToken cancellationToken)
     {
         using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
+        User? existing;
+        using (dataFilter.Disable<ISoftDelete>())
+        {
+            existing = await userRepository.GetByIdAsync(subjectId, cancellationToken);
+        }
+
+        if (existing is { IsDeleted: true })
+        {
+            return null;
+        }
+
+        var grantAdmin = existing is null
+            && await identityAdministrator.IsAdministratorAsync(currentTenant.Id, subjectId, cancellationToken);
+
+        // 与启动初始化及部署授予共用锁，角色首次播种时持锁直到成员和授予提交。
+        await using var lockHandle = grantAdmin
+            ? await projectionLock.LockAsync(SystemInitializer.InitializationLockKey, cancellationToken)
+            : null;
+        using var lockScope = lockHandle is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lockHandle.LockLost);
+        cancellationToken = lockScope?.Token ?? cancellationToken;
+
         var user = await userDomainService.EnsureProjectedAsync(
             subjectId,
+            existing,
             currentUser.Username,
             currentUser.Email,
             currentUser.Name,
@@ -241,6 +262,11 @@ internal sealed class UserAppService(
             , Guid.TryParse(currentUser.FindClaim(WorkspaceClaimTypes.HomeUserId)?.Value, out var homeId) ? homeId : null
 #endif
             );
+        if (grantAdmin)
+        {
+            await adminBootstrap.GrantAsync(user, cancellationToken);
+        }
+
         await unitOfWork.CompleteAsync(cancellationToken);
         return user.GetAccessStatus(clock.Now);
     }

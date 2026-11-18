@@ -706,6 +706,9 @@
             "backend/src/CompanyName.ProjectName.Api/Auth/Authentication/RemoteTokenAuthenticationExtensions.cs",
             "backend/src/CompanyName.ProjectName.Api/Auth/Authorization/LocalMemberAccess*.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ResourceAuthController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/AppServices/ResourceAdminBootstrapAppService.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Users/IIdentityAdministratorsApi.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Users/IdentityAdministrator*.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/AccountPreferences/**",
             "backend/src/CompanyName.ProjectName.Application/Settings/Preferences/RemoteAccountPreferenceStore.cs",
             "backend/src/CompanyName.ProjectName.Domain/Users/Abstractions/**",
@@ -720,6 +723,8 @@
             "backend/src/CompanyName.ProjectName.Api/HostedServices/Initializer/RemoteIdentityReadinessInitializer.cs",
             "backend/src/CompanyName.ProjectName.Api/Options/RemoteIdentityOptions.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceAdminBootstrapTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceAutomaticAdminTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/Fixtures/StubIdentityAdministratorsApi.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceMemberAccessTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SigningKeyRotationTests.cs"
           ]
@@ -801,6 +806,11 @@
           "condition": "!OpenIddictServer",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/InternalAccountPreferenceController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/InternalAdministratorController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/AppServices/*AdministratorAppService.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Constants/Administrator*.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/AdministratorStatusOutputDto.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/InternalAdministratorTests.cs",
             "backend/src/CompanyName.ProjectName.Application/Settings/Constants/AccountPreferencePolicies.cs",
             "backend/src/CompanyName.ProjectName.Application/Settings/Constants/AccountPreferenceScopes.cs",
             "docs/operations/runbooks/token-certificate-rotation.md",

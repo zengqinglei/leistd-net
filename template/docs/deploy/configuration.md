@@ -185,6 +185,8 @@ OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
 - Compose 只要求 `IDENTITY_ISSUER`；`IDENTITY_AUTHORITY`、`IDENTITY_BASE_ADDRESS` 留空时沿用它，仅内网地址不同时填写，API 与多租户 DbMigrator 一致。跨服务客户端、Audience 与机器身份配置见 [服务间调用](../standards/service-invocation.md#identity-与资源服务对接)。
+- 初始化新环境时，完成 Identity 与 Resource 的迁移后，Identity 内置管理员首次进入 Resource 即获得同一作用域的 Admin。自定义首位管理员及恢复命令见[后端说明](../../backend/README.md#资源管理员首次授予)。
+- 升级现有环境时，先升级 Identity，再在 Identity 的开放应用中给 Resource API 使用的机器客户端授予 `administrators.read`，最后升级 Resource。新的 Resource 默认会在机器令牌请求中带上这个 scope，漏授时 Identity 会拒绝整次令牌请求。DbMigrator 的机器客户端沿用现有权限。
 - readiness 是启动门禁：首次成功解析发现文档、精确比对 issuer 并取得非空 JWKS 后锁存成功。
   冷实例在 Identity 不可达时 `/api/health/ready` 返回 503，`/api/health/live` 仍为 200；
   日志指出发现文档或签名密钥依赖（探针请求时健康检查与请求日志各记一条），Identity 恢复后自动重试并进入就绪。
@@ -196,7 +198,7 @@ OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
 <!--#if (ResourceBrowserSession)-->
 - 浏览器使用后端 OIDC 机密客户端与 Cookie 会话，服务端保存并刷新令牌；配置、回调、缓存/密钥与 CSRF 边界见 [浏览器认证](../standards/auth.md#浏览器认证)。
 <!--#endif-->
-- 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
+- 本服务验证 Identity 签发的令牌，首次建成员时向 Identity 查询内置管理员资格。令牌撤销状态按下述窗口收敛。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
 - 本服务自己禁用成员（用户管理里的禁用）不依赖身份服务，下一个请求即答 403，边界见 [资源服务的成员启停](../standards/auth.md#资源服务的成员启停)。
 <!--#endif-->
 <!--#if (IncludeNotifications && Email)-->

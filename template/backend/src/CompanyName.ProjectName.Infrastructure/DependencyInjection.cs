@@ -37,6 +37,7 @@ using Leistd.MultiTenancy.ServiceClient;
 using CompanyName.ProjectName.Domain.Users.Abstractions;
 using CompanyName.ProjectName.Infrastructure.AccountPreferences;
 using CompanyName.ProjectName.Infrastructure.Systems;
+using CompanyName.ProjectName.Infrastructure.Users;
 using CompanyName.ProjectName.Domain.Systems.Abstractions;
 using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.OAuth.Options;
@@ -407,6 +408,12 @@ public static class DependencyInjection
             "IdentitySystems", configSectionPath: identitySection);
         if (HasServiceAuthentication(configuration)) systems.AddClientCredentials(configSectionPath: identitySection);
         systems.AddStandardResilienceHandler();
+        services.TryAddTransient<IIdentityAdministrator, IdentityAdministrator>();
+        var administrators = services.AddRefitServiceClient<IIdentityAdministratorsApi, IdentityAdministratorsClientOptions>(
+            "IdentityAdministrators", configSectionPath: identitySection);
+        // 超时包含取机器令牌的时间，查询失败后由下次访问重新投影。
+        administrators.AddStandardResilienceHandler(options => options.Retry.ShouldHandle = _ => ValueTask.FromResult(false));
+        if (HasServiceAuthentication(configuration)) administrators.AddClientCredentials(configSectionPath: identitySection);
 #if (TenantWorkspace)
         services.TryAddTransient<IIdentityWorkspaceDirectory,
             IdentityWorkspaceDirectory>();

@@ -53,6 +53,10 @@ public sealed class RoleDomainService(
         return role;
     }
 
+    /// <summary>查询当前作用域的内置管理员角色。</summary>
+    public async Task<Role?> FindBuiltInAdminAsync(CancellationToken cancellationToken = default)
+        => await roleRepository.GetOneAsync(role => role.IsStatic && role.Name == AdminConstant.RoleName, cancellationToken);
+
     /// <summary>确保内置的管理员与默认成员角色存在，不存在就建。宿主初始化与租户初始化共用这一份定义。</summary>
     /// <param name="adminDescription">管理员角色的说明，宿主与租户的管理范围不同。</param>
     /// <param name="cancellationToken">取消标记。</param>

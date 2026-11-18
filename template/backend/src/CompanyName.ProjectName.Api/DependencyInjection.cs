@@ -10,6 +10,7 @@ using Leistd.Security.Claims;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.Settings.Constants;
 using CompanyName.ProjectName.Application.Systems.Constants;
+using CompanyName.ProjectName.Application.Users.Constants;
 #endif
 #if (OpenIddictServer && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
@@ -118,6 +119,7 @@ public static class DependencyInjection
 
         // 资源服务按用户读取账户偏好（给收件人产出文本时没有用户令牌）
         services.AddMachineScopePolicy(AccountPreferencePolicies.Read, AccountPreferenceScopes.Read);
+        services.AddMachineScopePolicy(AdministratorPolicies.Read, AdministratorScopes.Read);
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claims) =>
         {
             var human = options.DefaultPolicy;

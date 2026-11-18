@@ -9,6 +9,7 @@ using Leistd.UnitOfWork;
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
+using CompanyName.ProjectName.Infrastructure.Users;
 #endif
 using CompanyName.ProjectName.Api.Options;
 using Microsoft.AspNetCore.Hosting;
@@ -214,6 +215,10 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             var openedGate = new RemoteIdentityReadinessHealthCheck();
             openedGate.MarkReady();
             services.AddSingleton(openedGate);
+
+            // 其余集成测试把新成员视为普通用户；管理员引导用例按需替换 HTTP 响应。
+            services.AddSingleton<IIdentityAdministratorsApi>(new StubIdentityAdministratorsApi(
+                (_, _, _) => Task.FromResult(StubIdentityAdministratorsApi.Status(false))));
 
             // 账户偏好归 Identity：测试宿主里没有 Identity，端口换成内存替身（读取器、写入用例与接口照常）。
             // 回源、缓存与转交的协议行为由单元测试（IdentityAccountPreferenceCacheTests、IdentityAccountPreferencesTests）对假接口钉住

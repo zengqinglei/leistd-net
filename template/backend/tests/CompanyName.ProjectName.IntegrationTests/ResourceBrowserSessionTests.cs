@@ -35,6 +35,7 @@ using Microsoft.Extensions.Caching.Memory;
 using System.Text.RegularExpressions;
 
 #if (TenantWorkspace)
+using CompanyName.ProjectName.Infrastructure.Users;
 using Leistd.MultiTenancy.Stores;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Time.Testing;
@@ -86,6 +87,30 @@ public sealed class ResourceBrowserSessionTests
         Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
         using var me = await homeBrowser.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+    }
+
+    [Fact]
+    public async Task The_workspace_linked_account_is_bootstrapped_from_its_own_administrator_status()
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer();
+        var queried = new List<(string Tenant, Guid Subject)>();
+        using var host = WorkspaceHost(factory, issuer, TimeProvider.System).WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IIdentityAdministratorsApi>(new StubIdentityAdministratorsApi((tenant, id, _) =>
+                {
+                    queried.Add((tenant, id));
+                    return Task.FromResult(StubIdentityAdministratorsApi.Status(tenant == issuer.WorkspaceTenantId.ToString()
+                        && id.ToString() == issuer.WorkspaceMemberId));
+                }))));
+        var cookie = await LoginAsync(host, issuer);
+        using var browser = Client(host, cookie);
+        browser.DefaultRequestHeaders.Add("X-Workspace", "acme");
+
+        using var response = await browser.GetAsync("/api/v1/users?offset=0&limit=10");
+
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        Assert.Contains((issuer.WorkspaceTenantId.ToString(), Guid.Parse(issuer.WorkspaceMemberId)), queried);
     }
 
     [Fact]
@@ -890,7 +915,7 @@ public sealed class ResourceBrowserSessionTests
         public int WorkspaceLifetime { get; set; } = 300;
         public int WorkspaceExchanges { get; private set; }
         public string WorkspaceMemberId { get; set; } = Guid.NewGuid().ToString();
-        private readonly Guid workspaceTenantId = Guid.NewGuid();
+        public Guid WorkspaceTenantId { get; } = Guid.NewGuid();
 #endif
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -898,9 +923,9 @@ public sealed class ResourceBrowserSessionTests
             if (request.Method == HttpMethod.Get)
             {
                 if (request.RequestUri!.AbsolutePath == "/api/v1/auth/me/workspaces")
-                    return new(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { new { userId = WorkspaceMemberId, tenantId = workspaceTenantId, name = "acme", displayName = "Acme" } }) };
+                    return new(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { new { userId = WorkspaceMemberId, tenantId = WorkspaceTenantId, name = "acme", displayName = "Acme" } }) };
                 return request.RequestUri!.AbsolutePath.EndsWith("ACME", StringComparison.Ordinal)
-                    ? new(HttpStatusCode.OK) { Content = JsonContent.Create(new TenantConfiguration { Id = workspaceTenantId, Name = "acme", NormalizedName = "ACME", IsActive = true }) }
+                    ? new(HttpStatusCode.OK) { Content = JsonContent.Create(new TenantConfiguration { Id = WorkspaceTenantId, Name = "acme", NormalizedName = "ACME", IsActive = true }) }
                     : new(HttpStatusCode.NoContent);
             }
 #endif
@@ -911,7 +936,7 @@ public sealed class ResourceBrowserSessionTests
                 var workspace = form.TryGetValue("workspace", out var requestedWorkspace) ? requestedWorkspace.ToString() : "";
                 if (!string.IsNullOrEmpty(workspace)) WorkspaceExchanges++;
                 var claims = new Dictionary<string, object> { ["sub"] = string.IsNullOrEmpty(workspace) ? Subject : WorkspaceMemberId, ["jti"] = Guid.NewGuid().ToString() };
-                if (!string.IsNullOrEmpty(workspace)) { claims["home_sub"] = Subject; claims["tenant_id"] = workspaceTenantId.ToString(); }
+                if (!string.IsNullOrEmpty(workspace)) { claims["home_sub"] = Subject; claims["tenant_id"] = WorkspaceTenantId.ToString(); }
                 var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
                 {
                     Issuer = Address, Audience = form.TryGetValue("audience", out var requestedAudience) && requestedAudience.ToString() is { Length: > 0 } audience ? audience : "identity-api", Claims = claims, TokenType = "at+jwt",
