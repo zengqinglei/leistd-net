@@ -339,6 +339,7 @@ def check_quality_aggregation():
     required = ['quality-plan', 'docs-sync', 'docs-sync-windows', 'frontend-gates', 'dependency-audit', 'framework-pack', 'test',
                 'template-slices', 'template-generation', 'package-consumption', 'postgresql-e2e', 'oidc-e2e']
     assert set(jobs['template-matrix']['needs']) == set(required) and jobs['template-matrix']['if'] == 'always()'
+    assert any(step.get('run') == 'node scripts/check-frontend-dependency-order.mjs' for step in jobs['frontend-gates']['steps'])
     # The audit reaches the external advisory database: it runs only when the plan requires it, the summary holds it
     # to success or skipped by that field, and no scenario slice audits.
     audit = jobs['dependency-audit']

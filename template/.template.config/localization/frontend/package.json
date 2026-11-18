@@ -59,8 +59,8 @@
     "@jsverse/transloco-optimize": "^8.4.0",
     "@playwright/test": "^1.64.1",
     "@spartan-ng/cli": "1.9.0",
-    "@testcontainers/postgresql": "^12.2.1",
     "@tailwindcss/postcss": "^4.3.3",
+    "@testcontainers/postgresql": "^12.2.1",
     //#if (LocalIdentity)
     "@types/qrcode": "^1.5.6",
     //#endif

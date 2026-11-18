@@ -153,7 +153,7 @@ PR 有意不承担全局覆盖，放行候选必须完整：这是责任迁移�
   - 无冲突退出 0 并写目标标记；有冲突退出 2，目标标记暂存在 `.leistd/` 下的 template.pending.json，没有未合并路径、改动的文件里也没有冲突标记时 `-Complete` 才写入。
   - 无标记的存量项目用 `-Adopt` 从某个提交的模板源码一次性接入，基线须与项目生成那次提交（`-BaselineCommit`，缺省为唯一根提交）一致（差异逐项确认），项目改过的规范基线（生成项目的 docs/standards）迁到 docs/project 下同名文件，只写目标包版本的标记。
 - **升级闸门** `pwsh template-package/test-template-upgrade.ps1 -PreviousVersion <上一版> -CandidatePackage <候选 nupkg>`：从第二个模板版本起是模板发布的前提，发布时以 verify Full 运行（见[模板版本与发布](./versioning.md#验证与推送)）；每个工作日的定时检查另以 verify Fast 对 develop 运行，提前暴露问题。
-  - 上一版在仓库之外生成 `identity-all-features` 与 `resource-capabilities-03`，提交项目定制（新增 npm 依赖，纯 API 为 NuGet 依赖；一处源码修改；替换一个图片，纯 API 没有图片时不适用），定制只放在上一版与候选之间稳定的位置。
+  - 上一版在仓库之外用旧版支持的固定参数生成 `identity-all-features` 与 `resource-capabilities-03`，提交项目定制（新增 npm 依赖，纯 API 为 NuGet 依赖；一处源码修改；替换一个图片，纯 API 没有图片时不适用），定制只放在上一版与候选之间稳定的位置。
   - 再用生成项目自带的同步脚本同步到候选，三类分开验收：无冲突自动合并、与候选重建的差异恰好是定制文件、verify 通过；在候选改动的同一行另做修改时退出 2、该文件是唯一的未合并路径且保留双方内容、标记未更新，未解决或只 `git add` 而留着冲突标记时 `-Complete` 被拒绝；按候选一侧解决并 `git add` 后 `-Complete`、verify 通过。
   - `-LocalFeedPath` 给出候选 Framework 包源时 verify 只用这批包。
 - **同步本地验收** `pwsh template-package/test-template-sync.ps1`：把 `template/` 副本打成 0.1.0、0.1.1（改一行、换图片、删文件、加文档、改依赖清单与锁文件）、0.1.2（只改文件名大小写）与 0.2.0（参数改名）几个本地包，不改动模板源码；跑升级闸门，再跑诊断反例（工作区不干净、缺少标记、源码生成、参数不兼容、已是目标版本、没有待完成同步时的 `-Complete`、`-ProjectRoot` 不是工作树根目录）、二进制与删除/修改冲突在 git 里的解决与 `-Complete`、新增路径上有被忽略的本地文件、只改大小写的改名，以及从首个模板包之前的真实提交存量接入、再同步到下一版。改同步脚本、标记库或闸门时运行，verify 缺省 `-Fast`。
@@ -162,6 +162,8 @@ PR 有意不承担全局覆盖，放行候选必须完整：这是责任迁移�
 ## 前端依赖维护
 
 默认与本地化载荷的 Angular 运行时、CDK、编译器和构建工具须按官方 peer 范围配套更新，并同时更新两套锁文件。先在隔离副本验证安装、生产依赖审计、lint、构建与真实浏览器测试，再同步依赖文件；完整条件矩阵由 CI 执行，不能因依赖改动免除。不得用 `--force`、`--legacy-peer-deps` 或降低审计阈值绕过依赖冲突与安全门禁。
+
+两套清单的 `dependencies` 与 `devDependencies` 按 npm 的顺序排列，由前端依赖闸门运行 `node scripts/check-frontend-dependency-order.mjs` 检查。这样 npm 添加依赖时只插入新条目，避免重排旧条目与模板升级发生冲突。
 
 本仓和生成项目的 GitHub CI、GitLab CI 与本地验证共用前端的 `node scripts/audit-dependencies.mjs`。脚本读取 `npm audit --json --omit=dev --package-lock-only` 的报告。生产依赖的 high/critical 公告在 `fixAvailable` 为 `true`，或建议版本大于等于建议包在锁文件中的版本时阻断。暂无修复版本或建议降级时输出公告编号、包名和受影响区间。GitHub 使用工作流警告，其他环境打印警告。查询或解析报告失败会阻断，只有查询遇到网络错误才有限重试。生成项目的 `verify` 不含审计，CI 只在前端锁文件变化、定时和手动时运行；本仓同理：模板发布放行（stable）必须审计，PR 与 develop 只在依赖闭包或审计输入有改动时审计，依赖未变时新出的公告由每个工作日的定时检查发现（触发规则与覆盖核对见 [CI 与发布闸门](../framework/ci-release-gates.md)）。生产审计通过不代表工具链或部署产物没有漏洞。
 
