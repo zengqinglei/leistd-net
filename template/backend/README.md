@@ -71,9 +71,9 @@ dotnet user-secrets set "Authentication:ClientSecret" "<机密客户端密钥>" 
 <!--#endif-->
 
 <!--#if (IncludeMultiTenancy)-->
-租户路由、迁移作业、账户偏好与系统目录的读取以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）、`account-preferences.read`（按用户读偏好）、`system-directory.read`（系统入口目录）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户；它补齐租户 Admin 时按正式路由进入租户，因此同时要 `tenant-routing.read`），把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有这些 scope，部署环境按 `../deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity。
+租户路由、迁移作业、账户偏好、内置管理员资格与系统目录的读取以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）、`account-preferences.read`（按用户读偏好）、`system-directory.read`（系统入口目录）、`administrators.read`（首次引导管理员）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户；它补齐租户 Admin 时按正式路由进入租户，因此同时要 `tenant-routing.read`），把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有这些 scope，部署环境按 `../deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity。
 <!--#else-->
-账户偏好与系统目录的读取以机器身份回源 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `account-preferences.read` 与 `system-directory.read`，把凭据写进 user-secrets。
+账户偏好、内置管理员资格与系统目录的读取以机器身份回源 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity 登记一个 client credentials 机器客户端，授予 `account-preferences.read`、`system-directory.read` 与 `administrators.read`，把凭据写进 user-secrets。
 <!--#endif-->
 本人改偏好时代表用户经 Token Exchange 转交 Identity：同一个客户端还要启用 Token Exchange，`aud`、`scp` 授予 Identity 自身 API 的标识（它的 `OAuth:Resource`），并把这个标识填进下面两项，缺失时启动按键名失败：
 
@@ -196,7 +196,13 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置，部署要�
 
 ## 资源管理员首次授予
 
-在完成迁移后，以部署授权执行正式引导命令，把远端用户加入 Admin 角色；`sub` 必须为远端自然人的非空 GUID，允许在其首次访问之前执行：
+宿主超管、宿主内置 Admin 成员
+<!--#if (IncludeMultiTenancy)-->
+以及租户内置 Admin 成员
+<!--#endif-->
+首次进入 Resource 时，服务向 Identity 查询其管理员资格，并在建立成员的同一事务中授予同一作用域的 Admin。成功记录的操作者是当前用户，授权依据为 `IdentityAdministrator`。已有成员的角色由 Resource 管理，Identity 后续角色变动不会同步。
+
+要指定一位未获 Identity 内置管理员资格的用户作为首位管理员，可用部署命令。其 `sub` 为远端用户的非空 GUID，可在该用户首次访问前执行。
 
 ```bash
 dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <sub>
@@ -208,7 +214,7 @@ dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --grant-admin <su
 
 默认 dry-run 不改变任何数据或操作记录，只说明将要做的事；`--apply` 在持有初始化锁的同一事务内完成：首次初始化角色（Admin 角色首次播种当前作用域全部权限，之后每次迁移补齐新增的权限），本地还没有该用户时建立只含主体标识的最小用户行（首次访问时按令牌补齐资料），再把该用户加入 Admin 角色。已有用户不改资料与启停，已删除的用户不恢复。
 
-权限经角色取得：把此人移出 Admin 按普通角色管理生效；Admin 角色只增不减，撤掉的权限下次迁移会补回，要收窄此人的权限就换成自定义角色。此人已在 Admin 中时重复执行无操作；曾被移出、被停用或被删除时普通引导一律不改，要恢复走角色管理与用户管理。记录来源是部署身份，授权依据为 `DeploymentBootstrap`。
+权限经角色取得：把此人移出 Admin 按普通角色管理生效；Admin 角色只增不减，撤掉的权限下次迁移会补回，要收窄此人的权限就换成自定义角色。此人已在 Admin 中时重复执行无操作；曾被移出的成员需经角色管理重新授予，已删除的成员使用恢复命令。命令给停用的成员加角色后，成员仍处于停用状态。记录来源是部署身份，授权依据为 `DeploymentBootstrap`。
 <!--#if (IncludeMultiTenancy)-->
 租户必须已经登记，目标连接经正式路由解析。回源机器身份需要租户路由读取权限。
 <!--#else-->

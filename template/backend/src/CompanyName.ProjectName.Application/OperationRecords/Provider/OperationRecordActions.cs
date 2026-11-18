@@ -304,6 +304,11 @@ public static class OperationRecordAuthorizations
 #if (RemoteTokenAuth || LocalIdentity)
     /// <summary>持有数据库部署权限的命令行作业（DbMigrator 的管理员引导、恢复与两步验证重置）。</summary>
     public const string DeploymentBootstrap = "DeploymentBootstrap";
+
+#if (RemoteTokenAuth)
+    /// <summary>Identity 确认的内置管理员资格。</summary>
+    public const string IdentityAdministrator = "IdentityAdministrator";
+#endif
 #endif
 #if (LocalIdentity)
 

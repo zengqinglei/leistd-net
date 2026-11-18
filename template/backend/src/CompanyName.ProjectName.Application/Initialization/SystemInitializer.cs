@@ -6,7 +6,6 @@ using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Management.Dtos;
 #if (TenantWorkspace)
 using CompanyName.ProjectName.Application.Tenants.AppServices;
-using Leistd.Ddd.Domain.Repositories;
 using Leistd.UnitOfWork;
 #endif
 #endif
@@ -60,7 +59,6 @@ public class SystemInitializer(
     ITenantManagementService tenantManagement,
 #if (TenantWorkspace)
     ITenantStaffAppService tenantStaff,
-    IRepository<Role, Guid> roleRepository,
     IUnitOfWorkManager unitOfWorkManager,
 #endif
 #endif
@@ -155,7 +153,7 @@ public class SystemInitializer(
         Guid roleId;
         using (currentTenant.Change(tenant.Id, tenant.Name))
         using (unitOfWorkManager.Begin(requiresNew: true))
-            roleId = (await roleRepository.GetOneAsync(role => role.IsStatic && role.Name == AdminConstant.RoleName, cancellationToken))!.Id;
+            roleId = (await roleDomainService.FindBuiltInAdminAsync(cancellationToken))!.Id;
         await tenantStaff.GrantAsync(tenant.Id, new GrantTenantStaffInputDto
         { HomeUserId = adminUser.Id, RoleIds = [roleId] }, cancellationToken);
 #endif

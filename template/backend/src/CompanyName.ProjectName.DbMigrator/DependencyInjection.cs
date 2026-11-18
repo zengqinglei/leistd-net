@@ -4,6 +4,7 @@ using CompanyName.ProjectName.Application;
 #endif
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Initialization;
+using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Domain;
 #endif
 #if (LocalIdentity)
@@ -89,6 +90,7 @@ public static class DependencyInjection
         services.AddApplicationDefinitions();
         // 首次建角色与播种走 API 启动初始化的同一实现，二者由同一把初始化锁互斥
         services.TryAddTransient<ISystemInitializer, SystemInitializer>();
+        services.TryAddTransient<ResourceAdminBootstrapAppService>();
         services.AddScoped<ResourceAdminBootstrapRunner>();
         return services;
     }

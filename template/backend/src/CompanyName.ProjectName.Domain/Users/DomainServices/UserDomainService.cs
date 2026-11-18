@@ -51,15 +51,17 @@ public class UserDomainService(
     /// <para><b>角色与启停不碰。</b>那两样是本服务自己的授权决定，刷新资料时必须原样保留，
     /// 否则每次请求都会把管理员刚做的授权冲掉。</para>
     /// <para>首次访问的并发不在这里处理：撞主键要到冲刷时才抛，本方法内接不到。
-    /// 由持有事务边界的调用方重试一次，见 <c>IUserAppService.EnsureCurrentUserProjectedAsync</c>。</para>
+    /// 由调用方重开工作单元重试一次。</para>
     /// </remarks>
     /// <param name="subjectId">签发方主体标识，取自令牌的 <c>sub</c>。</param>
+    /// <param name="existing">调用方在当前工作单元中读到的成员，包括可刷新资料的已有成员。</param>
     /// <param name="username">令牌里的用户名；缺失时回落为主体标识，保证非空且可检索。</param>
     /// <param name="email">令牌里的邮箱；缺失时留空串。</param>
     /// <param name="displayName">令牌里的展示名。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     public async Task<User> EnsureProjectedAsync(
         Guid subjectId,
+        User? existing,
         string? username,
         string? email,
         string? displayName,
@@ -73,7 +75,6 @@ public class UserDomainService(
         // 与新建时同一口径：签发方没给显示名就用用户名。比较与写入用同一个值，否则每个请求都会判成"变了"
         var display = string.IsNullOrWhiteSpace(displayName) ? name : displayName.Trim();
 
-        var existing = await userRepository.GetByIdAsync(subjectId, cancellationToken);
         if (existing is not null)
         {
             // 没变就不写：这条路径在每个已认证请求上都会走到

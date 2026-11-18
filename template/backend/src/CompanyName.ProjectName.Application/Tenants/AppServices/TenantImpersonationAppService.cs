@@ -10,7 +10,7 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
-using CompanyName.ProjectName.Domain.Users.Constants;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
@@ -34,7 +34,7 @@ namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 internal sealed class TenantImpersonationAppService(
     ITenantStore tenantStore,
     IRepository<User, Guid> userRepository,
-    IRepository<Role, Guid> roleRepository,
+    RoleDomainService roleDomainService,
     SessionIssuer sessionIssuer,
     IUserSessionAppService userSessionAppService,
     ICurrentUser currentUser,
@@ -82,8 +82,7 @@ internal sealed class TenantImpersonationAppService(
         using (currentTenant.Change(tenant.Id, tenant.Name))
         using (var tenantUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
-            var adminRole = await roleRepository.GetOneAsync(
-                r => r.IsStatic && r.Name == AdminConstant.RoleName, cancellationToken);
+            var adminRole = await roleDomainService.FindBuiltInAdminAsync(cancellationToken);
             var admin = adminRole is null ? null : await userRepository.GetFirstAsync(
                 u => u.IsActive && u.Roles.Any(membership => membership.RoleId == adminRole.Id),
                 q => q.OrderBy(u => u.CreationTime).ThenBy(u => u.Id),

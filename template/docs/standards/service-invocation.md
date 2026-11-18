@@ -66,7 +66,7 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 <!--#if (IncludeMultiTenancy)-->
 - 租户回源授予 tenant-routing.read；迁移身份单独授予 tenant-migration.read，并因补齐租户 Admin 时按正式路由进入租户而同时授予 tenant-routing.read。需要机器回源的交换客户端可同时启用 client credentials。
 <!--#endif-->
-- 资源服务的客户端还要按用户读账户偏好与代表本人写偏好：启用 client credentials 并授予 account-preferences.read 与 system-directory.read，同时启用 Token Exchange、ept:token、aud 与 scp 取 Identity 自身 API 的标识（OAuth:Resource）。
+- Resource API 以 client credentials 读取账户偏好、系统目录和内置管理员资格，授予 `account-preferences.read`、`system-directory.read` 与 `administrators.read`。代表本人写偏好时还需启用 Token Exchange、`ept:token`，`aud` 与 `scp` 取 Identity 自身 API 的标识（`OAuth:Resource`）。
 <!--#if (TenantWorkspace)-->
 - 工作区形态的 Resource 客户端还需登记自身资源的 `aud` 与 `scp`（例如 `aud:orders-api`、`scp:orders-api`）。进入工作区的交换携带 `workspace`，保持原受众并限制为原 scope 的子集，输出关联账号与 `home_sub`；该令牌可继续发起一次下游委托。
 <!--#endif-->
@@ -97,13 +97,13 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 <!--#if (RemoteTokenAuth && IncludeMultiTenancy)-->
       "Identity": {
         "BaseAddress": "https://login.example.com/",
-        "Scope": "tenant-routing.read account-preferences.read system-directory.read",
+        "Scope": "tenant-routing.read account-preferences.read system-directory.read administrators.read",
         "TokenExchange": { "Audience": "identity-api", "Scope": "identity-api" }
       },
 <!--#elseif (RemoteTokenAuth)-->
       "Identity": {
         "BaseAddress": "https://login.example.com/",
-        "Scope": "account-preferences.read system-directory.read",
+        "Scope": "account-preferences.read system-directory.read administrators.read",
         "TokenExchange": { "Audience": "identity-api", "Scope": "identity-api" }
       },
 <!--#endif-->

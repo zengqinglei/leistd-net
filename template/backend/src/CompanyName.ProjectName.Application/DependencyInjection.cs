@@ -112,6 +112,9 @@ public static class DependencyInjection
         });
 
         services.TryAddTransient<ISystemInitializer, SystemInitializer>();
+#if (RemoteTokenAuth)
+        services.TryAddTransient<ResourceAdminBootstrapAppService>();
+#endif
 
 #if (LocalIdentity)
         services.TryAddTransient<UserSortingValidator>();
@@ -175,6 +178,9 @@ public static class DependencyInjection
 #endif
 
         services.TryAddTransient<IUserAppService, UserAppService>();
+#if (OpenIddictServer)
+        services.TryAddTransient<IAdministratorAppService, AdministratorAppService>();
+#endif
 
         services.TryAddTransient<IRoleAppService, RoleAppService>();
 

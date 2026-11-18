@@ -700,8 +700,8 @@ function Initialize-Environment {
             $environment.Authentication__Issuer = $issuer
             $environment.Authentication__Audience = "$name-api"
             $environment.Leistd__ServiceClients__Identity__BaseAddress = $urls.idp
-            # 机器身份回源租户路由与按用户读账户偏好；代表本人写偏好经 Token Exchange 换 Identity 自身 API 的令牌
-            $environment.Leistd__ServiceClients__Identity__Scope = "tenant-routing.read account-preferences.read system-directory.read"
+            # 机器身份读取租户路由、内置管理员资格与账户偏好；代表本人写偏好经 Token Exchange 换取令牌
+            $environment.Leistd__ServiceClients__Identity__Scope = "tenant-routing.read account-preferences.read system-directory.read administrators.read"
             $environment.Leistd__ServiceClients__Identity__TokenExchange__Audience = "e2e-idp-api"
             $environment.Leistd__ServiceClients__Identity__TokenExchange__Scope = "e2e-idp-api"
             $environment.Leistd__ServiceAuth__Authority = $urls.idp
@@ -748,7 +748,7 @@ function Initialize-Environment {
     New-Application "orders-web" @("openid", "profile", "email", "roles", "orders-api") -Public | Out-Null
     New-Application "billing-web" @("openid", "profile", "email", "roles", "billing-api") -Public | Out-Null
     New-Application "idp-web" @("openid", "profile", "email", "roles", "e2e-idp-api") -Public | Out-Null
-    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read", "system-directory.read") -Exchange
+    $script:exchangeClient = New-Application "orders-api" @("orders-api", "billing-api", "e2e-idp-api", "tenant-routing.read", "account-preferences.read", "system-directory.read", "administrators.read") -Exchange
     $script:machine = New-Application "orders-machine" @("orders-api", "billing-api", "tenant-routing.read")
     $script:plainClient = New-Application "orders-only" @("orders-api")
     $script:noDelegateClient = New-Application "no-delegate" @("orders-api", "billing-api")
@@ -869,6 +869,7 @@ function Test-Workspace {
     Assert-Value "workspace-home-sub" $workspaceHome.id $entered.homeUserId
     $projectionQuery = 'SELECT count(*) FROM "e2e-orders"."Users" WHERE "Id"=''{0}'' AND "TenantId"=''{1}'' AND "HomeUserId"=''{2}'';' -f $member.userId, $tenant.id, $workspaceHome.id
     Assert-Value "workspace-resource-jit-member" "1" (Invoke-Sql "oidc_shared" $projectionQuery)
+    Assert-Http "workspace-resource-admin-access" 200 ($urls.orders + "/api/v1/users?offset=0&limit=10") -Headers $headers | Out-Null
     Assert-Value "workspace-no-actor-on-entry" $false $entered.ContainsKey("actor")
     $again = (Assert-Http "workspace-cached-entry" 200 ($urls.orders + "/api/e2e/natural") -Headers $headers).Data
     Assert-Value "workspace-cache-same-ticket" $entered.tokenId $again.tokenId
@@ -1021,6 +1022,8 @@ function Test-S5 {
         $tenant, $token, $database, $other = $target
         $subject = (Read-TokenClaims $token).sub
         Assert-Http "project-$($tenant.name)-orders" 200 ($urls.orders + "/api/e2e/natural") -Token $token | Out-Null
+        $me = (Assert-Http "project-$($tenant.name)-admin" 200 ($urls.orders + "/api/v1/auth/me") -Token $token).Data
+        Assert-Value "project-$($tenant.name)-admin-role" $true ($me.roles -contains "Admin")
         $query = 'SELECT count(*) FROM "e2e-orders"."Users" WHERE "Id"=''{0}'' AND "TenantId"=''{1}'';' -f $subject, $tenant.id
         Assert-Value "projection-target-$($tenant.name)-orders" "1" (Invoke-Sql $database $query)
         Assert-Value "projection-no-leak-$($tenant.name)-orders" "0" (Invoke-Sql $other $query)
@@ -1048,8 +1051,11 @@ function Test-S7 {
     $idpToken = Get-CodeToken $session "openid profile e2e-idp-api" "idp-web"
     $tenantIdpSession = Login -Tenant $sharedTenant.name -Password $tenantPassword
     $tenantIdpToken = Get-CodeToken $tenantIdpSession "openid profile e2e-idp-api" "idp-web"
-    Get-ServiceToken $token "billing" | Out-Null
-    Get-ServiceToken $tenantToken "billing" | Out-Null
+    # 先在两个 Resource 建好成员，之后验证已建立成员的令牌撤销窗口。
+    foreach ($name in @("orders", "billing")) {
+        Assert-Http "revocation-user-warm-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
+        Assert-Http "revocation-tenant-warm-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $tenantToken $name) | Out-Null
+    }
     $otherSession = Login "revocation_user" -Password $password
     Assert-Http "revoke-other-sessions" 200 ($urls.idp + "/api/v1/auth/me/sessions/revoke-others") -Method POST -Body @{} -Session $otherSession | Out-Null
     Assert-Http "revoked-cookie-immediate" 401 ($urls.idp + "/api/v1/auth/me") -Session $session | Out-Null

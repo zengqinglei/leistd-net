@@ -764,13 +764,21 @@ def validate(output, values, config, verify=True, sdk=None):
     frontend = output / 'frontend'
     assert frontend.exists() == values['SpaFrontend'], 'Frontend applicability'
     settings = json.loads(re.sub(r'^\s*//.*$', '', (api / 'appsettings.json').read_text(encoding='utf-8'), flags=re.M))
-    # 资源服务都回源 Identity（账户偏好）；租户路由的 scope 只在多租户时出现
+    assert (api / 'Controllers/InternalAdministratorController.cs').is_file() == values['OpenIddictServer'], 'Administrator lookup endpoint applicability'
+    assert (infra / 'Users/IIdentityAdministratorsApi.cs').is_file() == values['RemoteTokenAuth'], 'Administrator lookup client applicability'
+    # 资源服务回源 Identity；租户路由的 scope 只在多租户时出现
     identity_client = settings.get('Leistd', {}).get('ServiceClients', {}).get('Identity')
     assert (identity_client is not None) == values['RemoteTokenAuth'], 'Identity client configuration applicability'
     if identity_client is not None:
         scopes = identity_client.get('Scope', '').split()
         assert 'account-preferences.read' in scopes, 'Account preference machine scope'
         assert 'system-directory.read' in scopes, 'System directory machine scope'
+        assert 'administrators.read' in scopes, 'Built-in administrator machine scope'
+        compose = (output / 'deploy/docker-compose.yml').read_text(encoding='utf-8')
+        api_compose = re.search(r'(?ms)^  backend:\s*\n(.*?)(?=^  \S|^\S|\Z)', compose)
+        assert api_compose, 'Resource API Compose service'
+        compose_scope = re.search(r'Leistd__ServiceClients__Identity__Scope=(.+)', api_compose.group(1))
+        assert compose_scope and compose_scope.group(1).split() == scopes, 'Resource API Compose machine scope matches appsettings'
         assert ('tenant-routing.read' in scopes) == values['IncludeMultiTenancy'], 'Tenant routing scope applicability'
         assert 'TokenExchange' in identity_client, 'Account preference token exchange section'
     readme = (output / 'README.md').read_text(encoding='utf-8')

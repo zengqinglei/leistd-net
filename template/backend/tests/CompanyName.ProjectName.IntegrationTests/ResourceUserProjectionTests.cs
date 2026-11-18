@@ -191,10 +191,10 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         Assert.Equal(1, await CountUsersAsync(subjectId, host.Services));
     }
 
-    /// <summary>投影持续失败：只重试一次，记下警告后放行请求，不留下用户行。</summary>
+    /// <summary>非唯一约束错误：记下警告后放行请求，不留下用户行。</summary>
     /// <remarks>投影不是安全闸门：拦下请求只会让一个可预见的写入故障把该用户的每个请求都变成 500。</remarks>
     [Fact]
-    public async Task A_projection_that_keeps_failing_is_retried_once_then_logged_and_the_request_proceeds()
+    public async Task A_projection_failure_outside_a_unique_constraint_is_logged_without_retry()
     {
         var subjectId = Guid.CreateVersion7();
         var failing = new FailingUserInsert(subjectId);
@@ -207,8 +207,7 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         using var response = await session.Client.GetAsync("/api/health/live");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        // 两次：首次加一次重试；不重试是 1，重试循环会大于 2
-        Assert.Equal(2, failing.Attempts);
+        Assert.Equal(1, failing.Attempts);
         Assert.Contains(
             host.Services.GetFakeLogCollector().GetSnapshot(),
             record => record.Category?.EndsWith(nameof(ResourceUserProvisioningMiddleware), StringComparison.Ordinal) == true
