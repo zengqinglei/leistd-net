@@ -136,8 +136,8 @@ public sealed class ResourceMemberAccessTests(ProjectWebApplicationFactory facto
         using var response = await PatchOwnThemeAsync(session.Client);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        // 投影读两次（首次加一次重试）都失败，授权阶段又按主键读一次
-        Assert.Equal(3, failing.Count);
+        // 普通读取异常交给授权阶段再判定；只有唯一约束冲突会重试投影。
+        Assert.Equal(2, failing.Count);
     }
 
     [Fact]
