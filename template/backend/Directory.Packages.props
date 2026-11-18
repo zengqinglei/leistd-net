@@ -114,6 +114,9 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.15" />
+    <!--#if (RemoteTokenAuth)-->
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
+    <!--#endif-->
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.15" />
     <!-- 设计时 DbContext 工厂（Infrastructure/Persistence/DesignTime）要自建 ConfigurationBuilder

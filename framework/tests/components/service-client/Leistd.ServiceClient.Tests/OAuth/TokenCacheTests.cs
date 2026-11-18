@@ -1,7 +1,6 @@
 using Leistd.ServiceClient.OAuth.Handlers;
 using Leistd.ServiceClient.Exceptions;
 using Microsoft.Extensions.Internal;
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,18 +12,12 @@ namespace Leistd.ServiceClient.Tests.OAuth;
 
 public sealed class TokenCacheTests
 {
-    // 升级 HybridCache 时先移除生产复查，确认本用例仍拒绝迟到 miss，再恢复；会话移除须早于完成信号。
     [Fact]
     public async Task A_delayed_cache_miss_reuses_the_completed_fetch()
     {
-        using var memory = new PausingMemory(new MemoryCache(new MemoryCacheOptions()));
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IMemoryCache>(memory);
-        services.AddHybridCache();
-        await using var provider = services.BuildServiceProvider();
-        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 4, 0, 0, 0, TimeSpan.Zero));
-        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ILogger<TokenCache>>(), clock);
+        var clock = new FakeTimeProvider();
+        using var memory = new PausingMemory(new MemoryCache(new MemoryCacheOptions { Clock = new CacheClock(clock) }));
+        var cache = new TokenCache(memory, new FakeLogger<TokenCache>(), clock);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var count = 0;
@@ -62,6 +55,28 @@ public sealed class TokenCacheTests
         }
     }
 
+    [Fact]
+    public async Task Concurrent_cold_reads_share_one_token_request()
+    {
+        using var memory = new MemoryCache(new MemoryCacheOptions());
+        var cache = new TokenCache(memory, new FakeLogger<TokenCache>());
+        var release = new TaskCompletionSource<TokenCache.Token>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        ValueTask<TokenCache.Token> Fetch(CancellationToken _)
+        {
+            Interlocked.Increment(ref calls);
+            return new(release.Task);
+        }
+
+        var callers = Enumerable.Range(0, 8)
+            .Select(_ => cache.GetAsync("cold", TimeSpan.FromSeconds(10), Fetch, default).AsTask())
+            .ToArray();
+        release.SetResult(new TokenCache.Token("shared", DateTimeOffset.UtcNow.AddMinutes(2)));
+
+        Assert.All(await Task.WhenAll(callers), token => Assert.Equal("shared", token.Value));
+        Assert.Equal(1, calls);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -70,9 +85,9 @@ public sealed class TokenCacheTests
         var clock = new FakeTimeProvider();
         var services = new ServiceCollection().AddLogging();
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
-        services.AddHybridCache();
+        services.AddMemoryCache();
         await using var provider = services.BuildServiceProvider();
-        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ILogger<TokenCache>>(), clock);
+        var cache = new TokenCache(provider.GetRequiredService<IMemoryCache>(), provider.GetRequiredService<ILogger<TokenCache>>(), clock);
         var calls = 0;
         var began = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -111,10 +126,10 @@ public sealed class TokenCacheTests
         var clock = new BudgetClock();
         var services = new ServiceCollection().AddLogging();
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
-        services.AddHybridCache();
+        services.AddMemoryCache();
         await using var provider = services.BuildServiceProvider();
         var logger = new FakeLogger<TokenCache>();
-        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), logger, clock);
+        var cache = new TokenCache(provider.GetRequiredService<IMemoryCache>(), logger, clock);
         var calls = 0;
         var release = new TaskCompletionSource<TokenCache.Token>(TaskCreationOptions.RunContinuationsAsynchronously);
         ValueTask<TokenCache.Token> Fetch(CancellationToken ct) => ++calls == 1
@@ -131,14 +146,13 @@ public sealed class TokenCacheTests
             Assert.Equal("old-token", (await Read()).Value);
             Assert.Equal(2, calls);
             Assert.Single(logger.Collector.GetSnapshot(), record => record.Level == LogLevel.Warning);
-            var completion = provider.GetRequiredService<HybridCache>().GetOrCreateAsync<TokenCache.Token>("machine:fetch",
-                static _ => throw new InvalidOperationException("The original renewal must still be running."),
-                new HybridCacheEntryOptions { Flags = HybridCacheEntryFlags.DisableDistributedCache | HybridCacheEntryFlags.DisableLocalCacheWrite }).AsTask();
             clock.Advance(TimeSpan.FromSeconds(30));
             var retry = Read().AsTask();
             clock.Advance(TimeSpan.FromSeconds(1));
             Assert.Equal("old-token", (await retry).Value);
             Assert.Equal(2, calls);
+            clock.Advance(TimeSpan.FromSeconds(30));
+            var completion = Read().AsTask();
             release.SetResult(new TokenCache.Token("new-token", clock.GetUtcNow().AddHours(2)));
             Assert.Equal("new-token", (await completion).Value);
             Assert.Equal("new-token", (await Read()).Value);
@@ -159,10 +173,10 @@ public sealed class TokenCacheTests
         var clock = new BudgetClock();
         var services = new ServiceCollection().AddLogging();
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
-        services.AddHybridCache();
+        services.AddMemoryCache();
         await using var provider = services.BuildServiceProvider();
-        var hybrid = provider.GetRequiredService<HybridCache>();
-        var cache = new TokenCache(hybrid, new FakeLogger<TokenCache>(), clock);
+        var memory = provider.GetRequiredService<IMemoryCache>();
+        var cache = new TokenCache(memory, new FakeLogger<TokenCache>(), clock);
         var release = new TaskCompletionSource<TokenCache.Token>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         ValueTask<TokenCache.Token> Fetch(CancellationToken ct) => ++calls == 1
@@ -186,10 +200,10 @@ public sealed class TokenCacheTests
         var clock = new BudgetClock();
         var services = new ServiceCollection().AddLogging();
         services.Configure<MemoryCacheOptions>(options => options.Clock = new CacheClock(clock));
-        services.AddHybridCache();
+        services.AddMemoryCache();
         await using var provider = services.BuildServiceProvider();
-        var hybrid = provider.GetRequiredService<HybridCache>();
-        var cache = new TokenCache(hybrid, new FakeLogger<TokenCache>(), clock);
+        var memory = provider.GetRequiredService<IMemoryCache>();
+        var cache = new TokenCache(memory, new FakeLogger<TokenCache>(), clock);
         var release = new TaskCompletionSource<TokenCache.Token>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         ValueTask<TokenCache.Token> Fetch(CancellationToken ct) => ++calls == 1
@@ -199,11 +213,10 @@ public sealed class TokenCacheTests
         clock.Advance(TimeSpan.FromMinutes(61));
         var reader = Read();
         await clock.BudgetStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        var completion = hybrid.GetOrCreateAsync<TokenCache.Token>("reject:fetch",
-            static _ => throw new InvalidOperationException("The original renewal must still be running."),
-            new HybridCacheEntryOptions { Flags = HybridCacheEntryFlags.DisableDistributedCache | HybridCacheEntryFlags.DisableLocalCacheWrite }).AsTask();
         clock.Advance(TimeSpan.FromSeconds(1));
         Assert.Equal("old", (await reader).Value);
+        clock.Advance(TimeSpan.FromSeconds(30));
+        var completion = Read();
         release.SetException(new RemoteServiceException("Rejected", 400, "invalid_client") { IsOAuthError = true });
         await Assert.ThrowsAsync<RemoteServiceException>(() => completion);
         await Assert.ThrowsAsync<RemoteServiceException>(() => Read());

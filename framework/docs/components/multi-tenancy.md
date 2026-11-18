@@ -350,7 +350,7 @@ IHttpClientBuilder controlPlane = builder.Services.AddRemoteTenantConnectionStor
 - 需要硬保证时，在业务 `DbContext` 里加守卫。
 
 - **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `TenantNotFoundException`。连接路由查询在独立异步作用域直接取得控制库上下文并释放，不经 `IDbContextProvider`，不占用调用方工作单元的实例；无租户和控制库连接名不创建查询上下文。租户管理与存储仍经 Provider 参与工作单元。
-- **远端解析**：结果按 `Leistd:MultiTenancy:Routing:CacheLifetime` 缓存；同租户并发请求合并为一次回源；连接失败、超时、408/429/5xx 时可在新鲜期后沿用最后确认的路由最多 `MaxStaleness`（默认 1 小时），每键 30 秒重试一次并记 Warning；明确拒绝立即丢弃旧值，取消照常传播；响应的 `TenantId` 与请求不一致时抛 `InvalidOperationException`，校验在使用连接串和写缓存之前。
+- **远端解析**：结果按 `Leistd:MultiTenancy:Routing:CacheLifetime` 缓存；同租户并发请求合并为一次回源；连接失败、超时、408/429/5xx 时可在新鲜期后沿用最后确认的路由最多 `MaxStaleness`（默认 1 小时），每键 30 秒重试一次并记 Warning；明确拒绝立即丢弃旧值；响应的 `TenantId` 与请求不一致时抛 `InvalidOperationException`，校验在使用连接串和写缓存之前。
 - **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按连接名枚举独立物理库，同一连接串只出现一次（代表租户取标识最小者）；
   一条连接都没登记的租户不出现（随宿主库迁移）。结果带明文连接串，只给迁移作业（`MigrationReadPolicy`）。
   取不出连接的租户列进 `TenantMigrationTargetSet.FailedTenants`，不挡住其他库；迁移作业须迁完其余库后报出它们并以失败结束。
@@ -379,7 +379,7 @@ IHttpClientBuilder controlPlane = builder.Services.AddRemoteTenantConnectionStor
 ```
 
 `CacheLifetime` 默认 10 分钟，`MaxStaleness` 默认 1 小时（0 表示不接受陈旧状态，大于等于 0、不超过 1 小时）。路由最长沿用 `CacheLifetime + MaxStaleness`，库清单最长沿用 `DatabaseDirectoryCacheLifetime + MaxStaleness`；连接串仅在进程内。
-路由与库清单有可用旧值时，单次回源最多等待 1 秒；超过预算先返回旧值并按键节流 30 秒，原回源继续更新缓存。收到明确拒绝即清旧值，之后不得回落；没有旧值或已超硬截止时仍等待正常回源结果。超时回落不主动取消回源，原参与者取消及既有管道时限仍生效。该预算不等于整条跨服务请求的耗时上限。
+路由与库清单有可用旧值时，单次回源最多等待 1 秒；超过预算先返回旧值并按键节流 30 秒，原回源继续更新缓存。收到明确拒绝即清旧值，之后不得回落；没有旧值或已超硬截止时仍等待正常回源结果。每个调用方可单独取消等待，共享回源继续受客户端与弹性管道时限约束。该预算不等于整条跨服务请求的耗时上限。
 
 改路由前仍等待 `max(Access Token 有效期, CacheLifetime)`，并确认承载该租户的各实例在变更开始后成功回源过；检索不到旧值 Warning 不足为据。依据租户不存在/退役删除业务数据时须权威结果；本地保留期清理可以用旧清单。
 
@@ -417,7 +417,7 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionConfigurationManager` | `SetAsync(tenantId, name, connectionString, expectedVersion, ct)` 登记或更新一条；`RemoveAsync(tenantId, name, expectedVersion, ct)` 删除一条（该名字随即回落到服务自己的配置）。会改变数据落点的写入要求租户已停用，判据见上文表格 |
 | `AddTenantManagement()` | Management 包：注册 `ITenantManagementService`、`ITenantConnectionManagementService` 与开通错误翻译的默认实现（不翻译），并调用 `AddMultiTenancyCore()`；存储契约与工作单元由调用方先就位 |
 | `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标，并调用 `AddMultiTenancyCore()`；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
-| `AddRemoteTenantConnectionResolution(configSectionPath?)` | Core 包：注册远端连接解析、`HybridCache`（只用进程内一级，并发回源合并为一次，连接串不进分布式缓存）与远端迁移目标，并调用 `AddMultiTenancyCore()`；绑定 `configSectionPath`（默认 `Leistd:MultiTenancy:Routing`），校验消息按实际路径报键，重复调用换用另一配置节时抛出 |
+| `AddRemoteTenantConnectionResolution(configSectionPath?)` | Core 包：注册远端连接解析、`IMemoryCache`（连接串留在本进程，同键并发回源合并为一次）与远端迁移目标，并调用 `AddMultiTenancyCore()`；绑定 `configSectionPath`（默认 `Leistd:MultiTenancy:Routing`），校验消息按实际路径报键，重复调用换用另一配置节时抛出 |
 | `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），“精确名 → 默认名”的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举，返回 `TenantMigrationConnectionListResult(Connections, FailedTenants)`。EF 包提供控制库实现，ServiceClient 包提供远端实现，一次只按名字返回一条 |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
 | `TenantRouteCacheOptions` | `CacheLifetime`（默认 10 分钟，不超过 `MaximumCacheLifetime` 1 小时）；`MaxStaleness`（默认 1 小时，0–1 小时） |

@@ -14,7 +14,6 @@ using Microsoft.Extensions.Http;
 using OpenIddict.Client.SystemNetHttp;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Time.Testing;
@@ -158,9 +157,9 @@ public sealed class OfficialClientTests : IAsyncLifetime
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Unauthorized_is_not_replayed_and_distributed_delete_failure_does_not_mask_it(bool exchange)
+    public async Task Unauthorized_invalidates_the_local_token_without_replaying_the_request(bool exchange)
     {
-        var distributed = new RejectDistributedCache { RejectRemoval = true };
+        var distributed = new RecordingDistributedCache();
         var destination = new Destination(unauthorized: true);
         await using var provider = Caller(exchange, destination: destination, distributed: distributed);
         var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("Billing");
@@ -169,13 +168,13 @@ public sealed class OfficialClientTests : IAsyncLifetime
         Assert.Equal(exchange ? "exchange-1" : "machine-1", await first.Content.ReadAsStringAsync());
         Assert.Equal(1, destination.Requests);
         Assert.Equal(1, tokenRequests);
-        Assert.Equal(1, distributed.Removals);
+        Assert.Equal(0, distributed.Removals);
         using var second = await client.PostAsync("https://billing.test/", new StringContent("second"));
         Assert.Equal(HttpStatusCode.Unauthorized, second.StatusCode);
         Assert.Equal(exchange ? "exchange-2" : "machine-2", await second.Content.ReadAsStringAsync());
         Assert.Equal(2, destination.Requests);
         Assert.Equal(2, tokenRequests);
-        Assert.Equal(2, distributed.Removals);
+        Assert.Equal(0, distributed.Removals);
         Assert.Equal(0, distributed.Reads + distributed.Writes);
     }
 
@@ -183,11 +182,9 @@ public sealed class OfficialClientTests : IAsyncLifetime
     public async Task Cache_invalidation_preserves_request_cancellation()
     {
         using var cancellation = new CancellationTokenSource();
-        var distributed = new RejectDistributedCache { OnRemove = () => cancellation.Cancel() };
-        var services = new ServiceCollection();
-        services.AddLogging(); services.AddSingleton<IDistributedCache>(distributed); services.AddHybridCache();
-        await using var provider = services.BuildServiceProvider();
-        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ILogger<TokenCache>>());
+        cancellation.Cancel();
+        using var memory = new MemoryCache(new MemoryCacheOptions());
+        var cache = new TokenCache(memory, Microsoft.Extensions.Logging.Abstractions.NullLogger<TokenCache>.Instance);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.RemoveAsync(TokenCache.Key("cancel"), cancellation.Token).AsTask());
     }
 
@@ -296,46 +293,43 @@ public sealed class OfficialClientTests : IAsyncLifetime
         Assert.Equal("api", exchanges.Get("ValidExchange").Audience);
     }
 
-    private sealed class RejectDistributedCache : IDistributedCache
+    private sealed class RecordingDistributedCache : IDistributedCache
     {
         internal int Reads;
         internal int Writes;
         internal int Removals;
-        internal bool RejectRemoval;
-        internal Action? OnRemove;
         // HybridCache 初始化会读取全局标签版本；此处只追踪 Bearer 条目。
-        public byte[]? Get(string key) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return null; Interlocked.Increment(ref Reads); throw new InvalidOperationException("Distributed read."); }
-        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return Task.FromResult<byte[]?>(null); Interlocked.Increment(ref Reads); throw new InvalidOperationException("Distributed read."); }
-        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return; Interlocked.Increment(ref Writes); throw new InvalidOperationException("Distributed write."); }
-        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return Task.CompletedTask; Interlocked.Increment(ref Writes); throw new InvalidOperationException("Distributed write."); }
+        public byte[]? Get(string key) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return null; Interlocked.Increment(ref Reads); return null; }
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return Task.FromResult<byte[]?>(null); Interlocked.Increment(ref Reads); return Task.FromResult<byte[]?>(null); }
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return; Interlocked.Increment(ref Writes); }
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default) { if (!key.StartsWith("leistd:oauth:", StringComparison.Ordinal)) return Task.CompletedTask; Interlocked.Increment(ref Writes); return Task.CompletedTask; }
         public void Refresh(string key) => throw new InvalidOperationException("Distributed refresh.");
         public Task RefreshAsync(string key, CancellationToken token = default) => throw new InvalidOperationException("Distributed refresh.");
         public void Remove(string key) => RemoveAsync(key).GetAwaiter().GetResult();
         public Task RemoveAsync(string key, CancellationToken token = default)
         {
             Interlocked.Increment(ref Removals);
-            OnRemove?.Invoke();
-            token.ThrowIfCancellationRequested();
-            if (RejectRemoval || OnRemove is not null) throw new InvalidOperationException("Distributed delete.");
             return Task.CompletedTask;
         }
     }
 
     [Fact]
-    public async Task Hybrid_cache_never_reads_or_writes_distributed_storage_and_respects_output_expiry()
+    public async Task Token_cache_never_writes_distributed_storage_and_respects_output_expiry()
     {
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 4, 0, 0, 0, TimeSpan.Zero));
-        var distributed = new RejectDistributedCache();
-        var services = new ServiceCollection(); services.AddLogging(); services.AddSingleton<IDistributedCache>(distributed);
+        var distributed = new RecordingDistributedCache();
+        var services = new ServiceCollection().AddLogging().AddSingleton<IDistributedCache>(distributed);
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddSingleton<TimeProvider>(time);
         services.AddMemoryCache(options => options.Clock = new MemoryClock(time));
-        services.AddHybridCache();
+        services.AddServiceAuthentication();
         await using var provider = services.BuildServiceProvider();
-        var cache = new TokenCache(provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ILogger<TokenCache>>(), time);
+        var cache = provider.GetRequiredService<TokenCache>();
         var key = TokenCache.Key("test");
         var count = 0;
         ValueTask<TokenCache.Token> Fetch(CancellationToken _) => ValueTask.FromResult(new TokenCache.Token($"token-{++count}", time.GetUtcNow().AddSeconds(11)));
         Assert.Equal("token-1", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
+        Assert.Equal(0, distributed.Writes);
         Assert.Equal("token-1", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
         time.Advance(TimeSpan.FromMilliseconds(999));
         Assert.Equal("token-1", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
@@ -343,10 +337,10 @@ public sealed class OfficialClientTests : IAsyncLifetime
         time.Advance(TimeSpan.FromMilliseconds(1));
         Assert.Equal("token-2", (await cache.GetAsync(key, TimeSpan.FromSeconds(10), Fetch, default)).Value);
         Assert.Equal(2, count);
-        Assert.Equal(0, distributed.Reads);
         Assert.Equal(0, distributed.Writes);
+        Assert.Equal(0, distributed.Reads);
     }
-    // 两级本地缓存与 TokenCache 的 TTL 计算共享官方假时钟。
+    // 真实缓存与 TokenCache 的 TTL 计算共享同一假时钟。
     private sealed class MemoryClock(TimeProvider time) : ISystemClock
     {
         public DateTimeOffset UtcNow => time.GetUtcNow();

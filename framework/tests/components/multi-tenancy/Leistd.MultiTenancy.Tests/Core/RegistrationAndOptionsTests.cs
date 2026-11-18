@@ -5,6 +5,7 @@ using Leistd.Data.Connections;
 using Leistd.TestBase.Assertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -15,13 +16,14 @@ namespace Leistd.MultiTenancy.Tests.Core;
 public class RegistrationAndOptionsTests
 {
     [Fact]
-    public void Remote_resolution_registers_a_scoped_resolver_and_a_hybrid_cache()
+    public void Remote_resolution_registers_a_scoped_resolver_and_a_memory_cache()
     {
         var services = new ServiceCollection().AddRemoteTenantConnectionResolution();
 
         services.AssertSingle<IConnectionStringResolver>(ServiceLifetime.Scoped);
         services.AssertImplementedBy<IConnectionStringResolver, RemoteConnectionStringResolver>();
-        services.AssertSingle<Microsoft.Extensions.Caching.Hybrid.HybridCache>(ServiceLifetime.Singleton);
+        services.AssertSingle<IMemoryCache>(ServiceLifetime.Singleton);
+        services.AssertSingle<TenantRouteCache>(ServiceLifetime.Singleton);
         services.AssertImplementedBy<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
     }
 

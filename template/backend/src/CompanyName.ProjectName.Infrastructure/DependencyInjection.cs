@@ -401,6 +401,7 @@ public static class DependencyInjection
         }
 
         read.AddStandardResilienceHandler();
+        services.AddHybridCache();
         services.TryAddTransient<IIdentitySystemDirectory, IdentitySystemDirectory>();
         var systems = services.AddRefitServiceClient<IIdentitySystemsApi, IdentitySystemsClientOptions>(
             "IdentitySystems", configSectionPath: identitySection);
