@@ -10,7 +10,7 @@ import {
   DISTRIBUTED_EVENT_RAW_MESSAGES,
 } from '../data/distributed-events';
 import { getMockSessionTenantKey } from '../utils/current-user';
-import { parseMockTimeRange } from '../utils/time-range';
+import { mockInstantKey, parseMockTimeRange, withinMockTimeRange } from '../utils/time-range';
 
 type Kind = 'outbox' | 'inbox' | 'rejections';
 type Row =
@@ -67,8 +67,10 @@ function matches(row: Row, filter: Filter, headers: Record<string, string> = {})
   const get = (key: string) => filter[key] || undefined;
   return (
     (!get('before') || Date.parse(timestamp(row)) <= Date.parse(String(get('before')))) &&
-    (!get('startTime') || Date.parse(timestamp(row)) >= Date.parse(String(get('startTime')))) &&
-    (!get('endTime') || Date.parse(timestamp(row)) <= Date.parse(String(get('endTime')))) &&
+    withinMockTimeRange(timestamp(row), {
+      from: get('startTime') ? mockInstantKey(String(get('startTime'))) : undefined,
+      to: get('endTime') ? mockInstantKey(String(get('endTime'))) : undefined,
+    }) &&
     (!get('status') || row.status === get('status')) &&
     (!get('eventName') || row.eventName === get('eventName')) &&
     (!get('keyword') ||

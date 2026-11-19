@@ -29,6 +29,13 @@ describe('date-range-query', () => {
   it('rejects impossible calendar days and keeps sub-millisecond precision', () => {
     expect(validTimeRange('2026-02-30T00:00:00Z', '2026-03-05T00:00:00Z')).toBeNull();
     expect(validTimeRange('2026-11-19T24:00:00Z', '2026-11-20T01:00:00Z')).toBeNull();
+    // 同一毫秒内颠倒：按完整小数位比较
+    expect(
+      validTimeRange('2026-11-19T08:34:56.1234567Z', '2026-11-19T08:34:56.1234566Z'),
+    ).toBeNull();
+    expect(
+      validTimeRange('2026-11-19T08:34:56.1234566Z', '2026-11-19T08:34:56.1234567Z'),
+    ).not.toBeNull();
     expect(validTimeRange('2026-11-12T16:00:00Z', '2026-11-19T08:34:56.1234567Z')).toEqual({
       startTime: '2026-11-12T16:00:00.000Z',
       endTime: '2026-11-19T08:34:56.1234567Z',

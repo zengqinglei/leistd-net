@@ -202,6 +202,11 @@ export class DistributedEvents {
       : 10,
   );
   readonly cutoff = signal(new Date().toISOString());
+  /**
+   * 最后一次成功加载所用的截止时间：表格与总数都出自这次加载，按条件恢复的 before 与确认框都以它为准。
+   * 刷新会先推进 cutoff，失败时保留的仍是旧截止下的结果。
+   */
+  readonly loadedCutoff = signal<string | null>(null);
   readonly rows = signal<EventRow[]>([]);
   readonly totalCount = signal(0);
   readonly status = signal<Dto.DistributedEventStatusOutputDto | null>(null);
@@ -244,6 +249,13 @@ export class DistributedEvents {
   /** 勾选里符合各动作的记录 ID；拒收的重新解码与丢弃各自只统计、只提交适用的记录。 */
   readonly selectedForRecovery = computed(() => this.selectedFor(false));
   readonly selectedForDiscard = computed(() => this.selectedFor(true));
+  /**
+   * 按条件恢复只针对屏幕上那次成功加载的结果：列表请求进行中、加载失败或尚无结果时都不可用，
+   * 免得用新条件配旧总数打开确认框。按勾选 ID 恢复不受影响。
+   */
+  readonly filterRecoveryReady = computed(
+    () => !this.loading() && !this.loadError() && this.loadedCutoff() !== null,
+  );
   /** 选择条：有勾选，或状态筛选满足按条件恢复时出现。 */
   readonly selectionBarVisible = computed(
     () =>
@@ -317,6 +329,7 @@ export class DistributedEvents {
           }).pipe(
             tap((result) => {
               loadedKey = key;
+              this.loadedCutoff.set(String(input['before']));
               this.now.set(Date.now());
               this.status.set(result.status);
               this.catalog.set(result.catalog);
@@ -362,6 +375,7 @@ export class DistributedEvents {
                 toast.error(applicationErrorMessage(error));
               } else {
                 loadedKey = null;
+                this.loadedCutoff.set(null);
                 this.rows.set([]);
                 this.totalCount.set(0);
                 this.loadError.set(applicationErrorMessage(error));
@@ -545,7 +559,8 @@ export class DistributedEvents {
     if (
       (mode !== 'filter' && !ids.length) ||
       (mode === 'filter' &&
-        (!(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()) || this.loadError()))
+        (!(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()) ||
+          !this.filterRecoveryReady()))
     )
       return;
     const action = discard
@@ -555,7 +570,9 @@ export class DistributedEvents {
         : view === 'inbox'
           ? 'replay'
           : 'redecode';
-    const input = this.listInput();
+    // 不在加载中且没有失败时，当前筛选就是最后一次成功加载的筛选；截止取那次加载的值
+    const loadedCutoff = this.loadedCutoff() ?? this.cutoff();
+    const input: Record<string, unknown> = { ...this.listInput(), before: loadedCutoff };
     const { offset: _offset, limit: _limit, status: _status, ...filter } = input;
     const body =
       mode === 'filter'
@@ -596,7 +613,7 @@ export class DistributedEvents {
         ),
         confirmText: this.t(`distributedEvents.confirmation.button.${action}`, { count }),
         cancelText: this.t('distributedEvents.cancel'),
-        cutoff: formatAppDate(this.cutoff(), 'full', this.displayTimeZone(), this.displayLocale()),
+        cutoff: formatAppDate(loadedCutoff, 'full', this.displayTimeZone(), this.displayLocale()),
         criteria: mode === 'filter' ? criteria : ids.join(', '),
         cutoffLabel: this.t('distributedEvents.confirmation.cutoff'),
         criteriaLabel: this.t(

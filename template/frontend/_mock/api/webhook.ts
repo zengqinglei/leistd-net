@@ -25,7 +25,7 @@ import {
   nextMockWebhookId,
 } from '../data/webhooks';
 import { isUsableTimeZone, resolvePeriod, todayIn } from '../utils/statistics-calendar';
-import { parseMockTimeRange } from '../utils/time-range';
+import { parseMockTimeRange, withinMockTimeRange } from '../utils/time-range';
 
 /** 订阅全部事件（含以后新增的）的取值。 */
 const ALL_EVENTS = '*';
@@ -404,7 +404,7 @@ function sendTestEvent(req: MockRequest) {
 
 function getDeliveries(req: MockRequest) {
   requirePermission(PERMISSIONS.webhooks.default);
-  const { from, to } = parseMockTimeRange(
+  const range = parseMockTimeRange(
     // 时间取原始值：显式空串与后端一样按不合法处理，不能像其他参数那样当作没传
     { startTime: rawQuery(req, 'startTime'), endTime: rawQuery(req, 'endTime') },
     'query',
@@ -423,10 +423,7 @@ function getDeliveries(req: MockRequest) {
     .filter((item) => !subscriptionId || item.subscriptionId === subscriptionId)
     .filter((item) => !status || item.status === status)
     .filter((item) => !eventType || item.eventType === eventType)
-    .filter((item) => {
-      const time = Date.parse(item.creationTime);
-      return (from === undefined || time >= from) && (to === undefined || time <= to);
-    })
+    .filter((item) => withinMockTimeRange(item.creationTime, range))
     .sort((a, b) => Date.parse(b.creationTime) - Date.parse(a.creationTime));
   return page(items.map(deliveryOutput), req);
 }

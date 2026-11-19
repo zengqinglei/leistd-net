@@ -104,6 +104,9 @@ describe('DistributedEvents page', () => {
               distributedEvents: {
                 confirm: '{{scope}} | {{count}} | {{filter}} | {{before}}',
                 confirmation: {
+                  filterQuestion: {
+                    redeliver: 'Redeliver {{count}} dead letters matching the current filter?',
+                  },
                   result: {
                     redecode:
                       'Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}',
@@ -422,6 +425,66 @@ describe('DistributedEvents page', () => {
     expect(component.query()['endTime']).toBeUndefined();
     expect(host().querySelector('[data-record-id="42"]')).not.toBeNull();
     expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).toBeNull();
+  });
+
+  it('blocks recovery by filter while the list request is pending and then uses that load', async () => {
+    await setup(true, null, { status: 'deadLettered' });
+    const pending = new Subject<{
+      items: Dto.DistributedEventOutboxOutputDto[];
+      totalCount: number;
+    }>();
+    service.getOutboxList.mockReturnValueOnce(pending);
+    component.onRangeChange([new Date(2026, 0, 1), new Date(2026, 0, 7)]);
+    await settle();
+    const filterButton = () =>
+      Array.from(host().querySelectorAll('[data-testid=event-selection-bar] button')).at(
+        -1,
+      ) as HTMLButtonElement;
+    // 旧行与旧总数还在，但新条件的结果未到，按条件恢复不可用
+    expect(component.loading()).toBe(true);
+    expect(component.totalCount()).toBe(1200);
+    expect(filterButton().disabled).toBe(true);
+    await component.recover('filter');
+    expect(confirm.open).not.toHaveBeenCalled();
+
+    const loadedBefore = service.getOutboxList.mock.calls.at(-1)?.[0].before;
+    pending.next({ items: [OUTBOX], totalCount: 7 });
+    pending.complete();
+    await settle();
+    expect(filterButton().disabled).toBe(false);
+    await component.recover('filter');
+    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+    expect(options.header).toContain('Redeliver 7 dead letters');
+    expect(options.cutoff).toBe(formatAppDate(loadedBefore, 'full', 'UTC', 'en'));
+    options.action!().subscribe();
+    expect(service.redeliver.mock.calls[0][0].filter).toMatchObject({
+      before: loadedBefore,
+      startTime: START,
+      endTime: END,
+    });
+  });
+
+  it('recovers by the cutoff of the rows kept after a failed refresh with the same filter', async () => {
+    await setup(true, null, { status: 'deadLettered' });
+    const loadedBefore = component.cutoff();
+    expect(component.loadedCutoff()).toBe(loadedBefore);
+    const notice = vi.spyOn(toast, 'error').mockReturnValue('refresh-failed');
+    try {
+      // 刷新会推进截止时间；等过 1 毫秒，保证新截止与旧截止不同
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      service.getOutboxList.mockReturnValueOnce(throwError(() => new Error('offline')));
+      component.reload();
+      await settle();
+      expect(component.cutoff()).not.toBe(loadedBefore);
+      expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();
+      await component.recover('filter');
+      const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+      expect(options.cutoff).toBe(formatAppDate(loadedBefore, 'full', 'UTC', 'en'));
+      options.action!().subscribe();
+      expect(service.redeliver.mock.calls[0][0].filter.before).toBe(loadedBefore);
+    } finally {
+      notice.mockRestore();
+    }
   });
 
   it('drops rows from the previous filter when loading a changed filter fails', async () => {

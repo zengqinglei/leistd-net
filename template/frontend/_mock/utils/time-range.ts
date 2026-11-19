@@ -1,10 +1,10 @@
 import { parseZonedInstant } from '../../src/app/shared/utils/date-range-query';
 import { MockException } from '../core/models';
 
-/** 解析后的时间范围（毫秒）；只给一端时另一端为 undefined。 */
+/** 解析后的时间范围，值为 {@link mockInstantKey} 的比较键；只给一端时另一端为 undefined。 */
 export interface MockTimeRange {
-  from?: number;
-  to?: number;
+  from?: string;
+  to?: string;
 }
 
 /**
@@ -32,7 +32,7 @@ export function parseMockTimeRange(
       return undefined;
     }
 
-    return instant.time;
+    return instant.key;
   };
   const from = parse('startTime');
   const to = parse('endTime');
@@ -46,4 +46,17 @@ export function parseMockTimeRange(
   }
 
   return { from, to };
+}
+
+/** 数据里的时刻换成与 {@link MockTimeRange} 同口径的比较键（UTC，小数补齐到 7 位）。 */
+export function mockInstantKey(value: string): string {
+  return parseZonedInstant(value)?.key ?? '';
+}
+
+/** 时刻是否落在范围内（两端闭区间，按完整小数位比较）。 */
+export function withinMockTimeRange(value: string, range: MockTimeRange): boolean {
+  const key = mockInstantKey(value);
+  return (
+    (range.from === undefined || key >= range.from) && (range.to === undefined || key <= range.to)
+  );
 }

@@ -10,10 +10,13 @@ export interface TimeRangeQuery {
 const ZONED_INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,7}))?)?(Z|([+-])(\d{2}):(\d{2}))$/;
 
-/** 带时区的 ISO 时刻换算成 UTC 后的结果：`time` 是毫秒，`iso` 保留原有的全部小数位。 */
+/**
+ * 带时区的 ISO 时刻换算成 UTC 后的结果：`iso` 保留原有的全部小数位；`key` 把小数补齐到 7 位，
+ * 按字符串比较即按时刻先后，比较精度与传给后端的值一致。
+ */
 export interface ZonedInstant {
-  time: number;
   iso: string;
+  key: string;
 }
 
 /**
@@ -57,11 +60,8 @@ export function parseZonedInstant(value: string | null | undefined): ZonedInstan
 
   const offset =
     zone === 'Z' ? 0 : (sign === '+' ? 1 : -1) * (+offsetHours * 60 + +offsetMinutes) * 60_000;
-  const utc = wall - offset;
-  return {
-    time: utc + Number(fraction.padEnd(3, '0').slice(0, 3)),
-    iso: `${new Date(utc).toISOString().slice(0, 19)}.${fraction || '000'}Z`,
-  };
+  const base = new Date(wall - offset).toISOString().slice(0, 19);
+  return { iso: `${base}.${fraction || '000'}Z`, key: `${base}.${fraction.padEnd(7, '0')}Z` };
 }
 
 /**
@@ -74,7 +74,7 @@ export function validTimeRange(
 ): { startTime: string; endTime: string } | null {
   const from = parseZonedInstant(start);
   const to = parseZonedInstant(end);
-  return from && to && from.time <= to.time ? { startTime: from.iso, endTime: to.iso } : null;
+  return from && to && from.key <= to.key ? { startTime: from.iso, endTime: to.iso } : null;
 }
 
 /** URL 里的 UTC 起止 → 日期区间控件的值（展示时区的日历日，浏览器本地 `Date`）。 */

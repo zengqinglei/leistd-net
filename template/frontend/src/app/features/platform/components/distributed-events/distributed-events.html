@@ -306,7 +306,7 @@
                   hlmBtn
                   variant="outline"
                   size="sm"
-                  [disabled]="busy() || !totalCount()"
+                  [disabled]="busy() || !filterRecoveryReady() || !totalCount()"
                   (click)="recover('filter')"
                 >
                   {{ t('distributedEvents.bulk.filter.' + action()) }}
@@ -333,7 +333,7 @@
                     variant="outline"
                     size="sm"
                     class="text-destructive"
-                    [disabled]="busy() || !totalCount()"
+                    [disabled]="busy() || !filterRecoveryReady() || !totalCount()"
                     (click)="recover('filter', undefined, true)"
                   >
                     {{ t('distributedEvents.bulk.filter.discard') }}

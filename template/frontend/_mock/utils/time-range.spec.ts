@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMockTimeRange } from './time-range';
+import { parseMockTimeRange, withinMockTimeRange } from './time-range';
 import { MockException } from '../core/models';
 
 function errorFields(action: () => unknown): string[] {
@@ -22,7 +22,7 @@ describe('mock time range', () => {
         { startTime: '2026-11-19T08:00:00+08:00', endTime: '2026-11-19T01:00:00Z' },
         'query',
       ),
-    ).toEqual({ from: Date.parse('2026-11-19T00:00:00Z'), to: Date.parse('2026-11-19T01:00:00Z') });
+    ).toEqual({ from: '2026-11-19T00:00:00.0000000Z', to: '2026-11-19T01:00:00.0000000Z' });
     expect(parseMockTimeRange({ startTime: undefined, endTime: null }, 'query')).toEqual({
       from: undefined,
       to: undefined,
@@ -60,5 +60,18 @@ describe('mock time range', () => {
         ),
       ),
     ).toEqual(['startTime', 'endTime']);
+  });
+  it('compares order and bounds with every fractional digit', () => {
+    expect(
+      errorFields(() =>
+        parseMockTimeRange(
+          { startTime: '2026-11-19T08:34:56.1234567Z', endTime: '2026-11-19T08:34:56.1234566Z' },
+          'query',
+        ),
+      ),
+    ).toEqual(['startTime', 'endTime']);
+    const range = parseMockTimeRange({ startTime: '2026-11-19T08:34:56.1234567Z' }, 'query');
+    expect(withinMockTimeRange('2026-11-19T08:34:56.123Z', range)).toBe(false);
+    expect(withinMockTimeRange('2026-11-19T08:34:56.124Z', range)).toBe(true);
   });
 });
