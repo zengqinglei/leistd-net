@@ -50,6 +50,7 @@
     "searchSubscriptions": "Search by name or URL...",
     "searchDeliveries": "Search by event ID or type...",
     "status": "Status",
+    "dateRange": "Date range",
     "eventType": "Event type",
     "subscription": "Subscription",
     "narrowSubscriptions": "Type a keyword to narrow the results.",
@@ -128,6 +129,14 @@
   "sheet": {
     "title": "Delivery details",
     "description": "The request sent for this event and every attempt to deliver it.",
+    "alert": {
+      "statusCode": "The last attempt returned {{code}}",
+      "error": "Delivery error",
+      "notAttempted": "Not attempted yet",
+      "failedNext": "Automatic retries have ended. Resend once the receiver is back; the webhook-id stays the same so the receiver can deduplicate.",
+      "retryNext": "The next automatic attempt is at {{time}}; no action is needed. It is marked as failed once retries run out.",
+      "manualNext": "A manual resend is queued for {{time}}."
+    },
     "copyEventId": "Copy event ID",
     "overview": "Overview",
     "attemptCount": "{{count}} (automatic {{automatic}} · manual {{manual}})",

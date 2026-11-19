@@ -131,6 +131,54 @@ describe('webhook mock', () => {
     expect(search(sample.eventType.toUpperCase())).toContain(sample.id);
   });
 
+  it('filters the delivery log by creation time with both ends included', () => {
+    const list = (queryParams: Record<string, string>) =>
+      call<PagedResultDto<WebhookDeliveryOutputDto>>('GET /api/v1/webhooks/deliveries', {
+        queryParams: { limit: '1000', ...queryParams },
+      });
+    // 投递按创建时间倒序：取中间两条做边界，范围内只剩它们之间（含）的投递
+    const all = list({}).items;
+    const [newer, older] = [all[2], all[5]];
+    const inRange = all.filter(
+      (item) =>
+        Date.parse(item.creationTime) >= Date.parse(older.creationTime) &&
+        Date.parse(item.creationTime) <= Date.parse(newer.creationTime),
+    );
+
+    const ranged = list({ startTime: older.creationTime, endTime: newer.creationTime });
+    expect(ranged.items.map((item) => item.id)).toEqual(inRange.map((item) => item.id));
+    expect(ranged.totalCount).toBe(inRange.length);
+    expect(ranged.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([newer.id, older.id]),
+    );
+
+    // 只给一端按单边筛选；显式偏移换算成 UTC 后比较
+    const since = list({ startTime: older.creationTime }).items;
+    expect(since.every((item) => item.creationTime >= older.creationTime)).toBe(true);
+    expect(since.map((item) => item.id)).toContain(older.id);
+    const offset = new Date(Date.parse(newer.creationTime) + 8 * 3_600_000)
+      .toISOString()
+      .replace('Z', '+08:00');
+    expect(list({ endTime: offset }).items.map((item) => item.id)).toContain(newer.id);
+    expect(
+      list({ endTime: offset }).items.every((item) => item.creationTime <= newer.creationTime),
+    ).toBe(true);
+  });
+
+  it('rejects a time range without a time zone, malformed or reversed', () => {
+    const fieldsOf = (queryParams: Record<string, string>) => {
+      const error = rejectionOf(() => call('GET /api/v1/webhooks/deliveries', { queryParams }));
+      expect(error.status).toBe(400);
+      return error.error.errors.map((item: { field: string }) => item.field);
+    };
+
+    expect(fieldsOf({ startTime: '2026-11-01T00:00:00' })).toEqual(['startTime']);
+    expect(fieldsOf({ endTime: 'yesterday' })).toEqual(['endTime']);
+    expect(
+      fieldsOf({ startTime: '2026-11-08T00:00:00.000Z', endTime: '2026-11-01T00:00:00.000Z' }),
+    ).toEqual(['startTime', 'endTime']);
+  });
+
   it('returns the plain secret only in the create response', () => {
     const created = call<WebhookSubscriptionSecretOutputDto>(
       'POST /api/v1/webhooks/subscriptions',

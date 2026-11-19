@@ -20,7 +20,6 @@
   "clear": "清除筛选",
   "noResults": "没有匹配的事件",
   "onlyAnomalies": "只看异常",
-  "chooseState": "请先筛选死信、失败／已处理收件箱或待处理拒收。",
   "retry": "重试",
   "loading": "正在加载事件",
   "emptyHelp": "调整筛选条件，或发送测试事件检查投递链路。",
@@ -64,7 +63,8 @@
     "retrying": "重试中",
     "redecoded": "已重新解码",
     "discarded": "已丢弃",
-    "redecodePending": "待重新解码"
+    "redecodePending": "待重新解码",
+    "pendingSend": "待发送"
   },
   "health": {
     "healthy": "健康",
@@ -132,7 +132,8 @@
     "pendingInbox": "待处理",
     "deadLettered": "死信",
     "failedInbox": "处理失败",
-    "direction": "方向"
+    "direction": "方向",
+    "timeRange": "时间范围"
   },
   "cancel": "取消",
   "reason": {
@@ -195,5 +196,25 @@
     }
   },
   "transportChanged": "状态变化",
-  "transportReported": "最后上报"
+  "transportReported": "最后上报",
+  "transport": "传输",
+  "clearTimeRange": "清除时间范围",
+  "selectedCount": "已选 {{count}} 条",
+  "clearSelection": "取消选择",
+  "selectDisabled": {
+    "outbox": "仅死信可重投",
+    "inbox": "仅处理失败或已处理的记录可重放",
+    "rejections": "仅未解决的拒收可重新解码或丢弃"
+  },
+  "moreActions": "更多操作",
+  "copyRecordId": "复制记录 ID",
+  "recordId": "记录 {{id}}",
+  "relatedRecords": "相关记录",
+  "viewRecords": "查看",
+  "nextStep": {
+    "redeliver": "排查传输连通性或失败原因后重投；事件 ID 不变，消费方按 ID 去重。",
+    "replay": "修复处理器的失败原因后重放；重放会再次执行处理器，包括外部副作用。",
+    "redecode": "确认发送方格式或接收方配置后重新解码；确认无法恢复时丢弃。",
+    "redecodePending": "已转交重新解码，等待接收端处理；确认无需处理时可丢弃。"
+  }
 }

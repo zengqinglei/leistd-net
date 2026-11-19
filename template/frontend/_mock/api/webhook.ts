@@ -42,6 +42,8 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** 轮换后旧密钥继续签名的时长（`Leistd:Webhooks:SecretRotationOverlap` 默认值）。 */
 const ROTATION_OVERLAP_MS = 24 * 3_600_000;
 const SEVEN_DAYS_MS = 7 * 24 * 3_600_000;
+/** 查询参数里的时刻须带时区：`Z` 或显式偏移（后端换算成 UTC）；不带时区的后端得到非 UTC 时间，返回 400。 */
+const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{2}:\d{2})$/i;
 
 function query(req: MockRequest, name: string): string | undefined {
   const raw = req.queryParams[name];
@@ -396,8 +398,43 @@ function sendTestEvent(req: MockRequest) {
   return deliveryResponse(deliveryOutput(delivery));
 }
 
+/**
+ * 投递列表的时间范围（投递创建时间，两端闭区间）：与后端一致，写法不合规或起止颠倒时一次报全、返回 400。
+ * 只给一端时按单边筛选。
+ */
+function deliveryTimeRange(req: MockRequest): { from?: number; to?: number } {
+  const errors: { field: string; detail: string }[] = [];
+  const parse = (field: 'startTime' | 'endTime', label: string) => {
+    const value = query(req, field);
+    if (value === undefined) {
+      return undefined;
+    }
+    const time = Date.parse(value);
+    if (Number.isNaN(time)) {
+      errors.push({ field, detail: `The value '${value}' is not valid for ${label}.` });
+      return undefined;
+    }
+    if (!ZONED_INSTANT.test(value)) {
+      errors.push({ field, detail: `${label} must be UTC.` });
+      return undefined;
+    }
+    return time;
+  };
+  const from = parse('startTime', 'StartTime');
+  const to = parse('endTime', 'EndTime');
+  if (from !== undefined && to !== undefined && from > to) {
+    const detail = 'StartTime must not be later than EndTime.';
+    errors.push({ field: 'startTime', detail }, { field: 'endTime', detail });
+  }
+  if (errors.length > 0) {
+    throw new MockException(400, { errors });
+  }
+  return { from, to };
+}
+
 function getDeliveries(req: MockRequest) {
   requirePermission(PERMISSIONS.webhooks.default);
+  const { from, to } = deliveryTimeRange(req);
   const keyword = query(req, 'keyword')?.trim().toLowerCase();
   const subscriptionId = query(req, 'subscriptionId');
   const status = query(req, 'status');
@@ -412,6 +449,10 @@ function getDeliveries(req: MockRequest) {
     .filter((item) => !subscriptionId || item.subscriptionId === subscriptionId)
     .filter((item) => !status || item.status === status)
     .filter((item) => !eventType || item.eventType === eventType)
+    .filter((item) => {
+      const time = Date.parse(item.creationTime);
+      return (from === undefined || time >= from) && (to === undefined || time <= to);
+    })
     .sort((a, b) => Date.parse(b.creationTime) - Date.parse(a.creationTime));
   return page(items.map(deliveryOutput), req);
 }

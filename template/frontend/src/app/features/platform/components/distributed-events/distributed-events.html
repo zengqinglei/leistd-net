@@ -5,72 +5,81 @@
 <!--#endif-->
   <div class="relative flex h-full min-w-0 flex-col overflow-y-auto p-4 sm:p-6">
     <div class="flex flex-col gap-6 *:shrink-0">
-      <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
-          @if (status(); as status) {
-            <span
-              hlmBadge
-              [variant]="
-                status.transportStatus === 'healthy'
-                  ? 'success'
-                  : status.transportStatus === 'unknown'
-                    ? 'secondary'
-                    : 'warning'
-              "
-              data-testid="event-transport"
+      @if (status(); as status) {
+        <!-- 传输行：第一行名称与一枚健康徽章，下一行元信息用相对时间（完整时刻在 Tooltip）；
+         发送测试事件检验的是传输链路，与列表筛选无关，放在这一行右侧 -->
+        <div
+          class="flex flex-wrap items-start justify-between gap-3"
+          data-testid="event-transport-row"
+        >
+          <div class="flex min-w-0 flex-col gap-1">
+            <div class="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+              <span class="text-muted-foreground">{{ t('distributedEvents.transport') }}</span>
+              <span class="font-medium" data-testid="event-transport-name">{{
+                status.transportName || t('distributedEvents.noTransport')
+              }}</span>
+              <span
+                hlmBadge
+                appStatusDot
+                [variant]="healthVariant(status.transportStatus)"
+                data-testid="event-transport"
+                >{{ t('distributedEvents.health.' + status.transportStatus) }}</span
+              >
+            </div>
+            <p
+              class="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums"
             >
-              {{ status.transportName || t('distributedEvents.noTransport') }} ·
-              {{ t('distributedEvents.health.' + status.transportStatus) }}
-            </span>
-            <span class="text-muted-foreground text-xs" data-testid="event-transport-changed">
-              {{ t('distributedEvents.transportChanged') }} ·
-              {{
-                status.transportStatusChangedAt
-                  ? (status.transportStatusChangedAt
-                    | appDate: 'full' : displayTimeZone() : displayLocale())
-                  : '—'
-              }}
-            </span>
-            <span class="text-muted-foreground text-xs" data-testid="event-transport-reported">
-              {{ t('distributedEvents.transportReported') }} ·
-              {{
-                status.transportReportedAt
-                  ? (status.transportReportedAt
-                    | appDate: 'full' : displayTimeZone() : displayLocale())
-                  : '—'
-              }}
-            </span>
-            <span class="text-muted-foreground text-xs">{{
-              t('distributedEvents.last24Hours', {
-                sent: status.sentLast24Hours,
-                processed: status.processedLast24Hours,
-              })
-            }}</span>
-          }
-        </div>
-        <div class="flex flex-auto gap-2 sm:flex-initial">
-          <button
-            hlmBtn
-            variant="outline"
-            class="flex-1 sm:flex-initial"
-            [disabled]="loading()"
-            (click)="reload()"
-          >
-            <ng-icon name="lucideRefreshCw" />{{ t('distributedEvents.refresh') }}
-          </button>
+              <span class="whitespace-nowrap" data-testid="event-transport-changed">
+                {{ t('distributedEvents.transportChanged') }}
+                @if (status.transportStatusChangedAt; as changedAt) {
+                  <app-relative-time-label
+                    [instant]="changedAt"
+                    [now]="now()"
+                    [timeZone]="relativeTimeZone()"
+                    [locale]="displayLocale() || 'en'"
+                  />
+                } @else {
+                  —
+                }
+              </span>
+              <span aria-hidden="true">·</span>
+              <span class="whitespace-nowrap" data-testid="event-transport-reported">
+                {{ t('distributedEvents.transportReported') }}
+                @if (status.transportReportedAt; as reportedAt) {
+                  <app-relative-time-label
+                    [instant]="reportedAt"
+                    [now]="now()"
+                    [timeZone]="relativeTimeZone()"
+                    [locale]="displayLocale() || 'en'"
+                  />
+                } @else {
+                  —
+                }
+              </span>
+              <span aria-hidden="true">·</span>
+              <span class="whitespace-nowrap">{{
+                t('distributedEvents.last24Hours', {
+                  sent: status.sentLast24Hours,
+                  processed: status.processedLast24Hours,
+                })
+              }}</span>
+            </p>
+          </div>
           @if (canTest()) {
             <button
               hlmBtn
-              class="flex-1 sm:flex-initial"
+              variant="outline"
               [disabled]="busy()"
               (click)="sendTest()"
               data-testid="event-send-test"
             >
-              <ng-icon name="lucideSend" />{{ t('distributedEvents.sendTest') }}
+              <ng-icon name="lucideSend" data-icon="inline-start" />{{
+                t('distributedEvents.sendTest')
+              }}
             </button>
           }
         </div>
-      </div>
+      }
 
       <app-distributed-event-statistics
         [status]="status()"
@@ -163,6 +172,21 @@
                 (input)="update({ keyword: $any($event.target).value || null })"
               />
             </hlm-input-group>
+            @if (view() !== 'catalog') {
+              <!-- 状态 ≤4 项，用单选分段快捷切换；再点一次取消即为全部 -->
+              <hlm-toggle-group
+                type="single"
+                size="sm"
+                [value]="statusFilter()"
+                [attr.aria-label]="t('distributedEvents.field.status')"
+                data-testid="event-status-filter"
+                (valueChange)="setFilter('status', $any($event) || null)"
+              >
+                @for (state of states(); track state) {
+                  <button hlmToggleGroupItem [value]="state">{{ stateText(state) }}</button>
+                }
+              </hlm-toggle-group>
+            }
             @for (key of facetKeys(); track key) {
               <app-faceted-filter
                 [label]="t('distributedEvents.field.' + key)"
@@ -193,59 +217,131 @@
               query()['consumer'] ||
               query()['reason'] ||
               query()['anomalies'] ||
-              query()['direction']
+              query()['direction'] ||
+              timeRange()
             ) {
               <button hlmBtn variant="ghost" size="sm" (click)="setView(view())">
                 <ng-icon name="lucideX" />{{ t('distributedEvents.clear') }}
               </button>
             }
           </div>
-          @if (canManage() && view() !== 'catalog') {
-            <div
-              class="flex flex-auto flex-wrap gap-2 sm:flex-initial"
-              data-testid="event-bulk-actions"
-            >
-              @if (selected().length) {
-                <button
-                  hlmBtn
-                  variant="outline"
-                  class="flex-1 sm:flex-initial"
-                  [disabled]="busy()"
-                  (click)="recover('selected')"
-                >
-                  {{
-                    t('distributedEvents.bulk.selected.' + action(), { count: selected().length })
-                  }}
-                </button>
-              }
-              <span
-                class="inline-flex flex-1 sm:flex-initial"
-                [hlmTooltip]="bulkAllowed() ? null : t('distributedEvents.chooseState')"
+          <!-- 右组依次是时间范围、刷新；ml-auto 让这组始终靠右，窄屏刷新 flex-1 占满剩余宽度 -->
+          <div class="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+            @if (view() !== 'catalog') {
+              <!-- 写法同操作记录：按展示时区选日期，parseDate / formatInputDates 必须自己传，
+               默认实现按浏览器时区；占位文字不是标签，另给读屏用的 label -->
+              <label class="sr-only" for="event-time-range">{{
+                t('distributedEvents.field.timeRange')
+              }}</label>
+              <hlm-date-range-picker
+                class="w-full sm:w-auto"
+                align="end"
+                data-testid="event-time-range"
+                [date]="selectedRange()"
+                [formatDates]="formatRange()"
+                (dateChange)="onRangeChange($event)"
               >
+                <hlm-date-range-input
+                  class="w-full sm:w-[20rem] md:w-[18rem]"
+                  inputId="event-time-range"
+                  showClear
+                  [placeholder]="t('distributedEvents.field.timeRange')"
+                  [clearAriaLabel]="t('distributedEvents.clearTimeRange')"
+                  [calendarAriaLabel]="t('distributedEvents.field.timeRange')"
+                  [parseDate]="parseRangeInput()"
+                  [formatInputDates]="formatRange()"
+                />
+              </hlm-date-range-picker>
+            }
+            <button
+              hlmBtn
+              variant="secondary"
+              class="flex-1 sm:flex-none"
+              data-testid="event-refresh"
+              (click)="reload()"
+            >
+              @if (loading()) {
+                <hlm-spinner data-icon="inline-start" />
+              } @else {
+                <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+              }
+              {{ t('distributedEvents.refresh') }}
+            </button>
+          </div>
+        </div>
+
+        @if (selectionBarVisible()) {
+          <!-- 选择条：有勾选或状态筛选满足按条件恢复时出现；每个按钮只统计、只提交适用于该动作的记录 -->
+          <div
+            class="bg-muted/40 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border px-3 py-2 text-sm"
+            data-testid="event-selection-bar"
+          >
+            <span class="font-medium whitespace-nowrap tabular-nums">{{
+              t('distributedEvents.selectedCount', { count: selected().length })
+            }}</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                hlmBtn
+                variant="ghost"
+                size="sm"
+                [disabled]="!selected().length"
+                (click)="selected.set([])"
+              >
+                {{ t('distributedEvents.clearSelection') }}
+              </button>
+              <button
+                hlmBtn
+                variant="outline"
+                size="sm"
+                [disabled]="busy() || !selectedForRecovery().length"
+                (click)="recover('selected')"
+              >
+                {{
+                  t('distributedEvents.bulk.selected.' + action(), {
+                    count: selectedForRecovery().length,
+                  })
+                }}
+              </button>
+              @if (bulkAllowed()) {
                 <button
                   hlmBtn
                   variant="outline"
-                  class="flex-1"
-                  [disabled]="busy() || !bulkAllowed() || !totalCount()"
+                  size="sm"
+                  [disabled]="busy() || !totalCount()"
                   (click)="recover('filter')"
                 >
                   {{ t('distributedEvents.bulk.filter.' + action()) }}
                 </button>
-              </span>
+              }
               @if (view() === 'rejections') {
                 <button
                   hlmBtn
                   variant="outline"
-                  class="flex-1 sm:flex-initial"
-                  [disabled]="busy() || (!selected().length && !bulkDiscardAllowed())"
-                  (click)="recover(selected().length ? 'selected' : 'filter', undefined, true)"
+                  size="sm"
+                  [disabled]="busy() || !selectedForDiscard().length"
+                  (click)="recover('selected', undefined, true)"
                 >
-                  {{ t('distributedEvents.action.discard') }}
+                  {{
+                    t('distributedEvents.bulk.selected.discard', {
+                      count: selectedForDiscard().length,
+                    })
+                  }}
                 </button>
+                @if (bulkDiscardAllowed()) {
+                  <button
+                    hlmBtn
+                    variant="outline"
+                    size="sm"
+                    [disabled]="busy() || !totalCount()"
+                    (click)="recover('filter', undefined, true)"
+                  >
+                    {{ t('distributedEvents.bulk.filter.discard') }}
+                  </button>
+                }
               }
             </div>
-          }
-        </div>
+          </div>
+        }
 
         @if (loadError(); as error) {
           <div role="alert" class="flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm">

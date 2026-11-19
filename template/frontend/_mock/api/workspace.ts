@@ -34,6 +34,7 @@ function staff(tenantId: string) {
       homeUserId: user.id,
       memberId: member?.id ?? `platform-${tenantId}-${user.id}`,
       username: user.username,
+      linkedUsername: member?.username ?? `platform.${user.username}`,
       displayName: user.displayName,
       isActive: member?.isActive ?? true,
       creationTime: access.creationTime,

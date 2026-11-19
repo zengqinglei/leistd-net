@@ -10,64 +10,122 @@
       [closeLabel]="t('distributedEvents.close')"
       data-testid="event-detail"
     >
-      <div hlmSheetHeader class="gap-3 border-b pe-12">
-        <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <h2 hlmSheetTitle class="min-w-0 wrap-anywhere font-mono">
-            {{
-              detail()?.record?.eventName ||
-                catalogDetail()?.eventName ||
-                t('distributedEvents.details')
-            }}
-          </h2>
-          @if (detail(); as current) {
-            @if (canManage() && recoverable(current.record)) {
-              <button
-                hlmBtn
-                size="sm"
-                [disabled]="busy()"
-                (click)="recover.emit({ record: current.record, discard: false })"
+      <div hlmSheetHeader class="border-b pe-12">
+        <div class="flex min-w-0 items-start justify-between gap-3">
+          <div class="flex min-w-0 flex-col gap-2">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <h2 hlmSheetTitle class="min-w-0 wrap-anywhere font-mono text-base">
+                {{
+                  detail()?.record?.eventName ||
+                    catalogDetail()?.eventName ||
+                    t('distributedEvents.details')
+                }}
+              </h2>
+              @if (detail(); as current) {
+                <span
+                  hlmBadge
+                  appStatusDot
+                  [variant]="badge(current.record)"
+                  data-testid="event-detail-status"
+                  >{{ t(stateLabel(current.record)) }}</span
+                >
+              }
+              @if (catalogDetail(); as catalog) {
+                @if (catalog.outgoing) {
+                  <span hlmBadge variant="outline">{{ t('distributedEvents.outgoing') }}</span>
+                }
+                @if (catalog.incoming) {
+                  <span hlmBadge variant="secondary">{{ t('distributedEvents.incoming') }}</span>
+                }
+              }
+            </div>
+            @if (detail(); as current) {
+              <div
+                class="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+                data-testid="event-detail-meta"
               >
-                {{ t('distributedEvents.action.' + action()) }}
-              </button>
+                <span class="whitespace-nowrap">{{ t('distributedEvents.view.' + view()) }}</span>
+                <span aria-hidden="true">·</span>
+                <span class="whitespace-nowrap tabular-nums">{{
+                  t('distributedEvents.recordId', { id: current.record.id })
+                }}</span>
+                @if (current.record.eventId) {
+                  <span aria-hidden="true">·</span>
+                  <span class="flex min-w-0 items-center gap-1">
+                    <code class="min-w-0 font-mono break-all">{{ current.record.eventId }}</code>
+                    <button
+                      hlmBtn
+                      variant="ghost"
+                      size="icon-xs"
+                      class="shrink-0"
+                      [attr.aria-label]="t('distributedEvents.copyId')"
+                      [hlmTooltip]="t('distributedEvents.copyId')"
+                      (click)="clipboard.copy(current.record.eventId!)"
+                    >
+                      <ng-icon [name]="clipboard.copied() ? 'lucideCheck' : 'lucideCopy'" />
+                    </button>
+                  </span>
+                }
+              </div>
+            }
+          </div>
+          @if (detail(); as current) {
+            @if (canManage() && (recoverable(current.record) || discardable(current.record))) {
+              <div class="flex shrink-0 items-center gap-2">
+                @if (recoverable(current.record)) {
+                  <button
+                    hlmBtn
+                    size="sm"
+                    [disabled]="busy()"
+                    (click)="recover.emit({ record: current.record, discard: false })"
+                  >
+                    <ng-icon name="lucideRotateCw" data-icon="inline-start" />
+                    {{ t('distributedEvents.action.' + action()) }}
+                  </button>
+                }
+                <!-- 破坏性的丢弃收进菜单，放在分隔线之后 -->
+                @if (discardable(current.record)) {
+                  <button
+                    hlmBtn
+                    variant="outline"
+                    size="icon-sm"
+                    align="end"
+                    data-testid="event-detail-more"
+                    [attr.aria-label]="t('distributedEvents.moreActions')"
+                    [hlmTooltip]="t('distributedEvents.moreActions')"
+                    [hlmDropdownMenuTrigger]="recordMenu"
+                  >
+                    <ng-icon name="lucideEllipsis" />
+                  </button>
+                  <ng-template #recordMenu>
+                    <hlm-dropdown-menu>
+                      <hlm-dropdown-menu-group>
+                        <button
+                          hlmDropdownMenuItem
+                          (click)="recordClipboard.copy(current.record.id)"
+                        >
+                          <ng-icon name="lucideCopy" />
+                          {{ t('distributedEvents.copyRecordId') }}
+                        </button>
+                      </hlm-dropdown-menu-group>
+                      <hlm-dropdown-menu-separator />
+                      <button
+                        hlmDropdownMenuItem
+                        variant="destructive"
+                        [disabled]="busy()"
+                        (click)="recover.emit({ record: current.record, discard: true })"
+                      >
+                        <ng-icon name="lucideTrash2" />
+                        {{ t('distributedEvents.action.discard') }}
+                      </button>
+                    </hlm-dropdown-menu>
+                  </ng-template>
+                }
+              </div>
             }
           }
         </div>
         <p hlmSheetDescription class="sr-only">{{ t('distributedEvents.detailHelp') }}</p>
-        @if (detail(); as current) {
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <code class="text-muted-foreground min-w-0 font-mono text-xs break-all">{{
-              current.record.eventId || '—'
-            }}</code>
-            @if (current.record.eventId) {
-              <button
-                hlmBtn
-                variant="ghost"
-                size="icon-sm"
-                [attr.aria-label]="t('distributedEvents.copyId')"
-                [hlmTooltip]="t('distributedEvents.copyId')"
-                (click)="clipboard.copy(current.record.eventId!)"
-              >
-                <ng-icon [name]="clipboard.copied() ? 'lucideCheck' : 'lucideCopy'" />
-              </button>
-            }
-            <span
-              hlmBadge
-              [variant]="badge(current.record.status)"
-              data-testid="event-detail-status"
-              >{{ t('distributedEvents.state.' + stateLabel(current.record)) }}</span
-            >
-          </div>
-        }
-        @if (catalogDetail(); as catalog) {
-          <div class="flex flex-wrap gap-2">
-            @if (catalog.outgoing) {
-              <span hlmBadge variant="outline">{{ t('distributedEvents.outgoing') }}</span>
-            }
-            @if (catalog.incoming) {
-              <span hlmBadge variant="secondary">{{ t('distributedEvents.incoming') }}</span>
-            }
-          </div>
-        }
       </div>
       <div class="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
         @if (detailLoading()) {
@@ -77,76 +135,83 @@
           <p role="alert" class="text-sm">{{ error }}</p>
         }
         @if (catalogDetail(); as item) {
-          <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 text-sm">
-            @for (field of catalogFields(); track field[0]) {
-              <dt class="text-muted-foreground">{{ t('distributedEvents.field.' + field[0]) }}</dt>
-              <dd class="min-w-0 wrap-anywhere">
-                {{
-                  isDate(field[0]) && field[1]
-                    ? ($any(field[1]) | appDate: 'full' : displayTimeZone() : displayLocale())
-                    : fieldValue(field[1])
-                }}
-              </dd>
-            }
-          </dl>
-          <div class="flex flex-wrap gap-2">
-            <button
-              hlmBtn
-              variant="outline"
-              size="sm"
-              (click)="jump('outbox', 'pending', item.eventName)"
-            >
-              {{ t('distributedEvents.view.outbox') }} · {{ item.pendingOutbox }}
-            </button>
-            <button
-              hlmBtn
-              variant="outline"
-              size="sm"
-              (click)="jump('inbox', 'pending', item.eventName)"
-            >
-              {{ t('distributedEvents.view.inbox') }} · {{ item.pendingInbox }}
-            </button>
-            <button
-              hlmBtn
-              variant="outline"
-              size="sm"
-              (click)="jump('outbox', 'deadLettered', item.eventName)"
-            >
-              {{ t('distributedEvents.deadLettered') }} · {{ item.deadLettered }}
-            </button>
-            <button
-              hlmBtn
-              variant="outline"
-              size="sm"
-              (click)="jump('inbox', 'failed', item.eventName)"
-            >
-              {{ t('distributedEvents.failedInbox') }} · {{ item.failedInbox }}
-            </button>
-          </div>
+          <section class="flex flex-col gap-3">
+            <h3 class="border-b pb-3 text-sm font-semibold">
+              {{ t('distributedEvents.overview') }}
+            </h3>
+            <dl class="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+              @for (field of catalogFields(); track field[0]) {
+                <dt class="text-muted-foreground">
+                  {{ t('distributedEvents.field.' + field[0]) }}
+                </dt>
+                <dd class="min-w-0 wrap-anywhere">
+                  {{
+                    isDate(field[0]) && field[1]
+                      ? ($any(field[1]) | appDate: 'full' : displayTimeZone() : displayLocale())
+                      : fieldValue(field[1])
+                  }}
+                </dd>
+              }
+            </dl>
+          </section>
+          <section class="flex flex-col gap-3">
+            <h3 class="border-b pb-3 text-sm font-semibold">
+              {{ t('distributedEvents.relatedRecords') }}
+            </h3>
+            <ul class="flex flex-col divide-y rounded-md border" data-testid="event-catalog-links">
+              @for (link of catalogLinks(); track link.labelKey) {
+                <li class="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span class="truncate">{{ t(link.labelKey) }}</span>
+                    <span class="text-muted-foreground tabular-nums">{{ link.count }}</span>
+                  </span>
+                  @if (link.count > 0) {
+                    <button
+                      hlmBtn
+                      variant="link"
+                      size="sm"
+                      class="shrink-0"
+                      [attr.aria-label]="
+                        t(link.labelKey) + ' · ' + t('distributedEvents.viewRecords')
+                      "
+                      (click)="jump(link.view, link.status, item.eventName)"
+                    >
+                      {{ t('distributedEvents.viewRecords') }}
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
         }
         @if (detail(); as detail) {
-          @if (canManage() && view() === 'rejections' && discardable(detail.record)) {
-            <button
-              hlmBtn
-              variant="outline"
-              size="sm"
-              [disabled]="busy()"
-              (click)="recover.emit({ record: detail.record, discard: true })"
-            >
-              {{ t('distributedEvents.action.discard') }}
-            </button>
+          @if (attention(); as notice) {
+            <div hlmAlert [variant]="notice.variant" data-testid="event-detail-alert">
+              <ng-icon name="lucideCircleAlert" />
+              <h4 hlmAlertTitle>
+                {{ stateText(notice.state) }} · <span class="font-mono">{{ notice.code }}</span>
+              </h4>
+              <div hlmAlertDescription>
+                @if (notice.diagnostic) {
+                  <p class="wrap-anywhere">{{ notice.diagnostic }}</p>
+                }
+                <p>{{ t(notice.nextKey) }}</p>
+              </div>
+            </div>
           }
           <section class="flex flex-col gap-3">
-            <h3 class="text-sm font-semibold">{{ t('distributedEvents.overview') }}</h3>
-            <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 text-sm">
+            <h3 class="border-b pb-3 text-sm font-semibold">
+              {{ t('distributedEvents.overview') }}
+            </h3>
+            <dl class="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               @for (field of detailFields(); track field[0]) {
                 <dt class="text-muted-foreground">
                   {{ t('distributedEvents.field.' + field[0]) }}
                 </dt>
                 <dd class="min-w-0 wrap-anywhere">
                   @if (field[0] === 'status') {
-                    <span hlmBadge [variant]="badge($any(field[1]))">{{
-                      t('distributedEvents.state.' + stateLabel(detail.record))
+                    <span hlmBadge appStatusDot [variant]="badge(detail.record)">{{
+                      t(stateLabel(detail.record))
                     }}</span>
                   } @else if (field[0] === 'reason') {
                     <span>{{ reasonLabel($any(field[1])) }}</span
@@ -165,8 +230,10 @@
             </dl>
           </section>
           <section class="flex flex-col gap-3">
-            <h3 class="text-sm font-semibold">{{ t('distributedEvents.headers') }}</h3>
-            <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 font-mono text-xs">
+            <h3 class="border-b pb-3 text-sm font-semibold">
+              {{ t('distributedEvents.headers') }}
+            </h3>
+            <dl class="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-4 gap-y-2 font-mono text-xs">
               @for (header of detailHeaders(); track header[0]) {
                 <dt class="wrap-anywhere text-muted-foreground">{{ header[0] }}</dt>
                 <dd class="min-w-0 wrap-anywhere">{{ header[1] }}</dd>
@@ -177,8 +244,10 @@
           </section>
           @if (detailCoordinates().length) {
             <section class="flex flex-col gap-3">
-              <h3 class="text-sm font-semibold">{{ t('distributedEvents.coordinates') }}</h3>
-              <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-2 font-mono text-xs">
+              <h3 class="border-b pb-3 text-sm font-semibold">
+                {{ t('distributedEvents.coordinates') }}
+              </h3>
+              <dl class="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-4 gap-y-2 font-mono text-xs">
                 @for (item of detailCoordinates(); track item[0]) {
                   <dt class="text-muted-foreground wrap-anywhere">{{ item[0] }}</dt>
                   <dd class="min-w-0 wrap-anywhere">{{ item[1] }}</dd>
@@ -187,30 +256,39 @@
             </section>
           }
           @if (canManage() && payloadEnabled()) {
-            <section class="flex flex-col items-start gap-3" data-testid="event-payload">
-              <h3 class="text-sm font-semibold">
-                {{
-                  t(
-                    view() === 'rejections'
-                      ? 'distributedEvents.rawBody'
-                      : 'distributedEvents.payload'
-                  )
-                }}
-              </h3>
-              @if (payload() === null) {
-                <button
-                  hlmBtn
-                  variant="outline"
-                  size="sm"
-                  [disabled]="payloadLoading()"
-                  (click)="loadPayload()"
-                >
-                  {{ t('distributedEvents.showPayload') }}
-                </button>
-              } @else {
-                <button hlmBtn variant="outline" size="sm" (click)="clipboard.copy(payload()!)">
-                  <ng-icon name="lucideCopy" />{{ t('distributedEvents.copyPayload') }}
-                </button>
+            <section class="flex flex-col gap-3" data-testid="event-payload">
+              <div class="flex min-h-8 items-center justify-between gap-3 border-b pb-3">
+                <h3 class="text-sm font-semibold">
+                  {{
+                    t(
+                      view() === 'rejections'
+                        ? 'distributedEvents.rawBody'
+                        : 'distributedEvents.payload'
+                    )
+                  }}
+                </h3>
+                @if (payload() === null) {
+                  <button
+                    hlmBtn
+                    variant="outline"
+                    size="sm"
+                    [disabled]="payloadLoading()"
+                    (click)="loadPayload()"
+                  >
+                    @if (payloadLoading()) {
+                      <hlm-spinner data-icon="inline-start" />
+                    }
+                    {{ t('distributedEvents.showPayload') }}
+                  </button>
+                } @else {
+                  <button hlmBtn variant="ghost" size="sm" (click)="clipboard.copy(payload()!)">
+                    <ng-icon name="lucideCopy" data-icon="inline-start" />{{
+                      t('distributedEvents.copyPayload')
+                    }}
+                  </button>
+                }
+              </div>
+              @if (payload() !== null) {
                 <pre
                   class="bg-muted w-full overflow-x-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-all"
                   >{{ payload() }}</pre>

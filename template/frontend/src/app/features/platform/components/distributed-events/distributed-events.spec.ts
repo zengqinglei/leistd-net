@@ -22,6 +22,7 @@ import { AccountPreferencesService } from '../../../../core/services/account-pre
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
 
@@ -146,7 +147,7 @@ describe('DistributedEvents page', () => {
     await setup(false, null, { record: OUTBOX.id });
     await settle();
     expect(fixture.nativeElement.querySelector('[data-testid="event-send-test"]')).toBeNull();
-    expect(fixture.nativeElement.querySelector('[data-testid="event-bulk-actions"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="event-selection-bar"]')).toBeNull();
     expect(document.querySelector('[data-testid="event-payload"]')).toBeNull();
     const sheet = fixture.debugElement.query(By.directive(DistributedEventRecordSheet))
       .componentInstance as DistributedEventRecordSheet;
@@ -295,5 +296,235 @@ describe('DistributedEvents page', () => {
     expect(component.canTest()).toBe(false);
     component.sendTest();
     expect(service.sendTestEvent).not.toHaveBeenCalled();
+  });
+
+  const START = '2026-01-01T00:00:00.000Z';
+  const END = '2026-01-07T23:59:59.999Z';
+  const host = () => fixture.nativeElement as HTMLElement;
+
+  it('sends a valid URL time range to the list and the recovery filter and lists it in the confirmation', async () => {
+    await setup(true, null, { status: 'deadLettered', startTime: START, endTime: END });
+    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).toMatchObject({
+      startTime: START,
+      endTime: END,
+      before: component.cutoff(),
+    });
+    expect(component.selectedRange()).toBeDefined();
+    await component.recover('filter');
+    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+    //#if (IncludeLocalization)
+    expect(options.criteria).toContain('distributedEvents.field.timeRange');
+    //#else
+    expect(options.criteria).toContain('Time range');
+    //#endif
+    expect(options.criteria).toContain(
+      `${formatAppDate(START, 'full', 'UTC', 'en')} ~ ${formatAppDate(END, 'full', 'UTC', 'en')}`,
+    );
+    expect(options.cutoff).not.toBe('');
+    options.action!().subscribe();
+    expect(service.redeliver.mock.calls[0][0].filter).toMatchObject({
+      before: component.cutoff(),
+      startTime: START,
+      endTime: END,
+    });
+  });
+
+  it.each([
+    { startTime: START },
+    { startTime: 'yesterday', endTime: END },
+    { startTime: END, endTime: START },
+  ])('treats an incomplete, malformed or reversed URL range as unfiltered (%o)', async (range) => {
+    await setup(true, null, { status: 'deadLettered', ...(range as Record<string, string>) });
+    const input = service.getOutboxList.mock.calls.at(-1)?.[0];
+    expect(input).not.toHaveProperty('startTime');
+    expect(input).not.toHaveProperty('endTime');
+    expect(component.selectedRange()).toBeUndefined();
+    await component.recover('filter');
+    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+    options.action!().subscribe();
+    expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('startTime');
+    expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('endTime');
+  });
+
+  it('writes the selected days in the display time zone as UTC bounds and returns to the first page', async () => {
+    await setup(true, null, { page: '3' });
+    component.onRangeChange([new Date(2026, 0, 1), new Date(2026, 0, 7)]);
+    await settle();
+    expect(component.query()['startTime']).toBe(START);
+    expect(component.query()['endTime']).toBe(END);
+    expect(component.page()).toBe(0);
+    component.onRangeChange(null);
+    await settle();
+    expect(component.query()['startTime']).toBeUndefined();
+  });
+
+  it('clears the time range when switching tabs or jumping to another view', async () => {
+    await setup(true, null, { startTime: START, endTime: END });
+    component.setView('inbox');
+    await settle();
+    expect(component.timeRange()).toBeNull();
+    await router.navigate(['/platform/distributed-events'], {
+      queryParams: { view: 'inbox', startTime: START, endTime: END },
+    });
+    await settle();
+    component.jump('outbox', 'deadLettered');
+    await settle();
+    expect(router.url).not.toContain('startTime');
+    expect(router.url).not.toContain('endTime');
+  });
+
+  it('shows a test event sent while the outbox is filtered to historical dates', async () => {
+    await setup(true, null, { view: 'outbox', startTime: START, endTime: END });
+    component.sendTest();
+    await settle();
+    expect(router.url).not.toContain('startTime');
+    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).toMatchObject({ keyword: 'test-event' });
+    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).not.toHaveProperty('startTime');
+  });
+
+  it('hides the time range on the event catalog', async () => {
+    await setup(true, null, { view: 'catalog' });
+    expect(host().querySelector('[data-testid=event-time-range]')).toBeNull();
+    expect(host().querySelector('[data-testid=event-status-filter]')).toBeNull();
+  });
+
+  it('orders the toolbar right group as time range then a secondary refresh that never disables', async () => {
+    await setup(true);
+    const refresh = host().querySelector('[data-testid=event-refresh]') as HTMLButtonElement;
+    const range = host().querySelector('[data-testid=event-time-range]')!;
+    expect(range.parentElement).toBe(refresh.parentElement);
+    expect(range.compareDocumentPosition(refresh)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(refresh.classList).toContain('bg-secondary');
+    const pending = new Subject<{
+      items: Dto.DistributedEventOutboxOutputDto[];
+      totalCount: number;
+    }>();
+    service.getOutboxList.mockReturnValueOnce(pending);
+    refresh.click();
+    fixture.detectChanges();
+    expect(refresh.disabled).toBe(false);
+    expect(refresh.querySelector('hlm-spinner')).not.toBeNull();
+    pending.next({ items: [OUTBOX], totalCount: 1 });
+    pending.complete();
+    await settle();
+    expect(refresh.querySelector('hlm-spinner')).toBeNull();
+  });
+
+  it('filters status with a single-choice toggle group that clears on a second click', async () => {
+    await setup(true);
+    // 发件箱状态依次是待发送、已发送、死信
+    const item = () =>
+      host().querySelectorAll(
+        '[data-testid=event-status-filter] [hlmToggleGroupItem]',
+      )[2] as HTMLButtonElement;
+    expect(
+      host().querySelectorAll('[data-testid=event-status-filter] [hlmToggleGroupItem]'),
+    ).toHaveLength(3);
+    expect(host().querySelector('app-faceted-filter')?.textContent).not.toMatch(/status/i);
+    item().click();
+    await settle();
+    expect(component.query()['status']).toBe('deadLettered');
+    expect(item().getAttribute('data-state')).toBe('on');
+    item().click();
+    await settle();
+    expect(component.query()['status']).toBeUndefined();
+  });
+
+  it('shows the transport name with one health badge and relative report times', async () => {
+    await setup(true);
+    component.status.set({
+      ...STATUS,
+      transportStatusChangedAt: '2026-01-01T10:20:30Z',
+      transportReportedAt: '2026-01-01T11:22:33Z',
+    });
+    await settle();
+    const row = host().querySelector('[data-testid=event-transport-row]')!;
+    expect(row.querySelector('[data-testid=event-transport-name]')?.textContent).toContain(
+      'RabbitMQ',
+    );
+    expect(row.querySelectorAll('[hlmBadge]')).toHaveLength(1);
+    expect(row.querySelector('[hlmBadge]')?.className).toContain("before:content-['']");
+    expect(
+      row.querySelector('[data-testid=event-transport-reported] time')?.getAttribute('datetime'),
+    ).toBe('2026-01-01T11:22:33Z');
+    expect(row.querySelector('p')?.classList).toContain('text-xs');
+    const send = row.querySelector('[data-testid=event-send-test]')!;
+    expect(send.classList).toContain('bg-background');
+  });
+
+  describe('selection bar', () => {
+    const rejection = (
+      id: string,
+      status: Dto.DistributedEventRejectionStatus,
+    ): Dto.DistributedEventRejectionOutputDto => ({
+      id,
+      transport: 'RabbitMQ',
+      coordinates: {},
+      reason: 'invalid-payload',
+      error: 'Invalid payload.',
+      status,
+      redecodeCount: 0,
+      receivedAt: '2026-11-09T00:00:00Z',
+      lastModificationTime: '2026-11-09T00:00:00Z',
+    });
+    const bar = () => host().querySelector('[data-testid=event-selection-bar]');
+    const buttons = () =>
+      Array.from(bar()?.querySelectorAll('button') ?? []) as HTMLButtonElement[];
+
+    it('stays hidden until records are selected or the status allows recovery by condition', async () => {
+      await setup(true);
+      expect(bar()).toBeNull();
+      component.selected.set([OUTBOX.id]);
+      await settle();
+      expect(bar()).not.toBeNull();
+      expect(buttons().find((b) => /redeliver/i.test(b.textContent!))?.disabled).toBe(false);
+      buttons()[0].click();
+      await settle();
+      expect(component.selected()).toEqual([]);
+      expect(bar()).toBeNull();
+    });
+
+    it('offers recovery by the current filter for dead letters with the selected action disabled at zero', async () => {
+      await setup(true, null, { status: 'deadLettered' });
+      expect(bar()).not.toBeNull();
+      // 取消选择、重投已选（0）、按当前筛选重投
+      expect(buttons()).toHaveLength(3);
+      expect(buttons().map((button) => button.disabled)).toEqual([true, true, false]);
+    });
+
+    it('counts and submits only the rejections each action applies to', async () => {
+      await setup(true, null, { view: 'rejections' });
+      service.getRejectionList.mockReturnValue(
+        of({
+          items: [rejection('1', 'pending'), rejection('2', 'redecodePending')],
+          totalCount: 2,
+        }),
+      );
+      component.reload();
+      await settle();
+      component.selected.set(['1', '2']);
+      await settle();
+      expect(component.selectedForRecovery()).toEqual(['1']);
+      expect(component.selectedForDiscard()).toEqual(['1', '2']);
+      // 取消选择、重新解码已选、丢弃已选；状态未筛选时没有按条件的入口
+      expect(buttons().map((button) => button.disabled)).toEqual([false, false, false]);
+      service.redecode.mockReturnValue(of({ affectedCount: 1, deferredCount: 0, skipped: [] }));
+      await component.recover('selected');
+      (confirm.open.mock.calls.at(-1)![0] as DistributedEventRecoveryOptions).action!().subscribe();
+      expect(service.redecode).toHaveBeenCalledWith({ ids: ['1'] });
+      // 恢复成功后列表重新加载并清空勾选，重新勾选后再丢弃
+      await settle();
+      component.selected.set(['1', '2']);
+      service.discard.mockReturnValue(of({ affectedCount: 2, deferredCount: 0, skipped: [] }));
+      await component.recover('selected', undefined, true);
+      (confirm.open.mock.calls.at(-1)![0] as DistributedEventRecoveryOptions).action!().subscribe();
+      expect(service.discard).toHaveBeenCalledWith({ ids: ['1', '2'] });
+    });
+
+    it('offers discard by the current filter for pending and queued rejections', async () => {
+      await setup(true, null, { view: 'rejections', status: 'redecodePending' });
+      expect(component.bulkDiscardAllowed()).toBe(true);
+      expect(buttons().some((button) => /filter/i.test(button.textContent!))).toBe(true);
+    });
   });
 });

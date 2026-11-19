@@ -50,6 +50,7 @@
     "searchSubscriptions": "搜索名称或地址...",
     "searchDeliveries": "搜索事件 ID 或类型...",
     "status": "状态",
+    "dateRange": "时间范围",
     "eventType": "事件类型",
     "subscription": "订阅",
     "narrowSubscriptions": "请输入关键词缩小结果范围。",
@@ -128,6 +129,14 @@
   "sheet": {
     "title": "投递详情",
     "description": "这次事件发出的请求与每一次投递尝试。",
+    "alert": {
+      "statusCode": "最近一次返回 {{code}}",
+      "error": "投递出错",
+      "notAttempted": "尚未尝试",
+      "failedNext": "自动重试已结束。确认接收方恢复后重发；webhook-id 不变，接收方按它去重。",
+      "retryNext": "将于 {{time}} 自动再试，无需操作；重试用尽仍未成功时记为失败。",
+      "manualNext": "已排队手动重发，将于 {{time}} 发送。"
+    },
     "copyEventId": "复制事件 ID",
     "overview": "概要",
     "attemptCount": "{{count}}（自动 {{automatic}} · 手动 {{manual}}）",

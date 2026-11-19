@@ -13,38 +13,48 @@
     >
       <div hlmSheetHeader class="gap-2 border-b pe-12">
         @if (delivery(); as delivery) {
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <h2 hlmSheetTitle class="font-mono">{{ delivery.eventType }}</h2>
-            <span
-              hlmBadge
-              appStatusDot
-              data-testid="webhook-delivery-sheet-status"
-              [variant]="statusVariants[delivery.status]"
-              >{{ t(statusKeys[delivery.status]) }}</span
-            >
-          </div>
-          <p hlmSheetDescription class="sr-only">{{ t('webhooks.sheet.description') }}</p>
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex min-w-0 items-center gap-1">
-              <code class="text-muted-foreground min-w-0 font-mono text-xs break-all">{{
-                delivery.eventId
-              }}</code>
-              <button
-                hlmBtn
-                variant="ghost"
-                size="icon-sm"
-                type="button"
-                class="shrink-0"
-                [attr.aria-label]="t('webhooks.sheet.copyEventId')"
-                [hlmTooltip]="t('webhooks.sheet.copyEventId')"
-                (click)="copyEventId()"
+          <!-- 标题行：事件类型与状态，操作贴右；下一行是元信息（订阅 · 可复制的 webhook-id） -->
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex min-w-0 flex-col gap-1">
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <h2 hlmSheetTitle class="font-mono text-base break-all">
+                  {{ delivery.eventType }}
+                </h2>
+                <span
+                  hlmBadge
+                  appStatusDot
+                  class="whitespace-nowrap"
+                  data-testid="webhook-delivery-sheet-status"
+                  [variant]="statusVariants[delivery.status]"
+                  >{{ t(statusKeys[delivery.status]) }}</span
+                >
+              </div>
+              <div
+                class="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1 text-xs"
+                data-testid="webhook-delivery-sheet-meta"
               >
-                <ng-icon [name]="eventIdClipboard.copied() ? 'lucideCheck' : 'lucideCopy'" />
-              </button>
+                <span class="min-w-0 wrap-anywhere">{{ delivery.subscriptionName }}</span>
+                <span aria-hidden="true">·</span>
+                <span class="flex min-w-0 items-center gap-1">
+                  <code class="min-w-0 font-mono break-all">{{ delivery.eventId }}</code>
+                  <button
+                    hlmBtn
+                    variant="ghost"
+                    size="icon-sm"
+                    type="button"
+                    class="shrink-0"
+                    [attr.aria-label]="t('webhooks.sheet.copyEventId')"
+                    [hlmTooltip]="t('webhooks.sheet.copyEventId')"
+                    (click)="copyEventId()"
+                  >
+                    <ng-icon [name]="eventIdClipboard.copied() ? 'lucideCheck' : 'lucideCopy'" />
+                  </button>
+                </span>
+              </div>
             </div>
             @if (canManage()) {
               <span
-                class="inline-flex"
+                class="inline-flex shrink-0"
                 [hlmTooltip]="
                   delivery.status === 'pending'
                     ? t('webhooks.action.retryPending', {
@@ -57,7 +67,6 @@
               >
                 <button
                   hlmBtn
-                  variant="outline"
                   size="sm"
                   type="button"
                   data-testid="webhook-delivery-sheet-retry"
@@ -74,8 +83,9 @@
               </span>
             }
           </div>
+          <p hlmSheetDescription class="sr-only">{{ t('webhooks.sheet.description') }}</p>
         } @else {
-          <h2 hlmSheetTitle>{{ t('webhooks.sheet.title') }}</h2>
+          <h2 hlmSheetTitle class="text-base">{{ t('webhooks.sheet.title') }}</h2>
           <p hlmSheetDescription class="sr-only">{{ t('webhooks.sheet.description') }}</p>
         }
       </div>
@@ -95,10 +105,52 @@
             </button>
           </div>
         } @else if (delivery(); as delivery) {
+          <!-- 未成功的投递在正文顶部说明最近一次的结果与下一步 -->
+          @if (outcome(); as outcome) {
+            <div
+              hlmAlert
+              role="note"
+              data-testid="webhook-delivery-alert"
+              [variant]="outcome.failed ? 'destructive' : 'default'"
+            >
+              <ng-icon [name]="outcome.failed ? 'lucideCircleAlert' : 'lucideClock'" />
+              <p hlmAlertTitle>
+                @switch (outcome.result) {
+                  @case ('statusCode') {
+                    {{ t('webhooks.sheet.alert.statusCode', { code: delivery.lastStatusCode }) }}
+                  }
+                  @case ('error') {
+                    {{ t('webhooks.sheet.alert.error') }}
+                  }
+                  @default {
+                    {{ t('webhooks.sheet.alert.notAttempted') }}
+                  }
+                }
+              </p>
+              <div hlmAlertDescription>
+                @if (outcome.result === 'error') {
+                  <p class="wrap-anywhere">{{ delivery.lastError }}</p>
+                }
+                @if (outcome.failed) {
+                  <p>{{ t('webhooks.sheet.alert.failedNext') }}</p>
+                } @else if (delivery.nextAttemptAt; as next) {
+                  @let time = next | appDate: 'full' : displayTimeZone() : displayLocale();
+                  <p>
+                    {{
+                      delivery.nextTrigger === 'manual'
+                        ? t('webhooks.sheet.alert.manualNext', { time })
+                        : t('webhooks.sheet.alert.retryNext', { time })
+                    }}
+                  </p>
+                }
+              </div>
+            </div>
+          }
+
           <section class="flex flex-col gap-3">
-            <h3 class="text-sm font-semibold">{{ t('webhooks.sheet.overview') }}</h3>
+            <h3 class="border-b pb-3 text-sm font-semibold">{{ t('webhooks.sheet.overview') }}</h3>
             <dl
-              class="grid grid-cols-[minmax(6rem,auto)_1fr] items-baseline gap-x-4 gap-y-2 text-sm"
+              class="grid grid-cols-[8rem_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-sm"
               data-testid="webhook-delivery-overview"
             >
               <dt class="text-muted-foreground">{{ t('webhooks.deliveries.colSubscription') }}</dt>
@@ -146,43 +198,7 @@
           </section>
 
           <section class="flex flex-col gap-3">
-            <h3 class="text-sm font-semibold">{{ t('webhooks.sheet.request') }}</h3>
-            @if (latestAttempt(); as attempt) {
-              <div class="flex flex-col gap-1.5">
-                <p class="text-muted-foreground text-xs">
-                  {{
-                    t('webhooks.sheet.latestHeaders', {
-                      time:
-                        attempt.attemptedAt | appDate: 'full' : displayTimeZone() : displayLocale(),
-                    })
-                  }}
-                </p>
-                <pre
-                  class="bg-muted max-h-48 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-all"
-                  data-testid="webhook-delivery-headers"
-                  >{{ headerLines(attempt.requestHeaders) }}</pre>
-              </div>
-            }
-            <div class="flex flex-col gap-1.5">
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-muted-foreground text-xs">{{ t('webhooks.sheet.body') }}</p>
-                <button hlmBtn variant="ghost" size="sm" type="button" (click)="copyPayload()">
-                  <ng-icon
-                    [name]="payloadClipboard.copied() ? 'lucideCheck' : 'lucideCopy'"
-                    data-icon="inline-start"
-                  />
-                  {{ t('common.copy') }}
-                </button>
-              </div>
-              <pre
-                class="bg-muted max-h-72 overflow-auto rounded-md p-3 font-mono text-xs"
-                data-testid="webhook-delivery-payload"
-                >{{ payload() }}</pre>
-            </div>
-          </section>
-
-          <section class="flex flex-col gap-3">
-            <h3 class="text-sm font-semibold">{{ t('webhooks.sheet.attempts') }}</h3>
+            <h3 class="border-b pb-3 text-sm font-semibold">{{ t('webhooks.sheet.attempts') }}</h3>
             <ul class="flex flex-col divide-y rounded-md border" data-testid="webhook-attempts">
               @for (attempt of delivery.attempts; track attempt.id) {
                 <li class="text-sm">
@@ -236,6 +252,42 @@
                 </li>
               }
             </ul>
+          </section>
+
+          <section class="flex flex-col gap-3">
+            <h3 class="border-b pb-3 text-sm font-semibold">{{ t('webhooks.sheet.request') }}</h3>
+            @if (latestAttempt(); as attempt) {
+              <div class="flex flex-col gap-1.5">
+                <p class="text-muted-foreground text-xs">
+                  {{
+                    t('webhooks.sheet.latestHeaders', {
+                      time:
+                        attempt.attemptedAt | appDate: 'full' : displayTimeZone() : displayLocale(),
+                    })
+                  }}
+                </p>
+                <pre
+                  class="bg-muted max-h-48 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-all"
+                  data-testid="webhook-delivery-headers"
+                  >{{ headerLines(attempt.requestHeaders) }}</pre>
+              </div>
+            }
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-muted-foreground text-xs">{{ t('webhooks.sheet.body') }}</p>
+                <button hlmBtn variant="ghost" size="sm" type="button" (click)="copyPayload()">
+                  <ng-icon
+                    [name]="payloadClipboard.copied() ? 'lucideCheck' : 'lucideCopy'"
+                    data-icon="inline-start"
+                  />
+                  {{ t('common.copy') }}
+                </button>
+              </div>
+              <pre
+                class="bg-muted max-h-72 overflow-auto rounded-md p-3 font-mono text-xs"
+                data-testid="webhook-delivery-payload"
+                >{{ payload() }}</pre>
+            </div>
           </section>
         }
       </div>

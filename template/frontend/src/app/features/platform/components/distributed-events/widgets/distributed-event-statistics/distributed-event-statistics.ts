@@ -39,7 +39,7 @@ import {
   ],
   providers: [provideIcons({ lucideInfo })],
   templateUrl: './distributed-event-statistics.html',
-  host: { class: 'block min-w-0' },
+  host: { class: '@container block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DistributedEventStatistics {

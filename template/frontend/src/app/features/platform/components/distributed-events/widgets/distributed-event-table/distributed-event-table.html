@@ -3,6 +3,9 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
+  @if (selectionColumns().length) {
+    <span hidden [id]="selectReasonId">{{ selectReason() }}</span>
+  }
   <app-table-loading
     class="@container rounded-xl border border-border overflow-hidden"
     #loadingState="appTableLoading"
@@ -23,6 +26,7 @@
                 @if (column.id === 'select') {
                   <hlm-checkbox
                     [checked]="allChecked()"
+                    [disabled]="!selectableRows().length"
                     [aria-label]="t('distributedEvents.selectPage')"
                     (checkedChange)="toggleAll($event === true)"
                   />
@@ -52,12 +56,26 @@
                   <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'first:ps-4'">
                     @switch (cell.column.id) {
                       @case ('select') {
-                        @if (row.original.record && recoverable(row.original.record)) {
+                        @if (selectable(row.original.record)) {
                           <hlm-checkbox
                             [checked]="selected().includes(row.id)"
                             [aria-label]="t('distributedEvents.selectRecord', { id: row.id })"
                             (checkedChange)="toggle(row.id, $event === true)"
                           />
+                        } @else {
+                          <!-- 禁用控件收不到悬停与焦点：原因提示挂在可聚焦的外层，读屏经 aria-describedby 读到 -->
+                          <span
+                            class="inline-flex"
+                            tabindex="0"
+                            data-select-cell
+                            [hlmTooltip]="selectReason()"
+                          >
+                            <hlm-checkbox
+                              disabled
+                              [aria-label]="t('distributedEvents.selectRecord', { id: row.id })"
+                              [aria-describedby]="selectReasonId"
+                            />
+                          </span>
                         }
                       }
                       @case ('event') {
@@ -83,8 +101,8 @@
                         </div>
                       }
                       @case ('status') {
-                        <span hlmBadge [variant]="badge(row.original.status)">{{
-                          t('distributedEvents.state.' + statusLabel(row.original))
+                        <span hlmBadge appStatusDot [variant]="badge(row.original)">{{
+                          t(statusLabel(row.original))
                         }}</span>
                       }
                       @case ('orderingKey') {

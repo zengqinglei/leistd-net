@@ -48,6 +48,10 @@ export interface DistributedEventInboxDetailOutputDto {
 export interface DistributedEventInboxFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
+  /** 接收时间下限（UTC），含等于该时刻的记录。 */
+  startTime?: string | null;
+  /** 接收时间上限（UTC），含等于该时刻的记录；与 before 同时生效。 */
+  endTime?: string | null;
   eventName?: string | null;
   /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
@@ -100,6 +104,10 @@ export interface DistributedEventOutboxDetailOutputDto {
 export interface DistributedEventOutboxFilterDto {
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
+  /** 创建时间下限（UTC），含等于该时刻的记录。 */
+  startTime?: string | null;
+  /** 创建时间上限（UTC），含等于该时刻的记录；与 before 同时生效。 */
+  endTime?: string | null;
   eventName?: string | null;
   /** 事件标识、排序键、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
@@ -180,6 +188,10 @@ export interface DistributedEventRejectionFilterDto {
   status?: 'pending' | 'redecodePending' | null;
   /** 本次恢复的时间上限（UTC），必填，防止卷入后续新记录。 */
   before: string;
+  /** 接收时间下限（UTC），含等于该时刻的记录。 */
+  startTime?: string | null;
+  /** 接收时间上限（UTC），含等于该时刻的记录；与 before 同时生效。 */
+  endTime?: string | null;
   eventName?: string | null;
   /** 事件标识、TraceId 或 CorrelationId 精确匹配。 */
   keyword?: string | null;
@@ -248,6 +260,10 @@ export interface GetDistributedEventInboxInputDto extends PagedRequestDto {
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
+  /** 接收时间下限（UTC），含等于该时刻的记录。 */
+  startTime?: string | null;
+  /** 接收时间上限（UTC），含等于该时刻的记录；与 before 同时生效。 */
+  endTime?: string | null;
   /** 状态精确匹配；查询串只接受 camelCase 名称。 */
   status?: DistributedEventInboxStatus | null;
   errorCode?: string | null;
@@ -262,6 +278,10 @@ export interface GetDistributedEventOutboxInputDto extends PagedRequestDto {
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
+  /** 创建时间下限（UTC），含等于该时刻的记录。 */
+  startTime?: string | null;
+  /** 创建时间上限（UTC），含等于该时刻的记录；与 before 同时生效。 */
+  endTime?: string | null;
   /** 状态精确匹配；查询串只接受 camelCase 名称。 */
   status?: DistributedEventOutboxStatus | null;
   errorCode?: string | null;
@@ -275,6 +295,10 @@ export interface GetDistributedEventRejectionsInputDto extends PagedRequestDto {
   keyword?: string | null;
   /** 首次加载时刻上限（UTC），含等于该时刻的记录。 */
   before?: string | null;
+  /** 接收时间下限（UTC），含等于该时刻的记录。 */
+  startTime?: string | null;
+  /** 接收时间上限（UTC），含等于该时刻的记录；与 before 同时生效。 */
+  endTime?: string | null;
   /** 状态精确匹配；查询串只接受 camelCase 名称。 */
   status?: DistributedEventRejectionStatus | null;
   /** 拒收原因码精确匹配。 */

@@ -70,6 +70,7 @@ public sealed class TenantStaffTests(ProjectWebApplicationFactory factory) : ICl
         (await session.Client.PostAsJsonAsync(url, input)).EnsureSuccessStatusCode();
         var member = Assert.Single((await session.Client.GetFromJsonAsync<List<TenantStaffOutputDto>>(url))!);
         Assert.Equal(homeUserId, member.HomeUserId);
+        Assert.Equal("platform.admin", member.LinkedUsername);
         Assert.Equal("Admin", Assert.Single(member.Roles).Name);
         (await session.Client.DeleteAsync($"{url}/{homeUserId}")).EnsureSuccessStatusCode();
         Assert.Empty((await session.Client.GetFromJsonAsync<List<TenantStaffOutputDto>>(url))!);

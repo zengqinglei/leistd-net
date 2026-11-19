@@ -14,9 +14,18 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCopy, lucideCheck } from '@ng-icons/lucide';
+import {
+  lucideCheck,
+  lucideCircleAlert,
+  lucideCopy,
+  lucideEllipsis,
+  lucideRotateCw,
+  lucideTrash2,
+} from '@ng-icons/lucide';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -24,6 +33,7 @@ import { Observable, catchError, finalize, of, switchMap, tap } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
+import { StatusDot } from '../../../../../../shared/directives/status-dot';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { injectCopyToClipboard } from '../../../../../../shared/utils/clipboard';
 //#if (!IncludeLocalization)
@@ -38,29 +48,64 @@ import {
   EventDetail,
   EventRecord,
   EventView,
-  STATUS_VARIANTS,
+  StateBadgeVariant,
   canRecover,
   canDiscard,
+  displayState,
   recoveryAction,
   reasonKey,
+  stateLabelKey,
+  stateVariant,
 } from '../../distributed-event-display';
+
+/** 需要人工处理的记录在正文顶部给出原因与下一步。 */
+interface RecordAttention {
+  variant: 'default' | 'destructive';
+  state: string;
+  code: string;
+  diagnostic: string | null;
+  nextKey: string;
+}
+
+/** 目录详情里跳到相关记录的一行；只列该事件适用的方向。 */
+interface CatalogLink {
+  labelKey: string;
+  count: number;
+  view: EventView;
+  status: string;
+}
+
+/** 已用跳转行展示的计数，不在概要里重复。 */
+const CATALOG_LINK_FIELDS = ['pendingOutbox', 'pendingInbox', 'deadLettered', 'failedInbox'];
 
 /** 记录与目录抽屉；按输入取消旧详情及载荷请求，载荷仅在 Manage 用户点开后读取。 */
 @Component({
   selector: 'app-distributed-event-record-sheet',
   imports: [
     NgIcon,
+    ...HlmAlertImports,
     HlmBadge,
     HlmButton,
+    ...HlmDropdownMenuImports,
     ...HlmSheetImports,
     HlmSpinner,
     ...HlmTooltipImports,
+    StatusDot,
     AppDate,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideCopy, lucideCheck })],
+  providers: [
+    provideIcons({
+      lucideCheck,
+      lucideCircleAlert,
+      lucideCopy,
+      lucideEllipsis,
+      lucideRotateCw,
+      lucideTrash2,
+    }),
+  ],
   templateUrl: './distributed-event-record-sheet.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -80,9 +125,11 @@ export class DistributedEventRecordSheet {
   protected readonly displayTimeZone = this.preferences.timeZone;
   protected readonly displayLocale = this.preferences.displayLocale;
   protected readonly clipboard = injectCopyToClipboard();
+  protected readonly recordClipboard = injectCopyToClipboard();
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  protected readonly t = (key: string) => this.transloco.translate(key);
+  protected readonly t = (key: string, params?: Record<string, unknown>) =>
+    this.transloco.translate(key, params);
   //#else
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -106,10 +153,74 @@ export class DistributedEventRecordSheet {
   protected readonly catalogFields = computed(() =>
     this.catalogDetail()
       ? Object.entries(this.catalogDetail()!).filter(
-          ([key]) => key !== 'outgoing' && key !== 'incoming',
+          ([key]) => key !== 'outgoing' && key !== 'incoming' && !CATALOG_LINK_FIELDS.includes(key),
         )
       : [],
   );
+  protected readonly catalogLinks = computed<CatalogLink[]>(() => {
+    const item = this.catalogDetail();
+    if (!item) return [];
+    return [
+      ...(item.outgoing
+        ? [
+            {
+              labelKey: 'distributedEvents.field.pendingOutbox',
+              count: item.pendingOutbox,
+              view: 'outbox' as const,
+              status: 'pending',
+            },
+            {
+              labelKey: 'distributedEvents.field.deadLettered',
+              count: item.deadLettered,
+              view: 'outbox' as const,
+              status: 'deadLettered',
+            },
+          ]
+        : []),
+      ...(item.incoming
+        ? [
+            {
+              labelKey: 'distributedEvents.field.pendingInbox',
+              count: item.pendingInbox,
+              view: 'inbox' as const,
+              status: 'pending',
+            },
+            {
+              labelKey: 'distributedEvents.field.failedInbox',
+              count: item.failedInbox,
+              view: 'inbox' as const,
+              status: 'failed',
+            },
+          ]
+        : []),
+    ];
+  });
+  protected readonly attention = computed<RecordAttention | null>(() => {
+    const record = this.detail()?.record;
+    if (!record) return null;
+    if ('redecodeCount' in record) {
+      return record.status === 'pending' || record.status === 'redecodePending'
+        ? {
+            variant: 'default',
+            state: record.status,
+            code: record.reason,
+            diagnostic: record.error || null,
+            nextKey: `distributedEvents.nextStep.${record.status === 'pending' ? 'redecode' : 'redecodePending'}`,
+          }
+        : null;
+    }
+    const failed =
+      'redeliverCount' in record ? record.status === 'deadLettered' : record.status === 'failed';
+    return failed
+      ? {
+          variant: 'destructive',
+          state: record.status,
+          code: record.lastErrorCode ?? '—',
+          diagnostic: record.lastError ?? null,
+          nextKey: `distributedEvents.nextStep.${recoveryAction(this.view())}`,
+        }
+      : null;
+  });
 
   constructor() {
     toObservable(
@@ -166,15 +277,23 @@ export class DistributedEventRecordSheet {
     return canRecover(record);
   }
   protected stateLabel(record: EventRecord): string {
-    return record.status === 'pending' && 'attemptCount' in record && record.attemptCount > 0
-      ? 'retrying'
-      : record.status;
+    return stateLabelKey(this.view(), this.state(record));
+  }
+  protected stateText(state: string): string {
+    return this.t(stateLabelKey(this.view(), state));
   }
   protected action(): string {
     return recoveryAction(this.view());
   }
-  protected badge(status: string): 'warning' | 'success' | 'destructive' | 'secondary' {
-    return STATUS_VARIANTS[status as keyof typeof STATUS_VARIANTS] ?? 'secondary';
+  protected badge(record: EventRecord): StateBadgeVariant {
+    return stateVariant(this.view(), this.state(record));
+  }
+  private state(record: EventRecord): string {
+    return displayState(
+      this.view(),
+      record.status,
+      'attemptCount' in record ? record.attemptCount : record.redecodeCount,
+    );
   }
   protected reasonLabel(reason: string): string {
     const key = reasonKey(reason);
