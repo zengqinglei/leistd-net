@@ -21,6 +21,7 @@
   "noResults": "没有匹配的事件",
   "onlyAnomalies": "只看异常",
   "retry": "重试",
+  "loadFailed": "列表加载失败",
   "loading": "正在加载事件",
   "emptyHelp": "调整筛选条件，或发送测试事件检查投递链路。",
   "selectPage": "选中本页可恢复记录",
@@ -46,6 +47,7 @@
   "payload": "事件载荷",
   "showPayload": "显示载荷",
   "copyPayload": "复制载荷",
+  "copied": "已复制",
   "replayWarning": "这将再次执行处理器，包括外部副作用。请确认业务操作适合再次执行。",
   "testSent": "测试事件已发送：{{id}}",
   "view": {

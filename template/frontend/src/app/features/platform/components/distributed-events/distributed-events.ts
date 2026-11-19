@@ -13,7 +13,14 @@ import { ActivatedRoute, Params, Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideSearch, lucideRefreshCw, lucideSend, lucideX, lucideInbox } from '@ng-icons/lucide';
+import {
+  lucideCircleAlert,
+  lucideInbox,
+  lucideRefreshCw,
+  lucideSearch,
+  lucideSend,
+  lucideX,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -124,7 +131,16 @@ import { DistributedEventService } from '../../services/distributed-event-servic
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideSearch, lucideRefreshCw, lucideSend, lucideX, lucideInbox })],
+  providers: [
+    provideIcons({
+      lucideCircleAlert,
+      lucideInbox,
+      lucideRefreshCw,
+      lucideSearch,
+      lucideSend,
+      lucideX,
+    }),
+  ],
   templateUrl: './distributed-events.html',
   host: { class: 'block h-full min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -324,9 +340,13 @@ export class DistributedEvents {
               }
             }),
             catchError((error: unknown) => {
-              this.rows.set([]);
-              this.totalCount.set(0);
-              this.loadError.set(applicationErrorMessage(error));
+              // 已有内容时刷新失败保留表格并提示；首次加载（含切换视图）失败才换成可重试的空态
+              if (this.rows().length) {
+                toast.error(applicationErrorMessage(error));
+              } else {
+                this.totalCount.set(0);
+                this.loadError.set(applicationErrorMessage(error));
+              }
               return of(null);
             }),
             finalize(() => this.loading.set(false)),

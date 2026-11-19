@@ -266,7 +266,46 @@ export class Webhooks {
   readonly formatRange = computed(() => dateRangeFormatter(this.displayLocale()));
   readonly parseRangeInput = computed(() => dateRangeParser(this.displayLocale()));
   private readonly today = computed(() => zonedCalendarDate(this.now(), this.timeZone()));
-  readonly statistics = signal<WebhookStatisticsOutputDto | null>(null);
+  /**
+   * 当前显示的统计与它请求时的订阅：重新加载期间（含失败后）卡片仍是旧数据，失败卡跳转与摘要里的订阅名
+   * 都跟这一组走，不读当前 URL，否则会拼出"旧订阅的数字 + 新订阅的列表"。
+   */
+  private readonly shownStatistics = signal<{
+    statistics: WebhookStatisticsOutputDto;
+    subscriptionId: string | null;
+  } | null>(null);
+  readonly statistics = computed(() => this.shownStatistics()?.statistics ?? null);
+  /**
+   * 显示中的统计所属订阅最后一次解析到的名称：它还是当前筛选时跟着更新，筛选换走后保留，
+   * 订阅名只在当前筛选时才能经详情接口解析到。
+   */
+  private readonly statisticsSubscription = linkedSignal<
+    { id: string | null; current: string | null; name: string | null },
+    { id: string; name: string | null } | null
+  >({
+    source: () => ({
+      id: this.shownStatistics()?.subscriptionId ?? null,
+      current: this.selectedSubscriptionId(),
+      name: this.selectedSubscriptionName(),
+    }),
+    computation: ({ id, current, name }, previous) =>
+      id && id === current ? { id, name } : (previous?.value ?? null),
+  });
+  /** 摘要里的订阅名：随显示中的统计；首次加载前沿用当前筛选。 */
+  readonly statisticsSubscriptionName = computed(() => {
+    const shown = this.shownStatistics();
+    if (!shown) {
+      return this.selectedSubscriptionName();
+    }
+    const id = shown.subscriptionId;
+    if (!id) {
+      return null;
+    }
+    const remembered = this.statisticsSubscription();
+    return remembered?.id === id && remembered.name
+      ? remembered.name
+      : this.subscriptionToString(id);
+  });
   readonly statisticsLoading = signal(false);
   readonly statisticsFailed = signal(false);
   /** 统计请求：区间换算成日历日；投递日志按订阅筛选时只统计该订阅。 */
@@ -463,13 +502,19 @@ export class Webhooks {
     // 统计：区间、时区或订阅筛选变化时取；只保留最后一次请求，失败时保留已有数据
     this.statisticsRequests
       .pipe(
-        switchMap((query) => this.service.getStatistics(query).pipe(catchError(() => of(null)))),
+        switchMap((query) =>
+          // 请求时的订阅与响应配成一组
+          this.service.getStatistics(query).pipe(
+            map((statistics) => ({ statistics, subscriptionId: query.subscriptionId ?? null })),
+            catchError(() => of(null)),
+          ),
+        ),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((statistics) => {
+      .subscribe((shown) => {
         this.statisticsLoading.set(false);
-        if (statistics) {
-          this.statistics.set(statistics);
+        if (shown) {
+          this.shownStatistics.set(shown);
         } else {
           this.statisticsFailed.set(true);
         }
@@ -585,15 +630,16 @@ export class Webhooks {
   }
 
   /**
-   * 失败卡：投递日志筛选失败，保留当前的订阅筛选；时间范围取当前显示的统计数据的 UTC 边界
-   * （服务端实际计数用的区间，含今天时截到统计查询时刻）。统计重新加载期间显示的仍是旧数据，跟着用旧区间。
+   * 失败卡：投递日志筛选失败；订阅与时间范围都取当前显示的那组统计（时间是服务端实际计数用的 UTC 边界，
+   * 含今天时截到统计查询时刻）。统计重新加载期间显示的仍是旧数据，跟着用旧数据的订阅与区间。
    */
   showFailedDeliveries(): void {
-    const range = this.statistics()?.range;
+    const shown = this.shownStatistics();
+    const range = shown?.statistics.range;
     this.navigate({
       view: 'deliveries',
       status: 'failed',
-      subscriptionId: this.selectedSubscriptionId(),
+      subscriptionId: shown ? shown.subscriptionId : this.selectedSubscriptionId(),
       startTime: range?.start ?? null,
       endTime: range?.end ?? null,
       range: this.rangeParam(),

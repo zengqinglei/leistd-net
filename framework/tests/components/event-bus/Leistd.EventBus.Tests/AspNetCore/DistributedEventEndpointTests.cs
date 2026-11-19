@@ -7,6 +7,7 @@ using Leistd.EventBus.AspNetCore.Endpoints;
 using Leistd.EventBus.Distributed.Management;
 using Leistd.EventBus.Distributed.Stores;
 using Leistd.EventBus.Distributed;
+using Leistd.EventBus.EntityFrameworkCore.Entities;
 using Leistd.EventBus.Tests.TestDoubles;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.MultiTenancy.Context;
@@ -174,6 +175,30 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
     {
         var response = await SendAsync("GET", route + "?" + query, "read");
         Assert.Equal(expected, response.StatusCode);
+    }
+
+    /// <summary>显式偏移在绑定后换算为 UTC 再筛选（宿主时钟起点 2026-11-08T00:00Z）。</summary>
+    [Theory]
+    [InlineData("startTime=2026-11-08T08:00:00%2B08:00", 1)]
+    [InlineData("startTime=2026-11-08T08:00:01%2B08:00", 0)]
+    public async Task List_time_range_filters_offset_times_in_utc(string query, int expected)
+    {
+        var time = _backend.Clock.GetUtcNow().UtcDateTime;
+        await _backend.InTenantAsync(null, (_, db) =>
+        {
+            db.Add(new DistributedEventOutbox
+            {
+                EventId = Guid.NewGuid(), EventName = "order.paid", Payload = "{}", OccurredAt = time,
+                CreationTime = time, LastModificationTime = time, Status = DistributedEventOutboxStatus.Sent
+            });
+            return Task.CompletedTask;
+        });
+
+        var response = await SendAsync("GET", "outbox?" + query, "read");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expected, json.RootElement.GetProperty("totalCount").GetInt32());
     }
 
     /// <summary>按条件恢复的 JSON 只接受 Z；显式偏移、缺时区或起止颠倒返回 400。</summary>

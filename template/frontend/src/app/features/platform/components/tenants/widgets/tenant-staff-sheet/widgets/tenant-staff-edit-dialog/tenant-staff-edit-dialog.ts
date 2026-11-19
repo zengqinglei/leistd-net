@@ -28,6 +28,7 @@ import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { catchError, defer, firstValueFrom, map, of, Subject, switchMap, timer } from 'rxjs';
 
 import { DialogClose } from '../../../../../../../../core/components/dialog-close/dialog-close';
@@ -40,6 +41,7 @@ import { injectFormSubmission } from '../../../../../../../../core/validation/fo
 import { isSubmittedInvalid } from '../../../../../../../../core/validation/submit-error-state-matcher';
 import { ImeGuard } from '../../../../../../../../shared/directives/ime-guard';
 import { StatusDot } from '../../../../../../../../shared/directives/status-dot';
+import { TruncatedTooltip } from '../../../../../../../../shared/directives/truncated-tooltip';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../../../shared/utils/english-text';
 //#endif
@@ -73,7 +75,7 @@ interface CandidateQuery {
 @Component({
   selector: 'app-tenant-staff-edit-dialog',
   // prettier-ignore
-  imports: [ImeGuard, DialogClose, FormField, StatusDot,
+  imports: [ImeGuard, DialogClose, FormField, StatusDot, TruncatedTooltip,
     HlmBadge,
     HlmButton,
     HlmSpinner,
@@ -82,6 +84,7 @@ interface CandidateQuery {
     ...HlmComboboxImports,
     ...HlmDialogImports,
     ...HlmFieldImports,
+    ...HlmTooltipImports,
     //#if (IncludeLocalization)
     TranslocoDirective,
     //#endif
@@ -116,6 +119,12 @@ export class TenantStaffEditDialog {
   readonly keyword = signal('');
   /** 选中的候选人：搜索词变化后列表里可能已没有它，触发器仍要显示。 */
   readonly picked = signal<TenantStaffCandidateOutputDto | null>(null);
+  /** 触发器上的全文提示：姓名与用户名。 */
+  readonly pickedLabel = computed(() => {
+    const person = this.picked();
+    if (!person) return '';
+    return person.displayName ? `${person.displayName} ${person.username}` : person.username;
+  });
   private readonly candidateQueries = new Subject<CandidateQuery>();
 
   protected readonly formModel = signal<StaffAccessFormModel>({ homeUserId: null, roleIds: [] });
@@ -195,6 +204,12 @@ export class TenantStaffEditDialog {
         if (!member) this.candidateQueries.next({ keyword: '', immediate: true });
       });
     });
+  }
+
+  /** 提示只监听宿主自身的 focus / blur，焦点却在宿主里的触发器按钮上：把进出转成宿主上的同名事件。 */
+  relayFocus(event: FocusEvent): void {
+    const host = event.currentTarget as HTMLElement;
+    host.dispatchEvent(new FocusEvent(event.type === 'focusin' ? 'focus' : 'blur'));
   }
 
   initial(text: string): string {

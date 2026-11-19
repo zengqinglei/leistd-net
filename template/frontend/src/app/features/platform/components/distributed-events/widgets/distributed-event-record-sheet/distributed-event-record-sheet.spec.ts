@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject } from 'rxjs';
 
 import { DistributedEventRecordSheet } from './distributed-event-record-sheet';
@@ -260,5 +261,108 @@ describe('DistributedEventRecordSheet', () => {
       status: 'deadLettered',
       eventName: 'order.paid',
     });
+  });
+
+  it('confirms a payload copy on the button and a record ID copy from the menu with a toast', async () => {
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    const notice = vi.spyOn(toast, 'success').mockReturnValue('copied');
+    try {
+      const detail: DistributedEventRejectionDetailOutputDto = {
+        record: {
+          id: '3',
+          transport: 'RabbitMQ',
+          coordinates: {},
+          reason: 'invalid-envelope',
+          error: 'Safe reason.',
+          status: 'pending',
+          redecodeCount: 0,
+          receivedAt: '2026-11-09T00:00:00Z',
+          lastModificationTime: '2026-11-09T00:00:00Z',
+        },
+        headers: {},
+        coordinates: {},
+      };
+      const sheet = await open(
+        { getRejection: () => of(detail), getRejectionPayload: () => of({ rawBody: 'AAEC' }) },
+        { recordId: '3', view: 'rejections', canManage: true, payloadEnabled: true },
+      );
+      fixture.componentInstance.loadPayload();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const copy = () =>
+        sheet.querySelector('[data-testid=event-copy-payload]') as HTMLButtonElement;
+      const icon = () => copy().querySelector('ng-icon')!.innerHTML;
+      const copyIcon = icon();
+      copy().click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(write).toHaveBeenCalledWith('AAEC');
+      //#if (IncludeLocalization)
+      expect(copy().textContent?.trim()).toBe('distributedEvents.copied');
+      //#else
+      expect(copy().textContent?.trim()).toBe('Copied');
+      //#endif
+      // 图标换成对勾：渲染出的 SVG 与复制图标不同，且与 lucideCheck 一致
+      expect(icon()).not.toBe(copyIcon);
+      expect(icon()).toContain('M20 6');
+      expect(fixture.componentInstance['payloadClipboard'].copied()).toBe(true);
+      // 事件 ID 的复制图标不受载荷复制影响
+      expect(fixture.componentInstance['clipboard'].copied()).toBe(false);
+
+      (sheet.querySelector('[data-testid=event-detail-more]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      (
+        document.querySelector('hlm-dropdown-menu [hlmDropdownMenuItem]') as HTMLButtonElement
+      ).click();
+      await fixture.whenStable();
+      expect(write).toHaveBeenLastCalledWith('3');
+      //#if (IncludeLocalization)
+      expect(notice).toHaveBeenCalledWith('distributedEvents.copied');
+      //#else
+      expect(notice).toHaveBeenCalledWith('Copied');
+      //#endif
+    } finally {
+      write.mockRestore();
+      notice.mockRestore();
+    }
+  });
+
+  it('does not report success when the clipboard is unavailable', async () => {
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    const notice = vi.spyOn(toast, 'success').mockReturnValue('copied');
+    try {
+      const detail: DistributedEventRejectionDetailOutputDto = {
+        record: {
+          id: '3',
+          transport: 'RabbitMQ',
+          coordinates: {},
+          reason: 'invalid-envelope',
+          error: 'Safe reason.',
+          status: 'pending',
+          redecodeCount: 0,
+          receivedAt: '2026-11-09T00:00:00Z',
+          lastModificationTime: '2026-11-09T00:00:00Z',
+        },
+        headers: {},
+        coordinates: {},
+      };
+      const sheet = await open(
+        { getRejection: () => of(detail) },
+        { recordId: '3', view: 'rejections', canManage: true },
+      );
+      (sheet.querySelector('[data-testid=event-detail-more]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      (
+        document.querySelector('hlm-dropdown-menu [hlmDropdownMenuItem]') as HTMLButtonElement
+      ).click();
+      await fixture.whenStable();
+      expect(write).toHaveBeenCalledWith('3');
+      expect(notice).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+      notice.mockRestore();
+    }
   });
 });

@@ -145,6 +145,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.noResults': 'No matching events',
   'distributedEvents.onlyAnomalies': 'Only anomalies',
   'distributedEvents.retry': 'Retry',
+  'distributedEvents.loadFailed': "Couldn't load the list",
   'distributedEvents.loading': 'Loading events',
   'distributedEvents.emptyHelp':
     'Change the filters or send a test event to inspect the delivery path.',
@@ -172,6 +173,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.payload': 'Event payload',
   'distributedEvents.showPayload': 'Show payload',
   'distributedEvents.copyPayload': 'Copy payload',
+  'distributedEvents.copied': 'Copied',
   'distributedEvents.replayWarning':
     'This will execute the handler again, including any external effects. Confirm that repeating the business operation is appropriate.',
   'distributedEvents.testSent': 'Test event sent: {{id}}',

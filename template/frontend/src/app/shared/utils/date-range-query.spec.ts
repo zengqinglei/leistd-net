@@ -15,6 +15,12 @@ describe('date-range-query', () => {
       endTime: '2026-11-19T15:59:59.999Z',
     });
     expect(validTimeRange('2026-11-18T16:00:00.000Z', null)).toBeNull();
+    expect(validTimeRange('2026-11-01', '2026-11-07')).toBeNull();
+    expect(validTimeRange('2026-11-01T00:00:00', '2026-11-07T00:00:00Z')).toBeNull();
+    expect(validTimeRange('2026-11-19T08:00:00+08:00', '2026-11-19T01:00:00Z')).toEqual({
+      startTime: '2026-11-19T00:00:00.000Z',
+      endTime: '2026-11-19T01:00:00.000Z',
+    });
     expect(validTimeRange('not-a-date', '2026-11-19T15:59:59.999Z')).toBeNull();
     expect(validTimeRange('2026-11-20T00:00:00.000Z', '2026-11-19T00:00:00.000Z')).toBeNull();
   });

@@ -21,6 +21,7 @@
   "noResults": "No matching events",
   "onlyAnomalies": "Only anomalies",
   "retry": "Retry",
+  "loadFailed": "Couldn't load the list",
   "loading": "Loading events",
   "emptyHelp": "Change the filters or send a test event to inspect the delivery path.",
   "selectPage": "Select recoverable records on this page",
@@ -46,6 +47,7 @@
   "payload": "Event payload",
   "showPayload": "Show payload",
   "copyPayload": "Copy payload",
+  "copied": "Copied",
   "replayWarning": "This will execute the handler again, including any external effects. Confirm that repeating the business operation is appropriate.",
   "testSent": "Test event sent: {{id}}",
   "view": {

@@ -10,7 +10,7 @@
         [preset]="preset()"
         [loading]="statisticsLoading()"
         [loadFailed]="statisticsFailed()"
-        [subscriptionName]="selectedSubscriptionName()"
+        [subscriptionName]="statisticsSubscriptionName()"
         (presetChange)="setPreset($event)"
         (retry)="reloadStatistics()"
         (showFailed)="showFailedDeliveries()"
@@ -69,7 +69,6 @@
               @if (view() === 'deliveries') {
                 <hlm-toggle-group
                   type="single"
-                  size="sm"
                   [value]="selectedDeliveryStatus()"
                   [attr.aria-label]="t('webhooks.filter.status')"
                   data-testid="webhook-status-filter"
@@ -162,7 +161,6 @@
               } @else {
                 <hlm-toggle-group
                   type="single"
-                  size="sm"
                   [value]="selectedSubscriptionStatus()"
                   [attr.aria-label]="t('webhooks.filter.status')"
                   data-testid="webhook-status-filter"

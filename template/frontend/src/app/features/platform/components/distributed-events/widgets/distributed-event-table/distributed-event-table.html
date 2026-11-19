@@ -171,6 +171,7 @@
                         >
                       }
                       @case ('actions') {
+                        <!-- ≥sm 平铺 icon 按钮；<sm 收进 … 菜单省列宽（列表规范 §2） -->
                         <div class="flex items-center justify-end gap-1">
                           @if (
                             canManage() && row.original.record && recoverable(row.original.record)
@@ -179,6 +180,7 @@
                               hlmBtn
                               size="icon-sm"
                               variant="ghost"
+                              class="hidden sm:inline-flex"
                               [disabled]="busy()"
                               [attr.aria-label]="t('distributedEvents.action.' + action())"
                               [hlmTooltip]="t('distributedEvents.action.' + action())"
@@ -191,12 +193,49 @@
                             hlmBtn
                             size="icon-sm"
                             variant="ghost"
+                            class="hidden sm:inline-flex"
                             [attr.aria-label]="t('distributedEvents.details')"
                             [hlmTooltip]="t('distributedEvents.details')"
                             (click)="openRecord(row.id)"
                           >
                             <ng-icon name="lucidePanelRight" />
                           </button>
+                          <button
+                            hlmBtn
+                            size="icon-sm"
+                            variant="ghost"
+                            align="end"
+                            class="sm:hidden"
+                            data-testid="event-row-menu"
+                            [attr.aria-label]="t('distributedEvents.actions')"
+                            [hlmDropdownMenuTrigger]="rowMenu"
+                          >
+                            <ng-icon name="lucideEllipsis" />
+                          </button>
+                          <ng-template #rowMenu>
+                            <hlm-dropdown-menu>
+                              <hlm-dropdown-menu-group>
+                                <button hlmDropdownMenuItem (click)="openRecord(row.id)">
+                                  <ng-icon name="lucidePanelRight" />
+                                  {{ t('distributedEvents.details') }}
+                                </button>
+                                @if (
+                                  canManage() &&
+                                  row.original.record &&
+                                  recoverable(row.original.record)
+                                ) {
+                                  <button
+                                    hlmDropdownMenuItem
+                                    [disabled]="busy()"
+                                    (click)="recover.emit(row.original.record)"
+                                  >
+                                    <ng-icon name="lucideRotateCw" />
+                                    {{ t('distributedEvents.action.' + action()) }}
+                                  </button>
+                                }
+                              </hlm-dropdown-menu-group>
+                            </hlm-dropdown-menu>
+                          </ng-template>
                         </div>
                       }
                       @case ('direction') {

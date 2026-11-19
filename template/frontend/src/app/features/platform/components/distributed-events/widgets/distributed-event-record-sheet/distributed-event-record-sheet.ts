@@ -22,6 +22,7 @@ import {
   lucideRotateCw,
   lucideTrash2,
 } from '@ng-icons/lucide';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -124,8 +125,10 @@ export class DistributedEventRecordSheet {
   private readonly preferences = inject(AccountPreferencesService);
   protected readonly displayTimeZone = this.preferences.timeZone;
   protected readonly displayLocale = this.preferences.displayLocale;
+  /** 事件 ID、载荷与记录 ID 各用一份复制状态，"已复制"反馈互不串到别的按钮上。 */
   protected readonly clipboard = injectCopyToClipboard();
-  protected readonly recordClipboard = injectCopyToClipboard();
+  protected readonly payloadClipboard = injectCopyToClipboard();
+  private readonly recordClipboard = injectCopyToClipboard();
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   protected readonly t = (key: string, params?: Record<string, unknown>) =>
@@ -142,7 +145,10 @@ export class DistributedEventRecordSheet {
   private payloadSubscription?: { unsubscribe(): void };
   protected readonly detailFields = computed(() =>
     this.detail()
-      ? Object.entries(this.detail()!.record).filter(([key]) => key !== 'tenantId')
+      ? // 传输坐标另有分区，不在概要里重复
+        Object.entries(this.detail()!.record).filter(
+          ([key]) => key !== 'tenantId' && key !== 'coordinates',
+        )
       : [],
   );
   protected readonly detailHeaders = computed(() => Object.entries(this.detail()?.headers ?? {}));
@@ -266,6 +272,10 @@ export class DistributedEventRecordSheet {
       }
     });
     this.owner.onDestroy(() => this.payloadSubscription?.unsubscribe());
+  }
+  /** 菜单项点击后菜单即关闭、看不到图标变化，成功时改用 toast 反馈；剪贴板不可用时不提示成功。 */
+  protected async copyRecordId(id: string): Promise<void> {
+    if (await this.recordClipboard.copy(id)) toast.success(this.t('distributedEvents.copied'));
   }
   protected closeDetail(): void {
     this.closed.emit();

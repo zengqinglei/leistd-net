@@ -1,5 +1,5 @@
-import { formatAppDate, parseAppCalendarDate } from '../pipes/app-date-pipe';
 import { isoToZonedDate, zonedEndOfDayIso, zonedStartOfDayIso } from './zoned-time';
+import { formatAppDate, parseAppCalendarDate } from '../pipes/app-date-pipe';
 
 /** 写进 URL、发给后端的时间范围：UTC ISO 时刻，两端闭区间。 */
 export interface TimeRangeQuery {
@@ -7,15 +7,23 @@ export interface TimeRangeQuery {
   endTime: string | null;
 }
 
+/** 带 `Z` 或显式偏移的 ISO 时刻；后端拒绝不带时区的写法，这里一并视为不合法。 */
+const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{2}:\d{2})$/;
+
 /**
- * 从 URL 查询参数取出合法的时间范围；只有一端、格式错误或起止颠倒时视为未筛选，
- * 控件、列表请求与按条件恢复因此保持一致。
+ * 从 URL 查询参数取出合法的时间范围，并归一为 UTC（`toISOString`）：控件、列表请求与按条件恢复
+ * 共用这一份结果。只有一端、不带时区、格式错误或起止颠倒时视为未筛选。
  */
-export function validTimeRange(start: string | null | undefined, end: string | null | undefined) {
-  const from = start ? Date.parse(start) : Number.NaN;
-  const to = end ? Date.parse(end) : Number.NaN;
+export function validTimeRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): { startTime: string; endTime: string } | null {
+  const parse = (value: string | null | undefined) =>
+    value && ZONED_INSTANT.test(value) ? Date.parse(value) : Number.NaN;
+  const from = parse(start);
+  const to = parse(end);
   return Number.isFinite(from) && Number.isFinite(to) && from <= to
-    ? { startTime: start!, endTime: end! }
+    ? { startTime: new Date(from).toISOString(), endTime: new Date(to).toISOString() }
     : null;
 }
 

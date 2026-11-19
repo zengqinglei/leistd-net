@@ -7,6 +7,7 @@ using System.Text.Json;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.Webhooks.AspNetCore.Endpoints;
 using Leistd.Webhooks.Delivery;
+using Leistd.Webhooks.Dtos;
 using Leistd.Webhooks.Errors;
 using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Stores;
@@ -221,15 +222,26 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         Assert.Contains(field, document.RootElement.GetProperty("errors").EnumerateArray().Select(x => x.GetProperty("field").GetString()));
     }
 
-    /// <summary>投递列表的时间参数接受带 Z 或显式偏移的时刻，绑定后换算为 UTC。</summary>
+    /// <summary>投递列表的时间参数接受带 Z 或显式偏移的时刻，绑定后换算为 UTC 再筛选（宿主时钟起点 2026-11-03T00:00Z）。</summary>
     [Theory]
-    [InlineData("deliveries?startTime=2026-11-19T00:00:00Z&endTime=2026-11-19T01:00:00Z")]
-    [InlineData("deliveries?startTime=2026-11-19T08:00:00%2B08:00")]
-    public async Task Delivery_time_range_accepts_explicit_zones(string route)
+    [InlineData("startTime=2026-11-03T00:00:00Z&endTime=2026-11-03T00:00:00Z", 1)]
+    [InlineData("startTime=2026-11-03T08:00:00%2B08:00", 1)]
+    [InlineData("startTime=2026-11-03T08:00:01%2B08:00", 0)]
+    public async Task Delivery_time_range_accepts_explicit_zones_and_filters_in_utc(string query, int expected)
     {
-        var response = await SendAsync("GET", route, "read");
+        await _backend.ManageAsync(null, service => service.CreateSubscriptionAsync(new CreateWebhookSubscriptionInputDto
+        {
+            Name = "receiver",
+            Url = "https://receiver.example/hook",
+            EventTypes = [WebhookTestHost.OrderPaid]
+        }));
+        await _backend.PublishAsync(null);
+
+        var response = await SendAsync("GET", "deliveries?" + query, "read");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expected, document.RootElement.GetProperty("totalCount").GetInt32());
     }
 
     /// <summary>与前端约定：<c>retryFailed=true</c> 走查询串，失败投递按手动重发排期。</summary>

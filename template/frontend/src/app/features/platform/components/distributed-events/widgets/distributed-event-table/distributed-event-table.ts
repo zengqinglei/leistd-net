@@ -5,10 +5,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePanelRight, lucideRotateCw } from '@ng-icons/lucide';
+import { lucideEllipsis, lucidePanelRight, lucideRotateCw } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef } from '@tanstack/angular-table';
@@ -63,6 +64,7 @@ export const EVENT_TABLE_IMPORTS = [
   HlmBadge,
   HlmButton,
   HlmCheckbox,
+  ...HlmDropdownMenuImports,
   ...HlmTableImports,
   ...HlmTooltipImports,
   RelativeTimeLabel,
@@ -76,7 +78,7 @@ export const EVENT_TABLE_IMPORTS = [
   TranslocoDirective,
   //#endif
 ];
-export const EVENT_TABLE_ICONS = provideIcons({ lucidePanelRight, lucideRotateCw });
+export const EVENT_TABLE_ICONS = provideIcons({ lucideEllipsis, lucidePanelRight, lucideRotateCw });
 
 /** 四张表共用的呈现与选择行为；视图由具体表固定，分页与 URL 由页面编排。 */
 @Directive()

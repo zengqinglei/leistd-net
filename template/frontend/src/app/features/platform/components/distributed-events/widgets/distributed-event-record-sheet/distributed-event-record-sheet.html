@@ -100,10 +100,7 @@
                   <ng-template #recordMenu>
                     <hlm-dropdown-menu>
                       <hlm-dropdown-menu-group>
-                        <button
-                          hlmDropdownMenuItem
-                          (click)="recordClipboard.copy(current.record.id)"
-                        >
+                        <button hlmDropdownMenuItem (click)="copyRecordId(current.record.id)">
                           <ng-icon name="lucideCopy" />
                           {{ t('distributedEvents.copyRecordId') }}
                         </button>
@@ -281,9 +278,21 @@
                     {{ t('distributedEvents.showPayload') }}
                   </button>
                 } @else {
-                  <button hlmBtn variant="ghost" size="sm" (click)="clipboard.copy(payload()!)">
-                    <ng-icon name="lucideCopy" data-icon="inline-start" />{{
-                      t('distributedEvents.copyPayload')
+                  <button
+                    hlmBtn
+                    variant="ghost"
+                    size="sm"
+                    data-testid="event-copy-payload"
+                    (click)="payloadClipboard.copy(payload()!)"
+                  >
+                    <ng-icon
+                      [name]="payloadClipboard.copied() ? 'lucideCheck' : 'lucideCopy'"
+                      data-icon="inline-start"
+                    />
+                    {{
+                      payloadClipboard.copied()
+                        ? t('distributedEvents.copied')
+                        : t('distributedEvents.copyPayload')
                     }}
                   </button>
                 }

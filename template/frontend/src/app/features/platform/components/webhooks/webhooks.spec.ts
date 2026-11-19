@@ -377,6 +377,38 @@ describe('Webhooks page', () => {
     });
   });
 
+  // 订阅 A → B，B 的统计未返回时卡片仍是 A 的数据：跳转带 A 的区间与 A 的订阅，摘要也仍写 A
+  it('opens the failed deliveries of the subscription whose statistics are still shown', async () => {
+    await setup(manage);
+    vi.mocked(service.getSubscription).mockImplementation((id: string) => of(subscription(id)));
+    const statisticsOfA = statisticsFor('2026-11-01T00:00:00.000Z', '2026-11-07T06:00:00.000Z');
+    service.getStatistics.mockReturnValue(of(statisticsOfA));
+    await router.navigate(['/platform/webhooks'], {
+      queryParams: { view: 'deliveries', subscriptionId: 'sub-A' },
+    });
+    await settle();
+    expect(statisticsPanel().subscriptionName()).toBe('Name sub-A');
+
+    service.getStatistics.mockReturnValue(new Subject<WebhookStatisticsOutputDto>());
+    component.onFilterChange('subscriptionId', 'sub-B');
+    await settle();
+    expect(vi.mocked(service.getStatistics).mock.calls.at(-1)?.[0]?.subscriptionId).toBe('sub-B');
+    expect(component.statisticsLoading()).toBe(true);
+    expect(component.selectedSubscriptionName()).toBe('Name sub-B');
+    expect(statisticsPanel().subscriptionName()).toBe('Name sub-A');
+
+    statisticsPanel().showFailed.emit();
+    await settle();
+
+    expect(router.parseUrl(router.url).queryParams).toEqual({
+      view: 'deliveries',
+      status: 'failed',
+      subscriptionId: 'sub-A',
+      startTime: statisticsOfA.range.start,
+      endTime: statisticsOfA.range.end,
+    });
+  });
+
   it('uses the range of the statistics still on screen while they reload', async () => {
     await setup(manage);
     // 新区间的统计还没返回：卡片仍是旧数据，跳转跟着旧数据的区间
@@ -482,13 +514,35 @@ describe('Webhooks page', () => {
         { startTime: '2026-11-01T00:00:00.000Z' } as Record<string, string>,
         { startTime: 'not-a-date', endTime: '2026-11-07T00:00:00.000Z' },
         { startTime: '2026-11-08T00:00:00.000Z', endTime: '2026-11-01T00:00:00.000Z' },
+        // JS 能解析、接口会拒绝：不带时区
+        { startTime: '2026-11-01', endTime: '2026-11-07' },
+        { startTime: '2026-11-01T00:00:00', endTime: '2026-11-07T23:59:59' },
       ]) {
         await openView({ view: 'deliveries', ...range });
 
         expect(component.selectedRange(), JSON.stringify(range)).toBeUndefined();
+        expect(
+          root().querySelector<HTMLInputElement>('#webhook-delivery-date-range')!.value,
+          JSON.stringify(range),
+        ).toBe('');
         expect(component.hasActiveFilters()).toBe(false);
         expect(lastDeliveriesQuery()).toMatchObject({ startTime: undefined, endTime: undefined });
       }
+    });
+
+    it('sends a range written with an explicit offset as UTC', async () => {
+      await setup(manage);
+      await openView({
+        view: 'deliveries',
+        startTime: '2026-11-01T08:00:00+08:00',
+        endTime: '2026-11-08T07:59:59.999+08:00',
+      });
+
+      expect(lastDeliveriesQuery()).toMatchObject({
+        startTime: '2026-11-01T00:00:00.000Z',
+        endTime: '2026-11-07T23:59:59.999Z',
+      });
+      expect(component.selectedRange()).toBeDefined();
     });
 
     it('clears the time range when switching views or jumping from a subscription', async () => {

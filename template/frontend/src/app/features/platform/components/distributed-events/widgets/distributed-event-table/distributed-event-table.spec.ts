@@ -238,6 +238,44 @@ describe('distributed event selection and status badges', () => {
     //#endif
   });
 
+  it('collects row actions into a menu below sm that opens details and runs the allowed recovery', async () => {
+    const host = await render(DistributedOutboxTable, [
+      eventRow(outbox('1', 'deadLettered')),
+      eventRow(outbox('2', 'sent')),
+    ]);
+    const open = vi.fn();
+    const recover = vi.fn();
+    fixture.componentInstance.open.subscribe(open);
+    fixture.componentInstance.recover.subscribe(recover);
+    const row = (id: string) => host.querySelector(`[data-record-id="${id}"]`)!;
+    // 平铺按钮只在 ≥sm 显示，触发器只在 <sm 显示
+    for (const button of Array.from(row('1').querySelectorAll('td:last-child button[hlmBtn]')))
+      expect(
+        button.getAttribute('data-testid') === 'event-row-menu'
+          ? button.classList.contains('sm:hidden')
+          : button.classList.contains('hidden') && button.classList.contains('sm:inline-flex'),
+      ).toBe(true);
+    const menuItems = async (id: string) => {
+      (row(id).querySelector('[data-testid=event-row-menu]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      return Array.from(
+        document.querySelectorAll('hlm-dropdown-menu [hlmDropdownMenuItem]'),
+      ) as HTMLButtonElement[];
+    };
+    const items = await menuItems('1');
+    expect(items).toHaveLength(2);
+    items[1].click();
+    expect(recover).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const sentItems = await menuItems('2');
+    // 已发送的记录不能重投，菜单里只有详情
+    expect(sentItems).toHaveLength(1);
+    sentItems[0].click();
+    expect(open).toHaveBeenCalledWith('2');
+  });
+
   it('marks pending and queued rejections as needing attention', async () => {
     const host = await render(DistributedRejectionTable, [
       eventRow(rejection('1', 'pending')),

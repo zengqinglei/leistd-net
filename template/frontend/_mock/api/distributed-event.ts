@@ -10,6 +10,7 @@ import {
   DISTRIBUTED_EVENT_RAW_MESSAGES,
 } from '../data/distributed-events';
 import { getMockSessionTenantKey } from '../utils/current-user';
+import { parseMockTimeRange } from '../utils/time-range';
 
 type Kind = 'outbox' | 'inbox' | 'rejections';
 type Row =
@@ -59,31 +60,6 @@ function timestamp(row: Row) {
   return 'creationTime' in row ? row.creationTime : row.receivedAt;
 }
 
-const QUERY_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{2}:\d{2})$/i;
-const JSON_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?Z$/i;
-
-/**
- * 与后端绑定同形：查询参数接受带 Z 或显式偏移的时刻（偏移换算成 UTC），JSON 只接受带 Z 的时刻；
- * 不带时区或起止颠倒返回 400 字段错误。
- */
-function validateTimeRange(source: Filter, json: boolean): void {
-  const pattern = json ? JSON_INSTANT : QUERY_INSTANT;
-  const errors: { field: string; detail: string }[] = [];
-  for (const field of ['startTime', 'endTime']) {
-    const value = source[field];
-    if (value === undefined || value === null || value === '') continue;
-    if (typeof value !== 'string' || !pattern.test(value) || !Number.isFinite(Date.parse(value)))
-      errors.push({ field, detail: `${field} must be UTC.` });
-  }
-  const start = source['startTime'];
-  const end = source['endTime'];
-  if (!errors.length && start && end && Date.parse(String(start)) > Date.parse(String(end))) {
-    const detail = 'StartTime must not be later than EndTime.';
-    errors.push({ field: 'startTime', detail }, { field: 'endTime', detail });
-  }
-  if (errors.length) throw new MockException(400, { errors });
-}
-
 function matches(row: Row, filter: Filter, headers: Record<string, string> = {}) {
   const keyword = String(filter['keyword'] || '');
   const parent = headers['traceparent']?.match(/^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/);
@@ -116,7 +92,7 @@ function list(kind: Kind, req: MockRequest) {
         : ['pending', 'redecoded', 'discarded', 'redecodePending'];
   if (queryValues(req)['status'] && !statuses.includes(queryValues(req)['status']))
     throw new MockException(400);
-  validateTimeRange(queryValues(req), false);
+  parseMockTimeRange(queryValues(req), 'query');
   const items = records(kind)
     .filter((item) => allowed(item.record) && matches(item.record, queryValues(req), item.headers))
     .map((item) => item.record)
@@ -238,7 +214,7 @@ function recover(
     throw new MockException(400, {
       message: 'Specify IDs (1–100) or a filter with a valid cutoff.',
     });
-  if (filter) validateTimeRange(filter, true);
+  if (filter) parseMockTimeRange(filter, 'json');
   const eligible = (row: Row) =>
     kind === 'outbox'
       ? row.status === 'deadLettered'

@@ -176,7 +176,6 @@
               <!-- 状态 ≤4 项，用单选分段快捷切换；再点一次取消即为全部 -->
               <hlm-toggle-group
                 type="single"
-                size="sm"
                 [value]="statusFilter()"
                 [attr.aria-label]="t('distributedEvents.field.status')"
                 data-testid="event-status-filter"
@@ -318,6 +317,7 @@
                   hlmBtn
                   variant="outline"
                   size="sm"
+                  class="text-destructive"
                   [disabled]="busy() || !selectedForDiscard().length"
                   (click)="recover('selected', undefined, true)"
                 >
@@ -332,6 +332,7 @@
                     hlmBtn
                     variant="outline"
                     size="sm"
+                    class="text-destructive"
                     [disabled]="busy() || !totalCount()"
                     (click)="recover('filter', undefined, true)"
                   >
@@ -344,11 +345,18 @@
         }
 
         @if (loadError(); as error) {
-          <div role="alert" class="flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm">
-            <p>{{ error }}</p>
-            <button hlmBtn variant="outline" size="sm" (click)="reload()">
-              {{ t('distributedEvents.retry') }}
-            </button>
+          <!-- 首次加载失败与"没有匹配"分开表达：说出原因并给重试 -->
+          <div hlmEmpty class="border" data-testid="event-load-error">
+            <div hlmEmptyHeader>
+              <div hlmEmptyMedia variant="icon"><ng-icon name="lucideCircleAlert" /></div>
+              <h3 hlmEmptyTitle role="alert">{{ t('distributedEvents.loadFailed') }}</h3>
+              <p hlmEmptyDescription>{{ error }}</p>
+            </div>
+            <div hlmEmptyContent>
+              <button hlmBtn variant="outline" (click)="reload()">
+                {{ t('distributedEvents.retry') }}
+              </button>
+            </div>
           </div>
         } @else if (!loading() && !rows().length) {
           <div hlmEmpty class="border">

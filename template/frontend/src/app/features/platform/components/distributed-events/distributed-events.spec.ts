@@ -7,7 +7,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { DistributedEvents } from './distributed-events';
 import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
@@ -86,8 +86,9 @@ describe('DistributedEvents page', () => {
     manage = false,
     tenantId: string | null = null,
     query: Record<string, string> = {},
+    stub = mockService(),
   ) {
-    service = mockService();
+    service = stub;
     confirm = { open: vi.fn().mockResolvedValue(false) };
     await TestBed.configureTestingModule({
       imports: [DistributedEvents],
@@ -333,18 +334,24 @@ describe('DistributedEvents page', () => {
     { startTime: START },
     { startTime: 'yesterday', endTime: END },
     { startTime: END, endTime: START },
-  ])('treats an incomplete, malformed or reversed URL range as unfiltered (%o)', async (range) => {
-    await setup(true, null, { status: 'deadLettered', ...(range as Record<string, string>) });
-    const input = service.getOutboxList.mock.calls.at(-1)?.[0];
-    expect(input).not.toHaveProperty('startTime');
-    expect(input).not.toHaveProperty('endTime');
-    expect(component.selectedRange()).toBeUndefined();
-    await component.recover('filter');
-    const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
-    options.action!().subscribe();
-    expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('startTime');
-    expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('endTime');
-  });
+    // 浏览器能解析、接口会拒绝的日期写法（缺时区）
+    { startTime: '2026-11-01', endTime: '2026-11-07' },
+    { startTime: '2026-11-01T00:00:00', endTime: '2026-11-07T23:59:59' },
+  ])(
+    'treats an incomplete, malformed, zoneless or reversed URL range as unfiltered (%o)',
+    async (range) => {
+      await setup(true, null, { status: 'deadLettered', ...(range as Record<string, string>) });
+      const input = service.getOutboxList.mock.calls.at(-1)?.[0];
+      expect(input).not.toHaveProperty('startTime');
+      expect(input).not.toHaveProperty('endTime');
+      expect(component.selectedRange()).toBeUndefined();
+      await component.recover('filter');
+      const options = confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions;
+      options.action!().subscribe();
+      expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('startTime');
+      expect(service.redeliver.mock.calls[0][0].filter).not.toHaveProperty('endTime');
+    },
+  );
 
   it('writes the selected days in the display time zone as UTC bounds and returns to the first page', async () => {
     await setup(true, null, { page: '3' });
@@ -373,13 +380,82 @@ describe('DistributedEvents page', () => {
     expect(router.url).not.toContain('endTime');
   });
 
+  it('sends an explicit-offset URL range to the list and the recovery filter as UTC', async () => {
+    await setup(true, null, {
+      status: 'deadLettered',
+      startTime: '2026-01-01T08:00:00+08:00',
+      endTime: '2026-01-08T07:59:59.999+08:00',
+    });
+    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).toMatchObject({
+      startTime: START,
+      endTime: END,
+    });
+    expect(component.selectedRange()).toBeDefined();
+    await component.recover('filter');
+    (confirm.open.mock.calls[0][0] as DistributedEventRecoveryOptions).action!().subscribe();
+    expect(service.redeliver.mock.calls[0][0].filter).toMatchObject({
+      startTime: START,
+      endTime: END,
+    });
+  });
+
   it('shows a test event sent while the outbox is filtered to historical dates', async () => {
     await setup(true, null, { view: 'outbox', startTime: START, endTime: END });
+    const sent: Dto.DistributedEventOutboxOutputDto = {
+      ...OUTBOX,
+      id: '42',
+      eventId: 'test-event',
+      eventName: 'event-bus.test',
+      status: 'sent',
+    };
+    // 只有不带时间范围、按新事件 ID 查询时才返回新事件；还带着历史日期时照旧只有旧记录
+    service.getOutboxList.mockImplementation((input: Dto.GetDistributedEventOutboxInputDto) =>
+      of(
+        !input.startTime && !input.endTime && input.keyword === 'test-event'
+          ? { items: [sent], totalCount: 1 }
+          : { items: [OUTBOX], totalCount: 1 },
+      ),
+    );
     component.sendTest();
     await settle();
-    expect(router.url).not.toContain('startTime');
-    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).toMatchObject({ keyword: 'test-event' });
-    expect(service.getOutboxList.mock.calls.at(-1)?.[0]).not.toHaveProperty('startTime');
+    expect(component.query()['startTime']).toBeUndefined();
+    expect(component.query()['endTime']).toBeUndefined();
+    expect(host().querySelector('[data-record-id="42"]')).not.toBeNull();
+    expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).toBeNull();
+  });
+
+  it('keeps the loaded rows and shows a toast when a refresh fails, then recovers on retry', async () => {
+    await setup(true);
+    expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();
+    const notice = vi.spyOn(toast, 'error').mockReturnValue('refresh-failed');
+    try {
+      service.getOutboxList.mockReturnValueOnce(throwError(() => new Error('offline')));
+      component.reload();
+      await settle();
+      expect(notice).toHaveBeenCalledOnce();
+      expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();
+      expect(component.totalCount()).toBe(1200);
+      expect(host().querySelector('[data-testid=event-load-error]')).toBeNull();
+      component.reload();
+      await settle();
+      expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();
+      expect(notice).toHaveBeenCalledOnce();
+    } finally {
+      notice.mockRestore();
+    }
+  });
+
+  it('shows a retryable empty state only when the first load fails', async () => {
+    const failing = mockService();
+    failing.getOutboxList.mockReturnValueOnce(throwError(() => new Error('offline')));
+    await setup(true, null, {}, failing);
+    const error = host().querySelector('[data-testid=event-load-error]')!;
+    expect(error.getAttribute('data-slot')).toBe('empty');
+    expect(host().querySelector('[data-testid=event-table]')).toBeNull();
+    (error.querySelector('button') as HTMLButtonElement).click();
+    await settle();
+    expect(host().querySelector('[data-testid=event-load-error]')).toBeNull();
+    expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();
   });
 
   it('hides the time range on the event catalog', async () => {

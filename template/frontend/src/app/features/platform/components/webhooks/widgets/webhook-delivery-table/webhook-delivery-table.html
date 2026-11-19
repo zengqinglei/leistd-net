@@ -139,11 +139,13 @@
                             >
                           }
                           @case ('actions') {
+                            <!-- ≥sm 平铺详情与重发；<sm 收进 … 菜单（列表规范 §2） -->
                             <div class="flex items-center justify-end gap-0.5">
                               <button
                                 hlmBtn
                                 variant="ghost"
                                 size="icon-sm"
+                                class="hidden sm:inline-flex"
                                 data-testid="webhook-delivery-details"
                                 [hlmTooltip]="t('common.details')"
                                 [attr.aria-label]="t('common.details')"
@@ -154,7 +156,7 @@
                               @if (canManage()) {
                                 <!-- 重试中不可重发：原因与下次时刻挂在外层（禁用按钮收不到悬停） -->
                                 <span
-                                  class="inline-flex"
+                                  class="hidden sm:inline-flex"
                                   [hlmTooltip]="
                                     delivery.status === 'pending'
                                       ? t('webhooks.action.retryPending', {
@@ -169,6 +171,7 @@
                                     hlmBtn
                                     variant="ghost"
                                     size="icon-sm"
+                                    data-testid="webhook-delivery-retry"
                                     [disabled]="
                                       delivery.status === 'pending' || retryingId() !== null
                                     "
@@ -183,6 +186,66 @@
                                   </button>
                                 </span>
                               }
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon-sm"
+                                align="end"
+                                class="sm:hidden"
+                                data-testid="webhook-delivery-menu"
+                                [attr.aria-label]="t('common.actions')"
+                                [hlmDropdownMenuTrigger]="rowMenu"
+                              >
+                                @if (retryingId() === delivery.id) {
+                                  <hlm-spinner class="text-base" />
+                                } @else {
+                                  <ng-icon name="lucideEllipsis" />
+                                }
+                              </button>
+                              <ng-template #rowMenu>
+                                <hlm-dropdown-menu>
+                                  <hlm-dropdown-menu-group>
+                                    <button hlmDropdownMenuItem (click)="open.emit(delivery.id)">
+                                      <ng-icon name="lucidePanelRight" />
+                                      {{ t('common.details') }}
+                                    </button>
+                                    @if (canManage()) {
+                                      <button
+                                        hlmDropdownMenuItem
+                                        [disabled]="
+                                          delivery.status === 'pending' || retryingId() !== null
+                                        "
+                                        [attr.aria-describedby]="
+                                          delivery.status === 'pending'
+                                            ? 'webhook-delivery-retry-reason-' + delivery.id
+                                            : null
+                                        "
+                                        (click)="retry.emit(delivery)"
+                                      >
+                                        <ng-icon name="lucideRotateCw" />
+                                        {{ t('webhooks.action.retry') }}
+                                      </button>
+                                      @if (delivery.status === 'pending') {
+                                        <p
+                                          class="px-1.5 pb-1 text-xs text-muted-foreground"
+                                          [id]="'webhook-delivery-retry-reason-' + delivery.id"
+                                        >
+                                          {{
+                                            t('webhooks.action.retryPending', {
+                                              time:
+                                                delivery.nextAttemptAt
+                                                | appDate
+                                                  : 'full'
+                                                  : displayTimeZone()
+                                                  : displayLocale(),
+                                            })
+                                          }}
+                                        </p>
+                                      }
+                                    }
+                                  </hlm-dropdown-menu-group>
+                                </hlm-dropdown-menu>
+                              </ng-template>
                             </div>
                           }
                         }
