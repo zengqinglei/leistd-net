@@ -1,6 +1,6 @@
 # 分布式事件、Webhook 与租户授予访问的列表体验
 
-状态：已完成 · 风险档：高 · 关联：方案对比页 [design.html](2026-11-19-platform-ops-list-ux/design.html)
+状态：已完成 · 风险档：高 · 关联：[PR #301](https://github.com/zengqinglei/leistd-net/pull/301)；方案对比页 [design.html](2026-11-19-platform-ops-list-ux/design.html)
 
 ## 1. 需求
 
