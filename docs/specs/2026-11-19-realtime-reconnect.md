@@ -1,6 +1,6 @@
 # 实时连接持续重连与悬浮提示
 
-状态：进行中 · 风险档：中 · 关联：设计稿 [design.html](2026-11-19-realtime-reconnect/design.html)
+状态：已完成 · 风险档：中 · 关联：[PR #303](https://github.com/zengqinglei/leistd-net/pull/303)；设计稿 [design.html](2026-11-19-realtime-reconnect/design.html)
 
 ## 1. 需求
 
@@ -64,3 +64,28 @@
 服务沿用 SDK 自动重连，传入自定义 `IRetryPolicy`：除 Mock 外永不返回 `null`，并记录下次重试时刻供界面倒计时。SDK 不覆盖的两种情况，由服务自己用同一退避处理：首次或重建时 `start()` 失败，以及当前连接收到 `onclose`（服务端发来不允许重连的关闭消息等）。"立即重试"的做法是：静默丢弃当前连接，状态保持 `reconnecting`，再新建连接。状态类型去掉 `disconnected`，只剩 `idle`、`connected`、`reconnecting`，另外暴露下次重试时刻。重试失败原因匹配到 401 时，服务发出会话重查信号；`SessionContextService` 收到后调用已有的 `revalidate()`，401 由拦截器清会话并调用 `reset()`，重连就此停止。
 
 提示组件改为零高度宿主，胶囊绝对定位，骑在页头下边沿。倒计时每秒刷新，放在 `aria-hidden` 里；宿主里另放一句稳定的读屏文案。`frontend-navigation.md` 的挂载说明同步修改。
+
+## 4. 结果
+
+### 实际交付
+
+[PR #303](https://github.com/zengqinglei/leistd-net/pull/303)，只改模板前端。涉及 `signalr-service`、`session-context-service`、`realtime-status`、中英文词条，以及 `frontend-navigation.md` 的挂载说明。
+
+### 与方案的偏差
+
+- 胶囊位置比设计稿略低：侧栏布局的页头正中是搜索框，胶囊按 `-top-2.5` 骑在页头下沿，与搜索框之间留出间隙。字号用 `text-xs`，规范只允许档位字号。
+- 触屏下胶囊保持小尺寸。「立即重试」的命中区用透明 `::after` 补足 44px，不跟随按钮自带的触屏加高。
+- Codex 审查四轮。除重连本身外，还修了几处租户工作空间切换竞态，其中部分原本就存在：
+  - 目标范围先于旧连接收尾确定。
+  - 建连收尾只清理自己那条连接，因此去掉了跨代串行等待。
+  - 进入租户不再等首页握手。
+  - 切回首页时，若首页连接仍在退避，就重建它。
+  - 对同一目标的重复切换请求不再作废进行中的切换。
+- `disconnect()` 合并进 `resetCurrent()`，不再对外公开。
+
+### 验收记录
+
+- AC1–AC10：identity-workspace 生成项目中，6 个 spec 文件共 128 例通过。审查轮次新增的回归用例都做过回退检验，退回旧实现后会失败。
+- AC1、AC11 人工验收：业务接口走 Mock，`/hubs/` 经开发代理连到本机最小 Hub。Hub 停 66 秒后重启，页面在第 76 秒自动连回，显示「已恢复」后消失。在 390、768、1440 宽度及暗色、英文下截图检查。
+- 未在真实后端的重新部署中验证。worker-01 演示站更新到包含本改动的版本后，可以直接验证。
+
