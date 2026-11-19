@@ -145,7 +145,8 @@ export class WorkspaceContextService {
   }
 
   switchTo(name: string | null): void {
-    const suffix = this.router.url.replace(/^\/w\/[^/]+/, '').split(/[?#]/)[0];
+    const url = this.router.url;
+    const suffix = url.startsWith('/w/') ? url.replace(/^\/w\/[^/]+/, '').split(/[?#]/)[0] : '';
     const destination = name
       ? `/w/${encodeURIComponent(
           name,
