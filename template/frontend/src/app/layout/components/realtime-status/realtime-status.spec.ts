@@ -198,6 +198,31 @@ describe('RealtimeStatus', () => {
     expect(notice()).toBeNull();
   });
 
+  it('dismisses a restored notice when another outage begins', () => {
+    set('reconnecting');
+    advance(3000);
+    set('connected');
+    expect(notice()!.dataset['notice']).toBe('restored');
+
+    advance(1000);
+    set('reconnecting');
+    expect(notice()).toBeNull();
+
+    advance(2999);
+    expect(notice()).toBeNull();
+    advance(1);
+    expect(notice()!.dataset['notice']).toBe('reconnecting');
+
+    set('connected');
+    expect(notice()!.dataset['notice']).toBe('restored');
+    expect(visibleText()).toBe('Live updates restored');
+
+    advance(1999);
+    expect(notice()!.dataset['notice']).toBe('restored');
+    advance(1);
+    expect(notice()).toBeNull();
+  });
+
   it('hides everything when the session ends while reconnecting', () => {
     set('reconnecting', 10_000);
     advance(3000);
