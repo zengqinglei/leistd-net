@@ -5,7 +5,6 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { page } from 'vitest/browser';
 
-import { RealtimeStatus } from './realtime-status';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
@@ -19,6 +18,7 @@ import {
   setCoarsePointer,
   tapAt,
 } from '../../../shared/utils/coarse-pointer.testing';
+import { RealtimeStatus } from './realtime-status';
 
 /**
  * 触屏手机上的实时连接提示：胶囊保持小尺寸，「立即重试」的命中区仍不小于 44px，点在按钮视觉范围之外、
