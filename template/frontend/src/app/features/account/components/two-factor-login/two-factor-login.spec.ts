@@ -26,8 +26,8 @@ import { AccountService } from '../../services/account-service';
 import { TwoFactorLogin } from './two-factor-login';
 
 import type { MockedObject } from 'vitest';
-
 //#if (OpenIddictServer)
+
 /** 授权端点送来的原目标：缓存请求的引用与重新认证证明原样带回。 */
 const AUTHORIZE =
   '/connect/authorize?client_id=resource&request_uri=urn%3Aabc&reauthentication=proof';

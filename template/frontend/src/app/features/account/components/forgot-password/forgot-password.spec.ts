@@ -36,8 +36,8 @@ import { TenantByHostOutputDto } from '../../dtos/tenant-by-host.dto';
 import { AccountService } from '../../services/account-service';
 //#endif
 import { ForgotPassword } from './forgot-password';
-
 //#if (Email)
+
 import type { MockedObject } from 'vitest';
 //#endif
 

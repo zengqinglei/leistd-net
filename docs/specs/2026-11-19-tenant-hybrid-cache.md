@@ -8,7 +8,7 @@
 
 Microsoft.Extensions.Caching.Hybrid 10.11.0 在缓存未命中、调用方令牌 `CanBeCanceled` 时，用 `ThreadPool.UnsafeQueueUserWorkItem` 执行回源，不流转调用方的 `ExecutionContext`。源码见 `DefaultHybridCache.cs` 第 178–191 行和 `DefaultHybridCache.StampedeStateT.cs` 第 47–61 行。
 
-Leistd 的当前租户、主体、链路标识、工作单元、数据过滤开关都存在 `AsyncLocal` 里，回调里全部读不到。下游 CRM 门户取品牌图因此在冷缓存时全部返回 500。
+Leistd 的当前租户、主体、链路标识、工作单元、数据过滤开关都存在 `AsyncLocal` 里，回调里全部读不到。下游应用在冷缓存时读取租户品牌图，会因回调缺少租户上下文而返回 500。
 
 更危险的情形：按租户分库时，回调里的连接解析拿不到租户，可能静默连到宿主库。
 
@@ -23,7 +23,7 @@ Leistd 的当前租户、主体、链路标识、工作单元、数据过滤开�
   - `ScopeKey` 已规定租户外部标识的格式：租户为 `{租户 Id:N}:{key}`，宿主为 `host:{key}`。
   - `IAmbientContext.Capture/Restore` 用于后台队列，会恢复主体。
   - `SharedSettingCache` 在回调外取好租户，经路径参数显式传入，写法正确。
-- **下游 Leistd 调用点：** 只有 CRM 的 `FoundationBrandVisualAssetStore` 需要改。完整核对结果见下游反馈文件 §6.7。
+- **下游 Leistd 调用点：** 已核对的调用中，只有租户品牌图读取需要迁移到租户缓存。
 
 ### 决定
 
