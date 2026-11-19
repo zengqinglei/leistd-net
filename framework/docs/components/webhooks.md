@@ -174,7 +174,7 @@ public class OrderCancelledWebhookHandler(IWebhookPublisher webhookPublisher) : 
 | `POST /subscriptions/{id}/enable`、`POST /subscriptions/{id}/disable` | Manage | 启用可带查询参数 `retryFailed=true` |
 | `POST /subscriptions/{id}/rotate-secret` | Manage | 返回一次性明文新密钥 |
 | `POST /subscriptions/{id}/test` | Manage | 向该订阅发一条 `webhook.test`，不论它是否订阅了该类型 |
-| `GET /deliveries`、`GET /deliveries/{id}` | Read | 查询参数 `offset`、`limit`、`keyword`、`subscriptionId`、`status`（`pending`、`succeeded`、`failed`）、`eventType`；详情含载荷与全部尝试 |
+| `GET /deliveries`、`GET /deliveries/{id}` | Read | 查询参数 `offset`、`limit`、`keyword`、`subscriptionId`、`status`（`pending`、`succeeded`、`failed`）、`eventType`、`startTime`、`endTime`（投递创建时间，UTC，两端都包含）；详情含载荷与全部尝试 |
 | `POST /deliveries/{id}/retry` | Manage | 手动重发一次终态投递 |
 
 明文密钥只在创建与轮换的响应里出现一次，之后只返回 `SecretPrefix`。

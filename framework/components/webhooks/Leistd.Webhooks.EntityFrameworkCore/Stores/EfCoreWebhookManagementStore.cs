@@ -249,6 +249,16 @@ internal sealed class EfCoreWebhookManagementStore<TDbContext>(
             query = query.Where(x => x.Event.Type == eventType);
         }
 
+        if (input.StartTime is { } startTime)
+        {
+            query = query.Where(x => x.Delivery.CreationTime >= startTime);
+        }
+
+        if (input.EndTime is { } endTime)
+        {
+            query = query.Where(x => x.Delivery.CreationTime <= endTime);
+        }
+
         var totalCount = await query.LongCountAsync(cancellationToken);
         var rows = await query
             .OrderByDescending(x => x.Delivery.CreationTime)

@@ -161,12 +161,43 @@ public sealed class DistributedEventEndpointTests : IAsyncLifetime
         await host.StopAsync();
     }
 
-    private Task<HttpResponseMessage> SendAsync(string method, string route, string? permission, Guid? tenant = null)
+    /// <summary>列表 GET 接受带 Z 或显式偏移的时刻（绑定后换算为 UTC）；缺时区或起止颠倒返回 400。</summary>
+    [Theory]
+    [InlineData("outbox", "startTime=2026-11-19T00:00:00Z&endTime=2026-11-19T01:00:00Z", HttpStatusCode.OK)]
+    [InlineData("inbox", "startTime=2026-11-19T08:00:00%2B08:00", HttpStatusCode.OK)]
+    [InlineData("rejections", "endTime=2026-11-19T01:00:00Z", HttpStatusCode.OK)]
+    [InlineData("outbox", "startTime=2026-11-19T00:00:00", HttpStatusCode.BadRequest)]
+    [InlineData("inbox", "startTime=2026-11-19T02:00:00Z&endTime=2026-11-19T01:00:00Z", HttpStatusCode.BadRequest)]
+    [InlineData("rejections", "endTime=2026-11-19T01:00:00", HttpStatusCode.BadRequest)]
+    public async Task List_time_range_accepts_explicit_zones_and_rejects_missing_zone_or_reversed_range(
+        string route, string query, HttpStatusCode expected)
+    {
+        var response = await SendAsync("GET", route + "?" + query, "read");
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    /// <summary>按条件恢复的 JSON 只接受 Z；显式偏移、缺时区或起止颠倒返回 400。</summary>
+    [Theory]
+    [InlineData("outbox/redeliver", "\"startTime\":\"2026-11-19T00:00:00Z\"", HttpStatusCode.OK)]
+    [InlineData("rejections/discard", "\"endTime\":\"2026-11-19T00:00:00Z\"", HttpStatusCode.OK)]
+    [InlineData("outbox/redeliver", "\"startTime\":\"2026-11-19T08:00:00+08:00\"", HttpStatusCode.BadRequest)]
+    [InlineData("rejections/redecode", "\"startTime\":\"2026-11-19T00:00:00\"", HttpStatusCode.BadRequest)]
+    [InlineData("inbox/replay", "\"startTime\":\"2026-11-19T02:00:00Z\",\"endTime\":\"2026-11-19T01:00:00Z\"", HttpStatusCode.BadRequest)]
+    public async Task Filter_recovery_time_range_accepts_utc_json_and_rejects_other_forms(
+        string route, string times, HttpStatusCode expected)
+    {
+        var status = route.StartsWith("inbox", StringComparison.Ordinal) ? ",\"status\":\"failed\"" : "";
+        var body = "{\"filter\":{\"before\":\"2026-11-20T00:00:00Z\"," + times + status + "}}";
+        var response = await SendAsync("POST", route, "manage", body: body);
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    private Task<HttpResponseMessage> SendAsync(string method, string route, string? permission, Guid? tenant = null, string? body = null)
     {
         var request = new HttpRequestMessage(new HttpMethod(method), "/api/v1/distributed-events/" + route);
         if (permission is not null) request.Headers.Add("X-Permission", permission);
         if (tenant is not null) request.Headers.Add("X-Tenant", tenant.ToString());
-        if (method == "POST") request.Content = new StringContent("{\"ids\":[\"1\"]}", Encoding.UTF8, "application/json");
+        if (method == "POST") request.Content = new StringContent(body ?? "{\"ids\":[\"1\"]}", Encoding.UTF8, "application/json");
         return _client.SendAsync(request);
     }
 

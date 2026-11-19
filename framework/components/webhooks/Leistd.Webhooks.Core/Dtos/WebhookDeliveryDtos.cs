@@ -5,7 +5,8 @@ using Leistd.Webhooks.Delivery;
 namespace Leistd.Webhooks.Dtos;
 
 /// <summary>投递分页查询入参；按创建时间倒序。</summary>
-public record GetWebhookDeliveriesInputDto : PageRequest
+/// <remarks>时间按 UTC 比较，两端都是闭区间。</remarks>
+public record GetWebhookDeliveriesInputDto : PageRequest, IValidatableObject
 {
     /// <summary>在事件类型名与事件标识上做包含匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
@@ -22,6 +23,33 @@ public record GetWebhookDeliveriesInputDto : PageRequest
     /// <summary>只取该事件类型的投递；为空不过滤。</summary>
     [MaxLength(CreateWebhookSubscriptionInputDto.MaxEventTypeLength, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? EventType { get; init; }
+
+    /// <summary>投递创建时间下限（UTC，含）。</summary>
+    public DateTime? StartTime { get; init; }
+
+    /// <summary>投递创建时间上限（UTC，含）。</summary>
+    public DateTime? EndTime { get; init; }
+
+    /// <inheritdoc />
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (StartTime is { Kind: not DateTimeKind.Utc })
+        {
+            yield return new ValidationResult("StartTime must be UTC.", [nameof(StartTime)]);
+        }
+
+        if (EndTime is { Kind: not DateTimeKind.Utc })
+        {
+            yield return new ValidationResult("EndTime must be UTC.", [nameof(EndTime)]);
+        }
+
+        if (StartTime > EndTime)
+        {
+            yield return new ValidationResult(
+                "StartTime must not be later than EndTime.",
+                [nameof(StartTime), nameof(EndTime)]);
+        }
+    }
 }
 
 /// <summary>投递列表项：一个事件发给一个订阅的投递。</summary>

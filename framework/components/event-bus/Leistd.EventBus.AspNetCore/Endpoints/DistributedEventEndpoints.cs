@@ -104,12 +104,12 @@ public static class DistributedEventEndpoints
         group.MapGet("outbox", (IDistributedEventManagementService service, CancellationToken cancellationToken,
                 int offset = 0, int limit = PageRequest.DefaultLimit,
                 string? status = null,
-                string? eventName = null, string? keyword = null, DateTime? before = null, string? errorCode = null)
+                string? eventName = null, string? keyword = null, DateTime? before = null, DateTime? startTime = null, DateTime? endTime = null, string? errorCode = null)
                 => service.GetOutboxListAsync(new GetDistributedEventOutboxInputDto
                     {
                         Offset = offset, Limit = limit,
                         Status = ParseStatus<DistributedEventOutboxStatus>(status),
-                        EventName = eventName, Keyword = keyword, Before = before,
+                        EventName = eventName, Keyword = keyword, Before = before, StartTime = startTime, EndTime = endTime,
                         ErrorCode = errorCode
                     }, cancellationToken))
             .WithName(GetOutboxListName)
@@ -131,12 +131,12 @@ public static class DistributedEventEndpoints
         group.MapGet("inbox", (IDistributedEventManagementService service, CancellationToken cancellationToken,
                 int offset = 0, int limit = PageRequest.DefaultLimit,
                 string? status = null,
-                string? eventName = null, string? keyword = null, DateTime? before = null, string? errorCode = null, string? consumer = null)
+                string? eventName = null, string? keyword = null, DateTime? before = null, DateTime? startTime = null, DateTime? endTime = null, string? errorCode = null, string? consumer = null)
                 => service.GetInboxListAsync(new GetDistributedEventInboxInputDto
                     {
                         Offset = offset, Limit = limit,
                         Status = ParseStatus<DistributedEventInboxStatus>(status),
-                        EventName = eventName, Keyword = keyword, Before = before,
+                        EventName = eventName, Keyword = keyword, Before = before, StartTime = startTime, EndTime = endTime,
                         ErrorCode = errorCode, Consumer = consumer
                     }, cancellationToken))
             .WithName(GetInboxListName)
@@ -158,12 +158,12 @@ public static class DistributedEventEndpoints
         group.MapGet("rejections", (IDistributedEventManagementService service, CancellationToken cancellationToken,
                 int offset = 0, int limit = PageRequest.DefaultLimit,
                 string? status = null,
-                string? eventName = null, string? keyword = null, DateTime? before = null, string? reason = null)
+                string? eventName = null, string? keyword = null, DateTime? before = null, DateTime? startTime = null, DateTime? endTime = null, string? reason = null)
                 => service.GetRejectionsAsync(new GetDistributedEventRejectionsInputDto
                     {
                         Offset = offset, Limit = limit,
                         Status = ParseStatus<DistributedEventRejectionStatus>(status),
-                        EventName = eventName, Keyword = keyword, Before = before,
+                        EventName = eventName, Keyword = keyword, Before = before, StartTime = startTime, EndTime = endTime,
                         Reason = reason
                     }, cancellationToken))
             .WithName(GetRejectionsName)

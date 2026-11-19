@@ -209,6 +209,8 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
     [InlineData("POST", "subscriptions", """{"name":"a","url":"https://r.example","eventTypes":["order.paid"],"headers":{"webhook-id":"x"}}""", "headers")]
     [InlineData("GET", "deliveries?status=Failed", null, "status")]
     [InlineData("GET", "subscriptions?limit=0", null, "limit")]
+    [InlineData("GET", "deliveries?startTime=2026-11-19T00:00:00", null, "startTime")]
+    [InlineData("GET", "deliveries?startTime=2026-11-19T02:00:00Z&endTime=2026-11-19T01:00:00Z", null, "startTime")]
     public async Task Invalid_input_is_400_with_the_field(string method, string route, string? body, string field)
     {
         var response = await SendAsync(method, route, "manage", body);
@@ -217,6 +219,17 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.False(document.RootElement.TryGetProperty("code", out _));
         Assert.Contains(field, document.RootElement.GetProperty("errors").EnumerateArray().Select(x => x.GetProperty("field").GetString()));
+    }
+
+    /// <summary>投递列表的时间参数接受带 Z 或显式偏移的时刻，绑定后换算为 UTC。</summary>
+    [Theory]
+    [InlineData("deliveries?startTime=2026-11-19T00:00:00Z&endTime=2026-11-19T01:00:00Z")]
+    [InlineData("deliveries?startTime=2026-11-19T08:00:00%2B08:00")]
+    public async Task Delivery_time_range_accepts_explicit_zones(string route)
+    {
+        var response = await SendAsync("GET", route, "read");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     /// <summary>与前端约定：<c>retryFailed=true</c> 走查询串，失败投递按手动重发排期。</summary>

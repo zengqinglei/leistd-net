@@ -130,6 +130,29 @@ public sealed class WebhookDeliveryManagementTests : IAsyncLifetime
         Assert.Equal(delivery.Id, Assert.Single(succeeded.Items).Id);
     }
 
+    /// <summary>投递列表按创建时间筛选，两端都包含；只给一端时单边筛选。</summary>
+    [Fact]
+    public async Task The_list_filters_by_creation_time_inclusively()
+    {
+        await CreateAsync();
+        await _host.PublishAsync(null, data: new { orderId = 1 });
+        var first = _host.Clock.GetUtcNow().UtcDateTime;
+        _host.Clock.Advance(TimeSpan.FromHours(1));
+        await _host.PublishAsync(null, data: new { orderId = 2 });
+        var second = _host.Clock.GetUtcNow().UtcDateTime;
+
+        async Task<long> CountAsync(DateTime? start, DateTime? end)
+            => (await _host.ManageAsync(null, service => service.GetDeliveriesAsync(
+                new GetWebhookDeliveriesInputDto { StartTime = start, EndTime = end }))).TotalCount;
+
+        Assert.Equal(2, await CountAsync(null, null));
+        Assert.Equal(2, await CountAsync(first, second));
+        Assert.Equal(1, await CountAsync(first, first));
+        Assert.Equal(1, await CountAsync(second, null));
+        Assert.Equal(1, await CountAsync(null, first));
+        Assert.Equal(0, await CountAsync(first.AddMinutes(1), second.AddMinutes(-1)));
+    }
+
     private async Task<Guid> CreateAsync(params string[] eventTypes)
         => (await _host.ManageAsync(null, service => service.CreateSubscriptionAsync(new CreateWebhookSubscriptionInputDto
         {
