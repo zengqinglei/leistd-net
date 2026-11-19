@@ -104,6 +104,13 @@ describe('NavigationService current item', () => {
               { path: 'settings/:panel', component: Page },
             ],
           },
+          {
+            path: 'w/:workspace/platform',
+            children: [
+              { path: '', component: Page },
+              { path: 'users', component: Page },
+            ],
+          },
         ]),
         {
           provide: AuthorizationService,
@@ -144,5 +151,16 @@ describe('NavigationService current item', () => {
 
     await router.navigateByUrl('/platform/users');
     expect(service.isItemActive(item('/platform'))).toBe(false);
+  });
+
+  // 租户工作区里菜单路由带 /w/<名称> 前缀：落地页仍只精确匹配，切到其他菜单后不再保持选中
+  it('matches the workspace platform landing page only exactly', async () => {
+    const landing = item('/w/acme/platform');
+    await router.navigateByUrl('/w/acme/platform');
+    expect(service.isItemActive(landing)).toBe(true);
+
+    await router.navigateByUrl('/w/acme/platform/users');
+    expect(service.isItemActive(landing)).toBe(false);
+    expect(service.isItemActive(item('/w/acme/platform/users'))).toBe(true);
   });
 });

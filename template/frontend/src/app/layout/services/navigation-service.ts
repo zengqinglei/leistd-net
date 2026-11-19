@@ -459,8 +459,9 @@ export class NavigationService {
     let active = this.activeByRoute.get(item.route);
     if (!active) {
       active = isActive(item.route, this.router, {
-        // 平台落地页是其余平台路由的前缀，只能精确匹配；其余入口连同子页面（如设置面板）都算当前
-        paths: item.route === '/platform' ? 'exact' : 'subset',
+        // 平台落地页是其余平台路由的前缀，只能精确匹配；其余入口连同子页面（如设置面板）都算当前。
+        // 租户工作区的路由带 /w/<名称> 前缀，去掉前缀再判断是否落地页
+        paths: item.route.replace(/^\/w\/[^/]+/, '') === '/platform' ? 'exact' : 'subset',
         queryParams: 'ignored',
         fragment: 'ignored',
         matrixParams: 'ignored',
