@@ -119,9 +119,9 @@ export class SignalRService {
   async setWorkspace(name: string | null, platformStaff: boolean): Promise<void> {
     const revision = ++this.workspaceRevision;
     if (this.workspaceName === name) return;
-    if (!this.workspaceName && name && platformStaff) {
-      await this.connect();
-      if (revision !== this.workspaceRevision) return;
+    // 平台人员从首页进入租户：首页连接（已连上或正在握手）留在后台继续收首页推送，不等它握手完成。
+    // 等待期间目标页已挂载并登记订阅，之后的重置会把这些登记清掉；没有首页连接时回到首页再建
+    if (!this.workspaceName && name && platformStaff && isLive(this.connection)) {
       this.homeConnection = this.connection;
       this.connection = null;
       //#if (IncludeNotifications)
@@ -309,25 +309,34 @@ export class SignalRService {
     await this.dropConnection();
 
     // await 之后先核对代际：连接一旦写进字段，isCurrent() 的身份比对就一律为真，排除不了旧请求
-    // 在 reset 之后新建的连接。本行到建连方法里的字段赋值之间不得插入 await。
+    // 在 reset 之后新建的连接。本行到 buildConnection() 的字段赋值之间不得插入 await。
     if (generation !== this.generation) {
       return;
     }
 
+    // 页面主动建连时提前用掉退避等待：界面不再显示旧倒计时，原计时器也不再唤醒
+    this.clearRetry();
+    const connection = this.buildConnection();
+    // 收尾只处理仍在字段里的这一条。握手期间被重置、换人或切换工作空间摘走的连接，由摘走它的流程停掉
+    // 或留作首页连接；按字段清理会误关此时放进字段的另一条（例如刚恢复的首页连接）
     try {
-      // 页面主动建连时提前用掉退避等待：界面不再显示旧倒计时，原计时器也不再唤醒
-      this.clearRetry();
-      await this.startConnection();
-
-      if (generation !== this.generation) {
-        // 连接期间发生了主体切换：这条连接握的是上一个身份，不能留给下一个用户。
-        await this.dropConnection();
-      }
+      await connection.start();
     } catch (err) {
       console.error('[SignalR] Connection failed:', err);
-      await this.dropConnection();
+      if (this.connection === connection) {
+        await this.dropConnection();
+      }
       // SDK 的自动重连只接管建连成功之后的掉线，建连本身失败由这里按同一退避重试
       this.scheduleRetry(generation, err);
+      return;
+    }
+
+    if (this.connection === connection) {
+      this.markConnected();
+      //#if (IncludeRealTime)
+      // 连上之前登记的需求（页面先于连接创建）在这里补齐
+      this.resubscribeResources();
+      //#endif
     }
   }
 
@@ -423,11 +432,7 @@ export class SignalRService {
     this.notifications.set([]);
     //#endif
 
-    await this.disconnect();
-  }
-
-  /** 主动断开连接，回到 `idle`，等待中的重试一并撤销。只经 reset 调用：代际随之递增，在途建连失败后不会再排重试。 */
-  private async disconnect(): Promise<void> {
+    // 主动断开：回到 idle，等待中的重试一并撤销
     this.clearRetry();
     this.status.set('idle');
     await this.dropConnection();
@@ -586,7 +591,8 @@ export class SignalRService {
     return gatewayPart ? `${gatewayPart}${path}` : path;
   }
 
-  private async startConnection(): Promise<void> {
+  /** 建一条连接并写进字段，注册推送与重连回调；启动由调用方负责。 */
+  private buildConnection(): HubConnection {
     // 策略只在建连成功后的掉线里被调用，那时 owner 已赋值
     let owner: HubConnection | null = null;
     const connection = new HubConnectionBuilder()
@@ -620,7 +626,7 @@ export class SignalRService {
     owner = connection;
 
     // 每个回调先确认仍是当前连接。判据用身份而非代际：stop() 是异步的，旧连接的回调可能晚于
-    // 主体切换才到达，而 disconnect() 已把字段置空。
+    // 主体切换才到达，而重置已把字段置空。
     const isCurrent = () => this.connection === connection;
     //#if (IncludeNotifications)
 
@@ -673,14 +679,6 @@ export class SignalRService {
     });
 
     this.connection = connection;
-    await connection.start();
-
-    if (isCurrent()) {
-      this.markConnected();
-      //#if (IncludeRealTime)
-      // 连上之前登记的需求（页面先于连接创建）在这里补齐
-      this.resubscribeResources();
-      //#endif
-    }
+    return connection;
   }
 }

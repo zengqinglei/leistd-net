@@ -112,6 +112,8 @@ describe('SignalRService connection lifecycle', () => {
 
     async start(): Promise<void> {
       this.startCount++;
+      // 与 SDK 一致：start() 同步进入 Connecting，握手期间连接已是活的
+      this.state = signalR.HubConnectionState.Connecting;
 
       // 立即完成的 start 构造不出"连接已写入字段、但尚未通过最终代际校验"的窗口，
       // 而那正是旧请求的推送可以穿透的地方。
@@ -122,6 +124,7 @@ describe('SignalRService connection lifecycle', () => {
       }
 
       if ([...failing].some((fragment) => this.url.includes(fragment))) {
+        this.state = signalR.HubConnectionState.Disconnected;
         throw failure(this.url);
       }
       this.state = signalR.HubConnectionState.Connected;
@@ -1379,6 +1382,51 @@ describe('SignalRService connection lifecycle', () => {
       expect(live).toHaveLength(1);
       expect(live[0].url).toContain('workspace=globex');
     });
+
+    it('keeps the restored home connection when a pending tenant handshake fails afterwards', async () => {
+      await service.connect();
+      const home = built[0];
+      deferStart = true;
+      const entering = service.setWorkspace('acme', true);
+      await vi.advanceTimersByTimeAsync(0);
+      const acme = built[1];
+      expect(acme.url).toContain('workspace=acme');
+
+      // 租户握手未完成就回到首页，随后这次握手失败
+      failing.add('workspace=acme');
+      const returning = service.setWorkspace(null, true);
+      acme.completeStart();
+      await Promise.all([entering, returning]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(home.stopCount).toBe(0);
+      expect(built).toHaveLength(2);
+      expect(service.connectionStatus()).toBe('connected');
+    });
+    //#if (IncludeRealTime)
+
+    it('keeps what a tenant page registers while the home handshake is still pending', async () => {
+      deferStart = true;
+      void service.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      const home = built[0];
+
+      const entering = service.setWorkspace('acme', true);
+      // 角色页先于首页握手完成挂载：登记订阅并建连
+      service.watchResource('acme-roles', holder().ref);
+      const pageConnect = service.connect();
+      deferStart = false;
+      home.completeStart();
+      await Promise.all([entering, pageConnect]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const acme = built[1];
+      expect(acme.url).toContain('workspace=acme');
+      expect(acme.invocations).toEqual([{ method: 'Subscribe', args: ['acme-roles'] }]);
+      expect(home.stopCount).toBe(0);
+      expect(service.connectionStatus()).toBe('connected');
+    });
+    //#endif
     //#endif
   });
 });
