@@ -70,8 +70,6 @@ describe('NotificationService', () => {
   });
 
   it('keeps a stale response out of the new auth subject list on mid-request switch', async () => {
-    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
-
     const init = service.init();
     const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
 
@@ -86,7 +84,6 @@ describe('NotificationService', () => {
   });
 
   it('skips the connection from a stale init after a mid-request subject switch', async () => {
-    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
     (signalR.connect as Mock).mockClear();
 
     const init = service.init();
@@ -102,7 +99,6 @@ describe('NotificationService', () => {
   });
 
   it('keeps a stale write response off the new subject list on a mid-request switch', async () => {
-    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
     signalR.notifications.set([notification('b-1', '2026-02-01T00:00:00Z')]);
 
     const cleared = service.clearAll();
@@ -154,8 +150,6 @@ describe('NotificationService', () => {
   });
 
   it('keeps a stale failure off the new subject on a mid-request switch', async () => {
-    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
-
     const load = service.loadNotifications();
     const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
 
@@ -168,8 +162,6 @@ describe('NotificationService', () => {
   });
 
   it("keeps the new subject's loading state when the old subject's request settles late", async () => {
-    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
-
     const loadA = service.loadNotifications();
     await signalR.reset();
     const loadB = service.loadNotifications();

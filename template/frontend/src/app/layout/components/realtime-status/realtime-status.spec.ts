@@ -15,24 +15,32 @@ import {
 import { RealtimeStatus } from './realtime-status';
 
 /**
- * 实时连接提示条：正常时不显示，重连持续 2 秒以上与断开时显示。假计时器只推进本组件的显示延时
- * （setTimeout），渲染调度照常。文案逐字写出、不从词条推导：多语言形态渲染 `public/i18n` 的英文词条。
+ * 实时连接提示：正常时不显示，重连持续 3 秒以上才出现；等待重试给倒计时与「立即重试」，胶囊出现过才在连回时
+ * 报告「已恢复」。假计时器推进本组件的显示延时与倒计时时钟。文案逐字写出、不从词条推导：多语言形态渲染
+ * `public/i18n` 的英文词条。
  */
 describe('RealtimeStatus', () => {
   let fixture: ComponentFixture<RealtimeStatus>;
   let status: ReturnType<typeof signal<RealtimeConnectionStatus>>;
-  let connect: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  let nextRetryAt: ReturnType<typeof signal<number | null>>;
+  let retryNow: ReturnType<typeof vi.fn<() => void>>;
 
   const host = () => fixture.nativeElement as HTMLElement;
   const notice = () => host().querySelector<HTMLElement>('[data-testid="realtime-status-notice"]');
+  const visibleText = () =>
+    notice()!.querySelector<HTMLElement>('span.truncate')!.textContent!.replace(/\s+/g, ' ').trim();
+  const spokenText = () => notice()!.querySelector<HTMLElement>('.sr-only')!.textContent!.trim();
+  const retryButton = () =>
+    notice()!.querySelector<HTMLButtonElement>('[data-testid="realtime-retry"]');
 
   beforeEach(async () => {
     status = signal<RealtimeConnectionStatus>('connected');
-    connect = vi.fn(() => Promise.resolve());
+    nextRetryAt = signal<number | null>(null);
+    retryNow = vi.fn();
     TestBed.configureTestingModule({
       // prettier-ignore
       providers: [
-        { provide: SignalRService, useValue: { connectionStatus: status, connect } },
+        { provide: SignalRService, useValue: { connectionStatus: status, nextRetryAt, retryNow } },
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(['en']),
         //#endif
@@ -44,102 +52,159 @@ describe('RealtimeStatus', () => {
     fixture = TestBed.createComponent(RealtimeStatus);
     fixture.detectChanges();
     await fixture.whenStable();
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
   });
 
   afterEach(() => vi.useRealTimers());
 
-  async function render(): Promise<void> {
-    fixture.detectChanges();
-    await fixture.whenStable();
+  /** 推进假时钟后渲染一次：effect 在变更检测里执行，计时器回调写入的信号在下一次检测里生效。 */
+  function advance(ms: number): void {
+    vi.advanceTimersByTime(ms);
     fixture.detectChanges();
   }
 
-  it('shows nothing while connected or not yet connecting', async () => {
+  function set(next: RealtimeConnectionStatus, retryInMs?: number): void {
+    nextRetryAt.set(retryInMs === undefined ? null : Date.now() + retryInMs);
+    status.set(next);
+    fixture.detectChanges();
+  }
+
+  it('shows nothing and takes no space while connected or not yet connecting', () => {
     expect(notice()).toBeNull();
-    status.set('idle');
-    await render();
+    set('idle');
     expect(notice()).toBeNull();
     expect(host().getBoundingClientRect().height).toBe(0);
   });
 
-  // 随内容一起插入的 live region 多数读屏不播报：状态区要在变化之前就在，提示条插进同一个元素
-  it('announces the notice inside a status region that exists before the change', async () => {
+  // 随内容一起插入的 live region 多数读屏不播报：状态区要在变化之前就在，胶囊插进同一个元素
+  it('announces the notice inside a status region that exists before the change', () => {
     expect(host().getAttribute('role')).toBe('status');
-    expect(host().isConnected).toBe(true);
 
-    status.set('disconnected');
-    await render();
+    set('reconnecting');
+    advance(3000);
 
     expect(host().contains(notice())).toBe(true);
-    expect(host().getAttribute('role')).toBe('status');
-    // hlm-alert 自带的 alert 角色去掉，只由宿主播报一次
     expect(notice()!.hasAttribute('role')).toBe(false);
   });
 
-  it('shows the reconnecting notice only after two seconds of reconnecting', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    status.set('reconnecting');
-    fixture.detectChanges();
+  it('floats over the page instead of pushing it down', () => {
+    set('reconnecting', 18_000);
+    advance(3000);
 
-    vi.advanceTimersByTime(1999);
-    fixture.detectChanges();
-    expect(notice()).toBeNull();
-
-    vi.advanceTimersByTime(1);
-    vi.useRealTimers();
-    await render();
-    expect(notice()!.textContent!.trim()).toBe('Live updates interrupted. Reconnecting…');
-    expect(notice()!.querySelector('button')).toBeNull();
+    expect(notice()).not.toBeNull();
+    expect(host().getBoundingClientRect().height).toBe(0);
+    expect(getComputedStyle(notice()!).position).toBe('absolute');
   });
 
-  it('shows nothing when a reconnect recovers within two seconds', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    status.set('reconnecting');
-    fixture.detectChanges();
-    vi.advanceTimersByTime(1000);
-    status.set('connected');
-    fixture.detectChanges();
+  it('shows the reconnecting notice only after three seconds of reconnecting', () => {
+    set('reconnecting');
+    advance(2999);
+    expect(notice()).toBeNull();
 
-    vi.advanceTimersByTime(5000);
-    vi.useRealTimers();
-    await render();
+    advance(1);
+    expect(notice()!.dataset['notice']).toBe('reconnecting');
+    expect(visibleText()).toBe('Live updates interrupted. Reconnecting…');
+    expect(retryButton()).toBeNull();
+  });
+
+  it('shows nothing, not even a restored notice, when a reconnect recovers within three seconds', () => {
+    set('reconnecting');
+    advance(2000);
+    set('connected');
+
+    advance(5000);
     expect(notice()).toBeNull();
   });
 
-  it('restarts the delay when a new reconnect begins', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    status.set('reconnecting');
-    fixture.detectChanges();
-    vi.advanceTimersByTime(1500);
-    status.set('connected');
-    fixture.detectChanges();
-    status.set('reconnecting');
-    fixture.detectChanges();
+  it('restarts the delay when a new reconnect begins', () => {
+    set('reconnecting');
+    advance(2500);
+    set('connected');
+    set('reconnecting');
 
-    vi.advanceTimersByTime(1500);
-    fixture.detectChanges();
+    advance(2500);
     expect(notice()).toBeNull();
-    vi.advanceTimersByTime(500);
-    vi.useRealTimers();
-    await render();
+    advance(500);
     expect(notice()).not.toBeNull();
   });
 
-  it('shows a disconnected notice at once and reconnects on request until connected', async () => {
-    status.set('disconnected');
-    await render();
+  it('counts down to the next retry and offers to retry now', () => {
+    set('reconnecting', 20_000);
+    advance(3000);
 
-    expect(notice()!.querySelector('[hlmAlertTitle]')!.textContent!.trim()).toBe(
-      'Live updates disconnected. This page may be out of date.',
+    expect(notice()!.dataset['notice']).toBe('waiting');
+    expect(notice()!.querySelector('span.sm\\:inline')!.textContent!.trim()).toBe(
+      'Live updates interrupted. Retrying in 17s',
     );
-    const button = notice()!.querySelector<HTMLButtonElement>('[hlmAlertAction] button')!;
-    expect(button.textContent!.trim()).toBe('Reconnect');
+    expect(notice()!.querySelector('span.sm\\:hidden')!.textContent!.trim()).toBe(
+      'Retrying in 17s',
+    );
 
-    button.click();
-    expect(connect).toHaveBeenCalledTimes(1);
+    advance(1000);
+    expect(notice()!.querySelector('span.sm\\:hidden')!.textContent!.trim()).toBe(
+      'Retrying in 16s',
+    );
 
-    status.set('connected');
-    await render();
+    retryButton()!.click();
+    expect(retryNow).toHaveBeenCalledTimes(1);
+  });
+
+  // 倒计时逐秒变化：可见文案对读屏隐藏，读屏只读一句不随秒数变化的文案
+  it('keeps the countdown away from screen readers behind one stable sentence', () => {
+    set('reconnecting', 20_000);
+    advance(3000);
+    const spoken = spokenText();
+
+    advance(2000);
+    expect(spokenText()).toBe(spoken);
+    expect(spoken).toBe('Live updates interrupted. Retrying automatically.');
+    expect(notice()!.querySelector('span.truncate')!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('keeps the notice and spins the retry button while a retry is in flight', () => {
+    set('reconnecting', 5000);
+    advance(3000);
+    expect(notice()!.dataset['notice']).toBe('waiting');
+
+    // 倒计时走完：服务开始建连，下次重试时刻已过去
+    advance(2000);
+    expect(notice()!.dataset['notice']).toBe('retrying');
+    expect(visibleText()).toContain('Retrying…');
+    expect(retryButton()!.disabled).toBe(false);
+    expect(retryButton()!.querySelector('ng-icon')).not.toBeNull();
+    // 读屏文案与等待时相同，不因转入重试再播报一次
+    expect(spokenText()).toBe('Live updates interrupted. Retrying automatically.');
+
+    // 失败后进入下一轮等待
+    nextRetryAt.set(Date.now() + 10_000);
+    fixture.detectChanges();
+    expect(notice()!.dataset['notice']).toBe('waiting');
+  });
+
+  it('reports restoration for two seconds after the notice was shown', () => {
+    set('reconnecting', 10_000);
+    advance(3000);
+    set('connected');
+
+    expect(notice()!.dataset['notice']).toBe('restored');
+    expect(visibleText()).toBe('Live updates restored');
+    expect(retryButton()).toBeNull();
+
+    advance(1999);
+    expect(notice()).not.toBeNull();
+    advance(1);
+    expect(notice()).toBeNull();
+  });
+
+  it('hides everything when the session ends while reconnecting', () => {
+    set('reconnecting', 10_000);
+    advance(3000);
+    set('idle');
+
+    expect(notice()).toBeNull();
+    advance(5000);
     expect(notice()).toBeNull();
   });
 });
