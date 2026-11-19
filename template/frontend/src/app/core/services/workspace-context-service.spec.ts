@@ -40,6 +40,43 @@ describe('WorkspaceContextService', () => {
     expect(service.landingUrl()).toBe('/platform');
   });
 
+  describe('switchTo', () => {
+    function setup(url: string) {
+      const navigateByUrl = vi.fn().mockResolvedValue(true);
+      TestBed.configureTestingModule({
+        providers: [{ provide: Router, useValue: { url, events: new Subject(), navigateByUrl } }],
+      });
+      return { service: TestBed.inject(WorkspaceContextService), navigateByUrl };
+    }
+
+    it('returns from a host-only console page to the tenant landing', () => {
+      const { service, navigateByUrl } = setup('/platform/open-applications');
+
+      service.switchTo('acme');
+
+      expect(navigateByUrl).toHaveBeenCalledWith('/w/acme/platform');
+    });
+
+    it.each(['/platform/settings', '/workspace/dashboard'])(
+      'preserves %s when switching between tenants',
+      (path) => {
+        const { service, navigateByUrl } = setup(`/w/acme${path}?tab=general#details`);
+
+        service.switchTo('globex');
+
+        expect(navigateByUrl).toHaveBeenCalledWith(`/w/globex${path}`);
+      },
+    );
+
+    it('opens the platform landing when entering the console', () => {
+      const { service, navigateByUrl } = setup('/w/acme/platform/settings');
+
+      service.switchTo(null);
+
+      expect(navigateByUrl).toHaveBeenCalledWith('/platform');
+    });
+  });
+
   it('discards a late context load after a newer workspace selection', async () => {
     const completions: (() => void)[] = [];
     TestBed.configureTestingModule({
