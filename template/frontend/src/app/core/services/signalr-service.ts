@@ -55,8 +55,10 @@ export function realtimeRetryDelay(retryCount: number, random: () => number = Ma
   if (retryCount < QUICK_RETRY_DELAYS_MS.length) {
     return QUICK_RETRY_DELAYS_MS[retryCount];
   }
-  const exponent = Math.min(retryCount - QUICK_RETRY_DELAYS_MS.length, 8);
-  const capped = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** exponent);
+  const capped = Math.min(
+    BACKOFF_CAP_MS,
+    BACKOFF_BASE_MS * 2 ** (retryCount - QUICK_RETRY_DELAYS_MS.length),
+  );
   return Math.round(capped * (0.5 + random() / 2));
 }
 
@@ -126,8 +128,8 @@ export class SignalRService {
       this.homeNotifications.set(this.notifications());
       //#endif
     }
-    await this.resetCurrent();
-    if (revision !== this.workspaceRevision) return;
+    // 目标范围与连接归属在旧连接收尾之前同步定下：收尾途中目标页主动 connect()，建出的就是目标工作空间的连接
+    const resetting = this.resetCurrent();
     this.workspaceName = name;
     if (!name && this.homeConnection) {
       this.connection = this.homeConnection;
@@ -135,11 +137,16 @@ export class SignalRService {
       //#if (IncludeNotifications)
       this.notifications.set(this.homeNotifications());
       //#endif
-      // 首页连接还在自动重连或已经关闭时记为 reconnecting：随后的 connect() 会等它恢复或重建
-      this.status.set(
-        this.connection.state === HubConnectionState.Connected ? 'connected' : 'reconnecting',
-      );
+      if (this.connection.state === HubConnectionState.Connected) {
+        this.status.set('connected');
+      } else {
+        // 首页连接在后台断了：它的退避等待不在界面上，丢掉重建，回到首页即重试
+        void this.dropConnection();
+        this.status.set('reconnecting');
+      }
     }
+    await resetting;
+    if (revision !== this.workspaceRevision) return;
     await this.connect();
   }
   //#endif
@@ -308,6 +315,8 @@ export class SignalRService {
     }
 
     try {
+      // 页面主动建连时提前用掉退避等待：界面不再显示旧倒计时，原计时器也不再唤醒
+      this.clearRetry();
       await this.startConnection();
 
       if (generation !== this.generation) {
@@ -333,11 +342,10 @@ export class SignalRService {
     }
 
     this.clearRetry();
-    // SDK 正在等下一次自动重连：丢掉这条连接另建一条。先清字段再 stop，它的 onclose 认不出自己就不会再排重试
-    const connection = this.connection;
-    if (connection?.state === HubConnectionState.Reconnecting) {
-      this.connection = null;
-      connection.stop().catch((err: unknown) => console.error('[SignalR] stop failed:', err));
+    this.retryCount = 0;
+    // SDK 正在等下一次自动重连：丢掉这条连接另建一条。字段先于 stop 清空，它的 onclose 认不出自己就不会再排重试
+    if (this.connection?.state === HubConnectionState.Reconnecting) {
+      void this.dropConnection();
     }
     void this.connect();
   }
@@ -404,7 +412,6 @@ export class SignalRService {
 
   private async resetCurrent(): Promise<void> {
     this.generation++;
-    this.clearRetry();
     this.retryCount = 0;
     //#if (IncludeRealTime)
     this.resourceHolders.clear();
@@ -419,8 +426,8 @@ export class SignalRService {
     await this.disconnect();
   }
 
-  /** 主动断开连接，回到 `idle`，等待中的重试一并撤销。 */
-  async disconnect(): Promise<void> {
+  /** 主动断开连接，回到 `idle`，等待中的重试一并撤销。只经 reset 调用：代际随之递增，在途建连失败后不会再排重试。 */
+  private async disconnect(): Promise<void> {
     this.clearRetry();
     this.status.set('idle');
     await this.dropConnection();

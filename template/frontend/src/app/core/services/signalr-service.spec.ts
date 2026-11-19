@@ -132,9 +132,24 @@ describe('SignalRService connection lifecycle', () => {
       this.startGate = null;
     }
 
+    /** 置为 true 时 stop() 在发出关闭回调后挂起，直到 releaseStop() 被调用（模拟收尾请求较慢）。 */
+    gateStop = false;
+    private stopGates: (() => void)[] = [];
+
     async stop(): Promise<void> {
       this.stopCount++;
       this.state = signalR.HubConnectionState.Disconnected;
+      // 真实 SDK 停连时会触发 onclose（退避等待中同步触发）：服务必须认得出这是自己丢掉的连接
+      this.closed?.();
+      if (this.gateStop) {
+        await new Promise<void>((resolve) => this.stopGates.push(resolve));
+      }
+    }
+
+    releaseStop(): void {
+      const gates = this.stopGates;
+      this.stopGates = [];
+      gates.forEach((resolve) => resolve());
     }
 
     // 订阅走 invoke：缺了它，对账步骤会直接抛错进 catch，
@@ -199,6 +214,7 @@ describe('SignalRService connection lifecycle', () => {
     built.forEach((connection) => {
       connection.completeStart();
       connection.releaseInvoke();
+      connection.releaseStop();
     });
     vi.useRealTimers();
   });
@@ -417,7 +433,7 @@ describe('SignalRService connection lifecycle', () => {
 
   it('can connect again after disconnecting', async () => {
     await service.connect();
-    await service.disconnect();
+    await service.reset();
 
     expect(service.isConnected()).toBe(false);
     expect(built.every((connection) => connection.stopCount === 1)).toBe(true);
@@ -635,7 +651,7 @@ describe('SignalRService connection lifecycle', () => {
       vi.spyOn(connection, 'stop').mockRejectedValue(new Error('stop failed'));
     });
 
-    await service.disconnect();
+    await service.reset();
     await service.connect();
 
     // 引用已清空，新一轮正常建立一条。
@@ -1197,6 +1213,45 @@ describe('SignalRService connection lifecycle', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(built).toHaveLength(2);
       expect(service.connectionStatus()).toBe('connected');
+
+      // 丢掉的连接停下时发出的关闭回调不会再排一轮：原等待时刻过去后仍只有这一条新连接
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(built).toHaveLength(2);
+    });
+
+    it('starts the backoff over when retrying at once fails again', async () => {
+      failing.add(SignalRService.hubPath);
+      await service.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(service.nextRetryAt()).toBe(Date.now() + 1000);
+
+      service.retryNow();
+      await vi.advanceTimersByTimeAsync(0);
+
+      // 计数已从头开始：立即重试失败后先不等待再试一次（第 4 条），随后等 1 秒；沿用旧计数会排到 2 秒后
+      expect(built).toHaveLength(4);
+      expect(service.nextRetryAt()).toBe(Date.now() + 1000);
+    });
+
+    it('uses up the pending wait when a page connects on its own', async () => {
+      failing.add(SignalRService.hubPath);
+      await service.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(service.nextRetryAt()).toBe(Date.now() + 1000);
+      failing.clear();
+      deferStart = true;
+
+      // 规范用法：进入页面登记订阅后调一次 connect()，握手较慢
+      void service.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(service.connectionStatus()).toBe('reconnecting');
+      expect(service.nextRetryAt()).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(built).toHaveLength(3);
+      built[2].completeStart();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(service.connectionStatus()).toBe('connected');
     });
 
     it('does not start another attempt while one is already in flight', async () => {
@@ -1289,6 +1344,40 @@ describe('SignalRService connection lifecycle', () => {
 
       expect(service.connectionStatus()).toBe('connected');
       expect(service.nextRetryAt()).toBeNull();
+    });
+
+    it('rebuilds the home connection at once when returning while it is backing off', async () => {
+      await service.connect();
+      const home = built[0];
+      await service.setWorkspace('acme', true);
+      home.dropWithPolicy();
+      home.failReconnectAttempt(new Error('fetch failed'));
+
+      await service.setWorkspace(null, true);
+
+      expect(home.stopCount).toBe(1);
+      expect(built).toHaveLength(3);
+      expect(built[2].url).not.toContain('workspace=');
+      expect(service.connectionStatus()).toBe('connected');
+    });
+
+    it('connects a page to the target workspace while the previous connection is still closing', async () => {
+      await service.setWorkspace('acme', false);
+      const acme = built[0];
+      acme.gateStop = true;
+
+      const switching = service.setWorkspace('globex', false);
+      // 工作空间守卫异步切换，目标页在旧连接收尾途中挂载并主动建连
+      await service.connect();
+      acme.releaseStop();
+      await switching;
+
+      const live = built.filter(
+        (connection) =>
+          connection.state === signalR.HubConnectionState.Connected && connection.stopCount === 0,
+      );
+      expect(live).toHaveLength(1);
+      expect(live[0].url).toContain('workspace=globex');
     });
     //#endif
   });
