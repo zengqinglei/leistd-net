@@ -49,7 +49,7 @@ export function parseMockTimeRange(
 }
 
 /** 数据里的时刻换成与 {@link MockTimeRange} 同口径的比较键（UTC，小数补齐到 7 位）。 */
-export function mockInstantKey(value: string): string {
+function mockInstantKey(value: string): string {
   return parseZonedInstant(value)?.key ?? '';
 }
 
