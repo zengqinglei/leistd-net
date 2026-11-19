@@ -10,6 +10,7 @@ import {
   DISTRIBUTED_EVENT_RAW_MESSAGES,
 } from '../data/distributed-events';
 import { getMockSessionTenantKey } from '../utils/current-user';
+import { MockTimeRange, parseMockTimeRange, withinMockTimeRange } from '../utils/time-range';
 
 type Kind = 'outbox' | 'inbox' | 'rejections';
 type Row =
@@ -59,13 +60,19 @@ function timestamp(row: Row) {
   return 'creationTime' in row ? row.creationTime : row.receivedAt;
 }
 
-function matches(row: Row, filter: Filter, headers: Record<string, string> = {}) {
+function matches(
+  row: Row,
+  filter: Filter,
+  range: MockTimeRange,
+  headers: Record<string, string> = {},
+) {
   const keyword = String(filter['keyword'] || '');
   const parent = headers['traceparent']?.match(/^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/);
   const traceId = parent && !/^0+$/.test(parent[1]) && !/^0+$/.test(parent[2]) ? parent[1] : null;
   const get = (key: string) => filter[key] || undefined;
   return (
     (!get('before') || Date.parse(timestamp(row)) <= Date.parse(String(get('before')))) &&
+    withinMockTimeRange(timestamp(row), range) &&
     (!get('status') || row.status === get('status')) &&
     (!get('eventName') || row.eventName === get('eventName')) &&
     (!get('keyword') ||
@@ -89,8 +96,11 @@ function list(kind: Kind, req: MockRequest) {
         : ['pending', 'redecoded', 'discarded', 'redecodePending'];
   if (queryValues(req)['status'] && !statuses.includes(queryValues(req)['status']))
     throw new MockException(400);
+  const range = parseMockTimeRange(queryValues(req), 'query');
   const items = records(kind)
-    .filter((item) => allowed(item.record) && matches(item.record, queryValues(req), item.headers))
+    .filter(
+      (item) => allowed(item.record) && matches(item.record, queryValues(req), range, item.headers),
+    )
     .map((item) => item.record)
     .sort((a, b) => (BigInt(a.id) > BigInt(b.id) ? -1 : 1));
   const offset = Math.max(0, Number(queryValues(req)['offset']) || 0);
@@ -210,6 +220,7 @@ function recover(
     throw new MockException(400, {
       message: 'Specify IDs (1–100) or a filter with a valid cutoff.',
     });
+  const range = filter ? parseMockTimeRange(filter, 'json') : {};
   const eligible = (row: Row) =>
     kind === 'outbox'
       ? row.status === 'deadLettered'
@@ -223,7 +234,7 @@ function recover(
           (item) =>
             allowed(item.record) &&
             eligible(item.record) &&
-            matches(item.record, filter!, item.headers),
+            matches(item.record, filter!, range, item.headers),
         )
         .map((item) => item.record.id);
   const result: Dto.DistributedEventRecoveryOutputDto = {

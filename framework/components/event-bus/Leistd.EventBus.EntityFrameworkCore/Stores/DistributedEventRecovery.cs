@@ -41,6 +41,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 {
                     var filter = input.Filter!;
                     query = query.Where(x => x.Status == DistributedEventOutboxStatus.DeadLettered && x.CreationTime <= filter.Before);
+                    if (filter.StartTime is { } start) query = query.Where(x => x.CreationTime >= start);
+                    if (filter.EndTime is { } end) query = query.Where(x => x.CreationTime <= end);
                     if (filter.EventName is not null) query = query.Where(x => x.EventName == filter.EventName);
                     if (filter.ErrorCode is not null) query = query.Where(x => x.LastErrorCode == filter.ErrorCode);
                     if (filter.Keyword is { } key)
@@ -97,6 +99,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 {
                     var filter = input.Filter!;
                     query = query.Where(x => x.Status == filter.Status && x.ReceivedAt <= filter.Before);
+                    if (filter.StartTime is { } start) query = query.Where(x => x.ReceivedAt >= start);
+                    if (filter.EndTime is { } end) query = query.Where(x => x.ReceivedAt <= end);
                     if (filter.EventName is not null) query = query.Where(x => x.EventName == filter.EventName);
                     if (filter.Consumer is not null) query = query.Where(x => x.Consumer == filter.Consumer);
                     if (filter.ErrorCode is not null) query = query.Where(x => x.LastErrorCode == filter.ErrorCode);
@@ -156,6 +160,8 @@ internal sealed class DistributedEventRecovery<TDbContext>(
                 {
                     var filter = input.Filter!;
                     query = query.Where(x => (x.Status == DistributedEventRejectionStatus.Pending || (discard && x.Status == DistributedEventRejectionStatus.RedecodePending)) && x.ReceivedAt <= filter.Before);
+                    if (filter.StartTime is { } start) query = query.Where(x => x.ReceivedAt >= start);
+                    if (filter.EndTime is { } end) query = query.Where(x => x.ReceivedAt <= end);
                     if (filter.Status is { } state) query = query.Where(x => x.Status == state);
                     if (filter.EventName is not null) query = query.Where(x => x.EventName == filter.EventName);
                     if (filter.Reason is not null) query = query.Where(x => x.Reason == filter.Reason);

@@ -13,15 +13,26 @@ import { ActivatedRoute, Params, Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideSearch, lucideRefreshCw, lucideSend, lucideX, lucideInbox } from '@ng-icons/lucide';
+import {
+  lucideCircleAlert,
+  lucideInbox,
+  lucideRefreshCw,
+  lucideSearch,
+  lucideSend,
+  lucideX,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
+// 日期区间输入框自带日历按钮及其图标，本页不必登记 lucideCalendar。
+import { HlmDateRangeInput, HlmDateRangePicker } from '@spartan-ng/helm/date-picker';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmInputGroupImports } from '@spartan-ng/helm/input-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
+import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import {
   Observable,
@@ -30,6 +41,7 @@ import {
   combineLatest,
   finalize,
   forkJoin,
+  interval,
   of,
   startWith,
   switchMap,
@@ -41,9 +53,12 @@ import {
   EventRecord,
   EventView,
   EventRow,
+  canDiscard,
+  canRecover,
   eventRow,
   recoveryAction,
   reasonKey,
+  stateLabelKey,
   //#if (!IncludeLocalization)
   ENGLISH,
   //#endif
@@ -66,15 +81,37 @@ import { LayoutService } from '../../../../core/services/layout-service';
 import { WorkspaceContextService } from '../../../../core/services/workspace-context-service';
 //#endif
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
+import { RelativeTimeLabel } from '../../../../shared/components/relative-time-label/relative-time-label';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import { StatusDot } from '../../../../shared/directives/status-dot';
 import { PagedResultDto } from '../../../../shared/dtos/paged-result.dto';
-import { AppDate, formatAppDate } from '../../../../shared/pipes/app-date-pipe';
+import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import { AppNumber } from '../../../../shared/pipes/app-number-pipe';
+import {
+  dateRangeFormatter,
+  dateRangeFromQuery,
+  dateRangeParser,
+  dateRangeToQuery,
+  validTimeRange,
+} from '../../../../shared/utils/date-range-query';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
+import { resolveDisplayTimeZone } from '../../../../shared/utils/zoned-time';
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
+
+/** 影响列表结果的筛选参数，与视图、分页、时间范围一起组成加载条件。 */
+const LIST_FILTER_KEYS = [
+  'status',
+  'eventName',
+  'keyword',
+  'errorCode',
+  'consumer',
+  'reason',
+  'direction',
+  'anomalies',
+];
 
 @Component({
   selector: 'app-distributed-events',
@@ -83,14 +120,19 @@ import { DistributedEventService } from '../../services/distributed-event-servic
     HlmBadge,
     HlmButton,
     HlmCheckbox,
+    HlmDateRangePicker,
+    HlmDateRangeInput,
     ...HlmEmptyImports,
     ...HlmInputGroupImports,
     ...HlmSelectImports,
+    HlmSpinner,
     ...HlmTabsImports,
+    ...HlmToggleGroupImports,
     ...HlmTooltipImports,
     FacetedFilter,
+    RelativeTimeLabel,
+    StatusDot,
     AppNumber,
-    AppDate,
     DistributedEventStatistics,
     DistributedOutboxTable,
     DistributedInboxTable,
@@ -101,7 +143,16 @@ import { DistributedEventService } from '../../services/distributed-event-servic
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideSearch, lucideRefreshCw, lucideSend, lucideX, lucideInbox })],
+  providers: [
+    provideIcons({
+      lucideCircleAlert,
+      lucideInbox,
+      lucideRefreshCw,
+      lucideSearch,
+      lucideSend,
+      lucideX,
+    }),
+  ],
   templateUrl: './distributed-events.html',
   host: { class: 'block h-full min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -151,6 +202,11 @@ export class DistributedEvents {
       : 10,
   );
   readonly cutoff = signal(new Date().toISOString());
+  /**
+   * 最后一次成功加载所用的截止时间：表格与总数都出自这次加载，按条件恢复的 before 与确认框都以它为准。
+   * 刷新会先推进 cutoff，失败时保留的仍是旧截止下的结果。
+   */
+  readonly loadedCutoff = signal<string | null>(null);
   readonly rows = signal<EventRow[]>([]);
   readonly totalCount = signal(0);
   readonly status = signal<Dto.DistributedEventStatusOutputDto | null>(null);
@@ -161,6 +217,18 @@ export class DistributedEvents {
   readonly busy = signal(false);
   readonly displayTimeZone = this.preferences.timeZone;
   readonly displayLocale = this.preferences.displayLocale;
+  /** 传输行相对时间的分钟级时钟；每次加载也对一次时，刷新后立即反映最新上报。 */
+  readonly now = signal(Date.now());
+  readonly relativeTimeZone = computed(() => resolveDisplayTimeZone(this.displayTimeZone()));
+  /** URL 里合法的时间范围；只有一端、格式错误或起止颠倒时为 null，控件、请求与按条件恢复都当作未筛选。 */
+  readonly timeRange = computed(() =>
+    validTimeRange(this.query()['startTime'], this.query()['endTime']),
+  );
+  readonly selectedRange = computed<[Date, Date] | undefined>(() =>
+    dateRangeFromQuery(this.query()['startTime'], this.query()['endTime'], this.displayTimeZone()),
+  );
+  readonly formatRange = computed(() => dateRangeFormatter(this.displayLocale()));
+  readonly parseRangeInput = computed(() => dateRangeParser(this.displayLocale()));
   private readonly refresh = new Subject<void>();
   readonly detailVersion = signal(0);
   readonly canTest = computed(
@@ -178,6 +246,27 @@ export class DistributedEvents {
       this.view() === 'rejections' &&
       ['pending', 'redecodePending'].includes(this.query()['status']),
   );
+  /** 勾选里符合各动作的记录 ID；拒收的重新解码与丢弃各自只统计、只提交适用的记录。 */
+  readonly selectedForRecovery = computed(() => this.selectedFor(false));
+  readonly selectedForDiscard = computed(() => this.selectedFor(true));
+  /**
+   * 按条件恢复只针对屏幕上那次成功加载的结果：列表请求进行中、加载失败或尚无结果时都不可用，
+   * 免得用新条件配旧总数打开确认框。按勾选 ID 恢复不受影响。
+   */
+  readonly filterRecoveryReady = computed(
+    () => !this.loading() && !this.loadError() && this.loadedCutoff() !== null,
+  );
+  /** 选择条：有勾选，或状态筛选满足按条件恢复时出现。 */
+  readonly selectionBarVisible = computed(
+    () =>
+      this.canManage() &&
+      this.view() !== 'catalog' &&
+      (this.selected().length > 0 || this.bulkAllowed() || this.bulkDiscardAllowed()),
+  );
+  /** 状态快捷切换的当前值；URL 里不属于本视图的状态视为未选。 */
+  readonly statusFilter = computed(() =>
+    this.states().includes(this.query()['status']) ? (this.query()['status'] as string) : null,
+  );
   readonly catalogDetail = computed(() =>
     this.view() === 'catalog'
       ? (this.catalog().find((item) => item.eventName === this.recordId()) ?? null)
@@ -194,7 +283,6 @@ export class DistributedEvents {
     this.view() === 'catalog'
       ? ['direction']
       : [
-          'status',
           'eventName',
           ...(this.view() === 'rejections' ? ['reason'] : ['errorCode']),
           ...(this.view() === 'inbox' ? ['consumer'] : []),
@@ -210,6 +298,8 @@ export class DistributedEvents {
       //#endif
     });
     let renderedView = this.view();
+    // 上次成功加载的列表条件；刷新失败时只有条件未变才保留旧行
+    let loadedKey: string | null = null;
     const query$ = this.route.queryParams;
     combineLatest([query$, this.refresh.pipe(startWith(undefined))])
       .pipe(
@@ -220,6 +310,7 @@ export class DistributedEvents {
           const view = this.view();
           if (view !== renderedView) this.rows.set([]);
           renderedView = view;
+          const key = this.listKey(query);
           const input = this.listInput(query);
           const list$: Observable<PagedResultDto<EventRecord>> =
             this.view() === 'catalog'
@@ -237,6 +328,9 @@ export class DistributedEvents {
             list: list$,
           }).pipe(
             tap((result) => {
+              loadedKey = key;
+              this.loadedCutoff.set(String(input['before']));
+              this.now.set(Date.now());
               this.status.set(result.status);
               this.catalog.set(result.catalog);
               if (this.view() === 'catalog') {
@@ -275,9 +369,17 @@ export class DistributedEvents {
               }
             }),
             catchError((error: unknown) => {
-              this.rows.set([]);
-              this.totalCount.set(0);
-              this.loadError.set(applicationErrorMessage(error));
+              // 同条件刷新失败保留表格并提示；条件变了（或首次加载）失败则清空并进入可重试的空态，
+              // 免得旧条件下的行与总数被当成新条件的结果，按条件恢复拿旧总数去确认新条件
+              if (this.rows().length && key === loadedKey) {
+                toast.error(applicationErrorMessage(error));
+              } else {
+                loadedKey = null;
+                this.loadedCutoff.set(null);
+                this.rows.set([]);
+                this.totalCount.set(0);
+                this.loadError.set(applicationErrorMessage(error));
+              }
               return of(null);
             }),
             finalize(() => this.loading.set(false)),
@@ -289,10 +391,25 @@ export class DistributedEvents {
     effect(() => {
       if (!this.canManage()) this.selected.set([]);
     });
+    interval(60_000)
+      .pipe(takeUntilDestroyed(this.owner))
+      .subscribe(() => this.now.set(Date.now()));
+  }
+
+  /** 决定列表结果的条件；打开详情（record）不算。视图、分页与时间范围取解析后的值。 */
+  private listKey(query: Params): string {
+    return JSON.stringify([
+      this.view(),
+      this.page(),
+      this.pageSize(),
+      validTimeRange(query['startTime'], query['endTime']),
+      ...LIST_FILTER_KEYS.map((key) => query[key] ?? null),
+    ]);
   }
 
   listInput(query: Params = this.query()): Record<string, unknown> {
     return {
+      ...validTimeRange(query['startTime'], query['endTime']),
       status: query['status'],
       eventName: query['eventName'],
       keyword: query['keyword'],
@@ -317,9 +434,12 @@ export class DistributedEvents {
     this.update({ [key]: value });
   }
 
+  /** 切换视图、跳转与清除筛选都清掉时间范围：新视图从全部时间看起。 */
   setView(view: string): void {
     this.update({
       view,
+      startTime: null,
+      endTime: null,
       status: null,
       eventName: null,
       errorCode: null,
@@ -335,6 +455,8 @@ export class DistributedEvents {
     this.update({
       view,
       status,
+      startTime: null,
+      endTime: null,
       eventName: eventName || null,
       keyword: null,
       errorCode: null,
@@ -343,6 +465,11 @@ export class DistributedEvents {
       anomalies: null,
       direction: null,
     });
+  }
+
+  /** 日期按展示时区取整天换算成 UTC 写回 URL；页码随 update 回到第一页。 */
+  onRangeChange(range: [Date, Date] | null): void {
+    this.update(dateRangeToQuery(range, this.displayTimeZone()));
   }
 
   reload(): void {
@@ -365,6 +492,23 @@ export class DistributedEvents {
   protected reasonLabel(reason: string): string {
     const key = reasonKey(reason);
     return key ? this.t(key) : reason;
+  }
+  protected stateText(state: string): string {
+    return this.t(stateLabelKey(this.view(), state));
+  }
+  protected healthVariant(status: Dto.DistributedEventTransportStatus) {
+    return status === 'healthy' ? 'success' : status === 'unknown' ? 'secondary' : 'warning';
+  }
+  private selectedFor(discard: boolean): string[] {
+    const ids = new Set(this.selected());
+    return this.rows()
+      .filter(
+        (row) =>
+          ids.has(row.id) &&
+          !!row.record &&
+          (discard ? canDiscard(row.record) : canRecover(row.record)),
+      )
+      .map((row) => row.id);
   }
   options(key: string) {
     const values =
@@ -411,10 +555,12 @@ export class DistributedEvents {
     if (!this.canManage() || this.busy()) return;
     const view = this.view();
     if (view === 'catalog') return;
-    const ids = row ? [row.id] : this.selected();
+    const ids = row ? [row.id] : this.selectedFor(discard);
     if (
       (mode !== 'filter' && !ids.length) ||
-      (mode === 'filter' && !(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()))
+      (mode === 'filter' &&
+        (!(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()) ||
+          !this.filterRecoveryReady()))
     )
       return;
     const action = discard
@@ -424,7 +570,9 @@ export class DistributedEvents {
         : view === 'inbox'
           ? 'replay'
           : 'redecode';
-    const input = this.listInput();
+    // 不在加载中且没有失败时，当前筛选就是最后一次成功加载的筛选；截止取那次加载的值
+    const loadedCutoff = this.loadedCutoff() ?? this.cutoff();
+    const input: Record<string, unknown> = { ...this.listInput(), before: loadedCutoff };
     const { offset: _offset, limit: _limit, status: _status, ...filter } = input;
     const body =
       mode === 'filter'
@@ -447,12 +595,13 @@ export class DistributedEvents {
             : this.t(`distributedEvents.field.${key}`);
         const value =
           key === 'status'
-            ? this.t(`distributedEvents.state.${this.query()[key]}`)
+            ? this.stateText(this.query()[key])
             : key === 'reason'
               ? this.reasonLabel(this.query()[key])
               : String(this.query()[key]);
         return `${label}: ${value}`;
       })
+      .concat(this.rangeCriterion())
       .join(' · ');
     this.busy.set(true);
     try {
@@ -464,7 +613,7 @@ export class DistributedEvents {
         ),
         confirmText: this.t(`distributedEvents.confirmation.button.${action}`, { count }),
         cancelText: this.t('distributedEvents.cancel'),
-        cutoff: formatAppDate(this.cutoff(), 'full', this.displayTimeZone(), this.displayLocale()),
+        cutoff: formatAppDate(loadedCutoff, 'full', this.displayTimeZone(), this.displayLocale()),
         criteria: mode === 'filter' ? criteria : ids.join(', '),
         cutoffLabel: this.t('distributedEvents.confirmation.cutoff'),
         criteriaLabel: this.t(
@@ -507,6 +656,17 @@ export class DistributedEvents {
     }
   }
 
+  /** 确认框里的时间范围写完整时刻，与"加载截止"同一写法，分享链接带来的非整天边界也不失真。 */
+  private rangeCriterion(): string[] {
+    const range = this.timeRange();
+    if (!range) return [];
+    const format = (instant: string) =>
+      formatAppDate(instant, 'full', this.displayTimeZone(), this.displayLocale());
+    return [
+      `${this.t('distributedEvents.field.timeRange')}: ${format(range.startTime)} ~ ${format(range.endTime)}`,
+    ];
+  }
+
   sendTest(): void {
     if (!this.canTest() || this.busy()) return;
     this.busy.set(true);
@@ -520,13 +680,19 @@ export class DistributedEvents {
         next: (result) => {
           toast.success(this.t('distributedEvents.testSent', { id: result.eventId }));
           this.cutoff.set(new Date().toISOString());
+          // 即使已在发件箱也清掉时间范围与其余筛选，保证刚创建的事件能被列出。
           this.update({
             view: 'outbox',
             keyword: result.eventId,
+            startTime: null,
+            endTime: null,
             status: null,
             eventName: null,
             errorCode: null,
             consumer: null,
+            reason: null,
+            anomalies: null,
+            direction: null,
           });
           this.refresh.next();
         },

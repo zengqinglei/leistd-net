@@ -56,7 +56,12 @@ import {
   type FacetedFilterOption,
 } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
-import { formatAppDate, parseAppCalendarDate } from '../../../../shared/pipes/app-date-pipe';
+import {
+  dateRangeFormatter,
+  dateRangeFromQuery,
+  dateRangeParser,
+  dateRangeToQuery,
+} from '../../../../shared/utils/date-range-query';
 import { saveBlob } from '../../../../shared/utils/download-file';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
@@ -66,11 +71,6 @@ import {
   paginationFromQuery,
   tableStateToQuery,
 } from '../../../../shared/utils/table-query-state';
-import {
-  isoToZonedDate,
-  zonedEndOfDayIso,
-  zonedStartOfDayIso,
-} from '../../../../shared/utils/zoned-time';
 import {
   ExportOperationRecordsInputDto,
   GetOperationRecordsInputDto,
@@ -159,19 +159,13 @@ export class OperationRecords {
   private readonly displayLocale = inject(AccountPreferencesService).displayLocale;
 
   /** 选中的时间范围，从 URL 回填；起止缺一端即视为未筛选。 */
-  readonly selectedRange = computed<[Date, Date] | undefined>(() => {
-    const params = this.queryParams();
-    const start = params.get('startTime');
-    const end = params.get('endTime');
-    if (!start || !end) {
-      return undefined;
-    }
-
-    const zone = this.displayTimeZone();
-    const from = isoToZonedDate(start, zone);
-    const to = isoToZonedDate(end, zone);
-    return from && to ? [from, to] : undefined;
-  });
+  readonly selectedRange = computed<[Date, Date] | undefined>(() =>
+    dateRangeFromQuery(
+      this.queryParams().get('startTime'),
+      this.queryParams().get('endTime'),
+      this.displayTimeZone(),
+    ),
+  );
 
   /** 服务端下发的筛选项：类别与动作码都不在前端硬编码。 */
   readonly filterOptions = signal<OperationRecordFilterOptionsDto>({ categories: [], actions: [] });
@@ -394,67 +388,14 @@ export class OperationRecords {
     this.updateQuery(tableStateToQuery(pagination, []));
   }
 
-  /**
-   * 输入框里的区间文案，同时交给 `formatDates`（展示态）与 `formatInputDates`（编辑态）；
-   * 两态共用，否则聚焦时文本会当场变成另一种写法。写法与时间列同源（`formatAppDate` 的
-   * `date` 槽位）。写成返回函数的 `computed`：回调传进子组件不丢 `this`，切换语言时换新函数
-   * 触发重渲染。
-   *
-   * 只读本地字段，不再套 `timeZone`：`isoToZonedDate` 返回的本地 `Date` 的年月日已是展示时区
-   * 的日历日，再按时区格式化会折两遍偏移，浏览器时区领先时显示成前一天。缺一端时只渲染已选的一端。
-   */
-  readonly formatRange = computed(() => {
-    const locale = this.displayLocale();
-    // 不传时区：本地字段已是展示时区的日历日（见上）。
-    const day = (date: Date | null) => (date ? formatAppDate(date, 'date', undefined, locale) : '');
-    return (dates: [Date | null, Date | null]): string => {
-      const [from, to] = dates;
-      if (!from && !to) {
-        return '';
-      }
+  /** 区间文案与手输解析：写法与时间列同源，两态共用；写成 `computed` 以便切换语言时换新函数。 */
+  readonly formatRange = computed(() => dateRangeFormatter(this.displayLocale()));
 
-      return `${day(from)} ~ ${day(to)}`.trim();
-    };
-  });
+  readonly parseRangeInput = computed(() => dateRangeParser(this.displayLocale()));
 
-  /**
-   * 解析手输区间，交给 `hlm-date-range-input` 的 `parseDate`。认 {@link formatRange} 的当前
-   * 语言写法与 `YYYY-MM-DD`（见 `parseAppCalendarDate`），构造浏览器本地 `Date`，与
-   * `isoToZonedDate` 约定一致。解析不了返回 `null`：组件清掉区间但保留文本。
-   */
-  readonly parseRangeInput = computed(() => {
-    const locale = this.displayLocale();
-    return (value: string): [Date, Date] | null => {
-      const parts = value
-        .split('~')
-        .map((part) => part.trim())
-        .filter(Boolean);
-      if (parts.length !== 2) {
-        return null;
-      }
-
-      const from = parseAppCalendarDate(parts[0], locale);
-      const to = parseAppCalendarDate(parts[1], locale);
-      return from && to ? [from, to] : null;
-    };
-  });
-
-  /**
-   * 时间范围按展示时区取整天再换算成 UTC 写回 URL。后端是闭区间，终点取 23:59:59.999，
-   * 否则最后一天整天查不到。
-   */
+  /** 时间范围按展示时区取整天再换算成 UTC 写回 URL（后端闭区间，终点取 23:59:59.999）。 */
   onRangeChange(range: [Date, Date] | null): void {
-    if (!range?.[0] || !range[1]) {
-      this.updateQuery({ startTime: null, endTime: null, page: 1 });
-      return;
-    }
-
-    const zone = this.displayTimeZone();
-    this.updateQuery({
-      startTime: zonedStartOfDayIso(range[0], zone),
-      endTime: zonedEndOfDayIso(range[1], zone),
-      page: 1,
-    });
+    this.updateQuery({ ...dateRangeToQuery(range, this.displayTimeZone()), page: 1 });
   }
 
   reloadList() {

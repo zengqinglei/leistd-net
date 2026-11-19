@@ -11,8 +11,16 @@ import {
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCheck, lucideChevronRight, lucideCopy, lucideRotateCw } from '@ng-icons/lucide';
+import {
+  lucideCheck,
+  lucideChevronRight,
+  lucideCircleAlert,
+  lucideClock,
+  lucideCopy,
+  lucideRotateCw,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
@@ -38,8 +46,9 @@ import {
 } from '../../webhook-display';
 
 /**
- * 投递详情抽屉（右侧 Sheet，窄屏占满）：标题区（事件类型、可复制的事件 id、状态、重发）→ 概要（列全表格各列）
- * → 请求（最近一次尝试的头部快照与格式化的请求体）→ 调用记录（倒序，逐次展开看头部与响应或错误）。
+ * 投递详情抽屉（右侧 Sheet，窄屏占满）：标题区（事件类型与状态、订阅与可复制的事件 id、重发）→ 未成功时的结果与下一步
+ * → 概要（列全表格各列）→ 调用记录（倒序，逐次展开看头部与响应或错误）→ 请求（最近一次尝试的头部快照与格式化的请求体）。
+ * 调用记录排在请求之前：排查时先看哪次失败，再看发出的内容。
  * 打开与关闭由父页面按查询参数 `delivery` 驱动。`closed` 在退场动画结束、焦点已按 CDK 还原之后发出
  * （关闭按钮、Esc 与随导航关闭都会发），父页面据此收掉参数并回焦入口。
  */
@@ -48,6 +57,7 @@ import {
   // prettier-ignore
   imports: [
     NgIcon,
+    ...HlmAlertImports,
     HlmBadge,
     HlmButton,
     HlmSkeleton,
@@ -61,7 +71,16 @@ import {
     TranslocoDirective,
     //#endif
   ],
-  providers: [provideIcons({ lucideCheck, lucideChevronRight, lucideCopy, lucideRotateCw })],
+  providers: [
+    provideIcons({
+      lucideCheck,
+      lucideChevronRight,
+      lucideCircleAlert,
+      lucideClock,
+      lucideCopy,
+      lucideRotateCw,
+    }),
+  ],
   templateUrl: './webhook-delivery-sheet.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -101,6 +120,24 @@ export class WebhookDeliverySheet {
   protected readonly payload = computed(() => {
     const delivery = this.delivery();
     return delivery ? prettyJson(delivery.payload) : '';
+  });
+
+  /**
+   * 未成功投递的提示：`failed` 决定告警色与下一步；`result` 是最近一次的结果，有状态码写状态码，
+   * 没有状态码写错误原文，都没有（尚未尝试）单独说明。成功的投递不提示。
+   */
+  protected readonly outcome = computed(() => {
+    const delivery = this.delivery();
+    if (!delivery || delivery.status === 'succeeded') {
+      return null;
+    }
+    const result: 'statusCode' | 'error' | 'none' =
+      (delivery.lastStatusCode ?? null) !== null
+        ? 'statusCode'
+        : delivery.lastError
+          ? 'error'
+          : 'none';
+    return { failed: delivery.status === 'failed', result };
   });
 
   /** 最近一次尝试（倒序的第一项）：请求区展示它的头部快照。 */
@@ -168,6 +205,14 @@ const ENGLISH: Record<string, string> = {
   'webhooks.deliveryStatus.pending': 'Retrying',
   'webhooks.deliveryStatus.succeeded': 'Succeeded',
   'webhooks.sheet.attemptCount': '{{count}} (automatic {{automatic}} · manual {{manual}})',
+  'webhooks.sheet.alert.error': 'Delivery error',
+  'webhooks.sheet.alert.failedNext':
+    'Automatic retries have ended. Resend once the receiver is back; the webhook-id stays the same so the receiver can deduplicate.',
+  'webhooks.sheet.alert.manualNext': 'A manual resend is queued for {{time}}.',
+  'webhooks.sheet.alert.notAttempted': 'Not attempted yet',
+  'webhooks.sheet.alert.retryNext':
+    'The next automatic attempt is at {{time}}; no action is needed. It is marked as failed once retries run out.',
+  'webhooks.sheet.alert.statusCode': 'The last attempt returned {{code}}',
   'webhooks.sheet.attempts': 'Attempts',
   'webhooks.sheet.body': 'Body',
   'webhooks.sheet.copyEventId': 'Copy event ID',

@@ -118,6 +118,10 @@ export interface GetWebhookDeliveriesInputDto extends PagedRequestDto {
   subscriptionId?: string;
   status?: WebhookDeliveryStatus;
   eventType?: string;
+  /** 投递创建时间下限，UTC ISO 时刻，含端点。 */
+  startTime?: string;
+  /** 投递创建时间上限，UTC ISO 时刻，含端点。 */
+  endTime?: string;
 }
 
 /**

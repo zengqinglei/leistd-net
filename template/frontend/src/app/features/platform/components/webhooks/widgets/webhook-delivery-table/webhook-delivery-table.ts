@@ -15,6 +15,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideCircleAlert,
+  lucideEllipsis,
   lucideInbox,
   lucidePanelRight,
   lucideRotateCw,
@@ -22,6 +23,7 @@ import {
 } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
@@ -60,6 +62,7 @@ import { DELIVERY_STATUS_KEYS, DELIVERY_STATUS_VARIANTS } from '../../webhook-di
 /**
  * 投递日志表：事件类型与 id、订阅、状态、尝试次数、最近状态码、下次重试、发生时间与操作（详情、重发）。
  * 不做行展开：点整行或"详情"打开右侧投递详情抽屉，抽屉顶部列全各列。重发只对终态开放。
+ * 行操作 ≥sm 平铺，<sm 收进 … 菜单。
  */
 @Component({
   selector: 'app-webhook-delivery-table',
@@ -74,6 +77,7 @@ import { DELIVERY_STATUS_KEYS, DELIVERY_STATUS_VARIANTS } from '../../webhook-di
     NgIcon,
     HlmBadge,
     HlmButton,
+    ...HlmDropdownMenuImports,
     HlmSpinner,
     StatusDot,
     TablePaginator,
@@ -87,6 +91,7 @@ import { DELIVERY_STATUS_KEYS, DELIVERY_STATUS_VARIANTS } from '../../webhook-di
   providers: [
     provideIcons({
       lucideCircleAlert,
+      lucideEllipsis,
       lucideInbox,
       lucidePanelRight,
       lucideRotateCw,
@@ -206,12 +211,19 @@ export class WebhookDeliveryTable {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
 
-  /** 聚焦该投递行的"详情"按钮（关闭详情抽屉后回焦）；行不在当前页时返回 `false`。 */
+  /**
+   * 聚焦该投递行的详情入口（关闭详情抽屉后回焦）：≥sm 是"详情"按钮，<sm 是 … 菜单触发器，取当前可见的那个。
+   * 行不在当前页时返回 `false`。
+   */
   focusDetails(id: string): boolean {
     const row = Array.from(
       this.host.nativeElement.querySelectorAll<HTMLElement>('[data-testid="webhook-delivery-row"]'),
     ).find((element) => element.dataset['deliveryId'] === id);
-    const button = row?.querySelector<HTMLElement>('[data-testid="webhook-delivery-details"]');
+    const button = Array.from(
+      row?.querySelectorAll<HTMLElement>(
+        '[data-testid="webhook-delivery-details"], [data-testid="webhook-delivery-menu"]',
+      ) ?? [],
+    ).find((element) => element.getClientRects().length > 0);
     button?.focus();
     return !!button;
   }

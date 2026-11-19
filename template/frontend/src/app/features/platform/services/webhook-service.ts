@@ -125,6 +125,8 @@ export class WebhookService {
         subscriptionId: input.subscriptionId,
         status: input.status,
         eventType: input.eventType,
+        startTime: input.startTime,
+        endTime: input.endTime,
       }),
     });
   }

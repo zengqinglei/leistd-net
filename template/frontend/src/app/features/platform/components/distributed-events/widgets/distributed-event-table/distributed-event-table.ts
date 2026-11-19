@@ -5,10 +5,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePanelRight, lucideRotateCw } from '@ng-icons/lucide';
+import { lucideEllipsis, lucidePanelRight, lucideRotateCw } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef } from '@tanstack/angular-table';
@@ -21,6 +22,7 @@ import {
   TableLoadingBody,
 } from '../../../../../../shared/components/table-loading/table-loading';
 import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
+import { StatusDot } from '../../../../../../shared/directives/status-dot';
 import { TableFit } from '../../../../../../shared/directives/table-fit';
 import { TruncatedTooltip } from '../../../../../../shared/directives/truncated-tooltip';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
@@ -44,10 +46,14 @@ import {
   EventRecord,
   EventRow,
   EventView,
-  STATUS_VARIANTS,
+  StateBadgeVariant,
   canRecover,
+  canSelect,
+  displayState,
   recoveryAction,
   reasonKey,
+  stateLabelKey,
+  stateVariant,
 } from '../../distributed-event-display';
 
 export const EVENT_TABLE_IMPORTS = [
@@ -58,9 +64,11 @@ export const EVENT_TABLE_IMPORTS = [
   HlmBadge,
   HlmButton,
   HlmCheckbox,
+  ...HlmDropdownMenuImports,
   ...HlmTableImports,
   ...HlmTooltipImports,
   RelativeTimeLabel,
+  StatusDot,
   TablePaginator,
   TableFit,
   TruncatedTooltip,
@@ -70,11 +78,12 @@ export const EVENT_TABLE_IMPORTS = [
   TranslocoDirective,
   //#endif
 ];
-export const EVENT_TABLE_ICONS = provideIcons({ lucidePanelRight, lucideRotateCw });
+export const EVENT_TABLE_ICONS = provideIcons({ lucideEllipsis, lucidePanelRight, lucideRotateCw });
 
 /** 四张表共用的呈现与选择行为；视图由具体表固定，分页与 URL 由页面编排。 */
 @Directive()
 export abstract class DistributedEventTable {
+  private static sequence = 0;
   protected abstract view(): EventView;
   readonly rows = input<EventRow[]>([]);
   readonly totalCount = input(0);
@@ -96,7 +105,8 @@ export abstract class DistributedEventTable {
   protected readonly displayLocale = this.preferences.displayLocale;
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  protected readonly t = (key: string) => this.transloco.translate(key);
+  protected readonly t = (key: string, params?: Record<string, unknown>) =>
+    this.transloco.translate(key, params);
   //#else
   protected readonly t = englishText(ENGLISH);
   //#endif
@@ -108,10 +118,16 @@ export abstract class DistributedEventTable {
     resolveDisplayTimeZone(this.displayTimeZone()),
   );
   private readonly tableFit = viewChild(TableFit);
+  /** 本页可勾选的行；不可勾选的行照样渲染复选框，禁用并说明原因。 */
+  protected readonly selectableRows = computed(() =>
+    this.rows().filter((row) => row.record && canSelect(row.record)),
+  );
   protected readonly allChecked = computed(() => {
-    const eligible = this.rows().filter((row) => row.record && canRecover(row.record));
+    const eligible = this.selectableRows();
     return eligible.length > 0 && eligible.every((row) => this.selected().includes(row.id));
   });
+  /** 禁用复选框的原因只有一种，全表共用一个说明元素。 */
+  protected readonly selectReasonId = `event-select-reason-${++DistributedEventTable.sequence}`;
   protected abstract columnsForView(): ColumnDef<AppTableFeatures, EventRow>[];
   protected readonly columns = computed(() => this.columnsForView());
   protected dataColumn(
@@ -171,13 +187,17 @@ export abstract class DistributedEventTable {
   protected recoverable(record: EventRecord): boolean {
     return canRecover(record);
   }
-  protected badge(status: string): 'warning' | 'success' | 'destructive' | 'secondary' {
-    return STATUS_VARIANTS[status as keyof typeof STATUS_VARIANTS] ?? 'secondary';
+  protected selectable(record: EventRecord | undefined): boolean {
+    return !!record && canSelect(record);
+  }
+  protected badge(row: EventRow): StateBadgeVariant {
+    return stateVariant(this.view(), displayState(this.view(), row.status, row.attempts));
   }
   protected statusLabel(row: EventRow): string {
-    return row.status === 'pending' && row.attempts > 0 && this.view() !== 'rejections'
-      ? 'retrying'
-      : row.status;
+    return stateLabelKey(this.view(), displayState(this.view(), row.status, row.attempts));
+  }
+  protected selectReason(): string {
+    return this.t(`distributedEvents.selectDisabled.${this.view()}`);
   }
   protected isRejection(): boolean {
     return this.view() === 'rejections';
@@ -199,15 +219,15 @@ export abstract class DistributedEventTable {
   protected toggleAll(checked: boolean): void {
     this.selectionChange.emit(
       checked
-        ? this.rows()
-            .filter((row) => row.record && canRecover(row.record))
+        ? this.selectableRows()
             .map((row) => row.id)
             .slice(0, 100)
         : [],
     );
   }
   protected onRowClick(event: MouseEvent, row: EventRow): void {
-    if (!(event.target as HTMLElement).closest('button,a,hlm-checkbox')) this.open.emit(row.id);
+    if (!(event.target as HTMLElement).closest('button,a,hlm-checkbox,[data-select-cell]'))
+      this.open.emit(row.id);
   }
   protected jump(view: EventView, status: string, eventName?: string): void {
     this.jumpTo.emit({ view, status, eventName });

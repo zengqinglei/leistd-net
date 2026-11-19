@@ -19,6 +19,12 @@ public record GetDistributedEventInboxInputDto : PageRequest
     /// <summary>首次加载时刻上限（UTC），含等于该时刻的记录。</summary>
     public DateTime? Before { get; init; }
 
+    /// <summary>接收时间下限（UTC），含等于该时刻的记录。</summary>
+    public DateTime? StartTime { get; init; }
+
+    /// <summary>接收时间上限（UTC），含等于该时刻的记录；与 <see cref="Before"/> 同时生效。</summary>
+    public DateTime? EndTime { get; init; }
+
     /// <summary>状态精确匹配；查询串只接受 camelCase 名称。</summary>
     [EnumDataType(typeof(DistributedEventInboxStatus), ErrorMessage = "{0} is not an allowed value.")]
     public DistributedEventInboxStatus? Status { get; init; }
@@ -107,6 +113,12 @@ public sealed record DistributedEventInboxFilterDto
     /// <summary>本次恢复的时间上限（UTC），必填，防止卷入后续新记录。</summary>
     [Required(ErrorMessage = "{0} is required.")]
     public DateTime? Before { get; init; }
+
+    /// <summary>接收时间下限（UTC），含等于该时刻的记录。</summary>
+    public DateTime? StartTime { get; init; }
+
+    /// <summary>接收时间上限（UTC），含等于该时刻的记录；与 <see cref="Before"/> 同时生效。</summary>
+    public DateTime? EndTime { get; init; }
 
     /// <summary>事件名精确匹配。</summary>
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]

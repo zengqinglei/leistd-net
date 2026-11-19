@@ -203,7 +203,7 @@ describe('DistributedEvents UI R1', () => {
     expect(fixture.nativeElement.textContent).toContain('1 day');
     expect(fixture.nativeElement.textContent).not.toContain('90,116');
   });
-  it('renders reported status timestamps and clears them for unknown transport', async () => {
+  it('renders reported status times as relative labels and clears them for unknown transport', async () => {
     await setup();
     component.status.set({
       ...STATUS,
@@ -211,12 +211,14 @@ describe('DistributedEvents UI R1', () => {
       transportReportedAt: '2026-01-01T11:22:33Z',
     });
     fixture.detectChanges();
-    expect(
-      fixture.nativeElement.querySelector('[data-testid=event-transport-changed]').textContent,
-    ).toContain('10:20:30');
-    expect(
-      fixture.nativeElement.querySelector('[data-testid=event-transport-reported]').textContent,
-    ).toContain('11:22:33');
+    const changed = () =>
+      fixture.nativeElement.querySelector('[data-testid=event-transport-changed]') as HTMLElement;
+    const reported = () =>
+      fixture.nativeElement.querySelector('[data-testid=event-transport-reported]') as HTMLElement;
+    // 完整时刻放进相对时间的 Tooltip，行内不再出现原始时刻
+    expect(changed().querySelector('time')?.getAttribute('datetime')).toBe('2026-01-01T10:20:30Z');
+    expect(reported().querySelector('time')?.getAttribute('datetime')).toBe('2026-01-01T11:22:33Z');
+    expect(reported().textContent).not.toContain('11:22:33');
     component.status.set({
       ...STATUS,
       transportStatus: 'unknown',
@@ -224,12 +226,9 @@ describe('DistributedEvents UI R1', () => {
       transportReportedAt: null,
     });
     fixture.detectChanges();
-    expect(
-      fixture.nativeElement.querySelector('[data-testid=event-transport-changed]').textContent,
-    ).toContain('—');
-    expect(
-      fixture.nativeElement.querySelector('[data-testid=event-transport-reported]').textContent,
-    ).toContain('—');
+    expect(changed().querySelector('time')).toBeNull();
+    expect(changed().textContent).toContain('—');
+    expect(reported().textContent).toContain('—');
   });
   it('hides the payload section when the endpoint reports it disabled while keeping recovery available', async () => {
     await setup({ view: 'outbox', record: '1' });

@@ -206,7 +206,9 @@ public static class WebhookEndpoints
                 string? keyword = null,
                 Guid? subscriptionId = null,
                 string? status = null,
-                string? eventType = null)
+                string? eventType = null,
+                DateTime? startTime = null,
+                DateTime? endTime = null)
                 => service.GetDeliveriesAsync(
                     new GetWebhookDeliveriesInputDto
                     {
@@ -215,7 +217,9 @@ public static class WebhookEndpoints
                         Keyword = keyword,
                         SubscriptionId = subscriptionId,
                         Status = ParseStatus(status),
-                        EventType = eventType
+                        EventType = eventType,
+                        StartTime = startTime,
+                        EndTime = endTime
                     },
                     cancellationToken))
             .WithName(GetDeliveriesName)

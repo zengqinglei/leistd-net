@@ -37,6 +37,8 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
             if (input.ErrorCode is not null) query = query.Where(x => x.LastErrorCode == input.ErrorCode);
             if (input.Status is { } status) query = query.Where(x => x.Status == status);
             if (input.Before is { } before) query = query.Where(x => x.CreationTime <= before);
+            if (input.StartTime is { } start) query = query.Where(x => x.CreationTime >= start);
+            if (input.EndTime is { } end) query = query.Where(x => x.CreationTime <= end);
             if (input.Keyword is { } key)
             {
                 var isId = Guid.TryParse(key, out var id);
@@ -59,6 +61,8 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
             if (input.Consumer is not null) query = query.Where(x => x.Consumer == input.Consumer);
             if (input.Status is { } status) query = query.Where(x => x.Status == status);
             if (input.Before is { } before) query = query.Where(x => x.ReceivedAt <= before);
+            if (input.StartTime is { } start) query = query.Where(x => x.ReceivedAt >= start);
+            if (input.EndTime is { } end) query = query.Where(x => x.ReceivedAt <= end);
             if (input.Keyword is { } key)
             {
                 var isId = Guid.TryParse(key, out var id);
@@ -80,6 +84,8 @@ internal sealed class EfCoreDistributedEventManagementStore<TDbContext>(
             if (input.Reason is not null) query = query.Where(x => x.Reason == input.Reason);
             if (input.Status is { } status) query = query.Where(x => x.Status == status);
             if (input.Before is { } before) query = query.Where(x => x.ReceivedAt <= before);
+            if (input.StartTime is { } start) query = query.Where(x => x.ReceivedAt >= start);
+            if (input.EndTime is { } end) query = query.Where(x => x.ReceivedAt <= end);
             if (input.Keyword is { } key)
             {
                 var isId = Guid.TryParse(key, out var id);

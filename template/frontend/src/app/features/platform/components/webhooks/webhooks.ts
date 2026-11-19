@@ -22,6 +22,7 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
+import { HlmDateRangeInput, HlmDateRangePicker } from '@spartan-ng/helm/date-picker';
 import {
   HlmInputGroup,
   HlmInputGroupAddon,
@@ -30,6 +31,7 @@ import {
 import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
+import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState } from '@tanstack/angular-table';
 import {
@@ -72,6 +74,13 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 import { LayoutService } from '../../../../core/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import {
+  dateRangeFormatter,
+  dateRangeFromQuery,
+  dateRangeParser,
+  dateRangeToQuery,
+  validTimeRange,
+} from '../../../../shared/utils/date-range-query';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -102,13 +111,18 @@ const SUBSCRIPTION_OPTION_LIMIT = 20;
 /** 从列表打开投递详情时写进新历史条目的标记：有它说明前一条就是打开前的列表条目，刷新后仍随条目保留。 */
 const DELIVERY_OPENED_STATE = 'webhookDeliveryOpened';
 
-/** 只取列表相关的参数：打开投递详情（`delivery`）与切换区间（`range`）不重查列表。 */
+/**
+ * 只取列表相关的参数：打开投递详情（`delivery`）与切换统计区间（`range`）不重查列表；
+ * 投递日志的时间范围（`startTime` / `endTime`）属于列表筛选。
+ */
 const LIST_PARAMS = [
   'view',
   'keyword',
   'status',
   'eventType',
   'subscriptionId',
+  'startTime',
+  'endTime',
   'page',
   'pageSize',
 ] as const;
@@ -131,7 +145,10 @@ const LIST_PARAMS = [
     HlmInputGroupInput,
     HlmInputGroupAddon,
     ...HlmTabsImports,
+    ...HlmToggleGroupImports,
     ...HlmTooltipImports,
+    HlmDateRangePicker,
+    HlmDateRangeInput,
     FacetedFilter,
     //#if (IncludeLocalization)
     TranslocoDirective,
@@ -209,6 +226,17 @@ export class Webhooks {
   readonly selectedSubscriptionId = computed(() =>
     this.view() === 'deliveries' ? this.queryParams().get('subscriptionId') : null,
   );
+  /** 投递日志的时间范围（UTC 起止）：只有一端、格式错误或起止颠倒时视为未筛选，控件与请求一致。 */
+  private readonly timeRange = computed(() =>
+    this.view() === 'deliveries'
+      ? validTimeRange(this.queryParams().get('startTime'), this.queryParams().get('endTime'))
+      : null,
+  );
+  /** 日期区间控件的值：时间范围换算成展示时区的日历日。 */
+  readonly selectedRange = computed<[Date, Date] | undefined>(() => {
+    const range = this.timeRange();
+    return range ? dateRangeFromQuery(range.startTime, range.endTime, this.timeZone()) : undefined;
+  });
   /** 抽屉里打开的投递。 */
   readonly deliveryId = computed(() =>
     this.view() === 'deliveries' ? this.queryParams().get('delivery') : null,
@@ -224,15 +252,60 @@ export class Webhooks {
       this.selectedEventType() !== null ||
       (this.view() === 'subscriptions'
         ? this.selectedSubscriptionStatus() !== null
-        : this.selectedDeliveryStatus() !== null || this.selectedSubscriptionId() !== null),
+        : this.selectedDeliveryStatus() !== null ||
+          this.selectedSubscriptionId() !== null ||
+          this.timeRange() !== null),
   );
 
   // ---- 时钟与统计 ----
   /** 分钟级时钟：「今天」的判定与相对时间随它更新。 */
   readonly now = signal(Date.now());
   readonly timeZone = computed(() => resolveDisplayTimeZone(this.accountPreferences.timeZone()));
+  private readonly displayLocale = this.accountPreferences.displayLocale;
+  /** 区间文案与手输解析（同操作记录）：写成 `computed`，切换语言时换新函数。 */
+  readonly formatRange = computed(() => dateRangeFormatter(this.displayLocale()));
+  readonly parseRangeInput = computed(() => dateRangeParser(this.displayLocale()));
   private readonly today = computed(() => zonedCalendarDate(this.now(), this.timeZone()));
-  readonly statistics = signal<WebhookStatisticsOutputDto | null>(null);
+  /**
+   * 当前显示的统计与它请求时的订阅：重新加载期间（含失败后）卡片仍是旧数据，失败卡跳转与摘要里的订阅名
+   * 都跟这一组走，不读当前 URL，否则会拼出"旧订阅的数字 + 新订阅的列表"。
+   */
+  private readonly shownStatistics = signal<{
+    statistics: WebhookStatisticsOutputDto;
+    subscriptionId: string | null;
+  } | null>(null);
+  readonly statistics = computed(() => this.shownStatistics()?.statistics ?? null);
+  /**
+   * 显示中的统计所属订阅最后一次解析到的名称：它还是当前筛选时跟着更新，筛选换走后保留，
+   * 订阅名只在当前筛选时才能经详情接口解析到。
+   */
+  private readonly statisticsSubscription = linkedSignal<
+    { id: string | null; current: string | null; name: string | null },
+    { id: string; name: string | null } | null
+  >({
+    source: () => ({
+      id: this.shownStatistics()?.subscriptionId ?? null,
+      current: this.selectedSubscriptionId(),
+      name: this.selectedSubscriptionName(),
+    }),
+    computation: ({ id, current, name }, previous) =>
+      id && id === current ? { id, name } : (previous?.value ?? null),
+  });
+  /** 摘要里的订阅名：随显示中的统计；首次加载前沿用当前筛选。 */
+  readonly statisticsSubscriptionName = computed(() => {
+    const shown = this.shownStatistics();
+    if (!shown) {
+      return this.selectedSubscriptionName();
+    }
+    const id = shown.subscriptionId;
+    if (!id) {
+      return null;
+    }
+    const remembered = this.statisticsSubscription();
+    return remembered?.id === id && remembered.name
+      ? remembered.name
+      : this.subscriptionToString(id);
+  });
   readonly statisticsLoading = signal(false);
   readonly statisticsFailed = signal(false);
   /** 统计请求：区间换算成日历日；投递日志按订阅筛选时只统计该订阅。 */
@@ -274,35 +347,6 @@ export class Webhooks {
   readonly eventTypeOptions = computed(() =>
     this.eventTypes().map((type) => ({ label: type.name, value: type.name })),
   );
-
-  //#if (IncludeLocalization)
-  private readonly optionTexts = {
-    enabled: translateSignal('webhooks.subscriptionStatus.enabled', {}, { scope: 'webhooks' }),
-    disabled: translateSignal('webhooks.subscriptionStatus.disabled', {}, { scope: 'webhooks' }),
-    pending: translateSignal('webhooks.deliveryStatus.pending', {}, { scope: 'webhooks' }),
-    succeeded: translateSignal('webhooks.deliveryStatus.succeeded', {}, { scope: 'webhooks' }),
-    failed: translateSignal('webhooks.deliveryStatus.failed', {}, { scope: 'webhooks' }),
-  };
-  readonly subscriptionStatusOptions = computed(() => [
-    { label: this.optionTexts.enabled(), value: 'enabled' },
-    { label: this.optionTexts.disabled(), value: 'disabled' },
-  ]);
-  readonly deliveryStatusOptions = computed(() => [
-    { label: this.optionTexts.succeeded(), value: 'succeeded' },
-    { label: this.optionTexts.pending(), value: 'pending' },
-    { label: this.optionTexts.failed(), value: 'failed' },
-  ]);
-  //#else
-  readonly subscriptionStatusOptions = computed(() => [
-    { label: 'Enabled', value: 'enabled' },
-    { label: 'Disabled', value: 'disabled' },
-  ]);
-  readonly deliveryStatusOptions = computed(() => [
-    { label: 'Succeeded', value: 'succeeded' },
-    { label: 'Retrying', value: 'pending' },
-    { label: 'Failed', value: 'failed' },
-  ]);
-  //#endif
 
   // ---- 投递详情抽屉 ----
   readonly delivery = signal<WebhookDeliveryDetailOutputDto | null>(null);
@@ -458,13 +502,19 @@ export class Webhooks {
     // 统计：区间、时区或订阅筛选变化时取；只保留最后一次请求，失败时保留已有数据
     this.statisticsRequests
       .pipe(
-        switchMap((query) => this.service.getStatistics(query).pipe(catchError(() => of(null)))),
+        switchMap((query) =>
+          // 请求时的订阅与响应配成一组
+          this.service.getStatistics(query).pipe(
+            map((statistics) => ({ statistics, subscriptionId: query.subscriptionId ?? null })),
+            catchError(() => of(null)),
+          ),
+        ),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((statistics) => {
+      .subscribe((shown) => {
         this.statisticsLoading.set(false);
-        if (statistics) {
-          this.statistics.set(statistics);
+        if (shown) {
+          this.shownStatistics.set(shown);
         } else {
           this.statisticsFailed.set(true);
         }
@@ -556,6 +606,11 @@ export class Webhooks {
     this.updateQuery({ [name]: typeof value === 'string' && value ? value : null, page: 1 });
   }
 
+  /** 时间范围按展示时区取整天再换算成 UTC 写回 URL（后端闭区间），页码回到第一页。 */
+  onRangeChange(range: [Date, Date] | null): void {
+    this.updateQuery({ ...dateRangeToQuery(range, this.timeZone()), page: 1 });
+  }
+
   onPaginationChange(pagination: PaginationState): void {
     this.updateQuery({ page: pagination.pageIndex + 1, pageSize: pagination.pageSize });
   }
@@ -574,12 +629,19 @@ export class Webhooks {
     this.navigate({ view: 'deliveries', subscriptionId, range: this.rangeParam() });
   }
 
-  /** 失败卡：投递日志筛选失败，保留当前的订阅筛选。 */
+  /**
+   * 失败卡：投递日志筛选失败；订阅与时间范围都取当前显示的那组统计（时间是服务端实际计数用的 UTC 边界，
+   * 含今天时截到统计查询时刻）。统计重新加载期间显示的仍是旧数据，跟着用旧数据的订阅与区间。
+   */
   showFailedDeliveries(): void {
+    const shown = this.shownStatistics();
+    const range = shown?.statistics.range;
     this.navigate({
       view: 'deliveries',
       status: 'failed',
-      subscriptionId: this.selectedSubscriptionId(),
+      subscriptionId: shown ? shown.subscriptionId : this.selectedSubscriptionId(),
+      startTime: range?.start ?? null,
+      endTime: range?.end ?? null,
       range: this.rangeParam(),
     });
   }
@@ -859,6 +921,7 @@ export class Webhooks {
   private deliveriesQuery(params: ParamMap): GetWebhookDeliveriesInputDto {
     const pagination = paginationFromQuery(params);
     const status = params.get('status') as WebhookDeliveryStatus | null;
+    const range = validTimeRange(params.get('startTime'), params.get('endTime'));
     return {
       offset: pagination.pageIndex * pagination.pageSize,
       limit: pagination.pageSize,
@@ -866,6 +929,8 @@ export class Webhooks {
       subscriptionId: params.get('subscriptionId') || undefined,
       status: status && DELIVERY_STATUSES.includes(status) ? status : undefined,
       eventType: params.get('eventType') || undefined,
+      startTime: range?.startTime,
+      endTime: range?.endTime,
     };
   }
 
@@ -944,6 +1009,7 @@ const ENGLISH: Record<string, string> = {
   'webhooks.deliveryStatus.failed': 'Failed',
   'webhooks.deliveryStatus.pending': 'Retrying',
   'webhooks.deliveryStatus.succeeded': 'Succeeded',
+  'webhooks.filter.dateRange': 'Date range',
   'webhooks.filter.eventType': 'Event type',
   'webhooks.filter.searchDeliveries': 'Search by event ID or type...',
   'webhooks.filter.loadingSubscriptions': 'Loading subscriptions...',

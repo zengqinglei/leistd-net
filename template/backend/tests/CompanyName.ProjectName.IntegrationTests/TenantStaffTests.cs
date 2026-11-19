@@ -47,6 +47,42 @@ public sealed class TenantStaffTests(ProjectWebApplicationFactory factory) : ICl
     }
 
     [Fact]
+    public async Task The_list_returns_the_stored_linked_username_rather_than_the_home_username()
+    {
+        using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var name = "linked-" + Guid.NewGuid().ToString("N")[..8];
+        using var created = await session.Client.PostAsJsonAsync("/api/v1/tenants", new
+        { Name = name, AdminEmail = "admin@example.com", AdminPassword = "Tenant@123456" });
+        created.EnsureSuccessStatusCode();
+        using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var tenantId = body.RootElement.GetProperty("id").GetGuid();
+        Guid homeUserId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(null))
+            using (scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+                homeUserId = (await scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>()
+                    .GetOneAsync(u => u.Username == "admin"))!.Id;
+            // 关联账号保留早先的用户名（例如宿主改名前授予过），列表要返回库里的真实值
+            using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId, name))
+            using (var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+            {
+                await scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>()
+                    .InsertAsync(User.CreatePlatformAccount(homeUserId, "renamed", "Renamed"));
+                await unit.CompleteAsync();
+            }
+        }
+        var roles = await session.Client.GetFromJsonAsync<List<RoleBriefOutputDto>>($"/api/v1/tenants/{tenantId}/staff/roles");
+        var url = $"/api/v1/tenants/{tenantId}/staff";
+        (await session.Client.PostAsJsonAsync(url, new GrantTenantStaffInputDto
+        { HomeUserId = homeUserId, RoleIds = [roles!.Single(r => r.Name == "Admin").Id] })).EnsureSuccessStatusCode();
+
+        var member = Assert.Single((await session.Client.GetFromJsonAsync<List<TenantStaffOutputDto>>(url))!);
+        Assert.Equal("admin", member.Username);
+        Assert.Equal("platform.renamed", member.LinkedUsername);
+    }
+
+    [Fact]
     public async Task Grant_remove_and_regrant_restore_the_same_member_and_roles()
     {
         using var session = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -70,6 +106,7 @@ public sealed class TenantStaffTests(ProjectWebApplicationFactory factory) : ICl
         (await session.Client.PostAsJsonAsync(url, input)).EnsureSuccessStatusCode();
         var member = Assert.Single((await session.Client.GetFromJsonAsync<List<TenantStaffOutputDto>>(url))!);
         Assert.Equal(homeUserId, member.HomeUserId);
+        Assert.Equal("platform.admin", member.LinkedUsername);
         Assert.Equal("Admin", Assert.Single(member.Roles).Name);
         (await session.Client.DeleteAsync($"{url}/{homeUserId}")).EnsureSuccessStatusCode();
         Assert.Empty((await session.Client.GetFromJsonAsync<List<TenantStaffOutputDto>>(url))!);

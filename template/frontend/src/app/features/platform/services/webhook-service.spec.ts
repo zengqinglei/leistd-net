@@ -43,6 +43,30 @@ describe('WebhookService', () => {
     request.flush({ items: [], totalCount: 0 });
   });
 
+  it('sends the time range of the delivery log as UTC query parameters', () => {
+    service
+      .getDeliveries({
+        offset: 0,
+        limit: 20,
+        status: 'failed',
+        startTime: '2026-11-01T00:00:00.000Z',
+        endTime: '2026-11-07T12:00:00.000Z',
+      })
+      .subscribe();
+
+    const request = http.expectOne((req) => req.url === '/api/v1/webhooks/deliveries');
+    expect(request.request.params.get('startTime')).toBe('2026-11-01T00:00:00.000Z');
+    expect(request.request.params.get('endTime')).toBe('2026-11-07T12:00:00.000Z');
+    expect(request.request.params.keys()).toEqual([
+      'offset',
+      'limit',
+      'status',
+      'startTime',
+      'endTime',
+    ]);
+    request.flush({ items: [], totalCount: 0 });
+  });
+
   it('sends retryFailed in the query string only when requested', () => {
     service.enableSubscription('sub-1', true).subscribe();
     service.enableSubscription('sub-2', false).subscribe();

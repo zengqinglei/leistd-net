@@ -69,5 +69,24 @@ describe('workspace mock', () => {
       'user_admin',
     );
   });
+  //#if (LocalIdentity)
+
+  it('lists the stored linked account username instead of deriving it from the home username', () => {
+    const list = () =>
+      WORKSPACE_API['GET /api/v1/tenants/:tenantId/staff']({
+        ...request('acme'),
+        params: { tenantId: 'tenant_acme' },
+      });
+    expect(list()).toEqual([
+      expect.objectContaining({ username: 'admin', linkedUsername: 'platform.admin' }),
+    ]);
+    WORKSPACE_API['GET /api/v1/auth/me/workspaces']();
+    USERS.find((user) => user.id === 'platform-tenant_acme-user_admin')!.username =
+      'platform.admin-renamed';
+    expect(list()).toEqual([
+      expect.objectContaining({ username: 'admin', linkedUsername: 'platform.admin-renamed' }),
+    ]);
+  });
+  //#endif
 });
 //#endif

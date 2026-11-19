@@ -255,6 +255,97 @@ describe('distributed event mock', () => {
     expect(result.items[0].status).toBe('deadLettered');
   });
 
+  it.each(['outbox', 'inbox', 'rejections'] as const)(
+    'filters %s by an inclusive time range on the creation or receive time',
+    (kind) => {
+      const route = `GET /api/v1/distributed-events/${kind}` as const;
+      const source =
+        kind === 'outbox'
+          ? DISTRIBUTED_EVENT_OUTBOX
+          : kind === 'inbox'
+            ? DISTRIBUTED_EVENT_INBOX
+            : DISTRIBUTED_EVENT_REJECTIONS;
+      const record = source[0].record;
+      const time = 'creationTime' in record ? record.creationTime : record.receivedAt;
+      const later = new Date(Date.parse(time) + 1).toISOString();
+      const ids = (queryParams: Record<string, string>) =>
+        call(route, { queryParams }).items.map((item) => item.id);
+      expect(ids({ startTime: time, endTime: time })).toEqual([record.id]);
+      expect(ids({ startTime: later })).not.toContain(record.id);
+      expect(ids({ endTime: time })).toContain(record.id);
+      expect(
+        ids({ startTime: time, before: new Date(Date.parse(time) - 1).toISOString() }),
+      ).toEqual([]);
+    },
+  );
+
+  it('accepts UTC or explicit offsets in query strings and rejects missing zones or reversed ranges', () => {
+    const route = 'GET /api/v1/distributed-events/outbox' as const;
+    const record = DISTRIBUTED_EVENT_OUTBOX[0].record;
+    const local = new Date(Date.parse(record.creationTime) + 8 * 3600000)
+      .toISOString()
+      .replace('Z', '+08:00');
+    expect(
+      call(route, { queryParams: { startTime: local, endTime: local } }).items.map((i) => i.id),
+    ).toEqual([record.id]);
+    for (const queryParams of [
+      { startTime: '2026-01-01T00:00:00' },
+      { endTime: 'yesterday' },
+      { startTime: '2026-01-02T00:00:00Z', endTime: '2026-01-01T00:00:00Z' },
+    ])
+      expect(() => call(route, { queryParams })).toThrow(MockException);
+  });
+
+  it('recovers only dead letters inside the time range and accepts only UTC JSON instants', () => {
+    const [inside, outside] = DISTRIBUTED_EVENT_OUTBOX.filter(
+      (item) => item.record.status === 'deadLettered',
+    ).map((item) => item.record);
+    const before = new Date().toISOString();
+    const result = call('POST /api/v1/distributed-events/outbox/redeliver', {
+      body: { filter: { before, startTime: inside.creationTime, endTime: inside.creationTime } },
+    });
+    expect(result.affectedCount).toBe(1);
+    expect(inside.status).toBe('pending');
+    expect(outside.status).toBe('deadLettered');
+    for (const range of [
+      { startTime: '2026-01-01T08:00:00+08:00' },
+      { endTime: '2026-01-01T00:00:00' },
+      { startTime: '2026-01-02T00:00:00Z', endTime: '2026-01-01T00:00:00Z' },
+    ])
+      expect(() =>
+        call('POST /api/v1/distributed-events/outbox/redeliver', {
+          body: { filter: { before, ...range } },
+        }),
+      ).toThrow(MockException);
+  });
+
+  it.each([
+    ['inbox/replay', { status: 'failed' }],
+    ['rejections/redecode', { status: 'pending' }],
+    ['rejections/discard', {}],
+  ] as const)('applies the time range to %s by condition', (path, extra) => {
+    const route = `POST /api/v1/distributed-events/${path}` as const;
+    const result = call(route, {
+      body: {
+        filter: {
+          before: new Date().toISOString(),
+          startTime: '2000-01-01T00:00:00Z',
+          endTime: '2000-01-02T00:00:00Z',
+          ...extra,
+        },
+      },
+    });
+    expect(result.affectedCount).toBe(0);
+    expect(result.skipped).toEqual([]);
+    expect(() =>
+      call(route, {
+        body: {
+          filter: { before: new Date().toISOString(), startTime: '2000-01-01T00:00:00', ...extra },
+        },
+      }),
+    ).toThrow(MockException);
+  });
+
   it('has no database directory route', () => {
     expect(DISTRIBUTED_EVENT_API).not.toHaveProperty('GET /api/v1/distributed-events/databases');
   });

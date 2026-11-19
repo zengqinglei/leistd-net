@@ -166,13 +166,25 @@ test.describe('workspace requests and routes', () => {
     );
     const tenant = tenants.items.find((item) => item.name === 'default-e2e')!;
     await page.goto(`/platform/tenants?staff=${tenant.id}`);
-    await page.getByRole('button', { name: 'Grant access', exact: true }).click();
+    // 没有平台人员时空态里还有一个同名按钮，取工具栏那个
+    await page.getByRole('button', { name: 'Grant access', exact: true }).first().click();
     const dialog = page.getByRole('dialog').last();
-    await dialog.getByRole('combobox').fill('e2e_viewer');
-    await dialog.getByRole('option', { name: /e2e_viewer/ }).click();
-    await dialog.getByRole('checkbox', { name: 'Administrator', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    const person = dialog.getByRole('combobox', { name: 'Platform staff' });
+    // 打开动画结束、首个字段获得焦点后再操作：刚打开的瞬间点击会被遮罩截获
+    await expect(person).toBeFocused();
+    // 未选人员和角色时提交：在字段下报错，不发请求
+    await dialog.getByRole('button', { name: 'Grant access', exact: true }).click();
+    await expect(dialog.getByText('This field is required.').first()).toBeVisible();
+    await expect(person).toBeFocused();
+    await person.click();
+    // 选择框的弹出层挂在对话框之外，搜索框与选项要从页面上找
+    await page.getByPlaceholder('Search by name or username').fill('e2e_viewer');
+    await page.getByRole('option', { name: /e2e_viewer/ }).click();
+    await expect(dialog.getByText(/A new linked account uses platform\.e2e_viewer/)).toBeVisible();
+    await dialog.getByRole('checkbox', { name: /^Administrator\b/ }).click();
+    await dialog.getByRole('button', { name: 'Grant access', exact: true }).click();
     await expect(dialog).not.toBeVisible();
+    await expect(page.getByText(/Granted .* access to default-e2e/)).toBeVisible();
     await expect(page.getByRole('cell', { name: /e2e_viewer/ }).first()).toBeVisible();
   });
 });

@@ -25,6 +25,7 @@ import {
   nextMockWebhookId,
 } from '../data/webhooks';
 import { isUsableTimeZone, resolvePeriod, todayIn } from '../utils/statistics-calendar';
+import { parseMockTimeRange, withinMockTimeRange } from '../utils/time-range';
 
 /** 订阅全部事件（含以后新增的）的取值。 */
 const ALL_EVENTS = '*';
@@ -42,11 +43,16 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** 轮换后旧密钥继续签名的时长（`Leistd:Webhooks:SecretRotationOverlap` 默认值）。 */
 const ROTATION_OVERLAP_MS = 24 * 3_600_000;
 const SEVEN_DAYS_MS = 7 * 24 * 3_600_000;
-
 function query(req: MockRequest, name: string): string | undefined {
   const raw = req.queryParams[name];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return value === undefined || value === null || value === '' ? undefined : String(value);
+}
+
+function rawQuery(req: MockRequest, name: string): string | undefined {
+  const raw = req.queryParams[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === undefined || value === null ? undefined : String(value);
 }
 
 function notFound(code: 'Webhook:SubscriptionNotFound' | 'Webhook:DeliveryNotFound') {
@@ -398,6 +404,11 @@ function sendTestEvent(req: MockRequest) {
 
 function getDeliveries(req: MockRequest) {
   requirePermission(PERMISSIONS.webhooks.default);
+  const range = parseMockTimeRange(
+    // 时间取原始值：显式空串与后端一样按不合法处理，不能像其他参数那样当作没传
+    { startTime: rawQuery(req, 'startTime'), endTime: rawQuery(req, 'endTime') },
+    'query',
+  );
   const keyword = query(req, 'keyword')?.trim().toLowerCase();
   const subscriptionId = query(req, 'subscriptionId');
   const status = query(req, 'status');
@@ -412,6 +423,7 @@ function getDeliveries(req: MockRequest) {
     .filter((item) => !subscriptionId || item.subscriptionId === subscriptionId)
     .filter((item) => !status || item.status === status)
     .filter((item) => !eventType || item.eventType === eventType)
+    .filter((item) => withinMockTimeRange(item.creationTime, range))
     .sort((a, b) => Date.parse(b.creationTime) - Date.parse(a.creationTime));
   return page(items.map(deliveryOutput), req);
 }

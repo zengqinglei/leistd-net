@@ -64,8 +64,34 @@ export function canDiscard(record: EventRecord): boolean {
   return 'redecodeCount' in record && ['pending', 'redecodePending'].includes(record.status);
 }
 
-export const STATUS_VARIANTS = {
-  pending: 'warning',
+/** 可勾选：至少有一种恢复动作适用；拒收待处理两者皆可，待重新解码只能丢弃。 */
+export function canSelect(record: EventRecord): boolean {
+  return canRecover(record) || canDiscard(record);
+}
+
+export type StateBadgeVariant = 'warning' | 'success' | 'destructive' | 'secondary';
+
+/** 界面状态：发件箱、收件箱的 Pending 有过尝试即显示重试中；拒收的次数是重新解码次数，不参与。 */
+export function displayState(view: EventView, status: string, attempts: number): string {
+  return status === 'pending' && attempts > 0 && view !== 'rejections' ? 'retrying' : status;
+}
+
+/** 状态文案键：发件箱的 Pending 与指标卡同叫"待发送"，其余视图沿用共用文案。 */
+export function stateLabelKey(view: EventView, state: string): string {
+  return `distributedEvents.state.${view === 'outbox' && state === 'pending' ? 'pendingSend' : state}`;
+}
+
+/** 徽章变体：进行中为 secondary；拒收的待处理需要人工处理，用 warning。 */
+export function stateVariant(view: EventView, state: string): StateBadgeVariant {
+  return state === 'pending'
+    ? view === 'rejections'
+      ? 'warning'
+      : 'secondary'
+    : (STATE_VARIANTS[state] ?? 'secondary');
+}
+
+const STATE_VARIANTS: Record<string, StateBadgeVariant> = {
+  retrying: 'warning',
   sent: 'success',
   processed: 'success',
   deadLettered: 'destructive',
@@ -73,7 +99,7 @@ export const STATUS_VARIANTS = {
   redecoded: 'success',
   discarded: 'secondary',
   redecodePending: 'warning',
-} as const;
+};
 
 /** 运维动作的显示名与记录类型保持一致。 */
 export function recoveryAction(view: EventView): 'redeliver' | 'replay' | 'redecode' {
@@ -118,9 +144,8 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.clear': 'Clear filters',
   'distributedEvents.noResults': 'No matching events',
   'distributedEvents.onlyAnomalies': 'Only anomalies',
-  'distributedEvents.chooseState':
-    'Choose dead letters, failed/processed inbox or pending rejections first.',
   'distributedEvents.retry': 'Retry',
+  'distributedEvents.loadFailed': "Couldn't load the list",
   'distributedEvents.loading': 'Loading events',
   'distributedEvents.emptyHelp':
     'Change the filters or send a test event to inspect the delivery path.',
@@ -148,6 +173,7 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.payload': 'Event payload',
   'distributedEvents.showPayload': 'Show payload',
   'distributedEvents.copyPayload': 'Copy payload',
+  'distributedEvents.copied': 'Copied',
   'distributedEvents.replayWarning':
     'This will execute the handler again, including any external effects. Confirm that repeating the business operation is appropriate.',
   'distributedEvents.testSent': 'Test event sent: {{id}}',
@@ -274,5 +300,28 @@ export const ENGLISH: Record<string, string> = {
   'distributedEvents.confirmation.result.redecode':
     'Re-decoded {{count}} · Handed off {{deferred}} · Skipped {{skipped}}',
   'distributedEvents.confirmation.result.discard': 'Discarded {{count}} · Skipped {{skipped}}',
+  'distributedEvents.state.pendingSend': 'Pending send',
+  'distributedEvents.field.timeRange': 'Time range',
+  'distributedEvents.transport': 'Transport',
+  'distributedEvents.clearTimeRange': 'Clear time range',
+  'distributedEvents.selectedCount': '{{count}} selected',
+  'distributedEvents.clearSelection': 'Clear selection',
+  'distributedEvents.selectDisabled.outbox': 'Only dead letters can be redelivered',
+  'distributedEvents.selectDisabled.inbox': 'Only failed or processed records can be replayed',
+  'distributedEvents.selectDisabled.rejections':
+    'Only unresolved rejections can be re-decoded or discarded',
+  'distributedEvents.moreActions': 'More actions',
+  'distributedEvents.copyRecordId': 'Copy record ID',
+  'distributedEvents.recordId': 'Record {{id}}',
+  'distributedEvents.relatedRecords': 'Related records',
+  'distributedEvents.viewRecords': 'View',
+  'distributedEvents.nextStep.redeliver':
+    'Check transport connectivity or the failure cause, then redeliver. The event ID is preserved and consumers deduplicate by ID.',
+  'distributedEvents.nextStep.replay':
+    'Fix the handler failure, then replay. Replay executes the handler again, including any external effects.',
+  'distributedEvents.nextStep.redecode':
+    'Check the sender format or receiver configuration, then re-decode. Discard it once it cannot be recovered.',
+  'distributedEvents.nextStep.redecodePending':
+    'Handed off for re-decoding and waiting for the receiver. Discard it if no longer needed.',
 };
 //#endif

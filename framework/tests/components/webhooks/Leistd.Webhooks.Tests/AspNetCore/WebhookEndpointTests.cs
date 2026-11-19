@@ -7,6 +7,7 @@ using System.Text.Json;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.Webhooks.AspNetCore.Endpoints;
 using Leistd.Webhooks.Delivery;
+using Leistd.Webhooks.Dtos;
 using Leistd.Webhooks.Errors;
 using Leistd.Webhooks.Management;
 using Leistd.Webhooks.Stores;
@@ -209,6 +210,8 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
     [InlineData("POST", "subscriptions", """{"name":"a","url":"https://r.example","eventTypes":["order.paid"],"headers":{"webhook-id":"x"}}""", "headers")]
     [InlineData("GET", "deliveries?status=Failed", null, "status")]
     [InlineData("GET", "subscriptions?limit=0", null, "limit")]
+    [InlineData("GET", "deliveries?startTime=2026-11-19T00:00:00", null, "startTime")]
+    [InlineData("GET", "deliveries?startTime=2026-11-19T02:00:00Z&endTime=2026-11-19T01:00:00Z", null, "startTime")]
     public async Task Invalid_input_is_400_with_the_field(string method, string route, string? body, string field)
     {
         var response = await SendAsync(method, route, "manage", body);
@@ -217,6 +220,28 @@ public sealed class WebhookEndpointTests : IAsyncLifetime
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.False(document.RootElement.TryGetProperty("code", out _));
         Assert.Contains(field, document.RootElement.GetProperty("errors").EnumerateArray().Select(x => x.GetProperty("field").GetString()));
+    }
+
+    /// <summary>投递列表的时间参数接受带 Z 或显式偏移的时刻，绑定后换算为 UTC 再筛选（宿主时钟起点 2026-11-03T00:00Z）。</summary>
+    [Theory]
+    [InlineData("startTime=2026-11-03T00:00:00Z&endTime=2026-11-03T00:00:00Z", 1)]
+    [InlineData("startTime=2026-11-03T08:00:00%2B08:00", 1)]
+    [InlineData("startTime=2026-11-03T08:00:01%2B08:00", 0)]
+    public async Task Delivery_time_range_accepts_explicit_zones_and_filters_in_utc(string query, int expected)
+    {
+        await _backend.ManageAsync(null, service => service.CreateSubscriptionAsync(new CreateWebhookSubscriptionInputDto
+        {
+            Name = "receiver",
+            Url = "https://receiver.example/hook",
+            EventTypes = [WebhookTestHost.OrderPaid]
+        }));
+        await _backend.PublishAsync(null);
+
+        var response = await SendAsync("GET", "deliveries?" + query, "read");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expected, document.RootElement.GetProperty("totalCount").GetInt32());
     }
 
     /// <summary>与前端约定：<c>retryFailed=true</c> 走查询串，失败投递按手动重发排期。</summary>

@@ -20,8 +20,8 @@
   "clear": "Clear filters",
   "noResults": "No matching events",
   "onlyAnomalies": "Only anomalies",
-  "chooseState": "Choose dead letters, failed/processed inbox or pending rejections first.",
   "retry": "Retry",
+  "loadFailed": "Couldn't load the list",
   "loading": "Loading events",
   "emptyHelp": "Change the filters or send a test event to inspect the delivery path.",
   "selectPage": "Select recoverable records on this page",
@@ -47,6 +47,7 @@
   "payload": "Event payload",
   "showPayload": "Show payload",
   "copyPayload": "Copy payload",
+  "copied": "Copied",
   "replayWarning": "This will execute the handler again, including any external effects. Confirm that repeating the business operation is appropriate.",
   "testSent": "Test event sent: {{id}}",
   "view": {
@@ -64,7 +65,8 @@
     "retrying": "Retrying",
     "redecoded": "Re-decoded",
     "discarded": "Discarded",
-    "redecodePending": "Awaiting re-decode"
+    "redecodePending": "Awaiting re-decode",
+    "pendingSend": "Pending send"
   },
   "health": {
     "healthy": "Healthy",
@@ -132,7 +134,8 @@
     "pendingInbox": "Pending processing",
     "deadLettered": "Dead letters",
     "failedInbox": "Processing failed",
-    "direction": "Direction"
+    "direction": "Direction",
+    "timeRange": "Time range"
   },
   "cancel": "Cancel",
   "reason": {
@@ -195,5 +198,25 @@
     }
   },
   "transportChanged": "Status changed",
-  "transportReported": "Last reported"
+  "transportReported": "Last reported",
+  "transport": "Transport",
+  "clearTimeRange": "Clear time range",
+  "selectedCount": "{{count}} selected",
+  "clearSelection": "Clear selection",
+  "selectDisabled": {
+    "outbox": "Only dead letters can be redelivered",
+    "inbox": "Only failed or processed records can be replayed",
+    "rejections": "Only unresolved rejections can be re-decoded or discarded"
+  },
+  "moreActions": "More actions",
+  "copyRecordId": "Copy record ID",
+  "recordId": "Record {{id}}",
+  "relatedRecords": "Related records",
+  "viewRecords": "View",
+  "nextStep": {
+    "redeliver": "Check transport connectivity or the failure cause, then redeliver. The event ID is preserved and consumers deduplicate by ID.",
+    "replay": "Fix the handler failure, then replay. Replay executes the handler again, including any external effects.",
+    "redecode": "Check the sender format or receiver configuration, then re-decode. Discard it once it cannot be recovered.",
+    "redecodePending": "Handed off for re-decoding and waiting for the receiver. Discard it if no longer needed."
+  }
 }

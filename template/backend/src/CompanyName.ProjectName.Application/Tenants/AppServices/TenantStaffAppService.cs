@@ -50,7 +50,7 @@ public sealed class TenantStaffAppService(
             var roles = await roleRepository.GetListAsync(cancellationToken: cancellationToken);
             return members.Join(homes, m => m.HomeUserId, h => h.Id, (member, home) => new TenantStaffOutputDto
             {
-                HomeUserId = home.Id, MemberId = member.Id, Username = home.Username, DisplayName = home.DisplayName,
+                HomeUserId = home.Id, MemberId = member.Id, Username = home.Username, LinkedUsername = member.Username, DisplayName = home.DisplayName,
                 IsActive = member.IsActive, CreationTime = accesses.Single(a => a.HomeUserId == home.Id).CreationTime,
                 Roles = roles.Where(r => member.IsInRole(r.Id)).Select(RoleOutput).ToList()
             }).OrderBy(s => s.Username).ToList();

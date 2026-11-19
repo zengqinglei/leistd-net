@@ -23,6 +23,7 @@ import {
   expectTouchTarget,
   setCoarsePointer,
 } from '../../../../shared/utils/coarse-pointer.testing';
+import { dateRangeToQuery } from '../../../../shared/utils/date-range-query';
 import {
   WebhookDeliveryOutputDto,
   WebhookStatisticsOutputDto,
@@ -301,19 +302,326 @@ describe('Webhooks page', () => {
     expect(vi.mocked(service.getStatistics).mock.calls.at(-1)?.[0]?.subscriptionId).toBe('sub-1');
   });
 
-  it('opens the failed deliveries from the failed card', async () => {
-    await setup(manage);
-    const statistics = fixture.debugElement.query(By.directive(WebhookStatistics))
+  function statisticsPanel(): WebhookStatistics {
+    return fixture.debugElement.query(By.directive(WebhookStatistics))
       .componentInstance as WebhookStatistics;
+  }
 
-    statistics.showFailed.emit();
+  /** 统计响应换一组 UTC 边界，其余沿用默认数据。 */
+  function statisticsFor(start: string, end: string): WebhookStatisticsOutputDto {
+    return { ...STATISTICS, range: { ...STATISTICS.range, start, end } };
+  }
+
+  // 统计的 UTC 边界直接带进列表的时间范围，失败数与列表对得上
+  it('opens the failed deliveries of the statistics range from the failed card', async () => {
+    await setup(manage);
+
+    statisticsPanel().showFailed.emit();
     await fixture.whenStable();
 
     expect(router.parseUrl(router.url).queryParams).toEqual({
       view: 'deliveries',
       status: 'failed',
+      startTime: STATISTICS.range.start,
+      endTime: STATISTICS.range.end,
     });
-    expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]?.status).toBe('failed');
+    expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]).toMatchObject({
+      status: 'failed',
+      startTime: STATISTICS.range.start,
+      endTime: STATISTICS.range.end,
+    });
+  });
+
+  it('carries a range that ends at the statistics query time when it includes today', async () => {
+    await setup(manage);
+    // 含今天：服务端把结束截到统计查询时刻（最多 7 位小数），不是当天结束；列表要原样带上，不截成毫秒
+    const today = statisticsFor('2026-11-07T00:00:00.000Z', '2026-11-07T09:41:27.5123456Z');
+    service.getStatistics.mockReturnValue(of(today));
+    component.setPreset('today');
+    await fixture.whenStable();
+
+    statisticsPanel().showFailed.emit();
+    await fixture.whenStable();
+
+    const url = router.parseUrl(router.url).queryParams;
+    expect(url['range']).toBe('today');
+    expect(url['startTime']).toBe('2026-11-07T00:00:00.000Z');
+    expect(url['endTime']).toBe('2026-11-07T09:41:27.5123456Z');
+    expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]).toMatchObject({
+      startTime: '2026-11-07T00:00:00.000Z',
+      endTime: '2026-11-07T09:41:27.5123456Z',
+    });
+  });
+
+  it('keeps the subscription and its statistics range when opening failed deliveries', async () => {
+    await setup(manage);
+    const scoped = statisticsFor('2026-11-01T00:00:00.000Z', '2026-11-07T08:00:00.000Z');
+    service.getStatistics.mockReturnValue(of(scoped));
+    await router.navigate(['/platform/webhooks'], {
+      queryParams: { view: 'deliveries', subscriptionId: 'sub-1' },
+    });
+    await fixture.whenStable();
+    expect(vi.mocked(service.getStatistics).mock.calls.at(-1)?.[0]?.subscriptionId).toBe('sub-1');
+
+    statisticsPanel().showFailed.emit();
+    await fixture.whenStable();
+
+    expect(router.parseUrl(router.url).queryParams).toEqual({
+      view: 'deliveries',
+      status: 'failed',
+      subscriptionId: 'sub-1',
+      startTime: scoped.range.start,
+      endTime: scoped.range.end,
+    });
+    expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]).toMatchObject({
+      subscriptionId: 'sub-1',
+      status: 'failed',
+      startTime: scoped.range.start,
+      endTime: scoped.range.end,
+    });
+  });
+
+  // 订阅 A → B，B 的统计未返回时卡片仍是 A 的数据：跳转带 A 的区间与 A 的订阅，摘要也仍写 A
+  it('opens the failed deliveries of the subscription whose statistics are still shown', async () => {
+    await setup(manage);
+    vi.mocked(service.getSubscription).mockImplementation((id: string) => of(subscription(id)));
+    const statisticsOfA = statisticsFor('2026-11-01T00:00:00.000Z', '2026-11-07T06:00:00.000Z');
+    service.getStatistics.mockReturnValue(of(statisticsOfA));
+    await router.navigate(['/platform/webhooks'], {
+      queryParams: { view: 'deliveries', subscriptionId: 'sub-A' },
+    });
+    await settle();
+    expect(statisticsPanel().subscriptionName()).toBe('Name sub-A');
+
+    service.getStatistics.mockReturnValue(new Subject<WebhookStatisticsOutputDto>());
+    component.onFilterChange('subscriptionId', 'sub-B');
+    await settle();
+    expect(vi.mocked(service.getStatistics).mock.calls.at(-1)?.[0]?.subscriptionId).toBe('sub-B');
+    expect(component.statisticsLoading()).toBe(true);
+    expect(component.selectedSubscriptionName()).toBe('Name sub-B');
+    expect(statisticsPanel().subscriptionName()).toBe('Name sub-A');
+
+    statisticsPanel().showFailed.emit();
+    await settle();
+
+    expect(router.parseUrl(router.url).queryParams).toEqual({
+      view: 'deliveries',
+      status: 'failed',
+      subscriptionId: 'sub-A',
+      startTime: statisticsOfA.range.start,
+      endTime: statisticsOfA.range.end,
+    });
+  });
+
+  it('uses the range of the statistics still on screen while they reload', async () => {
+    await setup(manage);
+    // 新区间的统计还没返回：卡片仍是旧数据，跳转跟着旧数据的区间
+    service.getStatistics.mockReturnValue(new Subject<WebhookStatisticsOutputDto>());
+    component.setPreset('30d');
+    await fixture.whenStable();
+    expect(component.statisticsLoading()).toBe(true);
+
+    statisticsPanel().showFailed.emit();
+    await fixture.whenStable();
+
+    const url = router.parseUrl(router.url).queryParams;
+    expect(url['startTime']).toBe(STATISTICS.range.start);
+    expect(url['endTime']).toBe(STATISTICS.range.end);
+    expect(url['range']).toBe('30d');
+  });
+
+  describe('time range and toolbar', () => {
+    const root = () => fixture.nativeElement as HTMLElement;
+    const actions = () =>
+      root().querySelector<HTMLElement>('[data-testid="webhook-toolbar-actions"]')!;
+    const refresh = () =>
+      root().querySelector<HTMLButtonElement>('[data-testid="webhook-refresh"]')!;
+    const queryParam = (name: string) => router.parseUrl(router.url).queryParamMap.get(name);
+    const lastDeliveriesQuery = () => vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0];
+
+    async function openView(queryParams: Record<string, string>): Promise<void> {
+      await router.navigate(['/platform/webhooks'], { queryParams });
+      await settle();
+    }
+
+    it('orders the delivery log actions as time range then refresh', async () => {
+      await setup(manage);
+      await openView({ view: 'deliveries' });
+
+      const children = [...actions().children].filter((child) => !child.matches('label'));
+      expect(children.map((child) => child.localName)).toEqual(['hlm-date-range-picker', 'button']);
+      expect(children[1]).toBe(refresh());
+      const label = actions().querySelector('label')!;
+      expect(label.classList).toContain('sr-only');
+      expect(label.htmlFor).toBe('webhook-delivery-date-range');
+      expect(actions().querySelector('#webhook-delivery-date-range')).not.toBeNull();
+    });
+
+    it('shows no time range on subscriptions and keeps creating last', async () => {
+      await setup(manage);
+
+      expect(actions().querySelector('hlm-date-range-picker')).toBeNull();
+      const buttons = [...actions().querySelectorAll('button')];
+      expect(buttons[0]).toBe(refresh());
+      expect(buttons.at(-1)!.querySelector('ng-icon[name="lucidePlus"]')).not.toBeNull();
+    });
+
+    it('keeps the secondary refresh enabled and swaps its icon for a spinner while loading', async () => {
+      await setup(manage);
+      expect(refresh().getAttribute('variant')).toBe('secondary');
+      service.getSubscriptions.mockReturnValue(new Subject());
+
+      component.reload();
+      await settle();
+
+      expect(component.loading()).toBe(true);
+      expect(refresh().disabled).toBe(false);
+      expect(refresh().querySelector('hlm-spinner')).not.toBeNull();
+      expect(refresh().querySelector('ng-icon[name="lucideRefreshCw"]')).toBeNull();
+    });
+
+    it('writes the picked days as UTC bounds, resets the page and refetches the list', async () => {
+      await setup(manage);
+      await openView({ view: 'deliveries', page: '3' });
+      const calls = vi.mocked(service.getDeliveries).mock.calls.length;
+      const picked: [Date, Date] = [new Date(2026, 10, 1), new Date(2026, 10, 7)];
+      const bounds = dateRangeToQuery(picked, component.timeZone());
+
+      component.onRangeChange(picked);
+      await settle();
+
+      expect(queryParam('startTime')).toBe(bounds.startTime);
+      expect(queryParam('endTime')).toBe(bounds.endTime);
+      expect(queryParam('page')).toBe('1');
+      // 去重键含时间参数：只改时间范围也会重查列表
+      expect(vi.mocked(service.getDeliveries).mock.calls.length).toBe(calls + 1);
+      expect(lastDeliveriesQuery()).toMatchObject({
+        offset: 0,
+        startTime: bounds.startTime,
+        endTime: bounds.endTime,
+      });
+      expect(component.hasActiveFilters()).toBe(true);
+      const [from, to] = component.selectedRange()!;
+      expect([from.getFullYear(), from.getMonth(), from.getDate()]).toEqual([2026, 10, 1]);
+      expect([to.getFullYear(), to.getMonth(), to.getDate()]).toEqual([2026, 10, 7]);
+
+      component.onRangeChange(null);
+      await settle();
+      expect(queryParam('startTime')).toBeNull();
+      expect(queryParam('endTime')).toBeNull();
+      expect(lastDeliveriesQuery()?.startTime).toBeUndefined();
+    });
+
+    it('treats a one-sided, malformed or reversed range in the URL as no filter', async () => {
+      await setup(manage);
+      for (const range of [
+        { startTime: '2026-11-01T00:00:00.000Z' } as Record<string, string>,
+        { startTime: 'not-a-date', endTime: '2026-11-07T00:00:00.000Z' },
+        { startTime: '2026-11-08T00:00:00.000Z', endTime: '2026-11-01T00:00:00.000Z' },
+        // JS 能解析、接口会拒绝：不带时区
+        { startTime: '2026-11-01', endTime: '2026-11-07' },
+        { startTime: '2026-11-01T00:00:00', endTime: '2026-11-07T23:59:59' },
+      ]) {
+        await openView({ view: 'deliveries', ...range });
+
+        expect(component.selectedRange(), JSON.stringify(range)).toBeUndefined();
+        expect(
+          root().querySelector<HTMLInputElement>('#webhook-delivery-date-range')!.value,
+          JSON.stringify(range),
+        ).toBe('');
+        expect(component.hasActiveFilters()).toBe(false);
+        expect(lastDeliveriesQuery()).toMatchObject({ startTime: undefined, endTime: undefined });
+      }
+    });
+
+    it('sends a range written with an explicit offset as UTC', async () => {
+      await setup(manage);
+      await openView({
+        view: 'deliveries',
+        startTime: '2026-11-01T08:00:00+08:00',
+        endTime: '2026-11-08T07:59:59.999+08:00',
+      });
+
+      expect(lastDeliveriesQuery()).toMatchObject({
+        startTime: '2026-11-01T00:00:00.000Z',
+        endTime: '2026-11-07T23:59:59.999Z',
+      });
+      expect(component.selectedRange()).toBeDefined();
+    });
+
+    it('clears the time range when switching views or jumping from a subscription', async () => {
+      await setup(manage);
+      const range = { startTime: '2026-11-01T00:00:00.000Z', endTime: '2026-11-07T23:59:59.999Z' };
+      await openView({ view: 'deliveries', ...range });
+
+      component.setView('subscriptions');
+      await settle();
+      expect(queryParam('startTime')).toBeNull();
+      expect(queryParam('endTime')).toBeNull();
+
+      await openView({ view: 'deliveries', ...range });
+      component.viewDeliveries('sub-1');
+      await settle();
+      expect(router.parseUrl(router.url).queryParams).toEqual({
+        view: 'deliveries',
+        subscriptionId: 'sub-1',
+      });
+      expect(lastDeliveriesQuery()?.startTime).toBeUndefined();
+    });
+  });
+
+  describe('status filter', () => {
+    const items = () =>
+      [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+          '[data-testid="webhook-status-filter"] button',
+        ),
+      ].map((button) => ({ value: button.getAttribute('value'), button }));
+    const status = () => router.parseUrl(router.url).queryParamMap.get('status');
+
+    it('toggles one delivery status and clears it on a second click', async () => {
+      await setup(manage);
+      await router.navigate(['/platform/webhooks'], {
+        queryParams: { view: 'deliveries', page: '2' },
+      });
+      await settle();
+      expect(items().map((item) => item.value)).toEqual(['succeeded', 'pending', 'failed']);
+
+      items()
+        .find((item) => item.value === 'failed')!
+        .button.click();
+      await settle();
+      expect(status()).toBe('failed');
+      expect(router.parseUrl(router.url).queryParamMap.get('page')).toBe('1');
+      expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]?.status).toBe('failed');
+      expect(
+        items()
+          .find((item) => item.value === 'failed')!
+          .button.getAttribute('data-state'),
+      ).toBe('on');
+
+      items()
+        .find((item) => item.value === 'failed')!
+        .button.click();
+      await settle();
+      expect(status()).toBeNull();
+      expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]?.status).toBeUndefined();
+    });
+
+    it('toggles the subscription status between enabled, disabled and all', async () => {
+      await setup(manage);
+      expect(items().map((item) => item.value)).toEqual(['enabled', 'disabled']);
+
+      items()[1].button.click();
+      await settle();
+      expect(status()).toBe('disabled');
+      expect(vi.mocked(service.getSubscriptions).mock.calls.at(-1)?.[0]?.isEnabled).toBe(false);
+
+      items()[1].button.click();
+      await settle();
+      expect(status()).toBeNull();
+      expect(vi.mocked(service.getSubscriptions).mock.calls.at(-1)?.[0]?.isEnabled).toBeUndefined();
+    });
   });
 
   it('loads the delivery details from the URL without refetching the list', async () => {

@@ -119,9 +119,9 @@ internal sealed class DistributedEventManagementService(IDistributedEventManagem
             case RecoverDistributedEventOutboxInputDto value: ValidateRecovery(value.Ids, value.Filter); break;
             case RecoverDistributedEventInboxInputDto value: ValidateRecovery(value.Ids, value.Filter); break;
             case RecoverDistributedEventRejectionInputDto value: ValidateRecovery(value.Ids, value.Filter); break;
-            case GetDistributedEventOutboxInputDto value: ValidateBefore(value.Before); break;
-            case GetDistributedEventInboxInputDto value: ValidateBefore(value.Before); break;
-            case GetDistributedEventRejectionsInputDto value: ValidateBefore(value.Before); break;
+            case GetDistributedEventOutboxInputDto value: ValidateTimes(value.Before, value.StartTime, value.EndTime); break;
+            case GetDistributedEventInboxInputDto value: ValidateTimes(value.Before, value.StartTime, value.EndTime); break;
+            case GetDistributedEventRejectionsInputDto value: ValidateTimes(value.Before, value.StartTime, value.EndTime); break;
         }
     }
 
@@ -135,18 +135,26 @@ internal sealed class DistributedEventManagementService(IDistributedEventManagem
         Validator.ValidateObject(filter, new ValidationContext(filter), validateAllProperties: true);
         if (filter is DistributedEventInboxFilterDto inbox && inbox.Status is not (DistributedEventInboxStatus.Failed or DistributedEventInboxStatus.Processed))
             throw new ValidationException(new ValidationResult("Status must be failed or processed.", ["Filter.Status"]), null, inbox.Status);
-        ValidateBefore(filter switch
+        switch (filter)
         {
-            DistributedEventOutboxFilterDto value => value.Before,
-            DistributedEventInboxFilterDto value => value.Before,
-            DistributedEventRejectionFilterDto value => value.Before,
-            _ => null
-        });
+            case DistributedEventOutboxFilterDto value: ValidateTimes(value.Before, value.StartTime, value.EndTime); break;
+            case DistributedEventInboxFilterDto value: ValidateTimes(value.Before, value.StartTime, value.EndTime); break;
+            case DistributedEventRejectionFilterDto value: ValidateTimes(value.Before, value.StartTime, value.EndTime); break;
+        }
     }
 
-    private static void ValidateBefore(DateTime? before)
+    private static void ValidateTimes(DateTime? before, DateTime? startTime, DateTime? endTime)
     {
-        if (before is { Kind: not DateTimeKind.Utc })
-            throw new ValidationException(new ValidationResult("Before must be UTC.", ["Before"]), null, before);
+        RequireUtc(before, "Before");
+        RequireUtc(startTime, "StartTime");
+        RequireUtc(endTime, "EndTime");
+        if (startTime > endTime)
+            throw new ValidationException(new ValidationResult("StartTime must not be later than EndTime.", ["StartTime", "EndTime"]), null, startTime);
+    }
+
+    private static void RequireUtc(DateTime? value, string member)
+    {
+        if (value is { Kind: not DateTimeKind.Utc })
+            throw new ValidationException(new ValidationResult($"{member} must be UTC.", [member]), null, value);
     }
 }

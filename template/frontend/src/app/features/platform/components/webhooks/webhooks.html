@@ -10,7 +10,7 @@
         [preset]="preset()"
         [loading]="statisticsLoading()"
         [loadFailed]="statisticsFailed()"
-        [subscriptionName]="selectedSubscriptionName()"
+        [subscriptionName]="statisticsSubscriptionName()"
         (presetChange)="setPreset($event)"
         (retry)="reloadStatistics()"
         (showFailed)="showFailedDeliveries()"
@@ -65,7 +65,25 @@
                 />
               </hlm-input-group>
 
+              <!-- 状态只有两三个值：单选分段快捷切换，再点一次取消即为全部；选中项是中性色（styles.css 分段样式） -->
               @if (view() === 'deliveries') {
+                <hlm-toggle-group
+                  type="single"
+                  [value]="selectedDeliveryStatus()"
+                  [attr.aria-label]="t('webhooks.filter.status')"
+                  data-testid="webhook-status-filter"
+                  (valueChange)="onFilterChange('status', $event)"
+                >
+                  <button hlmToggleGroupItem value="succeeded">
+                    {{ t('webhooks.deliveryStatus.succeeded') }}
+                  </button>
+                  <button hlmToggleGroupItem value="pending">
+                    {{ t('webhooks.deliveryStatus.pending') }}
+                  </button>
+                  <button hlmToggleGroupItem value="failed">
+                    {{ t('webhooks.deliveryStatus.failed') }}
+                  </button>
+                </hlm-toggle-group>
                 <hlm-combobox
                   class="min-w-0 max-w-full"
                   data-testid="subscription-filter"
@@ -140,25 +158,21 @@
                     }
                   </hlm-combobox-content>
                 </hlm-combobox>
-                <app-faceted-filter
-                  [label]="t('webhooks.filter.status')"
-                  [options]="deliveryStatusOptions()"
-                  [value]="selectedDeliveryStatus()"
-                  [searchPlaceholder]="t('webhooks.filter.status')"
-                  [clearLabel]="t('common.clearFilter')"
-                  [emptyLabel]="t('common.noResults')"
-                  (valueChange)="onFilterChange('status', $event)"
-                />
               } @else {
-                <app-faceted-filter
-                  [label]="t('webhooks.filter.status')"
-                  [options]="subscriptionStatusOptions()"
+                <hlm-toggle-group
+                  type="single"
                   [value]="selectedSubscriptionStatus()"
-                  [searchPlaceholder]="t('webhooks.filter.status')"
-                  [clearLabel]="t('common.clearFilter')"
-                  [emptyLabel]="t('common.noResults')"
+                  [attr.aria-label]="t('webhooks.filter.status')"
+                  data-testid="webhook-status-filter"
                   (valueChange)="onFilterChange('status', $event)"
-                />
+                >
+                  <button hlmToggleGroupItem value="enabled">
+                    {{ t('webhooks.subscriptionStatus.enabled') }}
+                  </button>
+                  <button hlmToggleGroupItem value="disabled">
+                    {{ t('webhooks.subscriptionStatus.disabled') }}
+                  </button>
+                </hlm-toggle-group>
               }
               <app-faceted-filter
                 [label]="t('webhooks.filter.eventType')"
@@ -171,11 +185,40 @@
               />
             </div>
 
-            <div class="ml-auto flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+            <!-- 右组依次是时间范围、刷新、本视图的主操作；订阅是配置清单，不按时间筛选 -->
+            <div
+              class="ml-auto flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto"
+              data-testid="webhook-toolbar-actions"
+            >
+              @if (view() === 'deliveries') {
+                <label class="sr-only" for="webhook-delivery-date-range">{{
+                  t('webhooks.filter.dateRange')
+                }}</label>
+                <hlm-date-range-picker
+                  class="w-full sm:w-auto"
+                  align="end"
+                  [date]="selectedRange()"
+                  [formatDates]="formatRange()"
+                  (dateChange)="onRangeChange($event)"
+                >
+                  <!-- 宽度沿用操作记录按最长写法实测的取值（md 以下输入框为 16px 字号，故更宽） -->
+                  <hlm-date-range-input
+                    class="w-full sm:w-[20rem] md:w-[18rem]"
+                    inputId="webhook-delivery-date-range"
+                    showClear
+                    [placeholder]="t('webhooks.filter.dateRange')"
+                    [clearAriaLabel]="t('common.clearFilter')"
+                    [calendarAriaLabel]="t('webhooks.filter.dateRange')"
+                    [parseDate]="parseRangeInput()"
+                    [formatInputDates]="formatRange()"
+                  />
+                </hlm-date-range-picker>
+              }
               <button
                 hlmBtn
                 variant="secondary"
                 class="flex-1 sm:flex-none"
+                data-testid="webhook-refresh"
                 (click)="reload()"
                 [hlmTooltip]="t('common.refresh')"
               >

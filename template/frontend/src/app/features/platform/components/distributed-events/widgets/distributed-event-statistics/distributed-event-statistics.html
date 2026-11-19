@@ -4,10 +4,11 @@
 <ng-container>
 <!--#endif-->
   @if (status(); as status) {
+    <!-- 按内容区宽度切列（同 Webhook、仪表盘）：约 54rem 起一行放下全部卡片，再窄时两两一行 -->
     <div
       class="grid grid-cols-2 gap-4"
-      [class.xl:grid-cols-4]="isHost()"
-      [class.xl:grid-cols-3]="!isHost()"
+      [class]="isHost() ? '@[54rem]:grid-cols-4' : '@[54rem]:grid-cols-3'"
+      data-testid="event-statistics-grid"
     >
       <app-stat-panel [panelTitle]="t('distributedEvents.pendingOutbox')">
         <button
