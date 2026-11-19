@@ -1,6 +1,6 @@
 # 分布式事件、Webhook 与租户授予访问的列表体验
 
-状态：进行中 · 风险档：高 · 关联：方案对比页 [design.html](2026-11-19-platform-ops-list-ux/design.html)
+状态：已完成 · 风险档：高 · 关联：方案对比页 [design.html](2026-11-19-platform-ops-list-ux/design.html)
 
 ## 1. 需求
 
@@ -140,3 +140,55 @@
 7. **形态验证**（AC24）：在 worker-01 上经 remote-project-runner，用同一候选 feed 还原，生成代表形态并跑 lint、生产构建、受影响前端 spec、后端单元测试项目。形态至少包括：`identity-workspace`（两页与平台人员都在，含 `TenantStaffTests` 的 PostgreSQL 集成测试和现有 Workspace E2E）、关闭本地化、关闭 TenantWorkspace，以及不含 Webhook、分布式事件或操作记录的裁剪形态。代表场景由场景选择器给出，交给模板矩阵 `-Scenarios … -GenerateOnly` 生成后再构建测试；`test-template-generation.py --shard` 按全形态编号分片，完整形态证明交给 CI。新增文件或条件时，核对模板矩阵里登记的功能裁剪与资产断言。
 8. **界面验收**（AC10、AC25）：生成项目配 Mock，用有头浏览器看 1440 与 390 宽、浅色与暗色，覆盖列折叠、菜单切换、右对齐日历浮层，以及刷新时保留原数据、失败可重试。
 9. 送 Codex 做代码审查，明确"通过"后开 PR，CI 全绿后合并；填写 §4。
+
+## 4. 结果
+
+### 实际交付
+
+一个 PR（目标 develop），提交按交付面拆分：规格、框架时间范围、模板实现，以及三轮代码审查的修复。
+
+- **框架**：`Leistd.EventBus` 三个列表输入与三个恢复筛选、`Leistd.Webhooks` 投递列表输入加 `StartTime`/`EndTime`（UTC，两端闭区间）。校验在两个管理服务的现有入口各做一次；EF 查询与 `DistributedEventRecovery.cs` 按创建/接收时间比较，与 `Before` 同时生效；端点绑定查询参数。随包文档 `event-bus.md`、`webhooks.md` 写明参数与时间写法（GET 接受 `Z` 与显式偏移，恢复 JSON 只接受 `Z`）。
+- **模板后端**：`TenantStaffOutputDto.LinkedUsername` 取关联账号在库里的真实用户名。
+- **模板前端**：
+  - 共享 `shared/utils/date-range-query.ts`：严格解析带时区的时刻（拒绝缺时区与不存在的日历日），换算 UTC 时保留全部小数位，按补齐 7 位的键比较；URL 回填、手输解析、格式化与日期换算三处共用，操作记录改为调用它。
+  - 分布式事件、Webhook：按方案 A 重排；工具栏右组为时间范围 → 刷新 → 主操作；状态快捷切换；每行复选框（不可选禁用并说明原因）；选择条按动作计数；徽章带状态点；记录/投递 Sheet 按 AC15 调整；窄屏行操作收进菜单。Webhook 失败卡带统计响应的实际边界与订阅。分布式事件按条件恢复以最后一次成功加载的筛选与截止为准，加载中不可用；同条件刷新失败保留旧行，条件变化后失败清空。复制载荷与复制记录 ID 有反馈（用户走查时提出）。
+  - 平台人员：抽屉加关联账号列、"已授予 N 人"、窄屏菜单与空态；授予/修改对话框按 D1 实现（Combobox 选人、账号预览、角色代码名、Signal Forms 提交时校验、修改时显示对象）。
+  - Mock：`_mock/utils/time-range.ts` 统一按端点绑定规则解析时间；分布式事件、Webhook、Workspace 三个 Mock 同步。
+- **顺带修复**：租户工作区侧栏"仪表盘"在其他平台页面保持选中（develop 既有缺陷，用户走查时提出）。落地页精确匹配只认无前缀路由，`/w/<名称>/platform` 退回子集匹配；改为去掉工作区前缀再判断。
+
+### 与计划的偏差
+
+- AC5 的"缺一端、坏格式、颠倒"之外，还把"缺时区、不存在的日历日"也当作未筛选；保留小数位与按 7 位比较来自代码审查。
+- AC13 补充：列表请求进行中、或上次加载失败时，"按当前筛选"不可用（代码审查第 3、4 轮）。
+- 计划里的"更多筛选"、已选条件 chip、新行高亮按非目标不实现；design.html 以本规格为准。
+- worker-01 上用 `-SkipRuntime` 跑矩阵：执行器的 Docker 守卫拦截矩阵运行时冒烟阶段的 `docker rm -fv`，容器冒烟留给 CI。
+
+### 验收记录
+
+- **审查**：Codex 方案审查三轮后通过；代码审查四轮后通过（`41093f50`），之后只有一个 Mock 内部重构和一个 e2e 节奏修复。
+- **框架定向测试**：`Leistd.EventBus.Tests`（时间范围、端点、管理用例）与 `Leistd.Webhooks.Tests`（端点、投递管理）全过；端点用例覆盖 GET 的 `Z`/偏移正例（含按 UTC 换算后的筛选结果）、缺时区与颠倒 400，以及恢复 JSON 的偏移/缺时区/颠倒 400。受影响 6 个包隔离消费通过。
+- **worker-01 矩阵**（`-SkipPack -SkipRuntime`，全部通过）：
+
+| 场景 | 后端单元 / 集成 |
+| --- | --- |
+| identity | 317 / 697 |
+| standalone-external-login | 281 / 670 |
+| identity-all-features | 339 / 823 |
+| resource-capabilities-03 | 175 / 185 |
+| webhooks | 323 / 721 |
+| distributed-events | 323 / 728 |
+| identity-workspace（含 PostgreSQL 集成测试与 16 条 e2e） | 339 / 854 |
+| identity-capabilities-05（关闭本地化，含分布式事件） | 297 / 636 |
+| resource-capabilities-09（关闭本地化，含 Webhook） | 175 / 240 |
+
+- **identity-workspace e2e**：首轮 `workspaces.e2e.ts` 的授予用例在对话框刚打开时提交，被遮罩截获直至超时；改为等首个字段获得焦点再操作，并断言必填提示。用 Playwright 在 Mock 上以 1280×720 复现与验证。
+- **界面**：生成项目配 Mock，有头浏览器看 1440 与 390、浅色与暗色；390 宽无横向溢出，投递日志行菜单与禁用原因、复制载荷反馈、授予对话框均按设计。
+
+### 遗留项
+
+无。
+
+### 上收的常驻文档
+
+- `framework/docs/components/event-bus.md`、`framework/docs/components/webhooks.md`：列表与恢复的时间参数及写法。
+
