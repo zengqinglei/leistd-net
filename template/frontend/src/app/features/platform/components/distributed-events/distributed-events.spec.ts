@@ -424,6 +424,33 @@ describe('DistributedEvents page', () => {
     expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).toBeNull();
   });
 
+  it('drops rows from the previous filter when loading a changed filter fails', async () => {
+    await setup(true, null, { status: 'deadLettered' });
+    expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();
+    expect(component.totalCount()).toBe(1200);
+    const notice = vi.spyOn(toast, 'error').mockReturnValue('load-failed');
+    try {
+      service.getOutboxList.mockReturnValueOnce(throwError(() => new Error('offline')));
+      component.onRangeChange([new Date(2026, 0, 1), new Date(2026, 0, 7)]);
+      await settle();
+      expect(component.timeRange()).toEqual({ startTime: START, endTime: END });
+      // 旧条件下的行与总数不留下，进入可重试的空态
+      expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).toBeNull();
+      expect(component.totalCount()).toBe(0);
+      expect(host().querySelector('[data-testid=event-load-error]')).not.toBeNull();
+      expect(notice).not.toHaveBeenCalled();
+      // 选择条里"按当前筛选重投"不可用，直接调用也不会拿旧总数开确认框
+      const filterButton = Array.from(
+        host().querySelectorAll('[data-testid=event-selection-bar] button'),
+      ).at(-1) as HTMLButtonElement;
+      expect(filterButton.disabled).toBe(true);
+      await component.recover('filter');
+      expect(confirm.open).not.toHaveBeenCalled();
+    } finally {
+      notice.mockRestore();
+    }
+  });
+
   it('keeps the loaded rows and shows a toast when a refresh fails, then recovers on retry', async () => {
     await setup(true);
     expect(host().querySelector(`[data-record-id="${OUTBOX.id}"]`)).not.toBeNull();

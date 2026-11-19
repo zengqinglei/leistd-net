@@ -101,6 +101,18 @@ import { resolveDisplayTimeZone } from '../../../../shared/utils/zoned-time';
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
 
+/** 影响列表结果的筛选参数，与视图、分页、时间范围一起组成加载条件。 */
+const LIST_FILTER_KEYS = [
+  'status',
+  'eventName',
+  'keyword',
+  'errorCode',
+  'consumer',
+  'reason',
+  'direction',
+  'anomalies',
+];
+
 @Component({
   selector: 'app-distributed-events',
   imports: [
@@ -274,6 +286,8 @@ export class DistributedEvents {
       //#endif
     });
     let renderedView = this.view();
+    // 上次成功加载的列表条件；刷新失败时只有条件未变才保留旧行
+    let loadedKey: string | null = null;
     const query$ = this.route.queryParams;
     combineLatest([query$, this.refresh.pipe(startWith(undefined))])
       .pipe(
@@ -284,6 +298,7 @@ export class DistributedEvents {
           const view = this.view();
           if (view !== renderedView) this.rows.set([]);
           renderedView = view;
+          const key = this.listKey(query);
           const input = this.listInput(query);
           const list$: Observable<PagedResultDto<EventRecord>> =
             this.view() === 'catalog'
@@ -301,6 +316,7 @@ export class DistributedEvents {
             list: list$,
           }).pipe(
             tap((result) => {
+              loadedKey = key;
               this.now.set(Date.now());
               this.status.set(result.status);
               this.catalog.set(result.catalog);
@@ -340,10 +356,13 @@ export class DistributedEvents {
               }
             }),
             catchError((error: unknown) => {
-              // 已有内容时刷新失败保留表格并提示；首次加载（含切换视图）失败才换成可重试的空态
-              if (this.rows().length) {
+              // 同条件刷新失败保留表格并提示；条件变了（或首次加载）失败则清空并进入可重试的空态，
+              // 免得旧条件下的行与总数被当成新条件的结果，按条件恢复拿旧总数去确认新条件
+              if (this.rows().length && key === loadedKey) {
                 toast.error(applicationErrorMessage(error));
               } else {
+                loadedKey = null;
+                this.rows.set([]);
                 this.totalCount.set(0);
                 this.loadError.set(applicationErrorMessage(error));
               }
@@ -361,6 +380,17 @@ export class DistributedEvents {
     interval(60_000)
       .pipe(takeUntilDestroyed(this.owner))
       .subscribe(() => this.now.set(Date.now()));
+  }
+
+  /** 决定列表结果的条件；打开详情（record）不算。视图、分页与时间范围取解析后的值。 */
+  private listKey(query: Params): string {
+    return JSON.stringify([
+      this.view(),
+      this.page(),
+      this.pageSize(),
+      validTimeRange(query['startTime'], query['endTime']),
+      ...LIST_FILTER_KEYS.map((key) => query[key] ?? null),
+    ]);
   }
 
   listInput(query: Params = this.query()): Record<string, unknown> {
@@ -514,7 +544,8 @@ export class DistributedEvents {
     const ids = row ? [row.id] : this.selectedFor(discard);
     if (
       (mode !== 'filter' && !ids.length) ||
-      (mode === 'filter' && !(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()))
+      (mode === 'filter' &&
+        (!(discard ? this.bulkDiscardAllowed() : this.bulkAllowed()) || this.loadError()))
     )
       return;
     const action = discard

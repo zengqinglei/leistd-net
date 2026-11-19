@@ -334,8 +334,8 @@ describe('Webhooks page', () => {
 
   it('carries a range that ends at the statistics query time when it includes today', async () => {
     await setup(manage);
-    // 含今天：服务端把结束截到统计查询时刻，不是当天结束
-    const today = statisticsFor('2026-11-07T00:00:00.000Z', '2026-11-07T09:41:27.512Z');
+    // 含今天：服务端把结束截到统计查询时刻（最多 7 位小数），不是当天结束；列表要原样带上，不截成毫秒
+    const today = statisticsFor('2026-11-07T00:00:00.000Z', '2026-11-07T09:41:27.5123456Z');
     service.getStatistics.mockReturnValue(of(today));
     component.setPreset('today');
     await fixture.whenStable();
@@ -346,7 +346,11 @@ describe('Webhooks page', () => {
     const url = router.parseUrl(router.url).queryParams;
     expect(url['range']).toBe('today');
     expect(url['startTime']).toBe('2026-11-07T00:00:00.000Z');
-    expect(url['endTime']).toBe('2026-11-07T09:41:27.512Z');
+    expect(url['endTime']).toBe('2026-11-07T09:41:27.5123456Z');
+    expect(vi.mocked(service.getDeliveries).mock.calls.at(-1)?.[0]).toMatchObject({
+      startTime: '2026-11-07T00:00:00.000Z',
+      endTime: '2026-11-07T09:41:27.5123456Z',
+    });
   });
 
   it('keeps the subscription and its statistics range when opening failed deliveries', async () => {

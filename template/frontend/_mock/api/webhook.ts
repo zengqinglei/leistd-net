@@ -43,12 +43,16 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** 轮换后旧密钥继续签名的时长（`Leistd:Webhooks:SecretRotationOverlap` 默认值）。 */
 const ROTATION_OVERLAP_MS = 24 * 3_600_000;
 const SEVEN_DAYS_MS = 7 * 24 * 3_600_000;
-/** 查询参数里的时刻须带时区：`Z` 或显式偏移（后端换算成 UTC）；不带时区的后端得到非 UTC 时间，返回 400。 */
-
 function query(req: MockRequest, name: string): string | undefined {
   const raw = req.queryParams[name];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return value === undefined || value === null || value === '' ? undefined : String(value);
+}
+
+function rawQuery(req: MockRequest, name: string): string | undefined {
+  const raw = req.queryParams[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === undefined || value === null ? undefined : String(value);
 }
 
 function notFound(code: 'Webhook:SubscriptionNotFound' | 'Webhook:DeliveryNotFound') {
@@ -401,7 +405,8 @@ function sendTestEvent(req: MockRequest) {
 function getDeliveries(req: MockRequest) {
   requirePermission(PERMISSIONS.webhooks.default);
   const { from, to } = parseMockTimeRange(
-    { startTime: query(req, 'startTime'), endTime: query(req, 'endTime') },
+    // 时间取原始值：显式空串与后端一样按不合法处理，不能像其他参数那样当作没传
+    { startTime: rawQuery(req, 'startTime'), endTime: rawQuery(req, 'endTime') },
     'query',
   );
   const keyword = query(req, 'keyword')?.trim().toLowerCase();

@@ -7,24 +7,74 @@ export interface TimeRangeQuery {
   endTime: string | null;
 }
 
-/** 带 `Z` 或显式偏移的 ISO 时刻；后端拒绝不带时区的写法，这里一并视为不合法。 */
-const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{2}:\d{2})$/;
+const ZONED_INSTANT =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,7}))?)?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+/** 带时区的 ISO 时刻换算成 UTC 后的结果：`time` 是毫秒，`iso` 保留原有的全部小数位。 */
+export interface ZonedInstant {
+  time: number;
+  iso: string;
+}
 
 /**
- * 从 URL 查询参数取出合法的时间范围，并归一为 UTC（`toISOString`）：控件、列表请求与按条件恢复
- * 共用这一份结果。只有一端、不带时区、格式错误或起止颠倒时视为未筛选。
+ * 解析带 `Z` 或显式偏移的 ISO 时刻并换算成 UTC。不带时区、日历上不存在的日期（如 2 月 30 日）
+ * 或越界的时分秒返回 `null`，与后端绑定一致。小数秒原样保留，不截成毫秒：统计接口回显的边界
+ * 最多 7 位小数，截断会让列表漏掉边界上的记录。
+ */
+export function parseZonedInstant(value: string | null | undefined): ZonedInstant | null {
+  const match = value ? ZONED_INSTANT.exec(value) : null;
+  if (!match) {
+    return null;
+  }
+
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second = '0',
+    fraction = '',
+    zone,
+    sign,
+    offsetHours,
+    offsetMinutes,
+  ] = match;
+  const wall = Date.UTC(+year, +month - 1, +day, +hour, +minute, +second);
+  const check = new Date(wall);
+  if (
+    check.getUTCFullYear() !== +year ||
+    check.getUTCMonth() !== +month - 1 ||
+    check.getUTCDate() !== +day ||
+    check.getUTCHours() !== +hour ||
+    check.getUTCMinutes() !== +minute ||
+    check.getUTCSeconds() !== +second ||
+    (zone !== 'Z' && (+offsetHours > 14 || +offsetMinutes > 59))
+  ) {
+    return null;
+  }
+
+  const offset =
+    zone === 'Z' ? 0 : (sign === '+' ? 1 : -1) * (+offsetHours * 60 + +offsetMinutes) * 60_000;
+  const utc = wall - offset;
+  return {
+    time: utc + Number(fraction.padEnd(3, '0').slice(0, 3)),
+    iso: `${new Date(utc).toISOString().slice(0, 19)}.${fraction || '000'}Z`,
+  };
+}
+
+/**
+ * 从 URL 查询参数取出合法的时间范围，换算成 UTC（保留小数位）：控件、列表请求与按条件恢复
+ * 共用这一份结果。只有一端、不合法（见 {@link parseZonedInstant}）或起止颠倒时视为未筛选。
  */
 export function validTimeRange(
   start: string | null | undefined,
   end: string | null | undefined,
 ): { startTime: string; endTime: string } | null {
-  const parse = (value: string | null | undefined) =>
-    value && ZONED_INSTANT.test(value) ? Date.parse(value) : Number.NaN;
-  const from = parse(start);
-  const to = parse(end);
-  return Number.isFinite(from) && Number.isFinite(to) && from <= to
-    ? { startTime: new Date(from).toISOString(), endTime: new Date(to).toISOString() }
-    : null;
+  const from = parseZonedInstant(start);
+  const to = parseZonedInstant(end);
+  return from && to && from.time <= to.time ? { startTime: from.iso, endTime: to.iso } : null;
 }
 
 /** URL 里的 UTC 起止 → 日期区间控件的值（展示时区的日历日，浏览器本地 `Date`）。 */

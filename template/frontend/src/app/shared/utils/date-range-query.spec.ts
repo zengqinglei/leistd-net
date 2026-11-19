@@ -5,6 +5,7 @@ import {
   dateRangeFromQuery,
   dateRangeParser,
   dateRangeToQuery,
+  parseZonedInstant,
   validTimeRange,
 } from './date-range-query';
 
@@ -23,6 +24,18 @@ describe('date-range-query', () => {
     });
     expect(validTimeRange('not-a-date', '2026-11-19T15:59:59.999Z')).toBeNull();
     expect(validTimeRange('2026-11-20T00:00:00.000Z', '2026-11-19T00:00:00.000Z')).toBeNull();
+  });
+
+  it('rejects impossible calendar days and keeps sub-millisecond precision', () => {
+    expect(validTimeRange('2026-02-30T00:00:00Z', '2026-03-05T00:00:00Z')).toBeNull();
+    expect(validTimeRange('2026-11-19T24:00:00Z', '2026-11-20T01:00:00Z')).toBeNull();
+    expect(validTimeRange('2026-11-12T16:00:00Z', '2026-11-19T08:34:56.1234567Z')).toEqual({
+      startTime: '2026-11-12T16:00:00.000Z',
+      endTime: '2026-11-19T08:34:56.1234567Z',
+    });
+    expect(parseZonedInstant('2026-11-19T08:34:56.1234567+08:00')?.iso).toBe(
+      '2026-11-19T00:34:56.1234567Z',
+    );
   });
 
   it('turns calendar days into the whole days of the display time zone in UTC', () => {

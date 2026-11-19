@@ -16,14 +16,14 @@ function errorFields(action: () => unknown): string[] {
 }
 
 describe('mock time range', () => {
-  it('accepts Z or an explicit offset in query strings and treats empty values as omitted', () => {
+  it('accepts Z or an explicit offset in query strings and treats missing values as omitted', () => {
     expect(
       parseMockTimeRange(
         { startTime: '2026-11-19T08:00:00+08:00', endTime: '2026-11-19T01:00:00Z' },
         'query',
       ),
     ).toEqual({ from: Date.parse('2026-11-19T00:00:00Z'), to: Date.parse('2026-11-19T01:00:00Z') });
-    expect(parseMockTimeRange({ startTime: '', endTime: undefined }, 'query')).toEqual({
+    expect(parseMockTimeRange({ startTime: undefined, endTime: null }, 'query')).toEqual({
       from: undefined,
       to: undefined,
     });
@@ -40,6 +40,12 @@ describe('mock time range', () => {
   });
 
   it('rejects missing zones, date-only values and reversed ranges', () => {
+    expect(errorFields(() => parseMockTimeRange({ startTime: '' }, 'query'))).toEqual([
+      'startTime',
+    ]);
+    expect(
+      errorFields(() => parseMockTimeRange({ startTime: '2026-02-30T00:00:00Z' }, 'query')),
+    ).toEqual(['startTime']);
     expect(
       errorFields(() => parseMockTimeRange({ startTime: '2026-11-19T00:00:00' }, 'query')),
     ).toEqual(['startTime']);
