@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-import { LoginDevices } from './login-devices';
 import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmOptions, ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -12,6 +11,7 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { UserSessionOutputDto } from '../../../../shared/dtos/account-security.dto';
 import { AccountService } from '../../services/account-service';
+import { LoginDevices } from './login-devices';
 
 import type { MockedObject } from 'vitest';
 

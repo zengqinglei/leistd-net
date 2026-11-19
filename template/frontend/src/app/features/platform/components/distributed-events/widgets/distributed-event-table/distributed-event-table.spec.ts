@@ -1,7 +1,6 @@
 import { signal, Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { DistributedEventTable } from './distributed-event-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -12,6 +11,7 @@ import { DistributedCatalogTable } from '../distributed-catalog-table/distribute
 import { DistributedInboxTable } from '../distributed-inbox-table/distributed-inbox-table';
 import { DistributedOutboxTable } from '../distributed-outbox-table/distributed-outbox-table';
 import { DistributedRejectionTable } from '../distributed-rejection-table/distributed-rejection-table';
+import { DistributedEventTable } from './distributed-event-table';
 
 const TABLES: { name: string; component: Type<DistributedEventTable> }[] = [
   { name: 'Outbox', component: DistributedOutboxTable },

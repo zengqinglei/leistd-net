@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
-import { WebhookSubscriptionDialog } from './webhook-subscription-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -10,6 +9,7 @@ import {
   CreateWebhookSubscriptionInputDto,
   WebhookSubscriptionOutputDto,
 } from '../../../../dtos/webhook.dto';
+import { WebhookSubscriptionDialog } from './webhook-subscription-dialog';
 
 const EVENT_TYPES = [
   { name: 'webhook.test', group: 'webhooks' },

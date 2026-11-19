@@ -1,12 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 
-import { UriListEditor } from './uri-list-editor';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { renderSubmission } from '../../../../../../core/validation/form-submission.testing';
 import { SubmitErrorStateMatcher } from '../../../../../../core/validation/submit-error-state-matcher';
+import { UriListEditor } from './uri-list-editor';
 
 describe('UriListEditor', () => {
   function createEditor(uris: string[] = []): ComponentFixture<UriListEditor> {

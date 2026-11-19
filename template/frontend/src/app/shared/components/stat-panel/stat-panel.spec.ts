@@ -2,9 +2,9 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 
-import { StatPanel } from './stat-panel';
 import { TruncatedTooltip } from '../../directives/truncated-tooltip';
 import { parkPointer } from '../../utils/pointer.testing';
+import { StatPanel } from './stat-panel';
 
 @Component({
   imports: [StatPanel],

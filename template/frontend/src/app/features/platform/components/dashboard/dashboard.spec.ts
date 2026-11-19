@@ -6,7 +6,6 @@ import { Router, provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { page, userEvent } from 'vitest/browser';
 
-import { Dashboard } from './dashboard';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -26,6 +25,7 @@ import { PlatformStatisticsOutputDto, StatisticsQuery } from '../../dtos/platfor
 import { OperationRecordService } from '../../services/operation-record-service';
 //#endif
 import { PlatformStatisticsService } from '../../services/platform-statistics-service';
+import { Dashboard } from './dashboard';
 
 /**
  * 仪表盘的区间、加载状态与权限：统计要 `App.Dashboard`，没有时不发请求；区间写在 URL 上，带实际生效的

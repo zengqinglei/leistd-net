@@ -5,17 +5,17 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
+import { PLATFORM_ENTRY_PERMISSIONS } from '../../shared/constants/permission.constants';
+import { CurrentPermissionsOutputDto } from '../../shared/dtos/permission.dto';
+import { WorkspaceOutputDto } from '../dtos/workspace.dto';
+import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
+import { EntryRouteService } from '../routing/entry-route-service';
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
 import { SessionContextService } from './session-context-service';
 //#if (IncludeRealTime || IncludeNotifications)
 import { SignalRService } from './signalr-service';
 //#endif
-import { PLATFORM_ENTRY_PERMISSIONS } from '../../shared/constants/permission.constants';
-import { CurrentPermissionsOutputDto } from '../../shared/dtos/permission.dto';
-import { WorkspaceOutputDto } from '../dtos/workspace.dto';
-import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
-import { EntryRouteService } from '../routing/entry-route-service';
 
 /** 当前范围只存在本标签页内；存储只记最后一次成功的落点。 */
 @Injectable({ providedIn: 'root' })

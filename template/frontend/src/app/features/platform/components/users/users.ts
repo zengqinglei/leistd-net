@@ -46,15 +46,6 @@ import { tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 //#endif
 import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
-import { BatchRolesDialog } from './widgets/batch-roles-dialog/batch-roles-dialog';
-//#if (LocalIdentity)
-import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
-//#endif
-//#if (LocalIdentity)
-import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
-//#endif
-import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
-import { UserTable } from './widgets/user-table/user-table';
 //#if (LocalIdentity)
 import {
   ReauthenticateDialog,
@@ -100,6 +91,15 @@ import {
 } from '../../dtos/user-management.dto';
 import { RoleService } from '../../services/role-service';
 import { UserManagementService } from '../../services/user-management-service';
+import { BatchRolesDialog } from './widgets/batch-roles-dialog/batch-roles-dialog';
+//#if (LocalIdentity)
+import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
+//#endif
+//#if (LocalIdentity)
+import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
+//#endif
+import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
+import { UserTable } from './widgets/user-table/user-table';
 
 //#if (LocalIdentity)
 const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;

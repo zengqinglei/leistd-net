@@ -3,7 +3,6 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 
-import { TwoFactorSetup } from './two-factor-setup';
 import {
   confirmWithCode,
   confirmWithPassword,
@@ -22,6 +21,7 @@ import {
   rejectedField,
 } from '../../../../core/validation/form-submission.testing';
 import { AccountService } from '../../services/account-service';
+import { TwoFactorSetup } from './two-factor-setup';
 
 import type { MockedObject } from 'vitest';
 

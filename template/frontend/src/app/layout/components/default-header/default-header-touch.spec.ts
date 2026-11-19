@@ -6,7 +6,6 @@ import { of } from 'rxjs';
 //#endif
 import { page } from 'vitest/browser';
 
-import { DefaultHeader } from './default-header';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
@@ -24,6 +23,7 @@ import { NotificationService } from '../../../core/services/notification-service
 //#endif
 import { ThemeService } from '../../../core/services/theme-service';
 import { expectTouchTarget, setCoarsePointer } from '../../../shared/utils/coarse-pointer.testing';
+import { DefaultHeader } from './default-header';
 
 const TITLE = 'Detail of an account with a very long registered company name';
 

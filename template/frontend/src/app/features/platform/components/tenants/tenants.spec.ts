@@ -8,9 +8,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState } from '@tanstack/angular-table';
 import { lastValueFrom, of, Subject, throwError } from 'rxjs';
 
-import { Tenants } from './tenants';
-import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
-import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -22,6 +19,9 @@ import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { CreateTenantInputDto, GetTenantsInputDto, TenantOutputDto } from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
+import { Tenants } from './tenants';
+import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
+import { TenantTable } from './widgets/tenant-table/tenant-table';
 
 import type { MockedObject } from 'vitest';
 

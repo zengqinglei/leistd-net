@@ -2,7 +2,6 @@ import { computed, inject, Signal, signal, WritableSignal } from '@angular/core'
 import { Router } from '@angular/router';
 import { lastValueFrom, Observable, Subscription } from 'rxjs';
 
-import { ReauthenticationProof } from './reauthenticate-dialog';
 import { API_ERROR_CODES } from '../../errors/api-error-codes';
 import { ApplicationHttpError, applicationErrorMessage } from '../../errors/application-http-error';
 import { AuthService } from '../../services/auth-service';
@@ -12,6 +11,7 @@ import {
   isWebAuthnError,
   WebAuthnFailure,
 } from '../../webauthn/webauthn-error';
+import { ReauthenticationProof } from './reauthenticate-dialog';
 
 /**
  * 带着凭证重试仍被拒、要留在对话框里就地说明的错误：口令或验证码不对、通行密钥没通过或这次仪式已失效、

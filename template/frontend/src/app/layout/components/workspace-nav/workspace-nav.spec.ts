@@ -9,7 +9,6 @@ import { of } from 'rxjs';
 //#endif
 import { userEvent } from 'vitest/browser';
 
-import { fitCount, WorkspaceNav } from './workspace-nav';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
 //#endif
@@ -21,6 +20,7 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { expectTouchTarget, setCoarsePointer } from '../../../shared/utils/coarse-pointer.testing';
 import { MenuGroup, MenuItem, NavigationService } from '../../services/navigation-service';
+import { fitCount, WorkspaceNav } from './workspace-nav';
 
 describe('fitCount', () => {
   const ruler = { items: [100, 100, 100], more: 60, gap: 4 };

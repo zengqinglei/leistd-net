@@ -8,12 +8,12 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 //#endif
 
-import { SystemSettings } from './system-settings';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { SettingOutputDto } from '../../../../core/settings/setting.dto';
+import { SystemSettings } from './system-settings';
 
 function row(name: string, group: string, canManage = true, hostScope = false): SettingOutputDto {
   return {

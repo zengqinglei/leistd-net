@@ -3,10 +3,10 @@ import { TestBed } from '@angular/core/testing';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 
-import { RecoveryCodes } from './recovery-codes';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
+import { RecoveryCodes } from './recovery-codes';
 
 describe('RecoveryCodes', () => {
   beforeEach(() => {

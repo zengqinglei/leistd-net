@@ -1,8 +1,8 @@
 import { HttpRequest, HttpResponse } from '@angular/common/http';
 import { firstValueFrom, of } from 'rxjs';
 
-import { mockInterceptors, provideMock } from './providers.mock';
 import { USERS } from '../data/user';
+import { mockInterceptors, provideMock } from './providers.mock';
 
 /**
  * 用户数据与设置一样存本页 sessionStorage：请求处理完写回，Mock 下次启动（刷新、退出登录的整页跳转）恢复。

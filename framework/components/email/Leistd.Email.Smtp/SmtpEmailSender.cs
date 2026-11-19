@@ -1,6 +1,7 @@
 using Leistd.Email.Abstractions;
 using Leistd.Redaction;
 using Leistd.Email.Smtp.Options;
+using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;

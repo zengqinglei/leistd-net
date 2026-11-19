@@ -1,7 +1,7 @@
 import { HttpHeaders } from '@angular/common/http';
 
-import { NOTIFICATION_API } from './notification';
 import { MockRequest } from '../core/models';
+import { NOTIFICATION_API } from './notification';
 
 import type { NotificationOutputDto } from '../../src/app/shared/dtos/notification.dto';
 

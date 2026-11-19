@@ -4,7 +4,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { throwError, Observable, of } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
-import { OpenApplicationEditDialog } from './open-application-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -18,6 +17,7 @@ import {
   OpenApplicationScopeOutputDto,
   UpdateOpenApplicationInputDto,
 } from '../../../../dtos/open-application.dto';
+import { OpenApplicationEditDialog } from './open-application-edit-dialog';
 
 /**
  * 下拉触发器与选项文案一致：不传 `itemToString` 时触发器显示原始值，只有点开、选中再读触发器

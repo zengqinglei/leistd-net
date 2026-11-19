@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 
-import { CaptchaImage } from './captcha-image';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -10,6 +9,7 @@ import {
   setCoarsePointer,
 } from '../../../../shared/utils/coarse-pointer.testing';
 import { AccountService } from '../../services/account-service';
+import { CaptchaImage } from './captcha-image';
 
 import type { MockedObject } from 'vitest';
 

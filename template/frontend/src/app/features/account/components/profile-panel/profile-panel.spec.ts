@@ -4,7 +4,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, throwError } from 'rxjs';
 
-import { ProfilePanel } from './profile-panel';
 import {
   confirmWithCode,
   confirmWithPassword,
@@ -28,6 +27,7 @@ import {
   rejectedField,
 } from '../../../../core/validation/form-submission.testing';
 import { AccountService } from '../../services/account-service';
+import { ProfilePanel } from './profile-panel';
 
 import type { Mock } from 'vitest';
 

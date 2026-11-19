@@ -7,12 +7,12 @@ import { PaginationState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
-import { TenantTable } from './tenant-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
+import { TenantTable } from './tenant-table';
 
 /**
  * 租户表格与用户、角色表格共用受控分页与列收纳约定，但各自实现，因此各自用例钉住。

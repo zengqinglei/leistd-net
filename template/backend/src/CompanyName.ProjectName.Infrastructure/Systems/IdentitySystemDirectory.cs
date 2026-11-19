@@ -17,10 +17,10 @@ public sealed class IdentitySystemDirectory(IIdentitySystemsApi api, HybridCache
         var culture = CultureInfo.CurrentUICulture.Name;
         try
         {
-            return await cache.GetOrCreateAsync<IReadOnlyList<IdentitySystem>>(
-                "identity-system-directory:" + culture, async token =>
+            return await cache.GetOrCreateAsync<(IIdentitySystemsApi Api, string Culture), IReadOnlyList<IdentitySystem>>(
+                "identity-system-directory:" + culture, (api, culture), static async (state, token) =>
                 {
-                    using var response = await api.GetListAsync(culture, token);
+                    using var response = await state.Api.GetListAsync(state.Culture, token);
                     return (await response.ReadContentAsync<List<IdentitySystem>>(cancellationToken: token))!;
                 }, new HybridCacheEntryOptions
                 {

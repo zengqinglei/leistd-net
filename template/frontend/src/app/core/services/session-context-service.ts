@@ -12,14 +12,14 @@ import {
 } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
+import { SettingContextService } from '../settings/setting-context-service';
+import { SettingOutputDto } from '../settings/setting.dto';
 import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
 //#if (TenantWorkspace)
 import { WorkspaceContextService } from './workspace-context-service';
 //#endif
-import { SettingContextService } from '../settings/setting-context-service';
-import { SettingOutputDto } from '../settings/setting.dto';
 
 /**
  * 认证会话上下文：主体确立与离开的唯一入口。当前用户、权限、设置、账户偏好四份状态跟着主体一起建立、

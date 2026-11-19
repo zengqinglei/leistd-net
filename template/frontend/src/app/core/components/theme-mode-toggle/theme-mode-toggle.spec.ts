@@ -5,12 +5,12 @@ import { TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of } from 'rxjs';
 
-import { ThemeModeToggle } from './theme-mode-toggle';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../services/auth-service';
 import { ThemeService } from '../../services/theme-service';
+import { ThemeModeToggle } from './theme-mode-toggle';
 
 const URL = '/api/v1/auth/me/preferences';
 const NONE = { language: null, timeZone: null, theme: null };

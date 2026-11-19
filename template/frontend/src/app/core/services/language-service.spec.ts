@@ -15,8 +15,8 @@ import {
 } from '@jsverse/transloco';
 import { defer, Subject, throwError } from 'rxjs';
 
-import { LanguageService, provideLanguageInitializer } from './language-service';
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
+import { LanguageService, provideLanguageInitializer } from './language-service';
 
 import type { Mock } from 'vitest';
 

@@ -6,7 +6,6 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { Observable, throwError, of } from 'rxjs';
 
-import { TenantEditDialog } from './tenant-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -19,6 +18,7 @@ import {
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../../dtos/tenant.dto';
+import { TenantEditDialog } from './tenant-edit-dialog';
 
 /**
  * 新建与编辑共用对话框：新建连带初始管理员，编辑只改名称与显示名。分流靠 `isEdit()`，

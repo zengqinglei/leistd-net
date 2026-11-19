@@ -19,7 +19,6 @@ import { translateSignal, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { page, userEvent } from 'vitest/browser';
 
-import { DefaultHeader } from './default-header';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../core/components/language-switcher/language-switcher';
 //#endif
@@ -40,6 +39,7 @@ import { DefaultSidebar } from '../default-sidebar/default-sidebar';
 import { Notifications } from '../notifications/notifications';
 //#endif
 import { UserMenu } from '../user-menu/user-menu';
+import { DefaultHeader } from './default-header';
 
 /**
  * 页面标题只在带页头的布局里设置；离开布局（去登录页、落地页）时页头负责清掉，

@@ -14,8 +14,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { of, Subject, throwError } from 'rxjs';
 
-import { Roles } from './roles';
-import { RoleTable } from './widgets/role-table/role-table';
 import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -30,6 +28,8 @@ import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { GetRolesInputDto, RoleOutputDto } from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
+import { Roles } from './roles';
+import { RoleTable } from './widgets/role-table/role-table';
 
 import type { MockedObject } from 'vitest';
 

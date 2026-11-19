@@ -3,11 +3,11 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
-import { WorkspaceDenied } from './workspace-denied';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
 import { WorkspaceContextService } from '../../services/workspace-context-service';
+import { WorkspaceDenied } from './workspace-denied';
 
 describe('WorkspaceDenied', () => {
   for (const reason of ['forbidden', 'unavailable']) {

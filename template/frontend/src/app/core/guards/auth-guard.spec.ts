@@ -11,7 +11,6 @@ import {
 } from '@angular/router';
 import { firstValueFrom, isObservable, of } from 'rxjs';
 
-import { authGuard } from './auth-guard';
 import { User } from '../../shared/models/user.model';
 import { ApplicationHttpError } from '../errors/application-http-error';
 import { EntryRouteService } from '../routing/entry-route-service';
@@ -21,6 +20,7 @@ import { ImpersonationService } from '../services/impersonation-service';
 //#endif
 import { SessionContextService } from '../services/session-context-service';
 import { StartupService } from '../services/startup-service';
+import { authGuard } from './auth-guard';
 
 describe('authGuard', () => {
   const currentUser = signal<User | null>(null);

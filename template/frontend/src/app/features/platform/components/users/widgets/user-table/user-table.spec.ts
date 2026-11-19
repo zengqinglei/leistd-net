@@ -11,7 +11,6 @@ import { PaginationState, RowSelectionState, SortingState } from '@tanstack/angu
 import { BehaviorSubject } from 'rxjs';
 import { page, userEvent } from 'vitest/browser';
 
-import { UserTable } from './user-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -24,6 +23,7 @@ import {
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { expectAriaSortOnSortedHeaderOnly } from '../../../../../../shared/utils/table-sorting.testing';
 import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
+import { UserTable } from './user-table';
 
 /** 用户表格的交互状态：分页与排序是 manual 模式，验证回传给父级的意图，而不是表格里剩几行。 */
 describe('UserTable', () => {

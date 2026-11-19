@@ -1,4 +1,3 @@
-import { currentAccountPreferences } from './account-preferences';
 //#if (Impersonation)
 import { ImpersonationStatus } from '../../src/app/core/services/impersonation-service';
 //#endif
@@ -109,6 +108,7 @@ import {
   verifyMockPasskeyAssertion,
 } from '../utils/current-user';
 import { StoredMap } from '../utils/stored-map';
+import { currentAccountPreferences } from './account-preferences';
 
 const CAPTCHA_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const CAPTCHA_DIGITS = '23456789';

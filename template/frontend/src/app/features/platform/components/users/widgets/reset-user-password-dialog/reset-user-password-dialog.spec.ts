@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { throwError, Observable, Subject, of } from 'rxjs';
 
-import { ResetUserPasswordDialog } from './reset-user-password-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -16,6 +15,7 @@ import {
   PASSWORD_MIN_LENGTH,
 } from '../../../../../../core/validation/password-rule';
 import { ResetUserPasswordInputDto } from '../../../../dtos/user-management.dto';
+import { ResetUserPasswordDialog } from './reset-user-password-dialog';
 
 /**
  * 管理员重置用户口令：对话框负责口令规则与提交防重，重置请求与失败提示由用户页处理。

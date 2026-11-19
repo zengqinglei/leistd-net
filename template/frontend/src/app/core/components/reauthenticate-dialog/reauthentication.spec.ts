@@ -4,10 +4,10 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
-import { injectReauthentication, Reauthentication } from './reauthentication';
 import { ApplicationHttpError } from '../../errors/application-http-error';
 import { AuthService } from '../../services/auth-service';
 import { fakeAssertion, REQUEST_OPTIONS, webAuthnError } from '../../webauthn/webauthn.testing';
+import { injectReauthentication, Reauthentication } from './reauthentication';
 
 import type { Mock } from 'vitest';
 

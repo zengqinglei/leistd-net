@@ -1,4 +1,3 @@
-import { hasPermission, requirePermission } from './authorization';
 //#if (ExternalLogin)
 import { ExternalLoginStatusOutputDto } from '../../src/app/core/settings/setting.dto';
 //#endif
@@ -26,6 +25,7 @@ import {
   getMockSessionTenantKey,
 } from '../utils/current-user';
 import { StoredMap } from '../utils/stored-map';
+import { hasPermission, requirePermission } from './authorization';
 
 //#if (IncludeLocalization)
 /**

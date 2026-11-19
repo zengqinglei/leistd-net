@@ -1,5 +1,5 @@
-import { operationFailureReason, operationRecordActor } from './operation-record-texts';
 import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto';
+import { operationFailureReason, operationRecordActor } from './operation-record-texts';
 
 /**
  * 失败原因的取法：后端按请求语言渲染的 `failureMessage` 优先，取不到时回落；操作人缺失时只在服务端判定

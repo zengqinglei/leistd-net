@@ -5,7 +5,6 @@ import { Router } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, throwError } from 'rxjs';
 
-import { TwoFactorPasskeySettings } from './two-factor-passkey-settings';
 import {
   confirmWithPassword,
   reauthenticateMethod,
@@ -33,6 +32,7 @@ import {
   TwoFactorStatusOutputDto,
 } from '../../../../shared/dtos/account-security.dto';
 import { AccountService } from '../../services/account-service';
+import { TwoFactorPasskeySettings } from './two-factor-passkey-settings';
 
 import type { MockedObject } from 'vitest';
 

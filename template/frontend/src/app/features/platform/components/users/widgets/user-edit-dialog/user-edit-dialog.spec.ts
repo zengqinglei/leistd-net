@@ -5,7 +5,6 @@ import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { toast } from '@spartan-ng/brain/sonner';
 import { throwError, Observable, Subject, of } from 'rxjs';
 
-import { UserEditDialog } from './user-edit-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -26,6 +25,7 @@ import {
   UpdateUserInputDto,
   UserManagementOutputDto,
 } from '../../../../dtos/user-management.dto';
+import { UserEditDialog } from './user-edit-dialog';
 
 /**
  * 用户新建与编辑共用一个对话框，两种模式的字段集与提交载荷不同：

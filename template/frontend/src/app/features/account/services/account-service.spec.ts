@@ -2,11 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { AccountService } from './account-service';
 import { AuthService } from '../../../core/services/auth-service';
 //#if (ExternalLogin && IncludeMultiTenancy)
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 //#endif
+import { AccountService } from './account-service';
 
 import type { Mock } from 'vitest';
 

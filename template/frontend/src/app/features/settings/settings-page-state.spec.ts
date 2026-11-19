@@ -7,6 +7,15 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { of } from 'rxjs';
 //#endif
 
+import { applicationErrorMessage } from '../../core/errors/application-http-error';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
+//#endif
+import { SessionContextService } from '../../core/services/session-context-service';
+//#if (TenantWorkspace)
+import { SettingService } from '../../core/settings/setting-service';
+//#endif
+import { SettingOutputDto } from '../../core/settings/setting.dto';
 // prettier-ignore
 import {
   buildSettingTree,
@@ -18,15 +27,6 @@ import {
   SettingsPageState,
   shownChildren,
 } from './settings-page-state';
-import { applicationErrorMessage } from '../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
-//#endif
-import { SessionContextService } from '../../core/services/session-context-service';
-//#if (TenantWorkspace)
-import { SettingService } from '../../core/settings/setting-service';
-//#endif
-import { SettingOutputDto } from '../../core/settings/setting.dto';
 
 /**
  * 页面状态自己的保证：快照取会话刷新入口返回给本页的那一份，本页的读取只认最后发起的那次。会话服务用桩，

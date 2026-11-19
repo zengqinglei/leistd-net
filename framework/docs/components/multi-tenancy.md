@@ -114,14 +114,16 @@ using (currentTenant.Change(tenantId))
 
 ### 隔离数据库之外的标识
 
-缓存键、分布式锁键这类数据库之外的标识要自己带租户段：
+租户级查询结果可注入 `Leistd.MultiTenancy.Caching.TenantHybridCache`。宿主调用 `AddMultiTenancy()` 和 `AddHybridCache()` 后，向租户缓存传业务键和标签即可。租户分区为 `{租户 Id:N}:`，宿主分区为 `host:`。回源回调恢复调用时的租户 Id 与名称，其他影响结果的维度应写入键并经 `state` 传入。按标签失效只影响当前分区，传入全局通配符 `*` 会抛出 `NotSupportedException`。
+
+分布式锁键、幂等键及其他租户外部标识，用 `ScopeKey` 加租户段：
 
 ```csharp
 // 产出 "{租户 Id:N}:catalog:category:{id:N}"
-var cacheKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
+var lockKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
 ```
 
-拿到的键直接交给缓存、[分布式锁](./lock.md)或幂等存储。`ScopeKey` 产出 `{租户 Id:N}:{key}`，宿主视角为 `host:{key}`；
+拿到的键直接交给[分布式锁](./lock.md)或幂等存储。`ScopeKey` 产出 `{租户 Id:N}:{key}`，宿主视角为 `host:{key}`；
 它是 `Leistd.MultiTenancy.Extensions` 命名空间下的 `this ICurrentTenant` 扩展。租户注册表、租户连接配置这类判断租户本身的数据不加租户段。
 
 ### 解析与校验
@@ -398,7 +400,8 @@ public sealed class IdentityControlDbContext : DbContext;
 | --- | --- |
 | `Leistd.MultiTenancy.Tenancy.IMultiTenant` | 通过 `Guid? TenantId` 声明数据归属；`null` 表示宿主 |
 | `Leistd.MultiTenancy.Context.ICurrentTenant` | 读取或临时切换租户上下文 |
-| `CurrentTenantKeyExtensions.ScopeKey(currentTenant, key)` | 把缓存键、锁键等租户外部标识限定到当前租户；`this ICurrentTenant` 扩展 |
+| `Leistd.MultiTenancy.Caching.TenantHybridCache` | 隔离租户缓存键与标签，回源时恢复租户 |
+| `CurrentTenantKeyExtensions.ScopeKey(currentTenant, key)` | 把锁键、幂等键等外部标识限定到当前租户 |
 | `Leistd.MultiTenancy.Stores.ITenantStore` | 按 Id 或归一化名称查找租户 |
 | `Leistd.MultiTenancy.Stores.ITenantManager` | 创建、修改、启停、软删除和分页查询租户；`GetPagedAsync(keyword, isActive, PageRequest, ct)` 只查未删除的租户，`isActive` 为 `null` 不按状态过滤，返回 `PagedResult<TenantConfiguration>` |
 | `ITenantManagementService` | 租户管理用例：`GetPagedAsync`、`GetAsync`、`CreateAsync`（登记→开通→启用与补偿）、`UpdateAsync`、`SetActivationAsync`、`DeleteAsync`；Management 包注册。不提供按名字查询 |
@@ -457,7 +460,7 @@ public sealed class IdentityControlDbContext : DbContext;
 - 认证端必须向租户用户签发单一、有效的租户 claim（类型见 `ClaimTypeOptions.TenantId`，签发与读取两端同一配置）；漏写会将 Resource 请求当作宿主上下文。
 - `IgnoreQueryFilters()` 与 raw SQL 会绕过租户隔离。合法的跨租户操作使用 `IDataFilter.Disable<IMultiTenant>()` 显式表达。
 - 租户实体的唯一索引需分别覆盖 `TenantId IS NULL` 的宿主行和 `TenantId IS NOT NULL` 的租户行；单一 `(TenantId, X)` 索引无法限制多个 NULL。
-- 承载租户业务数据的外部标识（缓存 key、锁 key 等）必须用 `ScopeKey` 带租户作用域；控制面标识（租户注册表、租户连接配置）保持全局。
+- 承载租户业务数据的外部标识要带租户段。租户缓存自动加段，锁键等标识用 `ScopeKey`。租户注册表、租户连接配置等控制面标识保持全局。
 - 超级管理员只可旁路功能权限，不可旁路租户数据隔离。
 - 多服务系统的租户注册表应归 Identity 所有，Resource 在令牌有效期内信任经验证的 claim。租户停用或删除在 Identity 立即生效，在 Resource 要等已签发的 Access Token 过期。
   要即时生效，需在停用时撤销该租户已签发的令牌并让 Resource 做令牌内省，框架不内置；只开内省不够，内省不查租户状态。

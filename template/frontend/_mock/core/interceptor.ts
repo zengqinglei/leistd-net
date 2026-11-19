@@ -3,12 +3,12 @@ import { InjectionToken, inject } from '@angular/core';
 import { from, of, throwError } from 'rxjs';
 import { catchError, delay, mergeMap, tap } from 'rxjs/operators';
 
+import { environment } from '../../src/environments/environment';
 import { getUrlPath, isMockedUrl } from './matching';
 import { MockConfig, MockException, MockRequest, MockResponse } from './models';
 //#if (TenantWorkspace)
 import { withinWorkspace } from './request-workspace';
 //#endif
-import { environment } from '../../src/environments/environment';
 
 type MockApiHandler = (request: MockRequest) => unknown;
 type MockApiRegistry = Record<string, MockApiHandler | unknown>;

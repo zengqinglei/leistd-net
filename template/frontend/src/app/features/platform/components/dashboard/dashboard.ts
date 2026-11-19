@@ -58,26 +58,6 @@ import { scalePoint } from '@tanstack/charts/scales/point';
 //#endif
 import { Subject, catchError, interval, of, switchMap } from 'rxjs';
 
-// prettier-ignore
-import {
-  CalendarRange,
-  RangePreset,
-  //#if (IncludeOperationRecords && LocalIdentity)
-  WEEKLY_DEFAULT_DAYS,
-  WEEKLY_MIN_DAYS,
-  bucketLabels,
-  bucketTitle,
-  groupByWeek,
-  sumByGroups,
-  weekLabel,
-  //#endif
-  fromCalendarDate,
-  parseRange,
-  presetOf,
-  presetRange,
-  rangeDays,
-  toCalendarDate,
-} from './dashboard-calendar';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -124,6 +104,26 @@ import { operationRecordActor } from '../operation-records/widgets/operation-rec
 //#if (IncludeOperationRecords)
 import { injectOperationActionSentence } from '../operation-records/widgets/operation-record-table/operation-action-sentence';
 //#endif
+// prettier-ignore
+import {
+  CalendarRange,
+  RangePreset,
+  //#if (IncludeOperationRecords && LocalIdentity)
+  WEEKLY_DEFAULT_DAYS,
+  WEEKLY_MIN_DAYS,
+  bucketLabels,
+  bucketTitle,
+  groupByWeek,
+  sumByGroups,
+  weekLabel,
+  //#endif
+  fromCalendarDate,
+  parseRange,
+  presetOf,
+  presetRange,
+  rangeDays,
+  toCalendarDate,
+} from './dashboard-calendar';
 
 type KpiId = 'totalUsers' | 'newUsers' | 'activeUsers' | 'failedLoginAlerts';
 
@@ -601,7 +601,12 @@ export class Dashboard {
             },
           ],
           marks: [
-            areaY(succeededRows, { x: 'key', y: 'count', fill: 'url(#dashboard-trend-fill)' }),
+            areaY(succeededRows, {
+              x: 'key',
+              y1: 0,
+              y2: 'count',
+              fill: 'url(#dashboard-trend-fill)',
+            }),
             lineY(succeededRows, {
               x: 'key',
               y: 'count',

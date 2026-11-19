@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { page, userEvent } from 'vitest/browser';
 
-import { FacetedFilter, FacetedFilterOption } from './faceted-filter';
 import { expectTouchTarget, setCoarsePointer } from '../../utils/coarse-pointer.testing';
+import { FacetedFilter, FacetedFilterOption } from './faceted-filter';
 
 describe('FacetedFilter', () => {
   const OPTIONS: FacetedFilterOption[] = [

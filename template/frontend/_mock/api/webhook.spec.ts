@@ -1,6 +1,5 @@
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
 
-import { getWebhookStatistics, WEBHOOK_API } from './webhook';
 import {
   WebhookDeliveryOutputDto,
   WebhookSubscriptionOutputDto,
@@ -10,6 +9,7 @@ import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest, MockResponse } from '../core/models';
 import { WEBHOOK_DELIVERIES, WEBHOOK_SUBSCRIPTIONS } from '../data/webhooks';
 import { setMockSessionUserId } from '../utils/current-user';
+import { getWebhookStatistics, WEBHOOK_API } from './webhook';
 
 type Api = typeof WEBHOOK_API;
 

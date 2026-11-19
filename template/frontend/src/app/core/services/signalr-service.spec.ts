@@ -4,8 +4,8 @@ import { DestroyRef, EnvironmentInjector, createEnvironmentInjector } from '@ang
 import { TestBed } from '@angular/core/testing';
 import * as signalR from '@microsoft/signalr';
 
-import { SignalRService } from './signalr-service';
 import { environment } from '../../../environments/environment';
+import { SignalRService } from './signalr-service';
 
 import type { Mock } from 'vitest';
 

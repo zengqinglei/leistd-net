@@ -10,7 +10,6 @@ import {
 } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 
-import { twoFactorSetupGuard } from './two-factor-setup-guard';
 import { authGuard } from '../../../core/guards/auth-guard';
 //#if (OpenIddictServer)
 import { FullPageNavigationService } from '../../../core/routing/full-page-navigation-service';
@@ -20,6 +19,7 @@ import { AuthorizationService } from '../../../core/services/authorization-servi
 import { SessionContextService } from '../../../core/services/session-context-service';
 import { StartupService } from '../../../core/services/startup-service';
 import { User } from '../../../shared/models/user.model';
+import { twoFactorSetupGuard } from './two-factor-setup-guard';
 
 describe('twoFactorSetupGuard', () => {
   const currentUser = signal<User | null>(null);

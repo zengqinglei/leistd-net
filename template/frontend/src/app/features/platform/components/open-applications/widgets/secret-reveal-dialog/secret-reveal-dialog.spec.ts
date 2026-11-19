@@ -3,11 +3,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
 
-import { SecretRevealDialog } from './secret-reveal-dialog';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
+import { SecretRevealDialog } from './secret-reveal-dialog';
 
 import type { Mock } from 'vitest';
 

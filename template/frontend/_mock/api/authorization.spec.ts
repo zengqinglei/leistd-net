@@ -1,7 +1,7 @@
-import { AUTHORIZATION_API, getRoleOptions, getRoles } from './authorization';
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PERMISSION_DEFINITIONS, ROLES } from '../data/authorization';
 import { setMockSessionUserId } from '../utils/current-user';
+import { AUTHORIZATION_API, getRoleOptions, getRoles } from './authorization';
 
 /**
  * 超管在 Mock 下拿到定义树里的全部权限，与真实后端的超管旁路一致。

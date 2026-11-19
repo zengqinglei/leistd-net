@@ -1,4 +1,3 @@
-import { requirePermission } from './authorization';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
@@ -13,6 +12,7 @@ import {
   OPEN_APPLICATION_SCOPES,
   OPEN_APPLICATIONS,
 } from '../data/open-applications';
+import { requirePermission } from './authorization';
 
 const applications = OPEN_APPLICATIONS;
 

@@ -27,12 +27,6 @@ import { PaginationState } from '@tanstack/angular-table';
 import { Observable, tap, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
-import { TenantDetailDialog } from './widgets/tenant-detail-dialog/tenant-detail-dialog';
-import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
-//#if (TenantWorkspace)
-import { TenantStaffSheet } from './widgets/tenant-staff-sheet/tenant-staff-sheet';
-//#endif
-import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -56,6 +50,12 @@ import {
   UpdateTenantInputDto,
 } from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
+import { TenantDetailDialog } from './widgets/tenant-detail-dialog/tenant-detail-dialog';
+import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
+//#if (TenantWorkspace)
+import { TenantStaffSheet } from './widgets/tenant-staff-sheet/tenant-staff-sheet';
+//#endif
+import { TenantTable } from './widgets/tenant-table/tenant-table';
 
 /** 租户管理页（仅宿主侧可见），列表状态（分页、关键字）落在 URL 查询参数上。 */
 @Component({

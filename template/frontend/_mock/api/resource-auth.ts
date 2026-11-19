@@ -1,5 +1,4 @@
 //#if (RemoteTokenAuth)
-import { currentAccountPreferences } from './account-preferences';
 import { MockException } from '../core/models';
 import { USERS, toUserOutput } from '../data/user';
 import {
@@ -8,6 +7,7 @@ import {
   setMockSessionIdentity,
   setMockSessionUserId,
 } from '../utils/current-user';
+import { currentAccountPreferences } from './account-preferences';
 
 /** 模拟服务端 Cookie 会话；不生成或解析 OAuth 令牌。 */
 export const RESOURCE_AUTH_API = {

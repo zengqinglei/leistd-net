@@ -3,10 +3,10 @@ import { HttpContext, HttpErrorResponse, HttpRequest, HttpResponse } from '@angu
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, of, throwError } from 'rxjs';
 
-import { WORKSPACE_SCOPE } from './http-context-tokens';
-import { workspaceInterceptor } from './workspace-interceptor';
 import { ApplicationHttpError } from '../errors/application-http-error';
 import { WorkspaceContextService } from '../services/workspace-context-service';
+import { WORKSPACE_SCOPE } from './http-context-tokens';
+import { workspaceInterceptor } from './workspace-interceptor';
 
 describe('workspaceInterceptor', () => {
   beforeEach(() =>

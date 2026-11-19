@@ -9,7 +9,6 @@ import { provideTranslocoScope } from '@jsverse/transloco';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject, throwError } from 'rxjs';
 
-import { TwoFactorLogin } from './two-factor-login';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -24,6 +23,7 @@ import { LanguageService } from '../../../../core/services/language-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { TwoFactorLoginOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
+import { TwoFactorLogin } from './two-factor-login';
 
 import type { MockedObject } from 'vitest';
 //#if (OpenIddictServer)

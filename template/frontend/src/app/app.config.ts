@@ -24,9 +24,10 @@ import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 
+import { provideMock } from '../../_mock/core/providers';
+import { environment } from '../environments/environment';
 import { appInterceptors } from './app.interceptors';
 import { routes } from './app.routes';
-import { environment } from '../environments/environment';
 import { GlobalErrorHandler } from './core/handlers/global-error-handler';
 //#if (IncludeLocalization)
 import { provideAppA11yLabels } from './core/i18n/a11y-labels';
@@ -41,7 +42,6 @@ import {
 import { StartupService } from './core/services/startup-service';
 import { provideAppCalendarLocale } from './core/settings/calendar-locale';
 import { SubmitErrorStateMatcher } from './core/validation/submit-error-state-matcher';
-import { provideMock } from '../../_mock/core/providers';
 
 const routerFeatures: RouterFeatures[] = [
   withComponentInputBinding(),

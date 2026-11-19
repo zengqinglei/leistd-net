@@ -14,7 +14,6 @@ import {
 } from 'rxjs';
 //#endif
 
-import { ForgotPassword } from './forgot-password';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -35,6 +34,9 @@ import { TenantByHostOutputDto } from '../../dtos/tenant-by-host.dto';
 //#endif
 //#if (Email)
 import { AccountService } from '../../services/account-service';
+//#endif
+import { ForgotPassword } from './forgot-password';
+//#if (Email)
 
 import type { MockedObject } from 'vitest';
 //#endif

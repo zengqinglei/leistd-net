@@ -3,13 +3,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 
-import { operationFailureReason } from './operation-record-texts';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
 import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto';
+import { operationFailureReason } from './operation-record-texts';
 
 /**
  * 一条操作记录的追查字段：目标标识、失败原因与技术详情、授权依据、操作人租户、链路标识。操作记录表的行展开

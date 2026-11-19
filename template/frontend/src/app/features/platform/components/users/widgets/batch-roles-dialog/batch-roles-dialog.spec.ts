@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 
-import { BatchRolesDialog } from './batch-roles-dialog';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
@@ -10,6 +9,7 @@ import {
   renderSubmission,
   rejectedField,
 } from '../../../../../../core/validation/form-submission.testing';
+import { BatchRolesDialog } from './batch-roles-dialog';
 
 /** 批量角色的业务前提与异步边界，零选择有可见说明、选项失败有重试。 */
 describe('BatchRolesDialog', () => {

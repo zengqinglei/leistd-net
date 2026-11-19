@@ -5,13 +5,13 @@ import { Router, provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 
-import { NavigationService } from './navigation-service';
 //#if (IncludeLocalization)
 import en from '../../../../public/i18n/en.json';
 import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../core/services/auth-service';
 import { AuthorizationService } from '../../core/services/authorization-service';
+import { NavigationService } from './navigation-service';
 
 const user = signal<{ tenantId: string | null }>({ tenantId: null });
 

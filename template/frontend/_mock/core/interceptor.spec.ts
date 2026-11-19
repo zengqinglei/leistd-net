@@ -3,7 +3,6 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 
-import { MOCK_APIS, mockInterceptor } from './interceptor';
 //#if (OpenIddictServer)
 import {
   CreateOpenApplicationInputDto,
@@ -20,6 +19,7 @@ import { USERS } from '../data/user';
 // setMockSessionUserId 的使用范围更宽：清会话是所有有本地身份的形态都要做的
 import { setMockSessionUserId } from '../utils/current-user';
 //#endif
+import { MOCK_APIS, mockInterceptor } from './interceptor';
 
 describe('mockInterceptor', () => {
   const originalUseMock = environment.useMock;

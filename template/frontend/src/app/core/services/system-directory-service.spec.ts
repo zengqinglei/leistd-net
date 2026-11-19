@@ -5,6 +5,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 import { AuthService } from './auth-service';
 //#if (IncludeLocalization)
 import { LanguageService } from './language-service';
@@ -14,7 +15,6 @@ import { SystemDirectoryService } from './system-directory-service';
 //#if (TenantWorkspace)
 import { WorkspaceContextService } from './workspace-context-service';
 //#endif
-import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 
 const identity = {
   key: 'identity',

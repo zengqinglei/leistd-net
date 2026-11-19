@@ -1,5 +1,4 @@
 //#if (RemoteTokenAuth)
-import { RESOURCE_AUTH_API } from './resource-auth';
 import { MockException } from '../core/models';
 import { USERS } from '../data/user';
 import {
@@ -8,6 +7,7 @@ import {
   setMockSessionIdentity,
   setMockSessionUserId,
 } from '../utils/current-user';
+import { RESOURCE_AUTH_API } from './resource-auth';
 
 describe('Resource mock server session', () => {
   beforeEach(() => setMockSessionUserId(null));

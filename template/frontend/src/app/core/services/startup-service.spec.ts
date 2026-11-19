@@ -4,11 +4,11 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
+import { ApplicationHttpError } from '../errors/application-http-error';
+import { EntryRouteService } from '../routing/entry-route-service';
 import { AuthService } from './auth-service';
 import { SessionContextService } from './session-context-service';
 import { StartupService } from './startup-service';
-import { ApplicationHttpError } from '../errors/application-http-error';
-import { EntryRouteService } from '../routing/entry-route-service';
 
 import type { Mock, MockedObject } from 'vitest';
 

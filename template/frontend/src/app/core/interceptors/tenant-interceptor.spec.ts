@@ -4,9 +4,9 @@ import { Injector, provideZonelessChangeDetection, runInInjectionContext } from 
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
-import { tenantInterceptor } from './tenant-interceptor';
 import { TenantContextService } from '../services/tenant-context-service';
 import { TENANT_HEADER } from '../tenancy/tenant-protocol';
+import { tenantInterceptor } from './tenant-interceptor';
 
 /**
  * 直接以 runInInjectionContext 驱动拦截器（与 http-error-interceptor.spec 同形态），

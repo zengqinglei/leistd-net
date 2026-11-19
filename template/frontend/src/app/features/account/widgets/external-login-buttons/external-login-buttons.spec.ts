@@ -1,12 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 
-import { ExternalLoginButtons } from './external-login-buttons';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
 import { ExternalLoginProvidersOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
+import { ExternalLoginButtons } from './external-login-buttons';
 
 import type { MockedObject } from 'vitest';
 

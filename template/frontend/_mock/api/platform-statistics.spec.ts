@@ -1,12 +1,12 @@
-import { getPlatformStatistics } from './platform-statistics';
-//#if (LocalIdentity)
-import { deleteUser } from './user';
-//#endif
 import { MockException } from '../core/models';
 //#if (LocalIdentity)
 import { DELETED_USERS, USERS } from '../data/user';
 //#endif
 import { setMockSessionUserId } from '../utils/current-user';
+import { getPlatformStatistics } from './platform-statistics';
+//#if (LocalIdentity)
+import { deleteUser } from './user';
+//#endif
 
 /** 与后端集成测试 `PlatformStatisticsTests` 同一组期望值：Mock 与后端按同一规则切区间与桶。 */
 describe('platform statistics mock', () => {

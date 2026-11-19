@@ -6,7 +6,6 @@ import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 import { userEvent } from 'vitest/browser';
 //#endif
 
-import { SystemSwitcher } from './system-switcher';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
@@ -14,6 +13,7 @@ import { LayoutService } from '../../../core/services/layout-service';
 //#if (OpenIddictServer || RemoteTokenAuth)
 import { SystemDirectoryService } from '../../../core/services/system-directory-service';
 //#endif
+import { SystemSwitcher } from './system-switcher';
 
 @Component({
   selector: 'app-test-system-switcher-host',

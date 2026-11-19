@@ -4,7 +4,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-import { ExternalLogins } from './external-logins';
 import {
   confirmWithCode,
   confirmWithPassword,
@@ -21,6 +20,7 @@ import { AccountPreferencesService } from '../../../../core/services/account-pre
 import { AuthService } from '../../../../core/services/auth-service';
 import { ExternalLoginsOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
+import { ExternalLogins } from './external-logins';
 
 import type { MockedObject } from 'vitest';
 

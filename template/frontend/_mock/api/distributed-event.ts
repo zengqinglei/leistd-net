@@ -1,4 +1,3 @@
-import { requirePermission } from './authorization';
 import * as Dto from '../../src/app/features/platform/dtos/distributed-event.dto';
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { MockException, MockRequest } from '../core/models';
@@ -11,6 +10,7 @@ import {
 } from '../data/distributed-events';
 import { getMockSessionTenantKey } from '../utils/current-user';
 import { MockTimeRange, parseMockTimeRange, withinMockTimeRange } from '../utils/time-range';
+import { requirePermission } from './authorization';
 
 type Kind = 'outbox' | 'inbox' | 'rejections';
 type Row =

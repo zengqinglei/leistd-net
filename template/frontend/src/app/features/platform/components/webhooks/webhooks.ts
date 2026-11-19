@@ -56,17 +56,6 @@ import {
   switchMap,
 } from 'rxjs/operators';
 
-import { WebhookView } from './webhook-display';
-import { WebhookDeliverySheet } from './widgets/webhook-delivery-sheet/webhook-delivery-sheet';
-import { WebhookDeliveryTable } from './widgets/webhook-delivery-table/webhook-delivery-table';
-import { WebhookEnableDialog } from './widgets/webhook-enable-dialog/webhook-enable-dialog';
-import {
-  WebhookSecretDialog,
-  WebhookSecretKind,
-} from './widgets/webhook-secret-dialog/webhook-secret-dialog';
-import { WebhookStatistics } from './widgets/webhook-statistics/webhook-statistics';
-import { WebhookSubscriptionDialog } from './widgets/webhook-subscription-dialog/webhook-subscription-dialog';
-import { WebhookSubscriptionTable } from './widgets/webhook-subscription-table/webhook-subscription-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
@@ -103,6 +92,17 @@ import {
 } from '../../dtos/webhook.dto';
 import { WebhookService } from '../../services/webhook-service';
 import { presetRange, RangePreset } from '../dashboard/dashboard-calendar';
+import { WebhookView } from './webhook-display';
+import { WebhookDeliverySheet } from './widgets/webhook-delivery-sheet/webhook-delivery-sheet';
+import { WebhookDeliveryTable } from './widgets/webhook-delivery-table/webhook-delivery-table';
+import { WebhookEnableDialog } from './widgets/webhook-enable-dialog/webhook-enable-dialog';
+import {
+  WebhookSecretDialog,
+  WebhookSecretKind,
+} from './widgets/webhook-secret-dialog/webhook-secret-dialog';
+import { WebhookStatistics } from './widgets/webhook-statistics/webhook-statistics';
+import { WebhookSubscriptionDialog } from './widgets/webhook-subscription-dialog/webhook-subscription-dialog';
+import { WebhookSubscriptionTable } from './widgets/webhook-subscription-table/webhook-subscription-table';
 
 const RANGE_PRESETS: readonly RangePreset[] = ['today', '7d', '30d'];
 const DELIVERY_STATUSES: readonly WebhookDeliveryStatus[] = ['pending', 'succeeded', 'failed'];

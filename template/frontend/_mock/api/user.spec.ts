@@ -1,3 +1,10 @@
+import { MockException } from '../core/models';
+import { DELETED_USERS, MockUser, USERS } from '../data/user';
+//#if (LocalIdentity)
+import { expireMockSessionAuthentication, setMockSessionUserId } from '../utils/current-user';
+//#else
+import { setMockSessionUserId } from '../utils/current-user';
+//#endif
 import {
   USER_API,
   addUser,
@@ -6,13 +13,6 @@ import {
   getUsers,
   updateUser,
 } from './user';
-import { MockException } from '../core/models';
-import { DELETED_USERS, MockUser, USERS } from '../data/user';
-//#if (LocalIdentity)
-import { expireMockSessionAuthentication, setMockSessionUserId } from '../utils/current-user';
-//#else
-import { setMockSessionUserId } from '../utils/current-user';
-//#endif
 
 type Handler = (req: { params: { id: string } }) => unknown;
 

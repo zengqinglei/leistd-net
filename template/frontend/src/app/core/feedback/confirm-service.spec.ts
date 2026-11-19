@@ -7,12 +7,12 @@ import { HlmDialogService } from '@spartan-ng/helm/dialog';
 import { EMPTY, of, Subject, throwError } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
-import { ConfirmService } from './confirm-service';
 import { DialogClose } from '../components/dialog-close/dialog-close';
 import { ApplicationHttpError, applicationErrorMessage } from '../errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
+import { ConfirmService } from './confirm-service';
 
 import type { Mock } from 'vitest';
 

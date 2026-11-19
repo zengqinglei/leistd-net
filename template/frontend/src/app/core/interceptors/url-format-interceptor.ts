@@ -8,9 +8,9 @@ import {
 import { inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { SKIP_GATEWAY } from './http-context-tokens';
 import { environment } from '../../../environments/environment';
 import { MOCKED_URL } from '../mock/mocked-url';
+import { SKIP_GATEWAY } from './http-context-tokens';
 
 /** 请求上下文令牌：本服务在网关中的名字。 */
 export const GATEWAY_SERVICE_NAME = new HttpContextToken<string>(() => '');

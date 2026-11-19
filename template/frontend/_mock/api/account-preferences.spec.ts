@@ -1,9 +1,9 @@
 import { HttpHeaders } from '@angular/common/http';
 
-import { ACCOUNT_PREFERENCES_API, currentAccountPreferences } from './account-preferences';
 import { MockException } from '../core/models';
 import { TENANT_SETTING_VALUES, USER_SETTING_VALUES } from '../data/settings';
 import { setMockSessionTenantKey, setMockSessionUserId } from '../utils/current-user';
+import { ACCOUNT_PREFERENCES_API, currentAccountPreferences } from './account-preferences';
 
 type MockHandler = (req: { body: unknown; headers: HttpHeaders }) => unknown;
 

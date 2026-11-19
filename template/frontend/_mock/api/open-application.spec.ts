@@ -1,6 +1,5 @@
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
 
-import { OPEN_APPLICATION_API } from './open-application';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
@@ -8,6 +7,7 @@ import {
 import { MockException } from '../core/models';
 import { OPEN_APPLICATIONS, OPEN_APPLICATION_SCOPES } from '../data/open-applications';
 import { setMockSessionUserId } from '../utils/current-user';
+import { OPEN_APPLICATION_API } from './open-application';
 
 type Handler = (req: { body?: unknown; params?: Record<string, string> }) => unknown;
 

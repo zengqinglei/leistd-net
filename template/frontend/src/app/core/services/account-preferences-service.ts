@@ -7,10 +7,6 @@ import { HttpClient, HttpErrorResponse, HttpHeaders,
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-//#if (IncludeLocalization)
-import { Lang, LanguageService, SUPPORTED_LANGS } from './language-service';
-//#endif
-import { THEME_MODES, ThemeMode, ThemeService } from './theme-service';
 import {
   AccountPreferenceField,
   AccountPreferencesDto,
@@ -21,6 +17,10 @@ import { ApplicationHttpError } from '../errors/application-http-error';
 //#if (TenantWorkspace)
 import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
 //#endif
+//#if (IncludeLocalization)
+import { Lang, LanguageService, SUPPORTED_LANGS } from './language-service';
+//#endif
+import { THEME_MODES, ThemeMode, ThemeService } from './theme-service';
 
 /** 解析后的一份偏好：每个字段都在，未设置为 null（线上缺省与 null 同义）。 */
 export interface AccountPreferences {

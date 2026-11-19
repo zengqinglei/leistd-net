@@ -129,7 +129,7 @@ Resource 已注册用户访问令牌适配器。
 
 ## 发布本服务的 Client 包
 
-src/CompanyName.ProjectName.Client 只依赖 Refit 与服务客户端框架，不引用服务内部程序集；DTO 独立演进。新增接口经 Refit 特性声明，并由 AddRefitServiceClient 注册，以统一还原远端异常。Client 注册返回 IHttpClientBuilder，由消费宿主选择机器认证或用户交换，不自行猜测身份模式。以 NuGet 发布并按服务版本升级。
+`src/CompanyName.ProjectName.Client` 直接引用 `Refit` 17 以启用接口源生成器，DTO 独立于服务内部程序集。新增接口经 Refit 特性声明，并由 `AddRefitServiceClient` 注册，以统一还原远端异常。服务客户端框架携带 `Refit.HttpClientFactory.Reflection` 和 `Refit.Reflection`。Client 注册返回 `IHttpClientBuilder`，由消费宿主选择机器认证或用户交换。以 NuGet 发布并按服务版本升级。
 
 服务同时提供机器端点与用户端点时，按认证方式拆分 Refit 接口与命名客户端，各给一个注册入口；框架要求每个命名客户端只挂一种认证，单模式服务不预建两套接口。拆出的第二个入口用同一个 `configSectionPath` 共用地址节，见[Identity 与资源服务对接](#identity-与资源服务对接)的配置说明。
 

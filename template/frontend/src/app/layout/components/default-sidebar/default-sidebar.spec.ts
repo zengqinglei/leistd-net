@@ -11,7 +11,6 @@ import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 import { Subject } from 'rxjs';
 //#endif
 
-import { DefaultSidebar } from './default-sidebar';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
 //#endif
@@ -37,6 +36,7 @@ import {
   PLATFORM_ENTRY_PERMISSIONS,
 } from '../../../shared/constants/permission.constants';
 import { expectTouchTarget, setCoarsePointer } from '../../../shared/utils/coarse-pointer.testing';
+import { DefaultSidebar } from './default-sidebar';
 
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以这里按**键**断言：分组骨架与文案无关，

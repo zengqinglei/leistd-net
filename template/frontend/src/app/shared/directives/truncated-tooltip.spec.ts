@@ -4,8 +4,8 @@ import { By } from '@angular/platform-browser';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { userEvent } from 'vitest/browser';
 
-import { TruncatedTooltip } from './truncated-tooltip';
 import { parkPointer } from '../utils/pointer.testing';
+import { TruncatedTooltip } from './truncated-tooltip';
 
 @Component({
   imports: [...HlmTooltipImports, TruncatedTooltip],

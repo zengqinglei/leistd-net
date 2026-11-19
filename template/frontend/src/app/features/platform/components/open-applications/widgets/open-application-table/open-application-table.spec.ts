@@ -10,7 +10,6 @@ import { SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 import { page, userEvent } from 'vitest/browser';
 
-import { OpenApplicationTable } from './open-application-table';
 //#if (IncludeLocalization)
 import globalEn from '../../../../../../../../public/i18n/en.json';
 import openAppEn from '../../../../../../../../public/i18n/openApp/en.json';
@@ -25,6 +24,7 @@ import {
 } from '../../../../../../shared/utils/coarse-pointer.testing';
 import { expectAriaSortOnSortedHeaderOnly } from '../../../../../../shared/utils/table-sorting.testing';
 import { OpenApplicationOutputDto } from '../../../../dtos/open-application.dto';
+import { OpenApplicationTable } from './open-application-table';
 
 /** 开放应用表格在最窄一档的身份信息：主列截断名称与 Client ID，展开详情补全文。 */
 describe('OpenApplicationTable', () => {

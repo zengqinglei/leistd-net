@@ -2,6 +2,11 @@ import { Component, provideZonelessChangeDetection, signal } from '@angular/core
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { userEvent } from 'vitest/browser';
 
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../i18n/transloco.testing';
+//#endif
+import { renderSubmission } from '../../validation/form-submission.testing';
+import { WebAuthnFailure } from '../../webauthn/webauthn-error';
 import { ReauthenticateDialog, ReauthenticationProof } from './reauthenticate-dialog';
 import {
   confirmWithCode,
@@ -11,11 +16,6 @@ import {
   reauthenticateForm,
   reauthenticateMethod,
 } from './reauthenticate-dialog.testing';
-//#if (IncludeLocalization)
-import { provideTranslocoTesting } from '../../i18n/transloco.testing';
-//#endif
-import { renderSubmission } from '../../validation/form-submission.testing';
-import { WebAuthnFailure } from '../../webauthn/webauthn-error';
 
 /**
  * 确认是本人：按出示者的账号状态给出可选方式，只交出当前所选的那一种凭证；

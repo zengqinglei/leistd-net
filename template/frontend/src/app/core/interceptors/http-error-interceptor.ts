@@ -12,7 +12,6 @@ import { catchError, lastValueFrom, throwError } from 'rxjs';
 import { catchError, throwError } from 'rxjs';
 //#endif
 
-import { SILENT_AUTH } from './http-context-tokens';
 //#if (LocalIdentity)
 import { API_ERROR_CODES } from '../errors/api-error-codes';
 import { apiErrorCode, ApplicationHttpError } from '../errors/application-http-error';
@@ -31,6 +30,7 @@ import { TenantContextService } from '../services/tenant-context-service';
 //#if (IncludeMultiTenancy)
 import { TENANT_INVALID_HEADER } from '../tenancy/tenant-protocol';
 //#endif
+import { SILENT_AUTH } from './http-context-tokens';
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);

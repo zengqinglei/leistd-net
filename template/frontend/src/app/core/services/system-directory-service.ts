@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { SystemOutputDto } from '../../shared/dtos/system.dto';
+import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 import { AuthService } from './auth-service';
 //#if (IncludeLocalization)
 import { LanguageService } from './language-service';
@@ -11,8 +13,6 @@ import { LayoutService } from './layout-service';
 //#if (TenantWorkspace)
 import { WorkspaceContextService } from './workspace-context-service';
 //#endif
-import { SystemOutputDto } from '../../shared/dtos/system.dto';
-import { FullPageNavigationService } from '../routing/full-page-navigation-service';
 
 /** 品牌块与命令面板共用目录与跳转规则，目录随本人会话和语言重新读取。 */
 @Injectable({ providedIn: 'root' })

@@ -14,8 +14,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { of, Subject, throwError } from 'rxjs';
 
-import { Users } from './users';
-import { UserTable } from './widgets/user-table/user-table';
 //#if (LocalIdentity)
 import {
   confirmWithCode,
@@ -40,6 +38,8 @@ import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { GetUsersInputDto } from '../../dtos/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
+import { Users } from './users';
+import { UserTable } from './widgets/user-table/user-table';
 
 import type { MockedObject } from 'vitest';
 

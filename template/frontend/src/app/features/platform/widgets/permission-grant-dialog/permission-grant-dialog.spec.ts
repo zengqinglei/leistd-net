@@ -11,7 +11,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { catchError, throwError } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
-import { PermissionGrantDialog } from './permission-grant-dialog';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -23,6 +22,7 @@ import {
   setCoarsePointer,
   tapAt,
 } from '../../../../shared/utils/coarse-pointer.testing';
+import { PermissionGrantDialog } from './permission-grant-dialog';
 
 /**
  * 权限弹窗的加载竞态：弹窗供角色与用户共用，晚到的响应若落到新主体，两边版本同为 0 时

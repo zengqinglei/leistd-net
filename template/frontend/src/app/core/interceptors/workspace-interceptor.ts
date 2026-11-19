@@ -3,10 +3,10 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 
-import { WORKSPACE_SCOPE } from './http-context-tokens';
 import { API_ERROR_CODES } from '../errors/api-error-codes';
 import { ApplicationHttpError } from '../errors/application-http-error';
 import { WorkspaceContextService } from '../services/workspace-context-service';
+import { WORKSPACE_SCOPE } from './http-context-tokens';
 
 export const workspaceInterceptor: HttpInterceptorFn = (request, next) => {
   if (!request.url.includes('/api/')) return next(request);

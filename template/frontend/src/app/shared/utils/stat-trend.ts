@@ -36,7 +36,7 @@ export function sparklineOf(series: readonly (number | null)[] | null | undefine
       marks: [
         ...(flat
           ? []
-          : [areaY(rows, { x: 'index', y: 'value', y1: low, fill: color, fillOpacity: 0.12 })]),
+          : [areaY(rows, { x: 'index', y1: low, y2: 'value', fill: color, fillOpacity: 0.12 })]),
         lineY(rows, { x: 'index', y: 'value', stroke: color, strokeWidth: 1.75 }),
       ],
       scales: {

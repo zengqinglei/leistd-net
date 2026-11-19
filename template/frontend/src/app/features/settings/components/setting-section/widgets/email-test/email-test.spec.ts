@@ -4,7 +4,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-import { EmailTest } from './email-test';
 import { ApplicationHttpError } from '../../../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
@@ -15,6 +14,7 @@ import {
   renderSubmission,
   rejectedField,
 } from '../../../../../../core/validation/form-submission.testing';
+import { EmailTest } from './email-test';
 
 import type { Mock } from 'vitest';
 

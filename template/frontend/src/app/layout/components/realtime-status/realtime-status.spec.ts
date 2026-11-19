@@ -4,7 +4,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 
-import { RealtimeStatus } from './realtime-status';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
@@ -13,6 +12,7 @@ import {
   type RealtimeConnectionStatus,
   SignalRService,
 } from '../../../core/services/signalr-service';
+import { RealtimeStatus } from './realtime-status';
 
 /**
  * 实时连接提示条：正常时不显示，重连持续 2 秒以上与断开时显示。假计时器只推进本组件的显示延时

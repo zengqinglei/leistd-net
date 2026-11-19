@@ -2,11 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { AuthorizationService } from './authorization-service';
 import {
   PERMISSIONS,
   PLATFORM_ENTRY_PERMISSIONS,
 } from '../../shared/constants/permission.constants';
+import { AuthorizationService } from './authorization-service';
 
 /** 前端可见性的唯一判据：超级管理员标记只是展示信息，不参与 has/hasAny/canAccessPlatform 的判定。 */
 describe('AuthorizationService', () => {

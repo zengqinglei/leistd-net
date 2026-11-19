@@ -5,9 +5,9 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 
-import { markFormSubmitted } from './submit-error-state-matcher';
 import { focusFirstInvalid } from '../../shared/utils/form-focus';
 import { mapFormErrors } from '../errors/form-errors';
+import { markFormSubmitted } from './submit-error-state-matcher';
 
 /** 保持 Angular 提交状态覆盖真实异步动作，服务端错误挂载并渲染后再移焦点。 */
 export function injectFormSubmission() {

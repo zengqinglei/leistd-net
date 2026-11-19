@@ -25,11 +25,16 @@ public static class CurrentTenantKeyExtensions
     public static string ScopeKey(this ICurrentTenant currentTenant, string key)
     {
         ArgumentNullException.ThrowIfNull(currentTenant);
+        return ScopeKey(currentTenant.Id, key);
+    }
+
+    internal static string ScopeKey(Guid? tenantId, string key)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
         // 租户 Id 的 N 格式是 32 位十六进制，与 host 不会撞。
-        return currentTenant.Id is { } tenantId
-            ? $"{tenantId:N}:{key}"
+        return tenantId is { } id
+            ? $"{id:N}:{key}"
             : $"{HostScope}:{key}";
     }
 }

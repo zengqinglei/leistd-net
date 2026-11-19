@@ -1,8 +1,6 @@
 //#if (TenantWorkspace)
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
 
-import { getCurrentPermissions } from './authorization';
-import { WORKSPACE_API } from './workspace';
 import { MockRequest } from '../core/models';
 import { withinWorkspace } from '../core/request-workspace';
 import { USERS } from '../data/user';
@@ -12,6 +10,8 @@ import {
   setMockSessionTenantKey,
   setMockSessionUserId,
 } from '../utils/current-user';
+import { getCurrentPermissions } from './authorization';
+import { WORKSPACE_API } from './workspace';
 
 function request(workspace: string, url = '/api/v1/permissions/current'): MockRequest {
   const headers = new HttpHeaders({ 'X-Workspace': workspace });
