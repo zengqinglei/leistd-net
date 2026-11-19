@@ -195,8 +195,13 @@
     },
     "realtime": {
       "reconnecting": "Live updates interrupted. Reconnecting…",
-      "disconnected": "Live updates disconnected. This page may be out of date.",
-      "reconnect": "Reconnect"
+      "waiting": "Live updates interrupted. Retrying in {{seconds}}s",
+      "waitingShort": "Retrying in {{seconds}}s",
+      "retrying": "Live updates interrupted. Retrying…",
+      "retryingShort": "Retrying…",
+      "restored": "Live updates restored",
+      "retryNow": "Retry now",
+      "interrupted": "Live updates interrupted. Retrying automatically."
     },
     "breadcrumb": {
       "label": "Breadcrumb",

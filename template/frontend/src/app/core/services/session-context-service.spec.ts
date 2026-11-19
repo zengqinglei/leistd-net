@@ -38,6 +38,9 @@ import { AuthorizationService } from './authorization-service';
 import { LanguageService } from './language-service';
 //#endif
 import { SessionContextService } from './session-context-service';
+//#if (IncludeNotifications || IncludeRealTime)
+import { SignalRService } from './signalr-service';
+//#endif
 import { ThemeService } from './theme-service';
 
 import type { MockedObject } from 'vitest';
@@ -86,6 +89,9 @@ describe('SessionContextService', () => {
     | 'revision'
   >;
   let http: HttpTestingController;
+  //#if (IncludeNotifications || IncludeRealTime)
+  let sessionRejected: Subject<void>;
+  //#endif
 
   beforeEach(() => {
     //#if (IncludeLocalization)
@@ -136,6 +142,12 @@ describe('SessionContextService', () => {
       ],
       //#endif
     });
+    //#if (IncludeNotifications || IncludeRealTime)
+    sessionRejected = new Subject<void>();
+    TestBed.overrideProvider(SignalRService, {
+      useValue: { sessionRejected$: sessionRejected.asObservable() },
+    });
+    //#endif
     service = TestBed.inject(SessionContextService);
     settingContext = TestBed.inject(SettingContextService);
     preferences = TestBed.inject(AccountPreferencesService);
@@ -359,6 +371,16 @@ describe('SessionContextService', () => {
 
       expect(preferences.timeZone()).toBe('Asia/Tokyo');
     });
+    //#if (IncludeNotifications || IncludeRealTime)
+
+    // 实时连接重连被拒（疑似 401）：同样只重查 /me，失效时由拦截器转去登录
+    it('re-reads the current user when the live connection is rejected', () => {
+      sessionRejected.next();
+
+      expect(authService.fetchUser).toHaveBeenCalledOnce();
+      expect(authService.fetchUser).toHaveBeenCalledWith(false);
+    });
+    //#endif
 
     it('does nothing without a signed-in subject', () => {
       authService.isAuthenticated.mockReturnValue(false);

@@ -3,42 +3,65 @@
 <!--#else-->
 <ng-container>
 <!--#endif-->
-  <!-- 外边距与页面外框（p-4 sm:p-6）同一档，提示条与页面内容左右对齐；hlm-alert 自带的 role="alert" 去掉，
-       由常驻的宿主播报 -->
-  @switch (notice()) {
-    @case ('reconnecting') {
-      <div class="px-4 pt-4 sm:px-6 sm:pt-6">
-        <div hlmAlert [attr.role]="null" data-testid="realtime-status-notice">
-          <ng-icon name="lucideRefreshCw" />
-          <p hlmAlertTitle>{{ t('layout.realtime.reconnecting') }}</p>
-        </div>
-      </div>
-    }
-    @case ('disconnected') {
-      <div class="px-4 pt-4 sm:px-6 sm:pt-6">
-        <!-- 按钮放官方 action 槽位；垂直居中并让出右侧空间，触屏按钮加高时提示条随之加高 -->
-        <div
-          hlmAlert
-          variant="destructive"
-          class="has-data-[slot=alert-action]:pr-28 pointer-coarse:min-h-14"
-          [attr.role]="null"
-          data-testid="realtime-status-notice"
-        >
-          <ng-icon name="lucideWifiOff" />
-          <p hlmAlertTitle>{{ t('layout.realtime.disconnected') }}</p>
-          <div hlmAlertAction class="top-1/2 -translate-y-1/2">
-            <button
-              hlmBtn
-              variant="outline"
-              size="sm"
-              data-testid="realtime-reconnect"
-              (click)="reconnect()"
-            >
-              {{ t('layout.realtime.reconnect') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    }
+  <!-- 胶囊骑在页头下边框（略偏下，让开页头正中的搜索框）：不推开页面，也不压页面工具栏。
+       可见文案对读屏隐藏，读屏只读下面那句稳定文案，倒计时逐秒变化不会被反复播报 -->
+  @if (notice(); as notice) {
+    <div
+      class="absolute -top-2.5 left-1/2 flex h-7 max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 ps-2.5 text-xs whitespace-nowrap shadow-md backdrop-blur pointer-coarse:h-9 pointer-coarse:ps-3 pointer-coarse:text-sm"
+      [class]="notice === 'waiting' || notice === 'retrying' ? 'pe-0.5' : 'pe-3'"
+      data-testid="realtime-status-notice"
+      [attr.data-notice]="notice"
+    >
+      @switch (notice) {
+        @case ('reconnecting') {
+          <ng-icon
+            name="lucideLoaderCircle"
+            class="shrink-0 text-muted-foreground motion-safe:animate-spin"
+            size="16"
+          />
+          <span class="truncate" aria-hidden="true">{{ t('layout.realtime.reconnecting') }}</span>
+          <span class="sr-only">{{ t('layout.realtime.reconnecting') }}</span>
+        }
+        @case ('restored') {
+          <ng-icon name="lucideCheck" class="shrink-0 text-success" size="16" />
+          <span class="truncate" aria-hidden="true">{{ t('layout.realtime.restored') }}</span>
+          <span class="sr-only">{{ t('layout.realtime.restored') }}</span>
+        }
+        @default {
+          <ng-icon name="lucideWifiOff" class="shrink-0 text-warning" size="16" />
+          <!-- 窄屏只留倒计时，按钮不被挤出去 -->
+          <span class="truncate" aria-hidden="true">
+            @if (notice === 'waiting') {
+              <span class="hidden sm:inline">{{
+                t('layout.realtime.waiting', { seconds: seconds() })
+              }}</span>
+              <span class="tabular-nums sm:hidden">{{
+                t('layout.realtime.waitingShort', { seconds: seconds() })
+              }}</span>
+            } @else {
+              <span class="hidden sm:inline">{{ t('layout.realtime.retrying') }}</span>
+              <span class="sm:hidden">{{ t('layout.realtime.retryingShort') }}</span>
+            }
+          </span>
+          <span class="sr-only">{{ t('layout.realtime.interrupted') }}</span>
+          <span class="h-4 w-px shrink-0 bg-border" aria-hidden="true"></span>
+          <!-- 进行中只转圈、不禁用：再点由服务判定为正在建连，不会重复发起。
+               触屏下按钮保持胶囊内的高度，命中区由透明 ::after 上下各伸出 10px 补足 44px（从内边距盒算起，扣掉边框） -->
+          <button
+            hlmBtn
+            variant="ghost"
+            size="sm"
+            class="relative h-6 shrink-0 rounded-full px-2 text-xs pointer-coarse:h-7 pointer-coarse:px-3 pointer-coarse:text-sm pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2.5"
+            data-testid="realtime-retry"
+            (click)="retryNow()"
+          >
+            @if (notice === 'retrying') {
+              <ng-icon name="lucideLoaderCircle" class="motion-safe:animate-spin" size="14" />
+            }
+            {{ t('layout.realtime.retryNow') }}
+          </button>
+        }
+      }
+    </div>
   }
 </ng-container>

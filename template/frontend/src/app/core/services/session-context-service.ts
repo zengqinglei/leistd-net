@@ -1,5 +1,8 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { DestroyRef, Injectable, PLATFORM_ID, inject } from '@angular/core';
+//#if (IncludeNotifications || IncludeRealTime)
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+//#endif
 import {
   NavigationCancel,
   NavigationCancellationCode,
@@ -17,6 +20,9 @@ import { SettingOutputDto } from '../settings/setting.dto';
 import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
+//#if (IncludeNotifications || IncludeRealTime)
+import { SignalRService } from './signalr-service';
+//#endif
 //#if (TenantWorkspace)
 import { WorkspaceContextService } from './workspace-context-service';
 //#endif
@@ -27,7 +33,7 @@ import { WorkspaceContextService } from './workspace-context-service';
  * 主体建立走 {@link establish}（启动）或 {@link enter}（登录导航），离开走 {@link clear}，设置刷新走 {@link refreshSettings}，
  * 不单独调下层的 load/clear。
  *
- * 页签回到前台时只重查 `/me`（见 {@link revalidate}）：别处改了偏好或资料、或者会话已经失效，打开着的页签
+ * 页签回到前台、实时连接重连被拒时只重查 `/me`（见 {@link revalidate}）：别处改了偏好或资料、或者会话已经失效，打开着的页签
  * 否则要等下一次操作撞上才知道。权限与设置不随可见事件重查，刷新页面或重新登录时更新：权限只决定界面显示什么，
  * 拦截在服务端；设置很少变，界面用到的生效值已由 `/me` 的偏好给出。
  */
@@ -59,6 +65,13 @@ export class SessionContextService {
     inject(DestroyRef).onDestroy(() =>
       document.removeEventListener('visibilitychange', onVisibilityChange),
     );
+    //#if (IncludeNotifications || IncludeRealTime)
+
+    // 实时连接重连被拒（疑似 401）：会话可能已失效，同样重查一次，失效时由拦截器转去登录
+    inject(SignalRService)
+      .sessionRejected$.pipe(takeUntilDestroyed())
+      .subscribe(() => void this.revalidate());
+    //#endif
   }
 
   /**
