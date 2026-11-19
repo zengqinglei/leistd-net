@@ -375,7 +375,19 @@ describe('WorkspaceDashboard', () => {
       return;
     }
     const tooltip = () => document.querySelector<HTMLElement>('[role="tooltip"]');
-    card.focus();
+    // 先处理滚动再聚焦。聚焦引起的滚动事件可能在提示打开后才派发，Spartan 会在滚动时收起提示。
+    const { scrollX, scrollY } = window;
+    const onScroll = vi.fn();
+    window.addEventListener('scroll', onScroll, { once: true });
+    try {
+      card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+      if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
+        await expect.poll(() => onScroll.mock.calls.length).toBe(1);
+      }
+    } finally {
+      window.removeEventListener('scroll', onScroll);
+    }
+    card.focus({ preventScroll: true });
     await expect.poll(() => tooltip()?.textContent?.trim()).toBe(text);
     card.blur();
     await expect.poll(() => tooltip()).toBeNull();

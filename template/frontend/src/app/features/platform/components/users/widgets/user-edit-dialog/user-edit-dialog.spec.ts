@@ -204,8 +204,7 @@ describe('UserEditDialog', () => {
   });
 
   // 开关各占整行（宽屏两栏布局下也是）：开关与上方输入框的右缘对齐，说明不被半栏挤成两行
-  it('lines each switch up with the right edge of the inputs above', async () => {
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
+  it('lines each switch up with the right edge of the inputs above', () => {
     const inputsRight = document.getElementById('user-email')!.getBoundingClientRect().right;
 
     // prettier-ignore
@@ -221,9 +220,7 @@ describe('UserEditDialog', () => {
   });
 
   // 宽度固定为两栏布局的宽度，不随内容伸缩：新建与编辑两态、说明长短不同时对话框不忽宽忽窄
-  it('keeps the dialog at its two-column width regardless of content', async () => {
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
-
+  it('keeps the dialog at its two-column width regardless of content', () => {
     expect(document.querySelector('hlm-dialog-content')!.getBoundingClientRect().width).toBe(672);
   });
 
@@ -231,8 +228,6 @@ describe('UserEditDialog', () => {
   it('toggles the active switch from the edge of its touch target on coarse pointers', async () => {
     await setCoarsePointer(true);
     onTestFinished(() => setCoarsePointer(false));
-    // 弹窗打开时有缩放动画，量尺寸前等它结束
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     const active = document.getElementById('user-is-active')!;
     const before = active.getAttribute('aria-checked');
 

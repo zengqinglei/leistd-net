@@ -51,14 +51,8 @@ describe('dropdown trigger side change after opening', () => {
       await userEvent.click(buttonElement);
       await expect.poll(() => buttonElement.getAttribute('aria-expanded')).toBe('true');
       await fixture.whenStable();
-      // 浮层挂在 document 上，不在组件宿主里；等进场动画（缩放、平移）结束再量
+      // 浮层挂在 document 上，不在组件宿主里。
       const menu = document.querySelector<HTMLElement>('[data-slot="dropdown-menu"]')!;
-      // 动画可能被取消后重播（finished 以 AbortError 拒绝），所以等到没有在跑的为止
-      for (let round = 0; round < 10; round++) {
-        const running = menu.getAnimations().filter((a) => a.playState === 'running');
-        if (running.length === 0) break;
-        await Promise.allSettled(running.map((a) => a.finished));
-      }
       return menu.getBoundingClientRect();
     }
 

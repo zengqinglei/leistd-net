@@ -326,10 +326,9 @@ describe('FacetedFilter', () => {
   });
 
   // 面板里的选项没有别的全文入口：长选项折行，图标不被挤压
-  it('wraps a long option in the panel instead of truncating it', async () => {
+  it('wraps a long option in the panel instead of truncating it', () => {
     const long = 'Operations, logging and data retention administrator';
     createFilter({ options: [{ value: 'ops', label: long, icon: 'lucideCheck' }] });
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
 
     const option = optionBy(long)!;
     const label = Array.from(option.querySelectorAll('span')).find((s) => s.textContent === long)!;
@@ -349,8 +348,6 @@ describe('FacetedFilter', () => {
     it('gives the search box, options and the clear command 44px targets', async () => {
       await setCoarsePointer(true);
       createFilter({ multiple: true, values: ['admin'] });
-      // 展开动画带缩放，量的是动画结束后的尺寸
-      await Promise.all(document.getAnimations().map((animation) => animation.finished));
 
       const group = search()!.closest<HTMLElement>('hlm-input-group')!;
       expect(group.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

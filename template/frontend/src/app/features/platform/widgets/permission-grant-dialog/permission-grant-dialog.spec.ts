@@ -309,8 +309,6 @@ describe('PermissionGrantDialog', () => {
     ]);
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
     await fixture.whenStable();
-    // 弹窗打开时有缩放动画，量尺寸前等它结束
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     const users = document.getElementById('App.Users')!;
     const roles = document.getElementById('App.Roles')!;
 

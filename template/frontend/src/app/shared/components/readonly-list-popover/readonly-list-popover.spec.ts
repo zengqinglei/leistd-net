@@ -81,10 +81,9 @@ describe('ReadonlyListPopover', () => {
     return Array.from(list().querySelectorAll('li')).map((li) => li.textContent!.trim());
   }
 
-  /** 等待动画与 ResizeObserver 测量完成，避免布局已更新而截断绑定尚未更新。 */
+  /** 等待 ResizeObserver 测量完成，避免布局已更新而截断绑定尚未更新。 */
   async function settle(): Promise<void> {
     await fixture.whenStable();
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     await new Promise<void>((resolve) => {
       const observer = new ResizeObserver(() => {
         observer.disconnect();
@@ -328,7 +327,6 @@ describe('ReadonlyListPopover', () => {
     await userEvent.hover(target);
     await expect.poll(() => tooltip()).not.toBeNull();
     const tip = tooltip()!;
-    await Promise.all(tip.getAnimations({ subtree: true }).map((a) => a.finished));
     const box = tip.getBoundingClientRect();
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(window.innerWidth);

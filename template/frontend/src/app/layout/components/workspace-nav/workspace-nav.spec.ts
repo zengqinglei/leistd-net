@@ -143,12 +143,6 @@ describe('WorkspaceNav overflow', () => {
     more.dispatchEvent(arrowDown);
   }
 
-  /** 等浮层开合动画结束：几何与焦点要在动画之后读。 */
-  async function settleOverlay(fixture: Awaited<ReturnType<typeof render>>): Promise<void> {
-    await settle(fixture);
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
-  }
-
   const menuItems = () =>
     Array.from(document.querySelectorAll<HTMLElement>('[hlmDropdownMenuItem]'));
 
@@ -159,7 +153,7 @@ describe('WorkspaceNav overflow', () => {
     ) as HTMLElement;
 
     pressArrowDown(more);
-    await settleOverlay(fixture);
+    await settle(fixture);
 
     // 打开的菜单首项拿到焦点，导航自己的方向键管理没有把焦点抢回平铺链接
     expect(menuItems().length).toBeGreaterThan(0);
@@ -174,14 +168,14 @@ describe('WorkspaceNav overflow', () => {
       '[data-testid="workspace-nav-more"]',
     ) as HTMLElement;
     pressArrowDown(more);
-    await settleOverlay(fixture);
+    await settle(fixture);
     await userEvent.hover(menuItems()[1]);
     await userEvent.keyboard('{Escape}');
-    await settleOverlay(fixture);
+    await settle(fixture);
     expect(menuItems()).toHaveLength(0);
 
     pressArrowDown(more);
-    await settleOverlay(fixture);
+    await settle(fixture);
 
     expect(document.activeElement).toBe(menuItems()[0]);
   });
@@ -193,7 +187,7 @@ describe('WorkspaceNav overflow', () => {
       '[data-testid="workspace-nav-more"]',
     ) as HTMLElement;
     pressArrowDown(more);
-    await settleOverlay(fixture);
+    await settle(fixture);
 
     await userEvent.hover(menuItems()[2]);
 
@@ -209,8 +203,6 @@ describe('WorkspaceNav overflow', () => {
       ) as HTMLElement;
       more.click();
       await settle(fixture);
-      // 浮层带缩放进场动画，量到的尺寸要等动画结束
-      await Promise.all(document.getAnimations().map((animation) => animation.finished));
       return { more, menuItems: Array.from(document.querySelectorAll('[hlmDropdownMenuItem]')) };
     }
 
@@ -352,7 +344,6 @@ describe('WorkspaceNav pseudo locale', () => {
     more.click();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     await fixture.whenStable();
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     const folded = Array.from(document.querySelectorAll<HTMLElement>('[hlmDropdownMenuItem]')).map(
       (item) => item.textContent!.trim(),
     );

@@ -128,6 +128,7 @@ npm run build
 ```
 
 单测由 Vitest 在 Playwright 驱动的真实 Chromium 里运行（无头）。新机器首次运行前安装一次浏览器：`npx playwright install chromium`。`angular.json` 的 test 目标开启 `isolate`（每个 spec 独立 iframe，避免全局桩串扰）并使用不做 Mock 替换的 `unit-test` 构建配置，不要关闭或改用开发配置。单测 setup 已预载全局网页字体，量宽不必再等；用例另外登记的字体须先加载。
+单测 setup 关闭 CSS 过渡与动画，用例直接断言终态，异步状态用 `expect.element` 或 `expect.poll` 等待，专测动画的用例可移除 `#test-disable-motion` 样式并在 `onTestFinished` 中恢复。
 
 Linux 关闭触屏仿真不恢复 fine/hover，须分实例；见 `frontend/src/app/shared/utils/coarse-pointer.testing.ts`。
 

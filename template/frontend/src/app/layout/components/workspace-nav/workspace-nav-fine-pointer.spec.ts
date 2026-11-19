@@ -48,7 +48,6 @@ describe('WorkspaceNav on fine pointers', () => {
     )!;
     more.click();
     await fixture.whenStable();
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     const item = document.querySelector<HTMLElement>('[hlmDropdownMenuItem]')!;
 
     expect(more.getBoundingClientRect().height).toBeLessThan(44);

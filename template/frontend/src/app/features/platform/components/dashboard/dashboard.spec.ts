@@ -260,7 +260,6 @@ describe('Dashboard', () => {
 
     await userEvent.click(trigger);
     await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
-    await Promise.allSettled(document.getAnimations().map((animation) => animation.finished));
 
     const pane = document.querySelector<HTMLElement>('.cdk-overlay-pane')!.getBoundingClientRect();
     const calendar = document

@@ -268,7 +268,6 @@ describe('DefaultSidebar pseudo locale', () => {
       TestBed.inject(HlmSidebarService).setOpen(true);
       fixture.autoDetectChanges();
       await fixture.whenStable();
-      await Promise.all(document.getAnimations().map((animation) => animation.finished));
       const host = fixture.nativeElement as HTMLElement;
 
       const sidebar = Array.from(
@@ -332,8 +331,6 @@ describe('DefaultSidebar touch targets', () => {
     TestBed.inject(HlmSidebarService).setOpen(false);
     fixture.detectChanges();
     await fixture.whenStable();
-    // 折叠是宽度过渡，量尺寸要等过渡结束
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-collapsible="icon"]')).not.toBeNull();
@@ -476,7 +473,6 @@ describe('DefaultSidebar tenant selection and platform management', () => {
     const { fixture, host, sidebar, workspace } = await setup('acme');
     sidebar.setOpen(false);
     await fixture.whenStable();
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     const icon = host.querySelector<HTMLButtonElement>('[data-testid="tenant-context-icon"]')!;
     expect(icon.getBoundingClientRect().width).toBe(32);
     expect(icon.getAttribute('aria-label')).toBe('acme');
