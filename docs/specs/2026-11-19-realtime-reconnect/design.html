@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>实时连接悬浮提示</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
+<style>
+/* VOICE 设计评审稿，冷静、可对照；结论先行。
+   IDEA 产品截图评审板：真实页面帧 + 编号批注，现状与方案并排。
+   PICTURE 推荐方案的 1440 帧，悬浮提示骑在页头下沿；下面是状态序列与 390 手机帧。
+   COLOUR 直接用模板 styles.css 的令牌，帧外只用中性色与两种批注色。
+   TYPE Geist + Geist Mono（模板字体）。
+   LAYOUT 顶部结论；方案切换 + 大帧；状态条；现状对照与手机帧两栏。 */
+:root{color-scheme:light dark;
+--background:light-dark(oklch(1 0 0),oklch(0.2 0.006 255));
+--foreground:light-dark(oklch(0.18 0.01 255),oklch(0.94 0.003 255));
+--card:light-dark(oklch(1 0 0),oklch(0.225 0.006 255));
+--primary:light-dark(oklch(0.52 0.16 250),oklch(0.72 0.14 250));
+--secondary:light-dark(oklch(0.966 0.004 250),oklch(0.27 0.006 255));
+--muted:light-dark(oklch(0.966 0.004 250),oklch(0.27 0.006 255));
+--muted-foreground:light-dark(oklch(0.505 0.015 255),oklch(0.72 0.012 250));
+--destructive:light-dark(oklch(0.457 0.245 27.325),oklch(0.759 0.191 22.216));
+--warning:light-dark(oklch(0.47 0.12 70),oklch(0.8 0.14 75));
+--success:light-dark(oklch(0.51 0.13 155),oklch(0.76 0.15 155));
+--border:light-dark(oklch(0.925 0.005 250),oklch(1 0 0 / 10%));
+--input:light-dark(oklch(0.86 0.02 250),oklch(1 0 0 / 22%));
+--sidebar:light-dark(oklch(0.985 0.002 250),oklch(0.225 0.006 255));
+--board:light-dark(oklch(0.955 0.004 250),oklch(0.16 0.006 255));
+--pin:oklch(0.55 0.2 262);--pin2:oklch(0.6 0.22 27)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--board);color:var(--foreground);font:15px/1.6 Geist,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;overflow-x:clip}
+.vp{overflow:hidden;border-radius:12px;box-shadow:0 1px 0 var(--border),0 12px 32px -12px oklch(0 0 0 / 25%);outline:1px solid var(--border);background:var(--background)}
+.frame{font-size:14px;line-height:1.5}
+.mk{position:absolute;z-index:30;width:20px;height:20px;border-radius:999px;display:grid;place-items:center;font:600 11px/1 Geist,sans-serif;color:#fff;background:var(--pin);box-shadow:0 0 0 2px var(--background)}
+.mk.cur{background:var(--pin2)}
+.lg{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:999px;font:600 11px/1 Geist,sans-serif;color:#fff;flex:none;margin-top:2px;background:var(--pin)}
+.lg.cur{background:var(--pin2)}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.pill-in{animation:pin .18s ease-out}
+@keyframes pin{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){.pill-in{animation:none}}
+</style>
+<style type="text/tailwindcss">
+@theme inline{
+--font-sans:Geist,system-ui,"PingFang SC",sans-serif;--font-mono:"Geist Mono",ui-monospace,monospace;
+--color-background:var(--background);--color-foreground:var(--foreground);--color-card:var(--card);
+--color-primary:var(--primary);--color-secondary:var(--secondary);--color-muted:var(--muted);--color-muted-foreground:var(--muted-foreground);
+--color-destructive:var(--destructive);--color-warning:var(--warning);--color-success:var(--success);
+--color-border:var(--border);--color-input:var(--input);--color-sidebar:var(--sidebar);--color-board:var(--board)}
+@layer base{*,::after,::before{border-color:var(--border)}}
+</style>
+</head>
+<body>
+<main class="mx-auto flex max-w-[1240px] flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
+  <header class="flex flex-col gap-3">
+    <h1 class="m-0 text-[clamp(28px,4vw,40px)] leading-[1.1] font-semibold tracking-[-0.02em]">实时连接提示改成顶部居中的悬浮胶囊</h1>
+    <p class="m-0 max-w-[68ch] text-base text-muted-foreground">推荐方案 A：胶囊骑在页头下沿，不推开页面，也不压住页头搜索和页面工具栏。登录期间一直重试，不再有“永久断开”；断线 3 秒内悄悄重连，超过才出现；会话失效不显示胶囊，交给现有的登录过期流程。</p>
+  </header>
+
+  <section class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div id="schemes" class="inline-flex h-9 items-center gap-0.5 rounded-md border border-input bg-background p-0.5" role="tablist" aria-label="位置方案"></div>
+      <div id="states" class="inline-flex h-9 flex-wrap items-center gap-0.5 rounded-md border border-input bg-background p-0.5" role="tablist" aria-label="连接状态"></div>
+    </div>
+    <div class="vp overflow-x-auto"><div id="big"></div></div>
+    <ol id="notes" class="m-0 grid list-none gap-3 p-0 text-sm sm:grid-cols-3"></ol>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div class="flex flex-col gap-3">
+      <h2 class="m-0 text-xl font-semibold tracking-[-0.01em]">四种状态，同一个位置</h2>
+      <p class="m-0 text-sm text-muted-foreground">只在异常时出现，正常连接时不占任何位置。</p>
+      <div id="seq" class="grid gap-3 sm:grid-cols-2"></div>
+    </div>
+    <div class="flex flex-col gap-3">
+      <h2 class="m-0 text-xl font-semibold tracking-[-0.01em]">手机 390</h2>
+      <p class="m-0 text-sm text-muted-foreground">同样骑在页头下沿；触屏按钮加高到 44px 命中区，文案只留倒计时。</p>
+      <div class="vp mx-auto w-full max-w-[390px]"><div id="phone"></div></div>
+    </div>
+  </section>
+  <section class="flex flex-col gap-3">
+    <h2 class="m-0 text-xl font-semibold tracking-[-0.01em]">业界做法：无限重试 + 封顶 + 抖动，会话失效才停</h2>
+    <p class="m-0 max-w-[80ch] text-sm text-muted-foreground">按各项目源码与官方文档核对（2026-11-19）。SignalR 官方默认只重试 4 次、到此为止，文档示例遇到放弃只提示刷新页面；常见实时客户端都不放弃。</p>
+    <div class="vp overflow-x-auto"><table class="w-full min-w-[760px] border-collapse text-sm"><thead class="bg-muted"><tr><th class="h-10 px-4 text-start font-medium">项目</th><th class="px-4 text-start font-medium">重试间隔</th><th class="px-4 text-start font-medium">封顶</th><th class="px-4 text-start font-medium">放弃</th><th class="px-4 text-start font-medium">提前重试</th><th class="px-4 text-start font-medium">断线提示</th></tr></thead><tbody id="rs"></tbody></table></div>
+  </section>
+  <p class="m-0 text-xs text-muted-foreground">帧内数据为虚构示例，仅用于版式。</p>
+</main>
+<script>
+{
+const I={refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',loader:'<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',wifiOff:'<path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/>',check:'<path d="M20 6 9 17l-5-5"/>',search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',panel:'<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',chevR:'<path d="m9 18 6-6-6-6"/>',bell:'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',plusCircle:'<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>',grid:'<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',menu:'<path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/>',plus:'<path d="M5 12h14"/><path d="M12 5v14"/>'};
+const ic=(n,c='size-4')=>`<svg class="${c} shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+const BV={success:'bg-success/10 text-success',warning:'bg-warning/10 text-warning',destructive:'bg-destructive/10 text-destructive',secondary:'bg-secondary'};
+const bd=(v,t)=>`<span class="inline-flex h-5 items-center gap-1 rounded-full px-2 text-xs font-medium whitespace-nowrap ${BV[v]}"><span class="size-1.5 rounded-full ${v==='secondary'?'bg-muted-foreground':'bg-current'}"></span>${t}</span>`;
+const mk=(n,pos,cur)=>`<b class="mk ${cur?'cur':''}" style="${pos}">${n}</b>`;
+
+/* —— 胶囊：状态 → 图标、文案、操作 —— */
+const ST={
+ reconnecting:{tab:'重连中',ic:ic('loader','size-4 spin text-muted-foreground'),t:'实时更新中断，正在重新连接…',m:'正在重新连接…',act:'',when:'断线 3 秒后仍未连上（快速重试 0、1、2 秒期间不显示）'},
+ waiting:{tab:'等待重试',ic:ic('wifiOff','size-4 text-warning'),t:'实时更新已中断，<span class="tabular-nums">18</span> 秒后重试',m:'<span class="tabular-nums">18</span> 秒后重试',act:'立即重试',when:'进入退避，间隔逐次加长到 30 秒封顶，倒计时到 0 自动重试'},
+ retrying:{tab:'重试中',ic:ic('wifiOff','size-4 text-warning'),t:'实时更新已中断，正在重试…',m:'正在重试…',act:'spin',when:'点「立即重试」，或网络恢复、切回本页时，跳过等待马上重试'},
+ restored:{tab:'已恢复',ic:ic('check','size-4 text-success'),t:'实时更新已恢复',m:'已恢复',act:'',when:'只在胶囊出现过时显示，2 秒后淡出；页面数据随之补查'}};
+const btn=(a,mobile)=>a?`<span class="h-4 w-px shrink-0 bg-border"></span><span class="inline-flex shrink-0 whitespace-nowrap ${mobile?'h-10 px-3':'h-6 px-2'} items-center gap-1.5 rounded-full font-medium hover:bg-muted">${a==='spin'?`${ic('loader','size-3.5 spin')}立即重试`:a}</span>`:'';
+const pill=(s,{mobile=false,top=42,anim=false}={})=>{const x=ST[s];return `<div class="${anim?'pill-in':''} absolute left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 ${mobile?'h-11 ps-3.5 pe-1 text-sm':'h-7 ps-2.5 '+(x.act?'pe-0.5':'pe-3')+' text-[13px]'} shadow-[0_4px_16px_-6px_oklch(0_0_0/0.25)] backdrop-blur" style="top:${top}px" role="status">${x.ic}<span class="truncate whitespace-nowrap">${mobile?x.m:x.t}</span>${btn(x.act,mobile)}</div>`};
+
+/* —— 应用外壳（侧栏布局）与一张列表页 —— */
+const NAV=[['概览',['仪表盘']],['管理',['租户','用户','角色']],['审计',['操作记录']],['集成',['分布式事件','Webhook']]];
+const ROWS=[['order.paid','死信','destructive','11-19 10:42'],['order.created','已发送','success','11-19 10:41'],['customer.updated','重试中','warning','11-19 10:40'],['invoice.issued','待发送','secondary','11-19 10:40'],['payment.refunded','死信','destructive','11-19 10:37'],['tenant.provisioned','已发送','success','11-19 10:31'],['user.registered','已发送','success','11-19 10:28']];
+const page=(pad=24)=>`<div class="flex flex-col gap-6" style="padding:${pad}px">
+ <div class="flex flex-wrap items-center gap-3"><div class="flex flex-auto flex-wrap items-center gap-2"><span class="flex h-8 w-72 items-center gap-2 rounded-md border border-input px-2.5 text-sm text-muted-foreground">${ic('search')}搜索事件名或 ID</span><span class="inline-flex h-8 items-center gap-0.5 rounded-md border border-input p-0.5">${['全部','待发送','重试中','死信'].map((l,i)=>`<span class="inline-flex h-full items-center rounded-[5px] px-2.5 text-sm ${i?'text-muted-foreground':'bg-muted font-medium'}">${l}</span>`).join('')}</span><span class="inline-flex h-8 items-center gap-1.5 rounded-md border border-dashed border-input px-2.5 text-sm font-medium">${ic('plusCircle')}事件名</span></div><span class="inline-flex h-8 items-center gap-1.5 rounded-md bg-secondary px-3 text-sm font-medium">${ic('refresh')}刷新</span></div>
+ <div class="overflow-hidden rounded-xl border"><table class="w-full border-collapse text-sm"><thead class="bg-muted"><tr>${['事件','状态','创建时间'].map(h=>`<th class="h-10 px-4 text-start font-medium">${h}</th>`).join('')}</tr></thead><tbody>${ROWS.map(r=>`<tr class="border-t"><td class="px-4 py-2.5 font-mono">${r[0]}</td><td class="px-4 py-2.5">${bd(r[2],r[1])}</td><td class="px-4 py-2.5 text-xs tabular-nums whitespace-nowrap">${r[3]}</td></tr>`).join('')}</tbody></table></div></div>`;
+const header=()=>`<header class="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/95 px-6">${ic('panel','size-4 text-muted-foreground')}<span class="h-4 w-px bg-border"></span><span class="text-sm text-muted-foreground">平台管理</span>${ic('chevR','size-3.5 text-muted-foreground')}<span class="text-sm font-medium">分布式事件</span><span class="flex flex-1 justify-center"><span class="flex h-8 w-56 items-center gap-2 rounded-md border border-input px-2.5 text-sm text-muted-foreground">${ic('search')}搜索<span class="ms-auto rounded border px-1 text-xs">⌘K</span></span></span><span class="flex items-center gap-3 text-muted-foreground">${ic('bell')}<span class="grid size-8 place-items-center rounded-full bg-muted text-xs font-medium text-foreground">PA</span></span></header>`;
+const side=()=>`<aside class="hidden w-56 shrink-0 flex-col gap-5 bg-sidebar p-3 md:flex"><div class="flex items-center gap-2 px-1 pt-1"><span class="grid size-8 place-items-center rounded-lg bg-foreground text-background">${ic('grid')}</span><span class="text-sm font-semibold">示例应用</span></div>${NAV.map(([g,it])=>`<div class="flex flex-col gap-0.5"><span class="px-2 pb-1 text-xs text-muted-foreground">${g}</span>${it.map(l=>`<span class="flex h-8 items-center rounded-md px-2 text-sm ${l==='分布式事件'?'bg-muted font-medium':''}">${l}</span>`).join('')}</div>`).join('')}</aside>`;
+const shell=(inner,overlay='',h=620)=>`<div class="frame relative flex min-w-[720px] bg-sidebar" style="height:${h}px">${side()}<div class="relative my-2 me-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-background md:ms-0 ms-2">${header()}${inner}${overlay}</div></div>`;
+
+/* —— 方案 —— */
+const curAlert=`<div class="px-6 pt-6"><div class="relative grid grid-cols-[auto_1fr] items-center gap-x-2.5 rounded-lg border px-4 py-3 pr-28 text-sm text-destructive">${ic('wifiOff')}<p class="m-0">实时连接已断开，页面数据可能不是最新。</p><span class="absolute top-1/2 right-3 inline-flex h-8 -translate-y-1/2 items-center rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground">重新连接</span></div></div>`;
+const SCH={
+ cur:{tab:'现状',cur:1,notes:[['1','整行 Alert 插在页面顶部，内容整体下移约 76px；重连中和已断开两种状态时高时低，页面跟着跳。',1],['2','点「重新连接」后提示先消失，失败再出现，看不出是否在重试。',1],['3','自动重试 5 次（约 47 秒）后放弃，之后只能手动点；重新部署超过 47 秒就一直挂着。',1]]},
+ A:{tab:'A 骑页头下沿（推荐）',top:42,notes:[['1','胶囊中线压在页头下边框，上半在页头里、下半在页面留白里：不挡页头搜索，也不压页面工具栏。'],['2','悬浮在内容区上层，页面不下移；居中对齐内容区而不是整个视口，侧栏展开收起都跟着走。'],['3','操作只有一个「立即重试」，文字按钮，进行中转圈但不禁用；没有关闭按钮，连回即消失。']]},
+ B:{tab:'B 页头下方 8px',top:64,notes:[['1','完全在页头之外，视觉更独立。'],['2','压住页面第一行：工具栏、Tab 或详情页标题的中段会被挡住，宽屏下工具栏左组正好延伸到中间。',1],['3','需要额外给页面留出顶部空间，等于又回到推开内容。',1]]},
+ C:{tab:'C 视口顶端居中',top:12,notes:[['1','和常见的全局 toast 位置一致。'],['2','压在页头正中，正好挡住 ⌘K 搜索入口；侧栏布局下也偏离内容区中线。',1],['3','和右上角通知、页头控件抢同一条视线。',1]]}};
+let sch='A',st='waiting';
+const tabBtn=(on,l,k,g)=>`<button type="button" role="tab" aria-selected="${on}" data-${g}="${k}" class="inline-flex h-full cursor-pointer items-center rounded-[5px] border-0 px-3 text-sm whitespace-nowrap ${on?'bg-muted font-medium text-foreground':'bg-transparent text-muted-foreground'}">${l}</button>`;
+const draw=()=>{
+ document.getElementById('schemes').innerHTML=Object.entries(SCH).map(([k,v])=>tabBtn(k===sch,v.tab,k,'s')).join('');
+ document.getElementById('states').innerHTML=Object.entries(ST).map(([k,v])=>tabBtn(k===st,v.tab,k,'t')).join('');
+ const S=SCH[sch];
+ document.getElementById('states').style.visibility=S.cur?'hidden':'visible';
+ document.getElementById('big').innerHTML=S.cur?shell(curAlert+page(),mk(1,'top:72px;right:16px',true)):shell(page(),pill(st,{top:S.top,anim:true})+mk(1,`top:${S.top-10}px;left:calc(50% + 180px)`,sch!=='A'));
+ document.getElementById('notes').innerHTML=S.notes.map(([n,t,bad])=>`<li class="flex gap-2.5"><span class="lg ${bad?'cur':''}">${n}</span><span>${t}</span></li>`).join('');
+};
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-s],button[data-t]');if(!b)return;if(b.dataset.s)sch=b.dataset.s;if(b.dataset.t)st=b.dataset.t;draw();});
+draw();
+
+const RS=[
+['SignalR 默认','0 / 2 / 10 / 30 秒','—','4 次后放弃','无','文档示例：提示刷新页面',1],
+['Rocket.Chat','1 秒起翻倍，乘 0.5–1 随机','30 秒','不放弃','「Connect」按钮','断线即显示顶部横条，倒计时 + 按钮'],
+['Mattermost','前 7 次约 3 秒，之后平方增长','5 分钟','不放弃','网络恢复','失败 7 次后顶部公告栏'],
+['Phoenix LiveView','10 毫秒 … 2 秒，之后 5 秒','5 秒','不放弃','切回页面','断开 0.5 秒后右上角提示，无按钮'],
+['centrifuge（Grafana Live）','0.5 秒起指数，全抖动','20 秒','令牌失效才停','网络恢复','库本身不带界面'],
+['Meteor','2.2 倍增长，乘 0.75–1.25 随机','5 分钟','不放弃','网络恢复','提供下次重试时间供界面倒计时'],
+['socket.io','1 秒起翻倍，±50% 随机','5 秒','服务端拒绝才停','无','库本身不带界面'],
+['本方案','0 / 1 / 2 / 5 秒，之后翻倍，乘 0.5–1 随机','30 秒','会话失效（401）才停','按钮、网络恢复、切回页面','3 秒后顶部居中胶囊，倒计时 + 立即重试',2]];
+document.getElementById('rs').innerHTML=RS.map(r=>`<tr class="border-t ${r[6]===2?'bg-primary/5 font-medium':''}">${r.slice(0,6).map((c,i)=>`<td class="px-4 py-2.5 align-top ${i===0||i===2?'whitespace-nowrap':''} ${r[6]===1&&i===3?'text-destructive':''}">${c}</td>`).join('')}</tr>`).join('');
+
+document.getElementById('seq').innerHTML=Object.entries(ST).map(([k,v])=>`<div class="flex flex-col gap-3 rounded-xl border bg-card p-4"><div class="flex items-center justify-between gap-2"><span class="text-sm font-semibold">${v.tab}</span></div><div class="relative h-12 overflow-hidden rounded-lg border-b bg-muted/40">${pill(k,{top:8}).replace('max-w-[calc(100%-2rem)]','max-w-[calc(100%-1rem)]')}</div><p class="m-0 text-xs text-muted-foreground">${v.when}</p></div>`).join('');
+
+
+document.getElementById('phone').innerHTML=`<div class="frame relative flex h-[600px] flex-col overflow-hidden bg-background"><div class="flex h-11 items-center justify-between px-5 text-xs font-semibold"><span>9:41</span><span>5G ▮▮▮</span></div><header class="flex h-14 items-center gap-3 border-b px-4">${ic('menu','size-5')}<span class="text-sm font-medium">分布式事件</span><span class="ms-auto flex items-center gap-3 text-muted-foreground">${ic('search')}${ic('bell')}</span></header>${pill('waiting',{mobile:true,top:44+56-22})}<div class="flex flex-col gap-4 p-4 pt-6"><span class="flex h-10 items-center gap-2 rounded-md border border-input px-3 text-sm text-muted-foreground">${ic('search')}搜索事件名或 ID</span>${ROWS.slice(0,5).map(r=>`<div class="flex items-center justify-between gap-3 border-b pb-3"><div class="flex flex-col"><span class="font-mono text-sm">${r[0]}</span><span class="text-xs text-muted-foreground tabular-nums">${r[3]}</span></div>${bd(r[2],r[1])}</div>`).join('')}</div></div>`;
+}
+</script>
+</body>
+</html>
