@@ -12,13 +12,13 @@
     <!-- Microsoft.Extensions.* 统一到同一服务版本，随 .NET 每月补丁一起升（Refit.HttpClientFactory 对 Microsoft.Extensions.Http 有最低版本要求，升 Refit 时一并核对） -->
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
-    <PackageVersion Include="OpenIddict.Server" Version="7.8.0" />
-    <PackageVersion Include="OpenIddict.Core" Version="7.8.0" />
-    <PackageVersion Include="OpenIddict.Validation" Version="7.8.0" />
-    <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.8.0" />
-    <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.8.0" />
-    <PackageVersion Include="OpenIddict.Client" Version="7.8.0" />
-    <PackageVersion Include="OpenIddict.Client.SystemNetHttp" Version="7.8.0" />
+    <PackageVersion Include="OpenIddict.Server" Version="7.9.0" />
+    <PackageVersion Include="OpenIddict.Core" Version="7.9.0" />
+    <PackageVersion Include="OpenIddict.Validation" Version="7.9.0" />
+    <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.9.0" />
+    <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.9.0" />
+    <PackageVersion Include="OpenIddict.Client" Version="7.9.0" />
+    <PackageVersion Include="OpenIddict.Client.SystemNetHttp" Version="7.9.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
@@ -50,10 +50,10 @@
     <PackageVersion Include="Refit" Version="16.4.0" />
     <PackageVersion Include="Refit.HttpClientFactory" Version="16.4.0" />
     <PackageVersion Include="Refit.Reflection" Version="16.4.0" />
-    <PackageVersion Include="StackExchange.Redis" Version="3.4.31" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.35" />
 
     <!-- 构建期（源码调试） -->
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.404" />
 
     <!-- 测试（仅 framework/tests 下的项目使用） -->
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.15" />
@@ -62,7 +62,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.15" />
     <!-- 真实 Host 生命周期：验证托管服务的启动检查（StartingAsync 先于 StartAsync、ConfigureContainer 走 CreateBuilder） -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <!-- 只要断言库：共享基座不是测试项目，引 xunit 元包会经 xunit.core.props 把它标成
          IsTestProject=true，于是 dotnet test 把它当测试程序集启动并失败 -->
@@ -82,7 +82,7 @@
     <!-- Standard Webhooks 官方 C# 库（standard-webhooks/standard-webhooks 仓库，nuget.org 所有者 svix）：webhook 测试用它独立验签，
          证明组件签名与规范互通，而不是拿组件自己的算法验自己 -->
     <PackageVersion Include="StandardWebhooks.StandardWebhooks" Version="1.0.1" />
-    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.1" />
   </ItemGroup>
 
 </Project>
