@@ -1364,6 +1364,22 @@ describe('SignalRService connection lifecycle', () => {
       expect(service.connectionStatus()).toBe('connected');
     });
 
+    it('still connects the target workspace when it is requested again while the previous connection is closing', async () => {
+      await service.setWorkspace('acme', false);
+      const acme = built[0];
+      acme.gateStop = true;
+
+      const switching = service.setWorkspace('globex', false);
+      // 权限未加载完时又导航到同一工作空间的另一页，守卫再请求一次
+      const again = service.setWorkspace('globex', false);
+      acme.releaseStop();
+      await Promise.all([switching, again]);
+
+      expect(built).toHaveLength(2);
+      expect(built[1].url).toContain('workspace=globex');
+      expect(service.connectionStatus()).toBe('connected');
+    });
+
     it('connects a page to the target workspace while the previous connection is still closing', async () => {
       await service.setWorkspace('acme', false);
       const acme = built[0];
@@ -1411,18 +1427,22 @@ describe('SignalRService connection lifecycle', () => {
       await vi.advanceTimersByTimeAsync(0);
       const home = built[0];
 
+      deferStart = false;
       const entering = service.setWorkspace('acme', true);
       // 角色页先于首页握手完成挂载：登记订阅并建连
       service.watchResource('acme-roles', holder().ref);
       const pageConnect = service.connect();
-      deferStart = false;
-      home.completeStart();
       await Promise.all([entering, pageConnect]);
       await vi.advanceTimersByTimeAsync(0);
 
+      // 首页握手仍挂着：租户连接不等它，已经连上并确认了订阅
       const acme = built[1];
       expect(acme.url).toContain('workspace=acme');
       expect(acme.invocations).toEqual([{ method: 'Subscribe', args: ['acme-roles'] }]);
+      expect(service.connectionStatus()).toBe('connected');
+
+      home.completeStart();
+      await vi.advanceTimersByTimeAsync(0);
       expect(home.stopCount).toBe(0);
       expect(service.connectionStatus()).toBe('connected');
     });

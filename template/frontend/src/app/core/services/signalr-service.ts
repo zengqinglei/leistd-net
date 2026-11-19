@@ -117,8 +117,9 @@ export class SignalRService {
   //#endif
 
   async setWorkspace(name: string | null, platformStaff: boolean): Promise<void> {
-    const revision = ++this.workspaceRevision;
+    // 同一目标的重复请求（切换途中又导航到该工作空间的另一页）不作废正在进行的那次切换
     if (this.workspaceName === name) return;
+    const revision = ++this.workspaceRevision;
     // 平台人员从首页进入租户：首页连接（已连上或正在握手）留在后台继续收首页推送，不等它握手完成。
     // 等待期间目标页已挂载并登记订阅，之后的重置会把这些登记清掉；没有首页连接时回到首页再建
     if (!this.workspaceName && name && platformStaff && isLive(this.connection)) {
@@ -277,27 +278,21 @@ export class SignalRService {
       return this.connecting;
     }
 
-    // 上一个主体的连接过程还没收尾：它会断开自己建的连接，直接复用会得到"成功但没连上"的结果。
-    // 等它结束再为本主体重建。
-    const previous = this.connecting;
+    // 上一代的连接过程可能还在握手（例如留在后台的首页连接）：它收尾时只动自己那条连接，不必等它
     const generation = this.generation;
-
     this.connectingGeneration = generation;
-    this.connecting = (async () => {
-      await previous?.catch(() => undefined);
-      await this.connectAsync(generation);
-    })().finally(() => {
-      if (this.connectingGeneration === generation) {
+    const connecting: Promise<void> = this.connectAsync(generation).finally(() => {
+      if (this.connecting === connecting) {
         this.connecting = null;
       }
     });
+    this.connecting = connecting;
 
-    return this.connecting;
+    return connecting;
   }
 
   /**
-   * @param generation 发起本次连接请求时的认证代际。由调用方传入：本方法要等上一个连接过程收尾
-   * 才执行，那时读到的已是 reset() 递增后的值，校验将形同虚设。
+   * @param generation 发起本次连接请求时的认证代际。等待清理旧连接期间可能发生 reset()，await 之后据此核对。
    */
   private async connectAsync(generation: number): Promise<void> {
     if (isLive(this.connection)) {
