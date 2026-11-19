@@ -412,6 +412,26 @@ export default defineConfig(
     },
   },
   {
+    files: ['src/**/*.spec.ts', '_mock/**/*.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        importPathSyntax,
+        dtoOutsideDtoFileSyntax,
+        {
+          selector: "CallExpression[callee.property.name='getAnimations']",
+          message: 'CSS motion is disabled in unit tests. See docs/standards/testing.md.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/motion.spec.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', importPathSyntax, dtoOutsideDtoFileSyntax],
+    },
+  },
+  {
     files: ['_mock/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',

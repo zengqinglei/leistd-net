@@ -130,6 +130,7 @@ export class RealtimeStatus {
     effect((onCleanup) => {
       const status = this.signalR.connectionStatus();
       if (status === 'reconnecting') {
+        this.restored.set(false);
         return;
       }
 
