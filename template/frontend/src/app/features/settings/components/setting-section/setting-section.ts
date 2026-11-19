@@ -29,17 +29,6 @@ import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { firstValueFrom, map } from 'rxjs';
 
-//#if (Email)
-import { EMAIL_GROUP, EmailTest } from './widgets/email-test/email-test';
-//#endif
-//#if (ExternalLogin)
-import {
-  EXTERNAL_LOGIN_GROUP,
-  ExternalLoginProviders,
-  ExternalLoginProviderSettings,
-  partitionExternalLoginSettings,
-} from './widgets/external-login-providers/external-login-providers';
-//#endif
 import { mapFormErrors } from '../../../../core/errors/form-errors';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
@@ -93,6 +82,17 @@ import {
   SettingsPageState,
   shownChildren,
 } from '../../settings-page-state';
+//#if (Email)
+import { EMAIL_GROUP, EmailTest } from './widgets/email-test/email-test';
+//#endif
+//#if (ExternalLogin)
+import {
+  EXTERNAL_LOGIN_GROUP,
+  ExternalLoginProviders,
+  ExternalLoginProviderSettings,
+  partitionExternalLoginSettings,
+} from './widgets/external-login-providers/external-login-providers';
+//#endif
 
 /**
  * 单项设置的写入状态。`saved` 在 {@link SAVED_HINT_MS} 后回到常态；

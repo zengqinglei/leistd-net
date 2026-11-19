@@ -59,8 +59,6 @@ import {
   //#endif
 } from 'rxjs/operators';
 
-import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
-import { RoleTable } from './widgets/role-table/role-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeRealTime)
@@ -95,6 +93,8 @@ import {
 } from '../../dtos/role.dto';
 import { RoleService } from '../../services/role-service';
 import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/permission-grant-dialog';
+import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
+import { RoleTable } from './widgets/role-table/role-table';
 
 // 只列实体自身的列：userCount / permissionCount 是聚合出来的派生值，后端无法据其排序。
 const ROLE_SORT_COLUMNS = ['displayName', 'sort', 'creationTime'] as const;

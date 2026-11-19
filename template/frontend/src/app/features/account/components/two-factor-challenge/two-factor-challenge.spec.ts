@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject, throwError } from 'rxjs';
 
-import { TwoFactorChallenge, TwoFactorExit, TwoFactorPrompt } from './two-factor-challenge';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -18,6 +17,7 @@ import {
   webAuthnError,
 } from '../../../../core/webauthn/webauthn.testing';
 import { AccountService } from '../../services/account-service';
+import { TwoFactorChallenge, TwoFactorExit, TwoFactorPrompt } from './two-factor-challenge';
 
 import type { MockedObject } from 'vitest';
 

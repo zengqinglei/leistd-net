@@ -11,8 +11,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState } from '@tanstack/angular-table';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-import { OperationRecords } from './operation-records';
-import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -26,6 +24,8 @@ import {
   OperationRecordFilterOptionsDto,
 } from '../../dtos/operation-record.dto';
 import { OperationRecordService } from '../../services/operation-record-service';
+import { OperationRecords } from './operation-records';
+import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 
 import type { Mock } from 'vitest';
 

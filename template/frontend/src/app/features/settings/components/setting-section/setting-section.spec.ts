@@ -21,7 +21,6 @@ import { EMPTY, firstValueFrom, Subject, throwError } from 'rxjs';
 //#endif
 import { userEvent } from 'vitest/browser';
 
-import { SettingSection } from './setting-section';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -56,6 +55,7 @@ import {
   SettingValueLabel,
 } from '../../setting-choices';
 import { SETTING_WRITE_GUARD, SettingsPageState } from '../../settings-page-state';
+import { SettingSection } from './setting-section';
 
 /** 日志级别的候选值，与后端定义的 `allowedValues` 一致：下拉的候选项只认后端下发的这一份。 */
 const LOG_LEVELS = ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical'];

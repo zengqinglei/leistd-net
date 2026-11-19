@@ -5,7 +5,6 @@ import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { page, userEvent } from 'vitest/browser';
 
-import { PageBreadcrumb } from './page-breadcrumb';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
 import { lineCount, pseudoCatalog } from '../../../core/i18n/pseudo-locale.testing';
@@ -20,6 +19,7 @@ import {
   setCoarsePointer,
   tapAt,
 } from '../../../shared/utils/coarse-pointer.testing';
+import { PageBreadcrumb } from './page-breadcrumb';
 
 /**
  * 面包屑按「首页 > 上级… > 当前页」渲染：两级以上上级只留最近一级、其余收进省略号下拉，

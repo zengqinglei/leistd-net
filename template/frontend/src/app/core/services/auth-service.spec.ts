@@ -2,11 +2,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { AccountPreferencesService } from './account-preferences-service';
-import { AuthService } from './auth-service';
-//#if (IncludeNotifications || IncludeRealTime)
-import { SignalRService } from './signalr-service';
-//#endif
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
@@ -15,6 +10,11 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 import { MOCKED_URL } from '../mock/mocked-url';
 //#endif
 import { FullPageNavigationService } from '../routing/full-page-navigation-service';
+import { AccountPreferencesService } from './account-preferences-service';
+import { AuthService } from './auth-service';
+//#if (IncludeNotifications || IncludeRealTime)
+import { SignalRService } from './signalr-service';
+//#endif
 
 describe('AuthService', () => {
   let service: AuthService;

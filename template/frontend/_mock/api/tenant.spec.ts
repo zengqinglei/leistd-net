@@ -1,14 +1,3 @@
-import {
-  createTenant,
-  deleteTenant,
-  getTenantByHost,
-  getTenantById,
-  getTenantConnections,
-  removeTenantConnection,
-  setTenantConnection,
-  TENANT_API,
-  updateTenant,
-} from './tenant';
 import { MockException } from '../core/models';
 //#if (Impersonation)
 import { MockRole, ROLES } from '../data/authorization';
@@ -24,6 +13,17 @@ import {
   setMockSessionUserId,
 } from '../utils/current-user';
 //#endif
+import {
+  createTenant,
+  deleteTenant,
+  getTenantByHost,
+  getTenantById,
+  getTenantConnections,
+  removeTenantConnection,
+  setTenantConnection,
+  TENANT_API,
+  updateTenant,
+} from './tenant';
 
 /**
  * Mock 与真实后端的契约对齐：Mock 是 `useMock` 模式下的后端，契约加了字段而 Mock 没跟上时，

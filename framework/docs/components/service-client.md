@@ -23,7 +23,7 @@ dotnet add package Leistd.ServiceClient.OAuth
 dotnet add package Leistd.ServiceClient.AspNetCore
 ```
 
-声明 Refit 接口的项目直接引用 Refit，以激活源生成器；接口为 public。
+声明 Refit 接口的项目直接引用 `Refit` 17，以激活源生成器；接口为 public。`Leistd.ServiceClient.Refit` 提供 `AddRefitServiceClient`，并携带反射构建器 `Refit.Reflection` 和用于注册的 `Refit.HttpClientFactory.Reflection`。
 
 ## 注册
 
@@ -62,7 +62,7 @@ builder.Services.AddUserAccessTokenAccessor("OpenIddict.Validation.AspNetCore");
 
 ### 请求与响应
 
-Refit 客户端默认使用 System.Text.Json Web 约定。常用形态如下：
+服务客户端默认使用 System.Text.Json Web 约定，写 camelCase 字符串枚举，读取数字枚举和字符串形式的数字，`object` 类型的 JSON 值读取为 `JsonElement`。常用形态如下：
 
 | 数据 | 声明 |
 | --- | --- |

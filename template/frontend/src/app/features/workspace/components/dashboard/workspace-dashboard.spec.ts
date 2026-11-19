@@ -22,7 +22,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, throwError } from 'rxjs';
 //#endif
 
-import { WorkspaceDashboard } from './workspace-dashboard';
 //#if (IncludeLocalization)
 import enTexts from '../../../../../../public/i18n/en.json';
 import enWorkspace from '../../../../../../public/i18n/workspace/en.json';
@@ -61,6 +60,7 @@ import { parkPointer } from '../../../../shared/utils/pointer.testing';
 //#if (LocalIdentity)
 import { WorkbenchService } from '../../services/workbench-service';
 //#endif
+import { WorkspaceDashboard } from './workspace-dashboard';
 
 /** 工作台：常用动作与快捷入口按状态和权限出现，安全检查不把「未取回」当成「未开启」，加载失败可重试。 */
 describe('WorkspaceDashboard', () => {

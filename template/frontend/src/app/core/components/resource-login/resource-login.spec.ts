@@ -2,11 +2,11 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
-import { ResourceLogin } from './resource-login';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../services/auth-service';
+import { ResourceLogin } from './resource-login';
 
 describe('ResourceLogin', () => {
   const startLogin = vi.fn();

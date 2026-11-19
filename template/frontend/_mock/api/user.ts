@@ -1,4 +1,3 @@
-import { ensureRolesCanBeManaged, requirePermission } from './authorization';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { MockSortFields, sortMockRows } from '../core/sorting';
@@ -29,6 +28,7 @@ import {
 //#if (!(LocalIdentity))
 import { getCurrentUser } from '../utils/current-user';
 //#endif
+import { ensureRolesCanBeManaged, requirePermission } from './authorization';
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;

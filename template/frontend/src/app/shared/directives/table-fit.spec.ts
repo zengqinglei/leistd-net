@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, signal, viewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { TableFit } from './table-fit';
 import { TableViewport } from '../utils/table-column-meta';
+import { TableFit } from './table-fit';
 
 /** 每档显示的列数：模拟优先级折叠，前四列是 tablet 档仍显示的列。 */
 const COLUMNS: Record<TableViewport, number> = { desktop: 6, tablet: 4, mobile: 2 };

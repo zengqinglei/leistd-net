@@ -402,6 +402,8 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 `HybridCacheEntryFlags` 的关闭标志只用于第一类条目的性能或场景取舍，并注释原因；不用它把数据留在本进程，它是按场景的取舍提示，替换实现不一定遵守。第二类需要同键合并时在本类按键共享进行中的任务，可接受重复回源的不做合并。
 
+回源回调可能在线程池执行，且拿不到调用方的执行上下文。按租户隔离的查询结果用 `TenantHybridCache`，它自动给键和标签加租户段，并在回源时恢复租户。结果依赖语言、工作区等其他维度时，在调用前读取这些值、写入键并经 `state` 传给回调。避免在回调里发起需要当前用户令牌的 Token Exchange 调用。
+
 ## 7. 测试
 
 测试项目的**布局、命名与 csproj** 由 `scripts/check-test-layout.py` 与 `scripts/check-csproj-conventions.py` 强制；

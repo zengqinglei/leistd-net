@@ -8,9 +8,6 @@ import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of, Subject } from 'rxjs';
 
-import { DistributedEvents } from './distributed-events';
-import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
-import { DistributedEventRecoveryConfirmService } from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -23,6 +20,9 @@ import { DistributedEventService } from '../../services/distributed-event-servic
 //#if (LocalIdentity && IncludeMultiTenancy)
 import { TenantService } from '../../services/tenant-service';
 //#endif
+import { DistributedEvents } from './distributed-events';
+import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
+import { DistributedEventRecoveryConfirmService } from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
 
 const TENANT_ID = '00000000-0000-4000-8000-000000000011';
 const OUTBOX: Dto.DistributedEventOutboxOutputDto = {

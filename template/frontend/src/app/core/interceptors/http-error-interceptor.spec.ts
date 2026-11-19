@@ -19,8 +19,6 @@ import { Observable, of, throwError } from 'rxjs';
 import { Observable, throwError } from 'rxjs';
 //#endif
 
-import { SILENT_AUTH } from './http-context-tokens';
-import { httpErrorInterceptor } from './http-error-interceptor';
 import { applicationErrorMessage, ApplicationHttpError } from '../errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
@@ -31,6 +29,8 @@ import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
 import { TENANT_INVALID_HEADER } from '../tenancy/tenant-protocol';
 //#endif
+import { SILENT_AUTH } from './http-context-tokens';
+import { httpErrorInterceptor } from './http-error-interceptor';
 
 //#if (LocalIdentity)
 import type { Mock, MockedObject } from 'vitest';

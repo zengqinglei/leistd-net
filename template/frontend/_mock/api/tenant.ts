@@ -1,6 +1,3 @@
-//#if (Impersonation)
-import { requirePermission } from './authorization';
-//#endif
 import { TenantByHostOutputDto } from '../../src/app/features/account/dtos/tenant-by-host.dto';
 //#if (Impersonation)
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
@@ -28,6 +25,9 @@ import {
   setMockSessionTenantKey,
   setMockSessionUserId,
 } from '../utils/current-user';
+//#endif
+//#if (Impersonation)
+import { requirePermission } from './authorization';
 //#endif
 
 /** 连接名的合法形态，与后端 `TenantConnectionConfiguration.NamePattern` 同源。 */

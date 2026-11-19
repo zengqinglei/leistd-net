@@ -9,9 +9,9 @@ import { lucideInfo } from '@ng-icons/lucide';
 import { of } from 'rxjs';
 //#endif
 
-import { NotificationItem } from './notification-item';
 import { NotificationOutputDto } from '../../dtos/notification.dto';
 import { expectTouchTarget, setCoarsePointer } from '../../utils/coarse-pointer.testing';
+import { NotificationItem } from './notification-item';
 
 const LONG_TITLE =
   'Quarterly settlement reconciliation for the cross-border operations ledger has finished with warnings';

@@ -2,12 +2,12 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { Provider } from '@angular/core';
 import { finalize } from 'rxjs/operators';
 
-import { MOCK_APIS, mockInterceptor } from './interceptor';
-import { isMockedUrl, shouldProvideMock } from './matching';
-import { MockConfig } from './models';
 import { MOCKED_URL } from '../../src/app/core/mock/mocked-url';
 import { persistMockUsers, restoreMockUsers } from '../data/user';
 import * as allApis from '../index';
+import { MOCK_APIS, mockInterceptor } from './interceptor';
+import { isMockedUrl, shouldProvideMock } from './matching';
+import { MockConfig } from './models';
 
 /** 每个请求处理完把用户数据写回本页 sessionStorage：刷新与整页跳转（退出登录）后改动仍在，与设置一致。 */
 const persistMockUsersInterceptor: HttpInterceptorFn = (req, next) =>

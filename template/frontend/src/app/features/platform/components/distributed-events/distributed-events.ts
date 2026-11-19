@@ -48,28 +48,6 @@ import {
   tap,
 } from 'rxjs';
 
-// prettier-ignore
-import {
-  EventRecord,
-  EventView,
-  EventRow,
-  canDiscard,
-  canRecover,
-  eventRow,
-  recoveryAction,
-  reasonKey,
-  stateLabelKey,
-  //#if (!IncludeLocalization)
-  ENGLISH,
-  //#endif
-} from './distributed-event-display';
-import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
-import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
-import { DistributedEventRecoveryConfirmService } from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
-import { DistributedEventStatistics } from './widgets/distributed-event-statistics/distributed-event-statistics';
-import { DistributedInboxTable } from './widgets/distributed-inbox-table/distributed-inbox-table';
-import { DistributedOutboxTable } from './widgets/distributed-outbox-table/distributed-outbox-table';
-import { DistributedRejectionTable } from './widgets/distributed-rejection-table/distributed-rejection-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 //#if (!(TenantWorkspace))
@@ -100,6 +78,28 @@ import { englishText } from '../../../../shared/utils/english-text';
 import { resolveDisplayTimeZone } from '../../../../shared/utils/zoned-time';
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
+// prettier-ignore
+import {
+  EventRecord,
+  EventView,
+  EventRow,
+  canDiscard,
+  canRecover,
+  eventRow,
+  recoveryAction,
+  reasonKey,
+  stateLabelKey,
+  //#if (!IncludeLocalization)
+  ENGLISH,
+  //#endif
+} from './distributed-event-display';
+import { DistributedCatalogTable } from './widgets/distributed-catalog-table/distributed-catalog-table';
+import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
+import { DistributedEventRecoveryConfirmService } from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
+import { DistributedEventStatistics } from './widgets/distributed-event-statistics/distributed-event-statistics';
+import { DistributedInboxTable } from './widgets/distributed-inbox-table/distributed-inbox-table';
+import { DistributedOutboxTable } from './widgets/distributed-outbox-table/distributed-outbox-table';
+import { DistributedRejectionTable } from './widgets/distributed-rejection-table/distributed-rejection-table';
 
 /** 影响列表结果的筛选参数，与视图、分页、时间范围一起组成加载条件。 */
 const LIST_FILTER_KEYS = [

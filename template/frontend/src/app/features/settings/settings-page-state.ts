@@ -25,13 +25,13 @@ import { Observable,
   //#endif
 } from 'rxjs';
 
-import { SettingDependency } from './setting-choices';
 import { applicationErrorMessage } from '../../core/errors/application-http-error';
 import { SessionContextService } from '../../core/services/session-context-service';
 //#if (TenantWorkspace)
 import { SettingService } from '../../core/settings/setting-service';
 //#endif
 import { SettingOutputDto } from '../../core/settings/setting.dto';
+import { SettingDependency } from './setting-choices';
 
 /** 一行设置及挂在它下面的子项（见 {@link buildSettingTree}）。 */
 export interface SettingRowNode {

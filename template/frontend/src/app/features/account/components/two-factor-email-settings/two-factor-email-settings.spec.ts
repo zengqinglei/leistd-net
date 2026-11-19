@@ -4,7 +4,6 @@ import { Router } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
 import { throwError, of } from 'rxjs';
 
-import { TwoFactorEmailSettings } from './two-factor-email-settings';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -16,6 +15,7 @@ import {
 } from '../../../../core/validation/form-submission.testing';
 import { TwoFactorStatusOutputDto } from '../../../../shared/dtos/account-security.dto';
 import { AccountService } from '../../services/account-service';
+import { TwoFactorEmailSettings } from './two-factor-email-settings';
 
 import type { MockedObject } from 'vitest';
 

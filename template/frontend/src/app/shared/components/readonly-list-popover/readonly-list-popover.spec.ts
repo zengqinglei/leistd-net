@@ -3,9 +3,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BrnTooltip } from '@spartan-ng/brain/tooltip';
 import { page, userEvent } from 'vitest/browser';
 
-import { ReadonlyListItem, ReadonlyListPopover } from './readonly-list-popover';
 import { expectTouchTarget, setCoarsePointer, tapAt } from '../../utils/coarse-pointer.testing';
 import { parkPointer } from '../../utils/pointer.testing';
+import { ReadonlyListItem, ReadonlyListPopover } from './readonly-list-popover';
 
 @Component({
   imports: [ReadonlyListPopover],

@@ -2,7 +2,6 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { CommandPalette } from './command-palette';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
@@ -11,6 +10,7 @@ import { CommandPaletteService } from '../../../core/services/command-palette-se
 import { SystemDirectoryService } from '../../../core/services/system-directory-service';
 //#endif
 import { MenuGroup, NavigationService } from '../../services/navigation-service';
+import { CommandPalette } from './command-palette';
 
 /**
  * 命令面板：列出当前区已按权限裁剪的菜单与另一区的入口，⌘K / Ctrl+K 开合，选中即跳转并关闭。

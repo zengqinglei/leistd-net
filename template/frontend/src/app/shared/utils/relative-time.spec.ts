@@ -1,5 +1,5 @@
-import { formatElapsedTime, formatRelativeTime } from './relative-time';
 import { formatAppDate } from '../pipes/app-date-pipe';
+import { formatElapsedTime, formatRelativeTime } from './relative-time';
 
 /** 相对时间：按展示时区判今天与昨天，午夜前后与时钟稍快都不出错。 */
 describe('formatRelativeTime', () => {

@@ -16,7 +16,6 @@ import {
   //#endif
 } from 'rxjs';
 
-import { Login } from './login';
 import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 import { permissionGuard } from '../../../../core/guards/permission-guard';
 //#if (IncludeLocalization)
@@ -54,6 +53,7 @@ import { ExternalLoginProvidersOutputDto } from '../../dtos/account.dto';
 import { TenantByHostOutputDto } from '../../dtos/tenant-by-host.dto';
 //#endif
 import { AccountService } from '../../services/account-service';
+import { Login } from './login';
 
 import type { Mock, MockedObject } from 'vitest';
 

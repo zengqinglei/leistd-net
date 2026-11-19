@@ -2,10 +2,10 @@ import { HttpClient, HttpContext, provideHttpClient, withInterceptors } from '@a
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { SKIP_GATEWAY } from './http-context-tokens';
-import { GATEWAY_SERVICE_NAME, urlFormatInterceptor } from './url-format-interceptor';
 import { environment } from '../../../environments/environment';
 import { MOCKED_URL } from '../mock/mocked-url';
+import { SKIP_GATEWAY } from './http-context-tokens';
+import { GATEWAY_SERVICE_NAME, urlFormatInterceptor } from './url-format-interceptor';
 
 describe('urlFormatInterceptor', () => {
   const originalGateway = environment.api.gateway;

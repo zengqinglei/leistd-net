@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
-import { LogoutConfirm } from './logout-confirm';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -11,6 +10,7 @@ import { FullPageNavigationService } from '../../../../core/routing/full-page-na
 import { AuthService } from '../../../../core/services/auth-service';
 import { LogoutConfirmationOutputDto } from '../../dtos/account.dto';
 import { AccountService } from '../../services/account-service';
+import { LogoutConfirm } from './logout-confirm';
 
 import type { MockInstance } from 'vitest';
 

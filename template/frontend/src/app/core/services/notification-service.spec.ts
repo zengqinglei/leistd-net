@@ -2,9 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
 import { NOTIFICATION_ICONS, NotificationService } from './notification-service';
 import { SignalRService } from './signalr-service';
-import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
 
 import type { Mock } from 'vitest';
 

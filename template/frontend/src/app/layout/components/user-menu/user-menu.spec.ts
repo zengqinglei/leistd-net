@@ -5,7 +5,6 @@ import { Router, provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 
-import { UserMenu } from './user-menu';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
@@ -16,6 +15,7 @@ import { LayoutService } from '../../../core/services/layout-service';
 import { WorkspaceContextService } from '../../../core/services/workspace-context-service';
 import { User } from '../../../shared/models/user.model';
 //#endif
+import { UserMenu } from './user-menu';
 
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以按**键**断言：改一句中文不该让这组用例变红。

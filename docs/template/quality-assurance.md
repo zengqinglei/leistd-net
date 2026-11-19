@@ -173,10 +173,11 @@ PR 有意不承担全局覆盖，放行候选必须完整：这是责任迁移�
 | --- | --- | --- | --- |
 | `braces` 3.0.3（[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)） | Stylelint 与 Spartan CLI→`ts-morph` 经 `micromatch` 引入，只在本地 lint 与组件生成时匹配仓库内的 glob | 上游无补丁版本 | 上游发布修复或 Stylelint/Spartan CLI 换掉该依赖时 |
 | `undici` 7.29.0（如 [GHSA-rfgv-xxqx-mfg5](https://github.com/advisories/GHSA-rfgv-xxqx-mfg5)） | Nx 23.3.0 精确依赖，经 Spartan CLI 引入，属于本地开发与 CI 都会执行的开发工具链（Spartan CLI 的 info/healthcheck 与组件生成），不进入生产前端运行载荷。Nx 只在其 http-client 发起请求（Nx Cloud、`nx release` 的 GitHub 客户端等）且设置了 `HTTP(S)_PROXY`/`ALL_PROXY` 时才加载 undici，输入是远端服务的响应；本仓不配置 Nx Cloud 或 `nx release` | 7.29.1 已有修复，但被 Nx 精确钉住。没有证明所有 CLI 路径都不可达；考虑到维护成本暂时接受，不强行 override 父工具链钉住的版本 | Nx 放宽或升级该依赖时，与 Spartan CLI 配套升级 |
-| `vite` 8.3.0（如 [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm)，受影响 8.3.0–8.3.2） | `@angular/build` 22.2.3 精确依赖，只用于 `ng serve` 开发服务器；顶层 `vite` 8.3.4（Vitest 用）不受影响。high 一条是开发服务器打开编辑器的中间件在 Windows 上可绕过路径检查，与同批公告组合可执行命令，前提是能向开发服务器发请求；其余为 moderate/low 的开发服务器文件读取问题 | 修复在 8.3.3 起；`@angular/build` 22.3 预发布已改用 8.3.4，正式版尚未发布 | `@angular/build` 22.3 正式版发布后按 Angular 配套升级 |
 | `picomatch` 4.0.7（[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)） | Angular CLI 的 `@angular-devkit/core` 经 schematics 引入，用于开发工具的文件匹配 | picomatch 暂无修复版本，审计输出警告。它在构建时匹配项目自身的 glob，不进入浏览器包 | picomatch 发布修复或引入路径变化时，重新审计两套锁文件 |
 
 清零方式按本项目的维护取舍：不用 `npm audit fix --force` 降级 Angular/Spartan/Nx，不加未经验证的 `overrides` 强行替换父工具链钉住的版本，优先等上游后配套升级；确需 override 时按上一段的隔离验证执行并写明退出条件。这是控制维护成本的决定，不是 npm 的规定。
+
+Angular 22.3.0 的 Oxc WASM 绑定在 npm 发布包里要求 `@napi-rs/wasm-runtime` 1.2.7 系列，但绑定使用的 emnapi alpha 超出该系列的 peer 范围。两套清单只对 `@oxc-parser/binding-wasm32-wasi@0.158.0` 指定 runtime 1.2.5，与 [Oxc 该版本的构建配置](https://github.com/oxc-project/oxc/blob/crates_v0.158.0/pnpm-workspace.yaml#L12-L19)一致。Angular 升级后，先在生成副本去掉覆盖，严格 peer 解析和 WASM 加载通过后再移除两套覆盖。
 
 ## lint 缓存与失效
 

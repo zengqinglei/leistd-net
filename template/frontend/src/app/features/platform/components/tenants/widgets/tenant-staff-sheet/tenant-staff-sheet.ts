@@ -40,7 +40,6 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef } from '@tanstack/angular-table';
 import { firstValueFrom, tap } from 'rxjs';
 
-import { TenantStaffEditDialog } from './widgets/tenant-staff-edit-dialog/tenant-staff-edit-dialog';
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 import { ReadonlyListPopover } from '../../../../../../shared/components/readonly-list-popover/readonly-list-popover';
@@ -70,6 +69,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
 import { RoleBriefDto } from '../../../../dtos/role.dto';
 import { TenantStaffOutputDto } from '../../../../dtos/tenant-staff.dto';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
+import { TenantStaffEditDialog } from './widgets/tenant-staff-edit-dialog/tenant-staff-edit-dialog';
 
 /**
  * 租户的平台人员抽屉：打开状态只来自查询参数 `staff`（租户 id）。列出已授予的宿主用户与其关联账号，

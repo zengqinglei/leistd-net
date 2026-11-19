@@ -12,12 +12,12 @@ import {
 } from 'rxjs';
 import { page } from 'vitest/browser';
 
-import { TenantStaffSheet } from './tenant-staff-sheet';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { TenantStaffOutputDto } from '../../../../dtos/tenant-staff.dto';
+import { TenantStaffSheet } from './tenant-staff-sheet';
 
 const ROLES = [
   { id: 'admin', name: 'Admin', displayName: 'Administrator', isStatic: true },

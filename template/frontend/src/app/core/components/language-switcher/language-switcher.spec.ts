@@ -3,7 +3,6 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 
-import { LanguageSwitcher } from './language-switcher';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
@@ -13,6 +12,7 @@ import {
 } from '../../services/account-preferences-service';
 import { AuthService } from '../../services/auth-service';
 import { LanguageService } from '../../services/language-service';
+import { LanguageSwitcher } from './language-switcher';
 
 import type { MockedObject } from 'vitest';
 

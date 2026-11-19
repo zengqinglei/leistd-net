@@ -9,12 +9,6 @@ import { Router, provideRouter } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject, throwError } from 'rxjs';
 
-import { DistributedEvents } from './distributed-events';
-import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
-import {
-  DistributedEventRecoveryConfirmService,
-  DistributedEventRecoveryOptions,
-} from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -25,6 +19,12 @@ import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
 import * as Dto from '../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../services/distributed-event-service';
+import { DistributedEvents } from './distributed-events';
+import { DistributedEventRecordSheet } from './widgets/distributed-event-record-sheet/distributed-event-record-sheet';
+import {
+  DistributedEventRecoveryConfirmService,
+  DistributedEventRecoveryOptions,
+} from './widgets/distributed-event-recovery-confirm/distributed-event-recovery-confirm';
 
 const OUTBOX: Dto.DistributedEventOutboxOutputDto = {
   id: '9007199254740993',

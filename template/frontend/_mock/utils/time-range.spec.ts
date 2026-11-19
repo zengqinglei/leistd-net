@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMockTimeRange, withinMockTimeRange } from './time-range';
 import { MockException } from '../core/models';
+import { parseMockTimeRange, withinMockTimeRange } from './time-range';
 
 function errorFields(action: () => unknown): string[] {
   try {

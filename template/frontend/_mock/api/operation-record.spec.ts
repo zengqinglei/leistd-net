@@ -1,3 +1,9 @@
+import { MockException } from '../core/models';
+import {
+  MockOperationRecord,
+  OPERATION_ACTION_DEFINITIONS,
+  OPERATION_RECORDS,
+} from '../data/operation-record';
 import {
   escapeCsv,
   exportOperationRecords,
@@ -6,12 +12,6 @@ import {
   MAXIMUM_EXPORT_COUNT,
   OPERATION_RECORD_API,
 } from './operation-record';
-import { MockException } from '../core/models';
-import {
-  MockOperationRecord,
-  OPERATION_ACTION_DEFINITIONS,
-  OPERATION_RECORDS,
-} from '../data/operation-record';
 
 /**
  * Mock 与真实后端的契约对齐：筛选按类别展开成动作码、筛选项随动作定义下发、

@@ -1,5 +1,7 @@
 using Leistd.ExceptionHandling.Options;
+using Leistd.MultiTenancy.Caching;
 using Leistd.MultiTenancy.ExceptionMappings;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -35,6 +37,9 @@ public static class DependencyInjection
         // 而 Change() 的嵌套与还原（漏还原即跨租户泄漏）仍由框架的 CurrentTenant 保证。
         services.TryAddSingleton<ICurrentTenantAccessor>(AsyncLocalCurrentTenantAccessor.Instance);
         services.TryAddTransient<ICurrentTenant, CurrentTenant>();
+        // 宿主只在使用租户缓存时才需要注册 HybridCache。
+        services.TryAddSingleton(provider => new TenantHybridCache(
+            provider.GetRequiredService<HybridCache>(), provider.GetRequiredService<ICurrentTenant>()));
         services.TryAddTransient<ITenantNormalizer, UpperInvariantTenantNormalizer>();
         // 连接相同的共享库租户仍必须绑定不同的工作单元归属。
         services.TryAddTransient<IConnectionAffinityProvider, TenantConnectionAffinityProvider>();

@@ -3,10 +3,10 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { catchError, Observable, of, switchMap } from 'rxjs';
 
+import { SecurityConfigOutputDto } from '../../shared/dtos/account-security.dto';
 //#if (IncludeMultiTenancy)
 import { TenantContextService } from './tenant-context-service';
 //#endif
-import { SecurityConfigOutputDto } from '../../shared/dtos/account-security.dto';
 
 /**
  * 当前租户的注册摘要：是否开放自助注册、注册时怎么验证。登录页、注册页、首页与个人资料读同一份。

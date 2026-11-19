@@ -5,11 +5,11 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 //#endif
 
-import { EmptyWorkspace } from './empty-workspace';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
 //#endif
 import { WorkspaceContextService } from '../../core/services/workspace-context-service';
+import { EmptyWorkspace } from './empty-workspace';
 
 describe('EmptyWorkspace', () => {
   it('offers workspace switching and the home console while preserving the surrounding layout', async () => {

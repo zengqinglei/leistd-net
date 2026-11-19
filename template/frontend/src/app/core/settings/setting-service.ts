@@ -7,6 +7,9 @@ import { HttpClient,
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+//#if (TenantWorkspace)
+import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
+//#endif
 import { SettingScope } from './setting-groups';
 // prettier-ignore
 import {
@@ -16,9 +19,6 @@ import {
   SetSettingInputDto,
   SettingOutputDto,
 } from './setting.dto';
-//#if (TenantWorkspace)
-import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
-//#endif
 
 @Injectable({ providedIn: 'root' })
 export class SettingService {

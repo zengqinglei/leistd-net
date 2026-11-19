@@ -7,7 +7,6 @@ import { By } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
 import { EMPTY, Observable, of, Subject, throwError } from 'rxjs';
 
-import { SecurityPanel } from './security-panel';
 //#if (ExternalLogin)
 import {
   confirmWithCode,
@@ -38,6 +37,7 @@ import { AccountService } from '../../services/account-service';
 //#if (Email)
 import { TwoFactorEmailSettings } from '../two-factor-email-settings/two-factor-email-settings';
 //#endif
+import { SecurityPanel } from './security-panel';
 
 import type { Mock } from 'vitest';
 

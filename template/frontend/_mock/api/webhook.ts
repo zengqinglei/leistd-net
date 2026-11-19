@@ -1,4 +1,3 @@
-import { requirePermission } from './authorization';
 import {
   CreateWebhookSubscriptionInputDto,
   UpdateWebhookSubscriptionInputDto,
@@ -26,6 +25,7 @@ import {
 } from '../data/webhooks';
 import { isUsableTimeZone, resolvePeriod, todayIn } from '../utils/statistics-calendar';
 import { parseMockTimeRange, withinMockTimeRange } from '../utils/time-range';
+import { requirePermission } from './authorization';
 
 /** 订阅全部事件（含以后新增的）的取值。 */
 const ALL_EVENTS = '*';

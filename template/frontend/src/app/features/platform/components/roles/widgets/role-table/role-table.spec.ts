@@ -9,12 +9,12 @@ import { TranslocoService } from '@jsverse/transloco';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 
-import { RoleTable } from './role-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { expectAriaSortOnSortedHeaderOnly } from '../../../../../../shared/utils/table-sorting.testing';
 import { RoleOutputDto } from '../../../../dtos/role.dto';
+import { RoleTable } from './role-table';
 
 /** 角色表格与用户表格共用受控分页与排序约定，但各自实现，因此各自用例钉住。 */
 describe('RoleTable', () => {

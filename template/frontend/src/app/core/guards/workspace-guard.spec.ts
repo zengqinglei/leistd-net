@@ -7,11 +7,11 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 
-import { workspaceDeniedGuard, workspaceGuard } from './workspace-guard';
 import { ApplicationHttpError } from '../errors/application-http-error';
 import { AuthorizationService } from '../services/authorization-service';
 import { StartupService } from '../services/startup-service';
 import { WorkspaceContextService } from '../services/workspace-context-service';
+import { workspaceDeniedGuard, workspaceGuard } from './workspace-guard';
 
 @Component({ selector: 'app-workspace-content-stub', template: 'Workspace content' })
 class Content {}

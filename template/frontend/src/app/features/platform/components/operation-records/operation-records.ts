@@ -43,7 +43,6 @@ import { PaginationState } from '@tanstack/angular-table';
 import { combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
-import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
@@ -79,6 +78,7 @@ import {
   OperationRecordOutputDto,
 } from '../../dtos/operation-record.dto';
 import { OperationRecordService } from '../../services/operation-record-service';
+import { OperationRecordTable } from './widgets/operation-record-table/operation-record-table';
 
 /**
  * 操作记录页。审计表只读，不提供新建、编辑与删除；后端契约不含排序，固定按时间倒序，

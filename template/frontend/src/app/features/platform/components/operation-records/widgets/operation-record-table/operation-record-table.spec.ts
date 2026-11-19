@@ -12,12 +12,12 @@ import { of, Subject } from 'rxjs';
 import { of } from 'rxjs';
 //#endif
 
-import { OperationRecordTable } from './operation-record-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
 import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto';
+import { OperationRecordTable } from './operation-record-table';
 
 /**
  * 行展开：先按列定义顺序列出被折叠的数据列（与表头同一份标签），后接共用记录详情给出的追查字段；

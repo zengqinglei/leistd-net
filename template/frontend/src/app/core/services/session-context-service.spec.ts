@@ -20,14 +20,6 @@ import {
   of, Subject, throwError,
 } from 'rxjs';
 
-import { AccountPreferencesService } from './account-preferences-service';
-import { AuthService } from './auth-service';
-import { AuthorizationService } from './authorization-service';
-//#if (IncludeLocalization)
-import { LanguageService } from './language-service';
-//#endif
-import { SessionContextService } from './session-context-service';
-import { ThemeService } from './theme-service';
 import {
   AccountPreferencesDto,
   AccountPreferencesOutputDto,
@@ -39,6 +31,14 @@ import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
 import { SettingContextService } from '../settings/setting-context-service';
 import { SettingOutputDto } from '../settings/setting.dto';
+import { AccountPreferencesService } from './account-preferences-service';
+import { AuthService } from './auth-service';
+import { AuthorizationService } from './authorization-service';
+//#if (IncludeLocalization)
+import { LanguageService } from './language-service';
+//#endif
+import { SessionContextService } from './session-context-service';
+import { ThemeService } from './theme-service';
 
 import type { MockedObject } from 'vitest';
 

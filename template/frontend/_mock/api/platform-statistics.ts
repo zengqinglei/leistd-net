@@ -1,4 +1,3 @@
-import { requirePermission } from './authorization';
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { MockException, MockRequest } from '../core/models';
 //#if (IncludeOperationRecords && LocalIdentity)
@@ -22,6 +21,7 @@ import {
   resolvePeriod,
   todayIn,
 } from '../utils/statistics-calendar';
+import { requirePermission } from './authorization';
 
 /** 区间最多包含的日数，与后端一致。 */
 const MAX_DAYS = 366;

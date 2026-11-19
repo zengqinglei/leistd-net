@@ -1,8 +1,8 @@
-import { RoleBriefDto } from './role.dto';
 //#if (LocalIdentity)
 import { WebAuthnJson } from '../../../shared/dtos/account-security.dto';
 //#endif
 import { PagedRequestDto } from '../../../shared/dtos/paged-request.dto';
+import { RoleBriefDto } from './role.dto';
 
 export interface UserManagementOutputDto {
   id: string;

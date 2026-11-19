@@ -8,10 +8,6 @@ import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-import { Webhooks } from './webhooks';
-import { WebhookStatistics } from './widgets/webhook-statistics/webhook-statistics';
-import { WebhookSubscriptionDialog } from './widgets/webhook-subscription-dialog/webhook-subscription-dialog';
-import { WebhookSubscriptionTable } from './widgets/webhook-subscription-table/webhook-subscription-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -30,6 +26,10 @@ import {
   WebhookSubscriptionOutputDto,
 } from '../../dtos/webhook.dto';
 import { WebhookService } from '../../services/webhook-service';
+import { Webhooks } from './webhooks';
+import { WebhookStatistics } from './widgets/webhook-statistics/webhook-statistics';
+import { WebhookSubscriptionDialog } from './widgets/webhook-subscription-dialog/webhook-subscription-dialog';
+import { WebhookSubscriptionTable } from './widgets/webhook-subscription-table/webhook-subscription-table';
 
 import type { MockedObject } from 'vitest';
 

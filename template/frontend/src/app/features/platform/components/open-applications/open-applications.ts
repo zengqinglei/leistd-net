@@ -36,12 +36,6 @@ import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { tap, firstValueFrom, combineLatest, defer, EMPTY, Subject } from 'rxjs';
 import { catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs/operators';
 
-import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
-import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
-import {
-  SecretRevealDialog,
-  SecretRevealKind,
-} from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -68,6 +62,12 @@ import {
   UpdateOpenApplicationInputDto,
 } from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
+import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
+import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
+import {
+  SecretRevealDialog,
+  SecretRevealKind,
+} from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 
 const APPLICATION_SORT_COLUMNS = ['clientId', 'creationTime'] as const;
 const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'creationTime', desc: true }];

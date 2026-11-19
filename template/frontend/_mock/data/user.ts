@@ -1,6 +1,6 @@
-import { ROLES } from './authorization';
 import { UserManagementOutputDto } from '../../src/app/features/platform/dtos/user-management.dto';
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
+import { ROLES } from './authorization';
 
 //#if (LocalIdentity)
 /** 一把已登记的通行密钥：Mock 只记浏览器交回的凭据 Id 与展示字段，不存公钥、不校验签名。 */

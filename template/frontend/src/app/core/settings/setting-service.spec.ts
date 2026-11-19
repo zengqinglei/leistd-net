@@ -2,11 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { SettingService } from './setting-service';
-import { SettingOutputDto } from './setting.dto';
 //#if (TenantWorkspace)
 import { WORKSPACE_SCOPE } from '../interceptors/http-context-tokens';
 //#endif
+import { SettingService } from './setting-service';
+import { SettingOutputDto } from './setting.dto';
 
 /** 路由契约：用户偏好与系统默认值走两个端点，打错端点会被 403 或越权改全局默认值。 */
 describe('SettingService', () => {

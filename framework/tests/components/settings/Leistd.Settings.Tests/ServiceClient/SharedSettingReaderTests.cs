@@ -72,6 +72,20 @@ public sealed class SharedSettingReaderTests : IAsyncDisposable
             _remote.Requests.Select(request => request.Path));
     }
 
+    [Fact]
+    public async Task Cold_cache_with_a_cancelable_token_fetches_the_tenant_path()
+    {
+        var tenant = Guid.NewGuid();
+        _remote.Respond(Ok(new() { ["Security.StepUp.Enabled"] = "true" }));
+        var reader = Reader();
+        using var scope = Tenant.Change(tenant);
+        using var cancellation = new CancellationTokenSource();
+
+        Assert.Equal(new SharedSettingValue("true", SharedSettingSource.Current),
+            await reader.GetAsync(Provider, "Security.StepUp.Enabled", cancellation.Token));
+        Assert.Equal($"/api/v1/internal/shared-settings/{tenant}", Assert.Single(_remote.Requests).Path);
+    }
+
     /// <summary>
     /// 宿主把租户上下文换成请求作用域的实现时，各作用域读到各自的租户；回源仍在进程级缓存里进行，
     /// 不借用调用方作用域里的实例。

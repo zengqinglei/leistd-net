@@ -1,7 +1,6 @@
 //#if (LocalIdentity)
 import { HttpHeaders } from '@angular/common/http';
 
-import { AUTH_API } from './auth';
 //#if (IncludeMultiTenancy)
 import { TENANT_HEADER } from '../../src/app/core/tenancy/tenant-protocol';
 //#endif
@@ -25,6 +24,7 @@ import {
   //#endif
   setMockSessionUserId,
 } from '../utils/current-user';
+import { AUTH_API } from './auth';
 
 type MockHandler = (req: { body: unknown }) => unknown;
 

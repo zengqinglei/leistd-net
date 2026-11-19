@@ -2,11 +2,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 
-import { GlobalErrorHandler } from './global-error-handler';
 import { ApplicationHttpError } from '../errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
+import { GlobalErrorHandler } from './global-error-handler';
 
 describe('GlobalErrorHandler', () => {
   let handler: GlobalErrorHandler;

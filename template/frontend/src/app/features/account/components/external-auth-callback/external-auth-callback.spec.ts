@@ -6,7 +6,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, UrlTree, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
-import { ExternalAuthCallback } from './external-auth-callback';
 import {
   confirmWithCode,
   reauthenticateForm,
@@ -21,6 +20,7 @@ import { FullPageNavigationService } from '../../../../core/routing/full-page-na
 import { AuthService } from '../../../../core/services/auth-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { AccountService } from '../../services/account-service';
+import { ExternalAuthCallback } from './external-auth-callback';
 
 /** 外部登录回调的接线：会话上下文须在导航之前建立；业务拒绝展示服务端下发的原因。 */
 describe('ExternalAuthCallback', () => {

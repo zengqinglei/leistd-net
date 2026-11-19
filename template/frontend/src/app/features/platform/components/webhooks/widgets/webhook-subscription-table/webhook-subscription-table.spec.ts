@@ -4,13 +4,13 @@ import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testin
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 
-import { WebhookSubscriptionTable } from './webhook-subscription-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { TruncatedTooltip } from '../../../../../../shared/directives/truncated-tooltip';
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { WebhookSubscriptionOutputDto } from '../../../../dtos/webhook.dto';
+import { WebhookSubscriptionTable } from './webhook-subscription-table';
 
 const LONG_NAME = 'Order fulfilment notifications for the regional warehouse integration endpoint';
 

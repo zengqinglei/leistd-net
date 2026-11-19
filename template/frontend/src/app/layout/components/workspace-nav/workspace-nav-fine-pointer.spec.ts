@@ -2,12 +2,12 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import { WorkspaceNav } from './workspace-nav';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { requireFinePointer } from '../../../shared/utils/coarse-pointer.testing';
 import { NavigationService } from '../../services/navigation-service';
+import { WorkspaceNav } from './workspace-nav';
 
 @Component({
   imports: [WorkspaceNav],

@@ -1,11 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import { NavigationProgress } from './navigation-progress';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
 import { NavigationProgressService } from '../../services/navigation-progress-service';
+import { NavigationProgress } from './navigation-progress';
 
 /** 在真实浏览器 DOM 验证无障碍与两种挂载位置，假时钟只推进进度延迟，不替换渲染调度。 */
 describe('NavigationProgress', () => {

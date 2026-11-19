@@ -5,7 +5,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
-import { TenantDetailDialog } from './tenant-detail-dialog';
 import { acceptConfirmAction } from '../../../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -18,6 +17,7 @@ import {
 import { TenantConnectionDto } from '../../../../dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
+import { TenantDetailDialog } from './tenant-detail-dialog';
 
 import type { Mock, MockedObject } from 'vitest';
 

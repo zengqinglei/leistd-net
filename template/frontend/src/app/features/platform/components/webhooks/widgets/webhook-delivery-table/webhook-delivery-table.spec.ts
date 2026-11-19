@@ -3,11 +3,11 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { page } from 'vitest/browser';
 
-import { WebhookDeliveryTable } from './webhook-delivery-table';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { WebhookDeliveryOutputDto } from '../../../../dtos/webhook.dto';
+import { WebhookDeliveryTable } from './webhook-delivery-table';
 
 function delivery(
   id: string,

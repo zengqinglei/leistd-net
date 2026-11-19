@@ -16,7 +16,6 @@ import { catchError, throwError,
 } from 'rxjs';
 import { page, userEvent } from 'vitest/browser';
 
-import { TENANT_STAFF_CANDIDATE_LIMIT, TenantStaffEditDialog } from './tenant-staff-edit-dialog';
 import { ApplicationHttpError } from '../../../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -25,6 +24,7 @@ import { provideTranslocoTesting } from '../../../../../../../../core/i18n/trans
 import { renderSubmission } from '../../../../../../../../core/validation/form-submission.testing';
 import { RoleBriefDto } from '../../../../../../dtos/role.dto';
 import { TenantStaffOutputDto } from '../../../../../../dtos/tenant-staff.dto';
+import { TENANT_STAFF_CANDIDATE_LIMIT, TenantStaffEditDialog } from './tenant-staff-edit-dialog';
 
 import type { MockInstance } from 'vitest';
 

@@ -8,8 +8,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { of, Subject, throwError } from 'rxjs';
 
-import { OpenApplications } from './open-applications';
-import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
 import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -21,6 +19,8 @@ import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
 import { GetOpenApplicationsInputDto } from '../../dtos/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
+import { OpenApplications } from './open-applications';
+import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
 
 import type { MockedObject } from 'vitest';
 

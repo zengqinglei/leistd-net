@@ -4,11 +4,11 @@ import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { userEvent } from 'vitest/browser';
 
-import { DialogClose } from './dialog-close';
 import { ConfirmService } from '../../feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../i18n/transloco.testing';
 //#endif
+import { DialogClose } from './dialog-close';
 
 //#if (IncludeLocalization)
 const continueEditing = 'common.continueEditing';

@@ -6,7 +6,6 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { toast } from '@spartan-ng/brain/sonner';
 import { EMPTY, of, throwError } from 'rxjs';
 
-import { TwoFactorRequired } from './two-factor-required';
 import {
   confirmWithPassword,
   reauthenticateMethod,
@@ -27,6 +26,7 @@ import { SecurityConfigOutputDto } from '../../../../shared/dtos/account-securit
 import { AccountService } from '../../services/account-service';
 import { RecoveryCodes } from '../recovery-codes/recovery-codes';
 import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
+import { TwoFactorRequired } from './two-factor-required';
 
 import type { Mock } from 'vitest';
 

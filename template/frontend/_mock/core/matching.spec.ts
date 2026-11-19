@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 
+import { MOCKED_URL } from '../../src/app/core/mock/mocked-url';
 import { isMockedUrl, shouldProvideMock } from './matching';
 import * as deployed from './providers';
 import * as development from './providers.mock';
-import { MOCKED_URL } from '../../src/app/core/mock/mocked-url';
 
 /**
  * Mock 的两条判定规则只有一份：是否安装 Mock、某个请求是否走 Mock。

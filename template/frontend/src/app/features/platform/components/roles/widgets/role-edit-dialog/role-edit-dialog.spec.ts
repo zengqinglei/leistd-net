@@ -5,13 +5,13 @@ import { By } from '@angular/platform-browser';
 import { Subject, throwError, Observable, of } from 'rxjs';
 import { userEvent } from 'vitest/browser';
 
-import { RoleEditDialog } from './role-edit-dialog';
 import { ApplicationHttpError } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { CreateRoleInputDto, RoleOutputDto, UpdateRoleInputDto } from '../../../../dtos/role.dto';
+import { RoleEditDialog } from './role-edit-dialog';
 
 /**
  * 角色新建与编辑共用一个对话框：名称是稳定业务标识，只在新建时可填、按服务端同一规则校验，

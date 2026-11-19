@@ -6,7 +6,6 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { provideErrorStateMatcher } from '@spartan-ng/brain/forms';
 import { of, throwError } from 'rxjs';
 
-import { Register } from './register';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -17,6 +16,7 @@ import {
 } from '../../../../core/validation/form-submission.testing';
 import { SubmitErrorStateMatcher } from '../../../../core/validation/submit-error-state-matcher';
 import { AccountService } from '../../services/account-service';
+import { Register } from './register';
 
 import type { MockedObject } from 'vitest';
 

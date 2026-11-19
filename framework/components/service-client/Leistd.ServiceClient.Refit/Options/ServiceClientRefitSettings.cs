@@ -19,6 +19,9 @@ public static class ServiceClientRefitSettings
     /// </remarks>
     public static RefitSettings Create(JsonSerializerOptions? jsonOptions = null)
     {
+        // 设置可独立使用。未提供类型元数据的选项继续由反射解析。
+        ReflectionSupport.EnsureRegistered();
+
         return new RefitSettings
         {
             ContentSerializer = new SystemTextJsonContentSerializer(

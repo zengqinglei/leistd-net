@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Leistd.ServiceClient.Refit.Options;
 using Refit;
 using Xunit;
@@ -73,5 +74,37 @@ public class RefitSettingsSerializationTests
         var json = await content.ReadAsStringAsync();
 
         Assert.Contains("\"databaseMode\":\"dedicatedDatabase\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Reads_stringified_numbers_and_writes_json_numbers()
+    {
+        var serializer = Serializer();
+        var payload = await serializer.FromHttpContentAsync<Dictionary<string, int>>(
+            JsonContent("""{"count":"42"}"""));
+
+        Assert.NotNull(payload);
+        Assert.Equal(42, payload["count"]);
+        using var content = serializer.ToHttpContent(payload);
+        Assert.Equal("""{"count":42}""", await content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("42", JsonValueKind.Number)]
+    [InlineData("\"42\"", JsonValueKind.String)]
+    [InlineData("true", JsonValueKind.True)]
+    [InlineData("""{"nested":42}""", JsonValueKind.Object)]
+    public async Task Reads_object_values_as_json_elements_and_preserves_their_json(
+        string wireValue, JsonValueKind kind)
+    {
+        var serializer = Serializer();
+        var json = $"{{\"value\":{wireValue}}}";
+        var payload = await serializer.FromHttpContentAsync<Dictionary<string, object>>(JsonContent(json));
+
+        Assert.NotNull(payload);
+        var value = Assert.IsType<JsonElement>(payload["value"]);
+        Assert.Equal(kind, value.ValueKind);
+        using var content = serializer.ToHttpContent(payload);
+        Assert.Equal(json, await content.ReadAsStringAsync());
     }
 }

@@ -17,7 +17,6 @@ import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
-import { injectOperationActionSentence } from './operation-action-sentence';
 import { AccountPreferencesService } from '../../../../../../core/services/account-preferences-service';
 import {
   TableLoading,
@@ -44,6 +43,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
 import { OperationRecordOutputDto } from '../../../../dtos/operation-record.dto';
 import { OperationRecordDetail } from '../operation-record-detail/operation-record-detail';
 import { operationRecordActor } from '../operation-record-detail/operation-record-texts';
+import { injectOperationActionSentence } from './operation-action-sentence';
 
 @Component({
   selector: 'app-operation-record-table',

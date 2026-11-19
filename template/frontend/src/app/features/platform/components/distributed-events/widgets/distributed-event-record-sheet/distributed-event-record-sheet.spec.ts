@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, Subject } from 'rxjs';
 
-import { DistributedEventRecordSheet } from './distributed-event-record-sheet';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -14,6 +13,7 @@ import {
   DistributedEventOutboxDetailOutputDto,
 } from '../../../../dtos/distributed-event.dto';
 import { DistributedEventService } from '../../../../services/distributed-event-service';
+import { DistributedEventRecordSheet } from './distributed-event-record-sheet';
 
 const TENANT_ID = '00000000-0000-4000-8000-000000000011';
 const DETAIL: DistributedEventOutboxDetailOutputDto = {

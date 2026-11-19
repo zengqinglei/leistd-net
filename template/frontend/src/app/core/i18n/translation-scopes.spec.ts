@@ -13,9 +13,9 @@ import {
 } from '@jsverse/transloco';
 import { defer, of, Subject, throwError } from 'rxjs';
 
+import { LanguageService } from '../services/language-service';
 import { resolveTranslationScopes, TranslationScopeRecovery } from './translation-scopes';
 import { provideTranslocoTesting } from './transloco.testing';
-import { LanguageService } from '../services/language-service';
 
 @Component({
   selector: 'app-scope-test-page',

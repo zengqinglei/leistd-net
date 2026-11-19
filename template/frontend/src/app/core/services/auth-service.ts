@@ -2,15 +2,6 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, Injector, inject, signal } from '@angular/core';
 import { Observable, defer, lastValueFrom, tap } from 'rxjs';
 
-import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
-//#if (IncludeNotifications || IncludeRealTime)
-import { SignalRService } from './signalr-service';
-//#endif
-//#if (RemoteTokenAuth)
-//#if (IncludeMultiTenancy)
-import { TenantContextService } from './tenant-context-service';
-//#endif
-//#endif
 //#if (LocalIdentity)
 import { PasskeyOptionsOutputDto } from '../../shared/dtos/account-security.dto';
 import { LoginInputDto, SessionLoginOutputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
@@ -23,6 +14,15 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 import { MOCKED_URL } from '../mock/mocked-url';
 //#endif
 import { FullPageNavigationService } from '../routing/full-page-navigation-service';
+import { AccountPreferencesService, PreferenceRead } from './account-preferences-service';
+//#if (IncludeNotifications || IncludeRealTime)
+import { SignalRService } from './signalr-service';
+//#endif
+//#if (RemoteTokenAuth)
+//#if (IncludeMultiTenancy)
+import { TenantContextService } from './tenant-context-service';
+//#endif
+//#endif
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

@@ -1,6 +1,5 @@
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
 
-import { DISTRIBUTED_EVENT_API } from './distributed-event';
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { MockException, MockRequest } from '../core/models';
 import { PERMISSION_GRANTS } from '../data/authorization';
@@ -16,6 +15,7 @@ import { setMockSessionUserId, setMockSessionTenantKey } from '../utils/current-
 //#else
 import { setMockSessionUserId } from '../utils/current-user';
 //#endif
+import { DISTRIBUTED_EVENT_API } from './distributed-event';
 
 type Api = typeof DISTRIBUTED_EVENT_API;
 function call<K extends keyof Api>(

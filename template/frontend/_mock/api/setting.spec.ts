@@ -1,10 +1,6 @@
 import { HttpHeaders } from '@angular/common/http';
 
 //#if (LocalIdentity)
-import { AUTH_API } from './auth';
-//#endif
-import { SETTING_API } from './setting';
-//#if (LocalIdentity)
 import { TENANT_HEADER } from '../../src/app/core/tenancy/tenant-protocol';
 //#endif
 import { MockException } from '../core/models';
@@ -13,6 +9,10 @@ import { TENANT_SETTING_VALUES, USER_SETTING_VALUES } from '../data/settings';
 import { USERS } from '../data/user';
 //#endif
 import { setMockSessionTenantKey, setMockSessionUserId } from '../utils/current-user';
+//#if (LocalIdentity)
+import { AUTH_API } from './auth';
+//#endif
+import { SETTING_API } from './setting';
 
 type MockHandler = (req: { body: unknown; headers: HttpHeaders }) => unknown;
 

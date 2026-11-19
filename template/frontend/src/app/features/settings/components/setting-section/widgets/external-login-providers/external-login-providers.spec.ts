@@ -2,12 +2,6 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-// prettier-ignore
-import {
-  ExternalLoginProviders,
-  ExternalLoginProviderSettings,
-  partitionExternalLoginSettings,
-} from './external-login-providers';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
@@ -18,6 +12,12 @@ import {
   ExternalLoginStatusOutputDto,
   SettingOutputDto,
 } from '../../../../../../core/settings/setting.dto';
+// prettier-ignore
+import {
+  ExternalLoginProviders,
+  ExternalLoginProviderSettings,
+  partitionExternalLoginSettings,
+} from './external-login-providers';
 
 import type { Mock } from 'vitest';
 

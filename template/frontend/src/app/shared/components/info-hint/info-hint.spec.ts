@@ -2,9 +2,9 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { userEvent } from 'vitest/browser';
 
-import { InfoHint } from './info-hint';
 import { expectTouchTarget, setCoarsePointer } from '../../utils/coarse-pointer.testing';
 import { parkPointer } from '../../utils/pointer.testing';
+import { InfoHint } from './info-hint';
 
 @Component({
   selector: 'app-test-info-hint-host',

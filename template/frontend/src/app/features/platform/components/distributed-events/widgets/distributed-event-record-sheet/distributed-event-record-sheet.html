@@ -211,10 +211,10 @@
                       t(stateLabel(detail.record))
                     }}</span>
                   } @else if (field[0] === 'reason') {
-                    <span>{{ reasonLabel($any(field[1])) }}</span
-                    ><code class="text-muted-foreground block font-mono text-xs">{{
-                      field[1]
-                    }}</code>
+                    <span>{{ reasonLabel($any(field[1])) }}</span><code
+                      class="text-muted-foreground block font-mono text-xs"
+                      >{{ field[1] }}</code
+                    >
                   } @else {
                     <span [class.font-mono]="!isDate(field[0])">{{
                       isDate(field[0]) && field[1]

@@ -14,7 +14,6 @@ import {
 } from '@angular/router';
 import { firstValueFrom, isObservable, of } from 'rxjs';
 
-import { forbiddenGuard, permissionGuard } from './permission-guard';
 import { PERMISSIONS } from '../../shared/constants/permission.constants';
 import { User } from '../../shared/models/user.model';
 import { ApplicationHttpError } from '../errors/application-http-error';
@@ -26,6 +25,7 @@ import { ImpersonationService } from '../services/impersonation-service';
 //#endif
 import { SessionContextService } from '../services/session-context-service';
 import { StartupService } from '../services/startup-service';
+import { forbiddenGuard, permissionGuard } from './permission-guard';
 
 /**
  * 路由准入。守卫只读路由自身的 data（`routeConfig.data`）：合并后的 `snapshot.data` 会让父路由的

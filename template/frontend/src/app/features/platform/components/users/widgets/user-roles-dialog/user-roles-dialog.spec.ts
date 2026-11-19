@@ -5,7 +5,6 @@ import { By } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
-import { UserRolesDialog } from './user-roles-dialog';
 import { ApplicationHttpError } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -23,6 +22,7 @@ import {
   UserManagementOutputDto,
 } from '../../../../dtos/user-management.dto';
 import { UserManagementService } from '../../../../services/user-management-service';
+import { UserRolesDialog } from './user-roles-dialog';
 
 import type { Mock } from 'vitest';
 

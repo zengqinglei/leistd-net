@@ -9,8 +9,8 @@ import {
 } from '@ng-icons/lucide';
 import { lastValueFrom } from 'rxjs';
 
-import { SignalRService } from './signalr-service';
 import { NotificationOutputDto } from '../../shared/dtos/notification.dto';
+import { SignalRService } from './signalr-service';
 
 /** 一个图标：键是 lucide 图标名，值是图标数据，用简写 `{ lucideXxx }` 写出，名称与数据同源。 */
 type NotificationIcon = Readonly<Record<string, string>>;
