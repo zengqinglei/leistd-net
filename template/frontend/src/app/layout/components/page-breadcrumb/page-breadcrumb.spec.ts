@@ -189,7 +189,6 @@ describe('PageBreadcrumb', () => {
       // 点在扩出的命中区边缘也能打开下拉
       await tapAt(more, 20, 0);
       await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-      await Promise.all(document.getAnimations().map((animation) => animation.finished));
       document.querySelectorAll('[role="menu"] a').forEach(expectTouchTarget);
       document
         .querySelectorAll('.cdk-overlay-container')

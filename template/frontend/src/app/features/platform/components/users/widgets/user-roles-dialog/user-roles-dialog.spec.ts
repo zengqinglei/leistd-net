@@ -124,8 +124,6 @@ describe('UserRolesDialog', () => {
     await setCoarsePointer(true);
     onTestFinished(() => setCoarsePointer(false));
     await fixture.whenStable();
-    // 弹窗打开时有缩放动画，量尺寸前等它结束
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
     const dialog = fixture.debugElement.query(By.directive(UserRolesDialog))
       .componentInstance as UserRolesDialog;
 

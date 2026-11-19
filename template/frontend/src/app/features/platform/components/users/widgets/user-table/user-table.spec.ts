@@ -475,8 +475,6 @@ describe('UserTable', () => {
       const [table] = await fixture.getDeferBlocks();
       await table.render(DeferBlockState.Complete);
       await fixture.whenStable();
-      // hlmBtn 的尺寸类在插入后才套上，transition-all 会把按钮从细指针尺寸过渡到 44px，量之前等它结束
-      await Promise.all(document.getAnimations().map((animation) => animation.finished));
       const selections: RowSelectionState[] = [];
       const sorts: SortingState[] = [];
       component.rowSelectionChange.subscribe((value) => selections.push(value));

@@ -40,7 +40,6 @@ describe('dropdown menu hover focus', () => {
   async function settle(fixture: { whenStable: () => Promise<unknown> }): Promise<void> {
     await fixture.whenStable();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await Promise.all(document.getAnimations().map((animation) => animation.finished));
   }
 
   /** 按文案取当前打开的菜单项（浮层挂在 document 上）。 */
