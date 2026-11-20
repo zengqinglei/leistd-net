@@ -131,14 +131,15 @@ class ScrollHost {}
   ],
   template: `
     <div class="flex flex-col items-start gap-12 p-12">
-      <button hlmBtn data-target="button default">Default</button>
-      <button hlmBtn size="sm" data-target="button sm">Small</button>
-      <button hlmBtn size="lg" data-target="button lg">Large</button>
+      <!-- 文字档用短文案：文字宽度不到 44px 时宽度也要靠补足 -->
+      <button hlmBtn data-target="button default">OK</button>
+      <button hlmBtn size="sm" data-target="button sm">OK</button>
+      <button hlmBtn size="lg" data-target="button lg">OK</button>
       <button hlmBtn size="icon" aria-label="icon" data-target="button icon">+</button>
       <button hlmBtn size="icon-sm" aria-label="icon sm" data-target="button icon-sm">+</button>
       <button hlmBtn size="icon-lg" aria-label="icon lg" data-target="button icon-lg">+</button>
       <input hlmInput aria-label="input" data-target="input" />
-      <!-- 验证码格上盖着一个透明输入框，点按落在它身上：量包含两者的宿主 -->
+      <!-- 验证码格上盖着一个铺满宿主的透明输入框，点按由它承接：尺寸与命中都量这个输入框 -->
       <hlm-input-otp length="1" aria-label="code" data-target="otp slot">
         <hlm-input-otp-slot index="0" />
       </hlm-input-otp>
@@ -155,7 +156,7 @@ class ScrollHost {}
       <nav hlmNavigationMenu aria-label="navigation">
         <ul hlmNavigationMenuList>
           <li hlmNavigationMenuItem>
-            <a hlmNavigationMenuLink href="#" data-target="navigation link">Link</a>
+            <a hlmNavigationMenuLink href="#" data-target="navigation link">Go</a>
           </li>
         </ul>
       </nav>
@@ -273,7 +274,9 @@ describe('small controls on coarse pointers', () => {
       'tab',
       'navigation link',
     ]);
-    inline.forEach(expectTouchTarget);
+    inline.forEach((target) =>
+      expectTouchTarget(target.matches('hlm-input-otp') ? target.querySelector('input')! : target),
+    );
 
     // 菜单浮层会盖住宿主里的其他控件，量完它们再打开
     await userEvent.click(root.querySelector<HTMLElement>('[data-testid="menu-trigger"]')!);

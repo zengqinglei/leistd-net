@@ -14,7 +14,7 @@
 
 | 组件 | 改动 | 原因 |
 | --- | --- | --- |
-| `button` | `default` / `sm` / `lg` 加 `pointer-coarse:h-11`，`icon` / `icon-sm` / `icon-lg` 加 `pointer-coarse:size-11`；`destructive` 暗色底 `dark:bg-destructive/20` 改 `/10`、悬停 `dark:hover:bg-destructive/30` 改 `/20` | 触屏设备的点按目标不小于 44px，页面不再逐处补；`xs` / `icon-xs` 用于组合框标签移除等嵌在控件内的位置，不改。尺寸档位只体现在 class 上，样式表选不出来。淡色底与同源文字色越接近对比越低，暗色底收到与亮色相同的 alpha（上限见 `styles.css` 色板注释）；只调 `--destructive` 无法同时满足常态与悬停两档 |
+| `button` | `default` / `sm` / `lg` 加 `pointer-coarse:h-11 pointer-coarse:min-w-11`（短文案也不窄于 44px），`icon` / `icon-sm` / `icon-lg` 加 `pointer-coarse:size-11`；`destructive` 暗色底 `dark:bg-destructive/20` 改 `/10`、悬停 `dark:hover:bg-destructive/30` 改 `/20` | 触屏设备的点按目标不小于 44px，页面不再逐处补；`xs` / `icon-xs` 用于组合框标签移除等嵌在控件内的位置，不改。尺寸档位只体现在 class 上，样式表选不出来。淡色底与同源文字色越接近对比越低，暗色底收到与亮色相同的 alpha（上限见 `styles.css` 色板注释）；只调 `--destructive` 无法同时满足常态与悬停两档 |
 | `input`、`input-group` | 加 `pointer-coarse:h-11`；`input-group-button` 的 `xs` 加 `pointer-coarse:h-11`，`icon-xs` / `icon-sm` 加 `pointer-coarse:size-11` | 与按钮同高，表单里并排时对齐；组内按钮（显示口令、清除）触屏点按目标不小于 44px，与组同高 |
 | `select`（trigger） | `data-[size=default]`、`data-[size=sm]` 下加 `pointer-coarse:h-11`；新增 `aria-label`、`aria-labelledby` 输入，绑定到内部 combobox 按钮 | 尺寸同上；读屏名必须落在真正的 combobox 上，写在宿主 `hlm-select-trigger` 上读不到，未传时仍走 Field 原生的 label 关联 |
 | `field`（`hlm-field`、`hlm-field-error`） | `hlm-field` 暴露 `spartanInvalid()` 供说明与错误共用匹配态；向 Field 登记错误 id（进入控件 `aria-describedby`）的条件由校验命中改为可见态，含 `forceShow` | 说明显隐须复用 matcher；业务错误用 `forceShow` 显示时上游不登记，看得见的错误读屏读不到，页面只能手写关联；改成与可见态一致后由组件统一负责，接入 Field 的控件不再手写（OTP 将 Field 关联转发到内部输入框） |
