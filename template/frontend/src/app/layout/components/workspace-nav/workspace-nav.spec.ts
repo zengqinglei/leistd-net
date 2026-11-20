@@ -197,27 +197,44 @@ describe('WorkspaceNav overflow', () => {
   describe('touch targets', () => {
     afterEach(() => setCoarsePointer(false));
 
-    async function openMore(fixture: Awaited<ReturnType<typeof render>>) {
-      const more = fixture.nativeElement.querySelector(
-        '[data-testid="workspace-nav-more"]',
-      ) as HTMLElement;
-      more.click();
+    // 触屏下短标签的链接按 44px 补宽：量尺也要同样补足，否则按文字宽度算出能平铺的项数偏多，末项伸出导航区
+    it('fits short labels by their widened touch width', async () => {
+      await setCoarsePointer(true);
+      const original = groups();
+      groups.set([
+        {
+          label: 'Workspace',
+          items: ['A', 'B', 'C', 'D'].map((label, index) => ({
+            label,
+            icon: 'lucideGauge',
+            route: `/workspace/short-${index}`,
+          })),
+        },
+      ]);
+      onTestFinished(() => groups.set(original));
+      // 导航区本身取 187px（品牌另占宽度）：够平铺两项加「更多」，按文字宽度算则四项都能平铺
+      const fixture = await render(1200);
+      const root = fixture.nativeElement as HTMLElement;
+      const nav = root.querySelector<HTMLElement>('nav[hlmNavigationMenu]')!;
+      const brand = nav.getBoundingClientRect().left - root.getBoundingClientRect().left;
+      fixture.componentInstance.width.set(brand + 187);
       await settle(fixture);
-      return { more, menuItems: Array.from(document.querySelectorAll('[hlmDropdownMenuItem]')) };
-    }
+      const links = inlineLinks(root);
 
-    it('gives the inline links, the more button and its menu items 44px targets on touch screens', async () => {
+      expect(links).toHaveLength(2);
+      expect(links.at(-1)!.getBoundingClientRect().right).toBeLessThanOrEqual(
+        nav.getBoundingClientRect().right,
+      );
+    });
+
+    // 导航链接与下拉菜单项由 coarse-pointer.spec 的共享代表覆盖；「更多」按钮是组件自写的目标
+    it('gives the more button a 44px target on touch screens', async () => {
       await setCoarsePointer(true);
       const fixture = await render(560);
-      const links = inlineLinks(fixture.nativeElement);
-      expect(links.length).toBeGreaterThan(0);
-      links.forEach(expectTouchTarget);
 
-      const { more, menuItems } = await openMore(fixture);
-
-      expectTouchTarget(more);
-      expect(menuItems.length).toBeGreaterThan(0);
-      menuItems.forEach(expectTouchTarget);
+      expectTouchTarget(
+        fixture.nativeElement.querySelector('[data-testid="workspace-nav-more"]') as HTMLElement,
+      );
     });
   });
 });

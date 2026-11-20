@@ -15,10 +15,6 @@ import { AccountPreferencesService } from '../../../../core/services/account-pre
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
-import {
-  expectTouchTarget,
-  setCoarsePointer,
-} from '../../../../shared/utils/coarse-pointer.testing';
 import { dateRangeToQuery } from '../../../../shared/utils/date-range-query';
 import {
   WebhookDeliveryOutputDto,
@@ -134,23 +130,11 @@ describe('Webhooks page', () => {
   afterEach(async () => {
     fixture?.destroy();
     vi.useRealTimers();
-    await setCoarsePointer(false);
   });
 
   const manage = [PERMISSIONS.webhooks.default, PERMISSIONS.webhooks.manage];
 
   // 标签列表上游定高、项比按钮矮，触屏下项补足 44px，列表随之撑高
-  it('gives both view tabs a 44px target on touch screens', async () => {
-    await setCoarsePointer(true);
-    await setup(manage);
-    const tabs = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
-      '[data-testid="webhook-view"] [role="tab"]',
-    );
-
-    expect(tabs.length).toBe(2);
-    tabs.forEach(expectTouchTarget);
-  });
-
   it('searches the same keyword after changing views clears the URL keyword', async () => {
     await setup(manage);
     vi.useFakeTimers({

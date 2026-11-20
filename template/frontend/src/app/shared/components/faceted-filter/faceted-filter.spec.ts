@@ -345,7 +345,8 @@ describe('FacetedFilter', () => {
       await setCoarsePointer(false);
     });
 
-    it('gives the search box, options and the clear command 44px targets', async () => {
+    // 清除按钮是 Spartan 按钮，尺寸由 coarse-pointer.spec 的共享代表覆盖；这里只量组件自己补的目标
+    it('gives the search box and options 44px targets', async () => {
       await setCoarsePointer(true);
       createFilter({ multiple: true, values: ['admin'] });
 
@@ -354,10 +355,6 @@ describe('FacetedFilter', () => {
       // 输入框撑满框内高度（减去上下边框），点在框里任一高度都落在输入框上
       expect(search()!.getBoundingClientRect().height).toBeGreaterThanOrEqual(42);
       expectTouchTarget(optionBy('Member')!);
-      const clear = Array.from(document.querySelectorAll<HTMLElement>('button')).find(
-        (b) => b.textContent?.trim() === 'Clear filter',
-      );
-      expectTouchTarget(clear!);
     });
   });
 });

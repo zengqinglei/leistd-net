@@ -95,7 +95,8 @@ describe('InfoHint', () => {
     await vi.waitFor(() => expect(tooltip()).toBeNull());
   });
 
-  it('keeps a 44px target on coarse pointers', async () => {
+  // 按钮带 -my-2 比所在标题行高：量的是它在标题里的命中区不被裁、不被邻项盖住，按钮尺寸本身由 coarse-pointer.spec 的共享代表覆盖
+  it('keeps a full 44px hit area inside its heading on coarse pointers', async () => {
     await setCoarsePointer(true);
     const button = await render();
 

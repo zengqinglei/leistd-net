@@ -132,6 +132,12 @@ npm run build
 
 Linux 关闭触屏仿真不恢复 fine/hover，须分实例；见 `frontend/src/app/shared/utils/coarse-pointer.testing.ts`。
 
+布局与触屏检查同样按 §4 的判定原则：
+
+- 触屏尺寸：按钮（除 `xs` 两档）、输入、验证码、分段项、标签页项、导航链接和下拉菜单项在 `coarse-pointer.spec.ts` 各有一条代表，侧栏按钮的代表在 default-sidebar spec，组件 spec 不再逐个量；选择框、组合框与命令面板的选项尚无代表，在使用处量一条。组件自写的目标，以及自定义布局下的裁切与邻项，照常验证，每种写法一条。
+- 视口与语言：不做全组合。代表语言组与伪语言在最窄视口（390）复核；更宽的宽度只在组件有断点行为时，每个断点写一条。
+- 单测只做断言，不写截图等证据文件。
+
 保存状态最短时长与搜索防抖使用 Vitest 假计时器验证边界，不睡真实业务时长。先完成宿主／路由初始化，再伪造 Date、timeout 与 interval（RxJS 防抖使用 interval），保留原生 rAF、performance 和微任务；用 `vi.advanceTimersByTimeAsync` 推进，配合 fixture 稳定与 DOM 断言。边界期望独立于生产常量，teardown 清理业务计时器并恢复真实计时器；HTTP 验证与真实 Chromium 隔离保留。菜单、弹层、选择框与抽屉用 `vitest/browser` 的 `userEvent` 打开，先断言已打开（`aria-expanded="true"` 或浮层出现）再往下断言；合成 `click()` 只点不经指针模态的普通按钮。提示用真实计时器，出现与消失用 `expect.poll` 等待；"不出现"断言被测指令的判定（如提示被禁用），同一 spec 留一条真实交互的出现用例，不拿另一个提示出现当屏障（同组提示跳过延时，失焦会取消未触发的显示），依据见 §4 因果屏障。物理指针不会自动重置：需排除非本次操作的悬停时，渲染前调 `frontend/src/app/shared/utils/pointer.testing.ts` 的 `parkPointer()`；合成事件不能代替。
 
 - `describe` 写被测对象；`it` 用英文句子，小写开头，写出行为与期望（如 `keeps the dialog open when saving fails`）；中文只出现在注释与测试数据里。名字装不下的前因后果写进上方注释。

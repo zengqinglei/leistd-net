@@ -34,8 +34,9 @@ yarn-error.log
 .sass-cache/
 /connect.lock
 /coverage
-# Vitest 浏览器模式在用例失败时截的图
+# Vitest 浏览器模式在用例失败时截的图（Vitest 5 起写到 .vitest/attachments）与附件
 __screenshots__/
+/.vitest/
 #if (LocalIdentity)
 # Playwright 端到端测试的结果、报告与经接口登录保存的会话
 /test-results/

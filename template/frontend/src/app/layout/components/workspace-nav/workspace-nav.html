@@ -126,7 +126,10 @@
       <div class="invisible absolute inset-0 overflow-hidden" aria-hidden="true">
         <div #ruler class="flex w-max gap-1">
           @for (item of items(); track item.route) {
-            <span class="p-2 text-sm whitespace-nowrap">{{ item.label }}</span>
+            <!-- 触屏下导航链接至少 44px 宽（styles.css），量尺同样补足，短标签才不会被量窄 -->
+            <span class="p-2 text-sm whitespace-nowrap pointer-coarse:min-w-11">{{
+              item.label
+            }}</span>
           }
           <span class="flex items-center gap-1.5 p-2 text-sm whitespace-nowrap">
             {{ t('layout.topbar.more') }}
