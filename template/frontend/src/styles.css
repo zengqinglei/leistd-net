@@ -304,13 +304,18 @@ body {
     [data-slot='select-item'],
     [data-slot='combobox-item'],
     [data-slot='command-item'],
-    [data-slot='navigation-menu-link'],
     [data-slot='sidebar-menu-button']
   ) {
     min-height: calc(var(--spacing) * 11);
   }
 
-  :is([data-slot='toggle-group-item'], [data-slot='tabs-trigger'], [data-slot='input-otp-slot']) {
+  /* 横排的项还要补宽：标签短（如两个汉字）时内容宽度不到 44px；菜单项、选项与侧栏按钮占满整行，只需补高 */
+  :is(
+    [data-slot='navigation-menu-link'],
+    [data-slot='toggle-group-item'],
+    [data-slot='tabs-trigger'],
+    [data-slot='input-otp-slot']
+  ) {
     min-width: calc(var(--spacing) * 11);
     min-height: calc(var(--spacing) * 11);
   }

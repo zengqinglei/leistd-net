@@ -66,5 +66,11 @@ export default defineConfig({
     // 只管这两种；Object.defineProperty 之类的直接修改与假计时器仍由用例自己还原
     restoreMocks: true,
     unstubGlobals: true,
+    // CI 上限定并行浏览器会话数。默认取 CPU 数减一，每个会话是一个各自加载用例的 Chromium 页面，瓶颈是内存，
+    // 按 CPU 推算的值（百分比同理）在大节点上偏高；多个作业挤在同一节点时浏览器整体停摆。本机保持默认。
+    // 只在根配置生效，本文件由 Angular 构建器作为根配置加载
+    ...(process.env['CI'] ? { maxWorkers: 3 } : {}),
+    // CI 不收集单测截图，停摆时截图还会超时并加重负载；本机保留便于排查
+    browser: { screenshotFailures: !process.env['CI'] },
   },
 });

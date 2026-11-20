@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { userEvent } from 'vitest/browser';
 
-import { expectTouchTarget, setCoarsePointer } from '../../utils/coarse-pointer.testing';
 import { parkPointer } from '../../utils/pointer.testing';
 import { InfoHint } from './info-hint';
 
@@ -57,7 +56,6 @@ describe('InfoHint', () => {
   const elsewhere = () => document.querySelector<HTMLElement>('[data-testid="elsewhere"]')!;
 
   afterEach(async () => {
-    await setCoarsePointer(false);
     await userEvent.keyboard('{Escape}');
   });
 
@@ -93,13 +91,6 @@ describe('InfoHint', () => {
 
     await userEvent.keyboard('{Escape}');
     await vi.waitFor(() => expect(tooltip()).toBeNull());
-  });
-
-  it('keeps a 44px target on coarse pointers', async () => {
-    await setCoarsePointer(true);
-    const button = await render();
-
-    expectTouchTarget(button);
   });
 
   it('centers the icon on the row it sits in', async () => {

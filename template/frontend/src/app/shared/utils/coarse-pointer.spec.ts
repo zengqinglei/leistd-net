@@ -1,9 +1,17 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmInputImports } from '@spartan-ng/helm/input';
+import { HlmInputOtpImports } from '@spartan-ng/helm/input-otp';
+import { HlmNavigationMenuImports } from '@spartan-ng/helm/navigation-menu';
 import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 import { HlmTableImports } from '@spartan-ng/helm/table';
+import { HlmTabsImports } from '@spartan-ng/helm/tabs';
+import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
+import { page, userEvent } from 'vitest/browser';
 
 import {
   expectTouchTarget,
@@ -106,6 +114,65 @@ class TableHost {}
 })
 class ScrollHost {}
 
+/**
+ * 由 Spartan 组件或 `styles.css` 补足 44px 的控件（frontend-ui.md「可访问性」），在这里各验一条代表，
+ * 组件 spec 不再逐个测量。按钮 `xs` 两档不补足，不在其中；侧栏按钮依赖侧栏上下文，代表在 default-sidebar spec。
+ */
+@Component({
+  selector: 'app-spartan-host',
+  imports: [
+    HlmButton,
+    HlmInputImports,
+    HlmInputOtpImports,
+    HlmToggleGroupImports,
+    HlmTabsImports,
+    HlmNavigationMenuImports,
+    HlmDropdownMenuImports,
+  ],
+  template: `
+    <div class="flex flex-col items-start gap-12 p-12">
+      <button hlmBtn data-target="button default">Default</button>
+      <button hlmBtn size="sm" data-target="button sm">Small</button>
+      <button hlmBtn size="lg" data-target="button lg">Large</button>
+      <button hlmBtn size="icon" aria-label="icon" data-target="button icon">+</button>
+      <button hlmBtn size="icon-sm" aria-label="icon sm" data-target="button icon-sm">+</button>
+      <button hlmBtn size="icon-lg" aria-label="icon lg" data-target="button icon-lg">+</button>
+      <input hlmInput aria-label="input" data-target="input" />
+      <!-- 验证码格上盖着一个透明输入框，点按落在它身上：量包含两者的宿主 -->
+      <hlm-input-otp length="1" aria-label="code" data-target="otp slot">
+        <hlm-input-otp-slot index="0" />
+      </hlm-input-otp>
+      <hlm-toggle-group type="single" aria-label="segments">
+        <button hlmToggleGroupItem value="a" data-target="segment">A</button>
+        <button hlmToggleGroupItem value="b">B</button>
+      </hlm-toggle-group>
+      <hlm-tabs tab="a">
+        <hlm-tabs-list aria-label="tabs">
+          <button hlmTabsTrigger="a" data-target="tab">A</button>
+          <button hlmTabsTrigger="b">B</button>
+        </hlm-tabs-list>
+      </hlm-tabs>
+      <nav hlmNavigationMenu aria-label="navigation">
+        <ul hlmNavigationMenuList>
+          <li hlmNavigationMenuItem>
+            <a hlmNavigationMenuLink href="#" data-target="navigation link">Link</a>
+          </li>
+        </ul>
+      </nav>
+      <button hlmBtn variant="outline" data-testid="menu-trigger" [hlmDropdownMenuTrigger]="menu">
+        Menu
+      </button>
+      <ng-template #menu>
+        <hlm-dropdown-menu>
+          <button hlmDropdownMenuItem data-target="menu item">Item</button>
+        </hlm-dropdown-menu>
+      </ng-template>
+    </div>
+  `,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class SpartanHost {}
+
 describe('small controls on coarse pointers', () => {
   afterEach(async () => {
     await setCoarsePointer(false);
@@ -183,6 +250,35 @@ describe('small controls on coarse pointers', () => {
     expectTouchTarget(bare);
     expectTouchTarget(neighbour.querySelector('[role="checkbox"]')!);
     expectTouchTarget(neighbour.querySelector('button:not([role])')!);
+  });
+
+  it('gives each Spartan control sized by the shared rules a 44px target', async () => {
+    await setCoarsePointer(true);
+    const fixture = TestBed.createComponent(SpartanHost);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const targets = () => Array.from(document.querySelectorAll<HTMLElement>('[data-target]'));
+
+    const inline = targets();
+    expect(inline.map((target) => target.dataset['target'])).toEqual([
+      'button default',
+      'button sm',
+      'button lg',
+      'button icon',
+      'button icon-sm',
+      'button icon-lg',
+      'input',
+      'otp slot',
+      'segment',
+      'tab',
+      'navigation link',
+    ]);
+    inline.forEach(expectTouchTarget);
+
+    // 菜单浮层会盖住宿主里的其他控件，量完它们再打开
+    await userEvent.click(root.querySelector<HTMLElement>('[data-testid="menu-trigger"]')!);
+    await expect.element(page.getByRole('menuitem', { name: 'Item' })).toBeVisible();
+    expectTouchTarget(document.querySelector('[data-target="menu item"]')!);
   });
 
   // 滚动区紧贴首列时命中区左沿被裁：外层留白救不了，助手必须能查出来；在滚动区内部留起始内边距后通过

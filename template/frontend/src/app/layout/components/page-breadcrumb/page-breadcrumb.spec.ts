@@ -177,6 +177,7 @@ describe('PageBreadcrumb', () => {
   describe('touch targets', () => {
     afterEach(() => setCoarsePointer(false));
 
+    // 下拉菜单项由 coarse-pointer.spec 的共享代表覆盖；这里只量组件自己补的链接与省略号
     it('gives the links and the ellipsis 44px targets on touch screens', async () => {
       await setCoarsePointer(true);
       const host = await render([CENTRE, BRAND]);
@@ -189,7 +190,6 @@ describe('PageBreadcrumb', () => {
       // 点在扩出的命中区边缘也能打开下拉
       await tapAt(more, 20, 0);
       await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-      document.querySelectorAll('[role="menu"] a').forEach(expectTouchTarget);
       document
         .querySelectorAll('.cdk-overlay-container')
         .forEach((container) => container.remove());

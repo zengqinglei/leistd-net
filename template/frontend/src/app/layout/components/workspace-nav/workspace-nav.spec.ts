@@ -197,27 +197,14 @@ describe('WorkspaceNav overflow', () => {
   describe('touch targets', () => {
     afterEach(() => setCoarsePointer(false));
 
-    async function openMore(fixture: Awaited<ReturnType<typeof render>>) {
-      const more = fixture.nativeElement.querySelector(
-        '[data-testid="workspace-nav-more"]',
-      ) as HTMLElement;
-      more.click();
-      await settle(fixture);
-      return { more, menuItems: Array.from(document.querySelectorAll('[hlmDropdownMenuItem]')) };
-    }
-
-    it('gives the inline links, the more button and its menu items 44px targets on touch screens', async () => {
+    // 导航链接与下拉菜单项由 coarse-pointer.spec 的共享代表覆盖；「更多」按钮是组件自写的目标
+    it('gives the more button a 44px target on touch screens', async () => {
       await setCoarsePointer(true);
       const fixture = await render(560);
-      const links = inlineLinks(fixture.nativeElement);
-      expect(links.length).toBeGreaterThan(0);
-      links.forEach(expectTouchTarget);
 
-      const { more, menuItems } = await openMore(fixture);
-
-      expectTouchTarget(more);
-      expect(menuItems.length).toBeGreaterThan(0);
-      menuItems.forEach(expectTouchTarget);
+      expectTouchTarget(
+        fixture.nativeElement.querySelector('[data-testid="workspace-nav-more"]') as HTMLElement,
+      );
     });
   });
 });
