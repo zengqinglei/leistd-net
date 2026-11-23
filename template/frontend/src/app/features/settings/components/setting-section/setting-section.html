@@ -206,11 +206,13 @@
           </p>
         }
         @if (checkableIn(setting, scope())) {
+          <!-- 本次请求的错误与已保存的最近结论各自显示：重测失败不遮掉上一次的结论与"已过期" -->
           @if (checkErrors()[setting.name]; as checkError) {
             <p class="text-destructive text-xs" role="status" data-testid="setting-check-error">
               {{ checkError }}
             </p>
-          } @else if (setting.lastCheck; as check) {
+          }
+          @if (setting.lastCheck; as check) {
             <!-- 最近一次测试的结论：是状态而不是当前输入的校验错误，不挂 aria-invalid、不用字段错误样式 -->
             <p
               class="text-muted-foreground inline-flex flex-wrap items-center gap-x-1 text-xs"

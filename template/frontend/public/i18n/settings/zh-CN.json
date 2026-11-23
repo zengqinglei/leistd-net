@@ -104,6 +104,7 @@
     "failed": "最近测试未通过：{{reason}} · {{name}} ·",
     "stale": "已过期",
     "requestFailed": "测试没能执行，请稍后再试",
+    "saveFirst": "请先保存这一组的修改，再测试",
     "failure": {
       "not-configured": "未配置",
       "secret-unavailable": "已存的机密解不开",

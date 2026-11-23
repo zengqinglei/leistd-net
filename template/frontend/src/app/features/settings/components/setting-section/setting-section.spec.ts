@@ -2880,7 +2880,7 @@ describe('SettingSection modification and checks', () => {
     button.click();
     fixture.detectChanges();
     expect(button.hasAttribute('disabled')).toBe(true);
-    const post = http.expectOne('/api/v1/settings/checks/Probe.Endpoint');
+    const post = await vi.waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'));
     expect(post.request.method).toBe('POST');
     post.flush({ passed: true, time: '2026-11-23T08:00:00Z', isStale: false });
     await fixture.whenStable();
@@ -2911,14 +2911,82 @@ describe('SettingSection modification and checks', () => {
     const { fixture, http } = await render([checkable()]);
 
     find(fixture, 'setting-check-Probe.Endpoint')!.click();
-    http
-      .expectOne('/api/v1/settings/checks/Probe.Endpoint')
-      .flush(null, { status: 503, statusText: 'Service Unavailable' });
+    (await vi.waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'))).flush(null, {
+      status: 503,
+      statusText: 'Service Unavailable',
+    });
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(find(fixture, 'setting-check-error')).not.toBeNull();
     expect(find(fixture, 'setting-check')).toBeNull();
+  });
+
+  // 改完直接点测试：输入框失焦提交的 PUT 先落定，测试才发出，测到的是刚改的值
+  it('runs the check only after the pending save of the edited value', async () => {
+    const { fixture, http } = await render([checkable()]);
+    const field = find(fixture, 'setting-input-Probe.Endpoint') as HTMLInputElement;
+    field.focus();
+    field.value = 'https://new:4318';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+
+    find(fixture, 'setting-check-Probe.Endpoint')!.click();
+    await fixture.whenStable();
+    const put = http.expectOne(settingWrite);
+    expect(http.match('/api/v1/settings/checks/Probe.Endpoint')).toHaveLength(0);
+
+    put.flush(null);
+    await fixture.whenStable();
+    http.expectOne('/api/v1/settings').flush([checkable({ tenantValue: 'https://new:4318' })]);
+    await vi.waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'), {
+      timeout: 2000,
+    });
+  });
+
+  // 同组的保存失败了：测到的会是旧配置，不测，提示先保存
+  it('does not run the check while a save in the group has failed', async () => {
+    const { fixture, http } = await render([checkable()]);
+    const field = find(fixture, 'setting-input-Probe.Endpoint') as HTMLInputElement;
+    field.value = 'https://new:4318';
+    field.dispatchEvent(new Event('input'));
+    field.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+
+    find(fixture, 'setting-check-Probe.Endpoint')!.click();
+    await fixture.whenStable();
+    http.expectOne(settingWrite).flush('boom', { status: 500, statusText: 'Server Error' });
+    await vi.waitFor(
+      () => {
+        fixture.detectChanges();
+        expect(find(fixture, 'setting-check-error')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
+
+    expect(http.match('/api/v1/settings/checks/Probe.Endpoint')).toHaveLength(0);
+  });
+
+  // 重测请求失败：上一次的结论与"已过期"照常显示，错误另起一行
+  it('keeps the last result visible when a re-run request fails', async () => {
+    const { fixture, http } = await render([
+      checkable({
+        lastCheck: { passed: true, time: '2026-11-22T08:00:00Z', isStale: true },
+      }),
+    ]);
+
+    find(fixture, 'setting-check-Probe.Endpoint')!.click();
+    await vi
+      .waitFor(() => http.expectOne('/api/v1/settings/checks/Probe.Endpoint'))
+      .then((request) => request.flush(null, { status: 503, statusText: 'Service Unavailable' }));
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(find(fixture, 'setting-check-error')).not.toBeNull();
+    });
+
+    expect(find(fixture, 'setting-check')).not.toBeNull();
+    expect(find(fixture, 'setting-check-stale')).not.toBeNull();
   });
 
   it('puts the check button beside a control that is not a text input', async () => {

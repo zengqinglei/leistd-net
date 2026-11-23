@@ -1002,12 +1002,34 @@ export class SettingSection {
       : 'settings.check.failure.other';
   }
 
-  /** 执行一项测试并重取快照：结论、测试人与"已过期"都以后端为准。 */
+  /**
+   * 执行一项测试并重取快照：结论、测试人与"已过期"都以后端为准。
+   * 先等此前排队的写入落定（点按钮时输入框失焦提交的那次也在其中），测试才用到刚改的值；
+   * 同组还有没保存成功的输入时不测，提示先保存。依赖设置都在主设置的分组里。
+   */
   protected async runCheck(setting: SettingOutputDto): Promise<void> {
     const name = setting.name;
+    const scope = this.scope();
     this.checking.update((names) => new Set(names).add(name));
     this.checkErrors.update(({ [name]: _, ...rest }) => rest);
     try {
+      await new Promise<void>((resolve) => this.enqueue(async () => resolve()));
+      const unsaved = this.settings().some(
+        (row) =>
+          row.group === setting.group &&
+          (this.pending().has(draftKey(row, scope)) ||
+            this.stateOf(row, scope)?.status === 'error'),
+      );
+      if (unsaved) {
+        //#if (IncludeLocalization)
+        const message = this.transloco.translate('settings.check.saveFirst');
+        //#else
+        const message = this.t('settings.check.saveFirst');
+        //#endif
+        this.checkErrors.update((errors) => ({ ...errors, [name]: message }));
+        return;
+      }
+
       await firstValueFrom(this.settingService.checkSetting(name));
       await this.pageState.refresh();
     } catch (error: unknown) {
@@ -1210,6 +1232,7 @@ const ENGLISH: Record<string, string> = {
   'settings.check.failed': 'Last test failed: {{reason}} · {{name}} ·',
   'settings.check.stale': 'Outdated',
   'settings.check.requestFailed': "Couldn't run the test. Try again later",
+  'settings.check.saveFirst': 'Save the changes in this group before testing',
   'settings.check.failure.not-configured': 'not configured',
   'settings.check.failure.secret-unavailable': "the saved secret can't be decrypted",
   'settings.check.failure.auth-rejected': 'credentials rejected',

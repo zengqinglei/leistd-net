@@ -104,6 +104,7 @@
     "failed": "Last test failed: {{reason}} · {{name}} ·",
     "stale": "Outdated",
     "requestFailed": "Couldn't run the test. Try again later",
+    "saveFirst": "Save the changes in this group before testing",
     "failure": {
       "not-configured": "not configured",
       "secret-unavailable": "the saved secret can't be decrypted",

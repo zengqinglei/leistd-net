@@ -422,13 +422,13 @@ export const SETTING_API = {
         hasSecretValue:
           !!definition.isSecret && TENANT_SETTING_VALUES.has(`${tenantKey}:${definition.name}`),
         canManage: manageable,
-        // 与后端一致：修改信息机密设置同样下发；测试只在可管理层的设置上
-        tenantModification: parsed(
-          TENANT_SETTING_MODIFICATIONS.get(`${tenantKey}:${definition.name}`),
-        ),
-        isCheckable: definition.name in SETTING_CHECKS,
+        // 与后端一致：修改信息机密设置同样下发；测试结果与租户层修改人是管理数据，只给能管理的人
+        tenantModification: manageable
+          ? parsed(TENANT_SETTING_MODIFICATIONS.get(`${tenantKey}:${definition.name}`))
+          : null,
+        isCheckable: manageable && definition.name in SETTING_CHECKS,
         lastCheck:
-          definition.name in SETTING_CHECKS
+          manageable && definition.name in SETTING_CHECKS
             ? parsed(SETTING_CHECK_RESULTS.get(`${tenantKey}:${definition.name}`))
             : null,
       }));
