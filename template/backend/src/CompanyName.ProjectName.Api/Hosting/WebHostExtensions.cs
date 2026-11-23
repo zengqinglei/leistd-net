@@ -102,6 +102,9 @@ public static class WebHostExtensions
             options.AllMethodPaths = ["/hubs"];
 #endif
         });
+        // 只压缩前端构建产物（作用范围见 SpaExtensions.UseMyProjectSpaCompression）：内容是公开的静态代码，
+        // HTTPS 下压缩没有把机密与攻击者输入混在同一响应里的问题
+        services.AddResponseCompression(options => options.EnableForHttps = true);
 #endif
 
         return services;

@@ -198,6 +198,7 @@ app.UseForwardedHeaders();
 app.UseJsonRequestLocalization();
 #endif
 #if (SpaFrontend)
+app.UseMyProjectSpaCompression();
 app.UseDefaultFiles();
 app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
 #endif

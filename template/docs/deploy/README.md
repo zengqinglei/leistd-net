@@ -30,6 +30,7 @@
 - **容器用户**：API 与迁移镜像以镜像自带的非 root 用户（UID 1654）运行。挂进容器的文件要对它可读。
 <!--#if (SpaFrontend)-->
   Data Protection 密钥改用文件目录（`DataProtection:KeysPath`）而不是 Redis 时，挂载的目录要对它可写。
+- **前端静态资源**：API 托管的构建产物里，根目录的 `.js`、`.css` 按请求的 `Accept-Encoding` 返回 Brotli 或 Gzip（经 HTTPS 入口同样压缩），不论是否压缩都带 `Vary: Accept-Encoding`，缓存仍是一年不可变；`index.html`、`public/` 下的文件与 API 响应不压缩。
 <!--#endif-->
 - **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis：分布式缓存与分布式锁依赖它。
 <!--#if (SpaFrontend)-->
