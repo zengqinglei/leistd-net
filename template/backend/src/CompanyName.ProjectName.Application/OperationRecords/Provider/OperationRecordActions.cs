@@ -91,6 +91,13 @@ public static class OperationRecordActions
     /// <summary>设置变更。作用域（宿主／租户／用户）随目标标识带出。</summary>
     public const string SettingChanged = "setting.changed";
 
+    /// <summary>清除了某一层的设置值，读取回落到下一层。作用域随目标标识带出。</summary>
+    /// <remarks>清除会连同修改信息一起删掉那一行，事后只能从这里查到是谁、什么时候清的。</remarks>
+    public const string SettingCleared = "setting.cleared";
+
+    /// <summary>执行了一次设置测试（如用已存的凭据调一次对方）。作用域随目标标识带出，结论见设置页。</summary>
+    public const string SettingChecked = "setting.checked";
+
 #if (LocalIdentity && Email)
     /// <summary>用当前发信参数发送了一封测试邮件。</summary>
     /// <remarks>

@@ -12,7 +12,8 @@ namespace Leistd.Settings.Events;
 /// <param name="name">设置名。</param>
 /// <param name="scope">写入的层级。</param>
 /// <param name="userId">用户级时的用户标识。</param>
-public sealed class SettingChangedEvent(string name, SettingScopes scope, string? userId) : LocalEvent
+/// <param name="isCleared">本次是清除该层的值（回落到下一层），而不是写入新值。</param>
+public sealed class SettingChangedEvent(string name, SettingScopes scope, string? userId, bool isCleared = false) : LocalEvent
 {
     /// <summary>设置名。</summary>
     public string Name { get; } = name;
@@ -22,4 +23,7 @@ public sealed class SettingChangedEvent(string name, SettingScopes scope, string
 
     /// <summary>用户级时的用户标识；其它层级为 <see langword="null"/>。</summary>
     public string? UserId { get; } = userId;
+
+    /// <summary>本次是否为清除：值已删除，读取回落到下一层。</summary>
+    public bool IsCleared { get; } = isCleared;
 }

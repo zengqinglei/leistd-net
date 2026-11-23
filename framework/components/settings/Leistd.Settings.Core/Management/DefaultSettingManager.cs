@@ -3,6 +3,8 @@ using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Context;
+using Leistd.Security.Users;
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Errors;
 using Leistd.Settings.Resolution;
@@ -15,6 +17,7 @@ using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.Options;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Management;
@@ -47,6 +50,11 @@ namespace Leistd.Settings.Management;
 /// <param name="currentTenant">锁键按它取租户；未注册多租户时全部写入共用宿主那把锁。</param>
 /// <param name="unitOfWorkOptions">宿主的工作单元默认选项，提供隔离级别与超时；事务开关固定为开启。</param>
 /// <param name="encryptionOptions">可指定机密设置专用的 Data Protection，见 <see cref="SettingEncryptionOptions.DataProtectionProvider"/>。</param>
+/// <param name="currentUser">写入人；未注册或无主体时修改信息里的写入人为空。</param>
+/// <param name="timeProvider">写入时间的来源；默认 <see cref="TimeProvider.System"/>。</param>
+/// <param name="logger">清除时解不开租户层回落值，记 <see cref="SettingLogEvents.DecryptionFailed"/>。</param>
+/// <param name="checks">设置测试的登记；写入或清除租户层、宿主层的值时，把依赖它的测试结果标记为过期。</param>
+/// <param name="checkStore">测试结果存储；与设置值在同一事务里标记过期。未注册时不标记。</param>
 public sealed class DefaultSettingManager(
     ISettingDefinitionManager definitionManager,
     ISettingStore store,
@@ -60,7 +68,12 @@ public sealed class DefaultSettingManager(
     IOptions<SettingManagementOptions>? managementOptions = null,
     ICurrentTenant? currentTenant = null,
     IOptions<UnitOfWorkOptions>? unitOfWorkOptions = null,
-    IOptions<SettingEncryptionOptions>? encryptionOptions = null) : ISettingManager
+    IOptions<SettingEncryptionOptions>? encryptionOptions = null,
+    ICurrentUser? currentUser = null,
+    TimeProvider? timeProvider = null,
+    ILogger<DefaultSettingManager>? logger = null,
+    IEnumerable<SettingCheckRegistration>? checks = null,
+    ISettingCheckStore? checkStore = null) : ISettingManager
 {
     // 与读取器同一判定、同一用途，写入的密文它才解得开
     private readonly IDataProtector? _protector =
@@ -145,15 +158,38 @@ public sealed class DefaultSettingManager(
                 .Protect(value)
             : value;
 
-        await store.SetAsync(definition.Name, stored, scope, userId, cancellationToken);
+        await store.SetAsync(definition.Name, stored, scope, userId, CurrentModification(), cancellationToken);
+
+        // 只改个人偏好不动租户的配置；依赖它的测试结论与本次写入同一事务过期
+        if (scope != SettingScopes.User && checkStore is not null && checks is not null)
+        {
+            var stale = checks
+                .Where(check => check.Covers.Contains(definition.Name, StringComparer.Ordinal))
+                .Select(check => check.SettingName)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (stale.Count > 0)
+            {
+                await checkStore.MarkStaleAsync(stale, cancellationToken);
+            }
+        }
 
         // 校验器读取时又缓存了含本项旧值的快照；不再作废的话同一作用域写后读仍是旧值
         reader?.Invalidate();
 
         if (eventBus is not null)
         {
-            await eventBus.PublishAsync(new SettingChangedEvent(definition.Name, scope, userId), cancellationToken);
+            await eventBus.PublishAsync(new SettingChangedEvent(definition.Name, scope, userId, isCleared: value is null), cancellationToken);
         }
+    }
+
+    // 名字取写入当时的快照：资源服务没有用户表，事后换不出名字
+    private SettingModification CurrentModification()
+    {
+        var time = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        return currentUser is { IsAuthenticated: true }
+            ? new SettingModification(time, currentUser.Id?.ToString(), currentUser.Name ?? currentUser.Username)
+            : new SettingModification(time, null, null);
     }
 
     private string LockKey() => currentTenant?.Id is { } tenantId ? $"settings:{tenantId:D}" : "settings:host";
@@ -180,7 +216,7 @@ public sealed class DefaultSettingManager(
             if (tenantValues.TryGetValue(definition.Name, out var tenantValue))
             {
                 return definition.IsEncrypted
-                    ? DefaultSettingProvider.Decrypt(_protector, definition.Name, tenantValue)
+                    ? DefaultSettingProvider.Decrypt(_protector, definition.Name, tenantValue, logger)
                     : tenantValue;
             }
         }

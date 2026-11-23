@@ -62,6 +62,40 @@ public sealed class SmtpEmailSender(
             message.Subject);
     }
 
+    /// <summary>按当前配置连接服务器并认证，不发信，用来确认配置可用。</summary>
+    /// <remarks>
+    /// 只覆盖连接与认证：发件地址是否被服务器接受、收件人能否投递要真正发一封信才知道。
+    /// 失败只返回分类，原因记 Information 日志（不含口令）；取消照常抛出。
+    /// </remarks>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>探测结果。</returns>
+    public async Task<SmtpProbeResult> ProbeAsync(CancellationToken cancellationToken = default)
+    {
+        var current = options.CurrentValue;
+        using var client = CreateClient();
+        try
+        {
+            await client.ConnectAsync(current.Host, current.Port, ResolveSocketOptions(current), cancellationToken);
+            if (!string.IsNullOrWhiteSpace(current.Username))
+            {
+                await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
+            }
+
+            await client.DisconnectAsync(quit: true, cancellationToken);
+            return SmtpProbeResult.Succeeded;
+        }
+        catch (AuthenticationException exception)
+        {
+            logger.LogInformation(exception, "SMTP probe of {Host}:{Port} was rejected at authentication", current.Host, current.Port);
+            return SmtpProbeResult.AuthenticationRejected;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogInformation(exception, "SMTP probe of {Host}:{Port} could not reach the server", current.Host, current.Port);
+            return SmtpProbeResult.Unreachable;
+        }
+    }
+
     // 465 要求连接即 TLS，其余加密端口使用 STARTTLS。
     private static SecureSocketOptions ResolveSocketOptions(SmtpOptions current)
         => current.EnableSsl

@@ -73,11 +73,15 @@ internal sealed class FakeSettingStore : ISettingStore
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyDictionary<string, SettingModification>>(new Dictionary<string, SettingModification>());
+
     public Task SetAsync(
         string name,
         string? value,
         SettingScopes scope,
         string? userId,
+        SettingModification modification,
         CancellationToken cancellationToken = default)
     {
         Writes.Add((name, value, scope, userId));

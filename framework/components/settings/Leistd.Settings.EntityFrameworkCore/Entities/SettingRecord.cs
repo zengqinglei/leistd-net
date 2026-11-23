@@ -1,3 +1,4 @@
+using Leistd.Auditing.Abstractions;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Settings.EntityFrameworkCore.Entities;
@@ -7,8 +8,9 @@ namespace Leistd.Settings.EntityFrameworkCore.Entities;
 /// 层级由 <c>TenantId</c> 与 <c>UserId</c> 共同表达，不引入可独立修改的 Scope 列：
 /// <c>TenantId</c> 交给多租户查询过滤器隔离（<see langword="null"/> 即宿主），
 /// <c>UserId</c> 为 <see langword="null"/> 即租户级、非空即该用户的用户级。
+/// <para>修改信息由存储在每次新增与改值时写入，语义是"最后一次写入"：新增的行同样带上，不依赖宿主是否接入审计拦截器。</para>
 /// </remarks>
-public class SettingRecord : IMultiTenant
+public class SettingRecord : IMultiTenant, IModificationAuditedObject
 {
     /// <summary>主键（有序 Guid v7）。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -27,4 +29,13 @@ public class SettingRecord : IMultiTenant
 
     /// <summary>设置值。</summary>
     public string Value { get; set; } = default!;
+
+    /// <summary>最后一次写入的时间；修改信息上线之前写入、从未再写过的行为 <see langword="null"/>。</summary>
+    public DateTime? LastModificationTime { get; set; }
+
+    /// <summary>最后一次写入人的标识；无主体写入时为 <see langword="null"/>。</summary>
+    public string? LastModifierId { get; set; }
+
+    /// <summary>最后一次写入人的显示名快照；无主体写入时为 <see langword="null"/>。</summary>
+    public string? LastModifierName { get; set; }
 }

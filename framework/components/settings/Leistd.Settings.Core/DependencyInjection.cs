@@ -3,6 +3,7 @@ using Leistd.Settings.ExceptionMappings;
 using Leistd.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Errors;
 using Leistd.Settings.Management;
@@ -48,6 +49,7 @@ public static class DependencyInjection
         services.TryAddScoped<ISettingProvider, DefaultSettingProvider>();
         services.TryAddTransient<ISettingManager, DefaultSettingManager>();
         services.TryAddTransient<ISettingManagementService, SettingManagementService>();
+        services.TryAddTransient<ISettingCheckService, SettingCheckService>();
         // 检查要看宿主最终的登记（替换发生在本方法之后），因此持有登记集合本身而不是此刻的快照
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, SettingManagerDependencyCheck>(
             sp => new SettingManagerDependencyCheck(sp.GetRequiredService<IServiceScopeFactory>(), services)));
@@ -62,6 +64,30 @@ public static class DependencyInjection
         // 错误码的状态语义与默认译文属于本组件默认值，在此登记，避免宿主漏配时静默回落成 400。
         // 宿主的 MapCode / MapException 覆盖同一码或同一类型，与调用顺序无关。
         services.Configure<GlobalExceptionOptions>(SettingsExceptionMappings.Configure);
+        return services;
+    }
+
+    /// <summary>给一项设置登记测试：设置页在该行提供"测试"，结果保存为本租户（宿主上下文为宿主）的最近结论。</summary>
+    /// <remarks>
+    /// <para>同一设置只认最后一次登记。探针按作用域解析。<paramref name="dependsOn"/> 列出结论依赖的其他设置，
+    /// 它们与主设置在同一租户里任一项被写入或清除，结果即标记为过期；只在用户层被写入不影响。</para>
+    /// <para>结果需要 <see cref="ISettingCheckStore"/>：<c>AddSettingsEfCore</c> 已提供。</para>
+    /// </remarks>
+    /// <typeparam name="TCheck">探针类型。</typeparam>
+    /// <param name="services">服务集合。</param>
+    /// <param name="settingName">主设置：测试按钮所在的那一项，须允许租户层或宿主层写入。</param>
+    /// <param name="dependsOn">结论依赖的其他设置。</param>
+    /// <returns>同一服务集合。</returns>
+    public static IServiceCollection AddSettingCheck<TCheck>(
+        this IServiceCollection services,
+        string settingName,
+        params string[] dependsOn)
+        where TCheck : class, ISettingCheck
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(settingName);
+        ArgumentNullException.ThrowIfNull(dependsOn);
+        services.TryAddScoped<TCheck>();
+        services.AddSingleton(new SettingCheckRegistration(settingName, [.. dependsOn], typeof(TCheck)));
         return services;
     }
 }

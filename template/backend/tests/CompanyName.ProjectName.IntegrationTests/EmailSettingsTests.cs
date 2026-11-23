@@ -16,6 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Leistd.Settings.Definitions;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -222,6 +223,47 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
 #if (IncludeMultiTenancy)
     private const string TenantAdminPassword = "Tenant@123456";
 #endif
+
+    // 连通测试只连接与认证：连不上记为 unreachable 并保存在设置页上，测试本身留痕；
+    // 之后改了依赖的设置（端口），上次的结论标为过期。同时证明真实库里有测试结果表与修改信息列
+    [Fact]
+    public async Task Checking_the_smtp_connection_saves_the_result_until_a_covered_setting_changes()
+    {
+        using var admin = await LoginAdminAsync();
+        // 保留给 IANA 的丢弃端口，本机上不会有服务监听
+        await WriteAsync(admin.Client, SettingConstant.Email.SmtpHost, "127.0.0.1");
+        await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, "9");
+        var target = $"{SettingScopes.Host}/{SettingConstant.Email.SmtpHost}";
+        var checkedBefore = await OperationRecordQueries.CountSucceededAsync(
+            factory, admin.Client, OperationRecordActions.SettingChecked, target);
+        try
+        {
+            using var response = await admin.Client.PostAsync($"/api/v1/settings/checks/{SettingConstant.Email.SmtpHost}", null);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(result.GetProperty("passed").GetBoolean());
+            Assert.Equal("unreachable", result.GetProperty("failureCode").GetString());
+
+            var host = await ReadSettingAsync(admin.Client, SettingConstant.Email.SmtpHost);
+            Assert.True(host.GetProperty("isCheckable").GetBoolean());
+            Assert.Equal("unreachable", host.GetProperty("lastCheck").GetProperty("failureCode").GetString());
+            Assert.False(host.GetProperty("lastCheck").GetProperty("isStale").GetBoolean());
+            Assert.False(string.IsNullOrEmpty(host.GetProperty("tenantModification").GetProperty("modifierName").GetString()));
+            Assert.Equal(checkedBefore + 1, await OperationRecordQueries.CountSucceededAsync(
+                factory, admin.Client, OperationRecordActions.SettingChecked, target));
+
+            await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, "10");
+
+            var after = await ReadSettingAsync(admin.Client, SettingConstant.Email.SmtpHost);
+            Assert.True(after.GetProperty("lastCheck").GetProperty("isStale").GetBoolean());
+        }
+        finally
+        {
+            await WriteAsync(admin.Client, SettingConstant.Email.SmtpHost, null);
+            await WriteAsync(admin.Client, SettingConstant.Email.SmtpPort, null);
+        }
+    }
 
     // 测试邮件不带目标：收件人是任意填写的地址，不进审计表
     private const string NoTarget = "-";

@@ -1,3 +1,4 @@
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Management;
 using Leistd.Settings.Dtos;
@@ -28,12 +29,17 @@ public static class SettingEndpoints
     /// <summary>写当前租户设置的端点名。</summary>
     public const string SetForCurrentTenantName = NamePrefix + "SetForCurrentTenant";
 
-    /// <summary>映射设置页端点：<c>GET /</c>、<c>PUT /current-user</c>、<c>PUT /current-tenant</c>。</summary>
+    /// <summary>执行设置测试的端点名。</summary>
+    public const string CheckName = NamePrefix + "Check";
+
+    /// <summary>映射设置页端点：<c>GET /</c>、<c>PUT /current-user</c>、<c>PUT /current-tenant</c>、<c>POST /checks/{name}</c>。</summary>
     /// <remarks>
     /// <para>两个写入端点授权不同：改自己的偏好走 <see cref="SettingEndpointOptions.AccessPolicy"/>，
     /// 改租户值走 <see cref="SettingEndpointOptions.TenantWritePolicy"/>，分组登记了
     /// <see cref="SettingEndpointOptions.GroupPolicies"/> 时还要满足该分组的策略。读取按同一判据给出
     /// <see cref="SettingOutputDto.CanManage"/>，不能管理又不允许用户覆盖的设置不下发。</para>
+    /// <para>执行测试（<see cref="ISettingCheckService"/>）与写租户值同一授权，会触发对外调用；成功返回 200 与本次结果
+    /// <see cref="SettingCheckResultDto"/>，没有登记测试的设置按 404。</para>
     /// <para>写入成功返回 204；取值、层级与可见性错误是带码的 400 / 403 / 404。
     /// 前缀由宿主的路由组决定；返回的路由组可继续追加约定。</para>
     /// </remarks>
@@ -125,6 +131,36 @@ public static class SettingEndpoints
                 return TypedResults.NoContent();
             })
             .WithName(SetForCurrentTenantName)
+            .RequireAuthorization(options.TenantWritePolicy);
+
+        group.MapPost("checks/{name}", async Task<IResult> (
+                string name,
+                HttpContext httpContext,
+                ISettingCheckService service,
+                ISettingDefinitionManager definitions,
+                IAuthorizationPolicyProvider policies,
+                IPolicyEvaluator evaluator,
+                IOptions<SettingManagementOptions> managementOptions,
+                CancellationToken cancellationToken) =>
+            {
+                // 与写租户值同一判据：测试会用这组设置对外调用，只给能管理它的人
+                var definition = definitions.GetOrNull(name);
+                if (definition is { IsVisibleToClients: true })
+                {
+                    var settingGroup = string.IsNullOrWhiteSpace(definition.Group)
+                        ? managementOptions.Value.DefaultGroup
+                        : definition.Group;
+                    var denied = await new ManagementAccess(options, policies, evaluator, httpContext)
+                        .DenyGroupAsync(settingGroup);
+                    if (denied is not null)
+                    {
+                        return denied;
+                    }
+                }
+
+                return TypedResults.Ok(await service.RunAsync(name, cancellationToken));
+            })
+            .WithName(CheckName)
             .RequireAuthorization(options.TenantWritePolicy);
 
         return group;

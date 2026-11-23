@@ -9,6 +9,7 @@ using Leistd.Settings.Stores;
 using Leistd.Settings.Exceptions;
 using Leistd.Settings.Options;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Resolution;
@@ -27,13 +28,15 @@ namespace Leistd.Settings.Resolution;
 /// 两者都没有时只有读取落过库的机密设置会失败。</param>
 /// <param name="currentTenant">缓存按它分键；未注册多租户时为 <see langword="null"/>，全部读取共用宿主一份。</param>
 /// <param name="encryptionOptions">可指定机密设置专用的 Data Protection，见 <see cref="SettingEncryptionOptions.DataProtectionProvider"/>。</param>
+/// <param name="logger">解不开机密设置时记 <see cref="SettingLogEvents.DecryptionFailed"/>。</param>
 public sealed class DefaultSettingProvider(
     ISettingDefinitionManager definitionManager,
     ISettingStore store,
     ICurrentUser currentUser,
     IDataProtectionProvider? dataProtectionProvider = null,
     ICurrentTenant? currentTenant = null,
-    IOptions<SettingEncryptionOptions>? encryptionOptions = null) : ISettingProvider
+    IOptions<SettingEncryptionOptions>? encryptionOptions = null,
+    ILogger<DefaultSettingProvider>? logger = null) : ISettingProvider
 {
     // 机密设置的用途字符串，固定不变（改动会让已存密文不可解）；每个设置再以设置名作子用途，密文不能挪到别的设置名下。
     internal const string ProtectionPurpose = "Leistd.Settings.EncryptedValue.v1";
@@ -106,7 +109,7 @@ public sealed class DefaultSettingProvider(
         }
 
         // 只解密落过库的值：代码默认值按约定不加密（见 ISettingDefinition.IsEncrypted）
-        return Decrypt(_protector, definition.Name, value);
+        return Decrypt(_protector, definition.Name, value, logger);
     }
 
     // 专用实例优先于宿主的：读写两端经同一判定取保护器，写入的密文读取端才解得开
@@ -115,8 +118,9 @@ public sealed class DefaultSettingProvider(
         IDataProtectionProvider? hostProvider)
         => (options?.Value.DataProtectionProvider ?? hostProvider)?.CreateProtector(ProtectionPurpose);
 
-    // 解密一条落过库的机密值；写入入口算清除后的回落值时也用它
-    internal static string Decrypt(IDataProtector? protector, string name, string value)
+    // 解密一条落过库的机密值；写入入口算清除后的回落值时也用它。
+    // 解不开时在这里记一次事件再抛：读取、写入回落与宿主设置应用三条路径都经过这里，告警只接一个事件号
+    internal static string Decrypt(IDataProtector? protector, string name, string value, ILogger? logger)
     {
         try
         {
@@ -126,12 +130,16 @@ public sealed class DefaultSettingProvider(
         }
         catch (CryptographicException exception)
         {
-            // 密钥丢失、密钥环未共享或密文被篡改；拒绝而不是回退到默认值。消息只带设置名，不回显密文
-            throw new InvalidOperationException(
-                $"Setting '{name}' could not be decrypted with the current Data Protection key ring. " +
-                "Check that this process uses the key ring and application name of the process that wrote it " +
-                $"(the host's Data Protection, or {nameof(SettingEncryptionOptions)}.{nameof(SettingEncryptionOptions.DataProtectionProvider)} when set).",
-                exception);
+            // 密钥丢失、密钥环未共享或密文被篡改；拒绝而不是回退到默认值。不回显密文与明文
+            var keyId = ProtectedPayload.TryReadKeyId(value);
+            logger?.LogError(
+                new EventId(SettingLogEvents.DecryptionFailed, nameof(SettingLogEvents.DecryptionFailed)),
+                exception,
+                "Setting {SettingName} could not be decrypted with the current Data Protection key ring (key {KeyId}, {ErrorType}).",
+                name,
+                keyId,
+                exception.GetType().Name);
+            throw new SettingDecryptionException(name, [ProtectionPurpose, name], keyId, exception);
         }
     }
 

@@ -10,21 +10,26 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource _stop = new(TimeSpan.FromSeconds(30));
     private readonly Task _serving;
+    private readonly string? _authReply;
 
     /// <param name="dataReply">收到正文结束符后的回复；<see langword="null"/> 表示不回复（挂住客户端）。</param>
     /// <param name="onDataEnd">收到正文结束符、回复之前调用。</param>
     /// <param name="onQuit">收到 QUIT 时调用。</param>
     /// <param name="replyToQuit">是否回复 QUIT；<see langword="false"/> 让客户端等到读超时或取消。</param>
+    /// <param name="authReply">不为 <see langword="null"/> 时 EHLO 声明支持 AUTH PLAIN，并以它回复 AUTH 命令。</param>
     public LoopbackSmtpServer(
         string? dataReply = "250 2.0.0 accepted",
         Action? onDataEnd = null,
         Action? onQuit = null,
-        bool replyToQuit = true)
+        bool replyToQuit = true,
+        string? authReply = null)
     {
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        _authReply = authReply;
         _serving = ServeAsync(dataReply, onDataEnd, onQuit, replyToQuit);
     }
+
 
     public int Port { get; }
 
@@ -62,7 +67,19 @@ internal sealed class LoopbackSmtpServer : IAsyncDisposable
             }
             else if (line.StartsWith("EHLO", StringComparison.Ordinal) || line.StartsWith("HELO", StringComparison.Ordinal))
             {
-                await writer.WriteLineAsync("250 localhost");
+                if (_authReply is not null)
+                {
+                    await writer.WriteLineAsync("250-localhost");
+                    await writer.WriteLineAsync("250 AUTH PLAIN");
+                }
+                else
+                {
+                    await writer.WriteLineAsync("250 localhost");
+                }
+            }
+            else if (_authReply is not null && line.StartsWith("AUTH", StringComparison.Ordinal))
+            {
+                await writer.WriteLineAsync(_authReply);
             }
             else if (line == "DATA")
             {

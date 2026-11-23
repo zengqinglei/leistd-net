@@ -97,7 +97,7 @@ internal sealed class TelemetryExportHandler(
 
     // 格式同 OTEL_EXPORTER_OTLP_HEADERS：逗号分隔的 key=value，值按 URL 编码解码（与 SDK 一致）。
     // 系统设置的写法在写入时已校验，这里只解析
-    private static IEnumerable<(string Name, string Value)> ParseHeaders(string? headers)
+    internal static IEnumerable<(string Name, string Value)> ParseHeaders(string? headers)
     {
         if (string.IsNullOrWhiteSpace(headers))
         {

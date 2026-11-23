@@ -194,6 +194,7 @@ XML 按需补契约。短摘要写 `/// <summary>说明。</summary>`；正文�
 
 - 部署配置错误在启动期失败：`AddOptions<T>().Validate(...).ValidateOnStart()`；连接串缺失时由创建 DbContext 直接抛出并指明键名。组合期只为**选择注册哪种实现**（是否接 Redis、加载哪些证书）读配置，在读取处校验并报出键名，集成测试用 `UseSetting` 覆盖这类键。
 - 日志用结构化消息模板，消息为英文：`logger.LogWarning("Login failed too many times for user {UserId}", userId)`；不可记录的内容见[通用约定 §1](./coding-common.md#1-语言与敏感信息)。关联标识与租户由框架放进日志作用域（`leistd.correlationId`、`leistd.tenantId`），不要再拼进消息；请求完成日志由宿主统一记录，见 [日志](../deploy/configuration.md#日志)。路径段是机密的端点（如回调地址里的路由键）调用 `WithSensitiveRoute()`，控制器标 `[SensitiveRoute]`：完成日志与追踪只记路由模板；业务日志不记路径与路由值。
+- 需要接告警或按事件检索的日志带固定事件号（`EventId` 的编号与名称），常量集中在一个类里，并在项目文档登记编号、事件名、级别与结构化字段。号段：本项目业务用 51000–59999；50000–50999 留给模板代码，1000–9999 是框架组件，10000 起是 EF Core。告警按日志类别加事件号匹配。
 
 - 业务指标经 `IMeterFactory` 创建 Meter；Meter 与 `ActivitySource` 均用 `CompanyName.ProjectName.*` 项目前缀命名，宿主已按此前缀采集。标签必须有界，不带租户 Id、用户或地址；确有可变维度时限定数量，超出归入 `other`，不建通用截断组件。
 - 新增独立 Worker 时，将 `TelemetryExtensions` 源码与包引用迁到宿主共用位置，调用同一入口；Worker 不反向引用 Api，没有入站 HTTP，也不需要指标端点。导出配置与排障见 [遥测导出](../deploy/configuration.md#遥测导出)。

@@ -9,6 +9,7 @@ using Leistd.MultiTenancy.Management.Events;
 #endif
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Events;
 #if (IncludeWebhooks)
@@ -40,14 +41,34 @@ internal sealed class SettingChangedAuditHandler(
         => @event.Scope == SettingScopes.User
             ? Task.CompletedTask
             : recorder.RecordSucceededAsync(
-                OperationRecordActions.SettingChanged,
+                // 清除会把修改信息随行删掉，单独记一个动作，事后才查得到是谁清的
+                @event.IsCleared ? OperationRecordActions.SettingCleared : OperationRecordActions.SettingChanged,
                 OperationTarget.For($"{@event.Scope}/{@event.Name}", @event.Name),
-                // 凭什么：该设置所在分组的管理子权限；未登记分组的只要求父权限
-                definitions.GetOrNull(@event.Name)?.Group is { } group
-                && SettingGroupPermissions.All.TryGetValue(group, out var permission)
-                    ? permission
-                    : PermissionConstant.Settings.Default,
+                SettingAuthorization.For(definitions, @event.Name),
                 cancellationToken);
+}
+
+/// <summary>设置测试留痕：测试会用存着的凭据对外调用一次，记下谁触发的；结论本身在设置页，不进记录。</summary>
+internal sealed class SettingCheckCompletedAuditHandler(
+    IOperationRecorder recorder,
+    ISettingDefinitionManager definitions) : IEventHandler<SettingCheckCompletedEvent>
+{
+    public Task HandleAsync(SettingCheckCompletedEvent @event, CancellationToken cancellationToken = default)
+        => recorder.RecordSucceededAsync(
+            OperationRecordActions.SettingChecked,
+            OperationTarget.For($"{@event.Scope}/{@event.SettingName}", @event.SettingName),
+            SettingAuthorization.For(definitions, @event.SettingName),
+            cancellationToken);
+}
+
+// 凭什么：该设置所在分组的管理子权限；未登记分组的只要求父权限
+internal static class SettingAuthorization
+{
+    public static string For(ISettingDefinitionManager definitions, string name)
+        => definitions.GetOrNull(name)?.Group is { } group
+           && SettingGroupPermissions.All.TryGetValue(group, out var permission)
+            ? permission
+            : PermissionConstant.Settings.Default;
 }
 
 /// <summary>权限授予整体替换留痕，是整套权限体系里最敏感的写操作之一。</summary>

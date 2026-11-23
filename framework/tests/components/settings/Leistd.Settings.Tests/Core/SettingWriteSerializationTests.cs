@@ -113,7 +113,7 @@ public sealed class SettingWriteSerializationTests : IDisposable
     {
         if (presetUnread is not null)
         {
-            await _store.SetAsync(UnreadDays, presetUnread, SettingScopes.Tenant, userId: null);
+            await _store.SetAsync(UnreadDays, presetUnread, SettingScopes.Tenant, userId: null, TestWrites.Anonymous);
         }
 
         var barrier = new FirstPartyBarrier();

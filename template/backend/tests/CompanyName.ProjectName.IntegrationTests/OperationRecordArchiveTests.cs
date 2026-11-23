@@ -169,7 +169,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
         var services = scope.ServiceProvider;
         using (var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
         {
-            await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null);
+            await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null, new SettingModification(DateTime.UtcNow, null, null));
             await unitOfWork.CompleteAsync();
         }
 

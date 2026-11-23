@@ -1,4 +1,5 @@
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Exceptions;
 using Leistd.Settings.Management;
 using Leistd.Security.Users;
 using Leistd.Settings.Options;
@@ -59,8 +60,10 @@ public class SettingEncryptionTests
         await Manager(store, _dataProtection).SetAsync("Email.Password", "s3cret", SettingScopes.Host);
         store.Tenant["Api.Token"] = Assert.Single(store.Writes).Value!;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var error = await Assert.ThrowsAsync<SettingDecryptionException>(
             () => Provider(store, _dataProtection).GetOrNullAsync("Api.Token"));
+        Assert.Equal("Api.Token", error.SettingName);
+        Assert.Equal(["Leistd.Settings.EncryptedValue.v1", "Api.Token"], error.Purposes);
     }
 
     // 没配 Data Protection：机密设置宁可失败也不存明文；普通设置不受影响
@@ -109,8 +112,11 @@ public class SettingEncryptionTests
 
             var readerHostRing = new EphemeralDataProtectionProvider();
             Assert.Equal("s3cret", await Provider(store, readerHostRing, Encryption(Dedicated(keys))).GetOrNullAsync("Api.Token"));
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            var error = await Assert.ThrowsAsync<SettingDecryptionException>(
                 () => Provider(store, readerHostRing).GetOrNullAsync("Api.Token"));
+            // 密钥标识从密文头读出，与 Data Protection 报告缺失的那一把相同
+            Assert.NotNull(error.KeyId);
+            Assert.Contains(error.KeyId.Value.ToString("D"), error.InnerException!.Message);
         }
         finally
         {

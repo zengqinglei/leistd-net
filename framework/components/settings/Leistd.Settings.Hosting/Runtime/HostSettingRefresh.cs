@@ -41,7 +41,11 @@ internal sealed class HostSettingChangedHandler(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Applying host setting {SettingName} failed; the next refresh will retry.", @event.Name);
+            logger.LogWarning(
+                new EventId(SettingLogEvents.HostSettingsNotApplied, nameof(SettingLogEvents.HostSettingsNotApplied)),
+                ex,
+                "Applying host setting {SettingName} failed; the next refresh will retry.",
+                @event.Name);
         }
     }
 }
@@ -69,7 +73,10 @@ internal sealed class HostSettingStartupService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Applying host settings at startup failed; the deployment configuration stays in effect until the next refresh.");
+            logger.LogWarning(
+                new EventId(SettingLogEvents.HostSettingsNotApplied, nameof(SettingLogEvents.HostSettingsNotApplied)),
+                ex,
+                "Applying host settings at startup failed; the deployment configuration stays in effect until the next refresh.");
         }
     }
 

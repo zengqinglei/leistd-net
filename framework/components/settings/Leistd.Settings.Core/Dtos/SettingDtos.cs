@@ -23,6 +23,10 @@ namespace Leistd.Settings.Dtos;
 /// <param name="AllowedValues">候选值；不限时为 <see langword="null"/>。</param>
 /// <param name="CanManage">调用方能否写入租户层（宿主上下文下为进程级）的值，由 HTTP 端点按授权策略计算；
 /// 直接调用 <see cref="Management.ISettingManagementService"/> 时恒为 <see langword="false"/>。</param>
+/// <param name="UserModification"><see cref="UserValue"/> 那一层最后一次写入的时间与写入人；该层没有值时为 <see langword="null"/>。</param>
+/// <param name="TenantModification"><see cref="TenantValue"/> 那一层最后一次写入的时间与写入人；机密设置同样给出，不含值。</param>
+/// <param name="IsCheckable">这一项登记了测试（<c>AddSettingCheck</c>），设置页在这一行提供"测试"。</param>
+/// <param name="LastCheck">本租户（宿主上下文为宿主）最近一次测试的结果；没测过或没有登记测试时为 <see langword="null"/>。</param>
 public record SettingOutputDto(
     string Name,
     string DisplayName,
@@ -40,7 +44,36 @@ public record SettingOutputDto(
     bool IsSecret = false,
     bool HasSecretValue = false,
     IReadOnlyList<string>? AllowedValues = null,
-    bool CanManage = false);
+    bool CanManage = false,
+    SettingModificationDto? UserModification = null,
+    SettingModificationDto? TenantModification = null,
+    bool IsCheckable = false,
+    SettingCheckResultDto? LastCheck = null);
+
+/// <summary>一项设置测试最近一次的结果。</summary>
+/// <param name="Passed">是否通过。</param>
+/// <param name="FailureCode">未通过时的失败码，见 <see cref="Checks.SettingCheckFailureCodes"/>；界面按码取文案，未知码走兜底。</param>
+/// <param name="Time">测试时间（UTC）。</param>
+/// <param name="CheckerId">测试人标识；无主体时为 <see langword="null"/>。</param>
+/// <param name="CheckerName">测试人显示名快照；无主体时为 <see langword="null"/>。</param>
+/// <param name="IsStale">测试之后主设置或依赖设置被写入或清除过，结论可能已不反映当前配置。</param>
+public record SettingCheckResultDto(
+    bool Passed,
+    string? FailureCode,
+    DateTime Time,
+    string? CheckerId,
+    string? CheckerName,
+    bool IsStale)
+{
+    internal static SettingCheckResultDto From(Checks.SettingCheckResult result)
+        => new(result.Passed, result.FailureCode, result.Time, result.CheckerId, result.CheckerName, result.IsStale);
+}
+
+/// <summary>某一层设置值最后一次写入的时间与写入人。</summary>
+/// <param name="Time">写入时间（UTC）。</param>
+/// <param name="ModifierId">写入人标识；无主体写入（迁移、种子、服务账号）时为 <see langword="null"/>。</param>
+/// <param name="ModifierName">写入人显示名，取写入当时的快照；无主体写入时为 <see langword="null"/>。</param>
+public record SettingModificationDto(DateTime Time, string? ModifierId, string? ModifierName);
 
 /// <summary>写入一项设置。</summary>
 /// <param name="Name">设置名称。</param>

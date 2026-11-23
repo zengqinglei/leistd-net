@@ -1,5 +1,6 @@
 using Leistd.ExceptionHandling;
 using Leistd.Security.Users;
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Errors;
 using Leistd.Settings.Stores;
@@ -17,11 +18,13 @@ internal sealed class SettingManagementService(
     ISettingManager settingManager,
     ICurrentUser currentUser,
     IOptions<SettingManagementOptions> options,
-    IStringLocalizerFactory? localizerFactory = null) : ISettingManagementService
+    IStringLocalizerFactory? localizerFactory = null,
+    IEnumerable<SettingCheckRegistration>? checks = null,
+    ISettingCheckStore? checkStore = null) : ISettingManagementService
 {
     public async Task<IReadOnlyList<SettingOutputDto>> GetAsync(CancellationToken cancellationToken = default)
     {
-        var tenantValues = await settingStore.GetAllAsync(SettingScopes.Tenant, userId: null, cancellationToken);
+        var tenant = await LoadAsync(SettingScopes.Tenant, userId: null, cancellationToken);
 
         var isHost = settingStore.CanAccessHostScope;
         var definitions = definitionManager.GetAll()
@@ -29,17 +32,48 @@ internal sealed class SettingManagementService(
             .Where(definition => isHost || !definition.Scopes.HasFlag(SettingScopes.Host))
             .ToList();
 
-        var hostValues = isHost && definitions.Any(definition => definition.Scopes.HasFlag(SettingScopes.Host))
-            ? await settingStore.GetAllAsync(SettingScopes.Host, userId: null, cancellationToken)
-            : new Dictionary<string, string>();
+        var host = isHost && definitions.Any(definition => definition.Scopes.HasFlag(SettingScopes.Host))
+            ? await LoadAsync(SettingScopes.Host, userId: null, cancellationToken)
+            : Layer.Empty;
 
         var userId = currentUser.Id?.ToString();
-        var userValues = userId is null
-            ? new Dictionary<string, string>()
-            : await settingStore.GetAllAsync(SettingScopes.User, userId, cancellationToken);
+        var user = userId is null
+            ? Layer.Empty
+            : await LoadAsync(SettingScopes.User, userId, cancellationToken);
+
+        // 同一设置只认最后一次登记
+        var checkable = (checks ?? [])
+            .GroupBy(check => check.SettingName, StringComparer.Ordinal)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var results = checkable.Count > 0 && checkStore is not null
+            ? await checkStore.GetAllAsync(cancellationToken)
+            : new Dictionary<string, SettingCheckResult>();
 
         var localizer = SettingDisplayNames.CreateLocalizer(localizerFactory, options.Value);
-        return [.. definitions.Select(definition => ToOutput(definition, userValues, tenantValues, hostValues, localizer))];
+        return [.. definitions.Select(definition => ToOutput(definition, user, tenant, host, localizer) with
+        {
+            // 测试作用于设置页编辑的那一层：只有租户层或宿主层可写的设置才有
+            IsCheckable = checkable.Contains(definition.Name) && Manageable(definition),
+            LastCheck = checkable.Contains(definition.Name) && Manageable(definition)
+                && results.TryGetValue(definition.Name, out var last)
+                ? SettingCheckResultDto.From(last)
+                : null
+        })];
+    }
+
+    private async Task<Layer> LoadAsync(SettingScopes scope, string? userId, CancellationToken cancellationToken)
+        => new(
+            await settingStore.GetAllAsync(scope, userId, cancellationToken),
+            await settingStore.GetModificationsAsync(scope, userId, cancellationToken));
+
+    // 一层的值与修改信息；修改信息只含有值、且在修改信息上线后写过的项
+    private sealed record Layer(
+        IReadOnlyDictionary<string, string> Values,
+        IReadOnlyDictionary<string, SettingModification> Modifications)
+    {
+        public static Layer Empty { get; } = new(
+            new Dictionary<string, string>(), new Dictionary<string, SettingModification>());
     }
 
     public async Task SetForCurrentUserAsync(SetSettingInputDto input, CancellationToken cancellationToken = default)
@@ -73,15 +107,18 @@ internal sealed class SettingManagementService(
 
     private SettingOutputDto ToOutput(
         ISettingDefinition definition,
-        IReadOnlyDictionary<string, string> userValues,
-        IReadOnlyDictionary<string, string> tenantValues,
-        IReadOnlyDictionary<string, string> hostValues,
+        Layer user,
+        Layer tenant,
+        Layer host,
         IStringLocalizer? localizer)
     {
-        var userValue = definition.Scopes.HasFlag(SettingScopes.User) ? userValues.GetValueOrDefault(definition.Name) : null;
-        var tenantValue = definition.Scopes.HasFlag(SettingScopes.Host)
-            ? hostValues.GetValueOrDefault(definition.Name)
-            : definition.Scopes.HasFlag(SettingScopes.Tenant) ? tenantValues.GetValueOrDefault(definition.Name) : null;
+        var userLayer = definition.Scopes.HasFlag(SettingScopes.User) ? user : Layer.Empty;
+        // 进程级设置只有宿主那一行，与租户层值一起放在 TenantValue
+        var tenantLayer = definition.Scopes.HasFlag(SettingScopes.Host)
+            ? host
+            : definition.Scopes.HasFlag(SettingScopes.Tenant) ? tenant : Layer.Empty;
+        var userValue = userLayer.Values.GetValueOrDefault(definition.Name);
+        var tenantValue = tenantLayer.Values.GetValueOrDefault(definition.Name);
 
         var group = string.IsNullOrWhiteSpace(definition.Group) ? options.Value.DefaultGroup : definition.Group;
         var secret = definition.IsEncrypted;
@@ -102,8 +139,18 @@ internal sealed class SettingManagementService(
             definition.ValueType == SettingValueType.Boolean,
             secret,
             secret && (tenantValue ?? userValue) is not null,
-            definition.AllowedValues);
+            definition.AllowedValues,
+            UserModification: ToDto(userLayer.Modifications.GetValueOrDefault(definition.Name)),
+            TenantModification: ToDto(tenantLayer.Modifications.GetValueOrDefault(definition.Name)));
     }
+
+    private static bool Manageable(ISettingDefinition definition)
+        => definition.Scopes.HasFlag(SettingScopes.Tenant) || definition.Scopes.HasFlag(SettingScopes.Host);
+
+    private static SettingModificationDto? ToDto(SettingModification? modification)
+        => modification is null
+            ? null
+            : new SettingModificationDto(modification.Time, modification.ModifierId, modification.ModifierName);
 
     private ISettingDefinition EnsureVisibleToClients(string name)
     {

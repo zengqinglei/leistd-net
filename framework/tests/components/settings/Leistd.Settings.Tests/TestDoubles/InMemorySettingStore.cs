@@ -8,6 +8,7 @@ namespace Leistd.Settings.Tests.TestDoubles;
 internal sealed class InMemorySettingStore(Action<string>? journal = null) : ISettingStore
 {
     private readonly Dictionary<(SettingScopes Scope, string? UserId), Dictionary<string, string>> _rows = [];
+    private readonly Dictionary<(SettingScopes Scope, string? UserId), Dictionary<string, SettingModification>> _modifications = [];
 
     public bool CanAccessHostScope => true;
 
@@ -34,9 +35,24 @@ internal sealed class InMemorySettingStore(Action<string>? journal = null) : ISe
         lock (_rows)
         {
             _rows.Clear();
+            _modifications.Clear();
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(
+        SettingScopes scope,
+        string? userId,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_rows)
+        {
+            IReadOnlyDictionary<string, SettingModification> copy = _modifications.TryGetValue(Key(scope, userId), out var values)
+                ? new Dictionary<string, SettingModification>(values, StringComparer.Ordinal)
+                : new Dictionary<string, SettingModification>(StringComparer.Ordinal);
+            return Task.FromResult(copy);
+        }
     }
 
     public Task SetAsync(
@@ -44,6 +60,7 @@ internal sealed class InMemorySettingStore(Action<string>? journal = null) : ISe
         string? value,
         SettingScopes scope,
         string? userId,
+        SettingModification modification,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -61,13 +78,21 @@ internal sealed class InMemorySettingStore(Action<string>? journal = null) : ISe
                 _rows[key] = values = new Dictionary<string, string>(StringComparer.Ordinal);
             }
 
+            if (!_modifications.TryGetValue(key, out var modifications))
+            {
+                _modifications[key] = modifications = new Dictionary<string, SettingModification>(StringComparer.Ordinal);
+            }
+
+            // 与数据库实现一致：修改信息随值保存，清除时一起删掉
             if (value is null)
             {
                 values.Remove(name);
+                modifications.Remove(name);
             }
             else
             {
                 values[name] = value;
+                modifications[name] = modification;
             }
         }
 

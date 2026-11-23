@@ -8,9 +8,11 @@ using Leistd.Settings.Hosting;
 using Leistd.Settings.Hosting.Runtime;
 using Leistd.Settings.Tests.Core;
 using Leistd.TestBase.Doubles;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Leistd.Settings.Tests.TestDoubles;
@@ -23,6 +25,7 @@ namespace Leistd.Settings.Tests.Hosting;
 public sealed class HostSettingsTests : IDisposable
 {
     private readonly FakeSettingStore _store = new();
+    private readonly EphemeralDataProtectionProvider _dataProtection = new();
     private readonly IHost _host;
 
     public HostSettingsTests()
@@ -82,6 +85,47 @@ public sealed class HostSettingsTests : IDisposable
         await ApplyAsync();
 
         Assert.Equal(("Debug", 90), (Options.Level, Options.Days));
+    }
+
+    // 校验失败整组回落时记固定事件号的 Error，可以接告警
+    [Fact]
+    public async Task A_rejected_set_is_logged_with_its_event_id()
+    {
+        _store.Host["Demo.Days"] = "10";
+
+        await ApplyAsync();
+
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Error, Assert.Single(Logged(SettingLogEvents.HostSettingsRejected)).Level);
+    }
+
+    // 一项解不开只影响该项：它沿用当前生效的值，其余照常应用；解密失败在解密点记一次事件
+    [Fact]
+    public async Task A_secret_that_cannot_be_decrypted_keeps_its_current_value_and_the_others_apply()
+    {
+        _store.Host["Demo.Password"] = Protect(_dataProtection, "Demo.Password", "p1");
+        await ApplyAsync();
+        Assert.Equal("p1", Options.Password);
+
+        _store.Host["Demo.Password"] = Protect(new EphemeralDataProtectionProvider(), "Demo.Password", "p2");
+        _store.Host["Demo.Level"] = "Debug";
+        await ApplyAsync();
+
+        Assert.Equal(("p1", "Debug"), (Options.Password, Options.Level));
+        var logged = Assert.Single(Logged(SettingLogEvents.DecryptionFailed));
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Error, logged.Level);
+        Assert.Contains("Demo.Password", logged.Message);
+    }
+
+    // 从未生效过的机密解不开时回落到部署配置，不阻止其他项
+    [Fact]
+    public async Task A_secret_never_applied_falls_back_to_the_deployment_configuration()
+    {
+        _store.Host["Demo.Password"] = Protect(new EphemeralDataProtectionProvider(), "Demo.Password", "p2");
+        _store.Host["Demo.Level"] = "Debug";
+
+        await ApplyAsync();
+
+        Assert.Equal(("from-config", "Debug"), (Options.Password, Options.Level));
     }
 
     [Fact]
@@ -165,6 +209,13 @@ public sealed class HostSettingsTests : IDisposable
         Assert.Contains("not host-scoped", error.Message);
     }
 
+    // 机密设置按读取器的用途链加密；换一个密钥环加密的密文本进程解不开
+    private static string Protect(IDataProtectionProvider provider, string name, string value)
+        => provider.CreateProtector("Leistd.Settings.EncryptedValue.v1").CreateProtector(name).Protect(value);
+
+    private IReadOnlyList<FakeLogRecord> Logged(int eventId)
+        => [.. _host.Services.GetFakeLogCollector().GetSnapshot().Where(record => record.Id.Id == eventId)];
+
     private DemoOptions Options => _host.Services.GetRequiredService<IOptionsMonitor<DemoOptions>>().CurrentValue;
 
     private async Task ApplyAsync()
@@ -197,6 +248,8 @@ public sealed class HostSettingsTests : IDisposable
             .AddSingleton<IUnitOfWorkManager>(new RecordingUnitOfWorkManager())
             .AddSingleton<ICurrentUser>(new FakeCurrentUser())
             .AddSingleton<ISettingDefinitionProvider, Definitions>()
+            .AddSingleton<IDataProtectionProvider>(_dataProtection)
+            .AddFakeLogging()
             .AddHostSettings(bindings =>
             {
                 bindings

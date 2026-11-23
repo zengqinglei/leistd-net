@@ -1,6 +1,7 @@
 #if (OpenIddictServer || RemoteTokenAuth)
 using CompanyName.ProjectName.Application.Systems.AppServices;
 #endif
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 #if (LocalIdentity && IncludeMultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Options;
@@ -236,6 +237,7 @@ public static class DependencyInjection
         services.TryAddTransient<IAccountPreferenceAppService, AccountPreferenceAppService>();
         // 组件写入后发布的事件转成本项目的操作记录（提交后分发，回滚的写入不留痕）
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<SettingChangedEvent>, SettingChangedAuditHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<SettingCheckCompletedEvent>, SettingCheckCompletedAuditHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Transient<IEventHandler<PermissionGrantsReplacedEvent>, PermissionGrantsReplacedAuditHandler>());
 #if (IncludeRealTime)
         // 业务实时：角色列表变化后推给订阅者（有工作单元时在提交之后）
