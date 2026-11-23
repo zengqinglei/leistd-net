@@ -1,6 +1,6 @@
 # 设置的修改信息、解密诊断与按设置测试
 
-状态：进行中 · 风险档：高 · 关联：#306（Mock 拦截器）
+状态：已完成 · 风险档：高 · 关联：#306（Mock 拦截器）、#307
 
 ## 1. 需求
 
@@ -103,4 +103,24 @@
 
 ## 4. 结果
 
-（实施后填写。）
+**交付：** #306（Mock 拦截器），#307（框架、模板后端、设置页与 Mock 合在一个 PR：同一能力的前后端，分开会让模板中间态带着没有界面的端点）。
+
+**与计划的偏差：**
+
+- **修改信息不经审计接口。** `SettingRecord` 不实现 `IModificationAuditedObject`：审计拦截器与存储会同时写这三列，来源不唯一。三列由存储在 `SetAsync` 里按 `SettingModification` 写入；读取另设 `GetModificationsAsync`，值的读取签名不变。
+- **探针按本次存储值取，不读已生效的配置。** 另一副本可能尚未刷新，进程里的选项叠加了覆盖。`SettingCheckContext.GetStoredValueAsync` 只给本层存储值。被绑定的宿主级设置缺项时，取 `IHostSettingBaseline.GetDeploymentValue`（部署配置的当前值，按配置源优先级，保留显式空值），不用启动时的代码默认值。
+- **过期按修订核对。** 保存结果时，取与设置写入同一把锁，比较原始值与最后写入时间。写回同值、清除后又写回原值都算变化；丢锁时不保存。
+- **测试的依赖只在执行时要求。** 结果存储、锁、工作单元在执行测试时才解析。没登记测试、或换掉写入入口的宿主，不必注册这些依赖。
+- **事务内拒绝执行。** 探针外呼期间不持有调用方的数据库事务。
+- **测试按钮。** 文本输入行放在输入框尾部；开关、下拉、时区和项目控件放在控件旁，用 `outline` `sm`。
+
+**验收：**
+
+- 设置组件单测 247、邮件 58；新增的并发、丢锁、部署值、依赖可选用例逐条做过变异，确认会失败。
+- 模板：identity-all-features 单测与 SMTP 集成用例；resource-capabilities-03 本机矩阵；设置页 spec 99、Mock spec 45；CI 全矩阵。
+- 对比页经用户确认（1440、390 两档）。
+- 两轮 Codex 审查意见均已修复，结论见 PR。
+
+**遗留：** 租户连接串的解密诊断（多租户组件）另行处理。
+
+**已上收：** `framework/docs/components/settings.md`（修改信息、排障、按设置测试、部署基线）、`email.md`（连通探测）、`docs/framework/development-guide.md` §6.8（事件号段）、`template/docs/standards/coding-backend.md`（业务事件号段）、`frontend-spartan.md`（组内按钮触屏宽度）。
