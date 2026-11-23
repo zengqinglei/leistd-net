@@ -61,6 +61,8 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'tenant.admin-restored': (t) => `Restored tenant administrator ${t}`,
   //#endif
   'setting.changed': (t) => `Changed setting ${t}`,
+  'setting.cleared': (t) => `Cleared setting ${t}`,
+  'setting.checked': (t) => `Tested setting ${t}`,
   //#if (LocalIdentity && Email)
   'setting.test-email-sent': () => 'Sent a test email',
   //#endif

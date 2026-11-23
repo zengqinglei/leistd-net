@@ -1,4 +1,5 @@
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Exceptions;
 using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Settings.Hosting.Configuration;
@@ -11,7 +12,9 @@ using Microsoft.Extensions.Options;
 namespace Leistd.Settings.Hosting.Runtime;
 
 // 把宿主级设置按绑定推进配置源。只推存储里有行的项；值经 ISettingProvider 取，机密设置由它解密，明文只在进程内。
-// 新值让某个 Options 校验不过时整组不生效、沿用上一组，只记错误不抛（值已落库）。
+// 一项解不开只影响该项：它的键沿用当前生效的值（从未生效过则回落到部署配置），其余照常；解密失败已由读取器记过事件。
+// 新值让某个 Options 校验不过时整组不生效、沿用上一组，只记错误不抛（值已落库）：同一 Options 的多个设置间可能有
+// 跨字段约束，只换一部分会得到一组从未校验过的组合。
 internal sealed class HostSettingApplier(
     HostSettingsConfigurationProvider configuration,
     ISettingStore settingStore,
@@ -28,7 +31,9 @@ internal sealed class HostSettingApplier(
         // 租户上下文下读不到宿主行，不能当成“都没设”推进配置
         if (!settingStore.CanAccessHostScope)
         {
-            logger.LogWarning("Host settings were not applied: the host scope is not reachable in the current context.");
+            logger.LogWarning(
+                new EventId(SettingLogEvents.HostScopeUnreachable, nameof(SettingLogEvents.HostScopeUnreachable)),
+                "Host settings were not applied: the host scope is not reachable in the current context.");
             return;
         }
 
@@ -36,7 +41,25 @@ internal sealed class HostSettingApplier(
         var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (var binding in bindings.Value.Bindings.Where(binding => stored.ContainsKey(binding.SettingName)))
         {
-            var value = await settingProvider.GetOrNullAsync(binding.SettingName, cancellationToken);
+            string? value;
+            try
+            {
+                value = await settingProvider.GetOrNullAsync(binding.SettingName, cancellationToken);
+            }
+            catch (SettingDecryptionException)
+            {
+                // 密钥环的临时问题不该把一个原本可用的值换回部署配置
+                foreach (var key in binding.ConfigurationKeys)
+                {
+                    if (configuration.TryGetCurrent(key, out var current))
+                    {
+                        values[key] = current;
+                    }
+                }
+
+                continue;
+            }
+
             foreach (var key in binding.ConfigurationKeys)
             {
                 values[key] = value;
@@ -47,6 +70,7 @@ internal sealed class HostSettingApplier(
         if (failures.Count > 0)
         {
             logger.LogError(
+                new EventId(SettingLogEvents.HostSettingsRejected, nameof(SettingLogEvents.HostSettingsRejected)),
                 "Host settings were not applied because some options would fail validation; keeping the previous values: {Failures}",
                 string.Join("; ", failures));
         }

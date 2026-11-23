@@ -27,6 +27,16 @@ public interface ISettingStore
         string? userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>读取当前租户下某一层级各项设置最后一次写入的时间与写入人。</summary>
+    /// <remarks>只含存储里有值的项；修改信息上线之前写入、从未再写过的项不在结果里。</remarks>
+    /// <param name="scope">要读取的层级。</param>
+    /// <param name="userId">用户级时的用户标识；租户级传 <see langword="null"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(
+        SettingScopes scope,
+        string? userId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>移除当前租户下的全部设置值，含各用户在该租户内的偏好。</summary>
     /// <remarks>供永久废弃租户时清理。按当前租户隐式限定：在宿主上下文调用会清掉宿主的设置。</remarks>
     Task RemoveAllAsync(CancellationToken cancellationToken = default);
@@ -45,11 +55,13 @@ public interface ISettingStore
     /// <param name="value">设置值；<see langword="null"/> 表示清除，使其回落到下一层。</param>
     /// <param name="scope">写入的层级。</param>
     /// <param name="userId">用户级时的用户标识；租户级传 <see langword="null"/>。</param>
+    /// <param name="modification">本次写入的时间与写入人，写值时随值一起保存；清除时值与它一起删除。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     Task SetAsync(
         string name,
         string? value,
         SettingScopes scope,
         string? userId,
+        SettingModification modification,
         CancellationToken cancellationToken = default);
 }

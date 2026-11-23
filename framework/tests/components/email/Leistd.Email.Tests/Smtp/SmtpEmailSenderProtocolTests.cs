@@ -34,6 +34,80 @@ public sealed class SmtpEmailSenderProtocolTests
         Body = "<p>123456</p>",
     };
 
+    // 探测只连接与认证，不发信：设置页据此判断配置能否用，而不是投递一封测试信
+    [Fact]
+    public async Task A_probe_connects_without_sending()
+    {
+        await using var server = new LoopbackSmtpServer();
+
+        Assert.Equal(SmtpProbeResult.Succeeded, await Sender(server).ProbeAsync());
+        Assert.False(server.Accepted);
+    }
+
+    // 给定的参数优先于当前配置：设置测试用刚读到的存储值探测，进程里的配置可能尚未刷新
+    [Fact]
+    public async Task A_probe_uses_the_given_options_instead_of_the_current_configuration()
+    {
+        await using var server = new LoopbackSmtpServer();
+        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
+        {
+            Host = "127.0.0.1",
+            Port = 1,
+            EnableSsl = false,
+            DefaultFromAddress = "noreply@example.com",
+        }), _logger)
+        {
+            CreateClient = () => new SmtpClient { Timeout = 10_000 },
+        };
+
+        var result = await sender.ProbeAsync(new SmtpOptions { Host = "127.0.0.1", Port = server.Port, EnableSsl = false });
+
+        Assert.Equal(SmtpProbeResult.Succeeded, result);
+    }
+
+    [Fact]
+    public async Task A_probe_reports_rejected_credentials()
+    {
+        await using var server = new LoopbackSmtpServer(authReply: "535 5.7.8 authentication failed");
+        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
+        {
+            Host = "127.0.0.1",
+            Port = server.Port,
+            EnableSsl = false,
+            Username = "user",
+            Password = "wrong",
+            DefaultFromAddress = "noreply@example.com",
+        }), _logger)
+        {
+            CreateClient = () => new SmtpClient { Timeout = 10_000 },
+        };
+
+        Assert.Equal(SmtpProbeResult.AuthenticationRejected, await sender.ProbeAsync());
+    }
+
+    [Fact]
+    public async Task A_probe_reports_a_server_it_cannot_reach()
+    {
+        int port;
+        await using (var server = new LoopbackSmtpServer())
+        {
+            port = server.Port;
+        }
+
+        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
+        {
+            Host = "127.0.0.1",
+            Port = port,
+            EnableSsl = false,
+            DefaultFromAddress = "noreply@example.com",
+        }), _logger)
+        {
+            CreateClient = () => new SmtpClient { Timeout = 2_000 },
+        };
+
+        Assert.Equal(SmtpProbeResult.Unreachable, await sender.ProbeAsync());
+    }
+
     [Fact]
     public async Task An_accepted_message_is_sent()
     {

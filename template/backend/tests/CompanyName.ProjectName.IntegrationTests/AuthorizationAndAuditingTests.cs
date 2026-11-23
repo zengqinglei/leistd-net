@@ -320,10 +320,11 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         // 操作记录的"凭什么"是该分组的子权限，不是入口权限
         var target = $"{SettingScopes.Host}/{SettingConstant.Logging.RequestLogging}";
-        Task<int> RecordedAsync() => OperationRecordQueries.CountSucceededAsync(
-            Factory, superAdmin.Client, OperationRecordActions.SettingChanged, target,
+        Task<int> RecordedAsync(string action) => OperationRecordQueries.CountSucceededAsync(
+            Factory, superAdmin.Client, action, target,
             authorizationBasis: PermissionConstant.Settings.Operations);
-        var recordedBefore = await RecordedAsync();
+        var changedBefore = await RecordedAsync(OperationRecordActions.SettingChanged);
+        var clearedBefore = await RecordedAsync(OperationRecordActions.SettingCleared);
 
         using (var accepted = await operations.Client.PutAsJsonAsync(
                    "/api/v1/settings/current-tenant",
@@ -336,7 +337,9 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             "/api/v1/settings/current-tenant",
             new { Name = SettingConstant.Logging.RequestLogging, Value = (string?)null });
         Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
-        Assert.Equal(recordedBefore + 2, await RecordedAsync());
+        // 清除单独记一个动作：它会把修改信息随行删掉，事后只能从这里查到是谁清的
+        Assert.Equal(changedBefore + 1, await RecordedAsync(OperationRecordActions.SettingChanged));
+        Assert.Equal(clearedBefore + 1, await RecordedAsync(OperationRecordActions.SettingCleared));
     }
 
     [Fact]

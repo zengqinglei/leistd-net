@@ -17,6 +17,7 @@ import {
   ExternalLoginStatusOutputDto,
   //#endif
   SetSettingInputDto,
+  SettingCheckResultDto,
   SettingOutputDto,
 } from './setting.dto';
 
@@ -66,6 +67,14 @@ export class SettingService {
   ): Observable<void> {
     const data = { name: setting.name, value };
     return scope === 'account' ? this.setForCurrentUser(data) : this.setForCurrentTenant(data);
+  }
+
+  /** 在设置页编辑的那一层执行一项设置测试（会用存着的凭据对外调用一次），返回本次结果。 */
+  checkSetting(name: string): Observable<SettingCheckResultDto> {
+    return this.http.post<SettingCheckResultDto>(
+      `${this.baseUrl}/checks/${encodeURIComponent(name)}`,
+      null,
+    );
   }
   //#if (LocalIdentity)
 

@@ -235,7 +235,10 @@ public sealed class SharedSettingEndpointTests : IAsyncLifetime
 
         public Task RemoveAllAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task SetAsync(string name, string? value, SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyDictionary<string, SettingModification>>(new Dictionary<string, SettingModification>());
+
+        public Task SetAsync(string name, string? value, SettingScopes scope, string? userId, SettingModification modification, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 

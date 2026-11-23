@@ -73,11 +73,20 @@ internal sealed class FakeSettingStore : ISettingStore
         return Task.CompletedTask;
     }
 
+    /// <summary>租户层的修改信息；其余层没有。</summary>
+    public Dictionary<string, SettingModification> TenantModifications { get; } = new(StringComparer.Ordinal);
+
+    public Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyDictionary<string, SettingModification>>(scope == SettingScopes.Tenant
+            ? new Dictionary<string, SettingModification>(TenantModifications, StringComparer.Ordinal)
+            : new Dictionary<string, SettingModification>());
+
     public Task SetAsync(
         string name,
         string? value,
         SettingScopes scope,
         string? userId,
+        SettingModification modification,
         CancellationToken cancellationToken = default)
     {
         Writes.Add((name, value, scope, userId));

@@ -316,8 +316,11 @@ public class SettingResolutionTests
 
         public Task RemoveAllAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+        public Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyDictionary<string, SettingModification>>(new Dictionary<string, SettingModification>());
+
         public Task SetAsync(
-            string name, string? value, SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+            string name, string? value, SettingScopes scope, string? userId, SettingModification modification, CancellationToken cancellationToken = default)
         {
             var key = (currentTenant.Id, scope, scope == SettingScopes.User ? userId : null);
             if (!Rows.TryGetValue(key, out var values))

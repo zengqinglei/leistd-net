@@ -16,6 +16,15 @@ internal sealed class HostSettingsConfigurationProvider : ConfigurationProvider
 
     public void MarkAttached() => IsAttached = true;
 
+    // 当前生效的一组里某个键的值；不在其中表示该键正回落到部署配置
+    public bool TryGetCurrent(string key, out string? value)
+    {
+        lock (_gate)
+        {
+            return Data.TryGetValue(key, out value);
+        }
+    }
+
     // 换上新的一组配置键值；新值让某个 Options 校验不过时换回上一组再重载，整组不生效。
     // 校验失败来自重载回调（已订阅的 IOptionsMonitor）或 validate（无人订阅的选项）。
     // 与当前一组或上次被拒的一组相同时不做任何事，周期刷新不重复重算或报错。

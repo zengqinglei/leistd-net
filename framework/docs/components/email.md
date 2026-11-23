@@ -83,7 +83,7 @@ await emailSender.SendAsync(new EmailMessage
 | `EmailMessage.FromAddress` | 发件地址；`null` 时用 `DefaultFromAddress` |
 | `EmailMessage.FromName` | 发件显示名；语义与 `FromAddress` 成对，见「注意事项」 |
 | `NullEmailSender` | 不投递、只按 Warning 记录的实现，由 `AddNullEmailSender()` 注册 |
-| `SmtpEmailSender` | SMTP 实现，由 `AddSmtpEmailSender()` 注册 |
+| `SmtpEmailSender` | SMTP 实现，由 `AddSmtpEmailSender()` 注册；`ProbeAsync(ct)` 只连接与认证、不发信，返回 `SmtpProbeResult`（`Succeeded`、`AuthenticationRejected`、`Unreachable`），供设置页的连通测试使用 |
 
 ## 配置项（`Leistd:Email:Smtp`）
 

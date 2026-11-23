@@ -933,6 +933,8 @@
             "backend/src/CompanyName.ProjectName.Application/Settings/AppServices/IEmailSettingsAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Settings/Validators/EmailSettingValidator.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/SettingController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Configuration/SmtpConnectionCheck.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Api/SmtpConnectionCheckTests.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/VerificationCodes/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Shared/Security/VerificationCodes/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/EmailSettingsTests.cs",

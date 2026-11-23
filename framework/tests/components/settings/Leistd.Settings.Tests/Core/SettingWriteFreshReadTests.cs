@@ -26,8 +26,8 @@ public sealed class SettingWriteFreshReadTests
     public async Task The_same_reader_sees_the_new_effective_value_after_a_validator_read_it(string? value, string expected)
     {
         var store = new InMemorySettingStore();
-        await store.SetAsync("Display.Language", "fr-FR", SettingScopes.Tenant, userId: null);
-        await store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, UserId.ToString());
+        await store.SetAsync("Display.Language", "fr-FR", SettingScopes.Tenant, userId: null, TestWrites.Anonymous);
+        await store.SetAsync("Display.Language", "ja-JP", SettingScopes.User, UserId.ToString(), TestWrites.Anonymous);
         var (manager, provider) = Build(store, reader => new ReadingValidator(reader));
 
         await manager.SetAsync("Display.Language", value, SettingScopes.User, UserId.ToString());
@@ -44,7 +44,7 @@ public sealed class SettingWriteFreshReadTests
         Assert.Equal(365, await provider.GetAsync<int>("Retention.UnreadDays"));
 
         // 另一个请求已经提交了更短的未读保留期
-        await store.SetAsync("Retention.UnreadDays", "200", SettingScopes.Tenant, userId: null);
+        await store.SetAsync("Retention.UnreadDays", "200", SettingScopes.Tenant, userId: null, TestWrites.Anonymous);
 
         var error = await Assert.ThrowsAsync<BusinessException>(
             () => manager.SetAsync("Retention.ReadDays", "300", SettingScopes.Tenant));

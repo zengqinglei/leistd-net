@@ -27,6 +27,10 @@ public class SettingRecordConfiguration : IEntityTypeConfiguration<SettingRecord
             .HasMaxLength(2000)
             .IsRequired();
 
+        // 与审计约定的用户标识同长；宿主未接入审计约定时也按此建列
+        builder.Property(x => x.LastModifierId).HasMaxLength(64);
+        builder.Property(x => x.LastModifierName).HasMaxLength(256);
+
         // 用非空 ScopeKey 约束唯一性：可空的 TenantId/UserId 进不了有效的唯一约束
         builder.HasIndex(x => new { x.ScopeKey, x.Name }).IsUnique();
     }

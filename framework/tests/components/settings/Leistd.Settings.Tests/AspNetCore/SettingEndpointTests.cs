@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using Leistd.ExceptionHandling;
 using Leistd.Security.AspNetCore;
 using Leistd.Security.Claims;
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Errors;
 using Leistd.Settings.Stores;
@@ -42,6 +43,7 @@ public sealed class SettingEndpointTests : IAsyncLifetime
     private const string FeatureGroupPolicy = "App.Settings.Feature";
     private static readonly Guid UserId = Guid.Parse("55555555-5555-5555-5555-555555555555");
     private readonly FakeSettingStore _store = new();
+    private readonly CountingCheck _check = new();
     private IHost _host = default!;
     private HttpClient _client = default!;
 
@@ -56,6 +58,10 @@ public sealed class SettingEndpointTests : IAsyncLifetime
                     services.AddSecurity();
                     services.AddSettingsCore();
                     services.AddSingleton<ISettingStore>(_store);
+                    services.AddSettingCheck<CountingCheck>("Security.RequireTwoFactor");
+                    services.AddSettingCheck<CountingCheck>("Display.TimeZone");
+                    services.AddSingleton(_check);
+                    services.AddSingleton<ISettingCheckStore>(new InMemorySettingCheckStore());
                     services.AddMemoryLocalLock();
                     services.AddSingleton<IUnitOfWorkManager>(new RecordingUnitOfWorkManager());
                     services.AddSingleton<ISettingDefinitionProvider, Definitions>();
@@ -165,6 +171,32 @@ public sealed class SettingEndpointTests : IAsyncLifetime
         Assert.Equal(SettingScopes.Tenant, Assert.Single(_store.Writes).Scope);
     }
 
+    // 测试会用这组设置对外调用：与写租户值同一判据，被拒时探针不执行
+    [Theory]
+    [InlineData(TenantWritePolicy)]
+    [InlineData(SecurityPolicy)]
+    public async Task Running_a_check_needs_the_same_policies_as_writing(string onlyPolicy)
+    {
+        var denied = await SendAsync(HttpMethod.Post, "/checks/Security.RequireTwoFactor", UserId.ToString(), null, onlyPolicy);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.Equal(0, _check.Runs);
+
+        var granted = await SendAsync(
+            HttpMethod.Post, "/checks/Security.RequireTwoFactor", UserId.ToString(), null, TenantWritePolicy, SecurityPolicy);
+
+        Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
+        Assert.True((await granted.Content.ReadFromJsonAsync<SettingCheckResultDto>())!.Passed);
+        Assert.Equal(1, _check.Runs);
+    }
+
+    [Fact]
+    public async Task A_setting_without_a_check_cannot_be_checked()
+    {
+        var response = await SendAsync(HttpMethod.Post, "/checks/Export.MaxRowsPerFile", UserId.ToString(), null, TenantWritePolicy);
+
+        Assert.Equal(SettingErrorCodes.NotAvailable, Assert.Single(response.Headers.GetValues("X-Error-Code")));
+    }
+
     [Theory]
     [InlineData(TenantWritePolicy)]
     [InlineData(SecurityPolicy)]
@@ -204,6 +236,27 @@ public sealed class SettingEndpointTests : IAsyncLifetime
         // 未登记分组策略的分组只看 TenantWritePolicy
         Assert.DoesNotContain("Export.MaxRowsPerFile", member.Keys);
         Assert.True(tenantOnly["Export.MaxRowsPerFile"].CanManage);
+    }
+
+    // 允许个人覆盖的设置照常下发给成员作占位，但测试结果与租户层修改人是管理数据，只给能管理的人
+    [Fact]
+    public async Task Members_reading_an_overridable_setting_get_no_check_or_modifier()
+    {
+        _store.Tenant["Display.TimeZone"] = "Asia/Tokyo";
+        _store.TenantModifications["Display.TimeZone"] = new SettingModification(DateTime.UtcNow, "admin", "Admin");
+        var run = await SendAsync(HttpMethod.Post, "/checks/Display.TimeZone", UserId.ToString(), null, TenantWritePolicy);
+        Assert.Equal(HttpStatusCode.OK, run.StatusCode);
+
+        var manager = (await ReadAsync(TenantWritePolicy))["Display.TimeZone"];
+        var member = (await ReadAsync())["Display.TimeZone"];
+
+        Assert.True(manager.IsCheckable);
+        Assert.NotNull(manager.LastCheck);
+        Assert.NotNull(manager.TenantModification);
+        Assert.False(member.IsCheckable);
+        Assert.Null(member.LastCheck);
+        Assert.Null(member.TenantModification);
+        Assert.Equal("Asia/Tokyo", member.TenantValue);
     }
 
     [Theory]
@@ -331,6 +384,17 @@ public sealed class SettingEndpointTests : IAsyncLifetime
         }
 
         return _client.SendAsync(request);
+    }
+
+    private sealed class CountingCheck : ISettingCheck
+    {
+        public int Runs { get; private set; }
+
+        public Task<SettingCheckOutcome> ExecuteAsync(SettingCheckContext context, CancellationToken cancellationToken)
+        {
+            Runs++;
+            return Task.FromResult(SettingCheckOutcome.Pass());
+        }
     }
 
     private sealed class Definitions : ISettingDefinitionProvider

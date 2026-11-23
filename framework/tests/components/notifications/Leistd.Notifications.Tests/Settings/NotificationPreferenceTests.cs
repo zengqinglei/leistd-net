@@ -89,7 +89,10 @@ public sealed class NotificationPreferenceTests
 
         public Task RemoveAllAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-        public Task SetAsync(string name, string? value, SettingScopes scope, string? requestedUserId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(SettingScopes scope, string? userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyDictionary<string, SettingModification>>(new Dictionary<string, SettingModification>());
+
+        public Task SetAsync(string name, string? value, SettingScopes scope, string? requestedUserId, SettingModification modification, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 }

@@ -92,6 +92,31 @@
   },
   "secretSet": "已设置（输入新值即替换）",
   "secretUnset": "未设置",
+  "modification": {
+    "secret": "已设置 · {{name}} 更新于",
+    "value": "{{name}} 更新于",
+    "system": "系统"
+  },
+  "check": {
+    "run": "测试",
+    "running": "测试中…",
+    "passed": "最近测试通过 · {{name}} ·",
+    "failed": "最近测试未通过：{{reason}} · {{name}} ·",
+    "stale": "已过期",
+    "requestFailed": "测试没能执行，请稍后再试",
+    "saveFirst": "请先保存这一组的修改，再测试",
+    "failure": {
+      "not-configured": "未配置",
+      "secret-unavailable": "已存的机密解不开",
+      "auth-rejected": "凭据被拒绝",
+      "unreachable": "连接不上",
+      "rate-limited": "被限流",
+      "service-disabled": "服务已停用",
+      "unexpected-status": "响应异常",
+      "unexpected-error": "测试意外出错",
+      "other": "未通过"
+    }
+  },
   //#if (ExternalLogin)
   "externalLoginProviders": {
     "description": "生效状态以响应本次请求的实例为准。",

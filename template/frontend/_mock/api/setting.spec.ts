@@ -4,7 +4,12 @@ import { HttpHeaders } from '@angular/common/http';
 import { TENANT_HEADER } from '../../src/app/core/tenancy/tenant-protocol';
 //#endif
 import { MockException } from '../core/models';
-import { TENANT_SETTING_VALUES, USER_SETTING_VALUES } from '../data/settings';
+import {
+  SETTING_CHECK_RESULTS,
+  TENANT_SETTING_MODIFICATIONS,
+  TENANT_SETTING_VALUES,
+  USER_SETTING_VALUES,
+} from '../data/settings';
 //#if (ExternalLogin && IncludeMultiTenancy)
 import { USERS } from '../data/user';
 //#endif
@@ -14,7 +19,11 @@ import { AUTH_API } from './auth';
 //#endif
 import { SETTING_API } from './setting';
 
-type MockHandler = (req: { body: unknown; headers: HttpHeaders }) => unknown;
+type MockHandler = (req: {
+  body: unknown;
+  headers: HttpHeaders;
+  params?: Record<string, string>;
+}) => unknown;
 
 function request(body: unknown = null, headers: Record<string, string> = {}) {
   return { body, headers: new HttpHeaders(headers) };
@@ -57,6 +66,8 @@ describe('settings mock', () => {
   beforeEach(() => {
     USER_SETTING_VALUES.clear();
     TENANT_SETTING_VALUES.clear();
+    TENANT_SETTING_MODIFICATIONS.clear();
+    SETTING_CHECK_RESULTS.clear();
     setMockSessionUserId(null);
     setMockSessionTenantKey(null);
   });
@@ -67,7 +78,7 @@ describe('settings mock', () => {
   });
 
   it('registers the settings endpoints', () => {
-    const expected = [get, putTenant, putUser];
+    const expected = [get, putTenant, putUser, 'POST /api/v1/settings/checks/:name'];
     //#if (Email)
     // 测试邮件端点仅随有效邮件能力生成
     expected.push('POST /api/v1/settings/email/test');
@@ -132,6 +143,41 @@ describe('settings mock', () => {
   });
 
   // 请求日志与遥测导出开关是布尔；认证头是机密设置，写入后只报告"已设置"，值不下发
+  // 与后端一致：本层写入记下修改人与时间，清除时一并清掉；测试结论按租户保存，依赖改动后标为过期
+  it('records modifications and keeps check results until a covered setting changes', () => {
+    signIn('user_admin');
+    const check = 'POST /api/v1/settings/checks/:name';
+    const run = (name: string) =>
+      api[check]({ ...request(), params: { name } }) as {
+        passed: boolean;
+        failureCode: string | null;
+        isStale: boolean;
+      };
+    const row = (name: string) =>
+      (api[get](request()) as (SettingRow & Record<string, unknown>)[]).find(
+        (s) => s.name === name,
+      )!;
+
+    api[putTenant](request({ name: 'Telemetry.Export.Endpoint', value: 'http://collector:4318' }));
+    expect(row('Telemetry.Export.Endpoint')).toMatchObject({
+      isCheckable: true,
+      tenantModification: { modifierId: expect.any(String) },
+    });
+
+    expect(run('Telemetry.Export.Endpoint')).toMatchObject({
+      passed: false,
+      failureCode: 'auth-rejected',
+      isStale: false,
+    });
+    api[putTenant](request({ name: 'Telemetry.Export.Headers', value: 'x-api-key=secret' }));
+    expect(row('Telemetry.Export.Endpoint')['lastCheck']).toMatchObject({ isStale: true });
+    expect(run('Telemetry.Export.Endpoint')).toMatchObject({ passed: true, isStale: false });
+
+    api[putTenant](request({ name: 'Telemetry.Export.Endpoint', value: null }));
+    expect(row('Telemetry.Export.Endpoint')['tenantModification']).toBeNull();
+    expect(statusOf(() => run('Telemetry.Export.Headers'))).toBe(404);
+  });
+
   it('serves request logging and telemetry export as host settings with write-only headers', () => {
     signIn('user_admin');
     expect(

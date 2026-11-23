@@ -11,11 +11,14 @@ import {
   isExternalLoginAvailable,
   //#endif
   MockSettingDefinition,
+  SETTING_CHECK_RESULTS,
+  SETTING_CHECKS,
   SETTING_DEFINITIONS,
   SETTING_GROUP_NAMES,
   //#if (IncludeLocalization)
   SETTING_TEXTS_ZH_CN,
   //#endif
+  TENANT_SETTING_MODIFICATIONS,
   TENANT_SETTING_VALUES,
   USER_SETTING_VALUES,
 } from '../data/settings';
@@ -320,6 +323,55 @@ function getExternalLoginStatus(): ExternalLoginStatusOutputDto {
 }
 
 //#endif
+function parsed<T>(json: string | undefined): T | null {
+  return json === undefined ? null : (JSON.parse(json) as T);
+}
+
+function currentModifier(): {
+  time: string;
+  modifierId: string | null;
+  modifierName: string | null;
+} {
+  const user = getCurrentUser();
+  return {
+    time: new Date().toISOString(),
+    modifierId: user?.id ?? null,
+    modifierName: user?.displayName ?? user?.username ?? null,
+  };
+}
+
+/** 与后端一致：主设置或依赖设置在同一租户被写入或清除时，测试结论标为过期。 */
+function markChecksStale(tenantKey: string, name: string): void {
+  for (const [primary, dependsOn] of Object.entries(SETTING_CHECKS)) {
+    const key = `${tenantKey}:${primary}`;
+    const result = parsed<Record<string, unknown>>(SETTING_CHECK_RESULTS.get(key));
+    if (result && (primary === name || dependsOn.includes(name))) {
+      SETTING_CHECK_RESULTS.set(key, JSON.stringify({ ...result, isStale: true }));
+    }
+  }
+}
+
+/**
+ * Mock 的探针按值给出确定的结论，便于演示各种状态：没有主设置值为未配置；OTLP 没有认证头视为被拒；
+ * SMTP 指向本机回环地址视为连不上；其余通过。
+ */
+function probe(tenantKey: string, name: string): string | null {
+  const valueOf = (setting: string) =>
+    TENANT_SETTING_VALUES.get(`${tenantKey}:${setting}`) ??
+    SETTING_DEFINITIONS.find((definition) => definition.name === setting)?.defaultValue ??
+    null;
+  const primary = valueOf(name);
+  if (!primary) {
+    return 'not-configured';
+  }
+  if (name === 'Telemetry.Export.Endpoint') {
+    return TENANT_SETTING_VALUES.has(`${tenantKey}:Telemetry.Export.Headers`)
+      ? null
+      : 'auth-rejected';
+  }
+  return ['localhost', '127.0.0.1'].includes(primary) ? 'unreachable' : null;
+}
+
 /** 设置中心 Mock API（对应设置组件映射的 /api/v1/settings 端点）。 */
 export const SETTING_API = {
   //#if (IncludeLocalization)
@@ -370,6 +422,15 @@ export const SETTING_API = {
         hasSecretValue:
           !!definition.isSecret && TENANT_SETTING_VALUES.has(`${tenantKey}:${definition.name}`),
         canManage: manageable,
+        // 与后端一致：修改信息机密设置同样下发；测试结果与租户层修改人是管理数据，只给能管理的人
+        tenantModification: manageable
+          ? parsed(TENANT_SETTING_MODIFICATIONS.get(`${tenantKey}:${definition.name}`))
+          : null,
+        isCheckable: manageable && definition.name in SETTING_CHECKS,
+        lastCheck:
+          manageable && definition.name in SETTING_CHECKS
+            ? parsed(SETTING_CHECK_RESULTS.get(`${tenantKey}:${definition.name}`))
+            : null,
       }));
   },
 
@@ -401,7 +462,40 @@ export const SETTING_API = {
     //#if (IncludeNotifications)
     assertRetentionOrder(tenantKey, name, value);
     //#endif
+    write(
+      TENANT_SETTING_MODIFICATIONS,
+      `${tenantKey}:${name}`,
+      value === null ? null : JSON.stringify(currentModifier()),
+    );
+    markChecksStale(tenantKey, name);
     return write(TENANT_SETTING_VALUES, `${tenantKey}:${name}`, value);
+  },
+
+  // 与写租户值同一授权；结论按租户保存，再测即覆盖
+  'POST /api/v1/settings/checks/:name': (req: MockRequest) => {
+    requirePermission(PERMISSIONS.settings.default);
+    const name = req.params['name'];
+    const definition = requireDefinition(name);
+    if (!(name in SETTING_CHECKS)) {
+      throw new MockException(404, {
+        code: 'Setting:NotAvailable',
+        message: `Setting '${name}' has no check.`,
+      });
+    }
+    requireManage(definition);
+    const tenantKey = getMockSessionTenantKey();
+    const failureCode = probe(tenantKey, name);
+    const modifier = currentModifier();
+    const result = {
+      passed: failureCode === null,
+      failureCode,
+      time: modifier.time,
+      checkerId: modifier.modifierId,
+      checkerName: modifier.modifierName,
+      isStale: false,
+    };
+    SETTING_CHECK_RESULTS.set(`${tenantKey}:${name}`, JSON.stringify(result));
+    return result;
   },
   //#if (Email)
 

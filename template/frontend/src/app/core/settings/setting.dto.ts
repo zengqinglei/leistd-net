@@ -43,6 +43,36 @@ export interface SettingOutputDto {
    * 不能管理、又不允许用户覆盖的设置服务端不下发。
    */
   canManage: boolean;
+  /** `userValue` 那一层最后一次写入的时间与写入人；该层没有值时为 null。 */
+  userModification?: SettingModificationDto | null;
+  /** `tenantValue` 那一层最后一次写入的时间与写入人；机密设置同样给出，不含值。 */
+  tenantModification?: SettingModificationDto | null;
+  /** 这一项登记了测试，设置页在这一行提供"测试"。 */
+  isCheckable?: boolean;
+  /** 本租户（宿主上下文为宿主）最近一次测试的结果；没测过时为 null。 */
+  lastCheck?: SettingCheckResultDto | null;
+}
+
+/** 某一层设置值最后一次写入的时间与写入人。 */
+export interface SettingModificationDto {
+  /** 写入时间（UTC，ISO 8601）。 */
+  time: string;
+  modifierId?: string | null;
+  /** 写入当时的显示名；无主体写入（迁移、种子、服务账号）时为 null。 */
+  modifierName?: string | null;
+}
+
+/** 一项设置测试最近一次的结果。 */
+export interface SettingCheckResultDto {
+  passed: boolean;
+  /** 未通过时的稳定失败码，界面按码取文案，未知码走兜底。 */
+  failureCode?: string | null;
+  /** 测试时间（UTC，ISO 8601）。 */
+  time: string;
+  checkerId?: string | null;
+  checkerName?: string | null;
+  /** 测试之后主设置或依赖设置被写入或清除过，结论可能已不反映当前配置。 */
+  isStale: boolean;
 }
 
 /** 写入一项设置；`value` 为 null 表示清除该层级，回落到下一层。 */

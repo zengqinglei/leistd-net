@@ -47,7 +47,7 @@ PROTOCOL_CATALOGS = {
                  'DistributedEventRecoverySkipReasons', 'DistributedEventRejectionReasons')
 }
 PROTOCOL_REASON = re.compile(r'[a-z]+(?:-[a-z]+)*')
-ENTRY = re.compile(r'''(?:['"])?([\w.]+)(?:['"])?:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")\s*,''')
+ENTRY = re.compile(r'''(?:['"])?([\w.-]+)(?:['"])?:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")\s*,''')
 
 
 def framework_error_codes(components):

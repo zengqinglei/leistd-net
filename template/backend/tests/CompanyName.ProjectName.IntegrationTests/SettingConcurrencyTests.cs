@@ -89,7 +89,7 @@ public sealed class SettingConcurrencyTests(ProjectWebApplicationFactory factory
                 Value = "pending"
             });
 
-            await provider.GetRequiredService<ISettingStore>().SetAsync(name, "mine", SettingScopes.User, userId);
+            await provider.GetRequiredService<ISettingStore>().SetAsync(name, "mine", SettingScopes.User, userId, new SettingModification(DateTime.UtcNow, null, null));
             await unitOfWork.CompleteAsync();
         }
 
@@ -154,7 +154,7 @@ public sealed class SettingConcurrencyTests(ProjectWebApplicationFactory factory
         {
             await using var scope = Services!.CreateAsyncScope();
             using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
-            await scope.ServiceProvider.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.User, userId);
+            await scope.ServiceProvider.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.User, userId, new SettingModification(DateTime.UtcNow, null, null));
             await unitOfWork.CompleteAsync();
         }
     }
