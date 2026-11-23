@@ -4,20 +4,28 @@
 <ng-container>
 <!--#endif-->
   <nav hlmBreadcrumb class="min-w-0 overflow-hidden" [aria-label]="t('layout.breadcrumb.label')">
-    <!-- 单行：页头定高，折到第二行会被裁掉；放不下时上级与末级截断，截断时悬停或聚焦给全文。
-         首项与省略号不收缩（参与收缩会被压到最小内容宽度，中文一字一行）；上级收缩权重大，先截上级、末级留下其余宽度。
+    <!-- 单行：页头定高，折到第二行会被裁掉；放不下时首项、上级与末级都单行截断，截断时悬停或聚焦给全文。
+         按收缩权重让位：上级最先（4），首项其次（2），末级最后（1），当前页留得最多；省略号不收缩。
+         文字都包在 truncate 里，收缩到底也只是省略号，不会被压到最小内容宽度（中文一字一行）。
          末级不设硬下限：省略号分支下各项下限之和会超过导航区，下限会把末级推出导航区被裁掉。
          触屏下链接与省略号补足44px（页头高56px，放得下） -->
     <ol hlmBreadcrumbList class="flex-nowrap sm:gap-1.5">
-      <li hlmBreadcrumbItem class="hidden shrink-0 sm:inline-flex">
+      @let homeLabel =
+        layoutService.isPlatform() ? t(layoutService.managementAreaKey()) : t('menu.workspace');
+      <li
+        hlmBreadcrumbItem
+        class="hidden min-w-0 shrink-2 sm:inline-flex pointer-coarse:min-w-11"
+        data-testid="breadcrumb-home"
+      >
         <a
           hlmBreadcrumbLink
-          class="inline-flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+          class="inline-flex min-w-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           [link]="layoutService.homeRoute()"
-          >{{
-            layoutService.isPlatform() ? t(layoutService.managementAreaKey()) : t('menu.workspace')
-          }}</a
+          [hlmTooltip]="homeLabel"
+          [appTruncatedTooltip]="homeText"
         >
+          <span #homeText class="truncate">{{ homeLabel }}</span>
+        </a>
       </li>
       @if (collapsed().length) {
         <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>

@@ -112,11 +112,10 @@ describe('DefaultHeader on touch phones', () => {
     const theme = host.querySelector('app-theme-mode-toggle button')!;
     expect(theme.getBoundingClientRect().width).toBe(0);
 
-    // 首项不参与收缩、单行：参与收缩时被压到最小内容宽度，中文一字一行、英文一词一行
-    const home = host.querySelector<HTMLElement>('[data-slot="breadcrumb-item"]:first-child')!;
-    expect(getComputedStyle(home).flexShrink).toBe('0');
+    // 首项收缩时单行截断，不折行：文字不包 truncate 时会被压到最小内容宽度，中文一字一行、英文一词一行
+    const home = host.querySelector<HTMLElement>('[data-testid="breadcrumb-home"]')!;
     const homeLines = document.createRange();
-    homeLines.selectNodeContents(home.querySelector('a')!);
+    homeLines.selectNodeContents(home.querySelector('a span')!);
     expect(new Set([...homeLines.getClientRects()].map((r) => Math.round(r.top))).size).toBe(1);
 
     // 上级与当前页都在导航区内占位；上级先截断，当前页至少留约四个字
@@ -139,7 +138,8 @@ describe('DefaultHeader on touch phones', () => {
     expect(host.querySelector('[data-testid="breadcrumb-more"]')).not.toBeNull();
     const deepNav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
     const deepTitle = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
-    expect(deepTitle.width).toBeGreaterThan(0);
+    // 首项与上级先让位：当前页仍留下约四个字，而不是被挤到只剩零宽
+    expect(deepTitle.width).toBeGreaterThanOrEqual(56);
     expect(deepTitle.right).toBeLessThanOrEqual(deepNav.right + 0.5);
 
     const avatar = host.querySelector<HTMLElement>('app-user-menu')!;
