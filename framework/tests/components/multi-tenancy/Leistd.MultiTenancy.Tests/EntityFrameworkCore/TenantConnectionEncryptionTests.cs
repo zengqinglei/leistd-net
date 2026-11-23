@@ -4,6 +4,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
+using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
@@ -14,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
@@ -43,6 +45,8 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
             .EnableSensitiveDataLogging()
             .LogTo(_efLog.Enqueue, LogLevel.Debug));
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        // 解密失败的事件经容器里的 ILoggerFactory 记录：注册入口漏传它时这里收不到事件
+        services.AddFakeLogging();
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
@@ -63,6 +67,10 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
 
     private ITenantConnectionConfigurationStore Store =>
         _provider.GetRequiredService<ITenantConnectionConfigurationStore>();
+
+    private IReadOnlyList<FakeLogRecord> UnprotectFailures() =>
+        [.. _provider.GetFakeLogCollector().GetSnapshot()
+            .Where(x => x.Id.Id == MultiTenancyLogEvents.TenantConnectionStringUnprotectFailed)];
 
     private async Task<Guid> RegisterTenantAsync()
     {
@@ -151,8 +159,9 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
             _provider.GetRequiredService<IDbContextProvider<TestDbContext>>(),
             new EphemeralDataProtectionProvider());
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => otherKeyRing.FindAsync(tenantId, Name));
+        var error = await Assert.ThrowsAsync<TenantConnectionStringDecryptionException>(() => otherKeyRing.FindAsync(tenantId, Name));
 
+        Assert.NotNull(error.KeyId);
         Assert.Contains(tenantId.ToString(), error.Message);
         Assert.Contains(Name, error.Message);
         Assert.DoesNotContain(Secret, error.ToString());
@@ -168,7 +177,13 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Store.FindAsync(tenantId, Name));
+        // 不是 Data Protection 密文，读不出密钥标识：区别于“缺某把密钥”
+        var error = await Assert.ThrowsAsync<TenantConnectionStringDecryptionException>(() => Store.FindAsync(tenantId, Name));
+        Assert.Null(error.KeyId);
+        Assert.Equal(tenantId, error.TenantId);
+        var logged = Assert.Single(UnprotectFailures());
+        Assert.Equal(tenantId.ToString(), logged.GetStructuredStateValue("TenantId"));
+        Assert.Equal(Name, logged.GetStructuredStateValue("ConnectionName"));
     }
 
     // 迁移清单里解不开的密文只算这个租户失败：不挡住其他租户，失败原因里也没有明文
@@ -189,6 +204,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
         var failure = Assert.Single(list.FailedTenants);
         Assert.Equal(tampered, failure.TenantId);
         Assert.DoesNotContain(Secret, failure.Reason);
+        Assert.Equal(tampered.ToString(), Assert.Single(UnprotectFailures()).GetStructuredStateValue("TenantId"));
     }
 
     // 开着 EF 敏感数据日志，写入与读取的日志里也只能出现密文

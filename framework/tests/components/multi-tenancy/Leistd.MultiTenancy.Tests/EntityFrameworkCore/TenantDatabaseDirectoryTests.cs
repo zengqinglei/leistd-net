@@ -1,5 +1,6 @@
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
+using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
@@ -9,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
@@ -31,6 +33,7 @@ public class TenantDatabaseDirectoryTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddFakeLogging();
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
@@ -145,6 +148,29 @@ public class TenantDatabaseDirectoryTests : IAsyncLifetime
 
         Assert.Empty(listed.Databases);
         Assert.Equal(tenant.Id, Assert.Single(listed.FailedTenants).TenantId);
+    }
+
+    /// <summary>解不开密文的租户进失败清单，失败原因不带连接串，解密点按固定事件号记一次。</summary>
+    [Fact]
+    public async Task A_tenant_whose_connection_cannot_be_decrypted_fails_alone_and_is_logged()
+    {
+        var healthy = await CreateWithConnectionAsync("healthy", "Host=healthy;Password=healthy-secret");
+        var tampered = await CreateWithConnectionAsync("tampered", "Host=tampered;Password=tampered-secret");
+        var db = _provider.GetRequiredService<TestDbContext>();
+        var record = await db.Set<TenantConnectionRecord>().SingleAsync(x => x.TenantId == tampered);
+        record.ProtectedConnectionString = "not-a-valid-payload";
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var listed = await Directory.GetDatabasesAsync("default", activeOnly: true);
+
+        Assert.Equal([healthy], Assert.Single(listed.Databases).TenantIds);
+        var failure = Assert.Single(listed.FailedTenants);
+        Assert.Equal(tampered, failure.TenantId);
+        Assert.DoesNotContain("tampered-secret", failure.Reason);
+        var logged = Assert.Single(_provider.GetFakeLogCollector().GetSnapshot(),
+            x => x.Id.Id == MultiTenancyLogEvents.TenantConnectionStringUnprotectFailed);
+        Assert.Equal(tampered.ToString(), logged.GetStructuredStateValue("TenantId"));
     }
 
     private async Task<Guid> CreateWithConnectionAsync(string name, string connectionString, bool activate = true)

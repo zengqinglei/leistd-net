@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
@@ -18,10 +19,11 @@ internal sealed class LocalConnectionStringResolver<TControlDbContext>(
     IServiceScopeFactory scopeFactory,
     IDataProtectionProvider dataProtectionProvider,
     IConfiguration configuration,
-    IOptions<LocalTenantConnectionOptions> options) : IConnectionStringResolver
+    IOptions<LocalTenantConnectionOptions> options,
+    ILoggerFactory? loggerFactory = null) : IConnectionStringResolver
     where TControlDbContext : DbContext
 {
-    private readonly TenantConnectionStringProtector _protector = new(dataProtectionProvider);
+    private readonly TenantConnectionStringProtector _protector = new(dataProtectionProvider, loggerFactory);
 
     public async Task<string> ResolveAsync(string connectionStringName, CancellationToken cancellationToken = default)
     {
