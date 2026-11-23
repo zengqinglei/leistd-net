@@ -4,6 +4,7 @@ import { By } from '@angular/platform-browser';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { userEvent } from 'vitest/browser';
 
+import { focusWithKeyboard } from '../utils/keyboard-focus.testing';
 import { parkPointer } from '../utils/pointer.testing';
 import { TruncatedTooltip } from './truncated-tooltip';
 
@@ -58,7 +59,7 @@ describe('TruncatedTooltip', () => {
   /** 聚焦后提示给出全文、失焦后收起；真实计时器，等它出现与消失。 */
   async function expectFocusTooltip(text: string): Promise<void> {
     const button = (fixture.nativeElement as HTMLElement).querySelector('button')!;
-    button.focus();
+    await focusWithKeyboard(button);
     await expect.poll(() => tooltip()?.textContent?.trim()).toBe(text);
     button.blur();
     await expect.poll(() => tooltip()).toBeNull();

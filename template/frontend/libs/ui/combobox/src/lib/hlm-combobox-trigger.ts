@@ -32,6 +32,7 @@ import type { ClassValue } from 'clsx';
   ],
   providers: [provideIcons({ lucideChevronDown })],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'contents' },
   template: `
     <button
       brnComboboxTrigger

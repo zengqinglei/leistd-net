@@ -22,6 +22,7 @@ import { ConfirmService } from '../../../../../../../../core/feedback/confirm-se
 import { provideTranslocoTesting } from '../../../../../../../../core/i18n/transloco.testing';
 //#endif
 import { renderSubmission } from '../../../../../../../../core/validation/form-submission.testing';
+import { focusWithKeyboard } from '../../../../../../../../shared/utils/keyboard-focus.testing';
 import { RoleBriefDto } from '../../../../../../dtos/role.dto';
 import { TenantStaffOutputDto } from '../../../../../../dtos/tenant-staff.dto';
 import { TENANT_STAFF_CANDIDATE_LIMIT, TenantStaffEditDialog } from './tenant-staff-edit-dialog';
@@ -267,7 +268,7 @@ describe('TenantStaffEditDialog', () => {
     document.querySelector<HTMLElement>('[role="option"][data-value="home-1"]')!.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    trigger().focus();
+    await focusWithKeyboard(trigger());
     await expect
       .poll(() => document.querySelector('[role="tooltip"]')?.textContent?.trim() ?? '')
       .toBe('Alexandra Konstantinopoulou-Montgomery alexandra.konstantinopoulou.montgomery');

@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 
 import { TruncatedTooltip } from '../../directives/truncated-tooltip';
+import { focusWithKeyboard } from '../../utils/keyboard-focus.testing';
 import { parkPointer } from '../../utils/pointer.testing';
 import { StatPanel } from './stat-panel';
 
@@ -58,7 +59,7 @@ describe('StatPanel', () => {
     expect(title.scrollWidth).toBeGreaterThan(title.clientWidth);
     expect(title.getAttribute('tabindex')).toBe('0');
 
-    title.focus();
+    await focusWithKeyboard(title);
     await expect.poll(() => tooltip()?.textContent?.trim()).toBe('Disabled subscriptions');
     title.blur();
     await expect.poll(() => tooltip()).toBeNull();

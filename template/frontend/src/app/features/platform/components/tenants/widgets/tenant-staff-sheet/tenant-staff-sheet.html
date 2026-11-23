@@ -285,8 +285,10 @@
           >
             @switch (id) {
               @case ('linkedUsername') {
+                <!-- 登录名不是需要逐字辨认的码，不用等宽：等宽字体更宽，这一格会让人员表在抽屉宽度下多收起一档列 -->
                 <span
-                  class="font-mono text-xs"
+                  class="text-xs"
+                  data-testid="staff-linked-username"
                   [class]="mode === 'detail' ? 'break-all' : 'whitespace-nowrap'"
                   >{{ staff.linkedUsername }}</span
                 >
