@@ -11,6 +11,7 @@ using Leistd.TestBase.Doubles;
 using Leistd.UnitOfWork;
 using Leistd.TestBase.Assertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -79,5 +80,28 @@ public sealed class SettingsCoreRegistrationTests
 
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISettingCheckService>());
+    }
+
+    // 换掉写入入口的宿主不注册锁与工作单元：测试服务只在执行测试时才要它们，构建与解析不受影响
+    [Fact]
+    public void A_host_that_replaces_the_setting_manager_builds_without_a_lock_or_unit_of_work()
+    {
+        var services = new ServiceCollection()
+            .AddSettingsCore()
+            .AddSingleton<ISettingStore>(new FakeSettingStore())
+            .AddSingleton<ICurrentUser>(new FakeCurrentUser())
+            .AddLogging();
+        services.Replace(ServiceDescriptor.Transient<ISettingManager, ReplacementManager>());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISettingCheckService>());
+    }
+
+    private sealed class ReplacementManager : ISettingManager
+    {
+        public Task SetAsync(string name, string? value, SettingScopes scope, string? userId = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

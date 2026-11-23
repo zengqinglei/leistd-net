@@ -20,7 +20,7 @@ internal sealed class SmtpConnectionCheck(
     public async Task<SettingCheckOutcome> ExecuteAsync(SettingCheckContext context, CancellationToken cancellationToken)
     {
         async Task<string?> ValueAsync(string name)
-            => await context.GetValueAsync(name, cancellationToken) ?? deployment.GetDeploymentValue(name);
+            => await context.GetStoredValueAsync(name, cancellationToken) ?? deployment.GetDeploymentValue(name);
 
         var host = await ValueAsync(SettingConstant.Email.SmtpHost);
         if (string.IsNullOrWhiteSpace(host))

@@ -7,7 +7,11 @@ namespace Leistd.Settings.Hosting;
 /// </remarks>
 public interface IHostSettingBaseline
 {
-    /// <summary>按设置名取部署配置里的原始值；未绑定或部署里没有时为 <see langword="null"/>。</summary>
+    /// <summary>按设置名取部署配置里的当前值；未绑定或部署里没有时为 <see langword="null"/>。</summary>
+    /// <remarks>
+    /// 与 <c>IConfiguration</c> 同一取值语义：优先级最高、含任一绑定配置键的配置源决定结果（同一源内按键的顺序），显式空值原样返回；
+    /// 每次现读，部署配置重载后即是新值。
+    /// </remarks>
     /// <param name="settingName">被绑定的宿主级设置名。</param>
     string? GetDeploymentValue(string settingName);
 }

@@ -169,6 +169,51 @@ public sealed class SettingModificationAndCheckTests
         Assert.True((await _checks.GetAllAsync())["Export.Headers"].IsStale);
     }
 
+    // 值看不出变化的写入同样作废结论：写回同值、清除后又写回原值都是在探针之后提交的配置
+    [Theory]
+    [InlineData("same-value")]
+    [InlineData("clear-and-restore")]
+    public async Task A_write_that_leaves_the_value_unchanged_still_makes_the_result_stale(string writes)
+    {
+        var services = Services();
+        await services.GetRequiredService<ISettingManager>().SetAsync("Export.Endpoint", "https://collector:4318", SettingScopes.Tenant);
+        var release = new TaskCompletionSource();
+        _probe.Pause = release.Task;
+
+        var running = services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Entered.Task;
+        var other = Services().GetRequiredService<ISettingManager>();
+        if (writes == "clear-and-restore")
+        {
+            await other.SetAsync("Export.Endpoint", null, SettingScopes.Tenant);
+        }
+
+        await other.SetAsync("Export.Endpoint", "https://collector:4318", SettingScopes.Tenant);
+        release.SetResult();
+
+        Assert.True((await running).IsStale);
+        Assert.True((await _checks.GetAllAsync())["Export.Headers"].IsStale);
+    }
+
+    // 保存时持锁资格已失效：不再提交，否则锁外的写入可能先标了过期、再被这里覆盖成未过期
+    [Fact]
+    public async Task A_result_is_not_saved_after_the_write_lock_is_lost()
+    {
+        using var memoryLock = new MemoryLocalLock(Microsoft.Extensions.Logging.Abstractions.NullLogger<MemoryLocalLock>.Instance);
+        var writeLock = new JournalingLock(memoryLock);
+        var services = Services(writeLock: writeLock);
+        var release = new TaskCompletionSource();
+        _probe.Pause = release.Task;
+
+        var running = services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Entered.Task;
+        writeLock.LoseLease();
+        release.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        Assert.Empty(await _checks.GetAllAsync());
+    }
+
     // 探针读的是测试那一层的值：全租户共享的结论不能来自操作者自己的个人覆盖
     [Fact]
     public async Task The_probe_reads_the_tested_level_rather_than_a_personal_override()
@@ -226,7 +271,7 @@ public sealed class SettingModificationAndCheckTests
     private static SettingOutputDto Single(IReadOnlyList<SettingOutputDto> settings, string name)
         => Assert.Single(settings, setting => setting.Name == name);
 
-    private IServiceProvider Services(FakeCurrentUser? currentUser = null)
+    private IServiceProvider Services(FakeCurrentUser? currentUser = null, Leistd.Lock.Abstractions.IDistributedLock? writeLock = null)
     {
         var services = new ServiceCollection()
             .AddSettingsCore()
@@ -246,6 +291,11 @@ public sealed class SettingModificationAndCheckTests
             .AddSingleton<IUnitOfWorkManager>(new RecordingUnitOfWorkManager());
         // 测试替身由用例直接控制，替换登记时的作用域探针
         services.AddSingleton<ProbeCheck>(_probe);
+        if (writeLock is not null)
+        {
+            services.AddSingleton(writeLock);
+        }
+
         return services.BuildServiceProvider().CreateScope().ServiceProvider;
     }
 

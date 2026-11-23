@@ -262,10 +262,10 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
 | `ISettingManagementService` | 设置页用例：`GetAsync`、`SetForCurrentUserAsync`、`SetForCurrentTenantAsync` |
 | `SettingOutputDto` / `SetSettingInputDto` | 设置页的读写形状；`UserModification` / `TenantModification`（`SettingModificationDto`）、`IsCheckable`、`LastCheck`（`SettingCheckResultDto`） |
 | `AddSettingCheck<TCheck>(name, params dependsOn)` | 给一项设置登记测试探针；同一设置只认最后一次登记 |
-| `ISettingCheck.ExecuteAsync(context, ct)` | 探针：经 `context.GetValueAsync(name)` 读本层的值，返回 `SettingCheckOutcome.Pass()` 或 `Fail(code)`；失败码基线见 `SettingCheckFailureCodes`，业务可加自己的稳定字符串 |
+| `ISettingCheck.ExecuteAsync(context, ct)` | 探针：经 `context.GetStoredValueAsync(name)` 读本层的存储值（`GetValueAsync` 缺项时取代码默认值），返回 `SettingCheckOutcome.Pass()` 或 `Fail(code)`；失败码基线见 `SettingCheckFailureCodes`，业务可加自己的稳定字符串 |
 | `ISettingCheckService.RunAsync(name, ct)` | 执行测试并保存结果；授权由调用方负责 |
 | `ISettingCheckStore` | 测试结果的持久化契约；EF 实现随 `AddSettingsEfCore` 注册，`ISettingStore.RemoveAllAsync` 一并清理；只在执行测试时需要 |
-| `IHostSettingBaseline.GetDeploymentValue(name)` | Hosting 包：被绑定的宿主级设置在部署配置里的值，不含系统设置的覆盖；机密设置同样给出 |
+| `IHostSettingBaseline.GetDeploymentValue(name)` | Hosting 包：被绑定的宿主级设置在部署配置里的当前值：不含系统设置的覆盖，按配置源优先级取、保留显式空值，重载后即是新值；机密设置同样给出 |
 | `SettingCheckCompletedEvent` | 测试执行后发布：`SettingName`、`Scope`、`Passed`、`FailureCode` |
 | `SettingDecryptionException` | 机密设置解不开：`SettingName`、`Purposes`、`KeyId` |
 | `SettingLogEvents` | 日志事件号常量，见注意事项的排障表 |
@@ -366,10 +366,10 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
   完整的变更历史不在这里：订阅 `SettingChangedEvent`（`IsCleared` 区分写入与清除）写操作记录。
 - 设置测试：`AddSettingCheck<TCheck>(name, dependsOn)` 给一项设置登记探针，设置页对它给出 `IsCheckable` 与 `LastCheck`。
   `POST /checks/{name}` 在设置页编辑的那一层执行（与写租户值同一授权；主设置须允许租户层或宿主层写入），结果按租户保存（再测即覆盖）并发布 `SettingCheckCompletedEvent`。
-  探针在独立的非事务工作单元里运行，经 `SettingCheckContext.GetValueAsync` 读这一层的存储值（不含个人覆盖，没有存值时为代码默认值）；
-  机密设置没有默认值，部署配置里的值经 Hosting 包的 `IHostSettingBaseline` 取，不要读进程里叠加了覆盖、可能落后于另一副本的配置。
+  探针在独立的非事务工作单元里运行，读这一层的值，不含个人覆盖：`GetStoredValueAsync` 只给存储值，`GetValueAsync` 缺项时取代码默认值。
+  绑定到部署配置的宿主级设置缺项时，用存储值加 Hosting 包 `IHostSettingBaseline` 的部署当前值，不用代码默认值（启动时的快照），也不要读进程里叠加了覆盖、可能落后于另一副本的配置。
   读到解不开的机密归一为 `secret-unavailable`，探针自身抛出的异常记告警并归为 `unexpected-error`；在事务型工作单元里调用会被拒绝。
-  主设置或依赖设置在同一租户里被写入、清除时，与该次写入同一事务把结果标记为过期（`IsStale`）；探针运行期间提交的写入在保存时核对出来，结果直接按过期保存；只改个人偏好不影响。
+  主设置或依赖设置在同一租户里被写入、清除时，与该次写入同一事务把结果标记为过期（`IsStale`）；探针运行期间提交的写入（含写回同值、清除后写回原值）在保存时按值与最后写入时间核对出来，结果直接按过期保存；保存时失去写锁则不保存；只改个人偏好不影响。
 - 共享端点按路径里的租户读取：注册了 `ITenantStore` 时租户须存在且启用，没有注册多租户时只接受 `host`，其余一律 404。
   切到该租户后开新工作单元读存储，值为租户层的值、没有时为代码默认值；共享设置不会有个人覆盖、进程级或密文，所以不经 `ISettingProvider`，也不受调用方主体的影响。
   ETag 取按名称排序后响应体的 SHA-256，`If-None-Match` 命中回 304。
