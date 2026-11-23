@@ -10,6 +10,7 @@ using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Application.OpenApplications.Errors;
 #endif
 using Leistd.Authorization.Errors;
+using Leistd.ExceptionHandling;
 using Leistd.ExceptionHandling.Options;
 using Leistd.MultiTenancy.Errors;
 using Leistd.OperationRecords.Errors;
@@ -84,6 +85,7 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 #if (IncludeNotifications)
     [InlineData(NotificationErrorCodes.IdentityCannotOperate, StatusCodes.Status403Forbidden)]
 #endif
+    [InlineData(AuthenticationRequiredException.ErrorCode, StatusCodes.Status401Unauthorized)]
     [InlineData(PermissionErrorCodes.SubjectNotFound, StatusCodes.Status404NotFound)]
 #if (IncludeDistributedEvents)
     [InlineData(DistributedEventErrorCodes.RecordNotFound, StatusCodes.Status404NotFound)]
@@ -135,6 +137,7 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
 #if (OpenIddictServer)
             typeof(OpenAppErrorCodes),
 #endif
+            typeof(AuthenticationRequiredException),
             typeof(PermissionErrorCodes), typeof(MultiTenancyErrorCodes), typeof(SettingErrorCodes), typeof(OperationFailureCodes),
 #if (IncludeDistributedEvents)
             typeof(DistributedEventErrorCodes),
