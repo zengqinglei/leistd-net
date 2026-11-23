@@ -31,8 +31,12 @@ public sealed class SmtpConnectionCheckTests
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var accepted = listener.AcceptTcpClientAsync();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        // 接受后立刻断开：客户端读到连接关闭即判为连不上，不必等满问候语的读超时
+        var accepted = Task.Run(async () =>
+        {
+            using var connection = await listener.AcceptTcpClientAsync();
+        });
 
         var outcome = await Check(new() { [SettingConstant.Email.SmtpPort] = "1" }).ExecuteAsync(Context(new()
         {
@@ -41,7 +45,7 @@ public sealed class SmtpConnectionCheckTests
             [SettingConstant.Email.SmtpEnableSsl] = "false",
         }), CancellationToken.None);
 
-        using var client = await accepted.WaitAsync(TimeSpan.FromSeconds(5));
+        await accepted.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(SettingCheckFailureCodes.Unreachable, outcome.FailureCode);
     }
 
