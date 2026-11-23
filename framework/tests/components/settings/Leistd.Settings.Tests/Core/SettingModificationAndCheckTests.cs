@@ -242,6 +242,37 @@ public sealed class SettingModificationAndCheckTests
         Assert.False((await _checks.GetAllAsync())["Export.Headers"].IsStale);
     }
 
+    // 两人同时测同一项、期间没有改配置：两次结论都有效；先开始的那次后完成时不覆盖后开始那次已保存的结果
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Concurrent_runs_without_writes_stay_current_and_the_later_start_wins(bool earlierFinishesFirst)
+    {
+        var earlierGate = new TaskCompletionSource();
+        var laterGate = new TaskCompletionSource();
+        _probe.Pauses.Enqueue(earlierGate.Task);
+        _probe.Pauses.Enqueue(laterGate.Task);
+
+        var earlier = Services().GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Arrivals.WaitAsync();
+        var later = Services().GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Arrivals.WaitAsync();
+
+        // 先完成的那次通过，后完成的那次未通过：保存下来的应当是后开始那次的结论
+        _probe.Next = SettingCheckOutcome.Pass();
+        (earlierFinishesFirst ? earlierGate : laterGate).SetResult();
+        var first = await (earlierFinishesFirst ? earlier : later);
+        _probe.Next = SettingCheckOutcome.Fail(SettingCheckFailureCodes.Unreachable);
+        (earlierFinishesFirst ? laterGate : earlierGate).SetResult();
+        var second = await (earlierFinishesFirst ? later : earlier);
+
+        Assert.False(first.IsStale);
+        Assert.False(second.IsStale);
+        var saved = (await _checks.GetAllAsync())["Export.Headers"];
+        Assert.False(saved.IsStale);
+        Assert.Equal(!earlierFinishesFirst, saved.Passed);
+    }
+
     // 保存时持锁资格已失效：不再提交，否则锁外的写入可能先标了过期、再被这里覆盖成未过期
     [Fact]
     public async Task A_result_is_not_saved_after_the_write_lock_is_lost()
@@ -378,6 +409,12 @@ public sealed class SettingModificationAndCheckTests
         /// <summary>不为空时探针在这里等待，模拟一次慢的外呼。</summary>
         public Task? Pause { get; set; }
 
+        /// <summary>按执行顺序逐次取用的等待；取完后回到 <see cref="Pause"/>。并发用例用它分别放行每一次。</summary>
+        public Queue<Task> Pauses { get; } = new();
+
+        /// <summary>每次进入探针时释放一次。</summary>
+        public SemaphoreSlim Arrivals { get; } = new(0);
+
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>不为空时探针经上下文读这一项，读到的值记在 <see cref="ReadValue"/>。</summary>
@@ -393,10 +430,17 @@ public sealed class SettingModificationAndCheckTests
                 ReadValue = await context.GetValueAsync(Read, cancellationToken);
             }
 
-            Entered.TrySetResult();
-            if (Pause is not null)
+            Task? pause;
+            lock (Pauses)
             {
-                await Pause;
+                pause = Pauses.Count > 0 ? Pauses.Dequeue() : Pause;
+            }
+
+            Entered.TrySetResult();
+            Arrivals.Release();
+            if (pause is not null)
+            {
+                await pause;
             }
 
             return Throw is null ? Next : throw Throw;

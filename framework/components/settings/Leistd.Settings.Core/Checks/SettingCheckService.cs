@@ -22,9 +22,9 @@ using Microsoft.Extensions.Options;
 namespace Leistd.Settings.Checks;
 
 // 探针在独立的非事务工作单元里执行（可能是一次慢的外呼，不持有数据库事务），只读本次测试那一层的存储值。
-// 过期按运行登记判断：开始前在写锁内登记一次运行，写入或清除主设置、依赖设置时在同一事务里作废登记；
-// 保存时登记已不是本次的，结果按过期保存。不依赖时钟，也不依赖被清除后已不存在的设置行。
-// 同一项同时测两次时，后开始的那次接替登记，先完成的按过期保存，随后被后完成的覆盖。
+// 过期与先后分开判断，都只靠存储里的计数，不依赖时钟或被清除后已不存在的设置行：
+// 开始前在写锁内登记，得到运行序号与此刻的配置修订号；写入、清除主设置或依赖设置时同事务推进修订号。
+// 保存时修订号变了，结论针对的是旧配置，按过期保存；已有更新的运行保存过结果时不覆盖它（两人同时测同一项）。
 // 锁与工作单元只在执行测试时才要求：没有登记测试、或换掉了写入入口的宿主不必注册它们。
 internal sealed class SettingCheckService(
     ISettingDefinitionManager definitionManager,
@@ -83,14 +83,14 @@ internal sealed class SettingCheckService(
         var store = checkStore ?? throw new InvalidOperationException(
             $"Setting '{settingName}' has a check but no {nameof(ISettingCheckStore)} is registered; AddSettingsEfCore registers one.");
 
-        var runId = await BeginAsync(units, writeLock, store, registration, cancellationToken);
+        var run = await BeginAsync(units, writeLock, store, registration, cancellationToken);
         var outcome = await ProbeAsync(units, registration, scope, cancellationToken);
-        var result = await SaveAsync(units, writeLock, store, registration, scope, outcome, runId, cancellationToken);
+        var result = await SaveAsync(units, writeLock, store, registration, scope, outcome, run, cancellationToken);
         return SettingCheckResultDto.From(result);
     }
 
     // 在写锁内登记：之前提交的写入都对随后的读取可见，之后的写入都会作废这次登记
-    private async Task<Guid> BeginAsync(
+    private async Task<SettingCheckRun> BeginAsync(
         IUnitOfWorkManager units,
         IDistributedLock writeLock,
         ISettingCheckStore store,
@@ -100,10 +100,10 @@ internal sealed class SettingCheckService(
         await using var lease = await writeLock.LockAsync(SettingWriteLock.Key(currentTenant), cancellationToken);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.LockLost);
         using var unitOfWork = units.Begin(new UnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
-        var runId = await store.BeginRunAsync(registration.SettingName, linked.Token);
+        var run = await store.BeginRunAsync(registration.SettingName, linked.Token);
         linked.Token.ThrowIfCancellationRequested();
         await unitOfWork.CompleteAsync(linked.Token);
-        return runId;
+        return run;
     }
 
     private async Task<SettingCheckOutcome> ProbeAsync(
@@ -149,7 +149,7 @@ internal sealed class SettingCheckService(
         SettingCheckRegistration registration,
         SettingScopes scope,
         SettingCheckOutcome outcome,
-        Guid runId,
+        SettingCheckRun run,
         CancellationToken cancellationToken)
     {
         await using var lease = await writeLock.LockAsync(SettingWriteLock.Key(currentTenant), cancellationToken);
@@ -158,8 +158,9 @@ internal sealed class SettingCheckService(
         cancellationToken = linked.Token;
         using var unitOfWork = units.Begin(new UnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
 
-        // 登记被作废或被接替：探针期间主设置或依赖设置被写入、清除过，结论针对的是旧配置
-        var changed = await store.GetPendingRunAsync(registration.SettingName, cancellationToken) != runId;
+        // 修订号变了：探针期间主设置或依赖设置被写入、清除过，结论针对的是旧配置
+        var latest = await store.GetLatestAsync(registration.SettingName, cancellationToken);
+        var changed = latest.Revision != run.Revision;
         var result = new SettingCheckResult(
             outcome.Passed,
             outcome.FailureCode,
@@ -169,7 +170,12 @@ internal sealed class SettingCheckService(
             IsStale: changed);
 
         cancellationToken.ThrowIfCancellationRequested();
-        await store.SaveAsync(registration.SettingName, result, cancellationToken);
+        // 更新的运行已经保存过：它的结论不比这次旧，不覆盖；本次结果照常返回给调用方
+        if (latest.Sequence < run.Sequence)
+        {
+            await store.SaveAsync(registration.SettingName, run.Sequence, result, cancellationToken);
+        }
+
         if (eventBus is not null)
         {
             await eventBus.PublishAsync(

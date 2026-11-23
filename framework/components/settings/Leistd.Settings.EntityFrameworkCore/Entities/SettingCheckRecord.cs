@@ -24,7 +24,7 @@ public class SettingCheckRecord : IMultiTenant
     /// <summary>未通过时的失败码。</summary>
     public string? FailureCode { get; set; }
 
-    /// <summary>测试时间（UTC）；首次测试尚未完成时只有运行登记，没有结果，为空。</summary>
+    /// <summary>测试时间（UTC）；首次测试尚未完成时只有计数，没有结果，为空。</summary>
     public DateTime? CheckTime { get; set; }
 
     /// <summary>测试人标识。</summary>
@@ -36,6 +36,12 @@ public class SettingCheckRecord : IMultiTenant
     /// <summary>测试之后主设置或依赖设置被写入或清除过。</summary>
     public bool IsStale { get; set; }
 
-    /// <summary>正在进行的运行登记；写入或清除主设置、依赖设置时作废，保存结果后清除。</summary>
-    public Guid? RunId { get; set; }
+    /// <summary>已分配的最大运行序号：每次开始测试时递增。</summary>
+    public long RunSequence { get; set; }
+
+    /// <summary>已保存结果的运行序号；更早开始的运行不覆盖它。</summary>
+    public long ResultSequence { get; set; }
+
+    /// <summary>配置修订号：主设置或依赖设置每被写入、清除一次就递增。</summary>
+    public long Revision { get; set; }
 }

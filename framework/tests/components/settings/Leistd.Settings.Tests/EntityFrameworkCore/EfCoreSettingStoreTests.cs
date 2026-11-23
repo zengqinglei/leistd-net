@@ -335,35 +335,31 @@ public sealed class EfCoreSettingStoreTests : IDisposable
         var failed = new SettingCheckResult(false, "auth-rejected", new DateTime(2026, 11, 1, 8, 0, 0, DateTimeKind.Utc), "u-1", "Alice", false);
         var passed = failed with { Passed = true, FailureCode = null };
 
-        await checks.SaveAsync("Export.Headers", failed);
+        await checks.SaveAsync("Export.Headers", 1, failed);
         await checks.MarkStaleAsync(["Export.Headers", "Never.Checked"]);
         Assert.Equal(failed with { IsStale = true }, (await checks.GetAllAsync())["Export.Headers"]);
         Assert.Empty(await other.GetAllAsync());
 
-        await checks.SaveAsync("Export.Headers", passed);
+        await checks.SaveAsync("Export.Headers", 2, passed);
         Assert.Equal(passed, Assert.Single(await checks.GetAllAsync()).Value);
     }
 
-    // 运行登记：首次测试只有登记的那一行不列为结果；写入作废登记，再登记接替上一次，保存后清除
+    // 运行计数：首次测试只有计数的那一行不列为结果；序号逐次递增，写入推进修订号，保存记下结果的序号
     [Fact]
-    public async Task A_run_registration_is_hidden_invalidated_by_writes_and_cleared_on_save()
+    public async Task Run_counters_are_hidden_advanced_by_writes_and_recorded_on_save()
     {
         var checks = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(null));
 
-        var first = await checks.BeginRunAsync("Export.Headers");
+        Assert.Equal(default, await checks.GetLatestAsync("Export.Headers"));
+        Assert.Equal(new SettingCheckRun(1, 0), await checks.BeginRunAsync("Export.Headers"));
         Assert.Empty(await checks.GetAllAsync());
-        Assert.Equal(first, await checks.GetPendingRunAsync("Export.Headers"));
 
         await checks.MarkStaleAsync(["Export.Headers"]);
-        Assert.Null(await checks.GetPendingRunAsync("Export.Headers"));
+        Assert.Equal(new SettingCheckRun(2, 1), await checks.BeginRunAsync("Export.Headers"));
         Assert.Empty(await checks.GetAllAsync());
 
-        var second = await checks.BeginRunAsync("Export.Headers");
-        Assert.NotEqual(first, await checks.BeginRunAsync("Export.Headers"));
-        Assert.NotEqual(second, await checks.GetPendingRunAsync("Export.Headers"));
-
-        await checks.SaveAsync("Export.Headers", new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
-        Assert.Null(await checks.GetPendingRunAsync("Export.Headers"));
+        await checks.SaveAsync("Export.Headers", 2, new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
+        Assert.Equal(new SettingCheckRun(2, 1), await checks.GetLatestAsync("Export.Headers"));
         Assert.False(Assert.Single(await checks.GetAllAsync()).Value.IsStale);
     }
 
@@ -373,7 +369,7 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     {
         var checks = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(null));
         await _store.SetAsync("Display.Language", "en-US", SettingScopes.Tenant, null, TestWrites.Anonymous);
-        await checks.SaveAsync("Export.Headers", new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
+        await checks.SaveAsync("Export.Headers", 1, new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
 
         await _store.RemoveAllAsync();
 

@@ -40,7 +40,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
 
     /// <inheritdoc />
     /// <remarks>两次测试同时首插时，后者撞唯一索引后改为覆盖赢家那一行。</remarks>
-    public async Task SaveAsync(string settingName, SettingCheckResult result, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(string settingName, long sequence, SettingCheckResult result, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(settingName);
         ArgumentNullException.ThrowIfNull(result);
@@ -51,7 +51,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
         var record = await set.FirstOrDefaultAsync(x => x.ScopeKey == scopeKey && x.Name == settingName, cancellationToken);
         var added = record is null;
         record ??= set.Add(new SettingCheckRecord { ScopeKey = scopeKey, Name = settingName }).Entity;
-        Apply(record, result);
+        Apply(record, sequence, result);
 
         try
         {
@@ -66,7 +66,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
                 throw;
             }
 
-            Apply(winner, result);
+            Apply(winner, sequence, result);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
     }
@@ -84,8 +84,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
         var scopeKey = ScopeKey();
         // 加载后改：兼容所有 EF 提供程序（含内存库），与设置值的写入在同一次保存里提交
         var records = await dbContext.Set<SettingCheckRecord>()
-            .Where(x => x.ScopeKey == scopeKey && settingNames.Contains(x.Name)
-                && (x.RunId != null || (x.CheckTime != null && !x.IsStale)))
+            .Where(x => x.ScopeKey == scopeKey && settingNames.Contains(x.Name))
             .ToListAsync(cancellationToken);
         if (records.Count == 0)
         {
@@ -94,7 +93,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
 
         foreach (var record in records)
         {
-            record.RunId = null;
+            record.Revision++;
             record.IsStale = record.CheckTime is not null;
         }
 
@@ -102,8 +101,8 @@ public class EfCoreSettingCheckStore<TDbContext>(
     }
 
     /// <inheritdoc />
-    /// <remarks>首次测试时插入只有登记、没有结果的一行，读取结果时不列出；调用方持有设置写锁，不会并发首插。</remarks>
-    public async Task<Guid> BeginRunAsync(string settingName, CancellationToken cancellationToken = default)
+    /// <remarks>首次测试时插入只有计数、没有结果的一行，读取结果时不列出；调用方持有设置写锁，不会并发首插。</remarks>
+    public async Task<SettingCheckRun> BeginRunAsync(string settingName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(settingName);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
@@ -111,25 +110,26 @@ public class EfCoreSettingCheckStore<TDbContext>(
         var set = dbContext.Set<SettingCheckRecord>();
         var record = await set.FirstOrDefaultAsync(x => x.ScopeKey == scopeKey && x.Name == settingName, cancellationToken)
             ?? set.Add(new SettingCheckRecord { ScopeKey = scopeKey, Name = settingName }).Entity;
-        record.RunId = Guid.CreateVersion7();
+        record.RunSequence++;
         await dbContext.SaveChangesAsync(cancellationToken);
-        return record.RunId.Value;
+        return new SettingCheckRun(record.RunSequence, record.Revision);
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetPendingRunAsync(string settingName, CancellationToken cancellationToken = default)
+    public async Task<SettingCheckRun> GetLatestAsync(string settingName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(settingName);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var scopeKey = ScopeKey();
-        return await dbContext.Set<SettingCheckRecord>()
+        var latest = await dbContext.Set<SettingCheckRecord>()
             .AsNoTracking()
             .Where(x => x.ScopeKey == scopeKey && x.Name == settingName)
-            .Select(x => x.RunId)
+            .Select(x => new { x.ResultSequence, x.Revision })
             .FirstOrDefaultAsync(cancellationToken);
+        return latest is null ? default : new SettingCheckRun(latest.ResultSequence, latest.Revision);
     }
 
-    private static void Apply(SettingCheckRecord record, SettingCheckResult result)
+    private static void Apply(SettingCheckRecord record, long sequence, SettingCheckResult result)
     {
         record.Passed = result.Passed;
         record.FailureCode = result.FailureCode;
@@ -137,7 +137,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
         record.CheckerId = result.CheckerId;
         record.CheckerName = result.CheckerName;
         record.IsStale = result.IsStale;
-        record.RunId = null;
+        record.ResultSequence = sequence;
     }
 
     // 与 EfCoreSettingStore 的租户级同一写法：宿主为 host:t

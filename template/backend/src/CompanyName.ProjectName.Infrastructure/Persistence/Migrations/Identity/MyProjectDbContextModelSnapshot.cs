@@ -908,8 +908,14 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     b.Property<bool>("Passed")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("RunId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("ResultSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RunSequence")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()

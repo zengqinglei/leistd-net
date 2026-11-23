@@ -2,11 +2,11 @@ using Leistd.Settings.Checks;
 
 namespace Leistd.Settings.Tests.TestDoubles;
 
-// 单租户的内存测试结果存储：保存即覆盖（过期标记原样保存）；标记过期作用于已有结果并作废运行登记
+// 单租户的内存测试结果存储：保存即覆盖（过期标记原样保存）；标记过期作用于已有结果并推进配置修订号
 internal sealed class InMemorySettingCheckStore : ISettingCheckStore
 {
     private readonly Dictionary<string, SettingCheckResult> _results = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Guid> _runs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (long Allocated, long Saved, long Revision)> _counters = new(StringComparer.Ordinal);
 
     public Task<IReadOnlyDictionary<string, SettingCheckResult>> GetAllAsync(CancellationToken cancellationToken = default)
     {
@@ -17,12 +17,13 @@ internal sealed class InMemorySettingCheckStore : ISettingCheckStore
         }
     }
 
-    public Task SaveAsync(string settingName, SettingCheckResult result, CancellationToken cancellationToken = default)
+    public Task SaveAsync(string settingName, long sequence, SettingCheckResult result, CancellationToken cancellationToken = default)
     {
         lock (_results)
         {
             _results[settingName] = result;
-            _runs.Remove(settingName);
+            var counters = _counters.GetValueOrDefault(settingName);
+            _counters[settingName] = counters with { Saved = sequence };
         }
 
         return Task.CompletedTask;
@@ -34,7 +35,11 @@ internal sealed class InMemorySettingCheckStore : ISettingCheckStore
         {
             foreach (var name in settingNames)
             {
-                _runs.Remove(name);
+                if (_counters.TryGetValue(name, out var counters))
+                {
+                    _counters[name] = counters with { Revision = counters.Revision + 1 };
+                }
+
                 if (_results.TryGetValue(name, out var result))
                 {
                     _results[name] = result with { IsStale = true };
@@ -45,22 +50,23 @@ internal sealed class InMemorySettingCheckStore : ISettingCheckStore
         return Task.CompletedTask;
     }
 
-    public Task<Guid> BeginRunAsync(string settingName, CancellationToken cancellationToken = default)
+    public Task<SettingCheckRun> BeginRunAsync(string settingName, CancellationToken cancellationToken = default)
     {
-        var runId = Guid.NewGuid();
         lock (_results)
         {
-            _runs[settingName] = runId;
+            var counters = _counters.GetValueOrDefault(settingName);
+            counters = counters with { Allocated = counters.Allocated + 1 };
+            _counters[settingName] = counters;
+            return Task.FromResult(new SettingCheckRun(counters.Allocated, counters.Revision));
         }
-
-        return Task.FromResult(runId);
     }
 
-    public Task<Guid?> GetPendingRunAsync(string settingName, CancellationToken cancellationToken = default)
+    public Task<SettingCheckRun> GetLatestAsync(string settingName, CancellationToken cancellationToken = default)
     {
         lock (_results)
         {
-            return Task.FromResult<Guid?>(_runs.TryGetValue(settingName, out var runId) ? runId : null);
+            var counters = _counters.GetValueOrDefault(settingName);
+            return Task.FromResult(new SettingCheckRun(counters.Saved, counters.Revision));
         }
     }
 }

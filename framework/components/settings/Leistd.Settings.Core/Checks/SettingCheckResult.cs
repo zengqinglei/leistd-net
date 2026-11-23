@@ -25,22 +25,28 @@ public interface ISettingCheckStore
     /// <summary>读取当前租户下全部测试的最近结果，键为主设置名。</summary>
     Task<IReadOnlyDictionary<string, SettingCheckResult>> GetAllAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>保存一项测试的最近结果，覆盖上一次（含过期标记，按 <see cref="SettingCheckResult.IsStale"/> 原样保存），并清除运行登记。</summary>
-    Task SaveAsync(string settingName, SettingCheckResult result, CancellationToken cancellationToken = default);
+    /// <summary>保存运行 <paramref name="sequence"/> 的结果，覆盖上一次（含过期标记，按 <see cref="SettingCheckResult.IsStale"/> 原样保存）。</summary>
+    /// <remarks>调用方持有设置写锁，并已确认没有更新的运行保存过结果。</remarks>
+    Task SaveAsync(string settingName, long sequence, SettingCheckResult result, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 把当前租户下这些测试的结果标记为过期，并作废它们正在进行的运行登记（见 <see cref="BeginRunAsync"/>）。
-    /// 与设置写入在同一事务里调用；既没有结果也没有登记的项忽略。
+    /// 主设置或依赖设置被写入、清除：把当前租户下这些测试已有的结果标记为过期，并推进它们的配置修订号
+    /// （见 <see cref="BeginRunAsync"/>）。与设置写入在同一事务里调用；从没测过的项忽略。
     /// </summary>
     Task MarkStaleAsync(IReadOnlyCollection<string> settingNames, CancellationToken cancellationToken = default);
 
-    /// <summary>登记一次即将开始的运行，返回登记标识；已有的最近结果保持不变，之前的登记被接替。</summary>
-    /// <remarks>调用方持有设置写锁；登记在 <see cref="MarkStaleAsync"/> 或下一次登记之前一直有效，<see cref="SaveAsync"/> 后清除。</remarks>
-    Task<Guid> BeginRunAsync(string settingName, CancellationToken cancellationToken = default);
+    /// <summary>登记一次即将开始的运行：分配递增的运行序号，并记下此刻的配置修订号；已有的最近结果保持不变。</summary>
+    /// <remarks>调用方持有设置写锁，序号的分配与配置写入互相串行。</remarks>
+    Task<SettingCheckRun> BeginRunAsync(string settingName, CancellationToken cancellationToken = default);
 
-    /// <summary>读取一项测试当前有效的运行登记；没有或已被作废时为 <see langword="null"/>。</summary>
-    Task<Guid?> GetPendingRunAsync(string settingName, CancellationToken cancellationToken = default);
+    /// <summary>读取一项测试此刻的配置修订号与已保存结果的运行序号；从没登记过时均为 0。</summary>
+    Task<SettingCheckRun> GetLatestAsync(string settingName, CancellationToken cancellationToken = default);
 }
+
+/// <summary>一项测试的运行计数。</summary>
+/// <param name="Sequence">运行序号：每次开始测试时递增；读取最新时为已保存结果的序号。</param>
+/// <param name="Revision">配置修订号：主设置或依赖设置每被写入、清除一次就递增。</param>
+public readonly record struct SettingCheckRun(long Sequence, long Revision);
 
 /// <summary>一项测试的登记：挂在哪个设置上、结论依赖哪些设置、由哪个探针执行。</summary>
 /// <param name="SettingName">主设置：界面上测试按钮所在的那一项。</param>

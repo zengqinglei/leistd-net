@@ -49,7 +49,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     CheckerId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CheckerName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     IsStale = table.Column<bool>(type: "boolean", nullable: false),
-                    RunId = table.Column<Guid>(type: "uuid", nullable: true)
+                    RunSequence = table.Column<long>(type: "bigint", nullable: false),
+                    ResultSequence = table.Column<long>(type: "bigint", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false)
                 },
                 constraints: table =>
                 {
