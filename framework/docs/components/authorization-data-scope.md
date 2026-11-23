@@ -107,6 +107,7 @@ var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).T
 批量操作应先在范围内定位目标并核对数量，不能静默跳过越权项：
 
 ```csharp
+using Leistd.Authorization.DataScope.Abstractions;
 using Leistd.ExceptionHandling;
 using Microsoft.EntityFrameworkCore;
 
