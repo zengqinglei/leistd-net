@@ -104,6 +104,24 @@ export async function tapAt(
   });
 }
 
+/**
+ * 在元素中心派发一次真实的触摸点按（CDP `Input.dispatchTouchEvent`）：指针事件的 `pointerType` 为 `touch`。
+ * {@link tapAt} 走 Playwright 的点击，即使开着触屏仿真，指针事件仍是 `mouse`；要验证"触摸与鼠标行为不同"时用本函数。
+ * CDP 坐标以顶层页面为准，用例跑在 Vitest 的 iframe 里，按 iframe 的位置与缩放换算。
+ */
+export async function touchTap(element: Element): Promise<void> {
+  element.scrollIntoView({ block: 'center', inline: 'center' });
+  const rect = element.getBoundingClientRect();
+  const frame = window.frameElement?.getBoundingClientRect();
+  const scale = frame ? frame.width / window.innerWidth : 1;
+  const point = {
+    x: (frame?.left ?? 0) + (rect.left + rect.width / 2) * scale,
+    y: (frame?.top ?? 0) + (rect.top + rect.height / 2) * scale,
+  };
+  await cdp().send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+  await cdp().send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
 interface TouchTargetBox {
   readonly left: number;
   readonly top: number;
