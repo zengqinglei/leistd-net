@@ -140,7 +140,9 @@ describe('TenantStaffSheet', () => {
     const first = content().querySelector('tbody tr')!;
     expect(first.textContent).toContain('Alice');
     expect(first.textContent).toContain('alice');
-    expect(first.querySelector('.font-mono')?.textContent?.trim()).toBe('platform.alice-old');
+    expect(first.querySelector('[data-testid="staff-linked-username"]')?.textContent?.trim()).toBe(
+      'platform.alice-old',
+    );
     const badges = [...first.querySelectorAll('app-readonly-list-popover [hlmBadge]')];
     expect(badges.map((badge) => badge.textContent?.trim())).toEqual([
       'Administrator',
