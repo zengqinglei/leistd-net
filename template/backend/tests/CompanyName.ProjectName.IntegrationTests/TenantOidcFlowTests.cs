@@ -268,26 +268,28 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         }
 
         var now = DateTimeOffset.UtcNow;
-        var cases = new (string Name, string Subject, (string Id, string Secret) Caller, Action<Dictionary<string, string>>? Change, string? Error)[]
+        // 每项都断言错误码：invalid_grant 只留给"本人凭据不再被接受"（调用方据此要求重新登录），
+        // 调用方与目标的配置问题（原生验证或控制器的目标约束）都答其他码
+        var cases = new (string Name, string Subject, (string Id, string Secret) Caller, Action<Dictionary<string, string>>? Change, string Error)[]
         {
-            ("unknown-audience", source, exchanger, form => form["audience"] = "unknown-api", null),
-            ("source-resource-as-target", source, exchanger, form => { form["audience"] = ExchangeSource; form["scope"] = ExchangeSourceScope; }, null),
-            ("scope-of-another-resource", source, exchanger, form => form["scope"] = ExchangeSourceScope, null),
-            ("refresh-token-requested", source, exchanger, form => form["requested_token_type"] = "urn:ietf:params:oauth:token-type:refresh_token", null),
-            ("id-token-requested", source, exchanger, form => form["requested_token_type"] = "urn:ietf:params:oauth:token-type:id_token", null),
-            ("id-token-subject", source, exchanger, form => form["subject_token_type"] = "urn:ietf:params:oauth:token-type:id_token", null),
-            ("actor-token", source, exchanger, form => { form["actor_token"] = source; form["actor_token_type"] = AccessTokenType; }, null),
+            ("unknown-audience", source, exchanger, form => form["audience"] = "unknown-api", OpenIddictConstants.Errors.InvalidTarget),
+            ("source-resource-as-target", source, exchanger, form => { form["audience"] = ExchangeSource; form["scope"] = ExchangeSourceScope; }, OpenIddictConstants.Errors.InvalidRequest),
+            ("scope-of-another-resource", source, exchanger, form => form["scope"] = ExchangeSourceScope, OpenIddictConstants.Errors.InvalidTarget),
+            ("refresh-token-requested", source, exchanger, form => form["requested_token_type"] = "urn:ietf:params:oauth:token-type:refresh_token", OpenIddictConstants.Errors.InvalidRequest),
+            ("id-token-requested", source, exchanger, form => form["requested_token_type"] = "urn:ietf:params:oauth:token-type:id_token", OpenIddictConstants.Errors.InvalidRequest),
+            ("id-token-subject", source, exchanger, form => form["subject_token_type"] = "urn:ietf:params:oauth:token-type:id_token", OpenIddictConstants.Errors.InvalidRequest),
+            ("actor-token", source, exchanger, form => { form["actor_token"] = source; form["actor_token_type"] = AccessTokenType; }, OpenIddictConstants.Errors.InvalidRequest),
             ("unregistered-resource", source, exchanger, form => form["resource"] = "https://billing.example.com/", OpenIddictConstants.Errors.InvalidTarget),
-            ("caller-without-exchange-permission", source, withoutExchange, null, null),
-            ("caller-does-not-own-the-subject-audience", targetAudience, exchanger, null, null),
+            ("caller-without-exchange-permission", source, withoutExchange, null, OpenIddictConstants.Errors.UnauthorizedClient),
+            ("caller-does-not-own-the-subject-audience", targetAudience, exchanger, null, OpenIddictConstants.Errors.UnauthorizedClient),
             ("already-exchanged-subject", Resign(host, source, claims =>
-                claims["act"] = new JsonObject { ["sub"] = ClientSubject.Format("previous-api") }), exchanger, null, null),
+                claims["act"] = new JsonObject { ["sub"] = ClientSubject.Format("previous-api") }), exchanger, null, OpenIddictConstants.Errors.InvalidGrant),
             ("machine-subject", Resign(host, source, claims =>
             {
                 claims["sub"] = ClientSubject.Format("orders-machine");
                 claims["user_id"] = ClientSubject.Format("orders-machine");
                 claims["org_id"] = tenantId.ToString();
-            }), exchanger, null, null),
+            }), exchanger, null, OpenIddictConstants.Errors.InvalidGrant),
             // 带着令牌登记时有效期以登记为准（OpenIddict 从库里恢复），所以去掉登记，只看令牌自己的 exp
             ("expired-subject", Resign(host, source, claims =>
             {
@@ -295,18 +297,15 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
                 claims["iat"] = now.AddMinutes(-20).ToUnixTimeSeconds();
                 claims["nbf"] = now.AddMinutes(-20).ToUnixTimeSeconds();
                 claims["exp"] = now.AddMinutes(-10).ToUnixTimeSeconds();
-            }), exchanger, null, null),
-            ("user-not-in-the-claimed-tenant", Resign(host, source, claims => claims["org_id"] = tenantId.ToString()), exchanger, null, null),
+            }), exchanger, null, OpenIddictConstants.Errors.InvalidGrant),
+            ("user-not-in-the-claimed-tenant", Resign(host, source, claims => claims["org_id"] = tenantId.ToString()), exchanger, null, OpenIddictConstants.Errors.InvalidGrant),
         };
         foreach (var (name, subject, caller, change, error) in cases)
         {
             var (status, body) = await ExchangeAsync(host, caller, subject, change);
             Assert.True(status == HttpStatusCode.BadRequest, $"{name}: {(int)status} {body}");
-            if (error is not null)
-            {
-                using var json = JsonDocument.Parse(body);
-                Assert.Equal(error, json.RootElement.GetProperty("error").GetString());
-            }
+            using var json = JsonDocument.Parse(body);
+            Assert.True(error == json.RootElement.GetProperty("error").GetString(), $"{name}: {body}");
         }
     }
 

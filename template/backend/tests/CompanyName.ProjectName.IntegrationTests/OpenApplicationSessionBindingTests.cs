@@ -136,6 +136,9 @@ public sealed class OpenApplicationSessionBindingTests(ProjectWebApplicationFact
             Assert.Equal(tenantId, tenantBody.RootElement.GetProperty("id").GetGuid());
         }
         (await mine.Client.GetAsync("/api/v1/auth/me")).EnsureSuccessStatusCode();
+        // 本人账号停用：凭据随之撤销，交换答 invalid_grant（调用方据此要求重新登录），不是"没有这个工作区"
+        (await admin.Client.PatchAsync($"/api/v1/users/{homeId}/disable", null)).EnsureSuccessStatusCode();
+        Assert.Equal(Errors.InvalidGrant, (await TokenAsync(Exchange(tokens.AccessToken, tenantName))).Error);
     }
 #endif
 

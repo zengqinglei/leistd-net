@@ -108,7 +108,7 @@ Identity 自身 API 的标识是 OAuth:Resource，同名登记为 scope，本服
 ```
 
 工作负载身份全局注册一次，客户端配置名与注册名一致；示例中的 Billing 经 AddTokenExchange 注册。同一下游有多个客户端时用 `configSectionPath` 共用地址节，认证节按客户端名各自配置。
-TokenExchange 的 Audience 与 Scope 都必须显式填写，Scope 填签发方为目标资源登记的那一个 scope，只能一个值；Token Exchange 只接受单个 scope、映射单个资源，填空格分隔的多值只会得到笼统的 invalid_grant。机器调用的 Scope 才可以是空格分隔的多值。
+TokenExchange 的 Audience 与 Scope 都必须显式填写，Scope 填签发方为目标资源登记的那一个 scope，只能一个值；Token Exchange 只接受单个 scope、映射单个资源，填空格分隔的多值会被拒绝（按远端故障默认 502）：含未登记的 scope 答 invalid_scope，有未获授的答 invalid_request，都已登记且获授时按单 scope 约束答 invalid_target。机器调用的 Scope 才可以是空格分隔的多值。交换被拒为 invalid_grant 表示 Identity 不再接受本人凭据（会话结束、账号停用），框架抛 `AuthenticationRequiredException`，默认 401，前端整页重新登录；业务代码不要捕获它。
 <!--#if (RemoteTokenAuth)-->
 Resource 已注册用户访问令牌适配器。
 账户偏好的 Identity 客户端按认证方式拆成两个，共用 `Leistd:ServiceClients:Identity` 地址节：读取经 AddClientCredentials，写入经 AddTokenExchange（示例中的 identity-api 换成 Identity 实际的 OAuth:Resource）。模板 Identity 以 OAuth:Resource 同名登记自身 API 的 scope，所以 Audience 与 Scope 相同；Identity 另起了 scope 名时，Audience 填资源标识、Scope 填该 scope。两个客户端都有弹性管道的超时，写入不重试。读取被拒（漏授 Identity 服务级 scope、密钥轮换）时 `/me` 照常返回、偏好按暂时读不到并记 Error，给收件人产出文本的读取仍然失败。

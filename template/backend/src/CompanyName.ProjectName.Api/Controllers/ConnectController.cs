@@ -256,10 +256,12 @@ public sealed class ConnectController(
 #if (TenantWorkspace)
             if ((string?)request["workspace"] is { Length: > 0 } workspace)
             {
-                if (subject is null || app is null || subject.HasClaim(claim => claim.Type is "act" or "home_sub") ||
+                if (app is null || !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken))
+                    return ProtocolError(Errors.UnauthorizedClient);
+                if (subject is null || subject.GetExpirationDate() is not { } workspaceExpiry)
+                    return ProtocolError(Errors.InvalidGrant);
+                if (subject.HasClaim(claim => claim.Type is "act" or "home_sub") ||
                     claimTypes.Value.ReadTenant(subject).TenantId is not null ||
-                    !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken) ||
-                    subject.GetExpirationDate() is not { } workspaceExpiry ||
                     !request.GetAudiences().ToHashSet(StringComparer.Ordinal).SetEquals(subject.GetAudiences()) ||
                     !request.GetScopes().ToHashSet(StringComparer.Ordinal).IsSubsetOf(subject.GetScopes()))
                     return ProtocolError(Errors.InvalidTarget);
@@ -277,16 +279,18 @@ public sealed class ConnectController(
             }
 #endif
             // 官方验证管线完成归属验证后，仍保留控制器的严格单跳约束。
-            if (subject is null || app is null ||
-                !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken) ||
-                subject.HasClaim(claim => claim.Type == "act") ||
-                request.GetAudiences().Length != 1 ||
+            // 错误码按 RFC 6749 / 8693 分开：invalid_grant 只表示本人凭据不再被接受，调用方据此要求重新登录；
+            // 调用方与目标的配置问题答 unauthorized_client / invalid_target，否则配置错误会把用户反复带去登录。
+            if (app is null || !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken))
+                return ProtocolError(Errors.UnauthorizedClient);
+            if (subject is null || subject.HasClaim(claim => claim.Type == "act") || subject.GetExpirationDate() is not { } expiry)
+                return ProtocolError(Errors.InvalidGrant);
+            if (request.GetAudiences().Length != 1 ||
                 request.GetScopes().Length != 1 ||
                 !OAuthScopes.ResourcesOf(oauthOptions.Value, request.GetScopes()).SequenceEqual(request.GetAudiences()) ||
                 !OAuthScopes.All(oauthOptions.Value).Any(scope => !scope.MachineOnly &&
-                    scope.Name == request.GetScopes()[0] && scope.Resources.Count == 1) ||
-                subject.GetExpirationDate() is not { } expiry)
-                return ProtocolError(Errors.InvalidGrant);
+                    scope.Name == request.GetScopes()[0] && scope.Resources.Count == 1))
+                return ProtocolError(Errors.InvalidTarget);
             var principal = await principalFactory.CreateFromTokenAsync(subject, request.GetScopes(), cancellationToken);
             if (principal is null) return ProtocolError(Errors.InvalidGrant);
             var identity = (ClaimsIdentity)principal.Identity!;
