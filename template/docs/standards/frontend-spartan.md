@@ -6,8 +6,8 @@
 - **摇树**：`frontend/libs/package.json` 声明 `"sideEffects": false`，未用到的 helm 模块不进产物。因此 libs 下的模块不能靠被导入本身产生必须保留的全局效果（裸导入样式或 polyfill、顶层注册、改全局对象）；顶层纯初始化、导出函数里的 DOM 操作与 Angular 声明不受影响。加组件或升级同步 Spartan 文件时逐个核对。
 - **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `frontend/libs/ui/`。
 - **风格**：`components.json` 的 `style` 为 `vega`。结构与间距只用 Vega，不照搬其他风格示例；字号、颜色等有意调整须在本文登记理由。
-- **先用样式表，再改组件**：能用语义 token 或 `frontend/src/styles.css` 里按 `data-slot`、状态属性写的规则实现的调整，不改 helm。由样式表承担的调整以 `styles.css` 为准，例如：系统开启"减少动效"时关闭浮层的进出场动画与侧栏、抽屉、导航菜单的位移过渡；对话框与抽屉页头为右上角关闭按钮让出宽度；选择框与组合框值区因上游 flex/收缩约束不足，统一单行省略、保留箭头；触屏下菜单项、选项、导航链接、侧栏菜单按钮、分段控件项、标签页项与验证码格补足 44px（标签列表随之放开定高），折叠的图标侧栏随之加宽。每条覆盖的注释写依据：按 Vega 算出的数值或上游缺陷，不写沿用某风格时期。只有样式表区分不了（按尺寸档位改高度）、要新增变体或改组件模板时才改 helm，并在下表登记。
-- 样式表登记：dialog/sheet 标题统一 16px 以区分 14px 正文；分段控件（ToggleGroup 默认变体）借用 Tabs 的灰轨道与浮起当前项，保留切换按钮组语义；失败字段只标控件边框和错误文案，标签保留正文色；侧栏当前项描边区分同色悬停。实现以 `styles.css` 为准。
+- **先用样式表，再改组件**：能用语义 token 或 `frontend/src/styles.css` 里按 `data-slot`、状态属性写的规则实现的调整，不改 helm。由样式表承担的调整以 `styles.css` 及其注释为准。每条覆盖的注释写依据：按 Vega 算出的数值或上游缺陷，不写沿用某风格时期。只有样式表区分不了（按尺寸档位改高度）、要新增变体或改组件模板时才改 helm，并在下表登记。
+- 样式表登记：dialog/sheet 标题统一 16px 以区分 14px 正文；分段控件（ToggleGroup 默认变体）借用 Tabs 的灰轨道与浮起当前项，保留切换按钮组语义；失败字段只标控件边框和错误文案，标签保留正文色；侧栏当前项描边区分同色悬停；`@theme` 定义 `--font-mono`（Geist Mono），预设留给应用定义，缺省时落回正文字体。实现以 `styles.css` 为准。
 - Sheet 关闭文案由调用处通过官方 `closeLabel` 传入；工作区导航与设置外壳读取共享读屏词条。
 - 覆盖 helm 带变体前缀的默认类时写同一前缀，并覆盖到同前缀的每一项，否则被属性选择器压住、tailwind-merge 也不合并：Sheet 默认 `data-[side=right]:w-3/4 data-[side=right]:sm:max-w-sm`，官方示例 `w-[400px] sm:w-[540px] sm:max-w-none` 不生效；应写 `data-[side=right]:w-[400px] data-[side=right]:sm:w-[540px] data-[side=right]:sm:max-w-none`。
 - **已定制的 helm 组件**（升级时逐个对照上游手动合入）：
@@ -25,6 +25,8 @@
 | `command`（`hlm-command`、`hlm-command-input`） | 根捕获阶段忽略 isComposing/keyCode 229 的 Enter；内部 input 转发 ariaLabel，缺省使用 placeholder | Brain 根回车未判断组字；命令输入须有稳定可访问名 |
 | `input`（`hlm-input.ts`）、`textarea`（`hlm-textarea.ts`）、`select`（`hlm-select-trigger.ts`）、`combobox`（`hlm-combobox-input.ts`、`hlm-combobox-trigger.ts`、`hlm-combobox-chip-input.ts`）、`radio-group`（`hlm-radio-group.ts`、`hlm-radio.ts`）、`date-picker`（`hlm-date-picker-input.ts`、`hlm-date-multi-input.ts`、`hlm-date-range-input.ts`、`hlm-month-year-input.ts`、`hlm-date-picker-trigger.ts`）、`input-otp`（`hlm-input-otp.ts`） | `aria-invalid` 自动判断来源改为 `spartanInvalid`（含 `forceInvalid`）；保留官方手动覆盖语义；OTP 同时关联内部输入的 Field 描述 | 读屏与可见报错同源，提交前不标无效；`data-invalid` 保持上游语义 |
 | `checkbox`（`hlm-checkbox.ts`）、`switch`（`hlm-switch.ts`）、`utils`（`hlm-aria-invalid.ts`、`index.ts`） | utils 导出 `hlmAriaInvalid` 与 `syncHlmAriaInvalid`；渲染后同步内部控件并覆盖 Brain 后续原始无效态写入；checkbox/switch 转发 Field 错误描述 | Brain 私有模板无绑定入口，稳定为空的宿主绑定也不会重复覆盖原始态更新；Helm 统一处理。上游 [spartan#1881](https://github.com/spartan-ng/spartan/issues/1881) 修复后删同步函数 |
+| `combobox`（`hlm-combobox-trigger.ts`）、`select`（`hlm-select-trigger.ts`）、`date-picker`（`hlm-date-picker-trigger.ts`） | 宿主加 `class: 'contents'`；宿主上不写 display 类，会盖过它 | class 转交内部按钮，静态 `class` 却仍留在行内宿主上，底色、内边距画两遍；同上游 checkbox/switch。[spartan#1900](https://github.com/spartan-ng/spartan/issues/1900) 修复后撤除 |
+| `tooltip`（`hlm-tooltip.ts`） | 聚焦不匹配 `:focus-visible`（焦点在宿主内的元素上时按该元素判断）且未悬停时，用 Brain 的 `delay(false, -1)` 撤销打开；不支持该选择器时按可见 | Brain 对任何聚焦都打开，对话框关闭后的焦点恢复会弹出提示、盖住相邻行；同 Floating UI `visibleOnly`。`delay` 在 1.9 为 private，由 `tooltip-focus-visible.spec.ts` 钉住；spec 用 `focusWithKeyboard` 打开提示。[spartan#1899](https://github.com/spartan-ng/spartan/issues/1899) 支持后撤除 |
 
 登记有上游差异的组件及其全部改动；无差异不登记。升级、评审须逐项核对源码。
 

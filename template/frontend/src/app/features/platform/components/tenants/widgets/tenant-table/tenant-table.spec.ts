@@ -10,6 +10,7 @@ import { userEvent } from 'vitest/browser';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import { focusWithKeyboard } from '../../../../../../shared/utils/keyboard-focus.testing';
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { TenantOutputDto } from '../../../../dtos/tenant.dto';
 import { TenantTable } from './tenant-table';
@@ -116,7 +117,7 @@ describe('TenantTable', () => {
     expect(cell).not.toBeNull();
     expect(cell!.textContent).not.toMatch(/\d:\d{2}:\d{2}/);
 
-    cell!.focus();
+    await focusWithKeyboard(cell!);
 
     await expect
       .poll(() => document.querySelector('[role="tooltip"]')?.textContent ?? '')

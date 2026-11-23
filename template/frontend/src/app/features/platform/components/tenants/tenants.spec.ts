@@ -1,12 +1,13 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
 import { PaginationState } from '@tanstack/angular-table';
 import { lastValueFrom, of, Subject, throwError } from 'rxjs';
+import { userEvent } from 'vitest/browser';
 
 import { acceptConfirmAction } from '../../../../core/feedback/confirm-action.testing';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
@@ -17,6 +18,7 @@ import { AccountPreferencesService } from '../../../../core/services/account-pre
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/constants/permission.constants';
+import { parkPointer } from '../../../../shared/utils/pointer.testing';
 import { CreateTenantInputDto, GetTenantsInputDto, TenantOutputDto } from '../../dtos/tenant.dto';
 import { TenantService } from '../../services/tenant-service';
 import { Tenants } from './tenants';
@@ -426,4 +428,49 @@ describe('Tenants page query and write flow', () => {
     expect(component.impersonatingId()).toBeFalsy();
   });
   //#endif
+
+  // 行内图标按钮的提示只在键盘聚焦时弹出（helm 定制）：鼠标关闭对话框后焦点回到按钮，
+  // 提示若随之弹出会盖住上一行的同一个按钮
+  it('does not cover the previous row with a tooltip when focus returns after a mouse-closed dialog', async () => {
+    await parkPointer();
+    service.getTenants.mockReturnValue(
+      of({
+        items: [tenant, { ...tenant, id: '019ff8ed-221b-7673-9ba8-6b6dd5a638ac', name: 'globex' }],
+        totalCount: 2,
+      }) as never,
+    );
+    table().paginationChange.emit({ pageIndex: 0, pageSize: 20 } as PaginationState);
+    const [tableBlock] = await fixture.getDeferBlocks();
+    await tableBlock.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    onTestFinished(() => document.querySelector('.cdk-overlay-container')?.remove());
+
+    const [upper, lower] = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('tbody button'),
+    ].filter((button) => button.querySelector('ng-icon[name="lucidePencil"]'));
+    expect(lower, 'edit button of the second row').toBeDefined();
+
+    await userEvent.click(lower);
+    await expect.poll(() => component.editDialogOpen()).toBe(true);
+    const cancel = await vi.waitFor(() => {
+      const found = [
+        ...document.querySelectorAll<HTMLButtonElement>('hlm-dialog-footer button'),
+      ].find((button) => button.type === 'button');
+      expect(found).toBeDefined();
+      return found!;
+    });
+    await userEvent.click(cancel);
+
+    await expect.poll(() => document.activeElement).toBe(lower);
+    // 前提：浏览器把这次焦点恢复判为非键盘，否则覆盖不到撤销分支
+    expect(lower.matches(':focus-visible')).toBe(false);
+    // Brain 的打开走 timer(0)，再等两帧让浮层挂上
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+
+    const box = upper.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    expect(hit !== null && upper.contains(hit), 'previous row edit button is reachable').toBe(true);
+  });
 });

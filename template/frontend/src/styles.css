@@ -6,10 +6,12 @@
 
 @import '@spartan-ng/brain/hlm-tailwind-preset.css';
 
-/* 正文字体 Geist；业务项目可替换为品牌字体或系统字体栈。 */
+/* 正文字体 Geist、等宽字体 Geist Mono；业务项目可替换为品牌字体或系统字体栈。 */
 @import '@fontsource/geist/400.css';
 @import '@fontsource/geist/500.css';
 @import '@fontsource/geist/600.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
 
 /*
  * 不要给 html/body 加 scrollbar-gutter: stable：常规滚动条（Windows 默认）下它让 CDK 浮层容器比
@@ -151,9 +153,15 @@ body {
   color-scheme: dark;
 }
 
-/* 字体与语义色接入 Tailwind：body 用 font-sans；success、warning、info 与 hero-* 暴露为语义工具类。 */
+/*
+ * 字体与语义色接入 Tailwind：body 用 font-sans；success、warning、info 与 hero-* 暴露为语义工具类。
+ * --font-mono 必须在这里定义：Spartan 预设写的是 var(--font-mono) 自引用，不定义时 font-mono 落回正文字体。
+ */
 @theme {
   --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono:
+    'Geist Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono',
+    'Courier New', monospace;
 }
 
 @theme inline {

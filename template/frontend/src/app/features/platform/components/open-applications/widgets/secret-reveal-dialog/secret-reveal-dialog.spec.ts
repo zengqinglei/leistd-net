@@ -6,6 +6,7 @@ import { toast } from '@spartan-ng/brain/sonner';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
+import { focusWithKeyboard } from '../../../../../../shared/utils/keyboard-focus.testing';
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { SecretRevealDialog } from './secret-reveal-dialog';
 
@@ -108,7 +109,7 @@ describe('SecretRevealDialog', () => {
     const element = await openDialog();
     const [clientIdButton] = copyButtons(element);
 
-    clientIdButton.focus();
+    await focusWithKeyboard(clientIdButton);
     await afterFocusTooltipTimer();
 
     expect(tooltip()).not.toBeNull();

@@ -29,7 +29,7 @@ import { ClassValue } from 'clsx';
     provideBrnDatePickerTrigger(HlmDatePickerTrigger),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { 'data-slot': 'date-picker-trigger' },
+  host: { class: 'contents', 'data-slot': 'date-picker-trigger' },
   template: `
     <button
       [id]="buttonId()"

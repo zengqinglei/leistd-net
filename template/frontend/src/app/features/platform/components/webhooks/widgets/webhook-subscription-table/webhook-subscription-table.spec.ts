@@ -8,6 +8,7 @@ import { provideRouter } from '@angular/router';
 import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
 //#endif
 import { TruncatedTooltip } from '../../../../../../shared/directives/truncated-tooltip';
+import { focusWithKeyboard } from '../../../../../../shared/utils/keyboard-focus.testing';
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { WebhookSubscriptionOutputDto } from '../../../../dtos/webhook.dto';
 import { WebhookSubscriptionTable } from './webhook-subscription-table';
@@ -75,7 +76,7 @@ describe('WebhookSubscriptionTable', () => {
     const name = nameOf(LONG_NAME);
     expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
 
-    name.focus();
+    await focusWithKeyboard(name);
 
     await expect.poll(() => tooltip()?.textContent?.trim() ?? '').toBe(LONG_NAME);
   });

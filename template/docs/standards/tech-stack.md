@@ -12,7 +12,7 @@
 | 前端框架 | Angular | 22+ | Web/UI 实现 |
 | UI 组件库 | Spartan UI | 1+ | `@spartan-ng/brain` 无头基元 + helm 样式层（复制进 `frontend/libs/ui/`） |
 | CSS | Tailwind CSS | 4+ | 原子化样式与布局 |
-| 字体 | Geist | 5+ | `@fontsource/geist` 自托管（离线可用，回退 `system-ui`），模板设计系统一部分，项目可替换 |
+| 字体 | Geist、Geist Mono | 5+ | `@fontsource/geist`、`@fontsource/geist-mono` 自托管（离线可用，回退 `system-ui` 与系统等宽字体），模板设计系统一部分，项目可替换 |
 | 前端语言 | TypeScript | 6.0+ | 类型安全 |
 | 前端状态 | Angular Signals | 当前框架版本 | 组件级/局部状态 |
 | 前端表单 | Angular Signal Forms | 当前框架版本 | `@angular/forms/signals`（仍为 experimental，需锁定 Angular 版本） |

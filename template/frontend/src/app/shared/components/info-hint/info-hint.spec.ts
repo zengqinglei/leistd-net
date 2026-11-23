@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { userEvent } from 'vitest/browser';
 
 import { expectTouchTarget, setCoarsePointer } from '../../utils/coarse-pointer.testing';
+import { focusWithKeyboard } from '../../utils/keyboard-focus.testing';
 import { parkPointer } from '../../utils/pointer.testing';
 import { InfoHint } from './info-hint';
 
@@ -88,7 +89,7 @@ describe('InfoHint', () => {
     const button = await render();
     expect(tooltip()).toBeNull();
 
-    button.focus();
+    await focusWithKeyboard(button);
     await vi.waitFor(() => expect(tooltip()?.textContent).toContain('Applies everywhere'));
 
     await userEvent.keyboard('{Escape}');

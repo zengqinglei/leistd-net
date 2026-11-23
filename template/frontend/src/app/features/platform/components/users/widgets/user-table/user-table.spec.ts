@@ -20,6 +20,7 @@ import {
   setCoarsePointer,
   tapAt,
 } from '../../../../../../shared/utils/coarse-pointer.testing';
+import { focusWithKeyboard } from '../../../../../../shared/utils/keyboard-focus.testing';
 import { parkPointer } from '../../../../../../shared/utils/pointer.testing';
 import { expectAriaSortOnSortedHeaderOnly } from '../../../../../../shared/utils/table-sorting.testing';
 import { UserManagementOutputDto } from '../../../../dtos/user-management.dto';
@@ -371,7 +372,7 @@ describe('UserTable', () => {
     }
     // 外层可聚焦：键盘聚焦即弹出原因提示（鼠标悬停走同一提示），并由提示自身补 aria-describedby
     const wrapper = inline[0].parentElement!;
-    wrapper.focus();
+    await focusWithKeyboard(wrapper);
     await expect
       .poll(() => document.querySelector('[role="tooltip"]')?.textContent ?? '')
       .toMatch(SUPER_ADMIN_REASON);
@@ -565,7 +566,7 @@ describe('UserTable', () => {
     ).find((span) => /:09/.test(span.textContent ?? ''))!;
     expect(time.textContent).not.toMatch(/:07/);
 
-    time.focus();
+    await focusWithKeyboard(time);
     await expect.poll(() => document.body.textContent?.includes(':09:07')).toBe(true);
   });
 
