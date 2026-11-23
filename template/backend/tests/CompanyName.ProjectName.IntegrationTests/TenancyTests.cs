@@ -1096,6 +1096,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 #endif
                 nameof(PermissionGrantRecord),
                 nameof(Role),
+                nameof(SettingCheckRecord),
                 nameof(SettingRecord),
                 nameof(User),
                 nameof(UserPasskey),
