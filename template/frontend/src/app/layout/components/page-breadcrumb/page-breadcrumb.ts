@@ -16,7 +16,7 @@ import { englishText } from '../../../shared/utils/english-text';
 /**
  * 页面面包屑：「首页 > 上级… > 当前页」，上级取 `LayoutService.trail`，当前页取 `LayoutService.title`。
  * 上级有两级及以上时只留最近一级，更远的收进省略号下拉（Spartan breadcrumb 的折叠用法）；
- * 窄屏只留最近一级上级与当前页；上级与当前页放不下时截断，悬停或聚焦给全文。侧栏布局放在页头，顶栏布局在有上级时放在正文上方。
+ * 按自身宽度收起：窄时只留最近一级上级与当前页，再窄只留当前页；放不下时截断，悬停或聚焦给全文。侧栏布局放在页头，顶栏布局在有上级时放在正文上方。
  */
 @Component({
   selector: 'app-page-breadcrumb',
@@ -33,7 +33,9 @@ import { englishText } from '../../../shared/utils/english-text';
     TranslocoDirective,
     //#endif
   ],
-  host: { class: 'flex min-w-0' },
+  // 尺寸容器：显示几项按自己的宽度。宽度由使用处给（页头里 flex-1，正文上方 w-full）；不在这里设 flex-1，
+  // 否则放进纵向 flex 列（工作台布局）时会和正文平分高度
+  host: { class: '@container/breadcrumb flex min-w-0' },
   templateUrl: './page-breadcrumb.html',
 })
 export class PageBreadcrumb {
@@ -42,7 +44,7 @@ export class PageBreadcrumb {
   protected readonly t = englishText(ENGLISH);
   //#endif
 
-  /** 最近一级上级，窄屏也保留，作为返回入口。 */
+  /** 最近一级上级，作为返回入口，面包屑窄到只够放当前页时才收起。 */
   protected readonly parent = computed(() => this.layoutService.trail().at(-1));
   /** 收进省略号下拉的更远上级。 */
   protected readonly collapsed = computed(() => this.layoutService.trail().slice(0, -1));

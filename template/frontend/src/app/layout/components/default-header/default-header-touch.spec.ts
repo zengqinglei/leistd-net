@@ -36,11 +36,10 @@ const TITLE = 'Detail of an account with a very long registered company name';
 describe('DefaultHeader on touch phones', () => {
   afterEach(() => setCoarsePointer(false));
 
-  it('keeps the nearest breadcrumb parent a full touch target beside every header control', async () => {
+  it('drops the breadcrumb on phones so every header control keeps its place', async () => {
     await setCoarsePointer(true);
     await page.viewport(390, 844);
     onTestFinished(() => page.viewport(1280, 800));
-    // 当前页标题很长：上级与标题一起收缩时，上级也不能缩到触屏目标以下
     const host = (await renderHeader()).nativeElement as HTMLElement;
 
     // 前提：窄屏仍显示的操作区控件都已渲染并占位，否则下面的断言测不到挤压
@@ -71,22 +70,9 @@ describe('DefaultHeader on touch phones', () => {
       expect(control!.getBoundingClientRect().width, selector).toBe(0);
     }
 
-    const parent = host.querySelector<HTMLElement>('[data-testid="breadcrumb-parent"] a')!;
-    expectTouchTarget(parent);
-    // 条目按链接的触屏宽度占位：条目缩得比链接窄时，链接伸进间距，再窄就被下一个分隔符盖住
-    const right = parent.getBoundingClientRect().right;
-    const item = host.querySelector('[data-testid="breadcrumb-parent"]')!;
-    expect(right).toBeLessThanOrEqual(item.getBoundingClientRect().right + 0.5);
-    // 导航区 overflow-hidden：链接伸出右缘的部分会被裁掉
-    const nav = host.querySelector('app-page-breadcrumb nav')!;
-    expect(right).toBeLessThanOrEqual(nav.getBoundingClientRect().right + 0.5);
-    const title = host.querySelector<HTMLElement>('[data-slot="breadcrumb-page"]')!;
-    expect(title.textContent!.trim()).toBe(TITLE);
-    // 末级被截断但仍占位、在导航区内：只查文字时，缩到零宽或被裁掉也会通过
-    const titleBox = title.getBoundingClientRect();
-    expect(titleBox.width).toBeGreaterThan(0);
-    expect(titleBox.left).toBeGreaterThanOrEqual(right);
-    expect(titleBox.right).toBeLessThanOrEqual(nav.getBoundingClientRect().right + 0.5);
+    // 手机屏宽只剩一两个字的位置：面包屑连同前面的竖分隔线整个不放，而不是留一截被裁的链接或省略号
+    expect(widthOf(host, 'app-page-breadcrumb')).toBe(0);
+    expect(widthOf(host, 'hlm-separator')).toBe(0);
 
     const avatar = host.querySelector<HTMLElement>('app-user-menu')!;
     expect(avatar.parentElement!.lastElementChild).toBe(avatar);
@@ -94,6 +80,34 @@ describe('DefaultHeader on touch phones', () => {
     const container = host.querySelector<HTMLElement>('header > div')!;
     expect(container.clientWidth).toBeLessThanOrEqual(390);
     expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
+  });
+
+  it('keeps the parent a full touch target and the title readable beside an expanded sidebar on tablets', async () => {
+    await setCoarsePointer(true);
+    // 769 宽视口减去展开的侧栏：视口断点 sm 成立，页头只有 505px；按视口放首项与省略号时，上级被裁、当前页为零宽
+    await page.viewport(769, 800);
+    onTestFinished(() => page.viewport(1280, 800));
+    const fixture = await renderHeader(505);
+    TestBed.inject(LayoutService).trail.update((trail) => [
+      { label: 'Customer accounts', link: '/platform/parties' },
+      ...trail,
+    ]);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const parent = host.querySelector<HTMLElement>('[data-testid="breadcrumb-parent"] a')!;
+    expectTouchTarget(parent);
+    // 条目按链接的触屏宽度占位：条目缩得比链接窄时，链接伸进间距，再窄就被下一个分隔符盖住
+    const right = parent.getBoundingClientRect().right;
+    const item = host.querySelector('[data-testid="breadcrumb-parent"]')!;
+    expect(right).toBeLessThanOrEqual(item.getBoundingClientRect().right + 0.5);
+    // 导航区 overflow-hidden：链接伸出右缘的部分会被裁掉
+    const nav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
+    expect(right).toBeLessThanOrEqual(nav.right + 0.5);
+    const title = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
+    expect(title.width).toBeGreaterThanOrEqual(56);
+    expect(title.left).toBeGreaterThanOrEqual(right);
+    expect(title.right).toBeLessThanOrEqual(nav.right + 0.5);
   });
 
   it('switches controls by header width so the breadcrumb stays readable beside an expanded sidebar', async () => {
@@ -112,13 +126,7 @@ describe('DefaultHeader on touch phones', () => {
     const theme = host.querySelector('app-theme-mode-toggle button')!;
     expect(theme.getBoundingClientRect().width).toBe(0);
 
-    // 首项不参与收缩、单行：参与收缩时被压到最小内容宽度，中文一字一行、英文一词一行
-    const home = host.querySelector<HTMLElement>('[data-slot="breadcrumb-item"]:first-child')!;
-    expect(getComputedStyle(home).flexShrink).toBe('0');
-    const homeLines = document.createRange();
-    homeLines.selectNodeContents(home.querySelector('a')!);
-    expect(new Set([...homeLines.getClientRects()].map((r) => Math.round(r.top))).size).toBe(1);
-
+    // 首项与省略号是否显示取决于场景里操作区控件的多少（按面包屑宽度分档），这里只断言与场景无关的结果
     // 上级与当前页都在导航区内占位；上级先截断，当前页至少留约四个字
     const nav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
     const parent = host
@@ -130,16 +138,16 @@ describe('DefaultHeader on touch phones', () => {
     expect(title.left).toBeGreaterThanOrEqual(parent.right);
     expect(title.right).toBeLessThanOrEqual(nav.right + 0.5);
 
-    // 两级上级时首项后多一个省略号：各项下限之和逼近导航区，当前页仍不能被推出导航区裁掉
+    // 两级上级：多出首项或省略号时，当前页仍不能被推出导航区裁掉
     TestBed.inject(LayoutService).trail.update((trail) => [
       { label: 'Customer accounts', link: '/platform/parties' },
       ...trail,
     ]);
     await fixture.whenStable();
-    expect(host.querySelector('[data-testid="breadcrumb-more"]')).not.toBeNull();
     const deepNav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
     const deepTitle = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
-    expect(deepTitle.width).toBeGreaterThan(0);
+    // 当前页仍留下约四个字，而不是被挤到只剩零宽（Release 曾在此处为 0）
+    expect(deepTitle.width).toBeGreaterThanOrEqual(56);
     expect(deepTitle.right).toBeLessThanOrEqual(deepNav.right + 0.5);
 
     const avatar = host.querySelector<HTMLElement>('app-user-menu')!;
@@ -149,7 +157,53 @@ describe('DefaultHeader on touch phones', () => {
     expect(container.clientWidth).toBeLessThanOrEqual(636);
     expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
   });
+
+  it('shows the home crumb and collapsed parents once the breadcrumb is wide enough', async () => {
+    await setCoarsePointer(true);
+    await page.viewport(1024, 800);
+    onTestFinished(() => page.viewport(1280, 800));
+    const fixture = await renderHeader(760);
+    TestBed.inject(LayoutService).trail.update((trail) => [
+      { label: 'Customer accounts', link: '/platform/parties' },
+      ...trail,
+    ]);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const home = host.querySelector<HTMLElement>('[data-testid="breadcrumb-home"]')!;
+    // 首项收缩时单行截断，不折行：文字不包 truncate 时会被压到最小内容宽度，中文一字一行、英文一词一行
+    const homeLines = document.createRange();
+    homeLines.selectNodeContents(home.querySelector('a span')!);
+    expect(new Set([...homeLines.getClientRects()].map((r) => Math.round(r.top))).size).toBe(1);
+
+    expectTouchTarget(home.querySelector('a')!);
+    expectTouchTarget(host.querySelector<HTMLElement>('[data-testid="breadcrumb-more"]')!);
+    expectTouchTarget(host.querySelector<HTMLElement>('[data-testid="breadcrumb-parent"] a')!);
+    const nav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
+    const title = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
+    expect(title.width).toBeGreaterThanOrEqual(56);
+    expect(title.right).toBeLessThanOrEqual(nav.right + 0.5);
+  });
+
+  it('keeps the parent legible beside a long title with a mouse', async () => {
+    // 细指针没有 44px 命中区撑着：只靠收缩权重时，长标题会把上级压成零宽，只剩两个相邻分隔符
+    await page.viewport(900, 800);
+    onTestFinished(() => page.viewport(1280, 800));
+    const host = (await renderHeader(636)).nativeElement as HTMLElement;
+
+    const parent = host.querySelector('[data-testid="breadcrumb-parent"]')!.getBoundingClientRect();
+    expect(parent.width).toBeGreaterThanOrEqual(44);
+    const nav = host.querySelector('app-page-breadcrumb nav')!.getBoundingClientRect();
+    const title = host.querySelector('[data-slot="breadcrumb-page"]')!.getBoundingClientRect();
+    expect(title.width).toBeGreaterThanOrEqual(56);
+    expect(title.right).toBeLessThanOrEqual(nav.right + 0.5);
+  });
 });
+
+/** 元素的渲染宽度；收起（display: none）的条目为 0。 */
+function widthOf(host: HTMLElement, selector: string): number {
+  return host.querySelector(selector)!.getBoundingClientRect().width;
+}
 
 /**
  * 渲染侧栏布局的页头：真实操作区控件全开、嵌套页带一级上级；默认上级短、标题长。

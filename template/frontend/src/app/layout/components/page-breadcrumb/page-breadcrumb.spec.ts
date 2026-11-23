@@ -3,7 +3,7 @@ import { provideRouter, Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import { page, userEvent } from 'vitest/browser';
+import { userEvent } from 'vitest/browser';
 
 //#if (IncludeLocalization)
 import enTexts from '../../../../../public/i18n/en.json';
@@ -129,18 +129,22 @@ describe('PageBreadcrumb', () => {
     body.querySelectorAll('.cdk-overlay-container').forEach((container) => container.remove());
   });
 
-  it('keeps only the nearest parent and the page title on phones', async () => {
-    await page.viewport(390, 844);
-    onTestFinished(() => page.viewport(1280, 800));
-
-    const nested = await render([CENTRE, BRAND]);
+  /** 显示几项按面包屑自身宽度：侧栏或操作区占去页头宽度时，宽视口下也要收起。 */
+  it('keeps only the nearest parent and the page title when the breadcrumb is narrow', async () => {
+    const nested = await render([CENTRE, BRAND], undefined, 240);
     expect(visibleItems(nested)).toEqual(['Spec Markets /platform/brand-center/spec', 'Messages']);
     expect(visibleSeparators(nested)).toBe(1);
 
     TestBed.resetTestingModule();
-    const topLevel = await render([], 'Users');
+    const topLevel = await render([], 'Users', 240);
     expect(visibleItems(topLevel)).toEqual(['Users']);
     expect(visibleSeparators(topLevel)).toBe(0);
+  });
+
+  it('keeps only the page title when the parent would crowd it out', async () => {
+    const host = await render([CENTRE, BRAND], undefined, 112);
+    expect(visibleItems(host)).toEqual(['Messages']);
+    expect(visibleSeparators(host)).toBe(0);
   });
 
   it('names the navigation landmark from the localized label', async () => {
