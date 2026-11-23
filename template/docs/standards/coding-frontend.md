@@ -91,6 +91,7 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 
 - 每个后端新端点同步补 Mock（`_mock/data` + `_mock/api` + `frontend/_mock/index.ts` 注册），前端可脱离后端运行。
 - Mock 代码只放 `_mock`，引入规则见第 2 节；Mock 单测在 `_mock/` 与被测文件相邻。
+- 处理器直接返回正文（按 200 响应）；要给状态码、响应头或延迟时返回 `new MockResponse({...})`，不返回带 `status` 的对象字面量。
 - Mock 与后端保持可观察行为一致：认证、权限、参数校验、过滤语义与失败响应；不复制后端内部实现。
 - Mock 业务数据存本页内存，重载回初始数据；会话、设置覆盖与用户存 `sessionStorage`（设置用 `frontend/_mock/utils/stored-map.ts`，直读直写），刷新不丢。新页面初始存储由浏览器决定（保留 opener 打开、复制或恢复标签页会带入原存储），不保证新标签页未登录；之后各页会话与设置改动互不影响。
 

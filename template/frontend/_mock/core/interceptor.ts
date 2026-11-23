@@ -70,13 +70,17 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     }),
   ).pipe(
     mergeMap((result) => {
-      const mockResponse = result as MockResponse | undefined;
-      const response =
-        mockResponse && typeof mockResponse.status !== 'undefined'
-          ? new HttpResponse(mockResponse)
-          : new HttpResponse({ status: 200, body: result });
+      // 只认显式的 MockResponse：按字段猜会把自带 status 字段的业务 DTO 当成响应选项，正文丢成 null
+      const explicit = MockResponse.is(result) ? result : undefined;
+      const response = explicit
+        ? new HttpResponse({
+            status: explicit.status,
+            headers: explicit.headers,
+            body: explicit.body,
+          })
+        : new HttpResponse({ status: 200, body: result });
 
-      return of(response).pipe(delay(mockResponse?.delay ?? mockConfig.delay ?? 0));
+      return of(response).pipe(delay(explicit?.delay ?? mockConfig.delay ?? 0));
     }),
     tap((response) => {
       if (mockConfig.log) {

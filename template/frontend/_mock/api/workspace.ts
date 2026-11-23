@@ -4,6 +4,9 @@ import { MockException,
   //#if (LocalIdentity)
   MockRequest,
   //#endif
+  //#if (OpenIddictServer)
+  MockResponse,
+  //#endif
 } from '../core/models';
 //#if (LocalIdentity)
 import { ROLES } from '../data/authorization';
@@ -134,12 +137,12 @@ export const WORKSPACE_API = {
   //#endif
   //#if (OpenIddictServer)
   'GET /api/v1/workspace-tenants/:id': (req: MockRequest) =>
-    TENANTS.find((t) => t.id === req.params.id) ?? { status: 204 },
+    TENANTS.find((t) => t.id === req.params.id) ?? new MockResponse({ status: 204 }),
   'GET /api/v1/workspace-tenants/by-name/:name': (req: MockRequest) => {
     const tenant = TENANTS.find((t) => t.name.toLowerCase() === req.params.name.toLowerCase());
     return tenant
       ? { ...toTenantOutput(tenant), normalizedName: tenant.name.toUpperCase() }
-      : { status: 204 };
+      : new MockResponse({ status: 204 });
   },
   //#endif
 };
