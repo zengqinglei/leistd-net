@@ -1,17 +1,20 @@
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.EntityFrameworkCore.Extensions;
+using Leistd.MultiTenancy.Exceptions;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 
 /// <summary>直接读取控制库的租户连接存储。</summary>
 /// <remarks>
 /// 只读未删除租户的连接（经 <see cref="TenantQueryableExtensions"/> 起查）。
-/// 返回的连接串已用宿主的 Data Protection 密钥环解密；解密失败抛出，不回退。
+/// 返回的连接串已用宿主的 Data Protection 密钥环解密；解不开时记 <see cref="MultiTenancyLogEvents.TenantConnectionStringUnprotectFailed"/>，
+/// 按租户读取抛 <see cref="TenantConnectionStringDecryptionException"/>、不回退，迁移清单只把该租户列为失败。
 /// </remarks>
 public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConnectionConfigurationStore
     where TDbContext : DbContext
@@ -22,12 +25,14 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
     /// <summary>创建存储。</summary>
     /// <param name="dbContextProvider">工作单元内的 DbContext 提供器。</param>
     /// <param name="dataProtectionProvider">宿主的 Data Protection 提供器，用于解密连接串。</param>
+    /// <param name="loggerFactory">解不开连接串时记 <see cref="MultiTenancyLogEvents.TenantConnectionStringUnprotectFailed"/>；为 <see langword="null"/> 时不记。</param>
     public EfCoreTenantConnectionConfigurationStore(
         IDbContextProvider<TDbContext> dbContextProvider,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider,
+        ILoggerFactory? loggerFactory = null)
     {
         _dbContextProvider = dbContextProvider;
-        _protector = new TenantConnectionStringProtector(dataProtectionProvider);
+        _protector = new TenantConnectionStringProtector(dataProtectionProvider, loggerFactory);
     }
 
     /// <inheritdoc />
@@ -107,13 +112,13 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
                 continue;
             }
 
-            // 解不开密文（密钥环没共享、密文被改）同样只记在这个租户名下：保护器已把它换成只带租户与连接名的安全消息
+            // 解不开密文（密钥环没共享、密文被改）同样只记在这个租户名下：保护器已把它换成只带租户、连接名与密钥标识的安全消息
             string connectionString;
             try
             {
                 connectionString = _protector.Unprotect(tenantId, record.Name, record.ProtectedConnectionString);
             }
-            catch (InvalidOperationException exception)
+            catch (TenantConnectionStringDecryptionException exception)
             {
                 failures.Add(new TenantDatabaseFailure(tenantId, exception.Message));
                 continue;

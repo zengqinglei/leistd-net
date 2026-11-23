@@ -340,7 +340,7 @@ IHttpClientBuilder controlPlane = builder.Services.AddRemoteTenantConnectionStor
 | 命中默认名的登记 | 默认名那一行的连接串 |
 | 登记过连接、却缺这个名字且无默认名 | 抛 `InvalidOperationException`，**不回落本服务的库** |
 | 租户不存在或已删除 | 抛 `TenantNotFoundException`（带 `Tenant:NotFound` 错误码） |
-| 本地解析时解密失败 | 抛 `InvalidOperationException`，不回落 |
+| 本地解析时解密失败 | 记事件 4301，抛 `TenantConnectionStringDecryptionException`（继承 `InvalidOperationException`），不回落 |
 | 连接名不合法（不匹配 `NamePattern`，来自 `[ConnectionStringName]` 的编程错误） | 抛 `ArgumentException` |
 
 分库租户缺这个服务的连接且没有默认名可回落时失败关闭，不连到本服务的库。宿主连接的 `ConnectionStrings:Default` 回落是有意的：上下文改名后部署仍只需配置 `ConnectionStrings__Default`。
@@ -412,6 +412,8 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionManagementService` | 连接管理用例：`GetListAsync`、`GetRuntimeAsync`、`GetMigrationListAsync`、`GetDatabaseListAsync`、`SetAsync`、`RemoveAsync`；Management 包注册 |
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
 | `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
+| `TenantConnectionStringDecryptionException` | 租户连接串用当前密钥环解不开：`TenantId`、`ConnectionName`、`Purpose`、`KeyId`（密文头读不出时为 `null`），内层为原始 `CryptographicException`；按调用点降级时捕获它 |
+| `MultiTenancyLogEvents` | 日志事件号常量，见注意事项的排障表 |
 | `TenantConfiguration.NamePattern` / `MaxNameLength` | 租户名规则（单个 DNS 标签，≤63）；前端表单可直接复用这个模式 |
 | 默认 HTTP 状态 | 组件默认状态：租户停用（`Tenant:NotActive`）→ 403，不存在（`Tenant:NotFound`）→ 404；租户版本冲突（`Tenant:ConcurrencyConflict`）、重名（`Tenant:DuplicateName`）、连接版本冲突（`TenantConnection:VersionConflict`）与租户未停用时修改连接（`TenantConnection:ChangeRequiresInactiveTenant`）→ 409。其余（如 `Tenant:NameInvalid`、`TenantConnection:NameInvalid`）按业务异常默认 400。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名，它跑宿主配置的解析链，与真实请求给出同一个答案 |
@@ -465,6 +467,16 @@ public sealed class IdentityControlDbContext : DbContext;
 - 多服务系统的租户注册表应归 Identity 所有，Resource 在令牌有效期内信任经验证的 claim。租户停用或删除在 Identity 立即生效，在 Resource 要等已签发的 Access Token 过期。
   要即时生效，需在停用时撤销该租户已签发的令牌并让 Resource 做令牌内省，框架不内置；只开内省不够，内省不查租户状态。
 - `EfCoreTenantStore` 默认不缓存，使启停和删除在提交后立即生效。自行加缓存时必须显式承担撤销延迟。
+
+### 排障
+
+多租户组件的日志事件号段为 4300–4399，常量在 `MultiTenancyLogEvents`；框架内各组件号段不重叠，告警按事件号匹配即可。
+
+| 编号 | 事件名 | 级别 | 结构化上下文 | 含义与处置 |
+| --- | --- | --- | --- | --- |
+| 4301 | TenantConnectionStringUnprotectFailed | Error | Purpose、TenantId、ConnectionName、KeyId | 租户连接串解不开。配置存储、迁移清单、库目录与本地解析共用这一个解密点，宿主配置了日志时每次失败记一条；事件的结构化字段不含密文、明文与连接串，内层异常照原样记录。`KeyId` 是从未经验证的密文头读出的标识。为空：头部读不出，库里的值不是 Data Protection 密文或头部被截断，需要重新登记这条连接。有值时分三种情况：本进程的密钥环里没有这把密钥或应用名与写入方不一致，核对并修正宿主的密钥环与应用名配置；这把密钥已被吊销，按宿主的密钥处置流程处理（吊销的密钥默认不再用于解密）；密钥可用仍解不开，结合内层异常判断，确认是头部之后的内容损坏后重新登记 |
+
+迁移清单与库目录里这类租户单独列为失败，原因即异常消息（含密钥标识）。本进程用的是哪张证书、哪个密钥环属于宿主自己的配置，在宿主启动时记一次，排查时与 `KeyId` 对照。
 
 ## 相关
 

@@ -1,6 +1,6 @@
 namespace Leistd.Settings;
 
-/// <summary>设置组件记录的日志事件号，号段 4200–4299；告警按日志类别加事件号匹配。</summary>
+/// <summary>设置组件记录的日志事件号，号段 4200–4299；框架内各组件号段不重叠，告警按事件号匹配。</summary>
 public static class SettingLogEvents
 {
     /// <summary>机密设置解不开（Error）：密钥丢失、密钥环未共享、应用名不同或密文被篡改。字段 <c>SettingName</c>、<c>KeyId</c>、<c>ErrorType</c>。</summary>

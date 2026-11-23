@@ -7,6 +7,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 using Leistd.MultiTenancy.Tests.TestDoubles;
 
@@ -49,7 +51,8 @@ public sealed class LocalResolutionTests : IDisposable
     private LocalConnectionStringResolver<ControlDbContext> Resolver(
         string? controlConnection = ControlConnection,
         string? billingConnection = null,
-        IDataProtectionProvider? keyRing = null) => new(
+        IDataProtectionProvider? keyRing = null,
+        ILoggerFactory? loggerFactory = null) => new(
         _tenant,
         _services.GetRequiredService<IServiceScopeFactory>(),
         keyRing ?? _keyRing,
@@ -60,7 +63,8 @@ public sealed class LocalResolutionTests : IDisposable
             ["ConnectionStrings:Control"] = controlConnection
         }).Build(),
         Microsoft.Extensions.Options.Options.Create(
-            new LocalTenantConnectionOptions { ControlPlaneConnectionStringName = "Control" }));
+            new LocalTenantConnectionOptions { ControlPlaneConnectionStringName = "Control" }),
+        loggerFactory);
 
     private async Task<Guid> SeedTenantAsync(bool deleted = false)
     {
@@ -177,17 +181,26 @@ public sealed class LocalResolutionTests : IDisposable
         Assert.Equal(AcmeConnection, await Resolver().ResolveAsync(requested));
     }
 
-    // 密钥环不同（未共享、密钥丢失）时拒绝；拒绝消息不带明文
+    // 密钥环不同（未共享、密钥丢失）时拒绝；异常与事件带租户、连接名与密钥标识，不带明文
     [Fact]
     public async Task A_connection_string_that_cannot_be_decrypted_is_refused()
     {
         _tenant.Id = await SeedTenantAsync();
         await RegisterAsync(_tenant.Id!.Value, "default", AcmeConnection);
+        using var logs = new FakeLoggerProvider();
+        using var loggerFactory = new LoggerFactory([logs]);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Resolver(keyRing: new EphemeralDataProtectionProvider()).ResolveAsync("Default"));
+        var error = await Assert.ThrowsAsync<TenantConnectionStringDecryptionException>(
+            () => Resolver(keyRing: new EphemeralDataProtectionProvider(), loggerFactory: loggerFactory).ResolveAsync("Billing"));
 
+        Assert.Equal(_tenant.Id, error.TenantId);
+        Assert.Equal("default", error.ConnectionName);
+        Assert.NotNull(error.KeyId);
         Assert.DoesNotContain("acme-secret", error.ToString());
+        var record = Assert.Single(logs.Collector.GetSnapshot(),
+            x => x.Id.Id == MultiTenancyLogEvents.TenantConnectionStringUnprotectFailed);
+        Assert.Equal(error.KeyId.ToString(), record.GetStructuredStateValue("KeyId"));
+        Assert.Equal("default", record.GetStructuredStateValue("ConnectionName"));
     }
 
     // 软删租户的连接行仍在库里；漏掉这道排除就是一条越过删除边界的读路径

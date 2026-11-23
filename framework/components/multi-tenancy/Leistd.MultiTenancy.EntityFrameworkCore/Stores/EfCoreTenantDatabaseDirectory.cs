@@ -1,9 +1,11 @@
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore.Extensions;
+using Leistd.MultiTenancy.Exceptions;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 
@@ -11,10 +13,11 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 // 指纹按解密后的连接串算，与迁移目标同一算法；连接串只用于算指纹，不出这个类。
 internal sealed class EfCoreTenantDatabaseDirectory<TDbContext>(
     IDbContextProvider<TDbContext> dbContextProvider,
-    IDataProtectionProvider dataProtectionProvider) : ITenantDatabaseDirectory
+    IDataProtectionProvider dataProtectionProvider,
+    ILoggerFactory? loggerFactory = null) : ITenantDatabaseDirectory
     where TDbContext : DbContext
 {
-    private readonly TenantConnectionStringProtector _protector = new(dataProtectionProvider);
+    private readonly TenantConnectionStringProtector _protector = new(dataProtectionProvider, loggerFactory);
 
     public async Task<TenantDatabaseListResult> GetDatabasesAsync(
         string name,
@@ -71,7 +74,7 @@ internal sealed class EfCoreTenantDatabaseDirectory<TDbContext>(
             {
                 connectionString = _protector.Unprotect(tenantId, record.Name, record.ProtectedConnectionString);
             }
-            catch (Exception exception)
+            catch (TenantConnectionStringDecryptionException exception)
             {
                 failures.Add(new TenantDatabaseFailure(tenantId, exception.Message));
                 continue;
