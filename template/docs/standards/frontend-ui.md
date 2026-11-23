@@ -1,6 +1,6 @@
 # 前端界面规范
 
-编码与分层见[前端开发规范](./coding-frontend.md)；专题见[列表与表格](./frontend-lists.md)、[表单](./frontend-forms.md)、[导航](./frontend-navigation.md)、[路由](./frontend-routing.md)、[时间、图表与推送](./frontend-data.md)，设置页见[设置规范](./settings.md#3-设置页)。
+编码与分层见[前端开发规范](./coding-frontend.md)，首屏性能见其 [§10](./coding-frontend.md#10-首屏性能)；专题见[列表与表格](./frontend-lists.md)、[表单](./frontend-forms.md)、[导航](./frontend-navigation.md)、[路由](./frontend-routing.md)、[时间、图表与推送](./frontend-data.md)，设置页见[设置规范](./settings.md#3-设置页)。
 
 ## 1. 设计原则
 

@@ -36,17 +36,35 @@ public static class SpaExtensions
             return RevalidateCacheControl;
         }
 
-        if (requestPath.StartsWithSegments("/media"))
-        {
-            return FingerprintedCacheControl;
-        }
-
-        var path = requestPath.Value ?? string.Empty;
-        var isRootLevel = path.LastIndexOf('/') == 0;
-        var isBundle = path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase);
-        return isRootLevel && isBundle ? FingerprintedCacheControl : RevalidateCacheControl;
+        return requestPath.StartsWithSegments("/media") || IsRootLevelBundle(requestPath)
+            ? FingerprintedCacheControl
+            : RevalidateCacheControl;
     }
+
+    /// <summary>是否请求根目录下的 .js/.css，即带内容哈希的构建产物（目录约定见 <see cref="CreateSpaStaticFileOptions"/>）。</summary>
+    private static bool IsRootLevelBundle(PathString requestPath)
+    {
+        var path = requestPath.Value ?? string.Empty;
+        return path.LastIndexOf('/') == 0
+            && (path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>根目录的 .js/.css 按请求协商 Brotli/Gzip；index.html、public/ 下的文件与 API 响应不经过压缩。</summary>
+    /// <remarks>
+    /// 这些文件可公开缓存一年，不协商编码的原文同样声明 <c>Vary: Accept-Encoding</c>：
+    /// 否则缓存先存下原文，之后支持压缩的请求也会拿到它。
+    /// </remarks>
+    public static IApplicationBuilder UseMyProjectSpaCompression(this IApplicationBuilder app) =>
+        app.UseWhen(
+            context => IsRootLevelBundle(context.Request.Path),
+            bundles => bundles
+                .Use((context, next) =>
+                {
+                    context.Response.Headers.Append(HeaderNames.Vary, HeaderNames.AcceptEncoding);
+                    return next(context);
+                })
+                .UseResponseCompression());
 
     public static IEndpointRouteBuilder MapMyProjectSpaFallback(this WebApplication app)
     {

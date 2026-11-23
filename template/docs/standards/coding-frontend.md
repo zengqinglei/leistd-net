@@ -7,7 +7,7 @@
 
 ## 1. 技术栈
 
-Angular（Signals、zoneless、CLI、Signal Forms `@angular/forms/signals`）、TypeScript、Spartan UI（`@spartan-ng/brain` 无头基元与项目持有的 Helm 样式层）、Tailwind CSS 4、TanStack Table。版本以 `frontend/package.json` 与锁文件为准。表单写法与 ESLint 约束见[前端表单规范](./frontend-forms.md)。
+Angular（Signals、zoneless、Signal Forms `@angular/forms/signals`）、TypeScript、Spartan UI、Tailwind CSS 4、TanStack Table。版本以 `frontend/package.json` 与锁文件为准。表单写法与 ESLint 约束见[前端表单规范](./frontend-forms.md)。
 
 ## 2. 目录与依赖方向
 
@@ -105,3 +105,10 @@ selector 用 `app-` + kebab-case（eslint 检查）；API 请求/响应须有类
 ## 9. 日期、时区与数字
 
 时间以 UTC 传输与存储，只在展示时按会话时区换算。业务日期用 `appDate` 管道（不用 Angular 的 `date`），业务数字用 `appNumber` 管道，非模板调用方用同一套 `formatAppDate`、`formatAppNumber`，不在组件里直接 new `Intl.*Format`。展示时区的判定、日历日、格式槽位与相对时间见 [前端时间、数字、图表与推送规范](./frontend-data.md)。
+
+## 10. 首屏性能
+
+- 按真实访问的 P75、移动与桌面分开统计：LCP ≤ 2.5 s、INP ≤ 200 ms、CLS ≤ 0.1。
+- 懒加载用于功能路由（`loadComponent`/`loadChildren`）；落地必经的布局外壳保持静态引用：拆出后要等守卫结束才沿导入链下载，字节只是挪后。首屏非必需的第三方脚本按需加载。
+- 只给真实的 LCP 图片提优先级：`NgOptimizedImage` 的 `priority`；瀑布图显示它发现晚且地址已知时，再加同 URL 的 preload。
+- 上调 `initial` 预算须附 `--stats-json` 构建统计的前后差异。
