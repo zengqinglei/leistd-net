@@ -33,7 +33,9 @@ import { englishText } from '../../../shared/utils/english-text';
     TranslocoDirective,
     //#endif
   ],
-  host: { class: '@container/breadcrumb flex min-w-0 flex-1' },
+  // 尺寸容器：显示几项按自己的宽度。宽度由使用处给（页头里 flex-1，正文上方 w-full）；不在这里设 flex-1，
+  // 否则放进纵向 flex 列（工作台布局）时会和正文平分高度
+  host: { class: '@container/breadcrumb flex min-w-0' },
   templateUrl: './page-breadcrumb.html',
 })
 export class PageBreadcrumb {

@@ -260,6 +260,8 @@ describe('Layout page heading', () => {
     expect(crumb.querySelector('[data-slot="breadcrumb-page"]')!.textContent!.trim()).toBe(
       'User detail',
     );
+    // 与正文同在纵向 flex 列里：面包屑只占一行，正文拿走其余高度（宿主带 flex-1 时会和正文平分）
+    expect(crumb.getBoundingClientRect().height).toBeLessThan(64);
 
     // 嵌套页离开时清空上级，回到一级页面不留旧上级
     await visit(harness, '/workspace/users');
