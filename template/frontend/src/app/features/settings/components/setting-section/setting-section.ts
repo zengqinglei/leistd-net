@@ -23,6 +23,7 @@ import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 import { HlmEmptyImports } from '@spartan-ng/helm/empty';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmInputGroupImports } from '@spartan-ng/helm/input-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
@@ -33,6 +34,7 @@ import { mapFormErrors } from '../../../../core/errors/form-errors';
 //#if (IncludeLocalization)
 import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
+import { AccountPreferencesService } from '../../../../core/services/account-preferences-service';
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../../core/services/language-service';
 //#endif
@@ -45,7 +47,7 @@ import {
   settingsInScope,
 } from '../../../../core/settings/setting-groups';
 import { SettingService } from '../../../../core/settings/setting-service';
-import { SettingOutputDto } from '../../../../core/settings/setting.dto';
+import { SettingModificationDto, SettingOutputDto } from '../../../../core/settings/setting.dto';
 import { SETTINGS_SECTION_HEADING_LEVEL } from '../../../../core/settings/settings-section-heading-level';
 import { injectFormSubmission } from '../../../../core/validation/form-submission';
 import {
@@ -54,6 +56,7 @@ import {
 } from '../../../../core/validation/submit-error-state-matcher';
 import { InfoHint } from '../../../../shared/components/info-hint/info-hint';
 import { ComboboxRevealSelected } from '../../../../shared/directives/combobox-reveal-selected';
+import { AppDate } from '../../../../shared/pipes/app-date-pipe';
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -164,6 +167,8 @@ export const SAVING_MIN_MS = 400;
     HlmButton,
     HlmInput,
     HlmSpinner,
+    ...HlmInputGroupImports,
+    AppDate,
     ...HlmComboboxImports,
     ...HlmFieldImports,
     ...HlmSelectImports,
@@ -190,6 +195,8 @@ export const SAVING_MIN_MS = 400;
     HlmButton,
     HlmInput,
     HlmSpinner,
+    ...HlmInputGroupImports,
+    AppDate,
     ...HlmComboboxImports,
     ...HlmFieldImports,
     ...HlmSelectImports,
@@ -223,6 +230,13 @@ export class SettingSection {
     );
   /** 多分组时的分区标题级别，由外壳按自己的标题层级给出。 */
   protected readonly headingLevel = inject(SETTINGS_SECTION_HEADING_LEVEL);
+  /** 修改信息与测试结论的时间按用户的时区与语言显示，与操作记录一致。 */
+  protected readonly displayTimeZone = inject(AccountPreferencesService).timeZone;
+  protected readonly displayLocale = inject(AccountPreferencesService).displayLocale;
+  /** 正在执行测试的设置名：测试期间按钮显示进行中并禁用，避免重复外呼。 */
+  protected readonly checking = signal<ReadonlySet<string>>(new Set());
+  /** 测试请求本身失败（网络中断、无权限）时该行的原因；测试结论来自后端快照，不在这里。 */
+  protected readonly checkErrors = signal<Readonly<Record<string, string>>>({});
   private readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
@@ -948,6 +962,71 @@ export class SettingSection {
     });
   }
 
+  /**
+   * 本层最后一次写入的时间与写入人。个人页不显示（写入人就是自己）；机密行只在已设置时显示，
+   * 是只写之后唯一的状态线索；非机密行只在本层有覆盖值时显示，继承来的值没有"谁改过"。
+   */
+  protected modificationOf(
+    setting: SettingOutputDto,
+    scope: SettingScope,
+  ): SettingModificationDto | null {
+    if (scope === 'account' || !setting.tenantModification) {
+      return null;
+    }
+
+    return (setting.isSecret ? setting.hasSecretValue : setting.tenantValue !== null)
+      ? setting.tenantModification
+      : null;
+  }
+
+  /** 这一行能否测试：只在系统设置里、且当前用户能管理这一项时提供（测试会用存着的凭据对外调用）。 */
+  protected checkableIn(setting: SettingOutputDto, scope: SettingScope): boolean {
+    return scope !== 'account' && setting.isCheckable === true && setting.canManage;
+  }
+
+  /** 能测试、但控件不是文本输入框（开关、下拉、时区、项目控件）：测试按钮放在控件旁，而不是输入框尾部。 */
+  protected checksBesideControl(setting: SettingOutputDto, scope: SettingScope): boolean {
+    return (
+      this.checkableIn(setting, scope) &&
+      (this.customControlOf(setting) !== undefined ||
+        this.isBoolean(setting) ||
+        this.isTimeZone(setting) ||
+        this.choicesOf(setting) !== undefined)
+    );
+  }
+
+  /** 失败码对应的词条；不认识的码走兜底，不把对方的原始状态显示给管理员。 */
+  protected checkFailureKey(code: string | null | undefined): string {
+    return code && KNOWN_CHECK_FAILURES.has(code)
+      ? `settings.check.failure.${code}`
+      : 'settings.check.failure.other';
+  }
+
+  /** 执行一项测试并重取快照：结论、测试人与"已过期"都以后端为准。 */
+  protected async runCheck(setting: SettingOutputDto): Promise<void> {
+    const name = setting.name;
+    this.checking.update((names) => new Set(names).add(name));
+    this.checkErrors.update(({ [name]: _, ...rest }) => rest);
+    try {
+      await firstValueFrom(this.settingService.checkSetting(name));
+      await this.pageState.refresh();
+    } catch (error: unknown) {
+      //#if (IncludeLocalization)
+      const fallback = this.transloco.translate('settings.check.requestFailed');
+      //#else
+      const fallback = this.t('settings.check.requestFailed');
+      //#endif
+      const { message } = mapFormErrors(error, this.settingForm, {}, fallback);
+      this.checkErrors.update((errors) => ({ ...errors, [name]: message ?? fallback }));
+    } finally {
+      this.checking.update((names) => {
+        const next = new Set(names);
+        next.delete(name);
+        return next;
+      });
+    }
+  }
+
   /** 把一行的值写进表单并记为正在编辑：直到写入落定，快照刷新都不覆盖它。 */
   private setDraft(key: string, value: string): void {
     this.markPending(key);
@@ -1092,6 +1171,17 @@ function storedValueOf(setting: SettingOutputDto, scope: SettingScope): string {
 function isHostScopeOnly(settings: readonly SettingOutputDto[]): boolean {
   return settings.length > 0 && settings.every((setting) => setting.allowsHostScope);
 }
+/** 失败码基线（框架 SettingCheckFailureCodes）；项目新增的码加到这里并补词条。 */
+const KNOWN_CHECK_FAILURES = new Set([
+  'not-configured',
+  'secret-unavailable',
+  'auth-rejected',
+  'unreachable',
+  'rate-limited',
+  'service-disabled',
+  'unexpected-status',
+  'unexpected-error',
+]);
 //#if (!IncludeLocalization)
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
@@ -1111,6 +1201,24 @@ const ENGLISH: Record<string, string> = {
   'settings.browserTimeZone': 'browser',
   'settings.secretSet': 'Set (type a new value to replace it)',
   'settings.secretUnset': 'Not set',
+  'settings.modification.secret': 'Set · updated by {{name}} on',
+  'settings.modification.value': 'Updated by {{name}} on',
+  'settings.modification.system': 'the system',
+  'settings.check.run': 'Test',
+  'settings.check.running': 'Testing…',
+  'settings.check.passed': 'Last test passed · {{name}} ·',
+  'settings.check.failed': 'Last test failed: {{reason}} · {{name}} ·',
+  'settings.check.stale': 'Outdated',
+  'settings.check.requestFailed': "Couldn't run the test. Try again later",
+  'settings.check.failure.not-configured': 'not configured',
+  'settings.check.failure.secret-unavailable': "the saved secret can't be decrypted",
+  'settings.check.failure.auth-rejected': 'credentials rejected',
+  'settings.check.failure.unreachable': "couldn't connect",
+  'settings.check.failure.rate-limited': 'rate limited',
+  'settings.check.failure.service-disabled': 'service disabled',
+  'settings.check.failure.unexpected-status': 'unexpected response',
+  'settings.check.failure.unexpected-error': 'test failed unexpectedly',
+  'settings.check.failure.other': 'failed',
   'settings.reset': 'Reset to default',
   'settings.hostScope.hint':
     'One value for the whole system; changes reach every server within about 30 seconds',

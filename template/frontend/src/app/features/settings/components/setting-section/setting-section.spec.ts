@@ -2827,3 +2827,122 @@ describe('SettingSection extension points', () => {
     expect(field.getAttribute('autocapitalize')).toBe('off');
   });
 });
+
+// 修改信息与设置测试：只在系统设置里出现；测试按钮在输入框尾部或控件旁，结论以后端快照为准
+describe('SettingSection modification and checks', () => {
+  const checkable = (overrides: Partial<SettingOutputDto> = {}) =>
+    row({
+      name: 'Probe.Endpoint',
+      tenantValue: 'https://collector:4318',
+      tenantModification: { time: '2026-11-20T08:00:00Z', modifierName: 'Alice' },
+      isCheckable: true,
+      ...overrides,
+    });
+
+  async function render(
+    settings: SettingOutputDto[],
+    scope: 'system' | 'account' = 'system',
+  ): Promise<{ fixture: ComponentFixture<SettingSection>; http: HttpTestingController }> {
+    TestBed.configureTestingModule({ imports: [SettingSection], providers: [...pageProviders()] });
+    const fixture = TestBed.createComponent(SettingSection);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.componentRef.setInput('scope', scope);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/settings').flush(settings);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return { fixture, http };
+  }
+
+  const find = (fixture: ComponentFixture<SettingSection>, testId: string) =>
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('shows who last changed an overridden value, but not an inherited one or on the account page', async () => {
+    const overridden = await render([checkable({ isCheckable: false })]);
+    expect(find(overridden.fixture, 'setting-modification')).not.toBeNull();
+    TestBed.resetTestingModule();
+
+    const inherited = await render([checkable({ isCheckable: false, tenantValue: null })]);
+    expect(find(inherited.fixture, 'setting-modification')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const account = await render([checkable({ isCheckable: false })], 'account');
+    expect(find(account.fixture, 'setting-modification')).toBeNull();
+  });
+
+  it('puts the check button inside the input group and refreshes the snapshot after a run', async () => {
+    const { fixture, http } = await render([checkable()]);
+    const button = find(fixture, 'setting-check-Probe.Endpoint')!;
+    expect(button.closest('hlm-input-group')).not.toBeNull();
+
+    button.click();
+    fixture.detectChanges();
+    expect(button.hasAttribute('disabled')).toBe(true);
+    const post = http.expectOne('/api/v1/settings/checks/Probe.Endpoint');
+    expect(post.request.method).toBe('POST');
+    post.flush({ passed: true, time: '2026-11-23T08:00:00Z', isStale: false });
+    await fixture.whenStable();
+    http.expectOne('/api/v1/settings').flush([
+      checkable({
+        lastCheck: {
+          passed: false,
+          failureCode: 'unreachable',
+          time: '2026-11-23T08:00:00Z',
+          isStale: true,
+        },
+      }),
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 刷新经会话服务的桩取快照，按钮在它落定之后才恢复
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(find(fixture, 'setting-check-Probe.Endpoint')!.hasAttribute('disabled')).toBe(false);
+    });
+    expect(find(fixture, 'setting-check')).not.toBeNull();
+    expect(find(fixture, 'setting-check-stale')).not.toBeNull();
+  });
+
+  // 测试请求本身失败（网络、无权限）：在该行给出原因，不当成一次测试结论
+  it('shows a failed check request on the row', async () => {
+    const { fixture, http } = await render([checkable()]);
+
+    find(fixture, 'setting-check-Probe.Endpoint')!.click();
+    http
+      .expectOne('/api/v1/settings/checks/Probe.Endpoint')
+      .flush(null, { status: 503, statusText: 'Service Unavailable' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(find(fixture, 'setting-check-error')).not.toBeNull();
+    expect(find(fixture, 'setting-check')).toBeNull();
+  });
+
+  it('puts the check button beside a control that is not a text input', async () => {
+    const { fixture } = await render([
+      checkable({
+        name: 'Probe.Enabled',
+        defaultValue: 'false',
+        tenantValue: 'true',
+        isBoolean: true,
+      }),
+    ]);
+    const button = find(fixture, 'setting-check-Probe.Enabled');
+
+    expect(button).not.toBeNull();
+    expect(button!.closest('hlm-input-group')).toBeNull();
+  });
+
+  // 测试会用存着的凭据对外调用：个人页、不能管理这一项时都不提供
+  it('offers no check on the account page or to someone who cannot manage the setting', async () => {
+    const account = await render([checkable()], 'account');
+    expect(find(account.fixture, 'setting-check-Probe.Endpoint')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const readOnly = await render([checkable({ canManage: false })]);
+    expect(find(readOnly.fixture, 'setting-check-Probe.Endpoint')).toBeNull();
+  });
+});

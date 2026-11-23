@@ -92,6 +92,30 @@
   },
   "secretSet": "Set (type a new value to replace it)",
   "secretUnset": "Not set",
+  "modification": {
+    "secret": "Set · updated by {{name}} on",
+    "value": "Updated by {{name}} on",
+    "system": "the system"
+  },
+  "check": {
+    "run": "Test",
+    "running": "Testing…",
+    "passed": "Last test passed · {{name}} ·",
+    "failed": "Last test failed: {{reason}} · {{name}} ·",
+    "stale": "Outdated",
+    "requestFailed": "Couldn't run the test. Try again later",
+    "failure": {
+      "not-configured": "not configured",
+      "secret-unavailable": "the saved secret can't be decrypted",
+      "auth-rejected": "credentials rejected",
+      "unreachable": "couldn't connect",
+      "rate-limited": "rate limited",
+      "service-disabled": "service disabled",
+      "unexpected-status": "unexpected response",
+      "unexpected-error": "test failed unexpectedly",
+      "other": "failed"
+    }
+  },
   //#if (ExternalLogin)
   "externalLoginProviders": {
     "description": "Status shows the instance that answered this request.",
