@@ -19,6 +19,7 @@ import {
   setCoarsePointer,
   tapAt,
 } from '../../../shared/utils/coarse-pointer.testing';
+import { focusWithKeyboard } from '../../../shared/utils/keyboard-focus.testing';
 import { PageBreadcrumb } from './page-breadcrumb';
 
 /**
@@ -167,7 +168,7 @@ describe('PageBreadcrumb', () => {
     }
 
     await vi.waitFor(() => expect(pageText.getAttribute('tabindex')).toBe('0'));
-    pageText.focus();
+    await focusWithKeyboard(pageText);
     await expect
       .poll(() => document.querySelector('[role="tooltip"]')?.textContent?.trim() ?? '')
       .toBe(longTitle);
