@@ -41,6 +41,6 @@ public sealed class TenantConnectionStringDecryptionException : InvalidOperation
     /// <summary>保护器用途 <c>Leistd.MultiTenancy.TenantConnectionString.v1</c>；用途或应用名不同的密钥环解不开旧密文。</summary>
     public string Purpose { get; }
 
-    /// <summary>密文头记录的密钥标识，用来查是哪一把密钥缺失；密文不是标准 Data Protection 格式或被截断时为 <see langword="null"/>。</summary>
+    /// <summary>从密文头读出、未经验证的密钥标识，用来对照本进程的密钥环；头部读不出（不是标准 Data Protection 格式或头部被截断）时为 <see langword="null"/>，头部完整而之后的内容损坏时仍有值。</summary>
     public Guid? KeyId { get; }
 }

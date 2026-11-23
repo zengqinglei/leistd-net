@@ -470,11 +470,11 @@ public sealed class IdentityControlDbContext : DbContext;
 
 ### 排障
 
-多租户组件的日志事件号段为 4300–4399，常量在 `MultiTenancyLogEvents`；告警按日志类别加事件号匹配。
+多租户组件的日志事件号段为 4300–4399，常量在 `MultiTenancyLogEvents`；框架内各组件号段不重叠，告警按事件号匹配即可。
 
 | 编号 | 事件名 | 级别 | 结构化上下文 | 含义与处置 |
 | --- | --- | --- | --- | --- |
-| 4301 | TenantConnectionStringUnprotectFailed | Error | Purpose、TenantId、ConnectionName、KeyId | 租户连接串解不开。配置存储、迁移清单、库目录与本地解析共用这一个解密点与同一个日志类别，每次失败记一条，不记密文、明文与连接串。`KeyId` 为空：库里的值不是 Data Protection 密文，或被截断、篡改，需要重新登记这条连接。`KeyId` 有值：本进程的密钥环里缺这把密钥，或应用名与写入方不一致，把本进程接到写入方的密钥环与应用名上 |
+| 4301 | TenantConnectionStringUnprotectFailed | Error | Purpose、TenantId、ConnectionName、KeyId | 租户连接串解不开。配置存储、迁移清单、库目录与本地解析共用这一个解密点，每次失败记一条，不记密文、明文与连接串。`KeyId` 是从未经验证的密文头读出的标识。为空：头部读不出，库里的值不是 Data Protection 密文或头部被截断，需要重新登记这条连接。有值：先查本进程的密钥环里有没有这把密钥、应用名与写入方是否一致，不一致就把本进程接到写入方的密钥环与应用名上；两者都对仍解不开，是头部之后的内容被损坏，需要重新登记 |
 
 迁移清单与库目录里这类租户单独列为失败，原因即异常消息（含密钥标识）。本进程用的是哪张证书、哪个密钥环属于宿主自己的配置，在宿主启动时记一次，排查时与 `KeyId` 对照。
 

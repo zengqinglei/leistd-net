@@ -69,6 +69,21 @@ public sealed class TenantConnectionStringDecryptionTests : IDisposable
         Assert.Null(ProtectedPayload.TryReadKeyId(ciphertext[..20]));
     }
 
+    // 头部完整、之后的内容被改：同一个密钥环也解不开，读出的仍是写入时那把密钥的标识——KeyId 有值不等于缺这把密钥
+    [Fact]
+    public void A_ciphertext_damaged_after_its_header_keeps_the_key_id_and_still_fails()
+    {
+        var (ciphertext, keyId) = ProtectWithPersistedKeyRing();
+        var index = ciphertext.Length - 5;
+        var damaged = ciphertext[..index] + (ciphertext[index] == 'A' ? 'B' : 'A') + ciphertext[(index + 1)..];
+
+        var error = Assert.Throws<TenantConnectionStringDecryptionException>(
+            () => new TenantConnectionStringProtector(DataProtectionProvider.Create(_keys), _loggerFactory)
+                .Unprotect(Guid.NewGuid(), Name, damaged));
+
+        Assert.Equal(keyId, error.KeyId);
+    }
+
     [Fact]
     public void A_ciphertext_from_another_key_ring_throws_the_dedicated_exception_with_its_key_id()
     {

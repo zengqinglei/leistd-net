@@ -433,7 +433,7 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
 
 ### 排障
 
-设置组件的日志事件号段为 4200–4299，常量在 `SettingLogEvents`；告警按日志类别加事件号匹配。
+设置组件的日志事件号段为 4200–4299，常量在 `SettingLogEvents`；框架内各组件号段不重叠，告警按事件号匹配即可。
 
 | 编号 | 事件名 | 级别 | 结构化上下文 |
 | --- | --- | --- | --- |
