@@ -885,7 +885,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("CheckTime")
+                    b.Property<DateTime?>("CheckTime")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CheckerId")
@@ -910,6 +910,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
                     b.Property<bool>("Passed")
                         .HasColumnType("boolean");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ScopeKey")
                         .IsRequired()

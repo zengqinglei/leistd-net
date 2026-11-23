@@ -59,6 +59,7 @@ public sealed class SettingEndpointTests : IAsyncLifetime
                     services.AddSettingsCore();
                     services.AddSingleton<ISettingStore>(_store);
                     services.AddSettingCheck<CountingCheck>("Security.RequireTwoFactor");
+                    services.AddSettingCheck<CountingCheck>("Display.TimeZone");
                     services.AddSingleton(_check);
                     services.AddSingleton<ISettingCheckStore>(new InMemorySettingCheckStore());
                     services.AddMemoryLocalLock();
@@ -235,6 +236,27 @@ public sealed class SettingEndpointTests : IAsyncLifetime
         // 未登记分组策略的分组只看 TenantWritePolicy
         Assert.DoesNotContain("Export.MaxRowsPerFile", member.Keys);
         Assert.True(tenantOnly["Export.MaxRowsPerFile"].CanManage);
+    }
+
+    // 允许个人覆盖的设置照常下发给成员作占位，但测试结果与租户层修改人是管理数据，只给能管理的人
+    [Fact]
+    public async Task Members_reading_an_overridable_setting_get_no_check_or_modifier()
+    {
+        _store.Tenant["Display.TimeZone"] = "Asia/Tokyo";
+        _store.TenantModifications["Display.TimeZone"] = new SettingModification(DateTime.UtcNow, "admin", "Admin");
+        var run = await SendAsync(HttpMethod.Post, "/checks/Display.TimeZone", UserId.ToString(), null, TenantWritePolicy);
+        Assert.Equal(HttpStatusCode.OK, run.StatusCode);
+
+        var manager = (await ReadAsync(TenantWritePolicy))["Display.TimeZone"];
+        var member = (await ReadAsync())["Display.TimeZone"];
+
+        Assert.True(manager.IsCheckable);
+        Assert.NotNull(manager.LastCheck);
+        Assert.NotNull(manager.TenantModification);
+        Assert.False(member.IsCheckable);
+        Assert.Null(member.LastCheck);
+        Assert.Null(member.TenantModification);
+        Assert.Equal("Asia/Tokyo", member.TenantValue);
     }
 
     [Theory]

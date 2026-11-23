@@ -344,6 +344,29 @@ public sealed class EfCoreSettingStoreTests : IDisposable
         Assert.Equal(passed, Assert.Single(await checks.GetAllAsync()).Value);
     }
 
+    // 运行登记：首次测试只有登记的那一行不列为结果；写入作废登记，再登记接替上一次，保存后清除
+    [Fact]
+    public async Task A_run_registration_is_hidden_invalidated_by_writes_and_cleared_on_save()
+    {
+        var checks = new EfCoreSettingCheckStore<SettingDbContext>(new FixedDbContextProvider<SettingDbContext>(_db), new FakeCurrentTenant(null));
+
+        var first = await checks.BeginRunAsync("Export.Headers");
+        Assert.Empty(await checks.GetAllAsync());
+        Assert.Equal(first, await checks.GetPendingRunAsync("Export.Headers"));
+
+        await checks.MarkStaleAsync(["Export.Headers"]);
+        Assert.Null(await checks.GetPendingRunAsync("Export.Headers"));
+        Assert.Empty(await checks.GetAllAsync());
+
+        var second = await checks.BeginRunAsync("Export.Headers");
+        Assert.NotEqual(first, await checks.BeginRunAsync("Export.Headers"));
+        Assert.NotEqual(second, await checks.GetPendingRunAsync("Export.Headers"));
+
+        await checks.SaveAsync("Export.Headers", new SettingCheckResult(true, null, DateTime.UtcNow, null, null, false));
+        Assert.Null(await checks.GetPendingRunAsync("Export.Headers"));
+        Assert.False(Assert.Single(await checks.GetAllAsync()).Value.IsStale);
+    }
+
     // 永久废弃租户时测试结果随设置一起清掉
     [Fact]
     public async Task Removing_all_settings_also_removes_the_check_results()

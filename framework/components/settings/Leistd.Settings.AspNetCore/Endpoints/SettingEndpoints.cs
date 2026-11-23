@@ -82,10 +82,21 @@ public static class SettingEndpoints
                 {
                     var canManage = (setting.AllowsTenantScope || setting.AllowsHostScope)
                                     && await access.CanManageAsync(setting.Group);
-                    // 管理值只给管理者；允许用户覆盖的设置照常下发，个人设置页要用租户默认值作占位
-                    if (canManage || setting.AllowsUserScope)
+                    // 管理值只给管理者；允许用户覆盖的设置照常下发，个人设置页要用租户默认值作占位，
+                    // 但测试结果与租户层的修改人属于管理数据，不随占位下发
+                    if (canManage)
                     {
-                        result.Add(setting with { CanManage = canManage });
+                        result.Add(setting with { CanManage = true });
+                    }
+                    else if (setting.AllowsUserScope)
+                    {
+                        result.Add(setting with
+                        {
+                            CanManage = false,
+                            IsCheckable = false,
+                            LastCheck = null,
+                            TenantModification = null,
+                        });
                     }
                 }
 

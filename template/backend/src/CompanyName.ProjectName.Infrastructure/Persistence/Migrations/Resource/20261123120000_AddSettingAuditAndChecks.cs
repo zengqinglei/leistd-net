@@ -45,10 +45,11 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     Name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     Passed = table.Column<bool>(type: "boolean", nullable: false),
                     FailureCode = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
-                    CheckTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CheckTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     CheckerId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CheckerName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    IsStale = table.Column<bool>(type: "boolean", nullable: false)
+                    IsStale = table.Column<bool>(type: "boolean", nullable: false),
+                    RunId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {

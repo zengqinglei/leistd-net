@@ -25,11 +25,21 @@ public interface ISettingCheckStore
     /// <summary>读取当前租户下全部测试的最近结果，键为主设置名。</summary>
     Task<IReadOnlyDictionary<string, SettingCheckResult>> GetAllAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>保存一项测试的最近结果，覆盖上一次（含过期标记，按 <see cref="SettingCheckResult.IsStale"/> 原样保存）。</summary>
+    /// <summary>保存一项测试的最近结果，覆盖上一次（含过期标记，按 <see cref="SettingCheckResult.IsStale"/> 原样保存），并清除运行登记。</summary>
     Task SaveAsync(string settingName, SettingCheckResult result, CancellationToken cancellationToken = default);
 
-    /// <summary>把当前租户下这些测试的结果标记为过期；没有结果的项忽略。</summary>
+    /// <summary>
+    /// 把当前租户下这些测试的结果标记为过期，并作废它们正在进行的运行登记（见 <see cref="BeginRunAsync"/>）。
+    /// 与设置写入在同一事务里调用；既没有结果也没有登记的项忽略。
+    /// </summary>
     Task MarkStaleAsync(IReadOnlyCollection<string> settingNames, CancellationToken cancellationToken = default);
+
+    /// <summary>登记一次即将开始的运行，返回登记标识；已有的最近结果保持不变，之前的登记被接替。</summary>
+    /// <remarks>调用方持有设置写锁；登记在 <see cref="MarkStaleAsync"/> 或下一次登记之前一直有效，<see cref="SaveAsync"/> 后清除。</remarks>
+    Task<Guid> BeginRunAsync(string settingName, CancellationToken cancellationToken = default);
+
+    /// <summary>读取一项测试当前有效的运行登记；没有或已被作废时为 <see langword="null"/>。</summary>
+    Task<Guid?> GetPendingRunAsync(string settingName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>一项测试的登记：挂在哪个设置上、结论依赖哪些设置、由哪个探针执行。</summary>

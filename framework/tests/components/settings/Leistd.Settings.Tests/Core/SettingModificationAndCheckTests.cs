@@ -195,6 +195,53 @@ public sealed class SettingModificationAndCheckTests
         Assert.True((await _checks.GetAllAsync())["Export.Headers"].IsStale);
     }
 
+    // 从缺项开始、探针期间写入又清除：起止都没有存值，仍是探针之后提交过的配置
+    [Fact]
+    public async Task A_write_and_clear_from_an_absent_value_makes_the_result_stale()
+    {
+        var services = Services();
+        var release = new TaskCompletionSource();
+        _probe.Pause = release.Task;
+
+        var running = services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Entered.Task;
+        var other = Services().GetRequiredService<ISettingManager>();
+        await other.SetAsync("Export.Endpoint", "https://collector:4318", SettingScopes.Tenant);
+        await other.SetAsync("Export.Endpoint", null, SettingScopes.Tenant);
+        release.SetResult();
+
+        Assert.True((await running).IsStale);
+    }
+
+    // 时钟固定（两次写入时间相同）时写回同值同样作废结论：判断不依赖时间戳
+    [Fact]
+    public async Task A_same_value_write_under_a_fixed_clock_makes_the_result_stale()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2026, 11, 23, 8, 0, 0, TimeSpan.Zero));
+        var services = Services(clock: clock);
+        await services.GetRequiredService<ISettingManager>().SetAsync("Export.Endpoint", "https://collector:4318", SettingScopes.Tenant);
+        var release = new TaskCompletionSource();
+        _probe.Pause = release.Task;
+
+        var running = services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Entered.Task;
+        await Services(clock: clock).GetRequiredService<ISettingManager>()
+            .SetAsync("Export.Endpoint", "https://collector:4318", SettingScopes.Tenant);
+        release.SetResult();
+
+        Assert.True((await running).IsStale);
+    }
+
+    // 没有写入时结论是当前的：登记不会被误判作废
+    [Fact]
+    public async Task A_run_without_concurrent_writes_is_current()
+    {
+        var result = await Services().GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+
+        Assert.False(result.IsStale);
+        Assert.False((await _checks.GetAllAsync())["Export.Headers"].IsStale);
+    }
+
     // 保存时持锁资格已失效：不再提交，否则锁外的写入可能先标了过期、再被这里覆盖成未过期
     [Fact]
     public async Task A_result_is_not_saved_after_the_write_lock_is_lost()
@@ -271,7 +318,10 @@ public sealed class SettingModificationAndCheckTests
     private static SettingOutputDto Single(IReadOnlyList<SettingOutputDto> settings, string name)
         => Assert.Single(settings, setting => setting.Name == name);
 
-    private IServiceProvider Services(FakeCurrentUser? currentUser = null, Leistd.Lock.Abstractions.IDistributedLock? writeLock = null)
+    private IServiceProvider Services(
+        FakeCurrentUser? currentUser = null,
+        Leistd.Lock.Abstractions.IDistributedLock? writeLock = null,
+        TimeProvider? clock = null)
     {
         var services = new ServiceCollection()
             .AddSettingsCore()
@@ -294,6 +344,11 @@ public sealed class SettingModificationAndCheckTests
         if (writeLock is not null)
         {
             services.AddSingleton(writeLock);
+        }
+
+        if (clock is not null)
+        {
+            services.AddSingleton(clock);
         }
 
         return services.BuildServiceProvider().CreateScope().ServiceProvider;
