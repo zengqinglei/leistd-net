@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using System.Net.Http.Headers;
+using Leistd.ExceptionHandling;
 using Leistd.ServiceClient.Abstractions;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.OAuth;
@@ -74,6 +75,11 @@ public sealed class OfficialClientTests : IAsyncLifetime
                 var serial = Interlocked.Increment(ref machineRequests);
                 return Results.Json(new { access_token = $"machine-{serial}", token_type = "Bearer", expires_in = 600 });
             }
+            // 主体令牌以 "rejected:" 开头时按其后的 OAuth 错误码拒绝交换
+            const string rejected = "rejected:";
+            var subject = form["subject_token"].ToString();
+            if (subject.StartsWith(rejected, StringComparison.Ordinal))
+                return Results.Json(new { error = subject[rejected.Length..] }, statusCode: 400);
             lock (exchanges) exchanges.Add(form);
             var exchangeSerial = Interlocked.Increment(ref exchangeRequests);
             return Results.Json(new { access_token = $"exchange-{exchangeSerial}", token_type = "Bearer", expires_in = 120,
@@ -218,6 +224,32 @@ public sealed class OfficialClientTests : IAsyncLifetime
         Assert.Equal("subject-two", exchanges[1]["subject_token"]);
         Assert.All(exchanges, form => { Assert.Equal("billing-api", form["audience"]); Assert.Equal("billing-api", form["scope"]); });
         Assert.Equal(0, machineRequests);
+    }
+
+    // 身份服务不再接受用户凭据（invalid_grant）时需要重新认证，原拒绝留作诊断；其他 OAuth 错误仍是远端故障
+    [Fact]
+    public async Task Exchange_rejected_with_invalid_grant_requires_authentication()
+    {
+        await using var provider = Caller(exchange: true, new Accessor("rejected:invalid_grant"));
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("Billing");
+
+        var exception = await Assert.ThrowsAsync<AuthenticationRequiredException>(() => client.GetAsync("https://billing.test/"));
+
+        var cause = Assert.IsType<RemoteServiceException>(exception.InnerException);
+        Assert.True(cause.IsOAuthError);
+        Assert.Equal("invalid_grant", cause.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Exchange_rejected_for_other_oauth_reasons_stays_a_remote_failure()
+    {
+        await using var provider = Caller(exchange: true, new Accessor("rejected:invalid_target"));
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("Billing");
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => client.GetAsync("https://billing.test/"));
+
+        Assert.Equal("invalid_target", exception.ErrorCode);
+        Assert.Equal(ServiceClientFailureKind.RemoteFailure, exception.FailureKind);
     }
 
     [Fact]

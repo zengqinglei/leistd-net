@@ -249,6 +249,37 @@ public sealed class ResponseFailureTests : IAsyncLifetime
         AssertNoSentinel(logs, exception);
     }
 
+    // 用户凭据失效是预期情况，不按故障告警；其余 OAuth 错误照常记 Error
+    [Theory]
+    [InlineData("invalid_grant", LogLevel.Information)]
+    [InlineData("invalid_client", LogLevel.Error)]
+    public async Task Token_errors_are_logged_at_error_unless_the_user_grant_was_rejected(string error, LogLevel level)
+    {
+        token = _ => Results.Json(new { error }, statusCode: 400);
+        var (provider, logs) = Caller();
+        await using var _ = provider;
+
+        await Assert.ThrowsAsync<RemoteServiceException>(() => RequestAsync(provider));
+
+        var record = Assert.Single(logs.GetSnapshot(), record => record.Message.Contains($"({error})", StringComparison.Ordinal));
+        Assert.Equal(level, record.Level);
+    }
+
+    // 降级只认令牌响应：发现文档里的同名 error 不是 OAuth 拒绝，仍是故障
+    [Fact]
+    public async Task An_invalid_grant_error_outside_the_token_response_is_still_logged_as_a_failure()
+    {
+        token = _ => Results.Json(new { access_token = "machine-1", token_type = "Bearer", expires_in = 600 });
+        discovery = _ => Results.Json(new { error = "invalid_grant" }, statusCode: 400);
+        var (provider, logs) = Caller();
+        await using var _ = provider;
+
+        await Assert.ThrowsAnyAsync<Exception>(() => RequestAsync(provider));
+
+        Assert.Contains(logs.GetSnapshot(), record => record.Level == LogLevel.Error &&
+            record.Message.Contains("(invalid_grant)", StringComparison.Ordinal));
+    }
+
     // 原样写出状态码、Content-Type（可缺省）与正文：Results.Content 缺省时会补 text/plain
     private sealed class RawResult(int status, string? contentType, string body) : IResult
     {
