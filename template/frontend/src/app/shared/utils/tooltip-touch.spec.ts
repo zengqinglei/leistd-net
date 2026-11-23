@@ -5,6 +5,7 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { userEvent } from 'vitest/browser';
 
 import { setCoarsePointer, touchTap } from './coarse-pointer.testing';
+import { parkPointer } from './pointer.testing';
 
 /**
  * 触摸点按不弹提示（helm 定制，见 docs/standards/frontend-spartan.md）：点按会让按钮获得焦点，此时 `:focus-visible`
@@ -32,6 +33,8 @@ describe('tooltip on touch', () => {
 
   beforeEach(async () => {
     await setCoarsePointer(true);
+    // 物理指针不会自动重置：渲染前移开，免得上一条用例留下的鼠标悬停被当成悬停放行（testing.md）
+    await parkPointer();
     fixture = TestBed.createComponent(TestHost);
     await settle();
   });
