@@ -4,6 +4,8 @@ using System.Text.Json;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.ExceptionHandling.Options;
 using Leistd.ExceptionHandling.Descriptors;
+using Leistd.Localization.Json;
+using Leistd.Localization.Options;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -46,6 +48,8 @@ public class GlobalExceptionPipelineTests
                             throw new BusinessException("OrderNotFound", $"Order {path[12..]} not found.");
                         if (path.StartsWith("/api/carried/", StringComparison.Ordinal))
                             throw new CarriedStatusException("OrderNotFound", int.Parse(path[13..], System.Globalization.CultureInfo.InvariantCulture));
+                        if (path == "/api/sign-in-required")
+                            throw new AuthenticationRequiredException();
                         if (path == "/api/custom")
                             throw new CustomApiException("custom failure");
                         if (path == "/api/programmer-error")
@@ -164,7 +168,8 @@ public class GlobalExceptionPipelineTests
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;
 
-        Assert.Empty(options.CodeStatusMappings);
+        // 只剩组件自己登记的默认项，配置节里写的码没有进来
+        Assert.False(options.CodeStatusMappings.ContainsKey("OrderNotFound"));
     }
 
     [Theory]
@@ -183,6 +188,57 @@ public class GlobalExceptionPipelineTests
 
         var response = await host.GetTestClient().GetAsync("/api/orders/7");
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    // 需要重新认证由框架统一答 401 并带固定码，前端据码重新登录；宿主不登记也成立
+    [Fact]
+    public async Task Authentication_required_is_answered_with_401_and_its_code_by_default()
+    {
+        using var host = await StartAsync(services => services.AddGlobalExceptionHandler());
+
+        var response = await host.GetTestClient().GetAsync("/api/sign-in-required");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // 字面值：公开契约变了要让测试也跟着改，而不是随常量一起悄悄变
+        Assert.Equal("Authentication:Required", problem.GetProperty("code").GetString());
+        // 未启用本地化时回退到异常自带的英文安全文案
+        Assert.Equal("Sign in again to continue.", problem.GetProperty("detail").GetString());
+    }
+
+    // 默认译文随发码的包分发，由 AddGlobalExceptionHandler 登记；宿主资源同名键可覆盖（覆盖顺序见本地化组件测试）
+    [Theory]
+    [InlineData("en", "Sign in again to continue.")]
+    [InlineData("zh-CN", "请重新登录后继续。")]
+    public void Authentication_required_ships_its_default_translations(string culture, string text)
+    {
+        var services = new ServiceCollection();
+        services.AddGlobalExceptionHandler();
+        using var provider = services.BuildServiceProvider();
+
+        var reader = new JsonLocalizationResourceReader(provider.GetRequiredService<IOptions<JsonLocalizationOptions>>());
+
+        Assert.Equal(text, reader.GetTexts(culture)["Authentication:Required"]);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Host_code_mapping_overrides_the_authentication_required_default_in_either_order(bool hostFirst)
+    {
+        using var host = await StartAsync(services =>
+        {
+            if (hostFirst)
+                services.Configure<GlobalExceptionOptions>(options =>
+                    options.MapCode(AuthenticationRequiredException.ErrorCode, StatusCodes.Status403Forbidden));
+            services.AddGlobalExceptionHandler(options =>
+            {
+                if (!hostFirst) options.MapCode(AuthenticationRequiredException.ErrorCode, StatusCodes.Status403Forbidden);
+            });
+        });
+
+        var response = await host.GetTestClient().GetAsync("/api/sign-in-required");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     // 正常响应不得被异常中间件改写——接入位置靠前，很容易误伤成功路径。

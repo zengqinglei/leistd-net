@@ -107,6 +107,7 @@ var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).T
 批量操作应先在范围内定位目标并核对数量，不能静默跳过越权项：
 
 ```csharp
+using Leistd.ExceptionHandling;
 using Microsoft.EntityFrameworkCore;
 
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Update, ct);
@@ -114,7 +115,8 @@ var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOp
 var targets = await scoped.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
 if (targets.Count != ids.Count)
 {
-    throw new UnauthorizedAccessException("Some of the selected orders are out of your data scope.");
+    // 已登录但越权：宿主用 MapCode("Orders:OutOfDataScope", 403) 映射
+    throw new BusinessException("Orders:OutOfDataScope", "Some of the selected orders are out of your data scope.");
 }
 
 foreach (var order in targets)

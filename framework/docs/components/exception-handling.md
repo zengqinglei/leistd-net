@@ -91,6 +91,7 @@ if (order.Status == OrderStatus.Shipped)
 | 异常 | 默认响应 |
 | --- | --- |
 | `BusinessException` | 实现 `IHasHttpStatusCode` 且值在 400–599 时用它，否则错误码映射命中时使用配置状态，再否则 400；返回本地化文案或安全 `Message` |
+| `AuthenticationRequiredException`（`BusinessException`，码 `Authentication:Required`） | 401：调用方从未登录或凭据已不被接受，需要重新认证；由 `AddGlobalExceptionHandler` 登记默认映射，宿主可用 `MapCode` 覆盖。已登录但无权限不用它，用带错误码的 `BusinessException` 映射为 403。不映射 BCL 的 `UnauthorizedAccessException`（它表示操作系统拒绝访问）。响应不带 `WWW-Authenticate`：异常发生在认证之后的业务代码里，处理器不知道宿主用哪种认证方式；需要标准质询的 Bearer API 由宿主在 `ProblemDetailsOptions.CustomizeProblemDetails` 里处理：回调能读到异常与 `HttpContext`，对本异常且最终状态为 401 的端点写入适用的 `WWW-Authenticate`，错误体保持不变 |
 | `System.ComponentModel.DataAnnotations.ValidationException` | 400，类型 `validation-error` + `errors`；不带业务码 |
 | `BadHttpRequestException`（Minimal API 绑定失败、请求体过大等框架判定的请求错误） | 处理器放行，由异常中间件按异常自带的状态码（400、413 等）写出标准问题详情；原始消息只进日志 |
 | 请求被客户端取消 | 官方 `ExceptionHandlerMiddleware` 在调用处理器之前直接返回 499，不经本组件 |

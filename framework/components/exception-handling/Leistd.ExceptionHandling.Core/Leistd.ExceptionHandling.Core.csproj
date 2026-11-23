@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 本包错误码的默认中英文案，由 AddGlobalExceptionHandler 经 AddJsonLocalizationResources 登记，宿主资源可覆盖 -->
+    <EmbeddedResource Include="Resources\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- GlobalExceptionOptions 的登记结果只给写出端读；宿主经 MapCode/MapDefaultCode 写入 -->
     <InternalsVisibleTo Include="Leistd.ExceptionHandling.AspNetCore" />
   </ItemGroup>

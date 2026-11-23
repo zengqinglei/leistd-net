@@ -202,9 +202,7 @@ public class OrderService(ICurrentUser currentUser)
 {
     public Task PlaceOrderAsync()
     {
-        if (!currentUser.IsAuthenticated)
-            throw new UnauthorizedAccessException();
-
+        // 要求登录由端点的 [Authorize] 保证；未登录时 Id 为 null
         Guid? userId = currentUser.Id;
         string? username = currentUser.Username;
         return Task.CompletedTask;
