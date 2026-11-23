@@ -1,6 +1,6 @@
 namespace Leistd.MultiTenancy;
 
-/// <summary>多租户组件记录的日志事件号，号段 4300–4399；告警按日志类别加事件号匹配。</summary>
+/// <summary>多租户组件记录的日志事件号，号段 4300–4399；框架内各组件号段不重叠，告警按事件号匹配。</summary>
 public static class MultiTenancyLogEvents
 {
     /// <summary>
