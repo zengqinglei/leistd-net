@@ -59,8 +59,8 @@ export const tooltipPositionVariants = cva('absolute', {
 export class HlmTooltip {
   private readonly _brnTooltip = inject(BrnTooltip);
   private readonly _host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
-  // 鼠标或笔真实停在宿主上；触摸点按后 CSS :hover 也会成立，不能用它判断
-  private _hoveredByPointer = false;
+  // 仍停在宿主上的鼠标或笔（按 pointerId）；触摸点按后 CSS :hover 也会成立，不能用它判断，触摸的进出一律不计
+  private readonly _hoveringPointers = new Set<number>();
 
   constructor() {
     const renderer = inject(Renderer2);
@@ -70,9 +70,11 @@ export class HlmTooltip {
     afterNextRender(() => {
       const unlisten = [
         renderer.listen(this._host, 'pointerenter', (event: PointerEvent) => {
-          this._hoveredByPointer = event.pointerType !== 'touch';
+          if (isHoverPointer(event)) this._hoveringPointers.add(event.pointerId);
         }),
-        renderer.listen(this._host, 'pointerleave', () => (this._hoveredByPointer = false)),
+        renderer.listen(this._host, 'pointerleave', (event: PointerEvent) => {
+          if (isHoverPointer(event)) this._hoveringPointers.delete(event.pointerId);
+        }),
         renderer.listen(this._host, 'focus', () => this._cancelUnlessFocusVisible()),
       ];
       destroyRef.onDestroy(() => unlisten.forEach((stop) => stop()));
@@ -90,7 +92,7 @@ export class HlmTooltip {
     const active = document.activeElement;
     const focused =
       active instanceof HTMLElement && this._host.contains(active) ? active : this._host;
-    if (isFocusVisible(focused) || this._hoveredByPointer) return;
+    if (isFocusVisible(focused) || this._hoveringPointers.size > 0) return;
     // 立即关闭：替换掉 Brain 排上的打开（其延时队列用 switchMap，后到的请求取消先到的）
     (this._brnTooltip as unknown as BrnTooltipDelay).delay(false, -1);
   }
@@ -103,6 +105,11 @@ export class HlmTooltip {
  */
 interface BrnTooltipDelay {
   delay(isShow: boolean, delay?: number): void;
+}
+
+/** 能悬停的指针：鼠标与笔。混合输入时触摸的进出不影响鼠标仍在悬停。 */
+function isHoverPointer(event: PointerEvent): boolean {
+  return event.pointerType === 'mouse' || event.pointerType === 'pen';
 }
 
 /** 运行环境不支持 `:focus-visible` 时按可见处理：宁可多弹，也不能让键盘用户看不到提示。 */

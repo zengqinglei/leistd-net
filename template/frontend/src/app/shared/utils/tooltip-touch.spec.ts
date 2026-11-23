@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
+import { userEvent } from 'vitest/browser';
 
 import { setCoarsePointer, touchTap } from './coarse-pointer.testing';
 
@@ -52,5 +53,20 @@ describe('tooltip on touch', () => {
     expect(document.activeElement).toBe(target);
     expect(target.matches(':hover')).toBe(true);
     expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
+  // 混合输入（触屏笔记本）：鼠标仍停在按钮上时手指点按同一按钮，触摸的进出不能清掉鼠标的悬停、关掉已打开的提示
+  it('keeps the tooltip opened by a hovering mouse when the same trigger is tapped', async () => {
+    const target = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '[data-testid="target"]',
+    )!;
+    await userEvent.hover(target);
+    await settle();
+    expect(document.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe('Edit');
+
+    await touchTap(target);
+    await settle();
+
+    expect(document.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe('Edit');
   });
 });
