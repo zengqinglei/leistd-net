@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using CompanyName.ProjectName.Api.Configuration;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using Leistd.Email.Smtp;
@@ -5,70 +7,66 @@ using Leistd.Email.Smtp.Options;
 using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Exceptions;
-using Leistd.Settings.Resolution;
+using Leistd.Settings.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.UnitTests.Api;
 
-/// <summary>系统设置的 SMTP 测试：只连接与认证；没配主机不连，存着的口令解不开时不拿旧口令去测。</summary>
+/// <summary>系统设置的 SMTP 测试：用这一次读到的存储值（缺项取部署配置）只连接与认证；没配主机不连，口令解不开不拿旧口令去测。</summary>
 /// <remarks>连通与认证的分类由框架 <c>SmtpEmailSender.ProbeAsync</c> 的协议测试覆盖，这里只验本项目的取值与映射。</remarks>
 public sealed class SmtpConnectionCheckTests
 {
-    private static readonly SettingCheckContext Context = new(SettingConstant.Email.SmtpHost, SettingScopes.Host);
-
     [Fact]
     public async Task Without_a_host_nothing_is_contacted()
     {
-        var outcome = await Check(new SmtpOptions { Host = "" }).ExecuteAsync(Context, CancellationToken.None);
+        var outcome = await Check([]).ExecuteAsync(Context([]), CancellationToken.None);
 
         Assert.Equal(SettingCheckFailureCodes.NotConfigured, outcome.FailureCode);
     }
 
-    // 本机没有监听的端口：连接立刻被拒
+    // 存储里的端口优先于部署配置：本机监听一个端口，接受连接后立即关闭，连接落在它上面即说明用了存储值
     [Fact]
-    public async Task A_server_that_refuses_the_connection_is_unreachable()
+    public async Task Stored_values_win_over_the_deployment_configuration()
     {
-        var outcome = await Check(new SmtpOptions { Host = "127.0.0.1", Port = 1, DefaultFromAddress = "noreply@example.com" })
-            .ExecuteAsync(Context, CancellationToken.None);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var accepted = listener.AcceptTcpClientAsync();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
+        var outcome = await Check(new() { [SettingConstant.Email.SmtpPort] = "1" }).ExecuteAsync(Context(new()
+        {
+            [SettingConstant.Email.SmtpHost] = "127.0.0.1",
+            [SettingConstant.Email.SmtpPort] = port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [SettingConstant.Email.SmtpEnableSsl] = "false",
+        }), CancellationToken.None);
+
+        using var client = await accepted.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(SettingCheckFailureCodes.Unreachable, outcome.FailureCode);
     }
 
     [Fact]
     public async Task A_stored_password_that_cannot_be_decrypted_is_not_replaced_by_the_deployed_one()
     {
-        var check = Check(new SmtpOptions { Host = "127.0.0.1", Port = 1 }, undecryptable: SettingConstant.Email.SmtpPassword);
+        var context = Context(new() { [SettingConstant.Email.SmtpHost] = "127.0.0.1" }, undecryptable: SettingConstant.Email.SmtpPassword);
 
-        await Assert.ThrowsAsync<SettingDecryptionException>(() => check.ExecuteAsync(Context, CancellationToken.None));
+        await Assert.ThrowsAsync<SettingDecryptionException>(
+            () => Check(new() { [SettingConstant.Email.SmtpPassword] = "deployed" }).ExecuteAsync(context, CancellationToken.None));
     }
 
-    private static SmtpConnectionCheck Check(SmtpOptions options, string? undecryptable = null)
+    private static SmtpConnectionCheck Check(Dictionary<string, string?> deployed)
+        => new(
+            new Baseline(deployed),
+            new SmtpEmailSender(new Monitor(new SmtpOptions()), NullLogger<SmtpEmailSender>.Instance));
+
+    private static SettingCheckContext Context(Dictionary<string, string?> stored, string? undecryptable = null)
+        => new(SettingConstant.Email.SmtpHost, SettingScopes.Host, (name, _) => name == undecryptable
+            ? Task.FromException<string?>(new SettingDecryptionException(name, [name], keyId: null, new InvalidOperationException()))
+            : Task.FromResult(stored.GetValueOrDefault(name)));
+
+    private sealed class Baseline(Dictionary<string, string?> values) : IHostSettingBaseline
     {
-        var monitor = new Monitor(options);
-        return new SmtpConnectionCheck(
-            new Settings(undecryptable),
-            new SmtpEmailSender(monitor, NullLogger<SmtpEmailSender>.Instance),
-            monitor);
-    }
-
-    private sealed class Settings(string? undecryptable) : ISettingProvider
-    {
-        public Task<string?> GetOrNullAsync(string name, CancellationToken cancellationToken = default)
-            => name == undecryptable
-                ? Task.FromException<string?>(new SettingDecryptionException(name, [name], keyId: null, new InvalidOperationException()))
-                : Task.FromResult<string?>(null);
-
-        public Task<string?> GetOrNullForUserAsync(string name, string userId, CancellationToken cancellationToken = default)
-            => GetOrNullAsync(name, cancellationToken);
-
-        public Task<T?> GetAsync<T>(string name, CancellationToken cancellationToken = default)
-            => Task.FromResult<T?>(default);
-
-        public Task<IReadOnlyDictionary<string, string?>> GetAllAsync(
-            bool visibleToClientsOnly = false,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyDictionary<string, string?>>(new Dictionary<string, string?>());
+        public string? GetDeploymentValue(string settingName) => values.GetValueOrDefault(settingName);
     }
 
     private sealed class Monitor(SmtpOptions value) : IOptionsMonitor<SmtpOptions>

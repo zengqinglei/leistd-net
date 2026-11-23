@@ -25,7 +25,7 @@ public interface ISettingCheckStore
     /// <summary>读取当前租户下全部测试的最近结果，键为主设置名。</summary>
     Task<IReadOnlyDictionary<string, SettingCheckResult>> GetAllAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>保存一项测试的最近结果，覆盖上一次，过期标记随之清除。</summary>
+    /// <summary>保存一项测试的最近结果，覆盖上一次（含过期标记，按 <see cref="SettingCheckResult.IsStale"/> 原样保存）。</summary>
     Task SaveAsync(string settingName, SettingCheckResult result, CancellationToken cancellationToken = default);
 
     /// <summary>把当前租户下这些测试的结果标记为过期；没有结果的项忽略。</summary>

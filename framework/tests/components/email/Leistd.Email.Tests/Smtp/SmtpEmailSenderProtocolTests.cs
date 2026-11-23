@@ -44,6 +44,27 @@ public sealed class SmtpEmailSenderProtocolTests
         Assert.False(server.Accepted);
     }
 
+    // 给定的参数优先于当前配置：设置测试用刚读到的存储值探测，进程里的配置可能尚未刷新
+    [Fact]
+    public async Task A_probe_uses_the_given_options_instead_of_the_current_configuration()
+    {
+        await using var server = new LoopbackSmtpServer();
+        var sender = new SmtpEmailSender(new FixedOptionsMonitor(new SmtpOptions
+        {
+            Host = "127.0.0.1",
+            Port = 1,
+            EnableSsl = false,
+            DefaultFromAddress = "noreply@example.com",
+        }), _logger)
+        {
+            CreateClient = () => new SmtpClient { Timeout = 10_000 },
+        };
+
+        var result = await sender.ProbeAsync(new SmtpOptions { Host = "127.0.0.1", Port = server.Port, EnableSsl = false });
+
+        Assert.Equal(SmtpProbeResult.Succeeded, result);
+    }
+
     [Fact]
     public async Task A_probe_reports_rejected_credentials()
     {

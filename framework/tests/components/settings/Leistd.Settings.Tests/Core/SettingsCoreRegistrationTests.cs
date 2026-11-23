@@ -1,7 +1,14 @@
+using Leistd.Lock.Memory;
+using Leistd.Security.Users;
+using Leistd.Settings.Checks;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Management;
 using Leistd.Settings.Options;
 using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
+using Leistd.Settings.Tests.TestDoubles;
+using Leistd.TestBase.Doubles;
+using Leistd.UnitOfWork;
 using Leistd.TestBase.Assertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -54,5 +61,23 @@ public sealed class SettingsCoreRegistrationTests
         services.AddSettingsCore();
 
         Assert.NotNull(services.AssertSingle<ISettingProvider>(ServiceLifetime.Scoped).ImplementationFactory);
+    }
+
+    // 只换了自己的设置存储、没有登记任何测试的宿主：不因测试结果存储缺席而构建失败
+    [Fact]
+    public void A_host_with_only_its_own_setting_store_builds_without_a_check_store()
+    {
+        var services = new ServiceCollection()
+            .AddSettingsCore()
+            .AddSingleton<ISettingStore>(new FakeSettingStore())
+            .AddSingleton<ICurrentUser>(new FakeCurrentUser())
+            .AddLogging()
+            .AddMemoryLocalLock()
+            .AddSingleton<IUnitOfWorkManager>(new RecordingUnitOfWorkManager());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISettingCheckService>());
     }
 }

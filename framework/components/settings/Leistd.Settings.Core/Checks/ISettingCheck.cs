@@ -4,8 +4,9 @@ namespace Leistd.Settings.Checks;
 
 /// <summary>对一组设置做一次探测（例如用凭据调一次供应商），确认配置可用。</summary>
 /// <remarks>
-/// <para>经 <c>AddSettingCheck&lt;T&gt;</c> 登记，按作用域解析。探针经 <see cref="Resolution.ISettingProvider"/> 读当前生效的值；
-/// 读到解不开的机密设置时不必自己处理，调用方归一为 <see cref="SettingCheckFailureCodes.SecretUnavailable"/>。</para>
+/// <para>经 <c>AddSettingCheck&lt;T&gt;</c> 登记，按作用域解析。探针经 <see cref="SettingCheckContext.GetValueAsync"/> 读本次测试那一层的值：
+/// 不含个人覆盖，也不读进程里已生效的配置（另一副本可能尚未刷新）；读到解不开的机密设置时不必自己处理，调用方归一为
+/// <see cref="SettingCheckFailureCodes.SecretUnavailable"/>。</para>
 /// <para>失败用 <see cref="SettingCheckOutcome.Fail"/> 返回失败码，不抛异常；码取 <see cref="SettingCheckFailureCodes"/> 的基线，
 /// 或业务自己的稳定字符串。结果会保存并展示给管理员，不要把供应商的原始响应或设置值放进去。</para>
 /// </remarks>
@@ -18,9 +19,31 @@ public interface ISettingCheck
 }
 
 /// <summary>一次测试的上下文。</summary>
-/// <param name="SettingName">登记测试的主设置名。</param>
-/// <param name="Scope">测试所在的层级：租户上下文为 <see cref="SettingScopes.Tenant"/>，进程级设置为 <see cref="SettingScopes.Host"/>。</param>
-public sealed record SettingCheckContext(string SettingName, SettingScopes Scope);
+/// <param name="settingName">登记测试的主设置名。</param>
+/// <param name="scope">测试所在的层级：租户上下文为 <see cref="SettingScopes.Tenant"/>，进程级设置为 <see cref="SettingScopes.Host"/>。</param>
+/// <param name="readValue">按设置名读本层的值；由 <see cref="ISettingCheckService"/> 提供，单测可传自己的实现。</param>
+public sealed class SettingCheckContext(
+    string settingName,
+    SettingScopes scope,
+    Func<string, CancellationToken, Task<string?>> readValue)
+{
+    /// <summary>登记测试的主设置名。</summary>
+    public string SettingName { get; } = settingName;
+
+    /// <summary>测试所在的层级。</summary>
+    public SettingScopes Scope { get; } = scope;
+
+    /// <summary>读一项设置在本层的值：存储里本层的值（机密设置已解密），没有时为代码默认值。</summary>
+    /// <remarks>
+    /// 不经个人覆盖：结果是全租户（或宿主）共享的。被绑定的宿主级设置的代码默认值就是部署基线；
+    /// 机密设置没有默认值，存储里没有时为 <see langword="null"/>，部署配置里的值由宿主另取。
+    /// 解不开时抛 <see cref="Exceptions.SettingDecryptionException"/>。
+    /// </remarks>
+    /// <param name="name">设置名。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public Task<string?> GetValueAsync(string name, CancellationToken cancellationToken = default)
+        => readValue(name, cancellationToken);
+}
 
 /// <summary>一次测试的结论。</summary>
 public sealed record SettingCheckOutcome

@@ -82,7 +82,7 @@ public sealed class SettingModificationAndCheckTests
         var result = await services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
         var listed = Single(await services.GetRequiredService<ISettingManagementService>().GetAsync(), "Export.Headers");
 
-        Assert.Equal(new SettingCheckContext("Export.Headers", SettingScopes.Tenant), _probe.LastContext);
+        Assert.Equal(("Export.Headers", SettingScopes.Tenant), (_probe.LastContext!.SettingName, _probe.LastContext.Scope));
         Assert.False(result.Passed);
         Assert.Equal(SettingCheckFailureCodes.AuthRejected, result.FailureCode);
         Assert.Equal("Alice Admin", result.CheckerName);
@@ -149,9 +149,58 @@ public sealed class SettingModificationAndCheckTests
         Assert.Equal(SettingCheckFailureCodes.UnexpectedError, result.FailureCode);
     }
 
+    // 探针运行期间另一个请求改了依赖并提交：结论针对的是旧配置，直接按过期保存，不能显示成当前结论
+    [Theory]
+    [InlineData("https://other:4318")]
+    [InlineData(null)]
+    public async Task A_change_committed_while_the_probe_runs_saves_the_result_as_stale(string? value)
+    {
+        var services = Services();
+        await services.GetRequiredService<ISettingManager>().SetAsync("Export.Endpoint", "https://collector:4318", SettingScopes.Tenant);
+        var release = new TaskCompletionSource();
+        _probe.Pause = release.Task;
+
+        var running = services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+        await _probe.Entered.Task;
+        await Services().GetRequiredService<ISettingManager>().SetAsync("Export.Endpoint", value, SettingScopes.Tenant);
+        release.SetResult();
+
+        Assert.True((await running).IsStale);
+        Assert.True((await _checks.GetAllAsync())["Export.Headers"].IsStale);
+    }
+
+    // 探针读的是测试那一层的值：全租户共享的结论不能来自操作者自己的个人覆盖
+    [Fact]
+    public async Task The_probe_reads_the_tested_level_rather_than_a_personal_override()
+    {
+        var services = Services();
+        var manager = services.GetRequiredService<ISettingManager>();
+        await manager.SetAsync("Export.Endpoint", "https://tenant:4318", SettingScopes.Tenant);
+        await manager.SetAsync("Export.Endpoint", "https://mine:4318", SettingScopes.User, AdminId.ToString());
+        _probe.Read = "Export.Endpoint";
+
+        await services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers");
+
+        Assert.Equal("https://tenant:4318", _probe.ReadValue);
+    }
+
+    // 探针外呼期间不能持有调用方的数据库事务
+    [Fact]
+    public async Task A_check_refuses_to_run_inside_a_transactional_unit_of_work()
+    {
+        var services = Services();
+        var unitOfWork = (RecordingUnitOfWorkManager)services.GetRequiredService<IUnitOfWorkManager>();
+        unitOfWork.Current = unitOfWork.Begin(new Leistd.UnitOfWork.Options.UnitOfWorkOptions { IsTransactional = true });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => services.GetRequiredService<ISettingCheckService>().RunAsync("Export.Headers"));
+        Assert.Null(_probe.LastContext);
+    }
+
     [Theory]
     [InlineData("Export.Endpoint")]
     [InlineData("Missing.Setting")]
+    [InlineData("Display.Personal")]
     public async Task A_setting_without_a_check_is_not_available(string name)
     {
         var error = await Assert.ThrowsAsync<BusinessException>(
@@ -182,6 +231,8 @@ public sealed class SettingModificationAndCheckTests
         var services = new ServiceCollection()
             .AddSettingsCore()
             .AddSettingCheck<ProbeCheck>("Export.Headers", "Export.Endpoint")
+            // 只允许个人覆盖的设置登记了探针也不能测：没有可管理的层
+            .AddSettingCheck<ProbeCheck>("Display.Personal")
             .AddSingleton<ISettingDefinitionProvider, Definitions>()
             .AddSingleton<ISettingStore>(_store)
             .AddSingleton<ISettingCheckStore>(_checks)
@@ -203,6 +254,7 @@ public sealed class SettingModificationAndCheckTests
         public void Define(ISettingDefinitionContext context)
         {
             context.Add("Display.TimeZone", "UTC", SettingScopes.All).IsVisibleToClients = true;
+            context.Add("Display.Personal", scopes: SettingScopes.User).IsVisibleToClients = true;
             context.Add("Export.Endpoint", scopes: SettingScopes.All).IsVisibleToClients = true;
             var headers = context.Add("Export.Headers", scopes: SettingScopes.Tenant);
             headers.IsVisibleToClients = true;
@@ -218,10 +270,31 @@ public sealed class SettingModificationAndCheckTests
 
         public SettingCheckContext? LastContext { get; private set; }
 
-        public Task<SettingCheckOutcome> ExecuteAsync(SettingCheckContext context, CancellationToken cancellationToken)
+        /// <summary>不为空时探针在这里等待，模拟一次慢的外呼。</summary>
+        public Task? Pause { get; set; }
+
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>不为空时探针经上下文读这一项，读到的值记在 <see cref="ReadValue"/>。</summary>
+        public string? Read { get; set; }
+
+        public string? ReadValue { get; private set; }
+
+        public async Task<SettingCheckOutcome> ExecuteAsync(SettingCheckContext context, CancellationToken cancellationToken)
         {
             LastContext = context;
-            return Throw is null ? Task.FromResult(Next) : Task.FromException<SettingCheckOutcome>(Throw);
+            if (Read is not null)
+            {
+                ReadValue = await context.GetValueAsync(Read, cancellationToken);
+            }
+
+            Entered.TrySetResult();
+            if (Pause is not null)
+            {
+                await Pause;
+            }
+
+            return Throw is null ? Next : throw Throw;
         }
     }
 

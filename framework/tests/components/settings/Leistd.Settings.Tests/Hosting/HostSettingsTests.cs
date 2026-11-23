@@ -128,6 +128,21 @@ public sealed class HostSettingsTests : IDisposable
         Assert.Equal(("from-config", "Debug"), (Options.Password, Options.Level));
     }
 
+    // 部署值不含系统设置的覆盖：设置测试要用这一次读到的存储值，缺项才取部署配置，不能取进程里已叠加覆盖的配置
+    [Fact]
+    public async Task The_deployment_baseline_ignores_host_setting_overrides()
+    {
+        _store.Host["Demo.Password"] = Protect(_dataProtection, "Demo.Password", "p1");
+        _store.Host["Demo.Level"] = "Debug";
+        await ApplyAsync();
+        var baseline = _host.Services.GetRequiredService<IHostSettingBaseline>();
+
+        Assert.Equal(("p1", "Debug"), (Options.Password, Options.Level));
+        Assert.Equal("from-config", baseline.GetDeploymentValue("Demo.Password"));
+        Assert.Equal("warning", baseline.GetDeploymentValue("Demo.Level"));
+        Assert.Null(baseline.GetDeploymentValue("Demo.Unbound"));
+    }
+
     [Fact]
     public async Task A_committed_host_write_is_applied_to_this_process()
     {

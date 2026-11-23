@@ -192,7 +192,7 @@ public sealed class DefaultSettingManager(
             : new SettingModification(time, null, null);
     }
 
-    private string LockKey() => currentTenant?.Id is { } tenantId ? $"settings:{tenantId:D}" : "settings:host";
+    private string LockKey() => SettingWriteLock.Key(currentTenant);
 
     // 宿主可能把默认工作单元配成非事务型；本操作的回滚与“提交先于释放锁”都依赖事务
     private UnitOfWorkOptions TransactionalOptions()

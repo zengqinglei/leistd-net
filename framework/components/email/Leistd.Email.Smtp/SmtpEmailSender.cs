@@ -69,9 +69,19 @@ public sealed class SmtpEmailSender(
     /// </remarks>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>探测结果。</returns>
-    public async Task<SmtpProbeResult> ProbeAsync(CancellationToken cancellationToken = default)
+    public Task<SmtpProbeResult> ProbeAsync(CancellationToken cancellationToken = default)
+        => ProbeAsync(options.CurrentValue, cancellationToken);
+
+    /// <summary>按给定的发信参数连接服务器并认证，不发信。</summary>
+    /// <remarks>
+    /// 用于在参数生效之前确认它们：例如设置页刚读到的存储值，而进程里的配置可能尚未刷新。只用到主机、端口、加密与用户名口令。
+    /// </remarks>
+    /// <param name="current">要探测的发信参数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>探测结果。</returns>
+    public async Task<SmtpProbeResult> ProbeAsync(SmtpOptions current, CancellationToken cancellationToken = default)
     {
-        var current = options.CurrentValue;
+        ArgumentNullException.ThrowIfNull(current);
         using var client = CreateClient();
         try
         {

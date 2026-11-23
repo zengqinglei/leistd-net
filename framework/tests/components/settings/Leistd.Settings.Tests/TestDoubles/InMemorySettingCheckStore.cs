@@ -2,7 +2,7 @@ using Leistd.Settings.Checks;
 
 namespace Leistd.Settings.Tests.TestDoubles;
 
-// 单租户的内存测试结果存储：保存即覆盖并清除过期标记，标记过期只作用于已有结果
+// 单租户的内存测试结果存储：保存即覆盖（过期标记原样保存），标记过期只作用于已有结果
 internal sealed class InMemorySettingCheckStore : ISettingCheckStore
 {
     private readonly Dictionary<string, SettingCheckResult> _results = new(StringComparer.Ordinal);
@@ -20,7 +20,7 @@ internal sealed class InMemorySettingCheckStore : ISettingCheckStore
     {
         lock (_results)
         {
-            _results[settingName] = result with { IsStale = false };
+            _results[settingName] = result;
         }
 
         return Task.CompletedTask;

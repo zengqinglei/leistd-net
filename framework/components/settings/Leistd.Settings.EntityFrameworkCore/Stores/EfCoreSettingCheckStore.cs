@@ -106,7 +106,7 @@ public class EfCoreSettingCheckStore<TDbContext>(
         record.CheckTime = result.Time;
         record.CheckerId = result.CheckerId;
         record.CheckerName = result.CheckerName;
-        record.IsStale = false;
+        record.IsStale = result.IsStale;
     }
 
     // 与 EfCoreSettingStore 的租户级同一写法：宿主为 host:t
