@@ -132,7 +132,7 @@ ASP.NET Core 宿主按上面的注册契约选择证明来源；仅有 Cookie �
 机器令牌过半续取时，有未到可用截止的旧令牌则单次最多等待 1 秒；超时先返回旧令牌并设 30 秒节流，原回源继续。续取成功替换令牌，明确拒绝或 401 清除旧令牌；等待期间已清除或到达可用截止的令牌不能回填。每个调用方可单独取消等待，共享回源继续受 OpenIddict 客户端时限约束。无旧令牌及 Token Exchange 沿用正常等待，该预算不是整条 HTTP 调用链的上限。
 
 401 清除对应的进程内令牌，下次调用重新获取。组件不自动重放业务请求，调用方按幂等性决定重试。
-令牌端点的真实失败响应使用 `RemoteServiceException`（`RemoteFailure`，默认 502），保留真实状态、OAuth 错误码及 `IsOAuthError` 来源。传输失败归 `Unavailable` / `Timeout`（503 / 504），无效响应归 `InvalidResponse`（502）。
+令牌端点的真实失败响应使用 `RemoteServiceException`（`RemoteFailure`，默认 502），保留真实状态、OAuth 错误码及 `IsOAuthError` 来源。Token Exchange 被以 `invalid_grant` 拒绝时改抛 `AuthenticationRequiredException`（默认 401），原 `RemoteServiceException` 作为内层异常，OAuth 诊断从中读取。这是组件对 `invalid_grant` 的约定：按 RFC 6749 与 OpenIddict 的用法，它表示签发方不再接受该用户凭据（会话结束、令牌过期或撤销、用户停用），重试和换上游都无效，只能重新认证。签发方若把调用方配置问题（如授权方不匹配）也答成 `invalid_grant`，同样会被当作需要重新认证，应在签发方把这类拒绝改用 `invalid_target`、`unauthorized_client` 等代码。令牌响应守卫对该错误只记 Information，其余 OAuth 错误仍记 Error；业务请求转成 401 后由全局异常处理按 4xx 另记一条。传输失败归 `Unavailable` / `Timeout`（503 / 504），无效响应归 `InvalidResponse`（502）。
 `ServiceClientFailureClassifier.IsUnavailable` 统一判断依赖暂不可达：传输不可达或超时、HTTP 408/429/5xx；真实 OAuth 错误优先，只有 `server_error` / `temporarily_unavailable` 属暂时故障。业务接口错误码不按 OAuth 解释。明确拒绝立即丢弃旧令牌；主动取消照常传播。
 
 官方客户端在响应解析失败、非成功状态码且没有 OAuth error、成功状态码却取不出响应时一律拒绝为 `server_error`，7.x 还会把调用方取消当成 JSON 不合法；7.8 起官方默认也不再记录响应原文。

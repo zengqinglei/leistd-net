@@ -82,10 +82,13 @@ internal static class ResponseFailureGuard
             if (!response.IsSuccessStatusCode || !string.IsNullOrEmpty(context.Transaction.Response?.Error))
             {
                 var error = context.Transaction.Response?.Error;
-                context.Logger.LogError("The remote server returned HTTP {StatusCode} ({Error}).", (int)response.StatusCode, error);
+                var oauthError = context is ExtractTokenResponseContext && !string.IsNullOrEmpty(error);
+                // 令牌端点的 invalid_grant 是用户凭据失效（会话结束、令牌过期），属于预期情况，不按故障告警
+                context.Logger.Log(oauthError && error == OpenIddictConstants.Errors.InvalidGrant ? LogLevel.Information : LogLevel.Error,
+                    "The remote server returned HTTP {StatusCode} ({Error}).", (int)response.StatusCode, error);
                 throw new RemoteServiceException($"The remote server returned HTTP {(int)response.StatusCode} ({error}).",
                     (int)response.StatusCode, error)
-                { IsOAuthError = context is ExtractTokenResponseContext && !string.IsNullOrEmpty(error) };
+                { IsOAuthError = oauthError };
             }
         }
 

@@ -36,6 +36,7 @@ using System.Text.RegularExpressions;
 
 #if (TenantWorkspace)
 using CompanyName.ProjectName.Infrastructure.Users;
+using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Stores;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Time.Testing;
@@ -87,6 +88,31 @@ public sealed class ResourceBrowserSessionTests
         Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
         using var me = await homeBrowser.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+    }
+
+    // 本人凭据不再被接受（会话结束、账号停用）答 401 与固定码，前端整页重新登录；没有这个工作区仍是 403
+    [Theory]
+    [InlineData("invalid_grant", HttpStatusCode.Unauthorized)]
+    [InlineData("invalid_target", HttpStatusCode.Forbidden)]
+    public async Task A_rejected_workspace_exchange_requires_authentication_only_when_the_user_grant_is_invalid(string error, HttpStatusCode expected)
+    {
+        using var factory = new ProjectWebApplicationFactory { UseProductionAuthentication = true };
+        using var issuer = new Issuer { WorkspaceExchangeError = error };
+        using var host = WorkspaceHost(factory, issuer, TimeProvider.System);
+        var cookie = await LoginAsync(host, issuer);
+        using var browser = Client(host, cookie);
+        browser.DefaultRequestHeaders.Add("X-Workspace", "acme");
+
+        // 走业务端点：认证在全局异常处理之内执行，与真实请求同一路径
+        using var response = await browser.GetAsync("/api/v1/users?offset=0&limit=10");
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(1, issuer.WorkspaceExchanges);
+        if (expected == HttpStatusCode.Unauthorized)
+        {
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(AuthenticationRequiredException.ErrorCode, problem.RootElement.GetProperty("code").GetString());
+        }
     }
 
     [Fact]
@@ -914,6 +940,7 @@ public sealed class ResourceBrowserSessionTests
         public TimeProvider WorkspaceClock { get; set; } = TimeProvider.System;
         public int WorkspaceLifetime { get; set; } = 300;
         public int WorkspaceExchanges { get; private set; }
+        public string? WorkspaceExchangeError { get; set; }
         public string WorkspaceMemberId { get; set; } = Guid.NewGuid().ToString();
         public Guid WorkspaceTenantId { get; } = Guid.NewGuid();
 #endif
@@ -935,6 +962,8 @@ public sealed class ResourceBrowserSessionTests
             {
                 var workspace = form.TryGetValue("workspace", out var requestedWorkspace) ? requestedWorkspace.ToString() : "";
                 if (!string.IsNullOrEmpty(workspace)) WorkspaceExchanges++;
+                if (!string.IsNullOrEmpty(workspace) && WorkspaceExchangeError is { } exchangeError)
+                    return new(HttpStatusCode.BadRequest) { Content = JsonContent.Create(new { error = exchangeError }) };
                 var claims = new Dictionary<string, object> { ["sub"] = string.IsNullOrEmpty(workspace) ? Subject : WorkspaceMemberId, ["jti"] = Guid.NewGuid().ToString() };
                 if (!string.IsNullOrEmpty(workspace)) { claims["home_sub"] = Subject; claims["tenant_id"] = WorkspaceTenantId.ToString(); }
                 var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor

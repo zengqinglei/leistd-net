@@ -2,7 +2,9 @@
 using System.Globalization;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Shared;
+using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Stores;
+using Leistd.ServiceClient.Exceptions;
 using Leistd.Security.AspNetCore.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Caching.Memory;
@@ -42,9 +44,15 @@ internal sealed class ResourceWorkspaceTicketProvider(IMemoryCache cache, IServi
                     AdditionalTokenRequestParameters = new() { ["workspace"] = tenant.Name }
                 });
             }
-            catch (OpenIddict.Abstractions.OpenIddictExceptions.ProtocolException exception) when (exception.Error == Errors.InvalidTarget)
+            // 框架在官方客户端上统一接手令牌响应，OAuth 拒绝以 RemoteServiceException 抛出（保留错误码）
+            catch (RemoteServiceException exception) when (exception is { IsOAuthError: true, ErrorCode: Errors.InvalidTarget })
             {
                 return null;
+            }
+            catch (RemoteServiceException exception) when (exception is { IsOAuthError: true, ErrorCode: Errors.InvalidGrant })
+            {
+                // 身份服务不再接受本人凭据（会话结束、令牌撤销、账号停用）：与框架的 Token Exchange 同一口径，答 401 让前端重新登录
+                throw new AuthenticationRequiredException(exception);
             }
             if (result.IssuedTokenExpirationDate is not { } expiry || expiry <= clock.GetUtcNow()) return null;
             token = new(result.IssuedToken, expiry);

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Leistd.ExceptionHandling;
 using Leistd.ServiceClient.Abstractions;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.OAuth.Options;
@@ -38,7 +39,17 @@ internal sealed class TokenExchangeDelegatingHandler(string name, OpenIddictClie
                 throw new ServiceClientException("The issuer returned an unsupported exchanged token type.");
             return new(result.IssuedToken, result.IssuedTokenExpirationDate);
         }
-        var token = await cache.GetAsync(key, ExpirationBuffer, Fetch, cancellationToken);
+        TokenCache.Token token;
+        try
+        {
+            token = await cache.GetAsync(key, ExpirationBuffer, Fetch, cancellationToken);
+        }
+        catch (RemoteServiceException exception) when (exception is { IsOAuthError: true, ErrorCode: Errors.InvalidGrant })
+        {
+            // RFC 6749 §5.2；OpenIddict 把无效、过期或已撤销的主体令牌一律答 invalid_grant：
+            // 身份服务不再接受这份用户凭据，重试与换上游都没用，只能让用户重新认证
+            throw new AuthenticationRequiredException(exception);
+        }
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
         var response = await base.SendAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.Unauthorized) await cache.RemoveAsync(key, cancellationToken);

@@ -5,8 +5,9 @@ namespace Leistd.Authorization.Checking;
 /// <summary>检查权限授予状态。</summary>
 /// <example>
 /// <code>
+/// // 已登录但无权限：业务错误码由宿主 MapCode 映射为 403
 /// if (!await permissionChecker.IsGrantedAsync("Orders.Update", ct))
-///     throw new UnauthorizedAccessException();
+///     throw new BusinessException("Orders:UpdateForbidden", "You cannot update orders.");
 ///
 /// // 批量检查：一次读取，其后都是内存查找
 /// var result = await permissionChecker.IsGrantedAsync(["Orders.Read", "Orders.Update"], ct);

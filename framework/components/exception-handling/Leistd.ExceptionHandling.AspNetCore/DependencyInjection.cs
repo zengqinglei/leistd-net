@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Mvc.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Leistd.ExceptionHandling.Options;
 using Leistd.ExceptionHandling.Descriptors;
+using Leistd.Localization;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -97,6 +98,7 @@ public static class DependencyInjection
     /// <remarks>
     /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加；
     /// 换用另一配置节时两个配置节都会绑定（后绑定的覆盖同名键）。
+    /// <see cref="AuthenticationRequiredException"/> 的错误码默认答 401，宿主可用 <c>MapCode</c> 覆盖。
     /// </remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">编程式配置（如错误码映射），在配置节绑定之后应用。</param>
@@ -121,6 +123,9 @@ public static class DependencyInjection
         RegisterProblemDetailsConventions(services);
 
         var options = services.AddOptions<GlobalExceptionOptions>().BindConfiguration(configSectionPath);
+        // 本包拥有的默认状态；MapDefaultCode 按码 TryAdd，重复调用幂等，宿主的 MapCode 与调用顺序无关地优先
+        options.Configure(o => o.MapDefaultCode(AuthenticationRequiredException.ErrorCode, StatusCodes.Status401Unauthorized));
+        services.AddJsonLocalizationResources(typeof(AuthenticationRequiredException).Assembly);
         if (configure is not null)
         {
             options.Configure(configure);

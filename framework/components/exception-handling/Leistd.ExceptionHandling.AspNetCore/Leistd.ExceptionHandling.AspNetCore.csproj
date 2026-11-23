@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
+    <!-- 登记 Core 错误码的默认译文 -->
+    <ProjectReference Include="..\..\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
   </ItemGroup>
 
 </Project>
