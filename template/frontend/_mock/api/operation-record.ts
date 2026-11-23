@@ -211,12 +211,11 @@ export function exportOperationRecords(params: any): MockResponse {
     actorName: actor?.displayName ?? actor?.username,
   });
 
-  return {
-    status: 200,
+  return new MockResponse({
     headers: new HttpHeaders({ 'Content-Type': 'text/csv' }),
     // 与后端一样带 UTF-8 BOM：否则 Excel 按本地代码页解释，中文全是乱码。
     body: new Blob(['﻿', content], { type: 'text/csv' }),
-  };
+  });
 }
 
 // 只读：记录写下之后不再修改或删除，因此没有写端点。

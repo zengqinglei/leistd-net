@@ -9,7 +9,7 @@ import {
 } from '../../src/app/features/platform/dtos/webhook.dto';
 import { PERMISSIONS } from '../../src/app/shared/constants/permission.constants';
 import { PagedResultDto } from '../../src/app/shared/dtos/paged-result.dto';
-import { MockException, MockRequest, MockResponse } from '../core/models';
+import { MockException, MockRequest } from '../core/models';
 import {
   MockWebhookDelivery,
   MockWebhookSubscription,
@@ -105,14 +105,6 @@ function subscriptionOutput(
       : null,
     successRateLast7Days: terminal > 0 ? succeeded / terminal : null,
   };
-}
-
-/**
- * 投递 DTO 自带字符串 `status`，Mock 拦截器会把带 `status` 的返回值当成 `MockResponse`，正文变成 null；
- * 显式包一层，让它按 200 正文返回。
- */
-function deliveryResponse<T>(body: T): MockResponse {
-  return { status: 200, body };
 }
 
 function deliveryOutput(delivery: MockWebhookDelivery): WebhookDeliveryOutputDto {
@@ -399,7 +391,7 @@ function sendTestEvent(req: MockRequest) {
   };
   sendNow(delivery, 'automatic', now);
   WEBHOOK_DELIVERIES.unshift(delivery);
-  return deliveryResponse(deliveryOutput(delivery));
+  return deliveryOutput(delivery);
 }
 
 function getDeliveries(req: MockRequest) {
@@ -441,7 +433,7 @@ function retryDelivery(req: MockRequest) {
     throw disabledConflict();
   }
   sendNow(delivery, 'manual', Date.now());
-  return deliveryResponse(deliveryOutput(delivery));
+  return deliveryOutput(delivery);
 }
 
 /**
@@ -557,7 +549,7 @@ export const WEBHOOK_API = {
   'GET /api/v1/webhooks/deliveries': (req: MockRequest) => getDeliveries(req),
   'GET /api/v1/webhooks/deliveries/:id': (req: MockRequest) => {
     requirePermission(PERMISSIONS.webhooks.default);
-    return deliveryResponse(deliveryDetail(findDelivery(req.params['id'])));
+    return deliveryDetail(findDelivery(req.params['id']));
   },
   'POST /api/v1/webhooks/deliveries/:id/retry': (req: MockRequest) => retryDelivery(req),
 };

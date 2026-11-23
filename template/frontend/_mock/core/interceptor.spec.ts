@@ -1,4 +1,4 @@
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, HttpHeaders, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
@@ -20,6 +20,7 @@ import { USERS } from '../data/user';
 import { setMockSessionUserId } from '../utils/current-user';
 //#endif
 import { MOCK_APIS, mockInterceptor } from './interceptor';
+import { MockResponse } from './models';
 
 describe('mockInterceptor', () => {
   const originalUseMock = environment.useMock;
@@ -43,6 +44,11 @@ describe('mockInterceptor', () => {
                         ...OPEN_APPLICATION_API,
                         //#endif
                         'GET /api/items': [{ id: 'all' }],
+                        'GET /api/channels/active': () => ({ id: 'c1', status: 'active' }),
+                        'GET /api/problems/latest': () => ({ title: 'Bad request', status: 400 }),
+                        'GET /api/channels/missing': () => new MockResponse({ status: 204 }),
+                        'GET /api/channels/export': () =>
+                            new MockResponse({ headers: new HttpHeaders({ 'X-Total': '3' }), body: 'csv' }),
                         'GET /api/items/:id': (request: {
                             params: Record<string, string>;
                         }) => ({
@@ -75,6 +81,37 @@ describe('mockInterceptor', () => {
     );
 
     expect(response).toEqual({ id: 'item-42' });
+  });
+
+  // 自带 status 字段的业务 DTO（字符串或数值）都是正文，不能被当成响应选项把正文丢成 null
+  it('returns a DTO with its own status field as the body', async () => {
+    const http = TestBed.inject(HttpClient);
+
+    expect(await firstValueFrom(http.get('/api/channels/active'))).toEqual({
+      id: 'c1',
+      status: 'active',
+    });
+    expect(await firstValueFrom(http.get('/api/problems/latest'))).toEqual({
+      title: 'Bad request',
+      status: 400,
+    });
+  });
+
+  it('answers with the status, headers and body of an explicit MockResponse', async () => {
+    const http = TestBed.inject(HttpClient);
+
+    const missing = await firstValueFrom(
+      http.get('/api/channels/missing', { observe: 'response' }),
+    );
+    expect(missing.status).toBe(204);
+    expect(missing.body).toBeNull();
+
+    const exported = await firstValueFrom(
+      http.get('/api/channels/export', { observe: 'response', responseType: 'text' }),
+    );
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('X-Total')).toBe('3');
+    expect(exported.body).toBe('csv');
   });
 
   it('fails with 501 when no mock route matches an /api request', async () => {
