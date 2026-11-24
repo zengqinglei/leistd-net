@@ -16,9 +16,12 @@ using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using OpenIddict.Abstractions;
 using Leistd.Security.OpenIddict.Server.Pruning;
 using OpenIddict.Core;
@@ -51,9 +54,11 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         return id;
     }
 
-    private HttpClient Browser(string? cookie = null)
+    private HttpClient Browser(string? cookie = null) => Browser(factory, cookie);
+
+    private static HttpClient Browser(WebApplicationFactory<Program> host, string? cookie = null)
     {
-        var client = factory.CreateProjectClient();
+        var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         client.BaseAddress = new Uri("https://localhost");
         if (cookie is not null) client.DefaultRequestHeaders.Add("Cookie", cookie);
         return client;
@@ -392,6 +397,40 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Contains("error=login_required", response.Headers.Location!.Query);
         Assert.StartsWith(Callback, response.Headers.Location.AbsoluteUri);
+    }
+
+    /// <summary>
+    /// OIDC Core §3.1.2.1：经过时间大于 <c>max_age</c> 才要求重新认证，恰好等于仍签发授权码；<c>max_age=0</c> 同一秒也要求重新认证。
+    /// </summary>
+    /// <remarks>替换 <see cref="TimeProvider"/>（应用时钟随之），登录时刻落在整秒上，认证年龄因此按秒精确可控。</remarks>
+    [Theory]
+    [InlineData(60, 60, true)]
+    [InlineData(60, 61, false)]
+    [InlineData(0, 0, false)]
+    public async Task Max_age_boundary_follows_the_specification(int maxAge, int elapsedSeconds, bool issuesCode)
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+        }));
+        using var session = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var id = await CreatePublicClientAsync(session.Client);
+        clock.Advance(TimeSpan.FromSeconds(elapsedSeconds));
+        using var browser = Browser(host, session.Cookie);
+
+        if (issuesCode)
+        {
+            using var response = await browser.GetCachedAsync(AuthorizationUrl(id, $"&max_age={maxAge}"));
+            Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+            Assert.StartsWith(Callback, response.Headers.Location!.AbsoluteUri);
+            Assert.Contains("code=", response.Headers.Location.Query);
+        }
+        else
+        {
+            await ReauthenticationReturnUrlAsync(browser, AuthorizationUrl(id, $"&max_age={maxAge}"));
+        }
     }
 
     [Fact]

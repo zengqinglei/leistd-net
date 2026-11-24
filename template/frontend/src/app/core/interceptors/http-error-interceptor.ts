@@ -59,7 +59,11 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         // 租户去向由 AuthService.clearAuthData() 按身份形态决定。
 //#if (IncludeMultiTenancy)
         if (error.headers.get(TENANT_INVALID_HEADER)) {
+          //#if (LocalIdentity)
+          tenantContext.forget();
+          //#else
           tenantContext.clear();
+          //#endif
         }
 
 //#endif

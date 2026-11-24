@@ -261,6 +261,10 @@ export class Login implements OnInit {
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
         const result = await lastValueFrom(this.authService.login(loginInput));
+        //#if (IncludeMultiTenancy)
+        // 口令已被接受（含尚待第二步）：此时才把这个租户记为下次的预选，第二步页刷新也靠它带对租户
+        this.tenantContext.remember();
+        //#endif
         if (result?.requiresTwoFactor) {
           // 还要第二步：服务端只写了待完成登录的临时 Cookie，第二步在独立页面完成，刷新也能接着做
           await this.router.navigateByUrl(this.returnUrls.twoFactorLogin(returnUrl));
@@ -293,6 +297,9 @@ export class Login implements OnInit {
    * @returns 是否已发起整页离开（离开时加载态不复位，原因见 {@link onSubmit}）。
    */
   private async onSignedIn(): Promise<boolean> {
+    //#if (IncludeMultiTenancy)
+    this.tenantContext.remember();
+    //#endif
     this._isLoading.set(true);
     let left = false;
     try {
@@ -483,7 +490,7 @@ export class Login implements OnInit {
     this.tenantError.set(null);
 
     // 不向服务端确认这个租户是否存在：那会让任何人靠这个接口枚举租户。
-    // 名字直接记进上下文；租户不存在或已停用时，请求会被中间件按统一的 404 挡住
+    // 名字直接写进上下文（只在内存，凭据被接受后才记住）；租户不存在或已停用时，请求会被中间件按统一的 404 挡住
     // （两种情形不区分，停用状态本身也是情报），不是由登录接口判凭据。
     this.tenantContext.set(name);
     this.tenantName.set('');

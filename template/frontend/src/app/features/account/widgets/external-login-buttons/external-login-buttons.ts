@@ -11,6 +11,9 @@ import {
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { FullPageNavigationService } from '../../../../core/routing/full-page-navigation-service';
+//#if (IncludeMultiTenancy)
+import { TenantContextService } from '../../../../core/services/tenant-context-service';
+//#endif
 //#if (!IncludeLocalization)
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
@@ -46,6 +49,9 @@ const githubIcon =
 export class ExternalLoginButtons {
   private readonly accountService = inject(AccountService);
   private readonly fullPage = inject(FullPageNavigationService);
+  //#if (IncludeMultiTenancy)
+  private readonly tenantContext = inject(TenantContextService);
+  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
@@ -103,6 +109,10 @@ export class ExternalLoginButtons {
 
     this.redirecting.set(true);
     try {
+      //#if (IncludeMultiTenancy)
+      // 整页离开再回来，内存里的租户会丢：提供商那一侧的结果回不到这里，只能在离开前记住
+      this.tenantContext.remember();
+      //#endif
       this.fullPage.assign(this.accountService.getExternalLoginUrl(provider, this.returnUrl()));
     } catch (error) {
       console.error(`${label} login failed`, error);

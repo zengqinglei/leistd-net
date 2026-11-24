@@ -33,14 +33,14 @@ export function hostTenantProbe() {
           if (result.tenant) {
             tenantContext.set(result.tenant.name);
           } else {
-            tenantContext.clear();
+            tenantContext.forget();
             error.set('account.login.tenantUnavailable');
           }
           break;
 
         case 'host':
           // 受管域但不指向租户：服务端会按宿主处理，记住的租户必须清掉。
-          tenantContext.clear();
+          tenantContext.forget();
           break;
 
         case 'undecided':

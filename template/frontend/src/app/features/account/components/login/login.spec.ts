@@ -852,6 +852,7 @@ describe('Login', () => {
       await setUp();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
+      expect(localStorage.getItem('app.tenant')).toBeNull();
       expect(component.tenantLocked()).toBe(true);
     });
 
@@ -988,6 +989,38 @@ describe('Login', () => {
       await component.onConfirmTenant();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
+    });
+
+    // 记住的应是上次成功进入的租户：选错后凭据被拒，下次打开仍预选原来那个
+    it('remembers a manually selected tenant only after the credentials are accepted', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      rememberTenant();
+      await setUp();
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+
+      authService.login.mockReturnValue(throwError(() => new Error('bad credentials')));
+      fillValidCredentials();
+      await component.onSubmit();
+      expect(TestBed.inject(TenantContextService).current()?.key).toBe('acme');
+      expect(localStorage.getItem('app.tenant')).toContain('remembered');
+
+      authService.login.mockReturnValue(of({ requiresTwoFactor: true }) as never);
+      await component.onSubmit();
+      expect(localStorage.getItem('app.tenant')).toContain('acme');
+    });
+
+    it('forgets the remembered tenant once the credentials are accepted on the host', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      rememberTenant();
+      await setUp();
+      component.clearTenant();
+      expect(localStorage.getItem('app.tenant')).toContain('remembered');
+
+      fillValidCredentials();
+      await component.onSubmit();
+
+      expect(localStorage.getItem('app.tenant')).toBeNull();
     });
 
     // 「切换租户」展开的输入框：填名称切到该租户，留空回到宿主，应用后收起
