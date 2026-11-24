@@ -1,6 +1,6 @@
 # 统一的"需要认证"异常与令牌交换 invalid_grant
 
-状态：已完成 · 风险档：高 · 关联：#313
+状态：已完成 · 风险档：高 · 关联：#313、传输异常透传修复 PR（见 §4）
 
 ## 1. 需求
 
@@ -83,3 +83,10 @@
   - 模板：identity-workspace 与 resource-workspace 的快速检查和相关集成测试通过。
   - 全场景矩阵由 CI 承担。
 - **已上收的常驻文档：** `framework/docs/components/exception-handling.md`、`service-client.md`；`template/docs/standards/auth.md`、`service-invocation.md`。
+- **后续缺陷（下游反馈，已修复）：** 原用例只用普通 `AddHttpClient` 挂令牌处理器，没走 `AddServiceClient` / `AddRefitServiceClient` 的标准管道。标准管道最外层的 `TransportFailureHandler` 会把调用方主动取消以外、所有非 `ServiceClientException` 的异常按故障分类器包成 `ServiceClientException`（连接失败归 `Unavailable`、超时归 `Timeout`、无效响应归 `InvalidResponse`，其余归 `Unknown`）。`AuthenticationRequiredException` 落在 `Unknown`，因此答 500。修法：该处理器对 `BusinessException` 一并原样抛出，因为内层处理器抛出的业务异常已经是本服务对调用方的语义，不是传输故障。
+  - 只放行 `AuthenticationRequiredException` 一种也能修好本例，但宿主自加的处理器抛其他业务异常时会再犯，所以按基类放行。
+  - 回归用例：
+    - `TransportFailureHandlerTests.A_business_failure_from_an_inner_handler_passes_through_unchanged` 与 `RefitTransportFailureTests.Business_failures_from_the_pipeline_pass_through_unchanged`：都用普通 `BusinessException`，锁定按基类放行；Refit 一条覆盖 `Task<T>` 与 `Task<ApiResponse<T>>`。
+    - `OfficialClientTests` 的 invalid_grant 与 invalid_target 两条用例改为同时覆盖普通客户端和标准管道两种形态。
+    - 修复前，标准管道形态的 invalid_grant 用例和业务异常透传用例失败。
+  - 模板 `IdentityAccountPreferences` 的写入路径（Token Exchange）本来就让重新认证异常上抛，读取路径（Client Credentials）仍捕获依赖故障，代码不改，升级框架后生效。

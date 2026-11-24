@@ -1,3 +1,4 @@
+using Leistd.ExceptionHandling;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.Options;
@@ -73,6 +74,21 @@ public sealed class RefitTransportFailureTests
         using var provider = Build(new FailureHandler(cause));
 
         var failure = await Assert.ThrowsAsync<ServiceClientException>(
+            () => InvokeAsync(provider.GetRequiredService<IFailureApi>(), wrappedResponse));
+
+        Assert.Same(cause, failure);
+    }
+
+    /// <summary>管道内处理器抛出的业务异常是本服务对调用方的语义，两种返回形态都原样传出，不包成上游故障。</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Business_failures_from_the_pipeline_pass_through_unchanged(bool wrappedResponse)
+    {
+        var cause = new BusinessException("Demo:Rejected", "Rejected by a pipeline handler.");
+        using var provider = Build(new FailureHandler(cause));
+
+        var failure = await Assert.ThrowsAsync<BusinessException>(
             () => InvokeAsync(provider.GetRequiredService<IFailureApi>(), wrappedResponse));
 
         Assert.Same(cause, failure);
