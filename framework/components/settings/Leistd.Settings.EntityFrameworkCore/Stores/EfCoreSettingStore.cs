@@ -50,27 +50,6 @@ public class EfCoreSettingStore<TDbContext>(
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyDictionary<string, SettingModification>> GetModificationsAsync(
-        SettingScopes scope,
-        string? userId,
-        CancellationToken cancellationToken = default)
-    {
-        var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
-        var scopeKey = BuildScopeKey(scope, userId);
-
-        var rows = await dbContext.Set<SettingRecord>()
-            .AsNoTracking()
-            .Where(x => x.ScopeKey == scopeKey && x.LastModificationTime != null)
-            .Select(x => new { x.Name, x.LastModificationTime, x.LastModifierId, x.LastModifierName })
-            .ToListAsync(cancellationToken);
-
-        return rows.ToDictionary(
-            x => x.Name,
-            x => new SettingModification(DateTime.SpecifyKind(x.LastModificationTime!.Value, DateTimeKind.Utc), x.LastModifierId, x.LastModifierName),
-            StringComparer.Ordinal);
-    }
-
-    /// <inheritdoc />
     /// <remarks>
     /// 先查后写，并发时由数据库约束与影响行数暴露冲突：首插撞唯一索引、改写或删除时行已被删。
     /// 只恢复本次条目引发的这两类冲突，在调用方当前的上下文与事务内回库重读后重试一次，再次失败原样抛出。
@@ -82,10 +61,8 @@ public class EfCoreSettingStore<TDbContext>(
         string? value,
         SettingScopes scope,
         string? userId,
-        SettingModification modification,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(modification);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var scopeKey = BuildScopeKey(scope, userId);
 
@@ -98,7 +75,7 @@ public class EfCoreSettingStore<TDbContext>(
             return;
         }
 
-        var entry = Stage(dbContext, record, name, value, scope, userId, scopeKey, modification);
+        var entry = Stage(dbContext, record, name, value, scope, userId, scopeKey);
 
         try
         {
@@ -117,7 +94,7 @@ public class EfCoreSettingStore<TDbContext>(
                 return;
             }
 
-            Stage(dbContext, current, name, value, scope, userId, scopeKey, modification);
+            Stage(dbContext, current, name, value, scope, userId, scopeKey);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
@@ -133,7 +110,7 @@ public class EfCoreSettingStore<TDbContext>(
                 throw;
             }
 
-            Stage(dbContext, winner, name, value, scope, userId, scopeKey, modification);
+            Stage(dbContext, winner, name, value, scope, userId, scopeKey);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
     }
@@ -147,8 +124,7 @@ public class EfCoreSettingStore<TDbContext>(
         string? value,
         SettingScopes scope,
         string? userId,
-        string scopeKey,
-        SettingModification modification)
+        string scopeKey)
     {
         var set = dbContext.Set<SettingRecord>();
 
@@ -161,10 +137,7 @@ public class EfCoreSettingStore<TDbContext>(
                 UserId = scope == SettingScopes.User ? userId : null,
                 ScopeKey = scopeKey,
                 Name = name,
-                Value = value!,
-                LastModificationTime = modification.Time,
-                LastModifierId = modification.ModifierId,
-                LastModifierName = modification.ModifierName
+                Value = value!
             });
         }
 
@@ -180,9 +153,6 @@ public class EfCoreSettingStore<TDbContext>(
         }
 
         existing.Value = value;
-        existing.LastModificationTime = modification.Time;
-        existing.LastModifierId = modification.ModifierId;
-        existing.LastModifierName = modification.ModifierName;
         entry.DetectChanges();
         return entry;
     }
@@ -207,16 +177,13 @@ public class EfCoreSettingStore<TDbContext>(
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         // 查询过滤器已限定当前租户，不带 ScopeKey 条件，清掉所有层级（含用户偏好）。
         // 加载后 RemoveRange 而非批量删除：兼容所有 EF 提供程序（含内存库），在工作单元里与其它清理一起提交。
-        // 测试结果随设置一起清掉，废弃的租户不留残余
         var records = await dbContext.Set<SettingRecord>().ToListAsync(cancellationToken);
-        var checks = await dbContext.Set<SettingCheckRecord>().ToListAsync(cancellationToken);
-        if (records.Count == 0 && checks.Count == 0)
+        if (records.Count == 0)
         {
             return;
         }
 
         dbContext.Set<SettingRecord>().RemoveRange(records);
-        dbContext.Set<SettingCheckRecord>().RemoveRange(checks);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

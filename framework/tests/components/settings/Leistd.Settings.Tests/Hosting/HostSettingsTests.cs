@@ -128,45 +128,6 @@ public sealed class HostSettingsTests : IDisposable
         Assert.Equal(("from-config", "Debug"), (Options.Password, Options.Level));
     }
 
-    // 部署值不含系统设置的覆盖：设置测试要用这一次读到的存储值，缺项才取部署配置，不能取进程里已叠加覆盖的配置
-    [Fact]
-    public async Task The_deployment_baseline_ignores_host_setting_overrides()
-    {
-        _store.Host["Demo.Password"] = Protect(_dataProtection, "Demo.Password", "p1");
-        _store.Host["Demo.Level"] = "Debug";
-        await ApplyAsync();
-        var baseline = _host.Services.GetRequiredService<IHostSettingBaseline>();
-
-        Assert.Equal(("p1", "Debug"), (Options.Password, Options.Level));
-        Assert.Equal("from-config", baseline.GetDeploymentValue("Demo.Password"));
-        Assert.Equal("warning", baseline.GetDeploymentValue("Demo.Level"));
-        Assert.Null(baseline.GetDeploymentValue("Demo.Unbound"));
-    }
-
-    // 高优先级配置源显式置空：正式配置读到的是空值，部署值也是空值，不能回落到低优先级源里的旧凭据
-    [Fact]
-    public async Task An_explicit_empty_value_in_a_higher_source_is_the_deployment_value()
-    {
-        await ApplyAsync();
-        var configuration = _host.Services.GetRequiredService<IConfiguration>();
-        ((IConfigurationBuilder)configuration).AddInMemoryCollection(new Dictionary<string, string?> { ["Demo:Password"] = "" });
-
-        Assert.Equal("", configuration["Demo:Password"]);
-        Assert.Equal("", _host.Services.GetRequiredService<IHostSettingBaseline>().GetDeploymentValue("Demo.Password"));
-    }
-
-    // 部署配置运行期间重载：部署值是现读的，不是启动时的快照
-    [Fact]
-    public async Task The_deployment_value_follows_a_configuration_reload()
-    {
-        await ApplyAsync();
-        var root = (IConfigurationRoot)_host.Services.GetRequiredService<IConfiguration>();
-        root.Providers.OfType<Microsoft.Extensions.Configuration.Memory.MemoryConfigurationProvider>()
-            .Single(provider => provider.TryGet("Demo:Level", out _)).Set("Demo:Level", "error");
-
-        Assert.Equal("error", _host.Services.GetRequiredService<IHostSettingBaseline>().GetDeploymentValue("Demo.Level"));
-    }
-
     [Fact]
     public async Task A_committed_host_write_is_applied_to_this_process()
     {

@@ -258,15 +258,9 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
 | `ISettingProvider.GetAllAsync(visibleToClientsOnly?, ct)` | 读取全部生效值 |
 | `ISettingProvider.GetOrNullForUserAsync(name, userId, ct)` | 读取指定用户在当前租户下的生效值 |
 | `ISettingManager.SetAsync(name, value, scope, userId?, ct)` | 写入；`value` 为 `null` 时清除该层级。默认实现按租户串行、每次独立提交 |
-| `ISettingStore` | 持久化契约；只按层级读写原始字符串与修改信息（`SetAsync` 的 `SettingModification`、`GetModificationsAsync`），不做校验与回落；须经当前工作单元读写并参与其事务 |
+| `ISettingStore` | 持久化契约；只按层级读写原始字符串，不做校验与回落；须经当前工作单元读写并参与其事务 |
 | `ISettingManagementService` | 设置页用例：`GetAsync`、`SetForCurrentUserAsync`、`SetForCurrentTenantAsync` |
-| `SettingOutputDto` / `SetSettingInputDto` | 设置页的读写形状；`UserModification` / `TenantModification`（`SettingModificationDto`）、`IsCheckable`、`LastCheck`（`SettingCheckResultDto`） |
-| `AddSettingCheck<TCheck>(name, params dependsOn)` | 给一项设置登记测试探针；同一设置只认最后一次登记 |
-| `ISettingCheck.ExecuteAsync(context, ct)` | 探针：经 `context.GetStoredValueAsync(name)` 读本层的存储值（`GetValueAsync` 缺项时取代码默认值），返回 `SettingCheckOutcome.Pass()` 或 `Fail(code)`；失败码基线见 `SettingCheckFailureCodes`，业务可加自己的稳定字符串 |
-| `ISettingCheckService.RunAsync(name, ct)` | 执行测试并保存结果；授权由调用方负责 |
-| `ISettingCheckStore` | 测试结果的持久化契约；EF 实现随 `AddSettingsEfCore` 注册，`ISettingStore.RemoveAllAsync` 一并清理；只在执行测试时需要 |
-| `IHostSettingBaseline.GetDeploymentValue(name)` | Hosting 包：被绑定的宿主级设置在部署配置里的当前值：不含系统设置的覆盖，按配置源优先级取、保留显式空值，重载后即是新值；机密设置同样给出 |
-| `SettingCheckCompletedEvent` | 测试执行后发布：`SettingName`、`Scope`、`Passed`、`FailureCode` |
+| `SettingOutputDto` / `SetSettingInputDto` | 设置页的读写形状 |
 | `SettingDecryptionException` | 机密设置解不开：`SettingName`、`Purposes`、`KeyId` |
 | `SettingLogEvents` | 日志事件号常量，见注意事项的排障表 |
 | `SettingErrorCodes` | 组件抛出的错误码，默认中英译文随包分发 |
@@ -274,8 +268,8 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
 | 默认 HTTP 状态 | 组件默认状态：宿主限定与身份拒绝 → 403，不可见设置 → 404。由 `AddSettingsCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `AddSettingsCore(services, configure?)` | 注册定义管理器、解析器、写入入口、设置页用例与写入依赖的启动检查；`SettingManagementOptions` 给翻译资源与默认分组 |
 | `AddSettingsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddSettingsCore()` |
-| `ConfigureSettings(modelBuilder)` | 映射 `SettingRecord` 与 `SettingCheckRecord` 实体 |
-| `MapSettings(configure)` | AspNetCore 包：`GET /`、`PUT /current-user`、`PUT /current-tenant`、`POST /checks/{name}`；`AccessPolicy` 与 `TenantWritePolicy` 均必填（组件不套宿主默认策略），`GroupPolicies` 可选（分组 → 策略名），端点名前缀 `SettingEndpoints.NamePrefix` |
+| `ConfigureSettings(modelBuilder)` | 映射 `SettingRecord` 实体 |
+| `MapSettings(configure)` | AspNetCore 包：`GET /`、`PUT /current-user`、`PUT /current-tenant`；`AccessPolicy` 与 `TenantWritePolicy` 均必填（组件不套宿主默认策略），`GroupPolicies` 可选（分组 → 策略名），端点名前缀 `SettingEndpoints.NamePrefix` |
 | `ISettingDefinition.IsShared` | 共享给其他服务只读；只允许非机密、允许租户层、非进程级的设置，否则首次访问定义时抛 `InvalidOperationException` |
 | `MapSharedSettings(configure)` | AspNetCore 包：`GET /{tenant}`（`host` 或租户 Id）返回 `SharedSettingsDto` 与强 ETag；`Policy` 必填，端点名 `SharedSettingEndpoints.GetName` |
 | `SharedSettingsDto` | 共享端点的响应：`Values`（设置名 → 生效值）；两端按 `JsonSerializerDefaults.Web` 序列化 |
@@ -361,16 +355,7 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
   指定了存储位置后默认的密钥静态加密不再自动生效，要显式配置（如上例的证书）。共用密钥存储的宿主都能解这批机密，存储的访问权限就是边界。
   切换到专用实例后，宿主密钥环加密的旧值解不开，要重新写入。
   `Leistd.Settings.Core` 因此引用 `Microsoft.AspNetCore.DataProtection.Abstractions`，这是纯抽象包，非 Web 宿主同样可用；架构门禁可按 `*.Abstractions` 放行。
-- 修改信息：每次写入由写入入口记下时间与写入人（标识与显示名快照，名字取 `ICurrentUser.Name`，没有时取 `Username`），随值保存、清除时一起删除；
-  无主体写入只有时间。设置页按层给出 `UserModification`、`TenantModification`，机密设置同样给出。修改信息上线之前写入、从未再写过的行没有修改信息。
-  完整的变更历史不在这里：订阅 `SettingChangedEvent`（`IsCleared` 区分写入与清除）写操作记录。
-- 设置测试：`AddSettingCheck<TCheck>(name, dependsOn)` 给一项设置登记探针，设置页对它给出 `IsCheckable` 与 `LastCheck`。
-  `POST /checks/{name}` 在设置页编辑的那一层执行（与写租户值同一授权；主设置须允许租户层或宿主层写入），结果按租户保存（再测即覆盖）并发布 `SettingCheckCompletedEvent`。
-  探针在独立的非事务工作单元里运行，读这一层的值，不含个人覆盖：`GetStoredValueAsync` 只给存储值，`GetValueAsync` 缺项时取代码默认值。
-  绑定到部署配置的宿主级设置缺项时，用存储值加 Hosting 包 `IHostSettingBaseline` 的部署当前值，不用代码默认值（启动时的快照），也不要读进程里叠加了覆盖、可能落后于另一副本的配置。
-  读到解不开的机密归一为 `secret-unavailable`，探针自身抛出的异常记告警并归为 `unexpected-error`；在事务型工作单元里调用会被拒绝。
-  主设置或依赖设置在同一租户里被写入、清除时，与该次写入同一事务把结果标记为过期（`IsStale`）；开始测试前在写锁内登记（`ISettingCheckStore.BeginRunAsync`），得到递增的运行序号与此刻的配置修订号；写入与清除同事务推进修订号，保存时修订号变了就按过期保存：探针期间的任何写入（含写回同值、从缺项写入再清除）都算，不依赖时钟；同一项并发测两次时互不判过期，更早开始的运行不覆盖更晚开始那次已保存的结果；保存时失去写锁则不保存；只改个人偏好不影响。
-  `GET` 下发给不能管理的成员的行（允许个人覆盖、作个人页占位）不带 `LastCheck`、`TenantModification`，`IsCheckable` 为 `false`。
+- 组件不存修改人与修改时间，也不存变更历史：需要时订阅 `SettingChangedEvent`（`IsCleared` 区分写入与清除）写操作记录。
 - 共享端点按路径里的租户读取：注册了 `ITenantStore` 时租户须存在且启用，没有注册多租户时只接受 `host`，其余一律 404。
   切到该租户后开新工作单元读存储，值为租户层的值、没有时为代码默认值；共享设置不会有个人覆盖、进程级或密文，所以不经 `ISettingProvider`，也不受调用方主体的影响。
   ETag 取按名称排序后响应体的 SHA-256，`If-None-Match` 命中回 304。
@@ -429,7 +414,6 @@ if (window.Source == SharedSettingSource.Fallback) { /* 读不到，用的是兜
 - 在租户请求里读进程级配置时，注入经 Hosting 包绑定的 `IOptionsMonitor<T>`，不要读设置存储。
 - 共享设置只用于租户级、只读的策略与组织配置。用户级的值、使用方要写回的值仍走提供方的专用端点（如账户偏好）；共享名单只扩大可读范围，不改变谁能写。
 - 兜底值按设置语义选：安全策略取更严格的一侧，显示类取部署基线。生效延迟最长为 `FreshFor`，提供方故障期间最长为 `FreshFor + MaxStaleness`；不做变更推送。
-- 测试探针只回答"配置能不能用"：结果会展示给管理员，不要把设置值或对方的原始响应放进失败码；需要输入额外参数的动作（如发一封测试信）不是测试，单独做端点。
 
 ### 排障
 

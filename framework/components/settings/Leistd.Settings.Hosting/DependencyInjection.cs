@@ -77,8 +77,6 @@ public static class DependencyInjection
         }
 
         services.AddSingleton(new HostSettingsConfigurationProvider());
-        services.AddSingleton<HostSettingBaseline>();
-        services.AddSingleton<IHostSettingBaseline>(sp => sp.GetRequiredService<HostSettingBaseline>());
         services.AddSingleton<ISettingDefinitionProvider, HostSettingDefaultsProvider>();
         services.TryAddScoped<HostSettingApplier>();
         services.AddScoped<IEventHandler<SettingChangedEvent>, HostSettingChangedHandler>();
