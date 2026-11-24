@@ -17,15 +17,15 @@ public sealed class SmtpEmailSenderProtocolTests
 {
     private readonly FakeLogger<SmtpEmailSender> _logger = new();
 
-    private SmtpEmailSender Sender(LoopbackSmtpServer server, int timeoutMilliseconds = 10_000, string? username = null)
-        => Sender(server.Port, timeoutMilliseconds, username);
+    private SmtpEmailSender Sender(LoopbackSmtpServer server, int timeoutMilliseconds = 10_000, string? username = null, bool enableSsl = false)
+        => Sender(server.Port, timeoutMilliseconds, username, enableSsl);
 
-    private SmtpEmailSender Sender(int port, int timeoutMilliseconds = 10_000, string? username = null)
+    private SmtpEmailSender Sender(int port, int timeoutMilliseconds = 10_000, string? username = null, bool enableSsl = false)
         => new(new FixedOptionsMonitor(new SmtpOptions
         {
             Host = "127.0.0.1",
             Port = port,
-            EnableSsl = false,
+            EnableSsl = enableSsl,
             Username = username,
             Password = username is null ? null : "wrong",
             DefaultFromAddress = "noreply@example.com",
@@ -109,6 +109,34 @@ public sealed class SmtpEmailSenderProtocolTests
         Assert.Equal(EmailDeliveryFailureKind.AuthenticationRejected, exception.FailureKind);
         Assert.IsType(innerType, exception.InnerException);
         Assert.DoesNotContain("mailer@example.com", exception.Message);
+        Assert.False(server.Accepted);
+    }
+
+    /// <summary>服务器回 454（暂时无法认证）：临时故障不归为认证被拒，凭据未必有错，原样抛出。</summary>
+    [Fact]
+    public async Task A_temporary_authentication_failure_is_not_reported_as_rejected_credentials()
+    {
+        await using var server = new LoopbackSmtpServer(authReply: "454 4.7.0 Temporary authentication failure");
+
+        var exception = await Assert.ThrowsAsync<MailKit.Security.AuthenticationException>(
+            () => Sender(server, username: "mailer@example.com").SendAsync(Message()));
+
+        var command = Assert.IsType<SmtpCommandException>(exception.InnerException);
+        Assert.Equal(454, (int)command.StatusCode);
+        Assert.False(server.Accepted);
+    }
+
+    /// <summary>服务器声明了 STARTTLS 却拒绝执行：和不支持 STARTTLS 一样归为连不上，调用方据此提示检查 TLS。</summary>
+    [Fact]
+    public async Task A_refused_starttls_throws_an_unreachable_failure()
+    {
+        await using var server = new LoopbackSmtpServer(startTlsReply: "454 4.7.0 TLS not available");
+
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => Sender(server, enableSsl: true).SendAsync(Message()));
+
+        Assert.Equal(EmailDeliveryFailureKind.Unreachable, exception.FailureKind);
+        Assert.IsType<SmtpCommandException>(exception.InnerException);
         Assert.False(server.Accepted);
     }
 

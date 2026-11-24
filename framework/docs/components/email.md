@@ -139,8 +139,8 @@ await emailSender.SendAsync(new EmailMessage
 
   | 阶段 | `FailureKind` | 归入的异常 |
   | --- | --- | --- |
-  | 连接 | `Unreachable` | `SocketException`、`SslHandshakeException`、`IOException`、`SmtpProtocolException`、`TimeoutException`；要求 STARTTLS 而服务器不支持时的 `NotSupportedException` |
-  | 认证 | `AuthenticationRejected` | MailKit 的 `AuthenticationException`、`SaslException`；服务器不支持认证时的 `NotSupportedException` |
+  | 连接 | `Unreachable` | `SocketException`、`SslHandshakeException`、`IOException`、`SmtpProtocolException`、`TimeoutException`；要求 STARTTLS 而服务器不支持时的 `NotSupportedException`；问候、EHLO 或 STARTTLS 被拒的 `SmtpCommandException` |
+  | 认证 | `AuthenticationRejected` | MailKit 的 `AuthenticationException`、`SaslException`；服务器不支持认证时的 `NotSupportedException`。服务器回 4xx（如 454 暂时无法认证）属临时故障，原样抛出 |
   | 发送 | `AuthenticationRejected` | 服务器要求认证而未配置账号（`ServiceNotAuthenticatedException`，如 530） |
   | 发送 | `DeliveryRejected` | `ErrorCode` 为 `SenderNotAccepted`、`RecipientNotAccepted`、`MessageNotAccepted` 的 `SmtpCommandException`；`SmtpUtf8AddressException` |
 

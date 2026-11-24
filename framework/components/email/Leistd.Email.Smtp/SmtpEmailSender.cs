@@ -56,7 +56,7 @@ public sealed class SmtpEmailSender(
                 // CurrentValue 经 SmtpOptionsValidator 校验，只有用户名、没有口令的配置到不了这里。
                 await client.AuthenticateAsync(current.Username, current.Password!, cancellationToken);
             }
-            catch (Exception exception) when (exception is AuthenticationException or SaslException or NotSupportedException)
+            catch (Exception exception) when (IsAuthenticationRejected(exception))
             {
                 // 用户名常是邮箱，不进消息。
                 throw new EmailDeliveryException(
@@ -107,10 +107,20 @@ public sealed class SmtpEmailSender(
             message.Subject);
     }
 
-    // 连接阶段：Socket 不通、TLS 握手失败、服务器不支持 STARTTLS、连接或问候中断与超时；参数错误与取消不在其列。
+    // 连接阶段：Socket 不通、TLS 握手失败、服务器不支持或拒绝 STARTTLS、问候被拒、连接中断与超时；参数错误与取消不在其列。
+    // 连接阶段的 SmtpCommandException 只来自问候、EHLO 与 STARTTLS，都表示这台服务器此刻用不了。
     private static bool IsUnreachable(Exception exception)
         => exception is SocketException or SslHandshakeException or IOException or SmtpProtocolException
-            or TimeoutException or NotSupportedException;
+            or TimeoutException or NotSupportedException or SmtpCommandException;
+
+    // 认证阶段：凭据被拒或服务器不支持认证。服务器回 4xx（如 454 暂时无法认证）是临时故障，凭据未必有错，原样抛出。
+    private static bool IsAuthenticationRejected(Exception exception)
+        => exception switch
+        {
+            AuthenticationException { InnerException: SmtpCommandException command } => (int)command.StatusCode is < 400 or >= 500,
+            AuthenticationException or SaslException or NotSupportedException => true,
+            _ => false,
+        };
 
     // 发送阶段只有服务器明确拒收发件人、收件人或正文，以及地址过不了 SMTPUTF8 校验才算投递被拒；
     // 其他状态码、协议错误与超时原样抛出。
